@@ -1,0 +1,386 @@
+"""
+DistSSHRun — local + SSH Julia runs (`go` / `plan` / `ride` / `drive` / `setup`) and a small API
+(`go!`, `plan`, `ride!`, `pool!`, `drive!`, `pipeline!`, …).
+
+Package entry: exports, version, `include`s, `main` (`@main` on Julia 1.13+).
+CLI entries live under `src/cli/`; argv parsers under `src/DistSSHRun/argv/`.
+"""
+module DistSSHRun
+
+using Dates
+using Distributed
+using Pkg
+using SHA
+using TOML
+
+# Public surface. Prefer `julia -m DistSSHRun …` for day-to-day CLI.
+#   user — go! / ride! / drive! / plan / pool! / size! / setup! / pipeline!
+#   occupancy — size! (RSS WorkerPlan; CLI size / pool; not implied by omit :N)
+#   queue — execute!(; detached=true), parsers, paths, help chrome
+#   argv wrappers `go` / `drive` stay unexported (`main` / tests)
+export worker_pmap
+export KitSession
+export HostResult
+export SyncResult
+export WorkerPlan
+export host_tokens
+export is_parent_host_name
+export DriveResult
+export HostRunResult
+export DriveHostStatus
+export CollectResult
+export KitRunResult
+export KitProcess
+export kit_run_result
+export PipelineConfig
+export PipelineResult
+export sync!
+export instantiate!
+export setup!
+export size!
+export pool!
+export ResourcePool
+export HostInventory
+export print_pool
+export plan
+export KitPlan
+export PlanFinding
+export print_plan
+export ns_path
+export file_sha256
+export cache_file
+export cache_path
+export cache_relpath
+export push_cache!
+export cache_remote_dir
+export drive!
+export collect!
+export pipeline!
+export pipeline_config_from_env
+export report_pipeline_errors
+export report_run_errors
+export go!
+export GoResult
+export report_go_errors
+export ride!
+export RideResult
+export print_ride
+export execute!
+export allocate_output_dir
+export allocate_run_dir
+export kit_run_dir
+export read_kit_run_toml
+export execute_detached_accepts
+export execute_kwargs_from_parsed
+export kit_pid_file_running
+export terminate!
+export terminate_run!
+export kit_result_from_dir
+export drive_host_status
+export parse_go_args
+export parse_drive_args
+export show_go_usage
+export show_drive_usage
+export println_kit_version
+export ssh_opts
+export run_on_host
+export resolve_controller_julia
+export canonical_local_path
+export short_path
+export resolve_pkg_project_dir
+export resolve_pkg_env
+export explain_script_not_found
+export print_cli_error
+export print_help_chrome
+export print_help_section
+export print_help_lines
+export print_help_blank
+export print_colored
+export SPINNER_FRAMES
+# `_print_colored` remains an alias of `print_colored`.
+
+
+# Implementation
+
+include("DistSSHRun/display.jl")
+include("DistSSHRun/namespace.jl")
+include("DistSSHRun/explain.jl")
+include("DistSSHRun/argv/args.jl")
+include("DistSSHRun/argv/session.jl")
+include("DistSSHRun/hosts.jl")
+include("DistSSHRun/remote.jl")
+include("DistSSHRun/demos.jl")
+include("DistSSHRun/distributed.jl")
+include("DistSSHRun/drive/types.jl")
+include("DistSSHRun/run_manifest.jl")
+include("DistSSHRun/size/measure.jl")
+include("DistSSHRun/setup.jl")
+include("DistSSHRun/argv/drive_args.jl")
+include("DistSSHRun/argv/go_args.jl")
+include("DistSSHRun/argv/plan_args.jl")
+include("DistSSHRun/argv/setup_args.jl")
+include("DistSSHRun/argv/size_args.jl")
+include("DistSSHRun/argv/pool_args.jl")
+include("DistSSHRun/argv/ride_args.jl")
+include("DistSSHRun/drive.jl")
+include("DistSSHRun/namespace_sync.jl")
+include("DistSSHRun/pool.jl")
+include("DistSSHRun/drive/runtime/heartbeat.jl")
+include("DistSSHRun/drive/runtime/_common.jl")
+include("DistSSHRun/drive/runtime/checks.jl")
+include("DistSSHRun/drive/runtime/collect_tree.jl")
+include("DistSSHRun/drive/runtime/workers.jl")
+include("DistSSHRun/drive/runtime/init.jl")
+include("DistSSHRun/drive/runtime/results.jl")
+include("DistSSHRun/drive/runtime/run.jl")
+include("DistSSHRun/argv/size_report.jl")
+include("DistSSHRun/plan.jl")
+include("DistSSHRun/go.jl")
+include("DistSSHRun/ride.jl")
+include("DistSSHRun/execute.jl")
+
+const _KIT_ROOT = dirname(@__DIR__)
+
+# Kit version (from Project.toml).
+# `@__DIR__` is `src/` — keep path resolution here, not in included files.
+
+"""Read `version` from `path` (`Project.toml`); return `nothing` if missing or invalid."""
+function _project_toml_version(path::AbstractString)::Union{Nothing, VersionNumber}
+    p = String(path)
+    isfile(p) || return nothing
+    try
+        raw = get(TOML.parsefile(p), "version", nothing)
+        raw isa AbstractString || return nothing
+        return VersionNumber(String(raw))
+    catch
+        return nothing
+    end
+end
+
+const _DIST_SSH_KIT_PROJECT_TOML = joinpath(@__DIR__, "..", "Project.toml")
+
+"""Semantic version of this vendored kit (from kit `Project.toml`)."""
+const DIST_SSH_KIT_VERSION = something(
+    _project_toml_version(_DIST_SSH_KIT_PROJECT_TOML),
+    v"0.0.0",
+)
+
+dist_ssh_kit_version()::VersionNumber = DIST_SSH_KIT_VERSION
+
+# CLI: load `src/cli/*.jl` into Main and run `*_main`.
+#   julia --project=. -m DistSSHRun drive parent:2 script.jl
+
+const _KIT_CLI_LOADED = Set{String}()
+const _KIT_CLI_SCRIPTS = ("drive.jl", "go.jl", "plan.jl", "pool.jl", "ride.jl", "setup.jl", "size.jl")
+
+const _KIT_CLI_MAIN = Dict(
+    "drive.jl" => :drive_main,
+    "go.jl" => :go_main,
+    "plan.jl" => :plan_main,
+    "pool.jl" => :pool_main,
+    "ride.jl" => :ride_main,
+    "setup.jl" => :setup_main,
+    "size.jl" => :size_main,
+)
+
+function _kit_cli_run_entry(script_base::String)::Cint
+    sym = get(_KIT_CLI_MAIN, script_base, nothing)
+    sym === nothing && return 0
+    return Base.invokelatest() do
+        result = getfield(Main, sym)()
+        return result isa Cint ? result : 0
+    end
+end
+
+function _append_script_arg_prelude!(args::Vector{String})
+    raw = get(ENV, "DISTSSHKIT_SCRIPT_ARG_PRELUDE", "")
+    isempty(raw) && return
+    delete!(ENV, "DISTSSHKIT_SCRIPT_ARG_PRELUDE")
+    for line in split(raw, '\n')
+        s = strip(String(line))
+        !isempty(s) && push!(args, s)
+    end
+    return
+end
+
+function _merge_script_arg_prelude(rest::Vector{String})::Vector{String}
+    merged = collect(String, rest)
+    _append_script_arg_prelude!(merged)
+    return merged
+end
+
+function _mark_kit_cli_subcommand_done!()
+    return ENV["DISTSSHKIT_CLI_SUBCOMMAND_DONE"] = "1"
+end
+
+function _consume_kit_cli_subcommand_done!()::Bool
+    if get(ENV, "DISTSSHKIT_CLI_SUBCOMMAND_DONE", "") == "1"
+        delete!(ENV, "DISTSSHKIT_CLI_SUBCOMMAND_DONE")
+        return true
+    end
+    return false
+end
+
+"""Run a kit CLI script under `src/cli/` (`drive.jl`, `setup.jl`, …) with `ARGS` set."""
+function _run_kit_cli_script(script_name::AbstractString, args::Vector{String})::Cint
+    haskey(ENV, "DISTRIBUTED_PROJECT_ROOT") || (ENV["DISTRIBUTED_PROJECT_ROOT"] = pwd())
+    # `args` may alias `ARGS` (the app launcher can pass `ARGS` directly).
+    args_snapshot = collect(String, args)
+    empty!(ARGS)
+    append!(ARGS, args_snapshot)
+    script_path::String = if isabspath(script_name)
+        String(script_name)
+    else
+        joinpath(@__DIR__, "cli", String(script_name))
+    end
+    script_base = basename(script_path)
+    prev_include = get(ENV, "DIST_SSH_KIT_CLI_INCLUDE", nothing)
+    ENV["DIST_SSH_KIT_CLI_INCLUDE"] = "1"
+    try
+        if script_base in _KIT_CLI_SCRIPTS
+            if !(script_base in _KIT_CLI_LOADED)
+                Core.include(Main, script_path)
+                push!(_KIT_CLI_LOADED, script_base)
+            end
+            return _kit_cli_run_entry(script_base)
+        end
+        Core.include(Main, script_path)
+        return 0
+    finally
+        if prev_include === nothing
+            delete!(ENV, "DIST_SSH_KIT_CLI_INCLUDE")
+        else
+            ENV["DIST_SSH_KIT_CLI_INCLUDE"] = prev_include
+        end
+        _mark_kit_cli_subcommand_done!()
+    end
+end
+
+"""
+    drive(args::Vector{String}=copy(ARGS))
+
+Run `drive.jl` with `args` (same as `julia -m DistSSHRun drive …`).
+"""
+drive(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("drive.jl", args)
+
+"""
+    go(args::Vector{String}=copy(ARGS))
+
+Run `go.jl` with `args` (same as `julia -m DistSSHRun go …`).
+"""
+go(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("go.jl", args)
+
+"""
+    setup(args::Vector{String}=copy(ARGS))
+
+Run `setup.jl` (clone / sync / cleanup) with `args` (same as `julia -m DistSSHRun setup …`).
+"""
+setup(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("setup.jl", args)
+
+"""
+    run_size(args::Vector{String}=copy(ARGS))
+
+Run the `size` CLI (`size.jl`) with `args`. Named `run_size` so it does not
+shadow `Base.size`. Prefer `julia -m DistSSHRun size …` day-to-day.
+"""
+run_size(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("size.jl", args)
+
+"""
+    run_pool(args::Vector{String}=copy(ARGS))
+
+Run the `pool` CLI (`pool.jl`) with `args`. Prefer `julia -m DistSSHRun pool …`.
+"""
+run_pool(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("pool.jl", args)
+
+"""
+    run_ride(args::Vector{String}=copy(ARGS))
+
+Run the `ride` CLI (`ride.jl`) with `args`. Prefer `julia -m DistSSHRun ride …`.
+"""
+run_ride(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("ride.jl", args)
+
+"""
+    run_plan(args::Vector{String}=copy(ARGS))
+
+Run the `plan` CLI (`plan.jl`) with `args`. Prefer `julia -m DistSSHRun plan …`.
+"""
+run_plan(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("plan.jl", args)
+
+"""
+    main(args::Vector{String}=copy(ARGS))
+
+CLI entry. Prefer Julia 1.13+ and `julia -m DistSSHRun SUBCOMMAND …`:
+
+    julia --project=. -m DistSSHRun setup --clone child:host1 child:host2
+    julia --project=. -m DistSSHRun go SCRIPT.jl
+    julia --project=. -m DistSSHRun ride parent:2 SCRIPT.jl
+    julia --project=. -m DistSSHRun drive parent:2 script.jl
+    julia --project=. -m DistSSHRun plan SCRIPT.jl
+    julia --project=. -m DistSSHRun size parent child:host1
+    julia --project=. -m DistSSHRun pool parent child:host1
+    julia --project=. -m DistSSHRun progress DIR
+
+`main` remains for wrappers and tests; prefer `-m` day-to-day.
+A `.jl` path with no command is not implicit `go`.
+"""
+function main(args::Vector{String} = copy(ARGS))::Cint
+    if _consume_kit_cli_subcommand_done!()
+        return 0
+    end
+    if length(args) == 1 && args[1] in ("--version", "-v", "-V")
+        println_kit_version()
+        return 0
+    end
+    if length(args) == 1 && args[1] in ("-h", "--help", "help")
+        print_kit_root_usage()
+        return 0
+    end
+    if isempty(args)
+        print_kit_root_usage()
+        return 1
+    end
+    subcommand, rest = args[1], args[2:end]
+    if subcommand in ("drive", "go") &&
+            any(endswith(String(a), ".jl") for a in rest)
+        _mark_kit_cli_subcommand_done!()
+    end
+    if subcommand == "drive"
+        return drive(_merge_script_arg_prelude(rest))
+    elseif subcommand == "go"
+        return go(_merge_script_arg_prelude(rest))
+    elseif subcommand == "demo"
+        return demo(rest)
+    elseif subcommand == "setup"
+        return setup(rest)
+    elseif subcommand == "plan"
+        return run_plan(rest)
+    elseif subcommand == "ride"
+        return run_ride(rest)
+    elseif subcommand == "size"
+        return run_size(rest)
+    elseif subcommand == "pool"
+        return run_pool(rest)
+    elseif subcommand == "progress"
+        return progress(rest)
+    else
+        if any(endswith(String(a), ".jl") for a in args)
+            print_cli_error(
+                "No command (got $(repr(subcommand))). Kit does not infer go / ride / drive.",
+            )
+            println(stderr, "  go SCRIPT.jl      as-is complete job (timing without rewrite)")
+            println(stderr, "  ride … SCRIPT.jl  experimental map / filter")
+            println(stderr, "  drive … SCRIPT.jl Distributed")
+            println(stderr, "  plan SCRIPT.jl    inspect; do not run")
+        else
+            print_cli_error("Unknown subcommand: $subcommand")
+            println(stderr, "Expected: setup | go | ride | drive | plan | size | pool | demo | progress")
+        end
+        println(stderr)
+        print_kit_root_usage()
+        return 1
+    end
+end
+
+Base.eval(@__MODULE__, :(@main))
+
+end # module DistSSHRun

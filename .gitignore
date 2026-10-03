@@ -1,0 +1,49 @@
+# Julia / Pkg
+Manifest.toml
+docs/Manifest.toml
+docs/build/
+docs/site/
+
+# Kit dumps (matches any path named these):
+#   {script}/.distsshkit/go/     go batches
+#   {script}/.distsshkit/drive   omitted drive result root
+#   {project}/.distsshkit/setup  setup logs
+# Demo drivers still set output/ via init_output_dir!.
+# results/ is the old omitted drive/go default (leftover trees).
+.distsshkit/
+output/
+results/
+data/
+runner_*.log
+drive_*.log
+go_*.log
+
+# Tests & CI artifacts
+.ci-cache/
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+coverage/
+lcov.info
+# SSH E2E kept runs (see test/artifacts/README.md)
+test/artifacts/ssh-e2e/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*~
+.vscode/settings.json
+
+# Secrets / local tooling (defense in depth; testenv also ignores mounted-keys)
+.env
+.env.*
+!.env.example
+*.pem
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+.cursor/
+
+# Local dev notes (not shared)
+ROADMAP.ja.local.md

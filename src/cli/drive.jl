@@ -1,0 +1,53 @@
+#!/usr/bin/env julia
+"""
+`julia -m DistSSHRun drive` — run a driver on local/SSH workers, then collect remote outputs.
+
+  julia --project=. -m DistSSHRun drive
+  julia --project=. -m DistSSHRun drive parent:9 child:host1:10 script.jl
+  julia --project=. -m DistSSHRun drive --collect-missing data/out host1 host2
+
+See `--help`.
+"""
+
+# Prefer package DistSSHRun; fall back to vendored include.
+if !isdefined(@__MODULE__, :DistSSHRun)
+    if get(ENV, "DIST_SSH_KIT_CLI_INCLUDE", "") == "1"
+        import DistSSHRun
+    else
+        try
+            import DistSSHRun
+        catch
+            include(joinpath(@__DIR__, "..", "DistSSHRun.jl"))
+        end
+    end
+end
+include(joinpath(@__DIR__, "drive", "_using.jl"))
+
+function _restore_drive_args!(original_args::Vector{String})
+    empty!(ARGS)
+    return append!(ARGS, original_args)
+end
+
+function drive_main()::Cint
+    original_args = copy(ARGS)
+    try
+        return _drive_main_body(original_args)
+    finally
+        _restore_drive_args!(original_args)
+    end
+end
+
+function _drive_main_body(original_args::Vector{String})::Cint
+    parsed = parse_drive_args(ARGS)
+    return run_drive_parsed!(
+        parsed;
+        original_args = original_args,
+        project_root = cli_project_root(@__DIR__),
+    )
+end
+
+if get(ENV, "DIST_SSH_KIT_CLI_INCLUDE", "") != "1" &&
+        !isempty(PROGRAM_FILE) &&
+        abspath(PROGRAM_FILE) == abspath(@__FILE__)
+    exit(drive_main())
+end
