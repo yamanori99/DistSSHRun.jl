@@ -1,0 +1,34 @@
+name: Bug
+description: Something is broken or behaves unexpectedly.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Expected vs actual, and any error text.
+      placeholder: When I run … I expected … but …
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce? (optional)
+      description: Commands, script path, Julia version, local vs remote.
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area (optional)
+      description: Same vocabulary as PR path labels. Add matching area:* labels after submit if useful.
+      multiple: true
+      options:
+        - ci
+        - docs
+        - project-docs
+        - run
+        - test
+    validations:
+      required: false

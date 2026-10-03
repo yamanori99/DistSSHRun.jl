@@ -1,0 +1,36 @@
+# TagBot creates `vX.Y.Z` tags after General-registry releases (JuliaTagBot /
+# workflow_dispatch). Manual `git tag -a` remains fine for maintainer overrides;
+# see CONTRIBUTING.md.
+#
+# Do not set `permissions:` here (TagBot troubleshooting: use repo defaults).
+# SSH deploy key pushes the tag so Docs on `vX.Y.Z` runs. GitHub Releases use
+# `token`. Prefer repo secret `TAGBOT_PAT` (fine-grained, this repo: Contents
+# + Issues write). Add Workflows write only if the tagged SHA changes
+# `.github/workflows`. Empty secret falls back to `GITHUB_TOKEN`.
+name: TagBot
+on:
+  issue_comment:
+    types:
+      - created
+  workflow_dispatch:
+
+# JuliaTagBot can comment twice in seconds. A second `git push` of the same
+# tag fails and opens a false tagbot-manual issue. Do not cancel in progress.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  TagBot:
+    if: github.event_name == 'workflow_dispatch' || github.actor == 'JuliaTagBot'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: JuliaRegistries/TagBot@v1
+        with:
+          token: ${{ secrets.TAGBOT_PAT || secrets.GITHUB_TOKEN }}
+          # Fine-grained TAGBOT_PAT is this repo only (Releases). It 401s on
+          # GET JuliaRegistries/General. GITHUB_TOKEN can read public General.
+          registry_token: ${{ secrets.GITHUB_TOKEN }}
+          # SSH deploy key so the version tag starts Documentation.yml (`stable`).
+          # Docs still push gh-pages with GITHUB_TOKEN (not this key).
+          ssh: ${{ secrets.DOCUMENTER_KEY }}

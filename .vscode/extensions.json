@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "julialang.language-julia",
+    "jkillingsworth.custom-local-formatters",
+    "tamasfe.even-better-toml",
+    "davidanson.vscode-markdownlint",
+    "github.vscode-github-actions",
+    "redhat.vscode-yaml"
+  ]
+}

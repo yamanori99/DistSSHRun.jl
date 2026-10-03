@@ -5,7 +5,7 @@ How this repo tests DistSSHRun. Maintainer checklist:
 
 ## Run
 
-From the kit checkout root:
+From the package root:
 
 ```bash
 julia --project=. -e 'using Pkg; Pkg.test()'

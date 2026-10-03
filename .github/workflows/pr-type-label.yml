@@ -1,0 +1,159 @@
+# Require a type label on every PR: bug | enhancement | breaking | chore.
+# If missing: unique type on a closing issue (`Fixes #N`) first, else branch prefix
+# (`feat/` → enhancement, `fix/` → bug, …). Dependabot is exempt (`dependencies`).
+# A version increase is not a label. Test reads Project.toml (version-cut.sh).
+# Do not lower `version` for General; postpone with `cut-hold` instead.
+name: Type
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled]
+
+# Include event.action so labeled/unlabeled (from path Labels) do not
+# cancel an in-flight opened/synchronize job that is applying the type.
+concurrency:
+  group: pr-type-label-${{ github.event.pull_request.number }}-${{ github.event.action }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  require-type:
+    name: PR label
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/github-script@v9
+        with:
+          # 422 on a brand-new PR is often "Could not resolve … global id" (node
+          # not visible on the Issues API yet). github-script exempts 422 from
+          # its own retries, so this script backs off instead.
+          script: |
+            const login = context.payload.pull_request.user.login;
+            if (login === "dependabot[bot]") {
+              core.info("Skipping type label check for Dependabot");
+              return;
+            }
+
+            const required = ["bug", "enhancement", "breaking", "chore"];
+            const requiredSet = new Set(required);
+            const n = context.issue.number;
+
+            async function retryPrNode(fn) {
+              let delayMs = 1000;
+              const tries = 8;
+              for (let i = 1; i <= tries; i++) {
+                try {
+                  return await fn();
+                } catch (err) {
+                  const msg = String(err.message || "");
+                  const transient =
+                    err.status === 422 &&
+                    msg.includes("Could not resolve to a node with the global id");
+                  if (!transient || i === tries) {
+                    throw err;
+                  }
+                  core.info(
+                    `PR node not ready (${i}/${tries}); retry in ${delayMs}ms`,
+                  );
+                  await new Promise((r) => setTimeout(r, delayMs));
+                  delayMs = Math.min(delayMs * 2, 8000);
+                }
+              }
+            }
+
+            async function listLabelNames() {
+              try {
+                const { data } = await retryPrNode(() =>
+                  github.rest.issues.listLabelsOnIssue({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: n,
+                  }),
+                );
+                return data.map((l) => l.name);
+              } catch (err) {
+                core.warning(
+                  `listLabelsOnIssue failed (${err.message}); using event payload`,
+                );
+                return (context.payload.pull_request.labels || []).map((l) => l.name);
+              }
+            }
+
+            async function addIssueLabels(names) {
+              await retryPrNode(() =>
+                github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: n,
+                  labels: names,
+                }),
+              );
+            }
+
+            const labels = await listLabelNames();
+            let found = labels.filter((name) => requiredSet.has(name));
+            if (found.length > 0) {
+              core.info(`Type label(s): ${found.join(", ")}`);
+            } else {
+              const fromIssue = await typeFromClosingIssues(n);
+              const branch = String(context.payload.pull_request.head.ref || "");
+              const inferred = fromIssue !== null ? fromIssue : inferType(branch);
+              await addIssueLabels([inferred]);
+              if (fromIssue !== null) {
+                core.info(`Applied type label "${inferred}" from a closing issue`);
+              } else {
+                core.info(`Applied type label "${inferred}" from branch "${branch}"`);
+              }
+            }
+
+            async function typeFromClosingIssues(num) {
+              const query = `query($owner: String!, $name: String!, $n: Int!) {
+                repository(owner: $owner, name: $name) {
+                  pullRequest(number: $n) {
+                    closingIssuesReferences(first: 20) {
+                      nodes { labels(first: 20) { nodes { name } } }
+                    }
+                  }
+                }
+              }`;
+              const result = await retryPrNode(() =>
+                github.graphql(query, {
+                  owner: context.repo.owner,
+                  name: context.repo.repo,
+                  n: num,
+                }),
+              );
+              const nodes =
+                result.repository?.pullRequest?.closingIssuesReferences?.nodes ?? [];
+              const types = new Set();
+              for (const node of nodes) {
+                for (const lab of node.labels?.nodes ?? []) {
+                  if (requiredSet.has(lab.name) && lab.name !== "breaking") {
+                    types.add(lab.name);
+                  }
+                }
+              }
+              if (types.size === 1) {
+                return [...types][0];
+              }
+              return null;
+            }
+
+            function inferType(ref) {
+              const b = ref.toLowerCase();
+              if (b.startsWith("breaking/") || b.startsWith("break/")) {
+                return "breaking";
+              }
+              if (b.startsWith("feat/") || b.startsWith("feature/")) {
+                return "enhancement";
+              }
+              if (b.startsWith("fix/") || b.startsWith("bug/") || b.startsWith("hotfix/")) {
+                return "bug";
+              }
+              // Known prefixes, and anything else (demos/, wip/, unprefixed).
+              return "chore";
+            }
