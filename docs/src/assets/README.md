@@ -1,4 +1,4 @@
 # Docs assets
 
-There is no package mark yet. `pkgeval.svg` is the Nanosoldier badge.
-`custom.css` is the Documenter theme tweak.
+There is no package mark yet. `custom.css` is the Documenter theme tweak.
+`pkgeval.svg` is written by the PkgEval badge workflow once Nanosoldier has this package.
