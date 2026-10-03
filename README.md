@@ -12,9 +12,23 @@
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 <!-- markdownlint-enable MD013 -->
 
-One DistSSHKit run on shared machines over SSH: `setup`, `go`, `ride`, `drive`, `plan`, `size`, `pool`, `demo`, and `progress`. Supported on **macOS, Linux, and WSL2 Ubuntu** (not native Windows).
+DistSSHRun is the
+[DistSSHKit](https://github.com/yamanori99/DistSSHKit.jl)
+execution layer moved into this package. It is one run on shared machines
+over SSH: `setup`, `go`, `ride`, `drive`, `plan`, `size`, `pool`, `demo`,
+and `progress`. Supported on **macOS, Linux, and WSL2 Ubuntu** (not native
+Windows).
 
-Users add [DistSSHKit](https://github.com/yamanori99/DistSSHKit.jl). The manual is the [DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/stable/). The command is `julia -m DistSSHKit`.
+Today, DistSSHKit 0.9 still contains that run and does not depend on
+DistSSHRun. [DistSSHQueue](https://github.com/yamanori99/DistSSHQueue.jl)
+depends on DistSSHKit. Users add DistSSHKit. The manual is the
+[DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/stable/).
+The command is `julia -m DistSSHKit`.
+
+Later, DistSSHQueue depends on DistSSHRun. DistSSHKit depends on
+DistSSHQueue and reexports DistSSHRun, so users still add DistSSHKit and
+run `julia -m DistSSHKit`. Queue depends on this package so Kit can depend
+on Queue.
 
 ## Install
 
@@ -30,7 +44,8 @@ Direct dependency of this package:
 pkg> add DistSSHRun
 ```
 
-Julia **1.13+**. Hosts need **`ssh`** and **`rsync`**. Git deploys also need **`git`**.
+Julia **1.13+**. Hosts need **`ssh`** and **`rsync`**. Git deploys also
+need **`git`**.
 
 ## Commands
 
@@ -44,4 +59,5 @@ julia -m DistSSHKit size
 julia -m DistSSHKit pool
 ```
 
-`julia -m DistSSHRun` is the same entry when this package is a direct dependency.
+`julia -m DistSSHRun` is the same entry when this package is a direct
+dependency.

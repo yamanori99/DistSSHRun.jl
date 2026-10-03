@@ -1,6 +1,9 @@
 """
-DistSSHRun — local + SSH Julia runs (`go` / `plan` / `ride` / `drive` / `setup`) and a small API
-(`go!`, `plan`, `ride!`, `pool!`, `drive!`, `pipeline!`, …).
+DistSSHRun — the DistSSHKit execution layer moved into this package.
+
+One SSH run (`setup`, `go`, `ride`, `drive`, `plan`, `size`, `pool`, `demo`, `progress`) and the bang API (`go!`, `plan`, `ride!`, `pool!`, `drive!`, `pipeline!`).
+
+Today DistSSHKit 0.9 still contains that run and does not depend on DistSSHRun. Users add DistSSHKit and run `julia -m DistSSHKit`. Later DistSSHQueue depends on DistSSHRun, and DistSSHKit depends on DistSSHQueue and reexports this package.
 
 Package entry: exports, version, `include`s, `main` (`@main` on Julia 1.13+).
 CLI entries live under `src/cli/`; argv parsers under `src/DistSSHRun/argv/`.
