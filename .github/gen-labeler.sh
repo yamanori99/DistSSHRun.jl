@@ -14,7 +14,7 @@
 #   - .github/**, codecov.yml, .coderabbit.yaml → area:ci
 #
 # Product tests live only under the trees in `product_test_trees`. Shared
-# unit / integration files stay area:queue. Any other path under test/ is
+# unit / integration files stay area:run. Any other path under test/ is
 # the harness (runtests, support, e2e, …).
 #
 # Usage:
