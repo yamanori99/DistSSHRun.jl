@@ -1,33 +1,66 @@
 name: PkgEval badge
 
 # This repository updates its own badge. The restyle is DistSSHKit's
-# docs/pkgeval-badge.jl. A missing Nanosoldier badge is not written.
+# docs/pkgeval-badge.jl. That script runs in a read-only job. Only the
+# SVG is passed to the job that can push. A missing Nanosoldier badge
+# is not written.
 on:
   schedule:
     - cron: "0 22 * * *"
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  refresh:
+  generate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      present: ${{ steps.badge.outputs.present }}
     steps:
-      - uses: actions/checkout@v7
       - uses: actions/checkout@v7
         with:
           repository: yamanori99/DistSSHKit.jl
           ref: main
           path: distsshkit
+          persist-credentials: false
       - uses: julia-actions/setup-julia@v3
         with:
           version: "1.13"
       - name: Refresh badge
-        run: julia --startup-file=no distsshkit/docs/pkgeval-badge.jl DistSSHRun docs/src/assets/pkgeval.svg
+        id: badge
+        run: |
+          julia --startup-file=no distsshkit/docs/pkgeval-badge.jl DistSSHRun pkgeval.svg
+          if [[ -f pkgeval.svg ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: steps.badge.outputs.present == 'true'
+        with:
+          name: pkgeval-svg
+          path: pkgeval.svg
+          if-no-files-found: error
+
+  commit:
+    needs: generate
+    if: needs.generate.outputs.present == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/download-artifact@v4
+        with:
+          name: pkgeval-svg
+          path: docs/src/assets
       - name: Commit if the badge changed
         run: |
+          grep -q 'PkgEval' docs/src/assets/pkgeval.svg
           git add docs/src/assets/pkgeval.svg
           if git diff --cached --quiet; then
             echo "PkgEval badge unchanged"
