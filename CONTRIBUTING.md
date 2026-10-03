@@ -58,8 +58,6 @@ runic --inplace src test docs testenv   # before push; not `.` (markdown out of 
 ./testenv/docker-ssh/scripts/up.sh --e2e
 julia --project=docs -e 'using Pkg; Pkg.instantiate()'
 julia --project=docs --color=yes docs/make.jl
-julia --project=docs/src/assets/logo -e 'using Pkg; Pkg.instantiate()'
-julia --project=docs/src/assets/logo docs/src/assets/logo/draw.jl   # SVG; add --png for rasters
 gitleaks detect --source .
 ```
 
