@@ -97,7 +97,7 @@ build locally instead (omit `DISTSSHKIT_WORKER_IMAGE`).
 
 ```bash
 export DISTSSHKIT_WORKER_IMAGE=ghcr.io/yamanori99/\
-distsshkit-linux-ssh-worker:latest
+distsshrun-linux-ssh-worker:latest
 ./scripts/up.sh --e2e
 ```
 
@@ -130,7 +130,7 @@ Register from the version-cut PR's Linux E2E. Weekly Intel / WSL are
 watchers (`cut-hold` only if weekly Linux is red).
 
 Those kit parent jobs wait for `ubuntu-latest (image)` then pull
-`ghcr.io/<owner>/distsshkit-linux-ssh-worker:<sha>` instead of building
+`ghcr.io/<owner>/distsshrun-linux-ssh-worker:<sha>` instead of building
 Julia-in-Docker on Colima / WSL `dockerd`. Push to GHCR is retried until the
 tag is inspectable (GHCR `unknown blob`). After the weekly Linux suite,
 `:latest`
