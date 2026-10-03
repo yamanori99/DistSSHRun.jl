@@ -13,27 +13,27 @@
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 <!-- markdownlint-enable MD013 -->
 
-One DistSSHKit run on shared machines over SSH: `setup`, `go`, `ride`, `drive`, `plan`, `size`, `pool`, `demo`, and `progress`. Supported on **macOS, Linux, and WSL2 Ubuntu** (not native Windows).
+SSH で共有マシンに載せる、DistSSHKit の一回の実行である。`setup`、`go`、`ride`、`drive`、`plan`、`size`、`pool`、`demo`、`progress`。対応は **macOS、Linux、WSL2 Ubuntu** (ネイティブ Windows は対象外)。
 
-Users add [DistSSHKit](https://github.com/yamanori99/DistSSHKit.jl). The manual is the [DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/stable/). The command is `julia -m DistSSHKit`.
+利用者は [DistSSHKit](https://github.com/yamanori99/DistSSHKit.jl) を足す。手順は [DistSSHKit のマニュアル](https://yamanori99.github.io/DistSSHKit.jl/stable/) にある。打つコマンドは `julia -m DistSSHKit` である。
 
-## Install
+## インストール
 
-Day-to-day:
+普段は次を足す。
 
 ```julia
 pkg> add DistSSHKit
 ```
 
-Direct dependency of this package:
+このパッケージを直接依存にするときは次を足す。
 
 ```julia
 pkg> add DistSSHRun
 ```
 
-Julia **1.13+**. Hosts need **`ssh`** and **`rsync`**. Git deploys also need **`git`**.
+Julia **1.13+**。ホストには **`ssh`** と **`rsync`** が要る。git で配るときは **`git`** も要る。
 
-## Commands
+## コマンド
 
 ```bash
 julia -m DistSSHKit setup --check child:host1
@@ -45,4 +45,4 @@ julia -m DistSSHKit size
 julia -m DistSSHKit pool
 ```
 
-`julia -m DistSSHRun` is the same entry when this package is a direct dependency.
+DistSSHRun を直接依存にしているときは、`julia -m DistSSHRun` が同じ入口になる。

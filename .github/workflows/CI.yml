@@ -1,0 +1,240 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+# Cancel redundant runs on the same branch/PR.
+# A Project.toml version increase (see version-cut.sh) runs tip /
+# Aqua tip / registry tree in this workflow. No label is involved.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+
+permissions:
+  contents: read
+  actions: write # julia-actions/cache delete-old-caches
+
+jobs:
+  # Full `Pkg.test()` stays Linux-only. Slow SSH E2E kit parents are `E2E weekly`.
+  # PRs run `ubuntu-latest → ubuntu-24.04` in this workflow.
+  # One detect job; markdown-only / allowlisted PRs skip heavy jobs (UI: skipping).
+  # Required check names do not include a Julia version.
+  # Codecov (flag pkgtest): main push only — not on pull_request.
+  # cache-scratchspaces: false — registry_updates.toml in scratchspaces can
+  # poison Pkg.Registry.update on 1.13 if restored corrupt.
+  # Aqua / JETLS share this workflow so the Test badge is the PR gate.
+  # Linux E2E (1.13): path filter on PR / main push; always on a version
+  # increase and dispatch. JETLS uses `.github/actions/jetls-check` (no nested
+  # cache; julia-actions/cache#236). JETLS runs on 1.13. Add another version
+  # job only when that runtime is outside JETLS's range.
+  detect:
+    name: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      heavy: ${{ steps.heavy.outputs.heavy }}
+      version_cut: ${{ steps.heavy.outputs.version_cut }}
+      e2e: ${{ steps.gate.outputs.e2e }}
+      coverage: ${{ steps.gate.outputs.coverage }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/ci-heavy
+        id: heavy
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        id: filter
+        with:
+          predicate-quantifier: some-with-excludes
+          filters: |
+            e2e:
+              - "src/**"
+              - "test/**"
+              - "!test/**/*.md"
+              - "demos/**"
+              - "!demos/**/*.md"
+              - "testenv/**"
+              - "!testenv/**/*.md"
+              - "Project.toml"
+              - ".github/julia-slots.env"
+              - ".github/workflows/CI.yml"
+      - id: gate
+        env:
+          FILTER_E2E: ${{ steps.filter.outputs.e2e }}
+          CUT: ${{ steps.heavy.outputs.version_cut }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$CUT" = "true" ]; then
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_EVENT_NAME" = "push" ] || [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            echo "e2e=${FILTER_E2E}" >> "$GITHUB_OUTPUT"
+          else
+            echo "e2e=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "$CUT" = "true" ]; then
+            echo "coverage=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "coverage=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  test:
+    name: Pkg.test - 1.13 - ubuntu-latest
+    needs: detect
+    if: github.event_name != 'pull_request' || needs.detect.outputs.heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # Codecov OIDC on main push
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@v3
+        with:
+          cache-scratchspaces: false
+      - uses: ./.github/actions/pkg-test
+        with:
+          coverage: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          upload: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
+  test-tip:
+    name: Pkg.test - 1.14-nightly - ubuntu-latest
+    needs: detect
+    if: github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.14-nightly"
+      - uses: julia-actions/cache@v3
+        with:
+          cache-scratchspaces: false
+      - uses: ./.github/actions/pkg-test
+
+  # Not a Julia slot. Not required to merge. Catches checkout-only Pkg.test assumptions.
+  test-registry-tree:
+    name: Pkg.test - registry tree - ubuntu-latest
+    needs: detect
+    if: github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.14-nightly"
+      - uses: julia-actions/cache@v3
+        with:
+          cache-scratchspaces: false
+      - uses: ./.github/actions/registry-tree-test
+
+  aqua:
+    name: Aqua - 1.13 - ubuntu-latest
+    needs: detect
+    if: github.event_name != 'pull_request' || needs.detect.outputs.heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@v3
+        with:
+          cache-scratchspaces: false
+      - name: Aqua.test_all (latest Aqua)
+        run: ./.github/aqua-check.sh
+
+  aqua-tip:
+    name: Aqua - 1.14-nightly - ubuntu-latest
+    needs: detect
+    if: github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.14-nightly"
+      - uses: julia-actions/cache@v3
+        with:
+          cache-scratchspaces: false
+      - name: Aqua.test_all (latest Aqua)
+        run: ./.github/aqua-check.sh
+
+  # Literal name: a skipped job must still be this string.
+  # 1.13 only. Add another job when JETLS does not list that version.
+  jetls:
+    name: JETLS - 1.13 - ubuntu-latest
+    needs: detect
+    if: github.event_name != 'pull_request' || needs.detect.outputs.heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - id: files
+        run: echo "list=$(./.github/jetls-check.sh --print-files)" >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@v3
+        with:
+          cache-scratchspaces: false
+      - uses: ./.github/actions/jetls-check
+        with:
+          files: ${{ steps.files.outputs.list }}
+
+  ssh-e2e:
+    name: ubuntu-latest → ubuntu-24.04
+    needs: detect
+    if: needs.detect.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: write
+      id-token: write # Codecov OIDC when a version-cut PR runs E2E coverage
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/julia-slot
+        id: julia
+        with:
+          version: "1.13"
+      - name: Julia ${{ steps.julia.outputs.version }}
+        run: julia --version
+
+      - uses: julia-actions/cache@v3
+        with:
+          cache-scratchspaces: false
+
+      - uses: julia-actions/julia-buildpkg@v1
+
+      - name: docker-ssh up + SSH E2E
+        id: e2e
+        env:
+          DISTSSHKIT_CODE_COVERAGE: ${{ needs.detect.outputs.coverage == 'true' && '1' || '' }}
+        run: ./testenv/docker-ssh/scripts/up.sh --e2e
+
+      - uses: ./.github/actions/e2e-codecov
+        if: ${{ always() && steps.e2e.outcome == 'success' && needs.detect.outputs.coverage == 'true' }}
+
+      - name: Teardown workers
+        if: ${{ always() }}
+        run: ./testenv/docker-ssh/scripts/down.sh || true

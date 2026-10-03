@@ -1,0 +1,150 @@
+name: CI weekly
+
+# Not on pull_request: insurance for 1.13 / 1.14-nightly / Aqua / JETLS
+# @release drift when no PR ran that week. PR / main push stay the gate.
+# tip jobs are continue-on-error and omitted from notify.
+on:
+  workflow_dispatch:
+  # Sunday 10:00 JST (UTC 01:00). Misses E2E weekly (Saturday 19:00 UTC).
+  schedule:
+    - cron: "0 1 * * 0"
+
+concurrency:
+  group: ci-weekly-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write # julia-actions/cache delete-old-caches
+
+jobs:
+  test:
+    name: Pkg.test - 1.13 - ubuntu-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@v3
+        with:
+          cache-scratchspaces: false
+      - uses: ./.github/actions/pkg-test
+
+  test-tip:
+    name: Pkg.test - 1.14-nightly - ubuntu-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.14-nightly"
+      - uses: julia-actions/cache@v3
+        with:
+          cache-scratchspaces: false
+      - uses: ./.github/actions/pkg-test
+
+  jetls:
+    name: JETLS - 1.13 - ubuntu-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - id: files
+        run: echo "list=$(./.github/jetls-check.sh --print-files)" >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@v3
+        with:
+          cache-scratchspaces: false
+      - uses: ./.github/actions/jetls-check
+        with:
+          files: ${{ steps.files.outputs.list }}
+
+  aqua:
+    name: Aqua - 1.13 - ubuntu-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@v3
+        with:
+          cache-scratchspaces: false
+      - name: Aqua.test_all (latest Aqua)
+        run: ./.github/aqua-check.sh
+
+  aqua-tip:
+    name: Aqua - 1.14-nightly - ubuntu-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.14-nightly"
+      - uses: julia-actions/cache@v3
+        with:
+          cache-scratchspaces: false
+      - name: Aqua.test_all (latest Aqua)
+        run: ./.github/aqua-check.sh
+
+  cache-gc:
+    needs:
+      - test
+      - jetls
+      - aqua
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    name: cache-gc
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Keep latest cache per restore-key prefix
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/cache-gc.sh
+
+  notify:
+    needs:
+      - test
+      - jetls
+      - aqua
+      - cache-gc
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    name: notify
+    permissions:
+      issues: write
+    steps:
+      - name: Open or close tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FAILED: ${{ contains(join(needs.*.result, ','), 'failure') }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title='CI weekly failed'
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label alert --search "in:title $title" --json number --jq '.[0].number // empty')"
+          if [ "$FAILED" = "true" ]; then
+            body="Latest run: $RUN_URL
+
+          Not a PR check. Re-run **CI weekly** after a fix."
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+            else
+              gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label alert --body "$body"
+            fi
+          elif [ -n "$existing" ]; then
+            gh issue close "$existing" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Latest run succeeded: $RUN_URL"
+          fi

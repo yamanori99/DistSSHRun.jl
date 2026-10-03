@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-action.json
+name: julia-slot
+description: setup-julia for a version listed in .github/julia-slots.env
+
+inputs:
+  version:
+    description: Julia version (1.13, 1.14-nightly). Must be its own line in julia-slots.env.
+    required: true
+  setup:
+    description: "true to run julia-actions/setup-julia"
+    required: false
+    default: "true"
+
+outputs:
+  version:
+    description: Version passed in, after the env-file check
+    value: ${{ steps.pin.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - id: pin
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        file="${GITHUB_WORKSPACE}/.github/julia-slots.env"
+        if ! grep -Fxq "${VERSION}" "${file}"; then
+          echo "version ${VERSION} is not a line in ${file}" >&2
+          exit 1
+        fi
+        echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+        echo "Julia ${VERSION}"
+    - uses: julia-actions/setup-julia@v3
+      if: ${{ inputs.setup == 'true' }}
+      with:
+        version: ${{ steps.pin.outputs.version }}
