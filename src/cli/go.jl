@@ -1,11 +1,11 @@
 #!/usr/bin/env julia
 """
-`julia -m DistSSHRun go` — run an as-is complete job (no Kit APIs in the script).
+`julia -m DistSSHKit go` — run an as-is complete job (no Kit APIs in the script).
 
 Outputs: `{script}/.distsshkit/go/<stem>_<UTC>/<slot>/` (or `--output-dir`).
 
-  julia --project=. -m DistSSHRun go SCRIPT.jl
-  julia --project=. -m DistSSHRun go parent:2 child:user@h1 SCRIPT.jl
+  julia --project=. -m DistSSHKit go SCRIPT.jl
+  julia --project=. -m DistSSHKit go parent:2 child:user@h1 SCRIPT.jl
 
 See `--help`.
 """

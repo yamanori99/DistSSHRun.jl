@@ -22,7 +22,7 @@ using Test
     let (code, _, err) = _main_capture(String[])
         @test code == 1
         @test occursin("Usage", err)
-        @test occursin("julia -m DistSSHRun <command>", err)
+        @test occursin("julia -m DistSSHKit <command>", err)
     end
     # Unknown first token must fail, not exit 0.
     let (code, _, err) = _main_capture(["bogus"])
@@ -46,7 +46,7 @@ using Test
     let (code, _, err) = _main_capture(["--help"])
         @test code == 0
         @test occursin("Usage", err)
-        @test occursin("julia -m DistSSHRun <command>", err)
+        @test occursin("julia -m DistSSHKit <command>", err)
         @test occursin("progress", err)
     end
     let (code, out, _) = _main_capture(["--version"])
@@ -55,7 +55,7 @@ using Test
     end
     let (code, _, err) = _main_capture(["help"])
         @test code == 0
-        @test occursin("julia -m DistSSHRun <command>", err)
+        @test occursin("julia -m DistSSHKit <command>", err)
     end
     let (code, out, _) = _main_capture(["-V"])
         @test code == 0

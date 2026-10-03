@@ -107,7 +107,7 @@ function print_juliaup_align_fix!(
     )
     ch = String(channel)
     h = String(host)
-    kit_println("    Fix: julia --project=. -m DistSSHRun setup --juliaup $(setup_cli_host_token(h))")
+    kit_println("    Fix: julia --project=. -m DistSSHKit setup --juliaup $(setup_cli_host_token(h))")
     kit_println("         (or on $h: juliaup add $ch && juliaup update $ch && \\")
     kit_println("          juliaup default $ch —")
     kit_println("          \$HOME/.juliaup/bin/juliaup, /opt/homebrew/bin/juliaup,")
@@ -138,7 +138,7 @@ function print_juliaup_parent_patch_note!(
     juliaup_parent_behind_channel(local_version, remote_version) || return false
     ch = String(channel)
     warn("kit parent Julia $local_version is behind channel $ch latest on remotes ($remote_version)")
-    kit_println("    Tip: julia --project=. -m DistSSHRun setup --juliaup $PARENT_HOST_NAME")
+    kit_println("    Tip: julia --project=. -m DistSSHKit setup --juliaup $PARENT_HOST_NAME")
     kit_println("         (or: juliaup update $ch && juliaup default $ch), then re-run workers.")
     return true
 end

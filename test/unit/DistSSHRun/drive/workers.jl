@@ -13,7 +13,7 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
 
         @testset "setup_cli_host_token child token" begin
             host_name = "worker-host"
-            hint = "hint: julia --project=. -m DistSSHRun setup --instantiate $(DistSSHRun.setup_cli_host_token(host_name))"
+            hint = "hint: julia --project=. -m DistSSHKit setup --instantiate $(DistSSHRun.setup_cli_host_token(host_name))"
             @test occursin("child:worker-host", hint)
         end
 

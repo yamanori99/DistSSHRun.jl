@@ -37,7 +37,7 @@ function show_ride_usage(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia --project=. -m DistSSHRun ride SCRIPT.jl",
+        "  julia --project=. -m DistSSHKit ride SCRIPT.jl",
         "  ride parent:2 SCRIPT.jl",
         "  ride parent:1 child:host1:2 SCRIPT.jl",
         "  ride --spi-check parent:2 SCRIPT.jl",

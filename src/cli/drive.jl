@@ -1,10 +1,10 @@
 #!/usr/bin/env julia
 """
-`julia -m DistSSHRun drive` — run a driver on local/SSH workers, then collect remote outputs.
+`julia -m DistSSHKit drive` — run a driver on local/SSH workers, then collect remote outputs.
 
-  julia --project=. -m DistSSHRun drive
-  julia --project=. -m DistSSHRun drive parent:9 child:host1:10 script.jl
-  julia --project=. -m DistSSHRun drive --collect-missing data/out host1 host2
+  julia --project=. -m DistSSHKit drive
+  julia --project=. -m DistSSHKit drive parent:9 child:host1:10 script.jl
+  julia --project=. -m DistSSHKit drive --collect-missing data/out host1 host2
 
 See `--help`.
 """

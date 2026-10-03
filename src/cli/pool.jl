@@ -1,8 +1,8 @@
 #!/usr/bin/env julia
 """
-`julia -m DistSSHRun pool` — cluster cores / RAM / health (no job).
+`julia -m DistSSHKit pool` — cluster cores / RAM / health (no job).
 
-  julia --project=. -m DistSSHRun pool parent child:host1 child:host2
+  julia --project=. -m DistSSHKit pool parent child:host1 child:host2
 
 See `--help`.
 """

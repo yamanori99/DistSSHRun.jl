@@ -34,7 +34,7 @@ function show_pool_usage(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia --project=. -m DistSSHRun pool [parent] [child:NAME...]",
+        "  julia --project=. -m DistSSHKit pool [parent] [child:NAME...]",
         "  pool parent child:host1 child:host2",
         "  pool --gb-per-worker 1.5 child:host1",
     )

@@ -1,14 +1,14 @@
 #!/usr/bin/env julia
 """
-`julia -m DistSSHRun setup` — deploy and verify the project on SSH hosts.
+`julia -m DistSSHKit setup` — deploy and verify the project on SSH hosts.
 
 Recommended workflow:
   1. --rsync → 2. --instantiate → 3. --check → 4. --runtest (optional) → `go` / `drive`
   Optional git: --clone → --instantiate → --check → --sync / --pull
   Replace a remote tree: --delete, then --rsync or --clone
 
-  julia --project=. -m DistSSHRun setup --rsync child:host1 child:host2
-  julia --project=. -m DistSSHRun setup --sync child:host1 child:host2   # git updates
+  julia --project=. -m DistSSHKit setup --rsync child:host1 child:host2
+  julia --project=. -m DistSSHKit setup --sync child:host1 child:host2   # git updates
 
 See `--help`.
 """

@@ -244,7 +244,7 @@ function init_drive_workers!(proj_dir::String, explicit_package, path_anchor::St
                 end
 
                 # Skip processes where the binding already exists (e.g. master
-                # already loaded DistSSHRun via `julia -m DistSSHRun`).
+                # already loaded DistSSHRun via `julia -m DistSSHKit`).
                 load_src = """
                 if !isdefined(Main, $(repr(pkg_sym)))
                     using $pkg_sym

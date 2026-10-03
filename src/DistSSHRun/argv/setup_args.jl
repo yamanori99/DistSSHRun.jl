@@ -13,7 +13,7 @@ function show_requirements(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia --project=. -m DistSSHRun setup MODE child:host1 child:host2",
+        "  julia --project=. -m DistSSHKit setup MODE child:host1 child:host2",
         "  setup --rsync child:host1 child:host2",
         "  setup --instantiate child:host1 child:host2",
         "  setup --check child:host1 child:host2",

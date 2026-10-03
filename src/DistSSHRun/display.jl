@@ -1835,7 +1835,7 @@ end
 Last `begin`…`done` in `kit.progress` (prefers the sidecar over `*.log`).
 Each row is `label` and `seconds` (≥ 0). Sequential `step` lines are
 pipeline intervals; concurrent `item` lines are per-slot spans (running→ok/fail).
-CLI: `julia -m DistSSHRun progress DIR`.
+CLI: `julia -m DistSSHKit progress DIR`.
 """
 function kit_progress_phases(
         log_dir_or_file::AbstractString;
@@ -2179,7 +2179,7 @@ function show_progress_usage(io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia -m DistSSHRun progress [DIR]",
+        "  julia -m DistSSHKit progress [DIR]",
     )
     print_help_blank(io)
     print_help_section("Args"; io = io)
@@ -2480,13 +2480,13 @@ function print_help_document(title::AbstractString, body::AbstractString; io::IO
     return nothing
 end
 
-"""Top-level `julia -m DistSSHRun` usage (no subcommand)."""
+"""Top-level `julia -m DistSSHKit` usage (no subcommand)."""
 function print_kit_root_usage(io::IO = stderr)
     print_help_chrome("DistSSHRun"; io = io)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia -m DistSSHRun <command> [args...]",
+        "  julia -m DistSSHKit <command> [args...]",
     )
     print_help_blank(io)
     print_help_section("Commands"; io = io)
@@ -2506,14 +2506,14 @@ function print_kit_root_usage(io::IO = stderr)
     print_help_section("Examples"; io = io)
     print_help_lines(
         io,
-        "  julia --project=. -m DistSSHRun setup --check child:host1",
-        "  julia --project=. -m DistSSHRun go SCRIPT.jl",
-        "  julia --project=. -m DistSSHRun ride parent:2 SCRIPT.jl",
-        "  julia --project=. -m DistSSHRun drive parent:2 SCRIPT.jl",
-        "  julia --project=. -m DistSSHRun plan SCRIPT.jl",
+        "  julia --project=. -m DistSSHKit setup --check child:host1",
+        "  julia --project=. -m DistSSHKit go SCRIPT.jl",
+        "  julia --project=. -m DistSSHKit ride parent:2 SCRIPT.jl",
+        "  julia --project=. -m DistSSHKit drive parent:2 SCRIPT.jl",
+        "  julia --project=. -m DistSSHKit plan SCRIPT.jl",
     )
     print_help_blank(io)
-    println(io, "Run `julia -m DistSSHRun <command> -h` for flags.")
+    println(io, "Run `julia -m DistSSHKit <command> -h` for flags.")
     return nothing
 end
 

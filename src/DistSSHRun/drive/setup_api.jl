@@ -1,4 +1,4 @@
-# setup! — Julian mirror of `julia -m DistSSHRun setup --<mode>`.
+# setup! — Julian mirror of `julia -m DistSSHKit setup --<mode>`.
 
 const _SETUP_BANG_MODES = (
     :delete,
@@ -19,7 +19,7 @@ const _SETUP_BANG_MODES = (
     setup!(session::KitSession, mode::Symbol; kwargs...) -> SyncResult
     setup!(session::KitSession, modes::Symbol...) -> SyncResult
 
-Prepare SSH hosts — same jobs as `julia -m DistSSHRun setup --…`.
+Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup --…`.
 
 | `mode` | CLI | Notes |
 | --- | --- | --- |

@@ -37,7 +37,7 @@ function show_plan_usage(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia --project=. -m DistSSHRun plan SCRIPT.jl",
+        "  julia --project=. -m DistSSHKit plan SCRIPT.jl",
         "  plan SCRIPT.jl",
         "  plan parent --gb-per-worker 1.5 SCRIPT.jl",
     )

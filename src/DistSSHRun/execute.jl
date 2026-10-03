@@ -1,7 +1,7 @@
 # execute! — one seam over `go!` / `ride!` / `drive!` for callers that pick the kind at runtime
 # (see https://github.com/yamanori99/DistSSHKit.jl/issues/129).
 # Thin wrapper only: `go!` / `ride!` / `drive!` / `src/cli/*` are untouched.
-# `detached=true` spawns `julia -m DistSSHRun go|ride|drive` and returns [`KitProcess`](@ref).
+# `detached=true` spawns `julia -m DistSSHKit go|ride|drive` and returns [`KitProcess`](@ref).
 
 const _EXECUTE_DETACHED_KW = Set{Symbol}(
     (
@@ -122,7 +122,7 @@ end
 """
 Handle to a detached [`execute!`](@ref) child (`detached=true`).
 
-`process` is the `julia -m DistSSHRun go|drive|ride` subprocess.
+`process` is the `julia -m DistSSHKit go|drive|ride` subprocess.
 `run_dir` is always allocated in the parent before spawn (pid / `kit.out` /
 `run.toml`). `output_dir` is the artifact root when known at spawn (`go` /
 `ride`, explicit `output_dir=`, or inherited `DISTRIBUTED_OUTPUT_DIR`).
@@ -254,7 +254,7 @@ wait(execute!(:go, "job.jl", ["parent:1"]; detached=true, args=["8"]))
 and [`drive!`](@ref) already share (`ride!` ignores `sync`). With `detached=false`
 (default), any other keyword is forwarded to the chosen function.
 
-`detached=true` spawns `julia -m DistSSHRun go|ride|drive` and returns a
+`detached=true` spawns `julia -m DistSSHKit go|ride|drive` and returns a
 [`KitProcess`](@ref). `--project=` is `project=` when that tree lists
 DistSSHRun in `Project.toml` `[deps]` (`julia -m` needs a direct dep);
 otherwise `pkgdir(DistSSHRun)`. A Manifest-only / transitive DistSSHRun
@@ -359,31 +359,43 @@ function _parse_toml_dict(path::AbstractString)
     return raw isa AbstractDict ? raw : nothing
 end
 
-function _deps_has_distsshkit(raw)::Bool
+function _deps_has_name(raw, name::AbstractString)::Bool
     raw isa AbstractDict || return false
     deps = get(raw, "deps", nothing)
-    return deps isa AbstractDict && haskey(deps, "DistSSHRun")
+    return deps isa AbstractDict && haskey(deps, name)
 end
 
-"""Whether a job tree can load `-m DistSSHRun` via `--project=` at `project`.
+function _deps_has_distsshkit(raw)::Bool
+    return _deps_has_name(raw, "DistSSHKit") || _deps_has_name(raw, "DistSSHRun")
+end
+
+"""Whether a job tree can load `-m` via `--project=` at `project`.
 
 `julia -m` needs a **direct** dependency, so only `Project.toml` `[deps]`
 counts. `Manifest.toml` is a flat resolved graph; a `DistSSHRun` entry there
 can be transitive (e.g. via DistSSHQueue) and does not mean `--project=` can
-load it with `-m` (#372)."""
+load it with `-m` (#372). A direct `DistSSHKit` dep loads `-m DistSSHKit`.
+A direct `DistSSHRun` dep loads `-m DistSSHRun`."""
 function _project_tree_has_distsshkit(project::AbstractString)::Bool
     p = String(project)
     return _deps_has_distsshkit(_parse_toml_dict(joinpath(p, "Project.toml")))
 end
 
-"""`--project=` for a detached `-m DistSSHRun` child."""
+"""`--project=` for a detached child."""
 function _detached_julia_project(project::AbstractString)::String
     kit_proj = pkgdir(DistSSHRun)
     kit_proj === nothing && throw(
-        ArgumentError("pkgdir(DistSSHRun) is nothing; cannot spawn -m DistSSHRun"),
+        ArgumentError("pkgdir(DistSSHRun) is nothing; cannot spawn a detached child"),
     )
     _project_tree_has_distsshkit(project) && return String(project)
     return kit_proj
+end
+
+"""`-m` package for a detached child. Users add DistSSHKit."""
+function _detached_m_package(project::AbstractString)::String
+    raw = _parse_toml_dict(joinpath(String(project), "Project.toml"))
+    _deps_has_name(raw, "DistSSHKit") && return "DistSSHKit"
+    return "DistSSHRun"
 end
 
 function _execute_detached!(
@@ -578,7 +590,7 @@ function _execute_detached!(
             "--startup-file=no",
             "--project=$(child_proj)",
             "-m",
-            "DistSSHRun",
+            _detached_m_package(proj),
             argv...,
         ]
     )

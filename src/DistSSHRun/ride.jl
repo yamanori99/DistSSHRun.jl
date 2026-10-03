@@ -324,7 +324,7 @@ function _ride_drive_vocab_error(kp::KitPlan)::String
         "  $excerpt\n\n",
         "  ride expects a plain script; it distributes automatically.\n",
         "  For explicit distribution, use drive instead:\n\n",
-        "    julia --project=. -m DistSSHRun drive $(kp.script) ...",
+        "    julia --project=. -m DistSSHKit drive $(kp.script) ...",
     )
 end
 

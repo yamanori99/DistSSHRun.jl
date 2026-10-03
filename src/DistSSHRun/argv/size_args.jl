@@ -25,7 +25,7 @@ function show_size_usage(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia --project=. -m DistSSHRun size [parent] [child:NAME...]",
+        "  julia --project=. -m DistSSHKit size [parent] [child:NAME...]",
         "  size parent child:host1 child:host2",
         "  size --gb-per-worker 1.5 child:host1",
     )

@@ -1,10 +1,10 @@
 #!/usr/bin/env julia
 """
-`julia -m DistSSHRun ride` — experimental auto-split of map / filter / comprehensions.
+`julia -m DistSSHKit ride` — experimental auto-split of map / filter / comprehensions.
 
-  julia --project=. -m DistSSHRun ride SCRIPT.jl
-  julia --project=. -m DistSSHRun ride parent:2 SCRIPT.jl
-  julia --project=. -m DistSSHRun ride parent:1 child:host1:2 SCRIPT.jl
+  julia --project=. -m DistSSHKit ride SCRIPT.jl
+  julia --project=. -m DistSSHKit ride parent:2 SCRIPT.jl
+  julia --project=. -m DistSSHKit ride parent:1 child:host1:2 SCRIPT.jl
 
 See `--help`. Analysis is `plan`, not this command.
 """

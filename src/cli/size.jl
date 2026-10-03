@@ -1,9 +1,9 @@
 #!/usr/bin/env julia
 """
-`julia -m DistSSHRun size` — estimate worker counts from RAM/CPU.
+`julia -m DistSSHKit size` — estimate worker counts from RAM/CPU.
 
-  julia --project=. -m DistSSHRun size parent child:host1 child:host2
-  julia --project=. -m DistSSHRun size --gb-per-worker 1.5 child:host1
+  julia --project=. -m DistSSHKit size parent child:host1 child:host2
+  julia --project=. -m DistSSHKit size --gb-per-worker 1.5 child:host1
 
 See `--help`.
 """

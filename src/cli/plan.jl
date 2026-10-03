@@ -1,8 +1,8 @@
 #!/usr/bin/env julia
 """
-`julia -m DistSSHRun plan` — inspect a script; do not start a job.
+`julia -m DistSSHKit plan` — inspect a script; do not start a job.
 
-  julia --project=. -m DistSSHRun plan SCRIPT.jl
+  julia --project=. -m DistSSHKit plan SCRIPT.jl
 
 See `--help`.
 """

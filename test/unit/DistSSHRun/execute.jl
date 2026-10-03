@@ -32,6 +32,18 @@ using Test
             )
             @test DistSSHRun._project_tree_has_distsshkit(proj)
             @test DistSSHRun._detached_julia_project(proj) == proj
+            @test DistSSHRun._detached_m_package(proj) == "DistSSHRun"
+            write(
+                joinpath(proj, "Project.toml"),
+                """
+                name = "HasMetaDep"
+                [deps]
+                DistSSHKit = "ceec0504-c968-4be5-b215-667cae0e8f81"
+                """,
+            )
+            @test DistSSHRun._project_tree_has_distsshkit(proj)
+            @test DistSSHRun._detached_julia_project(proj) == proj
+            @test DistSSHRun._detached_m_package(proj) == "DistSSHKit"
         end
         _with_tempdir() do proj
             # DistSSHRun only transitive (e.g. via DistSSHQueue [deps]): the

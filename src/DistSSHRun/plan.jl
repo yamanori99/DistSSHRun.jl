@@ -447,7 +447,7 @@ function _drive_plain_script_hint(
         "  Load is this include (once). Publish sends defs / using / include to workers.\n",
         "  Run is main() if defined; otherwise Load is the run. plan scans this file only.\n",
         "  Full-file worker include: --sync-script. Rewrite or independent slots:\n\n",
-        "    julia --project=. -m DistSSHRun $cmd $shown_s",
+        "    julia --project=. -m DistSSHKit $cmd $shown_s",
     )
 end
 

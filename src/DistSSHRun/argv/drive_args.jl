@@ -410,7 +410,7 @@ function parse_drive_args(args::Vector{String})
     )
 end
 
-"""Print `drive --help` (same chrome as `julia -m DistSSHRun drive -h`)."""
+"""Print `drive --help` (same chrome as `julia -m DistSSHKit drive -h`)."""
 function show_drive_usage(; io::IO = stdout)
     print_help_chrome("DistSSHRun drive"; io = io)
     print_help_lines(
@@ -423,7 +423,7 @@ function show_drive_usage(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia --project=. -m DistSSHRun drive [workers...] DRIVER.jl",
+        "  julia --project=. -m DistSSHKit drive [workers...] DRIVER.jl",
         "  drive parent:4 child:host1:8 jobs.jl",
         "  drive --collect-missing ROOT HOST...",
     )

@@ -13,7 +13,7 @@ using Pkg
 using SHA
 using TOML
 
-# Public surface. Prefer `julia -m DistSSHRun …` for day-to-day CLI.
+# Public surface. Prefer `julia -m DistSSHKit …` for day-to-day CLI.
 #   user — go! / ride! / drive! / plan / pool! / size! / setup! / pipeline!
 #   occupancy — size! (RSS WorkerPlan; CLI size / pool; not implied by omit :N)
 #   queue — execute!(; detached=true), parsers, paths, help chrome
@@ -168,7 +168,7 @@ const DIST_SSH_KIT_VERSION = something(
 dist_ssh_kit_version()::VersionNumber = DIST_SSH_KIT_VERSION
 
 # CLI: load `src/cli/*.jl` into Main and run `*_main`.
-#   julia --project=. -m DistSSHRun drive parent:2 script.jl
+#   julia --project=. -m DistSSHKit drive parent:2 script.jl
 
 const _KIT_CLI_LOADED = Set{String}()
 const _KIT_CLI_SCRIPTS = ("drive.jl", "go.jl", "plan.jl", "pool.jl", "ride.jl", "setup.jl", "size.jl")
@@ -259,21 +259,21 @@ end
 """
     drive(args::Vector{String}=copy(ARGS))
 
-Run `drive.jl` with `args` (same as `julia -m DistSSHRun drive …`).
+Run `drive.jl` with `args` (same as `julia -m DistSSHKit drive …`).
 """
 drive(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("drive.jl", args)
 
 """
     go(args::Vector{String}=copy(ARGS))
 
-Run `go.jl` with `args` (same as `julia -m DistSSHRun go …`).
+Run `go.jl` with `args` (same as `julia -m DistSSHKit go …`).
 """
 go(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("go.jl", args)
 
 """
     setup(args::Vector{String}=copy(ARGS))
 
-Run `setup.jl` (clone / sync / cleanup) with `args` (same as `julia -m DistSSHRun setup …`).
+Run `setup.jl` (clone / sync / cleanup) with `args` (same as `julia -m DistSSHKit setup …`).
 """
 setup(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("setup.jl", args)
 
@@ -281,44 +281,44 @@ setup(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("setup.jl",
     run_size(args::Vector{String}=copy(ARGS))
 
 Run the `size` CLI (`size.jl`) with `args`. Named `run_size` so it does not
-shadow `Base.size`. Prefer `julia -m DistSSHRun size …` day-to-day.
+shadow `Base.size`. Prefer `julia -m DistSSHKit size …` day-to-day.
 """
 run_size(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("size.jl", args)
 
 """
     run_pool(args::Vector{String}=copy(ARGS))
 
-Run the `pool` CLI (`pool.jl`) with `args`. Prefer `julia -m DistSSHRun pool …`.
+Run the `pool` CLI (`pool.jl`) with `args`. Prefer `julia -m DistSSHKit pool …`.
 """
 run_pool(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("pool.jl", args)
 
 """
     run_ride(args::Vector{String}=copy(ARGS))
 
-Run the `ride` CLI (`ride.jl`) with `args`. Prefer `julia -m DistSSHRun ride …`.
+Run the `ride` CLI (`ride.jl`) with `args`. Prefer `julia -m DistSSHKit ride …`.
 """
 run_ride(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("ride.jl", args)
 
 """
     run_plan(args::Vector{String}=copy(ARGS))
 
-Run the `plan` CLI (`plan.jl`) with `args`. Prefer `julia -m DistSSHRun plan …`.
+Run the `plan` CLI (`plan.jl`) with `args`. Prefer `julia -m DistSSHKit plan …`.
 """
 run_plan(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("plan.jl", args)
 
 """
     main(args::Vector{String}=copy(ARGS))
 
-CLI entry. Prefer Julia 1.13+ and `julia -m DistSSHRun SUBCOMMAND …`:
+CLI entry. Prefer Julia 1.13+ and `julia -m DistSSHKit SUBCOMMAND …`:
 
-    julia --project=. -m DistSSHRun setup --clone child:host1 child:host2
-    julia --project=. -m DistSSHRun go SCRIPT.jl
-    julia --project=. -m DistSSHRun ride parent:2 SCRIPT.jl
-    julia --project=. -m DistSSHRun drive parent:2 script.jl
-    julia --project=. -m DistSSHRun plan SCRIPT.jl
-    julia --project=. -m DistSSHRun size parent child:host1
-    julia --project=. -m DistSSHRun pool parent child:host1
-    julia --project=. -m DistSSHRun progress DIR
+    julia --project=. -m DistSSHKit setup --clone child:host1 child:host2
+    julia --project=. -m DistSSHKit go SCRIPT.jl
+    julia --project=. -m DistSSHKit ride parent:2 SCRIPT.jl
+    julia --project=. -m DistSSHKit drive parent:2 script.jl
+    julia --project=. -m DistSSHKit plan SCRIPT.jl
+    julia --project=. -m DistSSHKit size parent child:host1
+    julia --project=. -m DistSSHKit pool parent child:host1
+    julia --project=. -m DistSSHKit progress DIR
 
 `main` remains for wrappers and tests; prefer `-m` day-to-day.
 A `.jl` path with no command is not implicit `go`.

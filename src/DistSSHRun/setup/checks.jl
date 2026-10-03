@@ -284,7 +284,7 @@ function check_prerequisites(
                 ok("Project dependencies resolvable")
             else
                 fail(deps_err)
-                kit_println("    Fix: julia --project=. -m DistSSHRun setup --instantiate $(setup_cli_host_token(host))")
+                kit_println("    Fix: julia --project=. -m DistSSHKit setup --instantiate $(setup_cli_host_token(host))")
                 all_ok = false
                 host_ok[] = false
             end

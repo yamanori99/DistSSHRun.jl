@@ -64,9 +64,9 @@ function print_size_report(
     println("Command template:")
     worker_args = "$(local_arg)$(remote_arg)"
     if isempty(worker_args)
-        println("  julia --project=. -m DistSSHRun drive <script.jl> <args>")
+        println("  julia --project=. -m DistSSHKit drive <script.jl> <args>")
     else
-        println("  julia --project=. -m DistSSHRun drive \\")
+        println("  julia --project=. -m DistSSHKit drive \\")
         println("    $(rstrip(worker_args)) \\")
         println("    <script.jl> <args>")
     end
