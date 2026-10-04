@@ -105,12 +105,17 @@ export SPINNER_FRAMES
 
 # Implementation
 
+include("DistSSHRun/base/paths.jl")
+include("DistSSHRun/base/explain.jl")
+include("DistSSHRun/base/argv.jl")
+include("DistSSHRun/base/hosts.jl")
+include("DistSSHRun/base/host_tokens.jl")
+include("DistSSHRun/base/help.jl")
+include("DistSSHRun/base/ssh.jl")
+include("DistSSHRun/base/julia_where.jl")
+include("DistSSHRun/base/namespace.jl")
 include("DistSSHRun/display.jl")
-include("DistSSHRun/namespace.jl")
-include("DistSSHRun/explain.jl")
-include("DistSSHRun/argv/args.jl")
 include("DistSSHRun/argv/session.jl")
-include("DistSSHRun/hosts.jl")
 include("DistSSHRun/remote.jl")
 include("DistSSHRun/demos.jl")
 include("DistSSHRun/distributed.jl")

@@ -1,10 +1,5 @@
 # Rsync local project tree to SSH hosts (shared by `setup --rsync` and `sync!`).
 
-"""Julia argv for `DISTSSHKIT_TEST_SSH` / `.jl` rsync doubles (`--compile=min`)."""
-function _test_double_julia_argv(script::AbstractString)::Vector{String}
-    julia = joinpath(Sys.BINDIR, Base.julia_exename())
-    return [julia, "--startup-file=no", "--compile=min", abspath(script)]
-end
 
 function _host_sync_rsync_transport()::String
     custom = strip(get(ENV, "DISTSSHKIT_TEST_SSH", ""))
@@ -51,14 +46,6 @@ function _run_rsync_files_from(
     return nothing
 end
 
-function _host_sync_remote_shell_cmd(host::String, remote_script::String)::Cmd
-    custom = strip(get(ENV, "DISTSSHKIT_TEST_SSH", ""))
-    if !isempty(custom)
-        return Cmd(vcat(_test_double_julia_argv(custom), [host, remote_script]))
-    end
-    # `-n`: do not forward kit stdin (juliaup/git must not wait on a TTY pipe).
-    return _ssh_cmd(["-n", ssh_opts()..., host, remote_script])
-end
 
 """Remote shell snippet classifying `remote_path` as MISSING / EMPTY / NONEMPTY."""
 function _remote_dest_status_script(remote_path::AbstractString)::String
