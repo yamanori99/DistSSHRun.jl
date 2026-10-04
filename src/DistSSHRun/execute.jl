@@ -381,6 +381,21 @@ function _project_tree_has_distsshkit(project::AbstractString)::Bool
     return _deps_has_distsshkit(_parse_toml_dict(joinpath(p, "Project.toml")))
 end
 
+"""`--project=` for a detached child.
+
+The package tree is the fallback when it has a `Manifest.toml` (a checkout
+someone instantiated). A Pkg-installed tree has no manifest and is often not
+writable, so the child uses the active project when that project lists
+DistSSHKit or DistSSHRun in `[deps]`."""
+function _detached_fallback_project(kit_proj::AbstractString)::String
+    isfile(joinpath(kit_proj, "Manifest.toml")) && return kit_proj
+    active = Base.active_project()
+    active === nothing && return kit_proj
+    env = dirname(String(active))
+    _project_tree_has_distsshkit(env) || return kit_proj
+    return env
+end
+
 """`--project=` for a detached child."""
 function _detached_julia_project(project::AbstractString)::String
     kit_proj = pkgdir(DistSSHRun)
@@ -388,7 +403,7 @@ function _detached_julia_project(project::AbstractString)::String
         ArgumentError("pkgdir(DistSSHRun) is nothing; cannot spawn a detached child"),
     )
     _project_tree_has_distsshkit(project) && return String(project)
-    return kit_proj
+    return _detached_fallback_project(kit_proj)
 end
 
 """`-m` package for a detached child. Users add DistSSHKit."""
