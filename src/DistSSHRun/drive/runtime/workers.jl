@@ -126,9 +126,9 @@ function add_drive_workers!(
             remote_script = resolve_host_path_abs(host_name, script_path, repo_ra)
             if remote_dir === nothing || remote_proj === nothing || remote_script === nothing
                 write_both("$host_name ($host_workers workers): ")
-                missing = remote_dir === nothing ? remote_path_for_ssh_collect(script_dir, repo_ra) :
-                    remote_proj === nothing ? remote_path_for_ssh_collect(proj_dir, repo_ra) :
-                    remote_path_for_ssh_collect(script_path, repo_ra)
+                missing = remote_dir === nothing ? remote_layout_path(script_dir, repo_ra) :
+                    remote_proj === nothing ? remote_layout_path(proj_dir, repo_ra) :
+                    remote_layout_path(script_path, repo_ra)
                 print_progress_err("✗ (remote path not found: $missing)")
                 writeln_both("")
                 writeln_both("    hint: julia --project=. -m DistSSHKit setup --rsync $(setup_cli_host_token(host_name))")

@@ -12,7 +12,7 @@ function place_drive_sentinels!(
         _early_local = DistSSHRun.canonical_local_path(local_rd)
         for host in unique(successful_hosts)
             try
-                remote_early = remote_path_for_ssh_collect(_early_local, repo_ra)
+                remote_early = remote_layout_path(_early_local, repo_ra)
                 remote_early_abs = ensure_remote_abs_path(host, remote_early)
                 if remote_early_abs === nothing
                     print_warn("sentinel: cannot resolve collect root on $host")
@@ -202,7 +202,7 @@ function collect_drive_results!(
             rsync_bin = DistSSHRun._host_sync_rsync_argv()
             for local_rd in collect_roots
                 local_abs = DistSSHRun.canonical_local_path(local_rd)
-                remote_rd_collect = remote_path_for_ssh_collect(local_abs, repo_ra)
+                remote_rd_collect = remote_layout_path(local_abs, repo_ra)
                 remote_rd_abs = ensure_remote_abs_path(host, remote_rd_collect)
                 if remote_rd_abs === nothing
                     host_err === nothing && (

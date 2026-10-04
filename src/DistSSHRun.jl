@@ -48,7 +48,7 @@ export plan
 export KitPlan
 export PlanFinding
 export print_plan
-export ns_path
+export stored_path
 export file_sha256
 export cache_file
 export cache_path
