@@ -193,6 +193,7 @@ using Test
                     ju, """
                     #!/bin/sh
                     case "\$1" in
+                      --version) echo 'Juliaup 1.22.7'; exit 0 ;;
                       add|update|default) exit 0 ;;
                       status) echo ok; exit 0 ;;
                       *) exit 1 ;;
@@ -232,6 +233,7 @@ using Test
                     #!/bin/sh
                     printf '%s\\n' "\$1" >> $(repr(logp))
                     case "\$1" in
+                      --version) echo 'Juliaup 1.22.7'; exit 0 ;;
                       add|update|default) exit 0 ;;
                       status) echo ok; exit 0 ;;
                       *) exit 1 ;;
@@ -251,7 +253,7 @@ using Test
                     @test upd.ok && !upd.cancelled
                     @test length(upd.hosts) == 1 && upd.hosts[1].ok
                     @test upd.hosts[1].host == "parent"
-                    @test strip(read(logp, String)) == "update"
+                    @test split(strip(read(logp, String)), '\n') == ["--version", "update"]
                 end
             end
         end

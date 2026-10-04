@@ -28,6 +28,7 @@ using DistSSHUp
             """
             #!/bin/sh
             case "\$1" in
+              --version) echo 'Juliaup 1.22.7'; exit 0 ;;
               status) echo '       *  $ch     julia version'; exit 0 ;;
               add|update|default) echo "unexpected \$1" >&2; exit 1 ;;
               *) exit 1 ;;
