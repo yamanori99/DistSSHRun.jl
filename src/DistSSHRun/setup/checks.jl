@@ -19,18 +19,6 @@ function _report_local_host_tools!()
     return (; ssh, rsync, git)
 end
 
-"""Compare two Julia versions and classify the difference:
-`:none` (equal, or nothing to compare), `:minor` (major.minor differs — the
-concerning case), or `:patch` (patch-only difference — usually fine)."""
-function julia_version_mismatch_kind(local_version::VersionNumber, remote_version::VersionNumber)::Symbol
-    if remote_version.major != local_version.major || remote_version.minor != local_version.minor
-        return :minor
-    elseif remote_version.patch != local_version.patch
-        return :patch
-    end
-    return :none
-end
-
 """Check Julia on a remote host: is it present, and does its version match closely enough?
 
 Returns a NamedTuple `(found, version, mismatch_kind)`:

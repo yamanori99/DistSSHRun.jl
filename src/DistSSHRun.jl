@@ -118,6 +118,23 @@ for _base_name in names(DistSSHBase; all = true)
     @eval import DistSSHBase: $_base_name
 end
 
+using DistSSHUp
+
+# Channel alignment lives in DistSSHUp. These names stay on DistSSHRun.
+import DistSSHUp:
+    _juliaup_align_local!,
+    _juliaup_align_remote_sh,
+    _juliaup_captured_fail_msg,
+    _juliaup_default_channel_from_status,
+    _juliaup_local_already_aligned,
+    _juliaup_run_captured,
+    _juliaup_update_local!,
+    _juliaup_update_remote_sh,
+    _remote_julia_version_setup_ssh,
+    julia_version_mismatch_kind,
+    juliaup_channel,
+    juliaup_parent_behind_channel
+
 include("DistSSHRun/display.jl")
 include("DistSSHRun/argv/session.jl")
 include("DistSSHRun/remote.jl")
