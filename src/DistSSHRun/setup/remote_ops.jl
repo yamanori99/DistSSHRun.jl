@@ -60,7 +60,7 @@ function delete_remotes(
             print_err("  This will DELETE repositories on all hosts via SSH.\n")
             println_fatal("  Remote path: $remote_path")
             println_fatal("  Hosts: $(join(hosts, ", "))")
-            println_fatal("  Note: pass `child:NAME` for SSH hosts; `parent` only with --juliaup.")
+            println_fatal("  Note: pass `child:NAME` for SSH hosts; `parent` only with up.")
             println_fatal()
             kit_confirm("Type 'delete' to confirm: "; keyword = "delete") || begin
                 println_fatal("Cancelled.")

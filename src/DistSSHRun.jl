@@ -148,6 +148,7 @@ include("DistSSHRun/argv/drive_args.jl")
 include("DistSSHRun/argv/go_args.jl")
 include("DistSSHRun/argv/plan_args.jl")
 include("DistSSHRun/argv/setup_args.jl")
+include("DistSSHRun/argv/up_args.jl")
 include("DistSSHRun/argv/size_args.jl")
 include("DistSSHRun/argv/pool_args.jl")
 include("DistSSHRun/argv/ride_args.jl")
@@ -200,7 +201,7 @@ dist_ssh_kit_version()::VersionNumber = DIST_SSH_KIT_VERSION
 #   julia --project=. -m DistSSHKit drive parent:2 script.jl
 
 const _KIT_CLI_LOADED = Set{String}()
-const _KIT_CLI_SCRIPTS = ("drive.jl", "go.jl", "plan.jl", "pool.jl", "ride.jl", "setup.jl", "size.jl")
+const _KIT_CLI_SCRIPTS = ("drive.jl", "go.jl", "plan.jl", "pool.jl", "ride.jl", "setup.jl", "size.jl", "up.jl")
 
 const _KIT_CLI_MAIN = Dict(
     "drive.jl" => :drive_main,
@@ -210,6 +211,7 @@ const _KIT_CLI_MAIN = Dict(
     "ride.jl" => :ride_main,
     "setup.jl" => :setup_main,
     "size.jl" => :size_main,
+    "up.jl" => :up_main,
 )
 
 function _kit_cli_run_entry(script_base::String)::Cint
@@ -307,6 +309,13 @@ Run `setup.jl` (clone / sync / cleanup) with `args` (same as `julia -m DistSSHKi
 setup(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("setup.jl", args)
 
 """
+    up(args::Vector{String}=copy(ARGS))
+
+Run `up.jl` (juliaup align / update) with `args` (same as `julia -m DistSSHKit up …`).
+"""
+up(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("up.jl", args)
+
+"""
     run_size(args::Vector{String}=copy(ARGS))
 
 Run the `size` CLI (`size.jl`) with `args`. Named `run_size` so it does not
@@ -381,6 +390,8 @@ function main(args::Vector{String} = copy(ARGS))::Cint
         return demo(rest)
     elseif subcommand == "setup"
         return setup(rest)
+    elseif subcommand == "up"
+        return up(rest)
     elseif subcommand == "plan"
         return run_plan(rest)
     elseif subcommand == "ride"
@@ -402,7 +413,7 @@ function main(args::Vector{String} = copy(ARGS))::Cint
             println(stderr, "  plan SCRIPT.jl    inspect; do not run")
         else
             print_cli_error("Unknown subcommand: $subcommand")
-            println(stderr, "Expected: setup | go | ride | drive | plan | size | pool | demo | progress")
+            println(stderr, "Expected: setup | up | go | ride | drive | plan | size | pool | demo | progress")
         end
         println(stderr)
         print_kit_root_usage()

@@ -9,8 +9,6 @@ using .DistSSHRun:
     git_sync_project_to_hosts!,
     init_log_file,
     instantiate_remotes,
-    juliaup_align_remotes,
-    juliaup_update_remotes,
     kit_println,
     parse_setup_args,
     preflight_setup_ssh,

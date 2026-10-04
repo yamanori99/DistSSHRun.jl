@@ -95,8 +95,6 @@ if !isdefined(@__MODULE__, :setup_main)
                 :sync => "Sync",
                 :rsync_push => "rsync (no git)",
                 :instantiate => "Instantiate",
-                :juliaup => "juliaup (align Julia)",
-                :juliaup_update => "juliaup update",
                 :runtest => "Pkg.test (job)",
                 :cleanup => "Cleanup Workers",
                 :prune => "Prune kit leaves",
@@ -169,24 +167,6 @@ if !isdefined(@__MODULE__, :setup_main)
                                 opts.hosts, opts.julia_path, remote_path, project;
                                 path_anchor = path_anchor,
                             ),
-                        ) ? 0 : 1
-                )
-            end
-
-            if mode === :juliaup
-                return Cint(
-                    finish_host_op!(
-                            "juliaup",
-                            juliaup_align_remotes(opts.hosts),
-                        ) ? 0 : 1
-                )
-            end
-
-            if mode === :juliaup_update
-                return Cint(
-                    finish_host_op!(
-                            "juliaup update",
-                            juliaup_update_remotes(opts.hosts),
                         ) ? 0 : 1
                 )
             end

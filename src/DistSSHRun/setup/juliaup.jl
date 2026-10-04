@@ -1,4 +1,4 @@
-# Align remote Julia via juliaup (`setup --juliaup` / check Fix hints).
+# Align remote Julia via juliaup (`up` / check Fix hints).
 # Channel math, status, and the juliaup process live in DistSSHUp.
 
 
@@ -10,7 +10,7 @@ function print_juliaup_align_fix!(
     )
     ch = String(channel)
     h = String(host)
-    kit_println("    Fix: julia --project=. -m DistSSHKit setup --juliaup $(setup_cli_host_token(h))")
+    kit_println("    Fix: julia --project=. -m DistSSHKit up $(setup_cli_host_token(h))")
     kit_println("         (or on $h: juliaup add $ch && juliaup update $ch && \\")
     kit_println("          juliaup default $ch —")
     kit_println("          \$HOME/.juliaup/bin/juliaup, /opt/homebrew/bin/juliaup,")
@@ -32,7 +32,7 @@ function print_juliaup_parent_patch_note!(
     juliaup_parent_behind_channel(local_version, remote_version) || return false
     ch = String(channel)
     warn("kit parent Julia $local_version is behind channel $ch latest on remotes ($remote_version)")
-    kit_println("    Tip: julia --project=. -m DistSSHKit setup --juliaup $PARENT_HOST_NAME")
+    kit_println("    Tip: julia --project=. -m DistSSHKit up $PARENT_HOST_NAME")
     kit_println("         (or: juliaup update $ch && juliaup default $ch), then re-run workers.")
     return true
 end
@@ -166,7 +166,7 @@ end
 """
 Run `juliaup update` on each target (installed channels; does not `default`).
 
-Same hosts as `--juliaup` (`child:NAME` and/or `parent`). Confirm unless
+Same hosts as `up` (`child:NAME` and/or `parent`). Confirm unless
 `confirm=false`. Does not install juliaup.
 """
 function juliaup_update_remotes(
