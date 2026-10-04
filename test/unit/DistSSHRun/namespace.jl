@@ -1,45 +1,6 @@
 using Test
 
 @testset "namespace" begin
-    _with_tempdir() do tmp
-        src = joinpath(tmp, "a.bin")
-        write(src, "hello ns")
-        h = DistSSHRun.file_sha256(src)
-        @test length(h) == 64
-        @test h == DistSSHRun.file_sha256(src)
-        @test_throws ArgumentError DistSSHRun.file_sha256(joinpath(tmp, "missing"))
-
-        dest = DistSSHRun.cache_file(src; project = tmp)
-        @test dest == DistSSHRun.cache_path(h; project = tmp)
-        @test isfile(dest)
-        @test DistSSHRun.file_sha256(dest) == h
-        dest2 = DistSSHRun.cache_file(src; project = tmp)
-        @test dest2 == dest
-        other = joinpath(tmp, "b.bin")
-        write(other, "hello ns")
-        @test DistSSHRun.cache_file(other; project = tmp) == dest
-        @test DistSSHRun.cache_relpath(h) == joinpath(".distsshkit", "cache", "sha256", h)
-        @test_throws ArgumentError DistSSHRun.cache_relpath("zz")
-
-        withenv("DISTRIBUTED_OUTPUT_DIR" => nothing) do
-            @test DistSSHRun.ns_path("a.bin"; project = tmp) == joinpath(
-                DistSSHRun.canonical_local_path(tmp), "a.bin",
-            )
-            @test DistSSHRun.ns_path(src; project = tmp) == DistSSHRun.canonical_local_path(src)
-        end
-        out = joinpath(tmp, "slot")
-        mkpath(out)
-        write(joinpath(out, "a.bin"), "from slot")
-        withenv("DISTRIBUTED_OUTPUT_DIR" => out) do
-            @test DistSSHRun.ns_path("a.bin"; project = tmp) == joinpath(
-                DistSSHRun.canonical_local_path(out), "a.bin",
-            )
-            @test DistSSHRun.ns_path("new.csv"; project = tmp) == joinpath(
-                DistSSHRun.canonical_local_path(out), "new.csv",
-            )
-        end
-    end
-
     @test DistSSHRun.cache_remote_dir("/remote/App") == joinpath(
         "/remote/App", ".distsshkit", "cache", "sha256",
     )

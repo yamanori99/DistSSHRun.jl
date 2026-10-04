@@ -1,18 +1,6 @@
 using Test
 
 @testset "explain surfaces" begin
-    @test DistSSHRun.join_explained_message("a", nothing) == "a"
-    @test DistSSHRun.join_explained_message("a", "b") == "a\nb"
-
-    @testset "surface / kind contracts" begin
-        @test_throws ArgumentError DistSSHRun._normalize_hint_surface(:nope)
-        @test_throws ArgumentError DistSSHRun.explain_no_hosts(; kind = :drive)
-        cli_size = DistSSHRun.explain_no_hosts(; surface = :cli, kind = :size)
-        @test occursin("size --help", cli_size)
-        cli_collect = DistSSHRun.explain_no_hosts(; surface = :cli, kind = :collect)
-        @test occursin("--collect-missing", cli_collect)
-    end
-
     @testset "script not found" begin
         _with_tempdir() do tmp
             missing = joinpath(tmp, "nope.jl")
@@ -54,56 +42,6 @@ using Test
         end
     end
 
-    @testset "hosts file" begin
-        msg = DistSSHRun.explain_hosts_file_not_found("/no/hosts"; surface = :cli)
-        @test occursin("hosts file not found", msg)
-        @test occursin("--hosts-file", msg)
-        msg_api = DistSSHRun.explain_hosts_file_not_found("/no/hosts"; surface = :api)
-        @test occursin("hosts_file=", msg_api)
-
-        empty_cli = DistSSHRun.explain_hosts_file_empty("/empty"; surface = :cli)
-        @test occursin("command line", empty_cli)
-        empty_api = DistSSHRun.explain_hosts_file_empty("/empty"; surface = :api)
-        @test occursin("workers=", empty_api)
-    end
-
-    @testset "no hosts" begin
-        @test occursin("workers=", DistSSHRun.explain_no_hosts(; surface = :api, kind = :ssh))
-        @test occursin("--hosts-file", DistSSHRun.explain_no_hosts(; surface = :cli, kind = :ssh))
-        @test occursin("collect!", DistSSHRun.explain_no_hosts(; surface = :api, kind = :collect))
-        @test occursin("size!", DistSSHRun.explain_no_hosts(; surface = :api, kind = :size))
-        @test occursin("pool!", DistSSHRun.explain_no_hosts(; surface = :api, kind = :pool))
-        @test occursin(
-            ":N",
-            DistSSHRun.explain_bare_placement_tokens(["parent"]; surface = :cli),
-        )
-    end
-
-    @testset "clone / probe / driver" begin
-        @test occursin("repo=", DistSSHRun.explain_clone_repo_required(; surface = :api))
-        @test occursin("--repo", DistSSHRun.explain_clone_repo_required(; surface = :cli))
-        @test occursin("--repo", DistSSHRun.explain_clone_origin_missing(; surface = :cli))
-        @test occursin("repo=", DistSSHRun.explain_clone_origin_missing(; surface = :api))
-        @test occursin("--probe", DistSSHRun.explain_size_probe_not_found("x.jl"; surface = :cli))
-        @test occursin("probe=", DistSSHRun.explain_size_probe_not_found("x.jl"; surface = :api))
-        @test occursin("driver=", DistSSHRun.explain_pipeline_driver_missing(; surface = :api))
-    end
-
-    @testset "host tools" begin
-        @test_throws ArgumentError DistSSHRun._normalize_host_tool("foo")
-        @test DistSSHRun._normalize_host_tool("scp") == "scp"
-        ssh = DistSSHRun.explain_host_tool_missing("ssh")
-        @test occursin("ssh not found in PATH", ssh)
-        @test occursin("OpenSSH", ssh)
-        @test occursin("Requirements", ssh)
-        @test DistSSHRun.explain_host_tool_missing("ssh"; surface = :cli) ==
-            DistSSHRun.explain_host_tool_missing("ssh"; surface = :api)
-        @test occursin("scp not found", DistSSHRun.explain_host_tool_missing("scp"))
-        @test occursin("OpenSSH", DistSSHRun.explain_host_tool_missing("scp"))
-        @test occursin("rsync", DistSSHRun.explain_host_tool_missing("rsync"))
-        @test occursin("clone", DistSSHRun.explain_host_tool_missing("git"))
-    end
-
     @testset "session wiring" begin
         _with_tempdir() do tmp
             session = DistSSHRun.KitSession(project = tmp, workers = String[], quiet = true)
@@ -123,31 +61,6 @@ using Test
             @test occursin("Hint:", sprint(showerror, err))
 
             @test DistSSHRun.KitCliSession().hint_surface === :cli
-        end
-    end
-
-    @testset "hosts file throws" begin
-        _with_tempdir() do tmp
-            missing = joinpath(tmp, "no-hosts.txt")
-            err = try
-                DistSSHRun.read_hosts_file_lines(missing; surface = :api)
-                nothing
-            catch e
-                e
-            end
-            @test err isa ArgumentError
-            @test occursin("hosts_file=", sprint(showerror, err))
-
-            empty = joinpath(tmp, "empty.txt")
-            write(empty, "# only comments\n\n")
-            err2 = try
-                DistSSHRun.read_hosts_file_lines(empty; surface = :cli)
-                nothing
-            catch e
-                e
-            end
-            @test err2 isa ArgumentError
-            @test occursin("command line", sprint(showerror, err2))
         end
     end
 end

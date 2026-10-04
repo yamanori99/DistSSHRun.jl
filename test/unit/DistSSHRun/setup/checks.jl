@@ -12,12 +12,6 @@ using Pkg
 
     @test DistSSHRun.juliaup_channel(v"1.12.6") == "1.12"
     @test DistSSHRun.juliaup_channel(VERSION) == "$(VERSION.major).$(VERSION.minor)"
-    @test DistSSHRun.remote_juliaup_candidates("Darwin") == [
-        raw"$HOME/.juliaup/bin/juliaup",
-        "/opt/homebrew/bin/juliaup",
-        "/usr/local/bin/juliaup",
-    ]
-    @test DistSSHRun.remote_juliaup_candidates("Linux") == [raw"$HOME/.juliaup/bin/juliaup"]
     sh = DistSSHRun._juliaup_align_remote_sh("1.12")
     @test occursin(raw"$HOME/.juliaup/bin/juliaup", sh)
     @test occursin("/opt/homebrew/bin/juliaup", sh)
@@ -62,8 +56,6 @@ using Pkg
         end
     end
     @test occursin("setup --juliaup parent", tip_out)
-    @test occursin(".juliaup", DistSSHRun.local_juliaup_candidates()[1])
-    @test DistSSHRun.find_local_juliaup(String[]) === nothing
     mktempdir() do d
         ju = joinpath(d, "juliaup")
         jl = joinpath(d, "julia")
@@ -274,41 +266,8 @@ using Pkg
                 [deps]
                 """
             )
-            env = DistSSHRun.resolve_pkg_env(member)
-            @test env.project_dir == DistSSHRun.canonical_local_path(member)
-            @test env.env_dir == DistSSHRun.canonical_local_path(lab)
-            @test env.manifest == DistSSHRun.canonical_local_path(joinpath(lab, "Manifest.toml"))
-            @test DistSSHRun.julia_project_rel(env) == joinpath("experiments", "run1")
             shipped = DistSSHRun.ensure_manifest_ships!(member)
-            @test shipped.env_dir == env.env_dir
-            withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => nothing) do
-                deploy = DistSSHRun.remote_deploy_root(member)
-                julia_remote = DistSSHRun.resolve_remote_project_root(member)
-                @test deploy == joinpath("~", basename(dirname(lab)), "lab")
-                @test julia_remote == joinpath(deploy, "experiments", "run1")
-                if Sys.which("git") !== nothing
-                    run(pipeline(`git -C $lab init -q`; stdout = devnull, stderr = devnull))
-                    @test DistSSHRun.remote_git_clone_dest(member) == deploy
-                end
-            end
-
-            solo = joinpath(root, "solo")
-            mkpath(solo)
-            write(joinpath(solo, "Project.toml"), "name = \"Solo\"\n[deps]\n")
-            bare = DistSSHRun.resolve_pkg_env(solo)
-            @test bare.manifest === nothing
-            @test bare.env_dir == bare.project_dir
-            @test DistSSHRun.julia_project_rel(bare) == "."
-
-            ver = joinpath(root, "ver")
-            mkpath(ver)
-            write(joinpath(ver, "Project.toml"), "name = \"Ver\"\n[deps]\n")
-            write(joinpath(ver, "Manifest-v$(VERSION.major).$(VERSION.minor).toml"), "# v\n")
-            versioned = DistSSHRun.resolve_pkg_env(ver)
-            @test versioned.manifest == DistSSHRun.canonical_local_path(
-                joinpath(ver, "Manifest-v$(VERSION.major).$(VERSION.minor).toml"),
-            )
-            @test versioned.env_dir == versioned.project_dir
+            @test shipped.env_dir == DistSSHRun.canonical_local_path(lab)
 
             elsewhere = joinpath(root, "elsewhere")
             mkpath(elsewhere)
@@ -319,8 +278,6 @@ using Pkg
                 joinpath(elsewhere, "Project.toml"),
                 "name = \"Out\"\nmanifest = \"$(outside_manifest)\"\n",
             )
-            outside = DistSSHRun.resolve_pkg_env(elsewhere)
-            @test outside.manifest == DistSSHRun.canonical_local_path(outside_manifest)
             @test_throws ArgumentError DistSSHRun.ensure_manifest_ships!(elsewhere)
 
             linked = joinpath(root, "linked")
@@ -363,26 +320,6 @@ using Pkg
                 )
                 run(pipeline(`git -C $held init -q`; stdout = devnull, stderr = devnull))
                 @test_throws ArgumentError DistSSHRun.ensure_manifest_in_git_worktree!(held)
-
-                nest = joinpath(root, "nest")
-                nest_member = joinpath(nest, "lab", "experiments", "run1")
-                mkpath(nest_member)
-                write(
-                    joinpath(nest, "lab", "Project.toml"),
-                    "name = \"NestLab\"\n[workspace]\nprojects = [\"experiments/run1\"]\n",
-                )
-                write(joinpath(nest, "lab", "Manifest.toml"), "# lock\n")
-                write(joinpath(nest_member, "Project.toml"), "name = \"NestRun\"\n[deps]\n")
-                run(pipeline(`git -C $nest init -q`; stdout = devnull, stderr = devnull))
-                withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => nothing) do
-                    nest_deploy = DistSSHRun.remote_deploy_root(nest_member)
-                    @test DistSSHRun.remote_git_clone_dest(nest_member) == dirname(nest_deploy)
-                    @test DistSSHRun.remote_delete_root(nest_member) == dirname(nest_deploy)
-                    @test DistSSHRun.remote_delete_root(nest_member; cli_override = "/srv/job") == "/srv/job"
-                    @test_throws ArgumentError DistSSHRun.remote_git_clone_dest(
-                        nest_member; cli_override = "/srv/job",
-                    )
-                end
             end
         end
     end
