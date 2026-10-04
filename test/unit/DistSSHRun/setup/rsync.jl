@@ -46,6 +46,11 @@ using Test
     end
 
     @testset "rsync outcomes" begin
+        # A user tree. The package checkout path-depends on DistSSHBase, which
+        # setup correctly refuses to ship.
+        project = mktempdir()
+        write(joinpath(project, "Project.toml"), "name = \"RsyncSmoke\"\n")
+        write(joinpath(project, "smoke.jl"), "smoke = 1\n")
         withenv("DISTSSHKIT_YES" => nothing) do
             prev_ni = DistSSHRun.kit_noninteractive()
             DistSSHRun.set_kit_noninteractive!(false)

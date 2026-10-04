@@ -408,3 +408,21 @@ function demo(args::Vector{String} = copy(ARGS))::Cint
         return 1
     end
 end
+
+
+"""
+Full script/driver-not-found message (headline + optional demo-related hint).
+
+The demo tip stays here because it knows the bundled examples.
+"""
+function explain_script_not_found(
+        script_path::AbstractString,
+        project_root::AbstractString;
+        surface::Symbol = :cli,
+        headline::Union{Nothing, AbstractString} = nothing,
+    )::String
+    path = String(script_path)
+    head = headline === nothing ? "Script not found: $path" : String(headline)
+    hint = missing_script_demo_hint(path, project_root; surface = surface)
+    return join_explained_message(head, hint)
+end
