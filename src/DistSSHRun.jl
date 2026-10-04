@@ -120,17 +120,8 @@ end
 
 using DistSSHUp
 
-# Channel alignment lives in DistSSHUp. These names stay on DistSSHRun.
+# Confirm text and progress stay here. The host operation is DistSSHUp.
 import DistSSHUp:
-    _juliaup_align_local!,
-    _juliaup_align_remote_sh,
-    _juliaup_captured_fail_msg,
-    _juliaup_default_channel_from_status,
-    _juliaup_local_already_aligned,
-    _juliaup_run_captured,
-    _juliaup_update_local!,
-    _juliaup_update_remote_sh,
-    _remote_julia_version_setup_ssh,
     julia_version_mismatch_kind,
     juliaup_align_host!,
     juliaup_channel,

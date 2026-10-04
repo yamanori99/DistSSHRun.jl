@@ -17,7 +17,7 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 
 [sources]
 DistSSHBase = {rev = "8059ab9762e6f7472a12cd0c77740b9d2d1e2437", url = "https://github.com/yamanori99/DistSSHBase.jl"}
-DistSSHUp = {rev = "fec90255a74b223b498b9a74bb52ea5eebd347f2", url = "https://github.com/yamanori99/DistSSHUp.jl"}
+DistSSHUp = {rev = "bc0586a569b5aec58ee096578e3d64b8b94e408d", url = "https://github.com/yamanori99/DistSSHUp.jl"}
 
 [compat]
 Dates = "1.11"
