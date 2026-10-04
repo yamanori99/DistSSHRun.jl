@@ -10,16 +10,19 @@ projects = ["test", "docs"]
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 DistSSHBase = "f0a69307-14e5-4272-8c28-20680d05bac8"
+DistSSHUp = "76a6745a-cbcc-444e-a19a-dcac12a79e7c"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 
 [sources]
 DistSSHBase = {rev = "1f9a383041125048b68796cfd882c0a5603738ef", url = "https://github.com/yamanori99/DistSSHBase.jl"}
+DistSSHUp = {rev = "d84c8a9e30b8cda4caa62b3c04fc890d4cc22a7a", url = "https://github.com/yamanori99/DistSSHUp.jl"}
 
 [compat]
 Dates = "1.11"
 DistSSHBase = "0.1"
+DistSSHUp = "0.1"
 Distributed = "1.11"
 Pkg = "1.13"
 TOML = "1"

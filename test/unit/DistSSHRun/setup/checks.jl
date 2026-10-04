@@ -2,46 +2,8 @@ using Test
 using Pkg
 
 @testset "setup checks" begin
-    @test DistSSHRun.julia_version_mismatch_kind(v"1.12.6", v"1.12.6") == :none
-    @test DistSSHRun.julia_version_mismatch_kind(v"1.12.6", v"1.12.9") == :patch
-    @test DistSSHRun.julia_version_mismatch_kind(v"1.12.6", v"1.11.6") == :minor
-    @test DistSSHRun.julia_version_mismatch_kind(v"1.12.6", v"2.0.6") == :minor
-    # --check fails on :minor unless --ignore-julia-version (see check_prerequisites).
-    @test DistSSHRun.julia_version_mismatch_kind(VERSION, VersionNumber(VERSION.major, VERSION.minor + 1, 0)) ==
-        :minor
-
-    @test DistSSHRun.juliaup_channel(v"1.12.6") == "1.12"
-    @test DistSSHRun.juliaup_channel(VERSION) == "$(VERSION.major).$(VERSION.minor)"
-    sh = DistSSHRun._juliaup_align_remote_sh("1.12")
-    @test occursin(raw"$HOME/.juliaup/bin/juliaup", sh)
-    @test occursin("/opt/homebrew/bin/juliaup", sh)
-    @test occursin(" add ", sh) || occursin("add '", sh)
-    @test occursin("update", sh) && occursin("default", sh)
-    @test occursin("echo already", sh)
-    @test occursin("\$1==\"*\"", sh)
-    up_sh = DistSSHRun._juliaup_update_remote_sh()
-    @test occursin(raw"$HOME/.juliaup/bin/juliaup", up_sh)
-    @test occursin("\"\$JU\" update", up_sh)
-    @test !occursin("echo already", up_sh)
-    @test !occursin("default", up_sh)
-    st = """
-    Default  Channel  Version
-    -------------------------------------------------------------------------
-         *  1.13     1.13.2+0.aarch64.apple.darwin14
-          1.12     1.12.7+0.aarch64.apple.darwin14
-    """
-    @test DistSSHRun._juliaup_default_channel_from_status(st) == "1.13"
-    @test DistSSHRun._juliaup_default_channel_from_status("no default here") === nothing
-    # Channel must not enter remote diagnostics unquoted (shell metacharacters).
-    sh_meta = DistSSHRun._juliaup_align_remote_sh("1.12\$(id)")
-    @test occursin("'1.12\$(id)'", sh_meta)
-    @test !occursin("juliaup add 1.12\$(id) failed", sh_meta)
     DistSSHRun.print_juliaup_align_fix!("user@host"; kind = :missing, channel = "1.12")
     DistSSHRun.print_juliaup_align_fix!("user@host"; kind = :mismatch, channel = "1.12")
-    @test DistSSHRun.juliaup_parent_behind_channel(v"1.12.6", v"1.12.9")
-    @test !DistSSHRun.juliaup_parent_behind_channel(v"1.12.9", v"1.12.6")
-    @test !DistSSHRun.juliaup_parent_behind_channel(v"1.12.6", v"1.12.6")
-    @test !DistSSHRun.juliaup_parent_behind_channel(v"1.12.6", v"1.11.9")
     @test DistSSHRun.print_juliaup_parent_patch_note!(
         v"1.12.9"; local_version = v"1.12.6", channel = "1.12",
     )
@@ -56,44 +18,6 @@ using Pkg
         end
     end
     @test occursin("setup --juliaup parent", tip_out)
-    mktempdir() do d
-        ju = joinpath(d, "juliaup")
-        jl = joinpath(d, "julia")
-        write(
-            ju, """
-            #!/bin/sh
-            case "\$1" in
-              add|update|default)
-                echo "Checking for new Julia versions" >&2
-                echo "'1.13' is already installed."
-                exit 0
-                ;;
-              status) echo "1.12"; exit 0 ;;
-              *) exit 1 ;;
-            esac
-            """
-        )
-        write(
-            jl, """
-            #!/bin/sh
-            echo "julia version $(VERSION.major).$(VERSION.minor).$(VERSION.patch)"
-            """
-        )
-        chmod(ju, 0o755)
-        chmod(jl, 0o755)
-        withenv("DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
-            @test DistSSHRun.find_local_juliaup() == ju
-            ch = "$(VERSION.major).$(VERSION.minor)"
-            captured, r = _capture_stdio() do _, _
-                DistSSHRun._juliaup_align_local!(ch)
-            end
-            @test r.changed
-            @test DistSSHRun.julia_version_mismatch_kind(VERSION, r.ver) != :minor
-            @test !occursin("Checking for new Julia versions", captured)
-            @test !occursin("already installed", captured)
-        end
-    end
-
     mktempdir() do d
         ju = joinpath(d, "juliaup")
         jl = joinpath(d, "julia")
@@ -128,39 +52,6 @@ using Pkg
                 end
             end
             @test occursin("parent: already on $ch", out)
-        end
-    end
-
-    mktempdir() do d
-        ju = joinpath(d, "juliaup")
-        jl = joinpath(d, "julia")
-        write(
-            ju, """
-            #!/bin/sh
-            case "\$1" in
-              add) echo "network failed"; exit 1 ;;
-              status) echo "empty"; exit 0 ;;
-              *) exit 1 ;;
-            esac
-            """
-        )
-        write(
-            jl, """
-            #!/bin/sh
-            echo "julia version $(VERSION.major).$(VERSION.minor).$(VERSION.patch)"
-            """
-        )
-        chmod(ju, 0o755)
-        chmod(jl, 0o755)
-        withenv("DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
-            err = try
-                DistSSHRun._juliaup_align_local!("$(VERSION.major).$(VERSION.minor)")
-                nothing
-            catch e
-                sprint(showerror, e)
-            end
-            @test err !== nothing
-            @test occursin("network failed", err)
         end
     end
 
