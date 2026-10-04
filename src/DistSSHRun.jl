@@ -106,17 +106,32 @@ export SPINNER_FRAMES
 
 using DistSSHBase
 
-# Same names as before the trial. Queue still calls DistSSHRun.*.
-for _base_name in names(DistSSHBase; all = true)
-    _base_name === :DistSSHBase && continue
-    _base_name === :eval && continue
-    _base_name === :include && continue
-    _base_str = string(_base_name)
-    isempty(_base_str) && continue
-    _base_str[1] == '#' && continue
+# Public names only. Kit still calls several as DistSSHRun.*.
+for _base_name in names(DistSSHBase)
+    _base_name in (:DistSSHBase, :eval, :include) && continue
     isdefined(DistSSHBase, _base_name) || continue
     @eval import DistSSHBase: $_base_name
 end
+
+import DistSSHBase:
+    _HOST_TOOL_NAMES,
+    _NS_CACHE_DIR,
+    _git_cmd,
+    _host_sync_remote_shell_cmd,
+    _host_tool_exe,
+    _host_tool_present,
+    _julia_spec_is_auto,
+    _normalize_hint_surface,
+    _path_is_under,
+    _path_under_resolved,
+    _print_colored,
+    _remote_shell_path_word,
+    _rethrow_missing_host_tool,
+    _scp_cmd,
+    _ssh_cmd,
+    _ssh_exe,
+    _test_double_julia_argv,
+    _truncate_ssh_message
 
 using DistSSHUp
 

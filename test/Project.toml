@@ -1,7 +1,9 @@
 [deps]
 ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+DistSSHBase = "f0a69307-14e5-4272-8c28-20680d05bac8"
 DistSSHRun = "b568025c-2759-4ef1-8b14-17d00e2cd000"
+DistSSHUp = "76a6745a-cbcc-444e-a19a-dcac12a79e7c"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
@@ -9,11 +11,15 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 
 [sources]
+DistSSHBase = {rev = "c126a3e8747c45377afad652c7ebc37913dc4e03", url = "https://github.com/yamanori99/DistSSHBase.jl"}
 DistSSHRun = {path = ".."}
+DistSSHUp = {rev = "01364eeab31539148dae853deaaf72bc5c46d1af", url = "https://github.com/yamanori99/DistSSHUp.jl"}
 
 [compat]
 ArgParse = "1"
 Dates = "1.11"
+DistSSHBase = "0.1"
+DistSSHUp = "0.1"
 Distributed = "1.11"
 JSON = "1"
 Pkg = "1.13"

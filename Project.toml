@@ -16,8 +16,8 @@ Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 
 [sources]
-DistSSHBase = {rev = "8059ab9762e6f7472a12cd0c77740b9d2d1e2437", url = "https://github.com/yamanori99/DistSSHBase.jl"}
-DistSSHUp = {rev = "5795e1836e2235fd0155a9f8b828242fd8040ba8", url = "https://github.com/yamanori99/DistSSHUp.jl"}
+DistSSHBase = {rev = "c126a3e8747c45377afad652c7ebc37913dc4e03", url = "https://github.com/yamanori99/DistSSHBase.jl"}
+DistSSHUp = {rev = "01364eeab31539148dae853deaaf72bc5c46d1af", url = "https://github.com/yamanori99/DistSSHUp.jl"}
 
 [compat]
 Dates = "1.11"
