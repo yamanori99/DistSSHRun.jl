@@ -17,7 +17,7 @@ using Pkg
             )
         end
     end
-    @test occursin("setup --juliaup parent", tip_out)
+    @test occursin("DistSSHKit up parent", tip_out)
     mktempdir() do d
         ju = joinpath(d, "juliaup")
         jl = joinpath(d, "julia")

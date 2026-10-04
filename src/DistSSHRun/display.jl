@@ -2266,6 +2266,7 @@ function print_kit_root_usage(io::IO = stderr)
     print_help_lines(
         io,
         "  setup              Clone / sync / check remotes",
+        "  up                 Align a Julia channel with juliaup",
         "  go                 Run an as-is complete job",
         "  ride               Experimental auto-split of map / filter",
         "  drive              Distributed workers + collect",
@@ -2280,6 +2281,7 @@ function print_kit_root_usage(io::IO = stderr)
     print_help_lines(
         io,
         "  julia --project=. -m DistSSHKit setup --check child:host1",
+        "  julia --project=. -m DistSSHKit up child:host1",
         "  julia --project=. -m DistSSHKit go SCRIPT.jl",
         "  julia --project=. -m DistSSHKit ride parent:2 SCRIPT.jl",
         "  julia --project=. -m DistSSHKit drive parent:2 SCRIPT.jl",
