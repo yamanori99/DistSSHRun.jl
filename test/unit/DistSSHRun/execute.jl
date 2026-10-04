@@ -67,6 +67,13 @@ using Test
             @test !DistSSHRun._project_tree_has_distsshkit(proj)
             @test DistSSHRun._detached_julia_project(proj) == kit
         end
+        _with_tempdir() do bare
+            active = Base.active_project()
+            @test active !== nothing
+            @test DistSSHRun._detached_fallback_project(bare) == dirname(active)
+            write(joinpath(bare, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+            @test DistSSHRun._detached_fallback_project(bare) == bare
+        end
     end
 
     @testset "_remove_kit_pid_file" begin
