@@ -15,7 +15,7 @@ Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 
 [sources]
-DistSSHBase = {rev = "05f695c721460a3f3a7af443787758c6976aab5a", url = "https://github.com/yamanori99/DistSSHBase.jl"}
+DistSSHBase = {rev = "1f9a383041125048b68796cfd882c0a5603738ef", url = "https://github.com/yamanori99/DistSSHBase.jl"}
 
 [compat]
 Dates = "1.11"

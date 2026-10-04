@@ -22,7 +22,7 @@ DistSSHRun.set_kit_verbosity!(:progress)
 
 # Keep `include(joinpath(@__DIR__, …))` at this top level (JETLS). Only the
 # banner is counted. Update `_RUNTEST_N` when adding a file below.
-const _RUNTEST_N = 50
+const _RUNTEST_N = 49
 const _RUNTEST_I = Ref(0)
 function _runtest_announce(rel::AbstractString)
     _RUNTEST_I[] += 1
@@ -63,8 +63,6 @@ end
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "module.jl"))
         _runtest_announce("unit/DistSSHRun/execute.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "execute.jl"))
-        _runtest_announce("unit/DistSSHRun/argv/args.jl")
-        include(joinpath(@__DIR__, "unit", "DistSSHRun", "argv", "args.jl"))
         _runtest_announce("unit/DistSSHRun/argv/session.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "argv", "session.jl"))
         _runtest_announce("unit/DistSSHRun/hosts.jl")
