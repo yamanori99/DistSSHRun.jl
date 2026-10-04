@@ -72,7 +72,7 @@ using Test
                     "DISTSSHKIT_TEST_SSH_LOG" => logp,
                 ),
             )
-            empty!(DistSSHRun._DETECT_JULIA_PATH_CACHE)
+            empty!(DistSSHBase._DETECT_JULIA_PATH_CACHE)
             try
                 withenv(env...) do
                     @test DistSSHRun.detect_julia_path("host1") == "/opt/custom/julia"
@@ -82,7 +82,7 @@ using Test
                 @test occursin("command -v julia", body)
                 @test !occursin("/usr/bin/julia", body)
             finally
-                empty!(DistSSHRun._DETECT_JULIA_PATH_CACHE)
+                empty!(DistSSHBase._DETECT_JULIA_PATH_CACHE)
             end
         end
     end
