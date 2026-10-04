@@ -103,8 +103,10 @@ jobs:
   cache-gc:
     needs:
       - test
+      - test-tip
       - jetls
       - aqua
+      - aqua-tip
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
