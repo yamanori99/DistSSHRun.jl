@@ -3,6 +3,7 @@
 if !isdefined(Main, :_ssh_e2e_enabled)
 
     using Dates
+    using DistSSHUp
 
     """True when CI / local docker-ssh E2E should run."""
     function _ssh_e2e_enabled()::Bool
@@ -91,7 +92,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
     function _ssh_e2e_juliaup_remote_default_channel(host::AbstractString)::String
         proc, out = _ssh_e2e_ssh(host, "\$HOME/.juliaup/bin/juliaup status")
         proc.exitcode == 0 || error("juliaup status on $host failed: $out")
-        ch = DistSSHRun._juliaup_default_channel_from_status(out)
+        ch = DistSSHUp._juliaup_default_channel_from_status(out)
         ch === nothing && error("no default channel in juliaup status on $host:\n$out")
         return ch
     end

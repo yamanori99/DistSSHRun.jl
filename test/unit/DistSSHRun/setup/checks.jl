@@ -1,5 +1,6 @@
 using Test
 using Pkg
+using DistSSHUp
 
 @testset "setup checks" begin
     DistSSHRun.print_juliaup_align_fix!("user@host"; kind = :missing, channel = "1.12")
@@ -43,7 +44,7 @@ using Pkg
         chmod(ju, 0o755)
         chmod(jl, 0o755)
         withenv("DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
-            r = DistSSHRun._juliaup_align_local!(ch)
+            r = DistSSHUp.juliaup_align_local!(ch)
             @test !r.changed
             @test DistSSHRun.julia_version_mismatch_kind(VERSION, r.ver) != :minor
             out, _ = with_kit_verbosity(:progress) do
