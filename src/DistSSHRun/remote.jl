@@ -153,23 +153,6 @@ end
 
 # Git utilities
 
-"""`git rev-parse --show-toplevel` for `proj_dir`, or `nothing` when it is not a work tree."""
-function git_work_tree(proj_dir::AbstractString)::Union{Nothing, String}
-    _host_tool_present("git") || return nothing
-    resolved = canonical_local_path(proj_dir)
-    try
-        s = strip(
-            read(
-                pipeline(_git_cmd(["-C", resolved, "rev-parse", "--show-toplevel"]); stderr = devnull),
-                String,
-            )
-        )
-        return isempty(s) ? nothing : canonical_local_path(s)
-    catch
-        return nothing
-    end
-end
-
 """
 Throw when the lock Pkg reads, or a `[sources]` path, is outside the git
 work tree of `project`.

@@ -13,7 +13,6 @@ module DistSSHRun
 using Dates
 using Distributed
 using Pkg
-using SHA
 using TOML
 
 # Public surface. Prefer `julia -m DistSSHKit …` for day-to-day CLI.
@@ -105,15 +104,20 @@ export SPINNER_FRAMES
 
 # Implementation
 
-include("DistSSHRun/base/paths.jl")
-include("DistSSHRun/base/explain.jl")
-include("DistSSHRun/base/argv.jl")
-include("DistSSHRun/base/hosts.jl")
-include("DistSSHRun/base/host_tokens.jl")
-include("DistSSHRun/base/help.jl")
-include("DistSSHRun/base/ssh.jl")
-include("DistSSHRun/base/julia_where.jl")
-include("DistSSHRun/base/namespace.jl")
+using DistSSHBase
+
+# Same names as before the trial. Queue still calls DistSSHRun.*.
+for _base_name in names(DistSSHBase; all = true)
+    _base_name === :DistSSHBase && continue
+    _base_name === :eval && continue
+    _base_name === :include && continue
+    _base_str = string(_base_name)
+    isempty(_base_str) && continue
+    _base_str[1] == '#' && continue
+    isdefined(DistSSHBase, _base_name) || continue
+    @eval import DistSSHBase: $_base_name
+end
+
 include("DistSSHRun/display.jl")
 include("DistSSHRun/argv/session.jl")
 include("DistSSHRun/remote.jl")

@@ -513,23 +513,6 @@ function kit_project_root(kit_dir::AbstractString)::String
     return root
 end
 
-"""True when `path` is `root` or a file/dir under it."""
-function _path_is_under(path::AbstractString, root::AbstractString)::Bool
-    p = canonical_local_path(path)
-    r = canonical_local_path(root)
-    p == r && return true
-    return startswith(p, r * Base.Filesystem.path_separator)
-end
-
-"""Like [`_path_is_under`](@ref) after `realpath`, so `/var` and `/private/var` match."""
-function _path_under_resolved(path::AbstractString, root::AbstractString)::Bool
-    _path_is_under(path, root) && return true
-    p = canonical_local_path(path)
-    r = canonical_local_path(root)
-    (ispath(p) && ispath(r)) || return false
-    return _path_is_under(canonical_local_path(realpath(p)), canonical_local_path(realpath(r)))
-end
-
 """
 Job root for the CLI when DistSSHRun is loaded from `kit`.
 
@@ -985,6 +968,13 @@ end
 function print_err(msg; io = stdout, bold = false)
     _print_colored(io, msg, :red, bold)
     _kit_log_write(string(msg))
+    return nothing
+end
+
+"""CLI user error on stderr (no stacktrace)."""
+function print_cli_error(msg::AbstractString; io::IO = stderr)
+    print_err("Error: "; io = io, bold = true)
+    println(io, msg)
     return nothing
 end
 
