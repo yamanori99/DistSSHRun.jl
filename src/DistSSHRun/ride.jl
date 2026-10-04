@@ -725,7 +725,7 @@ end
 
 """Print a [`RideResult`](@ref). Field names match go / drive (`Script:`, `Workers:`)."""
 function print_ride(result::RideResult; io::IO = stdout)
-    println(io, "DistSSHRun ride")
+    println(io, cli_heading("ride"))
     println(io, "Script: ", result.script)
     println(io, "Workers: ", result.workers)
     println(io, "Julia: ", result.julia)

@@ -707,7 +707,7 @@ function _go_print_run_header!(
         writeln_field(label, value)
     end
     writeln_both("")
-    print_header("DistSSHRun go")
+    print_header(cli_heading("go"))
     writeln_both("")
     writeln_field("Script", display_path(script_path, anchor))
     writeln_field("Args", isempty(script_args) ? "—" : join(script_args, " "))

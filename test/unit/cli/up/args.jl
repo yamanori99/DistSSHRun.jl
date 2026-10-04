@@ -30,7 +30,16 @@ using Test
     @test_throws ArgumentError parse_up_args(["--nope"])
 
     txt = DistSSHRun.up_help_text()
+    @test occursin("DistSSHKit up", txt)
+    @test occursin("julia --project=. -m DistSSHKit up", txt)
     @test occursin("up update", txt)
     @test occursin("parent", txt)
     @test occursin("child:host1", txt)
+    err = try
+        parse_up_args(["child:host1", "update"])
+        ""
+    catch e
+        e isa ArgumentError ? e.msg : ""
+    end
+    @test occursin("julia -m DistSSHKit up update", err)
 end

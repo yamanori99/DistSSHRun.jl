@@ -76,13 +76,13 @@ function _demo_install_phrase(
         fam === nothing && return "`DistSSHRun.install_demos(; family=\"with_kit\")`"
         return "`DistSSHRun.install_demos(; family=$(repr(fam)))`"
     end
-    fam === nothing && return "`julia --project=. -m DistSSHKit demo install with_kit`"
-    return "`julia --project=. -m DistSSHKit demo install $fam`"
+    fam === nothing && return "`$(cli_m_project()) demo install with_kit`"
+    return "`$(cli_m_project()) demo install $fam`"
 end
 
 function _demo_list_phrase(surface::Symbol)::String
     _normalize_hint_surface(surface) === :api && return "`DistSSHRun.list_demos()`"
-    return "`julia --project=. -m DistSSHKit demo list`"
+    return "`$(cli_m_project()) demo list`"
 end
 
 """
@@ -226,7 +226,7 @@ function install_demos(
         install = if _normalize_hint_surface(surface) === :api
             "`DistSSHRun.install_demos(dest=...; family=$(repr(group)))`"
         else
-            "`julia --project=. -m DistSSHKit demo install $group --dest DIR`"
+            "`$(cli_m_project()) demo install $group --dest DIR`"
         end
         throw(
             ArgumentError(
@@ -297,14 +297,14 @@ function _demo_install_args(
 end
 
 function show_demo_usage(io::IO = stdout)
-    print_help_chrome("DistSSHRun demo"; io = io)
+    print_help_chrome(cli_heading("demo"); io = io)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia --project=. -m DistSSHKit demo install with_kit [--dest DIR] [--force]",
-        "  julia --project=. -m DistSSHKit demo install without_kit [--dest DIR] [--force]",
-        "  julia --project=. -m DistSSHKit demo install ride [--dest DIR] [--force]",
-        "  julia --project=. -m DistSSHKit demo list",
+        "  $(cli_m_project()) demo install with_kit [--dest DIR] [--force]",
+        "  $(cli_m_project()) demo install without_kit [--dest DIR] [--force]",
+        "  $(cli_m_project()) demo install ride [--dest DIR] [--force]",
+        "  $(cli_m_project()) demo list",
     )
     print_help_blank(io)
     print_help_section("Commands"; io = io)
@@ -339,10 +339,10 @@ function show_demo_usage(io::IO = stdout)
     print_help_section("After install"; io = io)
     print_help_lines(
         io,
-        "  julia --project=. -m DistSSHKit drive parent:2 $DEMO_INSTALL_DIR/with_kit/square_file.jl",
+        "  $(cli_m_project()) drive parent:2 $DEMO_INSTALL_DIR/with_kit/square_file.jl",
         "  julia --project=. $DEMO_INSTALL_DIR/with_kit/pipeline_square.jl",
         "  julia --project=. $DEMO_INSTALL_DIR/without_kit/pipeline_pi.jl",
-        "  julia --project=. -m DistSSHKit go $DEMO_INSTALL_DIR/without_kit/pi_file.jl",
+        "  $(cli_m_project()) go $DEMO_INSTALL_DIR/without_kit/pi_file.jl",
     )
     return nothing
 end
@@ -389,14 +389,14 @@ function demo(args::Vector{String} = copy(ARGS))::Cint
             println()
             println("Demos are in ", dest_demos, "; open and edit them, then run for example:")
             if family == "with_kit"
-                println("  julia --project=. -m DistSSHKit drive parent:2 $rel_demos/with_kit/square_file.jl")
+                println("  $(cli_m_project()) drive parent:2 $rel_demos/with_kit/square_file.jl")
                 println("  julia --project=. $rel_demos/with_kit/pipeline_square.jl")
             elseif family == "ride"
-                println("  julia --project=. -m DistSSHKit plan $rel_demos/ride/map_echo.jl")
-                println("  julia --project=. -m DistSSHKit ride parent:2 $rel_demos/ride/map_echo.jl")
+                println("  $(cli_m_project()) plan $rel_demos/ride/map_echo.jl")
+                println("  $(cli_m_project()) ride parent:2 $rel_demos/ride/map_echo.jl")
             else
                 println("  julia --project=. $rel_demos/without_kit/pipeline_pi.jl")
-                println("  julia --project=. -m DistSSHKit go $rel_demos/without_kit/pi_file.jl")
+                println("  $(cli_m_project()) go $rel_demos/without_kit/pi_file.jl")
             end
             return 0
         catch err

@@ -43,7 +43,7 @@ function size_main()::Cint
         return 0
     end
 
-    print_header("DistSSHRun size")
+    print_header(DistSSHRun.cli_heading("size"))
     DistSSHRun.writeln_field("Project", cli_project_disp(PROJECT_ROOT, _PATH_ANCHOR))
     DistSSHRun.kit_println()
 

@@ -23,7 +23,7 @@ function _pool_parsed(;
 end
 
 function show_pool_usage(; io::IO = stdout)
-    print_help_chrome("DistSSHRun pool"; io = io)
+    print_help_chrome(cli_heading("pool"); io = io)
     print_help_lines(
         io,
         "Show cluster cores, RAM, and a slot hint. Does not start a job.",
@@ -34,7 +34,7 @@ function show_pool_usage(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia --project=. -m DistSSHKit pool [parent] [child:NAME...]",
+        "  $(cli_m_project()) pool [parent] [child:NAME...]",
         "  pool parent child:host1 child:host2",
         "  pool --gb-per-worker 1.5 child:host1",
     )

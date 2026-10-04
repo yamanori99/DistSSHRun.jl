@@ -22,7 +22,7 @@ using Test
     let (code, _, err) = _main_capture(String[])
         @test code == 1
         @test occursin("Usage", err)
-        @test occursin("julia -m DistSSHKit <command>", err)
+        @test occursin("julia -m DistSSHRun <command>", err)
     end
     # Unknown first token must fail, not exit 0.
     let (code, _, err) = _main_capture(["bogus"])
@@ -46,7 +46,7 @@ using Test
     let (code, _, err) = _main_capture(["--help"])
         @test code == 0
         @test occursin("Usage", err)
-        @test occursin("julia -m DistSSHKit <command>", err)
+        @test occursin("julia -m DistSSHRun <command>", err)
         @test occursin("progress", err)
     end
     let (code, out, _) = _main_capture(["--version"])
@@ -55,7 +55,7 @@ using Test
     end
     let (code, _, err) = _main_capture(["help"])
         @test code == 0
-        @test occursin("julia -m DistSSHKit <command>", err)
+        @test occursin("julia -m DistSSHRun <command>", err)
     end
     let (code, out, _) = _main_capture(["-V"])
         @test code == 0
@@ -69,6 +69,8 @@ using Test
                 combined = out * err
                 @test code == 0
                 @test occursin("Usage", combined)
+                @test occursin("DistSSHRun $cmd", combined)
+                @test occursin("-m DistSSHRun", combined)
                 @test occursin(cmd, lowercase(combined))
             end
             let (code, out, _) = _main_capture([cmd, "--version"])
@@ -78,7 +80,15 @@ using Test
         end
         let (code, out, _) = _main_capture(["progress", "--help"])
             @test code == 0
+            @test occursin("DistSSHRun progress", out)
+            @test occursin("-m DistSSHRun progress", out)
             @test occursin("kit.progress", out)
+        end
+        let (code, out, _) = _main_capture(["up", "-h"])
+            @test code == 0
+            @test occursin("DistSSHRun up", out)
+            @test occursin("-m DistSSHRun up", out)
+            @test !occursin("qhost", out)
         end
     end
 end

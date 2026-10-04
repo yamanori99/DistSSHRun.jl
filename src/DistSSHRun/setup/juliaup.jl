@@ -10,7 +10,7 @@ function print_juliaup_align_fix!(
     )
     ch = String(channel)
     h = String(host)
-    kit_println("    Fix: julia --project=. -m DistSSHKit up $(setup_cli_host_token(h))")
+    kit_println("    Fix: $(cli_m_project()) up $(setup_cli_host_token(h))")
     kit_println("         (or on $h: juliaup add $ch && juliaup update $ch && \\")
     kit_println("          juliaup default $ch —")
     kit_println("          \$HOME/.juliaup/bin/juliaup, /opt/homebrew/bin/juliaup,")
@@ -32,7 +32,7 @@ function print_juliaup_parent_patch_note!(
     juliaup_parent_behind_channel(local_version, remote_version) || return false
     ch = String(channel)
     warn("kit parent Julia $local_version is behind channel $ch latest on remotes ($remote_version)")
-    kit_println("    Tip: julia --project=. -m DistSSHKit up $PARENT_HOST_NAME")
+    kit_println("    Tip: $(cli_m_project()) up $PARENT_HOST_NAME")
     kit_println("         (or: juliaup update $ch && juliaup default $ch), then re-run workers.")
     return true
 end
@@ -88,75 +88,38 @@ function juliaup_align_remotes(
         cancelled && return (; cancelled = true, succeeded = 0, failed = 0, hosts = HostResult[])
     end
 
-    remote_sh = _juliaup_align_remote_sh(ch)
     succeeded = 0
     failed = 0
     host_results = HostResult[]
     for host in hosts
         _setup_host_span!(host, :running)
-        err_buf = IOBuffer()
-        out_buf = IOBuffer()
+        label = is_parent_host_name(host) ? PARENT_HOST_NAME : host
         try
-            if is_parent_host_name(host)
-                r = kit_spin!("  $PARENT_HOST_NAME: ") do
-                    _juliaup_align_local!(ch)
-                end
-                if r.changed
-                    print_ok("✓ Julia $(r.ver) (channel $ch)")
-                    kit_println()
+            r = kit_spin!("  $label: ") do
+                juliaup_align_host!(host; channel = ch)
+            end
+            if r.already
+                print_juliaup_already_on!(label, ch)
+            else
+                print_ok("✓ Julia $(r.ver) (channel $ch)")
+                kit_println()
+                if is_parent_host_name(host)
                     kit_println("    Note: this process still runs Julia $VERSION until you restart.")
                 else
-                    print_juliaup_already_on!(PARENT_HOST_NAME, ch)
+                    print_juliaup_parent_patch_note!(r.ver; channel = ch)
                 end
-                succeeded += 1
-                push!(host_results, HostResult(PARENT_HOST_NAME, true, "juliaup $ch"))
-                _setup_host_span!(host, :ok)
-                continue
-            end
-            align_out = kit_spin!("  $host: ") do
-                proc = run(
-                    pipeline(
-                        ignorestatus(_host_sync_remote_shell_cmd(host, remote_sh));
-                        stdout = out_buf,
-                        stderr = err_buf,
-                    );
-                    wait = true,
-                )
-                if proc.exitcode != 0
-                    msg = strip(String(take!(err_buf)))
-                    isempty(msg) && (msg = strip(String(take!(out_buf))))
-                    isempty(msg) && (msg = "juliaup align exit $(proc.exitcode)")
-                    error(first(split(msg, '\n')))
-                end
-                return strip(String(take!(out_buf)))
-            end
-            if align_out == "already"
-                print_juliaup_already_on!(host, ch)
-            else
-                clear_detect_julia_path_cache!(host)
-                path = detect_julia_path(host)
-                path === nothing && error("Julia not found after juliaup align")
-                ver = _remote_julia_version_setup_ssh(host, path)
-                ver === nothing && error("Julia --version unparseable after juliaup align")
-                if julia_version_mismatch_kind(VERSION, ver) == :minor
-                    error("still mismatched after align: local $(VERSION), remote $ver")
-                end
-                print_ok("✓ Julia $ver (channel $ch)")
-                kit_println()
-                print_juliaup_parent_patch_note!(ver; channel = ch)
             end
             succeeded += 1
-            push!(host_results, HostResult(host, true, "juliaup $ch"))
+            push!(host_results, HostResult(label, true, "juliaup $ch"))
             _setup_host_span!(host, :ok)
         catch e
-            detail = strip(String(take!(err_buf)))
-            report_remote_failure(e; stderr = detail)
-            combined = isempty(detail) ? sprint(showerror, e) : detail
-            if occursin("juliaup not found", combined) || occursin("127", combined)
-                kit_println("    Install juliaup on $host first (see Requirements), then retry.")
+            detail = e isa ErrorException ? e.msg : sprint(showerror, e)
+            report_remote_failure(e)
+            if occursin("juliaup not found", detail) || occursin("127", detail)
+                kit_println("    Install juliaup on $label first (see Requirements), then retry.")
             end
             failed += 1
-            push!(host_results, HostResult(host, false, combined))
+            push!(host_results, HostResult(label, false, detail))
             _setup_host_span!(host, :fail)
         end
     end
@@ -192,57 +155,29 @@ function juliaup_update_remotes(
         cancelled && return (; cancelled = true, succeeded = 0, failed = 0, hosts = HostResult[])
     end
 
-    remote_sh = _juliaup_update_remote_sh()
     succeeded = 0
     failed = 0
     host_results = HostResult[]
     for host in hosts
         _setup_host_span!(host, :running)
-        err_buf = IOBuffer()
-        out_buf = IOBuffer()
+        label = is_parent_host_name(host) ? PARENT_HOST_NAME : host
         try
-            if is_parent_host_name(host)
-                kit_spin!("  $PARENT_HOST_NAME: ") do
-                    _juliaup_update_local!()
-                end
-                print_ok("✓ juliaup update")
-                kit_println()
-                succeeded += 1
-                push!(host_results, HostResult(PARENT_HOST_NAME, true, "juliaup update"))
-                _setup_host_span!(host, :ok)
-                continue
-            end
-            kit_spin!("  $host: ") do
-                proc = run(
-                    pipeline(
-                        ignorestatus(_host_sync_remote_shell_cmd(host, remote_sh));
-                        stdout = out_buf,
-                        stderr = err_buf,
-                    );
-                    wait = true,
-                )
-                if proc.exitcode != 0
-                    msg = strip(String(take!(err_buf)))
-                    isempty(msg) && (msg = strip(String(take!(out_buf))))
-                    isempty(msg) && (msg = "juliaup update exit $(proc.exitcode)")
-                    error(first(split(msg, '\n')))
-                end
-                return nothing
+            kit_spin!("  $label: ") do
+                juliaup_update_host!(host)
             end
             print_ok("✓ juliaup update")
             kit_println()
             succeeded += 1
-            push!(host_results, HostResult(host, true, "juliaup update"))
+            push!(host_results, HostResult(label, true, "juliaup update"))
             _setup_host_span!(host, :ok)
         catch e
-            detail = strip(String(take!(err_buf)))
-            report_remote_failure(e; stderr = detail)
-            combined = isempty(detail) ? sprint(showerror, e) : detail
-            if occursin("juliaup not found", combined) || occursin("127", combined)
-                kit_println("    Install juliaup on $host first (see Requirements), then retry.")
+            detail = e isa ErrorException ? e.msg : sprint(showerror, e)
+            report_remote_failure(e)
+            if occursin("juliaup not found", detail) || occursin("127", detail)
+                kit_println("    Install juliaup on $label first (see Requirements), then retry.")
             end
             failed += 1
-            push!(host_results, HostResult(host, false, combined))
+            push!(host_results, HostResult(label, false, detail))
             _setup_host_span!(host, :fail)
         end
     end

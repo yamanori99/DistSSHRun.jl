@@ -412,7 +412,7 @@ end
 
 """Print `drive --help` (same chrome as `julia -m DistSSHKit drive -h`)."""
 function show_drive_usage(; io::IO = stdout)
-    print_help_chrome("DistSSHRun drive"; io = io)
+    print_help_chrome(cli_heading("drive"); io = io)
     print_help_lines(
         io,
         "Driver + Distributed workers (pmap), then collect new files.",
@@ -423,7 +423,7 @@ function show_drive_usage(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia --project=. -m DistSSHKit drive [workers...] DRIVER.jl",
+        "  $(cli_m_project()) drive [workers...] DRIVER.jl",
         "  drive parent:4 child:host1:8 jobs.jl",
         "  drive --collect-missing ROOT HOST...",
     )

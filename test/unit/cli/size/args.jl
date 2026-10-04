@@ -71,7 +71,8 @@ using Test
             end
             help = read(path, String)
             rm(path; force = true)
-            @test occursin("DistSSHRun size", help)
+            @test occursin("DistSSHKit size", help)
+            @test occursin("-m DistSSHKit", help)
             @test occursin("parent", help)
             @test !occursin("--local", help)
             @test occursin("--gb-per-worker", help)

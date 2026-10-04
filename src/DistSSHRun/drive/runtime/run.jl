@@ -185,7 +185,7 @@ function _run_drive_parsed_locked!(
     end
     writeln_both("")
 
-    print_header("DistSSHRun drive")
+    print_header(cli_heading("drive"))
     writeln_both("")
     writeln_field("Script", display_path(script_path, path_anchor))
     writeln_field("Args", isempty(script_args) ? "—" : join(script_args, " "))
