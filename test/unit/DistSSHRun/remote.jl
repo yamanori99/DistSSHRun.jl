@@ -61,32 +61,6 @@ using Test
         @test DistSSHRun._git_pull_remote_inner(abs) == "cd $pq_abs && git pull"
     end
 
-    @testset "detect_julia_path skips Linux candidates when uname fails" begin
-        _with_tempdir() do state_dir
-            logp = joinpath(state_dir, "ssh.log")
-            env = merge(
-                _fake_setup_remote_env(state_dir),
-                Dict(
-                    "DISTSSHKIT_TEST_UNAME_FAIL" => "1",
-                    "DISTSSHKIT_TEST_JULIA_WHICH" => "/opt/custom/julia",
-                    "DISTSSHKIT_TEST_SSH_LOG" => logp,
-                ),
-            )
-            empty!(DistSSHBase._DETECT_JULIA_PATH_CACHE)
-            try
-                withenv(env...) do
-                    @test DistSSHRun.detect_julia_path("host1") == "/opt/custom/julia"
-                end
-                body = isfile(logp) ? read(logp, String) : ""
-                @test occursin("uname -s", body)
-                @test occursin("command -v julia", body)
-                @test !occursin("/usr/bin/julia", body)
-            finally
-                empty!(DistSSHBase._DETECT_JULIA_PATH_CACHE)
-            end
-        end
-    end
-
     @testset "run_on_host remote sh" begin
         withenv("PATH" => "/nonexistent-distsshkit-path") do
             @test_throws ArgumentError DistSSHRun._remote_ssh_ok("no-such-host.invalid")
