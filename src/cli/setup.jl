@@ -99,7 +99,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 :cleanup => "Cleanup Workers",
                 :prune => "Prune kit leaves",
             )[mode]
-            print_header("DistSSHRun setup · $mode_name")
+            print_header("$(DistSSHRun.cli_heading("setup")) · $mode_name")
             kit_println()
             writeln_field("Remote path", remote_path)
             kit_println()

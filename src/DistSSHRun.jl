@@ -132,8 +132,10 @@ import DistSSHUp:
     _juliaup_update_remote_sh,
     _remote_julia_version_setup_ssh,
     julia_version_mismatch_kind,
+    juliaup_align_host!,
     juliaup_channel,
-    juliaup_parent_behind_channel
+    juliaup_parent_behind_channel,
+    juliaup_update_host!
 
 include("DistSSHRun/display.jl")
 include("DistSSHRun/argv/session.jl")
@@ -362,6 +364,12 @@ CLI entry. Prefer Julia 1.13+ and `julia -m DistSSHKit SUBCOMMAND …`:
 A `.jl` path with no command is not implicit `go`.
 """
 function main(args::Vector{String} = copy(ARGS))::Cint
+    return with_cli_entry(:DistSSHRun) do
+        _main(args)
+    end
+end
+
+function _main(args::Vector{String})::Cint
     if _consume_kit_cli_subcommand_done!()
         return 0
     end

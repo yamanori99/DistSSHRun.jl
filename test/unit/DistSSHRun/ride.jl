@@ -398,7 +398,7 @@ using Test
         buf = IOBuffer()
         DistSSHRun.print_ride(r; io = buf)
         shown = String(take!(buf))
-        @test startswith(shown, "DistSSHRun ride\n")
+        @test startswith(shown, "DistSSHKit ride\n")
         @test occursin("Script: ", shown)
         @test occursin("Workers: ", shown)
         @test occursin("Julia: ", shown)

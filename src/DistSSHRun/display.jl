@@ -2027,11 +2027,11 @@ function _maybe_print_kit_progress_phases(dir::AbstractString)
 end
 
 function show_progress_usage(io::IO = stdout)
-    print_help_chrome("DistSSHRun progress"; io = io)
+    print_help_chrome(cli_heading("progress"); io = io)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia -m DistSSHKit progress [DIR]",
+        "  $(cli_m()) progress [DIR]",
     )
     print_help_blank(io)
     print_help_section("Args"; io = io)
@@ -2255,11 +2255,11 @@ end
 
 """Top-level `julia -m DistSSHKit` usage (no subcommand)."""
 function print_kit_root_usage(io::IO = stderr)
-    print_help_chrome("DistSSHRun"; io = io)
+    print_help_chrome(string(cli_entry()); io = io)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia -m DistSSHKit <command> [args...]",
+        "  $(cli_m()) <command> [args...]",
     )
     print_help_blank(io)
     print_help_section("Commands"; io = io)
@@ -2280,15 +2280,15 @@ function print_kit_root_usage(io::IO = stderr)
     print_help_section("Examples"; io = io)
     print_help_lines(
         io,
-        "  julia --project=. -m DistSSHKit setup --check child:host1",
-        "  julia --project=. -m DistSSHKit up child:host1",
-        "  julia --project=. -m DistSSHKit go SCRIPT.jl",
-        "  julia --project=. -m DistSSHKit ride parent:2 SCRIPT.jl",
-        "  julia --project=. -m DistSSHKit drive parent:2 SCRIPT.jl",
-        "  julia --project=. -m DistSSHKit plan SCRIPT.jl",
+        "  $(cli_m_project()) setup --check child:host1",
+        "  $(cli_m_project()) up child:host1",
+        "  $(cli_m_project()) go SCRIPT.jl",
+        "  $(cli_m_project()) ride parent:2 SCRIPT.jl",
+        "  $(cli_m_project()) drive parent:2 SCRIPT.jl",
+        "  $(cli_m_project()) plan SCRIPT.jl",
     )
     print_help_blank(io)
-    println(io, "Run `julia -m DistSSHKit <command> -h` for flags.")
+    println(io, "Run `$(cli_m()) <command> -h` for flags.")
     return nothing
 end
 

@@ -1,5 +1,5 @@
 function show_up_usage(; io::IO = stdout)
-    print_help_chrome("DistSSHRun up"; io = io)
+    print_help_chrome(cli_heading("up"); io = io)
     print_help_lines(
         io,
         "Align a host's Julia channel with juliaup: add, update, and default.",
@@ -10,7 +10,7 @@ function show_up_usage(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia --project=. -m DistSSHKit up child:host1 child:host2",
+        "  $(cli_m_project()) up child:host1 child:host2",
         "  up parent child:host1",
         "  up update child:host1",
         "  up update parent",
@@ -47,10 +47,10 @@ function parse_up_args(args::Vector{String})
             update = true
             cli_consume!(c)
         elseif arg == "update"
-            throw(ArgumentError("`update` comes before hosts: julia -m DistSSHKit up update …"))
+            throw(ArgumentError("`update` comes before hosts: $(cli_m()) up update …"))
         elseif arg in ("--juliaup", "--juliaup-update")
             gone = arg == "--juliaup-update" ? "up update" : "up"
-            throw(ArgumentError("$arg is now: julia -m DistSSHKit $gone"))
+            throw(ArgumentError("$arg is now: $(cli_m()) $gone"))
         elseif cli_match(c, ["-h", "--help"])
             show_help = true
             cli_consume!(c)

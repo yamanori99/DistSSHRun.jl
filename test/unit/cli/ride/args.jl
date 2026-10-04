@@ -29,7 +29,8 @@ using Test
         end
         help = read(path, String)
         rm(path; force = true)
-        @test occursin("DistSSHRun ride", help)
+        @test occursin("DistSSHKit ride", help)
+        @test occursin("-m DistSSHKit", help)
         @test occursin("plan", help)
         @test occursin("child:", help)
         @test !occursin("--analyze", help)

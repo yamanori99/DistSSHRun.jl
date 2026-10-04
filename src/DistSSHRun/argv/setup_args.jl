@@ -1,5 +1,5 @@
 function show_requirements(; io::IO = stdout)
-    print_help_chrome("DistSSHRun setup"; io = io)
+    print_help_chrome(cli_heading("setup"); io = io)
     print_help_lines(
         io,
         "Deploy and check the project on SSH hosts before go / drive.",
@@ -13,7 +13,7 @@ function show_requirements(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia --project=. -m DistSSHKit setup MODE child:host1 child:host2",
+        "  $(cli_m_project()) setup MODE child:host1 child:host2",
         "  setup --rsync child:host1 child:host2",
         "  setup --instantiate child:host1 child:host2",
         "  setup --check child:host1 child:host2",
@@ -92,9 +92,9 @@ function parse_setup_args(args::Vector{String})
             mode = :instantiate
             cli_consume!(c)
         elseif arg == "--juliaup"
-            throw(ArgumentError("setup --juliaup is now: julia -m DistSSHKit up"))
+            throw(ArgumentError("setup --juliaup is now: $(cli_m()) up"))
         elseif arg == "--juliaup-update"
-            throw(ArgumentError("setup --juliaup-update is now: julia -m DistSSHKit up update"))
+            throw(ArgumentError("setup --juliaup-update is now: $(cli_m()) up update"))
         elseif arg == "--runtest"
             mode = :runtest
             cli_consume!(c)

@@ -21,7 +21,7 @@ function drive_collect_tree(
     transport = DistSSHRun._host_sync_rsync_transport()
     rsync_bin = DistSSHRun._host_sync_rsync_argv()
 
-    print_header(merge ? "DistSSHRun collect-overwrite" : "DistSSHRun collect-missing")
+    print_header(merge ? cli_heading("collect-overwrite") : cli_heading("collect-missing"))
     writeln_both("")
     writeln_field("Local root", display_path(local_root, path_anchor))
     writeln_field(
