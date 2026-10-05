@@ -15,6 +15,10 @@ See `--help`.
 
 # Guard on a setup-only import — not names `go`/`drive` may already have
 # bound from DistSSHRun (e.g. `cli_project_root`) before `setup.jl` is included.
+# Top-level include so JETLS sees `_include_checkout_run` (it does not follow
+# `include` inside `catch`).
+include(joinpath(@__DIR__, "_checkout.jl"))
+
 if !isdefined(@__MODULE__, :DistSSHRun)
     if get(ENV, "DIST_SSH_KIT_CLI_INCLUDE", "") == "1"
         import DistSSHRun

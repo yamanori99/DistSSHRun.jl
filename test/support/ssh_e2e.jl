@@ -3,6 +3,7 @@
 if !isdefined(Main, :_ssh_e2e_enabled)
 
     using Dates
+    using DistSSHBase
     using DistSSHUp
 
     """True when CI / local docker-ssh E2E should run."""
