@@ -108,7 +108,9 @@ function juliaup_align_remotes(
                 if is_parent_host_name(host)
                     kit_println("    Note: this process still runs Julia $VERSION until you restart.")
                 else
-                    print_juliaup_parent_patch_note!(r.ver; channel = ch)
+                    ver = r.ver
+                    ver isa VersionNumber || error("juliaup align returned no version")
+                    print_juliaup_parent_patch_note!(ver; channel = ch)
                 end
             end
             succeeded += 1
