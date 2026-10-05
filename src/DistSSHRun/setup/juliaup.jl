@@ -10,7 +10,8 @@ function print_juliaup_align_fix!(
     )
     ch = String(channel)
     h = String(host)
-    kit_println("    Fix: $(cli_m_project()) up $(setup_cli_host_token(h))")
+    kit_println("    Fix: $(cli_m_project()) up add $ch $(setup_cli_host_token(h))")
+    kit_println("         $(cli_m_project()) up default $ch $(setup_cli_host_token(h))")
     kit_println("         (or on $h: juliaup add $ch && juliaup update $ch && \\")
     kit_println("          juliaup default $ch —")
     kit_println("          \$HOME/.juliaup/bin/juliaup, /opt/homebrew/bin/juliaup,")
@@ -32,7 +33,8 @@ function print_juliaup_parent_patch_note!(
     juliaup_parent_behind_channel(local_version, remote_version) || return false
     ch = String(channel)
     warn("kit parent Julia $local_version is behind channel $ch latest on remotes ($remote_version)")
-    kit_println("    Tip: $(cli_m_project()) up $PARENT_HOST_NAME")
+    kit_println("    Tip: $(cli_m_project()) up update $ch $PARENT_HOST_NAME")
+    kit_println("         $(cli_m_project()) up default $ch $PARENT_HOST_NAME")
     kit_println("         (or: juliaup update $ch && juliaup default $ch), then re-run workers.")
     return true
 end
@@ -169,6 +171,85 @@ function juliaup_update_remotes(
             kit_println()
             succeeded += 1
             push!(host_results, HostResult(label, true, "juliaup update"))
+            _setup_host_span!(host, :ok)
+        catch e
+            detail = e isa ErrorException ? e.msg : sprint(showerror, e)
+            report_remote_failure(e)
+            if occursin("juliaup not found", detail) || occursin("127", detail)
+                kit_println("    Install juliaup on $label first (see Requirements), then retry.")
+            end
+            failed += 1
+            push!(host_results, HostResult(label, false, detail))
+            _setup_host_span!(host, :fail)
+        end
+    end
+    return (; host_op_result(succeeded = succeeded, failed = failed)..., hosts = host_results)
+end
+
+"""
+Run one juliaup verb on each target.
+
+`verb` is `add`, `default`, `update`, or `status`. `add` and `default` need
+`channel`. Confirm only for `default`, which changes the host default Julia.
+"""
+function juliaup_verb_remotes(
+        hosts::Vector{String};
+        verb::AbstractString,
+        channel::Union{Nothing, AbstractString} = nothing,
+        confirm::Bool = true,
+    )::NamedTuple
+    v = String(verb)
+    ch = channel === nothing ? nothing : String(channel)
+    if v == "default" && confirm && !kit_noninteractive()
+        cancelled = with_kit_progress_suspended() do
+            print_err("  This will run juliaup default $ch on each target.\n")
+            println_fatal("  That changes the host default Julia.")
+            println_fatal("  Targets: $(join(hosts, ", "))")
+            println_fatal("  The running kit process keeps its current Julia until restart.")
+            println_fatal()
+            kit_confirm("Type 'default' to confirm: "; keyword = "default") || begin
+                println_fatal("Cancelled.")
+                return true
+            end
+            println_fatal()
+            return false
+        end
+        cancelled && return (; cancelled = true, succeeded = 0, failed = 0, hosts = HostResult[])
+    end
+
+    succeeded = 0
+    failed = 0
+    host_results = HostResult[]
+    for host in hosts
+        _setup_host_span!(host, :running)
+        label = is_parent_host_name(host) ? PARENT_HOST_NAME : host
+        try
+            if v == "status"
+                lines = juliaup_status_lines(host; channel = ch)
+                if isempty(lines)
+                    kit_println("  $label: (none)")
+                else
+                    for line in lines
+                        kit_println("  $label: $line")
+                    end
+                end
+            else
+                kit_spin!("  $label: ") do
+                    if v == "add"
+                        juliaup_add_host!(host, something(ch, ""))
+                    elseif v == "default"
+                        juliaup_default_host!(host, something(ch, ""))
+                    elseif v == "update"
+                        juliaup_update_host!(host; channel = ch)
+                    else
+                        error("unknown juliaup verb: $v")
+                    end
+                end
+                print_ok("✓ juliaup $v$(ch === nothing ? "" : " $ch")")
+                kit_println()
+            end
+            succeeded += 1
+            push!(host_results, HostResult(label, true, "juliaup $v"))
             _setup_host_span!(host, :ok)
         catch e
             detail = e isa ErrorException ? e.msg : sprint(showerror, e)

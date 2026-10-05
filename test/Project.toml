@@ -13,7 +13,7 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 [sources]
 DistSSHBase = {rev = "cc4d354c02bcb0ec1d28fec59479ad8dd0e5d93b", url = "https://github.com/yamanori99/DistSSHBase.jl"}
 DistSSHRun = {path = ".."}
-DistSSHUp = {rev = "f942c87db2fd08b7eca31586d05b063ac9fc075b", url = "https://github.com/yamanori99/DistSSHUp.jl"}
+DistSSHUp = {rev = "6c5da969f126fd1e698a611af6e9302c6b23e25a", url = "https://github.com/yamanori99/DistSSHUp.jl"}
 
 [compat]
 ArgParse = "1"

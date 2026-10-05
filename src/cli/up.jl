@@ -2,8 +2,10 @@
 """
 `julia -m DistSSHKit up` — align a host's Julia channel with juliaup.
 
-  julia --project=. -m DistSSHKit up child:host1 child:host2
+  julia --project=. -m DistSSHKit up add 1.13 child:host1
+  julia --project=. -m DistSSHKit up default 1.13 parent
   julia --project=. -m DistSSHKit up update child:host1
+  julia --project=. -m DistSSHKit up status parent
 
 See `--help`.
 """
@@ -43,9 +45,9 @@ if !isdefined(@__MODULE__, :up_main)
             return 0
         end
 
-        if opts.show_help || isempty(opts.hosts)
+        if opts.show_help || isempty(opts.verb) || isempty(opts.hosts)
             show_up_usage()
-            return 0
+            return opts.show_help ? 0 : 1
         end
 
         try
@@ -66,13 +68,13 @@ if !isdefined(@__MODULE__, :up_main)
             return Cint(1)
         end
 
-        label = opts.update ? "juliaup update" : "juliaup"
-        result = if opts.update
-            juliaup_update_remotes(opts.hosts)
-        else
-            juliaup_align_remotes(opts.hosts)
-        end
-        return Cint(finish_host_op!(label, result) ? 0 : 1)
+        result = juliaup_verb_remotes(
+            opts.hosts;
+            verb = opts.verb,
+            channel = opts.channel,
+            confirm = opts.verb == "default",
+        )
+        return Cint(finish_host_op!(opts.verb, result) ? 0 : 1)
     end
 end
 
