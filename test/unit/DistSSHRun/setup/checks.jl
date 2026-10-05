@@ -18,7 +18,8 @@ using DistSSHUp
             )
         end
     end
-    @test occursin("DistSSHKit up parent", tip_out)
+    @test occursin("up update 1.12 parent", tip_out)
+    @test occursin("up default 1.12 parent", tip_out)
     mktempdir() do d
         ju = joinpath(d, "juliaup")
         jl = joinpath(d, "julia")
