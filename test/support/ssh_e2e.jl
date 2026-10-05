@@ -105,13 +105,13 @@ if !isdefined(Main, :_ssh_e2e_enabled)
             "\$HOME/.juliaup/bin/juliaup default $(Base.shell_escape(ch))",
         )
         proc.exitcode == 0 || error("juliaup default $ch on $host failed: $out")
-        DistSSHRun.clear_detect_julia_path_cache!(String(host))
+        DistSSHBase.clear_detect_julia_path_cache!(String(host))
         return nothing
     end
 
     """Local juliaup on the kit parent (required for `setup --juliaup parent` E2E)."""
     function _ssh_e2e_local_juliaup()::String
-        ju = DistSSHRun.find_local_juliaup()
+        ju = DistSSHBase.find_local_juliaup()
         ju === nothing && error(
             "local juliaup not found; kit parent E2E needs \$HOME/.juliaup/bin/juliaup " *
                 "or Homebrew juliaup",
@@ -141,7 +141,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         ju = _ssh_e2e_local_juliaup()
         jl = DistSSHBase._local_julia_beside_juliaup(ju)
         isfile(jl) || error("Julia not found beside juliaup: $jl")
-        ver = DistSSHRun.parse_julia_version(read(`$jl --version`, String))
+        ver = DistSSHBase.parse_julia_version(read(`$jl --version`, String))
         ver === nothing && error("unparseable julia --version from $jl")
         return ver
     end
