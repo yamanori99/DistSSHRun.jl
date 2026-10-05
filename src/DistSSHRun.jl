@@ -208,9 +208,12 @@ using DistSSHUp
 # Confirm text and progress stay here. The host operation is DistSSHUp.
 import DistSSHUp:
     julia_version_mismatch_kind,
+    juliaup_add_host!,
     juliaup_align_host!,
     juliaup_channel,
+    juliaup_default_host!,
     juliaup_parent_behind_channel,
+    juliaup_status_lines,
     juliaup_update_host!
 
 include("DistSSHRun/display.jl")
