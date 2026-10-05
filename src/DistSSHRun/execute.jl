@@ -406,7 +406,12 @@ function _detached_julia_project(project::AbstractString)::String
     return _detached_fallback_project(kit_proj)
 end
 
-"""`-m` package for a detached child. Users add DistSSHKit."""
+"""`-m` package for a detached child.
+
+`project` is the directory passed to `--project=`, from
+`_detached_julia_project`. That directory can be a fallback when the job
+tree has no direct DistSSHKit or DistSSHRun dependency, and the fallback
+may list DistSSHKit. Users add DistSSHKit."""
 function _detached_m_package(project::AbstractString)::String
     raw = _parse_toml_dict(joinpath(String(project), "Project.toml"))
     _deps_has_name(raw, "DistSSHKit") && return "DistSSHKit"
@@ -605,7 +610,7 @@ function _execute_detached!(
             "--startup-file=no",
             "--project=$(child_proj)",
             "-m",
-            _detached_m_package(proj),
+            _detached_m_package(child_proj),
             argv...,
         ]
     )
