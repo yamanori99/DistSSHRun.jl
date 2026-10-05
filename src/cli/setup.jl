@@ -32,7 +32,9 @@ if !isdefined(@__MODULE__, :DistSSHRun)
     end
 end
 
-if !isdefined(@__MODULE__, :resolve_remote_project_root)
+# `using DistSSHBase` (test support) already binds `resolve_remote_project_root`.
+# Key off the setup parser, which that import does not bring in.
+if !isdefined(@__MODULE__, :parse_setup_args)
     include(joinpath(@__DIR__, "setup", "_using.jl"))
 end
 
