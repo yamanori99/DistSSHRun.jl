@@ -4,6 +4,13 @@ User-facing changes.
 GitHub Releases may copy these sections (`Release notes:` on
 `@JuliaRegistrator register`).
 
+## 0.1.1
+
+The README and the docs index lead with this package. Install with
+`pkg> add DistSSHRun`. The command is `julia -m DistSSHRun`. From
+Julia, `go!("job.jl")`. The API page groups those names. The dependency
+plan stays in the 0.1.0 note.
+
 ## 0.1.0
 
 First release of the run surface. DistSSHRun is the DistSSHKit execution
