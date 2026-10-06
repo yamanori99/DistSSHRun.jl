@@ -123,8 +123,10 @@ When a new RC of the floor's minor lands, point **1.13** jobs at `~1.13.0-0` so 
 
 These run as jobs of the `Test` workflow
 ([`.github/workflows/CI.yml`](.github/workflows/CI.yml)). Ubuntu:
-`Pkg.test` 1.13, JETLS 1.13, Aqua 1.13, Gitleaks
-(also rejects `< 0.0.1` in `Project.toml`). Documenter 1.13 is
+`Pkg.test` 1.13, JETLS 1.13, Aqua 1.13, Gitleaks. macOS (`macos-latest`):
+`Pkg.test` 1.13, same heavy gate, no coverage upload. That job runs
+`ps -o lstart=` in `kit_process_start_key`. It is not a required check.
+Gitleaks also rejects `< 0.0.1` in `Project.toml`. Documenter 1.13 is
 [`.github/workflows/Documentation.yml`](.github/workflows/Documentation.yml).
 `Assets` (`draw SVG`) runs if `docs/src/assets/` or that workflow
 changed. Linux E2E (1.13) uses the same **path filter** as **main** push
@@ -155,8 +157,9 @@ Linux E2E is skipped on allowlisted markdown-only PRs (same skipping UI):
 A new root markdown file stays heavy until listed in
 [`.github/actions/ci-heavy/action.yml`](.github/actions/ci-heavy/action.yml).
 A `Project.toml` version increase skips none of this: Pkg.test, JETLS, Aqua, Documenter,
-and Linux E2E all run (E2E Codecov too). macOS / WSL stay on `E2E weekly`,
-not the PR. Register from the cut PR's Linux E2E (optional local Mac
+and Linux E2E all run (E2E Codecov too). macOS and WSL SSH E2E stay on
+`E2E weekly`, not the PR. `Pkg.test` 1.13 also runs on `macos-latest`.
+Register from the cut PR's Linux E2E (optional local Mac
 `./testenv/docker-ssh/scripts/up.sh --e2e`). Intel / WSL weekly are
 watchers, not the register gate.
 

@@ -18,7 +18,10 @@ permissions:
   contents: read
 
 jobs:
-  # Full `Pkg.test()` stays Linux-only. Slow SSH E2E kit parents are `E2E weekly`.
+  # `Pkg.test` 1.13 runs on ubuntu-latest and macos-latest. The macOS job
+  # exercises `ps -o lstart=` in kit_process_start_key (no /proc). It does
+  # not upload coverage. Slow SSH E2E kit parents are `E2E weekly`
+  # (macos-15-intel Colima, not this job).
   # PRs run `ubuntu-latest → ubuntu-24.04` in this workflow.
   # One detect job; markdown-only / allowlisted PRs skip heavy jobs (UI: skipping).
   # Required check names do not include a Julia version.
@@ -105,6 +108,25 @@ jobs:
         with:
           coverage: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           upload: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
+  test-macos:
+    name: Pkg.test - 1.13 - macos-latest
+    needs: detect
+    if: github.event_name != 'pull_request' || needs.detect.outputs.heavy == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@v3
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - uses: ./.github/actions/pkg-test
 
   test-tip:
     name: Pkg.test - 1.14-nightly - ubuntu-latest
