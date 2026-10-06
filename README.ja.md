@@ -12,50 +12,38 @@
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 <!-- markdownlint-enable MD013 -->
 
-DistSSHRun は、
-[DistSSHKit](https://github.com/yamanori99/DistSSHKit.jl)
-の実行層をこのパッケージへ移したものである。SSH で共有マシンに載せる一回の
-実行で、`setup`、`go`、`ride`、`drive`、`plan`、`size`、`pool`、`demo`、
-`progress` を持つ。対応は **macOS、Linux、WSL2 Ubuntu** (ネイティブ Windows
-は対象外)。
+DistSSHRun は、SSH で共有マシンに載せる一回の実行である。`setup`、`go`、
+`ride`、`drive`、`plan`、`size`、`pool`、`demo`、`progress` を持つ。
+対応は **macOS、Linux、WSL2 Ubuntu** (ネイティブ Windows は対象外)。
 
-いま、DistSSHKit 0.9 はその実行を自分で持ち、DistSSHRun には依存していない。
-[DistSSHQueue](https://github.com/yamanori99/DistSSHQueue.jl)
-は DistSSHKit に依存する。利用者は DistSSHKit を足す。手順は
+手順の詳細は
 [DistSSHKit のマニュアル](https://yamanori99.github.io/DistSSHKit.jl/stable/)
-にある。打つコマンドは `julia -m DistSSHKit` である。
-
-あとで、DistSSHQueue は DistSSHRun に依存する。DistSSHKit は DistSSHQueue
-に依存し、DistSSHRun を reexport する。利用者はこれまでどおり DistSSHKit
-を足し、`julia -m DistSSHKit` を打つ。Queue がこのパッケージに依存するので、
-Kit は Queue に依存できる。
+にある。
 
 ## インストール
-
-普段は次を足す。
-
-```julia
-pkg> add DistSSHKit
-```
-
-このパッケージを直接依存にするときは次を足す。
 
 ```julia
 pkg> add DistSSHRun
 ```
 
-Julia **1.13+**。ホストには **`ssh`** と **`rsync`** が要る。git で配るときは **`git`** も要る。
+Julia **1.13+**。ホストには **`ssh`** と **`rsync`** が要る。git で配る
+ときは **`git`** も要る。
 
 ## コマンド
 
+打つコマンドは `julia -m DistSSHRun` である。
+
 ```bash
-julia -m DistSSHKit setup --check child:host1
-julia -m DistSSHKit go SCRIPT.jl
-julia -m DistSSHKit ride parent:2 SCRIPT.jl
-julia -m DistSSHKit drive parent:2 SCRIPT.jl
-julia -m DistSSHKit plan SCRIPT.jl
-julia -m DistSSHKit size
-julia -m DistSSHKit pool
+julia -m DistSSHRun setup --check child:host1
+julia -m DistSSHRun go SCRIPT.jl
+julia -m DistSSHRun ride parent:2 SCRIPT.jl
+julia -m DistSSHRun drive parent:2 SCRIPT.jl
+julia -m DistSSHRun plan SCRIPT.jl
+julia -m DistSSHRun size
+julia -m DistSSHRun pool
 ```
 
-DistSSHRun を直接依存にしているときは、`julia -m DistSSHRun` が同じ入口になる。
+```julia
+using DistSSHRun
+go!("job.jl")
+```
