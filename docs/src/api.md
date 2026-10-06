@@ -9,8 +9,9 @@ is the [DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/stable/).
 
 ## Run
 
-`go!` runs a script as-is on one or more slots. `ride!` rewrites `map` and
-`filter` in that script onto workers.
+`go!` runs a script as-is on one or more slots. `drive!` runs a driver
+script on workers. `ride!` is experimental: it rewrites `map` and `filter`
+in a script onto workers.
 
 ```@autodocs
 Modules = [DistSSHRun]
@@ -19,6 +20,8 @@ Private = false
 Filter = function (x)
     names = (
         :worker_pmap, :go!, :GoResult, :report_go_errors,
+        :drive!, :DriveResult, :HostRunResult, :DriveHostStatus, :drive_host_status,
+        :KitRunResult, :KitProcess, :kit_run_result, :report_run_errors,
         :ride!, :RideResult, :print_ride,
     )
     n = try
@@ -53,10 +56,9 @@ Filter = function (x)
 end
 ```
 
-## Drive and pipeline
+## Pipeline
 
-`drive!` runs a script after a git check. `pipeline!` chains those runs.
-`collect!` brings the outputs back.
+`pipeline!` chains runs. `collect!` brings the outputs back.
 
 ```@autodocs
 Modules = [DistSSHRun]
@@ -64,10 +66,9 @@ Public = true
 Private = false
 Filter = function (x)
     names = (
-        :drive!, :DriveResult, :HostRunResult, :DriveHostStatus, :drive_host_status,
-        :collect!, :CollectResult, :KitRunResult, :KitProcess, :kit_run_result,
         :pipeline!, :PipelineConfig, :PipelineResult, :pipeline_config_from_env,
-        :report_pipeline_errors, :report_run_errors,
+        :report_pipeline_errors,
+        :collect!, :CollectResult,
     )
     n = try
         nameof(x)
@@ -113,13 +114,14 @@ Private = false
 Filter = function (x)
     grouped = (
         :worker_pmap, :go!, :GoResult, :report_go_errors,
+        :drive!, :DriveResult, :HostRunResult, :DriveHostStatus, :drive_host_status,
+        :KitRunResult, :KitProcess, :kit_run_result, :report_run_errors,
         :ride!, :RideResult, :print_ride,
         :plan, :KitPlan, :PlanFinding, :print_plan,
         :size!, :WorkerPlan, :pool!, :ResourcePool, :HostInventory, :print_pool,
-        :drive!, :DriveResult, :HostRunResult, :DriveHostStatus, :drive_host_status,
-        :collect!, :CollectResult, :KitRunResult, :KitProcess, :kit_run_result,
         :pipeline!, :PipelineConfig, :PipelineResult, :pipeline_config_from_env,
-        :report_pipeline_errors, :report_run_errors,
+        :report_pipeline_errors,
+        :collect!, :CollectResult,
         :setup!, :sync!, :instantiate!,
         :KitSession, :HostResult, :SyncResult,
     )
