@@ -12,33 +12,14 @@
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 <!-- markdownlint-enable MD013 -->
 
-DistSSHRun is the
-[DistSSHKit](https://github.com/yamanori99/DistSSHKit.jl)
-execution layer moved into this package. It is one run on shared machines
-over SSH: `setup`, `go`, `ride`, `drive`, `plan`, `size`, `pool`, `demo`,
-and `progress`. Supported on **macOS, Linux, and WSL2 Ubuntu** (not native
-Windows).
+DistSSHRun is one run on shared machines over SSH: `setup`, `go`,
+`ride`, `drive`, `plan`, `size`, `pool`, `demo`, and `progress`.
+Supported on **macOS, Linux, and WSL2 Ubuntu** (not native Windows).
 
-Today, DistSSHKit 0.9 still contains that run and does not depend on
-DistSSHRun. [DistSSHQueue](https://github.com/yamanori99/DistSSHQueue.jl)
-depends on DistSSHKit. Users add DistSSHKit. The manual is the
+The longer guide is the
 [DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/stable/).
-The command is `julia -m DistSSHKit`.
-
-Later, DistSSHQueue depends on DistSSHRun. DistSSHKit depends on
-DistSSHQueue and reexports DistSSHRun, so users still add DistSSHKit and
-run `julia -m DistSSHKit`. Queue depends on this package so Kit can depend
-on Queue.
 
 ## Install
-
-Day-to-day:
-
-```julia
-pkg> add DistSSHKit
-```
-
-Direct dependency of this package:
 
 ```julia
 pkg> add DistSSHRun
@@ -49,15 +30,19 @@ need **`git`**.
 
 ## Commands
 
+The command is `julia -m DistSSHRun`.
+
 ```bash
-julia -m DistSSHKit setup --check child:host1
-julia -m DistSSHKit go SCRIPT.jl
-julia -m DistSSHKit ride parent:2 SCRIPT.jl
-julia -m DistSSHKit drive parent:2 SCRIPT.jl
-julia -m DistSSHKit plan SCRIPT.jl
-julia -m DistSSHKit size
-julia -m DistSSHKit pool
+julia -m DistSSHRun setup --check child:host1
+julia -m DistSSHRun go SCRIPT.jl
+julia -m DistSSHRun ride parent:2 SCRIPT.jl
+julia -m DistSSHRun drive parent:2 SCRIPT.jl
+julia -m DistSSHRun plan SCRIPT.jl
+julia -m DistSSHRun size
+julia -m DistSSHRun pool
 ```
 
-`julia -m DistSSHRun` is the same entry when this package is a direct
-dependency.
+```julia
+using DistSSHRun
+go!("job.jl")
+```
