@@ -4,6 +4,14 @@ User-facing changes.
 GitHub Releases may copy these sections (`Release notes:` on
 `@JuliaRegistrator register`).
 
+## 0.1.2
+
+Host talking and the juliaup verbs live in this package (`base/` and `up/`).
+This package does not depend on DistSSHBase or DistSSHUp. The commands are
+`up add`, `up default`, `up update`, and `up status`. Help no longer lists
+`setup --juliaup` or `setup --juliaup-update`. Those flags still succeed
+and warn, and the warning names `up`.
+
 ## 0.1.1
 
 The README and the docs index lead with this package. Install with
