@@ -33,7 +33,7 @@ using Test
     end
     let (code, out, err) = _setup_capture(["--delete", "parent"])
         @test code == 1
-        @test occursin("only for --juliaup", out * err)
+        @test occursin("only for up", out * err)
     end
     let (code, out, err) = _setup_capture(["--delete", "host1"])
         @test code == 1

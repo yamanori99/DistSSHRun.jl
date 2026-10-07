@@ -4,7 +4,6 @@ using Test
 
 @testset "setup rsync" begin
     remote_path = "~/App.jl"
-    project = _kit_root()
 
     function _with_fake_remotes(f::Function; extra_env = Dict{String, String}())
         _with_tempdir() do state_dir
@@ -46,6 +45,11 @@ using Test
     end
 
     @testset "rsync outcomes" begin
+        # A user tree. The package checkout path-depends on this repo, which
+        # setup correctly refuses to ship.
+        smoke_project = mktempdir()
+        write(joinpath(smoke_project, "Project.toml"), "name = \"RsyncSmoke\"\n")
+        write(joinpath(smoke_project, "smoke.jl"), "smoke = 1\n")
         withenv("DISTSSHKIT_YES" => nothing) do
             prev_ni = DistSSHRun.kit_noninteractive()
             DistSSHRun.set_kit_noninteractive!(false)
@@ -57,7 +61,7 @@ using Test
                                 println(stdin_io, "")
                                 flush(stdin_io)
                                 seekstart(stdin_io)
-                                DistSSHRun.rsync_push_to_remotes(["host1"], remote_path, project)
+                                DistSSHRun.rsync_push_to_remotes(["host1"], remote_path, smoke_project)
                             end
                             @test result == (cancelled = true, succeeded = 0, failed = 0)
                             @test occursin("Cancelled.", out)
@@ -76,14 +80,14 @@ using Test
 
         _with_fake_remotes(extra_env = Dict("DISTSSHKIT_TEST_MKDIR_FAIL" => "1")) do _
             raw = DistSSHRun.rsync_project_to_hosts!(
-                ["host1"], project, remote_path; confirm = false, report = false,
+                ["host1"], smoke_project, remote_path; confirm = false, report = false,
             )
             @test raw.succeeded == 0 && raw.failed == 1
         end
 
         _with_fake_remotes() do _
             raw = DistSSHRun.rsync_project_to_hosts!(
-                ["host1"], project, remote_path; confirm = false, report = false,
+                ["host1"], smoke_project, remote_path; confirm = false, report = false,
             )
             @test raw.succeeded == 1 && raw.failed == 0
         end
@@ -91,7 +95,7 @@ using Test
         _with_fake_remotes() do _
             withenv("DISTSSHKIT_JOBS" => "2") do
                 raw = DistSSHRun.rsync_project_to_hosts!(
-                    ["host1", "host2"], project, remote_path; confirm = false, report = false,
+                    ["host1", "host2"], smoke_project, remote_path; confirm = false, report = false,
                 )
                 @test raw.succeeded == 2 && raw.failed == 0
                 @test [hr.host for hr in raw.host_results] == ["host1", "host2"]
@@ -103,7 +107,7 @@ using Test
             _mark_nonempty!(state_dir, host)
             DistSSHRun.apply_kit_cli_session!(DistSSHRun.KitCliSession(quiet = false, yes = true))
             out, result = _capture_stdio() do _, _
-                DistSSHRun.rsync_push_to_remotes([host], remote_path, project)
+                DistSSHRun.rsync_push_to_remotes([host], remote_path, smoke_project)
             end
             @test result == (cancelled = false, succeeded = 0, failed = 1)
             @test occursin("refusing to overwrite", out)
@@ -111,7 +115,7 @@ using Test
 
         _with_fake_remotes(extra_env = Dict("DISTSSHKIT_TEST_RSYNC_FAIL" => "1")) do _
             raw = DistSSHRun.rsync_project_to_hosts!(
-                ["host1"], project, remote_path; confirm = false, report = false,
+                ["host1"], smoke_project, remote_path; confirm = false, report = false,
             )
             @test raw.succeeded == 0 && raw.failed == 1
         end

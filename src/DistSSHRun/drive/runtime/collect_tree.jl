@@ -5,7 +5,7 @@ Recursively pull files under `local_root` from each host (**collect-missing** /
 - `merge=false`: skip relative paths that already exist locally.
 - `merge=true`:  rsync the whole tree (overwrites same-named files).
 
-Uses `DISTRIBUTED_REMOTE_PROJECT_ROOT` (via `remote_path_for_ssh_collect`) to map the local root to the correct path on each host.
+Uses `DISTRIBUTED_REMOTE_PROJECT_ROOT` (via `remote_layout_path`) to map the local root to the correct path on each host.
 Respects `--quiet` / `--progress` via kit printers (kit log still written when open).
 """
 function drive_collect_tree(
@@ -21,7 +21,7 @@ function drive_collect_tree(
     transport = DistSSHRun._host_sync_rsync_transport()
     rsync_bin = DistSSHRun._host_sync_rsync_argv()
 
-    print_header(merge ? "DistSSHRun collect-overwrite" : "DistSSHRun collect-missing")
+    print_header(merge ? cli_heading("collect-overwrite") : cli_heading("collect-missing"))
     writeln_both("")
     writeln_field("Local root", display_path(local_root, path_anchor))
     writeln_field(
@@ -32,7 +32,7 @@ function drive_collect_tree(
     writeln_field("Hosts", join(host_names, ", "))
     writeln_both("")
 
-    remote_root = remote_path_for_ssh_collect(local_root, repo_root)
+    remote_root = remote_layout_path(local_root, repo_root)
     if remote_root != local_root
         writeln_field("Remote root", remote_root)
         writeln_both("")

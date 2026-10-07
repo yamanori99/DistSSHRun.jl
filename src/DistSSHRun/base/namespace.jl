@@ -1,5 +1,5 @@
-# Shared path namespace: project + `DISTRIBUTED_OUTPUT_DIR` + content-hash cache.
-# Does not mount FUSE. Project rsync excludes `.distsshkit/`; `push_cache!` copies blobs.
+# Shared paths: project + `DISTRIBUTED_OUTPUT_DIR` + content-hash cache.
+# Does not mount FUSE. Project rsync excludes `.distsshkit/`.
 
 const _NS_CACHE_DIR = joinpath(".distsshkit", "cache", "sha256")
 
@@ -32,7 +32,7 @@ end
 Copy `src` into `.distsshkit/cache/sha256/<digest>` if that blob is missing
 or stale. Same contents share one file (no second copy). Returns the cache
 path. Does not rsync by itself; `.distsshkit/` is excluded from project
-sync. Use [`push_cache!`](@ref) to copy blobs to SSH hosts.
+sync.
 """
 function cache_file(src::AbstractString; project::AbstractString = pwd())::String
     srcp = canonical_local_path(src)
@@ -48,20 +48,36 @@ function cache_file(src::AbstractString; project::AbstractString = pwd())::Strin
 end
 
 """
-    ns_path(rel; project=pwd()) -> String
+    stored_path(rel; project=pwd(), output=nothing) -> String
 
-Resolve a namespace-relative path. Absolute `rel` is canonicalized.
+Where `rel` is stored. `output=nothing` reads `DISTRIBUTED_OUTPUT_DIR`.
+A passed string is used as given and does not read that variable.
+`""` means no output directory.
 
-Otherwise, if `DISTRIBUTED_OUTPUT_DIR` is set and that join exists, use it.
-Else if the path exists under `project`, use that. Else if the output dir is
-set, join there (typical write). Else join `project`.
+An absolute `rel`, after expanding a leading `~` on this machine, is
+returned as a canonical local path. The output directory is not consulted.
+
+A relative `rel` uses the first match:
+
+1. The output directory is set and `rel` already exists there.
+2. `rel` already exists under `project`, even when the output directory is set.
+3. The output directory is set, including when the file does not exist yet.
+4. `project`, when the output directory is empty.
 """
-function ns_path(rel::AbstractString; project::AbstractString = pwd())::String
+function stored_path(
+        rel::AbstractString;
+        project::AbstractString = pwd(),
+        output::Union{Nothing, AbstractString} = nothing,
+    )::String
     r = String(rel)
     startswith(r, "~") && (r = expanduser(r))
     isabspath(r) && return canonical_local_path(r)
     proj = canonical_local_path(project)
-    out = strip(get(ENV, "DISTRIBUTED_OUTPUT_DIR", ""))
+    out = if output === nothing
+        strip(get(ENV, "DISTRIBUTED_OUTPUT_DIR", ""))
+    else
+        strip(String(output))
+    end
     cand_proj = joinpath(proj, r)
     if !isempty(out)
         cand_out = joinpath(canonical_local_path(out), r)

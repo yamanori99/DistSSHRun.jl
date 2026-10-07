@@ -204,7 +204,7 @@ DISTSSHKIT_CODE_COVERAGE=1 \
 - `--rsync`: remote `Project.toml` exists
 - `--instantiate` / `--check`: job deps; Julia version (no
   `--ignore-julia-version`)
-- `--juliaup`: remotes (mismatch → align); `parent` + one remote
+- `up`: remotes (mismatch → align); `parent` + one remote
   (kit parent + child default restored in `finally`). `--e2e` ensures
   kit-parent juliaup + both channels via
   `ensure-kit-parent-juliaup.sh` (needed on CI `setup-julia`)
@@ -278,7 +278,7 @@ Tests follow the same two surfaces as the kit. No extra test harness:
 
 - CLI (`setup` / `go` / `drive` / `size`), `KitSession(workers=…)`, and
   hosts files use placement tokens (`parent:2`, `child:host-a:4`).
-  setup / size ignore `:N`; setup accepts `parent` only with `--juliaup`
+  setup / size ignore `:N`; `up` accepts `parent`
 - Internal SSH names stay bare (`host-a`): `session.hosts`,
   `HostRunResult.host`, collect-only `HOST`, and fake SSH trees
 - `_sample_hosts_file` / `_sample_setup_hosts_file` are placement tokens

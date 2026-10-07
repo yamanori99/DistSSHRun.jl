@@ -41,7 +41,8 @@ using Test
             end
             help = read(path, String)
             rm(path; force = true)
-            @test occursin("DistSSHRun pool", help)
+            @test occursin("DistSSHKit pool", help)
+            @test occursin("-m DistSSHKit", help)
             @test occursin("parent", help)
             @test occursin("--gb-per-worker", help)
             @test !occursin("--probe PATH", help)

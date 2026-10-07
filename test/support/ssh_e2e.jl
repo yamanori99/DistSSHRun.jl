@@ -108,7 +108,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         return nothing
     end
 
-    """Local juliaup on the kit parent (required for `setup --juliaup parent` E2E)."""
+    """Local juliaup on the kit parent (required for `up` parent E2E)."""
     function _ssh_e2e_local_juliaup()::String
         ju = DistSSHRun.find_local_juliaup()
         ju === nothing && error(

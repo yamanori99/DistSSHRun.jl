@@ -28,29 +28,6 @@ using Test
         @test !isdefined(DistSSHRun, :MEMORY_CAPACITY_FRACTION)
     end
 
-    @testset "resolve_host_project_abs parent" begin
-        _with_tempdir() do tmp
-            p = abspath(tmp)
-            @test DistSSHRun.resolve_host_project_abs("parent", p) ==
-                DistSSHRun.canonical_local_path(p)
-            @test DistSSHRun.resolve_host_path_abs("parent", joinpath(p, "sub"), p) ==
-                DistSSHRun.canonical_local_path(joinpath(p, "sub"))
-            @test !DistSSHRun.is_parent_host_name("localhost")
-        end
-    end
-
-    @testset "resolve_host_path_abs absolute remote map" begin
-        _with_tempdir() do tmp
-            p = DistSSHRun.canonical_local_path(tmp)
-            withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/remote/App") do
-                # Absolute mapped path short-circuits SSH in resolve_remote_abs_path_on_host.
-                @test DistSSHRun.resolve_host_project_abs("some-host", p) == "/remote/App"
-                @test DistSSHRun.resolve_host_path_abs("some-host", joinpath(p, "src"), p) ==
-                    joinpath("/remote/App", "src") |> abspath
-            end
-        end
-    end
-
     @testset "compute_worker_plan matches size_worker_count" begin
         # Use only localhost so remote SSH is not required.
         local_total, local_nproc = DistSSHRun.get_local_resources()

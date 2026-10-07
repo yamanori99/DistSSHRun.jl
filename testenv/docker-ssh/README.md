@@ -40,7 +40,7 @@ Worker image installs **two** juliaup channels from
   kit parent so `--check` runs **without** `--ignore-julia-version`
 - **alt** = `JULIA_E2E_MISMATCH_CHANNEL` (today **1.12**) — a different
   major.minor so E2E can `juliaup default` to mismatch, then
-  `setup --juliaup` to realign. Not a supported floor and not a Pkg.test slot.
+  `up` to realign. Not a supported floor and not a Pkg.test slot.
 
 `up.sh` passes both as Docker / `container` build-args and exports
 `DISTSSHKIT_E2E_JULIA_{DEFAULT,ALT}_CHANNEL` for `test/e2e.jl`. On the build
@@ -52,7 +52,7 @@ major.minor is required at runtime. Install policy:
 [Requirements](https://yamanori99.github.io/DistSSHKit.jl/dev/requirements/).
 `--e2e` also runs
 [`scripts/ensure-kit-parent-juliaup.sh`](scripts/ensure-kit-parent-juliaup.sh)
-so the kit parent has juliaup + both channels (`setup --juliaup parent`;
+so the kit parent has juliaup + both channels (`up default` on parent;
 CI `setup-julia` alone does not install juliaup).
 
 On macOS, publish ports on `127.0.0.1` (Docker Desktop / Colima defaults)

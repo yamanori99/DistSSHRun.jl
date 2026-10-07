@@ -28,8 +28,6 @@ using Test
             "--sync" => :sync,
             "--pull" => :pull,
             "--instantiate" => :instantiate,
-            "--juliaup" => :juliaup,
-            "--juliaup-update" => :juliaup_update,
             "--cleanup" => :cleanup,
             "--prune" => :prune,
             "--delete" => :delete,
@@ -77,10 +75,10 @@ using Test
         @test r.mode == :juliaup
         @test r.hosts == ["parent", "host1"]
     end
-    let r = parse_setup_args(["--juliaup", "child:host1:4"])
+    let r = parse_setup_args(["--juliaup-update", "child:host1"])
+        @test r.mode == :juliaup_update
         @test r.hosts == ["host1"]
     end
-    @test_throws ArgumentError parse_setup_args(["--juliaup", "update", "parent", "child:host1"])
     let r = parse_setup_args(["--check", "child:update"])
         @test r.mode == :check
         @test r.hosts == ["update"]
@@ -107,8 +105,7 @@ using Test
         @test occursin("--prune", txt)
         @test occursin("--older-than", txt)
         @test occursin("--runtest", txt)
-        @test occursin("--juliaup", txt)
-        @test occursin("--juliaup-update", txt)
+        @test !occursin("--juliaup", txt)
         @test occursin("--hosts", txt)
         @test occursin("child:host1", txt)
         @test occursin("parent", txt)

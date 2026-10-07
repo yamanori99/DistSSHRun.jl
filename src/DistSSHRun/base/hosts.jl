@@ -1,12 +1,12 @@
 # Host tokens & SSH failure summaries (drive / go / setup)
 
-"""Reserved token for this job's DistSSHRun parent (Kit side; not an SSH host)."""
+"""Reserved token for this job's parent (not an SSH host)."""
 const PARENT_HOST_NAME = "parent"
 
 """Prefix for an SSH child (`child:NAME` / `child:NAME:N`)."""
 const CHILD_TOKEN_PREFIX = "child:"
 
-"""Whether `host` denotes this job's DistSSHRun parent in drive/go/size.
+"""Whether `host` denotes this job's parent in drive/go/size.
 
 Only `parent` matches. `parenthost` is rejected by `parse_placement_token`.
 A token `local` / `localhost` / `l` is an ordinary SSH child (`child:local`).
@@ -32,12 +32,12 @@ function is_parent_host_name(host_name::AbstractString)::Bool
     return String(host_name) == PARENT_HOST_NAME
 end
 
-"""`ArgumentError` for removed `--local` / `-l` (0.4)."""
+"""`ArgumentError` for removed `--local` / `-l`."""
 function throw_removed_local_flag(arg::AbstractString)
     a = String(arg)
     throw(
         ArgumentError(
-            "$(a) was removed in DistSSHRun 0.4; use $(PARENT_HOST_NAME) / $(PARENT_HOST_NAME):N",
+            "$(a) was removed; use $(PARENT_HOST_NAME) / $(PARENT_HOST_NAME):N",
         )
     )
 end

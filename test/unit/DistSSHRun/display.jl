@@ -31,28 +31,6 @@ using Test
         end
     end
 
-    @testset "paths" begin
-        _with_tempdir() do tmp
-            rel = joinpath(tmp, "nested")
-            mkpath(rel)
-            @test DistSSHRun.canonical_local_path(rel) == abspath(rel)
-            @test DistSSHRun.canonical_local_path(joinpath("~", ".ssh")) ==
-                abspath(expanduser(joinpath("~", ".ssh")))
-        end
-
-        let home = expanduser("~")
-            @test DistSSHRun.short_path(joinpath(home, "foo", "bar")) == joinpath("~", "foo", "bar")
-        end
-
-        _with_tempdir() do tmp
-            d = tmp
-            nested = joinpath(d, "a", "b.txt")
-            mkpath(dirname(nested))
-            write(nested, "")
-            @test DistSSHRun.display_path(nested, d) == joinpath("a", "b.txt")
-        end
-    end
-
     @testset "project layout" begin
         # Standalone kit vs host-app embedding (the two layouts that matter).
         withenv("DISTRIBUTED_PROJECT_ROOT" => nothing) do
@@ -66,7 +44,6 @@ using Test
                     @test DistSSHRun.cli_project_root(src) == realpath(d)
                 end
                 @test DistSSHRun._cli_job_root(d, d) == d
-                @test DistSSHRun.resolve_pkg_project_dir(d) == d
             end
             withenv("DISTRIBUTED_PROJECT_ROOT" => "/override/root") do
                 @test DistSSHRun.cli_project_root("/unused") == "/override/root"
@@ -75,20 +52,11 @@ using Test
                 d = tmp
                 app = joinpath(d, "MyApp")
                 kit = joinpath(app, "DistSSHRun")
-                scripts = joinpath(app, "scripts", "jobs")
-                mkpath(scripts)
                 mkpath(joinpath(kit, "src"))
                 write(joinpath(app, "Project.toml"), "name = \"MyApp\"\n")
                 write(joinpath(kit, "Project.toml"), "name = \"DistSSHRun\"\n")
                 @test DistSSHRun.kit_project_root(joinpath(kit, "src")) == app
                 @test DistSSHRun.cli_project_root(joinpath(kit, "src")) == app
-                @test DistSSHRun.resolve_pkg_project_dir(scripts) == app
-            end
-            _with_tempdir() do tmp
-                d = tmp
-                @test DistSSHRun.project_package_name(d) === nothing
-                write(joinpath(d, "Project.toml"), "name = \"FooBar\"\n")
-                @test DistSSHRun.project_package_name(d) == "FooBar"
             end
             _with_tempdir() do tmp
                 d = tmp
@@ -99,9 +67,6 @@ using Test
                 @test DistSSHRun.cli_project_disp(d, DistSSHRun.canonical_local_path(d)) ==
                     basename(abspath(d))
             end
-            @test DistSSHRun._path_is_under("/a/b/c", "/a/b")
-            @test DistSSHRun._path_is_under("/a/b", "/a/b")
-            @test !DistSSHRun._path_is_under("/a/bother", "/a/b")
             # Loaded DistSSHRun is not the host Project.toml (Pkg.add / apps).
             _with_tempdir() do tmp
                 d = tmp
@@ -145,18 +110,6 @@ using Test
         buf = IOBuffer()
         DistSSHRun.print_cli_error("boom"; io = buf)
         @test occursin("Error:", String(take!(buf)))
-        @test DistSSHRun._help_section_line("Usage:")
-        @test !DistSSHRun._help_section_line("  indented:")
-        @test !DistSSHRun._help_section_line("# comment:")
-        txt = sprint(
-            io -> DistSSHRun.print_help_document(
-                "DistSSHRun test",
-                "Usage:\n  cmd --help\n";
-                io = io,
-            )
-        )
-        @test occursin("DistSSHRun test", txt)
-        @test occursin("cmd --help", txt)
     end
 
     @testset "verbosity gates" begin

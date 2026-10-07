@@ -7,14 +7,16 @@ if !isdefined(Main, :_run_kit_setup)
     SSH E2E passes an explicit durable host under `test/artifacts/ssh-e2e/`.
     """
     function _run_kit_setup(;
-            setup_args::Vector{String},
+            setup_args::AbstractVector,
+            command::AbstractString = "setup",
             kit_root::String = _kit_root(),
             julia::String = _julia_exe(),
             project_root = nothing,
             extra_env::Dict{String, String} = Dict{String, String}(),
         )
+        args = String[String(a) for a in setup_args]
         function _run(proj)
-            cmd = _kit_cli_cmd(vcat(["setup"], setup_args); julia = julia, project = kit_root)
+            cmd = _kit_cli_cmd(vcat([String(command)], args); julia = julia, project = kit_root)
             base = Dict{String, String}(
                 "DISTSSHKIT_YES" => "1",
                 "DISTRIBUTED_PROJECT_ROOT" => proj,
@@ -29,6 +31,33 @@ if !isdefined(Main, :_run_kit_setup)
             _write_host_project!(proj, "SetupCliHost")
             return _run(proj)
         end
+    end
+
+    """`up add` then `up default` for the same channel and hosts.
+
+    The old host-only `up` aligned in one shot. Verbs are separate: install the
+    kit channel, then switch the default. `default` confirms unless
+    `DISTSSHKIT_YES` is set (`_run_kit_setup` sets it).
+    """
+    function _run_kit_up_align(
+            tail::AbstractVector;
+            project_root,
+            extra_env::Dict{String, String},
+        )
+        proc_add, out_add = _run_kit_setup(;
+            command = "up",
+            setup_args = ["add", tail...],
+            project_root = project_root,
+            extra_env = extra_env,
+        )
+        proc_add.exitcode == 0 || return proc_add, out_add
+        proc_def, out_def = _run_kit_setup(;
+            command = "up",
+            setup_args = ["default", tail...],
+            project_root = project_root,
+            extra_env = extra_env,
+        )
+        return proc_def, out_add * out_def
     end
 
     function _fake_setup_remote_env(state_dir)::Dict{String, String}

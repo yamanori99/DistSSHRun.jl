@@ -25,7 +25,7 @@ function _ride_parsed(;
 end
 
 function show_ride_usage(; io::IO = stdout)
-    print_help_chrome("DistSSHRun ride"; io = io)
+    print_help_chrome(cli_heading("ride"); io = io)
     print_help_lines(
         io,
         "Experimental. Split map / filter / simple comprehensions / indexed for",
@@ -37,7 +37,7 @@ function show_ride_usage(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia --project=. -m DistSSHKit ride SCRIPT.jl",
+        "  $(cli_m_project()) ride SCRIPT.jl",
         "  ride parent:2 SCRIPT.jl",
         "  ride parent:1 child:host1:2 SCRIPT.jl",
         "  ride --spi-check parent:2 SCRIPT.jl",

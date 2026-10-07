@@ -1,37 +1,3 @@
-# Path helpers
-
-"""Absolute local path with `~` expanded (canonical form for file I/O and comparisons)."""
-canonical_local_path(path::AbstractString)::String = String(abspath(expanduser(String(path))))
-
-"""Shorten absolute paths by replacing the home directory prefix with `~`."""
-short_path(path::String) = let home = expanduser("~")
-    startswith(path, home) ? "~" * path[(length(home) + 1):end] : path
-end
-
-"""
-Paths under `anchor` → `relpath` from `anchor` (POSIX-style separators in the result).
-Otherwise fall back to `short_path` (home as `~`).
-"""
-function display_path(path::AbstractString, anchor::AbstractString)::String
-    ap = try
-        canonical_local_path(path)
-    catch
-        return short_path(String(path))
-    end
-    an = try
-        canonical_local_path(anchor)
-    catch
-        return short_path(String(path))
-    end
-    ap == an && return "."
-    sep = Sys.iswindows() ? '\\' : '/'
-    prefix = endswith(an, string(sep)) ? String(an) : an * sep
-    if startswith(ap, prefix)
-        return String(relpath(ap, an))
-    end
-    return short_path(String(path))
-end
-
 """
     kit_pid_alive(pid) -> Bool
 
@@ -199,86 +165,6 @@ function _with_kit_inproc_run!(f, kind::Symbol)
     end
 end
 
-"""Read `name = "..."` from `proj_dir/Project.toml`; return `nothing` if missing or unreadable."""
-function project_package_name(proj_dir::AbstractString)::Union{Nothing, String}
-    path = joinpath(proj_dir, "Project.toml")
-    isfile(path) || return nothing
-    try
-        m = match(r"name\s*=\s*\"([^\"]+)\"", read(path, String))
-        m === nothing && return nothing
-        cap = m.captures[1]
-        return cap isa AbstractString ? String(cap) : nothing
-    catch
-        return nothing
-    end
-end
-
-"""
-Walk upward from `start_dir` to find the directory that should be passed to
-`Pkg.activate` on workers.
-
-If the first `Project.toml` found is the **vendored stub** (its `name` is
-`DistSSHRun`, matching this kit’s own `Project.toml`) and the parent
-directory also has a `Project.toml`, skip it and keep walking so scripts
-co-located with the kit inherit the application project root (regardless of
-the kit folder’s basename).
-"""
-function resolve_pkg_project_dir(start_dir::AbstractString)::String
-    test_dir = abspath(String(start_dir))
-    fallback = dirname(test_dir)
-    for _ in 1:24
-        pt = joinpath(test_dir, "Project.toml")
-        if isfile(pt)
-            parent = dirname(test_dir)
-            stub = project_package_name(test_dir)
-            skip_stub = stub == "DistSSHRun" && isfile(joinpath(parent, "Project.toml"))
-            skip_stub || return test_dir
-        end
-        parent = dirname(test_dir)
-        parent == test_dir && return fallback
-        test_dir = parent
-    end
-    return fallback
-end
-
-"""
-Pkg environment for `project` (a directory, or a `Project.toml` path).
-
-`project_dir` is the directory of that `Project.toml` (`--project`).
-`manifest` is `Base.active_manifest` of that file, or `nothing` when Pkg has
-no lock yet. `env_dir` is the directory of `manifest`, or `project_dir` when
-there is no lock. That is the tree `setup --rsync` sends.
-
-Queue: `default_queue_env` (no dedicated `~/.distsshqueue/env`) should return
-`env_dir`. `stage_job_tree!` should rsync `env_dir`, and set
-`DISTRIBUTED_PROJECT_ROOT` to the staged `project_dir` (relative to that
-tree). Serve `--queue-env` is `env_dir`. A job's `--project` stays
-`project_dir`, because `env_dir` as `--project` misses `[deps]` that exist
-only on the member.
-"""
-function resolve_pkg_env(project::AbstractString)
-    project_dir = canonical_local_path(project)
-    if isfile(project_dir) && basename(project_dir) == "Project.toml"
-        project_dir = canonical_local_path(dirname(project_dir))
-    end
-    project_file = joinpath(project_dir, "Project.toml")
-    if !isfile(project_file)
-        return (project_dir = project_dir, env_dir = project_dir, manifest = nothing)
-    end
-    found = Base.active_manifest(project_file)
-    if found === nothing
-        return (project_dir = project_dir, env_dir = project_dir, manifest = nothing)
-    end
-    manifest = canonical_local_path(String(found))
-    env_dir = canonical_local_path(dirname(manifest))
-    return (project_dir = project_dir, env_dir = env_dir, manifest = manifest)
-end
-
-"""`--project` value relative to [`resolve_pkg_env`](@ref) `env_dir` (`.` when they match)."""
-function julia_project_rel(env)::String
-    env.project_dir == env.env_dir && return "."
-    return relpath(env.project_dir, env.env_dir)
-end
 
 """
 Lock path after following symlinks.
@@ -627,23 +513,6 @@ function kit_project_root(kit_dir::AbstractString)::String
     return root
 end
 
-"""True when `path` is `root` or a file/dir under it."""
-function _path_is_under(path::AbstractString, root::AbstractString)::Bool
-    p = canonical_local_path(path)
-    r = canonical_local_path(root)
-    p == r && return true
-    return startswith(p, r * Base.Filesystem.path_separator)
-end
-
-"""Like [`_path_is_under`](@ref) after `realpath`, so `/var` and `/private/var` match."""
-function _path_under_resolved(path::AbstractString, root::AbstractString)::Bool
-    _path_is_under(path, root) && return true
-    p = canonical_local_path(path)
-    r = canonical_local_path(root)
-    (ispath(p) && ispath(r)) || return false
-    return _path_is_under(canonical_local_path(realpath(p)), canonical_local_path(realpath(r)))
-end
-
 """
 Job root for the CLI when DistSSHRun is loaded from `kit`.
 
@@ -673,18 +542,6 @@ function cli_project_root(kit_src_dir::AbstractString)
         _cli_job_root(kit_project_root(kit_src_dir), pwd())
     end
 end
-
-# Output formatting
-
-const OUTPUT_WIDTH = 64
-const RULE_CHAR = '─'
-"""Minimum underline width under a help title (short titles still get a visible rule)."""
-const HELP_RULE_MIN_WIDTH = 8
-"""Max length for auto-detecting `Heading:` lines in plain `--help` bodies."""
-const HELP_SECTION_MAX_LEN = 48
-
-"""Horizontal rule used for section headers (UTF-8 box drawing)."""
-rule_line(width::Int = OUTPUT_WIDTH)::String = string(RULE_CHAR)^width
 
 # Log file
 
@@ -1029,16 +886,6 @@ function writeln_field(label::AbstractString, value)
     return nothing
 end
 
-# Colored output (off when NO_COLOR or non-TTY)
-
-"""Whether to use ANSI colors (false when NO_COLOR is set or output is piped)."""
-use_colors() = !haskey(ENV, "NO_COLOR") && stdout isa Base.TTY
-
-"""Print `msg` with `color` when the kit would use ANSI (TTY, no `NO_COLOR`)."""
-function print_colored(io, msg, color, bold = false)
-    return use_colors() ? printstyled(io, msg; color = color, bold = bold) : print(io, msg)
-end
-const _print_colored = print_colored
 
 function print_ok(msg; io = stdout, bold = false)
     if kit_output_detail()
@@ -1124,6 +971,13 @@ function print_err(msg; io = stdout, bold = false)
     return nothing
 end
 
+"""CLI user error on stderr (no stacktrace)."""
+function print_cli_error(msg::AbstractString; io::IO = stderr)
+    print_err("Error: "; io = io, bold = true)
+    println(io, msg)
+    return nothing
+end
+
 function print_info(msg; io = stdout, bold = false)
     if kit_output_detail()
         _print_colored(io, msg, :cyan, bold)
@@ -1164,8 +1018,6 @@ function print_progress_warn(msg; kwargs...)
     return print_warn(msg; kwargs...)
 end
 
-"""Help / requirements title text only (no newline). Prefer [`print_help_chrome`](@ref)."""
-print_help_title(msg; io = stdout) = _print_colored(io, msg, :cyan, true)
 
 # Live phase progress (`--progress`)
 #
@@ -2175,11 +2027,11 @@ function _maybe_print_kit_progress_phases(dir::AbstractString)
 end
 
 function show_progress_usage(io::IO = stdout)
-    print_help_chrome("DistSSHRun progress"; io = io)
+    print_help_chrome(cli_heading("progress"); io = io)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia -m DistSSHKit progress [DIR]",
+        "  $(cli_m()) progress [DIR]",
     )
     print_help_blank(io)
     print_help_section("Args"; io = io)
@@ -2400,99 +2252,21 @@ function _progress_print_footer(footer::AbstractString)
     return nothing
 end
 
-"""
-Kit help chrome — every overview / `--help` starts here:
-
-    DistSSHRun drive
-    ────────────────
-
-Exported for DistSSHQueue-style callers; signature is stable, exact
-glyphs / colors are not (see API · CLI parsers and helpers).
-"""
-function print_help_chrome(title::AbstractString; io::IO = stdout)
-    t = String(title)
-    print_help_title(t; io = io)
-    println(io)
-    w = clamp(length(t), HELP_RULE_MIN_WIDTH, OUTPUT_WIDTH)
-    _print_colored(io, rule_line(w) * "\n", :light_black)
-    println(io)
-    return nothing
-end
-
-"""
-Section heading (dim) with a trailing blank line so body lines follow immediately.
-
-    Section
-    <blank>
-      body…
-"""
-function print_help_section(msg; io = stdout)
-    _print_colored(io, String(msg), :light_black, true)
-    println(io)
-    println(io)
-    return nothing
-end
-
-"""One or more verbatim help body lines."""
-function print_help_lines(io::IO, lines::AbstractString...)
-    for line in lines
-        println(io, line)
-    end
-    return nothing
-end
-print_help_lines(lines::AbstractString...) = print_help_lines(stdout, lines...)
-
-"""One blank line in kit `--help` output."""
-print_help_blank(io::IO = stdout) = (println(io); nothing)
-
-"""CLI user error on stderr (no stacktrace)."""
-function print_cli_error(msg::AbstractString; io::IO = stderr)
-    print_err("Error: "; io = io, bold = true)
-    println(io, msg)
-    return nothing
-end
-
-"""True when a plain-help line looks like a section heading (`Usage:`, `Options:`)."""
-function _help_section_line(line::AbstractString)::Bool
-    isempty(line) && return false
-    c0 = first(line)
-    (c0 == ' ' || c0 == '\t' || c0 == '#') && return false
-    last(line) == ':' || return false
-    return length(line) <= HELP_SECTION_MAX_LEN
-end
-
-"""
-Render a plain-text `--help` body under [`print_help_chrome`](@ref).
-Non-indented `Heading:` lines are styled like [`print_help_section`](@ref).
-"""
-function print_help_document(title::AbstractString, body::AbstractString; io::IO = stdout)
-    print_help_chrome(title; io = io)
-    for line in split(rstrip(String(body), '\n'), '\n'; keepempty = true)
-        if _help_section_line(line)
-            heading = rstrip(String(line))
-            endswith(heading, ':') && (heading = heading[1:prevind(heading, end)])
-            _print_colored(io, heading, :light_black, true)
-            println(io)
-        else
-            println(io, line)
-        end
-    end
-    return nothing
-end
 
 """Top-level `julia -m DistSSHKit` usage (no subcommand)."""
 function print_kit_root_usage(io::IO = stderr)
-    print_help_chrome("DistSSHRun"; io = io)
+    print_help_chrome(string(cli_entry()); io = io)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia -m DistSSHKit <command> [args...]",
+        "  $(cli_m()) <command> [args...]",
     )
     print_help_blank(io)
     print_help_section("Commands"; io = io)
     print_help_lines(
         io,
         "  setup              Clone / sync / check remotes",
+        "  up                 Align a Julia channel with juliaup",
         "  go                 Run an as-is complete job",
         "  ride               Experimental auto-split of map / filter",
         "  drive              Distributed workers + collect",
@@ -2506,14 +2280,15 @@ function print_kit_root_usage(io::IO = stderr)
     print_help_section("Examples"; io = io)
     print_help_lines(
         io,
-        "  julia --project=. -m DistSSHKit setup --check child:host1",
-        "  julia --project=. -m DistSSHKit go SCRIPT.jl",
-        "  julia --project=. -m DistSSHKit ride parent:2 SCRIPT.jl",
-        "  julia --project=. -m DistSSHKit drive parent:2 SCRIPT.jl",
-        "  julia --project=. -m DistSSHKit plan SCRIPT.jl",
+        "  $(cli_m_project()) setup --check child:host1",
+        "  $(cli_m_project()) up child:host1",
+        "  $(cli_m_project()) go SCRIPT.jl",
+        "  $(cli_m_project()) ride parent:2 SCRIPT.jl",
+        "  $(cli_m_project()) drive parent:2 SCRIPT.jl",
+        "  $(cli_m_project()) plan SCRIPT.jl",
     )
     print_help_blank(io)
-    println(io, "Run `julia -m DistSSHKit <command> -h` for flags.")
+    println(io, "Run `$(cli_m()) <command> -h` for flags.")
     return nothing
 end
 

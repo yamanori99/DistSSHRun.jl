@@ -25,7 +25,7 @@ function _plan_parsed(;
 end
 
 function show_plan_usage(; io::IO = stdout)
-    print_help_chrome("DistSSHRun plan"; io = io)
+    print_help_chrome(cli_heading("plan"); io = io)
     print_help_lines(
         io,
         "Inspect a script. Does not start a job.",
@@ -37,7 +37,7 @@ function show_plan_usage(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia --project=. -m DistSSHKit plan SCRIPT.jl",
+        "  $(cli_m_project()) plan SCRIPT.jl",
         "  plan SCRIPT.jl",
         "  plan parent --gb-per-worker 1.5 SCRIPT.jl",
     )

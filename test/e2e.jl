@@ -43,7 +43,7 @@ _e2e_base_env() = _ssh_e2e_env(; remote_project = remote_root)
 
 # Same banner idea as `test/runtests.jl`. Inner `@testset`s can take minutes
 # of SSH with no Test output until they finish. Update `_E2E_N` when adding one.
-const _E2E_N = 29
+const _E2E_N = 27
 const _E2E_I = Ref(0)
 # Print `[i/N]` before an inner `@testset`.
 function _e2e_announce(label::AbstractString)
@@ -55,59 +55,6 @@ end
 
 @testset "SSH E2E (docker-ssh)" verbose = true begin
     _with_ssh_e2e_suite() do suite
-        @testset "julia path resolve (kit parent + remotes)" begin
-            _e2e_announce("julia path resolve (kit parent + remotes)")
-            withenv(_e2e_base_env()...) do
-                ctrl = DistSSHRun.resolve_controller_julia("auto")
-                @test isabspath(ctrl)
-                @test isfile(ctrl)
-                @test ctrl != "julia"
-                ctrl_ver = DistSSHRun.parse_julia_version(read(`$ctrl --version`, String))
-                @test ctrl_ver isa VersionNumber
-                os_label = Sys.isapple() ? "darwin" : (Sys.islinux() ? "linux" : Sys.KERNEL)
-                _ssh_e2e_record_julia!(suite, "kit_parent($(os_label))", ctrl, string(ctrl_ver))
-                _assert_ssh_e2e_api_ok(suite, "kit_parent_julia", true, "path=$(ctrl) ver=$(ctrl_ver)")
-
-                for host in hosts
-                    found = DistSSHRun.resolve_remote_julia(host, "auto")
-                    @test found isa AbstractString
-                    found isa AbstractString || error("expected remote julia path")
-                    @test isabspath(found) || startswith(found, '/')
-                    @test found != "julia"
-                    ver = DistSSHRun.get_remote_julia_version(host, found)
-                    @test ver isa VersionNumber
-                    @test ver.major == ctrl_ver.major
-                    @test ver.minor == ctrl_ver.minor
-                    _ssh_e2e_record_julia!(suite, "remote($(host))", found, string(ver))
-                    _assert_ssh_e2e_api_ok(
-                        suite,
-                        "remote_julia_$(host)",
-                        true,
-                        "path=$(found) ver=$(ver)",
-                    )
-                end
-            end
-        end
-
-        @testset "run_on_host exitcode" begin
-            _e2e_announce("run_on_host exitcode")
-            withenv(_e2e_base_env()...) do
-                host = hosts[1]
-                ok = DistSSHRun.run_on_host(host, ["--version"])
-                @test ok.exitcode == 0
-                fail = DistSSHRun.run_on_host(host, ["-e", "exit(3)"])
-                @test fail.exitcode == 3
-                _assert_ssh_e2e_api_ok(
-                    suite,
-                    "run_on_host_exitcode",
-                    fail.exitcode == 3 && ok.exitcode == 0,
-                    "ok=$(ok.exitcode) fail=$(fail.exitcode)",
-                )
-            end
-        end
-
-        # Remote suite (both docker workers). Local with_kit demos live in
-        # test/integration/demos/with_kit.jl — not duplicated here.
         proj = suite.project_remote
         _stage_ssh_e2e_remote_host!(proj)
         smoke = joinpath(proj, "smoke.jl")
@@ -174,8 +121,8 @@ end
             @test occursin("Julia", out)
         end
 
-        @testset "setup --juliaup (mismatch then align to kit parent)" begin
-            _e2e_announce("setup --juliaup (mismatch then align to kit parent)")
+        @testset "up (mismatch then align to kit parent)" begin
+            _e2e_announce("up (mismatch then align to kit parent)")
             ch = _ssh_e2e_julia_channels()
             @test ch.alt != ch.default
             host = hosts[1]
@@ -194,8 +141,8 @@ end
                 @test occursin("mismatch", lowercase(out_bad)) ||
                     occursin("version", lowercase(out_bad))
 
-                proc_up, out_up = _run_kit_setup(;
-                    setup_args = ["--juliaup", setup_hosts...],
+                proc_up, out_up = _run_kit_up_align(
+                    [ch.default, setup_hosts...];
                     project_root = proj,
                     extra_env = merge(_e2e_base_env(), Dict("DISTSSHKIT_QUIET" => "0")),
                 )
@@ -240,8 +187,8 @@ end
             end
         end
 
-        @testset "setup --juliaup parent + one remote" begin
-            _e2e_announce("setup --juliaup parent + one remote")
+        @testset "up parent + one remote" begin
+            _e2e_announce("up parent + one remote")
             ch = _ssh_e2e_julia_channels()
             @test ch.alt != ch.default
             host = hosts[1]
@@ -256,8 +203,8 @@ end
                 @test parent_alt.minor == parse(Int, alt_parts[2])
                 @test DistSSHRun.julia_version_mismatch_kind(VERSION, parent_alt) == :minor
 
-                proc_up, out_up = _run_kit_setup(;
-                    setup_args = ["--juliaup", "parent", DistSSHRun.setup_cli_host_token(host)],
+                proc_up, out_up = _run_kit_up_align(
+                    [ch.default, "parent", DistSSHRun.setup_cli_host_token(host)];
                     project_root = proj,
                     extra_env = merge(_e2e_base_env(), Dict("DISTSSHKIT_QUIET" => "0")),
                 )
@@ -265,7 +212,8 @@ end
                     suite, "setup_juliaup_parent_remote", proc_up, out_up;
                     project = proj, kit = :setup,
                 )
-                @test occursin("parent", lowercase(out_up))
+                @test occursin("add complete (2 host(s)).", out_up)
+                @test occursin("default complete (2 host(s)).", out_up)
 
                 parent_ver = _ssh_e2e_local_juliaup_julia_version()
                 @test parent_ver.major == VERSION.major
@@ -320,12 +268,13 @@ end
             end
         end
 
-        @testset "setup --juliaup-update (default channel unchanged)" begin
-            _e2e_announce("setup --juliaup-update (default channel unchanged)")
+        @testset "up update (default channel unchanged)" begin
+            _e2e_announce("up update (default channel unchanged)")
             host = hosts[1]
             before = _ssh_e2e_juliaup_remote_default_channel(host)
             proc, out = _run_kit_setup(;
-                setup_args = ["--juliaup-update", DistSSHRun.setup_cli_host_token(host)],
+                command = "up",
+                setup_args = ["update", DistSSHRun.setup_cli_host_token(host)],
                 project_root = proj,
                 extra_env = merge(_e2e_base_env(), Dict("DISTSSHKIT_QUIET" => "0")),
             )

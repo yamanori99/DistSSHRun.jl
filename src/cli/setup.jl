@@ -15,6 +15,10 @@ See `--help`.
 
 # Guard on a setup-only import — not names `go`/`drive` may already have
 # bound from DistSSHRun (e.g. `cli_project_root`) before `setup.jl` is included.
+# Top-level include so JETLS sees `_include_checkout_run` (it does not follow
+# `include` inside `catch`).
+include(joinpath(@__DIR__, "_checkout.jl"))
+
 if !isdefined(@__MODULE__, :DistSSHRun)
     if get(ENV, "DIST_SSH_KIT_CLI_INCLUDE", "") == "1"
         import DistSSHRun
@@ -22,12 +26,15 @@ if !isdefined(@__MODULE__, :DistSSHRun)
         try
             import DistSSHRun
         catch
-            include(joinpath(@__DIR__, "..", "DistSSHRun.jl"))
+            include(joinpath(@__DIR__, "_checkout.jl"))
+            _include_checkout_run()
         end
     end
 end
 
-if !isdefined(@__MODULE__, :resolve_remote_project_root)
+# The included module already binds `resolve_remote_project_root`.
+# Key off the setup parser, which that import does not bring in.
+if !isdefined(@__MODULE__, :parse_setup_args)
     include(joinpath(@__DIR__, "setup", "_using.jl"))
 end
 
@@ -100,7 +107,12 @@ if !isdefined(@__MODULE__, :setup_main)
                 :cleanup => "Cleanup Workers",
                 :prune => "Prune kit leaves",
             )[mode]
-            print_header("DistSSHRun setup · $mode_name")
+            if mode === :juliaup || mode === :juliaup_update
+                flag = mode === :juliaup_update ? "--juliaup-update" : "--juliaup"
+                instead = mode === :juliaup_update ? "up update" : "up"
+                @warn "setup $flag is deprecated and will be removed. Use `$(DistSSHRun.cli_m()) $instead`. The command still runs."
+            end
+            print_header("$(DistSSHRun.cli_heading("setup")) · $mode_name")
             kit_println()
             writeln_field("Remote path", remote_path)
             kit_println()

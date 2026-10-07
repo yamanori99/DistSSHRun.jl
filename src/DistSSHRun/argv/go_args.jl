@@ -2,7 +2,7 @@
 
 """Print `go --help` (same chrome as `julia -m DistSSHKit go -h`)."""
 function show_go_usage(; io::IO = stdout)
-    print_help_chrome("DistSSHRun go"; io = io)
+    print_help_chrome(cli_heading("go"); io = io)
     print_help_lines(
         io,
         "Standalone script. One full run per slot; slots start together.",
@@ -13,7 +13,7 @@ function show_go_usage(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  julia --project=. -m DistSSHKit go [slots...] SCRIPT.jl",
+        "  $(cli_m_project()) go [slots...] SCRIPT.jl",
         "  go parent:2 SCRIPT.jl",
         "  go --repeat 100 SCRIPT.jl",
         "  go --repeat 100 child:host1 child:host2 SCRIPT.jl",

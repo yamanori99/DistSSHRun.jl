@@ -169,11 +169,6 @@ end
 
     @testset "hosts file" begin
         hosts_file = _sample_hosts_file()
-        @test DistSSHRun.read_hosts_file_lines(hosts_file) == ["child:host-a:1", "child:host-b:4"]
-        @test DistSSHRun.split_worker_token("host-b:4") == ("host-b", 4)
-        @test DistSSHRun.parse_placement_token("child:host-b:4") ==
-            (role = :child, name = "host-b", n = 4)
-
         let lines = DistSSHRun.read_hosts_file_lines(hosts_file)
             slots = DistSSHRun._go_plan_slots(lines)
             @test length(slots) == 5  # host-a + host-b:4

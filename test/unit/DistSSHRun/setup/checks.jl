@@ -2,52 +2,8 @@ using Test
 using Pkg
 
 @testset "setup checks" begin
-    @test DistSSHRun.julia_version_mismatch_kind(v"1.12.6", v"1.12.6") == :none
-    @test DistSSHRun.julia_version_mismatch_kind(v"1.12.6", v"1.12.9") == :patch
-    @test DistSSHRun.julia_version_mismatch_kind(v"1.12.6", v"1.11.6") == :minor
-    @test DistSSHRun.julia_version_mismatch_kind(v"1.12.6", v"2.0.6") == :minor
-    # --check fails on :minor unless --ignore-julia-version (see check_prerequisites).
-    @test DistSSHRun.julia_version_mismatch_kind(VERSION, VersionNumber(VERSION.major, VERSION.minor + 1, 0)) ==
-        :minor
-
-    @test DistSSHRun.juliaup_channel(v"1.12.6") == "1.12"
-    @test DistSSHRun.juliaup_channel(VERSION) == "$(VERSION.major).$(VERSION.minor)"
-    @test DistSSHRun.remote_juliaup_candidates("Darwin") == [
-        raw"$HOME/.juliaup/bin/juliaup",
-        "/opt/homebrew/bin/juliaup",
-        "/usr/local/bin/juliaup",
-    ]
-    @test DistSSHRun.remote_juliaup_candidates("Linux") == [raw"$HOME/.juliaup/bin/juliaup"]
-    sh = DistSSHRun._juliaup_align_remote_sh("1.12")
-    @test occursin(raw"$HOME/.juliaup/bin/juliaup", sh)
-    @test occursin("/opt/homebrew/bin/juliaup", sh)
-    @test occursin(" add ", sh) || occursin("add '", sh)
-    @test occursin("update", sh) && occursin("default", sh)
-    @test occursin("echo already", sh)
-    @test occursin("\$1==\"*\"", sh)
-    up_sh = DistSSHRun._juliaup_update_remote_sh()
-    @test occursin(raw"$HOME/.juliaup/bin/juliaup", up_sh)
-    @test occursin("\"\$JU\" update", up_sh)
-    @test !occursin("echo already", up_sh)
-    @test !occursin("default", up_sh)
-    st = """
-    Default  Channel  Version
-    -------------------------------------------------------------------------
-         *  1.13     1.13.2+0.aarch64.apple.darwin14
-          1.12     1.12.7+0.aarch64.apple.darwin14
-    """
-    @test DistSSHRun._juliaup_default_channel_from_status(st) == "1.13"
-    @test DistSSHRun._juliaup_default_channel_from_status("no default here") === nothing
-    # Channel must not enter remote diagnostics unquoted (shell metacharacters).
-    sh_meta = DistSSHRun._juliaup_align_remote_sh("1.12\$(id)")
-    @test occursin("'1.12\$(id)'", sh_meta)
-    @test !occursin("juliaup add 1.12\$(id) failed", sh_meta)
     DistSSHRun.print_juliaup_align_fix!("user@host"; kind = :missing, channel = "1.12")
     DistSSHRun.print_juliaup_align_fix!("user@host"; kind = :mismatch, channel = "1.12")
-    @test DistSSHRun.juliaup_parent_behind_channel(v"1.12.6", v"1.12.9")
-    @test !DistSSHRun.juliaup_parent_behind_channel(v"1.12.9", v"1.12.6")
-    @test !DistSSHRun.juliaup_parent_behind_channel(v"1.12.6", v"1.12.6")
-    @test !DistSSHRun.juliaup_parent_behind_channel(v"1.12.6", v"1.11.9")
     @test DistSSHRun.print_juliaup_parent_patch_note!(
         v"1.12.9"; local_version = v"1.12.6", channel = "1.12",
     )
@@ -61,47 +17,8 @@ using Pkg
             )
         end
     end
-    @test occursin("setup --juliaup parent", tip_out)
-    @test occursin(".juliaup", DistSSHRun.local_juliaup_candidates()[1])
-    @test DistSSHRun.find_local_juliaup(String[]) === nothing
-    mktempdir() do d
-        ju = joinpath(d, "juliaup")
-        jl = joinpath(d, "julia")
-        write(
-            ju, """
-            #!/bin/sh
-            case "\$1" in
-              add|update|default)
-                echo "Checking for new Julia versions" >&2
-                echo "'1.13' is already installed."
-                exit 0
-                ;;
-              status) echo "1.12"; exit 0 ;;
-              *) exit 1 ;;
-            esac
-            """
-        )
-        write(
-            jl, """
-            #!/bin/sh
-            echo "julia version $(VERSION.major).$(VERSION.minor).$(VERSION.patch)"
-            """
-        )
-        chmod(ju, 0o755)
-        chmod(jl, 0o755)
-        withenv("DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
-            @test DistSSHRun.find_local_juliaup() == ju
-            ch = "$(VERSION.major).$(VERSION.minor)"
-            captured, r = _capture_stdio() do _, _
-                DistSSHRun._juliaup_align_local!(ch)
-            end
-            @test r.changed
-            @test DistSSHRun.julia_version_mismatch_kind(VERSION, r.ver) != :minor
-            @test !occursin("Checking for new Julia versions", captured)
-            @test !occursin("already installed", captured)
-        end
-    end
-
+    @test occursin("up update 1.12 parent", tip_out)
+    @test occursin("up default 1.12 parent", tip_out)
     mktempdir() do d
         ju = joinpath(d, "juliaup")
         jl = joinpath(d, "julia")
@@ -111,6 +28,7 @@ using Pkg
             """
             #!/bin/sh
             case "\$1" in
+              --version) echo 'Juliaup 1.22.7'; exit 0 ;;
               status) echo '       *  $ch     julia version'; exit 0 ;;
               add|update|default) echo "unexpected \$1" >&2; exit 1 ;;
               *) exit 1 ;;
@@ -127,7 +45,7 @@ using Pkg
         chmod(ju, 0o755)
         chmod(jl, 0o755)
         withenv("DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
-            r = DistSSHRun._juliaup_align_local!(ch)
+            r = DistSSHRun.juliaup_align_local!(ch)
             @test !r.changed
             @test DistSSHRun.julia_version_mismatch_kind(VERSION, r.ver) != :minor
             out, _ = with_kit_verbosity(:progress) do
@@ -136,39 +54,6 @@ using Pkg
                 end
             end
             @test occursin("parent: already on $ch", out)
-        end
-    end
-
-    mktempdir() do d
-        ju = joinpath(d, "juliaup")
-        jl = joinpath(d, "julia")
-        write(
-            ju, """
-            #!/bin/sh
-            case "\$1" in
-              add) echo "network failed"; exit 1 ;;
-              status) echo "empty"; exit 0 ;;
-              *) exit 1 ;;
-            esac
-            """
-        )
-        write(
-            jl, """
-            #!/bin/sh
-            echo "julia version $(VERSION.major).$(VERSION.minor).$(VERSION.patch)"
-            """
-        )
-        chmod(ju, 0o755)
-        chmod(jl, 0o755)
-        withenv("DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
-            err = try
-                DistSSHRun._juliaup_align_local!("$(VERSION.major).$(VERSION.minor)")
-                nothing
-            catch e
-                sprint(showerror, e)
-            end
-            @test err !== nothing
-            @test occursin("network failed", err)
         end
     end
 
@@ -274,41 +159,8 @@ using Pkg
                 [deps]
                 """
             )
-            env = DistSSHRun.resolve_pkg_env(member)
-            @test env.project_dir == DistSSHRun.canonical_local_path(member)
-            @test env.env_dir == DistSSHRun.canonical_local_path(lab)
-            @test env.manifest == DistSSHRun.canonical_local_path(joinpath(lab, "Manifest.toml"))
-            @test DistSSHRun.julia_project_rel(env) == joinpath("experiments", "run1")
             shipped = DistSSHRun.ensure_manifest_ships!(member)
-            @test shipped.env_dir == env.env_dir
-            withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => nothing) do
-                deploy = DistSSHRun.remote_deploy_root(member)
-                julia_remote = DistSSHRun.resolve_remote_project_root(member)
-                @test deploy == joinpath("~", basename(dirname(lab)), "lab")
-                @test julia_remote == joinpath(deploy, "experiments", "run1")
-                if Sys.which("git") !== nothing
-                    run(pipeline(`git -C $lab init -q`; stdout = devnull, stderr = devnull))
-                    @test DistSSHRun.remote_git_clone_dest(member) == deploy
-                end
-            end
-
-            solo = joinpath(root, "solo")
-            mkpath(solo)
-            write(joinpath(solo, "Project.toml"), "name = \"Solo\"\n[deps]\n")
-            bare = DistSSHRun.resolve_pkg_env(solo)
-            @test bare.manifest === nothing
-            @test bare.env_dir == bare.project_dir
-            @test DistSSHRun.julia_project_rel(bare) == "."
-
-            ver = joinpath(root, "ver")
-            mkpath(ver)
-            write(joinpath(ver, "Project.toml"), "name = \"Ver\"\n[deps]\n")
-            write(joinpath(ver, "Manifest-v$(VERSION.major).$(VERSION.minor).toml"), "# v\n")
-            versioned = DistSSHRun.resolve_pkg_env(ver)
-            @test versioned.manifest == DistSSHRun.canonical_local_path(
-                joinpath(ver, "Manifest-v$(VERSION.major).$(VERSION.minor).toml"),
-            )
-            @test versioned.env_dir == versioned.project_dir
+            @test shipped.env_dir == DistSSHRun.canonical_local_path(lab)
 
             elsewhere = joinpath(root, "elsewhere")
             mkpath(elsewhere)
@@ -319,8 +171,6 @@ using Pkg
                 joinpath(elsewhere, "Project.toml"),
                 "name = \"Out\"\nmanifest = \"$(outside_manifest)\"\n",
             )
-            outside = DistSSHRun.resolve_pkg_env(elsewhere)
-            @test outside.manifest == DistSSHRun.canonical_local_path(outside_manifest)
             @test_throws ArgumentError DistSSHRun.ensure_manifest_ships!(elsewhere)
 
             linked = joinpath(root, "linked")
@@ -363,26 +213,6 @@ using Pkg
                 )
                 run(pipeline(`git -C $held init -q`; stdout = devnull, stderr = devnull))
                 @test_throws ArgumentError DistSSHRun.ensure_manifest_in_git_worktree!(held)
-
-                nest = joinpath(root, "nest")
-                nest_member = joinpath(nest, "lab", "experiments", "run1")
-                mkpath(nest_member)
-                write(
-                    joinpath(nest, "lab", "Project.toml"),
-                    "name = \"NestLab\"\n[workspace]\nprojects = [\"experiments/run1\"]\n",
-                )
-                write(joinpath(nest, "lab", "Manifest.toml"), "# lock\n")
-                write(joinpath(nest_member, "Project.toml"), "name = \"NestRun\"\n[deps]\n")
-                run(pipeline(`git -C $nest init -q`; stdout = devnull, stderr = devnull))
-                withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => nothing) do
-                    nest_deploy = DistSSHRun.remote_deploy_root(nest_member)
-                    @test DistSSHRun.remote_git_clone_dest(nest_member) == dirname(nest_deploy)
-                    @test DistSSHRun.remote_delete_root(nest_member) == dirname(nest_deploy)
-                    @test DistSSHRun.remote_delete_root(nest_member; cli_override = "/srv/job") == "/srv/job"
-                    @test_throws ArgumentError DistSSHRun.remote_git_clone_dest(
-                        nest_member; cli_override = "/srv/job",
-                    )
-                end
             end
         end
     end

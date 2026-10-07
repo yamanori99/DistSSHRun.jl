@@ -67,6 +67,43 @@ using Test
             @test !DistSSHRun._project_tree_has_distsshkit(proj)
             @test DistSSHRun._detached_julia_project(proj) == kit
         end
+        _with_tempdir() do bare
+            active = Base.active_project()
+            @test active !== nothing
+            @test DistSSHRun._detached_fallback_project(bare) == dirname(active)
+            write(joinpath(bare, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+            @test DistSSHRun._detached_fallback_project(bare) == bare
+        end
+        # Installed tree (no Manifest) plus a job with no kit dep falls back
+        # to the active project. `-m` follows that project: a DistSSHKit-only
+        # env must not spawn `-m DistSSHRun`.
+        _with_tempdir() do root
+            job = joinpath(root, "job")
+            installed = joinpath(root, "installed")
+            env = joinpath(root, "env")
+            mkpath(job)
+            mkpath(installed)
+            mkpath(env)
+            write(joinpath(job, "Project.toml"), "name = \"NoKitHere\"\n")
+            write(
+                joinpath(env, "Project.toml"),
+                """
+                name = "KitOnly"
+                [deps]
+                DistSSHKit = "ceec0504-c968-4be5-b215-667cae0e8f81"
+                """,
+            )
+            prev = Base.active_project()
+            try
+                Base.set_active_project(joinpath(env, "Project.toml"))
+                child = DistSSHRun._detached_fallback_project(installed)
+                @test child == env
+                @test DistSSHRun._detached_m_package(job) == "DistSSHRun"
+                @test DistSSHRun._detached_m_package(child) == "DistSSHKit"
+            finally
+                Base.set_active_project(prev)
+            end
+        end
     end
 
     @testset "_remove_kit_pid_file" begin

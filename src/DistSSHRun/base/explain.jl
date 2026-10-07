@@ -19,27 +19,7 @@ join_explained_message(headline::AbstractString, ::Nothing)::String = string(hea
 join_explained_message(headline::AbstractString, hint::AbstractString)::String =
     string(headline, '\n', hint)
 
-# --- script / driver ---------------------------------------------------------
-
-"""
-Full script/driver-not-found message (headline + optional demo-related hint).
-
-Used by drive (CLI / `drive!`), go (CLI / `go!`), and [`pipeline!`](@ref).
-Demo tip formatting: `missing_script_demo_hint` in `demos.jl`.
-"""
-function explain_script_not_found(
-        script_path::AbstractString,
-        project_root::AbstractString;
-        surface::Symbol = :cli,
-        headline::Union{Nothing, AbstractString} = nothing,
-    )::String
-    path = String(script_path)
-    head = headline === nothing ? "Script not found: $path" : String(headline)
-    hint = missing_script_demo_hint(path, project_root; surface = surface)
-    return join_explained_message(head, hint)
-end
-
-"""Missing `DRIVER=` / `driver=` for [`pipeline_config_from_env`](@ref)."""
+"""Missing `DRIVER=` / `driver=` for `pipeline_config_from_env`."""
 function explain_pipeline_driver_missing(; surface::Symbol = :api)::String
     surface = _normalize_hint_surface(surface)
     if surface === :cli
@@ -163,11 +143,12 @@ end
 function explain_host_tool_hint(tool::AbstractString; surface::Symbol = :api)::String
     _normalize_hint_surface(surface)
     t = _normalize_host_tool(tool)
-    t == "ssh" && return "Hint: DistSSHRun does not install OpenSSH; see Requirements"
-    t == "scp" && return "Hint: DistSSHRun does not install OpenSSH (scp); see Requirements"
+    pkg = cli_entry()
+    t == "ssh" && return "Hint: $pkg does not install OpenSSH; see Requirements"
+    t == "scp" && return "Hint: $pkg does not install OpenSSH (scp); see Requirements"
     t == "rsync" &&
-        return "Hint: DistSSHRun does not install rsync; needed for collect and setup --rsync (see Requirements)"
-    return "Hint: DistSSHRun does not install git; needed for clone / push / pull (see Requirements)"
+        return "Hint: $pkg does not install rsync; needed for collect and setup --rsync (see Requirements)"
+    return "Hint: $pkg does not install git; needed for clone / push / pull (see Requirements)"
 end
 
 """Full message when a required host tool is not on `PATH`."""
