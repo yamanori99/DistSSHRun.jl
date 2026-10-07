@@ -71,8 +71,14 @@ using Test
     @test_throws ArgumentError parse_setup_args(["--julia"])
     @test_throws ArgumentError parse_setup_args(["--check", "host1"])
 
-    @test_throws ArgumentError parse_setup_args(["--juliaup", "parent", "child:host1"])
-    @test_throws ArgumentError parse_setup_args(["--juliaup-update", "child:host1"])
+    let r = parse_setup_args(["--juliaup", "parent", "child:host1"])
+        @test r.mode == :juliaup
+        @test r.hosts == ["parent", "host1"]
+    end
+    let r = parse_setup_args(["--juliaup-update", "child:host1"])
+        @test r.mode == :juliaup_update
+        @test r.hosts == ["host1"]
+    end
     let r = parse_setup_args(["--check", "child:update"])
         @test r.mode == :check
         @test r.hosts == ["update"]

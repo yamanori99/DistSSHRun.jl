@@ -7,6 +7,8 @@ using .DistSSHRun:
     delete_remotes,
     finish_host_op!,
     git_sync_project_to_hosts!,
+    juliaup_align_remotes,
+    juliaup_update_remotes,
     init_log_file,
     instantiate_remotes,
     kit_println,

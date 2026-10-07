@@ -101,10 +101,17 @@ if !isdefined(@__MODULE__, :setup_main)
                 :sync => "Sync",
                 :rsync_push => "rsync (no git)",
                 :instantiate => "Instantiate",
+                :juliaup => "juliaup (align Julia)",
+                :juliaup_update => "juliaup update",
                 :runtest => "Pkg.test (job)",
                 :cleanup => "Cleanup Workers",
                 :prune => "Prune kit leaves",
             )[mode]
+            if mode === :juliaup || mode === :juliaup_update
+                flag = mode === :juliaup_update ? "--juliaup-update" : "--juliaup"
+                instead = mode === :juliaup_update ? "up update" : "up"
+                @warn "setup $flag is deprecated and will be removed. Use `$(DistSSHRun.cli_m()) $instead`. The command still runs."
+            end
             print_header("$(DistSSHRun.cli_heading("setup")) · $mode_name")
             kit_println()
             writeln_field("Remote path", remote_path)
@@ -173,6 +180,24 @@ if !isdefined(@__MODULE__, :setup_main)
                                 opts.hosts, opts.julia_path, remote_path, project;
                                 path_anchor = path_anchor,
                             ),
+                        ) ? 0 : 1
+                )
+            end
+
+            if mode === :juliaup
+                return Cint(
+                    finish_host_op!(
+                            "juliaup",
+                            juliaup_align_remotes(opts.hosts),
+                        ) ? 0 : 1
+                )
+            end
+
+            if mode === :juliaup_update
+                return Cint(
+                    finish_host_op!(
+                            "juliaup update",
+                            juliaup_update_remotes(opts.hosts),
                         ) ? 0 : 1
                 )
             end

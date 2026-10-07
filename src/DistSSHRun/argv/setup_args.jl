@@ -91,6 +91,12 @@ function parse_setup_args(args::Vector{String})
         elseif arg == "--instantiate"
             mode = :instantiate
             cli_consume!(c)
+        elseif arg == "--juliaup"
+            mode = :juliaup
+            cli_consume!(c)
+        elseif arg == "--juliaup-update"
+            mode = :juliaup_update
+            cli_consume!(c)
         elseif arg == "--runtest"
             mode = :runtest
             cli_consume!(c)
