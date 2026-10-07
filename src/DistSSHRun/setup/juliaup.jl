@@ -1,5 +1,5 @@
 # Align remote Julia via juliaup (`up` / check Fix hints).
-# Channel math, status, and the juliaup process live in DistSSHUp.
+# Channel math, status, and the juliaup process live in up/.
 
 
 """Print Fix lines for missing / mismatched remote Julia (check output)."""

@@ -88,7 +88,7 @@ using Test
                 extra_env = _fake_setup_remote_env(state_dir),
             )
             @test proc.exitcode == 1
-            @test occursin("up update", combined)
+            @test occursin("--juliaup-update", combined)
         end
     end
 end

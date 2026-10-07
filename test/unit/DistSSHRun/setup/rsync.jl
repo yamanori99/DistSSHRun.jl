@@ -45,7 +45,7 @@ using Test
     end
 
     @testset "rsync outcomes" begin
-        # A user tree. The package checkout path-depends on DistSSHBase, which
+        # A user tree. The package checkout path-depends on this repo, which
         # setup correctly refuses to ship.
         smoke_project = mktempdir()
         write(joinpath(smoke_project, "Project.toml"), "name = \"RsyncSmoke\"\n")

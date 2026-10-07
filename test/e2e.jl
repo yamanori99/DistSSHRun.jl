@@ -17,7 +17,6 @@
 
 using Test
 using Distributed
-using DistSSHBase
 using DistSSHRun
 
 # Same include shape as `test/runtests.jl` so JETLS follows it. Do not route
@@ -122,8 +121,8 @@ end
             @test occursin("Julia", out)
         end
 
-        @testset "setup --juliaup (mismatch then align to kit parent)" begin
-            _e2e_announce("setup --juliaup (mismatch then align to kit parent)")
+        @testset "up (mismatch then align to kit parent)" begin
+            _e2e_announce("up (mismatch then align to kit parent)")
             ch = _ssh_e2e_julia_channels()
             @test ch.alt != ch.default
             host = hosts[1]
@@ -149,7 +148,7 @@ end
                 )
                 _assert_ssh_e2e_ok(suite, "setup_juliaup", proc_up, out_up; project = proj, kit = :setup)
 
-                DistSSHBase.clear_detect_julia_path_cache!()
+                DistSSHRun.clear_detect_julia_path_cache!()
                 withenv(_e2e_base_env()...) do
                     found = DistSSHRun.resolve_remote_julia(host, "auto")
                     @test found isa AbstractString
@@ -184,12 +183,12 @@ end
                         @warn "restore juliaup default failed" host = h exception = e
                     end
                 end
-                DistSSHBase.clear_detect_julia_path_cache!()
+                DistSSHRun.clear_detect_julia_path_cache!()
             end
         end
 
-        @testset "setup --juliaup parent + one remote" begin
-            _e2e_announce("setup --juliaup parent + one remote")
+        @testset "up parent + one remote" begin
+            _e2e_announce("up parent + one remote")
             ch = _ssh_e2e_julia_channels()
             @test ch.alt != ch.default
             host = hosts[1]
@@ -226,7 +225,7 @@ end
                     "ver=$(parent_ver) channel=$(ch.default)",
                 )
 
-                DistSSHBase.clear_detect_julia_path_cache!()
+                DistSSHRun.clear_detect_julia_path_cache!()
                 withenv(_e2e_base_env()...) do
                     found = DistSSHRun.resolve_remote_julia(host, "auto")
                     @test found isa AbstractString
@@ -265,12 +264,12 @@ end
                 catch e
                     @warn "restore juliaup default failed" host = host exception = e
                 end
-                DistSSHBase.clear_detect_julia_path_cache!()
+                DistSSHRun.clear_detect_julia_path_cache!()
             end
         end
 
-        @testset "setup --juliaup-update (default channel unchanged)" begin
-            _e2e_announce("setup --juliaup-update (default channel unchanged)")
+        @testset "up update (default channel unchanged)" begin
+            _e2e_announce("up update (default channel unchanged)")
             host = hosts[1]
             before = _ssh_e2e_juliaup_remote_default_channel(host)
             proc, out = _run_kit_setup(;

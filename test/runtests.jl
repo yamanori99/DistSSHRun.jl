@@ -12,7 +12,6 @@
 #   ./.github/jetls-check.sh
 
 using Test
-import DistSSHBase
 using DistSSHRun
 
 include(joinpath(@__DIR__, "support.jl"))

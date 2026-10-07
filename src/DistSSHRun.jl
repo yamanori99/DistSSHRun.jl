@@ -13,6 +13,7 @@ module DistSSHRun
 using Dates
 using Distributed
 using Pkg
+using SHA
 using TOML
 
 # Public surface. Prefer `julia -m DistSSHKit …` for day-to-day CLI.
@@ -104,117 +105,23 @@ export SPINNER_FRAMES
 
 # Implementation
 
-import DistSSHBase
-
-# Names this package calls or reexports. Host talking stays defined in DistSSHBase.
-import DistSSHBase:
-    CliCursor,
-    OUTPUT_WIDTH,
-    PARENT_HOST_NAME,
-    cache_file,
-    cache_path,
-    cache_relpath,
-    canonical_local_path,
-    cli_at_end,
-    cli_consume!,
-    cli_current,
-    cli_entry,
-    cli_heading,
-    cli_m,
-    cli_m_project,
-    cli_match,
-    cli_take_value!,
-    clone_url_from_local_origin,
-    detect_julia_path,
-    display_path,
-    ensure_remote_abs_path,
-    explain_bare_placement_tokens,
-    explain_clone_origin_missing,
-    explain_clone_repo_required,
-    explain_host_tool_hint,
-    explain_host_tool_missing,
-    explain_no_hosts,
-    explain_pipeline_driver_missing,
-    explain_size_probe_not_found,
-    file_sha256,
-    format_placement_token,
-    get_remote_git_hash,
-    get_remote_julia_version,
-    get_remote_nproc,
-    get_remote_total_gb,
-    git_work_tree,
-    host_tokens,
-    is_parent_host_name,
-    join_explained_message,
-    looks_like_path_host,
-    normalize_git_clone_url,
-    parse_placement_token,
-    print_colored,
-    print_help_blank,
-    print_help_chrome,
-    print_help_lines,
-    print_help_section,
-    project_package_name,
-    read_hosts_file,
-    read_hosts_file_lines,
-    remote_delete_root,
-    remote_deploy_root,
-    remote_env_project_root,
-    remote_git_clone_dest,
-    remote_layout_path,
-    resolve_controller_julia,
-    resolve_host_path_abs,
-    resolve_host_project_abs,
-    resolve_pkg_env,
-    resolve_pkg_project_dir,
-    resolve_remote_julia,
-    resolve_remote_project_root,
-    rule_line,
-    run_on_host,
-    short_path,
-    split_hosts_csv,
-    split_worker_token,
-    ssh_addprocs_machine,
-    ssh_opts,
-    stored_path,
-    summarize_ssh_error,
-    throw_legacy_placement_token,
-    throw_removed_local_flag,
-    use_colors,
-    with_cli_entry
-
-import DistSSHBase:
-    _HOST_TOOL_NAMES,
-    _NS_CACHE_DIR,
-    _git_cmd,
-    _host_sync_remote_shell_cmd,
-    _host_tool_exe,
-    _host_tool_present,
-    _julia_spec_is_auto,
-    _normalize_hint_surface,
-    _path_is_under,
-    _path_under_resolved,
-    _print_colored,
-    _remote_shell_path_word,
-    _rethrow_missing_host_tool,
-    _scp_cmd,
-    _ssh_cmd,
-    _ssh_exe,
-    _test_double_julia_argv,
-    _truncate_ssh_message
-
-using DistSSHUp
-
-# Confirm text and progress stay here. The host operation is DistSSHUp.
-import DistSSHUp:
-    julia_version_mismatch_kind,
-    juliaup_add_host!,
-    juliaup_align_host!,
-    juliaup_channel,
-    juliaup_default_host!,
-    juliaup_parent_behind_channel,
-    juliaup_status_lines,
-    juliaup_update_host!
+# Host talking and juliaup verbs live in this package until DistSSHBase and
+# DistSSHUp are registered. Confirm text and progress stay in setup/juliaup.jl.
+include("DistSSHRun/base/paths.jl")
+include("DistSSHRun/base/explain.jl")
+include("DistSSHRun/base/argv.jl")
+include("DistSSHRun/base/hosts.jl")
+include("DistSSHRun/base/host_tokens.jl")
+include("DistSSHRun/base/cli_entry.jl")
+include("DistSSHRun/base/help.jl")
+include("DistSSHRun/base/ssh.jl")
+include("DistSSHRun/base/julia_where.jl")
+include("DistSSHRun/base/namespace.jl")
+include("DistSSHRun/up/version.jl")
+include("DistSSHRun/up/status.jl")
+include("DistSSHRun/up/remote.jl")
+include("DistSSHRun/up/local.jl")
+include("DistSSHRun/up/hosts.jl")
 
 include("DistSSHRun/display.jl")
 include("DistSSHRun/argv/session.jl")

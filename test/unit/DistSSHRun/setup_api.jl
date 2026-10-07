@@ -127,7 +127,7 @@ using Test
                     yes = true,
                     quiet = true,
                 )
-                empty!(DistSSHBase._DETECT_JULIA_PATH_CACHE)
+                empty!(DistSSHRun._DETECT_JULIA_PATH_CACHE)
                 ver_env = Dict(
                     "DISTSSHKIT_TEST_JULIA_VERSION" => "julia version $(VERSION)",
                     "DISTSSHKIT_TEST_UNAME" => "Linux",
@@ -141,7 +141,7 @@ using Test
                     ver_env...,
                     "DISTSSHKIT_TEST_JULIAUP_ALREADY" => "1",
                 ) do
-                    empty!(DistSSHBase._DETECT_JULIA_PATH_CACHE)
+                    empty!(DistSSHRun._DETECT_JULIA_PATH_CACHE)
                     # `quiet=true` would re-pin `:quiet` in `apply_session_env!`
                     # and swallow the `:progress` already-on line.
                     progress_session = DistSSHRun.KitSession(
@@ -160,13 +160,13 @@ using Test
                     @test occursin("$host: already on $ch", out)
                 end
                 withenv("DISTSSHKIT_TEST_NO_JULIAUP" => "1") do
-                    empty!(DistSSHBase._DETECT_JULIA_PATH_CACHE)
+                    empty!(DistSSHRun._DETECT_JULIA_PATH_CACHE)
                     bad = DistSSHRun.setup!(session, :juliaup)
                     @test !bad.ok
                 end
                 ssh_log = joinpath(proj, "ssh.log")
                 withenv(ver_env..., "DISTSSHKIT_TEST_SSH_LOG" => ssh_log) do
-                    empty!(DistSSHBase._DETECT_JULIA_PATH_CACHE)
+                    empty!(DistSSHRun._DETECT_JULIA_PATH_CACHE)
                     upd = DistSSHRun.setup!(session, :juliaup_update)
                     @test upd.ok && !upd.cancelled
                     @test length(upd.hosts) == 1 && upd.hosts[1].ok
@@ -178,7 +178,7 @@ using Test
                     @test !occursin("default", logged)
                 end
                 withenv("DISTSSHKIT_TEST_NO_JULIAUP" => "1") do
-                    empty!(DistSSHBase._DETECT_JULIA_PATH_CACHE)
+                    empty!(DistSSHRun._DETECT_JULIA_PATH_CACHE)
                     bad_up = DistSSHRun.setup!(session, :juliaup_update)
                     @test !bad_up.ok
                 end

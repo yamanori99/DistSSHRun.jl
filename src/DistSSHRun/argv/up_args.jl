@@ -57,9 +57,6 @@ function parse_up_args(args::Vector{String})
             cli_consume!(c)
         elseif arg in verbs
             throw(ArgumentError("`$arg` comes first: $(cli_m()) up $arg …"))
-        elseif arg in ("--juliaup", "--juliaup-update")
-            gone = arg == "--juliaup-update" ? "up update" : "up add CHANNEL"
-            throw(ArgumentError("$arg is now: $(cli_m()) $gone"))
         elseif cli_match(c, ["-h", "--help"])
             show_help = true
             cli_consume!(c)
