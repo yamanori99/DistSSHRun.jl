@@ -96,9 +96,9 @@ Reproduce that tree: copy without kit `.git` / `Manifest.toml`, `Pkg.add`
 from a **bare** `file://` git (so the installed package dir has no `.git` —
 DistSSHRun talks to git for jobs, not for its own install), `chmod a-w` on
 `pkgdir`, then `Pkg.test`. Do this after changing the gates above, and
-before a General cut. CI: `Pkg.test - registry tree` on **main** and
-a version-cut PR (slot tip, no `ssh`; not a required check). Not
-ordinary PRs.
+before a General cut. CI: `Pkg.test - registry tree` on ordinary PRs
+(heavy gate) and **main** (slot tip, no `ssh`; `continue-on-error`;
+not a required check).
 
 Copy without `Manifest.toml` (and without `.git`). On Linux, `mktemp -d` is
 enough. On macOS, put the copy under `$HOME` if you will bind-mount it into

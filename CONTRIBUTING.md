@@ -48,7 +48,7 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 
 Run this on Julia **1.13** (and **1.14-nightly** if you have it). Layout: [test/README.md](test/README.md). When adding a file under `test/runtests.jl` or an inner SSH E2E `@testset`, bump `_RUNTEST_N` / `_E2E_N` so `[i/N]` stays honest.
 
-Checkout `Pkg.test()` is not a Registry tarball. After changing those gates (child CLI project, `ssh` spawn), and before a General cut, run the disposable copy in [test/README.md](test/README.md#registry-tree). CI runs that shape on **main** and a version increase (Julia 1.14-nightly; not a required check).
+Checkout `Pkg.test()` is not a Registry tarball. After changing those gates (child CLI project, `ssh` spawn), and before a General cut, run the disposable copy in [test/README.md](test/README.md#registry-tree). CI runs that shape on ordinary PRs (heavy gate) and **main** (Julia 1.14-nightly; `continue-on-error`; not a required check).
 
 ```bash
 julia -e 'using Pkg; Pkg.Apps.add("Runic")'   # once
@@ -102,7 +102,7 @@ Workflows pass the version to `julia-actions/setup-julia`. The job name is that 
 | **1.13** | `Project.toml` julia floor. Pkg.test, Aqua, JETLS, Documenter, draw, E2E, Runic. Codecov `pkgtest` on **main push** only | yes |
 | **1.14-nightly** | Next-minor nightly. Pkg.test, Aqua, registry tree. `continue-on-error` | no |
 
-**1.13** runs on ordinary PRs (heavy gate). **1.14-nightly** runs on **main**, **CI weekly**, and a `Project.toml` version increase ([`.github/version-cut.sh`](.github/version-cut.sh)), not ordinary PRs.
+**1.13** runs on ordinary PRs (heavy gate). **1.14-nightly** `Pkg.test` and Aqua run on **main**, **CI weekly**, and a `Project.toml` version increase ([`.github/version-cut.sh`](.github/version-cut.sh)), not ordinary PRs. Registry tree uses the same heavy gate as **1.13** and also runs on ordinary PRs. It stays `continue-on-error` and is not a required check.
 
 This package feels SSH hosts, Pkg, and lockfiles more than a compute-model
 library does. When Julia announces that it has stopped maintaining the
@@ -134,8 +134,7 @@ changed. Linux E2E (1.13) uses the same **path filter** as **main** push
 `Project.toml`, `test/Project.toml`, `.github/workflows/CI.yml`). It also
 runs on a **version increase**, **E2E weekly** (`ssh-e2e-weekly.yml`; `CI.yml` has no
 `schedule`), and `workflow_dispatch`. **1.14-nightly** `Pkg.test` / Aqua
-stay on **main**, **CI weekly**, and a version increase, not ordinary PRs. Registry tree stays on **main**
-and a version increase, not ordinary PRs.
+stay on **main**, **CI weekly**, and a version increase, not ordinary PRs. Registry tree runs on ordinary PRs (heavy gate) and **main**. It is `continue-on-error` and not a required check.
 
 [Runic](https://github.com/fredrikekre/Runic.jl) is a separate light
 workflow ([`.github/workflows/runic.yml`](.github/workflows/runic.yml)).
@@ -170,7 +169,7 @@ julia --project=. -e 'using Pkg; Pkg.test(; coverage=true)'
 DISTSSHQUEUE_CODE_COVERAGE=1 ./testenv/docker-ssh/scripts/up.sh --e2e
 ```
 
-Required to merge (ruleset `main` uses these names). **1.14-nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Nightly runs on **main**, weekly, and a version increase, not ordinary PRs. E2E weekly and CI weekly are not required.
+Required to merge (ruleset `main` uses these names). **1.14-nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Nightly `Pkg.test` and Aqua run on **main**, weekly, and a version increase, not ordinary PRs. Registry tree runs on ordinary PRs (heavy gate) and is not in the list below. E2E weekly and CI weekly are not required.
 
 - `Pkg.test - 1.13 - ubuntu-latest`
 - `JETLS - 1.13 - ubuntu-latest`

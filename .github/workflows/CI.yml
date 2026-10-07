@@ -9,7 +9,8 @@ on:
 
 # Cancel redundant runs on the same branch/PR.
 # A Project.toml version increase (see version-cut.sh) runs tip /
-# Aqua tip / registry tree in this workflow. No label is involved.
+# Aqua tip in this workflow. Registry tree follows the heavy gate
+# (ordinary PRs too) and is continue-on-error. No label is involved.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
@@ -146,11 +147,13 @@ jobs:
           delete-old-caches: false
       - uses: ./.github/actions/pkg-test
 
-  # Not a Julia slot. Not required to merge. Catches checkout-only Pkg.test assumptions.
+  # Not a Julia slot. Not required to merge. Ordinary PRs use the heavy
+  # gate (same as Pkg.test 1.13). continue-on-error: a red job does not
+  # fail the workflow. Catches checkout-only Pkg.test assumptions.
   test-registry-tree:
     name: Pkg.test - registry tree - ubuntu-latest
     needs: detect
-    if: github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true'
+    if: github.event_name != 'pull_request' || needs.detect.outputs.heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     continue-on-error: true

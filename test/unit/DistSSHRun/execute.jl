@@ -12,7 +12,8 @@ using Test
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"NoKitHere\"\n")
             @test !DistSSHRun._project_tree_has_distsshkit(proj)
-            @test DistSSHRun._detached_julia_project(proj) == kit
+            @test DistSSHRun._detached_julia_project(proj) ==
+                DistSSHRun._detached_fallback_project(kit)
             write(
                 joinpath(proj, "Project.toml"),
                 """
@@ -21,7 +22,8 @@ using Test
                 """,
             )
             @test !DistSSHRun._project_tree_has_distsshkit(proj)
-            @test DistSSHRun._detached_julia_project(proj) == kit
+            @test DistSSHRun._detached_julia_project(proj) ==
+                DistSSHRun._detached_fallback_project(kit)
             write(
                 joinpath(proj, "Project.toml"),
                 """
@@ -59,13 +61,15 @@ using Test
                 """,
             )
             @test !DistSSHRun._project_tree_has_distsshkit(proj)
-            @test DistSSHRun._detached_julia_project(proj) == kit
+            @test DistSSHRun._detached_julia_project(proj) ==
+                DistSSHRun._detached_fallback_project(kit)
         end
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"JunkManifest\"\n")
             write(joinpath(proj, "Manifest.toml"), "not = [ toml")
             @test !DistSSHRun._project_tree_has_distsshkit(proj)
-            @test DistSSHRun._detached_julia_project(proj) == kit
+            @test DistSSHRun._detached_julia_project(proj) ==
+                DistSSHRun._detached_fallback_project(kit)
         end
         _with_tempdir() do bare
             active = Base.active_project()
