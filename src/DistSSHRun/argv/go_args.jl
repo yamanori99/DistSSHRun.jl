@@ -38,7 +38,6 @@ function show_go_usage(; io::IO = stdout)
         "  --sync / --rsync    optional pre-run; --rsync instantiates if needed",
         "  --julia PATH        remote Julia (ENV or auto)",
         "  --output-dir PATH   batch root; slots are PATH/<slot>/",
-        "  $(KIT_TIME_HELP)",
         "  $(KIT_QUIET_FLAG_HELP)",
         "  $(KIT_PROGRESS_FLAG_HELP)",
         "  $(KIT_VERBOSE_FLAG_HELP)",
@@ -46,6 +45,8 @@ function show_go_usage(; io::IO = stdout)
         "  --version, -v       print version and exit",
         "  -h, --help          this help",
     )
+    print_help_blank(io)
+    print_help_lines(io, "  $(KIT_TIME_HELP)")
     print_help_blank(io)
     print_help_section("Output"; io = io)
     print_help_lines(

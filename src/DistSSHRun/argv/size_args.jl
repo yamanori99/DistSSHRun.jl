@@ -37,7 +37,7 @@ function show_size_usage(; io::IO = stdout)
         "  --probe PATH        warm-up script; peak RSS",
         "  --mem-headroom N    RAM fraction (default $(DEFAULT_MEM_HEADROOM))",
         "  --parent-gb N       parent process reserve (default $(DEFAULT_PARENT_GB))",
-        "  --hosts CSV         parent / child:NAME[:N] (`:N` stripped)",
+        "  --hosts CSV         parent / child:NAME[:N] (:N stripped)",
         "  --hosts-file PATH   same, one token per line",
         "  $(KIT_QUIET_FLAG_HELP)",
         "  $(KIT_PROGRESS_FLAG_HELP)",

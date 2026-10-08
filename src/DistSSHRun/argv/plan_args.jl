@@ -45,7 +45,7 @@ function show_plan_usage(; io::IO = stdout)
     print_help_section("Options"; io = io)
     print_help_lines(
         io,
-        "  parent[:N] / child:NAME[:N]  hosts for optional size! (`:N` ignored)",
+        "  parent[:N] / child:NAME[:N]  hosts for optional size! (:N ignored)",
         "  --gb-per-worker N   skip RSS; assume N GB each (runs size!)",
         "  --probe PATH        warm-up script; peak RSS (runs size!)",
         "  --mem-headroom N    RAM fraction (default $(DEFAULT_MEM_HEADROOM))",

@@ -5,7 +5,7 @@ function show_requirements(; io::IO = stdout)
         "Deploy and check the project on SSH hosts before go / drive.",
         "Recommended: --rsync, --instantiate, --check, then optional --runtest.",
         "Hosts: child:NAME[:N] (same as go / drive / size; :N ignored).",
-        "       parent is `up`, not setup.",
+        "       parent is up, not setup.",
         "Remote path: ~/Parent/RepoName, or --remote-path / ENV.",
         "Git parity is drive --require-git (off by default).",
     )
@@ -29,7 +29,8 @@ function show_requirements(; io::IO = stdout)
         "  --instantiate        Pkg.instantiate on remotes",
         "  --check              SSH, Julia, project, deps",
         "  --runtest            Pkg.test of the job project on remotes",
-        "  --cleanup / --delete stale workers / remote tree",
+        "  --cleanup            stale workers",
+        "  --delete             remote project tree",
         "  --prune              .distsshkit go/drive/setup/runs leaves",
     )
     print_help_blank(io)
@@ -42,14 +43,15 @@ function show_requirements(; io::IO = stdout)
         "  $(KIT_QUIET_FLAG_HELP)",
         "  $(KIT_PROGRESS_FLAG_HELP)",
         "  $(KIT_VERBOSE_FLAG_HELP)",
-        "  $(KIT_TIME_HELP)",
-        "  -y, --yes            skip confirmations",
-        "  --hosts CSV          child:NAME[:N] (`:N` stripped)",
-        "  --hosts-file PATH    one token per line (`:N` stripped)",
+        "  -y, --yes           skip confirmations",
+        "  --hosts CSV          child:NAME[:N] (:N stripped)",
+        "  --hosts-file PATH    one token per line (:N stripped)",
         "  --version, -v        print version and exit",
         "  --older-than DAYS    with --prune: mtime at least DAYS old",
         "  --id TOKEN           with --prune: go / runs leaf name contains TOKEN",
     )
+    print_help_blank(io)
+    print_help_lines(io, "  $(KIT_TIME_HELP)")
     print_help_blank(io)
     print_help_section("Environment"; io = io)
     print_help_lines(
