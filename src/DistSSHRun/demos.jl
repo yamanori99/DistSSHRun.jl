@@ -318,7 +318,7 @@ function show_demo_usage(io::IO = stdout)
     print_help_section("Layout"; io = io)
     print_help_lines(
         io,
-        "  with_kit/     DistSSHRun drivers (drive / pipeline!)",
+        "  with_kit/     Drivers for drive / pipeline!",
         "  without_kit/  Kit-independent scripts (julia / go / go!)",
         "  ride/         Plain scripts for plan / go / ride (map, filter, for)",
     )

@@ -447,7 +447,6 @@ function show_drive_usage(; io::IO = stdout)
         "  --require-all-hosts listed parent/child tokens must join, stay, and collect (default)",
         "  --best-effort       allow a partial run (missing join is not a failure)",
         "  --output-dir PATH   result root (default: {script}/.distsshkit/drive/<stem>_<UTC>/)",
-        "  $(KIT_TIME_HELP)",
         "  --julia PATH        remote Julia",
         "  --mem-headroom N    RAM fraction (default $(DEFAULT_MEM_HEADROOM); same as size)",
         "  --parent-gb N       parent process reserve (default $(DEFAULT_PARENT_GB); same as size)",
@@ -459,6 +458,8 @@ function show_drive_usage(; io::IO = stdout)
         "  --version, -v       print version and exit",
         "  -h, --help          this help",
     )
+    print_help_blank(io)
+    print_help_lines(io, "  $(KIT_TIME_HELP)")
     print_help_blank(io)
     print_help_section("Collect"; io = io)
     print_help_lines(

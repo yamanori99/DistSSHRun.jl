@@ -24,9 +24,9 @@ function show_up_usage(; io::IO = stdout)
         "  $(KIT_QUIET_FLAG_HELP)",
         "  $(KIT_PROGRESS_FLAG_HELP)",
         "  $(KIT_VERBOSE_FLAG_HELP)",
-        "  -y, --yes            skip confirmations",
-        "  --hosts CSV          child:NAME[:N] or parent[:N] (`:N` stripped)",
-        "  --hosts-file PATH    one token per line (`:N` stripped)",
+        "  -y, --yes           skip confirmations",
+        "  --hosts CSV          child:NAME[:N] or parent[:N] (:N stripped)",
+        "  --hosts-file PATH    one token per line (:N stripped)",
         "  --version, -v        print version and exit",
     )
     print_help_blank(io)

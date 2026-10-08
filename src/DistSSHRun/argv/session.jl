@@ -26,7 +26,7 @@ const KIT_PROGRESS_FLAG_HELP =
 const KIT_VERBOSE_FLAG_HELP =
     "--verbose           full detail (non-TTY default)"
 const KIT_TIME_HELP =
-    "Time table after the run (-q hides it); replay: progress DIR"
+    "A time table prints after the run (-q hides it). Replay: progress DIR"
 const KIT_HOSTS_FLAG_HELP =
     "--hosts CSV         parent[:N] / child:NAME[:N]"
 const KIT_QUIET_ENV_HELP =
