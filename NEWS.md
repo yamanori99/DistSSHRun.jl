@@ -4,6 +4,11 @@ User-facing changes.
 GitHub Releases may copy these sections (`Release notes:` on
 `@JuliaRegistrator register`).
 
+## 0.1.3
+
+CLI help only. `setup` lists `--cleanup` and `--delete` separately.
+The time-table note on `go`, `drive`, and `setup` sits after Options.
+
 ## 0.1.2
 
 Host talking and the juliaup verbs live in this package (`base/` and `up/`).
