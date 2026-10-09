@@ -13,9 +13,10 @@
 
 import TOML
 
-# Direct [deps] only. DistSSHKit if the user added it, otherwise DistSSHRun.
+# Active project (`--project`), direct [deps] only. DistSSHKit if the user
+# added it, otherwise DistSSHRun. A directory walk is not what `using` loads.
 function _demo_package()::Symbol
-    proj = Base.current_project()
+    proj = Base.active_project()
     proj === nothing && return :DistSSHRun
     raw = TOML.parsefile(proj)
     deps = get(raw, "deps", nothing)
