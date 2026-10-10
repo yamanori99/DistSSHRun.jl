@@ -34,7 +34,7 @@ end
 ```
 
 ```@docs
-wait
+wait(::KitProcess)
 ```
 
 ## Plan and size
