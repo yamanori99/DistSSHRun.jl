@@ -78,8 +78,8 @@ Green on one layer does not imply the others. `Pkg.test()` does not run
   adding a case.
 - **e2e weekly** (10–50 min): same `e2e.jl` from Linux, macOS Intel, or
   WSL2 (not a PR check; starts when `Project.toml` `version` goes up on
-  `main`; Intel / WSL are watchers). Register from the version-cut PR's
-  Linux E2E.
+  `main`; Intel / WSL are watchers). Register when the required checks
+  are green.
   Not macOS workers.
 - **doctests** (~5 s): `src/` docstring examples (Documenter, Julia 1.13).
   Not workers / SSH.
