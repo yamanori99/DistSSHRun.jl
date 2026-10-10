@@ -4,8 +4,18 @@ DistSSHRun is one run on shared machines over SSH: `setup`, `go`,
 `ride`, `drive`, `plan`, `size`, `pool`, `demo`, and `progress`.
 Supported on **macOS, Linux, and WSL2 Ubuntu** (not native Windows).
 
+The command is `julia -m DistSSHRun`.
+
+`pkg> app add DistSSHRun` still installs `distsshrun`. That command is
+experimental. The binary is the Apps copy, not `--project=.`. Apps
+fixes `JULIA_LOAD_PATH`, so `drive`, `size`, and `pool` still need
+`julia -m DistSSHRun`.
+
+DistSSHKit does not install a terminal command. When that package is
+installed, `julia -m DistSSHKit` is the same entry.
+
 The longer guide is the
-[DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/stable/).
+[DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/dev/).
 
 ## Install
 
@@ -17,11 +27,6 @@ Julia **1.13+**. Hosts need **`ssh`** and **`rsync`**. Git deploys also
 need **`git`**.
 
 ## Commands
-
-The command is `julia -m DistSSHRun`. DistSSHKit does not install a
-terminal command of its own. This package still does: `pkg> app add DistSSHRun`
-installs `distsshrun`, and that copy is the Apps environment, not
-`--project=.`. Prefer `julia -m DistSSHRun` or `julia -m DistSSHKit`.
 
 ```bash
 julia -m DistSSHRun setup --check child:host1
