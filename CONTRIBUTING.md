@@ -205,7 +205,7 @@ what is useful.
 | Label | Meaning |
 | --- | --- |
 | `breaking` | Incompatible behavior. May land **without** a version bump. |
-| version cut | `Project.toml` `version` went up. CI compares that file with the base (`version-cut.sh`). There is no `cut` label. |
+| version cut | `Project.toml` `version` went up. CI compares that file with the base (`version-cut.sh`). Labels adds `cut` on that rise. Removing it sticks until the next rise. CI still reads the file, not the label. |
 | `cut-hold` | Postpone register. CI adds this on Issue `E2E weekly failed` when weekly **Linux** is red after a `cut` merge. Intel / WSL red does not. Not a PR `area:*` label. Do not lower `version`. |
 
 On a breaking line bump `x` in `0.x.y`; otherwise bump `y`. Do not ship an empty cut. Do not automate the bump or `@JuliaRegistrator register`.
@@ -293,7 +293,7 @@ CI infers, in order:
 
 `fix/` plus `Fixes` an enhancement issue gets `enhancement`. `breaking` may sit next to the type label. After a cut, a human registers from Linux E2E (or holds with `cut-hold` if weekly Linux is red); TagBot tags.
 
-Ruleset `main` requires check `PR label` (workflow `Type`). Type labels (`bug` / `enhancement` / `breaking` / `chore`) and each `area:*` must exist (`gh label create` if missing). `when:*` and `julia-next` are Issues only (not a PR type). There is no `cut` label.
+Ruleset `main` requires check `PR label` (workflow `Type`). Type labels (`bug` / `enhancement` / `breaking` / `chore`) and each `area:*` must exist (`gh label create` if missing). `when:*` and `julia-next` are Issues only (not a PR type). Labels adds `cut` when the version rises above the base. Removing it sticks until the next rise. CI still reads Project.toml, not the label.
 
 Colors match DistSSHKit: type is "what", area is "where". Do not give each `area:*` its own hue.
 
