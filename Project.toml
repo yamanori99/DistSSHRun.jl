@@ -1,7 +1,7 @@
 name = "DistSSHRun"
 uuid = "b568025c-2759-4ef1-8b14-17d00e2cd000"
 license = "MIT"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Yamamoto, Takanori <takanori.yamamoto.99@gmail.com>", "Ampuku, Honoka <ampk.hono@gmail.com>"]
 
 [workspace]

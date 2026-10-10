@@ -4,6 +4,12 @@ User-facing changes.
 GitHub Releases may copy these sections (`Release notes:` on
 `@JuliaRegistrator register`).
 
+## 0.1.4
+
+Demo scripts that load a package use DistSSHKit when the active project
+lists it in direct `[deps]`, and DistSSHRun otherwise. `using` follows
+`--project`, not a Project.toml found by walking from the working directory.
+
 ## 0.1.3
 
 CLI help only. `setup` lists `--cleanup` and `--delete` separately.
