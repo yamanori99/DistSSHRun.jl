@@ -5,7 +5,7 @@ CurrentModule = DistSSHRun
 ```
 
 Exported names, grouped by the command they belong to. The longer guide
-is the [DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/stable/).
+is the [DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/dev/).
 
 ## Run
 
