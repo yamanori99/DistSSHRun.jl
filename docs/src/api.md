@@ -33,6 +33,10 @@ Filter = function (x)
 end
 ```
 
+```@docs
+wait
+```
+
 ## Plan and size
 
 `plan` reads a script and reports how it would split. `size!` and `pool!`

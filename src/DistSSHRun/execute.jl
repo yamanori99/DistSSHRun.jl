@@ -1213,7 +1213,7 @@ end
 Live per-host membership for a running (or recently collecting) `drive`
 or `ride`. Reads `kit.hosts.status`. Empty when the file is missing (too
 early, a `go` run, or a hard death before join). This is not
-[`DriveResult.hosts`](@ref) (post-run collect); that vector is stored in
+[`DriveResult`](@ref) `hosts` (post-run collect); that vector is stored in
 `kit.result` as `hosts`.
 """
 function drive_host_status(output_dir::AbstractString)::Vector{DriveHostStatus}
