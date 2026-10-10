@@ -18,7 +18,10 @@ need **`git`**.
 
 ## Commands
 
-The command is `julia -m DistSSHRun`.
+The command is `julia -m DistSSHRun`. DistSSHKit does not install a
+terminal command of its own. This package still does: `pkg> app add DistSSHRun`
+installs `distsshrun`, and that copy is the Apps environment, not
+`--project=.`. Prefer `julia -m DistSSHRun` or `julia -m DistSSHKit`.
 
 ```bash
 julia -m DistSSHRun setup --check child:host1
