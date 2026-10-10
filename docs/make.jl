@@ -15,7 +15,7 @@ makedocs(;
         assets = ["assets/custom.css"],
     ),
     pages = [
-        "Introduction" => "index.md",
+        "Home" => "index.md",
         "API" => "api.md",
     ],
     checkdocs = :none,
