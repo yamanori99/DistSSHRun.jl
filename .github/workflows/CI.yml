@@ -19,13 +19,14 @@ permissions:
   contents: read
 
 jobs:
-  # `Pkg.test` 1.13 runs on ubuntu-latest and macos-latest. The macOS job
-  # exercises `ps -o lstart=` in kit_process_start_key (no /proc). It does
-  # not upload coverage. Slow SSH E2E kit parents are `E2E weekly`
+  # `Pkg.test` 1.13 runs on ubuntu-latest, macos-latest, and WSL2 Ubuntu.
+  # macOS and WSL are required. The macOS job exercises `ps -o lstart=`
+  # in kit_process_start_key (no /proc). Coverage uploads from Ubuntu only.
+  # Slow SSH E2E kit parents are `E2E weekly`
   # (macos-15-intel Colima, not this job).
   # PRs run `ubuntu-latest → ubuntu-24.04` in this workflow.
   # One detect job; markdown-only / allowlisted PRs skip heavy jobs (UI: skipping).
-  # Required check names do not include a Julia version.
+  # Required check names include the Julia version and the architecture.
   # Codecov (flag pkgtest): main push only — not on pull_request.
   # cache-scratchspaces: false — registry_updates.toml in scratchspaces can
   # poison Pkg.Registry.update on 1.13 if restored corrupt.
@@ -88,7 +89,7 @@ jobs:
           fi
 
   test:
-    name: Pkg.test - 1.13 - ubuntu-latest
+    name: Pkg.test (1.13, ubuntu-latest, x64)
     needs: detect
     if: github.event_name != 'pull_request' || needs.detect.outputs.heavy == 'true'
     runs-on: ubuntu-latest
@@ -111,7 +112,7 @@ jobs:
           upload: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
   test-macos:
-    name: Pkg.test - 1.13 - macos-latest
+    name: Pkg.test (1.13, macos-latest, aarch64)
     needs: detect
     if: github.event_name != 'pull_request' || needs.detect.outputs.heavy == 'true'
     runs-on: macos-latest
@@ -129,8 +130,33 @@ jobs:
           delete-old-caches: false
       - uses: ./.github/actions/pkg-test
 
+  test-wsl:
+    name: Pkg.test (1.13, WSL2 ubuntu-24.04, x64)
+    needs: detect
+    if: github.event_name != 'pull_request' || needs.detect.outputs.heavy == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: Vampire/setup-wsl@d1da7f2c0322a5ee4f24975344f67fc0f5baf364 # v7
+        with:
+          distribution: Ubuntu-24.04
+          wsl-version: 2
+          additional-packages: ca-certificates curl git
+      - uses: actions/cache@v6
+        with:
+          path: .ci-cache/wsl-julia
+          key: wsl-julia-1.13-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
+      - name: Pkg.test in WSL2
+        shell: wsl-bash {0}
+        run: ./.github/wsl-julia.sh 1.13 julia --project=. -e 'using Pkg; Pkg.test()'
+
   test-tip:
-    name: Pkg.test - 1.14-nightly - ubuntu-latest
+    name: Pkg.test (1.14-nightly, ubuntu-latest, x64)
     needs: detect
     if: github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true'
     runs-on: ubuntu-latest
@@ -147,11 +173,55 @@ jobs:
           delete-old-caches: false
       - uses: ./.github/actions/pkg-test
 
+  test-tip-macos:
+    name: Pkg.test (1.14-nightly, macos-latest, aarch64)
+    needs: detect
+    if: github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.14-nightly"
+      - uses: julia-actions/cache@v3
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - uses: ./.github/actions/pkg-test
+
+  test-tip-wsl:
+    name: Pkg.test (1.14-nightly, WSL2 ubuntu-24.04, x64)
+    needs: detect
+    if: github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: Vampire/setup-wsl@d1da7f2c0322a5ee4f24975344f67fc0f5baf364 # v7
+        with:
+          distribution: Ubuntu-24.04
+          wsl-version: 2
+          additional-packages: ca-certificates curl git
+      - uses: actions/cache@v6
+        with:
+          path: .ci-cache/wsl-julia
+          key: wsl-julia-1.14-nightly-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
+      - name: Pkg.test in WSL2
+        shell: wsl-bash {0}
+        run: ./.github/wsl-julia.sh 1.14-nightly julia --project=. -e 'using Pkg; Pkg.test()'
+
   # Not a Julia slot. Not required to merge. Ordinary PRs use the heavy
   # gate (same as Pkg.test 1.13). continue-on-error: a red job does not
   # fail the workflow. Catches checkout-only Pkg.test assumptions.
   test-registry-tree:
-    name: Pkg.test - registry tree - ubuntu-latest
+    name: Pkg.test (registry, ubuntu-latest, x64)
     needs: detect
     if: github.event_name != 'pull_request' || needs.detect.outputs.heavy == 'true'
     runs-on: ubuntu-latest
@@ -171,7 +241,7 @@ jobs:
       - uses: ./.github/actions/registry-tree-test
 
   aqua:
-    name: Aqua - 1.13 - ubuntu-latest
+    name: Aqua (1.13, ubuntu-latest, x64)
     needs: detect
     if: github.event_name != 'pull_request' || needs.detect.outputs.heavy == 'true'
     runs-on: ubuntu-latest
@@ -189,7 +259,7 @@ jobs:
         run: ./.github/aqua-check.sh
 
   aqua-tip:
-    name: Aqua - 1.14-nightly - ubuntu-latest
+    name: Aqua (1.14-nightly, ubuntu-latest, x64)
     needs: detect
     if: github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true'
     runs-on: ubuntu-latest
@@ -207,10 +277,55 @@ jobs:
       - name: Aqua.test_all (latest Aqua)
         run: ./.github/aqua-check.sh
 
+  aqua-tip-macos:
+    name: Aqua (1.14-nightly, macos-latest, aarch64)
+    needs: detect
+    if: github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.14-nightly"
+      - uses: julia-actions/cache@v3
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - name: Aqua.test_all (latest Aqua)
+        run: ./.github/aqua-check.sh
+
+  aqua-tip-wsl:
+    name: Aqua (1.14-nightly, WSL2 ubuntu-24.04, x64)
+    needs: detect
+    if: github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: Vampire/setup-wsl@d1da7f2c0322a5ee4f24975344f67fc0f5baf364 # v7
+        with:
+          distribution: Ubuntu-24.04
+          wsl-version: 2
+          additional-packages: ca-certificates curl git
+      - uses: actions/cache@v6
+        with:
+          path: .ci-cache/wsl-julia
+          key: wsl-julia-1.14-nightly-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
+      - name: Aqua.test_all (latest Aqua)
+        shell: wsl-bash {0}
+        run: ./.github/wsl-julia.sh 1.14-nightly ./.github/aqua-check.sh
+
   # Literal name: a skipped job must still be this string.
   # 1.13 only. Add another job when JETLS does not list that version.
   jetls:
-    name: JETLS - 1.13 - ubuntu-latest
+    name: JETLS (1.13, ubuntu-latest, x64)
     needs: detect
     if: github.event_name != 'pull_request' || needs.detect.outputs.heavy == 'true'
     runs-on: ubuntu-latest
