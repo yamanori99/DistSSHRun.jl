@@ -12,8 +12,8 @@
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 <!-- markdownlint-enable MD013 -->
 
-DistSSHRun は、SSH で共有マシンに載せる一回の実行である。`setup`、`go`、
-`ride`、`drive`、`plan`、`size`、`pool`、`demo`、`progress` を持つ。
+DistSSHRun は、SSH で共有マシンに載せる一回の実行である。`setup`、`up`、
+`go`、`ride`、`drive`、`plan`、`size`、`pool`、`demo`、`progress` を持つ。
 対応は **macOS、Linux、WSL2 Ubuntu** (ネイティブ Windows は対象外)。
 
 手順の詳細は

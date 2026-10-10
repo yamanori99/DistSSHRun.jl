@@ -12,8 +12,8 @@
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 <!-- markdownlint-enable MD013 -->
 
-DistSSHRun is one run on shared machines over SSH: `setup`, `go`,
-`ride`, `drive`, `plan`, `size`, `pool`, `demo`, and `progress`.
+DistSSHRun is one run on shared machines over SSH: `setup`, `up`,
+`go`, `ride`, `drive`, `plan`, `size`, `pool`, `demo`, and `progress`.
 Supported on **macOS, Linux, and WSL2 Ubuntu** (not native Windows).
 
 The longer guide is the
