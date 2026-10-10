@@ -49,7 +49,7 @@ path it also resolves each channel's current release from `versions.json`
 cache key, so a new patch, or a prerelease becoming stable, rebuilds the
 juliaup layer. The image build checks `julia --version` against it. Only
 major.minor is required at runtime. Install policy:
-[Requirements](https://yamanori99.github.io/DistSSHKit.jl/dev/requirements/).
+[Requirements](https://yamanori99.github.io/DistSSHKit.jl/stable/requirements/).
 `--e2e` also runs
 [`scripts/ensure-kit-parent-juliaup.sh`](scripts/ensure-kit-parent-juliaup.sh)
 so the kit parent has juliaup + both channels (`up default` on parent;
