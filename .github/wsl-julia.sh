@@ -26,7 +26,8 @@ dest="$HOME/DistSSHRun.jl"
 cache="$src/.ci-cache/wsl-julia"
 mkdir -p "$cache"
 rm -rf "$dest"
-git clone "$src" "$dest"
+# Checkout on /mnt is owned by root. Mark it safe only for this clone.
+git -c safe.directory="$src" -c safe.directory="$src/.git" clone "$src" "$dest"
 if [[ -f "$cache/julia.tgz" ]]; then
   tar -xzf "$cache/julia.tgz" -C "$HOME"
 else
