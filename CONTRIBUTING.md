@@ -158,8 +158,7 @@ A new root markdown file stays heavy until listed in
 A `Project.toml` version increase skips none of this: Pkg.test, JETLS, Aqua, Documenter,
 and Linux E2E all run (E2E Codecov too). macOS and WSL SSH E2E stay on
 `E2E weekly`, not the PR. `Pkg.test` 1.13 also runs on `macos-latest`.
-Register from the cut PR's Linux E2E (optional local Mac
-`./testenv/docker-ssh/scripts/up.sh --e2e`). Intel / WSL weekly are
+Register when the required checks below are green. Intel / WSL weekly are
 watchers, not the register gate.
 
 CI uploads Codecov on **main push** only (`Pkg.test` on 1.13, flag `pkgtest`). PR E2E does not upload; a version-increase PR and **E2E weekly** Linux upload flag `e2e`. Public repo + Codecov OIDC (`id-token: write`). Status checks are informational (`codecov.yml`). Local coverage:
@@ -225,7 +224,7 @@ Not a calendar. Cut when [NEWS.md](NEWS.md) **Unreleased** has something General
 
 ### After a cut merges
 
-1. Register when the **version-increase PR Linux E2E** is green (`ubuntu-latest → ubuntu-24.04`, with Codecov). Path-filtered PRs already run that job; a higher `Project.toml` `version` still forces it. Optional: local Mac `./testenv/docker-ssh/scripts/up.sh --e2e` (same suite; not Colima Intel CI). Do not wait for weekly Intel / WSL.
+1. Register when the required checks on the version-increase PR are green. Do not wait for weekly Intel / WSL.
 2. **E2E weekly** still starts on the merge commit (`Project.toml` version went up): Linux, `macos-15-intel`, WSL2. Watchers. Do not wait for Sunday cron. `workflow_dispatch` remains for a re-run.
 3. Weekly **Linux** red after a cut: Issue `E2E weekly failed` gets `cut-hold`. Do not `@JuliaRegistrator register` while `cut-hold` is open. Do not lower `version`. Intel / WSL red comments on that Issue without `cut-hold`.
 4. Weekly Linux green: CI removes `cut-hold` even if Intel / WSL are still red (the Issue stays open until the whole weekly run is green). Register on the merge commit (not the PR body). Paste the NEWS section under `Release notes:`.
@@ -291,7 +290,7 @@ CI infers, in order:
 1. A unique type on a closing issue (`Fixes #N`)
 2. Else the branch prefix: `feat/` → enhancement, `fix/` → bug, `breaking/` → breaking, `chore/` / `docs/` / `ci/` / `test/` / anything else → chore
 
-`fix/` plus `Fixes` an enhancement issue gets `enhancement`. `breaking` may sit next to the type label. After a cut, a human registers from Linux E2E (or holds with `cut-hold` if weekly Linux is red); TagBot tags.
+`fix/` plus `Fixes` an enhancement issue gets `enhancement`. `breaking` may sit next to the type label. After a cut, a human registers when the required checks are green (or holds with `cut-hold` if weekly Linux is red); TagBot tags.
 
 Ruleset `main` requires check `PR label` (workflow `Type`). Type labels (`bug` / `enhancement` / `breaking` / `chore`) and each `area:*` must exist (`gh label create` if missing). `when:*` and `julia-next` are Issues only (not a PR type). Labels adds `cut` when the version rises above the base. Removing it sticks until the next rise. CI still reads Project.toml, not the label.
 
