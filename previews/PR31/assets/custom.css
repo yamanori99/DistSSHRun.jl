@@ -1,0 +1,45 @@
+/* Slightly larger sidebar logo than Documenter default (6rem). */
+#documenter .docs-sidebar .docs-logo > img {
+  max-height: 9.5rem;
+}
+
+/*
+  documenter-light.css is unscoped: `.docs-dark-only { display: none !important }`
+  applies on every theme. Dark theme sheets hide `.docs-light-only` but never
+  restore `.docs-dark-only`.
+  Use `block` (not `inline-block`): the light logo is a centered block; inline
+  would sit on the left of the sidebar, which is obvious with a wide wordmark.
+*/
+html.theme--documenter-dark .docs-sidebar .docs-dark-only,
+html.theme--catppuccin-frappe .docs-sidebar .docs-dark-only,
+html.theme--catppuccin-macchiato .docs-sidebar .docs-dark-only,
+html.theme--catppuccin-mocha .docs-sidebar .docs-dark-only {
+  display: block !important;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Version selector: Documenter puts it at the bottom of the sidebar. */
+#documenter .docs-sidebar {
+  display: flex;
+  flex-direction: column;
+}
+#documenter .docs-sidebar > .docs-logo {
+  order: 0;
+}
+#documenter .docs-sidebar > .docs-package-name {
+  order: 1;
+}
+#documenter .docs-sidebar > .docs-version-selector {
+  order: 2;
+  margin: 0.5rem 0.75rem 0;
+}
+#documenter .docs-sidebar > .docs-search-query {
+  order: 3;
+}
+#documenter .docs-sidebar > .docs-menu {
+  order: 4;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
