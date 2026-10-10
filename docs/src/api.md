@@ -5,7 +5,7 @@ CurrentModule = DistSSHRun
 ```
 
 Exported names, grouped by the command they belong to. The longer guide
-is the [DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/stable/).
+is the [DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/dev/).
 
 ## Run
 
@@ -31,6 +31,10 @@ Filter = function (x)
     end
     return n in names
 end
+```
+
+```@docs
+wait(::KitProcess)
 ```
 
 ## Plan and size
