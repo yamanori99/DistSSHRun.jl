@@ -4,6 +4,10 @@ User-facing changes.
 GitHub Releases may copy these sections (`Release notes:` on
 `@JuliaRegistrator register`).
 
+## 0.1.5
+
+`wait` on a detached `KitProcess` is on the API page. `drive_host_status` points at `DriveResult`, not a field of it.
+
 ## 0.1.4
 
 Demo scripts that load a package use DistSSHKit when the active project
