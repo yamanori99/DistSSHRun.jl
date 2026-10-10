@@ -5,10 +5,25 @@
 #   julia --project=. -m DistSSHRun drive parent:2 distsshkit_demos/with_kit/square_file.jl --n 4
 
 using Distributed
-using DistSSHRun
+import TOML
+
+# Active project (`--project`), direct [deps] only. DistSSHKit if the user
+# added it, otherwise DistSSHRun. A directory walk is not what `using` loads.
+function _demo_package()::Symbol
+    proj = Base.active_project()
+    proj === nothing && return :DistSSHRun
+    raw = TOML.parsefile(proj)
+    deps = get(raw, "deps", nothing)
+    deps isa AbstractDict && haskey(deps, "DistSSHKit") && return :DistSSHKit
+    return :DistSSHRun
+end
+
+const _DEMO_PACKAGE = _demo_package()
+@eval using $_DEMO_PACKAGE
 
 function init_output_dir!(_)
-    return DistSSHRun.resolve_distributed_output_dir!(ARGS, joinpath(@__DIR__, "output"))
+    pkg = getfield(Main, _DEMO_PACKAGE)
+    return pkg.resolve_distributed_output_dir!(ARGS, joinpath(@__DIR__, "output"))
 end
 
 function main()
