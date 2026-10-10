@@ -12,6 +12,8 @@ on:
 # Aqua tip in this workflow. macOS and WSL2 tip are CI weekly.
 # Registry tree follows the heavy gate
 # (ordinary PRs too) and is continue-on-error. No label is involved.
+# A main push that changes only Project.toml and NEWS.md, and raises
+# version, skips Test and does not start Linux E2E.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
@@ -75,8 +77,12 @@ jobs:
         env:
           FILTER_E2E: ${{ steps.filter.outputs.e2e }}
           CUT: ${{ steps.heavy.outputs.version_cut }}
+          HEAVY: ${{ steps.heavy.outputs.heavy }}
         run: |
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$CUT" = "true" ]; then
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$HEAVY" = "false" ]; then
+            echo "e2e=false" >> "$GITHUB_OUTPUT"
+            echo "coverage=false" >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$CUT" = "true" ]; then
             echo "e2e=true" >> "$GITHUB_OUTPUT"
           elif [ "$GITHUB_EVENT_NAME" = "push" ] || [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             echo "e2e=${FILTER_E2E}" >> "$GITHUB_OUTPUT"
@@ -92,7 +98,7 @@ jobs:
   test:
     name: Pkg.test (1.13, ubuntu-latest, x64)
     needs: detect
-    if: github.event_name != 'pull_request' || needs.detect.outputs.heavy == 'true'
+    if: needs.detect.outputs.heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -115,7 +121,7 @@ jobs:
   test-macos:
     name: Pkg.test (1.13, macos-latest, aarch64)
     needs: detect
-    if: github.event_name != 'pull_request' || needs.detect.outputs.heavy == 'true'
+    if: needs.detect.outputs.heavy == 'true'
     runs-on: macos-latest
     timeout-minutes: 30
     permissions:
@@ -134,7 +140,7 @@ jobs:
   test-wsl:
     name: Pkg.test (1.13, WSL2 ubuntu-24.04, x64)
     needs: detect
-    if: github.event_name != 'pull_request' || needs.detect.outputs.heavy == 'true'
+    if: needs.detect.outputs.heavy == 'true'
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
@@ -159,7 +165,7 @@ jobs:
   test-tip:
     name: Pkg.test (1.14-nightly, ubuntu-latest, x64)
     needs: detect
-    if: github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true'
+    if: needs.detect.outputs.heavy == 'true' && (github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     continue-on-error: true
@@ -180,7 +186,7 @@ jobs:
   test-registry-tree:
     name: Pkg.test (registry, ubuntu-latest, x64)
     needs: detect
-    if: github.event_name != 'pull_request' || needs.detect.outputs.heavy == 'true'
+    if: needs.detect.outputs.heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     continue-on-error: true
@@ -200,7 +206,7 @@ jobs:
   aqua:
     name: Aqua (1.13, ubuntu-latest, x64)
     needs: detect
-    if: github.event_name != 'pull_request' || needs.detect.outputs.heavy == 'true'
+    if: needs.detect.outputs.heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -218,7 +224,7 @@ jobs:
   aqua-tip:
     name: Aqua (1.14-nightly, ubuntu-latest, x64)
     needs: detect
-    if: github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true'
+    if: needs.detect.outputs.heavy == 'true' && (github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     continue-on-error: true
@@ -239,7 +245,7 @@ jobs:
   jetls:
     name: JETLS (1.13, ubuntu-latest, x64)
     needs: detect
-    if: github.event_name != 'pull_request' || needs.detect.outputs.heavy == 'true'
+    if: needs.detect.outputs.heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

@@ -216,7 +216,7 @@ what is useful.
 | --- | --- |
 | `breaking` | Incompatible behavior. May land **without** a version bump. |
 | version cut | `Project.toml` `version` went up. CI compares that file with the base (`version-cut.sh`). Labels adds `cut` on that rise. Removing it sticks until the next rise. CI still reads the file, not the label. |
-| `cut-hold` | Postpone register. CI adds this on Issue `E2E weekly failed` when weekly **Linux** is red after a `cut` merge. Intel / WSL red does not. Not a PR `area:*` label. Do not lower `version`. |
+| `cut-hold` | Postpone register. CI adds this on Issue `E2E weekly failed` when Sunday **Linux** is red. Intel / WSL red does not. Not a PR `area:*` label. Do not lower `version`. |
 
 On a breaking line bump `x` in `0.x.y`; otherwise bump `y`. Do not ship an empty cut. Do not automate the bump or `@JuliaRegistrator register`.
 
@@ -235,10 +235,10 @@ Not a calendar. Cut when [NEWS.md](NEWS.md) **Unreleased** has something General
 
 ### After a cut merges
 
-1. Register when the required checks on the version-increase PR are green. Do not wait for weekly Intel / WSL.
-2. **E2E weekly** still starts on the merge commit (`Project.toml` version went up): Linux, `macos-15-intel`, WSL2. Watchers. Do not wait for Sunday cron. `workflow_dispatch` remains for a re-run.
-3. Weekly **Linux** red after a cut: Issue `E2E weekly failed` gets `cut-hold`. Do not `@JuliaRegistrator register` while `cut-hold` is open. Do not lower `version`. Intel / WSL red comments on that Issue without `cut-hold`.
-4. Weekly Linux green: CI removes `cut-hold` even if Intel / WSL are still red (the Issue stays open until the whole weekly run is green). Register on the merge commit (not the PR body). Paste the NEWS section under `Release notes:`.
+1. Register when the required checks on the version-increase PR are green, including Linux E2E. Do not wait for E2E weekly.
+2. Register on the merge commit (not the PR body). Paste the NEWS section under `Release notes:`.
+3. **E2E weekly** is Sunday 04:00 JST and `workflow_dispatch` only. A version-and-NEWS merge does not start it.
+4. Sunday **Linux** red: Issue `E2E weekly failed` gets `cut-hold`. Do not `@JuliaRegistrator register` while `cut-hold` is open. Do not lower `version`. Intel / WSL red does not add `cut-hold`. A later green Sunday Linux removes `cut-hold` even if Intel / WSL are still red (the Issue stays open until the whole weekly run is green).
 5. Skip that version on General instead: keep `cut-hold` until a later cut (higher `version`) is ready, then register that later cut.
 6. TagBot tags once General has the release.
 
