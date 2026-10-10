@@ -8,6 +8,19 @@ set -euo pipefail
 channel="$1"
 shift
 
+# The Actions distro is root. chmod does not deny that user, so a test
+# that locks a directory still writes into it. Run the rest as `ci`.
+if [[ "$(id -u)" -eq 0 ]]; then
+  if ! id -u ci >/dev/null 2>&1; then
+    useradd --create-home --shell /bin/bash ci
+  fi
+  src="$(pwd)"
+  mkdir -p "$src/.ci-cache/wsl-julia"
+  chmod -R a+rX "$src"
+  chmod 777 "$src/.ci-cache" "$src/.ci-cache/wsl-julia"
+  exec runuser -u ci -- "$0" "$channel" "$@"
+fi
+
 src="$(pwd)"
 dest="$HOME/DistSSHRun.jl"
 cache="$src/.ci-cache/wsl-julia"
