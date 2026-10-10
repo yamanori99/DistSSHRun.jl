@@ -15,7 +15,7 @@ DistSSHKit does not install a terminal command. When that package is
 installed, `julia -m DistSSHKit` is the same entry.
 
 The longer guide is the
-[DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/dev/).
+[DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/stable/).
 
 ## Install
 
