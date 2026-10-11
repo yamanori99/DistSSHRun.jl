@@ -66,6 +66,11 @@ using Test
         @test r.older_days == 7
         @test r.prune_id == "pi_file"
     end
+    let r = parse_setup_args(["--delete", "--confirm-path", "~/App", "child:host1"])
+        @test r.mode == :delete
+        @test r.confirm_paths == ["~/App"]
+    end
+    @test_throws ArgumentError parse_setup_args(["--check", "--confirm-path", "~/App", "child:host1"])
     @test_throws ArgumentError parse_setup_args(["--check", "--older-than", "1", "child:host1"])
     @test_throws ArgumentError parse_setup_args(["--prune", "--older-than", "-1", "child:host1"])
     @test_throws ArgumentError parse_setup_args(["--julia"])
@@ -103,6 +108,7 @@ using Test
     @testset "help smoke (rsync-first)" begin
         txt = DistSSHRun.setup_help_text()
         @test occursin("--prune", txt)
+        @test occursin("--confirm-path", txt)
         @test occursin("--older-than", txt)
         @test occursin("--runtest", txt)
         @test !occursin("--juliaup", txt)

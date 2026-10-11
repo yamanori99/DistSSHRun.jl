@@ -30,8 +30,8 @@ function show_requirements(; io::IO = stdout)
         "  --check              SSH, Julia, project, deps",
         "  --runtest            Pkg.test of the job project on remotes",
         "  --cleanup            stale workers",
-        "  --delete             remote project tree",
-        "  --prune              .distsshkit go/drive/setup/runs leaves",
+        "  --delete             remote project tree (needs --confirm-path)",
+        "  --prune              .distsshkit go/drive/setup/runs leaves (needs --confirm-path)",
     )
     print_help_blank(io)
     print_help_section("Options"; io = io)
@@ -43,7 +43,8 @@ function show_requirements(; io::IO = stdout)
         "  $(KIT_QUIET_FLAG_HELP)",
         "  $(KIT_PROGRESS_FLAG_HELP)",
         "  $(KIT_VERBOSE_FLAG_HELP)",
-        "  -y, --yes           skip confirmations",
+        "  -y, --yes           skip confirmations (not --delete or --prune)",
+        "  --confirm-path PATH  with --delete or --prune: the computed path (quote ~)",
         "  --hosts CSV          child:NAME[:N] (:N stripped)",
         "  --hosts-file PATH    one token per line (:N stripped)",
         "  --version, -v        print version and exit",
@@ -77,6 +78,7 @@ function parse_setup_args(args::Vector{String})
     ignore_julia_version = false
     older_days = nothing
     prune_id = nothing
+    confirm_paths = String[]
 
     c = CliCursor(args)
     while !cli_at_end(c)
@@ -114,6 +116,10 @@ function parse_setup_args(args::Vector{String})
         elseif arg == "--prune"
             mode = :prune
             cli_consume!(c)
+        elseif arg == "--confirm-path"
+            raw = String(strip(cli_take_value!(c, arg)))
+            isempty(raw) && throw(ArgumentError("--confirm-path needs a non-empty path"))
+            push!(confirm_paths, raw)
         elseif arg == "--older-than"
             raw = strip(cli_take_value!(c, arg))
             n = tryparse(Int, raw)
@@ -158,6 +164,9 @@ function parse_setup_args(args::Vector{String})
     if (older_days !== nothing || prune_id !== nothing) && mode !== :prune
         throw(ArgumentError("--older-than / --id only apply to setup --prune"))
     end
+    if !isempty(confirm_paths) && mode !== :delete && mode !== :prune
+        throw(ArgumentError("--confirm-path only applies to setup --delete or setup --prune"))
+    end
 
     return (
         mode = mode,
@@ -169,6 +178,7 @@ function parse_setup_args(args::Vector{String})
         ignore_julia_version = ignore_julia_version,
         older_days = older_days,
         prune_id = prune_id,
+        confirm_paths = confirm_paths,
         show_version = cli_session.show_version,
         cli_session = cli_session,
     )

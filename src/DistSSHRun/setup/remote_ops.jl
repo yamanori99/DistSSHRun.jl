@@ -68,7 +68,9 @@ Delete remote repositories.
 
 Returns `(cancelled, succeeded, failed, hosts)`. Caller should use
 [`finish_host_op!`](@ref) so partial failure is not reported as success.
-Pass `confirm=false` to skip the typed `delete` prompt (CLI `-y` / API `session.yes`).
+Pass `confirm=false` to skip the typed `delete` prompt.
+The `setup --delete` CLI does that only after `--confirm-path` matches.
+`-y` and `DISTSSHKIT_YES` do not.
 """
 function delete_remotes(
         hosts::Vector{String},
@@ -134,7 +136,7 @@ Returns `(cancelled, succeeded, failed, hosts)`.
 Pass `confirm=false` to skip the proceed prompt (CLI `-y` / API `session.yes`).
 
 Runs `git clone` **on each remote**. Private URLs need credentials **on that host**
-(deploy key, HTTPS token, or agent forward) — not the kit parent's agent alone.
+(deploy key or HTTPS token), not the kit parent's agent.
 """
 function clone_to_remotes(
         hosts::Vector{String},
@@ -259,7 +261,7 @@ end
 Run `using Pkg; <pkg_e>` on remote hosts (parallel) with `--project` at `remote_path`.
 
 Returns `(cancelled=false, succeeded, failed)`.
-Private git deps need working SSH on the remote (or agent forwarding). Uses
+Private git deps need a deploy key or HTTPS token on the remote. Uses
 `JULIA_PKG_USE_CLI_GIT=true` so Pkg prefers the `git` CLI over LibGit2.
 """
 function _pkg_e_on_remotes(
@@ -350,8 +352,7 @@ function _pkg_e_on_remotes(
             !isempty(msg) && kit_println("    $msg")
             if occursin("credential", lowercase(msg)) || occursin("Permission denied", msg) ||
                     occursin("failed to clone", lowercase(msg))
-                kit_println("    Hint: remote needs git SSH access to private deps (deploy key),")
-                kit_println("          or agent forward: DISTRIBUTED_SSH_OPTS=\"-A \$(…)\"")
+                kit_println("    Hint: remote needs a deploy key or HTTPS token for private deps.")
                 kit_println("          (JULIA_PKG_USE_CLI_GIT is already set for this step)")
             end
             failed += 1

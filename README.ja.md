@@ -20,6 +20,8 @@ DistSSHRun は、SSH で共有マシンに載せる一回の実行である。`s
 [DistSSHKit のマニュアル](https://yamanori99.github.io/DistSSHKit.jl/stable/)
 にある。
 
+DistSSHRun の UUID は `b568025c-2759-4ef1-8b14-17d00e2cd000` である。
+
 ## インストール
 
 ```julia
