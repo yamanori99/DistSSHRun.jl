@@ -43,6 +43,26 @@ function rsync_push_to_remotes(
     )
 end
 
+"""Remote `sh` that removes `remote_path` unless it is that host's `~` or `/`."""
+function _remote_delete_shell(remote_path::AbstractString)::String
+    pq = _remote_shell_path_word(remote_path)
+    return """
+    if [ -e $pq ]; then
+      _distssh_target=\$(cd $pq && pwd -P) || exit 1
+      _distssh_home=\$(cd ~ && pwd -P) || exit 1
+      if [ "\$_distssh_target" = "\$_distssh_home" ] || [ "\$_distssh_target" = / ]; then
+        echo "refusing to delete \$_distssh_target" >&2
+        exit 1
+      fi
+    fi
+    rm -rf $pq 2>/dev/null
+    if [ -e $pq ]; then
+      chmod -R u+rwX $pq 2>/dev/null
+      rm -rf $pq
+    fi
+    """
+end
+
 """
 Delete remote repositories.
 
@@ -55,6 +75,7 @@ function delete_remotes(
         remote_path::String;
         confirm::Bool = true,
     )::NamedTuple
+    _checked_remote_dest(remote_path)
     if confirm && !kit_noninteractive()
         cancelled = with_kit_progress_suspended() do
             print_err("  This will DELETE repositories on all hosts via SSH.\n")
@@ -72,7 +93,6 @@ function delete_remotes(
         cancelled && return (; cancelled = true, succeeded = 0, failed = 0, hosts = HostResult[])
     end
 
-    pq = _remote_shell_path_word(remote_path)
     succeeded = 0
     failed = 0
     host_results = HostResult[]
@@ -81,15 +101,13 @@ function delete_remotes(
         err_buf = IOBuffer()
         try
             kit_spin!("  $host: ") do
-                # Try rm -rf first; if path still exists (e.g. permission/lock), retry with chmod
-                cmd = """
-                    rm -rf $pq 2>/dev/null
-                    if [ -e $pq ]; then
-                      chmod -R u+rwX $pq 2>/dev/null
-                      rm -rf $pq
-                    fi
-                """
-                read(pipeline(_host_sync_remote_shell_cmd(host, cmd); stderr = err_buf), String)
+                read(
+                    pipeline(
+                        _host_sync_remote_shell_cmd(host, _remote_delete_shell(remote_path));
+                        stderr = err_buf,
+                    ),
+                    String,
+                )
                 return nothing
             end
             print_ok("✓")
@@ -124,6 +142,7 @@ function clone_to_remotes(
         clone_url::String;
         confirm::Bool = true,
     )::NamedTuple
+    _checked_remote_dest(remote_path)
     if confirm && !kit_noninteractive()
         cancelled = with_kit_progress_suspended() do
             println_fatal("  Repository: $clone_url")
@@ -144,7 +163,7 @@ function clone_to_remotes(
     end
 
     pq = _remote_shell_path_word(remote_path)
-    uq = Base.shell_escape(String(clone_url))
+    uq = _remote_sh_quote(String(clone_url))
     succeeded = 0
     failed = 0
     host_results = HostResult[]
@@ -159,7 +178,7 @@ function clone_to_remotes(
                 end
                 read(
                     pipeline(
-                        _host_sync_remote_shell_cmd(host, "git clone $uq $pq 2>&1");
+                        _host_sync_remote_shell_cmd(host, "git clone -- $uq $pq 2>&1");
                         stderr = err_buf,
                     ),
                     String,

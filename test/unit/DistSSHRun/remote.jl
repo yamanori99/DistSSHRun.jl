@@ -1,5 +1,15 @@
 using Test
 
+function _remote_delete_fixture(root::String, parts::Vector{String})
+    repo = joinpath(root, "Repo")
+    proj = joinpath(repo, parts...)
+    mkpath(proj)
+    write(joinpath(proj, "Project.toml"), "name = \"P\"\n")
+    write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+    run(pipeline(`git -C $repo init -q`; stdout = devnull, stderr = devnull))
+    return proj
+end
+
 @testset "remote" begin
     let r = DistSSHRun.get_local_resources()
         @test r.total_gb > 0
@@ -57,7 +67,7 @@ using Test
         tilde = "~/App.jl"
         abs = "/opt/App.jl"
         pq_abs = DistSSHRun._remote_shell_path_word(abs)
-        @test DistSSHRun._git_pull_remote_inner(tilde) == "cd ~/App.jl && git pull"
+        @test DistSSHRun._git_pull_remote_inner(tilde) == "cd ~/'App.jl' && git pull"
         @test DistSSHRun._git_pull_remote_inner(abs) == "cd $pq_abs && git pull"
     end
 
@@ -68,6 +78,77 @@ using Test
         end
         if Sys.which("ssh") !== nothing
             @test !DistSSHRun._remote_ssh_ok("no-such-host.invalid")
+        end
+    end
+
+    @testset "remote shell quotes metacharacters" begin
+        @test DistSSHRun._remote_shell_path_word("/srv/x;id") == "'/srv/x;id'"
+        @test DistSSHRun._remote_shell_path_word("~/Repo") == "~/'Repo'"
+        @test DistSSHRun._remote_shell_path_word("~/a/b c") == "~/'a/b c'"
+        @test DistSSHRun._ssh_host_args("host", "true") == ["--", "host", "true"]
+        @test_throws ArgumentError DistSSHRun.parse_placement_token("child:-oBatchMode=yes")
+    end
+
+    @testset "delete root does not climb to home or slash" begin
+        Sys.which("git") === nothing && return
+        mktempdir() do root
+            proj = _remote_delete_fixture(root, ["proj"])
+            @test DistSSHRun.remote_delete_root(proj) == "~/Repo"
+            @test DistSSHRun.remote_git_clone_dest(proj) == "~/Repo"
+        end
+        mktempdir() do root
+            proj = _remote_delete_fixture(root, ["a", "proj"])
+            @test DistSSHRun.remote_delete_root(proj) == "~/a/proj"
+            clone_err = try
+                DistSSHRun.remote_git_clone_dest(proj)
+                ""
+            catch e
+                e isa ArgumentError ? e.msg : sprint(showerror, e)
+            end
+            @test occursin("--remote-path", clone_err)
+            @test DistSSHRun.remote_delete_root(proj; cli_override = "/a/proj") == "/a/proj"
+            @test DistSSHRun.remote_delete_root(proj; cli_override = "/var/a/proj") == "/var/a/proj"
+            @test_throws ArgumentError DistSSHRun.remote_delete_root(proj; cli_override = "~")
+            @test_throws ArgumentError DistSSHRun.delete_remotes(String[], "~")
+            @test_throws ArgumentError DistSSHRun.delete_remotes(String[], "~/../u")
+            @test DistSSHRun._remote_path_forbidden("~/../u")
+            @test DistSSHRun._remote_path_forbidden("/a/../b")
+            @test !DistSSHRun._remote_path_forbidden("~/a/proj")
+        end
+        mktempdir() do root
+            proj = _remote_delete_fixture(root, ["x", "b", "proj"])
+            @test DistSSHRun.remote_delete_root(proj) == "~/b/proj"
+        end
+    end
+
+    @testset "delete shell stops when the path is ~ or /" begin
+        mktempdir() do d
+            home = joinpath(d, "home")
+            proj = joinpath(d, "proj")
+            mkdir(home)
+            mkdir(proj)
+            fake = joinpath(d, "bin")
+            mkdir(fake)
+            log = joinpath(d, "rm.log")
+            write(joinpath(fake, "rm"), "#!/bin/sh\necho called >> $(repr(log))\n")
+            chmod(joinpath(fake, "rm"), 0o755)
+            path = fake * ":" * get(ENV, "PATH", "")
+            home_script = DistSSHRun._remote_delete_shell(home)
+            allowed = DistSSHRun._remote_delete_shell(proj)
+            withenv("HOME" => home, "PATH" => path) do
+                refused = run(
+                    ignorestatus(pipeline(`sh -c $home_script`; stdout = devnull, stderr = devnull));
+                    wait = true,
+                )
+                @test refused.exitcode != 0
+                @test !isfile(log)
+                ran = run(
+                    ignorestatus(pipeline(`sh -c $allowed`; stdout = devnull, stderr = devnull));
+                    wait = true,
+                )
+                @test ran.exitcode == 0
+                @test isfile(log)
+            end
         end
     end
 end

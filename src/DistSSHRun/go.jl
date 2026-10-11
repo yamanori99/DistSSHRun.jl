@@ -314,7 +314,7 @@ end
 function _go_assert_remote_ready!(host::AbstractString, remote_root::AbstractString)
     rr = _remote_shell_path_word(remote_root)
     inner = "test -d $rr && test -f $rr/Project.toml"
-    cmd = _ssh_cmd([ssh_opts()..., String(host), inner])
+    cmd = _ssh_cmd([ssh_opts()..., _ssh_host_args(String(host), inner)...])
     out = IOBuffer()
     err = IOBuffer()
     proc = run(pipeline(ignorestatus(cmd), stdout = out, stderr = err), wait = true)
@@ -516,6 +516,7 @@ function _go_remote_slot_shell_inner(
     end
     jb = _remote_shell_path_word(julia_bin)
     log_q = _remote_shell_path_word(joinpath(slot_rel, "julia.stdout.log"))
+    exit_q = _remote_shell_path_word(joinpath(slot_rel, "go.exitcode"))
     job_id = resolved_kit_job_id()
     job_export = ""
     job_load = ""
@@ -523,8 +524,8 @@ function _go_remote_slot_shell_inner(
     if job_id !== nothing
         mark_rel = joinpath(slot_rel, kit_job_pkill_pattern(job_id))
         mark_q = _remote_shell_path_word(mark_rel)
-        # `#…` must be single-quoted: `_remote_shell_path_word` leaves it raw, and
-        # an unquoted word starting with `#` is a shell comment.
+        # The mark file is a shell comment. Quote it even though the path word
+        # is already quoted: the printf argument is the comment text.
         comment_q = "'" * kit_job_mark_comment(job_id) * "'"
         job_export = "export DISTSSHKIT_JOB_ID=$(_remote_shell_path_word(job_id)) && "
         job_mark = "printf '%s\\n' $comment_q > $mark_q && "
@@ -536,7 +537,7 @@ function _go_remote_slot_shell_inner(
         job_export,
         job_mark,
         "$jb$job_load --project=. $rel_q$args_s >$log_q 2>&1; ",
-        "ec=\$?; echo \$ec > $slot_q/go.exitcode; cat $log_q; exit \$ec",
+        "ec=\$?; echo \$ec > $exit_q; cat $log_q; exit \$ec",
     )
 end
 
@@ -557,7 +558,7 @@ function _go_run_remote_slot!(
     inner = _go_remote_slot_shell_inner(
         remote_root, slot_rel, rel, script_args, julia_bin,
     )
-    cmd = ignorestatus(_ssh_cmd([ssh_opts()..., String(host), inner]))
+    cmd = ignorestatus(_ssh_cmd([ssh_opts()..., _ssh_host_args(String(host), inner)...]))
     # Capture streams ourselves: piping to the parent's stdout can drop ssh exit codes.
     buf = IOBuffer()
     proc = run(pipeline(cmd; stdout = buf, stderr = buf); wait = true)
@@ -576,7 +577,7 @@ function _go_run_remote_slot!(
         remote_ec = string(rstrip(remote_root, '/'), "/", slot_rel, "/go.exitcode")
         run(
             pipeline(
-                _scp_cmd([ssh_opts()..., string(host, ":", remote_ec), ec_path]);
+                _scp_cmd([ssh_opts()..., _ssh_host_args(string(host, ":", remote_ec))..., ec_path]);
                 stdout = devnull,
                 stderr = devnull,
             );

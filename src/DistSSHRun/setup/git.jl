@@ -30,7 +30,7 @@ end
 function git_pull_remote_host!(host::AbstractString, remote_path::AbstractString)::Bool
     cmd = _git_pull_remote_inner(remote_path)
     try
-        run(pipeline(_ssh_cmd([ssh_opts()..., String(host), cmd]), stdout = devnull, stderr = devnull))
+        run(pipeline(_ssh_cmd([ssh_opts()..., _ssh_host_args(String(host), cmd)...]), stdout = devnull, stderr = devnull))
         return true
     catch e
         _rethrow_missing_host_tool(e)
