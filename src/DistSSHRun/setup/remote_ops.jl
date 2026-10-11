@@ -69,8 +69,8 @@ Delete remote repositories.
 Returns `(cancelled, succeeded, failed, hosts)`. Caller should use
 [`finish_host_op!`](@ref) so partial failure is not reported as success.
 Pass `confirm=false` to skip the typed `delete` prompt.
-The `setup --delete` CLI does that only after `--confirm-path` matches.
-`-y` and `DISTSSHKIT_YES` do not.
+The `setup --delete` CLI does that after `--confirm-path` matches, and also
+when `-y` / `DISTSSHKIT_YES` is set. That skip stops in 0.2.
 """
 function delete_remotes(
         hosts::Vector{String},

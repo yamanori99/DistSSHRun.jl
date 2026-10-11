@@ -8,10 +8,15 @@ using Test
     function _setup_capture(args)
         mktemp() do out_path, out_io
             mktemp() do err_path, err_io
-                code = withenv("DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "") do
-                    redirect_stdout(out_io) do
-                        redirect_stderr(err_io) do
-                            DistSSHRun.setup(args)
+                code = withenv(
+                    "DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "",
+                    "DISTSSHKIT_YES" => nothing,
+                ) do
+                    redirect_stdin(devnull) do
+                        redirect_stdout(out_io) do
+                            redirect_stderr(err_io) do
+                                DistSSHRun.setup(args)
+                            end
                         end
                     end
                 end
@@ -40,17 +45,22 @@ using Test
         combined = out * err
         @test occursin("child:NAME", combined) || occursin("parent[:N]", combined)
     end
-    let (code, out, err) = _setup_capture(["--delete", "--yes", "child:host1"])
-        @test code == 0
-        @test occursin("Would remove", out)
-        @test occursin("Pass --confirm-path '", out)
-        @test occursin("' to delete.", out)
-        @test !occursin("SSH preflight failed", out * err)
+    let (code, out, err) = withenv(
+            "DISTSSHKIT_TEST" => "1",
+            "DISTSSHKIT_TEST_SSH" => "/no/such/fake-ssh.jl",
+        ) do
+            _setup_capture(["--delete", "--yes", "child:host1"])
+        end
+        @test code == 1
+        @test occursin("still deletes", err)
+        @test occursin("0.2", err)
+        @test occursin("--confirm-path", err)
+        @test occursin("SSH preflight failed", out * err)
     end
     let (code, out, err) = _setup_capture(["--prune", "child:host1"])
         @test code == 0
-        @test occursin("Would remove", out)
-        @test occursin(".distsshkit/{go,drive,setup,runs}", out)
-        @test !occursin("SSH preflight failed", out * err)
+        @test occursin("Type 'prune' to confirm", out)
+        @test occursin("Cancelled.", out)
+        @test !occursin("SSH preflight", out * err)
     end
 end

@@ -19,15 +19,13 @@ using Test
         _with_tempdir() do state_dir
             proc, combined = _run_kit_setup(
                 setup_args = ["--delete", "--remote-path", remote, "child:host1"],
-                extra_env = merge(
-                    _fake_setup_remote_env(state_dir),
-                    Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1"),
-                ),
+                extra_env = _fake_setup_remote_env(state_dir),
             )
             @test proc.exitcode == 0
-            @test occursin("Would remove", combined)
-            @test occursin("Pass --confirm-path '~/dsk-setup-delete/App' to delete.", combined)
-            @test !occursin("SSH preflight failed", combined)
+            @test occursin("still deletes", combined)
+            @test occursin("0.2", combined)
+            @test occursin("Delete complete (1 host(s))", combined)
+            @test !occursin("Would remove", combined)
         end
         _with_tempdir() do state_dir
             proc, combined = _run_kit_setup(
