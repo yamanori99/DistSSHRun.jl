@@ -35,23 +35,29 @@ end
 
 # `nothing` means `--confirm-path` matched `expected` and the caller may delete.
 # Empty `given` prints Would remove and returns 0. A mismatch returns 1.
+# The path is single-quoted so a shell does not expand `~` before Julia sees it.
+function _confirm_path_quote(path::AbstractString)::String
+    return "'" * replace(String(path), "'" => "'\\''") * "'"
+end
+
 function _setup_confirm_gate(
         given::Vector{String},
         expected::AbstractString,
         detail::Vector{String},
     )::Union{Nothing, Cint}
+    shown = _confirm_path_quote(expected)
     if isempty(given)
         println(stdout, "Would remove")
         for line in detail
             println(stdout, "  ", line)
         end
-        println(stdout, "  Pass --confirm-path $(expected) to delete.")
+        println(stdout, "  Pass --confirm-path $(shown) to delete.")
         return Cint(0)
     end
     got = Set(strip(s) for s in given)
     if got != Set([strip(String(expected))])
         print_err("Error: "; bold = true)
-        println_fatal("--confirm-path does not match $(expected)")
+        println_fatal("--confirm-path does not match $(shown)")
         return Cint(1)
     end
     return nothing

@@ -43,6 +43,8 @@ using Test
     let (code, out, err) = _setup_capture(["--delete", "--yes", "child:host1"])
         @test code == 0
         @test occursin("Would remove", out)
+        @test occursin("Pass --confirm-path '", out)
+        @test occursin("' to delete.", out)
         @test !occursin("SSH preflight failed", out * err)
     end
     let (code, out, err) = _setup_capture(["--prune", "child:host1"])

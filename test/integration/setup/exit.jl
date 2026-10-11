@@ -26,6 +26,7 @@ using Test
             )
             @test proc.exitcode == 0
             @test occursin("Would remove", combined)
+            @test occursin("Pass --confirm-path '~/dsk-setup-delete/App' to delete.", combined)
             @test !occursin("SSH preflight failed", combined)
         end
         _with_tempdir() do state_dir
