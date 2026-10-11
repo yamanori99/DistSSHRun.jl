@@ -5,9 +5,9 @@ description: Process E2E .cov and upload to Codecov (flag e2e)
 runs:
   using: composite
   steps:
-    - uses: julia-actions/julia-processcoverage@v1
+    - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
     - name: Upload E2E coverage to Codecov
-      uses: codecov/codecov-action@v7
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
       with:
         files: lcov.info
         slug: ${{ github.repository }}

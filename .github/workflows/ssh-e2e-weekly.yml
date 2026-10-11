@@ -75,7 +75,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Log in to GHCR
         run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
         env:
@@ -100,15 +100,15 @@ jobs:
       packages: write
       id-token: write # Codecov OIDC (E2E coverage; not on PR E2E)
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@v3
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
         with:
           cache-scratchspaces: false
           delete-old-caches: false
-      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
       - name: Log in to GHCR
         run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
         env:
@@ -143,15 +143,15 @@ jobs:
       contents: read
       packages: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: julia-actions/cache@v3
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
         with:
           cache-scratchspaces: false
           delete-old-caches: false
-      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
       - name: Colima
         run: ./testenv/docker-ssh/scripts/setup-colima-ci.sh
       - name: Log in to GHCR
@@ -190,8 +190,8 @@ jobs:
       contents: read
       packages: read
     steps:
-      - uses: actions/checkout@v7
-      - uses: Vampire/setup-wsl@d1da7f2c0322a5ee4f24975344f67fc0f5baf364 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Vampire/setup-wsl@d1da7f2c0322a5ee4f24975344f67fc0f5baf364 # v7.0.0
         timeout-minutes: 10
         with:
           distribution: Ubuntu-24.04
@@ -199,7 +199,7 @@ jobs:
           additional-packages: >-
             ca-certificates curl git rsync openssh-client
             docker.io docker-compose-v2 iptables
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ci-cache/wsl-julia
           key: wsl-julia-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
