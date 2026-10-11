@@ -15,9 +15,40 @@ using Test
     end
 
     @testset "delete" begin
+        remote = "~/dsk-setup-delete/App"
         _with_tempdir() do state_dir
             proc, combined = _run_kit_setup(
-                setup_args = ["--delete", "child:host1"],
+                setup_args = ["--delete", "--remote-path", remote, "child:host1"],
+                extra_env = merge(
+                    _fake_setup_remote_env(state_dir),
+                    Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1"),
+                ),
+            )
+            @test proc.exitcode == 0
+            @test occursin("Would remove", combined)
+            @test !occursin("SSH preflight failed", combined)
+        end
+        _with_tempdir() do state_dir
+            proc, combined = _run_kit_setup(
+                setup_args = [
+                    "--delete", "--remote-path", remote, "--confirm-path", "/not/the/path",
+                    "child:host1",
+                ],
+                extra_env = merge(
+                    _fake_setup_remote_env(state_dir),
+                    Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1"),
+                ),
+            )
+            @test proc.exitcode == 1
+            @test occursin("does not match", combined)
+            @test !occursin("SSH preflight failed", combined)
+        end
+        _with_tempdir() do state_dir
+            proc, combined = _run_kit_setup(
+                setup_args = [
+                    "--delete", "--yes", "--remote-path", remote,
+                    "--confirm-path", remote, "child:host1",
+                ],
                 extra_env = merge(
                     _fake_setup_remote_env(state_dir),
                     Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1"),
@@ -28,7 +59,10 @@ using Test
         end
         _with_tempdir() do state_dir
             proc, combined = _run_kit_setup(
-                setup_args = ["--delete", "child:host1", "child:host2"],
+                setup_args = [
+                    "--delete", "--remote-path", remote, "--confirm-path", remote,
+                    "child:host1", "child:host2",
+                ],
                 extra_env = _fake_setup_remote_env(state_dir),
             )
             @test proc.exitcode == 0

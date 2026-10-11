@@ -65,7 +65,7 @@ end
         @testset "setup --delete (clean slate)" begin
             _e2e_announce("setup --delete (clean slate)")
             proc, out = _run_kit_setup(;
-                setup_args = ["--delete", "--remote-path", remote_root, setup_hosts...],
+                setup_args = ["--delete", "--remote-path", remote_root, "--confirm-path", remote_root, setup_hosts...],
                 project_root = proj,
                 extra_env = _e2e_base_env(),
             )
@@ -575,7 +575,7 @@ end
             oneshot_env = _ssh_e2e_env(; remote_project = oneshot)
             try
                 proc, out = _run_kit_setup(;
-                    setup_args = ["--delete", "--remote-path", oneshot, setup_hosts...],
+                    setup_args = ["--delete", "--remote-path", oneshot, "--confirm-path", oneshot, setup_hosts...],
                     project_root = proj,
                     extra_env = oneshot_env,
                 )
@@ -610,7 +610,7 @@ end
                 end
             finally
                 proc, out = _run_kit_setup(;
-                    setup_args = ["--delete", "--remote-path", oneshot, setup_hosts...],
+                    setup_args = ["--delete", "--remote-path", oneshot, "--confirm-path", oneshot, setup_hosts...],
                     project_root = proj,
                     extra_env = oneshot_env,
                 )
@@ -631,7 +631,7 @@ end
             isfile(out_csv) && rm(out_csv)
 
             proc, out = _run_kit_setup(;
-                setup_args = ["--delete", "--remote-path", tilde_root, setup_hosts...],
+                setup_args = ["--delete", "--remote-path", tilde_root, "--confirm-path", tilde_root, setup_hosts...],
                 project_root = proj,
                 extra_env = tilde_env,
             )
@@ -1011,7 +1011,7 @@ end
 
             proc, out = _run_kit_setup(;
                 setup_args = [
-                    "--delete", "--remote-path", git_root, setup_hosts...,
+                    "--delete", "--remote-path", git_root, "--confirm-path", git_root, setup_hosts...,
                 ],
                 project_root = proj,
                 extra_env = git_env,

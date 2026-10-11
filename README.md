@@ -19,6 +19,8 @@ Supported on **macOS, Linux, and WSL2 Ubuntu** (not native Windows).
 The longer guide is the
 [DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/stable/).
 
+DistSSHRun UUID: `b568025c-2759-4ef1-8b14-17d00e2cd000`.
+
 ## Install
 
 ```julia

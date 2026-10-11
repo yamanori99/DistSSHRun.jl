@@ -6,6 +6,7 @@ GitHub Releases may copy these sections (`Release notes:` on
 
 ## Unreleased
 
+- `setup --delete` and `setup --prune` delete only when `--confirm-path` matches the computed path. Without it they print `Would remove` and exit 0. `-y` and `DISTSSHKIT_YES` do not authorize them.
 - `setup --delete` and `setup --clone` refuse `~`, `/`, and a single directory under `/`.
 - `setup --clone` also refuses when the git root would land on one of those. Pass `--remote-path`.
 - A path containing `.` or `..` is refused. `setup --delete` stops when the remote path resolves to `~` or `/`.

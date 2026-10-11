@@ -25,7 +25,9 @@ reviews:
       instructions: >
         Placement tokens, go / drive flags, and execute! stay DistSSHKit's.
         Flag this PR only if it copies those into Queue. qhost: names the
-        queue host, not a worker. Stay inside the PR's stated scope.
+        queue host, not a worker. Flag a remote shell string that interpolates
+        a value without _remote_sh_quote or _remote_shell_path_word.
+        Stay inside the PR's stated scope.
   auto_review:
     enabled: true
     drafts: false

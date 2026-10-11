@@ -32,6 +32,30 @@ end
 
 # The included module already binds `resolve_remote_project_root`.
 # Key off the setup parser, which that import does not bring in.
+
+# `nothing` means `--confirm-path` matched `expected` and the caller may delete.
+# Empty `given` prints Would remove and returns 0. A mismatch returns 1.
+function _setup_confirm_gate(
+        given::Vector{String},
+        expected::AbstractString,
+        detail::Vector{String},
+    )::Union{Nothing, Cint}
+    if isempty(given)
+        println(stdout, "Would remove")
+        for line in detail
+            println(stdout, "  ", line)
+        end
+        println(stdout, "  Pass --confirm-path $(expected) to delete.")
+        return Cint(0)
+    end
+    got = Set(strip(s) for s in given)
+    if got != Set([strip(String(expected))])
+        print_err("Error: "; bold = true)
+        println_fatal("--confirm-path does not match $(expected)")
+        return Cint(1)
+    end
+    return nothing
+end
 if !isdefined(@__MODULE__, :parse_setup_args)
     include(joinpath(@__DIR__, "setup", "_using.jl"))
 end
@@ -116,8 +140,9 @@ if !isdefined(@__MODULE__, :setup_main)
             kit_println()
 
             # Mutating / multi-host SSH ops: fail fast before confirmations.
-            if mode === :delete || mode === :clone || mode === :rsync_push ||
-                    mode === :instantiate || mode === :runtest || mode === :prune
+            # `--delete` and `--prune` stay off SSH until `--confirm-path` matches.
+            if mode === :clone || mode === :rsync_push ||
+                    mode === :instantiate || mode === :runtest
                 if !preflight_setup_ssh(opts.hosts)
                     print_err("SSH preflight failed. Fix connectivity, then retry.")
                     kit_println()
@@ -137,7 +162,26 @@ if !isdefined(@__MODULE__, :setup_main)
                     project;
                     cli_override = opts.remote_path_override,
                 )
-                return Cint(finish_host_op!("Delete", delete_remotes(opts.hosts, delete_path)) ? 0 : 1)
+                gate = _setup_confirm_gate(
+                    opts.confirm_paths,
+                    delete_path,
+                    String[
+                        "Remote path: $(delete_path)",
+                        "Hosts: $(join(opts.hosts, ", "))",
+                    ],
+                )
+                gate isa Cint && return gate
+                if !preflight_setup_ssh(opts.hosts)
+                    print_err("SSH preflight failed. Fix connectivity, then retry.")
+                    kit_println()
+                    return Cint(1)
+                end
+                return Cint(
+                    finish_host_op!(
+                        "Delete",
+                        delete_remotes(opts.hosts, delete_path; confirm = false),
+                    ) ? 0 : 1,
+                )
             end
 
             if mode === :clone
@@ -217,6 +261,22 @@ if !isdefined(@__MODULE__, :setup_main)
             end
 
             if mode === :prune
+                gate = _setup_confirm_gate(
+                    opts.confirm_paths,
+                    remote_path,
+                    String[
+                        "Local project: $(project)",
+                        "Remote path: $(remote_path)",
+                        "Leaves: .distsshkit/{go,drive,setup,runs}",
+                        "Hosts: $(join(opts.hosts, ", "))",
+                    ],
+                )
+                gate isa Cint && return gate
+                if !preflight_setup_ssh(opts.hosts)
+                    print_err("SSH preflight failed. Fix connectivity, then retry.")
+                    kit_println()
+                    return Cint(1)
+                end
                 return Cint(
                     finish_host_op!(
                             "Prune",
@@ -224,6 +284,7 @@ if !isdefined(@__MODULE__, :setup_main)
                                 opts.hosts,
                                 remote_path,
                                 project;
+                                confirm = false,
                                 older_days = opts.older_days,
                                 id = opts.prune_id,
                                 skip_setup = DistSSHRun.setup_log_dir(project),
