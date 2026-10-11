@@ -19,10 +19,12 @@ function main(args)
     mkpath(dir)
     cases = Pair{String, String}[
         "juliaup-locate" => R._juliaup_locate_sh(R.remote_juliaup_candidates()),
-        "juliaup-locate-nasty" => R._juliaup_locate_sh([
-            "/opt/a'b \$(echo pwned)",
-            raw"$HOME/.juliaup/bin/juliaup",
-        ]),
+        "juliaup-locate-nasty" => R._juliaup_locate_sh(
+            [
+                "/opt/a'b \$(echo pwned)",
+                raw"$HOME/.juliaup/bin/juliaup",
+            ]
+        ),
         "juliaup-align" => R._juliaup_align_remote_sh(channel),
         "juliaup-update" => R._juliaup_update_remote_sh(),
         "juliaup-add" => R._juliaup_add_remote_sh(channel),
