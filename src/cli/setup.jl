@@ -184,9 +184,9 @@ if !isdefined(@__MODULE__, :setup_main)
                 end
                 return Cint(
                     finish_host_op!(
-                        "Delete",
-                        delete_remotes(opts.hosts, delete_path; confirm = false),
-                    ) ? 0 : 1,
+                            "Delete",
+                            delete_remotes(opts.hosts, delete_path; confirm = false),
+                        ) ? 0 : 1,
                 )
             end
 

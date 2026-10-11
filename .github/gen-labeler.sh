@@ -10,7 +10,7 @@
 #     unrelated files (CONTRIBUTING.md → area:test).
 #   - Documenter → area:docs (docs/**)
 #   - GitHub / repo prose → area:project-docs (README, NEWS, CONTRIBUTING,
-#     SECURITY)
+#     SECURITY, AGENTS, CODEOWNERS)
 #   - .github/**, codecov.yml, .coderabbit.yaml → area:ci
 #
 # Product tests live only under the trees in `product_test_trees`. Shared
@@ -48,6 +48,8 @@ trap 'rm -f "$tmp"' EXIT
           - "NEWS.md"
           - "CONTRIBUTING.md"
           - "SECURITY.md"
+          - "AGENTS.md"
+          - "CODEOWNERS"
 
 "area:ci":
   - changed-files:
