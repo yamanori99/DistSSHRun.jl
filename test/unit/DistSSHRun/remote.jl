@@ -1,5 +1,15 @@
 using Test
 
+function _remote_delete_fixture(root::String, parts::Vector{String})
+    repo = joinpath(root, "Repo")
+    proj = joinpath(repo, parts...)
+    mkpath(proj)
+    write(joinpath(proj, "Project.toml"), "name = \"P\"\n")
+    write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+    run(pipeline(`git -C $repo init -q`; stdout = devnull, stderr = devnull))
+    return proj
+end
+
 @testset "remote" begin
     let r = DistSSHRun.get_local_resources()
         @test r.total_gb > 0
@@ -81,25 +91,13 @@ using Test
 
     @testset "delete root does not climb to home or slash" begin
         Sys.which("git") === nothing && return
-        function lay(parts::Vector{String})
-            root = mktempdir()
-            repo = joinpath(root, "Repo")
-            proj = joinpath(repo, parts...)
-            mkpath(proj)
-            write(joinpath(proj, "Project.toml"), "name = \"P\"\n")
-            write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
-            run(pipeline(`git -C $repo init -q`; stdout = devnull, stderr = devnull))
-            return root, proj
-        end
-        root, proj = lay(["proj"])
-        try
+        mktempdir() do root
+            proj = _remote_delete_fixture(root, ["proj"])
             @test DistSSHRun.remote_delete_root(proj) == "~/Repo"
             @test DistSSHRun.remote_git_clone_dest(proj) == "~/Repo"
-        finally
-            rm(root; recursive = true)
         end
-        root, proj = lay(["a", "proj"])
-        try
+        mktempdir() do root
+            proj = _remote_delete_fixture(root, ["a", "proj"])
             @test DistSSHRun.remote_delete_root(proj) == "~/a/proj"
             clone_err = try
                 DistSSHRun.remote_git_clone_dest(proj)
@@ -116,14 +114,10 @@ using Test
             @test DistSSHRun._remote_path_forbidden("~/../u")
             @test DistSSHRun._remote_path_forbidden("/a/../b")
             @test !DistSSHRun._remote_path_forbidden("~/a/proj")
-        finally
-            rm(root; recursive = true)
         end
-        root, proj = lay(["x", "b", "proj"])
-        try
+        mktempdir() do root
+            proj = _remote_delete_fixture(root, ["x", "b", "proj"])
             @test DistSSHRun.remote_delete_root(proj) == "~/b/proj"
-        finally
-            rm(root; recursive = true)
         end
     end
 
