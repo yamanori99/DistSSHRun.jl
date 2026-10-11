@@ -57,7 +57,7 @@ using Test
         tilde = "~/App.jl"
         abs = "/opt/App.jl"
         pq_abs = DistSSHRun._remote_shell_path_word(abs)
-        @test DistSSHRun._git_pull_remote_inner(tilde) == "cd ~/App.jl && git pull"
+        @test DistSSHRun._git_pull_remote_inner(tilde) == "cd ~/'App.jl' && git pull"
         @test DistSSHRun._git_pull_remote_inner(abs) == "cd $pq_abs && git pull"
     end
 
@@ -68,6 +68,52 @@ using Test
         end
         if Sys.which("ssh") !== nothing
             @test !DistSSHRun._remote_ssh_ok("no-such-host.invalid")
+        end
+    end
+
+    @testset "remote shell quotes metacharacters" begin
+        @test DistSSHRun._remote_shell_path_word("/srv/x;id") == "'/srv/x;id'"
+        @test DistSSHRun._remote_shell_path_word("~/Repo") == "~/'Repo'"
+        @test DistSSHRun._remote_shell_path_word("~/a/b c") == "~/'a/b c'"
+        @test DistSSHRun._ssh_host_args("host", "true") == ["--", "host", "true"]
+        @test_throws ArgumentError DistSSHRun.parse_placement_token("child:-oBatchMode=yes")
+    end
+
+    @testset "delete root does not climb to home or slash" begin
+        Sys.which("git") === nothing && return
+        function lay(parts::Vector{String})
+            root = mktempdir()
+            repo = joinpath(root, "Repo")
+            proj = joinpath(repo, parts...)
+            mkpath(proj)
+            write(joinpath(proj, "Project.toml"), "name = \"P\"\n")
+            write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+            run(pipeline(`git -C $repo init -q`; stdout = devnull, stderr = devnull))
+            return root, proj
+        end
+        root, proj = lay(["proj"])
+        try
+            @test DistSSHRun.remote_delete_root(proj) == "~/Repo"
+            @test DistSSHRun.remote_git_clone_dest(proj) == "~/Repo"
+        finally
+            rm(root; recursive = true)
+        end
+        root, proj = lay(["a", "proj"])
+        try
+            @test DistSSHRun.remote_delete_root(proj) == "~/a/proj"
+            @test DistSSHRun.remote_git_clone_dest(proj) == "~/a/proj"
+            @test DistSSHRun.remote_delete_root(proj; cli_override = "/a/proj") == "/a/proj"
+            @test DistSSHRun.remote_delete_root(proj; cli_override = "/var/a/proj") == "/var/a/proj"
+            @test_throws ArgumentError DistSSHRun.remote_delete_root(proj; cli_override = "~")
+            @test_throws ArgumentError DistSSHRun.delete_remotes(String[], "~")
+        finally
+            rm(root; recursive = true)
+        end
+        root, proj = lay(["x", "b", "proj"])
+        try
+            @test DistSSHRun.remote_delete_root(proj) == "~/b/proj"
+        finally
+            rm(root; recursive = true)
         end
     end
 end

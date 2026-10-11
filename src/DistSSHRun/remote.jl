@@ -47,7 +47,7 @@ function _pkill_remote_julia_workers!(host::String)::Bool
         return false
     end
     for pattern in JULIA_WORKER_PKILL_PATTERNS
-        inner = "pkill -9 -f $(Base.shell_escape(pattern))"
+        inner = "pkill -9 -f $(_remote_sh_quote(pattern))"
         try
             run(pipeline(_host_sync_remote_shell_cmd(host, inner); stdout = devnull, stderr = devnull))
         catch e
@@ -142,7 +142,7 @@ function _pkill_remote_tagged_workers!(host::String, job_id::AbstractString)::Bo
     if !_remote_ssh_ok(host)
         return false
     end
-    inner = "pkill -9 -f $(Base.shell_escape(kit_job_pkill_pattern(job_id)))"
+    inner = "pkill -9 -f $(_remote_sh_quote(kit_job_pkill_pattern(job_id)))"
     try
         run(pipeline(_host_sync_remote_shell_cmd(host, inner); stdout = devnull, stderr = devnull))
     catch e

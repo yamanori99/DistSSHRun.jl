@@ -149,8 +149,8 @@ function _prune_remote_shell(
     pq = _remote_shell_path_word(remote_path)
     older = older_days === nothing ? "" : string(Int(older_days))
     idn = id === nothing ? "" : String(id)
-    idq = Base.shell_escape(idn)
-    older_q = Base.shell_escape(older)
+    idq = _remote_sh_quote(idn)
+    older_q = _remote_sh_quote(older)
     return """
     # DISTSSHKIT_PRUNE_KIT_LEAVES
     root=$pq

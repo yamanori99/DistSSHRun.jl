@@ -55,6 +55,7 @@ function delete_remotes(
         remote_path::String;
         confirm::Bool = true,
     )::NamedTuple
+    _checked_remote_dest(remote_path)
     if confirm && !kit_noninteractive()
         cancelled = with_kit_progress_suspended() do
             print_err("  This will DELETE repositories on all hosts via SSH.\n")
@@ -144,7 +145,7 @@ function clone_to_remotes(
     end
 
     pq = _remote_shell_path_word(remote_path)
-    uq = Base.shell_escape(String(clone_url))
+    uq = _remote_sh_quote(String(clone_url))
     succeeded = 0
     failed = 0
     host_results = HostResult[]
@@ -159,7 +160,7 @@ function clone_to_remotes(
                 end
                 read(
                     pipeline(
-                        _host_sync_remote_shell_cmd(host, "git clone $uq $pq 2>&1");
+                        _host_sync_remote_shell_cmd(host, "git clone -- $uq $pq 2>&1");
                         stderr = err_buf,
                     ),
                     String,

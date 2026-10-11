@@ -208,8 +208,9 @@ using Dates
             "julia",
         )
         @test startswith(inner, "cd ")
-        @test occursin("cd ~/proj && mkdir -p demos/output/go_sim/root@192.0.2.10-1", inner)
-        @test occursin(">demos/output/go_sim/root@192.0.2.10-1/julia.stdout.log", inner)
+        slot = "demos/output/go_sim/root@192.0.2.10-1"
+        @test occursin("cd $(DistSSHRun._remote_shell_path_word("~/proj")) && mkdir -p $(DistSSHRun._remote_shell_path_word(slot))", inner)
+        @test occursin(">" * DistSSHRun._remote_shell_path_word(slot * "/julia.stdout.log"), inner)
         @test occursin("go.exitcode", inner)
         @test occursin("echo \$ec >", inner)
 
@@ -220,7 +221,7 @@ using Dates
             String[],
             "/opt/Julia 1.12/bin/julia",
         )
-        @test occursin(Base.shell_escape("/opt/Julia 1.12/bin/julia"), spaced)
+        @test occursin(DistSSHRun._remote_shell_path_word("/opt/Julia 1.12/bin/julia"), spaced)
 
         with_args = DistSSHRun._go_remote_slot_shell_inner(
             "~/proj",
@@ -229,7 +230,18 @@ using Dates
             ["8", "a b"],
             "julia",
         )
-        @test occursin("julia --project=. job.jl 8 " * Base.shell_escape("a b"), with_args)
+        @test occursin(
+            string(
+                DistSSHRun._remote_shell_path_word("julia"),
+                " --project=. ",
+                DistSSHRun._remote_shell_path_word("job.jl"),
+                " ",
+                DistSSHRun._remote_shell_path_word("8"),
+                " ",
+                DistSSHRun._remote_shell_path_word("a b"),
+            ),
+            with_args,
+        )
 
         withenv("DISTSSHKIT_JOB_ID" => "repro-1") do
             tagged = DistSSHRun._go_remote_slot_shell_inner(
