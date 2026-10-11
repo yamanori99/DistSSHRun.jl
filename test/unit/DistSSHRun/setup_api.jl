@@ -441,4 +441,106 @@ using Test
             end
         end
     end
+
+    @testset "confirm_path" begin
+        _with_fake_remotes() do state_dir
+            _with_tempdir() do proj
+                host = "host1"
+                slot = replace(host, r"[@:/]" => "_")
+                tree = joinpath(state_dir, slot, "tree")
+                mkpath(tree)
+                touch(joinpath(tree, "keepme.txt"))
+                write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
+                session = DistSSHRun.KitSession(
+                    project = proj,
+                    workers = ["child:$host"],
+                    remote = "~/App.jl",
+                    yes = false,
+                    quiet = true,
+                )
+                delete_path = DistSSHRun.remote_delete_root(proj; cli_override = "~/App.jl")
+                del = DistSSHRun.setup!(session, :delete; confirm_path = delete_path)
+                @test del.ok && !del.cancelled
+                @test !isdir(joinpath(state_dir, slot))
+            end
+        end
+
+        _with_fake_remotes() do state_dir
+            _with_tempdir() do proj
+                host = "host1"
+                slot = replace(host, r"[@:/]" => "_")
+                tree = joinpath(state_dir, slot, "tree")
+                mkpath(tree)
+                touch(joinpath(tree, "keepme.txt"))
+                mkpath(joinpath(tree, ".distsshkit", "go", "batch_a"))
+                write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
+                session = DistSSHRun.KitSession(
+                    project = proj,
+                    workers = ["child:$host"],
+                    remote = "~/App.jl",
+                    yes = false,
+                    quiet = true,
+                )
+                prune_path = DistSSHRun.session_remote_root(session)
+                pr = DistSSHRun.setup!(session, :prune; confirm_path = prune_path)
+                @test pr.ok && !pr.cancelled
+                @test isfile(joinpath(tree, "keepme.txt"))
+                @test !isdir(joinpath(tree, ".distsshkit", "go", "batch_a"))
+            end
+        end
+
+        _with_fake_remotes() do state_dir
+            _with_tempdir() do proj
+                host = "host1"
+                slot = replace(host, r"[@:/]" => "_")
+                tree = joinpath(state_dir, slot, "tree")
+                mkpath(tree)
+                touch(joinpath(tree, "keepme.txt"))
+                write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
+                session = DistSSHRun.KitSession(
+                    project = proj,
+                    workers = ["child:$host"],
+                    remote = "~/App.jl",
+                    yes = true,
+                    quiet = true,
+                )
+                log_dir = DistSSHRun.setup_log_dir(session.project)
+                @test !isdir(log_dir)
+                err = try
+                    DistSSHRun.setup!(session, :delete; confirm_path = "/not/the/path")
+                    nothing
+                catch e
+                    e
+                end
+                @test err isa ArgumentError
+                @test occursin("confirm_path", err.msg)
+                @test !isdir(log_dir)
+                @test isfile(joinpath(tree, "keepme.txt"))
+
+                rsync_err = try
+                    DistSSHRun.setup!(session, :rsync; confirm_path = "~/App.jl")
+                    nothing
+                catch e
+                    e
+                end
+                @test rsync_err isa ArgumentError
+                @test occursin("confirm_path", rsync_err.msg)
+                @test isfile(joinpath(tree, "keepme.txt"))
+
+                for modes in ((:delete, :prune), (:delete, :rsync))
+                    chain_err = try
+                        DistSSHRun.setup!(session, modes...; confirm_path = "~/App.jl")
+                        nothing
+                    catch e
+                        e
+                    end
+                    @test chain_err isa ArgumentError
+                    @test occursin("confirm_path", chain_err.msg)
+                    @test occursin("multiple modes", chain_err.msg)
+                end
+                @test isfile(joinpath(tree, "keepme.txt"))
+                @test !isdir(log_dir)
+            end
+        end
+    end
 end

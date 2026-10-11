@@ -23,7 +23,7 @@ Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup --…`.
 
 | `mode` | CLI | Notes |
 | --- | --- | --- |
-| `:delete` | `--delete` | Destructive; confirm unless `session.yes` |
+| `:delete` | `--delete` | Destructive. A `confirm_path` that matches the delete path deletes even when `yes=false`. Without it, confirm unless `session.yes` |
 | `:rsync` | `--rsync` | Refuses nonempty remote; delete first to replace |
 | `:clone` | `--clone` | Requires `repo=`; clone runs **on the remote** |
 | `:sync` | `--sync` | Local push + remote pull (git remotes); confirm unless `session.yes` |
@@ -34,10 +34,11 @@ Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup --…`.
 | `:check` | `--check` | `ignore_julia_version=`, `check_code_sync=` |
 | `:runtest` | `--runtest` | job `Pkg.test()` on remotes; `julia=` |
 | `:cleanup` | `--cleanup` | Kill stale workers (no confirm) |
-| `:prune` | `--prune` | `.distsshkit` go/drive/setup/runs leaves; confirm unless `session.yes`. `older_days=`, `id=` |
+| `:prune` | `--prune` | `.distsshkit` go/drive/setup/runs leaves. A `confirm_path` that matches the remote project path deletes even when `yes=false`. Without it, confirm unless `session.yes`. `older_days=`, `id=` |
 
-Confirmations follow `session.yes` (CLI `-y`). Multiple modes run in order and
-stop on the first failure:
+Confirmations follow `session.yes` (CLI `-y`). A matching `confirm_path` on
+`:delete` or `:prune` deletes even when `yes=false`. Any other mode rejects
+`confirm_path`. Multiple modes run in order and stop on the first failure:
 
 ```julia
 session = KitSession(workers=["child:user@h1"], remote="~/proj", yes=true)
@@ -57,8 +58,10 @@ function setup!(
         check_code_sync::Bool = true,
         older_days::Union{Nothing, Integer} = nothing,
         id::Union{Nothing, AbstractString} = nothing,
+        confirm_path::Union{Nothing, AbstractString} = nothing,
     )::SyncResult
     _setup_bang_preflight!(session, mode; repo = repo)
+    bound_path = _setup_bind_confirm_path!(session, mode, confirm_path)
     log_dir = setup_log_dir(session.project)
     step = setup_progress_step_name(mode)
     return _with_kit_inproc_run!(:setup) do
@@ -77,6 +80,7 @@ function setup!(
                 check_code_sync = check_code_sync,
                 older_days = older_days,
                 id = id,
+                bound_path = bound_path,
             )
         end
     end
@@ -88,7 +92,8 @@ function setup!(session::KitSession, mode::Symbol, more::Symbol...; kwargs...)
         throw(
             ArgumentError(
                 "setup! with multiple modes does not take keyword arguments; " *
-                    "call setup!(session, mode; …) per step, or pass modes that need no kwargs",
+                    "call setup!(session, mode; …) per step, or pass modes that need no kwargs. " *
+                    "Pass confirm_path only on setup!(session, :delete) or setup!(session, :prune)",
             )
         )
     end
@@ -137,6 +142,33 @@ function _setup_bang_preflight!(
     return nothing
 end
 
+"""Computed delete or prune path when `confirm_path` matches. `nothing` when it was omitted."""
+function _setup_bind_confirm_path!(
+        session::KitSession,
+        mode::Symbol,
+        confirm_path::Union{Nothing, AbstractString},
+    )::Union{Nothing, String}
+    confirm_path === nothing && return nothing
+    if mode !== :delete && mode !== :prune
+        throw(
+            ArgumentError(
+                "setup! confirm_path is only valid on setup!(session, :delete) or setup!(session, :prune)",
+            )
+        )
+    end
+    given = strip(String(confirm_path))
+    isempty(given) && throw(ArgumentError("setup! confirm_path must be a non-empty path"))
+    expected = mode === :delete ?
+        remote_delete_root(session.project; cli_override = session.remote) :
+        session_remote_root(session)
+    strip(expected) == given || throw(
+        ArgumentError(
+            "setup! confirm_path does not match $(repr(strip(expected)))",
+        )
+    )
+    return String(expected)
+end
+
 function _setup_one!(
         session::KitSession,
         mode::Symbol;
@@ -146,16 +178,21 @@ function _setup_one!(
         check_code_sync::Bool = true,
         older_days::Union{Nothing, Integer} = nothing,
         id::Union{Nothing, AbstractString} = nothing,
+        bound_path::Union{Nothing, AbstractString} = nothing,
     )::SyncResult
     _setup_bang_preflight!(session, mode; repo = repo)
     hosts = _setup_bang_hosts!(session; allow_parent = setup_mode_allows_parent(mode))
-    remote_path = session_remote_root(session)
+    remote_path = bound_path !== nothing && mode === :prune ?
+        String(bound_path) :
+        session_remote_root(session)
     julia_path = isempty(strip(String(julia))) ? "auto" : String(julia)
 
     if mode === :delete
         preflight_setup_ssh(hosts) || return SyncResult(true, HostResult[]; ok = false)
-        delete_path = remote_delete_root(session.project; cli_override = session.remote)
-        raw = delete_remotes(hosts, delete_path; confirm = !session.yes)
+        delete_path = bound_path !== nothing ?
+            String(bound_path) :
+            remote_delete_root(session.project; cli_override = session.remote)
+        raw = delete_remotes(hosts, delete_path; confirm = bound_path === nothing && !session.yes)
         return _sync_result_from_host_op(raw)
     elseif mode === :rsync
         return sync!(session; mode = :rsync)
@@ -230,7 +267,7 @@ function _setup_one!(
             hosts,
             remote_path,
             session.project;
-            confirm = !session.yes,
+            confirm = bound_path === nothing && !session.yes,
             older_days = older_days,
             id = id,
             skip_setup = log_dir,
