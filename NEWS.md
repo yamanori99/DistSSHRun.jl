@@ -7,7 +7,7 @@ GitHub Releases may copy these sections (`Release notes:` on
 ## Unreleased
 
 - `setup!(session, :delete; confirm_path)` and `setup!(session, :prune; confirm_path)` delete when that path matches the computed path, even when `yes=false`. Omitting `confirm_path` still follows `session.yes`. Other modes reject `confirm_path`.
-- `setup --delete` and `setup --prune` delete only when `--confirm-path` matches the computed path. Without it they print `Would remove` and exit 0. The path in that line is single-quoted so a shell does not expand `~`. `-y` and `DISTSSHKIT_YES` do not authorize them.
+- `setup --delete` and `setup --prune` delete when `--confirm-path` matches the computed path. A mismatch names that path in single quotes and exits 1. Without `--confirm-path`, `-y` and `DISTSSHKIT_YES` still skip the prompt and delete. That skip stops in 0.2. With neither, they ask for `delete` or `prune`.
 - `setup --delete` and `setup --clone` refuse `~`, `/`, and a single directory under `/`.
 - `setup --clone` also refuses when the git root would land on one of those. Pass `--remote-path`.
 - A path containing `.` or `..` is refused. `setup --delete` stops when the remote path resolves to `~` or `/`.

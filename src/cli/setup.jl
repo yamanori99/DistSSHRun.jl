@@ -33,9 +33,9 @@ end
 # The included module already binds `resolve_remote_project_root`.
 # Key off the setup parser, which that import does not bring in.
 
-# `nothing` means `--confirm-path` matched `expected` and the caller may delete.
-# Empty `given` prints Would remove and returns 0. A mismatch returns 1.
-# The path is single-quoted so a shell does not expand `~` before Julia sees it.
+# `nothing` means the caller may delete.
+# Empty `given` is not a grant: the caller prompts, unless `-y` / `DISTSSHKIT_YES`.
+# A mismatch returns 1. The path is single-quoted so a shell does not expand `~`.
 function _confirm_path_quote(path::AbstractString)::String
     return "'" * replace(String(path), "'" => "'\\''") * "'"
 end
@@ -43,17 +43,9 @@ end
 function _setup_confirm_gate(
         given::Vector{String},
         expected::AbstractString,
-        detail::Vector{String},
     )::Union{Nothing, Cint}
+    isempty(given) && return nothing
     shown = _confirm_path_quote(expected)
-    if isempty(given)
-        println(stdout, "Would remove")
-        for line in detail
-            println(stdout, "  ", line)
-        end
-        println(stdout, "  Pass --confirm-path $(shown) to delete.")
-        return Cint(0)
-    end
     got = Set(strip(s) for s in given)
     if got != Set([strip(String(expected))])
         print_err("Error: "; bold = true)
@@ -61,6 +53,22 @@ function _setup_confirm_gate(
         return Cint(1)
     end
     return nothing
+end
+
+# `true` asks for the typed prompt (`confirm = true`).
+# `-y` / `DISTSSHKIT_YES` skips it until 0.2 and says so. A matching
+# `--confirm-path` skips it without that note.
+function _setup_legacy_yes_confirm(confirm_paths::Vector{String})::Bool
+    isempty(confirm_paths) || return false
+    if DistSSHRun.kit_noninteractive()
+        println(
+            stderr,
+            "  -y / DISTSSHKIT_YES still deletes setup --delete and setup --prune. " *
+                "This stops in 0.2. Pass --confirm-path.",
+        )
+        return false
+    end
+    return true
 end
 if !isdefined(@__MODULE__, :parse_setup_args)
     include(joinpath(@__DIR__, "setup", "_using.jl"))
@@ -168,16 +176,10 @@ if !isdefined(@__MODULE__, :setup_main)
                     project;
                     cli_override = opts.remote_path_override,
                 )
-                gate = _setup_confirm_gate(
-                    opts.confirm_paths,
-                    delete_path,
-                    String[
-                        "Remote path: $(delete_path)",
-                        "Hosts: $(join(opts.hosts, ", "))",
-                    ],
-                )
+                gate = _setup_confirm_gate(opts.confirm_paths, delete_path)
                 gate isa Cint && return gate
-                if !preflight_setup_ssh(opts.hosts)
+                ask = _setup_legacy_yes_confirm(opts.confirm_paths)
+                if !ask && !preflight_setup_ssh(opts.hosts)
                     print_err("SSH preflight failed. Fix connectivity, then retry.")
                     kit_println()
                     return Cint(1)
@@ -185,7 +187,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 return Cint(
                     finish_host_op!(
                             "Delete",
-                            delete_remotes(opts.hosts, delete_path; confirm = false),
+                            delete_remotes(opts.hosts, delete_path; confirm = ask),
                         ) ? 0 : 1,
                 )
             end
@@ -267,18 +269,10 @@ if !isdefined(@__MODULE__, :setup_main)
             end
 
             if mode === :prune
-                gate = _setup_confirm_gate(
-                    opts.confirm_paths,
-                    remote_path,
-                    String[
-                        "Local project: $(project)",
-                        "Remote path: $(remote_path)",
-                        "Leaves: .distsshkit/{go,drive,setup,runs}",
-                        "Hosts: $(join(opts.hosts, ", "))",
-                    ],
-                )
+                gate = _setup_confirm_gate(opts.confirm_paths, remote_path)
                 gate isa Cint && return gate
-                if !preflight_setup_ssh(opts.hosts)
+                ask = _setup_legacy_yes_confirm(opts.confirm_paths)
+                if !ask && !preflight_setup_ssh(opts.hosts)
                     print_err("SSH preflight failed. Fix connectivity, then retry.")
                     kit_println()
                     return Cint(1)
@@ -290,7 +284,7 @@ if !isdefined(@__MODULE__, :setup_main)
                                 opts.hosts,
                                 remote_path,
                                 project;
-                                confirm = false,
+                                confirm = ask,
                                 older_days = opts.older_days,
                                 id = opts.prune_id,
                                 skip_setup = DistSSHRun.setup_log_dir(project),

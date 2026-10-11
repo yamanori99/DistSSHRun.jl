@@ -43,7 +43,7 @@ function show_requirements(; io::IO = stdout)
         "  $(KIT_QUIET_FLAG_HELP)",
         "  $(KIT_PROGRESS_FLAG_HELP)",
         "  $(KIT_VERBOSE_FLAG_HELP)",
-        "  -y, --yes           skip confirmations (not --delete or --prune)",
+        "  -y, --yes           skip confirmations (delete/prune stop in 0.2)",
         "  --confirm-path PATH  with --delete or --prune: the computed path (quote ~)",
         "  --hosts CSV          child:NAME[:N] (:N stripped)",
         "  --hosts-file PATH    one token per line (:N stripped)",
