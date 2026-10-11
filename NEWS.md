@@ -4,7 +4,7 @@ User-facing changes.
 GitHub Releases may copy these sections (`Release notes:` on
 `@JuliaRegistrator register`).
 
-## Unreleased
+## 0.1.6
 
 - `setup!(session, :delete; confirm_path)` and `setup!(session, :prune; confirm_path)` delete when that path matches the computed path, even when `yes=false`. Omitting `confirm_path` still follows `session.yes`. Other modes reject `confirm_path`.
 - `setup --delete` and `setup --prune` delete when `--confirm-path` matches the computed path. A mismatch names that path in single quotes and exits 1. Without `--confirm-path`, `-y` and `DISTSSHKIT_YES` still skip the prompt and delete. That skip stops in 0.2. With neither, they ask for `delete` or `prune`.
