@@ -2,7 +2,7 @@
 
 
 function _host_sync_rsync_transport()::String
-    custom = strip(get(ENV, "DISTSSHKIT_TEST_SSH", ""))
+    custom = _test_doubles_on() ? strip(get(ENV, "DISTSSHKIT_TEST_SSH", "")) : ""
     if !isempty(custom)
         return join(_test_double_julia_argv(custom), " ")
     end
@@ -10,7 +10,7 @@ function _host_sync_rsync_transport()::String
 end
 
 function _host_sync_rsync_argv()::Vector{String}
-    custom = strip(get(ENV, "DISTSSHKIT_TEST_RSYNC", ""))
+    custom = _test_doubles_on() ? strip(get(ENV, "DISTSSHKIT_TEST_RSYNC", "")) : ""
     if !isempty(custom)
         path = abspath(custom)
         # `.jl` doubles spawn Julia; prefer `.sh` so collect tests do not nest a

@@ -258,7 +258,8 @@ Not this file: macOS workers, dead hosts, fake `ssh`/`rsync`, local
 ## Fakes vs real SSH
 
 - **setup:** core work is `ssh` / `rsync`. `Pkg.test()` uses fixtures
-  `DISTSSHKIT_TEST_SSH` / `_RSYNC`. Bytes on a real remote: e2e.
+  `DISTSSHKIT_TEST_SSH` / `_RSYNC`, and only when `DISTSSHKIT_TEST=1`.
+  Bytes on a real remote: e2e.
 - **drive / go:** core work is `Distributed` workers. `Pkg.test()` uses
   real **local** `addprocs` (no SSH fake). Bytes on a real remote: e2e.
 - **drive collect:** core work is `ssh` / `rsync` of result trees.
