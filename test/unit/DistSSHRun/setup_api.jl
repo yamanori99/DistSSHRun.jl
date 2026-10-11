@@ -517,6 +517,17 @@ using Test
                 @test !isdir(log_dir)
                 @test isfile(joinpath(tree, "keepme.txt"))
 
+                blank = try
+                    DistSSHRun.setup!(session, :delete; confirm_path = "  ")
+                    nothing
+                catch e
+                    e
+                end
+                @test blank isa ArgumentError
+                @test occursin("non-empty", blank.msg)
+                @test !isdir(log_dir)
+                @test isfile(joinpath(tree, "keepme.txt"))
+
                 rsync_err = try
                     DistSSHRun.setup!(session, :rsync; confirm_path = "~/App.jl")
                     nothing
