@@ -224,7 +224,17 @@ function check_prerequisites(
         # Resolve Julia path per host
         host_julia = julia_path
         if host_julia == "auto"
-            host_julia = detect_julia_path(host)
+            try
+                host_julia = detect_julia_path(host)
+            catch e
+                e isa ArgumentError || rethrow()
+                fail(e.msg)
+                all_ok = false
+                host_ok[] = false
+                kit_println()
+                _setup_host_span!(host, :fail)
+                continue
+            end
         end
 
         julia_check = host_julia === nothing ?

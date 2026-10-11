@@ -286,8 +286,18 @@ function _pkg_e_on_remotes(
         @sync for host in hosts
             @async begin
                 _setup_host_span!(host, :running)
-                host_julia = julia_path == "auto" ? detect_julia_path(host) : julia_path
-                if host_julia === nothing
+                host_julia = nothing
+                ssh_msg = nothing
+                try
+                    host_julia = julia_path == "auto" ? detect_julia_path(host) : julia_path
+                catch e
+                    e isa ArgumentError || rethrow()
+                    ssh_msg = e.msg
+                end
+                if ssh_msg isa String
+                    results[host] = false
+                    fail_msgs[host] = ssh_msg
+                elseif host_julia === nothing
                     results[host] = false
                     fail_msgs[host] = "Julia not found"
                 else
