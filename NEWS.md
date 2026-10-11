@@ -7,6 +7,8 @@ GitHub Releases may copy these sections (`Release notes:` on
 ## Unreleased
 
 `setup --delete` and `setup --clone` refuse `~`, `/`, and a single directory under `/`.
+`setup --clone` also refuses when the git root would land on one of those. Pass `--remote-path`.
+A path containing `.` or `..` is refused. `setup --delete` stops when the remote path resolves to `~` or `/`.
 Remote shell words are quoted for `sh`. An SSH name that starts with `-` is rejected.
 
 ## 0.1.5

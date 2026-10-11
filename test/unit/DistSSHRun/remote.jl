@@ -101,11 +101,21 @@ using Test
         root, proj = lay(["a", "proj"])
         try
             @test DistSSHRun.remote_delete_root(proj) == "~/a/proj"
-            @test DistSSHRun.remote_git_clone_dest(proj) == "~/a/proj"
+            clone_err = try
+                DistSSHRun.remote_git_clone_dest(proj)
+                ""
+            catch e
+                e isa ArgumentError ? e.msg : sprint(showerror, e)
+            end
+            @test occursin("--remote-path", clone_err)
             @test DistSSHRun.remote_delete_root(proj; cli_override = "/a/proj") == "/a/proj"
             @test DistSSHRun.remote_delete_root(proj; cli_override = "/var/a/proj") == "/var/a/proj"
             @test_throws ArgumentError DistSSHRun.remote_delete_root(proj; cli_override = "~")
             @test_throws ArgumentError DistSSHRun.delete_remotes(String[], "~")
+            @test_throws ArgumentError DistSSHRun.delete_remotes(String[], "~/../u")
+            @test DistSSHRun._remote_path_forbidden("~/../u")
+            @test DistSSHRun._remote_path_forbidden("/a/../b")
+            @test !DistSSHRun._remote_path_forbidden("~/a/proj")
         finally
             rm(root; recursive = true)
         end
@@ -114,6 +124,37 @@ using Test
             @test DistSSHRun.remote_delete_root(proj) == "~/b/proj"
         finally
             rm(root; recursive = true)
+        end
+    end
+
+    @testset "delete shell stops when the path is ~ or /" begin
+        mktempdir() do d
+            home = joinpath(d, "home")
+            proj = joinpath(d, "proj")
+            mkdir(home)
+            mkdir(proj)
+            fake = joinpath(d, "bin")
+            mkdir(fake)
+            log = joinpath(d, "rm.log")
+            write(joinpath(fake, "rm"), "#!/bin/sh\necho called >> $(repr(log))\n")
+            chmod(joinpath(fake, "rm"), 0o755)
+            path = fake * ":" * get(ENV, "PATH", "")
+            home_script = DistSSHRun._remote_delete_shell(home)
+            allowed = DistSSHRun._remote_delete_shell(proj)
+            withenv("HOME" => home, "PATH" => path) do
+                refused = run(
+                    ignorestatus(pipeline(`sh -c $home_script`; stdout = devnull, stderr = devnull));
+                    wait = true,
+                )
+                @test refused.exitcode != 0
+                @test !isfile(log)
+                ran = run(
+                    ignorestatus(pipeline(`sh -c $allowed`; stdout = devnull, stderr = devnull));
+                    wait = true,
+                )
+                @test ran.exitcode == 0
+                @test isfile(log)
+            end
         end
     end
 end
