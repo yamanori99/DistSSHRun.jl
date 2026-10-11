@@ -6,7 +6,7 @@ function _host_sync_rsync_transport()::String
     if !isempty(custom)
         return join(_test_double_julia_argv(custom), " ")
     end
-    return Base.shell_escape(_ssh_exe()) * " " * join(ssh_opts(), " ")
+    return join(Base.shell_escape.([_ssh_exe(); ssh_opts()]), " ")
 end
 
 function _host_sync_rsync_argv()::Vector{String}

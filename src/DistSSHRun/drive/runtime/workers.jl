@@ -106,7 +106,14 @@ function add_drive_workers!(
             host_julia = julia_exe
             if host_julia === nothing
                 write_both("  $host_name: detecting Julia... ")
-                host_julia = detect_julia_path(host_name)
+                host_julia = try
+                    detect_julia_path(host_name)
+                catch e
+                    e isa ArgumentError || rethrow()
+                    print_progress_err("✗ ($(e.msg))")
+                    writeln_both("")
+                    continue
+                end
                 if host_julia === nothing
                     print_progress_err("✗ (Julia not found)")
                     writeln_both("")

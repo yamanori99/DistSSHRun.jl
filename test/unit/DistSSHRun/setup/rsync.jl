@@ -43,6 +43,21 @@ using Test
             end
             @test !in("/tmp/distsshkit-not-a-juliaup", DistSSHRun.local_juliaup_candidates())
         end
+        withenv(
+            "DISTSSHKIT_TEST" => nothing,
+            "DISTSSHKIT_TEST_SSH" => nothing,
+            "DISTRIBUTED_SSH_OPTS" => "-F \"/tmp/cfg dir/config\" -o BatchMode=yes",
+        ) do
+            @test DistSSHRun.ssh_opts() == ["-F", "/tmp/cfg dir/config", "-o", "BatchMode=yes"]
+            t = DistSSHRun._host_sync_rsync_transport()
+            @test occursin(Base.shell_escape("/tmp/cfg dir/config"), t)
+        end
+        withenv("DISTRIBUTED_SSH_OPTS" => "-F \"unterminated") do
+            @test_throws ArgumentError DistSSHRun.ssh_opts()
+        end
+        withenv("DISTRIBUTED_SSH_OPTS" => nothing) do
+            @test "BatchMode=yes" in DistSSHRun.ssh_opts()
+        end
     end
 
     @testset "remote_dir / ensure" begin

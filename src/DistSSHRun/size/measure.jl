@@ -130,14 +130,26 @@ function _measure_rss!(
         sshflags_cmd = Cmd(ssh_opts())
         n_hosts = length(hosts)
         detected = Vector{Union{Nothing, String}}(undef, n_hosts)
+        ssh_fail = Vector{Union{Nothing, String}}(nothing, n_hosts)
         map_host_jobs(hosts) do i, host
-            detected[i] = detect_julia_path(host)
+            try
+                detected[i] = detect_julia_path(host)
+            catch e
+                e isa ArgumentError || rethrow()
+                detected[i] = nothing
+                ssh_fail[i] = e.msg
+            end
         end
         for i in 1:n_hosts
             host = hosts[i]
             julia_exe = detected[i]
             if julia_exe === nothing
-                @warn "Worker on $host failed: Julia not found (auto-detect)"
+                msg = ssh_fail[i]
+                if msg isa String
+                    @warn "Worker on $host failed: $msg"
+                else
+                    @warn "Worker on $host failed: Julia not found (auto-detect)"
+                end
                 continue
             end
             remote_proj = resolve_host_project_abs(host, proj)
