@@ -30,6 +30,19 @@ using Test
             @test cmd.exec[1] == DistSSHRun._ssh_exe()
             @test "-n" in cmd.exec
         end
+        withenv(
+            "DISTSSHKIT_TEST" => nothing,
+            "DISTSSHKIT_TEST_SSH" => "/tmp/distsshkit-not-a-test.jl",
+            "DISTSSHKIT_TEST_RSYNC" => "/tmp/distsshkit-not-a-test.sh",
+            "DISTSSHKIT_TEST_LOCAL_JULIAUP" => "/tmp/distsshkit-not-a-juliaup",
+        ) do
+            cmd = DistSSHRun._host_sync_remote_shell_cmd("host.test", "true")
+            @test cmd.exec[1] == DistSSHRun._ssh_exe()
+            if Sys.which("rsync") !== nothing
+                @test DistSSHRun._host_sync_rsync_argv() != ["sh", "/tmp/distsshkit-not-a-test.sh"]
+            end
+            @test !in("/tmp/distsshkit-not-a-juliaup", DistSSHRun.local_juliaup_candidates())
+        end
     end
 
     @testset "remote_dir / ensure" begin

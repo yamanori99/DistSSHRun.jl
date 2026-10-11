@@ -215,7 +215,7 @@ using Test
                     yes = true,
                     quiet = true,
                 )
-                withenv("DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+                withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
                     up = DistSSHRun.setup!(session, :juliaup)
                     @test up.ok && !up.cancelled
                     @test length(up.hosts) == 1 && up.hosts[1].ok
@@ -248,7 +248,7 @@ using Test
                     yes = true,
                     quiet = true,
                 )
-                withenv("DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+                withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
                     upd = DistSSHRun.setup!(session, :juliaup_update)
                     @test upd.ok && !upd.cancelled
                     @test length(upd.hosts) == 1 && upd.hosts[1].ok
