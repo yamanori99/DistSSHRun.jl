@@ -301,3 +301,61 @@ jobs:
       - name: Teardown workers
         if: ${{ always() }}
         run: ./testenv/docker-ssh/scripts/down.sh || true
+
+  # Downstream main, with this checkout developed into its test project.
+  # Red is correct when this PR needs a downstream change that is not on main
+  # yet, or when this version leaves the downstream compat and resolution
+  # fails (for example a 0.2 bump).
+  downstream:
+    name: Downstream (${{ matrix.pkg }}, 1.13)
+    needs: detect
+    if: needs.detect.outputs.heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [DistSSHQueue, DistSSHKit]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yamanori99/${{ matrix.pkg }}.jl
+          ref: main
+          path: downstream
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - name: Pkg.test downstream against this checkout
+        env:
+          PKG: ${{ matrix.pkg }}
+          UPSTREAM: ${{ github.workspace }}
+          DOWNSTREAM: ${{ github.workspace }}/downstream
+          UPSTREAM_PKG: DistSSHRun
+        run: |
+          julia --startup-file=no -e '
+            using Pkg
+            upstream = ENV["UPSTREAM"]
+            downstream = ENV["DOWNSTREAM"]
+            name = Symbol(ENV["UPSTREAM_PKG"])
+            Pkg.activate(joinpath(downstream, "test"))
+            Pkg.develop(PackageSpec(path = upstream))
+            Pkg.instantiate()
+            Core.eval(Main, Expr(:using, Expr(:., name)))
+            dir = pkgdir(getfield(Main, name))
+            dir === nothing && error(string(name, " has no pkgdir"))
+            loaded = realpath(dir)
+            expected = realpath(upstream)
+            loaded == expected || error(string(name, " loaded from ", loaded))
+            Pkg.activate(downstream)
+            Pkg.test(ENV["PKG"])
+          '
