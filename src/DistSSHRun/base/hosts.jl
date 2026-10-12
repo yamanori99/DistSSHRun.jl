@@ -144,10 +144,10 @@ end
 ```jldoctest
 julia> using DistSSHRun
 
-julia> DistSSHRun.looks_like_script_host("job.jl")
+julia> DistSSHRun.DistSSHBase.looks_like_script_host("job.jl")
 true
 
-julia> DistSSHRun.looks_like_script_host("host1")
+julia> DistSSHRun.DistSSHBase.looks_like_script_host("host1")
 false
 ```
 """

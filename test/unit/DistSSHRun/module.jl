@@ -52,6 +52,10 @@ using Test
     @test :SPINNER_FRAMES in ns
     @test :_print_colored ∉ ns
     @test DistSSHRun._print_colored === DistSSHRun.print_colored
+    @test DistSSHRun.ssh_opts === DistSSHRun.DistSSHBase.ssh_opts
+    @test parentmodule(DistSSHRun.ssh_opts) === DistSSHRun.DistSSHBase
+    @test parentmodule(DistSSHRun.juliaup_add_host!) === DistSSHRun.DistSSHUp
+    @test :DistSSHBase ∉ ns && :DistSSHUp ∉ ns
     @test :parse_worker_tokens ∉ ns && :ParsedWorkerTokens ∉ ns
     @test :worker_tokens_fully_specified ∉ ns && :child_hosts_from_tokens ∉ ns
     @test :worker_plan_from_tokens ∉ ns
@@ -96,5 +100,27 @@ using Test
             @test DistSSHRun._merge_script_arg_prelude(["job.jl"]) == ["job.jl", "alpha", "beta"]
         end
         @test get(ENV, "DISTSSHKIT_SCRIPT_ARG_PRELUDE", nothing) === nothing
+    end
+end
+
+@testset "resolve_pkg_project_dir skips vendored stubs" begin
+    _with_tempdir() do tmp
+        app = joinpath(tmp, "App")
+        mkpath(app)
+        write(joinpath(app, "Project.toml"), "name = \"App\"\n")
+        for stub in ("DistSSHKit", "DistSSHQueue", "DistSSHRun")
+            dir = joinpath(app, stub)
+            mkpath(dir)
+            write(joinpath(dir, "Project.toml"), "name = \"$(stub)\"\n")
+            @test DistSSHRun.resolve_pkg_project_dir(dir) == abspath(app)
+        end
+        other = joinpath(app, "Other")
+        mkpath(other)
+        write(joinpath(other, "Project.toml"), "name = \"Other\"\n")
+        @test DistSSHRun.resolve_pkg_project_dir(other) == abspath(other)
+        lone = joinpath(tmp, "lone", "DistSSHRun")
+        mkpath(lone)
+        write(joinpath(lone, "Project.toml"), "name = \"DistSSHRun\"\n")
+        @test DistSSHRun.resolve_pkg_project_dir(lone) == abspath(lone)
     end
 end

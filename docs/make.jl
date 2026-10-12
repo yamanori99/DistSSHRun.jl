@@ -4,7 +4,7 @@ using DistSSHRun
 DocMeta.setdocmeta!(DistSSHRun, :DocTestSetup, :(using DistSSHRun); recursive = true)
 
 makedocs(;
-    modules = [DistSSHRun],
+    modules = [DistSSHRun, DistSSHRun.DistSSHBase, DistSSHRun.DistSSHUp],
     authors = "Takanori Yamamoto, Honoka Ampuku, and contributors",
     sitename = "DistSSHRun.jl",
     format = Documenter.HTML(;

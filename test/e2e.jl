@@ -148,7 +148,7 @@ end
                 )
                 _assert_ssh_e2e_ok(suite, "setup_juliaup", proc_up, out_up; project = proj, kit = :setup)
 
-                DistSSHRun.clear_detect_julia_path_cache!()
+                DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!()
                 withenv(_e2e_base_env()...) do
                     found = DistSSHRun.resolve_remote_julia(host, "auto")
                     @test found isa AbstractString
@@ -183,7 +183,7 @@ end
                         @warn "restore juliaup default failed" host = h exception = e
                     end
                 end
-                DistSSHRun.clear_detect_julia_path_cache!()
+                DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!()
             end
         end
 
@@ -225,7 +225,7 @@ end
                     "ver=$(parent_ver) channel=$(ch.default)",
                 )
 
-                DistSSHRun.clear_detect_julia_path_cache!()
+                DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!()
                 withenv(_e2e_base_env()...) do
                     found = DistSSHRun.resolve_remote_julia(host, "auto")
                     @test found isa AbstractString
@@ -264,7 +264,7 @@ end
                 catch e
                     @warn "restore juliaup default failed" host = host exception = e
                 end
-                DistSSHRun.clear_detect_julia_path_cache!()
+                DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!()
             end
         end
 

@@ -45,7 +45,7 @@ using Pkg
         chmod(ju, 0o755)
         chmod(jl, 0o755)
         withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
-            r = DistSSHRun.juliaup_align_local!(ch)
+            r = DistSSHRun.DistSSHUp.juliaup_align_local!(ch)
             @test !r.changed
             @test DistSSHRun.julia_version_mismatch_kind(VERSION, r.ver) != :minor
             out, _ = with_kit_verbosity(:progress) do

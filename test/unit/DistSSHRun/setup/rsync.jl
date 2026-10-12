@@ -41,7 +41,7 @@ using Test
             if Sys.which("rsync") !== nothing
                 @test DistSSHRun._host_sync_rsync_argv() != ["sh", "/tmp/distsshkit-not-a-test.sh"]
             end
-            @test !in("/tmp/distsshkit-not-a-juliaup", DistSSHRun.local_juliaup_candidates())
+            @test !in("/tmp/distsshkit-not-a-juliaup", DistSSHRun.DistSSHBase.local_juliaup_candidates())
         end
         withenv(
             "DISTSSHKIT_TEST" => nothing,

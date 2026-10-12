@@ -4,6 +4,15 @@ User-facing changes.
 GitHub Releases may copy these sections (`Release notes:` on
 `@JuliaRegistrator register`).
 
+## Unreleased
+
+- Host talking and the juliaup verbs move into two internal submodules,
+  `DistSSHRun.DistSSHBase` and `DistSSHRun.DistSSHUp`. Exported names do
+  not change. DistSSHQueue and DistSSHKit can use these instead of their
+  own copies.
+- `resolve_pkg_project_dir` also skips a vendored DistSSHKit or
+  DistSSHQueue stub, as DistSSHKit already did.
+
 ## 0.1.6
 
 - `setup!(session, :delete; confirm_path)` and `setup!(session, :prune; confirm_path)` delete when that path matches the computed path, even when `yes=false`. Omitting `confirm_path` still follows `session.yes`. Other modes reject `confirm_path`.

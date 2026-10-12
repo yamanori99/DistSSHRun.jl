@@ -60,7 +60,7 @@ end
     end
 
     err = try
-        DistSSHRun._remote_ancestor("~/Repo/proj", "a/proj")
+        DistSSHRun.DistSSHBase._remote_ancestor("~/Repo/proj", "a/proj")
         ""
     catch e
         e isa ArgumentError ? e.msg : sprint(showerror, e)

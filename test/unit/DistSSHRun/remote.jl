@@ -111,9 +111,9 @@ end
             @test_throws ArgumentError DistSSHRun.remote_delete_root(proj; cli_override = "~")
             @test_throws ArgumentError DistSSHRun.delete_remotes(String[], "~")
             @test_throws ArgumentError DistSSHRun.delete_remotes(String[], "~/../u")
-            @test DistSSHRun._remote_path_forbidden("~/../u")
-            @test DistSSHRun._remote_path_forbidden("/a/../b")
-            @test !DistSSHRun._remote_path_forbidden("~/a/proj")
+            @test DistSSHRun.DistSSHBase._remote_path_forbidden("~/../u")
+            @test DistSSHRun.DistSSHBase._remote_path_forbidden("/a/../b")
+            @test !DistSSHRun.DistSSHBase._remote_path_forbidden("~/a/proj")
         end
         mktempdir() do root
             proj = _remote_delete_fixture(root, ["x", "b", "proj"])
