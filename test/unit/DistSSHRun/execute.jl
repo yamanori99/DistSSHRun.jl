@@ -71,12 +71,38 @@ using Test
             @test DistSSHRun._detached_julia_project(proj) ==
                 DistSSHRun._detached_fallback_project(kit)
         end
+        # Fallback follows the active project only when that project lists
+        # DistSSHKit or DistSSHRun in `[deps]`. `Pkg.test` uses
+        # `test/Project.toml` (has DistSSHRun); `julia --project=.` uses this
+        # package's own `Project.toml` (does not). Pin the active project so
+        # both launches agree.
         _with_tempdir() do bare
-            active = Base.active_project()
-            @test active !== nothing
-            @test DistSSHRun._detached_fallback_project(bare) == dirname(active)
-            write(joinpath(bare, "Manifest.toml"), "manifest_format = \"2.0\"\n")
-            @test DistSSHRun._detached_fallback_project(bare) == bare
+            prev = Base.active_project()
+            try
+                _with_tempdir() do env
+                    write(
+                        joinpath(env, "Project.toml"),
+                        """
+                        name = "HasRunDep"
+                        [deps]
+                        DistSSHRun = "b568025c-2759-4ef1-8b14-17d00e2cd000"
+                        """,
+                    )
+                    Base.set_active_project(joinpath(env, "Project.toml"))
+                    @test DistSSHRun._detached_fallback_project(bare) == env
+                end
+                _with_tempdir() do env
+                    write(joinpath(env, "Project.toml"), "name = \"NoKitHere\"\n")
+                    Base.set_active_project(joinpath(env, "Project.toml"))
+                    @test DistSSHRun._detached_fallback_project(bare) == bare
+                end
+                Base.set_active_project(nothing)
+                @test DistSSHRun._detached_fallback_project(bare) == bare
+                write(joinpath(bare, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+                @test DistSSHRun._detached_fallback_project(bare) == bare
+            finally
+                Base.set_active_project(prev)
+            end
         end
         # Installed tree (no Manifest) plus a job with no kit dep falls back
         # to the active project. `-m` follows that project: a DistSSHKit-only
