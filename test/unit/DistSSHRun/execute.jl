@@ -75,9 +75,13 @@ using Test
         # DistSSHKit or DistSSHRun in `[deps]`. `Pkg.test` uses
         # `test/Project.toml` (has DistSSHRun); `julia --project=.` uses this
         # package's own `Project.toml` (does not). Pin the active project so
-        # both launches agree.
+        # both launches agree. `active_project()` still walks `LOAD_PATH`
+        # when `ACTIVE_PROJECT[]` is `nothing` (`@` is the test env under
+        # `Pkg.test`, `@v#.#` is the global env under `julia --project=.`),
+        # so the nothing branch clears `LOAD_PATH` too.
         _with_tempdir() do bare
             prev = Base.active_project()
+            prev_load = copy(Base.LOAD_PATH)
             try
                 _with_tempdir() do env
                     write(
@@ -97,10 +101,15 @@ using Test
                     @test DistSSHRun._detached_fallback_project(bare) == bare
                 end
                 Base.set_active_project(nothing)
+                empty!(Base.LOAD_PATH)
+                @test Base.active_project() === nothing
                 @test DistSSHRun._detached_fallback_project(bare) == bare
+                append!(Base.LOAD_PATH, prev_load)
                 write(joinpath(bare, "Manifest.toml"), "manifest_format = \"2.0\"\n")
                 @test DistSSHRun._detached_fallback_project(bare) == bare
             finally
+                empty!(Base.LOAD_PATH)
+                append!(Base.LOAD_PATH, prev_load)
                 Base.set_active_project(prev)
             end
         end
