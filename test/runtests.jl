@@ -47,8 +47,28 @@ end
 
 args = parse_args(ARGS)
 filter_tests!(testsuite, args)
+# Files that start a child Julia or addprocs. Four PTR jobs on a 16 GB
+# runner stack on that width and the children die, so the suite stays as
+# slow as the old serial run. Light unit and CLI argument files stay parallel.
 runtests(
     DistSSHRun, args;
     testsuite, init_code,
-    serial = ["integration/go/overlap", "integration/drive/in_process"],
+    serial = [
+        "integration/go/overlap",
+        "integration/go/cli",
+        "integration/drive/in_process",
+        "unit/DistSSHRun/ride",
+        "unit/DistSSHRun/drive/workers",
+        "integration/demos/with_kit",
+        "integration/demos/without_kit",
+        "integration/drive/pkg",
+        "integration/drive/local",
+        "integration/drive/pkg_develop",
+        "integration/drive/log_via_module",
+        "integration/drive/log_via_script",
+        "integration/drive/fail",
+        "integration/cli/help",
+        "integration/setup/exit",
+        "integration/size/measure",
+    ],
 )
