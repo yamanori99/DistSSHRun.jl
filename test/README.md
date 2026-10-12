@@ -11,7 +11,8 @@ From the package root:
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
-That is `test/runtests.jl` (unit + integration), sequential `@testset`s,
+That is `test/runtests.jl` (unit + integration) via ParallelTestRunner, one
+process per file,
 `test/Project.toml`. Aqua is a separate CI job, not `Pkg.test()`.
 `Pkg.test()` must pass on a Registry install (no kit `Manifest.toml`, often
 mode 444): job smokes pass `-y`; real `ssh` / `git` spawn runs only when that
@@ -32,7 +33,8 @@ Inventory: [SSH E2E](#ssh-e2e) below.
 
 ```text
 test/
-  runtests.jl     # Pkg.test() — unit + integration
+  runtests.jl     # Pkg.test() — ParallelTestRunner
+  jetls_entry.jl  # JETLS includes; not Pkg.test()
   e2e.jl          # real OpenSSH; not Pkg.test()
   support.jl      # loads support/
   support/        # subprocess, staging, E2E helpers
@@ -291,9 +293,10 @@ Do not search-replace a host name into a token (that produced
 ## Writing tests
 
 1. Add under `unit/` (src mirror) or `integration/<area>/`.
-2. Top-level `include` in `runtests.jl` (JETLS follows that). Do not
-   register `e2e.jl` there (`Pkg.test` must not SSH). `e2e.jl` is its own
-   JETLS entry in `.github/jetls-check.sh`.
+2. Top-level `include` in `jetls_entry.jl` (JETLS follows that).
+   `find_tests` picks the file up for `Pkg.test`. Do not register `e2e.jl`
+   in either (`Pkg.test` must not SSH). `e2e.jl` is its own JETLS entry in
+   `.github/jetls-check.sh`.
 3. Subprocess helpers in `support/`; one-off scripts in `fixtures/`.
 4. Short Oracle / non-guarantee comment at the top of the file.
 5. Pin verbosity with `with_kit_verbosity` if you assert kit detail

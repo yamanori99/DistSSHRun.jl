@@ -46,7 +46,7 @@ workers do not have. Keep a separate environment for package work.
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
-Run this on Julia **1.13** (and **1.14-nightly** if you have it). Layout: [test/README.md](test/README.md). When adding a file under `test/runtests.jl` or an inner SSH E2E `@testset`, bump `_RUNTEST_N` / `_E2E_N` so `[i/N]` stays honest.
+Run this on Julia **1.13** (and **1.14-nightly** if you have it). Layout: [test/README.md](test/README.md). When adding a unit or integration file, `find_tests` picks it up. Add the same top-level `include` to `test/jetls_entry.jl`. When adding an inner SSH E2E `@testset`, bump `_E2E_N` so `[i/N]` stays honest.
 
 Checkout `Pkg.test()` is not a Registry tarball. After changing those gates (child CLI project, `ssh` spawn), and before a General cut, run the disposable copy in [test/README.md](test/README.md#registry-tree). CI runs that shape on ordinary PRs (heavy gate) and **main** (Julia 1.14-nightly; `continue-on-error`; not a required check).
 

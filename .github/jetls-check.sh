@@ -15,6 +15,7 @@ shopt -s nullglob
 files=(
     src/DistSSHRun.jl
     test/runtests.jl
+    test/jetls_entry.jl
     test/e2e.jl
 )
 

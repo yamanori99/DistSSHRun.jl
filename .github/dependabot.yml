@@ -18,6 +18,7 @@ updates:
     directories:
       - "/"
       - "/docs"
+      - "/test"
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
@@ -25,6 +26,8 @@ updates:
       - dependencies
     ignore:
       - dependency-name: Dates
+      - dependency-name: Distributed
+      - dependency-name: DistSSHRun
       - dependency-name: Pkg
       - dependency-name: TOML
       - dependency-name: Test
