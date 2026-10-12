@@ -212,41 +212,27 @@ what is useful.
 
 ## Release
 
-| Label | Meaning |
-| --- | --- |
-| `breaking` | Incompatible behavior. May land **without** a version bump. |
-| version cut | `Project.toml` `version` went up. CI compares that file with the base (`version-cut.sh`). Labels adds `cut` on that rise. Removing it sticks until the next rise. CI still reads the file, not the label. |
-| `cut-hold` | Postpone register. CI adds this on Issue `E2E weekly failed` when Sunday **Linux** is red. Intel / WSL red does not. Not a PR `area:*` label. Do not lower `version`. |
+Versioning, when to cut, the dependency floor, and how to register are in
+the DistSSHKit manual:
+[Releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md)
+and
+[Packages](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/packages.md).
 
-On a breaking line bump `x` in `0.x.y`; otherwise bump `y`. Do not ship an empty cut. Do not automate the bump or `@JuliaRegistrator register`.
-
-### DistSSHKit
-
-Day-to-day users add DistSSHKit. This repository is the run. A behavior change that Kit reexports lands here first. Kit freeze and cut rules: [DistSSHKit CONTRIBUTING.md](https://github.com/yamanori99/DistSSHKit.jl/blob/main/CONTRIBUTING.md#when-to-cut).
+In short: a breaking change raises `x` in `0.x.y`, anything else raises
+`y`. Label a breaking pull request `breaking`. Register on the merge
+commit with the NEWS section as the release notes. Do not lower
+`version`. A version held by `cut-hold` is registered after the hold
+lifts. Do not publish a later number in its place.
 
 ### When to cut
 
-Not a calendar. Cut when [NEWS.md](NEWS.md) **Unreleased** has something General users should get.
+[Releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md#when-to-cut).
 
-| Unreleased is… | Cut? |
-| --- | --- |
-| Happy-path bug (`setup` / `go` / `ride` / `drive`) | Yes, that patch promptly |
-| Opt-in flags, docs, CI | When someone needs it on General, **or** those items have sat in Unreleased for **two weeks** |
+### DistSSHKit
 
-### After a cut merges
-
-1. Register when the required checks on the version-increase PR are green, including Linux E2E. Do not wait for E2E weekly.
-2. Register on the merge commit (not the PR body). Paste the NEWS section under `Release notes:`.
-3. **E2E weekly** is Sunday 04:00 JST and `workflow_dispatch` only. A version-and-NEWS merge does not start it.
-4. Sunday **Linux** red: Issue `E2E weekly failed` gets `cut-hold`. Do not `@JuliaRegistrator register` while `cut-hold` is open. Do not lower `version`. Intel / WSL red does not add `cut-hold`. A later green Sunday Linux removes `cut-hold` even if Intel / WSL are still red (the Issue stays open until the whole weekly run is green).
-5. Skip that version on General instead: keep `cut-hold` until a later cut (higher `version`) is ready, then register that later cut.
-6. TagBot tags once General has the release.
-
-TagBot uses SSH deploy key secret `DOCUMENTER_KEY` (write deploy key on this repo) so the `vX.Y.Z` tag starts Docs and `stable` updates. Docs still deploy with `GITHUB_TOKEN`. Do not add a `+doc1` tag unless that path failed. Manual rebuild: `gh workflow run Docs --ref vX.Y.Z`.
-
-GitHub Releases need a token that can `POST /repos/.../releases` (`Contents: write`). Keep cut commits to `Project.toml` + `NEWS.md` (no workflow files). For Releases, set repo secret **`TAGBOT_PAT`**: fine-grained PAT (this repo, or the same token as DistSSHKit), Contents read/write, Issues read/write. Add Workflows read/write only when the tagged SHA changes `.github/workflows` (GitHub then requires it). TagBot reads General with `GITHUB_TOKEN` (`registry_token`); a this-repo-only PAT 401s on `GET JuliaRegistries/General`. Empty `TAGBOT_PAT` still falls back to `GITHUB_TOKEN` for `token`. Do not put `permissions:` on `.github/workflows/TagBot.yml` (TagBot defaults). If TagBot opens `TagBot: Manual intervention needed for releases`, the tag may already exist; create the Release only (`gh release create vX.Y.Z --verify-tag --notes "…"`), then close the Issue. `--verify-tag` fails if the tag is missing (plain `gh release create` would mint it from the default branch).
-
-Repo Settings → Actions → Workflow permissions: **Read and write** (`GITHUB_TOKEN`).
+Day-to-day users add DistSSHKit. This repository is the run. A behavior
+change that Kit reexports lands here first. Kit freeze and cut rules:
+[Releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md#when-to-cut).
 
 ## Issues
 
@@ -254,7 +240,7 @@ Repo Settings → Actions → Workflow permissions: **Read and write** (`GITHUB_
 
 A failure of one run is a DistSSHRun bug. Open it here. DistSSHKit reexports this package; do not file the same defect on Kit unless the meta-package wiring is what broke. See [DistSSHKit](#distsshkit).
 
-Every PR needs one type label (`bug` / `enhancement` / `chore`) when labels exist.
+Every PR needs one type label (`bug` / `enhancement` / `breaking` / `chore`) when labels exist.
 
 ## Labels
 
@@ -284,7 +270,7 @@ Backfill every PR after a vocabulary change:
 
 ### Type labels
 
-Every PR needs one of `bug` / `enhancement` / `chore`. Dependabot skips the type check (`dependencies` only). Override with `gh pr edit N --add-label …`.
+Every PR needs one of `bug` / `enhancement` / `breaking` / `chore`. Dependabot skips the type check (`dependencies` only). Override with `gh pr edit N --add-label …`.
 
 Weekly Dependabot covers `github-actions` and Julia registry deps.
 Stdlib names are `ignore` in [`.github/dependabot.yml`](.github/dependabot.yml)
@@ -299,7 +285,7 @@ that union (comma is or, not and). Scan /
 CI infers, in order:
 
 1. A unique type on a closing issue (`Fixes #N`)
-2. Else the branch prefix: `feat/` → enhancement, `fix/` → bug, `breaking/` → breaking, `chore/` / `docs/` / `ci/` / `test/` / anything else → chore
+2. Else the branch prefix: `feat/` → enhancement, `fix/` → bug, `breaking/` → breaking, `chore/` / `docs/` / `ci/` / `test/` → chore. Any other prefix fails the check until someone adds one of the four labels.
 
 `fix/` plus `Fixes` an enhancement issue gets `enhancement`. `breaking` may sit next to the type label. After a cut, a human registers when the required checks are green (or holds with `cut-hold` if weekly Linux is red); TagBot tags.
 

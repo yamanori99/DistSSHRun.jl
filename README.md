@@ -52,5 +52,6 @@ go!("job.jl")
 - [Home](https://yamanori99.github.io/DistSSHRun.jl/stable/)
 - [API](https://yamanori99.github.io/DistSSHRun.jl/stable/api/)
 - [DistSSHKit](https://yamanori99.github.io/DistSSHKit.jl/stable/)
+- Versioning and releases: [DistSSHKit manual, Releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md)
 
 DistSSHRun `b568025c-2759-4ef1-8b14-17d00e2cd000`
