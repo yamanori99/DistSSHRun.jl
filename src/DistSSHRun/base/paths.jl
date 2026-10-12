@@ -52,10 +52,10 @@ end
 Walk upward from `start_dir` to find the directory that should be passed to
 `Pkg.activate` on workers.
 
-If the first `Project.toml` found is a vendored DistSSHRun stub (`name` is
-`DistSSHRun`) and the parent directory also has a `Project.toml`, skip it
-and keep walking. Scripts next to that stub then use the application
-project root. The folder name does not matter.
+If the first `Project.toml` found is a vendored DistSSHKit, DistSSHQueue, or
+DistSSHRun stub (`name` is one of those) and the parent directory also has a
+`Project.toml`, skip it and keep walking. Scripts next to that stub then use
+the application project root. The folder name does not matter.
 """
 function resolve_pkg_project_dir(start_dir::AbstractString)::String
     test_dir = abspath(String(start_dir))
@@ -65,7 +65,8 @@ function resolve_pkg_project_dir(start_dir::AbstractString)::String
         if isfile(pt)
             parent = dirname(test_dir)
             stub = project_package_name(test_dir)
-            skip_stub = stub == "DistSSHRun" && isfile(joinpath(parent, "Project.toml"))
+            skip_stub = stub in ("DistSSHKit", "DistSSHQueue", "DistSSHRun") &&
+                isfile(joinpath(parent, "Project.toml"))
             skip_stub || return test_dir
         end
         parent = dirname(test_dir)

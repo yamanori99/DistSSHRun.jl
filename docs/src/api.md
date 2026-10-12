@@ -112,7 +112,7 @@ Names the commands above call: host tokens and SSH, the file cache, run
 directories, and help text.
 
 ```@autodocs
-Modules = [DistSSHRun]
+Modules = [DistSSHRun, DistSSHRun.DistSSHBase]
 Public = true
 Private = false
 Filter = function (x)

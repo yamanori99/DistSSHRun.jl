@@ -71,7 +71,7 @@ using Test
         end
         host = "detect-ssh-fail.test"
         _with_fake_remotes(extra_env = Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1")) do _
-            DistSSHRun.clear_detect_julia_path_cache!(host)
+            DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!(host)
             try
                 err = try
                     DistSSHRun.detect_julia_path(host)
@@ -88,17 +88,17 @@ using Test
                     e
                 end
                 @test err2 isa ArgumentError
-                @test !haskey(DistSSHRun._DETECT_JULIA_PATH_CACHE, host)
+                @test !haskey(DistSSHRun.DistSSHBase._DETECT_JULIA_PATH_CACHE, host)
             finally
-                DistSSHRun.clear_detect_julia_path_cache!(host)
+                DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!(host)
             end
         end
         _with_fake_remotes() do _
-            DistSSHRun.clear_detect_julia_path_cache!("detect-no-julia.test")
+            DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!("detect-no-julia.test")
             try
                 @test DistSSHRun.detect_julia_path("detect-no-julia.test") === nothing
             finally
-                DistSSHRun.clear_detect_julia_path_cache!("detect-no-julia.test")
+                DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!("detect-no-julia.test")
             end
         end
     end

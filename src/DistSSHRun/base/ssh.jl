@@ -138,10 +138,10 @@ Returns `nothing` if the text doesn't match the expected pattern.
 ```jldoctest
 julia> using DistSSHRun
 
-julia> DistSSHRun.parse_julia_version("julia version 1.13.1")
+julia> DistSSHRun.DistSSHBase.parse_julia_version("julia version 1.13.1")
 v"1.13.1"
 
-julia> DistSSHRun.parse_julia_version("not julia") === nothing
+julia> DistSSHRun.DistSSHBase.parse_julia_version("not julia") === nothing
 true
 ```
 """

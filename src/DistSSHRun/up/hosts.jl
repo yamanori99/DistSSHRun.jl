@@ -1,5 +1,5 @@
 # add / update / default on `parent` and on a child SSH host.
-# Confirm text and progress stay in DistSSHRun.
+# Confirm text and progress stay in the calling package.
 
 function _juliaup_remote_capture(host::AbstractString, script::AbstractString)
     out_buf = IOBuffer()
