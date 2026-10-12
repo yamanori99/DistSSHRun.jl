@@ -11,8 +11,24 @@ if !isdefined(Main, :_run_kit_drive)
         return vcat(["-y"], drive_flags)
     end
 
-    # Run the kit `drive` CLI with a host `DISTRIBUTED_PROJECT_ROOT`.
-    function _run_kit_drive(;
+    # Child env for a host project: no init delay, project root set.
+    function _drive_host_env(
+            host_root;
+            extra_env::Dict{String, String} = Dict{String, String}(),
+        )
+        return _child_julia_env(
+            merge(
+                Dict(
+                    "DISTRIBUTED_INIT_DELAY_SEC" => "0",
+                    "DISTRIBUTED_PROJECT_ROOT" => _drive_host_root(host_root),
+                ),
+                extra_env,
+            ),
+        )
+    end
+
+    # Kit `drive` CLI command. Does not start the process.
+    function _kit_drive_cmd(;
             script::AbstractString,
             host_root,
             parent_workers::Int = 1,
@@ -23,7 +39,7 @@ if !isdefined(Main, :_run_kit_drive)
             julia::AbstractString = _julia_exe(),
             drive_flags::Vector{String} = String[],
             extra_env::Dict{String, String} = Dict{String, String}(),
-        )
+        )::Cmd
         script = String(script)
         host_root = _drive_host_root(host_root)
         kit_root = String(kit_root)
@@ -38,15 +54,12 @@ if !isdefined(Main, :_run_kit_drive)
             julia = julia,
             project = kit_root,
         )
-        env = _child_julia_env(
-            merge(
-                Dict(
-                    "DISTRIBUTED_INIT_DELAY_SEC" => "0",
-                    "DISTRIBUTED_PROJECT_ROOT" => host_root,
-                ), extra_env
-            )
-        )
-        return _run_subprocess(setenv(cmd, env))
+        return setenv(cmd, _drive_host_env(host_root; extra_env))
+    end
+
+    # Run the kit `drive` CLI with a host `DISTRIBUTED_PROJECT_ROOT`.
+    function _run_kit_drive(; kwargs...)
+        return _run_subprocess(_kit_drive_cmd(; kwargs...))
     end
 
     # Run `drive --collect-missing|--collect-overwrite ROOT HOST...` as a child CLI.
