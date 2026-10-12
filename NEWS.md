@@ -8,7 +8,8 @@ GitHub Releases may copy these sections (`Release notes:` on
 
 - Host talking and the juliaup verbs move into two internal submodules,
   `DistSSHRun.DistSSHBase` and `DistSSHRun.DistSSHUp`. Exported names do
-  not change. DistSSHQueue and DistSSHKit use these instead of their copies.
+  not change. DistSSHQueue and DistSSHKit can use these instead of their
+  own copies.
 - `resolve_pkg_project_dir` also skips a vendored DistSSHKit or
   DistSSHQueue stub, as DistSSHKit already did.
 

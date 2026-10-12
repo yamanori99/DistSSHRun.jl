@@ -117,6 +117,7 @@ Public = true
 Private = false
 Filter = function (x)
     grouped = (
+        :DistSSHBase,
         :worker_pmap, :go!, :GoResult, :report_go_errors,
         :drive!, :DriveResult, :HostRunResult, :DriveHostStatus, :drive_host_status,
         :KitRunResult, :KitProcess, :kit_run_result, :report_run_errors,
