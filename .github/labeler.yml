@@ -33,6 +33,7 @@
           - "test/artifacts/**"
           - "test/e2e.jl"
           - "test/fixtures/**"
+          - "test/jetls_entry.jl"
           - "test/runtests.jl"
           - "test/support/**"
           - "test/support.jl"
