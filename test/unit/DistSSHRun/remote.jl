@@ -81,14 +81,6 @@ end
         end
     end
 
-    @testset "remote shell quotes metacharacters" begin
-        @test DistSSHRun._remote_shell_path_word("/srv/x;id") == "'/srv/x;id'"
-        @test DistSSHRun._remote_shell_path_word("~/Repo") == "~/'Repo'"
-        @test DistSSHRun._remote_shell_path_word("~/a/b c") == "~/'a/b c'"
-        @test DistSSHRun._ssh_host_args("host", "true") == ["--", "host", "true"]
-        @test_throws ArgumentError DistSSHRun.parse_placement_token("child:-oBatchMode=yes")
-    end
-
     @testset "delete root does not climb to home or slash" begin
         Sys.which("git") === nothing && return
         mktempdir() do root
@@ -111,9 +103,6 @@ end
             @test_throws ArgumentError DistSSHRun.remote_delete_root(proj; cli_override = "~")
             @test_throws ArgumentError DistSSHRun.delete_remotes(String[], "~")
             @test_throws ArgumentError DistSSHRun.delete_remotes(String[], "~/../u")
-            @test DistSSHRun.DistSSHBase._remote_path_forbidden("~/../u")
-            @test DistSSHRun.DistSSHBase._remote_path_forbidden("/a/../b")
-            @test !DistSSHRun.DistSSHBase._remote_path_forbidden("~/a/proj")
         end
         mktempdir() do root
             proj = _remote_delete_fixture(root, ["x", "b", "proj"])

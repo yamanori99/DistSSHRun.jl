@@ -46,6 +46,8 @@ test/
 
 ```text
 unit/
+  DistSSHBase/    # ↔ src/DistSSHRun/base/
+  DistSSHUp/      # ↔ src/DistSSHRun/up/
   DistSSHRun/     # ↔ src/DistSSHRun/ (API, setup cores, argv)
     argv/         # ↔ DistSSHRun/argv/
     setup/        # ↔ DistSSHRun/setup/

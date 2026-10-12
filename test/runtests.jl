@@ -22,7 +22,7 @@ DistSSHRun.set_kit_verbosity!(:progress)
 
 # Keep `include(joinpath(@__DIR__, …))` at this top level (JETLS). Only the
 # banner is counted. Update `_RUNTEST_N` when adding a file below.
-const _RUNTEST_N = 51
+const _RUNTEST_N = 56
 const _RUNTEST_I = Ref(0)
 function _runtest_announce(rel::AbstractString)
     _RUNTEST_I[] += 1
@@ -33,14 +33,28 @@ end
 
 @testset "DistSSHRun" verbose = true begin
     @testset "unit" verbose = true begin
+        @testset "DistSSHBase" verbose = true begin
+            _runtest_announce("unit/DistSSHBase/paths.jl")
+            include(joinpath(@__DIR__, "unit", "DistSSHBase", "paths.jl"))
+            _runtest_announce("unit/DistSSHBase/hosts.jl")
+            include(joinpath(@__DIR__, "unit", "DistSSHBase", "hosts.jl"))
+            _runtest_announce("unit/DistSSHBase/ssh.jl")
+            include(joinpath(@__DIR__, "unit", "DistSSHBase", "ssh.jl"))
+            _runtest_announce("unit/DistSSHBase/shell_quote.jl")
+            include(joinpath(@__DIR__, "unit", "DistSSHBase", "shell_quote.jl"))
+            _runtest_announce("unit/DistSSHBase/detect_julia.jl")
+            include(joinpath(@__DIR__, "unit", "DistSSHBase", "detect_julia.jl"))
+        end
+        @testset "DistSSHUp" verbose = true begin
+            _runtest_announce("unit/DistSSHUp/local.jl")
+            include(joinpath(@__DIR__, "unit", "DistSSHUp", "local.jl"))
+        end
         _runtest_announce("unit/DistSSHRun/display.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "display.jl"))
         _runtest_announce("unit/DistSSHRun/explain.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "explain.jl"))
         _runtest_announce("unit/DistSSHRun/remote.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "remote.jl"))
-        _runtest_announce("unit/DistSSHRun/shell_quote.jl")
-        include(joinpath(@__DIR__, "unit", "DistSSHRun", "shell_quote.jl"))
         _runtest_announce("unit/DistSSHRun/distributed.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "distributed.jl"))
         _runtest_announce("unit/DistSSHRun/drive.jl")
