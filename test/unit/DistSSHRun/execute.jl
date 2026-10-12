@@ -71,13 +71,51 @@ using Test
             @test DistSSHRun._detached_julia_project(proj) ==
                 DistSSHRun._detached_fallback_project(kit)
         end
+        # Fallback follows the active project only when that project lists
+        # DistSSHKit or DistSSHRun in `[deps]`. `Pkg.test` uses
+        # `test/Project.toml` (has DistSSHRun); `julia --project=.` uses this
+        # package's own `Project.toml` (does not). Pin the active project so
+        # both launches agree. `active_project()` still walks `LOAD_PATH`
+        # when `ACTIVE_PROJECT[]` is `nothing`, and it skips `"@"`. `@v#.#`
+        # is the global env under `julia --project=.`. `Pkg.test` puts the
+        # test project on `LOAD_PATH` as its own entry. The nothing branch
+        # clears `LOAD_PATH` too. Restore `ACTIVE_PROJECT[]` itself:
+        # `active_project()` would substitute an expanded path for `nothing`.
+        saved_active = Base.ACTIVE_PROJECT[]
         _with_tempdir() do bare
-            active = Base.active_project()
-            @test active !== nothing
-            @test DistSSHRun._detached_fallback_project(bare) == dirname(active)
-            write(joinpath(bare, "Manifest.toml"), "manifest_format = \"2.0\"\n")
-            @test DistSSHRun._detached_fallback_project(bare) == bare
+            prev_load = copy(Base.LOAD_PATH)
+            try
+                _with_tempdir() do env
+                    write(
+                        joinpath(env, "Project.toml"),
+                        """
+                        name = "HasRunDep"
+                        [deps]
+                        DistSSHRun = "b568025c-2759-4ef1-8b14-17d00e2cd000"
+                        """,
+                    )
+                    Base.set_active_project(joinpath(env, "Project.toml"))
+                    @test DistSSHRun._detached_fallback_project(bare) == env
+                end
+                _with_tempdir() do env
+                    write(joinpath(env, "Project.toml"), "name = \"NoKitHere\"\n")
+                    Base.set_active_project(joinpath(env, "Project.toml"))
+                    @test DistSSHRun._detached_fallback_project(bare) == bare
+                end
+                Base.set_active_project(nothing)
+                empty!(Base.LOAD_PATH)
+                @test Base.active_project() === nothing
+                @test DistSSHRun._detached_fallback_project(bare) == bare
+                append!(Base.LOAD_PATH, prev_load)
+                write(joinpath(bare, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+                @test DistSSHRun._detached_fallback_project(bare) == bare
+            finally
+                empty!(Base.LOAD_PATH)
+                append!(Base.LOAD_PATH, prev_load)
+                Base.set_active_project(saved_active)
+            end
         end
+        @test Base.ACTIVE_PROJECT[] === saved_active
         # Installed tree (no Manifest) plus a job with no kit dep falls back
         # to the active project. `-m` follows that project: a DistSSHKit-only
         # env must not spawn `-m DistSSHRun`.
