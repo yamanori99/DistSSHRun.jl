@@ -2,7 +2,7 @@ using Test
 
 # Oracle: child `julia -m DistSSHRun <cmd> --help` / `--version` exits 0 and
 # prints a Usage / version needle. Does not run workers, SSH, or rsync.
-# `--help` / `--version` run `_SUBPROCESS_WIDTH` at a time. Each is still its
+# `--help` / `--version` run `_subprocess_width()` at a time. Each is still its
 # own process. The `ride` smoke stays after them so it does not share that wave.
 
 @testset "CLI child help and version" begin

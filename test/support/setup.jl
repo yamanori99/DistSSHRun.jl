@@ -42,7 +42,7 @@ if !isdefined(Main, :_run_kit_setup)
         end
     end
 
-    # Same children as `_run_kit_setup`, `_SUBPROCESS_WIDTH` at a time.
+    # Same children as `_run_kit_setup`, `_subprocess_width()` at a time.
     # Temp hosts stay until every process in `calls` has exited.
     function _run_kit_setups(calls::AbstractVector)
         prepared = map(calls) do call

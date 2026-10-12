@@ -34,7 +34,8 @@ if !isdefined(Main, :_child_julia_env)
     end
 
     # How many child processes `_run_subprocesses` starts at once.
-    const _SUBPROCESS_WIDTH = 4
+    # A function, not a `const` inside this `if`: JETLS reports that `const` as an undefined global.
+    _subprocess_width() = 4
 
     # One child, still running. Caller closes the write end so `read` ends at exit.
     function _start_subprocess(cmd::Cmd)
@@ -44,13 +45,14 @@ if !isdefined(Main, :_child_julia_env)
         return proc, @async read(out, String)
     end
 
-    # Run `cmds` `_SUBPROCESS_WIDTH` at a time. Result `i` is command `i`.
+    # Run `cmds` `_subprocess_width()` at a time. Result `i` is command `i`.
     function _run_subprocesses(cmds::AbstractVector{<:Cmd})
         n = length(cmds)
         results = Vector{Tuple{Base.Process, String}}(undef, n)
+        width = _subprocess_width()
         i = 1
         while i <= n
-            last = min(i + _SUBPROCESS_WIDTH - 1, n)
+            last = min(i + width - 1, n)
             started = map(i:last) do k
                 proc, reader = _start_subprocess(cmds[k])
                 return (k, proc, reader)
