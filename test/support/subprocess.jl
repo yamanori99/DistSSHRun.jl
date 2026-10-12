@@ -33,6 +33,37 @@ if !isdefined(Main, :_child_julia_env)
         return proc, String(take!(out))
     end
 
+    # How many child processes `_run_subprocesses` starts at once.
+    const _SUBPROCESS_WIDTH = 4
+
+    # One child, still running. Caller closes the write end so `read` ends at exit.
+    function _start_subprocess(cmd::Cmd)
+        out = Pipe()
+        proc = run(pipeline(ignorestatus(cmd), stdout = out, stderr = out); wait = false)
+        close(out.in)
+        return proc, @async read(out, String)
+    end
+
+    # Run `cmds` `_SUBPROCESS_WIDTH` at a time. Result `i` is command `i`.
+    function _run_subprocesses(cmds::AbstractVector{<:Cmd})
+        n = length(cmds)
+        results = Vector{Tuple{Base.Process, String}}(undef, n)
+        i = 1
+        while i <= n
+            last = min(i + _SUBPROCESS_WIDTH - 1, n)
+            started = map(i:last) do k
+                proc, reader = _start_subprocess(cmds[k])
+                return (k, proc, reader)
+            end
+            for (k, proc, reader) in started
+                wait(proc)
+                results[k] = (proc, fetch(reader))
+            end
+            i = last + 1
+        end
+        return results
+    end
+
 
     # Assert subprocess exit code 0; on failure print captured output first.
     function _assert_proc_ok(proc, combined::AbstractString; label::AbstractString = "subprocess")

@@ -5,7 +5,9 @@ if !isdefined(Main, :_run_kit_setup)
     # Kit logs land under `<project>/.distsshkit/setup/`. When `project_root` is
     # omitted, use an ephemeral host so unit tests never write into the kit checkout.
     # SSH E2E passes an explicit durable host under `test/artifacts/ssh-e2e/`.
-    function _run_kit_setup(;
+    # Child `setup` / `up` command. The second value is a temp host to remove
+    # after the process exits. `nothing` means the caller owns `project_root`.
+    function _kit_setup_cmd(;
             setup_args::AbstractVector,
             command::AbstractString = "setup",
             kit_root::String = _kit_root(),
@@ -14,21 +16,44 @@ if !isdefined(Main, :_run_kit_setup)
             extra_env::Dict{String, String} = Dict{String, String}(),
         )
         args = String[String(a) for a in setup_args]
-        function _run(proj)
+        owned = project_root === nothing
+        proj = owned ? abspath(string(mktempdir())) : abspath(string(project_root))
+        try
+            owned && _write_host_project!(proj, "SetupCliHost")
             cmd = _kit_cli_cmd(vcat([String(command)], args); julia = julia, project = kit_root)
             base = Dict{String, String}(
                 "DISTSSHKIT_YES" => "1",
                 "DISTRIBUTED_PROJECT_ROOT" => proj,
             )
             env = _child_julia_env(merge(base, extra_env))
-            return _run_subprocess(setenv(cmd, env))
+            return setenv(cmd, env), owned ? proj : nothing
+        catch
+            owned && _rm_tempdir!(proj)
+            rethrow()
         end
-        if project_root !== nothing
-            return _run(abspath(string(project_root)))
+    end
+
+    function _run_kit_setup(; kwargs...)
+        cmd, tmp = _kit_setup_cmd(; kwargs...)
+        try
+            return _run_subprocess(cmd)
+        finally
+            tmp === nothing || _rm_tempdir!(tmp)
         end
-        return _with_tempdir() do proj
-            _write_host_project!(proj, "SetupCliHost")
-            return _run(proj)
+    end
+
+    # Same children as `_run_kit_setup`, `_SUBPROCESS_WIDTH` at a time.
+    # Temp hosts stay until every process in `calls` has exited.
+    function _run_kit_setups(calls::AbstractVector)
+        prepared = map(calls) do call
+            _kit_setup_cmd(; call...)
+        end
+        try
+            return _run_subprocesses(Cmd[cmd for (cmd, _) in prepared])
+        finally
+            for (_, tmp) in prepared
+                tmp === nothing || _rm_tempdir!(tmp)
+            end
         end
     end
 
