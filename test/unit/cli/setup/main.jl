@@ -6,23 +6,30 @@ using Test
 
 @testset "setup CLI entry" begin
     function _setup_capture(args)
-        mktemp() do out_path, out_io
-            mktemp() do err_path, err_io
-                code = withenv(
-                    "DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "",
-                    "DISTSSHKIT_YES" => nothing,
-                ) do
-                    redirect_stdin(devnull) do
-                        redirect_stdout(out_io) do
-                            redirect_stderr(err_io) do
-                                DistSSHRun.setup(args)
+        # A registry install is mode 444. setup logs under the resolved
+        # project, and a worker whose cwd is test/ would otherwise mkdir
+        # test/.distsshkit inside that tree.
+        mktempdir() do proj
+            write(joinpath(proj, "Project.toml"), "name = \"SetupCapture\"\n")
+            mktemp() do out_path, out_io
+                mktemp() do err_path, err_io
+                    code = withenv(
+                        "DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "",
+                        "DISTSSHKIT_YES" => nothing,
+                        "DISTRIBUTED_PROJECT_ROOT" => proj,
+                    ) do
+                        redirect_stdin(devnull) do
+                            redirect_stdout(out_io) do
+                                redirect_stderr(err_io) do
+                                    DistSSHRun.setup(args)
+                                end
                             end
                         end
                     end
+                    flush(out_io)
+                    flush(err_io)
+                    return code, read(out_path, String), read(err_path, String)
                 end
-                flush(out_io)
-                flush(err_io)
-                return code, read(out_path, String), read(err_path, String)
             end
         end
     end
