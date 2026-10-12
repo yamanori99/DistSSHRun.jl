@@ -76,11 +76,13 @@ using Test
         # `test/Project.toml` (has DistSSHRun); `julia --project=.` uses this
         # package's own `Project.toml` (does not). Pin the active project so
         # both launches agree. `active_project()` still walks `LOAD_PATH`
-        # when `ACTIVE_PROJECT[]` is `nothing` (`@` is the test env under
-        # `Pkg.test`, `@v#.#` is the global env under `julia --project=.`),
-        # so the nothing branch clears `LOAD_PATH` too.
+        # when `ACTIVE_PROJECT[]` is `nothing`, and it skips `"@"`. `@v#.#`
+        # is the global env under `julia --project=.`. `Pkg.test` puts the
+        # test project on `LOAD_PATH` as its own entry. The nothing branch
+        # clears `LOAD_PATH` too. Restore `ACTIVE_PROJECT[]` itself:
+        # `active_project()` would substitute an expanded path for `nothing`.
+        saved_active = Base.ACTIVE_PROJECT[]
         _with_tempdir() do bare
-            prev = Base.active_project()
             prev_load = copy(Base.LOAD_PATH)
             try
                 _with_tempdir() do env
@@ -110,9 +112,10 @@ using Test
             finally
                 empty!(Base.LOAD_PATH)
                 append!(Base.LOAD_PATH, prev_load)
-                Base.set_active_project(prev)
+                Base.set_active_project(saved_active)
             end
         end
+        @test Base.ACTIVE_PROJECT[] === saved_active
         # Installed tree (no Manifest) plus a job with no kit dep falls back
         # to the active project. `-m` follows that project: a DistSSHKit-only
         # env must not spawn `-m DistSSHRun`.
