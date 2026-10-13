@@ -46,6 +46,164 @@ function _run_rsync_files_from(
     return nothing
 end
 
+function _join_send_rel(prefix::AbstractString, rel::AbstractString)::String
+    p = String(prefix)
+    r = String(rel)
+    isempty(p) && return r
+    return p * "/" * r
+end
+
+function _send_rel_excluded(rel::AbstractString)::Bool
+    r = replace(String(rel), '\\' => '/')
+    parts = split(r, '/')
+    return ".git" in parts || ".distsshkit" in parts
+end
+
+"""`git ls-files -z` records. Empty when git fails."""
+function _git_ls_files_z(dir::AbstractString, args::Vector{String})::Vector{String}
+    try
+        raw = read(
+            pipeline(_git_cmd(vcat(["-C", String(dir), "ls-files", "-z"], args)); stderr = devnull),
+            String,
+        )
+        return String[s for s in split(raw, '\0') if !isempty(s)]
+    catch e
+        _rethrow_missing_host_tool(e)
+        return String[]
+    end
+end
+
+function _git_submodule_paths(dir::AbstractString)::Set{String}
+    found = Set{String}()
+    for rec in _git_ls_files_z(dir, ["-s"])
+        startswith(rec, "160000 ") || continue
+        tab = findfirst('\t', rec)
+        tab === nothing && continue
+        push!(found, rec[(tab + 1):end])
+    end
+    return found
+end
+
+function _reject_newline_send_path(rel::AbstractString)
+    occursin('\n', rel) || return nothing
+    throw(ArgumentError(
+        "cannot rsync a path that contains a newline ($(repr(rel))). Rename it and retry.",
+    ))
+end
+
+"""Add files under `dir` to `out`, prefixed for the rsync list. Skips `.git` and `.distsshkit`."""
+function _walk_send_files!(out::Vector{String}, dir::AbstractString, prefix::AbstractString)
+    isdir(dir) || return nothing
+    for (cur, sub, files) in walkdir(dir)
+        filter!(d -> d != ".git" && d != ".distsshkit", sub)
+        rel_dir = relpath(cur, dir)
+        for f in files
+            rel = rel_dir == "." ? f : joinpath(rel_dir, f)
+            full = _join_send_rel(prefix, rel)
+            _send_rel_excluded(full) && continue
+            _reject_newline_send_path(full)
+            push!(out, full)
+        end
+    end
+    return nothing
+end
+
+"""
+Append the git send list for `dir` (paths relative to `dir`, then prefixed).
+
+`--cached` keeps tracked files even when they match gitignore. `--others
+--exclude-standard` applies negation, `.git/info/exclude`, and `core.excludesFile`.
+A trailing slash or a gitlink (mode 160000) is expanded in that directory.
+"""
+function _git_worktree_file_list!(
+        out::Vector{String},
+        dir::AbstractString,
+        prefix::AbstractString,
+        seen::Set{String},
+    )
+    c = canonical_local_path(dir)
+    c in seen && return nothing
+    push!(seen, c)
+    if git_work_tree(dir) === nothing
+        _walk_send_files!(out, dir, prefix)
+        return nothing
+    end
+    subs = _git_submodule_paths(dir)
+    for rel in _git_ls_files_z(dir, ["--cached", "--others", "--exclude-standard"])
+        bare = endswith(rel, "/") ? rel[1:end - 1] : rel
+        if endswith(rel, "/") || bare in subs
+            _git_worktree_file_list!(out, joinpath(dir, bare), _join_send_rel(prefix, bare), seen)
+            continue
+        end
+        full_path = joinpath(dir, rel)
+        (isfile(full_path) || islink(full_path)) || continue
+        listed = _join_send_rel(prefix, rel)
+        _send_rel_excluded(listed) && continue
+        _reject_newline_send_path(listed)
+        push!(out, listed)
+    end
+    return nothing
+end
+
+function _rsync_path_source_dirs(env, root::AbstractString)::Vector{String}
+    root_c = canonical_local_path(root)
+    found = String[]
+    for project_file in _pkg_env_project_files(env)
+        for (_, raw) in _project_path_sources(project_file)
+            isabspath(expanduser(raw)) && continue
+            loc = canonical_local_path(_resolved_source_path(project_file, raw))
+            loc == root_c && continue
+            isdir(loc) || continue
+            _path_is_under(loc, root_c) || continue
+            push!(found, loc)
+        end
+    end
+    return unique(found)
+end
+
+function _independent_git_repo(dir::AbstractString)::Bool
+    top = git_work_tree(dir)
+    top isa String || return false
+    d = canonical_local_path(dir)
+    top == d && return true
+    # `git rev-parse` may spell `/private/var` while `abspath` still has `/var`.
+    (ispath(top) && ispath(d)) || return false
+    return canonical_local_path(realpath(top)) == canonical_local_path(realpath(d))
+end
+
+"""
+Files to rsync, relative to `local_root`.
+
+`nothing` when `local_root` is outside a git work tree: the caller keeps
+rsync's per-directory `.gitignore` filter (negation is not applied).
+"""
+function _rsync_send_list(local_root::AbstractString, env)::Union{Nothing, Vector{String}}
+    root = canonical_local_path(local_root)
+    git_work_tree(root) === nothing && return nothing
+    sources = _rsync_path_source_dirs(env, root)
+    source_rels = String[relpath(s, root) for s in sources]
+    out = String[]
+    _git_worktree_file_list!(out, root, "", Set{String}())
+    function _under_source(rel::AbstractString)::Bool
+        r = replace(String(rel), '\\' => '/')
+        for src in source_rels
+            s = replace(src, '\\' => '/')
+            (r == s || startswith(r, s * "/")) && return true
+        end
+        return false
+    end
+    filtered = String[rel for rel in out if !_under_source(rel)]
+    for (src, rel_src) in zip(sources, source_rels)
+        if _independent_git_repo(src)
+            _git_worktree_file_list!(filtered, src, rel_src, Set{String}())
+        else
+            _walk_send_files!(filtered, src, rel_src)
+        end
+    end
+    unique!(filtered)
+    return filtered
+end
+
 
 """Remote shell snippet classifying `remote_path` as MISSING / EMPTY / NONEMPTY."""
 function _remote_dest_status_script(remote_path::AbstractString)::String
@@ -136,7 +294,11 @@ function _print_rsync_safety_banner!(
     println_fatal()
     print_warn("  Safety: refuses if the remote path already has any files.\n")
     println_fatal("  To replace an existing tree, run `setup --delete` first, then `--rsync`.")
-    println_fatal("  Mirrors onto a missing/empty path (`--delete`); excludes `.git/` and `.distsshkit/`; honors `.gitignore`.")
+    if git_work_tree(local_root) isa String
+        println_fatal("  Sends the git file list (negation, info/exclude, and global excludes). Excludes `.git/` and `.distsshkit/`. Empty directories are not sent.")
+    else
+        println_fatal("  Applies `.gitignore` exclude lines with rsync's per-directory filter. Negation patterns are not applied. Excludes `.git/` and `.distsshkit/`.")
+    end
     println_fatal()
     println_fatal("  Local project: $(display_path(local_root, path_anchor))")
     println_fatal("  Remote path: $remote_path")
@@ -155,6 +317,7 @@ function _rsync_one_host!(
         local_root::AbstractString,
         remote_path::AbstractString,
         ssh_cmd_str::String,
+        send_list::Union{Nothing, Vector{String}},
     )
     st = remote_dest_status(host, remote_path)
     if st === :nonempty
@@ -175,26 +338,45 @@ function _rsync_one_host!(
         end
         dir_created = true
     end
-    rsync_cmd = Cmd(
-        vcat(
+    # The destination is refused unless it is missing or empty, so --delete would remove nothing.
+    dest = string(host, ":", remote_path, "/")
+    if send_list === nothing
+        rsync_cmd = Cmd(
+            vcat(
+                _host_sync_rsync_argv(),
+                String[
+                    "-az",
+                    "-e",
+                    ssh_cmd_str,
+                    "--exclude",
+                    ".git/",
+                    "--exclude",
+                    ".distsshkit/",
+                    "--filter",
+                    ":- .gitignore",
+                    local_root * "/",
+                    dest,
+                ],
+            ),
+        )
+        run(pipeline(rsync_cmd; stderr = stderr))
+    else
+        _run_rsync_files_from(
             _host_sync_rsync_argv(),
             String[
                 "-az",
-                "--delete",
                 "-e",
                 ssh_cmd_str,
                 "--exclude",
                 ".git/",
                 "--exclude",
                 ".distsshkit/",
-                "--filter",
-                ":- .gitignore",
-                local_root * "/",
-                string(host, ":", remote_path, "/"),
             ],
-        ),
-    )
-    run(pipeline(rsync_cmd; stderr = stderr))
+            local_root * "/",
+            dest,
+            send_list::Vector{String},
+        )
+    end
     return (; status = :ok, message = "", dir_created = dir_created)
 end
 
@@ -226,6 +408,7 @@ function rsync_project_to_hosts!(
     given = canonical_local_path(local_root)
     shipped = ensure_manifest_ships!(given)
     local_root = shipped.env_dir
+    send_list = _rsync_send_list(local_root, shipped)
     raw_anchor = canonical_local_path(path_anchor)
     anchor = raw_anchor == given ? local_root : raw_anchor
     remote_path = String(remote_path)
@@ -261,10 +444,10 @@ function rsync_project_to_hosts!(
         try
             outcome = if sequential_spin
                 kit_spin!("  $host: ") do
-                    _rsync_one_host!(host, local_root, remote_path, ssh_cmd_str)
+                    _rsync_one_host!(host, local_root, remote_path, ssh_cmd_str, send_list)
                 end
             else
-                _rsync_one_host!(host, local_root, remote_path, ssh_cmd_str)
+                _rsync_one_host!(host, local_root, remote_path, ssh_cmd_str, send_list)
             end
             if outcome.status === :busy || outcome.status === :mkdir_fail
                 return HostResult(host, false, outcome.message)
