@@ -107,6 +107,8 @@ _distsshup_under_test() = DistSSHRun.DistSSHUp
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "git.jl"))
         _runtest_announce("unit/DistSSHRun/setup/rsync.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "rsync.jl"))
+        _runtest_announce("unit/DistSSHRun/setup/send_list.jl")
+        include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "send_list.jl"))
         _runtest_announce("unit/cli/drive/args.jl")
         include(joinpath(@__DIR__, "unit", "cli", "drive", "args.jl"))
         _runtest_announce("unit/cli/go/args.jl")

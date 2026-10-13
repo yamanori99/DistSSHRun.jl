@@ -458,7 +458,10 @@ One rsync cannot carry both. A symlink whose target leaves that tree is the
 same failure. A `url` source is fetched on the worker. No Manifest is not
 an error (instantiate resolves).
 """
-function ensure_manifest_ships!(project::AbstractString)
+function ensure_manifest_ships!(
+        project::AbstractString;
+        send_list::Union{Nothing, Vector{String}} = nothing,
+    )
     env = resolve_pkg_env(project)
     _ensure_path_sources_in_tree!(env, env.env_dir; git = false)
     manifest = env.manifest
@@ -475,6 +478,9 @@ function ensure_manifest_ships!(project::AbstractString)
             "Manifest $manifest points at $target, outside the tree setup/rsync would send ($root). Workers would instantiate a different resolution.",
         ),
     )
+    # `send_list` is computed once in `rsync_project_to_hosts!` so a later
+    # Manifest membership check can reuse it without calling git twice.
+    send_list isa Vector{String}
     return env
 end
 

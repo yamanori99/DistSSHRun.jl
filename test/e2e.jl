@@ -1131,5 +1131,47 @@ end
                 @test body == marker
             end
         end
+
+        @testset "setup --rsync sends a gitignore negation" begin
+            _e2e_announce("setup --rsync sends a gitignore negation")
+            neg_root = "/home/dev/distsshkit-e2e-negation"
+            _with_tempdir() do app_path
+                app = String(app_path)
+                write(joinpath(app, "Project.toml"), "name = \"NegationApp\"\n")
+                write(joinpath(app, ".gitignore"), "data/*\n!data/keep.txt\n")
+                mkpath(joinpath(app, "data"))
+                write(joinpath(app, "data", "a.dat"), "nope\n")
+                write(joinpath(app, "data", "keep.txt"), "keep\n")
+                mkpath(joinpath(app, "empty"))
+                run(pipeline(`git -C $app init -q`; stdout = devnull, stderr = devnull))
+                run(pipeline(`git -C $app config user.email "e2e@example.com"`; stdout = devnull, stderr = devnull))
+                run(pipeline(`git -C $app config user.name "e2e"`; stdout = devnull, stderr = devnull))
+                run(pipeline(`git -C $app add -A`; stdout = devnull, stderr = devnull))
+                run(pipeline(`git -C $app commit -q -m init`; stdout = devnull, stderr = devnull))
+                neg_env = _ssh_e2e_env(; remote_project = neg_root)
+                proc, out = _run_kit_setup(;
+                    setup_args = [
+                        "--delete", "--remote-path", neg_root, "--confirm-path", neg_root, setup_hosts...,
+                    ],
+                    project_root = app,
+                    extra_env = neg_env,
+                )
+                _assert_ssh_e2e_ok(suite, "negation_delete", proc, out; project = app, kit = :setup)
+                proc, out = _run_kit_setup(;
+                    setup_args = ["--rsync", "--remote-path", neg_root, setup_hosts...],
+                    project_root = app,
+                    extra_env = neg_env,
+                )
+                _assert_ssh_e2e_ok(suite, "negation_rsync", proc, out; project = app, kit = :setup)
+                for host in hosts
+                    p, ssh_out = _ssh_e2e_ssh(host, "test -f $(neg_root)/data/keep.txt")
+                    _assert_proc_ok(p, ssh_out; label = "negation keep.txt $(host)")
+                    p, ssh_out = _ssh_e2e_ssh(host, "test ! -e $(neg_root)/data/a.dat")
+                    _assert_proc_ok(p, ssh_out; label = "negation a.dat absent $(host)")
+                    p, ssh_out = _ssh_e2e_ssh(host, "test -d $(neg_root)/empty")
+                    _assert_proc_ok(p, ssh_out; label = "negation empty dir $(host)")
+                end
+            end
+        end
     end
 end
