@@ -145,6 +145,7 @@ function run_drive_parsed!(
                     output_dir = out,
                     log_dir = log,
                     result = result,
+                    project_root = project_root_abs,
                 )
                 DistSSHRun._remove_kit_pid_file(
                     getpid(),

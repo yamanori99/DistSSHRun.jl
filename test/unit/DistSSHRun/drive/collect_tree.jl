@@ -191,4 +191,49 @@ end
             @test !isfile(logp) || !occursin("mkdir", read(logp, String))
         end
     end
+
+    @testset "sentinel per host and shared collect" begin
+        @test DistSSHRun.drive_sentinel_for_host("s", "a b") == "s_a+20b"
+        @test DistSSHRun.drive_sentinel_for_host("s", "a:b") !=
+            DistSSHRun.drive_sentinel_for_host("s", "a_b")
+        @test DistSSHRun.drive_sentinel_for_host("s", "a:b") == "s_a+3ab"
+        @test DistSSHRun.drive_sentinel_for_host("s", "a_b") == "s_a+5fb"
+        @test DistSSHRun.drive_sentinel_for_host("s", "h1") !=
+            DistSSHRun.drive_sentinel_for_host("s", "h2")
+        _with_collect(; extra_env = Dict("DISTSSHKIT_TEST_SHARED_TREE" => "1")) do state_dir, proj
+            script = joinpath(proj, "job.jl")
+            write(script, "true\n")
+            out = joinpath(proj, "out")
+            mkpath(out)
+            mkpath(joinpath(state_dir, "shared", "tree"))
+            withenv("DISTRIBUTED_OUTPUT_DIR" => out) do
+                base = DistSSHRun.place_drive_sentinels!(
+                    ["host1", "host2"], dirname(script), false, proj,
+                )
+                # After sentinels: a real `find -newer` includes this file.
+                write(joinpath(state_dir, "shared", "tree", "a.txt"), "x\n")
+                @test !isempty(base)
+                captured, (ok, hrs) = _capture_stdio() do _, _
+                    DistSSHRun.collect_drive_results!(
+                        ["host1", "host2"], dirname(script), base, false, proj, proj,
+                    )
+                end
+                @test ok
+                @test all(h -> h.ok, hrs)
+                @test occursin("more than one host", captured)
+                @test !any(
+                    f -> startswith(f, ".drive_sentinel_"),
+                    Iterators.flatten((files for (_, _, files) in walkdir(out))),
+                )
+            end
+        end
+    end
+
+    @testset "newline paths are skipped" begin
+        captured, paths = _capture_stdio() do _, _
+            DistSSHRun._find_print0_paths("plain.txt\0has\nline.txt\0")
+        end
+        @test paths == ["plain.txt"]
+        @test occursin("newline", captured)
+    end
 end

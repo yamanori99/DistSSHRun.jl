@@ -372,6 +372,24 @@ using Test
             @test raw["ok"] === true
             @test raw["schema"] == 1
             @test occursin("out", String(raw["output_dir"]))
+            other = mktempdir()
+            try
+                cd(other) do
+                    withenv("DISTRIBUTED_COLLECT_DIRS" => "rel-out") do
+                        DistSSHRun.write_kit_run_toml!(
+                            d1;
+                            kind = :drive,
+                            project_root = project,
+                        )
+                        recorded = DistSSHRun.read_kit_run_toml(d1)
+                        @test recorded["collect_dirs"] == [
+                            DistSSHRun.canonical_local_path(joinpath(project, "rel-out")),
+                        ]
+                    end
+                end
+            finally
+                rm(other; recursive = true, force = true)
+            end
         end
 
         _with_tempdir() do project

@@ -248,6 +248,20 @@ end
 
 # Remote path resolution & result collection
 
+"""Split `find -print0` output. Paths that contain a newline are skipped."""
+function _find_print0_paths(raw::AbstractString)::Vector{String}
+    kept = String[]
+    for part in split(raw, '\0'; keepempty = false)
+        p = String(part)
+        if occursin('\n', p)
+            print_warn("skipping remote path that contains a newline\n")
+            continue
+        end
+        push!(kept, p)
+    end
+    return kept
+end
+
 """
 List all files under `remote_root` on `host` recursively via SSH `find`, returning
 `(remote_abs_path, relative_path)` pairs (relative to `remote_root`).
@@ -264,16 +278,14 @@ function collect_tree_remote_files_ssh(host::AbstractString, remote_root::Abstra
     pq = _remote_shell_path_word(rr)
     out = read(
         pipeline(
-            _host_sync_remote_shell_cmd(hp, "find $pq -type f -print");
+            _host_sync_remote_shell_cmd(hp, "find $pq -type f -print0");
             stderr = devnull,
         ),
         String,
     )
     sep = endswith(rr, "/") ? rr : (rr * "/")
     pairs = Tuple{String, String}[]
-    for line in split(out, '\n')
-        p = String(strip(line))
-        isempty(p) && continue
+    for p in _find_print0_paths(out)
         rel = startswith(p, sep) ? p[(length(sep) + 1):end] : String(relpath(p, rr))
         isempty(rel) && continue
         startswith(rel, "..") && continue

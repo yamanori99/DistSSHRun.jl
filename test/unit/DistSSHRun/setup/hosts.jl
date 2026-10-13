@@ -166,6 +166,15 @@ using Test
             @test !result.cancelled && result.succeeded == 0 && result.failed == 1
             @test length(result.hosts) == 1 && !result.hosts[1].ok
         end
+
+        _with_fake_remotes(; extra_env = Dict("DISTSSHKIT_TEST_GIT_CLONE_FAIL" => "1")) do _
+            result = DistSSHRun.clone_to_remotes(
+                ["host1"], "~/App.jl", "git@example.com:org/App.jl.git";
+                confirm = false,
+            )
+            @test result.failed == 1
+            @test occursin("repository not found", result.hosts[1].message)
+        end
     end
 
     @testset "prune_kit_leaves confirm abort" begin

@@ -6,6 +6,10 @@ GitHub Releases may copy these sections (`Release notes:` on
 
 ## Unreleased
 
+- A failed `git push`, `git pull`, or `git clone` prints the command's own error text.
+- Each host touches its own drive sentinel, so collect still runs when hosts share a directory.
+- `drive` warns when two hosts collect the same relative path. The last transfer remains. With `DISTSSHKIT_JOBS` greater than 1, which host remains is unspecified. Hosts that share one directory report every file, so the warning lists them all.
+- `run.toml` `collect_dirs` for `drive` resolves relative paths from the project root.
 - The DistSSHBase and DistSSHUp sources live under `lib/` with their own
   `Project.toml` and tests. DistSSHRun still includes them as submodules.
 - Host talking and the juliaup verbs move into two internal submodules,

@@ -148,15 +148,23 @@ function _list_kit_run_logs(run_dir::AbstractString)::Vector{String}
     return out
 end
 
-function _collect_dirs_from_env()::Vector{String}
+function _collect_dirs_from_env(;
+        project_root::Union{Nothing, AbstractString} = nothing,
+    )::Vector{String}
     spec = String(strip(get(ENV, "DISTRIBUTED_COLLECT_DIRS", "")))
     isempty(spec) && return String[]
+    repo = project_root isa AbstractString ? canonical_local_path(project_root) : nothing
     out = String[]
     seen = Set{String}()
     for chunk in split(spec, ':')
         p = String(strip(String(chunk)))
         isempty(p) && continue
-        ap = canonical_local_path(expanduser(p))
+        raw = String(expanduser(p))
+        ap = if repo isa String
+            canonical_local_path(isabspath(raw) ? raw : joinpath(repo, raw))
+        else
+            canonical_local_path(raw)
+        end
         ap in seen && continue
         push!(seen, ap)
         push!(out, ap)
@@ -171,6 +179,7 @@ function write_kit_run_toml!(
         output_dir::Union{Nothing, AbstractString} = nothing,
         log_dir::Union{Nothing, AbstractString} = nothing,
         result::Union{Nothing, KitRunResult} = nothing,
+        project_root::Union{Nothing, AbstractString} = nothing,
     )
     d = canonical_local_path(run_dir)
     data = Dict{String, Any}(
@@ -188,7 +197,7 @@ function write_kit_run_toml!(
     end
     logs = _list_kit_run_logs(d)
     isempty(logs) || (data["logs"] = logs)
-    cols = _collect_dirs_from_env()
+    cols = _collect_dirs_from_env(; project_root = project_root)
     isempty(cols) || (data["collect_dirs"] = cols)
     if result !== nothing
         data["ok"] = result.ok

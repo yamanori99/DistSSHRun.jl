@@ -1,3 +1,26 @@
+"""
+Sentinel file name for `host`.
+
+ASCII letters, digits, `.`, and `-` are kept. Every other byte (including `_`
+and `:`) becomes `+` plus two lowercase hex digits, so `a:b` and `a_b` never
+collide when hosts share a collect directory.
+"""
+function drive_sentinel_for_host(base::AbstractString, host::AbstractString)::String
+    buf = IOBuffer()
+    for b in codeunits(String(host))
+        if (UInt8('A') <= b <= UInt8('Z')) ||
+                (UInt8('a') <= b <= UInt8('z')) ||
+                (UInt8('0') <= b <= UInt8('9')) ||
+                b == UInt8('.') ||
+                b == UInt8('-')
+            write(buf, Char(b))
+        else
+            print(buf, '+', string(b; base = 16, pad = 2))
+        end
+    end
+    return string(base, "_", String(take!(buf)))
+end
+
 function place_drive_sentinels!(
         successful_hosts::Vector{String},
         script_dir::String,
@@ -20,7 +43,8 @@ function place_drive_sentinels!(
                 end
                 remote_early_abs = remote_early_abs::String
                 pq = DistSSHRun._remote_shell_path_word(remote_early_abs)
-                sn = DistSSHRun._remote_shell_path_word(joinpath(remote_early_abs, sentinel_name))
+                host_sentinel = drive_sentinel_for_host(sentinel_name, host)
+                sn = DistSSHRun._remote_shell_path_word(joinpath(remote_early_abs, host_sentinel))
                 run(
                     pipeline(
                         DistSSHRun._host_sync_remote_shell_cmd(host, "mkdir -p $pq"),
@@ -192,6 +216,8 @@ function collect_drive_results!(
     totals = zeros(Int, n_hosts)
     errs = Vector{Any}(undef, n_hosts)
     fill!(errs, nothing)
+    dup_lock = ReentrantLock()
+    dup_hosts = Dict{Tuple{String, String}, Vector{String}}()
 
     DistSSHRun.map_host_jobs(hosts_u) do i, host
         DistSSHRun._drive_host_span!(host, "collect", :running)
@@ -213,23 +239,24 @@ function collect_drive_results!(
                     continue
                 end
                 remote_rd_abs = remote_rd_abs::String
-                remote_sentinel = joinpath(remote_rd_abs, sentinel_name)
+                host_sentinel = drive_sentinel_for_host(sentinel_name, host)
+                remote_sentinel = joinpath(remote_rd_abs, host_sentinel)
                 try
                     remote_find_raw = try
                         pq = DistSSHRun._remote_shell_path_word(remote_rd_abs)
                         sq = DistSSHRun._remote_shell_path_word(remote_sentinel)
-                        nq = DistSSHRun._remote_shell_path_word(sentinel_name)
-                        strip(
-                            read(
-                                pipeline(
-                                    DistSSHRun._host_sync_remote_shell_cmd(
-                                        host,
-                                        "find $pq -type f -newer $sq ! -name $nq -print",
-                                    );
-                                    stderr = devnull,
-                                ),
-                                String,
+                        # Exclude every host sentinel for this run (`base_*`), not only
+                        # this host's file (shared trees otherwise collect others).
+                        nq = DistSSHRun._remote_shell_path_word(sentinel_name * "_*")
+                        read(
+                            pipeline(
+                                DistSSHRun._host_sync_remote_shell_cmd(
+                                    host,
+                                    "find $pq -type f -newer $sq ! -name $nq -print0",
+                                );
+                                stderr = devnull,
                             ),
+                            String,
                         )
                     catch e
                         DistSSHRun._rethrow_missing_host_tool(e)
@@ -241,9 +268,7 @@ function collect_drive_results!(
                     end
                     rroot = String(rstrip(String(remote_rd_abs), '/'))
                     rel_lines = String[]
-                    for line in split(remote_find_raw, '\n')
-                        lp = strip(String(line))
-                        isempty(lp) && continue
+                    for lp in _find_print0_paths(remote_find_raw)
                         rel = if startswith(lp, rroot * "/")
                             lp[(length(rroot) + 2):end]
                         else
@@ -256,6 +281,11 @@ function collect_drive_results!(
 
                     if !isempty(rel_lines)
                         uniq = unique(rel_lines)
+                        lock(dup_lock) do
+                            for rel in uniq
+                                push!(get!(() -> String[], dup_hosts, (local_abs, rel)), host)
+                            end
+                        end
                         DistSSHRun._run_rsync_files_from(
                             rsync_bin,
                             ["-az", "-e", ssh_cmd],
@@ -290,6 +320,25 @@ function collect_drive_results!(
         end
         totals[i] = total_for_host
         errs[i] = host_err
+    end
+
+    dups = Pair{String, Vector{String}}[]
+    for ((_, rel), hs) in dup_hosts
+        u = unique(hs)
+        length(u) < 2 && continue
+        push!(dups, rel => u)
+    end
+    sort!(dups; by = first)
+    if !isempty(dups)
+        print_warn(
+            "$(length(dups)) result path(s) came from more than one host. The last transfer remains.\n",
+        )
+        if DistSSHRun.kit_host_jobs() > 1
+            print_warn("With DISTSSHKIT_JOBS>1, which host's bytes remain is unspecified.\n")
+        end
+        for (rel, hs) in dups[1:min(end, 10)]
+            print_warn("  $rel ($(join(hs, ", ")))\n")
+        end
     end
 
     collect_ok = true
