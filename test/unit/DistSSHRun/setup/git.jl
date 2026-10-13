@@ -88,6 +88,14 @@ using Test
         end
     end
 
+    @testset "setup host outcome reads NamedTuple ok" begin
+        @test DistSSHRun._setup_host_outcome_ok((; ok = true, detail = ""))
+        @test !DistSSHRun._setup_host_outcome_ok((; ok = false, detail = "fatal:"))
+        @test !DistSSHRun._setup_host_outcome_ok(
+            DistSSHRun._git_run_detail(["-C", "/nonexistent-distsshkit-repo", "status"]),
+        )
+    end
+
     @testset "git_sync confirm abort" begin
         withenv("DISTSSHKIT_YES" => nothing) do
             prev_ni = DistSSHRun.kit_noninteractive()

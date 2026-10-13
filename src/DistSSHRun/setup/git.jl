@@ -13,26 +13,27 @@ function _captured_output_tail(out::AbstractString, err::AbstractString; n::Int 
     return join(lines[max(1, end - n + 1):end], "\n")
 end
 
-function _git_run_detail(args::Vector{String})::Tuple{Bool, String}
+function _git_run_detail(args::Vector{String})
     out_buf = IOBuffer()
     err_buf = IOBuffer()
     try
         run(pipeline(_git_cmd(args); stdout = out_buf, stderr = err_buf))
-        return true, ""
+        return (; ok = true, detail = "")
     catch e
         _rethrow_missing_host_tool(e)
-        return false, _captured_output_tail(String(take!(out_buf)), String(take!(err_buf)))
+        return (;
+            ok = false,
+            detail = _captured_output_tail(String(take!(out_buf)), String(take!(err_buf))),
+        )
     end
 end
 
 function git_push_project!(project::AbstractString)::Bool
-    ok, _ = _git_run_detail(["-C", String(project), "push"])
-    return ok
+    return _git_run_detail(["-C", String(project), "push"]).ok
 end
 
 function git_pull_local_project!(project::AbstractString)::Bool
-    ok, _ = _git_run_detail(["-C", String(project), "pull"])
-    return ok
+    return _git_run_detail(["-C", String(project), "pull"]).ok
 end
 
 """Remote shell snippet for `git pull` at `remote_path` (`ssh -n`, not a login shell)."""
@@ -40,7 +41,7 @@ function _git_pull_remote_inner(remote_path::AbstractString)::String
     return "cd $(_remote_shell_path_word(remote_path)) && git pull"
 end
 
-function _git_pull_remote_host_detail(host::AbstractString, remote_path::AbstractString)::Tuple{Bool, String}
+function _git_pull_remote_host_detail(host::AbstractString, remote_path::AbstractString)
     out_buf = IOBuffer()
     err_buf = IOBuffer()
     try
@@ -51,16 +52,18 @@ function _git_pull_remote_host_detail(host::AbstractString, remote_path::Abstrac
                 stderr = err_buf,
             )
         )
-        return true, ""
+        return (; ok = true, detail = "")
     catch e
         _rethrow_missing_host_tool(e)
-        return false, _captured_output_tail(String(take!(out_buf)), String(take!(err_buf)))
+        return (;
+            ok = false,
+            detail = _captured_output_tail(String(take!(out_buf)), String(take!(err_buf))),
+        )
     end
 end
 
 function git_pull_remote_host!(host::AbstractString, remote_path::AbstractString)::Bool
-    ok, _ = _git_pull_remote_host_detail(host, remote_path)
-    return ok
+    return _git_pull_remote_host_detail(host, remote_path).ok
 end
 
 function _git_remote_url(project::AbstractString)::String
@@ -138,25 +141,25 @@ function git_sync_project_to_hosts!(
     end
 
     if do_local_pull
-        ok_local, local_detail = kit_spin!("  localhost git pull: ") do
+        local_r = kit_spin!("  localhost git pull: ") do
             _git_run_detail(["-C", proj, "pull"])
         end
-        if ok_local
+        if local_r.ok
             print_ok("✓")
             kit_println()
         else
             print_progress_err("✗")
             kit_println()
-            isempty(local_detail) || println_fatal(local_detail)
+            isempty(local_r.detail) || println_fatal(local_r.detail)
             return (; ok = false, cancelled = false, host_results = host_results)
         end
     end
 
     if do_push
-        ok_push, push_detail = kit_spin!("  git push: ") do
+        push_r = kit_spin!("  git push: ") do
             _git_run_detail(["-C", proj, "push"])
         end
-        if ok_push
+        if push_r.ok
             print_ok("✓")
             kit_println()
         else
@@ -165,7 +168,7 @@ function git_sync_project_to_hosts!(
             println_fatal()
             repo_url = _git_remote_url(proj)
             print_warn("Push failed.\n")
-            isempty(push_detail) || println_fatal(push_detail)
+            isempty(push_r.detail) || println_fatal(push_r.detail)
             println_fatal()
             println_fatal("  Remote: $repo_url")
             println_fatal()
@@ -180,19 +183,19 @@ function git_sync_project_to_hosts!(
 
     if do_pull
         for host in hosts
-            ok_host, pull_detail = _setup_host_call!(host) do
+            pull_r = _setup_host_call!(host) do
                 kit_spin!("  $host git pull: ") do
                     _git_pull_remote_host_detail(host, remote)
                 end
             end
-            if ok_host
+            if pull_r.ok
                 print_ok("✓")
                 kit_println()
                 push!(host_results, HostResult(host, true, "git pull ok"))
             else
                 print_progress_err("✗")
                 kit_println()
-                msg = isempty(pull_detail) ? "git pull failed" : pull_detail
+                msg = isempty(pull_r.detail) ? "git pull failed" : pull_r.detail
                 push!(host_results, HostResult(host, false, msg))
                 return (; ok = false, cancelled = false, host_results = host_results)
             end

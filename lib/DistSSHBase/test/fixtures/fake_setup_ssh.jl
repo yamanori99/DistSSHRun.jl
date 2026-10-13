@@ -278,9 +278,17 @@ function main()
         find_root = cap === nothing ? tree : String(cap)
         find_root = strip(find_root, ['\'', '"'])
         nul = occursin("-print0", script)
+        name_excl = nothing
+        mname = match(r"!\s*-name\s+(\S+)", script)
+        if mname !== nothing && mname.captures[1] isa AbstractString
+            pat = strip(String(mname.captures[1]), ['\'', '"'])
+            # find -name glob: `*` → any chars in the basename.
+            name_excl = Regex("^" * replace(pat, "*" => ".*") * "\$")
+        end
         if isdir(tree)
             for (root, _, files) in walkdir(tree)
                 for f in files
+                    name_excl !== nothing && occursin(name_excl, f) && continue
                     rel = relpath(joinpath(root, f), tree)
                     path = joinpath(find_root, rel)
                     if nul

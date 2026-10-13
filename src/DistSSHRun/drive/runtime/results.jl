@@ -228,7 +228,9 @@ function collect_drive_results!(
                     remote_find_raw = try
                         pq = DistSSHRun._remote_shell_path_word(remote_rd_abs)
                         sq = DistSSHRun._remote_shell_path_word(remote_sentinel)
-                        nq = DistSSHRun._remote_shell_path_word(host_sentinel)
+                        # Exclude every host sentinel for this run (`base_*`), not only
+                        # this host's file (shared trees otherwise collect others).
+                        nq = DistSSHRun._remote_shell_path_word(sentinel_name * "_*")
                         read(
                             pipeline(
                                 DistSSHRun._host_sync_remote_shell_cmd(
@@ -309,6 +311,7 @@ function collect_drive_results!(
         length(u) < 2 && continue
         push!(dups, rel => u)
     end
+    sort!(dups; by = first)
     if !isempty(dups)
         print_warn(
             "$(length(dups)) result path(s) came from more than one host. The last transfer remains.\n",

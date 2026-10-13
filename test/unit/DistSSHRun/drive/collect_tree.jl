@@ -216,6 +216,10 @@ end
                 @test ok
                 @test all(h -> h.ok, hrs)
                 @test occursin("more than one host", captured)
+                @test !any(
+                    f -> startswith(f, ".drive_sentinel_"),
+                    Iterators.flatten((files for (_, _, files) in walkdir(out))),
+                )
             end
         end
     end
