@@ -311,7 +311,7 @@ end
 const _PATH_SOURCE_SHIP_NAMES =
     r"(?:^|/)(?:[^/]+\.jl|Project\.toml|JuliaProject\.toml|Artifacts\.toml|JuliaArtifacts\.toml)$"
 
-const _SHIP_ERROR_SOON = "This will be an error in DistSSHRun 0.2."
+const _SHIP_ERROR_SOON = "This will be an error."
 
 """Problems when `location` hides shippable files from a clone or git sync."""
 function _path_source_git_problems(
@@ -546,7 +546,7 @@ function ensure_manifest_ships!(
     listed = send_list isa Vector{String} ? send_list : _rsync_send_list(env.env_dir, env)
     if listed isa Vector
         for msg in _manifest_ship_problems(env, listed)
-            print_warn("Warning: $msg This will be an error in DistSSHRun 0.2.\n")
+            print_warn("Warning: $msg $_SHIP_ERROR_SOON\n")
         end
     end
     return env
