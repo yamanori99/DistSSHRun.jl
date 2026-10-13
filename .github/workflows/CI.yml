@@ -117,6 +117,10 @@ jobs:
         with:
           coverage: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           upload: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      - name: Pkg.test lib/DistSSHBase and lib/DistSSHUp on their own
+        run: |
+          julia --project=lib/DistSSHBase -e 'using Pkg; Pkg.test()'
+          julia --project=lib/DistSSHUp -e 'using Pkg; Pkg.test()'
 
   test-macos:
     name: Pkg.test (1.13, macos-latest, aarch64)

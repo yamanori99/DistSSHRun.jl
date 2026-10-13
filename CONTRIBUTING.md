@@ -52,7 +52,7 @@ Checkout `Pkg.test()` is not a Registry tarball. After changing those gates (chi
 
 ```bash
 julia -e 'using Pkg; Pkg.Apps.add("Runic")'   # once
-runic --inplace src test docs testenv   # before push; not `.` (markdown out of scope)
+runic --inplace src lib test docs testenv   # before push; not `.` (markdown out of scope)
 ./.github/jetls-check.sh    # hint+; same files as CI
 ./.github/aqua-check.sh     # latest registry Aqua; not part of Pkg.test()
 ./testenv/docker-ssh/scripts/up.sh --e2e
@@ -65,7 +65,7 @@ gitleaks detect --source .
 (`fredrikekre/runic-action@v1`, `version: '1'`) runs `--check` on every
 tracked `.jl`. Format `docs/*.jl` and `testenv/**/*.jl` too if you change
 them. A Runic minor may make `--check` red: re-run
-`runic --inplace src test docs testenv` and push.
+`runic --inplace src lib test docs testenv` and push.
 Optional: after a bulk format squash, add the landed SHA to
 [`.git-blame-ignore-revs`](.git-blame-ignore-revs) if blame is noisy.
 Local blame:

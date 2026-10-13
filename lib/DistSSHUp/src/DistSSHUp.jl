@@ -2,6 +2,7 @@
 module DistSSHUp
 
 import DistSSHBase
+using .DistSSHBase
 
 include("body.jl")
 

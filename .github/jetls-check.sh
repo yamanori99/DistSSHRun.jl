@@ -16,6 +16,8 @@ files=(
     src/DistSSHRun.jl
     test/runtests.jl
     test/e2e.jl
+    lib/DistSSHBase/test/runtests.jl
+    lib/DistSSHUp/test/runtests.jl
 )
 
 if ((${#files[@]} == 0)); then
