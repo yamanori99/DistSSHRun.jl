@@ -106,7 +106,13 @@ export SPINNER_FRAMES
 
 # Host talking lives in DistSSHBase, and the juliaup verbs in DistSSHUp.
 # Confirm text and progress stay in setup/juliaup.jl.
-include(joinpath(@__DIR__, "..", "lib", "DistSSHBase", "src", "DistSSHBase.jl"))
+# `lib/` sits beside `src/`. A copy of `src/` alone cannot load.
+let _base_src = joinpath(@__DIR__, "..", "lib", "DistSSHBase", "src", "DistSSHBase.jl")
+    isfile(_base_src) || error(
+        "DistSSHRun: $_base_src is missing. Copy the whole DistSSHRun package directory, including lib/, not only src/.",
+    )
+    include(_base_src)
+end
 include("DistSSHRun/up_module.jl")
 using .DistSSHBase
 using .DistSSHBase: CliCursor, OUTPUT_WIDTH, PARENT_HOST_NAME, _HOST_TOOL_NAMES,

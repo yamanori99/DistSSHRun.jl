@@ -64,6 +64,7 @@ jobs:
           filters: |
             e2e:
               - "src/**"
+              - "lib/**"
               - "test/**"
               - "!test/**/*.md"
               - "demos/**"

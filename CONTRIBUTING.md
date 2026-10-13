@@ -135,7 +135,7 @@ Gitleaks also rejects `< 0.0.1` in `Project.toml`. Documenter 1.13 is
 [`.github/workflows/Documentation.yml`](.github/workflows/Documentation.yml).
 `Assets` (`draw SVG`) runs if `docs/src/assets/` or that workflow
 changed. Linux E2E (1.13) uses the same **path filter** as **main** push
-(`src/**`, `test/**`, `testenv/**` minus markdown under those trees,
+(`src/**`, `lib/**`, `test/**`, `testenv/**` minus markdown under those trees,
 `Project.toml`, `test/Project.toml`, `.github/workflows/CI.yml`). It also
 runs on a **version increase**, **E2E weekly** (`ssh-e2e-weekly.yml`; `CI.yml` has no
 `schedule`), and `workflow_dispatch`. **1.14-nightly** `Pkg.test` / Aqua

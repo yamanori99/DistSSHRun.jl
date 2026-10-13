@@ -342,13 +342,15 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         return nothing
     end
 
-    # Copy DistSSHRun `Project.toml` + `src/` into `proj/deps/DistSSHRun` (relative path dep).
+    # Copy DistSSHRun `Project.toml`, `src/`, and `lib/` into `proj/deps/DistSSHRun`.
+    # `src/DistSSHRun.jl` includes `lib/*/src`. A copy of `src/` alone cannot load.
     function _vendor_distsshkit!(proj::AbstractString; kit_root::AbstractString = _kit_root())
         dest = joinpath(proj, "deps", "DistSSHRun")
         isdir(dest) && rm(dest; recursive = true)
         mkpath(dest)
         cp(joinpath(kit_root, "Project.toml"), joinpath(dest, "Project.toml"); force = true)
         cp(joinpath(kit_root, "src"), joinpath(dest, "src"); force = true)
+        cp(joinpath(kit_root, "lib"), joinpath(dest, "lib"); force = true)
         return dest
     end
 
