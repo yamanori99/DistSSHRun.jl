@@ -222,9 +222,198 @@ jobs:
             (cd "$dest" && ./testenv/docker-ssh/scripts/down.sh) || true
           fi
 
+  lib-linux-e2e:
+    name: ${{ matrix.pkg }} (ubuntu-latest → ubuntu-24.04)
+    needs: linux-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [DistSSHBase, DistSSHUp]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
+        with:
+          project: lib/${{ matrix.pkg }}
+      - name: Log in to GHCR
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+      - name: docker-ssh up + SSH E2E
+        env:
+          DISTSSHKIT_WORKER_IMAGE: ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}
+          DISTSSHKIT_WORKER_PULL_RETRIES: "8"
+          DISTSSHKIT_SSH_E2E: "1"
+        run: |
+          ./testenv/docker-ssh/scripts/up.sh
+          julia --project=lib/${{ matrix.pkg }} lib/${{ matrix.pkg }}/test/e2e.jl
+      - name: Teardown workers
+        if: always()
+        run: ./testenv/docker-ssh/scripts/down.sh || true
+
+  lib-macos-e2e:
+    name: ${{ matrix.pkg }} (macos-15-intel → ubuntu-24.04)
+    needs: linux-image
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [DistSSHBase, DistSSHUp]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
+        with:
+          project: lib/${{ matrix.pkg }}
+      - name: Colima
+        run: ./testenv/docker-ssh/scripts/setup-colima-ci.sh
+      - name: Log in to GHCR
+        run: |
+          attempt=1
+          max=5
+          delay=5
+          until echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin; do
+            if (( attempt >= max )); then
+              echo "docker login failed after ${max} attempts" >&2
+              exit 1
+            fi
+            echo "docker login failed (${attempt}/${max}); retrying in ${delay}s" >&2
+            sleep "$delay"
+            attempt=$((attempt + 1))
+            delay=$((delay * 2))
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+      - name: docker-ssh up + SSH E2E
+        env:
+          DISTSSHKIT_WORKER_IMAGE: ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}
+          DISTSSHKIT_WORKER_PULL_RETRIES: "8"
+          DISTSSHKIT_SSH_E2E: "1"
+        run: |
+          ./testenv/docker-ssh/scripts/up.sh
+          julia --project=lib/${{ matrix.pkg }} lib/${{ matrix.pkg }}/test/e2e.jl
+      - name: Teardown workers
+        if: always()
+        run: ./testenv/docker-ssh/scripts/down.sh || true
+
+  lib-wsl-e2e:
+    name: ${{ matrix.pkg }} (windows-latest (WSL2) → ubuntu-24.04)
+    needs: linux-image
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [DistSSHBase, DistSSHUp]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Vampire/setup-wsl@d1da7f2c0322a5ee4f24975344f67fc0f5baf364 # v7.0.0
+        timeout-minutes: 10
+        with:
+          distribution: Ubuntu-24.04
+          wsl-version: 2
+          additional-packages: >-
+            ca-certificates curl git rsync openssh-client
+            docker.io docker-compose-v2 iptables
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ci-cache/wsl-julia
+          key: wsl-julia-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
+      - name: GHCR token for WSL
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_ACTOR: ${{ github.actor }}
+        shell: bash
+        run: |
+          mkdir -p .ci-cache
+          printf '%s' "$GHCR_TOKEN" > .ci-cache/ghcr.token
+          printf '%s' "$GHCR_ACTOR" > .ci-cache/ghcr.actor
+      - name: docker-ssh up + SSH E2E in WSL2
+        shell: wsl-bash {0}
+        run: |
+          src="$(pwd)"
+          dest="$HOME/DistSSHRun.jl"
+          cache="$src/.ci-cache/wsl-julia"
+          export DISTSSHKIT_WORKER_IMAGE="ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}"
+          export DISTSSHKIT_WORKER_PULL_RETRIES="8"
+          export DISTSSHKIT_SSH_E2E=1
+          mkdir -p "$cache"
+          rm -rf "$dest"
+          git clone "$src" "$dest"
+          if ! docker info >/dev/null 2>&1; then
+            dockerd >/tmp/dockerd.log 2>&1 &
+            ok=0
+            for _ in $(seq 1 60); do
+              if docker info >/dev/null 2>&1; then
+                ok=1
+                break
+              fi
+              sleep 2
+            done
+            if [[ "$ok" -ne 1 ]]; then
+              cat /tmp/dockerd.log
+              exit 1
+            fi
+          fi
+          actor="$(cat "$src/.ci-cache/ghcr.actor")"
+          echo "$(cat "$src/.ci-cache/ghcr.token")" | docker login ghcr.io -u "$actor" --password-stdin
+          rm -f "$src/.ci-cache/ghcr.token" "$src/.ci-cache/ghcr.actor"
+          if [[ -f "$cache/julia.tgz" ]]; then
+            tar -xzf "$cache/julia.tgz" -C "$HOME"
+          else
+            # shellcheck source=/dev/null
+            source "$dest/testenv/docker-ssh/scripts/retry.sh"
+            _distsshkit_retry "WSL juliaup install" _distsshkit_install_juliaup 1.13
+          fi
+          export PATH="$HOME/.juliaup/bin:$PATH"
+          cd "$dest"
+          ./testenv/docker-ssh/scripts/up.sh
+          julia --project=lib/${{ matrix.pkg }} lib/${{ matrix.pkg }}/test/e2e.jl
+          if [[ -d "$HOME/.julia" ]]; then
+            tar -czf "$cache/julia.tgz" -C "$HOME" .juliaup .julia
+          else
+            tar -czf "$cache/julia.tgz" -C "$HOME" .juliaup
+          fi
+      - name: Teardown workers
+        if: always()
+        shell: wsl-bash {0}
+        run: |
+          src="$(pwd)"
+          rm -f "$src/.ci-cache/ghcr.token"
+          dest="$HOME/DistSSHRun.jl"
+          if [[ -d "$dest" ]]; then
+            (cd "$dest" && ./testenv/docker-ssh/scripts/down.sh) || true
+          fi
+
   # Schedule / post-cut runs are not PR checks, and github-actions[bot] does not email.
   notify:
-    needs: [linux-image, linux-e2e, macos-e2e, wsl-e2e]
+    needs: [linux-image, linux-e2e, macos-e2e, wsl-e2e, lib-linux-e2e, lib-macos-e2e, lib-wsl-e2e]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     timeout-minutes: 5

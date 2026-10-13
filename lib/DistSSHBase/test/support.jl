@@ -1,5 +1,5 @@
-# Shared by DistSSHBase's own tests and DistSSHRun's suite.
-# Run includes this file first, so the guards skip a second definition.
+# Shared by DistSSHBase's own tests.
+# The guard skips a second definition if a parent file included this first.
 
 if !isdefined(Main, :_with_tempdir)
     # macOS can throw ENOTEMPTY while removing a `.git` that was just written.

@@ -1,6 +1,6 @@
 using Test
 
-let _BASE = _distsshbase_under_test()
+let _BASE = DistSSHBase
 
     # `/bin/sh` executes the quoted word. A quote that is only syntactically valid
     # (for example a double-quoted `$(...)`) still fails here, because the sentinel

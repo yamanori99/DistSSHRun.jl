@@ -36,27 +36,8 @@ function _runtest_announce(rel::AbstractString)
     return nothing
 end
 
-_distsshbase_under_test() = DistSSHRun.DistSSHBase
-_distsshup_under_test() = DistSSHRun.DistSSHUp
-
 @testset "DistSSHRun" verbose = true begin
     @testset "unit" verbose = true begin
-        @testset "DistSSHBase" verbose = true begin
-            _runtest_announce("lib/DistSSHBase/test/paths.jl")
-            include(joinpath(dirname(@__DIR__), "lib", "DistSSHBase", "test", "paths.jl"))
-            _runtest_announce("lib/DistSSHBase/test/hosts.jl")
-            include(joinpath(dirname(@__DIR__), "lib", "DistSSHBase", "test", "hosts.jl"))
-            _runtest_announce("lib/DistSSHBase/test/ssh.jl")
-            include(joinpath(dirname(@__DIR__), "lib", "DistSSHBase", "test", "ssh.jl"))
-            _runtest_announce("lib/DistSSHBase/test/shell_quote.jl")
-            include(joinpath(dirname(@__DIR__), "lib", "DistSSHBase", "test", "shell_quote.jl"))
-            _runtest_announce("lib/DistSSHBase/test/detect_julia.jl")
-            include(joinpath(dirname(@__DIR__), "lib", "DistSSHBase", "test", "detect_julia.jl"))
-        end
-        @testset "DistSSHUp" verbose = true begin
-            _runtest_announce("lib/DistSSHUp/test/local.jl")
-            include(joinpath(dirname(@__DIR__), "lib", "DistSSHUp", "test", "local.jl"))
-        end
         _runtest_announce("unit/DistSSHRun/display.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "display.jl"))
         _runtest_announce("unit/DistSSHRun/explain.jl")

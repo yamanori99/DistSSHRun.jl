@@ -1,6 +1,6 @@
 using Test
 
-let _BASE = _distsshbase_under_test()
+let _BASE = DistSSHBase
 
     # SSH failure throws and is not cached. A host with no Julia returns nothing.
     # Kit CLI session is not required.

@@ -25,10 +25,11 @@ jobs:
   # `Pkg.test` 1.13 runs on ubuntu-latest, macos-latest, and WSL2 Ubuntu.
   # macOS and WSL are required. The macOS job exercises `ps -o lstart=`
   # in kit_process_start_key (no /proc). Coverage uploads from Ubuntu only.
-  # Run keeps the old check titles (no package name). Standalone
-  # DistSSHBase and DistSSHUp Pkg.test run as one step on the Ubuntu
-  # 1.13 job. Downstream is DistSSHQueue and DistSSHKit on Ubuntu.
-  # Coverage uploads from the Ubuntu Run job only.
+  # Run keeps the old check titles (no package name). DistSSHBase and
+  # DistSSHUp are their own Pkg.test jobs on Ubuntu, macOS, and WSL2.
+  # Downstream is DistSSHQueue and DistSSHKit on Ubuntu.
+  # Coverage uploads from the Ubuntu Run job and the Ubuntu DistSSHBase /
+  # DistSSHUp jobs (flag pkgtest, main push).
   # Slow SSH E2E kit parents are `E2E weekly`
   # (macos-15-intel Colima, not this job).
   # PRs run `ubuntu-latest → ubuntu-24.04` in this workflow.
@@ -122,12 +123,6 @@ jobs:
         with:
           coverage: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           upload: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-      # Standalone projects: undeclared deps fail here. The test bodies
-      # already run on every host inside DistSSHRun's Pkg.test.
-      - name: Pkg.test DistSSHBase and DistSSHUp
-        run: |
-          julia --project=lib/DistSSHBase -e 'using Pkg; Pkg.test()'
-          julia --project=lib/DistSSHUp -e 'using Pkg; Pkg.test()'
 
   test-macos:
     name: Pkg.test (1.13, macos-latest, aarch64)
@@ -173,6 +168,82 @@ jobs:
       - name: Pkg.test in WSL2
         shell: wsl-bash {0}
         run: ./.github/wsl-julia.sh 1.13 julia --project=. -e 'using Pkg; Pkg.test()'
+
+  lib-test:
+    name: ${{ matrix.pkg }} (1.13, ${{ matrix.slot.name }}, ${{ matrix.slot.arch }})
+    needs: detect
+    if: needs.detect.outputs.heavy == 'true'
+    runs-on: ${{ matrix.slot.runs }}
+    timeout-minutes: ${{ matrix.slot.timeout }}
+    permissions:
+      contents: read
+      id-token: write # Codecov OIDC on main push (Ubuntu cells)
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [DistSSHBase, DistSSHUp]
+        slot:
+          - { runs: ubuntu-latest, name: ubuntu-latest, arch: x64, timeout: 20 }
+          - { runs: macos-latest, name: macos-latest, arch: aarch64, timeout: 30 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - name: Pkg.test
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ matrix.slot.name }}" = "ubuntu-latest" ]; then
+            julia --project=lib/${{ matrix.pkg }} -e 'using Pkg; Pkg.test(; coverage=true)'
+          else
+            julia --project=lib/${{ matrix.pkg }} -e 'using Pkg; Pkg.test()'
+          fi
+      - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.slot.name == 'ubuntu-latest'
+        with:
+          directories: lib/${{ matrix.pkg }}/src
+      - name: Upload coverage to Codecov
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.slot.name == 'ubuntu-latest'
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: lcov.info
+          slug: ${{ github.repository }}
+          use_oidc: true
+          flags: pkgtest
+          fail_ci_if_error: true
+
+  lib-test-wsl:
+    name: ${{ matrix.pkg }} (1.13, WSL2 ubuntu-24.04, x64)
+    needs: detect
+    if: needs.detect.outputs.heavy == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [DistSSHBase, DistSSHUp]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: Vampire/setup-wsl@d1da7f2c0322a5ee4f24975344f67fc0f5baf364 # v7.0.0
+        timeout-minutes: 10
+        with:
+          distribution: Ubuntu-24.04
+          wsl-version: 2
+          additional-packages: ca-certificates curl git
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ci-cache/wsl-julia
+          key: wsl-julia-1.13-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
+      - name: Pkg.test in WSL2
+        shell: wsl-bash {0}
+        run: ./.github/wsl-julia.sh 1.13 julia --project=lib/${{ matrix.pkg }} -e 'using Pkg; Pkg.test()'
 
   downstream:
     name: Downstream (${{ matrix.pkg }}, 1.13)
@@ -369,6 +440,47 @@ jobs:
       - uses: ./.github/actions/e2e-codecov
         if: ${{ always() && steps.e2e.outcome == 'success' && needs.detect.outputs.coverage == 'true' }}
 
+      - name: Teardown workers
+        if: ${{ always() }}
+        run: ./testenv/docker-ssh/scripts/down.sh || true
+
+  lib-ssh-e2e:
+    name: ${{ matrix.pkg }} (ubuntu-latest → ubuntu-24.04)
+    needs: detect
+    if: needs.detect.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: write # buildx type=gha cache for the worker image
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [DistSSHBase, DistSSHUp]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/julia-slot
+        id: julia
+        with:
+          version: "1.13"
+      - name: Julia ${{ steps.julia.outputs.version }}
+        run: julia --version
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
+        with:
+          project: lib/${{ matrix.pkg }}
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+      - name: docker-ssh up + SSH E2E
+        env:
+          DISTSSHKIT_BUILD_CACHE: gha
+          DISTSSHKIT_SSH_E2E: "1"
+        run: |
+          ./testenv/docker-ssh/scripts/up.sh
+          julia --project=lib/${{ matrix.pkg }} lib/${{ matrix.pkg }}/test/e2e.jl
       - name: Teardown workers
         if: ${{ always() }}
         run: ./testenv/docker-ssh/scripts/down.sh || true
