@@ -333,6 +333,33 @@ function _find_print0_paths(raw::AbstractString)::Vector{String}
     return kept
 end
 
+"""True when `rel` is `.git` or a file under it."""
+function _collect_rel_is_git(rel::AbstractString)::Bool
+    r = replace(String(rel), '\\' => '/')
+    return r == ".git" || startswith(r, ".git/")
+end
+
+"""
+Warn when `collect_root` is `project_root` or an ancestor of it.
+
+A merge into that directory would overwrite source files, including `.git/`.
+This will be an error.
+"""
+function _warn_collect_root_overlap(collect_root::AbstractString, project_root::AbstractString)
+    # `abspath("dir/.")` keeps a trailing slash, so compare without it.
+    dest = rstrip(canonical_local_path(collect_root), '/')
+    proj = rstrip(canonical_local_path(project_root), '/')
+    isempty(dest) && (dest = "/")
+    isempty(proj) && (proj = "/")
+    (dest == proj || startswith(proj, dest * "/")) || return nothing
+    print_warn(
+        "Warning: collect root $dest is the project root or an ancestor of it ($proj). " *
+            "That would overwrite source files. Point DISTRIBUTED_COLLECT_DIRS, DISTRIBUTED_OUTPUT_DIR, or collect! at a result directory inside the project. " *
+            "$_SHIP_ERROR_SOON\n",
+    )
+    return nothing
+end
+
 """
 List all files under `remote_root` on `host` recursively via SSH `find`, returning
 `(remote_abs_path, relative_path)` pairs (relative to `remote_root`).
@@ -360,6 +387,7 @@ function collect_tree_remote_files_ssh(host::AbstractString, remote_root::Abstra
         rel = startswith(p, sep) ? p[(length(sep) + 1):end] : String(relpath(p, rr))
         isempty(rel) && continue
         startswith(rel, "..") && continue
+        _collect_rel_is_git(rel) && continue
         push!(pairs, (p, rel))
     end
     return pairs

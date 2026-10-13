@@ -18,6 +18,7 @@ function drive_collect_tree(
     )
     repo_root = canonical_local_path(project_root)
     local_root = DistSSHRun.canonical_local_path(local_root)
+    _warn_collect_root_overlap(local_root, repo_root)
     transport = DistSSHRun._host_sync_rsync_transport()
     rsync_bin = DistSSHRun._host_sync_rsync_argv()
 
@@ -74,7 +75,10 @@ function drive_collect_tree(
                 rsync_cmd = Cmd(
                     vcat(
                         rsync_bin,
-                        ["-az", "-e", transport, string(host, ":", host_remote, "/"), local_root * "/"],
+                        [
+                            "-az", "--exclude", ".git/", "-e", transport,
+                            string(host, ":", host_remote, "/"), local_root * "/",
+                        ],
                     )
                 )
                 run(pipeline(rsync_cmd; stderr = stderr))
