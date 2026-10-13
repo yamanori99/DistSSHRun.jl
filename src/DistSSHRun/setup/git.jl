@@ -66,17 +66,17 @@ function git_pull_remote_host!(host::AbstractString, remote_path::AbstractString
     return _git_pull_remote_host_detail(host, remote_path).ok
 end
 
-"""`git rev-parse` on `host` at `remote_path`. `nothing` when the command fails."""
-function _remote_git_rev_parse(
+"""Remote `HEAD` hash and branch from one `git rev-parse`. `nothing` when it fails."""
+function _remote_git_head(
         host::AbstractString,
         remote_path::AbstractString,
-        rev::AbstractString,
-    )::Union{Nothing, String}
+    )::Union{Nothing, @NamedTuple{hash::String, branch::String}}
     pq = _remote_shell_path_word(remote_path)
+    revs = join((_remote_sh_quote(w) for w in ("HEAD", "--abbrev-ref", "HEAD")), " ")
     inner = if startswith(strip(String(remote_path)), "~")
-        "cd $pq && git rev-parse $rev"
+        "cd $pq && git rev-parse $revs"
     else
-        "git -C $pq rev-parse $rev"
+        "git -C $pq rev-parse $revs"
     end
     try
         s = strip(
@@ -85,7 +85,9 @@ function _remote_git_rev_parse(
                 String,
             )
         )
-        return isempty(s) ? nothing : s
+        lines = split(s, '\n'; keepempty = false)
+        length(lines) == 2 || return nothing
+        return (hash = String(lines[1]), branch = String(lines[2]))
     catch e
         _rethrow_missing_host_tool(e)
         return nothing
@@ -232,21 +234,26 @@ function git_sync_project_to_hosts!(
                 end
             end
             if pull_r.ok
-                remote_hash = _remote_git_rev_parse(host, remote, "HEAD")
-                remote_branch = _remote_git_rev_parse(host, remote, "--abbrev-ref HEAD")
-                if local_hash isa String && remote_hash == local_hash
+                remote_head = _remote_git_head(host, remote)
+                if local_hash isa String && remote_head !== nothing && remote_head.hash == local_hash
                     print_ok("✓")
                     kit_println()
                     push!(host_results, HostResult(host, true, "git pull ok"))
-                else
-                    print_ok("✓")
+                elseif remote_head === nothing || !(local_hash isa String)
+                    print_progress_warn("⚠")
                     kit_println()
-                    lhs = local_hash isa String ? local_hash : "unknown"
-                    rhs = remote_hash isa String ? remote_hash : "unknown"
+                    msg = remote_head === nothing ?
+                        "could not read git HEAD on $host after pull" :
+                        "git HEAD on $host is not comparable (no local commit)"
+                    print_warn("Warning: $msg\n")
+                    push!(host_results, HostResult(host, true, "git pull ok; " * msg))
+                else
+                    print_progress_warn("⚠")
+                    kit_println()
                     lb = isempty(local_branch) ? "unknown" : local_branch
-                    rb = remote_branch isa String ? remote_branch : "unknown"
-                    msg = "git HEAD mismatch on $host: remote $rb ($rhs), local $lb ($lhs)"
+                    msg = "git HEAD mismatch on $host: remote $(remote_head.branch) ($(remote_head.hash)), local $lb ($local_hash)"
                     print_warn("Warning: $msg. $_SHIP_ERROR_SOON\n")
+                    lb == "unknown" || kit_println("    Fix: git -C $remote checkout $lb")
                     push!(host_results, HostResult(host, true, "git pull ok; " * msg))
                 end
             else

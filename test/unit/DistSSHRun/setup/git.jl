@@ -182,12 +182,15 @@ using Test
                     ),
                 )
                 withenv(env...) do
-                    raw = DistSSHRun.git_sync_project_to_hosts!(
-                        ["host1"], work, "/tmp/App.jl";
-                        do_push = false, do_pull = true, do_local_pull = false, confirm = false,
-                    )
+                    out, raw = _capture_stdio() do _, _
+                        DistSSHRun.git_sync_project_to_hosts!(
+                            ["host1"], work, "/tmp/App.jl";
+                            do_push = false, do_pull = true, do_local_pull = false, confirm = false,
+                        )
+                    end
                     @test raw.ok
                     @test raw.host_results[1].ok
+                    @test !occursin("Warning", out)
                 end
                 bad = merge(
                     env, Dict(
@@ -211,6 +214,20 @@ using Test
                     @test occursin("deadbeef", raw.host_results[1].message)
                     @test occursin("Warning:", out)
                     @test occursin("will be an error", out)
+                end
+                unread = merge(env, Dict("DISTSSHKIT_TEST_GIT_REV_PARSE_FAIL" => "1"))
+                withenv(unread...) do
+                    out, raw = _capture_stdio() do _, _
+                        DistSSHRun.git_sync_project_to_hosts!(
+                            ["host1"], work, "/tmp/App.jl";
+                            do_push = false, do_pull = true, do_local_pull = false, confirm = false,
+                        )
+                    end
+                    @test raw.ok
+                    @test raw.host_results[1].ok
+                    @test occursin("could not read git HEAD", raw.host_results[1].message)
+                    @test !occursin("HEAD mismatch", out)
+                    @test !occursin("will be an error", out)
                 end
                 fail_pull = merge(env, Dict("DISTSSHKIT_TEST_GIT_PULL_FAIL" => "1"))
                 withenv(fail_pull...) do

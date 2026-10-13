@@ -1158,6 +1158,10 @@ end
                 @test occursin("will be an error", out)
             finally
                 run(pipeline(`git -C $proj checkout -q $prev`; stdout = devnull, stderr = devnull))
+                try
+                    run(pipeline(`git -C $proj branch -D distsshkit-e2e-feature`; stdout = devnull, stderr = devnull))
+                catch
+                end
             end
         end
 
