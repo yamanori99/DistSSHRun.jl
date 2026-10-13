@@ -6,12 +6,20 @@ GitHub Releases may copy these sections (`Release notes:` on
 
 ## Unreleased
 
-- `setup --rsync` inside a git work tree sends the file list from `git ls-files` with each directory's `.gitignore`, so negation patterns (`!path`) now apply. A tracked file that matches `.gitignore` is sent. `.git/info/exclude` and `core.excludesFile` still do not apply, and directories are still created even when empty. Path-source directories are sent whole, except `.git/` and `.distsshkit/`. A path source that is its own repository applies only its own `.gitignore`. Outside a git work tree, behavior is unchanged.
+### Planned breaking (next minor)
+
+- `setup --rsync` and `setup --sync` will refuse a `Manifest.toml` that would not ship, and git sync will refuse a path source whose `*.jl` or project files are ignored or untracked. 0.1.7 warns.
+- `setup --sync`, `setup --pull`, and `sync!` will fail when the remote `HEAD` is not the local `HEAD`, including an unpushed local commit on `--pull`. 0.1.7 warns. A hash that could not be read stays a warning.
+- `drive` and `collect!` will refuse a collect root that is the project root or a parent of it. 0.1.7 warns.
+
+## 0.1.7
+
+- `setup --rsync` inside a git work tree sends the file list from `git ls-files` with each directory's `.gitignore`, so negation patterns (`!path`) now apply. A tracked file that matches `.gitignore` is sent. `.git/info/exclude` and `core.excludesFile` still do not apply, and directories are still created even when empty. Path-source directories are sent whole, except `.git/` and `.distsshkit/`. A path source that is its own repository applies only its own `.gitignore`. Outside a git work tree, behavior is unchanged. A send path that contains a newline is an error, and so is an empty send list. A failed `git check-ignore` stops and prints that command's stderr.
 - `setup --rsync` and `setup --sync` warn when `Manifest.toml` would not be the lock the workers instantiate. For rsync, an untracked ignored lock is missing from the send list. For git sync, the lock is not committed at `HEAD`. A path source whose `*.jl` or project files are ignored or untracked also warns on git sync. This will be an error.
 - `setup --sync`, `setup --pull`, and `sync!` warn when the remote `HEAD` is not the local `HEAD`. The message names both branches. A hash that could not be read is a separate warning, not a mismatch. Only a real mismatch will be an error.
 - `drive` and `collect!` warn when a collect root is the project root or a parent of it. That includes `DISTRIBUTED_COLLECT_DIRS=.` and a default root from `DISTRIBUTED_OUTPUT_DIR`. Point collect at a result directory inside the project. collect-overwrite also skips `.git/`. This will be an error.
 - A failed `git push`, `git pull`, or `git clone` prints the command's own error text.
-- Each host touches its own drive sentinel, so collect still runs when hosts share a directory.
+- Each host touches its own drive sentinel, so collect still runs when hosts share a directory. A remote path that contains a newline is skipped with a warning.
 - `drive` warns when two hosts collect the same relative path. The last transfer remains. With `DISTSSHKIT_JOBS` greater than 1, which host remains is unspecified. Hosts that share one directory report every file, so the warning lists them all.
 - `run.toml` `collect_dirs` for `drive` resolves relative paths from the project root.
 - The DistSSHBase and DistSSHUp sources live under `lib/` with their own
@@ -22,12 +30,6 @@ GitHub Releases may copy these sections (`Release notes:` on
   own copies.
 - `resolve_pkg_project_dir` also skips a vendored DistSSHKit or
   DistSSHQueue stub, as DistSSHKit already did.
-
-### Planned breaking (next minor)
-
-- `setup --rsync` and `setup --sync` will refuse a `Manifest.toml` that would not ship, and git sync will refuse a path source whose `*.jl` or project files are ignored or untracked. 0.1.7 warns.
-- `setup --sync`, `setup --pull`, and `sync!` will fail when the remote `HEAD` is not the local `HEAD`, including an unpushed local commit on `--pull`. 0.1.7 warns. A hash that could not be read stays a warning.
-- `drive` and `collect!` will refuse a collect root that is the project root or a parent of it. 0.1.7 warns.
 
 ## 0.1.6
 
