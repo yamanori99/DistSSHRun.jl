@@ -111,6 +111,8 @@ container system start
 
 # shellcheck source=../../docker-ssh/scripts/julia-channels.sh
 source "${DOCKER_ROOT}/scripts/julia-channels.sh"
+# shellcheck source=../../docker-ssh/scripts/retry.sh
+source "${DOCKER_ROOT}/scripts/retry.sh"
 _distsshkit_export_julia_channels "${KIT_ROOT}"
 
 # Always build so channel pins and resolved releases take effect
@@ -118,12 +120,15 @@ _distsshkit_export_julia_channels "${KIT_ROOT}"
 # when that release string is unchanged.
 _distsshkit_export_julia_releases
 echo "Building ${LOCAL_IMAGE} from docker-ssh/Dockerfile..."
-(cd "${DOCKER_ROOT}" && container build \
-  --build-arg "JULIA_DEFAULT_CHANNEL=${JULIA_DEFAULT_CHANNEL}" \
-  --build-arg "JULIA_ALT_CHANNEL=${JULIA_ALT_CHANNEL}" \
-  --build-arg "JULIA_DEFAULT_RELEASE=${JULIA_DEFAULT_RELEASE}" \
-  --build-arg "JULIA_ALT_RELEASE=${JULIA_ALT_RELEASE}" \
-  -t "${LOCAL_IMAGE}" .)
+_build_worker_image() {
+  (cd "${DOCKER_ROOT}" && container build \
+    --build-arg "JULIA_DEFAULT_CHANNEL=${JULIA_DEFAULT_CHANNEL}" \
+    --build-arg "JULIA_ALT_CHANNEL=${JULIA_ALT_CHANNEL}" \
+    --build-arg "JULIA_DEFAULT_RELEASE=${JULIA_DEFAULT_RELEASE}" \
+    --build-arg "JULIA_ALT_RELEASE=${JULIA_ALT_RELEASE}" \
+    -t "${LOCAL_IMAGE}" .)
+}
+_distsshkit_retry "worker image build" _build_worker_image
 
 "${APPLE_ROOT}/scripts/down.sh"
 MOUNT="type=bind,source=${DOCKER_ROOT}/mounted-keys,target=/mounted-keys,readonly"
