@@ -195,11 +195,14 @@ jobs:
           cache-scratchspaces: false
           delete-old-caches: false
       - name: Pkg.test
+        env:
+          SLOT_NAME: ${{ matrix.slot.name }}
+          PKG: ${{ matrix.pkg }}
         run: |
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ matrix.slot.name }}" = "ubuntu-latest" ]; then
-            julia --project=lib/${{ matrix.pkg }} -e 'using Pkg; Pkg.test(; coverage=true)'
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ] && [ "$SLOT_NAME" = "ubuntu-latest" ]; then
+            julia --project="lib/$PKG" -e 'using Pkg; Pkg.test(; coverage=true)'
           else
-            julia --project=lib/${{ matrix.pkg }} -e 'using Pkg; Pkg.test()'
+            julia --project="lib/$PKG" -e 'using Pkg; Pkg.test()'
           fi
       - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.slot.name == 'ubuntu-latest'
