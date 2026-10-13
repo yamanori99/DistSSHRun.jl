@@ -156,7 +156,7 @@ jobs:
         if: matrix.slot.wsl
         with:
           path: .ci-cache/wsl-julia
-          key: wsl-julia-1.13-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
+          key: wsl-julia-1.13-up-${{ hashFiles('lib/DistSSHUp/Project.toml', 'lib/DistSSHUp/test/Project.toml', '.github/julia-slots.env') }}
       - name: Pkg.test in WSL2
         if: matrix.slot.wsl
         shell: wsl-bash {0}
@@ -202,7 +202,7 @@ jobs:
         if: matrix.slot.wsl
         with:
           path: .ci-cache/wsl-julia
-          key: wsl-julia-1.13-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
+          key: wsl-julia-1.13-base-${{ hashFiles('lib/DistSSHBase/Project.toml', 'lib/DistSSHBase/test/Project.toml', '.github/julia-slots.env') }}
       - name: Pkg.test in WSL2
         if: matrix.slot.wsl
         shell: wsl-bash {0}

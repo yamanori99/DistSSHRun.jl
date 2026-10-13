@@ -421,7 +421,7 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ci-cache/wsl-julia
-          key: wsl-julia-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
+          key: wsl-julia-up-${{ hashFiles('lib/DistSSHUp/Project.toml', 'lib/DistSSHUp/test/Project.toml', '.github/julia-slots.env') }}
       - name: GHCR token for WSL
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -509,7 +509,7 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ci-cache/wsl-julia
-          key: wsl-julia-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
+          key: wsl-julia-base-${{ hashFiles('lib/DistSSHBase/Project.toml', 'lib/DistSSHBase/test/Project.toml', '.github/julia-slots.env') }}
       - name: GHCR token for WSL
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
