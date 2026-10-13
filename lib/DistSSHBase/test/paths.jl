@@ -1,6 +1,6 @@
 using Test
 
-let _BASE = DistSSHRun.DistSSHBase
+let _BASE = _distsshbase_under_test()
     @testset "resolve_pkg_project_dir skips vendored stubs" begin
         _with_tempdir() do tmp
             app = joinpath(tmp, "App")

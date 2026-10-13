@@ -42,12 +42,13 @@ test/
   Project.toml
 ```
 
-`unit/` mirrors `src/`:
+`unit/` mirrors Run's own sources. DistSSHBase and DistSSHUp tests live with
+those packages and are included from `test/runtests.jl`:
 
 ```text
+lib/DistSSHBase/test/   # ↔ lib/DistSSHBase/src/
+lib/DistSSHUp/test/     # ↔ lib/DistSSHUp/src/
 unit/
-  DistSSHBase/    # ↔ src/DistSSHRun/base/
-  DistSSHUp/      # ↔ src/DistSSHRun/up/
   DistSSHRun/     # ↔ src/DistSSHRun/ (API, setup cores, argv)
     argv/         # ↔ DistSSHRun/argv/
     setup/        # ↔ DistSSHRun/setup/

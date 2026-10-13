@@ -2,6 +2,8 @@
 # Guard: runtests and some unit files may both `include` this path; JETLS should not reload fragments.
 
 if !isdefined(Main, :_child_julia_env)
+    include(joinpath(@__DIR__, "..", "lib", "DistSSHBase", "test", "support.jl"))
+    include(joinpath(@__DIR__, "..", "lib", "DistSSHUp", "test", "support.jl"))
     include(joinpath(@__DIR__, "support", "_common.jl"))
     include(joinpath(@__DIR__, "support", "subprocess.jl"))
     include(joinpath(@__DIR__, "support", "host.jl"))
