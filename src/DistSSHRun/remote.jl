@@ -153,6 +153,72 @@ end
 
 # Git utilities
 
+"""Problems when `location` is missing from HEAD or differs from HEAD."""
+function _manifest_at_head_problems(
+        work_tree::AbstractString,
+        location::AbstractString,
+    )::Vector{String}
+    rel = _git_worktree_relpath(work_tree, location)
+    has_head = try
+        run(
+            pipeline(
+                _git_cmd(["-C", String(work_tree), "rev-parse", "--verify", "-q", "HEAD"]);
+                stdout = devnull,
+                stderr = devnull,
+            )
+        )
+        true
+    catch e
+        _rethrow_missing_host_tool(e)
+        false
+    end
+    if !has_head
+        return String[
+            "Manifest $rel: repository has no commit yet. git sync sends HEAD, so workers would instantiate a different resolution. Create a commit that includes the lock.",
+        ]
+    end
+    tracked = try
+        run(
+            pipeline(
+                _git_cmd(["-C", String(work_tree), "ls-files", "--error-unmatch", "--", rel]);
+                stdout = devnull,
+                stderr = devnull,
+            )
+        )
+        true
+    catch e
+        _rethrow_missing_host_tool(e)
+        false
+    end
+    tracked || return String[
+        "Manifest $rel is not tracked. git sync sends HEAD, so workers would instantiate a different resolution. Commit the lock.",
+    ]
+    clean = try
+        run(
+            pipeline(
+                _git_cmd(["-C", String(work_tree), "diff", "--quiet", "HEAD", "--", rel]);
+                stdout = devnull,
+                stderr = devnull,
+            )
+        )
+        true
+    catch e
+        _rethrow_missing_host_tool(e)
+        false
+    end
+    clean || return String[
+        "Manifest $rel has uncommitted changes. git sync sends HEAD, not the working tree. Commit the lock.",
+    ]
+    return String[]
+end
+
+function _ensure_manifest_at_head!(work_tree::AbstractString, location::AbstractString)
+    for msg in _manifest_at_head_problems(work_tree, location)
+        print_warn("Warning: $msg $_SHIP_ERROR_SOON\n")
+    end
+    return nothing
+end
+
 """
 Throw when the lock Pkg reads, or a `[sources]` path, is outside the git
 work tree of `project`.
@@ -182,6 +248,7 @@ function ensure_manifest_in_git_worktree!(project::AbstractString)
                 "Manifest $location points at $target, outside the git work tree ($top). The lock would not reach a clone or git sync.",
             ),
         )
+        _ensure_manifest_at_head!(top, location)
     end
     _ensure_path_sources_in_tree!(env, top; git = true)
     return nothing

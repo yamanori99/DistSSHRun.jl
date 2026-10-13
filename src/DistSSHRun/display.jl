@@ -300,9 +300,74 @@ function _ensure_path_sources_in_tree!(env, root::AbstractString; git::Bool)
             )
             git || continue
             _ensure_git_head_source!(root_c, location, name)
+            _ensure_path_source_git_files!(root_c, location, name)
         end
     end
     return nothing
+end
+
+# Path-source files that must reach a clone / git sync. Manifest and
+# LocalPreferences under a path source are not consulted by Pkg.
+const _PATH_SOURCE_SHIP_NAMES =
+    r"(?:^|/)(?:[^/]+\.jl|Project\.toml|JuliaProject\.toml|Artifacts\.toml|JuliaArtifacts\.toml)$"
+
+const _SHIP_ERROR_SOON = "This will be an error in DistSSHRun 0.2."
+
+"""Problems when `location` hides shippable files from a clone or git sync."""
+function _path_source_git_problems(
+        work_tree::AbstractString,
+        location::AbstractString,
+        name::AbstractString,
+    )::Vector{String}
+    msgs = String[]
+    rel = _git_worktree_relpath(work_tree, location)
+    ignored = _git_ls_files_z(
+        work_tree,
+        ["--others", "--ignored", "--exclude-standard", "--", rel],
+    )
+    bad = [p for p in ignored if occursin(_PATH_SOURCE_SHIP_NAMES, p)]
+    if !isempty(bad)
+        shown = join(bad[1:min(end, 10)], ", ")
+        extra = length(bad) > 10 ? " ($(length(bad)) files)" : ""
+        push!(
+            msgs,
+            "Source path $location for $name has files ignored by this repo that a clone or git sync would omit$extra: $shown. Commit them, or stop ignoring them.",
+        )
+    end
+    loose = [
+        p for p in _git_ls_files_z(work_tree, ["--others", "--exclude-standard", "--", rel])
+            if endswith(p, ".jl")
+    ]
+    if !isempty(loose)
+        shown = join(loose[1:min(end, 10)], ", ")
+        push!(
+            msgs,
+            "Source path $location for $name has untracked Julia files that a clone or git sync would omit: $shown. Commit them.",
+        )
+    end
+    return msgs
+end
+
+function _ensure_path_source_git_files!(
+        work_tree::AbstractString,
+        location::AbstractString,
+        name::AbstractString,
+    )
+    for msg in _path_source_git_problems(work_tree, location, name)
+        print_warn("Warning: $msg $_SHIP_ERROR_SOON\n")
+    end
+    return nothing
+end
+
+"""Problems when Manifest is missing from the rsync send list."""
+function _manifest_ship_problems(env, listed::Vector{String})::Vector{String}
+    manifest = env.manifest
+    manifest isa String || return String[]
+    rel = relpath(canonical_local_path(manifest), canonical_local_path(env.env_dir))
+    rel in listed && return String[]
+    return String[
+        "Manifest $rel is not in the rsync send list. It is untracked and ignored, so workers would instantiate a different resolution. Stop ignoring it, or do not use setup --instantiate.",
+    ]
 end
 
 """`realpath` of the parent, with the final component left as written.
@@ -478,9 +543,12 @@ function ensure_manifest_ships!(
             "Manifest $manifest points at $target, outside the tree setup/rsync would send ($root). Workers would instantiate a different resolution.",
         ),
     )
-    # `send_list` is computed once in `rsync_project_to_hosts!` so a later
-    # Manifest membership check can reuse it without calling git twice.
-    send_list isa Vector{String}
+    listed = send_list isa Vector{String} ? send_list : _rsync_send_list(env.env_dir, env)
+    if listed isa Vector
+        for msg in _manifest_ship_problems(env, listed)
+            print_warn("Warning: $msg This will be an error in DistSSHRun 0.2.\n")
+        end
+    end
     return env
 end
 
