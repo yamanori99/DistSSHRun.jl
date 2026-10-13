@@ -48,12 +48,19 @@ if [[ -z "${JU}" ]]; then
 fi
 
 # Both channels must exist so E2E can mismatch then realign.
-"${JU}" add "${JULIA_DEFAULT_CHANNEL}" >/dev/null || true
-"${JU}" add "${JULIA_ALT_CHANNEL}" >/dev/null || true
-# Current patch before the suite starts. A later juliaup version-db check
-# (setup --juliaup parent) must not delete the install the suite is running.
-"${JU}" update "${JULIA_DEFAULT_CHANNEL}"
-"${JU}" update "${JULIA_ALT_CHANNEL}"
-"${JU}" default "${JULIA_DEFAULT_CHANNEL}"
+# `add` / `update` download the version db from julialang-s3. That request
+# is outside the installer curl retry, and a timeout used to fail the job.
+_distsshkit_ensure_kit_channels() {
+  local ju="$1"
+  "${ju}" add "${JULIA_DEFAULT_CHANNEL}"
+  "${ju}" add "${JULIA_ALT_CHANNEL}"
+  # Current patch before the suite starts. A later juliaup version-db check
+  # (setup --juliaup parent) must not delete the install the suite is running.
+  "${ju}" update "${JULIA_DEFAULT_CHANNEL}"
+  "${ju}" update "${JULIA_ALT_CHANNEL}"
+  "${ju}" default "${JULIA_DEFAULT_CHANNEL}"
+}
+_distsshkit_retry "kit parent juliaup channels" \
+  _distsshkit_ensure_kit_channels "${JU}"
 
 echo "kit parent juliaup: ${JU} ($("${JU}" --version 2>/dev/null || echo ok); channels ${JULIA_DEFAULT_CHANNEL} / ${JULIA_ALT_CHANNEL})"
