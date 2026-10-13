@@ -66,6 +66,47 @@ function git_pull_remote_host!(host::AbstractString, remote_path::AbstractString
     return _git_pull_remote_host_detail(host, remote_path).ok
 end
 
+"""`git rev-parse` on `host` at `remote_path`. `nothing` when the command fails."""
+function _remote_git_rev_parse(
+        host::AbstractString,
+        remote_path::AbstractString,
+        rev::AbstractString,
+    )::Union{Nothing, String}
+    pq = _remote_shell_path_word(remote_path)
+    inner = if startswith(strip(String(remote_path)), "~")
+        "cd $pq && git rev-parse $rev"
+    else
+        "git -C $pq rev-parse $rev"
+    end
+    try
+        s = strip(
+            read(
+                pipeline(_host_sync_remote_shell_cmd(String(host), inner); stderr = devnull),
+                String,
+            )
+        )
+        return isempty(s) ? nothing : s
+    catch e
+        _rethrow_missing_host_tool(e)
+        return nothing
+    end
+end
+
+function _local_git_abbrev_ref(project::AbstractString)::String
+    try
+        s = strip(
+            read(
+                pipeline(_git_cmd(["-C", String(project), "rev-parse", "--abbrev-ref", "HEAD"]); stderr = devnull),
+                String,
+            )
+        )
+        return s
+    catch e
+        _rethrow_missing_host_tool(e)
+        return ""
+    end
+end
+
 function _git_remote_url(project::AbstractString)::String
     try
         return strip(read(pipeline(_git_cmd(["-C", String(project), "remote", "get-url", "origin"]); stderr = devnull), String))
@@ -182,6 +223,8 @@ function git_sync_project_to_hosts!(
     end
 
     if do_pull
+        local_hash = get_local_git_hash(proj)
+        local_branch = _local_git_abbrev_ref(proj)
         for host in hosts
             pull_r = _setup_host_call!(host) do
                 kit_spin!("  $host git pull: ") do
@@ -189,9 +232,23 @@ function git_sync_project_to_hosts!(
                 end
             end
             if pull_r.ok
-                print_ok("✓")
-                kit_println()
-                push!(host_results, HostResult(host, true, "git pull ok"))
+                remote_hash = _remote_git_rev_parse(host, remote, "HEAD")
+                remote_branch = _remote_git_rev_parse(host, remote, "--abbrev-ref HEAD")
+                if local_hash isa String && remote_hash == local_hash
+                    print_ok("✓")
+                    kit_println()
+                    push!(host_results, HostResult(host, true, "git pull ok"))
+                else
+                    print_ok("✓")
+                    kit_println()
+                    lhs = local_hash isa String ? local_hash : "unknown"
+                    rhs = remote_hash isa String ? remote_hash : "unknown"
+                    lb = isempty(local_branch) ? "unknown" : local_branch
+                    rb = remote_branch isa String ? remote_branch : "unknown"
+                    msg = "git HEAD mismatch on $host: remote $rb ($rhs), local $lb ($lhs)"
+                    print_warn("Warning: $msg. $_SHIP_ERROR_SOON\n")
+                    push!(host_results, HostResult(host, true, "git pull ok; " * msg))
+                end
             else
                 print_progress_err("✗")
                 kit_println()

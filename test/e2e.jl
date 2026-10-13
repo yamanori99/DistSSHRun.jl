@@ -1130,6 +1130,35 @@ end
                 _assert_proc_ok(p, body; label = "pull marker $(host)")
                 @test body == marker
             end
+
+            prev = strip(read(`git -C $proj rev-parse --abbrev-ref HEAD`, String))
+            try
+                run(pipeline(`git -C $proj checkout -q -b distsshkit-e2e-feature`; stdout = devnull, stderr = devnull))
+                write(joinpath(proj, "e2e_feature.txt"), "feature\n")
+                run(pipeline(`git -C $proj add e2e_feature.txt`; stdout = devnull, stderr = devnull))
+                run(pipeline(`git -C $proj commit -q -m feature`; stdout = devnull, stderr = devnull))
+                withenv(git_env...) do
+                    gssh = _docker_ssh_generated()
+                    push_cmd = setenv(
+                        `git -C $proj push -u origin HEAD:distsshkit-e2e-feature`,
+                        Dict("GIT_SSH_COMMAND" => "ssh -F $(gssh.ssh_config) -o RequestTTY=no"),
+                    )
+                    proc_push, out_push = _run_subprocess(push_cmd)
+                    _assert_proc_ok(proc_push, out_push; label = "push feature branch")
+                end
+                proc, out = _run_kit_setup(;
+                    setup_args = ["--sync", "--remote-path", git_root, setup_hosts...],
+                    project_root = proj,
+                    extra_env = merge(git_env, Dict("DISTSSHKIT_QUIET" => "0")),
+                )
+                _ssh_e2e_record!(suite, "git_sync_feature_mismatch", proc, out; expect_ok = true, project = proj, kit = :setup)
+                @test proc.exitcode == 0
+                @test occursin("HEAD mismatch", out)
+                @test occursin("Warning:", out)
+                @test occursin("will be an error", out)
+            finally
+                run(pipeline(`git -C $proj checkout -q $prev`; stdout = devnull, stderr = devnull))
+            end
         end
 
         @testset "setup --rsync sends a gitignore negation" begin

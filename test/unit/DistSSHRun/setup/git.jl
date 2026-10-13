@@ -165,18 +165,55 @@ using Test
         end
     end
 
-    @testset "remote pull prints the command error" begin
+    @testset "remote pull detail and HEAD check" begin
         _apply_quiet_setup_session!()
         _with_tempdir() do state
             _with_tempdir() do tmp
                 work = joinpath(tmp, "work")
                 mkpath(work)
                 _init_commit!(work)
+                hash = strip(read(`git -C $work rev-parse HEAD`, String))
+                branch = strip(read(`git -C $work rev-parse --abbrev-ref HEAD`, String))
                 env = merge(
                     _fake_setup_remote_env(state),
-                    Dict("DISTSSHKIT_TEST_GIT_PULL_FAIL" => "1"),
+                    Dict(
+                        "DISTSSHKIT_TEST_GIT_HEAD" => hash,
+                        "DISTSSHKIT_TEST_GIT_BRANCH" => branch,
+                    ),
                 )
                 withenv(env...) do
+                    raw = DistSSHRun.git_sync_project_to_hosts!(
+                        ["host1"], work, "/tmp/App.jl";
+                        do_push = false, do_pull = true, do_local_pull = false, confirm = false,
+                    )
+                    @test raw.ok
+                    @test raw.host_results[1].ok
+                end
+                bad = merge(
+                    env, Dict(
+                        "DISTSSHKIT_TEST_GIT_HEAD" => "deadbeef",
+                        "DISTSSHKIT_TEST_GIT_BRANCH" => "remote-main",
+                    )
+                )
+                withenv(bad...) do
+                    out, raw = _capture_stdio() do _, _
+                        DistSSHRun.git_sync_project_to_hosts!(
+                            ["host1", "host2"], work, "/tmp/App.jl";
+                            do_push = false, do_pull = true, do_local_pull = false, confirm = false,
+                        )
+                    end
+                    @test raw.ok
+                    @test length(raw.host_results) == 2
+                    @test raw.host_results[1].ok
+                    @test raw.host_results[2].ok
+                    @test occursin("remote-main", raw.host_results[1].message)
+                    @test occursin(branch, raw.host_results[1].message)
+                    @test occursin("deadbeef", raw.host_results[1].message)
+                    @test occursin("Warning:", out)
+                    @test occursin("will be an error", out)
+                end
+                fail_pull = merge(env, Dict("DISTSSHKIT_TEST_GIT_PULL_FAIL" => "1"))
+                withenv(fail_pull...) do
                     raw = DistSSHRun.git_sync_project_to_hosts!(
                         ["host1"], work, "/tmp/App.jl";
                         do_push = false, do_pull = true, do_local_pull = false, confirm = false,

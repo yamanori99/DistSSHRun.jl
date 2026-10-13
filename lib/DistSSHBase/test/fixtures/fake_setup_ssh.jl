@@ -144,6 +144,15 @@ function main()
         exit(0)
     end
 
+    if occursin("rev-parse", script)
+        if occursin("--abbrev-ref", script)
+            println(get(ENV, "DISTSSHKIT_TEST_GIT_BRANCH", "main"))
+        else
+            println(get(ENV, "DISTSSHKIT_TEST_GIT_HEAD", ""))
+        end
+        exit(0)
+    end
+
     if occursin("touch ", script)
         m = match(r"touch\s+(\S+)", script)
         if m !== nothing
