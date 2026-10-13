@@ -313,6 +313,13 @@ using Pkg
                 mkpath(foo_src)
                 write(joinpath(foo_src, "Project.toml"), "name = \"Foo\"\n")
                 write(joinpath(repo, "Manifest.toml"), "# lock\n")
+                write(joinpath(repo, "Project.toml"), "name = \"Src\"\n")
+                run(pipeline(`git -C $repo init -q`; stdout = devnull, stderr = devnull))
+                out_nocommit, = _capture_stdio() do _, _
+                    @test DistSSHRun.ensure_manifest_in_git_worktree!(repo) === nothing
+                end
+                @test occursin("has no commit yet", out_nocommit)
+                @test occursin("will be an error", out_nocommit)
                 write(
                     joinpath(repo, "Project.toml"),
                     """
@@ -321,12 +328,6 @@ using Pkg
                     Foo = {path = "dev/Foo"}
                     """,
                 )
-                run(pipeline(`git -C $repo init -q`; stdout = devnull, stderr = devnull))
-                out_nocommit, = _capture_stdio() do _, _
-                    @test DistSSHRun.ensure_manifest_in_git_worktree!(repo) === nothing
-                end
-                @test occursin("has no commit yet", out_nocommit)
-                @test occursin("will be an error", out_nocommit)
                 run(pipeline(`git -C $repo add -A`; stdout = devnull, stderr = devnull))
                 run(
                     pipeline(
@@ -677,11 +678,13 @@ using Pkg
             write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
             write(joinpath(foo, "docs", "build", "index.html"), "<p></p>\n")
             write(joinpath(foo, "Manifest.toml"), "# dep lock\n")
-            write(joinpath(tmp, "Project.toml"), """
-            name = "App"
-            [sources]
-            Foo = {path = "vendor/Foo"}
-            """)
+            write(
+                joinpath(tmp, "Project.toml"), """
+                name = "App"
+                [sources]
+                Foo = {path = "vendor/Foo"}
+                """
+            )
             write(joinpath(tmp, ".gitignore"), "lib/\ndocs/build/\nvendor/**/Manifest.toml\n")
             run(pipeline(`git -C $tmp add -A`; stdout = devnull, stderr = devnull))
             run(pipeline(`git -C $tmp commit -q -m foo`; stdout = devnull, stderr = devnull))
