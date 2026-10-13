@@ -144,6 +144,18 @@ function main()
         exit(0)
     end
 
+    if occursin("rev-parse", script)
+        if get(ENV, "DISTSSHKIT_TEST_GIT_REV_PARSE_FAIL", "") == "1"
+            println(stderr, "fatal: not a git repository")
+            exit(1)
+        end
+        head = get(ENV, "DISTSSHKIT_TEST_GIT_HEAD", "")
+        isempty(head) && exit(1)
+        println(head)
+        occursin("--abbrev-ref", script) && println(get(ENV, "DISTSSHKIT_TEST_GIT_BRANCH", "main"))
+        exit(0)
+    end
+
     if occursin("touch ", script)
         m = match(r"touch\s+(\S+)", script)
         if m !== nothing
