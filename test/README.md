@@ -56,8 +56,8 @@ unit/
     drive/, go/, setup/, size/
 ```
 
-`integration/` is grouped by area (`drive/`, `demos/`, `setup/`, `go/`,
-`size/`).
+`integration/` is grouped by area (`DistSSHRun/`, `drive/`, `demos/`,
+`setup/`, `go/`, `size/`).
 
 ## Layers
 

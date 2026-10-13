@@ -20,9 +20,14 @@ include(joinpath(@__DIR__, "support.jl"))
 # or a pipe. Child CLI processes still auto-detect their own stdout.
 DistSSHRun.set_kit_verbosity!(:progress)
 
-# Keep `include(joinpath(@__DIR__, …))` at this top level (JETLS). Only the
-# banner is counted. Update `_RUNTEST_N` when adding a file below.
-const _RUNTEST_N = 56
+# Keep `include(joinpath(@__DIR__, …))` at this top level (JETLS). The banner
+# counts `_runtest_announce` calls in this file, so adding one updates `[i/N]`.
+const _RUNTEST_N = let n = count(eachline(@__FILE__)) do line
+        return occursin(r"^\s*_runtest_announce\(", line)
+    end
+    n > 0 || error("test/runtests.jl: no _runtest_announce calls")
+    n
+end
 const _RUNTEST_I = Ref(0)
 function _runtest_announce(rel::AbstractString)
     _RUNTEST_I[] += 1
@@ -125,6 +130,8 @@ _distsshup_under_test() = DistSSHRun.DistSSHUp
     end
 
     @testset "integration" verbose = true begin
+        _runtest_announce("integration/DistSSHRun/vendor.jl")
+        include(joinpath(@__DIR__, "integration", "DistSSHRun", "vendor.jl"))
         _runtest_announce("integration/cli/help.jl")
         include(joinpath(@__DIR__, "integration", "cli", "help.jl"))
         _runtest_announce("integration/setup/exit.jl")
