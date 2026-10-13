@@ -313,6 +313,16 @@ const _PATH_SOURCE_SHIP_NAMES =
 
 const _SHIP_ERROR_SOON = "This will be an error."
 
+"""Directory whose files a clone would materialize for `location`.
+
+When `location` is a committed symlink, `ls-files` on the link path does not
+see ignored or untracked files under the target. Follow the leaf once.
+"""
+function _path_source_git_ship_root(location::AbstractString)::String
+    loc = canonical_local_path(location)
+    return islink(loc) ? canonical_local_path(realpath(loc)) : loc
+end
+
 """Problems when `location` hides shippable files from a clone or git sync."""
 function _path_source_git_problems(
         work_tree::AbstractString,
@@ -320,7 +330,7 @@ function _path_source_git_problems(
         name::AbstractString,
     )::Vector{String}
     msgs = String[]
-    rel = _git_worktree_relpath(work_tree, location)
+    rel = _git_worktree_relpath(work_tree, _path_source_git_ship_root(location))
     ignored = _git_ls_files_z(
         work_tree,
         ["--others", "--ignored", "--exclude-standard", "--", rel],

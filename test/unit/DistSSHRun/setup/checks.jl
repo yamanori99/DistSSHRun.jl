@@ -734,6 +734,48 @@ using Pkg
             @test !occursin("vendor/Bar/Manifest.toml", out_skip)
             @test !occursin("LocalPreferences.toml", out_skip)
             @test occursin("vendor/Bar/Project.toml", out_skip)
+            run(pipeline(`git -C $tmp add vendor/Bar/Project.toml`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp commit -q -m bar-proj`; stdout = devnull, stderr = devnull))
+
+            # Path-source symlink: ignored files under the target must warn.
+            mkpath(joinpath(tmp, "dev"))
+            symlink(joinpath("..", "vendor", "Foo"), joinpath(tmp, "dev", "Foo"))
+            write(
+                joinpath(tmp, "Project.toml"), """
+                name = "App"
+                [sources]
+                Foo = {path = "dev/Foo"}
+                """
+            )
+            write(joinpath(foo, "lib", "x.jl"), "x = 1\n")
+            run(pipeline(`git -C $tmp add Project.toml dev/Foo`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp commit -q -m link-foo`; stdout = devnull, stderr = devnull))
+            out_link, = _capture_stdio() do _, _
+                @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            end
+            @test occursin("ignored by this repo", out_link)
+            @test occursin("vendor/Foo/lib/x.jl", out_link)
+            @test occursin("will be an error", out_link)
+            rm(joinpath(foo, "lib", "x.jl"))
+
+            # Manifest symlink: the lock bytes must be at HEAD, not only the link.
+            write(joinpath(tmp, "Manifest-real.toml"), "# lock\n")
+            rm(joinpath(tmp, "Manifest.toml"))
+            symlink("Manifest-real.toml", joinpath(tmp, "Manifest.toml"))
+            run(pipeline(`git -C $tmp add Manifest.toml`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp commit -q -m manifest-link`; stdout = devnull, stderr = devnull))
+            out_mlink, = _capture_stdio() do _, _
+                @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            end
+            @test occursin("Manifest-real.toml", out_mlink)
+            @test occursin("is not tracked", out_mlink)
+            @test occursin("will be an error", out_mlink)
+            run(pipeline(`git -C $tmp add Manifest-real.toml`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp commit -q -m manifest-bytes`; stdout = devnull, stderr = devnull))
+            quiet_mlink, = _capture_stdio() do _, _
+                @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            end
+            @test !occursin("will be an error", quiet_mlink)
         end
     end
 end

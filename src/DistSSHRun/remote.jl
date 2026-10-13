@@ -249,6 +249,10 @@ function ensure_manifest_in_git_worktree!(project::AbstractString)
             ),
         )
         _ensure_manifest_at_head!(top, location)
+        # Symlink bytes reach a clone; the lock workers read is the target.
+        if islink(manifest)
+            _ensure_manifest_at_head!(top, target)
+        end
     end
     _ensure_path_sources_in_tree!(env, top; git = true)
     return nothing
