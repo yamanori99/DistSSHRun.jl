@@ -12,9 +12,11 @@ if get(ENV, "DISTSSHKIT_SSH_E2E", "") != "1"
     exit(0)
 end
 
-const _ssh_config = abspath(joinpath(
-    @__DIR__, "..", "..", "..", "testenv", "docker-ssh", ".generated", "ssh_config",
-))
+const _ssh_config = abspath(
+    joinpath(
+        @__DIR__, "..", "..", "..", "testenv", "docker-ssh", ".generated", "ssh_config",
+    )
+)
 isfile(_ssh_config) ||
     error("docker-ssh not ready: missing $(_ssh_config). Run testenv/docker-ssh/scripts/up.sh")
 
