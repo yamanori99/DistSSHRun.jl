@@ -177,7 +177,7 @@ julia --project=. -e 'using Pkg; Pkg.test(; coverage=true)'
 DISTSSHQUEUE_CODE_COVERAGE=1 ./testenv/docker-ssh/scripts/up.sh --e2e
 ```
 
-Required to merge (ruleset `main` uses these names). **1.14-nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and a version increase, not ordinary PRs. macOS and WSL2 nightly run on CI weekly only. Registry tree runs on ordinary PRs (heavy gate) and is not in the list below. E2E weekly and CI weekly are not required.
+Required to merge (ruleset `main` uses these names). **1.14-nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and a version increase, not ordinary PRs. macOS and WSL2 nightly run on CI weekly only. Registry tree runs on ordinary PRs (heavy gate) and is not in the list below. E2E weekly and CI weekly are not required. Standalone `Pkg.test` of `DistSSHBase` and `DistSSHUp` is one matrix on the same 1.13 hosts (`Pkg.test (DistSSHBase, 1.13, ubuntu-latest, x64)`, the macOS and WSL2 twins, and the same three for `DistSSHUp`). Ubuntu nightly has the matching allow-failure jobs. Registry-style `Pkg.test` is `Pkg.test (DistSSHRun, registry, ubuntu-latest, x64)` plus the `DistSSHBase` and `DistSSHUp` cells. Those names are not in the ruleset.
 
 - `Pkg.test (1.13, ubuntu-latest, x64)`
 - `Pkg.test (1.13, macos-latest, aarch64)`
@@ -192,7 +192,7 @@ Required to merge (ruleset `main` uses these names). **1.14-nightly** jobs are a
 | When | Workflow | What |
 | --- | --- | --- |
 | Sunday 04:00 JST, Run workflow, or a version-increase squash to `main` | `E2E weekly` | `ubuntu-latest`, `macos-15-intel`, WSL2 → `ubuntu-24.04`. Linux job uploads E2E Codecov. Not a PR check. Failure opens (or comments on) Issue `E2E weekly failed`; a later all-green run closes it. A red **Linux** job after a `cut` merge adds `cut-hold`. Intel / WSL red does not. Compat-only `Project.toml` edits start the workflow but skip the matrix. |
-| Sunday 10:00 JST, or Run workflow | `CI weekly` | Same 1.13 `Pkg.test` / JETLS / Aqua versions as a PR, including `macos-latest` and WSL2 (no coverage). 1.14-nightly `Pkg.test` and Aqua on macOS and WSL2 run here only. Not a PR check. Catches 1.13 / Aqua / JETLS `@release` drift when nothing merged that week. Failure of the 1.13 jobs opens Issue `CI weekly failed` (`alert`); 1.14-nightly is omitted from that notify. `cache-gc` keeps one Actions cache per restore-key prefix. |
+| Sunday 10:00 JST, or Run workflow | `CI weekly` | Same 1.13 `Pkg.test` / JETLS / Aqua versions as a PR, including `macos-latest`, WSL2, and standalone `DistSSHBase` / `DistSSHUp` (no coverage). 1.14-nightly `Pkg.test` and Aqua on macOS and WSL2 run here only, including the lib packages. Not a PR check. Catches 1.13 / Aqua / JETLS `@release` drift when nothing merged that week. Failure of the 1.13 jobs opens Issue `CI weekly failed` (`alert`); 1.14-nightly is omitted from that notify. `cache-gc` keeps one Actions cache per restore-key prefix. |
 | 1st 10:00 JST, or Run workflow | `Runic` | `runic --check` on tracked `.jl` (`version: '1'`). Not a required PR check. Catches Runic minor drift when nothing formatted that month. Failure opens Issue `Runic monthly failed` (`alert`). |
 
 ## Pull requests

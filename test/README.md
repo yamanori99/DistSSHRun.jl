@@ -99,7 +99,7 @@ Reproduce that tree: copy without kit `.git` / `Manifest.toml`, `Pkg.add`
 from a **bare** `file://` git (so the installed package dir has no `.git` —
 DistSSHRun talks to git for jobs, not for its own install), `chmod a-w` on
 `pkgdir`, then `Pkg.test`. Do this after changing the gates above, and
-before a General cut. CI: `Pkg.test (registry, ubuntu-latest, x64)` on ordinary PRs
+before a General cut. CI: `Pkg.test (DistSSHRun, registry, ubuntu-latest, x64)` and the same job for `DistSSHBase` and `DistSSHUp`, on ordinary PRs
 (heavy gate) and **main** (slot tip, no `ssh`; `continue-on-error`;
 not a required check).
 
