@@ -7,6 +7,7 @@ GitHub Releases may copy these sections (`Release notes:` on
 ## Unreleased
 
 - `setup --rsync` inside a git work tree sends the file list from `git ls-files` with each directory's `.gitignore`, so negation patterns (`!path`) now apply. A tracked file that matches `.gitignore` is sent. `.git/info/exclude` and `core.excludesFile` still do not apply, and directories are still created even when empty. Path-source directories are sent whole, except `.git/` and `.distsshkit/`. A path source that is its own repository applies only its own `.gitignore`. Outside a git work tree, behavior is unchanged.
+- `setup --rsync` and `setup --sync` warn when `Manifest.toml` would not be the lock the workers instantiate. For rsync, an untracked ignored lock is missing from the send list. For git sync, the lock is not committed at `HEAD`. A path source whose `*.jl` or project files are ignored or untracked also warns on git sync. This will be an error.
 - A failed `git push`, `git pull`, or `git clone` prints the command's own error text.
 - Each host touches its own drive sentinel, so collect still runs when hosts share a directory.
 - `drive` warns when two hosts collect the same relative path. The last transfer remains. With `DISTSSHKIT_JOBS` greater than 1, which host remains is unspecified. Hosts that share one directory report every file, so the warning lists them all.
@@ -19,6 +20,10 @@ GitHub Releases may copy these sections (`Release notes:` on
   own copies.
 - `resolve_pkg_project_dir` also skips a vendored DistSSHKit or
   DistSSHQueue stub, as DistSSHKit already did.
+
+### Planned breaking (next minor)
+
+- `setup --rsync` and `setup --sync` will refuse a `Manifest.toml` that would not ship, and git sync will refuse a path source whose `*.jl` or project files are ignored or untracked. 0.1.7 warns.
 
 ## 0.1.6
 

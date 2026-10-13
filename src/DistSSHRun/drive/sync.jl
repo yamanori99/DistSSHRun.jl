@@ -46,7 +46,6 @@ function sync!(session::KitSession; mode = :sync)::SyncResult
             end
             return SyncResult(false, raw.host_results; ok = raw.failed == 0)
         else
-            ensure_manifest_in_git_worktree!(session.project)
             remote_path = session_remote_root(session)
             raw = git_sync_project_to_hosts!(
                 session.hosts,

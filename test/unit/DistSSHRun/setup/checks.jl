@@ -313,6 +313,13 @@ using Pkg
                 mkpath(foo_src)
                 write(joinpath(foo_src, "Project.toml"), "name = \"Foo\"\n")
                 write(joinpath(repo, "Manifest.toml"), "# lock\n")
+                write(joinpath(repo, "Project.toml"), "name = \"Src\"\n")
+                run(pipeline(`git -C $repo init -q`; stdout = devnull, stderr = devnull))
+                out_nocommit, = _capture_stdio() do _, _
+                    @test DistSSHRun.ensure_manifest_in_git_worktree!(repo) === nothing
+                end
+                @test occursin("has no commit yet", out_nocommit)
+                @test occursin("will be an error", out_nocommit)
                 write(
                     joinpath(repo, "Project.toml"),
                     """
@@ -321,11 +328,6 @@ using Pkg
                     Foo = {path = "dev/Foo"}
                     """,
                 )
-                run(pipeline(`git -C $repo init -q`; stdout = devnull, stderr = devnull))
-                foo_loc = DistSSHRun.canonical_local_path(foo_src)
-                @test_throws ArgumentError(
-                    "Source path $foo_loc for Foo is not in the git commit a clone or git sync would send.",
-                ) DistSSHRun.ensure_manifest_in_git_worktree!(repo)
                 run(pipeline(`git -C $repo add -A`; stdout = devnull, stderr = devnull))
                 run(
                     pipeline(
@@ -632,5 +634,148 @@ using Pkg
         @test occursin("experiments/run1", inner)
         @test occursin("--project=.", inner)
         @test !occursin("--project=experiments", inner)
+    end
+
+    @testset "manifest and path-source files must be the bytes that ship" begin
+        Sys.which("git") === nothing && return
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
+            write(joinpath(tmp, ".gitignore"), "Manifest.toml\n")
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp config user.name "Test"`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp add Project.toml .gitignore`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp commit -q -m init`; stdout = devnull, stderr = devnull))
+            out_rsync, = _capture_stdio() do _, _
+                @test DistSSHRun.ensure_manifest_ships!(tmp).env_dir ==
+                    DistSSHRun.canonical_local_path(tmp)
+            end
+            @test occursin("not in the rsync send list", out_rsync)
+            @test occursin("will be an error", out_rsync)
+            out_git, = _capture_stdio() do _, _
+                @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            end
+            @test occursin("is not tracked", out_git)
+            @test occursin("will be an error", out_git)
+
+            rm(joinpath(tmp, ".gitignore"))
+            run(pipeline(`git -C $tmp add -A`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp commit -q -m track`; stdout = devnull, stderr = devnull))
+            @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            open(joinpath(tmp, "Manifest.toml"), "a") do io
+                println(io, "# dirty")
+            end
+            out_dirty, = _capture_stdio() do _, _
+                @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            end
+            @test occursin("uncommitted changes", out_dirty)
+            run(pipeline(`git -C $tmp checkout -q -- Manifest.toml`; stdout = devnull, stderr = devnull))
+
+            foo = joinpath(tmp, "vendor", "Foo")
+            mkpath(joinpath(foo, "lib"))
+            mkpath(joinpath(foo, "docs", "build"))
+            write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
+            write(joinpath(foo, "docs", "build", "index.html"), "<p></p>\n")
+            write(joinpath(foo, "Manifest.toml"), "# dep lock\n")
+            write(
+                joinpath(tmp, "Project.toml"), """
+                name = "App"
+                [sources]
+                Foo = {path = "vendor/Foo"}
+                """
+            )
+            write(joinpath(tmp, ".gitignore"), "lib/\ndocs/build/\nvendor/**/Manifest.toml\n")
+            run(pipeline(`git -C $tmp add -A`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp commit -q -m foo`; stdout = devnull, stderr = devnull))
+            # Path-source Manifest under app gitignore must not warn.
+            out_dep_manifest, = _capture_stdio() do _, _
+                @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            end
+            @test !occursin("vendor/Foo/Manifest.toml", out_dep_manifest)
+            @test !occursin("will be an error", out_dep_manifest)
+            write(joinpath(foo, "lib", "x.jl"), "x = 1\n")
+            out_jl, = _capture_stdio() do _, _
+                @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            end
+            @test occursin("ignored by this repo", out_jl)
+            @test occursin("will be an error", out_jl)
+            listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+            @test "vendor/Foo/lib/x.jl" in listed
+            @test DistSSHRun.ensure_manifest_ships!(tmp).env_dir == DistSSHRun.canonical_local_path(tmp)
+            rm(joinpath(foo, "lib", "x.jl"))
+            @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            # Untracked project files use the same ship names as ignored files.
+            bar = joinpath(tmp, "vendor", "Bar")
+            mkpath(joinpath(bar, "src"))
+            write(joinpath(bar, "src", "Bar.jl"), "module Bar end\n")
+            write(
+                joinpath(tmp, "Project.toml"), """
+                name = "App"
+                [sources]
+                Foo = {path = "vendor/Foo"}
+                Bar = {path = "vendor/Bar"}
+                """
+            )
+            run(pipeline(`git -C $tmp add Project.toml vendor/Bar/src`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp commit -q -m bar-src`; stdout = devnull, stderr = devnull))
+            write(joinpath(bar, "Project.toml"), "name = \"Bar\"\n")
+            out_proj, = _capture_stdio() do _, _
+                @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            end
+            @test occursin("untracked files", out_proj)
+            @test occursin("vendor/Bar/Project.toml", out_proj)
+            @test occursin("will be an error", out_proj)
+            write(joinpath(bar, "Manifest.toml"), "# dep lock\n")
+            write(joinpath(bar, "LocalPreferences.toml"), "[Bar]\nx = 1\n")
+            out_skip, = _capture_stdio() do _, _
+                @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            end
+            @test !occursin("vendor/Bar/Manifest.toml", out_skip)
+            @test !occursin("LocalPreferences.toml", out_skip)
+            @test occursin("vendor/Bar/Project.toml", out_skip)
+            run(pipeline(`git -C $tmp add vendor/Bar/Project.toml`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp commit -q -m bar-proj`; stdout = devnull, stderr = devnull))
+
+            # Path-source symlink: ignored files under the target must warn.
+            mkpath(joinpath(tmp, "dev"))
+            symlink(joinpath("..", "vendor", "Foo"), joinpath(tmp, "dev", "Foo"))
+            write(
+                joinpath(tmp, "Project.toml"), """
+                name = "App"
+                [sources]
+                Foo = {path = "dev/Foo"}
+                """
+            )
+            write(joinpath(foo, "lib", "x.jl"), "x = 1\n")
+            run(pipeline(`git -C $tmp add Project.toml dev/Foo`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp commit -q -m link-foo`; stdout = devnull, stderr = devnull))
+            out_link, = _capture_stdio() do _, _
+                @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            end
+            @test occursin("ignored by this repo", out_link)
+            @test occursin("vendor/Foo/lib/x.jl", out_link)
+            @test occursin("will be an error", out_link)
+            rm(joinpath(foo, "lib", "x.jl"))
+
+            # Manifest symlink: the lock bytes must be at HEAD, not only the link.
+            write(joinpath(tmp, "Manifest-real.toml"), "# lock\n")
+            rm(joinpath(tmp, "Manifest.toml"))
+            symlink("Manifest-real.toml", joinpath(tmp, "Manifest.toml"))
+            run(pipeline(`git -C $tmp add Manifest.toml`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp commit -q -m manifest-link`; stdout = devnull, stderr = devnull))
+            out_mlink, = _capture_stdio() do _, _
+                @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            end
+            @test occursin("Manifest-real.toml", out_mlink)
+            @test occursin("is not tracked", out_mlink)
+            @test occursin("will be an error", out_mlink)
+            run(pipeline(`git -C $tmp add Manifest-real.toml`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp commit -q -m manifest-bytes`; stdout = devnull, stderr = devnull))
+            quiet_mlink, = _capture_stdio() do _, _
+                @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            end
+            @test !occursin("will be an error", quiet_mlink)
+        end
     end
 end
