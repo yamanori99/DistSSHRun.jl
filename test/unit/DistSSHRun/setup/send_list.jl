@@ -45,11 +45,13 @@ using Test
         _with_tempdir() do tmp
             foo = joinpath(tmp, "vendor", "Foo")
             mkpath(joinpath(foo, "lib"))
-            write(joinpath(tmp, "Project.toml"), """
-            name = "App"
-            [sources]
-            Foo = {path = "vendor/Foo"}
-            """)
+            write(
+                joinpath(tmp, "Project.toml"), """
+                name = "App"
+                [sources]
+                Foo = {path = "vendor/Foo"}
+                """
+            )
             write(joinpath(tmp, ".gitignore"), "lib/\n")
             write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
             write(joinpath(foo, "lib", "x.jl"), "x = 1\n")
@@ -71,11 +73,13 @@ using Test
             run(pipeline(`git -C $dep init -q`; stdout = devnull, stderr = devnull))
             _ident!(dep)
             _commit!(dep, "dep")
-            write(joinpath(tmp, "Project.toml"), """
-            name = "App"
-            [sources]
-            Dep = {path = "dep"}
-            """)
+            write(
+                joinpath(tmp, "Project.toml"), """
+                name = "App"
+                [sources]
+                Dep = {path = "dep"}
+                """
+            )
             run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
             _ident!(tmp)
             _commit!(tmp, "app")

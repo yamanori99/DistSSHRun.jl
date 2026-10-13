@@ -86,9 +86,11 @@ end
 
 function _reject_newline_send_path(rel::AbstractString)
     occursin('\n', rel) || return nothing
-    throw(ArgumentError(
-        "cannot rsync a path that contains a newline ($(repr(rel))). Rename it and retry.",
-    ))
+    throw(
+        ArgumentError(
+            "cannot rsync a path that contains a newline ($(repr(rel))). Rename it and retry.",
+        )
+    )
 end
 
 """Add files under `dir` to `out`, prefixed for the rsync list. Skips `.git` and `.distsshkit`."""
@@ -130,7 +132,7 @@ function _git_worktree_file_list!(
     end
     subs = _git_submodule_paths(dir)
     for rel in _git_ls_files_z(dir, ["--cached", "--others", "--exclude-standard"])
-        bare = endswith(rel, "/") ? rel[1:end - 1] : rel
+        bare = endswith(rel, "/") ? rel[1:(end - 1)] : rel
         if endswith(rel, "/") || bare in subs
             _git_worktree_file_list!(out, joinpath(dir, bare), _join_send_rel(prefix, bare), seen)
             continue
