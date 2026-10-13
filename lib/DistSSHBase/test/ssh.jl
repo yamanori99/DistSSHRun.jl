@@ -1,6 +1,6 @@
 using Test
 
-let _BASE = _distsshbase_under_test()
+let _BASE = DistSSHBase
     @testset "remote shell quotes metacharacters" begin
         @test _BASE._remote_shell_path_word("/srv/x;id") == "'/srv/x;id'"
         @test _BASE._remote_shell_path_word("~/Repo") == "~/'Repo'"

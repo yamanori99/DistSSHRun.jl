@@ -1,4 +1,4 @@
-# Shared by DistSSHUp's own tests and DistSSHRun's suite.
+# Shared by DistSSHUp's own tests.
 # Helpers stay in this package. A Registry install has no sibling DistSSHBase tree.
 
 if !isdefined(Main, :_with_tempdir)

@@ -170,29 +170,37 @@ Codecov too). macOS and WSL SSH E2E stay on `E2E weekly`, not the PR.
 Register when the required checks below are green. Intel / WSL weekly are
 watchers, not the register gate.
 
-CI uploads Codecov on **main push** only (`Pkg.test` on 1.13, flag `pkgtest`). PR E2E does not upload; a version-increase PR and **E2E weekly** Linux upload flag `e2e`. Public repo + Codecov OIDC (`id-token: write`). Status checks are informational (`codecov.yml`). Local coverage:
+CI uploads Codecov on **main push** only (Run `Pkg.test` on 1.13, plus Ubuntu `Pkg.test` of DistSSHBase and DistSSHUp, flag `pkgtest`). PR E2E does not upload; a version-increase PR and **E2E weekly** Linux upload flag `e2e`. Public repo + Codecov OIDC (`id-token: write`). Status checks are informational (`codecov.yml`). Local coverage:
 
 ```bash
 julia --project=. -e 'using Pkg; Pkg.test(; coverage=true)'
 DISTSSHQUEUE_CODE_COVERAGE=1 ./testenv/docker-ssh/scripts/up.sh --e2e
 ```
 
-Required to merge (ruleset `main` uses these names). **1.14-nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and a version increase, not ordinary PRs. macOS and WSL2 nightly run on CI weekly only. Registry tree runs on ordinary PRs (heavy gate) and is not in the list below. E2E weekly and CI weekly are not required. Run keeps the titles in the list, plus `Pkg.test (1.14-nightly, ubuntu-latest, x64)` and `Pkg.test (registry, ubuntu-latest, x64)`. The Ubuntu 1.13 job also runs standalone `Pkg.test` for `DistSSHBase` and `DistSSHUp`. Downstream is `Downstream (DistSSHQueue, 1.13)` and `Downstream (DistSSHKit, 1.13)`. Names outside the list are not in the ruleset.
+Required to merge (ruleset `main` uses these names). **1.14-nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and a version increase, not ordinary PRs. macOS and WSL2 nightly run on CI weekly only. Registry tree runs on ordinary PRs (heavy gate) and is not in the list below. E2E weekly and CI weekly are not required. Run keeps the titles in the list, plus `Pkg.test (1.14-nightly, ubuntu-latest, x64)` and `Pkg.test (registry, ubuntu-latest, x64)`. DistSSHBase and DistSSHUp are their own jobs on Ubuntu, macOS, and WSL2, and their own Ubuntu SSH E2E rows. Downstream is `Downstream (DistSSHQueue, 1.13)` and `Downstream (DistSSHKit, 1.13)`. Names outside the list are not in the ruleset. The ruleset itself is edited on GitHub; this list is the names to add.
 
 - `Pkg.test (1.13, ubuntu-latest, x64)`
 - `Pkg.test (1.13, macos-latest, aarch64)`
 - `Pkg.test (1.13, WSL2 ubuntu-24.04, x64)`
+- `DistSSHBase (1.13, ubuntu-latest, x64)`
+- `DistSSHBase (1.13, macos-latest, aarch64)`
+- `DistSSHBase (1.13, WSL2 ubuntu-24.04, x64)`
+- `DistSSHUp (1.13, ubuntu-latest, x64)`
+- `DistSSHUp (1.13, macos-latest, aarch64)`
+- `DistSSHUp (1.13, WSL2 ubuntu-24.04, x64)`
 - `JETLS (1.13, ubuntu-latest, x64)`
 - `Aqua (1.13, ubuntu-latest, x64)`
 - `Documenter (1.13, ubuntu-latest, x64)`
 - `Gitleaks`
 - `ubuntu-latest → ubuntu-24.04`
+- `DistSSHBase (ubuntu-latest → ubuntu-24.04)`
+- `DistSSHUp (ubuntu-latest → ubuntu-24.04)`
 - `PR label`
 
 | When | Workflow | What |
 | --- | --- | --- |
-| Sunday 04:00 JST, Run workflow, or a version-increase squash to `main` | `E2E weekly` | `ubuntu-latest`, `macos-15-intel`, WSL2 → `ubuntu-24.04`. Linux job uploads E2E Codecov. Not a PR check. Failure opens (or comments on) Issue `E2E weekly failed`; a later all-green run closes it. A red **Linux** job after a `cut` merge adds `cut-hold`. Intel / WSL red does not. Compat-only `Project.toml` edits start the workflow but skip the matrix. |
-| Sunday 10:00 JST, or Run workflow | `CI weekly` | Same 1.13 jobs as a PR (Run's three hosts, with standalone DistSSHBase and DistSSHUp on the Ubuntu job, plus downstream DistSSHQueue and DistSSHKit; no coverage), plus JETLS and Aqua. 1.14-nightly `Pkg.test` is Run on Ubuntu, macOS, and WSL2; Aqua on macOS and WSL2 runs here only. Not a PR check. Catches 1.13 / Aqua / JETLS `@release` drift when nothing merged that week. Failure of the 1.13 jobs opens Issue `CI weekly failed` (`alert`); 1.14-nightly is omitted from that notify. `cache-gc` keeps one Actions cache per restore-key prefix. |
+| Sunday 04:00 JST, Run workflow, or a version-increase squash to `main` | `E2E weekly` | `ubuntu-latest`, `macos-15-intel`, WSL2 → `ubuntu-24.04`, plus the same three hosts for DistSSHBase and DistSSHUp. Linux job uploads E2E Codecov. Not a PR check. Failure opens (or comments on) Issue `E2E weekly failed`; a later all-green run closes it. A red **Linux** job after a `cut` merge adds `cut-hold`. Intel / WSL red does not. Compat-only `Project.toml` edits start the workflow but skip the matrix. |
+| Sunday 10:00 JST, or Run workflow | `CI weekly` | Same 1.13 jobs as a PR (Run's three hosts, DistSSHBase and DistSSHUp on Ubuntu, macOS, and WSL2, plus downstream DistSSHQueue and DistSSHKit; no coverage), plus JETLS and Aqua. 1.14-nightly `Pkg.test` is Run on Ubuntu, macOS, and WSL2; Aqua on macOS and WSL2 runs here only. Not a PR check. Catches 1.13 / Aqua / JETLS `@release` drift when nothing merged that week. Failure of the 1.13 jobs opens Issue `CI weekly failed` (`alert`); 1.14-nightly is omitted from that notify. `cache-gc` keeps one Actions cache per restore-key prefix. |
 | 1st 10:00 JST, or Run workflow | `Runic` | `runic --check` on tracked `.jl` (`version: '1'`). Not a required PR check. Catches Runic minor drift when nothing formatted that month. Failure opens Issue `Runic monthly failed` (`alert`). |
 
 ## Pull requests

@@ -43,11 +43,14 @@ test/
 ```
 
 `unit/` mirrors Run's own sources. DistSSHBase and DistSSHUp tests live with
-those packages and are included from `test/runtests.jl`:
+those packages and run as their own `Pkg.test` (`lib/DistSSHBase`,
+`lib/DistSSHUp`). SSH e2e for those packages is `lib/<pkg>/test/e2e.jl`
+(`DISTSSHKIT_SSH_E2E=1` after `testenv/docker-ssh/scripts/up.sh`).
+DistSSHRun's `test/runtests.jl` does not include them.
 
 ```text
-lib/DistSSHBase/test/   # ↔ lib/DistSSHBase/src/
-lib/DistSSHUp/test/     # ↔ lib/DistSSHUp/src/
+lib/DistSSHBase/test/   # Pkg.test of DistSSHBase; e2e.jl is SSH only
+lib/DistSSHUp/test/     # Pkg.test of DistSSHUp; e2e.jl is SSH only
 unit/
   DistSSHRun/     # ↔ src/DistSSHRun/ (API, setup cores, argv)
     argv/         # ↔ DistSSHRun/argv/
