@@ -179,11 +179,13 @@ function clone_to_remotes(
                 if st === :nonempty
                     return (:busy, remote_dest_busy_message(host, remote_path))
                 end
-                run(pipeline(
-                    _host_sync_remote_shell_cmd(host, "git clone -- $uq $pq");
-                    stdout = out_buf,
-                    stderr = err_buf,
-                ))
+                run(
+                    pipeline(
+                        _host_sync_remote_shell_cmd(host, "git clone -- $uq $pq");
+                        stdout = out_buf,
+                        stderr = err_buf,
+                    )
+                )
                 return (:ok, "")
             end
             if outcome[1] === :busy

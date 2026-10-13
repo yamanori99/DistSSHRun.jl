@@ -44,11 +44,13 @@ function _git_pull_remote_host_detail(host::AbstractString, remote_path::Abstrac
     out_buf = IOBuffer()
     err_buf = IOBuffer()
     try
-        run(pipeline(
-            _host_sync_remote_shell_cmd(String(host), _git_pull_remote_inner(remote_path));
-            stdout = out_buf,
-            stderr = err_buf,
-        ))
+        run(
+            pipeline(
+                _host_sync_remote_shell_cmd(String(host), _git_pull_remote_inner(remote_path));
+                stdout = out_buf,
+                stderr = err_buf,
+            )
+        )
         return true, ""
     catch e
         _rethrow_missing_host_tool(e)
