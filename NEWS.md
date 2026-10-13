@@ -6,7 +6,7 @@ GitHub Releases may copy these sections (`Release notes:` on
 
 ## Unreleased
 
-- `setup --rsync` sends the git file list (`git ls-files`, including negation, `info/exclude`, and global excludes). A tracked file that matches `.gitignore` is sent. An empty directory is not. Outside a git work tree, rsync still applies `.gitignore` exclude lines and does not apply negation. Path-source directories are sent whole, except `.git/` and `.distsshkit/`; an independent path-source repository uses only its own excludes.
+- `setup --rsync` inside a git work tree sends the file list from `git ls-files` with each directory's `.gitignore`, so negation patterns (`!path`) now apply. A tracked file that matches `.gitignore` is sent. `.git/info/exclude` and `core.excludesFile` still do not apply, and directories are still created even when empty. Path-source directories are sent whole, except `.git/` and `.distsshkit/`. A path source that is its own repository applies only its own `.gitignore`. Outside a git work tree, behavior is unchanged.
 - A failed `git push`, `git pull`, or `git clone` prints the command's own error text.
 - Each host touches its own drive sentinel, so collect still runs when hosts share a directory.
 - `drive` warns when two hosts collect the same relative path. The last transfer remains. With `DISTSSHKIT_JOBS` greater than 1, which host remains is unspecified. Hosts that share one directory report every file, so the warning lists them all.

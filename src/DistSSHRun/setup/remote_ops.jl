@@ -11,9 +11,10 @@ ensure_remote_dir(host::String, remote_path::String)::Bool =
 
 rsync the local project tree to each host, bypassing git entirely (no commit,
 no push/pull, no hash verification). Excludes `.git/` and `.distsshkit/`.
-Inside a git work tree the send list is `git ls-files` (negation and excludes
-included). Outside one, rsync's per-directory `.gitignore` filter applies, and
-negation patterns are not. The destination must be missing or empty.
+Inside a git work tree the send list is `git ls-files` with each directory's
+`.gitignore` (negation applies; `.git/info/exclude` and global excludes do not).
+Outside one, rsync's per-directory `.gitignore` filter applies, and negation
+patterns are not. The destination must be missing or empty.
 
 **Safety:** refuses if `remote_path` already has any files. Delete first with
 `setup --delete`, then `--rsync` onto a missing/empty path. For git-managed

@@ -59,17 +59,20 @@ function _send_rel_excluded(rel::AbstractString)::Bool
     return ".git" in parts || ".distsshkit" in parts
 end
 
-"""`git ls-files -z` records. Empty when git fails."""
+"""`git ls-files -z` records. Throws when git fails (after missing-tool checks)."""
 function _git_ls_files_z(dir::AbstractString, args::Vector{String})::Vector{String}
+    err_buf = IOBuffer()
     try
         raw = read(
-            pipeline(_git_cmd(vcat(["-C", String(dir), "ls-files", "-z"], args)); stderr = devnull),
+            pipeline(_git_cmd(vcat(["-C", String(dir), "ls-files", "-z"], args)); stderr = err_buf),
             String,
         )
         return String[s for s in split(raw, '\0') if !isempty(s)]
     catch e
         _rethrow_missing_host_tool(e)
-        return String[]
+        detail = strip(String(take!(err_buf)))
+        msg = isempty(detail) ? "git ls-files failed in $dir" : "git ls-files failed in $dir:\n$detail"
+        error(msg)
     end
 end
 
@@ -93,18 +96,105 @@ function _reject_newline_send_path(rel::AbstractString)
     )
 end
 
-"""Add files under `dir` to `out`, prefixed for the rsync list. Skips `.git` and `.distsshkit`."""
+"""
+True when `rel` itself is ignored by a directory `.gitignore` (no trailing slash).
+
+`output/*` ignores contents but not `output`, so the directory is still sent.
+`build/` ignores the directory itself.
+"""
+function _git_path_ignored(dir::AbstractString, rel::AbstractString)::Bool
+    r = replace(String(rel), '\\' => '/')
+    endswith(r, "/") && (r = r[1:(end - 1)])
+    isempty(r) && return false
+    err_buf = IOBuffer()
+    try
+        # Exit 0 → ignored. Exit 1 → not ignored.
+        run(
+            pipeline(
+                _git_cmd(["-C", String(dir), "check-ignore", "-q", "--", r]);
+                stdout = devnull,
+                stderr = err_buf,
+            )
+        )
+        return true
+    catch e
+        _rethrow_missing_host_tool(e)
+        return false
+    end
+end
+
+function _push_send_rel!(out::Vector{String}, prefix::AbstractString, rel::AbstractString)
+    listed = _join_send_rel(prefix, rel)
+    _send_rel_excluded(listed) && return nothing
+    _reject_newline_send_path(listed)
+    push!(out, listed)
+    return nothing
+end
+
+"""
+Add files and directories under `dir` (no app `.gitignore`). Skips `.git` /
+`.distsshkit`. Directory symlinks are listed as files (rsync `-a` sends the link).
+
+Uses an explicit stack (not `walkdir` + mutating `dirs`): Julia's `walkdir`
+Channel may buffer, so mutating `dirs` does not reliably prune descent.
+"""
 function _walk_send_files!(out::Vector{String}, dir::AbstractString, prefix::AbstractString)
     isdir(dir) || return nothing
-    for (cur, sub, files) in walkdir(dir)
-        filter!(d -> d != ".git" && d != ".distsshkit", sub)
+    stack = String[String(dir)]
+    while !isempty(stack)
+        cur = pop!(stack)
         rel_dir = relpath(cur, dir)
-        for f in files
-            rel = rel_dir == "." ? f : joinpath(rel_dir, f)
-            full = _join_send_rel(prefix, rel)
-            _send_rel_excluded(full) && continue
-            _reject_newline_send_path(full)
-            push!(out, full)
+        if rel_dir != "."
+            _push_send_rel!(out, prefix, rel_dir)
+        end
+        for name in readdir(cur; join = false, sort = false)
+            name == ".git" && continue
+            name == ".distsshkit" && continue
+            child = joinpath(cur, name)
+            if islink(child)
+                rel = rel_dir == "." ? name : joinpath(rel_dir, name)
+                _push_send_rel!(out, prefix, rel)
+                continue
+            end
+            if isdir(child)
+                push!(stack, child)
+                continue
+            end
+            rel = rel_dir == "." ? name : joinpath(rel_dir, name)
+            _push_send_rel!(out, prefix, rel)
+        end
+    end
+    return nothing
+end
+
+"""
+Directories that still exist after `.gitignore` filtering, for `--files-from`
+(creates them on the remote without recursing into their contents).
+"""
+function _append_gitignore_dirs!(
+        out::Vector{String},
+        dir::AbstractString,
+        prefix::AbstractString,
+    )
+    isdir(dir) || return nothing
+    stack = String[String(dir)]
+    while !isempty(stack)
+        cur = pop!(stack)
+        rel_dir = relpath(cur, dir)
+        if rel_dir != "."
+            _git_path_ignored(dir, rel_dir) && continue
+            _push_send_rel!(out, prefix, rel_dir)
+        end
+        for name in readdir(cur; join = false, sort = false)
+            name == ".git" && continue
+            name == ".distsshkit" && continue
+            child = joinpath(cur, name)
+            islink(child) && continue
+            isdir(child) || continue
+            isdir(joinpath(child, ".git")) && continue
+            rel = rel_dir == "." ? name : joinpath(rel_dir, name)
+            _git_path_ignored(dir, rel) && continue
+            push!(stack, child)
         end
     end
     return nothing
@@ -113,9 +203,12 @@ end
 """
 Append the git send list for `dir` (paths relative to `dir`, then prefixed).
 
-`--cached` keeps tracked files even when they match gitignore. `--others
---exclude-standard` applies negation, `.git/info/exclude`, and `core.excludesFile`.
-A trailing slash or a gitlink (mode 160000) is expanded in that directory.
+`--cached` keeps tracked files even when they match `.gitignore`. `--others
+--exclude-per-directory=.gitignore` applies negation from each directory's
+`.gitignore` only (not `.git/info/exclude` or `core.excludesFile`). A trailing
+slash or a gitlink (mode 160000) is expanded in that directory. Directories that
+are not themselves ignored are listed so `--files-from` still creates them when
+empty (`output/*` keeps `output/`; `build/` does not).
 """
 function _git_worktree_file_list!(
         out::Vector{String},
@@ -131,7 +224,10 @@ function _git_worktree_file_list!(
         return nothing
     end
     subs = _git_submodule_paths(dir)
-    for rel in _git_ls_files_z(dir, ["--cached", "--others", "--exclude-standard"])
+    for rel in _git_ls_files_z(
+            dir,
+            ["--cached", "--others", "--exclude-per-directory=.gitignore"],
+        )
         bare = endswith(rel, "/") ? rel[1:(end - 1)] : rel
         if endswith(rel, "/") || bare in subs
             _git_worktree_file_list!(out, joinpath(dir, bare), _join_send_rel(prefix, bare), seen)
@@ -139,11 +235,9 @@ function _git_worktree_file_list!(
         end
         full_path = joinpath(dir, rel)
         (isfile(full_path) || islink(full_path)) || continue
-        listed = _join_send_rel(prefix, rel)
-        _send_rel_excluded(listed) && continue
-        _reject_newline_send_path(listed)
-        push!(out, listed)
+        _push_send_rel!(out, prefix, rel)
     end
+    _append_gitignore_dirs!(out, dir, prefix)
     return nothing
 end
 
@@ -178,6 +272,7 @@ Files to rsync, relative to `local_root`.
 
 `nothing` when `local_root` is outside a git work tree: the caller keeps
 rsync's per-directory `.gitignore` filter (negation is not applied).
+An empty list throws `ArgumentError`.
 """
 function _rsync_send_list(local_root::AbstractString, env)::Union{Nothing, Vector{String}}
     root = canonical_local_path(local_root)
@@ -203,6 +298,7 @@ function _rsync_send_list(local_root::AbstractString, env)::Union{Nothing, Vecto
         end
     end
     unique!(filtered)
+    isempty(filtered) && throw(ArgumentError("nothing to send from $root"))
     return filtered
 end
 
@@ -297,7 +393,7 @@ function _print_rsync_safety_banner!(
     print_warn("  Safety: refuses if the remote path already has any files.\n")
     println_fatal("  To replace an existing tree, run `setup --delete` first, then `--rsync`.")
     if git_work_tree(local_root) isa String
-        println_fatal("  Sends the git file list (negation, info/exclude, and global excludes). Excludes `.git/` and `.distsshkit/`. Empty directories are not sent.")
+        println_fatal("  Sends the git file list from each directory's `.gitignore` (negation applies). Excludes `.git/` and `.distsshkit/`. Directories are still created when empty.")
     else
         println_fatal("  Applies `.gitignore` exclude lines with rsync's per-directory filter. Negation patterns are not applied. Excludes `.git/` and `.distsshkit/`.")
     end
@@ -408,9 +504,10 @@ function rsync_project_to_hosts!(
         path_anchor::AbstractString = local_root,
     )::NamedTuple
     given = canonical_local_path(local_root)
-    shipped = ensure_manifest_ships!(given)
+    env0 = resolve_pkg_env(given)
+    send_list = _rsync_send_list(given, env0)
+    shipped = ensure_manifest_ships!(given; send_list = send_list)
     local_root = shipped.env_dir
-    send_list = _rsync_send_list(local_root, shipped)
     raw_anchor = canonical_local_path(path_anchor)
     anchor = raw_anchor == given ? local_root : raw_anchor
     remote_path = String(remote_path)

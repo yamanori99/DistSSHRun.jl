@@ -1135,12 +1135,14 @@ end
         @testset "setup --rsync sends a gitignore negation" begin
             _e2e_announce("setup --rsync sends a gitignore negation")
             neg_root = "/home/dev/distsshkit-e2e-negation"
-            _with_tempdir() do app
+            _with_tempdir() do app_path
+                app = String(app_path)
                 write(joinpath(app, "Project.toml"), "name = \"NegationApp\"\n")
                 write(joinpath(app, ".gitignore"), "data/*\n!data/keep.txt\n")
                 mkpath(joinpath(app, "data"))
                 write(joinpath(app, "data", "a.dat"), "nope\n")
                 write(joinpath(app, "data", "keep.txt"), "keep\n")
+                mkpath(joinpath(app, "empty"))
                 run(pipeline(`git -C $app init -q`; stdout = devnull, stderr = devnull))
                 run(pipeline(`git -C $app config user.email "e2e@example.com"`; stdout = devnull, stderr = devnull))
                 run(pipeline(`git -C $app config user.name "e2e"`; stdout = devnull, stderr = devnull))
@@ -1166,6 +1168,8 @@ end
                     _assert_proc_ok(p, ssh_out; label = "negation keep.txt $(host)")
                     p, ssh_out = _ssh_e2e_ssh(host, "test ! -e $(neg_root)/data/a.dat")
                     _assert_proc_ok(p, ssh_out; label = "negation a.dat absent $(host)")
+                    p, ssh_out = _ssh_e2e_ssh(host, "test -d $(neg_root)/empty")
+                    _assert_proc_ok(p, ssh_out; label = "negation empty dir $(host)")
                 end
             end
         end

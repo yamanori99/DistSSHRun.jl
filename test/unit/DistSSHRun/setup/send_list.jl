@@ -36,8 +36,63 @@ using Test
             @test listed isa Vector
             @test "data/keep.txt" in listed
             @test !("data/a.dat" in listed)
-            @test !("secret.txt" in listed)
+            # info/exclude is not applied (same as rsync `:- .gitignore`).
+            @test "secret.txt" in listed
             @test !("gone.txt" in listed)
+            @test "data" in listed
+        end
+    end
+
+    @testset "empty and ignored directories" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(tmp, ".gitignore"), "output/*\nbuild/\n")
+            mkpath(joinpath(tmp, "output"))
+            write(joinpath(tmp, "output", "x.bin"), "x\n")
+            mkpath(joinpath(tmp, "empty"))
+            mkpath(joinpath(tmp, "build", "obj"))
+            write(joinpath(tmp, "build", "obj", "a.o"), "o\n")
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            _commit!(tmp, "init")
+            listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+            @test "output" in listed
+            @test !("output/x.bin" in listed)
+            @test "empty" in listed
+            @test !("build" in listed)
+            @test !("build/obj" in listed)
+            @test !("build/obj/a.o" in listed)
+        end
+    end
+
+    @testset "git ls-files failure is an error" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            @test_throws ErrorException DistSSHRun._git_ls_files_z(
+                tmp, ["--cached", "--others", "--exclude-per-directory=.gitignore"],
+            )
+        end
+    end
+
+    @testset "directory symlink is listed" begin
+        _with_tempdir() do tmp
+            # Path source that is not its own repo: walk must keep the symlink.
+            write(
+                joinpath(tmp, "Project.toml"), """
+                name = "App"
+                [sources]
+                Link = {path = "vendor"}
+                """
+            )
+            mkpath(joinpath(tmp, "vendor", "real"))
+            write(joinpath(tmp, "vendor", "Project.toml"), "name = \"Link\"\n")
+            write(joinpath(tmp, "vendor", "real", "x.jl"), "x = 1\n")
+            symlink("real", joinpath(tmp, "vendor", "link"))
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            _commit!(tmp, "init")
+            listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+            @test "vendor/link" in listed
         end
     end
 
