@@ -336,13 +336,13 @@ function _path_source_git_problems(
     end
     loose = [
         p for p in _git_ls_files_z(work_tree, ["--others", "--exclude-standard", "--", rel])
-            if endswith(p, ".jl")
+            if occursin(_PATH_SOURCE_SHIP_NAMES, p)
     ]
     if !isempty(loose)
         shown = join(loose[1:min(end, 10)], ", ")
         push!(
             msgs,
-            "Source path $location for $name has untracked Julia files that a clone or git sync would omit: $shown. Commit them.",
+            "Source path $location for $name has untracked files that a clone or git sync would omit: $shown. Commit them.",
         )
     end
     return msgs

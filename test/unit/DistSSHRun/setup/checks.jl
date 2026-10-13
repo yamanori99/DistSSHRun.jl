@@ -705,6 +705,35 @@ using Pkg
             @test DistSSHRun.ensure_manifest_ships!(tmp).env_dir == DistSSHRun.canonical_local_path(tmp)
             rm(joinpath(foo, "lib", "x.jl"))
             @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            # Untracked project files use the same ship names as ignored files.
+            bar = joinpath(tmp, "vendor", "Bar")
+            mkpath(joinpath(bar, "src"))
+            write(joinpath(bar, "src", "Bar.jl"), "module Bar end\n")
+            write(
+                joinpath(tmp, "Project.toml"), """
+                name = "App"
+                [sources]
+                Foo = {path = "vendor/Foo"}
+                Bar = {path = "vendor/Bar"}
+                """
+            )
+            run(pipeline(`git -C $tmp add Project.toml vendor/Bar/src`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp commit -q -m bar-src`; stdout = devnull, stderr = devnull))
+            write(joinpath(bar, "Project.toml"), "name = \"Bar\"\n")
+            out_proj, = _capture_stdio() do _, _
+                @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            end
+            @test occursin("untracked files", out_proj)
+            @test occursin("vendor/Bar/Project.toml", out_proj)
+            @test occursin("will be an error", out_proj)
+            write(joinpath(bar, "Manifest.toml"), "# dep lock\n")
+            write(joinpath(bar, "LocalPreferences.toml"), "[Bar]\nx = 1\n")
+            out_skip, = _capture_stdio() do _, _
+                @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            end
+            @test !occursin("vendor/Bar/Manifest.toml", out_skip)
+            @test !occursin("LocalPreferences.toml", out_skip)
+            @test occursin("vendor/Bar/Project.toml", out_skip)
         end
     end
 end
