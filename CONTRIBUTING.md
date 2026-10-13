@@ -46,13 +46,13 @@ workers do not have. Keep a separate environment for package work.
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
-Run this on Julia **1.13** (and **1.14-nightly** if you have it). Layout: [test/README.md](test/README.md). When adding a file under `test/runtests.jl` or an inner SSH E2E `@testset`, bump `_RUNTEST_N` / `_E2E_N` so `[i/N]` stays honest.
+Run this on Julia **1.13** (and **1.14-nightly** if you have it). Layout: [test/README.md](test/README.md). `test/runtests.jl` counts its `_runtest_announce` calls for `[i/N]`. When adding an inner SSH E2E `@testset`, bump `_E2E_N`.
 
 Checkout `Pkg.test()` is not a Registry tarball. After changing those gates (child CLI project, `ssh` spawn), and before a General cut, run the disposable copy in [test/README.md](test/README.md#registry-tree). CI runs that shape on ordinary PRs (heavy gate) and **main** (Julia 1.14-nightly; `continue-on-error`; not a required check).
 
 ```bash
 julia -e 'using Pkg; Pkg.Apps.add("Runic")'   # once
-runic --inplace src test docs testenv   # before push; not `.` (markdown out of scope)
+runic --inplace src lib test docs testenv   # before push; not `.` (markdown out of scope)
 ./.github/jetls-check.sh    # hint+; same files as CI
 ./.github/aqua-check.sh     # latest registry Aqua; not part of Pkg.test()
 ./testenv/docker-ssh/scripts/up.sh --e2e
@@ -65,7 +65,7 @@ gitleaks detect --source .
 (`fredrikekre/runic-action@v1`, `version: '1'`) runs `--check` on every
 tracked `.jl`. Format `docs/*.jl` and `testenv/**/*.jl` too if you change
 them. A Runic minor may make `--check` red: re-run
-`runic --inplace src test docs testenv` and push.
+`runic --inplace src lib test docs testenv` and push.
 Optional: after a bulk format squash, add the landed SHA to
 [`.git-blame-ignore-revs`](.git-blame-ignore-revs) if blame is noisy.
 Local blame:
@@ -135,7 +135,7 @@ Gitleaks also rejects `< 0.0.1` in `Project.toml`. Documenter 1.13 is
 [`.github/workflows/Documentation.yml`](.github/workflows/Documentation.yml).
 `Assets` (`draw SVG`) runs if `docs/src/assets/` or that workflow
 changed. Linux E2E (1.13) uses the same **path filter** as **main** push
-(`src/**`, `test/**`, `testenv/**` minus markdown under those trees,
+(`src/**`, `lib/**`, `test/**`, `testenv/**` minus markdown under those trees,
 `Project.toml`, `test/Project.toml`, `.github/workflows/CI.yml`). It also
 runs on a **version increase**, **E2E weekly** (`ssh-e2e-weekly.yml`; `CI.yml` has no
 `schedule`), and `workflow_dispatch`. **1.14-nightly** `Pkg.test` / Aqua
@@ -177,7 +177,7 @@ julia --project=. -e 'using Pkg; Pkg.test(; coverage=true)'
 DISTSSHQUEUE_CODE_COVERAGE=1 ./testenv/docker-ssh/scripts/up.sh --e2e
 ```
 
-Required to merge (ruleset `main` uses these names). **1.14-nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and a version increase, not ordinary PRs. macOS and WSL2 nightly run on CI weekly only. Registry tree runs on ordinary PRs (heavy gate) and is not in the list below. E2E weekly and CI weekly are not required.
+Required to merge (ruleset `main` uses these names). **1.14-nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and a version increase, not ordinary PRs. macOS and WSL2 nightly run on CI weekly only. Registry tree runs on ordinary PRs (heavy gate) and is not in the list below. E2E weekly and CI weekly are not required. Run keeps the titles in the list, plus `Pkg.test (1.14-nightly, ubuntu-latest, x64)` and `Pkg.test (registry, ubuntu-latest, x64)`. The Ubuntu 1.13 job also runs standalone `Pkg.test` for `DistSSHBase` and `DistSSHUp`. Downstream is `Downstream (DistSSHQueue, 1.13)` and `Downstream (DistSSHKit, 1.13)`. Names outside the list are not in the ruleset.
 
 - `Pkg.test (1.13, ubuntu-latest, x64)`
 - `Pkg.test (1.13, macos-latest, aarch64)`
@@ -192,7 +192,7 @@ Required to merge (ruleset `main` uses these names). **1.14-nightly** jobs are a
 | When | Workflow | What |
 | --- | --- | --- |
 | Sunday 04:00 JST, Run workflow, or a version-increase squash to `main` | `E2E weekly` | `ubuntu-latest`, `macos-15-intel`, WSL2 → `ubuntu-24.04`. Linux job uploads E2E Codecov. Not a PR check. Failure opens (or comments on) Issue `E2E weekly failed`; a later all-green run closes it. A red **Linux** job after a `cut` merge adds `cut-hold`. Intel / WSL red does not. Compat-only `Project.toml` edits start the workflow but skip the matrix. |
-| Sunday 10:00 JST, or Run workflow | `CI weekly` | Same 1.13 `Pkg.test` / JETLS / Aqua versions as a PR, including `macos-latest` and WSL2 (no coverage). 1.14-nightly `Pkg.test` and Aqua on macOS and WSL2 run here only. Not a PR check. Catches 1.13 / Aqua / JETLS `@release` drift when nothing merged that week. Failure of the 1.13 jobs opens Issue `CI weekly failed` (`alert`); 1.14-nightly is omitted from that notify. `cache-gc` keeps one Actions cache per restore-key prefix. |
+| Sunday 10:00 JST, or Run workflow | `CI weekly` | Same 1.13 jobs as a PR (Run's three hosts, with standalone DistSSHBase and DistSSHUp on the Ubuntu job, plus downstream DistSSHQueue and DistSSHKit; no coverage), plus JETLS and Aqua. 1.14-nightly `Pkg.test` is Run on Ubuntu, macOS, and WSL2; Aqua on macOS and WSL2 runs here only. Not a PR check. Catches 1.13 / Aqua / JETLS `@release` drift when nothing merged that week. Failure of the 1.13 jobs opens Issue `CI weekly failed` (`alert`); 1.14-nightly is omitted from that notify. `cache-gc` keeps one Actions cache per restore-key prefix. |
 | 1st 10:00 JST, or Run workflow | `Runic` | `runic --check` on tracked `.jl` (`version: '1'`). Not a required PR check. Catches Runic minor drift when nothing formatted that month. Failure opens Issue `Runic monthly failed` (`alert`). |
 
 ## Pull requests

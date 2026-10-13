@@ -46,6 +46,7 @@ runs:
             - "README.ja.md"
             - "NEWS.md"
             - "src/**"
+            - "lib/**"
             - "Project.toml"
     - id: version
       shell: bash

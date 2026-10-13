@@ -1,6 +1,6 @@
 using Test
 
-let _UP = DistSSHRun.DistSSHUp
+let _UP = _distsshup_under_test()
     @testset "juliaup align local" begin
         _with_tempdir() do d
             fake = _write_aligned_fake_juliaup(d)

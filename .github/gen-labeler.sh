@@ -86,6 +86,7 @@ EOF
   - changed-files:
       - any-glob-to-any-file:
           - "src/**"
+          - "lib/**"
           - "demos/**"
           - "test/unit/**"
           - "test/integration/**"

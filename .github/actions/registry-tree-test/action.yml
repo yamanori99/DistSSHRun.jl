@@ -1,12 +1,33 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-action.json
 name: registry-tree-test
-description: Pkg.test DistSSHRun from a Registry-style bare file:// tree (no ssh on PATH)
+description: Pkg.test a package from a Registry-style bare file:// tree (no ssh on PATH)
+
+inputs:
+  package:
+    description: Package name passed to Pkg.test
+    required: true
+  tree:
+    description: Repo-relative directory copied as the git work tree
+    required: true
+  subdir:
+    description: Subdirectory of the work tree to Pkg.add. Empty adds the tree root.
+    required: false
+    default: ""
+  base_subdir:
+    description: Sibling subdirectory to Pkg.add before subdir. Empty skips it.
+    required: false
+    default: ""
 
 runs:
   using: composite
   steps:
-    - name: Pkg.test on a Registry-style tree
+    - name: Pkg.test ${{ inputs.package }} on a Registry-style tree
       shell: bash
+      env:
+        REGISTRY_PACKAGE: ${{ inputs.package }}
+        REGISTRY_TREE: ${{ inputs.tree }}
+        REGISTRY_SUBDIR: ${{ inputs.subdir }}
+        REGISTRY_BASE_SUBDIR: ${{ inputs.base_subdir }}
       run: |
         set -euo pipefail
         sudo DEBIAN_FRONTEND=noninteractive apt-get remove -y openssh-client
@@ -23,7 +44,7 @@ runs:
           --exclude docs/Manifest.toml \
           --exclude docs/build \
           --exclude test/artifacts \
-          ./ "${WORKDIR}/"
+          "${REGISTRY_TREE}/" "${WORKDIR}/"
         git init --bare -q "${BARE}"
         git --git-dir="${BARE}" --work-tree="${WORKDIR}" add -A
         git --git-dir="${BARE}" --work-tree="${WORKDIR}" \
@@ -31,8 +52,22 @@ runs:
         julia -e '
           using Pkg
           Pkg.activate(temp=true)
-          Pkg.add(; url=ARGS[1])
-          using DistSSHRun
-          run(Cmd(["chmod", "-R", "a-w", pkgdir(DistSSHRun)]))
-          Pkg.test("DistSSHRun")
-        ' "file://${BARE}"
+          url = "file://" * ARGS[1]
+          base_subdir = ARGS[2]
+          subdir = ARGS[3]
+          name = ARGS[4]
+          if !isempty(base_subdir)
+              Pkg.add(; url, subdir=base_subdir)
+          end
+          if isempty(subdir)
+              Pkg.add(; url)
+          else
+              Pkg.add(; url, subdir)
+          end
+          mod = Symbol(name)
+          Core.eval(Main, Expr(:using, Expr(:., mod)))
+          dir = pkgdir(getfield(Main, mod))
+          dir === nothing && error(string(name, " has no pkgdir"))
+          run(Cmd(["chmod", "-R", "a-w", dir]))
+          Pkg.test(name)
+        ' "${BARE}" "${REGISTRY_BASE_SUBDIR}" "${REGISTRY_SUBDIR}" "${REGISTRY_PACKAGE}"

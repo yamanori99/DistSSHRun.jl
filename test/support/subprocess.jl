@@ -27,12 +27,6 @@ if !isdefined(Main, :_child_julia_env)
         return env
     end
 
-    function _run_subprocess(cmd::Cmd)
-        out = IOBuffer()
-        proc = run(pipeline(ignorestatus(cmd), stdout = out, stderr = out), wait = true)
-        return proc, String(take!(out))
-    end
-
     # How many child processes `_run_subprocesses` starts at once.
     # A function, not a `const` inside this `if`: JETLS reports that `const` as an undefined global.
     _subprocess_width() = 4

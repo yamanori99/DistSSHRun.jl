@@ -20,9 +20,14 @@ include(joinpath(@__DIR__, "support.jl"))
 # or a pipe. Child CLI processes still auto-detect their own stdout.
 DistSSHRun.set_kit_verbosity!(:progress)
 
-# Keep `include(joinpath(@__DIR__, …))` at this top level (JETLS). Only the
-# banner is counted. Update `_RUNTEST_N` when adding a file below.
-const _RUNTEST_N = 56
+# Keep `include(joinpath(@__DIR__, …))` at this top level (JETLS). The banner
+# counts `_runtest_announce` calls in this file, so adding one updates `[i/N]`.
+const _RUNTEST_N = let n = count(eachline(@__FILE__)) do line
+        return occursin(r"^\s*_runtest_announce\(", line)
+    end
+    n > 0 || error("test/runtests.jl: no _runtest_announce calls")
+    n
+end
 const _RUNTEST_I = Ref(0)
 function _runtest_announce(rel::AbstractString)
     _RUNTEST_I[] += 1
@@ -31,23 +36,26 @@ function _runtest_announce(rel::AbstractString)
     return nothing
 end
 
+_distsshbase_under_test() = DistSSHRun.DistSSHBase
+_distsshup_under_test() = DistSSHRun.DistSSHUp
+
 @testset "DistSSHRun" verbose = true begin
     @testset "unit" verbose = true begin
         @testset "DistSSHBase" verbose = true begin
-            _runtest_announce("unit/DistSSHBase/paths.jl")
-            include(joinpath(@__DIR__, "unit", "DistSSHBase", "paths.jl"))
-            _runtest_announce("unit/DistSSHBase/hosts.jl")
-            include(joinpath(@__DIR__, "unit", "DistSSHBase", "hosts.jl"))
-            _runtest_announce("unit/DistSSHBase/ssh.jl")
-            include(joinpath(@__DIR__, "unit", "DistSSHBase", "ssh.jl"))
-            _runtest_announce("unit/DistSSHBase/shell_quote.jl")
-            include(joinpath(@__DIR__, "unit", "DistSSHBase", "shell_quote.jl"))
-            _runtest_announce("unit/DistSSHBase/detect_julia.jl")
-            include(joinpath(@__DIR__, "unit", "DistSSHBase", "detect_julia.jl"))
+            _runtest_announce("lib/DistSSHBase/test/paths.jl")
+            include(joinpath(dirname(@__DIR__), "lib", "DistSSHBase", "test", "paths.jl"))
+            _runtest_announce("lib/DistSSHBase/test/hosts.jl")
+            include(joinpath(dirname(@__DIR__), "lib", "DistSSHBase", "test", "hosts.jl"))
+            _runtest_announce("lib/DistSSHBase/test/ssh.jl")
+            include(joinpath(dirname(@__DIR__), "lib", "DistSSHBase", "test", "ssh.jl"))
+            _runtest_announce("lib/DistSSHBase/test/shell_quote.jl")
+            include(joinpath(dirname(@__DIR__), "lib", "DistSSHBase", "test", "shell_quote.jl"))
+            _runtest_announce("lib/DistSSHBase/test/detect_julia.jl")
+            include(joinpath(dirname(@__DIR__), "lib", "DistSSHBase", "test", "detect_julia.jl"))
         end
         @testset "DistSSHUp" verbose = true begin
-            _runtest_announce("unit/DistSSHUp/local.jl")
-            include(joinpath(@__DIR__, "unit", "DistSSHUp", "local.jl"))
+            _runtest_announce("lib/DistSSHUp/test/local.jl")
+            include(joinpath(dirname(@__DIR__), "lib", "DistSSHUp", "test", "local.jl"))
         end
         _runtest_announce("unit/DistSSHRun/display.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "display.jl"))
@@ -122,6 +130,8 @@ end
     end
 
     @testset "integration" verbose = true begin
+        _runtest_announce("integration/DistSSHRun/vendor.jl")
+        include(joinpath(@__DIR__, "integration", "DistSSHRun", "vendor.jl"))
         _runtest_announce("integration/cli/help.jl")
         include(joinpath(@__DIR__, "integration", "cli", "help.jl"))
         _runtest_announce("integration/setup/exit.jl")

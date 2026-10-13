@@ -6,6 +6,8 @@ GitHub Releases may copy these sections (`Release notes:` on
 
 ## Unreleased
 
+- The DistSSHBase and DistSSHUp sources live under `lib/` with their own
+  `Project.toml` and tests. DistSSHRun still includes them as submodules.
 - Host talking and the juliaup verbs move into two internal submodules,
   `DistSSHRun.DistSSHBase` and `DistSSHRun.DistSSHUp`. Exported names do
   not change. DistSSHQueue and DistSSHKit can use these instead of their

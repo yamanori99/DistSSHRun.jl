@@ -3,7 +3,9 @@ name: CI weekly
 # Not on pull_request: insurance for 1.13 / 1.14-nightly / Aqua / JETLS
 # @release drift when no PR ran that week. PR / main push stay the gate.
 # tip jobs are continue-on-error and omitted from notify.
-# 1.13 macos-latest and WSL2 Pkg.test are included (no coverage), same as a PR.
+# 1.13 matches Test: Run's old titles (Ubuntu also runs standalone
+# DistSSHBase and DistSSHUp), then downstream DistSSHQueue and DistSSHKit
+# (no coverage).
 # 1.14-nightly Pkg.test and Aqua on macOS and WSL2 run here only, and stay
 # out of notify. Ubuntu nightly also runs in Test.
 on:
@@ -34,6 +36,10 @@ jobs:
           cache-scratchspaces: false
           delete-old-caches: false
       - uses: ./.github/actions/pkg-test
+      - name: Pkg.test DistSSHBase and DistSSHUp
+        run: |
+          julia --project=lib/DistSSHBase -e 'using Pkg; Pkg.test()'
+          julia --project=lib/DistSSHUp -e 'using Pkg; Pkg.test()'
 
   test-macos:
     name: Pkg.test (1.13, macos-latest, aarch64)
@@ -73,6 +79,59 @@ jobs:
       - name: Pkg.test in WSL2
         shell: wsl-bash {0}
         run: ./.github/wsl-julia.sh 1.13 julia --project=. -e 'using Pkg; Pkg.test()'
+
+  downstream:
+    name: Downstream (${{ matrix.pkg }}, 1.13)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [DistSSHQueue, DistSSHKit]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yamanori99/${{ matrix.pkg }}.jl
+          ref: main
+          path: downstream
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - name: Pkg.test downstream against this checkout
+        env:
+          PKG: ${{ matrix.pkg }}
+          UPSTREAM: ${{ github.workspace }}
+          DOWNSTREAM: ${{ github.workspace }}/downstream
+          UPSTREAM_PKG: DistSSHRun
+        run: |
+          julia --startup-file=no -e '
+            using Pkg
+            upstream = ENV["UPSTREAM"]
+            downstream = ENV["DOWNSTREAM"]
+            name = Symbol(ENV["UPSTREAM_PKG"])
+            Pkg.activate(joinpath(downstream, "test"))
+            Pkg.develop(PackageSpec(path = upstream))
+            Pkg.instantiate()
+            Core.eval(Main, Expr(:using, Expr(:., name)))
+            dir = pkgdir(getfield(Main, name))
+            dir === nothing && error(string(name, " has no pkgdir"))
+            loaded = realpath(dir)
+            expected = realpath(upstream)
+            loaded == expected || error(string(name, " loaded from ", loaded))
+            Pkg.activate(downstream)
+            Pkg.test(ENV["PKG"])
+          '
+
 
   test-tip:
     name: Pkg.test (1.14-nightly, ubuntu-latest, x64)
@@ -230,6 +289,7 @@ jobs:
       - test
       - test-macos
       - test-wsl
+      - downstream
       - test-tip
       - test-tip-macos
       - test-tip-wsl
@@ -257,6 +317,7 @@ jobs:
       - test
       - test-macos
       - test-wsl
+      - downstream
       - jetls
       - aqua
       - cache-gc

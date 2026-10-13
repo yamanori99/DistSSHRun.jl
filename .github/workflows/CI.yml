@@ -25,6 +25,10 @@ jobs:
   # `Pkg.test` 1.13 runs on ubuntu-latest, macos-latest, and WSL2 Ubuntu.
   # macOS and WSL are required. The macOS job exercises `ps -o lstart=`
   # in kit_process_start_key (no /proc). Coverage uploads from Ubuntu only.
+  # Run keeps the old check titles (no package name). Standalone
+  # DistSSHBase and DistSSHUp Pkg.test run as one step on the Ubuntu
+  # 1.13 job. Downstream is DistSSHQueue and DistSSHKit on Ubuntu.
+  # Coverage uploads from the Ubuntu Run job only.
   # Slow SSH E2E kit parents are `E2E weekly`
   # (macos-15-intel Colima, not this job).
   # PRs run `ubuntu-latest → ubuntu-24.04` in this workflow.
@@ -64,6 +68,7 @@ jobs:
           filters: |
             e2e:
               - "src/**"
+              - "lib/**"
               - "test/**"
               - "!test/**/*.md"
               - "demos/**"
@@ -117,6 +122,12 @@ jobs:
         with:
           coverage: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           upload: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      # Standalone projects: undeclared deps fail here. The test bodies
+      # already run on every host inside DistSSHRun's Pkg.test.
+      - name: Pkg.test DistSSHBase and DistSSHUp
+        run: |
+          julia --project=lib/DistSSHBase -e 'using Pkg; Pkg.test()'
+          julia --project=lib/DistSSHUp -e 'using Pkg; Pkg.test()'
 
   test-macos:
     name: Pkg.test (1.13, macos-latest, aarch64)
@@ -163,6 +174,61 @@ jobs:
         shell: wsl-bash {0}
         run: ./.github/wsl-julia.sh 1.13 julia --project=. -e 'using Pkg; Pkg.test()'
 
+  downstream:
+    name: Downstream (${{ matrix.pkg }}, 1.13)
+    needs: detect
+    if: needs.detect.outputs.heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [DistSSHQueue, DistSSHKit]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yamanori99/${{ matrix.pkg }}.jl
+          ref: main
+          path: downstream
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - name: Pkg.test downstream against this checkout
+        env:
+          PKG: ${{ matrix.pkg }}
+          UPSTREAM: ${{ github.workspace }}
+          DOWNSTREAM: ${{ github.workspace }}/downstream
+          UPSTREAM_PKG: DistSSHRun
+        run: |
+          julia --startup-file=no -e '
+            using Pkg
+            upstream = ENV["UPSTREAM"]
+            downstream = ENV["DOWNSTREAM"]
+            name = Symbol(ENV["UPSTREAM_PKG"])
+            Pkg.activate(joinpath(downstream, "test"))
+            Pkg.develop(PackageSpec(path = upstream))
+            Pkg.instantiate()
+            Core.eval(Main, Expr(:using, Expr(:., name)))
+            dir = pkgdir(getfield(Main, name))
+            dir === nothing && error(string(name, " has no pkgdir"))
+            loaded = realpath(dir)
+            expected = realpath(upstream)
+            loaded == expected || error(string(name, " loaded from ", loaded))
+            Pkg.activate(downstream)
+            Pkg.test(ENV["PKG"])
+          '
+
+  # A skipped job does not expand a matrix name, so these titles stay literal.
   test-tip:
     name: Pkg.test (1.14-nightly, ubuntu-latest, x64)
     needs: detect
@@ -181,9 +247,6 @@ jobs:
           delete-old-caches: false
       - uses: ./.github/actions/pkg-test
 
-  # Not a Julia slot. Not required to merge. Ordinary PRs use the heavy
-  # gate (same as Pkg.test 1.13). continue-on-error: a red job does not
-  # fail the workflow. Catches checkout-only Pkg.test assumptions.
   test-registry-tree:
     name: Pkg.test (registry, ubuntu-latest, x64)
     needs: detect
@@ -203,6 +266,9 @@ jobs:
           cache-scratchspaces: false
           delete-old-caches: false
       - uses: ./.github/actions/registry-tree-test
+        with:
+          package: DistSSHRun
+          tree: .
 
   aqua:
     name: Aqua (1.13, ubuntu-latest, x64)
@@ -302,60 +368,3 @@ jobs:
         if: ${{ always() }}
         run: ./testenv/docker-ssh/scripts/down.sh || true
 
-  # Downstream main, with this checkout developed into its test project.
-  # Red is correct when this PR needs a downstream change that is not on main
-  # yet, or when this version leaves the downstream compat and resolution
-  # fails (for example a 0.2 bump).
-  downstream:
-    name: Downstream (${{ matrix.pkg }}, 1.13)
-    needs: detect
-    if: needs.detect.outputs.heavy == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        pkg: [DistSSHQueue, DistSSHKit]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: yamanori99/${{ matrix.pkg }}.jl
-          ref: main
-          path: downstream
-          persist-credentials: false
-      - uses: ./.github/actions/julia-slot
-        with:
-          version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
-        with:
-          cache-scratchspaces: false
-          delete-old-caches: false
-      - name: Pkg.test downstream against this checkout
-        env:
-          PKG: ${{ matrix.pkg }}
-          UPSTREAM: ${{ github.workspace }}
-          DOWNSTREAM: ${{ github.workspace }}/downstream
-          UPSTREAM_PKG: DistSSHRun
-        run: |
-          julia --startup-file=no -e '
-            using Pkg
-            upstream = ENV["UPSTREAM"]
-            downstream = ENV["DOWNSTREAM"]
-            name = Symbol(ENV["UPSTREAM_PKG"])
-            Pkg.activate(joinpath(downstream, "test"))
-            Pkg.develop(PackageSpec(path = upstream))
-            Pkg.instantiate()
-            Core.eval(Main, Expr(:using, Expr(:., name)))
-            dir = pkgdir(getfield(Main, name))
-            dir === nothing && error(string(name, " has no pkgdir"))
-            loaded = realpath(dir)
-            expected = realpath(upstream)
-            loaded == expected || error(string(name, " loaded from ", loaded))
-            Pkg.activate(downstream)
-            Pkg.test(ENV["PKG"])
-          '

@@ -1,0 +1,10 @@
+[deps]
+DistSSHUp = "76a6745a-cbcc-444e-a19a-dcac12a79e7c"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[sources]
+DistSSHUp = {path = ".."}
+
+[compat]
+DistSSHUp = "0.1"
+Test = "1"

@@ -1,7 +1,8 @@
 """
 Host naming, SSH, paths, and help chrome shared by the DistSSH packages.
 
-Internal to the DistSSH family. No compatibility promise beyond the names
+Internal to the DistSSH family. Not registered. DistSSHRun includes this
+source as `DistSSHRun.DistSSHBase`. No compatibility promise beyond the names
 DistSSHRun exports.
 """
 module DistSSHBase
