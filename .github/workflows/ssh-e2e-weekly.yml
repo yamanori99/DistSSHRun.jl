@@ -20,54 +20,7 @@ permissions:
   contents: read
 
 jobs:
-  gate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    name: gate
-    outputs:
-      run: ${{ steps.decide.outputs.run }}
-    steps:
-      - id: decide
-        env:
-          BEFORE: ${{ github.event.before }}
-        run: |
-          set -euo pipefail
-          if [ "${GITHUB_EVENT_NAME}" != "push" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          zeros="$(printf '0%.0s' {1..40})"
-          if [ -z "${BEFORE:-}" ] || [ "$BEFORE" = "$zeros" ]; then
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git init -q
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --depth=1 origin "$BEFORE"
-          git fetch --depth=1 origin "$GITHUB_SHA"
-          old="$(git cat-file -p "${BEFORE}:Project.toml" | grep -E '^version[[:space:]]*=' | head -1 || true)"
-          new="$(git cat-file -p "${GITHUB_SHA}:Project.toml" | grep -E '^version[[:space:]]*=' | head -1 || true)"
-          parse() {
-            echo "$1" | sed -n 's/^version[[:space:]]*=[[:space:]]*"\([0-9][0-9]*\)\.\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2 \3/p'
-          }
-          read -r om oi op <<<"$(parse "$old")"
-          read -r nm ni np <<<"$(parse "$new")"
-          cut=false
-          if [ -n "${om:-}" ] && [ -n "${nm:-}" ]; then
-            if [ "$nm" -gt "$om" ] || { [ "$nm" -eq "$om" ] && [ "$ni" -gt "$oi" ]; } || { [ "$nm" -eq "$om" ] && [ "$ni" -eq "$oi" ] && [ "$np" -gt "$op" ]; }; then
-              cut=true
-            fi
-          fi
-          echo "version ${old:-?} → ${new:-?} cut=${cut}"
-          if [ "$cut" = true ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          fi
-
   linux-image:
-    needs: gate
-    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     name: ubuntu-latest (image)
@@ -271,8 +224,8 @@ jobs:
 
   # Schedule / post-cut runs are not PR checks, and github-actions[bot] does not email.
   notify:
-    needs: [gate, linux-image, linux-e2e, macos-e2e, wsl-e2e]
-    if: always() && needs.gate.result == 'success' && needs.gate.outputs.run == 'true'
+    needs: [linux-image, linux-e2e, macos-e2e, wsl-e2e]
+    if: always() && !cancelled()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     name: notify
