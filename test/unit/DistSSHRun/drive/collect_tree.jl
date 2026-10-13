@@ -193,7 +193,11 @@ end
     end
 
     @testset "sentinel per host and shared collect" begin
-        @test DistSSHRun.drive_sentinel_for_host("s", "a b") == "s_a_b"
+        @test DistSSHRun.drive_sentinel_for_host("s", "a b") == "s_a+20b"
+        @test DistSSHRun.drive_sentinel_for_host("s", "a:b") !=
+            DistSSHRun.drive_sentinel_for_host("s", "a_b")
+        @test DistSSHRun.drive_sentinel_for_host("s", "a:b") == "s_a+3ab"
+        @test DistSSHRun.drive_sentinel_for_host("s", "a_b") == "s_a+5fb"
         @test DistSSHRun.drive_sentinel_for_host("s", "h1") !=
             DistSSHRun.drive_sentinel_for_host("s", "h2")
         _with_collect(; extra_env = Dict("DISTSSHKIT_TEST_SHARED_TREE" => "1")) do state_dir, proj
@@ -202,11 +206,12 @@ end
             out = joinpath(proj, "out")
             mkpath(out)
             mkpath(joinpath(state_dir, "shared", "tree"))
-            write(joinpath(state_dir, "shared", "tree", "a.txt"), "x\n")
             withenv("DISTRIBUTED_OUTPUT_DIR" => out) do
                 base = DistSSHRun.place_drive_sentinels!(
                     ["host1", "host2"], dirname(script), false, proj,
                 )
+                # After sentinels: a real `find -newer` includes this file.
+                write(joinpath(state_dir, "shared", "tree", "a.txt"), "x\n")
                 @test !isempty(base)
                 captured, (ok, hrs) = _capture_stdio() do _, _
                     DistSSHRun.collect_drive_results!(

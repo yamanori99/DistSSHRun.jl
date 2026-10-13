@@ -1,7 +1,24 @@
-"""Sentinel file name for `host`. Characters outside `[A-Za-z0-9._-]` become `_`."""
+"""
+Sentinel file name for `host`.
+
+ASCII letters, digits, `.`, and `-` are kept. Every other byte (including `_`
+and `:`) becomes `+` plus two lowercase hex digits, so `a:b` and `a_b` never
+collide when hosts share a collect directory.
+"""
 function drive_sentinel_for_host(base::AbstractString, host::AbstractString)::String
-    safe = replace(String(host), r"[^A-Za-z0-9._-]" => "_")
-    return string(base, "_", safe)
+    buf = IOBuffer()
+    for b in codeunits(String(host))
+        if (UInt8('A') <= b <= UInt8('Z')) ||
+                (UInt8('a') <= b <= UInt8('z')) ||
+                (UInt8('0') <= b <= UInt8('9')) ||
+                b == UInt8('.') ||
+                b == UInt8('-')
+            write(buf, Char(b))
+        else
+            print(buf, '+', string(b; base = 16, pad = 2))
+        end
+    end
+    return string(base, "_", String(take!(buf)))
 end
 
 function place_drive_sentinels!(
