@@ -1,7 +1,7 @@
 using Test
 
 # Oracle: local `git` CLI for push/pull, and `git_sync` stopping before remotes
-# when local push/pull fails. Remote `git pull` uses `_ssh_cmd`. Unreachable
+# when local push/pull fails. Remote `git pull` uses the setup SSH double. Unreachable
 # hosts only. Real remote git is SSH E2E.
 
 @testset "setup git" begin
@@ -74,13 +74,17 @@ using Test
             @test !raw.ok
             @test isempty(raw.host_results)
             @test occursin("Push failed.", out)
+            @test occursin("fatal:", out)
 
-            raw_pull = DistSSHRun.git_sync_project_to_hosts!(
-                ["192.0.2.1"], work, "~/App.jl";
-                do_push = false, do_pull = true, do_local_pull = true,
-            )
+            out_pull, raw_pull = _capture_stdio() do _, _
+                DistSSHRun.git_sync_project_to_hosts!(
+                    ["192.0.2.1"], work, "~/App.jl";
+                    do_push = false, do_pull = true, do_local_pull = true,
+                )
+            end
             @test !raw_pull.ok
             @test isempty(raw_pull.host_results)
+            @test occursin("no tracking information", out_pull)
         end
     end
 
@@ -149,6 +153,29 @@ using Test
                 @test length(raw.host_results) == 1
                 @test raw.host_results[1].host == "192.0.2.1"
                 @test !raw.host_results[1].ok
+            end
+        end
+    end
+
+    @testset "remote pull prints the command error" begin
+        _apply_quiet_setup_session!()
+        _with_tempdir() do state
+            _with_tempdir() do tmp
+                work = joinpath(tmp, "work")
+                mkpath(work)
+                _init_commit!(work)
+                env = merge(
+                    _fake_setup_remote_env(state),
+                    Dict("DISTSSHKIT_TEST_GIT_PULL_FAIL" => "1"),
+                )
+                withenv(env...) do
+                    raw = DistSSHRun.git_sync_project_to_hosts!(
+                        ["host1"], work, "/tmp/App.jl";
+                        do_push = false, do_pull = true, do_local_pull = false, confirm = false,
+                    )
+                    @test !raw.ok
+                    @test occursin("not a git repository", raw.host_results[1].message)
+                end
             end
         end
     end

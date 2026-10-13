@@ -171,6 +171,7 @@ function clone_to_remotes(
     host_results = HostResult[]
     for host in hosts
         _setup_host_span!(host, :running)
+        out_buf = IOBuffer()
         err_buf = IOBuffer()
         try
             outcome = kit_spin!("  $host: ") do
@@ -178,13 +179,11 @@ function clone_to_remotes(
                 if st === :nonempty
                     return (:busy, remote_dest_busy_message(host, remote_path))
                 end
-                read(
-                    pipeline(
-                        _host_sync_remote_shell_cmd(host, "git clone -- $uq $pq 2>&1");
-                        stderr = err_buf,
-                    ),
-                    String,
-                )
+                run(pipeline(
+                    _host_sync_remote_shell_cmd(host, "git clone -- $uq $pq");
+                    stdout = out_buf,
+                    stderr = err_buf,
+                ))
                 return (:ok, "")
             end
             if outcome[1] === :busy
@@ -201,7 +200,7 @@ function clone_to_remotes(
             push!(host_results, HostResult(host, true, "cloned"))
             _setup_host_span!(host, :ok)
         catch e
-            detail = strip(String(take!(err_buf)))
+            detail = _captured_output_tail(String(take!(out_buf)), String(take!(err_buf)))
             report_remote_failure(e; stderr = detail)
             failed += 1
             msg = isempty(detail) ? sprint(showerror, e) : detail

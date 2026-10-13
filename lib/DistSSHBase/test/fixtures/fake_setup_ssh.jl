@@ -18,7 +18,11 @@ function main()
     if isempty(state_root)
         exit(1)
     end
-    slot = replace(host, r"[@:/]" => "_")
+    slot = if get(ENV, "DISTSSHKIT_TEST_SHARED_TREE", "") == "1"
+        "shared"
+    else
+        replace(host, r"[@:/]" => "_")
+    end
     dir = joinpath(state_root, slot)
     tree = joinpath(dir, "tree")
 
@@ -132,6 +136,38 @@ function main()
         exit(0)
     end
 
+    if occursin("git pull", script)
+        if get(ENV, "DISTSSHKIT_TEST_GIT_PULL_FAIL", "") == "1"
+            println("fatal: not a git repository")
+            exit(1)
+        end
+        exit(0)
+    end
+
+    if occursin("touch ", script)
+        m = match(r"touch\s+(\S+)", script)
+        if m !== nothing
+            cap = m.captures[1]
+            cap isa AbstractString || exit(1)
+            name = basename(strip(String(cap), ['\'', '"']))
+            mkpath(tree)
+            touch(joinpath(tree, name))
+        end
+        exit(0)
+    end
+
+    if occursin("rm -f ", script)
+        m = match(r"rm -f\s+(\S+)", script)
+        if m !== nothing
+            cap = m.captures[1]
+            if cap isa AbstractString
+                name = basename(strip(String(cap), ['\'', '"']))
+                rm(joinpath(tree, name); force = true)
+            end
+        end
+        exit(0)
+    end
+
     if occursin("mkdir -p", script)
         if get(ENV, "DISTSSHKIT_TEST_MKDIR_FAIL", "") == "1"
             exit(1)
@@ -141,6 +177,10 @@ function main()
     end
 
     if occursin("git clone", script)
+        if get(ENV, "DISTSSHKIT_TEST_GIT_CLONE_FAIL", "") == "1"
+            println("fatal: repository not found")
+            exit(1)
+        end
         st = _dest_status(tree)
         if st == "NONEMPTY"
             println("fatal: destination path already exists and is not an empty directory.")
@@ -222,15 +262,33 @@ function main()
             println(stderr, "find: failed")
             exit(1)
         end
+        if occursin("-newer", script)
+            mnew = match(r"-newer\s+(\S+)", script)
+            capn = mnew === nothing ? nothing : mnew.captures[1]
+            if capn isa AbstractString
+                name = basename(strip(String(capn), ['\'', '"']))
+                if !isfile(joinpath(tree, name))
+                    println(stderr, "find: No such file or directory")
+                    exit(1)
+                end
+            end
+        end
         m = match(r"find\s+(\S+)\s+-type", script)
         cap = m === nothing ? nothing : m.captures[1]
         find_root = cap === nothing ? tree : String(cap)
         find_root = strip(find_root, ['\'', '"'])
+        nul = occursin("-print0", script)
         if isdir(tree)
             for (root, _, files) in walkdir(tree)
                 for f in files
                     rel = relpath(joinpath(root, f), tree)
-                    println(joinpath(find_root, rel))
+                    path = joinpath(find_root, rel)
+                    if nul
+                        print(path)
+                        print('\0')
+                    else
+                        println(path)
+                    end
                 end
             end
         end
