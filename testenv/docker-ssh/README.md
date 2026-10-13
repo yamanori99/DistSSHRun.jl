@@ -105,7 +105,10 @@ A local image build retries up to three times (`DISTSSHKIT_BUILD_RETRIES`,
 default 3; waits 30 s, then 60 s). juliaup fetches its version list from
 S3 after the installer download, and a short network failure there would
 otherwise fail the run. Set `DISTSSHKIT_BUILD_RETRIES=1` while debugging
-the Dockerfile.
+the Dockerfile. CI sets `DISTSSHKIT_BUILD_CACHE=gha`, which builds with
+buildx and the GitHub Actions cache. The juliaup layer is reused until the
+pinned Julia release changes, so most runs do not contact julialang-s3 during
+the build.
 
 On a Mac or in WSL2 this is how you cover that kit parent against Linux workers.
 Suite coverage / artifacts: see `test/e2e.jl` and
