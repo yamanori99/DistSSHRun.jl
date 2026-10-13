@@ -8,12 +8,14 @@ let _BASE = DistSSHRun.DistSSHBase
 
     function _remote_sh_printf(dir::AbstractString, word::AbstractString)::String
         script = "printf %s " * word
-        return read(Cmd(`/bin/sh -c $script`; dir = dir), String)
+        proc, out = _run_subprocess(Cmd(`/bin/sh -c $script`; dir = dir))
+        proc.exitcode == 0 || error("remote sh printf failed: $(out)")
+        return out
     end
 
     @testset "remote shell quote" begin
         @test isfile("/bin/sh")
-        mktempdir() do dir
+        _with_tempdir() do dir
             sentinel = joinpath(dir, "SENTINEL")
             touch = "touch " * sentinel
             samples = String[
