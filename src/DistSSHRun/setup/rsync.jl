@@ -97,30 +97,45 @@ function _reject_newline_send_path(rel::AbstractString)
 end
 
 """
-True when `rel` itself is ignored by a directory `.gitignore` (no trailing slash).
+Paths in `rels` that `git check-ignore` treats as ignored (one process, `--stdin -z`).
 
-`output/*` ignores contents but not `output`, so the directory is still sent.
-`build/` ignores the directory itself.
+Paths are checked without a trailing slash so `output/*` does not ignore `output`
+while `build/` still ignores `build`.
 """
-function _git_path_ignored(dir::AbstractString, rel::AbstractString)::Bool
-    r = replace(String(rel), '\\' => '/')
-    endswith(r, "/") && (r = r[1:(end - 1)])
-    isempty(r) && return false
-    err_buf = IOBuffer()
-    try
-        # Exit 0 → ignored. Exit 1 → not ignored.
-        run(
-            pipeline(
-                _git_cmd(["-C", String(dir), "check-ignore", "-q", "--", r]);
-                stdout = devnull,
-                stderr = err_buf,
+function _git_check_ignore_set(dir::AbstractString, rels::Vector{String})::Set{String}
+    ignored = Set{String}()
+    isempty(rels) && return ignored
+    mktemp() do path, io
+        for rel in rels
+            r = replace(String(rel), '\\' => '/')
+            endswith(r, "/") && (r = r[1:(end - 1)])
+            isempty(r) && continue
+            write(io, r)
+            write(io, UInt8(0))
+        end
+        close(io)
+        out_buf = IOBuffer()
+        err_buf = IOBuffer()
+        try
+            run(
+                pipeline(
+                    _git_cmd(["-C", String(dir), "check-ignore", "--stdin", "-z"]);
+                    stdin = path,
+                    stdout = out_buf,
+                    stderr = err_buf,
+                )
             )
-        )
-        return true
-    catch e
-        _rethrow_missing_host_tool(e)
-        return false
+        catch e
+            _rethrow_missing_host_tool(e)
+            # Exit 1 with empty stderr: nothing ignored.
+            detail = strip(String(take!(err_buf)))
+            isempty(detail) || error("git check-ignore failed in $dir:\n$detail")
+        end
+        for part in split(String(take!(out_buf)), '\0'; keepempty = false)
+            push!(ignored, replace(String(part), '\\' => '/'))
+        end
     end
+    return ignored
 end
 
 function _push_send_rel!(out::Vector{String}, prefix::AbstractString, rel::AbstractString)
@@ -177,13 +192,14 @@ function _append_gitignore_dirs!(
         prefix::AbstractString,
     )
     isdir(dir) || return nothing
+    # Collect then classify in one `check-ignore --stdin` (not one git per directory).
+    candidates = String[]
     stack = String[String(dir)]
     while !isempty(stack)
         cur = pop!(stack)
         rel_dir = relpath(cur, dir)
         if rel_dir != "."
-            _git_path_ignored(dir, rel_dir) && continue
-            _push_send_rel!(out, prefix, rel_dir)
+            push!(candidates, rel_dir)
         end
         for name in readdir(cur; join = false, sort = false)
             name == ".git" && continue
@@ -191,11 +207,15 @@ function _append_gitignore_dirs!(
             child = joinpath(cur, name)
             islink(child) && continue
             isdir(child) || continue
-            isdir(joinpath(child, ".git")) && continue
-            rel = rel_dir == "." ? name : joinpath(rel_dir, name)
-            _git_path_ignored(dir, rel) && continue
+            # Submodules store `.git` as a file, not a directory.
+            ispath(joinpath(child, ".git")) && continue
             push!(stack, child)
         end
+    end
+    ignored = _git_check_ignore_set(dir, candidates)
+    for rel in candidates
+        rel in ignored && continue
+        _push_send_rel!(out, prefix, rel)
     end
     return nothing
 end
@@ -505,7 +525,8 @@ function rsync_project_to_hosts!(
     )::NamedTuple
     given = canonical_local_path(local_root)
     env0 = resolve_pkg_env(given)
-    send_list = _rsync_send_list(given, env0)
+    # Workspace members resolve `env_dir` to the parent root; list paths relative to that.
+    send_list = _rsync_send_list(env0.env_dir, env0)
     shipped = ensure_manifest_ships!(given; send_list = send_list)
     local_root = shipped.env_dir
     raw_anchor = canonical_local_path(path_anchor)

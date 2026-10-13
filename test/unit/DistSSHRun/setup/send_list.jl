@@ -175,6 +175,42 @@ using Test
         end
     end
 
+    @testset "workspace member lists paths from env_dir" begin
+        _with_tempdir() do root
+            lab = joinpath(root, "lab")
+            member = joinpath(lab, "experiments", "run1")
+            mkpath(member)
+            write(
+                joinpath(lab, "Project.toml"), """
+                name = "Lab"
+                [workspace]
+                projects = ["experiments/run1"]
+                """
+            )
+            write(joinpath(lab, "Manifest.toml"), "# lock\n")
+            write(joinpath(lab, "lab.jl"), "1\n")
+            write(joinpath(member, "Project.toml"), "name = \"Run1\"\n[deps]\n")
+            write(joinpath(member, "job.jl"), "2\n")
+            run(pipeline(`git -C $lab init -q`; stdout = devnull, stderr = devnull))
+            _ident!(lab)
+            _commit!(lab, "init")
+            env = DistSSHRun.resolve_pkg_env(member)
+            @test env.env_dir == DistSSHRun.canonical_local_path(lab)
+            listed = DistSSHRun._rsync_send_list(env.env_dir, env)
+            @test listed isa Vector
+            @test "lab.jl" in listed
+            @test "experiments/run1/job.jl" in listed
+            for p in listed
+                @test ispath(joinpath(env.env_dir, p))
+            end
+            # Listing from the member would not match the rsync source root (env_dir).
+            wrong = DistSSHRun._rsync_send_list(member, env)
+            @test "job.jl" in wrong
+            @test !("lab.jl" in wrong)
+            @test !ispath(joinpath(env.env_dir, "job.jl"))
+        end
+    end
+
     @testset "outside a work tree the caller keeps the filter" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
