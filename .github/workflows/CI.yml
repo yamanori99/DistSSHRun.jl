@@ -25,11 +25,9 @@ jobs:
   # `Pkg.test` 1.13 runs on ubuntu-latest, macos-latest, and WSL2 Ubuntu.
   # macOS and WSL are required. The macOS job exercises `ps -o lstart=`
   # in kit_process_start_key (no /proc). Coverage uploads from Ubuntu only.
-  # 1.13 `test` matrix: DistSSHRun (three hosts), downstream DistSSHQueue
-  # and DistSSHKit (ubuntu only), DistSSHBase, DistSSHUp (three hosts).
-  # DistSSHRun check titles stay the ruleset names. Coverage uploads from
-  # the Ubuntu DistSSHRun cell only. Registry-style Pkg.test is DistSSHRun,
-  # DistSSHBase, and DistSSHUp. Nightly ubuntu is those three, not downstream.
+  # Run keeps the old check titles (no package name). Base and Up are
+  # separate 1.13 matrices. Downstream is DistSSHQueue and DistSSHKit on
+  # Ubuntu. Coverage uploads from the Ubuntu Run job only.
   # Slow SSH E2E kit parents are `E2E weekly`
   # (macos-15-intel Colima, not this job).
   # PRs run `ubuntu-latest → ubuntu-24.04` in this workflow.
@@ -101,108 +99,106 @@ jobs:
             echo "coverage=false" >> "$GITHUB_OUTPUT"
           fi
 
-  # DistSSHRun titles match the ruleset. Downstream red can mean the other
-  # repo's main is not ready for this checkout. fail-fast stays off.
   test:
-    name: ${{ matrix.title }}
+    name: Pkg.test (1.13, ubuntu-latest, x64)
+    needs: detect
+    if: needs.detect.outputs.heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # Codecov OIDC on main push
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - uses: ./.github/actions/pkg-test
+        with:
+          coverage: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          upload: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
+  test-macos:
+    name: Pkg.test (1.13, macos-latest, aarch64)
+    needs: detect
+    if: needs.detect.outputs.heavy == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - uses: ./.github/actions/pkg-test
+
+  test-wsl:
+    name: Pkg.test (1.13, WSL2 ubuntu-24.04, x64)
+    needs: detect
+    if: needs.detect.outputs.heavy == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: Vampire/setup-wsl@d1da7f2c0322a5ee4f24975344f67fc0f5baf364 # v7.0.0
+        timeout-minutes: 10
+        with:
+          distribution: Ubuntu-24.04
+          wsl-version: 2
+          additional-packages: ca-certificates curl git
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ci-cache/wsl-julia
+          key: wsl-julia-1.13-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
+      - name: Pkg.test in WSL2
+        shell: wsl-bash {0}
+        run: ./.github/wsl-julia.sh 1.13 julia --project=. -e 'using Pkg; Pkg.test()'
+
+  test-base:
+    name: Pkg.test (${{ matrix.pkg }}, 1.13, ${{ matrix.label }}, ${{ matrix.arch }})
     needs: detect
     if: needs.detect.outputs.heavy == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     permissions:
       contents: read
-      id-token: write # Codecov OIDC on the Ubuntu DistSSHRun cell
     strategy:
       fail-fast: false
       matrix:
+        pkg: [DistSSHBase]
+        host: [ubuntu, macos, wsl]
         include:
-          - title: Pkg.test (1.13, ubuntu-latest, x64)
-            pkg: DistSSHRun
-            kind: run
+          - host: ubuntu
             os: ubuntu-latest
             arch: x64
+            label: ubuntu-latest
             wsl: false
-            codecov: true
-          - title: Pkg.test (1.13, macos-latest, aarch64)
-            pkg: DistSSHRun
-            kind: run
+          - host: macos
             os: macos-latest
             arch: aarch64
+            label: macos-latest
             wsl: false
-            codecov: false
-          - title: Pkg.test (1.13, WSL2 ubuntu-24.04, x64)
-            pkg: DistSSHRun
-            kind: run
+          - host: wsl
             os: windows-latest
             arch: x64
+            label: WSL2 ubuntu-24.04
             wsl: true
-            codecov: false
-          - title: Pkg.test (DistSSHQueue, 1.13, ubuntu-latest, x64)
-            pkg: DistSSHQueue
-            kind: downstream
-            os: ubuntu-latest
-            arch: x64
-            wsl: false
-            codecov: false
-          - title: Pkg.test (DistSSHKit, 1.13, ubuntu-latest, x64)
-            pkg: DistSSHKit
-            kind: downstream
-            os: ubuntu-latest
-            arch: x64
-            wsl: false
-            codecov: false
-          - title: Pkg.test (DistSSHBase, 1.13, ubuntu-latest, x64)
-            pkg: DistSSHBase
-            kind: lib
-            os: ubuntu-latest
-            arch: x64
-            wsl: false
-            codecov: false
-          - title: Pkg.test (DistSSHBase, 1.13, macos-latest, aarch64)
-            pkg: DistSSHBase
-            kind: lib
-            os: macos-latest
-            arch: aarch64
-            wsl: false
-            codecov: false
-          - title: Pkg.test (DistSSHBase, 1.13, WSL2 ubuntu-24.04, x64)
-            pkg: DistSSHBase
-            kind: lib
-            os: windows-latest
-            arch: x64
-            wsl: true
-            codecov: false
-          - title: Pkg.test (DistSSHUp, 1.13, ubuntu-latest, x64)
-            pkg: DistSSHUp
-            kind: lib
-            os: ubuntu-latest
-            arch: x64
-            wsl: false
-            codecov: false
-          - title: Pkg.test (DistSSHUp, 1.13, macos-latest, aarch64)
-            pkg: DistSSHUp
-            kind: lib
-            os: macos-latest
-            arch: aarch64
-            wsl: false
-            codecov: false
-          - title: Pkg.test (DistSSHUp, 1.13, WSL2 ubuntu-24.04, x64)
-            pkg: DistSSHUp
-            kind: lib
-            os: windows-latest
-            arch: x64
-            wsl: true
-            codecov: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: matrix.kind == 'downstream'
-        with:
-          repository: yamanori99/${{ matrix.pkg }}.jl
-          ref: main
-          path: downstream
           persist-credentials: false
       - uses: Vampire/setup-wsl@d1da7f2c0322a5ee4f24975344f67fc0f5baf364 # v7.0.0
         if: matrix.wsl
@@ -225,20 +221,107 @@ jobs:
         with:
           cache-scratchspaces: false
           delete-old-caches: false
-      - uses: ./.github/actions/pkg-test
-        if: ${{ matrix.kind == 'run' && !matrix.wsl }}
-        with:
-          coverage: ${{ matrix.codecov && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-          upload: ${{ matrix.codecov && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       - name: Pkg.test ${{ matrix.pkg }}
-        if: ${{ matrix.kind == 'lib' && !matrix.wsl }}
+        if: ${{ !matrix.wsl }}
         run: julia --project=lib/${{ matrix.pkg }} -e 'using Pkg; Pkg.test()'
-      - name: Pkg.test in WSL2
+      - name: Pkg.test ${{ matrix.pkg }} in WSL2
         if: matrix.wsl
         shell: wsl-bash {0}
-        run: ./.github/wsl-julia.sh 1.13 julia --project=${{ matrix.kind == 'run' && '.' || format('lib/{0}', matrix.pkg) }} -e 'using Pkg; Pkg.test()'
+        run: ./.github/wsl-julia.sh 1.13 julia --project=lib/${{ matrix.pkg }} -e 'using Pkg; Pkg.test()'
+
+  test-up:
+    name: Pkg.test (${{ matrix.pkg }}, 1.13, ${{ matrix.label }}, ${{ matrix.arch }})
+    needs: detect
+    if: needs.detect.outputs.heavy == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [DistSSHUp]
+        host: [ubuntu, macos, wsl]
+        include:
+          - host: ubuntu
+            os: ubuntu-latest
+            arch: x64
+            label: ubuntu-latest
+            wsl: false
+          - host: macos
+            os: macos-latest
+            arch: aarch64
+            label: macos-latest
+            wsl: false
+          - host: wsl
+            os: windows-latest
+            arch: x64
+            label: WSL2 ubuntu-24.04
+            wsl: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: Vampire/setup-wsl@d1da7f2c0322a5ee4f24975344f67fc0f5baf364 # v7.0.0
+        if: matrix.wsl
+        timeout-minutes: 10
+        with:
+          distribution: Ubuntu-24.04
+          wsl-version: 2
+          additional-packages: ca-certificates curl git
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: matrix.wsl
+        with:
+          path: .ci-cache/wsl-julia
+          key: wsl-julia-1.13-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
+      - uses: ./.github/actions/julia-slot
+        if: ${{ !matrix.wsl }}
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        if: ${{ !matrix.wsl }}
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - name: Pkg.test ${{ matrix.pkg }}
+        if: ${{ !matrix.wsl }}
+        run: julia --project=lib/${{ matrix.pkg }} -e 'using Pkg; Pkg.test()'
+      - name: Pkg.test ${{ matrix.pkg }} in WSL2
+        if: matrix.wsl
+        shell: wsl-bash {0}
+        run: ./.github/wsl-julia.sh 1.13 julia --project=lib/${{ matrix.pkg }} -e 'using Pkg; Pkg.test()'
+
+  # Red is correct when the other repo's main is not ready for this checkout.
+  downstream:
+    name: Downstream (${{ matrix.pkg }}, 1.13)
+    needs: detect
+    if: needs.detect.outputs.heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [DistSSHQueue, DistSSHKit]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yamanori99/${{ matrix.pkg }}.jl
+          ref: main
+          path: downstream
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
       - name: Pkg.test downstream against this checkout
-        if: matrix.kind == 'downstream'
         env:
           PKG: ${{ matrix.pkg }}
           UPSTREAM: ${{ github.workspace }}
@@ -263,17 +346,14 @@ jobs:
             Pkg.test(ENV["PKG"])
           '
 
+  # A skipped job does not expand a matrix name, so these titles stay literal.
   test-tip:
-    name: Pkg.test (${{ matrix.pkg }}, 1.14-nightly, ubuntu-latest, x64)
+    name: Pkg.test (1.14-nightly, ubuntu-latest, x64)
     needs: detect
     if: needs.detect.outputs.heavy == 'true' && (github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     continue-on-error: true
-    strategy:
-      fail-fast: false
-      matrix:
-        pkg: [DistSSHRun, DistSSHBase, DistSSHUp]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/julia-slot
@@ -284,37 +364,55 @@ jobs:
           cache-scratchspaces: false
           delete-old-caches: false
       - uses: ./.github/actions/pkg-test
-        if: matrix.pkg == 'DistSSHRun'
-      - name: Pkg.test ${{ matrix.pkg }}
-        if: matrix.pkg != 'DistSSHRun'
-        run: julia --project=lib/${{ matrix.pkg }} -e 'using Pkg; Pkg.test()'
+
+  test-tip-base:
+    name: Pkg.test (DistSSHBase, 1.14-nightly, ubuntu-latest, x64)
+    needs: detect
+    if: needs.detect.outputs.heavy == 'true' && (github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.14-nightly"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - name: Pkg.test DistSSHBase
+        run: julia --project=lib/DistSSHBase -e 'using Pkg; Pkg.test()'
+
+  test-tip-up:
+    name: Pkg.test (DistSSHUp, 1.14-nightly, ubuntu-latest, x64)
+    needs: detect
+    if: needs.detect.outputs.heavy == 'true' && (github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.14-nightly"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - name: Pkg.test DistSSHUp
+        run: julia --project=lib/DistSSHUp -e 'using Pkg; Pkg.test()'
 
   # Not a Julia slot. Not required to merge. Ordinary PRs use the heavy
   # gate (same as Pkg.test 1.13). continue-on-error: a red job does not
   # fail the workflow. Catches checkout-only Pkg.test assumptions.
   test-registry-tree:
-    name: Pkg.test (${{ matrix.pkg }}, registry, ubuntu-latest, x64)
+    name: Pkg.test (registry, ubuntu-latest, x64)
     needs: detect
     if: needs.detect.outputs.heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     continue-on-error: true
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - pkg: DistSSHRun
-            tree: .
-            subdir: ""
-            base_subdir: ""
-          - pkg: DistSSHBase
-            tree: lib/DistSSHBase
-            subdir: ""
-            base_subdir: ""
-          - pkg: DistSSHUp
-            tree: lib
-            subdir: DistSSHUp
-            base_subdir: DistSSHBase
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -328,10 +426,56 @@ jobs:
           delete-old-caches: false
       - uses: ./.github/actions/registry-tree-test
         with:
-          package: ${{ matrix.pkg }}
-          tree: ${{ matrix.tree }}
-          subdir: ${{ matrix.subdir }}
-          base_subdir: ${{ matrix.base_subdir }}
+          package: DistSSHRun
+          tree: .
+
+  test-registry-base:
+    name: Pkg.test (DistSSHBase, registry, ubuntu-latest, x64)
+    needs: detect
+    if: needs.detect.outputs.heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.14-nightly"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - uses: ./.github/actions/registry-tree-test
+        with:
+          package: DistSSHBase
+          tree: lib/DistSSHBase
+
+  test-registry-up:
+    name: Pkg.test (DistSSHUp, registry, ubuntu-latest, x64)
+    needs: detect
+    if: needs.detect.outputs.heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.14-nightly"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - uses: ./.github/actions/registry-tree-test
+        with:
+          package: DistSSHUp
+          tree: lib
+          subdir: DistSSHUp
+          base_subdir: DistSSHBase
 
   aqua:
     name: Aqua (1.13, ubuntu-latest, x64)
