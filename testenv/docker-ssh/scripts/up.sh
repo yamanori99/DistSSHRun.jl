@@ -22,6 +22,7 @@ for arg in "$@"; do
       echo "  DISTSSHKIT_SKIP_UP=1     skip compose up (push-only)"
       echo "  DISTSSHKIT_CODE_COVERAGE=1  e2e with --code-coverage=user (child CLI too)"
       echo "  DISTSSHKIT_BUILD_RETRIES=N  image build attempts (default 3)"
+      echo "  DISTSSHKIT_BUILD_CACHE=gha  CI only: buildx with the GitHub Actions layer cache"
       exit 0
       ;;
     *)
@@ -77,7 +78,21 @@ else
   _distsshkit_export_julia_releases
   # A failed RUN layer is discarded, so a rebuild starts that layer clean
   # and reuses the cached layers before it.
-  _distsshkit_retry "worker image build" "${COMPOSE[@]}" -f compose.yml build child-1
+  if [[ "${DISTSSHKIT_BUILD_CACHE:-}" == "gha" ]]; then
+    # CI: reuse layers across runs. The release ARGs are the cache key for the
+    # juliaup layer, so a hit skips julialang-s3 entirely.
+    _distsshkit_retry "worker image build" docker buildx build --load \
+      -t "${LOCAL_IMAGE}" \
+      --cache-from "type=gha,scope=distsshrun-ssh-worker" \
+      --cache-to "type=gha,scope=distsshrun-ssh-worker,mode=max" \
+      --build-arg JULIA_DEFAULT_CHANNEL \
+      --build-arg JULIA_ALT_CHANNEL \
+      --build-arg JULIA_DEFAULT_RELEASE \
+      --build-arg JULIA_ALT_RELEASE \
+      -f Dockerfile .
+  else
+    _distsshkit_retry "worker image build" "${COMPOSE[@]}" -f compose.yml build child-1
+  fi
   if [[ -n "${DISTSSHKIT_PUSH_IMAGE:-}" ]]; then
     DISTSSHKIT_LOCAL_IMAGE="$LOCAL_IMAGE" ./scripts/push-image.sh "$DISTSSHKIT_PUSH_IMAGE"
   fi

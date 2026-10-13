@@ -27,14 +27,16 @@ _distsshkit_retry() {
   done
 }
 
-# Fresh juliaup install with the default channel. Removes a partial
-# ~/.juliaup from an earlier failed attempt first.
+# Fresh juliaup install with the default channel. A failed attempt leaves
+# ~/.julia/juliaup/juliaup.json; the installer then refuses in non-interactive
+# mode and exits 0 without installing.
 _distsshkit_install_juliaup() {
   local channel="$1"
-  rm -rf "$HOME/.juliaup"
+  rm -rf "$HOME/.juliaup" "${JULIAUP_DEPOT_PATH:-$HOME/.julia}/juliaup"
   (
     set -o pipefail
     curl --retry 5 --retry-delay 5 --retry-connrefused --connect-timeout 10 \
       -fsSL https://install.julialang.org | sh -s -- --yes --default-channel "${channel}"
-  )
+  ) || return 1
+  [[ -x "$HOME/.juliaup/bin/juliaup" ]] || { echo "juliaup not installed" >&2; return 1; }
 }
