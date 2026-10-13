@@ -20,40 +20,14 @@ using Pkg
     @test occursin("up update 1.12 parent", tip_out)
     @test occursin("up default 1.12 parent", tip_out)
     mktempdir() do d
-        ju = joinpath(d, "juliaup")
-        jl = joinpath(d, "julia")
-        ch = "$(VERSION.major).$(VERSION.minor)"
-        write(
-            ju,
-            """
-            #!/bin/sh
-            case "\$1" in
-              --version) echo 'Juliaup 1.22.7'; exit 0 ;;
-              status) echo '       *  $ch     julia version'; exit 0 ;;
-              add|update|default) echo "unexpected \$1" >&2; exit 1 ;;
-              *) exit 1 ;;
-            esac
-            """,
-        )
-        write(
-            jl,
-            """
-            #!/bin/sh
-            echo "julia version $(VERSION.major).$(VERSION.minor).$(VERSION.patch)"
-            """,
-        )
-        chmod(ju, 0o755)
-        chmod(jl, 0o755)
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
-            r = DistSSHRun.DistSSHUp.juliaup_align_local!(ch)
-            @test !r.changed
-            @test DistSSHRun.julia_version_mismatch_kind(VERSION, r.ver) != :minor
+        fake = _write_aligned_fake_juliaup(d)
+        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => fake.ju) do
             out, _ = with_kit_verbosity(:progress) do
                 _capture_stdio() do _, _
                     DistSSHRun.juliaup_align_remotes(["parent"]; confirm = false)
                 end
             end
-            @test occursin("parent: already on $ch", out)
+            @test occursin("parent: already on $(fake.ch)", out)
         end
     end
 

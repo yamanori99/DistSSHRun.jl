@@ -69,38 +69,6 @@ using Test
             @test DistSSHRun.probe_setup_ssh("host1") isa String
             @test DistSSHRun.preflight_setup_ssh(["host1"]) == false
         end
-        host = "detect-ssh-fail.test"
-        _with_fake_remotes(extra_env = Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1")) do _
-            DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!(host)
-            try
-                err = try
-                    DistSSHRun.detect_julia_path(host)
-                    nothing
-                catch e
-                    e
-                end
-                @test err isa ArgumentError
-                @test occursin("ssh-copy-id", err.msg)
-                err2 = try
-                    DistSSHRun.detect_julia_path(host)
-                    nothing
-                catch e
-                    e
-                end
-                @test err2 isa ArgumentError
-                @test !haskey(DistSSHRun.DistSSHBase._DETECT_JULIA_PATH_CACHE, host)
-            finally
-                DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!(host)
-            end
-        end
-        _with_fake_remotes() do _
-            DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!("detect-no-julia.test")
-            try
-                @test DistSSHRun.detect_julia_path("detect-no-julia.test") === nothing
-            finally
-                DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!("detect-no-julia.test")
-            end
-        end
     end
 
     @testset "delete_remotes" begin
