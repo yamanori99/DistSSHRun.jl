@@ -16,7 +16,7 @@ using Test
             push!(LOAD_PATH, $(repr(dest)))
             using DistSSHRun
             println(parentmodule(DistSSHRun.ssh_opts))
-            println(something(pkgdir(DistSSHRun), ""))
+            println("PKGDIR=" * something(pkgdir(DistSSHRun), ""))
             """,
         )
         return _run_subprocess(
@@ -31,7 +31,8 @@ using Test
         proc, out = load_vendor(tmp, dest)
         @test proc.exitcode == 0
         @test occursin("DistSSHBase", out)
-        @test occursin("DistSSHRun", out)
+        m = match(r"^PKGDIR=(.*)$"m, out)
+        @test m !== nothing && realpath(m.captures[1]) == realpath(dest)
     end
     _with_tempdir() do tmp
         dest = _vendor_distsshkit!(tmp)

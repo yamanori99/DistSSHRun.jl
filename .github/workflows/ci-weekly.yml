@@ -3,8 +3,9 @@ name: CI weekly
 # Not on pull_request: insurance for 1.13 / 1.14-nightly / Aqua / JETLS
 # @release drift when no PR ran that week. PR / main push stay the gate.
 # tip jobs are continue-on-error and omitted from notify.
-# 1.13 matches Test: Run's old titles, then DistSSHBase, then DistSSHUp,
-# then downstream DistSSHQueue and DistSSHKit (no coverage).
+# 1.13 matches Test: Run's old titles (Ubuntu also runs standalone
+# DistSSHBase and DistSSHUp), then downstream DistSSHQueue and DistSSHKit
+# (no coverage).
 # 1.14-nightly Pkg.test and Aqua on macOS and WSL2 run here only, and stay
 # out of notify. Ubuntu nightly also runs in Test.
 on:
@@ -35,6 +36,10 @@ jobs:
           cache-scratchspaces: false
           delete-old-caches: false
       - uses: ./.github/actions/pkg-test
+      - name: Pkg.test DistSSHBase and DistSSHUp
+        run: |
+          julia --project=lib/DistSSHBase -e 'using Pkg; Pkg.test()'
+          julia --project=lib/DistSSHUp -e 'using Pkg; Pkg.test()'
 
   test-macos:
     name: Pkg.test (1.13, macos-latest, aarch64)
@@ -74,126 +79,6 @@ jobs:
       - name: Pkg.test in WSL2
         shell: wsl-bash {0}
         run: ./.github/wsl-julia.sh 1.13 julia --project=. -e 'using Pkg; Pkg.test()'
-
-  test-base:
-    name: Pkg.test (${{ matrix.pkg }}, 1.13, ${{ matrix.label }}, ${{ matrix.arch }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        pkg: [DistSSHBase]
-        host: [ubuntu, macos, wsl]
-        include:
-          - host: ubuntu
-            os: ubuntu-latest
-            arch: x64
-            label: ubuntu-latest
-            wsl: false
-          - host: macos
-            os: macos-latest
-            arch: aarch64
-            label: macos-latest
-            wsl: false
-          - host: wsl
-            os: windows-latest
-            arch: x64
-            label: WSL2 ubuntu-24.04
-            wsl: true
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: Vampire/setup-wsl@d1da7f2c0322a5ee4f24975344f67fc0f5baf364 # v7.0.0
-        if: matrix.wsl
-        timeout-minutes: 10
-        with:
-          distribution: Ubuntu-24.04
-          wsl-version: 2
-          additional-packages: ca-certificates curl git
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: matrix.wsl
-        with:
-          path: .ci-cache/wsl-julia
-          key: wsl-julia-1.13-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
-      - uses: ./.github/actions/julia-slot
-        if: ${{ !matrix.wsl }}
-        with:
-          version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
-        if: ${{ !matrix.wsl }}
-        with:
-          cache-scratchspaces: false
-          delete-old-caches: false
-      - name: Pkg.test ${{ matrix.pkg }}
-        if: ${{ !matrix.wsl }}
-        run: julia --project=lib/${{ matrix.pkg }} -e 'using Pkg; Pkg.test()'
-      - name: Pkg.test ${{ matrix.pkg }} in WSL2
-        if: matrix.wsl
-        shell: wsl-bash {0}
-        run: ./.github/wsl-julia.sh 1.13 julia --project=lib/${{ matrix.pkg }} -e 'using Pkg; Pkg.test()'
-
-  test-up:
-    name: Pkg.test (${{ matrix.pkg }}, 1.13, ${{ matrix.label }}, ${{ matrix.arch }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        pkg: [DistSSHUp]
-        host: [ubuntu, macos, wsl]
-        include:
-          - host: ubuntu
-            os: ubuntu-latest
-            arch: x64
-            label: ubuntu-latest
-            wsl: false
-          - host: macos
-            os: macos-latest
-            arch: aarch64
-            label: macos-latest
-            wsl: false
-          - host: wsl
-            os: windows-latest
-            arch: x64
-            label: WSL2 ubuntu-24.04
-            wsl: true
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: Vampire/setup-wsl@d1da7f2c0322a5ee4f24975344f67fc0f5baf364 # v7.0.0
-        if: matrix.wsl
-        timeout-minutes: 10
-        with:
-          distribution: Ubuntu-24.04
-          wsl-version: 2
-          additional-packages: ca-certificates curl git
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: matrix.wsl
-        with:
-          path: .ci-cache/wsl-julia
-          key: wsl-julia-1.13-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
-      - uses: ./.github/actions/julia-slot
-        if: ${{ !matrix.wsl }}
-        with:
-          version: "1.13"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
-        if: ${{ !matrix.wsl }}
-        with:
-          cache-scratchspaces: false
-          delete-old-caches: false
-      - name: Pkg.test ${{ matrix.pkg }}
-        if: ${{ !matrix.wsl }}
-        run: julia --project=lib/${{ matrix.pkg }} -e 'using Pkg; Pkg.test()'
-      - name: Pkg.test ${{ matrix.pkg }} in WSL2
-        if: matrix.wsl
-        shell: wsl-bash {0}
-        run: ./.github/wsl-julia.sh 1.13 julia --project=lib/${{ matrix.pkg }} -e 'using Pkg; Pkg.test()'
 
   downstream:
     name: Downstream (${{ matrix.pkg }}, 1.13)
@@ -305,130 +190,6 @@ jobs:
         shell: wsl-bash {0}
         run: ./.github/wsl-julia.sh 1.14-nightly julia --project=. -e 'using Pkg; Pkg.test()'
 
-  test-base-tip:
-    name: Pkg.test (${{ matrix.pkg }}, 1.14-nightly, ${{ matrix.label }}, ${{ matrix.arch }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
-    continue-on-error: true
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        pkg: [DistSSHBase]
-        host: [ubuntu, macos, wsl]
-        include:
-          - host: ubuntu
-            os: ubuntu-latest
-            arch: x64
-            label: ubuntu-latest
-            wsl: false
-          - host: macos
-            os: macos-latest
-            arch: aarch64
-            label: macos-latest
-            wsl: false
-          - host: wsl
-            os: windows-latest
-            arch: x64
-            label: WSL2 ubuntu-24.04
-            wsl: true
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: Vampire/setup-wsl@d1da7f2c0322a5ee4f24975344f67fc0f5baf364 # v7.0.0
-        if: matrix.wsl
-        timeout-minutes: 10
-        with:
-          distribution: Ubuntu-24.04
-          wsl-version: 2
-          additional-packages: ca-certificates curl git
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: matrix.wsl
-        with:
-          path: .ci-cache/wsl-julia
-          key: wsl-julia-1.14-nightly-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
-      - uses: ./.github/actions/julia-slot
-        if: ${{ !matrix.wsl }}
-        with:
-          version: "1.14-nightly"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
-        if: ${{ !matrix.wsl }}
-        with:
-          cache-scratchspaces: false
-          delete-old-caches: false
-      - name: Pkg.test ${{ matrix.pkg }}
-        if: ${{ !matrix.wsl }}
-        run: julia --project=lib/${{ matrix.pkg }} -e 'using Pkg; Pkg.test()'
-      - name: Pkg.test ${{ matrix.pkg }} in WSL2
-        if: matrix.wsl
-        shell: wsl-bash {0}
-        run: ./.github/wsl-julia.sh 1.14-nightly julia --project=lib/${{ matrix.pkg }} -e 'using Pkg; Pkg.test()'
-
-
-  test-up-tip:
-    name: Pkg.test (${{ matrix.pkg }}, 1.14-nightly, ${{ matrix.label }}, ${{ matrix.arch }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
-    continue-on-error: true
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        pkg: [DistSSHUp]
-        host: [ubuntu, macos, wsl]
-        include:
-          - host: ubuntu
-            os: ubuntu-latest
-            arch: x64
-            label: ubuntu-latest
-            wsl: false
-          - host: macos
-            os: macos-latest
-            arch: aarch64
-            label: macos-latest
-            wsl: false
-          - host: wsl
-            os: windows-latest
-            arch: x64
-            label: WSL2 ubuntu-24.04
-            wsl: true
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: Vampire/setup-wsl@d1da7f2c0322a5ee4f24975344f67fc0f5baf364 # v7.0.0
-        if: matrix.wsl
-        timeout-minutes: 10
-        with:
-          distribution: Ubuntu-24.04
-          wsl-version: 2
-          additional-packages: ca-certificates curl git
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: matrix.wsl
-        with:
-          path: .ci-cache/wsl-julia
-          key: wsl-julia-1.14-nightly-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
-      - uses: ./.github/actions/julia-slot
-        if: ${{ !matrix.wsl }}
-        with:
-          version: "1.14-nightly"
-      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
-        if: ${{ !matrix.wsl }}
-        with:
-          cache-scratchspaces: false
-          delete-old-caches: false
-      - name: Pkg.test ${{ matrix.pkg }}
-        if: ${{ !matrix.wsl }}
-        run: julia --project=lib/${{ matrix.pkg }} -e 'using Pkg; Pkg.test()'
-      - name: Pkg.test ${{ matrix.pkg }} in WSL2
-        if: matrix.wsl
-        shell: wsl-bash {0}
-        run: ./.github/wsl-julia.sh 1.14-nightly julia --project=lib/${{ matrix.pkg }} -e 'using Pkg; Pkg.test()'
-
-
   jetls:
     name: JETLS (1.13, ubuntu-latest, x64)
     runs-on: ubuntu-latest
@@ -528,14 +289,10 @@ jobs:
       - test
       - test-macos
       - test-wsl
-      - test-base
-      - test-up
       - downstream
       - test-tip
       - test-tip-macos
       - test-tip-wsl
-      - test-base-tip
-      - test-up-tip
       - jetls
       - aqua
       - aqua-tip
@@ -560,8 +317,6 @@ jobs:
       - test
       - test-macos
       - test-wsl
-      - test-base
-      - test-up
       - downstream
       - jetls
       - aqua

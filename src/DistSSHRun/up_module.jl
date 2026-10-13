@@ -7,7 +7,7 @@ let _up_body = joinpath(@__DIR__, "..", "..", "lib", "DistSSHUp", "src", "body.j
     isfile(_up_body) || error(
         "DistSSHRun: $_up_body is missing. Copy the whole DistSSHRun package directory, including lib/, not only src/.",
     )
-    include(_up_body)
 end
+include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHUp", "src", "body.jl"))
 
 end # module DistSSHUp

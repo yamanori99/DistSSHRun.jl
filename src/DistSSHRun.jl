@@ -111,8 +111,8 @@ let _base_src = joinpath(@__DIR__, "..", "lib", "DistSSHBase", "src", "DistSSHBa
     isfile(_base_src) || error(
         "DistSSHRun: $_base_src is missing. Copy the whole DistSSHRun package directory, including lib/, not only src/.",
     )
-    include(_base_src)
 end
+include(joinpath(@__DIR__, "..", "lib", "DistSSHBase", "src", "DistSSHBase.jl"))
 include("DistSSHRun/up_module.jl")
 using .DistSSHBase
 using .DistSSHBase: CliCursor, OUTPUT_WIDTH, PARENT_HOST_NAME, _HOST_TOOL_NAMES,
