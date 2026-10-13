@@ -236,4 +236,40 @@ end
         @test paths == ["plain.txt"]
         @test occursin("newline", captured)
     end
+
+    @testset "collect root overlap warns" begin
+        _with_tempdir() do proj
+            write(joinpath(proj, "Project.toml"), "name = \"CollectHost\"\n")
+            out_ok, = _capture_stdio() do _, _
+                DistSSHRun._warn_collect_root_overlap(joinpath(proj, "out"), proj)
+            end
+            @test !occursin("Warning:", out_ok)
+            out_proj, = _capture_stdio() do _, _
+                DistSSHRun._warn_collect_root_overlap(proj, proj)
+            end
+            @test occursin("Warning:", out_proj)
+            @test occursin("will be an error", out_proj)
+            out_parent, = _capture_stdio() do _, _
+                DistSSHRun._warn_collect_root_overlap(dirname(proj), proj)
+            end
+            @test occursin("Warning:", out_parent)
+            withenv("DISTRIBUTED_COLLECT_DIRS" => ".") do
+                roots = DistSSHRun.distributed_collect_root_dirs(proj, proj)
+                @test length(roots) == 1
+                @test rstrip(roots[1], '/') ==
+                    rstrip(DistSSHRun.canonical_local_path(proj), '/')
+            end
+        end
+        _with_collect() do state_dir, proj
+            mkpath(joinpath(state_dir, "host1", "tree"))
+            with_kit_verbosity(:verbose) do
+                captured, result = _capture_stdio() do _, _
+                    _collect!(proj, proj, ["child:host1"])
+                end
+                @test result.ok
+                @test count("Warning: collect root", captured) == 1
+                @test occursin("will be an error", captured)
+            end
+        end
+    end
 end

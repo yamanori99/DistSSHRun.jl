@@ -33,6 +33,7 @@ function place_drive_sentinels!(
     collect_roots_sentinel = distributed_collect_root_dirs(script_dir, repo_ra)
     for local_rd in collect_roots_sentinel
         _early_local = DistSSHRun.canonical_local_path(local_rd)
+        _warn_collect_root_overlap(_early_local, repo_ra)
         for host in unique(successful_hosts)
             try
                 remote_early = remote_layout_path(_early_local, repo_ra)
