@@ -77,8 +77,8 @@ Green on one layer does not imply the others. `Pkg.test()` does not run
   dispatch (Compose). Not markdown-only allowlisted PRs. Not local-only
   CLI wiring.
   `test/e2e.jl` prints `[i/N]` at the start of each inner `@testset`
-  (SSH steps can sit silent for minutes otherwise). Update `_E2E_N` when
-  adding a case.
+  (SSH steps can sit silent for minutes otherwise). `N` is the number of
+  `_e2e_announce` calls in that file.
 - **e2e weekly** (10–50 min): same `e2e.jl` from Linux, macOS Intel, or
   WSL2 (not a PR check; starts when `Project.toml` `version` goes up on
   `main`; Intel / WSL are watchers). Register when the required checks

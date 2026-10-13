@@ -8,7 +8,8 @@
 #   testenv/docker-ssh/scripts/up.sh --e2e
 #   testenv/apple-container-ssh/scripts/up.sh --e2e   # Mac Apple silicon; same suite
 #   DISTSSHKIT_SSH_E2E=1 julia --project=. test/e2e.jl   # from kit root
-# Inner `@testset`s print `[i/N]` (see `_E2E_N`) so CI logs are not a long stall.
+# Inner `@testset`s print `[i/N]`. The denominator is the number of
+# `_e2e_announce` calls in this file.
 #   DISTSSHKIT_CODE_COVERAGE=1 …/up.sh --e2e            # + .cov (child CLI too)
 #   ./.github/jetls-check.sh             # e2e.jl is a JETLS entry (not via runtests.jl)
 #
@@ -42,8 +43,14 @@ const remote_tokens = String["child:$(hosts[1]):1", "child:$(hosts[2]):1"]
 _e2e_base_env() = _ssh_e2e_env(; remote_project = remote_root)
 
 # Same banner idea as `test/runtests.jl`. Inner `@testset`s can take minutes
-# of SSH with no Test output until they finish. Update `_E2E_N` when adding one.
-const _E2E_N = 27
+# of SSH with no Test output until they finish. Adding an `_e2e_announce`
+# call updates `[i/N]`.
+const _E2E_N = let n = count(eachline(@__FILE__)) do line
+        return occursin(r"^\s*_e2e_announce\(", line)
+    end
+    n > 0 || error("test/e2e.jl: no _e2e_announce calls")
+    n
+end
 const _E2E_I = Ref(0)
 # Print `[i/N]` before an inner `@testset`.
 function _e2e_announce(label::AbstractString)
