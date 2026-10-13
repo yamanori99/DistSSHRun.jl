@@ -140,4 +140,12 @@ end
             end
         end
     end
+
+    @testset "collect skips .git" begin
+        @test DistSSHRun._collect_rel_is_git(".git")
+        @test DistSSHRun._collect_rel_is_git(".git/HEAD")
+        @test DistSSHRun._collect_rel_is_git(".git\\HEAD")
+        @test !DistSSHRun._collect_rel_is_git("out/.git/HEAD")
+        @test !DistSSHRun._collect_rel_is_git("result.txt")
+    end
 end

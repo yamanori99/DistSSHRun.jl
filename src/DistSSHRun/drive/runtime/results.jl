@@ -277,6 +277,9 @@ function collect_drive_results!(
                         end
                         isempty(rel) && continue
                         startswith(rel, "..") && continue
+                        # `find -newer` still lists `.git/` when the collect root
+                        # contains the project. `drive_collect_tree` already skips it.
+                        _collect_rel_is_git(rel) && continue
                         push!(rel_lines, rel)
                     end
 
