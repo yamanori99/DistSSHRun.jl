@@ -32,6 +32,9 @@ _distsshkit_retry() {
 _distsshkit_install_juliaup() {
   local channel="$1"
   rm -rf "$HOME/.juliaup"
-  curl --retry 5 --retry-delay 5 --retry-connrefused --connect-timeout 10 \
-    -fsSL https://install.julialang.org | sh -s -- --yes --default-channel "${channel}"
+  (
+    set -o pipefail
+    curl --retry 5 --retry-delay 5 --retry-connrefused --connect-timeout 10 \
+      -fsSL https://install.julialang.org | sh -s -- --yes --default-channel "${channel}"
+  )
 }
