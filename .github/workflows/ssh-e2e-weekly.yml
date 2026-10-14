@@ -90,7 +90,8 @@ jobs:
   macos-e2e:
     needs: linux-image
     runs-on: macos-15-intel
-    timeout-minutes: 60
+    # 2026-10-14 hit 60 min during [27/28]. The previous green run was 49 min.
+    timeout-minutes: 90
     name: macos-15-intel → ubuntu-24.04
     permissions:
       contents: read
@@ -471,6 +472,16 @@ jobs:
           export PATH="$HOME/.juliaup/bin:$PATH"
           cd "$dest"
           ./testenv/docker-ssh/scripts/up.sh
+          # Manifest.toml is gitignored. linux/macOS instantiate in julia-buildpkg.
+          # A fresh clone has the workspace Project.toml and no lock, so the
+          # DistSSHBase path dep does not load until instantiate.
+          julia --project=lib/DistSSHUp --color=yes -e '
+            using Pkg
+            isempty(Pkg.Registry.reachable_registries()) && Pkg.Registry.add("General")
+            Pkg.Registry.update()
+            Pkg.resolve()
+            Pkg.instantiate()
+          '
           julia --project=lib/DistSSHUp lib/DistSSHUp/test/e2e.jl
           if [[ -d "$HOME/.julia" ]]; then
             tar -czf "$cache/julia.tgz" -C "$HOME" .juliaup .julia
