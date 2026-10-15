@@ -46,6 +46,11 @@ function _setup_confirm_gate(
     )::Union{Nothing, Cint}
     isempty(given) && return nothing
     shown = _confirm_path_quote(expected)
+    if any(s -> DistSSHRun._confirm_path_control_char(s), given)
+        print_err("Error: "; bold = true)
+        println_fatal("--confirm-path does not match $(shown)")
+        return Cint(1)
+    end
     got = Set(strip(s) for s in given)
     if got != Set([strip(String(expected))])
         print_err("Error: "; bold = true)
@@ -148,9 +153,31 @@ if !isdefined(@__MODULE__, :setup_main)
                 instead = mode === :juliaup_update ? "up update" : "up"
                 @warn "setup $flag is deprecated and will be removed. Use `$(DistSSHRun.cli_m()) $instead`. The command still runs."
             end
+            op_path = try
+                if mode === :delete
+                    DistSSHRun.remote_delete_root(
+                        project;
+                        cli_override = opts.remote_path_override,
+                    )
+                elseif mode === :clone
+                    DistSSHRun.remote_git_clone_dest(
+                        project;
+                        cli_override = opts.remote_path_override,
+                    )
+                elseif mode === :rsync_push
+                    deploy_path
+                else
+                    remote_path
+                end
+            catch e
+                e isa ArgumentError || rethrow()
+                print_err("Error: "; bold = true)
+                println_fatal(e.msg)
+                return Cint(1)
+            end
             print_header("$(DistSSHRun.cli_heading("setup")) · $mode_name")
             kit_println()
-            writeln_field("Remote path", remote_path)
+            writeln_field("Remote path", op_path)
             kit_println()
 
             # Mutating / multi-host SSH ops: fail fast before confirmations.
@@ -172,10 +199,7 @@ if !isdefined(@__MODULE__, :setup_main)
             end
 
             if mode === :delete
-                delete_path = DistSSHRun.remote_delete_root(
-                    project;
-                    cli_override = opts.remote_path_override,
-                )
+                delete_path = op_path
                 gate = _setup_confirm_gate(opts.confirm_paths, delete_path)
                 gate isa Cint && return gate
                 ask = _setup_legacy_yes_confirm(opts.confirm_paths)
@@ -195,10 +219,7 @@ if !isdefined(@__MODULE__, :setup_main)
             if mode === :clone
                 DistSSHRun.ensure_manifest_in_git_worktree!(project)
                 clone_url = resolve_clone_url(opts.repo_url, project)
-                clone_dest = DistSSHRun.remote_git_clone_dest(
-                    project;
-                    cli_override = opts.remote_path_override,
-                )
+                clone_dest = op_path
                 result = clone_to_remotes(opts.hosts, clone_dest, clone_url)
                 ok = finish_host_op!("Clone", result)
                 if ok && !result.cancelled && result.failed == 0 &&
@@ -217,7 +238,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 return Cint(
                     finish_host_op!(
                             "rsync",
-                            rsync_push_to_remotes(opts.hosts, deploy_path, project; path_anchor = path_anchor),
+                            rsync_push_to_remotes(opts.hosts, op_path, project; path_anchor = path_anchor),
                         ) ? 0 : 1
                 )
             end
@@ -269,7 +290,7 @@ if !isdefined(@__MODULE__, :setup_main)
             end
 
             if mode === :prune
-                gate = _setup_confirm_gate(opts.confirm_paths, remote_path)
+                gate = _setup_confirm_gate(opts.confirm_paths, op_path)
                 gate isa Cint && return gate
                 ask = _setup_legacy_yes_confirm(opts.confirm_paths)
                 if !ask && !preflight_setup_ssh(opts.hosts)
@@ -282,7 +303,7 @@ if !isdefined(@__MODULE__, :setup_main)
                             "Prune",
                             prune_kit_leaves(
                                 opts.hosts,
-                                remote_path,
+                                op_path,
                                 project;
                                 confirm = ask,
                                 older_days = opts.older_days,
@@ -312,12 +333,14 @@ if !isdefined(@__MODULE__, :setup_main)
             end
 
             if mode === :check
+                DistSSHRun._warn_git_worktree_ship!(project)
                 print_ok("All prerequisites met.")
                 kit_println()
                 return Cint(0)
             end
 
             if !result.needs_sync
+                DistSSHRun._warn_git_worktree_ship!(project)
                 print_ok("Already up to date.")
                 kit_println()
                 return Cint(0)

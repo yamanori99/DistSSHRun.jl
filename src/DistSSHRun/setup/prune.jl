@@ -80,6 +80,7 @@ function prune_kit_leaves(
         id::Union{Nothing, AbstractString} = nothing,
         skip_setup::Union{Nothing, AbstractString} = nothing,
     )::NamedTuple
+    remote_path = _checked_remote_dest(remote_path)
     if confirm && !kit_noninteractive()
         cancelled = with_kit_progress_suspended() do
             print_err("  This will DELETE .distsshkit go/drive/setup/runs leaves.\n")
@@ -157,6 +158,12 @@ function _prune_remote_shell(
     older=$older_q
     id=$idq
     [ -d "\$root" ] || exit 0
+    _distssh_target=\$(cd "\$root" && pwd -P) || exit 1
+    _distssh_home=\$(cd ~ && pwd -P) || exit 1
+    if [ "\$_distssh_target" = "\$_distssh_home" ] || [ "\$_distssh_target" = / ]; then
+      echo "refusing to prune \$_distssh_target" >&2
+      exit 1
+    fi
     find "\$root" -type d -name .distsshkit 2>/dev/null | while IFS= read -r kit; do
       go="\$kit/go"
       if [ -d "\$go" ]; then

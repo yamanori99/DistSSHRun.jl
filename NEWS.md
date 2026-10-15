@@ -11,6 +11,13 @@ Those notes are often shorter than the section below.
 - Directories in the send list ignore `.git/info/exclude` and `core.excludesFile`, the same rule as the file list. A negated pattern (`!dir/`) keeps the directory.
 - A failed `git check-ignore` stops the send list, including when its stderr is empty. Exit 1 with empty stderr still means nothing matched.
 - `rsync_send_list` returns the send list and does not warn. `setup --rsync` still warns once. A send root that is the git work tree does not scan ignored files for that warning.
+- `setup --prune` and `setup --rsync` refuse `~`, `/`, a single directory under `/`, this machine's home, and a path containing `.` or `..`, the same paths `setup --delete` and `setup --clone` already refuse. The remote prune script also stops when the path resolves to that host's home or `/`.
+- `setup` prints the path that mode changes. `--delete`, `--clone`, and `--rsync` no longer all print the project root when the operation uses another path. A refused path prints `Error:` and exits 1.
+- `--confirm-path` and `setup!` `confirm_path` reject a newline or NUL before surrounding whitespace is removed.
+- An SSH failure while checking a remote destination is reported as a probe failure. `setup --rsync` and `setup --clone` no longer tell you to delete a path that was never shown to exist. `remote_dest_status` still returns `:nonempty` on that failure.
+- `setup --clone` creates the parent of a missing destination before `git clone`. An existing empty destination is left for git.
+- `setup --check`, and `setup --sync` or `--pull` when the tree is already current, warn when a lock or path source would not ship. They still exit 0. Clone and git sync keep the existing error for a path outside the work tree.
+- `collect-missing` skips a relative path that would write outside the local collect root. `collect-overwrite` refuses the transfer when the local root already contains such a symlink. The warning names the path.
 
 ### Planned breaking (next minor)
 

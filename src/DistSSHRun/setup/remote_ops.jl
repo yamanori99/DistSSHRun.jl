@@ -177,9 +177,18 @@ function clone_to_remotes(
         err_buf = IOBuffer()
         try
             outcome = kit_spin!("  $host: ") do
-                st = remote_dest_status(host, remote_path)
+                st, detail = _remote_dest_probe(host, remote_path)
+                if st === :error
+                    return (:probe_fail, "could not inspect remote path: $detail")
+                end
                 if st === :nonempty
                     return (:busy, remote_dest_busy_message(host, remote_path))
+                end
+                if st === :missing
+                    parent = _remote_clone_parent(remote_path)
+                    if parent !== nothing && !_ensure_remote_dir(host, parent)
+                        return (:mkdir_fail, "could not create parent of remote clone path")
+                    end
                 end
                 run(
                     pipeline(
@@ -190,7 +199,7 @@ function clone_to_remotes(
                 )
                 return (:ok, "")
             end
-            if outcome[1] === :busy
+            if outcome[1] !== :ok
                 print_err("✗ $(outcome[2])")
                 println()
                 failed += 1
@@ -213,6 +222,15 @@ function clone_to_remotes(
         end
     end
     return (; host_op_result(succeeded = succeeded, failed = failed)..., hosts = host_results)
+end
+
+"""Parent of a remote clone destination, or `nothing` when it is already `/` or `~`."""
+function _remote_clone_parent(remote_path::AbstractString)::Union{Nothing, String}
+    path = rstrip(strip(String(remote_path)), '/')
+    parent = dirname(path)
+    (isempty(parent) || parent == path || parent == "." || parent == "/") && return nothing
+    occursin(r"^~[^/]*$", parent) && return nothing
+    return parent
 end
 
 """

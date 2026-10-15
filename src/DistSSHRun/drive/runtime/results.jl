@@ -284,11 +284,32 @@ function collect_drive_results!(
                     end
 
                     if !isempty(rel_lines)
-                        uniq = unique(rel_lines)
+                        uniq = String[]
+                        for rel in unique(rel_lines)
+                            if DistSSHRun._collect_dest_escapes_root(local_abs, rel)
+                                print_warn(
+                                    "Warning: skipping $rel; it would write outside $local_abs.\n",
+                                )
+                                host_err === nothing && (
+                                    host_err = ErrorException(
+                                        "collect path escapes $local_abs: $rel",
+                                    )
+                                )
+                                continue
+                            end
+                            push!(uniq, rel)
+                        end
                         lock(dup_lock) do
                             for rel in uniq
                                 push!(get!(() -> String[], dup_hosts, (local_abs, rel)), host)
                             end
+                        end
+                        if isempty(uniq)
+                            continue
+                        end
+                        for rel in uniq
+                            parent = dirname(joinpath(local_abs, rel))
+                            !isempty(parent) && mkpath(parent)
                         end
                         DistSSHRun._run_rsync_files_from(
                             rsync_bin,

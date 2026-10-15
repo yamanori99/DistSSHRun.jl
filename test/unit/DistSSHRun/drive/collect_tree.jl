@@ -20,6 +20,22 @@ function _collect!(
 end
 
 @testset "drive collect_tree" begin
+    @testset "local symlink cannot leave the collect root" begin
+        root = mktempdir()
+        outside = mktempdir()
+        try
+            symlink(outside, joinpath(root, "out"))
+            @test DistSSHRun._collect_dest_escapes_root(root, "out/file.txt")
+            @test DistSSHRun._collect_local_symlink_escape(root) == "out"
+            @test !DistSSHRun._collect_dest_escapes_root(root, "kept.txt")
+            write(joinpath(root, "kept.txt"), "ok\n")
+            @test !DistSSHRun._collect_dest_escapes_root(root, "kept.txt")
+        finally
+            rm(root; recursive = true, force = true)
+            rm(outside; recursive = true, force = true)
+        end
+    end
+
     function _seed_tree!(state_dir, host, rel)
         slot = replace(host, r"[@:/]" => "_")
         path = joinpath(state_dir, slot, "tree", rel)

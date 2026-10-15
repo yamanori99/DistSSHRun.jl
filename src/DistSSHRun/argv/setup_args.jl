@@ -117,7 +117,11 @@ function parse_setup_args(args::Vector{String})
             mode = :prune
             cli_consume!(c)
         elseif arg == "--confirm-path"
-            raw = String(strip(cli_take_value!(c, arg)))
+            raw = String(cli_take_value!(c, arg))
+            _confirm_path_control_char(raw) && throw(
+                ArgumentError("--confirm-path cannot contain a newline or NUL"),
+            )
+            raw = strip(raw)
             isempty(raw) && throw(ArgumentError("--confirm-path needs a non-empty path"))
             push!(confirm_paths, raw)
         elseif arg == "--older-than"

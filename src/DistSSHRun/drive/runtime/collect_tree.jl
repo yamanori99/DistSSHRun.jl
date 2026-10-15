@@ -33,6 +33,16 @@ function drive_collect_tree(
     writeln_field("Hosts", join(host_names, ", "))
     writeln_both("")
 
+    if merge
+        escaped = _collect_local_symlink_escape(local_root)
+        if escaped !== nothing
+            print_warn(
+                "Warning: collect-overwrite refused because $escaped points outside $local_root.\n",
+            )
+            return false
+        end
+    end
+
     remote_root = remote_layout_path(local_root, repo_root)
     if remote_root != local_root
         writeln_field("Remote root", remote_root)
@@ -95,9 +105,24 @@ function drive_collect_tree(
                     continue
                 end
                 sort!(need)
+                safe = String[]
+                for rel in need
+                    if startswith(rel, "..") || _collect_dest_escapes_root(local_root, rel)
+                        ok = false
+                        print_warn(
+                            "Warning: skipping $rel; it would write outside $local_root.\n",
+                        )
+                        continue
+                    end
+                    push!(safe, rel)
+                end
+                if isempty(safe)
+                    writeln_both("(nothing safe to collect)")
+                    continue
+                end
+                need = safe
                 # `--files-from` does not create parents on BSD rsync; pre-create (GNU rsync `--mkpath` unavailable).
                 for rel in need
-                    startswith(rel, "..") && continue
                     d = dirname(joinpath(local_root, rel))
                     !isempty(d) && mkpath(d)
                 end

@@ -70,6 +70,11 @@ using Test
         @test r.mode == :delete
         @test r.confirm_paths == ["~/App"]
     end
+    @test DistSSHRun._confirm_path_control_char("a\nb")
+    @test DistSSHRun._confirm_path_control_char("a\rb")
+    @test DistSSHRun._confirm_path_control_char("a\0b")
+    @test !DistSSHRun._confirm_path_control_char(" ~/App ")
+    @test_throws ArgumentError parse_setup_args(["--delete", "--confirm-path", "a\nb", "child:host1"])
     @test_throws ArgumentError parse_setup_args(["--check", "--confirm-path", "~/App", "child:host1"])
     @test_throws ArgumentError parse_setup_args(["--check", "--older-than", "1", "child:host1"])
     @test_throws ArgumentError parse_setup_args(["--prune", "--older-than", "-1", "child:host1"])

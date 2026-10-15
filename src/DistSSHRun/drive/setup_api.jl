@@ -142,6 +142,11 @@ function _setup_bang_preflight!(
     return nothing
 end
 
+"""True when a confirm path contains a newline, carriage return, or NUL."""
+function _confirm_path_control_char(raw::AbstractString)::Bool
+    return any(c -> c == '\n' || c == '\r' || c == '\0', String(raw))
+end
+
 """Computed delete or prune path when `confirm_path` matches. `nothing` when it was omitted."""
 function _setup_bind_confirm_path!(
         session::KitSession,
@@ -149,6 +154,10 @@ function _setup_bind_confirm_path!(
         confirm_path::Union{Nothing, AbstractString},
     )::Union{Nothing, String}
     confirm_path === nothing && return nothing
+    raw_confirm = String(confirm_path)
+    _confirm_path_control_char(raw_confirm) && throw(
+        ArgumentError("setup! confirm_path cannot contain a newline or NUL"),
+    )
     if mode !== :delete && mode !== :prune
         throw(
             ArgumentError(
@@ -156,7 +165,7 @@ function _setup_bind_confirm_path!(
             )
         )
     end
-    given = strip(String(confirm_path))
+    given = strip(raw_confirm)
     isempty(given) && throw(ArgumentError("setup! confirm_path must be a non-empty path"))
     expected = mode === :delete ?
         remote_delete_root(session.project; cli_override = session.remote) :

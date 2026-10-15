@@ -258,6 +258,40 @@ function ensure_manifest_in_git_worktree!(project::AbstractString)
     return nothing
 end
 
+"""
+Warn about a lock or path source that git sync would not ship.
+
+Skips structural errors. Those stay on the clone and git-sync path, which
+throws. `--check` and an already-current `--sync` / `--pull` only warn.
+"""
+function _warn_git_worktree_ship!(project::AbstractString)
+    env = resolve_pkg_env(project)
+    top = git_work_tree(env.project_dir)
+    top isa String || return nothing
+    manifest = env.manifest
+    if manifest isa String
+        location = canonical_local_path(manifest)
+        if _path_under_resolved(dirname(location), top)
+            _ensure_manifest_at_head!(top, location)
+            if islink(manifest)
+                target = manifest_link_target(manifest)
+                _path_under_resolved(target, top) && _ensure_manifest_at_head!(top, target)
+            end
+        end
+    end
+    root_c = canonical_local_path(top)
+    for project_file in _pkg_env_project_files(env)
+        for (name, raw) in _project_path_sources(project_file)
+            isabspath(expanduser(raw)) && continue
+            location = _resolved_source_path(project_file, raw)
+            _path_under_resolved(location, root_c) || continue
+            isdir(location) || continue
+            _ensure_path_source_git_files!(root_c, location, name)
+        end
+    end
+    return nothing
+end
+
 """Get local git commit hash (`short=nothing` → full hash, else `git rev-parse --short`)."""
 function get_local_git_hash(proj_dir::AbstractString; short::Union{Nothing, Int} = nothing)::Union{Nothing, String}
     _host_tool_present("git") || return nothing
@@ -357,6 +391,50 @@ function _warn_collect_root_overlap(collect_root::AbstractString, project_root::
             "That would overwrite source files. Point DISTRIBUTED_COLLECT_DIRS, DISTRIBUTED_OUTPUT_DIR, or collect! at a result directory inside the project. " *
             "$_SHIP_ERROR_SOON\n",
     )
+    return nothing
+end
+
+"""True when writing `rel` under `local_root` would leave that root.
+
+An intermediate `.` or `..`, or a symlink whose resolved path is outside
+`local_root`, counts. Missing path components do not.
+"""
+function _collect_dest_escapes_root(local_root::AbstractString, rel::AbstractString)::Bool
+    root = rstrip(canonical_local_path(local_root), '/')
+    isempty(root) && (root = "/")
+    cur = root
+    parts = split(replace(String(rel), '\\' => '/'), '/'; keepempty = false)
+    for part in parts
+        (part == "." || part == "..") && return true
+        nxt = joinpath(cur, part)
+        if islink(nxt) || isdir(nxt)
+            resolved = try
+                rstrip(canonical_local_path(realpath(nxt)), '/')
+            catch
+                return true
+            end
+            isempty(resolved) && (resolved = "/")
+            _path_is_under(resolved, root) || return true
+            cur = resolved
+        else
+            cur = nxt
+        end
+    end
+    return false
+end
+
+"""First symlink under `local_root` that points outside it."""
+function _collect_local_symlink_escape(local_root::AbstractString)::Union{Nothing, String}
+    root = canonical_local_path(local_root)
+    isdir(root) || return nothing
+    for (dir, subdirs, files) in walkdir(root)
+        for name in Iterators.flatten((subdirs, files))
+            path = joinpath(dir, name)
+            islink(path) || continue
+            rel = relpath(path, root)
+            _collect_dest_escapes_root(root, rel) && return rel
+        end
+    end
     return nothing
 end
 

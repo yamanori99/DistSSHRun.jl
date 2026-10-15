@@ -148,6 +148,16 @@ using Test
             @test raw.succeeded == 0 && raw.failed == 1
         end
     end
+
+    @testset "probe failure is not a nonempty tree" begin
+        _with_fake_remotes(extra_env = Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1")) do _
+            host = "user@host.test"
+            status, detail = DistSSHRun._remote_dest_probe(host, remote_path)
+            @test status === :error
+            @test occursin("Permission denied", detail)
+            @test DistSSHRun.remote_dest_status(host, remote_path) === :nonempty
+        end
+    end
 end
 
 @testset "setup clone dest safety" begin
@@ -171,5 +181,16 @@ end
             @test occursin("refusing to overwrite", out)
             @test isfile(joinpath(tree, "keepme.txt"))
         end
+    end
+
+    @testset "forbidden remote dest and clone parent" begin
+        @test_throws ArgumentError DistSSHRun.prune_kit_leaves(
+            ["host1"], "/", pwd(); confirm = false,
+        )
+        @test occursin("pwd -P", DistSSHRun._prune_remote_shell("~/App.jl"))
+        @test occursin("refusing to prune", DistSSHRun._prune_remote_shell("~/App.jl"))
+        @test DistSSHRun._remote_clone_parent("~/jobs/App") == "~/jobs"
+        @test DistSSHRun._remote_clone_parent("~/App") === nothing
+        @test DistSSHRun._remote_clone_parent("/tmp/jobs/App") == "/tmp/jobs"
     end
 end
