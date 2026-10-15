@@ -587,9 +587,44 @@ jobs:
             (cd "$dest" && ./testenv/docker-ssh/scripts/down.sh) || true
           fi
 
+  # Queue host loads this checkout. Does not wait for this repo's worker image.
+  # Workers stay on General DistSSHRun in the published Queue image. Linux only.
+  queue-ssh-e2e:
+    name: Downstream SSH E2E (DistSSHQueue, 1.13)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yamanori99/DistSSHQueue.jl
+          ref: main
+          path: downstream
+          persist-credentials: false
+      - name: docker-ssh up + SSH E2E
+        working-directory: downstream
+        env:
+          DISTSSHQUEUE_DEV_RUN: ${{ github.workspace }}
+          DISTSSHQUEUE_WORKER_IMAGE: ghcr.io/yamanori99/distsshqueue-linux-ssh-worker:latest
+          DISTSSHQUEUE_WORKER_PULL_RETRIES: "8"
+        run: ./testenv/docker-ssh/scripts/up.sh --e2e
+      - name: Teardown workers
+        if: always()
+        run: |
+          if [[ -d downstream ]]; then
+            (cd downstream && ./testenv/docker-ssh/scripts/down.sh) || true
+          fi
+
   # Schedule / post-cut runs are not PR checks, and github-actions[bot] does not email.
   notify:
-    needs: [linux-image, linux-e2e, macos-e2e, wsl-e2e, up-linux-e2e, up-macos-e2e, up-wsl-e2e, base-linux-e2e, base-macos-e2e, base-wsl-e2e]
+    needs: [linux-image, linux-e2e, macos-e2e, wsl-e2e, up-linux-e2e, up-macos-e2e, up-wsl-e2e, base-linux-e2e, base-macos-e2e, base-wsl-e2e, queue-ssh-e2e]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     timeout-minutes: 5
