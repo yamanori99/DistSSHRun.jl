@@ -79,6 +79,50 @@ using Test
         end
     end
 
+    @testset "a re-included directory keeps its file" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(tmp, ".gitignore"), "*/\n!keep/\n")
+            mkpath(joinpath(tmp, "keep"))
+            write(joinpath(tmp, "keep", "a.txt"), "x\n")
+            mkpath(joinpath(tmp, "build"))
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+            @test "keep" in listed
+            @test "keep/a.txt" in listed
+            @test !("build" in listed)
+        end
+    end
+
+    @testset "a later pattern ignores the directory again" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(tmp, ".gitignore"), "*/\n!keep/\nkeep/\n")
+            mkpath(joinpath(tmp, "keep"))
+            mkpath(joinpath(tmp, "build"))
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+            @test !("keep" in listed)
+            @test !("build" in listed)
+        end
+    end
+
+    @testset "an escaped bang still ignores the directory" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(tmp, ".gitignore"), "\\!keep/\n")
+            mkpath(joinpath(tmp, "!keep"))
+            mkpath(joinpath(tmp, "plain"))
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+            @test "plain" in listed
+            @test !("!keep" in listed)
+        end
+    end
+
     @testset "git ls-files failure is an error" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
@@ -273,6 +317,49 @@ using Test
             @test occursin("dropped.txt (.gitignore:1)", text)
             @test !occursin("info/exclude", text)
             @test !occursin("global-excludes", text)
+        end
+    end
+
+    @testset "an ancestor negation keeps the directory" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "*/\n!sub/\n!sub/keep/\n")
+            sub = joinpath(tmp, "sub")
+            mkpath(sub)
+            write(joinpath(sub, "Project.toml"), "name = \"App\"\n")
+            mkpath(joinpath(sub, "keep"))
+            mkpath(joinpath(sub, "build"))
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            listed = DistSSHRun._rsync_send_list(sub, DistSSHRun.resolve_pkg_env(sub))
+            @test "keep" in listed
+            @test !("build" in listed)
+        end
+    end
+
+    @testset "an ancestor negation does not warn" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "*.txt\n!kept.txt\n")
+            sub = joinpath(tmp, "sub")
+            mkpath(sub)
+            write(joinpath(sub, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(sub, "dropped.txt"), "nope\n")
+            write(joinpath(sub, "kept.txt"), "yes\n")
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            env = DistSSHRun.resolve_pkg_env(sub)
+            text = mktemp() do _, io
+                redirect_stdout(io) do
+                    listed = DistSSHRun.rsync_send_list(sub, env)
+                    @test "kept.txt" in listed
+                    @test !("dropped.txt" in listed)
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
+            end
+            @test count("Warning:", text) == 1
+            @test occursin("dropped.txt (.gitignore:1)", text)
+            @test !occursin("kept.txt", text)
         end
     end
 
