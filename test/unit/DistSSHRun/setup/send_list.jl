@@ -240,7 +240,7 @@ using Test
             run(pipeline(`git -C $tmp config core.excludesFile $excludes`; stdout = devnull, stderr = devnull))
             _commit!(tmp, "init")
             env = DistSSHRun.resolve_pkg_env(sub)
-            text = mktemp() do path, io
+            text = mktemp() do _, io
                 redirect_stdout(io) do
                     listed = DistSSHRun.rsync_send_list(sub, env)
                     @test listed isa Vector
