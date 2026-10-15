@@ -16,8 +16,8 @@ Those notes are often shorter than the section below.
 - `--confirm-path` and `setup!` `confirm_path` reject a newline or NUL before surrounding whitespace is removed.
 - An SSH failure while checking a remote destination is reported as a probe failure. `setup --rsync` and `setup --clone` no longer tell you to delete a path that was never shown to exist. `remote_dest_status` still returns `:nonempty` on that failure.
 - `setup --clone` creates the parent of a missing destination before `git clone`. An existing empty destination is left for git.
-- `setup --check`, and `setup --sync` or `--pull` when the tree is already current, warn when a lock or path source would not ship. They still exit 0. Clone and git sync keep the existing error for a path outside the work tree.
-- `collect-missing` skips a relative path that would write outside the local collect root. `collect-overwrite` refuses the transfer when the local root already contains such a symlink. The warning names the path.
+- `setup --check`, and `setup --sync` or `--pull` when the tree is already current, warn when a lock or path source would not ship. They still exit 0. A `Project.toml` that cannot be parsed is part of that warning and does not change the exit code. Clone and git sync keep the existing error for a path outside the work tree.
+- `collect-missing` skips a relative path that would write outside the local collect root, including an absolute path taken from the remote listing. `collect-overwrite` refuses the transfer when the local root already contains such a symlink. A collect root reached through a symlink is compared after that symlink is resolved. The warning names the path.
 
 ### Planned breaking (next minor)
 

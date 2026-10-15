@@ -21,18 +21,30 @@ end
 
 @testset "drive collect_tree" begin
     @testset "local symlink cannot leave the collect root" begin
-        root = mktempdir()
-        outside = mktempdir()
-        try
-            symlink(outside, joinpath(root, "out"))
-            @test DistSSHRun._collect_dest_escapes_root(root, "out/file.txt")
-            @test DistSSHRun._collect_local_symlink_escape(root) == "out"
-            @test !DistSSHRun._collect_dest_escapes_root(root, "kept.txt")
-            write(joinpath(root, "kept.txt"), "ok\n")
-            @test !DistSSHRun._collect_dest_escapes_root(root, "kept.txt")
-        finally
-            rm(root; recursive = true, force = true)
-            rm(outside; recursive = true, force = true)
+        _with_tempdir() do root
+            _with_tempdir() do outside
+                symlink(outside, joinpath(root, "out"))
+                @test DistSSHRun._collect_dest_escapes_root(root, "out/file.txt")
+                @test DistSSHRun._collect_local_symlink_escape(root) == "out"
+                @test !DistSSHRun._collect_dest_escapes_root(root, "kept.txt")
+                write(joinpath(root, "kept.txt"), "ok\n")
+                @test !DistSSHRun._collect_dest_escapes_root(root, "kept.txt")
+            end
+        end
+    end
+
+    @testset "absolute remote paths and a symlinked collect root" begin
+        _with_tempdir() do real
+            mkdir(joinpath(real, "sub"))
+            write(joinpath(real, "sub", "file.txt"), "ok\n")
+            _with_tempdir() do holder
+                link = joinpath(holder, "link")
+                symlink(real, link)
+                @test !DistSSHRun._collect_dest_escapes_root(link, "sub/file.txt")
+                @test DistSSHRun._collect_local_symlink_escape(link) === nothing
+                @test DistSSHRun._collect_dest_escapes_root(link, "/home/user/out/file")
+                @test joinpath(link, "/home/user/out/file") == "/home/user/out/file"
+            end
         end
     end
 

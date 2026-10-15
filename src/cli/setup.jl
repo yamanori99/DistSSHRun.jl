@@ -165,7 +165,9 @@ if !isdefined(@__MODULE__, :setup_main)
                         cli_override = opts.remote_path_override,
                     )
                 elseif mode === :rsync_push
-                    deploy_path
+                    DistSSHRun._checked_remote_dest(deploy_path)
+                elseif mode === :prune
+                    DistSSHRun._checked_remote_dest(remote_path)
                 else
                     remote_path
                 end

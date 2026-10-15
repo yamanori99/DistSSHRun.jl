@@ -778,4 +778,17 @@ using Pkg
             @test !occursin("will be an error", quiet_mlink)
         end
     end
+
+    @testset "a malformed Project.toml stays on the warning path" begin
+        Sys.which("git") === nothing && return
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"Bad\"\n[deps\n")
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            out, = _capture_stdio() do _, _
+                @test DistSSHRun._warn_git_worktree_ship!(tmp) === nothing
+            end
+            @test occursin("could not read", out)
+            @test occursin("Project.toml", out)
+        end
+    end
 end

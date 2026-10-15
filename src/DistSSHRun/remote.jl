@@ -258,6 +258,11 @@ function ensure_manifest_in_git_worktree!(project::AbstractString)
     return nothing
 end
 
+"""True for a TOML parse failure from Base or the TOML stdlib."""
+function _toml_parse_failed(e)::Bool
+    return e isa Base.TOML.ParserError || e isa TOML.ParserError
+end
+
 """
 Warn about a lock or path source that git sync would not ship.
 
@@ -265,7 +270,16 @@ Skips structural errors. Those stay on the clone and git-sync path, which
 throws. `--check` and an already-current `--sync` / `--pull` only warn.
 """
 function _warn_git_worktree_ship!(project::AbstractString)
-    env = resolve_pkg_env(project)
+    env = try
+        resolve_pkg_env(project)
+    catch e
+        _toml_parse_failed(e) || rethrow()
+        print_warn(
+            "Warning: could not read $(joinpath(project, "Project.toml")). " *
+                "$(sprint(showerror, e))\n",
+        )
+        return nothing
+    end
     top = git_work_tree(env.project_dir)
     top isa String || return nothing
     manifest = env.manifest
@@ -281,7 +295,17 @@ function _warn_git_worktree_ship!(project::AbstractString)
     end
     root_c = canonical_local_path(top)
     for project_file in _pkg_env_project_files(env)
-        for (name, raw) in _project_path_sources(project_file)
+        sources = try
+            _project_path_sources(project_file)
+        catch e
+            _toml_parse_failed(e) || rethrow()
+            print_warn(
+                "Warning: could not read path sources from $project_file. " *
+                    "$(sprint(showerror, e))\n",
+            )
+            continue
+        end
+        for (name, raw) in sources
             isabspath(expanduser(raw)) && continue
             location = _resolved_source_path(project_file, raw)
             _path_under_resolved(location, root_c) || continue
@@ -396,14 +420,28 @@ end
 
 """True when writing `rel` under `local_root` would leave that root.
 
-An intermediate `.` or `..`, or a symlink whose resolved path is outside
-`local_root`, counts. Missing path components do not.
+An absolute `rel` counts: `joinpath` would drop `local_root`. An intermediate
+`.` or `..`, or a symlink whose resolved path is outside `local_root`, counts.
+`local_root` is resolved through symlinks before that comparison, so a root
+reached via `/tmp` or another symlink does not look like an escape. Missing
+path components do not.
 """
 function _collect_dest_escapes_root(local_root::AbstractString, rel::AbstractString)::Bool
-    root = rstrip(canonical_local_path(local_root), '/')
+    normalized = replace(String(rel), '\\' => '/')
+    isabspath(normalized) && return true
+    root_c = canonical_local_path(local_root)
+    root = if ispath(root_c)
+        try
+            rstrip(canonical_local_path(realpath(root_c)), '/')
+        catch
+            return true
+        end
+    else
+        rstrip(root_c, '/')
+    end
     isempty(root) && (root = "/")
     cur = root
-    parts = split(replace(String(rel), '\\' => '/'), '/'; keepempty = false)
+    parts = split(normalized, '/'; keepempty = false)
     for part in parts
         (part == "." || part == "..") && return true
         nxt = joinpath(cur, part)
