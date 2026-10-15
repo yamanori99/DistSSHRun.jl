@@ -338,9 +338,10 @@ using Test
 
     @testset "an ancestor negation does not warn" begin
         _with_tempdir() do tmp
-            write(joinpath(tmp, ".gitignore"), "*.txt\n!kept.txt\n")
+            write(joinpath(tmp, ".gitignore"), "*.txt\n")
             sub = joinpath(tmp, "sub")
             mkpath(sub)
+            write(joinpath(sub, ".gitignore"), "!kept.txt\n")
             write(joinpath(sub, "Project.toml"), "name = \"App\"\n")
             write(joinpath(sub, "dropped.txt"), "nope\n")
             write(joinpath(sub, "kept.txt"), "yes\n")
@@ -360,6 +361,75 @@ using Test
             @test count("Warning:", text) == 1
             @test occursin("dropped.txt (.gitignore:1)", text)
             @test !occursin("kept.txt", text)
+        end
+    end
+
+    @testset "local ignores and tracked ancestor matches do not warn" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "tracked.txt\n")
+            sub = joinpath(tmp, "sub")
+            mkpath(sub)
+            write(joinpath(sub, ".gitignore"), "local.txt\n")
+            write(joinpath(sub, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(sub, "tracked.txt"), "tracked\n")
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            run(
+                pipeline(
+                    `git -C $tmp add -f .gitignore sub/.gitignore sub/Project.toml sub/tracked.txt`;
+                    stdout = devnull,
+                    stderr = devnull,
+                )
+            )
+            run(pipeline(`git -C $tmp commit -q -m init`; stdout = devnull, stderr = devnull))
+            write(joinpath(sub, "local.txt"), "local\n")
+            env = DistSSHRun.resolve_pkg_env(sub)
+            text = mktemp() do _, io
+                redirect_stdout(io) do
+                    listed = DistSSHRun.rsync_send_list(sub, env)
+                    @test "tracked.txt" in listed
+                    @test !("local.txt" in listed)
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
+            end
+            @test !occursin("Warning:", text)
+        end
+    end
+
+    @testset "an ancestor warning shows three paths and the remainder" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "*.tmp\n")
+            sub = joinpath(tmp, "sub")
+            mkpath(sub)
+            write(joinpath(sub, "Project.toml"), "name = \"App\"\n")
+            for name in ("a.tmp", "b.tmp", "c.tmp", "d.tmp", "e.tmp")
+                write(joinpath(sub, name), "$name\n")
+            end
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            _commit!(tmp, "init")
+            env = DistSSHRun.resolve_pkg_env(sub)
+            text = mktemp() do _, io
+                redirect_stdout(io) do
+                    listed = DistSSHRun.rsync_send_list(sub, env)
+                    for name in ("a.tmp", "b.tmp", "c.tmp", "d.tmp", "e.tmp")
+                        @test !(name in listed)
+                    end
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
+            end
+            @test count("Warning:", text) == 1
+            @test occursin("5 untracked files left out", text)
+            @test occursin("a.tmp (.gitignore:1)", text)
+            @test occursin("b.tmp (.gitignore:1)", text)
+            @test occursin("c.tmp (.gitignore:1)", text)
+            @test !occursin("d.tmp", text)
+            @test !occursin("e.tmp", text)
+            @test occursin("and 2 more.", text)
         end
     end
 
