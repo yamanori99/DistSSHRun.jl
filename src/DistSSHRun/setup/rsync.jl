@@ -96,20 +96,24 @@ function _reject_newline_send_path(rel::AbstractString)
     )
 end
 
-"""`git check-ignore -v -z` records: source, line, pathname."""
+"""`git check-ignore -v -z` records: source, line, pattern, pathname."""
 function _parse_check_ignore_verbose(
         raw::AbstractString,
-    )::Vector{@NamedTuple{source::String, line::String, path::String}}
+    )::Vector{@NamedTuple{source::String, line::String, pattern::String, path::String}}
     parts = split(String(raw), '\0'; keepempty = true)
     if !isempty(parts) && isempty(last(parts))
         pop!(parts)
     end
-    recs = @NamedTuple{source::String, line::String, path::String}[]
+    recs = @NamedTuple{source::String, line::String, pattern::String, path::String}[]
     i = 1
     n = length(parts)
     while i + 3 <= n
+        pattern = String(parts[i + 2])
         path = replace(String(parts[i + 3]), '\\' => '/')
-        push!(recs, (source = String(parts[i]), line = String(parts[i + 1]), path = path))
+        push!(
+            recs,
+            (source = String(parts[i]), line = String(parts[i + 1]), pattern = pattern, path = path),
+        )
         i += 4
     end
     return recs
@@ -131,8 +135,8 @@ function _git_check_ignore_records(
         dir::AbstractString,
         rels::Vector{String};
         nonmatching::Bool = false,
-    )::Vector{@NamedTuple{source::String, line::String, path::String}}
-    isempty(rels) && return @NamedTuple{source::String, line::String, path::String}[]
+    )::Vector{@NamedTuple{source::String, line::String, pattern::String, path::String}}
+    isempty(rels) && return @NamedTuple{source::String, line::String, pattern::String, path::String}[]
     return mktemp() do path, io
         for rel in rels
             r = replace(String(rel), '\\' => '/')
@@ -170,6 +174,8 @@ Paths in `rels` that a `.gitignore` ignores.
 
 `core.excludesFile` is cleared. A match from `.git/info/exclude` is kept in
 the send list, matching `ls-files --exclude-per-directory=.gitignore`.
+`check-ignore -v` still prints a path whose last pattern starts with `!`.
+That path is not ignored.
 """
 function _git_check_ignore_set(dir::AbstractString, rels::Vector{String})::Set{String}
     ignored = Set{String}()
@@ -177,6 +183,7 @@ function _git_check_ignore_set(dir::AbstractString, rels::Vector{String})::Set{S
         _info_exclude_source(rec.source) && continue
         isempty(rec.source) && continue
         isempty(rec.path) && continue
+        startswith(rec.pattern, "!") && continue
         push!(ignored, rec.path)
     end
     return ignored
@@ -225,6 +232,7 @@ function _warn_ancestor_gitignore!(send_dir::AbstractString, listed::Vector{Stri
     for rec in _git_check_ignore_records(send_dir, rels; nonmatching = true)
         isempty(rec.source) && continue
         _info_exclude_source(rec.source) && continue
+        startswith(rec.pattern, "!") && continue
         _gitignore_source_above(top, send_dir, rec.source) || continue
         push!(hits, (rec.path, rec.source, rec.line))
     end
@@ -334,9 +342,10 @@ Append the git send list for `dir` (paths relative to `dir`, then prefixed).
 `.gitignore` only (not `.git/info/exclude` or `core.excludesFile`). A trailing
 slash or a gitlink (mode 160000) is expanded in that directory. Directories that
 are not themselves ignored are listed so `--files-from` still creates them when
-empty (`output/*` keeps `output/`; `build/` does not). Directory checks use the
-same two exclusions: `core.excludesFile` is cleared, and `.git/info/exclude`
-does not drop a directory.
+empty (`output/*` keeps `output/`; `build/` does not). A last pattern that
+starts with `!` keeps the directory (`*/` then `!keep/` keeps empty `keep/`).
+Directory checks use the same two exclusions: `core.excludesFile` is cleared,
+and `.git/info/exclude` does not drop a directory.
 """
 function _git_worktree_file_list!(
         out::Vector{String},

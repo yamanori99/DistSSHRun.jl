@@ -65,6 +65,20 @@ using Test
         end
     end
 
+    @testset "a negated pattern keeps an empty directory" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(tmp, ".gitignore"), "*/\n!keep/\n")
+            mkpath(joinpath(tmp, "keep"))
+            mkpath(joinpath(tmp, "build"))
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+            @test "keep" in listed
+            @test !("build" in listed)
+        end
+    end
+
     @testset "git ls-files failure is an error" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")

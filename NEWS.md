@@ -8,7 +8,7 @@ Those notes are often shorter than the section below.
 
 - Since DistSSHRun 0.1.7, `setup --rsync` inside one git repository also applies `.gitignore` files above the send root.
 - `setup --rsync` warns once when untracked files are left out by a `.gitignore` above the send root. The warning names the count, a few paths, and that file's path and line. Those files stay out of the send list. `.git/info/exclude` and `core.excludesFile` are not part of this warning.
-- Directories in the send list ignore `.git/info/exclude` and `core.excludesFile`, the same rule as the file list.
+- Directories in the send list ignore `.git/info/exclude` and `core.excludesFile`, the same rule as the file list. A negated pattern (`!dir/`) keeps the directory.
 
 ### Planned breaking (next minor)
 
