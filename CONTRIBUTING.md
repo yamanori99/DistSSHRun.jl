@@ -177,7 +177,7 @@ julia --project=. -e 'using Pkg; Pkg.test(; coverage=true)'
 DISTSSHQUEUE_CODE_COVERAGE=1 ./testenv/docker-ssh/scripts/up.sh --e2e
 ```
 
-Required to merge (ruleset `main` uses these names). **1.14-nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and a version increase, not ordinary PRs. macOS and WSL2 nightly run on CI weekly only. Registry tree runs on ordinary PRs (heavy gate) and is not in the list below. E2E weekly and CI weekly are not required. Run keeps the titles in the list, plus `Pkg.test (1.14-nightly, ubuntu-latest, x64)` and `Pkg.test (registry, ubuntu-latest, x64)`. DistSSHBase and DistSSHUp are their own jobs on Ubuntu, macOS, and WSL2, and their own Ubuntu SSH E2E rows. Downstream is `Downstream (DistSSHQueue, 1.13)` and `Downstream (DistSSHKit, 1.13)`. Names outside the list are not in the ruleset. The ruleset itself is edited on GitHub; this list is the names to add.
+Required to merge (ruleset `main` uses these names). **1.14-nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and a version increase, not ordinary PRs. macOS and WSL2 nightly run on CI weekly only. Registry tree runs on ordinary PRs (heavy gate) and is not in the list below. E2E weekly and CI weekly are not required. Run keeps the titles in the list, plus `Pkg.test (1.14-nightly, ubuntu-latest, x64)` and `Pkg.test (registry, ubuntu-latest, x64)`. DistSSHBase and DistSSHUp are their own jobs on Ubuntu, macOS, and WSL2, and their own Ubuntu SSH E2E rows. Downstream is `Downstream (DistSSHQueue, 1.13)` and `Downstream (DistSSHKit, 1.13)`. `Downstream SSH E2E (DistSSHQueue, 1.13)` runs on a version-cut pull request, a push to `main`, and `workflow_dispatch`. Ordinary pull requests skip it. Names outside the list are not in the ruleset. The ruleset itself is edited on GitHub; this list is the names to add.
 
 - `Pkg.test (1.13, ubuntu-latest, x64)`
 - `Pkg.test (1.13, macos-latest, aarch64)`
@@ -195,6 +195,7 @@ Required to merge (ruleset `main` uses these names). **1.14-nightly** jobs are a
 - `ubuntu-latest → ubuntu-24.04`
 - `DistSSHBase (ubuntu-latest → ubuntu-24.04)`
 - `DistSSHUp (ubuntu-latest → ubuntu-24.04)`
+- `Downstream SSH E2E (DistSSHQueue, 1.13)`
 - `PR label`
 
 | When | Workflow | What |
