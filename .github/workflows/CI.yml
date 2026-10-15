@@ -58,6 +58,8 @@ jobs:
       version_cut: ${{ steps.heavy.outputs.version_cut }}
       e2e: ${{ steps.gate.outputs.e2e }}
       coverage: ${{ steps.gate.outputs.coverage }}
+      # Queue's Linux SSH E2E against this checkout. Not the path-filtered `e2e` gate.
+      queue_e2e: ${{ steps.gate.outputs.queue_e2e }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -102,6 +104,12 @@ jobs:
             echo "coverage=true" >> "$GITHUB_OUTPUT"
           else
             echo "coverage=false" >> "$GITHUB_OUTPUT"
+          fi
+          # Version-cut PRs, main pushes, and workflow_dispatch. Ordinary PRs stay false.
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$CUT" = "true" ] || { [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ]; }; then
+            echo "queue_e2e=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "queue_e2e=false" >> "$GITHUB_OUTPUT"
           fi
   test:
     name: Pkg.test (1.13, ubuntu-latest, x64)
@@ -615,4 +623,41 @@ jobs:
       - name: Teardown workers
         if: ${{ always() }}
         run: ./testenv/docker-ssh/scripts/down.sh || true
+
+  # Queue host loads this checkout (DISTSSHQUEUE_DEV_RUN). Workers stay on
+  # General DistSSHRun inside the published Queue image. No buildx.
+  queue-ssh-e2e:
+    name: Downstream SSH E2E (DistSSHQueue, 1.13)
+    needs: detect
+    if: needs.detect.outputs.queue_e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yamanori99/DistSSHQueue.jl
+          ref: main
+          path: downstream
+          persist-credentials: false
+      - name: docker-ssh up + SSH E2E
+        working-directory: downstream
+        env:
+          DISTSSHQUEUE_DEV_RUN: ${{ github.workspace }}
+          DISTSSHQUEUE_WORKER_IMAGE: ghcr.io/yamanori99/distsshqueue-linux-ssh-worker:latest
+          DISTSSHQUEUE_WORKER_PULL_RETRIES: "8"
+        run: ./testenv/docker-ssh/scripts/up.sh --e2e
+      - name: Teardown workers
+        if: always()
+        run: |
+          if [[ -d downstream ]]; then
+            (cd downstream && ./testenv/docker-ssh/scripts/down.sh) || true
+          fi
 

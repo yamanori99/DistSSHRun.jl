@@ -230,7 +230,10 @@ In short: a breaking change raises `x` in `0.x.y`, anything else raises
 `y`. Label a breaking pull request `breaking`. Register on the merge
 commit with the NEWS section as the release notes. Do not lower
 `version`. A version held by `cut-hold` is registered after the hold
-lifts. Do not publish a later number in its place.
+lifts. Do not publish a later number in its place. If `Downstream SSH E2E
+(DistSSHQueue, 1.13)` is red on a version-cut pull request, do not register
+until the cause is known, and open a DistSSHQueue issue when the cause is
+DistSSHQueue.
 
 ### When to cut
 
