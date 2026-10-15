@@ -214,7 +214,51 @@ using Test
     @testset "outside a work tree the caller keeps the filter" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
-            @test DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp)) === nothing
+            env = DistSSHRun.resolve_pkg_env(tmp)
+            @test DistSSHRun._rsync_send_list(tmp, env) === nothing
+            @test DistSSHRun.rsync_send_list(tmp, env) === nothing
+        end
+    end
+
+    @testset "ancestor gitignore warns; info/exclude keeps the directory" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "dropped.txt\n")
+            sub = joinpath(tmp, "sub")
+            mkpath(sub)
+            write(joinpath(sub, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(sub, "dropped.txt"), "nope\n")
+            write(joinpath(sub, "keep.txt"), "yes\n")
+            mkpath(joinpath(tmp, ".git", "info"))
+            write(joinpath(tmp, ".git", "info", "exclude"), "hideme/\n")
+            mkpath(joinpath(sub, "hideme"))
+            write(joinpath(sub, "hideme", "a.txt"), "a\n")
+            excludes = joinpath(tmp, "global-excludes")
+            write(excludes, "globaldir/\n")
+            mkpath(joinpath(sub, "globaldir"))
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            run(pipeline(`git -C $tmp config core.excludesFile $excludes`; stdout = devnull, stderr = devnull))
+            _commit!(tmp, "init")
+            env = DistSSHRun.resolve_pkg_env(sub)
+            text = mktemp() do path, io
+                redirect_stdout(io) do
+                    listed = DistSSHRun.rsync_send_list(sub, env)
+                    @test listed isa Vector
+                    @test !("dropped.txt" in listed)
+                    @test "keep.txt" in listed
+                    @test "hideme" in listed
+                    @test "hideme/a.txt" in listed
+                    @test "globaldir" in listed
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
+            end
+            @test count("Warning:", text) == 1
+            @test occursin("1 untracked file left out", text)
+            @test occursin("dropped.txt (.gitignore:1)", text)
+            @test !occursin("info/exclude", text)
+            @test !occursin("global-excludes", text)
         end
     end
 

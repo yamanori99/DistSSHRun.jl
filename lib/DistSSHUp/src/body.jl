@@ -10,3 +10,6 @@ include("status.jl")
 include("remote.jl")
 include("local.jl")
 include("hosts.jl")
+
+public juliaup_add_host!, juliaup_default_host!, juliaup_default_patch
+public juliaup_status_lines, juliaup_update_host!

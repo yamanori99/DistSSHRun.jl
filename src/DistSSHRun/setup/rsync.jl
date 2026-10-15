@@ -96,16 +96,44 @@ function _reject_newline_send_path(rel::AbstractString)
     )
 end
 
-"""
-Paths in `rels` that `git check-ignore` treats as ignored (one process, `--stdin -z`).
+"""`git check-ignore -v -z` records: source, line, pathname."""
+function _parse_check_ignore_verbose(
+        raw::AbstractString,
+    )::Vector{@NamedTuple{source::String, line::String, path::String}}
+    parts = split(String(raw), '\0'; keepempty = true)
+    if !isempty(parts) && isempty(last(parts))
+        pop!(parts)
+    end
+    recs = @NamedTuple{source::String, line::String, path::String}[]
+    i = 1
+    n = length(parts)
+    while i + 3 <= n
+        path = replace(String(parts[i + 3]), '\\' => '/')
+        push!(recs, (source = String(parts[i]), line = String(parts[i + 1]), path = path))
+        i += 4
+    end
+    return recs
+end
 
-Paths are checked without a trailing slash so `output/*` does not ignore `output`
-while `build/` still ignores `build`.
+function _info_exclude_source(source::AbstractString)::Bool
+    s = replace(String(source), '\\' => '/')
+    return s == ".git/info/exclude" || endswith(s, "/.git/info/exclude")
+end
+
 """
-function _git_check_ignore_set(dir::AbstractString, rels::Vector{String})::Set{String}
-    ignored = Set{String}()
-    isempty(rels) && return ignored
-    mktemp() do path, io
+`check-ignore -v --stdin -z` for `rels`, with `core.excludesFile` cleared.
+
+Paths are checked without a trailing slash so `output/*` does not ignore
+`output` while `build/` still ignores `build`. Exit 1 and empty stderr means
+no match. `-n` also prints paths that matched nothing (empty source).
+"""
+function _git_check_ignore_records(
+        dir::AbstractString,
+        rels::Vector{String};
+        nonmatching::Bool = false,
+    )::Vector{@NamedTuple{source::String, line::String, path::String}}
+    isempty(rels) && return @NamedTuple{source::String, line::String, path::String}[]
+    return mktemp() do path, io
         for rel in rels
             r = replace(String(rel), '\\' => '/')
             endswith(r, "/") && (r = r[1:(end - 1)])
@@ -116,10 +144,13 @@ function _git_check_ignore_set(dir::AbstractString, rels::Vector{String})::Set{S
         close(io)
         out_buf = IOBuffer()
         err_buf = IOBuffer()
+        args = String["-C", String(dir), "-c", "core.excludesFile=", "check-ignore", "-v"]
+        nonmatching && push!(args, "-n")
+        push!(args, "--stdin", "-z")
         try
             run(
                 pipeline(
-                    _git_cmd(["-C", String(dir), "check-ignore", "--stdin", "-z"]);
+                    _git_cmd(args);
                     stdin = path,
                     stdout = out_buf,
                     stderr = err_buf,
@@ -127,15 +158,90 @@ function _git_check_ignore_set(dir::AbstractString, rels::Vector{String})::Set{S
             )
         catch e
             _rethrow_missing_host_tool(e)
-            # Exit 1 with empty stderr: nothing ignored.
             detail = strip(String(take!(err_buf)))
             isempty(detail) || error("git check-ignore failed in $dir:\n$detail")
         end
-        for part in split(String(take!(out_buf)), '\0'; keepempty = false)
-            push!(ignored, replace(String(part), '\\' => '/'))
-        end
+        return _parse_check_ignore_verbose(String(take!(out_buf)))
+    end
+end
+
+"""
+Paths in `rels` that a `.gitignore` ignores.
+
+`core.excludesFile` is cleared. A match from `.git/info/exclude` is kept in
+the send list, matching `ls-files --exclude-per-directory=.gitignore`.
+"""
+function _git_check_ignore_set(dir::AbstractString, rels::Vector{String})::Set{String}
+    ignored = Set{String}()
+    for rec in _git_check_ignore_records(dir, rels)
+        _info_exclude_source(rec.source) && continue
+        isempty(rec.source) && continue
+        isempty(rec.path) && continue
+        push!(ignored, rec.path)
     end
     return ignored
+end
+
+"""True when `source` is a `.gitignore` in a parent of `send_dir`."""
+function _gitignore_source_above(
+        work_tree::AbstractString,
+        send_dir::AbstractString,
+        source::AbstractString,
+    )::Bool
+    src = replace(String(source), '\\' => '/')
+    (src == ".gitignore" || endswith(src, "/.gitignore")) || return false
+    parent = dirname(src)
+    ignore_dir = parent == "." ? String(work_tree) : joinpath(work_tree, parent)
+    _path_under_resolved(send_dir, ignore_dir) || return false
+    send = canonical_local_path(send_dir)
+    ignore = canonical_local_path(ignore_dir)
+    send == ignore && return false
+    (ispath(send) && ispath(ignore)) || return true
+    return canonical_local_path(realpath(send)) != canonical_local_path(realpath(ignore))
+end
+
+"""
+One warning when untracked files are missing because a `.gitignore` above
+`send_dir` excluded them. The send list itself is unchanged.
+"""
+function _warn_ancestor_gitignore!(send_dir::AbstractString, listed::Vector{String})
+    top = git_work_tree(send_dir)
+    top isa String || return nothing
+    present = Set{String}(replace(String(rel), '\\' => '/') for rel in listed)
+    rels = String[]
+    for rel in _git_ls_files_z(
+            send_dir,
+            ["--others", "--ignored", "--exclude-per-directory=.gitignore"],
+        )
+        r = replace(String(rel), '\\' => '/')
+        endswith(r, "/") && continue
+        r in present && continue
+        full = joinpath(send_dir, r)
+        (isfile(full) || islink(full)) || continue
+        push!(rels, r)
+    end
+    isempty(rels) && return nothing
+    hits = Tuple{String, String, String}[]
+    for rec in _git_check_ignore_records(send_dir, rels; nonmatching = true)
+        isempty(rec.source) && continue
+        _info_exclude_source(rec.source) && continue
+        _gitignore_source_above(top, send_dir, rec.source) || continue
+        push!(hits, (rec.path, rec.source, rec.line))
+    end
+    isempty(hits) && return nothing
+    n = length(hits)
+    show_n = min(3, n)
+    buf = IOBuffer()
+    noun = n == 1 ? "file" : "files"
+    println(buf, "Warning: $n untracked $noun left out by a .gitignore above this directory.")
+    for i in 1:show_n
+        path, source, line = hits[i]
+        println(buf, "  $path ($source:$line)")
+    end
+    extra = n - show_n
+    extra > 0 && println(buf, "  and $extra more.")
+    print_warn(String(take!(buf)))
+    return nothing
 end
 
 function _push_send_rel!(out::Vector{String}, prefix::AbstractString, rel::AbstractString)
@@ -228,7 +334,9 @@ Append the git send list for `dir` (paths relative to `dir`, then prefixed).
 `.gitignore` only (not `.git/info/exclude` or `core.excludesFile`). A trailing
 slash or a gitlink (mode 160000) is expanded in that directory. Directories that
 are not themselves ignored are listed so `--files-from` still creates them when
-empty (`output/*` keeps `output/`; `build/` does not).
+empty (`output/*` keeps `output/`; `build/` does not). Directory checks use the
+same two exclusions: `core.excludesFile` is cleared, and `.git/info/exclude`
+does not drop a directory.
 """
 function _git_worktree_file_list!(
         out::Vector{String},
@@ -318,9 +426,27 @@ function _rsync_send_list(local_root::AbstractString, env)::Union{Nothing, Vecto
         end
     end
     unique!(filtered)
+    _warn_ancestor_gitignore!(root, filtered)
     isempty(filtered) && throw(ArgumentError("nothing to send from $root"))
     return filtered
 end
+
+"""
+    rsync_send_list(local_root, env) -> Union{Nothing, Vector{String}}
+
+Same paths `setup --rsync` sends for a git work tree, relative to `local_root`.
+
+Returns `nothing` outside a git work tree. The caller then uses rsync's
+per-directory `.gitignore` filter (dir-merge). An empty list throws
+`ArgumentError`.
+
+A 0.x patch does not change this contract.
+"""
+function rsync_send_list(local_root::AbstractString, env)
+    return _rsync_send_list(local_root, env)
+end
+
+public rsync_send_list
 
 
 """Remote shell snippet classifying `remote_path` as MISSING / EMPTY / NONEMPTY."""

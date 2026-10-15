@@ -2,8 +2,8 @@
 Host naming, SSH, paths, and help chrome shared by the DistSSH packages.
 
 Internal to the DistSSH family. Not registered. DistSSHRun includes this
-source as `DistSSHRun.DistSSHBase`. No compatibility promise beyond the names
-DistSSHRun exports.
+source as `DistSSHRun.DistSSHBase`. Names marked `public` are a contract
+inside the DistSSH family. A 0.x patch does not change them.
 """
 module DistSSHBase
 
@@ -25,5 +25,12 @@ include("help.jl")
 include("ssh.jl")
 include("julia_where.jl")
 include("namespace.jl")
+
+# Queue and Kit import these. Underscore names stay private.
+public PARENT_HOST_NAME
+public cli_entry, cli_heading, cli_m, cli_m_project, cli_qhost, cli_qhost_heading
+public format_placement_token, get_remote_julia_version, julia_project_rel
+public parse_placement_token, remote_env_project_root, resolve_remote_julia
+public resolve_remote_project_root, with_cli_entry
 
 end # module DistSSHBase
