@@ -329,7 +329,7 @@ using Test
             env = DistSSHRun.resolve_pkg_env(sub)
             text = mktemp() do _, io
                 redirect_stdout(io) do
-                    listed = DistSSHRun.rsync_send_list(sub, env)
+                    listed = DistSSHRun.rsync_send_list(sub, env; warn = true)
                     @test listed isa Vector
                     @test !("dropped.txt" in listed)
                     @test "keep.txt" in listed
@@ -365,7 +365,7 @@ using Test
         end
     end
 
-    @testset "an ancestor negation does not warn" begin
+    @testset "an ancestor negation stays out of the warning" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, ".gitignore"), "*.txt\n")
             sub = joinpath(tmp, "sub")
@@ -379,7 +379,7 @@ using Test
             env = DistSSHRun.resolve_pkg_env(sub)
             text = mktemp() do _, io
                 redirect_stdout(io) do
-                    listed = DistSSHRun.rsync_send_list(sub, env)
+                    listed = DistSSHRun.rsync_send_list(sub, env; warn = true)
                     @test "kept.txt" in listed
                     @test !("dropped.txt" in listed)
                 end
@@ -415,7 +415,7 @@ using Test
             env = DistSSHRun.resolve_pkg_env(sub)
             text = mktemp() do _, io
                 redirect_stdout(io) do
-                    listed = DistSSHRun.rsync_send_list(sub, env)
+                    listed = DistSSHRun.rsync_send_list(sub, env; warn = true)
                     @test "tracked.txt" in listed
                     @test !("local.txt" in listed)
                 end
@@ -442,7 +442,7 @@ using Test
             env = DistSSHRun.resolve_pkg_env(sub)
             text = mktemp() do _, io
                 redirect_stdout(io) do
-                    listed = DistSSHRun.rsync_send_list(sub, env)
+                    listed = DistSSHRun.rsync_send_list(sub, env; warn = true)
                     for name in ("a.tmp", "b.tmp", "c.tmp", "d.tmp", "e.tmp")
                         @test !(name in listed)
                     end
@@ -460,6 +460,144 @@ using Test
             @test !occursin("e.tmp", text)
             @test occursin("and 2 more.", text)
         end
+    end
+
+    @testset "check-ignore records are complete" begin
+        @test_throws ErrorException DistSSHRun._parse_check_ignore_verbose("only\0two")
+        recs = DistSSHRun._parse_check_ignore_verbose("\0\0\0keep.txt\0")
+        @test length(recs) == 1
+        @test recs[1].path == "keep.txt"
+        @test isempty(recs[1].source)
+        @test isempty(recs[1].pattern)
+    end
+
+    @testset "a locally ignored directory is not expanded" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "data/\n")
+            sub = joinpath(tmp, "sub")
+            mkpath(joinpath(sub, "data"))
+            write(joinpath(sub, "data", "x.csv"), "x\n")
+            write(joinpath(sub, "data", "y.csv"), "y\n")
+            write(joinpath(sub, ".gitignore"), "output/\n")
+            mkpath(joinpath(sub, "output"))
+            for name in ("a.txt", "b.txt", "c.txt")
+                write(joinpath(sub, "output", name), "z\n")
+            end
+            write(joinpath(sub, "Project.toml"), "name = \"App\"\n")
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            env = DistSSHRun.resolve_pkg_env(sub)
+            probes = DistSSHRun._ancestor_gitignore_probes(sub)
+            @test "data" in probes
+            @test "output" in probes
+            @test !any(startswith(p, "data/") for p in probes)
+            @test !any(startswith(p, "output/") for p in probes)
+            quiet = mktemp() do _, io
+                redirect_stdout(io) do
+                    DistSSHRun.rsync_send_list(sub, env)
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
+            end
+            @test !occursin("Warning:", quiet)
+            text = mktemp() do _, io
+                redirect_stdout(io) do
+                    DistSSHRun.rsync_send_list(sub, env; warn = true)
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
+            end
+            @test count("Warning:", text) == 1
+            @test occursin("2 untracked files left out", text)
+            @test occursin("data/x.csv (.gitignore:1)", text)
+            @test occursin("data/y.csv (.gitignore:1)", text)
+            @test !occursin("output/", text)
+        end
+    end
+
+    @testset "a symlinked send root still warns" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "dropped.txt\n")
+            sub = joinpath(tmp, "sub")
+            mkpath(sub)
+            write(joinpath(sub, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(sub, "dropped.txt"), "nope\n")
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            link = joinpath(tmp, "link")
+            symlink(sub, link)
+            env = DistSSHRun.resolve_pkg_env(link)
+            text = mktemp() do _, io
+                redirect_stdout(io) do
+                    listed = DistSSHRun.rsync_send_list(link, env; warn = true)
+                    @test !("dropped.txt" in listed)
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
+            end
+            @test occursin("dropped.txt (.gitignore:1)", text)
+            rootlink = joinpath(tmp, "rootlink")
+            symlink(tmp, rootlink)
+            @test isempty(DistSSHRun._ancestor_gitignore_probes(rootlink))
+        end
+    end
+
+    @testset "ancestor warnings name each source" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "a file.txt\nメモ.txt\n")
+            mid = joinpath(tmp, "mid")
+            mkpath(mid)
+            write(joinpath(mid, ".gitignore"), "b.txt\n")
+            sub = joinpath(mid, "sub")
+            mkpath(sub)
+            write(joinpath(sub, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(sub, "a file.txt"), "a\n")
+            write(joinpath(sub, "メモ.txt"), "m\n")
+            write(joinpath(sub, "b.txt"), "b\n")
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            env = DistSSHRun.resolve_pkg_env(sub)
+            text = mktemp() do _, io
+                redirect_stdout(io) do
+                    DistSSHRun.rsync_send_list(sub, env; warn = true)
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
+            end
+            @test count("Warning:", text) == 1
+            @test occursin("3 untracked files left out", text)
+            @test occursin("a file.txt (.gitignore:1)", text)
+            @test occursin("メモ.txt (.gitignore:2)", text)
+            @test occursin("b.txt (mid/.gitignore:1)", text)
+        end
+    end
+
+    @testset "family public names stay public" begin
+        base = DistSSHRun.DistSSHBase
+        got = Set(n for n in names(base; all = true) if Base.ispublic(base, n))
+        @test got ⊇ Set(
+            [
+                :PARENT_HOST_NAME,
+                :cli_entry, :cli_heading, :cli_m, :cli_m_project, :cli_qhost, :cli_qhost_heading,
+                :format_placement_token, :get_remote_julia_version, :julia_project_rel,
+                :parse_placement_token, :remote_env_project_root, :resolve_remote_julia,
+                :resolve_remote_project_root, :with_cli_entry,
+            ]
+        )
+        up = DistSSHRun.DistSSHUp
+        up_got = Set(n for n in names(up; all = true) if Base.ispublic(up, n))
+        @test up_got ⊇ Set(
+            [
+                :juliaup_add_host!, :juliaup_default_host!, :juliaup_default_patch,
+                :juliaup_status_lines, :juliaup_update_host!,
+            ]
+        )
+        @test Base.ispublic(DistSSHRun, :rsync_send_list)
+        @test !Base.isexported(DistSSHRun, :rsync_send_list)
     end
 
     @testset "a newline in a path is an error" begin

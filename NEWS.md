@@ -10,6 +10,7 @@ Those notes are often shorter than the section below.
 - `setup --rsync` warns once when untracked files are left out by a `.gitignore` above the send root. The warning names the count, a few paths, and that file's path and line. Those files stay out of the send list. `.git/info/exclude` and `core.excludesFile` are not part of this warning.
 - Directories in the send list ignore `.git/info/exclude` and `core.excludesFile`, the same rule as the file list. A negated pattern (`!dir/`) keeps the directory.
 - A failed `git check-ignore` stops the send list, including when its stderr is empty. Exit 1 with empty stderr still means nothing matched.
+- `rsync_send_list` returns the send list and does not warn. `setup --rsync` still warns once. A send root that is the git work tree does not scan ignored files for that warning.
 
 ### Planned breaking (next minor)
 

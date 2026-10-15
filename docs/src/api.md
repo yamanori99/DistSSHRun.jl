@@ -129,21 +129,18 @@ Filter = function (x)
         :collect!, :CollectResult,
         :setup!, :sync!, :instantiate!,
         :KitSession, :HostResult, :SyncResult,
-        # Family contract (`public`), not the user manual.
-        :rsync_send_list,
-        :PARENT_HOST_NAME,
-        :cli_entry, :cli_heading, :cli_m, :cli_m_project, :cli_qhost, :cli_qhost_heading,
-        :format_placement_token, :get_remote_julia_version, :julia_project_rel,
-        :parse_placement_token, :remote_env_project_root, :resolve_remote_julia,
-        :resolve_remote_project_root, :with_cli_entry,
-        :juliaup_add_host!, :juliaup_default_host!, :juliaup_default_patch,
-        :juliaup_status_lines, :juliaup_update_host!,
     )
     n = try
         nameof(x)
     catch
         return true
     end
-    return !(n in grouped)
+    # Family contract (`public`), not the user manual. Exported names stay.
+    family_only = try
+        Base.ispublic(parentmodule(x), n) && !Base.isexported(parentmodule(x), n)
+    catch
+        false
+    end
+    return !(n in grouped) && !family_only
 end
 ```

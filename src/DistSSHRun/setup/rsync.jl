@@ -116,6 +116,7 @@ function _parse_check_ignore_verbose(
         )
         i += 4
     end
+    i <= n && error("git check-ignore returned a truncated record")
     return recs
 end
 
@@ -219,13 +220,46 @@ function _gitignore_source_above(
     src = replace(String(source), '\\' => '/')
     (src == ".gitignore" || endswith(src, "/.gitignore")) || return false
     parent = dirname(src)
-    ignore_dir = parent == "." ? String(work_tree) : joinpath(work_tree, parent)
+    # `dirname(".gitignore")` is `""`, not `"."`.
+    ignore_dir = isempty(parent) || parent == "." ? String(work_tree) : joinpath(work_tree, parent)
     _path_under_resolved(send_dir, ignore_dir) || return false
     send = canonical_local_path(send_dir)
     ignore = canonical_local_path(ignore_dir)
     send == ignore && return false
     (ispath(send) && ispath(ignore)) || return true
     return canonical_local_path(realpath(send)) != canonical_local_path(realpath(ignore))
+end
+
+"""True when `a` and `b` are the same directory, including via a symlink."""
+function _same_resolved_dir(a::AbstractString, b::AbstractString)::Bool
+    left = canonical_local_path(a)
+    right = canonical_local_path(b)
+    left == right && return true
+    (ispath(left) && ispath(right)) || return false
+    return canonical_local_path(realpath(left)) == canonical_local_path(realpath(right))
+end
+
+"""
+Paths passed to the first `check-ignore` for the ancestor warning.
+
+A locally ignored directory is one path (`output/`), not each file inside it.
+The send root being the work tree returns an empty list: no parent `.gitignore` exists.
+"""
+function _ancestor_gitignore_probes(send_dir::AbstractString)::Vector{String}
+    top = git_work_tree(send_dir)
+    top isa String || return String[]
+    _same_resolved_dir(top, send_dir) && return String[]
+    probes = String[]
+    for rel in _git_ls_files_z(
+            send_dir,
+            ["--others", "--ignored", "--directory", "--exclude-per-directory=.gitignore"],
+        )
+        r = replace(String(rel), '\\' => '/')
+        endswith(r, "/") && (r = r[1:(end - 1)])
+        isempty(r) && continue
+        push!(probes, r)
+    end
+    return probes
 end
 
 """
@@ -235,27 +269,41 @@ One warning when untracked files are missing because a `.gitignore` above
 function _warn_ancestor_gitignore!(send_dir::AbstractString, listed::Vector{String})
     top = git_work_tree(send_dir)
     top isa String || return nothing
+    _same_resolved_dir(top, send_dir) && return nothing
     present = Set{String}(replace(String(rel), '\\' => '/') for rel in listed)
-    rels = String[]
-    for rel in _git_ls_files_z(
-            send_dir,
-            ["--others", "--ignored", "--exclude-per-directory=.gitignore"],
-        )
-        r = replace(String(rel), '\\' => '/')
-        endswith(r, "/") && continue
-        r in present && continue
-        full = joinpath(send_dir, r)
-        (isfile(full) || islink(full)) || continue
-        push!(rels, r)
-    end
-    isempty(rels) && return nothing
+    probes = _ancestor_gitignore_probes(send_dir)
+    isempty(probes) && return nothing
     hits = Tuple{String, String, String}[]
-    for rec in _git_check_ignore_records(send_dir, rels; nonmatching = true)
+    expand = Tuple{String, String, String}[]
+    seen_dir = Set{String}()
+    for rec in _git_check_ignore_records(send_dir, probes; nonmatching = true)
         isempty(rec.source) && continue
         _info_exclude_source(rec.source) && continue
         startswith(rec.pattern, "!") && continue
         _gitignore_source_above(top, send_dir, rec.source) || continue
-        push!(hits, (rec.path, rec.source, rec.line))
+        full = joinpath(send_dir, rec.path)
+        if isdir(full) && !islink(full)
+            rec.path in seen_dir && continue
+            push!(seen_dir, rec.path)
+            push!(expand, (rec.path, rec.source, rec.line))
+        else
+            rec.path in present && continue
+            (isfile(full) || islink(full)) || continue
+            push!(hits, (rec.path, rec.source, rec.line))
+        end
+    end
+    for (dir, source, line) in expand
+        for rel in _git_ls_files_z(
+                send_dir,
+                ["--others", "--ignored", "--exclude-per-directory=.gitignore", "--", dir],
+            )
+            r = replace(String(rel), '\\' => '/')
+            endswith(r, "/") && continue
+            r in present && continue
+            full = joinpath(send_dir, r)
+            (isfile(full) || islink(full)) || continue
+            push!(hits, (r, source, line))
+        end
     end
     isempty(hits) && return nothing
     n = length(hits)
@@ -432,7 +480,11 @@ Files to rsync, relative to `local_root`.
 rsync's per-directory `.gitignore` filter (negation is not applied).
 An empty list throws `ArgumentError`.
 """
-function _rsync_send_list(local_root::AbstractString, env)::Union{Nothing, Vector{String}}
+function _rsync_send_list(
+        local_root::AbstractString,
+        env;
+        warn::Bool = false,
+    )::Union{Nothing, Vector{String}}
     root = canonical_local_path(local_root)
     git_work_tree(root) === nothing && return nothing
     sources = _rsync_path_source_dirs(env, root)
@@ -456,24 +508,25 @@ function _rsync_send_list(local_root::AbstractString, env)::Union{Nothing, Vecto
         end
     end
     unique!(filtered)
-    _warn_ancestor_gitignore!(root, filtered)
+    warn && _warn_ancestor_gitignore!(root, filtered)
     isempty(filtered) && throw(ArgumentError("nothing to send from $root"))
     return filtered
 end
 
 """
-    rsync_send_list(local_root, env) -> Union{Nothing, Vector{String}}
+    rsync_send_list(local_root, env; warn=false) -> Union{Nothing, Vector{String}}
 
 Same paths `setup --rsync` sends for a git work tree, relative to `local_root`.
 
 Returns `nothing` outside a git work tree. The caller then uses rsync's
 per-directory `.gitignore` filter (dir-merge). An empty list throws
-`ArgumentError`.
+`ArgumentError`. `warn=true` prints the ancestor-`.gitignore` warning once.
+The default does not print it, so a second call does not repeat the warning.
 
-A 0.x patch does not change this contract.
+A 0.x patch does not change the paths this function returns.
 """
-function rsync_send_list(local_root::AbstractString, env)
-    return _rsync_send_list(local_root, env)
+function rsync_send_list(local_root::AbstractString, env; warn::Bool = false)
+    return _rsync_send_list(local_root, env; warn = warn)
 end
 
 public rsync_send_list
@@ -682,7 +735,7 @@ function rsync_project_to_hosts!(
     given = canonical_local_path(local_root)
     env0 = resolve_pkg_env(given)
     # Workspace members resolve `env_dir` to the parent root; list paths relative to that.
-    send_list = _rsync_send_list(env0.env_dir, env0)
+    send_list = _rsync_send_list(env0.env_dir, env0; warn = true)
     shipped = ensure_manifest_ships!(given; send_list = send_list)
     local_root = shipped.env_dir
     raw_anchor = canonical_local_path(path_anchor)
