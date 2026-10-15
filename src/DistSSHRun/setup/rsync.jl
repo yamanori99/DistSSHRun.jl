@@ -124,12 +124,26 @@ function _info_exclude_source(source::AbstractString)::Bool
     return s == ".git/info/exclude" || endswith(s, "/.git/info/exclude")
 end
 
+"""True when every failed process in `e` exited 1 (`check-ignore`: no match)."""
+function _check_ignore_no_match(e)::Bool
+    e isa ProcessFailedException || return false
+    saw_one = false
+    for proc in e.procs
+        code = proc.exitcode
+        code == 0 && continue
+        code == 1 || return false
+        saw_one = true
+    end
+    return saw_one
+end
+
 """
 `check-ignore -v --stdin -z` for `rels`, with `core.excludesFile` cleared.
 
 Paths are checked without a trailing slash so `output/*` does not ignore
 `output` while `build/` still ignores `build`. Exit 1 and empty stderr means
-no match. `-n` also prints paths that matched nothing (empty source).
+no match. Any other failure is an error, even when stderr is empty. `-n`
+also prints paths that matched nothing (empty source).
 """
 function _git_check_ignore_records(
         dir::AbstractString,
@@ -163,7 +177,14 @@ function _git_check_ignore_records(
         catch e
             _rethrow_missing_host_tool(e)
             detail = strip(String(take!(err_buf)))
-            isempty(detail) || error("git check-ignore failed in $dir:\n$detail")
+            # Exit 1 is check-ignore's "nothing matched", not a failed command.
+            no_match = _check_ignore_no_match(e) && isempty(detail)
+            if !no_match
+                msg = isempty(detail) ?
+                    "git check-ignore failed in $dir" :
+                    "git check-ignore failed in $dir:\n$detail"
+                error(msg)
+            end
         end
         return _parse_check_ignore_verbose(String(take!(out_buf)))
     end

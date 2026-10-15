@@ -132,6 +132,35 @@ using Test
         end
     end
 
+    @testset "check-ignore exit 1 is no match" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "keep.txt"), "yes\n")
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            @test isempty(DistSSHRun._git_check_ignore_records(tmp, ["keep.txt"]))
+        end
+    end
+
+    @testset "check-ignore failure with empty stderr is an error" begin
+        _with_tempdir() do tmp
+            bindir = joinpath(tmp, "bin")
+            mkpath(bindir)
+            git = joinpath(bindir, "git")
+            write(git, "#!/bin/sh\nexit 2\n")
+            chmod(git, 0o755)
+            err = withenv("PATH" => bindir * ":" * get(ENV, "PATH", "")) do
+                try
+                    DistSSHRun._git_check_ignore_records(tmp, ["a.txt"])
+                    nothing
+                catch e
+                    e
+                end
+            end
+            @test err isa ErrorException
+            @test err.msg == "git check-ignore failed in $tmp"
+        end
+    end
+
     @testset "directory symlink is listed" begin
         _with_tempdir() do tmp
             # Path source that is not its own repo: walk must keep the symlink.
