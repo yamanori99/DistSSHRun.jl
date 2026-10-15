@@ -844,7 +844,9 @@ end
 
             ready = false
             t0 = time()
-            while (time() - t0) < 90
+            # Intel weekly (2026-10-15) still logged "Loading packages on workers"
+            # at 90s, with `--worker` pids already present. Monitors start after that load.
+            while (time() - t0) < 240
                 # Prefix is logged before `@everywhere`; the ✓ is after monitors start.
                 if occursin("Starting heartbeat monitors... ✓", _hb_log_text())
                     ready = true
