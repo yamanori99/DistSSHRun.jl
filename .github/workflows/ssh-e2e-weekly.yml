@@ -90,8 +90,9 @@ jobs:
   macos-e2e:
     needs: linux-image
     runs-on: macos-15-intel
-    # 2026-10-14 hit 60 min during [27/28]. The previous green run was 49 min.
-    timeout-minutes: 90
+    # 2026-10-15 finished the suite in 88 min and failed the heartbeat wait.
+    # A 240s wait needs room past that.
+    timeout-minutes: 120
     name: macos-15-intel → ubuntu-24.04
     permissions:
       contents: read
