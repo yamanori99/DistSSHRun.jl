@@ -135,6 +135,12 @@ Filter = function (x)
     catch
         return true
     end
-    return !(n in grouped)
+    # Family contract (`public`), not the user manual. Exported names stay.
+    family_only = try
+        Base.ispublic(parentmodule(x), n) && !Base.isexported(parentmodule(x), n)
+    catch
+        false
+    end
+    return !(n in grouped) && !family_only
 end
 ```

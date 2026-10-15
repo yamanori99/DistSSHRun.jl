@@ -65,12 +65,99 @@ using Test
         end
     end
 
+    @testset "a negated pattern keeps an empty directory" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(tmp, ".gitignore"), "*/\n!keep/\n")
+            mkpath(joinpath(tmp, "keep"))
+            mkpath(joinpath(tmp, "build"))
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+            @test "keep" in listed
+            @test !("build" in listed)
+        end
+    end
+
+    @testset "a re-included directory keeps its file" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(tmp, ".gitignore"), "*/\n!keep/\n")
+            mkpath(joinpath(tmp, "keep"))
+            write(joinpath(tmp, "keep", "a.txt"), "x\n")
+            mkpath(joinpath(tmp, "build"))
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+            @test "keep" in listed
+            @test "keep/a.txt" in listed
+            @test !("build" in listed)
+        end
+    end
+
+    @testset "a later pattern ignores the directory again" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(tmp, ".gitignore"), "*/\n!keep/\nkeep/\n")
+            mkpath(joinpath(tmp, "keep"))
+            mkpath(joinpath(tmp, "build"))
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+            @test !("keep" in listed)
+            @test !("build" in listed)
+        end
+    end
+
+    @testset "an escaped bang still ignores the directory" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(tmp, ".gitignore"), "\\!keep/\n")
+            mkpath(joinpath(tmp, "!keep"))
+            mkpath(joinpath(tmp, "plain"))
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+            @test "plain" in listed
+            @test !("!keep" in listed)
+        end
+    end
+
     @testset "git ls-files failure is an error" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
             @test_throws ErrorException DistSSHRun._git_ls_files_z(
                 tmp, ["--cached", "--others", "--exclude-per-directory=.gitignore"],
             )
+        end
+    end
+
+    @testset "check-ignore exit 1 is no match" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "keep.txt"), "yes\n")
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            @test isempty(DistSSHRun._git_check_ignore_records(tmp, ["keep.txt"]))
+        end
+    end
+
+    @testset "check-ignore failure with empty stderr is an error" begin
+        _with_tempdir() do tmp
+            bindir = joinpath(tmp, "bin")
+            mkpath(bindir)
+            git = joinpath(bindir, "git")
+            write(git, "#!/bin/sh\nexit 2\n")
+            chmod(git, 0o755)
+            err = withenv("PATH" => bindir * ":" * get(ENV, "PATH", "")) do
+                try
+                    DistSSHRun._git_check_ignore_records(tmp, ["a.txt"])
+                    nothing
+                catch e
+                    e
+                end
+            end
+            @test err isa ErrorException
+            @test err.msg == "git check-ignore failed in $tmp"
         end
     end
 
@@ -214,8 +301,303 @@ using Test
     @testset "outside a work tree the caller keeps the filter" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
-            @test DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp)) === nothing
+            env = DistSSHRun.resolve_pkg_env(tmp)
+            @test DistSSHRun._rsync_send_list(tmp, env) === nothing
+            @test DistSSHRun.rsync_send_list(tmp, env) === nothing
         end
+    end
+
+    @testset "ancestor gitignore warns; info/exclude keeps the directory" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "dropped.txt\n")
+            sub = joinpath(tmp, "sub")
+            mkpath(sub)
+            write(joinpath(sub, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(sub, "dropped.txt"), "nope\n")
+            write(joinpath(sub, "keep.txt"), "yes\n")
+            mkpath(joinpath(tmp, ".git", "info"))
+            write(joinpath(tmp, ".git", "info", "exclude"), "hideme/\n")
+            mkpath(joinpath(sub, "hideme"))
+            write(joinpath(sub, "hideme", "a.txt"), "a\n")
+            excludes = joinpath(tmp, "global-excludes")
+            write(excludes, "globaldir/\n")
+            mkpath(joinpath(sub, "globaldir"))
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            run(pipeline(`git -C $tmp config core.excludesFile $excludes`; stdout = devnull, stderr = devnull))
+            _commit!(tmp, "init")
+            env = DistSSHRun.resolve_pkg_env(sub)
+            text = mktemp() do _, io
+                redirect_stdout(io) do
+                    listed = DistSSHRun.rsync_send_list(sub, env; warn = true)
+                    @test listed isa Vector
+                    @test !("dropped.txt" in listed)
+                    @test "keep.txt" in listed
+                    @test "hideme" in listed
+                    @test "hideme/a.txt" in listed
+                    @test "globaldir" in listed
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
+            end
+            @test count("Warning:", text) == 1
+            @test occursin("1 untracked file left out", text)
+            @test occursin("dropped.txt (.gitignore:1)", text)
+            @test !occursin("info/exclude", text)
+            @test !occursin("global-excludes", text)
+        end
+    end
+
+    @testset "an ancestor negation keeps the directory" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "*/\n!sub/\n!sub/keep/\n")
+            sub = joinpath(tmp, "sub")
+            mkpath(sub)
+            write(joinpath(sub, "Project.toml"), "name = \"App\"\n")
+            mkpath(joinpath(sub, "keep"))
+            mkpath(joinpath(sub, "build"))
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            listed = DistSSHRun._rsync_send_list(sub, DistSSHRun.resolve_pkg_env(sub))
+            @test "keep" in listed
+            @test !("build" in listed)
+        end
+    end
+
+    @testset "an ancestor negation stays out of the warning" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "*.txt\n")
+            sub = joinpath(tmp, "sub")
+            mkpath(sub)
+            write(joinpath(sub, ".gitignore"), "!kept.txt\n")
+            write(joinpath(sub, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(sub, "dropped.txt"), "nope\n")
+            write(joinpath(sub, "kept.txt"), "yes\n")
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            env = DistSSHRun.resolve_pkg_env(sub)
+            text = mktemp() do _, io
+                redirect_stdout(io) do
+                    listed = DistSSHRun.rsync_send_list(sub, env; warn = true)
+                    @test "kept.txt" in listed
+                    @test !("dropped.txt" in listed)
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
+            end
+            @test count("Warning:", text) == 1
+            @test occursin("dropped.txt (.gitignore:1)", text)
+            @test !occursin("kept.txt", text)
+        end
+    end
+
+    @testset "local ignores and tracked ancestor matches do not warn" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "tracked.txt\n")
+            sub = joinpath(tmp, "sub")
+            mkpath(sub)
+            write(joinpath(sub, ".gitignore"), "local.txt\n")
+            write(joinpath(sub, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(sub, "tracked.txt"), "tracked\n")
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            run(
+                pipeline(
+                    `git -C $tmp add -f .gitignore sub/.gitignore sub/Project.toml sub/tracked.txt`;
+                    stdout = devnull,
+                    stderr = devnull,
+                )
+            )
+            run(pipeline(`git -C $tmp commit -q -m init`; stdout = devnull, stderr = devnull))
+            write(joinpath(sub, "local.txt"), "local\n")
+            env = DistSSHRun.resolve_pkg_env(sub)
+            text = mktemp() do _, io
+                redirect_stdout(io) do
+                    listed = DistSSHRun.rsync_send_list(sub, env; warn = true)
+                    @test "tracked.txt" in listed
+                    @test !("local.txt" in listed)
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
+            end
+            @test !occursin("Warning:", text)
+        end
+    end
+
+    @testset "an ancestor warning shows three paths and the remainder" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "*.tmp\n")
+            sub = joinpath(tmp, "sub")
+            mkpath(sub)
+            write(joinpath(sub, "Project.toml"), "name = \"App\"\n")
+            for name in ("a.tmp", "b.tmp", "c.tmp", "d.tmp", "e.tmp")
+                write(joinpath(sub, name), "$name\n")
+            end
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            _commit!(tmp, "init")
+            env = DistSSHRun.resolve_pkg_env(sub)
+            text = mktemp() do _, io
+                redirect_stdout(io) do
+                    listed = DistSSHRun.rsync_send_list(sub, env; warn = true)
+                    for name in ("a.tmp", "b.tmp", "c.tmp", "d.tmp", "e.tmp")
+                        @test !(name in listed)
+                    end
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
+            end
+            @test count("Warning:", text) == 1
+            @test occursin("5 untracked files left out", text)
+            @test occursin("a.tmp (.gitignore:1)", text)
+            @test occursin("b.tmp (.gitignore:1)", text)
+            @test occursin("c.tmp (.gitignore:1)", text)
+            @test !occursin("d.tmp", text)
+            @test !occursin("e.tmp", text)
+            @test occursin("and 2 more.", text)
+        end
+    end
+
+    @testset "check-ignore records are complete" begin
+        @test_throws ErrorException DistSSHRun._parse_check_ignore_verbose("only\0two")
+        recs = DistSSHRun._parse_check_ignore_verbose("\0\0\0keep.txt\0")
+        @test length(recs) == 1
+        @test recs[1].path == "keep.txt"
+        @test isempty(recs[1].source)
+        @test isempty(recs[1].pattern)
+    end
+
+    @testset "a locally ignored directory is not expanded" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "data/\n")
+            sub = joinpath(tmp, "sub")
+            mkpath(joinpath(sub, "data"))
+            write(joinpath(sub, "data", "x.csv"), "x\n")
+            write(joinpath(sub, "data", "y.csv"), "y\n")
+            write(joinpath(sub, ".gitignore"), "output/\n")
+            mkpath(joinpath(sub, "output"))
+            for name in ("a.txt", "b.txt", "c.txt")
+                write(joinpath(sub, "output", name), "z\n")
+            end
+            write(joinpath(sub, "Project.toml"), "name = \"App\"\n")
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            env = DistSSHRun.resolve_pkg_env(sub)
+            probes = DistSSHRun._ancestor_gitignore_probes(sub)
+            @test "data" in probes
+            @test "output" in probes
+            @test !any(startswith(p, "data/") for p in probes)
+            @test !any(startswith(p, "output/") for p in probes)
+            quiet = mktemp() do _, io
+                redirect_stdout(io) do
+                    DistSSHRun.rsync_send_list(sub, env)
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
+            end
+            @test !occursin("Warning:", quiet)
+            text = mktemp() do _, io
+                redirect_stdout(io) do
+                    DistSSHRun.rsync_send_list(sub, env; warn = true)
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
+            end
+            @test count("Warning:", text) == 1
+            @test occursin("2 untracked files left out", text)
+            @test occursin("data/x.csv (.gitignore:1)", text)
+            @test occursin("data/y.csv (.gitignore:1)", text)
+            @test !occursin("output/", text)
+        end
+    end
+
+    @testset "a symlinked send root still warns" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "dropped.txt\n")
+            sub = joinpath(tmp, "sub")
+            mkpath(sub)
+            write(joinpath(sub, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(sub, "dropped.txt"), "nope\n")
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            link = joinpath(tmp, "link")
+            symlink(sub, link)
+            env = DistSSHRun.resolve_pkg_env(link)
+            text = mktemp() do _, io
+                redirect_stdout(io) do
+                    listed = DistSSHRun.rsync_send_list(link, env; warn = true)
+                    @test !("dropped.txt" in listed)
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
+            end
+            @test occursin("dropped.txt (.gitignore:1)", text)
+            rootlink = joinpath(tmp, "rootlink")
+            symlink(tmp, rootlink)
+            @test isempty(DistSSHRun._ancestor_gitignore_probes(rootlink))
+        end
+    end
+
+    @testset "ancestor warnings name each source" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "a file.txt\nメモ.txt\n")
+            mid = joinpath(tmp, "mid")
+            mkpath(mid)
+            write(joinpath(mid, ".gitignore"), "b.txt\n")
+            sub = joinpath(mid, "sub")
+            mkpath(sub)
+            write(joinpath(sub, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(sub, "a file.txt"), "a\n")
+            write(joinpath(sub, "メモ.txt"), "m\n")
+            write(joinpath(sub, "b.txt"), "b\n")
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            _ident!(tmp)
+            env = DistSSHRun.resolve_pkg_env(sub)
+            text = mktemp() do _, io
+                redirect_stdout(io) do
+                    DistSSHRun.rsync_send_list(sub, env; warn = true)
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
+            end
+            @test count("Warning:", text) == 1
+            @test occursin("3 untracked files left out", text)
+            @test occursin("a file.txt (.gitignore:1)", text)
+            @test occursin("メモ.txt (.gitignore:2)", text)
+            @test occursin("b.txt (mid/.gitignore:1)", text)
+        end
+    end
+
+    @testset "family public names stay public" begin
+        base = DistSSHRun.DistSSHBase
+        got = Set(n for n in names(base; all = true) if Base.ispublic(base, n))
+        @test got ⊇ Set(
+            [
+                :PARENT_HOST_NAME,
+                :cli_entry, :cli_heading, :cli_m, :cli_m_project, :cli_qhost, :cli_qhost_heading,
+                :format_placement_token, :get_remote_julia_version, :julia_project_rel,
+                :parse_placement_token, :remote_env_project_root, :resolve_remote_julia,
+                :resolve_remote_project_root, :with_cli_entry,
+            ]
+        )
+        up = DistSSHRun.DistSSHUp
+        up_got = Set(n for n in names(up; all = true) if Base.ispublic(up, n))
+        @test up_got ⊇ Set(
+            [
+                :juliaup_add_host!, :juliaup_default_host!, :juliaup_default_patch,
+                :juliaup_status_lines, :juliaup_update_host!,
+            ]
+        )
+        @test Base.ispublic(DistSSHRun, :rsync_send_list)
+        @test !Base.isexported(DistSSHRun, :rsync_send_list)
     end
 
     @testset "a newline in a path is an error" begin
