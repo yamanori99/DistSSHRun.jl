@@ -209,6 +209,8 @@ end
                 @test !ok
                 @test length(hrs) == 1
                 @test !hrs[1].ok
+                @test hrs[1].error isa String
+                @test occursin("find: failed", something(hrs[1].error, ""))
             end
         end
     end
@@ -305,5 +307,34 @@ end
                 @test occursin("will be an error", captured)
             end
         end
+    end
+
+    @testset "collect warnings are ordered and find stderr is kept" begin
+        e = DistSSHRun._collect_find_failure(
+            "host1", ErrorException("fail"), "find: no such file\n",
+        )
+        @test e.msg == "collect find -newer on host1: fail: find: no such file"
+        long = DistSSHRun._collect_find_failure("h", ErrorException("x"), "e"^300)
+        @test endswith(long.msg, "…")
+        @test length(long.msg) < 400
+        lines = withenv("DISTSSHKIT_JOBS" => "1") do
+            DistSSHRun._collect_dup_warning_lines(
+                Dict(
+                    ("root", "b.txt") => ["z", "a", "a"],
+                    ("root", "a.txt") => ["m", "a"],
+                    ("root-b", "same.txt") => ["m", "b"],
+                    ("root-a", "same.txt") => ["z", "a"],
+                ),
+            )
+        end
+        @test lines == [
+            "4 result path(s) came from more than one host. The last transfer remains.",
+            "  a.txt (a, m)",
+            "  b.txt (a, z)",
+            "  same.txt (a, z)",
+            "  same.txt (b, m)",
+        ]
+        @test DistSSHRun._collect_escape_line("out/x", "/tmp/root") ==
+            "Warning: skipping out/x; it would write outside /tmp/root."
     end
 end

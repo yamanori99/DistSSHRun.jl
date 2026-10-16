@@ -60,6 +60,8 @@ end
 
 Rsync local `.distsshkit/cache/sha256/` blobs onto each SSH host under the
 same relative path on the session remote project root. Does not use `--delete`.
+Hosts run at most `DISTSSHKIT_JOBS` at a time (default 1). Host result order
+matches `session.hosts`.
 Project `setup --rsync` still excludes `.distsshkit/`; this call is the
 dedicated transfer.
 
@@ -81,9 +83,9 @@ function push_cache!(
         files = _cache_blob_names(local_dir, hashes)
         isempty(files) && return SyncResult(false, HostResult[]; ok = true)
         remote_dir = cache_remote_dir(session_remote_root(session))
-        results = HostResult[]
-        for host in session.hosts
-            push!(results, _rsync_cache_one_host!(host, local_dir, remote_dir, files))
+        results = Vector{HostResult}(undef, length(session.hosts))
+        map_host_jobs(session.hosts) do i, host
+            results[i] = _rsync_cache_one_host!(host, local_dir, remote_dir, files)
         end
         return SyncResult(false, results; ok = all(r -> r.ok, results))
     end

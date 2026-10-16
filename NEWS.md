@@ -8,6 +8,12 @@ Those notes are often shorter than the section below.
 
 - Rsync `--files-from` lists use NUL separators and protect names beginning
   with `#` or `;` from comment parsing, so every selected path is transferred.
+- `push_cache!` transfers hosts with the same `DISTSSHKIT_JOBS` limit as
+  other host work. The returned host rows stay in session order.
+- A failed `collect` `find -newer` includes a short excerpt of that command's
+  stderr. Collect warnings for an escaping path, and the host list on a path
+  that arrived from more than one host, are sorted so the text does not depend
+  on which host finished first.
 
 ### Planned breaking (next minor)
 
