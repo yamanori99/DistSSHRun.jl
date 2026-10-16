@@ -92,25 +92,29 @@ using Test
                 write(script_a, "println(\"ok_a\")\n")
                 write(script_b, "println(\"ok_b\")\n")
 
-                let (code_a, out_a, err_a) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_a) do
-                        _cli_capture(
-                            () -> DistSSHRun.go(["-y", "parent:1", script_a]),
-                        )
+                withenv("DISTRIBUTED_PROJECT_ROOT" => nothing) do
+                    let (code_a, out_a, err_a) = cd(proj_a) do
+                            _cli_capture(
+                                () -> DistSSHRun.run_plan(
+                                    ["parent", "--gb-per-worker", "0.5", script_a],
+                                ),
+                            )
+                        end
+                        @test code_a == 0
+                        @test occursin("SwitchOne", out_a * err_a)
                     end
-                    @test code_a == 0
-                    @test isdir(joinpath(proj_a, ".distsshkit", "go"))
-                    @test occursin("SwitchOne", out_a * err_a)
-                end
 
-                let (code_b, out_b, err_b) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_b) do
-                        _cli_capture(
-                            () -> DistSSHRun.go(["-y", "parent:1", script_b]),
-                        )
+                    let (code_b, out_b, err_b) = cd(proj_b) do
+                            _cli_capture(
+                                () -> DistSSHRun.run_plan(
+                                    ["parent", "--gb-per-worker", "0.5", script_b],
+                                ),
+                            )
+                        end
+                        @test code_b == 0
+                        @test occursin("SwitchTwo", out_b * err_b)
+                        @test !occursin("SwitchOne", out_b * err_b)
                     end
-                    @test code_b == 0
-                    @test isdir(joinpath(proj_b, ".distsshkit", "go"))
-                    @test occursin("SwitchTwo", out_b * err_b)
-                    @test !occursin("SwitchOne", out_b * err_b)
                 end
             end
         end

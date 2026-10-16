@@ -135,14 +135,16 @@ using Test
                 write(script_a, "true\n")
                 write(script_b, "true\n")
 
-                let (_, out_a, err_a) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_a) do
-                        _main_capture(["plan", "parent:1", "--gb-per-worker", "0.5", script_a])
+                let (code_a, out_a, err_a) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_a) do
+                        _main_capture(["plan", "parent", "--gb-per-worker", "0.5", script_a])
                     end
+                    @test code_a == 0
                     @test occursin("ProjAlpha", out_a * err_a)
                 end
-                let (_, out_b, err_b) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_b) do
-                        _main_capture(["plan", "parent:1", "--gb-per-worker", "0.5", script_b])
+                let (code_b, out_b, err_b) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_b) do
+                        _main_capture(["plan", "parent", "--gb-per-worker", "0.5", script_b])
                     end
+                    @test code_b == 0
                     @test occursin("ProjBeta", out_b * err_b)
                     @test !occursin("ProjAlpha", out_b * err_b)
                 end

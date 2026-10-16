@@ -569,7 +569,7 @@ using Test
                 "DISTSSHKIT_TEST" => "1",
                 "DISTSSHKIT_TEST_SSH" => "/no/such/fake-ssh.jl",
             ) do
-                res_setup = DistSSHRun.setup!(session, :check)
+                res_setup = DistSSHRun.setup!(session, :runtest; julia = "/bin/echo")
                 @test !res_setup.ok
                 @test !res_setup.cancelled
                 res_inst = DistSSHRun.instantiate!(session)
@@ -583,13 +583,15 @@ using Test
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
                 hosts = ["h1", "h2", "h3"]
                 inst_res = DistSSHRun.instantiate_remotes(
-                    hosts, "~/App.jl", "/bin/echo", proj,
+                    hosts, "/bin/echo", "~/App.jl", proj,
                 )
                 @test [r.host for r in inst_res.hosts] == hosts
+                @test all(r -> r.ok, inst_res.hosts)
                 test_res = DistSSHRun.runtest_remotes(
-                    hosts, "~/App.jl", "/bin/echo", proj,
+                    hosts, "/bin/echo", "~/App.jl", proj,
                 )
                 @test [r.host for r in test_res.hosts] == hosts
+                @test all(r -> r.ok, test_res.hosts)
                 clean_res = DistSSHRun.cleanup_remote_workers(hosts)
                 @test [r.host for r in clean_res.hosts] == hosts
                 @test all(r -> r.ok, clean_res.hosts)
