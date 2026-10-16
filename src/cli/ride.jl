@@ -23,9 +23,8 @@ if !isdefined(@__MODULE__, :DistSSHRun)
 end
 include(joinpath(@__DIR__, "ride", "_using.jl"))
 
-const PROJECT_ROOT = cli_project_root(@__DIR__)
-
 function ride_main()::Cint
+    project_root = cli_project_root(@__DIR__)
     parsed = parse_ride_args(ARGS)
     if parsed.show_version
         println_kit_version()
@@ -47,7 +46,7 @@ function ride_main()::Cint
         args = parsed.script_args,
         spi_check = parsed.spi_check,
         output_dir = parsed.output_dir,
-        project = PROJECT_ROOT,
+        project = project_root,
         julia = parsed.julia,
         remote = isempty(remote_raw) ? nothing : remote_raw,
     )

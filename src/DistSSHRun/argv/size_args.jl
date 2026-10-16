@@ -108,7 +108,7 @@ function parse_size_args(args::Vector{String})
             end
             cli_consume!(c)
         else
-            @warn "Unknown option: $arg (ignored)"
+            @warn "Unknown option: $arg (ignored; will be an error in DistSSHRun 0.2)"
             cli_consume!(c)
         end
     end

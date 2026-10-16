@@ -554,4 +554,46 @@ using Test
             end
         end
     end
+
+    @testset "SSH preflight failure sets cancelled=false and map_host_jobs preserves order" begin
+        _with_tempdir() do proj::String
+            write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
+            session = DistSSHRun.KitSession(
+                project = proj,
+                workers = ["child:h1", "child:h2"],
+                remote = "~/App.jl",
+                yes = true,
+                quiet = true,
+            )
+            withenv(
+                "DISTSSHKIT_TEST" => "1",
+                "DISTSSHKIT_TEST_SSH" => "/no/such/fake-ssh.jl",
+            ) do
+                res_setup = DistSSHRun.setup!(session, :check)
+                @test !res_setup.ok
+                @test !res_setup.cancelled
+                res_inst = DistSSHRun.instantiate!(session)
+                @test !res_inst.ok
+                @test !res_inst.cancelled
+            end
+        end
+
+        _with_fake_remotes() do _
+            _with_tempdir() do proj::String
+                write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
+                hosts = ["h1", "h2", "h3"]
+                inst_res = DistSSHRun.instantiate_remotes(
+                    hosts, "~/App.jl", "/bin/echo", proj,
+                )
+                @test [r.host for r in inst_res.hosts] == hosts
+                test_res = DistSSHRun.runtest_remotes(
+                    hosts, "~/App.jl", "/bin/echo", proj,
+                )
+                @test [r.host for r in test_res.hosts] == hosts
+                clean_res = DistSSHRun.cleanup_remote_workers(hosts)
+                @test [r.host for r in clean_res.hosts] == hosts
+                @test all(r -> r.ok, clean_res.hosts)
+            end
+        end
+    end
 end

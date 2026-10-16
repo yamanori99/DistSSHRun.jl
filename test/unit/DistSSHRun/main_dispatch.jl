@@ -107,4 +107,46 @@ using Test
             @test !occursin("qhost", out)
         end
     end
+
+    @testset "_run_kit_cli_script restores ARGS and re-reads project root" begin
+        saved = copy(ARGS)
+        try
+            empty!(ARGS)
+            append!(ARGS, ["sentinel-a", "sentinel-b"])
+            let (code, _, _) = _main_capture(["size", "--version"])
+                @test code == 0
+            end
+            @test ARGS == ["sentinel-a", "sentinel-b"]
+        finally
+            empty!(ARGS)
+            append!(ARGS, saved)
+        end
+
+        _with_tempdir() do root_a::String
+            _with_tempdir() do root_b::String
+                proj_a = joinpath(root_a, "ProjAlpha")
+                proj_b = joinpath(root_b, "ProjBeta")
+                mkpath(proj_a)
+                mkpath(proj_b)
+                write(joinpath(proj_a, "Project.toml"), "name = \"ProjAlpha\"\n")
+                write(joinpath(proj_b, "Project.toml"), "name = \"ProjBeta\"\n")
+                script_a = joinpath(proj_a, "job.jl")
+                script_b = joinpath(proj_b, "job.jl")
+                write(script_a, "true\n")
+                write(script_b, "true\n")
+
+                let (_, out_a, err_a) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_a) do
+                        _main_capture(["plan", "parent:1", "--gb-per-worker", "0.5", script_a])
+                    end
+                    @test occursin("ProjAlpha", out_a * err_a)
+                end
+                let (_, out_b, err_b) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_b) do
+                        _main_capture(["plan", "parent:1", "--gb-per-worker", "0.5", script_b])
+                    end
+                    @test occursin("ProjBeta", out_b * err_b)
+                    @test !occursin("ProjAlpha", out_b * err_b)
+                end
+            end
+        end
+    end
 end

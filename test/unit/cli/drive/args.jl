@@ -19,6 +19,10 @@ using Test
             @test r.collect_overwrite == true
             @test r.collect_hosts == ["host-a"]
         end
+        DistSSHRun.set_kit_verbosity!(:progress)
+        parse_drive_args(["-q", "--collect-missing", "data/sweep", "host-a"])
+        @test DistSSHRun.kit_verbosity() === :quiet
+        DistSSHRun.set_kit_verbosity!(:progress)
     end
 
     @testset "parse hosts and flags" begin

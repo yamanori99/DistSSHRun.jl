@@ -38,6 +38,18 @@ using Dates
         @test_throws ArgumentError DistSSHRun._go_plan_slots(["child:local:0"])
         @test_throws ArgumentError DistSSHRun._go_plan_slots(["child:local:-1"])
         @test DistSSHRun._go_sanitize_label("user@lab") == "user@lab"
+        _with_tempdir() do proj::String
+            in_batch = joinpath(proj, "scripts", ".distsshkit", "go", "job_1")
+            in_slot = joinpath(in_batch, "h1-1")
+            @test DistSSHRun._go_remote_slot_rel(proj, in_slot, in_batch, "h1-1") ==
+                joinpath("scripts", ".distsshkit", "go", "job_1", "h1-1")
+            _with_tempdir() do out_dir::String
+                out_slot = joinpath(out_dir, "h1-1")
+                rel = DistSSHRun._go_remote_slot_rel(proj, out_slot, out_dir, "h1-1")
+                @test rel == joinpath(".distsshkit", "go", basename(out_dir), "h1-1")
+                @test !occursin("..", rel)
+            end
+        end
         @test DistSSHRun._go_sanitize_label("a/b c") == "a_b_c"
         @test DistSSHRun._go_sanitize_label("***") == "_"
         err = try
@@ -377,6 +389,33 @@ using Dates
                     @test r.ok
                 end
             end
+        end
+    end
+
+    @testset "later succeeding slot does not mask earlier failure" begin
+        _with_tempdir() do proj::String
+            script = joinpath(proj, "job.jl")
+            write(
+                script,
+                """
+                slot = basename(get(ENV, "DISTRIBUTED_OUTPUT_DIR", ""))
+                if endswith(slot, "-1")
+                    exit(2)
+                else
+                    sleep(0.15)
+                    exit(0)
+                end
+                """,
+            )
+            r = redirect_stdout(devnull) do
+                DistSSHRun.go!(
+                    script, ["parent:2"];
+                    project = proj, quiet = true, yes = true,
+                )
+            end
+            @test !r.ok
+            @test r.run.ok == false
+            @test r.run.exit_code == 2
         end
     end
 end

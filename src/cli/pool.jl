@@ -21,10 +21,9 @@ if !isdefined(@__MODULE__, :DistSSHRun)
 end
 include(joinpath(@__DIR__, "pool", "_using.jl"))
 
-const PROJECT_ROOT = cli_project_root(@__DIR__)
-const _PATH_ANCHOR = DistSSHRun.canonical_local_path(PROJECT_ROOT)
-
 function pool_main()::Cint
+    project_root = cli_project_root(@__DIR__)
+    path_anchor = DistSSHRun.canonical_local_path(project_root)
     opts = parse_pool_args(ARGS)
     if opts.show_help
         show_pool_usage()
@@ -45,11 +44,11 @@ function pool_main()::Cint
     end
 
     print_header(DistSSHRun.cli_heading("pool"))
-    DistSSHRun.writeln_field("Project", cli_project_disp(PROJECT_ROOT, _PATH_ANCHOR))
+    DistSSHRun.writeln_field("Project", cli_project_disp(project_root, path_anchor))
     DistSSHRun.kit_println()
 
     session = DistSSHRun.KitSession(
-        project = PROJECT_ROOT,
+        project = project_root,
         workers = tokens,
         quiet = opts.cli_session.quiet,
         verbosity = opts.cli_session.verbosity,

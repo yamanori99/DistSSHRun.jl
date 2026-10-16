@@ -259,6 +259,7 @@ function parse_drive_args(args::Vector{String})
             tree_root = canonical_local_path(tail[1])
             tree_hosts = String[_parse_worker_token(String(x))[1] for x in tail[2:end]]
             isempty(tree_hosts) && throw(ArgumentError("`$(flag)` requires at least one HOST after ROOT"))
+            apply_kit_cli_session!(cli_session)
             if julia_exe === nothing
                 env_val = get(ENV, "JULIA_DISTRIBUTED_EXE", "auto")
                 julia_exe = env_val == "auto" ? nothing : env_val

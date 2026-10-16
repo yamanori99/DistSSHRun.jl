@@ -261,6 +261,7 @@ function _run_kit_cli_script(script_name::AbstractString, args::Vector{String}):
     haskey(ENV, "DISTRIBUTED_PROJECT_ROOT") || (ENV["DISTRIBUTED_PROJECT_ROOT"] = pwd())
     # `args` may alias `ARGS` (the app launcher can pass `ARGS` directly).
     args_snapshot = collect(String, args)
+    orig_args = copy(ARGS)
     empty!(ARGS)
     append!(ARGS, args_snapshot)
     script_path::String = if isabspath(script_name)
@@ -282,6 +283,8 @@ function _run_kit_cli_script(script_name::AbstractString, args::Vector{String}):
         Core.include(Main, script_path)
         return 0
     finally
+        empty!(ARGS)
+        append!(ARGS, orig_args)
         if prev_include === nothing
             delete!(ENV, "DIST_SSH_KIT_CLI_INCLUDE")
         else

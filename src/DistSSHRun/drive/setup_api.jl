@@ -197,7 +197,7 @@ function _setup_one!(
     julia_path = isempty(strip(String(julia))) ? "auto" : String(julia)
 
     if mode === :delete
-        preflight_setup_ssh(hosts) || return SyncResult(true, HostResult[]; ok = false)
+        preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
         delete_path = bound_path !== nothing ?
             String(bound_path) :
             remote_delete_root(session.project; cli_override = session.remote)
@@ -208,7 +208,7 @@ function _setup_one!(
     elseif mode === :clone
         ensure_manifest_in_git_worktree!(session.project)
         url = normalize_git_clone_url(_setup_clone_url(repo; surface = hint_surface(session)))
-        preflight_setup_ssh(hosts) || return SyncResult(true, HostResult[]; ok = false)
+        preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
         clone_dest = remote_git_clone_dest(session.project; cli_override = session.remote)
         raw = clone_to_remotes(hosts, clone_dest, url; confirm = !session.yes)
         return _sync_result_from_host_op(raw)
@@ -234,14 +234,14 @@ function _setup_one!(
     elseif mode === :juliaup || mode === :juliaup_update
         ssh_hosts = setup_juliaup_ssh_hosts(hosts)
         if !isempty(ssh_hosts)
-            preflight_setup_ssh(ssh_hosts) || return SyncResult(true, HostResult[]; ok = false)
+            preflight_setup_ssh(ssh_hosts) || return SyncResult(false, HostResult[]; ok = false)
         end
         raw = mode === :juliaup ?
             juliaup_align_remotes(hosts; confirm = !session.yes) :
             juliaup_update_remotes(hosts; confirm = !session.yes)
         return _sync_result_from_host_op(raw)
     elseif mode === :runtest
-        preflight_setup_ssh(hosts) || return SyncResult(true, HostResult[]; ok = false)
+        preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
         raw = runtest_remotes(
             hosts, julia_path, remote_path, session.project;
             path_anchor = session.project,
@@ -270,7 +270,7 @@ function _setup_one!(
         raw = cleanup_remote_workers(hosts)
         return _sync_result_from_host_op(raw)
     elseif mode === :prune
-        preflight_setup_ssh(hosts) || return SyncResult(true, HostResult[]; ok = false)
+        preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
         log_dir = setup_log_dir(session.project)
         raw = prune_kit_leaves(
             hosts,
