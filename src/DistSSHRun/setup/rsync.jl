@@ -21,11 +21,12 @@ function _host_sync_rsync_argv()::Vector{String}
     return [_host_tool_exe("rsync")]
 end
 
-"""Run rsync with `--files-from` via a temp list, not `stdin`.
+"""Run rsync with `--from0 --files-from` via a temp list, not `stdin`.
 
 Julia 1.14 `pipeline(; stdin=buf)` waits for the write and throws `EPIPE` if the
 child exits without reading stdin (fake rsync, or rsync dying on argv). A list
-file is the same rsync contract without that pipe.
+file is the same rsync contract without that pipe. NUL framing keeps entries
+unambiguous. `./` protects a leading `#` or `;` from rsync's comment syntax.
 """
 function _run_rsync_files_from(
         rsync_bin::Vector{String},
@@ -37,10 +38,13 @@ function _run_rsync_files_from(
     )
     mktemp() do path, io
         for rel in files
-            println(io, rel)
+            entry = !isempty(rel) && first(rel) in ('#', ';') ? string("./", rel) : rel
+            write(io, entry, '\0')
         end
         close(io)
-        cmd = Cmd(vcat(rsync_bin, opts, ["--files-from=$path", String(src), String(dest)]))
+        cmd = Cmd(
+            vcat(rsync_bin, opts, ["--from0", "--files-from=$path", String(src), String(dest)]),
+        )
         run(pipeline(cmd; stderr = stderr))
     end
     return nothing
