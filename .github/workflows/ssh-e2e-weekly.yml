@@ -151,6 +151,8 @@ jobs:
         with:
           distribution: Ubuntu-24.04
           wsl-version: 2
+          # Cache the rootfs download. Packages below are not in the rootfs.
+          use-cache: true
           additional-packages: >-
             ca-certificates curl git rsync openssh-client
             docker.io docker-compose-v2 iptables
@@ -417,6 +419,8 @@ jobs:
         with:
           distribution: Ubuntu-24.04
           wsl-version: 2
+          # Cache the rootfs download. Packages below are not in the rootfs.
+          use-cache: true
           additional-packages: >-
             ca-certificates curl git rsync openssh-client
             docker.io docker-compose-v2 iptables
@@ -515,6 +519,8 @@ jobs:
         with:
           distribution: Ubuntu-24.04
           wsl-version: 2
+          # Cache the rootfs download. Packages below are not in the rootfs.
+          use-cache: true
           additional-packages: >-
             ca-certificates curl git rsync openssh-client
             docker.io docker-compose-v2 iptables
