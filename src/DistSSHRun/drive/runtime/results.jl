@@ -205,7 +205,8 @@ function _collect_dup_warning_lines(
         length(u) < 2 && continue
         push!(dups, rel => u)
     end
-    sort!(dups; by = first)
+    # Same relative path under two collect roots sorts by the host list too.
+    sort!(dups)
     lines = String[]
     isempty(dups) && return lines
     push!(

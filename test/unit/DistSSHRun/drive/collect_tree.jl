@@ -317,16 +317,22 @@ end
         long = DistSSHRun._collect_find_failure("h", ErrorException("x"), "e"^300)
         @test endswith(long.msg, "…")
         @test length(long.msg) < 400
-        lines = DistSSHRun._collect_dup_warning_lines(
-            Dict(
-                ("root", "b.txt") => ["z", "a", "a"],
-                ("root", "a.txt") => ["m", "a"],
-            ),
-        )
+        lines = withenv("DISTSSHKIT_JOBS" => "1") do
+            DistSSHRun._collect_dup_warning_lines(
+                Dict(
+                    ("root", "b.txt") => ["z", "a", "a"],
+                    ("root", "a.txt") => ["m", "a"],
+                    ("root-b", "same.txt") => ["m", "b"],
+                    ("root-a", "same.txt") => ["z", "a"],
+                ),
+            )
+        end
         @test lines == [
-            "2 result path(s) came from more than one host. The last transfer remains.",
+            "4 result path(s) came from more than one host. The last transfer remains.",
             "  a.txt (a, m)",
             "  b.txt (a, z)",
+            "  same.txt (a, z)",
+            "  same.txt (b, m)",
         ]
         @test DistSSHRun._collect_escape_line("out/x", "/tmp/root") ==
             "Warning: skipping out/x; it would write outside /tmp/root."
