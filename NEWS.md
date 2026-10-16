@@ -6,6 +6,15 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
+### Planned breaking (next minor)
+
+- `setup --rsync` and `setup --sync` will refuse a `Manifest.toml` that would not ship, and git sync will refuse a path source whose `*.jl` or project files are ignored or untracked. 0.1.7 warns.
+- `setup --sync`, `setup --pull`, and `sync!` will fail when the remote `HEAD` is not the local `HEAD`, including an unpushed local commit on `--pull`. 0.1.7 warns. A hash that could not be read stays a warning.
+- `drive` and `collect!` will refuse a collect root that is the project root or a parent of it. 0.1.7 warns.
+- `setup` will refuse more than one mode flag, and `plan`, `pool`, and `size` will reject unknown `-` options instead of ignoring them with a warning.
+
+## 0.1.9
+
 - Rsync `--files-from` lists use NUL separators and protect names beginning
   with `#` or `;` from comment parsing, so every selected path is transferred.
 - `push_cache!` transfers hosts with the same `DISTSSHKIT_JOBS` limit as
@@ -14,13 +23,6 @@ Those notes are often shorter than the section below.
   stderr. Collect warnings for an escaping path, and the host list on a path
   that arrived from more than one host, are sorted so the text does not depend
   on which host finished first.
-
-### Planned breaking (next minor)
-
-- `setup --rsync` and `setup --sync` will refuse a `Manifest.toml` that would not ship, and git sync will refuse a path source whose `*.jl` or project files are ignored or untracked. 0.1.7 warns.
-- `setup --sync`, `setup --pull`, and `sync!` will fail when the remote `HEAD` is not the local `HEAD`, including an unpushed local commit on `--pull`. 0.1.7 warns. A hash that could not be read stays a warning.
-- `drive` and `collect!` will refuse a collect root that is the project root or a parent of it. 0.1.7 warns.
-- `setup` will refuse more than one mode flag, and `plan`, `pool`, and `size` will reject unknown `-` options instead of ignoring them with a warning.
 
 ## 0.1.8
 
