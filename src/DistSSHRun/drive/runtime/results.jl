@@ -183,6 +183,44 @@ function run_driver_script!(enable_log::Bool, drive_atexit_cleanup)
     end
 end
 
+function _collect_find_failure(host::AbstractString, e, err_text)::ErrorException
+    detail = replace(strip(String(err_text)), '\n' => ' ')
+    if length(detail) > 240
+        detail = first(detail, 240) * "…"
+    end
+    extra = isempty(detail) ? "" : ": " * detail
+    return ErrorException("collect find -newer on $host: $(sprint(showerror, e))$extra")
+end
+
+function _collect_escape_line(rel::AbstractString, local_abs::AbstractString)::String
+    return "Warning: skipping $rel; it would write outside $local_abs."
+end
+
+function _collect_dup_warning_lines(
+        dup_hosts::Dict{Tuple{String, String}, Vector{String}},
+    )::Vector{String}
+    dups = Pair{String, Vector{String}}[]
+    for ((_, rel), hs) in dup_hosts
+        u = sort!(unique(hs))
+        length(u) < 2 && continue
+        push!(dups, rel => u)
+    end
+    sort!(dups; by = first)
+    lines = String[]
+    isempty(dups) && return lines
+    push!(
+        lines,
+        "$(length(dups)) result path(s) came from more than one host. The last transfer remains.",
+    )
+    if DistSSHRun.kit_host_jobs() > 1
+        push!(lines, "With DISTSSHKIT_JOBS>1, which host's bytes remain is unspecified.")
+    end
+    for (rel, hs) in dups[1:min(end, 10)]
+        push!(lines, "  $rel ($(join(hs, ", ")))")
+    end
+    return lines
+end
+
 function collect_drive_results!(
         successful_hosts::Vector{String},
         script_dir::String,
@@ -219,6 +257,7 @@ function collect_drive_results!(
     fill!(errs, nothing)
     dup_lock = ReentrantLock()
     dup_hosts = Dict{Tuple{String, String}, Vector{String}}()
+    escape_warns = String[]
 
     DistSSHRun.map_host_jobs(hosts_u) do i, host
         DistSSHRun._drive_host_span!(host, "collect", :running)
@@ -242,6 +281,7 @@ function collect_drive_results!(
                 remote_rd_abs = remote_rd_abs::String
                 host_sentinel = drive_sentinel_for_host(sentinel_name, host)
                 remote_sentinel = joinpath(remote_rd_abs, host_sentinel)
+                err_buf = IOBuffer()
                 try
                     remote_find_raw = try
                         pq = DistSSHRun._remote_shell_path_word(remote_rd_abs)
@@ -255,17 +295,13 @@ function collect_drive_results!(
                                     host,
                                     "find $pq -type f -newer $sq ! -name $nq -print0",
                                 );
-                                stderr = devnull,
+                                stderr = err_buf,
                             ),
                             String,
                         )
                     catch e
                         DistSSHRun._rethrow_missing_host_tool(e)
-                        throw(
-                            ErrorException(
-                                "collect find -newer on $host: $(sprint(showerror, e))",
-                            )
-                        )
+                        throw(_collect_find_failure(host, e, String(take!(err_buf))))
                     end
                     rroot = String(rstrip(String(remote_rd_abs), '/'))
                     rel_lines = String[]
@@ -287,9 +323,9 @@ function collect_drive_results!(
                         uniq = String[]
                         for rel in unique(rel_lines)
                             if DistSSHRun._collect_dest_escapes_root(local_abs, rel)
-                                print_warn(
-                                    "Warning: skipping $rel; it would write outside $local_abs.\n",
-                                )
+                                lock(dup_lock) do
+                                    push!(escape_warns, _collect_escape_line(rel, local_abs))
+                                end
                                 host_err === nothing && (
                                     host_err = ErrorException(
                                         "collect path escapes $local_abs: $rel",
@@ -347,23 +383,12 @@ function collect_drive_results!(
         errs[i] = host_err
     end
 
-    dups = Pair{String, Vector{String}}[]
-    for ((_, rel), hs) in dup_hosts
-        u = unique(hs)
-        length(u) < 2 && continue
-        push!(dups, rel => u)
+    sort!(unique!(escape_warns))
+    for line in escape_warns
+        print_warn(line * "\n")
     end
-    sort!(dups; by = first)
-    if !isempty(dups)
-        print_warn(
-            "$(length(dups)) result path(s) came from more than one host. The last transfer remains.\n",
-        )
-        if DistSSHRun.kit_host_jobs() > 1
-            print_warn("With DISTSSHKIT_JOBS>1, which host's bytes remain is unspecified.\n")
-        end
-        for (rel, hs) in dups[1:min(end, 10)]
-            print_warn("  $rel ($(join(hs, ", ")))\n")
-        end
+    for line in _collect_dup_warning_lines(dup_hosts)
+        print_warn(line * "\n")
     end
 
     collect_ok = true
