@@ -6,6 +6,9 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
+- Rsync `--files-from` lists use NUL separators and protect names beginning
+  with `#` or `;` from comment parsing, so every selected path is transferred.
+
 ### Planned breaking (next minor)
 
 - `setup --rsync` and `setup --sync` will refuse a `Manifest.toml` that would not ship, and git sync will refuse a path source whose `*.jl` or project files are ignored or untracked. 0.1.7 warns.

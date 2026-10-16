@@ -21,6 +21,61 @@ using Test
         touch(joinpath(tree, "keepme.txt"))
     end
 
+    @testset "files-from uses NUL and protects comment prefixes" begin
+        mktempdir() do tmp::String
+            rsync = joinpath(tmp, "rsync")
+            argv = joinpath(tmp, "argv")
+            list = joinpath(tmp, "list")
+            write(
+                rsync,
+                """
+                #!/bin/sh
+                printf '%s\\n' "\$@" > "\$FAKE_RSYNC_ARGV"
+                for arg in "\$@"; do
+                  case "\$arg" in
+                    --files-from=*)
+                      cp "\${arg#--files-from=}" "\$FAKE_RSYNC_LIST"
+                      ;;
+                  esac
+                done
+                """,
+            )
+            chmod(rsync, 0o755)
+            withenv("FAKE_RSYNC_ARGV" => argv, "FAKE_RSYNC_LIST" => list) do
+                DistSSHRun._run_rsync_files_from(
+                    [rsync],
+                    ["-az"],
+                    "/source/",
+                    "host:/dest/",
+                    ["plain.txt", "#hash.txt", ";semi.txt"],
+                )
+            end
+            args = read(argv, String)
+            @test occursin("--from0", args)
+            @test occursin("--files-from=", args)
+            entries = Set(split(read(list, String), '\0'; keepempty = false))
+            @test entries == Set(["plain.txt", "./#hash.txt", "./;semi.txt"])
+
+            system_rsync = Sys.which("rsync")
+            if system_rsync !== nothing
+                src = joinpath(tmp, "src")
+                dest = joinpath(tmp, "dest")
+                mkpath(src)
+                for name in ("plain.txt", "#hash.txt", ";semi.txt")
+                    write(joinpath(src, name), name)
+                end
+                DistSSHRun._run_rsync_files_from(
+                    [String(system_rsync)],
+                    ["-a"],
+                    src * "/",
+                    dest * "/",
+                    ["plain.txt", "#hash.txt", ";semi.txt"],
+                )
+                @test Set(readdir(dest)) == Set(["plain.txt", "#hash.txt", ";semi.txt"])
+            end
+        end
+    end
+
     @testset "rsync -e quotes ssh" begin
         Sys.which("ssh") === nothing && return
         withenv("DISTSSHKIT_TEST_SSH" => nothing) do
