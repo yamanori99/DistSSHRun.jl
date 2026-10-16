@@ -62,6 +62,22 @@ using Test
         @test occursin("DistSSHRun $(DistSSHRun.dist_ssh_kit_version())", out)
     end
 
+    @testset "refused rsync and prune paths print Error" begin
+        for mode in ("--rsync", "--prune")
+            let (code, out, err) = _main_capture(
+                    [
+                        "setup", mode, "--remote-path", "/", "child:host1",
+                    ]
+                )
+                shown = out * err
+                @test code == 1
+                @test occursin("Error:", shown)
+                @test occursin("refusing remote path", shown)
+                @test !occursin("Stacktrace", shown)
+            end
+        end
+    end
+
     # Subcommand --help / --version load `src/cli/*.jl` in-process (no SSH / addprocs).
     @testset "subcommand help and version" begin
         for cmd in ("drive", "go", "plan", "ride", "setup", "size", "pool")

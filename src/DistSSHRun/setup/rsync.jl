@@ -546,30 +546,50 @@ function _remote_dest_status_script(remote_path::AbstractString)::String
 end
 
 """
-Classify `remote_path` on `host`: `:missing`, `:empty`, or `:nonempty`.
+Classify `remote_path` on `host`.
 
-Uses `_host_sync_remote_shell_cmd` (honors `DISTSSHKIT_TEST_SSH`).
-On SSH/script failure, returns `:nonempty` (fail closed — refuse overwrite).
+Returns `(:missing|:empty|:nonempty|:error, detail)`. `:error` keeps the
+remote command's stderr (or the exception text) so callers do not describe
+an SSH failure as an existing tree.
 """
-function remote_dest_status(host::String, remote_path::AbstractString)::Symbol
+function _remote_dest_probe(
+        host::String,
+        remote_path::AbstractString,
+    )::Tuple{Symbol, String}
+    err_buf = IOBuffer()
     try
         result = read(
             pipeline(
                 _host_sync_remote_shell_cmd(host, _remote_dest_status_script(remote_path));
-                stderr = devnull,
+                stderr = err_buf,
             ),
             String,
         )
         for line in eachline(IOBuffer(result))
             s = strip(line)
-            s == "MISSING" && return :missing
-            s == "EMPTY" && return :empty
-            s == "NONEMPTY" && return :nonempty
+            s == "MISSING" && return (:missing, "")
+            s == "EMPTY" && return (:empty, "")
+            s == "NONEMPTY" && return (:nonempty, "")
         end
-        return :nonempty
-    catch
-        return :nonempty
+        return (:nonempty, "remote dest probe returned no status")
+    catch e
+        _rethrow_missing_host_tool(e)
+        detail = strip(String(take!(err_buf)))
+        isempty(detail) && (detail = sprint(showerror, e))
+        return (:error, detail)
     end
+end
+
+"""
+Classify `remote_path` on `host`: `:missing`, `:empty`, or `:nonempty`.
+
+Uses `_host_sync_remote_shell_cmd` (honors `DISTSSHKIT_TEST_SSH`).
+On SSH/script failure, returns `:nonempty` (fail closed — refuse overwrite).
+Callers that can report the failure use [`_remote_dest_probe`](@ref).
+"""
+function remote_dest_status(host::String, remote_path::AbstractString)::Symbol
+    status, _ = _remote_dest_probe(host, remote_path)
+    return status === :error ? :nonempty : status
 end
 
 function remote_dest_busy_message(host::AbstractString, remote_path::AbstractString)::String
@@ -646,7 +666,14 @@ function _rsync_one_host!(
         ssh_cmd_str::String,
         send_list::Union{Nothing, Vector{String}},
     )
-    st = remote_dest_status(host, remote_path)
+    st, detail = _remote_dest_probe(host, remote_path)
+    if st === :error
+        return (;
+            status = :probe_fail,
+            message = "could not inspect remote path: $detail",
+            dir_created = false,
+        )
+    end
     if st === :nonempty
         return (;
             status = :busy,
@@ -740,7 +767,7 @@ function rsync_project_to_hosts!(
     local_root = shipped.env_dir
     raw_anchor = canonical_local_path(path_anchor)
     anchor = raw_anchor == given ? local_root : raw_anchor
-    remote_path = String(remote_path)
+    remote_path = _checked_remote_dest(remote_path)
 
     if confirm && !kit_noninteractive()
         cancelled = let anchor = anchor
@@ -778,7 +805,8 @@ function rsync_project_to_hosts!(
             else
                 _rsync_one_host!(host, local_root, remote_path, ssh_cmd_str, send_list)
             end
-            if outcome.status === :busy || outcome.status === :mkdir_fail
+            if outcome.status === :busy || outcome.status === :mkdir_fail ||
+                    outcome.status === :probe_fail
                 return HostResult(host, false, outcome.message)
             end
             dir_created = outcome.dir_created
