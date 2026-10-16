@@ -32,6 +32,11 @@ using Test
             @test r.mem_headroom == 0.5
             @test r.parent_gb == 0.2
         end
+        let r = @test_logs (:warn, r"Unknown option.*0\.2") parse_pool_args(
+                ["--nope", "parent"],
+            )
+            @test r.include_parent
+        end
         let path = tempname()
             r = parse_pool_args(["--help"])
             @test r.show_help

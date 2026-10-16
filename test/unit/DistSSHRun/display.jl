@@ -752,4 +752,19 @@ using Test
     @testset "driver sigint as exception helper (#371)" begin
         @test DistSSHRun._with_driver_sigint_exceptions(() -> 7) == 7
     end
+
+    @testset "init_log_file closes previous handle" begin
+        _with_tempdir() do dir::String
+            p1 = DistSSHRun.init_log_file(dir; prefix = "first")
+            io1 = DistSSHRun.LOG_FILE_HANDLE[]
+            @test io1 !== nothing && isopen(io1)
+            p2 = DistSSHRun.init_log_file(dir; prefix = "second")
+            io2 = DistSSHRun.LOG_FILE_HANDLE[]
+            @test !isopen(io1)
+            @test io2 !== nothing && isopen(io2)
+            DistSSHRun.close_log_file()
+            @test DistSSHRun.LOG_FILE_HANDLE[] === nothing
+            @test isfile(p1) && isfile(p2)
+        end
+    end
 end

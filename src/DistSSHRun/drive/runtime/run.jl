@@ -33,6 +33,7 @@ function run_drive_parsed!(
     end
 
     if parsed.collect_root !== nothing && parsed.collect_hosts !== nothing
+        apply_kit_cli_session!(parsed.cli_session)
         root = canonical_local_path(
             something(project_root, get(ENV, "DISTRIBUTED_PROJECT_ROOT", pwd())),
         )
@@ -177,7 +178,6 @@ function _run_drive_parsed_locked!(
     )::Cint
     if enable_log
         init_log_file(resolve_drive_log_dir(log_dir, script_dir); prefix = "drive", path_anchor = path_anchor)
-        atexit(close_log_file)
     end
 
     writeln_field("Subcommand args", subcommand_args_record("drive", original_args))
@@ -400,5 +400,6 @@ function _run_drive_parsed_locked!(
         # `add_drive_workers!`). Otherwise idempotent (guarded by a `Ref`
         # inside) — a harmless no-op if `atexit` already ran it.
         drive_atexit_cleanup !== nothing && drive_atexit_cleanup()
+        enable_log && close_log_file()
     end
 end

@@ -630,6 +630,15 @@ end
 # Log file
 
 const LOG_FILE_HANDLE = Ref{Union{IO, Nothing}}(nothing)
+const _LOG_ATEXIT_REGISTERED = Ref(false)
+
+function _register_close_log_atexit!()
+    _LOG_ATEXIT_REGISTERED[] && return nothing
+    _LOG_ATEXIT_REGISTERED[] = true
+    atexit(close_log_file)
+    return nothing
+end
+
 """`output_dir/kit.progress` path, or `nothing`. Written even when `--no-log`."""
 const KIT_PROGRESS_SIDECAR = Ref{Union{Nothing, String}}(nothing)
 const KIT_OUTPUT_QUIET = Ref(false)
@@ -831,7 +840,9 @@ function init_log_file(output_dir::String; prefix::String = "drive", path_anchor
     isdir(output_dir) || mkpath(output_dir)
     timestamp = Dates.format(now(), dateformat"yyyy-mm-ddTHHMMSS")
     log_file = joinpath(output_dir, "$(prefix)_$(timestamp).log")
+    close_log_file()
     LOG_FILE_HANDLE[] = open(log_file, "w")
+    _register_close_log_atexit!()
     log_disp = path_anchor === nothing ? short_path(log_file) : display_path(log_file, path_anchor)
     writeln_field("Log file", log_disp)
     return log_file

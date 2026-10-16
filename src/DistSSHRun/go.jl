@@ -497,6 +497,28 @@ function _go_run_local_slot!(
     return DriveResult(code == 0, code; output_dir = slot_dir)
 end
 
+"""Remote path of a go slot: relative to `proj` when `slot_dir` is inside `proj`, else under `.distsshkit/go/`."""
+function _go_remote_slot_rel(
+        proj::AbstractString,
+        slot_dir::AbstractString,
+        batch_dir::AbstractString,
+        slot_label::AbstractString,
+    )::String
+    proj_abs = canonical_local_path(proj)
+    slot_abs = canonical_local_path(slot_dir)
+    if _path_under_resolved(slot_abs, proj_abs) && slot_abs != proj_abs
+        rel = String(relpath(slot_abs, proj_abs))
+        if rel != "." && !startswith(rel, "..")
+            return rel
+        end
+    end
+    batch = basename(canonical_local_path(batch_dir))
+    label = String(slot_label)
+    (isempty(batch) || batch == "." || batch == "..") && (batch = "batch")
+    (isempty(label) || label == "." || label == "..") && (label = "slot")
+    return joinpath(".distsshkit", "go", batch, label)
+end
+
 """Remote SSH shell snippet for one `go` slot (cd project root before mkdir/log paths)."""
 function _go_remote_slot_shell_inner(
         remote_root::AbstractString,
@@ -656,7 +678,7 @@ function _go_exec_slot!(
         )
     else
         host = slot.host::String
-        slot_rel = relpath(slot_dir, proj)
+        slot_rel = _go_remote_slot_rel(proj, slot_dir, batch_dir, slot.label)
         run_res = _go_run_remote_slot!(
             host,
             proj,
@@ -683,7 +705,7 @@ function _go_collect_slot!(
     slot.kind === :child || return (collect = nothing, collect_fail = false)
     host = slot.host::String
     slot_dir = joinpath(batch_dir, slot.label)
-    slot_rel = relpath(slot_dir, proj)
+    slot_rel = _go_remote_slot_rel(proj, slot_dir, batch_dir, slot.label)
     col_lab = string(slot.label, "/collect")
     _kit_progress_span!(col_lab, :running)
     if _go_pull_slot!(host, remote_root, slot_rel, slot_dir)
@@ -951,6 +973,7 @@ function _go_run!(
         any_run_fail = Ref(false)
         any_collect_fail = Ref(false)
         last_run = Ref(DriveResult(true, 0))
+        first_fail_run = Ref{Union{Nothing, DriveResult}}(nothing)
         last_collect = Ref{Union{Nothing, CollectResult}}(nothing)
 
         _go_print_run_header!(original_args, script_path, args, slots, proj, anchor)
@@ -1056,6 +1079,9 @@ function _go_run!(
                 slot_run_ok[i] = outcome.run.ok
                 lock(_GO_IO_LOCK) do
                     last_run[] = outcome.run
+                    if !outcome.run.ok && first_fail_run[] === nothing
+                        first_fail_run[] = outcome.run
+                    end
                     if err !== nothing
                         any_run_fail[] = true
                         kit_progress_item!(slot.label; status = :fail)
@@ -1116,7 +1142,7 @@ function _go_run!(
                 GoResult(
                     false,
                     sync_result,
-                    last_run[],
+                    something(first_fail_run[], last_run[]),
                     last_collect[],
                     script_path,
                     batch_dir;

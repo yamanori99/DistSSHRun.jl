@@ -30,7 +30,7 @@ function instantiate!(
     return _with_kit_inproc_run!(:instantiate) do
         apply_session_env!(session)
         preflight_setup_ssh(session.hosts) || return SyncResult(
-            true,
+            false,
             HostResult[];
             ok = false,
         )

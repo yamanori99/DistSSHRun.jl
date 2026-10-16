@@ -110,6 +110,8 @@ end
         include(joinpath(@__DIR__, "unit", "cli", "pool", "args.jl"))
         _runtest_announce("unit/cli/ride/args.jl")
         include(joinpath(@__DIR__, "unit", "cli", "ride", "args.jl"))
+        _runtest_announce("unit/cli/subcommands_main.jl")
+        include(joinpath(@__DIR__, "unit", "cli", "subcommands_main.jl"))
     end
 
     @testset "integration" verbose = true begin

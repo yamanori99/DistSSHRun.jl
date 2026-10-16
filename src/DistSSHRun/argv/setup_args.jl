@@ -67,9 +67,27 @@ function show_requirements(; io::IO = stdout)
     )
 end
 
+function _setup_flag_mode(arg::AbstractString)::Union{Nothing, Symbol}
+    arg == "--check" && return :check
+    arg == "--pull" && return :pull
+    arg == "--sync" && return :sync
+    arg == "--instantiate" && return :instantiate
+    arg == "--juliaup" && return :juliaup
+    arg == "--juliaup-update" && return :juliaup_update
+    arg == "--runtest" && return :runtest
+    arg == "--cleanup" && return :cleanup
+    arg == "--clone" && return :clone
+    arg == "--delete" && return :delete
+    arg == "--prune" && return :prune
+    arg == "--rsync" && return :rsync_push
+    arg == "--requirements" && return :requirements
+    return nothing
+end
+
 function parse_setup_args(args::Vector{String})
     cli_session, args = peel_kit_cli_flags(args)
     mode = nothing
+    multi_mode_warned = false
     julia_path = get(ENV, "JULIA_DISTRIBUTED_EXE", "auto")  # default to env or auto-detect
     repo_url = nothing
     remote_path_override = nothing
@@ -83,38 +101,13 @@ function parse_setup_args(args::Vector{String})
     c = CliCursor(args)
     while !cli_at_end(c)
         arg = cli_current(c)::String
-        if arg == "--check"
-            mode = :check
-            cli_consume!(c)
-        elseif arg == "--pull"
-            mode = :pull
-            cli_consume!(c)
-        elseif arg == "--sync"
-            mode = :sync
-            cli_consume!(c)
-        elseif arg == "--instantiate"
-            mode = :instantiate
-            cli_consume!(c)
-        elseif arg == "--juliaup"
-            mode = :juliaup
-            cli_consume!(c)
-        elseif arg == "--juliaup-update"
-            mode = :juliaup_update
-            cli_consume!(c)
-        elseif arg == "--runtest"
-            mode = :runtest
-            cli_consume!(c)
-        elseif arg == "--cleanup"
-            mode = :cleanup
-            cli_consume!(c)
-        elseif arg == "--clone"
-            mode = :clone
-            cli_consume!(c)
-        elseif arg == "--delete"
-            mode = :delete
-            cli_consume!(c)
-        elseif arg == "--prune"
-            mode = :prune
+        flag_mode = _setup_flag_mode(arg)
+        if flag_mode !== nothing
+            if mode !== nothing && !multi_mode_warned
+                @warn "Multiple setup modes specified; only the last mode takes effect. Passing more than one mode will be an error in DistSSHRun 0.2."
+                multi_mode_warned = true
+            end
+            mode = flag_mode
             cli_consume!(c)
         elseif arg == "--confirm-path"
             raw = String(cli_take_value!(c, arg))
@@ -136,12 +129,6 @@ function parse_setup_args(args::Vector{String})
         elseif arg == "--id"
             prune_id = String(strip(cli_take_value!(c, arg)))
             isempty(prune_id) && throw(ArgumentError("--id needs a non-empty token"))
-        elseif arg == "--rsync"
-            mode = :rsync_push
-            cli_consume!(c)
-        elseif arg == "--requirements"
-            mode = :requirements
-            cli_consume!(c)
         elseif arg == "--julia"
             julia_path = cli_take_value!(c, arg)
         elseif arg == "--repo"
@@ -154,6 +141,8 @@ function parse_setup_args(args::Vector{String})
         elseif cli_match(c, ["-h", "--help"])
             show_help = true
             cli_consume!(c)
+        elseif startswith(arg, "-") && length(arg) > 1
+            throw(ArgumentError("unknown setup option: $arg"))
         else
             let p = parse_placement_token(arg)
                 push!(hosts, p.role === :parent ? PARENT_HOST_NAME : p.name)

@@ -78,17 +78,21 @@ using Test
             end
         end
 
-        _with_tempdir() do tmp
+        _with_tempdir() do tmp::String
             mktemp() do args_file, _
-                withenv(
-                    "DISTRIBUTED_PROJECT_ROOT" => nothing,
-                    "_DISTSSHKIT_TEST_ARGS_FILE" => args_file,
-                ) do
-                    cd(tmp) do
-                        empty!(ARGS)
-                        @test DistSSHRun._run_kit_cli_script(fixture, ["probe"]) == 0
-                        @test realpath(ENV["DISTRIBUTED_PROJECT_ROOT"]) == realpath(tmp)
-                        @test readlines(args_file) == ["probe"]
+                mktemp() do proj_file, _
+                    withenv(
+                        "DISTRIBUTED_PROJECT_ROOT" => nothing,
+                        "_DISTSSHKIT_TEST_ARGS_FILE" => args_file,
+                        "_DISTSSHKIT_TEST_PROJ_FILE" => proj_file,
+                    ) do
+                        cd(tmp) do
+                            empty!(ARGS)
+                            @test DistSSHRun._run_kit_cli_script(fixture, ["probe"]) == 0
+                            @test realpath(read(proj_file, String)) == realpath(tmp)
+                            @test !haskey(ENV, "DISTRIBUTED_PROJECT_ROOT")
+                            @test readlines(args_file) == ["probe"]
+                        end
                     end
                 end
             end

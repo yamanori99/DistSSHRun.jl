@@ -39,9 +39,11 @@ using Test
         end
     end
 
-    # Last mode token wins; earlier flags are not rejected.
-    let r = parse_setup_args(["--check", "--rsync", "child:host1"])
-        @test r.mode == :rsync_push
+    # Last mode token wins; earlier flags warn once (will be an error in 0.2).
+    let r = @test_logs (:warn, r"Multiple setup modes specified.*0\.2") parse_setup_args(
+            ["--check", "--rsync", "--pull", "child:host1"],
+        )
+        @test r.mode == :pull
     end
 
     let r = parse_setup_args(["--clone", "--repo", "git@ex/app.git", "child:host1"])
@@ -80,6 +82,15 @@ using Test
     @test_throws ArgumentError parse_setup_args(["--prune", "--older-than", "-1", "child:host1"])
     @test_throws ArgumentError parse_setup_args(["--julia"])
     @test_throws ArgumentError parse_setup_args(["--check", "host1"])
+    let err = try
+            parse_setup_args(["--check", "--not-a-flag", "child:host1"])
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("unknown setup option: --not-a-flag", err.msg)
+    end
 
     let r = parse_setup_args(["--juliaup", "parent", "child:host1"])
         @test r.mode == :juliaup

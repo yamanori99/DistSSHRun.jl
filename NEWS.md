@@ -18,12 +18,17 @@ Those notes are often shorter than the section below.
 - `setup --clone` creates the parent of a missing destination before `git clone`. An existing empty destination is left for git.
 - `setup --check`, and `setup --sync` or `--pull` when the tree is already current, warn when a lock or path source would not ship. They still exit 0. A `Project.toml` that cannot be parsed is part of that warning and does not change the exit code. Clone and git sync keep the existing error for a path outside the work tree.
 - `collect-missing` skips a relative path that would write outside the local collect root, including an absolute path taken from the remote listing. `collect-overwrite` refuses the transfer when the local root already contains such a symlink. A collect root reached through a symlink is compared after that symlink is resolved. The warning names the path.
+- CLI `go` / `plan` / `pool` / `ride` / `size` re-read the project root on each call and restore `ARGS` after `_run_kit_cli_script`. Direct `size.jl` exits with `size_main`'s status. `drive --collect-missing` / `--collect-overwrite` honor `-q` / `--verbose` / `--progress`.
+- When `go` `--output-dir` is outside the project, remote slot output is staged under `$remote_root/.distsshkit/go/<batch>/<slot>` and collected into the local `--output-dir`. A later successful slot no longer hides an earlier failure in `GoResult.run`.
+- `setup` treats an unknown `-` option as `unknown setup option` (exit 1). Passing more than one `setup` mode flag or an unknown option to `plan` / `pool` / `size` warns that it will be an error in DistSSHRun 0.2.
+- SSH preflight failure on `setup!` / `instantiate!` returns `cancelled=false` with `ok=false`. `instantiate_remotes`, `runtest_remotes`, and `cleanup_remote_workers` bound remote concurrency with `map_host_jobs`.
 
 ### Planned breaking (next minor)
 
 - `setup --rsync` and `setup --sync` will refuse a `Manifest.toml` that would not ship, and git sync will refuse a path source whose `*.jl` or project files are ignored or untracked. 0.1.7 warns.
 - `setup --sync`, `setup --pull`, and `sync!` will fail when the remote `HEAD` is not the local `HEAD`, including an unpushed local commit on `--pull`. 0.1.7 warns. A hash that could not be read stays a warning.
 - `drive` and `collect!` will refuse a collect root that is the project root or a parent of it. 0.1.7 warns.
+- `setup` will refuse more than one mode flag, and `plan`, `pool`, and `size` will reject unknown `-` options instead of ignoring them with a warning.
 
 ## 0.1.7
 

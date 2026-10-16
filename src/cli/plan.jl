@@ -21,9 +21,8 @@ if !isdefined(@__MODULE__, :DistSSHRun)
 end
 include(joinpath(@__DIR__, "plan", "_using.jl"))
 
-const PROJECT_ROOT = cli_project_root(@__DIR__)
-
 function plan_main()::Cint
+    project_root = cli_project_root(@__DIR__)
     opts = parse_plan_args(ARGS)
     if opts.show_help
         show_plan_usage()
@@ -40,7 +39,7 @@ function plan_main()::Cint
     kp = plan(
         opts.script_path;
         workers = opts.tokens,
-        project = PROJECT_ROOT,
+        project = project_root,
         gb_per_worker = opts.gb_per_worker,
         probe = opts.probe,
         mem_headroom = opts.mem_headroom,

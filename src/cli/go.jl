@@ -24,10 +24,9 @@ if !isdefined(@__MODULE__, :DistSSHRun)
 end
 include(joinpath(@__DIR__, "go", "_using.jl"))
 
-const PROJECT_ROOT = cli_project_root(@__DIR__)
-const _PATH_ANCHOR = DistSSHRun.canonical_local_path(PROJECT_ROOT)
-
 function go_main()::Cint
+    project_root = cli_project_root(@__DIR__)
+    path_anchor = DistSSHRun.canonical_local_path(project_root)
     original_args = copy(ARGS)
     parsed = parse_go_args(ARGS)
     if parsed.show_version
@@ -48,13 +47,13 @@ function go_main()::Cint
     result = go!(
         parsed.script_path,
         host_tokens(parsed; kind = :go);
-        project = PROJECT_ROOT,
+        project = project_root,
         quiet = kw[:quiet],
         verbosity = kw[:verbosity],
         yes = yes,
         sync = kw[:sync],
         args = kw[:args],
-        path_anchor = _PATH_ANCHOR,
+        path_anchor = path_anchor,
         output_dir = kw[:output_dir],
         hosts_file = nothing,
         julia = kw[:julia],

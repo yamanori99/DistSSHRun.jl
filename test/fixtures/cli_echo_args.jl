@@ -13,4 +13,8 @@ let path = get(ENV, "_DISTSSHKIT_TEST_ARGS_FILE", "")
             close(io)
         end
     end
+    proj_file = get(ENV, "_DISTSSHKIT_TEST_PROJ_FILE", "")
+    if !isempty(proj_file)
+        write(proj_file, get(ENV, "DISTRIBUTED_PROJECT_ROOT", ""))
+    end
 end

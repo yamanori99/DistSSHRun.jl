@@ -247,15 +247,14 @@ function cleanup_remote_workers(hosts::Vector{String})::NamedTuple
     print_ok("✓")
     kit_println()
 
-    results = Dict{String, Bool}()
+    n = length(hosts)
+    oks = fill(false, n)
     kit_spin!("  Cleaning remotes ($(length(hosts))) ") do
-        @sync for host in hosts
-            @async begin
-                _setup_host_span!(host, :running)
-                okh = _pkill_remote_julia_workers!(host)
-                results[host] = okh
-                _setup_host_span!(host, okh ? :ok : :fail)
-            end
+        map_host_jobs(hosts) do i, host
+            _setup_host_span!(host, :running)
+            okh = _pkill_remote_julia_workers!(host)
+            oks[i] = okh
+            _setup_host_span!(host, okh ? :ok : :fail)
         end
         return nothing
     end
@@ -264,8 +263,9 @@ function cleanup_remote_workers(hosts::Vector{String})::NamedTuple
     succeeded = 0
     failed = 0
     host_results = HostResult[]
-    for host in hosts
-        if get(results, host, false)
+    for i in 1:n
+        host = hosts[i]
+        if oks[i]
             ok("$host: done")
             succeeded += 1
             push!(host_results, HostResult(host, true, "cleaned"))
@@ -303,57 +303,56 @@ function _pkg_e_on_remotes(
     end
 
     pq = _remote_shell_path_word(remote_path)
-    results = Dict{String, Bool}()
-    fail_msgs = Dict{String, String}()
+    n = length(hosts)
+    oks = fill(false, n)
+    fail_msgs = fill("", n)
     kit_spin!("  $spin_label ($(length(hosts)) hosts) ") do
-        @sync for host in hosts
-            @async begin
-                _setup_host_span!(host, :running)
-                host_julia = nothing
-                ssh_msg = nothing
-                try
-                    host_julia = julia_path == "auto" ? detect_julia_path(host) : julia_path
-                catch e
-                    e isa ArgumentError || rethrow()
-                    ssh_msg = e.msg
-                end
-                if ssh_msg isa String
-                    results[host] = false
-                    fail_msgs[host] = ssh_msg
-                elseif host_julia === nothing
-                    results[host] = false
-                    fail_msgs[host] = "Julia not found"
-                else
-                    jb = _remote_shell_path_word(host_julia)
-                    # Prefer git CLI (ssh-agent / SSH config) over LibGit2 credentials UI.
-                    cmd = "JULIA_PKG_USE_CLI_GIT=true $jb --project=$pq --startup-file=no " *
-                        "-e 'using Pkg; $pkg_e'"
-                    out = IOBuffer()
-                    err = IOBuffer()
-                    try
-                        proc = run(
-                            pipeline(
-                                ignorestatus(_host_sync_remote_shell_cmd(host, cmd));
-                                stdout = out,
-                                stderr = err,
-                            );
-                            wait = true,
-                        )
-                        if proc.exitcode == 0
-                            results[host] = true
-                        else
-                            results[host] = false
-                            msg = strip(String(take!(err)))
-                            isempty(msg) && (msg = strip(String(take!(out))))
-                            fail_msgs[host] = isempty(msg) ? "exit $(proc.exitcode)" : first(split(msg, '\n'))
-                        end
-                    catch e
-                        results[host] = false
-                        fail_msgs[host] = sprint(showerror, e)
-                    end
-                end
-                _setup_host_span!(host, get(results, host, false) ? :ok : :fail)
+        map_host_jobs(hosts) do i, host
+            _setup_host_span!(host, :running)
+            host_julia = nothing
+            ssh_msg = nothing
+            try
+                host_julia = julia_path == "auto" ? detect_julia_path(host) : julia_path
+            catch e
+                e isa ArgumentError || rethrow()
+                ssh_msg = e.msg
             end
+            if ssh_msg isa String
+                oks[i] = false
+                fail_msgs[i] = ssh_msg
+            elseif host_julia === nothing
+                oks[i] = false
+                fail_msgs[i] = "Julia not found"
+            else
+                jb = _remote_shell_path_word(host_julia)
+                # Prefer git CLI (ssh-agent / SSH config) over LibGit2 credentials UI.
+                cmd = "JULIA_PKG_USE_CLI_GIT=true $jb --project=$pq --startup-file=no " *
+                    "-e 'using Pkg; $pkg_e'"
+                out = IOBuffer()
+                err = IOBuffer()
+                try
+                    proc = run(
+                        pipeline(
+                            ignorestatus(_host_sync_remote_shell_cmd(host, cmd));
+                            stdout = out,
+                            stderr = err,
+                        );
+                        wait = true,
+                    )
+                    if proc.exitcode == 0
+                        oks[i] = true
+                    else
+                        oks[i] = false
+                        msg = strip(String(take!(err)))
+                        isempty(msg) && (msg = strip(String(take!(out))))
+                        fail_msgs[i] = isempty(msg) ? "exit $(proc.exitcode)" : first(split(msg, '\n'))
+                    end
+                catch e
+                    oks[i] = false
+                    fail_msgs[i] = sprint(showerror, e)
+                end
+            end
+            _setup_host_span!(host, oks[i] ? :ok : :fail)
         end
         return nothing
     end
@@ -362,14 +361,15 @@ function _pkg_e_on_remotes(
     succeeded = 0
     failed = 0
     host_results = HostResult[]
-    for host in hosts
-        if get(results, host, false)
+    for i in 1:n
+        host = hosts[i]
+        if oks[i]
             ok("$host: done")
             succeeded += 1
             push!(host_results, HostResult(host, true, "done"))
         else
             fail("$host: failed")
-            msg = get(fail_msgs, host, "")
+            msg = fail_msgs[i]
             !isempty(msg) && kit_println("    $msg")
             if occursin("credential", lowercase(msg)) || occursin("Permission denied", msg) ||
                     occursin("failed to clone", lowercase(msg))

@@ -258,9 +258,11 @@ end
 
 """Run a kit CLI script under `src/cli/` (`drive.jl`, `setup.jl`, …) with `ARGS` set."""
 function _run_kit_cli_script(script_name::AbstractString, args::Vector{String})::Cint
-    haskey(ENV, "DISTRIBUTED_PROJECT_ROOT") || (ENV["DISTRIBUTED_PROJECT_ROOT"] = pwd())
+    prev_proj = get(ENV, "DISTRIBUTED_PROJECT_ROOT", nothing)
+    prev_proj === nothing && (ENV["DISTRIBUTED_PROJECT_ROOT"] = pwd())
     # `args` may alias `ARGS` (the app launcher can pass `ARGS` directly).
     args_snapshot = collect(String, args)
+    orig_args = copy(ARGS)
     empty!(ARGS)
     append!(ARGS, args_snapshot)
     script_path::String = if isabspath(script_name)
@@ -282,6 +284,13 @@ function _run_kit_cli_script(script_name::AbstractString, args::Vector{String}):
         Core.include(Main, script_path)
         return 0
     finally
+        empty!(ARGS)
+        append!(ARGS, orig_args)
+        if prev_proj === nothing
+            delete!(ENV, "DISTRIBUTED_PROJECT_ROOT")
+        else
+            ENV["DISTRIBUTED_PROJECT_ROOT"] = prev_proj
+        end
         if prev_include === nothing
             delete!(ENV, "DIST_SSH_KIT_CLI_INCLUDE")
         else

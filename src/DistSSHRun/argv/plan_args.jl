@@ -97,7 +97,7 @@ function parse_plan_args(args::Vector{String})
         elseif arg == "--parent-gb"
             parent_gb = parse(Float64, cli_take_value!(c, arg))
         elseif startswith(arg, "-")
-            @warn "Unknown option: $arg"
+            @warn "Unknown option: $arg (ignored; will be an error in DistSSHRun 0.2)"
             cli_consume!(c)
         elseif endswith(arg, ".jl")
             script_path === nothing || throw(
