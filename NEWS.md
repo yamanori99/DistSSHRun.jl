@@ -6,6 +6,15 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
+### Planned breaking (next minor)
+
+- `setup --rsync` and `setup --sync` will refuse a `Manifest.toml` that would not ship, and git sync will refuse a path source whose `*.jl` or project files are ignored or untracked. 0.1.7 warns.
+- `setup --sync`, `setup --pull`, and `sync!` will fail when the remote `HEAD` is not the local `HEAD`, including an unpushed local commit on `--pull`. 0.1.7 warns. A hash that could not be read stays a warning.
+- `drive` and `collect!` will refuse a collect root that is the project root or a parent of it. 0.1.7 warns.
+- `setup` will refuse more than one mode flag, and `plan`, `pool`, and `size` will reject unknown `-` options instead of ignoring them with a warning.
+
+## 0.1.8
+
 - Since DistSSHRun 0.1.7, `setup --rsync` inside one git repository also applies `.gitignore` files above the send root.
 - `setup --rsync` warns once when untracked files are left out by a `.gitignore` above the send root. The warning names the count, a few paths, and that file's path and line. Those files stay out of the send list. `.git/info/exclude` and `core.excludesFile` are not part of this warning.
 - Directories in the send list ignore `.git/info/exclude` and `core.excludesFile`, the same rule as the file list. A negated pattern (`!dir/`) keeps the directory.
@@ -22,13 +31,6 @@ Those notes are often shorter than the section below.
 - When `go` `--output-dir` is outside the project, remote slot output is staged under `$remote_root/.distsshkit/go/<batch>/<slot>` and collected into the local `--output-dir`. A later successful slot no longer hides an earlier failure in `GoResult.run`.
 - `setup` treats an unknown `-` option as `unknown setup option` (exit 1). Passing more than one `setup` mode flag or an unknown option to `plan` / `pool` / `size` warns that it will be an error in DistSSHRun 0.2.
 - SSH preflight failure on `setup!` / `instantiate!` returns `cancelled=false` with `ok=false`. `instantiate_remotes`, `runtest_remotes`, and `cleanup_remote_workers` bound remote concurrency with `map_host_jobs`.
-
-### Planned breaking (next minor)
-
-- `setup --rsync` and `setup --sync` will refuse a `Manifest.toml` that would not ship, and git sync will refuse a path source whose `*.jl` or project files are ignored or untracked. 0.1.7 warns.
-- `setup --sync`, `setup --pull`, and `sync!` will fail when the remote `HEAD` is not the local `HEAD`, including an unpushed local commit on `--pull`. 0.1.7 warns. A hash that could not be read stays a warning.
-- `drive` and `collect!` will refuse a collect root that is the project root or a parent of it. 0.1.7 warns.
-- `setup` will refuse more than one mode flag, and `plan`, `pool`, and `size` will reject unknown `-` options instead of ignoring them with a warning.
 
 ## 0.1.7
 
