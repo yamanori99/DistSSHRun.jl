@@ -29,6 +29,12 @@ end
                 @test !DistSSHRun._collect_dest_escapes_root(root, "kept.txt")
                 write(joinpath(root, "kept.txt"), "ok\n")
                 @test !DistSSHRun._collect_dest_escapes_root(root, "kept.txt")
+                if !Sys.iswindows()
+                    rm(joinpath(root, "out"))
+                    symlink(outside, joinpath(root, "out\\side"))
+                    @test DistSSHRun._collect_dest_escapes_root(root, "out\\side/file.txt")
+                    @test DistSSHRun._collect_local_symlink_escape(root) == "out\\side"
+                end
             end
         end
     end

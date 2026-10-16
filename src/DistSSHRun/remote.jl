@@ -427,7 +427,7 @@ reached via `/tmp` or another symlink does not look like an escape. Missing
 path components do not.
 """
 function _collect_dest_escapes_root(local_root::AbstractString, rel::AbstractString)::Bool
-    normalized = replace(String(rel), '\\' => '/')
+    normalized = Sys.iswindows() ? replace(String(rel), '\\' => '/') : String(rel)
     isabspath(normalized) && return true
     root_c = canonical_local_path(local_root)
     root = if ispath(root_c)
