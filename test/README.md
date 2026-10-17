@@ -13,10 +13,10 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 
 That is `test/runtests.jl` (unit + integration), sequential `@testset`s,
 `test/Project.toml`. Aqua is a separate CI job, not `Pkg.test()`.
-`Pkg.test()` must pass on a Registry install (no kit `Manifest.toml`, often
-mode 444): job smokes pass `-y`; real `ssh` / `git` spawn runs only when that
-binary is on `PATH`; real SSH clusters stay in `e2e.jl`. Occasional copy
-recipe: [Registry tree](#registry-tree).
+`Pkg.test()` on this checkout is not the PkgEval sandbox. Job smokes pass
+`-y`; real `ssh` / `git` spawn runs only when that binary is on `PATH`;
+real SSH clusters stay in `e2e.jl`. Reproduce that sandbox:
+[PkgEval](#pkgeval).
 
 Real SSH:
 
@@ -90,92 +90,37 @@ Green on one layer does not imply the others. `Pkg.test()` does not run
 - **doctests** (~5 s): `src/` docstring examples (Documenter, Julia 1.13).
   Not workers / SSH.
 
-## Registry tree
+## PkgEval
 
-[PkgEval](https://github.com/JuliaCI/PkgEval.jl) (via
-[Nanosoldier](https://github.com/JuliaCI/Nanosoldier.jl)) and `Pkg.add` use
-a Registry tarball, not this checkout. This package:
+[PkgEval](https://github.com/JuliaCI/PkgEval.jl) runs the daily ecosystem
+check. The sandbox is Debian bookworm without `tzdata`, with
+`LANG=C.UTF-8`, a pipe for stdout, and a 45 minute test limit. Daily uses
+the General tarball. This recipe mounts this checkout read-only, and
+dependencies resolve from General, so an unreleased DistSSHQueue change is
+not in the sandbox. This package:
 <https://juliaci.github.io/NanosoldierReports/pkgeval_badges/D/DistSSHRun.html>
 Latest ecosystem report:
 <https://juliaci.github.io/NanosoldierReports/pkgeval_badges/report.html>
-Reproduce that tree: copy without kit `.git` / `Manifest.toml`, `Pkg.add`
-from a **bare** `file://` git (so the installed package dir has no `.git` —
-DistSSHRun talks to git for jobs, not for its own install), `chmod a-w` on
-`pkgdir`, then `Pkg.test`. Do this after changing the gates above, and
-before a General cut. CI: `Pkg.test (registry, ubuntu-latest, x64)` on ordinary PRs
-(heavy gate) and **main** (slot tip, no `ssh`; `continue-on-error`;
-not a required check).
+Run it on Linux with cgroup v2 and unprivileged user namespaces, before a
+General cut. The host Julia is 1.12 or newer. PkgEval is not in General,
+so this adds it from its repository. The tested Julia is nightly.
+CI: `PkgEval (nightly, ubuntu-latest, x64)` on ordinary PRs (heavy gate)
+and **main** (`continue-on-error`; not a required check).
 
-Copy without `Manifest.toml` (and without `.git`). On Linux, `mktemp -d` is
-enough. On macOS, put the copy under `$HOME` if you will bind-mount it into
-Docker Desktop (`$TMPDIR` / `/tmp` mount empty).
-
-```bash
-WORKDIR=$(mktemp -d "$HOME/dsk.XXXXXX")
-rsync -a \
-  --exclude .git \
-  --exclude Manifest.toml \
-  --exclude docs/Manifest.toml \
-  --exclude docs/build \
-  --exclude test/artifacts \
-  ./ "$WORKDIR/"
-```
-
-This machine (**1.13**, and `+nightly`). Distro `ssh` / `git` stay on `PATH`.
-On Linux this is enough for the tree; it does not reproduce a missing
-`ssh`. Do not `git init` inside the copy (that would put `.git` on the kit
-tree). Use a bare repo, then `Pkg.add(; url=)`.
-
-```bash
-BARE=$(mktemp -d "$HOME/dsk.git.XXXXXX")
-git init --bare -q "$BARE"
-git --git-dir="$BARE" --work-tree="$WORKDIR" add -A
-git --git-dir="$BARE" --work-tree="$WORKDIR" \
-  -c user.email=ci@distsshkit -c user.name=ci commit -q -m tree
-```
+From this checkout:
 
 ```bash
 julia -e '
   using Pkg
   Pkg.activate(temp=true)
-  Pkg.add(; url=ARGS[1])
-  using DistSSHRun
-  run(Cmd(["chmod", "-R", "a-w", pkgdir(DistSSHRun)]))
-  Pkg.test("DistSSHRun")
-' "file://$BARE"
-```
-
-Linux without `ssh`: same [juliaup](https://github.com/JuliaLang/juliaup)
-Ubuntu container from macOS or from Linux
-([Docker Hub `julia`](https://hub.docker.com/_/julia) has no `nightly`
-tag). `--no-install-recommends` keeps `openssh-client` out.
-
-```bash
-docker run --rm \
-  -v "$WORKDIR:/pkg:ro" \
-  ubuntu:24.04 \
-  bash -lc "
-    apt-get update -qq &&
-    apt-get install -y -qq --no-install-recommends \
-      curl ca-certificates git &&
-    curl -fsSL https://install.julialang.org |
-      sh -s -- --yes --default-channel nightly &&
-    export PATH=\"\$HOME/.juliaup/bin:\$PATH\" &&
-    cp -a /pkg /tmp/dsk &&
-    git init --bare -q /tmp/dsk.git &&
-    git --git-dir=/tmp/dsk.git --work-tree=/tmp/dsk add -A &&
-    git --git-dir=/tmp/dsk.git --work-tree=/tmp/dsk \
-      -c user.email=ci@distsshkit -c user.name=ci \
-      commit -q -m tree &&
-    julia +nightly -e '
-      using Pkg
-      Pkg.activate(temp=true)
-      Pkg.add(; url=\"file:///tmp/dsk.git\")
-      using DistSSHRun
-      run(Cmd([\"chmod\", \"-R\", \"a-w\", pkgdir(DistSSHRun)]))
-      Pkg.test(\"DistSSHRun\")
-    '
-  "
+  Pkg.add(url="https://github.com/JuliaCI/PkgEval.jl")
+  using PkgEval
+  config = Configuration(; julia="nightly")
+  pkg = Package(; name="DistSSHRun", url="/package")
+  result = PkgEval.evaluate_package(config, pkg; echo=true,
+      mounts=Dict("/package:ro" => pwd()))
+  exit(result.status == :test ? 0 : 1)
+'
 ```
 
 ## SSH E2E
