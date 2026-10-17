@@ -1,0 +1,127 @@
+slot = "1.14-nightly"
+commit = "1459df0081f0c7749b7435bee00f0bbefb5e779a"
+precompile_full_sec = 5.783588254
+src_bytes = 631277
+cpu = "AMD EPYC 7763 64-Core Processor"
+julia_commit = "08e5253dc0"
+threads = 4
+src_files = 70
+src_lines = 18078
+repo = "DistSSHRun"
+version = "0.1.9"
+julia = "1.14.0-DEV.3787"
+src_code_lines = 16840
+precompile_pkg_sec = 3.087657505
+using_sec = 0.338928456
+time = "2026-10-17T19:55:20Z"
+os = "Linux"
+
+[[imports]]
+name = "DistSSHRun"
+ms = 11.0
+
+[[commands]]
+total_ms = 1524.1000000000001
+name = "help"
+wall_sec = 1.0917530059814453
+exit = 0
+args = ["--help"]
+walls_sec = [2.008061170578003, 1.0917530059814453, 1.0851819515228271]
+main_ms = 1403.4
+count = 15
+
+    [[commands.top]]
+    bucket = "DistSSHRun"
+    signature = "Tuple{typeof(DistSSHRun.main), Array{String, 1}}"
+    recompile = false
+    ms = 1403.4
+    [[commands.top]]
+    bucket = "DistSSHRun"
+    signature = "Tuple{typeof(DistSSHRun.print_kit_root_usage), Base.IOStream}"
+    recompile = false
+    ms = 62.0
+    [[commands.top]]
+    bucket = "stdlib"
+    signature = "Tuple{Distributed.var\"#start_gc_msgs_task##0#start_gc_msgs_task##1\"}"
+    recompile = false
+    ms = 14.2
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.should_use_main_entrypoint)}"
+    recompile = true
+    ms = 13.2
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.string), Char}"
+    recompile = false
+    ms = 6.4
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.getproperty), Base.MappingRF{DistSSHRun.var\"#77#78\", typeof(Base.max)}, Symbol}"
+    recompile = false
+    ms = 5.7
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.getproperty), Base.MappingRF{DistSSHRun.var\"#67#68\", typeof(Base.max)}, Symbol}"
+    recompile = false
+    ms = 5.4
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.in), String, Tuple{String, String, String}}"
+    recompile = false
+    ms = 5.2
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.getproperty), Base.Order.By{DistSSHRun.var\"#_kit_progress_files##0#_kit_progress_files##1\", Base.Order.ForwardOrdering}, Symbol}"
+    recompile = false
+    ms = 4.6
+    [[commands.top]]
+    bucket = "stdlib"
+    signature = "Tuple{Core.TypeEgal{NamedTuple{(:init,), T} where T<:Tuple}, Tuple{Float64}}"
+    recompile = false
+    ms = 0.9
+    [[commands.top]]
+    bucket = "stdlib"
+    signature = "Tuple{Core.TypeEgal{NamedTuple{(:surface,), T} where T<:Tuple}, Tuple{Symbol}}"
+    recompile = false
+    ms = 0.8
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.structdiff), NamedTuple{(:init,), Tuple{Float64}}, Core.TypeEgal{NamedTuple{(:dims,), T} where T<:Tuple}}"
+    recompile = false
+    ms = 0.6
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.pairs), NamedTuple{(:init,), Tuple{Float64}}}"
+    recompile = false
+    ms = 0.6
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.merge), NamedTuple{(), Tuple{}}, Base.Pairs{Symbol, Float64, Nothing, NamedTuple{(:init,), Tuple{Float64}}}}"
+    recompile = false
+    ms = 0.6
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.getproperty), Base.Order.Lt{Base.Sort.var\"#_sort!##10#_sort!##11\"{Base.Order.By{DistSSHRun.var\"#_kit_progress_files##0#_kit_progress_files##1\", Base.Order.ForwardOrdering}}}, Symbol}"
+    recompile = false
+    ms = 0.5
+
+    [commands.buckets.Base]
+    ms = 42.800000000000004
+    count = 10
+
+    [commands.buckets.stdlib]
+    ms = 15.899999999999999
+    count = 3
+
+    [commands.buckets.DistSSHKit]
+    ms = 0.0
+    count = 0
+
+    [commands.buckets.DistSSHRun]
+    ms = 1465.4
+    count = 2
+
+    [commands.buckets.DistSSHQueue]
+    ms = 0.0
+    count = 0

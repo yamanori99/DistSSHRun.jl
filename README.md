@@ -40,3 +40,33 @@ Latest `help` methods:
 | `Tuple{typeof(Base.getproperty), Base.MappingRF{DistSSHRun.var"#67#68", typeof(Base.max)}, ...` | 4.1 |  |
 | `Tuple{typeof(Base.indexed_iterate), Tuple{Bool, Tuple{Base.Missing, Base.Missing, Base.Mis...` | 4.0 |  |
 
+## 1.14-nightly
+
+| date | commit | version | src files | code lines | full s | pkg s | using s | help s |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-10-17 | 1459df0 | 0.1.9 | 70 | 16840 | 5.78 | 3.09 | 0.34 | 1.09 |
+
+```mermaid
+xychart-beta
+    title "1.14-nightly help"
+    x-axis ["1017"]
+    y-axis "seconds" 0 --> 2
+    line [1.09]
+```
+
+
+Latest `help` methods:
+
+| method | now ms | previous ms |
+| --- | ---: | ---: |
+| `Tuple{typeof(DistSSHRun.main), Array{String, 1}}` | 1403.4 |  |
+| `Tuple{typeof(DistSSHRun.print_kit_root_usage), Base.IOStream}` | 62.0 |  |
+| `Tuple{Distributed.var"#start_gc_msgs_task##0#start_gc_msgs_task##1"}` | 14.2 |  |
+| `Tuple{typeof(Base.should_use_main_entrypoint)}` | 13.2 |  |
+| `Tuple{typeof(Base.string), Char}` | 6.4 |  |
+| `Tuple{typeof(Base.getproperty), Base.MappingRF{DistSSHRun.var"#77#78", typeof(Base.max)}, ...` | 5.7 |  |
+| `Tuple{typeof(Base.getproperty), Base.MappingRF{DistSSHRun.var"#67#68", typeof(Base.max)}, ...` | 5.4 |  |
+| `Tuple{typeof(Base.in), String, Tuple{String, String, String}}` | 5.2 |  |
+| `Tuple{typeof(Base.getproperty), Base.Order.By{DistSSHRun.var"#_kit_progress_files##0#_kit_...` | 4.6 |  |
+| `Tuple{Core.TypeEgal{NamedTuple{(:init,), T} where T<:Tuple}, Tuple{Float64}}` | 0.9 |  |
+
