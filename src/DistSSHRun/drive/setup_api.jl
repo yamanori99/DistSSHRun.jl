@@ -42,7 +42,7 @@ Confirmations follow `session.yes` (CLI `-y`). A matching `confirm_path` on
 
 ```julia
 session = KitSession(workers=["child:user@h1"], remote="~/proj", yes=true)
-setup!(session, :delete, :rsync, :instantiate)
+setup!(session, :rsync, :instantiate)
 setup!(session, :check; ignore_julia_version=true)
 ```
 

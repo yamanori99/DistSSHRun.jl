@@ -6,6 +6,8 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
+- The `setup!` and `instantiate!` examples no longer pass `:delete` with `yes=true`. A first-time remote uses `:rsync` and `:instantiate`. `:rsync` already refuses a remote path that is not empty.
+
 ### Planned breaking (next minor)
 
 - `setup --rsync` and `setup --sync` will refuse a `Manifest.toml` that would not ship, and git sync will refuse a path source whose `*.jl` or project files are ignored or untracked. 0.1.7 warns.
