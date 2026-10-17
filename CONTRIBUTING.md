@@ -156,7 +156,8 @@ still runs when `docs/**`, README,
 `src/**`, or `Project.toml` changed; otherwise it is skipped too.
 Linux E2E is skipped on allowlisted markdown-only PRs (same skipping UI):
 
-- `README.md`, `README.ja.md`, `CONTRIBUTING.md`, `NEWS.md`,
+- `AGENTS.md`, `REVIEW.md`, `README.md`, `README.ja.md`,
+  `CONTRIBUTING.md`, `NEWS.md`,
   `SECURITY.md`, `LICENSE`
 - `.gitignore`, `.git-blame-ignore-revs`,
   `.github/pull_request_template.md`, `.coderabbit.yaml`
@@ -209,6 +210,15 @@ Required to merge (ruleset `main` uses these names). **1.14-nightly** jobs are a
 - Branch from `main`. Squash-merge only. Merged heads are deleted.
 - One reviewable change per PR. Split unless `main` would be broken in between.
 - Large plans: discuss in an issue first, then small PRs.
+- The body is
+  [`.github/pull_request_template.md`](.github/pull_request_template.md):
+  what changed, what ran, what it can break, and how to undo it.
+  [AGENTS.md](AGENTS.md) tells an agent how to fill that.
+  [REVIEW.md](REVIEW.md) tells a reviewer what failure looks like here.
+  The type label stays out of the body. CI applies it. See
+  [DistSSHKit releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md).
+- That split follows
+  [How the Claude Code team does code review](https://claude.dev/blog/solving-code-review-at-anthropic/).
 
 ### CodeRabbit (experimental)
 
