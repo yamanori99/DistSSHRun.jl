@@ -1,0 +1,6 @@
+# Commands measured by bench/compile/measure.jl. No SSH.
+package = "DistSSHRun"
+
+[[command]]
+name = "help"
+args = ["--help"]
