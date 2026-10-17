@@ -102,7 +102,8 @@ not in the sandbox. This package:
 Latest ecosystem report:
 <https://juliaci.github.io/NanosoldierReports/pkgeval_badges/report.html>
 Run it on Linux with cgroup v2 and unprivileged user namespaces, before a
-General cut. The host Julia is 1.12 or newer. The tested Julia is nightly.
+General cut. The host Julia is 1.12 or newer. PkgEval is not in General,
+so this adds it from its repository. The tested Julia is nightly.
 CI: `PkgEval (nightly, ubuntu-latest, x64)` on ordinary PRs (heavy gate)
 and **main** (`continue-on-error`; not a required check).
 
@@ -112,7 +113,7 @@ From this checkout:
 julia -e '
   using Pkg
   Pkg.activate(temp=true)
-  Pkg.add("PkgEval")
+  Pkg.add(url="https://github.com/JuliaCI/PkgEval.jl")
   using PkgEval
   config = Configuration(; julia="nightly")
   pkg = Package(; name="DistSSHRun", url="/package")
