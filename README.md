@@ -89,17 +89,18 @@ Latest `drive` methods:
 
 ## 1.14-nightly
 
-| date | commit | version | os | arch | src files | code lines | full s | pkg s | using s | help s |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-10-17 | 1459df0 | 0.1.9 | Linux |  | 70 | 16840 | 5.78 | 3.09 | 0.34 | 1.09 |
-| 2026-10-18 | e677df9 | 0.1.9 | Ubuntu 24.04.5 LTS | x86_64 | 70 | 16840 | 4.6 | 2.38 | 0.31 | 0.96 |
+| date | commit | version | os | arch | src files | code lines | full s | pkg s | using s | help s | go s | drive s |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-10-17 | 1459df0 | 0.1.9 | Linux |  | 70 | 16840 | 5.78 | 3.09 | 0.34 | 1.09 |  |  |
+| 2026-10-18 | e677df9 | 0.1.9 | Ubuntu 24.04.5 LTS | x86_64 | 70 | 16840 | 4.6 | 2.38 | 0.31 | 0.96 |  |  |
+| 2026-10-18 | 91b44e7 | 0.1.9 | Ubuntu 24.04.5 LTS | x86_64 | 70 | 17009 | 4.9 | 2.57 | 0.32 | 0.56 | 2.95 | 11.38 |
 
 ```mermaid
 xychart-beta
     title "1.14-nightly help"
-    x-axis ["1017", "1018"]
+    x-axis ["1017", "1018", "1018"]
     y-axis "seconds" 0 --> 2
-    line [1.09, 0.96]
+    line [1.09, 0.96, 0.56]
 ```
 
 
@@ -107,14 +108,58 @@ Latest `help` methods:
 
 | method | now ms | previous ms |
 | --- | ---: | ---: |
-| `Tuple{typeof(DistSSHRun.main), Array{String, 1}}` | 1180.1 | 1403.4 |
-| `Tuple{typeof(DistSSHRun.print_kit_root_usage), Base.PipeEndpoint}` | 48.9 |  |
-| `Tuple{typeof(Distributed.flush_gc_msgs)}` | 18.2 |  |
-| `Tuple{typeof(Base.should_use_main_entrypoint)}` | 12.6 | 13.2 |
-| `Tuple{Distributed.var"#start_gc_msgs_task##0#start_gc_msgs_task##1"}` | 12.2 | 14.2 |
-| `Tuple{typeof(Base.string), Char}` | 5.5 | 6.4 |
-| `Tuple{typeof(Base.getproperty), Base.MappingRF{DistSSHRun.var"#77#78", typeof(Base.max)}, ...` | 5.4 | 5.7 |
-| `Tuple{typeof(Base.getproperty), Base.MappingRF{DistSSHRun.var"#67#68", typeof(Base.max)}, ...` | 5.3 | 5.4 |
-| `Tuple{typeof(Base.in), String, Tuple{String, String, String}}` | 5.2 | 5.2 |
-| `Tuple{typeof(Base.getproperty), Base.Order.By{DistSSHRun.var"#_kit_progress_files##0#_kit_...` | 4.7 | 4.6 |
+| `Tuple{typeof(DistSSHRun.main), Array{String, 1}}` | 114.3 | 1180.1 |
+| `Tuple{typeof(DistSSHRun.print_kit_root_usage), Base.PipeEndpoint}` | 49.3 | 48.9 |
+| `Tuple{typeof(Distributed.flush_gc_msgs)}` | 19.1 | 18.2 |
+| `Tuple{Distributed.var"#start_gc_msgs_task##0#start_gc_msgs_task##1"}` | 12.5 | 12.2 |
+| `Tuple{typeof(Base.should_use_main_entrypoint)}` | 11.9 | 12.6 |
+| `Tuple{typeof(Base.string), Char}` | 6.0 | 5.5 |
+
+```mermaid
+xychart-beta
+    title "1.14-nightly go"
+    x-axis ["1018"]
+    y-axis "seconds" 0 --> 4
+    bar [2.95]
+```
+
+
+Latest `go` methods:
+
+| method | now ms | previous ms |
+| --- | ---: | ---: |
+| `Tuple{typeof(Core.kwcall), NamedTuple{(:project, :quiet, :verbosity, :yes, :sync, :args, :...` | 2924.7 |  |
+| `Tuple{typeof(Main.go_main)}` | 2047.7 |  |
+| `Tuple{DistSSHRun.var"#_go_run!##6#_go_run!##7"{String, String, Bool, Array{String, 1}, Not...` | 373.4 |  |
+| `Tuple{typeof(Base.push_widen), Array{NamedTuple{(:event, :kind, :job, :label, :total, :don...` | 115.3 |  |
+| `Tuple{DistSSHRun.var"#577#578", Array{String, 1}}` | 82.8 |  |
+| `Tuple{typeof(DistSSHRun.main), Array{String, 1}}` | 75.9 |  |
+| `Tuple{typeof(Core.kwcall), NamedTuple{(:ok, :footer), Tuple{Bool, String}}, typeof(DistSSH...` | 51.9 |  |
+| `Tuple{typeof(Base.addenv), Base.Cmd, Pair{String, String}}` | 47.9 |  |
+| `Tuple{typeof(Core.kwcall), NamedTuple{(:kind,), Tuple{Symbol}}, typeof(DistSSHRun.execute_...` | 36.8 |  |
+| `Tuple{typeof(Base.grow_to!), Array{NamedTuple{(:event, :kind, :job, :label, :total, :done,...` | 36.5 |  |
+
+```mermaid
+xychart-beta
+    title "1.14-nightly drive"
+    x-axis ["1018"]
+    y-axis "seconds" 0 --> 14
+    bar [11.38]
+```
+
+
+Latest `drive` methods:
+
+| method | now ms | previous ms |
+| --- | ---: | ---: |
+| `Tuple{typeof(Core.kwcall), NamedTuple{(:original_args, :project_root), Tuple{Array{String,...` | 6885.8 |  |
+| `Tuple{typeof(Main.drive_main)}` | 3359.0 |  |
+| `Tuple{Distributed.var"#38#39"{Distributed.LocalManager, Array{Int64, 1}, Distributed.Worke...` | 1112.4 |  |
+| `Tuple{Distributed.var"#process_messages##0#process_messages##1"{Sockets.TCPSocket, Sockets...` | 874.9 |  |
+| `Tuple{typeof(Serialization.serialize), Distributed.ClusterSerializer{Sockets.TCPSocket}, A...` | 407.3 |  |
+| `Tuple{typeof(DistSSHRun.main)}` | 249.9 |  |
+| `Tuple{typeof(Distributed.send_connection_hdr), Sockets.TCPSocket, Bool}` | 238.1 |  |
+| `Tuple{typeof(Distributed.read_worker_host_port), Base.PipeEndpoint}` | 215.5 |  |
+| `Tuple{typeof(Base.print), Base.PipeEndpoint, Array{Int64, 1}, String}` | 148.8 |  |
+| `Tuple{typeof(Serialization.deserialize), Distributed.ClusterSerializer{Sockets.TCPSocket},...` | 130.0 |  |
 
