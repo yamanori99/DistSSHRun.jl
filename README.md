@@ -47,14 +47,14 @@ Latest `help` methods:
 | date | commit | version | os | arch | src files | code lines | full s | pkg s | using s | help s |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-10-17 | 1459df0 | 0.1.9 | Linux |  | 70 | 16840 | 5.78 | 3.09 | 0.34 | 1.09 |
-| 2026-10-18 | e677df9 | 0.1.9 | Ubuntu 24.04.5 LTS | x86_64 | 70 | 16840 | 4.48 | 2.36 | 0.28 | 0.89 |
+| 2026-10-18 | e677df9 | 0.1.9 | Ubuntu 24.04.5 LTS | x86_64 | 70 | 16840 | 4.6 | 2.38 | 0.31 | 0.96 |
 
 ```mermaid
 xychart-beta
     title "1.14-nightly help"
     x-axis ["1017", "1018"]
     y-axis "seconds" 0 --> 2
-    line [1.09, 0.89]
+    line [1.09, 0.96]
 ```
 
 
@@ -62,14 +62,14 @@ Latest `help` methods:
 
 | method | now ms | previous ms |
 | --- | ---: | ---: |
-| `Tuple{typeof(DistSSHRun.main), Array{String, 1}}` | 1116.9 | 1403.4 |
-| `Tuple{typeof(DistSSHRun.print_kit_root_usage), Base.PipeEndpoint}` | 46.7 |  |
-| `Tuple{typeof(Distributed.flush_gc_msgs)}` | 17.3 |  |
-| `Tuple{typeof(Base.should_use_main_entrypoint)}` | 12.8 | 13.2 |
-| `Tuple{Distributed.var"#start_gc_msgs_task##0#start_gc_msgs_task##1"}` | 11.1 | 14.2 |
-| `Tuple{typeof(Base.string), Char}` | 5.4 | 6.4 |
-| `Tuple{typeof(Base.getproperty), Base.MappingRF{DistSSHRun.var"#77#78", typeof(Base.max)}, ...` | 5.0 | 5.7 |
-| `Tuple{typeof(Base.getproperty), Base.MappingRF{DistSSHRun.var"#67#68", typeof(Base.max)}, ...` | 4.7 | 5.4 |
-| `Tuple{typeof(Base.in), String, Tuple{String, String, String}}` | 4.6 | 5.2 |
-| `Tuple{typeof(Base.getproperty), Base.Order.By{DistSSHRun.var"#_kit_progress_files##0#_kit_...` | 4.2 | 4.6 |
+| `Tuple{typeof(DistSSHRun.main), Array{String, 1}}` | 1180.1 | 1403.4 |
+| `Tuple{typeof(DistSSHRun.print_kit_root_usage), Base.PipeEndpoint}` | 48.9 |  |
+| `Tuple{typeof(Distributed.flush_gc_msgs)}` | 18.2 |  |
+| `Tuple{typeof(Base.should_use_main_entrypoint)}` | 12.6 | 13.2 |
+| `Tuple{Distributed.var"#start_gc_msgs_task##0#start_gc_msgs_task##1"}` | 12.2 | 14.2 |
+| `Tuple{typeof(Base.string), Char}` | 5.5 | 6.4 |
+| `Tuple{typeof(Base.getproperty), Base.MappingRF{DistSSHRun.var"#77#78", typeof(Base.max)}, ...` | 5.4 | 5.7 |
+| `Tuple{typeof(Base.getproperty), Base.MappingRF{DistSSHRun.var"#67#68", typeof(Base.max)}, ...` | 5.3 | 5.4 |
+| `Tuple{typeof(Base.in), String, Tuple{String, String, String}}` | 5.2 | 5.2 |
+| `Tuple{typeof(Base.getproperty), Base.Order.By{DistSSHRun.var"#_kit_progress_files##0#_kit_...` | 4.7 | 4.6 |
 
