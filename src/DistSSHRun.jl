@@ -380,6 +380,22 @@ function main(args::Vector{String} = copy(ARGS))::Cint
     end
 end
 
+# The callable stays in a `Dict{String,Function}` so `_main` infers one call.
+# `demo` and `progress` are ordinary functions. The script commands stop in
+# `include`, but a static call from `_main` still pulls `demo` and `progress` in.
+const _RUN_CALLS = Dict{String, Function}(
+    "drive" => (rest -> drive(_merge_script_arg_prelude(rest))::Cint),
+    "go" => (rest -> go(_merge_script_arg_prelude(rest))::Cint),
+    "demo" => (rest -> demo(rest)::Cint),
+    "setup" => (rest -> setup(rest)::Cint),
+    "up" => (rest -> up(rest)::Cint),
+    "plan" => (rest -> run_plan(rest)::Cint),
+    "ride" => (rest -> run_ride(rest)::Cint),
+    "size" => (rest -> run_size(rest)::Cint),
+    "pool" => (rest -> run_pool(rest)::Cint),
+    "progress" => (rest -> progress(rest)::Cint),
+)
+
 function _main(args::Vector{String})::Cint
     if _consume_kit_cli_subcommand_done!()
         return 0
@@ -401,43 +417,25 @@ function _main(args::Vector{String})::Cint
             any(endswith(String(a), ".jl") for a in rest)
         _mark_kit_cli_subcommand_done!()
     end
-    if subcommand == "drive"
-        return drive(_merge_script_arg_prelude(rest))
-    elseif subcommand == "go"
-        return go(_merge_script_arg_prelude(rest))
-    elseif subcommand == "demo"
-        return demo(rest)
-    elseif subcommand == "setup"
-        return setup(rest)
-    elseif subcommand == "up"
-        return up(rest)
-    elseif subcommand == "plan"
-        return run_plan(rest)
-    elseif subcommand == "ride"
-        return run_ride(rest)
-    elseif subcommand == "size"
-        return run_size(rest)
-    elseif subcommand == "pool"
-        return run_pool(rest)
-    elseif subcommand == "progress"
-        return progress(rest)
-    else
-        if any(endswith(String(a), ".jl") for a in args)
-            print_cli_error(
-                "No command (got $(repr(subcommand))). Kit does not infer go / ride / drive.",
-            )
-            println(stderr, "  go SCRIPT.jl      as-is complete job (timing without rewrite)")
-            println(stderr, "  ride … SCRIPT.jl  experimental map / filter")
-            println(stderr, "  drive … SCRIPT.jl Distributed")
-            println(stderr, "  plan SCRIPT.jl    inspect; do not run")
-        else
-            print_cli_error("Unknown subcommand: $subcommand")
-            println(stderr, "Expected: setup | up | go | ride | drive | plan | size | pool | demo | progress")
-        end
-        println(stderr)
-        print_kit_root_usage()
-        return 1
+    call = get(_RUN_CALLS, subcommand, nothing)
+    if call !== nothing
+        return call(rest)::Cint
     end
+    if any(endswith(String(a), ".jl") for a in args)
+        print_cli_error(
+            "No command (got $(repr(subcommand))). Kit does not infer go / ride / drive.",
+        )
+        println(stderr, "  go SCRIPT.jl      as-is complete job (timing without rewrite)")
+        println(stderr, "  ride … SCRIPT.jl  experimental map / filter")
+        println(stderr, "  drive … SCRIPT.jl Distributed")
+        println(stderr, "  plan SCRIPT.jl    inspect; do not run")
+    else
+        print_cli_error("Unknown subcommand: $subcommand")
+        println(stderr, "Expected: setup | up | go | ride | drive | plan | size | pool | demo | progress")
+    end
+    println(stderr)
+    print_kit_root_usage()
+    return 1
 end
 
 Base.eval(@__MODULE__, :(@main))
