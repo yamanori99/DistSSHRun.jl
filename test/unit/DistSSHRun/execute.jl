@@ -1088,19 +1088,24 @@ using Test
         end
         function catch_script(ready, mark)
             return """
-            using Distributed
-            # Julia 1.13 wraps a worker interrupt in `RemoteException`.
-            # Julia 1.14 delivers Ctrl-C to this driver as `CancellationRequest`.
+            # macOS keeps SIGINT pending across a blocking wait. Julia 1.13
+            # observes it at `GC.safepoint` (`InterruptException`). Julia 1.14
+            # throws `CancellationRequest` from `sleep`, and a safepoint does not.
             function _interrupt_seen(e)
                 DistSSHRun.DistSSHBase.is_sigint(e) && return true
                 e isa CapturedException && return _interrupt_seen(e.ex)
                 e isa RemoteException && return _interrupt_seen(e.captured.ex)
+                e isa TaskFailedException && return _interrupt_seen(e.task.exception)
                 return false
             end
             function main()
                 write($(repr(ready)), "1")
                 try
-                    pmap(_ -> sleep(120), 1:nworkers())
+                    t0 = time()
+                    while time() - t0 < 120
+                        GC.safepoint()
+                        isdefined(Base, :CancellationRequest) && sleep(0.05)
+                    end
                 catch e
                     if _interrupt_seen(e)
                         write($(repr(mark)), "1")
