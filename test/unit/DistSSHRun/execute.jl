@@ -1088,15 +1088,26 @@ using Test
         end
         function catch_script(ready, mark)
             return """
-            using Distributed
+            # macOS keeps SIGINT pending across a blocking wait. Julia 1.13
+            # observes it at `GC.safepoint` (`InterruptException`). Julia 1.14
+            # throws `CancellationRequest` from `sleep`, and a safepoint does not.
+            function _interrupt_seen(e)
+                DistSSHRun.DistSSHBase.is_sigint(e) && return true
+                e isa CapturedException && return _interrupt_seen(e.ex)
+                e isa RemoteException && return _interrupt_seen(e.captured.ex)
+                e isa TaskFailedException && return _interrupt_seen(e.task.exception)
+                return false
+            end
             function main()
                 write($(repr(ready)), "1")
                 try
-                    pmap(_ -> sleep(120), 1:nworkers())
+                    t0 = time()
+                    while time() - t0 < 120
+                        GC.safepoint()
+                        isdefined(Base, :CancellationRequest) && sleep(0.05)
+                    end
                 catch e
-                    inner = e isa CapturedException ? e.ex : e
-                    remote = inner isa RemoteException ? inner.captured.ex : inner
-                    if remote isa InterruptException
+                    if _interrupt_seen(e)
                         write($(repr(mark)), "1")
                     else
                         rethrow()
@@ -1143,6 +1154,65 @@ using Test
                 @test !isfile(mark)
             finally
                 process_running(kp0.process) && DistSSHRun.terminate!(kp0; grace = 1)
+            end
+        end
+    end
+
+    @testset "terminate! interrupt_grace reaches a drive worker" begin
+        # While the driver waits in `pmap`, Julia 1.13 exits 0 and the worker
+        # `catch` does not run. Measured on macOS, Ubuntu, and WSL. Julia 1.14
+        # on macOS exits 130, and the worker `catch` still does not run.
+        _with_tempdir() do proj
+            _write_host_project!(proj, "TerminateWorker")
+            script = joinpath(proj, "job.jl")
+            ready = joinpath(proj, "ready")
+            caught = joinpath(proj, "worker_caught")
+            write(
+                script,
+                """
+                using Distributed
+                function main()
+                    pmap(1:nworkers()) do _
+                        write($(repr(ready)), "1")
+                        try
+                            t0 = time()
+                            while time() - t0 < 120
+                                GC.safepoint()
+                                sleep(0.05)
+                            end
+                        catch e
+                            write($(repr(caught)), "1")
+                            rethrow()
+                        end
+                        return nothing
+                    end
+                    return nothing
+                end
+                """,
+            )
+            kp = DistSSHRun.execute!(
+                :drive,
+                script,
+                ["parent:1"];
+                detached = true,
+                project = proj,
+                quiet = true,
+            )
+            try
+                t0 = time()
+                while !isfile(ready) && (time() - t0) < 90
+                    sleep(0.05)
+                end
+                @test isfile(ready)
+                r = DistSSHRun.terminate!(kp; interrupt_grace = 15, grace = 2)
+                @test_broken isfile(caught)
+                if isdefined(Base, :CancellationRequest)
+                    @test r.exit_code == 130
+                else
+                    @test_broken r.exit_code == 130
+                end
+            finally
+                process_running(kp.process) && DistSSHRun.terminate!(kp; grace = 1)
             end
         end
     end
