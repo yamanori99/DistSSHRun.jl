@@ -418,4 +418,48 @@ using Dates
             @test r.run.exit_code == 2
         end
     end
+
+    @testset "_last_trace_location" begin
+        colored = "eval: \e[90m#= script.jl:4 =#\e[39m\n"
+        @test DistSSHRun._last_trace_location(colored) == "script.jl:4"
+        plain = "eval: #= /tmp/a.jl:2 =#\nhi\neval: #= /tmp/a.jl:9 =#\n"
+        @test DistSSHRun._last_trace_location(plain) == "/tmp/a.jl:9"
+        full = "eval: \$(Expr(:toplevel, :(#= virt.jl:3 =#), :(f())))\n"
+        @test DistSSHRun._last_trace_location(full) == "virt.jl:3"
+        marked = "eval: #= /tmp/distsshkit-job:repro-1:1 =#\neval: #= job.jl:2 =#\n"
+        @test DistSSHRun._last_trace_location(marked) == "job.jl:2"
+        @test DistSSHRun._last_trace_location("eval: #= /tmp/distsshkit-job:repro-1:1 =#\n") === nothing
+        @test DistSSHRun._last_trace_location("hello\nno trace\n") === nothing
+    end
+
+    @testset "failed slot names last top-level" begin
+        _with_tempdir() do proj
+            script = joinpath(proj, "job.jl")
+            write(
+                script,
+                """
+                Base.TRACE_EVAL = :loc
+                println("hello")
+                error("boom")
+                """,
+            )
+            err_path, err_io = mktemp()
+            r = try
+                redirect_stderr(err_io) do
+                    redirect_stdout(devnull) do
+                        DistSSHRun.go!(
+                            script, ["parent:1"];
+                            project = proj, quiet = true, yes = true,
+                        )
+                    end
+                end
+            finally
+                close(err_io)
+            end
+            txt = read(err_path, String)
+            @test !r.ok
+            @test occursin("last top-level:", txt)
+            @test occursin("job.jl:", txt)
+        end
+    end
 end

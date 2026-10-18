@@ -6,6 +6,7 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
+- A failed or interrupted `go` slot appends `last top-level: path:line` when its log contains a Julia `eval:` trace. Set `Base.TRACE_EVAL = :loc` in the script. There is no new flag.
 - The `setup!` and `instantiate!` examples no longer pass `:delete` with `yes=true`. A first-time remote uses `:rsync` and `:instantiate`. `:rsync` already refuses a remote path that is not empty.
 - On Julia 1.14, Ctrl-C during `drive` prints `Interrupted. Cleaning up workers...`, removes the workers, and exits 130. It used to exit 1 with a `CancellationRequest` stacktrace. Julia 1.13 is unchanged.
 
