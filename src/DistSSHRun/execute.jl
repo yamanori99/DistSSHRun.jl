@@ -1051,28 +1051,55 @@ function _reap_tagged_workers!(job_id::Union{Nothing, AbstractString}, hosts::Ab
     return nothing
 end
 
-function _signal_and_wait_pid!(pid::Integer, grace::Real)
-    pid <= 0 && return nothing
-    kit_pid_alive(pid) || return nothing
-    Sys.isunix() || return nothing
+function _require_nonnegative(name::AbstractString, value::Real)
+    value >= 0 || throw(ArgumentError("$name must be ≥ 0, got $value"))
+    return nothing
+end
+
+_send_signal(p::Base.Process, sig::Integer) = kill(p, sig)
+_send_signal(pid::Integer, sig::Integer) = ccall(:kill, Cint, (Cint, Cint), Cint(pid), Cint(sig))
+
+_target_alive(p::Base.Process)::Bool = process_running(p)
+_target_alive(pid::Integer)::Bool = kit_pid_alive(pid)
+
+"""Send `sig` if `target` is alive, then wait up to `wait_s` seconds."""
+function _signal_and_wait!(target, sig::Integer, wait_s::Real)
+    _target_alive(target) || return nothing
     try
-        ccall(:kill, Cint, (Cint, Cint), Cint(pid), Cint(15))
+        _send_signal(target, sig)
     catch
     end
     t0 = time()
-    while kit_pid_alive(pid) && (time() - t0) < Float64(grace)
+    while _target_alive(target) && (time() - t0) < Float64(wait_s)
         sleep(0.05)
     end
-    if kit_pid_alive(pid)
-        try
-            ccall(:kill, Cint, (Cint, Cint), Cint(pid), Cint(9))
-        catch
-        end
-        t1 = time()
-        while kit_pid_alive(pid) && (time() - t1) < 1.0
-            sleep(0.05)
-        end
+    return nothing
+end
+
+"""
+SIGINT, then SIGTERM, then SIGKILL.
+
+`interrupt_grace == 0` does not send SIGINT. `grace == 0` still sends
+SIGTERM and does not wait, which is what `terminate!` did before
+`interrupt_grace` existed. SIGKILL is sent only when the process is still
+alive, then this waits up to one second.
+"""
+function _signal_ladder!(target; interrupt_grace::Real, grace::Real)
+    if target isa Integer
+        target <= 0 && return nothing
+        Sys.isunix() || return nothing
     end
+    if interrupt_grace > 0
+        _signal_and_wait!(target, Base.SIGINT, interrupt_grace)
+    end
+    _signal_and_wait!(target, Base.SIGTERM, grace)
+    _target_alive(target) || return nothing
+    _signal_and_wait!(target, Base.SIGKILL, 1.0)
+    return nothing
+end
+
+function _signal_and_wait_pid!(pid::Integer, grace::Real; interrupt_grace::Real = 0)
+    _signal_ladder!(pid; interrupt_grace = interrupt_grace, grace = grace)
     return nothing
 end
 
@@ -1468,31 +1495,22 @@ function _execute_detached_env(extra::AbstractDict{<:AbstractString, <:AbstractS
 end
 
 """
-    terminate!(kp::KitProcess; grace=10) -> KitRunResult
+    terminate!(kp::KitProcess; grace=10, interrupt_grace=0) -> KitRunResult
 
-Stop a detached run. SIGTERM the child, wait up to `grace` seconds for its
-own `rmprocs` path, then SIGKILL if needed. Then `pkill` only processes
-tagged with this run's `job_id` (from `kit.job`), never `julia.*--worker`.
-Without `job_id`, only the child is signaled.
+Stop a detached run. `interrupt_grace == 0` (the default) does not send
+SIGINT. A positive `interrupt_grace` sends SIGINT and waits that many
+seconds first: a `drive` child runs its Ctrl-C path (interrupt workers,
+`rmprocs`, exit 130). A `go` or `ride` child is `julia -m` with
+exit-on-sigint, so SIGINT runs `atexit` and does not enter `catch` or
+`finally`. Then SIGTERM, wait up to `grace` seconds (`0` sends SIGTERM
+and does not wait), then SIGKILL if the process is still alive. Then
+`pkill` only processes tagged with this run's `job_id` (from `kit.job`),
+never `julia.*--worker`. Without `job_id`, only the child is signaled.
 """
-function terminate!(kp::KitProcess; grace::Real = 10)::KitRunResult
-    grace >= 0 || throw(ArgumentError("grace must be ≥ 0, got $grace"))
-    if process_running(kp.process)
-        try
-            kill(kp.process, Base.SIGTERM)
-        catch
-        end
-        t0 = time()
-        while process_running(kp.process) && (time() - t0) < Float64(grace)
-            sleep(0.05)
-        end
-        if process_running(kp.process)
-            try
-                kill(kp.process, Base.SIGKILL)
-            catch
-            end
-        end
-    end
+function terminate!(kp::KitProcess; grace::Real = 10, interrupt_grace::Real = 0)::KitRunResult
+    _require_nonnegative("grace", grace)
+    _require_nonnegative("interrupt_grace", interrupt_grace)
+    _signal_ladder!(kp.process; interrupt_grace = interrupt_grace, grace = grace)
     sidecar = something(kp.run_dir, kp.output_dir)
     job_id = sidecar === nothing ? nothing : _read_kit_text_file(sidecar, "kit.job")
     hosts = sidecar === nothing ? String[] : _read_kit_hosts(sidecar)
@@ -1501,24 +1519,26 @@ function terminate!(kp::KitProcess; grace::Real = 10)::KitRunResult
 end
 
 """
-    terminate_run!(output_dir; grace=10, log_dir=nothing, kind=:go) -> KitRunResult
+    terminate_run!(output_dir; grace=10, interrupt_grace=0, log_dir=nothing, kind=:go) -> KitRunResult
 
 Like [`terminate!`](@ref) after losing [`KitProcess`](@ref): read `kit.pid` /
-`kit.job` / `kit.hosts` under `output_dir`. `kind` is only used when
-`kit.result` is missing.
+`kit.job` / `kit.hosts` under `output_dir`. `interrupt_grace` is the same
+SIGINT stage. `kind` is only used when `kit.result` is missing.
 """
 function terminate_run!(
         output_dir::AbstractString;
         grace::Real = 10,
+        interrupt_grace::Real = 0,
         log_dir::Union{Nothing, AbstractString} = nothing,
         kind::Symbol = :go,
     )::KitRunResult
-    grace >= 0 || throw(ArgumentError("grace must be ≥ 0, got $grace"))
+    _require_nonnegative("grace", grace)
+    _require_nonnegative("interrupt_grace", interrupt_grace)
     _require_execute_kind!(kind)
     d = canonical_local_path(output_dir)
     rec = _read_kit_pid_record(d)
     if rec !== nothing && kit_pid_file_running(d)
-        _signal_and_wait_pid!(rec.pid, grace)
+        _signal_and_wait_pid!(rec.pid, grace; interrupt_grace = interrupt_grace)
     end
     job_id = _read_kit_text_file(d, "kit.job")
     _reap_tagged_workers!(job_id, _read_kit_hosts(d))

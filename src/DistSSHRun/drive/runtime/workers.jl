@@ -232,13 +232,122 @@ function wait_for_worker_connections!(; ssh::Bool = true)
     end
 end
 
-"""SIGINT in-flight `pmap` work on workers before `rmprocs`."""
-const INTERRUPT_DRIVE_WORKERS = Ref{Function}(interrupt)
+# A yielding worker task observed `InterruptException` about 2s after the
+# signal (Julia 1.13.2, local `remotecall`). Wait so user code can `catch`
+# it and save state before `rmprocs`. Not a public setting.
+const _INTERRUPT_SETTLE_S = 3.0
 
-function _interrupt_drive_workers!()
-    nprocs() <= 1 && return nothing
+"""
+    _group_interrupt_targets(rows) -> (local_pids, ssh, fallback)
+
+`rows` is `(pid, endpoint)`. `endpoint` is `:local`, `nothing` (use
+`Distributed.interrupt` for that pid), or `(host, ospid)` for one SSH worker.
+SSH workers on the same host share one OS signal.
+"""
+function _group_interrupt_targets(rows)
+    local_pids = Int[]
+    fallback = Int[]
+    ssh = Dict{String, Vector{Int}}()
+    for (pid, endpoint) in rows
+        if endpoint === :local
+            push!(local_pids, Int(pid))
+        elseif endpoint === nothing
+            push!(fallback, Int(pid))
+        else
+            host, ospid = endpoint
+            push!(get!(ssh, String(host), Int[]), Int(ospid))
+        end
+    end
+    return (local_pids = local_pids, ssh = ssh, fallback = fallback)
+end
+
+"""`:local`, `(host, ospid)`, or `nothing` when the worker record cannot be used.
+
+`nothing` means the caller must use `Distributed.interrupt` for that pid.
+Reads `WorkerConfig.host` and `WorkerConfig.ospid` as documented for
+`SSHManager`. A missing or renamed field falls back instead of guessing.
+"""
+function _interrupt_endpoint(pid::Integer)
     try
-        INTERRUPT_DRIVE_WORKERS[](workers())
+        w = Distributed.map_pid_wrkr[Int(pid)]
+        w isa Distributed.Worker || return nothing
+        if w.manager isa Distributed.LocalManager
+            return :local
+        end
+        if w.manager isa Distributed.SSHManager
+            host = w.config.host
+            ospid = w.config.ospid
+            if host isa AbstractString && !isempty(host) && ospid isa Integer && ospid > 0
+                return (String(host), Int(ospid))
+            end
+        end
+    catch
+    end
+    return nothing
+end
+
+"""One `kill -INT` for every OS pid on `host`. Connection failure is logged, not thrown."""
+function _signal_ssh_interrupt(host::String, ospids::Vector{Int})
+    isempty(ospids) && return nothing
+    # `*` of strings is `Union{String, AnnotatedString}`. `String` keeps the
+    # shell text concrete for `_host_sync_remote_shell_cmd(::String, ::String)`.
+    inner = String("kill -INT " * join(string.(ospids), " ") * " || true")
+    try
+        run(
+            pipeline(
+                _host_sync_remote_shell_cmd(host, inner);
+                stdout = devnull,
+                stderr = devnull,
+            )
+        )
+    catch e
+        _rethrow_missing_host_tool(e)
+        @error "Error sending a Ctrl-C to workers on $host"
+    end
+    return nothing
+end
+
+"""
+Send SIGINT to `pids`, one SSH connection per host, then wait
+[`_INTERRUPT_SETTLE_S`](@ref).
+
+Local workers and any worker whose OS pid is not known use
+`Distributed.interrupt`. `Distributed.SSHManager` otherwise opens one `ssh`
+per worker (`kill -2`), which `sshd` `MaxStartups` drops once a host has
+many workers.
+"""
+function _interrupt_workers_grouped(pids)
+    rows = [(Int(pid), _interrupt_endpoint(pid)) for pid in pids]
+    groups = _group_interrupt_targets(rows)
+    @sync begin
+        if !isempty(groups.local_pids)
+            @async try
+                interrupt(groups.local_pids)
+            catch
+            end
+        end
+        if !isempty(groups.fallback)
+            @async try
+                interrupt(groups.fallback)
+            catch
+            end
+        end
+        for (host, ospids) in groups.ssh
+            @async _signal_ssh_interrupt(host, ospids)
+        end
+    end
+    isempty(pids) || sleep(_INTERRUPT_SETTLE_S)
+    return nothing
+end
+
+"""SIGINT in-flight `pmap` work on workers before `rmprocs`."""
+const INTERRUPT_DRIVE_WORKERS = Ref{Function}(_interrupt_workers_grouped)
+
+function _interrupt_drive_workers!(pids = workers())
+    nprocs() <= 1 && return nothing
+    isempty(pids) && return nothing
+    try
+        INTERRUPT_DRIVE_WORKERS[](pids)
     catch
     end
     return nothing
