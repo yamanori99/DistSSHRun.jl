@@ -49,6 +49,36 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             @test nprocs() == 1
         end
 
+        @testset "_group_interrupt_targets" begin
+            rows = [
+                (1, :local),
+                (2, :local),
+                (3, ("dev@child-1", 40)),
+                (4, ("dev@child-1", 41)),
+                (5, ("child-2", 7)),
+                (6, nothing),
+            ]
+            g = DistSSHRun._group_interrupt_targets(rows)
+            @test g.local_pids == [1, 2]
+            @test g.fallback == [6]
+            @test g.ssh["dev@child-1"] == [40, 41]
+            @test g.ssh["child-2"] == [7]
+            @test DistSSHRun._group_interrupt_targets(Tuple{Int, Any}[]).local_pids == Int[]
+        end
+
+        @testset "_interrupt_endpoint local worker" begin
+            addprocs(1; topology = :master_worker)
+            added = workers()
+            try
+                @test DistSSHRun._interrupt_endpoint(added[1]) === :local
+                @test DistSSHRun._interrupt_endpoint(1) === nothing
+            finally
+                for w in added
+                    w in workers() && rmprocs(w; waitfor = 2.0)
+                end
+            end
+        end
+
         @testset "register_worker_cleanup! removes added workers" begin
             addprocs(2; topology = :master_worker)
             added = workers()
