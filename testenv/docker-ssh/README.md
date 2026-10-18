@@ -130,18 +130,17 @@ paths), a PR whose `Project.toml` `version` went up, and manual dispatch
 (`ubuntu-latest → ubuntu-24.04`). Other PRs run it only when those paths
 change.
 [`.github/workflows/ssh-e2e-weekly.yml`][e2e-weekly]
-(`E2E weekly`) runs Sunday 04:00 JST, via Run workflow, or on a version
-squash to `main` (`Project.toml` version up): bake
+(`E2E weekly`) runs daily at 04:00 JST or via Run workflow: bake
 `ubuntu-latest (image)` to GHCR, then `ubuntu-latest`, `macos-15-intel`, and
-`windows-latest (WSL2)` pull that tag and run the suite. Weekly Linux is the
+`windows-latest (WSL2)` pull that tag and run the suite. Scheduled Linux is the
 same suite as a version-cut PR / **main** Linux E2E, not a PR check.
-Register from the version-cut PR's Linux E2E. Weekly Intel / WSL are
-watchers (`cut-hold` only if weekly Linux is red).
+Register from the version-cut PR's Linux E2E. Intel / WSL are
+watchers (`cut-hold` only if scheduled Linux is red).
 
 Those kit parent jobs wait for `ubuntu-latest (image)` then pull
 `ghcr.io/<owner>/distsshrun-linux-ssh-worker:<sha>` instead of building
 Julia-in-Docker on Colima / WSL `dockerd`. Push to GHCR is retried until the
-tag is inspectable (GHCR `unknown blob`). After the weekly Linux suite,
+tag is inspectable (GHCR `unknown blob`). After the scheduled Linux suite,
 `:latest`
 is pushed for
 local pull. The package is meant to be **public** (one-time: package Settings →

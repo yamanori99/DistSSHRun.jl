@@ -2,15 +2,15 @@ name: E2E weekly
 
 # Not on pull_request: skipped macOS/WSL jobs would show on every PR, and
 # job-name expressions do not expand when skipped.
-# Sunday 04:00 JST and workflow_dispatch. A version-and-NEWS main push
+# Daily 04:00 JST and workflow_dispatch. A version-and-NEWS main push
 # does not start this matrix. Register from cut PR Linux E2E.
-# `cut-hold` when Sunday Linux is red. Intel / WSL do not add it.
+# `cut-hold` when scheduled Linux is red. Intel / WSL do not add it.
 on:
   workflow_dispatch:
-  # Sunday 04:00 JST (Saturday 19:00 UTC). Misses CI weekly (Sunday 10:00 JST).
+  # Daily 04:00 JST (UTC 19:00). Misses CI weekly (daily 06:00 JST).
   # GitHub often delays cron; start early so it still finishes before morning.
   schedule:
-    - cron: "0 19 * * 6"
+    - cron: "0 19 * * *"
 
 concurrency:
   group: ssh-e2e-weekly-${{ github.workflow }}-${{ github.ref }}
@@ -652,7 +652,7 @@ jobs:
           if [ "$FAILED" = "true" ]; then
             body="Latest run: $RUN_URL
 
-          Not a PR check. Re-run **E2E weekly** after a fix. A red **Linux** job on the Sunday run adds \`cut-hold\` (do not register). Intel / WSL red does not."
+          Not a PR check. Re-run **E2E weekly** after a fix. A red **Linux** job on a scheduled run adds \`cut-hold\` (do not register). Intel / WSL red does not."
             labels=alert
             hold=false
             if [ "$WEEKLY" = "true" ] && [ "$LINUX_FAILED" = "true" ]; then

@@ -25,6 +25,6 @@
       [DistSSHKit releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md).
 - [ ] Version is correct — `Project.toml` `version` went up when this
       should ship, and stayed when it should not (CI reads the diff;
-      register when the required checks are green; weekly Intel / WSL watch;
-      `cut-hold` if weekly Linux is red)
+      register when the required checks are green; E2E weekly Intel / WSL
+      watch; `cut-hold` if scheduled Linux is red)
 - [ ] Remote / smoke is done, or this change does not need it
