@@ -1159,13 +1159,9 @@ using Test
     end
 
     @testset "terminate! interrupt_grace reaches a drive worker" begin
-        # Measured on macOS: Julia 1.13 never runs the drive Ctrl-C path while
-        # the driver waits in `pmap`. Julia 1.14 exits 130, but its own
-        # cancellation drops the worker connection before the worker is
-        # interrupted. Linux 1.13 interrupts the worker.
-        cancels = isdefined(Base, :CancellationRequest)
-        worker_catches = Sys.islinux() && !cancels
-        exits_130 = cancels || !Sys.isapple()
+        # While the driver waits in `pmap`, Julia 1.13 exits 0 and the worker
+        # `catch` does not run. Measured on macOS, Ubuntu, and WSL. Julia 1.14
+        # on macOS exits 130, and the worker `catch` still does not run.
         _with_tempdir() do proj
             _write_host_project!(proj, "TerminateWorker")
             script = joinpath(proj, "job.jl")
@@ -1209,12 +1205,8 @@ using Test
                 end
                 @test isfile(ready)
                 r = DistSSHRun.terminate!(kp; interrupt_grace = 15, grace = 2)
-                if worker_catches
-                    @test isfile(caught)
-                else
-                    @test_broken isfile(caught)
-                end
-                if exits_130
+                @test_broken isfile(caught)
+                if isdefined(Base, :CancellationRequest)
                     @test r.exit_code == 130
                 else
                     @test_broken r.exit_code == 130
