@@ -462,6 +462,42 @@ function _print_go_slot_stdout_after_progress!(batch_dir::AbstractString)
     return nothing
 end
 
+"""
+Last `path:line` from Julia `--trace-eval` / `Base.TRACE_EVAL` text.
+
+Strips ANSI color. Skips the `-L` job mark (`distsshkit-job:`). `nothing`
+when no top-level location was recorded. `full` lines carry the location
+inside `#= path:line =#`.
+"""
+function _last_trace_location(text::AbstractString)::Union{Nothing, String}
+    cleaned = replace(String(text), r"\e\[[0-9;]*m" => "")
+    last = nothing
+    for line in eachsplit(cleaned, '\n'; keepempty = false)
+        occursin("eval:", line) || continue
+        occursin("distsshkit-job:", line) && continue
+        for m in eachmatch(r"#= (.+):([0-9]+) =#", line)
+            path = String(something(m.captures[1], ""))
+            occursin("distsshkit-job:", path) && continue
+            last = string(path, ":", something(m.captures[2], ""))
+        end
+    end
+    return last
+end
+
+"""` last top-level: path:line` from a slot log, or `""`."""
+function _go_trace_suffix(slot_dir::Union{Nothing, AbstractString})::String
+    slot_dir === nothing && return ""
+    log_path = joinpath(String(slot_dir), "julia.stdout.log")
+    isfile(log_path) || return ""
+    loc = try
+        _last_trace_location(read(log_path, String))
+    catch
+        nothing
+    end
+    loc === nothing && return ""
+    return " last top-level: " * loc
+end
+
 function _go_run_local_slot!(
         project::AbstractString,
         script::AbstractString,
@@ -585,6 +621,11 @@ function _go_run_remote_slot!(
     buf = IOBuffer()
     proc = run(pipeline(cmd; stdout = buf, stderr = buf); wait = true)
     out = String(take!(buf))
+    # Collect is skipped when the slot fails, so keep the captured log locally.
+    log_path = joinpath(slot_dir, "julia.stdout.log")
+    if !isempty(out) && !isfile(log_path)
+        write(log_path, out)
+    end
     # `:verbose` only: quiet/progress suppress script echo (still in slot logs).
     if !quiet && kit_output_detail() && !isempty(out)
         lock(_GO_IO_LOCK) do
@@ -1092,7 +1133,10 @@ function _go_run!(
                         any_run_fail[] = true
                         kit_progress_item!(slot.label; status = :fail)
                         write(stderr, "  ")
-                        print_err("✗ $(slot.label) (exit $(outcome.run.exit_code))"; io = stderr)
+                        print_err(
+                            "✗ $(slot.label) (exit $(outcome.run.exit_code))$(_go_trace_suffix(outcome.run.output_dir))";
+                            io = stderr,
+                        )
                         println(stderr)
                     else
                         kit_progress_item!(slot.label; status = :ok)

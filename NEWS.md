@@ -6,6 +6,7 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
+- A failed or interrupted `go` slot appends `last top-level: path:line` when its log contains a Julia `eval:` trace. Set `Base.TRACE_EVAL = :loc` in the script. There is no new flag.
 - `terminate!` and `terminate_run!` take `interrupt_grace` (default `0`). The default does not send SIGINT, so the stop sequence is unchanged. A positive value sends SIGINT and waits before SIGTERM.
 - Ctrl-C during `drive` sends one `kill -INT` per SSH host, then waits a few seconds so a worker can `catch` `InterruptException` before `rmprocs`. A `ride` whose workers have already joined does the same when that run fails or is interrupted. A `ride` that fails while workers are still joining removes those workers without that signal.
 - The `setup!` and `instantiate!` examples no longer pass `:delete` with `yes=true`. A first-time remote uses `:rsync` and `:instantiate`. `:rsync` already refuses a remote path that is not empty.
