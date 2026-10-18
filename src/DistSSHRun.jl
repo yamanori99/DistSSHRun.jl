@@ -128,13 +128,14 @@ using .DistSSHBase: CliCursor, OUTPUT_WIDTH, PARENT_HOST_NAME, _HOST_TOOL_NAMES,
     explain_host_tool_missing, explain_no_hosts, explain_pipeline_driver_missing,
     explain_size_probe_not_found, format_placement_token, get_remote_git_hash,
     get_remote_julia_version, get_remote_nproc, get_remote_total_gb, git_work_tree,
-    join_explained_message, looks_like_path_host, normalize_git_clone_url,
+    is_sigint, join_explained_message, looks_like_path_host, normalize_git_clone_url,
     parse_placement_token, project_package_name, read_hosts_file, read_hosts_file_lines,
     remote_delete_root, remote_deploy_root, remote_env_project_root, remote_git_clone_dest,
     remote_layout_path, resolve_host_path_abs, resolve_host_project_abs,
-    resolve_remote_julia, resolve_remote_project_root, rule_line, split_hosts_csv,
-    split_worker_token, ssh_addprocs_machine, summarize_ssh_error,
-    throw_legacy_placement_token, throw_removed_local_flag, use_colors, with_cli_entry
+    resolve_remote_julia, resolve_remote_project_root, rule_line, shield_sigint,
+    split_hosts_csv, split_worker_token, ssh_addprocs_machine, summarize_ssh_error,
+    throw_legacy_placement_token, throw_removed_local_flag, use_colors, with_cli_entry,
+    without_cancel
 using .DistSSHUp: julia_version_mismatch_kind, juliaup_add_host!, juliaup_align_host!,
     juliaup_channel, juliaup_default_host!, juliaup_parent_behind_channel,
     juliaup_status_lines, juliaup_update_host!
