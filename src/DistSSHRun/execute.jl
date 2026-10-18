@@ -1500,7 +1500,7 @@ end
 Stop a detached run. `interrupt_grace == 0` (the default) does not send
 SIGINT. A positive `interrupt_grace` sends SIGINT and waits that many
 seconds first: a `drive` child runs its Ctrl-C path (interrupt workers,
-`rmprocs`, exit 130). On macOS with Julia 1.13, a driver waiting in `pmap`
+`rmprocs`, exit 130). On Julia 1.13, a driver waiting in `pmap`
 does not run that path, and SIGTERM stops it. On Julia 1.14 the driver
 exits 130, but a worker can be removed before it sees the interrupt.
 A `go` or `ride` child is `julia -m` with
