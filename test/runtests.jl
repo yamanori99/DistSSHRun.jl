@@ -137,6 +137,8 @@ end
         include(joinpath(@__DIR__, "integration", "drive", "fail.jl"))
         _runtest_announce("integration/drive/sigint.jl")
         include(joinpath(@__DIR__, "integration", "drive", "sigint.jl"))
+        _runtest_announce("integration/drive/interrupt_grace.jl")
+        include(joinpath(@__DIR__, "integration", "drive", "interrupt_grace.jl"))
         _runtest_announce("integration/drive/pkg.jl")
         include(joinpath(@__DIR__, "integration", "drive", "pkg.jl"))
         _runtest_announce("integration/drive/log_via_script.jl")

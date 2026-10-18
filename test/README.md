@@ -74,7 +74,8 @@ Green on one layer does not imply the others. `Pkg.test()` does not run
 - **unit** (~45 s): parse, paths, fake setup, throws. Not child julia,
   `addprocs`, SSH.
 - **integration** (~3 min): child CLI and/or **local** `addprocs`. Not
-  real SSH / rsync.
+  real SSH / rsync. `integration/drive/interrupt_grace.jl` is a detached
+  `drive` plus `terminate!`.
 - **e2e** (~15–25 min): real SSH + rsync, two Linux workers; **PR** /
   **main** (path filter), a `Project.toml` version increase, weekly, or
   dispatch (Compose). Not markdown-only allowlisted PRs. Not local-only

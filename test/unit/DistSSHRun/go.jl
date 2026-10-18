@@ -408,10 +408,12 @@ using Dates
                 """,
             )
             r = redirect_stdout(devnull) do
-                DistSSHRun.go!(
-                    script, ["parent:2"];
-                    project = proj, quiet = true, yes = true,
-                )
+                redirect_stderr(devnull) do
+                    DistSSHRun.go!(
+                        script, ["parent:2"];
+                        project = proj, quiet = true, yes = true,
+                    )
+                end
             end
             @test !r.ok
             @test r.run.ok == false
