@@ -1068,6 +1068,82 @@ using Test
             @test r.ok === false
             @test r.failed_step == "terminated"
             @test r.kind === :go
+            err = try
+                DistSSHRun.terminate_run!(d; interrupt_grace = -1)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+        end
+    end
+
+    @testset "terminate! interrupt_grace" begin
+        function wait_file(path, seconds)
+            t0 = time()
+            while !isfile(path) && (time() - t0) < seconds
+                sleep(0.05)
+            end
+            return isfile(path)
+        end
+        function catch_script(ready, mark)
+            return """
+            using Distributed
+            function main()
+                write($(repr(ready)), "1")
+                try
+                    pmap(_ -> sleep(120), 1:nworkers())
+                catch e
+                    inner = e isa CapturedException ? e.ex : e
+                    remote = inner isa RemoteException ? inner.captured.ex : inner
+                    if remote isa InterruptException
+                        write($(repr(mark)), "1")
+                    else
+                        rethrow()
+                    end
+                end
+                return nothing
+            end
+            """
+        end
+        _with_tempdir() do proj
+            _write_host_project!(proj, "TerminateInt")
+            script = joinpath(proj, "job.jl")
+            ready = joinpath(proj, "ready")
+            mark = joinpath(proj, "caught")
+            write(script, catch_script(ready, mark))
+            kp = DistSSHRun.execute!(
+                :drive,
+                script,
+                ["parent:1"];
+                detached = true,
+                project = proj,
+                quiet = true,
+            )
+            try
+                @test wait_file(ready, 90)
+                DistSSHRun.terminate!(kp; interrupt_grace = 5, grace = 2)
+                @test isfile(mark)
+            finally
+                process_running(kp.process) && DistSSHRun.terminate!(kp; grace = 1)
+            end
+            rm(ready; force = true)
+            rm(mark; force = true)
+            kp0 = DistSSHRun.execute!(
+                :drive,
+                script,
+                ["parent:1"];
+                detached = true,
+                project = proj,
+                quiet = true,
+            )
+            try
+                @test wait_file(ready, 90)
+                DistSSHRun.terminate!(kp0; interrupt_grace = 0, grace = 2)
+                @test !isfile(mark)
+            finally
+                process_running(kp0.process) && DistSSHRun.terminate!(kp0; grace = 1)
+            end
         end
     end
 end
