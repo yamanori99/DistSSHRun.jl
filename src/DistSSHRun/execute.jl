@@ -1500,7 +1500,8 @@ end
 Stop a detached run. `interrupt_grace == 0` (the default) does not send
 SIGINT. A positive `interrupt_grace` sends SIGINT and waits that many
 seconds first: a `drive` child runs its Ctrl-C path (interrupt workers,
-`rmprocs`, exit 130), and a `go` or `ride` child runs `catch` and
+`rmprocs`, exit 130). A `go` or `ride` child is `julia -m` with
+exit-on-sigint, so SIGINT runs `atexit` and does not enter `catch` or
 `finally`. Then SIGTERM, wait up to `grace` seconds (`0` sends SIGTERM
 and does not wait), then SIGKILL if the process is still alive. Then
 `pkill` only processes tagged with this run's `job_id` (from `kit.job`),
