@@ -6,12 +6,14 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
+- `terminate!` and `terminate_run!` take `interrupt_grace` (default `0`). The default does not send SIGINT, so the stop sequence is unchanged. A positive value sends SIGINT and waits before SIGTERM.
 - Ctrl-C during `drive` sends one `kill -INT` per SSH host, then waits a few seconds so a worker can `catch` `InterruptException` before `rmprocs`. A `ride` whose workers have already joined does the same when that run fails or is interrupted. A `ride` that fails while workers are still joining removes those workers without that signal.
 - The `setup!` and `instantiate!` examples no longer pass `:delete` with `yes=true`. A first-time remote uses `:rsync` and `:instantiate`. `:rsync` already refuses a remote path that is not empty.
 - On Julia 1.14, Ctrl-C during `drive` prints `Interrupted. Cleaning up workers...`, removes the workers, and exits 130. It used to exit 1 with a `CancellationRequest` stacktrace. Julia 1.13 is unchanged.
 
 ### Planned breaking (next minor)
 
+- `interrupt_grace` on `terminate!` and `terminate_run!` will default to a positive value, so a stop sends SIGINT before SIGTERM. DistSSHQueue `cancel` of a running job will use that default. Until then the default is `0` and `cancel` does not send SIGINT.
 - `setup --rsync` and `setup --sync` will refuse a `Manifest.toml` that would not ship, and git sync will refuse a path source whose `*.jl` or project files are ignored or untracked. 0.1.7 warns.
 - `setup --sync`, `setup --pull`, and `sync!` will fail when the remote `HEAD` is not the local `HEAD`, including an unpushed local commit on `--pull`. 0.1.7 warns. A hash that could not be read stays a warning.
 - `drive` and `collect!` will refuse a collect root that is the project root or a parent of it. 0.1.7 warns.
