@@ -16,14 +16,14 @@ No sample grew past the watch line.
 | date | commit | version | os | arch | src files | code lines | full s | pkg s | using s | help s |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-10-17 | 1459df0 | 0.1.9 | Linux |  | 70 | 16840 | 5.8 | 2.86 | 0.31 | 1.94 |
-| 2026-10-18 | e677df9 | 0.1.9 | Ubuntu 24.04.5 LTS | x86_64 | 70 | 16840 | 6.76 | 3.35 | 0.33 | 2.16 |
+| 2026-10-18 | e677df9 | 0.1.9 | Ubuntu 24.04.5 LTS | x86_64 | 70 | 16840 | 6.66 | 3.32 | 0.35 | 2.09 |
 
 ```mermaid
 xychart-beta
     title "1.13 help"
     x-axis ["1017", "1018"]
     y-axis "seconds" 0 --> 3
-    line [1.94, 2.16]
+    line [1.94, 2.09]
 ```
 
 
@@ -31,16 +31,16 @@ Latest `help` methods:
 
 | method | now ms | previous ms |
 | --- | ---: | ---: |
-| `Tuple{typeof(DistSSHRun.main), Array{String, 1}}` | 1557.8 | 1389.8 |
-| `Tuple{typeof(DistSSHRun.print_kit_root_usage), Base.PipeEndpoint}` | 58.9 |  |
-| `Tuple{Distributed.var"#start_gc_msgs_task##0#start_gc_msgs_task##1"}` | 18.8 | 16.9 |
-| `Tuple{typeof(Base.should_use_main_entrypoint)}` | 11.6 | 11.0 |
-| `Tuple{typeof(Base.indexed_iterate), Tuple{Bool, Tuple{Base.Missing, Base.Missing, Base.Mis...` | 5.4 | 4.9 |
-| `Tuple{typeof(Base.getproperty), Base.Order.By{DistSSHRun.var"#_kit_progress_files##0#_kit_...` | 5.3 | 5.0 |
+| `Tuple{typeof(DistSSHRun.main), Array{String, 1}}` | 1506.5 | 1389.8 |
+| `Tuple{typeof(DistSSHRun.print_kit_root_usage), Base.PipeEndpoint}` | 55.8 |  |
+| `Tuple{Distributed.var"#start_gc_msgs_task##0#start_gc_msgs_task##1"}` | 18.0 | 16.9 |
+| `Tuple{typeof(Base.should_use_main_entrypoint)}` | 11.3 | 11.0 |
 | `Tuple{typeof(Base.getproperty), Base.MappingRF{DistSSHRun.var"#77#78", typeof(Base.max)}, ...` | 5.3 | 5.0 |
-| `Tuple{typeof(Base.getproperty), Base.MappingRF{DistSSHRun.var"#67#68", typeof(Base.max)}, ...` | 4.9 | 4.1 |
-| `Tuple{typeof(Base.in), String, Tuple{String, String, String}}` | 4.7 | 4.7 |
-| `Tuple{typeof(Base.indexed_iterate), Tuple{Bool, Tuple{Base.Missing, Base.Missing, Base.Mis...` | 4.3 | 4.0 |
+| `Tuple{typeof(Base.indexed_iterate), Tuple{Bool, Tuple{Base.Missing, Base.Missing, Base.Mis...` | 5.1 | 4.9 |
+| `Tuple{typeof(Base.getproperty), Base.Order.By{DistSSHRun.var"#_kit_progress_files##0#_kit_...` | 5.0 | 5.0 |
+| `Tuple{typeof(Base.in), String, Tuple{String, String, String}}` | 4.6 | 4.7 |
+| `Tuple{typeof(Base.getproperty), Base.MappingRF{DistSSHRun.var"#67#68", typeof(Base.max)}, ...` | 4.4 | 4.1 |
+| `Tuple{typeof(Base.indexed_iterate), Tuple{Bool, Tuple{Base.Missing, Base.Missing, Base.Mis...` | 4.1 | 4.0 |
 
 ## 1.14-nightly
 
