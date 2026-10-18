@@ -714,6 +714,11 @@ function _ride_run!(
                 ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = old_remote
             end
             _stop_drive_host_status_monitor!()
+            # Success already finished worker tasks. A failed or interrupted
+            # run may still be inside `pmap`; signal before `rmprocs`.
+            if !progress_ok && !isempty(added)
+                _interrupt_drive_workers!(added)
+            end
             !isempty(added) && rmprocs(added; waitfor = 30)
             _clear_drive_host_worker_ids!()
             _RIDE_DEPTH[] = 0

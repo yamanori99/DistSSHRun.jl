@@ -6,6 +6,7 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
+- Ctrl-C during `drive` sends one `kill -INT` per SSH host, then waits a few seconds so a worker can `catch` `InterruptException` before `rmprocs`. A `ride` whose workers have already joined does the same when that run fails or is interrupted. A `ride` that fails while workers are still joining removes those workers without that signal.
 - The `setup!` and `instantiate!` examples no longer pass `:delete` with `yes=true`. A first-time remote uses `:rsync` and `:instantiate`. `:rsync` already refuses a remote path that is not empty.
 - On Julia 1.14, Ctrl-C during `drive` prints `Interrupted. Cleaning up workers...`, removes the workers, and exits 130. It used to exit 1 with a `CancellationRequest` stacktrace. Julia 1.13 is unchanged.
 
