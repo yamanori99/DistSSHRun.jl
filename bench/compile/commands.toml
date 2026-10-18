@@ -1,6 +1,15 @@
 # Commands measured by bench/compile/measure.jl. No SSH.
+# `{work}` is a fresh copy of bench/compile/fixtures. The process cwd is that directory.
 package = "DistSSHRun"
 
 [[command]]
 name = "help"
 args = ["--help"]
+
+[[command]]
+name = "go"
+args = ["go", "{work}/pi_echo.jl"]
+
+[[command]]
+name = "drive"
+args = ["drive", "parent:2", "{work}/drive_square.jl"]
