@@ -1,7 +1,7 @@
 name: CI weekly
 
 # Not on pull_request: insurance for 1.13 / 1.14-nightly / Aqua / JETLS
-# @release drift when no PR ran that week. PR / main push stay the gate.
+# @release drift when no PR ran that day. PR / main push stay the gate.
 # tip jobs are continue-on-error and omitted from notify.
 # 1.13 matches Test: Run's old titles, then downstream, DistSSHUp, and
 # DistSSHBase as separate matrices (no coverage).
@@ -9,9 +9,9 @@ name: CI weekly
 # out of notify. Ubuntu nightly also runs in Test.
 on:
   workflow_dispatch:
-  # Sunday 10:00 JST (UTC 01:00). Misses E2E weekly (Saturday 19:00 UTC).
+  # Daily 06:00 JST (UTC 21:00). Misses E2E weekly (daily UTC 19:00).
   schedule:
-    - cron: "0 1 * * 0"
+    - cron: "0 21 * * *"
 
 concurrency:
   group: ci-weekly-${{ github.workflow }}-${{ github.ref }}

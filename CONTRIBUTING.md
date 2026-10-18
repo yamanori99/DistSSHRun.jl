@@ -201,8 +201,8 @@ Required to merge (ruleset `main` uses these names). **1.14-nightly** jobs are a
 
 | When | Workflow | What |
 | --- | --- | --- |
-| Sunday 04:00 JST, Run workflow, or a version-increase squash to `main` | `E2E weekly` | `ubuntu-latest`, `macos-15-intel`, WSL2 → `ubuntu-24.04`, plus the same three hosts for DistSSHBase and DistSSHUp. Linux job uploads E2E Codecov. Not a PR check. Failure opens (or comments on) Issue `E2E weekly failed`; a later all-green run closes it. A red **Linux** job after a `cut` merge adds `cut-hold`. Intel / WSL red does not. Compat-only `Project.toml` edits start the workflow but skip the matrix. |
-| Sunday 10:00 JST, or Run workflow | `CI weekly` | Same 1.13 jobs as a PR (Run's three hosts, DistSSHBase and DistSSHUp on Ubuntu, macOS, and WSL2, plus downstream DistSSHQueue and DistSSHKit; no coverage), plus JETLS and Aqua. 1.14-nightly `Pkg.test` is Run on Ubuntu, macOS, and WSL2; Aqua on macOS and WSL2 runs here only. `Compile bench` measures precompile, load, CLI wall time, `src/**/*.jl` size, and the host OS, arch, and CPU on 1.13 and 1.14-nightly. CI weekly runs it, and a **main** push that raises `Project.toml` `version` runs it too. A **main** run appends that to the `bench-data` branch. A command that exits nonzero is not recorded. It flags a host change, a 1.5x jump (and a 200 ms method that is new or doubled) but does not fail the run. Not a PR check. Catches 1.13 / Aqua / JETLS `@release` drift when nothing merged that week. Failure of the 1.13 jobs opens Issue `CI weekly failed` (`alert`); 1.14-nightly and compile bench are omitted from that notify. `cache-gc` keeps one Actions cache per restore-key prefix. |
+| Daily 04:00 JST, or Run workflow | `E2E weekly` | `ubuntu-latest`, `macos-15-intel`, WSL2 → `ubuntu-24.04`, plus the same three hosts for DistSSHBase and DistSSHUp. Linux job uploads E2E Codecov. Not a PR check. Failure opens (or comments on) Issue `E2E weekly failed`; a later all-green run closes it. A red **Linux** job on a scheduled run adds `cut-hold`, and a later green scheduled Linux removes it. Intel / WSL red does not. |
+| Daily 06:00 JST, or Run workflow | `CI weekly` | Same 1.13 jobs as a PR (Run's three hosts, DistSSHBase and DistSSHUp on Ubuntu, macOS, and WSL2, plus downstream DistSSHQueue and DistSSHKit; no coverage), plus JETLS and Aqua. 1.14-nightly `Pkg.test` is Run on Ubuntu, macOS, and WSL2; Aqua on macOS and WSL2 runs here only. `Compile bench` measures precompile, load, CLI wall time, `src/**/*.jl` size, and the host OS, arch, and CPU on 1.13 and 1.14-nightly. CI weekly runs it, and a **main** push that raises `Project.toml` `version` runs it too. A **main** run appends that to the `bench-data` branch. A command that exits nonzero is not recorded. It flags a host change, a 1.5x jump (and a 200 ms method that is new or doubled) but does not fail the run. Not a PR check. Catches 1.13 / Aqua / JETLS `@release` drift when nothing merged that day. Failure of the 1.13 jobs opens Issue `CI weekly failed` (`alert`); 1.14-nightly and compile bench are omitted from that notify. `cache-gc` keeps one Actions cache per restore-key prefix. |
 | 1st 10:00 JST, or Run workflow | `Runic` | `runic --check` on tracked `.jl` (`version: '1'`). Not a required PR check. Catches Runic minor drift when nothing formatted that month. Failure opens Issue `Runic monthly failed` (`alert`). |
 
 ## Pull requests
@@ -311,7 +311,7 @@ CI infers, in order:
 3. Else a Conventional Commit title: `fix:` → bug, `feat:` → enhancement, `!` before the colon → breaking, and `docs:` / `test:` / `ci:` / `chore:` → chore. `type(scope):` is accepted.
 4. Else `chore` when the diff has no `src/`, `ext/`, or root `Project.toml`. Anything else fails until someone adds one of the four labels.
 
-`fix/` plus `Fixes` an enhancement issue gets `enhancement`. `breaking` may sit next to the type label. After a cut, a human registers when the required checks are green (or holds with `cut-hold` if weekly Linux is red); TagBot tags.
+`fix/` plus `Fixes` an enhancement issue gets `enhancement`. `breaking` may sit next to the type label. After a cut, a human registers when the required checks are green (or holds with `cut-hold` if scheduled Linux is red); TagBot tags.
 
 Ruleset `main` requires check `PR label` (workflow `Type`). Type labels (`bug` / `enhancement` / `breaking` / `chore`) and each `area:*` must exist (`gh label create` if missing). `when:*` and `julia-next` are Issues only (not a PR type). Labels adds `cut` when the version rises above the base. Removing it sticks until the next rise. CI still reads Project.toml, not the label.
 
@@ -324,7 +324,7 @@ Colors match DistSSHKit: type is "what", area is "where". Do not give each `area
 | Documenter | blue `#0075ca` | `area:docs` (and leftover `docs`) |
 | CI | black `#000000` | `area:ci` |
 | Scheduled failure | orange `#ff4d00` | `alert` on bot Issues (`E2E weekly failed`, `CI weekly failed`, `Runic monthly failed`) |
-| Hold | pale blue `#BFD4F2` | `cut-hold` on Issue `E2E weekly failed` after a red weekly Linux job |
+| Hold | pale blue `#BFD4F2` | `cut-hold` on Issue `E2E weekly failed` after a red scheduled Linux job |
 | Test harness | pale blue `#c5def5` | `area:test` |
 | Horizon | orange `#fdba74` / violet `#c4b5fd` / slate `#94a3b8` | `when:current` `when:next` `when:later` |
 | Julia next | Julia purple `#9558b2` | `julia-next` (Issues: tip / next-stable API; not a PR type) |
