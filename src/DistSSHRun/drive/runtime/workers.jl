@@ -287,13 +287,15 @@ function _interrupt_endpoint(pid::Integer)
 end
 
 """One `kill -INT` for every OS pid on `host`. Connection failure is logged, not thrown."""
-function _signal_ssh_interrupt(host::AbstractString, ospids::AbstractVector{<:Integer})
+function _signal_ssh_interrupt(host::String, ospids::Vector{Int})
     isempty(ospids) && return nothing
-    inner = "kill -INT " * join(string.(Int.(ospids)), " ") * " || true"
+    # `*` of strings is `Union{String, AnnotatedString}`. `String` keeps the
+    # shell text concrete for `_host_sync_remote_shell_cmd(::String, ::String)`.
+    inner = String("kill -INT " * join(string.(ospids), " ") * " || true")
     try
         run(
             pipeline(
-                _host_sync_remote_shell_cmd(String(host), inner);
+                _host_sync_remote_shell_cmd(host, inner);
                 stdout = devnull,
                 stderr = devnull,
             )
