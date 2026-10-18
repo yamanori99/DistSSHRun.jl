@@ -1,0 +1,134 @@
+slot = "1.14-nightly"
+commit = "e677df9bca9394d6bf2c7bd38c78a3cf8b18b482"
+precompile_full_sec = 4.482080825
+src_bytes = 631277
+cpu = "AMD EPYC 9V74 80-Core Processor"
+julia_commit = "08e5253dc0"
+threads = 4
+src_files = 70
+src_lines = 18078
+repo = "DistSSHRun"
+version = "0.1.9"
+julia = "1.14.0-DEV.3787"
+os_name = "Ubuntu 24.04.5 LTS"
+src_code_lines = 16840
+precompile_pkg_sec = 2.355781297
+using_sec = 0.280146278
+arch = "x86_64"
+time = "2026-10-18T05:35:33Z"
+os = "Linux"
+
+[[imports]]
+name = "DistSSHRun"
+ms = 9.4
+
+[[commands]]
+count = 16
+name = "help"
+exit = 0
+walls_sec = [1.6346509456634521, 0.8865749835968018, 0.8902089595794678]
+total_ms = 1232.3
+wall_sec = 0.8902089595794678
+args = ["--help"]
+main_ms = 1116.9
+
+    [commands.buckets.Base]
+    ms = 38.6
+    count = 10
+
+    [commands.buckets.stdlib]
+    ms = 30.1
+    count = 4
+
+    [commands.buckets.DistSSHKit]
+    ms = 0.0
+    count = 0
+
+    [commands.buckets.DistSSHRun]
+    ms = 1163.6000000000001
+    count = 2
+
+    [commands.buckets.DistSSHQueue]
+    ms = 0.0
+    count = 0
+
+    [[commands.top]]
+    bucket = "DistSSHRun"
+    signature = "Tuple{typeof(DistSSHRun.main), Array{String, 1}}"
+    recompile = false
+    ms = 1116.9
+    [[commands.top]]
+    bucket = "DistSSHRun"
+    signature = "Tuple{typeof(DistSSHRun.print_kit_root_usage), Base.PipeEndpoint}"
+    recompile = false
+    ms = 46.7
+    [[commands.top]]
+    bucket = "stdlib"
+    signature = "Tuple{typeof(Distributed.flush_gc_msgs)}"
+    recompile = false
+    ms = 17.3
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.should_use_main_entrypoint)}"
+    recompile = true
+    ms = 12.8
+    [[commands.top]]
+    bucket = "stdlib"
+    signature = "Tuple{Distributed.var\"#start_gc_msgs_task##0#start_gc_msgs_task##1\"}"
+    recompile = false
+    ms = 11.1
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.string), Char}"
+    recompile = false
+    ms = 5.4
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.getproperty), Base.MappingRF{DistSSHRun.var\"#77#78\", typeof(Base.max)}, Symbol}"
+    recompile = false
+    ms = 5.0
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.getproperty), Base.MappingRF{DistSSHRun.var\"#67#68\", typeof(Base.max)}, Symbol}"
+    recompile = false
+    ms = 4.7
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.in), String, Tuple{String, String, String}}"
+    recompile = false
+    ms = 4.6
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.getproperty), Base.Order.By{DistSSHRun.var\"#_kit_progress_files##0#_kit_progress_files##1\", Base.Order.ForwardOrdering}, Symbol}"
+    recompile = false
+    ms = 4.2
+    [[commands.top]]
+    bucket = "stdlib"
+    signature = "Tuple{Core.TypeEgal{NamedTuple{(:init,), T} where T<:Tuple}, Tuple{Float64}}"
+    recompile = false
+    ms = 0.9
+    [[commands.top]]
+    bucket = "stdlib"
+    signature = "Tuple{Core.TypeEgal{NamedTuple{(:surface,), T} where T<:Tuple}, Tuple{Symbol}}"
+    recompile = false
+    ms = 0.8
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.getproperty), Base.Order.Lt{Base.Sort.var\"#_sort!##10#_sort!##11\"{Base.Order.By{DistSSHRun.var\"#_kit_progress_files##0#_kit_progress_files##1\", Base.Order.ForwardOrdering}}}, Symbol}"
+    recompile = false
+    ms = 0.5
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.structdiff), NamedTuple{(:init,), Tuple{Float64}}, Core.TypeEgal{NamedTuple{(:dims,), T} where T<:Tuple}}"
+    recompile = false
+    ms = 0.5
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.pairs), NamedTuple{(:init,), Tuple{Float64}}}"
+    recompile = false
+    ms = 0.5
+    [[commands.top]]
+    bucket = "Base"
+    signature = "Tuple{typeof(Base.merge), NamedTuple{(), Tuple{}}, Base.Pairs{Symbol, Float64, Nothing, NamedTuple{(:init,), Tuple{Float64}}}}"
+    recompile = false
+    ms = 0.4
