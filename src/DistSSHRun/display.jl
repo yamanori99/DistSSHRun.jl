@@ -737,7 +737,7 @@ end
 
 function _drain_job_stdio_pipe!(rd, wr)
     return @async begin
-        disable_sigint() do
+        shield_sigint() do
             try
                 while true
                     data = _ignore_interrupt() do
@@ -748,7 +748,7 @@ function _drain_job_stdio_pipe!(rd, wr)
                     isempty(data) && (eof(rd) || !isopen(wr)) && break
                 end
             catch e
-                isa(e, InterruptException) && return
+                is_sigint(e) && return
                 isa(e, Base.IOError) || rethrow()
             end
         end
@@ -1001,15 +1001,15 @@ _spinner_can_draw()::Bool =
 """Run `f` without letting Ctrl-C abort this task.
 
 A dying `@async` spinner / reader consumes SIGINT and never delivers
-`InterruptException` to the driver (`pmap`). Catch and continue so the
-background loop stays up; `disable_sigint` on the caller keeps the first
-Ctrl-C for the main task.
+it to the driver (`pmap`). Catch and continue so the background loop
+stays up; `shield_sigint` on the caller keeps the first Ctrl-C for the
+main task.
 """
 function _ignore_interrupt(f)
     try
         return f()
     catch e
-        e isa InterruptException || rethrow()
+        is_sigint(e) || rethrow()
         return nothing
     end
 end
@@ -1031,7 +1031,7 @@ function kit_spin!(f, prefix::AbstractString)
     done = Ref(false)
     prefix_s = String(prefix)
     spinner_task = @async begin
-        disable_sigint() do
+        shield_sigint() do
             i = 1
             while !done[]
                 _ignore_interrupt() do
@@ -1459,7 +1459,7 @@ function _progress_start_spinner!(state::KitProgressState)
     (_progress_can_draw() && !state.spinning) || return nothing
     state.spinning = true
     state.spinner_task = @async begin
-        disable_sigint() do
+        shield_sigint() do
             while state.spinning
                 _progress_is_current(state) || break
                 _ignore_interrupt() do

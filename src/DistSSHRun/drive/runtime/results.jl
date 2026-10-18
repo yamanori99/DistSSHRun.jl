@@ -67,10 +67,10 @@ function place_drive_sentinels!(
     return sentinel_name
 end
 
-"""Turn SIGINT into `InterruptException` for the duration of `f`.
+"""Turn SIGINT into an exception for the duration of `f`.
 
 CLI `julia -m` defaults to exit-on-sigint, so Ctrl-C never reaches the
-`catch InterruptException` path. Restore the script default afterward
+`is_sigint` catch. Restore the script default afterward
 unless this is an interactive session (`drive!` from the REPL).
 """
 function _with_driver_sigint_exceptions(f)
@@ -103,7 +103,7 @@ function run_driver_script!(enable_log::Bool, drive_atexit_cleanup)
                 linebuf = UInt8[]
                 rd, wr = redirect_stdout()
                 reader = @async begin
-                    disable_sigint() do
+                    shield_sigint() do
                         try
                             while true
                                 data = _ignore_interrupt() do
@@ -142,7 +142,7 @@ function run_driver_script!(enable_log::Bool, drive_atexit_cleanup)
                                 flush(log_io)
                             end
                         catch e
-                            isa(e, InterruptException) && return
+                            is_sigint(e) && return
                             isa(e, Base.IOError) || rethrow()
                         end
                     end
@@ -150,32 +150,36 @@ function run_driver_script!(enable_log::Bool, drive_atexit_cleanup)
                 try
                     call_main()
                 finally
-                    flush(stdout)
-                    close(wr)
-                    # `rd` normally reaches EOF once `wr` closes, but local worker processes
-                    # (spawned via `addprocs`) inherit our stdout fd and keep the underlying
-                    # pipe open until they exit, so EOF may never arrive here. All real script
-                    # output is already flushed to `rd` by this point (readavailable drains it
-                    # as it's written), so a short grace period is enough before we force-close.
-                    wait_ok = @async wait(reader)
-                    for _ in 1:20
-                        istaskdone(wait_ok) && break
-                        sleep(0.05)
+                    without_cancel() do
+                        flush(stdout)
+                        close(wr)
+                        # `rd` normally reaches EOF once `wr` closes, but local worker processes
+                        # (spawned via `addprocs`) inherit our stdout fd and keep the underlying
+                        # pipe open until they exit, so EOF may never arrive here. All real script
+                        # output is already flushed to `rd` by this point (readavailable drains it
+                        # as it's written), so a short grace period is enough before we force-close.
+                        wait_ok = @async wait(reader)
+                        for _ in 1:20
+                            istaskdone(wait_ok) && break
+                            sleep(0.05)
+                        end
+                        if !istaskdone(wait_ok)
+                            close(rd)
+                            wait(reader)
+                        end
+                        redirect_stdout(orig_stdout)
                     end
-                    if !istaskdone(wait_ok)
-                        close(rd)
-                        wait(reader)
-                    end
-                    redirect_stdout(orig_stdout)
                 end
             else
                 call_main()
             end
         catch e
-            if e isa InterruptException
-                writeln_both("\nInterrupted. Cleaning up workers...")
-                _interrupt_drive_workers!()
-                drive_atexit_cleanup()
+            if is_sigint(e)
+                without_cancel() do
+                    writeln_both("\nInterrupted. Cleaning up workers...")
+                    _interrupt_drive_workers!()
+                    drive_atexit_cleanup()
+                end
                 exit(130)
             end
             rethrow()

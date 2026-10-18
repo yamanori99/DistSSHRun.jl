@@ -21,6 +21,7 @@ include("argv.jl")
 include("hosts.jl")
 include("host_tokens.jl")
 include("cli_entry.jl")
+include("sigint.jl")
 include("help.jl")
 include("ssh.jl")
 include("julia_where.jl")
@@ -29,8 +30,8 @@ include("namespace.jl")
 # Queue and Kit import these. Underscore names stay private.
 public PARENT_HOST_NAME
 public cli_entry, cli_heading, cli_m, cli_m_project, cli_qhost, cli_qhost_heading
-public format_placement_token, get_remote_julia_version, julia_project_rel
+public format_placement_token, get_remote_julia_version, is_sigint, julia_project_rel
 public parse_placement_token, remote_env_project_root, resolve_remote_julia
-public resolve_remote_project_root, with_cli_entry
+public resolve_remote_project_root, shield_sigint, with_cli_entry, without_cancel
 
 end # module DistSSHBase
