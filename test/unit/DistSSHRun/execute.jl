@@ -1157,4 +1157,71 @@ using Test
             end
         end
     end
+
+    @testset "terminate! interrupt_grace reaches a drive worker" begin
+        # Measured on macOS: Julia 1.13 never runs the drive Ctrl-C path while
+        # the driver waits in `pmap`. Julia 1.14 exits 130, but its own
+        # cancellation drops the worker connection before the worker is
+        # interrupted. Linux 1.13 interrupts the worker.
+        cancels = isdefined(Base, :CancellationRequest)
+        worker_catches = Sys.islinux() && !cancels
+        exits_130 = cancels || !Sys.isapple()
+        _with_tempdir() do proj
+            _write_host_project!(proj, "TerminateWorker")
+            script = joinpath(proj, "job.jl")
+            ready = joinpath(proj, "ready")
+            caught = joinpath(proj, "worker_caught")
+            write(
+                script,
+                """
+                using Distributed
+                function main()
+                    pmap(1:nworkers()) do _
+                        write($(repr(ready)), "1")
+                        try
+                            t0 = time()
+                            while time() - t0 < 120
+                                GC.safepoint()
+                                sleep(0.05)
+                            end
+                        catch e
+                            write($(repr(caught)), "1")
+                            rethrow()
+                        end
+                        return nothing
+                    end
+                    return nothing
+                end
+                """,
+            )
+            kp = DistSSHRun.execute!(
+                :drive,
+                script,
+                ["parent:1"];
+                detached = true,
+                project = proj,
+                quiet = true,
+            )
+            try
+                t0 = time()
+                while !isfile(ready) && (time() - t0) < 90
+                    sleep(0.05)
+                end
+                @test isfile(ready)
+                r = DistSSHRun.terminate!(kp; interrupt_grace = 15, grace = 2)
+                if worker_catches
+                    @test isfile(caught)
+                else
+                    @test_broken isfile(caught)
+                end
+                if exits_130
+                    @test r.exit_code == 130
+                else
+                    @test_broken r.exit_code == 130
+                end
+            finally
+                process_running(kp.process) && DistSSHRun.terminate!(kp; grace = 1)
+            end
+        end
+    end
 end
