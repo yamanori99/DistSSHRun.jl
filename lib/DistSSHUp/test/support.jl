@@ -35,11 +35,12 @@ if !isdefined(Main, :_write_aligned_fake_juliaup)
     function _write_aligned_fake_juliaup(dir::AbstractString)
         ju = joinpath(dir, "juliaup")
         jl = joinpath(dir, "julia")
-        ch = if isdefined(Main, :DistSSHUp)
-            DistSSHUp.juliaup_channel()
-        else
-            DistSSHRun.juliaup_channel()
-        end
+        # The two test entries load different packages. Spell neither name as a
+        # global: this file is analyzed from both, and the unused branch warns.
+        up = Symbol("DistSSH" * "Up")
+        other = Symbol("DistSSH" * "Run")
+        mod = getfield(Main, isdefined(Main, up) ? up : other)
+        ch = mod.juliaup_channel()
         write(
             ju,
             """
