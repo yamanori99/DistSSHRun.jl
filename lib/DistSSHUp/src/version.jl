@@ -1,12 +1,14 @@
 """Compare two Julia versions and classify the difference:
-`:none` (equal), `:minor` (major.minor differs), or `:patch` (patch only)."""
+`:none` (equal), `:minor` (major.minor differs), or `:patch`
+(patch or prerelease differs)."""
 function julia_version_mismatch_kind(
         local_version::VersionNumber,
         remote_version::VersionNumber,
     )::Symbol
     if remote_version.major != local_version.major || remote_version.minor != local_version.minor
         return :minor
-    elseif remote_version.patch != local_version.patch
+    elseif remote_version.patch != local_version.patch ||
+            remote_version.prerelease != local_version.prerelease
         return :patch
     end
     return :none
@@ -45,8 +47,23 @@ function _reject_old_juliaup(ver::Union{Nothing, VersionNumber}, seen::AbstractS
     return nothing
 end
 
-"""Channel string for juliaup from a Julia `VersionNumber` (`\"1.13\"`)."""
-juliaup_channel(v::VersionNumber = VERSION)::String = "$(v.major).$(v.minor)"
+"""Channel string for juliaup from a Julia `VersionNumber`.
+
+A release is `\"1.13\"`. `1.14.0-DEV` is `\"1.14-nightly\"`.
+Another prerelease keeps its name: `1.13.0-rc1`.
+"""
+function juliaup_channel(v::VersionNumber = VERSION)::String
+    pre = v.prerelease
+    isempty(pre) && return "$(v.major).$(v.minor)"
+    head = first(pre)
+    if !(head isa Integer) && String(head) == "DEV"
+        return "$(v.major).$(v.minor)-nightly"
+    end
+    parts = map(pre) do piece
+        piece isa Integer ? string(Int(piece)) : String(piece)
+    end
+    return "$(v.major).$(v.minor).$(v.patch)-$(join(parts, "."))"
+end
 
 """True when `remote` is the same major.minor as `local` but a newer version."""
 function juliaup_parent_behind_channel(
