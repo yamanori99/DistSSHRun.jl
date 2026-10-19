@@ -189,6 +189,7 @@ using Test
                 @test DistSSHRun.kit_pid_file_running(d) === false
             end
             rec = DistSSHRun._parse_kit_pid_text("7\nboot\n")
+            @test rec !== nothing
             @test rec.pid == 7
             @test rec.start == "boot"
         end
@@ -221,6 +222,7 @@ using Test
                 )
             )
             with_hosts = DistSSHRun.kit_result_from_dir(d)
+            @test with_hosts !== nothing
             @test length(with_hosts.hosts) == 2
             @test with_hosts.hosts[1] == DistSSHRun.HostRunResult("h1", true, nothing)
             @test with_hosts.hosts[2].host == "h2"
@@ -233,6 +235,7 @@ using Test
                 )
             )
             ride_got = DistSSHRun.kit_result_from_dir(d)
+            @test ride_got !== nothing
             @test ride_got.kind === :ride
             @test ride_got.ok
             write(joinpath(d, "kit.result"), "not toml {")
@@ -382,6 +385,7 @@ using Test
                             project_root = project,
                         )
                         recorded = DistSSHRun.read_kit_run_toml(d1)
+                        @test recorded !== nothing
                         @test recorded["collect_dirs"] == [
                             DistSSHRun.canonical_local_path(joinpath(project, "rel-out")),
                         ]
@@ -836,14 +840,16 @@ using Test
                         stdout = out_io,
                         stderr = err_io,
                     )
-                    pid_path = joinpath(kp.output_dir, "kit.pid")
+                    out_dir = kp.output_dir
+                    @test out_dir !== nothing
+                    pid_path = joinpath(out_dir, "kit.pid")
                     if process_running(kp.process)
                         t0 = time()
                         while !isfile(pid_path) && process_running(kp.process) && (time() - t0) < 5
                             sleep(0.05)
                         end
                         if isfile(pid_path)
-                            rec = DistSSHRun._read_kit_pid_record(kp.output_dir)
+                            rec = DistSSHRun._read_kit_pid_record(out_dir)
                             @test rec !== nothing
                             @test rec.pid == getpid(kp.process)
                         end
@@ -905,13 +911,15 @@ using Test
                     )
                     result = wait(kp)
                     @test result.ok
-                    pid_path = joinpath(result.output_dir, "kit.pid")
+                    out_dir = result.output_dir
+                    @test out_dir !== nothing
+                    pid_path = joinpath(out_dir, "kit.pid")
                     @test !isfile(pid_path)
-                    @test isfile(joinpath(result.output_dir, "kit.job"))
-                    @test strip(read(joinpath(result.output_dir, "kit.job"), String)) == "q-1"
-                    log_files = filter(f -> endswith(f, ".log"), readdir(result.output_dir))
+                    @test isfile(joinpath(out_dir, "kit.job"))
+                    @test strip(read(joinpath(out_dir, "kit.job"), String)) == "q-1"
+                    log_files = filter(f -> endswith(f, ".log"), readdir(out_dir))
                     @test !isempty(log_files)
-                    log_body = read(joinpath(result.output_dir, first(log_files)), String)
+                    log_body = read(joinpath(out_dir, first(log_files)), String)
                     @test occursin("job=q-1", log_body)
                     @test isfile(ran)
                 end

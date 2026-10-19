@@ -1,0 +1,8 @@
+# SSH E2E is a separate entry. runtests.jl does not include it.
+# JETLS reports that as toplevel/analysis-skipped.
+[[diagnostic.patterns]]
+pattern = "toplevel/analysis-skipped"
+match_by = "code"
+match_type = "literal"
+severity = "off"
+path = "test/e2e.jl"

@@ -350,8 +350,9 @@ end
                 r = DistSSHUp.juliaup_align_host!("align-host"; channel = ch)
                 @test r.host == "align-host"
                 @test !r.already
-                @test r.ver isa VersionNumber
-                @test DistSSHUp.julia_version_mismatch_kind(VERSION, r.ver) != :minor
+                ver = r.ver
+                @test ver isa VersionNumber
+                @test DistSSHUp.julia_version_mismatch_kind(VERSION, ver) != :minor
                 @test DistSSHBase._DETECT_JULIA_PATH_CACHE["align-host"] == "/usr/bin/julia"
             end
             other = VersionNumber(VERSION.major, VERSION.minor + 1, 0)

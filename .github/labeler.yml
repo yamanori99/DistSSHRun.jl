@@ -25,6 +25,7 @@
           - "bench/**"
           - "codecov.yml"
           - ".coderabbit.yaml"
+          - ".JETLSConfig.toml"
 
 "area:test":
   - changed-files:

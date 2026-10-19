@@ -91,7 +91,9 @@ using Test
 
         missing = DistSSHRun.plan(joinpath(tmp, "nope.jl"))
         @test !missing.ok
-        @test occursin("file not found", missing.error)
+        missing_error = missing.error
+        @test missing_error !== nothing
+        @test occursin("file not found", missing_error)
         @test missing.slots === nothing
 
         @test DistSSHRun.plan(map_path).slots === nothing

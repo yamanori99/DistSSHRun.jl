@@ -49,7 +49,9 @@ using Pkg
     _with_tempdir() do dir
         @test DistSSHRun.probe_project_deps(dir) == "Project.toml not found"
         write(joinpath(dir, "Project.toml"), "[deps]\n")
-        @test occursin("Manifest.toml not found", DistSSHRun.probe_project_deps(dir))
+        probed = DistSSHRun.probe_project_deps(dir)
+        @test probed !== nothing
+        @test occursin("Manifest.toml not found", probed)
     end
 
     _with_tempdir() do dir
@@ -557,6 +559,7 @@ using Pkg
                     ),
                 )
                 top = DistSSHRun.git_work_tree(logical)
+                @test top !== nothing
                 foo_logical = joinpath(logical, "dev", "Foo")
                 @test DistSSHRun._git_worktree_relpath(top, foo_logical) == "dev/Foo"
                 @test !startswith(DistSSHRun._git_worktree_relpath(top, foo_logical), "..")

@@ -32,7 +32,10 @@ using Test
         @test proc.exitcode == 0
         @test occursin("DistSSHBase", out)
         m = match(r"^PKGDIR=(.*)$"m, out)
-        @test m !== nothing && realpath(m.captures[1]) == realpath(dest)
+        @test m !== nothing
+        cap = m.captures[1]
+        @test cap !== nothing
+        @test realpath(cap) == realpath(dest)
     end
     _with_tempdir() do tmp
         dest = _vendor_distsshkit!(tmp)
