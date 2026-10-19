@@ -134,6 +134,10 @@ upload. macOS runs `ps -o lstart=` in `kit_process_start_key`. Both are
 required.
 Gitleaks also rejects `< 0.0.1` in `Project.toml`. Documenter 1.13 is
 [`.github/workflows/Documentation.yml`](.github/workflows/Documentation.yml).
+A pull request that runs it also pushes a preview to `gh-pages` at
+`previews/PR<n>`. The commit status `documenter/deploy` links to
+`https://yamanori99.github.io/DistSSHRun.jl/previews/PR<n>/`.
+That directory stays after the pull request closes.
 `Assets` (`draw SVG`) runs if `docs/src/assets/` or that workflow
 changed. Linux E2E (1.13) uses the same **path filter** as **main** push
 (`src/**`, `lib/**`, `test/**`, `testenv/**` minus markdown under those trees,
