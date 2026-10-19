@@ -18,6 +18,8 @@ files=(
     test/e2e.jl
     lib/DistSSHBase/test/runtests.jl
     lib/DistSSHUp/test/runtests.jl
+    bench/compile/report.jl
+    bench/compile/measure.jl
 )
 
 if ((${#files[@]} == 0)); then
