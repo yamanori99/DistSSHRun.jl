@@ -37,7 +37,27 @@ xychart-beta
     title "1.13 help"
     x-axis ["10-17 1459df0", "10-18 e677df9", "10-18 91b44e7", "10-19 v0.1.10", "10-19 04517af", "10-19 v0.1.11"]
     y-axis "seconds" 0 --> 3
-    line [1.94, 2.09, 0.43, 0.7, 0.7, 0.48]
+        line "help" [1.94, 2.09, 0.43, 0.7, 0.7, 0.48]
+```
+
+
+```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#1f4e79, #b85c38"
+  xyChart:
+    xAxis:
+      labelRotation: 45
+---
+xychart-beta
+    title "1.13 go drive"
+    x-axis ["10-17 1459df0", "10-18 e677df9", "10-18 91b44e7", "10-19 v0.1.10", "10-19 04517af", "10-19 v0.1.11"]
+    y-axis "seconds" 0 --> 37
+        line "go" [null, null, 4.8, 8.4, 8.16, 6.09]
+        line "drive" [null, null, 17.93, 30.28, 29.01, 21.7]
 ```
 
 
@@ -51,25 +71,6 @@ Latest `help` methods:
 | `Tuple{typeof(Base.should_use_main_entrypoint)}` | 10.7 | 11.6 |
 | `Tuple{typeof(Base.getproperty), Base.GenericCondition{Base.ReentrantLock}, Symbol}` | 2.7 | 3.8 |
 | `Tuple{typeof(Base.something), Nothing, Symbol}` | 2.6 | 3.0 |
-
-```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    xyChart:
-      plotColorPalette: "#1f4e79"
-  xyChart:
-    xAxis:
-      labelRotation: 45
----
-xychart-beta
-    title "1.13 go"
-    x-axis ["10-18 91b44e7", "10-19 v0.1.10", "10-19 04517af", "10-19 v0.1.11"]
-    y-axis "seconds" 0 --> 11
-    line [4.8, 8.4, 8.16, 6.09]
-```
-
 
 Latest `go` methods:
 
@@ -85,25 +86,6 @@ Latest `go` methods:
 | `Tuple{typeof(Core.kwcall), NamedTuple{(:ok, :footer), Tuple{Bool, String}}, typeof(DistSSH...` | 54.5 | 72.0 |
 | `Tuple{typeof(Base.addenv), Base.Cmd, Pair{String, String}}` | 49.1 | 65.9 |
 | `Tuple{typeof(Base.setindex!), Base.Dict{String, Symbol}, Symbol, String}` | 45.4 | 62.2 |
-
-```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    xyChart:
-      plotColorPalette: "#1f4e79"
-  xyChart:
-    xAxis:
-      labelRotation: 45
----
-xychart-beta
-    title "1.13 drive"
-    x-axis ["10-18 91b44e7", "10-19 v0.1.10", "10-19 04517af", "10-19 v0.1.11"]
-    y-axis "seconds" 0 --> 37
-    line [17.93, 30.28, 29.01, 21.7]
-```
-
 
 Latest `drive` methods:
 
@@ -146,7 +128,27 @@ xychart-beta
     title "1.14-nightly 1.14-DEV.3787 help"
     x-axis ["10-17 1.14-DEV.3787", "10-18 e677df9", "10-18 91b44e7", "10-19 v0.1.10", "10-19 04517af", "10-19 v0.1.11"]
     y-axis "seconds" 0 --> 2
-    line [1.09, 0.96, 0.56, 0.58, 0.5, 0.63]
+        line "help" [1.09, 0.96, 0.56, 0.58, 0.5, 0.63]
+```
+
+
+```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#1f4e79, #b85c38"
+  xyChart:
+    xAxis:
+      labelRotation: 45
+---
+xychart-beta
+    title "1.14-nightly 1.14-DEV.3787 go drive"
+    x-axis ["10-17 1.14-DEV.3787", "10-18 e677df9", "10-18 91b44e7", "10-19 v0.1.10", "10-19 04517af", "10-19 v0.1.11"]
+    y-axis "seconds" 0 --> 16
+        line "go" [null, null, 2.95, 2.79, 2.7, 3.35]
+        line "drive" [null, null, 11.38, 11.03, 10.62, 12.86]
 ```
 
 
@@ -160,25 +162,6 @@ Latest `help` methods:
 | `Tuple{typeof(Base.should_use_main_entrypoint)}` | 15.1 | 10.4 |
 | `Tuple{Distributed.var"#start_gc_msgs_task##0#start_gc_msgs_task##1"}` | 14.0 | 10.7 |
 | `Tuple{typeof(Base.string), Char}` | 6.8 | 5.5 |
-
-```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    xyChart:
-      plotColorPalette: "#1f4e79"
-  xyChart:
-    xAxis:
-      labelRotation: 45
----
-xychart-beta
-    title "1.14-nightly 1.14-DEV.3787 go"
-    x-axis ["10-18 1.14-DEV.3787", "10-19 v0.1.10", "10-19 04517af", "10-19 v0.1.11"]
-    y-axis "seconds" 0 --> 5
-    line [2.95, 2.79, 2.7, 3.35]
-```
-
 
 Latest `go` methods:
 
@@ -194,25 +177,6 @@ Latest `go` methods:
 | `Tuple{typeof(Base.addenv), Base.Cmd, Pair{String, String}}` | 53.7 | 41.1 |
 | `Tuple{typeof(Base.grow_to!), Array{NamedTuple{(:event, :kind, :job, :label, :total, :done,...` | 44.5 | 33.9 |
 | `Tuple{typeof(Base.grow_to!), Array{NamedTuple{(:event, :kind, :job, :label, :total, :done,...` | 42.5 | 31.7 |
-
-```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    xyChart:
-      plotColorPalette: "#1f4e79"
-  xyChart:
-    xAxis:
-      labelRotation: 45
----
-xychart-beta
-    title "1.14-nightly 1.14-DEV.3787 drive"
-    x-axis ["10-18 1.14-DEV.3787", "10-19 v0.1.10", "10-19 04517af", "10-19 v0.1.11"]
-    y-axis "seconds" 0 --> 16
-    line [11.38, 11.03, 10.62, 12.86]
-```
-
 
 Latest `drive` methods:
 
@@ -253,7 +217,27 @@ xychart-beta
     title "nightly 1.15-DEV.19 help"
     x-axis ["10-18 1.14-DEV.3787", "10-19 v0.1.10 julia 1.15-DEV.15", "10-19 julia 1.15-DEV.18", "10-19 v0.1.11 julia 1.15-DEV.19"]
     y-axis "seconds" 0 --> 1
-    line [0.62, 0.62, 0.62, 0.48]
+        line "help" [0.62, 0.62, 0.62, 0.48]
+```
+
+
+```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#1f4e79, #b85c38"
+  xyChart:
+    xAxis:
+      labelRotation: 45
+---
+xychart-beta
+    title "nightly 1.15-DEV.19 go drive"
+    x-axis ["10-18 1.14-DEV.3787", "10-19 v0.1.10 julia 1.15-DEV.15", "10-19 julia 1.15-DEV.18", "10-19 v0.1.11 julia 1.15-DEV.19"]
+    y-axis "seconds" 0 --> 16
+        line "go" [3.38, 3.45, 3.38, 2.45]
+        line "drive" [12.97, 13.23, 13.01, 9.76]
 ```
 
 
@@ -267,25 +251,6 @@ Latest `help` methods:
 | `Tuple{typeof(Base.should_use_main_entrypoint)}` | 11.9 | 15.1 |
 | `Tuple{Distributed.var"#start_gc_msgs_task##0#start_gc_msgs_task##1"}` | 11.6 | 13.7 |
 | `Tuple{typeof(Base.string), Char}` | 6.6 | 7.0 |
-
-```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    xyChart:
-      plotColorPalette: "#1f4e79"
-  xyChart:
-    xAxis:
-      labelRotation: 45
----
-xychart-beta
-    title "nightly 1.15-DEV.19 go"
-    x-axis ["10-18 1.14-DEV.3787", "10-19 v0.1.10 julia 1.15-DEV.15", "10-19 julia 1.15-DEV.18", "10-19 v0.1.11 julia 1.15-DEV.19"]
-    y-axis "seconds" 0 --> 5
-    line [3.38, 3.45, 3.38, 2.45]
-```
-
 
 Latest `go` methods:
 
@@ -301,25 +266,6 @@ Latest `go` methods:
 | `Tuple{typeof(Base.addenv), Base.Cmd, Pair{String, String}}` | 40.5 | 53.7 |
 | `Tuple{typeof(Base.grow_to!), Array{NamedTuple{(:event, :kind, :job, :label, :total, :done,...` | 31.7 | 42.1 |
 | `Tuple{typeof(Base.grow_to!), Array{NamedTuple{(:event, :kind, :job, :label, :total, :done,...` | 31.4 | 43.9 |
-
-```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    xyChart:
-      plotColorPalette: "#1f4e79"
-  xyChart:
-    xAxis:
-      labelRotation: 45
----
-xychart-beta
-    title "nightly 1.15-DEV.19 drive"
-    x-axis ["10-18 1.14-DEV.3787", "10-19 v0.1.10 julia 1.15-DEV.15", "10-19 julia 1.15-DEV.18", "10-19 v0.1.11 julia 1.15-DEV.19"]
-    y-axis "seconds" 0 --> 16
-    line [12.97, 13.23, 13.01, 9.76]
-```
-
 
 Latest `drive` methods:
 
