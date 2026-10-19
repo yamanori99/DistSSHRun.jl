@@ -6,7 +6,7 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
-- `up` and `setup --juliaup` ask juliaup for `X.Y-nightly` when this Julia is `X.Y.0-DEV`, and for the prerelease name otherwise (`1.13.0-rc1`). A release build still asks for `X.Y`. `X.Y.0-DEV` and `X.Y.0` are no longer treated as the same Julia.
+- `up` and `setup --juliaup` ask juliaup for `X.Y-nightly` when this Julia is `X.Y.0-DEV`, and for the prerelease name otherwise (`1.13.0-rc1`). A release build still asks for `X.Y`.
 
 ### Planned breaking (next minor)
 

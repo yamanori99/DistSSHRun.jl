@@ -2,7 +2,7 @@
     mktempdir() do d
         ju = joinpath(d, "juliaup")
         jl = joinpath(d, "julia")
-        ch = "$(VERSION.major).$(VERSION.minor)"
+        ch = DistSSHUp.juliaup_channel()
         write(
             ju,
             """

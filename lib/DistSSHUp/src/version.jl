@@ -1,14 +1,12 @@
 """Compare two Julia versions and classify the difference:
-`:none` (equal), `:minor` (major.minor differs), or `:patch`
-(patch or prerelease differs)."""
+`:none` (equal), `:minor` (major.minor differs), or `:patch` (patch only)."""
 function julia_version_mismatch_kind(
         local_version::VersionNumber,
         remote_version::VersionNumber,
     )::Symbol
     if remote_version.major != local_version.major || remote_version.minor != local_version.minor
         return :minor
-    elseif remote_version.patch != local_version.patch ||
-            remote_version.prerelease != local_version.prerelease
+    elseif remote_version.patch != local_version.patch
         return :patch
     end
     return :none

@@ -35,7 +35,11 @@ if !isdefined(Main, :_write_aligned_fake_juliaup)
     function _write_aligned_fake_juliaup(dir::AbstractString)
         ju = joinpath(dir, "juliaup")
         jl = joinpath(dir, "julia")
-        ch = "$(VERSION.major).$(VERSION.minor)"
+        ch = if isdefined(Main, :DistSSHUp)
+            DistSSHUp.juliaup_channel()
+        else
+            DistSSHRun.juliaup_channel()
+        end
         write(
             ju,
             """

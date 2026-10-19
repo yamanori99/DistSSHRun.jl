@@ -156,7 +156,7 @@ using Test
                         end
                     end
                     @test up.ok && !up.cancelled
-                    ch = "$(VERSION.major).$(VERSION.minor)"
+                    ch = DistSSHRun.juliaup_channel()
                     @test occursin("$host: already on $ch", out)
                 end
                 withenv("DISTSSHKIT_TEST_NO_JULIAUP" => "1") do

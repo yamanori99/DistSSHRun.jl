@@ -20,12 +20,6 @@ using Test
         @test DistSSHUp.juliaup_channel(VERSION) == "$(VERSION.major).$(VERSION.minor)-nightly"
     end
 
-    @test DistSSHUp.julia_version_mismatch_kind(v"1.14.0-DEV", v"1.14.0") == :patch
-    @test DistSSHUp.julia_version_mismatch_kind(v"1.14.0", v"1.14.0-DEV") == :patch
-    @test DistSSHUp.julia_version_mismatch_kind(v"1.14.0-DEV", v"1.14.0-DEV") == :none
-    @test DistSSHUp.julia_version_mismatch_kind(v"1.13.0-rc1", v"1.13.0-rc2") == :patch
-    @test DistSSHUp.julia_version_mismatch_kind(v"1.13.0-rc1", v"1.13.0") == :patch
-
     @test DistSSHUp.juliaup_parent_behind_channel(v"1.12.6", v"1.12.9")
     @test !DistSSHUp.juliaup_parent_behind_channel(v"1.12.9", v"1.12.6")
     @test !DistSSHUp.juliaup_parent_behind_channel(v"1.12.6", v"1.12.6")
