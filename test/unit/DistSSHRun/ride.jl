@@ -14,7 +14,9 @@ using Test
             )
             try
                 DistSSHRun._ride_activate_project!(tmp)
-                @test startswith(Base.active_project(), tmp)
+                active = Base.active_project()
+                @test active !== nothing
+                @test startswith(active, tmp)
             finally
                 DistSSHRun._ride_restore_project!(prev)
             end

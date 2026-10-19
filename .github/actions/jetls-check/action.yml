@@ -22,11 +22,9 @@ runs:
         if [[ -z "${JULIA_APPS_JULIA_CMD:-}" ]]; then
           export JULIA_APPS_JULIA_CMD="$(command -v julia)"
         fi
-        # release b654719 (2026-10-14) reports 206 union-split warnings inside
-        # @testset. The same tests passed on 5b0854c (release of 2026-10-11).
         julia --startup-file=no -e '
           using Pkg
-          Pkg.Apps.add(; url="https://github.com/aviatesk/JETLS.jl", rev="5b0854c66113dde260e3f9a253be8e57e0b49ae0")
+          Pkg.Apps.add(; url="https://github.com/aviatesk/JETLS.jl", rev="release")
         '
     - name: Run jetls check
       shell: bash

@@ -123,7 +123,10 @@ end
                 @test result.output_dir == DistSSHRun.canonical_local_path(dest)
                 @test isfile(joinpath(dest, "hook.txt"))
                 @test kp.output_dir === nothing
-                raw = DistSSHRun.read_kit_run_toml(kp.run_dir)
+                run_dir = kp.run_dir
+                @test run_dir !== nothing
+                raw = DistSSHRun.read_kit_run_toml(run_dir)
+                @test raw !== nothing
                 @test raw["output_dir"] == DistSSHRun.canonical_local_path(dest)
             end
         end
