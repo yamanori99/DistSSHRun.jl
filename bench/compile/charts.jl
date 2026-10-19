@@ -222,7 +222,7 @@ const RANGES = [
   ["2y", 730],
   ["all", null]
 ];
-const NOT_JULIA = new Set(["", "Main", "stdlib", "other", "DistSSHKit", "DistSSHRun", "DistSSHQueue"]);
+const PACKAGE = new Set(["DistSSHKit", "DistSSHRun", "DistSSHQueue"]);
 const state = { slot: "", range: "all", n: 8, cmd: "", drag: null };
 
 function slotData() {
@@ -292,25 +292,12 @@ function defaultCommand(samples) {
   return best;
 }
 
-function chosenMethods(samples, name, count) {
-  const best = new Map();
-  const meta = new Map();
-  samples.forEach((sample) => {
-    const command = sample.commands.find((item) => item.name === name);
-    if (!command) return;
-    ranked(command).forEach((method, index) => {
-      const rank = index + 1;
-      if (!meta.has(method.signature)) meta.set(method.signature, method);
-      if (rank <= count) {
-        const previous = best.get(method.signature);
-        if (previous === undefined || rank < previous) best.set(method.signature, rank);
-      }
-    });
-  });
-  let keys = Array.from(best.keys());
-  keys.sort((a, b) => best.get(a) - best.get(b) || meta.get(b).ms - meta.get(a).ms);
-  if (keys.length > count) keys = keys.slice(0, count);
-  return keys.map((key) => meta.get(key));
+function latestWithCommand(samples, name) {
+  for (let index = samples.length - 1; index >= 0; index -= 1) {
+    const command = samples[index].commands.find((item) => item.name === name);
+    if (command) return { index, command };
+  }
+  return null;
 }
 
 function methodY(sample, name, signature, count) {
@@ -376,14 +363,33 @@ function sampleMark(sample) {
   return [String(sample.time).slice(0, 10), String(sample.commit || ""), String(sample.julia || "")];
 }
 
-function layout(title, ytitle, samples) {
+const COLORWAY = ["#636efa", "#EF553B", "#00cc96", "#ab63fa", "#FFA15A", "#19d3f3", "#FF6692", "#B6E880", "#FF97FF", "#FECB52"];
+
+function paintKey(id, names) {
+  const host = document.getElementById(id);
+  host.replaceChildren();
+  names.forEach((name, index) => {
+    const row = document.createElement("div");
+    const swatch = document.createElement("i");
+    swatch.style.background = COLORWAY[index % COLORWAY.length];
+    const text = document.createElement("span");
+    text.textContent = name;
+    row.appendChild(swatch);
+    row.appendChild(text);
+    host.appendChild(row);
+  });
+}
+
+function layout(title, ytitle, samples, width) {
   return {
-    title, margin: { t: 48, r: 16, b: 64, l: 56 }, height: title.startsWith("Method") ? 460 : 320,
+    title, width, height: title.startsWith("Method") ? 400 : 280,
+    margin: { t: 36, r: 16, b: 48, l: 48 },
     xaxis: { type: "date", automargin: true, tickformat: "%Y-%m-%d" },
     yaxis: { title: ytitle, rangemode: "tozero", automargin: true },
     shapes: shapes(samples),
     annotations: annotations(samples),
-    legend: { orientation: "v" },
+    colorway: COLORWAY,
+    showlegend: false,
     hovermode: "closest"
   };
 }
@@ -403,8 +409,9 @@ function drawWall(samples) {
       hovertemplate: "%{customdata[0]} %{customdata[1]}<br>%{fullData.name} %{y} s<extra></extra>"
     };
   });
+  paintKey("wall-key", names);
   const node = document.getElementById("wall-chart");
-  const drawn = window.Plotly ? Plotly.react(node, traces, layout("Command wall", "seconds", samples)) : Promise.resolve();
+  const drawn = window.Plotly ? Plotly.react(node, traces, layout("Command wall", "seconds", samples, node.clientWidth || 560)) : Promise.resolve();
   if (window.Plotly) {
     if (node.removeAllListeners) node.removeAllListeners("plotly_click");
     node.on("plotly_click", (event) => {
@@ -442,7 +449,8 @@ function drawMethods(samples) {
   });
   const cap = Math.max(1, available.size);
   if (state.n > cap) state.n = cap;
-  const chosen = chosenMethods(samples, state.cmd, state.n);
+  const found = latestWithCommand(samples, state.cmd);
+  const chosen = found ? ranked(found.command).slice(0, state.n) : [];
   const traces = chosen.map((method) => ({
     type: "scatter", mode: "lines+markers", name: method.short, connectgaps: false,
     x: samples.map((sample) => sample.time),
@@ -450,19 +458,20 @@ function drawMethods(samples) {
     customdata: samples.map((sample) => sampleMark(sample).concat([method.owner, method.signature])),
     hovertemplate: "%{customdata[0]} %{customdata[1]}<br>%{customdata[2]}<br>%{fullData.name}<br>%{customdata[3]} %{y} ms<br>%{customdata[4]}<extra></extra>"
   }));
+  paintKey("method-key", chosen.map((method) => method.short));
   const node = document.getElementById("method-chart");
-  const drawn = window.Plotly ? Plotly.react(node, traces, layout("Method rank", "ms", samples)) : Promise.resolve();
+  const drawn = window.Plotly ? Plotly.react(node, traces, layout("Method rank", "ms", samples, node.clientWidth || 560)) : Promise.resolve();
   window.__methodDrawn = drawn;
   const body = document.querySelector("#method-table tbody");
   body.innerHTML = "";
-  const last = samples[samples.length - 1];
-  const prev = samples.length > 1 ? samples[samples.length - 2] : null;
+  const last = found ? samples[found.index] : null;
+  const prev = found && found.index > 0 ? samples[found.index - 1] : null;
   function top(sample) {
     if (!sample) return [];
     const command = sample.commands.find((item) => item.name === state.cmd);
     return command ? ranked(command).slice(0, state.n) : [];
   }
-  const now = top(last);
+  const now = chosen;
   const before = top(prev);
   const rows = now.map((method) => {
     const nowRank = now.findIndex((item) => item.signature === method.signature) + 1;
@@ -477,7 +486,7 @@ function drawMethods(samples) {
   });
   rows.forEach((item) => {
     const row = document.createElement("tr");
-    if (!NOT_JULIA.has(item.method.owner)) row.dataset.julia = "1";
+    if (PACKAGE.has(item.method.owner)) row.dataset.package = "1";
     [item.nowRank, item.prevRank, item.change, item.method.owner, item.method.short, item.ms === "" ? "" : Math.round(item.ms), item.delta === "" ? "" : Math.round(item.delta)].forEach((cell) => {
       const td = document.createElement("td");
       td.textContent = cell;
@@ -601,10 +610,15 @@ function bench_html(groups)::String
     body { font: 15px/1.4 sans-serif; margin: 24px auto; max-width: 920px; padding: 0 16px; color: #0f172a; background: #fff; }
     button { margin: 0 4px 8px 0; }
     button[aria-pressed="true"] { font-weight: 700; }
-    .plot { width: 100%; }
+    .chart-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 16px; }
+    .plot { flex: 0 0 560px; width: 560px; max-width: 100%; }
+    .key { flex: 1 1 14rem; min-width: 12rem; max-width: 22rem; }
+    .key div { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 6px; }
+    .key i { flex: 0 0 12px; width: 12px; height: 12px; margin-top: 4px; }
+    .key span { overflow-wrap: anywhere; }
     table { border-collapse: collapse; margin: 12px 0 24px; width: 100%; table-layout: fixed; }
     td, th { border: 1px solid #cbd5e1; padding: 4px 8px; text-align: left; overflow-wrap: anywhere; }
-    tr[data-julia="1"] { background: #f3e8ff; }
+    tr[data-package="1"] { background: #f3e8ff; }
     #range-row, #method-row { margin: 8px 0 16px; }
     </style>
     </head>
@@ -624,7 +638,10 @@ function bench_html(groups)::String
     <button type="button" id="method-inc">+</button>
     </div>
     <p>A time is a specialization this command compiled. Specializations of this package are all kept. Any other owner is kept only at 200 ms or more. Main, the driving script, is omitted. A blank time is a function defined on the package module that the trace never named. This is not every method under <code>src/</code>. Each function is one name. When one of its methods compiles, the methods that did not compile are left out.</p>
+    <div class="chart-row">
     <div id="method-chart" class="plot"></div>
+    <div id="method-key" class="key"></div>
+    </div>
     <p id="method-note"></p>
     <table id="method-table">
     <colgroup><col style="width:3.5rem"><col style="width:3.5rem"><col style="width:4.5rem"><col style="width:8rem"><col><col style="width:4.5rem"><col style="width:5.5rem"></colgroup>
@@ -632,7 +649,10 @@ function bench_html(groups)::String
     <tbody></tbody>
     </table>
     <h2>Command wall</h2>
+    <div class="chart-row">
     <div id="wall-chart" class="plot"></div>
+    <div id="wall-key" class="key"></div>
+    </div>
     <p id="wall-note"></p>
     <table id="wall-table">
     <thead><tr><th>command</th><th>now s</th><th>start s</th><th>change</th></tr></thead>
