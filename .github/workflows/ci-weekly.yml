@@ -66,13 +66,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: ./.github/actions/wsl-install
       - uses: Vampire/setup-wsl@4c48163d9f981914dd8caa0fc335fe19cca5bff4 # v7.2.0
         timeout-minutes: 10
         with:
           distribution: Ubuntu-24.04
           wsl-version: 2
-          # Cache the rootfs. Do not apt-get in this action: a stuck wsl.exe
-          # keeps stdio open, so this step's timeout-minutes does not reap it.
+          # Already registered by ./.github/actions/wsl-install. See
+          # wsl-install.ps1 for #43, #96, and #134. This step must not run
+          # `wsl --install` or apt-get. A stuck wsl.exe keeps stdio open, so
+          # timeout-minutes does not reap it.
           use-cache: true
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -153,14 +156,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: ./.github/actions/wsl-install
+        if: matrix.slot.wsl
       - uses: Vampire/setup-wsl@4c48163d9f981914dd8caa0fc335fe19cca5bff4 # v7.2.0
         if: matrix.slot.wsl
         timeout-minutes: 10
         with:
           distribution: Ubuntu-24.04
           wsl-version: 2
-          # Cache the rootfs. Do not apt-get in this action: a stuck wsl.exe
-          # keeps stdio open, so this step's timeout-minutes does not reap it.
+          # Already registered by ./.github/actions/wsl-install. See
+          # wsl-install.ps1 for #43, #96, and #134. This step must not run
+          # `wsl --install` or apt-get. A stuck wsl.exe keeps stdio open, so
+          # timeout-minutes does not reap it.
           use-cache: true
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: matrix.slot.wsl
@@ -202,14 +209,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: ./.github/actions/wsl-install
+        if: matrix.slot.wsl
       - uses: Vampire/setup-wsl@4c48163d9f981914dd8caa0fc335fe19cca5bff4 # v7.2.0
         if: matrix.slot.wsl
         timeout-minutes: 10
         with:
           distribution: Ubuntu-24.04
           wsl-version: 2
-          # Cache the rootfs. Do not apt-get in this action: a stuck wsl.exe
-          # keeps stdio open, so this step's timeout-minutes does not reap it.
+          # Already registered by ./.github/actions/wsl-install. See
+          # wsl-install.ps1 for #43, #96, and #134. This step must not run
+          # `wsl --install` or apt-get. A stuck wsl.exe keeps stdio open, so
+          # timeout-minutes does not reap it.
           use-cache: true
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: matrix.slot.wsl
@@ -317,13 +328,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: ./.github/actions/wsl-install
       - uses: Vampire/setup-wsl@4c48163d9f981914dd8caa0fc335fe19cca5bff4 # v7.2.0
         timeout-minutes: 10
         with:
           distribution: Ubuntu-24.04
           wsl-version: 2
-          # Cache the rootfs. Do not apt-get in this action: a stuck wsl.exe
-          # keeps stdio open, so this step's timeout-minutes does not reap it.
+          # Already registered by ./.github/actions/wsl-install. See
+          # wsl-install.ps1 for #43, #96, and #134. This step must not run
+          # `wsl --install` or apt-get. A stuck wsl.exe keeps stdio open, so
+          # timeout-minutes does not reap it.
           use-cache: true
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -344,13 +358,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: ./.github/actions/wsl-install
       - uses: Vampire/setup-wsl@4c48163d9f981914dd8caa0fc335fe19cca5bff4 # v7.2.0
         timeout-minutes: 10
         with:
           distribution: Ubuntu-24.04
           wsl-version: 2
-          # Cache the rootfs. Do not apt-get in this action: a stuck wsl.exe
-          # keeps stdio open, so this step's timeout-minutes does not reap it.
+          # Already registered by ./.github/actions/wsl-install. See
+          # wsl-install.ps1 for #43, #96, and #134. This step must not run
+          # `wsl --install` or apt-get. A stuck wsl.exe keeps stdio open, so
+          # timeout-minutes does not reap it.
           use-cache: true
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -486,13 +503,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: ./.github/actions/wsl-install
       - uses: Vampire/setup-wsl@4c48163d9f981914dd8caa0fc335fe19cca5bff4 # v7.2.0
         timeout-minutes: 10
         with:
           distribution: Ubuntu-24.04
           wsl-version: 2
-          # Cache the rootfs. Do not apt-get in this action: a stuck wsl.exe
-          # keeps stdio open, so this step's timeout-minutes does not reap it.
+          # Already registered by ./.github/actions/wsl-install. See
+          # wsl-install.ps1 for #43, #96, and #134. This step must not run
+          # `wsl --install` or apt-get. A stuck wsl.exe keeps stdio open, so
+          # timeout-minutes does not reap it.
           use-cache: true
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -513,13 +533,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: ./.github/actions/wsl-install
       - uses: Vampire/setup-wsl@4c48163d9f981914dd8caa0fc335fe19cca5bff4 # v7.2.0
         timeout-minutes: 10
         with:
           distribution: Ubuntu-24.04
           wsl-version: 2
-          # Cache the rootfs. Do not apt-get in this action: a stuck wsl.exe
-          # keeps stdio open, so this step's timeout-minutes does not reap it.
+          # Already registered by ./.github/actions/wsl-install. See
+          # wsl-install.ps1 for #43, #96, and #134. This step must not run
+          # `wsl --install` or apt-get. A stuck wsl.exe keeps stdio open, so
+          # timeout-minutes does not reap it.
           use-cache: true
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
