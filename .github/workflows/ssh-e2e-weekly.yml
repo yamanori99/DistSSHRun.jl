@@ -165,6 +165,7 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ci-cache/wsl-julia
+          # root's depot. Pkg.test uses wsl-julia-1.13, so /root paths stay here.
           key: wsl-julia-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
       - name: GHCR token for WSL
         env:
@@ -177,7 +178,7 @@ jobs:
           printf '%s' "$GHCR_ACTOR" > .ci-cache/ghcr.actor
       # wsl-bash does not inherit Actions env (set -u → unbound GITHUB_TOKEN).
       - name: docker-ssh up + SSH E2E in WSL2
-        shell: wsl-bash {0}
+        shell: wsl-bash -u root {0}
         run: |
           bash ./.github/wsl-apt.sh ca-certificates curl git rsync openssh-client docker.io docker-compose-v2 iptables
           src="$(pwd)"
@@ -224,7 +225,7 @@ jobs:
           fi
       - name: Teardown workers
         if: always()
-        shell: wsl-bash {0}
+        shell: wsl-bash -u root {0}
         run: |
           src="$(pwd)"
           rm -f "$src/.ci-cache/ghcr.token"
@@ -442,6 +443,7 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ci-cache/wsl-julia
+          # root's depot. Pkg.test uses wsl-julia-1.13-up, so /root paths stay here.
           key: wsl-julia-up-${{ hashFiles('lib/DistSSHUp/Project.toml', 'lib/DistSSHUp/test/Project.toml', '.github/julia-slots.env') }}
       - name: GHCR token for WSL
         env:
@@ -453,7 +455,7 @@ jobs:
           printf '%s' "$GHCR_TOKEN" > .ci-cache/ghcr.token
           printf '%s' "$GHCR_ACTOR" > .ci-cache/ghcr.actor
       - name: docker-ssh up + SSH E2E in WSL2
-        shell: wsl-bash {0}
+        shell: wsl-bash -u root {0}
         run: |
           bash ./.github/wsl-apt.sh ca-certificates curl git rsync openssh-client docker.io docker-compose-v2 iptables
           src="$(pwd)"
@@ -511,7 +513,7 @@ jobs:
           fi
       - name: Teardown workers
         if: always()
-        shell: wsl-bash {0}
+        shell: wsl-bash -u root {0}
         run: |
           src="$(pwd)"
           rm -f "$src/.ci-cache/ghcr.token"
@@ -543,6 +545,7 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ci-cache/wsl-julia
+          # root's depot. Pkg.test uses wsl-julia-1.13-base, so /root paths stay here.
           key: wsl-julia-base-${{ hashFiles('lib/DistSSHBase/Project.toml', 'lib/DistSSHBase/test/Project.toml', '.github/julia-slots.env') }}
       - name: GHCR token for WSL
         env:
@@ -554,7 +557,7 @@ jobs:
           printf '%s' "$GHCR_TOKEN" > .ci-cache/ghcr.token
           printf '%s' "$GHCR_ACTOR" > .ci-cache/ghcr.actor
       - name: docker-ssh up + SSH E2E in WSL2
-        shell: wsl-bash {0}
+        shell: wsl-bash -u root {0}
         run: |
           bash ./.github/wsl-apt.sh ca-certificates curl git rsync openssh-client docker.io docker-compose-v2 iptables
           src="$(pwd)"
@@ -602,7 +605,7 @@ jobs:
           fi
       - name: Teardown workers
         if: always()
-        shell: wsl-bash {0}
+        shell: wsl-bash -u root {0}
         run: |
           src="$(pwd)"
           rm -f "$src/.ci-cache/ghcr.token"
