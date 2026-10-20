@@ -221,6 +221,10 @@ end
             )
             @test named.deadline == 9.0
         end
+        withenv("DISTSSHKIT_WAIT_PEER_SILENT" => "0") do
+            bare = DistSSHRun._heartbeat_config(Dict{String, String}())
+            @test bare.deadline == 600.0
+        end
     end
 
     @testset "_master_alive" begin

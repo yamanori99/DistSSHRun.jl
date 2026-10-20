@@ -108,7 +108,11 @@ using Test
         end
     end
 
-    withenv("DISTRIBUTED_SSH_OPTS" => nothing) do
+    withenv(
+        "DISTRIBUTED_SSH_OPTS" => nothing,
+        "DISTSSHKIT_WAIT_SSH_CONNECT" => nothing,
+        "DISTSSHKIT_WAIT_PEER_SILENT" => nothing,
+    ) do
         opts = DistSSHBase.build_ssh_opts()
         @test "-o" in opts
         @test "BatchMode=yes" in opts
@@ -122,6 +126,16 @@ using Test
         @test "BatchMode=yes" in tty
         @test DistSSHBase.build_ssh_opts(; request_tty = true) == tty
         @test DistSSHBase.ssh_opts(; request_tty = false) == DistSSHBase.ssh_opts()
+    end
+    withenv(
+        "DISTRIBUTED_SSH_OPTS" => nothing,
+        "DISTSSHKIT_WAIT_SSH_CONNECT" => "0.4",
+        "DISTSSHKIT_WAIT_PEER_SILENT" => "0",
+    ) do
+        opts = DistSSHBase.build_ssh_opts()
+        @test "ConnectTimeout=1" in opts
+        @test "ServerAliveInterval=60" in opts
+        @test "ServerAliveCountMax=10" in opts
     end
     withenv("DISTRIBUTED_SSH_OPTS" => "-o Foo=bar -o Baz=qux") do
         @test DistSSHBase.build_ssh_opts() == ["-o", "Foo=bar", "-o", "Baz=qux"]

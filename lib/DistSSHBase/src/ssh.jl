@@ -2,6 +2,14 @@
 
 # SSH configuration
 
+# Whole seconds for an OpenSSH option. Non-positive stays `default`. A
+# positive value is at least 1.
+function _ssh_whole_seconds(name::Symbol, default::Int)::Int
+    seconds = wait_seconds(name, default)
+    seconds > 0 || return default
+    return max(1, round(Int, seconds))
+end
+
 """Build SSH options. `request_tty=false` (default) adds `RequestTTY=no`."""
 function build_ssh_opts(; request_tty::Bool = false)
     custom = strip(get(ENV, "DISTRIBUTED_SSH_OPTS", ""))
@@ -10,11 +18,11 @@ function build_ssh_opts(; request_tty::Bool = false)
         if !request_tty
             push!(opts, "-o", "RequestTTY=no")
         end
-        connect = round(Int, wait_seconds(:ssh_connect, 10))
+        connect = _ssh_whole_seconds(:ssh_connect, 10)
         # Ten probes. The gap is the silent budget divided across them, so the
         # default stays Interval=60 and CountMax=10 (about 600s).
         alive_count = 10
-        silent = round(Int, wait_seconds(:peer_silent, 600))
+        silent = _ssh_whole_seconds(:peer_silent, 600)
         alive_interval = max(1, round(Int, silent / alive_count))
         append!(
             opts, (

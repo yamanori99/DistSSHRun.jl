@@ -6,7 +6,7 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
-- `DistSSHBase.wait_seconds(name, default)` resolves a named wait. DistSSHBase does not pick the seconds. `:until_exit` is `Inf`. `DISTSSHKIT_WAIT_<NAME>` overrides a finite name when it is a finite number ≥ 0. `DISTSSHKIT_WAIT_SCALE` multiplies only `:child_reply`, `:go_job`, and `:drive_job`. SSH `ConnectTimeout` and `ServerAlive`, and the worker heartbeat deadline, use this. Defaults stay 10 seconds to connect and about 600 seconds of silence. `DISTRIBUTED_HEARTBEAT_DEADLINE_SEC` still wins. The name is public on DistSSHBase and is not exported from DistSSHRun.
+- `DistSSHBase.wait_seconds(name, default)` resolves a named wait. DistSSHBase does not pick the seconds. `:until_exit` is `Inf`. `DISTSSHKIT_WAIT_<NAME>` overrides a finite name when it is a finite number ≥ 0. `DISTSSHKIT_WAIT_SCALE` multiplies only `:child_reply`, `:go_job`, and `:drive_job`. SSH `ConnectTimeout` and `ServerAlive`, and the worker heartbeat deadline, use this. Defaults stay 10 seconds to connect and about 600 seconds of silence. A positive SSH budget below 1 second becomes 1 second, and a non-positive one stays at that default, so `ConnectTimeout=0` does not replace the 10 second connect. A heartbeat deadline that is not positive stays 600 seconds, including when `DISTSSHKIT_WAIT_PEER_SILENT` is `0`. `DISTRIBUTED_HEARTBEAT_DEADLINE_SEC` still wins when it is positive. The name is public on DistSSHBase and is not exported from DistSSHRun.
 
 ### Planned breaking (next minor)
 
