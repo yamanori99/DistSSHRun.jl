@@ -5,6 +5,7 @@ include(joinpath(@__DIR__, "support.jl"))
 
 @testset "DistSSHBase" verbose = true begin
     include(joinpath(@__DIR__, "argv.jl"))
+    include(joinpath(@__DIR__, "budgets.jl"))
     include(joinpath(@__DIR__, "cli_entry.jl"))
     include(joinpath(@__DIR__, "explain.jl"))
     include(joinpath(@__DIR__, "help.jl"))
