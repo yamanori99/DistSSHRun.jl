@@ -6,8 +6,6 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
-- `DistSSHBase.wait_seconds(name, default)` resolves a named wait. DistSSHBase does not pick the seconds. `:until_exit` is `Inf`. `DISTSSHKIT_WAIT_<NAME>` overrides a finite name when it is a finite number ≥ 0. `DISTSSHKIT_WAIT_SCALE` multiplies only `:child_reply`, `:go_job`, and `:drive_job`. SSH `ConnectTimeout` and `ServerAlive`, and the worker heartbeat deadline, use this. Defaults stay 10 seconds to connect and about 600 seconds of silence. A positive SSH budget below 1 second becomes 1 second, and a non-positive one stays at that default, so `ConnectTimeout=0` does not replace the 10 second connect. A heartbeat deadline that is not positive stays 600 seconds, including when `DISTSSHKIT_WAIT_PEER_SILENT` is `0`. `DISTRIBUTED_HEARTBEAT_DEADLINE_SEC` still wins when it is positive. The name is public on DistSSHBase and is not exported from DistSSHRun.
-
 ### Planned breaking (next minor)
 
 - `interrupt_grace` on `terminate!` and `terminate_run!` will default to a positive value, so a stop sends SIGINT before SIGTERM. DistSSHQueue `cancel` of a running job will use that default. Until then the default is `0` and `cancel` does not send SIGINT.
@@ -15,6 +13,10 @@ Those notes are often shorter than the section below.
 - `setup --sync`, `setup --pull`, and `sync!` will fail when the remote `HEAD` is not the local `HEAD`, including an unpushed local commit on `--pull`. 0.1.7 warns. A hash that could not be read stays a warning.
 - `drive` and `collect!` will refuse a collect root that is the project root or a parent of it. 0.1.7 warns.
 - `setup` will refuse more than one mode flag, and `plan`, `pool`, and `size` will reject unknown `-` options instead of ignoring them with a warning.
+
+## 0.1.12
+
+- `DistSSHBase.wait_seconds(name, default)` resolves a named wait. DistSSHBase does not pick the seconds. `:until_exit` is `Inf`. `DISTSSHKIT_WAIT_<NAME>` overrides a finite name when it is a finite number ≥ 0. `DISTSSHKIT_WAIT_SCALE` multiplies only `:child_reply`, `:go_job`, and `:drive_job`. SSH `ConnectTimeout` and `ServerAlive`, and the worker heartbeat deadline, use this. Defaults stay 10 seconds to connect and about 600 seconds of silence. A positive SSH budget below 1 second becomes 1 second, and a non-positive one stays at that default, so `ConnectTimeout=0` does not replace the 10 second connect. A heartbeat deadline that is not positive stays 600 seconds, including when `DISTSSHKIT_WAIT_PEER_SILENT` is `0`. `DISTRIBUTED_HEARTBEAT_DEADLINE_SEC` still wins when it is positive. The name is public on DistSSHBase and is not exported from DistSSHRun.
 
 ## 0.1.11
 
