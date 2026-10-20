@@ -155,13 +155,11 @@ function bench_payload(groups::Dict{String, Vector{Dict{String, Any}}})::Vector{
             commands = Dict{String, Any}[]
             for cmd in get(row, "commands", [])
                 haskey(cmd, "wall_sec") || continue
-                missed = String[string(item) for item in get(cmd, "missed", [])]
                 push!(
                     commands, Dict{String, Any}(
                         "name" => string(get(cmd, "name", "")),
                         "wall" => Float64(cmd["wall_sec"]),
                         "methods" => method_records(stored_methods(cmd)),
-                        "missed" => missed,
                     )
                 )
             end
@@ -196,9 +194,6 @@ function fallback_rows(payload::Vector{Dict{String, Any}})::String
     lines = String["<table>", "<tr><th>owner</th><th>method</th><th>ms</th></tr>"]
     for item in shown
         push!(lines, "<tr><td>$(html_escape(item["owner"]))</td><td>$(html_escape(item["short"]))</td><td>$(html_escape(item["ms"]))</td></tr>")
-    end
-    for name in command["missed"]
-        push!(lines, "<tr><td></td><td>$(html_escape(name))</td><td></td></tr>")
     end
     push!(lines, "</table>")
     push!(lines, "<table>")
@@ -273,6 +268,21 @@ function wallAt(sample, name) {
 
 function ranked(command) {
   return command.methods.slice().sort((a, b) => b.ms - a.ms);
+}
+
+function chosenMethods(samples, count) {
+  const picked = [];
+  const seen = new Set();
+  for (let index = samples.length - 1; index >= 0 && picked.length < count; index -= 1) {
+    const command = samples[index].commands.find((item) => item.name === state.cmd);
+    if (!command) continue;
+    ranked(command).slice(0, count).forEach((method) => {
+      if (picked.length >= count || seen.has(method.signature)) return;
+      seen.add(method.signature);
+      picked.push(method);
+    });
+  }
+  return picked;
 }
 
 function defaultCommand(samples) {
@@ -450,13 +460,14 @@ function drawMethods(samples) {
   const cap = Math.max(1, available.size);
   if (state.n > cap) state.n = cap;
   const found = latestWithCommand(samples, state.cmd);
-  const chosen = found ? ranked(found.command).slice(0, state.n) : [];
+  const chosen = chosenMethods(samples, state.n);
+  if (chosen.length > 0 && state.n > chosen.length) state.n = chosen.length;
   const traces = chosen.map((method) => ({
     type: "scatter", mode: "lines+markers", name: method.short, connectgaps: false,
     x: samples.map((sample) => sample.time),
     y: samples.map((sample) => methodY(sample, state.cmd, method.signature, state.n)),
-    customdata: samples.map((sample) => sampleMark(sample).concat([method.owner, method.signature])),
-    hovertemplate: "%{customdata[0]} %{customdata[1]}<br>%{customdata[2]}<br>%{fullData.name}<br>%{customdata[3]} %{y} ms<br>%{customdata[4]}<extra></extra>"
+    customdata: samples.map(sampleMark),
+    hovertemplate: "%{customdata[0]} %{customdata[1]}<br>%{fullData.name}<br>%{y} ms<extra></extra>"
   }));
   paintKey("method-key", chosen.map((method) => method.short));
   const node = document.getElementById("method-chart");
@@ -464,23 +475,39 @@ function drawMethods(samples) {
   window.__methodDrawn = drawn;
   const body = document.querySelector("#method-table tbody");
   body.innerHTML = "";
-  const last = found ? samples[found.index] : null;
   const prev = found && found.index > 0 ? samples[found.index - 1] : null;
   function top(sample) {
     if (!sample) return [];
     const command = sample.commands.find((item) => item.name === state.cmd);
     return command ? ranked(command).slice(0, state.n) : [];
   }
-  const now = chosen;
+  const now = found ? ranked(found.command).slice(0, state.n) : [];
   const before = top(prev);
-  const rows = now.map((method) => {
-    const nowRank = now.findIndex((item) => item.signature === method.signature) + 1;
-    const prevRank = before.findIndex((item) => item.signature === method.signature) + 1;
-    const old = before.find((item) => item.signature === method.signature);
-    return { method, nowRank, prevRank: prevRank || "", change: prevRank ? String(prevRank - nowRank) : "new", ms: method.ms, delta: old ? method.ms - old.ms : "" };
+  function rankOf(list, signature) {
+    const index = list.findIndex((item) => item.signature === signature);
+    return index < 0 ? 0 : index + 1;
+  }
+  const rows = chosen.map((method) => {
+    const nowRank = rankOf(now, method.signature);
+    const prevRank = rankOf(before, method.signature);
+    const current = nowRank ? now[nowRank - 1] : null;
+    const old = prevRank ? before[prevRank - 1] : null;
+    const shown = current || method;
+    let change = "";
+    if (nowRank && prevRank) change = String(prevRank - nowRank);
+    else if (nowRank) change = "new";
+    else if (prevRank) change = "gone";
+    return {
+      method: shown,
+      nowRank: nowRank || "",
+      prevRank: prevRank || "",
+      change,
+      ms: current ? current.ms : method.ms,
+      delta: current && old ? current.ms - old.ms : ""
+    };
   });
   before.forEach((method) => {
-    if (now.some((item) => item.signature === method.signature)) return;
+    if (chosen.some((item) => item.signature === method.signature)) return;
     const prevRank = before.findIndex((item) => item.signature === method.signature) + 1;
     rows.push({ method, nowRank: "", prevRank, change: "gone", ms: "", delta: "" });
   });
@@ -494,19 +521,9 @@ function drawMethods(samples) {
     });
     body.appendChild(row);
   });
-  const command = last && last.commands.find((item) => item.name === state.cmd);
-  (command ? command.missed : []).forEach((name) => {
-    const row = document.createElement("tr");
-    ["", "", "", "", name, "", ""].forEach((cell) => {
-      const td = document.createElement("td");
-      td.textContent = cell;
-      row.appendChild(td);
-    });
-    body.appendChild(row);
-  });
   document.getElementById("method-count").textContent = String(state.n);
   document.getElementById("method-note").textContent =
-    state.slot + " methods for " + state.cmd + ". Owners other than the package or Main can be copied into a Julia issue with the Julia version, the command, the signature, and the milliseconds.";
+    state.slot + " methods for " + state.cmd + ".";
 }
 
 function drawControls() {
@@ -637,7 +654,7 @@ function bench_html(groups)::String
     <span id="method-count">8</span>
     <button type="button" id="method-inc">+</button>
     </div>
-    <p>A time is a specialization this command compiled. Specializations of this package are all kept. Any other owner is kept only at 200 ms or more. Main, the driving script, is omitted. A blank time is a function defined on the package module that the trace never named. This is not every method under <code>src/</code>. Each function is one name. When one of its methods compiles, the methods that did not compile are left out.</p>
+    <p>A time is a specialization this command compiled. Specializations of this package are all kept. Any other owner is kept only at 200 ms or more. Main, the driving script, is omitted. This is not every method under <code>src/</code>. Each function is one name. When one of its methods compiles, the methods that did not compile are left out.</p>
     <div class="chart-row">
     <div id="method-chart" class="plot"></div>
     <div id="method-key" class="key"></div>
