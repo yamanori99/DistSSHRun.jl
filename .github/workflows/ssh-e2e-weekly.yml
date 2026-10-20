@@ -159,11 +159,9 @@ jobs:
         with:
           distribution: Ubuntu-24.04
           wsl-version: 2
-          # Cache the rootfs download. Packages below are not in the rootfs.
+          # Cache the rootfs. Do not apt-get in this action: a stuck wsl.exe
+          # keeps stdio open, so this step's timeout-minutes does not reap it.
           use-cache: true
-          additional-packages: >-
-            ca-certificates curl git rsync openssh-client
-            docker.io docker-compose-v2 iptables
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ci-cache/wsl-julia
@@ -181,6 +179,7 @@ jobs:
       - name: docker-ssh up + SSH E2E in WSL2
         shell: wsl-bash {0}
         run: |
+          bash ./.github/wsl-apt.sh ca-certificates curl git rsync openssh-client docker.io docker-compose-v2 iptables
           src="$(pwd)"
           dest="$HOME/DistSSHRun.jl"
           cache="$src/.ci-cache/wsl-julia"
@@ -437,11 +436,9 @@ jobs:
         with:
           distribution: Ubuntu-24.04
           wsl-version: 2
-          # Cache the rootfs download. Packages below are not in the rootfs.
+          # Cache the rootfs. Do not apt-get in this action: a stuck wsl.exe
+          # keeps stdio open, so this step's timeout-minutes does not reap it.
           use-cache: true
-          additional-packages: >-
-            ca-certificates curl git rsync openssh-client
-            docker.io docker-compose-v2 iptables
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ci-cache/wsl-julia
@@ -458,6 +455,7 @@ jobs:
       - name: docker-ssh up + SSH E2E in WSL2
         shell: wsl-bash {0}
         run: |
+          bash ./.github/wsl-apt.sh ca-certificates curl git rsync openssh-client docker.io docker-compose-v2 iptables
           src="$(pwd)"
           dest="$HOME/DistSSHRun.jl"
           cache="$src/.ci-cache/wsl-julia"
@@ -539,11 +537,9 @@ jobs:
         with:
           distribution: Ubuntu-24.04
           wsl-version: 2
-          # Cache the rootfs download. Packages below are not in the rootfs.
+          # Cache the rootfs. Do not apt-get in this action: a stuck wsl.exe
+          # keeps stdio open, so this step's timeout-minutes does not reap it.
           use-cache: true
-          additional-packages: >-
-            ca-certificates curl git rsync openssh-client
-            docker.io docker-compose-v2 iptables
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ci-cache/wsl-julia
@@ -560,6 +556,7 @@ jobs:
       - name: docker-ssh up + SSH E2E in WSL2
         shell: wsl-bash {0}
         run: |
+          bash ./.github/wsl-apt.sh ca-certificates curl git rsync openssh-client docker.io docker-compose-v2 iptables
           src="$(pwd)"
           dest="$HOME/DistSSHRun.jl"
           cache="$src/.ci-cache/wsl-julia"
