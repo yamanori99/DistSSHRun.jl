@@ -10,12 +10,18 @@ function build_ssh_opts(; request_tty::Bool = false)
         if !request_tty
             push!(opts, "-o", "RequestTTY=no")
         end
+        connect = round(Int, wait_seconds(:ssh_connect, 10))
+        # Ten probes. The gap is the silent budget divided across them, so the
+        # default stays Interval=60 and CountMax=10 (about 600s).
+        alive_count = 10
+        silent = round(Int, wait_seconds(:peer_silent, 600))
+        alive_interval = max(1, round(Int, silent / alive_count))
         append!(
             opts, (
-                "-o", "ConnectTimeout=10",
+                "-o", "ConnectTimeout=$connect",
                 "-o", "StrictHostKeyChecking=accept-new",
-                "-o", "ServerAliveInterval=60",
-                "-o", "ServerAliveCountMax=10",
+                "-o", "ServerAliveInterval=$alive_interval",
+                "-o", "ServerAliveCountMax=$alive_count",
                 "-o", "TCPKeepAlive=yes",
             )
         )

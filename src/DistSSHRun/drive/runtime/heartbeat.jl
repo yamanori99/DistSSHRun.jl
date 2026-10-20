@@ -1,11 +1,20 @@
 # Drive worker heartbeat: one deadline. No pong from the master for `deadline`
 # seconds and the worker leaves. Matches SSH ServerAlive ~600s (see remote.jl).
 
+# `DISTRIBUTED_HEARTBEAT_DEADLINE_SEC` wins. Otherwise `:peer_silent` (600s),
+# the same budget as SSH ServerAlive. A missing or non-positive value uses that
+# budget too.
+function _heartbeat_deadline(env)::Float64
+    raw = strip(get(env, "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC", ""))
+    parsed = isempty(raw) ? nothing : tryparse(Float64, raw)
+    deadline = parsed === nothing ? DistSSHBase.wait_seconds(:peer_silent, 600) : Float64(parsed)
+    return deadline > 0 ? deadline : DistSSHBase.wait_seconds(:peer_silent, 600)
+end
+
 function _heartbeat_config(env = ENV)
     interval = something(tryparse(Float64, get(env, "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC", "30")), 30.0)
-    deadline = something(tryparse(Float64, get(env, "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC", "600")), 600.0)
+    deadline = _heartbeat_deadline(env)
     interval > 0 || (interval = 30.0)
-    deadline > 0 || (deadline = 600.0)
     return (; interval, deadline)
 end
 

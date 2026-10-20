@@ -213,6 +213,14 @@ end
         )
         @test cfg.interval == 30.0
         @test cfg.deadline == 600.0
+        withenv("DISTSSHKIT_WAIT_PEER_SILENT" => "42") do
+            bare = DistSSHRun._heartbeat_config(Dict{String, String}())
+            @test bare.deadline == 42.0
+            named = DistSSHRun._heartbeat_config(
+                Dict("DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "9"),
+            )
+            @test named.deadline == 9.0
+        end
     end
 
     @testset "_master_alive" begin

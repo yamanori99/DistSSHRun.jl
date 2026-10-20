@@ -113,6 +113,9 @@ using Test
         @test "-o" in opts
         @test "BatchMode=yes" in opts
         @test "RequestTTY=no" in opts
+        @test "ConnectTimeout=10" in opts
+        @test "ServerAliveInterval=60" in opts
+        @test "ServerAliveCountMax=10" in opts
         @test DistSSHBase.ssh_opts() == String.(opts)
         tty = DistSSHBase.ssh_opts(; request_tty = true)
         @test !("RequestTTY=no" in tty)
