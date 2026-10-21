@@ -200,6 +200,12 @@ end
                     read(joinpath(tmp, "Manifest.toml")),
                 )
                 @test with_manifest["project"]["julia_version"] == "1.13.2"
+                write(joinpath(tmp, "Project.toml"), "name = \"T\"\n")
+                versioned = joinpath(tmp, "Manifest-v$(VERSION.major).$(VERSION.minor).toml")
+                write(versioned, "julia_version = \"9.9.9\"\n")
+                picked = DistSSHRun.assemble_provenance(tmp)
+                @test picked["project"]["manifest"] == DistSSHRun._sha256_hex(read(versioned))
+                @test picked["project"]["julia_version"] == "9.9.9"
             end
             if Sys.which("git") !== nothing
                 _with_tempdir() do repo
@@ -224,6 +230,12 @@ end
                     @test only_new["source"]["dirty"] == true
                     @test only_new["source"]["untracked"] >= 1
                     @test only_new["source"]["diff_sha256"] == empty_diff
+                    mkpath(joinpath(repo, ".distsshkit"))
+                    write(joinpath(repo, ".distsshkit", "provenance.toml"), "x\n")
+                    rm(joinpath(repo, "extra.txt"))
+                    kit_only = DistSSHRun.assemble_provenance(repo)
+                    @test kit_only["source"]["dirty"] == false
+                    @test kit_only["source"]["untracked"] == 0
                     passed = Dict{String, Any}(
                         "commit" => "passed",
                         "dirty" => true,
@@ -260,6 +272,22 @@ end
         @test env["DISTSSHKIT_SOURCE_DIFF_SHA256"] == "e3b0"
         @test env["DISTSSHKIT_SOURCE_CAPTURED"] == "submit:client"
         @test env["DISTSSHKIT_SOURCE_UNTRACKED"] == "0"
+        inherited = Dict{String, String}(
+            "DISTSSHKIT_SOURCE_COMMIT" => "new",
+            "DISTSSHKIT_SOURCE_DIRTY" => "true",
+            "OTHER" => "keep",
+        )
+        DistSSHRun._drop_unspecified_source_env!(
+            inherited,
+            Dict("commit" => "new"),
+            Dict{String, String}("DISTSSHKIT_SOURCE_COMMIT" => "new"),
+        )
+        @test inherited["DISTSSHKIT_SOURCE_COMMIT"] == "new"
+        @test !haskey(inherited, "DISTSSHKIT_SOURCE_DIRTY")
+        @test inherited["OTHER"] == "keep"
+        kept = Dict{String, String}("DISTSSHKIT_SOURCE_DIRTY" => "true")
+        DistSSHRun._drop_unspecified_source_env!(kept, nothing, Dict{String, String}())
+        @test kept["DISTSSHKIT_SOURCE_DIRTY"] == "true"
         @test isempty(DistSSHRun._provenance_source_env(nothing))
         for kind in (:go, :ride, :drive)
             @test DistSSHRun.execute_detached_accepts(:source; kind = kind)
@@ -277,6 +305,22 @@ end
                 @test got["source"]["commit"] == "from-env"
                 @test got["source"]["dirty"] == true
                 @test got["source"]["untracked"] == 2
+            end
+        end
+    end
+
+    @testset "leftover workers keep their host" begin
+        saved = copy(DistSSHRun.DRIVE_HOST_WORKER_IDS)
+        try
+            empty!(DistSSHRun.DRIVE_HOST_WORKER_IDS)
+            DistSSHRun._register_drive_host_worker_ids!(DistSSHRun.PARENT_HOST_NAME, [2, 3])
+            DistSSHRun._register_leftover_workers!([99])
+            @test DistSSHRun.DRIVE_HOST_WORKER_IDS[DistSSHRun.PARENT_HOST_NAME] == [2, 3]
+            @test DistSSHRun.DRIVE_HOST_WORKER_IDS["unknown"] == [99]
+        finally
+            empty!(DistSSHRun.DRIVE_HOST_WORKER_IDS)
+            for (k, v) in saved
+                DistSSHRun.DRIVE_HOST_WORKER_IDS[k] = v
             end
         end
     end

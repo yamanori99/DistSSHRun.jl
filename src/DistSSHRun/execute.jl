@@ -620,6 +620,7 @@ function _execute_detached!(
         extra[envk] = envv
     end
     env = _execute_detached_env(extra)
+    _drop_unspecified_source_env!(env, source, extra)
     julia_bin = resolve_controller_julia(julia)
     child_proj = _detached_julia_project(proj)
     cmd = Cmd(
@@ -834,6 +835,37 @@ end
 
 function _register_drive_host_worker_ids!(host::AbstractString, ids::AbstractVector{<:Integer})
     DRIVE_HOST_WORKER_IDS[String(host)] = Int[Int(i) for i in ids]
+    return nothing
+end
+
+"""Host name for a worker that `addprocs` created but did not register.
+
+Local workers stay on the parent. An SSH worker uses the host in its
+`WorkerConfig`, without a `user@` prefix. Anything else is `unknown`, not the parent.
+"""
+function _leftover_worker_host(pid::Integer)::String
+    ep = _interrupt_endpoint(pid)
+    ep === :local && return PARENT_HOST_NAME
+    if ep isa Tuple
+        host = String(ep[1])
+        at = findlast('@', host)
+        return at === nothing ? host : String(host[nextind(host, at):end])
+    end
+    return "unknown"
+end
+
+"""Append unregistered workers to the host they belong to. Does not replace a host list."""
+function _register_leftover_workers!(pids::AbstractVector{<:Integer})
+    isempty(pids) && return nothing
+    by_host = Dict{String, Vector{Int}}()
+    for pid in pids
+        host = _leftover_worker_host(pid)
+        push!(get!(by_host, host, Int[]), Int(pid))
+    end
+    for (host, ids) in by_host
+        existing = Int[Int(i) for i in get(DRIVE_HOST_WORKER_IDS, String(host), Int[])]
+        _register_drive_host_worker_ids!(host, vcat(existing, ids))
+    end
     return nothing
 end
 

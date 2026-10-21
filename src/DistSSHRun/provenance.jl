@@ -190,8 +190,16 @@ function capture_worker_provenance!()
     return nothing
 end
 
+function _project_manifest_path(project::AbstractString)::String
+    fallback = joinpath(project, "Manifest.toml")
+    pfile = joinpath(project, "Project.toml")
+    isfile(pfile) || return fallback
+    found = Base.project_file_manifest_path(pfile)
+    return found isa AbstractString ? String(found) : fallback
+end
+
 function _project_provenance(project::AbstractString)::Dict{String, Any}
-    manifest = joinpath(project, "Manifest.toml")
+    manifest = _project_manifest_path(project)
     isfile(manifest) || return Dict{String, Any}("manifest" => "absent")
     out = Dict{String, Any}("manifest" => _sha256_hex(read(manifest)))
     parsed = try
@@ -226,6 +234,26 @@ function _git_capture(cmd::Cmd)::Union{Nothing, String}
     end
 end
 
+function _git_status_path(line::AbstractString)::String
+    text = String(line)
+    length(text) < 4 && return ""
+    rest = text[4:end]
+    sep = findfirst(" -> ", rest)
+    path = sep === nothing ? rest : rest[(last(sep) + 1):end]
+    path = strip(path)
+    if startswith(path, '"') && endswith(path, '"') && ncodeunits(path) >= 2
+        path = path[2:(end - 1)]
+    end
+    return path
+end
+
+"""Kit writes `output_dir/.distsshkit/` inside the caller's tree. Those files are not the caller's edits."""
+function _git_status_is_kit(line::AbstractString)::Bool
+    path = _git_status_path(line)
+    return path == ".distsshkit" || startswith(path, ".distsshkit/") ||
+        occursin("/.distsshkit/", path)
+end
+
 function _git_source(project::AbstractString)::Union{Nothing, Dict{String, Any}}
     git = Sys.which("git")
     git === nothing && return nothing
@@ -240,7 +268,9 @@ function _git_source(project::AbstractString)::Union{Nothing, Dict{String, Any}}
     status === nothing && return nothing
     diff = _git_capture_bytes(Cmd([git, "-C", String(project), _GIT_DIFF_FLAGS...]))
     diff === nothing && return nothing
-    lines = split(strip(status), '\n'; keepempty = false)
+    lines = String[
+        String(line) for line in split(strip(status), '\n'; keepempty = false) if !_git_status_is_kit(line)
+    ]
     untracked = 0
     for line in lines
         startswith(line, "??") && (untracked += 1)
@@ -293,6 +323,23 @@ function _source_from_env()::Union{Nothing, Dict{String, Any}}
     end
     built = _source_from_user(raw)
     return isempty(built) ? nothing : built
+end
+
+"""Drop inherited `DISTSSHKIT_SOURCE_*` keys that this explicit `source` did not set.
+
+`_execute_detached_env` copies the parent environment first. A partial `source`
+would otherwise keep stale fields from that copy.
+"""
+function _drop_unspecified_source_env!(
+        env::AbstractDict,
+        source::Union{Nothing, AbstractDict},
+        extra::AbstractDict,
+    )
+    source === nothing && return env
+    for (_, envk) in pairs(_PROVENANCE_SOURCE_ENV)
+        haskey(extra, envk) || delete!(env, envk)
+    end
+    return env
 end
 
 """Env for a detached child. Empty when `source` is `nothing`."""

@@ -472,7 +472,7 @@ function _ride_add_workers!(
             end
         end
         missing = Int[w for w in leftover if w ∉ known]
-        isempty(missing) || _register_drive_host_worker_ids!(PARENT_HOST_NAME, missing)
+        _register_leftover_workers!(missing)
         capture_worker_provenance!()
         isempty(leftover) || rmprocs(leftover; waitfor = 30)
         rethrow()
