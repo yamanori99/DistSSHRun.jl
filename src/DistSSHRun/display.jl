@@ -496,7 +496,7 @@ function _ensure_git_head_source!(
                 ),
             )
         end
-        entry.type == "tree" && return nothing
+        entry.type == "tree" && break
         if entry.mode != "120000"
             throw(
                 ArgumentError(
@@ -522,6 +522,7 @@ function _ensure_git_head_source!(
         )
         current = resolved
     end
+    return nothing
 end
 
 """

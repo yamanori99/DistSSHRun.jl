@@ -28,16 +28,18 @@ end
 function _mkdir_unique!(dir::AbstractString)::String
     mkpath(dirname(dir))
     base = String(dir)
-    while true
+    made = ""
+    while isempty(made)
         try
             mkdir(base)
-            return canonical_local_path(base)
+            made = canonical_local_path(base)
         catch e
             e isa Base.IOError || rethrow()
             e.code == Base.UV_EEXIST || rethrow()
             base = String(dir) * "-" * string(time_ns())
         end
     end
+    return made
 end
 
 """
