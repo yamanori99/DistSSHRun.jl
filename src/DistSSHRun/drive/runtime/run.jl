@@ -95,6 +95,7 @@ function run_drive_parsed!(
         :drive, script_path; project = proj_dir,
     )
     return try
+        DistSSHRun._reset_run_provenance!(project_root_abs)
         activate_drive_project!(proj_dir)
 
         old_out = get(ENV, "DISTRIBUTED_OUTPUT_DIR", nothing)
@@ -147,6 +148,7 @@ function run_drive_parsed!(
                     log_dir = log,
                     result = result,
                     project_root = project_root_abs,
+                    provenance = DistSSHRun.assemble_provenance(),
                 )
                 DistSSHRun._remove_kit_pid_file(
                     getpid(),
@@ -315,6 +317,7 @@ function _run_drive_parsed_locked!(
             hosts, parent_workers, default_workers, julia_exe, proj_dir, script_path,
             project_root,
         )
+        DistSSHRun.capture_worker_provenance!()
         # Register before the `require_all_hosts` check below: that branch can
         # `return 1` with workers already joined, and `finally` must still
         # reach a non-`nothing` `drive_atexit_cleanup` to tear them down.

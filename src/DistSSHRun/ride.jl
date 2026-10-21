@@ -461,9 +461,19 @@ function _ride_add_workers!(
             _register_drive_host_worker_ids!(PARENT_HOST_NAME, added)
         end
         isempty(added) || _ride_load_self_on_workers!()
+        capture_worker_provenance!()
         return added, ssh_hosts
     catch
         leftover = Int[w for w in workers() if w ∉ before]
+        known = Set{Int}()
+        for ids in values(DRIVE_HOST_WORKER_IDS)
+            for i in ids
+                push!(known, i)
+            end
+        end
+        missing = Int[w for w in leftover if w ∉ known]
+        isempty(missing) || _register_drive_host_worker_ids!(PARENT_HOST_NAME, missing)
+        capture_worker_provenance!()
         isempty(leftover) || rmprocs(leftover; waitfor = 30)
         rethrow()
     end
@@ -599,6 +609,7 @@ function _ride_run!(
         remote,
         require_all_hosts,
     )
+    _reset_run_provenance!(String(project))
     tok = String[String(t) for t in tokens]
     wp = try
         _ride_resolve_plan(tok)
@@ -696,6 +707,7 @@ function _ride_run!(
                         output_dir = batch_dir,
                         log_dir = nothing,
                         result = kr,
+                        provenance = assemble_provenance(),
                     )
                 end
             end

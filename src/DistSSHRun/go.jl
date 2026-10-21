@@ -812,6 +812,7 @@ function _go_complete!(
             output_dir = batch_dir,
             log_dir = batch_dir,
             result = kr,
+            provenance = assemble_provenance(),
         )
     end
     release_lock()
@@ -898,6 +899,7 @@ function go!(
     _acquire_kit_inproc_run!(:go)
     old_run = get(ENV, DISTSSHKIT_RUN_DIR_ENV, nothing)
     try
+        _reset_run_provenance!(proj)
         _ensure_kit_run_dir!(:go, script_path; project = proj)
         return _go_run!(
             script_path,

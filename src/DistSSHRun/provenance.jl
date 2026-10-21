@@ -1,0 +1,401 @@
+# Provenance recorded with a run. Failure to record does not fail the job.
+# Worker values come from the process Kit started (`Core.eval` of a Base-only
+# expression). The job project does not need DistSSHRun loaded.
+
+const _PROVENANCE_SOURCE = Ref{Union{Nothing, AbstractDict}}(nothing)
+const _PROVENANCE_WORKERS = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
+const _PROVENANCE_PROJECT = Ref{String}("")
+
+const _GIT_DIFF_FLAGS = (
+    "-c",
+    "core.quotepath=off",
+    "diff",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--no-color",
+    "--binary",
+    "HEAD",
+)
+
+const _PROVENANCE_SOURCE_ENV = (
+    commit = "DISTSSHKIT_SOURCE_COMMIT",
+    dirty = "DISTSSHKIT_SOURCE_DIRTY",
+    diff_sha256 = "DISTSSHKIT_SOURCE_DIFF_SHA256",
+    captured = "DISTSSHKIT_SOURCE_CAPTURED",
+    untracked = "DISTSSHKIT_SOURCE_UNTRACKED",
+)
+
+const _SNAP_KEYS = (
+    "version",
+    "commit",
+    "cpu",
+    "machine",
+    "kernel",
+    "nthreads",
+    "blas",
+    "blas_threads",
+    "hostname",
+)
+
+"""Base-only expression. Safe to `Core.eval` on a worker that has no DistSSHRun."""
+function _process_snapshot_expr()
+    return quote
+        let blas = Ref("not loaded"), blas_threads = Ref("not loaded")
+            for (pkg, mod) in Base.loaded_modules
+                pkg.name == "LinearAlgebra" || continue
+                try
+                    libs = mod.BLAS.get_config().loaded_libs
+                    if !isempty(libs)
+                        blas[] = string(first(libs).libname)
+                    end
+                    blas_threads[] = string(mod.BLAS.get_num_threads())
+                catch
+                    blas[] = "not loaded"
+                    blas_threads[] = "not loaded"
+                end
+            end
+            Dict{String, String}(
+                "version" => string(VERSION),
+                "commit" => string(Base.GIT_VERSION_INFO.commit),
+                "cpu" => string(Sys.CPU_NAME),
+                "machine" => string(Sys.MACHINE),
+                "kernel" => string(Sys.KERNEL),
+                "nthreads" => string(Threads.nthreads()),
+                "hostname" => string(gethostname()),
+                "blas" => blas[],
+                "blas_threads" => blas_threads[],
+            )
+        end
+    end
+end
+
+function _reset_run_provenance!(project::AbstractString)
+    _PROVENANCE_PROJECT[] = canonical_local_path(String(project))
+    _PROVENANCE_WORKERS[] = nothing
+    return nothing
+end
+
+function _set_provenance_source!(source::Union{Nothing, AbstractDict})
+    _PROVENANCE_SOURCE[] = source
+    return nothing
+end
+
+function _provenance_lookup(d::AbstractDict, key::String)
+    haskey(d, key) && return d[key]
+    sym = Symbol(key)
+    haskey(d, sym) && return d[sym]
+    return nothing
+end
+
+function _sha256_hex(bytes::AbstractVector{UInt8})::String
+    return SHA.bytes2hex(SHA.sha256(bytes))
+end
+
+function _snapshot_dict(raw)::Dict{String, String}
+    raw isa AbstractDict || return Dict{String, String}("error" => "snapshot was not a dict")
+    out = Dict{String, String}()
+    for (k, v) in raw
+        out[string(k)] = string(v)
+    end
+    for key in _SNAP_KEYS
+        haskey(out, key) || return Dict{String, String}("error" => "incomplete snapshot")
+    end
+    return out
+end
+
+function _local_process_snapshot()::Dict{String, String}
+    return try
+        _snapshot_dict(Core.eval(Main, _process_snapshot_expr()))
+    catch e
+        Dict{String, String}("error" => sprint(showerror, e))
+    end
+end
+
+"""Fetch one worker. A dead pid returns `error` and does not throw."""
+function _fetch_process_snapshot(pid::Integer)::Dict{String, String}
+    return try
+        _snapshot_dict(remotecall_fetch(Core.eval, Int(pid), Main, _process_snapshot_expr()))
+    catch e
+        Dict{String, String}("error" => sprint(showerror, e))
+    end
+end
+
+function _blas_threads_value(raw::AbstractString)
+    n = tryparse(Int, String(raw))
+    return n === nothing ? String(raw) : n
+end
+
+function _group_key(snap::Dict{String, String})::String
+    haskey(snap, "error") && return "error\0" * snap["error"]
+    return join((snap[k] for k in _SNAP_KEYS), '\0')
+end
+
+function _group_body(snap::Dict{String, String})::Dict{String, Any}
+    if haskey(snap, "error")
+        return Dict{String, Any}("error" => snap["error"], "n" => 1)
+    end
+    return Dict{String, Any}(
+        "version" => snap["version"],
+        "commit" => snap["commit"],
+        "cpu" => snap["cpu"],
+        "machine" => snap["machine"],
+        "kernel" => snap["kernel"],
+        "nthreads" => something(tryparse(Int, snap["nthreads"]), 0),
+        "blas" => snap["blas"],
+        "blas_threads" => _blas_threads_value(snap["blas_threads"]),
+        "hostname" => snap["hostname"],
+        "n" => 1,
+    )
+end
+
+"""Collapse identical snapshots. One placement token, one list of groups."""
+function _group_snapshots(snaps::AbstractVector{<:AbstractDict})::Vector{Dict{String, Any}}
+    order = String[]
+    groups = Dict{String, Dict{String, Any}}()
+    for raw in snaps
+        snap = raw isa Dict{String, String} ? raw : _snapshot_dict(raw)
+        key = _group_key(snap)
+        if haskey(groups, key)
+            groups[key]["n"] = groups[key]["n"] + 1
+        else
+            groups[key] = _group_body(snap)
+            push!(order, key)
+        end
+    end
+    return Dict{String, Any}[groups[k] for k in order]
+end
+
+function _provenance_token(host::AbstractString)::String
+    h = String(host)
+    h == PARENT_HOST_NAME && return h
+    startswith(h, "child:") && return h
+    return "child:" * h
+end
+
+"""Read `DRIVE_HOST_WORKER_IDS` now. Later `rmprocs` does not erase this."""
+function capture_worker_provenance!()
+    try
+        grouped = Dict{String, Any}()
+        hosts = Pair{String, Vector{Int}}[
+            String(host) => Int[Int(i) for i in ids] for (host, ids) in DRIVE_HOST_WORKER_IDS
+        ]
+        for (host, ids) in hosts
+            snaps = Dict{String, String}[_fetch_process_snapshot(pid) for pid in ids]
+            grouped[_provenance_token(host)] = _group_snapshots(snaps)
+        end
+        _PROVENANCE_WORKERS[] = grouped
+    catch
+        _PROVENANCE_WORKERS[] = Dict{String, Any}()
+    end
+    return nothing
+end
+
+function _project_provenance(project::AbstractString)::Dict{String, Any}
+    manifest = joinpath(project, "Manifest.toml")
+    isfile(manifest) || return Dict{String, Any}("manifest" => "absent")
+    out = Dict{String, Any}("manifest" => _sha256_hex(read(manifest)))
+    parsed = try
+        TOML.parsefile(manifest)
+    catch
+        nothing
+    end
+    if parsed isa AbstractDict && haskey(parsed, "julia_version")
+        out["julia_version"] = string(parsed["julia_version"])
+    end
+    return out
+end
+
+function _git_capture_bytes(cmd::Cmd)::Union{Nothing, Vector{UInt8}}
+    out = IOBuffer()
+    ok = try
+        proc = run(pipeline(ignorestatus(cmd); stdout = out, stderr = devnull))
+        proc.exitcode == 0
+    catch
+        false
+    end
+    return ok ? take!(out) : nothing
+end
+
+function _git_capture(cmd::Cmd)::Union{Nothing, String}
+    raw = _git_capture_bytes(cmd)
+    raw === nothing && return nothing
+    return try
+        String(raw)
+    catch
+        nothing
+    end
+end
+
+function _git_source(project::AbstractString)::Union{Nothing, Dict{String, Any}}
+    git = Sys.which("git")
+    git === nothing && return nothing
+    inside = _git_capture(`$git -C $project rev-parse --is-inside-work-tree`)
+    inside === nothing && return nothing
+    strip(inside) == "true" || return nothing
+    head = _git_capture(`$git -C $project rev-parse HEAD`)
+    head === nothing && return nothing
+    status = _git_capture(
+        `$git -C $project status --porcelain=v1 --untracked-files=all`,
+    )
+    status === nothing && return nothing
+    diff = _git_capture_bytes(Cmd([git, "-C", String(project), _GIT_DIFF_FLAGS...]))
+    diff === nothing && return nothing
+    lines = split(strip(status), '\n'; keepempty = false)
+    untracked = 0
+    for line in lines
+        startswith(line, "??") && (untracked += 1)
+    end
+    return Dict{String, Any}(
+        "commit" => strip(head),
+        "dirty" => !isempty(lines),
+        "diff_sha256" => _sha256_hex(diff),
+        "captured" => "run",
+        "untracked" => untracked,
+    )
+end
+
+function _source_from_user(source::AbstractDict)::Dict{String, Any}
+    out = Dict{String, Any}()
+    for key in ("commit", "diff_sha256", "captured")
+        value = _provenance_lookup(source, key)
+        value === nothing || (out[key] = string(value))
+    end
+    dirty = _provenance_lookup(source, "dirty")
+    if dirty isa Bool
+        out["dirty"] = dirty
+    elseif dirty isa AbstractString
+        s = lowercase(strip(String(dirty)))
+        s == "true" && (out["dirty"] = true)
+        s == "false" && (out["dirty"] = false)
+    end
+    untracked = _provenance_lookup(source, "untracked")
+    if untracked isa Integer && !(untracked isa Bool)
+        out["untracked"] = Int(untracked)
+    elseif untracked isa AbstractString
+        n = tryparse(Int, strip(String(untracked)))
+        n === nothing || (out["untracked"] = n)
+    end
+    return out
+end
+
+function _source_from_env()::Union{Nothing, Dict{String, Any}}
+    haskey(ENV, _PROVENANCE_SOURCE_ENV.commit) || return nothing
+    raw = Dict{String, Any}(
+        "commit" => ENV[_PROVENANCE_SOURCE_ENV.commit],
+    )
+    for (field, envk) in (
+            :dirty => _PROVENANCE_SOURCE_ENV.dirty,
+            :diff_sha256 => _PROVENANCE_SOURCE_ENV.diff_sha256,
+            :captured => _PROVENANCE_SOURCE_ENV.captured,
+            :untracked => _PROVENANCE_SOURCE_ENV.untracked,
+        )
+        haskey(ENV, envk) && (raw[String(field)] = ENV[envk])
+    end
+    built = _source_from_user(raw)
+    return isempty(built) ? nothing : built
+end
+
+"""Env for a detached child. Empty when `source` is `nothing`."""
+function _provenance_source_env(source::Union{Nothing, AbstractDict})::Dict{String, String}
+    source === nothing && return Dict{String, String}()
+    built = _source_from_user(source)
+    out = Dict{String, String}()
+    for (field, envk) in pairs(_PROVENANCE_SOURCE_ENV)
+        haskey(built, String(field)) || continue
+        value = built[String(field)]
+        out[envk] = value isa Bool ? (value ? "true" : "false") : string(value)
+    end
+    return out
+end
+
+function _resolve_source(project::AbstractString)::Union{Nothing, Dict{String, Any}}
+    explicit = _PROVENANCE_SOURCE[]
+    if explicit !== nothing
+        built = _source_from_user(explicit)
+        return isempty(built) ? nothing : built
+    end
+    from_env = _source_from_env()
+    from_env === nothing || return from_env
+    return _git_source(project)
+end
+
+function _parent_sections(snap::Dict{String, String})::Tuple{Dict{String, Any}, Dict{String, Any}}
+    if haskey(snap, "error")
+        err = Dict{String, Any}("error" => snap["error"])
+        return (err, Dict{String, Any}())
+    end
+    julia = Dict{String, Any}(
+        "version" => snap["version"],
+        "commit" => snap["commit"],
+    )
+    machine = Dict{String, Any}(
+        "cpu" => snap["cpu"],
+        "machine" => snap["machine"],
+        "kernel" => snap["kernel"],
+        "nthreads" => something(tryparse(Int, snap["nthreads"]), 0),
+        "blas" => snap["blas"],
+        "blas_threads" => _blas_threads_value(snap["blas_threads"]),
+        "hostname" => snap["hostname"],
+    )
+    return (julia, machine)
+end
+
+function _worker_section()::Any
+    grouped = _PROVENANCE_WORKERS[]
+    grouped === nothing && return Any[]
+    isempty(grouped) && return Any[]
+    return grouped
+end
+
+"""Full `[provenance]` table. Never throws."""
+function assemble_provenance(project::AbstractString = "")::Dict{String, Any}
+    return try
+        _assemble_provenance(project)
+    catch
+        Dict{String, Any}(
+            "project" => Dict{String, Any}("manifest" => "absent"),
+            "workers" => Any[],
+        )
+    end
+end
+
+function _assemble_provenance(project::AbstractString)::Dict{String, Any}
+    proj = strip(String(project))
+    isempty(proj) && (proj = _PROVENANCE_PROJECT[])
+    isempty(proj) && (proj = pwd())
+    proj = canonical_local_path(proj)
+    parent = _local_process_snapshot()
+    julia, machine = _parent_sections(parent)
+    data = Dict{String, Any}(
+        "julia" => Dict{String, Any}("parent" => julia),
+        "machine" => Dict{String, Any}("parent" => machine),
+        "workers" => _worker_section(),
+        "project" => _project_provenance(proj),
+    )
+    source = _resolve_source(proj)
+    source === nothing || (data["source"] = source)
+    return data
+end
+
+function _write_provenance_sidecar(
+        output_dir::Union{Nothing, AbstractString},
+        provenance::Union{Nothing, AbstractDict},
+    )
+    provenance === nothing && return nothing
+    output_dir === nothing && return nothing
+    root = strip(String(output_dir))
+    isempty(root) && return nothing
+    dest_dir = joinpath(canonical_local_path(root), ".distsshkit")
+    try
+        mkpath(dest_dir)
+        dest = joinpath(dest_dir, "provenance.toml")
+        tmp = dest * ".tmp"
+        open(tmp, "w") do io
+            TOML.print(io, provenance)
+        end
+        mv(tmp, dest; force = true)
+    catch
+        # best-effort only
+    end
+    return nothing
+end

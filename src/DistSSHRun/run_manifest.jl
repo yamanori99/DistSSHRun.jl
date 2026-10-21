@@ -180,6 +180,7 @@ function write_kit_run_toml!(
         log_dir::Union{Nothing, AbstractString} = nothing,
         result::Union{Nothing, KitRunResult} = nothing,
         project_root::Union{Nothing, AbstractString} = nothing,
+        provenance::Union{Nothing, AbstractDict} = nothing,
     )
     d = canonical_local_path(run_dir)
     data = Dict{String, Any}(
@@ -204,6 +205,7 @@ function write_kit_run_toml!(
         data["exit_code"] = result.exit_code
         result.failed_step !== nothing && (data["failed_step"] = result.failed_step)
     end
+    provenance !== nothing && (data["provenance"] = provenance)
     try
         mkpath(d)
         dest = kit_run_toml_path(d)
@@ -215,6 +217,7 @@ function write_kit_run_toml!(
     catch
         # best-effort only
     end
+    _write_provenance_sidecar(output_dir, provenance)
     return nothing
 end
 

@@ -50,6 +50,7 @@ const _EXECUTE_DETACHED_NAMED = (
     :sync,
     :julia,
     :detached,
+    :source,
 )
 
 """
@@ -57,7 +58,9 @@ const _EXECUTE_DETACHED_NAMED = (
 
 Whether `execute!(kind, ...; detached=true)` accepts keyword `kw`.
 Uses the same tables as the detached throw path, plus the named parameters
-(`output_dir`, `args`, `project`, `sync`, `julia`, `detached`).
+(`output_dir`, `args`, `project`, `sync`, `julia`, `detached`, `source`).
+`source` is a provenance dict. Detached passes it to the child as
+`DISTSSHKIT_SOURCE_*`. It is not a `go!` / `ride!` / `drive!` keyword.
 """
 function execute_detached_accepts(kw::Symbol; kind::Symbol)::Bool
     _require_execute_kind!(kind)
@@ -262,7 +265,7 @@ does not count. Keywords are then an allow-list (unknown names throw):
 `output_dir`, `args`, `project`, `sync`, `julia`, `quiet`, `verbosity`, `yes`,
 `remote`, `hosts_file`, `job_id`, and drive-only `log_dir`, `enable_log`,
 `package`, `require_all_hosts`, `skip_hash_check`, `mem_headroom`, `parent_gb`,
-`workers`, `sync_script`. Go-only `repeat`. Ride: `spi_check` (default
+`workers`, `sync_script`, `source`. Go-only `repeat`. Ride: `spi_check` (default
 `false`). Detached argv passes `--spi-check` when true and `--no-spi-check`
 when false, so an older child whose default is on still skips the compare.
 Neither go nor
@@ -292,6 +295,7 @@ function execute!(
         sync::Union{Symbol, Bool, Nothing} = nothing,
         julia::Union{Nothing, AbstractString} = nothing,
         detached::Bool = false,
+        source::Union{Nothing, AbstractDict} = nothing,
         kwargs...,
     )
     _require_execute_kind!(kind)
@@ -305,46 +309,52 @@ function execute!(
             project = project,
             sync = sync,
             julia = julia,
+            source = source,
             kwargs...,
         )
     end
-    result = if kind === :go
-        go!(
-            script,
-            tokens;
-            output_dir = output_dir,
-            args = args,
-            project = project,
-            sync = sync,
-            julia = julia,
-            kwargs...,
-        )
-    elseif kind === :ride
-        (sync === nothing || sync === false) || throw(
-            ArgumentError(
-                "execute!(:ride, ...) does not accept sync=$(repr(sync))",
+    _set_provenance_source!(source)
+    result = try
+        if kind === :go
+            go!(
+                script,
+                tokens;
+                output_dir = output_dir,
+                args = args,
+                project = project,
+                sync = sync,
+                julia = julia,
+                kwargs...,
             )
-        )
-        ride!(
-            script,
-            tokens;
-            output_dir = output_dir,
-            args = args,
-            project = project,
-            julia = julia,
-            kwargs...,
-        )
-    else
-        drive!(
-            script,
-            tokens;
-            output_dir = output_dir,
-            args = args,
-            project = project,
-            sync = sync,
-            julia = julia,
-            kwargs...,
-        )
+        elseif kind === :ride
+            (sync === nothing || sync === false) || throw(
+                ArgumentError(
+                    "execute!(:ride, ...) does not accept sync=$(repr(sync))",
+                )
+            )
+            ride!(
+                script,
+                tokens;
+                output_dir = output_dir,
+                args = args,
+                project = project,
+                julia = julia,
+                kwargs...,
+            )
+        else
+            drive!(
+                script,
+                tokens;
+                output_dir = output_dir,
+                args = args,
+                project = project,
+                sync = sync,
+                julia = julia,
+                kwargs...,
+            )
+        end
+    finally
+        _set_provenance_source!(nothing)
     end
     return kit_run_result(result)
 end
@@ -431,6 +441,7 @@ function _execute_detached!(
         project::AbstractString,
         sync::Union{Symbol, Bool, Nothing},
         julia::Union{Nothing, AbstractString},
+        source::Union{Nothing, AbstractDict} = nothing,
         kwargs...,
     )::KitProcess
     for k in keys(kwargs)
@@ -604,6 +615,9 @@ function _execute_detached!(
     end
     if job_id_s !== nothing
         extra["DISTSSHKIT_JOB_ID"] = job_id_s
+    end
+    for (envk, envv) in _provenance_source_env(source)
+        extra[envk] = envv
     end
     env = _execute_detached_env(extra)
     julia_bin = resolve_controller_julia(julia)
