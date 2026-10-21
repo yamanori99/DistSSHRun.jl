@@ -160,7 +160,7 @@ end
                     found = DistSSHRun.resolve_remote_julia(host, "auto")
                     @test found isa AbstractString
                     found isa AbstractString || error("expected remote julia after --juliaup")
-                    ver = DistSSHRun.get_remote_julia_version(host, found)
+                    ver = DistSSHRun.DistSSHBase.get_remote_julia_version(host, found)
                     @test ver isa VersionNumber
                     ver isa VersionNumber || error("expected remote version")
                     @test ver.major == VERSION.major
@@ -237,7 +237,7 @@ end
                     found = DistSSHRun.resolve_remote_julia(host, "auto")
                     @test found isa AbstractString
                     found isa AbstractString || error("expected remote julia after --juliaup")
-                    ver = DistSSHRun.get_remote_julia_version(host, found)
+                    ver = DistSSHRun.DistSSHBase.get_remote_julia_version(host, found)
                     @test ver isa VersionNumber
                     ver isa VersionNumber || error("expected remote version")
                     @test ver.major == VERSION.major

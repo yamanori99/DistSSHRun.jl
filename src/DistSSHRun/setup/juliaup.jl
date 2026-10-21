@@ -24,7 +24,18 @@ function print_juliaup_align_fix!(
     return nothing
 end
 
-"""Note when remotes landed on a newer patch than the kit parent (channel latest)."""
+"""`X.Y` and `X.Y-nightly` move. A named prerelease such as `1.14.0-alpha1` does not."""
+function _juliaup_channel_moves(channel::AbstractString)::Bool
+    ch = String(channel)
+    occursin(r"^\d+\.\d+$", ch) && return true
+    return endswith(ch, "-nightly")
+end
+
+"""Note when remotes landed on a newer patch than the kit parent (channel latest).
+
+A moving channel says the parent is behind. A pinned channel says `juliaup add` may
+have been treated as success without installing that channel. The success count stays.
+"""
 function print_juliaup_parent_patch_note!(
         remote_version::VersionNumber;
         local_version::VersionNumber = VERSION,
@@ -32,10 +43,15 @@ function print_juliaup_parent_patch_note!(
     )
     juliaup_parent_behind_channel(local_version, remote_version) || return false
     ch = String(channel)
-    warn("kit parent Julia $local_version is behind channel $ch latest on remotes ($remote_version)")
-    kit_println("    Tip: $(cli_m_project()) up update $ch $PARENT_HOST_NAME")
-    kit_println("         $(cli_m_project()) up default $ch $PARENT_HOST_NAME")
-    kit_println("         (or: juliaup update $ch && juliaup default $ch), then re-run workers.")
+    if _juliaup_channel_moves(ch)
+        warn("kit parent Julia $local_version is behind channel $ch latest on remotes ($remote_version)")
+        kit_println("    Tip: $(cli_m_project()) up update $ch $PARENT_HOST_NAME")
+        kit_println("         $(cli_m_project()) up default $ch $PARENT_HOST_NAME")
+        kit_println("         (or: juliaup update $ch && juliaup default $ch), then re-run workers.")
+    else
+        warn("pinned channel $ch may not be installed on the worker")
+        kit_println("    Check the result of `juliaup add $ch` on the worker.")
+    end
     return true
 end
 

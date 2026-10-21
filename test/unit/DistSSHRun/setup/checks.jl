@@ -19,6 +19,68 @@ using Pkg
     end
     @test occursin("up update 1.12 parent", tip_out)
     @test occursin("up default 1.12 parent", tip_out)
+    @test !DistSSHRun.print_juliaup_parent_patch_note!(
+        v"1.14.0-alpha1"; local_version = v"1.14.0-alpha1", channel = "1.14.0-alpha1",
+    )
+    @test !DistSSHRun.print_juliaup_parent_patch_note!(
+        v"1.13.2"; local_version = v"1.13.2+0.aarch64", channel = "1.13",
+    )
+    pinned_out, _ = with_kit_verbosity(:verbose) do
+        _capture_stdio() do _, _
+            @test DistSSHRun.print_juliaup_parent_patch_note!(
+                v"1.14.0"; local_version = v"1.14.0-alpha1", channel = "1.14.0-alpha1",
+            )
+        end
+    end
+    @test occursin("may not be installed", pinned_out)
+    @test occursin("juliaup add 1.14.0-alpha1", pinned_out)
+    @test !occursin("behind", pinned_out)
+    @test !occursin("up update", pinned_out)
+    nightly_out, _ = with_kit_verbosity(:verbose) do
+        _capture_stdio() do _, _
+            @test DistSSHRun.print_juliaup_parent_patch_note!(
+                v"1.14.0-DEV.2000"; local_version = v"1.14.0-DEV.1000", channel = "1.14-nightly",
+            )
+        end
+    end
+    @test occursin("behind", nightly_out)
+    @test occursin("up update 1.14-nightly parent", nightly_out)
+    pre_out, pre_ok = with_kit_verbosity(:verbose) do
+        _capture_stdio() do _, _
+            DistSSHRun._report_remote_julia!(
+                "worker",
+                "/usr/bin/julia",
+                (found = true, version = v"1.14.0-alpha1", mismatch_kind = :prerelease),
+                true,
+            )
+        end
+    end
+    @test pre_ok
+    @test occursin("prerelease", pre_out)
+    @test !occursin("✗", pre_out)
+    patch_out, patch_ok = with_kit_verbosity(:verbose) do
+        _capture_stdio() do _, _
+            DistSSHRun._report_remote_julia!(
+                "worker",
+                "/usr/bin/julia",
+                (found = true, version = v"1.13.2", mismatch_kind = :patch),
+                true,
+            )
+        end
+    end
+    @test patch_ok
+    @test occursin("patch", patch_out)
+    _, minor_fail = with_kit_verbosity(:verbose) do
+        _capture_stdio() do _, _
+            DistSSHRun._report_remote_julia!(
+                "worker",
+                "/usr/bin/julia",
+                (found = true, version = v"1.12.0", mismatch_kind = :minor),
+                false,
+            )
+        end
+    end
+    @test !minor_fail
     mktempdir() do d
         fake = _write_aligned_fake_juliaup(d)
         withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => fake.ju) do

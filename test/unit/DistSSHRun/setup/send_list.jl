@@ -583,7 +583,8 @@ using Test
             [
                 :PARENT_HOST_NAME,
                 :cli_entry, :cli_heading, :cli_m, :cli_m_project, :cli_qhost, :cli_qhost_heading,
-                :format_placement_token, :get_remote_julia_version, :julia_project_rel,
+                :format_placement_token, :get_remote_julia_version, :get_remote_julia_version_full,
+                :julia_project_rel, :parse_julia_version_full,
                 :parse_placement_token, :remote_env_project_root, :resolve_remote_julia,
                 :resolve_remote_project_root, :with_cli_entry,
             ]

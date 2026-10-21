@@ -158,6 +158,11 @@ using Test
     @test DistSSHBase.parse_julia_version("julia version 1.13.1") == v"1.13.1"
     @test DistSSHBase.parse_julia_version("julia version 1.9.0-DEV") == v"1.9.0"
     @test DistSSHBase.parse_julia_version("julia version 1.13.0-beta1") == v"1.13.0"
+    @test DistSSHBase.parse_julia_version_full("julia version 1.14.0-alpha1") == v"1.14.0-alpha1"
+    @test DistSSHBase.parse_julia_version_full("julia version 1.14.0-DEV.3787") == v"1.14.0-DEV.3787"
+    @test DistSSHBase.parse_julia_version_full("julia version 1.13.1") == v"1.13.1"
+    @test DistSSHBase.parse_julia_version_full("julia version 1.13.2+0.aarch64") == v"1.13.2+0.aarch64"
+    @test DistSSHBase.parse_julia_version_full("not julia") === nothing
     @test DistSSHBase.parse_julia_version("") === nothing
     @test DistSSHBase.parse_julia_version("not julia at all") === nothing
 

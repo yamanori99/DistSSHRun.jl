@@ -19,6 +19,36 @@ function _report_local_host_tools!()
     return (; ssh, rsync, git)
 end
 
+"""Print the remote Julia line. `false` when this host fails the check.
+
+`:minor` fails unless `ignore` is set. `:patch` and `:prerelease` warn either way.
+"""
+function _report_remote_julia!(
+        host::AbstractString,
+        checked::AbstractString,
+        julia_check,
+        ignore::Bool,
+    )::Bool
+    if !julia_check.found
+        fail("Julia not found (checked: $checked)")
+        print_juliaup_align_fix!(host; kind = :missing)
+        return false
+    elseif julia_check.mismatch_kind == :minor && !ignore
+        fail("Julia version mismatch: local $(VERSION), $host has $(julia_check.version) (at $checked)")
+        print_juliaup_align_fix!(host; kind = :mismatch)
+        return false
+    elseif julia_check.mismatch_kind == :minor
+        warn("Julia version differs: local $(VERSION), $host has $(julia_check.version) (--ignore-julia-version)")
+    elseif julia_check.mismatch_kind == :patch
+        warn("Julia patch version differs: local $(VERSION), $host has $(julia_check.version)")
+    elseif julia_check.mismatch_kind == :prerelease
+        warn("Julia prerelease differs: local $(VERSION), $host has $(julia_check.version)")
+    else
+        ok("Julia $(julia_check.version) found at $checked")
+    end
+    return true
+end
+
 """Check Julia on a remote host: is it present, and does its version match closely enough?
 
 Returns a NamedTuple `(found, version, mismatch_kind)`:
@@ -27,7 +57,7 @@ Returns a NamedTuple `(found, version, mismatch_kind)`:
 - `mismatch_kind`: see `julia_version_mismatch_kind` (`:none` when `version` is `nothing`)
 """
 function check_julia(host::String, julia_path::String)
-    remote_version = get_remote_julia_version(host, julia_path)
+    remote_version = get_remote_julia_version_full(host, julia_path)
     if remote_version === nothing
         return (found = false, version = nothing, mismatch_kind = :none)
     end
@@ -240,22 +270,10 @@ function check_prerequisites(
         julia_check = host_julia === nothing ?
             (found = false, version = nothing, mismatch_kind = :none) :
             check_julia(host, String(host_julia))
-        if !julia_check.found
-            fail("Julia not found (checked: $(host_julia === nothing ? "auto-detect" : host_julia))")
-            print_juliaup_align_fix!(host; kind = :missing)
+        checked = host_julia === nothing ? "auto-detect" : String(host_julia)
+        if !_report_remote_julia!(host, checked, julia_check, ignore_julia_version)
             all_ok = false
             host_ok[] = false
-        elseif julia_check.mismatch_kind == :minor && !ignore_julia_version
-            fail("Julia version mismatch: local $(VERSION), $host has $(julia_check.version) (at $host_julia)")
-            print_juliaup_align_fix!(host; kind = :mismatch)
-            all_ok = false
-            host_ok[] = false
-        elseif julia_check.mismatch_kind == :minor
-            warn("Julia version differs: local $(VERSION), $host has $(julia_check.version) (--ignore-julia-version)")
-        elseif julia_check.mismatch_kind == :patch
-            warn("Julia patch version differs: local $(VERSION), $host has $(julia_check.version)")
-        else
-            ok("Julia $(julia_check.version) found at $host_julia")
         end
 
         if check_project(host, remote_path)

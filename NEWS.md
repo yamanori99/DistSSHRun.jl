@@ -6,6 +6,8 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
+- `setup --check` warns when the same major.minor.patch has a different prerelease. The check still succeeds. `--ignore-julia-version` does not hide that warning, or a patch warning. A moving channel (`1.13`, `1.14-nightly`) still says the parent is behind a newer remote. A pinned channel such as `1.14.0-alpha1` says that channel may not be installed, and to check `juliaup add` on the worker. The success count is unchanged. `parse_julia_version` and `get_remote_julia_version` stay major.minor.patch. `parse_julia_version_full` and `get_remote_julia_version_full` are public on DistSSHBase.
+
 ### Planned breaking (next minor)
 
 - `interrupt_grace` on `terminate!` and `terminate_run!` will default to a positive value, so a stop sends SIGINT before SIGTERM. DistSSHQueue `cancel` of a running job will use that default. Until then the default is `0` and `cancel` does not send SIGINT.
