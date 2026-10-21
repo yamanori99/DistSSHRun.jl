@@ -220,6 +220,8 @@ end
                     head = readchomp(`git -C $repo rev-parse HEAD`)
                     @test clean["source"]["commit"] == head
                     snap = DistSSHRun.git_source_snapshot(repo)
+                    @test snap isa AbstractDict
+                    snap = snap::AbstractDict
                     @test snap["commit"] == head
                     @test !haskey(snap, "captured")
                     write(joinpath(repo, "f.txt"), "changed\n")

@@ -522,7 +522,6 @@ function _ensure_git_head_source!(
         )
         current = resolved
     end
-    return
 end
 
 """

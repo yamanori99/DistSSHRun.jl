@@ -38,7 +38,6 @@ function _mkdir_unique!(dir::AbstractString)::String
             base = String(dir) * "-" * string(time_ns())
         end
     end
-    return
 end
 
 """
