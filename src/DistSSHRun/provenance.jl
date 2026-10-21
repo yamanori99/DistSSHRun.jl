@@ -44,7 +44,9 @@ try
             "blas_threads" => blas_threads[],
         )
         dir = get(ENV, "DISTRIBUTED_OUTPUT_DIR", pwd())
-        open(joinpath(dir, "provenance-slot.toml"), "w") do io
+        dest = joinpath(dir, ".distsshkit")
+        mkpath(dest)
+        open(joinpath(dest, "provenance-slot.toml"), "w") do io
             TOML.print(io, snap)
         end
     end
@@ -132,8 +134,9 @@ end
 """Write the go-slot `-L` file. `nothing` when the directory cannot be written."""
 function write_go_slot_loader(slot_dir::AbstractString)::Union{Nothing, String}
     return try
-        mkpath(slot_dir)
-        path = joinpath(slot_dir, _GO_SLOT_LOADER_NAME)
+        dest = joinpath(slot_dir, ".distsshkit")
+        mkpath(dest)
+        path = joinpath(dest, _GO_SLOT_LOADER_NAME)
         write(path, _GO_SLOT_LOADER_SRC)
         path
     catch
@@ -143,7 +146,7 @@ end
 
 """Remember one go slot. `assemble_provenance` reads the toml after the slot exits."""
 function note_go_slot_provenance!(token::AbstractString, slot_dir::AbstractString)
-    path = joinpath(String(slot_dir), _GO_SLOT_PROVENANCE_NAME)
+    path = joinpath(String(slot_dir), ".distsshkit", _GO_SLOT_PROVENANCE_NAME)
     lock(_PROVENANCE_LOCK) do
         push!(_PROVENANCE_GO, String(token) => path)
     end
@@ -329,7 +332,10 @@ function _git_capture(cmd::Cmd)::Union{Nothing, String}
     end
 end
 
-"""`(xy, path)` from `git status --porcelain=v1 -z`. A rename keeps the new path."""
+"""`(xy, path)` from `git status --porcelain=v1 -z`.
+
+A rename or copy is `XY new\\0old\\0`. `path` is the new name. The old name is skipped.
+"""
 function _git_status_records(raw::AbstractVector{UInt8})::Vector{Tuple{String, String}}
     parts = split(String(raw), '\0'; keepempty = false)
     out = Tuple{String, String}[]
@@ -341,12 +347,25 @@ function _git_status_records(raw::AbstractVector{UInt8})::Vector{Tuple{String, S
         xy = rec[1:2]
         path = rec[4:end]
         if xy[1] in ('R', 'C') || xy[2] in ('R', 'C')
-            if i <= length(parts)
-                path = String(parts[i])
-                i += 1
-            end
+            i <= length(parts) && (i += 1)
         end
         push!(out, (xy, path))
+    end
+    return out
+end
+
+"""Work tree at `project`, or `nothing` when git is missing or this is not a work tree.
+
+`.distsshkit/` and `.distsshqueue/` are not uncommitted changes. DistSSHQueue calls this
+once that release is available. Until then it keeps a copy of the same rule.
+"""
+function git_source_snapshot(project::AbstractString)::Union{Nothing, Dict{String, Any}}
+    src = _git_source(project)
+    src === nothing && return nothing
+    out = Dict{String, Any}()
+    for (k, v) in src
+        String(k) == "captured" && continue
+        out[String(k)] = v
     end
     return out
 end

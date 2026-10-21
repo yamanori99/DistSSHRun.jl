@@ -591,12 +591,13 @@ function _go_remote_slot_shell_inner(
         job_mark = "printf '%s\\n' $comment_q > $mark_q && "
         job_load = " -L $mark_q"
     end
-    loader_q = _remote_shell_path_word(joinpath(slot_rel, _GO_SLOT_LOADER_NAME))
+    kit_q = _remote_shell_path_word(joinpath(slot_rel, ".distsshkit"))
+    loader_q = _remote_shell_path_word(joinpath(slot_rel, ".distsshkit", _GO_SLOT_LOADER_NAME))
     # Quoted heredoc: the slot has no DistSSHRun, so the snapshot source travels in the command.
     write_loader = "cat > $loader_q << 'DISTSSH_PROVENANCE_SLOT'\n$(_GO_SLOT_LOADER_SRC)\nDISTSSH_PROVENANCE_SLOT\n"
     prov_load = " -L $loader_q"
     return string(
-        "cd $rr && mkdir -p $slot_q && ",
+        "cd $rr && mkdir -p $slot_q && mkdir -p $kit_q && ",
         "export DISTRIBUTED_OUTPUT_DIR=$slot_q && ",
         job_export,
         job_mark,
@@ -657,29 +658,6 @@ function _go_run_remote_slot!(
         _rethrow_missing_host_tool(e)
         scp_failed = true
     end
-    # The slot writes this before the script. Fetch it even when collect is skipped.
-    try
-        remote_snap = string(
-            rstrip(remote_root, '/'), "/", slot_rel, "/", _GO_SLOT_PROVENANCE_NAME,
-        )
-        local_snap = joinpath(slot_dir, _GO_SLOT_PROVENANCE_NAME)
-        run(
-            pipeline(
-                _scp_cmd(
-                    [
-                        ssh_opts()...,
-                        _ssh_host_args(string(host, ":", remote_snap))...,
-                        local_snap,
-                    ]
-                );
-                stdout = devnull,
-                stderr = devnull,
-            );
-            wait = true,
-        )
-    catch e
-        _rethrow_missing_host_tool(e)
-    end
     code = _go_slot_exitcode(ssh_code, ec_path; scp_failed)
     return DriveResult(code == 0, code; output_dir = slot_dir)
 end
@@ -726,6 +704,40 @@ function _go_pull_slot!(
         _rethrow_missing_host_tool(e)
         return false
     end
+end
+
+"""Copy one remote slot snapshot when collect did not bring the slot directory back."""
+function _go_fetch_slot_provenance!(
+        host::AbstractString,
+        remote_root::AbstractString,
+        slot_rel::AbstractString,
+        slot_dir::AbstractString,
+    )
+    remote_snap = string(
+        rstrip(remote_root, '/'), "/", slot_rel, "/.distsshkit/", _GO_SLOT_PROVENANCE_NAME,
+    )
+    local_dir = joinpath(slot_dir, ".distsshkit")
+    mkpath(local_dir)
+    local_snap = joinpath(local_dir, _GO_SLOT_PROVENANCE_NAME)
+    try
+        run(
+            pipeline(
+                _scp_cmd(
+                    [
+                        ssh_opts()...,
+                        _ssh_host_args(string(host, ":", remote_snap))...,
+                        local_snap,
+                    ]
+                );
+                stdout = devnull,
+                stderr = devnull,
+            );
+            wait = true,
+        )
+    catch e
+        _rethrow_missing_host_tool(e)
+    end
+    return nothing
 end
 
 """Run one slot (local process or remote SSH). Isolated env per slot. Pull is `_go_collect_slot!`."""
@@ -1185,6 +1197,7 @@ function _go_run!(
         end
 
         n_slots > 0 && _kit_progress_mark!("collect")
+        slot_collect_ok = fill(false, n_slots)
         if !skip_collect
             @sync for (i, slot) in enumerate(slots)
                 slot_run_ok[i] || continue
@@ -1203,6 +1216,10 @@ function _go_run!(
                         if outcome.collect !== nothing
                             last_collect[] = outcome.collect
                         end
+                        if err === nothing && outcome.collect !== nothing &&
+                                outcome.collect.ok && !outcome.collect_fail
+                            slot_collect_ok[i] = true
+                        end
                         if outcome.collect_fail || err !== nothing
                             any_collect_fail[] = true
                         end
@@ -1217,6 +1234,14 @@ function _go_run!(
                     end
                 end
             end
+        end
+        for (i, slot) in enumerate(slots)
+            slot.kind === :child || continue
+            slot_collect_ok[i] && continue
+            host = slot.host::String
+            slot_dir = joinpath(batch_dir, slot.label)
+            slot_rel = _go_remote_slot_rel(proj, slot_dir, batch_dir, slot.label)
+            _go_fetch_slot_provenance!(host, sess_rr, slot_rel, slot_dir)
         end
         if any_run_fail[]
             completed = true

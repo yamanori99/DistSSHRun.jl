@@ -219,6 +219,9 @@ end
                     @test clean["source"]["diff_sha256"] == empty_diff
                     head = readchomp(`git -C $repo rev-parse HEAD`)
                     @test clean["source"]["commit"] == head
+                    snap = DistSSHRun.git_source_snapshot(repo)
+                    @test snap["commit"] == head
+                    @test !haskey(snap, "captured")
                     write(joinpath(repo, "f.txt"), "changed\n")
                     dirty = DistSSHRun.assemble_provenance(repo)
                     @test dirty["source"]["dirty"] == true
@@ -323,7 +326,7 @@ end
     @testset "git status -z" begin
         arrow = DistSSHRun._git_status_records(Vector{UInt8}("?? file -> name\0"))
         @test arrow == [("??", "file -> name")]
-        renamed = DistSSHRun._git_status_records(Vector{UInt8}("R  old\0new name\0"))
+        renamed = DistSSHRun._git_status_records(Vector{UInt8}("R  new name\0old\0"))
         @test renamed == [("R ", "new name")]
         @test DistSSHRun._git_status_is_kit(".distsshqueue/tickets/a")
         @test DistSSHRun._git_status_is_kit("out/.distsshkit/provenance.toml")

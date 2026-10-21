@@ -176,6 +176,8 @@ include("DistSSHRun/ride.jl")
 include("DistSSHRun/execute.jl")
 include("DistSSHRun/provenance.jl")
 
+public git_source_snapshot
+
 const _KIT_ROOT = dirname(@__DIR__)
 
 # Kit version (from Project.toml).
