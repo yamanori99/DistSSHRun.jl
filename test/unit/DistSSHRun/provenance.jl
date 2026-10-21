@@ -383,4 +383,23 @@ end
             end
         end
     end
+
+    @testset "a bad project file does not fail the record" begin
+        withenv(_PROV_ENV_OFF...) do
+            DistSSHRun._set_provenance_source!(nothing)
+            _with_tempdir() do proj
+                write(joinpath(proj, "Project.toml"), "name = [\n")
+                try
+                    DistSSHRun._reset_run_provenance!(proj)
+                    @test DistSSHRun._PROVENANCE_PROJECT_SNAP[] ==
+                        Dict{String, Any}("manifest" => "absent")
+                    @test DistSSHRun._PROVENANCE_AT_START[]
+                finally
+                    DistSSHRun._PROVENANCE_AT_START[] = false
+                    DistSSHRun._PROVENANCE_PROJECT_SNAP[] = nothing
+                    DistSSHRun._PROVENANCE_SOURCE_SNAP[] = nothing
+                end
+            end
+        end
+    end
 end

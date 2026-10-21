@@ -125,8 +125,18 @@ function _reset_run_provenance!(project::AbstractString)
         empty!(_PROVENANCE_GO)
     end
     # Taken now. A long run must not record edits made while it was going.
-    _PROVENANCE_PROJECT_SNAP[] = _project_provenance(proj)
-    _PROVENANCE_SOURCE_SNAP[] = _resolve_source(proj)
+    # A bad Project.toml, an unreadable manifest, or a git status that is not
+    # text must not fail the job. `assemble_provenance` already swallows this.
+    _PROVENANCE_PROJECT_SNAP[] = try
+        _project_provenance(proj)
+    catch
+        Dict{String, Any}("manifest" => "absent")
+    end
+    _PROVENANCE_SOURCE_SNAP[] = try
+        _resolve_source(proj)
+    catch
+        nothing
+    end
     _PROVENANCE_AT_START[] = true
     return nothing
 end

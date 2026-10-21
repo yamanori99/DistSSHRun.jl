@@ -240,7 +240,7 @@ function Base.wait(
 end
 
 """
-    execute!(kind, script, tokens=String[]; output_dir=nothing, args=String[], project=pwd(), sync=nothing, julia=nothing, detached=false, kwargs...) -> KitRunResult or KitProcess
+    execute!(kind, script, tokens=String[]; output_dir=nothing, args=String[], project=pwd(), sync=nothing, julia=nothing, detached=false, source=nothing, kwargs...) -> KitRunResult or KitProcess
 
 One seam over [`go!`](@ref) / [`ride!`](@ref) / [`drive!`](@ref) for callers
 that pick the kind at runtime (`kind ∈ (:go, :ride, :drive)`), returning the
@@ -263,9 +263,11 @@ DistSSHRun in `Project.toml` `[deps]` (`julia -m` needs a direct dep);
 otherwise `pkgdir(DistSSHRun)`. A Manifest-only / transitive DistSSHRun
 does not count. Keywords are then an allow-list (unknown names throw):
 `output_dir`, `args`, `project`, `sync`, `julia`, `quiet`, `verbosity`, `yes`,
-`remote`, `hosts_file`, `job_id`, and drive-only `log_dir`, `enable_log`,
-`package`, `require_all_hosts`, `skip_hash_check`, `mem_headroom`, `parent_gb`,
-`workers`, `sync_script`, `source`. Go-only `repeat`. Ride: `spi_check` (default
+`remote`, `hosts_file`, `job_id`, `source`, and drive-only `log_dir`,
+`enable_log`, `package`, `require_all_hosts`, `skip_hash_check`,
+`mem_headroom`, `parent_gb`, `workers`, `sync_script`. `source` is a provenance
+dict for every kind. Detached passes it as `DISTSSHKIT_SOURCE_*`. Go-only
+`repeat`. Ride: `spi_check` (default
 `false`). Detached argv passes `--spi-check` when true and `--no-spi-check`
 when false, so an older child whose default is on still skips the compare.
 Neither go nor
