@@ -6,7 +6,7 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
-- `run.toml` records `[provenance]` (Julia, machine, workers, the project manifest, and the code version). The same table is written to `output_dir/.distsshkit/provenance.toml`. `schema` stays 1.
+- `run.toml` records `[provenance]` (Julia, machine, workers, the project manifest, and the code version). The same table is written to `output_dir/.distsshkit/provenance.toml`. For `go`, `julia.parent` is the controller; each slot is under `workers`. The manifest hash and the git snapshot are taken when the run starts. `.distsshkit/` and `.distsshqueue/` are not counted as uncommitted changes. `schema` stays 1.
 
 ### Planned breaking (next minor)
 

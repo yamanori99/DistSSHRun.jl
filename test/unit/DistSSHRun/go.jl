@@ -245,6 +245,8 @@ using Dates
         @test occursin(
             string(
                 DistSSHRun._remote_shell_path_word("julia"),
+                " -L ",
+                DistSSHRun._remote_shell_path_word("slot/provenance-slot.jl"),
                 " --project=. ",
                 DistSSHRun._remote_shell_path_word("job.jl"),
                 " ",
@@ -254,6 +256,7 @@ using Dates
             ),
             with_args,
         )
+        @test occursin("DISTSSH_PROVENANCE_SLOT", with_args)
 
         withenv("DISTSSHKIT_JOB_ID" => "repro-1") do
             tagged = DistSSHRun._go_remote_slot_shell_inner(
@@ -299,6 +302,8 @@ using Dates
             @test strip(read(envf, String)) == "repro-1"
             @test abspath(strip(read(progf, String))) == abspath(script)
             @test isfile(joinpath(slot, DistSSHRun.kit_job_pkill_pattern("repro-1")))
+            snap = DistSSHRun.TOML.parsefile(joinpath(slot, "provenance-slot.toml"))
+            @test snap["version"] == string(VERSION)
         end
     end
 

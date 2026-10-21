@@ -514,6 +514,8 @@ function _go_run_local_slot!(
     if job_id !== nothing
         push!(argv, "-L", kit_write_job_mark_file(slot_dir, job_id))
     end
+    loader = write_go_slot_loader(slot_dir)
+    loader !== nothing && push!(argv, "-L", loader)
     push!(argv, String(script))
     append!(argv, collect(String, script_args))
     env_pairs = ["DISTRIBUTED_OUTPUT_DIR" => String(slot_dir)]
@@ -589,12 +591,17 @@ function _go_remote_slot_shell_inner(
         job_mark = "printf '%s\\n' $comment_q > $mark_q && "
         job_load = " -L $mark_q"
     end
+    loader_q = _remote_shell_path_word(joinpath(slot_rel, _GO_SLOT_LOADER_NAME))
+    # Quoted heredoc: the slot has no DistSSHRun, so the snapshot source travels in the command.
+    write_loader = "cat > $loader_q << 'DISTSSH_PROVENANCE_SLOT'\n$(_GO_SLOT_LOADER_SRC)\nDISTSSH_PROVENANCE_SLOT\n"
+    prov_load = " -L $loader_q"
     return string(
         "cd $rr && mkdir -p $slot_q && ",
         "export DISTRIBUTED_OUTPUT_DIR=$slot_q && ",
         job_export,
         job_mark,
-        "$jb$job_load --project=. $rel_q$args_s >$log_q 2>&1; ",
+        write_loader,
+        "$jb$job_load$prov_load --project=. $rel_q$args_s >$log_q 2>&1; ",
         "ec=\$?; echo \$ec > $exit_q; cat $log_q; exit \$ec",
     )
 end
@@ -649,6 +656,29 @@ function _go_run_remote_slot!(
     catch e
         _rethrow_missing_host_tool(e)
         scp_failed = true
+    end
+    # The slot writes this before the script. Fetch it even when collect is skipped.
+    try
+        remote_snap = string(
+            rstrip(remote_root, '/'), "/", slot_rel, "/", _GO_SLOT_PROVENANCE_NAME,
+        )
+        local_snap = joinpath(slot_dir, _GO_SLOT_PROVENANCE_NAME)
+        run(
+            pipeline(
+                _scp_cmd(
+                    [
+                        ssh_opts()...,
+                        _ssh_host_args(string(host, ":", remote_snap))...,
+                        local_snap,
+                    ]
+                );
+                stdout = devnull,
+                stderr = devnull,
+            );
+            wait = true,
+        )
+    catch e
+        _rethrow_missing_host_tool(e)
     end
     code = _go_slot_exitcode(ssh_code, ec_path; scp_failed)
     return DriveResult(code == 0, code; output_dir = slot_dir)
@@ -733,6 +763,8 @@ function _go_exec_slot!(
         )
     end
     _kit_progress_span!(run_lab, run_res.ok ? :ok : :fail)
+    token = slot.kind === :parent ? PARENT_HOST_NAME : String(something(slot.host, slot.label))
+    note_go_slot_provenance!(token, slot_dir)
     return (run = run_res, collect = nothing, collect_fail = false)
 end
 
@@ -825,6 +857,10 @@ end
     go!(script, workers::AbstractVector; kwargs...)
 
 Run an as-is complete job on one or more slots (local and/or remote).
+
+`[provenance]` records this controller under `julia.parent` and `machine.parent`.
+Each slot that ran the script is under `workers`, grouped by placement token.
+The manifest hash and the git snapshot are taken when `go!` starts.
 
 ```julia
 go!("job.jl")                          # one parent slot

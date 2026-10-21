@@ -5,6 +5,52 @@
 const _PROVENANCE_SOURCE = Ref{Union{Nothing, AbstractDict}}(nothing)
 const _PROVENANCE_WORKERS = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 const _PROVENANCE_PROJECT = Ref{String}("")
+const _PROVENANCE_LOCK = ReentrantLock()
+const _PROVENANCE_AT_START = Ref(false)
+const _PROVENANCE_PROJECT_SNAP = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
+const _PROVENANCE_SOURCE_SNAP = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
+const _PROVENANCE_GO = Pair{String, String}[]
+
+const _GO_SLOT_PROVENANCE_NAME = "provenance-slot.toml"
+const _GO_SLOT_LOADER_NAME = "provenance-slot.jl"
+
+# Same fields as `_process_snapshot_expr`. A go slot has no DistSSHRun, so `-L` runs this text.
+const _GO_SLOT_LOADER_SRC = """
+import TOML
+try
+    let blas = Ref("not loaded"), blas_threads = Ref("not loaded")
+        for (pkg, mod) in Base.loaded_modules
+            pkg.name == "LinearAlgebra" || continue
+            try
+                libs = mod.BLAS.get_config().loaded_libs
+                if !isempty(libs)
+                    blas[] = string(first(libs).libname)
+                end
+                blas_threads[] = string(mod.BLAS.get_num_threads())
+            catch
+                blas[] = "not loaded"
+                blas_threads[] = "not loaded"
+            end
+        end
+        snap = Dict{String, String}(
+            "version" => string(VERSION),
+            "commit" => string(Base.GIT_VERSION_INFO.commit),
+            "cpu" => string(Sys.CPU_NAME),
+            "machine" => string(Sys.MACHINE),
+            "kernel" => string(Sys.KERNEL),
+            "nthreads" => string(Threads.nthreads()),
+            "hostname" => string(gethostname()),
+            "blas" => blas[],
+            "blas_threads" => blas_threads[],
+        )
+        dir = get(ENV, "DISTRIBUTED_OUTPUT_DIR", pwd())
+        open(joinpath(dir, "provenance-slot.toml"), "w") do io
+            TOML.print(io, snap)
+        end
+    end
+catch
+end
+"""
 
 const _GIT_DIFF_FLAGS = (
     "-c",
@@ -70,8 +116,37 @@ function _process_snapshot_expr()
 end
 
 function _reset_run_provenance!(project::AbstractString)
-    _PROVENANCE_PROJECT[] = canonical_local_path(String(project))
+    proj = canonical_local_path(String(project))
+    _PROVENANCE_PROJECT[] = proj
     _PROVENANCE_WORKERS[] = nothing
+    lock(_PROVENANCE_LOCK) do
+        empty!(_PROVENANCE_GO)
+    end
+    # Taken now. A long run must not record edits made while it was going.
+    _PROVENANCE_PROJECT_SNAP[] = _project_provenance(proj)
+    _PROVENANCE_SOURCE_SNAP[] = _resolve_source(proj)
+    _PROVENANCE_AT_START[] = true
+    return nothing
+end
+
+"""Write the go-slot `-L` file. `nothing` when the directory cannot be written."""
+function write_go_slot_loader(slot_dir::AbstractString)::Union{Nothing, String}
+    return try
+        mkpath(slot_dir)
+        path = joinpath(slot_dir, _GO_SLOT_LOADER_NAME)
+        write(path, _GO_SLOT_LOADER_SRC)
+        path
+    catch
+        nothing
+    end
+end
+
+"""Remember one go slot. `assemble_provenance` reads the toml after the slot exits."""
+function note_go_slot_provenance!(token::AbstractString, slot_dir::AbstractString)
+    path = joinpath(String(slot_dir), _GO_SLOT_PROVENANCE_NAME)
+    lock(_PROVENANCE_LOCK) do
+        push!(_PROVENANCE_GO, String(token) => path)
+    end
     return nothing
 end
 
@@ -89,6 +164,26 @@ end
 
 function _sha256_hex(bytes::AbstractVector{UInt8})::String
     return SHA.bytes2hex(SHA.sha256(bytes))
+end
+
+"""SHA-256 of `cmd`'s stdout, read in chunks. `nothing` when the process fails."""
+function _sha256_process(cmd::Cmd)::Union{Nothing, String}
+    ctx = SHA.SHA256_CTX()
+    local proc
+    try
+        proc = open(pipeline(ignorestatus(cmd); stderr = devnull); read = true)
+        while !eof(proc)
+            chunk = read(proc, 1 << 16)
+            isempty(chunk) && break
+            SHA.update!(ctx, chunk)
+        end
+        close(proc)
+        wait(proc)
+    catch
+        return nothing
+    end
+    proc.exitcode == 0 || return nothing
+    return SHA.bytes2hex(SHA.digest!(ctx))
 end
 
 function _snapshot_dict(raw)::Dict{String, String}
@@ -234,24 +329,36 @@ function _git_capture(cmd::Cmd)::Union{Nothing, String}
     end
 end
 
-function _git_status_path(line::AbstractString)::String
-    text = String(line)
-    length(text) < 4 && return ""
-    rest = text[4:end]
-    sep = findfirst(" -> ", rest)
-    path = sep === nothing ? rest : rest[(last(sep) + 1):end]
-    path = strip(path)
-    if startswith(path, '"') && endswith(path, '"') && ncodeunits(path) >= 2
-        path = path[2:(end - 1)]
+"""`(xy, path)` from `git status --porcelain=v1 -z`. A rename keeps the new path."""
+function _git_status_records(raw::AbstractVector{UInt8})::Vector{Tuple{String, String}}
+    parts = split(String(raw), '\0'; keepempty = false)
+    out = Tuple{String, String}[]
+    i = 1
+    while i <= length(parts)
+        rec = String(parts[i])
+        i += 1
+        ncodeunits(rec) < 3 && continue
+        xy = rec[1:2]
+        path = rec[4:end]
+        if xy[1] in ('R', 'C') || xy[2] in ('R', 'C')
+            if i <= length(parts)
+                path = String(parts[i])
+                i += 1
+            end
+        end
+        push!(out, (xy, path))
     end
-    return path
+    return out
 end
 
-"""Kit writes `output_dir/.distsshkit/` inside the caller's tree. Those files are not the caller's edits."""
-function _git_status_is_kit(line::AbstractString)::Bool
-    path = _git_status_path(line)
-    return path == ".distsshkit" || startswith(path, ".distsshkit/") ||
-        occursin("/.distsshkit/", path)
+"""Kit and Queue write these directories inside the caller's tree. They are not the caller's edits."""
+function _git_status_is_kit(path::AbstractString)::Bool
+    for name in (".distsshkit", ".distsshqueue")
+        path == name && return true
+        startswith(path, name * "/") && return true
+        occursin("/" * name * "/", path) && return true
+    end
+    return false
 end
 
 function _git_source(project::AbstractString)::Union{Nothing, Dict{String, Any}}
@@ -262,23 +369,20 @@ function _git_source(project::AbstractString)::Union{Nothing, Dict{String, Any}}
     strip(inside) == "true" || return nothing
     head = _git_capture(`$git -C $project rev-parse HEAD`)
     head === nothing && return nothing
-    status = _git_capture(
-        `$git -C $project status --porcelain=v1 --untracked-files=all`,
+    status = _git_capture_bytes(
+        `$git -C $project status --porcelain=v1 -z --untracked-files=all`,
     )
     status === nothing && return nothing
-    diff = _git_capture_bytes(Cmd([git, "-C", String(project), _GIT_DIFF_FLAGS...]))
-    diff === nothing && return nothing
-    lines = String[
-        String(line) for line in split(strip(status), '\n'; keepempty = false) if !_git_status_is_kit(line)
+    diff_sha = _sha256_process(Cmd([git, "-C", String(project), _GIT_DIFF_FLAGS...]))
+    diff_sha === nothing && return nothing
+    records = Tuple{String, String}[
+        rec for rec in _git_status_records(status) if !_git_status_is_kit(rec[2])
     ]
-    untracked = 0
-    for line in lines
-        startswith(line, "??") && (untracked += 1)
-    end
+    untracked = count(rec -> rec[1] == "??", records)
     return Dict{String, Any}(
         "commit" => strip(head),
-        "dirty" => !isempty(lines),
-        "diff_sha256" => _sha256_hex(diff),
+        "dirty" => !isempty(records),
+        "diff_sha256" => diff_sha,
         "captured" => "run",
         "untracked" => untracked,
     )
@@ -387,7 +491,40 @@ function _parent_sections(snap::Dict{String, String})::Tuple{Dict{String, Any}, 
     return (julia, machine)
 end
 
+function _read_go_slot_snapshot(path::AbstractString)::Dict{String, String}
+    isfile(path) || return Dict{String, String}("error" => "missing snapshot")
+    return try
+        _snapshot_dict(TOML.parsefile(path))
+    catch e
+        Dict{String, String}("error" => sprint(showerror, e))
+    end
+end
+
+"""Go slots grouped by placement token, or `nothing` when this run is not `go`."""
+function _go_worker_section()::Union{Nothing, Dict{String, Any}}
+    rows = lock(_PROVENANCE_LOCK) do
+        return Pair{String, String}[_PROVENANCE_GO...]
+    end
+    isempty(rows) && return nothing
+    by_token = Dict{String, Vector{Dict{String, String}}}()
+    order = String[]
+    for (token, path) in rows
+        key = _provenance_token(token)
+        if !haskey(by_token, key)
+            push!(order, key)
+        end
+        push!(get!(by_token, key, Dict{String, String}[]), _read_go_slot_snapshot(path))
+    end
+    grouped = Dict{String, Any}()
+    for key in order
+        grouped[key] = _group_snapshots(by_token[key])
+    end
+    return grouped
+end
+
 function _worker_section()::Any
+    go = _go_worker_section()
+    go === nothing || return go
     grouped = _PROVENANCE_WORKERS[]
     grouped === nothing && return Any[]
     isempty(grouped) && return Any[]
@@ -413,13 +550,19 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     proj = canonical_local_path(proj)
     parent = _local_process_snapshot()
     julia, machine = _parent_sections(parent)
+    started = _PROVENANCE_AT_START[] && canonical_local_path(_PROVENANCE_PROJECT[]) == proj
+    project_table = if started
+        something(_PROVENANCE_PROJECT_SNAP[], Dict{String, Any}("manifest" => "absent"))
+    else
+        _project_provenance(proj)
+    end
     data = Dict{String, Any}(
         "julia" => Dict{String, Any}("parent" => julia),
         "machine" => Dict{String, Any}("parent" => machine),
-        "workers" => _worker_section(),
-        "project" => _project_provenance(proj),
+        "workers" => started ? _worker_section() : Any[],
+        "project" => project_table,
     )
-    source = _resolve_source(proj)
+    source = started ? _PROVENANCE_SOURCE_SNAP[] : _resolve_source(proj)
     source === nothing || (data["source"] = source)
     return data
 end

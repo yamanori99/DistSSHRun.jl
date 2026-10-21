@@ -236,6 +236,17 @@ end
                     kit_only = DistSSHRun.assemble_provenance(repo)
                     @test kit_only["source"]["dirty"] == false
                     @test kit_only["source"]["untracked"] == 0
+                    mkpath(joinpath(repo, ".distsshqueue", "tickets"))
+                    write(joinpath(repo, ".distsshqueue", "tickets", "j"), "t\n")
+                    queue_only = DistSSHRun.assemble_provenance(repo)
+                    @test queue_only["source"]["dirty"] == false
+                    @test queue_only["source"]["untracked"] == 0
+                    DistSSHRun._reset_run_provenance!(repo)
+                    write(joinpath(repo, "later.txt"), "after\n")
+                    held = DistSSHRun.assemble_provenance(repo)
+                    @test held["source"]["dirty"] == false
+                    @test held["source"]["commit"] == head
+                    DistSSHRun._PROVENANCE_AT_START[] = false
                     passed = Dict{String, Any}(
                         "commit" => "passed",
                         "dirty" => true,
@@ -309,6 +320,16 @@ end
         end
     end
 
+    @testset "git status -z" begin
+        arrow = DistSSHRun._git_status_records(Vector{UInt8}("?? file -> name\0"))
+        @test arrow == [("??", "file -> name")]
+        renamed = DistSSHRun._git_status_records(Vector{UInt8}("R  old\0new name\0"))
+        @test renamed == [("R ", "new name")]
+        @test DistSSHRun._git_status_is_kit(".distsshqueue/tickets/a")
+        @test DistSSHRun._git_status_is_kit("out/.distsshkit/provenance.toml")
+        @test !DistSSHRun._git_status_is_kit("src/job.jl")
+    end
+
     @testset "leftover workers keep their host" begin
         saved = copy(DistSSHRun.DRIVE_HOST_WORKER_IDS)
         try
@@ -345,7 +366,10 @@ end
                 @test raw["kind"] == "go"
                 @test haskey(raw, "output_dir")
                 @test raw["provenance"]["project"]["manifest"] == "absent"
-                @test raw["provenance"]["workers"] == []
+                workers = raw["provenance"]["workers"]
+                @test haskey(workers, "parent")
+                @test workers["parent"][1]["version"] == string(VERSION)
+                @test workers["parent"][1]["n"] == 1
                 @test raw["provenance"]["julia"]["parent"]["version"] == string(VERSION)
                 side = DistSSHRun.TOML.parsefile(
                     joinpath(raw["output_dir"], ".distsshkit", "provenance.toml"),
