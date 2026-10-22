@@ -171,16 +171,28 @@ function parse_julia_version(version_output::AbstractString)::Union{Nothing, Ver
     end
 end
 
+"""Stdout of `julia_path --version` on `host`."""
+function _remote_julia_version_output(host::String, julia_path::AbstractString)::String
+    return read(
+        pipeline(
+            _ssh_cmd([ssh_opts()..., _ssh_host_args(host, String(julia_path), "--version")...]);
+            stderr = devnull,
+        ),
+        String,
+    )
+end
+
 """Get the Julia version on a remote host by running `julia_path --version` over SSH.
 Returns `nothing` on any failure (SSH, missing binary, unparseable output)."""
 function get_remote_julia_version(host::String, julia_path::AbstractString)::Union{Nothing, VersionNumber}
     try
-        result = read(pipeline(_ssh_cmd([ssh_opts()..., _ssh_host_args(host, String(julia_path), "--version")...]); stderr = devnull), String)
-        return parse_julia_version(result)
+        return parse_julia_version(_remote_julia_version_output(host, julia_path))
     catch
         return nothing
     end
 end
+
+include("version_parse.jl")
 
 """
 Ordered remote Julia path candidates for `uname -s` output (Darwin vs Linux).

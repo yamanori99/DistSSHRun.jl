@@ -44,7 +44,7 @@ function _juliaup_local_already_aligned(
     default_ch == ch || return nothing
     jl = _local_julia_beside_juliaup(ju)
     isfile(jl) || return nothing
-    ver = parse_julia_version(read(`$jl --version`, String))
+    ver = parse_julia_version_full(read(`$jl --version`, String))
     ver === nothing && return nothing
     julia_version_mismatch_kind(VERSION, ver) == :minor && return nothing
     return ver
@@ -83,7 +83,7 @@ function juliaup_align_local!(
     jl = _local_julia_beside_juliaup(ju)
     isfile(jl) || error("Julia not found after juliaup align ($jl)")
     out = read(`$jl --version`, String)
-    ver = parse_julia_version(out)
+    ver = parse_julia_version_full(out)
     ver === nothing && error("Julia --version unparseable after juliaup align")
     if julia_version_mismatch_kind(VERSION, ver) == :minor
         error("still mismatched after align: process $(VERSION), juliaup default $ver")
@@ -102,7 +102,7 @@ function _remote_julia_version_setup_ssh(
             pipeline(_host_sync_remote_shell_cmd(String(host), "$pq --version"); stderr = devnull),
             String,
         )
-        return parse_julia_version(out)
+        return parse_julia_version_full(out)
     catch
         return nothing
     end

@@ -20,10 +20,19 @@ using Test
         @test DistSSHUp.juliaup_channel(VERSION) == "$(VERSION.major).$(VERSION.minor)-nightly"
     end
 
+    @test DistSSHUp.julia_version_mismatch_kind(v"1.13.2+0.aarch64", v"1.13.2") == :none
+    @test DistSSHUp.julia_version_mismatch_kind(v"1.14.0-alpha1", v"1.14.0-alpha1") == :none
+    @test DistSSHUp.julia_version_mismatch_kind(v"1.14.0-alpha1", v"1.14.0") == :prerelease
+    @test DistSSHUp.julia_version_mismatch_kind(v"1.14.0-alpha1", v"1.14.0-alpha2") == :prerelease
+
     @test DistSSHUp.juliaup_parent_behind_channel(v"1.12.6", v"1.12.9")
     @test !DistSSHUp.juliaup_parent_behind_channel(v"1.12.9", v"1.12.6")
     @test !DistSSHUp.juliaup_parent_behind_channel(v"1.12.6", v"1.12.6")
     @test !DistSSHUp.juliaup_parent_behind_channel(v"1.12.6", v"1.11.9")
+    @test !DistSSHUp.juliaup_parent_behind_channel(v"1.14.0-alpha1", v"1.14.0-alpha1")
+    @test !DistSSHUp.juliaup_parent_behind_channel(v"1.14.0", v"1.14.0-alpha1")
+    @test !DistSSHUp.juliaup_parent_behind_channel(v"1.13.2+0.aarch64", v"1.13.2")
+    @test DistSSHUp.juliaup_parent_behind_channel(v"1.14.0-alpha1", v"1.14.0")
 
     @test DistSSHUp._juliaup_version("Juliaup 1.22.7\n") == v"1.22.7"
     @test DistSSHUp._juliaup_version("juliaup 1.22.7") === nothing

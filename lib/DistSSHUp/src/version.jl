@@ -1,13 +1,26 @@
-"""Compare two Julia versions and classify the difference:
-`:none` (equal), `:minor` (major.minor differs), or `:patch` (patch only)."""
+"""`v` without its build (`+0.aarch64` and the like). Prerelease stays."""
+function _julia_version_without_build(v::VersionNumber)::VersionNumber
+    return VersionNumber(v.major, v.minor, v.patch, v.prerelease, ())
+end
+
+"""Compare two Julia versions and classify the difference.
+
+`:none` when major.minor.patch and prerelease match. A build-only difference is `:none`.
+`:minor` when major.minor differs. `:patch` when only the patch differs.
+`:prerelease` when major.minor.patch match and the prerelease does not.
+"""
 function julia_version_mismatch_kind(
         local_version::VersionNumber,
         remote_version::VersionNumber,
     )::Symbol
+    local_version = _julia_version_without_build(local_version)
+    remote_version = _julia_version_without_build(remote_version)
     if remote_version.major != local_version.major || remote_version.minor != local_version.minor
         return :minor
     elseif remote_version.patch != local_version.patch
         return :patch
+    elseif remote_version.prerelease != local_version.prerelease
+        return :prerelease
     end
     return :none
 end
@@ -63,11 +76,16 @@ function juliaup_channel(v::VersionNumber = VERSION)::String
     return "$(v.major).$(v.minor).$(v.patch)-$(join(parts, "."))"
 end
 
-"""True when `remote` is the same major.minor as `local` but a newer version."""
+"""True when `remote` is the same major.minor as `local` but a newer version.
+
+Build metadata is ignored. A prerelease is compared as a prerelease, not stripped.
+"""
 function juliaup_parent_behind_channel(
         local_version::VersionNumber,
         remote_version::VersionNumber,
     )::Bool
+    local_version = _julia_version_without_build(local_version)
+    remote_version = _julia_version_without_build(remote_version)
     julia_version_mismatch_kind(local_version, remote_version) == :minor && return false
     return remote_version > local_version
 end
