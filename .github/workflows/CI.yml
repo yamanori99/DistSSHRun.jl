@@ -10,7 +10,8 @@ on:
 # Cancel redundant runs on the same branch/PR.
 # A Project.toml version increase (see version-cut.sh) runs Ubuntu
 # 1.14-nightly, nightly, and Aqua on those channels in this workflow.
-# macOS and WSL2 for both channels are CI weekly.
+# macOS for both channels is CI weekly. WSL2 1.13 Pkg.test runs on a main
+# push and CI weekly, not on a pull request.
 # PkgEval follows the heavy gate
 # (ordinary PRs too) and is continue-on-error. No label is involved.
 # A main push that changes only Project.toml and NEWS.md, and raises
@@ -23,13 +24,15 @@ permissions:
   contents: read
 
 jobs:
-  # `Pkg.test` 1.13 runs on ubuntu-latest, macos-latest, and WSL2 Ubuntu.
-  # macOS and WSL are required. The macOS job exercises `ps -o lstart=`
+  # `Pkg.test` 1.13 on a pull request is ubuntu-latest and macos-latest.
+  # WSL2 Ubuntu is a main push and CI weekly, not a pull request.
+  # macOS is required. The macOS job exercises `ps -o lstart=`
   # in kit_process_start_key (no /proc). Coverage uploads from Ubuntu only.
   # Run keeps the old check titles (no package name). Downstream is one
   # matrix (DistSSHQueue, DistSSHKit). Each required DistSSHUp and
-  # DistSSHBase title is its own job (Ubuntu, macOS, WSL2, Ubuntu SSH
-  # E2E). A closed gate skips that job, so the check is skipping. Do not
+  # DistSSHBase title is its own job (Ubuntu, macOS, Ubuntu SSH
+  # E2E). WSL2 titles run on a main push and CI weekly, not a pull request.
+  # A closed gate skips that job, so the check is skipping. Do not
   # put those titles in one matrix: a job-level if runs before the matrix
   # expands, and the required names never report.
   # Coverage uploads from the Ubuntu Run job and the Ubuntu DistSSHBase /
@@ -161,7 +164,7 @@ jobs:
   test-wsl:
     name: Pkg.test (1.13, WSL2 ubuntu-24.04, x64)
     needs: detect
-    if: needs.detect.outputs.heavy == 'true'
+    if: needs.detect.outputs.heavy == 'true' && github.event_name != 'pull_request'
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
@@ -310,7 +313,7 @@ jobs:
   up-test-wsl:
     name: DistSSHUp (1.13, WSL2 ubuntu-24.04, x64)
     needs: detect
-    if: needs.detect.outputs.heavy == 'true'
+    if: needs.detect.outputs.heavy == 'true' && github.event_name != 'pull_request'
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
@@ -445,7 +448,7 @@ jobs:
   base-test-wsl:
     name: DistSSHBase (1.13, WSL2 ubuntu-24.04, x64)
     needs: detect
-    if: needs.detect.outputs.heavy == 'true'
+    if: needs.detect.outputs.heavy == 'true' && github.event_name != 'pull_request'
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
