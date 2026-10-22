@@ -222,6 +222,7 @@ using Dates
         @test startswith(inner, "cd ")
         slot = "demos/output/go_sim/root@192.0.2.10-1"
         @test occursin("cd $(DistSSHRun._remote_shell_path_word("~/proj")) && mkdir -p $(DistSSHRun._remote_shell_path_word(slot))", inner)
+        @test occursin("mkdir -p $(DistSSHRun._remote_shell_path_word(slot * "/.distsshkit"))", inner)
         @test occursin(">" * DistSSHRun._remote_shell_path_word(slot * "/julia.stdout.log"), inner)
         @test occursin("go.exitcode", inner)
         @test occursin("echo \$ec >", inner)
@@ -245,6 +246,8 @@ using Dates
         @test occursin(
             string(
                 DistSSHRun._remote_shell_path_word("julia"),
+                " -L ",
+                DistSSHRun._remote_shell_path_word("slot/.distsshkit/provenance-slot.jl"),
                 " --project=. ",
                 DistSSHRun._remote_shell_path_word("job.jl"),
                 " ",
@@ -254,6 +257,7 @@ using Dates
             ),
             with_args,
         )
+        @test occursin("DISTSSH_PROVENANCE_SLOT", with_args)
 
         withenv("DISTSSHKIT_JOB_ID" => "repro-1") do
             tagged = DistSSHRun._go_remote_slot_shell_inner(
@@ -299,6 +303,10 @@ using Dates
             @test strip(read(envf, String)) == "repro-1"
             @test abspath(strip(read(progf, String))) == abspath(script)
             @test isfile(joinpath(slot, DistSSHRun.kit_job_pkill_pattern("repro-1")))
+            snap = DistSSHRun.TOML.parsefile(
+                joinpath(slot, ".distsshkit", "provenance-slot.toml"),
+            )
+            @test snap["version"] == string(VERSION)
         end
     end
 

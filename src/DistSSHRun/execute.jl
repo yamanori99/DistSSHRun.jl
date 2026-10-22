@@ -50,6 +50,7 @@ const _EXECUTE_DETACHED_NAMED = (
     :sync,
     :julia,
     :detached,
+    :source,
 )
 
 """
@@ -57,7 +58,9 @@ const _EXECUTE_DETACHED_NAMED = (
 
 Whether `execute!(kind, ...; detached=true)` accepts keyword `kw`.
 Uses the same tables as the detached throw path, plus the named parameters
-(`output_dir`, `args`, `project`, `sync`, `julia`, `detached`).
+(`output_dir`, `args`, `project`, `sync`, `julia`, `detached`, `source`).
+`source` is a provenance dict. Detached passes it to the child as
+`DISTSSHKIT_SOURCE_*`. It is not a `go!` / `ride!` / `drive!` keyword.
 """
 function execute_detached_accepts(kw::Symbol; kind::Symbol)::Bool
     _require_execute_kind!(kind)
@@ -237,7 +240,7 @@ function Base.wait(
 end
 
 """
-    execute!(kind, script, tokens=String[]; output_dir=nothing, args=String[], project=pwd(), sync=nothing, julia=nothing, detached=false, kwargs...) -> KitRunResult or KitProcess
+    execute!(kind, script, tokens=String[]; output_dir=nothing, args=String[], project=pwd(), sync=nothing, julia=nothing, detached=false, source=nothing, kwargs...) -> KitRunResult or KitProcess
 
 One seam over [`go!`](@ref) / [`ride!`](@ref) / [`drive!`](@ref) for callers
 that pick the kind at runtime (`kind ∈ (:go, :ride, :drive)`), returning the
@@ -260,9 +263,11 @@ DistSSHRun in `Project.toml` `[deps]` (`julia -m` needs a direct dep);
 otherwise `pkgdir(DistSSHRun)`. A Manifest-only / transitive DistSSHRun
 does not count. Keywords are then an allow-list (unknown names throw):
 `output_dir`, `args`, `project`, `sync`, `julia`, `quiet`, `verbosity`, `yes`,
-`remote`, `hosts_file`, `job_id`, and drive-only `log_dir`, `enable_log`,
-`package`, `require_all_hosts`, `skip_hash_check`, `mem_headroom`, `parent_gb`,
-`workers`, `sync_script`. Go-only `repeat`. Ride: `spi_check` (default
+`remote`, `hosts_file`, `job_id`, `source`, and drive-only `log_dir`,
+`enable_log`, `package`, `require_all_hosts`, `skip_hash_check`,
+`mem_headroom`, `parent_gb`, `workers`, `sync_script`. `source` is a provenance
+dict for every kind. Detached passes it as `DISTSSHKIT_SOURCE_*`. Go-only
+`repeat`. Ride: `spi_check` (default
 `false`). Detached argv passes `--spi-check` when true and `--no-spi-check`
 when false, so an older child whose default is on still skips the compare.
 Neither go nor
@@ -292,6 +297,7 @@ function execute!(
         sync::Union{Symbol, Bool, Nothing} = nothing,
         julia::Union{Nothing, AbstractString} = nothing,
         detached::Bool = false,
+        source::Union{Nothing, AbstractDict} = nothing,
         kwargs...,
     )
     _require_execute_kind!(kind)
@@ -305,46 +311,52 @@ function execute!(
             project = project,
             sync = sync,
             julia = julia,
+            source = source,
             kwargs...,
         )
     end
-    result = if kind === :go
-        go!(
-            script,
-            tokens;
-            output_dir = output_dir,
-            args = args,
-            project = project,
-            sync = sync,
-            julia = julia,
-            kwargs...,
-        )
-    elseif kind === :ride
-        (sync === nothing || sync === false) || throw(
-            ArgumentError(
-                "execute!(:ride, ...) does not accept sync=$(repr(sync))",
+    _set_provenance_source!(source)
+    result = try
+        if kind === :go
+            go!(
+                script,
+                tokens;
+                output_dir = output_dir,
+                args = args,
+                project = project,
+                sync = sync,
+                julia = julia,
+                kwargs...,
             )
-        )
-        ride!(
-            script,
-            tokens;
-            output_dir = output_dir,
-            args = args,
-            project = project,
-            julia = julia,
-            kwargs...,
-        )
-    else
-        drive!(
-            script,
-            tokens;
-            output_dir = output_dir,
-            args = args,
-            project = project,
-            sync = sync,
-            julia = julia,
-            kwargs...,
-        )
+        elseif kind === :ride
+            (sync === nothing || sync === false) || throw(
+                ArgumentError(
+                    "execute!(:ride, ...) does not accept sync=$(repr(sync))",
+                )
+            )
+            ride!(
+                script,
+                tokens;
+                output_dir = output_dir,
+                args = args,
+                project = project,
+                julia = julia,
+                kwargs...,
+            )
+        else
+            drive!(
+                script,
+                tokens;
+                output_dir = output_dir,
+                args = args,
+                project = project,
+                sync = sync,
+                julia = julia,
+                kwargs...,
+            )
+        end
+    finally
+        _set_provenance_source!(nothing)
     end
     return kit_run_result(result)
 end
@@ -431,6 +443,7 @@ function _execute_detached!(
         project::AbstractString,
         sync::Union{Symbol, Bool, Nothing},
         julia::Union{Nothing, AbstractString},
+        source::Union{Nothing, AbstractDict} = nothing,
         kwargs...,
     )::KitProcess
     for k in keys(kwargs)
@@ -605,7 +618,11 @@ function _execute_detached!(
     if job_id_s !== nothing
         extra["DISTSSHKIT_JOB_ID"] = job_id_s
     end
+    for (envk, envv) in _provenance_source_env(source)
+        extra[envk] = envv
+    end
     env = _execute_detached_env(extra)
+    _drop_unspecified_source_env!(env, source, extra)
     julia_bin = resolve_controller_julia(julia)
     child_proj = _detached_julia_project(proj)
     cmd = Cmd(
@@ -820,6 +837,37 @@ end
 
 function _register_drive_host_worker_ids!(host::AbstractString, ids::AbstractVector{<:Integer})
     DRIVE_HOST_WORKER_IDS[String(host)] = Int[Int(i) for i in ids]
+    return nothing
+end
+
+"""Host name for a worker that `addprocs` created but did not register.
+
+Local workers stay on the parent. An SSH worker uses the host in its
+`WorkerConfig`, without a `user@` prefix. Anything else is `unknown`, not the parent.
+"""
+function _leftover_worker_host(pid::Integer)::String
+    ep = _interrupt_endpoint(pid)
+    ep === :local && return PARENT_HOST_NAME
+    if ep isa Tuple
+        host = String(ep[1])
+        at = findlast('@', host)
+        return at === nothing ? host : String(host[nextind(host, at):end])
+    end
+    return "unknown"
+end
+
+"""Append unregistered workers to the host they belong to. Does not replace a host list."""
+function _register_leftover_workers!(pids::AbstractVector{<:Integer})
+    isempty(pids) && return nothing
+    by_host = Dict{String, Vector{Int}}()
+    for pid in pids
+        host = _leftover_worker_host(pid)
+        push!(get!(by_host, host, Int[]), Int(pid))
+    end
+    for (host, ids) in by_host
+        existing = Int[Int(i) for i in get(DRIVE_HOST_WORKER_IDS, String(host), Int[])]
+        _register_drive_host_worker_ids!(host, vcat(existing, ids))
+    end
     return nothing
 end
 

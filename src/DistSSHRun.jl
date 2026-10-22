@@ -13,6 +13,7 @@ module DistSSHRun
 using Dates
 using Distributed
 using Pkg
+import SHA
 using TOML
 
 # Public surface. Prefer `julia -m DistSSHKit …` for day-to-day CLI.
@@ -174,6 +175,7 @@ include("DistSSHRun/plan.jl")
 include("DistSSHRun/go.jl")
 include("DistSSHRun/ride.jl")
 include("DistSSHRun/execute.jl")
+include("DistSSHRun/provenance.jl")
 
 const _KIT_ROOT = dirname(@__DIR__)
 

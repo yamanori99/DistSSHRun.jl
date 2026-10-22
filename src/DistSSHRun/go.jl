@@ -514,6 +514,8 @@ function _go_run_local_slot!(
     if job_id !== nothing
         push!(argv, "-L", kit_write_job_mark_file(slot_dir, job_id))
     end
+    loader = write_go_slot_loader(slot_dir)
+    loader !== nothing && push!(argv, "-L", loader)
     push!(argv, String(script))
     append!(argv, collect(String, script_args))
     env_pairs = ["DISTRIBUTED_OUTPUT_DIR" => String(slot_dir)]
@@ -589,12 +591,18 @@ function _go_remote_slot_shell_inner(
         job_mark = "printf '%s\\n' $comment_q > $mark_q && "
         job_load = " -L $mark_q"
     end
+    kit_q = _remote_shell_path_word(joinpath(slot_rel, ".distsshkit"))
+    loader_q = _remote_shell_path_word(joinpath(slot_rel, ".distsshkit", _GO_SLOT_LOADER_NAME))
+    # Quoted heredoc: the slot has no DistSSHRun, so the snapshot source travels in the command.
+    write_loader = "cat > $loader_q << 'DISTSSH_PROVENANCE_SLOT'\n$(_GO_SLOT_LOADER_SRC)\nDISTSSH_PROVENANCE_SLOT\n"
+    prov_load = " -L $loader_q"
     return string(
-        "cd $rr && mkdir -p $slot_q && ",
+        "cd $rr && mkdir -p $slot_q && mkdir -p $kit_q && ",
         "export DISTRIBUTED_OUTPUT_DIR=$slot_q && ",
         job_export,
         job_mark,
-        "$jb$job_load --project=. $rel_q$args_s >$log_q 2>&1; ",
+        write_loader,
+        "$jb$job_load$prov_load --project=. $rel_q$args_s >$log_q 2>&1; ",
         "ec=\$?; echo \$ec > $exit_q; cat $log_q; exit \$ec",
     )
 end
@@ -698,6 +706,40 @@ function _go_pull_slot!(
     end
 end
 
+"""Copy one remote slot snapshot when collect did not bring the slot directory back."""
+function _go_fetch_slot_provenance!(
+        host::AbstractString,
+        remote_root::AbstractString,
+        slot_rel::AbstractString,
+        slot_dir::AbstractString,
+    )
+    remote_snap = string(
+        rstrip(remote_root, '/'), "/", slot_rel, "/.distsshkit/", _GO_SLOT_PROVENANCE_NAME,
+    )
+    local_dir = joinpath(slot_dir, ".distsshkit")
+    mkpath(local_dir)
+    local_snap = joinpath(local_dir, _GO_SLOT_PROVENANCE_NAME)
+    try
+        run(
+            pipeline(
+                _scp_cmd(
+                    [
+                        ssh_opts()...,
+                        _ssh_host_args(string(host, ":", remote_snap))...,
+                        local_snap,
+                    ]
+                );
+                stdout = devnull,
+                stderr = devnull,
+            );
+            wait = true,
+        )
+    catch e
+        _rethrow_missing_host_tool(e)
+    end
+    return nothing
+end
+
 """Run one slot (local process or remote SSH). Isolated env per slot. Pull is `_go_collect_slot!`."""
 function _go_exec_slot!(
         slot::GoSlot,
@@ -733,6 +775,8 @@ function _go_exec_slot!(
         )
     end
     _kit_progress_span!(run_lab, run_res.ok ? :ok : :fail)
+    token = slot.kind === :parent ? PARENT_HOST_NAME : String(something(slot.host, slot.label))
+    note_go_slot_provenance!(token, slot_dir)
     return (run = run_res, collect = nothing, collect_fail = false)
 end
 
@@ -812,6 +856,7 @@ function _go_complete!(
             output_dir = batch_dir,
             log_dir = batch_dir,
             result = kr,
+            provenance = assemble_provenance(),
         )
     end
     release_lock()
@@ -824,6 +869,10 @@ end
     go!(script, workers::AbstractVector; kwargs...)
 
 Run an as-is complete job on one or more slots (local and/or remote).
+
+`[provenance]` records this controller under `julia.parent` and `machine.parent`.
+Each slot that ran the script is under `workers`, grouped by placement token.
+The manifest hash and the git snapshot are taken when `go!` starts.
 
 ```julia
 go!("job.jl")                          # one parent slot
@@ -898,6 +947,7 @@ function go!(
     _acquire_kit_inproc_run!(:go)
     old_run = get(ENV, DISTSSHKIT_RUN_DIR_ENV, nothing)
     try
+        _reset_run_provenance!(proj)
         _ensure_kit_run_dir!(:go, script_path; project = proj)
         return _go_run!(
             script_path,
@@ -1147,6 +1197,7 @@ function _go_run!(
         end
 
         n_slots > 0 && _kit_progress_mark!("collect")
+        slot_collect_ok = fill(false, n_slots)
         if !skip_collect
             @sync for (i, slot) in enumerate(slots)
                 slot_run_ok[i] || continue
@@ -1165,6 +1216,10 @@ function _go_run!(
                         if outcome.collect !== nothing
                             last_collect[] = outcome.collect
                         end
+                        if err === nothing && outcome.collect !== nothing &&
+                                outcome.collect.ok && !outcome.collect_fail
+                            slot_collect_ok[i] = true
+                        end
                         if outcome.collect_fail || err !== nothing
                             any_collect_fail[] = true
                         end
@@ -1179,6 +1234,14 @@ function _go_run!(
                     end
                 end
             end
+        end
+        for (i, slot) in enumerate(slots)
+            slot.kind === :child || continue
+            slot_collect_ok[i] && continue
+            host = slot.host::String
+            slot_dir = joinpath(batch_dir, slot.label)
+            slot_rel = _go_remote_slot_rel(proj, slot_dir, batch_dir, slot.label)
+            _go_fetch_slot_provenance!(host, sess_rr, slot_rel, slot_dir)
         end
         if any_run_fail[]
             completed = true
