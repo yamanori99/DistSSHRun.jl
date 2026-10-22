@@ -43,6 +43,20 @@ try
             "blas" => blas[],
             "blas_threads" => blas_threads[],
         )
+        # Same walk as `_julia_install_name`. This file has no DistSSHRun.
+        if isabspath(Sys.BINDIR)
+            dir = Sys.BINDIR
+            parent = dirname(dir)
+            while parent != dir
+                name = basename(parent)
+                if startswith(name, "julia-")
+                    snap["install"] = name
+                    break
+                end
+                dir = parent
+                parent = dirname(dir)
+            end
+        end
         dir = get(ENV, "DISTRIBUTED_OUTPUT_DIR", pwd())
         dest = joinpath(dir, ".distsshkit")
         mkpath(dest)
@@ -83,7 +97,24 @@ const _SNAP_KEYS = (
     "blas",
     "blas_threads",
     "hostname",
+    "install",
 )
+
+# `install` is optional. A Julia that is not under a `julia-*` directory omits it.
+# The other keys stay required so a partial snapshot is still an error.
+function _julia_install_name(bindir::AbstractString)::Union{Nothing, String}
+    path = String(bindir)
+    (isempty(path) || !isabspath(path)) && return nothing
+    dir = path
+    parent = dirname(dir)
+    while parent != dir
+        name = basename(parent)
+        startswith(name, "julia-") && return name
+        dir = parent
+        parent = dirname(dir)
+    end
+    return nothing
+end
 
 """Base-only expression. Safe to `Core.eval` on a worker that has no DistSSHRun."""
 function _process_snapshot_expr()
@@ -102,7 +133,7 @@ function _process_snapshot_expr()
                     blas_threads[] = "not loaded"
                 end
             end
-            Dict{String, String}(
+            snap = Dict{String, String}(
                 "version" => string(VERSION),
                 "commit" => string(Base.GIT_VERSION_INFO.commit),
                 "cpu" => string(Sys.CPU_NAME),
@@ -113,6 +144,21 @@ function _process_snapshot_expr()
                 "blas" => blas[],
                 "blas_threads" => blas_threads[],
             )
+            # Same walk as `_julia_install_name`. A worker has no DistSSHRun.
+            if isabspath(Sys.BINDIR)
+                dir = Sys.BINDIR
+                parent = dirname(dir)
+                while parent != dir
+                    name = basename(parent)
+                    if startswith(name, "julia-")
+                        snap["install"] = name
+                        break
+                    end
+                    dir = parent
+                    parent = dirname(dir)
+                end
+            end
+            snap
         end
     end
 end
@@ -206,7 +252,11 @@ function _snapshot_dict(raw)::Dict{String, String}
         out[string(k)] = string(v)
     end
     for key in _SNAP_KEYS
+        key == "install" && continue
         haskey(out, key) || return Dict{String, String}("error" => "incomplete snapshot")
+    end
+    if get(out, "install", "") == ""
+        delete!(out, "install")
     end
     return out
 end
@@ -235,14 +285,14 @@ end
 
 function _group_key(snap::Dict{String, String})::String
     haskey(snap, "error") && return "error\0" * snap["error"]
-    return join((snap[k] for k in _SNAP_KEYS), '\0')
+    return join((get(snap, k, "") for k in _SNAP_KEYS), '\0')
 end
 
 function _group_body(snap::Dict{String, String})::Dict{String, Any}
     if haskey(snap, "error")
         return Dict{String, Any}("error" => snap["error"], "n" => 1)
     end
-    return Dict{String, Any}(
+    body = Dict{String, Any}(
         "version" => snap["version"],
         "commit" => snap["commit"],
         "cpu" => snap["cpu"],
@@ -254,6 +304,9 @@ function _group_body(snap::Dict{String, String})::Dict{String, Any}
         "hostname" => snap["hostname"],
         "n" => 1,
     )
+    install = get(snap, "install", "")
+    isempty(install) || (body["install"] = install)
+    return body
 end
 
 """Collapse identical snapshots. One placement token, one list of groups."""
@@ -508,6 +561,8 @@ function _parent_sections(snap::Dict{String, String})::Tuple{Dict{String, Any}, 
         "version" => snap["version"],
         "commit" => snap["commit"],
     )
+    install = get(snap, "install", "")
+    isempty(install) || (julia["install"] = install)
     machine = Dict{String, Any}(
         "cpu" => snap["cpu"],
         "machine" => snap["machine"],
