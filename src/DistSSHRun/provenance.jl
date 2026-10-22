@@ -420,21 +420,18 @@ function _git_status_records(raw::AbstractVector{UInt8})::Vector{Tuple{String, S
     return out
 end
 
-"""Work tree at `project`, or `nothing` when git is missing or this is not a work tree.
+"""Git record of `project`, or `nothing` when git is missing or this is not a work tree.
 
-`.distsshkit/` and `.distsshqueue/` are not uncommitted changes. DistSSHQueue calls this
-once that release is available. Until then it keeps a copy of the same rule.
+Keys: `commit`, `dirty`, `diff_sha256`, `captured`, `untracked`.
+`captured` is `"run"`. `dirty` is a `Bool`. `untracked` is an `Int`.
+`.distsshkit/` and `.distsshqueue/` are not uncommitted changes.
+A 0.x patch does not change these keys.
 """
 function git_source_snapshot(project::AbstractString)::Union{Nothing, Dict{String, Any}}
-    src = _git_source(project)
-    src === nothing && return nothing
-    out = Dict{String, Any}()
-    for (k, v) in src
-        String(k) == "captured" && continue
-        out[String(k)] = v
-    end
-    return out
+    return _git_source(project)
 end
+
+public git_source_snapshot
 
 """Kit and Queue write these directories inside the caller's tree. They are not the caller's edits."""
 function _git_status_is_kit(path::AbstractString)::Bool
