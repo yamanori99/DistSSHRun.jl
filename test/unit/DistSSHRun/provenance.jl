@@ -84,6 +84,111 @@ end
         @test failed[1]["n"] == 1
         @test DistSSHRun._provenance_token("parent") == "parent"
         @test DistSSHRun._provenance_token("box") == "child:box"
+        plain = _prov_snap()
+        opt = _prov_snap()
+        opt["install"] = "julia-1.14.0-alpha1+0.aarch64.apple.darwin14.opt"
+        split_install = DistSSHRun._group_snapshots([plain, opt])
+        @test length(split_install) == 2
+        @test all(g -> g["n"] == 1, split_install)
+        @test !haskey(split_install[1], "install")
+        @test split_install[2]["install"] == opt["install"]
+        @test !haskey(failed[1], "install")
+        blank = _prov_snap()
+        blank["install"] = ""
+        @test length(DistSSHRun._group_snapshots([plain, blank])) == 1
+        @test !haskey(DistSSHRun._group_body(blank), "install")
+        incomplete = _prov_snap()
+        delete!(incomplete, "commit")
+        @test_throws KeyError DistSSHRun._group_key(incomplete)
+    end
+
+    @testset "install name" begin
+        mac_plain = joinpath(
+            "/Users/x/.julia/juliaup",
+            "julia-1.14.0-alpha1+0.aarch64.apple.darwin14",
+            "Julia-1.14.app", "Contents", "Resources", "julia", "bin",
+        )
+        mac_opt = joinpath(
+            "/Users/x/.julia/juliaup",
+            "julia-1.14.0-alpha1+0.aarch64.apple.darwin14.opt",
+            "Julia-1.14-opt.app", "Contents", "Resources", "julia", "bin",
+        )
+        @test basename(dirname(mac_plain)) == "julia"
+        @test basename(dirname(mac_opt)) == "julia"
+        @test DistSSHRun._julia_install_name(mac_plain) ==
+            "julia-1.14.0-alpha1+0.aarch64.apple.darwin14"
+        @test DistSSHRun._julia_install_name(mac_opt) ==
+            "julia-1.14.0-alpha1+0.aarch64.apple.darwin14.opt"
+        linux = "/home/x/.julia/juliaup/julia-1.14.0-alpha1+0.x86_64-linux-gnu/bin"
+        linux_assert = "/home/x/.julia/juliaup/julia-1.14.0-alpha1+0.x86_64-linux-gnu.assert/bin"
+        @test DistSSHRun._julia_install_name(linux) ==
+            "julia-1.14.0-alpha1+0.x86_64-linux-gnu"
+        @test DistSSHRun._julia_install_name(linux_assert) ==
+            "julia-1.14.0-alpha1+0.x86_64-linux-gnu.assert"
+        @test DistSSHRun._julia_install_name("/home/x/.julia/juliaup/julia-nightly+assert/bin") ==
+            "julia-nightly+assert"
+        @test DistSSHRun._julia_install_name("/home/x/.julia/juliaup/julia-nightly+nogpl/bin") ==
+            "julia-nightly+nogpl"
+        @test DistSSHRun._julia_install_name("/home/x/.julia/juliaup/julia-nightly+assert+opt/bin") ==
+            "julia-nightly+assert+opt"
+        @test DistSSHRun._julia_install_name("/home/x/.julia/juliaup/julia-nightly~x64/bin") ==
+            "julia-nightly~x64"
+        @test DistSSHRun._julia_install_name("/opt/julia-outer/julia-inner/bin") == "julia-inner"
+        @test DistSSHRun._julia_install_name("/usr/bin") === nothing
+        @test DistSSHRun._julia_install_name("") === nothing
+        @test DistSSHRun._julia_install_name("julia-1.14/bin") === nothing
+        julia, machine = DistSSHRun._parent_sections(_prov_snap())
+        @test julia == Dict("version" => "1.13.2", "commit" => "abc")
+        @test !haskey(machine, "install")
+        with_install = _prov_snap()
+        with_install["install"] = "julia-nightly+nogpl"
+        julia_named, _ = DistSSHRun._parent_sections(with_install)
+        @test julia_named["install"] == "julia-nightly+nogpl"
+        @test julia_named["version"] == "1.13.2"
+        err_julia, err_machine = DistSSHRun._parent_sections(
+            Dict{String, String}("error" => "gone"),
+        )
+        @test err_julia == Dict("error" => "gone")
+        @test isempty(err_machine)
+        live = DistSSHRun._local_process_snapshot()
+        @test live["version"] == string(VERSION)
+        @test haskey(live, "commit")
+        expected = DistSSHRun._julia_install_name(Sys.BINDIR)
+        if expected === nothing
+            @test !haskey(live, "install")
+        else
+            @test live["install"] == expected
+            @test !occursin('/', live["install"])
+        end
+        parent_live, _ = DistSSHRun._parent_sections(live)
+        @test parent_live["version"] == string(VERSION)
+        @test haskey(parent_live, "commit")
+        if expected === nothing
+            @test !haskey(parent_live, "install")
+        else
+            @test parent_live["install"] == expected
+        end
+        _with_tempdir() do tmp
+            script = DistSSHRun.write_go_slot_loader(tmp)
+            @test script !== nothing
+            run(
+                addenv(
+                    `$(Base.julia_cmd()) --startup-file=no $script`,
+                    "DISTRIBUTED_OUTPUT_DIR" => tmp,
+                )
+            )
+            slot = DistSSHRun._read_go_slot_snapshot(
+                joinpath(tmp, ".distsshkit", "provenance-slot.toml"),
+            )
+            @test slot["version"] == string(VERSION)
+            @test haskey(slot, "commit")
+            @test !haskey(slot, "error")
+            if expected === nothing
+                @test !haskey(slot, "install")
+            else
+                @test slot["install"] == expected
+            end
+        end
     end
 
     @testset "worker fetch does not throw" begin
@@ -95,6 +200,12 @@ end
             @test snap["version"] == string(VERSION)
             @test !isempty(snap["blas"])
             @test !haskey(snap, "error")
+            fetched_install = DistSSHRun._julia_install_name(Sys.BINDIR)
+            if fetched_install === nothing
+                @test !haskey(snap, "install")
+            else
+                @test snap["install"] == fetched_install
+            end
             bare = Core.eval(Main, _prov_clear_modules!(DistSSHRun._process_snapshot_expr()))
             @test bare["blas"] == "not loaded"
             @test bare["blas_threads"] == "not loaded"
