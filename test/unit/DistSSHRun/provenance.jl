@@ -334,7 +334,9 @@ end
                     @test snap isa AbstractDict
                     snap = snap::AbstractDict
                     @test snap["commit"] == head
-                    @test !haskey(snap, "captured")
+                    @test snap["captured"] == "run"
+                    @test Base.ispublic(DistSSHRun, :git_source_snapshot)
+                    @test !Base.isexported(DistSSHRun, :git_source_snapshot)
                     write(joinpath(repo, "f.txt"), "changed\n")
                     dirty = DistSSHRun.assemble_provenance(repo)
                     @test dirty["source"]["dirty"] == true
