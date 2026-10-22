@@ -634,7 +634,8 @@ function _print_rsync_safety_banner!(
         local_root::AbstractString,
         remote_path::AbstractString,
         hosts::Vector{String},
-        path_anchor::AbstractString,
+        path_anchor::AbstractString;
+        gitignore::Bool = true,
     )
     # Consent text: always on the terminal (same gate as `kit_confirm`).
     print_warn("  This bypasses git entirely: no commit, no push/pull, no hash check.\n")
@@ -645,7 +646,9 @@ function _print_rsync_safety_banner!(
     println_fatal()
     print_warn("  Safety: refuses if the remote path already has any files.\n")
     println_fatal("  To replace an existing tree, run `setup --delete` first, then `--rsync`.")
-    if git_work_tree(local_root) isa String
+    if !gitignore
+        println_fatal("  Sends the tree except `.git/` and `.distsshkit/`. `.gitignore` is not applied.")
+    elseif git_work_tree(local_root) isa String
         println_fatal("  Sends the git file list from each directory's `.gitignore` (negation applies). Excludes `.git/` and `.distsshkit/`. Directories are still created when empty.")
     else
         println_fatal("  Applies `.gitignore` exclude lines with rsync's per-directory filter. Negation patterns are not applied. Excludes `.git/` and `.distsshkit/`.")
@@ -658,6 +661,33 @@ function _print_rsync_safety_banner!(
     return nothing
 end
 
+"""Tree copy that does not use a send list.
+
+`gitignore=false` excludes only `.git/` and `.distsshkit/`.
+"""
+function _rsync_tree_cmd(
+        rsync_bin::Vector{String},
+        ssh_cmd_str::AbstractString,
+        local_root::AbstractString,
+        dest::AbstractString;
+        gitignore::Bool = true,
+    )::Cmd
+    args = String[
+        "-az",
+        "-e",
+        String(ssh_cmd_str),
+        "--exclude",
+        ".git/",
+        "--exclude",
+        ".distsshkit/",
+    ]
+    if gitignore
+        push!(args, "--filter", ":- .gitignore")
+    end
+    push!(args, local_root * "/", String(dest))
+    return Cmd(vcat(rsync_bin, args))
+end
+
 """
 Run rsync for one host. Returns
 `(; status=:ok|:busy|:mkdir_fail, message, dir_created)`.
@@ -668,7 +698,8 @@ function _rsync_one_host!(
         local_root::AbstractString,
         remote_path::AbstractString,
         ssh_cmd_str::String,
-        send_list::Union{Nothing, Vector{String}},
+        send_list::Union{Nothing, Vector{String}};
+        gitignore::Bool = true,
     )
     st, detail = _remote_dest_probe(host, remote_path)
     if st === :error
@@ -698,26 +729,21 @@ function _rsync_one_host!(
     end
     # The destination is refused unless it is missing or empty, so --delete would remove nothing.
     dest = string(host, ":", remote_path, "/")
-    if send_list === nothing
-        rsync_cmd = Cmd(
-            vcat(
-                _host_sync_rsync_argv(),
-                String[
-                    "-az",
-                    "-e",
+    # `gitignore=false` sends the whole tree. A send list would apply `.gitignore` again.
+    listed = gitignore ? send_list : nothing
+    if listed === nothing
+        run(
+            pipeline(
+                _rsync_tree_cmd(
+                    _host_sync_rsync_argv(),
                     ssh_cmd_str,
-                    "--exclude",
-                    ".git/",
-                    "--exclude",
-                    ".distsshkit/",
-                    "--filter",
-                    ":- .gitignore",
-                    local_root * "/",
-                    dest,
-                ],
-            ),
+                    local_root,
+                    dest;
+                    gitignore = gitignore,
+                );
+                stderr = stderr,
+            )
         )
-        run(pipeline(rsync_cmd; stderr = stderr))
     else
         _run_rsync_files_from(
             _host_sync_rsync_argv(),
@@ -732,7 +758,7 @@ function _rsync_one_host!(
             ],
             local_root * "/",
             dest,
-            send_list::Vector{String},
+            listed::Vector{String},
         )
     end
     return (; status = :ok, message = "", dir_created = dir_created)
@@ -741,7 +767,7 @@ end
 """
     rsync_project_to_hosts!(
         hosts, local_root, remote_path;
-        confirm=true, report=false, path_anchor=local_root,
+        confirm=true, report=false, path_anchor=local_root, gitignore=true,
     )
 
 Rsync `local_root/` to `remote_path` on each SSH host. Returns
@@ -754,6 +780,9 @@ directories are created/filled.
 When `confirm=true`, prints warnings and requires typing `rsync` (unless
 [`kit_noninteractive`](@ref) / `--yes` is active — then confirmation is skipped,
 but the nonempty-path refusal still applies).
+
+`gitignore=false` sends the tree except `.git/` and `.distsshkit/`. The
+caller has already chosen what to send. The default follows `.gitignore`.
 """
 function rsync_project_to_hosts!(
         hosts::Vector{String},
@@ -762,12 +791,15 @@ function rsync_project_to_hosts!(
         confirm::Bool = true,
         report::Bool = false,
         path_anchor::AbstractString = local_root,
+        gitignore::Bool = true,
     )::NamedTuple
     given = canonical_local_path(local_root)
     env0 = resolve_pkg_env(given)
     # Workspace members resolve `env_dir` to the parent root; list paths relative to that.
-    send_list = _rsync_send_list(env0.env_dir, env0; warn = true)
-    shipped = ensure_manifest_ships!(given; send_list = send_list)
+    send_list = gitignore ? _rsync_send_list(env0.env_dir, env0; warn = true) : nothing
+    shipped = ensure_manifest_ships!(
+        given; send_list = send_list, warn_send_list = gitignore,
+    )
     local_root = shipped.env_dir
     raw_anchor = canonical_local_path(path_anchor)
     anchor = raw_anchor == given ? local_root : raw_anchor
@@ -776,7 +808,9 @@ function rsync_project_to_hosts!(
     if confirm && !kit_noninteractive()
         cancelled = let anchor = anchor
             with_kit_progress_suspended() do
-                _print_rsync_safety_banner!(local_root, remote_path, hosts, anchor)
+                _print_rsync_safety_banner!(
+                    local_root, remote_path, hosts, anchor; gitignore = gitignore,
+                )
                 if !kit_confirm("Type 'rsync' to confirm: "; keyword = "rsync")
                     println_fatal("Cancelled.")
                     return true
@@ -804,10 +838,16 @@ function rsync_project_to_hosts!(
         try
             outcome = if sequential_spin
                 kit_spin!("  $host: ") do
-                    _rsync_one_host!(host, local_root, remote_path, ssh_cmd_str, send_list)
+                    _rsync_one_host!(
+                        host, local_root, remote_path, ssh_cmd_str, send_list;
+                        gitignore = gitignore,
+                    )
                 end
             else
-                _rsync_one_host!(host, local_root, remote_path, ssh_cmd_str, send_list)
+                _rsync_one_host!(
+                    host, local_root, remote_path, ssh_cmd_str, send_list;
+                    gitignore = gitignore,
+                )
             end
             if outcome.status === :busy || outcome.status === :mkdir_fail ||
                     outcome.status === :probe_fail

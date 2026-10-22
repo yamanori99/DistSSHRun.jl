@@ -6,6 +6,7 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
+- `setup!(session, :rsync; gitignore = false)` sends the tree without applying `.gitignore`. `.git/` and `.distsshkit/` stay excluded. The default remains `gitignore = true`.
 - `setup --check` warns when the same major.minor.patch has a different prerelease. The check still succeeds. `--ignore-julia-version` does not hide that warning, or a patch warning. A moving channel (`1.13`, `1.14-nightly`) still says the parent is behind a newer remote. A pinned channel such as `1.14.0-alpha1` says that channel may not be installed, and to check `juliaup add` on the worker. The success count is unchanged. `parse_julia_version` and `get_remote_julia_version` stay major.minor.patch. `parse_julia_version_full` and `get_remote_julia_version_full` are public on DistSSHBase.
 - `run.toml` records `[provenance]` (Julia, machine, workers, the project manifest, and the code version). The same table is written to `output_dir/.distsshkit/provenance.toml`. For `go`, `julia.parent` is the controller; each slot is under `workers`, and a slot's own snapshot is `slot/.distsshkit/provenance-slot.toml`. A remote slot copies that file only when collect does not bring the slot directory. The manifest hash and the git snapshot are taken when the run starts. `.distsshkit/` and `.distsshqueue/` are not counted as uncommitted changes. `git_source_snapshot` is that git record. `schema` stays 1.
 
