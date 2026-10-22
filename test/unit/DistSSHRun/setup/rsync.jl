@@ -215,6 +215,150 @@ using Test
     end
 end
 
+function _gitignore_tree!(dir::String)
+    write(joinpath(dir, "Project.toml"), "name = \"App\"\n")
+    write(
+        joinpath(dir, ".gitignore"),
+        "*.csv\n!data/input.csv\nManifest*.toml\n!Manifest.toml\n",
+    )
+    mkpath(joinpath(dir, "data"))
+    mkpath(joinpath(dir, "src"))
+    mkpath(joinpath(dir, ".distsshkit"))
+    write(joinpath(dir, "data", "input.csv"), "in\n")
+    write(joinpath(dir, "data", "tmp.csv"), "tmp\n")
+    write(joinpath(dir, "Manifest.toml"), "manifest\n")
+    write(joinpath(dir, "Manifest-v1.13.toml"), "old\n")
+    write(joinpath(dir, "src", "a.jl"), "1\n")
+    write(joinpath(dir, ".distsshkit", "marker"), "x\n")
+    return nothing
+end
+
+function _gitignore_git!(dir::String)
+    run(pipeline(`git -C $dir init -q`; stdout = devnull, stderr = devnull))
+    run(pipeline(`git -C $dir config user.email "t@example.com"`; stdout = devnull, stderr = devnull))
+    run(pipeline(`git -C $dir config user.name "T"`; stdout = devnull, stderr = devnull))
+    return nothing
+end
+
+function _gitignore_names(dest::String)::Set{String}
+    out = Set{String}()
+    for (root, _, files) in walkdir(dest)
+        rel = relpath(root, dest)
+        for f in files
+            push!(out, rel == "." ? f : joinpath(rel, f))
+        end
+    end
+    return out
+end
+
+const _GITIGNORE_ALL5 = Set(
+    [
+        "data/input.csv",
+        "data/tmp.csv",
+        "Manifest.toml",
+        "Manifest-v1.13.toml",
+        "src/a.jl",
+    ]
+)
+
+function _gitignore_copy_list!(bin::String, src::String, dest::String)
+    env = DistSSHRun.resolve_pkg_env(src)
+    listed = DistSSHRun._rsync_send_list(env.env_dir, env; warn = false)
+    @test listed isa Vector
+    DistSSHRun._run_rsync_files_from(
+        [bin],
+        ["-a", "--exclude", ".git/", "--exclude", ".distsshkit/"],
+        src * "/",
+        dest * "/",
+        listed,
+    )
+    return nothing
+end
+
+function _gitignore_copy_tree!(bin::String, src::String, dest::String; gitignore::Bool)
+    run(
+        pipeline(
+            DistSSHRun._rsync_tree_cmd([bin], "ssh", src, dest * "/"; gitignore = gitignore);
+            stderr = devnull,
+        )
+    )
+    return nothing
+end
+
+@testset "rsync gitignore keyword" begin
+    raw = Sys.which("rsync")
+    raw === nothing && return
+    bin = String(raw)
+
+    _with_tempdir() do tmp
+        src = joinpath(tmp, "proj")
+        mkpath(src)
+        _gitignore_tree!(src)
+        _gitignore_git!(src)
+        dest = joinpath(tmp, "dest")
+        mkpath(dest)
+        _gitignore_copy_list!(bin, src, dest)
+        got = _gitignore_names(dest)
+        @test "data/input.csv" in got
+        @test "Manifest.toml" in got
+        @test "src/a.jl" in got
+        @test "data/tmp.csv" ∉ got
+        @test "Manifest-v1.13.toml" ∉ got
+        @test ".distsshkit/marker" ∉ got
+    end
+
+    _with_tempdir() do tmp
+        src = joinpath(tmp, "proj")
+        mkpath(src)
+        _gitignore_tree!(src)
+        dest = joinpath(tmp, "dest")
+        mkpath(dest)
+        _gitignore_copy_tree!(bin, src, dest; gitignore = true)
+        got = _gitignore_names(dest)
+        @test "data/input.csv" ∉ got
+        @test "Manifest.toml" ∉ got
+        @test "data/tmp.csv" ∉ got
+        @test "Manifest-v1.13.toml" ∉ got
+        @test "src/a.jl" in got
+    end
+
+    for inside in (false, true)
+        _with_tempdir() do tmp
+            src = joinpath(tmp, "proj")
+            mkpath(src)
+            _gitignore_tree!(src)
+            inside && _gitignore_git!(src)
+            dest = joinpath(tmp, "dest")
+            mkpath(dest)
+            _gitignore_copy_tree!(bin, src, dest; gitignore = false)
+            got = _gitignore_names(dest)
+            @test _GITIGNORE_ALL5 ⊆ got
+            @test ".distsshkit/marker" ∉ got
+            @test !any(n -> n == ".git" || startswith(n, ".git/"), got)
+        end
+    end
+
+    session = DistSSHRun.KitSession(
+        project = pwd(), workers = ["child:h"], yes = true, quiet = true,
+    )
+    sync_err = try
+        DistSSHRun.sync!(session; mode = :sync, gitignore = false)
+        nothing
+    catch e
+        e
+    end
+    @test sync_err isa ArgumentError
+    @test occursin("gitignore", sync_err.msg)
+    setup_err = try
+        DistSSHRun.setup!(session, :check; gitignore = false)
+        nothing
+    catch e
+        e
+    end
+    @test setup_err isa ArgumentError
+    @test occursin("gitignore", setup_err.msg)
+end
+
 @testset "setup clone dest safety" begin
     remote_path = "~/App.jl"
 

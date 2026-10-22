@@ -14,7 +14,7 @@ Also available as `setup!(session, :rsync)` / `setup!(session, :sync)`.
 
 Returns [`SyncResult`](@ref).
 """
-function sync!(session::KitSession; mode = :sync)::SyncResult
+function sync!(session::KitSession; mode = :sync, gitignore::Bool = true)::SyncResult
     # Untyped kw: JETLS treats omitted kwargs as `nothing`, not `Union{Symbol,Bool}`.
     mode === false && throw(ArgumentError("sync!: mode=false means skip sync; do not call sync!"))
     kind = mode
@@ -40,12 +40,14 @@ function sync!(session::KitSession; mode = :sync)::SyncResult
                 remote_path;
                 confirm = !session.yes,
                 path_anchor = session.project,
+                gitignore = gitignore,
             )
             if raw.cancelled
                 return SyncResult(true, HostResult[]; ok = false)
             end
             return SyncResult(false, raw.host_results; ok = raw.failed == 0)
         else
+            gitignore || throw(ArgumentError("sync! gitignore is only valid for mode=:rsync"))
             remote_path = session_remote_root(session)
             raw = git_sync_project_to_hosts!(
                 session.hosts,

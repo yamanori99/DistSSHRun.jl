@@ -24,7 +24,7 @@ Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup --…`.
 | `mode` | CLI | Notes |
 | --- | --- | --- |
 | `:delete` | `--delete` | Destructive. A `confirm_path` that matches the delete path deletes even when `yes=false`. Without it, confirm unless `session.yes` |
-| `:rsync` | `--rsync` | Refuses nonempty remote; delete first to replace |
+| `:rsync` | `--rsync` | Refuses nonempty remote; delete first to replace. `gitignore=false` sends the tree except `.git/` and `.distsshkit/`, after the caller has already chosen what to send. The default `gitignore=true` is unchanged |
 | `:clone` | `--clone` | Requires `repo=`; clone runs **on the remote** |
 | `:sync` | `--sync` | Local push + remote pull (git remotes); confirm unless `session.yes` |
 | `:pull` | `--pull` | Local pull then remote pull; confirm unless `session.yes` |
@@ -59,7 +59,11 @@ function setup!(
         older_days::Union{Nothing, Integer} = nothing,
         id::Union{Nothing, AbstractString} = nothing,
         confirm_path::Union{Nothing, AbstractString} = nothing,
+        gitignore::Bool = true,
     )::SyncResult
+    if mode !== :rsync && !gitignore
+        throw(ArgumentError("setup! gitignore is only valid on setup!(session, :rsync)"))
+    end
     _setup_bang_preflight!(session, mode; repo = repo)
     bound_path = _setup_bind_confirm_path!(session, mode, confirm_path)
     log_dir = setup_log_dir(session.project)
@@ -81,6 +85,7 @@ function setup!(
                 older_days = older_days,
                 id = id,
                 bound_path = bound_path,
+                gitignore = gitignore,
             )
         end
     end
@@ -188,7 +193,11 @@ function _setup_one!(
         older_days::Union{Nothing, Integer} = nothing,
         id::Union{Nothing, AbstractString} = nothing,
         bound_path::Union{Nothing, AbstractString} = nothing,
+        gitignore::Bool = true,
     )::SyncResult
+    if mode !== :rsync && !gitignore
+        throw(ArgumentError("setup! gitignore is only valid on setup!(session, :rsync)"))
+    end
     _setup_bang_preflight!(session, mode; repo = repo)
     hosts = _setup_bang_hosts!(session; allow_parent = setup_mode_allows_parent(mode))
     remote_path = bound_path !== nothing && mode === :prune ?
@@ -204,7 +213,7 @@ function _setup_one!(
         raw = delete_remotes(hosts, delete_path; confirm = bound_path === nothing && !session.yes)
         return _sync_result_from_host_op(raw)
     elseif mode === :rsync
-        return sync!(session; mode = :rsync)
+        return sync!(session; mode = :rsync, gitignore = gitignore)
     elseif mode === :clone
         ensure_manifest_in_git_worktree!(session.project)
         url = normalize_git_clone_url(_setup_clone_url(repo; surface = hint_surface(session)))

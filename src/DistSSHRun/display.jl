@@ -536,6 +536,7 @@ an error (instantiate resolves).
 function ensure_manifest_ships!(
         project::AbstractString;
         send_list::Union{Nothing, Vector{String}} = nothing,
+        warn_send_list::Bool = true,
     )
     env = resolve_pkg_env(project)
     _ensure_path_sources_in_tree!(env, env.env_dir; git = false)
@@ -553,10 +554,12 @@ function ensure_manifest_ships!(
             "Manifest $manifest points at $target, outside the tree setup/rsync would send ($root). Workers would instantiate a different resolution.",
         ),
     )
-    listed = send_list isa Vector{String} ? send_list : _rsync_send_list(env.env_dir, env)
-    if listed isa Vector
-        for msg in _manifest_ship_problems(env, listed)
-            print_warn("Warning: $msg $_SHIP_ERROR_SOON\n")
+    if warn_send_list
+        listed = send_list isa Vector{String} ? send_list : _rsync_send_list(env.env_dir, env)
+        if listed isa Vector
+            for msg in _manifest_ship_problems(env, listed)
+                print_warn("Warning: $msg $_SHIP_ERROR_SOON\n")
+            end
         end
     end
     return env
