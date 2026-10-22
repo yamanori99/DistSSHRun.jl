@@ -97,6 +97,9 @@ end
         blank["install"] = ""
         @test length(DistSSHRun._group_snapshots([plain, blank])) == 1
         @test !haskey(DistSSHRun._group_body(blank), "install")
+        incomplete = _prov_snap()
+        delete!(incomplete, "commit")
+        @test_throws KeyError DistSSHRun._group_key(incomplete)
     end
 
     @testset "install name" begin

@@ -43,7 +43,7 @@ try
             "blas" => blas[],
             "blas_threads" => blas_threads[],
         )
-        # Same walk as `_julia_install_name`. This file has no DistSSHRun.
+        # Same walk as `_julia_install_name`. This script cannot load DistSSHRun.
         if isabspath(Sys.BINDIR)
             dir = Sys.BINDIR
             parent = dirname(dir)
@@ -144,7 +144,7 @@ function _process_snapshot_expr()
                 "blas" => blas[],
                 "blas_threads" => blas_threads[],
             )
-            # Same walk as `_julia_install_name`. A worker has no DistSSHRun.
+            # Same walk as `_julia_install_name`. A worker cannot load DistSSHRun.
             if isabspath(Sys.BINDIR)
                 dir = Sys.BINDIR
                 parent = dirname(dir)
@@ -285,7 +285,10 @@ end
 
 function _group_key(snap::Dict{String, String})::String
     haskey(snap, "error") && return "error\0" * snap["error"]
-    return join((get(snap, k, "") for k in _SNAP_KEYS), '\0')
+    return join(
+        (k == "install" ? get(snap, k, "") : snap[k] for k in _SNAP_KEYS),
+        '\0',
+    )
 end
 
 function _group_body(snap::Dict{String, String})::Dict{String, Any}
