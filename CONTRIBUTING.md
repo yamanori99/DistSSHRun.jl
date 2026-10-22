@@ -103,7 +103,8 @@ Workflows pass the version to `julia-actions/setup-julia`. The job name is that 
 | **1.14-nightly** | `release-1.14`. Pkg.test, Aqua. `continue-on-error` | no |
 | **nightly** | Published `julia-latest` tarball. It follows master and can lag a `VERSION` bump. Same jobs as 1.14-nightly. `continue-on-error` | no |
 
-**1.13** runs on ordinary PRs (heavy gate), on Ubuntu, macOS, and WSL2.
+**1.13** runs on ordinary PRs (heavy gate), on Ubuntu and macOS.
+WSL2 1.13 runs on a main push and CI weekly, not on a pull request.
 **1.14-nightly** and **nightly** `Pkg.test` and Aqua on Ubuntu run on **main**,
 **CI weekly**, and a `Project.toml` version increase
 ([`.github/version-cut.sh`](.github/version-cut.sh)), not ordinary PRs.
@@ -128,10 +129,10 @@ When a new RC of the floor's minor lands, point **1.13** jobs at `~1.13.0-0` so 
 
 These run as jobs of the `Test` workflow
 ([`.github/workflows/CI.yml`](.github/workflows/CI.yml)). Ubuntu:
-`Pkg.test` 1.13, JETLS 1.13, Aqua 1.13, Gitleaks. macOS (`macos-latest`)
-and WSL2 Ubuntu 24.04: `Pkg.test` 1.13, same heavy gate, no coverage
-upload. macOS runs `ps -o lstart=` in `kit_process_start_key`. Both are
-required.
+`Pkg.test` 1.13, JETLS 1.13, Aqua 1.13, Gitleaks. macOS (`macos-latest`):
+`Pkg.test` 1.13, same heavy gate, no coverage
+upload. macOS runs `ps -o lstart=` in `kit_process_start_key`. macOS is
+required. WSL2 1.13 is a main push and CI weekly, not a pull request.
 Gitleaks also rejects `< 0.0.1` in `Project.toml`. Documenter 1.13 is
 [`.github/workflows/Documentation.yml`](.github/workflows/Documentation.yml).
 A pull request that runs it also pushes a preview to `gh-pages` at
@@ -156,7 +157,7 @@ required-name list). Monthly cron on `main` opens Issue
 `Runic monthly failed` (`alert`) when `--check` is red.
 
 These files **alone** skip the heavy jobs (UI: skipping; Pkg.test on
-Ubuntu, macOS, and WSL2, plus JETLS / Aqua, do not start). Documenter
+Ubuntu and macOS, plus JETLS / Aqua, do not start). Documenter
 still runs when `docs/**`, README,
 `src/**`, or `Project.toml` changed; otherwise it is skipped too.
 Linux E2E is skipped on allowlisted markdown-only PRs (same skipping UI):
@@ -171,7 +172,7 @@ Linux E2E is skipped on allowlisted markdown-only PRs (same skipping UI):
 A new root markdown file stays heavy until listed in
 [`.github/actions/ci-heavy/action.yml`](.github/actions/ci-heavy/action.yml).
 A `Project.toml` version increase skips none of this: Pkg.test (Ubuntu,
-macOS, and WSL2), JETLS, Aqua, Documenter, and Linux E2E all run (E2E
+macOS), JETLS, Aqua, Documenter, and Linux E2E all run (E2E
 Codecov too). macOS and WSL SSH E2E stay on `E2E weekly`, not the PR.
 Register when the required checks below are green. Intel / WSL weekly are
 watchers, not the register gate.
@@ -183,17 +184,14 @@ julia --project=. -e 'using Pkg; Pkg.test(; coverage=true)'
 DISTSSHQUEUE_CODE_COVERAGE=1 ./testenv/docker-ssh/scripts/up.sh --e2e
 ```
 
-Required to merge (ruleset `main` uses these names). **1.14-nightly** and **nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and a version increase, not ordinary PRs. macOS and WSL2 nightly run on CI weekly only. PkgEval runs on ordinary PRs (heavy gate) and is not in the list below. E2E weekly and CI weekly are not required. Run keeps the titles in the list, plus `Pkg.test (1.14-nightly, ubuntu-latest, x64)`, `Pkg.test (nightly, ubuntu-latest, x64)`, `Aqua (nightly, ubuntu-latest, x64)`, and `PkgEval (nightly, ubuntu-latest, x64)`. DistSSHBase and DistSSHUp are their own jobs on Ubuntu, macOS, and WSL2, and their own Ubuntu SSH E2E rows. Downstream is `Downstream (DistSSHQueue, 1.13)` and `Downstream (DistSSHKit, 1.13)`. `Downstream SSH E2E (DistSSHQueue, 1.13)` runs on a version-cut pull request, a push to `main`, and `workflow_dispatch`. Ordinary pull requests skip it. Names outside the list are not in the ruleset. The ruleset itself is edited on GitHub; this list is the names to add.
+Required to merge (ruleset `main` uses these names). **1.14-nightly** and **nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and a version increase, not ordinary PRs. macOS and WSL2 nightly run on CI weekly only. PkgEval runs on ordinary PRs (heavy gate) and is not in the list below. E2E weekly and CI weekly are not required. Run keeps the titles in the list, plus `Pkg.test (1.14-nightly, ubuntu-latest, x64)`, `Pkg.test (nightly, ubuntu-latest, x64)`, `Aqua (nightly, ubuntu-latest, x64)`, and `PkgEval (nightly, ubuntu-latest, x64)`. DistSSHBase and DistSSHUp are their own jobs on Ubuntu and macOS, and their own Ubuntu SSH E2E rows. Their WSL2 titles run on a main push and CI weekly, not a pull request. Downstream is `Downstream (DistSSHQueue, 1.13)` and `Downstream (DistSSHKit, 1.13)`. `Downstream SSH E2E (DistSSHQueue, 1.13)` runs on a version-cut pull request, a push to `main`, and `workflow_dispatch`. Ordinary pull requests skip it. Names outside the list are not in the ruleset. The ruleset itself is edited on GitHub; this list is the names to add.
 
 - `Pkg.test (1.13, ubuntu-latest, x64)`
 - `Pkg.test (1.13, macos-latest, aarch64)`
-- `Pkg.test (1.13, WSL2 ubuntu-24.04, x64)`
 - `DistSSHBase (1.13, ubuntu-latest, x64)`
 - `DistSSHBase (1.13, macos-latest, aarch64)`
-- `DistSSHBase (1.13, WSL2 ubuntu-24.04, x64)`
 - `DistSSHUp (1.13, ubuntu-latest, x64)`
 - `DistSSHUp (1.13, macos-latest, aarch64)`
-- `DistSSHUp (1.13, WSL2 ubuntu-24.04, x64)`
 - `JETLS (1.13, ubuntu-latest, x64)`
 - `Aqua (1.13, ubuntu-latest, x64)`
 - `Documenter (1.13, ubuntu-latest, x64)`
@@ -207,7 +205,7 @@ Required to merge (ruleset `main` uses these names). **1.14-nightly** and **nigh
 | When | Workflow | What |
 | --- | --- | --- |
 | Daily 04:00 JST, or Run workflow | `E2E weekly` | `ubuntu-latest`, `macos-15-intel`, WSL2 → `ubuntu-24.04`, plus the same three hosts for DistSSHBase and DistSSHUp. Linux job uploads E2E Codecov. Not a PR check. Failure opens (or comments on) Issue `E2E weekly failed`; a later all-green run closes it. A red **Linux** job on a scheduled run adds `cut-hold`, and a later green scheduled Linux removes it. Intel / WSL red does not. |
-| Daily 06:00 JST, or Run workflow | `CI weekly` | Same 1.13 jobs as a PR (Run's three hosts, DistSSHBase and DistSSHUp on Ubuntu, macOS, and WSL2, plus downstream DistSSHQueue and DistSSHKit; no coverage), plus JETLS and Aqua. 1.14-nightly and nightly `Pkg.test` run on Ubuntu, macOS, and WSL2; Aqua on macOS and WSL2 runs here only. `Compile bench` measures precompile, load, CLI wall time, `src/**/*.jl` size, and the host OS, arch, and CPU on 1.13, 1.14-nightly, and nightly. CI weekly runs it, and a **main** push that raises `Project.toml` `version` runs it too. A **main** run appends that sample to the `bench-data` branch. A render job then rebuilds the README and `bench.html`, and a main run publishes that page on GitHub Pages. A **main** push of `bench/compile/report.jl` or `bench/compile/charts.jl` rebuilds them and does not measure. A pull request that changes the file renders the history into the job summary and does not push. A command that exits nonzero is not recorded. It flags a host change, a 1.5x jump (and a 200 ms method that is new or doubled) but does not fail the run. Not a PR check. Catches 1.13 / Aqua / JETLS `@release` drift when nothing merged that day. Failure of the 1.13 jobs opens Issue `CI weekly failed` (`alert`); 1.14-nightly, nightly, and compile bench are omitted from that notify. `cache-gc` keeps one Actions cache per restore-key prefix. |
+| Daily 06:00 JST, or Run workflow | `CI weekly` | Same 1.13 jobs as a main push of Test (Run, DistSSHBase, and DistSSHUp on Ubuntu, macOS, and WSL2, plus downstream DistSSHQueue and DistSSHKit; no coverage). A pull request does not run the WSL2 rows, plus JETLS and Aqua. 1.14-nightly and nightly `Pkg.test` run on Ubuntu, macOS, and WSL2; Aqua on macOS and WSL2 runs here only. `Compile bench` measures precompile, load, CLI wall time, `src/**/*.jl` size, and the host OS, arch, and CPU on 1.13, 1.14-nightly, and nightly. CI weekly runs it, and a **main** push that raises `Project.toml` `version` runs it too. A **main** run appends that sample to the `bench-data` branch. A render job then rebuilds the README and `bench.html`, and a main run publishes that page on GitHub Pages. A **main** push of `bench/compile/report.jl` or `bench/compile/charts.jl` rebuilds them and does not measure. A pull request that changes the file renders the history into the job summary and does not push. A command that exits nonzero is not recorded. It flags a host change, a 1.5x jump (and a 200 ms method that is new or doubled) but does not fail the run. Not a PR check. Catches 1.13 / Aqua / JETLS `@release` drift when nothing merged that day. Failure of the 1.13 jobs opens Issue `CI weekly failed` (`alert`); 1.14-nightly, nightly, and compile bench are omitted from that notify. `cache-gc` keeps one Actions cache per restore-key prefix. |
 | 1st 10:00 JST, or Run workflow | `Runic` | `runic --check` on tracked `.jl` (`version: '1'`). Not a required PR check. Catches Runic minor drift when nothing formatted that month. Failure opens Issue `Runic monthly failed` (`alert`). |
 
 ## Pull requests

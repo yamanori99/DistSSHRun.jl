@@ -4,8 +4,9 @@ name: CI weekly
 # @release drift when no PR ran that day. PR / main push stay the gate.
 # 1.14-nightly and nightly jobs are continue-on-error and omitted from notify.
 # A 1.13 compile bench failure on main opens "Compile bench failed".
-# 1.13 matches Test: Run's old titles, then downstream, DistSSHUp, and
-# DistSSHBase as separate matrices (no coverage).
+# 1.13 matches a main push of Test: Run's old titles, then downstream,
+# DistSSHUp, and DistSSHBase as separate matrices (no coverage). WSL2
+# 1.13 runs here and on a main push, not on a pull request.
 # 1.14-nightly and nightly Pkg.test and Aqua on macOS and WSL2 run here only, and stay
 # out of notify. Ubuntu copies also run in Test.
 on:
