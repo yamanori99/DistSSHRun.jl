@@ -10,7 +10,7 @@ Real OpenSSH + rsync Linux workers. CI remote SSH coverage uses this stack
 ## Coverage matrix
 
 - Linux (`ubuntu-latest`), workers `ubuntu:24.04` ×2: **CI** — main /
-  a version-cut PR (`E2E`) and weekly (`E2E weekly / ubuntu-latest → ubuntu-24.04`)
+  a version-cut PR (`E2E`) and weekly (`E2E weekly / DistSSHRun (ubuntu-latest → ubuntu-24.04)`)
 - macOS Intel (`macos-15-intel` + Colima), same image: **E2E weekly** —
   `E2E weekly / macos-15-intel → ubuntu-24.04`
 - WSL2 (`windows-latest`), same image: **E2E weekly** —
@@ -127,7 +127,7 @@ ssh -F .generated/ssh_config child-1 'echo ok; julia --version'
 [`.github/workflows/CI.yml`](../../.github/workflows/CI.yml) runs
 `./scripts/up.sh --e2e` on `ubuntu-latest` for **main** (E2E-relevant
 paths), a PR whose `Project.toml` `version` went up, and manual dispatch
-(`ubuntu-latest → ubuntu-24.04`). Other PRs run it only when those paths
+(`DistSSHRun (ubuntu-latest → ubuntu-24.04)`). Other PRs run it only when those paths
 change.
 [`.github/workflows/ssh-e2e-weekly.yml`][e2e-weekly]
 (`E2E weekly`) runs daily at 04:00 JST or via Run workflow: bake

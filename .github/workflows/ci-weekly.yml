@@ -4,7 +4,7 @@ name: CI weekly
 # @release drift when no PR ran that day. PR / main push stay the gate.
 # 1.14-nightly and nightly jobs are continue-on-error and omitted from notify.
 # A 1.13 compile bench failure on main opens "Compile bench failed".
-# 1.13 matches a main push of Test: Run's old titles, then downstream,
+# 1.13 matches a main push of Test: DistSSHRun titles, then downstream,
 # DistSSHUp, and DistSSHBase as separate matrices (no coverage). WSL2
 # 1.13 runs here and on a main push, not on a pull request.
 # 1.14-nightly and nightly Pkg.test and Aqua on macOS and WSL2 run here only, and stay
@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   test:
-    name: Pkg.test (1.13, ubuntu-latest, x64)
+    name: DistSSHRun (1.13, ubuntu-latest, x64)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -41,7 +41,7 @@ jobs:
       - uses: ./.github/actions/pkg-test
 
   test-macos:
-    name: Pkg.test (1.13, macos-latest, aarch64)
+    name: DistSSHRun (1.13, macos-latest, aarch64)
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
@@ -58,7 +58,7 @@ jobs:
       - uses: ./.github/actions/pkg-test
 
   test-wsl:
-    name: Pkg.test (1.13, WSL2 ubuntu-24.04, x64)
+    name: DistSSHRun (1.13, WSL2 ubuntu-24.04, x64)
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
@@ -247,7 +247,7 @@ jobs:
         run: julia --project=lib/DistSSHBase -e 'using Pkg; Pkg.test()'
 
   test-tip:
-    name: Pkg.test (1.14-nightly, ubuntu-latest, x64)
+    name: DistSSHRun (1.14-nightly, ubuntu-latest, x64)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     continue-on-error: true
@@ -265,7 +265,7 @@ jobs:
       - uses: ./.github/actions/pkg-test
 
   test-nightly:
-    name: Pkg.test (nightly, ubuntu-latest, x64)
+    name: DistSSHRun (nightly, ubuntu-latest, x64)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     continue-on-error: true
@@ -283,7 +283,7 @@ jobs:
       - uses: ./.github/actions/pkg-test
 
   test-tip-macos:
-    name: Pkg.test (1.14-nightly, macos-latest, aarch64)
+    name: DistSSHRun (1.14-nightly, macos-latest, aarch64)
     runs-on: macos-latest
     timeout-minutes: 45
     continue-on-error: true
@@ -301,7 +301,7 @@ jobs:
       - uses: ./.github/actions/pkg-test
 
   test-nightly-macos:
-    name: Pkg.test (nightly, macos-latest, aarch64)
+    name: DistSSHRun (nightly, macos-latest, aarch64)
     runs-on: macos-latest
     timeout-minutes: 45
     continue-on-error: true
@@ -319,7 +319,7 @@ jobs:
       - uses: ./.github/actions/pkg-test
 
   test-tip-wsl:
-    name: Pkg.test (1.14-nightly, WSL2 ubuntu-24.04, x64)
+    name: DistSSHRun (1.14-nightly, WSL2 ubuntu-24.04, x64)
     runs-on: windows-latest
     timeout-minutes: 45
     continue-on-error: true
@@ -349,7 +349,7 @@ jobs:
         run: ./.github/wsl-julia.sh 1.14-nightly julia --project=. -e 'using Pkg; Pkg.test()'
 
   test-nightly-wsl:
-    name: Pkg.test (nightly, WSL2 ubuntu-24.04, x64)
+    name: DistSSHRun (nightly, WSL2 ubuntu-24.04, x64)
     runs-on: windows-latest
     timeout-minutes: 45
     continue-on-error: true
