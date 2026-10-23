@@ -45,6 +45,7 @@ using Pkg
     end
     @test occursin("behind", nightly_out)
     @test occursin("up update 1.14-nightly parent", nightly_out)
+    pre_warnings = DistSSHRun.SetupWarning[]
     pre_out, pre_ok = with_kit_verbosity(:verbose) do
         _capture_stdio() do _, _
             DistSSHRun._report_remote_julia!(
@@ -52,12 +53,17 @@ using Pkg
                 "/usr/bin/julia",
                 (found = true, version = v"1.14.0-alpha1", mismatch_kind = :prerelease),
                 true,
+                pre_warnings,
             )
         end
     end
     @test pre_ok
     @test occursin("prerelease", pre_out)
     @test !occursin("✗", pre_out)
+    @test length(pre_warnings) == 1
+    @test pre_warnings[1].kind === :julia_prerelease
+    @test pre_warnings[1].host == "worker"
+    patch_warnings = DistSSHRun.SetupWarning[]
     patch_out, patch_ok = with_kit_verbosity(:verbose) do
         _capture_stdio() do _, _
             DistSSHRun._report_remote_julia!(
@@ -65,11 +71,15 @@ using Pkg
                 "/usr/bin/julia",
                 (found = true, version = v"1.13.2", mismatch_kind = :patch),
                 true,
+                patch_warnings,
             )
         end
     end
     @test patch_ok
     @test occursin("patch", patch_out)
+    @test length(patch_warnings) == 1
+    @test patch_warnings[1].kind === :julia_patch
+    @test patch_warnings[1].host == "worker"
     _, minor_fail = with_kit_verbosity(:verbose) do
         _capture_stdio() do _, _
             DistSSHRun._report_remote_julia!(
@@ -151,6 +161,17 @@ using Pkg
             run(pipeline(`git -C $dir config user.name "Test"`; stdout = devnull, stderr = devnull))
             run(pipeline(`git -C $dir add Project.toml`; stdout = devnull, stderr = devnull))
             run(pipeline(`git -C $dir commit -q -m init`; stdout = devnull, stderr = devnull))
+            if Sys.which("ssh") !== nothing && Sys.which("rsync") !== nothing
+                _, result_clean = with_kit_verbosity(:verbose) do
+                    _capture_stdio() do _, _
+                        DistSSHRun.check_prerequisites(
+                            String[], "auto", "~/App.jl", dir;
+                            require_clean_git = false,
+                        )
+                    end
+                end
+                @test isempty(result_clean.warnings)
+            end
             write(joinpath(dir, "dirty.txt"), "x\n")
 
             out_warn, result_warn = with_kit_verbosity(:verbose) do
@@ -164,6 +185,10 @@ using Pkg
             @test occursin("Git has uncommitted changes", out_warn)
             @test !occursin("✗ Git has uncommitted changes", out_warn)
             Sys.which("ssh") === nothing || @test result_warn.ok
+            dirty = filter(w -> w.kind === :git_dirty, result_warn.warnings)
+            @test length(dirty) == 1
+            @test dirty[1].host == DistSSHRun.PARENT_HOST_NAME
+            @test dirty[1].message == "Git has uncommitted changes"
 
             out_fail, result_fail = with_kit_verbosity(:verbose) do
                 _capture_stdio() do _, _
@@ -175,6 +200,7 @@ using Pkg
             end
             @test !result_fail.ok
             @test occursin("Git has uncommitted changes", out_fail)
+            @test !any(w -> w.kind === :git_dirty, result_fail.warnings)
         end
     end
 
@@ -855,5 +881,16 @@ using Pkg
             @test occursin("could not read", out)
             @test occursin("Project.toml", out)
         end
+    end
+
+    @testset "SetupWarning is public and SyncResult keeps its constructors" begin
+        @test Base.ispublic(DistSSHRun, :SetupWarning)
+        @test !Base.isexported(DistSSHRun, :SetupWarning)
+        positional = DistSSHRun.SyncResult(true, DistSSHRun.HostResult[], false)
+        keyword = DistSSHRun.SyncResult(false, DistSSHRun.HostResult[]; ok = true)
+        @test isempty(positional.warnings)
+        @test isempty(keyword.warnings)
+        @test positional.ok
+        @test keyword.ok
     end
 end

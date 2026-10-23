@@ -274,7 +274,7 @@ function _setup_one!(
             print_err("Prerequisites not met. Fix issues above and retry.")
             kit_println()
         end
-        return SyncResult(false, HostResult[]; ok = result.ok)
+        return SyncResult(false, HostResult[]; ok = result.ok, warnings = result.warnings)
     elseif mode === :cleanup
         raw = cleanup_remote_workers(hosts)
         return _sync_result_from_host_op(raw)

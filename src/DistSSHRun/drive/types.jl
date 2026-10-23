@@ -55,11 +55,32 @@ struct HostResult
     message::String
 end
 
-"""Outcome of `sync!` (rsync or git sync). `cancelled` is set when a confirm prompt is aborted."""
+"""One warning printed by `setup!(session, :check)`.
+
+`host` is `PARENT_HOST_NAME` for a local warning. `kind` names the check.
+`message` is the same text `warn` printed.
+"""
+struct SetupWarning
+    host::String
+    kind::Symbol
+    message::String
+end
+
+public SetupWarning
+
+"""Outcome of `sync!` (rsync or git sync). `cancelled` is set when a confirm prompt is aborted.
+
+`warnings` is empty except for `setup!(session, :check)`, which records each warning it printed.
+"""
 struct SyncResult
     ok::Bool
     hosts::Vector{HostResult}
     cancelled::Bool
+    warnings::Vector{SetupWarning}
+end
+
+function SyncResult(ok::Bool, hosts::Vector{HostResult}, cancelled::Bool)
+    return SyncResult(ok, hosts, cancelled, SetupWarning[])
 end
 
 """Sized worker counts per host (`parent_workers` + `child_workers`)."""
@@ -596,9 +617,10 @@ function SyncResult(
         cancelled::Bool,
         host_results::Vector{HostResult};
         ok::Union{Nothing, Bool} = nothing,
+        warnings::Vector{SetupWarning} = SetupWarning[],
     )
     if ok === nothing
         ok = !cancelled && all(hr.ok for hr in host_results)
     end
-    return SyncResult(ok, host_results, cancelled)
+    return SyncResult(ok, host_results, cancelled, warnings)
 end
