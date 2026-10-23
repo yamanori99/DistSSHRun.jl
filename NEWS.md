@@ -6,8 +6,6 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
-- `setup!(session, :check)` returns the warnings it printed in `SyncResult.warnings` as `SetupWarning` values. The output and the exit code do not change.
-
 ### Planned breaking (next minor)
 
 - `interrupt_grace` on `terminate!` and `terminate_run!` will default to a positive value, so a stop sends SIGINT before SIGTERM. DistSSHQueue `cancel` of a running job will use that default. Until then the default is `0` and `cancel` does not send SIGINT.
@@ -15,6 +13,10 @@ Those notes are often shorter than the section below.
 - `setup --sync`, `setup --pull`, and `sync!` will fail when the remote `HEAD` is not the local `HEAD`, including an unpushed local commit on `--pull`. 0.1.7 warns. A hash that could not be read stays a warning.
 - `drive` and `collect!` will refuse a collect root that is the project root or a parent of it. 0.1.7 warns.
 - `setup` will refuse more than one mode flag, and `plan`, `pool`, and `size` will reject unknown `-` options instead of ignoring them with a warning.
+
+## 0.1.14
+
+- `setup!(session, :check)` returns the warnings it printed in `SyncResult.warnings` as `SetupWarning` values. The output and the exit code do not change.
 
 ## 0.1.13
 
