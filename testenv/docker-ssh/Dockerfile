@@ -1,4 +1,4 @@
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 
 # GHCR package page (description / source / license):
 # https://docs.github.com/packages/working-with-a-github-packages-registry/working-with-the-container-registry
