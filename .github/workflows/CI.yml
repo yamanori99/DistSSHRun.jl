@@ -28,7 +28,9 @@ jobs:
   # WSL2 Ubuntu is a main push and CI weekly, not a pull request.
   # macOS is required. The macOS job exercises `ps -o lstart=`
   # in kit_process_start_key (no /proc). Coverage uploads from Ubuntu only.
-  # Run keeps the old check titles (no package name). Downstream is one
+  # Run's check titles are `DistSSHRun (...)`, the same shape as DistSSHBase
+  # and DistSSHUp. macOS 1.13 runs Base, then Up, then Run, one runner at a
+  # time. Ubuntu stays parallel. Downstream is one
   # matrix (DistSSHQueue, DistSSHKit). Each required DistSSHUp and
   # DistSSHBase title is its own job (Ubuntu, macOS, Ubuntu SSH
   # E2E). WSL2 titles run on a main push and CI weekly, not a pull request.
@@ -39,7 +41,7 @@ jobs:
   # DistSSHUp jobs (flag pkgtest, main push).
   # Slow SSH E2E kit parents are `E2E weekly`
   # (macos-15-intel Colima, not this job).
-  # PRs run `ubuntu-latest → ubuntu-24.04` in this workflow.
+  # PRs run `DistSSHRun (ubuntu-latest → ubuntu-24.04)` in this workflow.
   # One detect job; markdown-only / allowlisted PRs skip heavy jobs (UI: skipping).
   # Required check names include the Julia version and the architecture.
   # Codecov (flag pkgtest): main push only — not on pull_request.
@@ -116,7 +118,7 @@ jobs:
             echo "queue_e2e=false" >> "$GITHUB_OUTPUT"
           fi
   test:
-    name: Pkg.test (1.13, ubuntu-latest, x64)
+    name: DistSSHRun (1.13, ubuntu-latest, x64)
     needs: detect
     if: needs.detect.outputs.heavy == 'true'
     runs-on: ubuntu-latest
@@ -141,9 +143,9 @@ jobs:
           upload: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
   test-macos:
-    name: Pkg.test (1.13, macos-latest, aarch64)
-    needs: detect
-    if: needs.detect.outputs.heavy == 'true'
+    name: DistSSHRun (1.13, macos-latest, aarch64)
+    needs: [detect, up-test-macos]
+    if: needs.detect.outputs.heavy == 'true' && success()
     runs-on: macos-latest
     timeout-minutes: 30
     permissions:
@@ -162,7 +164,7 @@ jobs:
       - uses: ./.github/actions/pkg-test
 
   test-wsl:
-    name: Pkg.test (1.13, WSL2 ubuntu-24.04, x64)
+    name: DistSSHRun (1.13, WSL2 ubuntu-24.04, x64)
     needs: detect
     if: needs.detect.outputs.heavy == 'true' && github.event_name != 'pull_request'
     runs-on: windows-latest
@@ -290,8 +292,8 @@ jobs:
 
   up-test-macos:
     name: DistSSHUp (1.13, macos-latest, aarch64)
-    needs: detect
-    if: needs.detect.outputs.heavy == 'true'
+    needs: [detect, base-test-macos]
+    if: needs.detect.outputs.heavy == 'true' && success()
     runs-on: macos-latest
     timeout-minutes: 30
     permissions:
@@ -426,7 +428,7 @@ jobs:
   base-test-macos:
     name: DistSSHBase (1.13, macos-latest, aarch64)
     needs: detect
-    if: needs.detect.outputs.heavy == 'true'
+    if: needs.detect.outputs.heavy == 'true' && success()
     runs-on: macos-latest
     timeout-minutes: 30
     permissions:
@@ -519,7 +521,7 @@ jobs:
 
   # A skipped job does not expand a matrix name, so these titles stay literal.
   test-tip:
-    name: Pkg.test (1.14-nightly, ubuntu-latest, x64)
+    name: DistSSHRun (1.14-nightly, ubuntu-latest, x64)
     needs: detect
     if: needs.detect.outputs.heavy == 'true' && (github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true')
     runs-on: ubuntu-latest
@@ -539,7 +541,7 @@ jobs:
       - uses: ./.github/actions/pkg-test
 
   test-nightly:
-    name: Pkg.test (nightly, ubuntu-latest, x64)
+    name: DistSSHRun (nightly, ubuntu-latest, x64)
     needs: detect
     if: needs.detect.outputs.heavy == 'true' && (github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true')
     runs-on: ubuntu-latest
@@ -670,7 +672,7 @@ jobs:
           files: ${{ steps.files.outputs.list }}
 
   ssh-e2e:
-    name: ubuntu-latest → ubuntu-24.04
+    name: DistSSHRun (ubuntu-latest → ubuntu-24.04)
     needs: detect
     if: needs.detect.outputs.e2e == 'true'
     runs-on: ubuntu-latest
