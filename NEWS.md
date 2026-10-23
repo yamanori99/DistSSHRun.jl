@@ -6,11 +6,6 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
-- `setup!(session, :rsync; gitignore = false)` sends the tree without applying `.gitignore`. `.git/` and `.distsshkit/` stay excluded. The default remains `gitignore = true`.
-- `setup --check` warns when the same major.minor.patch has a different prerelease. The check still succeeds. `--ignore-julia-version` does not hide that warning, or a patch warning. A moving channel (`1.13`, `1.14-nightly`) still says the parent is behind a newer remote. A pinned channel such as `1.14.0-alpha1` says that channel may not be installed, and to check `juliaup add` on the worker. The success count is unchanged. `parse_julia_version` and `get_remote_julia_version` stay major.minor.patch. `parse_julia_version_full` and `get_remote_julia_version_full` are public on DistSSHBase.
-- `run.toml` records `[provenance]` (Julia, machine, workers, the project manifest, and the code version). The same table is written to `output_dir/.distsshkit/provenance.toml`. For `go`, `julia.parent` is the controller; each slot is under `workers`, and a slot's own snapshot is `slot/.distsshkit/provenance-slot.toml`. A remote slot copies that file only when collect does not bring the slot directory. The manifest hash and the git snapshot are taken when the run starts. `.distsshkit/` and `.distsshqueue/` are not counted as uncommitted changes. `git_source_snapshot` is that git record, and the name is public. `schema` stays 1.
-- `run.toml` `[provenance]` records `julia.install` as the nearest parent directory of `Sys.BINDIR` whose name starts with `julia-`. On macOS, `basename(dirname(Sys.BINDIR))` is `julia` for a release build and for a `+opt` build, so that name is not used. Processes with the same `version` and `commit` and a different `install` stay in different groups. When no `julia-*` parent exists, the key is omitted. `schema` stays 1.
-
 ### Planned breaking (next minor)
 
 - `interrupt_grace` on `terminate!` and `terminate_run!` will default to a positive value, so a stop sends SIGINT before SIGTERM. DistSSHQueue `cancel` of a running job will use that default. Until then the default is `0` and `cancel` does not send SIGINT.
@@ -18,6 +13,13 @@ Those notes are often shorter than the section below.
 - `setup --sync`, `setup --pull`, and `sync!` will fail when the remote `HEAD` is not the local `HEAD`, including an unpushed local commit on `--pull`. 0.1.7 warns. A hash that could not be read stays a warning.
 - `drive` and `collect!` will refuse a collect root that is the project root or a parent of it. 0.1.7 warns.
 - `setup` will refuse more than one mode flag, and `plan`, `pool`, and `size` will reject unknown `-` options instead of ignoring them with a warning.
+
+## 0.1.13
+
+- `setup!(session, :rsync; gitignore = false)` sends the tree without applying `.gitignore`. `.git/` and `.distsshkit/` stay excluded. The default remains `gitignore = true`.
+- `setup --check` warns when the same major.minor.patch has a different prerelease. The check still succeeds. `--ignore-julia-version` does not hide that warning, or a patch warning. A moving channel (`1.13`, `1.14-nightly`) still says the parent is behind a newer remote. A pinned channel such as `1.14.0-alpha1` says that channel may not be installed, and to check `juliaup add` on the worker. The success count is unchanged. `parse_julia_version` and `get_remote_julia_version` stay major.minor.patch. `parse_julia_version_full` and `get_remote_julia_version_full` are public on DistSSHBase.
+- `run.toml` records `[provenance]` (Julia, machine, workers, the project manifest, and the code version). The same table is written to `output_dir/.distsshkit/provenance.toml`. For `go`, `julia.parent` is the controller; each slot is under `workers`, and a slot's own snapshot is `slot/.distsshkit/provenance-slot.toml`. A remote slot copies that file only when collect does not bring the slot directory. The manifest hash and the git snapshot are taken when the run starts. `.distsshkit/` and `.distsshqueue/` are not counted as uncommitted changes. `git_source_snapshot` is that git record, and the name is public. `schema` stays 1.
+- `run.toml` `[provenance]` records `julia.install` as the nearest parent directory of `Sys.BINDIR` whose name starts with `julia-`. On macOS, `basename(dirname(Sys.BINDIR))` is `julia` for a release build and for a `+opt` build, so that name is not used. Processes with the same `version` and `commit` and a different `install` stay in different groups. When no `julia-*` parent exists, the key is omitted. `schema` stays 1.
 
 ## 0.1.12
 
