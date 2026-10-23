@@ -408,12 +408,20 @@ using Test
                     yes = true,
                     quiet = true,
                 )
-                out, res = _capture_stdio() do _, _
-                    DistSSHRun.setup!(session, :check; check_code_sync = false, ignore_julia_version = true)
+                out, res = withenv("PATH" => "/nonexistent-distsshkit-path") do
+                    _capture_stdio() do _, _
+                        DistSSHRun.setup!(session, :check; check_code_sync = false, ignore_julia_version = true)
+                    end
                 end
                 @test res isa DistSSHRun.SyncResult
                 @test !res.cancelled
                 @test !res.ok
+                @test any(
+                    w -> w.kind === :tool_missing &&
+                        w.host == DistSSHRun.PARENT_HOST_NAME &&
+                        w.message == "git not found in PATH",
+                    res.warnings,
+                )
                 @test occursin("Prerequisites not met", out)
                 @test !occursin("Log file:", out)
 
