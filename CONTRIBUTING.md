@@ -196,15 +196,15 @@ Required to merge (ruleset `main` uses these names). **1.14-nightly** and **nigh
 - `Aqua (1.13, ubuntu-latest, x64)`
 - `Documenter (1.13, ubuntu-latest, x64)`
 - `Gitleaks`
-- `DistSSHRun (ubuntu-latest → ubuntu-24.04)`
-- `DistSSHBase (ubuntu-latest → ubuntu-24.04)`
-- `DistSSHUp (ubuntu-latest → ubuntu-24.04)`
+- `DistSSHRun (ubuntu-latest → ubuntu-26.04)`
+- `DistSSHBase (ubuntu-latest → ubuntu-26.04)`
+- `DistSSHUp (ubuntu-latest → ubuntu-26.04)`
 - `Downstream SSH E2E (DistSSHQueue, 1.13)`
 - `PR label`
 
 | When | Workflow | What |
 | --- | --- | --- |
-| Daily 04:00 JST, or Run workflow | `E2E weekly` | `ubuntu-latest`, `macos-15-intel`, WSL2 → `ubuntu-24.04`, plus the same three hosts for DistSSHBase and DistSSHUp. Linux job uploads E2E Codecov. Not a PR check. Failure opens (or comments on) Issue `E2E weekly failed`; a later all-green run closes it. A red **Linux** job on a scheduled run adds `cut-hold`, and a later green scheduled Linux removes it. Intel / WSL red does not. |
+| Daily 04:00 JST, or Run workflow | `E2E weekly` | `ubuntu-latest`, `macos-15-intel`, WSL2 → `ubuntu-26.04`, plus the same three hosts for DistSSHBase and DistSSHUp. Linux job uploads E2E Codecov. Not a PR check. Failure opens (or comments on) Issue `E2E weekly failed`; a later all-green run closes it. A red **Linux** job on a scheduled run adds `cut-hold`, and a later green scheduled Linux removes it. Intel / WSL red does not. |
 | Daily 06:00 JST, or Run workflow | `CI weekly` | Same 1.13 jobs as a main push of Test (Run, DistSSHBase, and DistSSHUp on Ubuntu, macOS, and WSL2, plus downstream DistSSHQueue and DistSSHKit; no coverage). A pull request does not run the WSL2 rows, plus JETLS and Aqua. 1.14-nightly and nightly `Pkg.test` run on Ubuntu, macOS, and WSL2; Aqua on macOS and WSL2 runs here only. `Compile bench` measures precompile, load, CLI wall time, `src/**/*.jl` size, and the host OS, arch, and CPU on 1.13, 1.14-nightly, and nightly. CI weekly runs it, and a **main** push that raises `Project.toml` `version` runs it too. A **main** run appends that sample to the `bench-data` branch. A render job then rebuilds the README and `bench.html`, and a main run publishes that page on GitHub Pages. A **main** push of `bench/compile/report.jl` or `bench/compile/charts.jl` rebuilds them and does not measure. A pull request that changes the file renders the history into the job summary and does not push. A command that exits nonzero is not recorded. It flags a host change, a 1.5x jump (and a 200 ms method that is new or doubled) but does not fail the run. Not a PR check. Catches 1.13 / Aqua / JETLS `@release` drift when nothing merged that day. Failure of the 1.13 jobs opens Issue `CI weekly failed` (`alert`); 1.14-nightly, nightly, and compile bench are omitted from that notify. `cache-gc` keeps one Actions cache per restore-key prefix. |
 | 1st 10:00 JST, or Run workflow | `Runic` | `runic --check` on tracked `.jl` (`version: '1'`). Not a required PR check. Catches Runic minor drift when nothing formatted that month. Failure opens Issue `Runic monthly failed` (`alert`). |
 

@@ -41,7 +41,7 @@ jobs:
   # DistSSHUp jobs (flag pkgtest, main push).
   # Slow SSH E2E kit parents are `E2E weekly`
   # (macos-15-intel Colima, not this job).
-  # PRs run `DistSSHRun (ubuntu-latest → ubuntu-24.04)` in this workflow.
+  # PRs run `DistSSHRun (ubuntu-latest → ubuntu-26.04)` in this workflow.
   # One detect job; markdown-only / allowlisted PRs skip heavy jobs (UI: skipping).
   # Required check names include the Julia version and the architecture.
   # Codecov (flag pkgtest): main push only — not on pull_request.
@@ -345,7 +345,7 @@ jobs:
         run: ./.github/wsl-julia.sh 1.13 julia --project=lib/DistSSHUp -e 'using Pkg; Pkg.test()'
 
   up-ssh-e2e:
-    name: DistSSHUp (ubuntu-latest → ubuntu-24.04)
+    name: DistSSHUp (ubuntu-latest → ubuntu-26.04)
     needs: detect
     if: needs.detect.outputs.e2e == 'true'
     runs-on: ubuntu-latest
@@ -480,7 +480,7 @@ jobs:
         run: ./.github/wsl-julia.sh 1.13 julia --project=lib/DistSSHBase -e 'using Pkg; Pkg.test()'
 
   base-ssh-e2e:
-    name: DistSSHBase (ubuntu-latest → ubuntu-24.04)
+    name: DistSSHBase (ubuntu-latest → ubuntu-26.04)
     needs: detect
     if: needs.detect.outputs.e2e == 'true'
     runs-on: ubuntu-latest
@@ -672,7 +672,7 @@ jobs:
           files: ${{ steps.files.outputs.list }}
 
   ssh-e2e:
-    name: DistSSHRun (ubuntu-latest → ubuntu-24.04)
+    name: DistSSHRun (ubuntu-latest → ubuntu-26.04)
     needs: detect
     if: needs.detect.outputs.e2e == 'true'
     runs-on: ubuntu-latest

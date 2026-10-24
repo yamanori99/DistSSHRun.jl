@@ -49,7 +49,7 @@ jobs:
     needs: linux-image
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    name: DistSSHRun (ubuntu-latest → ubuntu-24.04)
+    name: DistSSHRun (ubuntu-latest → ubuntu-26.04)
     permissions:
       contents: read
       packages: write
@@ -97,7 +97,7 @@ jobs:
     # 2026-10-15 finished the suite in 88 min and failed the heartbeat wait.
     # A 240s wait needs room past that.
     timeout-minutes: 120
-    name: macos-15-intel → ubuntu-24.04
+    name: macos-15-intel → ubuntu-26.04
     permissions:
       contents: read
       packages: read
@@ -146,7 +146,7 @@ jobs:
     needs: linux-image
     runs-on: windows-latest
     timeout-minutes: 60
-    name: windows-latest (WSL2) → ubuntu-24.04
+    name: windows-latest (WSL2) → ubuntu-26.04
     permissions:
       contents: read
       packages: read
@@ -238,7 +238,7 @@ jobs:
           fi
 
   up-linux-e2e:
-    name: DistSSHUp (ubuntu-latest → ubuntu-24.04)
+    name: DistSSHUp (ubuntu-latest → ubuntu-26.04)
     needs: linux-image
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -277,7 +277,7 @@ jobs:
         run: ./testenv/docker-ssh/scripts/down.sh || true
 
   base-linux-e2e:
-    name: DistSSHBase (ubuntu-latest → ubuntu-24.04)
+    name: DistSSHBase (ubuntu-latest → ubuntu-26.04)
     needs: linux-image
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -316,7 +316,7 @@ jobs:
         run: ./testenv/docker-ssh/scripts/down.sh || true
 
   up-macos-e2e:
-    name: DistSSHUp (macos-15-intel → ubuntu-24.04)
+    name: DistSSHUp (macos-15-intel → ubuntu-26.04)
     needs: linux-image
     runs-on: macos-15-intel
     timeout-minutes: 60
@@ -370,7 +370,7 @@ jobs:
         run: ./testenv/docker-ssh/scripts/down.sh || true
 
   base-macos-e2e:
-    name: DistSSHBase (macos-15-intel → ubuntu-24.04)
+    name: DistSSHBase (macos-15-intel → ubuntu-26.04)
     needs: linux-image
     runs-on: macos-15-intel
     timeout-minutes: 60
@@ -424,7 +424,7 @@ jobs:
         run: ./testenv/docker-ssh/scripts/down.sh || true
 
   up-wsl-e2e:
-    name: DistSSHUp (windows-latest (WSL2) → ubuntu-24.04)
+    name: DistSSHUp (windows-latest (WSL2) → ubuntu-26.04)
     needs: linux-image
     runs-on: windows-latest
     timeout-minutes: 60
@@ -529,7 +529,7 @@ jobs:
           fi
 
   base-wsl-e2e:
-    name: DistSSHBase (windows-latest (WSL2) → ubuntu-24.04)
+    name: DistSSHBase (windows-latest (WSL2) → ubuntu-26.04)
     needs: linux-image
     runs-on: windows-latest
     timeout-minutes: 60
