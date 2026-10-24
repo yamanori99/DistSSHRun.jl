@@ -13,6 +13,8 @@ Those notes are often shorter than the section below.
 - `setup --sync`, `setup --pull`, and `sync!` will fail when the remote `HEAD` is not the local `HEAD`, including an unpushed local commit on `--pull`. 0.1.7 warns. A hash that could not be read stays a warning.
 - `drive` and `collect!` will refuse a collect root that is the project root or a parent of it. 0.1.7 warns.
 - `setup` will refuse more than one mode flag, and `plan`, `pool`, and `size` will reject unknown `-` options instead of ignoring them with a warning.
+- `-y`, `--yes`, and `DISTSSHKIT_YES` will stop authorizing `setup --delete` and `setup --prune`. Without `--confirm-path`, `-y` will exit 1. With neither, the commands still ask for `delete` or `prune`. A matching `--confirm-path` still deletes.
+- Display helpers that no package outside DistSSHRun calls will stop being exported. `parse_go_args`, `parse_drive_args`, and `parse_ride_args` stay exported. DistSSHKit 0.11 drops the names this package stops exporting.
 
 ## 0.1.14
 
