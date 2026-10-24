@@ -32,7 +32,7 @@ Julia **1.13+**。ホストには **`ssh`** と **`rsync`** が要る。git で�
 ## コマンド
 
 打つコマンドは `julia -m DistSSHRun` である。
-フラグは `julia -m DistSSHKit go --help` で見る。
+フラグは `julia -m DistSSHRun help go` で見る。
 
 ```bash
 julia -m DistSSHRun setup --check child:host1
