@@ -53,7 +53,7 @@ julia --project=. distsshkit_demos/without_kit/pipeline_pi.jl --n 5000
 - `pipeline_square.jl` → same CSV via `pipeline!`
 
 Drivers use `init_output_dir!` + `main` + `pmap`. Work count is `--n N`
-(default 8), not a positional integer. Optional hooks: `drive --help`.
+(default 8), not a positional integer. Optional hooks: `help drive`.
 `pipeline_square.jl` is the thin API entry (optional sync → size! → drive! →
 collect) over `square_file.jl`. Same tokens as the CLI:
 `pipeline!(driver, "parent:2"; args=[…])`. A commented remote example is at

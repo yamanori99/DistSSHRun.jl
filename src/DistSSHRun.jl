@@ -416,6 +416,17 @@ function _main(args::Vector{String})::Cint
         print_kit_root_usage()
         return 1
     end
+    # `help <verb> …` is `<verb> --help …`, once. A second word that is not a
+    # command stays on the unknown-subcommand path, and that word is the name.
+    if length(args) >= 2 && args[1] == "help"
+        verb = args[2]
+        if haskey(_RUN_CALLS, verb)
+            rewritten = String[verb, "--help"]
+            append!(rewritten, args[3:end])
+            return _main(rewritten)
+        end
+        args = args[2:end]
+    end
     subcommand, rest = args[1], args[2:end]
     if subcommand in ("drive", "go") &&
             any(endswith(String(a), ".jl") for a in rest)

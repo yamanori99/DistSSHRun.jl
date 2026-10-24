@@ -8,7 +8,11 @@ using Test
         @test_throws ArgumentError DistSSHBase._normalize_hint_surface(:nope)
         @test_throws ArgumentError DistSSHBase.explain_no_hosts(; kind = :drive)
         cli_size = DistSSHBase.explain_no_hosts(; surface = :cli, kind = :size)
-        @test occursin("size --help", cli_size)
+        @test occursin("help size", cli_size)
+        @test !occursin("size --help", cli_size)
+        cli_pool = DistSSHBase.explain_no_hosts(; surface = :cli, kind = :pool)
+        @test occursin("help pool", cli_pool)
+        @test !occursin("pool --help", cli_pool)
         cli_collect = DistSSHBase.explain_no_hosts(; surface = :cli, kind = :collect)
         @test occursin("--collect-missing", cli_collect)
     end

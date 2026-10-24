@@ -404,7 +404,7 @@ function demo(args::Vector{String} = copy(ARGS))::Cint
             return 1
         end
     else
-        print_cli_error("Unknown demo command: $sub (try: demo install with_kit, demo list, demo --help)")
+        print_cli_error("Unknown demo command: $sub (try: demo install with_kit, demo list, help demo)")
         return 1
     end
 end
