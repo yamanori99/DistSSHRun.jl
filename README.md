@@ -7,7 +7,8 @@ Precompile time, load time, CLI wall time, `src/**/*.jl` size, and the host
 against the previous sample on the same Julia slot, the host OS or arch
 changes, the Julia version changes, package precompile grows by 1.5x and 0.5s, a command wall grows
 by 1.5x and 1s, or a method of at least 200 ms is new in the top 20 or
-doubles. This does not fail CI.
+doubles. This does not fail CI. Each slot's table folds. The 1.13
+table starts open.
 
 ## Flagged
 
@@ -16,7 +17,8 @@ doubles. This does not fail CI.
 - nightly: host changed Ubuntu 24.04.5 LTS x86_64 -> Ubuntu 26.04.1 LTS x86_64
 - nightly: julia 1.15.0-DEV.92 -> 1.15.0-DEV.104
 
-## 1.13
+<details open>
+<summary>1.13</summary>
 
 | date | commit | version | julia | os | arch | src files | code lines | full s | pkg s | using s | help s | go s | drive s |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -33,7 +35,10 @@ doubles. This does not fail CI.
 | 2026-10-23 | 3b51f4b | 0.1.13 | 1.13.2 | Ubuntu 24.04.5 LTS | x86_64 | 71 | 17854 | 6.49 | 3.23 | 0.32 | 0.66 | 9.06 | 28.86 |
 | 2026-10-23 | 2a97bdd | 0.1.14 | 1.13.2 | Ubuntu 26.04.1 LTS | x86_64 | 71 | 17895 | 6.91 | 3.57 | 0.35 | 0.7 | 9.39 | 29.59 |
 
-## 1.14-nightly
+</details>
+
+<details>
+<summary>1.14-nightly</summary>
 
 | date | commit | version | julia | os | arch | src files | code lines | full s | pkg s | using s | help s | go s | drive s |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -50,7 +55,10 @@ doubles. This does not fail CI.
 | 2026-10-23 | 3b51f4b | 0.1.13 | 1.14.0-alpha1 | Ubuntu 24.04.5 LTS | x86_64 | 71 | 17854 | 3.53 | 1.85 | 0.22 | 0.43 | 2.5 | 9.6 |
 | 2026-10-23 | 2a97bdd | 0.1.14 | 1.14.0-alpha1 | Ubuntu 26.04.1 LTS | x86_64 | 71 | 17895 | 4.15 | 2.14 | 0.27 | 0.51 | 3.07 | 10.56 |
 
-## nightly
+</details>
+
+<details>
+<summary>nightly</summary>
 
 | date | commit | version | julia | os | arch | src files | code lines | full s | pkg s | using s | help s | go s | drive s |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -66,4 +74,6 @@ doubles. This does not fail CI.
 | 2026-10-22 | 03fe79f | 0.1.12 | 1.15.0-DEV.84 | Ubuntu 24.04.5 LTS | x86_64 | 71 | 17854 | 5.94 | 3.23 | 0.3 | 0.6 | 3.99 | 13.41 |
 | 2026-10-23 | 3b51f4b | 0.1.13 | 1.15.0-DEV.92 | Ubuntu 24.04.5 LTS | x86_64 | 71 | 17854 | 6.05 | 3.36 | 0.3 | 0.59 | 4.01 | 13.78 |
 | 2026-10-23 | 2a97bdd | 0.1.14 | 1.15.0-DEV.104 | Ubuntu 26.04.1 LTS | x86_64 | 71 | 17895 | 6.11 | 3.32 | 0.32 | 0.6 | 4.25 | 13.89 |
+
+</details>
 
