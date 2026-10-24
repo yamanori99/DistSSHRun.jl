@@ -31,6 +31,7 @@ need **`git`**.
 ## Commands
 
 The command is `julia -m DistSSHRun`.
+See flags with `julia -m DistSSHRun help go`.
 
 ```bash
 julia -m DistSSHRun setup --check child:host1

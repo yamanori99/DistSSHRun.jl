@@ -2386,7 +2386,7 @@ function print_kit_root_usage(io::IO = stderr)
         "  $(cli_m_project()) plan SCRIPT.jl",
     )
     print_help_blank(io)
-    println(io, "Run `$(cli_m()) <command> -h` for flags.")
+    println(io, "Run `$(cli_m()) help <command>` for flags.")
     return nothing
 end
 

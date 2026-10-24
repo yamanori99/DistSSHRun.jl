@@ -77,7 +77,7 @@ function explain_no_hosts(;
         hint = if surface === :api
             "Hint: pass workers=[\"parent:2\", …] or workers=[\"child:user@host\", …]"
         else
-            "Hint: pass local and/or SSH hosts (see pool --help)"
+            "Hint: pass local and/or SSH hosts (see help pool)"
         end
         return join_explained_message(head, hint)
     elseif kind === :size
@@ -85,7 +85,7 @@ function explain_no_hosts(;
         hint = if surface === :api
             "Hint: pass workers=[\"parent\", …] or workers=[\"child:user@host\", …] (`size!` ignores :N)"
         else
-            "Hint: pass local and/or SSH hosts (see size --help)"
+            "Hint: pass local and/or SSH hosts (see help size)"
         end
         return join_explained_message(head, hint)
     elseif kind === :collect

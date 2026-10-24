@@ -162,7 +162,10 @@ using Test
             end
         end
         flush(io)
+        text = read(path, String)
         @test code == 1
-        @test occursin("Unknown demo command: bogus", read(path, String))
+        @test occursin("Unknown demo command: bogus", text)
+        @test occursin("help demo", text)
+        @test !occursin("demo --help", text)
     end
 end

@@ -6,6 +6,8 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
+- `help <command>` prints the same page as `<command> --help` and exits 0. `help`, `-h`, and `--help` with no command stay as they are. A second word that is not a command still exits 1, and the message names that word. Hints for a missing `size` or `pool` host say `help size` and `help pool`.
+
 ### Planned breaking (next minor)
 
 - `interrupt_grace` on `terminate!` and `terminate_run!` will default to a positive value, so a stop sends SIGINT before SIGTERM. DistSSHQueue `cancel` of a running job will use that default. Until then the default is `0` and `cancel` does not send SIGINT.

@@ -108,6 +108,63 @@ using Test
         end
     end
 
+    @testset "help <command> is <command> --help" begin
+        for cmd in (
+                "drive", "go", "plan", "ride", "setup", "size", "pool", "up", "demo", "progress",
+            )
+            direct = _main_capture([cmd, "--help"])
+            via = _main_capture(["help", cmd])
+            @test via[1] == 0
+            @test via == direct
+        end
+        let via = _main_capture(["help", "go", "--hosts", "parent:1"])
+            direct = _main_capture(["go", "--hosts", "parent:1", "--help"])
+            @test via[1] == 0
+            @test via == direct
+            @test occursin("-h, --help", via[2])
+        end
+        let via = _main_capture(["help", "setup", "--check"])
+            direct = _main_capture(["setup", "--help", "--check"])
+            @test via[1] == 0
+            @test via == direct
+            @test occursin("Usage", via[2])
+        end
+        let (code, out, err) = _main_capture(["demo", "help"])
+            via = _main_capture(["help", "demo"])
+            direct = _main_capture(["demo", "--help"])
+            @test code == 0
+            @test (code, out, err) == via == direct
+            @test occursin("Usage", out)
+            @test !occursin("Unknown demo command", out * err)
+        end
+        let (code, _, err) = _main_capture(["help", "bogus"])
+            @test code == 1
+            @test occursin("Unknown subcommand: bogus", err)
+            @test !occursin("Unknown subcommand: help", err)
+        end
+        let (code, _, err) = _main_capture(["help", "--help"])
+            @test code == 1
+            @test occursin("Unknown subcommand: --help", err)
+        end
+        let (code, _, err) = _main_capture(["help", "map_echo.jl"])
+            @test code == 1
+            @test occursin("got \"map_echo.jl\"", err)
+            @test occursin("does not infer go / ride / drive", err)
+            @test !occursin("Unknown subcommand", err)
+        end
+        let (code, _, err) = _main_capture(["help", "parent:2", "job.jl"])
+            @test code == 1
+            @test occursin("got \"parent:2\"", err)
+        end
+        for args in (String[], ["help"], ["-h"], ["--help"])
+            let (code, _, err) = _main_capture(args)
+                @test code == (isempty(args) ? 1 : 0)
+                @test occursin("Run `julia -m DistSSHRun help <command>` for flags.", err)
+                @test !occursin("<command> -h", err)
+            end
+        end
+    end
+
     @testset "_run_kit_cli_script restores ARGS and re-reads project root" begin
         saved = copy(ARGS)
         try
