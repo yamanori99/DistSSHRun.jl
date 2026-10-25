@@ -6,6 +6,8 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
+- `unknown_subcommand_message`, `no_command_message`, `print_rejected_command`, `NO_COMMAND_HINT_LINES`, and `RUN_SUBCOMMAND_EXPECTATION` are public. They are the sentences an unknown `julia -m DistSSHRun` command already prints. The text and the exit code do not change. DistSSHKit calls these names.
+
 ### Planned breaking (next minor)
 
 - `interrupt_grace` on `terminate!` and `terminate_run!` will default to a positive value, so a stop sends SIGINT before SIGTERM. DistSSHQueue `cancel` of a running job will use that default. Until then the default is `0` and `cancel` does not send SIGINT.

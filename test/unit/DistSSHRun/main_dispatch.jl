@@ -162,6 +162,8 @@ using Test
             direct = _main_capture(["bogus"])
             @test via[1] == 1
             @test via == direct
+            @test occursin(DistSSHRun.unknown_subcommand_message("bogus"), via[3])
+            @test via[3] == direct[3]
             @test occursin("Unknown subcommand: bogus", via[3])
             @test !occursin("Unknown subcommand: help", via[3])
         end
@@ -193,6 +195,37 @@ using Test
             direct = _main_capture(["drive", "--help", "--help"])
             @test via == direct
         end
+    end
+
+    @testset "rejection sentences" begin
+        @test DistSSHRun.unknown_subcommand_message("bogus") ==
+            "Unknown subcommand: bogus"
+        @test DistSSHRun.no_command_message("map_echo.jl") ==
+            "No command (got \"map_echo.jl\"). Kit does not infer go / ride / drive."
+        @test DistSSHRun.RUN_SUBCOMMAND_EXPECTATION ==
+            "Expected: setup | up | go | ride | drive | plan | size | pool | demo | progress"
+        @test DistSSHRun.NO_COMMAND_HINT_LINES == (
+            "  go SCRIPT.jl      as-is complete job (timing without rewrite)",
+            "  ride … SCRIPT.jl  experimental map / filter",
+            "  drive … SCRIPT.jl Distributed",
+            "  plan SCRIPT.jl    inspect; do not run",
+        )
+        for name in (
+                :unknown_subcommand_message,
+                :no_command_message,
+                :print_rejected_command,
+                :NO_COMMAND_HINT_LINES,
+                :RUN_SUBCOMMAND_EXPECTATION,
+            )
+            @test Base.ispublic(DistSSHRun, name)
+            @test !Base.isexported(DistSSHRun, name)
+        end
+        buf = IOBuffer()
+        DistSSHRun.print_rejected_command("bogus"; script = false, io = buf)
+        text = String(take!(buf))
+        @test occursin("Unknown subcommand: bogus\n", text)
+        @test occursin(DistSSHRun.RUN_SUBCOMMAND_EXPECTATION * "\n", text)
+        @test !occursin("Usage", text)
     end
 
     @testset "help-only argv is the root page" begin
