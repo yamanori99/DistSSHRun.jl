@@ -6,9 +6,6 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
-- `help <command>` prints the same page as `<command> --help` and exits 0. `help`, `-h`, and `--help` with no command stay as they are. A second word that is not a command still exits 1, and the message names that word, except an argv made only of `help`, `-h`, and `--help`. Hints for a missing `size` or `pool` host say `help size` and `help pool`.
-- An argv made only of `help`, `-h`, and `--help` prints the root page on stderr and exits 0. That includes `help --help`. `help bogus` still exits 1 and names `bogus`. `help go --help` is still the `go` page.
-
 ### Planned breaking (next minor)
 
 - `interrupt_grace` on `terminate!` and `terminate_run!` will default to a positive value, so a stop sends SIGINT before SIGTERM. DistSSHQueue `cancel` of a running job will use that default. Until then the default is `0` and `cancel` does not send SIGINT.
@@ -18,6 +15,11 @@ Those notes are often shorter than the section below.
 - `setup` will refuse more than one mode flag, and `plan`, `pool`, and `size` will reject unknown `-` options instead of ignoring them with a warning.
 - `-y`, `--yes`, and `DISTSSHKIT_YES` will stop authorizing `setup --delete` and `setup --prune`. Without `--confirm-path`, `-y` will exit 1. With neither, the commands still ask for `delete` or `prune`. A matching `--confirm-path` still deletes.
 - Display helpers that no package outside DistSSHRun calls will stop being exported. `parse_go_args`, `parse_drive_args`, and `parse_ride_args` stay exported. DistSSHKit 0.11 drops the names this package stops exporting.
+
+## 0.1.15
+
+- `help <command>` prints the same page as `<command> --help` and exits 0. `help`, `-h`, and `--help` with no command stay as they are. A second word that is not a command still exits 1, and the message names that word, except an argv made only of `help`, `-h`, and `--help`. Hints for a missing `size` or `pool` host say `help size` and `help pool`.
+- An argv made only of `help`, `-h`, and `--help` prints the root page on stderr and exits 0. That includes `help --help`. `help bogus` still exits 1 and names `bogus`. `help go --help` is still the `go` page.
 
 ## 0.1.14
 
