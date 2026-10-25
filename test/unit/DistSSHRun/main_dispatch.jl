@@ -19,6 +19,27 @@ using Test
         end
     end
 
+    # Same stream and entry as `_main`: stderr, and no color while stdout is not a TTY.
+    function _root_page()
+        buf = IOBuffer()
+        redirect_stdout(devnull) do
+            DistSSHRun.with_cli_entry(:DistSSHRun) do
+                DistSSHRun.print_kit_root_usage(buf)
+            end
+        end
+        return String(take!(buf))
+    end
+
+    function _go_page()
+        buf = IOBuffer()
+        redirect_stdout(devnull) do
+            DistSSHRun.with_cli_entry(:DistSSHRun) do
+                DistSSHRun.show_go_usage(; io = buf)
+            end
+        end
+        return String(take!(buf))
+    end
+
     let (code, _, err) = _main_capture(String[])
         @test code == 1
         @test occursin("Usage", err)
@@ -137,14 +158,19 @@ using Test
             @test occursin("Usage", out)
             @test !occursin("Unknown demo command", out * err)
         end
-        let (code, _, err) = _main_capture(["help", "bogus"])
-            @test code == 1
-            @test occursin("Unknown subcommand: bogus", err)
-            @test !occursin("Unknown subcommand: help", err)
+        let via = _main_capture(["help", "bogus"])
+            direct = _main_capture(["bogus"])
+            @test via[1] == 1
+            @test via == direct
+            @test occursin("Unknown subcommand: bogus", via[3])
+            @test !occursin("Unknown subcommand: help", via[3])
         end
-        let (code, _, err) = _main_capture(["help", "--help"])
-            @test code == 1
-            @test occursin("Unknown subcommand: --help", err)
+        let via = _main_capture(["help", "go", "--help"])
+            direct = _main_capture(["go", "--help", "--help"])
+            @test via[1] == 0
+            @test via == direct
+            @test via[2] == _go_page()
+            @test via[3] == ""
         end
         let (code, _, err) = _main_capture(["help", "map_echo.jl"])
             @test code == 1
@@ -161,6 +187,29 @@ using Test
                 @test code == (isempty(args) ? 1 : 0)
                 @test occursin("Run `julia -m DistSSHRun help <command>` for flags.", err)
                 @test !occursin("<command> -h", err)
+            end
+        end
+        let via = _main_capture(["help", "drive", "--help"])
+            direct = _main_capture(["drive", "--help", "--help"])
+            @test via == direct
+        end
+    end
+
+    @testset "help-only argv is the root page" begin
+        page = _root_page()
+        for args in (
+                ["help", "--help"],
+                ["help", "-h"],
+                ["help", "help"],
+                ["--help", "help"],
+                ["-h", "--help"],
+                ["--help", "-h", "help"],
+            )
+            let (code, out, err) = _main_capture(args)
+                @test code == 0
+                @test out == ""
+                @test err == page
+                @test !occursin("Unknown subcommand", err)
             end
         end
     end
