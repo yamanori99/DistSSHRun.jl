@@ -6,7 +6,8 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
-- `help <command>` prints the same page as `<command> --help` and exits 0. `help`, `-h`, and `--help` with no command stay as they are. A second word that is not a command still exits 1, and the message names that word. Hints for a missing `size` or `pool` host say `help size` and `help pool`.
+- `help <command>` prints the same page as `<command> --help` and exits 0. `help`, `-h`, and `--help` with no command stay as they are. A second word that is not a command still exits 1, and the message names that word, except an argv made only of `help`, `-h`, and `--help`. Hints for a missing `size` or `pool` host say `help size` and `help pool`.
+- An argv made only of `help`, `-h`, and `--help` prints the root page on stderr and exits 0. That includes `help --help`. `help bogus` still exits 1 and names `bogus`. `help go --help` is still the `go` page.
 
 ### Planned breaking (next minor)
 

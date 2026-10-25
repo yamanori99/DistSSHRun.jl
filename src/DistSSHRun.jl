@@ -408,7 +408,9 @@ function _main(args::Vector{String})::Cint
         println_kit_version()
         return 0
     end
-    if length(args) == 1 && args[1] in ("-h", "--help", "help")
+    # `help`, `-h`, and `--help`, in any number and order, are the root page.
+    # `help go --help` is not: `go` is a command, so the rewrite below still runs.
+    if !isempty(args) && all(in(("help", "-h", "--help")), args)
         print_kit_root_usage()
         return 0
     end
@@ -418,6 +420,7 @@ function _main(args::Vector{String})::Cint
     end
     # `help <verb> …` is `<verb> --help …`, once. A second word that is not a
     # command stays on the unknown-subcommand path, and that word is the name.
+    # An argv of only help words already returned above.
     if length(args) >= 2 && args[1] == "help"
         verb = args[2]
         if haskey(_RUN_CALLS, verb)
