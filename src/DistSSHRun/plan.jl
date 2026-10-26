@@ -219,7 +219,7 @@ function plan(
         mem_headroom::Real = DEFAULT_MEM_HEADROOM,
         parent_gb::Real = DEFAULT_PARENT_GB,
     )::KitPlan
-    path = String(script)
+    path = _as_string(script)
     julia = string(VERSION)
     empty = KitPlan(
         path, :go, PlanFinding[], julia, false, "file not found: $path", nothing,

@@ -50,11 +50,11 @@ end
 
 """`(rel, tree)` under `distsshkit_demos/` or `demos/`, or `nothing`."""
 function _relpath_under_demo_trees(
-        script_path::AbstractString,
-        project_root::AbstractString,
+        script_path::String,
+        project_root::String,
     )::Union{Nothing, @NamedTuple{rel::String, tree::String}}
-    root = abspath(String(project_root))
-    path = abspath(String(script_path))
+    root = abspath(project_root)
+    path = abspath(script_path)
     for tree in (DEMO_INSTALL_DIR, "demos")
         base = joinpath(root, tree)
         path == base && return (rel = ".", tree = tree)
@@ -100,8 +100,8 @@ function diagnose_missing_script(
         script_path::AbstractString,
         project_root::AbstractString,
     )::Union{Nothing, @NamedTuple{kind::Symbol, group::Union{Nothing, String}, name::Union{Nothing, String}, tree::Union{Nothing, String}}}
-    path = String(script_path)
-    root = String(project_root)
+    path = _as_string(script_path)
+    root = _as_string(project_root)
     base = basename(path)
     if endswith(base, ".jl")
         for group in _DEMO_GROUPS

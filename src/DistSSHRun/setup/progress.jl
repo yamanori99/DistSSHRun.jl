@@ -51,18 +51,18 @@ function with_kit_setup_progress(
         path_anchor::Union{Nothing, AbstractString} = nothing,
     )
     KIT_PROGRESS[] isa KitProgressState && return f()
-    dir = String(log_dir)
+    dir = _as_string(log_dir)
     opened_log = LOG_FILE_HANDLE[] === nothing
     if opened_log
         init_log_file(
             dir;
             prefix = "setup",
-            path_anchor = path_anchor === nothing ? nothing : String(path_anchor),
+            path_anchor = path_anchor === nothing ? nothing : _as_string(path_anchor),
         )
     end
     _set_kit_progress_sidecar!(dir)
     kit_progress_begin!("setup"; steps = 1, kind = :setup)
-    kit_progress_step!(String(step))
+    kit_progress_step!(_as_string(step))
     ok_ref = Ref(true)
     threw = false
     try
