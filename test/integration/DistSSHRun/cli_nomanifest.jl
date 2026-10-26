@@ -15,7 +15,7 @@ function _nomanifest_env(depot::AbstractString, tree::AbstractString)::String
     return joinpath(depot, "environments", "distsshrun-cli", slug)
 end
 
-# Manifest present, completion marker absent: the next load must rebuild.
+# Corrupt Manifest, no marker: in-place develop fails and the directory is rebuilt.
 function _nomanifest_plant_half!(env::AbstractString)
     mkpath(env)
     write(joinpath(env, "Manifest.toml"), "half-ready\n")
@@ -90,6 +90,16 @@ function _nomanifest_check(tmp::AbstractString)
     @test isfile(joinpath(half, "distsshrun-ready"))
     @test read(joinpath(half, "Manifest.toml"), String) != "half-ready\n"
     @test !isfile(joinpath(tree, "Manifest.toml"))
+    rm(joinpath(half, "distsshrun-ready"); force = true)
+    write(joinpath(half, "keep.txt"), "keep\n")
+    again, again_out = _nomanifest_run(
+        depot,
+        `$julia --startup-file=no --project=$host $script`,
+    )
+    _assert_proc_ok(again, again_out; label = "checkout reuse")
+    @test _nomanifest_line(again_out, "ACTIVE_SAME") == "true"
+    @test isfile(joinpath(half, "keep.txt"))
+    @test isfile(joinpath(half, "distsshrun-ready"))
     drive = joinpath(tree, "src", "cli", "drive.jl")
     help, help_out = _nomanifest_run(
         depot,
