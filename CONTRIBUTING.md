@@ -100,7 +100,7 @@ Workflows pass the version to `julia-actions/setup-julia`. The job name is that 
 | Version | Role | Required |
 | --- | --- | --- |
 | **1.13** | `Project.toml` julia floor. Pkg.test, Aqua, JETLS, Documenter, draw, E2E, Runic. Codecov `pkgtest` on **main push** only | yes |
-| **1.14-nightly** | `release-1.14`. Pkg.test, Aqua. `continue-on-error` | no |
+| **1.14-nightly** | `release-1.14`. Pkg.test, Aqua, JETLS. `continue-on-error` | no |
 | **nightly** | Published `julia-latest` tarball. It follows master and can lag a `VERSION` bump. Same jobs as 1.14-nightly. `continue-on-error` | no |
 
 **1.13** runs on ordinary PRs (heavy gate), on Ubuntu and macOS.
@@ -108,6 +108,9 @@ WSL2 1.13 runs on a main push and CI weekly, not on a pull request.
 **1.14-nightly** and **nightly** `Pkg.test` and Aqua on Ubuntu run on **main**,
 **CI weekly**, and a `Project.toml` version increase
 ([`.github/version-cut.sh`](.github/version-cut.sh)), not ordinary PRs.
+`JETLS (1.14-nightly, ubuntu-latest, x64)` uses the same heavy gate as the
+1.13 JETLS job, including ordinary PRs. It is `continue-on-error` and is
+not a required check.
 macOS and WSL2 nightly `Pkg.test` and Aqua run on **CI weekly** only. PkgEval uses the same heavy gate as **1.13** and also runs on ordinary PRs. It stays `continue-on-error` and is not a required check.
 
 This package feels SSH hosts, Pkg, and lockfiles more than a compute-model
@@ -184,7 +187,7 @@ julia --project=. -e 'using Pkg; Pkg.test(; coverage=true)'
 DISTSSHQUEUE_CODE_COVERAGE=1 ./testenv/docker-ssh/scripts/up.sh --e2e
 ```
 
-Required to merge (ruleset `main` uses these names). **1.14-nightly** and **nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and a version increase, not ordinary PRs. macOS and WSL2 nightly run on CI weekly only. PkgEval runs on ordinary PRs (heavy gate) and is not in the list below. E2E weekly and CI weekly are not required. Run's titles are `DistSSHRun (...)`, the same shape as DistSSHBase and DistSSHUp, plus `DistSSHRun (1.14-nightly, ubuntu-latest, x64)`, `DistSSHRun (nightly, ubuntu-latest, x64)`, `Aqua (nightly, ubuntu-latest, x64)`, and `PkgEval (nightly, ubuntu-latest, x64)`. DistSSHBase and DistSSHUp are their own jobs on Ubuntu and macOS, and their own Ubuntu SSH E2E rows. Their WSL2 titles run on a main push and CI weekly, not a pull request. Downstream is `Downstream (DistSSHQueue@main, 1.13)` and `Downstream (DistSSHKit@main, 1.13)`. `Downstream SSH E2E (DistSSHQueue, 1.13)` runs on a version-cut pull request, a push to `main`, and `workflow_dispatch`. Ordinary pull requests skip it. Names outside the list are not in the ruleset. The ruleset itself is edited on GitHub; this list is the names to add.
+Required to merge (ruleset `main` uses these names). **1.14-nightly** and **nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and a version increase, not ordinary PRs. macOS and WSL2 nightly run on CI weekly only. PkgEval runs on ordinary PRs (heavy gate) and is not in the list below. E2E weekly and CI weekly are not required. Run's titles are `DistSSHRun (...)`, the same shape as DistSSHBase and DistSSHUp, plus `DistSSHRun (1.14-nightly, ubuntu-latest, x64)`, `DistSSHRun (nightly, ubuntu-latest, x64)`, `Aqua (nightly, ubuntu-latest, x64)`, `JETLS (1.14-nightly, ubuntu-latest, x64)`, and `PkgEval (nightly, ubuntu-latest, x64)`. DistSSHBase and DistSSHUp are their own jobs on Ubuntu and macOS, and their own Ubuntu SSH E2E rows. Their WSL2 titles run on a main push and CI weekly, not a pull request. Downstream is `Downstream (DistSSHQueue@main, 1.13)` and `Downstream (DistSSHKit@main, 1.13)`. `Downstream SSH E2E (DistSSHQueue, 1.13)` runs on a version-cut pull request, a push to `main`, and `workflow_dispatch`. Ordinary pull requests skip it. Names outside the list are not in the ruleset. The ruleset itself is edited on GitHub; this list is the names to add.
 
 - `DistSSHRun (1.13, ubuntu-latest, x64)`
 - `DistSSHRun (1.13, macos-latest, aarch64)`
