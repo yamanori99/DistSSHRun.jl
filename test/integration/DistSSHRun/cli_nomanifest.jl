@@ -84,8 +84,59 @@ function _nomanifest_check(tmp::AbstractString)
     return nothing
 end
 
+# `Pkg.test` sets `JULIA_LOAD_PATH` to the test project and does not append
+# `@stdlib`. DistSSHKit's test project does not depend on Pkg. `setup --help`
+# includes `_checkout.jl` and must still run.
+function _checkout_pkg_hidden!(proj::AbstractString, root::AbstractString)
+    mkpath(proj)
+    write(
+        joinpath(proj, "Project.toml"),
+        """
+        name = "KitLike"
+        uuid = "22222222-2222-4222-8222-222222222222"
+        version = "0.0.1"
+
+        [deps]
+        DistSSHRun = "b568025c-2759-4ef1-8b14-17d00e2cd000"
+
+        [sources]
+        DistSSHRun = {path = "$(root)"}
+        """,
+    )
+    return nothing
+end
+
+function _checkout_pkg_hidden_check(tmp::AbstractString)
+    proj = joinpath(tmp, "kitlike")
+    _checkout_pkg_hidden!(proj, _kit_root())
+    julia = _julia_exe()
+    inst, inst_out = _run_subprocess(
+        `$julia --startup-file=no --project=$proj -e "using Pkg; Pkg.instantiate()"`,
+    )
+    _assert_proc_ok(inst, inst_out; label = "kitlike instantiate")
+    script = joinpath(tmp, "setup_help.jl")
+    write(
+        script,
+        """
+        using DistSSHRun
+        code = DistSSHRun.main(["setup", "--help"])
+        println("CODE=" * string(Int(code)))
+        """,
+    )
+    env = _child_julia_env(Dict{String, String}("JULIA_LOAD_PATH" => proj))
+    proc, out = _run_subprocess(
+        setenv(`$julia --startup-file=no --project=$proj $script`, env),
+    )
+    _assert_proc_ok(proc, out; label = "setup --help without Pkg on LOAD_PATH")
+    @test _nomanifest_line(out, "CODE") == "0"
+    @test occursin("Usage", out)
+    @test !occursin("Package Pkg not found", out)
+    return nothing
+end
+
 @testset "CLI checkout without Manifest" begin
     _with_tempdir() do tmp
         _nomanifest_check(tmp)
+        _checkout_pkg_hidden_check(tmp)
     end
 end

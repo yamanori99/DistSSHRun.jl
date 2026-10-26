@@ -4,9 +4,10 @@
 # `include` of `src/DistSSHRun.jl` does not resolve non-stdlib deps.
 # A tree with no Manifest is developed into the depot, then loaded as a package.
 # The active project stays what the process was given.
-
-import Pkg
-import TOML
+#
+# Do not `import Pkg` here. `setup.jl` includes this file on every run, and
+# `import` only sees direct deps of `LOAD_PATH`. `Pkg.test` sets that to the
+# test project, which does not depend on Pkg. Load the stdlib by its id.
 
 if !isdefined(@__MODULE__, :_checkout_load_env)
     # BSD and Linux `flock`: exclusive lock, then unlock.
@@ -29,17 +30,44 @@ if !isdefined(@__MODULE__, :_checkout_load_env)
         return nothing
     end
 
-    function _checkout_project_name(toml::AbstractString)::String
-        parsed = TOML.parse(String(toml))
+    # `Base.require` of a stdlib id finds `Sys.STDLIB` when the name is not a
+    # direct dependency. An already loaded module is reused.
+    function _checkout_stdlib(name::AbstractString, uuid::AbstractString)
+        id = Base.PkgId(Base.UUID(uuid), String(name))
+        loaded = get(Base.loaded_modules, id, nothing)
+        if loaded isa Module
+            return loaded
+        end
+        return Base.require(id)
+    end
+
+    function _checkout_name_of(toml_mod::Module, toml::String)::String
+        parse = getfield(toml_mod, :parse)
+        parsed = parse(toml)
         name = get(parsed, "name", "")
         return name isa AbstractString ? String(name) : ""
     end
 
-    function _checkout_develop!(env::AbstractString, root::AbstractString)
-        Pkg.activate(env) do
-            Pkg.develop(Pkg.PackageSpec(; path = root); io = devnull)
-            Pkg.instantiate(; io = devnull)
+    function _checkout_project_name(toml::AbstractString)::String
+        toml_mod = _checkout_stdlib("TOML", "fa267f1f-6049-4f14-aa54-33bafae1ed76")
+        return Base.invokelatest(_checkout_name_of, toml_mod, String(toml))::String
+    end
+
+    function _checkout_develop_now!(pkg::Module, env::AbstractString, root::AbstractString)
+        activate = getfield(pkg, :activate)
+        develop = getfield(pkg, :develop)
+        instantiate = getfield(pkg, :instantiate)
+        spec = getfield(pkg, :PackageSpec)
+        activate(env) do
+            develop(spec(; path = root); io = devnull)
+            instantiate(; io = devnull)
         end
+        return nothing
+    end
+
+    function _checkout_develop!(env::AbstractString, root::AbstractString)
+        pkg = _checkout_stdlib("Pkg", "44cfe95a-1eb2-52ea-b672-e2afdf69b78f")
+        Base.invokelatest(_checkout_develop_now!, pkg, env, root)
         return nothing
     end
 
