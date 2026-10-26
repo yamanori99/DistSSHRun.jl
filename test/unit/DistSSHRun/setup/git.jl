@@ -13,7 +13,35 @@ using Test
     function _git_ident!(dir)
         run(pipeline(`git -C $dir config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
         run(pipeline(`git -C $dir config user.name "Test"`; stdout = devnull, stderr = devnull))
+        # Last-wins, so this overrides a user `push.default` such as `current`.
+        run(pipeline(`git -C $dir config push.default simple`; stdout = devnull, stderr = devnull))
+        # `git push` only ORs this flag, so a later false does not clear an earlier true.
+        run(pipeline(`git -C $dir config push.autoSetupRemote false`; stdout = devnull, stderr = devnull))
         return nothing
+    end
+
+    # Hide global, system, and `GIT_CONFIG_*` for one push. A repo-local false cannot
+    # clear `push.autoSetupRemote` once any earlier true was seen, and `GIT_CONFIG_COUNT`
+    # is command-line config, which overrides the temp repo.
+    function _without_inherited_push_config(f)
+        blank_global = tempname()
+        blank_system = tempname()
+        write(blank_global, "")
+        write(blank_system, "")
+        env = Dict{String, Union{Nothing, String}}(
+            "GIT_CONFIG_GLOBAL" => blank_global,
+            "GIT_CONFIG_SYSTEM" => blank_system,
+            "GIT_CONFIG_COUNT" => nothing,
+            "GIT_CONFIG_PARAMETERS" => nothing,
+        )
+        for k in keys(ENV)
+            if startswith(k, "GIT_CONFIG_KEY_") || startswith(k, "GIT_CONFIG_VALUE_")
+                env[k] = nothing
+            end
+        end
+        return withenv(env...) do
+            f()
+        end
     end
 
     function _init_commit!(dir)
@@ -52,7 +80,9 @@ using Test
             run(pipeline(`git -C $work remote add origin $bare`; stdout = devnull, stderr = devnull))
             @test DistSSHRun._git_remote_url(work) == bare
             # `git push` with no upstream tracking fails.
-            @test !DistSSHRun.git_push_project!(work)
+            _without_inherited_push_config() do
+                @test !DistSSHRun.git_push_project!(work)
+            end
             run(pipeline(`git -C $work push -q -u origin HEAD`; stdout = devnull, stderr = devnull))
             @test DistSSHRun.git_push_project!(work)
             @test DistSSHRun.git_pull_local_project!(work)
