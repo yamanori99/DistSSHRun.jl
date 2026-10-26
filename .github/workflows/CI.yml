@@ -196,7 +196,7 @@ jobs:
         run: ./.github/wsl-julia.sh 1.13 julia --project=. -e 'using Pkg; Pkg.test()'
 
   downstream:
-    name: Downstream (${{ matrix.pkg }}, 1.13)
+    name: Downstream (${{ matrix.pkg }}@main, 1.13)
     needs: detect
     if: needs.detect.outputs.heavy == 'true'
     runs-on: ubuntu-latest
