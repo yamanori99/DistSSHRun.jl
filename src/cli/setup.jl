@@ -26,6 +26,7 @@ if !isdefined(@__MODULE__, :DistSSHRun)
         catch
             include(joinpath(@__DIR__, "_checkout.jl"))
             _include_checkout_run()
+            import DistSSHRun
         end
     end
 end

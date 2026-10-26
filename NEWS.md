@@ -6,6 +6,9 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
+- The first `drive` in a process compiles less. `plan` is no longer inferred inside `run_drive_parsed!`, a drive without `--sync` or `--rsync` does not infer that path, and that call is precompiled. The text and the exit code do not change. Loading the package from a project still needs that project's dependencies instantiated.
+- A CLI script from a checkout with no `Manifest.toml` loads this package from a new environment under the depot (`environments/distsshrun-cli`). The active project stays the one the process was given.
+
 ### Planned breaking (next minor)
 
 - `interrupt_grace` on `terminate!` and `terminate_run!` will default to a positive value, so a stop sends SIGINT before SIGTERM. DistSSHQueue `cancel` of a running job will use that default. Until then the default is `0` and `cancel` does not send SIGINT.

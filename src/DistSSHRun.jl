@@ -495,6 +495,8 @@ function _main(args::Vector{String})::Cint
     return 1
 end
 
+include("DistSSHRun/precompile.jl")
+
 Base.eval(@__MODULE__, :(@main))
 
 end # module DistSSHRun

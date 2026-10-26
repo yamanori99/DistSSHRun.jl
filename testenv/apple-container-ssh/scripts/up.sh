@@ -177,6 +177,14 @@ if [[ "$RUN_E2E" -eq 1 ]]; then
   export DISTSSHKIT_YES=1
   "${DOCKER_ROOT}/scripts/ensure-kit-parent-juliaup.sh"
   cd "${KIT_ROOT}"
+  # Same as docker-ssh: e2e loads DistSSHRun, so a fresh tree needs its deps.
+  julia --project=. --color=yes -e '
+    using Pkg
+    isempty(Pkg.Registry.reachable_registries()) && Pkg.Registry.add("General")
+    Pkg.Registry.update()
+    Pkg.resolve()
+    Pkg.instantiate()
+  '
   julia_e2e=(julia --project=. --color=yes)
   if [[ "${DISTSSHKIT_CODE_COVERAGE:-}" == "1" ]]; then
     julia_e2e+=(--code-coverage=user)

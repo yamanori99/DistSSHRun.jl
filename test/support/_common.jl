@@ -2,6 +2,7 @@
 # Guard: JETLS may analyze this file both via support.jl and as an include leaf.
 
 if !isdefined(Main, :_test_root)
+    include(joinpath(@__DIR__, "..", "..", "src", "cli", "_checkout.jl"))
 
     function _test_root()::String
         return abspath(joinpath(@__DIR__, ".."))
@@ -26,6 +27,8 @@ if !isdefined(Main, :_test_root)
             julia::AbstractString = _julia_exe(),
             project::AbstractString = _kit_root(),
         )::Cmd
+        # A PkgEval tree has no Manifest. `-m` needs an instantiated project.
+        project = _checkout_load_env(String(project))
         prefix = String[
             String(julia),
             "--startup-file=no",

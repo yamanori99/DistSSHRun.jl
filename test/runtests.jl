@@ -127,6 +127,8 @@ end
     @testset "integration" verbose = true begin
         _runtest_announce("integration/DistSSHRun/vendor.jl")
         include(joinpath(@__DIR__, "integration", "DistSSHRun", "vendor.jl"))
+        _runtest_announce("integration/DistSSHRun/cli_nomanifest.jl")
+        include(joinpath(@__DIR__, "integration", "DistSSHRun", "cli_nomanifest.jl"))
         _runtest_announce("integration/cli/help.jl")
         if !_distsshrun_short_skip("integration/cli/help.jl")
             include(joinpath(@__DIR__, "integration", "cli", "help.jl"))
