@@ -6,7 +6,8 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
-- The first `drive` in a process compiles less. `plan` is no longer inferred inside `run_drive_parsed!`, a drive without `--sync` or `--rsync` does not infer that path, and that call is precompiled. The text and the exit code do not change. A copied tree loads after that project's dependencies are instantiated.
+- The first `drive` in a process compiles less. `plan` is no longer inferred inside `run_drive_parsed!`, a drive without `--sync` or `--rsync` does not infer that path, and that call is precompiled. The text and the exit code do not change. Loading the package from a project still needs that project's dependencies instantiated.
+- A CLI script from a checkout with no `Manifest.toml` loads this package from a new environment under the depot (`environments/distsshrun-cli`). The active project stays the one the process was given.
 
 ### Planned breaking (next minor)
 
