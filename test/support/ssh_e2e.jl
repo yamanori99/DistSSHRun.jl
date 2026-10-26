@@ -338,7 +338,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         run(pipeline(`git -C $proj config user.email "e2e@distsshkit.test"`; stdout = devnull, stderr = devnull))
         run(pipeline(`git -C $proj config user.name "DistSSHRun E2E"`; stdout = devnull, stderr = devnull))
         run(pipeline(`git -C $proj add -A`; stdout = devnull, stderr = devnull))
-        run(pipeline(`git -C $proj commit -m $message`; stdout = devnull, stderr = devnull))
+        run(pipeline(`git -C $proj -c commit.gpgsign=false commit -m $message`; stdout = devnull, stderr = devnull))
         return nothing
     end
 
@@ -578,7 +578,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         marker = joinpath(proj, "e2e_sync_marker.txt")
         write(marker, string(time()) * "\n")
         run(pipeline(`git -C $proj add -A`; stdout = devnull, stderr = devnull))
-        run(pipeline(`git -C $proj commit -m $message`; stdout = devnull, stderr = devnull))
+        run(pipeline(`git -C $proj -c commit.gpgsign=false commit -m $message`; stdout = devnull, stderr = devnull))
         DistSSHRun.local_git_clean(proj) || error(
             "e2e bump left a dirty tree:\n" *
                 read(pipeline(`git -C $proj status --porcelain`; stderr = devnull), String),

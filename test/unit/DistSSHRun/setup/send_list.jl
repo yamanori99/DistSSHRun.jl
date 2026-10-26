@@ -11,7 +11,7 @@ using Test
 
     function _commit!(dir, message)
         run(pipeline(`git -C $dir add -A`; stdout = devnull, stderr = devnull))
-        run(pipeline(`git -C $dir commit -q -m $message`; stdout = devnull, stderr = devnull))
+        run(pipeline(`git -C $dir -c commit.gpgsign=false commit -q -m $message`; stdout = devnull, stderr = devnull))
         return nothing
     end
 
@@ -410,7 +410,7 @@ using Test
                     stderr = devnull,
                 )
             )
-            run(pipeline(`git -C $tmp commit -q -m init`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
             write(joinpath(sub, "local.txt"), "local\n")
             env = DistSSHRun.resolve_pkg_env(sub)
             text = mktemp() do _, io

@@ -49,7 +49,7 @@ using Test
         _git_ident!(dir)
         write(joinpath(dir, "f.txt"), "hi\n")
         run(pipeline(`git -C $dir add f.txt`; stdout = devnull, stderr = devnull))
-        run(pipeline(`git -C $dir commit -q -m init`; stdout = devnull, stderr = devnull))
+        run(pipeline(`git -C $dir -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
         return nothing
     end
 

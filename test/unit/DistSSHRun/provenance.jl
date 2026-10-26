@@ -33,7 +33,7 @@ function _prov_git!(dir::String)
     run(pipeline(`git -C $dir config user.name "Test"`; stdout = devnull, stderr = devnull))
     write(joinpath(dir, "f.txt"), "hi\n")
     run(pipeline(`git -C $dir add f.txt`; stdout = devnull, stderr = devnull))
-    run(pipeline(`git -C $dir commit -q -m init`; stdout = devnull, stderr = devnull))
+    run(pipeline(`git -C $dir -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
     return nothing
 end
 

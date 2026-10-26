@@ -160,7 +160,7 @@ using Pkg
             run(pipeline(`git -C $dir config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
             run(pipeline(`git -C $dir config user.name "Test"`; stdout = devnull, stderr = devnull))
             run(pipeline(`git -C $dir add Project.toml`; stdout = devnull, stderr = devnull))
-            run(pipeline(`git -C $dir commit -q -m init`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $dir -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
             if Sys.which("ssh") !== nothing && Sys.which("rsync") !== nothing
                 _, result_clean = with_kit_verbosity(:verbose) do
                     _capture_stdio() do _, _
@@ -256,7 +256,7 @@ using Pkg
                 run(pipeline(`git -C $repo add Project.toml`; stdout = devnull, stderr = devnull))
                 run(
                     pipeline(
-                        `git -C $repo -c user.email=t@example.com -c user.name=t commit -q -m init`;
+                        `git -C $repo -c user.email=t@example.com -c user.name=t -c commit.gpgsign=false commit -q -m init`;
                         stdout = devnull,
                         stderr = devnull,
                     )
@@ -421,7 +421,7 @@ using Pkg
                 run(pipeline(`git -C $repo add -A`; stdout = devnull, stderr = devnull))
                 run(
                     pipeline(
-                        `git -C $repo -c user.email=kit@example.com -c user.name=kit commit -q -m init`;
+                        `git -C $repo -c user.email=kit@example.com -c user.name=kit -c commit.gpgsign=false commit -q -m init`;
                         stdout = devnull,
                         stderr = devnull,
                     ),
@@ -435,7 +435,7 @@ using Pkg
                 run(pipeline(`git -C $repo add -A`; stdout = devnull, stderr = devnull))
                 run(
                     pipeline(
-                        `git -C $repo -c user.email=kit@example.com -c user.name=kit commit -q -m ignore`;
+                        `git -C $repo -c user.email=kit@example.com -c user.name=kit -c commit.gpgsign=false commit -q -m ignore`;
                         stdout = devnull,
                         stderr = devnull,
                     ),
@@ -482,7 +482,7 @@ using Pkg
                 run(pipeline(`git -C $repo add -- dev/Loose`; stdout = devnull, stderr = devnull))
                 run(
                     pipeline(
-                        `git -C $repo -c user.email=kit@example.com -c user.name=kit commit -q -m link`;
+                        `git -C $repo -c user.email=kit@example.com -c user.name=kit -c commit.gpgsign=false commit -q -m link`;
                         stdout = devnull,
                         stderr = devnull,
                     ),
@@ -507,7 +507,7 @@ using Pkg
                 run(pipeline(`git -C $repo add -- vendor/In dev/Rel`; stdout = devnull, stderr = devnull))
                 run(
                     pipeline(
-                        `git -C $repo -c user.email=kit@example.com -c user.name=kit commit -q -m rel`;
+                        `git -C $repo -c user.email=kit@example.com -c user.name=kit -c commit.gpgsign=false commit -q -m rel`;
                         stdout = devnull,
                         stderr = devnull,
                     ),
@@ -527,7 +527,7 @@ using Pkg
                 run(pipeline(`git -C $repo add -- dev/Abs`; stdout = devnull, stderr = devnull))
                 run(
                     pipeline(
-                        `git -C $repo -c user.email=kit@example.com -c user.name=kit commit -q -m abs`;
+                        `git -C $repo -c user.email=kit@example.com -c user.name=kit -c commit.gpgsign=false commit -q -m abs`;
                         stdout = devnull,
                         stderr = devnull,
                     ),
@@ -550,7 +550,7 @@ using Pkg
                 run(pipeline(`git -C $repo add -- dev/Esc`; stdout = devnull, stderr = devnull))
                 run(
                     pipeline(
-                        `git -C $repo -c user.email=kit@example.com -c user.name=kit commit -q -m esc`;
+                        `git -C $repo -c user.email=kit@example.com -c user.name=kit -c commit.gpgsign=false commit -q -m esc`;
                         stdout = devnull,
                         stderr = devnull,
                     ),
@@ -641,7 +641,7 @@ using Pkg
                 run(pipeline(`git -C $phys add -A`; stdout = devnull, stderr = devnull))
                 run(
                     pipeline(
-                        `git -C $phys -c user.email=kit@example.com -c user.name=kit commit -q -m init`;
+                        `git -C $phys -c user.email=kit@example.com -c user.name=kit -c commit.gpgsign=false commit -q -m init`;
                         stdout = devnull,
                         stderr = devnull,
                     ),
@@ -678,7 +678,7 @@ using Pkg
                 run(pipeline(`git -C $phys add -- vendor/In dev/In Project.toml`; stdout = devnull, stderr = devnull))
                 run(
                     pipeline(
-                        `git -C $phys -c user.email=kit@example.com -c user.name=kit commit -q -m rel`;
+                        `git -C $phys -c user.email=kit@example.com -c user.name=kit -c commit.gpgsign=false commit -q -m rel`;
                         stdout = devnull,
                         stderr = devnull,
                     ),
@@ -692,7 +692,7 @@ using Pkg
                 run(pipeline(`git -C $phys add -- dev/Abs`; stdout = devnull, stderr = devnull))
                 run(
                     pipeline(
-                        `git -C $phys -c user.email=kit@example.com -c user.name=kit commit -q -m abs`;
+                        `git -C $phys -c user.email=kit@example.com -c user.name=kit -c commit.gpgsign=false commit -q -m abs`;
                         stdout = devnull,
                         stderr = devnull,
                     ),
@@ -737,7 +737,7 @@ using Pkg
             run(pipeline(`git -C $tmp config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
             run(pipeline(`git -C $tmp config user.name "Test"`; stdout = devnull, stderr = devnull))
             run(pipeline(`git -C $tmp add Project.toml .gitignore`; stdout = devnull, stderr = devnull))
-            run(pipeline(`git -C $tmp commit -q -m init`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
             out_rsync, = _capture_stdio() do _, _
                 @test DistSSHRun.ensure_manifest_ships!(tmp).env_dir ==
                     DistSSHRun.canonical_local_path(tmp)
@@ -752,7 +752,7 @@ using Pkg
 
             rm(joinpath(tmp, ".gitignore"))
             run(pipeline(`git -C $tmp add -A`; stdout = devnull, stderr = devnull))
-            run(pipeline(`git -C $tmp commit -q -m track`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m track`; stdout = devnull, stderr = devnull))
             @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
             open(joinpath(tmp, "Manifest.toml"), "a") do io
                 println(io, "# dirty")
@@ -778,7 +778,7 @@ using Pkg
             )
             write(joinpath(tmp, ".gitignore"), "lib/\ndocs/build/\nvendor/**/Manifest.toml\n")
             run(pipeline(`git -C $tmp add -A`; stdout = devnull, stderr = devnull))
-            run(pipeline(`git -C $tmp commit -q -m foo`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m foo`; stdout = devnull, stderr = devnull))
             # Path-source Manifest under app gitignore must not warn.
             out_dep_manifest, = _capture_stdio() do _, _
                 @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
@@ -809,7 +809,7 @@ using Pkg
                 """
             )
             run(pipeline(`git -C $tmp add Project.toml vendor/Bar/src`; stdout = devnull, stderr = devnull))
-            run(pipeline(`git -C $tmp commit -q -m bar-src`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m bar-src`; stdout = devnull, stderr = devnull))
             write(joinpath(bar, "Project.toml"), "name = \"Bar\"\n")
             out_proj, = _capture_stdio() do _, _
                 @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
@@ -826,7 +826,7 @@ using Pkg
             @test !occursin("LocalPreferences.toml", out_skip)
             @test occursin("vendor/Bar/Project.toml", out_skip)
             run(pipeline(`git -C $tmp add vendor/Bar/Project.toml`; stdout = devnull, stderr = devnull))
-            run(pipeline(`git -C $tmp commit -q -m bar-proj`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m bar-proj`; stdout = devnull, stderr = devnull))
 
             # Path-source symlink: ignored files under the target must warn.
             mkpath(joinpath(tmp, "dev"))
@@ -840,7 +840,7 @@ using Pkg
             )
             write(joinpath(foo, "lib", "x.jl"), "x = 1\n")
             run(pipeline(`git -C $tmp add Project.toml dev/Foo`; stdout = devnull, stderr = devnull))
-            run(pipeline(`git -C $tmp commit -q -m link-foo`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m link-foo`; stdout = devnull, stderr = devnull))
             out_link, = _capture_stdio() do _, _
                 @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
             end
@@ -854,7 +854,7 @@ using Pkg
             rm(joinpath(tmp, "Manifest.toml"))
             symlink("Manifest-real.toml", joinpath(tmp, "Manifest.toml"))
             run(pipeline(`git -C $tmp add Manifest.toml`; stdout = devnull, stderr = devnull))
-            run(pipeline(`git -C $tmp commit -q -m manifest-link`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m manifest-link`; stdout = devnull, stderr = devnull))
             out_mlink, = _capture_stdio() do _, _
                 @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
             end
@@ -862,7 +862,7 @@ using Pkg
             @test occursin("is not tracked", out_mlink)
             @test occursin("will be an error", out_mlink)
             run(pipeline(`git -C $tmp add Manifest-real.toml`; stdout = devnull, stderr = devnull))
-            run(pipeline(`git -C $tmp commit -q -m manifest-bytes`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m manifest-bytes`; stdout = devnull, stderr = devnull))
             quiet_mlink, = _capture_stdio() do _, _
                 @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
             end

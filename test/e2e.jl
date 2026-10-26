@@ -1138,7 +1138,7 @@ end
                 run(pipeline(`git -C $proj checkout -q -b distsshkit-e2e-feature`; stdout = devnull, stderr = devnull))
                 write(joinpath(proj, "e2e_feature.txt"), "feature\n")
                 run(pipeline(`git -C $proj add e2e_feature.txt`; stdout = devnull, stderr = devnull))
-                run(pipeline(`git -C $proj commit -q -m feature`; stdout = devnull, stderr = devnull))
+                run(pipeline(`git -C $proj -c commit.gpgsign=false commit -q -m feature`; stdout = devnull, stderr = devnull))
                 withenv(git_env...) do
                     gssh = _docker_ssh_generated()
                     push_cmd = setenv(
@@ -1182,7 +1182,7 @@ end
                 run(pipeline(`git -C $app config user.email "e2e@example.com"`; stdout = devnull, stderr = devnull))
                 run(pipeline(`git -C $app config user.name "e2e"`; stdout = devnull, stderr = devnull))
                 run(pipeline(`git -C $app add -A`; stdout = devnull, stderr = devnull))
-                run(pipeline(`git -C $app commit -q -m init`; stdout = devnull, stderr = devnull))
+                run(pipeline(`git -C $app -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
                 neg_env = _ssh_e2e_env(; remote_project = neg_root)
                 proc, out = _run_kit_setup(;
                     setup_args = [
