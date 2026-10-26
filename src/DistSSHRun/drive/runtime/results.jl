@@ -97,9 +97,9 @@ function run_driver_script!(enable_log::Bool, drive_atexit_cleanup)
     end
     return _with_driver_sigint_exceptions() do
         try
-            if enable_log && LOG_FILE_HANDLE[] !== nothing
+            log_io = LOG_FILE_HANDLE[]
+            if enable_log && log_io !== nothing
                 orig_stdout = stdout
-                log_io = LOG_FILE_HANDLE[]
                 linebuf = UInt8[]
                 rd, wr = redirect_stdout()
                 reader = @async begin

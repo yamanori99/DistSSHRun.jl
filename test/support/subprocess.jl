@@ -32,9 +32,13 @@ if !isdefined(Main, :_child_julia_env)
     _subprocess_width() = 4
 
     # One child, still running. Caller closes the write end so `read` ends at exit.
+    #
+    # `pipeline` is a `CmdRedirect` (`cmd::AbstractCmd`), so `run` also infers
+    # `ProcessChain` and `Vector{Process}`. A `Cmd` with stdio args is a `Process`,
+    # which has `exitcode`. `RawFD(0)` is the stdin `pipeline` leaves inherited.
     function _start_subprocess(cmd::Cmd)
         out = Pipe()
-        proc = run(pipeline(ignorestatus(cmd), stdout = out, stderr = out); wait = false)
+        proc = run(ignorestatus(cmd), RawFD(0), out, out; wait = false)
         close(out.in)
         return proc, @async read(out, String)
     end

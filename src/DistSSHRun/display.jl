@@ -630,6 +630,11 @@ function cli_project_root(kit_src_dir::AbstractString)
     end
 end
 
+# `String(::AbstractString)` infers as `Any`. A `String` is returned as-is;
+# any other string is copied, and that copy infers as `String`.
+_as_string(s::String) = s
+_as_string(s::AbstractString) = sprint(print, s)
+
 # Log file
 
 const LOG_FILE_HANDLE = Ref{Union{IO, Nothing}}(nothing)
