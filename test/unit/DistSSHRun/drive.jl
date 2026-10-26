@@ -513,6 +513,7 @@ using Test
             p = joinpath(tmp, "plain.jl")
             write(p, "ys = map(x -> x * x, 1:3)\nprintln(join(ys, \",\"))\n")
             msg = DistSSHRun._drive_plain_script_hint(p, tmp; shown = "plain.jl")
+            @test msg == DistSSHRun._drive_script_hint_now(p, tmp; shown = "plain.jl")
             @test msg isa String
             @test occursin("no Distributed vocabulary", msg)
             @test occursin("Load is this include", msg)

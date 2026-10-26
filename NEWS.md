@@ -6,6 +6,8 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
+- The first `drive` in a process compiles less. `plan` is no longer inferred inside `run_drive_parsed!`, a drive without `--sync` or `--rsync` does not infer that path, and that call is precompiled. The text and the exit code do not change.
+
 ### Planned breaking (next minor)
 
 - `interrupt_grace` on `terminate!` and `terminate_run!` will default to a positive value, so a stop sends SIGINT before SIGTERM. DistSSHQueue `cancel` of a running job will use that default. Until then the default is `0` and `cancel` does not send SIGINT.

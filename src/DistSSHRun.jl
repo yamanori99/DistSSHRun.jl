@@ -495,6 +495,17 @@ function _main(args::Vector{String})::Cint
     return 1
 end
 
+# A copied tree on `LOAD_PATH` (Project.toml + src + lib, no depot) is how
+# the SSH bundle and the vendor test load. That Project.toml names
+# PrecompileTools, so `identify_package` finds the uuid, but the source is
+# not installed. `locate_package` is the entry point on disk. Skip the
+# workload then. A normal project has the dependency installed.
+let pc = Base.identify_package("PrecompileTools")
+    if pc !== nothing && Base.locate_package(pc) !== nothing
+        include("DistSSHRun/precompile.jl")
+    end
+end
+
 Base.eval(@__MODULE__, :(@main))
 
 end # module DistSSHRun

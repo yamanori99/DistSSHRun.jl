@@ -22,6 +22,29 @@ function run_drive_parsed!(
         resolved_hosts::Union{Nothing, Base.RefValue{Vector{HostRunResult}}} = nothing,
         project_root::Union{Nothing, AbstractString} = nothing,
     )::Cint
+    # `parse_drive_args` is inferred as one NamedTuple whose fields are unions
+    # (`sync_mode::Union{Nothing,Symbol}`, and the same for paths and counts).
+    # The value for one argv is narrower. Lookup at runtime specializes the
+    # pipeline on that value, so a drive without `--sync` does not infer sync.
+    return Base.invokelatest(
+        _run_drive_parsed_specialized!,
+        parsed,
+        original_args,
+        resolved_output_dir,
+        resolved_log_dir,
+        resolved_hosts,
+        project_root,
+    )
+end
+
+function _run_drive_parsed_specialized!(
+        parsed,
+        original_args,
+        resolved_output_dir,
+        resolved_log_dir,
+        resolved_hosts,
+        project_root,
+    )::Cint
     if parsed.help
         show_drive_usage()
         return 0
@@ -82,7 +105,9 @@ function run_drive_parsed!(
     project_root_abs = canonical_local_path(something(project_root, proj_dir))
     path_anchor = canonical_local_path(project_root_abs)
     shown = display_path(script_path, path_anchor)
-    hint = DistSSHRun._drive_plain_script_hint(script_path, proj_dir; shown = shown)
+    # `plan` (and, through it, `size!`) stays out of this method. The hint
+    # runs the same function; only the compile is separate.
+    hint = DistSSHRun._drive_script_hint_now(script_path, proj_dir; shown = shown)
     if hint !== nothing
         print_warn("WARNING: "; bold = true)
         println_fatal(hint)

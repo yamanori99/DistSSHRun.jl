@@ -451,6 +451,24 @@ function _drive_plain_script_hint(
     )
 end
 
+"""Same words as [`_drive_plain_script_hint`](@ref), compiled apart from `drive`.
+
+`plan` is syntax-only here, but inferring it also infers `size!`. Resolving
+the call when the hint runs keeps that tree out of `run_drive_parsed!`.
+"""
+function _drive_script_hint_now(
+        script_path::AbstractString,
+        project::AbstractString;
+        shown::AbstractString,
+    )::Union{Nothing, String}
+    return Base.invokelatest(
+        _drive_plain_script_hint,
+        script_path,
+        project;
+        shown = shown,
+    )
+end
+
 """`nothing` if this file has Distributed vocabulary; otherwise a warning body."""
 function _drive_plain_script_hint(
         script_path::AbstractString,
