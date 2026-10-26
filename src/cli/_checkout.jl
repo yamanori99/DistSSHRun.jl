@@ -71,11 +71,24 @@ if !isdefined(@__MODULE__, :_checkout_load_env)
         return nothing
     end
 
+    # Written only after `develop` and `instantiate` both return.
+    # A Manifest without this file is a prepare that stopped halfway.
+    _checkout_ready_path(env::AbstractString) = joinpath(env, "distsshrun-ready")
+
+    function _checkout_mark_ready!(env::AbstractString)
+        dest = _checkout_ready_path(env)
+        tmp = dest * ".tmp"
+        write(tmp, "ok\n")
+        mv(tmp, dest; force = true)
+        return nothing
+    end
+
     function _checkout_fill_env!(env::AbstractString, root::AbstractString)
-        isfile(joinpath(env, "Manifest.toml")) && return nothing
+        isfile(_checkout_ready_path(env)) && return nothing
         rm(env; force = true, recursive = true)
         mkpath(env)
         _checkout_develop!(env, root)
+        _checkout_mark_ready!(env)
         return nothing
     end
 

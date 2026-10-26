@@ -5,6 +5,24 @@ using Test
 # so this is the PkgEval shape (package tree has no Manifest, active project
 # is a different env). The developed environment stays in the child depot.
 
+# Same slug as `_checkout_load_env`: the root `_include_checkout_run` builds
+# (`src/cli/../../`), then the Project.toml bytes. That root keeps a trailing
+# separator, so `abspath(tree)` is a different hash.
+function _nomanifest_env(depot::AbstractString, tree::AbstractString)::String
+    root = normpath(abspath(joinpath(tree, "src", "cli", "..", "..")))
+    toml = read(joinpath(tree, "Project.toml"), String)
+    slug = string(hash(root * "\n" * toml); base = 16)
+    return joinpath(depot, "environments", "distsshrun-cli", slug)
+end
+
+# Manifest present, completion marker absent: the next load must rebuild.
+function _nomanifest_plant_half!(env::AbstractString)
+    mkpath(env)
+    write(joinpath(env, "Manifest.toml"), "half-ready\n")
+    write(joinpath(env, "stale.txt"), "stale\n")
+    return nothing
+end
+
 function _nomanifest_copy!(dest::AbstractString, root::AbstractString)
     mkpath(dest)
     cp(joinpath(root, "Project.toml"), joinpath(dest, "Project.toml"))
@@ -34,6 +52,8 @@ function _nomanifest_check(tmp::AbstractString)
     mkpath(depot)
     mkpath(host)
     _nomanifest_copy!(tree, _kit_root())
+    half = _nomanifest_env(depot, tree)
+    _nomanifest_plant_half!(half)
     _write_host_project!(host, "HostApp")
     julia = _julia_exe()
     script = joinpath(tmp, "load.jl")
@@ -65,6 +85,10 @@ function _nomanifest_check(tmp::AbstractString)
     end
     env = _nomanifest_line(out, "LOAD0")
     @test startswith(env, depot)
+    @test normpath(env) == normpath(half)
+    @test !isfile(joinpath(half, "stale.txt"))
+    @test isfile(joinpath(half, "distsshrun-ready"))
+    @test read(joinpath(half, "Manifest.toml"), String) != "half-ready\n"
     @test !isfile(joinpath(tree, "Manifest.toml"))
     drive = joinpath(tree, "src", "cli", "drive.jl")
     help, help_out = _nomanifest_run(
