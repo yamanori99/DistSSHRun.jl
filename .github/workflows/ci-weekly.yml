@@ -88,7 +88,7 @@ jobs:
         run: ./.github/wsl-julia.sh 1.13 julia --project=. -e 'using Pkg; Pkg.test()'
 
   downstream:
-    name: Downstream (${{ matrix.pkg }}, 1.13)
+    name: Downstream (${{ matrix.pkg }}@main, 1.13)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

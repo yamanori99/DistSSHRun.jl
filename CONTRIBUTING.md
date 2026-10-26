@@ -184,7 +184,7 @@ julia --project=. -e 'using Pkg; Pkg.test(; coverage=true)'
 DISTSSHQUEUE_CODE_COVERAGE=1 ./testenv/docker-ssh/scripts/up.sh --e2e
 ```
 
-Required to merge (ruleset `main` uses these names). **1.14-nightly** and **nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and a version increase, not ordinary PRs. macOS and WSL2 nightly run on CI weekly only. PkgEval runs on ordinary PRs (heavy gate) and is not in the list below. E2E weekly and CI weekly are not required. Run's titles are `DistSSHRun (...)`, the same shape as DistSSHBase and DistSSHUp, plus `DistSSHRun (1.14-nightly, ubuntu-latest, x64)`, `DistSSHRun (nightly, ubuntu-latest, x64)`, `Aqua (nightly, ubuntu-latest, x64)`, and `PkgEval (nightly, ubuntu-latest, x64)`. DistSSHBase and DistSSHUp are their own jobs on Ubuntu and macOS, and their own Ubuntu SSH E2E rows. Their WSL2 titles run on a main push and CI weekly, not a pull request. Downstream is `Downstream (DistSSHQueue, 1.13)` and `Downstream (DistSSHKit, 1.13)`. `Downstream SSH E2E (DistSSHQueue, 1.13)` runs on a version-cut pull request, a push to `main`, and `workflow_dispatch`. Ordinary pull requests skip it. Names outside the list are not in the ruleset. The ruleset itself is edited on GitHub; this list is the names to add.
+Required to merge (ruleset `main` uses these names). **1.14-nightly** and **nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and a version increase, not ordinary PRs. macOS and WSL2 nightly run on CI weekly only. PkgEval runs on ordinary PRs (heavy gate) and is not in the list below. E2E weekly and CI weekly are not required. Run's titles are `DistSSHRun (...)`, the same shape as DistSSHBase and DistSSHUp, plus `DistSSHRun (1.14-nightly, ubuntu-latest, x64)`, `DistSSHRun (nightly, ubuntu-latest, x64)`, `Aqua (nightly, ubuntu-latest, x64)`, and `PkgEval (nightly, ubuntu-latest, x64)`. DistSSHBase and DistSSHUp are their own jobs on Ubuntu and macOS, and their own Ubuntu SSH E2E rows. Their WSL2 titles run on a main push and CI weekly, not a pull request. Downstream is `Downstream (DistSSHQueue@main, 1.13)` and `Downstream (DistSSHKit@main, 1.13)`. `Downstream SSH E2E (DistSSHQueue, 1.13)` runs on a version-cut pull request, a push to `main`, and `workflow_dispatch`. Ordinary pull requests skip it. Names outside the list are not in the ruleset. The ruleset itself is edited on GitHub; this list is the names to add.
 
 - `DistSSHRun (1.13, ubuntu-latest, x64)`
 - `DistSSHRun (1.13, macos-latest, aarch64)`
@@ -334,9 +334,11 @@ Colors match DistSSHKit: type is "what", area is "where". Do not give each `area
 
 | `when:*` | Use |
 | --- | --- |
-| `when:current` | Broken daily path or CLI that lies; same 0.4 contract |
-| `when:next` | Same contract: chrome, copy, colors |
-| `when:later` | Later cut: daemon, inventory, cwd, ids |
+| `when:current` | Bug on the ordinary path or lying CLI; patch promptly |
+| `when:next` | Non-breaking (opt-in, docs, CI); ships when needed or after 2 weeks |
+| `when:later` | Breaking milestone batch, or waits on upstream (e.g. julia-next) |
+
+An issue on the open breaking milestone (`X.Y.0`, no due date) gets `when:later`. That milestone is the batch in [When to cut](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md#when-to-cut).
 
 ## Language
 
