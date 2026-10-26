@@ -400,6 +400,53 @@ const _RUN_CALLS = Dict{String, Function}(
     "progress" => (rest -> progress(rest)::Cint),
 )
 
+"""`Unknown subcommand: ` plus `name`. DistSSHKit prints this sentence too."""
+function unknown_subcommand_message(name::AbstractString)::String
+    return "Unknown subcommand: $(name)"
+end
+
+"""The `.jl` rejection sentence. `name` is the word the caller reports."""
+function no_command_message(name::AbstractString)::String
+    return "No command (got $(repr(String(name)))). Kit does not infer go / ride / drive."
+end
+
+# Lines under `no_command_message`. DistSSHKit prints the same four lines.
+const NO_COMMAND_HINT_LINES = (
+    "  go SCRIPT.jl      as-is complete job (timing without rewrite)",
+    "  ride … SCRIPT.jl  experimental map / filter",
+    "  drive … SCRIPT.jl Distributed",
+    "  plan SCRIPT.jl    inspect; do not run",
+)
+
+# The run-command list under `unknown_subcommand_message`. Order is the sentence.
+const RUN_SUBCOMMAND_EXPECTATION =
+    "Expected: setup | up | go | ride | drive | plan | size | pool | demo | progress"
+
+"""Print the shared rejection lines. The caller prints the usage page.
+
+`script` is the `.jl` sentence and `NO_COMMAND_HINT_LINES`. Otherwise this
+prints `unknown_subcommand_message` and `RUN_SUBCOMMAND_EXPECTATION`.
+DistSSHKit prints its Queue line after that expectation, then its own page.
+"""
+function print_rejected_command(name::AbstractString; script::Bool, io::IO = stderr)
+    if script
+        print_cli_error(no_command_message(name); io = io)
+        for line in NO_COMMAND_HINT_LINES
+            println(io, line)
+        end
+    else
+        print_cli_error(unknown_subcommand_message(name); io = io)
+        println(io, RUN_SUBCOMMAND_EXPECTATION)
+    end
+    return nothing
+end
+
+public unknown_subcommand_message
+public no_command_message
+public NO_COMMAND_HINT_LINES
+public RUN_SUBCOMMAND_EXPECTATION
+public print_rejected_command
+
 function _main(args::Vector{String})::Cint
     if _consume_kit_cli_subcommand_done!()
         return 0
@@ -439,18 +486,10 @@ function _main(args::Vector{String})::Cint
     if call !== nothing
         return call(rest)::Cint
     end
-    if any(endswith(String(a), ".jl") for a in args)
-        print_cli_error(
-            "No command (got $(repr(subcommand))). Kit does not infer go / ride / drive.",
-        )
-        println(stderr, "  go SCRIPT.jl      as-is complete job (timing without rewrite)")
-        println(stderr, "  ride … SCRIPT.jl  experimental map / filter")
-        println(stderr, "  drive … SCRIPT.jl Distributed")
-        println(stderr, "  plan SCRIPT.jl    inspect; do not run")
-    else
-        print_cli_error("Unknown subcommand: $subcommand")
-        println(stderr, "Expected: setup | up | go | ride | drive | plan | size | pool | demo | progress")
-    end
+    print_rejected_command(
+        subcommand;
+        script = any(endswith(String(a), ".jl") for a in args),
+    )
     println(stderr)
     print_kit_root_usage()
     return 1
