@@ -6,7 +6,7 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
-- The first `drive` in a process compiles less. `plan` is no longer inferred inside `run_drive_parsed!`, a drive without `--sync` or `--rsync` does not infer that path, and that call is precompiled. The text and the exit code do not change.
+- The first `drive` in a process compiles less. `plan` is no longer inferred inside `run_drive_parsed!`, a drive without `--sync` or `--rsync` does not infer that path, and that call is precompiled. The text and the exit code do not change. A copied tree loads after that project's dependencies are instantiated.
 
 ### Planned breaking (next minor)
 
