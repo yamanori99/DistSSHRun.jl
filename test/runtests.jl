@@ -51,7 +51,9 @@ end
         _runtest_announce("unit/DistSSHRun/drive/collect_tree.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "drive", "collect_tree.jl"))
         _runtest_announce("unit/DistSSHRun/drive/workers.jl")
-        include(joinpath(@__DIR__, "unit", "DistSSHRun", "drive", "workers.jl"))
+        if !_distsshrun_short_skip("unit/DistSSHRun/drive/workers.jl")
+            include(joinpath(@__DIR__, "unit", "DistSSHRun", "drive", "workers.jl"))
+        end
         _runtest_announce("unit/DistSSHRun/size.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "size.jl"))
         _runtest_announce("unit/DistSSHRun/go.jl")
@@ -67,7 +69,9 @@ end
         _runtest_announce("unit/DistSSHRun/module.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "module.jl"))
         _runtest_announce("unit/DistSSHRun/execute.jl")
-        include(joinpath(@__DIR__, "unit", "DistSSHRun", "execute.jl"))
+        if !_distsshrun_short_skip("unit/DistSSHRun/execute.jl")
+            include(joinpath(@__DIR__, "unit", "DistSSHRun", "execute.jl"))
+        end
         _runtest_announce("unit/DistSSHRun/provenance.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "provenance.jl"))
         _runtest_announce("unit/DistSSHRun/argv/session.jl")
@@ -83,7 +87,9 @@ end
         _runtest_announce("unit/DistSSHRun/setup_api.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup_api.jl"))
         _runtest_announce("unit/DistSSHRun/setup/checks.jl")
-        include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "checks.jl"))
+        if !_distsshrun_short_skip("unit/DistSSHRun/setup/checks.jl")
+            include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "checks.jl"))
+        end
         _runtest_announce("unit/DistSSHRun/setup/hosts.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "hosts.jl"))
         _runtest_announce("unit/DistSSHRun/setup/git.jl")
@@ -91,7 +97,9 @@ end
         _runtest_announce("unit/DistSSHRun/setup/rsync.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "rsync.jl"))
         _runtest_announce("unit/DistSSHRun/setup/send_list.jl")
-        include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "send_list.jl"))
+        if !_distsshrun_short_skip("unit/DistSSHRun/setup/send_list.jl")
+            include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "send_list.jl"))
+        end
         _runtest_announce("unit/cli/drive/args.jl")
         include(joinpath(@__DIR__, "unit", "cli", "drive", "args.jl"))
         _runtest_announce("unit/cli/go/args.jl")
@@ -120,9 +128,13 @@ end
         _runtest_announce("integration/DistSSHRun/vendor.jl")
         include(joinpath(@__DIR__, "integration", "DistSSHRun", "vendor.jl"))
         _runtest_announce("integration/cli/help.jl")
-        include(joinpath(@__DIR__, "integration", "cli", "help.jl"))
+        if !_distsshrun_short_skip("integration/cli/help.jl")
+            include(joinpath(@__DIR__, "integration", "cli", "help.jl"))
+        end
         _runtest_announce("integration/setup/exit.jl")
-        include(joinpath(@__DIR__, "integration", "setup", "exit.jl"))
+        if !_distsshrun_short_skip("integration/setup/exit.jl")
+            include(joinpath(@__DIR__, "integration", "setup", "exit.jl"))
+        end
         _runtest_announce("integration/go/cli.jl")
         include(joinpath(@__DIR__, "integration", "go", "cli.jl"))
         _runtest_announce("integration/go/overlap.jl")
@@ -134,24 +146,40 @@ end
         _runtest_announce("integration/drive/api.jl")
         include(joinpath(@__DIR__, "integration", "drive", "api.jl"))
         _runtest_announce("integration/drive/execute.jl")
-        include(joinpath(@__DIR__, "integration", "drive", "execute.jl"))
+        if !_distsshrun_short_skip("integration/drive/execute.jl")
+            include(joinpath(@__DIR__, "integration", "drive", "execute.jl"))
+        end
         _runtest_announce("integration/drive/fail.jl")
         include(joinpath(@__DIR__, "integration", "drive", "fail.jl"))
         _runtest_announce("integration/drive/sigint.jl")
         include(joinpath(@__DIR__, "integration", "drive", "sigint.jl"))
         _runtest_announce("integration/drive/interrupt_grace.jl")
-        include(joinpath(@__DIR__, "integration", "drive", "interrupt_grace.jl"))
+        if !_distsshrun_short_skip("integration/drive/interrupt_grace.jl")
+            include(joinpath(@__DIR__, "integration", "drive", "interrupt_grace.jl"))
+        end
         _runtest_announce("integration/drive/pkg.jl")
-        include(joinpath(@__DIR__, "integration", "drive", "pkg.jl"))
+        if !_distsshrun_short_skip("integration/drive/pkg.jl")
+            include(joinpath(@__DIR__, "integration", "drive", "pkg.jl"))
+        end
         _runtest_announce("integration/drive/log_via_script.jl")
-        include(joinpath(@__DIR__, "integration", "drive", "log_via_script.jl"))
+        if !_distsshrun_short_skip("integration/drive/log_via_script.jl")
+            include(joinpath(@__DIR__, "integration", "drive", "log_via_script.jl"))
+        end
         _runtest_announce("integration/drive/log_via_module.jl")
-        include(joinpath(@__DIR__, "integration", "drive", "log_via_module.jl"))
+        if !_distsshrun_short_skip("integration/drive/log_via_module.jl")
+            include(joinpath(@__DIR__, "integration", "drive", "log_via_module.jl"))
+        end
         _runtest_announce("integration/drive/pkg_develop.jl")
-        include(joinpath(@__DIR__, "integration", "drive", "pkg_develop.jl"))
+        if !_distsshrun_short_skip("integration/drive/pkg_develop.jl")
+            include(joinpath(@__DIR__, "integration", "drive", "pkg_develop.jl"))
+        end
         _runtest_announce("integration/demos/with_kit.jl")
-        include(joinpath(@__DIR__, "integration", "demos", "with_kit.jl"))
+        if !_distsshrun_short_skip("integration/demos/with_kit.jl")
+            include(joinpath(@__DIR__, "integration", "demos", "with_kit.jl"))
+        end
         _runtest_announce("integration/demos/without_kit.jl")
-        include(joinpath(@__DIR__, "integration", "demos", "without_kit.jl"))
+        if !_distsshrun_short_skip("integration/demos/without_kit.jl")
+            include(joinpath(@__DIR__, "integration", "demos", "without_kit.jl"))
+        end
     end
 end

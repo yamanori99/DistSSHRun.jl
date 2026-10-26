@@ -125,6 +125,25 @@ using Test
             @test DistSSHRun._read_kit_hosts(hosts_tmp) == ["alice@h1", "bob@h2"]
         end
 
+        buf = IOBuffer()
+        DistSSHRun.print_ride(r; io = buf)
+        shown = String(take!(buf))
+        @test startswith(shown, "DistSSHKit ride\n")
+        @test occursin("Script: ", shown)
+        @test occursin("Workers: ", shown)
+        @test occursin("Julia: ", shown)
+        @test occursin("DistSSHRun: ", shown)
+        @test occursin("SPI check: passed", shown)
+        @test !occursin("Ride:", shown)
+
+        # One `ride!` above is the ordinary parent:1 map path. The rest repeat
+        # worker startup (filter, pmap, SPI variants).
+        if _distsshrun_test_short()
+            println("  short: skip extra ride! cases")
+            flush(stdout)
+            return
+        end
+
         fout = joinpath(tmp, "filt.txt")
         filt = joinpath(tmp, "filt.jl")
         write(
@@ -396,16 +415,5 @@ using Test
         @test !rd.ok
         @test occursin("drive", something(rd.error, ""))
         @test occursin("pmap", something(rd.error, ""))
-
-        buf = IOBuffer()
-        DistSSHRun.print_ride(r; io = buf)
-        shown = String(take!(buf))
-        @test startswith(shown, "DistSSHKit ride\n")
-        @test occursin("Script: ", shown)
-        @test occursin("Workers: ", shown)
-        @test occursin("Julia: ", shown)
-        @test occursin("DistSSHRun: ", shown)
-        @test occursin("SPI check: passed", shown)
-        @test !occursin("Ride:", shown)
     end
 end

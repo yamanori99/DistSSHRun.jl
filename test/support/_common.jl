@@ -63,4 +63,39 @@ if !isdefined(Main, :_test_root)
         return rec
     end
 
+    # PkgEval's assertion build kills this suite around 45 minutes.
+    # `DISTSSHRUN_TEST_SHORT=1` (or `JULIA_PKGEVAL=true`) drops the heavy
+    # files listed here. Unset keeps every file.
+    function _distsshrun_test_short()::Bool
+        flag = lowercase(strip(get(ENV, "DISTSSHRUN_TEST_SHORT", "")))
+        if flag in ("1", "true", "yes", "on")
+            return true
+        end
+        return strip(get(ENV, "JULIA_PKGEVAL", "")) == "true"
+    end
+
+    function _distsshrun_short_skip(rel::AbstractString)::Bool
+        _distsshrun_test_short() || return false
+        skipped = (
+            "unit/DistSSHRun/drive/workers.jl",
+            "unit/DistSSHRun/execute.jl",
+            "unit/DistSSHRun/setup/checks.jl",
+            "unit/DistSSHRun/setup/send_list.jl",
+            "integration/cli/help.jl",
+            "integration/setup/exit.jl",
+            "integration/drive/execute.jl",
+            "integration/drive/interrupt_grace.jl",
+            "integration/drive/pkg.jl",
+            "integration/drive/log_via_script.jl",
+            "integration/drive/log_via_module.jl",
+            "integration/drive/pkg_develop.jl",
+            "integration/demos/with_kit.jl",
+            "integration/demos/without_kit.jl",
+        )
+        String(rel) in skipped || return false
+        println("  short: skip $rel")
+        flush(stdout)
+        return true
+    end
+
 end

@@ -13,6 +13,9 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 
 That is `test/runtests.jl` (unit + integration), sequential `@testset`s,
 `test/Project.toml`. Aqua is a separate CI job, not `Pkg.test()`.
+Unset, all 56 files run. `DISTSSHRUN_TEST_SHORT=1` (`true`, `yes`, and `on`
+too) skips the heavy files and the extra `ride!` cases. `JULIA_PKGEVAL=true`
+does the same so a PkgEval run stays inside the 45 minute limit.
 `Pkg.test()` on this checkout is not the PkgEval sandbox. Job smokes pass
 `-y`; real `ssh` / `git` spawn runs only when that binary is on `PATH`;
 real SSH clusters stay in `e2e.jl`. Reproduce that sandbox:
@@ -118,7 +121,8 @@ julia-latest tarball (`julia="nightly"`). It follows master and can lag a
 `VERSION` bump. The ecosystem daily pins a master commit and enables
 assertions, so its Julia is not this tarball.
 CI: `PkgEval (nightly, ubuntu-latest, x64)` on ordinary PRs (heavy gate)
-and **main** (`continue-on-error`; not a required check).
+and **main** (`continue-on-error`; not a required check). The sandbox sets
+`JULIA_PKGEVAL=true`, which selects the short file list above.
 
 From this checkout:
 
