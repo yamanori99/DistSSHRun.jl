@@ -58,8 +58,8 @@ if !isdefined(Main, :_run_kit_drive)
     end
 
     # Run the kit `drive` CLI with a host `DISTRIBUTED_PROJECT_ROOT`.
-    function _run_kit_drive(; kwargs...)
-        return _run_subprocess(_kit_drive_cmd(; kwargs...))
+    function _run_kit_drive(; script::AbstractString, host_root, kwargs...)
+        return _run_subprocess(_kit_drive_cmd(; script, host_root, kwargs...))
     end
 
     # Run `drive --collect-missing|--collect-overwrite ROOT HOST...` as a child CLI.
