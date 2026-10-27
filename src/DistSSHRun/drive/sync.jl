@@ -5,7 +5,7 @@
 
 Sync local project to SSH hosts (call explicitly; go/drive do not call this by default).
 
-- `mode=:sync` — git push + pull on remotes (confirm unless `session.yes`)
+- `mode=:sync` — push the local branch to origin, then check out that commit on each remote as a detached HEAD (confirm unless `session.yes`). Does not run `git pull`. A dirty tree is refused.
 - `mode=:rsync` — rsync working tree (no git; confirm unless `session.yes`).
   Refuses nonempty remote paths; use `setup!(session, :delete)` /
   `setup --delete` first.
@@ -55,7 +55,6 @@ function sync!(session::KitSession; mode = :sync, gitignore::Bool = true)::SyncR
                 remote_path;
                 do_push = true,
                 do_pull = true,
-                do_local_pull = false,
                 confirm = !session.yes,
             )
             if raw.cancelled

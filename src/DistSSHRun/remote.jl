@@ -447,7 +447,8 @@ end
 Warn about a lock or path source that git sync would not ship.
 
 Skips structural errors. Those stay on the clone and git-sync path, which
-throws. `--check` and an already-current `--sync` / `--pull` only warn.
+throws. `--check` warns. `setup --sync` and `--pull` check the commit out
+instead of stopping when the hashes already match.
 """
 function _warn_git_worktree_ship!(project::AbstractString)
     env = try

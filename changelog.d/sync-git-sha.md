@@ -1,0 +1,3 @@
+category: breaking
+
+- `setup --sync`, `setup --pull`, and `sync!` check out the local commit on each remote (`git checkout --detach`) instead of `git pull`. The commit is pushed to `refs/distssh/<sha>` on that remote, so origin does not have to have it. Remote git runs with `core.fsmonitor=false` and `core.hooksPath=/dev/null`. A dirty local or remote tree is refused and is not sent as a patch. After checkout the remote is a detached HEAD, and a HEAD that is not that commit is an error. Submodules are updated to the pinned commit. Git LFS files are fetched when `.gitattributes` requests them. A shallow remote that still does not contain the commit is an error and is not unshallowed.
