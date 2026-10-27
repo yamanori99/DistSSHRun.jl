@@ -26,7 +26,7 @@ function _demo_default_output()::String
     if !ispath(root) || (isdir(root) && !islink(root) && isempty(readdir(root)))
         return root
     end
-    isdir(root) && !islink(root) && return mktempdir(root)
+    isdir(root) && !islink(root) && return mktempdir(root; cleanup = false)
     return root
 end
 

@@ -18,7 +18,7 @@ else
     if !ispath(root) || (isdir(root) && !islink(root) && isempty(readdir(root)))
         root
     elseif isdir(root) && !islink(root)
-        mktempdir(root)
+        mktempdir(root; cleanup = false)
     else
         root
     end
