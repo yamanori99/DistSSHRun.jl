@@ -172,26 +172,30 @@ end
         _write_host_project!(proj, "DriveLeftoverInit")
         filled = joinpath(proj, "output")
         with_init = joinpath(proj, "with_init.jl")
-        write(with_init, """
-        function init_output_dir!(_)
-            dest = joinpath(@__DIR__, "output")
-            mkpath(dest)
-            ENV["DISTRIBUTED_OUTPUT_DIR"] = dest
-            return nothing
-        end
-        function main()
-            write(joinpath(ENV["DISTRIBUTED_OUTPUT_DIR"], "filled.txt"), "x")
-            println("DISTSSHKIT_INIT_RAN")
-            return nothing
-        end
-        """)
+        write(
+            with_init, """
+            function init_output_dir!(_)
+                dest = joinpath(@__DIR__, "output")
+                mkpath(dest)
+                ENV["DISTRIBUTED_OUTPUT_DIR"] = dest
+                return nothing
+            end
+            function main()
+                write(joinpath(ENV["DISTRIBUTED_OUTPUT_DIR"], "filled.txt"), "x")
+                println("DISTSSHKIT_INIT_RAN")
+                return nothing
+            end
+            """
+        )
         no_init = joinpath(proj, "no_init.jl")
-        write(no_init, """
-        function main()
-            println("DISTSSHKIT_NO_INIT_OUTPUT")
-            return nothing
-        end
-        """)
+        write(
+            no_init, """
+            function main()
+                println("DISTSSHKIT_NO_INIT_OUTPUT")
+                return nothing
+            end
+            """
+        )
         prev_v = DistSSHRun.kit_verbosity()
         try
             first = redirect_stdout(devnull) do
