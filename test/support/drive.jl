@@ -58,8 +58,33 @@ if !isdefined(Main, :_run_kit_drive)
     end
 
     # Run the kit `drive` CLI with a host `DISTRIBUTED_PROJECT_ROOT`.
-    function _run_kit_drive(; script::AbstractString, host_root, kwargs...)
-        return _run_subprocess(_kit_drive_cmd(; script, host_root, kwargs...))
+    # Name every keyword. A `kwargs...` merge hides the required names from JETLS.
+    function _run_kit_drive(;
+            script::AbstractString,
+            host_root,
+            parent_workers::Int = 1,
+            child_hosts::Vector{String} = String[],
+            log_dir::Union{Nothing, String} = nothing,
+            script_args::Vector{String} = String[],
+            kit_root::AbstractString = _kit_root(),
+            julia::AbstractString = _julia_exe(),
+            drive_flags::Vector{String} = String[],
+            extra_env::Dict{String, String} = Dict{String, String}(),
+        )
+        return _run_subprocess(
+            _kit_drive_cmd(;
+                script,
+                host_root,
+                parent_workers,
+                child_hosts,
+                log_dir,
+                script_args,
+                kit_root,
+                julia,
+                drive_flags,
+                extra_env,
+            )
+        )
     end
 
     # Run `drive --collect-missing|--collect-overwrite ROOT HOST...` as a child CLI.
