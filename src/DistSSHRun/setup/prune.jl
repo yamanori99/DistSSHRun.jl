@@ -152,6 +152,7 @@ function _prune_remote_shell(
         id::Union{Nothing, AbstractString} = nothing,
     )::String
     pq = _remote_shell_path_word(remote_path)
+    # `$pq` is its own word, same as delete. Do not paste it into double quotes.
     older = older_days === nothing ? "" : string(Int(older_days))
     idn = id === nothing ? "" : String(id)
     idq = _remote_sh_quote(idn)
@@ -163,19 +164,19 @@ function _prune_remote_shell(
     id=$idq
     [ -d "\$root" ] || exit 0
     if test -L "\$root"; then
-      echo "refusing to prune symlink \$root" >&2
+      printf 'refusing to prune symlink %s\\n' $pq >&2
       exit 1
     fi
     _distssh_target=\$(cd -P "\$root" && pwd -P) || exit 1
     _distssh_home=\$(cd -P ~ && pwd -P) || exit 1
     if [ "\$_distssh_target" = "\$_distssh_home" ] || [ "\$_distssh_target" = / ]; then
-      echo "refusing to prune \$_distssh_target" >&2
+      printf 'refusing to prune %s\\n' "\$_distssh_target" >&2
       exit 1
     fi
     if test -d "\$_distssh_home/.julia"; then
       _distssh_depot=\$(cd -P "\$_distssh_home/.julia" && pwd -P) || exit 1
       if [ "\$_distssh_target" = "\$_distssh_depot" ]; then
-        echo "refusing to prune \$_distssh_depot" >&2
+        printf 'refusing to prune %s\\n' "\$_distssh_depot" >&2
         exit 1
       fi
     fi

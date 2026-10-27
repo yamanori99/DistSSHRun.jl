@@ -53,22 +53,24 @@ script. Flags are `rm -rf` only (BSD rm on macOS).
 """
 function _remote_delete_shell(remote_path::AbstractString)::String
     pq = _remote_shell_path_word(remote_path)
+    # `$pq` is its own word. A double-quoted echo would treat its quotes as
+    # text and run `$(...)` in the path.
     return """
     if test -L $pq; then
-      echo "refusing to delete symlink $pq" >&2
+      printf 'refusing to delete symlink %s\\n' $pq >&2
       exit 1
     fi
     if test -e $pq; then
       _distssh_target=\$(cd -P $pq && pwd -P) || exit 1
       _distssh_home=\$(cd -P ~ && pwd -P) || exit 1
       if [ "\$_distssh_target" = "\$_distssh_home" ] || [ "\$_distssh_target" = / ]; then
-        echo "refusing to delete \$_distssh_target" >&2
+        printf 'refusing to delete %s\\n' "\$_distssh_target" >&2
         exit 1
       fi
       if test -d "\$_distssh_home/.julia"; then
         _distssh_depot=\$(cd -P "\$_distssh_home/.julia" && pwd -P) || exit 1
         if [ "\$_distssh_target" = "\$_distssh_depot" ]; then
-          echo "refusing to delete \$_distssh_depot" >&2
+          printf 'refusing to delete %s\\n' "\$_distssh_depot" >&2
           exit 1
         fi
       fi

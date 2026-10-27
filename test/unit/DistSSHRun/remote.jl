@@ -149,6 +149,8 @@ end
         @test occursin("rm -rf", script)
         @test !occursin("--one-file-system", script)
         @test !occursin("--preserve-root", script)
+        @test occursin("printf 'refusing to delete symlink %s\\n'", script)
+        @test !occursin("echo \"", script)
         mktempdir() do d
             home = joinpath(d, "home")
             mkdir(home)
@@ -207,6 +209,65 @@ end
                 @test !isdir(nested)
                 @test islink(via)
                 @test isfile(log)
+            end
+        end
+    end
+
+    @testset "delete and prune print a nasty path literally" begin
+        # `$(...)`, backticks, a quote, and `~` must stay text. Nothing runs.
+        # One path component: a slash inside the name would be another directory.
+        leaf = "a'b~" * "\$(echo pwned; pwn)" * "`pwn`"
+        mktempdir() do d
+            home = joinpath(d, "home")
+            mkdir(home)
+            target = joinpath(d, "real")
+            mkdir(target)
+            link = joinpath(home, leaf)
+            # Julia `symlink` expands `~` anywhere in the link path.
+            run(Cmd(["ln", "-s", target, link]))
+            fake = joinpath(d, "bin")
+            mkdir(fake)
+            log = joinpath(d, "ran.log")
+            write(joinpath(fake, "pwn"), "#!/bin/sh\necho ran >> $(repr(log))\n")
+            chmod(joinpath(fake, "pwn"), 0o755)
+            path = fake * ":" * get(ENV, "PATH", "")
+            function run_body(body)
+                err = IOBuffer()
+                proc = run(
+                    ignorestatus(pipeline(`sh -c $body`; stdout = devnull, stderr = err));
+                    wait = true,
+                )
+                return proc, String(take!(err))
+            end
+            withenv("HOME" => home, "PATH" => path) do
+                rm(log; force = true)
+                delete_body = DistSSHRun._remote_delete_shell("~/" * leaf)
+                @test occursin("printf 'refusing to delete symlink %s\\n'", delete_body)
+                @test !occursin("echo \"", delete_body)
+                proc, err = run_body(delete_body)
+                @test proc.exitcode != 0
+                @test occursin("refusing to delete symlink " * joinpath(home, leaf), err)
+                @test occursin(leaf, err)
+                @test islink(link)
+                @test !isfile(log)
+                rm(log; force = true)
+                abs_link = joinpath(d, leaf)
+                run(Cmd(["ln", "-s", target, abs_link]))
+                proc, err = run_body(DistSSHRun._remote_delete_shell(abs_link))
+                @test proc.exitcode != 0
+                @test occursin("refusing to delete symlink " * abs_link, err)
+                @test islink(abs_link)
+                @test !isfile(log)
+                rm(log; force = true)
+                prune_body = DistSSHRun._prune_remote_shell("~/" * leaf)
+                @test occursin("printf 'refusing to prune symlink %s\\n'", prune_body)
+                @test !occursin("echo \"", prune_body)
+                proc, err = run_body(prune_body)
+                @test proc.exitcode != 0
+                @test occursin("refusing to prune symlink " * joinpath(home, leaf), err)
+                @test occursin(leaf, err)
+                @test islink(link)
+                @test !isfile(log)
             end
         end
     end
