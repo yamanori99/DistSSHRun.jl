@@ -333,9 +333,10 @@ if !isdefined(@__MODULE__, :setup_main)
                 return Cint(finish_host_op!("Prune", result) ? 0 : 1)
             end
 
-            # --pull/--sync: allow commit mismatch (fixed by the op). --check: require sync.
-            # --sync also requires a clean local tree.
-            require_clean = (mode === :sync)
+            # --pull/--sync: a commit mismatch is fixed by checkout --detach.
+            # --check: require the commits to match already.
+            # Both git modes refuse a dirty local tree (a patch is not shipped).
+            require_clean = (mode === :sync || mode === :pull)
             check_code_sync = (mode === :check)
             result = check_prerequisites(
                 opts.hosts, opts.julia_path, remote_path, project;
@@ -358,28 +359,21 @@ if !isdefined(@__MODULE__, :setup_main)
                 return Cint(0)
             end
 
-            if !result.needs_sync
-                DistSSHRun._warn_git_worktree_ship!(project)
-                print_ok("Already up to date.")
-                kit_println()
-                return Cint(0)
-            end
-
+            # Hashes already matching still run: the remote must be detached at
+            # that commit, and a dirty remote tree is refused.
             print_ok("Ready to proceed.")
             kit_println()
             kit_println()
 
-            # --pull: pull on localhost first, then on remotes
-            # --sync: push from localhost, then pull on remotes
+            # --sync also pushes the local branch to origin.
+            # --pull does not. Neither mode runs git pull.
             do_push = (mode === :sync)
-            do_local_pull = (mode === :pull)
             raw = git_sync_project_to_hosts!(
                 opts.hosts,
                 project,
                 remote_path;
                 do_push = do_push,
                 do_pull = true,
-                do_local_pull = do_local_pull,
             )
             raw.cancelled && return Cint(0)
             if !raw.ok

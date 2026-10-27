@@ -26,8 +26,8 @@ Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup --…`.
 | `:delete` | `--delete` | Destructive. Requires `confirm_path`. `session.yes` does not delete |
 | `:rsync` | `--rsync` | Refuses nonempty remote; delete first to replace. `gitignore=false` sends the tree except `.git/` and `.distsshkit/`, after the caller has already chosen what to send. The default `gitignore=true` is unchanged |
 | `:clone` | `--clone` | Requires `repo=`; clone runs **on the remote** |
-| `:sync` | `--sync` | Local push + remote pull (git remotes); confirm unless `session.yes` |
-| `:pull` | `--pull` | Local pull then remote pull; confirm unless `session.yes` |
+| `:sync` | `--sync` | Push the local branch to origin, then detach each remote at that commit; confirm unless `session.yes`. A dirty tree is refused |
+| `:pull` | `--pull` | Detach each remote at the local commit. Does not push to origin and does not run `git pull`; confirm unless `session.yes`. A dirty tree is refused |
 | `:instantiate` | `--instantiate` | `julia=` (default `"auto"`) |
 | `:juliaup` | `up` | Align Julia via juliaup on `child:NAME` and/or `parent` (`\$HOME/.juliaup` or Homebrew); confirm unless `session.yes`. Tip if kit parent patch lags channel latest |
 | `:juliaup_update` | `up update` | `juliaup update` on those hosts (no `default`); confirm unless `session.yes` |
@@ -636,7 +636,6 @@ function _setup_one!(
             remote_path;
             do_push = false,
             do_pull = true,
-            do_local_pull = true,
             confirm = !session.yes,
         )
         if raw.cancelled
