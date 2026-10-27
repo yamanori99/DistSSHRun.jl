@@ -40,8 +40,31 @@ using Test
         write(joinpath(solo, "Project.toml"), "name = \"Solo\"\n[deps]\n")
         bare = DistSSHBase.resolve_pkg_env(solo)
         @test bare.manifest === nothing
+        @test DistSSHBase.manifest_path(solo) === nothing
         @test bare.env_dir == bare.project_dir
         @test DistSSHBase.julia_project_rel(bare) == "."
+
+        julia_only = joinpath(root, "julia-only")
+        mkpath(julia_only)
+        write(joinpath(julia_only, "JuliaProject.toml"), "name = \"JuliaOnly\"\n[deps]\n")
+        write(joinpath(julia_only, "JuliaManifest.toml"), "# julia lock\n")
+        julia_env = DistSSHBase.resolve_pkg_env(julia_only)
+        @test julia_env.project_dir == DistSSHBase.canonical_local_path(julia_only)
+        @test DistSSHBase.manifest_path(julia_only) ==
+            DistSSHBase.canonical_local_path(joinpath(julia_only, "JuliaManifest.toml"))
+        @test julia_env.manifest == DistSSHBase.manifest_path(julia_only)
+
+        named = joinpath(root, "named")
+        mkpath(joinpath(named, "locks"))
+        write(joinpath(named, "locks", "Mine.toml"), "# named\n")
+        write(
+            joinpath(named, "Project.toml"),
+            "name = \"Named\"\nmanifest = \"locks/Mine.toml\"\n",
+        )
+        @test DistSSHBase.manifest_path(named) ==
+            DistSSHBase.canonical_local_path(joinpath(named, "locks", "Mine.toml"))
+        @test DistSSHBase.manifest_path(joinpath(named, "Project.toml")) ==
+            DistSSHBase.manifest_path(named)
 
         ver = joinpath(root, "ver")
         mkpath(ver)

@@ -123,7 +123,9 @@ using Pkg
         write(joinpath(dir, "Project.toml"), "[deps]\n")
         probed = DistSSHRun.probe_project_deps(dir)
         @test probed !== nothing
-        @test occursin("Manifest.toml not found", probed)
+        @test occursin("No Manifest for ", probed)
+        @test occursin("Pkg.resolve()", probed)
+        @test !occursin("--help", probed)
     end
 
     _with_tempdir() do dir
@@ -405,11 +407,14 @@ using Pkg
                 write(joinpath(repo, "Manifest.toml"), "# lock\n")
                 write(joinpath(repo, "Project.toml"), "name = \"Src\"\n")
                 run(pipeline(`git -C $repo init -q`; stdout = devnull, stderr = devnull))
-                out_nocommit, = _capture_stdio() do _, _
-                    @test DistSSHRun.ensure_manifest_in_git_worktree!(repo) === nothing
+                nocommit_err = try
+                    DistSSHRun.ensure_manifest_in_git_worktree!(repo)
+                    nothing
+                catch e
+                    e
                 end
-                @test occursin("has no commit yet", out_nocommit)
-                @test occursin("will be an error", out_nocommit)
+                @test nocommit_err isa ArgumentError
+                @test occursin("has no commit yet", nocommit_err.msg)
                 write(
                     joinpath(repo, "Project.toml"),
                     """
@@ -738,17 +743,23 @@ using Pkg
             run(pipeline(`git -C $tmp config user.name "Test"`; stdout = devnull, stderr = devnull))
             run(pipeline(`git -C $tmp add Project.toml .gitignore`; stdout = devnull, stderr = devnull))
             run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
-            out_rsync, = _capture_stdio() do _, _
-                @test DistSSHRun.ensure_manifest_ships!(tmp).env_dir ==
-                    DistSSHRun.canonical_local_path(tmp)
+            rsync_err = try
+                DistSSHRun.ensure_manifest_ships!(tmp)
+                nothing
+            catch e
+                e
             end
-            @test occursin("not in the rsync send list", out_rsync)
-            @test occursin("will be an error", out_rsync)
-            out_git, = _capture_stdio() do _, _
-                @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            @test rsync_err isa ArgumentError
+            @test occursin("not in the rsync send list", rsync_err.msg)
+            @test !occursin("will be an error", rsync_err.msg)
+            git_err = try
+                DistSSHRun.ensure_manifest_in_git_worktree!(tmp)
+                nothing
+            catch e
+                e
             end
-            @test occursin("is not tracked", out_git)
-            @test occursin("will be an error", out_git)
+            @test git_err isa ArgumentError
+            @test occursin("is not tracked", git_err.msg)
 
             rm(joinpath(tmp, ".gitignore"))
             run(pipeline(`git -C $tmp add -A`; stdout = devnull, stderr = devnull))
@@ -757,10 +768,14 @@ using Pkg
             open(joinpath(tmp, "Manifest.toml"), "a") do io
                 println(io, "# dirty")
             end
-            out_dirty, = _capture_stdio() do _, _
-                @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            dirty_err = try
+                DistSSHRun.ensure_manifest_in_git_worktree!(tmp)
+                nothing
+            catch e
+                e
             end
-            @test occursin("uncommitted changes", out_dirty)
+            @test dirty_err isa ArgumentError
+            @test occursin("uncommitted changes", dirty_err.msg)
             run(pipeline(`git -C $tmp checkout -q -- Manifest.toml`; stdout = devnull, stderr = devnull))
 
             foo = joinpath(tmp, "vendor", "Foo")
@@ -855,12 +870,15 @@ using Pkg
             symlink("Manifest-real.toml", joinpath(tmp, "Manifest.toml"))
             run(pipeline(`git -C $tmp add Manifest.toml`; stdout = devnull, stderr = devnull))
             run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m manifest-link`; stdout = devnull, stderr = devnull))
-            out_mlink, = _capture_stdio() do _, _
-                @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            mlink_err = try
+                DistSSHRun.ensure_manifest_in_git_worktree!(tmp)
+                nothing
+            catch e
+                e
             end
-            @test occursin("Manifest-real.toml", out_mlink)
-            @test occursin("is not tracked", out_mlink)
-            @test occursin("will be an error", out_mlink)
+            @test mlink_err isa ArgumentError
+            @test occursin("Manifest-real.toml", mlink_err.msg)
+            @test occursin("is not tracked", mlink_err.msg)
             run(pipeline(`git -C $tmp add Manifest-real.toml`; stdout = devnull, stderr = devnull))
             run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m manifest-bytes`; stdout = devnull, stderr = devnull))
             quiet_mlink, = _capture_stdio() do _, _

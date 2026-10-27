@@ -13,6 +13,7 @@ if !isdefined(Main, :_write_host_project!)
             joinpath(proj, "Project.toml"),
             "name = \"$(name)\"\n$(uuid_line)version = \"0.0.1\"\n$(extra_toml)",
         )
+        write(joinpath(proj, "Manifest.toml"), "# lock\n")
         src = joinpath(proj, "src")
         mkpath(src)
         write(joinpath(src, "$(name).jl"), "module $(name)\nend\n")

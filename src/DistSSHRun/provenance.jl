@@ -354,17 +354,9 @@ function capture_worker_provenance!()
     return nothing
 end
 
-function _project_manifest_path(project::AbstractString)::String
-    fallback = joinpath(project, "Manifest.toml")
-    pfile = joinpath(project, "Project.toml")
-    isfile(pfile) || return fallback
-    found = Base.project_file_manifest_path(pfile)
-    return found isa AbstractString ? String(found) : fallback
-end
-
 function _project_provenance(project::AbstractString)::Dict{String, Any}
-    manifest = _project_manifest_path(project)
-    isfile(manifest) || return Dict{String, Any}("manifest" => "absent")
+    manifest = manifest_path(project)
+    manifest isa String || return Dict{String, Any}("manifest" => "absent")
     out = Dict{String, Any}("manifest" => _sha256_hex(read(manifest)))
     parsed = try
         TOML.parsefile(manifest)
