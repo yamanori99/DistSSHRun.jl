@@ -766,6 +766,10 @@ end
             _e2e_announce("in-process drive! is reentrant (no worker leak)")
             withenv(_e2e_base_env()...) do
                 for call in 1:2
+                    # `pipeline!` above leaves `DISTRIBUTED_OUTPUT_DIR` on the
+                    # project `output/`, which now has files. This call does
+                    # not pass `output_dir`.
+                    delete!(ENV, "DISTRIBUTED_OUTPUT_DIR")
                     out = mktemp() do out_path, out_io
                         res = redirect_stdout(out_io) do
                             drive!(
