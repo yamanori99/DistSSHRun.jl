@@ -30,7 +30,14 @@ include(joinpath(@__DIR__, "size", "_using.jl"))
 function size_main()::Cint
     project_root = cli_project_root(@__DIR__)
     path_anchor = DistSSHRun.canonical_local_path(project_root)
-    opts = parse_size_args(ARGS)
+    opts = try
+        parse_size_args(ARGS)
+    catch e
+        e isa ArgumentError || rethrow()
+        startswith(e.msg, "unknown size option:") || rethrow()
+        DistSSHRun.print_cli_error(e.msg)
+        return Cint(1)
+    end
     if opts.show_help
         show_size_usage()
         return 0

@@ -39,11 +39,24 @@ using Test
         end
     end
 
-    # Last mode token wins; earlier flags warn once (will be an error in 0.2).
-    let r = @test_logs (:warn, r"Multiple setup modes specified.*0\.2") parse_setup_args(
-            ["--check", "--rsync", "--pull", "child:host1"],
-        )
-        @test r.mode == :pull
+    # The second mode flag fails immediately. Later flags are not applied.
+    let err = try
+            parse_setup_args(["--check", "--rsync", "--pull", "child:host1"])
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("more than one mode (--check and --rsync)", err.msg)
+        @test occursin("help setup", err.msg)
+        @test !occursin("--pull", err.msg)
+        @test !occursin("--help", err.msg)
+    end
+    @test_throws ArgumentError parse_setup_args(["--check", "--check", "child:host1"])
+    @test_throws ArgumentError parse_setup_args(["--help", "--delete", "--sync"])
+    let r = parse_setup_args(["--delete", "--help"])
+        @test r.show_help
+        @test r.mode == :delete
     end
 
     let r = parse_setup_args(["--clone", "--repo", "git@ex/app.git", "child:host1"])
@@ -90,6 +103,19 @@ using Test
         end
         @test err isa ArgumentError
         @test occursin("unknown setup option: --not-a-flag", err.msg)
+        @test occursin("help setup", err.msg)
+        @test !occursin("--help", err.msg)
+    end
+    let err = try
+            parse_setup_args(["--help", "--not-a-flag"])
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("unknown setup option: --not-a-flag", err.msg)
+        @test occursin("help setup", err.msg)
+        @test !occursin("--help", err.msg)
     end
 
     let r = parse_setup_args(["--juliaup", "parent", "child:host1"])

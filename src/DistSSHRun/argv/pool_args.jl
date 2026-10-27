@@ -63,6 +63,20 @@ function show_pool_usage(; io::IO = stdout)
 end
 
 function parse_pool_args(args::Vector{String})
+    # Unknown options fail before `--help` and before any other flag is applied.
+    _reject_unknown_cli_options(
+        args,
+        "pool";
+        valued = ("--gb-per-worker", "--mem-headroom", "--parent-gb"),
+        known = (
+            "-h", "--help",
+            "--local", "-l",
+            "--parenthost", "--masterhost", "--parent",
+            "--probe",
+            "--master-gb",
+        ),
+        prefixes = ("--local:", "-l:"),
+    )
     cli_session, args = peel_kit_cli_flags(args)
     gb_per_worker = nothing
     mem_headroom = DEFAULT_MEM_HEADROOM
@@ -109,8 +123,7 @@ function parse_pool_args(args::Vector{String})
             end
             cli_consume!(c)
         else
-            @warn "Unknown option: $arg (ignored; will be an error in DistSSHRun 0.2)"
-            cli_consume!(c)
+            throw(ArgumentError(_unknown_cli_option_message("pool", arg)))
         end
     end
 
