@@ -3,8 +3,10 @@
 # - a change under src/**, lib/**/src/**, or ext/** needs one valid fragment
 # - Dependabot is exempt
 # - the breaking label and a category: breaking fragment require each other
-# Planned fragments do not require the breaking label. A version cut does
-# not run this script.
+# Planned fragments do not require the breaking label. A breaking fragment
+# whose bullet is already in the base ## Unreleased section records a break
+# that has landed, so this pull request does not need the breaking label.
+# A version cut does not run this script.
 #
 # Usage:
 #   ./.github/news-fragment.sh OLD_REF NEW_REF
@@ -57,11 +59,32 @@ ensure_commit() {
   git cat-file -e "${ref}^{commit}"
 }
 
+# True when BODY, with its trailing newline, is already in the base
+# Unreleased section. A shorter prefix of a longer bullet does not match.
+bullet_already_landed() {
+  local body="$1" news="$2"
+  [[ -n "$body" && -n "$news" ]] || return 1
+  BODY="$body" awk '
+    BEGIN { body = ENVIRON["BODY"] }
+    { hay = hay $0 "\n" }
+    END { exit index(hay, body) ? 0 : 1 }
+  ' <<<"$news"
+}
+
 # Print need, fragments, and breaking counts for the diff.
+# breaking counts only bullets that are not already in the base Unreleased
+# section. Kit #570 and Queue #489 had no such landed breaks; this repo does.
 scan_diff() {
   local old="$1" new="$2"
   local need=false fragments=0 breaking=0
-  local status p1 p2 path dest category dir
+  local status p1 p2 path dest category dir body unreleased=""
+  if git cat-file -e "${old}:NEWS.md" 2>/dev/null; then
+    unreleased="$(git cat-file -p "${old}:NEWS.md" | awk '
+      $0 == "## Unreleased" { on = 1; next }
+      on && /^## / { exit }
+      on { print }
+    ')"
+  fi
   while IFS=$'\t' read -r status p1 p2; do
     [[ -z "${status:-}" ]] && continue
     case "$status" in
@@ -87,11 +110,16 @@ scan_diff() {
         rm -rf "$dir"
         return 1
       fi
-      rm -rf "$dir"
       fragments=$((fragments + 1))
       if [[ "$category" == breaking ]]; then
-        breaking=$((breaking + 1))
+        body="$(awk 'NR > 2 { print }' "$dest")"
+        body="${body%$'\n'}"
+        body="${body}"$'\n'
+        if ! bullet_already_landed "$body" "$unreleased"; then
+          breaking=$((breaking + 1))
+        fi
       fi
+      rm -rf "$dir"
     elif [[ "$path" == changelog.d/* ]]; then
       die "${path} is not a fragment file"
       return 1
@@ -140,7 +168,7 @@ fetch_breaking_label() {
 }
 
 self_test() {
-  local tmp failed=0 repo base head facts need fragments breaking
+  local tmp failed=0 repo base head facts need fragments breaking landed
   tmp="$(mktemp -d)"
   fail() {
     echo "FAIL $*" >&2
@@ -228,6 +256,51 @@ EOF
   breaking="$(printf '%s\n' "$facts" | sed -n 's/^breaking=//p')"
   if [[ "$breaking" != 1 ]]; then
     fail "breaking fragment scan: ${facts}"
+  fi
+
+  cat >"$repo/NEWS.md" <<'EOF'
+## Unreleased
+
+- already landed
+
+## 0.1.0
+
+- old
+EOF
+  git -C "$repo" add NEWS.md
+  git -C "$repo" commit -q -m news
+  landed="$(git -C "$repo" rev-parse HEAD)"
+  cat >"$repo/changelog.d/already.md" <<'EOF'
+category: breaking
+
+- already landed
+EOF
+  git -C "$repo" add changelog.d/already.md
+  git -C "$repo" commit -q -m landed
+  head="$(git -C "$repo" rev-parse HEAD)"
+  facts="$(cd "$repo" && scan_diff "$landed" "$head")"
+  fragments="$(printf '%s\n' "$facts" | sed -n 's/^fragments=//p')"
+  breaking="$(printf '%s\n' "$facts" | sed -n 's/^breaking=//p')"
+  if [[ "$fragments" != 1 || "$breaking" != 0 ]]; then
+    fail "landed breaking scan: ${facts}"
+  fi
+  if ! decide false false false 1 0 >/dev/null; then
+    fail "landed breaking without label"
+  fi
+
+  cat >"$repo/changelog.d/fresh.md" <<'EOF'
+category: breaking
+
+- fresh break
+EOF
+  git -C "$repo" add changelog.d/fresh.md
+  git -C "$repo" commit -q -m fresh
+  head="$(git -C "$repo" rev-parse HEAD)"
+  facts="$(cd "$repo" && scan_diff "$landed" "$head")"
+  fragments="$(printf '%s\n' "$facts" | sed -n 's/^fragments=//p')"
+  breaking="$(printf '%s\n' "$facts" | sed -n 's/^breaking=//p')"
+  if [[ "$fragments" != 2 || "$breaking" != 1 ]]; then
+    fail "fresh breaking still counts: ${facts}"
   fi
 
   printf 'nope\n' >"$repo/changelog.d/Bad Name.md"
