@@ -1,5 +1,30 @@
 using Test
 
+const _NONPOSIX_PROBE_PAT = r"case x in x\) echo __DSR_POSIX_OK_[0-9a-fA-F]+__;; esac"
+
+function _nonposix_logged(path::AbstractString)::Vector{String}
+    isfile(path) || return String[]
+    return split(read(path, String), '\n'; keepempty = false)
+end
+
+_nonposix_probe_line(line::AbstractString) = occursin(_NONPOSIX_PROBE_PAT, line)
+
+function _nonposix_shell_env(
+        double::AbstractString,
+        logp::AbstractString;
+        mode::AbstractString = "posix",
+        noise::Bool = false,
+    )::Dict{String, String}
+    return Dict{String, String}(
+        "DISTSSHKIT_TEST" => "1",
+        "DISTSSHKIT_TEST_SSH" => String(double),
+        "SHELL_DOUBLE_LOG" => String(logp),
+        "SHELL_DOUBLE_MODE" => String(mode),
+        "SHELL_DOUBLE_NOISE" => noise ? "1" : "0",
+        "DISTSSHKIT_TEST_POSIX_SHELL" => mode == "fish" ? "0" : "1",
+    )
+end
+
 let _BASE = DistSSHBase
     @testset "remote shell quotes metacharacters" begin
         @test _BASE._remote_shell_path_word("/srv/x;id") == "'/srv/x;id'"
@@ -66,22 +91,6 @@ let _BASE = DistSSHBase
 
     @testset "non-POSIX login shell is diagnosed only after a failure" begin
         double = joinpath(@__DIR__, "fixtures", "fake_shell_ssh.jl")
-        probe_pat = r"case x in x\) echo __DSR_POSIX_OK_[0-9a-fA-F]+__;; esac"
-        function logged(path::AbstractString)::Vector{String}
-            isfile(path) || return String[]
-            return split(read(path, String), '\n'; keepempty = false)
-        end
-        probe_line(line::AbstractString) = occursin(probe_pat, line)
-        function shell_env(logp::AbstractString; mode::AbstractString = "posix", noise::Bool = false)
-            return Dict(
-                "DISTSSHKIT_TEST" => "1",
-                "DISTSSHKIT_TEST_SSH" => double,
-                "SHELL_DOUBLE_LOG" => logp,
-                "SHELL_DOUBLE_MODE" => String(mode),
-                "SHELL_DOUBLE_NOISE" => noise ? "1" : "0",
-                "DISTSSHKIT_TEST_POSIX_SHELL" => mode == "fish" ? "0" : "1",
-            )
-        end
 
         @test _BASE._remote_shell_host_from_exec(
             ["/usr/bin/ssh", "-n", "--", "h.test", "true"],
@@ -106,36 +115,36 @@ let _BASE = DistSSHBase
         _with_tempdir() do dir
             logp = joinpath(dir, "ssh.log")
             try
-                withenv(shell_env(logp)...) do
+                withenv(_nonposix_shell_env(double, logp)...) do
                     code, out = _BASE._remote_shell_status("posix-ok.test", "ok")
                     @test code == 0
                     @test strip(out) == "ok"
                 end
-                @test !any(probe_line, logged(logp))
+                @test !any(_nonposix_probe_line, _nonposix_logged(logp))
 
                 rm(logp; force = true)
-                withenv(shell_env(logp)...) do
+                withenv(_nonposix_shell_env(double, logp)...) do
                     code, out = _BASE._remote_shell_status("posix-fail.test", "nope")
                     @test code == 9
                     @test out == ""
-                    @test any(probe_line, logged(logp))
+                    @test any(_nonposix_probe_line, _nonposix_logged(logp))
                     rm(logp; force = true)
                     code2, _ = _BASE._remote_shell_status("posix-fail.test", "nope")
                     @test code2 == 9
                 end
-                lines = logged(logp)
+                lines = _nonposix_logged(logp)
                 @test lines == ["nope"]
-                @test !any(probe_line, lines)
+                @test !any(_nonposix_probe_line, lines)
 
                 rm(logp; force = true)
-                withenv(shell_env(logp; noise = true)...) do
+                withenv(_nonposix_shell_env(double, logp; noise = true)...) do
                     code, _ = _BASE._remote_shell_status("posix-noise.test", "nope")
                     @test code == 9
                 end
-                @test any(probe_line, logged(logp))
+                @test any(_nonposix_probe_line, _nonposix_logged(logp))
 
                 rm(logp; force = true)
-                withenv(shell_env(logp)...) do
+                withenv(_nonposix_shell_env(double, logp)...) do
                     err = try
                         _BASE._remote_shell_status("posix-255.test", "sshfail")
                         nothing
@@ -146,20 +155,20 @@ let _BASE = DistSSHBase
                     @test !occursin("non-POSIX", err.msg)
                     @test !occursin("--help", err.msg)
                 end
-                @test !any(probe_line, logged(logp))
+                @test !any(_nonposix_probe_line, _nonposix_logged(logp))
 
                 rm(logp; force = true)
-                withenv(shell_env(logp; mode = "probe255")...) do
+                withenv(_nonposix_shell_env(double, logp; mode = "probe255")...) do
                     code, _ = _BASE._remote_shell_status("probe-unknown.test", "nope")
                     @test code == 9
                 end
-                unknown_lines = logged(logp)
-                @test any(probe_line, unknown_lines)
+                unknown_lines = _nonposix_logged(logp)
+                @test any(_nonposix_probe_line, unknown_lines)
                 @test !any(==(_BASE._REMOTE_SHELL_NAME_SCRIPT), unknown_lines)
 
                 rm(logp; force = true)
                 fish_host = "fish.test"
-                withenv(shell_env(logp; mode = "fish")...) do
+                withenv(_nonposix_shell_env(double, logp; mode = "fish")...) do
                     err = try
                         _BASE._remote_shell_status(fish_host, "nope")
                         nothing
@@ -181,13 +190,13 @@ let _BASE = DistSSHBase
                     @test err2 isa ArgumentError
                     @test occursin("non-POSIX (/usr/bin/fish)", err2.msg)
                 end
-                fish_lines = logged(logp)
-                @test count(probe_line, fish_lines) == 2
+                fish_lines = _nonposix_logged(logp)
+                @test count(_nonposix_probe_line, fish_lines) == 2
                 @test count(==(_BASE._REMOTE_SHELL_NAME_SCRIPT), fish_lines) == 2
                 @test !any(line -> occursin("case x in", line) && occursin("echo \$SHELL", line), fish_lines)
 
                 rm(logp; force = true)
-                withenv(shell_env(logp; mode = "fish")...) do
+                withenv(_nonposix_shell_env(double, logp; mode = "fish")...) do
                     cmd = _BASE._host_sync_remote_shell_cmd("summarize-fish.test", "nope")
                     proc = run(ignorestatus(cmd); wait = true)
                     @test proc.exitcode == 9
@@ -211,7 +220,7 @@ let _BASE = DistSSHBase
                 end
 
                 rm(logp; force = true)
-                withenv(shell_env(logp)...) do
+                withenv(_nonposix_shell_env(double, logp)...) do
                     hints = Vector{Union{Nothing, String}}(undef, 2)
                     @sync begin
                         Threads.@spawn begin
