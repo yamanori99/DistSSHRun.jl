@@ -730,4 +730,226 @@ end
             @test DistSSHRun._drive_init_delay_sec(; ssh = true) == 0.0
         end
     end
+
+    # `-orphan` is rejected before `ssh` runs, so these drives do not connect.
+    # A newline in the remote root throws inside `add_drive_workers!` after
+    # the planned list is written, and before a remote command is built.
+    @testset "kit.hosts around join (#213)" begin
+        hosts_of(names) = Tuple{String, Union{Int, Nothing}}[(String(n), 1) for n in names]
+        planned = hosts_of(["h1", "h2", "h1"])
+
+        _with_tempdir() do tmp
+            out = joinpath(tmp, "out")
+            log = joinpath(tmp, "log")
+            mkpath(out)
+            mkpath(log)
+            script = joinpath(tmp, "job.jl")
+            write(script, "")
+            msg = try
+                redirect_stdout(devnull) do
+                    DistSSHRun.add_drive_workers!(
+                        Tuple{String, Union{Int, Nothing}}[],
+                        0, nothing, nothing, tmp, script, tmp,
+                    )
+                end
+                ""
+            catch e
+                e isa ErrorException ? e.msg : sprint(showerror, e)
+            end
+            @test msg == DistSSHRun._NO_WORKERS_JOINED
+
+            seen = Ref(String[])
+            seen_log = Ref(String[])
+            joined = DistSSHRun._drive_kit_hosts_around_join!(planned, out, log) do
+                seen[] = DistSSHRun._read_kit_hosts(out)
+                seen_log[] = DistSSHRun._read_kit_hosts(log)
+                return String["h2"]
+            end
+            @test seen[] == ["h1", "h2"]
+            @test seen_log[] == ["h1", "h2"]
+            @test joined == ["h2"]
+            @test DistSSHRun._read_kit_hosts(out) == ["h2"]
+            @test DistSSHRun._read_kit_hosts(log) == ["h2"]
+
+            write(joinpath(out, "kit.hosts"), "stale\n")
+            write(joinpath(log, "kit.hosts"), "stale\n")
+            none = DistSSHRun._drive_kit_hosts_around_join!(
+                Tuple{String, Union{Int, Nothing}}[], out, log,
+            ) do
+                return String[]
+            end
+            @test isempty(none)
+            @test !isfile(joinpath(out, "kit.hosts"))
+            @test !isfile(joinpath(log, "kit.hosts"))
+
+            DistSSHRun._clear_interrupted!()
+            try
+                empty_err = try
+                    DistSSHRun._drive_frame() do
+                        DistSSHRun._drive_kit_hosts_around_join!(planned, out, nothing) do
+                            seen[] = DistSSHRun._read_kit_hosts(out)
+                            error(DistSSHRun._NO_WORKERS_JOINED)
+                        end
+                    end
+                    nothing
+                catch e
+                    e
+                end
+                @test seen[] == ["h1", "h2"]
+                @test empty_err isa ErrorException
+                @test empty_err.msg == DistSSHRun._NO_WORKERS_JOINED
+                @test !isfile(joinpath(out, "kit.hosts"))
+                @test !DistSSHRun._drive_was_interrupted()
+
+                other = try
+                    DistSSHRun._drive_frame() do
+                        DistSSHRun._drive_kit_hosts_around_join!(planned, out, nothing) do
+                            error("ssh exploded")
+                        end
+                    end
+                    nothing
+                catch e
+                    e
+                end
+                @test other isa ErrorException
+                @test occursin("ssh exploded", other.msg)
+                @test DistSSHRun._read_kit_hosts(out) == ["h1", "h2"]
+
+                interrupted = try
+                    DistSSHRun._drive_frame() do
+                        DistSSHRun._drive_kit_hosts_around_join!(planned, out, nothing) do
+                            throw(InterruptException())
+                        end
+                    end
+                    nothing
+                catch e
+                    e
+                end
+                @test interrupted isa InterruptException
+                @test DistSSHRun._read_kit_hosts(out) == ["h1", "h2"]
+                @test !DistSSHRun._drive_was_interrupted()
+
+                later = try
+                    DistSSHRun._drive_frame() do
+                        DistSSHRun._drive_kit_hosts_around_join!(planned, out, nothing) do
+                            return String["h1"]
+                        end
+                        DistSSHRun._drive_cancellable() do
+                            throw(InterruptException())
+                        end
+                    end
+                    nothing
+                catch e
+                    e
+                end
+                @test later isa InterruptException
+                @test DistSSHRun._read_kit_hosts(out) == ["h1"]
+
+                blown = try
+                    DistSSHRun._drive_frame() do
+                        DistSSHRun._drive_kit_hosts_around_join!(planned, out, nothing) do
+                            return String["h2"]
+                        end
+                        error("script failed")
+                    end
+                    nothing
+                catch e
+                    e
+                end
+                @test blown isa ErrorException
+                @test occursin("script failed", blown.msg)
+                @test DistSSHRun._read_kit_hosts(out) == ["h2"]
+            finally
+                DistSSHRun._clear_interrupted!()
+                DistSSHRun._disarm_second_sigint!()
+            end
+        end
+
+        function _hosts_on_disk(root::String)::Vector{String}
+            found = String[]
+            isdir(root) || return found
+            for (dir, _, files) in walkdir(root)
+                if "kit.hosts" in files
+                    push!(found, joinpath(dir, "kit.hosts"))
+                end
+            end
+            return found
+        end
+
+        function _drive_bad_host(proj::String)
+            # Do not define `main`. `integration/drive/api.jl` is the first
+            # in-process driver include and rejects a later overwrite warning.
+            script = joinpath(proj, "job.jl")
+            write(script, "# driver include only\n")
+            out = joinpath(proj, "batch-out")
+            mkpath(out)
+            session = DistSSHRun.KitSession(
+                project = proj,
+                workers = String[],
+                quiet = true,
+                yes = true,
+                verbosity = :quiet,
+            )
+            parsed = DistSSHRun.drive_parsed_from_session(
+                session,
+                script;
+                workers = DistSSHRun.WorkerPlan(0, Dict("-orphan" => 1)),
+                enable_log = false,
+                skip_hash_check = true,
+                output_dir = out,
+                julia = joinpath(Sys.BINDIR, Base.julia_exename()),
+                require_all_hosts = false,
+            )
+            err = redirect_stdout(devnull) do
+                redirect_stderr(devnull) do
+                    try
+                        DistSSHRun.run_drive_parsed!(parsed; project_root = proj)
+                        nothing
+                    catch e
+                        e
+                    end
+                end
+            end
+            return (err = err, out = out)
+        end
+
+        ssh_env = (
+            "DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes -o ConnectTimeout=1",
+            "DISTSSHKIT_JOB_ID" => nothing,
+            "DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL" => "1",
+        )
+        _mktemp_host() do proj
+            _write_host_project!(proj, "HostsKeep")
+            got = withenv(
+                ssh_env...,
+                "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/tmp/distsshkit-remote\nbad",
+            ) do
+                _drive_bad_host(proj)
+            end
+            @test got.err isa ArgumentError
+            @test occursin("newline", sprint(showerror, got.err))
+            listed = DistSSHRun._read_kit_hosts(got.out)
+            @test listed == ["-orphan"]
+            copies = vcat(_hosts_on_disk(proj), _hosts_on_disk(got.out))
+            @test !isempty(copies)
+            for path in unique(copies)
+                @test DistSSHRun._read_kit_hosts(dirname(path)) == ["-orphan"]
+            end
+        end
+
+        _mktemp_host() do proj
+            _write_host_project!(proj, "HostsDrop")
+            got = withenv(
+                ssh_env...,
+                "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/tmp/distsshkit-remote",
+            ) do
+                _drive_bad_host(proj)
+            end
+            @test got.err isa ErrorException
+            @test got.err.msg == DistSSHRun._NO_WORKERS_JOINED
+            @test !isfile(joinpath(got.out, "kit.hosts"))
+            @test isempty(_hosts_on_disk(proj))
+            @test isempty(_hosts_on_disk(got.out))
+        end
+    end
 end

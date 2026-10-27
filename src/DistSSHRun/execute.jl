@@ -811,6 +811,20 @@ function _write_kit_hosts_file(
     return nothing
 end
 
+"""Remove `kit.hosts` from the same directories as [`_write_kit_hosts_file`](@ref)."""
+function _remove_kit_hosts_file(
+        output_dir::AbstractString,
+        log_dir::Union{Nothing, AbstractString},
+    )
+    for d in _kit_sidecar_dirs(output_dir, log_dir)
+        try
+            rm(joinpath(d, "kit.hosts"); force = true)
+        catch
+        end
+    end
+    return nothing
+end
+
 const DRIVE_HOST_WORKER_IDS = Dict{String, Vector{Int}}()
 const DRIVE_HOST_LAST_SEEN = Dict{String, Float64}()
 const DRIVE_HOST_STATUS_STOP = Ref(true)
