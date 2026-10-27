@@ -24,6 +24,7 @@ const _EXECUTE_DETACHED_KW = Set{Symbol}(
         :job_id,
         :sync_script,
         :spi_check,
+        :allow_mismatch,
     )
 )
 const _EXECUTE_DETACHED_DRIVE_ONLY = (
@@ -99,6 +100,8 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
         :quiet => session.quiet,
         :verbosity => session.verbosity,
     )
+    am = get(parsed, :allow_mismatch, Symbol[])
+    isempty(am) || (kw[:allow_mismatch] = am)
     if kind === :go
         kw[:sync] = parsed.sync
         parsed.repeat === nothing || (kw[:repeat] = parsed.repeat)
@@ -258,10 +261,10 @@ and [`drive!`](@ref) already share (`ride!` ignores `sync`). With `detached=fals
 (default), any other keyword is forwarded to the chosen function.
 
 `detached=true` spawns `julia -m DistSSHKit go|ride|drive` and returns a
-[`KitProcess`](@ref). `--project=` is `project=` when that tree lists
-DistSSHRun in `Project.toml` `[deps]` (`julia -m` needs a direct dep);
-otherwise `pkgdir(DistSSHRun)`. A Manifest-only / transitive DistSSHRun
-does not count. Keywords are then an allow-list (unknown names throw):
+[`KitProcess`](@ref). `--project=` is always the job `project=` when that
+tree has a `Project.toml`. The job must list DistSSHKit or DistSSHRun in
+`[deps]`; otherwise this throws instead of using serve's active project.
+Keywords are then an allow-list (unknown names throw):
 `output_dir`, `args`, `project`, `sync`, `julia`, `quiet`, `verbosity`, `yes`,
 `remote`, `hosts_file`, `job_id`, `source`, and drive-only `log_dir`,
 `enable_log`, `package`, `require_all_hosts`, `skip_hash_check`,
@@ -383,39 +386,38 @@ end
 
 """Whether a job tree can load `-m` via `--project=` at `project`.
 
-`julia -m` needs a **direct** dependency, so only `Project.toml` `[deps]`
-counts. `Manifest.toml` is a flat resolved graph; a `DistSSHRun` entry there
-can be transitive (e.g. via DistSSHQueue) and does not mean `--project=` can
-load it with `-m` (#372). A direct `DistSSHKit` dep loads `-m DistSSHKit`.
-A direct `DistSSHRun` dep loads `-m DistSSHRun`."""
+`julia -m` needs the named package or a **direct** `[deps]` entry.
+`Manifest.toml` is a flat resolved graph; a `DistSSHRun` entry there can be
+transitive (e.g. via DistSSHQueue) and does not mean `--project=` can load it
+with `-m` (#372). The job package itself named DistSSHKit / DistSSHRun can
+`-m`. A direct `DistSSHKit` dep loads `-m DistSSHKit`. A direct `DistSSHRun`
+dep loads `-m DistSSHRun`."""
 function _project_tree_has_distsshkit(project::AbstractString)::Bool
     p = String(project)
+    n = project_package_name(p)
+    (n == "DistSSHRun" || n == "DistSSHKit") && return true
     return _deps_has_distsshkit(_parse_toml_dict(joinpath(p, "Project.toml")))
 end
 
 """`--project=` for a detached child.
 
-The package tree is the fallback when it has a `Manifest.toml` (a checkout
-someone instantiated). A Pkg-installed tree has no manifest and is often not
-writable, so the child uses the active project when that project lists
-DistSSHKit or DistSSHRun in `[deps]`."""
-function _detached_fallback_project(kit_proj::AbstractString)::String
-    isfile(joinpath(kit_proj, "Manifest.toml")) && return kit_proj
-    active = Base.active_project()
-    active === nothing && return kit_proj
-    env = dirname(String(active))
-    _project_tree_has_distsshkit(env) || return kit_proj
-    return env
-end
-
-"""`--project=` for a detached child."""
+Always the job `project=` when that tree has a `Project.toml`. Do not fall
+back to serve's active project or `pkgdir(DistSSHRun)`. If the job cannot
+load `-m DistSSHKit` / `-m DistSSHRun`, fail instead of using queue-env.
+"""
 function _detached_julia_project(project::AbstractString)::String
-    kit_proj = pkgdir(DistSSHRun)
-    kit_proj === nothing && throw(
-        ArgumentError("pkgdir(DistSSHRun) is nothing; cannot spawn a detached child"),
+    p = String(project)
+    isfile(joinpath(p, "Project.toml")) || throw(
+        ArgumentError(
+            "detached execute! project has no Project.toml: $(p)",
+        ),
     )
-    _project_tree_has_distsshkit(project) && return String(project)
-    return _detached_fallback_project(kit_proj)
+    _project_tree_has_distsshkit(p) || throw(
+        ArgumentError(
+            "detached execute! project $(p) does not list DistSSHKit or DistSSHRun in [deps]; cannot -m from the job tree",
+        ),
+    )
+    return p
 end
 
 """`-m` package for a detached child.
@@ -425,9 +427,7 @@ transitive DistSSHRun cannot be `-m`'d. DistSSHKit when that name is in
 `[deps]`, otherwise DistSSHRun.
 
 `project` is the directory passed to `--project=`, from
-`_detached_julia_project`. That directory can be a fallback when the job
-tree has no direct DistSSHKit or DistSSHRun dependency, and the fallback
-may list DistSSHKit."""
+`_detached_julia_project` (the job tree)."""
 function _detached_m_package(project::AbstractString)::String
     raw = _parse_toml_dict(joinpath(String(project), "Project.toml"))
     _deps_has_name(raw, "DistSSHKit") && return "DistSSHKit"
@@ -534,6 +534,7 @@ function _execute_detached!(
     repeat = get(kwargs, :repeat, nothing)
     sync_script = get(kwargs, :sync_script, false)
     spi_check = get(kwargs, :spi_check, false)
+    allow_mismatch = get(kwargs, :allow_mismatch, Symbol[])
     sync_script isa Bool || throw(
         ArgumentError(
             "sync_script must be a Bool, got $(repr(sync_script))",
@@ -610,6 +611,7 @@ function _execute_detached!(
         repeat = repeat,
         sync_script = sync_script,
         spi_check = spi_check,
+        allow_mismatch = allow_mismatch,
     )
     extra = Dict{String, String}(
         "DISTRIBUTED_PROJECT_ROOT" => proj,
@@ -1545,9 +1547,11 @@ function _execute_detached_argv(
         repeat = nothing,
         sync_script::Bool = false,
         spi_check::Bool = false,
+        allow_mismatch = Symbol[],
     )::Vector{String}
     argv = String[String(kind)]
     push!(argv, "-y")
+    append!(argv, allow_mismatch_argv(allow_mismatch))
     if verbosity === nothing
         quiet && push!(argv, "-q")
     elseif verbosity === :quiet

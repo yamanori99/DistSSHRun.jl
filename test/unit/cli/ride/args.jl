@@ -33,6 +33,7 @@ using Test
         @test occursin("-m DistSSHKit", help)
         @test occursin("plan", help)
         @test occursin("child:", help)
+        @test occursin("--allow-mismatch", help)
         @test !occursin("--analyze", help)
         @test !occursin("--gb-per-worker", help)
         @test_throws ArgumentError parse_ride_args(["--gb-per-worker", "1.5", "job.jl"])

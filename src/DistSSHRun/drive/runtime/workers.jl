@@ -73,22 +73,31 @@ function add_drive_workers!(
 
     successful_hosts = String[]
 
+    DistSSHRun.ensure_run_cluster_cookie!()
+    names = DistSSHRun.launch_override_names(ENV)
+    notice = DistSSHRun.launch_override_notice(DistSSHRun.PARENT_HOST_NAME, names)
+    isempty(notice) || writeln_both(notice)
+    local_julia = DistSSHRun.pin_local_julia(nothing)
+    host_manifests = Dict{Int, String}()
+
     if parent_workers > 0
         write_both("  $(DistSSHRun.PARENT_HOST_NAME) ($parent_workers workers): ")
         DistSSHRun._drive_host_span!(DistSSHRun.PARENT_HOST_NAME, "workers", :running)
         try
             before = Set(workers())
-            addprocs(
-                parent_workers;
-                exeflags = DistSSHRun._drive_worker_exeflags(proj_dir),
-                env = DistSSHRun._drive_worker_env(),
-                topology = :master_worker
+            DistSSHRun._add_local_drive_workers!(
+                parent_workers, proj_dir, local_julia,
             )
             _register_drive_workers!(before, proj_dir, script_path)
+            added = sort!(Int[w for w in workers() if w ∉ before])
             DistSSHRun._register_drive_host_worker_ids!(
                 DistSSHRun.PARENT_HOST_NAME,
-                sort!(Int[w for w in workers() if w ∉ before]),
+                added,
             )
+            local_man = joinpath(proj_dir, "Manifest.toml")
+            for w in added
+                host_manifests[w] = local_man
+            end
             print_ok("✓")
             writeln_both("")
             DistSSHRun._drive_host_span!(DistSSHRun.PARENT_HOST_NAME, "workers", :ok)
@@ -107,38 +116,14 @@ function add_drive_workers!(
         DistSSHRun._drive_host_span!(host_name, "workers", :running)
         host_ok = false
         try
-            host_julia = julia_exe
-            if host_julia === nothing
-                write_both("  $host_name: detecting Julia... ")
-                host_julia = try
-                    detect_julia_path(host_name)
-                catch e
-                    e isa ArgumentError || rethrow()
-                    print_progress_err("✗ ($(e.msg))")
-                    writeln_both("")
-                    continue
-                end
-                if host_julia === nothing
-                    print_progress_err("✗ (Julia not found)")
-                    writeln_both("")
-                    continue
-                end
-                print_info("found at $host_julia")
-                writeln_both("")
-                write_both("  ")
-            end
-
             host_workers = something(host_workers_spec, default_workers, 1)
 
             repo_ra = canonical_local_path(project_root)
-            script_dir = dirname(script_path)
-            remote_dir = resolve_host_path_abs(host_name, script_dir, repo_ra)
             remote_proj = resolve_host_path_abs(host_name, proj_dir, repo_ra)
             remote_script = resolve_host_path_abs(host_name, script_path, repo_ra)
-            if remote_dir === nothing || remote_proj === nothing || remote_script === nothing
+            if remote_proj === nothing || remote_script === nothing
                 write_both("$host_name ($host_workers workers): ")
-                missing = remote_dir === nothing ? remote_layout_path(script_dir, repo_ra) :
-                    remote_proj === nothing ? remote_layout_path(proj_dir, repo_ra) :
+                missing = remote_proj === nothing ? remote_layout_path(proj_dir, repo_ra) :
                     remote_layout_path(script_path, repo_ra)
                 print_progress_err("✗ (remote path not found: $missing)")
                 writeln_both("")
@@ -148,6 +133,27 @@ function add_drive_workers!(
                 writeln_both("           or export DISTRIBUTED_REMOTE_PROJECT_ROOT=<abs path on host>")
                 continue
             end
+
+            host_julia = try
+                DistSSHRun.pin_remote_julia(host_name, julia_exe)
+            catch e
+                e isa ArgumentError || rethrow()
+                write_both("  $host_name: ")
+                print_progress_err("✗ ($(e.msg))")
+                writeln_both("")
+                continue
+            end
+            if host_julia === nothing
+                write_both("  $host_name: ")
+                print_progress_err("✗ (Julia not found)")
+                writeln_both("")
+                continue
+            end
+            write_both("  $host_name: pinned $(host_julia)")
+            writeln_both("")
+            hn = DistSSHRun.launch_override_notice(host_name, names)
+            isempty(hn) || writeln_both("  " * hn)
+            write_both("  ")
 
             deps_err = DistSSHRun.probe_remote_project_deps(
                 host_name, remote_proj; julia_path = String(host_julia),
@@ -166,17 +172,14 @@ function add_drive_workers!(
                 # Default tunnel=true. Set DISTSSHKIT_SSH_TUNNEL=0 to disable.
                 # Machine must be user@host: Distributed prefixes \$USER otherwise and
                 # overrides SSH config User (Host aliases then look like "No free port?").
-                use_tunnel = get(ENV, "DISTSSHKIT_SSH_TUNNEL", "1") != "0"
-                machine = DistSSHRun.ssh_addprocs_machine(host_name)
-                addprocs(
-                    [(machine, host_workers)];
-                    exename = `$host_julia`,
-                    sshflags = sshflags_cmd,
-                    dir = remote_dir,
-                    tunnel = use_tunnel,
-                    topology = :master_worker,
-                    env = DistSSHRun._drive_worker_env(),
-                    exeflags = DistSSHRun._drive_worker_exeflags(remote_proj)
+                # Bind 127.0.0.1 so the cluster cookie is not reachable on other interfaces.
+                machine = DistSSHRun.ssh_addprocs_bind_localhost(host_name)
+                DistSSHRun._add_ssh_drive_workers!(
+                    machine,
+                    host_workers,
+                    host_julia,
+                    remote_proj,
+                    sshflags_cmd,
                 )
                 added = sort!(Int[w for w in workers() if w ∉ before])
                 # `SSHManager.launch` can swallow a failed machine; `addprocs` then
@@ -189,6 +192,10 @@ function add_drive_workers!(
                 end
                 _register_drive_workers!(before, remote_proj, remote_script)
                 DistSSHRun._register_drive_host_worker_ids!(host_name, added)
+                remote_man = joinpath(remote_proj, "Manifest.toml")
+                for w in added
+                    host_manifests[w] = remote_man
+                end
                 print_ok("✓")
                 writeln_both("")
                 push!(successful_hosts, host_name)
@@ -219,6 +226,11 @@ function add_drive_workers!(
 
     # Alone, Julia reports nworkers()==1 (the master). Fail when nothing joined.
     nprocs() <= 1 && error(_NO_WORKERS_JOINED)
+    DistSSHRun.verify_workers_match_job!(
+        proj_dir;
+        allow = DistSSHRun._ALLOW_MISMATCH[],
+        host_manifests = host_manifests,
+    )
 
     return successful_hosts
 end

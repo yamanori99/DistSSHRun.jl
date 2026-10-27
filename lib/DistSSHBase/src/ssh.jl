@@ -18,7 +18,7 @@ end
 function build_ssh_opts(; request_tty::Bool = false)
     custom = strip(get(ENV, "DISTRIBUTED_SSH_OPTS", ""))
     if isempty(custom)
-        opts = String["-o", "BatchMode=yes"]
+        opts = String["-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes"]
         if !request_tty
             push!(opts, "-o", "RequestTTY=no")
         end
@@ -656,6 +656,7 @@ A non-POSIX login shell throws `ArgumentError` (see `help setup`).
 function resolve_remote_abs_path_on_host(host::String, remote_path::AbstractString)::Union{Nothing, String}
     path = strip(String(remote_path))
     isempty(path) && return nothing
+    _reject_control_path(path)
     startswith(path, "/") && return path
     try
         inner = _remote_abs_path_resolve_shell(path)
@@ -817,11 +818,19 @@ function _remote_tree_root(
     )::String
     if cli_override !== nothing
         s = strip(String(cli_override))
-        !isempty(s) && return s
+        if !isempty(s)
+            _reject_control_path(s)
+            return s
+        end
     end
     env = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
-    !isempty(env) && return env
-    return default_remote_project_path(local_tree)
+    if !isempty(env)
+        _reject_control_path(env)
+        return env
+    end
+    root = default_remote_project_path(local_tree)
+    _reject_control_path(root)
+    return root
 end
 
 """

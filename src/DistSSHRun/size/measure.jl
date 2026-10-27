@@ -109,11 +109,18 @@ function _measure_rss!(
         worker_project::Dict{Int, String},
         worker_probe::Dict{Int, Union{Nothing, String}},
     )::Dict{String, WorkerMemorySample}
+    ensure_run_cluster_cookie!()
     if include_parent
         try
             local_proj = something(resolve_host_project_abs(PARENT_HOST_NAME, proj), proj)
             before = Set(workers())
-            addprocs(1; exeflags = `--project=$local_proj`, topology = :master_worker)
+            addprocs(
+                1;
+                exename = pin_local_julia(nothing),
+                exeflags = Cmd(worker_exeflag_strings(local_proj; local_cpu = true)),
+                env = worker_env_pairs(local_proj),
+                topology = :master_worker,
+            )
             added = setdiff(Set(workers()), before)
             if !isempty(added)
                 wid = first(added)
@@ -166,17 +173,19 @@ function _measure_rss!(
                 end
             end
             try
-                use_tunnel = get(ENV, "DISTSSHKIT_SSH_TUNNEL", "1") != "0"
-                machine = ssh_addprocs_machine(host)
+                pinned = something(pin_remote_julia(host, julia_exe), julia_exe)
+                machine = ssh_addprocs_bind_localhost(host)
                 before = Set(workers())
                 addprocs(
                     [(machine, 1)];
-                    exename = `$julia_exe`,
+                    exename = ssh_worker_exename(pinned),
                     sshflags = sshflags_cmd,
                     dir = remote_proj,
-                    tunnel = use_tunnel,
+                    tunnel = ssh_tunnel_enabled(),
+                    cmdline_cookie = false,
                     topology = :master_worker,
-                    exeflags = `--project=$remote_proj`
+                    env = worker_env_pairs(remote_proj; ssh = true),
+                    exeflags = Cmd(worker_exeflag_strings(remote_proj; local_cpu = false)),
                 )
                 added = setdiff(Set(workers()), before)
                 isempty(added) && continue

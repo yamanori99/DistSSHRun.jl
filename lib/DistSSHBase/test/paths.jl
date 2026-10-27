@@ -86,6 +86,9 @@ using Test
                 @test DistSSHBase.resolve_host_path_abs("some-host", joinpath(p, "src"), p) ==
                     joinpath("/remote/App", "src") |> abspath
             end
+            withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/remote/App\nbad") do
+                @test_throws ArgumentError DistSSHBase.resolve_host_project_abs("some-host", p)
+            end
         end
     end
 end

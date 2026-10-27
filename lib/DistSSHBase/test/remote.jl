@@ -116,6 +116,7 @@ using Test
         opts = DistSSHBase.build_ssh_opts()
         @test "-o" in opts
         @test "BatchMode=yes" in opts
+        @test "ExitOnForwardFailure=yes" in opts
         @test "RequestTTY=no" in opts
         @test "ConnectTimeout=10" in opts
         @test "ServerAliveInterval=60" in opts

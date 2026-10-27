@@ -68,6 +68,7 @@ function drive!(
         mem_headroom::Real = DEFAULT_MEM_HEADROOM,
         parent_gb::Real = DEFAULT_PARENT_GB,
         sync_script::Bool = false,
+        allow_mismatch = Symbol[],
     )::DriveResult
     return _drive_frame(; cli = false) do
         return _with_kit_inproc_run!(:drive) do
@@ -95,6 +96,7 @@ function drive!(
                     mem_headroom = mem_headroom,
                     parent_gb = parent_gb,
                     sync_script = sync_script,
+                    allow_mismatch = allow_mismatch,
                 )
                 apply_kit_cli_session!(parsed.cli_session)
                 original_args = copy(ARGS)

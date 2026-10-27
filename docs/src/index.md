@@ -9,7 +9,11 @@ The command is `julia -m DistSSHRun`.
 `pkg> app add DistSSHRun` still installs `distsshrun`. That command is
 experimental. The binary is the Apps copy, not `--project=.`. Apps
 fixes `JULIA_LOAD_PATH`, so `drive`, `size`, and `pool` still need
-`julia -m DistSSHRun`.
+`julia -m DistSSHRun`. Worker processes (local and SSH) set
+`JULIA_LOAD_PATH=@:@stdlib` and `--project=` of the job tree; they do not
+see `@v#.#`. Local workers also put DistSSHRun's package directory on that
+path so `ride` can load DistSSHRun when the job tree does not. Parent
+`LOAD_PATH` mutations do not otherwise affect workers.
 
 DistSSHKit does not install a terminal command. When that package is
 installed, `julia -m DistSSHKit` is the same entry.

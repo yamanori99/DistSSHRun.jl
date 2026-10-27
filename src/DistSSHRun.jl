@@ -149,6 +149,8 @@ using .DistSSHUp: julia_version_mismatch_kind, juliaup_add_host!, juliaup_align_
 include("DistSSHRun/display.jl")
 include("DistSSHRun/argv/session.jl")
 include("DistSSHRun/remote.jl")
+include("DistSSHRun/launch.jl")
+include("DistSSHRun/mismatch.jl")
 include("DistSSHRun/demos.jl")
 include("DistSSHRun/distributed.jl")
 include("DistSSHRun/drive/types.jl")

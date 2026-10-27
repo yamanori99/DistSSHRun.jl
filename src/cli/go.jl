@@ -63,6 +63,7 @@ function go_main()::Cint
             output_dir = kw[:output_dir],
             hosts_file = nothing,
             julia = kw[:julia],
+            allow_mismatch = get(kw, :allow_mismatch, Symbol[]),
             repeat = get(kw, :repeat, nothing),
             hint_surface = :cli,
             original_args = original_args,

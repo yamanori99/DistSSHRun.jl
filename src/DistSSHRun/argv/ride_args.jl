@@ -10,6 +10,7 @@ function _ride_parsed(;
         spi_check::Bool,
         output_dir,
         julia = nothing,
+        allow_mismatch = Symbol[],
     )
     return (
         help = help,
@@ -21,6 +22,7 @@ function _ride_parsed(;
         spi_check = spi_check,
         output_dir = output_dir,
         julia = julia,
+        allow_mismatch = allow_mismatch,
     )
 end
 
@@ -52,6 +54,8 @@ function show_ride_usage(; io::IO = stdout)
         "  --no-spi-check      skip that compare",
         "  --output-dir PATH   DISTRIBUTED_OUTPUT_DIR for the script (must be missing or empty)",
         "  --julia PATH        remote Julia (ENV or auto)",
+        "  --allow-mismatch F  waive julia, distssh, and/or manifest (comma list)",
+        "  SSH workers: project-root cwd, bind 127.0.0.1; mismatch is an error unless waived.",
         "  $(KIT_HOSTS_FLAG_HELP)",
         "  --hosts-file PATH   one token per line",
         "  $(KIT_QUIET_FLAG_HELP)",
@@ -75,6 +79,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
     script_args = String[]
     output_dir = nothing
     julia_exe = nothing
+    allow_mismatch = Symbol[]
     spi_check = false
     c = CliCursor(collect(String, rest))
     while !cli_at_end(c)
@@ -85,6 +90,8 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
             output_dir = cli_take_value!(c, arg)
         elseif arg == "--julia"
             julia_exe = cli_take_value!(c, arg)
+        elseif arg == "--allow-mismatch"
+            merge_allow_mismatch!(allow_mismatch, cli_take_value!(c, arg))
         elseif arg == "--spi-check"
             cli_consume!(c)
             spi_check = true
@@ -111,6 +118,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
                 spi_check = spi_check,
                 output_dir = output_dir,
                 julia = julia_exe,
+                allow_mismatch = allow_mismatch,
             )
         elseif endswith(arg, ".jl")
             script_path = arg
@@ -152,5 +160,6 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
         spi_check = spi_check,
         output_dir = output_dir,
         julia = julia_exe,
+        allow_mismatch = allow_mismatch,
     )
 end
