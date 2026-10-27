@@ -154,7 +154,9 @@ function main()
         exit(0)
     end
 
-    if occursin("git pull", script)
+    # Quoted argv is `'git' … 'pull'`, which does not contain the substring `git pull`.
+    if occursin("git pull", script) ||
+            (occursin("'pull'", script) && occursin("hooksPath=/dev/null", script))
         if get(ENV, "DISTSSHKIT_TEST_GIT_PULL_FAIL", "") == "1"
             println("fatal: not a git repository")
             exit(1)
