@@ -1,4 +1,4 @@
-# Git push/pull sync to SSH hosts (shared by `setup --sync` / `--pull` and `sync!`).
+# Git SHA checkout on SSH hosts (shared by `setup --sync` / `--pull` and `sync!`).
 
 """Last lines of captured stdout and stderr, for a failed git or ssh command."""
 function _captured_output_tail(out::AbstractString, err::AbstractString; n::Int = 20)::String
@@ -32,81 +32,43 @@ function git_push_project!(project::AbstractString)::Bool
     return _git_run_detail(["-C", String(project), "push"]).ok
 end
 
-function git_pull_local_project!(project::AbstractString)::Bool
-    return _git_run_detail(["-C", String(project), "pull"]).ok
-end
+# Mandatory on every remote git process. Ephemeral `-c` only: do not set
+# `safe.directory` or any other persistent config. Nice-to-have `-c` values
+# stay on #199.
+const _REMOTE_GIT_CONFIG_ARGS = (
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.hooksPath=/dev/null",
+)
 
-"""Remote shell snippet for `git pull` at `remote_path` (`ssh -n`, not a login shell)."""
-function _git_pull_remote_inner(remote_path::AbstractString)::String
-    return "cd $(_remote_shell_path_word(remote_path)) && git pull"
-end
+"""
+Remote `sh` body for one `git` at `remote_path`.
 
-function _git_pull_remote_host_detail(host::AbstractString, remote_path::AbstractString)
-    out_buf = IOBuffer()
-    err_buf = IOBuffer()
-    try
-        run(
-            pipeline(
-                _host_sync_remote_shell_cmd(String(host), _git_pull_remote_inner(remote_path));
-                stdout = out_buf,
-                stderr = err_buf,
-            )
-        )
-        return (; ok = true, detail = "")
-    catch e
-        _rethrow_missing_host_tool(e)
-        return (;
-            ok = false,
-            detail = _captured_output_tail(String(take!(out_buf)), String(take!(err_buf))),
-        )
-    end
-end
-
-function git_pull_remote_host!(host::AbstractString, remote_path::AbstractString)::Bool
-    return _git_pull_remote_host_detail(host, remote_path).ok
-end
-
-"""Remote `HEAD` hash and branch from one `git rev-parse`. `nothing` when it fails."""
-function _remote_git_head(
-        host::AbstractString,
+Every remote git call goes through here so hooks and fsmonitor do not run.
+Arguments are passed through [`_remote_argv_sh`](@ref). A `~` path is `cd`
+then `git` so the remote shell expands the tilde; any other path is `git -C`.
+"""
+function _remote_git_shell(
         remote_path::AbstractString,
-    )::Union{Nothing, @NamedTuple{hash::String, branch::String}}
-    pq = _remote_shell_path_word(remote_path)
-    revs = join((_remote_sh_quote(w) for w in ("HEAD", "--abbrev-ref", "HEAD")), " ")
-    inner = if startswith(strip(String(remote_path)), "~")
-        "cd $pq && git rev-parse $revs"
-    else
-        "git -C $pq rev-parse $revs"
+        args::AbstractVector{<:AbstractString},
+    )::String
+    path = strip(String(remote_path))
+    argv = String["git"]
+    for opt in _REMOTE_GIT_CONFIG_ARGS
+        push!(argv, String(opt))
     end
-    try
-        s = strip(
-            read(
-                pipeline(_host_sync_remote_shell_cmd(String(host), inner); stderr = devnull),
-                String,
-            )
-        )
-        lines = split(s, '\n'; keepempty = false)
-        length(lines) == 2 || return nothing
-        return (hash = String(lines[1]), branch = String(lines[2]))
-    catch e
-        _rethrow_missing_host_tool(e)
-        return nothing
+    if startswith(path, "~")
+        for a in args
+            push!(argv, String(a))
+        end
+        return "cd $(_remote_shell_path_word(path)) && " * DistSSHBase._remote_argv_sh(argv)
     end
-end
-
-function _local_git_abbrev_ref(project::AbstractString)::String
-    try
-        s = strip(
-            read(
-                pipeline(_git_cmd(["-C", String(project), "rev-parse", "--abbrev-ref", "HEAD"]); stderr = devnull),
-                String,
-            )
-        )
-        return s
-    catch e
-        _rethrow_missing_host_tool(e)
-        return ""
+    push!(argv, "-C", path)
+    for a in args
+        push!(argv, String(a))
     end
+    return DistSSHBase._remote_argv_sh(argv)
 end
 
 function _git_remote_url(project::AbstractString)::String
@@ -118,13 +80,288 @@ function _git_remote_url(project::AbstractString)::String
     end
 end
 
+# `git rev-parse` prints lowercase hex. Reject anything else before it is quoted
+# into a remote command or a ref name.
+# `\z` rejects a trailing newline. Julia's `$` matches before that newline.
+const _GIT_SHA_RE = r"\A(?:[0-9a-f]{40}|[0-9a-f]{64})\z"
+
+function _git_sha_valid(sha::AbstractString)::Bool
+    return occursin(_GIT_SHA_RE, sha)
+end
+
+function _process_failed_code(e)::Int
+    e isa ProcessFailedException || return 1
+    procs = e.procs
+    return isempty(procs) ? 1 : procs[end].exitcode
+end
+
+function _git_run_capture(args::Vector{String}; git_ssh::Union{Nothing, String} = nothing)
+    out_buf = IOBuffer()
+    err_buf = IOBuffer()
+    cmd = _git_cmd(args)
+    git_ssh isa String && (cmd = addenv(cmd, "GIT_SSH_COMMAND" => git_ssh))
+    try
+        run(pipeline(cmd; stdout = out_buf, stderr = err_buf))
+        return (; ok = true, code = 0, out = String(take!(out_buf)), err = String(take!(err_buf)), detail = "")
+    catch e
+        _rethrow_missing_host_tool(e)
+        out = String(take!(out_buf))
+        err = String(take!(err_buf))
+        return (;
+            ok = false,
+            code = _process_failed_code(e),
+            out = out,
+            err = err,
+            detail = _captured_output_tail(out, err),
+        )
+    end
+end
+
+"""`ssh://host/abs` with the path percent-encoded. `host` may be `user@name`."""
+function _percent_encode_git_path(path::AbstractString)::String
+    io = IOBuffer()
+    for b in codeunits(String(path))
+        safe = b == UInt8('/') ||
+            (UInt8('A') <= b <= UInt8('Z')) ||
+            (UInt8('a') <= b <= UInt8('z')) ||
+            (UInt8('0') <= b <= UInt8('9')) ||
+            b == UInt8('-') || b == UInt8('.') || b == UInt8('_') || b == UInt8('~')
+        if safe
+            write(io, b)
+        else
+            print(io, '%', uppercase(string(Int(b); base = 16, pad = 2)))
+        end
+    end
+    return String(take!(io))
+end
+
+function _git_ssh_repo_url(host::AbstractString, abs_path::AbstractString)::String
+    path = String(abs_path)
+    startswith(path, "/") || error("internal: git push path must be absolute")
+    return "ssh://$(String(host))$(_percent_encode_git_path(path))"
+end
+
+"""Kit `ssh` plus [`ssh_opts`](@ref), as `GIT_SSH_COMMAND` (git splits this itself)."""
+function _kit_git_ssh_command()::String
+    parts = String[_ssh_exe()]
+    append!(parts, ssh_opts())
+    return join((_remote_sh_quote(p) for p in parts), " ")
+end
+
+function _remote_git_run(
+        host::AbstractString,
+        remote_path::AbstractString,
+        args::Vector{String},
+    )
+    out_buf = IOBuffer()
+    err_buf = IOBuffer()
+    try
+        run(
+            pipeline(
+                _host_sync_remote_shell_cmd(String(host), _remote_git_shell(remote_path, args));
+                stdout = out_buf,
+                stderr = err_buf,
+            ),
+        )
+        return (; ok = true, code = 0, out = String(take!(out_buf)), err = String(take!(err_buf)), detail = "")
+    catch e
+        _rethrow_missing_host_tool(e)
+        out = String(take!(out_buf))
+        err = String(take!(err_buf))
+        return (;
+            ok = false,
+            code = _process_failed_code(e),
+            out = out,
+            err = err,
+            detail = _captured_output_tail(out, err),
+        )
+    end
+end
+
+function _git_status_args()::Vector{String}
+    return String["status", "--porcelain", "-z", "--untracked-files=normal"]
+end
+
+function _local_status_dirty(project::AbstractString)
+    args = String[
+        "-C", String(project),
+        "-c", "core.fsmonitor=false",
+        "-c", "core.hooksPath=/dev/null",
+    ]
+    append!(args, _git_status_args())
+    return _git_run_capture(args)
+end
+
+"""`(ok, sha, message)`. `message` is the refusal, already ending in `help setup`."""
+function _local_sync_sha(project::AbstractString)
+    sha = get_local_git_hash(project)
+    if !(sha isa String)
+        return (;
+            ok = false,
+            sha = "",
+            message = "This directory has no git commit to check out. See help setup.",
+        )
+    end
+    if !_git_sha_valid(sha)
+        return (;
+            ok = false,
+            sha = "",
+            message = "Local git commit is not a 40- or 64-character hex SHA. See help setup.",
+        )
+    end
+    st = _local_status_dirty(project)
+    if !st.ok
+        detail = isempty(st.detail) ? "git status failed" : st.detail
+        return (; ok = false, sha = "", message = detail * "\nSee help setup.")
+    end
+    if !isempty(st.out)
+        return (;
+            ok = false,
+            sha = "",
+            message = "Local git tree is dirty, so sync would not match $sha. " *
+                "Commit the changes. A dirty tree is not sent as a patch. See help setup.",
+        )
+    end
+    return (; ok = true, sha = sha, message = "")
+end
+
+function _missing_sha_message(host::AbstractString, sha::AbstractString, shallow::Bool)::String
+    if shallow
+        return "$host is a shallow clone and does not contain $sha. " *
+            "Refusing to unshallow it. See help setup."
+    end
+    return "$host does not contain $sha. See help setup."
+end
+
+function _remote_is_shallow(host::AbstractString, abs_path::AbstractString)::Bool
+    r = _remote_git_run(host, abs_path, ["rev-parse", "--is-shallow-repository"])
+    return r.ok && strip(r.out) == "true"
+end
+
+"""Push `sha` to `refs/distssh/<sha>` on the remote repo. Does not update a branch."""
+function _git_push_sha_detail(
+        project::AbstractString,
+        host::AbstractString,
+        abs_path::AbstractString,
+        sha::AbstractString,
+    )
+    _git_sha_valid(sha) || error("internal: refusing to push an unvalidated SHA")
+    url = _git_ssh_repo_url(host, abs_path)
+    refspec = string(sha, ":refs/distssh/", sha)
+    return _git_run_capture(
+        ["-C", String(project), "push", url, refspec];
+        git_ssh = _kit_git_ssh_command(),
+    )
+end
+
+function _remote_lfs_required(host::AbstractString, abs_path::AbstractString)
+    r = _remote_git_run(
+        host,
+        abs_path,
+        ["grep", "-I", "-F", "-e", "filter=lfs", "--", ".gitattributes", ":(glob)**/.gitattributes"],
+    )
+    r.code == 0 && return (; ok = true, uses = !isempty(strip(r.out)), detail = "")
+    r.code == 1 && return (; ok = true, uses = false, detail = "")
+    detail = isempty(r.detail) ? "git grep failed" : r.detail
+    return (; ok = false, uses = false, detail = detail)
+end
+
+"""
+Check out `sha` on `host` as a detached HEAD.
+
+Refuses a dirty tree before changing it. A shallow clone that still does not
+contain `sha` is an error; this does not unshallow. Submodules follow the
+commit. Git LFS runs only when `.gitattributes` asks for it.
+"""
+function _detach_sha_on_host(
+        project::AbstractString,
+        host::AbstractString,
+        remote_path::AbstractString,
+        sha::AbstractString,
+    )::NamedTuple{(:ok, :message), Tuple{Bool, String}}
+    abs_path = ensure_remote_abs_path(host, remote_path)
+    if !(abs_path isa String)
+        return (;
+            ok = false,
+            message = "Could not resolve the remote path on $host. See help setup.",
+        )
+    end
+    st = _remote_git_run(host, abs_path, _git_status_args())
+    if !st.ok
+        detail = isempty(st.detail) ? "git status failed" : st.detail
+        return (; ok = false, message = "$host: $detail\nSee help setup.")
+    end
+    if !isempty(st.out)
+        return (;
+            ok = false,
+            message = "$host has untracked or uncommitted files, so checkout would not match $sha. " *
+                "Refusing to overwrite them. See help setup.",
+        )
+    end
+    pushed = _git_push_sha_detail(project, host, abs_path, sha)
+    if !pushed.ok
+        detail = isempty(pushed.detail) ? "git push failed" : pushed.detail
+        extra = _remote_is_shallow(host, abs_path) ?
+            "\n" * _missing_sha_message(host, sha, true) : ""
+        return (; ok = false, message = "git push of $sha to $host failed.\n$detail$extra")
+    end
+    commit_rev = string(sha, '^', '{', "commit", '}')
+    present = _remote_git_run(host, abs_path, ["cat-file", "-e", commit_rev])
+    if !present.ok
+        return (; ok = false, message = _missing_sha_message(host, sha, _remote_is_shallow(host, abs_path)))
+    end
+    checked = _remote_git_run(host, abs_path, ["checkout", "--detach", sha])
+    if !checked.ok
+        detail = isempty(checked.detail) ? "git checkout failed" : checked.detail
+        return (; ok = false, message = "$host: $detail\nSee help setup.")
+    end
+    sub = _remote_git_run(host, abs_path, ["submodule", "update", "--init", "--recursive"])
+    if !sub.ok
+        detail = isempty(sub.detail) ? "git submodule update failed" : sub.detail
+        return (; ok = false, message = "$host: $detail\nSee help setup.")
+    end
+    lfs = _remote_lfs_required(host, abs_path)
+    if !lfs.ok
+        return (; ok = false, message = "$host: $(lfs.detail)\nSee help setup.")
+    end
+    if lfs.uses
+        pulled = _remote_git_run(host, abs_path, ["lfs", "pull"])
+        if !pulled.ok
+            detail = isempty(pulled.detail) ? "git lfs pull failed" : pulled.detail
+            return (;
+                ok = false,
+                message = "$host uses Git LFS but git lfs pull failed.\n$detail\nSee help setup.",
+            )
+        end
+    end
+    head = _remote_git_run(host, abs_path, ["rev-parse", "HEAD"])
+    if !head.ok
+        detail = isempty(head.detail) ? "could not read git HEAD" : head.detail
+        return (; ok = false, message = "$host: $detail\nSee help setup.")
+    end
+    got = strip(head.out)
+    if got != sha
+        return (;
+            ok = false,
+            message = "git HEAD on $host is $got, not $sha. See help setup.",
+        )
+    end
+    after = _remote_git_run(host, abs_path, _git_status_args())
+    if !after.ok || !isempty(after.out)
+        return (;
+            ok = false,
+            message = "$host is dirty after checkout of $sha. See help setup.",
+        )
+    end
+    return (; ok = true, message = "detached HEAD at $sha")
+end
+
 function _print_git_sync_banner!(
         hosts::Vector{String},
         project::AbstractString,
         remote_path::AbstractString;
         do_push::Bool,
         do_pull::Bool,
-        do_local_pull::Bool,
     )
     # Consent text: always on the terminal (same gate as `kit_confirm`).
     println_fatal("  Repository: $(_git_remote_url(project))")
@@ -132,11 +369,13 @@ function _print_git_sync_banner!(
     println_fatal("  Hosts: $(join(hosts, ", "))")
     println_fatal()
     println_fatal("  This will:")
-    do_local_pull && println_fatal("    git pull on localhost")
     if do_push
         print_warn("    git push (local → origin; not only the listed hosts)\n")
     end
-    do_pull && println_fatal("    git pull on remotes")
+    if do_pull
+        println_fatal("    push the local commit to refs/distssh/<sha> on each remote")
+        println_fatal("    git checkout --detach that commit (detached HEAD)")
+    end
     println_fatal()
     return nothing
 end
@@ -144,11 +383,15 @@ end
 """
     git_sync_project_to_hosts!(
         hosts, project, remote_path;
-        do_push=true, do_pull=true, do_local_pull=false, confirm=true,
+        do_push=true, do_pull=true, confirm=true,
     ) -> (; ok, cancelled, host_results)
 
-Push/pull git so remotes match `project`. Used by `setup --sync` / `--pull` and
-[`sync!`](@ref) (`mode=:sync`).
+Make each remote a detached HEAD at the local commit. Used by `setup --sync` /
+`--pull` and [`sync!`](@ref) (`mode=:sync`).
+
+Does not run `git pull`. `do_push` still updates `origin`. `do_pull` delivers
+the commit with `git push <host>:<path> <sha>:refs/distssh/<sha>` and checks
+it out. A dirty local or remote tree is refused and is not sent as a patch.
 
 When `confirm=true`, prints the planned git steps and requires `y` (unless
 [`kit_noninteractive`](@ref) / `--yes` is active).
@@ -159,19 +402,24 @@ function git_sync_project_to_hosts!(
         remote_path::AbstractString;
         do_push::Bool = true,
         do_pull::Bool = true,
-        do_local_pull::Bool = false,
         confirm::Bool = true,
     )
     ensure_manifest_in_git_worktree!(project)
     proj = canonical_local_path(project)
     remote = String(remote_path)
     host_results = HostResult[]
+    local_sha = _local_sync_sha(proj)
+    if !local_sha.ok
+        println_fatal(local_sha.message)
+        return (; ok = false, cancelled = false, host_results = host_results)
+    end
+    sha = local_sha.sha
 
     if confirm && !kit_noninteractive()
         cancelled = with_kit_progress_suspended() do
             _print_git_sync_banner!(
                 hosts, proj, remote;
-                do_push = do_push, do_pull = do_pull, do_local_pull = do_local_pull,
+                do_push = do_push, do_pull = do_pull,
             )
             kit_confirm("Proceed? [y/N]: ") || begin
                 println_fatal("Cancelled.")
@@ -181,21 +429,6 @@ function git_sync_project_to_hosts!(
             return false
         end
         cancelled && return (; ok = false, cancelled = true, host_results = HostResult[])
-    end
-
-    if do_local_pull
-        local_r = kit_spin!("  localhost git pull: ") do
-            _git_run_detail(["-C", proj, "pull"])
-        end
-        if local_r.ok
-            print_ok("✓")
-            kit_println()
-        else
-            print_progress_err("✗")
-            kit_println()
-            isempty(local_r.detail) || println_fatal(local_r.detail)
-            return (; ok = false, cancelled = false, host_results = host_results)
-        end
     end
 
     if do_push
@@ -225,42 +458,22 @@ function git_sync_project_to_hosts!(
     end
 
     if do_pull
-        local_hash = get_local_git_hash(proj)
-        local_branch = _local_git_abbrev_ref(proj)
         for host in hosts
-            pull_r = _setup_host_call!(host) do
-                kit_spin!("  $host git pull: ") do
-                    _git_pull_remote_host_detail(host, remote)
+            detached = _setup_host_call!(host) do
+                kit_spin!("  $host checkout: ") do
+                    _detach_sha_on_host(proj, host, remote, sha)
                 end
             end
-            if pull_r.ok
-                remote_head = _remote_git_head(host, remote)
-                if local_hash isa String && remote_head !== nothing && remote_head.hash == local_hash
-                    print_ok("✓")
-                    kit_println()
-                    push!(host_results, HostResult(host, true, "git pull ok"))
-                elseif remote_head === nothing || !(local_hash isa String)
-                    print_progress_warn("⚠")
-                    kit_println()
-                    msg = remote_head === nothing ?
-                        "could not read git HEAD on $host after pull" :
-                        "git HEAD on $host is not comparable (no local commit)"
-                    print_warn("Warning: $msg\n")
-                    push!(host_results, HostResult(host, true, "git pull ok; " * msg))
-                else
-                    print_progress_warn("⚠")
-                    kit_println()
-                    lb = isempty(local_branch) ? "unknown" : local_branch
-                    msg = "git HEAD mismatch on $host: remote $(remote_head.branch) ($(remote_head.hash)), local $lb ($local_hash)"
-                    print_warn("Warning: $msg. $_SHIP_ERROR_SOON\n")
-                    lb == "unknown" || kit_println("    Fix: git -C $remote checkout $lb")
-                    push!(host_results, HostResult(host, true, "git pull ok; " * msg))
-                end
+            if detached.ok
+                print_ok("✓")
+                kit_println()
+                println_fatal("    Detached HEAD at $sha.")
+                push!(host_results, HostResult(String(host), true, detached.message))
             else
                 print_progress_err("✗")
                 kit_println()
-                msg = isempty(pull_r.detail) ? "git pull failed" : pull_r.detail
-                push!(host_results, HostResult(host, false, msg))
+                println_fatal(detached.message)
+                push!(host_results, HostResult(String(host), false, detached.message))
                 return (; ok = false, cancelled = false, host_results = host_results)
             end
         end
