@@ -580,6 +580,10 @@ function _remote_dest_probe(
         _rethrow_missing_host_tool(e)
         detail = strip(String(take!(err_buf)))
         isempty(detail) && (detail = sprint(showerror, e))
+        code = DistSSHBase._remote_failure_exit_code(e)
+        if code isa Int
+            detail = DistSSHBase._append_remote_shell_hint(host, code, detail)
+        end
         return (:error, detail)
     end
 end
@@ -626,6 +630,7 @@ function _ensure_remote_dir(host::String, remote_path::String)::Bool
         return true
     catch e
         _rethrow_missing_host_tool(e)
+        DistSSHBase._throw_if_nonposix_shell(host, e)
         return false
     end
 end

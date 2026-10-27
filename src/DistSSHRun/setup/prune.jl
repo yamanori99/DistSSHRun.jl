@@ -155,8 +155,8 @@ function _prune_remote_shell(
     # `$pq` is its own word, same as delete. Do not paste it into double quotes.
     older = older_days === nothing ? "" : string(Int(older_days))
     idn = id === nothing ? "" : String(id)
-    idq = _remote_sh_quote(idn)
-    older_q = _remote_sh_quote(older)
+    idq = posix_quote(idn)
+    older_q = posix_quote(older)
     return """
     # DISTSSHKIT_PRUNE_KIT_LEAVES
     root=$pq

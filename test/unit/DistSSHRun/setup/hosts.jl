@@ -25,6 +25,9 @@ using Test
         @test DistSSHRun.validate_setup_hosts(["local"]) === nothing
         @test_throws ArgumentError DistSSHRun.validate_setup_hosts(["demos/foo.jl"])
         @test DistSSHRun.validate_setup_hosts(["root@192.0.2.10", "host-b"]) === nothing
+        @test_throws ArgumentError DistSSHRun.validate_setup_hosts(["-bad"])
+        @test_throws ArgumentError DistSSHRun.validate_setup_hosts(["user@-h"])
+        @test_throws ArgumentError DistSSHRun.validate_setup_hosts(["host\nname"])
         @test DistSSHRun.setup_cli_host_token("host-a") == "child:host-a"
         @test DistSSHRun.setup_cli_host_token("parent") == "parent"
     end

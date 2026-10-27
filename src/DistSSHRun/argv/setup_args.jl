@@ -12,6 +12,8 @@ function show_requirements(; io::IO = stdout)
         "Distributed starts workers with sh -l -c; that wrap cannot be changed.",
         "fish and csh are unsupported.",
         "fish can silently change quoting (backslashes inside single quotes).",
+        "An SSH name must not start with '-' (including user@-host).",
+        "A host or remote path must not contain NUL, a newline, or another control character.",
         "Git parity is drive --require-git (off by default).",
     )
     print_help_blank(io)

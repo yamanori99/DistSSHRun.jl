@@ -96,9 +96,10 @@ end
 _git_cmd(args::AbstractVector)::Cmd = _host_tool_cmd("git", args)
 _ssh_cmd(args::AbstractVector)::Cmd = _host_tool_cmd("ssh", args)
 
-"""`--` then `host`, then `args`. A name that starts with `-` stays a destination."""
+"""`--` then `host`, then `args`. A name that starts with `-` is rejected."""
 function _ssh_host_args(host::AbstractString, args::AbstractString...)::Vector{String}
-    return String["--", String(host), String.(args)...]
+    dest = validate_ssh_host(host)
+    return String["--", dest, String.(args)...]
 end
 _scp_cmd(args::AbstractVector)::Cmd = _host_tool_cmd("scp", args)
 
@@ -144,6 +145,7 @@ julia> DistSSHRun.ssh_addprocs_machine("dev@host1")
 function ssh_addprocs_machine(host::AbstractString)::String
     h = String(strip(host))
     isempty(h) && return h
+    h = validate_ssh_host(h)
     occursin('@', h) && return h
     u = ssh_config_user(h)
     return u === nothing ? h : string(u, '@', h)
@@ -301,6 +303,7 @@ A backtick, double quote, backslash, or any other `\$` in that word is escaped.
 Every other path is POSIX single-quoted.
 """
 function _remote_julia_path_sh(path::AbstractString)::String
+    _reject_control_path(path)
     s = String(path)
     if startswith(s, "~/")
         s = string("\$HOME", chopprefix(s, "~"))
@@ -309,7 +312,7 @@ function _remote_julia_path_sh(path::AbstractString)::String
     if startswith(s, prefix)
         return string('"', prefix, _remote_dq_escape(chopprefix(s, prefix)), '"')
     end
-    return _remote_sh_quote(s)
+    return posix_quote(s)
 end
 
 function _remote_julia_candidates_sh(uname_s::AbstractString)::String
@@ -323,11 +326,25 @@ function _remote_julia_candidates_sh(uname_s::AbstractString)::String
     end
 end
 
-"""POSIX single-quote a word so remote `sh` does not parse metacharacters."""
-function _remote_sh_quote(word::AbstractString)::String
+"""
+    posix_quote(word::AbstractString) -> String
+
+One POSIX single-quoted word for a remote `sh` command.
+
+A `'` inside `word` becomes `'\\''`. Every other byte is copied, including
+newline. NUL throws `ArgumentError` (a remote process cannot carry it).
+A path goes through [`_remote_shell_path_word`](@ref), which rejects a control
+character. A host goes through [`validate_ssh_host`](@ref), which rejects a
+name that starts with `-` and a control character.
+"""
+function posix_quote(word::AbstractString)::String
+    s = String(word)
+    if occursin('\0', s)
+        throw(ArgumentError("posix_quote: word contains NUL. See help setup."))
+    end
     return sprint() do io
         print(io, '\'')
-        for c in String(word)
+        for c in s
             if c == '\''
                 print(io, "'\\''")
             else
@@ -338,13 +355,29 @@ function _remote_sh_quote(word::AbstractString)::String
     end
 end
 
+"""[`posix_quote`](@ref). Callers use `posix_quote`."""
+function _remote_sh_quote(word::AbstractString)::String
+    return posix_quote(word)
+end
+
+"""Throw when `path` contains a control character (NUL, newline, or any other)."""
+function _reject_control_path(path::AbstractString)::Nothing
+    s = String(path)
+    any(iscntrl, s) || return nothing
+    throw(
+        ArgumentError(
+            "path contains a newline or NUL ($(repr(s))). See help setup.",
+        ),
+    )
+end
+
 function _remote_argv_sh(argv::AbstractVector{<:AbstractString})::String
     return sprint() do io
         first = true
         for a in argv
             first || print(io, ' ')
             first = false
-            print(io, _remote_sh_quote(a))
+            print(io, posix_quote(a))
         end
     end
 end
@@ -384,7 +417,8 @@ function _run_on_host_remote_sh(
             "run_on_host: detect=false requires julia= to a remote path (not auto)",
         )
     )
-    q = _remote_sh_quote(path)
+    _reject_control_path(path)
+    q = posix_quote(path)
     return sprint() do io
         print(io, "JULIA="); print(io, q)
         print(io, "; [ -x \"\$JULIA\" ] && \"\$JULIA\" --version 2>/dev/null | grep -q 'julia version' || exit 127; exec \"\$JULIA\"")
@@ -442,6 +476,7 @@ end
 """Run `script` on `host`. Returns `(exitcode, stdout)`.
 
 SSH's own failure (exit 255) throws `ArgumentError` from [`summarize_ssh_error`](@ref).
+A non-POSIX login shell throws `ArgumentError` and points to `help setup`.
 Other non-zero exits are returned so a missing command can stay `nothing`.
 """
 function _remote_shell_status(host::String, script::AbstractString)::Tuple{Int, String}
@@ -455,24 +490,28 @@ function _remote_shell_status(host::String, script::AbstractString)::Tuple{Int, 
         rethrow()
     end
     code = Int(something(proc.exitcode, 1))
+    out = String(take!(out_buf))
+    err = String(take!(err_buf))
     if code == 255
         throw(
             ArgumentError(
                 summarize_ssh_error(
                     Base.ProcessFailedException(Base.Process[proc]);
-                    stderr = String(take!(err_buf)),
-                )
-            )
+                    stderr = err,
+                ),
+            ),
         )
     end
-    return code, String(take!(out_buf))
+    code == 0 || _throw_if_nonposix_shell(host, code, err)
+    return code, out
 end
 
 """Detect Julia path on remote host via SSH (executable + parseable `--version`).
 
 Returns `nothing` when the remote shell ran and no Julia was found. That result
 is cached. SSH transport failure (exit 255) throws `ArgumentError` and is not
-cached.
+cached. A failed command whose login shell is non-POSIX also throws
+`ArgumentError` (see `help setup`) and is not cached.
 """
 function detect_julia_path(host::String)::Union{Nothing, String}
     h = String(strip(host))
@@ -494,7 +533,8 @@ function _remote_julia_reports_version(host::String, path::AbstractString)::Bool
             String,
         )
         return parse_julia_version(out) !== nothing
-    catch
+    catch e
+        _throw_if_nonposix_shell(host, e)
         return false
     end
 end
@@ -516,7 +556,9 @@ function _detect_julia_path_uncached(host::String)::Union{Nothing, String}
                 isempty(found) && continue
                 _remote_julia_reports_version(host, found) || continue
                 return String(found)
-            catch
+            catch e
+                _rethrow_missing_host_tool(e)
+                _throw_if_nonposix_shell(host, e)
                 continue
             end
         end
@@ -530,29 +572,31 @@ function _detect_julia_path_uncached(host::String)::Union{Nothing, String}
 end
 
 
+function _remote_tilde_prefix_bare(prefix::AbstractString)::Bool
+    return occursin(r"^~[A-Za-z0-9._-]*$", prefix)
+end
+
 """
 Shell word for `path` on the remote login shell.
 
 A `~` / `~user` prefix stays unquoted so the remote shell expands it, when the
 prefix is only `~` and letters, digits, `.`, `_`, or `-`. The rest of a `~/…`
-path is passed through [`_remote_sh_quote`](@ref). Other paths are quoted in full.
+path is passed through [`posix_quote`](@ref). Other paths are quoted in full.
+A control character in `path` is rejected.
 """
-function _remote_tilde_prefix_bare(prefix::AbstractString)::Bool
-    return occursin(r"^~[A-Za-z0-9._-]*$", prefix)
-end
-
 function _remote_shell_path_word(path::AbstractString)::String
+    _reject_control_path(path)
     p = strip(String(path))
-    startswith(p, "~") || return _remote_sh_quote(p)
+    startswith(p, "~") || return posix_quote(p)
     slash = findfirst('/', p)
     if slash === nothing
-        return _remote_tilde_prefix_bare(p) ? p : _remote_sh_quote(p)
+        return _remote_tilde_prefix_bare(p) ? p : posix_quote(p)
     end
     prefix = p[1:(slash - 1)]
     rest = p[(slash + 1):end]
-    _remote_tilde_prefix_bare(prefix) || return _remote_sh_quote(p)
+    _remote_tilde_prefix_bare(prefix) || return posix_quote(p)
     isempty(rest) && return prefix * "/"
-    return prefix * "/" * _remote_sh_quote(rest)
+    return prefix * "/" * posix_quote(rest)
 end
 
 """
@@ -607,6 +651,7 @@ Resolve `remote_path` to an absolute path on `host` via SSH (`cd … && pwd`).
 Returns `remote_path` unchanged when it is already absolute (`/` prefix).
 A `~/…` layout is expanded on the host even if the tree is not created yet.
 Returns `nothing` when SSH fails, or when a non-tilde path does not exist.
+A non-POSIX login shell throws `ArgumentError` (see `help setup`).
 """
 function resolve_remote_abs_path_on_host(host::String, remote_path::AbstractString)::Union{Nothing, String}
     path = strip(String(remote_path))
@@ -617,7 +662,8 @@ function resolve_remote_abs_path_on_host(host::String, remote_path::AbstractStri
         s = strip(read(pipeline(_ssh_cmd([ssh_opts()..., _ssh_host_args(host, inner)...]); stderr = devnull), String))
         isempty(s) && return nothing
         return String(s)
-    catch
+    catch e
+        _throw_if_nonposix_shell(host, e)
         return nothing
     end
 end
@@ -642,13 +688,15 @@ Get remote git commit hash via SSH.
 
 `remote_repo_dir` starting with `~` uses `cd DIR && git rev-parse …` (shell expands `~`);
 otherwise uses `git -C DIR rev-parse …` (absolute path on the remote, same layout as local).
+A non-POSIX login shell throws `ArgumentError` (see `help setup`).
 """
 function get_remote_git_hash(host::String, remote_repo_dir::AbstractString; short::Union{Nothing, Int} = nothing)::Union{Nothing, String}
     try
         inner = _remote_git_hash_inner(remote_repo_dir; short = short)
         s = strip(read(pipeline(_ssh_cmd([ssh_opts()..., _ssh_host_args(host, inner)...]); stderr = devnull), String))
         return isempty(s) ? nothing : s
-    catch
+    catch e
+        _throw_if_nonposix_shell(host, e)
         return nothing
     end
 end
@@ -673,7 +721,9 @@ function get_remote_total_gb(host::String)
         )
         isempty(s) && return nothing
         return parse(Float64, s) / 1024^3
-    catch end
+    catch e
+        _throw_if_nonposix_shell(host, e)
+    end
     return nothing
 end
 
@@ -694,7 +744,9 @@ function get_remote_nproc(host::String)
         )
         isempty(s) && return nothing
         return parse(Int, s)
-    catch end
+    catch e
+        _throw_if_nonposix_shell(host, e)
+    end
     return nothing
 end
 
@@ -943,6 +995,7 @@ end
 Absolute paths are [`canonical_local_path`](@ref).
 """
 function remote_env_project_root(raw::AbstractString)::String
+    _reject_control_path(raw)
     s = strip(String(raw))
     isempty(s) && throw(ArgumentError("remote project root is empty"))
     startswith(s, "~") && return s
@@ -1050,6 +1103,264 @@ function _host_sync_remote_shell_cmd(host::String, remote_script::String)::Cmd
     end
     # `-n`: do not forward kit stdin (juliaup/git must not wait on a TTY pipe).
     return _ssh_cmd(["-n", ssh_opts()..., _ssh_host_args(host, remote_script)...])
+end
+
+# Hosts whose login shell already passed the POSIX probe. Failures are not stored.
+const _REMOTE_POSIX_SHELL_OK = Set{String}()
+const _REMOTE_POSIX_SHELL_LOCK = ReentrantLock()
+
+"""Drop cached POSIX login-shell passes (`host=nothing` → all hosts)."""
+function _clear_remote_posix_shell_cache!(host::Union{Nothing, AbstractString} = nothing)
+    lock(_REMOTE_POSIX_SHELL_LOCK) do
+        if host === nothing
+            empty!(_REMOTE_POSIX_SHELL_OK)
+        else
+            delete!(_REMOTE_POSIX_SHELL_OK, String(strip(String(host))))
+        end
+    end
+    return nothing
+end
+
+function _remote_posix_shell_cached(host::AbstractString)::Bool
+    h = String(host)
+    return lock(_REMOTE_POSIX_SHELL_LOCK) do
+        return h in _REMOTE_POSIX_SHELL_OK
+    end
+end
+
+function _remote_posix_shell_remember!(host::AbstractString)
+    h = String(host)
+    lock(_REMOTE_POSIX_SHELL_LOCK) do
+        push!(_REMOTE_POSIX_SHELL_OK, h)
+    end
+    return nothing
+end
+
+"""`echo \$SHELL` as its own remote command. Fish aborts a `-c` string on a parse error."""
+const _REMOTE_SHELL_NAME_SCRIPT = "echo \$SHELL"
+
+function _posix_probe_nonce()::String
+    return string(rand(UInt128); base = 16)
+end
+
+function _posix_probe_marker(nonce::AbstractString)::String
+    return "__DSR_POSIX_OK_$(nonce)__"
+end
+
+"""POSIX `case` probe. The marker is random so rc-file stdout cannot fake a pass."""
+function _posix_probe_script(nonce::AbstractString)::String
+    return "case x in x) echo $(_posix_probe_marker(nonce));; esac"
+end
+
+function _remote_shell_capture(
+        host::String,
+        script::String,
+    )::Union{Nothing, @NamedTuple{code::Int, out::String}}
+    out_buf = IOBuffer()
+    err_buf = IOBuffer()
+    proc = try
+        run(
+            pipeline(
+                ignorestatus(_host_sync_remote_shell_cmd(host, script));
+                stdout = out_buf,
+                stderr = err_buf,
+            );
+            wait = true,
+        )
+    catch
+        return nothing
+    end
+    code = proc.exitcode
+    code isa Integer || return nothing
+    return (code = Int(code), out = String(take!(out_buf)))
+end
+
+"""A `DISTSSHKIT_TEST_SSH` double is not a login shell unless the test asks."""
+function _posix_probe_is_strict()::Bool
+    _test_doubles_on() || return true
+    isempty(strip(get(ENV, "DISTSSHKIT_TEST_SSH", ""))) && return true
+    # Test double only. Not a user setting, and it does not disable the probe.
+    return strip(get(ENV, "DISTSSHKIT_TEST_POSIX_SHELL", "1")) == "0"
+end
+
+"""`:pass`, `:fail`, or `:unknown`. Exit 255 and a probe that did not run are unknown.
+
+A test double that exits 0 without the marker is a pass (it is not a shell).
+Any other double exit is unknown. `DISTSSHKIT_TEST_POSIX_SHELL=0` keeps the strict check.
+"""
+function _probe_remote_login_shell(host::String)::Symbol
+    nonce = _posix_probe_nonce()
+    got = _remote_shell_capture(host, _posix_probe_script(nonce))
+    got === nothing && return :unknown
+    got.code == 255 && return :unknown
+    occursin(_posix_probe_marker(nonce), got.out) && return :pass
+    _posix_probe_is_strict() || return got.code == 0 ? :pass : :unknown
+    return :fail
+end
+
+function _shell_name_from_stdout(stdout::AbstractString)::Union{Nothing, String}
+    last = ""
+    saw = false
+    for line in eachsplit(String(stdout), '\n')
+        s = strip(line)
+        isempty(s) && continue
+        last = String(s)
+        saw = true
+    end
+    saw || return nothing
+    occursin(r"^[A-Za-z0-9_./+-]+$", last) || return nothing
+    length(last) > 128 && return nothing
+    return last
+end
+
+"""Last stdout line of `echo \$SHELL`, or `nothing` when that command is not usable."""
+function _remote_login_shell_name(host::String)::Union{Nothing, String}
+    got = _remote_shell_capture(host, _REMOTE_SHELL_NAME_SCRIPT)
+    got === nothing && return nothing
+    got.code == 255 && return nothing
+    return _shell_name_from_stdout(got.out)
+end
+
+function _nonposix_login_shell_sentence(shell::Union{Nothing, String})::String
+    named = shell === nothing ? "" : " ($(shell))"
+    return "The remote login shell appears to be non-POSIX$(named). See `help setup`."
+end
+
+"""
+Hint when `code` is a remote-command failure and the login shell is non-POSIX.
+
+Exit 0 and SSH's own exit 255 do not probe. A passed probe is cached per host.
+A failed or inconclusive probe is not cached. `nothing` leaves the original error as it is.
+"""
+function _remote_shell_failure_hint(host::AbstractString, code::Integer)::Union{Nothing, String}
+    c = Int(code)
+    (c == 0 || c == 255) && return nothing
+    h = String(strip(String(host)))
+    isempty(h) && return nothing
+    _remote_posix_shell_cached(h) && return nothing
+    verdict = _probe_remote_login_shell(h)
+    if verdict === :pass
+        _remote_posix_shell_remember!(h)
+        return nothing
+    elseif verdict === :fail
+        return _nonposix_login_shell_sentence(_remote_login_shell_name(h))
+    else
+        return nothing
+    end
+end
+
+function _remote_command_failure_text(
+        host::AbstractString,
+        code::Integer,
+        stderr::AbstractString,
+        hint::AbstractString,
+    )::String
+    lines = String["remote command on $(String(strip(String(host)))) failed (exit $(Int(code))):"]
+    err = strip(String(stderr))
+    if !isempty(err)
+        for line in eachsplit(err, '\n')
+            push!(lines, "  " * String(line))
+        end
+    end
+    push!(lines, String(hint))
+    return join(lines, '\n')
+end
+
+"""Throw when `code` is a definitive non-POSIX login shell. Otherwise return."""
+function _throw_if_nonposix_shell(
+        host::AbstractString,
+        code::Integer,
+        stderr::AbstractString,
+    )::Nothing
+    hint = _remote_shell_failure_hint(host, code)
+    hint === nothing && return nothing
+    throw(ArgumentError(_remote_command_failure_text(host, code, stderr, hint)))
+end
+
+function _throw_if_nonposix_shell(host::AbstractString, err)::Nothing
+    code = _remote_failure_exit_code(err)
+    code === nothing && return nothing
+    return _throw_if_nonposix_shell(host, code, sprint(showerror, err))
+end
+
+function _append_remote_shell_hint(
+        host::AbstractString,
+        code::Integer,
+        text::AbstractString,
+    )::String
+    body = String(text)
+    hint = _remote_shell_failure_hint(host, code)
+    hint === nothing && return body
+    occursin(hint, body) && return body
+    isempty(strip(body)) && return hint
+    return rstrip(body) * "\n" * hint
+end
+
+function _remote_failure_exit_code(err)::Union{Nothing, Int}
+    err isa Base.ProcessFailedException || return nothing
+    for proc in err.procs
+        code = proc.exitcode
+        code isa Integer || continue
+        return Int(code)
+    end
+    return nothing
+end
+
+function _cmd_exec(cmd)::Union{Nothing, Vector{String}}
+    if cmd isa Cmd
+        return cmd.exec
+    elseif cmd isa Base.CmdRedirect
+        return _cmd_exec(cmd.cmd)
+    else
+        return nothing
+    end
+end
+
+function _test_ssh_double_path()::Union{Nothing, String}
+    _test_doubles_on() || return nothing
+    script = strip(get(ENV, "DISTSSHKIT_TEST_SSH", ""))
+    isempty(script) && return nothing
+    return abspath(script)
+end
+
+function _remote_shell_host_from_exec(exec::Vector{String})::Union{Nothing, String}
+    isempty(exec) && return nothing
+    base = basename(exec[1])
+    if base == "ssh" || base == "ssh.exe"
+        idx = findlast(==("--"), exec)
+        idx === nothing && return nothing
+        idx + 2 <= length(exec) || return nothing
+        host = exec[idx + 1]
+        isempty(host) && return nothing
+        return String(host)
+    end
+    script = _test_ssh_double_path()
+    script === nothing && return nothing
+    idx = findlast(x -> x == script || abspath(x) == script, exec)
+    idx === nothing && return nothing
+    idx + 2 <= length(exec) || return nothing
+    host = exec[idx + 1]
+    isempty(host) && return nothing
+    return String(host)
+end
+
+function _remote_shell_host_from_error(err)::Union{Nothing, String}
+    err isa Base.ProcessFailedException || return nothing
+    for proc in err.procs
+        exec = _cmd_exec(proc.cmd)
+        exec === nothing && continue
+        host = _remote_shell_host_from_exec(exec)
+        host === nothing || return host
+    end
+    return nothing
+end
+
+function _append_remote_shell_hint_from_error(err, text::AbstractString)::String
+    code = _remote_failure_exit_code(err)
+    code === nothing && return String(text)
+    host = _remote_shell_host_from_error(err)
+    host === nothing && return String(text)
+    return _append_remote_shell_hint(host, code, text)
 end
 
 

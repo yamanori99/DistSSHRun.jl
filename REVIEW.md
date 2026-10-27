@@ -21,8 +21,10 @@ say there is nothing to fix.
 - **Config misroutes.** A required check name, the heavy-job allowlist,
   or a label rule sends a change to the wrong gate.
 - **Remote shell.** A remote command interpolates a value without
-  `_remote_sh_quote` or `_remote_shell_path_word`. `~` expansion belongs
-  to `_remote_shell_path_word`.
+  `posix_quote` or `_remote_shell_path_word`. `~` expansion belongs
+  to `_remote_shell_path_word`. A host that starts with `-`, including
+  `user@-host`, or a host or path that contains a control character, is
+  rejected before `ssh` runs.
 - **Delete and prune.** A path calculation in this diff can remove a path
   the user did not confirm. `setup!(session, :delete)` and
   `setup!(session, :prune)` delete without a matching `confirm_path`, or

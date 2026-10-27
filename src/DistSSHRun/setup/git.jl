@@ -145,7 +145,7 @@ end
 function _kit_git_ssh_command()::String
     parts = String[_ssh_exe()]
     append!(parts, ssh_opts())
-    return join((_remote_sh_quote(p) for p in parts), " ")
+    return join((posix_quote(p) for p in parts), " ")
 end
 
 function _remote_git_run(
@@ -168,14 +168,34 @@ function _remote_git_run(
         _rethrow_missing_host_tool(e)
         out = String(take!(out_buf))
         err = String(take!(err_buf))
+        detail = _captured_output_tail(out, err)
+        # Failure-only login-shell check. Exit 255 and an inconclusive probe
+        # leave `detail` as the captured git output.
+        code = DistSSHBase._remote_failure_exit_code(e)
+        if code isa Int
+            detail = DistSSHBase._append_remote_shell_hint(String(host), code, detail)
+        end
         return (;
             ok = false,
             code = _process_failed_code(e),
             out = out,
             err = err,
-            detail = _captured_output_tail(out, err),
+            detail = detail,
         )
     end
+end
+
+"""Keep `message` and append the non-POSIX sentence when `detail` already has it."""
+function _with_nonposix_hint(message::AbstractString, detail::AbstractString)::String
+    line = nothing
+    for raw in eachsplit(String(detail), '\n')
+        s = strip(raw)
+        startswith(s, "The remote login shell appears to be non-POSIX") || continue
+        line = s
+    end
+    line === nothing && return String(message)
+    occursin(line, message) && return String(message)
+    return String(message) * "\n" * line
 end
 
 function _git_status_args()::Vector{String}
@@ -308,7 +328,13 @@ function _detach_sha_on_host(
     commit_rev = string(sha, '^', '{', "commit", '}')
     present = _remote_git_run(host, abs_path, ["cat-file", "-e", commit_rev])
     if !present.ok
-        return (; ok = false, message = _missing_sha_message(host, sha, _remote_is_shallow(host, abs_path)))
+        return (;
+            ok = false,
+            message = _with_nonposix_hint(
+                _missing_sha_message(host, sha, _remote_is_shallow(host, abs_path)),
+                present.detail,
+            ),
+        )
     end
     checked = _remote_git_run(host, abs_path, ["checkout", "--detach", sha])
     if !checked.ok
@@ -348,10 +374,9 @@ function _detach_sha_on_host(
     end
     after = _remote_git_run(host, abs_path, _git_status_args())
     if !after.ok || !isempty(after.out)
-        return (;
-            ok = false,
-            message = "$host is dirty after checkout of $sha. See help setup.",
-        )
+        msg = "$host is dirty after checkout of $sha. See help setup."
+        after.ok || (msg = _with_nonposix_hint(msg, after.detail))
+        return (; ok = false, message = msg)
     end
     return (; ok = true, message = "detached HEAD at $sha")
 end

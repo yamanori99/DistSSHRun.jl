@@ -35,7 +35,7 @@ Every other path is single-quoted.
 function _juliaup_candidate_sh_word(path::AbstractString)::String
     p = String(path)
     p == _JULIAUP_REMOTE_BIN_HOME && return "\"\$HOME/.juliaup/bin/juliaup\""
-    return _remote_sh_quote(p)
+    return posix_quote(p)
 end
 
 """Local juliaup candidates (same layout as remotes; expands `\$HOME`)."""

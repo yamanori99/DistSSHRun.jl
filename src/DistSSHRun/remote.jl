@@ -47,7 +47,7 @@ function _pkill_remote_julia_workers!(host::String)::Bool
         return false
     end
     for pattern in JULIA_WORKER_PKILL_PATTERNS
-        inner = "pkill -9 -f $(_remote_sh_quote(pattern))"
+        inner = "pkill -9 -f $(posix_quote(pattern))"
         try
             run(pipeline(_host_sync_remote_shell_cmd(host, inner); stdout = devnull, stderr = devnull))
         catch e
@@ -155,7 +155,7 @@ end
 """Remote `pkill -9 -f` for this job mark. Exit 1 (no match) is success."""
 function _remote_tagged_pkill_sh(job_id::AbstractString)::String
     pattern = _pkill_regex_no_self(kit_job_pkill_pattern(job_id))
-    return "pkill -9 -f $(_remote_sh_quote(pattern))"
+    return "pkill -9 -f $(posix_quote(pattern))"
 end
 
 """SSH `pkill -f` for this run's job mark only (never `julia.*--worker`)."""

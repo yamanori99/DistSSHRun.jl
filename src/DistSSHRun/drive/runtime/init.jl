@@ -65,14 +65,18 @@ nothing
 """
     activate_drive_project!(proj_dir)
 
-Activate the host application project on the master process before the driver
+Point the master process at the host application project before the driver
 script is first `include`d. Workers are activated separately during init.
+
+Uses `Base.set_active_project` (the raw slot keeps the project file path).
+`Pkg.activate` logs, touches Pkg state, and is not used on the master.
 """
 function activate_drive_project!(proj_dir::String)
-    isdir(proj_dir) || return
-    isfile(joinpath(proj_dir, "Project.toml")) || return
-    Pkg.activate(proj_dir; io = devnull)
-    return
+    isdir(proj_dir) || return nothing
+    projfile = joinpath(proj_dir, "Project.toml")
+    isfile(projfile) || return nothing
+    Base.set_active_project(projfile)
+    return nothing
 end
 
 """

@@ -82,6 +82,43 @@ format_placement_token(
 const _PLACEMENT_HINT =
     "use `parent[:N]` or `child:NAME[:N]` (setup / size ignore `:N`)"
 
+"""Hostname inside `user@host`, `host:path`, or `[::1]:path`."""
+function _ssh_host_label(dest::AbstractString)::String
+    d = String(dest)
+    if startswith(d, "[")
+        close = findfirst(']', d)
+        close === nothing && return d
+        return d[1:close]
+    end
+    at = findlast('@', d)
+    rest = at === nothing ? d : d[(at + 1):end]
+    colon = findfirst(':', rest)
+    return colon === nothing ? rest : rest[1:(colon - 1)]
+end
+
+"""
+Reject an SSH destination that is an option or that contains a control character.
+
+`user@-host` is rejected. `host:path` checks the host, and a control character
+anywhere in `host` (including the path after `:`) is rejected. Returns `host`
+stripped. `parent` is not an SSH destination.
+"""
+function validate_ssh_host(host::AbstractString; shown::Union{Nothing, AbstractString} = nothing)::String
+    h = String(strip(host))
+    label = _ssh_host_label(h)
+    text = repr(shown === nothing ? h : String(shown))
+    if isempty(h) || isempty(label)
+        throw(ArgumentError("$text: empty host name. See help setup."))
+    end
+    if startswith(h, "-") || startswith(label, "-")
+        throw(ArgumentError("$text: SSH name must not start with '-'. See help setup."))
+    end
+    if any(iscntrl, h)
+        throw(ArgumentError("$text: SSH name contains a newline or NUL. See help setup."))
+    end
+    return h
+end
+
 function throw_legacy_placement_token(raw::AbstractString)
     s = String(raw)
     base = split(s, ':'; limit = 2)[1]
@@ -125,9 +162,7 @@ function parse_placement_token(
         isempty(rest) && throw(ArgumentError("$(repr(s)): missing SSH name after `child:`"))
         name, n = _placement_count_suffix(rest)
         isempty(name) && throw(ArgumentError("$(repr(s)): missing SSH name after `child:`"))
-        startswith(name, "-") && throw(
-            ArgumentError("$(repr(s)): SSH name must not start with '-'"),
-        )
+        validate_ssh_host(name; shown = s)
         is_parent_host_name(name) && throw(
             ArgumentError(
                 "$(repr(s)): Kit side is `parent`, not `child:parent`",
@@ -186,8 +221,14 @@ end
 Short, actionable summary for SSH / remote-shell failures.
 
 Prefer this over dumping a full `ProcessFailedException` with a long `Cmd`.
+A remote shell whose exit is not 255 adds a `help setup` line when the login
+shell is non-POSIX. Exit 255 is SSH itself and is not probed.
 """
 function summarize_ssh_error(err; stderr::AbstractString = "")::String
+    return _append_remote_shell_hint_from_error(err, _summarize_ssh_error_text(err; stderr = stderr))
+end
+
+function _summarize_ssh_error_text(err; stderr::AbstractString = "")::String
     detail = strip(String(stderr))
     msg = sprint(showerror, err)
     blob = isempty(detail) ? msg : detail * "\n" * msg

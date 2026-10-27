@@ -122,8 +122,8 @@ using .DistSSHBase: CliCursor, OUTPUT_WIDTH, PARENT_HOST_NAME, _HOST_TOOL_NAMES,
     _NS_CACHE_DIR, _checked_remote_dest, _git_cmd, _host_sync_remote_shell_cmd,
     _host_tool_exe, _host_tool_present, _julia_spec_is_auto, _located_project_file,
     _normalize_hint_surface,
-    _path_is_under, _path_under_resolved, _print_colored, _remote_sh_quote,
-    _remote_shell_path_word, _rethrow_missing_host_tool, _scp_cmd, _ssh_cmd, _ssh_exe,
+    _path_is_under, _path_under_resolved, _print_colored, _remote_shell_path_word,
+    _rethrow_missing_host_tool, _scp_cmd, _ssh_cmd, _ssh_exe,
     _ssh_host_args, _test_double_julia_argv, _test_doubles_on, _truncate_ssh_message,
     cli_at_end, cli_consume!, cli_current, cli_entry, cli_heading, cli_m, cli_m_project,
     cli_match, cli_take_value!, clone_url_from_local_origin, detect_julia_path,
@@ -134,12 +134,13 @@ using .DistSSHBase: CliCursor, OUTPUT_WIDTH, PARENT_HOST_NAME, _HOST_TOOL_NAMES,
     get_remote_julia_version_full, get_remote_nproc, get_remote_total_gb,
     git_work_tree,
     is_sigint, join_explained_message, looks_like_path_host, normalize_git_clone_url,
-    parse_placement_token, project_package_name, read_hosts_file, read_hosts_file_lines,
+    parse_placement_token, posix_quote, project_package_name, read_hosts_file, read_hosts_file_lines,
     remote_delete_root, remote_deploy_root, remote_env_project_root, remote_git_clone_dest,
     remote_layout_path, resolve_host_path_abs, resolve_host_project_abs,
     resolve_remote_julia, resolve_remote_project_root, rule_line, shield_sigint,
     split_hosts_csv, split_worker_token, ssh_addprocs_machine, summarize_ssh_error,
-    throw_legacy_placement_token, throw_removed_local_flag, use_colors, with_cli_entry,
+    throw_legacy_placement_token, throw_removed_local_flag, use_colors, validate_ssh_host,
+    with_cli_entry,
     without_cancel
 using .DistSSHUp: julia_version_mismatch_kind, juliaup_add_host!, juliaup_align_host!,
     juliaup_channel, juliaup_default_host!, juliaup_parent_behind_channel,
@@ -167,6 +168,7 @@ include("DistSSHRun/namespace_sync.jl")
 include("DistSSHRun/pool.jl")
 include("DistSSHRun/drive/runtime/heartbeat.jl")
 include("DistSSHRun/drive/runtime/_common.jl")
+include("DistSSHRun/drive/runtime/cancel_frame.jl")
 include("DistSSHRun/drive/runtime/checks.jl")
 include("DistSSHRun/drive/runtime/collect_tree.jl")
 include("DistSSHRun/drive/runtime/workers.jl")
@@ -382,10 +384,18 @@ CLI entry. Prefer Julia 1.13+ and `julia -m DistSSHKit SUBCOMMAND …`:
 A `.jl` path with no command is not implicit `go`.
 """
 function main(args::Vector{String} = copy(ARGS))::Cint
-    return with_cli_entry(:DistSSHRun) do
-        _main(args)
+    try
+        return with_cli_entry(:DistSSHRun) do
+            return _main(args)
+        end
+    catch e
+        # After the drive frame's `finally` blocks. Translation only.
+        _cli_finish_interrupt(e)
+        rethrow()
     end
 end
+
+public main
 
 # The callable stays in a `Dict{String,Function}` so `_main` infers one call.
 # `demo` and `progress` are ordinary functions. The script commands stop in
@@ -451,6 +461,17 @@ public RUN_SUBCOMMAND_EXPECTATION
 public print_rejected_command
 
 function _main(args::Vector{String})::Cint
+    try
+        return _main_dispatch(args)
+    finally
+        # A second `main` in this process must run. The handshake flag is
+        # single-shot: consume clears it, and this deletes it again on every
+        # return, including throw and drive interrupt.
+        delete!(ENV, "DISTSSHKIT_CLI_SUBCOMMAND_DONE")
+    end
+end
+
+function _main_dispatch(args::Vector{String})::Cint
     if _consume_kit_cli_subcommand_done!()
         return 0
     end

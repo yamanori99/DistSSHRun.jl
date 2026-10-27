@@ -30,8 +30,10 @@ need **`git`**. The remote login shell (`$SHELL`) must be POSIX-compatible
 (`sh`, `bash`, `dash`, or `zsh`). `ssh host command` runs `$SHELL -c`, not
 a login shell. Distributed's `SSHManager` starts workers with `sh -l -c`,
 and that wrap cannot be changed. `fish` and `csh` are unsupported. `fish`
-can silently change quoting (a backslash inside single quotes). See
-`julia -m DistSSHRun help setup`.
+can silently change quoting (a backslash inside single quotes). An SSH
+name that starts with `-`, including `user@-host`, is rejected. A host or
+remote path that contains a control character (NUL, newline, or any other)
+is rejected. See `julia -m DistSSHRun help setup`.
 
 ## Commands
 

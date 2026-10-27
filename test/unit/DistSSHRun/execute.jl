@@ -1141,6 +1141,15 @@ using Test
             ready = joinpath(dir, "ready")
             countp = joinpath(dir, "count")
             script = joinpath(dir, "count.jl")
+            # `ready` is created inside the `try`. The parent signals as soon
+            # as that file exists. Julia 1.13 turns SIGINT into
+            # `InterruptException` at the next safepoint, so a file written
+            # before this `try` (and before this toplevel thunk finishes
+            # compiling) is killed with count 0. A blocking `sleep` is not
+            # that safepoint on macOS; `GC.safepoint` is. Julia 1.14 throws
+            # `CancellationRequest` from `sleep` and does not throw at a
+            # safepoint. Count that once, then `pause`, or `sleep` throws
+            # again and the count runs away.
             write(
                 script,
                 """
@@ -1151,13 +1160,13 @@ using Test
                         print(io, n[])
                     end
                 end
-                open($(repr(ready)), "w") do io
-                    print(io, "1")
-                end
                 if isdefined(Base, :CancellationRequest)
                     const CR = getglobal(Base, :CancellationRequest)
                     while true
                         try
+                            open($(repr(ready)), "w") do io
+                                print(io, "1")
+                            end
                             sleep(60)
                         catch e
                             e isa InterruptException || e isa CR || rethrow()
@@ -1176,7 +1185,22 @@ using Test
                 else
                     while true
                         try
-                            sleep(60)
+                            open($(repr(ready)), "w") do io
+                                print(io, "1")
+                            end
+                            t0 = time()
+                            while time() - t0 < 60
+                                GC.safepoint()
+                            end
+                        catch e
+                            e isa InterruptException || rethrow()
+                            n[] += 1
+                            break
+                        end
+                    end
+                    while true
+                        try
+                            ccall(:pause, Cint, ())
                         catch e
                             e isa InterruptException || rethrow()
                             n[] += 1

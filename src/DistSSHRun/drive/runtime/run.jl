@@ -26,15 +26,19 @@ function run_drive_parsed!(
     # (`sync_mode::Union{Nothing,Symbol}`, and the same for paths and counts).
     # The value for one argv is narrower. Lookup at runtime specializes the
     # pipeline on that value, so a drive without `--sync` does not infer sync.
-    return Base.invokelatest(
-        _run_drive_parsed_specialized!,
-        parsed,
-        original_args,
-        resolved_output_dir,
-        resolved_log_dir,
-        resolved_hosts,
-        project_root,
-    )
+    # CLI `drive_main` already opened the frame (`cli=true`). A direct call,
+    # including `drive!`, opens it here when none is active (`cli=false`).
+    return _drive_frame(; cli = false) do
+        return Base.invokelatest(
+            _run_drive_parsed_specialized!,
+            parsed,
+            original_args,
+            resolved_output_dir,
+            resolved_log_dir,
+            resolved_hosts,
+            project_root,
+        )
+    end
 end
 
 function _run_drive_parsed_specialized!(
@@ -121,15 +125,13 @@ function _run_drive_parsed_specialized!(
     )
     return try
         DistSSHRun._reset_run_provenance!(project_root_abs)
-        activate_drive_project!(proj_dir)
-
-        old_out = get(ENV, "DISTRIBUTED_OUTPUT_DIR", nothing)
-        local release_output_dir_lock
-        code = Cint(1)
-        hosts_acc = resolved_hosts === nothing ?
-            Ref{Vector{HostRunResult}}(HostRunResult[]) :
-            resolved_hosts
-        try
+        # Inside `_drive_frame`: this `finally` restores after `rmprocs`.
+        return _with_drive_process!(proj_dir) do
+            local release_output_dir_lock
+            code = Cint(1)
+            hosts_acc = resolved_hosts === nothing ?
+                Ref{Vector{HostRunResult}}(HostRunResult[]) :
+                resolved_hosts
             if output_dir !== nothing
                 ENV["DISTRIBUTED_OUTPUT_DIR"] = DistSSHRun.canonical_local_path(String(output_dir))
             end
@@ -160,6 +162,9 @@ function _run_drive_parsed_specialized!(
                 )
                 return code
             finally
+                # The locked body throws before it can return 130. The result
+                # file is what `terminate!` reads.
+                _drive_was_interrupted() && (code = Cint(130))
                 out = DistSSHRun.resolve_drive_output_dir(script_dir)
                 log = enable_log ? DistSSHRun.resolve_drive_log_dir(log_dir, script_dir) : nothing
                 result = DistSSHRun.KitRunResult(
@@ -190,16 +195,64 @@ function _run_drive_parsed_specialized!(
                 )
                 release_output_dir_lock()
             end
-        finally
-            if old_out === nothing || (old_out isa AbstractString && isempty(strip(String(old_out))))
-                delete!(ENV, "DISTRIBUTED_OUTPUT_DIR")
-            else
-                ENV["DISTRIBUTED_OUTPUT_DIR"] = String(old_out)
-            end
         end
     finally
         DistSSHRun._restore_kit_run_dir_env!(old_run)
         DistSSHRun._release_kit_inproc_run!()
+    end
+end
+
+# Process-global slots a drive frame writes. Empty string is a value; absence is `nothing`.
+const _DRIVE_PROCESS_ENV = (
+    "DISTRIBUTED_PROJECT_ROOT",
+    "DISTRIBUTED_REMOTE_PROJECT_ROOT",
+    "DISTRIBUTED_OUTPUT_DIR",
+    "DISTRIBUTED_RUNNER",
+)
+
+"""
+    _with_drive_process!(f, proj_dir)
+
+Run `f` with the drive project active. On the way out, put back the raw
+`Base.ACTIVE_PROJECT[]` slot (so `nothing` round-trips) and each
+`_DRIVE_PROCESS_ENV` entry (delete when it was absent).
+
+Restore is idempotent and runs from `finally`, including throw.
+Each slot is its own `try`, so one failure does not skip the rest.
+`main` calls `exit` only after this returns.
+"""
+function _with_drive_process!(f, proj_dir::AbstractString)
+    prev_active = Base.ACTIVE_PROJECT[]
+    prev_env = Vector{Union{Nothing, String}}(undef, length(_DRIVE_PROCESS_ENV))
+    for (i, key) in enumerate(_DRIVE_PROCESS_ENV)
+        prev_env[i] = get(ENV, key, nothing)
+    end
+    restored = Ref(false)
+    function restore_drive_process!()
+        restored[] && return nothing
+        restored[] = true
+        try
+            Base.ACTIVE_PROJECT[] = prev_active
+        catch
+        end
+        for (i, key) in enumerate(_DRIVE_PROCESS_ENV)
+            try
+                old = prev_env[i]
+                if old === nothing
+                    delete!(ENV, key)
+                else
+                    ENV[key] = old
+                end
+            catch
+            end
+        end
+        return nothing
+    end
+    activate_drive_project!(String(proj_dir))
+    try
+        return f()
+    finally
+        restore_drive_process!()
     end
 end
 
@@ -401,7 +454,9 @@ function _run_drive_parsed_locked!(
         sentinel_name = sentinel_placed::String
 
         kit_progress_step!("run")
-        run_driver_script!(enable_log, drive_atexit_cleanup)
+        _drive_cancellable() do
+            run_driver_script!(enable_log)
+        end
         if require_all_hosts
             DistSSHRun._refresh_drive_host_status_file!(kit_out, kit_log)
             left = DistSSHRun._drive_hosts_that_left()
@@ -428,11 +483,18 @@ function _run_drive_parsed_locked!(
         progress_ok = true
         return 0
     finally
+        # Before worker teardown, so a second Ctrl-C can `jl_exit` on 1.14.
+        _ensure_second_sigint_watch!()
         if resolved_output_dir !== nothing
             resolved_output_dir[] = DistSSHRun.resolve_drive_output_dir(script_dir)
         end
         if resolved_log_dir !== nothing
             resolved_log_dir[] = enable_log ? DistSSHRun.resolve_drive_log_dir(log_dir, script_dir) : nothing
+        end
+        if _drive_was_interrupted()
+            writeln_both("\nInterrupted. Cleaning up workers...")
+            flush(stdout)
+            _interrupt_drive_workers!()
         end
         kit_progress_done!(; ok = progress_ok)
         DistSSHRun._maybe_print_kit_progress_phases(kit_out)
@@ -441,7 +503,9 @@ function _run_drive_parsed_locked!(
         # `nothing` when no workers were ever added (early `return` above
         # `add_drive_workers!`). Otherwise idempotent (guarded by a `Ref`
         # inside) — a harmless no-op if `atexit` already ran it.
+        # Runs in the frame's non-cancellable scope, before Distributed `atexit`.
         drive_atexit_cleanup !== nothing && drive_atexit_cleanup()
+        _drive_was_interrupted() && _retire_distributed_gc_task!()
         enable_log && close_log_file()
     end
 end

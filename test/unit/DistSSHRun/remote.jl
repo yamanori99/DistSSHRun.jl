@@ -270,7 +270,7 @@ end
             real_rm = String(something(Sys.which("rm"), "/bin/rm"))
             write(
                 joinpath(fake, "rm"),
-                "#!/bin/sh\necho called >> $(repr(log))\nexec $(DistSSHRun._remote_sh_quote(real_rm)) \"\$@\"\n",
+                "#!/bin/sh\necho called >> $(repr(log))\nexec $(DistSSHRun.posix_quote(real_rm)) \"\$@\"\n",
             )
             chmod(joinpath(fake, "rm"), 0o755)
             path = fake * ":" * get(ENV, "PATH", "")

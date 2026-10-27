@@ -45,6 +45,12 @@ so it does not instantiate after rsync.
 `sync_script=true` (CLI `--sync-script`) re-`include`s the full driver on
 workers. The default publishes definitions / `using` / `import` / `include`
 only, so top-level work on Load is not repeated on workers.
+
+Ctrl-C restores the active project and the `DISTRIBUTED_*` entries this call
+changed, then rethrows `InterruptException` or, when Julia has it,
+`Base.CancellationRequest`. `drive!` does not `exit` and does not throw the
+private CLI exception. On Julia 1.14 the caller's task stays cancelled after
+that exception.
 """
 function drive!(
         session::KitSession,
@@ -63,53 +69,59 @@ function drive!(
         parent_gb::Real = DEFAULT_PARENT_GB,
         sync_script::Bool = false,
     )::DriveResult
-    return _with_kit_inproc_run!(:drive) do
-        apply_session_env!(session)
-        resolved = plan
-        if resolved === nothing && !isempty(session.tokens)
-            resolved = worker_plan_from_tokens(session.tokens)
-        end
-        parsed = drive_parsed_from_session(
-            session,
-            script;
-            workers = resolved,
-            script_args = args,
-            skip_hash_check = skip_hash_check,
-            output_dir = output_dir,
-            enable_log = enable_log,
-            log_dir = log_dir,
-            package = package,
-            sync = sync,
-            julia = julia,
-            require_all_hosts = require_all_hosts,
-            mem_headroom = mem_headroom,
-            parent_gb = parent_gb,
-            sync_script = sync_script,
-        )
-        apply_kit_cli_session!(parsed.cli_session)
-        original_args = copy(ARGS)
-        resolved_output_dir = Ref{Union{Nothing, String}}(nothing)
-        resolved_log_dir = Ref{Union{Nothing, String}}(nothing)
-        resolved_hosts = Ref{Vector{HostRunResult}}(HostRunResult[])
-        try
-            code = run_drive_parsed!(
-                parsed;
-                original_args = original_args,
-                resolved_output_dir = resolved_output_dir,
-                resolved_log_dir = resolved_log_dir,
-                resolved_hosts = resolved_hosts,
-                project_root = session.project,
-            )
-            return DriveResult(
-                code == 0, Int(code);
-                output_dir = resolved_output_dir[],
-                log_dir = resolved_log_dir[],
-                failed_step = code == 0 ? nothing : "drive",
-                hosts = resolved_hosts[],
-            )
-        finally
-            empty!(ARGS)
-            append!(ARGS, original_args)
+    return _drive_frame(; cli = false) do
+        return _with_kit_inproc_run!(:drive) do
+            # Outside `run_drive_parsed!`: `apply_session_env!` runs first, and
+            # this frame restores it after the inner drive frame returns.
+            return _with_drive_process!(session.project) do
+                apply_session_env!(session)
+                resolved = plan
+                if resolved === nothing && !isempty(session.tokens)
+                    resolved = worker_plan_from_tokens(session.tokens)
+                end
+                parsed = drive_parsed_from_session(
+                    session,
+                    script;
+                    workers = resolved,
+                    script_args = args,
+                    skip_hash_check = skip_hash_check,
+                    output_dir = output_dir,
+                    enable_log = enable_log,
+                    log_dir = log_dir,
+                    package = package,
+                    sync = sync,
+                    julia = julia,
+                    require_all_hosts = require_all_hosts,
+                    mem_headroom = mem_headroom,
+                    parent_gb = parent_gb,
+                    sync_script = sync_script,
+                )
+                apply_kit_cli_session!(parsed.cli_session)
+                original_args = copy(ARGS)
+                resolved_output_dir = Ref{Union{Nothing, String}}(nothing)
+                resolved_log_dir = Ref{Union{Nothing, String}}(nothing)
+                resolved_hosts = Ref{Vector{HostRunResult}}(HostRunResult[])
+                try
+                    code = run_drive_parsed!(
+                        parsed;
+                        original_args = original_args,
+                        resolved_output_dir = resolved_output_dir,
+                        resolved_log_dir = resolved_log_dir,
+                        resolved_hosts = resolved_hosts,
+                        project_root = session.project,
+                    )
+                    return DriveResult(
+                        code == 0, Int(code);
+                        output_dir = resolved_output_dir[],
+                        log_dir = resolved_log_dir[],
+                        failed_step = code == 0 ? nothing : "drive",
+                        hosts = resolved_hosts[],
+                    )
+                finally
+                    empty!(ARGS)
+                    append!(ARGS, original_args)
+                end
+            end
         end
     end
 end

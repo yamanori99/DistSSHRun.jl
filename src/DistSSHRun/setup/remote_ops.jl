@@ -186,7 +186,7 @@ function clone_to_remotes(
     end
 
     pq = _remote_shell_path_word(remote_path)
-    uq = _remote_sh_quote(String(clone_url))
+    uq = posix_quote(String(clone_url))
     succeeded = 0
     failed = 0
     host_results = HostResult[]
@@ -347,7 +347,7 @@ function _pkg_e_on_remotes(
                 jb = _remote_shell_path_word(host_julia)
                 # Prefer git CLI (ssh-agent / SSH config) over LibGit2 credentials UI.
                 cmd = "JULIA_PKG_USE_CLI_GIT=true $jb --project=$pq --startup-file=no -e " *
-                    _remote_sh_quote(String(pkg_e))
+                    posix_quote(String(pkg_e))
                 out = IOBuffer()
                 err = IOBuffer()
                 try
@@ -365,7 +365,9 @@ function _pkg_e_on_remotes(
                         oks[i] = false
                         msg = strip(String(take!(err)))
                         isempty(msg) && (msg = strip(String(take!(out))))
-                        fail_msgs[i] = isempty(msg) ? "exit $(proc.exitcode)" : first(split(msg, '\n'))
+                        shown = isempty(msg) ? "exit $(proc.exitcode)" : first(split(msg, '\n'))
+                        code = proc.exitcode isa Integer ? Int(proc.exitcode) : 1
+                        fail_msgs[i] = DistSSHBase._append_remote_shell_hint(host, code, shown)
                     end
                 catch e
                     oks[i] = false
