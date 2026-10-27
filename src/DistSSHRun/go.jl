@@ -946,6 +946,7 @@ function go!(
     end
     _acquire_kit_inproc_run!(:go)
     old_run = get(ENV, DISTSSHKIT_RUN_DIR_ENV, nothing)
+    inherited_run = old_run isa AbstractString && !isempty(strip(old_run))
     try
         _reset_run_provenance!(proj)
         _ensure_kit_run_dir!(:go, script_path; project = proj)
@@ -967,6 +968,7 @@ function go!(
             hint_surface,
             original_args,
             repeat,
+            inherited_run,
         )
     finally
         _restore_kit_run_dir_env!(old_run)
@@ -992,6 +994,7 @@ function _go_run!(
         hint_surface,
         original_args,
         repeat,
+        inherited_run::Bool,
     )
     anchor = something(path_anchor, proj)
 
@@ -1023,9 +1026,19 @@ function _go_run!(
     end
     ensure_manifest_ships!(proj)
     batch_dir = if output_dir !== nothing
-        canonical_local_path(output_dir)
+        _prepare_output_dir!(
+            output_dir;
+            command = :go,
+            surface = hint_surface,
+            allow_parent_sidecars = inherited_run,
+        )
     elseif collect_spec isa AbstractString
-        canonical_local_path(collect_spec)
+        _prepare_output_dir!(
+            collect_spec;
+            command = :go,
+            surface = hint_surface,
+            allow_parent_sidecars = inherited_run,
+        )
     else
         _go_batch_output_dir(proj, script_path)
     end

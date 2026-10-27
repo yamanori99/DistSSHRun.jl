@@ -491,4 +491,85 @@ using Dates
             @test occursin("job.jl:", txt)
         end
     end
+
+    @testset "non-empty output directory" begin
+        _with_tempdir() do proj
+            write(joinpath(proj, "Project.toml"), "name = \"GoDirty\"\n")
+            write(joinpath(proj, "Manifest.toml"), "# lock\n")
+            script = joinpath(proj, "job.jl")
+            write(script, "println(\"ran\")\n")
+            dirty = joinpath(proj, "batch")
+            mkdir(dirty)
+            write(joinpath(dirty, "stale.txt"), "old\n")
+            err = try
+                DistSSHRun.go!(
+                    script;
+                    project = proj,
+                    output_dir = dirty,
+                    quiet = true,
+                    yes = true,
+                    hint_surface = :cli,
+                )
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            err isa ArgumentError || error("expected ArgumentError")
+            @test occursin(dirty, err.msg)
+            @test occursin("stale.txt", err.msg)
+            @test occursin("Run `julia -m DistSSHKit help go` for flags.", err.msg)
+            @test !occursin("--help", err.msg)
+            @test isfile(joinpath(dirty, "stale.txt"))
+            @test !isfile(joinpath(dirty, ".kit.lock"))
+            spec_err = try
+                DistSSHRun.go!(
+                    script;
+                    project = proj,
+                    collect_spec = dirty,
+                    quiet = true,
+                    yes = true,
+                    hint_surface = :api,
+                )
+                nothing
+            catch e
+                e
+            end
+            @test spec_err isa ArgumentError
+            spec_err isa ArgumentError || error("expected ArgumentError")
+            @test occursin("Omit output_dir or pass an empty directory.", spec_err.msg)
+            empty_dir = joinpath(proj, "empty-batch")
+            mkdir(empty_dir)
+            r = redirect_stdout(devnull) do
+                DistSSHRun.go!(
+                    script;
+                    project = proj,
+                    output_dir = empty_dir,
+                    quiet = true,
+                    yes = true,
+                )
+            end
+            @test r.ok
+            @test r.output_dir == DistSSHRun.canonical_local_path(empty_dir)
+            code, err_txt = mktemp() do err_path, err_io
+                status = redirect_stdout(devnull) do
+                    redirect_stderr(err_io) do
+                        withenv(
+                            "DISTRIBUTED_PROJECT_ROOT" => proj,
+                            "DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "",
+                        ) do
+                            DistSSHRun.main(["go", "-q", "--output-dir", dirty, script])
+                        end
+                    end
+                end
+                flush(err_io)
+                return status, read(err_path, String)
+            end
+            @test code == 1
+            @test occursin("Error:", err_txt)
+            @test occursin("stale.txt", err_txt)
+            @test occursin("help go", err_txt)
+            @test !occursin("--help", err_txt)
+        end
+    end
 end

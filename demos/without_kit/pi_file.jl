@@ -18,7 +18,18 @@ function main()
     end
 
     env = strip(get(ENV, "DISTRIBUTED_OUTPUT_DIR", ""))
-    outdir = isempty(env) ? joinpath(@__DIR__, "output") : env
+    outdir = if !isempty(env)
+        env
+    else
+        root = joinpath(@__DIR__, "output")
+        if !ispath(root) || (isdir(root) && !islink(root) && isempty(readdir(root)))
+            root
+        elseif isdir(root) && !islink(root)
+            mktempdir(root)
+        else
+            root
+        end
+    end
     mkpath(outdir)
 
     Random.seed!(42)

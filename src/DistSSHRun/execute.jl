@@ -565,6 +565,9 @@ function _execute_detached!(
         repeat = r
     end
 
+    if output_dir !== nothing
+        output_dir = _prepare_output_dir!(String(output_dir); command = kind, surface = :api)
+    end
     proj = canonical_local_path(project)
     script_path = canonical_local_path(script)
     job_id = get(kwargs, :job_id, nothing)

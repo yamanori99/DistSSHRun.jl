@@ -576,6 +576,7 @@ function ride!(
         julia::Union{Nothing, AbstractString} = nothing,
         remote::Union{Nothing, AbstractString} = nothing,
         require_all_hosts::Bool = true,
+        hint_surface::Symbol = :api,
     )::RideResult
     path = canonical_local_path(script)
     julia_s = string(VERSION)
@@ -585,11 +586,12 @@ function ride!(
         return RideResult(false, path, 0, nothing, _ride_drive_vocab_error(kp), julia_s)
     _acquire_kit_inproc_run!(:ride)
     old_run = get(ENV, DISTSSHKIT_RUN_DIR_ENV, nothing)
+    inherited_run = old_run isa AbstractString && !isempty(strip(old_run))
     try
         _ensure_kit_run_dir!(:ride, path; project = project)
         return _ride_run!(
             path, julia_s, tokens, args, spi_check, output_dir, project, julia,
-            remote, require_all_hosts,
+            remote, require_all_hosts, hint_surface, inherited_run,
         )
     finally
         _restore_kit_run_dir_env!(old_run)
@@ -608,6 +610,8 @@ function _ride_run!(
         julia,
         remote,
         require_all_hosts,
+        hint_surface::Symbol,
+        inherited_run::Bool,
     )
     _reset_run_provenance!(String(project))
     tok = String[String(t) for t in tokens]
@@ -632,7 +636,12 @@ function _ride_run!(
     old_out = get(ENV, "DISTRIBUTED_OUTPUT_DIR", nothing)
     old_remote = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
     old_proj = Base.active_project()
-    batch_dir = _ride_batch_dir(path, output_dir; project = project)
+    batch_dir = _prepare_output_dir!(
+        _ride_batch_dir(path, output_dir; project = project);
+        command = :ride,
+        surface = hint_surface,
+        allow_parent_sidecars = inherited_run,
+    )
     release_lock = () -> nothing
     progress_started = false
     progress_ok = false

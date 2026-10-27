@@ -98,4 +98,70 @@ using Test
             end
         end
     end
+
+    @testset "prepare_output_dir!" begin
+        _with_tempdir() do tmp
+            missing = joinpath(tmp, "missing")
+            made = DistSSHRun._prepare_output_dir!(missing; command = :drive, surface = :api)
+            @test made == DistSSHRun.canonical_local_path(missing)
+            @test isdir(made)
+            @test isempty(readdir(made))
+            empty_dir = joinpath(tmp, "empty")
+            mkdir(empty_dir)
+            @test DistSSHRun._prepare_output_dir!(empty_dir; command = :ride) ==
+                DistSSHRun.canonical_local_path(empty_dir)
+            file = joinpath(tmp, "a-file")
+            write(file, "x\n")
+            file_err = try
+                DistSSHRun._prepare_output_dir!(file; command = :go, surface = :cli)
+                nothing
+            catch e
+                e
+            end
+            @test file_err isa ArgumentError
+            file_err isa ArgumentError || error("expected ArgumentError")
+            @test occursin(file, file_err.msg)
+            @test occursin("Run `julia -m DistSSHKit help go` for flags.", file_err.msg)
+            @test !occursin("--help", file_err.msg)
+            link = joinpath(tmp, "link")
+            symlink(empty_dir, link)
+            link_err = try
+                DistSSHRun._prepare_output_dir!(link; command = :drive, surface = :api)
+                nothing
+            catch e
+                e
+            end
+            @test link_err isa ArgumentError
+            link_err isa ArgumentError || error("expected ArgumentError")
+            @test occursin("symlink", link_err.msg)
+            @test occursin("Omit output_dir or pass an empty directory.", link_err.msg)
+            sidecars = joinpath(tmp, "sidecars")
+            mkdir(sidecars)
+            write(joinpath(sidecars, "kit.pid"), "1\n")
+            write(joinpath(sidecars, "kit.job"), "q-1\n")
+            @test DistSSHRun._prepare_output_dir!(
+                sidecars; command = :go, allow_parent_sidecars = true,
+            ) == DistSSHRun.canonical_local_path(sidecars)
+            bare = try
+                DistSSHRun._prepare_output_dir!(sidecars; command = :go)
+                nothing
+            catch e
+                e
+            end
+            @test bare isa ArgumentError
+            write(joinpath(sidecars, "stale.txt"), "old\n")
+            mixed = try
+                DistSSHRun._prepare_output_dir!(
+                    sidecars; command = :go, allow_parent_sidecars = true,
+                )
+                nothing
+            catch e
+                e
+            end
+            @test mixed isa ArgumentError
+            mixed isa ArgumentError || error("expected ArgumentError")
+            @test occursin("stale.txt", mixed.msg)
+            @test occursin("kit.pid", mixed.msg)
+        end
+    end
 end

@@ -38,6 +38,96 @@ function resolve_distributed_output_dir!(
     return dir
 end
 
+const _OUTPUT_DIR_COMMANDS = (:go, :ride, :drive)
+
+function _output_dir_command!(command::Symbol)::Symbol
+    command in _OUTPUT_DIR_COMMANDS || throw(
+        ArgumentError(
+            "output directory command must be :go, :ride, or :drive, got $(repr(command))",
+        ),
+    )
+    return command
+end
+
+function _output_dir_hint(command::Symbol, surface::Symbol)::String
+    surface = _normalize_hint_surface(surface)
+    if surface === :cli
+        return "Run `$(cli_m()) help $(command)` for flags."
+    end
+    return "Omit output_dir or pass an empty directory."
+end
+
+function _output_dir_refusal(
+        path::AbstractString,
+        command::Symbol,
+        surface::Symbol;
+        kind::Symbol,
+        names::Vector{String} = String[],
+    )::String
+    head = if kind === :symlink
+        "refusing output directory symlink: $path"
+    elseif kind === :file
+        "output path is not a directory: $path"
+    else
+        lines = String["refusing non-empty output directory: $path"]
+        for name in names
+            push!(lines, "  " * joinpath(path, name))
+        end
+        join(lines, '\n')
+    end
+    return join_explained_message(head, _output_dir_hint(command, surface))
+end
+
+# Parent `execute!(detached=true)` writes these into the output directory after
+# spawn, once that directory was already empty. A child that inherited
+# `DISTSSHKIT_RUN_DIR` may see them and nothing else.
+const _OUTPUT_DIR_PARENT_SIDECARS = ("kit.job", "kit.pid")
+
+"""
+    _prepare_output_dir!(dir; command, surface=:api, allow_parent_sidecars=false) -> String
+
+Make `dir` an empty output directory.
+
+A missing path is created. An existing empty directory is kept. A non-empty
+directory, a file, or a symlink is refused. Call this before a lock or
+`kit.pid` write.
+
+`allow_parent_sidecars` is for a child that already inherited
+`DISTSSHKIT_RUN_DIR`. `kit.pid` and `kit.job` alone do not refuse that
+directory. Any other name still does, and the error lists every name.
+"""
+function _prepare_output_dir!(
+        dir::AbstractString;
+        command::Symbol,
+        surface::Symbol = :api,
+        allow_parent_sidecars::Bool = false,
+    )::String
+    command = _output_dir_command!(command)
+    path = canonical_local_path(dir)
+    if islink(path)
+        throw(ArgumentError(_output_dir_refusal(path, command, surface; kind = :symlink)))
+    end
+    if ispath(path) && !isdir(path)
+        throw(ArgumentError(_output_dir_refusal(path, command, surface; kind = :file)))
+    end
+    if isdir(path)
+        names = sort!(String[String(name) for name in readdir(path)])
+        blocking = if allow_parent_sidecars
+            filter(n -> !(n in _OUTPUT_DIR_PARENT_SIDECARS), names)
+        else
+            names
+        end
+        isempty(blocking) || throw(
+            ArgumentError(
+                _output_dir_refusal(path, command, surface; kind = :nonempty, names = names),
+            ),
+        )
+        return path
+    end
+    mkpath(path)
+    return canonical_local_path(path)
+end
+
 """`{script_dir}/.distsshkit/{kind}` (parent of go / ride / drive batch dirs)."""
 function kit_dir_beside_script(script_dir::AbstractString, kind::Symbol)::String
     return canonical_local_path(joinpath(String(script_dir), ".distsshkit", String(kind)))

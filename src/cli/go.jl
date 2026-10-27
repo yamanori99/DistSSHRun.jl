@@ -68,8 +68,11 @@ function go_main()::Cint
             original_args = original_args,
         )
     catch e
-        DistSSHRun._report_manifest_refusal(e) || rethrow()
-        return Cint(1)
+        if e isa ArgumentError
+            DistSSHRun._report_manifest_refusal(e) || DistSSHRun.print_cli_error(e.msg)
+            return Cint(1)
+        end
+        rethrow()
     end
     report_go_errors(result)
     return result.ok ? 0 : 1

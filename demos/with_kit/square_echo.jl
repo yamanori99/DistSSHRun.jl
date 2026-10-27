@@ -21,9 +21,22 @@ end
 const _DEMO_PACKAGE = _demo_package()
 @eval using $_DEMO_PACKAGE
 
+function _demo_default_output()::String
+    root = joinpath(@__DIR__, "output")
+    if !ispath(root) || (isdir(root) && !islink(root) && isempty(readdir(root)))
+        return root
+    end
+    isdir(root) && !islink(root) && return mktempdir(root)
+    return root
+end
+
 function init_output_dir!(_)
     pkg = getfield(Main, _DEMO_PACKAGE)
-    return pkg.resolve_distributed_output_dir!(ARGS, joinpath(@__DIR__, "output"))
+    env = strip(get(ENV, "DISTRIBUTED_OUTPUT_DIR", ""))
+    if !isempty(env) || any(==("--output-dir"), ARGS)
+        return pkg.resolve_distributed_output_dir!(ARGS, env)
+    end
+    return pkg.resolve_distributed_output_dir!(ARGS, _demo_default_output())
 end
 
 function main()
