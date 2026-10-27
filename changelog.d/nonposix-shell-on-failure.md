@@ -1,3 +1,3 @@
-category: added
+category: breaking
 
-- When a remote command fails with an exit other than 0 or SSH's 255, DistSSH checks whether that host's login shell is POSIX. A failed check keeps the original error and adds a line that names `$SHELL` and points to `help setup`. A command that succeeds does not run the check. A host that passes is not checked again in that process.
+- After a remote command fails with an exit other than 0 or SSH's 255, DistSSH checks that host's login shell. A non-POSIX shell throws `ArgumentError` and names `help setup` from `resolve_remote_julia`, from `setup` / `setup!` when the project check or remote git hash fails, and from `size` / `size!` and `drive` / `drive!` when the memory probe or a non-absolute remote path fails. `size` used to exit 0 with 0 GB. `drive` used to print that the memory check failed and continue. `get_remote_julia_version` still returns `nothing`. A command that succeeds does not run the check. A host that passes is not checked again in that process.
