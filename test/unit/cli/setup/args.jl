@@ -16,6 +16,8 @@ using Test
         @test occursin("sh -l -c", text)
         @test occursin("fish and csh are unsupported", text)
         @test occursin("backslashes inside single quotes", text)
+        @test occursin("must not start with '-'", text)
+        @test occursin("control character", text)
         @test !occursin("fish is refused", text)
     end
 

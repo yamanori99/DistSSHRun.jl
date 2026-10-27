@@ -1,7 +1,7 @@
 """Shell that finds the juliaup binary and refuses a build older than [`JULIAUP_MIN`](@ref)."""
 function _juliaup_locate_sh(candidates::Vector{String})::String
     words = join(_juliaup_candidate_sh_word.(candidates), " ")
-    tried = _remote_sh_quote(join(candidates, ", "))
+    tried = posix_quote(join(candidates, ", "))
     floor_major = JULIAUP_MIN.major
     floor_minor = JULIAUP_MIN.minor
     floor = "$(floor_major).$(floor_minor)"
@@ -46,7 +46,7 @@ function _juliaup_align_remote_sh(
         candidates::Vector{String} = remote_juliaup_candidates(),
     )::String
     ch = String(channel)
-    cq = _remote_sh_quote(ch)
+    cq = posix_quote(ch)
     return """
     $(_juliaup_locate_sh(candidates))
     default=\$( \"\$JU\" status 2>/dev/null | awk '\$1==\"*\" { print \$2; exit }' )
@@ -83,7 +83,7 @@ function _juliaup_add_remote_sh(
         channel::AbstractString;
         candidates::Vector{String} = remote_juliaup_candidates(),
     )::String
-    cq = _remote_sh_quote(String(channel))
+    cq = posix_quote(String(channel))
     return """
     $(_juliaup_locate_sh(candidates))
     if ! \"\$JU\" add $cq; then
@@ -101,7 +101,7 @@ function _juliaup_default_remote_sh(
         channel::AbstractString;
         candidates::Vector{String} = remote_juliaup_candidates(),
     )::String
-    cq = _remote_sh_quote(String(channel))
+    cq = posix_quote(String(channel))
     return """
     $(_juliaup_locate_sh(candidates))
     \"\$JU\" default $cq || exit \$?
@@ -114,7 +114,7 @@ function _juliaup_update_channel_remote_sh(
         channel::AbstractString;
         candidates::Vector{String} = remote_juliaup_candidates(),
     )::String
-    cq = _remote_sh_quote(String(channel))
+    cq = posix_quote(String(channel))
     return """
     $(_juliaup_locate_sh(candidates))
     \"\$JU\" update $cq || exit \$?

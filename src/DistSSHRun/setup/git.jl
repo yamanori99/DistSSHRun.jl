@@ -72,7 +72,7 @@ function _remote_git_head(
         remote_path::AbstractString,
     )::Union{Nothing, @NamedTuple{hash::String, branch::String}}
     pq = _remote_shell_path_word(remote_path)
-    revs = join((_remote_sh_quote(w) for w in ("HEAD", "--abbrev-ref", "HEAD")), " ")
+    revs = join((posix_quote(w) for w in ("HEAD", "--abbrev-ref", "HEAD")), " ")
     inner = if startswith(strip(String(remote_path)), "~")
         "cd $pq && git rev-parse $revs"
     else

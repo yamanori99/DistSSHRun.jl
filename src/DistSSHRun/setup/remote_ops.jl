@@ -186,7 +186,7 @@ function clone_to_remotes(
     end
 
     pq = _remote_shell_path_word(remote_path)
-    uq = _remote_sh_quote(String(clone_url))
+    uq = posix_quote(String(clone_url))
     succeeded = 0
     failed = 0
     host_results = HostResult[]

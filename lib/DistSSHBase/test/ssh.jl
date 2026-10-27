@@ -6,6 +6,11 @@ let _BASE = DistSSHBase
         @test _BASE._remote_shell_path_word("~/Repo") == "~/'Repo'"
         @test _BASE._remote_shell_path_word("~/a/b c") == "~/'a/b c'"
         @test _BASE._ssh_host_args("host", "true") == ["--", "host", "true"]
+        @test_throws ArgumentError _BASE._ssh_host_args("-oBatchMode=yes", "true")
+        @test_throws ArgumentError _BASE._ssh_host_args("user@-h", "true")
+        @test_throws ArgumentError _BASE._ssh_host_args("host:/tmp/a\nb")
+        @test _BASE._ssh_host_args("user@host:/tmp/a b") == ["--", "user@host:/tmp/a b"]
+        @test_throws ArgumentError _BASE.ssh_addprocs_machine("-worker")
     end
 
     @testset "julia --version path is one shell word" begin
