@@ -1,5 +1,17 @@
 # Core drive execution after argv parse (shared by CLI `drive_main` and API `drive!`).
 
+# `include` leaves `Main.init_output_dir!` defined. A later in-process `drive!`
+# whose script does not define that hook must not run the previous driver's
+# method: it would reuse that driver's output directory. Compare the method
+# that would accept this script's argument vector, and call it only when this
+# `include` added or replaced that method.
+function _drive_script_init_output_dir_method(script_args)::Union{Nothing, Method}
+    isdefined(Main, :init_output_dir!) || return nothing
+    hook = getfield(Main, :init_output_dir!)
+    applicable = methods(hook, (typeof(script_args),))
+    return isempty(applicable) ? nothing : first(applicable)::Method
+end
+
 """
     run_drive_parsed!(parsed; original_args=String[], resolved_output_dir=nothing, resolved_log_dir=nothing) -> Cint
 
@@ -139,8 +151,10 @@ function _run_drive_parsed_specialized!(
             # If still unset, kit allocates `{script}/.distsshkit/drive/<stem>_<UTC>/`.
             # Lock after that so `.kit.lock` is not the kind root when the driver
             # chose `output/` (or `--output-dir` / a unique batch dir).
+            init_before = _drive_script_init_output_dir_method(script_args)
             Base.include(Main, script_path)
-            if isdefined(Main, :init_output_dir!)
+            init_after = _drive_script_init_output_dir_method(script_args)
+            if init_after !== nothing && init_after !== init_before
                 @invokelatest Main.init_output_dir!(script_args)
             end
             DistSSHRun._ensure_drive_output_env!(script_path; project = proj_dir)

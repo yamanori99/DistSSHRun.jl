@@ -163,3 +163,72 @@ end
         end
     end
 end
+
+# A script that defines `init_output_dir!` leaves that function in `Main`.
+# The next in-process `drive!` of a script that does not define it must
+# allocate its own directory, including when the previous directory now has files.
+@testset "drive! ignores a leftover init_output_dir!" begin
+    _mktemp_host() do proj
+        _write_host_project!(proj, "DriveLeftoverInit")
+        filled = joinpath(proj, "output")
+        with_init = joinpath(proj, "with_init.jl")
+        write(with_init, """
+        function init_output_dir!(_)
+            dest = joinpath(@__DIR__, "output")
+            mkpath(dest)
+            ENV["DISTRIBUTED_OUTPUT_DIR"] = dest
+            return nothing
+        end
+        function main()
+            write(joinpath(ENV["DISTRIBUTED_OUTPUT_DIR"], "filled.txt"), "x")
+            println("DISTSSHKIT_INIT_RAN")
+            return nothing
+        end
+        """)
+        no_init = joinpath(proj, "no_init.jl")
+        write(no_init, """
+        function main()
+            println("DISTSSHKIT_NO_INIT_OUTPUT")
+            return nothing
+        end
+        """)
+        prev_v = DistSSHRun.kit_verbosity()
+        try
+            first = redirect_stdout(devnull) do
+                redirect_stderr(devnull) do
+                    DistSSHRun.drive!(
+                        with_init,
+                        "parent:1";
+                        project = proj,
+                        verbosity = :quiet,
+                        yes = true,
+                        enable_log = false,
+                    )
+                end
+            end
+            @test first.ok
+            @test first.output_dir == DistSSHRun.canonical_local_path(filled)
+            @test isfile(joinpath(filled, "filled.txt"))
+            delete!(ENV, "DISTRIBUTED_OUTPUT_DIR")
+            second = redirect_stdout(devnull) do
+                redirect_stderr(devnull) do
+                    DistSSHRun.drive!(
+                        no_init,
+                        "parent:1";
+                        project = proj,
+                        verbosity = :quiet,
+                        yes = true,
+                        enable_log = false,
+                    )
+                end
+            end
+            @test second.ok
+            @test second.exit_code == 0
+            @test second.output_dir !== nothing
+            @test second.output_dir != DistSSHRun.canonical_local_path(filled)
+        finally
+            DistSSHRun.set_kit_verbosity!(prev_v)
+            delete!(ENV, "DISTRIBUTED_OUTPUT_DIR")
+        end
+    end
+end
