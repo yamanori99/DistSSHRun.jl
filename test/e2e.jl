@@ -693,17 +693,22 @@ end
                     yes = true,
                     quiet = true,
                 )
-                prep = setup!(session, :delete, :rsync, :instantiate)
+                deleted = setup!(
+                    session, :delete;
+                    confirm_path = Dict(h => remote_root for h in session.hosts),
+                )
+                rest = setup!(session, :rsync, :instantiate)
                 _assert_ssh_e2e_api_ok(
                     suite,
                     "api_setup",
-                    prep.ok,
-                    "hosts=$(length(prep.hosts))",
+                    deleted.ok && rest.ok,
+                    "hosts=$(length(deleted.hosts))",
                 )
-                @test prep.ok
-                @test !prep.cancelled
-                @test length(prep.hosts) == length(hosts)
-                @test all(h -> h.ok, prep.hosts)
+                @test deleted.ok && rest.ok
+                @test !deleted.cancelled && !rest.cancelled
+                @test length(deleted.hosts) == length(hosts)
+                @test all(h -> h.ok, deleted.hosts)
+                @test all(h -> h.ok, rest.hosts)
 
                 go_out = joinpath(proj, "go_api_output")
                 isdir(go_out) && rm(go_out; recursive = true)

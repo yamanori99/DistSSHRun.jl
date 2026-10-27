@@ -16,6 +16,9 @@ Collect modes:
 
 Distinct from drive's automatic **post-run-new** (sentinel / newer-than-run) and go's
 **slot-overwrite**. Returns [`CollectResult`](@ref).
+
+A root that is the session project or a parent of it is refused (`ok=false`,
+exit code 1). Point it at a result directory inside the project.
 """
 function collect!(
         session::KitSession,

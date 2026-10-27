@@ -29,6 +29,10 @@ every explicit `parent:N` / `child:NAME:N` joined, stayed through the run,
 and collect succeeded. Pass `require_all_hosts=false` or CLI `--best-effort`
 for a partial run.
 
+A collect root that is the project or a parent of it stops the run before
+`main` and before collect, with exit code 1. That includes
+`DISTRIBUTED_COLLECT_DIRS` and a default root from `DISTRIBUTED_OUTPUT_DIR`.
+
 `mem_headroom` / `parent_gb` are the RAM budget for drive preflight (same as
 [`size!`](@ref) / CLI `--mem-headroom` / `--parent-gb`). [`pipeline!`](@ref)
 passes `config.mem_headroom` and `config.parent_gb`.

@@ -25,9 +25,9 @@ say there is nothing to fix.
   to `_remote_shell_path_word`.
 - **Delete and prune.** A path calculation in this diff can remove a path
   the user did not confirm. `setup!(session, :delete)` and
-  `setup!(session, :prune)` still delete when `yes=true`, without
-  `--confirm-path`. `-y`, `--yes`, and `DISTSSHKIT_YES` still skip the
-  prompt for `setup --delete` and `setup --prune`.
+  `setup!(session, :prune)` delete without a matching `confirm_path`, or
+  a host with no dict key is deleted. `-y`, `--yes`, and `DISTSSHKIT_YES`
+  authorize `setup --delete` or `setup --prune` without `--confirm-path`.
 - **Public behavior.** Flags, confirmation, exit codes, or what is deleted
   changed, and the pull request is not labeled `breaking`, or that
   breaking change is mixed with another change.

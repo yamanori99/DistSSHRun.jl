@@ -41,7 +41,8 @@ using Test
                     yes = true,
                     quiet = true,
                 )
-                del = DistSSHRun.setup!(session, :delete)
+                delete_path = DistSSHRun.remote_delete_root(proj; cli_override = "~/App.jl")
+                del = DistSSHRun.setup!(session, :delete; confirm_path = delete_path)
                 @test del.ok && !del.cancelled
                 @test length(del.hosts) == 1 && del.hosts[1].ok
                 @test !isdir(joinpath(state_dir, slot))
@@ -107,7 +108,7 @@ using Test
                     yes = true,
                     quiet = true,
                 )
-                pr = DistSSHRun.setup!(session, :prune)
+                pr = DistSSHRun.setup!(session, :prune; confirm_path = "~/App.jl")
                 @test pr.ok && !pr.cancelled
                 @test isfile(joinpath(tree, "keep", "Project.toml"))
                 @test !isdir(joinpath(tree, ".distsshkit", "go", "batch_a"))
@@ -289,7 +290,10 @@ using Test
                 )
                 with_kit_verbosity(:verbose) do
                     out, del = _capture_stdio() do _, _
-                        DistSSHRun.setup!(session, :delete)
+                        DistSSHRun.setup!(
+                            session, :delete;
+                            confirm_path = DistSSHRun.remote_delete_root(proj; cli_override = "~/App.jl"),
+                        )
                     end
                     @test del.ok && !del.cancelled
                     @test !occursin("Log file:", out)
@@ -520,9 +524,25 @@ using Test
                 catch e
                     e
                 end
-                @test err isa ArgumentError
-                @test occursin("confirm_path", err.msg)
+                @test err isa DistSSHRun.ConfirmPathMismatch
+                @test err.mode === :delete
+                @test err.given == "/not/the/path"
+                @test !isempty(err.expected)
+                @test occursin("confirm_path", sprint(showerror, err))
+                @test occursin("help setup", sprint(showerror, err))
+                @test !occursin("--help", sprint(showerror, err))
                 @test !isdir(log_dir)
+                @test isfile(joinpath(tree, "keepme.txt"))
+
+                missing = try
+                    DistSSHRun.setup!(session, :delete)
+                    nothing
+                catch e
+                    e
+                end
+                @test missing isa ArgumentError
+                @test occursin("confirm_path", missing.msg)
+                @test occursin("help setup", missing.msg)
                 @test isfile(joinpath(tree, "keepme.txt"))
 
                 blank = try
@@ -559,6 +579,105 @@ using Test
                 end
                 @test isfile(joinpath(tree, "keepme.txt"))
                 @test !isdir(log_dir)
+            end
+        end
+    end
+
+    @testset "confirm_path hosts and normalization" begin
+        @test DistSSHRun.normalize_remote_confirm_path("~/App.jl/") == "~/App.jl"
+        @test DistSSHRun.normalize_remote_confirm_path("App.jl") == "~/App.jl"
+        @test DistSSHRun.normalize_remote_confirm_path("/tmp//a/./b/") == "/tmp/a/b"
+        @test DistSSHRun.normalize_remote_confirm_path("~/a/./b/") == "~/a/b"
+        @test_throws ArgumentError DistSSHRun.normalize_remote_confirm_path("/tmp/../x")
+        @test_throws ArgumentError DistSSHRun.normalize_remote_confirm_path("~/a/../b")
+        @test_throws ArgumentError DistSSHRun.normalize_remote_confirm_path(".")
+
+        _with_fake_remotes() do state_dir
+            _with_tempdir() do proj
+                write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
+                for host in ("host1", "host2")
+                    tree = joinpath(state_dir, host, "tree")
+                    mkpath(tree)
+                    touch(joinpath(tree, "keepme.txt"))
+                end
+                session = DistSSHRun.KitSession(
+                    project = proj,
+                    workers = ["child:host1", "child:host2"],
+                    remote = "~/App.jl",
+                    yes = true,
+                    quiet = true,
+                )
+                string_err = try
+                    DistSSHRun.setup!(session, :delete; confirm_path = "~/App.jl")
+                    nothing
+                catch e
+                    e
+                end
+                @test string_err isa ArgumentError
+                @test occursin("one host", string_err.msg)
+                @test occursin("help setup", string_err.msg)
+                @test !occursin("--help", string_err.msg)
+                @test isfile(joinpath(state_dir, "host1", "tree", "keepme.txt"))
+                @test isfile(joinpath(state_dir, "host2", "tree", "keepme.txt"))
+
+                unknown = try
+                    DistSSHRun.setup!(
+                        session, :delete;
+                        confirm_path = Dict("host1" => "~/App.jl", "other" => "~/App.jl"),
+                    )
+                    nothing
+                catch e
+                    e
+                end
+                @test unknown isa ArgumentError
+                @test occursin("unknown host", unknown.msg)
+                @test isfile(joinpath(state_dir, "host1", "tree", "keepme.txt"))
+
+                partial = DistSSHRun.setup!(
+                    session, :delete;
+                    confirm_path = Dict("host1" => "App.jl"),
+                )
+                @test partial.ok && !partial.cancelled
+                @test [h.host for h in partial.hosts] == ["host1"]
+                @test !isdir(joinpath(state_dir, "host1"))
+                @test isfile(joinpath(state_dir, "host2", "tree", "keepme.txt"))
+
+                token_key = try
+                    DistSSHRun.setup!(
+                        session, :delete;
+                        confirm_path = Dict("child:host2" => "~/App.jl"),
+                    )
+                    nothing
+                catch e
+                    e
+                end
+                @test token_key isa ArgumentError
+                @test occursin("unknown host", token_key.msg)
+                @test isfile(joinpath(state_dir, "host2", "tree", "keepme.txt"))
+            end
+        end
+
+        _with_fake_remotes() do state_dir
+            _with_tempdir() do proj
+                host = "host1"
+                tree = joinpath(state_dir, host, "tree")
+                mkpath(tree)
+                touch(joinpath(tree, "keepme.txt"))
+                write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
+                session = DistSSHRun.KitSession(
+                    project = proj,
+                    workers = ["child:$host"],
+                    remote = "~/App.jl",
+                    yes = false,
+                    quiet = true,
+                )
+                home = "/home/distsshkit"
+                expanded = home * "/App.jl"
+                withenv("DISTSSHKIT_TEST_REMOTE_HOME" => home) do
+                    del = DistSSHRun.setup!(session, :delete; confirm_path = expanded)
+                    @test del.ok && !del.cancelled
+                end
+                @test !isdir(joinpath(state_dir, host))
             end
         end
     end

@@ -162,6 +162,8 @@ using Test
         @test occursin("--require-git", txt)
         @test occursin("DISTSSHKIT_JOBS", txt)
         @test occursin("confirm unless -y", txt)
+        @test occursin("does not authorize --delete or --prune", txt)
+        @test occursin("except --delete and --prune", txt)
         @test !occursin("day-to-day default", lowercase(txt))
         @test !occursin("drive needs --skip-git-guard", lowercase(txt))
     end
