@@ -29,12 +29,18 @@ using Test
             @test r.hosts == ["host-cli", "host-a", "host-b"]
         end
         @test_throws ArgumentError parse_size_args(["--version", "--local"])
-        # Unknown flags are warned and skipped (not an error).
-        let r = @test_logs (:warn, r"Unknown option") parse_size_args(["--nope"])
-            @test isempty(r.hosts)
-        end
-        @test_logs (:warn, r"Unknown option") begin
-            @test_throws ArgumentError parse_size_args(["--nope", "--local"])
+        for args in (["--nope"], ["--nope", "--help"], ["--help", "--nope"], ["--nope", "--local"])
+            let err = try
+                    parse_size_args(args)
+                    error("expected ArgumentError")
+                catch e
+                    e
+                end
+                @test err isa ArgumentError
+                @test occursin("unknown size option: --nope", err.msg)
+                @test occursin("help size", err.msg)
+                @test !occursin("--help", err.msg)
+            end
         end
         @test_throws ArgumentError parse_size_args(["--gb-per-worker"])
         @test_throws ArgumentError parse_size_args(["--probe"])
