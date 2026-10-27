@@ -1,6 +1,6 @@
-# On a version cut, NEWS.md's new section must match the bump.
-# A patch must not contain a ### Breaking heading. A breaking bump must.
-# Pull requests that do not raise Project.toml version pass without reading NEWS.
+# A version cut runs news-collect.sh --check, then release-news.sh.
+# Any other pull request runs news-fragment.sh.
+# The job name is the ruleset check "NEWS section".
 name: Release NEWS
 
 on:
@@ -30,14 +30,19 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
           PR: ${{ github.event.pull_request.number }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           ./.github/version-cut.sh --self-test
           ./.github/release-news.sh --self-test
+          ./.github/news-collect.sh --self-test
+          ./.github/news-fragment.sh --self-test
           cut="$(./.github/version-cut.sh "$BASE" "$HEAD")"
           if [ "$cut" != true ]; then
             echo "not a version cut"
+            ./.github/news-fragment.sh "$BASE" "$HEAD"
             exit 0
           fi
+          ./.github/news-collect.sh --check "$BASE" "$HEAD"
           ./.github/release-news.sh "$BASE" "$HEAD"
