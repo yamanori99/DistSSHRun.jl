@@ -131,6 +131,9 @@ end
 # and is not a valid handler after load.
 const _SECOND_SIGINT_CFUN = Ref{Ptr{Cvoid}}(C_NULL)
 
+# `signal` returns `SIG_ERR` on failure. `C_NULL` is `SIG_DFL`, a real disposition.
+const _SIG_ERR = reinterpret(Ptr{Cvoid}, -1)
+
 function _second_sigint_cfun()::Ptr{Cvoid}
     ptr = _SECOND_SIGINT_CFUN[]
     ptr == C_NULL || return ptr
@@ -226,9 +229,14 @@ function _arm_second_sigint!()
         # `jl_exit` from this thread deadlocks inside cleanup. Block SIGINT
         # here so the listener's thread runs the hard-exit handler.
         _block_this_thread_sigint!()
-        _OLD_SIGINT_HANDLER[] = ccall(
+        old = ccall(
             :signal, Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Cint(2), _second_sigint_cfun(),
         )
+        if old == _SIG_ERR
+            _SECOND_SIGINT_ARMED[] = false
+            return nothing
+        end
+        _OLD_SIGINT_HANDLER[] = old
     end
     return nothing
 end
@@ -242,10 +250,8 @@ function _disarm_second_sigint!()
         isinteractive() || Base.exit_on_sigint(true)
         return nothing
     end
-    old = _OLD_SIGINT_HANDLER[]
-    if old != C_NULL
-        ccall(:signal, Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Cint(2), old)
-    end
+    # `C_NULL` is `SIG_DFL` and must be put back. `SIG_ERR` is never stored.
+    ccall(:signal, Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Cint(2), _OLD_SIGINT_HANDLER[])
     return nothing
 end
 
@@ -343,9 +349,15 @@ function _install_main_task_sigint!()
     cond = Base.AsyncCondition(_deliver_main_sigint)
     _MAIN_SIGINT_ASYNC[] = cond
     _MAIN_HANDLE[] = cond.handle
-    _JULIA_SIGINT_HANDLER[] = ccall(
-        :signal, Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Cint(2), _main_sigint_cfun(),
-    )
+    old = ccall(:signal, Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Cint(2), _main_sigint_cfun())
+    if old == _SIG_ERR
+        _MAIN_HANDLE[] = C_NULL
+        _MAIN_SIGINT_TASK[] = nothing
+        _MAIN_SIGINT_ASYNC[] = nothing
+        close(cond)
+        return nothing
+    end
+    _JULIA_SIGINT_HANDLER[] = old
     _MAIN_SIGINT_INSTALLED[] = true
     return nothing
 end
@@ -355,10 +367,8 @@ function _restore_main_task_sigint!()
     _MAIN_SIGINT_INSTALLED[] = false
     _MAIN_HANDLE[] = C_NULL
     if !_SECOND_SIGINT_ARMED[]
-        old = _JULIA_SIGINT_HANDLER[]
-        if old != C_NULL
-            ccall(:signal, Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Cint(2), old)
-        end
+        # `C_NULL` is `SIG_DFL` and must be put back. `SIG_ERR` is never stored.
+        ccall(:signal, Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Cint(2), _JULIA_SIGINT_HANDLER[])
         # Julia's listener `sigwait`s. Leave SIGINT blocked on this thread.
         _block_this_thread_sigint!()
     end
@@ -410,6 +420,9 @@ function _drive_frame(f; cli::Bool = false)
         return f()
     end
     _DRIVE_FRAME_DEPTH[] += 1
+    # A `cli=true` frame leaves the flag set for `main`. The next outermost
+    # frame must not treat a later ordinary error as an interrupt.
+    _clear_interrupted!()
     token = _capture_cancel_token()
     try
         return _noncancellable() do

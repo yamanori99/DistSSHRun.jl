@@ -1,5 +1,14 @@
 using Test
 
+function _sigint_sa_handler()::Ptr{Cvoid}
+    buf = zeros(UInt8, 256)
+    rc = GC.@preserve buf ccall(
+        :sigaction, Cint, (Cint, Ptr{Cvoid}, Ptr{UInt8}), Cint(2), C_NULL, buf,
+    )
+    rc == 0 || error("sigaction SIGINT failed: $rc")
+    return GC.@preserve buf unsafe_load(Ptr{Ptr{Cvoid}}(pointer(buf)))
+end
+
 @testset "drive API" begin
     @testset "parse_worker_tokens" begin
         p = DistSSHRun.parse_worker_tokens(["parent:2", "child:host-a:4", "child:host-b"])
@@ -663,6 +672,53 @@ using Test
                 Base.ACTIVE_PROJECT[] = saved_raw
             end
         end
+    end
+
+    @testset "cli interrupt flag does not stick" begin
+        DistSSHRun._clear_interrupted!()
+        try
+            left = try
+                DistSSHRun._drive_frame(; cli = true) do
+                    DistSSHRun._mark_interrupted!()
+                    error("cli-interrupt")
+                end
+                nothing
+            catch e
+                e
+            end
+            @test left isa DistSSHRun._DriveProcessInterrupt
+            @test DistSSHRun._drive_was_interrupted()
+            seen = Ref(true)
+            ordinary = try
+                DistSSHRun._drive_frame() do
+                    seen[] = DistSSHRun._drive_was_interrupted()
+                    error("ordinary")
+                end
+                nothing
+            catch e
+                e
+            end
+            @test seen[] == false
+            @test ordinary isa ErrorException
+            @test occursin("ordinary", ordinary.msg)
+            @test !DistSSHRun._drive_was_interrupted()
+        finally
+            DistSSHRun._clear_interrupted!()
+        end
+    end
+
+    @testset "SIGINT disposition is restored on 1.13" begin
+        isdefined(Base, :CANCEL_TOKEN) && return
+        before = _sigint_sa_handler()
+        DistSSHRun._drive_frame() do
+            DistSSHRun._drive_cancellable() do
+                return nothing
+            end
+        end
+        @test _sigint_sa_handler() == before
+        DistSSHRun._arm_second_sigint!()
+        DistSSHRun._disarm_second_sigint!()
+        @test _sigint_sa_handler() == before
     end
 
     @testset "init delay" begin
