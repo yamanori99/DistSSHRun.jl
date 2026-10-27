@@ -6,6 +6,19 @@ using Test
     @test parse_setup_args(["--help"]).show_help
     @test parse_setup_args(["-h"]).show_help
 
+    let buf = IOBuffer()
+        DistSSHRun.with_cli_entry(:DistSSHRun) do
+            DistSSHRun.show_requirements(; io = buf)
+        end
+        text = String(take!(buf))
+        @test occursin("Remote login shell must be POSIX", text)
+        @test occursin("SHELL -c", text)
+        @test occursin("sh -l -c", text)
+        @test occursin("fish and csh are unsupported", text)
+        @test occursin("backslashes inside single quotes", text)
+        @test !occursin("fish is refused", text)
+    end
+
     let r = parse_setup_args(["--check", "child:host1"])
         @test r.ignore_julia_version == false
     end

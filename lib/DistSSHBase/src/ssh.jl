@@ -175,11 +175,21 @@ function parse_julia_version(version_output::AbstractString)::Union{Nothing, Ver
     end
 end
 
+"""One remote argument: quoted `julia_path`, then `--version`.
+
+OpenSSH joins every word after the host into one `\$SHELL -c` string. A path
+with spaces must not be its own SSH argument. See [`_remote_julia_path_sh`](@ref).
+"""
+function _remote_julia_version_remote_command(julia_path::AbstractString)::String
+    return string(_remote_julia_path_sh(julia_path), " --version")
+end
+
 """Stdout of `julia_path --version` on `host`."""
 function _remote_julia_version_output(host::String, julia_path::AbstractString)::String
+    remote = _remote_julia_version_remote_command(julia_path)
     return read(
         pipeline(
-            _ssh_cmd([ssh_opts()..., _ssh_host_args(host, String(julia_path), "--version")...]);
+            _ssh_cmd([ssh_opts()..., _ssh_host_args(host, remote)...]);
             stderr = devnull,
         ),
         String,
@@ -270,10 +280,34 @@ function resolve_remote_julia(
     return path
 end
 
+"""Escape `\\`, `"`, `` ` ``, and `\$` inside a POSIX double-quoted word."""
+function _remote_dq_escape(s::AbstractString)::String
+    return sprint() do io
+        for c in String(s)
+            if c == '\\' || c == '"' || c == '`' || c == '$'
+                print(io, '\\')
+            end
+            print(io, c)
+        end
+    end
+end
+
+"""
+One remote-shell word for a Julia binary path.
+
+A leading `~/` is rewritten to `\$HOME/` so `~/julia-1.x/bin/julia` still
+expands. A `\$HOME` prefix is double-quoted (the prefix itself still expands).
+A backtick, double quote, backslash, or any other `\$` in that word is escaped.
+Every other path is POSIX single-quoted.
+"""
 function _remote_julia_path_sh(path::AbstractString)::String
     s = String(path)
-    if startswith(s, raw"$HOME") || startswith(s, "\$HOME")
-        return string("\"", s, "\"")
+    if startswith(s, "~/")
+        s = string("\$HOME", chopprefix(s, "~"))
+    end
+    prefix = "\$HOME"
+    if startswith(s, prefix)
+        return string('"', prefix, _remote_dq_escape(chopprefix(s, prefix)), '"')
     end
     return _remote_sh_quote(s)
 end
