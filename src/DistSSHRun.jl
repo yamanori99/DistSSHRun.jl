@@ -523,7 +523,12 @@ function _main_dispatch(args::Vector{String})::Cint
 end
 
 if ccall(:jl_generating_output, Cint, ()) == 1
-    include("DistSSHRun/precompile.jl")
+    # A worker may precompile DistSSHRun from LOAD_PATH without this dep.
+    try
+        Base.require(Base.PkgId(Base.UUID("aea7be01-6a6a-4083-8856-8a6e6704d82a"), "PrecompileTools"))
+        include("DistSSHRun/precompile.jl")
+    catch
+    end
 end
 
 Base.eval(@__MODULE__, :(@main))

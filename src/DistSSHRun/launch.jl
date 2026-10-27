@@ -15,9 +15,18 @@ const _LAUNCH_LOAD_PATH = "@:@stdlib"
 
 function worker_load_path(; ssh::Bool = false)::String
     ssh && return _LAUNCH_LOAD_PATH
+    extras = String[]
+    ap = Base.active_project()
+    if ap !== nothing
+        pd = dirname(String(ap))
+        isempty(pd) || push!(extras, pd)
+    end
     d = pkgdir(@__MODULE__)
-    (d === nothing || isempty(d)) && return _LAUNCH_LOAD_PATH
-    return string(_LAUNCH_LOAD_PATH, ":", d)
+    if d !== nothing && !isempty(d) && !(d in extras)
+        push!(extras, d)
+    end
+    isempty(extras) && return _LAUNCH_LOAD_PATH
+    return string(_LAUNCH_LOAD_PATH, ":", join(extras, ":"))
 end
 
 function _env_unset_prefix()::String

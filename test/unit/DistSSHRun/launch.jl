@@ -14,6 +14,9 @@ using Distributed
     @test DistSSHRun.worker_load_path(; ssh = true) == "@:@stdlib"
     @test startswith(DistSSHRun.worker_load_path(), "@:@stdlib")
     @test !occursin("@v#.#", DistSSHRun.worker_load_path())
+    let ap = Base.active_project()
+        ap === nothing || @test occursin(dirname(String(ap)), DistSSHRun.worker_load_path())
+    end
     @test env["JULIA_PROJECT"] == "/tmp/job"
     @test haskey(env, "JULIA_NUM_THREADS")
 
