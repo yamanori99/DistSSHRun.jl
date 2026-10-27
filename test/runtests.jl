@@ -11,6 +11,13 @@
 #   CONTRIBUTING.md ("Before opening a PR")
 #   ./.github/jetls-check.sh
 
+# Startup project for helper children. Captured before any `include`: an
+# in-process `drive!` activates the host and must not become `--project`.
+const TEST_PROJECT = let active = Base.active_project()
+    active === nothing && error("test/runtests.jl: Base.active_project() is nothing")
+    String(active)
+end
+
 using Test
 using DistSSHRun
 
@@ -147,6 +154,8 @@ end
         include(joinpath(@__DIR__, "integration", "drive", "local.jl"))
         _runtest_announce("integration/drive/api.jl")
         include(joinpath(@__DIR__, "integration", "drive", "api.jl"))
+        _runtest_announce("integration/cli/project.jl")
+        include(joinpath(@__DIR__, "integration", "cli", "project.jl"))
         _runtest_announce("integration/drive/execute.jl")
         if !_distsshrun_short_skip("integration/drive/execute.jl")
             include(joinpath(@__DIR__, "integration", "drive", "execute.jl"))

@@ -25,15 +25,13 @@ if !isdefined(Main, :_test_root)
         return Cmd(vcat(String[exe], rest))
     end
 
-    # Kit root when that tree has a manifest. Otherwise the active project
-    # (`Pkg.test`'s env), which already depends on DistSSHRun.
+    # `--project` for `julia -m DistSSHRun`. `TEST_PROJECT` is the process
+    # startup project (`test/runtests.jl`, before any include). Do not read
+    # `Base.active_project()` here: `drive!` activates the host and leaves it.
     function _cli_m_project(project::AbstractString)::String
-        if _checkout_manifest_file(String(project)) !== nothing
-            return String(project)
-        end
-        active = Base.active_project()
-        active === nothing && return String(project)
-        return String(active)
+        isdefined(Main, :TEST_PROJECT) ||
+            error("_cli_m_project($(project)): TEST_PROJECT is not set")
+        return String(TEST_PROJECT::AbstractString)
     end
 
     # Kit CLI as a child `julia -m DistSSHRun`.

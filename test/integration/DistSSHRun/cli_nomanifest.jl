@@ -3,8 +3,9 @@ using Test
 # A script from a checkout with no manifest exits 1 and does not develop a
 # depot environment. `Pkg.test` puts the test project on `JULIA_LOAD_PATH`,
 # and that project provides DistSSHRun, so these children use
-# `_child_julia_env` (the same filter as the other CLI subprocesses). That
-# omits `JULIA_LOAD_PATH` from the child. It does not change this process.
+# `_child_julia_env` (the same filter as the other CLI subprocesses). The
+# child gets `@` and `@stdlib` only, not this process's load path. It does
+# not change this process.
 
 function _cli_chmod_writable!(root::AbstractString)
     for (dir, _, files) in walkdir(root)

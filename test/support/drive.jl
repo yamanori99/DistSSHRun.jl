@@ -91,7 +91,7 @@ if !isdefined(Main, :_run_kit_drive)
 
     # Host-app `drive`. A checkout with a manifest still runs `drive.jl`
     # (`--project` is the host). A checkout with no manifest uses
-    # `julia -m DistSSHRun` so the child does not develop a depot env.
+    # `julia -m DistSSHRun` and `--project=TEST_PROJECT`.
     function _host_drive_cmd(;
             script::AbstractString,
             host_project,
@@ -115,17 +115,9 @@ if !isdefined(Main, :_run_kit_drive)
             proj = _cli_m_project(kit_root)
             `$base --startup-file=no --project=$proj -m DistSSHRun drive $tokens`
         end
-        # `addenv` overrides these keys and leaves `JULIA_LOAD_PATH` /
-        # `JULIA_DEPOT_PATH` alone. `"0"` is not the subcommand-done sentinel.
-        return addenv(
-            cmd,
-            "DISTRIBUTED_INIT_DELAY_SEC" => "0",
-            "DISTRIBUTED_PROJECT_ROOT" => host_project,
-            "DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL" => "1",
-            "DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "0",
-            "DIST_SSH_KIT_CLI_INCLUDE" => "0",
-            "JULIA_PKG_PRECOMPILE_AUTO" => get(ENV, "JULIA_PKG_PRECOMPILE_AUTO", "0"),
-        )
+        # Same child env as `_kit_drive_cmd`: `@` + `@stdlib`, depot inherited,
+        # `JULIA_PROJECT` removed. `addenv` would keep this process's load path.
+        return setenv(cmd, _drive_host_env(host_project))
     end
 
     # Run a host-app `drive` and return `(process, output)`.
