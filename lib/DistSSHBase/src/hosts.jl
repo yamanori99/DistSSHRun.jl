@@ -186,8 +186,14 @@ end
 Short, actionable summary for SSH / remote-shell failures.
 
 Prefer this over dumping a full `ProcessFailedException` with a long `Cmd`.
+A remote shell whose exit is not 255 adds a `help setup` line when the login
+shell is non-POSIX. Exit 255 is SSH itself and is not probed.
 """
 function summarize_ssh_error(err; stderr::AbstractString = "")::String
+    return _append_remote_shell_hint_from_error(err, _summarize_ssh_error_text(err; stderr = stderr))
+end
+
+function _summarize_ssh_error_text(err; stderr::AbstractString = "")::String
     detail = strip(String(stderr))
     msg = sprint(showerror, err)
     blob = isempty(detail) ? msg : detail * "\n" * msg

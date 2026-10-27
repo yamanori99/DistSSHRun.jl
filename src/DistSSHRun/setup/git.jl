@@ -55,10 +55,12 @@ function _git_pull_remote_host_detail(host::AbstractString, remote_path::Abstrac
         return (; ok = true, detail = "")
     catch e
         _rethrow_missing_host_tool(e)
-        return (;
-            ok = false,
-            detail = _captured_output_tail(String(take!(out_buf)), String(take!(err_buf))),
-        )
+        detail = _captured_output_tail(String(take!(out_buf)), String(take!(err_buf)))
+        code = DistSSHBase._remote_failure_exit_code(e)
+        if code isa Int
+            detail = DistSSHBase._append_remote_shell_hint(String(host), code, detail)
+        end
+        return (; ok = false, detail = detail)
     end
 end
 
@@ -90,6 +92,7 @@ function _remote_git_head(
         return (hash = String(lines[1]), branch = String(lines[2]))
     catch e
         _rethrow_missing_host_tool(e)
+        DistSSHBase._throw_if_nonposix_shell(String(host), e)
         return nothing
     end
 end

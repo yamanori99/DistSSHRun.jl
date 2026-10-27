@@ -39,6 +39,19 @@ function main()
         end
     end
 
+    # POSIX login-shell probe (`case`) and a separate `echo $SHELL`. A pass
+    # prints the marker anywhere in stdout. This double is a POSIX shell.
+    if occursin("__DSR_POSIX_OK_", script) && occursin("case x in x)", script)
+        m = match(r"__DSR_POSIX_OK_[0-9a-fA-F]+__", script)
+        m === nothing && exit(1)
+        println(m.match)
+        exit(0)
+    end
+    if strip(script) == "echo \$SHELL"
+        println("/bin/sh")
+        exit(0)
+    end
+
     if occursin("DISTSSHKIT_REMOTE_HOME", script)
         println(get(ENV, "DISTSSHKIT_TEST_REMOTE_HOME", "/home/distsshkit"))
         exit(0)

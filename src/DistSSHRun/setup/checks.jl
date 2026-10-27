@@ -91,6 +91,7 @@ function check_project(host::String, remote_path::String)
         return strip(result) == "ok"
     catch e
         _rethrow_missing_host_tool(e)
+        DistSSHBase._throw_if_nonposix_shell(host, e)
         return false
     end
 end
@@ -179,8 +180,16 @@ function probe_remote_project_deps(
         msg = strip(String(take!(err)))
         isempty(msg) && (msg = strip(String(take!(out))))
         m = match(r"not instantiated \(([^)]+)\)", msg)
-        m !== nothing && return "dependencies missing: $(m.captures[1])"
-        return isempty(msg) ? "dependency check failed" : first(split(msg, '\n'))
+        shown = if m !== nothing
+            cap = m.captures[1]
+            "dependencies missing: $(cap isa AbstractString ? cap : "")"
+        elseif isempty(msg)
+            "dependency check failed"
+        else
+            first(split(msg, '\n'))
+        end
+        code = proc.exitcode isa Integer ? Int(proc.exitcode) : 1
+        return DistSSHBase._append_remote_shell_hint(String(host), code, shown)
     catch e
         return "dependency check failed: $(sprint(showerror, e))"
     end

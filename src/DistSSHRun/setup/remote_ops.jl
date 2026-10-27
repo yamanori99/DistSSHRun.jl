@@ -364,7 +364,9 @@ function _pkg_e_on_remotes(
                         oks[i] = false
                         msg = strip(String(take!(err)))
                         isempty(msg) && (msg = strip(String(take!(out))))
-                        fail_msgs[i] = isempty(msg) ? "exit $(proc.exitcode)" : first(split(msg, '\n'))
+                        shown = isempty(msg) ? "exit $(proc.exitcode)" : first(split(msg, '\n'))
+                        code = proc.exitcode isa Integer ? Int(proc.exitcode) : 1
+                        fail_msgs[i] = DistSSHBase._append_remote_shell_hint(host, code, shown)
                     end
                 catch e
                     oks[i] = false
