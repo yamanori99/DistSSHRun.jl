@@ -416,4 +416,32 @@ using Test
         @test occursin("drive", something(rd.error, ""))
         @test occursin("pmap", something(rd.error, ""))
     end
+
+    @testset "non-empty output directory" begin
+        _with_tempdir() do tmp
+            script = joinpath(tmp, "job.jl")
+            write(script, "println(\"hi\")\n")
+            dirty = joinpath(tmp, "out")
+            mkdir(dirty)
+            write(joinpath(dirty, "old.txt"), "old\n")
+            err = try
+                DistSSHRun.ride!(
+                    script;
+                    output_dir = dirty,
+                    project = tmp,
+                    hint_surface = :cli,
+                )
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            err isa ArgumentError || error("expected ArgumentError")
+            @test occursin("old.txt", err.msg)
+            @test occursin("Run `julia -m DistSSHKit help ride` for flags.", err.msg)
+            @test !occursin("--help", err.msg)
+            @test !isfile(joinpath(dirty, ".kit.lock"))
+            @test !isfile(joinpath(dirty, "kit.pid"))
+        end
+    end
 end

@@ -50,7 +50,7 @@ function show_ride_usage(; io::IO = stdout)
         "  omit :N             error (use size, then paste counts)",
         "  --spi-check         compare to sequential map/filter (default off)",
         "  --no-spi-check      skip that compare",
-        "  --output-dir PATH   DISTRIBUTED_OUTPUT_DIR for the script",
+        "  --output-dir PATH   DISTRIBUTED_OUTPUT_DIR for the script (must be missing or empty)",
         "  --julia PATH        remote Julia (ENV or auto)",
         "  $(KIT_HOSTS_FLAG_HELP)",
         "  --hosts-file PATH   one token per line",

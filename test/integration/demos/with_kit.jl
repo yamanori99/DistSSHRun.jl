@@ -56,6 +56,14 @@ using Test
         @test read(file_csv, String) == expected
         @test occursin("wrote ", file_out)
         _assert_kit_progress_done(file_out_dir; kind = :drive)
+        file_proc2, file_out2 = _run_subprocess(drive_cmd(file_host, "square_file.jl"))
+        _assert_proc_ok(file_proc2, file_out2; label = "square_file demo second run")
+        @test read(file_csv, String) == expected
+        csvs = String[]
+        for (dir, _, files) in walkdir(file_out_dir)
+            "square_results.csv" in files && push!(csvs, joinpath(dir, "square_results.csv"))
+        end
+        @test length(csvs) >= 2
 
         _assert_proc_ok(echo_proc, echo_out; label = "square_echo demo")
         @test occursin("param^2:", echo_out)

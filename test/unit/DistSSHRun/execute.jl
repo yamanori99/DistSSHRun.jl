@@ -1235,4 +1235,32 @@ using Test
         end
     end
 
+    @testset "detached execute! refuses a non-empty output_dir" begin
+        _with_tempdir() do project
+            script = joinpath(project, "job.jl")
+            write(script, "println(\"no\")\n")
+            dirty = joinpath(project, "out")
+            mkdir(dirty)
+            write(joinpath(dirty, "old.txt"), "x\n")
+            err = try
+                DistSSHRun.execute!(
+                    :go, script, String[];
+                    detached = true,
+                    output_dir = dirty,
+                    project = project,
+                    yes = true,
+                )
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            err isa ArgumentError || error("expected ArgumentError")
+            @test occursin("old.txt", err.msg)
+            @test occursin("Omit output_dir or pass an empty directory.", err.msg)
+            @test !occursin("--help", err.msg)
+            @test !isdir(joinpath(project, ".distsshkit", "runs"))
+        end
+    end
+
 end

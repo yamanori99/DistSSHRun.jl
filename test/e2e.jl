@@ -371,8 +371,9 @@ end
         @testset "drive square_file CSV is local (kit parent main)" begin
             _e2e_announce("drive square_file CSV is local (kit parent main)")
             square_file = joinpath(proj, "demos", "with_kit", "square_file.jl")
-            out_csv = joinpath(proj, "demos", "with_kit", "output", "square_results.csv")
-            isfile(out_csv) && rm(out_csv)
+            out_dir = joinpath(proj, "demos", "with_kit", "output")
+            isdir(out_dir) && rm(out_dir; recursive = true)
+            out_csv = joinpath(out_dir, "square_results.csv")
             proc, out = _run_kit_drive(;
                 script = square_file,
                 host_root = proj,
@@ -644,8 +645,9 @@ end
             tilde_root = _ssh_e2e_tilde_remote_root()
             tilde_env = _ssh_e2e_env(; remote_project = tilde_root)
             square_file = joinpath(proj, "demos", "with_kit", "square_file.jl")
-            out_csv = joinpath(proj, "demos", "with_kit", "output", "square_results.csv")
-            isfile(out_csv) && rm(out_csv)
+            out_dir = joinpath(proj, "demos", "with_kit", "output")
+            isdir(out_dir) && rm(out_dir; recursive = true)
+            out_csv = joinpath(out_dir, "square_results.csv")
 
             proc, out = _run_kit_setup(;
                 setup_args = ["--delete", "--remote-path", tilde_root, "--confirm-path", tilde_root, setup_hosts...],
@@ -764,6 +766,10 @@ end
             _e2e_announce("in-process drive! is reentrant (no worker leak)")
             withenv(_e2e_base_env()...) do
                 for call in 1:2
+                    # `pipeline!` above leaves `DISTRIBUTED_OUTPUT_DIR` on the
+                    # project `output/`, which now has files. This call does
+                    # not pass `output_dir`.
+                    delete!(ENV, "DISTRIBUTED_OUTPUT_DIR")
                     out = mktemp() do out_path, out_io
                         res = redirect_stdout(out_io) do
                             drive!(

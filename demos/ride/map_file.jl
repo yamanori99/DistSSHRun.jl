@@ -11,7 +11,18 @@ xs = 1:8
 ys = map(work, xs)
 
 env = strip(get(ENV, "DISTRIBUTED_OUTPUT_DIR", ""))
-outdir = isempty(env) ? joinpath(@__DIR__, "output") : env
+outdir = if !isempty(env)
+    env
+else
+    root = joinpath(@__DIR__, "output")
+    if !ispath(root) || (isdir(root) && !islink(root) && isempty(readdir(root)))
+        root
+    elseif isdir(root) && !islink(root)
+        mktempdir(root; cleanup = false)
+    else
+        root
+    end
+end
 mkpath(outdir)
 out_path = joinpath(outdir, "map_results.csv")
 open(out_path, "w") do io

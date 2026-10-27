@@ -45,16 +45,25 @@ function ride_main()::Cint
     end
     tok = parsed.hosts
     remote_raw = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
-    result = ride!(
-        parsed.script_path,
-        tok;
-        args = parsed.script_args,
-        spi_check = parsed.spi_check,
-        output_dir = parsed.output_dir,
-        project = project_root,
-        julia = parsed.julia,
-        remote = isempty(remote_raw) ? nothing : remote_raw,
-    )
+    result = try
+        ride!(
+            parsed.script_path,
+            tok;
+            args = parsed.script_args,
+            spi_check = parsed.spi_check,
+            output_dir = parsed.output_dir,
+            project = project_root,
+            julia = parsed.julia,
+            remote = isempty(remote_raw) ? nothing : remote_raw,
+            hint_surface = :cli,
+        )
+    catch e
+        if e isa ArgumentError
+            DistSSHRun.print_cli_error(e.msg)
+            return Cint(1)
+        end
+        rethrow()
+    end
     if !(kit_output_progress() && result.ok)
         print_ride(result)
     end

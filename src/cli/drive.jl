@@ -54,8 +54,11 @@ function _drive_main_body(original_args::Vector{String})::Cint
             project_root = cli_project_root(@__DIR__),
         )
     catch e
-        DistSSHRun._report_manifest_refusal(e) || rethrow()
-        return Cint(1)
+        if e isa ArgumentError
+            DistSSHRun._report_manifest_refusal(e) || DistSSHRun.print_cli_error(e.msg)
+            return Cint(1)
+        end
+        rethrow()
     end
 end
 

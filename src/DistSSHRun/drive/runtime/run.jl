@@ -144,7 +144,14 @@ function _run_drive_parsed_specialized!(
                 @invokelatest Main.init_output_dir!(script_args)
             end
             DistSSHRun._ensure_drive_output_env!(script_path; project = proj_dir)
-            release_output_dir_lock = DistSSHRun.kit_output_dir_lock!(DistSSHRun.resolve_drive_output_dir(script_dir))
+            out_ready = DistSSHRun._prepare_output_dir!(
+                DistSSHRun.resolve_drive_output_dir(script_dir);
+                command = :drive,
+                surface = hasproperty(parsed, :hint_surface) ? parsed.hint_surface::Symbol : :cli,
+                allow_parent_sidecars = old_run isa AbstractString && !isempty(strip(old_run)),
+            )
+            ENV["DISTRIBUTED_OUTPUT_DIR"] = out_ready
+            release_output_dir_lock = DistSSHRun.kit_output_dir_lock!(out_ready)
             try
                 code = _run_drive_parsed_locked!(
                     parsed, output_dir, script_path, script_dir, proj_dir, script_args,
