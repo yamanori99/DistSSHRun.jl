@@ -2,7 +2,13 @@
 using Dates
 using Distributed
 
-"""Ctrl-C during a drive. Callers `exit(130)` only after process state is restored."""
+"""
+CLI Ctrl-C after the drive frame has restored process state.
+
+`main` turns this into exit code 130. In-process [`drive!`](@ref) rethrows
+`InterruptException` or `Base.CancellationRequest` instead, and does not
+throw this type.
+"""
 struct _DriveProcessInterrupt <: Exception end
 
 """Build a drive error when the driver script path does not exist."""

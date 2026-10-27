@@ -167,6 +167,7 @@ include("DistSSHRun/namespace_sync.jl")
 include("DistSSHRun/pool.jl")
 include("DistSSHRun/drive/runtime/heartbeat.jl")
 include("DistSSHRun/drive/runtime/_common.jl")
+include("DistSSHRun/drive/runtime/cancel_frame.jl")
 include("DistSSHRun/drive/runtime/checks.jl")
 include("DistSSHRun/drive/runtime/collect_tree.jl")
 include("DistSSHRun/drive/runtime/workers.jl")
@@ -387,10 +388,8 @@ function main(args::Vector{String} = copy(ARGS))::Cint
             return _main(args)
         end
     catch e
-        # After `_main`'s `finally` (DONE flag) and the drive frame's restore.
-        if e isa _DriveProcessInterrupt
-            exit(130)
-        end
+        # After the drive frame's `finally` blocks. Translation only.
+        _cli_finish_interrupt(e)
         rethrow()
     end
 end

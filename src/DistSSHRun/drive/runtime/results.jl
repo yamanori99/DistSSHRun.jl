@@ -83,11 +83,17 @@ function _with_driver_sigint_exceptions(f)
     try
         return f()
     finally
-        isinteractive() || Base.exit_on_sigint(true)
+        if _SECOND_SIGINT_ARMED[]
+            # A second press must cancel the cleanup episode, not
+            # `jl_exit_thread0` (that deadlocks mid-cleanup on 1.14).
+            Base.exit_on_sigint(false)
+        else
+            isinteractive() || Base.exit_on_sigint(true)
+        end
     end
 end
 
-function run_driver_script!(enable_log::Bool, drive_atexit_cleanup)
+function run_driver_script!(enable_log::Bool)
     writeln_both("Running script..."; color = :light_black)
     writeln_both("")
     call_main = () -> begin
@@ -179,15 +185,10 @@ function run_driver_script!(enable_log::Bool, drive_atexit_cleanup)
                 call_main()
             end
         catch e
-            if is_sigint(e)
-                without_cancel() do
-                    writeln_both("\nInterrupted. Cleaning up workers...")
-                    _interrupt_drive_workers!()
-                    drive_atexit_cleanup()
-                end
-                # `exit` skips `finally`. Throw so worker teardown's caller can
-                # restore env and the active project, then `exit(130)`.
-                throw(_DriveProcessInterrupt())
+            # Arm the second Ctrl-C before this function's `finally` turns
+            # exit-on-sigint back on. Cleanup itself runs in the frame.
+            if _interruptish(e)
+                _accept_drive_sigint!()
             end
             rethrow()
         end

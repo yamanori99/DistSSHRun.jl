@@ -45,6 +45,12 @@ so it does not instantiate after rsync.
 `sync_script=true` (CLI `--sync-script`) re-`include`s the full driver on
 workers. The default publishes definitions / `using` / `import` / `include`
 only, so top-level work on Load is not repeated on workers.
+
+Ctrl-C restores the active project and the `DISTRIBUTED_*` entries this call
+changed, then rethrows `InterruptException` or, when Julia has it,
+`Base.CancellationRequest`. `drive!` does not `exit` and does not throw the
+private CLI exception. On Julia 1.14 the caller's task stays cancelled after
+that exception.
 """
 function drive!(
         session::KitSession,
@@ -63,7 +69,7 @@ function drive!(
         parent_gb::Real = DEFAULT_PARENT_GB,
         sync_script::Bool = false,
     )::DriveResult
-    try
+    return _drive_frame(; cli = false) do
         return _with_kit_inproc_run!(:drive) do
             # Outside `run_drive_parsed!`: `apply_session_env!` runs first, and
             # this frame restores it after the inner drive frame returns.
@@ -117,11 +123,6 @@ function drive!(
                 end
             end
         end
-    catch e
-        if e isa _DriveProcessInterrupt
-            exit(130)
-        end
-        rethrow()
     end
 end
 

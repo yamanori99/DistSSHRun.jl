@@ -150,7 +150,7 @@ end
                         end
                     end
                 end
-                @test got isa DistSSHRun._DriveProcessInterrupt
+                @test got isa InterruptException
                 @test Base.ACTIVE_PROJECT[] === nothing
                 @test get(ENV, "DISTRIBUTED_PROJECT_ROOT", "") == "prior-root"
                 @test get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", "missing") == ""
