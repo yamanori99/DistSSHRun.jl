@@ -12,6 +12,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
+script_path="${here}/$(basename "$0")"
 
 die() {
   echo "news-fragment: $*" >&2
@@ -237,7 +238,7 @@ EOF
     fail "invalid fragment accepted"
   fi
 
-  if ! AUTHOR='dependabot[bot]' bash "$0" "$base" "$head" | grep -q 'Dependabot'; then
+  if ! AUTHOR='dependabot[bot]' bash "$script_path" "$base" "$head" | grep -q 'Dependabot'; then
     fail "dependabot cli"
   fi
 

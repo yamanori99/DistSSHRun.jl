@@ -22,6 +22,8 @@
 set -euo pipefail
 shopt -s nullglob
 
+script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+
 slug_re='^[a-z0-9][a-z0-9.-]{0,60}\.md$'
 
 die() {
@@ -619,7 +621,7 @@ EOF
   git -C "$repo" add -A
   git -C "$repo" commit -q -m cut
   head="$(git -C "$repo" rev-parse HEAD)"
-  if ! (cd "$repo" && bash "$0" --check "$base" "$head") >"$tmp/check-out" 2>"$tmp/check-err"; then
+  if ! (cd "$repo" && bash "$script_path" --check "$base" "$head") >"$tmp/check-out" 2>"$tmp/check-err"; then
     cat "$tmp/check-err" >&2
     fail "check after apply"
   fi
@@ -628,7 +630,7 @@ EOF
   git -C "$repo" commit -q -m edit
   local edited
   edited="$(git -C "$repo" rev-parse HEAD)"
-  if (cd "$repo" && bash "$0" --check "$base" "$edited") >/dev/null 2>"$tmp/check-err"; then
+  if (cd "$repo" && bash "$script_path" --check "$base" "$edited") >/dev/null 2>"$tmp/check-err"; then
     fail "check accepted a hand-edited NEWS.md"
   fi
 
