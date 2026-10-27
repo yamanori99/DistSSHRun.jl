@@ -51,6 +51,10 @@ function cleanup_stale_workers!(hosts::Vector{Tuple{String, Union{Int, Nothing}}
     return writeln_both("")
 end
 
+# `add_drive_workers!` throws this after the host loop when nothing joined.
+# `drive` deletes `kit.hosts` only for this error, not for an interrupt.
+const _NO_WORKERS_JOINED = "No workers available. Check SSH connectivity."
+
 function add_drive_workers!(
         hosts::Vector{Tuple{String, Union{Int, Nothing}}},
         parent_workers::Int,
@@ -214,7 +218,7 @@ function add_drive_workers!(
     writeln_both("")
 
     # Alone, Julia reports nworkers()==1 (the master). Fail when nothing joined.
-    nprocs() <= 1 && error("No workers available. Check SSH connectivity.")
+    nprocs() <= 1 && error(_NO_WORKERS_JOINED)
 
     return successful_hosts
 end
