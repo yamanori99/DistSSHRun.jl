@@ -77,12 +77,52 @@ function resolve_pkg_project_dir(start_dir::AbstractString)::String
 end
 
 """
-Pkg environment for `project` (a directory, or a `Project.toml` path).
+Project file Base would use for `project`, or `nothing`.
 
-`project_dir` is the directory of that `Project.toml` (`--project`).
-`manifest` is `Base.active_manifest` of that file, or `nothing` when Pkg has
-no lock yet. `env_dir` is the directory of `manifest`, or `project_dir` when
-there is no lock. That is the tree `setup --rsync` sends.
+`project` is a directory or a project file. Names are `Base.project_names`
+(`JuliaProject.toml`, then `Project.toml`). A directory is not searched
+upward; a workspace member stays that member's file.
+"""
+function _located_project_file(project::AbstractString)::Union{Nothing, String}
+    raw = canonical_local_path(project)
+    if isfile(raw) && basename(raw) in Base.project_names
+        return raw
+    end
+    isdir(raw) || return nothing
+    located = Base.locate_project_file(raw)
+    return located isa String ? String(located) : nothing
+end
+
+"""
+    manifest_path(project::AbstractString) -> Union{Nothing,String}
+
+Absolute path of the Manifest file Base would use for `project`, or
+`nothing` when that lookup finds no file.
+
+`project` is a directory or a project file (`JuliaProject.toml` or
+`Project.toml`). The file is whatever `Base.project_file_manifest_path`
+returns: the workspace Manifest, an explicit `manifest` entry, then the
+first existing name in `Base.manifest_names` (`JuliaManifest-v*`,
+`Manifest-v*`, `JuliaManifest.toml`, `Manifest.toml`).
+
+DistSSHQueue `submit` should call this so a versioned Manifest counts as
+present. A directory with no project file returns `nothing`.
+"""
+function manifest_path(project::AbstractString)::Union{Nothing, String}
+    project_file = _located_project_file(project)
+    project_file isa String || return nothing
+    found = Base.project_file_manifest_path(project_file)
+    found isa String || return nothing
+    return canonical_local_path(found)
+end
+
+"""
+Pkg environment for `project` (a directory, or a project-file path).
+
+`project_dir` is the directory of the project file Base would use
+(`--project`). `manifest` is `manifest_path`, or `nothing` when
+that lookup finds no file. `env_dir` is the directory of `manifest`, or
+`project_dir` when there is no lock. That is the tree `setup --rsync` sends.
 
 Queue: `default_queue_env` (no dedicated `~/.distsshqueue/env`) should return
 `env_dir`. `stage_job_tree!` should rsync `env_dir`, and set
@@ -92,19 +132,13 @@ tree). Serve `--queue-env` is `env_dir`. A job's `--project` stays
 only on the member.
 """
 function resolve_pkg_env(project::AbstractString)
-    project_dir = canonical_local_path(project)
-    if isfile(project_dir) && basename(project_dir) == "Project.toml"
-        project_dir = canonical_local_path(dirname(project_dir))
-    end
-    project_file = joinpath(project_dir, "Project.toml")
-    if !isfile(project_file)
+    raw = canonical_local_path(project)
+    project_file = _located_project_file(raw)
+    project_dir = project_file isa String ? canonical_local_path(dirname(project_file)) : raw
+    manifest = manifest_path(raw)
+    if manifest === nothing
         return (project_dir = project_dir, env_dir = project_dir, manifest = nothing)
     end
-    found = Base.active_manifest(project_file)
-    if found === nothing
-        return (project_dir = project_dir, env_dir = project_dir, manifest = nothing)
-    end
-    manifest = canonical_local_path(String(found))
     env_dir = canonical_local_path(dirname(manifest))
     return (project_dir = project_dir, env_dir = env_dir, manifest = manifest)
 end

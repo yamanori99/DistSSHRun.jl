@@ -236,9 +236,21 @@ end
 # signal (Julia 1.13.2, local `remotecall`). On Julia 1.14, with
 # `exit_on_sigint(false)`, `sleep` throws `Base.CancellationRequest`, and a
 # later wait throws again while that request stays raised. Wait so user code
-# can catch that exception and save state before `rmprocs`.
-# `DistSSHBase.is_sigint` is `public` and not exported. Not a public setting.
+# can `catch` it and save a small amount of state before `rmprocs`.
+# Not a public setting. `DistSSHBase.is_sigint` is `public` and not exported.
+# The window is fixed. A write here is best-effort. Large state belongs in
+# an incremental checkpoint (temporary file, then rename) during the run.
 const _INTERRUPT_SETTLE_S = 3.0
+
+# Let the heartbeat task leave before `rmprocs`. Not a public setting.
+const _HEARTBEAT_STOP_S = 0.5
+
+# `rmprocs` `waitfor` when a drive run stops. Not a public setting.
+const _RMPROCS_WAITFOR_S = 5.0
+
+# Wall clock for parallel `kill -INT` ssh. The same number as SSH
+# `ConnectTimeout`, so a slow handshake cannot outlive that budget.
+const _INTERRUPT_SSH_PHASE_S = Float64(DistSSHBase._SSH_CONNECT_TIMEOUT_S)
 
 """
     _group_interrupt_targets(rows) -> (local_pids, ssh, fallback)
@@ -289,23 +301,28 @@ function _interrupt_endpoint(pid::Integer)
     return nothing
 end
 
-"""One `kill -INT` for every OS pid on `host`. Connection failure is logged, not thrown."""
-function _signal_ssh_interrupt(host::String, ospids::Vector{Int})
-    isempty(ospids) && return nothing
-    # `*` of strings is `Union{String, AnnotatedString}`. `String` keeps the
-    # shell text concrete for `_host_sync_remote_shell_cmd(::String, ::String)`.
-    inner = String("kill -INT " * join(string.(ospids), " ") * " || true")
-    try
-        run(
-            pipeline(
-                _host_sync_remote_shell_cmd(host, inner);
-                stdout = devnull,
-                stderr = devnull,
-            )
-        )
-    catch e
-        _rethrow_missing_host_tool(e)
-        @error "Error sending a Ctrl-C to workers on $host"
+"""Remote `kill -INT` text for julia pids on one host.
+
+`ospids` are `WorkerConfig.ospid`. The worker reports `getpid()` in
+`JoinCompleteMsg` after `SSHManager` `exec`s julia, so the signal names
+that julia process, not sshd or the login shell.
+"""
+function _interrupt_kill_shell(ospids::Vector{Int})::String
+    return String("kill -INT " * join(string.(ospids), " ") * " || true")
+end
+
+"""One bounded `kill -INT` ssh per host. A failure is logged, not thrown."""
+function _interrupt_ssh_phase!(ssh::AbstractDict{<:AbstractString, <:AbstractVector{Int}})
+    pairs = Pair{String, String}[]
+    for (host, ospids) in ssh
+        isempty(ospids) && continue
+        push!(pairs, String(host) => _interrupt_kill_shell(Int[Int(pid) for pid in ospids]))
+    end
+    isempty(pairs) && return nothing
+    results = _run_ssh_hosts!(pairs, _INTERRUPT_SSH_PHASE_S)
+    for result in results
+        _ssh_phase_exit_code(result) == 0 && continue
+        @error "Error sending a Ctrl-C to workers on $(result.host)"
     end
     return nothing
 end
@@ -315,30 +332,35 @@ Send SIGINT to `pids`, one SSH connection per host, then wait
 [`_INTERRUPT_SETTLE_S`](@ref).
 
 Local workers and any worker whose OS pid is not known use
-`Distributed.interrupt`. `Distributed.SSHManager` otherwise opens one `ssh`
-per worker (`kill -2`), which `sshd` `MaxStartups` drops once a host has
-many workers.
+`Distributed.interrupt`. SSH workers on one host share one `kill -INT`.
+That ssh is bounded by [`_INTERRUPT_SSH_PHASE_S`](@ref) and capped at
+`_SSH_PHASE_CONCURRENCY` so a slow host cannot hold the rest open.
 """
 function _interrupt_workers_grouped(pids)
     rows = [(Int(pid), _interrupt_endpoint(pid)) for pid in pids]
     groups = _group_interrupt_targets(rows)
-    @sync begin
-        if !isempty(groups.local_pids)
-            @async try
-                interrupt(groups.local_pids)
+    local_tasks = Task[]
+    if !isempty(groups.local_pids)
+        local_pids = groups.local_pids
+        push!(
+            local_tasks, @async try
+                interrupt(local_pids)
             catch
             end
-        end
-        if !isempty(groups.fallback)
-            @async try
-                interrupt(groups.fallback)
-            catch
-            end
-        end
-        for (host, ospids) in groups.ssh
-            @async _signal_ssh_interrupt(host, ospids)
-        end
+        )
     end
+    if !isempty(groups.fallback)
+        fallback = groups.fallback
+        push!(
+            local_tasks, @async try
+                interrupt(fallback)
+            catch
+            end
+        )
+    end
+    _interrupt_ssh_phase!(groups.ssh)
+    isempty(local_tasks) ||
+        timedwait(() -> all(istaskdone, local_tasks), 1.0; pollint = 0.05)
     isempty(pids) || sleep(_INTERRUPT_SETTLE_S)
     return nothing
 end
@@ -367,14 +389,14 @@ function register_worker_cleanup!(successful_hosts::Vector{String})
         if nprocs() > 1
             try
                 @everywhere stop_heartbeat_monitor()
-                sleep(0.5)
+                sleep(_HEARTBEAT_STOP_S)
             catch
             end
         end
 
         if nprocs() > 1
             try
-                rmprocs(workers(); waitfor = 5.0)
+                rmprocs(workers(); waitfor = _RMPROCS_WAITFOR_S)
             catch
             end
         end

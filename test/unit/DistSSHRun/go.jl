@@ -188,6 +188,24 @@ using Dates
         @test_throws ArgumentError DistSSHRun._go_resolve_julia("auto"; host = "no-such-host.invalid")
     end
 
+    @testset "a project file with no Manifest is refused" begin
+        _with_tempdir() do proj
+            write(joinpath(proj, "Project.toml"), "name = \"GoBare\"\n")
+            script = joinpath(proj, "job.jl")
+            write(script, "true\n")
+            err = try
+                DistSSHRun.go!(script, ["parent:1"]; project = proj, quiet = true, yes = true)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("No Manifest for ", err.msg)
+            @test occursin("Pkg.resolve()", err.msg)
+            @test !occursin("--help", err.msg)
+        end
+    end
+
     @testset "script not found surfaces" begin
         _with_tempdir() do tmp
             missing = joinpath(tmp, "demos", "with_kit", "rho_sweep.jl")
@@ -340,6 +358,7 @@ using Dates
     @testset "quiet suppresses Log file on stdout" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"GoQuietLog\"\n")
+            write(joinpath(proj, "Manifest.toml"), "# lock\n")
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
             with_kit_verbosity(:verbose) do

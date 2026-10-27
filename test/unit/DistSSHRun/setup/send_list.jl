@@ -599,6 +599,10 @@ using Test
         )
         @test Base.ispublic(DistSSHRun, :rsync_send_list)
         @test !Base.isexported(DistSSHRun, :rsync_send_list)
+        @test Base.ispublic(DistSSHRun, :manifest_path)
+        @test !Base.isexported(DistSSHRun, :manifest_path)
+        @test Base.ispublic(DistSSHRun.DistSSHBase, :manifest_path)
+        @test !Base.isexported(DistSSHRun.DistSSHBase, :manifest_path)
     end
 
     @testset "a newline in a path is an error" begin

@@ -2,6 +2,10 @@
 
 # SSH configuration
 
+# Default SSH `ConnectTimeout` seconds. Callers pass this into
+# `wait_seconds`; it is not read from the environment here.
+const _SSH_CONNECT_TIMEOUT_S = 10
+
 # Whole seconds for an OpenSSH option. Non-positive stays `default`. A
 # positive value is at least 1.
 function _ssh_whole_seconds(name::Symbol, default::Int)::Int
@@ -18,7 +22,7 @@ function build_ssh_opts(; request_tty::Bool = false)
         if !request_tty
             push!(opts, "-o", "RequestTTY=no")
         end
-        connect = _ssh_whole_seconds(:ssh_connect, 10)
+        connect = _ssh_whole_seconds(:ssh_connect, _SSH_CONNECT_TIMEOUT_S)
         # Ten probes. The gap is the silent budget divided across them, so the
         # default stays Interval=60 and CountMax=10 (about 600s).
         alive_count = 10
