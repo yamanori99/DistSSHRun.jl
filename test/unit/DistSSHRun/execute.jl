@@ -790,6 +790,7 @@ using Test
     @testset ":go dispatch" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"ExecuteGo\"\n")
+            write(joinpath(proj, "Manifest.toml"), "# lock\n")
             script = joinpath(proj, "job.jl")
             write(
                 script, """
@@ -819,6 +820,7 @@ using Test
     @testset ":go detached" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"ExecuteGoDetached\"\n")
+            write(joinpath(proj, "Manifest.toml"), "# lock\n")
             script = joinpath(proj, "job.jl")
             write(
                 script, """
@@ -887,6 +889,7 @@ using Test
     @testset ":go detached job_id" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"ExecuteGoJobId\"\n")
+            write(joinpath(proj, "Manifest.toml"), "# lock\n")
             script = joinpath(proj, "job.jl")
             ran = joinpath(proj, "RAN")
             write(
@@ -930,6 +933,7 @@ using Test
     @testset ":go detached default stdio files" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"ExecuteGoStdio\"\n")
+            write(joinpath(proj, "Manifest.toml"), "# lock\n")
             script = joinpath(proj, "job.jl")
             write(
                 script, """
@@ -978,6 +982,7 @@ using Test
     @testset "wait timeout hung" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"WaitHung\"\n")
+            write(joinpath(proj, "Manifest.toml"), "# lock\n")
             script = joinpath(proj, "job.jl")
             write(
                 script, """
@@ -1008,6 +1013,7 @@ using Test
     @testset "terminate! detached go" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"TerminateGo\"\n")
+            write(joinpath(proj, "Manifest.toml"), "# lock\n")
             script = joinpath(proj, "job.jl")
             write(
                 script, """
@@ -1041,6 +1047,7 @@ using Test
     @testset "terminate! detached ride" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"TerminateRide\"\n")
+            write(joinpath(proj, "Manifest.toml"), "# lock\n")
             script = joinpath(proj, "job.jl")
             write(
                 script, """

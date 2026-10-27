@@ -409,6 +409,7 @@ function instantiate_remotes(
         project::AbstractString;
         path_anchor::AbstractString = project,
     )::NamedTuple
+    ensure_manifest_ships!(project)
     return _pkg_e_on_remotes(
         hosts, julia_path, remote_path, project;
         path_anchor = path_anchor,

@@ -132,6 +132,7 @@ using Test
         # setup correctly refuses to ship.
         smoke_project = mktempdir()
         write(joinpath(smoke_project, "Project.toml"), "name = \"RsyncSmoke\"\n")
+        write(joinpath(smoke_project, "Manifest.toml"), "# lock\n")
         write(joinpath(smoke_project, "smoke.jl"), "smoke = 1\n")
         withenv("DISTSSHKIT_YES" => nothing) do
             prev_ni = DistSSHRun.kit_noninteractive()

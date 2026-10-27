@@ -49,23 +49,28 @@ function go_main()::Cint
     end
     yes = parsed.cli_session.yes || kit_noninteractive()
     kw = execute_kwargs_from_parsed(parsed; kind = :go)
-    result = go!(
-        parsed.script_path,
-        host_tokens(parsed; kind = :go);
-        project = project_root,
-        quiet = kw[:quiet],
-        verbosity = kw[:verbosity],
-        yes = yes,
-        sync = kw[:sync],
-        args = kw[:args],
-        path_anchor = path_anchor,
-        output_dir = kw[:output_dir],
-        hosts_file = nothing,
-        julia = kw[:julia],
-        repeat = get(kw, :repeat, nothing),
-        hint_surface = :cli,
-        original_args = original_args,
-    )
+    result = try
+        go!(
+            parsed.script_path,
+            host_tokens(parsed; kind = :go);
+            project = project_root,
+            quiet = kw[:quiet],
+            verbosity = kw[:verbosity],
+            yes = yes,
+            sync = kw[:sync],
+            args = kw[:args],
+            path_anchor = path_anchor,
+            output_dir = kw[:output_dir],
+            hosts_file = nothing,
+            julia = kw[:julia],
+            repeat = get(kw, :repeat, nothing),
+            hint_surface = :cli,
+            original_args = original_args,
+        )
+    catch e
+        DistSSHRun._report_manifest_refusal(e) || rethrow()
+        return Cint(1)
+    end
     report_go_errors(result)
     return result.ok ? 0 : 1
 end

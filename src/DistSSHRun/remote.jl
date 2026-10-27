@@ -382,8 +382,13 @@ function _manifest_at_head_problems(
     return String[]
 end
 
-function _ensure_manifest_at_head!(work_tree::AbstractString, location::AbstractString)
+function _ensure_manifest_at_head!(
+        work_tree::AbstractString,
+        location::AbstractString;
+        strict::Bool = false,
+    )
     for msg in _manifest_at_head_problems(work_tree, location)
+        strict && throw(ArgumentError(msg))
         print_warn("Warning: $msg $_SHIP_ERROR_SOON\n")
     end
     return nothing
@@ -393,17 +398,22 @@ end
 Throw when the lock Pkg reads, or a `[sources]` path, is outside the git
 work tree of `project`.
 
-No Manifest is not an error. No git work tree is not an error. A `url`
-source is fetched on the worker. Clone and git sync cannot carry a lock
-outside the repository, or a path source that is not in `HEAD`
-(including a committed symlink whose target would not arrive).
+A project file with no Manifest is an error. A directory with no project
+file is not. No git work tree is not an error. A Manifest that `HEAD` would
+not send (missing commit, untracked, or dirty) is an error. A `url` source
+is fetched on the worker. Clone and git sync cannot carry a lock outside
+the repository, or a path source that is not in `HEAD` (including a
+committed symlink whose target would not arrive). Ignored or untracked
+files under a path source still warn.
 """
 function ensure_manifest_in_git_worktree!(project::AbstractString)
     env = resolve_pkg_env(project)
     top = git_work_tree(env.project_dir)
     top isa String || return nothing
     manifest = env.manifest
-    if manifest isa String
+    if !(manifest isa String)
+        _require_manifest!(project)
+    else
         location = canonical_local_path(manifest)
         # The directory Pkg names, not the symlink target. A link outside the
         # work tree that points at a lock inside it is still not in the clone.
@@ -418,10 +428,10 @@ function ensure_manifest_in_git_worktree!(project::AbstractString)
                 "Manifest $location points at $target, outside the git work tree ($top). The lock would not reach a clone or git sync.",
             ),
         )
-        _ensure_manifest_at_head!(top, location)
+        _ensure_manifest_at_head!(top, location; strict = true)
         # Symlink bytes reach a clone; the lock workers read is the target.
         if islink(manifest)
-            _ensure_manifest_at_head!(top, target)
+            _ensure_manifest_at_head!(top, target; strict = true)
         end
     end
     _ensure_path_sources_in_tree!(env, top; git = true)

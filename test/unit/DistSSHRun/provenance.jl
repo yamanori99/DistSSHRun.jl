@@ -302,6 +302,7 @@ end
                 @test haskey(prov["machine"]["parent"], "hostname")
                 @test haskey(prov["machine"]["parent"], "blas")
                 @test !haskey(prov, "source")
+                write(joinpath(tmp, "Project.toml"), "name = \"T\"\n")
                 write(
                     joinpath(tmp, "Manifest.toml"),
                     "julia_version = \"1.13.2\"\nmanifest_format = \"2.0\"\n",
@@ -311,7 +312,6 @@ end
                     read(joinpath(tmp, "Manifest.toml")),
                 )
                 @test with_manifest["project"]["julia_version"] == "1.13.2"
-                write(joinpath(tmp, "Project.toml"), "name = \"T\"\n")
                 versioned = joinpath(tmp, "Manifest-v$(VERSION.major).$(VERSION.minor).toml")
                 write(versioned, "julia_version = \"9.9.9\"\n")
                 picked = DistSSHRun.assemble_provenance(tmp)
