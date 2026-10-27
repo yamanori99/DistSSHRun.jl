@@ -99,6 +99,8 @@ end
         if !_distsshrun_short_skip("unit/DistSSHRun/setup/checks.jl")
             include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "checks.jl"))
         end
+        _runtest_announce("unit/DistSSHRun/setup/instantiate.jl")
+        include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "instantiate.jl"))
         _runtest_announce("unit/DistSSHRun/setup/hosts.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "hosts.jl"))
         _runtest_announce("unit/DistSSHRun/setup/git.jl")

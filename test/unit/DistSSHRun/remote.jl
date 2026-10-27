@@ -66,15 +66,32 @@ end
     @testset "compat remote git shells" begin
         tilde = "~/App.jl"
         abs = "/opt/App.jl"
-        pq_abs = DistSSHRun._remote_shell_path_word(abs)
-        @test DistSSHRun._git_pull_remote_inner(tilde) == "cd ~/'App.jl' && git pull"
-        @test DistSSHRun._git_pull_remote_inner(abs) == "cd $pq_abs && git pull"
+        sha = "0123456789abcdef0123456789abcdef01234567"
+        hardened = [
+            "git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
+        ]
+        @test DistSSHRun._remote_git_shell(tilde, ["checkout", "--detach", sha]) ==
+            "cd ~/'App.jl' && " * DistSSHRun.DistSSHBase._remote_argv_sh(
+            vcat(hardened, ["checkout", "--detach", sha]),
+        )
+        @test DistSSHRun._remote_git_shell(abs, ["checkout", "--detach", sha]) ==
+            DistSSHRun.DistSSHBase._remote_argv_sh(
+            vcat(hardened, ["-C", abs, "checkout", "--detach", sha]),
+        )
+        nasty = "/tmp/a'b \$(echo pwned)"
+        shell = DistSSHRun._remote_git_shell(
+            nasty, ["status", "--porcelain", "-z", "--untracked-files=normal"],
+        )
+        @test occursin(DistSSHRun.DistSSHBase._remote_sh_quote(nasty), shell)
+        @test occursin("core.hooksPath=/dev/null", shell)
+        @test occursin("core.fsmonitor=false", shell)
+        @test !occursin("safe.directory", shell)
     end
 
     @testset "run_on_host remote sh" begin
         withenv("PATH" => "/nonexistent-distsshkit-path") do
             @test_throws ArgumentError DistSSHRun._remote_ssh_ok("no-such-host.invalid")
-            @test_throws ArgumentError DistSSHRun.git_pull_remote_host!("x", ".")
+            @test_throws ArgumentError DistSSHRun._remote_git_run("x", "/tmp/App.jl", ["status"])
         end
         if Sys.which("ssh") !== nothing
             @test !DistSSHRun._remote_ssh_ok("no-such-host.invalid")

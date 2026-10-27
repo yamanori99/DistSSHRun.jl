@@ -1,14 +1,14 @@
 using Test
 
-# Oracle: local `git` CLI for push/pull, and `git_sync` stopping before remotes
-# when local push/pull fails. Remote `git pull` uses the setup SSH double. Unreachable
-# hosts only. Real remote git is SSH E2E.
+# Oracle: local `git` CLI for the origin push, and `git_sync` stopping before
+# remotes when that push fails or the tree is dirty. Remote checkout is a local
+# `ssh` shim that speaks `receive-pack` and runs the remote shell. Unreachable
+# hosts only for the real ssh failure. Docker SSH E2E covers a real remote.
 
 @testset "setup git" begin
     withenv("PATH" => "/nonexistent-distsshkit-path") do
         @test_throws ArgumentError DistSSHRun.git_push_project!(".")
-        @test_throws ArgumentError DistSSHRun.git_pull_local_project!(".")
-        @test_throws ArgumentError DistSSHRun.git_pull_remote_host!("x", ".")
+        @test_throws ArgumentError DistSSHRun._kit_git_ssh_command()
     end
     function _git_ident!(dir)
         run(pipeline(`git -C $dir config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
@@ -66,14 +66,13 @@ using Test
 
     Sys.which("git") === nothing && return
 
-    @testset "push / local pull" begin
+    @testset "push to origin" begin
         _with_tempdir() do tmp
             work = joinpath(tmp, "work")
             mkpath(work)
             _init_commit!(work)
             @test DistSSHRun._git_remote_url(work) == "<repo_url>"
             @test !DistSSHRun.git_push_project!(work)
-            @test !DistSSHRun.git_pull_local_project!(work)
 
             bare = joinpath(tmp, "origin.git")
             run(pipeline(`git init -q --bare $bare`; stdout = devnull, stderr = devnull))
@@ -85,8 +84,22 @@ using Test
             end
             run(pipeline(`git -C $work push -q -u origin HEAD`; stdout = devnull, stderr = devnull))
             @test DistSSHRun.git_push_project!(work)
-            @test DistSSHRun.git_pull_local_project!(work)
         end
+    end
+
+    @testset "SHA and path helpers" begin
+        @test DistSSHRun._git_sha_valid("0123456789abcdef0123456789abcdef01234567")
+        @test DistSSHRun._git_sha_valid("a"^64)
+        @test !DistSSHRun._git_sha_valid("A"^40)
+        @test !DistSSHRun._git_sha_valid("deadbeef")
+        @test !DistSSHRun._git_sha_valid("0123456789abcdef0123456789abcdef01234567\n")
+        encoded = DistSSHRun._percent_encode_git_path("/tmp/a b")
+        @test encoded == "/tmp/a%20b"
+        @test DistSSHRun._git_ssh_repo_url("dev@h", "/tmp/a b") == "ssh://dev@h/tmp/a%20b"
+        @test DistSSHRun._missing_sha_message("h", "abc", true) ==
+            "h is a shallow clone and does not contain abc. Refusing to unshallow it. See help setup."
+        @test occursin("does not contain abc", DistSSHRun._missing_sha_message("h", "abc", false))
+        @test !occursin("unshallow", DistSSHRun._missing_sha_message("h", "abc", false))
     end
 
     @testset "git_sync stops on local failure" begin
@@ -98,7 +111,7 @@ using Test
             out, raw = _capture_stdio() do _, _
                 DistSSHRun.git_sync_project_to_hosts!(
                     ["192.0.2.1"], work, "~/App.jl";
-                    do_push = true, do_pull = true, do_local_pull = false,
+                    do_push = true, do_pull = true,
                 )
             end
             @test !raw.ok
@@ -106,15 +119,19 @@ using Test
             @test occursin("Push failed.", out)
             @test occursin("fatal:", out)
 
-            out_pull, raw_pull = _capture_stdio() do _, _
+            write(joinpath(work, "dirty.txt"), "x\n")
+            out_dirty, raw_dirty = _capture_stdio() do _, _
                 DistSSHRun.git_sync_project_to_hosts!(
                     ["192.0.2.1"], work, "~/App.jl";
-                    do_push = false, do_pull = true, do_local_pull = true,
+                    do_push = false, do_pull = true,
                 )
             end
-            @test !raw_pull.ok
-            @test isempty(raw_pull.host_results)
-            @test occursin("no tracking information", out_pull)
+            @test !raw_dirty.ok
+            @test isempty(raw_dirty.host_results)
+            @test occursin("dirty", out_dirty)
+            @test occursin("not sent as a patch", out_dirty)
+            @test occursin("help setup", out_dirty)
+            @test !occursin("--help", out_dirty)
         end
     end
 
@@ -144,7 +161,7 @@ using Test
                                     seekstart(stdin_io)
                                     DistSSHRun.git_sync_project_to_hosts!(
                                         ["host1"], work, "~/App.jl";
-                                        do_push = true, do_pull = true, do_local_pull = false,
+                                        do_push = true, do_pull = true,
                                     )
                                 end
                                 @test !raw.ok
@@ -153,6 +170,7 @@ using Test
                                 @test occursin("Cancelled.", out)
                                 @test occursin("Proceed?", out)
                                 @test occursin("git push", out)
+                                @test occursin("detached HEAD", out)
                                 # #374: bar is suspended while stdin is read, then released.
                                 @test nsus >= 1
                                 @test DistSSHRun.KIT_PROGRESS_SUSPEND[] == 0
@@ -162,7 +180,7 @@ using Test
                     _, raw_skip = _capture_stdio() do _, _
                         DistSSHRun.git_sync_project_to_hosts!(
                             ["192.0.2.1"], work, "~/App.jl";
-                            do_push = true, do_pull = false, do_local_pull = false, confirm = false,
+                            do_push = true, do_pull = false, confirm = false,
                         )
                     end
                     @test !raw_skip.ok
@@ -174,100 +192,144 @@ using Test
         end
     end
 
-    @testset "remote pull: unreachable host" begin
+    @testset "remote checkout: unreachable host" begin
         Sys.which("ssh") === nothing && return
         _apply_quiet_setup_session!()
         withenv("DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes -o ConnectTimeout=1") do
-            @test !DistSSHRun.git_pull_remote_host!("192.0.2.1", "~/App.jl")
             _with_tempdir() do tmp
                 work = joinpath(tmp, "work")
                 mkpath(work)
                 _init_commit!(work)
                 raw = DistSSHRun.git_sync_project_to_hosts!(
                     ["192.0.2.1", "192.0.2.2"], work, "~/App.jl";
-                    do_push = false, do_pull = true, do_local_pull = false,
+                    do_push = false, do_pull = true, confirm = false,
                 )
                 @test !raw.ok
                 @test length(raw.host_results) == 1
                 @test raw.host_results[1].host == "192.0.2.1"
                 @test !raw.host_results[1].ok
+                @test occursin("help setup", raw.host_results[1].message)
             end
         end
     end
 
-    @testset "remote pull detail and HEAD check" begin
+    # Local stand-in for ssh: `git push` speaks receive-pack; other commands run
+    # the remote shell, which uses the absolute path of the stand-in repo.
+    function _write_git_ssh_shim!(dir)
+        path = joinpath(dir, "ssh")
+        write(
+            path,
+            raw"""#!/bin/sh
+            skip=0
+            host=
+            cmd=
+            for a in "$@"; do
+              if [ "$skip" = 1 ]; then
+                skip=0
+                continue
+              fi
+              case "$a" in
+                -o|-p|-F|-i|-l|-b|-c|-D|-E|-J|-L|-R|-S|-W|-w)
+                  skip=1
+                  continue
+                  ;;
+                --)
+                  continue
+                  ;;
+                -*)
+                  continue
+                  ;;
+              esac
+              if [ -z "$host" ]; then
+                host=$a
+              else
+                cmd=$a
+              fi
+            done
+            case "$cmd" in
+              git-receive-pack\ *|git\ receive-pack\ *)
+                path=$(printf '%s\n' "$cmd" | sed -e "s/^[^ ]* //" -e "s/^'//" -e "s/'$//")
+                exec git receive-pack "$path"
+                ;;
+              "")
+                exit 0
+                ;;
+              *)
+                exec sh -c "$cmd"
+                ;;
+            esac
+            """,
+        )
+        chmod(path, 0o755)
+        return path
+    end
+
+    @testset "checkout detaches at the SHA" begin
         _apply_quiet_setup_session!()
-        _with_tempdir() do state
-            _with_tempdir() do tmp
-                work = joinpath(tmp, "work")
-                mkpath(work)
-                _init_commit!(work)
-                hash = strip(read(`git -C $work rev-parse HEAD`, String))
-                branch = strip(read(`git -C $work rev-parse --abbrev-ref HEAD`, String))
-                env = merge(
-                    _fake_setup_remote_env(state),
-                    Dict(
-                        "DISTSSHKIT_TEST_GIT_HEAD" => hash,
-                        "DISTSSHKIT_TEST_GIT_BRANCH" => branch,
-                    ),
-                )
-                withenv(env...) do
-                    out, raw = _capture_stdio() do _, _
-                        DistSSHRun.git_sync_project_to_hosts!(
-                            ["host1"], work, "/tmp/App.jl";
-                            do_push = false, do_pull = true, do_local_pull = false, confirm = false,
-                        )
-                    end
-                    @test raw.ok
-                    @test raw.host_results[1].ok
-                    @test !occursin("Warning", out)
+        _with_tempdir() do tmp
+            bindir = joinpath(tmp, "bin")
+            mkdir(bindir)
+            _write_git_ssh_shim!(bindir)
+            work = joinpath(tmp, "work")
+            remote = joinpath(tmp, "remote")
+            mkpath(work)
+            mkpath(remote)
+            _init_commit!(work)
+            run(pipeline(`git init -q $remote`; stdout = devnull, stderr = devnull))
+            hook = joinpath(remote, ".git", "hooks", "post-checkout")
+            mkpath(dirname(hook))
+            write(hook, "#!/bin/sh\necho ran > \"$(joinpath(remote, "hook-ran"))\"\n")
+            chmod(hook, 0o755)
+            sha = strip(read(`git -C $work rev-parse HEAD`, String))
+            path0 = get(ENV, "PATH", "")
+            withenv(
+                "PATH" => bindir * ":" * path0,
+                "DISTSSHKIT_TEST" => nothing,
+                "DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes",
+            ) do
+                out, raw = _capture_stdio() do _, _
+                    DistSSHRun.git_sync_project_to_hosts!(
+                        ["dest"], work, remote;
+                        do_push = false, do_pull = true, confirm = false,
+                    )
                 end
-                bad = merge(
-                    env, Dict(
-                        "DISTSSHKIT_TEST_GIT_HEAD" => "deadbeef",
-                        "DISTSSHKIT_TEST_GIT_BRANCH" => "remote-main",
+                @test raw.ok
+                @test raw.host_results[1].ok
+                @test occursin("detached HEAD", raw.host_results[1].message)
+                @test !occursin("Warning", out)
+                @test strip(read(`git -C $remote rev-parse HEAD`, String)) == sha
+                @test strip(read(`git -C $remote rev-parse refs/distssh/$sha`, String)) == sha
+                sym = run(
+                    pipeline(
+                        ignorestatus(`git -C $remote symbolic-ref -q HEAD`);
+                        stdout = devnull, stderr = devnull,
                     )
                 )
-                withenv(bad...) do
-                    out, raw = _capture_stdio() do _, _
-                        DistSSHRun.git_sync_project_to_hosts!(
-                            ["host1", "host2"], work, "/tmp/App.jl";
-                            do_push = false, do_pull = true, do_local_pull = false, confirm = false,
-                        )
-                    end
-                    @test raw.ok
-                    @test length(raw.host_results) == 2
-                    @test raw.host_results[1].ok
-                    @test raw.host_results[2].ok
-                    @test occursin("remote-main", raw.host_results[1].message)
-                    @test occursin(branch, raw.host_results[1].message)
-                    @test occursin("deadbeef", raw.host_results[1].message)
-                    @test occursin("Warning:", out)
-                    @test occursin("will be an error", out)
-                end
-                unread = merge(env, Dict("DISTSSHKIT_TEST_GIT_REV_PARSE_FAIL" => "1"))
-                withenv(unread...) do
-                    out, raw = _capture_stdio() do _, _
-                        DistSSHRun.git_sync_project_to_hosts!(
-                            ["host1"], work, "/tmp/App.jl";
-                            do_push = false, do_pull = true, do_local_pull = false, confirm = false,
-                        )
-                    end
-                    @test raw.ok
-                    @test raw.host_results[1].ok
-                    @test occursin("could not read git HEAD", raw.host_results[1].message)
-                    @test !occursin("HEAD mismatch", out)
-                    @test !occursin("will be an error", out)
-                end
-                fail_pull = merge(env, Dict("DISTSSHKIT_TEST_GIT_PULL_FAIL" => "1"))
-                withenv(fail_pull...) do
-                    raw = DistSSHRun.git_sync_project_to_hosts!(
-                        ["host1"], work, "/tmp/App.jl";
-                        do_push = false, do_pull = true, do_local_pull = false, confirm = false,
+                @test sym.exitcode != 0
+                @test !isfile(joinpath(remote, "hook-ran"))
+                @test read(joinpath(remote, "f.txt"), String) == "hi\n"
+
+                write(joinpath(remote, "extra.txt"), "shadow\n")
+                write(joinpath(work, "f.txt"), "next\n")
+                run(pipeline(`git -C $work add f.txt`; stdout = devnull, stderr = devnull))
+                run(
+                    pipeline(
+                        `git -C $work -c commit.gpgsign=false commit -q -m next`;
+                        stdout = devnull, stderr = devnull,
                     )
-                    @test !raw.ok
-                    @test occursin("not a git repository", raw.host_results[1].message)
+                )
+                sha2 = strip(read(`git -C $work rev-parse HEAD`, String))
+                out2, raw2 = _capture_stdio() do _, _
+                    DistSSHRun.git_sync_project_to_hosts!(
+                        ["dest"], work, remote;
+                        do_push = false, do_pull = true, confirm = false,
+                    )
                 end
+                @test !raw2.ok
+                @test occursin("untracked or uncommitted", out2)
+                @test occursin("help setup", out2)
+                @test strip(read(`git -C $remote rev-parse HEAD`, String)) == sha
+                @test sha2 != sha
             end
         end
     end
