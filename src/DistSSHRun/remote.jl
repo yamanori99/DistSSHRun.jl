@@ -398,24 +398,35 @@ function _collect_rel_is_git(rel::AbstractString)::Bool
 end
 
 """
-Warn when `collect_root` is `project_root` or an ancestor of it.
+Sentence when `collect_root` is `project_root` or an ancestor of it.
 
-A merge into that directory would overwrite source files, including `.git/`.
-This will be an error.
+`nothing` when the root sits inside the project. A merge into the project
+or a parent of it would overwrite source files, including `.git/`.
 """
-function _warn_collect_root_overlap(collect_root::AbstractString, project_root::AbstractString)
+function _collect_root_overlap_message(
+        collect_root::AbstractString,
+        project_root::AbstractString,
+    )::Union{Nothing, String}
     # `abspath("dir/.")` keeps a trailing slash, so compare without it.
     dest = rstrip(canonical_local_path(collect_root), '/')
     proj = rstrip(canonical_local_path(project_root), '/')
     isempty(dest) && (dest = "/")
     isempty(proj) && (proj = "/")
     (dest == proj || startswith(proj, dest * "/")) || return nothing
-    print_warn(
-        "Warning: collect root $dest is the project root or an ancestor of it ($proj). " *
-            "That would overwrite source files. Point DISTRIBUTED_COLLECT_DIRS, DISTRIBUTED_OUTPUT_DIR, or collect! at a result directory inside the project. " *
-            "$_SHIP_ERROR_SOON\n",
-    )
-    return nothing
+    return "collect root $dest is the project root or an ancestor of it ($proj). " *
+        "That would overwrite source files. Point DISTRIBUTED_COLLECT_DIRS, DISTRIBUTED_OUTPUT_DIR, or collect! at a result directory inside the project."
+end
+
+"""Print the collect-root error and return whether collection must stop."""
+function _error_collect_root_overlap(
+        collect_root::AbstractString,
+        project_root::AbstractString,
+    )::Bool
+    msg = _collect_root_overlap_message(collect_root, project_root)
+    msg === nothing && return false
+    print_err("Error: "; bold = true)
+    println_fatal(msg)
+    return true
 end
 
 """True when writing `rel` under `local_root` would leave that root.

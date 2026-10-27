@@ -384,7 +384,14 @@ function _run_drive_parsed_locked!(
 
         ENV["DISTRIBUTED_RUNNER"] = "1"
         skip_collect = get(ENV, "DISTRIBUTED_SKIP_COLLECT", "") == "1"
-        sentinel_name = place_drive_sentinels!(successful_hosts, script_dir, skip_collect, project_root)
+        sentinel_placed = place_drive_sentinels!(
+            successful_hosts, script_dir, skip_collect, project_root,
+        )
+        # Overlap is printed inside `place_drive_sentinels!`. Stop before `main`.
+        if sentinel_placed === nothing
+            return 1
+        end
+        sentinel_name = sentinel_placed::String
 
         kit_progress_step!("run")
         run_driver_script!(enable_log, drive_atexit_cleanup)
