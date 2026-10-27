@@ -171,11 +171,23 @@ function parse_julia_version(version_output::AbstractString)::Union{Nothing, Ver
     end
 end
 
+"""One remote argument: quoted `julia_path`, then `--version`.
+
+OpenSSH joins every word after the host into one `\$SHELL -c` string. A path
+with spaces must not be its own SSH argument. A `\$HOME/…` prefix stays
+double-quoted so the remote shell still expands `\$HOME` (`_remote_julia_path_sh`).
+"""
+function _remote_julia_version_remote_command(julia_path::AbstractString)::String
+    return string(_remote_julia_path_sh(julia_path), " --version")
+end
+
 """Stdout of `julia_path --version` on `host`."""
 function _remote_julia_version_output(host::String, julia_path::AbstractString)::String
+    _ensure_remote_posix_shell(host)
+    remote = _remote_julia_version_remote_command(julia_path)
     return read(
         pipeline(
-            _ssh_cmd([ssh_opts()..., _ssh_host_args(host, String(julia_path), "--version")...]);
+            _ssh_cmd([ssh_opts()..., _ssh_host_args(host, remote)...]);
             stderr = devnull,
         ),
         String,
@@ -183,11 +195,13 @@ function _remote_julia_version_output(host::String, julia_path::AbstractString):
 end
 
 """Get the Julia version on a remote host by running `julia_path --version` over SSH.
-Returns `nothing` on any failure (SSH, missing binary, unparseable output)."""
+Returns `nothing` on SSH failure, a missing binary, or unparseable output.
+A non-POSIX remote login shell throws `ArgumentError` (see `help setup`)."""
 function get_remote_julia_version(host::String, julia_path::AbstractString)::Union{Nothing, VersionNumber}
     try
         return parse_julia_version(_remote_julia_version_output(host, julia_path))
-    catch
+    catch e
+        _is_remote_posix_shell_error(e) && rethrow()
         return nothing
     end
 end
@@ -380,6 +394,7 @@ function run_on_host(
     )::Base.Process
     h = String(strip(host))
     isempty(h) && throw(ArgumentError("run_on_host: host must be non-empty"))
+    _ensure_remote_posix_shell(h)
     inner = _run_on_host_remote_sh(argv; julia = julia, detect = detect)
     args = String[ssh_opts(; request_tty = tty)...]
     tty && push!(args, "-t")
@@ -574,6 +589,7 @@ function resolve_remote_abs_path_on_host(host::String, remote_path::AbstractStri
     path = strip(String(remote_path))
     isempty(path) && return nothing
     startswith(path, "/") && return path
+    _ensure_remote_posix_shell(host)
     try
         inner = _remote_abs_path_resolve_shell(path)
         s = strip(read(pipeline(_ssh_cmd([ssh_opts()..., _ssh_host_args(host, inner)...]); stderr = devnull), String))
@@ -606,6 +622,7 @@ Get remote git commit hash via SSH.
 otherwise uses `git -C DIR rev-parse …` (absolute path on the remote, same layout as local).
 """
 function get_remote_git_hash(host::String, remote_repo_dir::AbstractString; short::Union{Nothing, Int} = nothing)::Union{Nothing, String}
+    _ensure_remote_posix_shell(host)
     try
         inner = _remote_git_hash_inner(remote_repo_dir; short = short)
         s = strip(read(pipeline(_ssh_cmd([ssh_opts()..., _ssh_host_args(host, inner)...]); stderr = devnull), String))
@@ -619,6 +636,7 @@ end
 
 """Get total memory (GB) for a remote host via SSH."""
 function get_remote_total_gb(host::String)
+    _ensure_remote_posix_shell(host)
     try
         s = strip(
             read(
@@ -641,6 +659,7 @@ end
 
 """Get CPU core count for a remote host via SSH."""
 function get_remote_nproc(host::String)
+    _ensure_remote_posix_shell(host)
     try
         s = strip(
             read(
@@ -1005,13 +1024,134 @@ function _test_double_julia_argv(script::AbstractString)::Vector{String}
     return [julia, "--startup-file=no", "--compile=min", abspath(script)]
 end
 
-function _host_sync_remote_shell_cmd(host::String, remote_script::String)::Cmd
+# OpenSSH runs `ssh host cmd` as `$SHELL -c` (not a login shell). Checked on
+# the Distributed.jl pin in Julia 1.13.3 (`DISTRIBUTED_SHA1` 661112ef): when
+# `shell=:posix`, `launch_on_machine` wraps the worker in `sh -l -c`. That
+# wrap lives in SSHManager and is not changed here. A POSIX shell prints `ok`
+# for the probe below. fish does not.
+const _POSIX_SHELL_PROBE = "case x in x) echo ok;; esac"
+
+const _REMOTE_POSIX_SHELL_OK = Set{String}()
+const _REMOTE_POSIX_SHELL_LOCK = ReentrantLock()
+
+"""Drop cached POSIX login-shell probes (`host=nothing` → all hosts)."""
+function _clear_remote_posix_shell_cache!(host::Union{Nothing, AbstractString} = nothing)
+    lock(_REMOTE_POSIX_SHELL_LOCK) do
+        if host === nothing
+            empty!(_REMOTE_POSIX_SHELL_OK)
+        else
+            delete!(_REMOTE_POSIX_SHELL_OK, String(strip(host)))
+        end
+    end
+    return nothing
+end
+
+function _remote_posix_shell_cached(host::AbstractString)::Bool
+    h = String(strip(host))
+    return lock(_REMOTE_POSIX_SHELL_LOCK) do
+        return h in _REMOTE_POSIX_SHELL_OK
+    end
+end
+
+function _remote_posix_shell_remember!(host::AbstractString)
+    h = String(strip(host))
+    lock(_REMOTE_POSIX_SHELL_LOCK) do
+        push!(_REMOTE_POSIX_SHELL_OK, h)
+    end
+    return nothing
+end
+
+"""True when the probe exited 0 and stdout is exactly `ok`."""
+function _remote_posix_probe_accepted(code::Integer, stdout::AbstractString)::Bool
+    return Int(code) == 0 && strip(String(stdout)) == "ok"
+end
+
+function _remote_posix_shell_error(host::AbstractString)::String
+    return "remote login shell on $(String(host)) is not POSIX-compatible. " *
+        "ssh runs commands under the user's \$SHELL -c (not a login shell). " *
+        "Distributed's SSHManager wraps workers with sh -l -c and cannot be changed from here. " *
+        "Use sh, bash, dash, or zsh. fish is refused. " *
+        "Run `$(cli_m()) help setup`."
+end
+
+"""True for the one-time remote POSIX shell refusal. Callers rethrow it."""
+function _is_remote_posix_shell_error(e)::Bool
+    return e isa ArgumentError && startswith(e.msg, "remote login shell on ")
+end
+
+"""`ssh -n` (or the setup test double) for one remote script. Does not probe."""
+function _remote_shell_transport_cmd(host::String, remote_script::String)::Cmd
     custom = _test_doubles_on() ? strip(get(ENV, "DISTSSHKIT_TEST_SSH", "")) : ""
     if !isempty(custom)
         return Cmd(vcat(_test_double_julia_argv(custom), [host, remote_script]))
     end
     # `-n`: do not forward kit stdin (juliaup/git must not wait on a TTY pipe).
     return _ssh_cmd(["-n", ssh_opts()..., _ssh_host_args(host, remote_script)...])
+end
+
+"""
+Refuse a non-POSIX remote login shell, once per `host` in this process.
+
+The probe is [`_POSIX_SHELL_PROBE`](@ref) and is not wrapped in `sh -c`.
+SSH exit 255 is not a shell verdict (the command that follows reports it)
+and is not cached. Any other miss on a real `ssh` throws `ArgumentError`.
+
+A `DISTSSHKIT_TEST_SSH` double is not a login shell: exit 0 caches the host,
+and any other exit is left for the command that follows.
+`DISTSSHKIT_TEST_POSIX_SHELL=0` keeps the strict check (the fish double).
+"""
+function _ensure_remote_posix_shell(host::AbstractString)
+    h = String(strip(host))
+    isempty(h) && return nothing
+    _remote_posix_shell_cached(h) && return nothing
+    err_buf = IOBuffer()
+    out_buf = IOBuffer()
+    proc = try
+        run(
+            pipeline(
+                ignorestatus(_remote_shell_transport_cmd(h, _POSIX_SHELL_PROBE));
+                stdout = out_buf,
+                stderr = err_buf,
+            );
+            wait = true,
+        )
+    catch e
+        _rethrow_missing_host_tool(e)
+        rethrow()
+    end
+    code = Int(something(proc.exitcode, 1))
+    # Exit 255 is SSH itself (auth, DNS, timeout), not the login shell.
+    code == 255 && return nothing
+    out = String(take!(out_buf))
+    # `DISTSSHKIT_TEST_SSH` is not a login shell. A zero exit caches the host.
+    # Any other exit is the double's own failure; the command that follows
+    # reports it. `DISTSSHKIT_TEST_POSIX_SHELL=0` is the fish double and stays strict.
+    # That variable is a test double, not a user setting.
+    test_double = _test_doubles_on() && !isempty(strip(get(ENV, "DISTSSHKIT_TEST_SSH", "")))
+    strict = !test_double || strip(get(ENV, "DISTSSHKIT_TEST_POSIX_SHELL", "1")) == "0"
+    if !strict
+        code == 0 && _remote_posix_shell_remember!(h)
+        return nothing
+    end
+    _remote_posix_probe_accepted(code, out) ||
+        throw(ArgumentError(_remote_posix_shell_error(h)))
+    _remote_posix_shell_remember!(h)
+    return nothing
+end
+
+"""
+Setup SSH command for `remote_script` (`DISTSSHKIT_TEST_SSH` when test doubles are on).
+
+`probe=true` (default) runs [`_ensure_remote_posix_shell`](@ref) first.
+`probe=false` only builds the command (callers that inspect argv).
+"""
+function _host_sync_remote_shell_cmd(
+        host::String,
+        remote_script::String;
+        probe::Bool = true,
+    )::Cmd
+    probe && _ensure_remote_posix_shell(host)
+    return _remote_shell_transport_cmd(host, remote_script)
 end
 
 

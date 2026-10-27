@@ -6,6 +6,8 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
+- The remote login shell must be POSIX-compatible (`sh`, `bash`, `dash`, or `zsh`). `ssh` runs a command as `$SHELL -c`, not a login shell. Distributed's SSHManager starts workers with `sh -l -c`, and that wrap cannot be changed. The first command to a host in a process runs `case x in x) echo ok;; esac` and refuses a shell such as fish. The error tells you to run `help setup`. `get_remote_julia_version` and `get_remote_julia_version_full` throw that error instead of returning `nothing`.
+- A Julia path passed to `get_remote_julia_version` is one quoted remote shell word, so a path that contains spaces is not split. A `$HOME/…` prefix still expands on the remote.
 - The first `drive` in a process compiles less. `plan` is no longer inferred inside `run_drive_parsed!`, a drive without `--sync` or `--rsync` does not infer that path, and that call is precompiled. The text and the exit code do not change. Loading the package from a project still needs that project's dependencies instantiated.
 - A CLI script from a checkout with no manifest exits with an instantiate hint and writes nothing under the depot. `julia -m DistSSHRun` and an installed package are unchanged.
 

@@ -26,7 +26,11 @@ pkg> add DistSSHRun
 ```
 
 Julia **1.13+**. Hosts need **`ssh`** and **`rsync`**. Git deploys also
-need **`git`**.
+need **`git`**. The remote login shell (`$SHELL`) must be POSIX-compatible
+(`sh`, `bash`, `dash`, or `zsh`). `ssh host command` runs `$SHELL -c`, not
+a login shell. Distributed's `SSHManager` starts workers with `sh -l -c`,
+and that wrap cannot be changed. A shell such as fish is refused. See
+`julia -m DistSSHRun help setup`.
 
 ## Commands
 
