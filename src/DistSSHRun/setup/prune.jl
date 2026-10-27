@@ -79,9 +79,11 @@ function prune_kit_leaves(
         older_days::Union{Nothing, Integer} = nothing,
         id::Union{Nothing, AbstractString} = nothing,
         skip_setup::Union{Nothing, AbstractString} = nothing,
+        include_local::Bool = true,
     )::NamedTuple
     remote_path = _checked_remote_dest(remote_path)
-    if confirm && !kit_noninteractive()
+    _refuse_depot_target(remote_path)
+    if confirm
         cancelled = with_kit_progress_suspended() do
             print_err("  This will DELETE .distsshkit go/drive/setup/runs leaves.\n")
             println_fatal("  Local project: $project")
@@ -101,17 +103,19 @@ function prune_kit_leaves(
         cancelled && return (; cancelled = true, succeeded = 0, failed = 0, hosts = HostResult[])
     end
 
-    kit_spin!("  localhost: ") do
-        prune_kit_leaf_dirs!(
-            project;
-            older_days = older_days,
-            id = id,
-            skip_setup = skip_setup,
-        )
-        return nothing
+    if include_local
+        kit_spin!("  localhost: ") do
+            prune_kit_leaf_dirs!(
+                project;
+                older_days = older_days,
+                id = id,
+                skip_setup = skip_setup,
+            )
+            return nothing
+        end
+        print_ok("✓")
+        kit_println()
     end
-    print_ok("✓")
-    kit_println()
 
     cmd = _prune_remote_shell(remote_path; older_days = older_days, id = id)
     succeeded = 0
@@ -148,6 +152,7 @@ function _prune_remote_shell(
         id::Union{Nothing, AbstractString} = nothing,
     )::String
     pq = _remote_shell_path_word(remote_path)
+    # `$pq` is its own word, same as delete. Do not paste it into double quotes.
     older = older_days === nothing ? "" : string(Int(older_days))
     idn = id === nothing ? "" : String(id)
     idq = _remote_sh_quote(idn)
@@ -158,11 +163,22 @@ function _prune_remote_shell(
     older=$older_q
     id=$idq
     [ -d "\$root" ] || exit 0
-    _distssh_target=\$(cd "\$root" && pwd -P) || exit 1
-    _distssh_home=\$(cd ~ && pwd -P) || exit 1
-    if [ "\$_distssh_target" = "\$_distssh_home" ] || [ "\$_distssh_target" = / ]; then
-      echo "refusing to prune \$_distssh_target" >&2
+    if test -L "\$root"; then
+      printf 'refusing to prune symlink %s\\n' $pq >&2
       exit 1
+    fi
+    _distssh_target=\$(cd -P "\$root" && pwd -P) || exit 1
+    _distssh_home=\$(cd -P ~ && pwd -P) || exit 1
+    if [ "\$_distssh_target" = "\$_distssh_home" ] || [ "\$_distssh_target" = / ]; then
+      printf 'refusing to prune %s\\n' "\$_distssh_target" >&2
+      exit 1
+    fi
+    if test -d "\$_distssh_home/.julia"; then
+      _distssh_depot=\$(cd -P "\$_distssh_home/.julia" && pwd -P) || exit 1
+      if [ "\$_distssh_target" = "\$_distssh_depot" ]; then
+        printf 'refusing to prune %s\\n' "\$_distssh_depot" >&2
+        exit 1
+      fi
     fi
     find "\$root" -type d -name .distsshkit 2>/dev/null | while IFS= read -r kit; do
       go="\$kit/go"

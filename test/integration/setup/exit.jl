@@ -26,10 +26,7 @@ using Test
                 "--delete", "--remote-path", remote, "--confirm-path", "/not/the/path",
                 "child:host1",
             ],
-            extra_env = merge(
-                _fake_setup_remote_env(fresh_state()),
-                Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1"),
-            ),
+            extra_env = _fake_setup_remote_env(fresh_state()),
         ),
         (;
             setup_args = [
@@ -97,20 +94,25 @@ using Test
 
         @testset "delete" begin
             proc, combined = got[3]
-            @test proc.exitcode == 0
-            @test occursin("still deletes", combined)
-            @test occursin("0.2", combined)
-            @test occursin("Delete complete (1 host(s))", combined)
+            @test proc.exitcode == 1
+            @test occursin("do not authorize", combined)
+            @test occursin("--confirm-path", combined)
+            @test occursin("help setup", combined)
+            @test !occursin("--help", combined)
+            @test !occursin("Delete complete", combined)
             @test !occursin("Would remove", combined)
 
             proc, combined = got[4]
             @test proc.exitcode == 1
             @test occursin("does not match", combined)
+            @test occursin("help setup", combined)
+            @test !occursin("--help", combined)
             @test !occursin("SSH preflight failed", combined)
 
             proc, combined = got[5]
             @test proc.exitcode == 1
             @test occursin("SSH preflight failed", combined)
+            @test !occursin("do not authorize", combined)
 
             proc, combined = got[6]
             @test proc.exitcode == 0

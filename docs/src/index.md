@@ -42,3 +42,17 @@ julia -m DistSSHRun pool
 using DistSSHRun
 go!("job.jl")
 ```
+
+## Delete and prune
+
+`setup --delete` and `setup --prune` remove a remote tree only when
+`--confirm-path` is the path that command prints. `-y`, `--yes`, and
+`DISTSSHKIT_YES` do not authorize those two modes. Without that flag and
+without `-y`, the command still asks you to type `delete` or `prune`.
+
+From Julia, `setup!(session, :delete; confirm_path)` and `:prune` follow
+the same rule. `session.yes` does not delete. One SSH host accepts a
+`String`. More than one host needs a `Dict` whose keys are the configured
+host aliases. A host with no key is left in place. An unknown key is an
+error. A mismatch throws `ConfirmPathMismatch`. Do not copy the target out
+of that error into a retry. See `help setup`.

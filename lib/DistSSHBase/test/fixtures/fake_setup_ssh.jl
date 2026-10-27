@@ -39,6 +39,11 @@ function main()
         end
     end
 
+    if occursin("DISTSSHKIT_REMOTE_HOME", script)
+        println(get(ENV, "DISTSSHKIT_TEST_REMOTE_HOME", "/home/distsshkit"))
+        exit(0)
+    end
+
     if occursin("uname -s", script)
         if get(ENV, "DISTSSHKIT_TEST_UNAME_FAIL", "") == "1"
             exit(1)

@@ -96,6 +96,7 @@ Filter = function (x)
     names = (
         :setup!, :sync!, :instantiate!,
         :KitSession, :HostResult, :SyncResult,
+        :ConfirmPathMismatch, :normalize_remote_confirm_path,
     )
     n = try
         nameof(x)
