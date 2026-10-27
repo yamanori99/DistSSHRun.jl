@@ -12,9 +12,10 @@ using Test
     end
     function catch_script(ready, mark)
         return """
-        # macOS keeps SIGINT pending across a blocking wait. Julia 1.13
-        # observes it at `GC.safepoint` (`InterruptException`). Julia 1.14
-        # throws `CancellationRequest` from `sleep`, and a safepoint does not.
+        # macOS keeps SIGINT pending across a blocking wait. DistSSHRun's
+        # 1.13 handler wakes through libuv (`sleep`). A `GC.safepoint` spin
+        # does not observe that wake. Julia 1.14 throws `CancellationRequest`
+        # from `sleep`. The worker test below uses the same wait.
         function _interrupt_seen(e)
             DistSSHRun.DistSSHBase.is_sigint(e) && return true
             e isa CapturedException && return _interrupt_seen(e.ex)
@@ -26,12 +27,15 @@ using Test
             # Write `ready` inside the `try`. Julia 1.13 delivers SIGINT at
             # the next safepoint, so a file written before `try` lets
             # `terminate!` land in that gap and this `catch` never runs.
+            # DistSSHRun's 1.13 handler wakes through libuv, so the wait
+            # must `sleep` (same as the worker test). `GC.safepoint` alone
+            # does not observe that wake on macOS.
             try
                 write($(repr(ready)), "1")
                 t0 = time()
                 while time() - t0 < 120
                     GC.safepoint()
-                    isdefined(Base, :CancellationRequest) && sleep(0.05)
+                    sleep(0.05)
                 end
             catch e
                 if _interrupt_seen(e)
