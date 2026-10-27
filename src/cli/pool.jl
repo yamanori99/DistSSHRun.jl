@@ -29,7 +29,14 @@ include(joinpath(@__DIR__, "pool", "_using.jl"))
 function pool_main()::Cint
     project_root = cli_project_root(@__DIR__)
     path_anchor = DistSSHRun.canonical_local_path(project_root)
-    opts = parse_pool_args(ARGS)
+    opts = try
+        parse_pool_args(ARGS)
+    catch e
+        e isa ArgumentError || rethrow()
+        startswith(e.msg, "unknown pool option:") || rethrow()
+        DistSSHRun.print_cli_error(e.msg)
+        return Cint(1)
+    end
     if opts.show_help
         show_pool_usage()
         return 0

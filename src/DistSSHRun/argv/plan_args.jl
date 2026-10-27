@@ -65,6 +65,13 @@ function show_plan_usage(; io::IO = stdout)
 end
 
 function parse_plan_args(args::Vector{String})
+    # Unknown options fail before `--help` and before any other flag is applied.
+    _reject_unknown_cli_options(
+        args,
+        "plan";
+        valued = ("--gb-per-worker", "--probe", "--mem-headroom", "--parent-gb"),
+        known = ("-h", "--help"),
+    )
     cli_session, args = peel_kit_cli_flags(args)
     script_path = nothing
     tokens = String[]
@@ -97,8 +104,7 @@ function parse_plan_args(args::Vector{String})
         elseif arg == "--parent-gb"
             parent_gb = parse(Float64, cli_take_value!(c, arg))
         elseif startswith(arg, "-")
-            @warn "Unknown option: $arg (ignored; will be an error in DistSSHRun 0.2)"
-            cli_consume!(c)
+            throw(ArgumentError(_unknown_cli_option_message("plan", arg)))
         elseif endswith(arg, ".jl")
             script_path === nothing || throw(
                 ArgumentError(

@@ -27,6 +27,21 @@ using Test
         end
     end
 
+    let (code, out, err) = _setup_capture(["--not-a-flag"])
+        shown = out * err
+        @test code == 1
+        @test occursin("unknown setup option: --not-a-flag", shown)
+        @test occursin("help setup", shown)
+        @test !occursin("--help", shown)
+        @test !occursin("Modes (one per run)", shown)
+    end
+    let (code, out, err) = _setup_capture(["--help", "--check", "--sync"])
+        shown = out * err
+        @test code == 1
+        @test occursin("more than one mode (--check and --sync)", shown)
+        @test occursin("help setup", shown)
+        @test !occursin("--help", shown)
+    end
     let (code, out, _) = _setup_capture(String[])
         @test code == 0
         @test occursin("Recommended", out)
