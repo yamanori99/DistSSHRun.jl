@@ -6,6 +6,8 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
+- The remote login shell must be POSIX (`sh`, `bash`, `dash`, or `zsh`). `ssh` runs a command as `$SHELL -c`, not a login shell. Distributed's SSHManager starts workers with `sh -l -c`, and that wrap cannot be changed. `fish` and `csh` are unsupported. `fish` can silently change quoting (a backslash inside single quotes). See `help setup`.
+- A Julia path passed to `get_remote_julia_version` is one quoted remote shell word, so a path that contains spaces is not split. A leading `~/` is sent as `$HOME/`. A `$HOME/…` prefix still expands on the remote. A backtick, double quote, backslash, or any other `$` in that word is escaped.
 - `setup` exits 1 when more than one mode flag is passed. The message names those two flags and `help setup`, and parsing stops at the second flag. `plan`, `pool`, and `size` exit 1 on an unknown `-` option before any other argument is applied, including when `-h` or `--help` is also present. The message names that option and `help plan`, `help pool`, or `help size`. `-h` and `--help` still print help when every flag is known. `setup` already rejected an unknown option; that message now names `help setup`.
 - The first `drive` in a process compiles less. `plan` is no longer inferred inside `run_drive_parsed!`, a drive without `--sync` or `--rsync` does not infer that path, and that call is precompiled. The text and the exit code do not change. Loading the package from a project still needs that project's dependencies instantiated.
 - A CLI script from a checkout with no manifest exits with an instantiate hint and writes nothing under the depot. `julia -m DistSSHRun` and an installed package are unchanged.
