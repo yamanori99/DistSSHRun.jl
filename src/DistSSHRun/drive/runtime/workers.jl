@@ -233,8 +233,11 @@ function wait_for_worker_connections!(; ssh::Bool = true)
 end
 
 # A yielding worker task observed `InterruptException` about 2s after the
-# signal (Julia 1.13.2, local `remotecall`). Wait so user code can `catch`
-# it and save state before `rmprocs`. Not a public setting.
+# signal (Julia 1.13.2, local `remotecall`). On Julia 1.14, with
+# `exit_on_sigint(false)`, `sleep` throws `Base.CancellationRequest`, and a
+# later wait throws again while that request stays raised. Wait so user code
+# can catch that exception and save state before `rmprocs`.
+# `DistSSHBase.is_sigint` is `public` and not exported. Not a public setting.
 const _INTERRUPT_SETTLE_S = 3.0
 
 """
