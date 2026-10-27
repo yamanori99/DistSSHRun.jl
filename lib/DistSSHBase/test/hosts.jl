@@ -17,6 +17,10 @@ using Test
         @test_throws ArgumentError DistSSHBase.parse_placement_token("parenthost:2")
         @test_throws ArgumentError DistSSHBase.parse_placement_token("child:parent")
         @test_throws ArgumentError DistSSHBase.parse_placement_token("child:-oBatchMode=yes")
+        @test_throws ArgumentError DistSSHBase.parse_placement_token("child:user@-h")
+        @test_throws ArgumentError DistSSHBase.parse_placement_token("child:h\nname")
+        @test DistSSHBase.validate_ssh_host("user@host:/tmp/a b") == "user@host:/tmp/a b"
+        @test DistSSHBase.validate_ssh_host("alice@h") == "alice@h"
     end
 
     @testset "looks_like_path_host / script" begin

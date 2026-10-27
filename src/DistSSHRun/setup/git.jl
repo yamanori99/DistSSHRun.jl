@@ -145,7 +145,7 @@ end
 function _kit_git_ssh_command()::String
     parts = String[_ssh_exe()]
     append!(parts, ssh_opts())
-    return join((_remote_sh_quote(p) for p in parts), " ")
+    return join((posix_quote(p) for p in parts), " ")
 end
 
 function _remote_git_run(

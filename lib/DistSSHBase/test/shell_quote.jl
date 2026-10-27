@@ -32,7 +32,7 @@ let _BASE = DistSSHBase
                 "",
             ]
             for s in samples
-                got = _remote_sh_printf(dir, _BASE._remote_sh_quote(s))
+                got = _remote_sh_printf(dir, _BASE.posix_quote(s))
                 @test got == s
                 @test !isfile(sentinel)
             end
@@ -62,6 +62,11 @@ let _BASE = DistSSHBase
                 @test !isfile(sentinel)
             end
         end
+
+        @test_throws ArgumentError _BASE.posix_quote("a\0b")
+        @test_throws ArgumentError _BASE._remote_shell_path_word("a\nb")
+        @test_throws ArgumentError _BASE._remote_shell_path_word("a\tb")
+        @test _BASE._remote_sh_quote("a'b") == _BASE.posix_quote("a'b")
 
         err = try
             _BASE._remote_ancestor("~/Repo/proj", "a/proj")

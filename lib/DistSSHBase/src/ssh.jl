@@ -96,9 +96,10 @@ end
 _git_cmd(args::AbstractVector)::Cmd = _host_tool_cmd("git", args)
 _ssh_cmd(args::AbstractVector)::Cmd = _host_tool_cmd("ssh", args)
 
-"""`--` then `host`, then `args`. A name that starts with `-` stays a destination."""
+"""`--` then `host`, then `args`. A name that starts with `-` is rejected."""
 function _ssh_host_args(host::AbstractString, args::AbstractString...)::Vector{String}
-    return String["--", String(host), String.(args)...]
+    dest = validate_ssh_host(host)
+    return String["--", dest, String.(args)...]
 end
 _scp_cmd(args::AbstractVector)::Cmd = _host_tool_cmd("scp", args)
 
@@ -144,6 +145,7 @@ julia> DistSSHRun.ssh_addprocs_machine("dev@host1")
 function ssh_addprocs_machine(host::AbstractString)::String
     h = String(strip(host))
     isempty(h) && return h
+    h = validate_ssh_host(h)
     occursin('@', h) && return h
     u = ssh_config_user(h)
     return u === nothing ? h : string(u, '@', h)
@@ -301,6 +303,7 @@ A backtick, double quote, backslash, or any other `\$` in that word is escaped.
 Every other path is POSIX single-quoted.
 """
 function _remote_julia_path_sh(path::AbstractString)::String
+    _reject_control_path(path)
     s = String(path)
     if startswith(s, "~/")
         s = string("\$HOME", chopprefix(s, "~"))
@@ -309,7 +312,7 @@ function _remote_julia_path_sh(path::AbstractString)::String
     if startswith(s, prefix)
         return string('"', prefix, _remote_dq_escape(chopprefix(s, prefix)), '"')
     end
-    return _remote_sh_quote(s)
+    return posix_quote(s)
 end
 
 function _remote_julia_candidates_sh(uname_s::AbstractString)::String
@@ -323,11 +326,25 @@ function _remote_julia_candidates_sh(uname_s::AbstractString)::String
     end
 end
 
-"""POSIX single-quote a word so remote `sh` does not parse metacharacters."""
-function _remote_sh_quote(word::AbstractString)::String
+"""
+    posix_quote(word::AbstractString) -> String
+
+One POSIX single-quoted word for a remote `sh` command.
+
+A `'` inside `word` becomes `'\\''`. Every other byte is copied, including
+newline. NUL throws `ArgumentError` (a remote process cannot carry it).
+A path goes through [`_remote_shell_path_word`](@ref), which rejects a control
+character. A host goes through [`validate_ssh_host`](@ref), which rejects a
+name that starts with `-` and a control character.
+"""
+function posix_quote(word::AbstractString)::String
+    s = String(word)
+    if occursin('\0', s)
+        throw(ArgumentError("posix_quote: word contains NUL. See help setup."))
+    end
     return sprint() do io
         print(io, '\'')
-        for c in String(word)
+        for c in s
             if c == '\''
                 print(io, "'\\''")
             else
@@ -338,13 +355,29 @@ function _remote_sh_quote(word::AbstractString)::String
     end
 end
 
+"""[`posix_quote`](@ref). Callers use `posix_quote`."""
+function _remote_sh_quote(word::AbstractString)::String
+    return posix_quote(word)
+end
+
+"""Throw when `path` contains a control character (NUL, newline, or any other)."""
+function _reject_control_path(path::AbstractString)::Nothing
+    s = String(path)
+    any(iscntrl, s) || return nothing
+    throw(
+        ArgumentError(
+            "path contains a newline or NUL ($(repr(s))). See help setup.",
+        ),
+    )
+end
+
 function _remote_argv_sh(argv::AbstractVector{<:AbstractString})::String
     return sprint() do io
         first = true
         for a in argv
             first || print(io, ' ')
             first = false
-            print(io, _remote_sh_quote(a))
+            print(io, posix_quote(a))
         end
     end
 end
@@ -384,7 +417,8 @@ function _run_on_host_remote_sh(
             "run_on_host: detect=false requires julia= to a remote path (not auto)",
         )
     )
-    q = _remote_sh_quote(path)
+    _reject_control_path(path)
+    q = posix_quote(path)
     return sprint() do io
         print(io, "JULIA="); print(io, q)
         print(io, "; [ -x \"\$JULIA\" ] && \"\$JULIA\" --version 2>/dev/null | grep -q 'julia version' || exit 127; exec \"\$JULIA\"")
@@ -530,29 +564,31 @@ function _detect_julia_path_uncached(host::String)::Union{Nothing, String}
 end
 
 
+function _remote_tilde_prefix_bare(prefix::AbstractString)::Bool
+    return occursin(r"^~[A-Za-z0-9._-]*$", prefix)
+end
+
 """
 Shell word for `path` on the remote login shell.
 
 A `~` / `~user` prefix stays unquoted so the remote shell expands it, when the
 prefix is only `~` and letters, digits, `.`, `_`, or `-`. The rest of a `~/…`
-path is passed through [`_remote_sh_quote`](@ref). Other paths are quoted in full.
+path is passed through [`posix_quote`](@ref). Other paths are quoted in full.
+A control character in `path` is rejected.
 """
-function _remote_tilde_prefix_bare(prefix::AbstractString)::Bool
-    return occursin(r"^~[A-Za-z0-9._-]*$", prefix)
-end
-
 function _remote_shell_path_word(path::AbstractString)::String
+    _reject_control_path(path)
     p = strip(String(path))
-    startswith(p, "~") || return _remote_sh_quote(p)
+    startswith(p, "~") || return posix_quote(p)
     slash = findfirst('/', p)
     if slash === nothing
-        return _remote_tilde_prefix_bare(p) ? p : _remote_sh_quote(p)
+        return _remote_tilde_prefix_bare(p) ? p : posix_quote(p)
     end
     prefix = p[1:(slash - 1)]
     rest = p[(slash + 1):end]
-    _remote_tilde_prefix_bare(prefix) || return _remote_sh_quote(p)
+    _remote_tilde_prefix_bare(prefix) || return posix_quote(p)
     isempty(rest) && return prefix * "/"
-    return prefix * "/" * _remote_sh_quote(rest)
+    return prefix * "/" * posix_quote(rest)
 end
 
 """
@@ -943,6 +979,7 @@ end
 Absolute paths are [`canonical_local_path`](@ref).
 """
 function remote_env_project_root(raw::AbstractString)::String
+    _reject_control_path(raw)
     s = strip(String(raw))
     isempty(s) && throw(ArgumentError("remote project root is empty"))
     startswith(s, "~") && return s

@@ -222,7 +222,8 @@ using Test
         @test occursin("/opt/homebrew/bin/julia", sh)
         @test occursin("-e", sh)
         @test DistSSHBase._remote_argv_sh(["-e", "exit(3)"]) == "'-e' 'exit(3)'"
-        @test DistSSHBase._remote_sh_quote("a'b") == raw"'a'\''b'"
+        @test DistSSHBase.posix_quote("a'b") == raw"'a'\''b'"
+        @test DistSSHBase._remote_sh_quote("a'b") == DistSSHBase.posix_quote("a'b")
         expl = DistSSHBase._run_on_host_remote_sh(["--version"]; julia = "/opt/julia", detect = false)
         @test occursin("/opt/julia", expl)
         @test occursin("exec", expl)

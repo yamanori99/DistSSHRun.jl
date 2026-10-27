@@ -186,7 +186,7 @@ function clone_to_remotes(
     end
 
     pq = _remote_shell_path_word(remote_path)
-    uq = _remote_sh_quote(String(clone_url))
+    uq = posix_quote(String(clone_url))
     succeeded = 0
     failed = 0
     host_results = HostResult[]
@@ -347,7 +347,7 @@ function _pkg_e_on_remotes(
                 jb = _remote_shell_path_word(host_julia)
                 # Prefer git CLI (ssh-agent / SSH config) over LibGit2 credentials UI.
                 cmd = "JULIA_PKG_USE_CLI_GIT=true $jb --project=$pq --startup-file=no -e " *
-                    _remote_sh_quote(String(pkg_e))
+                    posix_quote(String(pkg_e))
                 out = IOBuffer()
                 err = IOBuffer()
                 try

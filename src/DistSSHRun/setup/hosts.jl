@@ -42,7 +42,8 @@ function validate_setup_hosts(
                 )
             )
         end
-        isempty(strip(host)) && throw(ArgumentError("empty host name"))
+        isempty(strip(host)) && throw(ArgumentError("empty host name. See help setup."))
+        validate_ssh_host(host)
     end
     return nothing
 end
