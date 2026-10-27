@@ -7,7 +7,7 @@ Internals of this repo.
 
 This is a **separate** package from DistSSHKit: FIFO `serve` in front of one Kit `go` / `ride` / `drive`, not a bigger Kit. Placement tokens, `execute!`, `kit.pid` / `kit.result`, `terminate_run!`, demo argv, and rsync/collect are Kit's. Queue records table state and the path Kit already wrote.
 
-CI names Julia versions in the job (`1.13`, `1.14-nightly`, `nightly`), same as DistSSHKit. SSH E2E is this repo's `testenv/docker-ssh`. CI is `Pkg.test` (unit + integration), JETLS, Aqua, Linux SSH E2E on Julia **1.13** (`test/e2e.jl`: `setup` / `go` / `ride` / `drive`) on path-filtered PRs / **main** / a `Project.toml` version increase / weekly / dispatch, Gitleaks, light **Runic** `--check` (soft on PRs; monthly on `main`), schedule-only **E2E weekly** (Linux / macOS Intel / WSL), and schedule-only **CI weekly**.
+CI names Julia versions in the job (`1.13`, `1.14-nightly`, `nightly`), same as DistSSHKit. SSH E2E is this repo's `testenv/docker-ssh`. CI is `Pkg.test` (unit + integration), `Registry install (1.13, ubuntu-latest, x64)`, JETLS, Aqua, Linux SSH E2E on Julia **1.13** (`test/e2e.jl`: `setup` / `go` / `ride` / `drive`) on path-filtered PRs / **main** / a `Project.toml` version increase / weekly / dispatch, Gitleaks, light **Runic** `--check` (soft on PRs; monthly on `main`), schedule-only **E2E weekly** (Linux / macOS Intel / WSL), and schedule-only **CI weekly**.
 
 ## Requirements
 
@@ -48,7 +48,7 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 
 Run this on Julia **1.13** (and **1.14-nightly** or **nightly** if you have them). Layout: [test/README.md](test/README.md). `test/runtests.jl` counts its `_runtest_announce` calls for `[i/N]`. `test/e2e.jl` counts its `_e2e_announce` calls the same way. Unset, that run includes every announced file. `DISTSSHRUN_TEST_SHORT=1` skips the heavy ones, and `JULIA_PKGEVAL=true` turns that skip on by itself.
 
-Checkout `Pkg.test()` is not the PkgEval sandbox. Before a General cut, run the recipe in [test/README.md](test/README.md#pkgeval). CI runs that job on ordinary PRs (heavy gate) and **main** (host Julia 1.13; test Julia is the julia-latest tarball; `continue-on-error`; not a required check).
+Checkout `Pkg.test()` is not a registry install. General puts the committed tree in `~/.julia/packages/DistSSHRun/<slug>` with read-only files and no gitignored `Manifest.toml`. `lib/` is part of that tree. CI runs that install on the heavy gate (`Registry install (1.13, ubuntu-latest, x64)`), including ordinary pull requests and **main**. A pull request installs its head commit, not the merge commit. Dependencies come from General. The job sets `JULIA_PKGEVAL=true`, which selects the short file list. `PkgEval (nightly, ubuntu-latest, x64)` is the sandbox in [test/README.md](test/README.md#pkgeval). CI runs that job on ordinary PRs (heavy gate) and **main** (host Julia 1.13; test Julia is the julia-latest tarball; `continue-on-error`; not a required check). Run that recipe before a General cut.
 
 ```bash
 julia -e 'using Pkg; Pkg.Apps.add("Runic")'   # once
@@ -111,7 +111,7 @@ WSL2 1.13 runs on a main push and CI weekly, not on a pull request.
 `JETLS (1.14-nightly, ubuntu-latest, x64)` uses the same heavy gate as the
 1.13 JETLS job, including ordinary PRs. It is `continue-on-error` and is
 not a required check.
-macOS and WSL2 nightly `Pkg.test` and Aqua run on **CI weekly** only. PkgEval uses the same heavy gate as **1.13** and also runs on ordinary PRs. It stays `continue-on-error` and is not a required check.
+macOS and WSL2 nightly `Pkg.test` and Aqua run on **CI weekly** only. `Registry install (1.13, ubuntu-latest, x64)` uses the same heavy gate as Ubuntu `Pkg.test` 1.13, including ordinary pull requests and **main**. It is not `continue-on-error`. PkgEval uses that same heavy gate and also runs on ordinary PRs. It stays `continue-on-error` and is not a required check.
 
 This package feels SSH hosts, Pkg, and lockfiles more than a compute-model
 library does. When Julia announces that it has stopped maintaining the
@@ -132,7 +132,7 @@ When a new RC of the floor's minor lands, point **1.13** jobs at `~1.13.0-0` so 
 
 These run as jobs of the `Test` workflow
 ([`.github/workflows/CI.yml`](.github/workflows/CI.yml)). Ubuntu:
-`Pkg.test` 1.13, JETLS 1.13, Aqua 1.13, Gitleaks. macOS (`macos-latest`):
+`Pkg.test` 1.13, `Registry install (1.13, ubuntu-latest, x64)`, JETLS 1.13, Aqua 1.13, Gitleaks. macOS (`macos-latest`):
 `Pkg.test` 1.13, same heavy gate, no coverage
 upload. macOS runs `ps -o lstart=` in `kit_process_start_key`. macOS is
 required. WSL2 1.13 is a main push and CI weekly, not a pull request.
@@ -149,7 +149,12 @@ changed. Linux E2E (1.13) uses the same **path filter** as **main** push
 runs on a **version increase**, **E2E weekly** (`ssh-e2e-weekly.yml`; `CI.yml` has no
 `schedule`), and `workflow_dispatch`. **1.14-nightly** and **nightly** `Pkg.test` / Aqua
 on Ubuntu stay on **main**, **CI weekly**, and a version increase, not
-ordinary PRs. macOS and WSL2 nightly stay on **CI weekly** only. PkgEval runs on ordinary PRs
+ordinary PRs. macOS and WSL2 nightly stay on **CI weekly** only.
+`Registry install (1.13, ubuntu-latest, x64)` uses the same heavy gate
+as Ubuntu `Pkg.test` 1.13, so ordinary pull requests and **main** run it.
+It installs the head commit into a job-local depot and runs `Pkg.test`
+with `--check-bounds=yes`. `JULIA_PKGEVAL=true` selects the short file list.
+PkgEval runs on ordinary PRs
 (heavy gate) and **main**. It is `continue-on-error` and not a required
 check.
 
@@ -160,7 +165,7 @@ required-name list). Monthly cron on `main` opens Issue
 `Runic monthly failed` (`alert`) when `--check` is red.
 
 These files **alone** skip the heavy jobs (UI: skipping; Pkg.test on
-Ubuntu and macOS, plus JETLS / Aqua, do not start). Documenter
+Ubuntu and macOS, Registry install, plus JETLS / Aqua, do not start). Documenter
 still runs when `docs/**`, README,
 `src/**`, or `Project.toml` changed; otherwise it is skipped too.
 Linux E2E is skipped on allowlisted markdown-only PRs (same skipping UI):
@@ -175,7 +180,7 @@ Linux E2E is skipped on allowlisted markdown-only PRs (same skipping UI):
 A new root markdown file stays heavy until listed in
 [`.github/actions/ci-heavy/action.yml`](.github/actions/ci-heavy/action.yml).
 A `Project.toml` version increase skips none of this: Pkg.test (Ubuntu,
-macOS), JETLS, Aqua, Documenter, and Linux E2E all run (E2E
+macOS), Registry install, JETLS, Aqua, Documenter, and Linux E2E all run (E2E
 Codecov too). macOS and WSL SSH E2E stay on `E2E weekly`, not the PR.
 Register when the required checks below are green. Intel / WSL weekly are
 watchers, not the register gate.
@@ -187,10 +192,11 @@ julia --project=. -e 'using Pkg; Pkg.test(; coverage=true)'
 DISTSSHQUEUE_CODE_COVERAGE=1 ./testenv/docker-ssh/scripts/up.sh --e2e
 ```
 
-Required to merge (ruleset `main` uses these names). **1.14-nightly** and **nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and a version increase, not ordinary PRs. macOS and WSL2 nightly run on CI weekly only. PkgEval runs on ordinary PRs (heavy gate) and is not in the list below. E2E weekly and CI weekly are not required. Run's titles are `DistSSHRun (...)`, the same shape as DistSSHBase and DistSSHUp, plus `DistSSHRun (1.14-nightly, ubuntu-latest, x64)`, `DistSSHRun (nightly, ubuntu-latest, x64)`, `Aqua (nightly, ubuntu-latest, x64)`, `JETLS (1.14-nightly, ubuntu-latest, x64)`, and `PkgEval (nightly, ubuntu-latest, x64)`. DistSSHBase and DistSSHUp are their own jobs on Ubuntu and macOS, and their own Ubuntu SSH E2E rows. Their WSL2 titles run on a main push and CI weekly, not a pull request. Downstream is `Downstream (DistSSHQueue@main, 1.13)` and `Downstream (DistSSHKit@main, 1.13)`. `Downstream SSH E2E (DistSSHQueue, 1.13)` runs on a version-cut pull request, a push to `main`, and `workflow_dispatch`. Ordinary pull requests skip it. Names outside the list are not in the ruleset. The ruleset itself is edited on GitHub; this list is the names to add.
+Required to merge (ruleset `main` uses these names, except `Registry install (1.13, ubuntu-latest, x64)`, which is not in the ruleset yet). **1.14-nightly** and **nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and a version increase, not ordinary PRs. macOS and WSL2 nightly run on CI weekly only. PkgEval runs on ordinary PRs (heavy gate) and is not in the list below. `Registry install (1.13, ubuntu-latest, x64)` is in the list below. This change does not edit the ruleset, so that name does not block merge until it is added there. E2E weekly and CI weekly are not required. Run's titles are `DistSSHRun (...)`, the same shape as DistSSHBase and DistSSHUp, plus `DistSSHRun (1.14-nightly, ubuntu-latest, x64)`, `DistSSHRun (nightly, ubuntu-latest, x64)`, `Aqua (nightly, ubuntu-latest, x64)`, `JETLS (1.14-nightly, ubuntu-latest, x64)`, and `PkgEval (nightly, ubuntu-latest, x64)`. DistSSHBase and DistSSHUp are their own jobs on Ubuntu and macOS, and their own Ubuntu SSH E2E rows. Their WSL2 titles run on a main push and CI weekly, not a pull request. Downstream is `Downstream (DistSSHQueue@main, 1.13)` and `Downstream (DistSSHKit@main, 1.13)`. `Downstream SSH E2E (DistSSHQueue, 1.13)` runs on a version-cut pull request, a push to `main`, and `workflow_dispatch`. Ordinary pull requests skip it. Names outside the list are not in the ruleset. The ruleset itself is edited on GitHub; this list is the names to add.
 
 - `DistSSHRun (1.13, ubuntu-latest, x64)`
 - `DistSSHRun (1.13, macos-latest, aarch64)`
+- `Registry install (1.13, ubuntu-latest, x64)`
 - `DistSSHBase (1.13, ubuntu-latest, x64)`
 - `DistSSHBase (1.13, macos-latest, aarch64)`
 - `DistSSHUp (1.13, ubuntu-latest, x64)`

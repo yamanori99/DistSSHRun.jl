@@ -16,7 +16,7 @@ That is `test/runtests.jl` (unit + integration), sequential `@testset`s,
 Unset, all 56 files run. `DISTSSHRUN_TEST_SHORT=1` (`true`, `yes`, and `on`
 too) skips the heavy files and the extra `ride!` cases. `JULIA_PKGEVAL=true`
 does the same so a PkgEval run stays inside the 45 minute limit.
-`Pkg.test()` on this checkout is not the PkgEval sandbox. Job smokes pass
+`Pkg.test()` on this checkout is not a registry install and is not the PkgEval sandbox. Job smokes pass
 `-y`; real `ssh` / `git` spawn runs only when that binary is on `PATH`;
 real SSH clusters stay in `e2e.jl`. Reproduce that sandbox:
 [PkgEval](#pkgeval).
@@ -120,9 +120,14 @@ so this adds it from its repository. The tested Julia is the published
 julia-latest tarball (`julia="nightly"`). It follows master and can lag a
 `VERSION` bump. The ecosystem daily pins a master commit and enables
 assertions, so its Julia is not this tarball.
-CI: `PkgEval (nightly, ubuntu-latest, x64)` on ordinary PRs (heavy gate)
+CI: `Registry install (1.13, ubuntu-latest, x64)` on the heavy gate
+(ordinary pull requests and **main**). It `Pkg.add`s the head commit
+into a job-local depot and runs `Pkg.test` with `--check-bounds=yes`.
+`JULIA_PKGEVAL=true` selects the short file list above. Dependencies
+resolve from General. The installed tree includes `lib/`.
+`PkgEval (nightly, ubuntu-latest, x64)` stays on ordinary PRs (heavy gate)
 and **main** (`continue-on-error`; not a required check). The sandbox sets
-`JULIA_PKGEVAL=true`, which selects the short file list above.
+`JULIA_PKGEVAL=true`, which selects the same short file list.
 
 From this checkout:
 
