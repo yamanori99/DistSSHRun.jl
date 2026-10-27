@@ -89,34 +89,48 @@ if !isdefined(Main, :_run_kit_drive)
         return _run_subprocess(setenv(cmd, env))
     end
 
-    # Run `drive.jl` with `--project` set to a host package.
-    function _run_host_drive(;
+    # Host-app `drive`. A checkout with a manifest still runs `drive.jl`
+    # (`--project` is the host). A checkout with no manifest uses
+    # `julia -m DistSSHRun` so the child does not develop a depot env.
+    function _host_drive_cmd(;
             script::AbstractString,
             host_project,
             parent_workers::Int = 2,
             log_dir::Union{Nothing, String} = nothing,
             kit_root::AbstractString = _kit_root(),
             julia::AbstractString = _julia_exe(),
-        )
+        )::Cmd
         script = String(script)
         host_project = _drive_host_root(host_project)
         kit_root = String(kit_root)
-        julia = String(julia)
-        drive = joinpath(kit_root, "src", "cli", "drive.jl")
-        log_flags = log_dir === nothing ? ["--no-log"] : ["--log-dir", log_dir]
-        cmd = Cmd(
-            String[
-                julia, "--startup-file=no", "--project=$host_project", drive,
-                "-y", "parent:$(parent_workers)", log_flags..., script,
-            ]
+        log_flags = log_dir === nothing ? String["--no-log"] : String["--log-dir", String(log_dir)]
+        tokens = String["-y", "parent:$(parent_workers)"]
+        append!(tokens, log_flags)
+        push!(tokens, script)
+        base = _julia_cmd_for(julia)
+        cmd = if _checkout_manifest_file(kit_root) !== nothing
+            drive = joinpath(kit_root, "src", "cli", "drive.jl")
+            `$base --startup-file=no --project=$host_project $drive $tokens`
+        else
+            proj = _cli_m_project(kit_root)
+            `$base --startup-file=no --project=$proj -m DistSSHRun drive $tokens`
+        end
+        # `addenv` overrides these keys and leaves `JULIA_LOAD_PATH` /
+        # `JULIA_DEPOT_PATH` alone. `"0"` is not the subcommand-done sentinel.
+        return addenv(
+            cmd,
+            "DISTRIBUTED_INIT_DELAY_SEC" => "0",
+            "DISTRIBUTED_PROJECT_ROOT" => host_project,
+            "DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL" => "1",
+            "DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "0",
+            "DIST_SSH_KIT_CLI_INCLUDE" => "0",
+            "JULIA_PKG_PRECOMPILE_AUTO" => get(ENV, "JULIA_PKG_PRECOMPILE_AUTO", "0"),
         )
-        env = _child_julia_env(
-            Dict(
-                "DISTRIBUTED_INIT_DELAY_SEC" => "0",
-                "DISTRIBUTED_PROJECT_ROOT" => host_project,
-            )
-        )
-        return _run_subprocess(setenv(cmd, env))
+    end
+
+    # Run a host-app `drive` and return `(process, output)`.
+    function _run_host_drive(; kwargs...)
+        return _run_subprocess(_host_drive_cmd(; kwargs...))
     end
 
     # Run a local drive subprocess with logging enabled; assert console + log contents.

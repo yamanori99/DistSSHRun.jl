@@ -28,6 +28,8 @@ cd DistSSHRun.jl
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 ```
 
+The scripts under `src/cli/` do not instantiate this checkout.
+
 That pulls DistSSHKit from General. Do not add a `[sources]` path to a Kit checkout unless you are landing an unreleased kit hook.
 
 From another app (a **separate** env, not a job whose Manifest is copied to workers):

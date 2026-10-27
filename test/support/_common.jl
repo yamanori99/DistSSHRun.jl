@@ -15,10 +15,25 @@ if !isdefined(Main, :_test_root)
     _julia_exe()::String = joinpath(Sys.BINDIR, Base.julia_exename())
     _fixture(name::AbstractString) = joinpath(_test_root(), "fixtures", name)
 
-    # `--code-coverage=user` when the parent Julia process is collecting coverage.
-    function _julia_coverage_args()::Vector{String}
-        Base.JLOptions().code_coverage == 0 && return String[]
-        return ["--code-coverage=user"]
+    # `Base.julia_cmd()` carries the parent coverage and bounds flags.
+    # `julia` replaces the executable when a test names another binary.
+    function _julia_cmd_for(julia::AbstractString = _julia_exe())::Cmd
+        cmd = Base.julia_cmd()
+        exe = abspath(String(julia))
+        abspath(cmd.exec[1]) == exe && return cmd
+        rest = String[String(x) for x in cmd.exec[2:end]]
+        return Cmd(vcat(String[exe], rest))
+    end
+
+    # Kit root when that tree has a manifest. Otherwise the active project
+    # (`Pkg.test`'s env), which already depends on DistSSHRun.
+    function _cli_m_project(project::AbstractString)::String
+        if _checkout_manifest_file(String(project)) !== nothing
+            return String(project)
+        end
+        active = Base.active_project()
+        active === nothing && return String(project)
+        return String(active)
     end
 
     # Kit CLI as a child `julia -m DistSSHRun`.
@@ -27,16 +42,9 @@ if !isdefined(Main, :_test_root)
             julia::AbstractString = _julia_exe(),
             project::AbstractString = _kit_root(),
         )::Cmd
-        # A PkgEval tree has no Manifest. `-m` needs an instantiated project.
-        project = _checkout_load_env(String(project))
-        prefix = String[
-            String(julia),
-            "--startup-file=no",
-            "--project=$(project)",
-            _julia_coverage_args()...,
-        ]
+        proj = _cli_m_project(String(project))
         argv = String[String(a) for a in args]
-        return Cmd(vcat(prefix, ["-m", "DistSSHRun"], argv))
+        return `$(_julia_cmd_for(julia)) --startup-file=no --project=$proj -m DistSSHRun $argv`
     end
 
     # Temp go/drive/size/setup hosts file: comment, `child:host-a`, `child:host-b:4`.

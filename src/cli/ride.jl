@@ -9,17 +9,21 @@
 See `--help`. Analysis is `plan`, not this command.
 """
 
+# `find_package` is nothing when this environment does not provide DistSSHRun.
+# Any other import failure (precompile, `__init__`) propagates.
 if !isdefined(@__MODULE__, :DistSSHRun)
     if get(ENV, "DIST_SSH_KIT_CLI_INCLUDE", "") == "1"
         import DistSSHRun
-    else
+    elseif Base.find_package("DistSSHRun") === nothing
+        include(joinpath(@__DIR__, "_checkout.jl"))
         try
-            import DistSSHRun
-        catch
-            include(joinpath(@__DIR__, "_checkout.jl"))
             _include_checkout_run()
             import DistSSHRun
+        catch err
+            _checkout_report(err, @__FILE__)
         end
+    else
+        import DistSSHRun
     end
 end
 include(joinpath(@__DIR__, "ride", "_using.jl"))

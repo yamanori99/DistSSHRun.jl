@@ -13,21 +13,25 @@
 
 # Guard on a setup-only import — not names `go`/`drive` may already have
 # bound from DistSSHRun (e.g. `cli_project_root`) before `setup.jl` is included.
-# Top-level include so JETLS sees `_include_checkout_run` (it does not follow
-# `include` inside `catch`).
+# Top-level include so JETLS sees `_include_checkout_run`. Including this file
+# does not load the package and does not exit.
 include(joinpath(@__DIR__, "_checkout.jl"))
 
+# `find_package` is nothing when this environment does not provide DistSSHRun.
+# Any other import failure (precompile, `__init__`) propagates.
 if !isdefined(@__MODULE__, :DistSSHRun)
     if get(ENV, "DIST_SSH_KIT_CLI_INCLUDE", "") == "1"
         import DistSSHRun
-    else
+    elseif Base.find_package("DistSSHRun") === nothing
+        include(joinpath(@__DIR__, "_checkout.jl"))
         try
-            import DistSSHRun
-        catch
-            include(joinpath(@__DIR__, "_checkout.jl"))
             _include_checkout_run()
             import DistSSHRun
+        catch err
+            _checkout_report(err, @__FILE__)
         end
+    else
+        import DistSSHRun
     end
 end
 
