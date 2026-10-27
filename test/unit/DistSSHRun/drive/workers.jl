@@ -71,10 +71,13 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             added = workers()
             try
                 wpid = added[end]
-                cfg = Distributed.map_pid_wrkr[wpid].config
-                # Same field `kill -INT` reads. `JoinCompleteMsg` sends `getpid()`.
-                @test cfg.ospid == remotecall_fetch(getpid, wpid)
-                @test cfg.ospid != getpid()
+                wrk = Distributed.map_pid_wrkr[wpid]
+                @test wrk isa Distributed.Worker
+                if wrk isa Distributed.Worker
+                    # Same field `kill -INT` reads. `JoinCompleteMsg` sends `getpid()`.
+                    @test wrk.config.ospid == remotecall_fetch(getpid, wpid)
+                    @test wrk.config.ospid != getpid()
+                end
             finally
                 for w in added
                     w in workers() && rmprocs(w; waitfor = 2.0)
@@ -109,13 +112,18 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
                 runs = DistSSHRun._run_cmds_bounded!(cmds, 0.4)
                 @test time() - t0 < 8
                 for run in runs
-                    @test run.proc !== nothing
-                    @test !process_running(run.proc)
+                    proc = run.proc
+                    @test proc isa Base.Process
+                    if proc isa Base.Process
+                        @test !process_running(proc)
+                    end
                 end
             finally
                 for run in runs
                     proc = run.proc
-                    proc !== nothing && process_running(proc) && kill(proc, Base.SIGKILL)
+                    if proc isa Base.Process && process_running(proc)
+                        kill(proc, Base.SIGKILL)
+                    end
                 end
             end
             # A concurrency cap of 1 must not run the queued sleeps after the deadline.
@@ -126,12 +134,16 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
                 @test time() - t1 < 8
                 for run in queued
                     proc = run.proc
-                    proc !== nothing && @test !process_running(proc)
+                    if proc isa Base.Process
+                        @test !process_running(proc)
+                    end
                 end
             finally
                 for run in queued
                     proc = run.proc
-                    proc !== nothing && process_running(proc) && kill(proc, Base.SIGKILL)
+                    if proc isa Base.Process && process_running(proc)
+                        kill(proc, Base.SIGKILL)
+                    end
                 end
             end
         end
