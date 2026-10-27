@@ -424,7 +424,7 @@ function dropSpikes(values) {
 
 function breaks(samples, field, nightlyOnly) {
   const marks = [];
-  if (nightlyOnly && !state.slot.includes("nightly")) return marks;
+  if (nightlyOnly && !state.slot.includes("nightly") && state.slot !== "1.14-pre") return marks;
   for (let index = 1; index < samples.length; index += 1) {
     const previous = samples[index - 1][field];
     const current = samples[index][field];
