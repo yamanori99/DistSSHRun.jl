@@ -122,10 +122,12 @@ function _worker_identity_expr()
             if !isempty(man) && isfile(man)
                 raw = try
                     Base.require(Base.PkgId(Base.UUID("fa267f1f-6049-4f14-aa54-33bafae1ed76"), "TOML"))
-                    toml = Base.loaded_modules[Base.PkgId(
-                        Base.UUID("fa267f1f-6049-4f14-aa54-33bafae1ed76"),
-                        "TOML",
-                    )]
+                    toml = Base.loaded_modules[
+                        Base.PkgId(
+                            Base.UUID("fa267f1f-6049-4f14-aa54-33bafae1ed76"),
+                            "TOML",
+                        ),
+                    ]
                     toml.parsefile(man)
                 catch
                     nothing

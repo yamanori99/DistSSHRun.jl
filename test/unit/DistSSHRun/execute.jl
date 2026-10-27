@@ -1,15 +1,5 @@
 using Test
 
-function _write_job_with_distsshrun!(proj)
-    kit = _kit_root()
-    for name in ("Project.toml", "Manifest.toml", "src", "lib", "ext")
-        src = joinpath(kit, name)
-        ispath(src) || continue
-        cp(src, joinpath(proj, name); force = true)
-    end
-    return nothing
-end
-
 # Oracle: dispatcher only (plus detached `:go`, which is out-of-process).
 # `execute!(:drive, …)` includes a driver into `Main` and lives in
 # `integration/drive/execute.jl` (after `api.jl`, which is the first

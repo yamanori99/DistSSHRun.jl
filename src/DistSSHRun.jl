@@ -122,7 +122,8 @@ using .DistSSHBase: CliCursor, OUTPUT_WIDTH, PARENT_HOST_NAME, _HOST_TOOL_NAMES,
     _NS_CACHE_DIR, _checked_remote_dest, _git_cmd, _host_sync_remote_shell_cmd,
     _host_tool_exe, _host_tool_present, _julia_spec_is_auto, _located_project_file,
     _normalize_hint_surface,
-    _path_is_under, _path_under_resolved, _print_colored, _remote_shell_path_word,
+    _path_is_under, _path_under_resolved, _print_colored, _remote_julia_path_sh,
+    _remote_shell_path_word, _remote_shell_status,
     _rethrow_missing_host_tool, _scp_cmd, _ssh_cmd, _ssh_exe,
     _ssh_host_args, _test_double_julia_argv, _test_doubles_on, _truncate_ssh_message,
     cli_at_end, cli_consume!, cli_current, cli_entry, cli_heading, cli_m, cli_m_project,
@@ -521,7 +522,9 @@ function _main_dispatch(args::Vector{String})::Cint
     return 1
 end
 
-include("DistSSHRun/precompile.jl")
+if ccall(:jl_generating_output, Cint, ()) == 1
+    include("DistSSHRun/precompile.jl")
+end
 
 Base.eval(@__MODULE__, :(@main))
 

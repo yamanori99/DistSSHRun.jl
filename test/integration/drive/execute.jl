@@ -56,7 +56,7 @@ end
 @testset "execute! :drive detached" begin
     fixture = _fixture("drive_local_smoke.jl")
     _mktemp_host() do proj
-        _write_host_project!(proj, "ExecuteDriveDetached")
+        _write_job_with_distsshrun!(proj)
         script = joinpath(proj, "job.jl")
         cp(fixture, script; force = true)
         mktemp() do out_path, out_io
@@ -100,7 +100,7 @@ end
 @testset "execute! :drive init_output_dir! detached" begin
     fixture = _fixture("drive_init_output.jl")
     _mktemp_host() do proj
-        _write_host_project!(proj, "ExecuteDriveHook")
+        _write_job_with_distsshrun!(proj)
         script = joinpath(proj, "job.jl")
         cp(fixture, script; force = true)
         dest = joinpath(proj, "from_hook")

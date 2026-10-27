@@ -1,5 +1,16 @@
 if !isdefined(Main, :_write_host_project!)
 
+    # Detached `execute!` `-m DistSSHRun` needs DistSSHRun as the job package.
+    function _write_job_with_distsshrun!(proj)
+        kit = _kit_root()
+        for name in ("Project.toml", "Manifest.toml", "src", "lib", "ext")
+            src = joinpath(kit, name)
+            ispath(src) || continue
+            cp(src, joinpath(proj, name); force = true)
+        end
+        return nothing
+    end
+
     # Write a minimal loadable host package (`Project.toml` + `src/Name.jl`).
     function _write_host_project!(
             proj,
