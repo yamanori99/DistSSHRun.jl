@@ -249,6 +249,44 @@ function _with_drive_process!(f, proj_dir::AbstractString)
     end
 end
 
+"""True for the error `add_drive_workers!` raises when nothing joined."""
+function _drive_no_workers_joined(e)::Bool
+    return e isa ErrorException && e.msg == _NO_WORKERS_JOINED
+end
+
+"""
+Write the planned SSH hosts, run `join`, then keep only hosts that joined.
+
+`join` is `add_drive_workers!` and returns the SSH names that joined.
+An empty list removes `kit.hosts`. The same removal runs when `join` throws
+the no-worker error after that loop. An interrupt, or any other error,
+leaves the planned list so `terminate!` can reap workers that may already
+be running.
+"""
+function _drive_kit_hosts_around_join!(
+        join::Function,
+        hosts::Vector{Tuple{String, Union{Int, Nothing}}},
+        output_dir::AbstractString,
+        log_dir::Union{Nothing, AbstractString},
+    )::Vector{String}
+    _write_kit_hosts_file(String[String(pair[1]) for pair in hosts], output_dir, log_dir)
+    local joined::Vector{String}
+    try
+        joined = join()::Vector{String}
+    catch e
+        if !_interruptish(e) && _drive_no_workers_joined(e)
+            _remove_kit_hosts_file(output_dir, log_dir)
+        end
+        rethrow()
+    end
+    if isempty(joined)
+        _remove_kit_hosts_file(output_dir, log_dir)
+    else
+        _write_kit_hosts_file(joined, output_dir, log_dir)
+    end
+    return joined
+end
+
 function _run_drive_parsed_locked!(
         parsed, _output_dir, script_path, script_dir, proj_dir, script_args,
         enable_log, log_dir, original_args, host_names, hosts, parent_workers,
@@ -391,16 +429,20 @@ function _run_drive_parsed_locked!(
             return 1
         end
 
-        successful_hosts = add_drive_workers!(
-            hosts, parent_workers, default_workers, julia_exe, proj_dir, script_path,
-            project_root,
-        )
+        # Planned SSH names land in `kit.hosts` before `add_drive_workers!`.
+        # A kill during join can still find those hosts. The list is replaced
+        # with hosts that joined, or removed when none did.
+        successful_hosts = _drive_kit_hosts_around_join!(hosts, kit_out, kit_log) do
+            return add_drive_workers!(
+                hosts, parent_workers, default_workers, julia_exe, proj_dir, script_path,
+                project_root,
+            )
+        end
         DistSSHRun.capture_worker_provenance!()
         # Register before the `require_all_hosts` check below: that branch can
         # `return 1` with workers already joined, and `finally` must still
         # reach a non-`nothing` `drive_atexit_cleanup` to tear them down.
         drive_atexit_cleanup = register_worker_cleanup!(successful_hosts)
-        DistSSHRun._write_kit_hosts_file(successful_hosts, kit_out, kit_log)
         DistSSHRun._write_joined_drive_host_status!(successful_hosts, kit_out, kit_log)
         if require_all_hosts
             missing = unique(String[h[1] for h in hosts if !(h[1] in successful_hosts)])
