@@ -42,6 +42,11 @@ Worker image installs **two** juliaup channels from
   major.minor so E2E can `juliaup default` to mismatch, then
   `up` to realign. Not a supported floor and not a Pkg.test slot.
 
+The image also `Pkg.Registry.add("General")` on the default channel. A
+fresh juliaup depot has no registries, and `setup --instantiate` fail-closes
+in that case (`no reachable package registries`). The registry lives in
+`~/.julia/registries` and is shared by both channels.
+
 `up.sh` passes both as Docker / `container` build-args and exports
 `DISTSSHKIT_E2E_JULIA_{DEFAULT,ALT}_CHANNEL` for `test/e2e.jl`. On the build
 path it also resolves each channel's current release from `versions.json`

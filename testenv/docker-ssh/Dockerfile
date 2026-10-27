@@ -65,6 +65,15 @@ RUN set -eu; \
     }; \
     rm -f /tmp/julia-default-ver /tmp/julia-alt-ver
 
+# Fresh juliaup has no General. Remote `setup --instantiate` stops when
+# `Pkg.Registry.reachable_registries()` is empty (see help setup).
+RUN su - "${SSH_USER}" -c "\
+    \"\$HOME/.juliaup/bin/julia\" --startup-file=no -e '\
+        using Pkg; \
+        Pkg.Registry.add(\"General\"); \
+        isempty(Pkg.Registry.reachable_registries()) && \
+            error(\"worker image has no reachable package registry\")'"
+
 RUN mkdir -p /run/sshd /mounted-keys \
     && mkdir -p "/home/${SSH_USER}/.ssh" \
     && chmod 700 "/home/${SSH_USER}/.ssh" \
