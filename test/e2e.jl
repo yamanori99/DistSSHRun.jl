@@ -1183,6 +1183,7 @@ end
             _with_tempdir() do app_path
                 app = String(app_path)
                 write(joinpath(app, "Project.toml"), "name = \"NegationApp\"\n")
+                write(joinpath(app, "Manifest.toml"), "# lock\n")
                 write(joinpath(app, ".gitignore"), "data/*\n!data/keep.txt\n")
                 mkpath(joinpath(app, "data"))
                 write(joinpath(app, "data", "a.dat"), "nope\n")

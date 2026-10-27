@@ -120,7 +120,7 @@ end
 Pkg environment for `project` (a directory, or a project-file path).
 
 `project_dir` is the directory of the project file Base would use
-(`--project`). `manifest` is [`manifest_path`](@ref), or `nothing` when
+(`--project`). `manifest` is `manifest_path`, or `nothing` when
 that lookup finds no file. `env_dir` is the directory of `manifest`, or
 `project_dir` when there is no lock. That is the tree `setup --rsync` sends.
 
