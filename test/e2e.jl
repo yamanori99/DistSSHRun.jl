@@ -16,6 +16,16 @@
 # Afterward open only:
 #   $(cat test/artifacts/ssh-e2e/LATEST)/SUMMARY.txt
 
+# Startup project for helper children. Same capture as `test/runtests.jl`.
+# This file is a separate entry (`up.sh --e2e`, JETLS). Guard the `const` so
+# loading both files in one process does not redefine it.
+if !isdefined(Main, :TEST_PROJECT)
+    const TEST_PROJECT = let active = Base.active_project()
+        active === nothing && error("test/e2e.jl: Base.active_project() is nothing")
+        String(active)
+    end
+end
+
 using Test
 using Distributed
 using DistSSHRun

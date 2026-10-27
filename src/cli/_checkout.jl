@@ -1,143 +1,114 @@
-# Load this checkout when `--project` is the user's app, not DistSSHRun.
-# A registry install takes the `import` in the caller and never gets here.
+# Load this checkout when the active environment does not provide DistSSHRun.
+# A registry install and `julia -m` take the caller's `import` and never get here.
 #
-# `include` of `src/DistSSHRun.jl` does not resolve non-stdlib deps.
-# A tree with no Manifest is developed into the depot, then loaded as a package.
-# The active project stays what the process was given.
-#
-# Do not `import Pkg` here. `setup.jl` includes this file on every run, and
-# `import` only sees direct deps of `LOAD_PATH`. `Pkg.test` sets that to the
-# test project, which does not depend on Pkg. Load the stdlib by its id.
+# Do not `import Pkg` or `import TOML` here. `setup.jl` includes this file on
+# every run, and `import` only sees direct dependencies of `LOAD_PATH`.
+# `Pkg.test` sets that to the test project. Manifest and project names are
+# Base's (`Project.toml`, `JuliaProject.toml`, `Manifest.toml`,
+# `JuliaManifest.toml`, and `Manifest-v<major>.<minor>.toml`).
 
-if !isdefined(@__MODULE__, :_checkout_load_env)
-    # BSD and Linux `flock`: exclusive lock, then unlock.
-    function _checkout_flock(io::IOStream, op::Cint)
-        rc = ccall(:flock, Cint, (RawFD, Cint), Base.fd(io), op)
-        systemerror("flock", rc != 0)
-        return nothing
+if !isdefined(@__MODULE__, :_include_checkout_run)
+    function _checkout_root()::String
+        return normpath(abspath(joinpath(@__DIR__, "..", "..")))
     end
 
-    function _checkout_with_flock(f::Function, lock_path::AbstractString)
-        Sys.isunix() || (f(); return nothing)
-        open(lock_path, "w+") do io
-            _checkout_flock(io, Cint(2))
-            try
-                f()
-            finally
-                _checkout_flock(io, Cint(8))
-            end
-        end
-        return nothing
+    function _checkout_quote(path::AbstractString)::String
+        return "\"" * replace(String(path), "\"" => "\\\"") * "\""
     end
 
-    # `Base.require` of a stdlib id finds `Sys.STDLIB` when the name is not a
-    # direct dependency. An already loaded module is reused.
-    function _checkout_stdlib(name::AbstractString, uuid::AbstractString)
-        id = Base.PkgId(Base.UUID(uuid), String(name))
-        loaded = get(Base.loaded_modules, id, nothing)
-        if loaded isa Module
-            return loaded
-        end
-        return Base.require(id)
+    function _checkout_project_file(root::AbstractString)::Union{Nothing, String}
+        located = Base.locate_project_file(String(root))
+        return located isa String ? located : nothing
     end
 
-    function _checkout_name_of(toml_mod::Module, toml::String)::String
-        parse = getfield(toml_mod, :parse)
-        parsed = parse(toml)
-        name = get(parsed, "name", "")
-        return name isa AbstractString ? String(name) : ""
+    function _checkout_manifest_file(root::AbstractString)::Union{Nothing, String}
+        proj = _checkout_project_file(root)
+        proj === nothing && return nothing
+        return Base.project_file_manifest_path(proj)
     end
 
-    function _checkout_project_name(toml::AbstractString)::String
-        toml_mod = _checkout_stdlib("TOML", "fa267f1f-6049-4f14-aa54-33bafae1ed76")
-        return Base.invokelatest(_checkout_name_of, toml_mod, String(toml))::String
+    function _checkout_is_run(root::AbstractString)::Bool
+        proj = _checkout_project_file(root)
+        proj === nothing && return false
+        name = get(Base.parsed_toml(proj), "name", "")
+        return name == "DistSSHRun"
     end
 
-    function _checkout_develop_now!(pkg::Module, env::AbstractString, root::AbstractString)
-        activate = getfield(pkg, :activate)
-        develop = getfield(pkg, :develop)
-        instantiate = getfield(pkg, :instantiate)
-        spec = getfield(pkg, :PackageSpec)
-        activate(env) do
-            develop(spec(; path = root); io = devnull)
-            instantiate(; io = devnull)
-        end
-        return nothing
-    end
-
-    function _checkout_develop!(env::AbstractString, root::AbstractString)
-        pkg = _checkout_stdlib("Pkg", "44cfe95a-1eb2-52ea-b672-e2afdf69b78f")
-        Base.invokelatest(_checkout_develop_now!, pkg, env, root)
-        return nothing
-    end
-
-    # Written only after `develop` and `instantiate` both return.
-    _checkout_ready_path(env::AbstractString) = joinpath(env, "distsshrun-ready")
-
-    function _checkout_mark_ready!(env::AbstractString)
-        dest = _checkout_ready_path(env)
-        tmp = dest * ".tmp"
-        write(tmp, "ok\n")
-        mv(tmp, dest; force = true)
-        return nothing
-    end
-
-    function _checkout_develop_and_mark!(env::AbstractString, root::AbstractString)
-        mkpath(env)
-        _checkout_develop!(env, root)
-        _checkout_mark_ready!(env)
-        return nothing
-    end
-
-    # A missing marker on an existing directory is finished in place, so a
-    # usable env is not deleted when the process died before the marker.
-    # A failure there deletes the directory and starts over.
-    function _checkout_fill_env!(env::AbstractString, root::AbstractString)
-        isfile(_checkout_ready_path(env)) && return nothing
-        if isdir(env)
-            try
-                _checkout_develop_and_mark!(env, root)
-                return nothing
-            catch err
-                err isa InterruptException && rethrow()
-                rm(env; force = true, recursive = true)
-            end
-        end
-        _checkout_develop_and_mark!(env, root)
-        return nothing
-    end
-
-    function _checkout_ensure_env!(env::AbstractString, root::AbstractString)
-        mkpath(dirname(env))
-        _checkout_with_flock(env * ".lock") do
-            _checkout_fill_env!(env, root)
-        end
-        return nothing
-    end
-
-    # A tree that already has `Manifest.toml` is that directory.
-    # A DistSSHRun tree without one is developed into the first depot.
-    function _checkout_load_env(root::AbstractString)::String
+    # An installed tree (`…/packages/DistSSHRun/<slug>`), not a clone.
+    function _checkout_in_depot(root::AbstractString)::Bool
         root = normpath(abspath(String(root)))
-        isfile(joinpath(root, "Manifest.toml")) && return root
-        toml_path = joinpath(root, "Project.toml")
-        isfile(toml_path) || return root
-        toml = read(toml_path, String)
-        _checkout_project_name(toml) == "DistSSHRun" || return root
-        depot = Base.DEPOT_PATH[1]
-        isempty(depot) && (depot = joinpath(homedir(), ".julia"))
-        slug = string(hash(root * "\n" * toml); base = 16)
-        env = joinpath(depot, "environments", "distsshrun-cli", slug)
-        _checkout_ensure_env!(env, root)
-        return env
+        sep = Base.Filesystem.path_separator
+        for depot in DEPOT_PATH
+            isempty(depot) && continue
+            packages = normpath(abspath(joinpath(String(depot), "packages")))
+            root == packages && return true
+            startswith(root, packages * sep) && return true
+        end
+        return false
     end
 
-    # Puts this checkout on `LOAD_PATH`. The caller then `import DistSSHRun`
-    # at top level (`import` is not legal inside this function).
-    function _include_checkout_run()
-        root = normpath(abspath(joinpath(@__DIR__, "..", "..")))
-        env = _checkout_load_env(root)
-        env in LOAD_PATH || pushfirst!(LOAD_PATH, env)
+    function _checkout_no_manifest_line(root::AbstractString)::String
+        shown = _checkout_quote(root)
+        return "No Manifest in $(shown). Run: julia --project=$(shown) -e 'using Pkg; Pkg.instantiate()'"
+    end
+
+    function _checkout_deps_line(root::AbstractString)::String
+        shown = _checkout_quote(root)
+        return "Dependencies of $(shown) are not instantiated. Run: julia --project=$(shown) -e 'using Pkg; Pkg.instantiate()' or Pkg.resolve()"
+    end
+
+    # `nothing` means `err` is not one of the two hints.
+    function _checkout_hint_message(err)::Union{Nothing, String}
+        seen = 0
+        while err isa LoadError && seen < 8
+            err = err.error
+            seen += 1
+        end
+        if err isa ErrorException
+            msg = err.msg
+            if startswith(msg, "No Manifest in ") || startswith(msg, "Dependencies of ")
+                return msg
+            end
+        end
+        if err isa ArgumentError
+            msg = err.msg
+            # Not in the environment at all. The caller reports Julia's error.
+            occursin("Package DistSSHRun not found in current path", msg) && return nothing
+            if occursin("not found in current path", msg) ||
+                    occursin("does not seem to be installed", msg)
+                return _checkout_deps_line(_checkout_root())
+            end
+        end
         return nothing
+    end
+
+    # One stderr line when this file is the program. Otherwise throw.
+    function _checkout_report(err, script::AbstractString)
+        hint = _checkout_hint_message(err)
+        hint === nothing && rethrow()
+        if !isempty(PROGRAM_FILE) && abspath(PROGRAM_FILE) == abspath(String(script))
+            println(stderr, hint)
+            exit(1)
+        end
+        if err isa ErrorException && err.msg == hint
+            rethrow()
+        end
+        error(hint)
+    end
+
+    # Puts a checkout that already has a manifest on `LOAD_PATH`.
+    # The caller then `import`s at top level.
+    function _include_checkout_run()
+        root = _checkout_root()
+        _checkout_is_run(root) || return nothing
+        if _checkout_manifest_file(root) !== nothing
+            # `pushfirst!` puts this tree ahead of the active project, so a
+            # name defined here wins for DistSSHRun and for any other package
+            # this tree also provides.
+            root in LOAD_PATH || pushfirst!(LOAD_PATH, root)
+            return nothing
+        end
+        _checkout_in_depot(root) && return nothing
+        error(_checkout_no_manifest_line(root))
     end
 end

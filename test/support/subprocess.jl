@@ -1,9 +1,16 @@
 if !isdefined(Main, :_child_julia_env)
 
+    # `@` and `@stdlib`, joined by the platform depot separator (`;` on Windows).
+    function _child_load_path()::String
+        sep = Sys.iswindows() ? ";" : ":"
+        return "@" * sep * "@stdlib"
+    end
+
     # ENV for child `julia` / `drive` processes.
     #
-    # Drop `Pkg.test`'s `JULIA_LOAD_PATH` so `--project=` resolves packages (and
-    # stdlibs like Serialization) like a normal user invocation.
+    # Replace `JULIA_LOAD_PATH` (do not keep `Pkg.test`'s path) and drop
+    # `JULIA_PROJECT` so the child's `--project=` is the one on the command.
+    # `JULIA_DEPOT_PATH` is copied through with the rest of `ENV`.
     function _child_julia_env(extra::AbstractDict = Dict{String, String}())
         # In-process `_run_kit_cli_script` sets DISTSSHKIT_CLI_SUBCOMMAND_DONE so a
         # nested `main` does not run twice. Children must not inherit that, or
@@ -11,6 +18,7 @@ if !isdefined(Main, :_child_julia_env)
         skip = Set(
             (
                 "JULIA_LOAD_PATH",
+                "JULIA_PROJECT",
                 "DISTSSHKIT_CLI_SUBCOMMAND_DONE",
                 "DIST_SSH_KIT_CLI_INCLUDE",
             )
@@ -18,6 +26,7 @@ if !isdefined(Main, :_child_julia_env)
         env = Dict{String, String}(
             String(k) => String(v) for (k, v) in ENV if !isempty(v) && !(String(k) in skip)
         )
+        env["JULIA_LOAD_PATH"] = _child_load_path()
         env["JULIA_PKG_PRECOMPILE_AUTO"] = get(ENV, "JULIA_PKG_PRECOMPILE_AUTO", "0")
         # Avoid broad pkill in drive; each child cleans its own workers via rmprocs.
         env["DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL"] = "1"

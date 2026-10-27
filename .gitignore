@@ -1,6 +1,6 @@
 # Julia / Pkg
-Manifest.toml
-docs/Manifest.toml
+Manifest*.toml
+JuliaManifest*.toml
 docs/build/
 docs/site/
 

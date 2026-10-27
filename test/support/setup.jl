@@ -33,8 +33,22 @@ if !isdefined(Main, :_run_kit_setup)
         end
     end
 
-    function _run_kit_setup(; kwargs...)
-        cmd, tmp = _kit_setup_cmd(; kwargs...)
+    function _run_kit_setup(;
+            setup_args::AbstractVector,
+            command::AbstractString = "setup",
+            kit_root::String = _kit_root(),
+            julia::String = _julia_exe(),
+            project_root = nothing,
+            extra_env::Dict{String, String} = Dict{String, String}(),
+        )
+        cmd, tmp = _kit_setup_cmd(;
+            setup_args,
+            command,
+            kit_root,
+            julia,
+            project_root,
+            extra_env,
+        )
         try
             return _run_subprocess(cmd)
         finally
