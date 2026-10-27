@@ -38,47 +38,51 @@ end
 # The included module already binds `resolve_remote_project_root`.
 # Key off the setup parser, which that import does not bring in.
 
-# `nothing` means the caller may delete.
-# Empty `given` is not a grant: the caller prompts, unless `-y` / `DISTSSHKIT_YES`.
 # A mismatch returns 1. The path is single-quoted so a shell does not expand `~`.
 function _confirm_path_quote(path::AbstractString)::String
     return "'" * replace(String(path), "'" => "'\\''") * "'"
 end
 
-function _setup_confirm_gate(
-        given::Vector{String},
-        expected::AbstractString,
+# `-y` / `--yes` / `DISTSSHKIT_YES` do not authorize delete or prune.
+# A matching `--confirm-path` still deletes. With neither, the caller prompts.
+function _setup_reject_yes_delete(
+        yes::Bool,
+        confirm_paths::Vector{String},
     )::Union{Nothing, Cint}
-    isempty(given) && return nothing
-    shown = _confirm_path_quote(expected)
-    if any(s -> DistSSHRun._confirm_path_control_char(s), given)
-        print_err("Error: "; bold = true)
-        println_fatal("--confirm-path does not match $(shown)")
-        return Cint(1)
-    end
-    got = Set(strip(s) for s in given)
-    if got != Set([strip(String(expected))])
-        print_err("Error: "; bold = true)
-        println_fatal("--confirm-path does not match $(shown)")
-        return Cint(1)
-    end
-    return nothing
+    yes || return nothing
+    isempty(confirm_paths) || return nothing
+    print_err("Error: "; bold = true)
+    println_fatal(
+        "-y, --yes, and DISTSSHKIT_YES do not authorize setup --delete or setup --prune. " *
+            "Pass --confirm-path. See help setup.",
+    )
+    return Cint(1)
 end
 
-# `true` asks for the typed prompt (`confirm = true`).
-# `-y` / `DISTSSHKIT_YES` skips it until 0.2 and says so. A matching
-# `--confirm-path` skips it without that note.
-function _setup_legacy_yes_confirm(confirm_paths::Vector{String})::Bool
-    isempty(confirm_paths) || return false
-    if DistSSHRun.kit_noninteractive()
-        println(
-            stderr,
-            "  -y / DISTSSHKIT_YES still deletes setup --delete and setup --prune. " *
-                "This stops in 0.2. Pass --confirm-path.",
-        )
-        return false
+function _setup_confirm_error(err)::Cint
+    err isa DistSSHRun.ConfirmPathMismatch || err isa ArgumentError || rethrow()
+    print_err("Error: "; bold = true)
+    if err isa DistSSHRun.ConfirmPathMismatch
+        shown = _confirm_path_quote(err.expected)
+        println_fatal("--confirm-path does not match $(shown). See help setup.")
+    else
+        println_fatal(err.msg)
     end
-    return true
+    println_fatal()
+    return Cint(1)
+end
+
+function _setup_confirm_plan(
+        hosts::Vector{String},
+        mode::Symbol,
+        confirm_paths::Vector{String},
+        expected::AbstractString,
+    )
+    try
+        return DistSSHRun._setup_confirm_plans(hosts, mode, confirm_paths, expected)
+    catch err
+        return _setup_confirm_error(err)
+    end
 end
 if !isdefined(@__MODULE__, :parse_setup_args)
     include(joinpath(@__DIR__, "setup", "_using.jl"))
@@ -207,20 +211,19 @@ if !isdefined(@__MODULE__, :setup_main)
 
             if mode === :delete
                 delete_path = op_path
-                gate = _setup_confirm_gate(opts.confirm_paths, delete_path)
-                gate isa Cint && return gate
-                ask = _setup_legacy_yes_confirm(opts.confirm_paths)
-                if !ask && !preflight_setup_ssh(opts.hosts)
+                yes_gate = _setup_reject_yes_delete(opts.cli_session.yes, opts.confirm_paths)
+                yes_gate isa Cint && return yes_gate
+                plan = _setup_confirm_plan(opts.hosts, :delete, opts.confirm_paths, delete_path)
+                plan isa Cint && return plan
+                if plan !== nothing && !preflight_setup_ssh(opts.hosts)
                     print_err("SSH preflight failed. Fix connectivity, then retry.")
                     kit_println()
                     return Cint(1)
                 end
-                return Cint(
-                    finish_host_op!(
-                            "Delete",
-                            delete_remotes(opts.hosts, delete_path; confirm = ask),
-                        ) ? 0 : 1,
-                )
+                result = plan === nothing ?
+                    delete_remotes(opts.hosts, delete_path; confirm = true) :
+                    DistSSHRun._apply_confirmed_delete(opts.hosts, plan)
+                return Cint(finish_host_op!("Delete", result) ? 0 : 1)
             end
 
             if mode === :clone
@@ -297,28 +300,34 @@ if !isdefined(@__MODULE__, :setup_main)
             end
 
             if mode === :prune
-                gate = _setup_confirm_gate(opts.confirm_paths, op_path)
-                gate isa Cint && return gate
-                ask = _setup_legacy_yes_confirm(opts.confirm_paths)
-                if !ask && !preflight_setup_ssh(opts.hosts)
+                yes_gate = _setup_reject_yes_delete(opts.cli_session.yes, opts.confirm_paths)
+                yes_gate isa Cint && return yes_gate
+                plan = _setup_confirm_plan(opts.hosts, :prune, opts.confirm_paths, op_path)
+                plan isa Cint && return plan
+                if plan !== nothing && !preflight_setup_ssh(opts.hosts)
                     print_err("SSH preflight failed. Fix connectivity, then retry.")
                     kit_println()
                     return Cint(1)
                 end
-                return Cint(
-                    finish_host_op!(
-                            "Prune",
-                            prune_kit_leaves(
-                                opts.hosts,
-                                op_path,
-                                project;
-                                confirm = ask,
-                                older_days = opts.older_days,
-                                id = opts.prune_id,
-                                skip_setup = DistSSHRun.setup_log_dir(project),
-                            ),
-                        ) ? 0 : 1
-                )
+                result = plan === nothing ?
+                    prune_kit_leaves(
+                        opts.hosts,
+                        op_path,
+                        project;
+                        confirm = true,
+                        older_days = opts.older_days,
+                        id = opts.prune_id,
+                        skip_setup = DistSSHRun.setup_log_dir(project),
+                    ) :
+                    DistSSHRun._apply_confirmed_prune(
+                        opts.hosts,
+                        plan,
+                        project;
+                        older_days = opts.older_days,
+                        id = opts.prune_id,
+                        skip_setup = DistSSHRun.setup_log_dir(project),
+                    )
+                return Cint(finish_host_op!("Prune", result) ? 0 : 1)
             end
 
             # --pull/--sync: allow commit mismatch (fixed by the op). --check: require sync.

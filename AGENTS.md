@@ -2,9 +2,9 @@
 
 Users run `julia -m DistSSHKit`. This repository is DistSSHRun.
 
-Do not call `setup!(session, :delete)` or `setup!(session, :prune)`. `yes=true` still deletes without `--confirm-path`. Use the CLI.
+Do not call `setup!(session, :delete)` or `setup!(session, :prune)` unless `confirm_path` is a path the user typed. `yes=true` does not delete. Never copy the target out of an error, including `ConfirmPathMismatch`, into a retry.
 
-Agents must not pass `-y`, `--yes`, or set `DISTSSHKIT_YES` for `setup --delete` or `setup --prune`. Use `--confirm-path` with the path the command printed.
+Agents must not pass `-y`, `--yes`, or set `DISTSSHKIT_YES` for `setup --delete` or `setup --prune`. That combination is an error. Use `--confirm-path` with the path the command printed.
 
 Read [DistSSHKit releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md) before a pull request that raises the version or changes public behavior.
 

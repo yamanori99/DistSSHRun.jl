@@ -51,11 +51,23 @@ using Test
         ) do
             _setup_capture(["--delete", "--yes", "child:host1"])
         end
+        combined = out * err
         @test code == 1
-        @test occursin("still deletes", err)
-        @test occursin("0.2", err)
-        @test occursin("--confirm-path", err)
-        @test occursin("SSH preflight failed", out * err)
+        @test occursin("do not authorize", combined)
+        @test occursin("--confirm-path", combined)
+        @test occursin("help setup", combined)
+        @test !occursin("--help", combined)
+        @test !occursin("SSH preflight failed", combined)
+    end
+    let (code, out, err) = _setup_capture(
+            ["--delete", "--yes", "--confirm-path", "~/nope", "child:host1"],
+        )
+        combined = out * err
+        @test code == 1
+        @test occursin("does not match", combined)
+        @test occursin("help setup", combined)
+        @test !occursin("--help", combined)
+        @test !occursin("do not authorize", combined)
     end
     let (code, out, err) = _setup_capture(["--prune", "child:host1"])
         @test code == 0

@@ -141,6 +141,76 @@ end
         end
     end
 
+    @testset "delete shell refuses a final symlink and quotes odd names" begin
+        script = DistSSHRun._remote_delete_shell("~/proj")
+        @test occursin("test -L", script)
+        @test occursin("cd -P", script)
+        @test occursin("pwd -P", script)
+        @test occursin("rm -rf", script)
+        @test !occursin("--one-file-system", script)
+        @test !occursin("--preserve-root", script)
+        mktempdir() do d
+            home = joinpath(d, "home")
+            mkdir(home)
+            nasty = joinpath(d, "a b'c\\d")
+            mkdir(nasty)
+            touch(joinpath(nasty, "f"))
+            target = joinpath(d, "real")
+            mkdir(target)
+            touch(joinpath(target, "keep"))
+            link = joinpath(d, "link name")
+            symlink(target, link)
+            via = joinpath(d, "via")
+            symlink(d, via)
+            nested = joinpath(via, "nested")
+            mkdir(nested)
+            touch(joinpath(nested, "gone"))
+            depot = joinpath(home, ".julia")
+            mkdir(depot)
+            touch(joinpath(depot, "packages"))
+            log = joinpath(d, "rm.log")
+            fake = joinpath(d, "bin")
+            mkdir(fake)
+            real_rm = String(something(Sys.which("rm"), "/bin/rm"))
+            write(
+                joinpath(fake, "rm"),
+                "#!/bin/sh\necho called >> $(repr(log))\nexec $(DistSSHRun._remote_sh_quote(real_rm)) \"\$@\"\n",
+            )
+            chmod(joinpath(fake, "rm"), 0o755)
+            path = fake * ":" * get(ENV, "PATH", "")
+            function run_script(target_path)
+                body = DistSSHRun._remote_delete_shell(target_path)
+                return run(
+                    ignorestatus(pipeline(`sh -c $body`; stdout = devnull, stderr = devnull));
+                    wait = true,
+                )
+            end
+            withenv("HOME" => home, "PATH" => path) do
+                rm(log; force = true)
+                refused = run_script(link)
+                @test refused.exitcode != 0
+                @test islink(link)
+                @test isfile(joinpath(target, "keep"))
+                @test !isfile(log)
+                rm(log; force = true)
+                depot_refused = run_script(depot)
+                @test depot_refused.exitcode != 0
+                @test isdir(depot)
+                @test !isfile(log)
+                removed = run_script(nasty)
+                @test removed.exitcode == 0
+                @test !isdir(nasty)
+                @test isfile(log)
+                rm(log; force = true)
+                followed = run_script(nested)
+                @test followed.exitcode == 0
+                @test !isdir(nested)
+                @test islink(via)
+                @test isfile(log)
+            end
+        end
+    end
+
     @testset "collect skips .git" begin
         @test DistSSHRun._collect_rel_is_git(".git")
         @test DistSSHRun._collect_rel_is_git(".git/HEAD")

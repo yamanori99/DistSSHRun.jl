@@ -45,20 +45,36 @@ function rsync_push_to_remotes(
     )
 end
 
-"""Remote `sh` that removes `remote_path` unless it is that host's `~` or `/`."""
+"""Remote `sh` that removes `remote_path` unless it is that host's home, `/`, or depot.
+
+The final path component must not be a symlink. Intermediate symlinks stay,
+so `cd -P` / `pwd -P` can resolve them. The `test -L` check and `rm` are one
+script. Flags are `rm -rf` only (BSD rm on macOS).
+"""
 function _remote_delete_shell(remote_path::AbstractString)::String
     pq = _remote_shell_path_word(remote_path)
     return """
-    if [ -e $pq ]; then
-      _distssh_target=\$(cd $pq && pwd -P) || exit 1
-      _distssh_home=\$(cd ~ && pwd -P) || exit 1
+    if test -L $pq; then
+      echo "refusing to delete symlink $pq" >&2
+      exit 1
+    fi
+    if test -e $pq; then
+      _distssh_target=\$(cd -P $pq && pwd -P) || exit 1
+      _distssh_home=\$(cd -P ~ && pwd -P) || exit 1
       if [ "\$_distssh_target" = "\$_distssh_home" ] || [ "\$_distssh_target" = / ]; then
         echo "refusing to delete \$_distssh_target" >&2
         exit 1
       fi
+      if test -d "\$_distssh_home/.julia"; then
+        _distssh_depot=\$(cd -P "\$_distssh_home/.julia" && pwd -P) || exit 1
+        if [ "\$_distssh_target" = "\$_distssh_depot" ]; then
+          echo "refusing to delete \$_distssh_depot" >&2
+          exit 1
+        fi
+      fi
     fi
     rm -rf $pq 2>/dev/null
-    if [ -e $pq ]; then
+    if test -e $pq; then
       chmod -R u+rwX $pq 2>/dev/null
       rm -rf $pq
     fi
@@ -70,9 +86,9 @@ Delete remote repositories.
 
 Returns `(cancelled, succeeded, failed, hosts)`. Caller should use
 [`finish_host_op!`](@ref) so partial failure is not reported as success.
-Pass `confirm=false` to skip the typed `delete` prompt.
-The `setup --delete` CLI does that after `--confirm-path` matches, and also
-when `-y` / `DISTSSHKIT_YES` is set. That skip stops in 0.2.
+Pass `confirm=false` to skip the typed `delete` prompt. `-y` /
+`DISTSSHKIT_YES` do not skip it. `setup --delete` sets `confirm=false`
+only after `--confirm-path` matches, or after the typed `delete` prompt.
 """
 function delete_remotes(
         hosts::Vector{String},
@@ -80,7 +96,8 @@ function delete_remotes(
         confirm::Bool = true,
     )::NamedTuple
     _checked_remote_dest(remote_path)
-    if confirm && !kit_noninteractive()
+    _refuse_depot_target(remote_path)
+    if confirm
         cancelled = with_kit_progress_suspended() do
             print_err("  This will DELETE repositories on all hosts via SSH.\n")
             println_fatal("  Remote path: $remote_path")

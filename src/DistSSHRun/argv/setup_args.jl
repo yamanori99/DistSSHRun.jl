@@ -43,7 +43,7 @@ function show_requirements(; io::IO = stdout)
         "  $(KIT_QUIET_FLAG_HELP)",
         "  $(KIT_PROGRESS_FLAG_HELP)",
         "  $(KIT_VERBOSE_FLAG_HELP)",
-        "  -y, --yes           skip confirmations (delete/prune stop in 0.2)",
+        "  -y, --yes           skip confirmations except --delete and --prune",
         "  --confirm-path PATH  with --delete or --prune: the computed path (quote ~)",
         "  --hosts CSV          child:NAME[:N] (:N stripped)",
         "  --hosts-file PATH    one token per line (:N stripped)",
@@ -59,6 +59,7 @@ function show_requirements(; io::IO = stdout)
         io,
         "  $(KIT_SKIP_PKILL_ENV_HELP)",
         "  $(KIT_JOBS_ENV_HELP)",
+        "  DISTSSHKIT_YES            same as -y; does not authorize --delete or --prune",
     )
     print_help_blank(io)
     return print_help_lines(
