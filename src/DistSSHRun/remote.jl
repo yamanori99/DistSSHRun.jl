@@ -137,18 +137,188 @@ function _pkill_local_tagged_workers!(job_id::AbstractString)
     return nothing
 end
 
+"""Regex that matches `pattern` and not a shell line that contains this text.
+
+`pkill -f` on Linux matches the full command line. OpenSSH runs
+`sh -c 'pkill -9 -f …'`, so a raw tag in that string can SIGKILL the
+shell (exit 137) before the worker is signaled. `[d]istsshkit-job:…`
+matches `distsshkit-job:…` in another argv and not the bracket text.
+macOS `pkill` did not kill that shell in a local check; the bracket
+still matches a process whose argv contains the raw tag.
+"""
+function _pkill_regex_no_self(pattern::AbstractString)::String
+    s = String(pattern)
+    isempty(s) && return s
+    return string('[', s[1], ']', s[nextind(s, 1):end])
+end
+
+"""Remote `pkill -9 -f` for this job mark. Exit 1 (no match) is success."""
+function _remote_tagged_pkill_sh(job_id::AbstractString)::String
+    pattern = _pkill_regex_no_self(kit_job_pkill_pattern(job_id))
+    return "pkill -9 -f $(_remote_sh_quote(pattern))"
+end
+
 """SSH `pkill -f` for this run's job mark only (never `julia.*--worker`)."""
 function _pkill_remote_tagged_workers!(host::String, job_id::AbstractString)::Bool
     if !_remote_ssh_ok(host)
         return false
     end
-    inner = "pkill -9 -f $(_remote_sh_quote(kit_job_pkill_pattern(job_id)))"
+    inner = _remote_tagged_pkill_sh(job_id)
     try
         run(pipeline(_host_sync_remote_shell_cmd(host, inner); stdout = devnull, stderr = devnull))
     catch e
         _rethrow_missing_host_tool(e)
     end
     return true
+end
+
+# One SSH command on many hosts. `kill -INT` and tagged `pkill` share this.
+# OpenSSH keeps the first value of each option, so these budgets win over
+# `ssh_opts`, including a replacement `DISTRIBUTED_SSH_OPTS`.
+const _SSH_PHASE_CONCURRENCY = 8
+const _SSH_PHASE_ALIVE_INTERVAL = 5
+const _SSH_PHASE_ALIVE_COUNT = 1
+
+mutable struct _CmdRun
+    proc::Union{Nothing, Base.Process}
+    errkind::Symbol
+end
+
+_CmdRun() = _CmdRun(nothing, :none)
+
+struct _SSHHostResult
+    host::String
+    proc::Union{Nothing, Base.Process}
+    errkind::Symbol
+end
+
+function _ssh_phase_opts()::Vector{String}
+    connect = DistSSHBase._ssh_whole_seconds(:ssh_connect, DistSSHBase._SSH_CONNECT_TIMEOUT_S)
+    forced = String[
+        "-o", "BatchMode=yes",
+        "-o", "ConnectTimeout=$connect",
+        "-o", "ServerAliveInterval=$(_SSH_PHASE_ALIVE_INTERVAL)",
+        "-o", "ServerAliveCountMax=$(_SSH_PHASE_ALIVE_COUNT)",
+    ]
+    return append!(forced, ssh_opts())
+end
+
+"""`ssh` argv for one short remote command, or the `DISTSSHKIT_TEST_SSH` double."""
+function _ssh_phase_cmd(host::AbstractString, remote::AbstractString)::Cmd
+    custom = _test_doubles_on() ? strip(get(ENV, "DISTSSHKIT_TEST_SSH", "")) : ""
+    if !isempty(custom)
+        return Cmd(vcat(_test_double_julia_argv(custom), [String(host), String(remote)]))
+    end
+    return _ssh_cmd(String["-n"; _ssh_phase_opts(); _ssh_host_args(String(host), String(remote))])
+end
+
+function _kill_cmd_runs!(runs::AbstractVector{_CmdRun})
+    for run in runs
+        proc = run.proc
+        proc === nothing && continue
+        try
+            process_running(proc) && kill(proc, Base.SIGKILL)
+        catch
+        end
+    end
+    return nothing
+end
+
+"""
+Run `cmds` with at most `ntasks` in flight. After `seconds`, SIGKILL every
+local process this started, including ones that were still queued, and wait
+until those tasks finish.
+"""
+function _run_cmds_bounded!(
+        cmds::AbstractVector{Cmd},
+        seconds::Real;
+        ntasks::Integer = _SSH_PHASE_CONCURRENCY,
+    )::Vector{_CmdRun}
+    n = length(cmds)
+    runs = [_CmdRun() for _ in 1:n]
+    n == 0 && return runs
+    stop = Ref(false)
+    # `Base.Semaphore` waits on `Threads.Condition`. An `@async` task on this
+    # thread does not take that permit. A channel of permits does.
+    permits = Channel{Nothing}(max(1, Int(ntasks)))
+    for _ in 1:max(1, Int(ntasks))
+        put!(permits, nothing)
+    end
+    tasks = Vector{Task}(undef, n)
+    for i in 1:n
+        let i = i
+            tasks[i] = @async begin
+                try
+                    take!(permits)
+                catch
+                    return
+                end
+                try
+                    stop[] && return
+                    proc = run(pipeline(cmds[i]; stdout = devnull, stderr = devnull); wait = false)
+                    runs[i].proc = proc
+                    if stop[] && process_running(proc)
+                        kill(proc, Base.SIGKILL)
+                    end
+                    wait(proc)
+                catch e
+                    if e isa ProcessFailedException
+                        # Non-zero exit, including SIGKILL. Callers read `exitcode`.
+                    elseif e isa ArgumentError
+                        runs[i].errkind = :tool
+                    else
+                        runs[i].errkind = :other
+                    end
+                finally
+                    try
+                        isopen(permits) && put!(permits, nothing)
+                    catch
+                    end
+                end
+            end
+        end
+    end
+    timedwait(() -> all(istaskdone, tasks), Float64(seconds); pollint = 0.05)
+    stop[] = true
+    _kill_cmd_runs!(runs)
+    close(permits)
+    timedwait(() -> all(istaskdone, tasks), 2.0; pollint = 0.05)
+    _kill_cmd_runs!(runs)
+    timedwait(() -> all(istaskdone, tasks), 2.0; pollint = 0.05)
+    return runs
+end
+
+"""Run one remote command per host. `seconds` is the wall-clock deadline."""
+function _run_ssh_hosts!(
+        host_cmds::AbstractVector{<:Pair{<:AbstractString, <:AbstractString}},
+        seconds::Real;
+        ntasks::Integer = _SSH_PHASE_CONCURRENCY,
+    )::Vector{_SSHHostResult}
+    n = length(host_cmds)
+    cmds = Vector{Cmd}(undef, n)
+    hosts = Vector{String}(undef, n)
+    for i in eachindex(host_cmds)
+        hosts[i] = String(first(host_cmds[i]))
+        cmds[i] = _ssh_phase_cmd(hosts[i], last(host_cmds[i]))
+    end
+    runs = _run_cmds_bounded!(cmds, seconds; ntasks = ntasks)
+    return [_SSHHostResult(hosts[i], runs[i].proc, runs[i].errkind) for i in eachindex(hosts)]
+end
+
+function _ssh_phase_exit_code(result::_SSHHostResult)::Union{Nothing, Int}
+    result.errkind === :none || return nothing
+    proc = result.proc
+    proc === nothing && return nothing
+    process_exited(proc) || return nothing
+    # Deadline SIGKILL sets `exitcode` to 0 and `termsignal` to 9.
+    # That is not a remote status.
+    sig = proc.termsignal
+    if sig !== nothing && Int(sig) != 0
+        return nothing
+    end
+    code = proc.exitcode
+    code === nothing && return nothing
+    return Int(code)
 end
 
 # Git utilities
