@@ -26,8 +26,28 @@ using Test
         end
         @test_throws ArgumentError parse_plan_args(["a.jl", "b.jl"])
         @test_throws ArgumentError parse_plan_args(["job.jl", "extra"])
-        let r = @test_logs (:warn, r"Unknown option") parse_plan_args(["--nope", "job.jl"])
-            @test r.script_path == "job.jl"
+        for args in (["--nope", "job.jl"], ["--nope", "--help"], ["--help", "--nope"], ["-h", "--nope"])
+            let err = try
+                    parse_plan_args(args)
+                    error("expected ArgumentError")
+                catch e
+                    e
+                end
+                @test err isa ArgumentError
+                @test occursin("unknown plan option: --nope", err.msg)
+                @test occursin("help plan", err.msg)
+                @test !occursin("--help", err.msg)
+            end
+        end
+        @test parse_plan_args(["--gb-per-worker", "1.5", "--help"]).show_help
+        let err = try
+                parse_plan_args(["--parent-gb", "--nope"])
+                error("expected ArgumentError")
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test !occursin("unknown plan option", err.msg)
         end
     end
 end
