@@ -36,7 +36,10 @@ end
 function drive_main()::Cint
     original_args = copy(ARGS)
     try
-        return _drive_main_body(original_args)
+        # CLI: the frame throws `_DriveProcessInterrupt` after cleanup.
+        return DistSSHRun._drive_frame(; cli = true) do
+            return _drive_main_body(original_args)
+        end
     finally
         _restore_drive_args!(original_args)
     end
@@ -59,5 +62,10 @@ end
 if get(ENV, "DIST_SSH_KIT_CLI_INCLUDE", "") != "1" &&
         !isempty(PROGRAM_FILE) &&
         abspath(PROGRAM_FILE) == abspath(@__FILE__)
-    exit(drive_main())
+    try
+        exit(drive_main())
+    catch e
+        DistSSHRun._cli_finish_interrupt(e)
+        rethrow()
+    end
 end

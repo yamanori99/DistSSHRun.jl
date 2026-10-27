@@ -86,9 +86,8 @@ using Test
 end
 
 @testset "terminate! interrupt_grace reaches a drive worker" begin
-    # While the driver waits in `pmap`, Julia 1.13 exits 0 and the worker
-    # `catch` does not run. Measured on macOS, Ubuntu, and WSL. Julia 1.14
-    # on macOS exits 130, and the worker `catch` still does not run.
+    # SIGINT reaches the worker `sleep`, so the `catch` runs, and the
+    # driver's recorded exit code is 130.
     _with_tempdir() do proj
         _write_host_project!(proj, "TerminateWorker")
         script = joinpath(proj, "job.jl")
@@ -132,12 +131,8 @@ end
             end
             @test isfile(ready)
             r = DistSSHRun.terminate!(kp; interrupt_grace = 15, grace = 2)
-            @test_broken isfile(caught)
-            if isdefined(Base, :CancellationRequest)
-                @test r.exit_code == 130
-            else
-                @test_broken r.exit_code == 130
-            end
+            @test isfile(caught)
+            @test r.exit_code == 130
         finally
             process_running(kp.process) && DistSSHRun.terminate!(kp; grace = 1)
         end

@@ -167,6 +167,7 @@ include("DistSSHRun/namespace_sync.jl")
 include("DistSSHRun/pool.jl")
 include("DistSSHRun/drive/runtime/heartbeat.jl")
 include("DistSSHRun/drive/runtime/_common.jl")
+include("DistSSHRun/drive/runtime/cancel_frame.jl")
 include("DistSSHRun/drive/runtime/checks.jl")
 include("DistSSHRun/drive/runtime/collect_tree.jl")
 include("DistSSHRun/drive/runtime/workers.jl")
@@ -382,8 +383,14 @@ CLI entry. Prefer Julia 1.13+ and `julia -m DistSSHKit SUBCOMMAND …`:
 A `.jl` path with no command is not implicit `go`.
 """
 function main(args::Vector{String} = copy(ARGS))::Cint
-    return with_cli_entry(:DistSSHRun) do
-        _main(args)
+    try
+        return with_cli_entry(:DistSSHRun) do
+            return _main(args)
+        end
+    catch e
+        # After the drive frame's `finally` blocks. Translation only.
+        _cli_finish_interrupt(e)
+        rethrow()
     end
 end
 
@@ -451,6 +458,17 @@ public RUN_SUBCOMMAND_EXPECTATION
 public print_rejected_command
 
 function _main(args::Vector{String})::Cint
+    try
+        return _main_dispatch(args)
+    finally
+        # A second `main` in this process must run. The handshake flag is
+        # single-shot: consume clears it, and this deletes it again on every
+        # return, including throw and drive interrupt.
+        delete!(ENV, "DISTSSHKIT_CLI_SUBCOMMAND_DONE")
+    end
+end
+
+function _main_dispatch(args::Vector{String})::Cint
     if _consume_kit_cli_subcommand_done!()
         return 0
     end

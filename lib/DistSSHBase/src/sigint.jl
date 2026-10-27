@@ -9,14 +9,19 @@ const _CANCEL_TOKEN = isdefined(Base, :CANCEL_TOKEN) ? getglobal(Base, :CANCEL_T
 
 True when `e` is Ctrl-C delivered as an exception. Julia 1.13 throws
 `InterruptException`. Julia 1.14 throws `Base.CancellationRequest` when
-`exit_on_sigint` is off. `include` wraps either in `LoadError`, and a task
-wraps it in `TaskFailedException`. Those wrappers are opened here.
+`exit_on_sigint` is off. `include` wraps either in `LoadError`, a task wraps it in
+`TaskFailedException`, and a worker wraps it in `RemoteException`
+(`captured` / `ex`). Those wrappers are opened here.
 """
 function is_sigint(e)::Bool
     (e isa InterruptException || e isa _CANCELLATION_REQUEST) && return true
     e isa LoadError && return is_sigint(e.error)
     e isa TaskFailedException && return is_sigint(e.task.exception)
     e isa CompositeException && return any(is_sigint, e.exceptions)
+    if isstructtype(typeof(e))
+        hasfield(typeof(e), :captured) && return is_sigint(getfield(e, :captured))
+        hasfield(typeof(e), :ex) && return is_sigint(getfield(e, :ex))
+    end
     return false
 end
 
