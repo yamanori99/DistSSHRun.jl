@@ -229,6 +229,70 @@ function _flag_match(arg::AbstractString, names::Tuple{Vararg{String}})::Bool
     return false
 end
 
+function _prefix_match(arg::AbstractString, prefixes::Tuple{Vararg{String}})::Bool
+    for p in prefixes
+        startswith(arg, p) && return true
+    end
+    return false
+end
+
+function _shared_bare_cli_flag(arg::AbstractString)::Bool
+    return _flag_match(arg, _KIT_CLI_FLAGS.quiet) ||
+        _flag_match(arg, _KIT_CLI_FLAGS.progress) ||
+        _flag_match(arg, _KIT_CLI_FLAGS.verbose) ||
+        _flag_match(arg, _KIT_CLI_FLAGS.yes) ||
+        _flag_match(arg, _KIT_CLI_FLAGS.version)
+end
+
+function _shared_valued_cli_flag(arg::AbstractString)::Bool
+    return _flag_match(arg, _KIT_CLI_FLAGS.hosts_file) ||
+        _flag_match(arg, _KIT_CLI_FLAGS.hosts)
+end
+
+"""Unknown `-` option. The second line names `help <command>`, not `--help`."""
+function _unknown_cli_option_message(command::AbstractString, arg::AbstractString)::String
+    return join_explained_message(
+        "unknown $(command) option: $(arg)",
+        "Run `$(cli_m()) help $(command)` for flags.",
+    )
+end
+
+"""
+Reject the first unknown `-` option before help and before other flag handling.
+
+`valued` flags consume the next token, so that token is not an option.
+A missing value is left for the command parser. `"-"` is an option unless
+`bare_dash` is true.
+"""
+function _reject_unknown_cli_options(
+        args::AbstractVector{<:AbstractString},
+        command::AbstractString;
+        valued::Tuple{Vararg{String}},
+        known::Tuple{Vararg{String}},
+        prefixes::Tuple{Vararg{String}} = (),
+        bare_dash::Bool = false,
+    )::Nothing
+    i = 1
+    n = length(args)
+    while i <= n
+        arg = String(args[i])
+        if _shared_valued_cli_flag(arg) || _flag_match(arg, valued)
+            i += 2
+            continue
+        end
+        dashed = startswith(arg, "-") && !(bare_dash && arg == "-")
+        if !dashed ||
+                _shared_bare_cli_flag(arg) ||
+                _flag_match(arg, known) ||
+                _prefix_match(arg, prefixes)
+            i += 1
+            continue
+        end
+        throw(ArgumentError(_unknown_cli_option_message(command, arg)))
+    end
+    return nothing
+end
+
 function _set_session_verbosity!(session::KitCliSession, v::Symbol)
     if session.verbosity_explicit && session.verbosity !== v
         throw(ArgumentError("cannot combine --quiet (-q), --progress, and --verbose"))

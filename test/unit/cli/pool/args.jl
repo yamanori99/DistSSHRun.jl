@@ -32,10 +32,18 @@ using Test
             @test r.mem_headroom == 0.5
             @test r.parent_gb == 0.2
         end
-        let r = @test_logs (:warn, r"Unknown option.*0\.2") parse_pool_args(
-                ["--nope", "parent"],
-            )
-            @test r.include_parent
+        for args in (["--nope", "parent"], ["--nope", "--help"], ["--help", "--nope"])
+            let err = try
+                    parse_pool_args(args)
+                    error("expected ArgumentError")
+                catch e
+                    e
+                end
+                @test err isa ArgumentError
+                @test occursin("unknown pool option: --nope", err.msg)
+                @test occursin("help pool", err.msg)
+                @test !occursin("--help", err.msg)
+            end
         end
         let path = tempname()
             r = parse_pool_args(["--help"])

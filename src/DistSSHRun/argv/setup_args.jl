@@ -85,9 +85,25 @@ function _setup_flag_mode(arg::AbstractString)::Union{Nothing, Symbol}
 end
 
 function parse_setup_args(args::Vector{String})
+    # Unknown options fail before `--help` and before any other flag is applied.
+    _reject_unknown_cli_options(
+        args,
+        "setup";
+        valued = (
+            "--confirm-path", "--older-than", "--id", "--julia", "--repo",
+            "--remote-path", "--remote-dir",
+        ),
+        known = (
+            "--check", "--pull", "--sync", "--instantiate", "--juliaup",
+            "--juliaup-update", "--runtest", "--cleanup", "--clone",
+            "--delete", "--prune", "--rsync", "--requirements",
+            "--ignore-julia-version", "-h", "--help",
+        ),
+        bare_dash = true,
+    )
     cli_session, args = peel_kit_cli_flags(args)
     mode = nothing
-    multi_mode_warned = false
+    mode_flag::Union{Nothing, String} = nothing
     julia_path = get(ENV, "JULIA_DISTRIBUTED_EXE", "auto")  # default to env or auto-detect
     repo_url = nothing
     remote_path_override = nothing
@@ -103,10 +119,17 @@ function parse_setup_args(args::Vector{String})
         arg = cli_current(c)::String
         flag_mode = _setup_flag_mode(arg)
         if flag_mode !== nothing
-            if mode !== nothing && !multi_mode_warned
-                @warn "Multiple setup modes specified; only the last mode takes effect. Passing more than one mode will be an error in DistSSHRun 0.2."
-                multi_mode_warned = true
+            if mode_flag !== nothing
+                throw(
+                    ArgumentError(
+                        join_explained_message(
+                            "setup: more than one mode ($(mode_flag) and $(arg))",
+                            "Run `$(cli_m()) help setup` for flags.",
+                        )
+                    )
+                )
             end
+            mode_flag = String(arg)
             mode = flag_mode
             cli_consume!(c)
         elseif arg == "--confirm-path"
@@ -142,7 +165,7 @@ function parse_setup_args(args::Vector{String})
             show_help = true
             cli_consume!(c)
         elseif startswith(arg, "-") && length(arg) > 1
-            throw(ArgumentError("unknown setup option: $arg"))
+            throw(ArgumentError(_unknown_cli_option_message("setup", arg)))
         else
             let p = parse_placement_token(arg)
                 push!(hosts, p.role === :parent ? PARENT_HOST_NAME : p.name)

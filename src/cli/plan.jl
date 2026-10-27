@@ -28,7 +28,14 @@ include(joinpath(@__DIR__, "plan", "_using.jl"))
 
 function plan_main()::Cint
     project_root = cli_project_root(@__DIR__)
-    opts = parse_plan_args(ARGS)
+    opts = try
+        parse_plan_args(ARGS)
+    catch e
+        e isa ArgumentError || rethrow()
+        startswith(e.msg, "unknown plan option:") || rethrow()
+        DistSSHRun.print_cli_error(e.msg)
+        return Cint(1)
+    end
     if opts.show_help
         show_plan_usage()
         return 0
