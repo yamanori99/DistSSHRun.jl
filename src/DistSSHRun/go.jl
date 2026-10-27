@@ -318,10 +318,11 @@ function _go_assert_remote_ready!(host::AbstractString, remote_root::AbstractStr
     out = IOBuffer()
     err = IOBuffer()
     proc = run(pipeline(ignorestatus(cmd), stdout = out, stderr = err), wait = true)
-    if proc.exitcode != 0
+    code = proc.exitcode isa Integer ? Int(proc.exitcode) : 1
+    if code != 0
         err_text = strip(String(take!(err)))
         ssh_hint = _go_host_ssh_hint(host)
-        auth_or_conn = proc.exitcode == 255 ||
+        auth_or_conn = code == 255 ||
             occursin("Permission denied", err_text) ||
             occursin("Connection refused", err_text) ||
             occursin("Could not resolve hostname", err_text) ||
@@ -331,7 +332,7 @@ function _go_assert_remote_ready!(host::AbstractString, remote_root::AbstractStr
             msg = "cannot SSH to $host"
             !isempty(err_text) && (msg *= ": $(first(split(err_text, '\n')))")
             !isempty(ssh_hint) && (msg *= "\n  $ssh_hint")
-            throw(ArgumentError(msg))
+            throw(ArgumentError(DistSSHBase._append_remote_shell_hint(String(host), code, msg)))
         end
 
         msg = "remote project not ready on $host ($remote_root).\n" *
@@ -345,7 +346,7 @@ function _go_assert_remote_ready!(host::AbstractString, remote_root::AbstractStr
             "  (or go!(…; sync=:rsync); or :clone; repo=\"…\" then :instantiate; later :sync)\n" *
             "Set DISTRIBUTED_REMOTE_PROJECT_ROOT if the remote path is not the default."
         !isempty(ssh_hint) && (msg *= "\n  $ssh_hint")
-        throw(ArgumentError(msg))
+        throw(ArgumentError(DistSSHBase._append_remote_shell_hint(String(host), code, msg)))
     end
 
     deps_err = probe_remote_project_deps(host, remote_root)

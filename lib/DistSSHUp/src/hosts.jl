@@ -18,7 +18,9 @@ function _juliaup_remote_capture(host::AbstractString, script::AbstractString)
         msg = err_s
         isempty(msg) && (msg = out_s)
         isempty(msg) && (msg = "exit $(proc.exitcode)")
-        error(first(split(msg, '\n')))
+        shown = first(split(msg, '\n'))
+        code = proc.exitcode isa Integer ? Int(proc.exitcode) : 1
+        error(DistSSHBase._append_remote_shell_hint(String(host), code, shown))
     end
     return out_s
 end
