@@ -141,6 +141,83 @@ end
         end
     end
 
+    @testset "tagged pkill pattern does not match its own command" begin
+        raw = DistSSHRun.kit_job_pkill_pattern("job.1")
+        safe = DistSSHRun._pkill_regex_no_self(raw)
+        @test safe == "[d]istsshkit-job:job.1"
+        cmd = DistSSHRun._remote_tagged_pkill_sh("job.1")
+        @test occursin(safe, cmd)
+        @test !occursin(Regex(safe), cmd)
+        @test occursin(Regex(safe), "--eval=#$(raw)")
+        @test DistSSHRun._REAP_SSH_PHASE_S == 15.0
+        @test DistSSHRun._REAP_SSH_PHASE_S >=
+            Float64(DistSSHRun.DistSSHBase._SSH_CONNECT_TIMEOUT_S) + 5
+        if Sys.which("pkill") !== nothing
+            proc = run(
+                pipeline(
+                    ignorestatus(`pkill -9 -f distsshkit-job:no-such-reap-116`);
+                    stdout = devnull,
+                    stderr = devnull,
+                ),
+            )
+            @test Int(proc.exitcode) == 1
+        end
+    end
+
+    @testset "reap pkill is parallel, deduped, and bounded" begin
+        _with_tempdir() do dir
+            script = joinpath(dir, "reap_ssh.jl")
+            write(
+                script,
+                """
+                mark = joinpath(ENV["REAP_DIR"], ARGS[1])
+                open(mark, "w") do io
+                    println(io, "1")
+                end
+                code = parse(Int, get(ENV, "REAP_EXIT", "1"))
+                code == 99 && sleep(60)
+                exit(code)
+                """,
+            )
+            marks = joinpath(dir, "marks")
+            mkpath(marks)
+            withenv(
+                "DISTSSHKIT_TEST" => "1",
+                "DISTSSHKIT_TEST_SSH" => script,
+                "REAP_DIR" => marks,
+                "REAP_EXIT" => "1",
+            ) do
+                @test_logs DistSSHRun._reap_tagged_workers!("job.1", ["h", "h", "g"])
+            end
+            @test sort(readdir(marks)) == ["g", "h"]
+            rm(joinpath(marks, "g"); force = true)
+            rm(joinpath(marks, "h"); force = true)
+            withenv(
+                "DISTSSHKIT_TEST" => "1",
+                "DISTSSHKIT_TEST_SSH" => script,
+                "REAP_DIR" => marks,
+                "REAP_EXIT" => "255",
+            ) do
+                @test_logs (:warn, r"Tagged worker pkill did not reach: a, b") begin
+                    DistSSHRun._reap_tagged_workers!("job.1", ["a", "a", "b"])
+                end
+            end
+            withenv(
+                "DISTSSHKIT_TEST" => "1",
+                "DISTSSHKIT_TEST_SSH" => script,
+                "REAP_DIR" => marks,
+                "REAP_EXIT" => "99",
+            ) do
+                t0 = time()
+                @test_logs (:warn, r"Tagged worker pkill did not reach: a, b, c") begin
+                    DistSSHRun._reap_tagged_workers!("job.1", ["a", "b", "c"])
+                end
+                @test time() - t0 < DistSSHRun._REAP_SSH_PHASE_S + 8
+            end
+        end
+    end
+
+
     @testset "delete shell refuses a final symlink and quotes odd names" begin
         script = DistSSHRun._remote_delete_shell("~/proj")
         @test occursin("test -L", script)

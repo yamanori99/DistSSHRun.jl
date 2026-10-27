@@ -1090,6 +1090,124 @@ using Test
                 e
             end
             @test err isa ArgumentError
+            err_nan = try
+                DistSSHRun.terminate_run!(d; interrupt_grace = NaN)
+                nothing
+            catch e
+                e
+            end
+            @test err_nan isa ArgumentError
+        end
+    end
+
+    @testset "interrupt_grace default and DISTSSHKIT_WAIT_SIGINT_GRACE" begin
+        # Headroom for slow NFS / x86 / WSL2. The 30s default is not computed from this.
+        margin = 10.0
+        @test DistSSHRun._INTERRUPT_GRACE_DEFAULT_S >=
+            Float64(DistSSHRun.DistSSHBase._SSH_CONNECT_TIMEOUT_S) +
+            DistSSHRun._INTERRUPT_SETTLE_S +
+            DistSSHRun._HEARTBEAT_STOP_S +
+            DistSSHRun._RMPROCS_WAITFOR_S +
+            margin
+        @test DistSSHRun._SIGNAL_KILL_WAIT_S == 1.0
+        withenv("DISTSSHKIT_WAIT_SIGINT_GRACE" => nothing) do
+            @test DistSSHRun._resolve_interrupt_grace(nothing) ==
+                DistSSHRun._INTERRUPT_GRACE_DEFAULT_S
+            @test DistSSHRun._resolve_interrupt_grace(nothing) ==
+                DistSSHRun.DistSSHBase.wait_seconds(:sigint_grace, 30.0)
+        end
+        withenv("DISTSSHKIT_WAIT_SIGINT_GRACE" => "4.5") do
+            @test DistSSHRun._resolve_interrupt_grace(nothing) == 4.5
+            @test DistSSHRun._resolve_interrupt_grace(0) == 0.0
+            @test DistSSHRun._resolve_interrupt_grace(1) == 1.0
+        end
+        withenv("DISTSSHKIT_WAIT_SIGINT_GRACE" => "-1") do
+            @test_throws ArgumentError DistSSHRun._resolve_interrupt_grace(nothing)
+            @test DistSSHRun._resolve_interrupt_grace(2) == 2.0
+        end
+        withenv("DISTSSHKIT_WAIT_SIGINT_GRACE" => "NaN") do
+            @test_throws ArgumentError DistSSHRun._resolve_interrupt_grace(nothing)
+        end
+        withenv("DISTSSHKIT_WAIT_SIGINT_GRACE" => "Inf") do
+            @test_throws ArgumentError DistSSHRun._resolve_interrupt_grace(nothing)
+        end
+        @test_throws ArgumentError DistSSHRun._resolve_interrupt_grace(-0.1)
+        @test_throws ArgumentError DistSSHRun._resolve_interrupt_grace(NaN)
+        @test_throws ArgumentError DistSSHRun._resolve_interrupt_grace(Inf)
+    end
+
+    @testset "terminate! sends one SIGINT" begin
+        _with_tempdir() do dir
+            ready = joinpath(dir, "ready")
+            countp = joinpath(dir, "count")
+            script = joinpath(dir, "count.jl")
+            write(
+                script,
+                """
+                Base.exit_on_sigint(false)
+                const n = Ref(0)
+                atexit() do
+                    open($(repr(countp)), "w") do io
+                        print(io, n[])
+                    end
+                end
+                open($(repr(ready)), "w") do io
+                    print(io, "1")
+                end
+                if isdefined(Base, :CancellationRequest)
+                    const CR = getglobal(Base, :CancellationRequest)
+                    while true
+                        try
+                            sleep(60)
+                        catch e
+                            e isa InterruptException || e isa CR || rethrow()
+                            n[] += 1
+                            e isa CR && break
+                        end
+                    end
+                    while true
+                        try
+                            ccall(:pause, Cint, ())
+                        catch e
+                            e isa InterruptException || e isa CR || rethrow()
+                            n[] += 1
+                        end
+                    end
+                else
+                    while true
+                        try
+                            sleep(60)
+                        catch e
+                            e isa InterruptException || rethrow()
+                            n[] += 1
+                        end
+                    end
+                end
+                """,
+            )
+            julia = joinpath(Sys.BINDIR, Base.julia_exename())
+            proc = run(
+                pipeline(
+                    `$julia --startup-file=no --compile=min $script`;
+                    stdout = devnull,
+                    stderr = devnull,
+                );
+                wait = false,
+            )
+            kp = DistSSHRun.KitProcess(proc; kind = :go, output_dir = dir)
+            try
+                t0 = time()
+                while !isfile(ready) && (time() - t0) < 60
+                    process_running(proc) || break
+                    sleep(0.05)
+                end
+                @test isfile(ready)
+                DistSSHRun.terminate!(kp; interrupt_grace = 0.4, grace = 2)
+                @test isfile(countp)
+                @test read(countp, String) == "1"
+            finally
+                process_running(proc) && kill(proc, Base.SIGKILL)
+            end
         end
     end
 
