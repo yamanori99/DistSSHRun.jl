@@ -458,7 +458,8 @@ function _retire_distributed_gc_task!()
     if isdefined(Base, :CancellationRequest)
         isdefined(Distributed, :gc_msgs_task) || return nothing
         task = getfield(Distributed, :gc_msgs_task)
-        task isa Task && istaskfailed(task) || return nothing
+        task isa Task || return nothing
+        istaskfailed(task) || return nothing
         try
             wait(task)
         catch
