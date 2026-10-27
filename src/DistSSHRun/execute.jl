@@ -1622,13 +1622,12 @@ end
 """
     terminate!(kp::KitProcess; grace=10, interrupt_grace=nothing) -> KitRunResult
 
-Stop a detached run. Omit `interrupt_grace` and the wait is
-[`_resolve_interrupt_grace`](@ref): 30 seconds, or
+Stop a detached run. Omit `interrupt_grace` and the wait is 30 seconds, or
 `DISTSSHKIT_WAIT_SIGINT_GRACE` when that variable is set in this process.
-The driver host does not read it. An explicit keyword wins, including `0`,
-which sends no SIGINT. A negative value or `NaN` is an error. The 30 second
-default is a constant, chosen from the internal stop budgets, not computed
-when `terminate!` runs.
+The driver host does not read it. An explicit `interrupt_grace` keyword
+wins, including `0`, which sends no SIGINT. A negative value or `NaN` is
+an error. The 30 second default is a constant, chosen from the internal
+stop budgets, not computed when [`terminate!`](@ref) runs.
 
 A positive value sends SIGINT once and waits that many seconds. There is
 no retry. A `drive` child runs its Ctrl-C path: one `kill -INT` per SSH
