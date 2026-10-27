@@ -14,7 +14,7 @@ Base.set_active_project(joinpath(THROWAWAY, "Project.toml"))
 function _cmd_project(cmd::Cmd)::String
     for arg in cmd.exec
         s = String(arg)
-        startswith(s, "--project=") && return s[length("--project=") + 1:end]
+        startswith(s, "--project=") && return s[(length("--project=") + 1):end]
     end
     return ""
 end
