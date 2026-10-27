@@ -393,7 +393,7 @@ with `-m` (#372). The job package itself named DistSSHKit / DistSSHRun can
 `-m`. A direct `DistSSHKit` dep loads `-m DistSSHKit`. A direct `DistSSHRun`
 dep loads `-m DistSSHRun`."""
 function _project_tree_has_distsshkit(project::AbstractString)::Bool
-    p = String(project)
+    p = string(project)::String
     n = project_package_name(p)
     (n == "DistSSHRun" || n == "DistSSHKit") && return true
     return _deps_has_distsshkit(_parse_toml_dict(joinpath(p, "Project.toml")))
@@ -406,7 +406,7 @@ back to serve's active project or `pkgdir(DistSSHRun)`. If the job cannot
 load `-m DistSSHKit` / `-m DistSSHRun`, fail instead of using queue-env.
 """
 function _detached_julia_project(project::AbstractString)::String
-    p = String(project)
+    p = string(project)::String
     isfile(joinpath(p, "Project.toml")) || throw(
         ArgumentError(
             "detached execute! project has no Project.toml: $(p)",
