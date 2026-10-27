@@ -97,7 +97,10 @@ if !isdefined(@__MODULE__, :setup_main)
             print_err("Error: "; bold = true)
             println_fatal(e.msg)
             println_fatal()
-            show_usage()
+            # An unknown option already names `help setup`. Do not print the page.
+            if !startswith(e.msg, "unknown setup option:")
+                show_usage()
+            end
             return 1
         end
 

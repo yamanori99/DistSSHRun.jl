@@ -43,6 +43,31 @@ using Test
         let (code, _, _) = _cli_capture(() -> DistSSHRun.run_plan(["/no/such/script.jl"]))
             @test code == 1
         end
+        let (code, out, err) = _cli_capture(() -> DistSSHRun.run_plan(["--help", "--nope"]))
+            shown = out * err
+            @test code == 1
+            @test occursin("unknown plan option: --nope", shown)
+            @test occursin("help plan", shown)
+            @test !occursin("--help", shown)
+            @test !occursin("Usage", shown)
+            @test !occursin("Stacktrace", shown)
+        end
+        let (code, out, err) = _cli_capture(() -> DistSSHRun.run_size(["--nope", "-h"]))
+            shown = out * err
+            @test code == 1
+            @test occursin("unknown size option: --nope", shown)
+            @test occursin("help size", shown)
+            @test !occursin("--help", shown)
+            @test !occursin("Usage", shown)
+        end
+        let (code, out, err) = _cli_capture(() -> DistSSHRun.run_pool(["-h", "--nope"]))
+            shown = out * err
+            @test code == 1
+            @test occursin("unknown pool option: --nope", shown)
+            @test occursin("help pool", shown)
+            @test !occursin("--help", shown)
+            @test !occursin("Usage", shown)
+        end
         let (code, _, _) = _cli_capture(() -> DistSSHRun.run_ride(["/no/such/script.jl"]))
             @test code == 1
         end

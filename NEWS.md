@@ -6,6 +6,7 @@ Those notes are often shorter than the section below.
 
 ## Unreleased
 
+- `setup` exits 1 when more than one mode flag is passed. The message names those two flags and `help setup`, and parsing stops at the second flag. `plan`, `pool`, and `size` exit 1 on an unknown `-` option before any other argument is applied, including when `-h` or `--help` is also present. The message names that option and `help plan`, `help pool`, or `help size`. `-h` and `--help` still print help when every flag is known. `setup` already rejected an unknown option; that message now names `help setup`.
 - The first `drive` in a process compiles less. `plan` is no longer inferred inside `run_drive_parsed!`, a drive without `--sync` or `--rsync` does not infer that path, and that call is precompiled. The text and the exit code do not change. Loading the package from a project still needs that project's dependencies instantiated.
 - A CLI script from a checkout with no manifest exits with an instantiate hint and writes nothing under the depot. `julia -m DistSSHRun` and an installed package are unchanged.
 
@@ -21,6 +22,7 @@ Those notes are often shorter than the section below.
 - `setup --sync`, `setup --pull`, and `sync!` will fail when the remote `HEAD` is not the local `HEAD`, including an unpushed local commit on `--pull`. 0.1.7 warns. A hash that could not be read stays a warning.
 - `drive` and `collect!` will refuse a collect root that is the project root or a parent of it. 0.1.7 warns.
 - `setup` will refuse more than one mode flag, and `plan`, `pool`, and `size` will reject unknown `-` options instead of ignoring them with a warning.
+- `-y`, `--yes`, and `DISTSSHKIT_YES` will stop authorizing `setup --delete` and `setup --prune`. Without `--confirm-path`, `-y` will exit 1. With neither, the commands still ask for `delete` or `prune`. A matching `--confirm-path` still deletes.
 - Display helpers that no package outside DistSSHRun calls will stop being exported. `parse_go_args`, `parse_drive_args`, and `parse_ride_args` stay exported. DistSSHKit 0.11 drops the names this package stops exporting.
 
 ## 0.1.16
