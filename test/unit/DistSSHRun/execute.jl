@@ -1147,12 +1147,33 @@ using Test
                 open($(repr(ready)), "w") do io
                     print(io, "1")
                 end
-                while true
-                    try
-                        sleep(60)
-                    catch e
-                        e isa InterruptException || rethrow()
-                        n[] += 1
+                if isdefined(Base, :CancellationRequest)
+                    const CR = getglobal(Base, :CancellationRequest)
+                    while true
+                        try
+                            sleep(60)
+                        catch e
+                            e isa InterruptException || e isa CR || rethrow()
+                            n[] += 1
+                            e isa CR && break
+                        end
+                    end
+                    while true
+                        try
+                            ccall(:pause, Cint, ())
+                        catch e
+                            e isa InterruptException || e isa CR || rethrow()
+                            n[] += 1
+                        end
+                    end
+                else
+                    while true
+                        try
+                            sleep(60)
+                        catch e
+                            e isa InterruptException || rethrow()
+                            n[] += 1
+                        end
                     end
                 end
                 """,
