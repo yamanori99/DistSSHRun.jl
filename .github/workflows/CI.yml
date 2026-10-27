@@ -8,8 +8,9 @@ on:
   workflow_dispatch:
 
 # Cancel redundant runs on the same branch/PR.
-# A Project.toml version increase (see version-cut.sh) runs Ubuntu
-# 1.14-nightly, nightly, and Aqua on those channels in this workflow.
+# Ubuntu 1.14-pre (setup-julia ~1.14.0-0) Pkg.test, Aqua, and JETLS follow
+# the heavy gate, including ordinary pull requests. A Project.toml version
+# increase (see version-cut.sh) also runs Ubuntu nightly and Aqua on nightly.
 # macOS for both channels is CI weekly. WSL2 1.13 Pkg.test runs on a main
 # push and CI weekly, not on a pull request.
 # Registry install follows the heavy gate, including ordinary pull requests.
@@ -52,7 +53,7 @@ jobs:
   # Linux E2E (1.13): path filter on PR / main push; always on a version
   # increase and dispatch. JETLS uses `.github/actions/jetls-check` (no nested
   # cache; julia-actions/cache#236). JETLS 2026-10-26 supports 1.12.2 through
-  # 1.14. The required job is 1.13. The 1.14-nightly job is continue-on-error
+  # 1.14. The required job is 1.13. The 1.14-pre job is continue-on-error
   # and is not a required check.
   detect:
     name: detect
@@ -522,10 +523,11 @@ jobs:
 
 
   # A skipped job does not expand a matrix name, so these titles stay literal.
-  test-tip:
-    name: DistSSHRun (1.14-nightly, ubuntu-latest, x64)
+  # Version string is ~1.14.0-0. The title is 1.14-pre, shared with Queue and Kit.
+  test-1-14-pre:
+    name: DistSSHRun (1.14-pre, ubuntu-latest, x64)
     needs: detect
-    if: needs.detect.outputs.heavy == 'true' && (github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true')
+    if: needs.detect.outputs.heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     continue-on-error: true
@@ -535,7 +537,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/julia-slot
         with:
-          version: "1.14-nightly"
+          version: "~1.14.0-0"
       - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
         with:
           cache-scratchspaces: false
@@ -633,10 +635,10 @@ jobs:
       - name: Aqua.test_all (latest Aqua)
         run: ./.github/aqua-check.sh
 
-  aqua-tip:
-    name: Aqua (1.14-nightly, ubuntu-latest, x64)
+  aqua-1-14-pre:
+    name: Aqua (1.14-pre, ubuntu-latest, x64)
     needs: detect
-    if: needs.detect.outputs.heavy == 'true' && (github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true')
+    if: needs.detect.outputs.heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     continue-on-error: true
@@ -646,7 +648,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/julia-slot
         with:
-          version: "1.14-nightly"
+          version: "~1.14.0-0"
       - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
         with:
           cache-scratchspaces: false
@@ -702,8 +704,9 @@ jobs:
 
   # Same action and file list as the 1.13 job. continue-on-error, so a new
   # hint does not block merge. Not a ruleset check. The 1.13 name stays.
-  jetls-1-14:
-    name: JETLS (1.14-nightly, ubuntu-latest, x64)
+  # Version string is ~1.14.0-0. The title is 1.14-pre.
+  jetls-1-14-pre:
+    name: JETLS (1.14-pre, ubuntu-latest, x64)
     needs: detect
     if: needs.detect.outputs.heavy == 'true'
     runs-on: ubuntu-latest
@@ -717,7 +720,7 @@ jobs:
         run: echo "list=$(./.github/jetls-check.sh --print-files)" >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/julia-slot
         with:
-          version: "1.14-nightly"
+          version: "~1.14.0-0"
       - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
         with:
           cache-scratchspaces: false

@@ -1,13 +1,13 @@
 name: CI weekly
 
-# Not on pull_request: insurance for 1.13 / 1.14-nightly / nightly / Aqua / JETLS
+# Not on pull_request: insurance for 1.13 / 1.14-pre / nightly / Aqua / JETLS
 # @release drift when no PR ran that day. PR / main push stay the gate.
-# 1.14-nightly and nightly jobs are continue-on-error and omitted from notify.
+# 1.14-pre and nightly jobs are continue-on-error and omitted from notify.
 # A 1.13 compile bench failure on main opens "Compile bench failed".
 # 1.13 matches a main push of Test: DistSSHRun titles, then downstream,
 # DistSSHUp, and DistSSHBase as separate matrices (no coverage). WSL2
 # 1.13 runs here and on a main push, not on a pull request.
-# 1.14-nightly and nightly Pkg.test and Aqua on macOS and WSL2 run here only, and stay
+# 1.14-pre and nightly Pkg.test and Aqua on macOS and WSL2 run here only, and stay
 # out of notify. Ubuntu copies also run in Test.
 on:
   workflow_dispatch:
@@ -246,8 +246,8 @@ jobs:
         if: ${{ !matrix.slot.wsl }}
         run: julia --project=lib/DistSSHBase -e 'using Pkg; Pkg.test()'
 
-  test-tip:
-    name: DistSSHRun (1.14-nightly, ubuntu-latest, x64)
+  test-1-14-pre:
+    name: DistSSHRun (1.14-pre, ubuntu-latest, x64)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     continue-on-error: true
@@ -257,7 +257,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/julia-slot
         with:
-          version: "1.14-nightly"
+          version: "~1.14.0-0"
       - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
         with:
           cache-scratchspaces: false
@@ -282,8 +282,8 @@ jobs:
           delete-old-caches: false
       - uses: ./.github/actions/pkg-test
 
-  test-tip-macos:
-    name: DistSSHRun (1.14-nightly, macos-latest, aarch64)
+  test-1-14-pre-macos:
+    name: DistSSHRun (1.14-pre, macos-latest, aarch64)
     runs-on: macos-latest
     timeout-minutes: 45
     continue-on-error: true
@@ -293,7 +293,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/julia-slot
         with:
-          version: "1.14-nightly"
+          version: "~1.14.0-0"
       - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
         with:
           cache-scratchspaces: false
@@ -318,8 +318,8 @@ jobs:
           delete-old-caches: false
       - uses: ./.github/actions/pkg-test
 
-  test-tip-wsl:
-    name: DistSSHRun (1.14-nightly, WSL2 ubuntu-24.04, x64)
+  test-1-14-pre-wsl:
+    name: DistSSHRun (1.14-pre, WSL2 ubuntu-24.04, x64)
     runs-on: windows-latest
     timeout-minutes: 45
     continue-on-error: true
@@ -343,10 +343,10 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ci-cache/wsl-julia
-          key: wsl-julia-1.14-nightly-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
+          key: wsl-julia-1.14-pre-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
       - name: Pkg.test in WSL2
         shell: wsl-bash {0}
-        run: ./.github/wsl-julia.sh 1.14-nightly julia --project=. -e 'using Pkg; Pkg.test()'
+        run: ./.github/wsl-julia.sh '~1.14.0-0' julia --project=. -e 'using Pkg; Pkg.test()'
 
   test-nightly-wsl:
     name: DistSSHRun (nightly, WSL2 ubuntu-24.04, x64)
@@ -417,8 +417,8 @@ jobs:
       - name: Aqua.test_all (latest Aqua)
         run: ./.github/aqua-check.sh
 
-  aqua-tip:
-    name: Aqua (1.14-nightly, ubuntu-latest, x64)
+  aqua-1-14-pre:
+    name: Aqua (1.14-pre, ubuntu-latest, x64)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     continue-on-error: true
@@ -428,7 +428,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/julia-slot
         with:
-          version: "1.14-nightly"
+          version: "~1.14.0-0"
       - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
         with:
           cache-scratchspaces: false
@@ -455,8 +455,8 @@ jobs:
       - name: Aqua.test_all (latest Aqua)
         run: ./.github/aqua-check.sh
 
-  aqua-tip-macos:
-    name: Aqua (1.14-nightly, macos-latest, aarch64)
+  aqua-1-14-pre-macos:
+    name: Aqua (1.14-pre, macos-latest, aarch64)
     runs-on: macos-latest
     timeout-minutes: 45
     continue-on-error: true
@@ -466,7 +466,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/julia-slot
         with:
-          version: "1.14-nightly"
+          version: "~1.14.0-0"
       - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
         with:
           cache-scratchspaces: false
@@ -493,8 +493,8 @@ jobs:
       - name: Aqua.test_all (latest Aqua)
         run: ./.github/aqua-check.sh
 
-  aqua-tip-wsl:
-    name: Aqua (1.14-nightly, WSL2 ubuntu-24.04, x64)
+  aqua-1-14-pre-wsl:
+    name: Aqua (1.14-pre, WSL2 ubuntu-24.04, x64)
     runs-on: windows-latest
     timeout-minutes: 45
     continue-on-error: true
@@ -518,10 +518,10 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ci-cache/wsl-julia
-          key: wsl-julia-1.14-nightly-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
+          key: wsl-julia-1.14-pre-${{ hashFiles('Project.toml', 'test/Project.toml', '.github/julia-slots.env') }}
       - name: Aqua.test_all (latest Aqua)
         shell: wsl-bash {0}
-        run: ./.github/wsl-julia.sh 1.14-nightly ./.github/aqua-check.sh
+        run: ./.github/wsl-julia.sh '~1.14.0-0' ./.github/aqua-check.sh
 
   aqua-nightly-wsl:
     name: Aqua (nightly, WSL2 ubuntu-24.04, x64)
@@ -571,8 +571,8 @@ jobs:
           slot: "1.13"
           token: ${{ github.token }}
 
-  compile-bench-nightly:
-    name: Compile bench (1.14-nightly, ubuntu-latest, x64)
+  compile-bench-1-14-pre:
+    name: Compile bench (1.14-pre, ubuntu-latest, x64)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     continue-on-error: true
@@ -584,10 +584,10 @@ jobs:
           persist-credentials: false
       - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
         with:
-          version: "1.14-nightly"
+          version: "~1.14.0-0"
       - uses: ./.github/actions/compile-bench
         with:
-          slot: "1.14-nightly"
+          slot: "1.14-pre"
           token: ${{ github.token }}
 
   compile-bench-master:
@@ -613,7 +613,7 @@ jobs:
     name: Render bench-data
     needs:
       - compile-bench
-      - compile-bench-nightly
+      - compile-bench-1-14-pre
       - compile-bench-master
     if: always() && github.ref == 'refs/heads/main'
     # Same queue as Deploy docs. Both jobs push gh-pages.
@@ -666,14 +666,14 @@ jobs:
       - downstream
       - up-test
       - base-test
-      - test-tip
-      - test-tip-macos
-      - test-tip-wsl
+      - test-1-14-pre
+      - test-1-14-pre-macos
+      - test-1-14-pre-wsl
       - jetls
       - aqua
-      - aqua-tip
-      - aqua-tip-macos
-      - aqua-tip-wsl
+      - aqua-1-14-pre
+      - aqua-1-14-pre-macos
+      - aqua-1-14-pre-wsl
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
