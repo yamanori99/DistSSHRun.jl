@@ -43,12 +43,17 @@ function drive_main()::Cint
 end
 
 function _drive_main_body(original_args::Vector{String})::Cint
-    parsed = parse_drive_args(ARGS)
-    return run_drive_parsed!(
-        parsed;
-        original_args = original_args,
-        project_root = cli_project_root(@__DIR__),
-    )
+    try
+        parsed = parse_drive_args(ARGS)
+        return run_drive_parsed!(
+            parsed;
+            original_args = original_args,
+            project_root = cli_project_root(@__DIR__),
+        )
+    catch e
+        DistSSHRun._report_manifest_refusal(e) || rethrow()
+        return Cint(1)
+    end
 end
 
 if get(ENV, "DIST_SSH_KIT_CLI_INCLUDE", "") != "1" &&

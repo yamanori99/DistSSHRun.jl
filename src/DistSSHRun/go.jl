@@ -1021,6 +1021,7 @@ function _go_run!(
             )
         )
     end
+    ensure_manifest_ships!(proj)
     batch_dir = if output_dir !== nothing
         canonical_local_path(output_dir)
     elseif collect_spec isa AbstractString

@@ -398,6 +398,9 @@ if !isdefined(@__MODULE__, :setup_main)
             ) do
                 setup_job!(opts.mode::Symbol)
             end
+        catch e
+            DistSSHRun._report_manifest_refusal(e) || rethrow()
+            return Cint(1)
         finally
             close_log_file()
         end

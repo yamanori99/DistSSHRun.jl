@@ -525,19 +525,69 @@ function _ensure_git_head_source!(
     return nothing
 end
 
+"""Shell-quoted path for a one-line fix hint."""
+function _quoted_hint_path(path::AbstractString)::String
+    return "\"" * replace(String(path), "\"" => "\\\"") * "\""
+end
+
+"""
+One-line hint when a project file has no Manifest Base would use.
+
+`project` is a directory or a project file. The command is local
+`Pkg.resolve()`. This does not run it.
+"""
+function missing_manifest_message(project::AbstractString)::String
+    shown = canonical_local_path(project)
+    if isfile(shown) && basename(shown) in Base.project_names
+        shown = dirname(shown)
+    end
+    q = _quoted_hint_path(shown)
+    return "No Manifest for $q. Run: julia --project=$q -e 'using Pkg; Pkg.resolve()'"
+end
+
+"""
+Throw when `project` has a project file and [`manifest_path`](@ref) is `nothing`.
+
+A directory with no project file is not a Julia environment, so it is left
+alone. Queue's empty-`[deps]` exception stays in DistSSHQueue.
+"""
+function _require_manifest!(project::AbstractString)
+    manifest_path(project) isa String && return nothing
+    _located_project_file(project) isa String || return nothing
+    throw(ArgumentError(missing_manifest_message(project)))
+end
+
+"""
+Print a Manifest refusal as one stderr line and return true.
+
+Other errors return false so the caller can rethrow them.
+"""
+function _report_manifest_refusal(e)::Bool
+    e isa ArgumentError || return false
+    msg = e.msg
+    if !(startswith(msg, "No Manifest for ") || startswith(msg, "Manifest "))
+        return false
+    end
+    print_cli_error(msg)
+    return true
+end
+
 """
 Throw when `manifest`, or a `[sources]` path, is not inside `env_dir`
 together with `project_dir`.
 
 One rsync cannot carry both. A symlink whose target leaves that tree is the
-same failure. A `url` source is fetched on the worker. No Manifest is not
-an error (instantiate resolves).
+same failure. A `url` source is fetched on the worker. A project file with
+no Manifest is an error. A directory with no project file is not. A Manifest
+left out of the rsync send list is an error (it is untracked and ignored).
+`warn_send_list=false` is the `gitignore=false` send, which includes that file.
 """
 function ensure_manifest_ships!(
         project::AbstractString;
         send_list::Union{Nothing, Vector{String}} = nothing,
         warn_send_list::Bool = true,
     )
+    _require_manifest!(project)
     env = resolve_pkg_env(project)
     _ensure_path_sources_in_tree!(env, env.env_dir; git = false)
     manifest = env.manifest
@@ -557,9 +607,8 @@ function ensure_manifest_ships!(
     if warn_send_list
         listed = send_list isa Vector{String} ? send_list : _rsync_send_list(env.env_dir, env)
         if listed isa Vector
-            for msg in _manifest_ship_problems(env, listed)
-                print_warn("Warning: $msg $_SHIP_ERROR_SOON\n")
-            end
+            problems = _manifest_ship_problems(env, listed)
+            isempty(problems) || throw(ArgumentError(problems[1]))
         end
     end
     return env

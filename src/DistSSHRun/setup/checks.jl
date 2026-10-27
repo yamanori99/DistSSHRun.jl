@@ -124,10 +124,8 @@ function probe_project_deps(
         julia_bin::AbstractString = joinpath(Sys.BINDIR, Base.julia_exename()),
     )::Union{Nothing, String}
     proj = canonical_local_path(project)
-    isfile(joinpath(proj, "Project.toml")) || return "Project.toml not found"
-    env = resolve_pkg_env(proj)
-    env.manifest === nothing &&
-        return "Manifest.toml not found (run Pkg.resolve / Pkg.instantiate locally first)"
+    _located_project_file(proj) isa String || return "Project.toml not found"
+    resolve_pkg_env(proj).manifest isa String || return missing_manifest_message(proj)
     cmd = ignorestatus(
         Cmd(
             [

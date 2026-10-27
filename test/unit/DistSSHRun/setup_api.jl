@@ -34,6 +34,7 @@ using Test
                 mkpath(tree)
                 touch(joinpath(tree, "keepme.txt"))
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
+                write(joinpath(proj, "Manifest.toml"), "# lock\n")
                 session = DistSSHRun.KitSession(
                     project = proj,
                     workers = ["child:$host"],
@@ -325,6 +326,7 @@ using Test
         _with_fake_remotes() do state_dir
             _with_tempdir() do proj
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
+                write(joinpath(proj, "Manifest.toml"), "# lock\n")
                 host = "host1"
                 slot = replace(host, r"[@:/]" => "_")
                 tree = joinpath(state_dir, slot, "tree")
@@ -589,6 +591,7 @@ using Test
         _with_fake_remotes() do _
             _with_tempdir() do proj::String
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
+                write(joinpath(proj, "Manifest.toml"), "# lock\n")
                 hosts = ["h1", "h2", "h3"]
                 inst_res = DistSSHRun.instantiate_remotes(
                     hosts, "/bin/echo", "~/App.jl", proj,
