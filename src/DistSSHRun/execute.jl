@@ -1110,7 +1110,10 @@ _send_signal(pid::Integer, sig::Integer) = ccall(:kill, Cint, (Cint, Cint), Cint
 _target_alive(p::Base.Process)::Bool = process_running(p)
 _target_alive(pid::Integer)::Bool = kit_pid_alive(pid)
 
-"""Send `sig` if `target` is alive, then wait up to `wait_s` seconds."""
+"""Send `sig` once if `target` is alive, then wait up to `wait_s` seconds.
+
+Do not retry. A second signal is a separate force, not part of this wait.
+"""
 function _signal_and_wait!(target, sig::Integer, wait_s::Real)
     _target_alive(target) || return nothing
     try
@@ -1124,8 +1127,47 @@ function _signal_and_wait!(target, sig::Integer, wait_s::Real)
     return nothing
 end
 
+# Seconds to wait after SIGKILL. Part of the cancel budget, not a keyword.
+const _SIGNAL_KILL_WAIT_S = 1.0
+
+# Fixed default for `interrupt_grace`. Not computed at runtime.
+# It covers SSH connect, `_INTERRUPT_SETTLE_S`, `_HEARTBEAT_STOP_S`,
+# and `_RMPROCS_WAITFOR_S`, plus margin for a slow disk. A unit test
+# checks that this constant still does.
+const _INTERRUPT_GRACE_DEFAULT_S = 30.0
+
+const _SIGINT_GRACE_ENV = "DISTSSHKIT_WAIT_SIGINT_GRACE"
+
+function _require_interrupt_grace(name::AbstractString, value::Real)
+    if isfinite(value) && value >= 0
+        return nothing
+    end
+    throw(ArgumentError("$name must be a finite number ≥ 0, got $value"))
+end
+
 """
-SIGINT, then SIGTERM, then SIGKILL.
+Keyword, else `DISTSSHKIT_WAIT_SIGINT_GRACE` in this process, else 30 seconds.
+
+The variable is read here, in the process calling `terminate!` or `cancel`,
+not on the driver host. `0` is kept. A negative value, `NaN`, or `Inf` errors.
+"""
+function _resolve_interrupt_grace(explicit::Union{Nothing, Real})::Float64
+    if explicit !== nothing
+        _require_interrupt_grace("interrupt_grace", explicit)
+        return Float64(explicit)
+    end
+    raw = strip(get(ENV, _SIGINT_GRACE_ENV, ""))
+    if !isempty(raw)
+        parsed = tryparse(Float64, raw)
+        if parsed === nothing || !isfinite(parsed) || parsed < 0
+            throw(ArgumentError("$_SIGINT_GRACE_ENV must be a finite number ≥ 0, got $(repr(raw))"))
+        end
+    end
+    return DistSSHBase.wait_seconds(:sigint_grace, _INTERRUPT_GRACE_DEFAULT_S)
+end
+
+"""
+SIGINT once, then SIGTERM, then SIGKILL.
 
 `interrupt_grace == 0` does not send SIGINT. `grace == 0` still sends
 SIGTERM and does not wait, which is what `terminate!` did before
@@ -1142,7 +1184,7 @@ function _signal_ladder!(target; interrupt_grace::Real, grace::Real)
     end
     _signal_and_wait!(target, Base.SIGTERM, grace)
     _target_alive(target) || return nothing
-    _signal_and_wait!(target, Base.SIGKILL, 1.0)
+    _signal_and_wait!(target, Base.SIGKILL, _SIGNAL_KILL_WAIT_S)
     return nothing
 end
 
@@ -1543,17 +1585,32 @@ function _execute_detached_env(extra::AbstractDict{<:AbstractString, <:AbstractS
 end
 
 """
-    terminate!(kp::KitProcess; grace=10, interrupt_grace=0) -> KitRunResult
+    terminate!(kp::KitProcess; grace=10, interrupt_grace=nothing) -> KitRunResult
 
-Stop a detached run. `interrupt_grace == 0` (the default) does not send
-SIGINT. A positive `interrupt_grace` sends SIGINT and waits that many
-seconds first: a `drive` child runs its Ctrl-C path (interrupt workers,
-`rmprocs`, exit 130). On Julia 1.13, a driver waiting in `pmap`
-does not run that path, and SIGTERM stops it. A process-group SIGINT,
-as from a terminal Ctrl-C, also misses that path on Julia 1.13: the
-driver exits 1 and does not send `kill -INT`. Measured on macOS. On
-Julia 1.14 the driver exits 130, but a worker can be removed before it
-sees the interrupt.
+Stop a detached run. Omit `interrupt_grace` and the wait is
+[`_resolve_interrupt_grace`](@ref): 30 seconds, or
+`DISTSSHKIT_WAIT_SIGINT_GRACE` when that variable is set in this process.
+The driver host does not read it. An explicit keyword wins, including `0`,
+which sends no SIGINT. A negative value or `NaN` is an error. The 30 second
+default is a constant, chosen from the internal stop budgets, not computed
+when `terminate!` runs.
+
+A positive value sends SIGINT once and waits that many seconds. There is
+no retry. A `drive` child runs its Ctrl-C path: one `kill -INT` per SSH
+host, aimed at the worker julia pid (`WorkerConfig.ospid`, the worker's
+`getpid()`), then a fixed 3 second settle, then `rmprocs`. That ssh is
+bounded by the SSH connect timeout and uses `ServerAliveInterval=5` and
+`ServerAliveCountMax=1`. A write during the settle window is best-effort
+and should be small. Checkpoint large state during the run, to a temporary
+file, then rename it. A 1 GiB write in 0.4–0.7 seconds on one Mac mini is
+a lower bound. On Julia 1.13 a second Ctrl-C forces the driver out of that
+cleanup. On Julia 1.13, a driver waiting in `pmap` ignores SIGINT, so this
+wait runs out and SIGTERM stops it. With the defaults that is 30 seconds
+plus `grace` (10) plus one second after SIGKILL, about 41 seconds. A
+process-group SIGINT, as from a terminal Ctrl-C, also misses that path on
+Julia 1.13: the driver exits 1 and does not send `kill -INT`. Measured on
+macOS. On Julia 1.14 the driver exits 130, but a worker can be removed
+before it sees the interrupt.
 A `go` or `ride` child is `julia -m` with
 exit-on-sigint, so SIGINT runs `atexit` and does not enter `catch` or
 `finally`. Then SIGTERM, wait up to `grace` seconds (`0` sends SIGTERM
@@ -1561,10 +1618,14 @@ and does not wait), then SIGKILL if the process is still alive. Then
 `pkill` only processes tagged with this run's `job_id` (from `kit.job`),
 never `julia.*--worker`. Without `job_id`, only the child is signaled.
 """
-function terminate!(kp::KitProcess; grace::Real = 10, interrupt_grace::Real = 0)::KitRunResult
+function terminate!(
+        kp::KitProcess;
+        grace::Real = 10,
+        interrupt_grace::Union{Nothing, Real} = nothing,
+    )::KitRunResult
     _require_nonnegative("grace", grace)
-    _require_nonnegative("interrupt_grace", interrupt_grace)
-    _signal_ladder!(kp.process; interrupt_grace = interrupt_grace, grace = grace)
+    seconds = _resolve_interrupt_grace(interrupt_grace)
+    _signal_ladder!(kp.process; interrupt_grace = seconds, grace = grace)
     sidecar = something(kp.run_dir, kp.output_dir)
     job_id = sidecar === nothing ? nothing : _read_kit_text_file(sidecar, "kit.job")
     hosts = sidecar === nothing ? String[] : _read_kit_hosts(sidecar)
@@ -1573,26 +1634,28 @@ function terminate!(kp::KitProcess; grace::Real = 10, interrupt_grace::Real = 0)
 end
 
 """
-    terminate_run!(output_dir; grace=10, interrupt_grace=0, log_dir=nothing, kind=:go) -> KitRunResult
+    terminate_run!(output_dir; grace=10, interrupt_grace=nothing, log_dir=nothing, kind=:go) -> KitRunResult
 
 Like [`terminate!`](@ref) after losing [`KitProcess`](@ref): read `kit.pid` /
 `kit.job` / `kit.hosts` under `output_dir`. `interrupt_grace` is the same
-SIGINT stage. `kind` is only used when `kit.result` is missing.
+SIGINT stage, including the 30 second default and
+`DISTSSHKIT_WAIT_SIGINT_GRACE` in this process. `kind` is only used when
+`kit.result` is missing.
 """
 function terminate_run!(
         output_dir::AbstractString;
         grace::Real = 10,
-        interrupt_grace::Real = 0,
+        interrupt_grace::Union{Nothing, Real} = nothing,
         log_dir::Union{Nothing, AbstractString} = nothing,
         kind::Symbol = :go,
     )::KitRunResult
     _require_nonnegative("grace", grace)
-    _require_nonnegative("interrupt_grace", interrupt_grace)
+    seconds = _resolve_interrupt_grace(interrupt_grace)
     _require_execute_kind!(kind)
     d = canonical_local_path(output_dir)
     rec = _read_kit_pid_record(d)
     if rec !== nothing && kit_pid_file_running(d)
-        _signal_and_wait_pid!(rec.pid, grace; interrupt_grace = interrupt_grace)
+        _signal_and_wait_pid!(rec.pid, grace; interrupt_grace = seconds)
     end
     job_id = _read_kit_text_file(d, "kit.job")
     _reap_tagged_workers!(job_id, _read_kit_hosts(d))

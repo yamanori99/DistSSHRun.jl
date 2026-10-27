@@ -66,6 +66,76 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             @test DistSSHRun._group_interrupt_targets(Tuple{Int, Any}[]).local_pids == Int[]
         end
 
+        @testset "WorkerConfig.ospid is the julia pid" begin
+            addprocs(1; topology = :master_worker)
+            added = workers()
+            try
+                wpid = added[end]
+                cfg = Distributed.map_pid_wrkr[wpid].config
+                # Same field `kill -INT` reads. `JoinCompleteMsg` sends `getpid()`.
+                @test cfg.ospid == remotecall_fetch(getpid, wpid)
+                @test cfg.ospid != getpid()
+            finally
+                for w in added
+                    w in workers() && rmprocs(w; waitfor = 2.0)
+                end
+            end
+        end
+
+        @testset "_interrupt_kill_shell names those pids" begin
+            @test DistSSHRun._interrupt_kill_shell([4242, 4243]) == "kill -INT 4242 4243 || true"
+            @test !occursin("pkill", DistSSHRun._interrupt_kill_shell([7]))
+        end
+
+        @testset "kill -INT ssh options and deadline" begin
+            @test DistSSHRun._INTERRUPT_SSH_PHASE_S ==
+                Float64(DistSSHRun.DistSSHBase._SSH_CONNECT_TIMEOUT_S)
+            @test DistSSHRun._SSH_PHASE_CONCURRENCY == 8
+            withenv("DISTRIBUTED_SSH_OPTS" => nothing) do
+                cmd = DistSSHRun._ssh_phase_cmd("child.example", "kill -INT 4242 || true")
+                argv = collect(cmd)
+                i5 = findfirst(==("ServerAliveInterval=5"), argv)
+                i60 = findfirst(==("ServerAliveInterval=60"), argv)
+                @test i5 !== nothing && i60 !== nothing && i5 < i60
+                @test "ServerAliveCountMax=1" in argv
+                @test "BatchMode=yes" in argv
+                @test "ConnectTimeout=$(DistSSHRun.DistSSHBase._SSH_CONNECT_TIMEOUT_S)" in argv
+                @test any(arg -> occursin("kill -INT 4242", arg), argv)
+            end
+            cmds = Cmd[`sleep 30`, `sleep 30`, `sleep 30`]
+            runs = DistSSHRun._CmdRun[]
+            t0 = time()
+            try
+                runs = DistSSHRun._run_cmds_bounded!(cmds, 0.4)
+                @test time() - t0 < 8
+                for run in runs
+                    @test run.proc !== nothing
+                    @test !process_running(run.proc)
+                end
+            finally
+                for run in runs
+                    proc = run.proc
+                    proc !== nothing && process_running(proc) && kill(proc, Base.SIGKILL)
+                end
+            end
+            # A concurrency cap of 1 must not run the queued sleeps after the deadline.
+            queued = DistSSHRun._CmdRun[]
+            t1 = time()
+            try
+                queued = DistSSHRun._run_cmds_bounded!(cmds, 0.4; ntasks = 1)
+                @test time() - t1 < 8
+                for run in queued
+                    proc = run.proc
+                    proc !== nothing && @test !process_running(proc)
+                end
+            finally
+                for run in queued
+                    proc = run.proc
+                    proc !== nothing && process_running(proc) && kill(proc, Base.SIGKILL)
+                end
+            end
+        end
+
         @testset "_interrupt_endpoint local worker" begin
             addprocs(1; topology = :master_worker)
             added = workers()
