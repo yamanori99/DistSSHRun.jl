@@ -3,7 +3,13 @@
 """
     instantiate!(session::KitSession; julia="auto") -> SyncResult
 
-Run `Pkg.instantiate()` on each SSH host in `session` (parallel).
+Run `Pkg.instantiate` on each SSH host in `session` (parallel).
+
+The worker stops, and names `help setup`, when it has no reachable
+registry, when `Pkg.is_manifest_current` is not `true` (a Manifest with
+no `project_hash` counts), or when Manifest `julia_version` is missing
+or its minor differs from that Julia. Otherwise the worker runs
+`Pkg.instantiate(; manifest=true, update_registry=false, julia_version_strict=true)`.
 
 `julia` is the remote Julia path (`"auto"` detects per host, same as
 `setup --instantiate` / `drive --julia`). Returns [`SyncResult`](@ref).
@@ -52,7 +58,7 @@ function instantiate!(
     end
 end
 
-"""After `sync!(; mode=:rsync)`, `Pkg.instantiate` on hosts that still lack deps.
+"""After `sync!(; mode=:rsync)`, instantiate on hosts that still lack deps.
 
 Returns `nothing` when every host already resolves, else [`instantiate!`](@ref).
 """

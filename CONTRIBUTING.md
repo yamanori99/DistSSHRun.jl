@@ -356,4 +356,4 @@ An issue on the open breaking milestone (`X.Y.0`, no due date) gets `when:later`
 
 ## Language
 
-`.jl` comments, docstrings, and errors: English. Install or Docs links: `docs/src`, [README.md](README.md), and [README.ja.md](README.ja.md). User-visible behavior: NEWS. Generative AI is allowed; you own the diff. Keep docs plain.
+`.jl` comments, docstrings, and errors: English. Install or Docs links: `docs/src`, [README.md](README.md), and [README.ja.md](README.ja.md). User-visible behavior: one fragment in `changelog.d/`. The version-cut PR copies fragments into `NEWS.md`. Generative AI is allowed; you own the diff. Keep docs plain.

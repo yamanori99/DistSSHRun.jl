@@ -33,6 +33,7 @@ runs:
             - "!CONTRIBUTING.md"
             - "!REVIEW.md"
             - "!NEWS.md"
+            - "!changelog.d/**"
             - "!SECURITY.md"
             - "!LICENSE"
             - "!.gitignore"
@@ -84,7 +85,7 @@ runs:
               while IFS= read -r f; do
                 [ -z "$f" ] && continue
                 case "$f" in
-                  Project.toml|NEWS.md) ;;
+                  Project.toml|NEWS.md|changelog.d/*) ;;
                   *) only=false ;;
                 esac
               done <<<"$names"

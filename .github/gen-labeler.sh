@@ -9,8 +9,8 @@
 #     any-glob-to-any-file: labeler ORs them as "not this path" and tags
 #     unrelated files (CONTRIBUTING.md → area:test).
 #   - Documenter → area:docs (docs/**)
-#   - GitHub / repo prose → area:project-docs (README, NEWS, CONTRIBUTING,
-#     SECURITY, AGENTS, REVIEW, CODEOWNERS)
+#   - GitHub / repo prose → area:project-docs (README, NEWS, changelog.d,
+#     CONTRIBUTING, SECURITY, AGENTS, REVIEW, CODEOWNERS)
 #   - .github/**, bench/**, codecov.yml, .coderabbit.yaml,
 #     .JETLSConfig.toml → area:ci
 #
@@ -47,6 +47,7 @@ trap 'rm -f "$tmp"' EXIT
           - "README.md"
           - "README.ja.md"
           - "NEWS.md"
+          - "changelog.d/**"
           - "CONTRIBUTING.md"
           - "SECURITY.md"
           - "AGENTS.md"
