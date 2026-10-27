@@ -137,12 +137,33 @@ function _pkill_local_tagged_workers!(job_id::AbstractString)
     return nothing
 end
 
+"""Regex that matches `pattern` and not a shell line that contains this text.
+
+`pkill -f` on Linux matches the full command line. OpenSSH runs
+`sh -c 'pkill -9 -f …'`, so a raw tag in that string can SIGKILL the
+shell (exit 137) before the worker is signaled. `[d]istsshkit-job:…`
+matches `distsshkit-job:…` in another argv and not the bracket text.
+macOS `pkill` did not kill that shell in a local check; the bracket
+still matches a process whose argv contains the raw tag.
+"""
+function _pkill_regex_no_self(pattern::AbstractString)::String
+    s = String(pattern)
+    isempty(s) && return s
+    return string('[', s[1], ']', s[nextind(s, 1):end])
+end
+
+"""Remote `pkill -9 -f` for this job mark. Exit 1 (no match) is success."""
+function _remote_tagged_pkill_sh(job_id::AbstractString)::String
+    pattern = _pkill_regex_no_self(kit_job_pkill_pattern(job_id))
+    return "pkill -9 -f $(_remote_sh_quote(pattern))"
+end
+
 """SSH `pkill -f` for this run's job mark only (never `julia.*--worker`)."""
 function _pkill_remote_tagged_workers!(host::String, job_id::AbstractString)::Bool
     if !_remote_ssh_ok(host)
         return false
     end
-    inner = "pkill -9 -f $(_remote_sh_quote(kit_job_pkill_pattern(job_id)))"
+    inner = _remote_tagged_pkill_sh(job_id)
     try
         run(pipeline(_host_sync_remote_shell_cmd(host, inner); stdout = devnull, stderr = devnull))
     catch e
@@ -289,6 +310,12 @@ function _ssh_phase_exit_code(result::_SSHHostResult)::Union{Nothing, Int}
     proc = result.proc
     proc === nothing && return nothing
     process_exited(proc) || return nothing
+    # Deadline SIGKILL sets `exitcode` to 0 and `termsignal` to 9.
+    # That is not a remote status.
+    sig = proc.termsignal
+    if sig !== nothing && Int(sig) != 0
+        return nothing
+    end
     code = proc.exitcode
     code === nothing && return nothing
     return Int(code)

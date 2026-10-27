@@ -1089,13 +1089,48 @@ function _read_kit_hosts(output_dir::AbstractString)::Vector{String}
     return String[strip(line) for line in split(raw, '\n') if !isempty(strip(line))]
 end
 
+# Wall clock for tagged `pkill` ssh. Connect timeout plus margin.
+# Not computed, and not taken from `interrupt_grace`.
+const _REAP_SSH_PHASE_S = 15.0
+
+function _pkill_host_reached(result::_SSHHostResult)::Bool
+    code = _ssh_phase_exit_code(result)
+    code === nothing && return false
+    return code == 0 || code == 1
+end
+
+"""One `pkill` per host. Exit 1 is success. Failures are one warning, never a throw."""
+function _reap_remote_hosts!(job_id::AbstractString, hosts::AbstractVector{<:AbstractString})
+    seen = String[]
+    known = Set{String}()
+    for host in hosts
+        h = String(host)
+        h in known && continue
+        push!(known, h)
+        push!(seen, h)
+    end
+    isempty(seen) && return nothing
+    remote = _remote_tagged_pkill_sh(job_id)
+    pairs = Pair{String, String}[host => remote for host in seen]
+    results = try
+        _run_ssh_hosts!(pairs, _REAP_SSH_PHASE_S)
+    catch
+        @warn "Tagged worker pkill did not reach: $(join(seen, ", "))"
+        return nothing
+    end
+    missed = String[]
+    for result in results
+        _pkill_host_reached(result) || push!(missed, result.host)
+    end
+    isempty(missed) || @warn "Tagged worker pkill did not reach: $(join(missed, ", "))"
+    return nothing
+end
+
 function _reap_tagged_workers!(job_id::Union{Nothing, AbstractString}, hosts::AbstractVector{<:AbstractString})
     job_id === nothing && return nothing
     id = String(job_id)
     _pkill_local_tagged_workers!(id)
-    for host in hosts
-        _pkill_remote_tagged_workers!(String(host), id)
-    end
+    _reap_remote_hosts!(id, hosts)
     return nothing
 end
 
@@ -1606,7 +1641,8 @@ file, then rename it. A 1 GiB write in 0.4–0.7 seconds on one Mac mini is
 a lower bound. On Julia 1.13 a second Ctrl-C forces the driver out of that
 cleanup. On Julia 1.13, a driver waiting in `pmap` ignores SIGINT, so this
 wait runs out and SIGTERM stops it. With the defaults that is 30 seconds
-plus `grace` (10) plus one second after SIGKILL, about 41 seconds. A
+plus `grace` (10) plus one second after SIGKILL, about 41 seconds, and
+then the tagged `pkill` below. A
 process-group SIGINT, as from a terminal Ctrl-C, also misses that path on
 Julia 1.13: the driver exits 1 and does not send `kill -INT`. Measured on
 macOS. On Julia 1.14 the driver exits 130, but a worker can be removed
@@ -1617,6 +1653,13 @@ exit-on-sigint, so SIGINT runs `atexit` and does not enter `catch` or
 and does not wait), then SIGKILL if the process is still alive. Then
 `pkill` only processes tagged with this run's `job_id` (from `kit.job`),
 never `julia.*--worker`. Without `job_id`, only the child is signaled.
+That `pkill` is one SSH command per host, in parallel, deduplicated, with
+its own 15 second bound (SSH connect plus margin). It does not spend
+`interrupt_grace`. Worst case for those two stages is `interrupt_grace`
+plus that bound. `pkill` exit 1 means nothing matched and is success.
+Hosts that cannot be reached are named in one warning, and this still
+returns. The remote pattern is `[d]istsshkit-job:…`, so `pkill -f` does
+not match the `sh -c` line that contains the command.
 """
 function terminate!(
         kp::KitProcess;
