@@ -29,10 +29,12 @@ function _cli_copy_tree!(dest::AbstractString, root::AbstractString)
 end
 
 # First entry is `depot`. An empty second entry is the default depot.
+# Julia splits `JULIA_DEPOT_PATH` on `;` on Windows.
 function _cli_depot_first(depot::AbstractString)::String
     existing = get(ENV, "JULIA_DEPOT_PATH", "")
     depot = String(depot)
-    return isempty(existing) ? string(depot, ":") : string(depot, ":", existing)
+    sep = Sys.iswindows() ? ";" : ":"
+    return isempty(existing) ? string(depot, sep) : string(depot, sep, existing)
 end
 
 function _cli_child(cmd::Cmd; depot::Union{Nothing, String} = nothing)::Cmd
