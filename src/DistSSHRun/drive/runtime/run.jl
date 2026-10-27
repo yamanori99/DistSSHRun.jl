@@ -121,15 +121,14 @@ function _run_drive_parsed_specialized!(
     )
     return try
         DistSSHRun._reset_run_provenance!(project_root_abs)
-        activate_drive_project!(proj_dir)
-
-        old_out = get(ENV, "DISTRIBUTED_OUTPUT_DIR", nothing)
-        local release_output_dir_lock
-        code = Cint(1)
-        hosts_acc = resolved_hosts === nothing ?
-            Ref{Vector{HostRunResult}}(HostRunResult[]) :
-            resolved_hosts
-        try
+        # Restores after `_run_drive_parsed_locked!`'s `finally` (`rmprocs`)
+        # and before a caller `exit(130)` (`_DriveProcessInterrupt`).
+        return _with_drive_process!(proj_dir) do
+            local release_output_dir_lock
+            code = Cint(1)
+            hosts_acc = resolved_hosts === nothing ?
+                Ref{Vector{HostRunResult}}(HostRunResult[]) :
+                resolved_hosts
             if output_dir !== nothing
                 ENV["DISTRIBUTED_OUTPUT_DIR"] = DistSSHRun.canonical_local_path(String(output_dir))
             end
@@ -183,16 +182,57 @@ function _run_drive_parsed_specialized!(
                 )
                 release_output_dir_lock()
             end
-        finally
-            if old_out === nothing || (old_out isa AbstractString && isempty(strip(String(old_out))))
-                delete!(ENV, "DISTRIBUTED_OUTPUT_DIR")
-            else
-                ENV["DISTRIBUTED_OUTPUT_DIR"] = String(old_out)
-            end
         end
     finally
         DistSSHRun._restore_kit_run_dir_env!(old_run)
         DistSSHRun._release_kit_inproc_run!()
+    end
+end
+
+# Process-global slots a drive frame writes. Empty string is a value; absence is `nothing`.
+const _DRIVE_PROCESS_ENV = (
+    "DISTRIBUTED_PROJECT_ROOT",
+    "DISTRIBUTED_REMOTE_PROJECT_ROOT",
+    "DISTRIBUTED_OUTPUT_DIR",
+    "DISTRIBUTED_RUNNER",
+)
+
+"""
+    _with_drive_process!(f, proj_dir)
+
+Run `f` with the drive project active. On the way out, put back the raw
+`Base.ACTIVE_PROJECT[]` slot (so `nothing` round-trips) and each
+`_DRIVE_PROCESS_ENV` entry (delete when it was absent).
+
+Restore is idempotent and runs from `finally`, including throw and
+`_DriveProcessInterrupt`. Callers must `exit` only after this returns.
+"""
+function _with_drive_process!(f, proj_dir::AbstractString)
+    prev_active = Base.ACTIVE_PROJECT[]
+    prev_env = Vector{Union{Nothing, String}}(undef, length(_DRIVE_PROCESS_ENV))
+    for (i, key) in enumerate(_DRIVE_PROCESS_ENV)
+        prev_env[i] = get(ENV, key, nothing)
+    end
+    restored = Ref(false)
+    function restore_drive_process!()
+        restored[] && return nothing
+        restored[] = true
+        for (i, key) in enumerate(_DRIVE_PROCESS_ENV)
+            old = prev_env[i]
+            if old === nothing
+                delete!(ENV, key)
+            else
+                ENV[key] = old
+            end
+        end
+        Base.ACTIVE_PROJECT[] = prev_active
+        return nothing
+    end
+    activate_drive_project!(String(proj_dir))
+    try
+        return f()
+    finally
+        restore_drive_process!()
     end
 end
 

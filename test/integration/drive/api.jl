@@ -28,6 +28,13 @@ end
         saved_raw = Base.ACTIVE_PROJECT[]
         saved_project = Base.active_project()
         saved_load = copy(Base.load_path())
+        env_keys = (
+            "DISTRIBUTED_PROJECT_ROOT",
+            "DISTRIBUTED_REMOTE_PROJECT_ROOT",
+            "DISTRIBUTED_OUTPUT_DIR",
+            "DISTRIBUTED_RUNNER",
+        )
+        saved_env = Dict(k => get(ENV, k, nothing) for k in env_keys)
         try
             mktemp() do out_path, out_io
                 mktemp() do err_path, err_io
@@ -56,20 +63,103 @@ end
                     @test !occursin("overwritten", err)
                 end
             end
-            # Library `drive!` still leaves the host active. Run #184/#185
-            # will flip this to `@test` when the library restores the project.
             @testset "active project unchanged after drive! (Run #184/#185)" begin
-                @test_broken _api_project_same(Base.active_project(), saved_project)
+                @test Base.ACTIVE_PROJECT[] === saved_raw
+                @test _api_project_same(Base.active_project(), saved_project)
             end
+            @test Dict(k => get(ENV, k, nothing) for k in env_keys) == saved_env
         finally
             DistSSHRun.set_kit_verbosity!(prev_v)
-            # Production restores with `Base.set_active_project`. Do not copy
-            # this raw write into src. The test puts back the exact previous
-            # slot, including `nothing`. `set_active_project(nothing)` accepts
-            # `nothing`, then `active_project()` walks `LOAD_PATH`.
+            # Safety net if the library restore fails. Production writes this
+            # slot itself, including `nothing`.
             Base.ACTIVE_PROJECT[] = saved_raw
+            for (k, v) in saved_env
+                if v === nothing
+                    delete!(ENV, k)
+                else
+                    ENV[k] = v
+                end
+            end
         end
         @test _api_project_same(Base.active_project(), saved_project)
         @test Base.load_path() == saved_load
+    end
+end
+
+@testset "drive restores env and active project on error and interrupt (#185)" begin
+    _mktemp_host() do proj
+        _write_host_project!(proj, "DriveRestore")
+        saved_raw = Base.ACTIVE_PROJECT[]
+        prev_v = DistSSHRun.kit_verbosity()
+        try
+            withenv(
+                "DISTRIBUTED_PROJECT_ROOT" => "prior-root",
+                "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "",
+                "DISTRIBUTED_OUTPUT_DIR" => nothing,
+                "DISTRIBUTED_RUNNER" => nothing,
+            ) do
+                Base.ACTIVE_PROJECT[] = nothing
+                bad = joinpath(proj, "bad.jl")
+                write(bad, "error(\"drive-boom\")\n")
+                err = redirect_stdout(devnull) do
+                    redirect_stderr(devnull) do
+                        try
+                            DistSSHRun.drive!(
+                                bad;
+                                project = proj,
+                                verbosity = :quiet,
+                                yes = true,
+                                enable_log = false,
+                            )
+                            nothing
+                        catch e
+                            e
+                        end
+                    end
+                end
+                @test err isa LoadError
+                @test Base.ACTIVE_PROJECT[] === nothing
+                @test get(ENV, "DISTRIBUTED_PROJECT_ROOT", "") == "prior-root"
+                @test get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", "missing") == ""
+                @test !haskey(ENV, "DISTRIBUTED_OUTPUT_DIR")
+                @test !haskey(ENV, "DISTRIBUTED_RUNNER")
+
+                script = joinpath(proj, "stop.jl")
+                write(script, "function main()\n    throw(InterruptException())\nend\n")
+                session = DistSSHRun.KitSession(
+                    project = proj,
+                    workers = String[],
+                    quiet = true,
+                    yes = true,
+                    verbosity = :quiet,
+                )
+                parsed = DistSSHRun.drive_parsed_from_session(
+                    session,
+                    script;
+                    workers = DistSSHRun.WorkerPlan(1, Dict{String, Int}()),
+                    enable_log = false,
+                    skip_hash_check = true,
+                )
+                got = redirect_stdout(devnull) do
+                    redirect_stderr(devnull) do
+                        try
+                            DistSSHRun.run_drive_parsed!(parsed; project_root = proj)
+                            nothing
+                        catch e
+                            e
+                        end
+                    end
+                end
+                @test got isa DistSSHRun._DriveProcessInterrupt
+                @test Base.ACTIVE_PROJECT[] === nothing
+                @test get(ENV, "DISTRIBUTED_PROJECT_ROOT", "") == "prior-root"
+                @test get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", "missing") == ""
+                @test !haskey(ENV, "DISTRIBUTED_OUTPUT_DIR")
+                @test !haskey(ENV, "DISTRIBUTED_RUNNER")
+            end
+        finally
+            Base.ACTIVE_PROJECT[] = saved_raw
+            DistSSHRun.set_kit_verbosity!(prev_v)
+        end
     end
 end

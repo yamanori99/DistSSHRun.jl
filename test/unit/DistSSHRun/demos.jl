@@ -153,8 +153,9 @@ using Test
         @test !isdir(joinpath(tmp, "demos"))
     end
 
-    # `_run_kit_cli_script` (module.jl) leaves DISTSSHKIT_CLI_SUBCOMMAND_DONE=1;
-    # `main` would otherwise return 0 without running `demo`.
+    # A leftover DISTSSHKIT_CLI_SUBCOMMAND_DONE=1 makes `main` return 0
+    # without running `demo`. `_main` deletes that flag on return; this
+    # `withenv` still isolates the call.
     mktemp() do path, io
         code = withenv("DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "") do
             redirect_stderr(io) do

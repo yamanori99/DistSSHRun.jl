@@ -59,5 +59,12 @@ end
 if get(ENV, "DIST_SSH_KIT_CLI_INCLUDE", "") != "1" &&
         !isempty(PROGRAM_FILE) &&
         abspath(PROGRAM_FILE) == abspath(@__FILE__)
-    exit(drive_main())
+    try
+        exit(drive_main())
+    catch e
+        if e isa DistSSHRun._DriveProcessInterrupt
+            exit(130)
+        end
+        rethrow()
+    end
 end

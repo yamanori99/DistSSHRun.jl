@@ -605,6 +605,66 @@ using Test
         end
     end
 
+    @testset "drive process frame (#185)" begin
+        keys = (
+            "DISTRIBUTED_PROJECT_ROOT",
+            "DISTRIBUTED_REMOTE_PROJECT_ROOT",
+            "DISTRIBUTED_OUTPUT_DIR",
+            "DISTRIBUTED_RUNNER",
+        )
+        snap() = Dict(k => get(ENV, k, nothing) for k in keys)
+        _mktemp_host() do proj
+            _write_host_project!(proj, "DriveFrame")
+            projfile = joinpath(proj, "Project.toml")
+            saved_raw = Base.ACTIVE_PROJECT[]
+            try
+                withenv(
+                    "DISTRIBUTED_PROJECT_ROOT" => nothing,
+                    "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "",
+                    "DISTRIBUTED_OUTPUT_DIR" => "keep-me",
+                    "DISTRIBUTED_RUNNER" => nothing,
+                ) do
+                    pinned = snap()
+                    Base.ACTIVE_PROJECT[] = nothing
+                    err = try
+                        DistSSHRun._with_drive_process!(proj) do
+                            @test Base.ACTIVE_PROJECT[] == projfile
+                            ENV["DISTRIBUTED_PROJECT_ROOT"] = proj
+                            ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = "/remote"
+                            ENV["DISTRIBUTED_OUTPUT_DIR"] = joinpath(proj, "out")
+                            ENV["DISTRIBUTED_RUNNER"] = "1"
+                            error("drive-frame-boom")
+                        end
+                        nothing
+                    catch e
+                        e
+                    end
+                    @test err isa ErrorException
+                    @test occursin("drive-frame-boom", err.msg)
+                    @test Base.ACTIVE_PROJECT[] === nothing
+                    @test snap() == pinned
+                    interrupted = try
+                        DistSSHRun._with_drive_process!(proj) do
+                            ENV["DISTRIBUTED_RUNNER"] = "1"
+                            throw(DistSSHRun._DriveProcessInterrupt())
+                        end
+                        nothing
+                    catch e
+                        e
+                    end
+                    @test interrupted isa DistSSHRun._DriveProcessInterrupt
+                    @test Base.ACTIVE_PROJECT[] === nothing
+                    @test snap() == pinned
+                    @test get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", "missing") == ""
+                    @test !haskey(ENV, "DISTRIBUTED_PROJECT_ROOT")
+                    @test !haskey(ENV, "DISTRIBUTED_RUNNER")
+                end
+            finally
+                Base.ACTIVE_PROJECT[] = saved_raw
+            end
+        end
+    end
+
     @testset "init delay" begin
         @test DistSSHRun._drive_init_delay_sec(; ssh = false) == 0.0
         withenv("DISTRIBUTED_INIT_DELAY_SEC" => nothing) do

@@ -185,7 +185,9 @@ function run_driver_script!(enable_log::Bool, drive_atexit_cleanup)
                     _interrupt_drive_workers!()
                     drive_atexit_cleanup()
                 end
-                exit(130)
+                # `exit` skips `finally`. Throw so worker teardown's caller can
+                # restore env and the active project, then `exit(130)`.
+                throw(_DriveProcessInterrupt())
             end
             rethrow()
         end
