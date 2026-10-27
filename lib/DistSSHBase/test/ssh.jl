@@ -25,71 +25,36 @@ let _BASE = DistSSHBase
         @test proc2.exitcode == 0
         @test out2 == tricky
 
+        apostrophe = "/opt/o'brien/bin/julia"
+        apostrophe_remote = _BASE._remote_julia_version_remote_command(apostrophe)
+        @test apostrophe_remote == "'/opt/o'\\''brien/bin/julia' --version"
+        apostrophe_script = "set -- " * apostrophe_remote * "; printf '%s\\n%s' \"\$1\" \"\$2\""
+        proc3, out3 = _run_subprocess(`/bin/sh -c $apostrophe_script`)
+        @test proc3.exitcode == 0
+        @test out3 == apostrophe * "\n--version"
+
         home = raw"$HOME/.juliaup/bin/julia"
         @test _BASE._remote_julia_version_remote_command(home) ==
             "\"\$HOME/.juliaup/bin/julia\" --version"
-    end
+        tilde = "~/julia-1.x/bin/julia"
+        @test _BASE._remote_julia_version_remote_command(tilde) ==
+            "\"\$HOME/julia-1.x/bin/julia\" --version"
+        special = "\$HOME/a`b c\"d\$e\\f"
+        @test _BASE._remote_julia_version_remote_command(special) ==
+            "\"\$HOME/a\\`b c\\\"d\\\$e\\\\f\" --version"
 
-    @testset "posix login shell probe" begin
-        @test _BASE._remote_posix_probe_accepted(0, "ok\n")
-        @test _BASE._remote_posix_probe_accepted(0, "ok")
-        @test !_BASE._remote_posix_probe_accepted(0, "ok\nextra")
-        @test !_BASE._remote_posix_probe_accepted(127, "ok")
-        @test !_BASE._remote_posix_probe_accepted(255, "ok")
-        @test _BASE._POSIX_SHELL_PROBE == "case x in x) echo ok;; esac"
-        proc, out = _run_subprocess(`/bin/sh -c $(_BASE._POSIX_SHELL_PROBE)`)
-        @test proc.exitcode == 0
-        @test strip(out) == "ok"
-
-        _with_tempdir() do state_dir
-            logp = joinpath(state_dir, "ssh.log")
-            env = merge(
-                _fake_setup_remote_env(state_dir),
-                Dict("DISTSSHKIT_TEST_SSH_LOG" => logp),
+        home_dir = "/tmp/distssh-quote-home"
+        for (spec, expanded) in (
+                home => home_dir * "/.juliaup/bin/julia",
+                tilde => home_dir * "/julia-1.x/bin/julia",
+                "~/My Julia's/bin/julia" => home_dir * "/My Julia's/bin/julia",
+                special => home_dir * "/a`b c\"d\$e\\f",
             )
-            withenv(env...) do
-                host = "posix-host.test"
-                _BASE._clear_remote_posix_shell_cache!(host)
-                _BASE._ensure_remote_posix_shell(host)
-                first = read(logp, String)
-                _BASE._ensure_remote_posix_shell(host)
-                second = read(logp, String)
-                @test first == second
-                @test count(line -> occursin("case x in x)", line), eachline(IOBuffer(first))) == 1
-                @test _BASE._remote_posix_shell_cached(host)
-            end
-            withenv(merge(env, Dict("DISTSSHKIT_TEST_POSIX_SHELL" => "0"))...) do
-                host = "fish-host.test"
-                _BASE._clear_remote_posix_shell_cache!(host)
-                err = try
-                    _BASE._ensure_remote_posix_shell(host)
-                    nothing
-                catch e
-                    e
-                end
-                @test err isa ArgumentError
-                msg = err isa ArgumentError ? err.msg : ""
-                @test occursin("not POSIX-compatible", msg)
-                @test occursin("\$SHELL -c", msg)
-                @test occursin("sh -l -c", msg)
-                @test occursin("fish", msg)
-                @test occursin("help setup", msg)
-                @test !occursin("--help", msg)
-                err2 = try
-                    _BASE._ensure_remote_posix_shell(host)
-                    nothing
-                catch e
-                    e
-                end
-                @test err2 isa ArgumentError
-                @test !_BASE._remote_posix_shell_cached(host)
-            end
-            withenv(merge(env, Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1"))...) do
-                host = "down-host.test"
-                _BASE._clear_remote_posix_shell_cache!(host)
-                @test _BASE._ensure_remote_posix_shell(host) === nothing
-                @test !_BASE._remote_posix_shell_cached(host)
-            end
+            remote = _BASE._remote_julia_version_remote_command(spec)
+            script = "set -- " * remote * "; printf '%s\\n%s' \"\$1\" \"\$2\""
+            proc_h, out_h = _run_subprocess(setenv(`/bin/sh -c $script`, "HOME" => home_dir))
+            @test proc_h.exitcode == 0
+            @test out_h == expanded * "\n--version"
         end
     end
 

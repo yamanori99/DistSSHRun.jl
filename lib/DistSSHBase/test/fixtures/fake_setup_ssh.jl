@@ -39,17 +39,6 @@ function main()
         end
     end
 
-    # DistSSHBase._POSIX_SHELL_PROBE. DISTSSHKIT_TEST_POSIX_SHELL=0 simulates fish.
-    # Test double only; not a user setting.
-    if strip(script) == "case x in x) echo ok;; esac"
-        if get(ENV, "DISTSSHKIT_TEST_POSIX_SHELL", "1") == "0"
-            println(stderr, "fish: Unsupported use of 'case'")
-            exit(127)
-        end
-        println("ok")
-        exit(0)
-    end
-
     if occursin("uname -s", script)
         if get(ENV, "DISTSSHKIT_TEST_UNAME_FAIL", "") == "1"
             exit(1)

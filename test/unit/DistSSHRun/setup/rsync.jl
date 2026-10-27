@@ -81,7 +81,7 @@ using Test
         withenv("DISTSSHKIT_TEST_SSH" => nothing) do
             t = DistSSHRun._host_sync_rsync_transport()
             @test startswith(t, Base.shell_escape(DistSSHRun._ssh_exe()))
-            cmd = DistSSHRun._host_sync_remote_shell_cmd("host.test", "true"; probe = false)
+            cmd = DistSSHRun._host_sync_remote_shell_cmd("host.test", "true")
             @test cmd.exec[1] == DistSSHRun._ssh_exe()
             @test "-n" in cmd.exec
         end
@@ -91,7 +91,7 @@ using Test
             "DISTSSHKIT_TEST_RSYNC" => "/tmp/distsshkit-not-a-test.sh",
             "DISTSSHKIT_TEST_LOCAL_JULIAUP" => "/tmp/distsshkit-not-a-juliaup",
         ) do
-            cmd = DistSSHRun._host_sync_remote_shell_cmd("host.test", "true"; probe = false)
+            cmd = DistSSHRun._host_sync_remote_shell_cmd("host.test", "true")
             @test cmd.exec[1] == DistSSHRun._ssh_exe()
             if Sys.which("rsync") !== nothing
                 @test DistSSHRun._host_sync_rsync_argv() != ["sh", "/tmp/distsshkit-not-a-test.sh"]

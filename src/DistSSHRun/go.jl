@@ -312,7 +312,6 @@ function _go_host_ssh_hint(host::AbstractString)::String
 end
 
 function _go_assert_remote_ready!(host::AbstractString, remote_root::AbstractString)
-    DistSSHBase._ensure_remote_posix_shell(host)
     rr = _remote_shell_path_word(remote_root)
     inner = "test -d $rr && test -f $rr/Project.toml"
     cmd = _ssh_cmd([ssh_opts()..., _ssh_host_args(String(host), inner)...])
@@ -619,7 +618,6 @@ function _go_run_remote_slot!(
         quiet::Bool = false,
         julia::Union{Nothing, AbstractString} = nothing,
     )::DriveResult
-    DistSSHBase._ensure_remote_posix_shell(host)
     mkpath(slot_dir)
     rel = _go_script_relpath(project, script)
     julia_bin = _go_resolve_julia(julia; host = String(host))

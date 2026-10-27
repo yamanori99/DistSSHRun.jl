@@ -20,13 +20,11 @@ end
 Remote `julia --version`, keeping prerelease and build.
 
 Same host and path as [`get_remote_julia_version`](@ref). `nothing` on failure.
-A non-POSIX remote login shell throws `ArgumentError` (see `help setup`).
 """
 function get_remote_julia_version_full(host::String, julia_path::AbstractString)::Union{Nothing, VersionNumber}
     try
         return parse_julia_version_full(_remote_julia_version_output(host, julia_path))
-    catch e
-        _is_remote_posix_shell_error(e) && rethrow()
+    catch
         return nothing
     end
 end

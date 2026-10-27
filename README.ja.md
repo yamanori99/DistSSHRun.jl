@@ -30,7 +30,8 @@ Julia **1.13+**。ホストには **`ssh`** と **`rsync`** が要る。git で�
 ときは **`git`** も要る。リモートのログインシェル（`$SHELL`）は POSIX 互換
 （`sh`、`bash`、`dash`、`zsh`）である。`ssh host command` は `$SHELL -c` で
 実行し、ログインシェルにはしない。Distributed の `SSHManager` はワーカーを
-`sh -l -c` で起動し、この包みは変えられない。fish のようなシェルは拒否する。
+`sh -l -c` で起動し、この包みは変えられない。`fish` と `csh` は未対応である。
+`fish` は引用の意味を黙って変える（シングルクォート内のバックスラッシュ）。
 `julia -m DistSSHRun help setup` を見る。
 
 ## コマンド

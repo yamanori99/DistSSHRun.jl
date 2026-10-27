@@ -14,7 +14,9 @@ using Test
         @test occursin("Remote login shell must be POSIX", text)
         @test occursin("SHELL -c", text)
         @test occursin("sh -l -c", text)
-        @test occursin("fish is refused", text)
+        @test occursin("fish and csh are unsupported", text)
+        @test occursin("backslashes inside single quotes", text)
+        @test !occursin("fish is refused", text)
     end
 
     let r = parse_setup_args(["--check", "child:host1"])

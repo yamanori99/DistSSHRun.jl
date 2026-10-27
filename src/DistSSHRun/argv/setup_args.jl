@@ -10,7 +10,8 @@ function show_requirements(; io::IO = stdout)
         "Remote login shell must be POSIX (sh, bash, dash, or zsh).",
         "ssh runs a command as \$SHELL -c, not a login shell.",
         "Distributed starts workers with sh -l -c; that wrap cannot be changed.",
-        "A shell such as fish is refused on the first command to that host.",
+        "fish and csh are unsupported.",
+        "fish can silently change quoting (backslashes inside single quotes).",
         "Git parity is drive --require-git (off by default).",
     )
     print_help_blank(io)
