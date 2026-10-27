@@ -17,6 +17,7 @@ import SHA
 using TOML
 
 # Public surface. Prefer `julia -m DistSSHKit …` for day-to-day CLI.
+# Path-gate verification comment. This line is not behavior.
 #   user — go! / ride! / drive! / plan / pool! / size! / setup! / pipeline!
 #   occupancy — size! (RSS WorkerPlan; CLI size / pool; not implied by omit :N)
 #   queue — execute!(; detached=true), parsers, paths, help chrome
