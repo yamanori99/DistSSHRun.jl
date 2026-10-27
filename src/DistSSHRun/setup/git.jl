@@ -36,9 +36,48 @@ function git_pull_local_project!(project::AbstractString)::Bool
     return _git_run_detail(["-C", String(project), "pull"]).ok
 end
 
+# Mandatory on every remote git process. Ephemeral `-c` only: do not set
+# `safe.directory` or any other persistent config. Nice-to-have `-c` values
+# stay on #199.
+const _REMOTE_GIT_CONFIG_ARGS = (
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.hooksPath=/dev/null",
+)
+
+"""
+Remote `sh` body for one `git` at `remote_path`.
+
+Every remote git call goes through here so hooks and fsmonitor do not run.
+Arguments are passed through [`_remote_argv_sh`](@ref). A `~` path is `cd`
+then `git` so the remote shell expands the tilde; any other path is `git -C`.
+"""
+function _remote_git_shell(
+        remote_path::AbstractString,
+        args::AbstractVector{<:AbstractString},
+    )::String
+    path = strip(String(remote_path))
+    argv = String["git"]
+    for opt in _REMOTE_GIT_CONFIG_ARGS
+        push!(argv, String(opt))
+    end
+    if startswith(path, "~")
+        for a in args
+            push!(argv, String(a))
+        end
+        return "cd $(_remote_shell_path_word(path)) && " * _remote_argv_sh(argv)
+    end
+    push!(argv, "-C", path)
+    for a in args
+        push!(argv, String(a))
+    end
+    return _remote_argv_sh(argv)
+end
+
 """Remote shell snippet for `git pull` at `remote_path` (`ssh -n`, not a login shell)."""
 function _git_pull_remote_inner(remote_path::AbstractString)::String
-    return "cd $(_remote_shell_path_word(remote_path)) && git pull"
+    return _remote_git_shell(remote_path, ["pull"])
 end
 
 function _git_pull_remote_host_detail(host::AbstractString, remote_path::AbstractString)
@@ -71,13 +110,7 @@ function _remote_git_head(
         host::AbstractString,
         remote_path::AbstractString,
     )::Union{Nothing, @NamedTuple{hash::String, branch::String}}
-    pq = _remote_shell_path_word(remote_path)
-    revs = join((_remote_sh_quote(w) for w in ("HEAD", "--abbrev-ref", "HEAD")), " ")
-    inner = if startswith(strip(String(remote_path)), "~")
-        "cd $pq && git rev-parse $revs"
-    else
-        "git -C $pq rev-parse $revs"
-    end
+    inner = _remote_git_shell(remote_path, ["rev-parse", "HEAD", "--abbrev-ref", "HEAD"])
     try
         s = strip(
             read(
