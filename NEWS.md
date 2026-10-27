@@ -10,12 +10,15 @@ Those notes are often shorter than the section below.
 - The first `drive` in a process compiles less. `plan` is no longer inferred inside `run_drive_parsed!`, a drive without `--sync` or `--rsync` does not infer that path, and that call is precompiled. The text and the exit code do not change. Loading the package from a project still needs that project's dependencies instantiated.
 - A CLI script from a checkout with no manifest exits with an instantiate hint and writes nothing under the depot. `julia -m DistSSHRun` and an installed package are unchanged.
 
+### Breaking
+
+- `drive` and `collect!` refuse a collect root that is the project root or a parent of it. That includes `DISTRIBUTED_COLLECT_DIRS=.` and a default root from `DISTRIBUTED_OUTPUT_DIR`. Point collect at a result directory inside the project. 0.1.7 warned and still collected. The check runs when sentinels are placed and again in `collect!` / `drive --collect-missing` / `drive --collect-overwrite`.
+
 ### Planned breaking (next minor)
 
 - `interrupt_grace` on `terminate!` and `terminate_run!` will default to a positive value, so a stop sends SIGINT before SIGTERM. DistSSHQueue `cancel` of a running job will use that default. Until then the default is `0` and `cancel` does not send SIGINT.
 - `setup --rsync` and `setup --sync` will refuse a `Manifest.toml` that would not ship, and git sync will refuse a path source whose `*.jl` or project files are ignored or untracked. 0.1.7 warns.
 - `setup --sync`, `setup --pull`, and `sync!` will fail when the remote `HEAD` is not the local `HEAD`, including an unpushed local commit on `--pull`. 0.1.7 warns. A hash that could not be read stays a warning.
-- `drive` and `collect!` will refuse a collect root that is the project root or a parent of it. 0.1.7 warns.
 - `-y`, `--yes`, and `DISTSSHKIT_YES` will stop authorizing `setup --delete` and `setup --prune`. Without `--confirm-path`, `-y` will exit 1. With neither, the commands still ask for `delete` or `prune`. A matching `--confirm-path` still deletes.
 - Display helpers that no package outside DistSSHRun calls will stop being exported. `parse_go_args`, `parse_drive_args`, and `parse_ride_args` stay exported. DistSSHKit 0.11 drops the names this package stops exporting.
 

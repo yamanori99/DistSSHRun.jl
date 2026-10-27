@@ -273,22 +273,27 @@ end
         @test occursin("newline", captured)
     end
 
-    @testset "collect root overlap warns" begin
+    @testset "collect root overlap is an error" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"CollectHost\"\n")
-            out_ok, = _capture_stdio() do _, _
-                DistSSHRun._warn_collect_root_overlap(joinpath(proj, "out"), proj)
+            out_ok, refused_inside = _capture_stdio() do _, _
+                DistSSHRun._error_collect_root_overlap(joinpath(proj, "out"), proj)
             end
-            @test !occursin("Warning:", out_ok)
-            out_proj, = _capture_stdio() do _, _
-                DistSSHRun._warn_collect_root_overlap(proj, proj)
+            @test refused_inside == false
+            @test !occursin("Error:", out_ok)
+            out_proj, refused_proj = _capture_stdio() do _, _
+                DistSSHRun._error_collect_root_overlap(proj, proj)
             end
-            @test occursin("Warning:", out_proj)
-            @test occursin("will be an error", out_proj)
-            out_parent, = _capture_stdio() do _, _
-                DistSSHRun._warn_collect_root_overlap(dirname(proj), proj)
+            @test refused_proj
+            @test occursin("Error:", out_proj)
+            @test occursin("collect root", out_proj)
+            @test !occursin("will be an error", out_proj)
+            @test !occursin("--help", out_proj)
+            out_parent, refused_parent = _capture_stdio() do _, _
+                DistSSHRun._error_collect_root_overlap(dirname(proj), proj)
             end
-            @test occursin("Warning:", out_parent)
+            @test refused_parent
+            @test occursin("Error:", out_parent)
             withenv("DISTRIBUTED_COLLECT_DIRS" => ".") do
                 roots = DistSSHRun.distributed_collect_root_dirs(proj, proj)
                 @test length(roots) == 1
@@ -297,14 +302,35 @@ end
             end
         end
         _with_collect() do state_dir, proj
+            logp = joinpath(state_dir, "ssh.log")
+            script = joinpath(proj, "job.jl")
+            write(script, "true\n")
+            withenv(
+                "DISTSSHKIT_TEST_SSH_LOG" => logp,
+                "DISTRIBUTED_COLLECT_DIRS" => ".",
+            ) do
+                captured, name = _capture_stdio() do _, _
+                    DistSSHRun.place_drive_sentinels!(
+                        ["host1"], dirname(script), false, proj,
+                    )
+                end
+                @test name === nothing
+                @test occursin("Error:", captured)
+                @test occursin("collect root", captured)
+                @test !occursin("--help", captured)
+            end
+            @test !isfile(logp) || !occursin("mkdir", read(logp, String))
             mkpath(joinpath(state_dir, "host1", "tree"))
             with_kit_verbosity(:verbose) do
                 captured, result = _capture_stdio() do _, _
                     _collect!(proj, proj, ["child:host1"])
                 end
-                @test result.ok
-                @test count("Warning: collect root", captured) == 1
-                @test occursin("will be an error", captured)
+                @test !result.ok
+                @test result.exit_code == 1
+                @test count("Error:", captured) == 1
+                @test occursin("collect root", captured)
+                @test !occursin("will be an error", captured)
+                @test !occursin("collect-missing", captured)
             end
         end
     end

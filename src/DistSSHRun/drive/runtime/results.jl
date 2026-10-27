@@ -26,14 +26,19 @@ function place_drive_sentinels!(
         script_dir::String,
         skip_collect::Bool,
         project_root::AbstractString,
-    )::String
+    )::Union{Nothing, String}
     (skip_collect || isempty(successful_hosts)) && return ""
     sentinel_name = ".drive_sentinel_$(getpid())_$(Dates.format(now(), "yyyymmddTHHMMSS"))"
     repo_ra = canonical_local_path(project_root)
     collect_roots_sentinel = distributed_collect_root_dirs(script_dir, repo_ra)
+    # The driver script may set `DISTRIBUTED_COLLECT_DIRS` after drive starts
+    # and before sentinels. Refuse here, before any remote mkdir.
     for local_rd in collect_roots_sentinel
         _early_local = DistSSHRun.canonical_local_path(local_rd)
-        _warn_collect_root_overlap(_early_local, repo_ra)
+        _error_collect_root_overlap(_early_local, repo_ra) && return nothing
+    end
+    for local_rd in collect_roots_sentinel
+        _early_local = DistSSHRun.canonical_local_path(local_rd)
         for host in unique(successful_hosts)
             try
                 remote_early = remote_layout_path(_early_local, repo_ra)
