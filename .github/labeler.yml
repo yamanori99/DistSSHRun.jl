@@ -12,6 +12,7 @@
           - "README.md"
           - "README.ja.md"
           - "NEWS.md"
+          - "changelog.d/**"
           - "CONTRIBUTING.md"
           - "SECURITY.md"
           - "AGENTS.md"

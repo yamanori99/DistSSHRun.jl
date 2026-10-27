@@ -298,8 +298,9 @@ function cleanup_remote_workers(hosts::Vector{String})::NamedTuple
 end
 
 """
-Run `using Pkg; <pkg_e>` on remote hosts (parallel) with `--project` at `remote_path`.
+Run `pkg_e` on remote hosts (parallel) with `--project` at `remote_path`.
 
+`pkg_e` is the full `julia -e` program (it loads `Pkg` itself).
 Returns `(cancelled=false, succeeded, failed)`.
 Private git deps need a deploy key or HTTPS token on the remote. Uses
 `JULIA_PKG_USE_CLI_GIT=true` so Pkg prefers the `git` CLI over LibGit2.
@@ -345,8 +346,8 @@ function _pkg_e_on_remotes(
             else
                 jb = _remote_shell_path_word(host_julia)
                 # Prefer git CLI (ssh-agent / SSH config) over LibGit2 credentials UI.
-                cmd = "JULIA_PKG_USE_CLI_GIT=true $jb --project=$pq --startup-file=no " *
-                    "-e 'using Pkg; $pkg_e'"
+                cmd = "JULIA_PKG_USE_CLI_GIT=true $jb --project=$pq --startup-file=no -e " *
+                    _remote_sh_quote(String(pkg_e))
                 out = IOBuffer()
                 err = IOBuffer()
                 try
@@ -402,6 +403,58 @@ function _pkg_e_on_remotes(
     return (; cancelled = false, succeeded, failed, hosts = host_results)
 end
 
+"""
+Julia `-e` program for remote instantiate.
+
+The worker stops, and names `help setup`, when no registry is reachable,
+when `Pkg.is_manifest_current` is not `true` (no `project_hash` included),
+or when Manifest `julia_version` is missing or its minor differs from that
+Julia. Otherwise it instantiates the Manifest and does not update registries.
+"""
+function _instantiate_remote_e()::String
+    return join(
+        (
+            "using Pkg",
+            "using TOML",
+            "regs = Pkg.Registry.reachable_registries()",
+            "if isempty(regs)",
+            "    error(\"no reachable package registries. See help setup.\")",
+            "end",
+            "project = Base.active_project()",
+            "if project === nothing",
+            "    error(\"no active project. See help setup.\")",
+            "end",
+            "project_dir = isfile(project) ? dirname(project) : project",
+            "if Pkg.is_manifest_current(project_dir) !== true",
+            "    error(\"Manifest is not current with the project. See help setup.\")",
+            "end",
+            "manifest = Base.active_manifest()",
+            "parsed = manifest isa AbstractString ? TOML.parsefile(manifest) : Dict{String, Any}()",
+            "julia_version = get(parsed, \"julia_version\", nothing)",
+            "if !(julia_version isa String)",
+            "    error(\"Manifest julia_version is missing. See help setup.\")",
+            "end",
+            "parsed_version = try",
+            "    VersionNumber(julia_version)",
+            "catch",
+            "    nothing",
+            "end",
+            "if !(parsed_version isa VersionNumber)",
+            "    error(\"Manifest julia_version is not a Julia version. See help setup.\")",
+            "end",
+            "if Base.thisminor(parsed_version) != Base.thisminor(VERSION)",
+            "    error(",
+            "        \"Manifest julia_version \" * julia_version *",
+            "        \" does not match this Julia \" * string(VERSION) *",
+            "        \". See help setup.\",",
+            "    )",
+            "end",
+            "Pkg.instantiate(; manifest=true, update_registry=false, julia_version_strict=true)",
+        ),
+        "\n",
+    )
+end
+
 function instantiate_remotes(
         hosts::Vector{String},
         julia_path::String,
@@ -413,7 +466,7 @@ function instantiate_remotes(
     return _pkg_e_on_remotes(
         hosts, julia_path, remote_path, project;
         path_anchor = path_anchor,
-        pkg_e = "Pkg.instantiate()",
+        pkg_e = _instantiate_remote_e(),
         spin_label = "Instantiating",
     )
 end
@@ -429,7 +482,7 @@ function runtest_remotes(
     return _pkg_e_on_remotes(
         hosts, julia_path, remote_path, project;
         path_anchor = path_anchor,
-        pkg_e = "Pkg.test()",
+        pkg_e = "using Pkg; Pkg.test()",
         spin_label = "Pkg.test",
     )
 end

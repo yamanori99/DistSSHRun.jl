@@ -1163,16 +1163,33 @@ end
                     proc_push, out_push = _run_subprocess(push_cmd)
                     _assert_proc_ok(proc_push, out_push; label = "push feature branch")
                 end
+                feature_sha = strip(read(`git -C $proj rev-parse HEAD`, String))
                 proc, out = _run_kit_setup(;
                     setup_args = ["--sync", "--remote-path", git_root, setup_hosts...],
                     project_root = proj,
                     extra_env = merge(git_env, Dict("DISTSSHKIT_QUIET" => "0")),
                 )
-                _ssh_e2e_record!(suite, "git_sync_feature_mismatch", proc, out; expect_ok = true, project = proj, kit = :setup)
+                _ssh_e2e_record!(suite, "git_sync_feature_detach", proc, out; expect_ok = true, project = proj, kit = :setup)
                 @test proc.exitcode == 0
-                @test occursin("HEAD mismatch", out)
-                @test occursin("Warning:", out)
-                @test occursin("will be an error", out)
+                @test occursin("Detached HEAD", out)
+                @test !occursin("HEAD mismatch", out)
+                @test !occursin("will be an error", out)
+                for host in hosts
+                    p, body = withenv(git_env...) do
+                        _ssh_e2e_ssh(host, "git -C $(git_root) rev-parse HEAD")
+                    end
+                    _assert_proc_ok(p, body; label = "feature HEAD $(host)")
+                    @test strip(body) == feature_sha
+                    p, _ = withenv(git_env...) do
+                        _ssh_e2e_ssh(host, "git -C $(git_root) symbolic-ref -q HEAD")
+                    end
+                    @test p.exitcode != 0
+                    p, body = withenv(git_env...) do
+                        _ssh_e2e_ssh(host, "cat $(git_root)/e2e_feature.txt")
+                    end
+                    _assert_proc_ok(p, body; label = "feature file $(host)")
+                    @test strip(body) == "feature"
+                end
             finally
                 run(pipeline(`git -C $proj checkout -q $prev`; stdout = devnull, stderr = devnull))
                 try

@@ -13,6 +13,11 @@ on:
 # increase (see version-cut.sh) also runs Ubuntu nightly and Aqua on nightly.
 # macOS for both channels is CI weekly. WSL2 1.13 Pkg.test runs on a main
 # push and CI weekly, not on a pull request.
+# Ordinary pull requests skip DistSSHBase unless lib/DistSSHBase, root
+# Project.toml, .github/julia-slots.env, this file, or .github/actions
+# changed (`**/*.md` excluded). DistSSHUp also runs when lib/DistSSHUp
+# changed. A main push, version-cut PR, workflow_dispatch, and CI weekly
+# still run both. Codecov stays a main push.
 # Registry install follows the heavy gate, including ordinary pull requests.
 # PkgEval follows the heavy gate
 # (ordinary PRs too) and is continue-on-error. No label is involved.
@@ -32,7 +37,9 @@ jobs:
   # in kit_process_start_key (no /proc). Coverage uploads from Ubuntu only.
   # Run's check titles are `DistSSHRun (...)`, the same shape as DistSSHBase
   # and DistSSHUp. macOS 1.13 runs Base, then Up, then Run, one runner at a
-  # time. Ubuntu stays parallel. Downstream is one
+  # time. A skipped Base or Up does not skip the next (`!cancelled()` and
+  # `!failure()`, and Run also needs Base so a Base failure still blocks it).
+  # Ubuntu stays parallel. Downstream is one
   # matrix (DistSSHQueue, DistSSHKit). Each required DistSSHUp and
   # DistSSHBase title is its own job (Ubuntu, macOS, Ubuntu SSH
   # E2E). WSL2 titles run on a main push and CI weekly, not a pull request.
@@ -67,6 +74,9 @@ jobs:
       version_cut: ${{ steps.heavy.outputs.version_cut }}
       e2e: ${{ steps.gate.outputs.e2e }}
       coverage: ${{ steps.gate.outputs.coverage }}
+      # DistSSHBase / DistSSHUp path gates. True except on an ordinary pull request.
+      base: ${{ steps.gate.outputs.base }}
+      up: ${{ steps.gate.outputs.up }}
       # Queue's Linux SSH E2E against this checkout. Not the path-filtered `e2e` gate.
       queue_e2e: ${{ steps.gate.outputs.queue_e2e }}
     steps:
@@ -93,9 +103,22 @@ jobs:
               - "Project.toml"
               - ".github/julia-slots.env"
               - ".github/workflows/CI.yml"
+            base:
+              - "lib/DistSSHBase/**"
+              - "!lib/DistSSHBase/**/*.md"
+              - "Project.toml"
+              - ".github/julia-slots.env"
+              - ".github/workflows/CI.yml"
+              - ".github/actions/**"
+              - "!.github/actions/**/*.md"
+            up:
+              - "lib/DistSSHUp/**"
+              - "!lib/DistSSHUp/**/*.md"
       - id: gate
         env:
           FILTER_E2E: ${{ steps.filter.outputs.e2e }}
+          FILTER_BASE: ${{ steps.filter.outputs.base }}
+          FILTER_UP: ${{ steps.filter.outputs.up }}
           CUT: ${{ steps.heavy.outputs.version_cut }}
           HEAVY: ${{ steps.heavy.outputs.heavy }}
         run: |
@@ -119,6 +142,21 @@ jobs:
             echo "queue_e2e=true" >> "$GITHUB_OUTPUT"
           else
             echo "queue_e2e=false" >> "$GITHUB_OUTPUT"
+          fi
+          # Ordinary pull requests only. Push, dispatch, and a version cut run both.
+          # CI weekly is a separate workflow and does not read these outputs.
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ] || [ "$CUT" = "true" ]; then
+            echo "base=true" >> "$GITHUB_OUTPUT"
+            echo "up=true" >> "$GITHUB_OUTPUT"
+          else
+            base="${FILTER_BASE:-false}"
+            up_paths="${FILTER_UP:-false}"
+            echo "base=${base}" >> "$GITHUB_OUTPUT"
+            if [ "$base" = "true" ] || [ "$up_paths" = "true" ]; then
+              echo "up=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "up=false" >> "$GITHUB_OUTPUT"
+            fi
           fi
   test:
     name: DistSSHRun (1.13, ubuntu-latest, x64)
@@ -147,8 +185,10 @@ jobs:
 
   test-macos:
     name: DistSSHRun (1.13, macos-latest, aarch64)
-    needs: [detect, up-test-macos]
-    if: needs.detect.outputs.heavy == 'true' && success()
+    needs: [detect, base-test-macos, up-test-macos]
+    # success() is false when a needed job is skipped, which would skip Run
+    # after a path-gated Base or Up. Failure still blocks; skip does not.
+    if: ${{ needs.detect.outputs.heavy == 'true' && !cancelled() && !failure() }}
     runs-on: macos-latest
     timeout-minutes: 30
     permissions:
@@ -255,7 +295,7 @@ jobs:
   up-test-ubuntu:
     name: DistSSHUp (1.13, ubuntu-latest, x64)
     needs: detect
-    if: needs.detect.outputs.heavy == 'true'
+    if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.up == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -296,7 +336,8 @@ jobs:
   up-test-macos:
     name: DistSSHUp (1.13, macos-latest, aarch64)
     needs: [detect, base-test-macos]
-    if: needs.detect.outputs.heavy == 'true' && success()
+    # A skipped Base must not skip Up. A failed Base still does.
+    if: ${{ needs.detect.outputs.heavy == 'true' && needs.detect.outputs.up == 'true' && !cancelled() && !failure() }}
     runs-on: macos-latest
     timeout-minutes: 30
     permissions:
@@ -318,7 +359,7 @@ jobs:
   up-test-wsl:
     name: DistSSHUp (1.13, WSL2 ubuntu-24.04, x64)
     needs: detect
-    if: needs.detect.outputs.heavy == 'true' && github.event_name != 'pull_request'
+    if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.up == 'true' && github.event_name != 'pull_request'
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
@@ -350,7 +391,7 @@ jobs:
   up-ssh-e2e:
     name: DistSSHUp (ubuntu-latest → ubuntu-26.04)
     needs: detect
-    if: needs.detect.outputs.e2e == 'true'
+    if: needs.detect.outputs.e2e == 'true' && needs.detect.outputs.up == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -390,7 +431,7 @@ jobs:
   base-test-ubuntu:
     name: DistSSHBase (1.13, ubuntu-latest, x64)
     needs: detect
-    if: needs.detect.outputs.heavy == 'true'
+    if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.base == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -431,7 +472,7 @@ jobs:
   base-test-macos:
     name: DistSSHBase (1.13, macos-latest, aarch64)
     needs: detect
-    if: needs.detect.outputs.heavy == 'true' && success()
+    if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.base == 'true' && success()
     runs-on: macos-latest
     timeout-minutes: 30
     permissions:
@@ -453,7 +494,7 @@ jobs:
   base-test-wsl:
     name: DistSSHBase (1.13, WSL2 ubuntu-24.04, x64)
     needs: detect
-    if: needs.detect.outputs.heavy == 'true' && github.event_name != 'pull_request'
+    if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.base == 'true' && github.event_name != 'pull_request'
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
@@ -485,7 +526,7 @@ jobs:
   base-ssh-e2e:
     name: DistSSHBase (ubuntu-latest → ubuntu-26.04)
     needs: detect
-    if: needs.detect.outputs.e2e == 'true'
+    if: needs.detect.outputs.e2e == 'true' && needs.detect.outputs.base == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
