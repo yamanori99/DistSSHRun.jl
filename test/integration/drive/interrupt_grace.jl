@@ -23,8 +23,11 @@ using Test
             return false
         end
         function main()
-            write($(repr(ready)), "1")
+            # Write `ready` inside the `try`. Julia 1.13 delivers SIGINT at
+            # the next safepoint, so a file written before `try` lets
+            # `terminate!` land in that gap and this `catch` never runs.
             try
+                write($(repr(ready)), "1")
                 t0 = time()
                 while time() - t0 < 120
                     GC.safepoint()
