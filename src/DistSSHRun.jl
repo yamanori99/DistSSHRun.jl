@@ -395,6 +395,8 @@ function main(args::Vector{String} = copy(ARGS))::Cint
     end
 end
 
+public main
+
 # The callable stays in a `Dict{String,Function}` so `_main` infers one call.
 # `demo` and `progress` are ordinary functions. The script commands stop in
 # `include`, but a static call from `_main` still pulls `demo` and `progress` in.

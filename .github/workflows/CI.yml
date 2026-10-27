@@ -267,6 +267,10 @@ jobs:
         with:
           cache-scratchspaces: false
           delete-old-caches: false
+      - name: Public Run names in downstream src
+        env:
+          DOWNSTREAM_SRC: ${{ github.workspace }}/downstream/src
+        run: julia --startup-file=no --project=. .github/downstream_public.jl "$DOWNSTREAM_SRC"
       - name: Pkg.test downstream against this checkout
         env:
           PKG: ${{ matrix.pkg }}

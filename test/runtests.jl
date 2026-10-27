@@ -87,6 +87,8 @@ end
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "hosts.jl"))
         _runtest_announce("unit/DistSSHRun/main_dispatch.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "main_dispatch.jl"))
+        _runtest_announce("unit/DistSSHRun/downstream_public.jl")
+        include(joinpath(@__DIR__, "unit", "DistSSHRun", "downstream_public.jl"))
         _runtest_announce("unit/DistSSHRun/demos.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "demos.jl"))
         _runtest_announce("unit/DistSSHRun/host_project_toml.jl")
