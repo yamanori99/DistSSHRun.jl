@@ -191,9 +191,13 @@ function pin_remote_julia(
     pq = _remote_julia_path_sh(starter)
     inner = string(pq, " --startup-file=no -e 'print(joinpath(Sys.BINDIR, \"julia\"))'")
     code, out = _remote_shell_status(h, inner)
-    code == 0 || return starter
+    code == 0 || throw(
+        ArgumentError("could not resolve the remote Julia executable on $(h)"),
+    )
     p = strip(out)
-    isempty(p) && return starter
+    isempty(p) && throw(
+        ArgumentError("could not resolve the remote Julia executable on $(h)"),
+    )
     _PINNED_JULIA[key] = String(p)
     return String(p)
 end

@@ -91,10 +91,14 @@ end
 
 function _existing_project_manifest(project::AbstractString)::String
     d = canonical_local_path(project)
-    for name in ("Manifest.toml", "JuliaManifest.toml")
-        p = joinpath(d, name)
-        isfile(p) && return p
+    pf = joinpath(d, "Project.toml")
+    isfile(pf) || return ""
+    man = try
+        Base.project_file_manifest_path(String(pf))
+    catch
+        nothing
     end
+    man isa AbstractString && isfile(man) && return String(man)
     return ""
 end
 
@@ -119,13 +123,13 @@ function _worker_identity_expr()
         let man = ""
             proj = Base.active_project()
             if proj !== nothing
-                d = dirname(String(proj))
-                for name in ("Manifest.toml", "JuliaManifest.toml")
-                    p = joinpath(d, name)
-                    if isfile(p)
-                        man = p
-                        break
-                    end
+                man0 = try
+                    Base.project_file_manifest_path(String(proj))
+                catch
+                    nothing
+                end
+                if man0 isa AbstractString && isfile(man0)
+                    man = String(man0)
                 end
             end
             d = Dict{String, String}(
@@ -285,7 +289,7 @@ function _go_remote_run_identity(
         ident["commit"] = c
     end
     rr = String(remote_root)
-    for name in ("Manifest.toml", "JuliaManifest.toml")
+    for name in Base.manifest_names
         p = joinpath(rr, name)
         c2, body = _remote_shell_status(h, string("cat ", _remote_shell_path_word(p)))
         c2 == 0 || continue

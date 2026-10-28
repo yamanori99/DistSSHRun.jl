@@ -180,4 +180,44 @@ using TOML
         slots = DistSSHRun.GoSlot[DistSSHRun.GoSlot(:parent, nothing, "parent")]
         DistSSHRun.verify_go_slots_match_job!(proj, slots)
     end
+
+    _with_tempdir() do proj
+        write(joinpath(proj, "Project.toml"), "name = \"VerMan\"\n")
+        write(
+            joinpath(proj, "Manifest.toml"), """
+            julia_version = "1.12.0"
+            manifest_format = "2.0"
+            project_hash = "0123456789abcdef0123456789abcdef01234567"
+
+            [[deps.DistSSHRun]]
+            uuid = "b568025c-2759-4ef1-8b14-17d00e2cd000"
+            version = "0.0.1"
+            """
+        )
+        vman = joinpath(
+            proj,
+            "Manifest-v$(VERSION.major).$(VERSION.minor).toml",
+        )
+        write(
+            vman, """
+            julia_version = "$(VERSION)"
+            manifest_format = "2.0"
+            project_hash = "0123456789abcdef0123456789abcdef01234567"
+
+            [[deps.DistSSHRun]]
+            uuid = "b568025c-2759-4ef1-8b14-17d00e2cd000"
+            version = "0.1.16"
+            """
+        )
+        @test DistSSHRun._existing_project_manifest(proj) == vman
+        old = Base.active_project()
+        try
+            Pkg.activate(proj; io = devnull)
+            snap = Core.eval(Main, DistSSHRun._worker_identity_expr())
+            @test snap["manifest"] == vman
+            @test snap["pkg.DistSSHRun"] == "0.1.16"
+        finally
+            old === nothing || Pkg.activate(old; io = devnull)
+        end
+    end
 end
