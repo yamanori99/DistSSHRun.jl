@@ -45,7 +45,7 @@ using Test
     let (code, out, _) = _setup_capture(String[])
         @test code == 0
         @test occursin("Recommended", out)
-        @test occursin("--rsync", out)
+        @test occursin("--ship-tree", out)
     end
     let (code, out, _) = _setup_capture(["--requirements"])
         @test code == 0

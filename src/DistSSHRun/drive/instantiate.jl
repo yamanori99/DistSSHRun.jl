@@ -18,7 +18,7 @@ Typical first-time remote prep:
 
 ```julia
 session = KitSession(workers=["child:user@h1"], remote="/path/to/project", yes=true)
-setup!(session, :rsync, :instantiate)  # or sync!(…; mode=:rsync) then instantiate!
+setup!(session, :ship_tree, :instantiate)  # or sync!(…; mode=:ship_tree) then instantiate!
 ```
 
 Also available as [`setup!`](@ref)`(session, :instantiate; julia=…)`.
@@ -58,11 +58,11 @@ function instantiate!(
     end
 end
 
-"""After `sync!(; mode=:rsync)`, instantiate on hosts that still lack deps.
+"""After `sync!(; mode=:ship_tree)`, instantiate on hosts that still lack deps.
 
 Returns `nothing` when every host already resolves, else [`instantiate!`](@ref).
 """
-function instantiate_after_rsync!(
+function instantiate_after_ship!(
         session::KitSession;
         julia::AbstractString = "auto",
     )::Union{Nothing, SyncResult}
@@ -75,3 +75,6 @@ function instantiate_after_rsync!(
         return instantiate!(session; julia = julia)
     end
 end
+
+instantiate_after_rsync!(session::KitSession; julia::AbstractString = "auto") =
+    instantiate_after_ship!(session; julia = julia)

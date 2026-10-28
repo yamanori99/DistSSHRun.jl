@@ -92,8 +92,9 @@ function parse_drive_args(args::Vector{String})
     log_dir = nothing
     output_dir = nothing
     explicit_package = nothing
-    # nothing → no pre-run sync; :sync / :rsync → sync!
+    # nothing → no pre-run sync; :sync / :ship_tree → sync!
     sync_mode = nothing
+    allow_external_symlinks = false
     sync_script = false
     require_git = false
     skip_git_guard = false
@@ -145,18 +146,23 @@ function parse_drive_args(args::Vector{String})
             )
             sync_script = true
             i += 1
-        elseif arg == "--rsync"
+        elseif arg == "--ship-tree"
             require_git && throw(
                 ArgumentError(
-                    "drive: --require-git cannot be combined with --rsync",
+                    "drive: --require-git cannot be combined with --ship-tree",
                 )
             )
-            sync_mode = _kit_set_sync_mode!(sync_mode, :rsync; source = "drive")
+            sync_mode = _kit_set_sync_mode!(sync_mode, :ship_tree; source = "drive")
             i += 1
+        elseif arg == "--allow-external-symlinks"
+            allow_external_symlinks = true
+            i += 1
+        elseif arg == "--rsync"
+            _throw_rsync_removed()
         elseif arg == "--require-git"
-            sync_mode === :rsync && throw(
+            sync_mode === :ship_tree && throw(
                 ArgumentError(
-                    "drive: --require-git cannot be combined with --rsync",
+                    "drive: --require-git cannot be combined with --ship-tree",
                 )
             )
             skip_git_guard && throw(
@@ -169,7 +175,7 @@ function parse_drive_args(args::Vector{String})
             skip_hash_check = false
             i += 1
         elseif arg == "--skip-git-guard"
-            # Compat no-op for parity (already off). Independent of --sync / --rsync.
+            # Compat no-op for parity (already off). Independent of --sync / --ship-tree.
             require_git && throw(
                 ArgumentError(
                     "drive: --skip-git-guard cannot be combined with --require-git",
@@ -240,7 +246,7 @@ function parse_drive_args(args::Vector{String})
             sync_mode !== nothing &&
                 throw(
                 ArgumentError(
-                    "$(flag) cannot be combined with --sync / --rsync",
+                    "$(flag) cannot be combined with --sync / --ship-tree",
                 )
             )
             !isempty(hosts) &&
@@ -295,6 +301,7 @@ function parse_drive_args(args::Vector{String})
                 mem_headroom = mem_headroom,
                 parent_gb = parent_gb,
                 allow_mismatch = allow_mismatch,
+                allow_external_symlinks = allow_external_symlinks,
             )
         elseif arg == "--help" || arg == "-h"
             return (
@@ -322,6 +329,7 @@ function parse_drive_args(args::Vector{String})
                 mem_headroom = mem_headroom,
                 parent_gb = parent_gb,
                 allow_mismatch = allow_mismatch,
+                allow_external_symlinks = false,
             )
         elseif endswith(arg, ".jl")
             script_path = arg
@@ -362,11 +370,11 @@ function parse_drive_args(args::Vector{String})
         julia_exe = nothing
     end
 
-    # --rsync deploys without remote .git/; never run git parity.
-    if sync_mode === :rsync
+    # --ship-tree deploys without remote .git/; never run git parity.
+    if sync_mode === :ship_tree
         require_git && throw(
             ArgumentError(
-                "drive: --require-git cannot be combined with --rsync",
+                "drive: --require-git cannot be combined with --ship-tree",
             )
         )
         skip_hash_check = true
@@ -415,6 +423,7 @@ function parse_drive_args(args::Vector{String})
         mem_headroom = mem_headroom,
         parent_gb = parent_gb,
         allow_mismatch = allow_mismatch,
+        allow_external_symlinks = allow_external_symlinks,
     )
 end
 
@@ -424,8 +433,8 @@ function show_drive_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "Driver + Distributed workers (pmap), then collect new files.",
-        "Remotes: setup --rsync or --clone, then --instantiate.",
-        "Or drive --rsync onto an empty path (instantiates missing deps).",
+        "Remotes: setup --ship-tree or --clone, then --instantiate.",
+        "Or drive --ship-tree (extracts to runs/<run_id>/src/ and instantiates).",
     )
     print_help_blank(io)
     print_help_section("Usage"; io = io)
@@ -449,7 +458,8 @@ function show_drive_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  -w, --workers N     parent:N when no parent token is listed",
-        "  --sync / --rsync    optional pre-run; --rsync instantiates if needed",
+        "  --sync / --ship-tree  optional pre-run; --ship-tree instantiates src/",
+        "  --allow-external-symlinks  with --ship-tree: keep escaping symlinks",
         "  --sync-script       re-include the full driver on workers (default: defs only)",
         "  --require-git       $(REQUIRE_GIT_MEANING)",
         "  --require-all-hosts listed parent/child tokens must join, stay, and collect (default)",

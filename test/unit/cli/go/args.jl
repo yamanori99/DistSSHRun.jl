@@ -83,8 +83,8 @@ using Test
         let r = parse_go_args(["--sync", "child:h1:1", "job.jl"])
             @test r.sync === :sync
         end
-        let r = parse_go_args(["--rsync", "child:h1:1", "job.jl"])
-            @test r.sync === :rsync
+        let r = parse_go_args(["--ship-tree", "child:h1:1", "job.jl"])
+            @test r.sync === :ship_tree
         end
         let r = parse_go_args(["--skip-sync", "child:local:1", "child:h1:2", "job.jl"])
             @test r.sync === false
@@ -93,9 +93,23 @@ using Test
         let r = parse_go_args(["--skip-git-guard", "child:h1:1", "job.jl"])
             @test r.sync === false  # go alias of --skip-sync
         end
-        @test_throws ArgumentError parse_go_args(["--skip-sync", "--rsync", "job.jl"])
+        err = try
+            parse_go_args(["--skip-sync", "--rsync", "job.jl"])
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test err.msg == DistSSHRun.RSYNC_REMOVED_MSG
         @test_throws ArgumentError parse_go_args(["--sync", "--skip-git-guard", "job.jl"])
-        @test_throws ArgumentError parse_go_args(["--sync", "--rsync", "job.jl"])
+        err2 = try
+            parse_go_args(["--sync", "--rsync", "job.jl"])
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err2 isa ArgumentError
+        @test err2.msg == DistSSHRun.RSYNC_REMOVED_MSG
     end
 
     @testset "version, quiet, and hosts env" begin
@@ -134,8 +148,8 @@ using Test
         @test occursin("Usage", txt)
         @test occursin("--output-dir", txt)
         @test occursin("--sync", txt)
-        @test occursin("empty path", txt)
-        @test occursin("instantiates missing deps", txt)
+        @test occursin("--ship-tree", txt)
+        @test occursin("runs/<run_id>/src/", txt)
         @test occursin("--hosts", txt)
         @test occursin("--repeat", txt)
         @test occursin("--allow-mismatch", txt)

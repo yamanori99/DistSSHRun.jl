@@ -84,7 +84,7 @@ using Test
     end
 
     @testset "refused rsync and prune paths print Error" begin
-        for mode in ("--rsync", "--prune")
+        for mode in ("--ship-tree", "--prune")
             let (code, out, err) = _main_capture(
                     [
                         "setup", mode, "--remote-path", "/", "child:host1",

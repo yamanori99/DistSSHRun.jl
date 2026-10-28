@@ -3,7 +3,7 @@ function show_requirements(; io::IO = stdout)
     print_help_lines(
         io,
         "Deploy and check the project on SSH hosts before go / drive.",
-        "Recommended: --rsync, --instantiate, --check, then optional --runtest.",
+        "Recommended: --ship-tree, --instantiate, --check, then optional --runtest.",
         "Hosts: child:NAME[:N] (same as go / drive / size; :N ignored).",
         "       parent is up, not setup.",
         "Remote path: ~/Parent/RepoName, or --remote-path / ENV.",
@@ -21,7 +21,7 @@ function show_requirements(; io::IO = stdout)
     print_help_lines(
         io,
         "  $(cli_m_project()) setup MODE child:host1 child:host2",
-        "  setup --rsync child:host1 child:host2",
+        "  setup --ship-tree child:host1 child:host2",
         "  setup --instantiate child:host1 child:host2",
         "  setup --check child:host1 child:host2",
         "  setup --runtest child:host1 child:host2",
@@ -30,8 +30,9 @@ function show_requirements(; io::IO = stdout)
     print_help_section("Modes (one per run)"; io = io)
     print_help_lines(
         io,
-        "  --rsync / --clone    empty remote path only",
-        "                       --delete first to replace",
+        "  --ship-tree / --clone  --ship-tree writes runs/<run_id>/src/",
+        "                       --clone needs an empty remote path",
+        "                       --delete first to replace a clone dest",
         "  --sync / --pull      git update (confirm unless -y)",
         "  --instantiate        Pkg.instantiate on remotes",
         "  --check              SSH, Julia, project, deps",
@@ -46,6 +47,7 @@ function show_requirements(; io::IO = stdout)
         io,
         "  --repo URL           clone URL (default: origin)",
         "  --remote-path PATH   remote project root",
+        "  --allow-external-symlinks  with --ship-tree: keep escaping symlinks",
         "  --julia PATH         remote Julia",
         "  $(KIT_QUIET_FLAG_HELP)",
         "  $(KIT_PROGRESS_FLAG_HELP)",
@@ -87,7 +89,8 @@ function _setup_flag_mode(arg::AbstractString)::Union{Nothing, Symbol}
     arg == "--clone" && return :clone
     arg == "--delete" && return :delete
     arg == "--prune" && return :prune
-    arg == "--rsync" && return :rsync_push
+    arg == "--ship-tree" && return :ship_tree
+    arg == "--rsync" && _throw_rsync_removed()
     arg == "--requirements" && return :requirements
     return nothing
 end
@@ -104,7 +107,8 @@ function parse_setup_args(args::Vector{String})
         known = (
             "--check", "--pull", "--sync", "--instantiate", "--juliaup",
             "--juliaup-update", "--runtest", "--cleanup", "--clone",
-            "--delete", "--prune", "--rsync", "--requirements",
+            "--delete", "--prune", "--rsync", "--ship-tree",
+            "--allow-external-symlinks", "--requirements",
             "--ignore-julia-version", "-h", "--help",
         ),
         bare_dash = true,
@@ -121,6 +125,7 @@ function parse_setup_args(args::Vector{String})
     older_days = nothing
     prune_id = nothing
     confirm_paths = String[]
+    allow_external_symlinks = false
 
     c = CliCursor(args)
     while !cli_at_end(c)
@@ -166,6 +171,9 @@ function parse_setup_args(args::Vector{String})
             repo_url = String(strip(cli_take_value!(c, arg)))
         elseif arg in ("--remote-path", "--remote-dir")
             remote_path_override = String(strip(cli_take_value!(c, arg)))
+        elseif arg == "--allow-external-symlinks"
+            allow_external_symlinks = true
+            cli_consume!(c)
         elseif arg == "--ignore-julia-version"
             ignore_julia_version = true
             cli_consume!(c)
@@ -203,6 +211,7 @@ function parse_setup_args(args::Vector{String})
         older_days = older_days,
         prune_id = prune_id,
         confirm_paths = confirm_paths,
+        allow_external_symlinks = allow_external_symlinks,
         show_version = cli_session.show_version,
         cli_session = cli_session,
     )

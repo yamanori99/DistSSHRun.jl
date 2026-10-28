@@ -364,7 +364,13 @@ function _run_drive_parsed_locked!(
                 verbosity = parsed.cli_session.verbosity,
                 yes = parsed.cli_session.yes || DistSSHRun.kit_noninteractive(),
             )
-            sync_result = DistSSHRun.sync!(sync_session; mode = sync_mode)
+            DistSSHRun.warn_project_sshflags(proj_dir)
+            DistSSHRun._SHIP_ALLOW_EXTERNAL[] = get(parsed, :allow_external_symlinks, false)
+            sync_result = DistSSHRun.sync!(
+                sync_session;
+                mode = sync_mode,
+                allow_external_symlinks = DistSSHRun._SHIP_ALLOW_EXTERNAL[],
+            )
             if !sync_result.ok
                 print_err("ERROR: "; bold = true)
                 println_fatal("pre-run sync failed")
@@ -375,8 +381,12 @@ function _run_drive_parsed_locked!(
                 return 1
             end
             if sync_mode === :rsync
+                DistSSHRun._throw_rsync_removed()
+            end
+            if sync_mode === :ship_tree
+                DistSSHRun._SHIP_ALLOW_EXTERNAL[] = get(parsed, :allow_external_symlinks, false)
                 inst_julia = julia_exe === nothing ? "auto" : String(julia_exe)
-                inst = DistSSHRun.instantiate_after_rsync!(
+                inst = DistSSHRun.instantiate_after_ship!(
                     sync_session;
                     julia = inst_julia,
                 )
@@ -418,15 +428,15 @@ function _run_drive_parsed_locked!(
                         println_fatal("To re-deploy with git:")
                         println_fatal("  julia --project=. -m DistSSHKit setup --sync $(join(setup_cli_host_token.(mismatches), " "))")
                         println_fatal()
-                        println_fatal("Or re-deploy with rsync (after setup --delete if the path is nonempty):")
-                        println_fatal("  julia --project=. -m DistSSHKit setup --rsync $(join(setup_cli_host_token.(mismatches), " "))")
+                        println_fatal("Or re-deploy with ship-tree:")
+                        println_fatal("  julia --project=. -m DistSSHKit setup --ship-tree $(join(setup_cli_host_token.(mismatches), " "))")
                         println_fatal()
                     end
                     if !isempty(unverifiable)
                         println_fatal("Git commit could not be verified on $(join(unverifiable, ", "))")
-                        println_fatal("(remote tree may lack .git/ — e.g. after `setup --rsync`)")
+                        println_fatal("(remote tree may lack .git/ — e.g. after `setup --ship-tree`)")
                         println_fatal()
-                        println_fatal("For rsync-deployed remotes, omit --require-git (the default).")
+                        println_fatal("For ship-tree remotes, omit --require-git (the default).")
                         println_fatal()
                         println_fatal("Or use git-managed remotes:")
                         println_fatal("  julia --project=. -m DistSSHKit setup --clone child:HOST ...")

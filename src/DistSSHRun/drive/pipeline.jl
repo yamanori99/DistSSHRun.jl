@@ -5,8 +5,9 @@ function _parse_env_sync_mode(raw::AbstractString)::Union{Symbol, Bool, Nothing}
     isempty(s) && return nothing
     s in ("off", "false", "0", "skip", "no") && return false
     s == "sync" && return :sync
-    s == "rsync" && return :rsync
-    throw(ArgumentError("invalid SYNC_MODE=$(repr(raw)); use rsync, sync, or off"))
+    s == "rsync" && _throw_rsync_removed()
+    s in ("ship-tree", "ship_tree") && return :ship_tree
+    throw(ArgumentError("invalid SYNC_MODE=$(repr(raw)); use ship-tree, sync, or off"))
 end
 
 function _reject_obsolete_pipeline_size_env()
@@ -88,7 +89,7 @@ function kit_session_from_config(config::PipelineConfig)::KitSession
     )
 end
 
-"""Resolve sync mode for [`pipeline!`](@ref): `false`, `:rsync`, or `:sync`."""
+"""Resolve sync mode for [`pipeline!`](@ref): `false`, `:ship_tree`, or `:sync`."""
 function resolve_pipeline_sync(
         config::PipelineConfig,
         session::KitSession,
@@ -171,12 +172,11 @@ pipeline!(driver, "parent:2"; args=["8"])
 pipeline!(driver, "child:user@h1:1", "child:user@h2:1"; remote="/path/to/project", args=["8"], collect=true)
 ```
 
-Remote hosts default to **no** pre-run sync; set `sync=:sync` / `:rsync` explicitly.
-Collect defaults on when remotes are present (`collect=false` to skip). Use
-`sync=:rsync` only onto a missing/empty remote path (or `setup --delete` /
-`setup!(session, :delete)` first). `pipeline!` `sync=:rsync` copies only; it
-does not instantiate missing Manifest deps. Use [`drive!`](@ref) with
-`sync=:rsync`, or [`setup!`](@ref) `:instantiate`, for that.
+Remote hosts default to **no** pre-run sync; set `sync=:sync` / `:ship_tree` explicitly.
+Collect defaults on when remotes are present (`collect=false` to skip).
+`pipeline!` `sync=:ship_tree` copies only; it does not instantiate missing
+Manifest deps. Use [`drive!`](@ref) with `sync=:ship_tree`, or [`setup!`](@ref)
+`:instantiate`, for that.
 
 Returns [`PipelineResult`](@ref); check `result.ok` or use [`report_pipeline_errors`](@ref).
 """

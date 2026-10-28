@@ -46,14 +46,14 @@ using Test
             extra_env = _fake_setup_remote_env(fresh_state()),
         ),
         (;
-            setup_args = ["--rsync", "child:host1"],
+            setup_args = ["--ship-tree", "child:host1"],
             extra_env = merge(
                 _fake_setup_remote_env(fresh_state()),
                 Dict("DISTSSHKIT_TEST_MKDIR_FAIL" => "1"),
             ),
         ),
         (;
-            setup_args = ["--rsync", "child:host1", "child:host2"],
+            setup_args = ["--ship-tree", "child:host1", "child:host2"],
             extra_env = _fake_setup_remote_env(fresh_state()),
         ),
         # `--julia` skips remote detect; fake ssh still sees `Pkg.test()`.

@@ -2,7 +2,7 @@
 
 const _SETUP_BANG_MODES = (
     :delete,
-    :rsync,
+    :ship_tree,
     :clone,
     :sync,
     :pull,
@@ -24,7 +24,7 @@ Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup --…`.
 | `mode` | CLI | Notes |
 | --- | --- | --- |
 | `:delete` | `--delete` | Destructive. Requires `confirm_path`. `session.yes` does not delete |
-| `:rsync` | `--rsync` | Refuses nonempty remote; delete first to replace. `gitignore=false` sends the tree except `.git/` and `.distsshkit/`, after the caller has already chosen what to send. The default `gitignore=true` is unchanged |
+| `:ship_tree` | `--ship-tree` | Tar of the git file list into `runs/<run_id>/src/` |
 | `:clone` | `--clone` | Requires `repo=`; clone runs **on the remote** |
 | `:sync` | `--sync` | Push the local branch to origin, then detach each remote at that commit; confirm unless `session.yes`. A dirty tree is refused |
 | `:pull` | `--pull` | Detach each remote at the local commit. Does not push to origin and does not run `git pull`; confirm unless `session.yes`. A dirty tree is refused |
@@ -45,7 +45,7 @@ mode rejects `confirm_path`. Multiple modes run in order and stop on the first f
 
 ```julia
 session = KitSession(workers=["child:user@h1"], remote="~/proj", yes=true)
-setup!(session, :rsync, :instantiate)
+setup!(session, :ship_tree, :instantiate)
 setup!(session, :check; ignore_julia_version=true)
 ```
 
@@ -63,9 +63,10 @@ function setup!(
         id::Union{Nothing, AbstractString} = nothing,
         confirm_path = nothing,
         gitignore::Bool = true,
+        allow_external_symlinks::Bool = false,
     )::SyncResult
-    if mode !== :rsync && !gitignore
-        throw(ArgumentError("setup! gitignore is only valid on setup!(session, :rsync)"))
+    if !gitignore
+        throw(ArgumentError("setup! gitignore is not valid on setup!(session, :$(mode))"))
     end
     _setup_bang_preflight!(session, mode; repo = repo)
     hosts = _setup_bang_host_list(session)
@@ -94,6 +95,7 @@ function setup!(
                 id = id,
                 bound_plan = bound_plan,
                 gitignore = gitignore,
+                allow_external_symlinks = allow_external_symlinks,
             )
         end
     end
@@ -144,6 +146,7 @@ function _setup_bang_preflight!(
         mode::Symbol;
         repo::Union{Nothing, AbstractString} = nothing,
     )
+    mode === :rsync && _throw_rsync_removed()
     mode in _SETUP_BANG_MODES || throw(
         ArgumentError(
             "setup! mode must be one of $(_SETUP_BANG_MODES), got $(repr(mode))",
@@ -602,9 +605,10 @@ function _setup_one!(
         id::Union{Nothing, AbstractString} = nothing,
         bound_plan::Union{Nothing, Dict{String, String}} = nothing,
         gitignore::Bool = true,
+        allow_external_symlinks::Bool = false,
     )::SyncResult
-    if mode !== :rsync && !gitignore
-        throw(ArgumentError("setup! gitignore is only valid on setup!(session, :rsync)"))
+    if !gitignore
+        throw(ArgumentError("setup! gitignore is not valid on setup!(session, :$(mode))"))
     end
     _setup_bang_preflight!(session, mode; repo = repo)
     hosts = _setup_bang_hosts!(session; allow_parent = setup_mode_allows_parent(mode))
@@ -618,7 +622,13 @@ function _setup_one!(
         raw = _apply_confirmed_delete(touch, plan)
         return _sync_result_from_host_op(raw)
     elseif mode === :rsync
-        return sync!(session; mode = :rsync, gitignore = gitignore)
+        _throw_rsync_removed()
+    elseif mode === :ship_tree
+        return sync!(
+            session;
+            mode = :ship_tree,
+            allow_external_symlinks = allow_external_symlinks,
+        )
     elseif mode === :clone
         ensure_manifest_in_git_worktree!(session.project)
         url = normalize_git_clone_url(_setup_clone_url(repo; surface = hint_surface(session)))

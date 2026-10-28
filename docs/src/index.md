@@ -27,8 +27,15 @@ The longer guide is the
 pkg> add DistSSHRun
 ```
 
-Julia **1.13+**. Hosts need **`ssh`** and **`rsync`**. Git deploys also
-need **`git`**.
+Julia **1.13+**. Hosts need **`ssh`**. Collect and cache pull still need
+**`rsync`**. Ship uses stdlib Tar over SSH. Git deploys also need **`git`**.
+
+`setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` extract the
+git file list into `<remote_root>/runs/<run_id>/src/` (`run_id` is UTC plus
+6 hex). `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
+Provenance and `run.toml` use `schema = 1` and `writer = "DistSSHRun x.y.z"`.
+Unknown keys are ignored when reading. `[[inputs]]` / `outputs` are reserved
+and not written.
 
 The remote login shell (`$SHELL`) must be POSIX-compatible (`sh`, `bash`,
 `dash`, or `zsh`). `ssh host command` runs that shell as `$SHELL -c`, not

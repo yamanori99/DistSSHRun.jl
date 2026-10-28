@@ -64,6 +64,7 @@ function go_main()::Cint
             hosts_file = nothing,
             julia = kw[:julia],
             allow_mismatch = get(kw, :allow_mismatch, Symbol[]),
+            allow_external_symlinks = get(kw, :allow_external_symlinks, false),
             repeat = get(kw, :repeat, nothing),
             hint_surface = :cli,
             original_args = original_args,

@@ -834,7 +834,7 @@ function _remote_tree_root(
 end
 
 """
-Directory on the worker that receives `setup --rsync` of [`resolve_pkg_env`](@ref) `env_dir`.
+Directory on the worker that receives `setup --ship-tree` of [`resolve_pkg_env`](@ref) `env_dir`.
 
 An override (`--remote-path` / `DISTRIBUTED_REMOTE_PROJECT_ROOT`) is this tree
 root, not the member directory.

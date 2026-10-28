@@ -173,6 +173,36 @@ function _collect_dirs_from_env(;
     return out
 end
 
+function _record_path(path::AbstractString, project_root::Union{Nothing, AbstractString})::String
+    s = canonical_local_path(path)
+    home = homedir()
+    if !isempty(home) && (s == home || startswith(s, home * "/"))
+        return s == home ? "~" : "~" * s[ncodeunits(home) + 1:end]
+    end
+    if project_root isa AbstractString && !isempty(project_root)
+        root = canonical_local_path(project_root)
+        if s == root
+            return "."
+        end
+        if startswith(s, root * "/")
+            return relpath(s, root)
+        end
+    end
+    return s
+end
+
+function _recorded_env_names()::Vector{String}
+    names = String[]
+    for k in keys(ENV)
+        ks = String(k)
+        occursin("COOKIE", uppercase(ks)) && continue
+        startswith(ks, "DISTSSHKIT_") || startswith(ks, "DISTRIBUTED_") || continue
+        push!(names, ks)
+    end
+    sort!(names)
+    return names
+end
+
 """Write machine-readable `run.toml` under `run_dir`. Never throws."""
 function write_kit_run_toml!(
         run_dir::AbstractString;
@@ -186,21 +216,24 @@ function write_kit_run_toml!(
     d = canonical_local_path(run_dir)
     data = Dict{String, Any}(
         "schema" => 1,
+        "writer" => "DistSSHRun $(dist_ssh_kit_version())",
         "kind" => String(kind),
-        "run_dir" => d,
+        "run_dir" => _record_path(d, project_root),
     )
     jid = resolved_kit_job_id()
     jid !== nothing && (data["job_id"] = jid)
     if output_dir !== nothing && !isempty(strip(String(output_dir)))
-        data["output_dir"] = canonical_local_path(String(output_dir))
+        data["output_dir"] = _record_path(String(output_dir), project_root)
     end
     if log_dir !== nothing && !isempty(strip(String(log_dir)))
-        data["log_dir"] = canonical_local_path(String(log_dir))
+        data["log_dir"] = _record_path(String(log_dir), project_root)
     end
     logs = _list_kit_run_logs(d)
-    isempty(logs) || (data["logs"] = logs)
+    isempty(logs) || (data["logs"] = String[_record_path(p, project_root) for p in logs])
     cols = _collect_dirs_from_env(; project_root = project_root)
-    isempty(cols) || (data["collect_dirs"] = cols)
+    isempty(cols) || (data["collect_dirs"] = String[_record_path(p, project_root) for p in cols])
+    env_names = _recorded_env_names()
+    isempty(env_names) || (data["env"] = env_names)
     if result !== nothing
         data["ok"] = result.ok
         data["exit_code"] = result.exit_code

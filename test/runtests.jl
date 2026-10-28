@@ -109,6 +109,8 @@ end
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "git.jl"))
         _runtest_announce("unit/DistSSHRun/setup/rsync.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "rsync.jl"))
+        _runtest_announce("unit/DistSSHRun/ship.jl")
+        include(joinpath(@__DIR__, "unit", "DistSSHRun", "ship.jl"))
         _runtest_announce("unit/DistSSHRun/setup/send_list.jl")
         if !_distsshrun_short_skip("unit/DistSSHRun/setup/send_list.jl")
             include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "send_list.jl"))

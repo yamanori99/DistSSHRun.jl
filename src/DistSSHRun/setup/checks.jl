@@ -305,7 +305,7 @@ function check_prerequisites(
             ok("Project found at $project_path")
         else
             fail("Project not found at $project_path")
-            kit_println("    Fix: --clone $(setup_cli_host_token(host))  (or --rsync $(setup_cli_host_token(host)))")
+            kit_println("    Fix: --clone $(setup_cli_host_token(host))  (or --ship-tree $(setup_cli_host_token(host)))")
             all_ok = false
             host_ok[] = false
             kit_println()

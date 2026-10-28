@@ -6,8 +6,8 @@ function show_go_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "Standalone script. One full run per slot; slots start together.",
-        "Remotes: setup --rsync or --clone, then --instantiate.",
-        "Or go --rsync onto an empty path (instantiates missing deps).",
+        "Remotes: setup --ship-tree or --clone, then --instantiate.",
+        "Or go --ship-tree (extracts to runs/<run_id>/src/ and instantiates).",
     )
     print_help_blank(io)
     print_help_section("Usage"; io = io)
@@ -35,7 +35,8 @@ function show_go_usage(; io::IO = stdout)
     print_help_section("Options"; io = io)
     print_help_lines(
         io,
-        "  --sync / --rsync    optional pre-run; --rsync instantiates if needed",
+        "  --sync / --ship-tree  optional pre-run; --ship-tree instantiates src/",
+        "  --allow-external-symlinks  with --ship-tree: keep escaping symlinks",
         "  --julia PATH        remote Julia (ENV or auto)",
         "  --allow-mismatch F  waive julia, distssh, and/or manifest (comma list)",
         "  Remote slots cd to the project root and pin the real julia binary.",
@@ -102,6 +103,7 @@ function _go_parsed(;
         julia,
         repeat,
         allow_mismatch = Symbol[],
+        allow_external_symlinks = false,
     )
     return (
         help = help,
@@ -115,6 +117,7 @@ function _go_parsed(;
         julia = julia,
         repeat = repeat,
         allow_mismatch = allow_mismatch,
+        allow_external_symlinks = allow_external_symlinks,
     )
 end
 
@@ -128,8 +131,9 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
     output_dir = nothing
     julia_exe = nothing
     allow_mismatch = Symbol[]
-    # nothing → go! default (false); :sync / :rsync / false (= skip)
+    # nothing → go! default (false); :sync / :ship_tree / false (= skip)
     sync::Union{Nothing, Symbol, Bool} = nothing
+    allow_external_symlinks = false
     repeat_n::Union{Nothing, Int} = nothing
     c = CliCursor(collect(String, rest))
     while !cli_at_end(c)
@@ -146,9 +150,14 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
         elseif arg == "--sync"
             cli_consume!(c)
             sync = _go_set_sync!(sync, :sync)
-        elseif arg == "--rsync"
+        elseif arg == "--ship-tree"
             cli_consume!(c)
-            sync = _go_set_sync!(sync, :rsync)
+            sync = _go_set_sync!(sync, :ship_tree)
+        elseif arg == "--allow-external-symlinks"
+            cli_consume!(c)
+            allow_external_symlinks = true
+        elseif arg == "--rsync"
+            _throw_rsync_removed()
         elseif arg == "--skip-sync" || arg == "--skip-git-guard"
             cli_consume!(c)
             sync = _go_set_sync!(sync, false)
@@ -174,6 +183,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
                 julia = julia_exe,
                 repeat = repeat_n,
                 allow_mismatch = allow_mismatch,
+                allow_external_symlinks = allow_external_symlinks,
             )
         elseif endswith(arg, ".jl")
             script_path = arg
@@ -217,5 +227,6 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
         julia = julia_exe,
         repeat = repeat_n,
         allow_mismatch = allow_mismatch,
+        allow_external_symlinks = allow_external_symlinks,
     )
 end

@@ -2,11 +2,11 @@
 # `julia -m DistSSHKit setup` — deploy and verify the project on SSH hosts.
 #
 # Recommended workflow:
-#   1. --rsync → 2. --instantiate → 3. --check → 4. --runtest (optional) → `go` / `drive`
+#   1. --ship-tree → 2. --instantiate → 3. --check → 4. --runtest (optional) → `go` / `drive`
 #   Optional git: --clone → --instantiate → --check → --sync / --pull
-#   Replace a remote tree: --delete, then --rsync or --clone
+#   Replace a clone dest: --delete, then --clone
 #
-#   julia --project=. -m DistSSHKit setup --rsync child:host1 child:host2
+#   julia --project=. -m DistSSHKit setup --ship-tree child:host1 child:host2
 #   julia --project=. -m DistSSHKit setup --sync child:host1 child:host2   # git updates
 #
 # See `--help`.
@@ -152,7 +152,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 :check => "Check Prerequisites",
                 :pull => "Pull",
                 :sync => "Sync",
-                :rsync_push => "rsync (no git)",
+                :ship_tree => "ship-tree",
                 :instantiate => "Instantiate",
                 :juliaup => "juliaup (align Julia)",
                 :juliaup_update => "juliaup update",
@@ -176,7 +176,7 @@ if !isdefined(@__MODULE__, :setup_main)
                         project;
                         cli_override = opts.remote_path_override,
                     )
-                elseif mode === :rsync_push
+                elseif mode === :ship_tree
                     DistSSHRun._checked_remote_dest(deploy_path)
                 elseif mode === :prune
                     DistSSHRun._checked_remote_dest(remote_path)
@@ -196,7 +196,7 @@ if !isdefined(@__MODULE__, :setup_main)
 
             # Mutating / multi-host SSH ops: fail fast before confirmations.
             # `--delete` and `--prune` stay off SSH until `--confirm-path` matches.
-            if mode === :clone || mode === :rsync_push ||
+            if mode === :clone || mode === :ship_tree ||
                     mode === :instantiate || mode === :runtest
                 if !preflight_setup_ssh(opts.hosts)
                     print_err("SSH preflight failed. Fix connectivity, then retry.")
@@ -247,10 +247,11 @@ if !isdefined(@__MODULE__, :setup_main)
                 return Cint(ok ? 0 : 1)
             end
 
-            if mode === :rsync_push
+            if mode === :ship_tree
+                DistSSHRun._SHIP_ALLOW_EXTERNAL[] = opts.allow_external_symlinks
                 return Cint(
                     finish_host_op!(
-                            "rsync",
+                            "ship-tree",
                             rsync_push_to_remotes(opts.hosts, op_path, project; path_anchor = path_anchor),
                         ) ? 0 : 1
                 )

@@ -321,9 +321,7 @@ using Test
                         )
                         recorded = DistSSHRun.read_kit_run_toml(d1)
                         @test recorded !== nothing
-                        @test recorded["collect_dirs"] == [
-                            DistSSHRun.canonical_local_path(joinpath(project, "rel-out")),
-                        ]
+                        @test recorded["collect_dirs"] == ["rel-out"]
                     end
                 end
             finally
@@ -613,6 +611,7 @@ using Test
         @test Set(keys(gkw)) == Set(
             [
                 :output_dir, :args, :julia, :quiet, :verbosity, :sync,
+                :allow_external_symlinks,
             ]
         )
         go_r = DistSSHRun.parse_go_args(["--repeat", "8", "job.jl"])

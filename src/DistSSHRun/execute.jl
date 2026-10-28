@@ -104,6 +104,7 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
     isempty(am) || (kw[:allow_mismatch] = am)
     if kind === :go
         kw[:sync] = parsed.sync
+        kw[:allow_external_symlinks] = get(parsed, :allow_external_symlinks, false)
         parsed.repeat === nothing || (kw[:repeat] = parsed.repeat)
         return kw
     end
@@ -112,6 +113,7 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
         return kw
     end
     kw[:sync] = parsed.sync_mode
+    kw[:allow_external_symlinks] = get(parsed, :allow_external_symlinks, false)
     kw[:log_dir] = parsed.log_dir
     kw[:enable_log] = parsed.enable_log
     kw[:package] = parsed.explicit_package
@@ -1568,12 +1570,14 @@ function _execute_detached_argv(
     output_dir !== nothing && push!(argv, "--output-dir", String(output_dir))
     if sync === :sync
         push!(argv, "--sync")
+    elseif sync === :ship_tree
+        push!(argv, "--ship-tree")
     elseif sync === :rsync
-        push!(argv, "--rsync")
+        _throw_rsync_removed()
     elseif sync === false && kind === :go
         push!(argv, "--skip-sync")
     elseif sync !== nothing && sync !== false
-        throw(ArgumentError("sync must be nothing, false, :sync, or :rsync, got $(repr(sync))"))
+        throw(ArgumentError("sync must be nothing, false, :sync, or :ship_tree, got $(repr(sync))"))
     end
     if !_julia_spec_is_auto(julia)
         push!(argv, "--julia", String(strip(String(julia))))

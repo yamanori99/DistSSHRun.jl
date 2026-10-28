@@ -168,13 +168,13 @@ DISTSSHKIT_CODE_COVERAGE=1 \
   testenv/docker-ssh/scripts/up.sh --e2e
 ```
 
-### Setup (rsync tree)
+### Setup (ship-tree)
 
 - Julia resolve: kit parent and remotes share major.minor
 - `run_on_host`: `--version` exit 0; `-e exit(3)` is `.exitcode == 3`
   (no throw)
 - `--delete`: remote `Project.toml` is gone
-- `--rsync`: remote `Project.toml` exists
+- `--ship-tree`: remote `runs/<run_id>/src/Project.toml` exists
 - `--instantiate` / `--check`: job deps; Julia version (no
   `--ignore-julia-version`)
 - `up`: remotes (mismatch → align); `parent` + one remote
@@ -182,8 +182,8 @@ DISTSSHKIT_CODE_COVERAGE=1 \
   kit-parent juliaup + both channels via
   `ensure-kit-parent-juliaup.sh` (needed on CI `setup-julia`)
 - `--runtest`: job `Pkg.test` pass; a planted failure is non-zero
-- `--rsync` nonempty: refused
-- `~/…` remote path: delete → rsync → instantiate → drive still run
+- `--ship-tree` onto an existing root: a new `run_id` leaf
+- `~/…` remote path: delete → ship-tree → instantiate → drive still run
 
 ### Drive / go / size
 
@@ -207,8 +207,8 @@ only return numbers. Collect tests use files workers write.
   remote `--worker` gone (#148)
 - detached SSH ride `terminate!`: `kit.hosts` then remote `--worker` gone
 - `go pi_echo`: π on both hosts
-- `go --rsync` empty dedicated root: no prior `--instantiate`; π on
-  both; remote `Project.toml` appears
+- `go --ship-tree` empty dedicated root: no prior `--instantiate`; π on
+  both; remote `runs/<run_id>/src/Project.toml` appears
 - `go pi_file`: slot `pi_results.txt` after go collect;
   `DISTSSHKIT_JOB_ID` set so remote `-L` mark is collected
 - `go --output-dir`: `pi_results.txt` under the given batch root

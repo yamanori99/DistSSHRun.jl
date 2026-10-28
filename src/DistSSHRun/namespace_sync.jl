@@ -41,6 +41,7 @@ function _rsync_cache_one_host!(
     if !_ensure_remote_dir(h, remote_dir)
         return HostResult(h, false, "could not create remote cache directory")
     end
+    warn_openrsync_once()
     transport = _host_sync_rsync_transport()
     rsync = _host_sync_rsync_argv()
     src = local_dir * "/"
@@ -62,7 +63,7 @@ Rsync local `.distsshkit/cache/sha256/` blobs onto each SSH host under the
 same relative path on the session remote project root. Does not use `--delete`.
 Hosts run at most `DISTSSHKIT_JOBS` at a time (default 1). Host result order
 matches `session.hosts`.
-Project `setup --rsync` still excludes `.distsshkit/`; this call is the
+Project `setup --ship-tree` still excludes `.distsshkit/`; this call is the
 dedicated transfer.
 
 `hashes` limits the push to those digests. `nothing` pushes every local blob.

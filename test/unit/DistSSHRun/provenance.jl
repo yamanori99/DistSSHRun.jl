@@ -254,6 +254,7 @@ end
             )
             raw = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
             @test raw["schema"] == 1
+            @test startswith(String(raw["writer"]), "DistSSHRun ")
             @test raw["kind"] == "go"
             @test haskey(raw, "run_dir")
             @test raw["provenance"]["project"]["manifest"] == "absent"
@@ -325,9 +326,10 @@ end
                     @test clean["source"]["dirty"] == false
                     @test clean["source"]["untracked"] == 0
                     @test clean["source"]["captured"] == "run"
-                    @test haskey(clean["source"], "diff_sha256")
-                    empty_diff = DistSSHRun._sha256_hex(UInt8[])
-                    @test clean["source"]["diff_sha256"] == empty_diff
+                    @test !haskey(clean["source"], "diff_sha256")
+                    @test haskey(clean, "writer")
+                    @test startswith(clean["writer"], "DistSSHRun ")
+                    @test clean["schema"] == 1
                     head = readchomp(`git -C $repo rev-parse HEAD`)
                     @test clean["source"]["commit"] == head
                     snap = DistSSHRun.git_source_snapshot(repo)
@@ -341,13 +343,13 @@ end
                     dirty = DistSSHRun.assemble_provenance(repo)
                     @test dirty["source"]["dirty"] == true
                     @test dirty["source"]["untracked"] == 0
-                    @test dirty["source"]["diff_sha256"] != empty_diff
+                    @test !haskey(dirty["source"], "diff_sha256")
                     write(joinpath(repo, "f.txt"), "hi\n")
                     write(joinpath(repo, "extra.txt"), "x\n")
                     only_new = DistSSHRun.assemble_provenance(repo)
                     @test only_new["source"]["dirty"] == true
                     @test only_new["source"]["untracked"] >= 1
-                    @test only_new["source"]["diff_sha256"] == empty_diff
+                    @test !haskey(only_new["source"], "diff_sha256")
                     mkpath(joinpath(repo, ".distsshkit"))
                     write(joinpath(repo, ".distsshkit", "provenance.toml"), "x\n")
                     rm(joinpath(repo, "extra.txt"))
@@ -391,14 +393,13 @@ end
             Dict(
                 "commit" => "abc",
                 "dirty" => false,
-                "diff_sha256" => "e3b0",
                 "captured" => "submit:client",
                 "untracked" => 0,
             ),
         )
         @test env["DISTSSHKIT_SOURCE_COMMIT"] == "abc"
         @test env["DISTSSHKIT_SOURCE_DIRTY"] == "false"
-        @test env["DISTSSHKIT_SOURCE_DIFF_SHA256"] == "e3b0"
+        @test !haskey(env, "DISTSSHKIT_SOURCE_DIFF_SHA256")
         @test env["DISTSSHKIT_SOURCE_CAPTURED"] == "submit:client"
         @test env["DISTSSHKIT_SOURCE_UNTRACKED"] == "0"
         inherited = Dict{String, String}(
