@@ -337,6 +337,7 @@ end
                     snap = snap::AbstractDict
                     @test snap["commit"] == head
                     @test snap["captured"] == "run"
+                    @test haskey(snap, "diff_sha256")
                     @test Base.ispublic(DistSSHRun, :git_source_snapshot)
                     @test !Base.isexported(DistSSHRun, :git_source_snapshot)
                     write(joinpath(repo, "f.txt"), "changed\n")

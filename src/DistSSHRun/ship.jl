@@ -165,10 +165,10 @@ function pack_ship_tar(
         allow_external_symlinks::Bool = false,
         ship_max_bytes::Integer = SHIP_MAX_BYTES_DEFAULT,
     )
-    root = canonical_local_path(local_root)
-    env0 = resolve_pkg_env(root)
+    local_dir = canonical_local_path(local_root)
+    env0 = resolve_pkg_env(local_dir)
     root = ensure_manifest_ships!(
-        root;
+        local_dir;
         send_list = _rsync_send_list(env0.env_dir, env0; warn = true),
         warn_send_list = true,
     ).env_dir
@@ -234,15 +234,27 @@ function _warn_ignored_local_preferences(root::AbstractString)
 end
 
 function _probe_expanded_remote_root(host::AbstractString, remote_root::AbstractString)::String
-    pq = _remote_shell_path_word(remote_root)
-    code, out = _remote_shell_status(
-        String(host),
-        "cd -P $pq && pwd -P && cd -P ~ && pwd -P",
+    path = strip(String(remote_root))
+    abs_root = if startswith(path, "/")
+        path
+    else
+        code, out = _remote_shell_status(
+            String(host),
+            DistSSHBase._remote_abs_path_resolve_shell(path),
+        )
+        code == 0 || throw(
+            ArgumentError("could not resolve remote_root on $(host): $remote_root"),
+        )
+        strip(out)
+    end
+    isempty(abs_root) && throw(
+        ArgumentError("could not resolve remote_root on $(host): $remote_root"),
     )
-    code == 0 || throw(ArgumentError("could not resolve remote_root on $(host): $remote_root"))
-    lines = split(strip(out), '\n'; keepempty = false)
-    length(lines) >= 2 || throw(ArgumentError("could not resolve remote_root on $(host)"))
-    return validate_expanded_remote_root(String(lines[1]), String(lines[2]))
+    code, home_out = _remote_shell_status(String(host), "cd -P ~ && pwd -P")
+    code == 0 || throw(ArgumentError("could not resolve \$HOME on $(host)"))
+    home = strip(home_out)
+    isempty(home) && throw(ArgumentError("could not resolve \$HOME on $(host)"))
+    return validate_expanded_remote_root(String(abs_root), String(home))
 end
 
 function _remote_prepare_run_leaf!(host::AbstractString, abs_root::AbstractString, run_id::AbstractString)
@@ -336,7 +348,9 @@ function ship_project_to_hosts!(
     try
         if confirm && !kit_noninteractive()
             cancelled = with_kit_progress_suspended() do
-                writeln_both("ship-tree to $(length(hosts)) host(s) into runs/$rid/src/")
+                writeln_both(
+                    "ship-tree $(display_path(path_anchor, local_root)) to $(length(hosts)) host(s) into runs/$rid/src/",
+                )
                 writeln_both("  files=$(packed.files) bytes=$(packed.bytes) hash=$(packed.hash)")
                 if !kit_confirm("Type 'ship-tree' to confirm: "; keyword = "ship-tree")
                     println_fatal("Cancelled.")

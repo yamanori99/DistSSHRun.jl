@@ -335,6 +335,28 @@ function main()
         exit(0)
     end
 
+    if strip(script) == "cd -P ~ && pwd -P"
+        println(get(ENV, "DISTSSHKIT_TEST_REMOTE_HOME", "/home/distsshkit"))
+        exit(0)
+    end
+
+    if occursin("elif test -e", script) && occursin("printf", script)
+        home = get(ENV, "DISTSSHKIT_TEST_REMOTE_HOME", "/home/distsshkit")
+        println(home * "/ship-root")
+        exit(0)
+    end
+
+    if occursin("Sys.BINDIR", script)
+        w = get(ENV, "DISTSSHKIT_TEST_JULIA_WHICH", "")
+        println(isempty(w) ? "/usr/bin/julia" : w)
+        exit(0)
+    end
+
+    if occursin("Tar.extract", script)
+        mkpath(tree)
+        exit(0)
+    end
+
     return exit(0)
 end
 

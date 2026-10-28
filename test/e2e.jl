@@ -613,7 +613,7 @@ end
                     go_flags = ["-y", "--ship-tree"],
                     extra_env = merge(oneshot_env, Dict("DISTSSHKIT_QUIET" => "0")),
                 )
-                    _assert_ssh_e2e_ok(suite, "go_ship_tree_empty", proc, out; project = proj, kit = :go)
+                _assert_ssh_e2e_ok(suite, "go_ship_tree_empty", proc, out; project = proj, kit = :go)
                 @test occursin(hosts[1], out)
                 @test occursin(hosts[2], out)
                 @test count(r"π ≈", out) >= 2

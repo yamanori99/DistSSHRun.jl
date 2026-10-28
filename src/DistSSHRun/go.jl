@@ -1185,11 +1185,12 @@ function _go_run!(
             end
             _go_assert_remotes_ready!(child_hosts, sess_rr)
         end
+        run_rr = sess_rr
 
         verify_go_slots_match_job!(
             proj,
             slots;
-            remote_root = sess_rr,
+            remote_root = run_rr,
             julia = julia,
             allow = _ALLOW_MISMATCH[],
         )
@@ -1207,7 +1208,7 @@ function _go_run!(
                         script_path,
                         args,
                         batch_dir,
-                        sess_rr;
+                        run_rr;
                         quiet = quiet,
                         julia = julia,
                     )
@@ -1258,7 +1259,7 @@ function _go_run!(
                     err = nothing
                     outcome = try
                         _go_collect_slot!(
-                            slot, proj, batch_dir, sess_rr,
+                            slot, proj, batch_dir, run_rr,
                         )
                     catch e
                         err = e
@@ -1293,7 +1294,7 @@ function _go_run!(
             host = slot.host::String
             slot_dir = joinpath(batch_dir, slot.label)
             slot_rel = _go_remote_slot_rel(proj, slot_dir, batch_dir, slot.label)
-            _go_fetch_slot_provenance!(host, sess_rr, slot_rel, slot_dir)
+            _go_fetch_slot_provenance!(host, run_rr, slot_rel, slot_dir)
         end
         if any_run_fail[]
             completed = true

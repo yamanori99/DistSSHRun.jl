@@ -119,14 +119,14 @@ using Test
             @test occursin("Delete complete (2 host(s))", combined)
         end
 
-        @testset "rsync" begin
+        @testset "ship-tree" begin
             proc, combined = got[7]
             @test proc.exitcode == 1
-            @test occursin("rsync did not succeed on any host", combined)
+            @test occursin("ship-tree did not succeed on any host", combined)
 
             proc, combined = got[8]
             @test proc.exitcode == 0
-            @test occursin("rsync complete (2 host(s))", combined)
+            @test occursin("ship-tree complete (2 host(s))", combined)
         end
 
         @testset "runtest" begin

@@ -198,7 +198,7 @@ using Test
             host = "user@host.test"
             _mark_nonempty!(state_dir, host)
             DistSSHRun.apply_kit_cli_session!(DistSSHRun.KitCliSession(quiet = false, yes = true))
-            out, result = _capture_stdio() do _, _
+            _, result = _capture_stdio() do _, _
                 DistSSHRun.rsync_project_to_hosts!(
                     [host], smoke_project, remote_path; confirm = false, report = false,
                 )

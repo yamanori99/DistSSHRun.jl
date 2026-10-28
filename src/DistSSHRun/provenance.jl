@@ -413,9 +413,10 @@ end
 
 """Git record of `project`, or `nothing` when git is missing or this is not a work tree.
 
-Keys: `commit`, `dirty`, `captured`, `untracked`.
+Keys: `commit`, `dirty`, `diff_sha256`, `captured`, `untracked`.
 `captured` is `"run"`. `dirty` is a `Bool`. `untracked` is an `Int`.
-Schema 1 does not record `diff_sha256`.
+Schema 1 `run.toml` / `provenance.toml` omit `diff_sha256`; the snapshot
+dict still has it for Queue.
 `.distsshkit/` and `.distsshqueue/` are not uncommitted changes.
 """
 function git_source_snapshot(project::AbstractString)::Union{Nothing, Dict{String, Any}}
@@ -446,6 +447,8 @@ function _git_source(project::AbstractString)::Union{Nothing, Dict{String, Any}}
         `$git -C $project status --porcelain=v1 -z --untracked-files=all`,
     )
     status === nothing && return nothing
+    diff_sha = _sha256_process(Cmd([git, "-C", String(project), _GIT_DIFF_FLAGS...]))
+    diff_sha === nothing && return nothing
     records = Tuple{String, String}[
         rec for rec in _git_status_records(status) if !_git_status_is_kit(rec[2])
     ]
@@ -453,6 +456,7 @@ function _git_source(project::AbstractString)::Union{Nothing, Dict{String, Any}}
     return Dict{String, Any}(
         "commit" => strip(head),
         "dirty" => !isempty(records),
+        "diff_sha256" => diff_sha,
         "captured" => "run",
         "untracked" => untracked,
     )
@@ -536,7 +540,10 @@ function _resolve_source(project::AbstractString)::Union{Nothing, Dict{String, A
     end
     from_env = _source_from_env()
     from_env === nothing || return from_env
-    return _git_source(project)
+    raw = _git_source(project)
+    raw === nothing && return nothing
+    built = _source_from_user(raw)
+    return isempty(built) ? nothing : built
 end
 
 function _parent_sections(snap::Dict{String, String})::Tuple{Dict{String, Any}, Dict{String, Any}}

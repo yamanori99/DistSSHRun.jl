@@ -20,6 +20,7 @@ if !isdefined(Main, :_run_kit_setup)
         proj = owned ? abspath(string(mktempdir())) : abspath(string(project_root))
         try
             owned && _write_host_project!(proj, "SetupCliHost")
+            owned && _git_init_min!(proj)
             cmd = _kit_cli_cmd(vcat([String(command)], args); julia = julia, project = kit_root)
             base = Dict{String, String}(
                 "DISTSSHKIT_YES" => "1",

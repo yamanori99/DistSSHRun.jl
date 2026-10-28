@@ -43,6 +43,7 @@ if !isdefined(Main, :_with_tempdir)
             "DISTSSHKIT_TEST_SSH" => joinpath(fixtures, "fake_setup_ssh.jl"),
             "DISTSSHKIT_TEST_RSYNC" => joinpath(fixtures, "fake_setup_rsync.sh"),
             "DISTSSHKIT_TEST_STATE_ROOT" => abspath(string(state_dir)),
+            "DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia",
             "DISTSSHKIT_YES" => "1",
         )
     end

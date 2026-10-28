@@ -177,7 +177,7 @@ function _record_path(path::AbstractString, project_root::Union{Nothing, Abstrac
     s = canonical_local_path(path)
     home = homedir()
     if !isempty(home) && (s == home || startswith(s, home * "/"))
-        return s == home ? "~" : "~" * s[ncodeunits(home) + 1:end]
+        return s == home ? "~" : "~" * s[(ncodeunits(home) + 1):end]
     end
     if project_root isa AbstractString && !isempty(project_root)
         root = canonical_local_path(project_root)
