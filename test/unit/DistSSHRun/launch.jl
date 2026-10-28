@@ -82,6 +82,24 @@ using TOML
     @test DistSSHRun.allow_mismatch_argv([:julia, :manifest]) ==
         ["--allow-mismatch", "julia,manifest"]
 
+    missing_man = Dict(
+        "version" => "1.13.1",
+        "commit" => "abc",
+        "manifest" => "",
+        "pkg.DistSSHRun" => "0.1.0",
+    )
+    miss = DistSSHRun._identity_mismatch_lines(
+        parent, missing_man;
+        shipped_manifest = "/remote/job/Manifest.toml",
+    )
+    @test any(occursin("manifest missing", l) for l in miss)
+    waived_man = DistSSHRun._identity_mismatch_lines(
+        parent, missing_man;
+        allow = [:manifest],
+        shipped_manifest = "/remote/job/Manifest.toml",
+    )
+    @test !any(occursin("manifest", l) for l in waived_man)
+
     pin = DistSSHRun.pin_local_julia(nothing)
     @test isabspath(pin)
     @test isfile(pin) || islink(pin)

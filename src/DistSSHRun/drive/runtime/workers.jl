@@ -234,11 +234,7 @@ function add_drive_workers!(
             host_manifests = host_manifests,
         )
     catch
-        leftover = Int[w for w in workers() if w ∉ before_all]
-        try
-            isempty(leftover) || rmprocs(leftover; waitfor = 30)
-        catch
-        end
+        DistSSHRun._rmprocs_added_since(before_all)
         rethrow()
     end
 

@@ -262,27 +262,42 @@ function go_slot_julia_argv(
     return argv
 end
 
+function _rmprocs_added_since(before::AbstractSet{<:Integer})
+    leftover = Int[w for w in workers() if w ∉ before]
+    try
+        isempty(leftover) || rmprocs(leftover; waitfor = 30)
+    catch
+    end
+    return nothing
+end
+
 function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::AbstractString)
     n < 1 && return nothing
     flags = Cmd(worker_exeflag_strings(project; local_cpu = true, job_id = resolved_kit_job_id()))
     env = worker_env_pairs(project)
-    addprocs(
-        1;
-        exename = julia_bin,
-        exeflags = flags,
-        env = env,
-        topology = :master_worker,
-    )
-    _precompile_worker_project!(last(workers()))
-    rest = n - 1
-    rest < 1 && return nothing
-    addprocs(
-        rest;
-        exename = julia_bin,
-        exeflags = flags,
-        env = env,
-        topology = :master_worker,
-    )
+    before = Set(workers())
+    try
+        addprocs(
+            1;
+            exename = julia_bin,
+            exeflags = flags,
+            env = env,
+            topology = :master_worker,
+        )
+        _precompile_worker_project!(last(workers()))
+        rest = n - 1
+        rest < 1 && return nothing
+        addprocs(
+            rest;
+            exename = julia_bin,
+            exeflags = flags,
+            env = env,
+            topology = :master_worker,
+        )
+    catch
+        _rmprocs_added_since(before)
+        rethrow()
+    end
     return nothing
 end
 
@@ -297,31 +312,37 @@ function _add_ssh_drive_workers!(
     flags = Cmd(worker_exeflag_strings(project; local_cpu = false, job_id = resolved_kit_job_id()))
     env = worker_env_pairs(project; ssh = true)
     exename = ssh_worker_exename(julia_bin)
-    addprocs(
-        [(machine, 1)];
-        exename = exename,
-        sshflags = sshflags,
-        dir = project,
-        tunnel = ssh_tunnel_enabled(),
-        cmdline_cookie = false,
-        exeflags = flags,
-        env = env,
-        topology = :master_worker,
-    )
-    _precompile_worker_project!(last(workers()))
-    rest = n - 1
-    rest < 1 && return nothing
-    addprocs(
-        [(machine, rest)];
-        exename = exename,
-        sshflags = sshflags,
-        dir = project,
-        tunnel = ssh_tunnel_enabled(),
-        cmdline_cookie = false,
-        exeflags = flags,
-        env = env,
-        topology = :master_worker,
-    )
+    before = Set(workers())
+    try
+        addprocs(
+            [(machine, 1)];
+            exename = exename,
+            sshflags = sshflags,
+            dir = project,
+            tunnel = ssh_tunnel_enabled(),
+            cmdline_cookie = false,
+            exeflags = flags,
+            env = env,
+            topology = :master_worker,
+        )
+        _precompile_worker_project!(last(workers()))
+        rest = n - 1
+        rest < 1 && return nothing
+        addprocs(
+            [(machine, rest)];
+            exename = exename,
+            sshflags = sshflags,
+            dir = project,
+            tunnel = ssh_tunnel_enabled(),
+            cmdline_cookie = false,
+            exeflags = flags,
+            env = env,
+            topology = :master_worker,
+        )
+    catch
+        _rmprocs_added_since(before)
+        rethrow()
+    end
     return nothing
 end
 

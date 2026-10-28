@@ -197,9 +197,12 @@ function _identity_mismatch_lines(
     if !(:manifest in allow)
         want = isempty(shipped_manifest) ? get(parent, "manifest", "") : String(shipped_manifest)
         got = get(worker, "manifest", "")
-        if !isempty(want) && !isempty(got)
-            dirname(want) == dirname(got) ||
+        if !isempty(want)
+            if isempty(got)
+                push!(lines, "manifest missing (expected $(want))")
+            elseif dirname(want) != dirname(got)
                 push!(lines, "manifest path parent=$(want) worker=$(got)")
+            end
         end
     end
     return lines
@@ -345,7 +348,12 @@ function verify_go_slots_match_job!(
         hs in seen && continue
         push!(seen, hs)
         worker = _go_remote_run_identity(hs, remote_root, julia)
-        shipped = get(worker, "manifest", "")
+        local_man = get(parent, "manifest", "")
+        shipped = if isempty(local_man) || isempty(String(remote_root))
+            local_man
+        else
+            joinpath(String(remote_root), basename(local_man))
+        end
         for line in _identity_mismatch_lines(
                 parent, worker;
                 allow = allow, shipped_manifest = shipped,
