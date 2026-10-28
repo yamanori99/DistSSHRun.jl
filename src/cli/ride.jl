@@ -54,6 +54,7 @@ function ride_main()::Cint
             output_dir = parsed.output_dir,
             project = project_root,
             julia = parsed.julia,
+            allow_mismatch = parsed.allow_mismatch,
             remote = isempty(remote_raw) ? nothing : remote_raw,
             hint_surface = :cli,
         )

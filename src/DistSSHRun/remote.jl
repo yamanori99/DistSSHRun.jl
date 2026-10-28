@@ -110,17 +110,6 @@ function kit_job_pkill_pattern(job_id::AbstractString)::String
     return string(KIT_JOB_CMDLINE_MARK, String(job_id))
 end
 
-function _drive_worker_env()
-    id = resolved_kit_job_id()
-    id === nothing && return Pair{String, String}[]
-    return ["DISTSSHKIT_JOB_ID" => id]
-end
-
-function _drive_worker_exeflags(project::AbstractString)
-    id = resolved_kit_job_id()
-    id === nothing && return `--project=$project`
-    return `--project=$project $(kit_job_eval_arg(id))`
-end
 
 function _pkill_pattern!(pattern::AbstractString)
     Sys.isunix() || return nothing

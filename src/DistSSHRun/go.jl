@@ -509,18 +509,24 @@ function _go_run_local_slot!(
     )::DriveResult
     mkpath(slot_dir)
     log_path = joinpath(slot_dir, "julia.stdout.log")
-    julia_bin = _go_resolve_julia(julia)
-    argv = String[julia_bin, "--project=$(project)"]
+    julia_bin = pin_local_julia(julia)
+    extra_L = String[]
     job_id = resolved_kit_job_id()
     if job_id !== nothing
-        push!(argv, "-L", kit_write_job_mark_file(slot_dir, job_id))
+        push!(extra_L, kit_write_job_mark_file(slot_dir, job_id))
     end
     loader = write_go_slot_loader(slot_dir)
-    loader !== nothing && push!(argv, "-L", loader)
-    push!(argv, String(script))
-    append!(argv, collect(String, script_args))
-    env_pairs = ["DISTRIBUTED_OUTPUT_DIR" => String(slot_dir)]
-    job_id !== nothing && push!(env_pairs, "DISTSSHKIT_JOB_ID" => job_id)
+    loader !== nothing && push!(extra_L, loader)
+    argv = go_slot_julia_argv(
+        julia_bin, project, script, script_args;
+        local_cpu = true, extra_L = extra_L,
+    )
+    env_pairs = worker_env_pairs(
+        project;
+        extra = ["DISTRIBUTED_OUTPUT_DIR" => String(slot_dir)],
+    )
+    notice = launch_override_notice(PARENT_HOST_NAME, launch_override_names(ENV))
+    (quiet || isempty(notice)) || writeln_both(notice)
     cmd = addenv(ignorestatus(Cmd(argv)), env_pairs...)
     proc = open(log_path, "w") do log
         return run(pipeline(cmd; stdout = log, stderr = log); wait = true)
@@ -575,7 +581,7 @@ function _go_remote_slot_shell_inner(
             print(io, ' ', _remote_shell_path_word(a))
         end
     end
-    jb = _remote_shell_path_word(julia_bin)
+    jb_launch = go_remote_julia_prefix(julia_bin)
     log_q = _remote_shell_path_word(joinpath(slot_rel, "julia.stdout.log"))
     exit_q = _remote_shell_path_word(joinpath(slot_rel, "go.exitcode"))
     job_id = resolved_kit_job_id()
@@ -603,7 +609,7 @@ function _go_remote_slot_shell_inner(
         job_export,
         job_mark,
         write_loader,
-        "$jb$job_load$prov_load --project=. $rel_q$args_s >$log_q 2>&1; ",
+        "$jb_launch$job_load$prov_load $rel_q$args_s >$log_q 2>&1; ",
         "ec=\$?; echo \$ec > $exit_q; cat $log_q; exit \$ec",
     )
 end
@@ -621,7 +627,7 @@ function _go_run_remote_slot!(
     )::DriveResult
     mkpath(slot_dir)
     rel = _go_script_relpath(project, script)
-    julia_bin = _go_resolve_julia(julia; host = String(host))
+    julia_bin = something(pin_remote_julia(String(host), julia), _go_resolve_julia(julia; host = String(host)))
     inner = _go_remote_slot_shell_inner(
         remote_root, slot_rel, rel, script_args, julia_bin,
     )
@@ -900,6 +906,11 @@ when you need that.
 `julia` sets the Julia binary for each slot (`nothing` / `"auto"` → detect;
 same as CLI `--julia`).
 
+`allow_mismatch` (CLI `--allow-mismatch`) waives Julia version / commit,
+DistSSH* Manifest versions, and/or Manifest path when a slot does not match
+the job tree. Default is to error. Same tokens as `drive` / `ride`:
+`julia`, `distssh`, `manifest`.
+
 When `workers` is empty and `hosts_file` is omitted, `DISTSSHKIT_HOSTS_FILE`
 is still read (API `go!("job.jl")`). Non-empty `workers` (CLI
 [`host_tokens`](@ref)) does not re-read that ENV.
@@ -930,6 +941,7 @@ function go!(
         hint_surface::Symbol = :api,
         original_args::Vector{String} = String[],
         repeat::Union{Nothing, Integer} = nothing,
+        allow_mismatch = Symbol[],
     )::GoResult
     script_path = canonical_local_path(script)
     proj = canonical_local_path(project)
@@ -951,26 +963,28 @@ function go!(
     try
         _reset_run_provenance!(proj)
         _ensure_kit_run_dir!(:go, script_path; project = proj)
-        return _go_run!(
-            script_path,
-            proj,
-            workers,
-            remote,
-            hosts_file,
-            quiet,
-            verbosity,
-            yes,
-            sync,
-            output_dir,
-            collect_spec,
-            args,
-            path_anchor,
-            julia,
-            hint_surface,
-            original_args,
-            repeat,
-            inherited_run,
-        )
+        return with_allow_mismatch(allow_mismatch) do
+            return _go_run!(
+                script_path,
+                proj,
+                workers,
+                remote,
+                hosts_file,
+                quiet,
+                verbosity,
+                yes,
+                sync,
+                output_dir,
+                collect_spec,
+                args,
+                path_anchor,
+                julia,
+                hint_surface,
+                original_args,
+                repeat,
+                inherited_run,
+            )
+        end
     finally
         _restore_kit_run_dir_env!(old_run)
         _release_kit_inproc_run!()
@@ -1156,6 +1170,14 @@ function _go_run!(
             end
             _go_assert_remotes_ready!(child_hosts, sess_rr)
         end
+
+        verify_go_slots_match_job!(
+            proj,
+            slots;
+            remote_root = sess_rr,
+            julia = julia,
+            allow = _ALLOW_MISMATCH[],
+        )
 
         n_slots > 0 && _kit_progress_mark!("run")
         slot_run_ok = fill(false, n_slots)

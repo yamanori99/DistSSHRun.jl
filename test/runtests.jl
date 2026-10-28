@@ -75,6 +75,8 @@ end
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "pool.jl"))
         _runtest_announce("unit/DistSSHRun/module.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "module.jl"))
+        _runtest_announce("unit/DistSSHRun/launch.jl")
+        include(joinpath(@__DIR__, "unit", "DistSSHRun", "launch.jl"))
         _runtest_announce("unit/DistSSHRun/execute.jl")
         if !_distsshrun_short_skip("unit/DistSSHRun/execute.jl")
             include(joinpath(@__DIR__, "unit", "DistSSHRun", "execute.jl"))

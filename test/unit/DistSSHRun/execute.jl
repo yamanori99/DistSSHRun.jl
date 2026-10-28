@@ -7,13 +7,17 @@ using Test
 
 @testset "execute!" begin
     @testset "_detached_julia_project" begin
-        kit = pkgdir(DistSSHRun)
-        @test kit !== nothing
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"NoKitHere\"\n")
             @test !DistSSHRun._project_tree_has_distsshkit(proj)
-            @test DistSSHRun._detached_julia_project(proj) ==
-                DistSSHRun._detached_fallback_project(kit)
+            err = try
+                DistSSHRun._detached_julia_project(proj)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("does not list DistSSHKit or DistSSHRun", err.msg)
             write(
                 joinpath(proj, "Project.toml"),
                 """
@@ -22,8 +26,7 @@ using Test
                 """,
             )
             @test !DistSSHRun._project_tree_has_distsshkit(proj)
-            @test DistSSHRun._detached_julia_project(proj) ==
-                DistSSHRun._detached_fallback_project(kit)
+            @test_throws ArgumentError DistSSHRun._detached_julia_project(proj)
             write(
                 joinpath(proj, "Project.toml"),
                 """
@@ -46,11 +49,16 @@ using Test
             @test DistSSHRun._project_tree_has_distsshkit(proj)
             @test DistSSHRun._detached_julia_project(proj) == proj
             @test DistSSHRun._detached_m_package(proj) == "DistSSHKit"
+            write(joinpath(proj, "Project.toml"), "name = \"DistSSHRun\"\n")
+            @test DistSSHRun._project_tree_has_distsshkit(proj)
+            @test DistSSHRun._detached_julia_project(proj) == proj
+            @test DistSSHRun._detached_m_package(proj) == "DistSSHRun"
+            write(joinpath(proj, "Project.toml"), "name = \"DistSSHKit\"\n")
+            @test DistSSHRun._project_tree_has_distsshkit(proj)
+            @test DistSSHRun._detached_julia_project(proj) == proj
+            @test DistSSHRun._detached_m_package(proj) == "DistSSHKit"
         end
         _with_tempdir() do proj
-            # DistSSHRun only transitive (e.g. via DistSSHQueue [deps]): the
-            # Manifest is a flat graph and does not mark this direct, so
-            # `-m DistSSHRun` cannot load from here (#372).
             write(joinpath(proj, "Project.toml"), "name = \"QueueOnly\"\n")
             write(
                 joinpath(proj, "Manifest.toml"),
@@ -61,90 +69,17 @@ using Test
                 """,
             )
             @test !DistSSHRun._project_tree_has_distsshkit(proj)
-            @test DistSSHRun._detached_julia_project(proj) ==
-                DistSSHRun._detached_fallback_project(kit)
+            @test_throws ArgumentError DistSSHRun._detached_julia_project(proj)
         end
-        _with_tempdir() do proj
-            write(joinpath(proj, "Project.toml"), "name = \"JunkManifest\"\n")
-            write(joinpath(proj, "Manifest.toml"), "not = [ toml")
-            @test !DistSSHRun._project_tree_has_distsshkit(proj)
-            @test DistSSHRun._detached_julia_project(proj) ==
-                DistSSHRun._detached_fallback_project(kit)
+        _with_tempdir() do empty
+            @test_throws ArgumentError DistSSHRun._detached_julia_project(empty)
         end
-        # Fallback follows the active project only when that project lists
-        # DistSSHKit or DistSSHRun in `[deps]`. `Pkg.test` uses
-        # `test/Project.toml` (has DistSSHRun); `julia --project=.` uses this
-        # package's own `Project.toml` (does not). Pin the active project so
-        # both launches agree. `active_project()` still walks `LOAD_PATH`
-        # when `ACTIVE_PROJECT[]` is `nothing`, and it skips `"@"`. `@v#.#`
-        # is the global env under `julia --project=.`. `Pkg.test` puts the
-        # test project on `LOAD_PATH` as its own entry. The nothing branch
-        # clears `LOAD_PATH` too. Restore `ACTIVE_PROJECT[]` itself:
-        # `active_project()` would substitute an expanded path for `nothing`.
-        saved_active = Base.ACTIVE_PROJECT[]
-        _with_tempdir() do bare
-            prev_load = copy(Base.LOAD_PATH)
-            try
-                _with_tempdir() do env
-                    write(
-                        joinpath(env, "Project.toml"),
-                        """
-                        name = "HasRunDep"
-                        [deps]
-                        DistSSHRun = "b568025c-2759-4ef1-8b14-17d00e2cd000"
-                        """,
-                    )
-                    Base.set_active_project(joinpath(env, "Project.toml"))
-                    @test DistSSHRun._detached_fallback_project(bare) == env
-                end
-                _with_tempdir() do env
-                    write(joinpath(env, "Project.toml"), "name = \"NoKitHere\"\n")
-                    Base.set_active_project(joinpath(env, "Project.toml"))
-                    @test DistSSHRun._detached_fallback_project(bare) == bare
-                end
-                Base.set_active_project(nothing)
-                empty!(Base.LOAD_PATH)
-                @test Base.active_project() === nothing
-                @test DistSSHRun._detached_fallback_project(bare) == bare
-                append!(Base.LOAD_PATH, prev_load)
-                write(joinpath(bare, "Manifest.toml"), "manifest_format = \"2.0\"\n")
-                @test DistSSHRun._detached_fallback_project(bare) == bare
-            finally
-                empty!(Base.LOAD_PATH)
-                append!(Base.LOAD_PATH, prev_load)
-                Base.set_active_project(saved_active)
-            end
-        end
-        @test Base.ACTIVE_PROJECT[] === saved_active
-        # Installed tree (no Manifest) plus a job with no kit dep falls back
-        # to the active project. `-m` follows that project: a DistSSHKit-only
-        # env must not spawn `-m DistSSHRun`.
         _with_tempdir() do root
             job = joinpath(root, "job")
-            installed = joinpath(root, "installed")
-            env = joinpath(root, "env")
             mkpath(job)
-            mkpath(installed)
-            mkpath(env)
             write(joinpath(job, "Project.toml"), "name = \"NoKitHere\"\n")
-            write(
-                joinpath(env, "Project.toml"),
-                """
-                name = "KitOnly"
-                [deps]
-                DistSSHKit = "ceec0504-c968-4be5-b215-667cae0e8f81"
-                """,
-            )
-            prev = Base.active_project()
-            try
-                Base.set_active_project(joinpath(env, "Project.toml"))
-                child = DistSSHRun._detached_fallback_project(installed)
-                @test child == env
-                @test DistSSHRun._detached_m_package(job) == "DistSSHRun"
-                @test DistSSHRun._detached_m_package(child) == "DistSSHKit"
-            finally
-                Base.set_active_project(prev)
-            end
+            @test DistSSHRun._detached_m_package(job) == "DistSSHRun"
+            @test_throws ArgumentError DistSSHRun._detached_julia_project(job)
         end
     end
 
@@ -475,6 +410,9 @@ using Test
         @test !DistSSHRun.execute_detached_accepts(:workers; kind = :go)
         @test !DistSSHRun.execute_detached_accepts(:plan; kind = :go)
         @test !DistSSHRun.execute_detached_accepts(:plan; kind = :drive)
+        @test DistSSHRun.execute_detached_accepts(:allow_mismatch; kind = :go)
+        @test DistSSHRun.execute_detached_accepts(:allow_mismatch; kind = :drive)
+        @test DistSSHRun.execute_detached_accepts(:allow_mismatch; kind = :ride)
         @test DistSSHRun.execute_detached_accepts(:spi_check; kind = :ride)
         @test !DistSSHRun.execute_detached_accepts(:gb_per_worker; kind = :ride)
         @test !DistSSHRun.execute_detached_accepts(:mem_headroom; kind = :ride)
@@ -819,8 +757,7 @@ using Test
 
     @testset ":go detached" begin
         _with_tempdir() do proj
-            write(joinpath(proj, "Project.toml"), "name = \"ExecuteGoDetached\"\n")
-            write(joinpath(proj, "Manifest.toml"), "# lock\n")
+            _write_job_with_distsshrun!(proj)
             script = joinpath(proj, "job.jl")
             write(
                 script, """
@@ -888,8 +825,7 @@ using Test
 
     @testset ":go detached job_id" begin
         _with_tempdir() do proj
-            write(joinpath(proj, "Project.toml"), "name = \"ExecuteGoJobId\"\n")
-            write(joinpath(proj, "Manifest.toml"), "# lock\n")
+            _write_job_with_distsshrun!(proj)
             script = joinpath(proj, "job.jl")
             ran = joinpath(proj, "RAN")
             write(
@@ -932,8 +868,7 @@ using Test
 
     @testset ":go detached default stdio files" begin
         _with_tempdir() do proj
-            write(joinpath(proj, "Project.toml"), "name = \"ExecuteGoStdio\"\n")
-            write(joinpath(proj, "Manifest.toml"), "# lock\n")
+            _write_job_with_distsshrun!(proj)
             script = joinpath(proj, "job.jl")
             write(
                 script, """
@@ -981,8 +916,7 @@ using Test
 
     @testset "wait timeout hung" begin
         _with_tempdir() do proj
-            write(joinpath(proj, "Project.toml"), "name = \"WaitHung\"\n")
-            write(joinpath(proj, "Manifest.toml"), "# lock\n")
+            _write_job_with_distsshrun!(proj)
             script = joinpath(proj, "job.jl")
             write(
                 script, """
@@ -1012,8 +946,7 @@ using Test
 
     @testset "terminate! detached go" begin
         _with_tempdir() do proj
-            write(joinpath(proj, "Project.toml"), "name = \"TerminateGo\"\n")
-            write(joinpath(proj, "Manifest.toml"), "# lock\n")
+            _write_job_with_distsshrun!(proj)
             script = joinpath(proj, "job.jl")
             write(
                 script, """
@@ -1046,8 +979,7 @@ using Test
 
     @testset "terminate! detached ride" begin
         _with_tempdir() do proj
-            write(joinpath(proj, "Project.toml"), "name = \"TerminateRide\"\n")
-            write(joinpath(proj, "Manifest.toml"), "# lock\n")
+            _write_job_with_distsshrun!(proj)
             script = joinpath(proj, "job.jl")
             write(
                 script, """

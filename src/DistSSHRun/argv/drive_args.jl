@@ -86,6 +86,7 @@ function parse_drive_args(args::Vector{String})
     parent_workers = 0
     default_workers = nothing
     julia_exe = nothing
+    allow_mismatch = Symbol[]
     skip_hash_check = true  # default: no git parity; --require-git turns checks on
     enable_log = true
     log_dir = nothing
@@ -129,6 +130,9 @@ function parse_drive_args(args::Vector{String})
             i += 1
         elseif arg == "--julia" && i < length(args)
             julia_exe = args[i + 1]
+            i += 2
+        elseif arg == "--allow-mismatch" && i < length(args)
+            merge_allow_mismatch!(allow_mismatch, args[i + 1])
             i += 2
         elseif arg == "--sync"
             sync_mode = _kit_set_sync_mode!(sync_mode, :sync; source = "drive")
@@ -290,6 +294,7 @@ function parse_drive_args(args::Vector{String})
                 hint_surface = :cli,
                 mem_headroom = mem_headroom,
                 parent_gb = parent_gb,
+                allow_mismatch = allow_mismatch,
             )
         elseif arg == "--help" || arg == "-h"
             return (
@@ -316,6 +321,7 @@ function parse_drive_args(args::Vector{String})
                 hint_surface = :cli,
                 mem_headroom = mem_headroom,
                 parent_gb = parent_gb,
+                allow_mismatch = allow_mismatch,
             )
         elseif endswith(arg, ".jl")
             script_path = arg
@@ -408,6 +414,7 @@ function parse_drive_args(args::Vector{String})
         hint_surface = :cli,
         mem_headroom = mem_headroom,
         parent_gb = parent_gb,
+        allow_mismatch = allow_mismatch,
     )
 end
 
@@ -449,6 +456,8 @@ function show_drive_usage(; io::IO = stdout)
         "  --best-effort       allow a partial run (missing join is not a failure)",
         "  --output-dir PATH   result root (default: {script}/.distsshkit/drive/<stem>_<UTC>/; must be missing or empty)",
         "  --julia PATH        remote Julia",
+        "  --allow-mismatch F  waive julia, distssh, and/or manifest (comma list)",
+        "  SSH workers: project-root cwd, bind 127.0.0.1, tunnel unless DISTSSHKIT_SSH_TUNNEL=0.",
         "  --mem-headroom N    RAM fraction (default $(DEFAULT_MEM_HEADROOM); same as size)",
         "  --parent-gb N       parent process reserve (default $(DEFAULT_PARENT_GB); same as size)",
         "  --no-log            skip drive_*.log",

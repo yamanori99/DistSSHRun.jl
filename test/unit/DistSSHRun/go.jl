@@ -261,18 +261,15 @@ using Dates
             ["8", "a b"],
             "julia",
         )
+        @test occursin("env -u JULIA_PROJECT", with_args)
+        @test occursin("JULIA_LOAD_PATH=", with_args)
+        @test occursin("--project=.", with_args)
+        @test occursin("--startup-file=no", with_args)
+        @test occursin(DistSSHRun._remote_shell_path_word("job.jl"), with_args)
+        @test occursin(DistSSHRun._remote_shell_path_word("8"), with_args)
+        @test occursin(DistSSHRun._remote_shell_path_word("a b"), with_args)
         @test occursin(
-            string(
-                DistSSHRun._remote_shell_path_word("julia"),
-                " -L ",
-                DistSSHRun._remote_shell_path_word("slot/.distsshkit/provenance-slot.jl"),
-                " --project=. ",
-                DistSSHRun._remote_shell_path_word("job.jl"),
-                " ",
-                DistSSHRun._remote_shell_path_word("8"),
-                " ",
-                DistSSHRun._remote_shell_path_word("a b"),
-            ),
+            DistSSHRun._remote_shell_path_word("slot/.distsshkit/provenance-slot.jl"),
             with_args,
         )
         @test occursin("DISTSSH_PROVENANCE_SLOT", with_args)

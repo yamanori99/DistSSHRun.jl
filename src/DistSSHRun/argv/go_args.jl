@@ -37,6 +37,8 @@ function show_go_usage(; io::IO = stdout)
         io,
         "  --sync / --rsync    optional pre-run; --rsync instantiates if needed",
         "  --julia PATH        remote Julia (ENV or auto)",
+        "  --allow-mismatch F  waive julia, distssh, and/or manifest (comma list)",
+        "  Remote slots cd to the project root and pin the real julia binary.",
         "  --output-dir PATH   batch root; slots are PATH/<slot>/",
         "  $(KIT_QUIET_FLAG_HELP)",
         "  $(KIT_PROGRESS_FLAG_HELP)",
@@ -99,6 +101,7 @@ function _go_parsed(;
         output_dir,
         julia,
         repeat,
+        allow_mismatch = Symbol[],
     )
     return (
         help = help,
@@ -111,6 +114,7 @@ function _go_parsed(;
         output_dir = output_dir,
         julia = julia,
         repeat = repeat,
+        allow_mismatch = allow_mismatch,
     )
 end
 
@@ -123,6 +127,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
     script_args = String[]
     output_dir = nothing
     julia_exe = nothing
+    allow_mismatch = Symbol[]
     # nothing → go! default (false); :sync / :rsync / false (= skip)
     sync::Union{Nothing, Symbol, Bool} = nothing
     repeat_n::Union{Nothing, Int} = nothing
@@ -133,6 +138,8 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
             output_dir = cli_take_value!(c, arg)
         elseif arg == "--julia"
             julia_exe = cli_take_value!(c, arg)
+        elseif arg == "--allow-mismatch"
+            merge_allow_mismatch!(allow_mismatch, cli_take_value!(c, arg))
         elseif arg == "--repeat"
             repeat_n === nothing || throw(ArgumentError("go: --repeat given more than once"))
             repeat_n = _go_parse_repeat(cli_take_value!(c, arg))
@@ -166,6 +173,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
                 output_dir = output_dir,
                 julia = julia_exe,
                 repeat = repeat_n,
+                allow_mismatch = allow_mismatch,
             )
         elseif endswith(arg, ".jl")
             script_path = arg
@@ -208,5 +216,6 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
         output_dir = output_dir,
         julia = julia_exe,
         repeat = repeat_n,
+        allow_mismatch = allow_mismatch,
     )
 end

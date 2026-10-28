@@ -49,7 +49,7 @@ using Test
         """
     end
     _with_tempdir() do proj
-        _write_host_project!(proj, "TerminateInt")
+        _write_job_with_distsshrun!(proj)
         script = joinpath(proj, "job.jl")
         ready = joinpath(proj, "ready")
         mark = joinpath(proj, "caught")
@@ -93,7 +93,7 @@ end
     # SIGINT reaches the worker `sleep`, so the `catch` runs, and the
     # driver's recorded exit code is 130.
     _with_tempdir() do proj
-        _write_host_project!(proj, "TerminateWorker")
+        _write_job_with_distsshrun!(proj)
         script = joinpath(proj, "job.jl")
         ready = joinpath(proj, "ready")
         caught = joinpath(proj, "worker_caught")

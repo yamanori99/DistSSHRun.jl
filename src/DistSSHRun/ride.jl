@@ -418,11 +418,10 @@ function _ride_add_workers!(
         ]
         if isempty(child_hosts)
             n = plan.parent_workers
-            n > 0 && addprocs(
-                n;
-                topology = :master_worker,
-                exeflags = _drive_worker_exeflags(project),
-            )
+            if n > 0
+                ensure_run_cluster_cookie!()
+                _add_local_drive_workers!(n, project, pin_local_julia(nothing))
+            end
         else
             julia_exe = if julia === nothing || strip(String(julia)) == "" ||
                     lowercase(strip(String(julia))) == "auto"
@@ -457,10 +456,20 @@ function _ride_add_workers!(
             _ride_init_drive_workers!(project)
         end
         added = Int[w for w in workers() if w ∉ before]
+        isempty(added) || _ride_load_self_on_workers!()
         if isempty(child_hosts) && !isempty(added)
             _register_drive_host_worker_ids!(PARENT_HOST_NAME, added)
+            local_man = _existing_project_manifest(project)
+            verify_workers_match_job!(
+                project;
+                allow = _ALLOW_MISMATCH[],
+                host_manifests = if isempty(local_man)
+                    nothing
+                else
+                    Dict{Int, String}(w => local_man for w in added)
+                end,
+            )
         end
-        isempty(added) || _ride_load_self_on_workers!()
         capture_worker_provenance!()
         return added, ssh_hosts
     catch
@@ -577,6 +586,7 @@ function ride!(
         remote::Union{Nothing, AbstractString} = nothing,
         require_all_hosts::Bool = true,
         hint_surface::Symbol = :api,
+        allow_mismatch = Symbol[],
     )::RideResult
     path = canonical_local_path(script)
     julia_s = string(VERSION)
@@ -589,10 +599,12 @@ function ride!(
     inherited_run = old_run isa AbstractString && !isempty(strip(old_run))
     try
         _ensure_kit_run_dir!(:ride, path; project = project)
-        return _ride_run!(
-            path, julia_s, tokens, args, spi_check, output_dir, project, julia,
-            remote, require_all_hosts, hint_surface, inherited_run,
-        )
+        return with_allow_mismatch(allow_mismatch) do
+            return _ride_run!(
+                path, julia_s, tokens, args, spi_check, output_dir, project, julia,
+                remote, require_all_hosts, hint_surface, inherited_run,
+            )
+        end
     finally
         _restore_kit_run_dir_env!(old_run)
         _release_kit_inproc_run!()

@@ -103,6 +103,9 @@ using Test
             let r = parse_drive_args(["--julia", "auto", "s.jl"])
                 @test r.julia === nothing
             end
+            let r = parse_drive_args(["--allow-mismatch", "manifest", "s.jl"])
+                @test r.allow_mismatch == [:manifest]
+            end
             let r = parse_drive_args(["--no-log", "s.jl"])
                 @test r.enable_log == false
             end
@@ -231,6 +234,7 @@ using Test
         @test occursin("off by default", lowercase(txt))
         @test occursin("parent:N", txt)
         @test occursin("progress DIR", txt)
+        @test occursin("--allow-mismatch", txt)
         @test !occursin(r"--parent(?!-gb)", txt)
         @test !occursin("--local", txt)
         @test occursin("--mem-headroom", txt)

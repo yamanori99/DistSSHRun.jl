@@ -40,16 +40,19 @@ function run_drive_parsed!(
     # pipeline on that value, so a drive without `--sync` does not infer sync.
     # CLI `drive_main` already opened the frame (`cli=true`). A direct call,
     # including `drive!`, opens it here when none is active (`cli=false`).
-    return _drive_frame(; cli = false) do
-        return Base.invokelatest(
-            _run_drive_parsed_specialized!,
-            parsed,
-            original_args,
-            resolved_output_dir,
-            resolved_log_dir,
-            resolved_hosts,
-            project_root,
-        )
+    am = get(parsed, :allow_mismatch, Symbol[])
+    return with_allow_mismatch(am) do
+        return _drive_frame(; cli = false) do
+            return Base.invokelatest(
+                _run_drive_parsed_specialized!,
+                parsed,
+                original_args,
+                resolved_output_dir,
+                resolved_log_dir,
+                resolved_hosts,
+                project_root,
+            )
+        end
     end
 end
 

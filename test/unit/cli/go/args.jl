@@ -61,6 +61,10 @@ using Test
         let r = parse_go_args(["--julia", "auto", "job.jl"])
             @test r.julia === nothing
         end
+        let r = parse_go_args(["--allow-mismatch", "julia,distssh", "parent:1", "job.jl"])
+            @test r.allow_mismatch == [:julia, :distssh]
+        end
+        @test_throws ArgumentError parse_go_args(["--allow-mismatch", "cpu", "job.jl"])
         withenv("JULIA_DISTRIBUTED_EXE" => "/env/julia") do
             let r = parse_go_args(["job.jl"])
                 @test r.julia == "/env/julia"
@@ -134,6 +138,7 @@ using Test
         @test occursin("instantiates missing deps", txt)
         @test occursin("--hosts", txt)
         @test occursin("--repeat", txt)
+        @test occursin("--allow-mismatch", txt)
         @test occursin("parent", txt)
         @test occursin("progress DIR", txt)
     end
