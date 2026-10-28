@@ -95,9 +95,11 @@ function add_drive_workers!(
                 DistSSHRun.PARENT_HOST_NAME,
                 added,
             )
-            local_man = joinpath(proj_dir, "Manifest.toml")
-            for w in added
-                host_manifests[w] = local_man
+            local_man = DistSSHRun._existing_project_manifest(proj_dir)
+            if !isempty(local_man)
+                for w in added
+                    host_manifests[w] = local_man
+                end
             end
             print_ok("✓")
             writeln_both("")
@@ -193,9 +195,12 @@ function add_drive_workers!(
                 end
                 _register_drive_workers!(before, remote_proj, remote_script)
                 DistSSHRun._register_drive_host_worker_ids!(host_name, added)
-                remote_man = joinpath(remote_proj, "Manifest.toml")
-                for w in added
-                    host_manifests[w] = remote_man
+                parent_man = DistSSHRun._existing_project_manifest(proj_dir)
+                if !isempty(parent_man)
+                    remote_man = joinpath(remote_proj, basename(parent_man))
+                    for w in added
+                        host_manifests[w] = remote_man
+                    end
                 end
                 print_ok("✓")
                 writeln_both("")

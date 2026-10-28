@@ -459,11 +459,15 @@ function _ride_add_workers!(
         isempty(added) || _ride_load_self_on_workers!()
         if isempty(child_hosts) && !isempty(added)
             _register_drive_host_worker_ids!(PARENT_HOST_NAME, added)
-            local_man = joinpath(String(project), "Manifest.toml")
+            local_man = _existing_project_manifest(project)
             verify_workers_match_job!(
                 project;
                 allow = _ALLOW_MISMATCH[],
-                host_manifests = Dict{Int, String}(w => local_man for w in added),
+                host_manifests = if isempty(local_man)
+                    nothing
+                else
+                    Dict{Int, String}(w => local_man for w in added)
+                end,
             )
         end
         capture_worker_provenance!()

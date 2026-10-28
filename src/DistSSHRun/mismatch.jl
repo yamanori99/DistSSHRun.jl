@@ -89,16 +89,18 @@ function _active_manifest_path()::String
     return joinpath(d, "Manifest.toml")
 end
 
+function _existing_project_manifest(project::AbstractString)::String
+    d = canonical_local_path(project)
+    for name in ("Manifest.toml", "JuliaManifest.toml")
+        p = joinpath(d, name)
+        isfile(p) && return p
+    end
+    return ""
+end
+
 function parent_run_identity(project::AbstractString)::Dict{String, String}
     proj = canonical_local_path(project)
-    man = ""
-    for name in ("Manifest.toml", "JuliaManifest.toml")
-        p = joinpath(proj, name)
-        if isfile(p)
-            man = p
-            break
-        end
-    end
+    man = _existing_project_manifest(proj)
     ident = Dict{String, String}(
         "version" => string(VERSION),
         "commit" => string(Base.GIT_VERSION_INFO.commit),
