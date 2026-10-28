@@ -284,7 +284,8 @@ function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::A
             env = env,
             topology = :master_worker,
         )
-        _precompile_worker_project!(last(workers()))
+        added = sort!(Int[w for w in workers() if w ∉ before])
+        isempty(added) || _precompile_worker_project!(first(added))
         rest = n - 1
         rest < 1 && return nothing
         addprocs(
@@ -325,7 +326,9 @@ function _add_ssh_drive_workers!(
             env = env,
             topology = :master_worker,
         )
-        _precompile_worker_project!(last(workers()))
+        added = sort!(Int[w for w in workers() if w ∉ before])
+        isempty(added) && return nothing
+        _precompile_worker_project!(first(added))
         rest = n - 1
         rest < 1 && return nothing
         addprocs(

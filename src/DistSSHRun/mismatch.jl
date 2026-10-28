@@ -125,7 +125,6 @@ function _worker_identity_expr()
                         break
                     end
                 end
-                isempty(man) && (man = joinpath(d, "Manifest.toml"))
             end
             d = Dict{String, String}(
                 "version" => string(VERSION),
@@ -200,7 +199,7 @@ function _identity_mismatch_lines(
         if !isempty(want)
             if isempty(got)
                 push!(lines, "manifest missing (expected $(want))")
-            elseif dirname(want) != dirname(got)
+            elseif want != got
                 push!(lines, "manifest path parent=$(want) worker=$(got)")
             end
         end

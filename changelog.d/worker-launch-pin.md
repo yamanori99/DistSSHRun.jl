@@ -14,6 +14,7 @@ category: breaking
   workers and go slots error on Julia / DistSSH* / Manifest path mismatch
   unless `--allow-mismatch` lists `julia`, `distssh`, and/or `manifest`
   (Manifest format 2 `[[deps.Name]]` tables are read; a missing remote
-  Manifest is a mismatch unless `manifest` is waived). Parent `LOAD_PATH`
+  Manifest, or `JuliaManifest.toml` vs `Manifest.toml`, is a mismatch
+  unless `manifest` is waived). Parent `LOAD_PATH`
   and `@v#.#` are no longer visible to workers. Worker `JULIA_LOAD_PATH`
   uses Unix `:` (native Windows is still unsupported).

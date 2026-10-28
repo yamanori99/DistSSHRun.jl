@@ -100,6 +100,18 @@ using TOML
     )
     @test !any(occursin("manifest", l) for l in waived_man)
 
+    julia_man = DistSSHRun._identity_mismatch_lines(
+        parent,
+        Dict(
+            "version" => "1.13.1",
+            "commit" => "abc",
+            "manifest" => "/job/JuliaManifest.toml",
+            "pkg.DistSSHRun" => "0.1.0",
+        );
+        shipped_manifest = "/job/Manifest.toml",
+    )
+    @test any(occursin("manifest path", l) for l in julia_man)
+
     pin = DistSSHRun.pin_local_julia(nothing)
     @test isabspath(pin)
     @test isfile(pin) || islink(pin)
