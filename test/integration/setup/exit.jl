@@ -49,12 +49,18 @@ using Test
             setup_args = ["--ship-tree", "child:host1"],
             extra_env = merge(
                 _fake_setup_remote_env(fresh_state()),
-                Dict("DISTSSHKIT_TEST_MKDIR_FAIL" => "1"),
+                Dict(
+                    "DISTSSHKIT_TEST_MKDIR_FAIL" => "1",
+                    "DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia",
+                ),
             ),
         ),
         (;
             setup_args = ["--ship-tree", "child:host1", "child:host2"],
-            extra_env = _fake_setup_remote_env(fresh_state()),
+            extra_env = merge(
+                _fake_setup_remote_env(fresh_state()),
+                Dict("DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia"),
+            ),
         ),
         # `--julia` skips remote detect; fake ssh still sees `Pkg.test()`.
         (;
