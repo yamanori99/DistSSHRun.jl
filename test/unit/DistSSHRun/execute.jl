@@ -53,6 +53,10 @@ using Test
             @test DistSSHRun._project_tree_has_distsshkit(proj)
             @test DistSSHRun._detached_julia_project(proj) == proj
             @test DistSSHRun._detached_m_package(proj) == "DistSSHRun"
+            write(joinpath(proj, "Project.toml"), "name = \"DistSSHKit\"\n")
+            @test DistSSHRun._project_tree_has_distsshkit(proj)
+            @test DistSSHRun._detached_julia_project(proj) == proj
+            @test DistSSHRun._detached_m_package(proj) == "DistSSHKit"
         end
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"QueueOnly\"\n")

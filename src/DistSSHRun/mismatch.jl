@@ -44,24 +44,38 @@ function allow_mismatch_argv(syms)::Vector{String}
     return String["--allow-mismatch", join((String(s) for s in syms), ",")]
 end
 
-function _distssh_versions_from_manifest(path::AbstractString)::Dict{String, String}
-    out = Dict{String, String}()
-    isfile(path) || return out
-    raw = try
-        TOML.parsefile(String(path))
-    catch
-        return out
+"""Manifest format 1 stores `deps.Name` as a table; format 2 as an array of tables."""
+function _manifest_dep_table(entry)
+    entry isa AbstractDict && return entry
+    if entry isa AbstractVector && !isempty(entry)
+        first_entry = first(entry)
+        first_entry isa AbstractDict && return first_entry
     end
+    return nothing
+end
+
+function _distssh_versions_from_parsed(raw)::Dict{String, String}
+    out = Dict{String, String}()
     raw isa AbstractDict || return out
     deps = get(raw, "deps", nothing)
     deps isa AbstractDict || return out
     for name in ("DistSSHRun", "DistSSHKit", "DistSSHQueue", "DistSSHBase")
-        entry = get(deps, name, nothing)
-        entry isa AbstractDict || continue
-        v = get(entry, "version", nothing)
+        tab = _manifest_dep_table(get(deps, name, nothing))
+        tab === nothing && continue
+        v = get(tab, "version", nothing)
         v isa AbstractString && (out[name] = String(v))
     end
     return out
+end
+
+function _distssh_versions_from_manifest(path::AbstractString)::Dict{String, String}
+    isfile(path) || return Dict{String, String}()
+    raw = try
+        TOML.parsefile(String(path))
+    catch
+        return Dict{String, String}()
+    end
+    return _distssh_versions_from_parsed(raw)
 end
 
 function _active_manifest_path()::String
@@ -137,8 +151,16 @@ function _worker_identity_expr()
                     if deps isa AbstractDict
                         for name in ("DistSSHRun", "DistSSHKit", "DistSSHQueue", "DistSSHBase")
                             entry = get(deps, name, nothing)
-                            entry isa AbstractDict || continue
-                            v = get(entry, "version", nothing)
+                            tab = if entry isa AbstractDict
+                                entry
+                            elseif entry isa AbstractVector && !isempty(entry) &&
+                                    first(entry) isa AbstractDict
+                                first(entry)
+                            else
+                                nothing
+                            end
+                            tab === nothing && continue
+                            v = get(tab, "version", nothing)
                             v isa AbstractString && (d["pkg." * name] = String(v))
                         end
                     end
@@ -204,6 +226,131 @@ function verify_workers_match_job!(
                 allow = allow, shipped_manifest = shipped,
             )
             push!(mismatches, "worker $(w): $(line)")
+        end
+    end
+    isempty(mismatches) && return nothing
+    throw(
+        ErrorException(
+            "worker mismatch (pass --allow-mismatch julia,distssh,manifest to waive):\n  " *
+                join(mismatches, "\n  "),
+        ),
+    )
+end
+
+function _julia_version_commit_from_output(out::AbstractString)::Tuple{String, String}
+    lines = split(strip(out), '\n'; keepempty = false)
+    v = isempty(lines) ? "" : String(lines[1])
+    c = length(lines) >= 2 ? String(lines[2]) : ""
+    return v, c
+end
+
+const _JULIA_VERSION_COMMIT_EVAL =
+    "print(string(VERSION), '\\n', string(Base.GIT_VERSION_INFO.commit))"
+
+function _local_julia_version_commit(bin::AbstractString)::Tuple{String, String}
+    out = strip(
+        read(
+            Cmd(String[String(bin), "--startup-file=no", "-e", _JULIA_VERSION_COMMIT_EVAL]),
+            String,
+        ),
+    )
+    return _julia_version_commit_from_output(out)
+end
+
+function _go_remote_run_identity(
+        host::AbstractString,
+        remote_root::AbstractString,
+        julia,
+    )::Dict{String, String}
+    h = String(host)
+    spec = julia isa AbstractString ? String(julia) : nothing
+    pinned = pin_remote_julia(h, spec)
+    pinned === nothing && throw(ArgumentError("Julia not found on remote host $(h)"))
+    pq = _remote_julia_path_sh(pinned)
+    inner = string(pq, " --startup-file=no -e ", posix_quote(_JULIA_VERSION_COMMIT_EVAL))
+    code, out = _remote_shell_status(h, inner)
+    ident = Dict{String, String}(
+        "julia" => pinned,
+        "version" => "",
+        "commit" => "",
+        "manifest" => "",
+    )
+    if code == 0
+        v, c = _julia_version_commit_from_output(out)
+        ident["version"] = v
+        ident["commit"] = c
+    end
+    rr = String(remote_root)
+    for name in ("Manifest.toml", "JuliaManifest.toml")
+        p = joinpath(rr, name)
+        c2, body = _remote_shell_status(h, string("cat ", _remote_shell_path_word(p)))
+        c2 == 0 || continue
+        isempty(strip(body)) && continue
+        ident["manifest"] = p
+        raw = try
+            TOML.parse(body)
+        catch
+            nothing
+        end
+        for (k, v) in _distssh_versions_from_parsed(raw)
+            ident["pkg." * k] = v
+        end
+        break
+    end
+    return ident
+end
+
+"""Compare go slot Julia / DistSSH* / Manifest to the job tree (not Distributed workers)."""
+function verify_go_slots_match_job!(
+        project::AbstractString,
+        slots;
+        remote_root::AbstractString = "",
+        julia = nothing,
+        allow::AbstractVector{Symbol} = Symbol[],
+    )
+    parent = parent_run_identity(project)
+    mismatches = String[]
+    if any(s -> s.kind === :parent, slots)
+        spec = julia isa AbstractString ? String(julia) : nothing
+        bin = pin_local_julia(spec)
+        v, c = try
+            _local_julia_version_commit(bin)
+        catch
+            ("", "")
+        end
+        local_id = Dict{String, String}(
+            "version" => v,
+            "commit" => c,
+            "julia" => bin,
+            "manifest" => get(parent, "manifest", ""),
+        )
+        for (k, val) in parent
+            startswith(k, "pkg.") || continue
+            local_id[k] = val
+        end
+        shipped = get(parent, "manifest", "")
+        for line in _identity_mismatch_lines(
+                parent, local_id;
+                allow = allow, shipped_manifest = shipped,
+            )
+            push!(mismatches, "parent slot: $(line)")
+        end
+    end
+    seen = Set{String}()
+    for s in slots
+        s.kind === :child || continue
+        h = s.host
+        h isa AbstractString || continue
+        hs = String(h)
+        hs in seen && continue
+        push!(seen, hs)
+        worker = _go_remote_run_identity(hs, remote_root, julia)
+        shipped = get(worker, "manifest", "")
+        for line in _identity_mismatch_lines(
+                parent, worker;
+                allow = allow, shipped_manifest = shipped,
+            )
+            push!(mismatches, "host $(hs): $(line)")
         end
     end
     isempty(mismatches) && return nothing

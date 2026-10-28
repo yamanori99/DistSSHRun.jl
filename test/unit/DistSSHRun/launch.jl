@@ -1,5 +1,7 @@
 using Test
 using Distributed
+using Pkg
+using TOML
 
 @testset "worker launch helper" begin
     flags = DistSSHRun.worker_exeflag_strings("/tmp/job"; local_cpu = false)
@@ -29,11 +31,15 @@ using Distributed
     @test startswith(notice, "lab: launch overrides ")
 
     ssh_exe = DistSSHRun.ssh_worker_exename("/opt/julia")
+    ssh_cmd = join(ssh_exe.exec, " ")
     @test ssh_exe.exec[1] == "env"
     @test "/opt/julia" in ssh_exe.exec
     @test "-u" in ssh_exe.exec
     @test "JULIA_PROJECT" in ssh_exe.exec
-    @test "JULIA_LOAD_PATH" in ssh_exe.exec
+    @test "JULIA_LOAD_PATH=@:@stdlib" in ssh_exe.exec
+    @test occursin("-u JULIA_PROJECT", ssh_cmd)
+    @test occursin("JULIA_LOAD_PATH=@:@stdlib /opt/julia", ssh_cmd)
+    @test !occursin("-u JULIA_LOAD_PATH", ssh_cmd)
     @test DistSSHRun.ssh_addprocs_bind_localhost("user@lab") == "user@lab 127.0.0.1"
 
     prefix = DistSSHRun.go_remote_julia_prefix("julia")
@@ -84,4 +90,47 @@ using Distributed
     DistSSHRun.ensure_run_cluster_cookie!()
     @test length(Distributed.cluster_cookie()) == 16
     @test Distributed.cluster_cookie() == cookie_before || nprocs() == 1
+
+    _with_tempdir() do proj
+        man = joinpath(proj, "Manifest.toml")
+        write(
+            man, """
+            # This file is machine-generated - editing it directly is not advised
+
+            julia_version = "1.13.1"
+            manifest_format = "2.0"
+            project_hash = "0123456789abcdef0123456789abcdef01234567"
+
+            [[deps.Artifacts]]
+            uuid = "56c22d13-8852-41a3-930b-5e04c8691e1d"
+
+            [[deps.DistSSHKit]]
+            uuid = "ceec0504-c968-4be5-b215-667cae0e8f81"
+            version = "0.9.0"
+
+            [[deps.DistSSHRun]]
+            uuid = "b568025c-2759-4ef1-8b14-17d00e2cd000"
+            version = "0.1.16"
+            """,
+        )
+        parsed = TOML.parsefile(man)
+        @test parsed["manifest_format"] == "2.0"
+        @test parsed["deps"]["DistSSHRun"] isa Vector
+        vers = DistSSHRun._distssh_versions_from_manifest(man)
+        @test vers["DistSSHRun"] == "0.1.16"
+        @test vers["DistSSHKit"] == "0.9.0"
+        write(joinpath(proj, "Project.toml"), "name = \"Fmt2Job\"\n")
+        old = Base.active_project()
+        try
+            Pkg.activate(proj; io = devnull)
+            snap = Core.eval(Main, DistSSHRun._worker_identity_expr())
+            @test snap isa AbstractDict
+            @test snap["pkg.DistSSHRun"] == "0.1.16"
+            @test snap["pkg.DistSSHKit"] == "0.9.0"
+        finally
+            old === nothing || Pkg.activate(old; io = devnull)
+        end
+        slots = DistSSHRun.GoSlot[DistSSHRun.GoSlot(:parent, nothing, "parent")]
+        DistSSHRun.verify_go_slots_match_job!(proj, slots)
+    end
 end

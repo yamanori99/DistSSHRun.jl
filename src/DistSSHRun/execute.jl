@@ -266,7 +266,7 @@ tree has a `Project.toml`. The job must list DistSSHKit or DistSSHRun in
 `[deps]`; otherwise this throws instead of using serve's active project.
 Keywords are then an allow-list (unknown names throw):
 `output_dir`, `args`, `project`, `sync`, `julia`, `quiet`, `verbosity`, `yes`,
-`remote`, `hosts_file`, `job_id`, `source`, and drive-only `log_dir`,
+`remote`, `hosts_file`, `job_id`, `source`, `allow_mismatch`, and drive-only `log_dir`,
 `enable_log`, `package`, `require_all_hosts`, `skip_hash_check`,
 `mem_headroom`, `parent_gb`, `workers`, `sync_script`. `source` is a provenance
 dict for every kind. Detached passes it as `DISTSSHKIT_SOURCE_*`. Go-only
@@ -429,7 +429,9 @@ transitive DistSSHRun cannot be `-m`'d. DistSSHKit when that name is in
 `project` is the directory passed to `--project=`, from
 `_detached_julia_project` (the job tree)."""
 function _detached_m_package(project::AbstractString)::String
-    raw = _parse_toml_dict(joinpath(String(project), "Project.toml"))
+    p = String(project)
+    project_package_name(p) == "DistSSHKit" && return "DistSSHKit"
+    raw = _parse_toml_dict(joinpath(p, "Project.toml"))
     _deps_has_name(raw, "DistSSHKit") && return "DistSSHKit"
     return "DistSSHRun"
 end

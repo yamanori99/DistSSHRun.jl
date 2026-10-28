@@ -906,6 +906,11 @@ when you need that.
 `julia` sets the Julia binary for each slot (`nothing` / `"auto"` → detect;
 same as CLI `--julia`).
 
+`allow_mismatch` (CLI `--allow-mismatch`) waives Julia version / commit,
+DistSSH* Manifest versions, and/or Manifest path when a slot does not match
+the job tree. Default is to error. Same tokens as `drive` / `ride`:
+`julia`, `distssh`, `manifest`.
+
 When `workers` is empty and `hosts_file` is omitted, `DISTSSHKIT_HOSTS_FILE`
 is still read (API `go!("job.jl")`). Non-empty `workers` (CLI
 [`host_tokens`](@ref)) does not re-read that ENV.
@@ -1165,6 +1170,14 @@ function _go_run!(
             end
             _go_assert_remotes_ready!(child_hosts, sess_rr)
         end
+
+        verify_go_slots_match_job!(
+            proj,
+            slots;
+            remote_root = sess_rr,
+            julia = julia,
+            allow = _ALLOW_MISMATCH[],
+        )
 
         n_slots > 0 && _kit_progress_mark!("run")
         slot_run_ok = fill(false, n_slots)

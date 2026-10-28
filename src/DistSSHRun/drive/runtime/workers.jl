@@ -74,6 +74,7 @@ function add_drive_workers!(
     successful_hosts = String[]
 
     DistSSHRun.ensure_run_cluster_cookie!()
+    before_all = Set(workers())
     names = DistSSHRun.launch_override_names(ENV)
     notice = DistSSHRun.launch_override_notice(DistSSHRun.PARENT_HOST_NAME, names)
     isempty(notice) || writeln_both(notice)
@@ -226,11 +227,20 @@ function add_drive_workers!(
 
     # Alone, Julia reports nworkers()==1 (the master). Fail when nothing joined.
     nprocs() <= 1 && error(_NO_WORKERS_JOINED)
-    DistSSHRun.verify_workers_match_job!(
-        proj_dir;
-        allow = DistSSHRun._ALLOW_MISMATCH[],
-        host_manifests = host_manifests,
-    )
+    try
+        DistSSHRun.verify_workers_match_job!(
+            proj_dir;
+            allow = DistSSHRun._ALLOW_MISMATCH[],
+            host_manifests = host_manifests,
+        )
+    catch
+        leftover = Int[w for w in workers() if w ∉ before_all]
+        try
+            isempty(leftover) || rmprocs(leftover; waitfor = 30)
+        catch
+        end
+        rethrow()
+    end
 
     return successful_hosts
 end

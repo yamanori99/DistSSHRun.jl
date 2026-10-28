@@ -203,7 +203,9 @@ function ssh_worker_exename(julia_path::AbstractString)::Cmd
     for k in _LAUNCH_UNSET_ENV
         push!(argv, "-u", String(k))
     end
-    push!(argv, "-u", "JULIA_LOAD_PATH")
+    # Set LOAD_PATH here. `env -u JULIA_LOAD_PATH` would drop the value
+    # Distributed exported on the SSH command line.
+    push!(argv, "JULIA_LOAD_PATH=$(_LAUNCH_LOAD_PATH)")
     push!(argv, String(julia_path))
     return Cmd(argv)
 end
