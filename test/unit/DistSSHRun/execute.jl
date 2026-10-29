@@ -208,14 +208,20 @@ using Test
                 result = DistSSHRun.KitRunResult(true, :go, d, nothing, nothing, 0),
             )
             before = DistSSHRun.read_kit_run_toml(d)
-            @test before["schema"] == 1
-            @test !haskey(before, "stop")
+            @test before isa AbstractDict
+            if before isa AbstractDict
+                @test before["schema"] == 1
+                @test !haskey(before, "stop")
+            end
             DistSSHRun._stamp_run_toml_stop!(d, :sigkill)
             after = DistSSHRun.read_kit_run_toml(d)
-            @test after["schema"] == 1
-            @test after["kind"] == "go"
-            @test after["ok"] === true
-            @test after["stop"] == "sigkill"
+            @test after isa AbstractDict
+            if after isa AbstractDict
+                @test after["schema"] == 1
+                @test after["kind"] == "go"
+                @test after["ok"] === true
+                @test after["stop"] == "sigkill"
+            end
         end
     end
 
@@ -1136,11 +1142,15 @@ using Test
     end
 
     @testset "signal ladder stop" begin
-        function sh(script)
-            return run(
+        function sh(script)::Base.Process
+            proc = run(
                 pipeline(`sh -c $script`; stdout = devnull, stderr = devnull);
                 wait = false,
             )
+            if proc isa Base.Process
+                return proc
+            end
+            error("expected one process")
         end
         function ladder(script; interrupt_grace, grace)
             # `touch` runs after `trap`, so the signal is not delivered
