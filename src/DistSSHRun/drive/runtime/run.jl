@@ -5,11 +5,15 @@
 # method: it would reuse that driver's output directory. Compare the method
 # that would accept this script's argument vector, and call it only when this
 # `include` added or replaced that method.
+# Lookup is `invokelatest`: after `include` the binding's world is newer than
+# this method, and Julia 1.12+ warns (later errors) on a stale read.
 function _drive_script_init_output_dir_method(script_args)::Union{Nothing, Method}
-    isdefined(Main, :init_output_dir!) || return nothing
-    hook = getfield(Main, :init_output_dir!)
-    applicable = methods(hook, (typeof(script_args),))
-    return isempty(applicable) ? nothing : first(applicable)::Method
+    return Base.invokelatest() do
+        isdefined(Main, :init_output_dir!) || return nothing
+        hook = getfield(Main, :init_output_dir!)
+        applicable = methods(hook, (typeof(script_args),))
+        return isempty(applicable) ? nothing : first(applicable)::Method
+    end
 end
 
 """

@@ -236,3 +236,22 @@ end
         end
     end
 end
+
+@testset "init_output_dir! lookup uses the definition world" begin
+    # Tracked fixture: JETLS executes this `@testset` as top-level and cannot
+    # `include` a path that only exists after `mktempdir` + `write`.
+    path = _fixture("drive_init_output.jl")
+    args = String[]
+    lookup() = DistSSHRun._drive_script_init_output_dir_method(args)
+    before = lookup()
+    Base.include(Main, path)
+    mktemp() do err_path, err_io
+        after = redirect_stderr(err_io) do
+            lookup()
+        end
+        flush(err_io)
+        @test after isa Method
+        @test after !== before
+        @test !occursin("prior to its definition", read(err_path, String))
+    end
+end
