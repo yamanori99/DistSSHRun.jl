@@ -71,6 +71,17 @@ if !isdefined(Main, :_ssh_e2e_enabled)
     # Remote project root for the main rsync suite.
     _ssh_e2e_remote_root() = "/home/dev/distsshkit-e2e"
 
+    # Latest `runs/*/src` on `host` (docker SSH `-F`, not kit `ssh_opts`).
+    function _ssh_e2e_work_root(host::AbstractString, remote_root::AbstractString)::String
+        proc, out = _ssh_e2e_ssh(
+            host,
+            "ls -1d $(remote_root)/runs/*/src 2>/dev/null | sort | tail -n 1",
+        )
+        s = strip(out)
+        proc.exitcode == 0 && !isempty(s) && return s
+        return String(remote_root)
+    end
+
     # juliaup channels baked into the worker image (from `up.sh` / julia-slots.env).
     function _ssh_e2e_julia_channels()::NamedTuple{(:default, :alt), Tuple{String, String}}
         def = strip(get(ENV, "DISTSSHKIT_E2E_JULIA_DEFAULT_CHANNEL", ""))
@@ -381,11 +392,13 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         )
         g = _docker_ssh_generated()
         src = _ssh_e2e_job_runtests_src(; fail = fail)
-        work = DistSSHRun._work_root_for_hosts(String[String(h) for h in hosts], remote_root)
         mktemp() do path, io
             write(io, src)
             flush(io)
             for host in hosts
+                work = _ssh_e2e_work_root(host, remote_root)
+                mkdir_proc, mkdir_out = _ssh_e2e_ssh(host, "mkdir -p $(work)/test")
+                _assert_proc_ok(mkdir_proc, mkdir_out; label = "mkdir job test $(host)")
                 dest = "$(work)/test/runtests.jl"
                 proc, out = _run_subprocess(
                     Cmd(

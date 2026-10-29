@@ -411,7 +411,7 @@ end
             _assert_ssh_e2e_ok(suite, "drive_worker_file", proc, out)
             _assert_kit_progress_done(collect_root; kind = :drive)
 
-            work_root = DistSSHRun._work_root_for_hosts(hosts, remote_root)
+            work_root = _ssh_e2e_work_root(hosts[1], remote_root)
             worker_jl = """
             d = $(repr(joinpath(work_root, "output")))
             io = IOBuffer()
