@@ -563,13 +563,15 @@ end
 
 function warn_openrsync_once()
     _OPENRSYNC_WARNED[] && return nothing
-    exe = try
-        _host_tool_exe("rsync")
+    argv = try
+        _host_sync_rsync_argv()
     catch
         return nothing
     end
+    # Collect tests spawn `sh` plus `DISTSSHKIT_TEST_RSYNC`. PATH rsync is unused.
+    length(argv) == 1 || return nothing
     ver = try
-        lowercase(read(`$exe --version`, String))
+        lowercase(read(`$(argv[1]) --version`, String))
     catch
         return nothing
     end
