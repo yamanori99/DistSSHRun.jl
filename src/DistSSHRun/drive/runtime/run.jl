@@ -407,12 +407,18 @@ function _run_drive_parsed_locked!(
             end
             writeln_both("")
         elseif !isempty(host_names)
-            env_rr = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
-            base = isempty(env_rr) ?
-                DistSSHRun.resolve_remote_project_root(project_root) : env_rr
-            wr = DistSSHRun._work_root_for_hosts(host_names, base)
-            ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] =
-                DistSSHRun.remote_env_project_root(wr)
+            # Best-effort: a bad host name or control character in the path
+            # must not run before `kit.hosts` is written around join.
+            try
+                env_rr = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
+                base = isempty(env_rr) ?
+                    DistSSHRun.resolve_remote_project_root(project_root) : env_rr
+                wr = DistSSHRun._work_root_for_hosts(host_names, base)
+                ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] =
+                    DistSSHRun.remote_env_project_root(wr)
+            catch e
+                DistSSHRun._interruptish(e) && rethrow()
+            end
         end
 
         kit_progress_step!("git")

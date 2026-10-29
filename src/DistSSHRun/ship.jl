@@ -318,7 +318,12 @@ function _work_root_for_hosts(
     src = _shipped_src()
     src !== nothing && return src
     isempty(hosts) && return String(remote_root)
-    return _remote_project_work_root(first(hosts), remote_root)
+    try
+        return _remote_project_work_root(first(hosts), remote_root)
+    catch e
+        e isa InterruptException && rethrow()
+        return String(remote_root)
+    end
 end
 
 function _remote_prepare_run_leaf!(host::AbstractString, abs_root::AbstractString, run_id::AbstractString)
