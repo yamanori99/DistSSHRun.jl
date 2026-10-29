@@ -36,8 +36,10 @@ Suite inventory: [`test/README.md`](../../test/README.md#ssh-e2e).
 Worker image installs **two** juliaup channels from
 [`.github/julia-slots.env`](../../.github/julia-slots.env):
 
-- **default** = the stable line (today **1.13**) — matches the E2E
-  kit parent so `--check` runs **without** `--ignore-julia-version`
+- **default** = the stable line (today **1.13**) — matches the required E2E
+  kit parent so `--check` runs **without** `--ignore-julia-version`.
+  The 1.14-pre PR job sets `JULIA_DEFAULT_CHANNEL=1.14` so parent and
+  workers start on 1.14; alt stays `JULIA_E2E_MISMATCH_CHANNEL` (1.12).
 - **alt** = `JULIA_E2E_MISMATCH_CHANNEL` (today **1.12**) — a different
   major.minor so E2E can `juliaup default` to mismatch, then
   `up` to realign. Not a supported floor and not a Pkg.test slot.
@@ -132,7 +134,8 @@ ssh -F .generated/ssh_config child-1 'echo ok; julia --version'
 [`.github/workflows/CI.yml`](../../.github/workflows/CI.yml) runs
 `./scripts/up.sh --e2e` on `ubuntu-latest` for **main** (E2E-relevant
 paths), a PR whose `Project.toml` `version` went up, and manual dispatch
-(`DistSSHRun (ubuntu-latest → ubuntu-26.04)`). Other PRs run it only when those paths
+(`DistSSHRun (1.13, ubuntu-latest → ubuntu-26.04)` required;
+`DistSSHRun (1.14-pre, ubuntu-latest → ubuntu-26.04)` continue-on-error). Other PRs run it only when those paths
 change.
 [`.github/workflows/ssh-e2e-weekly.yml`][e2e-weekly]
 (`E2E weekly`) runs daily at 04:00 JST or via Run workflow: bake

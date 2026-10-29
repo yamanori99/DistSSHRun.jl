@@ -9,7 +9,8 @@ on:
 
 # Cancel redundant runs on the same branch/PR.
 # Ubuntu 1.14-pre (setup-julia ~1.14.0-0) Pkg.test, Aqua, and JETLS follow
-# the heavy gate, including ordinary pull requests. A Project.toml version
+# the heavy gate, including ordinary pull requests. Linux SSH E2E 1.14-pre
+# follows the E2E path filter (continue-on-error). A Project.toml version
 # increase (see version-cut.sh) also runs Ubuntu nightly and Aqua on nightly.
 # macOS for both channels is CI weekly. WSL2 1.13 Pkg.test runs on a main
 # push and CI weekly, not on a pull request.
@@ -50,14 +51,16 @@ jobs:
   # DistSSHUp jobs (flag pkgtest, main push).
   # Slow SSH E2E kit parents are `E2E weekly`
   # (macos-15-intel Colima, not this job).
-  # PRs run `DistSSHRun (ubuntu-latest → ubuntu-26.04)` in this workflow.
+  # PRs run `DistSSHRun (1.13, ubuntu-latest → ubuntu-26.04)` in this workflow.
+  # `DistSSHRun (1.14-pre, ubuntu-latest → ubuntu-26.04)` is continue-on-error.
   # One detect job; markdown-only / allowlisted PRs skip heavy jobs (UI: skipping).
   # Required check names include the Julia version and the architecture.
   # Codecov (flag pkgtest): main push only — not on pull_request.
   # cache-scratchspaces: false — registry_updates.toml in scratchspaces can
   # poison Pkg.Registry.update on 1.13 if restored corrupt.
   # Aqua / JETLS share this workflow so the Test badge is the PR gate.
-  # Linux E2E (1.13): path filter on PR / main push; always on a version
+  # Linux E2E (1.13 required, 1.14-pre continue-on-error): path filter on PR /
+  # main push; always on a version
   # increase and dispatch. JETLS uses `.github/actions/jetls-check` (no nested
   # cache; julia-actions/cache#236). JETLS 2026-10-26 supports 1.12.2 through
   # 1.14. The required job is 1.13. The 1.14-pre job is continue-on-error
@@ -775,7 +778,7 @@ jobs:
           files: ${{ steps.files.outputs.list }}
 
   ssh-e2e:
-    name: DistSSHRun (ubuntu-latest → ubuntu-26.04)
+    name: DistSSHRun (1.13, ubuntu-latest → ubuntu-26.04)
     needs: detect
     if: needs.detect.outputs.e2e == 'true'
     runs-on: ubuntu-latest
@@ -814,6 +817,49 @@ jobs:
 
       - uses: ./.github/actions/e2e-codecov
         if: ${{ always() && steps.e2e.outcome == 'success' && needs.detect.outputs.coverage == 'true' }}
+
+      - name: Teardown workers
+        if: ${{ always() }}
+        run: ./testenv/docker-ssh/scripts/down.sh || true
+
+  # Same path gate as 1.13. Parent and workers are 1.14 (JULIA_DEFAULT_CHANNEL).
+  # Alt stays JULIA_E2E_MISMATCH_CHANNEL (1.12). continue-on-error; not a ruleset check.
+  ssh-e2e-1-14-pre:
+    name: DistSSHRun (1.14-pre, ubuntu-latest → ubuntu-26.04)
+    needs: detect
+    if: needs.detect.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    permissions:
+      contents: read
+      actions: write # buildx type=gha cache for the worker image
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        id: julia
+        with:
+          version: "~1.14.0-0"
+      - name: Julia ${{ steps.julia.outputs.version }}
+        run: julia --version
+
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+
+      - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+
+      - name: docker-ssh up + SSH E2E
+        env:
+          DISTSSHKIT_BUILD_CACHE: gha
+          JULIA_DEFAULT_CHANNEL: "1.14"
+        run: ./testenv/docker-ssh/scripts/up.sh --e2e
 
       - name: Teardown workers
         if: ${{ always() }}
