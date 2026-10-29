@@ -281,6 +281,46 @@ function _probe_expanded_remote_root(host::AbstractString, remote_root::Abstract
     return validate_expanded_remote_root(String(abs_root), String(home))
 end
 
+"""Project cwd on `host`: `remote_root` when it has `Project.toml`, else latest `runs/*/src`."""
+function _remote_project_work_root(host::AbstractString, remote_root::AbstractString)::String
+    given = strip(String(remote_root))
+    isempty(given) && return given
+    abs_root = try
+        _probe_expanded_remote_root(host, given)
+    catch
+        given
+    end
+    rq = _remote_shell_path_word(abs_root)
+    script = """
+    # __DSR_SHIP_SRC__
+    if test -f $rq/Project.toml; then
+      printf '%s\\n' $rq
+      exit 0
+    fi
+    latest=\$(ls -1d $rq/runs/*/src 2>/dev/null | sort | tail -n 1)
+    if test -n "\$latest" && test -f "\$latest/Project.toml"; then
+      printf '%s\\n' "\$latest"
+      exit 0
+    fi
+    printf '%s\\n' $rq
+    exit 0
+    """
+    code, out = _remote_shell_status(String(host), script)
+    code == 0 || return given
+    s = strip(out)
+    return isempty(s) ? given : s
+end
+
+function _work_root_for_hosts(
+        hosts::AbstractVector{<:AbstractString},
+        remote_root::AbstractString,
+    )::String
+    src = _shipped_src()
+    src !== nothing && return src
+    isempty(hosts) && return String(remote_root)
+    return _remote_project_work_root(first(hosts), remote_root)
+end
+
 function _remote_prepare_run_leaf!(host::AbstractString, abs_root::AbstractString, run_id::AbstractString)
     runs = _posix_join(abs_root, "runs")
     leaf = _posix_join(runs, run_id)

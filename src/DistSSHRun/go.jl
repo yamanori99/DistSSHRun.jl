@@ -1125,6 +1125,9 @@ function _go_run!(
         # `sync=false`: remotes must already have Project.toml + deps.
         # With `:ship_tree` / `:sync`, copy first.
         if sync_mode === false
+            if !isempty(child_hosts)
+                sess_rr = _work_root_for_hosts(child_hosts, sess_rr)
+            end
             _go_assert_remotes_ready!(child_hosts, sess_rr)
         elseif !isempty(child_hosts)
             sync_mode === :rsync && _throw_rsync_removed()

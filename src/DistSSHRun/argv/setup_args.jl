@@ -3,8 +3,9 @@ function show_requirements(; io::IO = stdout)
     print_help_lines(
         io,
         "Deploy and check the project on SSH hosts before go / drive.",
-        "Recommended: --ship-tree, then --instantiate and --check with",
-        "  --remote-path <that runs/<run_id>/src/>, then optional --runtest.",
+        "Recommended: --ship-tree, --instantiate, --check, then optional --runtest.",
+        "  After --ship-tree, instantiate/check/go use latest runs/<run_id>/src",
+        "  when the remote root has no Project.toml. Or pass --remote-path.",
         "Hosts: child:NAME[:N] (same as go / drive / size; :N ignored).",
         "       parent is up, not setup.",
         "Remote path: ~/Parent/RepoName, or --remote-path / ENV.",
@@ -23,8 +24,8 @@ function show_requirements(; io::IO = stdout)
         io,
         "  $(cli_m_project()) setup MODE child:host1 child:host2",
         "  setup --ship-tree child:host1 child:host2",
-        "  setup --instantiate --remote-path PATH child:host1",
-        "  setup --check --remote-path PATH child:host1",
+        "  setup --instantiate child:host1 child:host2",
+        "  setup --check child:host1 child:host2",
         "  setup --runtest child:host1 child:host2",
     )
     print_help_blank(io)
@@ -35,8 +36,8 @@ function show_requirements(; io::IO = stdout)
         "                       --clone needs an empty remote path",
         "                       --delete first to replace a clone dest",
         "  --sync / --pull      git update (confirm unless -y)",
-        "  --instantiate        Pkg.instantiate (after --ship-tree: --remote-path to src/)",
-        "  --check              SSH, Julia, project, deps (same --remote-path after ship-tree)",
+        "  --instantiate        Pkg.instantiate on remotes",
+        "  --check              SSH, Julia, project, deps",
         "  --runtest            Pkg.test of the job project on remotes",
         "  --cleanup            stale workers",
         "  --delete             remote project tree (needs --confirm-path)",

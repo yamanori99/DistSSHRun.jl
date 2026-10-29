@@ -406,6 +406,14 @@ function _run_drive_parsed_locked!(
                 end
             end
             writeln_both("")
+        elseif !isempty(host_names)
+            base = let e = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
+                isempty(e) ?
+                    DistSSHRun.resolve_remote_project_root(project_root_abs) : e
+            end
+            wr = DistSSHRun._work_root_for_hosts(host_names, base)
+            ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] =
+                DistSSHRun.remote_env_project_root(wr)
         end
 
         kit_progress_step!("git")

@@ -2,9 +2,8 @@
 # `julia -m DistSSHKit setup` — deploy and verify the project on SSH hosts.
 #
 # Recommended workflow:
-#   1. --ship-tree → 2. --instantiate --remote-path <that runs/<run_id>/src>
-#      → 3. --check --remote-path <same src> → 4. --runtest (optional) → `go` / `drive`
-#   Same-process `setup!(session, :ship_tree, :instantiate)` uses the shipped src.
+#   1. --ship-tree → 2. --instantiate → 3. --check → 4. --runtest (optional) → `go` / `drive`
+#   instantiate/check/go follow latest runs/<run_id>/src when the root has no Project.toml.
 #   Optional git: --clone → --instantiate → --check → --sync / --pull
 #   Replace a clone dest: --delete, then --clone
 #
@@ -191,6 +190,10 @@ if !isdefined(@__MODULE__, :setup_main)
                 println_fatal(e.msg)
                 return Cint(1)
             end
+            if (mode === :instantiate || mode === :runtest || mode === :check) &&
+                    !isempty(opts.hosts)
+                op_path = DistSSHRun._work_root_for_hosts(opts.hosts, op_path)
+            end
             print_header("$(DistSSHRun.cli_heading("setup")) · $mode_name")
             kit_println()
             writeln_field("Remote path", op_path)
@@ -275,7 +278,7 @@ if !isdefined(@__MODULE__, :setup_main)
                     finish_host_op!(
                             "Instantiate",
                             instantiate_remotes(
-                                opts.hosts, opts.julia_path, remote_path, project;
+                                opts.hosts, opts.julia_path, op_path, project;
                                 path_anchor = path_anchor,
                             ),
                         ) ? 0 : 1
@@ -305,7 +308,7 @@ if !isdefined(@__MODULE__, :setup_main)
                     finish_host_op!(
                             "Pkg.test",
                             runtest_remotes(
-                                opts.hosts, opts.julia_path, remote_path, project;
+                                opts.hosts, opts.julia_path, op_path, project;
                                 path_anchor = path_anchor,
                             ),
                         ) ? 0 : 1
@@ -353,7 +356,7 @@ if !isdefined(@__MODULE__, :setup_main)
             require_clean = (mode === :sync || mode === :pull)
             check_code_sync = (mode === :check)
             result = check_prerequisites(
-                opts.hosts, opts.julia_path, remote_path, project;
+                opts.hosts, opts.julia_path, op_path, project;
                 path_anchor = path_anchor,
                 require_clean_git = require_clean,
                 check_code_sync = check_code_sync,

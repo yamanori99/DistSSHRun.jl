@@ -613,7 +613,6 @@ function _setup_one!(
     _setup_bang_preflight!(session, mode; repo = repo)
     hosts = _setup_bang_hosts!(session; allow_parent = setup_mode_allows_parent(mode))
     remote_path = session_remote_root(session)
-    work_path = something(_shipped_src(), remote_path)
     julia_path = isempty(strip(String(julia))) ? "auto" : String(julia)
 
     if mode === :delete
@@ -666,12 +665,14 @@ function _setup_one!(
         return _sync_result_from_host_op(raw)
     elseif mode === :runtest
         preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
+        work_path = _work_root_for_hosts(hosts, remote_path)
         raw = runtest_remotes(
             hosts, julia_path, work_path, session.project;
             path_anchor = session.project,
         )
         return _sync_result_from_host_op(raw)
     elseif mode === :check
+        work_path = _work_root_for_hosts(hosts, remote_path)
         result = check_prerequisites(
             hosts,
             julia_path,
