@@ -192,6 +192,20 @@ end
     @test err3.msg == DistSSHRun.RSYNC_REMOVED_MSG
 end
 
+@testset "openrsync warn uses the rsync collect will run" begin
+    DistSSHRun._OPENRSYNC_WARNED[] = false
+    try
+        _with_tempdir() do tmp
+            withenv(_fake_setup_remote_env(tmp)...) do
+                @test_logs DistSSHRun.warn_openrsync_once()
+                @test DistSSHRun._OPENRSYNC_WARNED[] == false
+            end
+        end
+    finally
+        DistSSHRun._OPENRSYNC_WARNED[] = false
+    end
+end
+
 @testset "rsync_send_list is the ship set" begin
     Sys.which("git") === nothing && return
     _with_tempdir() do tmp
