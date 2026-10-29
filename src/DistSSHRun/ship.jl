@@ -318,8 +318,14 @@ function _work_root_for_hosts(
     src = _shipped_src()
     src !== nothing && return src
     isempty(hosts) && return String(remote_root)
+    host = first(hosts)
     try
-        return _remote_project_work_root(first(hosts), remote_root)
+        validate_ssh_host(host)
+    catch
+        return String(remote_root)
+    end
+    try
+        return _remote_project_work_root(host, remote_root)
     catch e
         e isa InterruptException && rethrow()
         return String(remote_root)
