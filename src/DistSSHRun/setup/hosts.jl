@@ -68,6 +68,7 @@ Returns `nothing` on success, or a short error summary string on failure.
 function probe_setup_ssh(host::String)::Union{Nothing, String}
     err_buf = IOBuffer()
     try
+        DistSSHBase._ensure_posix_login_shell!(host)
         out = read(
             pipeline(_host_sync_remote_shell_cmd(host, "echo ok"); stderr = err_buf),
             String,

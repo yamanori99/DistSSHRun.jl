@@ -94,7 +94,7 @@ let _BASE = DistSSHBase
         @test !_BASE._remote_path_forbidden("~/a/proj")
     end
 
-    @testset "non-POSIX login shell is diagnosed only after a failure" begin
+    @testset "non-POSIX login shell is rejected before the first command" begin
         double = joinpath(@__DIR__, "fixtures", "fake_shell_ssh.jl")
 
         @test _BASE._remote_shell_host_from_exec(
@@ -124,8 +124,12 @@ let _BASE = DistSSHBase
                     code, out = _BASE._remote_shell_status("posix-ok.test", "ok")
                     @test code == 0
                     @test strip(out) == "ok"
+                    @test count(_nonposix_probe_line, _nonposix_logged(logp)) == 1
+                    code2, out2 = _BASE._remote_shell_status("posix-ok.test", "ok")
+                    @test code2 == 0
+                    @test strip(out2) == "ok"
                 end
-                @test !any(_nonposix_probe_line, _nonposix_logged(logp))
+                @test count(_nonposix_probe_line, _nonposix_logged(logp)) == 1
 
                 rm(logp; force = true)
                 withenv(_nonposix_shell_env(double, logp)...) do
@@ -160,7 +164,7 @@ let _BASE = DistSSHBase
                     @test !occursin("non-POSIX", err.msg)
                     @test !occursin("--help", err.msg)
                 end
-                @test !any(_nonposix_probe_line, _nonposix_logged(logp))
+                @test any(_nonposix_probe_line, _nonposix_logged(logp))
 
                 rm(logp; force = true)
                 withenv(_nonposix_shell_env(double, logp; mode = "probe255")...) do
@@ -181,11 +185,19 @@ let _BASE = DistSSHBase
                         e
                     end
                     @test err isa ArgumentError
-                    @test occursin("remote command on $(fish_host) failed (exit 9):", err.msg)
-                    @test occursin("missing-tool", err.msg)
                     @test occursin("non-POSIX (/usr/bin/fish)", err.msg)
                     @test occursin("help setup", err.msg)
+                    @test !occursin("remote command on $(fish_host) failed", err.msg)
+                    @test !occursin("missing-tool", err.msg)
                     @test !occursin("--help", err.msg)
+                    err_ok = try
+                        _BASE._remote_shell_status(fish_host, "ok")
+                        nothing
+                    catch e
+                        e
+                    end
+                    @test err_ok isa ArgumentError
+                    @test occursin("non-POSIX (/usr/bin/fish)", err_ok.msg)
                     err2 = try
                         _BASE._remote_shell_status(fish_host, "nope")
                         nothing
@@ -196,8 +208,10 @@ let _BASE = DistSSHBase
                     @test occursin("non-POSIX (/usr/bin/fish)", err2.msg)
                 end
                 fish_lines = _nonposix_logged(logp)
-                @test count(_nonposix_probe_line, fish_lines) == 2
-                @test count(==(_BASE._REMOTE_SHELL_NAME_SCRIPT), fish_lines) == 2
+                @test count(_nonposix_probe_line, fish_lines) == 3
+                @test count(==(_BASE._REMOTE_SHELL_NAME_SCRIPT), fish_lines) == 3
+                @test !any(==("nope"), fish_lines)
+                @test !any(==("ok"), fish_lines)
                 @test !any(line -> occursin("case x in", line) && occursin("echo \$SHELL", line), fish_lines)
 
                 rm(logp; force = true)
@@ -239,6 +253,13 @@ let _BASE = DistSSHBase
                     @test hints[2] === nothing
                     @test _BASE._remote_posix_shell_cached("posix-threads.test")
                 end
+
+                _BASE._remote_posix_shell_remember!("opts-host.test")
+                @test _BASE._remote_posix_shell_cached("opts-host.test")
+                withenv("DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes") do
+                    @test !_BASE._remote_posix_shell_cached("opts-host.test")
+                end
+                @test _BASE._remote_posix_shell_cached("opts-host.test")
             finally
                 _BASE._clear_remote_posix_shell_cache!()
             end
