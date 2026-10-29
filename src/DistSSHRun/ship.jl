@@ -5,7 +5,6 @@ const SHIP_FILE_WARN_BYTES = 50 * 1024 * 1024
 
 const _LAST_SHIP = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 const _SHIP_LAYOUT_ACTIVE = Ref(false)
-const _SHIP_ALLOW_EXTERNAL = Ref(false)
 const _OPENRSYNC_WARNED = Ref(false)
 const _SSHFLAGS_WARNED = Ref(false)
 
@@ -25,6 +24,31 @@ end
 
 function last_ship_result()::Union{Nothing, Dict{String, Any}}
     return _LAST_SHIP[]
+end
+
+function _clear_last_ship!()
+    _LAST_SHIP[] = nothing
+    _SHIP_LAYOUT_ACTIVE[] = false
+    return nothing
+end
+
+"""`runs/<run_id>/src` from the last successful ship in this process, else `nothing`."""
+function _shipped_src()::Union{Nothing, String}
+    _SHIP_LAYOUT_ACTIVE[] || return nothing
+    rec = last_ship_result()
+    rec === nothing && return nothing
+    src = get(rec, "src", nothing)
+    src isa AbstractString || return nothing
+    s = String(src)
+    return isempty(strip(s)) ? nothing : s
+end
+
+function _record_host_alias(host::AbstractString)::String
+    s = String(host)
+    at = findlast('@', s)
+    at === nothing && return s
+    rest = s[(nextind(s, at)):end]
+    return isempty(rest) ? s : rest
 end
 
 function _throw_rsync_removed()
@@ -387,6 +411,11 @@ function ship_project_to_hosts!(
                     end
                     return HostResult(host, true, "ship-tree ok")
                 catch e
+                    if report
+                        kit_print("  $host: ")
+                        print_err("✗")
+                        kit_println()
+                    end
                     return HostResult(host, false, sprint(showerror, e))
                 end
             end
@@ -398,12 +427,15 @@ function ship_project_to_hosts!(
             "files" => packed.files,
             "run_id" => rid,
             "src" => src_logical,
-            "host" => String(first(hosts)),
+            "host" => _record_host_alias(first(hosts)),
+            "run_dir_empty_at_start" => true,
         )
         allow_external_symlinks && (rec["external_symlinks_allowed"] = true)
         packed.tree_matches_head && (rec["tree_matches_head"] = true)
-        _LAST_SHIP[] = rec
-        _SHIP_LAYOUT_ACTIVE[] = true
+        if any(hr -> hr.ok, host_results)
+            _LAST_SHIP[] = rec
+            _SHIP_LAYOUT_ACTIVE[] = true
+        end
         return ShipTreeResult(
             rid, String(remote_root), src_logical, packed.hash, "git-sha1",
             packed.bytes, packed.files, packed.tree_matches_head,

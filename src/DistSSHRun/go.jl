@@ -869,6 +869,7 @@ function _go_complete!(
             output_dir = batch_dir,
             log_dir = batch_dir,
             result = kr,
+            project_root = String(anchor),
             provenance = assemble_provenance(),
         )
     end
@@ -968,8 +969,7 @@ function go!(
     inherited_run = old_run isa AbstractString && !isempty(strip(old_run))
     try
         _reset_run_provenance!(proj)
-        _SHIP_LAYOUT_ACTIVE[] = false
-        _SHIP_ALLOW_EXTERNAL[] = allow_external_symlinks
+        _clear_last_ship!()
         warn_project_sshflags(proj)
         _ensure_kit_run_dir!(:go, script_path; project = proj)
         return with_allow_mismatch(allow_mismatch) do
@@ -992,6 +992,7 @@ function go!(
                 original_args,
                 repeat,
                 inherited_run,
+                allow_external_symlinks,
             )
         end
     finally
@@ -1019,6 +1020,7 @@ function _go_run!(
         original_args,
         repeat,
         inherited_run::Bool,
+        allow_external_symlinks::Bool = false,
     )
     anchor = something(path_anchor, proj)
 
@@ -1137,7 +1139,7 @@ function _go_run!(
             sync_result = sync!(
                 sync_session;
                 mode = sync_mode,
-                allow_external_symlinks = _SHIP_ALLOW_EXTERNAL[],
+                allow_external_symlinks = allow_external_symlinks,
             )
             if !sync_result.ok
                 completed = true
@@ -1159,7 +1161,8 @@ function _go_run!(
                 )
             end
             if sync_mode === :ship_tree
-                sess_rr = session_remote_root(sync_session)
+                shipped = _shipped_src()
+                shipped !== nothing && (sess_rr = shipped)
                 inst_julia = julia === nothing || strip(String(julia)) == "auto" ?
                     "auto" : String(julia)
                 inst = instantiate_after_ship!(sync_session; julia = inst_julia)

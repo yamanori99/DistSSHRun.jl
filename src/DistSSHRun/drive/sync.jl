@@ -41,23 +41,18 @@ function sync!(
             remote_path = remote_deploy_root(
                 session.project; cli_override = session.remote,
             )
-            allow = allow_external_symlinks || _SHIP_ALLOW_EXTERNAL[]
             raw = ship_project_to_hosts!(
                 session.hosts,
                 session.project,
                 remote_path;
                 confirm = !session.yes,
                 path_anchor = session.project,
-                allow_external_symlinks = allow,
+                allow_external_symlinks = allow_external_symlinks,
             )
             if raw.cancelled
                 return SyncResult(true, HostResult[]; ok = false)
             end
             failed = count(hr -> !hr.ok, raw.host_results)
-            if failed == 0
-                session.remote = raw.src
-                apply_session_env!(session)
-            end
             return SyncResult(false, raw.host_results; ok = failed == 0)
         else
             remote_path = session_remote_root(session)

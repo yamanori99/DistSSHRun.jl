@@ -16,6 +16,7 @@ function drive_parsed_from_session(
         parent_gb::Real = DEFAULT_PARENT_GB,
         sync_script::Bool = false,
         allow_mismatch = Symbol[],
+        allow_external_symlinks::Bool = false,
     )
     parent_workers = 0
     hosts = Tuple{String, Union{Int, Nothing}}[]
@@ -72,6 +73,6 @@ function drive_parsed_from_session(
         mem_headroom = Float64(mem_headroom),
         parent_gb = Float64(parent_gb),
         allow_mismatch = collect(Symbol, allow_mismatch),
-        allow_external_symlinks = false,
+        allow_external_symlinks = allow_external_symlinks,
     )
 end

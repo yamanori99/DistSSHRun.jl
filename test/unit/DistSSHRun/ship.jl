@@ -64,6 +64,20 @@ end
     end
 end
 
+@testset "record host and path" begin
+    @test DistSSHRun._record_host_alias("mini") == "mini"
+    @test DistSSHRun._record_host_alias("user@mini") == "mini"
+    _with_tempdir() do proj
+        @test DistSSHRun._record_path(joinpath(proj, "out"), proj) == "out"
+        @test DistSSHRun._record_path(proj, proj) == "."
+        under_tmp = joinpath(tempdir(), "from_hook")
+        @test DistSSHRun._record_path(under_tmp, proj) == "from_hook"
+    end
+    DistSSHRun._clear_last_ship!()
+    @test DistSSHRun.last_ship_result() === nothing
+    @test DistSSHRun._shipped_src() === nothing
+end
+
 @testset "--rsync removed" begin
     err = try
         DistSSHRun.parse_setup_args(["--rsync", "child:h1"])

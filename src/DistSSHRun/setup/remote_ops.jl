@@ -21,6 +21,7 @@ function rsync_push_to_remotes(
         remote_path::String,
         project::AbstractString;
         path_anchor::AbstractString = project,
+        allow_external_symlinks::Bool = false,
     )::NamedTuple
     raw = ship_project_to_hosts!(
         hosts,
@@ -29,7 +30,7 @@ function rsync_push_to_remotes(
         confirm = true,
         report = true,
         path_anchor = path_anchor,
-        allow_external_symlinks = _SHIP_ALLOW_EXTERNAL[],
+        allow_external_symlinks = allow_external_symlinks,
     )
     ok = count(hr -> hr.ok, raw.host_results)
     failed = count(hr -> !hr.ok, raw.host_results)

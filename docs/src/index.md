@@ -32,7 +32,9 @@ Julia **1.13+**. Hosts need **`ssh`**. Collect and cache pull still need
 
 `setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` extract the
 git file list into `<remote_root>/runs/<run_id>/src/` (`run_id` is UTC plus
-6 hex). `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
+6 hex). A later `setup --instantiate` or `--check` needs `--remote-path` to
+that `src/` (same-process `setup!(session, :ship_tree, :instantiate)` uses it).
+`--rsync` was removed in 0.2.0. Workers `--project=` that tree.
 Provenance and `run.toml` use `schema = 1` and `writer = "DistSSHRun x.y.z"`.
 Unknown keys are ignored when reading. `[[inputs]]` / `outputs` are reserved
 and not written.

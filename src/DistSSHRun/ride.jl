@@ -728,6 +728,7 @@ function _ride_run!(
                         output_dir = batch_dir,
                         log_dir = nothing,
                         result = kr,
+                        project_root = canonical_local_path(project),
                         provenance = assemble_provenance(),
                     )
                 end

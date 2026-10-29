@@ -2,7 +2,9 @@
 # `julia -m DistSSHKit setup` — deploy and verify the project on SSH hosts.
 #
 # Recommended workflow:
-#   1. --ship-tree → 2. --instantiate → 3. --check → 4. --runtest (optional) → `go` / `drive`
+#   1. --ship-tree → 2. --instantiate --remote-path <that runs/<run_id>/src>
+#      → 3. --check --remote-path <same src> → 4. --runtest (optional) → `go` / `drive`
+#   Same-process `setup!(session, :ship_tree, :instantiate)` uses the shipped src.
 #   Optional git: --clone → --instantiate → --check → --sync / --pull
 #   Replace a clone dest: --delete, then --clone
 #
@@ -248,13 +250,24 @@ if !isdefined(@__MODULE__, :setup_main)
             end
 
             if mode === :ship_tree
-                DistSSHRun._SHIP_ALLOW_EXTERNAL[] = opts.allow_external_symlinks
-                return Cint(
-                    finish_host_op!(
-                            "ship-tree",
-                            rsync_push_to_remotes(opts.hosts, op_path, project; path_anchor = path_anchor),
-                        ) ? 0 : 1
+                ok = finish_host_op!(
+                    "ship-tree",
+                    rsync_push_to_remotes(
+                        opts.hosts,
+                        op_path,
+                        project;
+                        path_anchor = path_anchor,
+                        allow_external_symlinks = opts.allow_external_symlinks,
+                    ),
                 )
+                rec = DistSSHRun.last_ship_result()
+                if ok && rec !== nothing
+                    src = rec["src"]
+                    kit_println("  Next: $(DistSSHRun.cli_m()) setup --instantiate --remote-path $src")
+                    kit_println("        $(DistSSHRun.cli_m()) setup --check --remote-path $src")
+                    kit_println()
+                end
+                return Cint(ok ? 0 : 1)
             end
 
             if mode === :instantiate

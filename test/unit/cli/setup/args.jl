@@ -17,6 +17,7 @@ using Test
         @test occursin("fish and csh are unsupported", text)
         @test occursin("backslashes inside single quotes", text)
         @test occursin("must not start with '-'", text)
+        @test occursin("--remote-path <that runs/<run_id>/src/>", text)
         @test occursin("control character", text)
         @test !occursin("fish is refused", text)
     end

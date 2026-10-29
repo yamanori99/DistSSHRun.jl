@@ -140,6 +140,7 @@ function _run_drive_parsed_specialized!(
     )
     return try
         DistSSHRun._reset_run_provenance!(project_root_abs)
+        DistSSHRun._clear_last_ship!()
         # Inside `_drive_frame`: this `finally` restores after `rmprocs`.
         return _with_drive_process!(proj_dir) do
             local release_output_dir_lock
@@ -365,11 +366,11 @@ function _run_drive_parsed_locked!(
                 yes = parsed.cli_session.yes || DistSSHRun.kit_noninteractive(),
             )
             DistSSHRun.warn_project_sshflags(proj_dir)
-            DistSSHRun._SHIP_ALLOW_EXTERNAL[] = get(parsed, :allow_external_symlinks, false)
+            allow_ext = get(parsed, :allow_external_symlinks, false)
             sync_result = DistSSHRun.sync!(
                 sync_session;
                 mode = sync_mode,
-                allow_external_symlinks = DistSSHRun._SHIP_ALLOW_EXTERNAL[],
+                allow_external_symlinks = allow_ext,
             )
             if !sync_result.ok
                 print_err("ERROR: "; bold = true)
@@ -384,7 +385,11 @@ function _run_drive_parsed_locked!(
                 DistSSHRun._throw_rsync_removed()
             end
             if sync_mode === :ship_tree
-                DistSSHRun._SHIP_ALLOW_EXTERNAL[] = get(parsed, :allow_external_symlinks, false)
+                shipped = DistSSHRun._shipped_src()
+                if shipped !== nothing
+                    ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] =
+                        DistSSHRun.remote_env_project_root(shipped)
+                end
                 inst_julia = julia_exe === nothing ? "auto" : String(julia_exe)
                 inst = DistSSHRun.instantiate_after_ship!(
                     sync_session;

@@ -68,6 +68,7 @@ function drive!(
         parent_gb::Real = DEFAULT_PARENT_GB,
         sync_script::Bool = false,
         allow_mismatch = Symbol[],
+        allow_external_symlinks::Bool = false,
     )::DriveResult
     return _drive_frame(; cli = false) do
         return _with_kit_inproc_run!(:drive) do
@@ -96,6 +97,7 @@ function drive!(
                     parent_gb = parent_gb,
                     sync_script = sync_script,
                     allow_mismatch = allow_mismatch,
+                    allow_external_symlinks = allow_external_symlinks,
                 )
                 apply_kit_cli_session!(parsed.cli_session)
                 original_args = copy(ARGS)

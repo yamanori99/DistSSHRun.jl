@@ -175,10 +175,6 @@ end
 
 function _record_path(path::AbstractString, project_root::Union{Nothing, AbstractString})::String
     s = canonical_local_path(path)
-    home = homedir()
-    if !isempty(home) && (s == home || startswith(s, home * "/"))
-        return s == home ? "~" : "~" * s[(ncodeunits(home) + 1):end]
-    end
     if project_root isa AbstractString && !isempty(project_root)
         root = canonical_local_path(project_root)
         if s == root
@@ -188,7 +184,21 @@ function _record_path(path::AbstractString, project_root::Union{Nothing, Abstrac
             return relpath(s, root)
         end
     end
-    return s
+    tmp = try
+        canonical_local_path(tempdir())
+    catch
+        ""
+    end
+    if !isempty(tmp) && (s == tmp || startswith(s, tmp * "/"))
+        b = basename(s)
+        return isempty(b) ? "." : b
+    end
+    home = homedir()
+    if !isempty(home) && (s == home || startswith(s, home * "/"))
+        return s == home ? "~" : "~" * s[(ncodeunits(home) + 1):end]
+    end
+    b = basename(s)
+    return isempty(b) ? "." : b
 end
 
 function _recorded_env_names()::Vector{String}

@@ -491,8 +491,10 @@ end
                 @test workers["parent"][1]["version"] == string(VERSION)
                 @test workers["parent"][1]["n"] == 1
                 @test raw["provenance"]["julia"]["parent"]["version"] == string(VERSION)
+                od = String(raw["output_dir"])
+                side_root = isabspath(od) ? od : joinpath(proj, od)
                 side = DistSSHRun.TOML.parsefile(
-                    joinpath(raw["output_dir"], ".distsshkit", "provenance.toml"),
+                    joinpath(side_root, ".distsshkit", "provenance.toml"),
                 )
                 @test side == raw["provenance"]
             end
