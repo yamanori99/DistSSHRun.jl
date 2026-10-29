@@ -238,14 +238,9 @@ end
 end
 
 @testset "init_output_dir! lookup uses the definition world" begin
-    path = joinpath(mktempdir(), "define_init_output.jl")
-    write(
-        path, """
-        function init_output_dir!(_)
-            return nothing
-        end
-        """,
-    )
+    # Tracked fixture: JETLS executes this `@testset` as top-level and cannot
+    # `include` a path that only exists after `mktempdir` + `write`.
+    path = _fixture("drive_init_output.jl")
     args = String[]
     lookup() = DistSSHRun._drive_script_init_output_dir_method(args)
     before = lookup()
