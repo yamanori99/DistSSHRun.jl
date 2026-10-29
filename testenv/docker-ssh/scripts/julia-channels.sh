@@ -2,6 +2,8 @@
 # Source from docker-ssh / apple-container up.sh.
 # Sets JULIA_DEFAULT_CHANNEL / JULIA_ALT_CHANNEL from .github/julia-slots.env
 # (major.minor for juliaup). Also exports DISTSSHKIT_E2E_* for test/e2e.jl.
+# A non-empty JULIA_DEFAULT_CHANNEL in the environment is kept (1.14-pre E2E).
+# Alt still comes from JULIA_E2E_MISMATCH_CHANNEL.
 #
 # Do not `source` the env file: values like `~1.14.0-0` would expand as ~user.
 
@@ -41,9 +43,14 @@ _distsshkit_export_julia_channels() {
     echo "JULIA_E2E_MISMATCH_CHANNEL missing in ${slots}" >&2
     return 1
   }
+  local preset="${JULIA_DEFAULT_CHANNEL:-}"
   export JULIA_DEFAULT_CHANNEL
   export JULIA_ALT_CHANNEL
-  JULIA_DEFAULT_CHANNEL="$(_distsshkit_julia_channel_mm "${slot_stable}")"
+  if [[ -n "${preset}" ]]; then
+    JULIA_DEFAULT_CHANNEL="$(_distsshkit_julia_channel_mm "${preset}")"
+  else
+    JULIA_DEFAULT_CHANNEL="$(_distsshkit_julia_channel_mm "${slot_stable}")"
+  fi
   JULIA_ALT_CHANNEL="$(_distsshkit_julia_channel_mm "${slot_alt}")"
   export DISTSSHKIT_E2E_JULIA_DEFAULT_CHANNEL="${JULIA_DEFAULT_CHANNEL}"
   export DISTSSHKIT_E2E_JULIA_ALT_CHANNEL="${JULIA_ALT_CHANNEL}"

@@ -7,7 +7,7 @@ Internals of this repo.
 
 This is a **separate** package from DistSSHKit: FIFO `serve` in front of one Kit `go` / `ride` / `drive`, not a bigger Kit. Placement tokens, `execute!`, `kit.pid` / `kit.result`, `terminate_run!`, demo argv, and rsync/collect are Kit's. Queue records table state and the path Kit already wrote.
 
-CI names Julia versions in the job (`1.13`, `1.14-pre`, `nightly`). `1.14-pre` is setup-julia `~1.14.0-0`. The names match DistSSHQueue and DistSSHKit. SSH E2E is this repo's `testenv/docker-ssh`. CI is `Pkg.test` (unit + integration), `Registry install (1.13, ubuntu-latest, x64)`, JETLS, Aqua, Linux SSH E2E on Julia **1.13** (`test/e2e.jl`: `setup` / `go` / `ride` / `drive`) on path-filtered PRs / **main** / a `Project.toml` version increase / weekly / dispatch, Gitleaks, light **Runic** `--check` (soft on PRs; monthly on `main`), schedule-only **E2E weekly** (Linux / macOS Intel / WSL), and schedule-only **CI weekly**.
+CI names Julia versions in the job (`1.13`, `1.14-pre`, `nightly`). `1.14-pre` is setup-julia `~1.14.0-0`. The names match DistSSHQueue and DistSSHKit. SSH E2E is this repo's `testenv/docker-ssh`. CI is `Pkg.test` (unit + integration), `Registry install (1.13, ubuntu-latest, x64)`, JETLS, Aqua, Linux SSH E2E (`test/e2e.jl`: `setup` / `go` / `ride` / `drive`) on path-filtered PRs / **main** / a `Project.toml` version increase / weekly / dispatch: required **1.13** (`DistSSHRun (1.13, ubuntu-latest → ubuntu-26.04)`), plus continue-on-error **1.14-pre** (`DistSSHRun (1.14-pre, ubuntu-latest → ubuntu-26.04)`; parent and workers start on 1.14, alt channel 1.12). Gitleaks, light **Runic** `--check` (soft on PRs; monthly on `main`), schedule-only **E2E weekly** (Linux / macOS Intel / WSL, 1.13), and schedule-only **CI weekly**.
 
 ## Requirements
 
@@ -102,7 +102,7 @@ Workflows pass the version to `julia-actions/setup-julia`. The stable line and `
 | Version | Role | Required |
 | --- | --- | --- |
 | **1.13** | `Project.toml` julia floor. Pkg.test, Aqua, JETLS, Documenter, draw, E2E, Runic. Codecov `pkgtest` on **main push** only | yes |
-| **1.14-pre** | setup-julia `~1.14.0-0` (1.14.0 alpha, then beta, then rc, then 1.14.0; not 1.15). Pkg.test, Aqua, JETLS. `continue-on-error` | no |
+| **1.14-pre** | setup-julia `~1.14.0-0` (1.14.0 alpha, then beta, then rc, then 1.14.0; not 1.15). Pkg.test, Aqua, JETLS, Linux SSH E2E. `continue-on-error` | no |
 | **nightly** | Published `julia-latest` tarball. It follows master and can lag a `VERSION` bump. Pkg.test and Aqua. No JETLS. `continue-on-error` | no |
 
 **1.13** runs on ordinary PRs (heavy gate), on Ubuntu and macOS.
@@ -112,7 +112,8 @@ including ordinary PRs. They also run on **main**, **CI weekly**, and a
 `Project.toml` version increase
 ([`.github/version-cut.sh`](.github/version-cut.sh)).
 `JETLS (1.14-pre, ubuntu-latest, x64)`, `Aqua (1.14-pre, ubuntu-latest, x64)`,
-and `DistSSHRun (1.14-pre, ubuntu-latest, x64)` are `continue-on-error` and
+`DistSSHRun (1.14-pre, ubuntu-latest, x64)`, and
+`DistSSHRun (1.14-pre, ubuntu-latest → ubuntu-26.04)` are `continue-on-error` and
 are not required checks.
 Ubuntu **nightly** `Pkg.test` and Aqua run on **main**, **CI weekly**, and a
 version increase, not ordinary PRs. There is no JETLS on nightly.
@@ -148,7 +149,7 @@ A pull request that runs it also pushes a preview to `gh-pages` at
 `https://yamanori99.github.io/DistSSHRun.jl/previews/PR<n>/`.
 That directory stays after the pull request closes.
 `Assets` (`draw SVG`) runs if `docs/src/assets/` or that workflow
-changed. Linux E2E (1.13) uses the same **path filter** as **main** push
+changed. Linux E2E (1.13 required, 1.14-pre continue-on-error) uses the same **path filter** as **main** push
 (`src/**`, `lib/**`, `test/**`, `testenv/**` minus markdown under those trees,
 `Project.toml`, `test/Project.toml`, `.github/workflows/CI.yml`). It also
 runs on a **version increase**, **E2E weekly** (`ssh-e2e-weekly.yml`; `CI.yml` has no
@@ -197,7 +198,7 @@ julia --project=. -e 'using Pkg; Pkg.test(; coverage=true)'
 DISTSSHQUEUE_CODE_COVERAGE=1 ./testenv/docker-ssh/scripts/up.sh --e2e
 ```
 
-Required to merge (ruleset `main` uses these names, except `Registry install (1.13, ubuntu-latest, x64)`, which is not in the ruleset yet). **1.14-pre** and **nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu **1.14-pre** `Pkg.test`, Aqua, and JETLS run on ordinary heavy PRs. Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and a version increase, not ordinary PRs. macOS and WSL2 **1.14-pre** and nightly run on CI weekly only. PkgEval runs on ordinary PRs (heavy gate) and is not in the list below. `Registry install (1.13, ubuntu-latest, x64)` is in the list below. This change does not edit the ruleset, so that name does not block merge until it is added there. E2E weekly and CI weekly are not required. Run's titles are `DistSSHRun (...)`, the same shape as DistSSHBase and DistSSHUp, plus `DistSSHRun (1.14-pre, ubuntu-latest, x64)`, `DistSSHRun (nightly, ubuntu-latest, x64)`, `Aqua (1.14-pre, ubuntu-latest, x64)`, `Aqua (nightly, ubuntu-latest, x64)`, `JETLS (1.14-pre, ubuntu-latest, x64)`, and `PkgEval (nightly, ubuntu-latest, x64)`. DistSSHBase and DistSSHUp are their own jobs on Ubuntu and macOS, and their own Ubuntu SSH E2E rows. Their WSL2 titles run on a main push and CI weekly, not a pull request. Downstream is `Downstream (DistSSHQueue@main, 1.13)` and `Downstream (DistSSHKit@main, 1.13)`. `Downstream SSH E2E (DistSSHQueue, 1.13)` runs on a version-cut pull request, a push to `main`, and `workflow_dispatch`. Ordinary pull requests skip it. Names outside the list are not in the ruleset. The ruleset itself is edited on GitHub; this list is the names to add.
+Required to merge (ruleset `main` uses these names, except `Registry install (1.13, ubuntu-latest, x64)`, which is not in the ruleset yet). **1.14-pre** and **nightly** jobs are allow-failure. A job skipped by the heavy / E2E gate shows as skipping (not a green empty run). Ubuntu **1.14-pre** `Pkg.test`, Aqua, and JETLS run on ordinary heavy PRs. Linux SSH E2E **1.14-pre** uses the E2E path filter (`DistSSHRun (1.14-pre, ubuntu-latest → ubuntu-26.04)`). Ubuntu nightly `Pkg.test` and Aqua run on **main**, weekly, and a version increase, not ordinary PRs. macOS and WSL2 **1.14-pre** and nightly run on CI weekly only. PkgEval runs on ordinary PRs (heavy gate) and is not in the list below. `Registry install (1.13, ubuntu-latest, x64)` is in the list below. This change does not edit the ruleset, so that name does not block merge until it is added there. The required Linux E2E title is now `DistSSHRun (1.13, ubuntu-latest → ubuntu-26.04)` (was `DistSSHRun (ubuntu-latest → ubuntu-26.04)`); update ruleset `main` in the same PR. E2E weekly and CI weekly are not required. Run's titles are `DistSSHRun (...)`, the same shape as DistSSHBase and DistSSHUp, plus `DistSSHRun (1.14-pre, ubuntu-latest, x64)`, `DistSSHRun (1.14-pre, ubuntu-latest → ubuntu-26.04)`, `DistSSHRun (nightly, ubuntu-latest, x64)`, `Aqua (1.14-pre, ubuntu-latest, x64)`, `Aqua (nightly, ubuntu-latest, x64)`, `JETLS (1.14-pre, ubuntu-latest, x64)`, and `PkgEval (nightly, ubuntu-latest, x64)`. DistSSHBase and DistSSHUp are their own jobs on Ubuntu and macOS, and their own Ubuntu SSH E2E rows. Their WSL2 titles run on a main push and CI weekly, not a pull request. Downstream is `Downstream (DistSSHQueue@main, 1.13)` and `Downstream (DistSSHKit@main, 1.13)`. `Downstream SSH E2E (DistSSHQueue, 1.13)` runs on a version-cut pull request, a push to `main`, and `workflow_dispatch`. Ordinary pull requests skip it. Names outside the list are not in the ruleset. The ruleset itself is edited on GitHub; this list is the names to add.
 
 - `DistSSHRun (1.13, ubuntu-latest, x64)`
 - `DistSSHRun (1.13, macos-latest, aarch64)`
@@ -210,7 +211,7 @@ Required to merge (ruleset `main` uses these names, except `Registry install (1.
 - `Aqua (1.13, ubuntu-latest, x64)`
 - `Documenter (1.13, ubuntu-latest, x64)`
 - `Gitleaks`
-- `DistSSHRun (ubuntu-latest → ubuntu-26.04)`
+- `DistSSHRun (1.13, ubuntu-latest → ubuntu-26.04)`
 - `DistSSHBase (ubuntu-latest → ubuntu-26.04)`
 - `DistSSHUp (ubuntu-latest → ubuntu-26.04)`
 - `Downstream SSH E2E (DistSSHQueue, 1.13)`
