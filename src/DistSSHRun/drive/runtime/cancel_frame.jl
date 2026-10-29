@@ -10,9 +10,12 @@
 # not: those shims are `f()` / `false`.
 #
 # A second Ctrl-C during cleanup exits 130 and prints one line. Julia 1.13
-# installs that with `signal`. Julia 1.14 owns SIGINT in its listener;
-# `signal` and `exit_on_sigint` there either drop the listener or deadlock
-# in `jl_exit_thread0`. The 1.14 press cancels a fresh episode, and a task
+# installs that with `signal`. The handler must not call `jl_exit`: that
+# is not async-signal-safe, and on macOS 1.13 it can keep running worker
+# teardown, then SIGSEGV, so the wait status is not 130. `_exit` skips
+# atexit. Julia 1.14 owns SIGINT in its listener; `signal` and
+# `exit_on_sigint` there either drop the listener or deadlock in
+# `jl_exit_thread0`. The 1.14 press cancels a fresh episode, and a task
 # bound to that episode calls `jl_exit`.
 
 const _DRIVE_INTERRUPTED = Ref(false)
@@ -118,13 +121,13 @@ function _second_sigint_message()::String
     return "Cleanup skipped after a second interrupt. Run `$(cli_m()) help drive` for flags."
 end
 
-# Installed only after the first interrupt. `write` + `jl_exit` (no alloc).
+# Installed only after the first interrupt. `write` + `_exit` (no alloc).
 function _second_sigint_handler(_signum::Cint)::Cvoid
     bytes = _SECOND_SIGINT_BYTES
     if !isempty(bytes)
         ccall(:write, Cssize_t, (Cint, Ptr{UInt8}, Csize_t), 2, pointer(bytes), sizeof(bytes))
     end
-    return ccall(:jl_exit, Union{}, (Int32,), Int32(130))
+    return ccall(:_exit, Union{}, (Cint,), Cint(130))
 end
 
 # Created at runtime. A top-level `@cfunction` is baked into the package image

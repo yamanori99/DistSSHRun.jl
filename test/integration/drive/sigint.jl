@@ -92,7 +92,10 @@ end
         wait(reader)
         combined = String(acc)
         if proc.exitcode != 130 || !occursin("Cleanup skipped", combined)
-            println(stderr, "──── drive second SIGINT (exit=$(proc.exitcode) seen=$(seen)) ────")
+            println(
+                stderr,
+                "──── drive second SIGINT (exit=$(proc.exitcode) signal=$(proc.termsignal) seen=$(seen)) ────",
+            )
             println(stderr, combined)
             println(stderr, "──── end drive second SIGINT output ────")
         end
