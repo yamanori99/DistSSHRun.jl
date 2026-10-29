@@ -1124,11 +1124,11 @@ function _go_run!(
         n_slots > 0 && _kit_progress_mark!("sync")
         # `sync=false`: remotes must already have Project.toml + deps.
         # With `:ship_tree` / `:sync`, copy first.
-        if sync_mode === false
-            if !isempty(child_hosts)
-                sess_rr = _work_root_for_hosts(child_hosts, sess_rr)
-            end
-            _go_assert_remotes_ready!(child_hosts, sess_rr)
+        # `run_rr` is assigned once so later `@async` does not capture a boxed bind.
+        run_rr = if sync_mode === false
+            rr = isempty(child_hosts) ? sess_rr : _work_root_for_hosts(child_hosts, sess_rr)
+            _go_assert_remotes_ready!(child_hosts, rr)
+            rr
         elseif !isempty(child_hosts)
             sync_mode === :rsync && _throw_rsync_removed()
             sync_session = KitSession(
@@ -1164,8 +1164,6 @@ function _go_run!(
                 )
             end
             if sync_mode === :ship_tree
-                shipped = _shipped_src()
-                shipped !== nothing && (sess_rr = shipped)
                 inst_julia = julia === nothing || strip(String(julia)) == "auto" ?
                     "auto" : String(julia)
                 inst = instantiate_after_ship!(sync_session; julia = inst_julia)
@@ -1189,9 +1187,12 @@ function _go_run!(
                     )
                 end
             end
-            _go_assert_remotes_ready!(child_hosts, sess_rr)
+            rr = something(_shipped_src(), sess_rr)
+            _go_assert_remotes_ready!(child_hosts, rr)
+            rr
+        else
+            sess_rr
         end
-        run_rr = sess_rr
 
         verify_go_slots_match_job!(
             proj,
