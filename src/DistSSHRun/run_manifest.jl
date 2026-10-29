@@ -248,6 +248,7 @@ function write_kit_run_toml!(
         data["ok"] = result.ok
         data["exit_code"] = result.exit_code
         result.failed_step !== nothing && (data["failed_step"] = result.failed_step)
+        result.stop !== nothing && (data["stop"] = String(result.stop))
     end
     provenance !== nothing && (data["provenance"] = provenance)
     try
@@ -262,6 +263,28 @@ function write_kit_run_toml!(
         # best-effort only
     end
     _write_provenance_sidecar(output_dir, provenance)
+    return nothing
+end
+
+"""Set `stop` on an existing `run.toml`. Leaves the file alone when it is missing. Never throws."""
+function _stamp_run_toml_stop!(run_dir::AbstractString, stop::Symbol)
+    _kit_stop_symbol(stop) === nothing && return nothing
+    raw = read_kit_run_toml(run_dir)
+    raw === nothing && return nothing
+    data = Dict{String, Any}(String(k) => v for (k, v) in raw)
+    data["stop"] = String(stop)
+    try
+        d = canonical_local_path(run_dir)
+        isdir(d) || return nothing
+        dest = kit_run_toml_path(d)
+        tmp = dest * ".tmp"
+        open(tmp, "w") do io
+            TOML.print(io, data)
+        end
+        mv(tmp, dest; force = true)
+    catch
+        # best-effort only
+    end
     return nothing
 end
 

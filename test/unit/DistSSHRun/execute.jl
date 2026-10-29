@@ -147,6 +147,7 @@ using Test
             @test got.output_dir == d
             @test got.log_dir === nothing
             @test got.hosts == DistSSHRun.HostRunResult[]
+            @test got.stop === nothing
             DistSSHRun._write_kit_result_file(
                 DistSSHRun.KitRunResult(
                     false, :drive, d, nothing, "drive", 1,
@@ -175,6 +176,46 @@ using Test
             @test ride_got.ok
             write(joinpath(d, "kit.result"), "not toml {")
             @test DistSSHRun.kit_result_from_dir(d) === nothing
+            stopped = DistSSHRun.KitRunResult(
+                false, :go, d, nothing, "go", 1,
+                DistSSHRun.HostRunResult[], String[], :within_grace,
+            )
+            @test stopped.stop === :within_grace
+            @test_throws ArgumentError DistSSHRun.KitRunResult(
+                false, :go, d, nothing, "go", 1,
+                DistSSHRun.HostRunResult[], String[], :later,
+            )
+            DistSSHRun._write_kit_result_file(stopped; run_dir = nothing)
+            again = DistSSHRun.kit_result_from_dir(d)
+            @test again !== nothing
+            @test again.stop === :within_grace
+            @test occursin("within_grace", read(joinpath(d, "kit.result"), String))
+            write(
+                joinpath(d, "kit.result"),
+                """
+                ok = false
+                kind = "go"
+                exit_code = 1
+                stop = "nope"
+                """,
+            )
+            unknown = DistSSHRun.kit_result_from_dir(d)
+            @test unknown !== nothing
+            @test unknown.stop === nothing
+            DistSSHRun.write_kit_run_toml!(
+                d;
+                kind = :go,
+                result = DistSSHRun.KitRunResult(true, :go, d, nothing, nothing, 0),
+            )
+            before = DistSSHRun.read_kit_run_toml(d)
+            @test before["schema"] == 1
+            @test !haskey(before, "stop")
+            DistSSHRun._stamp_run_toml_stop!(d, :sigkill)
+            after = DistSSHRun.read_kit_run_toml(d)
+            @test after["schema"] == 1
+            @test after["kind"] == "go"
+            @test after["ok"] === true
+            @test after["stop"] == "sigkill"
         end
     end
 
@@ -1040,6 +1081,7 @@ using Test
             @test r.ok === false
             @test r.failed_step == "terminated"
             @test r.kind === :go
+            @test r.stop === nothing
             err = try
                 DistSSHRun.terminate_run!(d; interrupt_grace = -1)
                 nothing
@@ -1091,6 +1133,48 @@ using Test
         @test_throws ArgumentError DistSSHRun._resolve_interrupt_grace(-0.1)
         @test_throws ArgumentError DistSSHRun._resolve_interrupt_grace(NaN)
         @test_throws ArgumentError DistSSHRun._resolve_interrupt_grace(Inf)
+    end
+
+    @testset "signal ladder stop" begin
+        function sh(script)
+            return run(
+                pipeline(`sh -c $script`; stdout = devnull, stderr = devnull);
+                wait = false,
+            )
+        end
+        function ladder(script; interrupt_grace, grace)
+            # `touch` runs after `trap`, so the signal is not delivered
+            # before the ignore is installed.
+            d = mktempdir()
+            ready = joinpath(d, "ready")
+            quoted = "'" * replace(ready, "'" => "'\\''") * "'"
+            p = sh(script * "; touch $quoted; while true; do :; done")
+            try
+                t0 = time()
+                while !isfile(ready) && process_running(p) && (time() - t0) < 5
+                    sleep(0.02)
+                end
+                @assert isfile(ready)
+                return DistSSHRun._signal_ladder!(
+                    p; interrupt_grace = interrupt_grace, grace = grace,
+                )
+            finally
+                process_running(p) && kill(p, Base.SIGKILL)
+                try
+                    wait(p)
+                catch
+                end
+                rm(d; recursive = true, force = true)
+            end
+        end
+        @test DistSSHRun._signal_ladder!(0; interrupt_grace = 1, grace = 1) === nothing
+        dead = sh("exit 0")
+        wait(dead)
+        @test DistSSHRun._signal_ladder!(dead; interrupt_grace = 1, grace = 1) === nothing
+        @test ladder("trap '' INT"; interrupt_grace = 0.3, grace = 1) === :sigterm
+        @test ladder("trap '' INT TERM"; interrupt_grace = 0.2, grace = 0.2) === :sigkill
+        @test ladder("true"; interrupt_grace = 2, grace = 1) === :within_grace
+        @test ladder("true"; interrupt_grace = 0, grace = 1) === :no_sigint
     end
 
     @testset "terminate! sends one SIGINT" begin
@@ -1183,9 +1267,13 @@ using Test
                     sleep(0.05)
                 end
                 @test isfile(ready)
-                DistSSHRun.terminate!(kp; interrupt_grace = 0.4, grace = 2)
+                stopped = DistSSHRun.terminate!(kp; interrupt_grace = 0.4, grace = 2)
                 @test isfile(countp)
                 @test read(countp, String) == "1"
+                @test stopped.stop === :sigterm
+                recorded = DistSSHRun.kit_result_from_dir(dir)
+                @test recorded !== nothing
+                @test recorded.stop === :sigterm
             finally
                 process_running(proc) && kill(proc, Base.SIGKILL)
             end

@@ -1239,24 +1239,31 @@ SIGINT once, then SIGTERM, then SIGKILL.
 SIGTERM and does not wait, which is what `terminate!` did before
 `interrupt_grace` existed. SIGKILL is sent only when the process is still
 alive, then this waits up to one second.
+
+Returns the [`KitRunResult`](@ref) `stop` value, or `nothing` when `target`
+was already gone (no signal sent). `:within_grace` / `:sigterm` /
+`:sigkill` / `:no_sigint`.
 """
-function _signal_ladder!(target; interrupt_grace::Real, grace::Real)
+function _signal_ladder!(target; interrupt_grace::Real, grace::Real)::Union{Nothing, Symbol}
     if target isa Integer
         target <= 0 && return nothing
         Sys.isunix() || return nothing
     end
+    _target_alive(target) || return nothing
     if interrupt_grace > 0
         _signal_and_wait!(target, Base.SIGINT, interrupt_grace)
+        _target_alive(target) || return :within_grace
     end
     _signal_and_wait!(target, Base.SIGTERM, grace)
-    _target_alive(target) || return nothing
+    if !_target_alive(target)
+        return interrupt_grace > 0 ? :sigterm : :no_sigint
+    end
     _signal_and_wait!(target, Base.SIGKILL, _SIGNAL_KILL_WAIT_S)
-    return nothing
+    return interrupt_grace > 0 ? :sigkill : :no_sigint
 end
 
-function _signal_and_wait_pid!(pid::Integer, grace::Real; interrupt_grace::Real = 0)
-    _signal_ladder!(pid; interrupt_grace = interrupt_grace, grace = grace)
-    return nothing
+function _signal_and_wait_pid!(pid::Integer, grace::Real; interrupt_grace::Real = 0)::Union{Nothing, Symbol}
+    return _signal_ladder!(pid; interrupt_grace = interrupt_grace, grace = grace)
 end
 
 """Remove `kit.pid` in the same dirs as [`_write_kit_pid_file`](@ref), only if it still names `pid`."""
@@ -1284,8 +1291,11 @@ function _remove_kit_pid_file(
 end
 
 """Best-effort `kit.result` TOML next to `kit.pid`. Never throws."""
-function _write_kit_result_file(result::KitRunResult)
-    dirs = _kit_sidecar_dirs(result.output_dir, result.log_dir)
+function _write_kit_result_file(
+        result::KitRunResult;
+        run_dir::Union{Nothing, AbstractString} = kit_run_dir(),
+    )
+    dirs = _kit_sidecar_dirs(result.output_dir, result.log_dir; run_dir = run_dir)
     isempty(dirs) && return nothing
     data = Dict{String, Any}(
         "ok" => result.ok,
@@ -1308,6 +1318,7 @@ function _write_kit_result_file(result::KitRunResult)
     if !isempty(result.tokens)
         data["tokens"] = result.tokens
     end
+    result.stop !== nothing && (data["stop"] = String(result.stop))
     for d in dirs
         try
             mkpath(d)
@@ -1358,7 +1369,8 @@ function kit_result_from_dir(output_dir::AbstractString)::Union{Nothing, KitRunR
                 t isa AbstractString && push!(tokens, String(t))
             end
         end
-        return KitRunResult(ok, kind, od_s, ld_s, fs_s, Int(code), hosts, tokens)
+        stop = _kit_stop_symbol(get(raw, "stop", nothing))
+        return KitRunResult(ok, kind, od_s, ld_s, fs_s, Int(code), hosts, tokens, stop)
     catch
         return nothing
     end
@@ -1657,6 +1669,38 @@ function _execute_detached_env(extra::AbstractDict{<:AbstractString, <:AbstractS
     return env
 end
 
+function _result_with_stop(result::KitRunResult, stop::Union{Nothing, Symbol})::KitRunResult
+    parsed = _kit_stop_symbol(stop)
+    parsed === nothing && return result
+    result.stop === parsed && return result
+    return KitRunResult(
+        result.ok,
+        result.kind,
+        result.output_dir,
+        result.log_dir,
+        result.failed_step,
+        result.exit_code,
+        result.hosts,
+        result.tokens,
+        parsed,
+    )
+end
+
+"""Write `stop` onto `result` and the sidecars. `run_dir=nothing` does not use [`kit_run_dir`](@ref)."""
+function _persist_stop(
+        result::KitRunResult,
+        stop::Union{Nothing, Symbol};
+        run_dir::Union{Nothing, AbstractString} = nothing,
+    )::KitRunResult
+    stamped = _result_with_stop(result, stop)
+    stamped.stop === nothing && return stamped
+    _write_kit_result_file(stamped; run_dir = run_dir)
+    for d in _kit_sidecar_dirs(stamped.output_dir, stamped.log_dir; run_dir = run_dir)
+        _stamp_run_toml_stop!(d, stamped.stop)
+    end
+    return stamped
+end
+
 """
     terminate!(kp::KitProcess; grace=10, interrupt_grace=nothing) -> KitRunResult
 
@@ -1697,6 +1741,10 @@ plus that bound. `pkill` exit 1 means nothing matched and is success.
 Hosts that cannot be reached are named in one warning, and this still
 returns. The remote pattern is `[d]istsshkit-job:…`, so `pkill -f` does
 not match the `sh -c` line that contains the command.
+
+The returned [`KitRunResult`](@ref) `stop` is that ladder outcome. The same
+string is written to `kit.result` and, when `run.toml` already exists, to
+`stop` there. `schema` stays 1.
 """
 function terminate!(
         kp::KitProcess;
@@ -1705,12 +1753,12 @@ function terminate!(
     )::KitRunResult
     _require_nonnegative("grace", grace)
     seconds = _resolve_interrupt_grace(interrupt_grace)
-    _signal_ladder!(kp.process; interrupt_grace = seconds, grace = grace)
+    stop = _signal_ladder!(kp.process; interrupt_grace = seconds, grace = grace)
     sidecar = something(kp.run_dir, kp.output_dir)
     job_id = sidecar === nothing ? nothing : _read_kit_text_file(sidecar, "kit.job")
     hosts = sidecar === nothing ? String[] : _read_kit_hosts(sidecar)
     _reap_tagged_workers!(job_id, hosts)
-    return wait(kp)
+    return _persist_stop(wait(kp), stop; run_dir = kp.run_dir)
 end
 
 """
@@ -1720,7 +1768,8 @@ Like [`terminate!`](@ref) after losing [`KitProcess`](@ref): read `kit.pid` /
 `kit.job` / `kit.hosts` under `output_dir`. `interrupt_grace` is the same
 SIGINT stage, including the 30 second default and
 `DISTSSHKIT_WAIT_SIGINT_GRACE` in this process. `kind` is only used when
-`kit.result` is missing.
+`kit.result` is missing. `stop` is the ladder outcome, including on that
+synthetic result, and is written the same way as [`terminate!`](@ref).
 """
 function terminate_run!(
         output_dir::AbstractString;
@@ -1734,19 +1783,20 @@ function terminate_run!(
     _require_execute_kind!(kind)
     d = canonical_local_path(output_dir)
     rec = _read_kit_pid_record(d)
+    stop = nothing
     if rec !== nothing && kit_pid_file_running(d)
-        _signal_and_wait_pid!(rec.pid, grace; interrupt_grace = seconds)
+        stop = _signal_and_wait_pid!(rec.pid, grace; interrupt_grace = seconds)
     end
     job_id = _read_kit_text_file(d, "kit.job")
     _reap_tagged_workers!(job_id, _read_kit_hosts(d))
     recovered = kit_result_from_dir(d)
-    recovered !== nothing && return recovered
-    return KitRunResult(
-        false,
-        kind,
-        d,
-        log_dir === nothing ? nothing : canonical_local_path(String(log_dir)),
-        "terminated",
-        1,
-    )
+    result = recovered !== nothing ? recovered : KitRunResult(
+            false,
+            kind,
+            d,
+            log_dir === nothing ? nothing : canonical_local_path(String(log_dir)),
+            "terminated",
+            1,
+        )
+    return _persist_stop(result, stop; run_dir = d)
 end
