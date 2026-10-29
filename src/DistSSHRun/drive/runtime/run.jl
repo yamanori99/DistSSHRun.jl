@@ -385,8 +385,10 @@ function _run_drive_parsed_locked!(
                 DistSSHRun._throw_rsync_removed()
             end
             if sync_mode === :ship_tree
-                wr = DistSSHRun._work_root_for_hosts(
-                    host_names, DistSSHRun.session_remote_root(sync_session),
+                wr = DistSSHRun._project_work_root(
+                    host_names,
+                    sync_session.project;
+                    cli_override = sync_session.remote,
                 )
                 ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] =
                     DistSSHRun.remote_env_project_root(wr)
@@ -411,10 +413,11 @@ function _run_drive_parsed_locked!(
             # written around join; `add_drive_workers!` then rejects a
             # newline in the path, and an invalid SSH name fails that host.
             env_rr = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
-            base = isempty(env_rr) ?
-                DistSSHRun.resolve_remote_project_root(project_root) : env_rr
-            if !any(iscntrl, String(base))
-                wr = DistSSHRun._work_root_for_hosts(host_names, base)
+            cli = isempty(env_rr) ? nothing : env_rr
+            if cli === nothing || !any(iscntrl, String(cli))
+                wr = DistSSHRun._project_work_root(
+                    host_names, project_root; cli_override = cli,
+                )
                 if !any(iscntrl, String(wr))
                     ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] =
                         DistSSHRun.remote_env_project_root(wr)

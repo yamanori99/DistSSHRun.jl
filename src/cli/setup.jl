@@ -192,7 +192,9 @@ if !isdefined(@__MODULE__, :setup_main)
             end
             if (mode === :instantiate || mode === :runtest || mode === :check) &&
                     !isempty(opts.hosts)
-                op_path = DistSSHRun._work_root_for_hosts(opts.hosts, op_path)
+                op_path = DistSSHRun._project_work_root(
+                    opts.hosts, project; cli_override = opts.remote_path_override,
+                )
             end
             print_header("$(DistSSHRun.cli_heading("setup")) · $mode_name")
             kit_println()

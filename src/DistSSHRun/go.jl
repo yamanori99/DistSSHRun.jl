@@ -1126,7 +1126,8 @@ function _go_run!(
         # With `:ship_tree` / `:sync`, copy first.
         # `run_rr` is assigned once so later `@async` does not capture a boxed bind.
         run_rr = if sync_mode === false
-            rr = isempty(child_hosts) ? sess_rr : _work_root_for_hosts(child_hosts, sess_rr)
+            rr = isempty(child_hosts) ? sess_rr :
+                _project_work_root(child_hosts, proj; cli_override = remote)
             _go_assert_remotes_ready!(child_hosts, rr)
             rr
         elseif !isempty(child_hosts)
@@ -1187,7 +1188,7 @@ function _go_run!(
                     )
                 end
             end
-            rr = _work_root_for_hosts(child_hosts, sess_rr)
+            rr = _project_work_root(child_hosts, proj; cli_override = remote)
             _go_assert_remotes_ready!(child_hosts, rr)
             rr
         else

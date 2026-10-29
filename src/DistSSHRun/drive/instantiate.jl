@@ -40,7 +40,9 @@ function instantiate!(
             HostResult[];
             ok = false,
         )
-        remote_path = _work_root_for_hosts(session.hosts, session_remote_root(session))
+        remote_path = _project_work_root(
+            session.hosts, session.project; cli_override = session.remote,
+        )
         julia_path = isempty(strip(String(julia))) ? "auto" : String(julia)
         raw = instantiate_remotes(
             session.hosts,
@@ -69,7 +71,9 @@ function instantiate_after_ship!(
     isempty(session.hosts) && return nothing
     return _with_kit_inproc_run!(:instantiate) do
         apply_session_env!(session)
-        rr = _work_root_for_hosts(session.hosts, session_remote_root(session))
+        rr = _project_work_root(
+            session.hosts, session.project; cli_override = session.remote,
+        )
         any(h -> probe_remote_project_deps(h, rr) !== nothing, session.hosts) ||
             return nothing
         return instantiate!(session; julia = julia)

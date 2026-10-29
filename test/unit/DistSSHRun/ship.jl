@@ -79,6 +79,45 @@ end
             "/home/dev/app"
         @test DistSSHRun._work_root_for_hosts(["child-1"], "/other") !=
             "/home/dev/app/runs/id/src"
+        @test DistSSHRun._last_ship_src_for(["child-1"], "/home/dev/app/pkg") === nothing
+        wr = DistSSHRun._work_root_for_hosts(["child-1"], "/home/dev/app")
+        @test DistSSHRun._rehome_under_work_root(
+            "/home/dev/app/pkg", "/home/dev/app", wr,
+        ) == "/home/dev/app/runs/id/src/pkg"
+    finally
+        DistSSHRun._clear_last_ship!()
+    end
+end
+
+@testset "project work root rehomes workspace member onto shipped src" begin
+    DistSSHRun._clear_last_ship!()
+    DistSSHRun._LAST_SHIP[] = Dict{String, Any}(
+        "src" => "/home/dev/app/runs/id/src",
+        "hosts" => String["child-1"],
+        "remote_root" => "/home/dev/app",
+    )
+    DistSSHRun._SHIP_LAYOUT_ACTIVE[] = true
+    try
+        _with_tempdir() do tmp
+            write(
+                joinpath(tmp, "Project.toml"),
+                "[workspace]\nprojects = [\"pkg\"]\n",
+            )
+            write(
+                joinpath(tmp, "Manifest.toml"),
+                "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
+            )
+            mkpath(joinpath(tmp, "pkg"))
+            write(
+                joinpath(tmp, "pkg", "Project.toml"),
+                "name = \"Pkg\"\nuuid = \"11111111-1111-1111-1111-111111111111\"\n",
+            )
+            got = DistSSHRun._project_work_root(
+                ["child-1"], joinpath(tmp, "pkg");
+                cli_override = "/home/dev/app",
+            )
+            @test got == "/home/dev/app/runs/id/src/pkg"
+        end
     finally
         DistSSHRun._clear_last_ship!()
     end

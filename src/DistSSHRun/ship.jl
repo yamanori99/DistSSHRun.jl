@@ -350,6 +350,22 @@ function _work_root_for_hosts(
     end
 end
 
+"""Worker `--project` after ship: last-ship `src` under the deploy root, plus member rel.
+
+`_last_ship_src_for` matches `remote_deploy_root`, not `session_remote_root`.
+A workspace member is then joined onto that `src`.
+"""
+function _project_work_root(
+        hosts::AbstractVector{<:AbstractString},
+        local_project::AbstractString;
+        cli_override::Union{Nothing, AbstractString} = nothing,
+    )::String
+    deploy = remote_deploy_root(local_project; cli_override = cli_override)
+    mapped = resolve_remote_project_root(local_project; cli_override = cli_override)
+    wr = _work_root_for_hosts(hosts, deploy)
+    return _rehome_under_work_root(mapped, deploy, wr)
+end
+
 """Rewrite `mapped` from under `deploy` onto `work` (`runs/<id>/src` when that is the project)."""
 function _rehome_under_work_root(
         mapped::AbstractString,
@@ -372,7 +388,7 @@ function _remote_work_layout_path(
         hosts::AbstractVector{<:AbstractString},
     )::String
     mapped = remote_layout_path(local_abs, local_repo)
-    deploy = resolve_remote_project_root(local_repo)
+    deploy = remote_deploy_root(local_repo)
     wr = _work_root_for_hosts(hosts, deploy)
     return _rehome_under_work_root(mapped, deploy, wr)
 end

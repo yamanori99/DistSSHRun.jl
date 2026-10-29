@@ -665,14 +665,18 @@ function _setup_one!(
         return _sync_result_from_host_op(raw)
     elseif mode === :runtest
         preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
-        work_path = _work_root_for_hosts(hosts, remote_path)
+        work_path = _project_work_root(
+            hosts, session.project; cli_override = session.remote,
+        )
         raw = runtest_remotes(
             hosts, julia_path, work_path, session.project;
             path_anchor = session.project,
         )
         return _sync_result_from_host_op(raw)
     elseif mode === :check
-        work_path = _work_root_for_hosts(hosts, remote_path)
+        work_path = _project_work_root(
+            hosts, session.project; cli_override = session.remote,
+        )
         result = check_prerequisites(
             hosts,
             julia_path,
