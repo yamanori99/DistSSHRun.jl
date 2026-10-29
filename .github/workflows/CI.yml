@@ -597,7 +597,9 @@ jobs:
     needs: detect
     if: needs.detect.outputs.heavy == 'true' && (github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true')
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Cold nightly precompile plus the full suite does not fit in 20 minutes.
+    # The same suite on 1.13 does.
+    timeout-minutes: 30
     continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
