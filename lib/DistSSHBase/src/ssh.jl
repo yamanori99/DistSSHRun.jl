@@ -1123,9 +1123,14 @@ function _host_sync_remote_shell_cmd(
     return _ssh_cmd([flags..., ssh_opts()..., _ssh_host_args(host, remote_script)...])
 end
 
-# Hosts whose login shell already passed the POSIX probe. Failures are not stored.
+# Login-shell POSIX passes. Key is host plus live `ssh_opts()` (not host alone:
+# `DISTRIBUTED_SSH_OPTS` can change the login user). Failures are not stored.
 const _REMOTE_POSIX_SHELL_OK = Set{String}()
 const _REMOTE_POSIX_SHELL_LOCK = ReentrantLock()
+
+function _posix_shell_cache_key(host::AbstractString)::String
+    return string(strip(String(host)), '\0', join(ssh_opts(), '\0'))
+end
 
 """Drop cached POSIX login-shell passes (`host=nothing` → all hosts)."""
 function _clear_remote_posix_shell_cache!(host::Union{Nothing, AbstractString} = nothing)
@@ -1133,23 +1138,26 @@ function _clear_remote_posix_shell_cache!(host::Union{Nothing, AbstractString} =
         if host === nothing
             empty!(_REMOTE_POSIX_SHELL_OK)
         else
-            delete!(_REMOTE_POSIX_SHELL_OK, String(strip(String(host))))
+            prefix = string(strip(String(host)), '\0')
+            for k in collect(_REMOTE_POSIX_SHELL_OK)
+                startswith(k, prefix) && delete!(_REMOTE_POSIX_SHELL_OK, k)
+            end
         end
     end
     return nothing
 end
 
 function _remote_posix_shell_cached(host::AbstractString)::Bool
-    h = String(host)
+    key = _posix_shell_cache_key(host)
     return lock(_REMOTE_POSIX_SHELL_LOCK) do
-        return h in _REMOTE_POSIX_SHELL_OK
+        return key in _REMOTE_POSIX_SHELL_OK
     end
 end
 
 function _remote_posix_shell_remember!(host::AbstractString)
-    h = String(host)
+    key = _posix_shell_cache_key(host)
     lock(_REMOTE_POSIX_SHELL_LOCK) do
-        push!(_REMOTE_POSIX_SHELL_OK, h)
+        push!(_REMOTE_POSIX_SHELL_OK, key)
     end
     return nothing
 end
@@ -1218,7 +1226,7 @@ end
 
 """One-time POSIX login-shell probe. Rejects fish before `script` runs.
 
-A pass is cached for this process. Fail is not cached. Unknown leaves the
+A pass is cached for this process and these `ssh_opts()`. Fail is not cached. Unknown leaves the
 caller to run `script`; a later non-zero exit still calls
 [`_throw_if_nonposix_shell`](@ref).
 """

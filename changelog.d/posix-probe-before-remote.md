@@ -1,3 +1,3 @@
 category: breaking
 
-- The POSIX remote login-shell probe (`case x in x)`) runs once before the first remote command on that host in the process, including setup SSH preflight. fish is rejected without running the command. A host that passes is not probed again. A probe that is unknown still waits for a later non-zero exit, as before.
+- Setup SSH preflight and remote commands that go through `_remote_shell_status` run a POSIX login-shell probe (`case x in x)`) once per host and live `ssh_opts()` in the process. fish is rejected without running that command. `run_on_host` and other direct `_ssh_cmd` paths are not probed up front. A probe that is unknown still waits for a later non-zero exit, as before.

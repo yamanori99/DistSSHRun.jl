@@ -210,6 +210,8 @@ let _BASE = DistSSHBase
                 fish_lines = _nonposix_logged(logp)
                 @test count(_nonposix_probe_line, fish_lines) == 3
                 @test count(==(_BASE._REMOTE_SHELL_NAME_SCRIPT), fish_lines) == 3
+                @test !any(==("nope"), fish_lines)
+                @test !any(==("ok"), fish_lines)
                 @test !any(line -> occursin("case x in", line) && occursin("echo \$SHELL", line), fish_lines)
 
                 rm(logp; force = true)
@@ -251,6 +253,13 @@ let _BASE = DistSSHBase
                     @test hints[2] === nothing
                     @test _BASE._remote_posix_shell_cached("posix-threads.test")
                 end
+
+                _BASE._remote_posix_shell_remember!("opts-host.test")
+                @test _BASE._remote_posix_shell_cached("opts-host.test")
+                withenv("DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes") do
+                    @test !_BASE._remote_posix_shell_cached("opts-host.test")
+                end
+                @test _BASE._remote_posix_shell_cached("opts-host.test")
             finally
                 _BASE._clear_remote_posix_shell_cache!()
             end
