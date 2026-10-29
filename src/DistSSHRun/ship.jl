@@ -332,6 +332,33 @@ function _work_root_for_hosts(
     end
 end
 
+"""Rewrite `mapped` from under `deploy` onto `work` (`runs/<id>/src` when that is the project)."""
+function _rehome_under_work_root(
+        mapped::AbstractString,
+        deploy::AbstractString,
+        work::AbstractString,
+    )::String
+    d = rstrip(String(strip(String(deploy))), '/')
+    w = rstrip(String(strip(String(work))), '/')
+    m = String(mapped)
+    (isempty(d) || d == w) && return m
+    m == d && return w
+    startswith(m, d * "/") || return m
+    return w * m[(ncodeunits(d) + 1):end]
+end
+
+"""`remote_layout_path` re-homed onto the remote work root for `hosts`."""
+function _remote_work_layout_path(
+        local_abs::AbstractString,
+        local_repo::AbstractString,
+        hosts::AbstractVector{<:AbstractString},
+    )::String
+    mapped = remote_layout_path(local_abs, local_repo)
+    deploy = resolve_remote_project_root(local_repo)
+    wr = _work_root_for_hosts(hosts, deploy)
+    return _rehome_under_work_root(mapped, deploy, wr)
+end
+
 function _remote_prepare_run_leaf!(host::AbstractString, abs_root::AbstractString, run_id::AbstractString)
     runs = _posix_join(abs_root, "runs")
     leaf = _posix_join(runs, run_id)

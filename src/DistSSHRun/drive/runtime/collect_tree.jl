@@ -5,7 +5,7 @@ Recursively pull files under `local_root` from each host (**collect-missing** /
 - `merge=false`: skip relative paths that already exist locally.
 - `merge=true`:  rsync the whole tree (overwrites same-named files).
 
-Uses `DISTRIBUTED_REMOTE_PROJECT_ROOT` (via `remote_layout_path`) to map the local root to the correct path on each host.
+Uses the remote work root (`runs/<run_id>/src` after ship-tree) to map the local root onto each host.
 Respects `--quiet` / `--progress` via kit printers (kit log still written when open).
 """
 function drive_collect_tree(
@@ -44,9 +44,9 @@ function drive_collect_tree(
         end
     end
 
-    remote_root = remote_layout_path(local_root, repo_root)
-    if remote_root != local_root
-        writeln_field("Remote root", remote_root)
+    shown_root = DistSSHRun._remote_work_layout_path(local_root, repo_root, host_names)
+    if shown_root != local_root
+        writeln_field("Remote root", shown_root)
         writeln_both("")
     end
 
@@ -54,6 +54,9 @@ function drive_collect_tree(
     for host in host_names
         write_both("  $host: ")
         try
+            remote_root = DistSSHRun._remote_work_layout_path(
+                local_root, repo_root, String[String(host)],
+            )
             host_remote = ensure_remote_abs_path(host, remote_root)
             if host_remote === nothing
                 writeln_both("(skip: cannot resolve remote root $(repr(remote_root)))")

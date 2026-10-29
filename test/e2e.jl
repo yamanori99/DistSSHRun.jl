@@ -411,8 +411,9 @@ end
             _assert_ssh_e2e_ok(suite, "drive_worker_file", proc, out)
             _assert_kit_progress_done(collect_root; kind = :drive)
 
+            work_root = DistSSHRun._work_root_for_hosts(hosts, remote_root)
             worker_jl = """
-            d = $(repr(joinpath(remote_root, "output")))
+            d = $(repr(joinpath(work_root, "output")))
             io = IOBuffer()
             if isdir(d)
                 for (root, _, files) in walkdir(d)

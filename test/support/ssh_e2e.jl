@@ -373,7 +373,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         """
     end
 
-    # Overwrite `test/runtests.jl` on each remote (after rsync; does not dirty local git).
+    # Overwrite `test/runtests.jl` on each remote work root (after ship-tree).
     function _ssh_e2e_push_job_runtests!(
             hosts,
             remote_root::AbstractString;
@@ -381,15 +381,17 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         )
         g = _docker_ssh_generated()
         src = _ssh_e2e_job_runtests_src(; fail = fail)
+        work = DistSSHRun._work_root_for_hosts(String[String(h) for h in hosts], remote_root)
         mktemp() do path, io
             write(io, src)
             flush(io)
             for host in hosts
+                dest = "$(work)/test/runtests.jl"
                 proc, out = _run_subprocess(
                     Cmd(
                         [
                             "scp", "-F", g.ssh_config, path,
-                            "$(host):$(remote_root)/test/runtests.jl",
+                            "$(host):$(dest)",
                         ]
                     )
                 )

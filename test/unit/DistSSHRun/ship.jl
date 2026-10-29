@@ -64,6 +64,34 @@ end
     end
 end
 
+@testset "rehome collect path onto work root" begin
+    @test DistSSHRun._rehome_under_work_root(
+        "/home/dev/app/output",
+        "/home/dev/app",
+        "/home/dev/app/runs/x/src",
+    ) == "/home/dev/app/runs/x/src/output"
+    @test DistSSHRun._rehome_under_work_root(
+        "/home/dev/app",
+        "/home/dev/app",
+        "/home/dev/app/runs/x/src",
+    ) == "/home/dev/app/runs/x/src"
+    @test DistSSHRun._rehome_under_work_root(
+        "/tmp/other",
+        "/home/dev/app",
+        "/home/dev/app/runs/x/src",
+    ) == "/tmp/other"
+    @test DistSSHRun._rehome_under_work_root(
+        "~/app/output",
+        "~/app",
+        "~/app/runs/x/src",
+    ) == "~/app/runs/x/src/output"
+    @test DistSSHRun._rehome_under_work_root(
+        "/home/dev/app/output",
+        "/home/dev/app",
+        "/home/dev/app",
+    ) == "/home/dev/app/output"
+end
+
 @testset "record host and path" begin
     @test DistSSHRun._record_host_alias("mini") == "mini"
     @test DistSSHRun._record_host_alias("user@mini") == "mini"
