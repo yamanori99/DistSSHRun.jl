@@ -82,7 +82,6 @@ const _GIT_DIFF_FLAGS = (
 const _PROVENANCE_SOURCE_ENV = (
     commit = "DISTSSHKIT_SOURCE_COMMIT",
     dirty = "DISTSSHKIT_SOURCE_DIRTY",
-    diff_sha256 = "DISTSSHKIT_SOURCE_DIFF_SHA256",
     captured = "DISTSSHKIT_SOURCE_CAPTURED",
     untracked = "DISTSSHKIT_SOURCE_UNTRACKED",
 )
@@ -416,8 +415,9 @@ end
 
 Keys: `commit`, `dirty`, `diff_sha256`, `captured`, `untracked`.
 `captured` is `"run"`. `dirty` is a `Bool`. `untracked` is an `Int`.
+Schema 1 `run.toml` / `provenance.toml` omit `diff_sha256`; the snapshot
+dict still has it for Queue.
 `.distsshkit/` and `.distsshqueue/` are not uncommitted changes.
-A 0.x patch does not change these keys.
 """
 function git_source_snapshot(project::AbstractString)::Union{Nothing, Dict{String, Any}}
     return _git_source(project)
@@ -464,7 +464,7 @@ end
 
 function _source_from_user(source::AbstractDict)::Dict{String, Any}
     out = Dict{String, Any}()
-    for key in ("commit", "diff_sha256", "captured")
+    for key in ("commit", "captured")
         value = _provenance_lookup(source, key)
         value === nothing || (out[key] = string(value))
     end
@@ -493,7 +493,6 @@ function _source_from_env()::Union{Nothing, Dict{String, Any}}
     )
     for (field, envk) in (
             :dirty => _PROVENANCE_SOURCE_ENV.dirty,
-            :diff_sha256 => _PROVENANCE_SOURCE_ENV.diff_sha256,
             :captured => _PROVENANCE_SOURCE_ENV.captured,
             :untracked => _PROVENANCE_SOURCE_ENV.untracked,
         )
@@ -541,7 +540,10 @@ function _resolve_source(project::AbstractString)::Union{Nothing, Dict{String, A
     end
     from_env = _source_from_env()
     from_env === nothing || return from_env
-    return _git_source(project)
+    raw = _git_source(project)
+    raw === nothing && return nothing
+    built = _source_from_user(raw)
+    return isempty(built) ? nothing : built
 end
 
 function _parent_sections(snap::Dict{String, String})::Tuple{Dict{String, Any}, Dict{String, Any}}
@@ -633,6 +635,8 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
         _project_provenance(proj)
     end
     data = Dict{String, Any}(
+        "schema" => 1,
+        "writer" => "DistSSHRun $(dist_ssh_kit_version())",
         "julia" => Dict{String, Any}("parent" => julia),
         "machine" => Dict{String, Any}("parent" => machine),
         "workers" => started ? _worker_section() : Any[],
@@ -640,6 +644,22 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     )
     source = started ? _PROVENANCE_SOURCE_SNAP[] : _resolve_source(proj)
     source === nothing || (data["source"] = source)
+    ship = last_ship_result()
+    if ship !== nothing
+        shipped = Dict{String, Any}()
+        for key in (
+                "content_tree_hash", "algorithm", "bytes", "files", "host",
+                "run_dir_empty_at_start",
+            )
+            haskey(ship, key) || continue
+            val = ship[key]
+            (val isa AbstractString && isempty(val)) && continue
+            shipped[key] = val
+        end
+        get(ship, "external_symlinks_allowed", false) &&
+            (shipped["external_symlinks_allowed"] = true)
+        isempty(shipped) || (data["shipped"] = shipped)
+    end
     return data
 end
 

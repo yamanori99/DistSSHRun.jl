@@ -157,10 +157,10 @@ end
         cfg = DistSSHRun.PipelineConfig(
             driver = "job.jl",
             workers = ["child:host-a"],
-            sync = :rsync,
+            sync = :ship_tree,
         )
         session = DistSSHRun.kit_session_from_config(cfg)
-        @test DistSSHRun.resolve_pipeline_sync(cfg, session) === :rsync
+        @test DistSSHRun.resolve_pipeline_sync(cfg, session) === :ship_tree
         @test DistSSHRun.resolve_pipeline_collect(cfg, session)
 
         # Git parity off by default; sync mode does not flip it.
@@ -211,7 +211,15 @@ end
                 joinpath(dirname(abspath(driver)), "output")
         end
 
-        @test DistSSHRun._parse_env_sync_mode("rsync") === :rsync
+        err = try
+            DistSSHRun._parse_env_sync_mode("rsync")
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test err.msg == DistSSHRun.RSYNC_REMOVED_MSG
+        @test DistSSHRun._parse_env_sync_mode("ship-tree") === :ship_tree
         @test DistSSHRun._parse_env_sync_mode("sync") === :sync
         @test DistSSHRun._parse_env_sync_mode("off") === false
         @test DistSSHRun._parse_env_sync_mode("skip") === false
@@ -302,14 +310,14 @@ end
             @test parsed_require.skip_hash_check == false
 
             # rsync has no remote .git/; parity stays off even if requested via API
-            parsed_rsync = DistSSHRun.drive_parsed_from_session(
+            parsed_ship = DistSSHRun.drive_parsed_from_session(
                 session,
                 script;
-                sync = :rsync,
+                sync = :ship_tree,
                 skip_hash_check = false,
             )
-            @test parsed_rsync.sync_mode === :rsync
-            @test parsed_rsync.skip_hash_check == true
+            @test parsed_ship.sync_mode === :ship_tree
+            @test parsed_ship.skip_hash_check == true
         end
     end
 

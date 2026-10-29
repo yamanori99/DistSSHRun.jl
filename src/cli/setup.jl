@@ -2,11 +2,12 @@
 # `julia -m DistSSHKit setup` — deploy and verify the project on SSH hosts.
 #
 # Recommended workflow:
-#   1. --rsync → 2. --instantiate → 3. --check → 4. --runtest (optional) → `go` / `drive`
+#   1. --ship-tree → 2. --instantiate → 3. --check → 4. --runtest (optional) → `go` / `drive`
+#   instantiate/check/go follow latest runs/<run_id>/src when the root has no Project.toml.
 #   Optional git: --clone → --instantiate → --check → --sync / --pull
-#   Replace a remote tree: --delete, then --rsync or --clone
+#   Replace a clone dest: --delete, then --clone
 #
-#   julia --project=. -m DistSSHKit setup --rsync child:host1 child:host2
+#   julia --project=. -m DistSSHKit setup --ship-tree child:host1 child:host2
 #   julia --project=. -m DistSSHKit setup --sync child:host1 child:host2   # git updates
 #
 # See `--help`.
@@ -152,7 +153,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 :check => "Check Prerequisites",
                 :pull => "Pull",
                 :sync => "Sync",
-                :rsync_push => "rsync (no git)",
+                :ship_tree => "ship-tree",
                 :instantiate => "Instantiate",
                 :juliaup => "juliaup (align Julia)",
                 :juliaup_update => "juliaup update",
@@ -176,7 +177,7 @@ if !isdefined(@__MODULE__, :setup_main)
                         project;
                         cli_override = opts.remote_path_override,
                     )
-                elseif mode === :rsync_push
+                elseif mode === :ship_tree
                     DistSSHRun._checked_remote_dest(deploy_path)
                 elseif mode === :prune
                     DistSSHRun._checked_remote_dest(remote_path)
@@ -189,6 +190,12 @@ if !isdefined(@__MODULE__, :setup_main)
                 println_fatal(e.msg)
                 return Cint(1)
             end
+            if (mode === :instantiate || mode === :runtest || mode === :check) &&
+                    !isempty(opts.hosts)
+                op_path = DistSSHRun._project_work_root(
+                    opts.hosts, project; cli_override = opts.remote_path_override,
+                )
+            end
             print_header("$(DistSSHRun.cli_heading("setup")) · $mode_name")
             kit_println()
             writeln_field("Remote path", op_path)
@@ -196,7 +203,7 @@ if !isdefined(@__MODULE__, :setup_main)
 
             # Mutating / multi-host SSH ops: fail fast before confirmations.
             # `--delete` and `--prune` stay off SSH until `--confirm-path` matches.
-            if mode === :clone || mode === :rsync_push ||
+            if mode === :clone || mode === :ship_tree ||
                     mode === :instantiate || mode === :runtest
                 if !preflight_setup_ssh(opts.hosts)
                     print_err("SSH preflight failed. Fix connectivity, then retry.")
@@ -247,13 +254,25 @@ if !isdefined(@__MODULE__, :setup_main)
                 return Cint(ok ? 0 : 1)
             end
 
-            if mode === :rsync_push
-                return Cint(
-                    finish_host_op!(
-                            "rsync",
-                            rsync_push_to_remotes(opts.hosts, op_path, project; path_anchor = path_anchor),
-                        ) ? 0 : 1
+            if mode === :ship_tree
+                ok = finish_host_op!(
+                    "ship-tree",
+                    rsync_push_to_remotes(
+                        opts.hosts,
+                        op_path,
+                        project;
+                        path_anchor = path_anchor,
+                        allow_external_symlinks = opts.allow_external_symlinks,
+                    ),
                 )
+                rec = DistSSHRun.last_ship_result()
+                if ok && rec !== nothing
+                    src = rec["src"]
+                    kit_println("  Next: $(DistSSHRun.cli_m()) setup --instantiate --remote-path $src")
+                    kit_println("        $(DistSSHRun.cli_m()) setup --check --remote-path $src")
+                    kit_println()
+                end
+                return Cint(ok ? 0 : 1)
             end
 
             if mode === :instantiate
@@ -261,7 +280,7 @@ if !isdefined(@__MODULE__, :setup_main)
                     finish_host_op!(
                             "Instantiate",
                             instantiate_remotes(
-                                opts.hosts, opts.julia_path, remote_path, project;
+                                opts.hosts, opts.julia_path, op_path, project;
                                 path_anchor = path_anchor,
                             ),
                         ) ? 0 : 1
@@ -291,7 +310,7 @@ if !isdefined(@__MODULE__, :setup_main)
                     finish_host_op!(
                             "Pkg.test",
                             runtest_remotes(
-                                opts.hosts, opts.julia_path, remote_path, project;
+                                opts.hosts, opts.julia_path, op_path, project;
                                 path_anchor = path_anchor,
                             ),
                         ) ? 0 : 1
@@ -339,7 +358,7 @@ if !isdefined(@__MODULE__, :setup_main)
             require_clean = (mode === :sync || mode === :pull)
             check_code_sync = (mode === :check)
             result = check_prerequisites(
-                opts.hosts, opts.julia_path, remote_path, project;
+                opts.hosts, opts.julia_path, op_path, project;
                 path_anchor = path_anchor,
                 require_clean_git = require_clean,
                 check_code_sync = check_code_sync,

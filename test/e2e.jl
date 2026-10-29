@@ -93,31 +93,34 @@ end
             end
         end
 
-        @testset "setup --rsync" begin
-            _e2e_announce("setup --rsync")
+        @testset "setup --ship-tree" begin
+            _e2e_announce("setup --ship-tree")
             proc, out = _run_kit_setup(;
-                setup_args = ["--rsync", "--remote-path", remote_root, setup_hosts...],
+                setup_args = ["--ship-tree", "--remote-path", remote_root, setup_hosts...],
                 project_root = proj,
                 extra_env = _e2e_base_env(),
             )
-            _assert_ssh_e2e_ok(suite, "setup_rsync", proc, out; project = proj, kit = :setup)
+            _assert_ssh_e2e_ok(suite, "setup_ship_tree", proc, out; project = proj, kit = :setup)
             for host in hosts
                 p, ssh_out = _run_subprocess(
                     Cmd(
                         [
                             "ssh", "-F", g.ssh_config, host,
-                            "test -f $(remote_root)/Project.toml",
+                            "test -n \"\$(ls -d $(remote_root)/runs/*/src/Project.toml 2>/dev/null)\"",
                         ]
                     )
                 )
-                _assert_proc_ok(p, ssh_out; label = "rsync $(host) Project.toml")
+                _assert_proc_ok(p, ssh_out; label = "ship-tree $(host) Project.toml")
             end
         end
 
         @testset "setup --instantiate" begin
             _e2e_announce("setup --instantiate")
+            p_src, src_out = _ssh_e2e_ssh(hosts[1], "ls -1d $(remote_root)/runs/*/src 2>/dev/null | tail -n 1")
+            _assert_proc_ok(p_src, src_out; label = "latest ship src")
+            ship_src = strip(src_out)
             proc, out = _run_kit_setup(;
-                setup_args = ["--instantiate", "--remote-path", remote_root, setup_hosts...],
+                setup_args = ["--instantiate", "--remote-path", ship_src, setup_hosts...],
                 project_root = proj,
                 extra_env = _e2e_base_env(),
             )
@@ -408,8 +411,9 @@ end
             _assert_ssh_e2e_ok(suite, "drive_worker_file", proc, out)
             _assert_kit_progress_done(collect_root; kind = :drive)
 
+            work_root = _ssh_e2e_work_root(hosts[1], remote_root)
             worker_jl = """
-            d = $(repr(joinpath(remote_root, "output")))
+            d = $(repr(joinpath(work_root, "output")))
             io = IOBuffer()
             if isdir(d)
                 for (root, _, files) in walkdir(d)
@@ -586,9 +590,8 @@ end
             end
         end
 
-        # Own remote root: do not reuse `remote_root` (later nonempty `--rsync` must still refuse).
-        @testset "go --rsync empty remote" begin
-            _e2e_announce("go --rsync empty remote")
+        @testset "go --ship-tree empty remote" begin
+            _e2e_announce("go --ship-tree empty remote")
             oneshot = _ssh_e2e_go_rsync_remote_root()
             oneshot_env = _ssh_e2e_env(; remote_project = oneshot)
             try
@@ -600,7 +603,7 @@ end
                 _assert_ssh_e2e_ok(suite, "go_rsync_empty_delete", proc, out; project = proj, kit = :setup)
                 for host in hosts
                     p, ssh_out = _ssh_e2e_ssh(host, "test ! -e $(oneshot)/Project.toml")
-                    _assert_proc_ok(p, ssh_out; label = "go --rsync empty $(host) gone")
+                    _assert_proc_ok(p, ssh_out; label = "go --ship-tree empty $(host) gone")
                 end
 
                 proc, out = _run_kit_go(;
@@ -608,10 +611,10 @@ end
                     hosts = remote_tokens,
                     script_args = ["--n", "32"],
                     project_root = proj,
-                    go_flags = ["-y", "--rsync"],
+                    go_flags = ["-y", "--ship-tree"],
                     extra_env = merge(oneshot_env, Dict("DISTSSHKIT_QUIET" => "0")),
                 )
-                _assert_ssh_e2e_ok(suite, "go_rsync_empty", proc, out; project = proj, kit = :go)
+                _assert_ssh_e2e_ok(suite, "go_ship_tree_empty", proc, out; project = proj, kit = :go)
                 @test occursin(hosts[1], out)
                 @test occursin(hosts[2], out)
                 @test count(r"π ≈", out) >= 2
@@ -620,11 +623,11 @@ end
                         Cmd(
                             [
                                 "ssh", "-F", g.ssh_config, host,
-                                "test -f $(oneshot)/Project.toml",
+                                "test -n \"\$(ls -d $(oneshot)/runs/*/src/Project.toml 2>/dev/null)\"",
                             ]
                         )
                     )
-                    _assert_proc_ok(p, ssh_out; label = "go --rsync $(host) Project.toml")
+                    _assert_proc_ok(p, ssh_out; label = "go --ship-tree $(host) Project.toml")
                 end
             finally
                 proc, out = _run_kit_setup(;
@@ -657,7 +660,7 @@ end
             _assert_ssh_e2e_ok(suite, "tilde_delete", proc, out; project = proj, kit = :setup)
 
             proc, out = _run_kit_setup(;
-                setup_args = ["--rsync", "--remote-path", tilde_root, setup_hosts...],
+                setup_args = ["--ship-tree", "--remote-path", tilde_root, setup_hosts...],
                 project_root = proj,
                 extra_env = tilde_env,
             )
@@ -699,7 +702,7 @@ end
                     session, :delete;
                     confirm_path = Dict(h => remote_root for h in session.hosts),
                 )
-                rest = setup!(session, :rsync, :instantiate)
+                rest = setup!(session, :ship_tree, :instantiate)
                 _assert_ssh_e2e_api_ok(
                     suite,
                     "api_setup",
@@ -1002,16 +1005,14 @@ end
             @test gone
         end
 
-        @testset "setup --rsync refuses nonempty" begin
-            _e2e_announce("setup --rsync refuses nonempty")
+        @testset "setup --ship-tree onto an existing root" begin
+            _e2e_announce("setup --ship-tree onto an existing root")
             proc, out = _run_kit_setup(;
-                setup_args = ["--rsync", "--remote-path", remote_root, setup_hosts[1]],
+                setup_args = ["--ship-tree", "--remote-path", remote_root, setup_hosts[1]],
                 project_root = proj,
                 extra_env = merge(_e2e_base_env(), Dict("DISTSSHKIT_QUIET" => "0")),
             )
-            _ssh_e2e_record!(suite, "setup_rsync_refuse", proc, out; expect_ok = false, project = proj, kit = :setup)
-            @test proc.exitcode != 0
-            @test occursin("refusing", lowercase(out))
+            _assert_ssh_e2e_ok(suite, "setup_ship_tree_again", proc, out; project = proj, kit = :setup)
         end
 
         @testset "inter-child SSH (child-1 → child-2)" begin
@@ -1205,8 +1206,8 @@ end
             end
         end
 
-        @testset "setup --rsync sends a gitignore negation" begin
-            _e2e_announce("setup --rsync sends a gitignore negation")
+        @testset "setup --ship-tree sends a gitignore negation" begin
+            _e2e_announce("setup --ship-tree sends a gitignore negation")
             neg_root = "/home/dev/distsshkit-e2e-negation"
             _with_tempdir() do app_path
                 app = String(app_path)
@@ -1216,7 +1217,6 @@ end
                 mkpath(joinpath(app, "data"))
                 write(joinpath(app, "data", "a.dat"), "nope\n")
                 write(joinpath(app, "data", "keep.txt"), "keep\n")
-                mkpath(joinpath(app, "empty"))
                 run(pipeline(`git -C $app init -q`; stdout = devnull, stderr = devnull))
                 run(pipeline(`git -C $app config user.email "e2e@example.com"`; stdout = devnull, stderr = devnull))
                 run(pipeline(`git -C $app config user.name "e2e"`; stdout = devnull, stderr = devnull))
@@ -1232,18 +1232,16 @@ end
                 )
                 _assert_ssh_e2e_ok(suite, "negation_delete", proc, out; project = app, kit = :setup)
                 proc, out = _run_kit_setup(;
-                    setup_args = ["--rsync", "--remote-path", neg_root, setup_hosts...],
+                    setup_args = ["--ship-tree", "--remote-path", neg_root, setup_hosts...],
                     project_root = app,
                     extra_env = neg_env,
                 )
                 _assert_ssh_e2e_ok(suite, "negation_rsync", proc, out; project = app, kit = :setup)
                 for host in hosts
-                    p, ssh_out = _ssh_e2e_ssh(host, "test -f $(neg_root)/data/keep.txt")
+                    p, ssh_out = _ssh_e2e_ssh(host, "test -n \"\$(ls -d $(neg_root)/runs/*/src/data/keep.txt 2>/dev/null)\"")
                     _assert_proc_ok(p, ssh_out; label = "negation keep.txt $(host)")
-                    p, ssh_out = _ssh_e2e_ssh(host, "test ! -e $(neg_root)/data/a.dat")
+                    p, ssh_out = _ssh_e2e_ssh(host, "test -z \"\$(ls -d $(neg_root)/runs/*/src/data/a.dat 2>/dev/null)\"")
                     _assert_proc_ok(p, ssh_out; label = "negation a.dat absent $(host)")
-                    p, ssh_out = _ssh_e2e_ssh(host, "test -d $(neg_root)/empty")
-                    _assert_proc_ok(p, ssh_out; label = "negation empty dir $(host)")
                 end
             end
         end

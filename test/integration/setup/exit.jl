@@ -46,15 +46,21 @@ using Test
             extra_env = _fake_setup_remote_env(fresh_state()),
         ),
         (;
-            setup_args = ["--rsync", "child:host1"],
+            setup_args = ["--ship-tree", "child:host1"],
             extra_env = merge(
                 _fake_setup_remote_env(fresh_state()),
-                Dict("DISTSSHKIT_TEST_MKDIR_FAIL" => "1"),
+                Dict(
+                    "DISTSSHKIT_TEST_MKDIR_FAIL" => "1",
+                    "DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia",
+                ),
             ),
         ),
         (;
-            setup_args = ["--rsync", "child:host1", "child:host2"],
-            extra_env = _fake_setup_remote_env(fresh_state()),
+            setup_args = ["--ship-tree", "child:host1", "child:host2"],
+            extra_env = merge(
+                _fake_setup_remote_env(fresh_state()),
+                Dict("DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia"),
+            ),
         ),
         # `--julia` skips remote detect; fake ssh still sees `Pkg.test()`.
         (;
@@ -119,14 +125,14 @@ using Test
             @test occursin("Delete complete (2 host(s))", combined)
         end
 
-        @testset "rsync" begin
+        @testset "ship-tree" begin
             proc, combined = got[7]
             @test proc.exitcode == 1
-            @test occursin("rsync did not succeed on any host", combined)
+            @test occursin("ship-tree did not succeed on any host", combined)
 
             proc, combined = got[8]
             @test proc.exitcode == 0
-            @test occursin("rsync complete (2 host(s))", combined)
+            @test occursin("ship-tree complete (2 host(s))", combined)
         end
 
         @testset "runtest" begin

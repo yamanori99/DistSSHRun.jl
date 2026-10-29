@@ -16,6 +16,7 @@ function drive_parsed_from_session(
         parent_gb::Real = DEFAULT_PARENT_GB,
         sync_script::Bool = false,
         allow_mismatch = Symbol[],
+        allow_external_symlinks::Bool = false,
     )
     parent_workers = 0
     hosts = Tuple{String, Union{Int, Nothing}}[]
@@ -39,8 +40,8 @@ function drive_parsed_from_session(
     )
     sync_mode = sync isa Symbol ? sync : nothing
     # Default skip=true; --require-git / skip_hash_check=false enables checks.
-    # rsync never has remote .git/ parity.
-    effective_skip = skip_hash_check || sync_mode === :rsync
+    # ship-tree never has remote .git/ parity.
+    effective_skip = skip_hash_check || sync_mode === :ship_tree
     julia_exe = if julia === nothing || strip(String(julia)) == "" ||
             lowercase(strip(String(julia))) == "auto"
         nothing
@@ -72,5 +73,6 @@ function drive_parsed_from_session(
         mem_headroom = Float64(mem_headroom),
         parent_gb = Float64(parent_gb),
         allow_mismatch = collect(Symbol, allow_mismatch),
+        allow_external_symlinks = allow_external_symlinks,
     )
 end

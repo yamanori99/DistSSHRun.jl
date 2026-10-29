@@ -177,8 +177,8 @@ using Test
             @test r.sync_mode === :sync
             @test r.skip_hash_check == true
         end
-        let r = parse_drive_args(["--rsync", "s.jl"])
-            @test r.sync_mode === :rsync
+        let r = parse_drive_args(["--ship-tree", "s.jl"])
+            @test r.sync_mode === :ship_tree
             @test r.skip_hash_check == true
         end
         let r = parse_drive_args(["--require-git", "child:host1:1", "s.jl"])
@@ -198,9 +198,22 @@ using Test
             @test r.sync_mode === :sync
             @test r.skip_hash_check == true
         end
-        @test_throws ArgumentError parse_drive_args(["--sync", "--rsync", "s.jl"])
-        @test_throws ArgumentError parse_drive_args(["--require-git", "--rsync", "s.jl"])
-        @test_throws ArgumentError parse_drive_args(["--rsync", "--require-git", "s.jl"])
+        err = try
+            parse_drive_args(["--sync", "--rsync", "s.jl"])
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test err.msg == DistSSHRun.RSYNC_REMOVED_MSG
+        err2 = try
+            parse_drive_args(["--require-git", "--rsync", "s.jl"])
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err2 isa ArgumentError
+        @test err2.msg == DistSSHRun.RSYNC_REMOVED_MSG
         @test_throws ArgumentError parse_drive_args(["--require-git", "--skip-git-guard", "s.jl"])
         @test_throws ArgumentError parse_drive_args(["--sync", "--collect-missing", "out", "child:h1"])
         # Duplicate same sync flag is a no-op (only mixed flags throw).
@@ -227,9 +240,8 @@ using Test
         @test occursin("--require-git", txt)
         @test occursin("--sync", txt)
         @test occursin("--sync-script", txt)
-        @test occursin("--rsync", txt)
-        @test occursin("empty path", txt)
-        @test occursin("instantiates missing deps", txt)
+        @test occursin("--ship-tree", txt)
+        @test occursin("runs/<run_id>/src/", txt)
         @test occursin("post-run-new", txt)
         @test occursin("off by default", lowercase(txt))
         @test occursin("parent:N", txt)

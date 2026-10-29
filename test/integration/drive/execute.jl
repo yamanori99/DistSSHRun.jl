@@ -127,7 +127,7 @@ end
                 @test run_dir !== nothing
                 raw = DistSSHRun.read_kit_run_toml(run_dir)
                 @test raw !== nothing
-                @test raw["output_dir"] == DistSSHRun.canonical_local_path(dest)
+                @test raw["output_dir"] == "from_hook"
             end
         end
     end

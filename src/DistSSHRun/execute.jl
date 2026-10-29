@@ -25,6 +25,7 @@ const _EXECUTE_DETACHED_KW = Set{Symbol}(
         :sync_script,
         :spi_check,
         :allow_mismatch,
+        :allow_external_symlinks,
     )
 )
 const _EXECUTE_DETACHED_DRIVE_ONLY = (
@@ -73,6 +74,7 @@ function execute_detached_accepts(kw::Symbol; kind::Symbol)::Bool
         kw in (
             :repeat, :sync_script, :package, :log_dir, :enable_log, :skip_hash_check,
             :workers, :require_all_hosts, :mem_headroom, :parent_gb,
+            :allow_external_symlinks,
         )
     )
     return !(kw in (:repeat, :spi_check))
@@ -104,6 +106,8 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
     isempty(am) || (kw[:allow_mismatch] = am)
     if kind === :go
         kw[:sync] = parsed.sync
+        get(parsed, :allow_external_symlinks, false) &&
+            (kw[:allow_external_symlinks] = true)
         parsed.repeat === nothing || (kw[:repeat] = parsed.repeat)
         return kw
     end
@@ -112,6 +116,8 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
         return kw
     end
     kw[:sync] = parsed.sync_mode
+    get(parsed, :allow_external_symlinks, false) &&
+        (kw[:allow_external_symlinks] = true)
     kw[:log_dir] = parsed.log_dir
     kw[:enable_log] = parsed.enable_log
     kw[:package] = parsed.explicit_package
@@ -268,7 +274,8 @@ Keywords are then an allow-list (unknown names throw):
 `output_dir`, `args`, `project`, `sync`, `julia`, `quiet`, `verbosity`, `yes`,
 `remote`, `hosts_file`, `job_id`, `source`, `allow_mismatch`, and drive-only `log_dir`,
 `enable_log`, `package`, `require_all_hosts`, `skip_hash_check`,
-`mem_headroom`, `parent_gb`, `workers`, `sync_script`. `source` is a provenance
+`mem_headroom`, `parent_gb`, `workers`, `sync_script`,
+`allow_external_symlinks`. `source` is a provenance
 dict for every kind. Detached passes it as `DISTSSHKIT_SOURCE_*`. Go-only
 `repeat`. Ride: `spi_check` (default
 `false`). Detached argv passes `--spi-check` when true and `--no-spi-check`
@@ -484,6 +491,7 @@ function _execute_detached!(
         for k in (
                 :sync_script, :package, :log_dir, :enable_log, :skip_hash_check,
                 :workers, :require_all_hosts, :mem_headroom, :parent_gb,
+                :allow_external_symlinks,
             )
             haskey(kwargs, k) && throw(
                 ArgumentError(
@@ -537,6 +545,7 @@ function _execute_detached!(
     sync_script = get(kwargs, :sync_script, false)
     spi_check = get(kwargs, :spi_check, false)
     allow_mismatch = get(kwargs, :allow_mismatch, Symbol[])
+    allow_external_symlinks = get(kwargs, :allow_external_symlinks, false)
     sync_script isa Bool || throw(
         ArgumentError(
             "sync_script must be a Bool, got $(repr(sync_script))",
@@ -614,6 +623,7 @@ function _execute_detached!(
         sync_script = sync_script,
         spi_check = spi_check,
         allow_mismatch = allow_mismatch,
+        allow_external_symlinks = allow_external_symlinks === true,
     )
     extra = Dict{String, String}(
         "DISTRIBUTED_PROJECT_ROOT" => proj,
@@ -1550,6 +1560,7 @@ function _execute_detached_argv(
         sync_script::Bool = false,
         spi_check::Bool = false,
         allow_mismatch = Symbol[],
+        allow_external_symlinks::Bool = false,
     )::Vector{String}
     argv = String[String(kind)]
     push!(argv, "-y")
@@ -1568,13 +1579,17 @@ function _execute_detached_argv(
     output_dir !== nothing && push!(argv, "--output-dir", String(output_dir))
     if sync === :sync
         push!(argv, "--sync")
+    elseif sync === :ship_tree
+        push!(argv, "--ship-tree")
     elseif sync === :rsync
-        push!(argv, "--rsync")
+        _throw_rsync_removed()
     elseif sync === false && kind === :go
         push!(argv, "--skip-sync")
     elseif sync !== nothing && sync !== false
-        throw(ArgumentError("sync must be nothing, false, :sync, or :rsync, got $(repr(sync))"))
+        throw(ArgumentError("sync must be nothing, false, :sync, or :ship_tree, got $(repr(sync))"))
     end
+    allow_external_symlinks && sync === :ship_tree &&
+        push!(argv, "--allow-external-symlinks")
     if !_julia_spec_is_auto(julia)
         push!(argv, "--julia", String(strip(String(julia))))
     end

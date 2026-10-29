@@ -321,9 +321,7 @@ using Test
                         )
                         recorded = DistSSHRun.read_kit_run_toml(d1)
                         @test recorded !== nothing
-                        @test recorded["collect_dirs"] == [
-                            DistSSHRun.canonical_local_path(joinpath(project, "rel-out")),
-                        ]
+                        @test recorded["collect_dirs"] == ["rel-out"]
                     end
                 end
             finally
@@ -410,6 +408,9 @@ using Test
         @test !DistSSHRun.execute_detached_accepts(:workers; kind = :go)
         @test !DistSSHRun.execute_detached_accepts(:plan; kind = :go)
         @test !DistSSHRun.execute_detached_accepts(:plan; kind = :drive)
+        @test DistSSHRun.execute_detached_accepts(:allow_external_symlinks; kind = :go)
+        @test DistSSHRun.execute_detached_accepts(:allow_external_symlinks; kind = :drive)
+        @test !DistSSHRun.execute_detached_accepts(:allow_external_symlinks; kind = :ride)
         @test DistSSHRun.execute_detached_accepts(:allow_mismatch; kind = :go)
         @test DistSSHRun.execute_detached_accepts(:allow_mismatch; kind = :drive)
         @test DistSSHRun.execute_detached_accepts(:allow_mismatch; kind = :ride)
@@ -456,6 +457,24 @@ using Test
         @test "0.2" in argv
         @test "--best-effort" in argv
         @test !("--require-all-hosts" in argv)
+        @test !("--allow-external-symlinks" in argv)
+        argv_ext = DistSSHRun._execute_detached_argv(
+            :go, "job.jl", ["child:h1:1"], String[];
+            output_dir = nothing,
+            log_dir = nothing,
+            sync = :ship_tree,
+            julia = nothing,
+            quiet = true,
+            verbosity = nothing,
+            hosts_file = nothing,
+            enable_log = false,
+            package = nothing,
+            require_all_hosts = true,
+            skip_hash_check = true,
+            allow_external_symlinks = true,
+        )
+        @test "--ship-tree" in argv_ext
+        @test "--allow-external-symlinks" in argv_ext
         argv0 = DistSSHRun._execute_detached_argv(
             :drive, "job.jl", ["parent:1"], String[];
             output_dir = "/tmp/out",
@@ -575,6 +594,7 @@ using Test
         @test "--no-spi-check" in argv_ride
         @test !("--gb-per-worker" in argv_ride)
         @test "--output-dir" in argv_ride
+        @test !("--allow-external-symlinks" in argv_ride)
         argv_ride_spi = DistSSHRun._execute_detached_argv(
             :ride, "job.jl", ["parent:2"], String[];
             output_dir = "/tmp/out",
@@ -615,6 +635,11 @@ using Test
                 :output_dir, :args, :julia, :quiet, :verbosity, :sync,
             ]
         )
+        go_ext = DistSSHRun.parse_go_args(
+            ["--ship-tree", "--allow-external-symlinks", "child:h1:1", "job.jl"],
+        )
+        @test DistSSHRun.execute_kwargs_from_parsed(go_ext; kind = :go)[:allow_external_symlinks] ===
+            true
         go_r = DistSSHRun.parse_go_args(["--repeat", "8", "job.jl"])
         @test DistSSHRun.execute_kwargs_from_parsed(go_r; kind = :go)[:repeat] == 8
 

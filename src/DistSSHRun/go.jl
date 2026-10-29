@@ -337,13 +337,13 @@ function _go_assert_remote_ready!(host::AbstractString, remote_root::AbstractStr
 
         msg = "remote project not ready on $host ($remote_root).\n" *
             "Run setup first (pick one deploy path), then instantiate:\n" *
-            "  rsync:  julia --project=. -m DistSSHKit setup --rsync $(setup_cli_host_token(host))\n" *
+            "  ship:   julia --project=. -m DistSSHKit setup --ship-tree $(setup_cli_host_token(host))\n" *
             "  git:    julia --project=. -m DistSSHKit setup --clone $(setup_cli_host_token(host))\n" *
             "          (later updates: setup --sync $(setup_cli_host_token(host)))\n" *
             "  then:   julia --project=. -m DistSSHKit setup --instantiate $(setup_cli_host_token(host))\n" *
-            "Or one-shot onto an empty path: go --rsync (instantiates missing deps).\n" *
-            "Or from Julia: setup!(session, :rsync, :instantiate)\n" *
-            "  (or go!(…; sync=:rsync); or :clone; repo=\"…\" then :instantiate; later :sync)\n" *
+            "Or one-shot: go --ship-tree (extracts to runs/<run_id>/src/ and instantiates).\n" *
+            "Or from Julia: setup!(session, :ship_tree, :instantiate)\n" *
+            "  (or go!(…; sync=:ship_tree); or :clone; repo=\"…\" then :instantiate; later :sync)\n" *
             "Set DISTRIBUTED_REMOTE_PROJECT_ROOT if the remote path is not the default."
         !isempty(ssh_hint) && (msg *= "\n  $ssh_hint")
         throw(ArgumentError(DistSSHBase._append_remote_shell_hint(String(host), code, msg)))
@@ -355,7 +355,7 @@ function _go_assert_remote_ready!(host::AbstractString, remote_root::AbstractStr
             ArgumentError(
                 "remote project deps not ready on $host ($remote_root): $deps_err\n" *
                     "Fix: julia --project=. -m DistSSHKit setup --instantiate $(setup_cli_host_token(host))\n" *
-                    "  (or setup!(session, :instantiate) after :rsync / :clone)",
+                    "  (or setup!(session, :instantiate) after :ship_tree / :clone)",
             )
         )
     end
@@ -549,6 +549,11 @@ function _go_remote_slot_rel(
         batch_dir::AbstractString,
         slot_label::AbstractString,
     )::String
+    if _SHIP_LAYOUT_ACTIVE[]
+        label = String(slot_label)
+        (isempty(label) || label == "." || label == "..") && (label = "slot")
+        return string("..", "/", label)
+    end
     proj_abs = canonical_local_path(proj)
     slot_abs = canonical_local_path(slot_dir)
     if _path_under_resolved(slot_abs, proj_abs) && slot_abs != proj_abs
@@ -694,6 +699,7 @@ function _go_pull_slot!(
     # Ensure trailing slash semantics: copy contents into slot_dir
     src = remote_slot * "/"
     dest = slot_dir * "/"
+    warn_openrsync_once()
     rsync = _host_sync_rsync_argv()
     transport = _host_sync_rsync_transport()
     cmd = ignorestatus(
@@ -863,6 +869,7 @@ function _go_complete!(
             output_dir = batch_dir,
             log_dir = batch_dir,
             result = kr,
+            project_root = String(anchor),
             provenance = assemble_provenance(),
         )
     end
@@ -896,10 +903,9 @@ both `output_dir` and `collect_spec::String` is an error. `collect_spec === fals
 means "skip collect" and is orthogonal to `output_dir`.
 
 Default `sync` is `false` (no pre-run sync; remotes are checked first — setup
-is assumed done). Pass `sync=:sync` or `sync=:rsync` to copy, then check. After `:rsync`,
+is assumed done). Pass `sync=:sync` or `sync=:ship_tree` to copy, then check. After `:ship_tree`,
 hosts that still lack Manifest deps get [`instantiate!`](@ref) before the
-check. Use `sync=:rsync` only onto a missing/empty remote path (or
-`setup --delete` / `setup!(session, :delete)` first). `go!` has no git-parity
+check. `go!` has no git-parity
 gate; use [`drive!`](@ref) with `skip_hash_check=false` (CLI: `drive --require-git`)
 when you need that.
 
@@ -942,6 +948,7 @@ function go!(
         original_args::Vector{String} = String[],
         repeat::Union{Nothing, Integer} = nothing,
         allow_mismatch = Symbol[],
+        allow_external_symlinks::Bool = false,
     )::GoResult
     script_path = canonical_local_path(script)
     proj = canonical_local_path(project)
@@ -962,6 +969,8 @@ function go!(
     inherited_run = old_run isa AbstractString && !isempty(strip(old_run))
     try
         _reset_run_provenance!(proj)
+        _clear_last_ship!()
+        warn_project_sshflags(proj)
         _ensure_kit_run_dir!(:go, script_path; project = proj)
         return with_allow_mismatch(allow_mismatch) do
             return _go_run!(
@@ -983,6 +992,7 @@ function go!(
                 original_args,
                 repeat,
                 inherited_run,
+                allow_external_symlinks,
             )
         end
     finally
@@ -1010,6 +1020,7 @@ function _go_run!(
         original_args,
         repeat,
         inherited_run::Bool,
+        allow_external_symlinks::Bool = false,
     )
     anchor = something(path_anchor, proj)
 
@@ -1112,10 +1123,15 @@ function _go_run!(
         sync_mode = something(sync, false)
         n_slots > 0 && _kit_progress_mark!("sync")
         # `sync=false`: remotes must already have Project.toml + deps.
-        # With `:rsync` / `:sync`, copy first (empty `~/jobs/<id>` is expected).
-        if sync_mode === false
-            _go_assert_remotes_ready!(child_hosts, sess_rr)
+        # With `:ship_tree` / `:sync`, copy first.
+        # `run_rr` is assigned once so later `@async` does not capture a boxed bind.
+        run_rr = if sync_mode === false
+            rr = isempty(child_hosts) ? sess_rr :
+                _project_work_root(child_hosts, proj; cli_override = remote)
+            _go_assert_remotes_ready!(child_hosts, rr)
+            rr
         elseif !isempty(child_hosts)
+            sync_mode === :rsync && _throw_rsync_removed()
             sync_session = KitSession(
                 project = proj,
                 workers = [format_placement_token(:child, h) for h in child_hosts],
@@ -1124,7 +1140,11 @@ function _go_run!(
                 verbosity = verbosity,
                 yes = yes,
             )
-            sync_result = sync!(sync_session; mode = sync_mode)
+            sync_result = sync!(
+                sync_session;
+                mode = sync_mode,
+                allow_external_symlinks = allow_external_symlinks,
+            )
             if !sync_result.ok
                 completed = true
                 return _go_complete!(
@@ -1144,10 +1164,10 @@ function _go_run!(
                     place,
                 )
             end
-            if sync_mode === :rsync
+            if sync_mode === :ship_tree
                 inst_julia = julia === nothing || strip(String(julia)) == "auto" ?
                     "auto" : String(julia)
-                inst = instantiate_after_rsync!(sync_session; julia = inst_julia)
+                inst = instantiate_after_ship!(sync_session; julia = inst_julia)
                 if inst !== nothing && !inst.ok
                     completed = true
                     return _go_complete!(
@@ -1168,13 +1188,17 @@ function _go_run!(
                     )
                 end
             end
-            _go_assert_remotes_ready!(child_hosts, sess_rr)
+            rr = _project_work_root(child_hosts, proj; cli_override = remote)
+            _go_assert_remotes_ready!(child_hosts, rr)
+            rr
+        else
+            sess_rr
         end
 
         verify_go_slots_match_job!(
             proj,
             slots;
-            remote_root = sess_rr,
+            remote_root = run_rr,
             julia = julia,
             allow = _ALLOW_MISMATCH[],
         )
@@ -1192,7 +1216,7 @@ function _go_run!(
                         script_path,
                         args,
                         batch_dir,
-                        sess_rr;
+                        run_rr;
                         quiet = quiet,
                         julia = julia,
                     )
@@ -1243,7 +1267,7 @@ function _go_run!(
                     err = nothing
                     outcome = try
                         _go_collect_slot!(
-                            slot, proj, batch_dir, sess_rr,
+                            slot, proj, batch_dir, run_rr,
                         )
                     catch e
                         err = e
@@ -1278,7 +1302,7 @@ function _go_run!(
             host = slot.host::String
             slot_dir = joinpath(batch_dir, slot.label)
             slot_rel = _go_remote_slot_rel(proj, slot_dir, batch_dir, slot.label)
-            _go_fetch_slot_provenance!(host, sess_rr, slot_rel, slot_dir)
+            _go_fetch_slot_provenance!(host, run_rr, slot_rel, slot_dir)
         end
         if any_run_fail[]
             completed = true

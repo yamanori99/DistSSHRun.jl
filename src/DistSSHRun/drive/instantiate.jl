@@ -18,7 +18,7 @@ Typical first-time remote prep:
 
 ```julia
 session = KitSession(workers=["child:user@h1"], remote="/path/to/project", yes=true)
-setup!(session, :rsync, :instantiate)  # or sync!(…; mode=:rsync) then instantiate!
+setup!(session, :ship_tree, :instantiate)  # or sync!(…; mode=:ship_tree) then instantiate!
 ```
 
 Also available as [`setup!`](@ref)`(session, :instantiate; julia=…)`.
@@ -40,7 +40,9 @@ function instantiate!(
             HostResult[];
             ok = false,
         )
-        remote_path = session_remote_root(session)
+        remote_path = _project_work_root(
+            session.hosts, session.project; cli_override = session.remote,
+        )
         julia_path = isempty(strip(String(julia))) ? "auto" : String(julia)
         raw = instantiate_remotes(
             session.hosts,
@@ -58,20 +60,25 @@ function instantiate!(
     end
 end
 
-"""After `sync!(; mode=:rsync)`, instantiate on hosts that still lack deps.
+"""After `sync!(; mode=:ship_tree)`, instantiate on hosts that still lack deps.
 
 Returns `nothing` when every host already resolves, else [`instantiate!`](@ref).
 """
-function instantiate_after_rsync!(
+function instantiate_after_ship!(
         session::KitSession;
         julia::AbstractString = "auto",
     )::Union{Nothing, SyncResult}
     isempty(session.hosts) && return nothing
     return _with_kit_inproc_run!(:instantiate) do
         apply_session_env!(session)
-        rr = session_remote_root(session)
+        rr = _project_work_root(
+            session.hosts, session.project; cli_override = session.remote,
+        )
         any(h -> probe_remote_project_deps(h, rr) !== nothing, session.hosts) ||
             return nothing
         return instantiate!(session; julia = julia)
     end
 end
+
+instantiate_after_rsync!(session::KitSession; julia::AbstractString = "auto") =
+    instantiate_after_ship!(session; julia = julia)

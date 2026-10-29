@@ -3,8 +3,9 @@
 # progress run is already active (`sync!` from drive must not steal the bar).
 
 function setup_progress_step_name(mode::Symbol)::String
-    mode === :rsync_push && return "rsync"
-    mode === :rsync && return "rsync"
+    mode === :rsync_push && return "ship-tree"
+    mode === :rsync && return "ship-tree"
+    mode === :ship_tree && return "ship-tree"
     mode === :juliaup_update && return "juliaup-update"
     return String(mode)
 end

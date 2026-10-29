@@ -18,11 +18,10 @@ drive!(session, "job.jl")  # uses `session.tokens`
 
 With `sync` omitted or `false`, prepare remotes with [`setup!`](@ref) or CLI
 `setup` first; remotes are checked before execution. Optional
-`sync=:sync` / `sync=:rsync` copies, then checks. After `:rsync`, hosts that
+`sync=:sync` / `sync=:ship_tree` copies, then checks. After `:ship_tree`, hosts that
 still lack Manifest deps get [`instantiate!`](@ref) (same as CLI
-`drive --rsync`). Use `sync=:rsync` only onto a missing/empty remote path
-(or `setup --delete` / `setup!(session, :delete)` first).
-Git parity is off by default (`skip_hash_check=true`). With `sync=:rsync`, parity
+`drive --ship-tree`).
+Git parity is off by default (`skip_hash_check=true`). With `sync=:ship_tree`, parity
 stays off even if `skip_hash_check=false` (no remote `.git/`).
 `require_all_hosts=true` (the default; CLI `--require-all-hosts`) fails unless
 every explicit `parent:N` / `child:NAME:N` joined, stayed through the run,
@@ -69,6 +68,7 @@ function drive!(
         parent_gb::Real = DEFAULT_PARENT_GB,
         sync_script::Bool = false,
         allow_mismatch = Symbol[],
+        allow_external_symlinks::Bool = false,
     )::DriveResult
     return _drive_frame(; cli = false) do
         return _with_kit_inproc_run!(:drive) do
@@ -97,6 +97,7 @@ function drive!(
                     parent_gb = parent_gb,
                     sync_script = sync_script,
                     allow_mismatch = allow_mismatch,
+                    allow_external_symlinks = allow_external_symlinks,
                 )
                 apply_kit_cli_session!(parsed.cli_session)
                 original_args = copy(ARGS)

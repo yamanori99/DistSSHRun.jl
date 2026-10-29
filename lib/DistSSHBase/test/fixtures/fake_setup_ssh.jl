@@ -147,6 +147,27 @@ function main()
         exit(1)
     end
 
+    if occursin("__DSR_SHIP_SRC__", script)
+        home = get(ENV, "DISTSSHKIT_TEST_REMOTE_HOME", "/home/distsshkit")
+        root = home * "/ship-root"
+        if isfile(joinpath(tree, "Project.toml"))
+            println(root)
+            exit(0)
+        end
+        runs = joinpath(tree, "runs")
+        if isdir(runs)
+            for id in sort(readdir(runs); rev = true)
+                src = joinpath(runs, id, "src")
+                if isfile(joinpath(src, "Project.toml"))
+                    println(joinpath(root, "runs", id, "src"))
+                    exit(0)
+                end
+            end
+        end
+        println(root)
+        exit(0)
+    end
+
     if occursin("test -f", script) && occursin("Project.toml", script)
         if isfile(joinpath(tree, "Project.toml"))
             println("ok")
@@ -332,6 +353,28 @@ function main()
                 end
             end
         end
+        exit(0)
+    end
+
+    if strip(script) == "cd -P ~ && pwd -P"
+        println(get(ENV, "DISTSSHKIT_TEST_REMOTE_HOME", "/home/distsshkit"))
+        exit(0)
+    end
+
+    if occursin("elif test -e", script) && occursin("printf", script)
+        home = get(ENV, "DISTSSHKIT_TEST_REMOTE_HOME", "/home/distsshkit")
+        println(home * "/ship-root")
+        exit(0)
+    end
+
+    if occursin("Sys.BINDIR", script)
+        w = get(ENV, "DISTSSHKIT_TEST_JULIA_WHICH", "")
+        println(isempty(w) ? "/usr/bin/julia" : w)
+        exit(0)
+    end
+
+    if occursin("Tar.extract", script)
+        mkpath(tree)
         exit(0)
     end
 

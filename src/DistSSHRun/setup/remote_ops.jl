@@ -9,39 +9,35 @@ ensure_remote_dir(host::String, remote_path::String)::Bool =
 """
     rsync_push_to_remotes(hosts, remote_path, project; path_anchor=project)
 
-rsync the local project tree to each host, bypassing git entirely (no commit,
-no push/pull, no hash verification). Excludes `.git/` and `.distsshkit/`.
-Inside a git work tree the send list is `git ls-files` with each directory's
-`.gitignore` (negation applies; `.git/info/exclude` and global excludes do not).
-Outside one, rsync's per-directory `.gitignore` filter applies, and negation
-patterns are not. The destination must be missing or empty.
-
-**Safety:** refuses if `remote_path` already has any files. Delete first with
-`setup --delete`, then `--rsync` onto a missing/empty path. For git-managed
-remotes, use `setup --sync` / `--pull` for later updates.
+Ship the git file list as a tar into `remote_path/runs/<run_id>/src/` on each
+host (`setup --ship-tree`). The name is historical; this is not rsync.
 
 Returns `(cancelled, succeeded, failed)`:
 - `cancelled=true` when the user did not confirm
-- otherwise per-host rsync outcomes (`succeeded` / `failed` counts)
+- otherwise per-host ship outcomes (`succeeded` / `failed` counts)
 """
 function rsync_push_to_remotes(
         hosts::Vector{String},
         remote_path::String,
         project::AbstractString;
         path_anchor::AbstractString = project,
+        allow_external_symlinks::Bool = false,
     )::NamedTuple
-    raw = rsync_project_to_hosts!(
+    raw = ship_project_to_hosts!(
         hosts,
         project,
         remote_path;
         confirm = true,
         report = true,
         path_anchor = path_anchor,
+        allow_external_symlinks = allow_external_symlinks,
     )
+    ok = count(hr -> hr.ok, raw.host_results)
+    failed = count(hr -> !hr.ok, raw.host_results)
     return host_op_result(
         cancelled = raw.cancelled,
-        succeeded = raw.succeeded,
-        failed = raw.failed,
+        succeeded = ok,
+        failed = failed,
     )
 end
 

@@ -67,17 +67,18 @@ function _env_verbosity()::Union{Nothing, Symbol}
     return nothing
 end
 
-"""Set exclusive sync mode (`:sync` / `:rsync` / `false`); throw if conflicting."""
+"""Set exclusive sync mode (`:sync` / `:ship_tree` / `false`); throw if conflicting."""
 function _kit_set_sync_mode!(
         current::Union{Nothing, Symbol, Bool},
         next::Union{Symbol, Bool};
         source::AbstractString = "kit",
     )
+    next === :rsync && _throw_rsync_removed()
     if current !== nothing && current !== next
         msg = if source == "go"
-            "$source: use only one of --sync / --rsync / --skip-sync / --skip-git-guard"
+            "$source: use only one of --sync / --ship-tree / --skip-sync / --skip-git-guard"
         else
-            "$source: use only one of --sync / --rsync"
+            "$source: use only one of --sync / --ship-tree"
         end
         throw(ArgumentError(msg))
     end

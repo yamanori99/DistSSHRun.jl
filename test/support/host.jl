@@ -31,6 +31,18 @@ if !isdefined(Main, :_write_host_project!)
         return nothing
     end
 
+    function _git_init_min!(proj)
+        git = Sys.which("git")
+        git === nothing && return nothing
+        isdir(joinpath(proj, ".git")) && return nothing
+        run(`$git -C $proj init --quiet`)
+        run(`$git -C $proj config user.email t@t.t`)
+        run(`$git -C $proj config user.name t`)
+        run(`$git -C $proj add -A`)
+        run(`$git -C $proj commit --quiet -m init`)
+        return nothing
+    end
+
     function _mktemp_host(f::Function)
         return _with_tempdir() do path
             f(path)

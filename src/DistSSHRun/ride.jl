@@ -625,7 +625,8 @@ function _ride_run!(
         hint_surface::Symbol,
         inherited_run::Bool,
     )
-    _reset_run_provenance!(String(project))
+    project_root_abs = canonical_local_path(project)
+    _reset_run_provenance!(project_root_abs)
     tok = String[String(t) for t in tokens]
     wp = try
         _ride_resolve_plan(tok)
@@ -707,7 +708,7 @@ function _ride_run!(
         try
             if progress_started
                 footer = if progress_ok
-                    display_path(batch_dir, canonical_local_path(project))
+                    display_path(batch_dir, project_root_abs)
                 else
                     nothing
                 end
@@ -728,6 +729,7 @@ function _ride_run!(
                         output_dir = batch_dir,
                         log_dir = nothing,
                         result = kr,
+                        project_root = project_root_abs,
                         provenance = assemble_provenance(),
                     )
                 end

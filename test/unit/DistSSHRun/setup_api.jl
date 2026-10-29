@@ -53,9 +53,6 @@ using Test
                 @test occursin("kind=setup", body)
                 @test occursin("label=delete/$host", body)
 
-                # Fresh empty remote then rsync+instantiate path (fake rsync creates tree).
-                chained = DistSSHRun.setup!(session, :rsync)
-                @test chained isa DistSSHRun.SyncResult
                 tested = DistSSHRun.setup!(session, :runtest; julia = "/bin/echo")
                 @test tested.ok && !tested.cancelled
 
@@ -326,7 +323,7 @@ using Test
         end
     end
 
-    @testset "multi-mode stops after rsync refuse" begin
+    @testset "multi-mode ship-tree needs a git work tree" begin
         _with_fake_remotes() do state_dir
             _with_tempdir() do proj
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
@@ -343,11 +340,7 @@ using Test
                     yes = true,
                     quiet = true,
                 )
-                _, res = _capture_stdio() do _, _
-                    DistSSHRun.setup!(session, :rsync, :instantiate)
-                end
-                @test !res.ok
-                # Nonempty tree still there: instantiate must not have been the stop reason.
+                @test_throws ArgumentError DistSSHRun.setup!(session, :ship_tree, :instantiate)
                 @test isfile(joinpath(tree, "keepme.txt"))
             end
         end
@@ -559,7 +552,7 @@ using Test
                 @test isfile(joinpath(tree, "keepme.txt"))
 
                 rsync_err = try
-                    DistSSHRun.setup!(session, :rsync; confirm_path = "~/App.jl")
+                    DistSSHRun.setup!(session, :ship_tree; confirm_path = "~/App.jl")
                     nothing
                 catch e
                     e
@@ -568,7 +561,7 @@ using Test
                 @test occursin("confirm_path", rsync_err.msg)
                 @test isfile(joinpath(tree, "keepme.txt"))
 
-                for modes in ((:delete, :prune), (:delete, :rsync))
+                for modes in ((:delete, :prune), (:delete, :ship_tree))
                     chain_err = try
                         DistSSHRun.setup!(session, modes...; confirm_path = "~/App.jl")
                         nothing

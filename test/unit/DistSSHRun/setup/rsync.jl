@@ -84,6 +84,10 @@ using Test
             cmd = DistSSHRun._host_sync_remote_shell_cmd("host.test", "true")
             @test cmd.exec[1] == DistSSHRun._ssh_exe()
             @test "-n" in cmd.exec
+            fed = DistSSHRun._host_sync_remote_shell_cmd(
+                "host.test", "true"; forward_stdin = true,
+            )
+            @test !("-n" in fed.exec)
         end
         withenv(
             "DISTSSHKIT_TEST" => nothing,
@@ -134,6 +138,13 @@ using Test
         write(joinpath(smoke_project, "Project.toml"), "name = \"RsyncSmoke\"\n")
         write(joinpath(smoke_project, "Manifest.toml"), "# lock\n")
         write(joinpath(smoke_project, "smoke.jl"), "smoke = 1\n")
+        if Sys.which("git") !== nothing
+            run(`git -C $smoke_project init --quiet`)
+            run(`git -C $smoke_project config user.email t@t.t`)
+            run(`git -C $smoke_project config user.name t`)
+            run(`git -C $smoke_project add -A`)
+            run(`git -C $smoke_project commit --quiet -m init`)
+        end
         withenv("DISTSSHKIT_YES" => nothing) do
             prev_ni = DistSSHRun.kit_noninteractive()
             DistSSHRun.set_kit_noninteractive!(false)
@@ -145,12 +156,13 @@ using Test
                                 println(stdin_io, "")
                                 flush(stdin_io)
                                 seekstart(stdin_io)
-                                DistSSHRun.rsync_push_to_remotes(["host1"], remote_path, smoke_project)
+                                DistSSHRun.ship_project_to_hosts!(
+                                    ["host1"], smoke_project, remote_path; confirm = true,
+                                )
                             end
-                            @test result == (cancelled = true, succeeded = 0, failed = 0)
+                            @test result.cancelled
                             @test occursin("Cancelled.", out)
-                            @test occursin("bypasses git", out)
-                            @test occursin("Type 'rsync'", out)
+                            @test occursin("Type 'ship-tree'", out)
                             # #374: bar is suspended while stdin is read, then released.
                             @test nsus >= 1
                             @test DistSSHRun.KIT_PROGRESS_SUSPEND[] == 0
@@ -190,11 +202,13 @@ using Test
             host = "user@host.test"
             _mark_nonempty!(state_dir, host)
             DistSSHRun.apply_kit_cli_session!(DistSSHRun.KitCliSession(quiet = false, yes = true))
-            out, result = _capture_stdio() do _, _
-                DistSSHRun.rsync_push_to_remotes([host], remote_path, smoke_project)
+            _, result = _capture_stdio() do _, _
+                DistSSHRun.rsync_project_to_hosts!(
+                    [host], smoke_project, remote_path; confirm = false, report = false,
+                )
             end
-            @test result == (cancelled = false, succeeded = 0, failed = 1)
-            @test occursin("refusing to overwrite", out)
+            @test result.cancelled == false && result.failed == 1
+            @test occursin("refusing to overwrite", result.host_results[1].message)
         end
 
         _with_fake_remotes(extra_env = Dict("DISTSSHKIT_TEST_RSYNC_FAIL" => "1")) do _

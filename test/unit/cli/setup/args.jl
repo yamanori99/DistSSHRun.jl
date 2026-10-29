@@ -17,6 +17,7 @@ using Test
         @test occursin("fish and csh are unsupported", text)
         @test occursin("backslashes inside single quotes", text)
         @test occursin("must not start with '-'", text)
+        @test occursin("latest runs/<run_id>/src", text)
         @test occursin("control character", text)
         @test !occursin("fish is refused", text)
     end
@@ -33,8 +34,8 @@ using Test
         @test r.hosts == ["host1"]
     end
 
-    let r = parse_setup_args(["--rsync", "child:host1", "child:host2"])
-        @test r.mode == :rsync_push
+    let r = parse_setup_args(["--ship-tree", "child:host1", "child:host2"])
+        @test r.mode == :ship_tree
         @test r.hosts == ["host1", "host2"]
     end
 
@@ -56,13 +57,13 @@ using Test
 
     # The second mode flag fails immediately. Later flags are not applied.
     let err = try
-            parse_setup_args(["--check", "--rsync", "--pull", "child:host1"])
+            parse_setup_args(["--check", "--ship-tree", "--pull", "child:host1"])
             error("expected ArgumentError")
         catch e
             e
         end
         @test err isa ArgumentError
-        @test occursin("more than one mode (--check and --rsync)", err.msg)
+        @test occursin("more than one mode (--check and --ship-tree)", err.msg)
         @test occursin("help setup", err.msg)
         @test !occursin("--pull", err.msg)
         @test !occursin("--help", err.msg)

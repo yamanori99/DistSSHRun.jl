@@ -520,7 +520,7 @@ end
 """
     rsync_send_list(local_root, env; warn=false) -> Union{Nothing, Vector{String}}
 
-Same paths `setup --rsync` sends for a git work tree, relative to `local_root`.
+Same paths `setup --ship-tree` sends for a git work tree, relative to `local_root`.
 
 Returns `nothing` outside a git work tree. The caller then uses rsync's
 per-directory `.gitignore` filter (dir-merge). An empty list throws
