@@ -476,10 +476,13 @@ end
 """Run `script` on `host`. Returns `(exitcode, stdout)`.
 
 SSH's own failure (exit 255) throws `ArgumentError` from [`summarize_ssh_error`](@ref).
-A non-POSIX login shell throws `ArgumentError` and points to `help setup`.
-Other non-zero exits are returned so a missing command can stay `nothing`.
+A non-POSIX login shell throws `ArgumentError` and points to `help setup`
+before `script` runs. Other non-zero exits are returned so a missing command
+can stay `nothing`. A later failure still diagnoses the login shell when the
+up-front probe was unknown.
 """
 function _remote_shell_status(host::String, script::AbstractString)::Tuple{Int, String}
+    _ensure_posix_login_shell!(host)
     err_buf = IOBuffer()
     out_buf = IOBuffer()
     cmd = _host_sync_remote_shell_cmd(host, script)
@@ -1211,6 +1214,26 @@ function _probe_remote_login_shell(host::String)::Symbol
     occursin(_posix_probe_marker(nonce), got.out) && return :pass
     _posix_probe_is_strict() || return got.code == 0 ? :pass : :unknown
     return :fail
+end
+
+"""One-time POSIX login-shell probe. Rejects fish before `script` runs.
+
+A pass is cached for this process. Fail is not cached. Unknown leaves the
+caller to run `script`; a later non-zero exit still calls
+[`_throw_if_nonposix_shell`](@ref).
+"""
+function _ensure_posix_login_shell!(host::AbstractString)::Nothing
+    h = String(strip(String(host)))
+    isempty(h) && return nothing
+    _remote_posix_shell_cached(h) && return nothing
+    verdict = _probe_remote_login_shell(h)
+    if verdict === :pass
+        _remote_posix_shell_remember!(h)
+        return nothing
+    elseif verdict === :fail
+        throw(ArgumentError(_nonposix_login_shell_sentence(_remote_login_shell_name(h))))
+    end
+    return nothing
 end
 
 function _shell_name_from_stdout(stdout::AbstractString)::Union{Nothing, String}

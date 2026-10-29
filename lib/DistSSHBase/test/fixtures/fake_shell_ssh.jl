@@ -1,5 +1,5 @@
 #!/usr/bin/env julia
-# Login-shell double for the failure-time POSIX probe.
+# Login-shell double for the one-time POSIX probe.
 # SHELL_DOUBLE_MODE: posix (default), fish, probe255.
 # SHELL_DOUBLE_NOISE=1 prints a line before the POSIX marker.
 # SHELL_DOUBLE_LOG appends each remote script.
