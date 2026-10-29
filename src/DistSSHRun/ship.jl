@@ -311,11 +311,29 @@ function _remote_project_work_root(host::AbstractString, remote_root::AbstractSt
     return isempty(s) ? given : s
 end
 
+function _last_ship_src_for(
+        hosts::AbstractVector{<:AbstractString},
+        remote_root::AbstractString,
+    )::Union{Nothing, String}
+    src = _shipped_src()
+    src === nothing && return nothing
+    rec = last_ship_result()
+    rec === nothing && return nothing
+    shipped = get(rec, "hosts", nothing)
+    shipped isa AbstractVector || return nothing
+    have = Set{String}(String(h) for h in shipped)
+    all(h -> String(h) in have, hosts) || return nothing
+    stored = get(rec, "remote_root", nothing)
+    stored isa AbstractString || return nothing
+    String(stored) == String(remote_root) || return nothing
+    return src
+end
+
 function _work_root_for_hosts(
         hosts::AbstractVector{<:AbstractString},
         remote_root::AbstractString,
     )::String
-    src = _shipped_src()
+    src = _last_ship_src_for(hosts, remote_root)
     src !== nothing && return src
     isempty(hosts) && return String(remote_root)
     host = first(hosts)
@@ -498,6 +516,7 @@ function ship_project_to_hosts!(
                 end
             end
         end
+        ok_hosts = String[String(hr.host) for hr in host_results if hr.ok]
         rec = Dict{String, Any}(
             "algorithm" => "git-sha1",
             "content_tree_hash" => packed.hash,
@@ -506,11 +525,13 @@ function ship_project_to_hosts!(
             "run_id" => rid,
             "src" => src_logical,
             "host" => _record_host_alias(first(hosts)),
+            "hosts" => ok_hosts,
+            "remote_root" => String(remote_root),
             "run_dir_empty_at_start" => true,
         )
         allow_external_symlinks && (rec["external_symlinks_allowed"] = true)
         packed.tree_matches_head && (rec["tree_matches_head"] = true)
-        if any(hr -> hr.ok, host_results)
+        if !isempty(ok_hosts)
             _LAST_SHIP[] = rec
             _SHIP_LAYOUT_ACTIVE[] = true
         end

@@ -385,11 +385,11 @@ function _run_drive_parsed_locked!(
                 DistSSHRun._throw_rsync_removed()
             end
             if sync_mode === :ship_tree
-                shipped = DistSSHRun._shipped_src()
-                if shipped !== nothing
-                    ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] =
-                        DistSSHRun.remote_env_project_root(shipped)
-                end
+                wr = DistSSHRun._work_root_for_hosts(
+                    host_names, DistSSHRun.session_remote_root(sync_session),
+                )
+                ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] =
+                    DistSSHRun.remote_env_project_root(wr)
                 inst_julia = julia_exe === nothing ? "auto" : String(julia_exe)
                 inst = DistSSHRun.instantiate_after_ship!(
                     sync_session;

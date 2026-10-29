@@ -647,7 +647,10 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     ship = last_ship_result()
     if ship !== nothing
         shipped = Dict{String, Any}()
-        for key in ("content_tree_hash", "algorithm", "bytes", "files", "host")
+        for key in (
+                "content_tree_hash", "algorithm", "bytes", "files", "host",
+                "run_dir_empty_at_start",
+            )
             haskey(ship, key) || continue
             val = ship[key]
             (val isa AbstractString && isempty(val)) && continue

@@ -1187,7 +1187,7 @@ function _go_run!(
                     )
                 end
             end
-            rr = something(_shipped_src(), sess_rr)
+            rr = _work_root_for_hosts(child_hosts, sess_rr)
             _go_assert_remotes_ready!(child_hosts, rr)
             rr
         else

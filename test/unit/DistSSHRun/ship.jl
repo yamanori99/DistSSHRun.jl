@@ -64,6 +64,26 @@ end
     end
 end
 
+@testset "last-ship src is scoped to hosts and remote_root" begin
+    DistSSHRun._clear_last_ship!()
+    DistSSHRun._LAST_SHIP[] = Dict{String, Any}(
+        "src" => "/home/dev/app/runs/id/src",
+        "hosts" => String["child-1"],
+        "remote_root" => "/home/dev/app",
+    )
+    DistSSHRun._SHIP_LAYOUT_ACTIVE[] = true
+    try
+        @test DistSSHRun._work_root_for_hosts(["child-1"], "/home/dev/app") ==
+            "/home/dev/app/runs/id/src"
+        @test DistSSHRun._work_root_for_hosts(["-other"], "/home/dev/app") ==
+            "/home/dev/app"
+        @test DistSSHRun._work_root_for_hosts(["child-1"], "/other") !=
+            "/home/dev/app/runs/id/src"
+    finally
+        DistSSHRun._clear_last_ship!()
+    end
+end
+
 @testset "rehome collect path onto work root" begin
     @test DistSSHRun._rehome_under_work_root(
         "/home/dev/app/output",

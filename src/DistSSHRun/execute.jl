@@ -74,6 +74,7 @@ function execute_detached_accepts(kw::Symbol; kind::Symbol)::Bool
         kw in (
             :repeat, :sync_script, :package, :log_dir, :enable_log, :skip_hash_check,
             :workers, :require_all_hosts, :mem_headroom, :parent_gb,
+            :allow_external_symlinks,
         )
     )
     return !(kw in (:repeat, :spi_check))
@@ -490,6 +491,7 @@ function _execute_detached!(
         for k in (
                 :sync_script, :package, :log_dir, :enable_log, :skip_hash_check,
                 :workers, :require_all_hosts, :mem_headroom, :parent_gb,
+                :allow_external_symlinks,
             )
             haskey(kwargs, k) && throw(
                 ArgumentError(
@@ -1586,7 +1588,8 @@ function _execute_detached_argv(
     elseif sync !== nothing && sync !== false
         throw(ArgumentError("sync must be nothing, false, :sync, or :ship_tree, got $(repr(sync))"))
     end
-    allow_external_symlinks && push!(argv, "--allow-external-symlinks")
+    allow_external_symlinks && sync === :ship_tree &&
+        push!(argv, "--allow-external-symlinks")
     if !_julia_spec_is_auto(julia)
         push!(argv, "--julia", String(strip(String(julia))))
     end

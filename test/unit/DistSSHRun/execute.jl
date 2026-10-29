@@ -410,6 +410,7 @@ using Test
         @test !DistSSHRun.execute_detached_accepts(:plan; kind = :drive)
         @test DistSSHRun.execute_detached_accepts(:allow_external_symlinks; kind = :go)
         @test DistSSHRun.execute_detached_accepts(:allow_external_symlinks; kind = :drive)
+        @test !DistSSHRun.execute_detached_accepts(:allow_external_symlinks; kind = :ride)
         @test DistSSHRun.execute_detached_accepts(:allow_mismatch; kind = :go)
         @test DistSSHRun.execute_detached_accepts(:allow_mismatch; kind = :drive)
         @test DistSSHRun.execute_detached_accepts(:allow_mismatch; kind = :ride)
@@ -593,6 +594,7 @@ using Test
         @test "--no-spi-check" in argv_ride
         @test !("--gb-per-worker" in argv_ride)
         @test "--output-dir" in argv_ride
+        @test !("--allow-external-symlinks" in argv_ride)
         argv_ride_spi = DistSSHRun._execute_detached_argv(
             :ride, "job.jl", ["parent:2"], String[];
             output_dir = "/tmp/out",

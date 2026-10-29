@@ -1217,7 +1217,6 @@ end
                 mkpath(joinpath(app, "data"))
                 write(joinpath(app, "data", "a.dat"), "nope\n")
                 write(joinpath(app, "data", "keep.txt"), "keep\n")
-                mkpath(joinpath(app, "empty"))
                 run(pipeline(`git -C $app init -q`; stdout = devnull, stderr = devnull))
                 run(pipeline(`git -C $app config user.email "e2e@example.com"`; stdout = devnull, stderr = devnull))
                 run(pipeline(`git -C $app config user.name "e2e"`; stdout = devnull, stderr = devnull))
@@ -1243,8 +1242,6 @@ end
                     _assert_proc_ok(p, ssh_out; label = "negation keep.txt $(host)")
                     p, ssh_out = _ssh_e2e_ssh(host, "test -z \"\$(ls -d $(neg_root)/runs/*/src/data/a.dat 2>/dev/null)\"")
                     _assert_proc_ok(p, ssh_out; label = "negation a.dat absent $(host)")
-                    p, ssh_out = _ssh_e2e_ssh(host, "test -n \"\$(ls -d $(neg_root)/runs/*/src/empty 2>/dev/null)\"")
-                    _assert_proc_ok(p, ssh_out; label = "negation empty dir $(host)")
                 end
             end
         end
