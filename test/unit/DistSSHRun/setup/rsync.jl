@@ -84,6 +84,10 @@ using Test
             cmd = DistSSHRun._host_sync_remote_shell_cmd("host.test", "true")
             @test cmd.exec[1] == DistSSHRun._ssh_exe()
             @test "-n" in cmd.exec
+            fed = DistSSHRun._host_sync_remote_shell_cmd(
+                "host.test", "true"; forward_stdin = true,
+            )
+            @test !("-n" in fed.exec)
         end
         withenv(
             "DISTSSHKIT_TEST" => nothing,

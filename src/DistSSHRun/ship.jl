@@ -305,7 +305,7 @@ function _remote_extract_tar!(
     )
     err_buf = IOBuffer()
     out_buf = IOBuffer()
-    cmd = _host_sync_remote_shell_cmd(String(host), inner)
+    cmd = _host_sync_remote_shell_cmd(String(host), inner; forward_stdin = true)
     proc = open(tar_path) do io
         return run(
             pipeline(ignorestatus(cmd); stdin = io, stdout = out_buf, stderr = err_buf);
@@ -320,6 +320,11 @@ function _remote_extract_tar!(
     end
     code == 0 || DistSSHBase._throw_if_nonposix_shell(String(host), code, err)
     code == 0 || throw(ArgumentError("tar extract failed on $(host): $(strip(err) * strip(out))"))
+    filled, _ = _remote_shell_status(
+        String(host),
+        "test -n \"\$(ls -A $sq 2>/dev/null)\"",
+    )
+    filled == 0 || throw(ArgumentError("tar extract left empty dest on $(host): $src"))
     return nothing
 end
 

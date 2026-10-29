@@ -244,4 +244,16 @@ let _BASE = DistSSHBase
             end
         end
     end
+
+    @testset "ssh -n vs stdin forward" begin
+        Sys.which("ssh") === nothing && return
+        withenv("DISTSSHKIT_TEST" => nothing, "DISTSSHKIT_TEST_SSH" => nothing) do
+            cmd = _BASE._host_sync_remote_shell_cmd("host.test", "true")
+            @test "-n" in cmd.exec
+            fed = _BASE._host_sync_remote_shell_cmd(
+                "host.test", "true"; forward_stdin = true,
+            )
+            @test !("-n" in fed.exec)
+        end
+    end
 end
