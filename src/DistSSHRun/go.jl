@@ -735,7 +735,7 @@ function _go_slot_exitcode(
     return scp_failed ? 1 : ssh_code
 end
 
-"""Rsync one remote slot directory into the local slot directory (slot-overwrite collect)."""
+"""Tar one remote slot directory into the local slot directory (slot-overwrite collect)."""
 function _go_pull_slot!(
         host::AbstractString,
         remote_root::AbstractString,
@@ -744,24 +744,9 @@ function _go_pull_slot!(
     )::Bool
     mkpath(slot_dir)
     remote_slot = joinpath(remote_root, slot_rel)
-    # Ensure trailing slash semantics: copy contents into slot_dir
-    src = remote_slot * "/"
-    dest = slot_dir * "/"
-    warn_openrsync_once()
-    rsync = _host_sync_rsync_argv()
-    transport = _host_sync_rsync_transport()
-    cmd = ignorestatus(
-        Cmd(
-            vcat(
-                rsync,
-                _pull_rsync_opts(transport),
-                ["$(host):$src", dest],
-            ),
-        ),
-    )
     try
-        proc = run(pipeline(cmd; stdout = devnull, stderr = devnull); wait = true)
-        return proc.exitcode == 0
+        _pull_tar_tree!(host, remote_slot, slot_dir)
+        return true
     catch e
         _rethrow_missing_host_tool(e)
         return false

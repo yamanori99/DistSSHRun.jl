@@ -21,6 +21,29 @@ using Test
         touch(joinpath(tree, "keepme.txt"))
     end
 
+    @testset "tar pull refuses an escaping symlink" begin
+        outside = ""
+        mktempdir() do dest
+            outside = joinpath(dirname(dest), "tar-pull-secret")
+            write(outside, "nope\n")
+            write(joinpath(dest, "a.txt"), "a\n")
+            symlink(outside, joinpath(dest, "link"))
+            @test_throws ArgumentError DistSSHRun._finish_extracted_tree!(dest)
+        end
+        rm(outside; force = true)
+        mktempdir() do dest
+            write(joinpath(dest, "a.txt"), "a\n")
+            @test DistSSHRun._finish_extracted_tree!(dest) === nothing
+        end
+        filled = mktempdir()
+        write(joinpath(filled, "x"), "x")
+        @test_throws ArgumentError DistSSHRun._extract_remote_tar!("host.test", "/remote/out", filled)
+        rm(filled; force = true, recursive = true)
+        sh = DistSSHRun._remote_tar_create_sh("julia", "/remote/out")
+        @test occursin("Tar.create", sh)
+        @test occursin("/remote/out", sh)
+    end
+
     @testset "pull rsync uses --safe-links" begin
         opts = DistSSHRun._pull_rsync_opts("ssh -o BatchMode=yes")
         @test opts[1] == "-az"

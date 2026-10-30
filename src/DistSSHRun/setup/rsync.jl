@@ -21,15 +21,120 @@ function _host_sync_rsync_argv()::Vector{String}
     return [_host_tool_exe("rsync")]
 end
 
-"""Flags for remote→local rsync (drive collect, go slot pull).
+"""Flags for remote→local rsync that is still rsync (cache pull).
 
-`--safe-links` skips a symlink whose target is absolute or outside the
-copied tree, so rsync does not recreate an escaping link under the local
-destination. Outbound ship is Tar; pull-back stays rsync through 0.2.x
-because Tar would drop remote mtimes on outputs.
+Collect and go slot pull use Tar. `--safe-links` remains on this rsync path.
 """
 function _pull_rsync_opts(transport::AbstractString)::Vector{String}
     return String["-az", "--safe-links", "-e", String(transport)]
+end
+
+"""Remote `julia` that writes a Tar of `remote_dir` to stdout."""
+function _remote_tar_create_sh(julia_bin::AbstractString, remote_dir::AbstractString)::String
+    jb = _remote_julia_path_sh(julia_bin)
+    q = _remote_shell_path_word(remote_dir)
+    body = posix_quote("using Tar; Tar.create(ARGS[1], stdout)")
+    return "$jb --startup-file=no -e $body -- $q"
+end
+
+function _finish_extracted_tree!(dest::AbstractString; allow_external_symlinks::Bool = false)
+    root = canonical_local_path(dest)
+    for (dir, _, files) in walkdir(root)
+        for name in files
+            path = joinpath(dir, name)
+            if islink(path)
+                target = readlink(path)
+                resolved = isabspath(target) ? target : normpath(joinpath(dirname(path), target))
+                if !allow_external_symlinks && !_path_is_under(resolved, root)
+                    throw(ArgumentError("tar pull refuses escaping symlink $path"))
+                end
+            end
+            touch(path)
+        end
+    end
+    return nothing
+end
+
+function _extract_remote_tar!(
+        host::AbstractString,
+        remote_dir::AbstractString,
+        dest::AbstractString;
+        allow_external_symlinks::Bool = false,
+    )
+    mkpath(dest)
+    isempty(readdir(dest)) || throw(ArgumentError("tar extract dest is not empty: $dest"))
+    blob_dir = mktempdir()
+    blob = joinpath(blob_dir, "pull.tar")
+    try
+        inner = _remote_tar_create_sh("julia", remote_dir)
+        err = IOBuffer()
+        cmd = _host_sync_remote_shell_cmd(String(host), inner)
+        proc = run(pipeline(ignorestatus(cmd); stdout = blob, stderr = err); wait = true)
+        proc.exitcode == 0 || throw(
+            ArgumentError("tar pull failed on $(host): $(strip(String(take!(err))))"),
+        )
+        Tar.extract(blob, dest)
+        _finish_extracted_tree!(dest; allow_external_symlinks = allow_external_symlinks)
+    finally
+        rm(blob_dir; force = true, recursive = true)
+    end
+    return nothing
+end
+
+"""Copy `rels` from a remote tree. Extract lands in an empty directory; remote mtimes are not kept."""
+function _pull_tar_rels!(
+        host::AbstractString,
+        remote_dir::AbstractString,
+        local_root::AbstractString,
+        rels::AbstractVector{<:AbstractString};
+        allow_external_symlinks::Bool = false,
+    )
+    tmp = mktempdir()
+    try
+        _extract_remote_tar!(host, remote_dir, tmp; allow_external_symlinks = allow_external_symlinks)
+        for rel in rels
+            src = joinpath(tmp, rel)
+            ispath(src) || continue
+            _collect_dest_escapes_root(local_root, rel) && throw(
+                ArgumentError("collect path escapes $local_root: $rel"),
+            )
+            dest = joinpath(local_root, rel)
+            mkpath(dirname(dest))
+            cp(src, dest; force = true)
+            touch(dest)
+        end
+    finally
+        rm(tmp; force = true, recursive = true)
+    end
+    return nothing
+end
+
+function _pull_tar_tree!(
+        host::AbstractString,
+        remote_dir::AbstractString,
+        local_root::AbstractString;
+        allow_external_symlinks::Bool = false,
+    )
+    tmp = mktempdir()
+    try
+        _extract_remote_tar!(host, remote_dir, tmp; allow_external_symlinks = allow_external_symlinks)
+        rels = String[]
+        for (dir, _, files) in walkdir(tmp)
+            for name in files
+                push!(rels, relpath(joinpath(dir, name), tmp))
+            end
+        end
+        for rel in rels
+            src = joinpath(tmp, rel)
+            dest = joinpath(local_root, rel)
+            mkpath(dirname(dest))
+            cp(src, dest; force = true)
+            touch(dest)
+        end
+    finally
+        rm(tmp; force = true, recursive = true)
+    end
+    return nothing
 end
 
 """Run rsync with `--from0 --files-from` via a temp list, not `stdin`.

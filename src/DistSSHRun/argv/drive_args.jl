@@ -495,7 +495,7 @@ function show_drive_usage(; io::IO = stdout)
         io,
         "  After main(): post-run-new (files newer than run start).",
         "  Later: --collect-missing / --collect-overwrite ROOT HOST...",
-        "  Pull-back rsync uses --safe-links (escaping remote symlinks skipped).",
+        "  Pull-back uses Tar. Remote mtimes are not kept. Escaping symlinks are refused.",
         "  Skip auto-collect: DISTRIBUTED_SKIP_COLLECT=1",
     )
     print_help_blank(io)

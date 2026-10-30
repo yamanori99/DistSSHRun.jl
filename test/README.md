@@ -235,11 +235,9 @@ Not this file: macOS workers, dead hosts, fake `ssh`/`rsync`, local
   Bytes on a real remote: e2e.
 - **drive / go:** core work is `Distributed` workers. `Pkg.test()` uses
   real **local** `addprocs` (no SSH fake). Bytes on a real remote: e2e.
-- **drive collect:** core work is `ssh` / `rsync` of result trees.
-  Pull-back rsync includes `--safe-links`. `Pkg.test()` uses the same
-  fakes, **control flow only** (fake rsync does not copy), plus a local
-  rsync `--safe-links` check in `unit/DistSSHRun/setup/rsync.jl`. Bytes
-  on a real remote: e2e.
+- **drive collect:** core work is `ssh` and stdlib Tar of result trees.
+  Remote mtimes are not kept. An escaping symlink is refused.
+  Cache pull is still rsync. Bytes on a real remote: e2e.
 - **size:** plan math (+ optional RSS). `Pkg.test()` is unit + local
   probe in `integration/size/`. Bytes on a real remote: e2e if needed.
 
