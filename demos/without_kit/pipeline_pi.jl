@@ -73,5 +73,7 @@ result = go!(script, "parent:2"; args = ARGS)
 #   )
 
 demo = @eval $_DEMO_PACKAGE
-demo.report_go_errors(result) || exit(1)
+# Kit reexports exported names only. This reporter stays on DistSSHRun.
+run = _DEMO_PACKAGE === :DistSSHKit ? demo.DistSSHRun : demo
+run.report_go_errors(result) || exit(1)
 println("pipeline ok  (go! script=", basename(script), ")")

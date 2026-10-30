@@ -79,5 +79,7 @@ result = pipeline!(driver, "parent:2"; args = ARGS, collect = false, enable_log 
 #   )
 
 demo = @eval $_DEMO_PACKAGE
-demo.report_pipeline_errors(result) || exit(1)
+# Kit reexports exported names only. This reporter stays on DistSSHRun.
+run = _DEMO_PACKAGE === :DistSSHKit ? demo.DistSSHRun : demo
+run.report_pipeline_errors(result) || exit(1)
 println("pipeline! ok  (driver=", basename(driver), ")")
