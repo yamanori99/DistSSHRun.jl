@@ -23,6 +23,7 @@ using TOML
 #   queue — execute!(; detached=true), parsers, paths, help chrome
 #   argv wrappers `go` / `drive` stay unexported (`main` / tests)
 export worker_pmap
+export worker_seed
 export KitSession
 export HostResult
 export SyncResult

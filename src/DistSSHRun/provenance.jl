@@ -183,6 +183,7 @@ function _reset_run_provenance!(project::AbstractString)
         nothing
     end
     _PROVENANCE_AT_START[] = true
+    reset_worker_seeds!()
     return nothing
 end
 
@@ -354,18 +355,48 @@ function capture_worker_provenance!()
 end
 
 function _project_provenance(project::AbstractString)::Dict{String, Any}
+    out = Dict{String, Any}()
     manifest = manifest_path(project)
-    manifest isa String || return Dict{String, Any}("manifest" => "absent")
-    out = Dict{String, Any}("manifest" => _sha256_hex(read(manifest)))
-    parsed = try
-        TOML.parsefile(manifest)
-    catch
-        nothing
+    if manifest isa String
+        out["manifest"] = _sha256_hex(read(manifest))
+        parsed = try
+            TOML.parsefile(manifest)
+        catch
+            nothing
+        end
+        if parsed isa AbstractDict && haskey(parsed, "julia_version")
+            out["julia_version"] = string(parsed["julia_version"])
+        end
+    else
+        out["manifest"] = "absent"
     end
-    if parsed isa AbstractDict && haskey(parsed, "julia_version")
-        out["julia_version"] = string(parsed["julia_version"])
+    locks = Dict{String, String}()
+    for name in ("CondaPkg.toml", "conda-lock.yml", "pixi.lock")
+        path = joinpath(project, name)
+        isfile(path) || continue
+        locks[name] = _sha256_hex(read(path))
     end
+    isempty(locks) || (out["locks"] = locks)
     return out
+end
+
+function _seed_provenance()::Union{Nothing, Dict{String, Any}}
+    seed = _JOB_SEED[]
+    seed === nothing && return nothing
+    isempty(_ASSIGNED_RANKS) && return nothing
+    workers = Dict{String, Any}[]
+    for rank in _ASSIGNED_RANKS
+        push!(workers, Dict{String, Any}("rank" => rank, "seed" => string(worker_seed(seed, rank))))
+    end
+    data = Dict{String, Any}("job" => string(seed), "workers" => workers)
+    items = Dict{String, Any}[]
+    lock(_ITEM_LOCK) do
+        for item in sort!(collect(keys(_ITEM_MAP)))
+            push!(items, Dict{String, Any}("item" => item, "rank" => _ITEM_MAP[item]))
+        end
+    end
+    isempty(items) || (data["items"] = items)
+    return data
 end
 
 function _git_capture_bytes(cmd::Cmd)::Union{Nothing, Vector{UInt8}}
@@ -642,6 +673,8 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
         "workers" => started ? _worker_section() : Any[],
         "project" => project_table,
     )
+    seeds = _seed_provenance()
+    seeds === nothing || (data["seeds"] = seeds)
     source = started ? _PROVENANCE_SOURCE_SNAP[] : _resolve_source(proj)
     source === nothing || (data["source"] = source)
     ship = last_ship_result()

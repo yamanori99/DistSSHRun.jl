@@ -19,7 +19,7 @@ Public = true
 Private = false
 Filter = function (x)
     names = (
-        :worker_pmap, :go!, :GoResult, :report_go_errors,
+        :worker_pmap, :worker_seed, :go!, :GoResult, :report_go_errors,
         :drive!, :DriveResult, :HostRunResult, :DriveHostStatus, :drive_host_status,
         :KitRunResult, :KitProcess, :kit_run_result, :report_run_errors,
         :terminate!, :terminate_run!, :kit_result_from_dir,
@@ -120,7 +120,7 @@ Private = false
 Filter = function (x)
     grouped = (
         :DistSSHBase,
-        :worker_pmap, :go!, :GoResult, :report_go_errors,
+        :worker_pmap, :worker_seed, :go!, :GoResult, :report_go_errors,
         :drive!, :DriveResult, :HostRunResult, :DriveHostStatus, :drive_host_status,
         :KitRunResult, :KitProcess, :kit_run_result, :report_run_errors,
         :terminate!, :terminate_run!, :kit_result_from_dir,

@@ -185,4 +185,16 @@ After `drive` syncs your driver to workers and loads the project package, plain
 world-age errors (for example, a function reference or closure captured before
 package load).
 """
-worker_pmap(f, collection) = pmap(x -> Base.invokelatest(f, x), collection)
+function worker_pmap(f, collection)
+    indexed = collect(enumerate(collection))
+    return pmap(indexed) do (item, x)
+        raw = get(ENV, "DISTSSHKIT_WORKER_RANK", "")
+        rank = something(tryparse(Int, raw), 0)
+        if myid() == 1
+            _note_item!(item, rank)
+        else
+            remotecall_fetch(_note_item!, 1, item, rank)
+        end
+        return Base.invokelatest(f, x)
+    end
+end

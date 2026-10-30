@@ -21,6 +21,46 @@ using TOML
     end
     @test env["JULIA_PROJECT"] == "/tmp/job"
     @test haskey(env, "JULIA_NUM_THREADS")
+    @test !haskey(env, "OPENBLAS_NUM_THREADS")
+    withenv("DISTSSHKIT_BLAS_THREADS" => "1") do
+        pinned = Dict(DistSSHRun.worker_env_pairs("/tmp/job"))
+        @test pinned["OPENBLAS_NUM_THREADS"] == "1"
+        @test pinned["OMP_NUM_THREADS"] == "1"
+    end
+    DistSSHRun.reset_worker_seeds!()
+    a = Dict{String, String}()
+    b = Dict{String, String}()
+    withenv("DISTSSHKIT_JOB_SEED" => "11") do
+        a = Dict(DistSSHRun.worker_env_pairs("/tmp/job"; rank = DistSSHRun.take_worker_rank()))
+        b = Dict(DistSSHRun.worker_env_pairs("/tmp/job"; rank = DistSSHRun.take_worker_rank()))
+    end
+    @test a["DISTSSHKIT_WORKER_RANK"] == "1"
+    @test b["DISTSSHKIT_WORKER_RANK"] == "2"
+    @test a["DISTSSHKIT_WORKER_SEED"] != b["DISTSSHKIT_WORKER_SEED"]
+    @test DistSSHRun.worker_seed(11, 1) == parse(UInt64, a["DISTSSHKIT_WORKER_SEED"])
+    @test DistSSHRun.worker_seed(11, 1) == DistSSHRun.worker_seed(11, 1)
+    built = DistSSHRun._source_from_user(Dict{String, Any}("commit" => "abc", "nope" => "x"))
+    @test built["commit"] == "abc"
+    @test !haskey(built, "nope")
+    DistSSHRun.reset_worker_seeds!()
+    @test DistSSHRun.worker_pmap(identity, [10, 20]) == [10, 20]
+    @test DistSSHRun._ITEM_MAP[1] == 0
+    @test DistSSHRun._ITEM_MAP[2] == 0
+    DistSSHRun.reset_worker_seeds!()
+    withenv("DISTSSHKIT_JOB_SEED" => "11") do
+        DistSSHRun.job_seed()
+        DistSSHRun.take_worker_rank()
+    end
+    seeds = DistSSHRun._seed_provenance()
+    @test seeds["job"] == "11"
+    @test seeds["workers"][1]["rank"] == 1
+    mktempdir() do tmp
+        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        write(joinpath(tmp, "CondaPkg.toml"), "[deps]\n")
+        prov = DistSSHRun._project_provenance(tmp)
+        @test haskey(prov, "locks")
+        @test haskey(prov["locks"], "CondaPkg.toml")
+    end
 
     names = DistSSHRun.launch_override_names(
         Dict("JULIA_PROJECT" => "/old", "JULIA_LOAD_PATH" => "@v1.13"),
