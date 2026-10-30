@@ -572,13 +572,15 @@ jobs:
 
   # A skipped job does not expand a matrix name, so these titles stay literal.
   # Version string is ~1.14.0-0. The title is 1.14-pre, shared with Queue and Kit.
+  # Required: a driver blocked in pmap must cancel within interrupt_grace + 11s
+  # (#212). Nightly stays continue-on-error. Aqua, JETLS, and Linux E2E on
+  # 1.14-pre stay continue-on-error.
   test-1-14-pre:
     name: DistSSHRun (1.14-pre, ubuntu-latest, x64)
     needs: detect
     if: needs.detect.outputs.heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
