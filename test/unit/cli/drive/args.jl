@@ -39,7 +39,17 @@ using Test
             let r = parse_drive_args(["s.jl"])
                 @test r.hint_surface === :cli
                 @test r.sync_script == false
+                @test r.isolated == false
             end
+            let r = parse_drive_args(["--isolated", "s.jl", "--", "1"])
+                @test r.isolated
+                @test r.script_path == "s.jl"
+            end
+            @test_throws ArgumentError parse_drive_args(["--isolated", "--isolated", "s.jl"])
+            cmd = DistSSHRun._drive_isolated_cmd(["--isolated", "s.jl", "1"])
+            text = join(cmd.exec, " ")
+            @test occursin("run_drive_parsed!", text)
+            @test !occursin("--isolated", text)
             let r = parse_drive_args(["--sync-script", "s.jl"])
                 @test r.sync_script == true
             end

@@ -16,6 +16,18 @@ function _drive_script_init_output_dir_method(script_args)::Union{Nothing, Metho
     end
 end
 
+# Child `julia` that runs the same drive arguments without `--isolated`.
+function _drive_isolated_cmd(original_args::AbstractVector{<:AbstractString})::Cmd
+    child = String[String(a) for a in original_args if String(a) != "--isolated"]
+    script = "using DistSSHRun; exit(Int(run_drive_parsed!(parse_drive_args(String[ARGS...]); original_args=String[ARGS...])))"
+    return `$(Base.julia_cmd()) --startup-file=no -e $script -- $child`
+end
+
+function _drive_isolated_process(original_args::AbstractVector{<:AbstractString})::Cint
+    proc = run(ignorestatus(_drive_isolated_cmd(original_args)))
+    return Cint(something(proc.exitcode, 1))
+end
+
 """
     run_drive_parsed!(parsed; original_args=String[], resolved_output_dir=nothing, resolved_log_dir=nothing) -> Cint
 
@@ -39,6 +51,9 @@ function run_drive_parsed!(
         resolved_run_dir::Union{Nothing, Base.RefValue{Union{Nothing, String}}} = nothing,
         project_root::Union{Nothing, AbstractString} = nothing,
     )::Cint
+    if hasproperty(parsed, :isolated) && parsed.isolated
+        return _drive_isolated_process(original_args)
+    end
     # `parse_drive_args` is inferred as one NamedTuple whose fields are unions
     # (`sync_mode::Union{Nothing,Symbol}`, and the same for paths and counts).
     # The value for one argv is narrower. Lookup at runtime specializes the
