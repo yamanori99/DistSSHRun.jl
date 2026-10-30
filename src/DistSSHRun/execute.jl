@@ -1207,13 +1207,16 @@ _target_alive(pid::Integer)::Bool = kit_pid_alive(pid)
 Do not retry. A second signal is a separate force, not part of this wait.
 `true` when this call delivered the signal.
 """
-function _signal_and_wait!(target, sig::Integer, wait_s::Real)::Bool
+function _signal_and_wait!(
+        target::Union{Base.Process, Integer},
+        sig::Integer,
+        wait_s::Real,
+    )::Bool
     _target_alive(target) || return false
-    sent = false
-    try
-        sent = _send_signal(target, sig)
+    sent = try
+        _send_signal(target, sig)
     catch
-        sent = false
+        false
     end
     sent || return false
     t0 = time()
@@ -1274,7 +1277,11 @@ Returns the [`KitRunResult`](@ref) `stop` value, or `nothing` when `target`
 was already gone (no signal sent). `:within_grace` / `:sigterm` /
 `:sigkill` / `:no_sigint`.
 """
-function _signal_ladder!(target; interrupt_grace::Real, grace::Real)::Union{Nothing, Symbol}
+function _signal_ladder!(
+        target::Union{Base.Process, Integer};
+        interrupt_grace::Real,
+        grace::Real,
+    )::Union{Nothing, Symbol}
     if target isa Integer
         target <= 0 && return nothing
         Sys.isunix() || return nothing
