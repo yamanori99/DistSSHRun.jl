@@ -28,10 +28,12 @@ function main()
     # Captured here so a local worker can touch it. `main_started` is written
     # before `pmap` schedules anything.
     pmap_marker = joinpath(@__DIR__, "pmap_entered")
-    pmap(_ -> begin
-        touch(pmap_marker)
-        sleep(120)
-        1
-    end, 1:nworkers())
+    pmap(
+        _ -> begin
+            touch(pmap_marker)
+            sleep(120)
+            1
+        end, 1:nworkers()
+    )
     return nothing
 end
