@@ -72,5 +72,6 @@ result = go!(script, "parent:2"; args = ARGS)
 #       # path_anchor=nothing,          # shorten displayed paths
 #   )
 
-report_go_errors(result) || exit(1)
+demo = @eval $_DEMO_PACKAGE
+demo.report_go_errors(result) || exit(1)
 println("pipeline ok  (go! script=", basename(script), ")")

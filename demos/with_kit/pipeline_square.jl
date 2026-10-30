@@ -78,5 +78,6 @@ result = pipeline!(driver, "parent:2"; args = ARGS, collect = false, enable_log 
 #       # parent_gb=0.4,
 #   )
 
-report_pipeline_errors(result) || exit(1)
+demo = @eval $_DEMO_PACKAGE
+demo.report_pipeline_errors(result) || exit(1)
 println("pipeline! ok  (driver=", basename(driver), ")")
