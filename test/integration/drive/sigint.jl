@@ -106,3 +106,36 @@ end
         @test !occursin("--help", combined)
     end
 end
+
+@testset "pmap cancel stays within interrupt_grace + 11s" begin
+    if VERSION < v"1.14.0-"
+        @test_skip "Julia 1.13 pmap ignores SIGINT; budget is for 1.14-pre and nightly"
+    else
+        grace = DistSSHRun._resolve_interrupt_grace(nothing)
+        budget = grace + 11
+        _mktemp_host() do proj
+            marker = joinpath(proj, "main_started")
+            restore = joinpath(proj, "restored.txt")
+            cmd = _sigint_child(proj; marker = marker, restore = restore)
+            proc, reader = _start_subprocess(cmd)
+            started = timedwait(() -> isfile(marker) || !process_running(proc), 300.0; pollint = 0.5)
+            @test started === :ok && isfile(marker)
+            sleep(2)
+            t0 = time()
+            kill(proc, Base.SIGINT)
+            stopped = timedwait(() -> !process_running(proc), budget + 15; pollint = 0.25)
+            elapsed = time() - t0
+            stopped === :ok || kill(proc, Base.SIGKILL)
+            wait(proc)
+            fetch(reader)
+            if elapsed + 15 < budget
+                println(
+                    stderr,
+                    "pmap cancel finished early: $(round(elapsed; digits = 1))s, budget $(budget)s. SIGINT during pmap may have improved.",
+                )
+            end
+            @test stopped === :ok
+            @test elapsed <= budget
+        end
+    end
+end
