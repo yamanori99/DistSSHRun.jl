@@ -28,7 +28,11 @@ pkg> add DistSSHRun
 ```
 
 Julia **1.13+**. Hosts need **`ssh`**. Collect and cache pull still need
-**`rsync`**. Ship uses stdlib Tar over SSH. Git deploys also need **`git`**.
+**`rsync`**. Collect, `collect!`, and go slot pull pass **`--safe-links`**
+so a remote symlink that points outside the copied tree is not recreated
+locally. Ship uses stdlib Tar over SSH. Pull-back stays rsync through
+0.2.x; Tar pull-back waits until 0.3.0 because it would drop remote mtimes
+on outputs. Git deploys also need **`git`**.
 
 `setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` extract the
 git file list into `<remote_root>/runs/<run_id>/src/` (`run_id` is UTC plus

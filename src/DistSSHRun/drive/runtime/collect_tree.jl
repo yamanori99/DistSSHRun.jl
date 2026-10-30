@@ -89,8 +89,9 @@ function drive_collect_tree(
                 rsync_cmd = Cmd(
                     vcat(
                         rsync_bin,
+                        DistSSHRun._pull_rsync_opts(transport),
                         [
-                            "-az", "--exclude", ".git/", "-e", transport,
+                            "--exclude", ".git/",
                             string(host, ":", host_remote, "/"), local_root * "/",
                         ],
                     )
@@ -132,7 +133,7 @@ function drive_collect_tree(
                 end
                 DistSSHRun._run_rsync_files_from(
                     rsync_bin,
-                    ["-az", "-e", transport],
+                    DistSSHRun._pull_rsync_opts(transport),
                     string(host, ":", host_remote, "/"),
                     local_root * "/",
                     need,

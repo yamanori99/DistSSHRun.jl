@@ -21,6 +21,17 @@ function _host_sync_rsync_argv()::Vector{String}
     return [_host_tool_exe("rsync")]
 end
 
+"""Flags for remote→local rsync (drive collect, go slot pull).
+
+`--safe-links` skips a symlink whose target is absolute or outside the
+copied tree, so rsync does not recreate an escaping link under the local
+destination. Outbound ship is Tar; pull-back stays rsync through 0.2.x
+because Tar would drop remote mtimes on outputs.
+"""
+function _pull_rsync_opts(transport::AbstractString)::Vector{String}
+    return String["-az", "--safe-links", "-e", String(transport)]
+end
+
 """Run rsync with `--from0 --files-from` via a temp list, not `stdin`.
 
 Julia 1.14 `pipeline(; stdin=buf)` waits for the write and throws `EPIPE` if the

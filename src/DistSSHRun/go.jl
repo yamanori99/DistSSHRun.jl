@@ -706,7 +706,8 @@ function _go_pull_slot!(
         Cmd(
             vcat(
                 rsync,
-                ["-az", "-e", transport, "$(host):$src", dest],
+                _pull_rsync_opts(transport),
+                ["$(host):$src", dest],
             ),
         ),
     )

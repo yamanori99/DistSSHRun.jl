@@ -366,7 +366,7 @@ function collect_drive_results!(
                         end
                         DistSSHRun._run_rsync_files_from(
                             rsync_bin,
-                            ["-az", "-e", ssh_cmd],
+                            DistSSHRun._pull_rsync_opts(ssh_cmd),
                             string(host, ":", remote_rd_abs, "/"),
                             local_abs * "/",
                             uniq,

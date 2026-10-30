@@ -8,7 +8,9 @@
         hosts=nothing,
     )
 
-Rsync result files from SSH hosts into `local_root`.
+Rsync result files from SSH hosts into `local_root`. Pull-back rsync
+uses `--safe-links` so a remote symlink that points outside the copied
+tree is skipped. Tar pull-back is deferred (remote mtimes on outputs).
 
 Collect modes:
 - `merge=false` → **collect-missing** (CLI `drive --collect-missing`)

@@ -17,6 +17,8 @@ Collect modes:
   collect-missing    drive --collect-missing / collect!(merge=false): absent locally
   collect-overwrite  drive --collect-overwrite / collect!(merge=true): merge remote tree
   slot-overwrite     go after each remote slot: rsync whole slot directory
+Pull-back rsync uses --safe-links (escaping remote symlinks are not copied).
+Tar pull-back waits until 0.3.0 (it would drop remote mtimes on outputs).
 """
 
 const KIT_QUIET_FLAG_HELP =

@@ -58,6 +58,7 @@ function show_go_usage(; io::IO = stdout)
         "  DISTRIBUTED_OUTPUT_DIR → that slot dir",
         "  --output-dir is the batch root (not drive's result root)",
         "  a non-empty --output-dir is an error",
+        "  slot pull-back rsync uses --safe-links",
     )
     print_help_blank(io)
     print_help_section("Environment"; io = io)
