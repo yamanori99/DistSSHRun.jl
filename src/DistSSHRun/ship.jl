@@ -84,6 +84,7 @@ function _ship_rel_paths(local_root::AbstractString)::Vector{String}
         end
     end
     out = unique!(vcat(rels, extras))
+    _append_project_preference_rels!(root, out)
     filter!(rel -> !_ship_unshippable(joinpath(root, rel)), out)
     sort!(out)
     isempty(out) && throw(ArgumentError("nothing to ship from $root"))
@@ -236,25 +237,64 @@ function pack_ship_tar(
     end
 end
 
-function _warn_ignored_local_preferences(root::AbstractString)
-    for name in ("LocalPreferences.toml", "JuliaLocalPreferences.toml")
-        p = joinpath(root, name)
-        isfile(p) || continue
-        git = Sys.which("git")
-        git === nothing && continue
-        ignored = try
-            success(
-                pipeline(
-                    `$git -C $root check-ignore -q $name`;
-                    stdout = devnull, stderr = devnull,
-                ),
-            )
-        catch
-            false
+const _PROJECT_PREFERENCE_NAMES = ("LocalPreferences.toml", "JuliaLocalPreferences.toml")
+
+"""Add preference files that sit next to a shipped `Project.toml`, even when gitignored."""
+function _append_project_preference_rels!(root::AbstractString, out::Vector{String})
+    projects = String[]
+    for rel in out
+        (rel == "Project.toml" || endswith(rel, "/Project.toml")) && push!(projects, rel)
+    end
+    for rel in projects
+        dir = dirname(rel)
+        for name in _PROJECT_PREFERENCE_NAMES
+            pref = dir == "" || dir == "." ? name : dir * "/" * name
+            isfile(joinpath(root, pref)) || continue
+            pref in out || push!(out, pref)
         end
-        ignored && @warn "ship-tree: $name is gitignored and will not be shipped"
     end
     return nothing
+end
+
+function _depot_preference_paths()::Vector{String}
+    paths = String[]
+    isempty(Base.DEPOT_PATH) && return paths
+    depot = String(first(Base.DEPOT_PATH))
+    ov = joinpath(depot, "artifacts", "Overrides.toml")
+    isfile(ov) && push!(paths, ov)
+    env = joinpath(depot, "environments", "v$(VERSION.major).$(VERSION.minor)")
+    for name in _PROJECT_PREFERENCE_NAMES
+        p = joinpath(env, name)
+        isfile(p) && push!(paths, p)
+    end
+    return paths
+end
+
+function _preference_toml_affects(path::AbstractString)::Bool
+    raw = try
+        TOML.parsefile(path)
+    catch
+        return true
+    end
+    return raw isa AbstractDict && !isempty(raw)
+end
+
+"""Refuse when a depot override or `@v#.#` preference would apply and is not in the ship."""
+function _refuse_unshipped_depot_prefs!(paths::AbstractVector{<:AbstractString} = _depot_preference_paths())
+    hits = String[]
+    for path in paths
+        isfile(path) || continue
+        _preference_toml_affects(path) || continue
+        digest = _sha256_hex(read(path))
+        push!(hits, string(path, " sha256=", digest))
+    end
+    isempty(hits) && return nothing
+    throw(
+        ArgumentError(
+            "ship-tree: depot preferences affect this job and are not shipped:\n  " *
+                join(hits, "\n  "),
+        ),
+    )
 end
 
 function _probe_expanded_remote_root(host::AbstractString, remote_root::AbstractString)::String
@@ -480,7 +520,7 @@ function ship_project_to_hosts!(
     rid = run_id === nothing ? allocate_remote_run_id() : validate_run_id(run_id)
     src_logical = _posix_join(String(remote_root), "runs", rid, "src")
     warn_project_sshflags(canonical_local_path(local_root))
-    _warn_ignored_local_preferences(canonical_local_path(local_root))
+    _refuse_unshipped_depot_prefs!()
     packed = pack_ship_tar(
         local_root;
         allow_external_symlinks = allow_external_symlinks,

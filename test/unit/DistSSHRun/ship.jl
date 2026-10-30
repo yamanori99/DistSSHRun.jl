@@ -44,6 +44,48 @@ end
     end
 end
 
+@testset "gitignored project preferences ship" begin
+    Sys.which("git") === nothing && return
+    _with_tempdir() do tmp
+        run(`git -C $tmp init --quiet`)
+        run(`git -C $tmp config user.email t@t.t`)
+        run(`git -C $tmp config user.name t`)
+        write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\nJuliaLocalPreferences.toml\n")
+        write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
+        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        write(joinpath(tmp, "LocalPreferences.toml"), "[ShipT]\nx = 1\n")
+        write(joinpath(tmp, "JuliaLocalPreferences.toml"), "[ShipT]\ny = 2\n")
+        run(`git -C $tmp add -A`)
+        run(`git -C $tmp commit --quiet -m init`)
+        packed = DistSSHRun.pack_ship_tar(tmp)
+        try
+            dest = mktempdir()
+            DistSSHRun.Tar.extract(packed.tar_path, dest)
+            @test isfile(joinpath(dest, "LocalPreferences.toml"))
+            @test isfile(joinpath(dest, "JuliaLocalPreferences.toml"))
+        finally
+            rm(packed.tmpd; force = true, recursive = true)
+        end
+    end
+end
+
+@testset "depot preferences refuse ship" begin
+    empty = joinpath(mktempdir(), "empty.toml")
+    write(empty, "")
+    @test DistSSHRun._refuse_unshipped_depot_prefs!([empty]) === nothing
+    hit = joinpath(mktempdir(), "Overrides.toml")
+    write(hit, "Example = \"/tmp/example\"\n")
+    err = try
+        DistSSHRun._refuse_unshipped_depot_prefs!([hit])
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("not shipped", sprint(showerror, err))
+    @test occursin("sha256=", sprint(showerror, err))
+end
+
 @testset "escaping symlink" begin
     Sys.which("git") === nothing && return
     _with_tempdir() do tmp
