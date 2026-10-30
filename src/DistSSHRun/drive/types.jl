@@ -278,12 +278,31 @@ end
 HostRunResult(host::AbstractString, ok::Bool, error = nothing) =
     HostRunResult(String(host), ok, _host_run_error_text(error))
 
+const _KIT_STOP_OUTCOMES = (:within_grace, :sigterm, :sigkill, :no_sigint)
+
+function _kit_stop_symbol(raw)::Union{Nothing, Symbol}
+    raw isa Symbol && return raw in _KIT_STOP_OUTCOMES ? raw : nothing
+    raw isa AbstractString || return nothing
+    s = String(raw)
+    return s in ("within_grace", "sigterm", "sigkill", "no_sigint") ? Symbol(s) : nothing
+end
+
 """
-Shared run outcome (`ok`, `kind`, dirs, `failed_step`, `exit_code`, `hosts`).
+Shared run outcome (`ok`, `kind`, dirs, `failed_step`, `exit_code`, `hosts`, `stop`).
 
 `kind` is `:go`, `:drive`, `:ride`, or `:pipeline`. Convert with [`kit_run_result`](@ref).
 `hosts` is post-run collect ([`HostRunResult`](@ref)); empty for `go`, hung
 `wait`, or a `drive` that never collected.
+
+`stop` is the [`terminate!`](@ref) / [`terminate_run!`](@ref) ladder outcome.
+`nothing` on a run that was not stopped that way. `:within_grace` means one
+SIGINT was sent and the process was gone before SIGTERM, so workers had that
+`interrupt_grace` window. `:sigterm` and `:sigkill` mean that window ended
+and the ladder escalated. `:no_sigint` means `interrupt_grace` was 0, so
+SIGINT was not sent and the ladder went to SIGTERM (then SIGKILL if the
+process was still alive). The same string is `stop` in `kit.result`. When
+the kit run directory already has this package's `run.toml`, `stop` is set
+there too. `schema` stays 1. An unknown `stop` string is ignored.
 """
 struct KitRunResult
     ok::Bool
@@ -294,6 +313,7 @@ struct KitRunResult
     exit_code::Int
     hosts::Vector{HostRunResult}
     tokens::Vector{String}
+    stop::Union{Nothing, Symbol}
     function KitRunResult(
             ok::Bool,
             kind::Symbol,
@@ -303,6 +323,13 @@ struct KitRunResult
             exit_code::Integer,
             hosts::AbstractVector{HostRunResult} = HostRunResult[],
             tokens::AbstractVector{<:AbstractString} = String[],
+            stop::Union{Nothing, Symbol} = nothing,
+        )
+        parsed = _kit_stop_symbol(stop)
+        stop !== nothing && parsed === nothing && throw(
+            ArgumentError(
+                "stop must be nothing, :within_grace, :sigterm, :sigkill, or :no_sigint, got $(repr(stop))",
+            ),
         )
         return new(
             ok,
@@ -313,6 +340,7 @@ struct KitRunResult
             Int(exit_code),
             collect(HostRunResult, hosts),
             String[String(t) for t in tokens],
+            parsed,
         )
     end
 end

@@ -64,8 +64,9 @@ using Test
         )
         try
             @test wait_file(ready, 90)
-            DistSSHRun.terminate!(kp; interrupt_grace = 5, grace = 2)
+            stopped = DistSSHRun.terminate!(kp; interrupt_grace = 5, grace = 2)
             @test isfile(mark)
+            @test stopped.stop === :within_grace
         finally
             process_running(kp.process) && DistSSHRun.terminate!(kp; grace = 1)
         end
@@ -81,8 +82,9 @@ using Test
         )
         try
             @test wait_file(ready, 90)
-            DistSSHRun.terminate!(kp0; interrupt_grace = 0, grace = 2)
+            skipped = DistSSHRun.terminate!(kp0; interrupt_grace = 0, grace = 2)
             @test !isfile(mark)
+            @test skipped.stop === :no_sigint
         finally
             process_running(kp0.process) && DistSSHRun.terminate!(kp0; grace = 1)
         end
@@ -137,6 +139,7 @@ end
             r = DistSSHRun.terminate!(kp; interrupt_grace = 15, grace = 2)
             @test isfile(caught)
             @test r.exit_code == 130
+            @test r.stop === :within_grace
         finally
             process_running(kp.process) && DistSSHRun.terminate!(kp; grace = 1)
         end
