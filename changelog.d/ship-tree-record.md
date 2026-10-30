@@ -7,7 +7,9 @@ category: breaking
   `remote_root` after expansion must not be `$HOME` or `/`. The leaf
   directory is a plain `mkdir` (existing leaf fails). `--rsync` and
   `sync=:rsync` / `setup!(session, :rsync)` were removed; the usage error
-  names `--ship-tree`. Collect, slot pull, and `push_cache!` still use
+  names `--ship-tree`. `setup!(session, :ship_tree; gitignore = false)`
+  is `ArgumentError` for every setup mode, including `:ship_tree`.
+  Collect, slot pull, and `push_cache!` still use
   rsync. Escaping symlinks are refused unless `--allow-external-symlinks`.
   Trees larger than 256 MiB fail. Later `--instantiate` / `--check` / `go`
   use the latest `runs/<run_id>/src` when the remote root has no
