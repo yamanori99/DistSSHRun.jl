@@ -21,6 +21,34 @@ using Test
         touch(joinpath(tree, "keepme.txt"))
     end
 
+    @testset "pull rsync uses --safe-links" begin
+        opts = DistSSHRun._pull_rsync_opts("ssh -o BatchMode=yes")
+        @test opts[1] == "-az"
+        @test "--safe-links" in opts
+        @test "-e" in opts
+        system_rsync = Sys.which("rsync")
+        system_rsync === nothing && return
+        mktempdir() do tmp::String
+            src = joinpath(tmp, "src")
+            dest = joinpath(tmp, "dest")
+            outside = joinpath(tmp, "secret.txt")
+            mkpath(src)
+            mkpath(dest)
+            write(outside, "secret\n")
+            write(joinpath(src, "ok.txt"), "ok\n")
+            symlink(outside, joinpath(src, "escape"))
+            DistSSHRun._run_rsync_files_from(
+                [String(system_rsync)],
+                DistSSHRun._pull_rsync_opts("ssh"),
+                src * "/",
+                dest * "/",
+                ["ok.txt", "escape"],
+            )
+            @test isfile(joinpath(dest, "ok.txt"))
+            @test !ispath(joinpath(dest, "escape"))
+        end
+    end
+
     @testset "files-from uses NUL and protects comment prefixes" begin
         mktempdir() do tmp::String
             rsync = joinpath(tmp, "rsync")

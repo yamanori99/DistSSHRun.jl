@@ -155,6 +155,7 @@ using Test
         @test occursin("--allow-mismatch", txt)
         @test occursin("parent", txt)
         @test occursin("progress DIR", txt)
+        @test occursin("--safe-links", txt)
     end
 
     @testset "unknown option and missing script" begin
