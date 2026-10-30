@@ -27,14 +27,10 @@ pkg> add DistSSHRun
 ```
 
 Julia **1.13+**。ホストには **`ssh`** が要る。collect と cache pull には
-**`rsync`** が要る。Collect、`collect!`、go の slot pull は **`--safe-links`**
-を渡すので、コピーする木の外を指すリモートのシンボリックリンクはローカルに
-作られない。ship は SSH 上の stdlib Tar を使う。pull-back は 0.2.x のあいだ
-rsync のままである。Tar の pull-back は 0.3.0 まで待つ。出力のリモート mtime を
-落とすためである。git で配るときは **`git`** も要る。`setup --ship-tree`、
-`go --ship-tree`、`drive --ship-tree` は git のファイル一覧を
-`<remote_root>/runs/<run_id>/src/` に展開する。`--rsync` は 0.2.0 で削除した。
-リモートのログインシェル（`$SHELL`）は POSIX 互換
+**`rsync`** が要る。ship は SSH 上の stdlib Tar を使う。git で配るときは
+**`git`** も要る。`setup --ship-tree`、`go --ship-tree`、`drive --ship-tree`
+は git のファイル一覧を `<remote_root>/runs/<run_id>/src/` に展開する。
+`--rsync` は 0.2.0 で削除した。リモートのログインシェル（`$SHELL`）は POSIX 互換
 （`sh`、`bash`、`dash`、`zsh`）である。`ssh host command` は `$SHELL -c` で
 実行し、ログインシェルにはしない。Distributed の `SSHManager` はワーカーを
 `sh -l -c` で起動し、この包みは変えられない。`fish` と `csh` は未対応である。
