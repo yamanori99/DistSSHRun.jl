@@ -25,8 +25,15 @@ The longer guide is the
 pkg> add DistSSHRun
 ```
 
-Julia **1.13+**. Hosts need **`ssh`** and **`rsync`**. Git deploys also
-need **`git`**. The remote login shell (`$SHELL`) must be POSIX-compatible
+Julia **1.13+**. Hosts need **`ssh`**. Collect and cache pull still need
+**`rsync`**. Collect, `collect!`, and go slot pull pass **`--safe-links`**
+so a remote symlink that points outside the copied tree is not recreated
+locally. Ship uses stdlib Tar over SSH. Pull-back stays rsync through
+0.2.x; Tar pull-back waits until 0.3.0 because it would drop remote mtimes
+on outputs. Git deploys also need **`git`**. `setup --ship-tree`,
+`go --ship-tree`, and `drive --ship-tree` extract the git file list into
+`<remote_root>/runs/<run_id>/src/`. `--rsync` was removed in 0.2.0.
+The remote login shell (`$SHELL`) must be POSIX-compatible
 (`sh`, `bash`, `dash`, or `zsh`). `ssh host command` runs `$SHELL -c`, not
 a login shell. Distributed's `SSHManager` starts workers with `sh -l -c`,
 and that wrap cannot be changed. `fish` and `csh` are unsupported. `fish`
