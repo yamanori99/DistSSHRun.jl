@@ -44,6 +44,52 @@ end
     end
 end
 
+@testset "declared inputs stay out of the ship" begin
+    Sys.which("git") === nothing && return
+    _with_tempdir() do tmp
+        run(`git -C $tmp init --quiet`)
+        run(`git -C $tmp config user.email t@t.t`)
+        run(`git -C $tmp config user.name t`)
+        write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
+        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        mkpath(joinpath(tmp, "data"))
+        write(joinpath(tmp, "data", "big.bin"), "payload\n")
+        mkpath(joinpath(tmp, ".distsshkit"))
+        write(
+            joinpath(tmp, ".distsshkit", "inputs.toml"),
+            """
+            [[inputs]]
+            name = "big"
+            path = "data"
+            hash = false
+            """,
+        )
+        run(`git -C $tmp add -A`)
+        run(`git -C $tmp commit --quiet -m init`)
+        packed = DistSSHRun.pack_ship_tar(tmp)
+        try
+            dest = mktempdir()
+            DistSSHRun.Tar.extract(packed.tar_path, dest)
+            @test !isfile(joinpath(dest, "data", "big.bin"))
+            @test isfile(joinpath(dest, "Project.toml"))
+        finally
+            rm(packed.tmpd; force = true, recursive = true)
+        end
+        probe = DistSSHRun._remote_input_probe_sh("/remote/data", false)
+        @test occursin("stat", probe)
+        @test !occursin("sha256sum", probe)
+        hashed = DistSSHRun._remote_input_probe_sh("/remote/data", true)
+        @test occursin("sha256sum", hashed)
+        run_dir = mktempdir()
+        DistSSHRun._write_input_manifest!(
+            run_dir,
+            [Dict{String, Any}("name" => "big", "path" => "data", "host" => "h", "kind" => "stat", "value" => "1 2")],
+        )
+        @test isfile(joinpath(run_dir, "inputs.toml"))
+        @test !isfile(joinpath(tmp, "inputs.toml"))
+    end
+end
+
 @testset "escaping symlink" begin
     Sys.which("git") === nothing && return
     _with_tempdir() do tmp

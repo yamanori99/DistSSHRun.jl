@@ -85,9 +85,122 @@ function _ship_rel_paths(local_root::AbstractString)::Vector{String}
     end
     out = unique!(vcat(rels, extras))
     filter!(rel -> !_ship_unshippable(joinpath(root, rel)), out)
+    declared = _load_ship_inputs(root)
+    if !isempty(declared)
+        filter!(out) do rel
+            return !_ship_input_covers(rel, declared)
+        end
+    end
     sort!(out)
     isempty(out) && throw(ArgumentError("nothing to ship from $root"))
     return out
+end
+
+struct ShipInput
+    name::String
+    path::String
+    hash::Bool
+end
+
+function _ship_input_covers(rel::AbstractString, inputs::Vector{ShipInput})::Bool
+    for input in inputs
+        rel == input.path && return true
+        startswith(rel, input.path * "/") && return true
+    end
+    return false
+end
+
+function _load_ship_inputs(root::AbstractString)::Vector{ShipInput}
+    file = joinpath(root, ".distsshkit", "inputs.toml")
+    isfile(file) || return ShipInput[]
+    raw = TOML.parsefile(file)
+    rows = get(raw, "inputs", Any[])
+    rows isa AbstractVector || throw(ArgumentError("inputs.toml: inputs must be an array"))
+    out = ShipInput[]
+    for row in rows
+        row isa AbstractDict || throw(ArgumentError("inputs.toml: each input must be a table"))
+        name = strip(string(get(row, "name", "")))
+        path = replace(strip(string(get(row, "path", ""))), '\\' => '/')
+        isempty(name) && throw(ArgumentError("inputs.toml: name is required"))
+        isempty(path) && throw(ArgumentError("inputs.toml: path is required for $name"))
+        (startswith(path, "/") || startswith(path, "..") || occursin("/../", path) || path == "..") &&
+            throw(ArgumentError("inputs.toml: path must stay inside the project: $path"))
+        flag = get(row, "hash", true)
+        flag isa Bool || throw(ArgumentError("inputs.toml: hash must be true or false for $name"))
+        push!(out, ShipInput(name, path, flag))
+    end
+    return out
+end
+
+function _remote_input_probe_sh(abs_path::AbstractString, do_hash::Bool)::String
+    q = _remote_shell_path_word(abs_path)
+    exists = "if [ ! -e $q ]; then echo missing; exit 2; fi; "
+    if !do_hash
+        return exists * "if stat -c '%s %Y' $q >/dev/null 2>&1; then stat -c '%s %Y' $q; else stat -f '%z %m' $q; fi"
+    end
+    one = "if [ -f $q ]; then if command -v sha256sum >/dev/null 2>&1; then sha256sum $q; else shasum -a 256 $q; fi | awk '{ print \$1; exit }'; exit 0; fi; "
+    tree = "find $q -type f | sort | while IFS= read -r f; do if command -v sha256sum >/dev/null 2>&1; then sha256sum \"\$f\"; else shasum -a 256 \"\$f\"; fi; done | if command -v sha256sum >/dev/null 2>&1; then sha256sum; else shasum -a 256; fi | awk '{ print \$1; exit }'"
+    return exists * one * tree
+end
+
+const _INPUT_MANIFEST_LOCK = ReentrantLock()
+
+function _write_input_manifest!(run_dir::AbstractString, rows::AbstractVector{<:AbstractDict})
+    lock(_INPUT_MANIFEST_LOCK) do
+        dest = joinpath(run_dir, "inputs.toml")
+        existing = if isfile(dest)
+            parsed = TOML.parsefile(dest)
+            parsed isa AbstractDict ? get(parsed, "inputs", Any[]) : Any[]
+        else
+            Any[]
+        end
+        existing isa AbstractVector || (existing = Any[])
+        for row in rows
+            push!(existing, Dict{String, Any}(String(k) => v for (k, v) in pairs(row)))
+        end
+        data = Dict{String, Any}("schema" => 1, "inputs" => existing)
+        tmp = dest * ".tmp"
+        open(tmp, "w") do io
+            TOML.print(io, data)
+        end
+        mv(tmp, dest; force = true)
+    end
+    return nothing
+end
+
+function _record_remote_inputs!(
+        host::AbstractString,
+        abs_root::AbstractString,
+        local_root::AbstractString,
+    )
+    inputs = _load_ship_inputs(local_root)
+    isempty(inputs) && return nothing
+    run_dir = kit_run_dir()
+    run_dir === nothing && throw(
+        ArgumentError(
+            "ship-tree: declared inputs need DISTSSHKIT_RUN_DIR; refusing to write next to the project",
+        ),
+    )
+    rows = Dict{String, Any}[]
+    for input in inputs
+        remote = _posix_join(abs_root, input.path)
+        code, out = _remote_shell_status(String(host), _remote_input_probe_sh(remote, input.hash))
+        code == 0 || throw(
+            ArgumentError("$(host): input $(input.name) ($(remote)): $(strip(out))"),
+        )
+        push!(
+            rows,
+            Dict{String, Any}(
+                "name" => input.name,
+                "path" => input.path,
+                "host" => String(host),
+                "kind" => input.hash ? "sha256" : "stat",
+                "value" => strip(out),
+            ),
+        )
+    end
+    _write_input_manifest!(run_dir, rows)
+    return nothing
 end
 
 function _lexical_join(base::AbstractString, target::AbstractString)::Vector{String}
@@ -516,6 +629,7 @@ function ship_project_to_hosts!(
                     pinned = something(pin_remote_julia(host, julia), resolve_remote_julia(host, julia))
                     pinned === nothing && throw(ArgumentError("Julia not found on $host"))
                     _remote_extract_tar!(host, src, packed.tar_path, pinned)
+                    _record_remote_inputs!(host, abs_root, local_root)
                     if report
                         kit_print("  $host: ")
                         print_ok("✓")
