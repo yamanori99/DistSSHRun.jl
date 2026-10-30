@@ -432,7 +432,9 @@ end
                 failed_step = "run",
                 run_dir = run_dir,
             )
-            @test DistSSHRun.result_provenance(go)["kind"] == "drive"
+            go_prov = DistSSHRun.result_provenance(go)
+            @test go_prov isa AbstractDict
+            @test go_prov["kind"] == "drive"
         end
 
         hosts = [
