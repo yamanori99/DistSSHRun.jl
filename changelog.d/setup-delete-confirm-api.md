@@ -1,3 +1,0 @@
-category: breaking
-
-- `setup!(session, :delete)` and `setup!(session, :prune)` delete only when `confirm_path` matches the target. `session.yes` does not authorize these two modes, and they do not read stdin. A `String` is accepted only for one SSH host. A `Dict` uses the configured host alias as the key: an unknown key is an error, and a host with no key is not deleted. A mismatch throws `ConfirmPathMismatch` (`mode`, `given`, `expected`). Do not copy `expected` into a retry. The remote delete refuses a final path component that is a symlink, and still refuses `/`, that host's home, and the Julia depot. Intermediate symlinks, such as macOS `/tmp`, stay allowed.

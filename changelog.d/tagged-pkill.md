@@ -1,3 +1,0 @@
-category: changed
-
-- Tagged `pkill -9` from `terminate!` and `terminate_run!` runs one SSH command per host, in parallel, through the same helper as `kill -INT` (`BatchMode=yes`, `ConnectTimeout`, `ServerAliveInterval=5`, `ServerAliveCountMax=1`, at most 8 at once). It has its own 15 second bound, connect timeout plus margin, and does not spend `interrupt_grace`. Worst case for those two stages is `interrupt_grace` plus that bound. Duplicate hosts are one `pkill`. Exit 1 (nothing matched) is success. Hosts that cannot be reached are listed in one warning, and the call still returns. The remote pattern is `[d]istsshkit-job:…`, so `pkill -f` does not match the `sh -c` line that contains it.

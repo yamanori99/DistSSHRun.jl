@@ -1,3 +1,0 @@
-category: breaking
-
-- `setup --instantiate`, `instantiate!`, `go`, and `go!` refuse a project file whose Manifest Base would use is missing. `setup --ship-tree`, `setup --clone`, `setup --sync`, `setup --pull`, and the same `drive` / `sync!` paths refuse that missing file. They also refuse a Manifest that would not be shipped: left out of the rsync send list, or not the lock `HEAD` would send. A missing file prints one line that names `julia --project=… -e 'using Pkg; Pkg.resolve()'`. `manifest_path` is that lookup. It is public on DistSSHRun and DistSSHBase, and not exported. A directory with no project file is unchanged. Ignored or untracked files under a path source still warn.

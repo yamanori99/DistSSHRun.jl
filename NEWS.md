@@ -11,6 +11,88 @@ The version-cut PR copies them into this file.
 
 ### Planned breaking (next minor)
 
+- Git sync will refuse a path source whose `*.jl` or project files are ignored or untracked. 0.1.7 warns.
+- Display helpers that no package outside DistSSHRun calls will stop being exported. `parse_go_args`, `parse_drive_args`, and `parse_ride_args` stay exported. DistSSHKit 0.11 drops the names this package stops exporting.
+
+## 0.2.0
+
+### Breaking
+
+- `drive` and `collect!` refuse a collect root that is the project root or a parent of it. That includes `DISTRIBUTED_COLLECT_DIRS=.` and a default root from `DISTRIBUTED_OUTPUT_DIR`. Point collect at a result directory inside the project. 0.1.7 warned and still collected. The check runs when sentinels are placed and again in `collect!` / `drive --collect-missing` / `drive --collect-overwrite`.
+- Remote instantiate (`setup --instantiate`, `instantiate!`, and the instantiate step of `go --ship-tree` / `drive --ship-tree`) stops, and names `help setup`, when the worker has no reachable registry, when `Pkg.is_manifest_current` is not `true` (a Manifest with no `project_hash` included), or when Manifest `julia_version` is missing or its minor differs from that Julia. It then runs `Pkg.instantiate(; manifest=true, update_registry=false, julia_version_strict=true)`. A missing Manifest is still the error from #219.
+- `interrupt_grace` on `terminate!` and `terminate_run!` defaults to 30 seconds (DistSSHRun 0.2.0). The 30 is a fixed default, chosen from the internal stop budgets (SSH connect, the 3 second worker settle, heartbeat stop, and `rmprocs`), not computed at runtime. Omit the keyword and `DISTSSHKIT_WAIT_SIGINT_GRACE` overrides it. That variable is read in the process that calls `terminate!` or `cancel`, not on the driver host. An explicit keyword wins. `0` sends no SIGINT and goes straight to SIGTERM, then SIGKILL. A negative value or `NaN` is an error. SIGINT is sent once. The parallel `kill -INT` ssh is bounded by the SSH connect timeout, at most 8 hosts at once, and uses `BatchMode=yes`, `ConnectTimeout`, `ServerAliveInterval=5`, and `ServerAliveCountMax=1`. `WorkerConfig.ospid` is the worker `getpid()` after `exec`, so `kill -INT` names that julia process. The settle window after the signal is a fixed 3 seconds. A write in that window is best-effort and should be small. Checkpoint large state during the run, to a temporary file, then rename it. A 1 GiB write in 0.4–0.7 seconds on one Mac mini is a lower bound. On Julia 1.13 a driver blocked in `pmap` ignores SIGINT, so the signal ladder takes the 30 seconds plus `grace` (default 10) plus one second after SIGKILL, about 41 seconds, and then the tagged `pkill`. On Julia 1.13 a second Ctrl-C forces the driver out of that cleanup. DistSSHQueue `cancel` of a running job uses this default.
+- `setup --instantiate`, `instantiate!`, `go`, and `go!` refuse a project file whose Manifest Base would use is missing. `setup --ship-tree`, `setup --clone`, `setup --sync`, `setup --pull`, and the same `drive` / `sync!` paths refuse that missing file. They also refuse a Manifest that would not be shipped: left out of the rsync send list, or not the lock `HEAD` would send. A missing file prints one line that names `julia --project=… -e 'using Pkg; Pkg.resolve()'`. `manifest_path` is that lookup. It is public on DistSSHRun and DistSSHBase, and not exported. A directory with no project file is unchanged. Ignored or untracked files under a path source still warn.
+- After a remote command fails with an exit other than 0 or SSH's 255, DistSSH checks that host's login shell. A non-POSIX shell throws `ArgumentError` and names `help setup` from `resolve_remote_julia`, from `setup` / `setup!` when the project check or remote git hash fails, and from `size` / `size!` and `drive` / `drive!` when the memory probe or a non-absolute remote path fails. `size` used to exit 0 with 0 GB. `drive` used to print that the memory check failed and continue. `get_remote_julia_version` still returns `nothing`. A command that succeeds does not run the check. A host that passes is not checked again in that process.
+- Setup SSH preflight and remote commands that go through `_remote_shell_status` run a POSIX login-shell probe (`case x in x)`) once per host and live `ssh_opts()` in the process. fish is rejected without running that command. `run_on_host` and other direct `_ssh_cmd` paths are not probed up front. A probe that is unknown still waits for a later non-zero exit, as before.
+- An SSH host that starts with `-`, including `user@-host`, is rejected before `ssh` or `scp` runs. A host or remote path that contains a control character (NUL, newline, or any other control byte) is rejected. Remote shell words go through one `posix_quote`. `openrsync` handling and the project-local `sshflags` warning are still open on #197.
+- `go`, `ride`, and `drive` refuse a non-empty output directory, a file, or a symlink. The error names that directory and the files in it. On the CLI the next line is `help go`, `help ride`, or `help drive`. An empty directory is kept, and a missing path is created. Omitting the directory still allocates a fresh one.
+- `go!` applies this to `output_dir` and to `collect_spec` when that value is a path. `ride!` applies it to the output directory. `drive` applies it to the directory chosen after `init_output_dir!`. Detached `execute!` applies it to an explicit `output_dir` before the child starts.
+- Demos that used a fixed `output/` directory take a new empty directory when that one already has files, so a second run still runs.
+- `setup` exits 1 when more than one mode flag is passed. The message names those two flags and `help setup`, and parsing stops at the second flag. `plan`, `pool`, and `size` exit 1 on an unknown `-` option before any other argument is applied, including when `-h` or `--help` is also present. The message names that option and `help plan`, `help pool`, or `help size`. `-h` and `--help` still print help when every flag is known. `setup` already rejected an unknown option; that message now names `help setup`.
+- `setup!(session, :delete)` and `setup!(session, :prune)` delete only when `confirm_path` matches the target. `session.yes` does not authorize these two modes, and they do not read stdin. A `String` is accepted only for one SSH host. A `Dict` uses the configured host alias as the key: an unknown key is an error, and a host with no key is not deleted. A mismatch throws `ConfirmPathMismatch` (`mode`, `given`, `expected`). Do not copy `expected` into a retry. The remote delete refuses a final path component that is a symlink, and still refuses `/`, that host's home, and the Julia depot. Intermediate symlinks, such as macOS `/tmp`, stay allowed.
+- `setup --delete` and `setup --prune` no longer treat `-y`, `--yes`, or `DISTSSHKIT_YES` as permission to delete. Without `--confirm-path`, those switches exit 1 and the message names `--confirm-path` (`help setup`). With neither `-y` nor `--confirm-path`, the commands still ask for `delete` or `prune`. A matching `--confirm-path` still deletes.
+- `setup --ship-tree` / `go --ship-tree` / `drive --ship-tree` and
+  `setup!(session, :ship_tree)` pack the git file list (`git ls-files -co
+  --exclude-standard`) as a tar and extract it to
+  `<remote_root>/runs/<run_id>/src/`. `run_id` is UTC plus 6 hex.
+  `remote_root` after expansion must not be `$HOME` or `/`. The leaf
+  directory is a plain `mkdir` (existing leaf fails). `--rsync` and
+  `sync=:rsync` / `setup!(session, :rsync)` were removed; the usage error
+  names `--ship-tree`. `setup!(session, :ship_tree; gitignore = false)`
+  is `ArgumentError` for every setup mode, including `:ship_tree`.
+  Collect, slot pull, and `push_cache!` still use
+  rsync. Escaping symlinks are refused unless `--allow-external-symlinks`.
+  Trees larger than 256 MiB fail. Later `--instantiate` / `--check` / `go`
+  use the latest `runs/<run_id>/src` when the remote root has no
+  `Project.toml`. `sync!(; mode=:ship_tree)` does not rewrite
+  `session.remote`. `run.toml` and `provenance.toml` record `schema = 1`
+  and `writer = "DistSSHRun x.y.z"`. Schema 1 no longer writes
+  `diff_sha256`. `[shipped]` records `content_tree_hash` (`git-sha1`),
+  bytes, files, host alias, and `run_dir_empty_at_start` when a ship ran.
+  Env is names only; paths are `~` or relative; cookies are omitted.
+  Unknown keys are ignored when reading. `[[inputs]]` / `outputs` are
+  reserved and not written.
+  Remaining rsync warns when PATH is openrsync. Project-local `sshflags`
+  are ignored with a warning; SSH uses `DISTRIBUTED_SSH_OPTS` / `ssh_opts()`.
+- `setup --sync`, `setup --pull`, and `sync!` check out the local commit on each remote (`git checkout --detach`) instead of `git pull`. The commit is pushed to `refs/distssh/<sha>` on that remote, so origin does not have to have it. Remote git runs with `core.fsmonitor=false` and `core.hooksPath=/dev/null`. A dirty local or remote tree is refused and is not sent as a patch. After checkout the remote is a detached HEAD, and a HEAD that is not that commit is an error. Submodules are updated to the pinned commit. Git LFS files are fetched when `.gitattributes` requests them. A shallow remote that still does not contain the commit is an error and is not unshallowed.
+- Detached `execute!` always uses `--project=` of the job tree. A job that
+  does not list DistSSHKit or DistSSHRun in `[deps]` fails instead of using
+  serve's active project.
+- `go`, `ride`, and `drive` pin the real Julia binary (`Sys.BINDIR`), start
+  with `--startup-file=no --history-file=no` and an explicit `--threads`,
+  set worker `JULIA_LOAD_PATH=@:@stdlib` (local workers also add the parent
+  project, then DistSSHRun's package directory), and unset `JULIA_PROJECT`
+  so it cannot override `--project=`. SSH workers wrap the binary with
+  `env -u … JULIA_LOAD_PATH=@:@stdlib` (not `env -u JULIA_LOAD_PATH`) and
+  `cd` to the project root (not the script directory) and bind `127.0.0.1`
+  with `tunnel=true`. SSH adds `ExitOnForwardFailure=yes`. Drive / ride
+  workers and go slots error on Julia / DistSSH* / Manifest path mismatch
+  unless `--allow-mismatch` lists `julia`, `distssh`, and/or `manifest`
+  (Manifest format 2 `[[deps.Name]]` tables are read; identity uses Julia's
+  active Manifest, including `Manifest-v{major}.{minor}.toml`. A missing
+  Manifest is a mismatch only when the parent job has one.
+  `JuliaManifest.toml` vs `Manifest.toml` is a mismatch unless `manifest`
+  is waived). A remote Julia that cannot print `Sys.BINDIR` fails instead
+  of launching the starter path. Parent `LOAD_PATH`
+  and `@v#.#` are no longer visible to workers. Worker `JULIA_LOAD_PATH`
+  uses Unix `:` (native Windows is still unsupported).
+
+- The first `drive` in a process compiles less. `plan` is no longer inferred inside `run_drive_parsed!`, a drive without `--sync` or `--ship-tree` does not infer that path, and that call is precompiled. The text and the exit code do not change. Loading the package from a project still needs that project's dependencies instantiated.
+- Collect, `collect!`, and go slot pull pass rsync `--safe-links`, so a remote symlink that points outside the copied tree is not recreated locally. Pull-back stays rsync through 0.2.x; Tar pull-back waits until 0.3.0 because it would drop remote mtimes on outputs.
+- The remote login shell must be POSIX (`sh`, `bash`, `dash`, or `zsh`). `ssh` runs a command as `$SHELL -c`, not a login shell. Distributed's SSHManager starts workers with `sh -l -c`, and that wrap cannot be changed. `fish` and `csh` are unsupported. `fish` can silently change quoting (a backslash inside single quotes). See `help setup`.
+- Tagged `pkill -9` from `terminate!` and `terminate_run!` runs one SSH command per host, in parallel, through the same helper as `kill -INT` (`BatchMode=yes`, `ConnectTimeout`, `ServerAliveInterval=5`, `ServerAliveCountMax=1`, at most 8 at once). It has its own 15 second bound, connect timeout plus margin, and does not spend `interrupt_grace`. Worst case for those two stages is `interrupt_grace` plus that bound. Duplicate hosts are one `pkill`. Exit 1 (nothing matched) is success. Hosts that cannot be reached are listed in one warning, and the call still returns. The remote pattern is `[d]istsshkit-job:…`, so `pkill -f` does not match the `sh -c` line that contains it.
+- `main` is public on DistSSHRun and is not exported. `julia -m DistSSHRun` still dispatches the same commands. DistSSHKit calls `DistSSHRun.main`.
+- `terminate!` and `terminate_run!` set `KitRunResult.stop` from the signal ladder. `:within_grace` means the process exited after one SIGINT, before SIGTERM. `:sigterm` and `:sigkill` mean that `interrupt_grace` window ended and the ladder escalated. `:no_sigint` means `interrupt_grace` was 0, so SIGINT was not sent. `nothing` means the ladder did not run. The same string is written as `stop` in `kit.result`. When the kit run directory already has this package's `run.toml` (`schema = 1`, `writer` starting with `DistSSHRun `), `stop` is set there too. `terminate_run!` finds that directory from `kit.run_dir` next to `kit.pid`, or from this package's `run.toml` in the supplied directory. A `run.toml` in the artifact `output_dir` or log directory is left alone unless that supplied directory already holds this package's `run.toml`. An unknown `stop` string is ignored.
+- A CLI script from a checkout with no manifest exits with an instantiate hint and writes nothing under the depot. `julia -m DistSSHRun` and an installed package are unchanged.
+- In-process `drive!` looks up `Main.init_output_dir!` with `invokelatest` after `include`. A stale world-age read of that binding warned on Julia 1.12+ and will error later.
+- In-process `drive!` runs `init_output_dir!` only when this script defines it. A function left in `Main` by an earlier driver is not called, so a later script does not reuse that driver's output directory.
+- `drive` writes the planned SSH hosts to `kit.hosts` before workers join, then replaces that list with the hosts that joined. The file is removed when none joined. An interrupt or other error during join leaves the planned list, so `terminate!` outside Queue can reap those workers.
+- `drive` / `drive!` restore the active project and `DISTRIBUTED_PROJECT_ROOT`, `DISTRIBUTED_REMOTE_PROJECT_ROOT`, `DISTRIBUTED_OUTPUT_DIR`, and `DISTRIBUTED_RUNNER` when they return, including after an error or Ctrl-C. A second `main` in the same process runs. (#184, #185)
+- Ctrl-C during `drive` still exits 130 after cleanup. A second Ctrl-C exits 130 and skips the rest of that cleanup. `drive!` rethrows the interrupt instead of exiting. On Julia 1.14 the caller task stays cancelled.
+- `warn_openrsync_once` inspects the rsync collect / cache pull will spawn, not the first `rsync` on PATH. A `DISTSSHKIT_TEST_RSYNC` double is `sh` plus a script, so unit collect no longer warns on GitHub `macos-latest` (Apple openrsync) while Homebrew GNU rsync on a local Mac never did.
+- A Julia path passed to `get_remote_julia_version` is one quoted remote shell word, so a path that contains spaces is not split. A leading `~/` is sent as `$HOME/`. A `$HOME/…` prefix still expands on the remote. A backtick, double quote, backslash, or any other `$` in that word is escaped.
+- A second Ctrl-C during `drive` cleanup on Julia 1.13 now `_exit`s 130. The previous `jl_exit` from the signal handler could SIGSEGV on macOS, so the process did not report 130.
+
 ## 0.1.16
 
 - `unknown_subcommand_message`, `no_command_message`, `print_rejected_command`, `NO_COMMAND_HINT_LINES`, and `RUN_SUBCOMMAND_EXPECTATION` are public. They are the sentences an unknown `julia -m DistSSHRun` command already prints. The text and the exit code do not change. DistSSHKit calls these names.
