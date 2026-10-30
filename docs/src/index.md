@@ -44,9 +44,10 @@ is `:within_grace` when the process exited after one SIGINT and before
 SIGTERM, `:sigterm` or `:sigkill` when that `interrupt_grace` window ended
 and the ladder escalated, and `:no_sigint` when `interrupt_grace` was 0.
 `nothing` means this call did not run the ladder. The same string is `stop`
-in `kit.result` and in `run.toml` when that file already exists. `schema`
-stays 1. Read it from the return value or from `kit_result_from_dir` /
-`read_kit_run_toml`.
+in `kit.result`. When the kit run directory already has this package's
+`run.toml`, `stop` is set there too. A `run.toml` in the artifact
+`output_dir` or log directory is left alone. `schema` stays 1. Read it from
+the return value or from `kit_result_from_dir` / `read_kit_run_toml`.
 
 The remote login shell (`$SHELL`) must be POSIX-compatible (`sh`, `bash`,
 `dash`, or `zsh`). `ssh host command` runs that shell as `$SHELL -c`, not

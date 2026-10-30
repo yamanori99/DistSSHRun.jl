@@ -1686,7 +1686,7 @@ function _result_with_stop(result::KitRunResult, stop::Union{Nothing, Symbol})::
     )
 end
 
-"""Write `stop` onto `result` and the sidecars. `run_dir=nothing` does not use [`kit_run_dir`](@ref)."""
+"""Write `stop` onto `result` and `kit.result`. Stamp `run.toml` only in `run_dir`."""
 function _persist_stop(
         result::KitRunResult,
         stop::Union{Nothing, Symbol};
@@ -1695,8 +1695,8 @@ function _persist_stop(
     stamped = _result_with_stop(result, stop)
     stamped.stop === nothing && return stamped
     _write_kit_result_file(stamped; run_dir = run_dir)
-    for d in _kit_sidecar_dirs(stamped.output_dir, stamped.log_dir; run_dir = run_dir)
-        _stamp_run_toml_stop!(d, stamped.stop)
+    if run_dir !== nothing && !isempty(strip(String(run_dir)))
+        _stamp_run_toml_stop!(run_dir, stamped.stop)
     end
     return stamped
 end
@@ -1743,8 +1743,9 @@ returns. The remote pattern is `[d]istsshkit-job:…`, so `pkill -f` does
 not match the `sh -c` line that contains the command.
 
 The returned [`KitRunResult`](@ref) `stop` is that ladder outcome. The same
-string is written to `kit.result` and, when `run.toml` already exists, to
-`stop` there. `schema` stays 1.
+string is written to `kit.result`. When `run_dir` holds this package's
+`run.toml` (`schema = 1`, `writer` starting with `DistSSHRun `), `stop` is
+set there too. Artifact `output_dir` / `log_dir` are not rewritten.
 """
 function terminate!(
         kp::KitProcess;

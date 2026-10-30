@@ -222,6 +222,26 @@ using Test
                 @test after["ok"] === true
                 @test after["stop"] == "sigkill"
             end
+            other = mktempdir()
+            try
+                write(joinpath(other, "run.toml"), "name = \"job\"\n")
+                DistSSHRun._stamp_run_toml_stop!(other, :sigkill)
+                @test read(joinpath(other, "run.toml"), String) == "name = \"job\"\n"
+                write(joinpath(other, "run.toml"), "schema = 1\nkind = \"go\"\n")
+                DistSSHRun._stamp_run_toml_stop!(other, :sigkill)
+                @test !occursin("stop", read(joinpath(other, "run.toml"), String))
+                out = joinpath(other, "out")
+                mkpath(out)
+                write(joinpath(out, "run.toml"), "name = \"artifact\"\n")
+                DistSSHRun._persist_stop(
+                    DistSSHRun.KitRunResult(false, :go, out, nothing, "go", 1),
+                    :sigterm;
+                    run_dir = nothing,
+                )
+                @test read(joinpath(out, "run.toml"), String) == "name = \"artifact\"\n"
+            finally
+                rm(other; recursive = true, force = true)
+            end
         end
     end
 

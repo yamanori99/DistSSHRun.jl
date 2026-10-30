@@ -266,11 +266,26 @@ function write_kit_run_toml!(
     return nothing
 end
 
-"""Set `stop` on an existing `run.toml`. Leaves the file alone when it is missing. Never throws."""
+"""True when `run.toml` is this package's schema 1 manifest, not an arbitrary TOML file."""
+function _kit_run_toml_owned(raw::AbstractDict)::Bool
+    schema = get(raw, "schema", nothing)
+    schema isa Integer || return false
+    schema == 1 || return false
+    writer = get(raw, "writer", nothing)
+    writer isa AbstractString || return false
+    startswith(String(writer), "DistSSHRun ") || return false
+    kind = get(raw, "kind", nothing)
+    kind isa AbstractString || return false
+    ks = String(kind)
+    return ks == "go" || ks == "drive" || ks == "ride" || ks == "pipeline"
+end
+
+"""Set `stop` on this package's `run.toml`. Leaves any other file alone. Never throws."""
 function _stamp_run_toml_stop!(run_dir::AbstractString, stop::Symbol)
     _kit_stop_symbol(stop) === nothing && return nothing
     raw = read_kit_run_toml(run_dir)
     raw === nothing && return nothing
+    _kit_run_toml_owned(raw) || return nothing
     data = Dict{String, Any}(String(k) => v for (k, v) in raw)
     data["stop"] = String(stop)
     try

@@ -300,8 +300,9 @@ SIGINT was sent and the process was gone before SIGTERM, so workers had that
 `interrupt_grace` window. `:sigterm` and `:sigkill` mean that window ended
 and the ladder escalated. `:no_sigint` means `interrupt_grace` was 0, so
 SIGINT was not sent and the ladder went to SIGTERM (then SIGKILL if the
-process was still alive). The same string is `stop` in `kit.result` and
-`run.toml`. `schema` stays 1. An unknown `stop` string is ignored.
+process was still alive). The same string is `stop` in `kit.result`. When
+the kit run directory already has this package's `run.toml`, `stop` is set
+there too. `schema` stays 1. An unknown `stop` string is ignored.
 """
 struct KitRunResult
     ok::Bool
