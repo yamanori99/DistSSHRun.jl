@@ -239,6 +239,27 @@ using Test
                     run_dir = nothing,
                 )
                 @test read(joinpath(out, "run.toml"), String) == "name = \"artifact\"\n"
+                run_d = joinpath(other, "run")
+                mkpath(run_d)
+                DistSSHRun.write_kit_run_toml!(
+                    run_d;
+                    kind = :go,
+                    result = DistSSHRun.KitRunResult(true, :go, out, nothing, nothing, 0),
+                )
+                DistSSHRun._write_kit_pid_file(getpid(), out, nothing; run_dir = run_d)
+                @test DistSSHRun._run_dir_for_stop(out) ==
+                    DistSSHRun.canonical_local_path(run_d)
+                DistSSHRun._persist_stop(
+                    DistSSHRun.KitRunResult(false, :go, out, nothing, "terminated", 1),
+                    :sigterm;
+                    run_dir = DistSSHRun._run_dir_for_stop(out),
+                )
+                stamped = DistSSHRun.read_kit_run_toml(run_d)
+                @test stamped isa AbstractDict
+                if stamped isa AbstractDict
+                    @test stamped["stop"] == "sigterm"
+                end
+                @test read(joinpath(out, "run.toml"), String) == "name = \"artifact\"\n"
             finally
                 rm(other; recursive = true, force = true)
             end

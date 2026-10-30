@@ -81,7 +81,7 @@ end
 # Parent `execute!(detached=true)` writes these into the output directory after
 # spawn, once that directory was already empty. A child that inherited
 # `DISTSSHKIT_RUN_DIR` may see them and nothing else.
-const _OUTPUT_DIR_PARENT_SIDECARS = ("kit.job", "kit.pid")
+const _OUTPUT_DIR_PARENT_SIDECARS = ("kit.job", "kit.pid", "kit.run_dir")
 
 """
     _prepare_output_dir!(dir; command, surface=:api, allow_parent_sidecars=false) -> String
@@ -93,8 +93,8 @@ directory, a file, or a symlink is refused. Call this before a lock or
 `kit.pid` write.
 
 `allow_parent_sidecars` is for a child that already inherited
-`DISTSSHKIT_RUN_DIR`. `kit.pid` and `kit.job` alone do not refuse that
-directory. Any other name still does, and the error lists every name.
+`DISTSSHKIT_RUN_DIR`. `kit.pid`, `kit.job`, and `kit.run_dir` alone do not
+refuse that directory. Any other name still does, and the error lists every name.
 """
 function _prepare_output_dir!(
         dir::AbstractString;

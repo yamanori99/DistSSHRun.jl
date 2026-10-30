@@ -45,7 +45,8 @@ SIGTERM, `:sigterm` or `:sigkill` when that `interrupt_grace` window ended
 and the ladder escalated, and `:no_sigint` when `interrupt_grace` was 0.
 `nothing` means this call did not run the ladder. The same string is `stop`
 in `kit.result`. When the kit run directory already has this package's
-`run.toml`, `stop` is set there too. A `run.toml` in the artifact
+`run.toml`, `stop` is set there too. `terminate_run!` finds that directory
+from `kit.run_dir` next to `kit.pid`. A `run.toml` in the artifact
 `output_dir` or log directory is left alone. `schema` stays 1. Read it from
 the return value or from `kit_result_from_dir` / `read_kit_run_toml`.
 

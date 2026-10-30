@@ -785,6 +785,12 @@ function _write_kit_pid_file(
             if job_id !== nothing && !isempty(strip(String(job_id)))
                 write(joinpath(d, "kit.job"), strip(String(job_id)))
             end
+            if run_dir !== nothing && !isempty(strip(String(run_dir)))
+                write(
+                    joinpath(d, "kit.run_dir"),
+                    canonical_local_path(String(run_dir)) * "\n",
+                )
+            end
         catch
             # best-effort only
         end
@@ -1112,6 +1118,20 @@ function kit_pid_file_running(output_dir::AbstractString)::Bool
     cur = kit_process_start_key(rec.pid)
     cur === nothing && return false
     return cur == rec.start
+end
+
+"""Kit run directory recorded next to `kit.pid`, else this package's `run.toml` here."""
+function _run_dir_for_stop(dir::AbstractString)::Union{Nothing, String}
+    recorded = _read_kit_text_file(dir, "kit.run_dir")
+    if recorded !== nothing
+        s = strip(recorded)
+        !isempty(s) && return canonical_local_path(s)
+    end
+    env = kit_run_dir()
+    env !== nothing && return env
+    raw = read_kit_run_toml(dir)
+    raw !== nothing && _kit_run_toml_owned(raw) && return canonical_local_path(dir)
+    return nothing
 end
 
 function _read_kit_hosts(output_dir::AbstractString)::Vector{String}
@@ -1770,7 +1790,9 @@ Like [`terminate!`](@ref) after losing [`KitProcess`](@ref): read `kit.pid` /
 SIGINT stage, including the 30 second default and
 `DISTSSHKIT_WAIT_SIGINT_GRACE` in this process. `kind` is only used when
 `kit.result` is missing. `stop` is the ladder outcome, including on that
-synthetic result, and is written the same way as [`terminate!`](@ref).
+synthetic result. `run.toml` is stamped in the kit run directory named by
+`kit.run_dir` next to `kit.pid`, or in `output_dir` when that directory
+already holds this package's `run.toml`.
 """
 function terminate_run!(
         output_dir::AbstractString;
@@ -1799,5 +1821,5 @@ function terminate_run!(
             "terminated",
             1,
         )
-    return _persist_stop(result, stop; run_dir = d)
+    return _persist_stop(result, stop; run_dir = _run_dir_for_stop(d))
 end
