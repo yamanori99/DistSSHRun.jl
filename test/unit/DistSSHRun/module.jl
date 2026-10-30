@@ -19,16 +19,22 @@ using Test
     ns = names(DistSSHRun)
     @test :size! in ns && :go! in ns && :drive! in ns && :plan in ns
     @test :pool! in ns && :ResourcePool in ns && :HostInventory in ns
-    @test :print_pool in ns && :worker_plan_from_pool ∉ ns
-    @test :ride! in ns && :RideResult in ns && :print_ride in ns
-    @test :parse_ride_args ∉ ns && :show_ride_usage ∉ ns
+    @test :print_pool ∉ ns && Base.ispublic(DistSSHRun, :print_pool)
+    @test :worker_plan_from_pool ∉ ns
+    @test :ride! in ns && :RideResult in ns
+    @test :print_ride ∉ ns && Base.ispublic(DistSSHRun, :print_ride)
+    @test :parse_ride_args in ns && :show_ride_usage ∉ ns
     @test :plan! ∉ ns && :KitPlan in ns && :PlanFinding in ns
-    @test :print_plan in ns && :parse_plan_args ∉ ns && :show_plan_usage ∉ ns
+    @test :print_plan ∉ ns && Base.ispublic(DistSSHRun, :print_plan)
+    @test :parse_plan_args ∉ ns && :show_plan_usage ∉ ns
     @test :parse_pool_args ∉ ns && :show_pool_usage ∉ ns
     @test :stored_path in ns && :file_sha256 in ns && :cache_file in ns
     @test :cache_path in ns && :cache_relpath in ns
     @test :push_cache! in ns && :cache_remote_dir in ns
-    @test :KitRunResult in ns && :kit_run_result in ns && :report_run_errors in ns
+    @test :KitRunResult in ns && :kit_run_result in ns
+    @test :report_run_errors ∉ ns && Base.ispublic(DistSSHRun, :report_run_errors)
+    @test :report_pipeline_errors ∉ ns && Base.ispublic(DistSSHRun, :report_pipeline_errors)
+    @test :report_go_errors ∉ ns && Base.ispublic(DistSSHRun, :report_go_errors)
     @test :execute! in ns && :KitProcess in ns && :kit_result_from_dir in ns
     @test :drive_host_status in ns && :DriveHostStatus in ns
     @test :allocate_output_dir in ns
@@ -40,16 +46,21 @@ using Test
     @test :terminate! in ns && :terminate_run! in ns
     @test :parse_go_args in ns && :parse_drive_args in ns
     @test :execute_kwargs_from_parsed in ns
-    @test :show_go_usage in ns && :show_drive_usage in ns
-    @test :println_kit_version in ns && :ssh_opts in ns
+    @test :show_go_usage ∉ ns && Base.ispublic(DistSSHRun, :show_go_usage)
+    @test :show_drive_usage ∉ ns && Base.ispublic(DistSSHRun, :show_drive_usage)
+    @test :println_kit_version ∉ ns && Base.ispublic(DistSSHRun, :println_kit_version)
+    @test :ssh_opts in ns
     @test :resolve_remote_julia ∉ ns && :resolve_controller_julia in ns
     @test :run_on_host in ns
     @test :canonical_local_path in ns && :short_path in ns
     @test :resolve_pkg_project_dir in ns && :explain_script_not_found in ns
-    @test :print_cli_error in ns && :print_help_chrome in ns
-    @test :print_help_section in ns && :print_help_lines in ns
-    @test :print_help_blank in ns && :print_colored in ns
-    @test :SPINNER_FRAMES in ns
+    @test :print_cli_error ∉ ns && Base.ispublic(DistSSHRun, :print_cli_error)
+    @test :print_help_chrome ∉ ns && Base.ispublic(DistSSHRun, :print_help_chrome)
+    @test :print_help_section ∉ ns && Base.ispublic(DistSSHRun, :print_help_section)
+    @test :print_help_lines ∉ ns && Base.ispublic(DistSSHRun, :print_help_lines)
+    @test :print_help_blank ∉ ns && Base.ispublic(DistSSHRun, :print_help_blank)
+    @test :print_colored ∉ ns && Base.ispublic(DistSSHRun, :print_colored)
+    @test :SPINNER_FRAMES ∉ ns && Base.ispublic(DistSSHRun, :SPINNER_FRAMES)
     @test :_print_colored ∉ ns
     @test DistSSHRun._print_colored === DistSSHRun.print_colored
     @test DistSSHRun.ssh_opts === DistSSHRun.DistSSHBase.ssh_opts

@@ -12,7 +12,7 @@ end
 
 using DistSSHRun
 
-# Issue that removes the use. #57 keeps `parse_ride_args` exported.
+# #57 exported `parse_ride_args`. Remaining entries wait for #201.
 # #201 is the public-surface freeze. `main` is public, so it is not listed.
 const DOWNSTREAM_PUBLIC_ALLOW = Dict{Tuple{Symbol, Symbol}, Int}(
     (:DistSSHBase, :_ssh_host_args) => 201,
@@ -37,7 +37,6 @@ const DOWNSTREAM_PUBLIC_ALLOW = Dict{Tuple{Symbol, Symbol}, Int}(
     (:DistSSHRun, :kit_verbosity) => 201,
     (:DistSSHRun, :parse_plan_args) => 201,
     (:DistSSHRun, :parse_pool_args) => 201,
-    (:DistSSHRun, :parse_ride_args) => 57,
     (:DistSSHRun, :parse_size_args) => 201,
     (:DistSSHRun, :per_worker_gb_dict) => 201,
     (:DistSSHRun, :print_header) => 201,
