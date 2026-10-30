@@ -274,6 +274,16 @@ using Test
                     @test DistSSHRun._run_dir_for_stop(run_d) ==
                         DistSSHRun.canonical_local_path(run_d)
                 end
+                blocked = joinpath(other, "blocked")
+                mkpath(blocked)
+                mkdir(joinpath(blocked, "kit.run_dir"))
+                DistSSHRun._write_kit_pid_file(
+                    getpid(),
+                    blocked,
+                    nothing;
+                    run_dir = run_d,
+                )
+                @test !isfile(joinpath(blocked, "kit.pid"))
             finally
                 rm(other; recursive = true, force = true)
             end
@@ -1157,6 +1167,24 @@ using Test
                 e
             end
             @test err_nan isa ArgumentError
+        end
+        _with_tempdir() do tmp
+            out = joinpath(tmp, "out")
+            run_d = joinpath(tmp, "run")
+            mkpath(out)
+            mkpath(run_d)
+            write(
+                joinpath(out, "kit.run_dir"),
+                DistSSHRun.canonical_local_path(run_d) * "\n",
+            )
+            DistSSHRun._write_kit_result_file(
+                DistSSHRun.KitRunResult(false, :go, run_d, nothing, "collect", 7);
+                run_dir = run_d,
+            )
+            r = DistSSHRun.terminate_run!(out; grace = 0)
+            @test r.failed_step == "collect"
+            @test r.exit_code == 7
+            @test r.kind === :go
         end
     end
 

@@ -774,13 +774,10 @@ function _write_kit_pid_file(
         try
             mkpath(d) # child creates it too, but may not have raced ahead of us yet
             if run_dir !== nothing && !isempty(strip(String(run_dir)))
-                try
-                    write(
-                        joinpath(d, "kit.run_dir"),
-                        canonical_local_path(String(run_dir)) * "\n",
-                    )
-                catch
-                end
+                write(
+                    joinpath(d, "kit.run_dir"),
+                    canonical_local_path(String(run_dir)) * "\n",
+                )
             end
             path = joinpath(d, "kit.pid")
             body = sprint() do io
@@ -1194,8 +1191,13 @@ function _require_nonnegative(name::AbstractString, value::Real)
     return nothing
 end
 
-_send_signal(p::Base.Process, sig::Integer) = kill(p, sig)
-_send_signal(pid::Integer, sig::Integer) = ccall(:kill, Cint, (Cint, Cint), Cint(pid), Cint(sig))
+function _send_signal(p::Base.Process, sig::Integer)::Bool
+    kill(p, sig)
+    return true
+end
+function _send_signal(pid::Integer, sig::Integer)::Bool
+    return ccall(:kill, Cint, (Cint, Cint), Cint(pid), Cint(sig)) == 0
+end
 
 _target_alive(p::Base.Process)::Bool = process_running(p)
 _target_alive(pid::Integer)::Bool = kit_pid_alive(pid)
@@ -1203,18 +1205,22 @@ _target_alive(pid::Integer)::Bool = kit_pid_alive(pid)
 """Send `sig` once if `target` is alive, then wait up to `wait_s` seconds.
 
 Do not retry. A second signal is a separate force, not part of this wait.
+`true` when this call delivered the signal.
 """
-function _signal_and_wait!(target, sig::Integer, wait_s::Real)
-    _target_alive(target) || return nothing
+function _signal_and_wait!(target, sig::Integer, wait_s::Real)::Bool
+    _target_alive(target) || return false
+    sent = false
     try
-        _send_signal(target, sig)
+        sent = _send_signal(target, sig)
     catch
+        sent = false
     end
+    sent || return false
     t0 = time()
     while _target_alive(target) && (time() - t0) < Float64(wait_s)
         sleep(0.05)
     end
-    return nothing
+    return true
 end
 
 # Seconds to wait after SIGKILL. Part of the cancel budget, not a keyword.
@@ -1275,14 +1281,18 @@ function _signal_ladder!(target; interrupt_grace::Real, grace::Real)::Union{Noth
     end
     _target_alive(target) || return nothing
     if interrupt_grace > 0
-        _signal_and_wait!(target, Base.SIGINT, interrupt_grace)
-        _target_alive(target) || return :within_grace
+        sent_int = _signal_and_wait!(target, Base.SIGINT, interrupt_grace)
+        if !_target_alive(target)
+            return sent_int ? :within_grace : nothing
+        end
     end
-    _signal_and_wait!(target, Base.SIGTERM, grace)
+    sent_term = _signal_and_wait!(target, Base.SIGTERM, grace)
     if !_target_alive(target)
+        sent_term || return interrupt_grace > 0 ? :within_grace : nothing
         return interrupt_grace > 0 ? :sigterm : :no_sigint
     end
-    _signal_and_wait!(target, Base.SIGKILL, _SIGNAL_KILL_WAIT_S)
+    sent_kill = _signal_and_wait!(target, Base.SIGKILL, _SIGNAL_KILL_WAIT_S)
+    sent_kill || return interrupt_grace > 0 ? :sigterm : :no_sigint
     return interrupt_grace > 0 ? :sigkill : :no_sigint
 end
 
@@ -1816,7 +1826,11 @@ function terminate_run!(
     end
     job_id = _read_kit_text_file(d, "kit.job")
     _reap_tagged_workers!(job_id, _read_kit_hosts(d))
+    run_d = _run_dir_for_stop(d)
     recovered = kit_result_from_dir(d)
+    if recovered === nothing && run_d !== nothing
+        recovered = kit_result_from_dir(run_d)
+    end
     result = recovered !== nothing ? recovered : KitRunResult(
             false,
             kind,
@@ -1825,5 +1839,5 @@ function terminate_run!(
             "terminated",
             1,
         )
-    return _persist_stop(result, stop; run_dir = _run_dir_for_stop(d))
+    return _persist_stop(result, stop; run_dir = run_d)
 end
