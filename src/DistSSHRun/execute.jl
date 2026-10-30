@@ -774,13 +774,13 @@ function _write_kit_pid_file(
         try
             mkpath(d) # child creates it too, but may not have raced ahead of us yet
             if run_dir !== nothing && !isempty(strip(String(run_dir)))
-                write(
-                    joinpath(d, "kit.run_dir"),
-                    canonical_local_path(String(run_dir)) * "\n",
-                )
-            end
-            if job_id !== nothing && !isempty(strip(String(job_id)))
-                write(joinpath(d, "kit.job"), strip(String(job_id)))
+                try
+                    write(
+                        joinpath(d, "kit.run_dir"),
+                        canonical_local_path(String(run_dir)) * "\n",
+                    )
+                catch
+                end
             end
             path = joinpath(d, "kit.pid")
             body = sprint() do io
@@ -791,6 +791,12 @@ function _write_kit_pid_file(
                 end
             end
             write(path, body)
+            if job_id !== nothing && !isempty(strip(String(job_id)))
+                try
+                    write(joinpath(d, "kit.job"), strip(String(job_id)))
+                catch
+                end
+            end
         catch
             # best-effort only
         end
