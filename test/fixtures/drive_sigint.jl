@@ -25,6 +25,13 @@ function main()
         end
     end
     touch(ENV["DISTSSHKIT_TEST_SIGINT_MARKER"])
-    pmap(_ -> (sleep(120); 1), 1:nworkers())
+    # Captured here so a local worker can touch it. `main_started` is written
+    # before `pmap` schedules anything.
+    pmap_marker = joinpath(@__DIR__, "pmap_entered")
+    pmap(_ -> begin
+        touch(pmap_marker)
+        sleep(120)
+        1
+    end, 1:nworkers())
     return nothing
 end

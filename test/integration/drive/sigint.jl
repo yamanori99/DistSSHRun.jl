@@ -115,12 +115,14 @@ end
         budget = grace + 11
         _mktemp_host() do proj
             marker = joinpath(proj, "main_started")
+            in_pmap = joinpath(proj, "pmap_entered")
             restore = joinpath(proj, "restored.txt")
             cmd = _sigint_child(proj; marker = marker, restore = restore)
             proc, reader = _start_subprocess(cmd)
             started = timedwait(() -> isfile(marker) || !process_running(proc), 300.0; pollint = 0.5)
             @test started === :ok && isfile(marker)
-            sleep(2)
+            entered = timedwait(() -> isfile(in_pmap) || !process_running(proc), 120.0; pollint = 0.25)
+            @test entered === :ok && isfile(in_pmap)
             t0 = time()
             kill(proc, Base.SIGINT)
             stopped = timedwait(() -> !process_running(proc), budget + 15; pollint = 0.25)
