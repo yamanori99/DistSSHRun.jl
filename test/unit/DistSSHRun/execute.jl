@@ -260,6 +260,20 @@ using Test
                     @test stamped["stop"] == "sigterm"
                 end
                 @test read(joinpath(out, "run.toml"), String) == "name = \"artifact\"\n"
+                stray = joinpath(other, "caller-run")
+                mkpath(stray)
+                DistSSHRun.write_kit_run_toml!(
+                    stray;
+                    kind = :go,
+                    result = DistSSHRun.KitRunResult(true, :go, out, nothing, nothing, 0),
+                )
+                empty_out = joinpath(other, "empty-out")
+                mkpath(empty_out)
+                withenv(DistSSHRun.DISTSSHKIT_RUN_DIR_ENV => stray) do
+                    @test DistSSHRun._run_dir_for_stop(empty_out) === nothing
+                    @test DistSSHRun._run_dir_for_stop(run_d) ==
+                        DistSSHRun.canonical_local_path(run_d)
+                end
             finally
                 rm(other; recursive = true, force = true)
             end

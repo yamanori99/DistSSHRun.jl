@@ -47,7 +47,9 @@ and the ladder escalated, and `:no_sigint` when `interrupt_grace` was 0.
 in `kit.result`. When the kit run directory already has this package's
 `run.toml`, `stop` is set there too. `terminate_run!` finds that directory
 from `kit.run_dir` next to `kit.pid`. A `run.toml` in the artifact
-`output_dir` or log directory is left alone. `schema` stays 1. Read it from
+`output_dir` or log directory is left alone unless the supplied
+`output_dir` already holds this package's `run.toml`; `terminate_run!`
+updates that file. `schema` stays 1. Read it from
 the return value or from `kit_result_from_dir` / `read_kit_run_toml`.
 
 The remote login shell (`$SHELL`) must be POSIX-compatible (`sh`, `bash`,
