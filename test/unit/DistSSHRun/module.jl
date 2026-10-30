@@ -33,6 +33,7 @@ using Test
     @test :drive_host_status in ns && :DriveHostStatus in ns
     @test :allocate_output_dir in ns
     @test :allocate_run_dir in ns && :kit_run_dir in ns && :read_kit_run_toml in ns
+    @test :result_provenance in ns
     @test :parse_progress_line ∉ ns && :kit_progress_latest ∉ ns
     @test :kit_progress_phases ∉ ns
     @test :execute_detached_accepts in ns && :kit_pid_alive ∉ ns

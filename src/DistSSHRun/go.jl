@@ -7,7 +7,12 @@ struct GoSlot
     label::String
 end
 
-"""Outcome of [`go!`](@ref). On failure, `failed_step` is `"sync"`, `"run"`, or `"collect"`."""
+"""Outcome of [`go!`](@ref). On failure, `failed_step` is `"sync"`, `"run"`, or `"collect"`.
+
+`run_dir` is this run's `DISTSSHKIT_RUN_DIR` when one is active.
+[`result_provenance`](@ref) reads `run.toml` from it. Omitted `run_dir`
+uses [`kit_run_dir`](@ref), which is `nothing` outside a run.
+"""
 struct GoResult
     ok::Bool
     sync::Union{Nothing, SyncResult}
@@ -16,17 +21,34 @@ struct GoResult
     script::String
     output_dir::String
     failed_step::Union{Nothing, String}
+    run_dir::Union{Nothing, String}
+    function GoResult(
+            ok::Bool,
+            sync::Union{Nothing, SyncResult},
+            run::Union{Nothing, DriveResult},
+            collect::Union{Nothing, CollectResult},
+            script::String,
+            output_dir::String,
+            failed_step::Union{Nothing, String},
+            run_dir::Union{Nothing, String},
+        )
+        return new(ok, sync, run, collect, script, output_dir, failed_step, run_dir)
+    end
 end
 
-GoResult(
-    ok::Bool,
-    sync::Union{Nothing, SyncResult},
-    run::Union{Nothing, DriveResult},
-    collect::Union{Nothing, CollectResult},
-    script::String,
-    output_dir::String;
-    failed_step::Union{Nothing, String} = nothing,
-) = GoResult(ok, sync, run, collect, script, output_dir, failed_step)
+function GoResult(
+        ok::Bool,
+        sync::Union{Nothing, SyncResult},
+        run::Union{Nothing, DriveResult},
+        collect::Union{Nothing, CollectResult},
+        script::String,
+        output_dir::String;
+        failed_step::Union{Nothing, String} = nothing,
+        run_dir::Union{Nothing, AbstractString} = nothing,
+    )
+    rd = run_dir === nothing ? kit_run_dir() : String(run_dir)
+    return GoResult(ok, sync, run, collect, script, output_dir, failed_step, rd)
+end
 
 function kit_run_result(
         result::GoResult,
@@ -40,7 +62,8 @@ function kit_run_result(
         result.failed_step,
         _result_exit_code(result.ok, result.run, result.collect, result.failed_step),
         HostRunResult[],
-        tokens,
+        tokens;
+        run_dir = result.run_dir,
     )
 end
 

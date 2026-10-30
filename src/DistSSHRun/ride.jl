@@ -38,7 +38,8 @@ function kit_run_result(
         result.ok ? nothing : "ride",
         result.ok ? 0 : 1,
         HostRunResult[],
-        tokens,
+        tokens;
+        run_dir = kit_run_dir(),
     )
 end
 

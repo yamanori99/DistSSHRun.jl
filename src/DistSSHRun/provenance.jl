@@ -685,3 +685,14 @@ function _write_provenance_sidecar(
     end
     return nothing
 end
+
+"""
+    result_provenance(result) -> Union{Nothing, AbstractDict}
+
+Read `run.toml` from `result.run_dir`. `nothing` when `run_dir` is unset or the file is missing.
+"""
+function result_provenance(result::Union{DriveResult, GoResult, KitRunResult})
+    rd = result.run_dir
+    rd === nothing && return nothing
+    return read_kit_run_toml(rd)
+end

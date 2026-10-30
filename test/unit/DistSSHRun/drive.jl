@@ -409,6 +409,31 @@ end
         @test isempty(dr.hosts)
         @test DistSSHRun.kit_run_result(dr).kind === :drive
         @test DistSSHRun.kit_run_result(dr).exit_code == 7
+        @test dr.run_dir === nothing
+        @test DistSSHRun.result_provenance(dr) === nothing
+        mktempdir() do run_dir
+            DistSSHRun.write_kit_run_toml!(
+                run_dir;
+                kind = :drive,
+                result = DistSSHRun.KitRunResult(false, :drive, "/out", nothing, "drive", 7),
+            )
+            held = DistSSHRun.DriveResult(
+                false, 7;
+                output_dir = "/out",
+                failed_step = "drive",
+                run_dir = run_dir,
+            )
+            prov = DistSSHRun.result_provenance(held)
+            @test prov isa AbstractDict
+            @test prov["kind"] == "drive"
+            @test DistSSHRun.kit_run_result(held).run_dir == run_dir
+            go = DistSSHRun.GoResult(
+                false, nothing, held, nothing, "job.jl", "/out";
+                failed_step = "run",
+                run_dir = run_dir,
+            )
+            @test DistSSHRun.result_provenance(go)["kind"] == "drive"
+        end
 
         hosts = [
             DistSSHRun.HostRunResult("h1", true),
