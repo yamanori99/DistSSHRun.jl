@@ -25,7 +25,7 @@ using Test
     @test :worker_plan_from_pool ∉ ns
     @test :ride! in ns && :RideResult in ns
     @test not_exported(:print_ride)
-    @test :parse_ride_args in ns && :show_ride_usage ∉ ns
+    @test Base.isexported(DistSSHRun, :parse_ride_args) && :show_ride_usage ∉ ns
     @test :plan! ∉ ns && :KitPlan in ns && :PlanFinding in ns
     @test not_exported(:print_plan)
     @test :parse_plan_args ∉ ns && :show_plan_usage ∉ ns
@@ -46,7 +46,8 @@ using Test
     @test :execute_detached_accepts in ns && :kit_pid_alive ∉ ns
     @test :kit_pid_file_running in ns
     @test :terminate! in ns && :terminate_run! in ns
-    @test :parse_go_args in ns && :parse_drive_args in ns
+    @test Base.isexported(DistSSHRun, :parse_go_args) &&
+        Base.isexported(DistSSHRun, :parse_drive_args)
     @test :execute_kwargs_from_parsed in ns
     @test not_exported(:show_go_usage)
     @test not_exported(:show_drive_usage)
@@ -75,7 +76,7 @@ using Test
     @test :split_worker_token ∉ ns && :is_parent_host_name in ns && :host_tokens in ns
     @test :size_plan ∉ ns && :go ∉ ns && :drive ∉ ns
     @test isdefined(DistSSHRun, :go) && isdefined(DistSSHRun, :drive)
-    @test isdefined(DistSSHRun, :parse_ride_args) && isdefined(DistSSHRun, :kit_pid_alive)
+    @test isdefined(DistSSHRun, :kit_pid_alive)
     @test !isdefined(DistSSHRun, :size_plan)
 
     let fixture = _fixture("cli_echo_args.jl")
