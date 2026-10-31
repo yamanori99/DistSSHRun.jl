@@ -217,6 +217,18 @@ end
         )
         @test isfile(joinpath(run_dir, "inputs.toml"))
         @test !isfile(joinpath(tmp, "inputs.toml"))
+        withenv("DISTSSHKIT_RUN_DIR" => nothing) do
+            err = try
+                DistSSHRun.ship_project_to_hosts!(
+                    ["host.test"], tmp, "/remote/app"; confirm = false, report = false,
+                )
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("DISTSSHKIT_RUN_DIR", sprint(showerror, err))
+        end
     end
 end
 

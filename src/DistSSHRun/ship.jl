@@ -743,6 +743,13 @@ function ship_project_to_hosts!(
         ship_max_bytes = ship_max_bytes,
     )
     try
+        if !isempty(_load_ship_inputs(packed.root)) && kit_run_dir() === nothing
+            throw(
+                ArgumentError(
+                    "ship-tree: declared inputs need DISTSSHKIT_RUN_DIR; refusing to write next to the project",
+                ),
+            )
+        end
         if confirm && !kit_noninteractive()
             cancelled = with_kit_progress_suspended() do
                 writeln_both(
