@@ -170,6 +170,36 @@ using Test
             @test length(result.hosts) == 1 && !result.hosts[1].ok
         end
 
+        _with_fake_remotes(; extra_env = Dict("DISTSSHKIT_TEST_PROJECT_MODE" => "drwxrwxr-x")) do state_dir
+            host = "host1"
+            slot = replace(host, r"[@:/]" => "_")
+            tree = joinpath(state_dir, slot, "tree")
+            mkpath(tree)
+            _, result = _capture_stdio() do _, _
+                DistSSHRun.clone_to_remotes(
+                    [host], "~/App.jl", "git@example.com:org/App.jl.git";
+                    confirm = false,
+                )
+            end
+            @test !result.cancelled && result.succeeded == 0 && result.failed == 1
+            @test occursin("group-writable", result.hosts[1].message)
+            @test !isdir(joinpath(tree, ".git"))
+        end
+        _with_fake_remotes(; extra_env = Dict("DISTSSHKIT_TEST_PROJECT_MODE" => "drwxrwxrwx")) do state_dir
+            host = "host1"
+            slot = replace(host, r"[@:/]" => "_")
+            tree = joinpath(state_dir, slot, "tree")
+            _, result = _capture_stdio() do _, _
+                DistSSHRun.clone_to_remotes(
+                    [host], "~/App.jl", "git@example.com:org/App.jl.git";
+                    confirm = false,
+                )
+            end
+            @test result.failed == 1
+            @test occursin("world-writable", result.hosts[1].message)
+            @test !isdir(tree)
+        end
+
         _with_fake_remotes(; extra_env = Dict("DISTSSHKIT_TEST_GIT_CLONE_FAIL" => "1")) do _
             result = DistSSHRun.clone_to_remotes(
                 ["host1"], "~/App.jl", "git@example.com:org/App.jl.git";

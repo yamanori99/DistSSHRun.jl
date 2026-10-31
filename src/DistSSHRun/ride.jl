@@ -6,7 +6,18 @@ const _RIDE_SPI = Ref(true)
 const _RIDE_SPI_OK = Ref{Union{Nothing, Bool}}(nothing)
 const _RIDE_CAPTURE_DEPTH = 4
 
-"""Outcome of [`ride!`](@ref). Experimental."""
+"""Outcome of [`ride!`](@ref). Experimental.
+
+`output_dir` is the ride batch directory. `run_dir` is the
+`DISTSSHKIT_RUN_DIR` captured while that run was active. [`ride!`](@ref)
+restores the previous directory before it returns. Read the saved
+directory with [`result_run_dir`](@ref). [`result_provenance`](@ref) does
+not accept a `RideResult`; convert it with [`kit_run_result`](@ref) first.
+
+Result fields and positional constructors are not API. Result structs are
+not a stable serialization format. `serialize` and JLD2 of a result are
+unsupported. The supported record is `kit.result`.
+"""
 struct RideResult
     ok::Bool
     script::String
@@ -15,6 +26,19 @@ struct RideResult
     error::Union{Nothing, String}
     julia::String
     output_dir::Union{Nothing, String}
+    run_dir::Union{Nothing, String}
+    function RideResult(
+            ok::Bool,
+            script::String,
+            workers::Int,
+            spi_ok::Union{Nothing, Bool},
+            error::Union{Nothing, String},
+            julia::String,
+            output_dir::Union{Nothing, String},
+            run_dir::Union{Nothing, String},
+        )
+        return new(ok, script, workers, spi_ok, error, julia, output_dir, run_dir)
+    end
 end
 
 RideResult(
@@ -24,7 +48,28 @@ RideResult(
     spi_ok::Union{Nothing, Bool},
     error::Union{Nothing, String},
     julia::AbstractString,
-) = RideResult(ok, String(script), Int(workers), spi_ok, error, String(julia), nothing)
+) = RideResult(ok, String(script), Int(workers), spi_ok, error, String(julia), nothing, nothing)
+
+function RideResult(
+        ok::Bool,
+        script::AbstractString,
+        workers::Integer,
+        spi_ok::Union{Nothing, Bool},
+        error::Union{Nothing, String},
+        julia::AbstractString,
+        output_dir::Union{Nothing, AbstractString},
+    )
+    return RideResult(
+        ok,
+        String(script),
+        Int(workers),
+        spi_ok,
+        error,
+        String(julia),
+        output_dir === nothing ? nothing : String(output_dir),
+        nothing,
+    )
+end
 
 function kit_run_result(
         result::RideResult,
@@ -38,7 +83,8 @@ function kit_run_result(
         result.ok ? nothing : "ride",
         result.ok ? 0 : 1,
         HostRunResult[],
-        tokens,
+        tokens;
+        run_dir = result.run_dir,
     )
 end
 
@@ -625,6 +671,8 @@ function _ride_run!(
         hint_surface::Symbol,
         inherited_run::Bool,
     )
+    # `ride!` restores `DISTSSHKIT_RUN_DIR` after this returns.
+    run_dir = kit_run_dir()
     project_root_abs = canonical_local_path(project)
     _reset_run_provenance!(project_root_abs)
     tok = String[String(t) for t in tokens]
@@ -632,7 +680,7 @@ function _ride_run!(
         _ride_resolve_plan(tok)
     catch e
         e isa ArgumentError && return RideResult(
-            false, path, 0, nothing, sprint(showerror, e), julia_s,
+            false, path, 0, nothing, sprint(showerror, e), julia_s, nothing, run_dir,
         )
         rethrow()
     end
@@ -640,7 +688,9 @@ function _ride_run!(
     expr = try
         Meta.parseall(src; filename = path)
     catch e
-        return RideResult(false, path, 0, nothing, sprint(showerror, e), julia_s)
+        return RideResult(
+            false, path, 0, nothing, sprint(showerror, e), julia_s, nothing, run_dir,
+        )
     end
     rewritten = _ride_rewrite(expr)
     _ride_reset_runtime!(; spi_check = spi_check)
@@ -658,7 +708,9 @@ function _ride_run!(
     release_lock = () -> nothing
     progress_started = false
     progress_ok = false
-    outcome = RideResult(false, path, 0, nothing, "aborted", julia_s, batch_dir)
+    outcome = RideResult(
+        false, path, 0, nothing, "aborted", julia_s, batch_dir, run_dir,
+    )
     try
         ENV["DISTRIBUTED_OUTPUT_DIR"] = batch_dir
         mkpath(batch_dir)
@@ -697,11 +749,14 @@ function _ride_run!(
         kit_progress_step!("run")
         _ride_run_script!(rewritten)
         progress_ok = true
-        outcome = RideResult(true, path, length(added), _RIDE_SPI_OK[], nothing, julia_s, batch_dir)
+        outcome = RideResult(
+            true, path, length(added), _RIDE_SPI_OK[], nothing, julia_s, batch_dir, run_dir,
+        )
         return outcome
     catch e
         outcome = RideResult(
-            false, path, length(added), _RIDE_SPI_OK[], sprint(showerror, e), julia_s, batch_dir,
+            false, path, length(added), _RIDE_SPI_OK[], sprint(showerror, e), julia_s,
+            batch_dir, run_dir,
         )
         return outcome
     finally

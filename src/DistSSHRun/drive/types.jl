@@ -303,6 +303,15 @@ SIGINT was not sent and the ladder went to SIGTERM (then SIGKILL if the
 process was still alive). The same string is `stop` in `kit.result`. When
 the kit run directory already has this package's `run.toml`, `stop` is set
 there too. `schema` stays 1. An unknown `stop` string is ignored.
+
+`run_dir` is this run's `DISTSSHKIT_RUN_DIR` when one is known. Read it
+with [`result_run_dir`](@ref). [`result_provenance`](@ref) reads
+`run.toml` from it. A [`RideResult`](@ref) is not accepted there; convert
+it with [`kit_run_result`](@ref) first.
+
+Result fields and positional constructors are not API. Result structs are
+not a stable serialization format. `serialize` and JLD2 of a result are
+unsupported. The supported record is `kit.result`.
 """
 struct KitRunResult
     ok::Bool
@@ -314,6 +323,7 @@ struct KitRunResult
     hosts::Vector{HostRunResult}
     tokens::Vector{String}
     stop::Union{Nothing, Symbol}
+    run_dir::Union{Nothing, String}
     function KitRunResult(
             ok::Bool,
             kind::Symbol,
@@ -323,7 +333,8 @@ struct KitRunResult
             exit_code::Integer,
             hosts::AbstractVector{HostRunResult} = HostRunResult[],
             tokens::AbstractVector{<:AbstractString} = String[],
-            stop::Union{Nothing, Symbol} = nothing,
+            stop::Union{Nothing, Symbol} = nothing;
+            run_dir::Union{Nothing, AbstractString} = nothing,
         )
         parsed = _kit_stop_symbol(stop)
         stop !== nothing && parsed === nothing && throw(
@@ -341,6 +352,7 @@ struct KitRunResult
             collect(HostRunResult, hosts),
             String[String(t) for t in tokens],
             parsed,
+            run_dir === nothing ? nothing : String(run_dir),
         )
     end
 end
@@ -375,6 +387,14 @@ disabled.
 `hosts` is one [`HostRunResult`](@ref) per host that joined as a worker, in
 the order results were collected. Empty when no host-collection step ran
 (e.g. built by hand, or a run with no remote/local-only hosts).
+
+`run_dir` is this run's `DISTSSHKIT_RUN_DIR` when the driver allocated one.
+Read it with [`result_run_dir`](@ref). [`result_provenance`](@ref) reads
+`run.toml` from it.
+
+Result fields and positional constructors are not API. Result structs are
+not a stable serialization format. `serialize` and JLD2 of a result are
+unsupported. The supported record is `kit.result`.
 """
 struct DriveResult
     ok::Bool
@@ -383,23 +403,45 @@ struct DriveResult
     log_dir::Union{Nothing, String}
     failed_step::Union{Nothing, String}
     hosts::Vector{HostRunResult}
+    run_dir::Union{Nothing, String}
+    function DriveResult(
+            ok::Bool,
+            exit_code::Integer,
+            output_dir::Union{Nothing, String},
+            log_dir::Union{Nothing, String},
+            failed_step::Union{Nothing, String},
+            hosts::AbstractVector{HostRunResult},
+            run_dir::Union{Nothing, String} = nothing,
+        )
+        return new(
+            ok,
+            Int(exit_code),
+            output_dir,
+            log_dir,
+            failed_step,
+            collect(HostRunResult, hosts),
+            run_dir,
+        )
+    end
 end
 
 function DriveResult(
         ok::Bool,
-        exit_code::Int;
+        exit_code::Integer;
         output_dir::Union{Nothing, AbstractString} = nothing,
         log_dir::Union{Nothing, AbstractString} = nothing,
         failed_step::Union{Nothing, AbstractString} = nothing,
         hosts::AbstractVector{HostRunResult} = HostRunResult[],
+        run_dir::Union{Nothing, AbstractString} = nothing,
     )
     return DriveResult(
         ok,
-        exit_code,
+        Int(exit_code),
         _optional_path(output_dir),
         _optional_path(log_dir),
         failed_step === nothing ? nothing : String(failed_step),
         collect(HostRunResult, hosts),
+        _optional_path(run_dir),
     )
 end
 
@@ -569,7 +611,8 @@ function kit_run_result(result::DriveResult)::KitRunResult
         result.log_dir,
         result.failed_step,
         result.exit_code,
-        result.hosts,
+        result.hosts;
+        run_dir = result.run_dir,
     )
 end
 
