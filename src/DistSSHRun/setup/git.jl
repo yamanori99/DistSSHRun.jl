@@ -50,7 +50,7 @@ const _REMOTE_GIT_CONFIG_ARGS = (
     "--no-optional-locks",
 )
 
-"""`:world`, `:group`, or `nothing` from an `ls -ld` mode (`drwxrwxrwx`)."""
+"""`:world`, `:group`, or `nothing` from an `ls -ldL` mode (`drwxrwxrwx`)."""
 function _ls_mode_writable_kind(mode::AbstractString)::Union{Nothing, Symbol}
     m = String(mode)
     length(m) < 10 && return nothing
@@ -59,10 +59,23 @@ function _ls_mode_writable_kind(mode::AbstractString)::Union{Nothing, Symbol}
     return nothing
 end
 
-"""Remote `sh` that prints `missing` or the `ls -ld` mode of `abs_path`."""
+"""True when `mode` is an `ls -ldL` directory mode, including an ACL mark."""
+function _ls_directory_mode(mode::AbstractString)::Bool
+    m = String(mode)
+    return length(m) >= 10 && m[1] == 'd'
+end
+
+"""Remote `sh` that prints `missing` or the `ls -ldL` mode of `abs_path`.
+
+`-L` follows a symlink so the mode is the directory Git uses, not `lrwxrwxrwx`.
+`-l` stays so the first field is the mode. `ls` failure exits 1. A pipeline
+that drops that status is not a private directory.
+"""
 function _remote_project_mode_sh(abs_path::AbstractString)::String
     q = _remote_shell_path_word(abs_path)
-    return "if [ ! -d $q ]; then echo missing; exit 0; fi; ls -ld $q | awk '{ print \$1; exit }'"
+    return "if [ ! -d $q ]; then echo missing; exit 0; fi; " *
+        "mode=\$(ls -ldL $q) || exit 1; " *
+        "printf '%s\\n' \"\$mode\" | awk '{ print \$1; exit }'"
 end
 
 function _remote_project_mode(host::AbstractString, abs_path::AbstractString)
@@ -87,6 +100,11 @@ function _remote_project_mode(host::AbstractString, abs_path::AbstractString)
     line = strip(String(take!(out_buf)))
     line == "missing" && return (; ok = true, kind = :missing, detail = "")
     token = isempty(line) ? "" : String(first(split(line)))
+    _ls_directory_mode(token) || return (;
+        ok = false,
+        kind = :probe_failed,
+        detail = isempty(token) ? "could not read the project mode" : token,
+    )
     kind = _ls_mode_writable_kind(token)
     return (; ok = true, kind = something(kind, :private), detail = token)
 end
@@ -118,6 +136,26 @@ function _remote_git_shell(
         push!(argv, String(a))
     end
     return DistSSHBase._remote_argv_sh(argv)
+end
+
+"""Remote `sh` for `git clone`. Same `-c` and `--no-optional-locks` as [`_remote_git_shell`](@ref).
+
+`umask 022` keeps the new tree from being group- or world-writable. The
+destination stays outside the quoted argv so a `~` path still expands.
+"""
+function _remote_git_clone_sh(
+        remote_path::AbstractString,
+        clone_url::AbstractString,
+    )::String
+    argv = String["git"]
+    for opt in _REMOTE_GIT_CONFIG_ARGS
+        push!(argv, String(opt))
+    end
+    push!(argv, "clone", "--", String(clone_url))
+    return "umask 022 && " *
+        DistSSHBase._remote_argv_sh(argv) *
+        " " *
+        _remote_shell_path_word(remote_path)
 end
 
 function _git_remote_url(project::AbstractString)::String

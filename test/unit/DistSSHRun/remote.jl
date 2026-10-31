@@ -97,9 +97,25 @@ end
         @test DistSSHRun._ls_mode_writable_kind("drwxrwxrwx") === :world
         @test DistSSHRun._ls_mode_writable_kind("drwxrwxr-x") === :group
         @test DistSSHRun._ls_mode_writable_kind("drwxr-xr-x") === nothing
+        @test DistSSHRun._ls_directory_mode("drwxr-xr-x")
+        @test DistSSHRun._ls_directory_mode("drwxrwxr-x+")
+        @test !DistSSHRun._ls_directory_mode("lrwxrwxrwx")
+        @test !DistSSHRun._ls_directory_mode("")
         mode_sh = DistSSHRun._remote_project_mode_sh("/opt/App.jl")
         @test occursin("missing", mode_sh)
+        @test occursin("ls -ldL", mode_sh)
+        @test occursin("exit 1", mode_sh)
         @test !occursin("mkdir", mode_sh)
+        clone_sh = DistSSHRun._remote_git_clone_sh("/opt/App.jl", "https://example.test/App.jl")
+        @test startswith(clone_sh, "umask 022 && ")
+        @test occursin("core.hooksPath=/dev/null", clone_sh)
+        @test occursin("core.autocrlf=false", clone_sh)
+        @test occursin("--no-optional-locks", clone_sh)
+        @test occursin("'clone'", clone_sh)
+        @test !occursin("safe.directory", clone_sh)
+        @test endswith(clone_sh, " " * DistSSHRun._remote_shell_path_word("/opt/App.jl"))
+        tilde_clone = DistSSHRun._remote_git_clone_sh("~/App.jl", "git@example.test:App.jl")
+        @test endswith(tilde_clone, " " * DistSSHRun._remote_shell_path_word("~/App.jl"))
     end
 
     @testset "run_on_host remote sh" begin

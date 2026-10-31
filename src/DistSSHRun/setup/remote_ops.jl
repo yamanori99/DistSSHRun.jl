@@ -181,8 +181,7 @@ function clone_to_remotes(
         cancelled && return (; cancelled = true, succeeded = 0, failed = 0, hosts = HostResult[])
     end
 
-    pq = _remote_shell_path_word(remote_path)
-    uq = posix_quote(String(clone_url))
+    clone_sh = _remote_git_clone_sh(remote_path, clone_url)
     succeeded = 0
     failed = 0
     host_results = HostResult[]
@@ -207,8 +206,7 @@ function clone_to_remotes(
                 end
                 run(
                     pipeline(
-                        # umask 022: a later git command refuses a group- or world-writable project.
-                        _host_sync_remote_shell_cmd(host, "umask 022 && git clone -- $uq $pq");
+                        _host_sync_remote_shell_cmd(host, clone_sh);
                         stdout = out_buf,
                         stderr = err_buf,
                     )
