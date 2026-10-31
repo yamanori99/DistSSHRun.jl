@@ -7,8 +7,9 @@ name: CI weekly
 # 1.13 matches a main push of Test: DistSSHRun titles, then downstream,
 # DistSSHUp, and DistSSHBase as separate matrices (no coverage). WSL2
 # 1.13 runs here and on a main push, not on a pull request.
-# 1.14-pre and nightly Pkg.test and Aqua on macOS and WSL2 run here only, and stay
-# out of notify. Ubuntu copies also run in Test.
+# macOS nightly, and 1.14-pre and nightly Pkg.test and Aqua on WSL2, run here
+# only, and stay out of notify. Ubuntu 1.14-pre and macOS 1.14-pre Pkg.test
+# also run in Test. macOS Aqua stays here.
 on:
   workflow_dispatch:
   # Daily 06:00 JST (UTC 21:00). Misses E2E weekly (daily UTC 19:00).
