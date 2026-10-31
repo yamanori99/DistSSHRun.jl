@@ -267,6 +267,38 @@ end
     end
 
 
+    @testset "delete shell refuses an unowned run leaf stamp" begin
+        script = DistSSHRun._remote_delete_shell("/tmp/app")
+        @test occursin("refusing to delete unowned run leaf", script)
+        @test occursin("_dsk_assert_run_leaves_owned", script)
+        @test occursin("DistSSHRun ", script)
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            mkpath(joinpath(leaf, "src"))
+            write(
+                joinpath(leaf, "run.toml"),
+                "schema = 1\nwriter = \"Other 9.9.9\"\nkind = \"ship\"\n",
+            )
+            body = DistSSHRun._remote_delete_shell(root)
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(pipeline(`sh -c $body`; stdout = devnull, stderr = err));
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isdir(leaf)
+            write(joinpath(leaf, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
+            proc2 = run(
+                ignorestatus(pipeline(`sh -c $(DistSSHRun._remote_delete_shell(root))`; stdout = devnull, stderr = devnull));
+                wait = true,
+            )
+            @test proc2.exitcode == 0
+            @test !isdir(root)
+        end
+    end
+
     @testset "delete shell refuses a final symlink and quotes odd names" begin
         script = DistSSHRun._remote_delete_shell("~/proj")
         @test occursin("test -L", script)

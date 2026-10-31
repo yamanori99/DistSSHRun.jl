@@ -50,6 +50,19 @@ function prune_kit_leaf_dirs!(
     n = 0
     for p in victims
         isdir(p) || continue
+        stamp = joinpath(p, "run.toml")
+        if isfile(stamp)
+            raw = try
+                open(stamp) do io
+                    TOML.parse(io)
+                end
+            catch
+                nothing
+            end
+            if raw === nothing || !_kit_run_toml_owned(raw)
+                throw(ArgumentError("refusing to prune unowned run leaf $p"))
+            end
+        end
         rm(p; recursive = true, force = true)
         n += 1
     end
@@ -159,6 +172,7 @@ function _prune_remote_shell(
     older_q = posix_quote(older)
     return """
     # DISTSSHKIT_PRUNE_KIT_LEAVES
+    $(_remote_run_toml_owned_check_sh())
     root=$pq
     older=$older_q
     id=$idq
@@ -180,6 +194,16 @@ function _prune_remote_shell(
         exit 1
       fi
     fi
+    _dsk_prune_leaf() {
+      _child=\$1
+      if [ -f "\$_child/run.toml" ]; then
+        if ! _dsk_run_toml_owned "\$_child/run.toml"; then
+          printf 'refusing to prune unowned run leaf %s\\n' "\$_child" >&2
+          exit 1
+        fi
+      fi
+      rm -rf "\$_child"
+    }
     find "\$root" -type d -name .distsshkit 2>/dev/null | while IFS= read -r kit; do
       go="\$kit/go"
       if [ -d "\$go" ]; then
@@ -193,7 +217,7 @@ function _prune_remote_shell(
             # find -mtime +N is > N days; local prune is >= DAYS.
             [ -n "\$(find "\$child" -maxdepth 0 -mtime +"\$((older - 1))" 2>/dev/null)" ] || continue
           fi
-          rm -rf "\$child"
+          _dsk_prune_leaf "\$child"
         done
       fi
       runs="\$kit/runs"
@@ -209,7 +233,7 @@ function _prune_remote_shell(
             if [ -n "\$older" ] && [ "\$older" != 0 ]; then
               [ -n "\$(find "\$child" -maxdepth 0 -mtime +"\$((older - 1))" 2>/dev/null)" ] || continue
             fi
-            rm -rf "\$child"
+            _dsk_prune_leaf "\$child"
           done
         done
       fi
@@ -220,7 +244,7 @@ function _prune_remote_shell(
           if [ -n "\$older" ] && [ "\$older" != 0 ]; then
             [ -n "\$(find "\$p" -maxdepth 0 -mtime +"\$((older - 1))" 2>/dev/null)" ] || continue
           fi
-          rm -rf "\$p"
+          _dsk_prune_leaf "\$p"
         done
       fi
     done

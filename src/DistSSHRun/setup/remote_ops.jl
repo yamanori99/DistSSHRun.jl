@@ -47,11 +47,47 @@ The final path component must not be a symlink. Intermediate symlinks stay,
 so `cd -P` / `pwd -P` can resolve them. The `test -L` check and `rm` are one
 script. Flags are `rm -rf` only (BSD rm on macOS).
 """
+# Shell helpers: missing run.toml is allowed; a present file must be owned.
+function _remote_run_toml_owned_check_sh()::String
+    return """
+    _dsk_run_toml_owned() {
+      _f=\$1
+      [ -f "\$_f" ] || return 0
+      grep -Eq '^schema = 1\$' "\$_f" || return 1
+      grep -Eq '^writer = \"DistSSHRun ' "\$_f" || return 1
+      grep -Eq '^kind = \"(go|drive|ride|pipeline|ship)\"\$' "\$_f" || return 1
+      return 0
+    }
+    _dsk_assert_run_leaves_owned() {
+      _root=\$1
+      if [ -f "\$_root/run.toml" ]; then
+        if ! _dsk_run_toml_owned "\$_root/run.toml"; then
+          printf 'refusing to delete unowned run leaf %s\\n' "\$_root" >&2
+          return 1
+        fi
+      fi
+      if [ -d "\$_root/runs" ]; then
+        for _leaf in "\$_root/runs"/*; do
+          [ -d "\$_leaf" ] || continue
+          if [ -f "\$_leaf/run.toml" ]; then
+            if ! _dsk_run_toml_owned "\$_leaf/run.toml"; then
+              printf 'refusing to delete unowned run leaf %s\\n' "\$_leaf" >&2
+              return 1
+            fi
+          fi
+        done
+      fi
+      return 0
+    }
+    """
+end
+
 function _remote_delete_shell(remote_path::AbstractString)::String
     pq = _remote_shell_path_word(remote_path)
     # `$pq` is its own word. A double-quoted echo would treat its quotes as
     # text and run `$(...)` in the path.
     return """
+    $(_remote_run_toml_owned_check_sh())
     if test -L $pq; then
       printf 'refusing to delete symlink %s\\n' $pq >&2
       exit 1
@@ -70,6 +106,7 @@ function _remote_delete_shell(remote_path::AbstractString)::String
           exit 1
         fi
       fi
+      _dsk_assert_run_leaves_owned "\$_distssh_target" || exit 1
     fi
     rm -rf $pq 2>/dev/null
     if test -e $pq; then
