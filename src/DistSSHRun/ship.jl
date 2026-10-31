@@ -380,6 +380,12 @@ function _manifest_line(hex::AbstractString, path::AbstractString)::String
     return lowercase(String(hex)) * " *" * path
 end
 
+function _regex_field(m::RegexMatch, i::Int)::String
+    cap = m.captures[i]
+    cap isa AbstractString || throw(ArgumentError("regex capture $i was empty"))
+    return String(cap)
+end
+
 function _input_row_from_probe(
         name::AbstractString,
         path::AbstractString,
@@ -397,10 +403,10 @@ function _input_row_from_probe(
             "path" => String(path),
             "host" => String(host),
             "algorithm" => "stat",
-            "files" => parse(Int, String(m.captures[1])),
-            "bytes" => parse(Int, String(m.captures[2])),
-            "newest_mtime" => parse(Int, String(m.captures[3])),
-            "stat_digest" => lowercase(String(m.captures[4])),
+            "files" => parse(Int, _regex_field(m, 1)),
+            "bytes" => parse(Int, _regex_field(m, 2)),
+            "newest_mtime" => parse(Int, _regex_field(m, 3)),
+            "stat_digest" => lowercase(_regex_field(m, 4)),
             "verification" => "stat",
             "hashed_at" => hashed_at,
         )
@@ -465,8 +471,8 @@ end
 function _show_input_progress!(name::AbstractString, line::AbstractString, t0::Float64, last_pct::Ref{Int})
     m = match(r"^PROG (\d+) (\d+)$", line)
     m === nothing && return nothing
-    done = tryparse(Int, String(m.captures[1]))
-    total = tryparse(Int, String(m.captures[2]))
+    done = tryparse(Int, _regex_field(m, 1))
+    total = tryparse(Int, _regex_field(m, 2))
     (done === nothing || total === nothing) && return nothing
     total <= 0 && return nothing
     pct = min(100, fld(100 * done, total))
@@ -483,9 +489,9 @@ function _show_input_progress!(name::AbstractString, line::AbstractString, t0::F
 end
 
 function _remote_script_output(
+        on_line::Function,
         host::AbstractString,
         script::AbstractString,
-        on_line::Function,
     )::Tuple{Int, String, String}
     _ensure_posix_login_shell!(String(host))
     out_pipe = Pipe()

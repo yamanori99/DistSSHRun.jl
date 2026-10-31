@@ -351,7 +351,7 @@ end
         toml_dir = mktempdir()
         DistSSHRun._store_input_rows!(toml_dir, [stat_row])
         DistSSHRun.write_kit_run_toml!(toml_dir; kind = :go)
-        recorded = DistSSHRun.read_kit_run_toml(toml_dir)
+        recorded = something(DistSSHRun.read_kit_run_toml(toml_dir))
         @test recorded["inputs"] isa Vector
         @test recorded["inputs"][1]["verification"] == "stat"
         @test !haskey(recorded["inputs"][1], "content_hash")
