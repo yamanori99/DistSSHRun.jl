@@ -1,0 +1,3 @@
+category: added
+
+- A project may declare `.distsshkit/inputs.toml` entries with `name`, `path`, and optional `hash`. Those paths are left out of the ship tree. A trailing slash is the same path. `..` is rejected. Each remote copy is SHA-256 hashed from paths relative to the declared root. A declared symlink to a directory is followed; a symlink inside it is recorded as its link text. `hash = false` records `stat` for a file, and for a directory the file count, total bytes, newest mtime, and a digest of the sorted relative `(path, size, mtime)` rows. The result is written only under `DISTSSHKIT_RUN_DIR`. With no declaration, the ship tree is unchanged.

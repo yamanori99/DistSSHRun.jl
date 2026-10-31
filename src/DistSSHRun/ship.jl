@@ -86,9 +86,221 @@ function _ship_rel_paths(local_root::AbstractString)::Vector{String}
     out = unique!(vcat(rels, extras))
     _append_project_preference_rels!(root, out)
     filter!(rel -> !_ship_unshippable(joinpath(root, rel)), out)
+    declared = _load_ship_inputs(root)
+    if !isempty(declared)
+        filter!(out) do rel
+            return !_ship_input_covers(rel, declared)
+        end
+    end
     sort!(out)
     isempty(out) && throw(ArgumentError("nothing to ship from $root"))
     return out
+end
+
+struct ShipInput
+    name::String
+    path::String
+    hash::Bool
+end
+
+function _ship_input_covers(rel::AbstractString, inputs::Vector{ShipInput})::Bool
+    for input in inputs
+        rel == input.path && return true
+        startswith(rel, input.path * "/") && return true
+    end
+    return false
+end
+
+function _canonical_ship_input_path(path::AbstractString)::String
+    raw = replace(strip(String(path)), '\\' => '/')
+    any(iscntrl, raw) &&
+        throw(ArgumentError("inputs.toml: path contains a control character: $(repr(path))"))
+    startswith(raw, "/") &&
+        throw(ArgumentError("inputs.toml: path must stay inside the project: $path"))
+    parts = String[]
+    for piece in split(raw, '/'; keepempty = false)
+        piece == "." && continue
+        if piece == ".."
+            throw(ArgumentError("inputs.toml: path must stay inside the project: $path"))
+        end
+        push!(parts, piece)
+    end
+    isempty(parts) &&
+        throw(ArgumentError("inputs.toml: path must stay inside the project: $path"))
+    return join(parts, "/")
+end
+
+function _load_ship_inputs(root::AbstractString)::Vector{ShipInput}
+    file = joinpath(root, ".distsshkit", "inputs.toml")
+    isfile(file) || return ShipInput[]
+    raw = TOML.parsefile(file)
+    rows = get(raw, "inputs", Any[])
+    rows isa AbstractVector || throw(ArgumentError("inputs.toml: inputs must be an array"))
+    out = ShipInput[]
+    for row in rows
+        row isa AbstractDict || throw(ArgumentError("inputs.toml: each input must be a table"))
+        name = strip(string(get(row, "name", "")))
+        shown = strip(string(get(row, "path", "")))
+        isempty(name) && throw(ArgumentError("inputs.toml: name is required"))
+        isempty(shown) && throw(ArgumentError("inputs.toml: path is required for $name"))
+        path = _canonical_ship_input_path(shown)
+        flag = get(row, "hash", true)
+        flag isa Bool || throw(ArgumentError("inputs.toml: hash must be true or false for $name"))
+        push!(out, ShipInput(name, path, flag))
+    end
+    return out
+end
+
+function _remote_input_probe_sh(abs_path::AbstractString, do_hash::Bool)::String
+    q = _remote_shell_path_word(abs_path)
+    walk = do_hash ? _remote_input_hash_walk() : _remote_input_stat_walk()
+    return """
+        set -eu
+        if [ ! -e $q ]; then printf '%s\\n' missing; exit 2; fi
+        _dsk_hex() {
+          _line=
+          if command -v sha256sum >/dev/null 2>&1; then
+            _line=\$(sha256sum "\$1") || return 1
+          else
+            _line=\$(shasum -a 256 "\$1") || return 1
+          fi
+          _hex=\$(printf '%s\\n' "\$_line" | awk '{ print \$1; exit }')
+          printf '%s' "\$_hex" | awk 'length(\$0)==64 && \$0 ~ /^[0-9a-fA-F]+\$/ { found=1 } END { exit found ? 0 : 1 }' || return 1
+          printf '%s\\n' "\$_hex"
+        }
+        _dsk_stat() {
+          stat -c '%s %Y' "\$1" 2>/dev/null && return 0
+          stat -f '%z %m' "\$1"
+        }
+        if [ -d $q ]; then
+          _paths=\$(mktemp)
+          _sorted=\$(mktemp)
+          _rows=\$(mktemp)
+          trap 'rm -f "\$_paths" "\$_sorted" "\$_rows"' EXIT
+          cd $q || exit 1
+          find . '(' -type f -o -type l ')' -path '*
+    *' -print -quit > "\$_paths" || exit 1
+          if [ -s "\$_paths" ]; then
+            printf '%s\\n' 'input filename contains a newline'
+            exit 2
+          fi
+          find . -type f > "\$_paths" || exit 1
+          find . -type l >> "\$_paths" || exit 1
+          LC_ALL=C sort -o "\$_sorted" "\$_paths" || exit 1
+          : > "\$_rows"
+        $walk
+        elif [ -f $q ]; then
+        $(do_hash ? "  _sum=\$(_dsk_hex $q) || exit 1\n  printf '%s\\n' \"\$_sum\"" : "  _dsk_stat $q || exit 1")
+        else
+          printf '%s\\n' 'not a file or directory'
+          exit 2
+        fi
+        """
+end
+
+function _remote_input_hash_walk()::String
+    return """
+      while IFS= read -r _f; do
+        [ -n "\$_f" ] || continue
+        _rel=\${_f#./}
+        if [ -L "\$_f" ]; then
+          _target=\$(readlink "\$_f") || exit 1
+          printf '%s\\tlink\\t%s\\n' "\$_rel" "\$_target" >> "\$_rows" || exit 1
+        else
+          _hex=\$(_dsk_hex "\$_f") || exit 1
+          printf '%s\\tfile\\t%s\\n' "\$_rel" "\$_hex" >> "\$_rows" || exit 1
+        fi
+      done < "\$_sorted"
+      _sum=\$(_dsk_hex "\$_rows") || exit 1
+      printf '%s\\n' "\$_sum"
+    """
+end
+
+function _remote_input_stat_walk()::String
+    return """
+      _files=0
+      _bytes=0
+      _newest=0
+      while IFS= read -r _f; do
+        [ -n "\$_f" ] || continue
+        _rel=\${_f#./}
+        _st=\$(_dsk_stat "\$_f") || exit 1
+        _size=\$(printf '%s\\n' "\$_st" | awk '{ print \$1; exit }')
+        _mtime=\$(printf '%s\\n' "\$_st" | awk '{ print \$2; exit }')
+        [ -n "\$_size" ] && [ -n "\$_mtime" ] || exit 1
+        if [ -L "\$_f" ]; then
+          _target=\$(readlink "\$_f") || exit 1
+          printf '%s\\tlink\\t%s\\t%s\\t%s\\n' "\$_rel" "\$_size" "\$_mtime" "\$_target" >> "\$_rows" || exit 1
+        else
+          _files=\$((_files + 1))
+          _bytes=\$((_bytes + _size))
+          printf '%s\\tfile\\t%s\\t%s\\n' "\$_rel" "\$_size" "\$_mtime" >> "\$_rows" || exit 1
+        fi
+        if [ "\$_mtime" -gt "\$_newest" ]; then _newest=\$_mtime; fi
+      done < "\$_sorted"
+      _sum=\$(_dsk_hex "\$_rows") || exit 1
+      printf 'files=%s bytes=%s newest=%s digest=%s\\n' "\$_files" "\$_bytes" "\$_newest" "\$_sum"
+    """
+end
+
+const _INPUT_MANIFEST_LOCK = ReentrantLock()
+
+function _write_input_manifest!(run_dir::AbstractString, rows::AbstractVector{<:AbstractDict})
+    lock(_INPUT_MANIFEST_LOCK) do
+        dest = joinpath(run_dir, "inputs.toml")
+        existing = if isfile(dest)
+            parsed = TOML.parsefile(dest)
+            parsed isa AbstractDict ? get(parsed, "inputs", Any[]) : Any[]
+        else
+            Any[]
+        end
+        existing isa AbstractVector || (existing = Any[])
+        for row in rows
+            push!(existing, Dict{String, Any}(String(k) => v for (k, v) in pairs(row)))
+        end
+        data = Dict{String, Any}("schema" => 1, "inputs" => existing)
+        tmp = dest * ".tmp"
+        open(tmp, "w") do io
+            TOML.print(io, data)
+        end
+        mv(tmp, dest; force = true)
+    end
+    return nothing
+end
+
+function _record_remote_inputs!(
+        host::AbstractString,
+        abs_root::AbstractString,
+        local_root::AbstractString,
+    )
+    inputs = _load_ship_inputs(local_root)
+    isempty(inputs) && return nothing
+    run_dir = kit_run_dir()
+    run_dir === nothing && throw(
+        ArgumentError(
+            "ship-tree: declared inputs need DISTSSHKIT_RUN_DIR; refusing to write next to the project",
+        ),
+    )
+    rows = Dict{String, Any}[]
+    for input in inputs
+        remote = _posix_join(abs_root, input.path)
+        code, out = _remote_shell_status(String(host), _remote_input_probe_sh(remote, input.hash))
+        code == 0 || throw(
+            ArgumentError("$(host): input $(input.name) ($(remote)): $(strip(out))"),
+        )
+        push!(
+            rows,
+            Dict{String, Any}(
+                "name" => input.name,
+                "path" => input.path,
+                "host" => String(host),
+                "kind" => input.hash ? "sha256" : "stat",
+                "value" => strip(out),
+            ),
+        )
+    end
+    _write_input_manifest!(run_dir, rows)
+    return nothing
 end
 
 function _lexical_join(base::AbstractString, target::AbstractString)::Vector{String}
@@ -437,15 +649,53 @@ function _remote_work_layout_path(
     return _rehome_under_work_root(mapped, deploy, wr)
 end
 
-function _remote_prepare_run_leaf!(host::AbstractString, abs_root::AbstractString, run_id::AbstractString)
+function _remote_run_leaf_script(abs_root::AbstractString, run_id::AbstractString)::String
     runs = _posix_join(abs_root, "runs")
     leaf = _posix_join(runs, run_id)
     src = _posix_join(leaf, "src")
     rq = _remote_shell_path_word(runs)
     lq = _remote_shell_path_word(leaf)
     sq = _remote_shell_path_word(src)
+    rootq = _remote_shell_path_word(abs_root)
     script = """
-    mkdir -p $rq || exit 1
+    if [ ! -d $rootq ]; then
+      printf 'remote_root does not exist: %s\\n' $rootq
+      exit 2
+    fi
+    mode=\$(ls -ldL $rootq) || {
+      printf 'could not read remote_root mode\\n'
+      exit 2
+    }
+    mode=\$(printf '%s\\n' "\$mode" | awk '{ print \$1; exit }') || {
+      printf 'could not read remote_root mode\\n'
+      exit 2
+    }
+    case "\$mode" in
+      d????????*) ;;
+      *)
+        printf 'could not read remote_root mode (%s)\\n' "\$mode"
+        exit 2
+        ;;
+    esac
+    gw=\$(printf '%.1s' "\${mode#?????}")
+    ow=\$(printf '%.1s' "\${mode#????????}")
+    if [ -z "\$gw" ] || [ -z "\$ow" ]; then
+      printf 'could not read remote_root mode (%s)\\n' "\$mode"
+      exit 2
+    fi
+    if [ "\$gw" = w ] || [ "\$ow" = w ]; then
+      printf 'remote_root is group or world writable (%s)\\n' "\$mode"
+      exit 2
+    fi
+    me=\$(id -un) || exit 1
+    owner=\$(stat -L -c '%U' $rootq 2>/dev/null || stat -L -f '%Su' $rootq) || exit 1
+    if [ -z "\$owner" ] || [ "\$owner" != "\$me" ]; then
+      printf 'remote_root owner is %s, not %s\\n' "\$owner" "\$me"
+      exit 2
+    fi
+    if [ ! -d $rq ]; then
+      mkdir $rq || [ -d $rq ] || exit 1
+    fi
     mkdir $lq || { printf 'run_id already exists: %s\\n' $lq >&2; exit 2; }
     if test -L $sq; then
       printf 'refusing symlinked extract dest %s\\n' $sq >&2
@@ -463,9 +713,14 @@ function _remote_prepare_run_leaf!(host::AbstractString, abs_root::AbstractStrin
       fi
     fi
     """
+    return script
+end
+
+function _remote_prepare_run_leaf!(host::AbstractString, abs_root::AbstractString, run_id::AbstractString)
+    script = _remote_run_leaf_script(abs_root, run_id)
     code, out = _remote_shell_status(String(host), script)
     code == 0 || throw(ArgumentError("could not create run dir on $(host): $(strip(out))"))
-    return src
+    return _posix_join(_posix_join(_posix_join(abs_root, "runs"), run_id), "src")
 end
 
 function _remote_extract_tar!(
@@ -531,6 +786,13 @@ function ship_project_to_hosts!(
         ship_max_bytes = ship_max_bytes,
     )
     try
+        if !isempty(_load_ship_inputs(packed.root)) && kit_run_dir() === nothing
+            throw(
+                ArgumentError(
+                    "ship-tree: declared inputs need DISTSSHKIT_RUN_DIR; refusing to write next to the project",
+                ),
+            )
+        end
         if confirm && !kit_noninteractive()
             cancelled = with_kit_progress_suspended() do
                 writeln_both(
@@ -560,6 +822,7 @@ function ship_project_to_hosts!(
                     pinned = something(pin_remote_julia(host, julia), resolve_remote_julia(host, julia))
                     pinned === nothing && throw(ArgumentError("Julia not found on $host"))
                     _remote_extract_tar!(host, src, packed.tar_path, pinned)
+                    _record_remote_inputs!(host, abs_root, packed.root)
                     if report
                         kit_print("  $host: ")
                         print_ok("✓")
