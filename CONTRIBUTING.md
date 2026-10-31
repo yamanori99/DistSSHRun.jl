@@ -241,12 +241,14 @@ Required to merge (ruleset `main` uses these names). **nightly** jobs, and **1.1
 
 ### CodeRabbit (experimental)
 
-Open PRs may get an optional [CodeRabbit](https://docs.coderabbit.ai) pass.
-Config is [`.coderabbit.yaml`](.coderabbit.yaml) on the **PR head** (not a
-merge gate). JETLS / tests / e2e stay the gate. Treat inline comments as
-hints; do not apply Autofix or generated tests unless you want that change.
-`@coderabbitai pause` / `review` as needed. Settings will move as we learn
-what is useful.
+[CodeRabbit](https://docs.coderabbit.ai) does not review a pull request
+until someone comments `@coderabbitai review` (changes since the last
+review) or `@coderabbitai full review` (the whole pull request). It does
+not reply in a thread until it is mentioned, and a later push does not
+start another review. Config is [`.coderabbit.yaml`](.coderabbit.yaml)
+on the **PR head** (not a merge gate). JETLS / tests / e2e stay the gate.
+Treat inline comments as hints; do not apply Autofix or generated tests
+unless you want that change.
 
 ## Release
 
