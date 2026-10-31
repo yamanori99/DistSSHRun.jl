@@ -221,7 +221,9 @@ function main()
         exit(0)
     end
 
-    if occursin("ls -ldL", script)
+    # Project-mode probe. The ship script also runs `ls -ldL` and must reach
+    # the missing-root check below.
+    if occursin("ls -ldL", script) && !occursin("remote_root does not exist", script)
         if !isdir(tree)
             println("missing")
             exit(0)

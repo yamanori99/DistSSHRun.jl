@@ -705,6 +705,7 @@ end
                     session, :delete;
                     confirm_path = Dict(h => remote_root for h in session.hosts),
                 )
+                _ssh_e2e_ensure_remote_root!(hosts, remote_root)
                 rest = setup!(session, :ship_tree, :instantiate)
                 _assert_ssh_e2e_api_ok(
                     suite,

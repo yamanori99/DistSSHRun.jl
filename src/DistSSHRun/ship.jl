@@ -450,21 +450,39 @@ function _remote_run_leaf_script(abs_root::AbstractString, run_id::AbstractStrin
       printf 'remote_root does not exist: %s\\n' $rootq
       exit 2
     fi
-    mode=\$(ls -ld $rootq | awk '{ print \$1; exit }')
-    gw=\$(printf '%s' "\$mode" | cut -c 6)
-    ow=\$(printf '%s' "\$mode" | cut -c 9)
+    mode=\$(ls -ldL $rootq) || {
+      printf 'could not read remote_root mode\\n'
+      exit 2
+    }
+    mode=\$(printf '%s\\n' "\$mode" | awk '{ print \$1; exit }') || {
+      printf 'could not read remote_root mode\\n'
+      exit 2
+    }
+    case "\$mode" in
+      d????????*) ;;
+      *)
+        printf 'could not read remote_root mode (%s)\\n' "\$mode"
+        exit 2
+        ;;
+    esac
+    gw=\$(printf '%.1s' "\${mode#?????}")
+    ow=\$(printf '%.1s' "\${mode#????????}")
+    if [ -z "\$gw" ] || [ -z "\$ow" ]; then
+      printf 'could not read remote_root mode (%s)\\n' "\$mode"
+      exit 2
+    fi
     if [ "\$gw" = w ] || [ "\$ow" = w ]; then
       printf 'remote_root is group or world writable (%s)\\n' "\$mode"
       exit 2
     fi
-    me=\$(id -un)
-    owner=\$(stat -c '%U' $rootq 2>/dev/null || stat -f '%Su' $rootq)
-    if [ "\$owner" != "\$me" ]; then
+    me=\$(id -un) || exit 1
+    owner=\$(stat -L -c '%U' $rootq 2>/dev/null || stat -L -f '%Su' $rootq) || exit 1
+    if [ -z "\$owner" ] || [ "\$owner" != "\$me" ]; then
       printf 'remote_root owner is %s, not %s\\n' "\$owner" "\$me"
       exit 2
     fi
     if [ ! -d $rq ]; then
-      mkdir $rq || exit 1
+      mkdir $rq || [ -d $rq ] || exit 1
     fi
     mkdir $lq || { printf 'run_id already exists: %s\\n' $lq >&2; exit 2; }
     if test -L $sq; then

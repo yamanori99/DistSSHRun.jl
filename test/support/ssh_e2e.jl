@@ -74,10 +74,11 @@ if !isdefined(Main, :_ssh_e2e_enabled)
     # Ship refuses a missing root. Delete removes it, so recreate it as the
     # SSH user, mode 755, before the next ship.
     function _ssh_e2e_ensure_remote_root!(hosts, remote_root::AbstractString)
+        rootq = DistSSHRun._remote_shell_path_word(remote_root)
         for host in hosts
             proc, out = _ssh_e2e_ssh(
                 host,
-                "mkdir -p -m 755 $(remote_root) && chmod go-w $(remote_root)",
+                "mkdir -p -m 755 $(rootq) && chmod go-w $(rootq)",
             )
             _assert_proc_ok(proc, out; label = "ensure remote root $(host)")
         end
