@@ -9,6 +9,7 @@ const _PROVENANCE_LOCK = ReentrantLock()
 const _PROVENANCE_AT_START = Ref(false)
 const _PROVENANCE_PROJECT_SNAP = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 const _PROVENANCE_SOURCE_SNAP = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
+const _PROVENANCE_GIT_TOOL = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 const _PROVENANCE_GO = Pair{String, String}[]
 
 const _GO_SLOT_PROVENANCE_NAME = "provenance-slot.toml"
@@ -179,6 +180,13 @@ function _reset_run_provenance!(project::AbstractString)
     end
     _PROVENANCE_SOURCE_SNAP[] = try
         _resolve_source(proj)
+    catch
+        nothing
+    end
+    # Same moment as the source snapshot. A later PATH change must not
+    # record a different git from the one this snapshot used.
+    _PROVENANCE_GIT_TOOL[] = try
+        _path_resolved_git()
     catch
         nothing
     end
@@ -382,13 +390,12 @@ end
 
 function _seed_provenance()::Union{Nothing, Dict{String, Any}}
     seed = _JOB_SEED[]
-    seed === nothing && return nothing
-    isempty(_ASSIGNED_RANKS) && return nothing
     workers = Dict{String, Any}[]
-    for rank in _ASSIGNED_RANKS
-        push!(workers, Dict{String, Any}("rank" => rank, "seed" => string(worker_seed(seed, rank))))
+    if seed !== nothing
+        for rank in _ASSIGNED_RANKS
+            push!(workers, Dict{String, Any}("rank" => rank, "seed" => string(worker_seed(seed, rank))))
+        end
     end
-    data = Dict{String, Any}("job" => string(seed), "workers" => workers)
     items = Dict{String, Any}[]
     lock(_ITEM_LOCK) do
         for key in sort!(collect(keys(_ITEM_MAP)))
@@ -402,6 +409,10 @@ function _seed_provenance()::Union{Nothing, Dict{String, Any}}
             )
         end
     end
+    isempty(workers) && isempty(items) && return nothing
+    data = Dict{String, Any}()
+    seed === nothing || (data["job"] = string(seed))
+    isempty(workers) || (data["workers"] = workers)
     isempty(items) || (data["items"] = items)
     return data
 end
@@ -693,7 +704,7 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     )
     seeds = _seed_provenance()
     seeds === nothing || (data["seeds"] = seeds)
-    git_tool = _path_resolved_git()
+    git_tool = started ? _PROVENANCE_GIT_TOOL[] : _path_resolved_git()
     git_tool === nothing || (data["tools"] = Dict{String, Any}[git_tool])
     source = started ? _PROVENANCE_SOURCE_SNAP[] : _resolve_source(proj)
     source === nothing || (data["source"] = source)

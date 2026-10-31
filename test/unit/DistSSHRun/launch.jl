@@ -50,6 +50,20 @@ using TOML
     end
     @test DistSSHRun._ITEM_MAP[(1, 1)] == 0
     @test DistSSHRun._ITEM_MAP[(2, 1)] == 4
+    items_only = DistSSHRun._seed_provenance()
+    @test items_only isa AbstractDict
+    items_only isa AbstractDict || error("expected item provenance")
+    @test !haskey(items_only, "job")
+    @test !haskey(items_only, "workers")
+    item_rows = items_only["items"]
+    @test item_rows isa Vector
+    item_rows isa Vector || error("expected seed items")
+    first_item = item_rows[1]
+    @test first_item isa AbstractDict
+    first_item isa AbstractDict || error("expected a seed item")
+    @test first_item["call"] == 1
+    @test first_item["item"] == 1
+    @test first_item["rank"] == 0
     DistSSHRun.reset_worker_seeds!()
     withenv("DISTSSHKIT_JOB_SEED" => "11") do
         DistSSHRun.job_seed()
@@ -91,6 +105,25 @@ using TOML
             row isa AbstractDict || error("expected git tool")
             @test row["path"] == git
             @test row["outside_manifest"] === true
+        end
+        try
+            DistSSHRun._reset_run_provenance!(tmp)
+            DistSSHRun._PROVENANCE_GIT_TOOL[] = Dict{String, Any}(
+                "name" => "git",
+                "path" => "/recorded/git",
+                "outside_manifest" => true,
+            )
+            held = DistSSHRun.assemble_provenance(tmp)
+            held_tools = held["tools"]
+            @test held_tools isa Vector
+            held_tools isa Vector || error("expected snapshotted tools")
+            held_row = held_tools[1]
+            @test held_row isa AbstractDict
+            held_row isa AbstractDict || error("expected snapshotted git")
+            @test held_row["path"] == "/recorded/git"
+        finally
+            DistSSHRun._PROVENANCE_AT_START[] = false
+            DistSSHRun._PROVENANCE_GIT_TOOL[] = nothing
         end
     end
 
