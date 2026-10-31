@@ -41,12 +41,15 @@ the remote root has no `Project.toml` (or pass `--remote-path` to that tree).
 `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
 Provenance and `run.toml` use `schema = 1` and `writer = "DistSSHRun x.y.z"`.
 Unknown keys are ignored when reading. A ship that sees
-`.distsshkit/inputs.toml` writes those inputs into this run's `run.toml`
-and a manifest under `inputs/`. Each line is `hex *path`. A regular file
-is the SHA-256 of its bytes. A symlink is the SHA-256 of its link text
-and is not followed, so `sha256sum -c` does not check that line.
-`check_input_manifest(manifest, root)` checks both. `outputs` is reserved and
-not written.
+`.distsshkit/inputs.toml` writes those inputs into this run's `run.toml`.
+With hashing on, it also writes a manifest under `inputs/`. The file name
+is a sanitized `<name>--<host>` stem; characters outside
+`A-Za-z0-9._@-` become `_`, and a changed stem gets an eight-hex SHA-256
+suffix. Each line is `hex *path`. A regular file is the SHA-256 of its
+bytes. A symlink is the SHA-256 of its link text and is not followed, so
+`sha256sum -c` does not check that line. `check_input_manifest(manifest, root)`
+checks both. `hash = false` records only stat fields in `run.toml` and
+does not write a manifest. `outputs` is reserved and not written.
 
 `terminate!` and `terminate_run!` record how the stop ended. `KitRunResult.stop`
 is `:within_grace` when the process exited after one SIGINT and before

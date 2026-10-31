@@ -381,6 +381,20 @@ end
         wait(nl_proc)
         @test nl_proc.exitcode == 2
         @test occursin("newline", String(take!(nl_out)))
+        rm(joinpath(root, "sub", "a\nb.txt"); force = true)
+        symlink("a.txt\n", joinpath(root, "sub", "badlink"))
+        link_nl = DistSSHRun._remote_input_probe_sh(root, true)
+        link_out = IOBuffer()
+        link_proc = run(pipeline(`sh -c $link_nl`; stdout = link_out, stderr = devnull); wait = false)
+        wait(link_proc)
+        @test link_proc.exitcode == 2
+        @test occursin("link target contains a newline", String(take!(link_out)))
+        @test_throws ArgumentError DistSSHRun._nfc_input_rel("a\\b")
+        @test DistSSHRun._input_file_stem("ok") == "ok"
+        @test DistSSHRun._input_file_stem("a b") != "a b"
+        @test occursin('-', DistSSHRun._input_file_stem("a b"))
+        @test endswith(DistSSHRun._input_manifest_rel("a b", "h"), ".manifest")
+        @test startswith(DistSSHRun._input_manifest_rel("a b", "h"), "inputs/")
     finally
         rm(link; force = true)
         rm(root; force = true, recursive = true)

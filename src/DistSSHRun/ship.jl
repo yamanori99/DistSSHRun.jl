@@ -222,6 +222,28 @@ function _remote_input_file_branch(q::AbstractString, do_hash::Bool)::String
     """
 end
 
+"""`readlink` into `\$_target`. A tab or newline in the link text is refused.
+
+Command substitution drops trailing newlines from `readlink`. Compare the
+byte length to `stat` on the symlink; a shorter value means a trailing
+newline was stripped. An embedded newline still fails the awk check.
+"""
+function _remote_input_readlink_sh()::String
+    return """
+          _linklen=\$(stat -c '%s' "\$_f" 2>/dev/null || stat -f '%z' "\$_f") || exit 1
+          _target=\$(readlink "\$_f") || exit 1
+          _got=\$(printf '%s' "\$_target" | wc -c | tr -d ' ')
+          [ "\$_got" -eq "\$_linklen" ] || {
+            printf '%s\\n' 'input link target contains a newline'
+            exit 2
+          }
+          printf '%s' "\$_target" | awk 'BEGIN { bad = 0 } index(\$0, "\\t") { bad = 1 } END { if (NR > 1 || bad) exit 2 }' || {
+            printf '%s\\n' 'input link target contains a newline'
+            exit 2
+          }
+    """
+end
+
 function _remote_input_hash_walk()::String
     return """
       _total=0
@@ -238,11 +260,7 @@ function _remote_input_hash_walk()::String
         [ -n "\$_f" ] || continue
         _rel=\${_f#./}
         if [ -L "\$_f" ]; then
-          _target=\$(readlink "\$_f") || exit 1
-          printf '%s' "\$_target" | awk 'BEGIN { bad = 0 } index(\$0, "\\t") { bad = 1 } END { if (NR > 1 || bad) exit 2 }' || {
-            printf '%s\\n' 'input link target contains a newline'
-            exit 2
-          }
+        $(_remote_input_readlink_sh())
           printf 'link\\t%s\\t%s\\n' "\$_target" "\$_rel"
         else
           _st=\$(_dsk_stat "\$_f") || exit 1
@@ -270,7 +288,7 @@ function _remote_input_stat_walk()::String
         _mtime=\$(printf '%s\\n' "\$_st" | awk '{ print \$2; exit }')
         [ -n "\$_size" ] && [ -n "\$_mtime" ] || exit 1
         if [ -L "\$_f" ]; then
-          _target=\$(readlink "\$_f") || exit 1
+        $(_remote_input_readlink_sh())
           printf '%s\\tlink\\t%s\\t%s\\t%s\\n' "\$_rel" "\$_size" "\$_mtime" "\$_target" >> "\$_rows" || exit 1
         else
           _files=\$((_files + 1))
@@ -400,7 +418,9 @@ function _commit_declared_input_rows!(
 end
 
 function _nfc_input_rel(rel::AbstractString)::String
-    raw = Unicode.normalize(replace(String(rel), '\\' => '/'), :NFC)
+    raw = String(rel)
+    occursin('\\', raw) && throw(ArgumentError("input path contains a backslash"))
+    raw = Unicode.normalize(raw, :NFC)
     any(iscntrl, raw) && throw(ArgumentError("input path contains a control character"))
     parts = String[]
     for piece in split(raw, '/'; keepempty = false)
