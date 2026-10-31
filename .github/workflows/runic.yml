@@ -1,13 +1,11 @@
 name: Runic
 
-# Light `--check`. Not a substitute for Pkg.test / Aqua / JETLS.
-# `version: '1'`: a Runic minor can fail this job. Monthly schedule
-# opens Issue `Runic monthly failed` (same idea as CI weekly).
+# Monthly `--check`. Pull requests and main pushes run the same steps
+# inside Test (CI.yml), and heavy jobs wait for that job. This workflow
+# stays for the schedule and a manual run. `version: '1'`: a Runic minor
+# can fail this job. The schedule opens Issue `Runic monthly failed`
+# (same idea as CI weekly).
 on:
-  push:
-    branches:
-      - main
-  pull_request:
   workflow_dispatch:
   # 1st of the month 10:00 JST (UTC 01:00). Misses CI weekly (daily UTC 21:00).
   schedule:
