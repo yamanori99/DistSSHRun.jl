@@ -16,16 +16,104 @@ function _drive_script_init_output_dir_method(script_args)::Union{Nothing, Metho
     end
 end
 
-# Child `julia` that runs the same drive arguments without `--isolated`.
-function _drive_isolated_cmd(original_args::AbstractVector{<:AbstractString})::Cmd
-    child = String[String(a) for a in original_args if String(a) != "--isolated"]
-    script = "using DistSSHRun; exit(Int(run_drive_parsed!(parse_drive_args(String[ARGS...]); original_args=String[ARGS...])))"
-    return `$(Base.julia_cmd()) --startup-file=no -e $script -- $child`
+# Options that take the next argv word. A word equal to `--isolated` there is a value.
+const _DRIVE_VALUE_FLAGS = (
+    "--workers", "-w", "--julia", "--allow-mismatch", "--mem-headroom",
+    "--parent-gb", "--log-dir", "--output-dir", "--package", "--hosts", "--hosts-file",
+)
+
+"""Drop the drive `--isolated` option. Keep that word after the driver script, and as a flag value."""
+function _drive_isolated_child_args(original_args::AbstractVector{<:AbstractString})::Vector{String}
+    child = String[]
+    dropped = false
+    i = 1
+    n = length(original_args)
+    while i <= n
+        arg = String(original_args[i])
+        if endswith(arg, ".jl")
+            push!(child, arg)
+            for j in (i + 1):n
+                push!(child, String(original_args[j]))
+            end
+            break
+        end
+        if !dropped && arg == "--isolated"
+            dropped = true
+            i += 1
+            continue
+        end
+        push!(child, arg)
+        if arg in _DRIVE_VALUE_FLAGS && i < n
+            push!(child, String(original_args[i + 1]))
+            i += 2
+            continue
+        end
+        i += 1
+    end
+    return child
 end
 
-function _drive_isolated_process(original_args::AbstractVector{<:AbstractString})::Cint
-    proc = run(ignorestatus(_drive_isolated_cmd(original_args)))
-    return Cint(something(proc.exitcode, 1))
+function _isolated_child_load_path()::String
+    sep = Sys.iswindows() ? ";" : ":"
+    parts = String[]
+    for entry in LOAD_PATH
+        entry isa AbstractString || continue
+        s = String(entry)
+        (isempty(s) || s in parts) && continue
+        push!(parts, s)
+    end
+    d = pkgdir(@__MODULE__)
+    if d !== nothing && !isempty(d) && !(d in parts)
+        push!(parts, d)
+    end
+    return join(parts, sep)
+end
+
+function _isolated_project_flag()::Union{Nothing, String}
+    ap = Base.active_project()
+    ap === nothing && return nothing
+    dir = dirname(String(ap))
+    isempty(dir) && return nothing
+    return "--project=$(dir)"
+end
+
+"""A signalled child is a failure. Unix can report `exitcode == 0` with a nonzero `termsignal`."""
+function _drive_child_status(exitcode, termsignal)::Cint
+    if termsignal isa Integer && !(termsignal isa Bool) && Int(termsignal) != 0
+        return Cint(128 + Int(termsignal))
+    end
+    exitcode isa Integer && !(exitcode isa Bool) && return Cint(exitcode)
+    return Cint(1)
+end
+
+# Child `julia` that runs the same drive arguments without the drive `--isolated` option.
+function _drive_isolated_cmd(
+        original_args::AbstractVector{<:AbstractString};
+        project_root::Union{Nothing, AbstractString} = nothing,
+    )::Cmd
+    child = _drive_isolated_child_args(original_args)
+    script = "using DistSSHRun; exit(Int(DistSSHRun.run_drive_parsed!(DistSSHRun.parse_drive_args(String[ARGS...]); original_args=String[ARGS...])))"
+    argv = String[]
+    append!(argv, Base.julia_cmd().exec)
+    push!(argv, "--startup-file=no")
+    proj = _isolated_project_flag()
+    proj === nothing || push!(argv, proj)
+    push!(argv, "-e", script, "--")
+    append!(argv, child)
+    pairs = Pair{String, String}["JULIA_LOAD_PATH" => _isolated_child_load_path()]
+    if project_root !== nothing
+        root = strip(String(project_root))
+        isempty(root) || push!(pairs, "DISTRIBUTED_PROJECT_ROOT" => root)
+    end
+    return addenv(Cmd(argv), pairs...)
+end
+
+function _drive_isolated_process(
+        original_args::AbstractVector{<:AbstractString},
+        project_root::Union{Nothing, AbstractString} = nothing,
+    )::Cint
+    proc = run(ignorestatus(_drive_isolated_cmd(original_args; project_root = project_root)))
+    return _drive_child_status(proc.exitcode, proc.termsignal)
 end
 
 """
@@ -54,7 +142,7 @@ function run_drive_parsed!(
     # `drive!` builds the same field as `parse_drive_args` (`false`). A missing
     # key stays in this process. `get` does not read a field the tuple lacks.
     if get(parsed, :isolated, false) === true
-        return _drive_isolated_process(original_args)
+        return _drive_isolated_process(original_args, project_root)
     end
     # `parse_drive_args` is inferred as one NamedTuple whose fields are unions
     # (`sync_mode::Union{Nothing,Symbol}`, and the same for paths and counts).

@@ -48,8 +48,30 @@ using Test
             @test_throws ArgumentError parse_drive_args(["--isolated", "--isolated", "s.jl"])
             cmd = DistSSHRun._drive_isolated_cmd(["--isolated", "s.jl", "1"])
             text = join(cmd.exec, " ")
-            @test occursin("run_drive_parsed!", text)
+            @test occursin("DistSSHRun.run_drive_parsed!", text)
             @test !occursin("--isolated", text)
+            kept = DistSSHRun._drive_isolated_cmd(["--isolated", "s.jl", "--isolated"])
+            dash = findfirst(==("--"), kept.exec)
+            @test dash isa Int
+            dash isa Int || error("expected --")
+            @test kept.exec[(dash + 1):end] == ["s.jl", "--isolated"]
+            valued = DistSSHRun._drive_isolated_child_args(
+                ["--output-dir", "--isolated", "--isolated", "s.jl"],
+            )
+            @test valued == ["--output-dir", "--isolated", "s.jl"]
+            rooted = DistSSHRun._drive_isolated_cmd(
+                ["--isolated", "s.jl"]; project_root = "/jobs/app",
+            )
+            env = something(rooted.env, String[])
+            @test any(e -> startswith(e, "JULIA_LOAD_PATH="), env)
+            @test "DISTRIBUTED_PROJECT_ROOT=/jobs/app" in env
+            ap = Base.active_project()
+            if ap !== nothing
+                @test "--project=$(dirname(String(ap)))" in rooted.exec
+            end
+            @test DistSSHRun._drive_child_status(0, 9) == 137
+            @test DistSSHRun._drive_child_status(2, 0) == 2
+            @test DistSSHRun._drive_child_status(nothing, nothing) == 1
             let r = parse_drive_args(["--sync-script", "s.jl"])
                 @test r.sync_script == true
             end
