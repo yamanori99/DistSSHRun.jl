@@ -204,6 +204,7 @@ end
         @test occursin("stat", probe)
         @test occursin("files=%s", probe)
         @test occursin("find . -type f", probe)
+        @test occursin("input filename contains a newline", probe)
         hashed = DistSSHRun._remote_input_probe_sh("/remote/data", true)
         @test occursin("sha256sum", hashed)
         @test occursin("cd ", hashed)
@@ -245,6 +246,15 @@ end
             """,
         )
         @test_throws ArgumentError DistSSHRun._load_ship_inputs(tmp)
+        write(
+            joinpath(tmp, ".distsshkit", "inputs.toml"),
+            """
+            [[inputs]]
+            name = "bad"
+            path = "data/a\\nb"
+            """,
+        )
+        @test_throws ArgumentError DistSSHRun._load_ship_inputs(tmp)
     end
     root = mktempdir()
     other = mktempdir()
@@ -272,6 +282,13 @@ end
         proc = run(pipeline(`sh -c $missing`; stdout = devnull, stderr = devnull); wait = false)
         wait(proc)
         @test proc.exitcode == 2
+        write(joinpath(root, "sub", "a\nb.txt"), "x\n")
+        nl_probe = DistSSHRun._remote_input_probe_sh(root, true)
+        nl_out = IOBuffer()
+        nl_proc = run(pipeline(`sh -c $nl_probe`; stdout = nl_out, stderr = devnull); wait = false)
+        wait(nl_proc)
+        @test nl_proc.exitcode == 2
+        @test occursin("newline", String(take!(nl_out)))
     finally
         rm(link; force = true)
         rm(root; force = true, recursive = true)

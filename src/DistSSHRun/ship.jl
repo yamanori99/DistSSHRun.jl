@@ -113,6 +113,8 @@ end
 
 function _canonical_ship_input_path(path::AbstractString)::String
     raw = replace(strip(String(path)), '\\' => '/')
+    any(iscntrl, raw) &&
+        throw(ArgumentError("inputs.toml: path contains a control character: $(repr(path))"))
     startswith(raw, "/") &&
         throw(ArgumentError("inputs.toml: path must stay inside the project: $path"))
     parts = String[]
@@ -176,6 +178,12 @@ function _remote_input_probe_sh(abs_path::AbstractString, do_hash::Bool)::String
       _rows=\$(mktemp)
       trap 'rm -f "\$_paths" "\$_sorted" "\$_rows"' EXIT
       cd $q || exit 1
+      find . '(' -type f -o -type l ')' -path '*
+*' -print -quit > "\$_paths" || exit 1
+      if [ -s "\$_paths" ]; then
+        printf '%s\\n' 'input filename contains a newline'
+        exit 2
+      fi
       find . -type f > "\$_paths" || exit 1
       find . -type l >> "\$_paths" || exit 1
       LC_ALL=C sort -o "\$_sorted" "\$_paths" || exit 1
@@ -764,7 +772,7 @@ function ship_project_to_hosts!(
                     pinned = something(pin_remote_julia(host, julia), resolve_remote_julia(host, julia))
                     pinned === nothing && throw(ArgumentError("Julia not found on $host"))
                     _remote_extract_tar!(host, src, packed.tar_path, pinned)
-                    _record_remote_inputs!(host, abs_root, local_root)
+                    _record_remote_inputs!(host, abs_root, packed.root)
                     if report
                         kit_print("  $host: ")
                         print_ok("✓")
