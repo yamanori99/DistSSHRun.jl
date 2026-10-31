@@ -207,7 +207,8 @@ function clone_to_remotes(
                 end
                 run(
                     pipeline(
-                        _host_sync_remote_shell_cmd(host, "git clone -- $uq $pq");
+                        # umask 022: a later git command refuses a group- or world-writable project.
+                        _host_sync_remote_shell_cmd(host, "umask 022 && git clone -- $uq $pq");
                         stdout = out_buf,
                         stderr = err_buf,
                     )
