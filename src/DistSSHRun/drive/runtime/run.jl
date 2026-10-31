@@ -51,7 +51,9 @@ function run_drive_parsed!(
         resolved_run_dir::Union{Nothing, Base.RefValue{Union{Nothing, String}}} = nothing,
         project_root::Union{Nothing, AbstractString} = nothing,
     )::Cint
-    if hasproperty(parsed, :isolated) && parsed.isolated
+    # `drive!` builds the same field as `parse_drive_args` (`false`). A missing
+    # key stays in this process. `get` does not read a field the tuple lacks.
+    if get(parsed, :isolated, false) === true
         return _drive_isolated_process(original_args)
     end
     # `parse_drive_args` is inferred as one NamedTuple whose fields are unions
