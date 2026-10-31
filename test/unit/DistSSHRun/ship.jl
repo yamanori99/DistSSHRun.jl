@@ -445,6 +445,48 @@ end
     end
 end
 
+@testset "a root symlink to a file is a link record" begin
+    parent = mktempdir()
+    target = joinpath(parent, "payload.bin")
+    link = joinpath(parent, "alias.bin")
+    write(target, "hi\n")
+    symlink("payload.bin", link)
+    rec = mktempdir()
+    try
+        out = read(
+            pipeline(`sh -c $(DistSSHRun._remote_input_probe_sh(link, true))`; stderr = devnull),
+            String,
+        )
+        @test startswith(out, "link\t")
+        row = DistSSHRun._input_row_from_probe("n", "dir/alias.bin", "h", true, out, rec)
+        body = String(read(joinpath(rec, row["manifest"])))
+        @test occursin(" *alias.bin", body)
+        DistSSHRun.check_input_manifest(joinpath(rec, row["manifest"]), parent)
+    finally
+        rm(parent; force = true, recursive = true)
+        rm(rec; force = true, recursive = true)
+    end
+end
+
+@testset "check_input_manifest matches NFC to an NFD name" begin
+    root = mktempdir()
+    try
+        nfd = "cafe\u0301.txt"
+        nfc = DistSSHRun.Unicode.normalize(nfd, :NFC)
+        write(joinpath(root, nfd), "hi\n")
+        names = readdir(root)
+        stored = only(filter(!=("."), names))
+        DistSSHRun.Unicode.normalize(stored, :NFC) == nfc || return
+        stored == nfc && return
+        hex = DistSSHRun._sha256_hex(Vector{UInt8}("hi\n"))
+        man = joinpath(root, "m.manifest")
+        write(man, "$hex *$nfc\n")
+        @test DistSSHRun.check_input_manifest(man, root) === nothing
+    finally
+        rm(root; force = true, recursive = true)
+    end
+end
+
 @testset "declared input rows land in run.toml" begin
     run_dir = mktempdir()
     try
@@ -457,12 +499,17 @@ end
             run_dir,
             [Dict{String, Any}("name" => "b", "host" => "h", "verification" => "stat")],
         )
+        DistSSHRun._commit_declared_input_rows!(
+            run_dir,
+            [Dict{String, Any}("name" => "a", "host" => "h", "verification" => "sha256", "content_hash" => "x")],
+        )
         stored = DistSSHRun._read_declared_input_rows(run_dir)
         @test length(stored) == 2
         recorded = something(DistSSHRun.read_kit_run_toml(run_dir))
         @test length(recorded["inputs"]) == 2
-        @test recorded["inputs"][1]["name"] == "a"
-        @test recorded["inputs"][2]["name"] == "b"
+        @test recorded["inputs"][1]["name"] == "b"
+        @test recorded["inputs"][2]["name"] == "a"
+        @test recorded["inputs"][2]["verification"] == "sha256"
     finally
         rm(run_dir; force = true, recursive = true)
     end

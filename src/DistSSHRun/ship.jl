@@ -196,7 +196,19 @@ function _remote_input_probe_sh(abs_path::AbstractString, do_hash::Bool)::String
           : > "\$_rows"
         $walk
         elif [ -f $q ]; then
-        $(_remote_input_file_branch(q, do_hash))
+        $(
+        if do_hash
+            """
+              if [ -L $q ]; then
+                printf 'link\\t%s\\t.\\n' "\$_target"
+              else
+            $(_remote_input_file_branch(q, true))
+              fi
+                    """
+        else
+            _remote_input_file_branch(q, false)
+        end
+    )
         else
           printf '%s\\n' 'not a file or directory'
           exit 2
@@ -378,7 +390,18 @@ function _store_input_rows!(run_dir::AbstractString, rows::AbstractVector{<:Abst
         end
         existing isa AbstractVector || (existing = Any[])
         for row in rows
-            push!(existing, Dict{String, Any}(String(k) => v for (k, v) in pairs(row)))
+            stored = Dict{String, Any}(String(k) => v for (k, v) in pairs(row))
+            name = get(stored, "name", nothing)
+            host = get(stored, "host", nothing)
+            filter!(
+                old -> !(
+                    old isa AbstractDict &&
+                        get(old, "name", nothing) == name &&
+                        get(old, "host", nothing) == host
+                ),
+                existing,
+            )
+            push!(existing, stored)
         end
         data = Dict{String, Any}("schema" => 1, "inputs" => existing)
         tmp = dest * ".tmp"
@@ -446,16 +469,40 @@ function _input_manifest_entry(line::AbstractString)::Tuple{String, String}
     return lowercase(_regex_field(m, 1)), rel
 end
 
+"""Resolve `rel` under `root` by matching each path component as NFC.
+
+The manifest stores NFC names. A filesystem that keeps NFD still verifies.
+"""
+function _resolve_nfc_under(root::AbstractString, rel::AbstractString)
+    current = String(root)
+    for piece in split(rel, '/'; keepempty = false)
+        piece == "." && continue
+        piece == ".." && throw(ArgumentError("input path escapes the declared root"))
+        found = nothing
+        for name in readdir(current; join = false)
+            if Unicode.normalize(String(name), :NFC) == piece
+                found = String(name)
+                break
+            end
+        end
+        found === nothing && return nothing
+        current = joinpath(current, found)
+    end
+    return current
+end
+
 """Check `manifest` against `root`.
 
 A regular file is the SHA-256 of its bytes. A symlink is the SHA-256 of
-its link text and is not followed. `sha256sum -c` follows a symlink, so
-it does not check these lines.
+its link text and is not followed. `sha256sum -c` follows a symlink and
+opens manifest paths literally, so it does not check these lines and can
+miss an NFD directory entry that matches an NFC manifest path.
 """
 function check_input_manifest(manifest::AbstractString, root::AbstractString)
     for raw in eachsplit(read(manifest, String), '\n'; keepempty = false)
         hex, rel = _input_manifest_entry(String(raw))
-        full = joinpath(root, split(rel, '/')...)
+        full = _resolve_nfc_under(root, rel)
+        full === nothing && throw(ArgumentError("input manifest path is missing: $rel"))
         got = if islink(full)
             _sha256_hex(codeunits(readlink(full)))
         elseif isfile(full)
@@ -520,7 +567,12 @@ function _input_row_from_probe(
             length(parts) == 3 || throw(ArgumentError("input $name: bad link record"))
             target = String(parts[2])
             hex = _sha256_hex(codeunits(target))
-            push!(entries, (_nfc_input_rel(String(parts[3])), hex, 0, true))
+            rel = _nfc_input_rel(String(parts[3]))
+            if rel == "."
+                rel = _nfc_input_rel(basename(String(path)))
+                rel == "." && throw(ArgumentError("input $name: link record has no name"))
+            end
+            push!(entries, (rel, hex, 0, true))
         else
             throw(ArgumentError("input $name: unknown record $(repr(kind))"))
         end

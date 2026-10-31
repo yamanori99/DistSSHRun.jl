@@ -46,11 +46,16 @@ With hashing on, it also writes a manifest under `inputs/<sha256>.manifest`.
 The file name is the SHA-256 of `ncodeunits(name):name`, a newline, and the
 host. Each line is `hex *path`. A regular file is the SHA-256 of its bytes.
 A symlink is the SHA-256 of its link text and is not followed, so
-`sha256sum -c` does not check that line. A link target with a tab or
-newline is refused, including when the declared path itself is a symlink.
-A path with a backslash is refused. `check_input_manifest(manifest, root)`
-checks both. `hash = false` records only stat fields in `run.toml` and
-does not write a manifest. `outputs` is reserved and not written.
+`sha256sum -c` does not check that line. A declared path that is a
+symlink to a file is recorded as that link, not as the target bytes.
+A link target with a tab or newline is refused, including when the
+declared path itself is a symlink. A path with a backslash is refused.
+`check_input_manifest(manifest, root)` checks both and resolves each
+path component by NFC form when the filesystem kept NFD. `sha256sum -c`
+opens paths literally, so use `check_input_manifest` for those trees.
+`hash = false` records only stat fields in `run.toml` and does not write
+a manifest. A later ship into the same run directory replaces the row
+for the same input name and host. `outputs` is reserved and not written.
 
 `terminate!` and `terminate_run!` record how the stop ended. `KitRunResult.stop`
 is `:within_grace` when the process exited after one SIGINT and before
