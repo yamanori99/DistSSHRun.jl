@@ -50,6 +50,20 @@ function GoResult(
     return GoResult(ok, sync, run, collect, script, output_dir, failed_step, rd)
 end
 
+# Positional `failed_step`, the shape from before `run_dir`. The run
+# directory still comes from the active `DISTSSHKIT_RUN_DIR`.
+function GoResult(
+        ok::Bool,
+        sync::Union{Nothing, SyncResult},
+        run::Union{Nothing, DriveResult},
+        collect::Union{Nothing, CollectResult},
+        script::String,
+        output_dir::String,
+        failed_step::Union{Nothing, String},
+    )
+    return GoResult(ok, sync, run, collect, script, output_dir; failed_step = failed_step)
+end
+
 function kit_run_result(
         result::GoResult,
         tokens::AbstractVector{<:AbstractString} = String[],

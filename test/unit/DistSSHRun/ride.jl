@@ -116,6 +116,11 @@ using Test
         @test r.spi_ok === true
         @test read(out, String) == "2,3,4,5"
         @test r.output_dir !== nothing
+        @test r.run_dir !== nothing
+        @test r.run_dir != r.output_dir
+        withenv(DistSSHRun.DISTSSHKIT_RUN_DIR_ENV => nothing) do
+            @test DistSSHRun.kit_run_result(r).run_dir == r.run_dir
+        end
         @test !isfile(joinpath(something(r.output_dir, ""), "kit.hosts"))
         st = DistSSHRun.drive_host_status(something(r.output_dir, ""))
         @test any(row -> row.host == DistSSHRun.PARENT_HOST_NAME, st)
