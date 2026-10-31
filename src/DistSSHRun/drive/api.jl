@@ -104,6 +104,7 @@ function drive!(
                 resolved_output_dir = Ref{Union{Nothing, String}}(nothing)
                 resolved_log_dir = Ref{Union{Nothing, String}}(nothing)
                 resolved_hosts = Ref{Vector{HostRunResult}}(HostRunResult[])
+                resolved_run_dir = Ref{Union{Nothing, String}}(nothing)
                 try
                     code = run_drive_parsed!(
                         parsed;
@@ -111,6 +112,7 @@ function drive!(
                         resolved_output_dir = resolved_output_dir,
                         resolved_log_dir = resolved_log_dir,
                         resolved_hosts = resolved_hosts,
+                        resolved_run_dir = resolved_run_dir,
                         project_root = session.project,
                     )
                     return DriveResult(
@@ -119,6 +121,7 @@ function drive!(
                         log_dir = resolved_log_dir[],
                         failed_step = code == 0 ? nothing : "drive",
                         hosts = resolved_hosts[],
+                        run_dir = resolved_run_dir[],
                     )
                 finally
                     empty!(ARGS)

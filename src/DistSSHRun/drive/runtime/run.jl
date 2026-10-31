@@ -36,6 +36,7 @@ function run_drive_parsed!(
         resolved_output_dir::Union{Nothing, Base.RefValue{Union{Nothing, String}}} = nothing,
         resolved_log_dir::Union{Nothing, Base.RefValue{Union{Nothing, String}}} = nothing,
         resolved_hosts::Union{Nothing, Base.RefValue{Vector{HostRunResult}}} = nothing,
+        resolved_run_dir::Union{Nothing, Base.RefValue{Union{Nothing, String}}} = nothing,
         project_root::Union{Nothing, AbstractString} = nothing,
     )::Cint
     # `parse_drive_args` is inferred as one NamedTuple whose fields are unions
@@ -54,6 +55,7 @@ function run_drive_parsed!(
                 resolved_output_dir,
                 resolved_log_dir,
                 resolved_hosts,
+                resolved_run_dir,
                 project_root,
             )
         end
@@ -66,6 +68,7 @@ function _run_drive_parsed_specialized!(
         resolved_output_dir,
         resolved_log_dir,
         resolved_hosts,
+        resolved_run_dir,
         project_root,
     )::Cint
     if parsed.help
@@ -142,6 +145,7 @@ function _run_drive_parsed_specialized!(
     run_dir = DistSSHRun._ensure_kit_run_dir!(
         :drive, script_path; project = proj_dir,
     )
+    resolved_run_dir isa Base.RefValue && (resolved_run_dir[] = run_dir)
     return try
         DistSSHRun._reset_run_provenance!(project_root_abs)
         DistSSHRun._clear_last_ship!()
@@ -197,7 +201,8 @@ function _run_drive_parsed_specialized!(
                     code == 0 ? nothing : "drive",
                     Int(code),
                     hosts_acc[],
-                    DistSSHRun.resolved_placement_tokens(parent_workers, hosts, default_workers),
+                    DistSSHRun.resolved_placement_tokens(parent_workers, hosts, default_workers);
+                    run_dir = run_dir,
                 )
                 DistSSHRun._write_kit_result_file(result)
                 DistSSHRun.write_kit_run_toml!(

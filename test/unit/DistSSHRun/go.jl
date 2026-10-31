@@ -347,6 +347,15 @@ using Dates
         @test occursin("collect exit 1", txt)
         kr = DistSSHRun.kit_run_result(bad)
         @test kr.kind === :go
+        mktempdir() do rd
+            withenv(DistSSHRun.DISTSSHKIT_RUN_DIR_ENV => rd) do
+                positional = DistSSHRun.GoResult(
+                    false, nothing, nothing, nothing, "job.jl", "/out", "sync",
+                )
+                @test positional.failed_step == "sync"
+                @test positional.run_dir == DistSSHRun.kit_run_dir()
+            end
+        end
         @test kr.output_dir == "/tmp/go-out"
         @test kr.exit_code == 2
         @test !DistSSHRun.report_run_errors(bad; io = IOBuffer())

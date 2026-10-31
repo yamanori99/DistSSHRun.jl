@@ -223,7 +223,10 @@ function Base.wait(
             sleep(0.05)
         end
         if process_running(kp.process)
-            return KitRunResult(false, kp.kind, kp.output_dir, kp.log_dir, "hung", 124)
+            return KitRunResult(
+                false, kp.kind, kp.output_dir, kp.log_dir, "hung", 124;
+                run_dir = kp.run_dir,
+            )
         end
     end
     try
@@ -241,7 +244,8 @@ function Base.wait(
             kp.output_dir,
             kp.log_dir,
             ok ? nothing : String(kp.kind),
-            code,
+            code;
+            run_dir = kp.run_dir,
         )
     finally
         _close_owned_stdio!(kp)
@@ -1360,6 +1364,8 @@ function _write_kit_result_file(
         data["tokens"] = result.tokens
     end
     result.stop !== nothing && (data["stop"] = String(result.stop))
+    rd = result.run_dir === nothing ? run_dir : result.run_dir
+    rd !== nothing && (data["run_dir"] = String(rd))
     for d in dirs
         try
             mkpath(d)
@@ -1411,7 +1417,12 @@ function kit_result_from_dir(output_dir::AbstractString)::Union{Nothing, KitRunR
             end
         end
         stop = _kit_stop_symbol(get(raw, "stop", nothing))
-        return KitRunResult(ok, kind, od_s, ld_s, fs_s, Int(code), hosts, tokens, stop)
+        rd = get(raw, "run_dir", nothing)
+        rd_s = rd isa AbstractString ? String(rd) : nothing
+        return KitRunResult(
+            ok, kind, od_s, ld_s, fs_s, Int(code), hosts, tokens, stop;
+            run_dir = rd_s,
+        )
     catch
         return nothing
     end
@@ -1723,7 +1734,8 @@ function _result_with_stop(result::KitRunResult, stop::Union{Nothing, Symbol})::
         result.exit_code,
         result.hosts,
         result.tokens,
-        parsed,
+        parsed;
+        run_dir = result.run_dir,
     )
 end
 
@@ -1844,7 +1856,8 @@ function terminate_run!(
             d,
             log_dir === nothing ? nothing : canonical_local_path(String(log_dir)),
             "terminated",
-            1,
+            1;
+            run_dir = run_d,
         )
     return _persist_stop(result, stop; run_dir = run_d)
 end

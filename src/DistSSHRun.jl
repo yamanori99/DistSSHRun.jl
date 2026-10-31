@@ -68,6 +68,7 @@ export allocate_output_dir
 export allocate_run_dir
 export kit_run_dir
 export read_kit_run_toml
+export result_provenance
 export execute_detached_accepts
 export execute_kwargs_from_parsed
 export kit_pid_file_running
