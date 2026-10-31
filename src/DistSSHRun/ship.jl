@@ -696,10 +696,11 @@ A `~` path, a relative path, and a path this package will not use as a clone
 or delete target are refused. Nothing is read from the environment.
 """
 function explicit_remote_root_path(path::AbstractString)::String
-    s = strip(String(path))
-    any(c -> c == '\n' || c == '\r' || c == '\0' || iscntrl(c), s) && throw(
+    raw = String(path)
+    any(c -> c == '\n' || c == '\r' || c == '\0' || iscntrl(c), raw) && throw(
         ArgumentError("remote_root path contains a control character"),
     )
+    s = strip(raw)
     startswith(s, "/") || throw(
         ArgumentError(
             "setup --remote-root needs an absolute path; refusing $(repr(s))",

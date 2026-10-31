@@ -43,6 +43,7 @@ the remote root has no `Project.toml` (or pass `--remote-path` to that tree).
 directory with mode `700`. Group and other write are cleared again after
 `mkdir`. The parent must already exist. `~` and
 `DISTRIBUTED_REMOTE_PROJECT_ROOT` are not a source for this command.
+Confirmation is required unless `-y` is used.
 The directory must be owned by the SSH user and must not be group-writable
 or world-writable. No marker file is written, and `runs/` is not created.
 Provenance and `run.toml` use `schema = 1` and `writer = "DistSSHRun x.y.z"`.

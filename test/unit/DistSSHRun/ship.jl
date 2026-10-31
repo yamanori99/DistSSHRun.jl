@@ -29,6 +29,8 @@ end
     @test_throws ArgumentError DistSSHRun.explicit_remote_root_path("~/jobs/app")
     @test_throws ArgumentError DistSSHRun.explicit_remote_root_path("jobs/app")
     @test_throws ArgumentError DistSSHRun.explicit_remote_root_path("/")
+    @test_throws ArgumentError DistSSHRun.explicit_remote_root_path("/tmp/app\n")
+    @test_throws ArgumentError DistSSHRun.explicit_remote_root_path("/tmp/app\n ")
     @test DistSSHRun.explicit_remote_root_path("/tmp/jobs/app/") == "/tmp/jobs/app"
     sh = DistSSHRun._remote_root_create_script("/tmp/jobs/app")
     @test occursin("mkdir -m 700 ", sh)
