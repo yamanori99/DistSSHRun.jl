@@ -28,8 +28,10 @@ pkg> add DistSSHRun
 ```
 
 Julia **1.13+**. Hosts need **`ssh`**. Collect, `collect!`, and go slot
-pull-back use stdlib Tar over SSH. Remote mtimes are not kept. A symlink
-that points outside the copied tree is refused. Cache pull still needs
+pull-back use stdlib Tar over SSH. The remote Julia executable is `--julia`,
+or auto-detect. Remote mtimes are not kept. A non-executable file arrives as
+mode `0644`, and an executable file as `0755`. A symlink that points outside
+the copied tree is refused. Cache pull still needs
 **`rsync`**. Ship uses stdlib Tar over SSH. Git deploys also need **`git`**.
 
 `setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` extract the

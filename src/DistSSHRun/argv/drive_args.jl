@@ -495,7 +495,9 @@ function show_drive_usage(; io::IO = stdout)
         io,
         "  After main(): post-run-new (files newer than run start).",
         "  Later: --collect-missing / --collect-overwrite ROOT HOST...",
-        "  Pull-back uses Tar. Remote mtimes are not kept. Escaping symlinks are refused.",
+        "  Pull-back uses Tar. Remote mtimes and file modes are not kept.",
+        "  Modes are 0644, or 0755 if executable. Remote Julia is --julia or auto-detect.",
+        "  Escaping symlinks are refused.",
         "  Skip auto-collect: DISTRIBUTED_SKIP_COLLECT=1",
     )
     print_help_blank(io)

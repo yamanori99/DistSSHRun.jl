@@ -17,7 +17,9 @@ Collect modes:
   collect-missing    drive --collect-missing / collect!(merge=false): absent locally
   collect-overwrite  drive --collect-overwrite / collect!(merge=true): merge remote tree
   slot-overwrite     go after each remote slot: Tar the whole slot directory
-Pull-back uses stdlib Tar. Remote mtimes are not kept. An escaping symlink is refused.
+Pull-back uses stdlib Tar. Remote mtimes are not kept. File modes are not kept
+(0644, or 0755 if the file is executable). The remote Julia executable is
+--julia, or auto-detect. An escaping symlink is refused.
 """
 
 const KIT_QUIET_FLAG_HELP =

@@ -72,9 +72,11 @@ end
                     Dict(
                         "DISTRIBUTED_PROJECT_ROOT" => proj,
                         "DISTRIBUTED_REMOTE_PROJECT_ROOT" => remote,
+                        "DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia",
                     ),
                     extra_env,
                 )
+                DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!()
                 withenv(env...) do
                     DistSSHRun.apply_kit_cli_session!(DistSSHRun.KitCliSession(quiet = true, yes = true))
                     return f(state_dir, proj)

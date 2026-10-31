@@ -15,6 +15,7 @@ function drive_collect_tree(
         strict::Bool = false,
         project_root::AbstractString,
         path_anchor::AbstractString,
+        julia::Union{Nothing, AbstractString} = nothing,
     )
     repo_root = canonical_local_path(project_root)
     local_root = DistSSHRun.canonical_local_path(local_root)
@@ -80,8 +81,11 @@ function drive_collect_tree(
                 continue
             end
 
+            julia_bin = DistSSHRun._pull_remote_julia(host, julia)
             if merge
-                DistSSHRun._pull_tar_tree!(host, host_remote, local_root)
+                DistSSHRun._pull_tar_tree!(
+                    host, host_remote, local_root; julia_bin = julia_bin,
+                )
                 n = length(remote_files)
                 print_ok("✓ (synced $n remote file$(n == 1 ? "" : "s"))")
                 writeln_both("")
@@ -111,7 +115,9 @@ function drive_collect_tree(
                     continue
                 end
                 need = safe
-                DistSSHRun._pull_tar_rels!(host, host_remote, local_root, need)
+                DistSSHRun._pull_tar_rels!(
+                    host, host_remote, local_root, need; julia_bin = julia_bin,
+                )
                 n = length(need)
                 print_ok("✓ ($n file$(n == 1 ? "" : "s"))")
                 writeln_both("")
