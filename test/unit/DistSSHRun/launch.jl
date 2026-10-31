@@ -28,11 +28,10 @@ using TOML
         @test pinned["OMP_NUM_THREADS"] == "1"
     end
     DistSSHRun.reset_worker_seeds!()
-    a = Dict{String, String}()
-    b = Dict{String, String}()
-    withenv("DISTSSHKIT_JOB_SEED" => "11") do
-        a = Dict(DistSSHRun.worker_env_pairs("/tmp/job"; rank = DistSSHRun.take_worker_rank()))
-        b = Dict(DistSSHRun.worker_env_pairs("/tmp/job"; rank = DistSSHRun.take_worker_rank()))
+    a, b = withenv("DISTSSHKIT_JOB_SEED" => "11") do
+        aa = Dict(DistSSHRun.worker_env_pairs("/tmp/job"; rank = DistSSHRun.take_worker_rank()))
+        bb = Dict(DistSSHRun.worker_env_pairs("/tmp/job"; rank = DistSSHRun.take_worker_rank()))
+        aa, bb
     end
     @test a["DISTSSHKIT_WORKER_RANK"] == "1"
     @test b["DISTSSHKIT_WORKER_RANK"] == "2"
@@ -52,8 +51,16 @@ using TOML
         DistSSHRun.take_worker_rank()
     end
     seeds = DistSSHRun._seed_provenance()
+    @test seeds isa AbstractDict
+    seeds isa AbstractDict || error("expected seed provenance")
     @test seeds["job"] == "11"
-    @test seeds["workers"][1]["rank"] == 1
+    workers = seeds["workers"]
+    @test workers isa Vector
+    workers isa Vector || error("expected seed workers")
+    first_worker = workers[1]
+    @test first_worker isa AbstractDict
+    first_worker isa AbstractDict || error("expected a worker seed")
+    @test first_worker["rank"] == 1
     mktempdir() do tmp
         write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
         write(joinpath(tmp, "CondaPkg.toml"), "[deps]\n")
