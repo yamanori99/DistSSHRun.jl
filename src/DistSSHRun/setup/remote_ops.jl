@@ -41,12 +41,6 @@ function rsync_push_to_remotes(
     )
 end
 
-"""Remote `sh` that removes `remote_path` unless it is that host's home, `/`, or depot.
-
-The final path component must not be a symlink. Intermediate symlinks stay,
-so `cd -P` / `pwd -P` can resolve them. The `test -L` check and `rm` are one
-script. Flags are `rm -rf` only (BSD rm on macOS).
-"""
 # Shell helpers: missing run.toml is allowed; a present file must be owned.
 function _remote_run_toml_owned_check_sh()::String
     return """
@@ -82,6 +76,12 @@ function _remote_run_toml_owned_check_sh()::String
     """
 end
 
+"""Remote `sh` that removes `remote_path` unless it is that host's home, `/`, or depot.
+
+The final path component must not be a symlink. Intermediate symlinks stay,
+so `cd -P` / `pwd -P` can resolve them. The `test -L` check and `rm` are one
+script. Flags are `rm -rf` only (BSD rm on macOS).
+"""
 function _remote_delete_shell(remote_path::AbstractString)::String
     pq = _remote_shell_path_word(remote_path)
     # `$pq` is its own word. A double-quoted echo would treat its quotes as
