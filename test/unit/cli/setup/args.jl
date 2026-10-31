@@ -47,6 +47,7 @@ using Test
             "--cleanup" => :cleanup,
             "--prune" => :prune,
             "--delete" => :delete,
+            "--remote-root" => :remote_root,
             "--requirements" => :requirements,
         )
         let r = parse_setup_args([flag, "child:host1"])
@@ -85,6 +86,12 @@ using Test
     let r = parse_setup_args(["--check", "--remote-dir", "/tmp/App.jl", "child:host1"])
         @test r.remote_path_override == "/tmp/App.jl"
     end
+    let r = parse_setup_args(["--check", "--remote-path", " /tmp/App.jl ", "child:host1"])
+        @test r.remote_path_override == "/tmp/App.jl"
+    end
+    @test_throws ArgumentError parse_setup_args(
+        ["--remote-root", "--remote-path", "/tmp/app\n", "child:host1"],
+    )
     let r = parse_setup_args(["--check", "--julia", "/opt/julia/bin/julia", "child:host1"])
         @test r.julia_path == "/opt/julia/bin/julia"
     end
@@ -166,6 +173,7 @@ using Test
     @testset "help smoke (rsync-first)" begin
         txt = DistSSHRun.setup_help_text()
         @test occursin("--prune", txt)
+        @test occursin("--remote-root", txt)
         @test occursin("--confirm-path", txt)
         @test occursin("--older-than", txt)
         @test occursin("--runtest", txt)

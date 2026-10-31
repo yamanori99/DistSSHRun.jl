@@ -13,6 +13,7 @@ const _SETUP_BANG_MODES = (
     :runtest,
     :cleanup,
     :prune,
+    :remote_root,
 )
 
 """
@@ -35,6 +36,7 @@ Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup --…`.
 | `:runtest` | `--runtest` | job `Pkg.test()` on remotes; `julia=` |
 | `:cleanup` | `--cleanup` | Kill stale workers (no confirm) |
 | `:prune` | `--prune` | `.distsshkit` go/drive/setup/runs leaves. Requires `confirm_path`. `session.yes` does not delete. `older_days=`, `id=` |
+| `:remote_root` | `--remote-root` | `remote=` must be absolute. Creates that directory only when the parent exists. Confirm unless `session.yes` |
 
 Confirmations for other modes follow `session.yes` (CLI `-y`). `:delete` and
 `:prune` authorize only `confirm_path`: a `String` when the session has one
@@ -697,6 +699,15 @@ function _setup_one!(
         return SyncResult(false, HostResult[]; ok = result.ok, warnings = result.warnings)
     elseif mode === :cleanup
         raw = cleanup_remote_workers(hosts)
+        return _sync_result_from_host_op(raw)
+    elseif mode === :remote_root
+        remote = session.remote
+        if !(remote isa AbstractString)
+            throw(ArgumentError("setup! :remote_root needs remote= as an absolute path"))
+        end
+        root = explicit_remote_root_path(remote)
+        preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
+        raw = create_remote_roots!(hosts, root; confirm = !session.yes)
         return _sync_result_from_host_op(raw)
     elseif mode === :prune
         plan = _setup_require_plan(bound_plan)

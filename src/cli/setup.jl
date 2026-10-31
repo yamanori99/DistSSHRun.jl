@@ -154,6 +154,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 :pull => "Pull",
                 :sync => "Sync",
                 :ship_tree => "ship-tree",
+                :remote_root => "remote-root",
                 :instantiate => "Instantiate",
                 :juliaup => "juliaup (align Julia)",
                 :juliaup_update => "juliaup update",
@@ -179,6 +180,16 @@ if !isdefined(@__MODULE__, :setup_main)
                     )
                 elseif mode === :ship_tree
                     DistSSHRun._checked_remote_dest(deploy_path)
+                elseif mode === :remote_root
+                    override = opts.remote_path_override
+                    if !(override isa AbstractString)
+                        throw(
+                            ArgumentError(
+                                "setup --remote-root needs --remote-path as an absolute path",
+                            ),
+                        )
+                    end
+                    DistSSHRun.explicit_remote_root_path(override)
                 elseif mode === :prune
                     DistSSHRun._checked_remote_dest(remote_path)
                 else
@@ -203,7 +214,7 @@ if !isdefined(@__MODULE__, :setup_main)
 
             # Mutating / multi-host SSH ops: fail fast before confirmations.
             # `--delete` and `--prune` stay off SSH until `--confirm-path` matches.
-            if mode === :clone || mode === :ship_tree ||
+            if mode === :clone || mode === :ship_tree || mode === :remote_root ||
                     mode === :instantiate || mode === :runtest
                 if !preflight_setup_ssh(opts.hosts)
                     print_err("SSH preflight failed. Fix connectivity, then retry.")
@@ -272,6 +283,16 @@ if !isdefined(@__MODULE__, :setup_main)
                     kit_println("        $(DistSSHRun.cli_m()) setup --check --remote-path $src")
                     kit_println()
                 end
+                return Cint(ok ? 0 : 1)
+            end
+
+            if mode === :remote_root
+                ok = finish_host_op!(
+                    "remote-root",
+                    DistSSHRun.create_remote_roots!(
+                        opts.hosts, op_path; confirm = !opts.cli_session.yes,
+                    ),
+                )
                 return Cint(ok ? 0 : 1)
             end
 

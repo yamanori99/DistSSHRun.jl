@@ -32,6 +32,7 @@ function show_requirements(; io::IO = stdout)
     print_help_section("Modes (one per run)"; io = io)
     print_help_lines(
         io,
+        "  --remote-root        create that absolute --remote-path only",
         "  --ship-tree / --clone  --ship-tree writes runs/<run_id>/src/",
         "                       --clone needs an empty remote path",
         "                       --delete first to replace a clone dest",
@@ -92,6 +93,7 @@ function _setup_flag_mode(arg::AbstractString)::Union{Nothing, Symbol}
     arg == "--delete" && return :delete
     arg == "--prune" && return :prune
     arg == "--ship-tree" && return :ship_tree
+    arg == "--remote-root" && return :remote_root
     arg == "--rsync" && _throw_rsync_removed()
     arg == "--requirements" && return :requirements
     return nothing
@@ -109,7 +111,7 @@ function parse_setup_args(args::Vector{String})
         known = (
             "--check", "--pull", "--sync", "--instantiate", "--juliaup",
             "--juliaup-update", "--runtest", "--cleanup", "--clone",
-            "--delete", "--prune", "--rsync", "--ship-tree",
+            "--delete", "--prune", "--rsync", "--ship-tree", "--remote-root",
             "--allow-external-symlinks", "--requirements",
             "--ignore-julia-version", "-h", "--help",
         ),
@@ -172,7 +174,11 @@ function parse_setup_args(args::Vector{String})
         elseif arg == "--repo"
             repo_url = String(strip(cli_take_value!(c, arg)))
         elseif arg in ("--remote-path", "--remote-dir")
-            remote_path_override = String(strip(cli_take_value!(c, arg)))
+            raw = String(cli_take_value!(c, arg))
+            any(c -> c == '\n' || c == '\r' || c == '\0' || iscntrl(c), raw) && throw(
+                ArgumentError("--remote-path cannot contain a control character"),
+            )
+            remote_path_override = strip(raw)
         elseif arg == "--allow-external-symlinks"
             allow_external_symlinks = true
             cli_consume!(c)
