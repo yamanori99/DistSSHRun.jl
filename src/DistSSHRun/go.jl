@@ -633,7 +633,7 @@ function _go_remote_slot_shell_inner(
     seed = job_seed()
     wseed = worker_seed(seed, rank)
     seed_export = "export DISTSSHKIT_JOB_SEED=$(seed) DISTSSHKIT_WORKER_RANK=$(rank) DISTSSHKIT_WORKER_SEED=$(wseed) && "
-    jb_launch = go_remote_julia_prefix(julia_bin)
+    jb_launch = go_remote_julia_prefix(julia_bin; blas = _explicit_blas_threads())
     log_q = _remote_shell_path_word(joinpath(slot_rel, "julia.stdout.log"))
     exit_q = _remote_shell_path_word(joinpath(slot_rel, "go.exitcode"))
     job_id = resolved_kit_job_id()

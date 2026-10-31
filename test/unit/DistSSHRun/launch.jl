@@ -43,8 +43,13 @@ using TOML
     @test !haskey(built, "nope")
     DistSSHRun.reset_worker_seeds!()
     @test DistSSHRun.worker_pmap(identity, [10, 20]) == [10, 20]
-    @test DistSSHRun._ITEM_MAP[1] == 0
-    @test DistSSHRun._ITEM_MAP[2] == 0
+    @test DistSSHRun._ITEM_MAP[(1, 1)] == 0
+    @test DistSSHRun._ITEM_MAP[(1, 2)] == 0
+    withenv("DISTSSHKIT_WORKER_RANK" => "4") do
+        @test DistSSHRun.worker_pmap(identity, [10]) == [10]
+    end
+    @test DistSSHRun._ITEM_MAP[(1, 1)] == 0
+    @test DistSSHRun._ITEM_MAP[(2, 1)] == 4
     DistSSHRun.reset_worker_seeds!()
     withenv("DISTSSHKIT_JOB_SEED" => "11") do
         DistSSHRun.job_seed()
@@ -67,6 +72,26 @@ using TOML
         prov = DistSSHRun._project_provenance(tmp)
         @test haskey(prov, "locks")
         @test haskey(prov["locks"], "CondaPkg.toml")
+        whole = DistSSHRun.assemble_provenance(tmp)
+        git = Sys.which("git")
+        if git === nothing
+            @test !haskey(whole, "tools")
+        else
+            @test haskey(whole, "tools")
+            tools = whole["tools"]
+            @test tools isa Vector
+            tools isa Vector || error("expected tools")
+            row = nothing
+            for tool in tools
+                tool isa AbstractDict || continue
+                get(tool, "name", "") == "git" || continue
+                row = tool
+            end
+            @test row isa AbstractDict
+            row isa AbstractDict || error("expected git tool")
+            @test row["path"] == git
+            @test row["outside_manifest"] === true
+        end
     end
 
     names = DistSSHRun.launch_override_names(
@@ -91,8 +116,17 @@ using TOML
 
     prefix = DistSSHRun.go_remote_julia_prefix("julia")
     @test occursin("env -u JULIA_PROJECT", prefix)
+    @test occursin("-u OPENBLAS_NUM_THREADS", prefix)
+    @test !occursin("OPENBLAS_NUM_THREADS=", prefix)
     @test occursin("JULIA_LOAD_PATH=", prefix)
     @test occursin("--project=.", prefix)
+    capped = withenv("DISTSSHKIT_BLAS_THREADS" => "1") do
+        DistSSHRun.go_remote_julia_prefix("julia"; blas = DistSSHRun._explicit_blas_threads())
+    end
+    unset_at = findfirst("-u OPENBLAS_NUM_THREADS", capped)
+    set_at = findfirst("OPENBLAS_NUM_THREADS=", capped)
+    @test unset_at !== nothing && set_at !== nothing && first(unset_at) < first(set_at)
+    @test occursin("OMP_NUM_THREADS=", capped)
 
     @test DistSSHRun.parse_allow_mismatch("julia,distssh") == [:julia, :distssh]
     @test DistSSHRun.parse_allow_mismatch(" manifest ") == [:manifest]

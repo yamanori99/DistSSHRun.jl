@@ -391,8 +391,15 @@ function _seed_provenance()::Union{Nothing, Dict{String, Any}}
     data = Dict{String, Any}("job" => string(seed), "workers" => workers)
     items = Dict{String, Any}[]
     lock(_ITEM_LOCK) do
-        for item in sort!(collect(keys(_ITEM_MAP)))
-            push!(items, Dict{String, Any}("item" => item, "rank" => _ITEM_MAP[item]))
+        for key in sort!(collect(keys(_ITEM_MAP)))
+            call, item = key
+            push!(
+                items, Dict{String, Any}(
+                    "call" => call,
+                    "item" => item,
+                    "rank" => _ITEM_MAP[key],
+                )
+            )
         end
     end
     isempty(items) || (data["items"] = items)
@@ -464,6 +471,17 @@ function _git_status_is_kit(path::AbstractString)::Bool
         occursin("/" * name * "/", path) && return true
     end
     return false
+end
+
+"""PATH-resolved `git`, noted as outside the Manifest. `nothing` when `git` is absent."""
+function _path_resolved_git()::Union{Nothing, Dict{String, Any}}
+    path = Sys.which("git")
+    path isa AbstractString || return nothing
+    return Dict{String, Any}(
+        "name" => "git",
+        "path" => path,
+        "outside_manifest" => true,
+    )
 end
 
 function _git_source(project::AbstractString)::Union{Nothing, Dict{String, Any}}
@@ -675,6 +693,8 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     )
     seeds = _seed_provenance()
     seeds === nothing || (data["seeds"] = seeds)
+    git_tool = _path_resolved_git()
+    git_tool === nothing || (data["tools"] = Dict{String, Any}[git_tool])
     source = started ? _PROVENANCE_SOURCE_SNAP[] : _resolve_source(proj)
     source === nothing || (data["source"] = source)
     ship = last_ship_result()

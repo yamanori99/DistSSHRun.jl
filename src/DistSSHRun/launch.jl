@@ -84,7 +84,8 @@ end
 const _JOB_SEED = Ref{Union{Nothing, UInt64}}(nothing)
 const _NEXT_WORKER_RANK = Ref(1)
 const _ASSIGNED_RANKS = Int[]
-const _ITEM_MAP = Dict{Int, Int}()
+const _NEXT_PMAP_CALL = Ref(1)
+const _ITEM_MAP = Dict{Tuple{Int, Int}, Int}()
 const _ITEM_LOCK = ReentrantLock()
 
 """One seed for this run. `DISTSSHKIT_JOB_SEED` wins when it is a `UInt64`."""
@@ -118,14 +119,24 @@ function reset_worker_seeds!()
     _NEXT_WORKER_RANK[] = 1
     empty!(_ASSIGNED_RANKS)
     lock(_ITEM_LOCK) do
+        _NEXT_PMAP_CALL[] = 1
         empty!(_ITEM_MAP)
     end
     return nothing
 end
 
-function _note_item!(item::Integer, rank::Integer)
+"""One id per `worker_pmap` call, taken on process 1 before `pmap` starts."""
+function _take_pmap_call()::Int
+    return lock(_ITEM_LOCK) do
+        call = _NEXT_PMAP_CALL[]
+        _NEXT_PMAP_CALL[] = call + 1
+        return call
+    end
+end
+
+function _note_item!(call::Integer, item::Integer, rank::Integer)
     lock(_ITEM_LOCK) do
-        _ITEM_MAP[Int(item)] = Int(rank)
+        _ITEM_MAP[(Int(call), Int(item))] = Int(rank)
     end
     return nothing
 end
@@ -392,7 +403,10 @@ function _add_ssh_drive_workers!(
     return nothing
 end
 
-function go_remote_julia_prefix(julia_bin::AbstractString)::String
+function go_remote_julia_prefix(
+        julia_bin::AbstractString;
+        blas::Union{Nothing, AbstractString} = nothing,
+    )::String
     jb = _remote_shell_path_word(julia_bin)
     flags = worker_exeflag_strings("."; local_cpu = false)
     flag_s = sprint() do io
@@ -400,5 +414,7 @@ function go_remote_julia_prefix(julia_bin::AbstractString)::String
             print(io, ' ', posix_quote(f))
         end
     end
-    return "$(_env_unset_prefix()) JULIA_LOAD_PATH=$(posix_quote(_LAUNCH_LOAD_PATH)) $(jb)$(flag_s)"
+    blas_s = blas === nothing ? "" :
+        " OPENBLAS_NUM_THREADS=$(posix_quote(String(blas))) OMP_NUM_THREADS=$(posix_quote(String(blas)))"
+    return "$(_env_unset_prefix())$blas_s JULIA_LOAD_PATH=$(posix_quote(_LAUNCH_LOAD_PATH)) $(jb)$(flag_s)"
 end

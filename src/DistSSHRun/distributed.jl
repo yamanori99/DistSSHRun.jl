@@ -186,14 +186,15 @@ world-age errors (for example, a function reference or closure captured before
 package load).
 """
 function worker_pmap(f, collection)
+    call = myid() == 1 ? _take_pmap_call() : remotecall_fetch(_take_pmap_call, 1)
     indexed = collect(enumerate(collection))
     return pmap(indexed) do (item, x)
         raw = get(ENV, "DISTSSHKIT_WORKER_RANK", "")
         rank = something(tryparse(Int, raw), 0)
         if myid() == 1
-            _note_item!(item, rank)
+            _note_item!(call, item, rank)
         else
-            remotecall_fetch(_note_item!, 1, item, rank)
+            remotecall_fetch(_note_item!, 1, call, item, rank)
         end
         return Base.invokelatest(f, x)
     end
