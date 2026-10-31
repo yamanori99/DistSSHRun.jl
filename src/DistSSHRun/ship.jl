@@ -708,7 +708,10 @@ function explicit_remote_root_path(path::AbstractString)::String
     return _checked_remote_dest(rstrip(s, '/'))
 end
 
-"""Create `abs_path` with `mkdir` when it is missing. The parent must already exist."""
+"""Create `abs_path` with mode `700` when it is missing. The parent must already exist.
+
+`chmod go-w` clears group and other write again when a default ACL added it.
+"""
 function _remote_root_create_script(abs_path::AbstractString)::String
     path = explicit_remote_root_path(abs_path)
     q = _remote_shell_path_word(path)
@@ -728,7 +731,8 @@ function _remote_root_create_script(abs_path::AbstractString)::String
         printf 'remote_root parent does not exist: %s\\n' $pq
         exit 2
       fi
-      mkdir $q || exit 1
+      mkdir -m 700 $q || exit 1
+      chmod go-w $q || exit 1
     fi
     $(_remote_root_mode_sh(q))
     """

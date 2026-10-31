@@ -31,7 +31,8 @@ end
     @test_throws ArgumentError DistSSHRun.explicit_remote_root_path("/")
     @test DistSSHRun.explicit_remote_root_path("/tmp/jobs/app/") == "/tmp/jobs/app"
     sh = DistSSHRun._remote_root_create_script("/tmp/jobs/app")
-    @test occursin("mkdir ", sh)
+    @test occursin("mkdir -m 700 ", sh)
+    @test occursin("chmod go-w ", sh)
     @test !occursin("mkdir -p", sh)
     @test occursin("remote_root parent does not exist", sh)
     @test occursin("remote_root is a symlink", sh)
@@ -53,6 +54,12 @@ end
         script = "umask 022\n" * DistSSHRun._remote_root_create_script(root)
         run(`sh -c $script`)
         @test isdir(root)
+        @test (filemode(root) & 0o022) == 0
+        loose = joinpath(parent, "loose")
+        loose_script = "umask 002\n" * DistSSHRun._remote_root_create_script(loose)
+        run(`sh -c $loose_script`)
+        @test isdir(loose)
+        @test (filemode(loose) & 0o022) == 0
         @test !isdir(joinpath(root, "runs"))
         chmod(root, 0o775)
         bad = run(pipeline(`sh -c $script`; stdout = devnull, stderr = devnull); wait = false)
