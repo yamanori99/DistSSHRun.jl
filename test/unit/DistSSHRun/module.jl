@@ -16,40 +16,57 @@ using Test
     @test DistSSHRun.dist_ssh_kit_version() != v"0.0.0"
 
     # Public surface: sizing is `size!`; argv `go` / `drive` are unexported.
+    # `names` lists public names too. Whether `using` imports a name is `isexported`.
     ns = names(DistSSHRun)
+    not_exported(name) = !Base.isexported(DistSSHRun, name) && Base.ispublic(DistSSHRun, name)
     @test :size! in ns && :go! in ns && :drive! in ns && :plan in ns
     @test :pool! in ns && :ResourcePool in ns && :HostInventory in ns
-    @test :print_pool in ns && :worker_plan_from_pool ∉ ns
-    @test :ride! in ns && :RideResult in ns && :print_ride in ns
-    @test :parse_ride_args ∉ ns && :show_ride_usage ∉ ns
+    @test not_exported(:print_pool)
+    @test :worker_plan_from_pool ∉ ns
+    @test :ride! in ns && :RideResult in ns
+    @test not_exported(:print_ride)
+    @test Base.isexported(DistSSHRun, :parse_ride_args) && :show_ride_usage ∉ ns
     @test :plan! ∉ ns && :KitPlan in ns && :PlanFinding in ns
-    @test :print_plan in ns && :parse_plan_args ∉ ns && :show_plan_usage ∉ ns
+    @test not_exported(:print_plan)
+    @test :parse_plan_args ∉ ns && :show_plan_usage ∉ ns
     @test :parse_pool_args ∉ ns && :show_pool_usage ∉ ns
     @test :stored_path in ns && :file_sha256 in ns && :cache_file in ns
     @test :cache_path in ns && :cache_relpath in ns
     @test :push_cache! in ns && :cache_remote_dir in ns
-    @test :KitRunResult in ns && :kit_run_result in ns && :report_run_errors in ns
+    @test :KitRunResult in ns && :kit_run_result in ns
+    @test not_exported(:report_run_errors)
+    @test not_exported(:report_pipeline_errors)
+    @test not_exported(:report_go_errors)
     @test :execute! in ns && :KitProcess in ns && :kit_result_from_dir in ns
     @test :drive_host_status in ns && :DriveHostStatus in ns
     @test :allocate_output_dir in ns
     @test :allocate_run_dir in ns && :kit_run_dir in ns && :read_kit_run_toml in ns
+    @test :result_provenance in ns
+    @test :result_run_dir in ns && Base.ispublic(DistSSHRun, :result_run_dir)
+    @test !Base.isexported(DistSSHRun, :result_run_dir)
     @test :parse_progress_line ∉ ns && :kit_progress_latest ∉ ns
     @test :kit_progress_phases ∉ ns
     @test :execute_detached_accepts in ns && :kit_pid_alive ∉ ns
     @test :kit_pid_file_running in ns
     @test :terminate! in ns && :terminate_run! in ns
-    @test :parse_go_args in ns && :parse_drive_args in ns
+    @test Base.isexported(DistSSHRun, :parse_go_args) &&
+        Base.isexported(DistSSHRun, :parse_drive_args)
     @test :execute_kwargs_from_parsed in ns
-    @test :show_go_usage in ns && :show_drive_usage in ns
-    @test :println_kit_version in ns && :ssh_opts in ns
+    @test not_exported(:show_go_usage)
+    @test not_exported(:show_drive_usage)
+    @test not_exported(:println_kit_version)
+    @test :ssh_opts in ns
     @test :resolve_remote_julia ∉ ns && :resolve_controller_julia in ns
     @test :run_on_host in ns
     @test :canonical_local_path in ns && :short_path in ns
     @test :resolve_pkg_project_dir in ns && :explain_script_not_found in ns
-    @test :print_cli_error in ns && :print_help_chrome in ns
-    @test :print_help_section in ns && :print_help_lines in ns
-    @test :print_help_blank in ns && :print_colored in ns
-    @test :SPINNER_FRAMES in ns
+    @test not_exported(:print_cli_error)
+    @test not_exported(:print_help_chrome)
+    @test not_exported(:print_help_section)
+    @test not_exported(:print_help_lines)
+    @test not_exported(:print_help_blank)
+    @test not_exported(:print_colored)
+    @test not_exported(:SPINNER_FRAMES)
     @test :_print_colored ∉ ns
     @test DistSSHRun._print_colored === DistSSHRun.print_colored
     @test DistSSHRun.ssh_opts === DistSSHRun.DistSSHBase.ssh_opts
@@ -62,7 +79,7 @@ using Test
     @test :split_worker_token ∉ ns && :is_parent_host_name in ns && :host_tokens in ns
     @test :size_plan ∉ ns && :go ∉ ns && :drive ∉ ns
     @test isdefined(DistSSHRun, :go) && isdefined(DistSSHRun, :drive)
-    @test isdefined(DistSSHRun, :parse_ride_args) && isdefined(DistSSHRun, :kit_pid_alive)
+    @test isdefined(DistSSHRun, :kit_pid_alive)
     @test !isdefined(DistSSHRun, :size_plan)
 
     let fixture = _fixture("cli_echo_args.jl")

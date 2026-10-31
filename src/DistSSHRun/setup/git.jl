@@ -33,19 +33,102 @@ function git_push_project!(project::AbstractString)::Bool
 end
 
 # Mandatory on every remote git process. Ephemeral `-c` only: do not set
-# `safe.directory` or any other persistent config. Nice-to-have `-c` values
-# stay on #199.
+# `safe.directory` or any other persistent config.
 const _REMOTE_GIT_CONFIG_ARGS = (
     "-c",
     "core.fsmonitor=false",
     "-c",
     "core.hooksPath=/dev/null",
+    "-c",
+    "advice.detachedHead=false",
+    "-c",
+    "submodule.recurse=false",
+    "-c",
+    "gc.auto=0",
+    "-c",
+    "core.autocrlf=false",
+    "--no-optional-locks",
 )
+
+"""`:world`, `:group`, or `nothing` from an `ls -ldL` mode (`drwxrwxrwx`)."""
+function _ls_mode_writable_kind(mode::AbstractString)::Union{Nothing, Symbol}
+    m = String(mode)
+    length(m) < 10 && return nothing
+    m[9] == 'w' && return :world
+    m[6] == 'w' && return :group
+    return nothing
+end
+
+"""True when `mode` is an `ls -ldL` directory mode, including an ACL mark."""
+function _ls_directory_mode(mode::AbstractString)::Bool
+    m = String(mode)
+    return length(m) >= 10 && m[1] == 'd'
+end
+
+"""Remote `sh` that prints `missing` or the `ls -ldL` mode of `abs_path`.
+
+`-L` follows a symlink so the mode is the directory Git uses, not `lrwxrwxrwx`.
+`-l` stays so the first field is the mode. `ls` failure exits 1. A pipeline
+that drops that status is not a private directory.
+"""
+function _remote_project_mode_sh(abs_path::AbstractString)::String
+    q = _remote_shell_path_word(abs_path)
+    return "if [ ! -d $q ]; then echo missing; exit 0; fi; " *
+        "mode=\$(ls -ldL $q) || exit 1; " *
+        "printf '%s\\n' \"\$mode\" | awk '{ print \$1; exit }'"
+end
+
+function _remote_project_mode(host::AbstractString, abs_path::AbstractString)
+    out_buf = IOBuffer()
+    err_buf = IOBuffer()
+    try
+        run(
+            pipeline(
+                _host_sync_remote_shell_cmd(String(host), _remote_project_mode_sh(abs_path));
+                stdout = out_buf,
+                stderr = err_buf,
+            ),
+        )
+    catch e
+        _rethrow_missing_host_tool(e)
+        return (;
+            ok = false,
+            kind = :probe_failed,
+            detail = _captured_output_tail(String(take!(out_buf)), String(take!(err_buf))),
+        )
+    end
+    line = strip(String(take!(out_buf)))
+    line == "missing" && return (; ok = true, kind = :missing, detail = "")
+    token = isempty(line) ? "" : String(first(split(line)))
+    _ls_directory_mode(token) || return (;
+        ok = false,
+        kind = :probe_failed,
+        detail = isempty(token) ? "could not read the project mode" : token,
+    )
+    kind = _ls_mode_writable_kind(token)
+    return (; ok = true, kind = something(kind, :private), detail = token)
+end
+
+"""Refusal when `mode` cannot be read or the directory is group- or world-writable.
+
+`:missing` and a private directory return `nothing`.
+"""
+function _remote_writable_project_refusal(host::AbstractString, mode)::Union{Nothing, String}
+    if !mode.ok
+        detail = isempty(mode.detail) ? "could not read the project mode" : mode.detail
+        return "$host: $detail\nSee help setup."
+    end
+    if mode.kind === :world || mode.kind === :group
+        return "$host project is $(mode.kind)-writable ($(mode.detail)). " *
+            "Refusing to run git there. See help setup."
+    end
+    return nothing
+end
 
 """
 Remote `sh` body for one `git` at `remote_path`.
 
-Every remote git call goes through here so hooks and fsmonitor do not run.
+Every remote git call goes through here so hooks, fsmonitor, and optional locks do not run.
 Arguments are passed through [`_remote_argv_sh`](@ref). A `~` path is `cd`
 then `git` so the remote shell expands the tilde; any other path is `git -C`.
 """
@@ -69,6 +152,28 @@ function _remote_git_shell(
         push!(argv, String(a))
     end
     return DistSSHBase._remote_argv_sh(argv)
+end
+
+"""Remote `sh` for `git clone`. Same `-c` and `--no-optional-locks` as [`_remote_git_shell`](@ref).
+
+The umask keeps every bit it already had and also masks group and other
+write (`| 022`). A stricter umask such as `077` stays stricter. The
+destination stays outside the quoted argv so a `~` path still expands.
+"""
+function _remote_git_clone_sh(
+        remote_path::AbstractString,
+        clone_url::AbstractString,
+    )::String
+    argv = String["git"]
+    for opt in _REMOTE_GIT_CONFIG_ARGS
+        push!(argv, String(opt))
+    end
+    push!(argv, "clone", "--", String(clone_url))
+    # `022` is octal in bash and dash. `printf` hands umask octal digits.
+    return "umask \$(printf '%04o' \$(( \$(umask) | 022 ))) && " *
+        DistSSHBase._remote_argv_sh(argv) *
+        " " *
+        _remote_shell_path_word(remote_path)
 end
 
 function _git_remote_url(project::AbstractString)::String
@@ -305,6 +410,11 @@ function _detach_sha_on_host(
             ok = false,
             message = "Could not resolve the remote path on $host. See help setup.",
         )
+    end
+    mode = _remote_project_mode(host, abs_path)
+    refusal = _remote_writable_project_refusal(host, mode)
+    if refusal !== nothing
+        return (; ok = false, message = refusal)
     end
     st = _remote_git_run(host, abs_path, _git_status_args())
     if !st.ok

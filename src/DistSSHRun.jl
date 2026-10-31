@@ -45,11 +45,9 @@ export size!
 export pool!
 export ResourcePool
 export HostInventory
-export print_pool
 export plan
 export KitPlan
 export PlanFinding
-export print_plan
 export stored_path
 export file_sha256
 export cache_file
@@ -61,19 +59,16 @@ export drive!
 export collect!
 export pipeline!
 export pipeline_config_from_env
-export report_pipeline_errors
-export report_run_errors
 export go!
 export GoResult
-export report_go_errors
 export ride!
 export RideResult
-export print_ride
 export execute!
 export allocate_output_dir
 export allocate_run_dir
 export kit_run_dir
 export read_kit_run_toml
+export result_provenance
 export execute_detached_accepts
 export execute_kwargs_from_parsed
 export kit_pid_file_running
@@ -83,9 +78,7 @@ export kit_result_from_dir
 export drive_host_status
 export parse_go_args
 export parse_drive_args
-export show_go_usage
-export show_drive_usage
-export println_kit_version
+export parse_ride_args
 export ssh_opts
 export run_on_host
 export resolve_controller_julia
@@ -94,13 +87,23 @@ export short_path
 export resolve_pkg_project_dir
 export resolve_pkg_env
 export explain_script_not_found
-export print_cli_error
-export print_help_chrome
-export print_help_section
-export print_help_lines
-export print_help_blank
-export print_colored
-export SPINNER_FRAMES
+# Display helpers stay public and are not exported. DistSSHKit 0.11 drops them.
+public print_pool
+public print_plan
+public report_pipeline_errors
+public report_run_errors
+public report_go_errors
+public print_ride
+public show_go_usage
+public show_drive_usage
+public println_kit_version
+public print_cli_error
+public print_help_chrome
+public print_help_section
+public print_help_lines
+public print_help_blank
+public print_colored
+public SPINNER_FRAMES
 # `_print_colored` remains an alias of `print_colored`.
 
 

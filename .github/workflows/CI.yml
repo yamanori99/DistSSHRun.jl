@@ -12,7 +12,8 @@ on:
 # the heavy gate, including ordinary pull requests. Linux SSH E2E 1.14-pre
 # follows the E2E path filter (continue-on-error). A Project.toml version
 # increase (see version-cut.sh) also runs Ubuntu nightly and Aqua on nightly.
-# macOS for both channels is CI weekly. WSL2 1.13 Pkg.test runs on a main
+# macOS 1.14-pre Pkg.test follows the heavy gate and is required. macOS
+# nightly stays on CI weekly. WSL2 1.13 Pkg.test runs on a main
 # push and CI weekly, not on a pull request.
 # Ordinary pull requests skip DistSSHBase unless lib/DistSSHBase, root
 # Project.toml, .github/julia-slots.env, this file, or .github/actions
@@ -40,6 +41,7 @@ jobs:
   # and DistSSHUp. macOS 1.13 runs Base, then Up, then Run, one runner at a
   # time. A skipped Base or Up does not skip the next (`!cancelled()` and
   # `!failure()`, and Run also needs Base so a Base failure still blocks it).
+  # Run 1.14-pre starts with the other heavy jobs, in parallel with that chain.
   # Ubuntu stays parallel. Downstream is one
   # matrix (DistSSHQueue, DistSSHKit). Each required DistSSHUp and
   # DistSSHBase title is its own job (Ubuntu, macOS, Ubuntu SSH
@@ -572,13 +574,36 @@ jobs:
 
   # A skipped job does not expand a matrix name, so these titles stay literal.
   # Version string is ~1.14.0-0. The title is 1.14-pre, shared with Queue and Kit.
+  # Required: a driver blocked in pmap must cancel within interrupt_grace + 11s
+  # (#212). The macOS job is that suite on macos-latest, in parallel with Run
+  # 1.13, so ps -o lstart= runs on 1.14-pre without waiting. Nightly stays
+  # continue-on-error.
+  # Aqua, JETLS, and Linux E2E on 1.14-pre stay continue-on-error.
   test-1-14-pre:
     name: DistSSHRun (1.14-pre, ubuntu-latest, x64)
     needs: detect
     if: needs.detect.outputs.heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "~1.14.0-0"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - uses: ./.github/actions/pkg-test
+
+  test-1-14-pre-macos:
+    name: DistSSHRun (1.14-pre, macos-latest, aarch64)
+    needs: detect
+    if: needs.detect.outputs.heavy == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

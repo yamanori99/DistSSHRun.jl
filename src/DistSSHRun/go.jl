@@ -7,7 +7,17 @@ struct GoSlot
     label::String
 end
 
-"""Outcome of [`go!`](@ref). On failure, `failed_step` is `"sync"`, `"run"`, or `"collect"`."""
+"""Outcome of [`go!`](@ref). On failure, `failed_step` is `"sync"`, `"run"`, or `"collect"`.
+
+`run_dir` is this run's `DISTSSHKIT_RUN_DIR` when one is active.
+Read it with [`result_run_dir`](@ref). [`result_provenance`](@ref) reads
+`run.toml` from it. Omitted `run_dir` uses [`kit_run_dir`](@ref), which
+is `nothing` outside a run.
+
+Result fields and positional constructors are not API. Result structs are
+not a stable serialization format. `serialize` and JLD2 of a result are
+unsupported. The supported record is `kit.result`.
+"""
 struct GoResult
     ok::Bool
     sync::Union{Nothing, SyncResult}
@@ -16,17 +26,48 @@ struct GoResult
     script::String
     output_dir::String
     failed_step::Union{Nothing, String}
+    run_dir::Union{Nothing, String}
+    function GoResult(
+            ok::Bool,
+            sync::Union{Nothing, SyncResult},
+            run::Union{Nothing, DriveResult},
+            collect::Union{Nothing, CollectResult},
+            script::String,
+            output_dir::String,
+            failed_step::Union{Nothing, String},
+            run_dir::Union{Nothing, String},
+        )
+        return new(ok, sync, run, collect, script, output_dir, failed_step, run_dir)
+    end
 end
 
-GoResult(
-    ok::Bool,
-    sync::Union{Nothing, SyncResult},
-    run::Union{Nothing, DriveResult},
-    collect::Union{Nothing, CollectResult},
-    script::String,
-    output_dir::String;
-    failed_step::Union{Nothing, String} = nothing,
-) = GoResult(ok, sync, run, collect, script, output_dir, failed_step)
+function GoResult(
+        ok::Bool,
+        sync::Union{Nothing, SyncResult},
+        run::Union{Nothing, DriveResult},
+        collect::Union{Nothing, CollectResult},
+        script::String,
+        output_dir::String;
+        failed_step::Union{Nothing, String} = nothing,
+        run_dir::Union{Nothing, AbstractString} = nothing,
+    )
+    rd = run_dir === nothing ? kit_run_dir() : String(run_dir)
+    return GoResult(ok, sync, run, collect, script, output_dir, failed_step, rd)
+end
+
+# Positional `failed_step`, the shape from before `run_dir`. The run
+# directory still comes from the active `DISTSSHKIT_RUN_DIR`.
+function GoResult(
+        ok::Bool,
+        sync::Union{Nothing, SyncResult},
+        run::Union{Nothing, DriveResult},
+        collect::Union{Nothing, CollectResult},
+        script::String,
+        output_dir::String,
+        failed_step::Union{Nothing, String},
+    )
+    return GoResult(ok, sync, run, collect, script, output_dir; failed_step = failed_step)
+end
 
 function kit_run_result(
         result::GoResult,
@@ -40,7 +81,8 @@ function kit_run_result(
         result.failed_step,
         _result_exit_code(result.ok, result.run, result.collect, result.failed_step),
         HostRunResult[],
-        tokens,
+        tokens;
+        run_dir = result.run_dir,
     )
 end
 
