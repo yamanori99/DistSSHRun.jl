@@ -12,6 +12,19 @@ using Test
     @test_throws ArgumentError DistSSHRun.validate_expanded_remote_root("/home/u", "/home/u")
 end
 
+@testset "remote_root must already exist" begin
+    sh = DistSSHRun._remote_run_leaf_script("/work/app", "20260101T000000Z-abcd")
+    @test occursin("remote_root does not exist", sh)
+    @test occursin("ls -ldL", sh)
+    @test occursin("could not read remote_root mode", sh)
+    @test occursin("stat -L -c", sh)
+    @test occursin("group or world writable", sh)
+    @test occursin("owner", sh)
+    @test occursin("mkdir '/work/app/runs' || [ -d '/work/app/runs' ]", sh)
+    @test !occursin("mkdir -p", sh)
+    @test occursin("/work/app/runs/20260101T000000Z-abcd/src", sh)
+end
+
 @testset "ship tar pack" begin
     Sys.which("git") === nothing && return
     _with_tempdir() do tmp

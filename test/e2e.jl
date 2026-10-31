@@ -95,6 +95,7 @@ end
 
         @testset "setup --ship-tree" begin
             _e2e_announce("setup --ship-tree")
+            _ssh_e2e_ensure_remote_root!(hosts, remote_root)
             proc, out = _run_kit_setup(;
                 setup_args = ["--ship-tree", "--remote-path", remote_root, setup_hosts...],
                 project_root = proj,
@@ -605,6 +606,7 @@ end
                     p, ssh_out = _ssh_e2e_ssh(host, "test ! -e $(oneshot)/Project.toml")
                     _assert_proc_ok(p, ssh_out; label = "go --ship-tree empty $(host) gone")
                 end
+                _ssh_e2e_ensure_remote_root!(hosts, oneshot)
 
                 proc, out = _run_kit_go(;
                     script = pi_echo,
@@ -658,6 +660,7 @@ end
                 extra_env = tilde_env,
             )
             _assert_ssh_e2e_ok(suite, "tilde_delete", proc, out; project = proj, kit = :setup)
+            _ssh_e2e_ensure_remote_root!(hosts, tilde_root)
 
             proc, out = _run_kit_setup(;
                 setup_args = ["--ship-tree", "--remote-path", tilde_root, setup_hosts...],
@@ -702,6 +705,7 @@ end
                     session, :delete;
                     confirm_path = Dict(h => remote_root for h in session.hosts),
                 )
+                _ssh_e2e_ensure_remote_root!(hosts, remote_root)
                 rest = setup!(session, :ship_tree, :instantiate)
                 _assert_ssh_e2e_api_ok(
                     suite,
@@ -1231,6 +1235,7 @@ end
                     extra_env = neg_env,
                 )
                 _assert_ssh_e2e_ok(suite, "negation_delete", proc, out; project = app, kit = :setup)
+                _ssh_e2e_ensure_remote_root!(hosts, neg_root)
                 proc, out = _run_kit_setup(;
                     setup_args = ["--ship-tree", "--remote-path", neg_root, setup_hosts...],
                     project_root = app,

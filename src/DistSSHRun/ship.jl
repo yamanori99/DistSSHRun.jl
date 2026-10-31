@@ -649,15 +649,53 @@ function _remote_work_layout_path(
     return _rehome_under_work_root(mapped, deploy, wr)
 end
 
-function _remote_prepare_run_leaf!(host::AbstractString, abs_root::AbstractString, run_id::AbstractString)
+function _remote_run_leaf_script(abs_root::AbstractString, run_id::AbstractString)::String
     runs = _posix_join(abs_root, "runs")
     leaf = _posix_join(runs, run_id)
     src = _posix_join(leaf, "src")
     rq = _remote_shell_path_word(runs)
     lq = _remote_shell_path_word(leaf)
     sq = _remote_shell_path_word(src)
+    rootq = _remote_shell_path_word(abs_root)
     script = """
-    mkdir -p $rq || exit 1
+    if [ ! -d $rootq ]; then
+      printf 'remote_root does not exist: %s\\n' $rootq
+      exit 2
+    fi
+    mode=\$(ls -ldL $rootq) || {
+      printf 'could not read remote_root mode\\n'
+      exit 2
+    }
+    mode=\$(printf '%s\\n' "\$mode" | awk '{ print \$1; exit }') || {
+      printf 'could not read remote_root mode\\n'
+      exit 2
+    }
+    case "\$mode" in
+      d????????*) ;;
+      *)
+        printf 'could not read remote_root mode (%s)\\n' "\$mode"
+        exit 2
+        ;;
+    esac
+    gw=\$(printf '%.1s' "\${mode#?????}")
+    ow=\$(printf '%.1s' "\${mode#????????}")
+    if [ -z "\$gw" ] || [ -z "\$ow" ]; then
+      printf 'could not read remote_root mode (%s)\\n' "\$mode"
+      exit 2
+    fi
+    if [ "\$gw" = w ] || [ "\$ow" = w ]; then
+      printf 'remote_root is group or world writable (%s)\\n' "\$mode"
+      exit 2
+    fi
+    me=\$(id -un) || exit 1
+    owner=\$(stat -L -c '%U' $rootq 2>/dev/null || stat -L -f '%Su' $rootq) || exit 1
+    if [ -z "\$owner" ] || [ "\$owner" != "\$me" ]; then
+      printf 'remote_root owner is %s, not %s\\n' "\$owner" "\$me"
+      exit 2
+    fi
+    if [ ! -d $rq ]; then
+      mkdir $rq || [ -d $rq ] || exit 1
+    fi
     mkdir $lq || { printf 'run_id already exists: %s\\n' $lq >&2; exit 2; }
     if test -L $sq; then
       printf 'refusing symlinked extract dest %s\\n' $sq >&2
@@ -675,9 +713,14 @@ function _remote_prepare_run_leaf!(host::AbstractString, abs_root::AbstractStrin
       fi
     fi
     """
+    return script
+end
+
+function _remote_prepare_run_leaf!(host::AbstractString, abs_root::AbstractString, run_id::AbstractString)
+    script = _remote_run_leaf_script(abs_root, run_id)
     code, out = _remote_shell_status(String(host), script)
     code == 0 || throw(ArgumentError("could not create run dir on $(host): $(strip(out))"))
-    return src
+    return _posix_join(_posix_join(_posix_join(abs_root, "runs"), run_id), "src")
 end
 
 function _remote_extract_tar!(
