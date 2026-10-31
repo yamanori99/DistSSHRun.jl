@@ -81,16 +81,71 @@ function _launch_cpu_target()::Union{Nothing, String}
     return s
 end
 
-function _launch_blas_threads()::String
-    for (pkg, mod) in Base.loaded_modules
-        pkg.name == "LinearAlgebra" || continue
-        try
-            return string(mod.BLAS.get_num_threads())
-        catch
-            return "1"
-        end
+const _JOB_SEED = Ref{Union{Nothing, UInt64}}(nothing)
+const _NEXT_WORKER_RANK = Ref(1)
+const _ASSIGNED_RANKS = Int[]
+const _NEXT_PMAP_CALL = Ref(1)
+const _ITEM_MAP = Dict{Tuple{Int, Int}, Int}()
+const _ITEM_LOCK = ReentrantLock()
+
+"""One seed for this run. `DISTSSHKIT_JOB_SEED` wins when it is a `UInt64`."""
+function job_seed()::UInt64
+    existing = _JOB_SEED[]
+    existing !== nothing && return existing
+    parsed = tryparse(UInt64, strip(get(ENV, "DISTSSHKIT_JOB_SEED", "")))
+    seed = parsed === nothing ? rand(UInt64) : parsed
+    _JOB_SEED[] = seed
+    return seed
+end
+
+"""Stable worker seed from the job seed and a launch rank. Does not read `myid()`."""
+function worker_seed(job::Integer, rank::Integer)::UInt64
+    rank >= 1 || throw(ArgumentError("worker rank must be ≥ 1, got $rank"))
+    x = xor(UInt64(job), UInt64(rank) * 0x9E3779B97F4A7C15)
+    x = xor(x, x >> 30) * 0xBF58476D1CE4E5B9
+    x = xor(x, x >> 27) * 0x94D049BB133111EB
+    return xor(x, x >> 31)
+end
+
+function take_worker_rank()::Int
+    rank = _NEXT_WORKER_RANK[]
+    _NEXT_WORKER_RANK[] = rank + 1
+    push!(_ASSIGNED_RANKS, rank)
+    return rank
+end
+
+function reset_worker_seeds!()
+    _JOB_SEED[] = nothing
+    _NEXT_WORKER_RANK[] = 1
+    empty!(_ASSIGNED_RANKS)
+    lock(_ITEM_LOCK) do
+        _NEXT_PMAP_CALL[] = 1
+        empty!(_ITEM_MAP)
     end
-    return "1"
+    return nothing
+end
+
+"""One id per `worker_pmap` call, taken on process 1 before `pmap` starts."""
+function _take_pmap_call()::Int
+    return lock(_ITEM_LOCK) do
+        call = _NEXT_PMAP_CALL[]
+        _NEXT_PMAP_CALL[] = call + 1
+        return call
+    end
+end
+
+function _note_item!(call::Integer, item::Integer, rank::Integer)
+    lock(_ITEM_LOCK) do
+        _ITEM_MAP[(Int(call), Int(item))] = Int(rank)
+    end
+    return nothing
+end
+
+"""`DISTSSHKIT_BLAS_THREADS` when the operator set it, else `nothing`."""
+function _explicit_blas_threads()::Union{Nothing, String}
+    raw = strip(get(ENV, "DISTSSHKIT_BLAS_THREADS", ""))
+    isempty(raw) && return nothing
+    return raw
 end
 
 """Flags every worker / go slot gets (`--project=` plus pin flags)."""
@@ -128,15 +183,26 @@ function worker_env_pairs(
         project::AbstractString;
         ssh::Bool = false,
         extra::AbstractVector{<:Pair{<:AbstractString, <:AbstractString}} = Pair{String, String}[],
+        rank::Union{Nothing, Integer} = nothing,
     )
     n = Threads.nthreads()
     pairs = Pair{String, String}[
         "JULIA_PROJECT" => String(project),
         "JULIA_LOAD_PATH" => worker_load_path(; ssh = ssh),
         "JULIA_NUM_THREADS" => string(n),
-        "OPENBLAS_NUM_THREADS" => _launch_blas_threads(),
-        "OMP_NUM_THREADS" => _launch_blas_threads(),
     ]
+    blas = _explicit_blas_threads()
+    if blas !== nothing
+        push!(pairs, "OPENBLAS_NUM_THREADS" => blas)
+        push!(pairs, "OMP_NUM_THREADS" => blas)
+    end
+    if rank !== nothing
+        seed = job_seed()
+        r = Int(rank)
+        push!(pairs, "DISTSSHKIT_JOB_SEED" => string(seed))
+        push!(pairs, "DISTSSHKIT_WORKER_RANK" => string(r))
+        push!(pairs, "DISTSSHKIT_WORKER_SEED" => string(worker_seed(seed, r)))
+    end
     id = resolved_kit_job_id()
     id === nothing || push!(pairs, "DISTSSHKIT_JOB_ID" => id)
     for p in extra
@@ -278,27 +344,21 @@ end
 function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::AbstractString)
     n < 1 && return nothing
     flags = Cmd(worker_exeflag_strings(project; local_cpu = true, job_id = resolved_kit_job_id()))
-    env = worker_env_pairs(project)
     before = Set(workers())
     try
-        addprocs(
-            1;
-            exename = julia_bin,
-            exeflags = flags,
-            env = env,
-            topology = :master_worker,
-        )
-        added = sort!(Int[w for w in workers() if w ∉ before])
-        isempty(added) || _precompile_worker_project!(first(added))
-        rest = n - 1
-        rest < 1 && return nothing
-        addprocs(
-            rest;
-            exename = julia_bin,
-            exeflags = flags,
-            env = env,
-            topology = :master_worker,
-        )
+        for i in 1:n
+            env = worker_env_pairs(project; rank = take_worker_rank())
+            addprocs(
+                1;
+                exename = julia_bin,
+                exeflags = flags,
+                env = env,
+                topology = :master_worker,
+            )
+            i == 1 || continue
+            added = sort!(Int[w for w in workers() if w ∉ before])
+            isempty(added) || _precompile_worker_project!(first(added))
+        end
     catch
         _rmprocs_added_since(before)
         rethrow()
@@ -315,37 +375,27 @@ function _add_ssh_drive_workers!(
     )
     n < 1 && return nothing
     flags = Cmd(worker_exeflag_strings(project; local_cpu = false, job_id = resolved_kit_job_id()))
-    env = worker_env_pairs(project; ssh = true)
     exename = ssh_worker_exename(julia_bin)
     before = Set(workers())
     try
-        addprocs(
-            [(machine, 1)];
-            exename = exename,
-            sshflags = sshflags,
-            dir = project,
-            tunnel = ssh_tunnel_enabled(),
-            cmdline_cookie = false,
-            exeflags = flags,
-            env = env,
-            topology = :master_worker,
-        )
-        added = sort!(Int[w for w in workers() if w ∉ before])
-        isempty(added) && return nothing
-        _precompile_worker_project!(first(added))
-        rest = n - 1
-        rest < 1 && return nothing
-        addprocs(
-            [(machine, rest)];
-            exename = exename,
-            sshflags = sshflags,
-            dir = project,
-            tunnel = ssh_tunnel_enabled(),
-            cmdline_cookie = false,
-            exeflags = flags,
-            env = env,
-            topology = :master_worker,
-        )
+        for i in 1:n
+            env = worker_env_pairs(project; ssh = true, rank = take_worker_rank())
+            addprocs(
+                [(machine, 1)];
+                exename = exename,
+                sshflags = sshflags,
+                dir = project,
+                tunnel = ssh_tunnel_enabled(),
+                cmdline_cookie = false,
+                exeflags = flags,
+                env = env,
+                topology = :master_worker,
+            )
+            i == 1 || continue
+            added = sort!(Int[w for w in workers() if w ∉ before])
+            isempty(added) && return nothing
+            _precompile_worker_project!(first(added))
+        end
     catch
         _rmprocs_added_since(before)
         rethrow()
@@ -353,7 +403,10 @@ function _add_ssh_drive_workers!(
     return nothing
 end
 
-function go_remote_julia_prefix(julia_bin::AbstractString)::String
+function go_remote_julia_prefix(
+        julia_bin::AbstractString;
+        blas::Union{Nothing, AbstractString} = nothing,
+    )::String
     jb = _remote_shell_path_word(julia_bin)
     flags = worker_exeflag_strings("."; local_cpu = false)
     flag_s = sprint() do io
@@ -361,5 +414,7 @@ function go_remote_julia_prefix(julia_bin::AbstractString)::String
             print(io, ' ', posix_quote(f))
         end
     end
-    return "$(_env_unset_prefix()) JULIA_LOAD_PATH=$(posix_quote(_LAUNCH_LOAD_PATH)) $(jb)$(flag_s)"
+    blas_s = blas === nothing ? "" :
+        " OPENBLAS_NUM_THREADS=$(posix_quote(String(blas))) OMP_NUM_THREADS=$(posix_quote(String(blas)))"
+    return "$(_env_unset_prefix())$blas_s JULIA_LOAD_PATH=$(posix_quote(_LAUNCH_LOAD_PATH)) $(jb)$(flag_s)"
 end

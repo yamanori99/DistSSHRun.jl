@@ -566,6 +566,7 @@ function _go_run_local_slot!(
     env_pairs = worker_env_pairs(
         project;
         extra = ["DISTRIBUTED_OUTPUT_DIR" => String(slot_dir)],
+        rank = take_worker_rank(),
     )
     notice = launch_override_notice(PARENT_HOST_NAME, launch_override_names(ENV))
     (quiet || isempty(notice)) || writeln_both(notice)
@@ -628,7 +629,11 @@ function _go_remote_slot_shell_inner(
             print(io, ' ', _remote_shell_path_word(a))
         end
     end
-    jb_launch = go_remote_julia_prefix(julia_bin)
+    rank = take_worker_rank()
+    seed = job_seed()
+    wseed = worker_seed(seed, rank)
+    seed_export = "export DISTSSHKIT_JOB_SEED=$(seed) DISTSSHKIT_WORKER_RANK=$(rank) DISTSSHKIT_WORKER_SEED=$(wseed) && "
+    jb_launch = go_remote_julia_prefix(julia_bin; blas = _explicit_blas_threads())
     log_q = _remote_shell_path_word(joinpath(slot_rel, "julia.stdout.log"))
     exit_q = _remote_shell_path_word(joinpath(slot_rel, "go.exitcode"))
     job_id = resolved_kit_job_id()
@@ -653,6 +658,7 @@ function _go_remote_slot_shell_inner(
     return string(
         "cd $rr && mkdir -p $slot_q && mkdir -p $kit_q && ",
         "export DISTRIBUTED_OUTPUT_DIR=$slot_q && ",
+        seed_export,
         job_export,
         job_mark,
         write_loader,

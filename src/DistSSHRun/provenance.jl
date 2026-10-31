@@ -9,6 +9,7 @@ const _PROVENANCE_LOCK = ReentrantLock()
 const _PROVENANCE_AT_START = Ref(false)
 const _PROVENANCE_PROJECT_SNAP = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 const _PROVENANCE_SOURCE_SNAP = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
+const _PROVENANCE_GIT_TOOL = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 const _PROVENANCE_GO = Pair{String, String}[]
 
 const _GO_SLOT_PROVENANCE_NAME = "provenance-slot.toml"
@@ -182,7 +183,15 @@ function _reset_run_provenance!(project::AbstractString)
     catch
         nothing
     end
+    # Same moment as the source snapshot. A later PATH change must not
+    # record a different git from the one this snapshot used.
+    _PROVENANCE_GIT_TOOL[] = try
+        _path_resolved_git()
+    catch
+        nothing
+    end
     _PROVENANCE_AT_START[] = true
+    reset_worker_seeds!()
     return nothing
 end
 
@@ -248,6 +257,7 @@ function _snapshot_dict(raw)::Dict{String, String}
     raw isa AbstractDict || return Dict{String, String}("error" => "snapshot was not a dict")
     out = Dict{String, String}()
     for (k, v) in raw
+        string(k) == "pmap_items" && continue
         out[string(k)] = string(v)
     end
     for key in _SNAP_KEYS
@@ -354,18 +364,59 @@ function capture_worker_provenance!()
 end
 
 function _project_provenance(project::AbstractString)::Dict{String, Any}
+    out = Dict{String, Any}()
     manifest = manifest_path(project)
-    manifest isa String || return Dict{String, Any}("manifest" => "absent")
-    out = Dict{String, Any}("manifest" => _sha256_hex(read(manifest)))
-    parsed = try
-        TOML.parsefile(manifest)
-    catch
-        nothing
+    if manifest isa String
+        out["manifest"] = _sha256_hex(read(manifest))
+        parsed = try
+            TOML.parsefile(manifest)
+        catch
+            nothing
+        end
+        if parsed isa AbstractDict && haskey(parsed, "julia_version")
+            out["julia_version"] = string(parsed["julia_version"])
+        end
+    else
+        out["manifest"] = "absent"
     end
-    if parsed isa AbstractDict && haskey(parsed, "julia_version")
-        out["julia_version"] = string(parsed["julia_version"])
+    locks = Dict{String, String}()
+    for name in ("CondaPkg.toml", "conda-lock.yml", "pixi.lock")
+        path = joinpath(project, name)
+        isfile(path) || continue
+        locks[name] = _sha256_hex(read(path))
     end
+    isempty(locks) || (out["locks"] = locks)
     return out
+end
+
+function _seed_provenance()::Union{Nothing, Dict{String, Any}}
+    seed = _JOB_SEED[]
+    workers = Dict{String, Any}[]
+    if seed !== nothing
+        for rank in _ASSIGNED_RANKS
+            push!(workers, Dict{String, Any}("rank" => rank, "seed" => string(worker_seed(seed, rank))))
+        end
+    end
+    items = Dict{String, Any}[]
+    lock(_ITEM_LOCK) do
+        for key in sort!(collect(keys(_ITEM_MAP)))
+            call, item = key
+            push!(
+                items, Dict{String, Any}(
+                    "call" => call,
+                    "item" => item,
+                    "rank" => _ITEM_MAP[key],
+                )
+            )
+        end
+    end
+    _append_go_slot_items!(items)
+    isempty(workers) && isempty(items) && return nothing
+    data = Dict{String, Any}()
+    seed === nothing || (data["job"] = string(seed))
+    isempty(workers) || (data["workers"] = workers)
+    isempty(items) || (data["items"] = items)
+    return data
 end
 
 function _git_capture_bytes(cmd::Cmd)::Union{Nothing, Vector{UInt8}}
@@ -433,6 +484,102 @@ function _git_status_is_kit(path::AbstractString)::Bool
         occursin("/" * name * "/", path) && return true
     end
     return false
+end
+
+function _toml_int(value)::Union{Nothing, Int}
+    value isa Bool && return nothing
+    value isa Integer && return Int(value)
+    value isa AbstractString || return nothing
+    return tryparse(Int, strip(String(value)))
+end
+
+"""Item rows a go slot wrote into its snapshot. Each row gains `slot`."""
+function _read_go_slot_items(path::AbstractString, token::AbstractString)::Vector{Dict{String, Any}}
+    isfile(path) || return Dict{String, Any}[]
+    raw = try
+        TOML.parsefile(path)
+    catch
+        return Dict{String, Any}[]
+    end
+    raw isa AbstractDict || return Dict{String, Any}[]
+    listed = get(raw, "pmap_items", nothing)
+    listed isa AbstractVector || return Dict{String, Any}[]
+    label = basename(dirname(dirname(String(path))))
+    slot = string(_provenance_token(token), "/", label)
+    out = Dict{String, Any}[]
+    for row in listed
+        row isa AbstractDict || continue
+        call = _toml_int(get(row, "call", nothing))
+        item = _toml_int(get(row, "item", nothing))
+        rank = _toml_int(get(row, "rank", nothing))
+        (call === nothing || item === nothing || rank === nothing) && continue
+        push!(
+            out, Dict{String, Any}(
+                "call" => call,
+                "item" => item,
+                "rank" => rank,
+                "slot" => slot,
+            )
+        )
+    end
+    return out
+end
+
+function _append_go_slot_items!(items::Vector{Dict{String, Any}})
+    rows = lock(_PROVENANCE_LOCK) do
+        return Pair{String, String}[_PROVENANCE_GO...]
+    end
+    for (token, path) in rows
+        append!(items, _read_go_slot_items(path, token))
+    end
+    return nothing
+end
+
+"""Write this process's `worker_pmap` rows into the go-slot snapshot. No-op elsewhere."""
+function _flush_go_slot_pmap_items!()
+    try
+        dir = strip(get(ENV, "DISTRIBUTED_OUTPUT_DIR", ""))
+        isempty(dir) && return nothing
+        path = joinpath(dir, ".distsshkit", _GO_SLOT_PROVENANCE_NAME)
+        isfile(path) || return nothing
+        listed = Dict{String, Any}[]
+        lock(_ITEM_LOCK) do
+            for key in sort!(collect(keys(_ITEM_MAP)))
+                call, item = key
+                push!(
+                    listed, Dict{String, Any}(
+                        "call" => call,
+                        "item" => item,
+                        "rank" => _ITEM_MAP[key],
+                    )
+                )
+            end
+        end
+        isempty(listed) && return nothing
+        parsed = TOML.parsefile(path)
+        raw = parsed isa AbstractDict ? Dict{String, Any}(string(k) => v for (k, v) in parsed) : Dict{String, Any}()
+        raw["pmap_items"] = listed
+        tmp = path * ".tmp"
+        open(tmp, "w") do io
+            TOML.print(io, raw)
+        end
+        mv(tmp, path; force = true)
+    catch
+    end
+    return nothing
+end
+
+atexit(_flush_go_slot_pmap_items!)
+
+"""PATH-resolved `git`, noted as outside the Manifest. `nothing` when `git` is absent."""
+function _path_resolved_git()::Union{Nothing, Dict{String, Any}}
+    path = Sys.which("git")
+    path isa AbstractString || return nothing
+    return Dict{String, Any}(
+        "name" => "git",
+        "path" => path,
+        "outside_manifest" => true,
+    )
 end
 
 function _git_source(project::AbstractString)::Union{Nothing, Dict{String, Any}}
@@ -642,6 +789,10 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
         "workers" => started ? _worker_section() : Any[],
         "project" => project_table,
     )
+    seeds = _seed_provenance()
+    seeds === nothing || (data["seeds"] = seeds)
+    git_tool = started ? _PROVENANCE_GIT_TOOL[] : _path_resolved_git()
+    git_tool === nothing || (data["tools"] = Dict{String, Any}[git_tool])
     source = started ? _PROVENANCE_SOURCE_SNAP[] : _resolve_source(proj)
     source === nothing || (data["source"] = source)
     ship = last_ship_result()
