@@ -46,7 +46,12 @@ directory with mode `700`. Group and other write are cleared again after
 Confirmation is required unless `-y` is used.
 The directory must be owned by the SSH user and must not be group-writable
 or world-writable. No marker file is written, and `runs/` is not created.
-Provenance and `run.toml` use `schema = 1` and `writer = "DistSSHRun x.y.z"`.
+Controller provenance lives under `DISTSSHKIT_RUN_DIR/run.toml`
+(`schema = 1`, `writer = "DistSSHRun x.y.z"`). Each remote
+`runs/<run_id>/` also gets a minimal `run.toml` with only `schema`,
+`writer`, and `kind = "ship"` so delete and prune can refuse a leaf that
+is not DistSSHRun-owned. Older leaves without that file still use
+structural checks only. Queue teardown can reuse the same contract.
 Unknown keys are ignored when reading. A ship that sees
 `.distsshkit/inputs.toml` writes those inputs into this run's `run.toml`.
 With hashing on, it also writes a manifest under `inputs/<sha256>.manifest`.
