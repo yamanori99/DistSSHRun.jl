@@ -94,6 +94,62 @@ end
         @test occursin("symlinked project preference", err.msg)
         @test occursin("LocalPreferences.toml", err.msg)
     end
+    _with_tempdir() do tmp
+        run(`git -C $tmp init --quiet`)
+        run(`git -C $tmp config user.email t@t.t`)
+        run(`git -C $tmp config user.name t`)
+        write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
+        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        symlink("missing.toml", joinpath(tmp, "LocalPreferences.toml"))
+        run(`git -C $tmp add -A`)
+        run(`git -C $tmp commit --quiet -m init`)
+        err = try
+            DistSSHRun.pack_ship_tar(tmp)
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("LocalPreferences.toml", err.msg)
+    end
+    _with_tempdir() do tmp
+        run(`git -C $tmp init --quiet`)
+        run(`git -C $tmp config user.email t@t.t`)
+        run(`git -C $tmp config user.name t`)
+        write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
+        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        mkpath(joinpath(tmp, "prefsdir"))
+        symlink("prefsdir", joinpath(tmp, "JuliaLocalPreferences.toml"))
+        run(`git -C $tmp add -A`)
+        run(`git -C $tmp commit --quiet -m init`)
+        err = try
+            DistSSHRun.pack_ship_tar(tmp)
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("JuliaLocalPreferences.toml", err.msg)
+    end
+    _with_tempdir() do tmp
+        run(`git -C $tmp init --quiet`)
+        run(`git -C $tmp config user.email t@t.t`)
+        run(`git -C $tmp config user.name t`)
+        write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\n")
+        write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
+        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        symlink("missing.toml", joinpath(tmp, "LocalPreferences.toml"))
+        run(`git -C $tmp add -A`)
+        run(`git -C $tmp commit --quiet -m init`)
+        err = try
+            DistSSHRun.pack_ship_tar(tmp)
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("LocalPreferences.toml", err.msg)
+    end
 end
 
 @testset "depot preferences refuse ship" begin

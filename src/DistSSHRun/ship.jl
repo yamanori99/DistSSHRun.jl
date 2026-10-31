@@ -250,10 +250,10 @@ function _append_project_preference_rels!(root::AbstractString, out::Vector{Stri
         for name in _PROJECT_PREFERENCE_NAMES
             pref = dir == "" || dir == "." ? name : dir * "/" * name
             path = joinpath(root, pref)
-            isfile(path) || continue
             islink(path) && throw(
                 ArgumentError("ship-tree: symlinked project preference is not supported: $pref"),
             )
+            isfile(path) || continue
             pref in out || push!(out, pref)
         end
     end
