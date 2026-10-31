@@ -229,7 +229,9 @@ function main()
         exit(0)
     end
 
-    if occursin("git clone", script)
+    # Quoted argv is `'git' … 'clone'`, which does not contain the substring `git clone`.
+    if occursin("git clone", script) ||
+            (occursin("'clone'", script) && occursin("hooksPath=/dev/null", script))
         if get(ENV, "DISTSSHKIT_TEST_GIT_CLONE_FAIL", "") == "1"
             println("fatal: repository not found")
             exit(1)
