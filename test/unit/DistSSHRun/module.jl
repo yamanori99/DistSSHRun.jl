@@ -31,6 +31,7 @@ using Test
     @test :parse_plan_args ∉ ns && :show_plan_usage ∉ ns
     @test :parse_pool_args ∉ ns && :show_pool_usage ∉ ns
     @test :stored_path in ns && :file_sha256 in ns && :cache_file in ns
+    @test not_exported(:check_input_manifest)
     @test :cache_path in ns && :cache_relpath in ns
     @test :push_cache! in ns && :cache_remote_dir in ns
     @test :KitRunResult in ns && :kit_run_result in ns

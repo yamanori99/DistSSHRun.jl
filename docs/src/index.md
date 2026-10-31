@@ -42,7 +42,10 @@ the remote root has no `Project.toml` (or pass `--remote-path` to that tree).
 Provenance and `run.toml` use `schema = 1` and `writer = "DistSSHRun x.y.z"`.
 Unknown keys are ignored when reading. A ship that sees
 `.distsshkit/inputs.toml` writes those inputs into this run's `run.toml`
-and a `sha256sum -c` manifest under `inputs/`. `outputs` is reserved and
+and a manifest under `inputs/`. Each line is `hex *path`. A regular file
+is the SHA-256 of its bytes. A symlink is the SHA-256 of its link text
+and is not followed, so `sha256sum -c` does not check that line.
+`check_input_manifest(manifest, root)` checks both. `outputs` is reserved and
 not written.
 
 `terminate!` and `terminate_run!` record how the stop ended. `KitRunResult.stop`

@@ -52,6 +52,7 @@ export KitPlan
 export PlanFinding
 export stored_path
 export file_sha256
+public check_input_manifest
 export cache_file
 export cache_path
 export cache_relpath

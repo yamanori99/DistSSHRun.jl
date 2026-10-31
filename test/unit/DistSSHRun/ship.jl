@@ -319,18 +319,22 @@ end
         @test hashed["content_hash"] == probe_row(other, true)["content_hash"]
         @test hashed["content_hash"] == probe_row(link, true)["content_hash"]
         manifest_path = joinpath(rec_dir, hashed["manifest"])
-        if Sys.which("sha256sum") !== nothing
-            run(pipeline(Cmd(`sha256sum -c $manifest_path`; dir = root); stdout = devnull))
-        elseif Sys.which("shasum") !== nothing
-            run(pipeline(Cmd(`shasum -a 256 -c $manifest_path`; dir = root); stdout = devnull))
-        end
+        DistSSHRun.check_input_manifest(manifest_path, root)
         write(joinpath(root, "sub", "a.txt"), "changed\n")
+        @test_throws ArgumentError DistSSHRun.check_input_manifest(manifest_path, root)
         @test hashed["content_hash"] != probe_row(root, true)["content_hash"]
         write(joinpath(root, "sub", "a.txt"), "hi\n")
         symlink("a.txt", joinpath(root, "sub", "via"))
         with_link = probe_row(root, true)
         @test with_link["content_hash"] != hashed["content_hash"]
         @test occursin(" *sub/via", String(read(joinpath(rec_dir, with_link["manifest"]), String)))
+        link_manifest = joinpath(rec_dir, with_link["manifest"])
+        DistSSHRun.check_input_manifest(link_manifest, root)
+        rm(joinpath(root, "sub", "via"))
+        symlink("other", joinpath(root, "sub", "via"))
+        @test_throws ArgumentError DistSSHRun.check_input_manifest(link_manifest, root)
+        rm(joinpath(root, "sub", "via"))
+        symlink("a.txt", joinpath(root, "sub", "via"))
         stat_row = probe_row(other, false)
         @test stat_row["verification"] == "stat"
         @test stat_row["algorithm"] == "stat"
@@ -387,12 +391,7 @@ end
         body = String(read(joinpath(rec, hashed["manifest"])))
         @test occursin(" *one.bin", body)
         @test !occursin(" *.", body)
-        manifest = joinpath(rec, hashed["manifest"])
-        if Sys.which("sha256sum") !== nothing
-            run(pipeline(Cmd(`sha256sum -c $manifest`; dir = parent); stdout = devnull))
-        elseif Sys.which("shasum") !== nothing
-            run(pipeline(Cmd(`shasum -a 256 -c $manifest`; dir = parent); stdout = devnull))
-        end
+        DistSSHRun.check_input_manifest(joinpath(rec, hashed["manifest"]), parent)
         stat_out = read(
             pipeline(`sh -c $(DistSSHRun._remote_input_probe_sh(file, false))`; stderr = devnull),
             String,

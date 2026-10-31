@@ -416,6 +416,36 @@ function _manifest_line(hex::AbstractString, path::AbstractString)::String
     return lowercase(String(hex)) * " *" * path
 end
 
+function _input_manifest_entry(line::AbstractString)::Tuple{String, String}
+    m = match(r"^([0-9a-fA-F]{64}) \*(.*)$", line)
+    m === nothing && throw(ArgumentError("input manifest line is not sha256sum form: $(repr(line))"))
+    rel = _nfc_input_rel(_regex_field(m, 2))
+    rel == "." && throw(ArgumentError("input manifest path is empty"))
+    return lowercase(_regex_field(m, 1)), rel
+end
+
+"""Check `manifest` against `root`.
+
+A regular file is the SHA-256 of its bytes. A symlink is the SHA-256 of
+its link text and is not followed. `sha256sum -c` follows a symlink, so
+it does not check these lines.
+"""
+function check_input_manifest(manifest::AbstractString, root::AbstractString)
+    for raw in eachsplit(read(manifest, String), '\n'; keepempty = false)
+        hex, rel = _input_manifest_entry(String(raw))
+        full = joinpath(root, split(rel, '/')...)
+        got = if islink(full)
+            _sha256_hex(codeunits(readlink(full)))
+        elseif isfile(full)
+            _sha256_hex(read(full))
+        else
+            throw(ArgumentError("input manifest path is missing: $rel"))
+        end
+        got == hex || throw(ArgumentError("input manifest mismatch: $rel"))
+    end
+    return nothing
+end
+
 function _regex_field(m::RegexMatch, i::Int)::String
     cap = m.captures[i]
     cap isa AbstractString || throw(ArgumentError("regex capture $i was empty"))
