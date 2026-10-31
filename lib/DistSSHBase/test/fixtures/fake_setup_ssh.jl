@@ -396,6 +396,14 @@ function main()
         exit(0)
     end
 
+    # Ship no longer uses `mkdir -p` for the project root. The sad ship-tree
+    # case still sets DISTSSHKIT_TEST_MKDIR_FAIL.
+    if occursin("remote_root does not exist", script) &&
+            get(ENV, "DISTSSHKIT_TEST_MKDIR_FAIL", "") == "1"
+        println(stderr, "remote_root does not exist")
+        exit(2)
+    end
+
     return exit(0)
 end
 

@@ -447,20 +447,20 @@ function _remote_run_leaf_script(abs_root::AbstractString, run_id::AbstractStrin
     rootq = _remote_shell_path_word(abs_root)
     script = """
     if [ ! -d $rootq ]; then
-      printf 'remote_root does not exist: %s\\n' $rootq >&2
+      printf 'remote_root does not exist: %s\\n' $rootq
       exit 2
     fi
     mode=\$(ls -ld $rootq | awk '{ print \$1; exit }')
     gw=\$(printf '%s' "\$mode" | cut -c 6)
     ow=\$(printf '%s' "\$mode" | cut -c 9)
     if [ "\$gw" = w ] || [ "\$ow" = w ]; then
-      printf 'remote_root is group or world writable (%s)\\n' "\$mode" >&2
+      printf 'remote_root is group or world writable (%s)\\n' "\$mode"
       exit 2
     fi
     me=\$(id -un)
     owner=\$(stat -c '%U' $rootq 2>/dev/null || stat -f '%Su' $rootq)
     if [ "\$owner" != "\$me" ]; then
-      printf 'remote_root owner is %s, not %s\\n' "\$owner" "\$me" >&2
+      printf 'remote_root owner is %s, not %s\\n' "\$owner" "\$me"
       exit 2
     fi
     if [ ! -d $rq ]; then

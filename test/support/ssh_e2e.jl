@@ -71,6 +71,19 @@ if !isdefined(Main, :_ssh_e2e_enabled)
     # Remote project root for the main rsync suite.
     _ssh_e2e_remote_root() = "/home/dev/distsshkit-e2e"
 
+    # Ship refuses a missing root. Delete removes it, so recreate it as the
+    # SSH user, mode 755, before the next ship.
+    function _ssh_e2e_ensure_remote_root!(hosts, remote_root::AbstractString)
+        for host in hosts
+            proc, out = _ssh_e2e_ssh(
+                host,
+                "mkdir -p -m 755 $(remote_root) && chmod go-w $(remote_root)",
+            )
+            _assert_proc_ok(proc, out; label = "ensure remote root $(host)")
+        end
+        return nothing
+    end
+
     # Latest `runs/*/src` on `host` (docker SSH `-F`, not kit `ssh_opts`).
     function _ssh_e2e_work_root(host::AbstractString, remote_root::AbstractString)::String
         proc, out = _ssh_e2e_ssh(
