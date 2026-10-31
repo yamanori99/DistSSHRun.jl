@@ -22,35 +22,53 @@ const _DRIVE_VALUE_FLAGS = (
     "--parent-gb", "--log-dir", "--output-dir", "--package", "--hosts", "--hosts-file",
 )
 
-"""Drop the drive `--isolated` option. Keep that word after the driver script, and as a flag value."""
-function _drive_isolated_child_args(original_args::AbstractVector{<:AbstractString})::Vector{String}
-    child = String[]
-    dropped = false
+"""Index of the drive `--isolated` option in already-peeled argv, or `nothing`."""
+function _peeled_isolated_option(peeled::AbstractVector{<:AbstractString})::Union{Nothing, Int}
     i = 1
-    n = length(original_args)
+    n = length(peeled)
     while i <= n
-        arg = String(original_args[i])
-        if endswith(arg, ".jl")
-            push!(child, arg)
-            for j in (i + 1):n
-                push!(child, String(original_args[j]))
-            end
-            break
-        end
-        if !dropped && arg == "--isolated"
-            dropped = true
-            i += 1
-            continue
-        end
-        push!(child, arg)
-        if arg in _DRIVE_VALUE_FLAGS && i < n
-            push!(child, String(original_args[i + 1]))
+        arg = String(peeled[i])
+        endswith(arg, ".jl") && return nothing
+        if arg in _DRIVE_VALUE_FLAGS
             i += 2
             continue
         end
+        arg == "--isolated" && return i
         i += 1
     end
-    return child
+    return nothing
+end
+
+"""Raw index of peeled index `peeled_index`. Shared flags are absent from the peeled argv."""
+function _raw_index_for_peeled(raw::AbstractVector{<:AbstractString}, peeled_index::Int)::Int
+    p = 0
+    i = 1
+    n = length(raw)
+    while i <= n
+        arg = String(raw[i])
+        if _shared_bare_cli_flag(arg)
+            i += 1
+            continue
+        end
+        if _shared_valued_cli_flag(arg)
+            i += i < n ? 2 : 1
+            continue
+        end
+        p += 1
+        p == peeled_index && return i
+        i += 1
+    end
+    return peeled_index
+end
+
+"""Drop the drive `--isolated` option. Keep that word after the driver script, and as a flag value."""
+function _drive_isolated_child_args(original_args::AbstractVector{<:AbstractString})::Vector{String}
+    raw = String[String(a) for a in original_args]
+    _, peeled = peel_kit_cli_flags(raw)
+    drop_at = _peeled_isolated_option(peeled)
+    drop_at === nothing && return raw
+    deleteat!(raw, _raw_index_for_peeled(raw, drop_at))
+    return raw
 end
 
 function _isolated_child_load_path()::String
@@ -108,11 +126,37 @@ function _drive_isolated_cmd(
     return addenv(Cmd(argv), pairs...)
 end
 
+"""SIGINT the child, then wait until it exits. A second interrupt still uses the drive handler."""
+function _forward_isolated_interrupt!(proc::Base.Process)
+    if process_running(proc)
+        try
+            kill(proc, Base.SIGINT)
+        catch
+        end
+    end
+    try
+        wait(proc)
+    catch
+    end
+    return nothing
+end
+
 function _drive_isolated_process(
         original_args::AbstractVector{<:AbstractString},
         project_root::Union{Nothing, AbstractString} = nothing,
     )::Cint
-    proc = run(ignorestatus(_drive_isolated_cmd(original_args; project_root = project_root)))
+    proc = run(
+        ignorestatus(_drive_isolated_cmd(original_args; project_root = project_root));
+        wait = false,
+    )
+    try
+        wait(proc)
+    catch e
+        if is_sigint(e) || _is_cancellation_request(e)
+            _forward_isolated_interrupt!(proc)
+        end
+        rethrow()
+    end
     return _drive_child_status(proc.exitcode, proc.termsignal)
 end
 

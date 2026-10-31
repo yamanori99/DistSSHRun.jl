@@ -59,6 +59,14 @@ using Test
                 ["--output-dir", "--isolated", "--isolated", "s.jl"],
             )
             @test valued == ["--output-dir", "--isolated", "s.jl"]
+            quieted = [
+                "--output-dir", "--quiet", "result.jl", "--isolated", "driver.jl",
+            ]
+            @test DistSSHRun.parse_drive_args(quieted).script_path == "driver.jl"
+            @test DistSSHRun.parse_drive_args(quieted).isolated
+            child_args = DistSSHRun._drive_isolated_child_args(quieted)
+            @test child_args == ["--output-dir", "--quiet", "result.jl", "driver.jl"]
+            @test !DistSSHRun.parse_drive_args(child_args).isolated
             rooted = DistSSHRun._drive_isolated_cmd(
                 ["--isolated", "s.jl"]; project_root = "/jobs/app",
             )
@@ -72,6 +80,21 @@ using Test
             @test DistSSHRun._drive_child_status(0, 9) == 137
             @test DistSSHRun._drive_child_status(2, 0) == 2
             @test DistSSHRun._drive_child_status(nothing, nothing) == 1
+            sleeper = run(
+                ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "sleep(30)"`);
+                wait = false,
+            )
+            try
+                DistSSHRun._forward_isolated_interrupt!(sleeper)
+                @test process_exited(sleeper)
+                @test DistSSHRun._drive_child_status(sleeper.exitcode, sleeper.termsignal) != 0
+            finally
+                process_running(sleeper) && kill(sleeper, Base.SIGKILL)
+                try
+                    wait(sleeper)
+                catch
+                end
+            end
             let r = parse_drive_args(["--sync-script", "s.jl"])
                 @test r.sync_script == true
             end
