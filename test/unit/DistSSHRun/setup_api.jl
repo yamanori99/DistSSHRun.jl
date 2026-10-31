@@ -82,11 +82,28 @@ using Test
             @test isdir(drive)
             @test isdir(run_old)
             @test !isdir(run_keep)
+            fake = joinpath(proj, ".distsshkit", "go", "job_fake")
+            mkpath(fake)
+            write(
+                joinpath(fake, "run.toml"),
+                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"go\"\n",
+            )
+            err = try
+                DistSSHRun.prune_kit_leaf_dirs!(proj)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("unowned run leaf", err.msg)
+            @test isdir(fake)
+            rm(joinpath(fake, "run.toml"); force = true)
             n2 = DistSSHRun.prune_kit_leaf_dirs!(proj)
             @test n2 >= 3
             @test !isdir(go_old)
             @test !isdir(drive)
             @test !isdir(run_old)
+            @test !isdir(fake)
             @test isfile(joinpath(proj, "Project.toml"))
         end
 
