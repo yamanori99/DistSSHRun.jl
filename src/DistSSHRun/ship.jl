@@ -1218,9 +1218,11 @@ function _remote_run_leaf_script(abs_root::AbstractString, run_id::AbstractStrin
     runs = _posix_join(abs_root, "runs")
     leaf = _posix_join(runs, run_id)
     src = _posix_join(leaf, "src")
+    out = _posix_join(leaf, "out")
     rq = _remote_shell_path_word(runs)
     lq = _remote_shell_path_word(leaf)
     sq = _remote_shell_path_word(src)
+    oq = _remote_shell_path_word(out)
     rootq = _remote_shell_path_word(abs_root)
     script = """
     $(_remote_root_mode_sh(rootq))
@@ -1242,6 +1244,23 @@ function _remote_run_leaf_script(abs_root::AbstractString, run_id::AbstractStrin
         printf 'extract dest exists and is not a directory: %s\\n' $sq >&2
         exit 4
       fi
+    fi
+    if test -L $oq; then
+      printf 'refusing symlinked out dir %s\\n' $oq >&2
+      exit 3
+    fi
+    if test -e $oq; then
+      if test -d $oq; then
+        if test -n "\$(ls -A $oq 2>/dev/null)"; then
+          printf 'out dir is not empty: %s\\n' $oq >&2
+          exit 4
+        fi
+      else
+        printf 'out path exists and is not a directory: %s\\n' $oq >&2
+        exit 4
+      fi
+    else
+      mkdir $oq || exit 1
     fi
     """
     return script
