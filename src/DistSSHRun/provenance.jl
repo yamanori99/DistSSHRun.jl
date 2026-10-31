@@ -257,6 +257,7 @@ function _snapshot_dict(raw)::Dict{String, String}
     raw isa AbstractDict || return Dict{String, String}("error" => "snapshot was not a dict")
     out = Dict{String, String}()
     for (k, v) in raw
+        string(k) == "pmap_items" && continue
         out[string(k)] = string(v)
     end
     for key in _SNAP_KEYS
@@ -409,6 +410,7 @@ function _seed_provenance()::Union{Nothing, Dict{String, Any}}
             )
         end
     end
+    _append_go_slot_items!(items)
     isempty(workers) && isempty(items) && return nothing
     data = Dict{String, Any}()
     seed === nothing || (data["job"] = string(seed))
@@ -483,6 +485,91 @@ function _git_status_is_kit(path::AbstractString)::Bool
     end
     return false
 end
+
+function _toml_int(value)::Union{Nothing, Int}
+    value isa Bool && return nothing
+    value isa Integer && return Int(value)
+    value isa AbstractString || return nothing
+    return tryparse(Int, strip(String(value)))
+end
+
+"""Item rows a go slot wrote into its snapshot. Each row gains `slot`."""
+function _read_go_slot_items(path::AbstractString, token::AbstractString)::Vector{Dict{String, Any}}
+    isfile(path) || return Dict{String, Any}[]
+    raw = try
+        TOML.parsefile(path)
+    catch
+        return Dict{String, Any}[]
+    end
+    raw isa AbstractDict || return Dict{String, Any}[]
+    listed = get(raw, "pmap_items", nothing)
+    listed isa AbstractVector || return Dict{String, Any}[]
+    label = basename(dirname(dirname(String(path))))
+    slot = string(_provenance_token(token), "/", label)
+    out = Dict{String, Any}[]
+    for row in listed
+        row isa AbstractDict || continue
+        call = _toml_int(get(row, "call", nothing))
+        item = _toml_int(get(row, "item", nothing))
+        rank = _toml_int(get(row, "rank", nothing))
+        (call === nothing || item === nothing || rank === nothing) && continue
+        push!(
+            out, Dict{String, Any}(
+                "call" => call,
+                "item" => item,
+                "rank" => rank,
+                "slot" => slot,
+            )
+        )
+    end
+    return out
+end
+
+function _append_go_slot_items!(items::Vector{Dict{String, Any}})
+    rows = lock(_PROVENANCE_LOCK) do
+        return Pair{String, String}[_PROVENANCE_GO...]
+    end
+    for (token, path) in rows
+        append!(items, _read_go_slot_items(path, token))
+    end
+    return nothing
+end
+
+"""Write this process's `worker_pmap` rows into the go-slot snapshot. No-op elsewhere."""
+function _flush_go_slot_pmap_items!()
+    try
+        dir = strip(get(ENV, "DISTRIBUTED_OUTPUT_DIR", ""))
+        isempty(dir) && return nothing
+        path = joinpath(dir, ".distsshkit", _GO_SLOT_PROVENANCE_NAME)
+        isfile(path) || return nothing
+        listed = Dict{String, Any}[]
+        lock(_ITEM_LOCK) do
+            for key in sort!(collect(keys(_ITEM_MAP)))
+                call, item = key
+                push!(
+                    listed, Dict{String, Any}(
+                        "call" => call,
+                        "item" => item,
+                        "rank" => _ITEM_MAP[key],
+                    )
+                )
+            end
+        end
+        isempty(listed) && return nothing
+        parsed = TOML.parsefile(path)
+        raw = parsed isa AbstractDict ? Dict{String, Any}(string(k) => v for (k, v) in parsed) : Dict{String, Any}()
+        raw["pmap_items"] = listed
+        tmp = path * ".tmp"
+        open(tmp, "w") do io
+            TOML.print(io, raw)
+        end
+        mv(tmp, path; force = true)
+    catch
+    end
+    return nothing
+end
+
+atexit(_flush_go_slot_pmap_items!)
 
 """PATH-resolved `git`, noted as outside the Manifest. `nothing` when `git` is absent."""
 function _path_resolved_git()::Union{Nothing, Dict{String, Any}}

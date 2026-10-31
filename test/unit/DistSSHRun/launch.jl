@@ -80,6 +80,54 @@ using TOML
     @test first_worker isa AbstractDict
     first_worker isa AbstractDict || error("expected a worker seed")
     @test first_worker["rank"] == 1
+    slot = mktempdir()
+    try
+        snap_dir = joinpath(slot, ".distsshkit")
+        mkpath(snap_dir)
+        open(joinpath(snap_dir, "provenance-slot.toml"), "w") do io
+            TOML.print(
+                io, Dict(
+                    "version" => "1.13.0",
+                    "commit" => "abc",
+                    "cpu" => "cpu",
+                    "machine" => "aarch64",
+                    "kernel" => "darwin",
+                    "nthreads" => "1",
+                    "blas" => "openblas",
+                    "blas_threads" => "1",
+                    "hostname" => "slot",
+                )
+            )
+        end
+        DistSSHRun.reset_worker_seeds!()
+        withenv("DISTRIBUTED_OUTPUT_DIR" => slot, "DISTSSHKIT_WORKER_RANK" => "3") do
+            @test DistSSHRun.worker_pmap(identity, [7]) == [7]
+            DistSSHRun._flush_go_slot_pmap_items!()
+        end
+        DistSSHRun.reset_worker_seeds!()
+        DistSSHRun.note_go_slot_provenance!("lab", slot)
+        slot_seeds = DistSSHRun._seed_provenance()
+        @test slot_seeds isa AbstractDict
+        slot_seeds isa AbstractDict || error("expected slot seed provenance")
+        slot_rows = slot_seeds["items"]
+        @test slot_rows isa Vector
+        slot_rows isa Vector || error("expected slot items")
+        slot_row = slot_rows[1]
+        @test slot_row isa AbstractDict
+        slot_row isa AbstractDict || error("expected a slot item")
+        @test slot_row["call"] == 1
+        @test slot_row["item"] == 1
+        @test slot_row["rank"] == 3
+        @test slot_row["slot"] == "child:lab/" * basename(slot)
+        snap = DistSSHRun._read_go_slot_snapshot(joinpath(snap_dir, "provenance-slot.toml"))
+        @test snap["version"] == "1.13.0"
+        @test !haskey(snap, "pmap_items")
+    finally
+        DistSSHRun._reset_run_provenance!(slot)
+        DistSSHRun._PROVENANCE_AT_START[] = false
+        DistSSHRun._PROVENANCE_GIT_TOOL[] = nothing
+        rm(slot; force = true, recursive = true)
+    end
     mktempdir() do tmp
         write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
         write(joinpath(tmp, "CondaPkg.toml"), "[deps]\n")
