@@ -202,9 +202,13 @@ end
         end
         probe = DistSSHRun._remote_input_probe_sh("/remote/data", false)
         @test occursin("stat", probe)
-        @test !occursin("sha256sum", probe)
+        @test occursin("files=%s", probe)
+        @test occursin("find . -type f", probe)
         hashed = DistSSHRun._remote_input_probe_sh("/remote/data", true)
         @test occursin("sha256sum", hashed)
+        @test occursin("cd ", hashed)
+        @test occursin("\${_f#./}", hashed)
+        @test occursin("|| exit 1", hashed)
         run_dir = mktempdir()
         DistSSHRun._write_input_manifest!(
             run_dir,
@@ -212,6 +216,66 @@ end
         )
         @test isfile(joinpath(run_dir, "inputs.toml"))
         @test !isfile(joinpath(tmp, "inputs.toml"))
+    end
+end
+
+@testset "declared input paths and probes" begin
+    _with_tempdir() do tmp
+        mkpath(joinpath(tmp, ".distsshkit"))
+        write(
+            joinpath(tmp, ".distsshkit", "inputs.toml"),
+            """
+            [[inputs]]
+            name = "big"
+            path = "data/"
+            """,
+        )
+        inputs = DistSSHRun._load_ship_inputs(tmp)
+        @test length(inputs) == 1
+        @test inputs[1].path == "data"
+        @test DistSSHRun._ship_input_covers("data", inputs)
+        @test DistSSHRun._ship_input_covers("data/big.bin", inputs)
+        @test !DistSSHRun._ship_input_covers("database", inputs)
+        write(
+            joinpath(tmp, ".distsshkit", "inputs.toml"),
+            """
+            [[inputs]]
+            name = "bad"
+            path = "data/../secret"
+            """,
+        )
+        @test_throws ArgumentError DistSSHRun._load_ship_inputs(tmp)
+    end
+    root = mktempdir()
+    other = mktempdir()
+    link = joinpath(dirname(root), "declared-input-link-" * basename(root))
+    try
+        mkpath(joinpath(root, "sub"))
+        write(joinpath(root, "sub", "a.txt"), "hi\n")
+        mkpath(joinpath(other, "sub"))
+        write(joinpath(other, "sub", "a.txt"), "hi\n")
+        symlink(root, link)
+        hashed = strip(read(`sh -c $(DistSSHRun._remote_input_probe_sh(root, true))`, String))
+        @test occursin(r"^[0-9a-fA-F]{64}$", hashed)
+        @test hashed == strip(read(`sh -c $(DistSSHRun._remote_input_probe_sh(other, true))`, String))
+        @test hashed == strip(read(`sh -c $(DistSSHRun._remote_input_probe_sh(link, true))`, String))
+        write(joinpath(root, "sub", "a.txt"), "changed\n")
+        @test hashed != strip(read(`sh -c $(DistSSHRun._remote_input_probe_sh(root, true))`, String))
+        write(joinpath(root, "sub", "a.txt"), "hi\n")
+        symlink("a.txt", joinpath(root, "sub", "via"))
+        with_link = strip(read(`sh -c $(DistSSHRun._remote_input_probe_sh(root, true))`, String))
+        @test with_link != hashed
+        stat_line = strip(read(`sh -c $(DistSSHRun._remote_input_probe_sh(other, false))`, String))
+        @test startswith(stat_line, "files=1 bytes=")
+        @test occursin(r"digest=[0-9a-fA-F]{64}$", stat_line)
+        missing = DistSSHRun._remote_input_probe_sh(joinpath(root, "nope"), true)
+        proc = run(pipeline(`sh -c $missing`; stdout = devnull, stderr = devnull); wait = false)
+        wait(proc)
+        @test proc.exitcode == 2
+    finally
+        rm(link; force = true)
+        rm(root; force = true, recursive = true)
+        rm(other; force = true, recursive = true)
     end
 end
 
