@@ -39,6 +39,19 @@ end
     @test occursin("could not inspect out dir", sh)
     @test occursin("out dir is not empty", sh)
     @test occursin("mkdir '/work/app/runs/20260101T000000Z-abcd/out'", sh)
+    parent = mktempdir()
+    try
+        root = joinpath(parent, "app")
+        mkpath(root)
+        chmod(root, 0o755)
+        script = DistSSHRun._remote_run_leaf_script(root, "20260101T000000Z-abcd")
+        run(`sh -c $script`)
+        out = joinpath(root, "runs", "20260101T000000Z-abcd", "out")
+        @test isdir(out)
+        @test isempty(readdir(out))
+    finally
+        rm(parent; force = true, recursive = true)
+    end
 end
 
 @testset "setup --remote-root creates only that directory" begin
