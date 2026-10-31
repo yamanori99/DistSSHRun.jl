@@ -12,6 +12,17 @@ using Test
     @test_throws ArgumentError DistSSHRun.validate_expanded_remote_root("/home/u", "/home/u")
 end
 
+@testset "ship-tree refuses a repeated host" begin
+    err = try
+        DistSSHRun.ship_project_to_hosts!(["h", "h"], "/tmp", "/remote/app")
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("hosts must be unique", sprint(showerror, err))
+end
+
 @testset "remote_root must already exist" begin
     sh = DistSSHRun._remote_run_leaf_script("/work/app", "20260101T000000Z-abcd")
     @test occursin("remote_root does not exist", sh)

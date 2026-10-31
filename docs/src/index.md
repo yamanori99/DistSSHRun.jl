@@ -36,7 +36,7 @@ the copied tree is refused. Cache pull still needs
 
 `setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` extract the
 git file list into `<remote_root>/runs/<run_id>/src/` (`run_id` is UTC plus
-6 hex). Later `--instantiate` / `--check` / `go` use the latest `src/` when
+6 hex). A repeated host is refused. Later `--instantiate` / `--check` / `go` use the latest `src/` when
 the remote root has no `Project.toml` (or pass `--remote-path` to that tree).
 `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
 Provenance and `run.toml` use `schema = 1` and `writer = "DistSSHRun x.y.z"`.

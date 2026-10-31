@@ -1115,6 +1115,8 @@ function ship_project_to_hosts!(
         julia = nothing,
     )::ShipTreeResult
     isempty(hosts) && throw(ArgumentError("ship-tree: no hosts"))
+    length(unique(hosts)) == length(hosts) ||
+        throw(ArgumentError("ship-tree: hosts must be unique"))
     rid = run_id === nothing ? allocate_remote_run_id() : validate_run_id(run_id)
     src_logical = _posix_join(String(remote_root), "runs", rid, "src")
     warn_project_sshflags(canonical_local_path(local_root))
