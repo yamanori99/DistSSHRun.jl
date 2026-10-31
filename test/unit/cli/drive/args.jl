@@ -299,7 +299,7 @@ using Test
         @test occursin("--ship-tree", txt)
         @test occursin("runs/<run_id>/src/", txt)
         @test occursin("post-run-new", txt)
-        @test occursin("--safe-links", txt)
+        @test occursin("Pull-back uses Tar", txt)
         @test occursin("off by default", lowercase(txt))
         @test occursin("parent:N", txt)
         @test occursin("progress DIR", txt)

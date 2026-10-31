@@ -884,7 +884,7 @@ function warn_openrsync_once()
     end
     occursin("openrsync", ver) || return nothing
     _OPENRSYNC_WARNED[] = true
-    @warn "rsync on PATH is openrsync; collect / cache pull uses it, not GNU rsync"
+    @warn "rsync on PATH is openrsync; cache pull uses it, not GNU rsync"
     return nothing
 end
 

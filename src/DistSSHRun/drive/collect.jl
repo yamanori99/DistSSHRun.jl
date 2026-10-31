@@ -6,11 +6,13 @@
         local_root::AbstractString;
         merge=false,
         hosts=nothing,
+        julia=nothing,
     )
 
-Rsync result files from SSH hosts into `local_root`. Pull-back rsync
-uses `--safe-links` so a remote symlink that points outside the copied
-tree is skipped. Tar pull-back is deferred (remote mtimes on outputs).
+Pull result files from SSH hosts into `local_root` with stdlib Tar.
+Remote mtimes are not kept. A non-executable file arrives as mode `0644`,
+and an executable file as `0755`. A symlink that points outside the copied
+tree is refused. `julia` is the remote executable (`nothing` auto-detects).
 
 Collect modes:
 - `merge=false` → **collect-missing** (CLI `drive --collect-missing`)
@@ -27,6 +29,7 @@ function collect!(
         local_root::AbstractString;
         merge::Bool = false,
         hosts::Union{Nothing, AbstractVector{<:AbstractString}} = nothing,
+        julia::Union{Nothing, AbstractString} = nothing,
     )::CollectResult
     host_list = hosts === nothing ? session.hosts : collect(String, hosts)
     isempty(host_list) && throw(
@@ -42,6 +45,7 @@ function collect!(
             merge = merge,
             project_root = session.project,
             path_anchor = canonical_local_path(session.project),
+            julia = julia,
         )
         return CollectResult(ok, ok ? 0 : 1)
     end

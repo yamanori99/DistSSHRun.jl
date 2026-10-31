@@ -242,7 +242,8 @@ function collect_drive_results!(
         sentinel_name::String,
         skip_collect::Bool,
         path_anchor::String,
-        project_root::AbstractString,
+        project_root::AbstractString;
+        julia::Union{Nothing, AbstractString} = nothing,
     )
     results_dir = DistSSHRun.resolve_drive_output_dir(script_dir)
 
@@ -279,8 +280,6 @@ function collect_drive_results!(
         total_for_host = 0
         host_err = nothing
         try
-            ssh_cmd = DistSSHRun._host_sync_rsync_transport()
-            rsync_bin = DistSSHRun._host_sync_rsync_argv()
             for local_rd in collect_roots
                 local_abs = DistSSHRun.canonical_local_path(local_rd)
                 remote_rd_collect = DistSSHRun._remote_work_layout_path(
@@ -360,16 +359,9 @@ function collect_drive_results!(
                         if isempty(uniq)
                             continue
                         end
-                        for rel in uniq
-                            parent = dirname(joinpath(local_abs, rel))
-                            !isempty(parent) && mkpath(parent)
-                        end
-                        DistSSHRun._run_rsync_files_from(
-                            rsync_bin,
-                            DistSSHRun._pull_rsync_opts(ssh_cmd),
-                            string(host, ":", remote_rd_abs, "/"),
-                            local_abs * "/",
-                            uniq,
+                        DistSSHRun._pull_tar_rels!(
+                            host, remote_rd_abs, local_abs, uniq;
+                            julia_bin = DistSSHRun._pull_remote_julia(host, julia),
                         )
                         total_for_host += length(uniq)
                     end

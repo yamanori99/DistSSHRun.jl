@@ -25,7 +25,10 @@ The longer guide is the
 pkg> add DistSSHRun
 ```
 
-Julia **1.13+**. Hosts need **`ssh`**. Collect and cache pull still need
+Julia **1.13+**. Hosts need **`ssh`**. Collect and go slot pull-back also need
+a remote Julia executable (`--julia`, or auto-detect) and use stdlib Tar over
+SSH. Remote mtimes are not kept. A non-executable file arrives as mode `0644`,
+and an executable file as `0755`. Cache pull still needs
 **`rsync`**. Ship uses stdlib Tar over SSH. Git deploys also need **`git`**.
 `setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` extract the
 git file list into `<remote_root>/runs/<run_id>/src/`. `--rsync` was removed

@@ -26,7 +26,10 @@ DistSSHRun は、SSH で共有マシンに載せる一回の実行である。`s
 pkg> add DistSSHRun
 ```
 
-Julia **1.13+**。ホストには **`ssh`** が要る。collect と cache pull には
+Julia **1.13+**。ホストには **`ssh`** が要る。collect と go の slot pull-back には
+リモートの Julia 実行ファイルも要る (`--julia`、または自動検出)。転送は
+SSH 上の stdlib Tar で、リモートの mtime は残らない。実行可能でないファイルは
+モード`0644`、実行可能なファイルは`0755`になる。cache pull には
 **`rsync`** が要る。ship は SSH 上の stdlib Tar を使う。git で配るときは
 **`git`** も要る。`setup --ship-tree`、`go --ship-tree`、`drive --ship-tree`
 は git のファイル一覧を `<remote_root>/runs/<run_id>/src/` に展開する。

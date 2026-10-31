@@ -58,7 +58,8 @@ function show_go_usage(; io::IO = stdout)
         "  DISTRIBUTED_OUTPUT_DIR → that slot dir",
         "  --output-dir is the batch root (not drive's result root)",
         "  a non-empty --output-dir is an error",
-        "  slot pull-back rsync uses --safe-links",
+        "  slot pull-back uses Tar (remote mtimes and file modes are not kept)",
+        "  modes are 0644, or 0755 if executable; remote Julia is --julia or auto-detect",
     )
     print_help_blank(io)
     print_help_section("Environment"; io = io)

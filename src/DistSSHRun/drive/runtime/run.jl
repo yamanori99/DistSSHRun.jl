@@ -266,6 +266,7 @@ function _run_drive_parsed_specialized!(
                 strict = parsed.require_all_hosts,
                 project_root = root,
                 path_anchor = anchor,
+                julia = parsed.julia,
             )
             return ok ? 0 : 1
         end
@@ -744,7 +745,8 @@ function _run_drive_parsed_locked!(
         DistSSHRun._stop_drive_host_status_monitor!()
         DistSSHRun._mark_drive_hosts_collect_pending!(kit_out, kit_log)
         collect_ok, collect_hosts = collect_drive_results!(
-            successful_hosts, script_dir, sentinel_name, skip_collect, path_anchor, project_root,
+            successful_hosts, script_dir, sentinel_name, skip_collect, path_anchor, project_root;
+            julia = julia_exe,
         )
         resolved_hosts !== nothing && (resolved_hosts[] = collect_hosts)
         if require_all_hosts && !collect_ok

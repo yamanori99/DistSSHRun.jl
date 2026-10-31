@@ -21,6 +21,129 @@ using Test
         touch(joinpath(tree, "keepme.txt"))
     end
 
+    @testset "tar pull refuses an escaping symlink" begin
+        mktempdir() do dest
+            outside = joinpath(dirname(dest), "tar-pull-secret")
+            write(outside, "nope\n")
+            write(joinpath(dest, "a.txt"), "a\n")
+            symlink(outside, joinpath(dest, "link"))
+            try
+                @test_throws ArgumentError DistSSHRun._finish_extracted_tree!(dest)
+            finally
+                rm(outside; force = true)
+            end
+        end
+        mktempdir() do dest
+            write(joinpath(dest, "a.txt"), "a\n")
+            @test DistSSHRun._finish_extracted_tree!(dest) === nothing
+        end
+        filled = mktempdir()
+        write(joinpath(filled, "x"), "x")
+        @test_throws ArgumentError DistSSHRun._extract_remote_tar!(
+            "host.test", "/remote/out", filled; julia_bin = "julia",
+        )
+        rm(filled; force = true, recursive = true)
+        sh = DistSSHRun._remote_tar_create_sh("julia", "/remote/out")
+        @test occursin("Tar.create", sh)
+        @test occursin("/remote/out", sh)
+        @test occursin("julia", sh)
+        filtered = DistSSHRun._remote_tar_create_sh("/opt/julia/bin/julia", "/remote/out"; filtered = true)
+        @test occursin("Tar.create", filtered)
+        @test occursin("/opt/julia/bin/julia", filtered)
+        @test occursin("stdin", filtered)
+    end
+
+    @testset "tar pull checks each symlink hop and does not touch it" begin
+        mktempdir() do dest
+            outside = mktempdir()
+            try
+                symlink(outside, joinpath(dest, "inside"))
+                symlink(joinpath("inside", "secret"), joinpath(dest, "link"))
+                @test_throws ArgumentError DistSSHRun._finish_extracted_tree!(dest)
+                @test !ispath(joinpath(outside, "secret"))
+            finally
+                rm(outside; force = true, recursive = true)
+            end
+        end
+        mktempdir() do dest
+            outside = mktempdir()
+            try
+                symlink(outside, joinpath(dest, "dirlink"))
+                @test_throws ArgumentError DistSSHRun._finish_extracted_tree!(dest)
+            finally
+                rm(outside; force = true, recursive = true)
+            end
+        end
+        mktempdir() do dest
+            mkpath(joinpath(dest, "sub"))
+            write(joinpath(dest, "sub", "a.txt"), "a\n")
+            symlink(joinpath("sub", "a.txt"), joinpath(dest, "link"))
+            @test DistSSHRun._finish_extracted_tree!(dest) === nothing
+            @test islink(joinpath(dest, "link"))
+            @test readlink(joinpath(dest, "link")) == joinpath("sub", "a.txt")
+        end
+    end
+
+    @testset "collect copy keeps a local directory" begin
+        mktempdir() do tmp
+            src = joinpath(tmp, "src")
+            dest = joinpath(tmp, "dest")
+            write(src, "file\n")
+            mkpath(dest)
+            write(joinpath(dest, "keep"), "keep\n")
+            @test_throws ArgumentError DistSSHRun._copy_collected_path!(src, dest)
+            @test read(joinpath(dest, "keep"), String) == "keep\n"
+        end
+        mktempdir() do tmp
+            mkpath(joinpath(tmp, "empty"))
+            write(joinpath(tmp, "a.txt"), "a\n")
+            symlink("a.txt", joinpath(tmp, "link"))
+            rels = Set(DistSSHRun._extracted_rel_paths(tmp))
+            @test "empty" in rels
+            @test "a.txt" in rels
+            @test "link" in rels
+        end
+        mktempdir() do tmp
+            src = joinpath(tmp, "src")
+            dest = joinpath(tmp, "dest")
+            mkpath(joinpath(src, "sub"))
+            write(joinpath(src, "sub", "file"), "secret\n")
+            mkpath(dest)
+            outside = mktempdir()
+            try
+                symlink(outside, joinpath(dest, "sub"))
+                @test_throws ArgumentError DistSSHRun._copy_pulled_rels!(src, dest, ["sub/file"])
+                @test !isfile(joinpath(outside, "file"))
+            finally
+                rm(outside; force = true, recursive = true)
+            end
+        end
+    end
+
+    @testset "filtered tar archives only requested paths" begin
+        julia = joinpath(Sys.BINDIR, Base.julia_exename())
+        mktempdir() do tmp
+            src = joinpath(tmp, "src")
+            mkpath(joinpath(src, "keep"))
+            write(joinpath(src, "keep", "a.txt"), "a\n")
+            write(joinpath(src, "skip.txt"), "no\n")
+            mkpath(joinpath(src, "empty"))
+            blob = joinpath(tmp, "out.tar")
+            dest = joinpath(tmp, "dest")
+            script = DistSSHRun._remote_tar_create_sh(julia, src; filtered = true)
+            withenv("JULIA_LOAD_PATH" => _child_load_path()) do
+                open(blob, "w") do io
+                    run(pipeline(`sh -c $script`; stdin = IOBuffer("keep/a.txt\0empty\0"), stdout = io))
+                end
+                mkpath(dest)
+                run(`$julia --startup-file=no -e "using Tar; Tar.extract(ARGS[1], ARGS[2])" $blob $dest`)
+            end
+            @test read(joinpath(dest, "keep", "a.txt"), String) == "a\n"
+            @test isdir(joinpath(dest, "empty"))
+            @test !ispath(joinpath(dest, "skip.txt"))
+        end
+    end
+
     @testset "pull rsync uses --safe-links" begin
         opts = DistSSHRun._pull_rsync_opts("ssh -o BatchMode=yes")
         @test opts[1] == "-az"

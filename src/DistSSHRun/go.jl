@@ -735,33 +735,22 @@ function _go_slot_exitcode(
     return scp_failed ? 1 : ssh_code
 end
 
-"""Rsync one remote slot directory into the local slot directory (slot-overwrite collect)."""
+"""Tar one remote slot directory into the local slot directory (slot-overwrite collect)."""
 function _go_pull_slot!(
         host::AbstractString,
         remote_root::AbstractString,
         slot_rel::AbstractString,
-        slot_dir::AbstractString,
+        slot_dir::AbstractString;
+        julia::Union{Nothing, AbstractString} = nothing,
     )::Bool
     mkpath(slot_dir)
     remote_slot = joinpath(remote_root, slot_rel)
-    # Ensure trailing slash semantics: copy contents into slot_dir
-    src = remote_slot * "/"
-    dest = slot_dir * "/"
-    warn_openrsync_once()
-    rsync = _host_sync_rsync_argv()
-    transport = _host_sync_rsync_transport()
-    cmd = ignorestatus(
-        Cmd(
-            vcat(
-                rsync,
-                _pull_rsync_opts(transport),
-                ["$(host):$src", dest],
-            ),
-        ),
-    )
     try
-        proc = run(pipeline(cmd; stdout = devnull, stderr = devnull); wait = true)
-        return proc.exitcode == 0
+        _pull_tar_tree!(
+            host, remote_slot, slot_dir;
+            julia_bin = _pull_remote_julia(host, julia),
+        )
+        return true
     catch e
         _rethrow_missing_host_tool(e)
         return false
@@ -847,7 +836,8 @@ function _go_collect_slot!(
         slot::GoSlot,
         proj::AbstractString,
         batch_dir::AbstractString,
-        remote_root::AbstractString,
+        remote_root::AbstractString;
+        julia::Union{Nothing, AbstractString} = nothing,
     )
     slot.kind === :child || return (collect = nothing, collect_fail = false)
     host = slot.host::String
@@ -855,7 +845,7 @@ function _go_collect_slot!(
     slot_rel = _go_remote_slot_rel(proj, slot_dir, batch_dir, slot.label)
     col_lab = string(slot.label, "/collect")
     _kit_progress_span!(col_lab, :running)
-    if _go_pull_slot!(host, remote_root, slot_rel, slot_dir)
+    if _go_pull_slot!(host, remote_root, slot_rel, slot_dir; julia = julia)
         _kit_progress_span!(col_lab, :ok)
         return (collect = CollectResult(true, 0), collect_fail = false)
     end
@@ -1316,7 +1306,7 @@ function _go_run!(
                     err = nothing
                     outcome = try
                         _go_collect_slot!(
-                            slot, proj, batch_dir, run_rr,
+                            slot, proj, batch_dir, run_rr; julia = julia,
                         )
                     catch e
                         err = e

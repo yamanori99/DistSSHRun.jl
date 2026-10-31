@@ -21,15 +21,277 @@ function _host_sync_rsync_argv()::Vector{String}
     return [_host_tool_exe("rsync")]
 end
 
-"""Flags for remote→local rsync (drive collect, go slot pull).
+"""Flags for remote→local rsync that is still rsync (cache pull).
 
-`--safe-links` skips a symlink whose target is absolute or outside the
-copied tree, so rsync does not recreate an escaping link under the local
-destination. Outbound ship is Tar; pull-back stays rsync through 0.2.x
-because Tar would drop remote mtimes on outputs.
+Collect and go slot pull use Tar. `--safe-links` remains on this rsync path.
 """
 function _pull_rsync_opts(transport::AbstractString)::Vector{String}
     return String["-az", "--safe-links", "-e", String(transport)]
+end
+
+const _TAR_PULL_ALL = "using Tar; Tar.create(ARGS[1], stdout)"
+
+# NUL-separated relative paths arrive on stdin. Parents of a wanted path stay
+# so Tar can reach the file. Unwanted siblings are left out of the archive.
+const _TAR_PULL_FILTERED = """
+using Tar
+root = ARGS[1]
+wanted = Set{String}()
+for part in split(read(stdin, String), '\\0')
+    isempty(part) || push!(wanted, part)
+end
+parents = Set{String}()
+for w in wanted
+    parts = split(w, '/')
+    for i in 1:(length(parts) - 1)
+        push!(parents, join(parts[1:i], '/'))
+    end
+end
+function keep(path)
+    rel = replace(relpath(path, root), '\\\\' => '/')
+    rel == "." && return true
+    return rel in wanted || rel in parents
+end
+Tar.create(keep, root, stdout)
+"""
+
+"""Remote Julia that writes a Tar of `remote_dir` to stdout.
+
+`filtered` reads the relative paths from stdin. File modes are not in the
+archive: Tar stores `0644`, or `0755` when the file is executable.
+"""
+function _remote_tar_create_sh(
+        julia_bin::AbstractString,
+        remote_dir::AbstractString;
+        filtered::Bool = false,
+    )::String
+    jb = _remote_julia_path_sh(julia_bin)
+    q = _remote_shell_path_word(remote_dir)
+    body = posix_quote(filtered ? _TAR_PULL_FILTERED : _TAR_PULL_ALL)
+    return "$jb --startup-file=no -e $body -- $q"
+end
+
+"""Pinned remote Julia for a Tar pull. `spec` is `--julia` or auto-detect."""
+function _pull_remote_julia(
+        host::AbstractString,
+        spec::Union{Nothing, AbstractString},
+    )::String
+    found = pin_remote_julia(String(host), spec)
+    found === nothing && throw(
+        ArgumentError("Julia not found on remote host $(host) (auto-detect failed)"),
+    )
+    return found
+end
+
+"""Reject a symlink whose chain leaves `root`. Do not follow a hop that is outside."""
+function _assert_extracted_symlink_under!(path::AbstractString, root::AbstractString)
+    root = canonical_local_path(root)
+    rel = relpath(canonical_local_path(path), root)
+    sep = Base.Filesystem.path_separator
+    (rel == ".." || startswith(rel, ".." * sep)) &&
+        throw(ArgumentError("tar pull refuses escaping symlink $path"))
+    pending = rel
+    hops = 0
+    seen = Set{String}()
+    restarted = true
+    while restarted
+        parts = split(pending, sep)
+        current = root
+        restarted = false
+        for (i, part) in enumerate(parts)
+            (isempty(part) || part == ".") && continue
+            part == ".." && throw(ArgumentError("tar pull refuses escaping symlink $path"))
+            nxt = joinpath(current, String(part))
+            islink(nxt) || (current = nxt; continue)
+            hops += 1
+            hops > 40 && throw(ArgumentError("tar pull refuses symlink loop $path"))
+            nxt in seen && throw(ArgumentError("tar pull refuses symlink loop $path"))
+            push!(seen, nxt)
+            target = readlink(nxt)
+            resolved = isabspath(target) ? normpath(target) : normpath(joinpath(dirname(nxt), target))
+            _path_is_under(resolved, root) ||
+                throw(ArgumentError("tar pull refuses escaping symlink $path"))
+            rest = String[String(later) for later in parts[(i + 1):end]]
+            newrel = relpath(canonical_local_path(resolved), root)
+            pending = isempty(rest) ? newrel : joinpath(newrel, rest...)
+            restarted = true
+            break
+        end
+    end
+    return nothing
+end
+
+function _finish_extracted_tree!(dest::AbstractString; allow_external_symlinks::Bool = false)
+    root = canonical_local_path(dest)
+    for (dir, dirs, files) in walkdir(root)
+        for name in dirs
+            path = joinpath(dir, name)
+            islink(path) || continue
+            allow_external_symlinks && continue
+            _assert_extracted_symlink_under!(path, root)
+        end
+        for name in files
+            path = joinpath(dir, name)
+            if islink(path)
+                allow_external_symlinks || _assert_extracted_symlink_under!(path, root)
+            else
+                touch(path)
+            end
+        end
+    end
+    return nothing
+end
+
+function _extracted_rel_paths(root::AbstractString)::Vector{String}
+    rels = String[]
+    for (dir, dirs, files) in walkdir(root)
+        for name in dirs
+            path = joinpath(dir, name)
+            islink(path) && push!(rels, relpath(path, root))
+        end
+        if dir != root && isempty(dirs) && isempty(files) && !islink(dir)
+            push!(rels, relpath(dir, root))
+        end
+        for name in files
+            push!(rels, relpath(joinpath(dir, name), root))
+        end
+    end
+    return rels
+end
+
+function _collected_is_real_dir(path::AbstractString)::Bool
+    return isdir(path) && !islink(path)
+end
+
+"""Copy one extracted path. A file must not replace a local directory."""
+function _copy_collected_path!(src::AbstractString, dest::AbstractString)
+    if ispath(dest) || islink(dest)
+        src_dir = _collected_is_real_dir(src)
+        dest_dir = _collected_is_real_dir(dest)
+        if src_dir != dest_dir
+            throw(
+                ArgumentError(
+                    "collect refuses to replace a local $(dest_dir ? "directory" : "file") with a remote $(src_dir ? "directory" : "file"): $dest",
+                ),
+            )
+        end
+    end
+    if _collected_is_real_dir(src)
+        mkpath(dest)
+        return nothing
+    end
+    parent = dirname(dest)
+    parent == dest || mkpath(parent)
+    cp(src, dest; force = true, follow_symlinks = false)
+    islink(dest) || touch(dest)
+    return nothing
+end
+
+"""Copy extracted relative paths into `local_root`. A symlink parent that leaves the root is refused."""
+function _copy_pulled_rels!(
+        tmp::AbstractString,
+        local_root::AbstractString,
+        rels::AbstractVector{<:AbstractString},
+    )
+    for rel in rels
+        src = joinpath(tmp, rel)
+        ispath(src) || islink(src) || continue
+        _collect_dest_escapes_root(local_root, rel) && throw(
+            ArgumentError("collect path escapes $local_root: $rel"),
+        )
+        _copy_collected_path!(src, joinpath(local_root, rel))
+    end
+    return nothing
+end
+
+function _extract_remote_tar!(
+        host::AbstractString,
+        remote_dir::AbstractString,
+        dest::AbstractString;
+        julia_bin::AbstractString,
+        rels::Union{Nothing, AbstractVector{<:AbstractString}} = nothing,
+        allow_external_symlinks::Bool = false,
+    )
+    mkpath(dest)
+    isempty(readdir(dest)) || throw(ArgumentError("tar extract dest is not empty: $dest"))
+    blob_dir = mktempdir()
+    blob = joinpath(blob_dir, "pull.tar")
+    try
+        filtered = rels !== nothing
+        inner = _remote_tar_create_sh(julia_bin, remote_dir; filtered = filtered)
+        err = IOBuffer()
+        cmd = _host_sync_remote_shell_cmd(String(host), inner; forward_stdin = filtered)
+        list = IOBuffer()
+        if filtered
+            for rel in rels
+                occursin('\0', rel) && throw(ArgumentError("collect path contains NUL: $(repr(rel))"))
+                write(list, String(rel), '\0')
+            end
+            seekstart(list)
+        end
+        proc = run(
+            pipeline(ignorestatus(cmd); stdin = filtered ? list : devnull, stdout = blob, stderr = err);
+            wait = true,
+        )
+        proc.exitcode == 0 || throw(
+            ArgumentError("tar pull failed on $(host): $(strip(String(take!(err))))"),
+        )
+        Tar.extract(blob, dest)
+        _finish_extracted_tree!(dest; allow_external_symlinks = allow_external_symlinks)
+    finally
+        rm(blob_dir; force = true, recursive = true)
+    end
+    return nothing
+end
+
+"""Copy `rels` from a remote tree. The archive contains those paths only.
+
+Extract lands in an empty directory. Remote mtimes are not kept. Modes are
+`0644`, or `0755` when the remote file is executable.
+"""
+function _pull_tar_rels!(
+        host::AbstractString,
+        remote_dir::AbstractString,
+        local_root::AbstractString,
+        rels::AbstractVector{<:AbstractString};
+        julia_bin::AbstractString,
+        allow_external_symlinks::Bool = false,
+    )
+    isempty(rels) && return nothing
+    tmp = mktempdir()
+    try
+        _extract_remote_tar!(
+            host, remote_dir, tmp;
+            julia_bin = julia_bin,
+            rels = rels,
+            allow_external_symlinks = allow_external_symlinks,
+        )
+        _copy_pulled_rels!(tmp, local_root, rels)
+    finally
+        rm(tmp; force = true, recursive = true)
+    end
+    return nothing
+end
+
+function _pull_tar_tree!(
+        host::AbstractString,
+        remote_dir::AbstractString,
+        local_root::AbstractString;
+        julia_bin::AbstractString,
+        allow_external_symlinks::Bool = false,
+    )
+    tmp = mktempdir()
+    try
+        _extract_remote_tar!(
+            host, remote_dir, tmp;
+            julia_bin = julia_bin,
+            allow_external_symlinks = allow_external_symlinks,
+        )
+        _copy_pulled_rels!(tmp, local_root, _extracted_rel_paths(tmp))
+    finally
+        rm(tmp; force = true, recursive = true)
+    end
+    return nothing
 end
 
 """Run rsync with `--from0 --files-from` via a temp list, not `stdin`.

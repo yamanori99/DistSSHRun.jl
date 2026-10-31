@@ -3,7 +3,7 @@ Recursively pull files under `local_root` from each host (**collect-missing** /
 **collect-overwrite**).
 
 - `merge=false`: skip relative paths that already exist locally.
-- `merge=true`:  rsync the whole tree (overwrites same-named files).
+- `merge=true`:  pull the whole tree with Tar (overwrites same-named files).
 
 Uses the remote work root (`runs/<run_id>/src` after ship-tree) to map the local root onto each host.
 Respects `--quiet` / `--progress` via kit printers (kit log still written when open).
@@ -15,14 +15,11 @@ function drive_collect_tree(
         strict::Bool = false,
         project_root::AbstractString,
         path_anchor::AbstractString,
+        julia::Union{Nothing, AbstractString} = nothing,
     )
     repo_root = canonical_local_path(project_root)
     local_root = DistSSHRun.canonical_local_path(local_root)
     _error_collect_root_overlap(local_root, repo_root) && return false
-    DistSSHRun.warn_openrsync_once()
-    transport = DistSSHRun._host_sync_rsync_transport()
-    rsync_bin = DistSSHRun._host_sync_rsync_argv()
-
     print_header(merge ? cli_heading("collect-overwrite") : cli_heading("collect-missing"))
     writeln_both("")
     writeln_field("Local root", display_path(local_root, path_anchor))
@@ -84,19 +81,11 @@ function drive_collect_tree(
                 continue
             end
 
+            julia_bin = DistSSHRun._pull_remote_julia(host, julia)
             if merge
-                # No `--mkpath`: macOS ships BSD rsync without that flag (GNU rsync 3.2.3+).
-                rsync_cmd = Cmd(
-                    vcat(
-                        rsync_bin,
-                        DistSSHRun._pull_rsync_opts(transport),
-                        [
-                            "--exclude", ".git/",
-                            string(host, ":", host_remote, "/"), local_root * "/",
-                        ],
-                    )
+                DistSSHRun._pull_tar_tree!(
+                    host, host_remote, local_root; julia_bin = julia_bin,
                 )
-                run(pipeline(rsync_cmd; stderr = stderr))
                 n = length(remote_files)
                 print_ok("✓ (synced $n remote file$(n == 1 ? "" : "s"))")
                 writeln_both("")
@@ -126,17 +115,8 @@ function drive_collect_tree(
                     continue
                 end
                 need = safe
-                # `--files-from` does not create parents on BSD rsync; pre-create (GNU rsync `--mkpath` unavailable).
-                for rel in need
-                    d = dirname(joinpath(local_root, rel))
-                    !isempty(d) && mkpath(d)
-                end
-                DistSSHRun._run_rsync_files_from(
-                    rsync_bin,
-                    DistSSHRun._pull_rsync_opts(transport),
-                    string(host, ":", host_remote, "/"),
-                    local_root * "/",
-                    need,
+                DistSSHRun._pull_tar_rels!(
+                    host, host_remote, local_root, need; julia_bin = julia_bin,
                 )
                 n = length(need)
                 print_ok("✓ ($n file$(n == 1 ? "" : "s"))")
