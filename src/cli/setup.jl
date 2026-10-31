@@ -181,12 +181,15 @@ if !isdefined(@__MODULE__, :setup_main)
                 elseif mode === :ship_tree
                     DistSSHRun._checked_remote_dest(deploy_path)
                 elseif mode === :remote_root
-                    opts.remote_path_override === nothing && throw(
-                        ArgumentError(
-                            "setup --remote-root needs --remote-path as an absolute path",
-                        ),
-                    )
-                    DistSSHRun.explicit_remote_root_path(opts.remote_path_override)
+                    override = opts.remote_path_override
+                    if !(override isa AbstractString)
+                        throw(
+                            ArgumentError(
+                                "setup --remote-root needs --remote-path as an absolute path",
+                            ),
+                        )
+                    end
+                    DistSSHRun.explicit_remote_root_path(override)
                 elseif mode === :prune
                     DistSSHRun._checked_remote_dest(remote_path)
                 else

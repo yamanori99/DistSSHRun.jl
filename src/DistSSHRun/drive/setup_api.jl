@@ -701,10 +701,11 @@ function _setup_one!(
         raw = cleanup_remote_workers(hosts)
         return _sync_result_from_host_op(raw)
     elseif mode === :remote_root
-        session.remote === nothing && throw(
-            ArgumentError("setup! :remote_root needs remote= as an absolute path"),
-        )
-        root = explicit_remote_root_path(session.remote)
+        remote = session.remote
+        if !(remote isa AbstractString)
+            throw(ArgumentError("setup! :remote_root needs remote= as an absolute path"))
+        end
+        root = explicit_remote_root_path(remote)
         preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
         raw = create_remote_roots!(hosts, root; confirm = !session.yes)
         return _sync_result_from_host_op(raw)
