@@ -224,12 +224,20 @@ end
         @test occursin("\${_f#./}", hashed)
         @test occursin("|| exit 1", hashed)
         run_dir = mktempdir()
-        DistSSHRun._write_input_manifest!(
+        DistSSHRun._store_input_rows!(
             run_dir,
-            [Dict{String, Any}("name" => "big", "path" => "data", "host" => "h", "kind" => "stat", "value" => "1 2")],
+            [
+                Dict{String, Any}(
+                    "name" => "big",
+                    "path" => "data",
+                    "host" => "h",
+                    "verification" => "stat",
+                ),
+            ],
         )
-        @test isfile(joinpath(run_dir, "inputs.toml"))
+        @test isfile(joinpath(run_dir, "inputs", "records.toml"))
         @test !isfile(joinpath(tmp, "inputs.toml"))
+        @test !isfile(joinpath(tmp, "inputs", "records.toml"))
         withenv("DISTSSHKIT_RUN_DIR" => nothing) do
             err = try
                 DistSSHRun.ship_project_to_hosts!(
@@ -289,20 +297,64 @@ end
         write(joinpath(root, "sub", "a.txt"), "hi\n")
         mkpath(joinpath(other, "sub"))
         write(joinpath(other, "sub", "a.txt"), "hi\n")
+        write(joinpath(root, "sub", ".hidden"), "h\n")
+        write(joinpath(other, "sub", ".hidden"), "h\n")
         symlink(root, link)
-        hashed = strip(read(`sh -c $(DistSSHRun._remote_input_probe_sh(root, true))`, String))
-        @test occursin(r"^[0-9a-fA-F]{64}$", hashed)
-        @test hashed == strip(read(`sh -c $(DistSSHRun._remote_input_probe_sh(other, true))`, String))
-        @test hashed == strip(read(`sh -c $(DistSSHRun._remote_input_probe_sh(link, true))`, String))
+        rec_dir = mktempdir()
+        function probe_row(tree, do_hash)
+            script = DistSSHRun._remote_input_probe_sh(tree, do_hash)
+            out = read(pipeline(`sh -c $script`; stderr = devnull), String)
+            return DistSSHRun._input_row_from_probe("n", "p", "h", do_hash, out, rec_dir)
+        end
+        hashed = probe_row(root, true)
+        @test hashed["algorithm"] == "sha256-manifest-v1"
+        @test hashed["verification"] == "sha256"
+        @test hashed["files"] == 2
+        @test haskey(hashed, "content_hash")
+        @test !haskey(hashed, "stat_digest")
+        @test occursin(r"^[0-9a-f]{64}$", hashed["content_hash"])
+        manifest = String(read(joinpath(rec_dir, hashed["manifest"]), String))
+        @test occursin(" *sub/a.txt", manifest)
+        @test occursin(" *sub/.hidden", manifest)
+        @test hashed["content_hash"] == probe_row(other, true)["content_hash"]
+        @test hashed["content_hash"] == probe_row(link, true)["content_hash"]
+        manifest_path = joinpath(rec_dir, hashed["manifest"])
+        if Sys.which("sha256sum") !== nothing
+            run(pipeline(Cmd(`sha256sum -c $manifest_path`; dir = root); stdout = devnull))
+        elseif Sys.which("shasum") !== nothing
+            run(pipeline(Cmd(`shasum -a 256 -c $manifest_path`; dir = root); stdout = devnull))
+        end
         write(joinpath(root, "sub", "a.txt"), "changed\n")
-        @test hashed != strip(read(`sh -c $(DistSSHRun._remote_input_probe_sh(root, true))`, String))
+        @test hashed["content_hash"] != probe_row(root, true)["content_hash"]
         write(joinpath(root, "sub", "a.txt"), "hi\n")
         symlink("a.txt", joinpath(root, "sub", "via"))
-        with_link = strip(read(`sh -c $(DistSSHRun._remote_input_probe_sh(root, true))`, String))
-        @test with_link != hashed
-        stat_line = strip(read(`sh -c $(DistSSHRun._remote_input_probe_sh(other, false))`, String))
-        @test startswith(stat_line, "files=1 bytes=")
-        @test occursin(r"digest=[0-9a-fA-F]{64}$", stat_line)
+        with_link = probe_row(root, true)
+        @test with_link["content_hash"] != hashed["content_hash"]
+        @test occursin(" *sub/via", String(read(joinpath(rec_dir, with_link["manifest"]), String)))
+        stat_row = probe_row(other, false)
+        @test stat_row["verification"] == "stat"
+        @test stat_row["algorithm"] == "stat"
+        @test !haskey(stat_row, "content_hash")
+        @test stat_row["files"] == 2
+        @test occursin(r"^[0-9a-f]{64}$", stat_row["stat_digest"])
+        @test occursin(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$", stat_row["hashed_at"])
+        nfc_dir = mktempdir()
+        hex = DistSSHRun._sha256_hex(Vector{UInt8}("hi"))
+        nfd = "file\t2\t$(hex)\tcaf\u0065\u0301.txt"
+        nfc_row = DistSSHRun._input_row_from_probe("n", "p", "nfc", true, nfd, nfc_dir)
+        nfc_body = String(read(joinpath(nfc_dir, nfc_row["manifest"])))
+        @test occursin(" *caf\u00e9.txt", nfc_body)
+        @test !occursin('\u0301', nfc_body)
+        @test DistSSHRun._format_bytes(1536) == "1.5 KB"
+        @test DistSSHRun._input_summary_line("sim_input", 1536, 41, false) ==
+            "hashed sim_input: 1.5 KB in 41 s"
+        toml_dir = mktempdir()
+        DistSSHRun._store_input_rows!(toml_dir, [stat_row])
+        DistSSHRun.write_kit_run_toml!(toml_dir; kind = :go)
+        recorded = DistSSHRun.read_kit_run_toml(toml_dir)
+        @test recorded["inputs"] isa Vector
+        @test recorded["inputs"][1]["verification"] == "stat"
+        @test !haskey(recorded["inputs"][1], "content_hash")
         missing = DistSSHRun._remote_input_probe_sh(joinpath(root, "nope"), true)
         proc = run(pipeline(`sh -c $missing`; stdout = devnull, stderr = devnull); wait = false)
         wait(proc)

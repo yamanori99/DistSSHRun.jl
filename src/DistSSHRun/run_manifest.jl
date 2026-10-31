@@ -251,6 +251,8 @@ function write_kit_run_toml!(
         result.stop !== nothing && (data["stop"] = String(result.stop))
     end
     provenance !== nothing && (data["provenance"] = provenance)
+    recorded_inputs = _read_declared_input_rows(d)
+    recorded_inputs === nothing || (data["inputs"] = recorded_inputs)
     try
         mkpath(d)
         dest = kit_run_toml_path(d)

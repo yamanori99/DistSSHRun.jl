@@ -16,6 +16,7 @@ using Pkg
 import SHA
 using Tar
 using TOML
+using Unicode
 
 # Public surface. Prefer `julia -m DistSSHKit …` for day-to-day CLI.
 #   user — go! / ride! / drive! / plan / pool! / size! / setup! / pipeline!
@@ -128,7 +129,8 @@ using .DistSSHBase: CliCursor, OUTPUT_WIDTH, PARENT_HOST_NAME, _HOST_TOOL_NAMES,
     _host_tool_exe, _host_tool_present, _julia_spec_is_auto, _located_project_file,
     _normalize_hint_surface,
     _path_is_under, _path_under_resolved, _print_colored, _remote_julia_path_sh,
-    _remote_shell_path_word, _remote_shell_status,
+    _ensure_posix_login_shell!, _remote_shell_path_word, _remote_shell_status,
+    _throw_if_nonposix_shell,
     _rethrow_missing_host_tool, _scp_cmd, _ssh_cmd, _ssh_exe,
     _ssh_host_args, _test_double_julia_argv, _test_doubles_on, _truncate_ssh_message,
     cli_at_end, cli_consume!, cli_current, cli_entry, cli_heading, cli_m, cli_m_project,

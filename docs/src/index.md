@@ -40,8 +40,10 @@ git file list into `<remote_root>/runs/<run_id>/src/` (`run_id` is UTC plus
 the remote root has no `Project.toml` (or pass `--remote-path` to that tree).
 `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
 Provenance and `run.toml` use `schema = 1` and `writer = "DistSSHRun x.y.z"`.
-Unknown keys are ignored when reading. `[[inputs]]` / `outputs` are reserved
-and not written.
+Unknown keys are ignored when reading. A ship that sees
+`.distsshkit/inputs.toml` writes those inputs into this run's `run.toml`
+and a `sha256sum -c` manifest under `inputs/`. `outputs` is reserved and
+not written.
 
 `terminate!` and `terminate_run!` record how the stop ended. `KitRunResult.stop`
 is `:within_grace` when the process exited after one SIGINT and before

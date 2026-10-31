@@ -1,0 +1,3 @@
+category: changed
+
+- A declared input with hashing on is recorded as `sha256-manifest-v1` under `DISTSSHKIT_RUN_DIR/inputs/<name>--<host>.manifest`, in `sha256sum -c` form. Regular files contribute their bytes. A symlink contributes the SHA-256 of its link text and is not followed. Paths are relative to the declared root, NFC, separated by `/`, and sorted in byte order. `run.toml` `inputs` lists `name`, `path`, `host`, `algorithm`, `content_hash`, `files`, `bytes`, `verification`, and `hashed_at`. `hash = false` sets `verification` to `stat`, omits `content_hash`, and records `newest_mtime` and `stat_digest`. Ship prints `hashed <name>: <size> in <seconds> s`. Content hashing also prints progress and a remaining-time estimate.
