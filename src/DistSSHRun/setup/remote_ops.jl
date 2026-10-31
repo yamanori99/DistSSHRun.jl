@@ -198,11 +198,15 @@ function clone_to_remotes(
                 if st === :nonempty
                     return (:busy, remote_dest_busy_message(host, remote_path))
                 end
-                if st === :missing
-                    parent = _remote_clone_parent(remote_path)
-                    if parent !== nothing && !_ensure_remote_dir(host, parent)
-                        return (:mkdir_fail, "could not create parent of remote clone path")
-                    end
+                if st === :missing && !_ensure_remote_clone_dest(host, remote_path)
+                    return (:mkdir_fail, "could not create remote clone path")
+                end
+                # An existing empty directory keeps its mode. `umask` does not
+                # change it, and a default ACL can override `mkdir -m`.
+                refusal = _remote_clone_dest_refusal(host, remote_path)
+                if refusal !== nothing
+                    st === :missing && _remove_empty_remote_dir(host, remote_path)
+                    return (:mode_fail, refusal)
                 end
                 run(
                     pipeline(
@@ -236,6 +240,58 @@ function clone_to_remotes(
         end
     end
     return (; host_op_result(succeeded = succeeded, failed = failed)..., hosts = host_results)
+end
+
+"""Create `remote_path` with mode `755`, then drop group and other write.
+
+`mkdir -m` is the requested mode. `chmod go-w` clears write again when a
+default ACL added it. The caller still checks the mode before cloning.
+"""
+function _ensure_remote_clone_dest(host::String, remote_path::String)::Bool
+    pq = _remote_shell_path_word(remote_path)
+    try
+        run(
+            pipeline(
+                _host_sync_remote_shell_cmd(host, "mkdir -p -m 755 $pq && chmod go-w $pq");
+                stderr = devnull,
+                stdout = devnull,
+            ),
+        )
+        return true
+    catch e
+        _rethrow_missing_host_tool(e)
+        DistSSHBase._throw_if_nonposix_shell(host, e)
+        return false
+    end
+end
+
+"""`nothing` when `remote_path` is a private directory. Otherwise the refusal."""
+function _remote_clone_dest_refusal(
+        host::AbstractString,
+        remote_path::AbstractString,
+    )::Union{Nothing, String}
+    mode = _remote_project_mode(String(host), remote_path)
+    refusal = _remote_writable_project_refusal(host, mode)
+    refusal !== nothing && return refusal
+    mode.kind === :missing || return nothing
+    return "$host: could not read the project mode\nSee help setup."
+end
+
+"""Remove an empty directory this clone created after a mode refusal."""
+function _remove_empty_remote_dir(host::AbstractString, remote_path::AbstractString)::Nothing
+    pq = _remote_shell_path_word(remote_path)
+    try
+        run(
+            pipeline(
+                _host_sync_remote_shell_cmd(String(host), "rmdir $pq");
+                stdout = devnull,
+                stderr = devnull,
+            ),
+        )
+    catch e
+        _rethrow_missing_host_tool(e)
+    end
+    return nothing
 end
 
 """Parent of a remote clone destination, or `nothing` when it is already `/` or `~`."""

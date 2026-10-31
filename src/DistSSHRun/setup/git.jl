@@ -109,6 +109,22 @@ function _remote_project_mode(host::AbstractString, abs_path::AbstractString)
     return (; ok = true, kind = something(kind, :private), detail = token)
 end
 
+"""Refusal when `mode` cannot be read or the directory is group- or world-writable.
+
+`:missing` and a private directory return `nothing`.
+"""
+function _remote_writable_project_refusal(host::AbstractString, mode)::Union{Nothing, String}
+    if !mode.ok
+        detail = isempty(mode.detail) ? "could not read the project mode" : mode.detail
+        return "$host: $detail\nSee help setup."
+    end
+    if mode.kind === :world || mode.kind === :group
+        return "$host project is $(mode.kind)-writable ($(mode.detail)). " *
+            "Refusing to run git there. See help setup."
+    end
+    return nothing
+end
+
 """
 Remote `sh` body for one `git` at `remote_path`.
 
@@ -140,7 +156,8 @@ end
 
 """Remote `sh` for `git clone`. Same `-c` and `--no-optional-locks` as [`_remote_git_shell`](@ref).
 
-`umask 022` keeps the new tree from being group- or world-writable. The
+The umask keeps every bit it already had and also masks group and other
+write (`| 022`). A stricter umask such as `077` stays stricter. The
 destination stays outside the quoted argv so a `~` path still expands.
 """
 function _remote_git_clone_sh(
@@ -152,7 +169,8 @@ function _remote_git_clone_sh(
         push!(argv, String(opt))
     end
     push!(argv, "clone", "--", String(clone_url))
-    return "umask 022 && " *
+    # `022` is octal in bash and dash. `printf` hands umask octal digits.
+    return "umask \$(printf '%04o' \$(( \$(umask) | 022 ))) && " *
         DistSSHBase._remote_argv_sh(argv) *
         " " *
         _remote_shell_path_word(remote_path)
@@ -394,16 +412,9 @@ function _detach_sha_on_host(
         )
     end
     mode = _remote_project_mode(host, abs_path)
-    if !mode.ok
-        detail = isempty(mode.detail) ? "could not read the project mode" : mode.detail
-        return (; ok = false, message = "$host: $detail\nSee help setup.")
-    end
-    if mode.kind === :world || mode.kind === :group
-        return (;
-            ok = false,
-            message = "$host project is $(mode.kind)-writable ($(mode.detail)). " *
-                "Refusing to run git there. See help setup.",
-        )
+    refusal = _remote_writable_project_refusal(host, mode)
+    if refusal !== nothing
+        return (; ok = false, message = refusal)
     end
     st = _remote_git_run(host, abs_path, _git_status_args())
     if !st.ok

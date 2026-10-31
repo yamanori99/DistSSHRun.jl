@@ -221,6 +221,22 @@ function main()
         exit(0)
     end
 
+    if occursin("ls -ldL", script)
+        if !isdir(tree)
+            println("missing")
+            exit(0)
+        end
+        println(get(ENV, "DISTSSHKIT_TEST_PROJECT_MODE", "drwxr-xr-x"))
+        exit(0)
+    end
+
+    if occursin("rmdir ", script)
+        if isdir(tree) && isempty(readdir(tree))
+            rm(tree)
+        end
+        exit(0)
+    end
+
     if occursin("mkdir -p", script)
         if get(ENV, "DISTSSHKIT_TEST_MKDIR_FAIL", "") == "1"
             exit(1)
