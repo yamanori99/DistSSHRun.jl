@@ -169,6 +169,145 @@ end
     @test occursin("sha256=", sprint(showerror, err))
 end
 
+@testset "declared inputs stay out of the ship" begin
+    Sys.which("git") === nothing && return
+    _with_tempdir() do tmp
+        run(`git -C $tmp init --quiet`)
+        run(`git -C $tmp config user.email t@t.t`)
+        run(`git -C $tmp config user.name t`)
+        write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
+        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        mkpath(joinpath(tmp, "data"))
+        write(joinpath(tmp, "data", "big.bin"), "payload\n")
+        mkpath(joinpath(tmp, ".distsshkit"))
+        write(
+            joinpath(tmp, ".distsshkit", "inputs.toml"),
+            """
+            [[inputs]]
+            name = "big"
+            path = "data"
+            hash = false
+            """,
+        )
+        run(`git -C $tmp add -A`)
+        run(`git -C $tmp commit --quiet -m init`)
+        packed = DistSSHRun.pack_ship_tar(tmp)
+        try
+            dest = mktempdir()
+            DistSSHRun.Tar.extract(packed.tar_path, dest)
+            @test !isfile(joinpath(dest, "data", "big.bin"))
+            @test isfile(joinpath(dest, "Project.toml"))
+        finally
+            rm(packed.tmpd; force = true, recursive = true)
+        end
+        probe = DistSSHRun._remote_input_probe_sh("/remote/data", false)
+        @test occursin("stat", probe)
+        @test occursin("files=%s", probe)
+        @test occursin("find . -type f", probe)
+        @test occursin("input filename contains a newline", probe)
+        hashed = DistSSHRun._remote_input_probe_sh("/remote/data", true)
+        @test occursin("sha256sum", hashed)
+        @test occursin("cd ", hashed)
+        @test occursin("\${_f#./}", hashed)
+        @test occursin("|| exit 1", hashed)
+        run_dir = mktempdir()
+        DistSSHRun._write_input_manifest!(
+            run_dir,
+            [Dict{String, Any}("name" => "big", "path" => "data", "host" => "h", "kind" => "stat", "value" => "1 2")],
+        )
+        @test isfile(joinpath(run_dir, "inputs.toml"))
+        @test !isfile(joinpath(tmp, "inputs.toml"))
+        withenv("DISTSSHKIT_RUN_DIR" => nothing) do
+            err = try
+                DistSSHRun.ship_project_to_hosts!(
+                    ["host.test"], tmp, "/remote/app"; confirm = false, report = false,
+                )
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("DISTSSHKIT_RUN_DIR", sprint(showerror, err))
+        end
+    end
+end
+
+@testset "declared input paths and probes" begin
+    _with_tempdir() do tmp
+        mkpath(joinpath(tmp, ".distsshkit"))
+        write(
+            joinpath(tmp, ".distsshkit", "inputs.toml"),
+            """
+            [[inputs]]
+            name = "big"
+            path = "data/"
+            """,
+        )
+        inputs = DistSSHRun._load_ship_inputs(tmp)
+        @test length(inputs) == 1
+        @test inputs[1].path == "data"
+        @test DistSSHRun._ship_input_covers("data", inputs)
+        @test DistSSHRun._ship_input_covers("data/big.bin", inputs)
+        @test !DistSSHRun._ship_input_covers("database", inputs)
+        write(
+            joinpath(tmp, ".distsshkit", "inputs.toml"),
+            """
+            [[inputs]]
+            name = "bad"
+            path = "data/../secret"
+            """,
+        )
+        @test_throws ArgumentError DistSSHRun._load_ship_inputs(tmp)
+        write(
+            joinpath(tmp, ".distsshkit", "inputs.toml"),
+            """
+            [[inputs]]
+            name = "bad"
+            path = "data/a\\nb"
+            """,
+        )
+        @test_throws ArgumentError DistSSHRun._load_ship_inputs(tmp)
+    end
+    root = mktempdir()
+    other = mktempdir()
+    link = joinpath(dirname(root), "declared-input-link-" * basename(root))
+    try
+        mkpath(joinpath(root, "sub"))
+        write(joinpath(root, "sub", "a.txt"), "hi\n")
+        mkpath(joinpath(other, "sub"))
+        write(joinpath(other, "sub", "a.txt"), "hi\n")
+        symlink(root, link)
+        hashed = strip(read(`sh -c $(DistSSHRun._remote_input_probe_sh(root, true))`, String))
+        @test occursin(r"^[0-9a-fA-F]{64}$", hashed)
+        @test hashed == strip(read(`sh -c $(DistSSHRun._remote_input_probe_sh(other, true))`, String))
+        @test hashed == strip(read(`sh -c $(DistSSHRun._remote_input_probe_sh(link, true))`, String))
+        write(joinpath(root, "sub", "a.txt"), "changed\n")
+        @test hashed != strip(read(`sh -c $(DistSSHRun._remote_input_probe_sh(root, true))`, String))
+        write(joinpath(root, "sub", "a.txt"), "hi\n")
+        symlink("a.txt", joinpath(root, "sub", "via"))
+        with_link = strip(read(`sh -c $(DistSSHRun._remote_input_probe_sh(root, true))`, String))
+        @test with_link != hashed
+        stat_line = strip(read(`sh -c $(DistSSHRun._remote_input_probe_sh(other, false))`, String))
+        @test startswith(stat_line, "files=1 bytes=")
+        @test occursin(r"digest=[0-9a-fA-F]{64}$", stat_line)
+        missing = DistSSHRun._remote_input_probe_sh(joinpath(root, "nope"), true)
+        proc = run(pipeline(`sh -c $missing`; stdout = devnull, stderr = devnull); wait = false)
+        wait(proc)
+        @test proc.exitcode == 2
+        write(joinpath(root, "sub", "a\nb.txt"), "x\n")
+        nl_probe = DistSSHRun._remote_input_probe_sh(root, true)
+        nl_out = IOBuffer()
+        nl_proc = run(pipeline(`sh -c $nl_probe`; stdout = nl_out, stderr = devnull); wait = false)
+        wait(nl_proc)
+        @test nl_proc.exitcode == 2
+        @test occursin("newline", String(take!(nl_out)))
+    finally
+        rm(link; force = true)
+        rm(root; force = true, recursive = true)
+        rm(other; force = true, recursive = true)
+    end
+end
+
 @testset "escaping symlink" begin
     Sys.which("git") === nothing && return
     _with_tempdir() do tmp
