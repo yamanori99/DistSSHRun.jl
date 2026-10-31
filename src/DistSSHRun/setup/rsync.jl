@@ -531,7 +531,10 @@ end
 """
     rsync_send_list(local_root, env; warn=false) -> Union{Nothing, Vector{String}}
 
-Same paths `setup --ship-tree` sends for a git work tree, relative to `local_root`.
+Git send list for a work tree, relative to `local_root`. This is the rsync
+file list. `setup --ship-tree` starts from it and also sends
+`LocalPreferences.toml` and `JuliaLocalPreferences.toml` beside a shipped
+`Project.toml`, including when those files are gitignored.
 
 Returns `nothing` outside a git work tree. The caller then uses rsync's
 per-directory `.gitignore` filter (dir-merge). An empty list throws
