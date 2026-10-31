@@ -574,6 +574,32 @@ end
     end
 end
 
+@testset "await_inputs defers until await_declared_input_hashes!" begin
+    DistSSHRun.await_declared_input_hashes!()
+    @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
+    started = Ref(false)
+    finished = Ref(false)
+    task = @async begin
+        started[] = true
+        sleep(0.05)
+        finished[] = true
+        return nothing
+    end
+    lock(DistSSHRun._PENDING_INPUT_HASH_LOCK) do
+        push!(DistSSHRun._PENDING_INPUT_HASH_TASKS, task)
+    end
+    @test !finished[]
+    DistSSHRun.await_declared_input_hashes!()
+    @test started[]
+    @test finished[]
+    @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
+    @test hasmethod(
+        DistSSHRun.ship_project_to_hosts!,
+        Tuple{Vector{String}, String, String},
+        (:await_inputs,),
+    )
+end
+
 @testset "declared input rows land in run.toml" begin
     run_dir = mktempdir()
     try

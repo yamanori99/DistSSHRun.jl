@@ -684,6 +684,9 @@ function _remote_script_output(
     return code, out, err
 end
 
+const _PENDING_INPUT_HASH_LOCK = ReentrantLock()
+const _PENDING_INPUT_HASH_TASKS = Task[]
+
 function _record_remote_inputs!(
         host::AbstractString,
         abs_root::AbstractString,
@@ -720,6 +723,39 @@ function _record_remote_inputs!(
         kit_println(_input_summary_line(input.name, Int(row["bytes"]), elapsed, !input.hash))
     end
     _commit_declared_input_rows!(run_dir, rows)
+    return nothing
+end
+
+"""Start remote input hashing for `host` without waiting. See [`await_declared_input_hashes!`](@ref)."""
+function _start_remote_input_hashes!(
+        host::AbstractString,
+        abs_root::AbstractString,
+        local_root::AbstractString,
+    )
+    inputs = _load_ship_inputs(local_root)
+    isempty(inputs) && return nothing
+    kit_run_dir() === nothing && throw(
+        ArgumentError(
+            "ship-tree: declared inputs need DISTSSHKIT_RUN_DIR; refusing to write next to the project",
+        ),
+    )
+    task = @async _record_remote_inputs!(host, abs_root, local_root)
+    lock(_PENDING_INPUT_HASH_LOCK) do
+        push!(_PENDING_INPUT_HASH_TASKS, task)
+    end
+    return nothing
+end
+
+"""Wait for deferred declared-input hashes from ship (`await_inputs=false`)."""
+function await_declared_input_hashes!()
+    tasks = lock(_PENDING_INPUT_HASH_LOCK) do
+        taken = copy(_PENDING_INPUT_HASH_TASKS)
+        empty!(_PENDING_INPUT_HASH_TASKS)
+        return taken
+    end
+    for task in tasks
+        fetch(task)
+    end
     return nothing
 end
 
@@ -1328,6 +1364,7 @@ function ship_project_to_hosts!(
         ship_max_bytes::Integer = SHIP_MAX_BYTES_DEFAULT,
         run_id::Union{Nothing, AbstractString} = nothing,
         julia = nothing,
+        await_inputs::Bool = true,
     )::ShipTreeResult
     isempty(hosts) && throw(ArgumentError("ship-tree: no hosts"))
     length(unique(hosts)) == length(hosts) ||
@@ -1378,7 +1415,11 @@ function ship_project_to_hosts!(
                     pinned = something(pin_remote_julia(host, julia), resolve_remote_julia(host, julia))
                     pinned === nothing && throw(ArgumentError("Julia not found on $host"))
                     _remote_extract_tar!(host, src, packed.tar_path, pinned)
-                    _record_remote_inputs!(host, abs_root, packed.root)
+                    if await_inputs
+                        _record_remote_inputs!(host, abs_root, packed.root)
+                    else
+                        _start_remote_input_hashes!(host, abs_root, packed.root)
+                    end
                     if report
                         kit_print("  $host: ")
                         print_ok("✓")

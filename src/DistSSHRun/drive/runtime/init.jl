@@ -163,6 +163,8 @@ end
 function init_drive_workers!(proj_dir::String, explicit_package, path_anchor::String)
     write_both("Initializing workers... ")
     flush(stdout)
+    # Overlap deferred ship input hashing with activate / precompile.
+    hash_task = @async DistSSHRun.await_declared_input_hashes!()
     try
         worker_ids = workers()
         responses = Int[]
@@ -316,7 +318,9 @@ function init_drive_workers!(proj_dir::String, explicit_package, path_anchor::St
         print_progress_err("✗")
         writeln_both("")
         @warn "Worker initialization failed" exception = e
+        fetch(hash_task)
         rethrow()
     end
+    fetch(hash_task)
     return writeln_both("")
 end

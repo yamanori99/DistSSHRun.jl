@@ -1183,9 +1183,11 @@ function _go_run!(
                 sync_session;
                 mode = sync_mode,
                 allow_external_symlinks = allow_external_symlinks,
+                await_inputs = sync_mode !== :ship_tree,
             )
             if !sync_result.ok
                 completed = true
+                await_declared_input_hashes!()
                 return _go_complete!(
                     GoResult(
                         false,
@@ -1209,6 +1211,7 @@ function _go_run!(
                 inst = instantiate_after_ship!(sync_session; julia = inst_julia)
                 if inst !== nothing && !inst.ok
                     completed = true
+                    await_declared_input_hashes!()
                     return _go_complete!(
                         GoResult(
                             false,
@@ -1226,6 +1229,7 @@ function _go_run!(
                         place,
                     )
                 end
+                await_declared_input_hashes!()
             end
             rr = _project_work_root(child_hosts, proj; cli_override = remote)
             _go_assert_remotes_ready!(child_hosts, rr)
