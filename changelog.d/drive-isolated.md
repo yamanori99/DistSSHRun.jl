@@ -1,0 +1,3 @@
+category: added
+
+- `drive --isolated` runs the driver in a child Julia process. The default remains the current process. The child is started without the drive `--isolated` option. A later `--isolated` stays a script argument. Shared flags use the same boundary as parsing, so a value such as `result.jl` is not the driver script. An interrupt while the parent waits is forwarded to the child, and the parent waits for that child to exit. The child keeps the parent's project and load path, and `DISTRIBUTED_PROJECT_ROOT` when the CLI resolved one. A child stopped by a signal is a failure. An exit code that does not fit in `Cint` is a failure too.

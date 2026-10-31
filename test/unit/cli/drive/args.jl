@@ -39,6 +39,62 @@ using Test
             let r = parse_drive_args(["s.jl"])
                 @test r.hint_surface === :cli
                 @test r.sync_script == false
+                @test r.isolated == false
+            end
+            let r = parse_drive_args(["--isolated", "s.jl", "--", "1"])
+                @test r.isolated
+                @test r.script_path == "s.jl"
+            end
+            @test_throws ArgumentError parse_drive_args(["--isolated", "--isolated", "s.jl"])
+            cmd = DistSSHRun._drive_isolated_cmd(["--isolated", "s.jl", "1"])
+            text = join(cmd.exec, " ")
+            @test occursin("DistSSHRun.run_drive_parsed!", text)
+            @test !occursin("--isolated", text)
+            kept = DistSSHRun._drive_isolated_cmd(["--isolated", "s.jl", "--isolated"])
+            dash = findfirst(==("--"), kept.exec)
+            @test dash isa Int
+            dash isa Int || error("expected --")
+            @test kept.exec[(dash + 1):end] == ["s.jl", "--isolated"]
+            valued = DistSSHRun._drive_isolated_child_args(
+                ["--output-dir", "--isolated", "--isolated", "s.jl"],
+            )
+            @test valued == ["--output-dir", "--isolated", "s.jl"]
+            quieted = [
+                "--output-dir", "--quiet", "result.jl", "--isolated", "driver.jl",
+            ]
+            @test DistSSHRun.parse_drive_args(quieted).script_path == "driver.jl"
+            @test DistSSHRun.parse_drive_args(quieted).isolated
+            child_args = DistSSHRun._drive_isolated_child_args(quieted)
+            @test child_args == ["--output-dir", "--quiet", "result.jl", "driver.jl"]
+            @test !DistSSHRun.parse_drive_args(child_args).isolated
+            rooted = DistSSHRun._drive_isolated_cmd(
+                ["--isolated", "s.jl"]; project_root = "/jobs/app",
+            )
+            env = something(rooted.env, String[])
+            @test any(e -> startswith(e, "JULIA_LOAD_PATH="), env)
+            @test "DISTRIBUTED_PROJECT_ROOT=/jobs/app" in env
+            ap = Base.active_project()
+            if ap !== nothing
+                @test "--project=$(dirname(String(ap)))" in rooted.exec
+            end
+            @test DistSSHRun._drive_child_status(0, 9) == 137
+            @test DistSSHRun._drive_child_status(2, 0) == 2
+            @test DistSSHRun._drive_child_status(nothing, nothing) == 1
+            @test DistSSHRun._drive_child_status(0xC0000005, 0) == 1
+            sleeper = run(
+                ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "sleep(30)"`);
+                wait = false,
+            )
+            try
+                DistSSHRun._forward_isolated_interrupt!(sleeper)
+                @test process_exited(sleeper)
+                @test DistSSHRun._drive_child_status(sleeper.exitcode, sleeper.termsignal) != 0
+            finally
+                process_running(sleeper) && kill(sleeper, Base.SIGKILL)
+                try
+                    wait(sleeper)
+                catch
+                end
             end
             let r = parse_drive_args(["--sync-script", "s.jl"])
                 @test r.sync_script == true

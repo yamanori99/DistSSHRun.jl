@@ -41,8 +41,12 @@ jobs:
   # and DistSSHUp. macOS 1.13 runs Base, then Up, then Run, one runner at a
   # time. A skipped Base or Up does not skip the next (`!cancelled()` and
   # `!failure()`, and Run also needs Base so a Base failure still blocks it).
-  # Run 1.14-pre starts with the other heavy jobs, in parallel with that chain.
-  # Ubuntu stays parallel. Downstream is one
+  # Runic, JETLS 1.13, and Aqua 1.13 start after detect. Pkg.test, Registry,
+  # PkgEval, downstream, and SSH E2E start only after those three succeed.
+  # An `if` drops the implicit success() check, so each of those jobs names
+  # needs.*.result == 'success'. 1.14-pre Aqua and JETLS stay
+  # continue-on-error and do not hold the hosts. Ubuntu stays parallel once
+  # the gate is green. Downstream is one
   # matrix (DistSSHQueue, DistSSHKit). Each required DistSSHUp and
   # DistSSHBase title is its own job (Ubuntu, macOS, Ubuntu SSH
   # E2E). WSL2 titles run on a main push and CI weekly, not a pull request.
@@ -60,7 +64,8 @@ jobs:
   # Codecov (flag pkgtest): main push only — not on pull_request.
   # cache-scratchspaces: false — registry_updates.toml in scratchspaces can
   # poison Pkg.Registry.update on 1.13 if restored corrupt.
-  # Aqua / JETLS share this workflow so the Test badge is the PR gate.
+  # Aqua / JETLS / Runic share this workflow so the Test badge is the PR gate.
+  # `.github/workflows/runic.yml` keeps the monthly schedule.
   # Linux E2E (1.13 required, 1.14-pre continue-on-error): path filter on PR /
   # main push; always on a version
   # increase and dispatch. JETLS uses `.github/actions/jetls-check` (no nested
@@ -165,8 +170,8 @@ jobs:
           fi
   test:
     name: DistSSHRun (1.13, ubuntu-latest, x64)
-    needs: detect
-    if: needs.detect.outputs.heavy == 'true'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -190,10 +195,11 @@ jobs:
 
   test-macos:
     name: DistSSHRun (1.13, macos-latest, aarch64)
-    needs: [detect, base-test-macos, up-test-macos]
+    needs: [detect, runic, jetls, aqua, base-test-macos, up-test-macos]
     # success() is false when a needed job is skipped, which would skip Run
     # after a path-gated Base or Up. Failure still blocks; skip does not.
-    if: ${{ needs.detect.outputs.heavy == 'true' && !cancelled() && !failure() }}
+    # The static gate is result == success, so a skipped Runic does not start Run.
+    if: ${{ needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && !cancelled() && !failure() }}
     runs-on: macos-latest
     timeout-minutes: 30
     permissions:
@@ -213,8 +219,8 @@ jobs:
 
   test-wsl:
     name: DistSSHRun (1.13, WSL2 ubuntu-24.04, x64)
-    needs: detect
-    if: needs.detect.outputs.heavy == 'true' && github.event_name != 'pull_request'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request'
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
@@ -245,8 +251,8 @@ jobs:
 
   downstream:
     name: Downstream (${{ matrix.pkg }}@main, 1.13)
-    needs: detect
-    if: needs.detect.outputs.heavy == 'true'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -303,8 +309,8 @@ jobs:
 
   up-test-ubuntu:
     name: DistSSHUp (1.13, ubuntu-latest, x64)
-    needs: detect
-    if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.up == 'true'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.up == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -344,9 +350,9 @@ jobs:
 
   up-test-macos:
     name: DistSSHUp (1.13, macos-latest, aarch64)
-    needs: [detect, base-test-macos]
+    needs: [detect, runic, jetls, aqua, base-test-macos]
     # A skipped Base must not skip Up. A failed Base still does.
-    if: ${{ needs.detect.outputs.heavy == 'true' && needs.detect.outputs.up == 'true' && !cancelled() && !failure() }}
+    if: ${{ needs.detect.outputs.heavy == 'true' && needs.detect.outputs.up == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && !cancelled() && !failure() }}
     runs-on: macos-latest
     timeout-minutes: 30
     permissions:
@@ -367,8 +373,8 @@ jobs:
 
   up-test-wsl:
     name: DistSSHUp (1.13, WSL2 ubuntu-24.04, x64)
-    needs: detect
-    if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.up == 'true' && github.event_name != 'pull_request'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.up == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request'
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
@@ -399,8 +405,8 @@ jobs:
 
   up-ssh-e2e:
     name: DistSSHUp (ubuntu-latest → ubuntu-26.04)
-    needs: detect
-    if: needs.detect.outputs.e2e == 'true' && needs.detect.outputs.up == 'true'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.e2e == 'true' && needs.detect.outputs.up == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -439,8 +445,8 @@ jobs:
 
   base-test-ubuntu:
     name: DistSSHBase (1.13, ubuntu-latest, x64)
-    needs: detect
-    if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.base == 'true'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.base == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -480,8 +486,8 @@ jobs:
 
   base-test-macos:
     name: DistSSHBase (1.13, macos-latest, aarch64)
-    needs: detect
-    if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.base == 'true' && success()
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.base == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && success()
     runs-on: macos-latest
     timeout-minutes: 30
     permissions:
@@ -502,8 +508,8 @@ jobs:
 
   base-test-wsl:
     name: DistSSHBase (1.13, WSL2 ubuntu-24.04, x64)
-    needs: detect
-    if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.base == 'true' && github.event_name != 'pull_request'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.base == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request'
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
@@ -534,8 +540,8 @@ jobs:
 
   base-ssh-e2e:
     name: DistSSHBase (ubuntu-latest → ubuntu-26.04)
-    needs: detect
-    if: needs.detect.outputs.e2e == 'true' && needs.detect.outputs.base == 'true'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.e2e == 'true' && needs.detect.outputs.base == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -575,14 +581,14 @@ jobs:
   # A skipped job does not expand a matrix name, so these titles stay literal.
   # Version string is ~1.14.0-0. The title is 1.14-pre, shared with Queue and Kit.
   # Required: a driver blocked in pmap must cancel within interrupt_grace + 11s
-  # (#212). The macOS job is that suite on macos-latest, in parallel with Run
-  # 1.13, so ps -o lstart= runs on 1.14-pre without waiting. Nightly stays
-  # continue-on-error.
+  # (#212). The macOS job is that suite on macos-latest. It waits for the
+  # same Runic / JETLS 1.13 / Aqua 1.13 gate as Run 1.13, then runs beside
+  # that chain. Nightly stays continue-on-error.
   # Aqua, JETLS, and Linux E2E on 1.14-pre stay continue-on-error.
   test-1-14-pre:
     name: DistSSHRun (1.14-pre, ubuntu-latest, x64)
-    needs: detect
-    if: needs.detect.outputs.heavy == 'true'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -600,8 +606,8 @@ jobs:
 
   test-1-14-pre-macos:
     name: DistSSHRun (1.14-pre, macos-latest, aarch64)
-    needs: detect
-    if: needs.detect.outputs.heavy == 'true'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -619,8 +625,8 @@ jobs:
 
   test-nightly:
     name: DistSSHRun (nightly, ubuntu-latest, x64)
-    needs: detect
-    if: needs.detect.outputs.heavy == 'true' && (github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true')
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && (github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true')
     runs-on: ubuntu-latest
     # Cold nightly precompile plus the full suite does not fit in 20 minutes.
     # The same suite on 1.13 does.
@@ -645,8 +651,8 @@ jobs:
   # Add the job name to the main ruleset; this file does not change it.
   registry-install:
     name: Registry install (1.13, ubuntu-latest, x64)
-    needs: detect
-    if: needs.detect.outputs.heavy == 'true'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -670,8 +676,8 @@ jobs:
   # Julia nightly. Host Julia is 1.13. Dependencies come from General.
   pkgeval:
     name: PkgEval (nightly, ubuntu-latest, x64)
-    needs: detect
-    if: needs.detect.outputs.heavy == 'true'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     continue-on-error: true
@@ -689,6 +695,26 @@ jobs:
       - uses: ./.github/actions/pkgeval
         with:
           package: DistSSHRun
+
+  # Same check as the monthly workflow. That file no longer runs on a PR,
+  # so this job is the one heavy jobs wait for. Not a ruleset name. A red
+  # result skips Pkg.test, so the required checks stay skipping.
+  runic:
+    name: Runic
+    needs: detect
+    if: needs.detect.outputs.heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
+        with:
+          version: "1.13"
+      - uses: fredrikekre/runic-action@b4dbd650db5cc684baae27fea45d22daf41693c2 # v1.5.0
+        with:
+          version: '1'
 
   aqua:
     name: Aqua (1.13, ubuntu-latest, x64)
@@ -806,8 +832,8 @@ jobs:
 
   ssh-e2e:
     name: DistSSHRun (1.13, ubuntu-latest → ubuntu-26.04)
-    needs: detect
-    if: needs.detect.outputs.e2e == 'true'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.e2e == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -853,8 +879,8 @@ jobs:
   # Alt stays JULIA_E2E_MISMATCH_CHANNEL (1.12). continue-on-error; not a ruleset check.
   ssh-e2e-1-14-pre:
     name: DistSSHRun (1.14-pre, ubuntu-latest → ubuntu-26.04)
-    needs: detect
-    if: needs.detect.outputs.e2e == 'true'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.e2e == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     continue-on-error: true
@@ -896,8 +922,8 @@ jobs:
   # General DistSSHRun inside the published Queue image. No buildx.
   queue-ssh-e2e:
     name: Downstream SSH E2E (DistSSHQueue, 1.13)
-    needs: detect
-    if: needs.detect.outputs.queue_e2e == 'true'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.queue_e2e == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:

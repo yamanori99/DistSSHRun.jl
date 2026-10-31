@@ -74,5 +74,6 @@ function drive_parsed_from_session(
         parent_gb = Float64(parent_gb),
         allow_mismatch = collect(Symbol, allow_mismatch),
         allow_external_symlinks = allow_external_symlinks,
+        isolated = false,
     )
 end

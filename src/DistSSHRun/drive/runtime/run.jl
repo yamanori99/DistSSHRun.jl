@@ -16,6 +16,172 @@ function _drive_script_init_output_dir_method(script_args)::Union{Nothing, Metho
     end
 end
 
+# Options that take the next argv word. A word equal to `--isolated` there is a value.
+const _DRIVE_VALUE_FLAGS = (
+    "--workers", "-w", "--julia", "--allow-mismatch", "--mem-headroom",
+    "--parent-gb", "--log-dir", "--output-dir", "--package", "--hosts", "--hosts-file",
+)
+
+"""Index of the drive `--isolated` option in already-peeled argv, or `nothing`."""
+function _peeled_isolated_option(peeled::AbstractVector{<:AbstractString})::Union{Nothing, Int}
+    i = 1
+    n = length(peeled)
+    while i <= n
+        arg = String(peeled[i])
+        endswith(arg, ".jl") && return nothing
+        if arg in _DRIVE_VALUE_FLAGS
+            i += 2
+            continue
+        end
+        arg == "--isolated" && return i
+        i += 1
+    end
+    return nothing
+end
+
+"""Raw index of peeled index `peeled_index`. Shared flags are absent from the peeled argv."""
+function _raw_index_for_peeled(raw::AbstractVector{<:AbstractString}, peeled_index::Int)::Int
+    p = 0
+    i = 1
+    n = length(raw)
+    while i <= n
+        arg = String(raw[i])
+        if _shared_bare_cli_flag(arg)
+            i += 1
+            continue
+        end
+        if _shared_valued_cli_flag(arg)
+            i += i < n ? 2 : 1
+            continue
+        end
+        p += 1
+        p == peeled_index && return i
+        i += 1
+    end
+    return peeled_index
+end
+
+"""Drop the drive `--isolated` option. Keep that word after the driver script, and as a flag value."""
+function _drive_isolated_child_args(original_args::AbstractVector{<:AbstractString})::Vector{String}
+    raw = String[String(a) for a in original_args]
+    _, peeled = peel_kit_cli_flags(raw)
+    drop_at = _peeled_isolated_option(peeled)
+    drop_at === nothing && return raw
+    deleteat!(raw, _raw_index_for_peeled(raw, drop_at))
+    return raw
+end
+
+function _isolated_child_load_path()::String
+    sep = Sys.iswindows() ? ";" : ":"
+    parts = String[]
+    for entry in LOAD_PATH
+        entry isa AbstractString || continue
+        s = String(entry)
+        (isempty(s) || s in parts) && continue
+        push!(parts, s)
+    end
+    d = pkgdir(@__MODULE__)
+    if d !== nothing && !isempty(d) && !(d in parts)
+        push!(parts, d)
+    end
+    return join(parts, sep)
+end
+
+function _isolated_project_flag()::Union{Nothing, String}
+    ap = Base.active_project()
+    ap === nothing && return nothing
+    dir = dirname(String(ap))
+    isempty(dir) && return nothing
+    return "--project=$(dir)"
+end
+
+"""Fit `code` in `Cint`. A Windows crash code such as `0xC0000005` does not."""
+function _as_cint(code::Integer)::Cint
+    n = try
+        Int64(code)
+    catch
+        return Cint(1)
+    end
+    lo = Int64(typemin(Cint))
+    hi = Int64(typemax(Cint))
+    lo <= n <= hi && return Cint(n)
+    return Cint(1)
+end
+
+"""A signalled child is a failure. Unix can report `exitcode == 0` with a nonzero `termsignal`."""
+function _drive_child_status(exitcode, termsignal)::Cint
+    if termsignal isa Integer && !(termsignal isa Bool)
+        sig = try
+            Int64(termsignal)
+        catch
+            return Cint(1)
+        end
+        if sig != 0
+            return _as_cint(128 + sig)
+        end
+    end
+    if exitcode isa Integer && !(exitcode isa Bool)
+        return _as_cint(exitcode)
+    end
+    return Cint(1)
+end
+
+# Child `julia` that runs the same drive arguments without the drive `--isolated` option.
+function _drive_isolated_cmd(
+        original_args::AbstractVector{<:AbstractString};
+        project_root::Union{Nothing, AbstractString} = nothing,
+    )::Cmd
+    child = _drive_isolated_child_args(original_args)
+    script = "using DistSSHRun; exit(Int(DistSSHRun.run_drive_parsed!(DistSSHRun.parse_drive_args(String[ARGS...]); original_args=String[ARGS...])))"
+    argv = String[]
+    append!(argv, Base.julia_cmd().exec)
+    push!(argv, "--startup-file=no")
+    proj = _isolated_project_flag()
+    proj === nothing || push!(argv, proj)
+    push!(argv, "-e", script, "--")
+    append!(argv, child)
+    pairs = Pair{String, String}["JULIA_LOAD_PATH" => _isolated_child_load_path()]
+    if project_root !== nothing
+        root = strip(String(project_root))
+        isempty(root) || push!(pairs, "DISTRIBUTED_PROJECT_ROOT" => root)
+    end
+    return addenv(Cmd(argv), pairs...)
+end
+
+"""SIGINT the child, then wait until it exits. A second interrupt still uses the drive handler."""
+function _forward_isolated_interrupt!(proc::Base.Process)
+    if process_running(proc)
+        try
+            kill(proc, Base.SIGINT)
+        catch
+        end
+    end
+    try
+        wait(proc)
+    catch
+    end
+    return nothing
+end
+
+function _drive_isolated_process(
+        original_args::AbstractVector{<:AbstractString},
+        project_root::Union{Nothing, AbstractString} = nothing,
+    )::Cint
+    proc = run(
+        ignorestatus(_drive_isolated_cmd(original_args; project_root = project_root));
+        wait = false,
+    )
+    try
+        wait(proc)
+    catch e
+        if is_sigint(e) || _is_cancellation_request(e)
+            _forward_isolated_interrupt!(proc)
+        end
+        rethrow()
+    end
+    return _drive_child_status(proc.exitcode, proc.termsignal)
+end
+
 """
     run_drive_parsed!(parsed; original_args=String[], resolved_output_dir=nothing, resolved_log_dir=nothing) -> Cint
 
@@ -39,6 +205,11 @@ function run_drive_parsed!(
         resolved_run_dir::Union{Nothing, Base.RefValue{Union{Nothing, String}}} = nothing,
         project_root::Union{Nothing, AbstractString} = nothing,
     )::Cint
+    # `drive!` builds the same field as `parse_drive_args` (`false`). A missing
+    # key stays in this process. `get` does not read a field the tuple lacks.
+    if get(parsed, :isolated, false) === true
+        return _drive_isolated_process(original_args, project_root)
+    end
     # `parse_drive_args` is inferred as one NamedTuple whose fields are unions
     # (`sync_mode::Union{Nothing,Symbol}`, and the same for paths and counts).
     # The value for one argv is narrower. Lookup at runtime specializes the

@@ -95,6 +95,7 @@ function parse_drive_args(args::Vector{String})
     # nothing → no pre-run sync; :sync / :ship_tree → sync!
     sync_mode = nothing
     allow_external_symlinks = false
+    isolated = false
     sync_script = false
     require_git = false
     skip_git_guard = false
@@ -156,6 +157,10 @@ function parse_drive_args(args::Vector{String})
             i += 1
         elseif arg == "--allow-external-symlinks"
             allow_external_symlinks = true
+            i += 1
+        elseif arg == "--isolated"
+            isolated && throw(ArgumentError("drive: --isolated specified more than once"))
+            isolated = true
             i += 1
         elseif arg == "--rsync"
             _throw_rsync_removed()
@@ -302,6 +307,7 @@ function parse_drive_args(args::Vector{String})
                 parent_gb = parent_gb,
                 allow_mismatch = allow_mismatch,
                 allow_external_symlinks = allow_external_symlinks,
+                isolated = isolated,
             )
         elseif arg == "--help" || arg == "-h"
             return (
@@ -330,6 +336,7 @@ function parse_drive_args(args::Vector{String})
                 parent_gb = parent_gb,
                 allow_mismatch = allow_mismatch,
                 allow_external_symlinks = false,
+                isolated = false,
             )
         elseif endswith(arg, ".jl")
             script_path = arg
@@ -424,6 +431,7 @@ function parse_drive_args(args::Vector{String})
         parent_gb = parent_gb,
         allow_mismatch = allow_mismatch,
         allow_external_symlinks = allow_external_symlinks,
+        isolated = isolated,
     )
 end
 
@@ -465,6 +473,7 @@ function show_drive_usage(; io::IO = stdout)
         "  --require-all-hosts listed parent/child tokens must join, stay, and collect (default)",
         "  --best-effort       allow a partial run (missing join is not a failure)",
         "  --output-dir PATH   result root (default: {script}/.distsshkit/drive/<stem>_<UTC>/; must be missing or empty)",
+        "  --isolated          run the driver in a child process (default: this process)",
         "  --julia PATH        remote Julia",
         "  --allow-mismatch F  waive julia, distssh, and/or manifest (comma list)",
         "  SSH workers: project-root cwd, bind 127.0.0.1, tunnel unless DISTSSHKIT_SSH_TUNNEL=0.",
