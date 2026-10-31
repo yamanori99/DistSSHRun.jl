@@ -34,6 +34,10 @@ end
     @test occursin("mkdir '/work/app/runs' || [ -d '/work/app/runs' ]", sh)
     @test !occursin("mkdir -p", sh)
     @test occursin("/work/app/runs/20260101T000000Z-abcd/src", sh)
+    @test occursin("/work/app/runs/20260101T000000Z-abcd/out", sh)
+    @test occursin("refusing symlinked out dir", sh)
+    @test occursin("out dir is not empty", sh)
+    @test occursin("mkdir '/work/app/runs/20260101T000000Z-abcd/out'", sh)
 end
 
 @testset "setup --remote-root creates only that directory" begin
