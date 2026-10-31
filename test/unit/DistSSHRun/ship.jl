@@ -390,11 +390,24 @@ end
         @test link_proc.exitcode == 2
         @test occursin("link target contains a newline", String(take!(link_out)))
         @test_throws ArgumentError DistSSHRun._nfc_input_rel("a\\b")
-        @test DistSSHRun._input_file_stem("ok") == "ok"
-        @test DistSSHRun._input_file_stem("a b") != "a b"
-        @test occursin('-', DistSSHRun._input_file_stem("a b"))
-        @test endswith(DistSSHRun._input_manifest_rel("a b", "h"), ".manifest")
-        @test startswith(DistSSHRun._input_manifest_rel("a b", "h"), "inputs/")
+        @test_throws ArgumentError DistSSHRun._canonical_ship_input_path("data\\file")
+        left = DistSSHRun._input_manifest_rel("a--b", "c")
+        right = DistSSHRun._input_manifest_rel("a", "b--c")
+        @test left != right
+        @test occursin(r"^inputs/[0-9a-f]{64}\.manifest$", left)
+        @test occursin(r"^inputs/[0-9a-f]{64}\.manifest$", right)
+        root_link = joinpath(dirname(root), "declared-root-link-" * basename(root))
+        symlink("a.txt\n", root_link)
+        try
+            root_nl = DistSSHRun._remote_input_probe_sh(root_link, true)
+            root_out = IOBuffer()
+            root_proc = run(pipeline(`sh -c $root_nl`; stdout = root_out, stderr = devnull); wait = false)
+            wait(root_proc)
+            @test root_proc.exitcode == 2
+            @test occursin("link target contains a newline", String(take!(root_out)))
+        finally
+            rm(root_link; force = true)
+        end
     finally
         rm(link; force = true)
         rm(root; force = true, recursive = true)

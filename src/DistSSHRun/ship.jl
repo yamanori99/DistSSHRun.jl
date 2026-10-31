@@ -112,7 +112,9 @@ function _ship_input_covers(rel::AbstractString, inputs::Vector{ShipInput})::Boo
 end
 
 function _canonical_ship_input_path(path::AbstractString)::String
-    raw = replace(strip(String(path)), '\\' => '/')
+    raw = strip(String(path))
+    occursin('\\', raw) &&
+        throw(ArgumentError("inputs.toml: path contains a backslash: $(repr(path))"))
     any(iscntrl, raw) &&
         throw(ArgumentError("inputs.toml: path contains a control character: $(repr(path))"))
     startswith(raw, "/") &&
@@ -156,7 +158,11 @@ function _remote_input_probe_sh(abs_path::AbstractString, do_hash::Bool)::String
     walk = do_hash ? _remote_input_hash_walk() : _remote_input_stat_walk()
     return """
         set -eu
-        if [ ! -e $q ]; then printf '%s\\n' missing; exit 2; fi
+        if [ ! -e $q ] && [ ! -L $q ]; then printf '%s\\n' missing; exit 2; fi
+        if [ -L $q ]; then
+          _f=$q
+        $(_remote_input_readlink_sh())
+        fi
         _dsk_hex() {
           _line=
           if command -v sha256sum >/dev/null 2>&1; then
@@ -335,18 +341,14 @@ function _input_summary_line(name::AbstractString, nbytes::Integer, elapsed::Rea
     return "hashed $name: $(_format_bytes(nbytes)) in $(_format_seconds(elapsed))$extra"
 end
 
-function _input_file_stem(text::AbstractString)::String
-    raw = String(text)
-    safe = replace(raw, r"[^A-Za-z0-9._@-]" => "_")
-    if isempty(safe) || safe == "." || safe == ".."
-        safe = "input"
-    end
-    safe == raw && return safe
-    return safe * "-" * _sha256_hex(codeunits(raw))[1:8]
-end
+"""Manifest path for one `(name, host)` pair.
 
+The file name is the SHA-256 of `ncodeunits(name):name\\nhost`, so
+`(a--b, c)` and `(a, b--c)` do not share a path.
+"""
 function _input_manifest_rel(name::AbstractString, host::AbstractString)::String
-    return "inputs/" * _input_file_stem(name) * "--" * _input_file_stem(host) * ".manifest"
+    pair = string(ncodeunits(String(name)), ':', name, '\n', host)
+    return "inputs/" * _sha256_hex(codeunits(pair)) * ".manifest"
 end
 
 """`inputs/records.toml` rows, or `nothing` when this run has no declared inputs."""
