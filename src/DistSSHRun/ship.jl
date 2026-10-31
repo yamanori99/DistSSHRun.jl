@@ -190,12 +190,36 @@ function _remote_input_probe_sh(abs_path::AbstractString, do_hash::Bool)::String
           : > "\$_rows"
         $walk
         elif [ -f $q ]; then
-        $(do_hash ? "  _st=\$(_dsk_stat $q) || exit 1\n  _size=\$(printf '%s\\n' \"\$_st\" | awk '{ print \$1; exit }')\n  [ -n \"\$_size\" ] || exit 1\n  _sum=\$(_dsk_hex $q) || exit 1\n  printf 'PROG %s %s\\n' \"\$_size\" \"\$_size\" >&2\n  printf 'file\\t%s\\t%s\\t.\\n' \"\$_size\" \"\$_sum\"" : "  _dsk_stat $q || exit 1")
+        $(_remote_input_file_branch(q, do_hash))
         else
           printf '%s\\n' 'not a file or directory'
           exit 2
         fi
         """
+end
+
+function _remote_input_file_branch(q::AbstractString, do_hash::Bool)::String
+    if do_hash
+        return """
+          _st=\$(_dsk_stat $q) || exit 1
+          _size=\$(printf '%s\\n' "\$_st" | awk '{ print \$1; exit }')
+          [ -n "\$_size" ] || exit 1
+          _sum=\$(_dsk_hex $q) || exit 1
+          printf 'PROG %s %s\\n' "\$_size" "\$_size" >&2
+          printf 'file\\t%s\\t%s\\t.\\n' "\$_size" "\$_sum"
+        """
+    end
+    return """
+      _st=\$(_dsk_stat $q) || exit 1
+      _size=\$(printf '%s\\n' "\$_st" | awk '{ print \$1; exit }')
+      _mtime=\$(printf '%s\\n' "\$_st" | awk '{ print \$2; exit }')
+      [ -n "\$_size" ] && [ -n "\$_mtime" ] || exit 1
+      _one=\$(mktemp)
+      trap 'rm -f "\$_one"' EXIT
+      printf '.\\tfile\\t%s\\t%s\\n' "\$_size" "\$_mtime" > "\$_one"
+      _sum=\$(_dsk_hex "\$_one") || exit 1
+      printf 'files=1 bytes=%s newest=%s digest=%s\\n' "\$_size" "\$_mtime" "\$_sum"
+    """
 end
 
 function _remote_input_hash_walk()::String
@@ -363,6 +387,18 @@ function _merge_inputs_into_run_toml!(run_dir::AbstractString)
     return nothing
 end
 
+"""Append `rows` and copy them into `run.toml`. One lock covers both files."""
+function _commit_declared_input_rows!(
+        run_dir::AbstractString,
+        rows::AbstractVector{<:AbstractDict},
+    )
+    lock(_INPUT_MANIFEST_LOCK) do
+        _store_input_rows!(run_dir, rows)
+        _merge_inputs_into_run_toml!(run_dir)
+    end
+    return nothing
+end
+
 function _nfc_input_rel(rel::AbstractString)::String
     raw = Unicode.normalize(replace(String(rel), '\\' => '/'), :NFC)
     any(iscntrl, raw) && throw(ArgumentError("input path contains a control character"))
@@ -422,7 +458,12 @@ function _input_row_from_probe(
             sz === nothing && throw(ArgumentError("input $name: bad file size"))
             hex = String(parts[3])
             occursin(r"^[0-9a-fA-F]{64}$", hex) || throw(ArgumentError("input $name: bad sha256"))
-            push!(entries, (_nfc_input_rel(String(parts[4])), lowercase(hex), sz, false))
+            rel = _nfc_input_rel(String(parts[4]))
+            if rel == "."
+                rel = _nfc_input_rel(basename(String(path)))
+                rel == "." && throw(ArgumentError("input $name: file record has no name"))
+            end
+            push!(entries, (rel, lowercase(hex), sz, false))
         elseif kind == "link"
             length(parts) == 3 || throw(ArgumentError("input $name: bad link record"))
             target = String(parts[2])
@@ -567,8 +608,7 @@ function _record_remote_inputs!(
         push!(rows, row)
         kit_println(_input_summary_line(input.name, Int(row["bytes"]), elapsed, !input.hash))
     end
-    _store_input_rows!(run_dir, rows)
-    _merge_inputs_into_run_toml!(run_dir)
+    _commit_declared_input_rows!(run_dir, rows)
     return nothing
 end
 

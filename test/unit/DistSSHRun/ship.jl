@@ -373,6 +373,64 @@ end
     end
 end
 
+@testset "a file input is one sha256sum line" begin
+    parent = mktempdir()
+    file = joinpath(parent, "one.bin")
+    write(file, "hi\n")
+    rec = mktempdir()
+    try
+        hashed_out = read(
+            pipeline(`sh -c $(DistSSHRun._remote_input_probe_sh(file, true))`; stderr = devnull),
+            String,
+        )
+        hashed = DistSSHRun._input_row_from_probe("n", "dir/one.bin", "h", true, hashed_out, rec)
+        body = String(read(joinpath(rec, hashed["manifest"])))
+        @test occursin(" *one.bin", body)
+        @test !occursin(" *.", body)
+        manifest = joinpath(rec, hashed["manifest"])
+        if Sys.which("sha256sum") !== nothing
+            run(pipeline(Cmd(`sha256sum -c $manifest`; dir = parent); stdout = devnull))
+        elseif Sys.which("shasum") !== nothing
+            run(pipeline(Cmd(`shasum -a 256 -c $manifest`; dir = parent); stdout = devnull))
+        end
+        stat_out = read(
+            pipeline(`sh -c $(DistSSHRun._remote_input_probe_sh(file, false))`; stderr = devnull),
+            String,
+        )
+        stat_row = DistSSHRun._input_row_from_probe("n", "dir/one.bin", "h", false, stat_out, rec)
+        @test stat_row["verification"] == "stat"
+        @test stat_row["files"] == 1
+        @test stat_row["bytes"] == 3
+        @test occursin(r"^[0-9a-f]{64}$", stat_row["stat_digest"])
+    finally
+        rm(parent; force = true, recursive = true)
+        rm(rec; force = true, recursive = true)
+    end
+end
+
+@testset "declared input rows land in run.toml" begin
+    run_dir = mktempdir()
+    try
+        DistSSHRun.write_kit_run_toml!(run_dir; kind = :go)
+        DistSSHRun._commit_declared_input_rows!(
+            run_dir,
+            [Dict{String, Any}("name" => "a", "host" => "h", "verification" => "stat")],
+        )
+        DistSSHRun._commit_declared_input_rows!(
+            run_dir,
+            [Dict{String, Any}("name" => "b", "host" => "h", "verification" => "stat")],
+        )
+        stored = DistSSHRun._read_declared_input_rows(run_dir)
+        @test length(stored) == 2
+        recorded = something(DistSSHRun.read_kit_run_toml(run_dir))
+        @test length(recorded["inputs"]) == 2
+        @test recorded["inputs"][1]["name"] == "a"
+        @test recorded["inputs"][2]["name"] == "b"
+    finally
+        rm(run_dir; force = true, recursive = true)
+    end
+end
+
 @testset "escaping symlink" begin
     Sys.which("git") === nothing && return
     _with_tempdir() do tmp
