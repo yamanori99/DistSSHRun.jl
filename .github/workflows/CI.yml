@@ -38,10 +38,10 @@ jobs:
   # macOS is required. The macOS job exercises `ps -o lstart=`
   # in kit_process_start_key (no /proc). Coverage uploads from Ubuntu only.
   # Run's check titles are `DistSSHRun (...)`, the same shape as DistSSHBase
-  # and DistSSHUp. macOS runs Base, then Up, then Run 1.13, then Run
-  # 1.14-pre, one runner at a time. A skipped Base or Up does not skip the
-  # next (`!cancelled()` and `!failure()`, and Run also needs Base so a Base
-  # failure still blocks it).
+  # and DistSSHUp. macOS 1.13 runs Base, then Up, then Run, one runner at a
+  # time. A skipped Base or Up does not skip the next (`!cancelled()` and
+  # `!failure()`, and Run also needs Base so a Base failure still blocks it).
+  # Run 1.14-pre starts with the other heavy jobs, in parallel with that chain.
   # Ubuntu stays parallel. Downstream is one
   # matrix (DistSSHQueue, DistSSHKit). Each required DistSSHUp and
   # DistSSHBase title is its own job (Ubuntu, macOS, Ubuntu SSH
@@ -575,8 +575,9 @@ jobs:
   # A skipped job does not expand a matrix name, so these titles stay literal.
   # Version string is ~1.14.0-0. The title is 1.14-pre, shared with Queue and Kit.
   # Required: a driver blocked in pmap must cancel within interrupt_grace + 11s
-  # (#212). The macOS job is the same suite after Run 1.13, so ps -o lstart=
-  # runs on 1.14-pre without a second runner. Nightly stays continue-on-error.
+  # (#212). The macOS job is that suite on macos-latest, in parallel with Run
+  # 1.13, so ps -o lstart= runs on 1.14-pre without waiting. Nightly stays
+  # continue-on-error.
   # Aqua, JETLS, and Linux E2E on 1.14-pre stay continue-on-error.
   test-1-14-pre:
     name: DistSSHRun (1.14-pre, ubuntu-latest, x64)
@@ -599,10 +600,8 @@ jobs:
 
   test-1-14-pre-macos:
     name: DistSSHRun (1.14-pre, macos-latest, aarch64)
-    needs: [detect, test-macos]
-    # A skipped or failed 1.13 Run must not start another macOS runner.
-    # A closed heavy gate skips this job the same way it skips test-macos.
-    if: ${{ needs.detect.outputs.heavy == 'true' && !cancelled() && !failure() }}
+    needs: detect
+    if: needs.detect.outputs.heavy == 'true'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
