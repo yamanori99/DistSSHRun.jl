@@ -57,6 +57,9 @@ end
         write(joinpath(tmp, "JuliaLocalPreferences.toml"), "[ShipT]\ny = 2\n")
         run(`git -C $tmp add -A`)
         run(`git -C $tmp commit --quiet -m init`)
+        listed = DistSSHRun.rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+        @test listed isa Vector
+        @test "LocalPreferences.toml" ∉ listed
         packed = DistSSHRun.pack_ship_tar(tmp)
         try
             dest = mktempdir()
@@ -66,6 +69,30 @@ end
         finally
             rm(packed.tmpd; force = true, recursive = true)
         end
+    end
+end
+
+@testset "symlinked project preference is refused" begin
+    Sys.which("git") === nothing && return
+    _with_tempdir() do tmp
+        run(`git -C $tmp init --quiet`)
+        run(`git -C $tmp config user.email t@t.t`)
+        run(`git -C $tmp config user.name t`)
+        write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
+        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        write(joinpath(tmp, "prefs.toml"), "[ShipT]\nx = 1\n")
+        symlink("prefs.toml", joinpath(tmp, "LocalPreferences.toml"))
+        run(`git -C $tmp add -A`)
+        run(`git -C $tmp commit --quiet -m init`)
+        err = try
+            DistSSHRun.pack_ship_tar(tmp)
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("symlinked project preference", err.msg)
+        @test occursin("LocalPreferences.toml", err.msg)
     end
 end
 
@@ -248,7 +275,7 @@ end
     end
 end
 
-@testset "rsync_send_list is the ship set" begin
+@testset "rsync_send_list is the git send list" begin
     Sys.which("git") === nothing && return
     _with_tempdir() do tmp
         run(`git -C $tmp init --quiet`)
