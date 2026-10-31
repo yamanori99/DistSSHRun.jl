@@ -47,6 +47,7 @@ using Test
             "--cleanup" => :cleanup,
             "--prune" => :prune,
             "--delete" => :delete,
+            "--remote-root" => :remote_root,
             "--requirements" => :requirements,
         )
         let r = parse_setup_args([flag, "child:host1"])
@@ -166,6 +167,7 @@ using Test
     @testset "help smoke (rsync-first)" begin
         txt = DistSSHRun.setup_help_text()
         @test occursin("--prune", txt)
+        @test occursin("--remote-root", txt)
         @test occursin("--confirm-path", txt)
         @test occursin("--older-than", txt)
         @test occursin("--runtest", txt)

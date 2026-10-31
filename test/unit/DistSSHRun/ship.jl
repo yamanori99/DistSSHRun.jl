@@ -25,6 +25,66 @@ end
     @test occursin("/work/app/runs/20260101T000000Z-abcd/src", sh)
 end
 
+@testset "setup --remote-root creates only that directory" begin
+    @test_throws ArgumentError DistSSHRun.explicit_remote_root_path("~/jobs/app")
+    @test_throws ArgumentError DistSSHRun.explicit_remote_root_path("jobs/app")
+    @test_throws ArgumentError DistSSHRun.explicit_remote_root_path("/")
+    @test DistSSHRun.explicit_remote_root_path("/tmp/jobs/app/") == "/tmp/jobs/app"
+    sh = DistSSHRun._remote_root_create_script("/tmp/jobs/app")
+    @test occursin("mkdir ", sh)
+    @test !occursin("mkdir -p", sh)
+    @test occursin("remote_root parent does not exist", sh)
+    @test occursin("remote_root is a symlink", sh)
+    @test occursin("group or world writable", sh)
+    @test !occursin("runs", sh)
+    @test !occursin(".distssh", sh)
+    session = DistSSHRun.KitSession(; workers = ["child:host.test"], yes = true)
+    err = try
+        DistSSHRun.setup!(session, :remote_root)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("absolute path", sprint(showerror, err))
+    parent = mktempdir()
+    root = joinpath(parent, "app")
+    try
+        script = "umask 022\n" * DistSSHRun._remote_root_create_script(root)
+        run(`sh -c $script`)
+        @test isdir(root)
+        @test !isdir(joinpath(root, "runs"))
+        chmod(root, 0o775)
+        bad = run(pipeline(`sh -c $script`; stdout = devnull, stderr = devnull); wait = false)
+        wait(bad)
+        @test bad.exitcode == 2
+        chmod(root, 0o755)
+        run(`sh -c $script`)
+        @test isdir(root)
+        missing = joinpath(parent, "nope", "app")
+        miss = DistSSHRun._remote_root_create_script(missing)
+        miss_proc = run(pipeline(`sh -c $miss`; stdout = devnull, stderr = devnull); wait = false)
+        wait(miss_proc)
+        @test miss_proc.exitcode == 2
+        @test !isdir(joinpath(parent, "nope"))
+        file = joinpath(parent, "file")
+        write(file, "x")
+        file_script = DistSSHRun._remote_root_create_script(file)
+        file_proc = run(pipeline(`sh -c $file_script`; stdout = devnull, stderr = devnull); wait = false)
+        wait(file_proc)
+        @test file_proc.exitcode == 2
+        link = joinpath(parent, "link")
+        symlink(root, link)
+        link_script = DistSSHRun._remote_root_create_script(link)
+        link_proc = run(pipeline(`sh -c $link_script`; stdout = devnull, stderr = devnull); wait = false)
+        wait(link_proc)
+        @test link_proc.exitcode == 2
+        @test islink(link)
+    finally
+        rm(parent; force = true, recursive = true)
+    end
+end
+
 @testset "ship tar pack" begin
     Sys.which("git") === nothing && return
     _with_tempdir() do tmp

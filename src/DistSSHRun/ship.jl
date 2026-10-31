@@ -649,15 +649,9 @@ function _remote_work_layout_path(
     return _rehome_under_work_root(mapped, deploy, wr)
 end
 
-function _remote_run_leaf_script(abs_root::AbstractString, run_id::AbstractString)::String
-    runs = _posix_join(abs_root, "runs")
-    leaf = _posix_join(runs, run_id)
-    src = _posix_join(leaf, "src")
-    rq = _remote_shell_path_word(runs)
-    lq = _remote_shell_path_word(leaf)
-    sq = _remote_shell_path_word(src)
-    rootq = _remote_shell_path_word(abs_root)
-    script = """
+"""Shell that refuses a missing, unreadable, group-writable, world-writable, or foreign `remote_root`."""
+function _remote_root_mode_sh(rootq::AbstractString)::String
+    return """
     if [ ! -d $rootq ]; then
       printf 'remote_root does not exist: %s\\n' $rootq
       exit 2
@@ -693,6 +687,118 @@ function _remote_run_leaf_script(abs_root::AbstractString, run_id::AbstractStrin
       printf 'remote_root owner is %s, not %s\\n' "\$owner" "\$me"
       exit 2
     fi
+    """
+end
+
+"""Absolute `remote_root` from an explicit `--remote-path` or `session.remote`.
+
+A `~` path, a relative path, and a path this package will not use as a clone
+or delete target are refused. Nothing is read from the environment.
+"""
+function explicit_remote_root_path(path::AbstractString)::String
+    s = strip(String(path))
+    any(c -> c == '\n' || c == '\r' || c == '\0' || iscntrl(c), s) && throw(
+        ArgumentError("remote_root path contains a control character"),
+    )
+    startswith(s, "/") || throw(
+        ArgumentError(
+            "setup --remote-root needs an absolute path; refusing $(repr(s))",
+        ),
+    )
+    return _checked_remote_dest(rstrip(s, '/'))
+end
+
+"""Create `abs_path` with `mkdir` when it is missing. The parent must already exist."""
+function _remote_root_create_script(abs_path::AbstractString)::String
+    path = explicit_remote_root_path(abs_path)
+    q = _remote_shell_path_word(path)
+    parent = dirname(path)
+    pq = _remote_shell_path_word(parent)
+    return """
+    if [ -L $q ]; then
+      printf 'remote_root is a symlink: %s\\n' $q
+      exit 2
+    fi
+    if [ -e $q ] && [ ! -d $q ]; then
+      printf 'remote_root exists and is not a directory: %s\\n' $q
+      exit 2
+    fi
+    if [ ! -d $q ]; then
+      if [ ! -d $pq ]; then
+        printf 'remote_root parent does not exist: %s\\n' $pq
+        exit 2
+      fi
+      mkdir $q || exit 1
+    fi
+    $(_remote_root_mode_sh(q))
+    """
+end
+
+function create_remote_roots!(
+        hosts::AbstractVector{<:AbstractString},
+        abs_path::AbstractString;
+        confirm::Bool = true,
+    )
+    path = explicit_remote_root_path(abs_path)
+    script = _remote_root_create_script(path)
+    host_list = String[String(h) for h in hosts]
+    isempty(host_list) && throw(ArgumentError("setup --remote-root: no hosts"))
+    if confirm && !kit_noninteractive()
+        cancelled = with_kit_progress_suspended() do
+            writeln_both("remote-root $(path) on $(length(host_list)) host(s)")
+            if !kit_confirm("Type 'remote-root' to confirm: "; keyword = "remote-root")
+                println_fatal("Cancelled.")
+                return true
+            end
+            println_fatal()
+            return false
+        end
+        if cancelled
+            return (;
+                cancelled = true,
+                succeeded = 0,
+                failed = 0,
+                hosts = HostResult[],
+            )
+        end
+    end
+    n = length(host_list)
+    host_results = Vector{HostResult}(undef, n)
+    map_host_jobs(host_list) do i, host
+        host_results[i] = _setup_host_call!(host) do
+            try
+                code, out = _remote_shell_status(String(host), script)
+                if code != 0
+                    msg = strip(out)
+                    isempty(msg) && (msg = "remote_root failed")
+                    return HostResult(String(host), false, msg)
+                end
+                return HostResult(String(host), true, "remote_root ok")
+            catch e
+                e isa InterruptException && rethrow()
+                return HostResult(String(host), false, sprint(showerror, e))
+            end
+        end
+    end
+    ok_n = count(hr -> hr.ok, host_results)
+    return (;
+        cancelled = false,
+        succeeded = ok_n,
+        failed = n - ok_n,
+        hosts = host_results,
+    )
+end
+
+function _remote_run_leaf_script(abs_root::AbstractString, run_id::AbstractString)::String
+    runs = _posix_join(abs_root, "runs")
+    leaf = _posix_join(runs, run_id)
+    src = _posix_join(leaf, "src")
+    rq = _remote_shell_path_word(runs)
+    lq = _remote_shell_path_word(leaf)
+    sq = _remote_shell_path_word(src)
+    rootq = _remote_shell_path_word(abs_root)
+    script = """
+    $(_remote_root_mode_sh(rootq))
     if [ ! -d $rq ]; then
       mkdir $rq || [ -d $rq ] || exit 1
     fi
