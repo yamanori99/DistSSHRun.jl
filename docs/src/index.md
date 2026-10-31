@@ -45,8 +45,9 @@ Unknown keys are ignored when reading. A ship that sees
 With hashing on, it also writes a manifest under `inputs/<sha256>.manifest`.
 The file name is the SHA-256 of `ncodeunits(name):name`, a newline, and the
 host. Each line is `hex *path`. A regular file is the SHA-256 of its bytes.
-A symlink is the SHA-256 of its link text and is not followed, so
-`sha256sum -c` does not check that line. A declared path that is a
+A symlink is the SHA-256 of its link text and is not followed.
+`sha256sum -c` follows the symlink and normally reports `FAILED`; use
+`check_input_manifest` to verify symlink rows. A declared path that is a
 symlink to a file is recorded as that link, not as the target bytes.
 A link target with a tab or newline is refused, including when the
 declared path itself is a symlink. A path with a backslash is refused.

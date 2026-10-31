@@ -478,6 +478,12 @@ function _resolve_nfc_under(root::AbstractString, rel::AbstractString)
     for piece in split(rel, '/'; keepempty = false)
         piece == "." && continue
         piece == ".." && throw(ArgumentError("input path escapes the declared root"))
+        literal = joinpath(current, piece)
+        if ispath(literal) || islink(literal)
+            current = literal
+            continue
+        end
+        isdir(current) || return nothing
         found = nothing
         for name in readdir(current; join = false)
             if Unicode.normalize(String(name), :NFC) == piece
@@ -495,8 +501,9 @@ end
 
 A regular file is the SHA-256 of its bytes. A symlink is the SHA-256 of
 its link text and is not followed. `sha256sum -c` follows a symlink and
-opens manifest paths literally, so it does not check these lines and can
-miss an NFD directory entry that matches an NFC manifest path.
+normally reports `FAILED`, and it opens paths literally so it can miss
+an NFD directory entry that matches an NFC manifest path. Use this
+function to verify both.
 """
 function check_input_manifest(manifest::AbstractString, root::AbstractString)
     for raw in eachsplit(read(manifest, String), '\n'; keepempty = false)
