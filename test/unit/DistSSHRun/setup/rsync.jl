@@ -22,15 +22,17 @@ using Test
     end
 
     @testset "tar pull refuses an escaping symlink" begin
-        outside = ""
         mktempdir() do dest
             outside = joinpath(dirname(dest), "tar-pull-secret")
             write(outside, "nope\n")
             write(joinpath(dest, "a.txt"), "a\n")
             symlink(outside, joinpath(dest, "link"))
-            @test_throws ArgumentError DistSSHRun._finish_extracted_tree!(dest)
+            try
+                @test_throws ArgumentError DistSSHRun._finish_extracted_tree!(dest)
+            finally
+                rm(outside; force = true)
+            end
         end
-        rm(outside; force = true)
         mktempdir() do dest
             write(joinpath(dest, "a.txt"), "a\n")
             @test DistSSHRun._finish_extracted_tree!(dest) === nothing
