@@ -174,7 +174,11 @@ function parse_setup_args(args::Vector{String})
         elseif arg == "--repo"
             repo_url = String(strip(cli_take_value!(c, arg)))
         elseif arg in ("--remote-path", "--remote-dir")
-            remote_path_override = String(strip(cli_take_value!(c, arg)))
+            raw = String(cli_take_value!(c, arg))
+            any(c -> c == '\n' || c == '\r' || c == '\0' || iscntrl(c), raw) && throw(
+                ArgumentError("--remote-path cannot contain a control character"),
+            )
+            remote_path_override = strip(raw)
         elseif arg == "--allow-external-symlinks"
             allow_external_symlinks = true
             cli_consume!(c)
