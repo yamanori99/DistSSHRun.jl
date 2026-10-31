@@ -112,7 +112,9 @@ function _ship_input_covers(rel::AbstractString, inputs::Vector{ShipInput})::Boo
 end
 
 function _canonical_ship_input_path(path::AbstractString)::String
-    raw = replace(strip(String(path)), '\\' => '/')
+    raw = strip(String(path))
+    occursin('\\', raw) &&
+        throw(ArgumentError("inputs.toml: path contains a backslash: $(repr(path))"))
     any(iscntrl, raw) &&
         throw(ArgumentError("inputs.toml: path contains a control character: $(repr(path))"))
     startswith(raw, "/") &&
@@ -156,7 +158,11 @@ function _remote_input_probe_sh(abs_path::AbstractString, do_hash::Bool)::String
     walk = do_hash ? _remote_input_hash_walk() : _remote_input_stat_walk()
     return """
         set -eu
-        if [ ! -e $q ]; then printf '%s\\n' missing; exit 2; fi
+        if [ ! -e $q ] && [ ! -L $q ]; then printf '%s\\n' missing; exit 2; fi
+        if [ -L $q ]; then
+          _f=$q
+        $(_remote_input_readlink_sh())
+        fi
         _dsk_hex() {
           _line=
           if command -v sha256sum >/dev/null 2>&1; then
@@ -190,7 +196,19 @@ function _remote_input_probe_sh(abs_path::AbstractString, do_hash::Bool)::String
           : > "\$_rows"
         $walk
         elif [ -f $q ]; then
-        $(do_hash ? "  _sum=\$(_dsk_hex $q) || exit 1\n  printf '%s\\n' \"\$_sum\"" : "  _dsk_stat $q || exit 1")
+        $(
+        if do_hash
+            """
+              if [ -L $q ]; then
+                printf 'link\\t%s\\t.\\n' "\$_target"
+              else
+            $(_remote_input_file_branch(q, true))
+              fi
+                    """
+        else
+            _remote_input_file_branch(q, false)
+        end
+    )
         else
           printf '%s\\n' 'not a file or directory'
           exit 2
@@ -198,21 +216,80 @@ function _remote_input_probe_sh(abs_path::AbstractString, do_hash::Bool)::String
         """
 end
 
+function _remote_input_file_branch(q::AbstractString, do_hash::Bool)::String
+    if do_hash
+        return """
+          _st=\$(_dsk_stat $q) || exit 1
+          _size=\$(printf '%s\\n' "\$_st" | awk '{ print \$1; exit }')
+          [ -n "\$_size" ] || exit 1
+          _sum=\$(_dsk_hex $q) || exit 1
+          printf 'PROG %s %s\\n' "\$_size" "\$_size" >&2
+          printf 'file\\t%s\\t%s\\t.\\n' "\$_size" "\$_sum"
+        """
+    end
+    return """
+      _st=\$(_dsk_stat $q) || exit 1
+      _size=\$(printf '%s\\n' "\$_st" | awk '{ print \$1; exit }')
+      _mtime=\$(printf '%s\\n' "\$_st" | awk '{ print \$2; exit }')
+      [ -n "\$_size" ] && [ -n "\$_mtime" ] || exit 1
+      _one=\$(mktemp)
+      trap 'rm -f "\$_one"' EXIT
+      printf '.\\tfile\\t%s\\t%s\\n' "\$_size" "\$_mtime" > "\$_one"
+      _sum=\$(_dsk_hex "\$_one") || exit 1
+      printf 'files=1 bytes=%s newest=%s digest=%s\\n' "\$_size" "\$_mtime" "\$_sum"
+    """
+end
+
+"""`readlink` into `\$_target`. A tab or newline in the link text is refused.
+
+Command substitution drops trailing newlines from `readlink`. Compare the
+byte length to `stat` on the symlink; a shorter value means a trailing
+newline was stripped. An embedded newline still fails the awk check.
+"""
+function _remote_input_readlink_sh()::String
+    return """
+          _linklen=\$(stat -c '%s' "\$_f" 2>/dev/null || stat -f '%z' "\$_f") || exit 1
+          _target=\$(readlink "\$_f") || exit 1
+          _got=\$(printf '%s' "\$_target" | wc -c | tr -d ' ')
+          [ "\$_got" -eq "\$_linklen" ] || {
+            printf '%s\\n' 'input link target contains a newline'
+            exit 2
+          }
+          printf '%s' "\$_target" | awk 'BEGIN { bad = 0 } index(\$0, "\\t") { bad = 1 } END { if (NR > 1 || bad) exit 2 }' || {
+            printf '%s\\n' 'input link target contains a newline'
+            exit 2
+          }
+    """
+end
+
 function _remote_input_hash_walk()::String
     return """
+      _total=0
+      while IFS= read -r _f; do
+        [ -n "\$_f" ] || continue
+        [ -L "\$_f" ] && continue
+        _st=\$(_dsk_stat "\$_f") || exit 1
+        _size=\$(printf '%s\\n' "\$_st" | awk '{ print \$1; exit }')
+        [ -n "\$_size" ] || exit 1
+        _total=\$((_total + _size))
+      done < "\$_sorted"
+      _done=0
       while IFS= read -r _f; do
         [ -n "\$_f" ] || continue
         _rel=\${_f#./}
         if [ -L "\$_f" ]; then
-          _target=\$(readlink "\$_f") || exit 1
-          printf '%s\\tlink\\t%s\\n' "\$_rel" "\$_target" >> "\$_rows" || exit 1
+        $(_remote_input_readlink_sh())
+          printf 'link\\t%s\\t%s\\n' "\$_target" "\$_rel"
         else
+          _st=\$(_dsk_stat "\$_f") || exit 1
+          _size=\$(printf '%s\\n' "\$_st" | awk '{ print \$1; exit }')
+          [ -n "\$_size" ] || exit 1
           _hex=\$(_dsk_hex "\$_f") || exit 1
-          printf '%s\\tfile\\t%s\\n' "\$_rel" "\$_hex" >> "\$_rows" || exit 1
+          _done=\$((_done + _size))
+          printf 'file\\t%s\\t%s\\t%s\\n' "\$_size" "\$_hex" "\$_rel"
+          printf 'PROG %s %s\\n' "\$_done" "\$_total" >&2
         fi
       done < "\$_sorted"
-      _sum=\$(_dsk_hex "\$_rows") || exit 1
-      printf '%s\\n' "\$_sum"
     """
 end
 
@@ -229,7 +306,7 @@ function _remote_input_stat_walk()::String
         _mtime=\$(printf '%s\\n' "\$_st" | awk '{ print \$2; exit }')
         [ -n "\$_size" ] && [ -n "\$_mtime" ] || exit 1
         if [ -L "\$_f" ]; then
-          _target=\$(readlink "\$_f") || exit 1
+        $(_remote_input_readlink_sh())
           printf '%s\\tlink\\t%s\\t%s\\t%s\\n' "\$_rel" "\$_size" "\$_mtime" "\$_target" >> "\$_rows" || exit 1
         else
           _files=\$((_files + 1))
@@ -245,9 +322,66 @@ end
 
 const _INPUT_MANIFEST_LOCK = ReentrantLock()
 
-function _write_input_manifest!(run_dir::AbstractString, rows::AbstractVector{<:AbstractDict})
+function _format_bytes(n::Integer)::String
+    n < 1024 && return string(n, " B")
+    x = Float64(n)
+    unit = "KB"
+    x /= 1024
+    if x >= 1024
+        x /= 1024
+        unit = "MB"
+    end
+    if x >= 1024
+        x /= 1024
+        unit = "GB"
+    end
+    if x >= 1024
+        x /= 1024
+        unit = "TB"
+    end
+    return string(round(x; digits = 1), " ", unit)
+end
+
+function _format_seconds(t::Real)::String
+    secs = max(0.0, Float64(t))
+    secs >= 10 && return string(round(Int, secs), " s")
+    return string(round(secs; digits = 1), " s")
+end
+
+function _input_summary_line(name::AbstractString, nbytes::Integer, elapsed::Real, stat::Bool)::String
+    extra = stat ? " (stat)" : ""
+    return "hashed $name: $(_format_bytes(nbytes)) in $(_format_seconds(elapsed))$extra"
+end
+
+"""Manifest path for one `(name, host)` pair.
+
+The file name is the SHA-256 of `ncodeunits(name):name\\nhost`, so
+`(a--b, c)` and `(a, b--c)` do not share a path.
+"""
+function _input_manifest_rel(name::AbstractString, host::AbstractString)::String
+    pair = string(ncodeunits(String(name)), ':', name, '\n', host)
+    return "inputs/" * _sha256_hex(codeunits(pair)) * ".manifest"
+end
+
+"""`inputs/records.toml` rows, or `nothing` when this run has no declared inputs."""
+function _read_declared_input_rows(run_dir::AbstractString)
+    file = joinpath(run_dir, "inputs", "records.toml")
+    isfile(file) || return nothing
+    raw = try
+        TOML.parsefile(file)
+    catch
+        return nothing
+    end
+    raw isa AbstractDict || return nothing
+    rows = get(raw, "inputs", nothing)
+    return rows isa AbstractVector ? rows : nothing
+end
+
+function _store_input_rows!(run_dir::AbstractString, rows::AbstractVector{<:AbstractDict})
     lock(_INPUT_MANIFEST_LOCK) do
-        dest = joinpath(run_dir, "inputs.toml")
+        dir = joinpath(run_dir, "inputs")
+        mkpath(dir)
+        dest = joinpath(dir, "records.toml")
         existing = if isfile(dest)
             parsed = TOML.parsefile(dest)
             parsed isa AbstractDict ? get(parsed, "inputs", Any[]) : Any[]
@@ -256,7 +390,18 @@ function _write_input_manifest!(run_dir::AbstractString, rows::AbstractVector{<:
         end
         existing isa AbstractVector || (existing = Any[])
         for row in rows
-            push!(existing, Dict{String, Any}(String(k) => v for (k, v) in pairs(row)))
+            stored = Dict{String, Any}(String(k) => v for (k, v) in pairs(row))
+            name = get(stored, "name", nothing)
+            host = get(stored, "host", nothing)
+            filter!(
+                old -> !(
+                    old isa AbstractDict &&
+                        get(old, "name", nothing) == name &&
+                        get(old, "host", nothing) == host
+                ),
+                existing,
+            )
+            push!(existing, stored)
         end
         data = Dict{String, Any}("schema" => 1, "inputs" => existing)
         tmp = dest * ".tmp"
@@ -266,6 +411,277 @@ function _write_input_manifest!(run_dir::AbstractString, rows::AbstractVector{<:
         mv(tmp, dest; force = true)
     end
     return nothing
+end
+
+function _merge_inputs_into_run_toml!(run_dir::AbstractString)
+    raw = read_kit_run_toml(run_dir)
+    raw === nothing && return nothing
+    _kit_run_toml_owned(raw) || return nothing
+    rows = _read_declared_input_rows(run_dir)
+    rows === nothing && return nothing
+    data = Dict{String, Any}(String(k) => v for (k, v) in raw)
+    data["inputs"] = rows
+    dest = kit_run_toml_path(canonical_local_path(run_dir))
+    tmp = dest * ".tmp"
+    open(tmp, "w") do io
+        TOML.print(io, data)
+    end
+    mv(tmp, dest; force = true)
+    return nothing
+end
+
+"""Append `rows` and copy them into `run.toml`. One lock covers both files."""
+function _commit_declared_input_rows!(
+        run_dir::AbstractString,
+        rows::AbstractVector{<:AbstractDict},
+    )
+    lock(_INPUT_MANIFEST_LOCK) do
+        _store_input_rows!(run_dir, rows)
+        _merge_inputs_into_run_toml!(run_dir)
+    end
+    return nothing
+end
+
+function _nfc_input_rel(rel::AbstractString)::String
+    raw = String(rel)
+    occursin('\\', raw) && throw(ArgumentError("input path contains a backslash"))
+    raw = Unicode.normalize(raw, :NFC)
+    any(iscntrl, raw) && throw(ArgumentError("input path contains a control character"))
+    parts = String[]
+    for piece in split(raw, '/'; keepempty = false)
+        piece == "." && continue
+        piece == ".." && throw(ArgumentError("input path escapes the declared root"))
+        push!(parts, piece)
+    end
+    return isempty(parts) ? "." : join(parts, "/")
+end
+
+function _manifest_line(hex::AbstractString, path::AbstractString)::String
+    occursin('\n', path) && throw(ArgumentError("input path contains a newline"))
+    return lowercase(String(hex)) * " *" * path
+end
+
+function _input_manifest_entry(line::AbstractString)::Tuple{String, String}
+    m = match(r"^([0-9a-fA-F]{64}) \*(.*)$", line)
+    m === nothing && throw(ArgumentError("input manifest line is not sha256sum form: $(repr(line))"))
+    rel = _nfc_input_rel(_regex_field(m, 2))
+    rel == "." && throw(ArgumentError("input manifest path is empty"))
+    return lowercase(_regex_field(m, 1)), rel
+end
+
+"""Resolve `rel` under `root` by matching each path component as NFC.
+
+The manifest stores NFC names. A filesystem that keeps NFD still verifies.
+"""
+function _resolve_nfc_under(root::AbstractString, rel::AbstractString)
+    current = String(root)
+    for piece in split(rel, '/'; keepempty = false)
+        piece == "." && continue
+        piece == ".." && throw(ArgumentError("input path escapes the declared root"))
+        literal = joinpath(current, piece)
+        if ispath(literal) || islink(literal)
+            current = literal
+            continue
+        end
+        isdir(current) || return nothing
+        found = nothing
+        for name in readdir(current; join = false)
+            if Unicode.normalize(String(name), :NFC) == piece
+                found = String(name)
+                break
+            end
+        end
+        found === nothing && return nothing
+        current = joinpath(current, found)
+    end
+    return current
+end
+
+"""Check `manifest` against `root`.
+
+A regular file is the SHA-256 of its bytes. A symlink is the SHA-256 of
+its link text and is not followed. `sha256sum -c` follows a symlink and
+normally reports `FAILED`, and it opens paths literally so it can miss
+an NFD directory entry that matches an NFC manifest path. Use this
+function to verify both.
+"""
+function check_input_manifest(manifest::AbstractString, root::AbstractString)
+    for raw in eachsplit(read(manifest, String), '\n'; keepempty = false)
+        hex, rel = _input_manifest_entry(String(raw))
+        full = _resolve_nfc_under(root, rel)
+        full === nothing && throw(ArgumentError("input manifest path is missing: $rel"))
+        got = if islink(full)
+            _sha256_hex(codeunits(readlink(full)))
+        elseif isfile(full)
+            _sha256_hex(read(full))
+        else
+            throw(ArgumentError("input manifest path is missing: $rel"))
+        end
+        got == hex || throw(ArgumentError("input manifest mismatch: $rel"))
+    end
+    return nothing
+end
+
+function _regex_field(m::RegexMatch, i::Int)::String
+    cap = m.captures[i]
+    cap isa AbstractString || throw(ArgumentError("regex capture $i was empty"))
+    return String(cap)
+end
+
+function _input_row_from_probe(
+        name::AbstractString,
+        path::AbstractString,
+        host::AbstractString,
+        do_hash::Bool,
+        output::AbstractString,
+        run_dir::AbstractString,
+    )::Dict{String, Any}
+    hashed_at = Dates.format(Dates.now(Dates.UTC), "yyyy-mm-ddTHH:MM:SS") * "Z"
+    if !do_hash
+        m = match(r"^files=(\d+) bytes=(\d+) newest=(\d+) digest=([0-9a-fA-F]{64})$", strip(output))
+        m === nothing && throw(ArgumentError("input $name: stat fingerprint was not a single line"))
+        return Dict{String, Any}(
+            "name" => String(name),
+            "path" => String(path),
+            "host" => String(host),
+            "algorithm" => "stat",
+            "files" => parse(Int, _regex_field(m, 1)),
+            "bytes" => parse(Int, _regex_field(m, 2)),
+            "newest_mtime" => parse(Int, _regex_field(m, 3)),
+            "stat_digest" => lowercase(_regex_field(m, 4)),
+            "verification" => "stat",
+            "hashed_at" => hashed_at,
+        )
+    end
+    entries = Tuple{String, String, Int, Bool}[]
+    for raw in eachsplit(output, '\n'; keepempty = false)
+        line = String(raw)
+        parts = split(line, '\t')
+        kind = parts[1]
+        if kind == "file"
+            length(parts) == 4 || throw(ArgumentError("input $name: bad file record"))
+            sz = tryparse(Int, String(parts[2]))
+            sz === nothing && throw(ArgumentError("input $name: bad file size"))
+            hex = String(parts[3])
+            occursin(r"^[0-9a-fA-F]{64}$", hex) || throw(ArgumentError("input $name: bad sha256"))
+            rel = _nfc_input_rel(String(parts[4]))
+            if rel == "."
+                rel = _nfc_input_rel(basename(String(path)))
+                rel == "." && throw(ArgumentError("input $name: file record has no name"))
+            end
+            push!(entries, (rel, lowercase(hex), sz, false))
+        elseif kind == "link"
+            length(parts) == 3 || throw(ArgumentError("input $name: bad link record"))
+            target = String(parts[2])
+            hex = _sha256_hex(codeunits(target))
+            rel = _nfc_input_rel(String(parts[3]))
+            if rel == "."
+                rel = _nfc_input_rel(basename(String(path)))
+                rel == "." && throw(ArgumentError("input $name: link record has no name"))
+            end
+            push!(entries, (rel, hex, 0, true))
+        else
+            throw(ArgumentError("input $name: unknown record $(repr(kind))"))
+        end
+    end
+    sort!(entries; by = first)
+    seen = Set{String}()
+    io = IOBuffer()
+    nbytes = 0
+    nfiles = 0
+    for (rel, hex, sz, islink) in entries
+        rel in seen && throw(ArgumentError("input $name: duplicate path $rel"))
+        push!(seen, rel)
+        println(io, _manifest_line(hex, rel))
+        islink && continue
+        nbytes += sz
+        nfiles += 1
+    end
+    body = take!(io)
+    relmanifest = _input_manifest_rel(name, host)
+    dest = joinpath(run_dir, relmanifest)
+    mkpath(dirname(dest))
+    tmp = dest * ".tmp"
+    open(tmp, "w") do file
+        write(file, body)
+    end
+    mv(tmp, dest; force = true)
+    return Dict{String, Any}(
+        "name" => String(name),
+        "path" => String(path),
+        "host" => String(host),
+        "algorithm" => "sha256-manifest-v1",
+        "content_hash" => _sha256_hex(body),
+        "files" => nfiles,
+        "bytes" => nbytes,
+        "verification" => "sha256",
+        "hashed_at" => hashed_at,
+        "manifest" => relmanifest,
+    )
+end
+
+function _show_input_progress!(name::AbstractString, line::AbstractString, t0::Float64, last_pct::Ref{Int})
+    m = match(r"^PROG (\d+) (\d+)$", line)
+    m === nothing && return nothing
+    done = tryparse(Int, _regex_field(m, 1))
+    total = tryparse(Int, _regex_field(m, 2))
+    (done === nothing || total === nothing) && return nothing
+    total <= 0 && return nothing
+    pct = min(100, fld(100 * done, total))
+    pct == 100 && return nothing
+    pct < last_pct[] + 10 && return nothing
+    last_pct[] = pct
+    elapsed = time() - t0
+    rate = elapsed > 0 ? done / elapsed : 0.0
+    eta = rate > 0 ? (total - done) / rate : 0.0
+    kit_println(
+        "hashed $name: $(_format_bytes(done)) / $(_format_bytes(total)), $(_format_seconds(eta)) left",
+    )
+    return nothing
+end
+
+function _remote_script_output(
+        on_line::Function,
+        host::AbstractString,
+        script::AbstractString,
+    )::Tuple{Int, String, String}
+    _ensure_posix_login_shell!(String(host))
+    out_pipe = Pipe()
+    err_pipe = Pipe()
+    cmd = _host_sync_remote_shell_cmd(String(host), script)
+    proc = try
+        run(pipeline(ignorestatus(cmd); stdout = out_pipe, stderr = err_pipe); wait = false)
+    catch e
+        _rethrow_missing_host_tool(e)
+        rethrow()
+    end
+    close(out_pipe.in)
+    close(err_pipe.in)
+    out_task = @async String(read(out_pipe))
+    err_task = @async begin
+        text = IOBuffer()
+        for line in eachline(err_pipe)
+            println(text, line)
+            on_line(String(line))
+        end
+        String(take!(text))
+    end
+    wait(proc)
+    out = fetch(out_task)
+    err = fetch(err_task)
+    code = Int(something(proc.exitcode, 1))
+    if code == 255
+        throw(
+            ArgumentError(
+                summarize_ssh_error(
+                    Base.ProcessFailedException(Base.Process[proc]);
+                    stderr = err,
+                ),
+            ),
+        )
+    end
+    code == 0 || _throw_if_nonposix_shell(String(host), code, err)
+    return code, out, err
 end
 
 function _record_remote_inputs!(
@@ -284,22 +700,26 @@ function _record_remote_inputs!(
     rows = Dict{String, Any}[]
     for input in inputs
         remote = _posix_join(abs_root, input.path)
-        code, out = _remote_shell_status(String(host), _remote_input_probe_sh(remote, input.hash))
+        t0 = time()
+        last_pct = Ref(-1)
+        code, out, err = _remote_script_output(
+            String(host),
+            _remote_input_probe_sh(remote, input.hash),
+        ) do line
+            input.hash && _show_input_progress!(input.name, line, t0, last_pct)
+            return nothing
+        end
+        elapsed = time() - t0
         code == 0 || throw(
-            ArgumentError("$(host): input $(input.name) ($(remote)): $(strip(out))"),
+            ArgumentError("$(host): input $(input.name) ($(remote)): $(strip(err * out))"),
         )
-        push!(
-            rows,
-            Dict{String, Any}(
-                "name" => input.name,
-                "path" => input.path,
-                "host" => String(host),
-                "kind" => input.hash ? "sha256" : "stat",
-                "value" => strip(out),
-            ),
+        row = _input_row_from_probe(
+            input.name, input.path, host, input.hash, out, run_dir,
         )
+        push!(rows, row)
+        kit_println(_input_summary_line(input.name, Int(row["bytes"]), elapsed, !input.hash))
     end
-    _write_input_manifest!(run_dir, rows)
+    _commit_declared_input_rows!(run_dir, rows)
     return nothing
 end
 
@@ -776,6 +1196,8 @@ function ship_project_to_hosts!(
         julia = nothing,
     )::ShipTreeResult
     isempty(hosts) && throw(ArgumentError("ship-tree: no hosts"))
+    length(unique(hosts)) == length(hosts) ||
+        throw(ArgumentError("ship-tree: hosts must be unique"))
     rid = run_id === nothing ? allocate_remote_run_id() : validate_run_id(run_id)
     src_logical = _posix_join(String(remote_root), "runs", rid, "src")
     warn_project_sshflags(canonical_local_path(local_root))

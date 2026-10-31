@@ -36,12 +36,27 @@ the copied tree is refused. Cache pull still needs
 
 `setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` extract the
 git file list into `<remote_root>/runs/<run_id>/src/` (`run_id` is UTC plus
-6 hex). Later `--instantiate` / `--check` / `go` use the latest `src/` when
+6 hex). A repeated host is refused. Later `--instantiate` / `--check` / `go` use the latest `src/` when
 the remote root has no `Project.toml` (or pass `--remote-path` to that tree).
 `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
 Provenance and `run.toml` use `schema = 1` and `writer = "DistSSHRun x.y.z"`.
-Unknown keys are ignored when reading. `[[inputs]]` / `outputs` are reserved
-and not written.
+Unknown keys are ignored when reading. A ship that sees
+`.distsshkit/inputs.toml` writes those inputs into this run's `run.toml`.
+With hashing on, it also writes a manifest under `inputs/<sha256>.manifest`.
+The file name is the SHA-256 of `ncodeunits(name):name`, a newline, and the
+host. Each line is `hex *path`. A regular file is the SHA-256 of its bytes.
+A symlink is the SHA-256 of its link text and is not followed.
+`sha256sum -c` follows the symlink and normally reports `FAILED`; use
+`check_input_manifest` to verify symlink rows. A declared path that is a
+symlink to a file is recorded as that link, not as the target bytes.
+A link target with a tab or newline is refused, including when the
+declared path itself is a symlink. A path with a backslash is refused.
+`check_input_manifest(manifest, root)` checks both and resolves each
+path component by NFC form when the filesystem kept NFD. `sha256sum -c`
+opens paths literally, so use `check_input_manifest` for those trees.
+`hash = false` records only stat fields in `run.toml` and does not write
+a manifest. A later ship into the same run directory replaces the row
+for the same input name and host. `outputs` is reserved and not written.
 
 `terminate!` and `terminate_run!` record how the stop ended. `KitRunResult.stop`
 is `:within_grace` when the process exited after one SIGINT and before
