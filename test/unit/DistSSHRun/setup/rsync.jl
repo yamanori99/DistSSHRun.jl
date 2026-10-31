@@ -103,6 +103,21 @@ using Test
             @test "a.txt" in rels
             @test "link" in rels
         end
+        mktempdir() do tmp
+            src = joinpath(tmp, "src")
+            dest = joinpath(tmp, "dest")
+            mkpath(joinpath(src, "sub"))
+            write(joinpath(src, "sub", "file"), "secret\n")
+            mkpath(dest)
+            outside = mktempdir()
+            try
+                symlink(outside, joinpath(dest, "sub"))
+                @test_throws ArgumentError DistSSHRun._copy_pulled_rels!(src, dest, ["sub/file"])
+                @test !isfile(joinpath(outside, "file"))
+            finally
+                rm(outside; force = true, recursive = true)
+            end
+        end
     end
 
     @testset "filtered tar archives only requested paths" begin
@@ -114,13 +129,15 @@ using Test
             write(joinpath(src, "skip.txt"), "no\n")
             mkpath(joinpath(src, "empty"))
             blob = joinpath(tmp, "out.tar")
-            script = DistSSHRun._remote_tar_create_sh(julia, src; filtered = true)
-            open(blob, "w") do io
-                run(pipeline(`sh -c $script`; stdin = IOBuffer("keep/a.txt\0empty\0"), stdout = io))
-            end
             dest = joinpath(tmp, "dest")
-            mkpath(dest)
-            run(`$julia --startup-file=no -e "using Tar; Tar.extract(ARGS[1], ARGS[2])" $blob $dest`)
+            script = DistSSHRun._remote_tar_create_sh(julia, src; filtered = true)
+            withenv("JULIA_LOAD_PATH" => _child_load_path()) do
+                open(blob, "w") do io
+                    run(pipeline(`sh -c $script`; stdin = IOBuffer("keep/a.txt\0empty\0"), stdout = io))
+                end
+                mkpath(dest)
+                run(`$julia --startup-file=no -e "using Tar; Tar.extract(ARGS[1], ARGS[2])" $blob $dest`)
+            end
             @test read(joinpath(dest, "keep", "a.txt"), String) == "a\n"
             @test isdir(joinpath(dest, "empty"))
             @test !ispath(joinpath(dest, "skip.txt"))

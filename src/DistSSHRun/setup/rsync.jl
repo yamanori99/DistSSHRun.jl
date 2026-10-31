@@ -40,14 +40,17 @@ wanted = Set{String}()
 for part in split(read(stdin, String), '\\0')
     isempty(part) || push!(wanted, part)
 end
+parents = Set{String}()
+for w in wanted
+    parts = split(w, '/')
+    for i in 1:(length(parts) - 1)
+        push!(parents, join(parts[1:i], '/'))
+    end
+end
 function keep(path)
     rel = replace(relpath(path, root), '\\\\' => '/')
     rel == "." && return true
-    rel in wanted && return true
-    for w in wanted
-        startswith(w, rel * "/") && return true
-    end
-    return false
+    return rel in wanted || rel in parents
 end
 Tar.create(keep, root, stdout)
 """
@@ -184,6 +187,23 @@ function _copy_collected_path!(src::AbstractString, dest::AbstractString)
     return nothing
 end
 
+"""Copy extracted relative paths into `local_root`. A symlink parent that leaves the root is refused."""
+function _copy_pulled_rels!(
+        tmp::AbstractString,
+        local_root::AbstractString,
+        rels::AbstractVector{<:AbstractString},
+    )
+    for rel in rels
+        src = joinpath(tmp, rel)
+        ispath(src) || islink(src) || continue
+        _collect_dest_escapes_root(local_root, rel) && throw(
+            ArgumentError("collect path escapes $local_root: $rel"),
+        )
+        _copy_collected_path!(src, joinpath(local_root, rel))
+    end
+    return nothing
+end
+
 function _extract_remote_tar!(
         host::AbstractString,
         remote_dir::AbstractString,
@@ -246,14 +266,7 @@ function _pull_tar_rels!(
             rels = rels,
             allow_external_symlinks = allow_external_symlinks,
         )
-        for rel in rels
-            src = joinpath(tmp, rel)
-            ispath(src) || islink(src) || continue
-            _collect_dest_escapes_root(local_root, rel) && throw(
-                ArgumentError("collect path escapes $local_root: $rel"),
-            )
-            _copy_collected_path!(src, joinpath(local_root, rel))
-        end
+        _copy_pulled_rels!(tmp, local_root, rels)
     finally
         rm(tmp; force = true, recursive = true)
     end
@@ -274,9 +287,7 @@ function _pull_tar_tree!(
             julia_bin = julia_bin,
             allow_external_symlinks = allow_external_symlinks,
         )
-        for rel in _extracted_rel_paths(tmp)
-            _copy_collected_path!(joinpath(tmp, rel), joinpath(local_root, rel))
-        end
+        _copy_pulled_rels!(tmp, local_root, _extracted_rel_paths(tmp))
     finally
         rm(tmp; force = true, recursive = true)
     end
