@@ -254,7 +254,8 @@ jobs:
   test-1-14-pre:
     name: DistSSHRun (1.14-pre, ubuntu-latest, x64)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Same suite as Test. 20 minutes cancelled a run after the tests passed.
+    timeout-minutes: 30
     continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
