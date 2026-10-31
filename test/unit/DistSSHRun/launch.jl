@@ -21,6 +21,159 @@ using TOML
     end
     @test env["JULIA_PROJECT"] == "/tmp/job"
     @test haskey(env, "JULIA_NUM_THREADS")
+    @test !haskey(env, "OPENBLAS_NUM_THREADS")
+    withenv("DISTSSHKIT_BLAS_THREADS" => "1") do
+        pinned = Dict(DistSSHRun.worker_env_pairs("/tmp/job"))
+        @test pinned["OPENBLAS_NUM_THREADS"] == "1"
+        @test pinned["OMP_NUM_THREADS"] == "1"
+    end
+    DistSSHRun.reset_worker_seeds!()
+    a, b = withenv("DISTSSHKIT_JOB_SEED" => "11") do
+        aa = Dict(DistSSHRun.worker_env_pairs("/tmp/job"; rank = DistSSHRun.take_worker_rank()))
+        bb = Dict(DistSSHRun.worker_env_pairs("/tmp/job"; rank = DistSSHRun.take_worker_rank()))
+        aa, bb
+    end
+    @test a["DISTSSHKIT_WORKER_RANK"] == "1"
+    @test b["DISTSSHKIT_WORKER_RANK"] == "2"
+    @test a["DISTSSHKIT_WORKER_SEED"] != b["DISTSSHKIT_WORKER_SEED"]
+    @test DistSSHRun.worker_seed(11, 1) == parse(UInt64, a["DISTSSHKIT_WORKER_SEED"])
+    @test DistSSHRun.worker_seed(11, 1) == DistSSHRun.worker_seed(11, 1)
+    built = DistSSHRun._source_from_user(Dict{String, Any}("commit" => "abc", "nope" => "x"))
+    @test built["commit"] == "abc"
+    @test !haskey(built, "nope")
+    DistSSHRun.reset_worker_seeds!()
+    @test DistSSHRun.worker_pmap(identity, [10, 20]) == [10, 20]
+    @test DistSSHRun._ITEM_MAP[(1, 1)] == 0
+    @test DistSSHRun._ITEM_MAP[(1, 2)] == 0
+    withenv("DISTSSHKIT_WORKER_RANK" => "4") do
+        @test DistSSHRun.worker_pmap(identity, [10]) == [10]
+    end
+    @test DistSSHRun._ITEM_MAP[(1, 1)] == 0
+    @test DistSSHRun._ITEM_MAP[(2, 1)] == 4
+    items_only = DistSSHRun._seed_provenance()
+    @test items_only isa AbstractDict
+    items_only isa AbstractDict || error("expected item provenance")
+    @test !haskey(items_only, "job")
+    @test !haskey(items_only, "workers")
+    item_rows = items_only["items"]
+    @test item_rows isa Vector
+    item_rows isa Vector || error("expected seed items")
+    first_item = item_rows[1]
+    @test first_item isa AbstractDict
+    first_item isa AbstractDict || error("expected a seed item")
+    @test first_item["call"] == 1
+    @test first_item["item"] == 1
+    @test first_item["rank"] == 0
+    DistSSHRun.reset_worker_seeds!()
+    withenv("DISTSSHKIT_JOB_SEED" => "11") do
+        DistSSHRun.job_seed()
+        DistSSHRun.take_worker_rank()
+    end
+    seeds = DistSSHRun._seed_provenance()
+    @test seeds isa AbstractDict
+    seeds isa AbstractDict || error("expected seed provenance")
+    @test seeds["job"] == "11"
+    workers = seeds["workers"]
+    @test workers isa Vector
+    workers isa Vector || error("expected seed workers")
+    first_worker = workers[1]
+    @test first_worker isa AbstractDict
+    first_worker isa AbstractDict || error("expected a worker seed")
+    @test first_worker["rank"] == 1
+    slot = mktempdir()
+    try
+        snap_dir = joinpath(slot, ".distsshkit")
+        mkpath(snap_dir)
+        open(joinpath(snap_dir, "provenance-slot.toml"), "w") do io
+            TOML.print(
+                io, Dict(
+                    "version" => "1.13.0",
+                    "commit" => "abc",
+                    "cpu" => "cpu",
+                    "machine" => "aarch64",
+                    "kernel" => "darwin",
+                    "nthreads" => "1",
+                    "blas" => "openblas",
+                    "blas_threads" => "1",
+                    "hostname" => "slot",
+                )
+            )
+        end
+        DistSSHRun.reset_worker_seeds!()
+        withenv("DISTRIBUTED_OUTPUT_DIR" => slot, "DISTSSHKIT_WORKER_RANK" => "3") do
+            @test DistSSHRun.worker_pmap(identity, [7]) == [7]
+            DistSSHRun._flush_go_slot_pmap_items!()
+        end
+        DistSSHRun.reset_worker_seeds!()
+        DistSSHRun.note_go_slot_provenance!("lab", slot)
+        slot_seeds = DistSSHRun._seed_provenance()
+        @test slot_seeds isa AbstractDict
+        slot_seeds isa AbstractDict || error("expected slot seed provenance")
+        slot_rows = slot_seeds["items"]
+        @test slot_rows isa Vector
+        slot_rows isa Vector || error("expected slot items")
+        slot_row = slot_rows[1]
+        @test slot_row isa AbstractDict
+        slot_row isa AbstractDict || error("expected a slot item")
+        @test slot_row["call"] == 1
+        @test slot_row["item"] == 1
+        @test slot_row["rank"] == 3
+        @test slot_row["slot"] == "child:lab/" * basename(slot)
+        snap = DistSSHRun._read_go_slot_snapshot(joinpath(snap_dir, "provenance-slot.toml"))
+        @test snap["version"] == "1.13.0"
+        @test !haskey(snap, "pmap_items")
+    finally
+        DistSSHRun._reset_run_provenance!(slot)
+        DistSSHRun._PROVENANCE_AT_START[] = false
+        DistSSHRun._PROVENANCE_GIT_TOOL[] = nothing
+        rm(slot; force = true, recursive = true)
+    end
+    mktempdir() do tmp
+        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        write(joinpath(tmp, "CondaPkg.toml"), "[deps]\n")
+        prov = DistSSHRun._project_provenance(tmp)
+        @test haskey(prov, "locks")
+        @test haskey(prov["locks"], "CondaPkg.toml")
+        whole = DistSSHRun.assemble_provenance(tmp)
+        git = Sys.which("git")
+        if git === nothing
+            @test !haskey(whole, "tools")
+        else
+            @test haskey(whole, "tools")
+            tools = whole["tools"]
+            @test tools isa Vector
+            tools isa Vector || error("expected tools")
+            row = nothing
+            for tool in tools
+                tool isa AbstractDict || continue
+                get(tool, "name", "") == "git" || continue
+                row = tool
+            end
+            @test row isa AbstractDict
+            row isa AbstractDict || error("expected git tool")
+            @test row["path"] == git
+            @test row["outside_manifest"] === true
+        end
+        try
+            DistSSHRun._reset_run_provenance!(tmp)
+            DistSSHRun._PROVENANCE_GIT_TOOL[] = Dict{String, Any}(
+                "name" => "git",
+                "path" => "/recorded/git",
+                "outside_manifest" => true,
+            )
+            held = DistSSHRun.assemble_provenance(tmp)
+            held_tools = held["tools"]
+            @test held_tools isa Vector
+            held_tools isa Vector || error("expected snapshotted tools")
+            held_row = held_tools[1]
+            @test held_row isa AbstractDict
+            held_row isa AbstractDict || error("expected snapshotted git")
+            @test held_row["path"] == "/recorded/git"
+        finally
+            DistSSHRun._PROVENANCE_AT_START[] = false
+            DistSSHRun._PROVENANCE_GIT_TOOL[] = nothing
+        end
+    end
 
     names = DistSSHRun.launch_override_names(
         Dict("JULIA_PROJECT" => "/old", "JULIA_LOAD_PATH" => "@v1.13"),
@@ -44,8 +197,17 @@ using TOML
 
     prefix = DistSSHRun.go_remote_julia_prefix("julia")
     @test occursin("env -u JULIA_PROJECT", prefix)
+    @test occursin("-u OPENBLAS_NUM_THREADS", prefix)
+    @test !occursin("OPENBLAS_NUM_THREADS=", prefix)
     @test occursin("JULIA_LOAD_PATH=", prefix)
     @test occursin("--project=.", prefix)
+    capped = withenv("DISTSSHKIT_BLAS_THREADS" => "1") do
+        DistSSHRun.go_remote_julia_prefix("julia"; blas = DistSSHRun._explicit_blas_threads())
+    end
+    unset_at = findfirst("-u OPENBLAS_NUM_THREADS", capped)
+    set_at = findfirst("OPENBLAS_NUM_THREADS=", capped)
+    @test unset_at !== nothing && set_at !== nothing && first(unset_at) < first(set_at)
+    @test occursin("OMP_NUM_THREADS=", capped)
 
     @test DistSSHRun.parse_allow_mismatch("julia,distssh") == [:julia, :distssh]
     @test DistSSHRun.parse_allow_mismatch(" manifest ") == [:manifest]
