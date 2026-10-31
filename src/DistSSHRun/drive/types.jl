@@ -303,6 +303,15 @@ SIGINT was not sent and the ladder went to SIGTERM (then SIGKILL if the
 process was still alive). The same string is `stop` in `kit.result`. When
 the kit run directory already has this package's `run.toml`, `stop` is set
 there too. `schema` stays 1. An unknown `stop` string is ignored.
+
+`run_dir` is this run's `DISTSSHKIT_RUN_DIR` when one is known. Read it
+with [`result_run_dir`](@ref). [`result_provenance`](@ref) reads
+`run.toml` from it. A [`RideResult`](@ref) is not accepted there; convert
+it with [`kit_run_result`](@ref) first.
+
+Result fields and positional constructors are not API. Result structs are
+not a stable serialization format. `serialize` and JLD2 of a result are
+unsupported. The supported record is `kit.result`.
 """
 struct KitRunResult
     ok::Bool
@@ -380,7 +389,12 @@ the order results were collected. Empty when no host-collection step ran
 (e.g. built by hand, or a run with no remote/local-only hosts).
 
 `run_dir` is this run's `DISTSSHKIT_RUN_DIR` when the driver allocated one.
-[`result_provenance`](@ref) reads `run.toml` from it.
+Read it with [`result_run_dir`](@ref). [`result_provenance`](@ref) reads
+`run.toml` from it.
+
+Result fields and positional constructors are not API. Result structs are
+not a stable serialization format. `serialize` and JLD2 of a result are
+unsupported. The supported record is `kit.result`.
 """
 struct DriveResult
     ok::Bool

@@ -687,12 +687,33 @@ function _write_provenance_sidecar(
 end
 
 """
+    result_run_dir(result) -> Union{Nothing, String}
+
+This run's `DISTSSHKIT_RUN_DIR`, or `nothing` when the result has none.
+
+`result` is a [`DriveResult`](@ref), [`GoResult`](@ref),
+[`KitRunResult`](@ref), or [`RideResult`](@ref). Result fields and
+positional constructors are not API.
+"""
+function result_run_dir(
+        result::Union{DriveResult, GoResult, KitRunResult, RideResult},
+    )::Union{Nothing, String}
+    return result.run_dir
+end
+public result_run_dir
+
+"""
     result_provenance(result) -> Union{Nothing, AbstractDict}
 
-Read `run.toml` from `result.run_dir`. `nothing` when `run_dir` is unset or the file is missing.
+Read `run.toml` from [`result_run_dir`](@ref). `nothing` when that
+directory is unset or the file is missing.
+
+`result` is a [`DriveResult`](@ref), [`GoResult`](@ref), or
+[`KitRunResult`](@ref). A [`RideResult`](@ref) is not accepted; convert
+it with [`kit_run_result`](@ref) first.
 """
 function result_provenance(result::Union{DriveResult, GoResult, KitRunResult})
-    rd = result.run_dir
+    rd = result_run_dir(result)
     rd === nothing && return nothing
     return read_kit_run_toml(rd)
 end

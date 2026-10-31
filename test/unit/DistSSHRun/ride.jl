@@ -92,6 +92,7 @@ using Test
 
     @testset "kit_run_result" begin
         r = DistSSHRun.RideResult(true, "s.jl", 2, true, nothing, "1.13")
+        @test DistSSHRun.result_run_dir(r) === nothing
         kr = DistSSHRun.kit_run_result(r)
         @test kr.ok
         @test kr.kind === :ride
@@ -119,6 +120,7 @@ using Test
         @test r.run_dir !== nothing
         @test r.run_dir != r.output_dir
         withenv(DistSSHRun.DISTSSHKIT_RUN_DIR_ENV => nothing) do
+            @test DistSSHRun.result_run_dir(r) == r.run_dir
             @test DistSSHRun.kit_run_result(r).run_dir == r.run_dir
         end
         @test !isfile(joinpath(something(r.output_dir, ""), "kit.hosts"))

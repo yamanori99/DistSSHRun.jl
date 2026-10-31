@@ -10,8 +10,13 @@ end
 """Outcome of [`go!`](@ref). On failure, `failed_step` is `"sync"`, `"run"`, or `"collect"`.
 
 `run_dir` is this run's `DISTSSHKIT_RUN_DIR` when one is active.
-[`result_provenance`](@ref) reads `run.toml` from it. Omitted `run_dir`
-uses [`kit_run_dir`](@ref), which is `nothing` outside a run.
+Read it with [`result_run_dir`](@ref). [`result_provenance`](@ref) reads
+`run.toml` from it. Omitted `run_dir` uses [`kit_run_dir`](@ref), which
+is `nothing` outside a run.
+
+Result fields and positional constructors are not API. Result structs are
+not a stable serialization format. `serialize` and JLD2 of a result are
+unsupported. The supported record is `kit.result`.
 """
 struct GoResult
     ok::Bool

@@ -10,8 +10,13 @@ const _RIDE_CAPTURE_DEPTH = 4
 
 `output_dir` is the ride batch directory. `run_dir` is the
 `DISTSSHKIT_RUN_DIR` captured while that run was active. [`ride!`](@ref)
-restores the previous directory before it returns, so later conversion
-must use this field rather than [`kit_run_dir`](@ref).
+restores the previous directory before it returns. Read the saved
+directory with [`result_run_dir`](@ref). [`result_provenance`](@ref) does
+not accept a `RideResult`; convert it with [`kit_run_result`](@ref) first.
+
+Result fields and positional constructors are not API. Result structs are
+not a stable serialization format. `serialize` and JLD2 of a result are
+unsupported. The supported record is `kit.result`.
 """
 struct RideResult
     ok::Bool
