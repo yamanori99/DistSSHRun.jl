@@ -1,8 +1,8 @@
 using Test
 
-# Oracle: `collect!` skip / empty / rsync-invoke / rsync-fail wiring via setup
-# SSH+rsync fakes. Fake rsync is `sh` `exit 0` (or 1); it does not copy bytes.
-# Real collect of remote files is ssh-e2e.
+# Oracle: `collect!` skip / empty / tar-pull wiring via setup SSH fakes.
+# Fake `Tar.create` exits 0 and writes no archive (or 1 when
+# `DISTSSHKIT_TEST_TAR_PULL_FAIL=1`). Real collect of remote files is ssh-e2e.
 
 # File scope: a local inside `@testset` is captured by `_capture_stdio` and boxed.
 function _collect!(
@@ -162,8 +162,8 @@ end
         end
     end
 
-    @testset "rsync failure" begin
-        _with_collect(; extra_env = Dict("DISTSSHKIT_TEST_RSYNC_FAIL" => "1")) do state_dir, proj
+    @testset "tar pull failure" begin
+        _with_collect(; extra_env = Dict("DISTSSHKIT_TEST_TAR_PULL_FAIL" => "1")) do state_dir, proj
             _seed_tree!(state_dir, "host1", "a.txt")
             out_dir = joinpath(proj, "out")
             mkpath(out_dir)

@@ -396,6 +396,16 @@ function main()
         exit(0)
     end
 
+    # Collect / go pull: `Tar.create(..., stdout)`. Exit 0 writes no archive,
+    # matching the rsync double (success without copying bytes).
+    if occursin("Tar.create", script)
+        if get(ENV, "DISTSSHKIT_TEST_TAR_PULL_FAIL", "") == "1"
+            println(stderr, "tar pull failed")
+            exit(1)
+        end
+        exit(0)
+    end
+
     return exit(0)
 end
 
