@@ -6,5 +6,5 @@ Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 DistSSHRun = {path = ".."}
 
 [compat]
-Documenter = "1"
+Documenter = "1.9"
 julia = "1.13"
