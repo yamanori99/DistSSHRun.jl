@@ -115,7 +115,6 @@ function _assert_extracted_symlink_under!(path::AbstractString, root::AbstractSt
         end
         restarted || return nothing
     end
-    return
 end
 
 function _finish_extracted_tree!(dest::AbstractString; allow_external_symlinks::Bool = false)
