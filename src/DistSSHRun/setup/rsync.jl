@@ -90,7 +90,8 @@ function _assert_extracted_symlink_under!(path::AbstractString, root::AbstractSt
     pending = rel
     hops = 0
     seen = Set{String}()
-    while true
+    restarted = true
+    while restarted
         parts = split(pending, sep)
         current = root
         restarted = false
@@ -113,8 +114,8 @@ function _assert_extracted_symlink_under!(path::AbstractString, root::AbstractSt
             restarted = true
             break
         end
-        restarted || return nothing
     end
+    return nothing
 end
 
 function _finish_extracted_tree!(dest::AbstractString; allow_external_symlinks::Bool = false)
