@@ -5,8 +5,7 @@ include(joinpath(@__DIR__, "..", "..", "..", ".github", "downstream_public.jl"))
 @testset "downstream public names" begin
     @test Base.ispublic(DistSSHRun, :main)
     @test !Base.isexported(DistSSHRun, :main)
-    @test length(DOWNSTREAM_PUBLIC_ALLOW) == 38
-    @test DOWNSTREAM_PUBLIC_ALLOW[(:DistSSHRun, :parse_ride_args)] == 57
+    @test length(DOWNSTREAM_PUBLIC_ALLOW) == 37
     @test !Base.ispublic(DistSSHRun, :_main)
     @test !Base.ispublic(DistSSHRun.DistSSHBase, :_scp_cmd)
     @test !Base.ispublic(DistSSHRun, :kit_confirm!)
