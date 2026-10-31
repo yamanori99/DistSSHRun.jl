@@ -80,6 +80,7 @@ using Test
             @test DistSSHRun._drive_child_status(0, 9) == 137
             @test DistSSHRun._drive_child_status(2, 0) == 2
             @test DistSSHRun._drive_child_status(nothing, nothing) == 1
+            @test DistSSHRun._drive_child_status(0xC0000005, 0) == 1
             sleeper = run(
                 ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "sleep(30)"`);
                 wait = false,

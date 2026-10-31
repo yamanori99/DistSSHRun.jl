@@ -95,12 +95,34 @@ function _isolated_project_flag()::Union{Nothing, String}
     return "--project=$(dir)"
 end
 
+"""Fit `code` in `Cint`. A Windows crash code such as `0xC0000005` does not."""
+function _as_cint(code::Integer)::Cint
+    n = try
+        Int64(code)
+    catch
+        return Cint(1)
+    end
+    lo = Int64(typemin(Cint))
+    hi = Int64(typemax(Cint))
+    lo <= n <= hi && return Cint(n)
+    return Cint(1)
+end
+
 """A signalled child is a failure. Unix can report `exitcode == 0` with a nonzero `termsignal`."""
 function _drive_child_status(exitcode, termsignal)::Cint
-    if termsignal isa Integer && !(termsignal isa Bool) && Int(termsignal) != 0
-        return Cint(128 + Int(termsignal))
+    if termsignal isa Integer && !(termsignal isa Bool)
+        sig = try
+            Int64(termsignal)
+        catch
+            return Cint(1)
+        end
+        if sig != 0
+            return _as_cint(128 + sig)
+        end
     end
-    exitcode isa Integer && !(exitcode isa Bool) && return Cint(exitcode)
+    if exitcode isa Integer && !(exitcode isa Bool)
+        return _as_cint(exitcode)
+    end
     return Cint(1)
 end
 
