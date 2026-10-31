@@ -790,6 +790,10 @@ function _run_drive_parsed_locked!(
         # Runs in the frame's non-cancellable scope, before Distributed `atexit`.
         drive_atexit_cleanup !== nothing && drive_atexit_cleanup()
         _drive_was_interrupted() && _retire_distributed_gc_task!()
-        enable_log && close_log_file()
+        try
+            DistSSHRun.await_declared_input_hashes!()
+        finally
+            enable_log && close_log_file()
+        end
     end
 end

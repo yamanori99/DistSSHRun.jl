@@ -593,6 +593,25 @@ end
     @test started[]
     @test finished[]
     @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
+    second_done = Ref(false)
+    bad = @async error("hash failed")
+    good = @async begin
+        sleep(0.05)
+        second_done[] = true
+        return nothing
+    end
+    lock(DistSSHRun._PENDING_INPUT_HASH_LOCK) do
+        push!(DistSSHRun._PENDING_INPUT_HASH_TASKS, bad, good)
+    end
+    err = try
+        DistSSHRun.await_declared_input_hashes!()
+        nothing
+    catch e
+        e
+    end
+    @test err isa TaskFailedException
+    @test second_done[]
+    @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
     @test hasmethod(
         DistSSHRun.ship_project_to_hosts!,
         Tuple{Vector{String}, String, String},

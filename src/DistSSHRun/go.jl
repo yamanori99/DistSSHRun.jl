@@ -1186,8 +1186,8 @@ function _go_run!(
                 await_inputs = sync_mode !== :ship_tree,
             )
             if !sync_result.ok
-                completed = true
                 await_declared_input_hashes!()
+                completed = true
                 return _go_complete!(
                     GoResult(
                         false,
@@ -1210,8 +1210,8 @@ function _go_run!(
                     "auto" : String(julia)
                 inst = instantiate_after_ship!(sync_session; julia = inst_julia)
                 if inst !== nothing && !inst.ok
-                    completed = true
                     await_declared_input_hashes!()
+                    completed = true
                     return _go_complete!(
                         GoResult(
                             false,

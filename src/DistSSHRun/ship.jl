@@ -753,9 +753,15 @@ function await_declared_input_hashes!()
         empty!(_PENDING_INPUT_HASH_TASKS)
         return taken
     end
+    first_err = nothing
     for task in tasks
-        fetch(task)
+        try
+            fetch(task)
+        catch e
+            first_err === nothing && (first_err = e)
+        end
     end
+    first_err === nothing || throw(first_err)
     return nothing
 end
 
