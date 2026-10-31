@@ -47,26 +47,36 @@ function prune_kit_leaf_dirs!(
             end
         end
     end
+    for p in victims
+        isdir(p) || continue
+        _assert_kit_tree_stamps_owned!(p)
+    end
     n = 0
     for p in victims
         isdir(p) || continue
-        stamp = joinpath(p, "run.toml")
-        if isfile(stamp)
-            raw = try
-                open(stamp) do io
-                    TOML.parse(io)
-                end
-            catch
-                nothing
-            end
-            if raw === nothing || !_kit_run_toml_owned(raw)
-                throw(ArgumentError("refusing to prune unowned run leaf $p"))
-            end
-        end
         rm(p; recursive = true, force = true)
         n += 1
     end
     return n
+end
+
+"""Refuse prune when any `run.toml` under `root` is present but not DistSSHRun-owned."""
+function _assert_kit_tree_stamps_owned!(root::AbstractString)
+    for (dir, _, files) in walkdir(String(root); onerror = Returns(nothing))
+        ("run.toml" in files) || continue
+        stamp = joinpath(dir, "run.toml")
+        raw = try
+            open(stamp) do io
+                TOML.parse(io)
+            end
+        catch
+            nothing
+        end
+        if raw === nothing || !_kit_run_toml_owned(raw)
+            throw(ArgumentError("refusing to prune unowned run leaf $dir"))
+        end
+    end
+    return nothing
 end
 
 function _prune_id_ok(name::AbstractString, id::Union{Nothing, String})::Bool
@@ -196,11 +206,10 @@ function _prune_remote_shell(
     fi
     _dsk_prune_leaf() {
       _child=\$1
-      if [ -f "\$_child/run.toml" ]; then
-        if ! _dsk_run_toml_owned "\$_child/run.toml"; then
-          printf 'refusing to prune unowned run leaf %s\\n' "\$_child" >&2
-          exit 1
-        fi
+      _bad=\$(_dsk_first_unowned_stamp "\$_child")
+      if [ -n "\$_bad" ]; then
+        printf 'refusing to prune unowned run leaf %s\\n' "\$(dirname "\$_bad")" >&2
+        exit 1
       fi
       rm -rf "\$_child"
     }

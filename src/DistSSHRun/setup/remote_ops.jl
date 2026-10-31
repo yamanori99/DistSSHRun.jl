@@ -42,34 +42,38 @@ function rsync_push_to_remotes(
 end
 
 # Shell helpers: missing run.toml is allowed; a present file must be owned.
+# Top-level keys only (stop at the first TOML table header), matching
+# `_kit_run_toml_owned`.
 function _remote_run_toml_owned_check_sh()::String
     return """
     _dsk_run_toml_owned() {
       _f=\$1
       [ -f "\$_f" ] || return 0
-      grep -Eq '^schema = 1\$' "\$_f" || return 1
-      grep -Eq '^writer = \"DistSSHRun ' "\$_f" || return 1
-      grep -Eq '^kind = \"(go|drive|ride|pipeline|ship)\"\$' "\$_f" || return 1
-      return 0
+      awk '
+        BEGIN { s = 0; w = 0; k = 0 }
+        /^\\[/ { exit }
+        /^schema = 1\$/ { s = 1 }
+        /^writer = "DistSSHRun / { w = 1 }
+        /^kind = "(go|drive|ride|pipeline|ship)"\$/ { k = 1 }
+        END { exit (s && w && k) ? 0 : 1 }
+      ' "\$_f"
+    }
+    _dsk_first_unowned_stamp() {
+      _root=\$1
+      find "\$_root" -type f -name run.toml 2>/dev/null | while IFS= read -r _stamp; do
+        [ -f "\$_stamp" ] || continue
+        if ! _dsk_run_toml_owned "\$_stamp"; then
+          printf '%s\\n' "\$_stamp"
+          exit 0
+        fi
+      done
     }
     _dsk_assert_run_leaves_owned() {
       _root=\$1
-      if [ -f "\$_root/run.toml" ]; then
-        if ! _dsk_run_toml_owned "\$_root/run.toml"; then
-          printf 'refusing to delete unowned run leaf %s\\n' "\$_root" >&2
-          return 1
-        fi
-      fi
-      if [ -d "\$_root/runs" ]; then
-        for _leaf in "\$_root/runs"/*; do
-          [ -d "\$_leaf" ] || continue
-          if [ -f "\$_leaf/run.toml" ]; then
-            if ! _dsk_run_toml_owned "\$_leaf/run.toml"; then
-              printf 'refusing to delete unowned run leaf %s\\n' "\$_leaf" >&2
-              return 1
-            fi
-          fi
-        done
+      _bad=\$(_dsk_first_unowned_stamp "\$_root")
+      if [ -n "\$_bad" ]; then
+        printf 'refusing to delete unowned run leaf %s\\n' "\$(dirname "\$_bad")" >&2
+        return 1
       fi
       return 0
     }

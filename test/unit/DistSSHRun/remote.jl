@@ -271,7 +271,9 @@ end
         script = DistSSHRun._remote_delete_shell("/tmp/app")
         @test occursin("refusing to delete unowned run leaf", script)
         @test occursin("_dsk_assert_run_leaves_owned", script)
+        @test occursin("_dsk_first_unowned_stamp", script)
         @test occursin("DistSSHRun ", script)
+        @test occursin("/^\\[/", DistSSHRun._remote_run_toml_owned_check_sh())
         mktempdir() do d
             root = joinpath(d, "app")
             leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
@@ -289,6 +291,18 @@ end
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test isdir(leaf)
+            write(
+                joinpath(leaf, "run.toml"),
+                "[metadata]\nschema = 1\nwriter = \"DistSSHRun 1\"\nkind = \"ship\"\n",
+            )
+            err_meta = IOBuffer()
+            proc_meta = run(
+                ignorestatus(pipeline(`sh -c $(DistSSHRun._remote_delete_shell(root))`; stdout = devnull, stderr = err_meta));
+                wait = true,
+            )
+            @test proc_meta.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err_meta)))
+            @test isdir(leaf)
             write(joinpath(leaf, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
             proc2 = run(
                 ignorestatus(pipeline(`sh -c $(DistSSHRun._remote_delete_shell(root))`; stdout = devnull, stderr = devnull));
@@ -296,6 +310,47 @@ end
             )
             @test proc2.exitcode == 0
             @test !isdir(root)
+        end
+    end
+
+    @testset "prune shell refuses a nested unowned stamp" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            drive = joinpath(root, ".distsshkit", "drive")
+            nested = joinpath(drive, "nested")
+            mkpath(nested)
+            write(
+                joinpath(nested, "run.toml"),
+                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"drive\"\n",
+            )
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isdir(nested)
+            write(joinpath(nested, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
+            proc2 = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc2.exitcode == 0
+            @test !isdir(drive)
+            @test isdir(root)
         end
     end
 

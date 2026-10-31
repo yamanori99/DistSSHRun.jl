@@ -98,6 +98,22 @@ using Test
             @test occursin("unowned run leaf", err.msg)
             @test isdir(fake)
             rm(joinpath(fake, "run.toml"); force = true)
+            nested = joinpath(drive, "nested")
+            mkpath(nested)
+            write(
+                joinpath(nested, "run.toml"),
+                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"drive\"\n",
+            )
+            err_nested = try
+                DistSSHRun.prune_kit_leaf_dirs!(proj)
+                nothing
+            catch e
+                e
+            end
+            @test err_nested isa ArgumentError
+            @test occursin("unowned run leaf", err_nested.msg)
+            @test isdir(nested)
+            rm(joinpath(nested, "run.toml"); force = true)
             n2 = DistSSHRun.prune_kit_leaf_dirs!(proj)
             @test n2 >= 3
             @test !isdir(go_old)
