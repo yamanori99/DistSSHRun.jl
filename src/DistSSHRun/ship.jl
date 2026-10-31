@@ -1251,7 +1251,11 @@ function _remote_run_leaf_script(abs_root::AbstractString, run_id::AbstractStrin
     fi
     if test -e $oq; then
       if test -d $oq; then
-        if test -n "\$(ls -A $oq 2>/dev/null)"; then
+        if ! out_entries="\$(ls -A $oq 2>/dev/null)"; then
+          printf 'could not inspect out dir: %s\\n' $oq >&2
+          exit 4
+        fi
+        if test -n "\$out_entries"; then
           printf 'out dir is not empty: %s\\n' $oq >&2
           exit 4
         fi

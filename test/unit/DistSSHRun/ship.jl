@@ -36,6 +36,7 @@ end
     @test occursin("/work/app/runs/20260101T000000Z-abcd/src", sh)
     @test occursin("/work/app/runs/20260101T000000Z-abcd/out", sh)
     @test occursin("refusing symlinked out dir", sh)
+    @test occursin("could not inspect out dir", sh)
     @test occursin("out dir is not empty", sh)
     @test occursin("mkdir '/work/app/runs/20260101T000000Z-abcd/out'", sh)
 end
