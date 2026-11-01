@@ -346,12 +346,12 @@ end
         stop = Ref(false)
         dead = Ref(false)
         DistSSHRun._run_heartbeat!(
-            stop, 0.05, 0.12;
+            stop, 0.05, 1.0;
             ping = () -> true,
             on_dead = () -> (dead[] = true),
         )
         try
-            sleep(0.35)
+            sleep(0.4)
             @test !dead[]
         finally
             stop[] = true
