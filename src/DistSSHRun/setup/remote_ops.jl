@@ -42,8 +42,9 @@ function rsync_push_to_remotes(
 end
 
 # Shell helpers: missing run.toml is allowed; a present entry must be owned.
-# Delete passes `ship` and scans only `<root>/runs/<run_id>/run.toml`. A
-# missing `runs/` is not a stamp tree. Prune omits that mode and walks its
+# Delete passes `ship` and scans `<deploy>/runs/<run_id>/run.toml`. The confirmed
+# delete path may be a git-work-tree ancestor of that deploy root. A missing
+# `runs/` is not a stamp tree. Prune omits that mode and walks its
 # candidate recursively, including nested stamps. The textual check requires
 # the `_kit_run_toml_owned` fields and rejects unclosed quotes or brackets.
 # It is not a TOML parser. A newline in a stamp path, a symlink or other
@@ -198,8 +199,12 @@ The final path component must not be a symlink. Intermediate symlinks stay,
 so `cd -P` / `pwd -P` can resolve them. The `test -L` check and `rm` are one
 script. Flags are `rm -rf` only (BSD rm on macOS).
 """
-function _remote_delete_shell(remote_path::AbstractString)::String
+function _remote_delete_shell(
+        remote_path::AbstractString,
+        deploy_root::AbstractString = remote_path,
+    )::String
     pq = _remote_shell_path_word(remote_path)
+    dq = _remote_shell_path_word(deploy_root)
     # `$pq` is its own word. A double-quoted echo would treat its quotes as
     # text and run `$(...)` in the path.
     return """
@@ -222,7 +227,10 @@ function _remote_delete_shell(remote_path::AbstractString)::String
           exit 1
         fi
       fi
-      _dsk_assert_run_leaves_owned "\$_distssh_target" || exit 1
+      if test -e $dq; then
+        _distssh_deploy=\$(cd -P $dq && pwd -P) || exit 1
+        _dsk_assert_run_leaves_owned "\$_distssh_deploy" || exit 1
+      fi
     fi
     rm -rf $pq 2>/dev/null
     if test -e $pq; then
@@ -245,8 +253,10 @@ function delete_remotes(
         hosts::Vector{String},
         remote_path::String;
         confirm::Bool = true,
+        deploy_root::AbstractString = remote_path,
     )::NamedTuple
     _checked_remote_dest(remote_path)
+    _checked_remote_dest(String(deploy_root))
     _refuse_depot_target(remote_path)
     if confirm
         cancelled = with_kit_progress_suspended() do
@@ -275,7 +285,9 @@ function delete_remotes(
             kit_spin!("  $host: ") do
                 read(
                     pipeline(
-                        _host_sync_remote_shell_cmd(host, _remote_delete_shell(remote_path));
+                        _host_sync_remote_shell_cmd(
+                            host, _remote_delete_shell(remote_path, deploy_root),
+                        );
                         stderr = err_buf,
                     ),
                     String,

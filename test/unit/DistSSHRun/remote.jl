@@ -675,6 +675,64 @@ end
         end
     end
 
+    @testset "delete shell scans nested deploy runs not the git root" begin
+        mktempdir() do d
+            gitroot = joinpath(d, "Repo")
+            app = joinpath(gitroot, "App")
+            leaf = joinpath(app, "runs", "20260101T000000Z-abcd")
+            mkpath(leaf)
+            write(joinpath(leaf, "run.toml"), "name = \"job\"\n")
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(gitroot, app))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isdir(leaf)
+            write(joinpath(leaf, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
+            mkpath(joinpath(app, "src"))
+            write(joinpath(app, "src", "run.toml"), "name = \"job\"\n")
+            proc_ok = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(gitroot, app))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc_ok.exitcode == 0
+            @test !isdir(gitroot)
+        end
+        mktempdir() do d
+            gitroot = joinpath(d, "Repo")
+            app = joinpath(gitroot, "App")
+            decoy = joinpath(gitroot, "runs", "20260101T000000Z-abcd")
+            mkpath(decoy)
+            write(joinpath(decoy, "run.toml"), "name = \"job\"\n")
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(gitroot, app))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode == 0
+            @test !isdir(gitroot)
+        end
+    end
+
     @testset "delete shell ignores a project run.toml under the shipped src tree" begin
         delete_sh = DistSSHRun._remote_delete_shell("/tmp/app")
         @test occursin("-mindepth 2 -maxdepth 2", delete_sh)
