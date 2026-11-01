@@ -651,6 +651,30 @@ end
         end
     end
 
+    @testset "prune shell refuses a newline in the path to .distsshkit" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            keep = joinpath(root, "foo", "drive")
+            mkpath(keep)
+            write(joinpath(keep, "note"), "keep\n")
+            mkpath(joinpath(root, "foo\nbar", ".distsshkit"))
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("newline", String(take!(err)))
+            @test isfile(joinpath(keep, "note"))
+        end
+    end
+
     @testset "delete shell ignores a project run.toml under the shipped src tree" begin
         delete_sh = DistSSHRun._remote_delete_shell("/tmp/app")
         @test occursin("-mindepth 2 -maxdepth 2", delete_sh)

@@ -213,6 +213,30 @@ function _prune_remote_shell(
       fi
       rm -rf "\$_child"
     }
+    # The walk below reads find output by line. A newline in a parent of
+    # `.distsshkit` splits that path, and the prefix can be pruned.
+    _dsk_nlkit=\$(mktemp) || {
+      printf 'refusing to prune a path that contains a newline\\n' >&2
+      exit 1
+    }
+    if ! find "\$root" -type d -name .distsshkit -exec sh -c '
+      if printf "%s" "\$2" | awk "NR>1 { e = 1 } END { exit e ? 0 : 1 }"; then
+        printf "x\\n" > "\$1"
+      fi
+      exit 0
+    ' sh "\$_dsk_nlkit" {} \\; 2>/dev/null; then
+      if [ ! -s "\$_dsk_nlkit" ]; then
+        rm -f "\$_dsk_nlkit"
+        printf 'refusing to prune a path that contains a newline\\n' >&2
+        exit 1
+      fi
+    fi
+    if [ -s "\$_dsk_nlkit" ]; then
+      rm -f "\$_dsk_nlkit"
+      printf 'refusing to prune a path that contains a newline\\n' >&2
+      exit 1
+    fi
+    rm -f "\$_dsk_nlkit"
     find "\$root" -type d -name .distsshkit 2>/dev/null | while IFS= read -r kit; do
       go="\$kit/go"
       if [ -d "\$go" ]; then
