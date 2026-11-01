@@ -41,113 +41,155 @@ function rsync_push_to_remotes(
     )
 end
 
-# Shell helpers: missing run.toml is allowed; a present file must be owned.
+# Shell helpers: missing run.toml is allowed; a present entry must be owned.
 # Delete passes `ship` and scans only `<root>/runs/<run_id>/run.toml`. A
 # missing `runs/` is not a stamp tree. Prune omits that mode and walks its
-# candidate recursively, including nested stamps. Textual check approximates
-# `_kit_run_toml_owned` after a successful `TOML.parse`: top-level ownership
-# fields, complete quoted strings, and well-formed table headers. Scan errors
-# and newline paths fail closed.
+# candidate recursively, including nested stamps. The textual check requires
+# the `_kit_run_toml_owned` fields and rejects unclosed quotes or brackets.
+# It is not a TOML parser. A newline in a stamp path, a non-regular
+# `run.toml`, and a scan error are unowned (fail closed), never a missing
+# stamp and never ownership proof.
 function _remote_run_toml_owned_check_sh()::String
     return """
-        _dsk_run_toml_owned() {
-          _f=\$1
-          [ -f "\$_f" ] || return 0
-          awk '
-            BEGIN { s = 0; w = 0; k = 0; top = 1; bad = 0 }
-            /^[\\t ]*#/ { next }
-            /^[\\t ]*\$/ { next }
-            /^\\[/ {
-              top = 0
-              if (\$0 !~ /^\\[[^\\]]+\\]\$/) { bad = 1; exit }
-              next
+            _dsk_find_stamps() {
+              _dsk_find_root=\$1
+              _dsk_find_ship=\$2
+              shift 2
+              if [ "\$_dsk_find_ship" = 1 ]; then
+                find "\$_dsk_find_root" -mindepth 2 -maxdepth 2 -name run.toml "\$@"
+              else
+                find "\$_dsk_find_root" -name run.toml "\$@"
+              fi
             }
-            top == 1 {
-              if (\$0 ~ /^schema = 1\$/) { s = 1; next }
-              if (\$0 ~ /^writer = "DistSSHRun [^"]*"\$/) { w = 1; next }
-              if (\$0 ~ /^writer = "DistSSHRun /) { bad = 1; exit }
-              if (\$0 ~ /^kind = "(go|drive|ride|pipeline|ship)"\$/) { k = 1; next }
-              if (\$0 ~ /^[A-Za-z_][A-Za-z0-9_]* = /) next
-              bad = 1
-              exit
-            }
-            {
-              if (\$0 ~ /^[A-Za-z_][A-Za-z0-9_]* = /) next
-              bad = 1
-              exit
-            }
-            END { if (bad) exit 1; exit (s && w && k) ? 0 : 1 }
-          ' "\$_f"
+            _dsk_first_unowned_stamp() {
+              _root=\$1
+              _ship=0
+              _scan="\$_root"
+              if [ "\${2-}" = ship ]; then
+                _ship=1
+                _scan="\$_root/runs"
+                # Missing runs/ is an older tree, not a failed scan.
+                if [ ! -d "\$_scan" ]; then
+                  return 0
+                fi
+              fi
+              _mark=\$(mktemp) || {
+                printf '%s\\n' "\$_root"
+                return 0
+              }
+              _awkf=\$(mktemp) || {
+                rm -f "\$_mark"
+                printf '%s\\n' "\$_root"
+                return 0
+              }
+              _chk=\$(mktemp) || {
+                rm -f "\$_mark" "\$_awkf"
+                printf '%s\\n' "\$_root"
+                return 0
+              }
+              cat > "\$_awkf" << 'DSK_AWK'
+    function unbalanced(s,    i, n, c, dq, sq, br, cu, esc, sqch) {
+      n = length(s)
+      dq = 0
+      sq = 0
+      br = 0
+      cu = 0
+      esc = 0
+      sqch = sprintf("%c", 39)
+      for (i = 1; i <= n; i++) {
+        c = substr(s, i, 1)
+        if (esc) { esc = 0; continue }
+        if (dq) {
+          if (c == "\\\\") { esc = 1; continue }
+          if (c == "\\"") { dq = 0; continue }
+          continue
         }
-        # `_ship` 1: only runs/<run_id>/run.toml. Both the newline check and
-        # the list use this predicate. A symlink named run.toml is a stamp
-        # too; -type f would skip it and the leaf would be removed unread.
-        _dsk_find_stamps() {
-          _dsk_find_root=\$1
-          _dsk_find_ship=\$2
-          shift 2
-          if [ "\$_dsk_find_ship" = 1 ]; then
-            find "\$_dsk_find_root" -mindepth 2 -maxdepth 2 \\( -type f -o -type l \\) -name run.toml "\$@"
-          else
-            find "\$_dsk_find_root" \\( -type f -o -type l \\) -name run.toml "\$@"
-          fi
+        if (sq) {
+          if (c == sqch) { sq = 0; continue }
+          continue
         }
-        _dsk_first_unowned_stamp() {
-          _root=\$1
-          _ship=0
-          _scan="\$_root"
-          if [ "\${2-}" = ship ]; then
-            _ship=1
-            _scan="\$_root/runs"
-            # Missing runs/ is an older tree, not a failed scan.
-            if [ ! -d "\$_scan" ]; then
+        if (c == "#") return (br || cu) ? 1 : 0
+        if (c == "\\"") {
+          if (substr(s, i, 3) == "\\"\\"\\"") return 1
+          dq = 1
+          continue
+        }
+        if (c == sqch) {
+          if (substr(s, i, 3) == sqch sqch sqch) return 1
+          sq = 1
+          continue
+        }
+        if (c == "[") br++
+        else if (c == "]") { if (br == 0) return 1; br-- }
+        else if (c == "{") cu++
+        else if (c == "}") { if (cu == 0) return 1; cu-- }
+      }
+      if (dq || sq || br || cu || esc) return 1
+      return 0
+    }
+    BEGIN { s = 0; w = 0; k = 0; top = 1; bad = 0 }
+    /^[ \\t]*#/ { next }
+    /^[ \\t]*\$/ { next }
+    { if (unbalanced(\$0)) { bad = 1; exit } }
+    /^\\[/ {
+      top = 0
+      if (\$0 !~ /^\\[[^\\]]+\\]\$/) { bad = 1; exit }
+      next
+    }
+    top == 1 {
+      if (\$0 ~ /^schema = 1\$/) { s = 1; next }
+      if (\$0 ~ /^writer = "DistSSHRun [^"]*"\$/) { w = 1; next }
+      if (\$0 ~ /^writer = "DistSSHRun /) { bad = 1; exit }
+      if (\$0 ~ /^kind = "(go|drive|ride|pipeline|ship)"\$/) { k = 1; next }
+      if (\$0 ~ /^[A-Za-z_][A-Za-z0-9_]* = /) next
+      bad = 1
+      exit
+    }
+    {
+      if (\$0 ~ /^[A-Za-z_][A-Za-z0-9_]* = /) next
+      bad = 1
+      exit
+    }
+    END { if (bad) exit 1; exit (s && w && k) ? 0 : 1 }
+    DSK_AWK
+              cat > "\$_chk" << 'DSK_CHK'
+    _mark=\$1
+    _awkf=\$2
+    _f=\$3
+    if printf "%s" "\$_f" | awk "NR>1 { e = 1 } END { exit e ? 0 : 1 }"; then
+      printf "%s\\n" "\$_f" > "\$_mark"
+      exit 0
+    fi
+    if [ ! -f "\$_f" ] || ! awk -f "\$_awkf" "\$_f"; then
+      printf "%s\\n" "\$_f" > "\$_mark"
+    fi
+    exit 0
+    DSK_CHK
+              # `{}` is last so BSD find accepts it. The child exits 0 when the
+              # stamp is bad; find's status stays the scan, and the mark file
+              # records the path. A non-regular run.toml is not opened.
+              if ! _dsk_find_stamps "\$_scan" "\$_ship" -exec sh "\$_chk" "\$_mark" "\$_awkf" {} \\; 2>/dev/null; then
+                if [ ! -s "\$_mark" ]; then
+                  printf '%s\\n' "\$_root" > "\$_mark"
+                fi
+              fi
+              if [ -s "\$_mark" ]; then
+                cat "\$_mark"
+                rm -f "\$_mark" "\$_awkf" "\$_chk"
+                return 0
+              fi
+              rm -f "\$_mark" "\$_awkf" "\$_chk"
+            }
+            _dsk_assert_run_leaves_owned() {
+              _root=\$1
+              _bad=\$(_dsk_first_unowned_stamp "\$_root" ship)
+              if [ -n "\$_bad" ]; then
+                printf 'refusing to delete unowned run leaf %s\\n' "\$(dirname "\$_bad")" >&2
+                return 1
+              fi
               return 0
-            fi
-          fi
-          # Same newline refusal as remote input hashing: newline paths break
-          # line-oriented scans, so treat them as unowned (fail closed).
-          _nl=\$(_dsk_find_stamps "\$_scan" "\$_ship" -path '*
-    *' -print -quit 2>/dev/null) || {
-            printf '%s\\n' "\$_root"
-            return 0
-          }
-          if [ -n "\$_nl" ]; then
-            printf '%s\\n' "\$_nl"
-            return 0
-          fi
-          _list=\$(mktemp) || {
-            printf '%s\\n' "\$_root"
-            return 0
-          }
-          if ! _dsk_find_stamps "\$_scan" "\$_ship" >"\$_list" 2>/dev/null; then
-            rm -f "\$_list"
-            printf '%s\\n' "\$_root"
-            return 0
-          fi
-          _bad=
-          while IFS= read -r _stamp || [ -n "\$_stamp" ]; do
-            [ -n "\$_stamp" ] || continue
-            if [ ! -f "\$_stamp" ] || ! _dsk_run_toml_owned "\$_stamp"; then
-              _bad=\$_stamp
-              break
-            fi
-          done <"\$_list"
-          rm -f "\$_list"
-          if [ -n "\$_bad" ]; then
-            printf '%s\\n' "\$_bad"
-            return 0
-          fi
-        }
-        _dsk_assert_run_leaves_owned() {
-          _root=\$1
-          _bad=\$(_dsk_first_unowned_stamp "\$_root" ship)
-          if [ -n "\$_bad" ]; then
-            printf 'refusing to delete unowned run leaf %s\\n' "\$(dirname "\$_bad")" >&2
-            return 1
-          fi
-          return 0
-        }
-        """
+            }
+    """
 end
 
 """Remote `sh` that removes `remote_path` unless it is that host's home, `/`, or depot.
