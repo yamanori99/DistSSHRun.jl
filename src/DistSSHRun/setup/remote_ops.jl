@@ -80,15 +80,16 @@ function _remote_run_toml_owned_check_sh()::String
           ' "\$_f"
         }
         # `_ship` 1: only runs/<run_id>/run.toml. Both the newline check and
-        # the list use this predicate.
+        # the list use this predicate. A symlink named run.toml is a stamp
+        # too; -type f would skip it and the leaf would be removed unread.
         _dsk_find_stamps() {
           _dsk_find_root=\$1
           _dsk_find_ship=\$2
           shift 2
           if [ "\$_dsk_find_ship" = 1 ]; then
-            find "\$_dsk_find_root" -mindepth 2 -maxdepth 2 -type f -name run.toml "\$@"
+            find "\$_dsk_find_root" -mindepth 2 -maxdepth 2 \\( -type f -o -type l \\) -name run.toml "\$@"
           else
-            find "\$_dsk_find_root" -type f -name run.toml "\$@"
+            find "\$_dsk_find_root" \\( -type f -o -type l \\) -name run.toml "\$@"
           fi
         }
         _dsk_first_unowned_stamp() {

@@ -614,6 +614,89 @@ end
         end
     end
 
+    @testset "ownership scans read a symlinked run.toml" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            mkpath(joinpath(leaf, "src"))
+            outside = joinpath(d, "stamp.toml")
+            write(outside, "schema = 1\nwriter = \"Other 1.0\"\nkind = \"ship\"\n")
+            symlink(outside, joinpath(leaf, "run.toml"))
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test islink(joinpath(leaf, "run.toml"))
+            write(outside, DistSSHRun._ship_run_leaf_stamp_toml())
+            write(joinpath(leaf, "src", "run.toml"), "name = \"job\"\n")
+            proc_ok = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc_ok.exitcode == 0
+            @test !isdir(root)
+            @test isfile(outside)
+        end
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            mkpath(leaf)
+            symlink(joinpath(d, "missing.toml"), joinpath(leaf, "run.toml"))
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test islink(joinpath(leaf, "run.toml"))
+        end
+        mktempdir() do d
+            root = joinpath(d, "app")
+            nested = joinpath(root, ".distsshkit", "drive", "nested")
+            mkpath(nested)
+            outside = joinpath(d, "stamp.toml")
+            write(outside, "schema = 1\nwriter = \"Other 1.0\"\nkind = \"drive\"\n")
+            symlink(outside, joinpath(nested, "run.toml"))
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test islink(joinpath(nested, "run.toml"))
+            @test !isfile(joinpath(root, ".distsshkit", "drive", "run.toml"))
+        end
+    end
+
     @testset "delete shell refuses a final symlink and quotes odd names" begin
         script = DistSSHRun._remote_delete_shell("~/proj")
         @test occursin("test -L", script)
