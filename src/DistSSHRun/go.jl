@@ -1183,8 +1183,10 @@ function _go_run!(
                 sync_session;
                 mode = sync_mode,
                 allow_external_symlinks = allow_external_symlinks,
+                await_inputs = sync_mode !== :ship_tree,
             )
             if !sync_result.ok
+                await_declared_input_hashes!()
                 completed = true
                 return _go_complete!(
                     GoResult(
@@ -1208,6 +1210,7 @@ function _go_run!(
                     "auto" : String(julia)
                 inst = instantiate_after_ship!(sync_session; julia = inst_julia)
                 if inst !== nothing && !inst.ok
+                    await_declared_input_hashes!()
                     completed = true
                     return _go_complete!(
                         GoResult(
@@ -1226,6 +1229,7 @@ function _go_run!(
                         place,
                     )
                 end
+                await_declared_input_hashes!()
             end
             rr = _project_work_root(child_hosts, proj; cli_override = remote)
             _go_assert_remotes_ready!(child_hosts, rr)
@@ -1395,15 +1399,21 @@ function _go_run!(
             place,
         )
     finally
-        if !completed
-            footer = progress_ok ? display_path(batch_dir, anchor) : nothing
-            kit_progress_done!(; ok = progress_ok, footer = footer)
-            _print_go_slot_stdout_after_progress!(batch_dir)
-            _maybe_print_kit_progress_phases(batch_dir)
-            close_log_file()
-            _set_kit_progress_sidecar!(nothing)
-            release_lock()
-            _remove_kit_pid_file(getpid(), batch_dir, nothing)
+        # A throw after ship-tree registered hash tasks (for example
+        # `instantiate_after_ship!`) never reaches the awaits above.
+        try
+            await_declared_input_hashes!()
+        finally
+            if !completed
+                footer = progress_ok ? display_path(batch_dir, anchor) : nothing
+                kit_progress_done!(; ok = progress_ok, footer = footer)
+                _print_go_slot_stdout_after_progress!(batch_dir)
+                _maybe_print_kit_progress_phases(batch_dir)
+                close_log_file()
+                _set_kit_progress_sidecar!(nothing)
+                release_lock()
+                _remove_kit_pid_file(getpid(), batch_dir, nothing)
+            end
         end
     end
 end

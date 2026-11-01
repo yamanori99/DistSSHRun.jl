@@ -66,7 +66,11 @@ path component by NFC form when the filesystem kept NFD. `sha256sum -c`
 opens paths literally, so use `check_input_manifest` for those trees.
 `hash = false` records only stat fields in `run.toml` and does not write
 a manifest. A later ship into the same run directory replaces the row
-for the same input name and host. `outputs` is reserved and not written.
+for the same input name and host. Standalone `setup --ship-tree` waits
+for hashing before it returns. `drive` / `go` with `--ship-tree` start
+hashing after extract and finish it while instantiate, worker launch,
+and precompile run. `outputs` is reserved and not written. There is no
+`run.private.toml`; public records keep relative paths and aliases only.
 
 `terminate!` and `terminate_run!` record how the stop ended. `KitRunResult.stop`
 is `:within_grace` when the process exited after one SIGINT and before

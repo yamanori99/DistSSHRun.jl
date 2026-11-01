@@ -552,6 +552,7 @@ function _run_drive_parsed_locked!(
                 sync_session;
                 mode = sync_mode,
                 allow_external_symlinks = allow_ext,
+                await_inputs = sync_mode !== :ship_tree,
             )
             if !sync_result.ok
                 print_err("ERROR: "; bold = true)
@@ -560,6 +561,7 @@ function _run_drive_parsed_locked!(
                     !hr.ok && println_fatal("  $(hr.host): $(hr.message)")
                 end
                 println_fatal()
+                DistSSHRun.await_declared_input_hashes!()
                 return 1
             end
             if sync_mode === :rsync
@@ -585,6 +587,7 @@ function _run_drive_parsed_locked!(
                         !hr.ok && println_fatal("  $(hr.host): $(hr.message)")
                     end
                     println_fatal()
+                    DistSSHRun.await_declared_input_hashes!()
                     return 1
                 end
             end
@@ -663,17 +666,23 @@ function _run_drive_parsed_locked!(
                 mem_headroom = parsed.mem_headroom,
                 parent_gb = parsed.parent_gb,
             )
+            DistSSHRun.await_declared_input_hashes!()
             return 1
         end
 
         # Planned SSH names land in `kit.hosts` before `add_drive_workers!`.
         # A kill during join can still find those hosts. The list is replaced
         # with hosts that joined, or removed when none did.
-        successful_hosts = _drive_kit_hosts_around_join!(hosts, kit_out, kit_log) do
-            return add_drive_workers!(
-                hosts, parent_workers, default_workers, julia_exe, proj_dir, script_path,
-                project_root,
-            )
+        successful_hosts = try
+            _drive_kit_hosts_around_join!(hosts, kit_out, kit_log) do
+                return add_drive_workers!(
+                    hosts, parent_workers, default_workers, julia_exe, proj_dir, script_path,
+                    project_root,
+                )
+            end
+        catch
+            DistSSHRun.await_declared_input_hashes!()
+            rethrow()
         end
         DistSSHRun.capture_worker_provenance!()
         # Register before the `require_all_hosts` check below: that branch can
@@ -687,6 +696,7 @@ function _run_drive_parsed_locked!(
                 print_err("ERROR: "; bold = true)
                 println_fatal("required hosts did not join: $(join(missing, ", "))")
                 println_fatal("Pass --best-effort for a partial run.")
+                DistSSHRun.await_declared_input_hashes!()
                 return 1
             end
             if parent_workers > 0
@@ -697,6 +707,7 @@ function _run_drive_parsed_locked!(
                         "required parent workers did not join: wanted $parent_workers, got $n",
                     )
                     println_fatal("Pass --best-effort for a partial run.")
+                    DistSSHRun.await_declared_input_hashes!()
                     return 1
                 end
             end
@@ -779,6 +790,10 @@ function _run_drive_parsed_locked!(
         # Runs in the frame's non-cancellable scope, before Distributed `atexit`.
         drive_atexit_cleanup !== nothing && drive_atexit_cleanup()
         _drive_was_interrupted() && _retire_distributed_gc_task!()
-        enable_log && close_log_file()
+        try
+            DistSSHRun.await_declared_input_hashes!()
+        finally
+            enable_log && close_log_file()
+        end
     end
 end

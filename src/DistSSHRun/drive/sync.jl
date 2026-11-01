@@ -18,6 +18,7 @@ function sync!(
         mode = :sync,
         gitignore::Bool = true,
         allow_external_symlinks::Bool = false,
+        await_inputs::Bool = true,
     )::SyncResult
     # Untyped kw: JETLS treats omitted kwargs as `nothing`, not `Union{Symbol,Bool}`.
     mode === false && throw(ArgumentError("sync!: mode=false means skip sync; do not call sync!"))
@@ -48,6 +49,7 @@ function sync!(
                 confirm = !session.yes,
                 path_anchor = session.project,
                 allow_external_symlinks = allow_external_symlinks,
+                await_inputs = await_inputs,
             )
             if raw.cancelled
                 return SyncResult(true, HostResult[]; ok = false)

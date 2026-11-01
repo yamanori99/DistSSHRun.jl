@@ -578,4 +578,75 @@ using Dates
             @test !occursin("--help", err_txt)
         end
     end
+
+    @testset "early go! exit drains deferred input hashes" begin
+        _with_tempdir() do proj
+            write(joinpath(proj, "Project.toml"), "name = \"GoHashDrain\"\n")
+            write(joinpath(proj, "Manifest.toml"), "# lock\n")
+            script = joinpath(proj, "job.jl")
+            write(script, "true\n")
+            out = joinpath(proj, "out")
+            DistSSHRun.await_declared_input_hashes!()
+            try
+                task = @async nothing
+                lock(DistSSHRun._PENDING_INPUT_HASH_LOCK) do
+                    push!(DistSSHRun._PENDING_INPUT_HASH_TASKS, task)
+                end
+                err = redirect_stderr(devnull) do
+                    redirect_stdout(devnull) do
+                        try
+                            DistSSHRun.go!(
+                                script,
+                                ["child:user@hash-drain.test:1"];
+                                project = proj,
+                                output_dir = out,
+                                sync = :not_a_mode,
+                                quiet = true,
+                                yes = true,
+                            )
+                            nothing
+                        catch e
+                            e
+                        end
+                    end
+                end
+                @test err isa ArgumentError
+                @test occursin("sync! mode must be", sprint(showerror, err))
+                @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
+                @test !isfile(joinpath(out, ".kit.lock"))
+
+                bad = @async error("hash failed early")
+                lock(DistSSHRun._PENDING_INPUT_HASH_LOCK) do
+                    push!(DistSSHRun._PENDING_INPUT_HASH_TASKS, bad)
+                end
+                out2 = joinpath(proj, "out-hash-fail")
+                err2 = redirect_stderr(devnull) do
+                    redirect_stdout(devnull) do
+                        try
+                            DistSSHRun.go!(
+                                script,
+                                ["child:user@hash-drain.test:1"];
+                                project = proj,
+                                output_dir = out2,
+                                sync = :not_a_mode,
+                                quiet = true,
+                                yes = true,
+                            )
+                            nothing
+                        catch e
+                            e
+                        end
+                    end
+                end
+                @test err2 isa TaskFailedException
+                @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
+                @test !isfile(joinpath(out2, ".kit.lock"))
+            finally
+                try
+                    DistSSHRun.await_declared_input_hashes!()
+                catch
+                end
+            end
+        end
+    end
 end
