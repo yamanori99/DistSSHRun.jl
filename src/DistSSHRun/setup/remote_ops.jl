@@ -44,7 +44,8 @@ end
 # Shell helpers: missing run.toml is allowed; a present entry must be owned.
 # Delete passes `ship` and scans `<deploy>/runs/<run_id>/run.toml`. The confirmed
 # delete path may be a git-work-tree ancestor of that deploy root. A missing
-# `runs/` is not a stamp tree. Prune omits that mode and walks its
+# `runs/` is not a stamp tree. A symlink `runs/` is unowned (find would not
+# inspect the target). Prune omits that mode and walks its
 # candidate recursively, including nested stamps. The textual check requires
 # the `_kit_run_toml_owned` fields and rejects unclosed quotes or brackets.
 # It is not a TOML parser. A newline in a stamp path, a symlink or other
@@ -71,6 +72,12 @@ function _remote_run_toml_owned_check_sh()::String
                 _scan="\$_root/runs"
                 # Missing runs/ is an older tree, not a failed scan.
                 if [ ! -d "\$_scan" ]; then
+                  return 0
+                fi
+                # find does not inspect a symlink runs/ target; rm -rf of the
+                # parent would still remove that target's children.
+                if [ -L "\$_scan" ]; then
+                  printf '%s\\n' "\$_root"
                   return 0
                 fi
               fi

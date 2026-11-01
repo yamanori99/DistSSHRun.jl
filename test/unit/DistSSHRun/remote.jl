@@ -878,6 +878,34 @@ end
         end
     end
 
+    @testset "delete shell refuses a symlink runs directory" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            store = joinpath(d, "run_store")
+            leaf = joinpath(store, "20260101T000000Z-abcd")
+            mkpath(root)
+            mkpath(leaf)
+            write(joinpath(leaf, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
+            symlink(store, joinpath(root, "runs"))
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isdir(leaf)
+            @test islink(joinpath(root, "runs"))
+            @test isfile(joinpath(leaf, "run.toml"))
+        end
+    end
+
     @testset "ownership scans refuse a symlinked run.toml" begin
         mktempdir() do d
             root = joinpath(d, "app")
