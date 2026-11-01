@@ -23,6 +23,24 @@ end
     @test occursin("hosts must be unique", sprint(showerror, err))
 end
 
+@testset "remote run leaf stamp is DistSSHRun-owned" begin
+    stamp = DistSSHRun._ship_run_leaf_stamp_toml()
+    @test occursin("schema = 1", stamp)
+    @test occursin("kind = \"ship\"", stamp)
+    @test occursin("writer = \"DistSSHRun ", stamp)
+    raw = TOML.parse(stamp)
+    @test DistSSHRun._kit_run_toml_owned(raw)
+    @test !DistSSHRun._kit_run_toml_owned(
+        Dict("schema" => 1, "writer" => "Other 1.0", "kind" => "ship"),
+    )
+    @test !DistSSHRun._kit_run_toml_owned(
+        Dict("schema" => 1, "writer" => "DistSSHRun 1.0", "kind" => "other"),
+    )
+    sh = DistSSHRun._remote_run_leaf_stamp_sh("/work/app/runs/20260101T000000Z-abcd")
+    @test occursin("/work/app/runs/20260101T000000Z-abcd/run.toml", sh)
+    @test occursin("kind = \"ship\"", sh)
+end
+
 @testset "remote_root must already exist" begin
     sh = DistSSHRun._remote_run_leaf_script("/work/app", "20260101T000000Z-abcd")
     @test occursin("remote_root does not exist", sh)
@@ -774,7 +792,9 @@ end
             push!(DistSSHRun._PENDING_INPUT_HASH_TASKS, @async error("hash failed after init"))
         end
         after_init = @async DistSSHRun.await_declared_input_hashes!()
-        DistSSHRun._join_overlapped_input_hash_keep_prior!(after_init)
+        @test_logs (:warn, r"Declared-input hashing failed") DistSSHRun._join_overlapped_input_hash_keep_prior!(
+            after_init,
+        )
         @test istaskfailed(after_init)
         @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
 

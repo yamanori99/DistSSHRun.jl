@@ -242,8 +242,11 @@ if !isdefined(@__MODULE__, :setup_main)
                     return Cint(1)
                 end
                 result = plan === nothing ?
-                    delete_remotes(opts.hosts, delete_path; confirm = true) :
-                    DistSSHRun._apply_confirmed_delete(opts.hosts, plan)
+                    delete_remotes(
+                        opts.hosts, delete_path;
+                        confirm = true, deploy_root = deploy_path,
+                    ) :
+                    DistSSHRun._apply_confirmed_delete(opts.hosts, plan, deploy_path)
                 return Cint(finish_host_op!("Delete", result) ? 0 : 1)
             end
 

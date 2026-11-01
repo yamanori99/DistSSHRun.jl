@@ -41,17 +41,190 @@ function rsync_push_to_remotes(
     )
 end
 
+# Shell helpers: missing run.toml is allowed; a present entry must be owned.
+# Delete passes `ship` and scans `<deploy>/runs/<run_id>/run.toml`. The confirmed
+# delete path may be a git-work-tree ancestor of that deploy root. A missing
+# `runs/` is not a stamp tree. A symlink `runs/` or a symlink directly under
+# `runs/` is unowned (find would not inspect the target). Prune omits that
+# mode and walks its
+# candidate recursively, including nested stamps. The textual check requires
+# the `_kit_run_toml_owned` fields and rejects unclosed quotes or brackets.
+# It is not a TOML parser. A newline in a stamp path, a symlink or other
+# non-regular `run.toml`, and a scan error are unowned (fail closed), never a
+# missing stamp and never ownership proof.
+function _remote_run_toml_owned_check_sh()::String
+    return """
+            _dsk_find_stamps() {
+              _dsk_find_root=\$1
+              _dsk_find_ship=\$2
+              shift 2
+              if [ "\$_dsk_find_ship" = 1 ]; then
+                find "\$_dsk_find_root" -mindepth 2 -maxdepth 2 -name run.toml "\$@"
+              else
+                find "\$_dsk_find_root" -name run.toml "\$@"
+              fi
+            }
+            _dsk_first_unowned_stamp() {
+              _root=\$1
+              _ship=0
+              _scan="\$_root"
+              if [ "\${2-}" = ship ]; then
+                _ship=1
+                _scan="\$_root/runs"
+                # Missing runs/ is an older tree, not a failed scan.
+                if [ ! -d "\$_scan" ]; then
+                  return 0
+                fi
+                # find does not inspect a symlink runs/ target; rm -rf of the
+                # parent would still remove that target's children.
+                if [ -L "\$_scan" ]; then
+                  printf '%s\\n' "\$_root"
+                  return 0
+                fi
+                _link=\$(find "\$_scan" -mindepth 1 -maxdepth 1 -type l) || {
+                  printf '%s\\n' "\$_scan"
+                  return 0
+                }
+                if [ -n "\$_link" ]; then
+                  printf '%s\\n' "\$_link"
+                  return 0
+                fi
+              fi
+              _mark=\$(mktemp) || {
+                printf '%s\\n' "\$_root"
+                return 0
+              }
+              _awkf=\$(mktemp) || {
+                rm -f "\$_mark"
+                printf '%s\\n' "\$_root"
+                return 0
+              }
+              _chk=\$(mktemp) || {
+                rm -f "\$_mark" "\$_awkf"
+                printf '%s\\n' "\$_root"
+                return 0
+              }
+              cat > "\$_awkf" << 'DSK_AWK'
+    function unbalanced(s,    i, n, c, dq, sq, br, cu, esc, sqch) {
+      n = length(s)
+      dq = 0
+      sq = 0
+      br = 0
+      cu = 0
+      esc = 0
+      sqch = sprintf("%c", 39)
+      for (i = 1; i <= n; i++) {
+        c = substr(s, i, 1)
+        if (esc) { esc = 0; continue }
+        if (dq) {
+          if (c == "\\\\") { esc = 1; continue }
+          if (c == "\\"") { dq = 0; continue }
+          continue
+        }
+        if (sq) {
+          if (c == sqch) { sq = 0; continue }
+          continue
+        }
+        if (c == "#") return (br || cu) ? 1 : 0
+        if (c == "\\"") {
+          if (substr(s, i, 3) == "\\"\\"\\"") return 1
+          dq = 1
+          continue
+        }
+        if (c == sqch) {
+          if (substr(s, i, 3) == sqch sqch sqch) return 1
+          sq = 1
+          continue
+        }
+        if (c == "[") br++
+        else if (c == "]") { if (br == 0) return 1; br-- }
+        else if (c == "{") cu++
+        else if (c == "}") { if (cu == 0) return 1; cu-- }
+      }
+      if (dq || sq || br || cu || esc) return 1
+      return 0
+    }
+    BEGIN { s = 0; w = 0; k = 0; top = 1; bad = 0 }
+    /^[ \\t]*#/ { next }
+    /^[ \\t]*\$/ { next }
+    { if (unbalanced(\$0)) { bad = 1; exit } }
+    /^\\[/ {
+      top = 0
+      if (\$0 !~ /^\\[[^\\]]+\\]\$/) { bad = 1; exit }
+      next
+    }
+    top == 1 {
+      if (\$0 ~ /^schema = 1\$/) { s = 1; next }
+      if (\$0 ~ /^writer = "DistSSHRun [^"]*"\$/) { w = 1; next }
+      if (\$0 ~ /^writer = "DistSSHRun /) { bad = 1; exit }
+      if (\$0 ~ /^kind = "(go|drive|ride|pipeline|ship)"\$/) { k = 1; next }
+      if (\$0 ~ /^[A-Za-z_][A-Za-z0-9_]* = /) next
+      bad = 1
+      exit
+    }
+    {
+      if (\$0 ~ /^[A-Za-z_][A-Za-z0-9_]* = /) next
+      bad = 1
+      exit
+    }
+    END { if (bad) exit 1; exit (s && w && k) ? 0 : 1 }
+    DSK_AWK
+              cat > "\$_chk" << 'DSK_CHK'
+    _mark=\$1
+    _awkf=\$2
+    _f=\$3
+    if printf "%s" "\$_f" | awk "NR>1 { e = 1 } END { exit e ? 0 : 1 }"; then
+      printf "%s\\n" "\$_f" > "\$_mark"
+      exit 0
+    fi
+    if [ -L "\$_f" ] || [ ! -f "\$_f" ] || ! awk -f "\$_awkf" "\$_f"; then
+      printf "%s\\n" "\$_f" > "\$_mark"
+    fi
+    exit 0
+    DSK_CHK
+              # `{}` is last so BSD find accepts it. The child exits 0 when the
+              # stamp is bad; find's status stays the scan, and the mark file
+              # records the path. A non-regular run.toml is not opened.
+              if ! _dsk_find_stamps "\$_scan" "\$_ship" -exec sh "\$_chk" "\$_mark" "\$_awkf" {} \\; 2>/dev/null; then
+                if [ ! -s "\$_mark" ]; then
+                  printf '%s\\n' "\$_root" > "\$_mark"
+                fi
+              fi
+              if [ -s "\$_mark" ]; then
+                cat "\$_mark"
+                rm -f "\$_mark" "\$_awkf" "\$_chk"
+                return 0
+              fi
+              rm -f "\$_mark" "\$_awkf" "\$_chk"
+            }
+            _dsk_assert_run_leaves_owned() {
+              _root=\$1
+              _bad=\$(_dsk_first_unowned_stamp "\$_root" ship)
+              if [ -n "\$_bad" ]; then
+                printf 'refusing to delete unowned run leaf %s\\n' "\$(dirname "\$_bad")" >&2
+                return 1
+              fi
+              return 0
+            }
+    """
+end
+
 """Remote `sh` that removes `remote_path` unless it is that host's home, `/`, or depot.
 
 The final path component must not be a symlink. Intermediate symlinks stay,
 so `cd -P` / `pwd -P` can resolve them. The `test -L` check and `rm` are one
 script. Flags are `rm -rf` only (BSD rm on macOS).
 """
-function _remote_delete_shell(remote_path::AbstractString)::String
+function _remote_delete_shell(
+        remote_path::AbstractString,
+        deploy_root::AbstractString = remote_path,
+    )::String
     pq = _remote_shell_path_word(remote_path)
+    dq = _remote_shell_path_word(deploy_root)
     # `$pq` is its own word. A double-quoted echo would treat its quotes as
     # text and run `$(...)` in the path.
     return """
+    $(_remote_run_toml_owned_check_sh())
     if test -L $pq; then
       printf 'refusing to delete symlink %s\\n' $pq >&2
       exit 1
@@ -69,6 +242,10 @@ function _remote_delete_shell(remote_path::AbstractString)::String
           printf 'refusing to delete %s\\n' "\$_distssh_depot" >&2
           exit 1
         fi
+      fi
+      if test -e $dq; then
+        _distssh_deploy=\$(cd -P $dq && pwd -P) || exit 1
+        _dsk_assert_run_leaves_owned "\$_distssh_deploy" || exit 1
       fi
     fi
     rm -rf $pq 2>/dev/null
@@ -92,8 +269,10 @@ function delete_remotes(
         hosts::Vector{String},
         remote_path::String;
         confirm::Bool = true,
+        deploy_root::AbstractString = remote_path,
     )::NamedTuple
     _checked_remote_dest(remote_path)
+    _checked_remote_dest(String(deploy_root))
     _refuse_depot_target(remote_path)
     if confirm
         cancelled = with_kit_progress_suspended() do
@@ -122,7 +301,9 @@ function delete_remotes(
             kit_spin!("  $host: ") do
                 read(
                     pipeline(
-                        _host_sync_remote_shell_cmd(host, _remote_delete_shell(remote_path));
+                        _host_sync_remote_shell_cmd(
+                            host, _remote_delete_shell(remote_path, deploy_root),
+                        );
                         stderr = err_buf,
                     ),
                     String,

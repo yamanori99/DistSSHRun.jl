@@ -267,6 +267,739 @@ end
     end
 
 
+    @testset "delete shell refuses an unowned run leaf stamp" begin
+        script = DistSSHRun._remote_delete_shell("/tmp/app")
+        @test occursin("refusing to delete unowned run leaf", script)
+        @test occursin("_dsk_assert_run_leaves_owned", script)
+        @test occursin("_dsk_first_unowned_stamp", script)
+        @test occursin("DistSSHRun ", script)
+        owned_sh = DistSSHRun._remote_run_toml_owned_check_sh()
+        @test occursin("/^\\[/", owned_sh)
+        @test occursin("mktemp", owned_sh)
+        @test occursin("NR>1", owned_sh)
+        @test occursin("-exec sh", owned_sh)
+        @test !occursin("-type f", owned_sh)
+        @test occursin("-mindepth 1 -maxdepth 1 -type l", owned_sh)
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            mkpath(joinpath(leaf, "src"))
+            write(
+                joinpath(leaf, "run.toml"),
+                "schema = 1\nwriter = \"Other 9.9.9\"\nkind = \"ship\"\n",
+            )
+            body = DistSSHRun._remote_delete_shell(root)
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(pipeline(`sh -c $body`; stdout = devnull, stderr = err));
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isdir(leaf)
+            write(
+                joinpath(leaf, "run.toml"),
+                "[metadata]\nschema = 1\nwriter = \"DistSSHRun 1\"\nkind = \"ship\"\n",
+            )
+            err_meta = IOBuffer()
+            proc_meta = run(
+                ignorestatus(pipeline(`sh -c $(DistSSHRun._remote_delete_shell(root))`; stdout = devnull, stderr = err_meta));
+                wait = true,
+            )
+            @test proc_meta.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err_meta)))
+            @test isdir(leaf)
+            write(
+                joinpath(leaf, "run.toml"),
+                "schema = 1\nwriter = \"DistSSHRun 1.0\nkind = \"ship\"\n",
+            )
+            err_open = IOBuffer()
+            proc_open = run(
+                ignorestatus(pipeline(`sh -c $(DistSSHRun._remote_delete_shell(root))`; stdout = devnull, stderr = err_open));
+                wait = true,
+            )
+            @test proc_open.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err_open)))
+            @test isdir(leaf)
+            write(
+                joinpath(leaf, "run.toml"),
+                "schema = 1\nwriter = \"DistSSHRun 1.0\"\nkind = \"ship\"\n[bad\n",
+            )
+            err_hdr = IOBuffer()
+            proc_hdr = run(
+                ignorestatus(pipeline(`sh -c $(DistSSHRun._remote_delete_shell(root))`; stdout = devnull, stderr = err_hdr));
+                wait = true,
+            )
+            @test proc_hdr.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err_hdr)))
+            @test isdir(leaf)
+            write(joinpath(leaf, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
+            proc2 = run(
+                ignorestatus(pipeline(`sh -c $(DistSSHRun._remote_delete_shell(root))`; stdout = devnull, stderr = devnull));
+                wait = true,
+            )
+            @test proc2.exitcode == 0
+            @test !isdir(root)
+        end
+    end
+
+    @testset "prune shell refuses a nested unowned stamp" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            drive = joinpath(root, ".distsshkit", "drive")
+            nested = joinpath(drive, "nested")
+            mkpath(nested)
+            write(
+                joinpath(nested, "run.toml"),
+                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"drive\"\n",
+            )
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isdir(nested)
+            write(joinpath(nested, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
+            proc2 = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc2.exitcode == 0
+            @test !isdir(drive)
+            @test isdir(root)
+        end
+    end
+
+    @testset "prune shell keeps a recursive stamp walk" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            go = joinpath(root, ".distsshkit", "go", "job")
+            mkpath(go)
+            write(
+                joinpath(go, "run.toml"),
+                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"go\"\n",
+            )
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isfile(joinpath(go, "run.toml"))
+        end
+        mktempdir() do d
+            root = joinpath(d, "app")
+            deep = joinpath(root, ".distsshkit", "drive", "a", "b")
+            mkpath(deep)
+            write(
+                joinpath(deep, "run.toml"),
+                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"drive\"\n",
+            )
+            mkpath(joinpath(root, "src"))
+            write(joinpath(root, "src", "run.toml"), "name = \"job\"\n")
+            ship = joinpath(root, "runs", "20260101T000000Z-abcd", "src", "src")
+            mkpath(ship)
+            write(joinpath(ship, "run.toml"), "name = \"job\"\n")
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isfile(joinpath(deep, "run.toml"))
+            @test isfile(joinpath(root, "src", "run.toml"))
+        end
+    end
+
+    @testset "delete shell refuses a stamp path with a newline" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            weird = joinpath(root, "runs", "id\nleaf")
+            mkpath(weird)
+            write(joinpath(weird, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(pipeline(`sh -c $(DistSSHRun._remote_delete_shell(root))`; stdout = devnull, stderr = err));
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isdir(weird)
+        end
+    end
+
+    @testset "delete shell refuses a star-newline leaf even with decoy stamps" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, "runs", "*\n*")
+            mkpath(leaf)
+            write(
+                joinpath(leaf, "run.toml"),
+                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"ship\"\n",
+            )
+            # Line-splitting this path yields `<root>/runs/*` and `*/run.toml`.
+            write(joinpath(root, "runs", "*"), DistSSHRun._ship_run_leaf_stamp_toml())
+            cwd = joinpath(d, "cwd")
+            mkpath(joinpath(cwd, "*"))
+            write(joinpath(cwd, "*", "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
+            err = IOBuffer()
+            body = DistSSHRun._remote_delete_shell(root)
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        Cmd(`sh -c $body`; dir = cwd);
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isfile(joinpath(leaf, "run.toml"))
+        end
+    end
+
+    @testset "delete shell rejects unclosed quotes and brackets" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            mkpath(leaf)
+            owned = "schema = 1\nwriter = \"DistSSHRun 1.0\"\nkind = \"ship\"\n"
+            for extra in (
+                    "note = \"unterminated\n",
+                    "nums = [1, 2\n",
+                    "point = { x = 1\n",
+                    "note = 'unterminated\n",
+                    "[a.\"b]\n",
+                )
+                write(joinpath(leaf, "run.toml"), owned * extra)
+                err = IOBuffer()
+                proc = run(
+                    ignorestatus(
+                        pipeline(
+                            `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                            stdout = devnull,
+                            stderr = err,
+                        ),
+                    );
+                    wait = true,
+                )
+                @test proc.exitcode != 0
+                @test occursin("unowned run leaf", String(take!(err)))
+                @test isfile(joinpath(leaf, "run.toml"))
+            end
+            write(
+                joinpath(leaf, "run.toml"),
+                owned * "note = \"a [b]\"\nnums = [1, 2]\npoint = { x = 1 }\n",
+            )
+            proc_ok = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc_ok.exitcode == 0
+            @test !isdir(root)
+        end
+    end
+
+    @testset "delete shell refuses a non-regular run.toml" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            mkpath(leaf)
+            mkdir(joinpath(leaf, "run.toml"))
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isdir(joinpath(leaf, "run.toml"))
+        end
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            mkpath(leaf)
+            run(`mkfifo $(joinpath(leaf, "run.toml"))`)
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test ispath(joinpath(leaf, "run.toml"))
+            @test !isfile(joinpath(leaf, "run.toml"))
+            @test isdir(leaf)
+        end
+    end
+
+    @testset "prune shell refuses a non-regular or newline stamp" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            drive = joinpath(root, ".distsshkit", "drive")
+            mkpath(drive)
+            mkdir(joinpath(drive, "run.toml"))
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isdir(joinpath(drive, "run.toml"))
+        end
+        mktempdir() do d
+            root = joinpath(d, "app")
+            drive = joinpath(root, ".distsshkit", "drive")
+            mkpath(drive)
+            run(`mkfifo $(joinpath(drive, "run.toml"))`)
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test ispath(joinpath(drive, "run.toml"))
+            @test isdir(drive)
+        end
+        mktempdir() do d
+            root = joinpath(d, "app")
+            drive = joinpath(root, ".distsshkit", "drive")
+            weird = joinpath(drive, "*\n*")
+            mkpath(weird)
+            write(
+                joinpath(weird, "run.toml"),
+                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"drive\"\n",
+            )
+            write(joinpath(drive, "*"), DistSSHRun._ship_run_leaf_stamp_toml())
+            cwd = joinpath(d, "cwd")
+            mkpath(joinpath(cwd, "*"))
+            write(joinpath(cwd, "*", "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
+            err = IOBuffer()
+            body = DistSSHRun._prune_remote_shell(root)
+            proc = run(
+                ignorestatus(
+                    pipeline(Cmd(`sh -c $body`; dir = cwd); stdout = devnull, stderr = err),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isfile(joinpath(weird, "run.toml"))
+            @test isdir(drive)
+        end
+    end
+
+    @testset "prune shell refuses a newline in the path to .distsshkit" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            keep = joinpath(root, "foo", "drive")
+            mkpath(keep)
+            write(joinpath(keep, "note"), "keep\n")
+            mkpath(joinpath(root, "foo\nbar", ".distsshkit"))
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("newline", String(take!(err)))
+            @test isfile(joinpath(keep, "note"))
+        end
+    end
+
+    @testset "delete shell scans nested deploy runs not the git root" begin
+        mktempdir() do d
+            gitroot = joinpath(d, "Repo")
+            app = joinpath(gitroot, "App")
+            leaf = joinpath(app, "runs", "20260101T000000Z-abcd")
+            mkpath(leaf)
+            write(joinpath(leaf, "run.toml"), "name = \"job\"\n")
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(gitroot, app))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isdir(leaf)
+            write(joinpath(leaf, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
+            mkpath(joinpath(app, "src"))
+            write(joinpath(app, "src", "run.toml"), "name = \"job\"\n")
+            proc_ok = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(gitroot, app))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc_ok.exitcode == 0
+            @test !isdir(gitroot)
+        end
+        mktempdir() do d
+            gitroot = joinpath(d, "Repo")
+            app = joinpath(gitroot, "App")
+            decoy = joinpath(gitroot, "runs", "20260101T000000Z-abcd")
+            mkpath(decoy)
+            write(joinpath(decoy, "run.toml"), "name = \"job\"\n")
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(gitroot, app))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode == 0
+            @test !isdir(gitroot)
+        end
+    end
+
+    @testset "delete shell ignores a project run.toml under the shipped src tree" begin
+        delete_sh = DistSSHRun._remote_delete_shell("/tmp/app")
+        @test occursin("-mindepth 2 -maxdepth 2", delete_sh)
+        @test occursin("""_dsk_first_unowned_stamp "\$_root" ship""", delete_sh)
+        prune_sh = DistSSHRun._prune_remote_shell("/tmp/app")
+        @test occursin("""_bad=\$(_dsk_first_unowned_stamp "\$_child")""", prune_sh)
+        @test !occursin("""_dsk_first_unowned_stamp "\$_child" ship""", prune_sh)
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            mkpath(joinpath(leaf, "src", "src"))
+            write(joinpath(leaf, "src", "run.toml"), "name = \"job\"\n")
+            write(joinpath(leaf, "src", "src", "run.toml"), "name = \"job\"\n")
+            write(joinpath(leaf, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode == 0
+            @test !isdir(root)
+        end
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            mkpath(joinpath(leaf, "src", "src"))
+            write(joinpath(leaf, "src", "src", "run.toml"), "name = \"job\"\n")
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode == 0
+            @test !isdir(root)
+        end
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            mkpath(joinpath(leaf, "src"))
+            write(joinpath(leaf, "src", "run.toml"), "name = \"job\"\n")
+            write(
+                joinpath(leaf, "run.toml"),
+                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"ship\"\n",
+            )
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isfile(joinpath(leaf, "run.toml"))
+            @test isfile(joinpath(leaf, "src", "run.toml"))
+        end
+        mktempdir() do d
+            root = joinpath(d, "app")
+            mkpath(joinpath(root, "src"))
+            write(joinpath(root, "src", "run.toml"), "name = \"job\"\n")
+            fake = joinpath(d, "bin")
+            mkdir(fake)
+            write(joinpath(fake, "find"), "#!/bin/sh\nexit 1\n")
+            chmod(joinpath(fake, "find"), 0o755)
+            path = fake * ":" * get(ENV, "PATH", "")
+            proc = withenv("PATH" => path) do
+                run(
+                    ignorestatus(
+                        pipeline(
+                            `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                            stdout = devnull,
+                            stderr = devnull,
+                        ),
+                    );
+                    wait = true,
+                )
+            end
+            @test proc.exitcode == 0
+            @test !isdir(root)
+        end
+    end
+
+    @testset "delete shell still fails closed when the ship-leaf scan errors" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            mkpath(leaf)
+            write(joinpath(leaf, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
+            fake = joinpath(d, "bin")
+            mkdir(fake)
+            write(joinpath(fake, "find"), "#!/bin/sh\nexit 1\n")
+            chmod(joinpath(fake, "find"), 0o755)
+            path = fake * ":" * get(ENV, "PATH", "")
+            err = IOBuffer()
+            proc = withenv("PATH" => path) do
+                run(
+                    ignorestatus(
+                        pipeline(
+                            `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                            stdout = devnull,
+                            stderr = err,
+                        ),
+                    );
+                    wait = true,
+                )
+            end
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isdir(leaf)
+            write(joinpath(fake, "mktemp"), "#!/bin/sh\nexit 1\n")
+            chmod(joinpath(fake, "mktemp"), 0o755)
+            rm(joinpath(fake, "find"); force = true)
+            err_mk = IOBuffer()
+            proc_mk = withenv("PATH" => path) do
+                run(
+                    ignorestatus(
+                        pipeline(
+                            `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                            stdout = devnull,
+                            stderr = err_mk,
+                        ),
+                    );
+                    wait = true,
+                )
+            end
+            @test proc_mk.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err_mk)))
+            @test isdir(leaf)
+        end
+    end
+
+    @testset "delete shell refuses a symlink runs directory" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            store = joinpath(d, "run_store")
+            leaf = joinpath(store, "20260101T000000Z-abcd")
+            mkpath(root)
+            mkpath(leaf)
+            write(joinpath(leaf, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
+            symlink(store, joinpath(root, "runs"))
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isdir(leaf)
+            @test islink(joinpath(root, "runs"))
+            @test isfile(joinpath(leaf, "run.toml"))
+        end
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, "run_store", "20260101T000000Z-abcd")
+            mkpath(joinpath(root, "runs"))
+            mkpath(leaf)
+            write(joinpath(leaf, "run.toml"), "name = \"job\"\n")
+            symlink(leaf, joinpath(root, "runs", "20260101T000000Z-abcd"))
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isdir(leaf)
+            @test islink(joinpath(root, "runs", "20260101T000000Z-abcd"))
+            @test isfile(joinpath(leaf, "run.toml"))
+        end
+    end
+
+    @testset "ownership scans refuse a symlinked run.toml" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            mkpath(joinpath(leaf, "src"))
+            outside = joinpath(d, "stamp.toml")
+            write(outside, DistSSHRun._ship_run_leaf_stamp_toml())
+            symlink(outside, joinpath(leaf, "run.toml"))
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test islink(joinpath(leaf, "run.toml"))
+            @test isdir(leaf)
+            @test isfile(outside)
+        end
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
+            mkpath(leaf)
+            symlink(joinpath(d, "missing.toml"), joinpath(leaf, "run.toml"))
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test islink(joinpath(leaf, "run.toml"))
+        end
+        mktempdir() do d
+            root = joinpath(d, "app")
+            nested = joinpath(root, ".distsshkit", "drive", "nested")
+            mkpath(nested)
+            outside = joinpath(d, "stamp.toml")
+            write(outside, DistSSHRun._ship_run_leaf_stamp_toml())
+            symlink(outside, joinpath(nested, "run.toml"))
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test islink(joinpath(nested, "run.toml"))
+            @test !isfile(joinpath(root, ".distsshkit", "drive", "run.toml"))
+        end
+    end
+
     @testset "delete shell refuses a final symlink and quotes odd names" begin
         script = DistSSHRun._remote_delete_shell("~/proj")
         @test occursin("test -L", script)

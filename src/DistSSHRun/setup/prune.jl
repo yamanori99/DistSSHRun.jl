@@ -47,6 +47,10 @@ function prune_kit_leaf_dirs!(
             end
         end
     end
+    for p in victims
+        isdir(p) || continue
+        _assert_kit_tree_stamps_owned!(p)
+    end
     n = 0
     for p in victims
         isdir(p) || continue
@@ -54,6 +58,24 @@ function prune_kit_leaf_dirs!(
         n += 1
     end
     return n
+end
+
+"""Refuse prune when any `run.toml` under `root` is present but not DistSSHRun-owned."""
+function _assert_kit_tree_stamps_owned!(root::AbstractString)
+    for (dir, dirs, files) in walkdir(String(root))
+        ("run.toml" in files || "run.toml" in dirs) || continue
+        stamp = joinpath(dir, "run.toml")
+        # FIFO / directory / symlink / dangling link: do not `open` (a FIFO waits
+        # for a writer; `isfile` follows links).
+        if islink(stamp) || !isfile(stamp)
+            throw(ArgumentError("refusing to prune unowned run leaf $dir"))
+        end
+        raw = read_kit_run_toml(stamp)
+        if raw === nothing || !_kit_run_toml_owned(raw)
+            throw(ArgumentError("refusing to prune unowned run leaf $dir"))
+        end
+    end
+    return nothing
 end
 
 function _prune_id_ok(name::AbstractString, id::Union{Nothing, String})::Bool
@@ -159,6 +181,7 @@ function _prune_remote_shell(
     older_q = posix_quote(older)
     return """
     # DISTSSHKIT_PRUNE_KIT_LEAVES
+    $(_remote_run_toml_owned_check_sh())
     root=$pq
     older=$older_q
     id=$idq
@@ -180,6 +203,39 @@ function _prune_remote_shell(
         exit 1
       fi
     fi
+    _dsk_prune_leaf() {
+      _child=\$1
+      _bad=\$(_dsk_first_unowned_stamp "\$_child")
+      if [ -n "\$_bad" ]; then
+        printf 'refusing to prune unowned run leaf %s\\n' "\$(dirname "\$_bad")" >&2
+        exit 1
+      fi
+      rm -rf "\$_child"
+    }
+    # The walk below reads find output by line. A newline in a parent of
+    # `.distsshkit` splits that path, and the prefix can be pruned.
+    _dsk_nlkit=\$(mktemp) || {
+      printf 'refusing to prune a path that contains a newline\\n' >&2
+      exit 1
+    }
+    if ! find "\$root" -type d -name .distsshkit -exec sh -c '
+      if printf "%s" "\$2" | awk "NR>1 { e = 1 } END { exit e ? 0 : 1 }"; then
+        printf "x\\n" > "\$1"
+      fi
+      exit 0
+    ' sh "\$_dsk_nlkit" {} \\; 2>/dev/null; then
+      if [ ! -s "\$_dsk_nlkit" ]; then
+        rm -f "\$_dsk_nlkit"
+        printf 'refusing to prune a path that contains a newline\\n' >&2
+        exit 1
+      fi
+    fi
+    if [ -s "\$_dsk_nlkit" ]; then
+      rm -f "\$_dsk_nlkit"
+      printf 'refusing to prune a path that contains a newline\\n' >&2
+      exit 1
+    fi
+    rm -f "\$_dsk_nlkit"
     find "\$root" -type d -name .distsshkit 2>/dev/null | while IFS= read -r kit; do
       go="\$kit/go"
       if [ -d "\$go" ]; then
@@ -193,7 +249,7 @@ function _prune_remote_shell(
             # find -mtime +N is > N days; local prune is >= DAYS.
             [ -n "\$(find "\$child" -maxdepth 0 -mtime +"\$((older - 1))" 2>/dev/null)" ] || continue
           fi
-          rm -rf "\$child"
+          _dsk_prune_leaf "\$child"
         done
       fi
       runs="\$kit/runs"
@@ -209,7 +265,7 @@ function _prune_remote_shell(
             if [ -n "\$older" ] && [ "\$older" != 0 ]; then
               [ -n "\$(find "\$child" -maxdepth 0 -mtime +"\$((older - 1))" 2>/dev/null)" ] || continue
             fi
-            rm -rf "\$child"
+            _dsk_prune_leaf "\$child"
           done
         done
       fi
@@ -220,7 +276,7 @@ function _prune_remote_shell(
           if [ -n "\$older" ] && [ "\$older" != 0 ]; then
             [ -n "\$(find "\$p" -maxdepth 0 -mtime +"\$((older - 1))" 2>/dev/null)" ] || continue
           fi
-          rm -rf "\$p"
+          _dsk_prune_leaf "\$p"
         done
       fi
     done

@@ -82,11 +82,108 @@ using Test
             @test isdir(drive)
             @test isdir(run_old)
             @test !isdir(run_keep)
+            fake = joinpath(proj, ".distsshkit", "go", "job_fake")
+            mkpath(fake)
+            write(
+                joinpath(fake, "run.toml"),
+                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"go\"\n",
+            )
+            err = try
+                DistSSHRun.prune_kit_leaf_dirs!(proj)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("unowned run leaf", err.msg)
+            @test isdir(fake)
+            rm(joinpath(fake, "run.toml"); force = true)
+            nested = joinpath(drive, "nested")
+            mkpath(nested)
+            write(
+                joinpath(nested, "run.toml"),
+                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"drive\"\n",
+            )
+            err_nested = try
+                DistSSHRun.prune_kit_leaf_dirs!(proj)
+                nothing
+            catch e
+                e
+            end
+            @test err_nested isa ArgumentError
+            @test occursin("unowned run leaf", err_nested.msg)
+            @test isdir(nested)
+            rm(joinpath(nested, "run.toml"); force = true)
+            secret = joinpath(drive, "secret")
+            keep_note = joinpath(drive, "keep_note")
+            mkpath(secret)
+            mkpath(keep_note)
+            write(joinpath(secret, "run.toml"), "name = \"job\"\n")
+            write(joinpath(keep_note, "note"), "x")
+            chmod(secret, 0o000)
+            err_scan = try
+                DistSSHRun.prune_kit_leaf_dirs!(proj)
+                nothing
+            catch e
+                e
+            end
+            chmod(secret, 0o700)
+            @test err_scan !== nothing
+            @test isdir(keep_note)
+            @test isdir(secret)
+            rm(secret; recursive = true, force = true)
+            rm(keep_note; recursive = true, force = true)
+            fifo_leaf = joinpath(proj, ".distsshkit", "go", "job_fifo")
+            mkpath(fifo_leaf)
+            run(`mkfifo $(joinpath(fifo_leaf, "run.toml"))`)
+            fifo_task = @async begin
+                try
+                    DistSSHRun.prune_kit_leaf_dirs!(proj)
+                    nothing
+                catch e
+                    e
+                end
+            end
+            @test timedwait(() -> istaskdone(fifo_task), 5.0) === :ok
+            fifo_err = fetch(fifo_task)
+            @test fifo_err isa ArgumentError
+            @test occursin("unowned run leaf", fifo_err.msg)
+            @test ispath(joinpath(fifo_leaf, "run.toml"))
+            @test !isfile(joinpath(fifo_leaf, "run.toml"))
+            rm(joinpath(fifo_leaf, "run.toml"); force = true)
+            dir_stamp = joinpath(proj, ".distsshkit", "go", "job_dir_stamp")
+            mkpath(joinpath(dir_stamp, "run.toml"))
+            err_dir = try
+                DistSSHRun.prune_kit_leaf_dirs!(proj)
+                nothing
+            catch e
+                e
+            end
+            @test err_dir isa ArgumentError
+            @test occursin("unowned run leaf", err_dir.msg)
+            @test isdir(joinpath(dir_stamp, "run.toml"))
+            rm(joinpath(dir_stamp, "run.toml"); recursive = true, force = true)
+            link_leaf = joinpath(proj, ".distsshkit", "go", "job_link_stamp")
+            mkpath(link_leaf)
+            outside = joinpath(proj, "owned.toml")
+            write(outside, DistSSHRun._ship_run_leaf_stamp_toml())
+            symlink(outside, joinpath(link_leaf, "run.toml"))
+            err_link = try
+                DistSSHRun.prune_kit_leaf_dirs!(proj)
+                nothing
+            catch e
+                e
+            end
+            @test err_link isa ArgumentError
+            @test occursin("unowned run leaf", err_link.msg)
+            @test islink(joinpath(link_leaf, "run.toml"))
+            rm(joinpath(link_leaf, "run.toml"); force = true)
             n2 = DistSSHRun.prune_kit_leaf_dirs!(proj)
             @test n2 >= 3
             @test !isdir(go_old)
             @test !isdir(drive)
             @test !isdir(run_old)
+            @test !isdir(fake)
             @test isfile(joinpath(proj, "Project.toml"))
         end
 

@@ -559,10 +559,14 @@ end
 function _apply_confirmed_delete(
         hosts::AbstractVector{<:AbstractString},
         plan::Dict{String, String},
+        deploy_root::AbstractString,
     )::NamedTuple
     parts = NamedTuple[]
     for (path, group) in _confirmed_path_groups(hosts, plan)
-        push!(parts, delete_remotes(group, path; confirm = false))
+        push!(
+            parts,
+            delete_remotes(group, path; confirm = false, deploy_root = deploy_root),
+        )
     end
     return _merge_host_ops(parts)
 end
@@ -621,7 +625,11 @@ function _setup_one!(
         plan = _setup_require_plan(bound_plan)
         touch = _hosts_named_in_plan(hosts, plan)
         preflight_setup_ssh(touch) || return SyncResult(false, HostResult[]; ok = false)
-        raw = _apply_confirmed_delete(touch, plan)
+        raw = _apply_confirmed_delete(
+            touch,
+            plan,
+            remote_deploy_root(session.project; cli_override = session.remote),
+        )
         return _sync_result_from_host_op(raw)
     elseif mode === :rsync
         _throw_rsync_removed()
