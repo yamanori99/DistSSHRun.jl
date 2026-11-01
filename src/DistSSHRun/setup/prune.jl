@@ -65,8 +65,9 @@ function _assert_kit_tree_stamps_owned!(root::AbstractString)
     for (dir, dirs, files) in walkdir(String(root); onerror = Returns(nothing))
         ("run.toml" in files || "run.toml" in dirs) || continue
         stamp = joinpath(dir, "run.toml")
-        # FIFO / directory / dangling link: do not `open` (a FIFO waits for a writer).
-        if !isfile(stamp)
+        # FIFO / directory / symlink / dangling link: do not `open` (a FIFO waits
+        # for a writer; `isfile` follows links).
+        if islink(stamp) || !isfile(stamp)
             throw(ArgumentError("refusing to prune unowned run leaf $dir"))
         end
         raw = read_kit_run_toml(stamp)

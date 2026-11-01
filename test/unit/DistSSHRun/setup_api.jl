@@ -144,6 +144,21 @@ using Test
             @test occursin("unowned run leaf", err_dir.msg)
             @test isdir(joinpath(dir_stamp, "run.toml"))
             rm(joinpath(dir_stamp, "run.toml"); recursive = true, force = true)
+            link_leaf = joinpath(proj, ".distsshkit", "go", "job_link_stamp")
+            mkpath(link_leaf)
+            outside = joinpath(proj, "owned.toml")
+            write(outside, DistSSHRun._ship_run_leaf_stamp_toml())
+            symlink(outside, joinpath(link_leaf, "run.toml"))
+            err_link = try
+                DistSSHRun.prune_kit_leaf_dirs!(proj)
+                nothing
+            catch e
+                e
+            end
+            @test err_link isa ArgumentError
+            @test occursin("unowned run leaf", err_link.msg)
+            @test islink(joinpath(link_leaf, "run.toml"))
+            rm(joinpath(link_leaf, "run.toml"); force = true)
             n2 = DistSSHRun.prune_kit_leaf_dirs!(proj)
             @test n2 >= 3
             @test !isdir(go_old)

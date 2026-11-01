@@ -351,7 +351,7 @@ end
             on_dead = () -> (dead[] = true),
         )
         try
-            sleep(0.4)
+            sleep(1.5)
             @test !dead[]
         finally
             stop[] = true

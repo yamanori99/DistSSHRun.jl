@@ -820,13 +820,13 @@ end
         end
     end
 
-    @testset "ownership scans read a symlinked run.toml" begin
+    @testset "ownership scans refuse a symlinked run.toml" begin
         mktempdir() do d
             root = joinpath(d, "app")
             leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
             mkpath(joinpath(leaf, "src"))
             outside = joinpath(d, "stamp.toml")
-            write(outside, "schema = 1\nwriter = \"Other 1.0\"\nkind = \"ship\"\n")
+            write(outside, DistSSHRun._ship_run_leaf_stamp_toml())
             symlink(outside, joinpath(leaf, "run.toml"))
             err = IOBuffer()
             proc = run(
@@ -842,20 +842,7 @@ end
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test islink(joinpath(leaf, "run.toml"))
-            write(outside, DistSSHRun._ship_run_leaf_stamp_toml())
-            write(joinpath(leaf, "src", "run.toml"), "name = \"job\"\n")
-            proc_ok = run(
-                ignorestatus(
-                    pipeline(
-                        `sh -c $(DistSSHRun._remote_delete_shell(root))`;
-                        stdout = devnull,
-                        stderr = devnull,
-                    ),
-                );
-                wait = true,
-            )
-            @test proc_ok.exitcode == 0
-            @test !isdir(root)
+            @test isdir(leaf)
             @test isfile(outside)
         end
         mktempdir() do d
@@ -883,7 +870,7 @@ end
             nested = joinpath(root, ".distsshkit", "drive", "nested")
             mkpath(nested)
             outside = joinpath(d, "stamp.toml")
-            write(outside, "schema = 1\nwriter = \"Other 1.0\"\nkind = \"drive\"\n")
+            write(outside, DistSSHRun._ship_run_leaf_stamp_toml())
             symlink(outside, joinpath(nested, "run.toml"))
             err = IOBuffer()
             proc = run(

@@ -46,9 +46,9 @@ end
 # missing `runs/` is not a stamp tree. Prune omits that mode and walks its
 # candidate recursively, including nested stamps. The textual check requires
 # the `_kit_run_toml_owned` fields and rejects unclosed quotes or brackets.
-# It is not a TOML parser. A newline in a stamp path, a non-regular
-# `run.toml`, and a scan error are unowned (fail closed), never a missing
-# stamp and never ownership proof.
+# It is not a TOML parser. A newline in a stamp path, a symlink or other
+# non-regular `run.toml`, and a scan error are unowned (fail closed), never a
+# missing stamp and never ownership proof.
 function _remote_run_toml_owned_check_sh()::String
     return """
             _dsk_find_stamps() {
@@ -160,7 +160,7 @@ function _remote_run_toml_owned_check_sh()::String
       printf "%s\\n" "\$_f" > "\$_mark"
       exit 0
     fi
-    if [ ! -f "\$_f" ] || ! awk -f "\$_awkf" "\$_f"; then
+    if [ -L "\$_f" ] || [ ! -f "\$_f" ] || ! awk -f "\$_awkf" "\$_f"; then
       printf "%s\\n" "\$_f" > "\$_mark"
     fi
     exit 0
