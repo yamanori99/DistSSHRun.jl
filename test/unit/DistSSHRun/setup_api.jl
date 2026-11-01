@@ -114,6 +114,25 @@ using Test
             @test occursin("unowned run leaf", err_nested.msg)
             @test isdir(nested)
             rm(joinpath(nested, "run.toml"); force = true)
+            secret = joinpath(drive, "secret")
+            keep_note = joinpath(drive, "keep_note")
+            mkpath(secret)
+            mkpath(keep_note)
+            write(joinpath(secret, "run.toml"), "name = \"job\"\n")
+            write(joinpath(keep_note, "note"), "x")
+            chmod(secret, 0o000)
+            err_scan = try
+                DistSSHRun.prune_kit_leaf_dirs!(proj)
+                nothing
+            catch e
+                e
+            end
+            chmod(secret, 0o700)
+            @test err_scan !== nothing
+            @test isdir(keep_note)
+            @test isdir(secret)
+            rm(secret; recursive = true, force = true)
+            rm(keep_note; recursive = true, force = true)
             fifo_leaf = joinpath(proj, ".distsshkit", "go", "job_fifo")
             mkpath(fifo_leaf)
             run(`mkfifo $(joinpath(fifo_leaf, "run.toml"))`)
