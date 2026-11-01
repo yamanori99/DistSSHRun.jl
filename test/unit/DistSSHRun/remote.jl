@@ -279,7 +279,7 @@ end
         @test occursin("NR>1", owned_sh)
         @test occursin("-exec sh", owned_sh)
         @test !occursin("-type f", owned_sh)
-        @test !occursin("-type l", owned_sh)
+        @test occursin("-mindepth 1 -maxdepth 1 -type l", owned_sh)
         mktempdir() do d
             root = joinpath(d, "app")
             leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
@@ -902,6 +902,30 @@ end
             @test occursin("unowned run leaf", String(take!(err)))
             @test isdir(leaf)
             @test islink(joinpath(root, "runs"))
+            @test isfile(joinpath(leaf, "run.toml"))
+        end
+        mktempdir() do d
+            root = joinpath(d, "app")
+            leaf = joinpath(root, "run_store", "20260101T000000Z-abcd")
+            mkpath(joinpath(root, "runs"))
+            mkpath(leaf)
+            write(joinpath(leaf, "run.toml"), "name = \"job\"\n")
+            symlink(leaf, joinpath(root, "runs", "20260101T000000Z-abcd"))
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isdir(leaf)
+            @test islink(joinpath(root, "runs", "20260101T000000Z-abcd"))
             @test isfile(joinpath(leaf, "run.toml"))
         end
     end
