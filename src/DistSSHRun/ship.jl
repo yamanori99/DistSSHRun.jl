@@ -746,7 +746,12 @@ function _start_remote_input_hashes!(
     return nothing
 end
 
-"""Wait for deferred declared-input hashes from ship (`await_inputs=false`)."""
+"""Wait for deferred declared-input hashes from ship (`await_inputs=false`).
+
+An interrupt during `fetch` leaves that hash task in the drain set until it
+finishes. The interrupt is rethrown after every pending hash completes, and
+it is not hidden by an earlier task failure.
+"""
 function await_declared_input_hashes!()
     tasks = lock(_PENDING_INPUT_HASH_LOCK) do
         taken = copy(_PENDING_INPUT_HASH_TASKS)
@@ -754,13 +759,24 @@ function await_declared_input_hashes!()
         return taken
     end
     first_err = nothing
-    for task in tasks
+    interrupt_err = nothing
+    i = 1
+    while i <= length(tasks)
+        task = tasks[i]
         try
             fetch(task)
+            i += 1
         catch e
-            first_err === nothing && (first_err = e)
+            if e isa InterruptException ||
+                    (isdefined(Base, :CancellationRequest) && e isa Base.CancellationRequest)
+                interrupt_err = e
+            else
+                first_err === nothing && (first_err = e)
+                i += 1
+            end
         end
     end
+    interrupt_err === nothing || throw(interrupt_err)
     first_err === nothing || throw(first_err)
     return nothing
 end

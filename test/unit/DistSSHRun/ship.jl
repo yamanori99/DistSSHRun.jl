@@ -612,6 +612,65 @@ end
     @test err isa TaskFailedException
     @test second_done[]
     @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
+    gate = Channel{Bool}(1)
+    finished = Ref(false)
+    slow = @async begin
+        take!(gate)
+        finished[] = true
+        return nothing
+    end
+    lock(DistSSHRun._PENDING_INPUT_HASH_LOCK) do
+        push!(DistSSHRun._PENDING_INPUT_HASH_TASKS, slow)
+    end
+    waiter = @async DistSSHRun.await_declared_input_hashes!()
+    for _ in 1:200
+        (istaskstarted(waiter) && !istaskdone(waiter)) && break
+        sleep(0.01)
+    end
+    sleep(0.05)
+    schedule(waiter, InterruptException(); error = true)
+    sleep(0.05)
+    @test !finished[]
+    @test !istaskdone(slow)
+    put!(gate, true)
+    interrupted = try
+        fetch(waiter)
+        nothing
+    catch e
+        e isa TaskFailedException ? e.task.exception : e
+    end
+    @test interrupted isa InterruptException
+    @test finished[]
+    @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
+    gate2 = Channel{Bool}(1)
+    finished2 = Ref(false)
+    bad_first = @async error("hash failed first")
+    slow2 = @async begin
+        take!(gate2)
+        finished2[] = true
+        return nothing
+    end
+    lock(DistSSHRun._PENDING_INPUT_HASH_LOCK) do
+        push!(DistSSHRun._PENDING_INPUT_HASH_TASKS, bad_first, slow2)
+    end
+    waiter2 = @async DistSSHRun.await_declared_input_hashes!()
+    for _ in 1:200
+        (istaskstarted(waiter2) && !istaskdone(waiter2)) && break
+        sleep(0.01)
+    end
+    sleep(0.05)
+    schedule(waiter2, InterruptException(); error = true)
+    sleep(0.05)
+    put!(gate2, true)
+    prefer_interrupt = try
+        fetch(waiter2)
+        nothing
+    catch e
+        e isa TaskFailedException ? e.task.exception : e
+    end
+    @test prefer_interrupt isa InterruptException
+    @test finished2[]
+    @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
     @test hasmethod(
         DistSSHRun.ship_project_to_hosts!,
         Tuple{Vector{String}, String, String},
