@@ -1399,15 +1399,21 @@ function _go_run!(
             place,
         )
     finally
-        if !completed
-            footer = progress_ok ? display_path(batch_dir, anchor) : nothing
-            kit_progress_done!(; ok = progress_ok, footer = footer)
-            _print_go_slot_stdout_after_progress!(batch_dir)
-            _maybe_print_kit_progress_phases(batch_dir)
-            close_log_file()
-            _set_kit_progress_sidecar!(nothing)
-            release_lock()
-            _remove_kit_pid_file(getpid(), batch_dir, nothing)
+        # A throw after ship-tree registered hash tasks (for example
+        # `instantiate_after_ship!`) never reaches the awaits above.
+        try
+            await_declared_input_hashes!()
+        finally
+            if !completed
+                footer = progress_ok ? display_path(batch_dir, anchor) : nothing
+                kit_progress_done!(; ok = progress_ok, footer = footer)
+                _print_go_slot_stdout_after_progress!(batch_dir)
+                _maybe_print_kit_progress_phases(batch_dir)
+                close_log_file()
+                _set_kit_progress_sidecar!(nothing)
+                release_lock()
+                _remove_kit_pid_file(getpid(), batch_dir, nothing)
+            end
         end
     end
 end
