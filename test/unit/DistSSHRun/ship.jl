@@ -613,10 +613,10 @@ end
     @test second_done[]
     @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
     gate = Channel{Bool}(1)
-    finished = Ref(false)
+    slow_done = Ref(false)
     slow = @async begin
         take!(gate)
-        finished[] = true
+        slow_done[] = true
         return nothing
     end
     lock(DistSSHRun._PENDING_INPUT_HASH_LOCK) do
@@ -630,7 +630,7 @@ end
     sleep(0.05)
     schedule(waiter, InterruptException(); error = true)
     sleep(0.05)
-    @test !finished[]
+    @test !slow_done[]
     @test !istaskdone(slow)
     put!(gate, true)
     interrupted = try
@@ -640,7 +640,7 @@ end
         e isa TaskFailedException ? e.task.exception : e
     end
     @test interrupted isa InterruptException
-    @test finished[]
+    @test slow_done[]
     @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
     gate2 = Channel{Bool}(1)
     finished2 = Ref(false)
