@@ -160,6 +160,32 @@ function run_prepare_workers!()
     end
 end
 
+# `await_declared_input_hashes!` already emptied the pending list. An interrupt
+# during `fetch` must not return while that task is still hashing: the outer
+# drain would see an empty list and return. Wait until `hash_task` finishes,
+# keep its failure, then rethrow the interrupt so a hash failure cannot hide it.
+function _join_overlapped_input_hash!(hash_task::Task)
+    interrupt_err = nothing
+    hash_err = nothing
+    while true
+        try
+            fetch(hash_task)
+            break
+        catch e
+            if e isa InterruptException ||
+                    (isdefined(Base, :CancellationRequest) && e isa Base.CancellationRequest)
+                interrupt_err = e
+            else
+                hash_err = e
+                break
+            end
+        end
+    end
+    interrupt_err === nothing || throw(interrupt_err)
+    hash_err === nothing || throw(hash_err)
+    return nothing
+end
+
 function init_drive_workers!(proj_dir::String, explicit_package, path_anchor::String)
     write_both("Initializing workers... ")
     flush(stdout)
@@ -318,9 +344,9 @@ function init_drive_workers!(proj_dir::String, explicit_package, path_anchor::St
         print_progress_err("✗")
         writeln_both("")
         @warn "Worker initialization failed" exception = e
-        fetch(hash_task)
+        _join_overlapped_input_hash!(hash_task)
         rethrow()
     end
-    fetch(hash_task)
+    _join_overlapped_input_hash!(hash_task)
     return writeln_both("")
 end
