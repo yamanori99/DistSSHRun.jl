@@ -114,6 +114,36 @@ using Test
             @test occursin("unowned run leaf", err_nested.msg)
             @test isdir(nested)
             rm(joinpath(nested, "run.toml"); force = true)
+            fifo_leaf = joinpath(proj, ".distsshkit", "go", "job_fifo")
+            mkpath(fifo_leaf)
+            run(`mkfifo $(joinpath(fifo_leaf, "run.toml"))`)
+            fifo_task = @async begin
+                try
+                    DistSSHRun.prune_kit_leaf_dirs!(proj)
+                    nothing
+                catch e
+                    e
+                end
+            end
+            @test timedwait(() -> istaskdone(fifo_task), 5.0) === :ok
+            fifo_err = fetch(fifo_task)
+            @test fifo_err isa ArgumentError
+            @test occursin("unowned run leaf", fifo_err.msg)
+            @test ispath(joinpath(fifo_leaf, "run.toml"))
+            @test !isfile(joinpath(fifo_leaf, "run.toml"))
+            rm(joinpath(fifo_leaf, "run.toml"); force = true)
+            dir_stamp = joinpath(proj, ".distsshkit", "go", "job_dir_stamp")
+            mkpath(joinpath(dir_stamp, "run.toml"))
+            err_dir = try
+                DistSSHRun.prune_kit_leaf_dirs!(proj)
+                nothing
+            catch e
+                e
+            end
+            @test err_dir isa ArgumentError
+            @test occursin("unowned run leaf", err_dir.msg)
+            @test isdir(joinpath(dir_stamp, "run.toml"))
+            rm(joinpath(dir_stamp, "run.toml"); recursive = true, force = true)
             n2 = DistSSHRun.prune_kit_leaf_dirs!(proj)
             @test n2 >= 3
             @test !isdir(go_old)

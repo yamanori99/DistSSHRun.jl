@@ -62,16 +62,14 @@ end
 
 """Refuse prune when any `run.toml` under `root` is present but not DistSSHRun-owned."""
 function _assert_kit_tree_stamps_owned!(root::AbstractString)
-    for (dir, _, files) in walkdir(String(root); onerror = Returns(nothing))
-        ("run.toml" in files) || continue
+    for (dir, dirs, files) in walkdir(String(root); onerror = Returns(nothing))
+        ("run.toml" in files || "run.toml" in dirs) || continue
         stamp = joinpath(dir, "run.toml")
-        raw = try
-            open(stamp) do io
-                TOML.parse(io)
-            end
-        catch
-            nothing
+        # FIFO / directory / dangling link: do not `open` (a FIFO waits for a writer).
+        if !isfile(stamp)
+            throw(ArgumentError("refusing to prune unowned run leaf $dir"))
         end
+        raw = read_kit_run_toml(stamp)
         if raw === nothing || !_kit_run_toml_owned(raw)
             throw(ArgumentError("refusing to prune unowned run leaf $dir"))
         end
