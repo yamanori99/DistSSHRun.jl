@@ -47,77 +47,81 @@ end
 # well-formed table headers. Scan errors and newline paths fail closed.
 function _remote_run_toml_owned_check_sh()::String
     return """
-    _dsk_run_toml_owned() {
-      _f=\$1
-      [ -f "\$_f" ] || return 0
-      awk '
-        BEGIN { s = 0; w = 0; k = 0; top = 1; bad = 0 }
-        /^[\\t ]*#/ { next }
-        /^[\\t ]*\$/ { next }
-        /^\\[/ {
-          top = 0
-          if (\$0 !~ /^\\[[^\\]]+\\]\$/) { bad = 1; exit }
-          next
+        _dsk_run_toml_owned() {
+          _f=\$1
+          [ -f "\$_f" ] || return 0
+          awk '
+            BEGIN { s = 0; w = 0; k = 0; top = 1; bad = 0 }
+            /^[\\t ]*#/ { next }
+            /^[\\t ]*\$/ { next }
+            /^\\[/ {
+              top = 0
+              if (\$0 !~ /^\\[[^\\]]+\\]\$/) { bad = 1; exit }
+              next
+            }
+            top == 1 {
+              if (\$0 ~ /^schema = 1\$/) { s = 1; next }
+              if (\$0 ~ /^writer = "DistSSHRun [^"]*"\$/) { w = 1; next }
+              if (\$0 ~ /^writer = "DistSSHRun /) { bad = 1; exit }
+              if (\$0 ~ /^kind = "(go|drive|ride|pipeline|ship)"\$/) { k = 1; next }
+              if (\$0 ~ /^[A-Za-z_][A-Za-z0-9_]* = /) next
+              bad = 1
+              exit
+            }
+            {
+              if (\$0 ~ /^[A-Za-z_][A-Za-z0-9_]* = /) next
+              bad = 1
+              exit
+            }
+            END { if (bad) exit 1; exit (s && w && k) ? 0 : 1 }
+          ' "\$_f"
         }
-        top == 1 {
-          if (\$0 ~ /^schema = 1\$/) { s = 1; next }
-          if (\$0 ~ /^writer = "DistSSHRun [^"]*"\$/) { w = 1; next }
-          if (\$0 ~ /^writer = "DistSSHRun /) { bad = 1; exit }
-          if (\$0 ~ /^kind = "(go|drive|ride|pipeline|ship)"\$/) { k = 1; next }
-          if (\$0 ~ /^[A-Za-z_][A-Za-z0-9_]* = /) next
-          bad = 1
-          exit
-        }
-        {
-          if (\$0 ~ /^[A-Za-z_][A-Za-z0-9_]* = /) next
-          bad = 1
-          exit
-        }
-        END { if (bad) exit 1; exit (s && w && k) ? 0 : 1 }
-      ' "\$_f"
-    }
-    _dsk_first_unowned_stamp() {
-      _root=\$1
-      # Same newline refusal as remote input hashing: newline paths break
-      # line-oriented scans, so treat them as unowned (fail closed).
-      _nl=\$(find "\$_root" -type f -name run.toml -path '*
-*' -print -quit 2>/dev/null) || {
-        printf '%s\\n' "\$_root"
-        return 0
-      }
-      if [ -n "\$_nl" ]; then
-        printf '%s\\n' "\$_nl"
-        return 0
-      fi
-      _list=\$(mktemp) || {
-        printf '%s\\n' "\$_root"
-        return 0
-      }
-      if ! find "\$_root" -type f -name run.toml >"\$_list" 2>/dev/null; then
-        rm -f "\$_list"
-        printf '%s\\n' "\$_root"
-        return 0
-      fi
-      while IFS= read -r _stamp || [ -n "\$_stamp" ]; do
-        [ -n "\$_stamp" ] || continue
-        if [ ! -f "\$_stamp" ] || ! _dsk_run_toml_owned "\$_stamp"; then
-          printf '%s\\n' "\$_stamp"
+        _dsk_first_unowned_stamp() {
+          _root=\$1
+          # Same newline refusal as remote input hashing: newline paths break
+          # line-oriented scans, so treat them as unowned (fail closed).
+          _nl=\$(find "\$_root" -type f -name run.toml -path '*
+    *' -print -quit 2>/dev/null) || {
+            printf '%s\\n' "\$_root"
+            return 0
+          }
+          if [ -n "\$_nl" ]; then
+            printf '%s\\n' "\$_nl"
+            return 0
+          fi
+          _list=\$(mktemp) || {
+            printf '%s\\n' "\$_root"
+            return 0
+          }
+          if ! find "\$_root" -type f -name run.toml >"\$_list" 2>/dev/null; then
+            rm -f "\$_list"
+            printf '%s\\n' "\$_root"
+            return 0
+          fi
+          _bad=
+          while IFS= read -r _stamp || [ -n "\$_stamp" ]; do
+            [ -n "\$_stamp" ] || continue
+            if [ ! -f "\$_stamp" ] || ! _dsk_run_toml_owned "\$_stamp"; then
+              _bad=\$_stamp
+              break
+            fi
+          done <"\$_list"
           rm -f "\$_list"
+          if [ -n "\$_bad" ]; then
+            printf '%s\\n' "\$_bad"
+            return 0
+          fi
+        }
+        _dsk_assert_run_leaves_owned() {
+          _root=\$1
+          _bad=\$(_dsk_first_unowned_stamp "\$_root")
+          if [ -n "\$_bad" ]; then
+            printf 'refusing to delete unowned run leaf %s\\n' "\$(dirname "\$_bad")" >&2
+            return 1
+          fi
           return 0
-        fi
-      done <"\$_list"
-      rm -f "\$_list"
-    }
-    _dsk_assert_run_leaves_owned() {
-      _root=\$1
-      _bad=\$(_dsk_first_unowned_stamp "\$_root")
-      if [ -n "\$_bad" ]; then
-        printf 'refusing to delete unowned run leaf %s\\n' "\$(dirname "\$_bad")" >&2
-        return 1
-      fi
-      return 0
-    }
-    """
+        }
+        """
 end
 
 """Remote `sh` that removes `remote_path` unless it is that host's home, `/`, or depot.
