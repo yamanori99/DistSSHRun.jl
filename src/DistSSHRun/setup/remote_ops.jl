@@ -42,9 +42,12 @@ function rsync_push_to_remotes(
 end
 
 # Shell helpers: missing run.toml is allowed; a present file must be owned.
-# Textual check approximates `_kit_run_toml_owned` after a successful
-# `TOML.parse`: top-level ownership fields, complete quoted strings, and
-# well-formed table headers. Scan errors and newline paths fail closed.
+# Delete passes `ship` and scans only `<root>/runs/<run_id>/run.toml`. A
+# missing `runs/` is not a stamp tree. Prune omits that mode and walks its
+# candidate recursively, including nested stamps. Textual check approximates
+# `_kit_run_toml_owned` after a successful `TOML.parse`: top-level ownership
+# fields, complete quoted strings, and well-formed table headers. Scan errors
+# and newline paths fail closed.
 function _remote_run_toml_owned_check_sh()::String
     return """
         _dsk_run_toml_owned() {
@@ -76,11 +79,33 @@ function _remote_run_toml_owned_check_sh()::String
             END { if (bad) exit 1; exit (s && w && k) ? 0 : 1 }
           ' "\$_f"
         }
+        # `_ship` 1: only runs/<run_id>/run.toml. Both the newline check and
+        # the list use this predicate.
+        _dsk_find_stamps() {
+          _dsk_find_root=\$1
+          _dsk_find_ship=\$2
+          shift 2
+          if [ "\$_dsk_find_ship" = 1 ]; then
+            find "\$_dsk_find_root" -mindepth 2 -maxdepth 2 -type f -name run.toml "\$@"
+          else
+            find "\$_dsk_find_root" -type f -name run.toml "\$@"
+          fi
+        }
         _dsk_first_unowned_stamp() {
           _root=\$1
+          _ship=0
+          _scan="\$_root"
+          if [ "\${2-}" = ship ]; then
+            _ship=1
+            _scan="\$_root/runs"
+            # Missing runs/ is an older tree, not a failed scan.
+            if [ ! -d "\$_scan" ]; then
+              return 0
+            fi
+          fi
           # Same newline refusal as remote input hashing: newline paths break
           # line-oriented scans, so treat them as unowned (fail closed).
-          _nl=\$(find "\$_root" -type f -name run.toml -path '*
+          _nl=\$(_dsk_find_stamps "\$_scan" "\$_ship" -path '*
     *' -print -quit 2>/dev/null) || {
             printf '%s\\n' "\$_root"
             return 0
@@ -93,7 +118,7 @@ function _remote_run_toml_owned_check_sh()::String
             printf '%s\\n' "\$_root"
             return 0
           }
-          if ! find "\$_root" -type f -name run.toml >"\$_list" 2>/dev/null; then
+          if ! _dsk_find_stamps "\$_scan" "\$_ship" >"\$_list" 2>/dev/null; then
             rm -f "\$_list"
             printf '%s\\n' "\$_root"
             return 0
@@ -114,7 +139,7 @@ function _remote_run_toml_owned_check_sh()::String
         }
         _dsk_assert_run_leaves_owned() {
           _root=\$1
-          _bad=\$(_dsk_first_unowned_stamp "\$_root")
+          _bad=\$(_dsk_first_unowned_stamp "\$_root" ship)
           if [ -n "\$_bad" ]; then
             printf 'refusing to delete unowned run leaf %s\\n' "\$(dirname "\$_bad")" >&2
             return 1
