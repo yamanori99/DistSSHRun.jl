@@ -769,6 +769,50 @@ end
         end
         @test alone isa TaskFailedException
         @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
+
+        lock(DistSSHRun._PENDING_INPUT_HASH_LOCK) do
+            push!(DistSSHRun._PENDING_INPUT_HASH_TASKS, @async error("hash failed after init"))
+        end
+        after_init = @async DistSSHRun.await_declared_input_hashes!()
+        DistSSHRun._join_overlapped_input_hash_keep_prior!(after_init)
+        @test istaskfailed(after_init)
+        @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
+
+        gate_keep = Channel{Bool}(1)
+        kept_failed = Ref(false)
+        bad_keep = @async begin
+            take!(gate_keep)
+            kept_failed[] = true
+            error("hash failed during init catch")
+        end
+        lock(DistSSHRun._PENDING_INPUT_HASH_LOCK) do
+            push!(DistSSHRun._PENDING_INPUT_HASH_TASKS, bad_keep)
+        end
+        hash_keep = @async DistSSHRun.await_declared_input_hashes!()
+        waiter_keep = @async DistSSHRun._join_overlapped_input_hash_keep_prior!(hash_keep)
+        for _ in 1:200
+            (
+                istaskstarted(waiter_keep) && !istaskdone(waiter_keep) &&
+                    isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
+            ) && break
+            sleep(0.01)
+        end
+        sleep(0.05)
+        schedule(waiter_keep, InterruptException(); error = true)
+        sleep(0.05)
+        @test !kept_failed[]
+        @test !istaskdone(waiter_keep)
+        put!(gate_keep, true)
+        keep_interrupt = try
+            fetch(waiter_keep)
+            nothing
+        catch e
+            e isa TaskFailedException ? e.task.exception : e
+        end
+        @test keep_interrupt isa InterruptException
+        @test kept_failed[]
+        @test istaskfailed(hash_keep)
+        @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
     finally
         try
             DistSSHRun.await_declared_input_hashes!()

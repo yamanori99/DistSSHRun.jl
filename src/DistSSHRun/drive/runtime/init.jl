@@ -160,6 +160,11 @@ function run_prepare_workers!()
     end
 end
 
+function _is_overlapped_hash_interrupt(e)
+    return e isa InterruptException ||
+        (isdefined(Base, :CancellationRequest) && e isa Base.CancellationRequest)
+end
+
 # `await_declared_input_hashes!` already emptied the pending list. An interrupt
 # during `fetch` must not return while that task is still hashing: the outer
 # drain would see an empty list and return. Wait until `hash_task` finishes,
@@ -172,8 +177,7 @@ function _join_overlapped_input_hash!(hash_task::Task)
             fetch(hash_task)
             break
         catch e
-            if e isa InterruptException ||
-                    (isdefined(Base, :CancellationRequest) && e isa Base.CancellationRequest)
+            if _is_overlapped_hash_interrupt(e)
                 interrupt_err = e
             else
                 hash_err = e
@@ -183,6 +187,19 @@ function _join_overlapped_input_hash!(hash_task::Task)
     end
     interrupt_err === nothing || throw(interrupt_err)
     hash_err === nothing || throw(hash_err)
+    return nothing
+end
+
+# Worker init already failed. Finish the overlapped hash, then let the caller
+# `rethrow()` that init error. A hash failure is logged. An interrupt during
+# this wait still wins, matching `_join_overlapped_input_hash!`.
+function _join_overlapped_input_hash_keep_prior!(hash_task::Task)
+    try
+        _join_overlapped_input_hash!(hash_task)
+    catch hash_e
+        _is_overlapped_hash_interrupt(hash_e) && rethrow()
+        @warn "Declared-input hashing failed" exception = hash_e
+    end
     return nothing
 end
 
@@ -344,7 +361,7 @@ function init_drive_workers!(proj_dir::String, explicit_package, path_anchor::St
         print_progress_err("✗")
         writeln_both("")
         @warn "Worker initialization failed" exception = e
-        _join_overlapped_input_hash!(hash_task)
+        _join_overlapped_input_hash_keep_prior!(hash_task)
         rethrow()
     end
     _join_overlapped_input_hash!(hash_task)
