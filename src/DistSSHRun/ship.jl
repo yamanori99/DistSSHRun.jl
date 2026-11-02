@@ -1328,11 +1328,29 @@ function _remote_run_leaf_script(abs_root::AbstractString, run_id::AbstractStrin
     return script
 end
 
+"""Minimal remote-leaf `run.toml` for ownership proof (no paths or secrets)."""
+function _ship_run_leaf_stamp_toml()::String
+    return string(
+        "schema = 1\n",
+        "writer = \"DistSSHRun $(dist_ssh_kit_version())\"\n",
+        "kind = \"ship\"\n",
+    )
+end
+
+function _remote_run_leaf_stamp_sh(leaf::AbstractString)::String
+    dest = _remote_shell_path_word(_posix_join(leaf, "run.toml"))
+    cq = posix_quote(_ship_run_leaf_stamp_toml())
+    return """
+    printf '%s\\n' $cq > $dest || exit 1
+    """
+end
+
 function _remote_prepare_run_leaf!(host::AbstractString, abs_root::AbstractString, run_id::AbstractString)
-    script = _remote_run_leaf_script(abs_root, run_id)
+    leaf = _posix_join(_posix_join(abs_root, "runs"), run_id)
+    script = _remote_run_leaf_script(abs_root, run_id) * _remote_run_leaf_stamp_sh(leaf)
     code, out = _remote_shell_status(String(host), script)
     code == 0 || throw(ArgumentError("could not create run dir on $(host): $(strip(out))"))
-    return _posix_join(_posix_join(_posix_join(abs_root, "runs"), run_id), "src")
+    return _posix_join(leaf, "src")
 end
 
 function _remote_extract_tar!(

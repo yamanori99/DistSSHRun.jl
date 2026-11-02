@@ -209,7 +209,11 @@ function main()
         exit(0)
     end
 
-    if occursin("rm -f ", script)
+    # Ownership scans remove a tempfile with `rm -f`. That is not the remote op.
+    # Delete (`rm -rf`) and prune (`DISTSSHKIT_PRUNE_KIT_LEAVES`) fall through.
+    if occursin("rm -f ", script) &&
+            !occursin("rm -rf", script) &&
+            !occursin("DISTSSHKIT_PRUNE_KIT_LEAVES", script)
         m = match(r"rm -f\s+(\S+)", script)
         if m !== nothing
             cap = m.captures[1]

@@ -279,7 +279,8 @@ function _kit_run_toml_owned(raw::AbstractDict)::Bool
     kind = get(raw, "kind", nothing)
     kind isa AbstractString || return false
     ks = String(kind)
-    return ks == "go" || ks == "drive" || ks == "ride" || ks == "pipeline"
+    return ks == "go" || ks == "drive" || ks == "ride" || ks == "pipeline" ||
+        ks == "ship"
 end
 
 """Set `stop` on this package's `run.toml`. Leaves any other file alone. Never throws."""

@@ -141,6 +141,8 @@ jobs:
             expected = realpath(upstream)
             loaded == expected || error(string(name, " loaded from ", loaded))
             Pkg.activate(downstream)
+            Pkg.develop(PackageSpec(path = upstream))
+            Pkg.resolve()
             Pkg.test(ENV["PKG"])
           '
 
