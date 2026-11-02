@@ -280,6 +280,7 @@ end
         @test occursin("-exec sh", owned_sh)
         @test !occursin("-type f", owned_sh)
         @test occursin("-mindepth 1 -maxdepth 1 -type l", owned_sh)
+        @test occursin("if ! printf \"%s\\n\" \"\$_f\" > \"\$_mark\"", owned_sh)
         mktempdir() do d
             root = joinpath(d, "app")
             leaf = joinpath(root, "runs", "20260101T000000Z-abcd")

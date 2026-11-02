@@ -228,24 +228,39 @@ function _prune_remote_shell(
       printf 'refusing to prune: could not scan for .distsshkit\\n' >&2
       exit 1
     }
+    _dsk_nlkit_err=\$(mktemp) || {
+      rm -f "\$_dsk_nlkit"
+      printf 'refusing to prune: could not scan for .distsshkit\\n' >&2
+      exit 1
+    }
+    # `{}` is last so BSD find accepts it. A failed write to the newline
+    # marker is recorded on a second mktemp; find -exec status is not used
+    # as ownership proof.
     if ! find "\$root" -type d -name .distsshkit -exec sh -c '
-      if printf "%s" "\$2" | awk "NR>1 { e = 1 } END { exit e ? 0 : 1 }"; then
-        printf "x\\n" > "\$1"
+      if printf "%s" "\$3" | awk "NR>1 { e = 1 } END { exit e ? 0 : 1 }"; then
+        if ! printf "x\\n" > "\$1"; then
+          printf x > "\$2"
+        fi
       fi
       exit 0
-    ' sh "\$_dsk_nlkit" {} \\; 2>/dev/null; then
-      if [ ! -s "\$_dsk_nlkit" ]; then
-        rm -f "\$_dsk_nlkit"
+    ' sh "\$_dsk_nlkit" "\$_dsk_nlkit_err" {} \\; 2>/dev/null; then
+      if [ ! -s "\$_dsk_nlkit" ] && [ ! -s "\$_dsk_nlkit_err" ]; then
+        rm -f "\$_dsk_nlkit" "\$_dsk_nlkit_err"
         printf 'refusing to prune: could not scan for .distsshkit\\n' >&2
         exit 1
       fi
     fi
+    if [ -s "\$_dsk_nlkit_err" ]; then
+      rm -f "\$_dsk_nlkit" "\$_dsk_nlkit_err"
+      printf 'refusing to prune: could not scan for .distsshkit\\n' >&2
+      exit 1
+    fi
     if [ -s "\$_dsk_nlkit" ]; then
-      rm -f "\$_dsk_nlkit"
+      rm -f "\$_dsk_nlkit" "\$_dsk_nlkit_err"
       printf 'refusing to prune a path that contains a newline\\n' >&2
       exit 1
     fi
-    rm -f "\$_dsk_nlkit"
+    rm -f "\$_dsk_nlkit" "\$_dsk_nlkit_err"
     _dsk_victims=\$(mktemp) || {
       printf 'refusing to prune: could not scan for .distsshkit\\n' >&2
       exit 1

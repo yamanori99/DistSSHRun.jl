@@ -198,11 +198,15 @@ function _remote_run_toml_owned_check_sh()::String
     _awkf=\$2
     _f=\$3
     if printf "%s" "\$_f" | awk "NR>1 { e = 1 } END { exit e ? 0 : 1 }"; then
-      printf "%s\\n" "\$_f" > "\$_mark"
+      if ! printf "%s\\n" "\$_f" > "\$_mark"; then
+        printf "%s\\n" "\$_f"
+      fi
       exit 0
     fi
     if [ -L "\$_f" ] || [ ! -f "\$_f" ] || ! awk -f "\$_awkf" "\$_f"; then
-      printf "%s\\n" "\$_f" > "\$_mark"
+      if ! printf "%s\\n" "\$_f" > "\$_mark"; then
+        printf "%s\\n" "\$_f"
+      fi
     fi
     exit 0
     DSK_CHK
@@ -221,7 +225,9 @@ function _remote_run_toml_owned_check_sh()::String
               # records the path. A non-regular run.toml is not opened.
               if ! _dsk_find_stamps "\$_scan" "\$_ship" -exec sh "\$_chk" "\$_mark" "\$_awkf" {} \\; 2>/dev/null; then
                 if [ ! -s "\$_mark" ]; then
-                  printf '%s\\n' "\$_root" > "\$_mark"
+                  if ! printf '%s\\n' "\$_root" > "\$_mark"; then
+                    printf '%s\\n' "\$_root"
+                  fi
                 fi
               fi
               if [ -s "\$_mark" ]; then
