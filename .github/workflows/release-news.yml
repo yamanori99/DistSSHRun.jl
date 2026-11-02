@@ -5,9 +5,12 @@ name: Release NEWS
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
+# Include the event action so a label event does not cancel an in-flight
+# opened or synchronize run.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.action }}
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
 
 permissions:
