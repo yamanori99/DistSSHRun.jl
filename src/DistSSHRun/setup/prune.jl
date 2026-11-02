@@ -270,15 +270,21 @@ function _prune_remote_shell(
       fi
     done
     # Local prune inspects every victim before rm. The collect loop is a
-    # pipeline subshell, so the list file is the hand-off.
+    # pipeline subshell, so the list file is the hand-off. Do not rm the
+    # list while a loop still reads it.
+    _dsk_owned=1
     while IFS= read -r _child; do
       _bad=\$(_dsk_first_unowned_stamp "\$_child")
       if [ -n "\$_bad" ]; then
         printf 'refusing to prune unowned run leaf %s\\n' "\$(dirname "\$_bad")" >&2
-        rm -f "\$_dsk_victims"
-        exit 1
+        _dsk_owned=0
+        break
       fi
     done < "\$_dsk_victims"
+    if [ "\$_dsk_owned" != 1 ]; then
+      rm -f "\$_dsk_victims"
+      exit 1
+    fi
     while IFS= read -r _child; do
       rm -rf "\$_child"
     done < "\$_dsk_victims"
