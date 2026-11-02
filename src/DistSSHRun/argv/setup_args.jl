@@ -12,6 +12,7 @@ function show_requirements(; io::IO = stdout)
         "Ship needs an existing remote_root (setup --remote-root); not created from HOME.",
         "--ship-tree walks the project and each directory's .gitignore (case-sensitive).",
         ".git/info/exclude, core.excludesFile, and a .gitignore above the project are not used.",
+        "LocalPreferences next to a shipped Project.toml still ship. Declared inputs do not.",
         "Ship and collect use Tar. Original mtimes are not kept.",
         "Pull-back touches extracted files. Ship keeps extract-time mtime.",
         "Modes are 0644, or 0755 if executable. push_cache! still needs rsync.",

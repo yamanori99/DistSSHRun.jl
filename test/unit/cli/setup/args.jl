@@ -21,6 +21,8 @@ using Test
         @test occursin("existing remote_root", text)
         @test occursin("each directory's .gitignore", text)
         @test occursin("case-sensitive", text)
+        @test occursin("LocalPreferences", text)
+        @test occursin("Declared inputs do not", text)
         @test !occursin("git work tree", text)
         @test occursin("Pull-back touches extracted files", text)
         @test occursin("Ship keeps extract-time mtime", text)

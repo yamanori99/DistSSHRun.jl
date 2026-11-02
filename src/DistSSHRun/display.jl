@@ -369,15 +369,57 @@ function _ensure_path_source_git_files!(
     return nothing
 end
 
+function _ship_list_rel(path::AbstractString, root::AbstractString)::String
+    return replace(relpath(canonical_local_path(path), canonical_local_path(root)), '\\' => '/')
+end
+
+function _send_list_covers(listed::Vector{String}, rel::AbstractString)::Bool
+    rel in listed && return true
+    prefix = rel * "/"
+    return any(p -> startswith(p, prefix), listed)
+end
+
 """Problems when Manifest is missing from the rsync send list."""
 function _manifest_ship_problems(env, listed::Vector{String})::Vector{String}
     manifest = env.manifest
     manifest isa String || return String[]
-    rel = relpath(canonical_local_path(manifest), canonical_local_path(env.env_dir))
-    rel in listed && return String[]
-    return String[
-        "Manifest $rel is not in the rsync send list. It is untracked and ignored, so workers would instantiate a different resolution. Stop ignoring it, or do not use setup --instantiate.",
-    ]
+    env_dir = canonical_local_path(env.env_dir)
+    rel = _ship_list_rel(manifest, env_dir)
+    msgs = String[]
+    if !(rel in listed)
+        push!(
+            msgs,
+            "Manifest $rel is not in the rsync send list. It is untracked and ignored, so workers would instantiate a different resolution. Stop ignoring it, or do not use setup --instantiate.",
+        )
+    end
+    target = manifest_link_target(manifest)
+    target_rel = replace(relpath(target, canonical_local_path(realpath(env_dir))), '\\' => '/')
+    if target_rel != rel && !(target_rel in listed)
+        push!(
+            msgs,
+            "Manifest $rel points at $target_rel, which is not in the rsync send list. .gitignore omitted the target, so workers would instantiate a different resolution. Stop ignoring it, or do not use setup --instantiate.",
+        )
+    end
+    return msgs
+end
+
+"""Problems when a `[sources]` path is missing from the send list."""
+function _path_source_send_list_problems(env, listed::Vector{String})::Vector{String}
+    env_dir = canonical_local_path(env.env_dir)
+    msgs = String[]
+    for project_file in _pkg_env_project_files(env)
+        for (name, raw) in _project_path_sources(project_file)
+            location = _resolved_source_path(project_file, raw)
+            rel = _ship_list_rel(location, env_dir)
+            startswith(rel, "..") && continue
+            _send_list_covers(listed, rel) && continue
+            push!(
+                msgs,
+                "Source path $rel for $name is not in the rsync send list. .gitignore omitted it, so workers would not see this path. Stop ignoring it, or do not use setup --instantiate.",
+            )
+        end
+    end
+    return msgs
 end
 
 """`realpath` of the parent, with the final component left as written.
@@ -580,6 +622,8 @@ One rsync cannot carry both. A symlink whose target leaves that tree is the
 same failure. A `url` source is fetched on the worker. A project file with
 no Manifest is an error. A directory with no project file is not. A Manifest
 left out of the rsync send list is an error (it is untracked and ignored).
+A Manifest symlink whose target is left out, or a `[sources]` path left out
+by `.gitignore`, is the same kind of error.
 `warn_send_list=false` is the `gitignore=false` send, which includes that file.
 """
 function ensure_manifest_ships!(
@@ -607,7 +651,10 @@ function ensure_manifest_ships!(
     if warn_send_list
         listed = send_list isa Vector{String} ? send_list : _rsync_send_list(env.env_dir, env)
         if listed isa Vector
-            problems = _manifest_ship_problems(env, listed)
+            problems = vcat(
+                _manifest_ship_problems(env, listed),
+                _path_source_send_list_problems(env, listed),
+            )
             isempty(problems) || throw(ArgumentError(problems[1]))
         end
     end

@@ -35,7 +35,8 @@ SSH 上の stdlib Tar で、元の mtime は残らない。pull-back は展開�
 git で配るときは **`git`** も要る。`setup --ship-tree`、`go --ship-tree`、
 `drive --ship-tree` はプロジェクトを歩き、各ディレクトリの `.gitignore`
 を適用する（大文字小文字を区別する）。`.git/info/exclude`、
-`core.excludesFile`、プロジェクトより上の `.gitignore` は使わない。展開先は
+`core.excludesFile`、プロジェクトより上の `.gitignore` は使わない。同梱する
+`Project.toml` の横の preference は載り、宣言した入力は載らない。展開先は
 `<remote_root>/runs/<run_id>/src/` で、横に空の `out/` と DistSSHRun の短い
 `run.toml` stamp を置く。リモート根は先に存在しなければならない
 （`setup --remote-root`）。`--rsync` は 0.2.0 で削除した。`setup --delete` と `--prune` は `--confirm-path` が要る。`-y` では

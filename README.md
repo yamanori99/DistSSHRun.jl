@@ -35,7 +35,8 @@ deploys also need **`git`**.
 `setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` walk the
 project and apply each directory's `.gitignore` (case-sensitive).
 `.git/info/exclude`, `core.excludesFile`, and a `.gitignore` above the
-project are not used. Extract is into
+project are not used. Preference files next to a shipped `Project.toml`
+are still added, and declared inputs are left out. Extract is into
 `<remote_root>/runs/<run_id>/src/`, with empty `out/`
 beside it and a minimal DistSSHRun `run.toml` stamp. The remote root must
 already exist (`setup --remote-root`). `--rsync` was removed

@@ -14,7 +14,6 @@ using Dates
 using Distributed
 using Pkg
 import SHA
-import GitIgnore
 using Tar
 using TOML
 using Unicode

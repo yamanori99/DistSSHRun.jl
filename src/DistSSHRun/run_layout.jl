@@ -3,7 +3,7 @@
 const _RUN_ID_PATTERN = r"^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{6}$"
 
 const RSYNC_REMOVED_MSG =
-    "--rsync was removed in 0.2.0; use --ship-tree. Each directory's .gitignore decides what is shipped."
+    "--rsync was removed in 0.2.0; use --ship-tree. Each directory's .gitignore is the initial filter; LocalPreferences still ship and declared inputs do not."
 
 function allocate_remote_run_id()::String
     stamp = Dates.format(Dates.now(Dates.UTC), dateformat"yyyymmddTHHMMSS") * "Z"
