@@ -209,7 +209,7 @@ function _prune_remote_shell(
       # is not covered by the .distsshkit walk. The collect loop is a
       # pipeline subshell, so record the refusal and return.
       if printf "%s" "\$_child" | awk "NR>1 { e = 1 } END { exit e ? 0 : 1 }"; then
-        printf x > "\$_dsk_victims.nl"
+        printf x > "\$_dsk_nl"
         return 0
       fi
       base=\$(basename "\$_child")
@@ -250,6 +250,11 @@ function _prune_remote_shell(
       printf 'refusing to prune: could not scan for .distsshkit\\n' >&2
       exit 1
     }
+    _dsk_nl=\$(mktemp) || {
+      rm -f "\$_dsk_victims"
+      printf 'refusing to prune: could not scan for .distsshkit\\n' >&2
+      exit 1
+    }
     find "\$root" -type d -name .distsshkit 2>/dev/null | while IFS= read -r kit; do
       go="\$kit/go"
       if [ -d "\$go" ]; then
@@ -276,11 +281,12 @@ function _prune_remote_shell(
         done
       fi
     done
-    if [ -e "\$_dsk_victims.nl" ]; then
-      rm -f "\$_dsk_victims" "\$_dsk_victims.nl"
+    if [ -s "\$_dsk_nl" ]; then
+      rm -f "\$_dsk_victims" "\$_dsk_nl"
       printf 'refusing to prune a path that contains a newline\\n' >&2
       exit 1
     fi
+    rm -f "\$_dsk_nl"
     # Local prune inspects every victim before rm. The collect loop is a
     # pipeline subshell, so the list file is the hand-off. Do not rm the
     # list while a loop still reads it.
