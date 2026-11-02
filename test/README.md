@@ -296,4 +296,5 @@ CLI also honors `DISTSSHKIT_QUIET`, `DISTSSHKIT_PROGRESS`,
 
 CI and [`.github/aqua-check.sh`](../.github/aqua-check.sh) `Pkg.add("Aqua")`
 with no version pin. `Pkg` is a module dep (`using Pkg` in
-`src/DistSSHRun.jl`) so Aqua `stale_deps` can run.
+`src/DistSSHRun.jl`) so Aqua `stale_deps` can run. GitIgnore is loaded
+when the send list is built, so `stale_deps` ignores it.

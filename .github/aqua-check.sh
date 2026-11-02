@@ -13,5 +13,7 @@ Pkg.activate(; temp=true)
 Pkg.develop(PackageSpec(; path=pwd()))
 Pkg.add("Aqua")
 using Aqua, DistSSHRun
-Aqua.test_all(DistSSHRun)
+# GitIgnore is Base.require-d when the send list is built, not at import
+# (workers may precompile DistSSHRun from LOAD_PATH without that dep).
+Aqua.test_all(DistSSHRun; stale_deps = (ignore = [:GitIgnore],))
 '
