@@ -373,10 +373,77 @@ function _ship_list_rel(path::AbstractString, root::AbstractString)::String
     return replace(relpath(canonical_local_path(path), canonical_local_path(root)), '\\' => '/')
 end
 
+function _rel_is_outside_tree(rel::AbstractString)::Bool
+    return rel == ".." || startswith(rel, "../")
+end
+
 function _send_list_covers(listed::Vector{String}, rel::AbstractString)::Bool
+    (rel == "." || rel == "") && return true
     rel in listed && return true
     prefix = rel * "/"
     return any(p -> startswith(p, prefix), listed)
+end
+
+function _abspath_from_ship_rel(env_dir::AbstractString, rel::AbstractString)::String
+    (rel == "." || rel == "") && return canonical_local_path(env_dir)
+    return canonical_local_path(joinpath(env_dir, rel))
+end
+
+function _follow_link_abs(path::AbstractString)::String
+    text = String(readlink(path))
+    if isabspath(expanduser(text))
+        return canonical_local_path(expanduser(text))
+    end
+    return canonical_local_path(joinpath(dirname(String(path)), text))
+end
+
+"""Each send-list relative path from `start` along symlink hops inside `env_dir`."""
+function _ship_symlink_hop_rels(start::AbstractString, env_dir::AbstractString)::Vector{String}
+    hops = String[]
+    current = canonical_local_path(start)
+    seen = Set{String}()
+    while true
+        current in seen && break
+        push!(seen, current)
+        rel = _ship_list_rel(current, env_dir)
+        _rel_is_outside_tree(rel) && break
+        push!(hops, rel)
+        islink(current) || break
+        current = _follow_link_abs(current)
+        ispath(current) || break
+    end
+    return hops
+end
+
+function _send_list_covers_source(
+        listed::Vector{String},
+        rel::AbstractString,
+        env_dir::AbstractString,
+        seen::Set{String} = Set{String}(),
+    )::Bool
+    _rel_is_outside_tree(rel) && return false
+    rel in seen && return false
+    push!(seen, rel)
+    if _send_list_covers(listed, rel)
+        path = _abspath_from_ship_rel(env_dir, rel)
+        islink(path) || return true
+        target_rel = _ship_list_rel(_follow_link_abs(path), env_dir)
+        _rel_is_outside_tree(target_rel) && return false
+        return _send_list_covers_source(listed, target_rel, env_dir, seen)
+    end
+    parts = split(rel, '/'; keepempty = false)
+    for i in 1:(length(parts) - 1)
+        prefix = join(parts[1:i], "/")
+        prefix in listed || continue
+        p = _abspath_from_ship_rel(env_dir, prefix)
+        islink(p) || continue
+        target_rel = _ship_list_rel(_follow_link_abs(p), env_dir)
+        _rel_is_outside_tree(target_rel) && return false
+        rest = join(parts[(i + 1):end], "/")
+        next = (target_rel == "." || target_rel == "") ? rest : string(target_rel, "/", rest)
+        return _send_list_covers_source(listed, next, env_dir, seen)
+    end
+    return false
 end
 
 """Problems when Manifest is missing from the rsync send list."""
@@ -392,13 +459,15 @@ function _manifest_ship_problems(env, listed::Vector{String})::Vector{String}
             "Manifest $rel is not in the rsync send list. It is untracked and ignored, so workers would instantiate a different resolution. Stop ignoring it, or do not use setup --instantiate.",
         )
     end
-    target = manifest_link_target(manifest)
-    target_rel = replace(relpath(target, canonical_local_path(realpath(env_dir))), '\\' => '/')
-    if target_rel != rel && !(target_rel in listed)
+    hops = _ship_symlink_hop_rels(manifest, env_dir)
+    for hop in hops
+        hop == rel && continue
+        hop in listed && continue
         push!(
             msgs,
-            "Manifest $rel points at $target_rel, which is not in the rsync send list. .gitignore omitted the target, so workers would instantiate a different resolution. Stop ignoring it, or do not use setup --instantiate.",
+            "Manifest $rel points at $hop, which is not in the rsync send list. .gitignore omitted the target, so workers would instantiate a different resolution. Stop ignoring it, or do not use setup --instantiate.",
         )
+        break
     end
     return msgs
 end
@@ -411,8 +480,8 @@ function _path_source_send_list_problems(env, listed::Vector{String})::Vector{St
         for (name, raw) in _project_path_sources(project_file)
             location = _resolved_source_path(project_file, raw)
             rel = _ship_list_rel(location, env_dir)
-            startswith(rel, "..") && continue
-            _send_list_covers(listed, rel) && continue
+            _rel_is_outside_tree(rel) && continue
+            _send_list_covers_source(listed, rel, env_dir) && continue
             push!(
                 msgs,
                 "Source path $rel for $name is not in the rsync send list. .gitignore omitted it, so workers would not see this path. Stop ignoring it, or do not use setup --instantiate.",

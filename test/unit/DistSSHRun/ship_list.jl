@@ -181,6 +181,140 @@ using Test
         end
     end
 
+    @testset "a workspace source at the env root is covered" begin
+        _with_tempdir() do lab
+            member = joinpath(lab, "member")
+            mkpath(member)
+            write(
+                joinpath(lab, "Project.toml"), """
+                name = "Lab"
+                [workspace]
+                projects = ["member"]
+                """
+            )
+            write(joinpath(lab, "Manifest.toml"), "# lock\n")
+            write(
+                joinpath(member, "Project.toml"), """
+                name = "Run1"
+                [sources]
+                Lab = {path = ".."}
+                """
+            )
+            packed = DistSSHRun.pack_ship_tar(member)
+            try
+                dest = mktempdir()
+                DistSSHRun.Tar.extract(packed.tar_path, dest)
+                @test isfile(joinpath(dest, "Project.toml"))
+                @test isfile(joinpath(dest, "member", "Project.toml"))
+            finally
+                rm(packed.tmpd; force = true, recursive = true)
+            end
+        end
+    end
+
+    @testset "a gitignored ..vendor path source is refused" begin
+        _with_tempdir() do tmp
+            foo = joinpath(tmp, "..vendor", "Foo")
+            mkpath(joinpath(foo, "src"))
+            write(
+                joinpath(tmp, "Project.toml"), """
+                name = "App"
+                [sources]
+                Foo = {path = "..vendor/Foo"}
+                """
+            )
+            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
+            write(joinpath(tmp, ".gitignore"), "..vendor/\n")
+            write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
+            write(joinpath(foo, "src", "Foo.jl"), "module Foo end\n")
+            err = try
+                DistSSHRun.pack_ship_tar(tmp)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("Source path ..vendor/Foo for Foo is not in the rsync send list", err.msg)
+        end
+    end
+
+    @testset "an intermediate Manifest symlink must be listed" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            mkpath(joinpath(tmp, "hidden"))
+            mkpath(joinpath(tmp, "visible"))
+            write(joinpath(tmp, "visible", "Manifest.toml"), "# lock\n")
+            symlink(joinpath("..", "visible", "Manifest.toml"), joinpath(tmp, "hidden", "mid"))
+            symlink(joinpath("hidden", "mid"), joinpath(tmp, "Manifest.toml"))
+            write(joinpath(tmp, ".gitignore"), "hidden/\n")
+            err = try
+                DistSSHRun.pack_ship_tar(tmp)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("points at hidden/mid", err.msg)
+            @test occursin("not in the rsync send list", err.msg)
+        end
+    end
+
+    @testset "a path-source symlink to a gitignored target is refused" begin
+        _with_tempdir() do tmp
+            real = joinpath(tmp, "vendor", "real")
+            mkpath(joinpath(real, "src"))
+            write(joinpath(real, "Project.toml"), "name = \"Foo\"\n")
+            write(joinpath(real, "src", "Foo.jl"), "module Foo end\n")
+            mkpath(joinpath(tmp, "vendor"))
+            symlink("real", joinpath(tmp, "vendor", "Foo"))
+            write(
+                joinpath(tmp, "Project.toml"), """
+                name = "App"
+                [sources]
+                Foo = {path = "vendor/Foo"}
+                """
+            )
+            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
+            write(joinpath(tmp, ".gitignore"), "vendor/real/\n")
+            err = try
+                DistSSHRun.pack_ship_tar(tmp)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("Source path vendor/Foo for Foo is not in the rsync send list", err.msg)
+        end
+    end
+
+    @testset "a path source under a directory symlink uses the target" begin
+        _with_tempdir() do tmp
+            real = joinpath(tmp, "vendor", "real", "Foo")
+            mkpath(joinpath(real, "src"))
+            write(joinpath(real, "Project.toml"), "name = \"Foo\"\n")
+            write(joinpath(real, "src", "Foo.jl"), "module Foo end\n")
+            mkpath(joinpath(tmp, "vendor"))
+            symlink("real", joinpath(tmp, "vendor", "link"))
+            write(
+                joinpath(tmp, "Project.toml"), """
+                name = "App"
+                [sources]
+                Foo = {path = "vendor/link/Foo"}
+                """
+            )
+            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
+            packed = DistSSHRun.pack_ship_tar(tmp)
+            try
+                dest = mktempdir()
+                DistSSHRun.Tar.extract(packed.tar_path, dest)
+                @test islink(joinpath(dest, "vendor", "link"))
+                @test isfile(joinpath(dest, "vendor", "real", "Foo", "Project.toml"))
+            finally
+                rm(packed.tmpd; force = true, recursive = true)
+            end
+        end
+    end
+
     @testset "gitignored project preferences still ship" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\n")
