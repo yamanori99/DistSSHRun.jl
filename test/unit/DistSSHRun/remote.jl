@@ -906,6 +906,26 @@ end
         end
         mktempdir() do d
             root = joinpath(d, "app")
+            mkpath(root)
+            symlink(joinpath(d, "missing_store"), joinpath(root, "runs"))
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test islink(joinpath(root, "runs"))
+            @test isdir(root)
+        end
+        mktempdir() do d
+            root = joinpath(d, "app")
             leaf = joinpath(root, "run_store", "20260101T000000Z-abcd")
             mkpath(joinpath(root, "runs"))
             mkpath(leaf)

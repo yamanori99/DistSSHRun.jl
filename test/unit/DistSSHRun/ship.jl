@@ -1,4 +1,5 @@
 using Test
+using TOML
 
 @testset "run layout" begin
     id = DistSSHRun.allocate_remote_run_id()
