@@ -330,9 +330,19 @@ function _ensure_one_path_dep!(
         ),
     )
     git || return nothing
+    # The env root is the clone itself. `ls-tree` has no directory entry for `.`.
+    _path_is_env_root(location, root_c) && return nothing
     _ensure_git_head_source!(root_c, location, name)
     _ensure_path_source_git_files!(root_c, location, name)
     return nothing
+end
+
+function _path_is_env_root(path::AbstractString, root::AbstractString)::Bool
+    a = canonical_local_path(path)
+    b = canonical_local_path(root)
+    a == b && return true
+    ispath(a) && ispath(b) || return false
+    return canonical_local_path(realpath(a)) == canonical_local_path(realpath(b))
 end
 
 function _ensure_path_sources_in_tree!(env, root::AbstractString; git::Bool)

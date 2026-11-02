@@ -243,6 +243,37 @@ using Test
         end
     end
 
+    @testset "a Manifest path of the env root is the clone itself" begin
+        Sys.which("git") === nothing && return
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\nuuid = \"aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee\"\n")
+            write(
+                joinpath(tmp, "Manifest.toml"), """
+                julia_version = "1.13.0"
+                manifest_format = "2.0"
+                [[deps.App]]
+                path = "."
+                uuid = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+                version = "0.0.1"
+                """
+            )
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp config user.name "Test"`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp add Project.toml Manifest.toml`; stdout = devnull, stderr = devnull))
+            run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
+            @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
+            packed = DistSSHRun.pack_ship_tar(tmp)
+            try
+                dest = mktempdir()
+                DistSSHRun.Tar.extract(packed.tar_path, dest)
+                @test isfile(joinpath(dest, "Project.toml"))
+            finally
+                rm(packed.tmpd; force = true, recursive = true)
+            end
+        end
+    end
+
     @testset "a gitignored selected Project.toml is refused" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
