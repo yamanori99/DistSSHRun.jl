@@ -875,6 +875,25 @@ end
             @test proc_mk.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err_mk)))
             @test isdir(leaf)
+            rm(joinpath(fake, "mktemp"); force = true)
+            write(joinpath(fake, "cat"), "#!/bin/sh\nexit 0\n")
+            chmod(joinpath(fake, "cat"), 0o755)
+            err_cat = IOBuffer()
+            proc_cat = withenv("PATH" => path) do
+                run(
+                    ignorestatus(
+                        pipeline(
+                            `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                            stdout = devnull,
+                            stderr = err_cat,
+                        ),
+                    );
+                    wait = true,
+                )
+            end
+            @test proc_cat.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err_cat)))
+            @test isdir(leaf)
         end
     end
 

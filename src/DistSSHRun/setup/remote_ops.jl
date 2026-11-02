@@ -51,7 +51,8 @@ end
 # candidate recursively, including nested stamps. The textual check requires
 # the `_kit_run_toml_owned` fields and rejects unclosed quotes or brackets.
 # It is not a TOML parser. A newline in a stamp path, a symlink or other
-# non-regular `run.toml`, and a scan error are unowned (fail closed), never a
+# non-regular `run.toml`, a failed checker write, and a scan error are unowned
+# (fail closed), never a
 # missing stamp and never ownership proof.
 function _remote_run_toml_owned_check_sh()::String
     return """
@@ -107,7 +108,7 @@ function _remote_run_toml_owned_check_sh()::String
                 printf '%s\\n' "\$_root"
                 return 0
               }
-              cat > "\$_awkf" << 'DSK_AWK'
+              if ! cat > "\$_awkf" << 'DSK_AWK'
     function unbalanced(s,    i, n, c, dq, sq, br, cu, esc, sqch) {
       n = length(s)
       dq = 0
@@ -172,7 +173,17 @@ function _remote_run_toml_owned_check_sh()::String
     }
     END { if (bad) exit 1; exit (s && w && k) ? 0 : 1 }
     DSK_AWK
-              cat > "\$_chk" << 'DSK_CHK'
+              then
+                rm -f "\$_mark" "\$_awkf" "\$_chk"
+                printf '%s\\n' "\$_root"
+                return 0
+              fi
+              if [ ! -s "\$_awkf" ]; then
+                rm -f "\$_mark" "\$_awkf" "\$_chk"
+                printf '%s\\n' "\$_root"
+                return 0
+              fi
+              if ! cat > "\$_chk" << 'DSK_CHK'
     _mark=\$1
     _awkf=\$2
     _f=\$3
@@ -185,6 +196,16 @@ function _remote_run_toml_owned_check_sh()::String
     fi
     exit 0
     DSK_CHK
+              then
+                rm -f "\$_mark" "\$_awkf" "\$_chk"
+                printf '%s\\n' "\$_root"
+                return 0
+              fi
+              if [ ! -s "\$_chk" ]; then
+                rm -f "\$_mark" "\$_awkf" "\$_chk"
+                printf '%s\\n' "\$_root"
+                return 0
+              fi
               # `{}` is last so BSD find accepts it. The child exits 0 when the
               # stamp is bad; find's status stays the scan, and the mark file
               # records the path. A non-regular run.toml is not opened.
