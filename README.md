@@ -18,8 +18,6 @@ Supported on **macOS, Linux, and WSL2 Ubuntu** (not native Windows).
 
 The longer guide is the
 [DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/stable/).
-Users add DistSSHKit and run `julia -m DistSSHKit`. `julia -m DistSSHRun`
-is the same entry from this package.
 
 ## Install
 
@@ -44,21 +42,21 @@ and that wrap cannot be changed. `fish` and `csh` are unsupported. `fish`
 can silently change quoting (a backslash inside single quotes). An SSH
 name that starts with `-`, including `user@-host`, is rejected. A host or
 remote path that contains a control character (NUL, newline, or any other)
-is rejected. See `julia -m DistSSHKit help setup`.
+is rejected. See `julia -m DistSSHRun help setup`.
 
 ## Commands
 
-The command is `julia -m DistSSHKit` (or `julia -m DistSSHRun`).
-See flags with `julia -m DistSSHKit help go`.
+The command is `julia -m DistSSHRun`.
+See flags with `julia -m DistSSHRun help go`.
 
 ```bash
-julia -m DistSSHKit setup --check child:host1
-julia -m DistSSHKit go SCRIPT.jl
-julia -m DistSSHKit ride parent:2 SCRIPT.jl
-julia -m DistSSHKit drive parent:2 SCRIPT.jl
-julia -m DistSSHKit plan SCRIPT.jl
-julia -m DistSSHKit size
-julia -m DistSSHKit pool
+julia -m DistSSHRun setup --check child:host1
+julia -m DistSSHRun go SCRIPT.jl
+julia -m DistSSHRun ride parent:2 SCRIPT.jl
+julia -m DistSSHRun drive parent:2 SCRIPT.jl
+julia -m DistSSHRun plan SCRIPT.jl
+julia -m DistSSHRun size
+julia -m DistSSHRun pool
 ```
 
 ```julia

@@ -18,8 +18,7 @@ DistSSHRun は、SSH で共有マシンに載せる一回の実行である。`s
 
 手順の詳細は
 [DistSSHKit のマニュアル](https://yamanori99.github.io/DistSSHKit.jl/stable/)
-にある。利用者は DistSSHKit を追加し、`julia -m DistSSHKit` を打つ。
-`julia -m DistSSHRun` はこのパッケージからの同じ入口である。
+にある。
 
 ## インストール
 
@@ -44,21 +43,21 @@ SSH 上の stdlib Tar で、リモートの mtime は残らない。実行可能
 `fish` は引用の意味を黙って変える（シングルクォート内のバックスラッシュ）。
 `-` で始まる SSH 名（`user@-host` を含む）は拒否する。ホストまたは
 リモートパスに制御文字（NUL、改行、その他）が含まれるときも拒否する。
-`julia -m DistSSHKit help setup` を見る。
+`julia -m DistSSHRun help setup` を見る。
 
 ## コマンド
 
-打つコマンドは `julia -m DistSSHKit`（または `julia -m DistSSHRun`）である。
-フラグは `julia -m DistSSHKit help go` で見る。
+打つコマンドは `julia -m DistSSHRun` である。
+フラグは `julia -m DistSSHRun help go` で見る。
 
 ```bash
-julia -m DistSSHKit setup --check child:host1
-julia -m DistSSHKit go SCRIPT.jl
-julia -m DistSSHKit ride parent:2 SCRIPT.jl
-julia -m DistSSHKit drive parent:2 SCRIPT.jl
-julia -m DistSSHKit plan SCRIPT.jl
-julia -m DistSSHKit size
-julia -m DistSSHKit pool
+julia -m DistSSHRun setup --check child:host1
+julia -m DistSSHRun go SCRIPT.jl
+julia -m DistSSHRun ride parent:2 SCRIPT.jl
+julia -m DistSSHRun drive parent:2 SCRIPT.jl
+julia -m DistSSHRun plan SCRIPT.jl
+julia -m DistSSHRun size
+julia -m DistSSHRun pool
 ```
 
 ```julia
