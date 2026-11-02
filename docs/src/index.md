@@ -37,7 +37,9 @@ the copied tree is refused. Cache pull still needs
 `setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` extract the
 git file list into `<remote_root>/runs/<run_id>/src/` (`run_id` is UTC plus
 6 hex). The same leaf also gets an empty
-`<remote_root>/runs/<run_id>/out/`. A repeated host is refused. Later
+`<remote_root>/runs/<run_id>/out/`. A repeated host is refused. The
+`remote_root` must already exist on the host; ship does not create it from
+`$HOME` or the environment. Later
 `--instantiate` / `--check` / `go` use the latest `src/` when
 the remote root has no `Project.toml` (or pass `--remote-path` to that tree).
 `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
@@ -52,10 +54,11 @@ Controller provenance lives under `DISTSSHKIT_RUN_DIR/run.toml`
 (`schema = 1`, `writer = "DistSSHRun x.y.z"`). Each remote
 `runs/<run_id>/` also gets a minimal `run.toml` with only `schema`,
 `writer`, and `kind = "ship"` so `setup --delete` can refuse a Ship leaf
-that is not DistSSHRun-owned. `setup --prune` searches `.distsshkit`
-candidates and applies the same ownership check there; it does not inspect
-those Ship leaves. Older leaves without that file still use structural
-checks only.
+that is not DistSSHRun-owned. That stamp is not controller provenance.
+`setup --prune` searches `.distsshkit` candidates and applies the same
+ownership check there; it does not inspect those Ship leaves. Older leaves
+without that file still use structural checks only. DistSSHQueue
+`teardown` is a different command; it may reuse the same remote stamp later.
 Unknown keys are ignored when reading. A ship that sees
 `.distsshkit/inputs.toml` writes those inputs into this run's `run.toml`.
 With hashing on, it also writes a manifest under `inputs/<sha256>.manifest`.
@@ -124,9 +127,17 @@ go!("job.jl")
 `DISTSSHKIT_YES` do not authorize those two modes. Without that flag and
 without `-y`, the command still asks you to type `delete` or `prune`.
 
+`--delete` also refuses when a present `runs/<run_id>/run.toml` under the
+deploy root is not DistSSHRun-owned, including a symlink `runs/` or a
+symlink directly under `runs/`. The confirmed path may be a git-work-tree
+ancestor of that deploy root; the stamp check still uses the deploy root.
+`--prune` uses the same ownership rule on `.distsshkit` candidates. A
+missing stamp (older trees) still uses structural checks only.
+
 From Julia, `setup!(session, :delete; confirm_path)` and `:prune` follow
 the same rule. `session.yes` does not delete. One SSH host accepts a
 `String`. More than one host needs a `Dict` whose keys are the configured
 host aliases. A host with no key is left in place. An unknown key is an
 error. A mismatch throws `ConfirmPathMismatch`. Do not copy the target out
-of that error into a retry. See `help setup`.
+of that error into a retry. See `help setup`. `teardown` is DistSSHQueue,
+not this package.

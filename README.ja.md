@@ -32,8 +32,11 @@ SSH 上の stdlib Tar で、リモートの mtime は残らない。実行可能
 モード`0644`、実行可能なファイルは`0755`になる。cache pull には
 **`rsync`** が要る。ship は SSH 上の stdlib Tar を使う。git で配るときは
 **`git`** も要る。`setup --ship-tree`、`go --ship-tree`、`drive --ship-tree`
-は git のファイル一覧を `<remote_root>/runs/<run_id>/src/` に展開する。
-`--rsync` は 0.2.0 で削除した。リモートのログインシェル（`$SHELL`）は POSIX 互換
+は git のファイル一覧を `<remote_root>/runs/<run_id>/src/` に展開し、横に
+空の `out/` と DistSSHRun の短い `run.toml` stamp を置く。リモート根は
+先に存在しなければならない（`setup --remote-root`）。`--rsync` は 0.2.0 で
+削除した。`setup --delete` と `--prune` は `--confirm-path` が要る。`-y` では
+消さない。ある stamp が DistSSHRun 所有でなければ拒否する。リモートのログインシェル（`$SHELL`）は POSIX 互換
 （`sh`、`bash`、`dash`、`zsh`）である。`ssh host command` は `$SHELL -c` で
 実行し、ログインシェルにはしない。Distributed の `SSHManager` はワーカーを
 `sh -l -c` で起動し、この包みは変えられない。`fish` と `csh` は未対応である。

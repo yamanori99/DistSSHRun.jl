@@ -31,8 +31,11 @@ SSH. Remote mtimes are not kept. A non-executable file arrives as mode `0644`,
 and an executable file as `0755`. Cache pull still needs
 **`rsync`**. Ship uses stdlib Tar over SSH. Git deploys also need **`git`**.
 `setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` extract the
-git file list into `<remote_root>/runs/<run_id>/src/`. `--rsync` was removed
-in 0.2.0. The remote login shell (`$SHELL`) must be POSIX-compatible
+git file list into `<remote_root>/runs/<run_id>/src/`, with empty `out/`
+beside it and a minimal DistSSHRun `run.toml` stamp. The remote root must
+already exist (`setup --remote-root`). `--rsync` was removed
+in 0.2.0. `setup --delete` and `--prune` need `--confirm-path`; `-y` does
+not authorize them. A present unowned stamp is refused. The remote login shell (`$SHELL`) must be POSIX-compatible
 (`sh`, `bash`, `dash`, or `zsh`). `ssh host command` runs `$SHELL -c`, not
 a login shell. Distributed's `SSHManager` starts workers with `sh -l -c`,
 and that wrap cannot be changed. `fish` and `csh` are unsupported. `fish`
