@@ -224,43 +224,21 @@ function _prune_remote_shell(
     }
     # The walk below reads find output by line. A newline in a parent of
     # `.distsshkit` splits that path, and the prefix can be pruned.
-    _dsk_nlkit=\$(mktemp) || {
-      printf 'refusing to prune: could not scan for .distsshkit\\n' >&2
-      exit 1
-    }
-    _dsk_nlkit_err=\$(mktemp) || {
-      rm -f "\$_dsk_nlkit"
-      printf 'refusing to prune: could not scan for .distsshkit\\n' >&2
-      exit 1
-    }
-    # `{}` is last so BSD find accepts it. A failed write to the newline
-    # marker is recorded on a second mktemp; find -exec status is not used
-    # as ownership proof.
-    if ! find "\$root" -type d -name .distsshkit -exec sh -c '
-      if printf "%s" "\$3" | awk "NR>1 { e = 1 } END { exit e ? 0 : 1 }"; then
-        if ! printf "x\\n" > "\$1"; then
-          printf x > "\$2"
-        fi
+    # `{}` is last so BSD find accepts it. The child reports a newline hit
+    # on stdout, so a failed disk write cannot hide the hit.
+    if ! _dsk_nlhits=\$(find "\$root" -type d -name .distsshkit -exec sh -c '
+      if printf "%s" "\$1" | awk "NR>1 { e = 1 } END { exit e ? 0 : 1 }"; then
+        printf x
       fi
       exit 0
-    ' sh "\$_dsk_nlkit" "\$_dsk_nlkit_err" {} \\; 2>/dev/null; then
-      if [ ! -s "\$_dsk_nlkit" ] && [ ! -s "\$_dsk_nlkit_err" ]; then
-        rm -f "\$_dsk_nlkit" "\$_dsk_nlkit_err"
-        printf 'refusing to prune: could not scan for .distsshkit\\n' >&2
-        exit 1
-      fi
-    fi
-    if [ -s "\$_dsk_nlkit_err" ]; then
-      rm -f "\$_dsk_nlkit" "\$_dsk_nlkit_err"
+    ' sh {} \\; 2>/dev/null); then
       printf 'refusing to prune: could not scan for .distsshkit\\n' >&2
       exit 1
     fi
-    if [ -s "\$_dsk_nlkit" ]; then
-      rm -f "\$_dsk_nlkit" "\$_dsk_nlkit_err"
+    if [ -n "\$_dsk_nlhits" ]; then
       printf 'refusing to prune a path that contains a newline\\n' >&2
       exit 1
     fi
-    rm -f "\$_dsk_nlkit" "\$_dsk_nlkit_err"
     _dsk_victims=\$(mktemp) || {
       printf 'refusing to prune: could not scan for .distsshkit\\n' >&2
       exit 1
