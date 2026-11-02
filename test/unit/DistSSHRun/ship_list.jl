@@ -162,6 +162,49 @@ using Test
         end
     end
 
+    @testset "a gitignored path-source Project.toml is refused" begin
+        _with_tempdir() do tmp
+            foo = joinpath(tmp, "vendor", "Foo")
+            mkpath(joinpath(foo, "src"))
+            write(
+                joinpath(tmp, "Project.toml"), """
+                name = "App"
+                [sources]
+                Foo = {path = "vendor/Foo"}
+                """
+            )
+            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
+            write(joinpath(tmp, ".gitignore"), "vendor/Foo/Project.toml\n")
+            write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
+            write(joinpath(foo, "src", "Foo.jl"), "module Foo end\n")
+            err = try
+                DistSSHRun.pack_ship_tar(tmp)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("Source path vendor/Foo/Project.toml for Foo is not in the rsync send list", err.msg)
+        end
+    end
+
+    @testset "a gitignored selected Project.toml is refused" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
+            write(joinpath(tmp, "a.jl"), "1\n")
+            write(joinpath(tmp, ".gitignore"), "Project.toml\n")
+            err = try
+                DistSSHRun.pack_ship_tar(tmp)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("Project Project.toml is not in the rsync send list", err.msg)
+        end
+    end
+
     @testset "a gitignored Manifest symlink target is refused" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")

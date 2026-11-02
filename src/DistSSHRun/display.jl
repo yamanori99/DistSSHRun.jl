@@ -183,13 +183,13 @@ function manifest_link_target(manifest::AbstractString)::String
     return canonical_local_path(realpath(path))
 end
 
-"""Project.toml files whose `[sources]` paths must ride along with `env`."""
+"""Project files whose `[sources]` paths must ride along with `env`."""
 function _pkg_env_project_files(env)::Vector{String}
     files = String[]
-    member = canonical_local_path(joinpath(env.project_dir, "Project.toml"))
-    isfile(member) && push!(files, member)
-    root = canonical_local_path(joinpath(env.env_dir, "Project.toml"))
-    if isfile(root) && root != member
+    member = _located_project_file(env.project_dir)
+    member isa String && push!(files, member)
+    root = _located_project_file(env.env_dir)
+    if root isa String && root != member
         push!(files, root)
     end
     return files
@@ -481,12 +481,39 @@ function _path_source_send_list_problems(env, listed::Vector{String})::Vector{St
             location = _resolved_source_path(project_file, raw)
             rel = _ship_list_rel(location, env_dir)
             _rel_is_outside_tree(rel) && continue
-            _send_list_covers_source(listed, rel, env_dir) && continue
+            if !_send_list_covers_source(listed, rel, env_dir)
+                push!(
+                    msgs,
+                    "Source path $rel for $name is not in the rsync send list. .gitignore omitted it, so workers would not see this path. Stop ignoring it, or do not use setup --instantiate.",
+                )
+                continue
+            end
+            source_proj = _located_project_file(location)
+            source_proj isa String || continue
+            prel = _ship_list_rel(source_proj, env_dir)
+            _rel_is_outside_tree(prel) && continue
+            _send_list_covers_source(listed, prel, env_dir) && continue
             push!(
                 msgs,
-                "Source path $rel for $name is not in the rsync send list. .gitignore omitted it, so workers would not see this path. Stop ignoring it, or do not use setup --instantiate.",
+                "Source path $prel for $name is not in the rsync send list. .gitignore omitted it, so workers would not see this path. Stop ignoring it, or do not use setup --instantiate.",
             )
         end
+    end
+    return msgs
+end
+
+"""Problems when the selected project file is missing from the send list."""
+function _project_file_ship_problems(env, listed::Vector{String})::Vector{String}
+    env_dir = canonical_local_path(env.env_dir)
+    msgs = String[]
+    for project_file in _pkg_env_project_files(env)
+        rel = _ship_list_rel(project_file, env_dir)
+        _rel_is_outside_tree(rel) && continue
+        _send_list_covers_source(listed, rel, env_dir) && continue
+        push!(
+            msgs,
+            "Project $rel is not in the rsync send list. .gitignore omitted it, so workers would not see this environment. Stop ignoring it, or do not use setup --instantiate.",
+        )
     end
     return msgs
 end
@@ -676,7 +703,11 @@ Other errors return false so the caller can rethrow them.
 function _report_manifest_refusal(e)::Bool
     e isa ArgumentError || return false
     msg = e.msg
-    if !(startswith(msg, "No Manifest for ") || startswith(msg, "Manifest "))
+    if !(
+            startswith(msg, "No Manifest for ") ||
+                startswith(msg, "Manifest ") ||
+                startswith(msg, "Project ")
+        )
         return false
     end
     print_cli_error(msg)
@@ -691,8 +722,9 @@ One rsync cannot carry both. A symlink whose target leaves that tree is the
 same failure. A `url` source is fetched on the worker. A project file with
 no Manifest is an error. A directory with no project file is not. A Manifest
 left out of the rsync send list is an error (it is untracked and ignored).
-A Manifest symlink whose target is left out, or a `[sources]` path left out
-by `.gitignore`, is the same kind of error.
+A Manifest symlink whose target is left out, a `[sources]` path left out
+by `.gitignore`, or the selected `Project.toml` / `JuliaProject.toml` left
+out, is the same kind of error. The ignored file is not forced into the tar.
 `warn_send_list=false` is the `gitignore=false` send, which includes that file.
 """
 function ensure_manifest_ships!(
@@ -721,6 +753,7 @@ function ensure_manifest_ships!(
         listed = send_list isa Vector{String} ? send_list : _rsync_send_list(env.env_dir, env)
         if listed isa Vector
             problems = vcat(
+                _project_file_ship_problems(env, listed),
                 _manifest_ship_problems(env, listed),
                 _path_source_send_list_problems(env, listed),
             )
