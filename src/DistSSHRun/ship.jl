@@ -1,4 +1,4 @@
-# Tar ship of a git work tree into `<remote_root>/runs/<run_id>/src/`.
+# Tar ship of a project tree into `<remote_root>/runs/<run_id>/src/`.
 
 const SHIP_MAX_BYTES_DEFAULT = 256 * 1024 * 1024
 const SHIP_FILE_WARN_BYTES = 50 * 1024 * 1024
@@ -65,12 +65,7 @@ end
 function _ship_rel_paths(local_root::AbstractString)::Vector{String}
     root = canonical_local_path(local_root)
     env0 = resolve_pkg_env(root)
-    send_list = _rsync_send_list(env0.env_dir, env0; warn = true)
-    send_list === nothing && throw(
-        ArgumentError(
-            "ship-tree requires a git work tree (git ls-files --cached --others --exclude-per-directory=.gitignore)",
-        ),
-    )
+    send_list = _ship_gitignore_send_list(env0.env_dir)
     ensure_manifest_ships!(
         root; send_list = send_list, warn_send_list = true,
     )
@@ -884,7 +879,7 @@ function pack_ship_tar(
     env0 = resolve_pkg_env(local_dir)
     root = ensure_manifest_ships!(
         local_dir;
-        send_list = _rsync_send_list(env0.env_dir, env0; warn = true),
+        send_list = _ship_gitignore_send_list(env0.env_dir),
         warn_send_list = true,
     ).env_dir
     rels = _ship_rel_paths(root)

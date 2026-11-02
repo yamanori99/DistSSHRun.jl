@@ -14,6 +14,7 @@ using Dates
 using Distributed
 using Pkg
 import SHA
+import GitIgnore
 using Tar
 using TOML
 using Unicode
@@ -168,6 +169,7 @@ include("DistSSHRun/run_manifest.jl")
 include("DistSSHRun/size/measure.jl")
 include("DistSSHRun/setup.jl")
 include("DistSSHRun/run_layout.jl")
+include("DistSSHRun/ship_list.jl")
 include("DistSSHRun/ship.jl")
 include("DistSSHRun/argv/drive_args.jl")
 include("DistSSHRun/argv/go_args.jl")

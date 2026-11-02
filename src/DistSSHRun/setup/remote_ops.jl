@@ -9,7 +9,7 @@ ensure_remote_dir(host::String, remote_path::String)::Bool =
 """
     rsync_push_to_remotes(hosts, remote_path, project; path_anchor=project)
 
-Ship the git file list as a tar into `remote_path/runs/<run_id>/src/` on each
+Ship the project as a tar into `remote_path/runs/<run_id>/src/` on each
 host (`setup --ship-tree`). The name is historical; this is not rsync.
 
 Returns `(cancelled, succeeded, failed)`:

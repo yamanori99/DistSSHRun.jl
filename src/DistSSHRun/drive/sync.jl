@@ -6,7 +6,7 @@
 Sync local project to SSH hosts (call explicitly; go/drive do not call this by default).
 
 - `mode=:sync` — push the local branch to origin, then check out that commit on each remote as a detached HEAD (confirm unless `session.yes`). Does not run `git pull`. A dirty tree is refused.
-- `mode=:ship_tree` — pack the git file list into a tar and extract under
+- `mode=:ship_tree` — pack the project (each directory's `.gitignore`) into a tar and extract under
   `runs/<run_id>/src/` (confirm unless `session.yes`).
 
 Also available as `setup!(session, :ship_tree)` / `setup!(session, :sync)`.
