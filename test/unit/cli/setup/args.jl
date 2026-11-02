@@ -19,6 +19,11 @@ using Test
         @test occursin("must not start with '-'", text)
         @test occursin("latest runs/<run_id>/src", text)
         @test occursin("existing remote_root", text)
+        @test occursin("git work tree", text)
+        @test occursin("exclude-per-directory=.gitignore", text)
+        @test occursin("Pull-back touches extracted files", text)
+        @test occursin("Ship keeps extract-time mtime", text)
+        @test occursin("push_cache! still needs rsync", text)
         @test occursin("control character", text)
         @test !occursin("fish is refused", text)
     end

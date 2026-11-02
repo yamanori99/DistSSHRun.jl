@@ -29,14 +29,20 @@ pkg> add DistSSHRun
 
 Julia **1.13+**. Hosts need **`ssh`**. Collect, `collect!`, and go slot
 pull-back use stdlib Tar over SSH. The remote Julia executable is `--julia`,
-or auto-detect. Remote mtimes are not kept. A non-executable file arrives as
-mode `0644`, and an executable file as `0755`. A symlink that points outside
-the copied tree is refused. Cache pull still needs
-**`rsync`**. Ship uses stdlib Tar over SSH. Git deploys also need **`git`**.
+or auto-detect. Original mtimes are not kept. Pull-back `touch`es extracted
+files. Ship does not `touch`; files keep the extract-time mtime. A
+non-executable file arrives as mode `0644`, and an executable file as
+`0755`. A symlink that points outside the copied tree is refused.
+`push_cache!` still needs **`rsync`**. Ship uses stdlib Tar over SSH. Git
+deploys also need **`git`**.
 
-`setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` extract the
-git file list into `<remote_root>/runs/<run_id>/src/` (`run_id` is UTC plus
-6 hex). The same leaf also gets an empty
+`setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` need a git
+work tree. Git decides what is sent
+(`git ls-files --cached --others --exclude-per-directory=.gitignore`;
+`.git/info/exclude` and `core.excludesFile` are not used). Preference files
+next to a shipped `Project.toml` are still added, and declared inputs are
+left out. Extract is into `<remote_root>/runs/<run_id>/src/` (`run_id` is UTC
+plus 6 hex). The same leaf also gets an empty
 `<remote_root>/runs/<run_id>/out/`. A repeated host is refused. The
 `remote_root` must already exist on the host; ship does not create it from
 `$HOME` or the environment. Later

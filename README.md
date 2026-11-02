@@ -27,11 +27,16 @@ pkg> add DistSSHRun
 
 Julia **1.13+**. Hosts need **`ssh`**. Collect and go slot pull-back also need
 a remote Julia executable (`--julia`, or auto-detect) and use stdlib Tar over
-SSH. Remote mtimes are not kept. A non-executable file arrives as mode `0644`,
-and an executable file as `0755`. Cache pull still needs
-**`rsync`**. Ship uses stdlib Tar over SSH. Git deploys also need **`git`**.
-`setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` extract the
-git file list into `<remote_root>/runs/<run_id>/src/`, with empty `out/`
+SSH. Original mtimes are not kept. Pull-back `touch`es extracted files.
+Ship does not `touch`; files keep the extract-time mtime. A non-executable
+file arrives as mode `0644`, and an executable file as `0755`.
+`push_cache!` still needs **`rsync`**. Ship uses stdlib Tar over SSH. Git
+deploys also need **`git`**.
+`setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` need a git
+work tree. Git decides what is sent
+(`git ls-files --cached --others --exclude-per-directory=.gitignore`;
+`.git/info/exclude` and `core.excludesFile` are not used). Extract is into
+`<remote_root>/runs/<run_id>/src/`, with empty `out/`
 beside it and a minimal DistSSHRun `run.toml` stamp. The remote root must
 already exist (`setup --remote-root`). `--rsync` was removed
 in 0.2.0. `setup --delete` and `--prune` need `--confirm-path`; `-y` does
