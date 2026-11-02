@@ -9,6 +9,7 @@ function show_requirements(; io::IO = stdout)
         "Hosts: child:NAME[:N] (same as go / drive / size; :N ignored).",
         "       parent is up, not setup.",
         "Remote path: ~/Parent/RepoName, or --remote-path / ENV.",
+        "Ship needs an existing remote_root (setup --remote-root); not created from HOME.",
         "Remote login shell must be POSIX (sh, bash, dash, or zsh).",
         "ssh runs a command as \$SHELL -c, not a login shell.",
         "Distributed starts workers with sh -l -c; that wrap cannot be changed.",
@@ -33,7 +34,8 @@ function show_requirements(; io::IO = stdout)
     print_help_lines(
         io,
         "  --remote-root        create that absolute --remote-path only",
-        "  --ship-tree / --clone  --ship-tree writes runs/<run_id>/src/",
+        "  --ship-tree / --clone  --ship-tree writes runs/<run_id>/src/, out/,",
+        "                       and a DistSSHRun run.toml stamp",
         "                       --clone needs an empty remote path",
         "                       --delete first to replace a clone dest",
         "  --sync / --pull      git update (confirm unless -y)",
@@ -41,8 +43,10 @@ function show_requirements(; io::IO = stdout)
         "  --check              SSH, Julia, project, deps",
         "  --runtest            Pkg.test of the job project on remotes",
         "  --cleanup            stale workers",
-        "  --delete             remote project tree (needs --confirm-path)",
-        "  --prune              .distsshkit go/drive/setup/runs leaves (needs --confirm-path)",
+        "  --delete             remote project tree (needs --confirm-path;",
+        "                       refuses an unowned Ship run.toml)",
+        "  --prune              .distsshkit go/drive/setup/runs leaves (needs --confirm-path;",
+        "                       same ownership check on those candidates)",
     )
     print_help_blank(io)
     print_help_section("Options"; io = io)

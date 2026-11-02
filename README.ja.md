@@ -18,7 +18,8 @@ DistSSHRun は、SSH で共有マシンに載せる一回の実行である。`s
 
 手順の詳細は
 [DistSSHKit のマニュアル](https://yamanori99.github.io/DistSSHKit.jl/stable/)
-にある。
+にある。利用者は DistSSHKit を追加し、`julia -m DistSSHKit` を打つ。
+`julia -m DistSSHRun` はこのパッケージからの同じ入口である。
 
 ## インストール
 
@@ -32,29 +33,32 @@ SSH 上の stdlib Tar で、リモートの mtime は残らない。実行可能
 モード`0644`、実行可能なファイルは`0755`になる。cache pull には
 **`rsync`** が要る。ship は SSH 上の stdlib Tar を使う。git で配るときは
 **`git`** も要る。`setup --ship-tree`、`go --ship-tree`、`drive --ship-tree`
-は git のファイル一覧を `<remote_root>/runs/<run_id>/src/` に展開する。
-`--rsync` は 0.2.0 で削除した。リモートのログインシェル（`$SHELL`）は POSIX 互換
+は git のファイル一覧を `<remote_root>/runs/<run_id>/src/` に展開し、横に
+空の `out/` と DistSSHRun の短い `run.toml` stamp を置く。リモート根は
+先に存在しなければならない（`setup --remote-root`）。`--rsync` は 0.2.0 で
+削除した。`setup --delete` と `--prune` は `--confirm-path` が要る。`-y` では
+消さない。ある stamp が DistSSHRun 所有でなければ拒否する。リモートのログインシェル（`$SHELL`）は POSIX 互換
 （`sh`、`bash`、`dash`、`zsh`）である。`ssh host command` は `$SHELL -c` で
 実行し、ログインシェルにはしない。Distributed の `SSHManager` はワーカーを
 `sh -l -c` で起動し、この包みは変えられない。`fish` と `csh` は未対応である。
 `fish` は引用の意味を黙って変える（シングルクォート内のバックスラッシュ）。
 `-` で始まる SSH 名（`user@-host` を含む）は拒否する。ホストまたは
 リモートパスに制御文字（NUL、改行、その他）が含まれるときも拒否する。
-`julia -m DistSSHRun help setup` を見る。
+`julia -m DistSSHKit help setup` を見る。
 
 ## コマンド
 
-打つコマンドは `julia -m DistSSHRun` である。
-フラグは `julia -m DistSSHRun help go` で見る。
+打つコマンドは `julia -m DistSSHKit`（または `julia -m DistSSHRun`）である。
+フラグは `julia -m DistSSHKit help go` で見る。
 
 ```bash
-julia -m DistSSHRun setup --check child:host1
-julia -m DistSSHRun go SCRIPT.jl
-julia -m DistSSHRun ride parent:2 SCRIPT.jl
-julia -m DistSSHRun drive parent:2 SCRIPT.jl
-julia -m DistSSHRun plan SCRIPT.jl
-julia -m DistSSHRun size
-julia -m DistSSHRun pool
+julia -m DistSSHKit setup --check child:host1
+julia -m DistSSHKit go SCRIPT.jl
+julia -m DistSSHKit ride parent:2 SCRIPT.jl
+julia -m DistSSHKit drive parent:2 SCRIPT.jl
+julia -m DistSSHKit plan SCRIPT.jl
+julia -m DistSSHKit size
+julia -m DistSSHKit pool
 ```
 
 ```julia

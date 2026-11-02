@@ -18,6 +18,8 @@ Supported on **macOS, Linux, and WSL2 Ubuntu** (not native Windows).
 
 The longer guide is the
 [DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/stable/).
+Users add DistSSHKit and run `julia -m DistSSHKit`. `julia -m DistSSHRun`
+is the same entry from this package.
 
 ## Install
 
@@ -31,29 +33,32 @@ SSH. Remote mtimes are not kept. A non-executable file arrives as mode `0644`,
 and an executable file as `0755`. Cache pull still needs
 **`rsync`**. Ship uses stdlib Tar over SSH. Git deploys also need **`git`**.
 `setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` extract the
-git file list into `<remote_root>/runs/<run_id>/src/`. `--rsync` was removed
-in 0.2.0. The remote login shell (`$SHELL`) must be POSIX-compatible
+git file list into `<remote_root>/runs/<run_id>/src/`, with empty `out/`
+beside it and a minimal DistSSHRun `run.toml` stamp. The remote root must
+already exist (`setup --remote-root`). `--rsync` was removed
+in 0.2.0. `setup --delete` and `--prune` need `--confirm-path`; `-y` does
+not authorize them. A present unowned stamp is refused. The remote login shell (`$SHELL`) must be POSIX-compatible
 (`sh`, `bash`, `dash`, or `zsh`). `ssh host command` runs `$SHELL -c`, not
 a login shell. Distributed's `SSHManager` starts workers with `sh -l -c`,
 and that wrap cannot be changed. `fish` and `csh` are unsupported. `fish`
 can silently change quoting (a backslash inside single quotes). An SSH
 name that starts with `-`, including `user@-host`, is rejected. A host or
 remote path that contains a control character (NUL, newline, or any other)
-is rejected. See `julia -m DistSSHRun help setup`.
+is rejected. See `julia -m DistSSHKit help setup`.
 
 ## Commands
 
-The command is `julia -m DistSSHRun`.
-See flags with `julia -m DistSSHRun help go`.
+The command is `julia -m DistSSHKit` (or `julia -m DistSSHRun`).
+See flags with `julia -m DistSSHKit help go`.
 
 ```bash
-julia -m DistSSHRun setup --check child:host1
-julia -m DistSSHRun go SCRIPT.jl
-julia -m DistSSHRun ride parent:2 SCRIPT.jl
-julia -m DistSSHRun drive parent:2 SCRIPT.jl
-julia -m DistSSHRun plan SCRIPT.jl
-julia -m DistSSHRun size
-julia -m DistSSHRun pool
+julia -m DistSSHKit setup --check child:host1
+julia -m DistSSHKit go SCRIPT.jl
+julia -m DistSSHKit ride parent:2 SCRIPT.jl
+julia -m DistSSHKit drive parent:2 SCRIPT.jl
+julia -m DistSSHKit plan SCRIPT.jl
+julia -m DistSSHKit size
+julia -m DistSSHKit pool
 ```
 
 ```julia

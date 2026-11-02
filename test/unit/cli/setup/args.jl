@@ -18,6 +18,7 @@ using Test
         @test occursin("backslashes inside single quotes", text)
         @test occursin("must not start with '-'", text)
         @test occursin("latest runs/<run_id>/src", text)
+        @test occursin("existing remote_root", text)
         @test occursin("control character", text)
         @test !occursin("fish is refused", text)
     end
@@ -174,6 +175,8 @@ using Test
         txt = DistSSHRun.setup_help_text()
         @test occursin("--prune", txt)
         @test occursin("--remote-root", txt)
+        @test occursin("run.toml stamp", txt)
+        @test occursin("unowned Ship run.toml", txt)
         @test occursin("--confirm-path", txt)
         @test occursin("--older-than", txt)
         @test occursin("--runtest", txt)
