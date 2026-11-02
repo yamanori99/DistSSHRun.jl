@@ -6,6 +6,8 @@ Do not call `setup!(session, :delete)` or `setup!(session, :prune)` unless each 
 
 Agents must not pass `-y`, `--yes`, or set `DISTSSHKIT_YES` for `setup --delete` or `setup --prune`. Without `--confirm-path`, that is an error. Use `--confirm-path` with the path the command printed.
 
+Remote `runs/<run_id>/run.toml` is a DistSSHRun stamp (`schema`, `writer`, `kind`). Controller provenance is `DISTSSHKIT_RUN_DIR/run.toml`. Do not write a `.distssh-run` or `.distsshrun` marker. `teardown` is DistSSHQueue, not this package.
+
 Read [DistSSHKit releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md) before a pull request that raises the version or changes public behavior.
 
 Fill [.github/pull_request_template.md](.github/pull_request_template.md). Write Testing and Revert from the commands that ran and what they returned. Risk names what can break. CI applies the type label; see the DistSSHKit releasing doc.
