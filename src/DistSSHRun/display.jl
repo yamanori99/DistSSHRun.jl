@@ -221,8 +221,36 @@ function _resolved_source_path(project_file::AbstractString, raw::AbstractString
     return canonical_local_path(joinpath(dirname(String(project_file)), expanded))
 end
 
+"""`(name, path)` for each Manifest dep that names a `path` (format 1 or 2).
+
+Entries without `path` are skipped. A `url` source is not listed here.
 """
-Throw when a `[sources]` `path` would not arrive inside `root`.
+function _manifest_path_deps(manifest_file::AbstractString)::Vector{Tuple{String, String}}
+    data = TOML.parsefile(String(manifest_file))
+    deps = get(data, "deps", nothing)
+    deps isa AbstractDict || return Tuple{String, String}[]
+    found = Tuple{String, String}[]
+    for (name, entry) in deps
+        tables = if entry isa AbstractDict
+            Any[entry]
+        elseif entry isa AbstractVector
+            Any[t for t in entry if t isa AbstractDict]
+        else
+            continue
+        end
+        for tab in tables
+            raw = get(tab, "path", nothing)
+            raw isa AbstractString || continue
+            s = strip(String(raw))
+            isempty(s) && continue
+            push!(found, (String(name), s))
+        end
+    end
+    return found
+end
+
+"""
+Throw when a `[sources]` or Manifest `path` would not arrive inside `root`.
 
 `git=false` is the rsync tree (`env_dir`). `git=true` is the git work tree.
 An absolute path, including after `expanduser`, is rejected even when it
@@ -237,70 +265,88 @@ working-tree link currently points inside. A `url` source is fetched on
 the worker and is not checked. A symlink whose target leaves `root` is
 the same failure as a path that starts outside it.
 """
+function _ensure_one_path_dep!(
+        name::AbstractString,
+        raw::AbstractString,
+        declared_file::AbstractString,
+        root_c::AbstractString,
+        root_real::AbstractString;
+        git::Bool,
+    )
+    if isabspath(expanduser(raw))
+        throw(
+            ArgumentError(
+                "Source path $raw for $name is absolute. Workers resolve it on their own filesystem, so it would not be the staged tree.",
+            ),
+        )
+    end
+    location = _resolved_source_path(declared_file, raw)
+    if git
+        _path_under_resolved(location, root_c) || throw(
+            ArgumentError(
+                "Source path $location for $name is outside the git work tree ($root_c). The path would not reach a clone or git sync.",
+            ),
+        )
+    else
+        _path_is_under(location, root_c) || throw(
+            ArgumentError(
+                "Source path $location for $name is outside the tree setup/rsync would send ($root_c). Workers would not see this path.",
+            ),
+        )
+    end
+    if !git && islink(location)
+        link_text = String(readlink(location))
+        if isabspath(expanduser(link_text))
+            throw(
+                ArgumentError(
+                    "Source path $location for $name is a symlink to $link_text. rsync keeps that absolute target, so workers would not see the staged tree.",
+                ),
+            )
+        end
+    end
+    ispath(location) || throw(
+        ArgumentError(
+            "Source path $location for $name does not exist. Workers would not see this path.",
+        ),
+    )
+    target = canonical_local_path(realpath(location))
+    inside = if git
+        _path_under_resolved(target, root_real)
+    else
+        _path_is_under(target, root_real)
+    end
+    inside || throw(
+        ArgumentError(
+            if git
+                "Source path $location for $name points at $target, outside the git work tree ($root_real). The path would not reach a clone or git sync."
+            else
+                "Source path $location for $name points at $target, outside the tree setup/rsync would send ($root_real). Workers would not see this path."
+            end,
+        ),
+    )
+    isdir(location) || throw(
+        ArgumentError(
+            "Source path $location for $name is not a directory. Workers would not see this path.",
+        ),
+    )
+    git || return nothing
+    _ensure_git_head_source!(root_c, location, name)
+    _ensure_path_source_git_files!(root_c, location, name)
+    return nothing
+end
+
 function _ensure_path_sources_in_tree!(env, root::AbstractString; git::Bool)
     root_c = canonical_local_path(root)
     root_real = ispath(root_c) ? canonical_local_path(realpath(root_c)) : root_c
     for project_file in _pkg_env_project_files(env)
         for (name, raw) in _project_path_sources(project_file)
-            if isabspath(expanduser(raw))
-                throw(
-                    ArgumentError(
-                        "Source path $raw for $name is absolute. Workers resolve it on their own filesystem, so it would not be the staged tree.",
-                    ),
-                )
-            end
-            location = _resolved_source_path(project_file, raw)
-            if git
-                _path_under_resolved(location, root_c) || throw(
-                    ArgumentError(
-                        "Source path $location for $name is outside the git work tree ($root_c). The path would not reach a clone or git sync.",
-                    ),
-                )
-            else
-                _path_is_under(location, root_c) || throw(
-                    ArgumentError(
-                        "Source path $location for $name is outside the tree setup/rsync would send ($root_c). Workers would not see this path.",
-                    ),
-                )
-            end
-            if !git && islink(location)
-                link_text = String(readlink(location))
-                if isabspath(expanduser(link_text))
-                    throw(
-                        ArgumentError(
-                            "Source path $location for $name is a symlink to $link_text. rsync keeps that absolute target, so workers would not see the staged tree.",
-                        ),
-                    )
-                end
-            end
-            ispath(location) || throw(
-                ArgumentError(
-                    "Source path $location for $name does not exist. Workers would not see this path.",
-                ),
-            )
-            target = canonical_local_path(realpath(location))
-            inside = if git
-                _path_under_resolved(target, root_real)
-            else
-                _path_is_under(target, root_real)
-            end
-            inside || throw(
-                ArgumentError(
-                    if git
-                        "Source path $location for $name points at $target, outside the git work tree ($root_real). The path would not reach a clone or git sync."
-                    else
-                        "Source path $location for $name points at $target, outside the tree setup/rsync would send ($root_real). Workers would not see this path."
-                    end,
-                ),
-            )
-            isdir(location) || throw(
-                ArgumentError(
-                    "Source path $location for $name is not a directory. Workers would not see this path.",
-                ),
-            )
-            git || continue
-            _ensure_git_head_source!(root_c, location, name)
-            _ensure_path_source_git_files!(root_c, location, name)
+            _ensure_one_path_dep!(name, raw, project_file, root_c, root_real; git = git)
+        end
+    end
+    manifest = env.manifest
+    if manifest isa String && isfile(manifest)
+        for (name, raw) in _manifest_path_deps(manifest)
+            _ensure_one_path_dep!(name, raw, manifest, root_c, root_real; git = git)
         end
     end
     return nothing
@@ -472,33 +518,52 @@ function _manifest_ship_problems(env, listed::Vector{String})::Vector{String}
     return msgs
 end
 
-"""Problems when a `[sources]` path is missing from the send list."""
+function _append_path_dep_send_problems!(
+        msgs::Vector{String},
+        listed::Vector{String},
+        env_dir::AbstractString,
+        name::AbstractString,
+        declared_file::AbstractString,
+        raw::AbstractString,
+    )
+    location = _resolved_source_path(declared_file, raw)
+    rel = _ship_list_rel(location, env_dir)
+    _rel_is_outside_tree(rel) && return nothing
+    if !_send_list_covers_source(listed, rel, env_dir)
+        push!(
+            msgs,
+            "Source path $rel for $name is not in the rsync send list. .gitignore omitted it, so workers would not see this path. Stop ignoring it, or do not use setup --instantiate.",
+        )
+        return nothing
+    end
+    source_proj = _located_project_file(location)
+    source_proj isa String || return nothing
+    prel = _ship_list_rel(source_proj, env_dir)
+    _rel_is_outside_tree(prel) && return nothing
+    _send_list_covers_source(listed, prel, env_dir) && return nothing
+    push!(
+        msgs,
+        "Source path $prel for $name is not in the rsync send list. .gitignore omitted it, so workers would not see this path. Stop ignoring it, or do not use setup --instantiate.",
+    )
+    return nothing
+end
+
+"""Problems when a `[sources]` or Manifest `path` is missing from the send list."""
 function _path_source_send_list_problems(env, listed::Vector{String})::Vector{String}
     env_dir = canonical_local_path(env.env_dir)
     msgs = String[]
     for project_file in _pkg_env_project_files(env)
         for (name, raw) in _project_path_sources(project_file)
-            location = _resolved_source_path(project_file, raw)
-            rel = _ship_list_rel(location, env_dir)
-            _rel_is_outside_tree(rel) && continue
-            if !_send_list_covers_source(listed, rel, env_dir)
-                push!(
-                    msgs,
-                    "Source path $rel for $name is not in the rsync send list. .gitignore omitted it, so workers would not see this path. Stop ignoring it, or do not use setup --instantiate.",
-                )
-                continue
-            end
-            source_proj = _located_project_file(location)
-            source_proj isa String || continue
-            prel = _ship_list_rel(source_proj, env_dir)
-            _rel_is_outside_tree(prel) && continue
-            _send_list_covers_source(listed, prel, env_dir) && continue
-            push!(
-                msgs,
-                "Source path $prel for $name is not in the rsync send list. .gitignore omitted it, so workers would not see this path. Stop ignoring it, or do not use setup --instantiate.",
-            )
+            _append_path_dep_send_problems!(msgs, listed, env_dir, name, project_file, raw)
         end
     end
+    manifest = env.manifest
+    if manifest isa String && isfile(manifest)
+        for (name, raw) in _manifest_path_deps(manifest)
+            _append_path_dep_send_problems!(msgs, listed, env_dir, name, manifest, raw)
+        end
+    end
+    unique!(msgs)
     return msgs
 end
 
@@ -722,9 +787,11 @@ One rsync cannot carry both. A symlink whose target leaves that tree is the
 same failure. A `url` source is fetched on the worker. A project file with
 no Manifest is an error. A directory with no project file is not. A Manifest
 left out of the rsync send list is an error (it is untracked and ignored).
-A Manifest symlink whose target is left out, a `[sources]` path left out
-by `.gitignore`, or the selected `Project.toml` / `JuliaProject.toml` left
-out, is the same kind of error. The ignored file is not forced into the tar.
+A Manifest symlink whose target is left out, a `[sources]` or Manifest
+`path` left out by `.gitignore`, or the selected `Project.toml` /
+`JuliaProject.toml` left out, is the same kind of error. The ignored file
+is not forced into the tar. Manifest deps without `path` are not checked
+here; a `url` source is fetched on the worker.
 `warn_send_list=false` is the `gitignore=false` send, which includes that file.
 """
 function ensure_manifest_ships!(

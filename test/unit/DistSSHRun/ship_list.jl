@@ -188,6 +188,61 @@ using Test
         end
     end
 
+    @testset "a gitignored Manifest path dep is refused" begin
+        _with_tempdir() do tmp
+            foo = joinpath(tmp, "vendor", "Foo")
+            mkpath(joinpath(foo, "src"))
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            write(
+                joinpath(tmp, "Manifest.toml"), """
+                julia_version = "1.13.0"
+                manifest_format = "2.0"
+                [[deps.Foo]]
+                path = "vendor/Foo"
+                uuid = "00000000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                """
+            )
+            write(joinpath(tmp, ".gitignore"), "vendor/\n")
+            write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
+            write(joinpath(foo, "src", "Foo.jl"), "module Foo end\n")
+            err = try
+                DistSSHRun.pack_ship_tar(tmp)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("Source path vendor/Foo for Foo is not in the rsync send list", err.msg)
+        end
+    end
+
+    @testset "a Manifest url dep is not treated as a path source" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            write(
+                joinpath(tmp, "Manifest.toml"), """
+                julia_version = "1.13.0"
+                manifest_format = "2.0"
+                [[deps.Foo]]
+                git-tree-sha1 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                repo-url = "https://example.com/Foo.jl.git"
+                uuid = "00000000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                """
+            )
+            write(joinpath(tmp, "a.jl"), "1\n")
+            packed = DistSSHRun.pack_ship_tar(tmp)
+            try
+                dest = mktempdir()
+                DistSSHRun.Tar.extract(packed.tar_path, dest)
+                @test isfile(joinpath(dest, "Project.toml"))
+            finally
+                rm(packed.tmpd; force = true, recursive = true)
+            end
+        end
+    end
+
     @testset "a gitignored selected Project.toml is refused" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
