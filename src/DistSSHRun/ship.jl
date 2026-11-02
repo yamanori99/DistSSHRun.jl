@@ -68,7 +68,7 @@ function _ship_rel_paths(local_root::AbstractString)::Vector{String}
     send_list = _rsync_send_list(env0.env_dir, env0; warn = true)
     send_list === nothing && throw(
         ArgumentError(
-            "ship-tree requires a git work tree (git ls-files -co --exclude-standard)",
+            "ship-tree requires a git work tree (git ls-files --cached --others --exclude-per-directory=.gitignore)",
         ),
     )
     ensure_manifest_ships!(

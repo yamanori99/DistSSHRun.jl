@@ -28,14 +28,17 @@ pkg> add DistSSHRun
 
 Julia **1.13+**。ホストには **`ssh`** が要る。collect と go の slot pull-back には
 リモートの Julia 実行ファイルも要る (`--julia`、または自動検出)。転送は
-SSH 上の stdlib Tar で、リモートの mtime は残らない。実行可能でないファイルは
-モード`0644`、実行可能なファイルは`0755`になる。cache pull には
-**`rsync`** が要る。ship は SSH 上の stdlib Tar を使う。git で配るときは
-**`git`** も要る。`setup --ship-tree`、`go --ship-tree`、`drive --ship-tree`
-は git のファイル一覧を `<remote_root>/runs/<run_id>/src/` に展開し、横に
-空の `out/` と DistSSHRun の短い `run.toml` stamp を置く。リモート根は
-先に存在しなければならない（`setup --remote-root`）。`--rsync` は 0.2.0 で
-削除した。`setup --delete` と `--prune` は `--confirm-path` が要る。`-y` では
+SSH 上の stdlib Tar で、元の mtime は残らない。pull-back は展開したファイルを
+`touch` する。ship は `touch` せず、展開したときの時刻のままである。
+実行可能でないファイルはモード`0644`、実行可能なファイルは`0755`になる。
+`push_cache!` には **`rsync`** が要る。ship は SSH 上の stdlib Tar を使う。
+git で配るときは **`git`** も要る。`setup --ship-tree`、`go --ship-tree`、
+`drive --ship-tree` には git work tree が要る。送る中身は git が決める
+（`git ls-files --cached --others --exclude-per-directory=.gitignore`。
+`.git/info/exclude` と `core.excludesFile` は使わない）。展開先は
+`<remote_root>/runs/<run_id>/src/` で、横に空の `out/` と DistSSHRun の短い
+`run.toml` stamp を置く。リモート根は先に存在しなければならない
+（`setup --remote-root`）。`--rsync` は 0.2.0 で削除した。`setup --delete` と `--prune` は `--confirm-path` が要る。`-y` では
 消さない。ある stamp が DistSSHRun 所有でなければ拒否する。リモートのログインシェル（`$SHELL`）は POSIX 互換
 （`sh`、`bash`、`dash`、`zsh`）である。`ssh host command` は `$SHELL -c` で
 実行し、ログインシェルにはしない。Distributed の `SSHManager` はワーカーを
