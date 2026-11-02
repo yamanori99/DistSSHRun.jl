@@ -37,5 +37,6 @@ say there is nothing to fix.
 - **Public behavior.** Flags, confirmation, exit codes, or what is deleted
   changed, and the pull request is not labeled `breaking`, or that
   breaking change is mixed with another change.
+  Edits to existing breaking fragments are for factual corrections only.
 - **Registrator.** The register command appears in an issue, a pull
   request body, or a pull request comment.
