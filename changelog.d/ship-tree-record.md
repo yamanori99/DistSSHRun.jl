@@ -1,17 +1,16 @@
 category: breaking
 
 - `setup --ship-tree` / `go --ship-tree` / `drive --ship-tree` and
-  `setup!(session, :ship_tree)` pack the git file list (`git ls-files
-  --cached --others --exclude-per-directory=.gitignore`; `.git/info/exclude`
-  and `core.excludesFile` are not used) as a tar and extract it to
+  `setup!(session, :ship_tree)` pack the git file list (`git ls-files -co
+  --exclude-standard`) as a tar and extract it to
   `<remote_root>/runs/<run_id>/src/`. `run_id` is UTC plus 6 hex.
   `remote_root` after expansion must not be `$HOME` or `/`. The leaf
   directory is a plain `mkdir` (existing leaf fails). `--rsync` and
   `sync=:rsync` / `setup!(session, :rsync)` were removed; the usage error
   names `--ship-tree`. `setup!(session, :ship_tree; gitignore = false)`
   is `ArgumentError` for every setup mode, including `:ship_tree`.
-  Collect and slot pull-back use Tar. Remaining rsync is `push_cache!`.
-  Escaping symlinks are refused unless `--allow-external-symlinks`.
+  Collect, slot pull, and `push_cache!` still use
+  rsync. Escaping symlinks are refused unless `--allow-external-symlinks`.
   Trees larger than 256 MiB fail. Later `--instantiate` / `--check` / `go`
   use the latest `runs/<run_id>/src` when the remote root has no
   `Project.toml`. `sync!(; mode=:ship_tree)` does not rewrite
