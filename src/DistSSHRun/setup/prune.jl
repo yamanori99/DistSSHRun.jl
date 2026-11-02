@@ -205,6 +205,13 @@ function _prune_remote_shell(
     fi
     _dsk_consider() {
       _child=\$1
+      # The victims file is line-oriented. A newline in a go/ or runs/ leaf
+      # is not covered by the .distsshkit walk. The collect loop is a
+      # pipeline subshell, so record the refusal and return.
+      if printf "%s" "\$_child" | awk "NR>1 { e = 1 } END { exit e ? 0 : 1 }"; then
+        printf x > "\$_dsk_victims.nl"
+        return 0
+      fi
       base=\$(basename "\$_child")
       if [ -n "\$id" ]; then
         case "\$base" in *"\$id"*) ;; *) return 0 ;; esac
@@ -269,6 +276,11 @@ function _prune_remote_shell(
         done
       fi
     done
+    if [ -e "\$_dsk_victims.nl" ]; then
+      rm -f "\$_dsk_victims" "\$_dsk_victims.nl"
+      printf 'refusing to prune a path that contains a newline\\n' >&2
+      exit 1
+    fi
     # Local prune inspects every victim before rm. The collect loop is a
     # pipeline subshell, so the list file is the hand-off. Do not rm the
     # list while a loop still reads it.

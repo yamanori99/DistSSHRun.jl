@@ -758,6 +758,35 @@ end
         end
     end
 
+    @testset "prune shell refuses a newline in a go leaf name" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            keep = joinpath(root, ".distsshkit", "go", "job_ok")
+            weird = joinpath(root, ".distsshkit", "go", "foo\nbar")
+            mkpath(keep)
+            mkpath(weird)
+            write(joinpath(keep, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
+            write(joinpath(weird, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
+            cwd = joinpath(d, "cwd")
+            decoy = joinpath(cwd, "bar")
+            mkpath(decoy)
+            write(joinpath(decoy, "note"), "x")
+            err = IOBuffer()
+            body = DistSSHRun._prune_remote_shell(root)
+            proc = run(
+                ignorestatus(
+                    pipeline(Cmd(`sh -c $body`; dir = cwd); stdout = devnull, stderr = err),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("newline", String(take!(err)))
+            @test isdir(keep)
+            @test isdir(weird)
+            @test isfile(joinpath(decoy, "note"))
+        end
+    end
+
     @testset "delete shell scans nested deploy runs not the git root" begin
         mktempdir() do d
             gitroot = joinpath(d, "Repo")
