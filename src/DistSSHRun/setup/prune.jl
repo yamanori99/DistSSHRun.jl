@@ -203,19 +203,22 @@ function _prune_remote_shell(
         exit 1
       fi
     fi
-    _dsk_prune_leaf() {
+    _dsk_consider() {
       _child=\$1
-      _bad=\$(_dsk_first_unowned_stamp "\$_child")
-      if [ -n "\$_bad" ]; then
-        printf 'refusing to prune unowned run leaf %s\\n' "\$(dirname "\$_bad")" >&2
-        exit 1
+      base=\$(basename "\$_child")
+      if [ -n "\$id" ]; then
+        case "\$base" in *"\$id"*) ;; *) return 0 ;; esac
       fi
-      rm -rf "\$_child"
+      if [ -n "\$older" ] && [ "\$older" != 0 ]; then
+        # find -mtime +N is > N days; local prune is >= DAYS.
+        [ -n "\$(find "\$_child" -maxdepth 0 -mtime +"\$((older - 1))" 2>/dev/null)" ] || return 0
+      fi
+      printf '%s\\n' "\$_child" >> "\$_dsk_victims"
     }
     # The walk below reads find output by line. A newline in a parent of
     # `.distsshkit` splits that path, and the prefix can be pruned.
     _dsk_nlkit=\$(mktemp) || {
-      printf 'refusing to prune a path that contains a newline\\n' >&2
+      printf 'refusing to prune: could not scan for .distsshkit\\n' >&2
       exit 1
     }
     if ! find "\$root" -type d -name .distsshkit -exec sh -c '
@@ -226,7 +229,7 @@ function _prune_remote_shell(
     ' sh "\$_dsk_nlkit" {} \\; 2>/dev/null; then
       if [ ! -s "\$_dsk_nlkit" ]; then
         rm -f "\$_dsk_nlkit"
-        printf 'refusing to prune a path that contains a newline\\n' >&2
+        printf 'refusing to prune: could not scan for .distsshkit\\n' >&2
         exit 1
       fi
     fi
@@ -236,20 +239,16 @@ function _prune_remote_shell(
       exit 1
     fi
     rm -f "\$_dsk_nlkit"
+    _dsk_victims=\$(mktemp) || {
+      printf 'refusing to prune: could not scan for .distsshkit\\n' >&2
+      exit 1
+    }
     find "\$root" -type d -name .distsshkit 2>/dev/null | while IFS= read -r kit; do
       go="\$kit/go"
       if [ -d "\$go" ]; then
         for child in "\$go"/*; do
           [ -d "\$child" ] || continue
-          base=\$(basename "\$child")
-          if [ -n "\$id" ]; then
-            case "\$base" in *"\$id"*) ;; *) continue ;; esac
-          fi
-          if [ -n "\$older" ] && [ "\$older" != 0 ]; then
-            # find -mtime +N is > N days; local prune is >= DAYS.
-            [ -n "\$(find "\$child" -maxdepth 0 -mtime +"\$((older - 1))" 2>/dev/null)" ] || continue
-          fi
-          _dsk_prune_leaf "\$child"
+          _dsk_consider "\$child"
         done
       fi
       runs="\$kit/runs"
@@ -258,14 +257,7 @@ function _prune_remote_shell(
           [ -d "\$kinddir" ] || continue
           for child in "\$kinddir"/*; do
             [ -d "\$child" ] || continue
-            base=\$(basename "\$child")
-            if [ -n "\$id" ]; then
-              case "\$base" in *"\$id"*) ;; *) continue ;; esac
-            fi
-            if [ -n "\$older" ] && [ "\$older" != 0 ]; then
-              [ -n "\$(find "\$child" -maxdepth 0 -mtime +"\$((older - 1))" 2>/dev/null)" ] || continue
-            fi
-            _dsk_prune_leaf "\$child"
+            _dsk_consider "\$child"
           done
         done
       fi
@@ -273,12 +265,23 @@ function _prune_remote_shell(
         for kind in drive setup; do
           p="\$kit/\$kind"
           [ -d "\$p" ] || continue
-          if [ -n "\$older" ] && [ "\$older" != 0 ]; then
-            [ -n "\$(find "\$p" -maxdepth 0 -mtime +"\$((older - 1))" 2>/dev/null)" ] || continue
-          fi
-          _dsk_prune_leaf "\$p"
+          _dsk_consider "\$p"
         done
       fi
     done
+    # Local prune inspects every victim before rm. The collect loop is a
+    # pipeline subshell, so the list file is the hand-off.
+    while IFS= read -r _child; do
+      _bad=\$(_dsk_first_unowned_stamp "\$_child")
+      if [ -n "\$_bad" ]; then
+        printf 'refusing to prune unowned run leaf %s\\n' "\$(dirname "\$_bad")" >&2
+        rm -f "\$_dsk_victims"
+        exit 1
+      fi
+    done < "\$_dsk_victims"
+    while IFS= read -r _child; do
+      rm -rf "\$_child"
+    done < "\$_dsk_victims"
+    rm -f "\$_dsk_victims"
     """
 end

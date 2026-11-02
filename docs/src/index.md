@@ -55,7 +55,7 @@ Controller provenance lives under `DISTSSHKIT_RUN_DIR/run.toml`
 that is not DistSSHRun-owned. `setup --prune` searches `.distsshkit`
 candidates and applies the same ownership check there; it does not inspect
 those Ship leaves. Older leaves without that file still use structural
-checks only. Queue teardown can reuse the same contract.
+checks only.
 Unknown keys are ignored when reading. A ship that sees
 `.distsshkit/inputs.toml` writes those inputs into this run's `run.toml`.
 With hashing on, it also writes a manifest under `inputs/<sha256>.manifest`.

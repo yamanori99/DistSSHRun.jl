@@ -274,7 +274,7 @@ end
         @test occursin("_dsk_first_unowned_stamp", script)
         @test occursin("DistSSHRun ", script)
         owned_sh = DistSSHRun._remote_run_toml_owned_check_sh()
-        @test occursin("/^\\[/", owned_sh)
+        @test occursin("/^[ \\t]*\\[/", owned_sh)
         @test occursin("mktemp", owned_sh)
         @test occursin("NR>1", owned_sh)
         @test occursin("-exec sh", owned_sh)
@@ -333,6 +333,24 @@ end
             @test proc_hdr.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err_hdr)))
             @test isdir(leaf)
+            write(
+                joinpath(leaf, "run.toml"),
+                "schema = 1\nwriter = \"DistSSHRun 1.0\"\nkind = \"ship\"\nkind = \"evil\"\n",
+            )
+            err_dup = IOBuffer()
+            proc_dup = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(root))`;
+                        stdout = devnull,
+                        stderr = err_dup,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc_dup.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err_dup)))
+            @test isdir(leaf)
             write(joinpath(leaf, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
             proc2 = run(
                 ignorestatus(pipeline(`sh -c $(DistSSHRun._remote_delete_shell(root))`; stdout = devnull, stderr = devnull));
@@ -381,6 +399,70 @@ end
             @test proc2.exitcode == 0
             @test !isdir(drive)
             @test isdir(root)
+        end
+    end
+
+    @testset "prune shell accepts a TOML.print run.toml" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            go = joinpath(root, ".distsshkit", "go", "job")
+            mkpath(go)
+            DistSSHRun.write_kit_run_toml!(
+                go;
+                kind = :go,
+                provenance = Dict{String, Any}(
+                    "git" => Dict{String, Any}("commit" => "abc", "dirty" => false),
+                    "workers" => Dict{String, Any}(
+                        "child:box" => [Dict{String, Any}("n" => 2)],
+                    ),
+                ),
+            )
+            DistSSHRun._store_input_rows!(
+                go,
+                [Dict{String, Any}("name" => "a.b", "host" => "h1", "sha256" => "dead")],
+            )
+            DistSSHRun._merge_inputs_into_run_toml!(go)
+            @test occursin("[[inputs]]", read(joinpath(go, "run.toml"), String))
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode == 0
+            @test !isdir(go)
+            @test isdir(root)
+        end
+    end
+
+    @testset "prune shell inspects every victim before rm" begin
+        mktempdir() do d
+            root = joinpath(d, "app")
+            keep = joinpath(root, ".distsshkit", "go", "job_keep")
+            bad = joinpath(root, ".distsshkit", "go", "job_bad")
+            mkpath(keep)
+            mkpath(bad)
+            write(joinpath(keep, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
+            write(joinpath(bad, "run.toml"), "name = \"job\"\n")
+            err = IOBuffer()
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._prune_remote_shell(root))`;
+                        stdout = devnull,
+                        stderr = err,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode != 0
+            @test occursin("unowned run leaf", String(take!(err)))
+            @test isdir(keep)
+            @test isdir(bad)
         end
     end
 
@@ -652,6 +734,7 @@ end
     end
 
     @testset "prune shell refuses a newline in the path to .distsshkit" begin
+        @test occursin("could not scan for .distsshkit", DistSSHRun._prune_remote_shell("/tmp/app"))
         mktempdir() do d
             root = joinpath(d, "app")
             keep = joinpath(root, "foo", "drive")
@@ -730,6 +813,27 @@ end
             )
             @test proc.exitcode == 0
             @test !isdir(gitroot)
+        end
+        mktempdir() do d
+            gitroot = joinpath(d, "Repo")
+            app = joinpath(d, "OtherApp")
+            mkpath(gitroot)
+            leaf = joinpath(app, "runs", "20260101T000000Z-abcd")
+            mkpath(leaf)
+            write(joinpath(leaf, "run.toml"), "name = \"job\"\n")
+            proc = run(
+                ignorestatus(
+                    pipeline(
+                        `sh -c $(DistSSHRun._remote_delete_shell(gitroot, app))`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                );
+                wait = true,
+            )
+            @test proc.exitcode == 0
+            @test !isdir(gitroot)
+            @test isdir(leaf)
         end
     end
 

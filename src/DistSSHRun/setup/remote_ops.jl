@@ -48,9 +48,12 @@ end
 # or a symlink directly under
 # `runs/` is unowned (find would not inspect the target). Prune omits that
 # mode and walks its
-# candidate recursively, including nested stamps. The textual check requires
-# the `_kit_run_toml_owned` fields and rejects unclosed quotes or brackets.
-# It is not a TOML parser. A newline in a stamp path, a symlink or other
+# candidate recursively, including nested stamps. Top-level `schema` /
+# `writer` / `kind` must match `_kit_run_toml_owned`. After the first table
+# header (`[`, `[[`, optional leading space), only unclosed quotes or
+# brackets are refused, so a `TOML.print` tree is owned. Duplicate
+# `schema` / `writer` / `kind` lines are unowned. It is not a TOML parser.
+# A newline in a stamp path, a symlink or other
 # non-regular `run.toml`, a failed checker write, and a scan error are unowned
 # (fail closed), never a
 # missing stamp and never ownership proof.
@@ -152,22 +155,29 @@ function _remote_run_toml_owned_check_sh()::String
     /^[ \\t]*#/ { next }
     /^[ \\t]*\$/ { next }
     { if (unbalanced(\$0)) { bad = 1; exit } }
-    /^\\[/ {
+    /^[ \\t]*\\[/ {
       top = 0
-      if (\$0 !~ /^\\[[^\\]]+\\]\$/) { bad = 1; exit }
       next
     }
     top == 1 {
-      if (\$0 ~ /^schema = 1\$/) { s = 1; next }
-      if (\$0 ~ /^writer = "DistSSHRun [^"]*"\$/) { w = 1; next }
-      if (\$0 ~ /^writer = "DistSSHRun /) { bad = 1; exit }
-      if (\$0 ~ /^kind = "(go|drive|ride|pipeline|ship)"\$/) { k = 1; next }
+      if (\$0 ~ /^schema = /) {
+        if (s || \$0 !~ /^schema = 1\$/) { bad = 1; exit }
+        s = 1
+        next
+      }
+      if (\$0 ~ /^writer = /) {
+        if (w || \$0 !~ /^writer = "DistSSHRun [^"]*"\$/) { bad = 1; exit }
+        w = 1
+        next
+      }
+      if (\$0 ~ /^kind = /) {
+        if (k || \$0 !~ /^kind = "(go|drive|ride|pipeline|ship)"\$/) { bad = 1; exit }
+        k = 1
+        next
+      }
       if (\$0 ~ /^[A-Za-z_][A-Za-z0-9_]* = /) next
-      bad = 1
-      exit
-    }
-    {
-      if (\$0 ~ /^[A-Za-z_][A-Za-z0-9_]* = /) next
+      if (\$0 ~ /^"[^"]+" = /) next
+      if (\$0 ~ /^'[^']+' = /) next
       bad = 1
       exit
     }
@@ -269,7 +279,12 @@ function _remote_delete_shell(
       fi
       if test -e $dq; then
         _distssh_deploy=\$(cd -P $dq && pwd -P) || exit 1
-        _dsk_assert_run_leaves_owned "\$_distssh_deploy" || exit 1
+        # Ship stamps live under the deploy root. Scan only when that path is
+        # the confirmed target or a descendant of it.
+        if [ "\$_distssh_deploy" = "\$_distssh_target" ] ||
+            [ "\$_distssh_deploy" != "\${_distssh_deploy#"\$_distssh_target"/}" ]; then
+          _dsk_assert_run_leaves_owned "\$_distssh_deploy" || exit 1
+        fi
       fi
     fi
     rm -rf $pq 2>/dev/null

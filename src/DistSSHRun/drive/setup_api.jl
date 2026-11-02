@@ -556,6 +556,9 @@ function _confirmed_path_groups(
     return [path => groups[path] for path in order]
 end
 
+# One `deploy_root` for every confirmed delete path. Callers pass
+# `remote_deploy_root` for this project; host plan paths may be git-work-tree
+# ancestors of that same deploy root.
 function _apply_confirmed_delete(
         hosts::AbstractVector{<:AbstractString},
         plan::Dict{String, String},
