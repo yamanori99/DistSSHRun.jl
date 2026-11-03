@@ -924,11 +924,11 @@ end
 
 const _PROJECT_PREFERENCE_NAMES = ("LocalPreferences.toml", "JuliaLocalPreferences.toml")
 
-"""Add preference files that sit next to a shipped `Project.toml`, even when gitignored."""
+"""Add preference files next to a shipped project file, even when gitignored."""
 function _append_project_preference_rels!(root::AbstractString, out::Vector{String})
     projects = String[]
     for rel in out
-        (rel == "Project.toml" || endswith(rel, "/Project.toml")) && push!(projects, rel)
+        basename(rel) in Base.project_names && push!(projects, rel)
     end
     for rel in projects
         dir = dirname(rel)

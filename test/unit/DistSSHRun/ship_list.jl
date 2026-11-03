@@ -492,4 +492,21 @@ using Test
             end
         end
     end
+
+    @testset "gitignored preferences beside JuliaProject.toml still ship" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\n")
+            write(joinpath(tmp, "JuliaProject.toml"), "name = \"ShipT\"\n")
+            write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+            write(joinpath(tmp, "LocalPreferences.toml"), "[ShipT]\nx = 1\n")
+            packed = DistSSHRun.pack_ship_tar(tmp)
+            try
+                dest = mktempdir()
+                DistSSHRun.Tar.extract(packed.tar_path, dest)
+                @test isfile(joinpath(dest, "LocalPreferences.toml"))
+            finally
+                rm(packed.tmpd; force = true, recursive = true)
+            end
+        end
+    end
 end
