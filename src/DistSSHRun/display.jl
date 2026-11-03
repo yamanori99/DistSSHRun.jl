@@ -367,6 +367,9 @@ function _ensure_path_sources_in_tree!(env, root::AbstractString; git::Bool)
             _ensure_one_path_dep!(name, raw, project_file, root_c, root_real; git = git)
         end
     end
+    # Manifest `path` deps are a ship-tree check. Clone / git sync / go keep
+    # the selected project's `[sources]` only, as before this change.
+    git && return nothing
     manifest = env.manifest
     if manifest isa String && isfile(manifest)
         for (name, raw) in _manifest_path_deps(manifest)
@@ -526,16 +529,16 @@ function _manifest_ship_problems(env, listed::Vector{String})::Vector{String}
     if !(rel in listed)
         push!(
             msgs,
-            "Manifest $rel is not in the rsync send list. It is untracked and ignored, so workers would instantiate a different resolution. Stop ignoring it, or do not use setup --instantiate.",
+            "Manifest $rel is not in the rsync send list, so workers would instantiate a different resolution. Stop ignoring it.",
         )
     end
     hops = _ship_symlink_hop_rels(manifest, env_dir)
     for hop in hops
         hop == rel && continue
-        hop in listed && continue
+        _send_list_covers_source(listed, hop, env_dir) && continue
         push!(
             msgs,
-            "Manifest $rel points at $hop, which is not in the rsync send list. .gitignore omitted the target, so workers would instantiate a different resolution. Stop ignoring it, or do not use setup --instantiate.",
+            "Manifest $rel points at $hop, which is not in the rsync send list, so workers would instantiate a different resolution. Stop ignoring it.",
         )
         break
     end
@@ -556,7 +559,7 @@ function _append_path_dep_send_problems!(
     if !_send_list_covers_source(listed, rel, env_dir)
         push!(
             msgs,
-            "Source path $rel for $name is not in the rsync send list. .gitignore omitted it, so workers would not see this path. Stop ignoring it, or do not use setup --instantiate.",
+            "Source path $rel for $name is not in the rsync send list, so workers would not see this path. Stop ignoring it.",
         )
         return nothing
     end
@@ -567,7 +570,7 @@ function _append_path_dep_send_problems!(
     _send_list_covers_source(listed, prel, env_dir) && return nothing
     push!(
         msgs,
-        "Source path $prel for $name is not in the rsync send list. .gitignore omitted it, so workers would not see this path. Stop ignoring it, or do not use setup --instantiate.",
+        "Source path $prel for $name is not in the rsync send list, so workers would not see this path. Stop ignoring it.",
     )
     return nothing
 end
@@ -601,7 +604,7 @@ function _project_file_ship_problems(env, listed::Vector{String})::Vector{String
         _send_list_covers_source(listed, rel, env_dir) && continue
         push!(
             msgs,
-            "Project $rel is not in the rsync send list. .gitignore omitted it, so workers would not see this environment. Stop ignoring it, or do not use setup --instantiate.",
+            "Project $rel is not in the rsync send list, so workers would not see this environment. Stop ignoring it.",
         )
     end
     return msgs
@@ -795,7 +798,8 @@ function _report_manifest_refusal(e)::Bool
     if !(
             startswith(msg, "No Manifest for ") ||
                 startswith(msg, "Manifest ") ||
-                startswith(msg, "Project ")
+                startswith(msg, "Project ") ||
+                startswith(msg, "Source path ")
         )
         return false
     end
@@ -810,7 +814,7 @@ together with `project_dir`.
 One rsync cannot carry both. A symlink whose target leaves that tree is the
 same failure. A `url` source is fetched on the worker. A project file with
 no Manifest is an error. A directory with no project file is not. A Manifest
-left out of the rsync send list is an error (it is untracked and ignored).
+left out of the rsync send list is an error.
 A Manifest symlink whose target is left out, a `[sources]` or Manifest
 `path` left out by `.gitignore`, or the selected `Project.toml` /
 `JuliaProject.toml` left out, is the same kind of error. The ignored file

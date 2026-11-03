@@ -598,6 +598,52 @@ function _warn_ancestor_gitignore!(send_dir::AbstractString, listed::Vector{Stri
     return nothing
 end
 
+"""
+Warn when files in `listed` match a `.gitignore` above `send_dir`.
+
+The walker does not apply that file, so those paths are shipped. Git
+`info/exclude` and `core.excludesFile` are not this warning.
+"""
+function _warn_ancestor_gitignore_shipped!(send_dir::AbstractString, listed::Vector{String})
+    top = git_work_tree(send_dir)
+    top isa String || return nothing
+    _same_resolved_dir(top, send_dir) && return nothing
+    files = String[]
+    for rel in listed
+        r = replace(String(rel), '\\' => '/')
+        isempty(r) && continue
+        full = joinpath(send_dir, r)
+        (isfile(full) || islink(full)) || continue
+        push!(files, r)
+    end
+    isempty(files) && return nothing
+    hits = Tuple{String, String, String}[]
+    seen = Set{String}()
+    for rec in _git_check_ignore_records(send_dir, files; nonmatching = true)
+        isempty(rec.source) && continue
+        _info_exclude_source(rec.source) && continue
+        startswith(rec.pattern, "!") && continue
+        _gitignore_source_above(top, send_dir, rec.source) || continue
+        rec.path in seen && continue
+        push!(seen, rec.path)
+        push!(hits, (rec.path, rec.source, rec.line))
+    end
+    isempty(hits) && return nothing
+    n = length(hits)
+    show_n = min(3, n)
+    buf = IOBuffer()
+    noun = n == 1 ? "file" : "files"
+    println(buf, "Warning: $n $noun match a .gitignore above this directory and will be shipped.")
+    for i in 1:show_n
+        path, source, line = hits[i]
+        println(buf, "  $path ($source:$line)")
+    end
+    extra = n - show_n
+    extra > 0 && println(buf, "  and $extra more.")
+    print_warn(String(take!(buf)))
+    return nothing
+end
+
 function _push_send_rel!(out::Vector{String}, prefix::AbstractString, rel::AbstractString)
     listed = _join_send_rel(prefix, rel)
     _send_rel_excluded(listed) && return nothing
@@ -793,15 +839,16 @@ end
 """
     rsync_send_list(local_root, env; warn=false) -> Union{Nothing, Vector{String}}
 
-Git send list for a work tree, relative to `local_root`. This is the rsync
-file list. `setup --ship-tree` starts from it and also sends
-`LocalPreferences.toml` and `JuliaLocalPreferences.toml` beside a shipped
-`Project.toml` or `JuliaProject.toml`, including when those files are gitignored.
+Git send list for a work tree, relative to `local_root`. `--clone`, `--sync`,
+and `--pull` still use this list. `setup --ship-tree` does not: it walks the
+project and each directory's `.gitignore`, then adds `LocalPreferences.toml`
+and `JuliaLocalPreferences.toml` beside a shipped `Project.toml` or
+`JuliaProject.toml`, including when those files are gitignored.
 
-Returns `nothing` outside a git work tree. The caller then uses rsync's
-per-directory `.gitignore` filter (dir-merge). An empty list throws
-`ArgumentError`. `warn=true` prints the ancestor-`.gitignore` warning once.
-The default does not print it, so a second call does not repeat the warning.
+Returns `nothing` outside a git work tree. An empty list throws
+`ArgumentError`. `warn=true` prints the ancestor-`.gitignore` warning once
+for this git list (files left out). The default does not print it, so a
+second call does not repeat the warning.
 
 A 0.x patch does not change the paths this function returns.
 """

@@ -66,6 +66,7 @@ function _ship_rel_paths(local_root::AbstractString)::Vector{String}
     root = canonical_local_path(local_root)
     env0 = resolve_pkg_env(root)
     send_list = _ship_gitignore_send_list(env0.env_dir)
+    _warn_ancestor_gitignore_shipped!(env0.env_dir, send_list)
     ensure_manifest_ships!(
         root; send_list = send_list, warn_send_list = true,
     )
@@ -855,7 +856,15 @@ function _head_tree(root::AbstractString)::Union{Nothing, String}
     git = Sys.which("git")
     git === nothing && return nothing
     out = try
-        strip(read(Cmd([git, "-C", root, "rev-parse", "HEAD^{tree}"]), String))
+        strip(
+            read(
+                pipeline(
+                    Cmd([git, "-C", String(root), "rev-parse", "HEAD^{tree}"]);
+                    stderr = devnull,
+                ),
+                String,
+            ),
+        )
     catch
         return nothing
     end

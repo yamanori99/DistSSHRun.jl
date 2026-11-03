@@ -10,12 +10,20 @@ using Test
             @test listed isa Vector
             @test "Project.toml" in listed
             @test "a.jl" in listed
-            packed = DistSSHRun.pack_ship_tar(tmp)
+            packed, err = mktemp() do _, io
+                p = redirect_stderr(io) do
+                    DistSSHRun.pack_ship_tar(tmp)
+                end
+                flush(io)
+                seekstart(io)
+                return p, read(io, String)
+            end
             try
                 dest = mktempdir()
                 DistSSHRun.Tar.extract(packed.tar_path, dest)
                 @test isfile(joinpath(dest, "a.jl"))
                 @test !isdir(joinpath(dest, ".git"))
+                @test !occursin("fatal:", err)
             finally
                 rm(packed.tmpd; force = true, recursive = true)
             end
@@ -133,6 +141,17 @@ using Test
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
             write(joinpath(tmp, "a\nb.txt"), "x\n")
             @test_throws ArgumentError DistSSHRun._ship_gitignore_send_list(tmp)
+        end
+    end
+
+    @testset "an ignored newline path is skipped" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(tmp, ".gitignore"), "*.tmp\n")
+            write(joinpath(tmp, "a\nb.tmp"), "x\n")
+            listed = DistSSHRun._ship_gitignore_send_list(tmp)
+            @test "Project.toml" in listed
+            @test !any(occursin('\n', r) for r in listed)
         end
     end
 
@@ -489,6 +508,102 @@ using Test
                 @test isfile(joinpath(dest, "LocalPreferences.toml"))
             finally
                 rm(packed.tmpd; force = true, recursive = true)
+            end
+        end
+    end
+
+    @testset "a Manifest behind a directory symlink is covered" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            mkpath(joinpath(tmp, "real"))
+            write(joinpath(tmp, "real", "Manifest.toml"), "# lock\n")
+            symlink("real", joinpath(tmp, "link"))
+            symlink(joinpath("link", "Manifest.toml"), joinpath(tmp, "Manifest.toml"))
+            packed = DistSSHRun.pack_ship_tar(tmp)
+            try
+                dest = mktempdir()
+                DistSSHRun.Tar.extract(packed.tar_path, dest)
+                @test isfile(joinpath(dest, "Project.toml"))
+                @test islink(joinpath(dest, "Manifest.toml")) || isfile(joinpath(dest, "real", "Manifest.toml"))
+            finally
+                rm(packed.tmpd; force = true, recursive = true)
+            end
+        end
+    end
+
+    @testset "a Manifest path outside the git tree is a ship-tree check" begin
+        _with_tempdir() do tmp
+            app = joinpath(tmp, "app")
+            bar = joinpath(tmp, "shared", "Bar")
+            mkpath(app)
+            mkpath(joinpath(bar, "src"))
+            write(joinpath(app, "Project.toml"), "name = \"App\"\n")
+            write(
+                joinpath(app, "Manifest.toml"), """
+                julia_version = "1.13.0"
+                manifest_format = "2.0"
+                [[deps.Bar]]
+                path = "../shared/Bar"
+                uuid = "00000000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                """
+            )
+            write(joinpath(bar, "Project.toml"), "name = \"Bar\"\n")
+            write(joinpath(bar, "src", "Bar.jl"), "module Bar end\n")
+            if Sys.which("git") !== nothing
+                run(pipeline(`git -C $app init -q`; stdout = devnull, stderr = devnull))
+                run(pipeline(`git -C $app config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
+                run(pipeline(`git -C $app config user.name "Test"`; stdout = devnull, stderr = devnull))
+                run(pipeline(`git -C $app add Project.toml Manifest.toml`; stdout = devnull, stderr = devnull))
+                run(pipeline(`git -C $app -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
+                @test DistSSHRun.ensure_manifest_in_git_worktree!(app) === nothing
+            end
+            err = try
+                DistSSHRun.pack_ship_tar(app)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("Source path", err.msg)
+        end
+    end
+
+    @testset "ancestor gitignore files are shipped with a warning" begin
+        if Sys.which("git") === nothing
+            @test_skip "git is not on PATH"
+        else
+            _with_tempdir() do tmp
+                write(joinpath(tmp, ".gitignore"), "*.pem\n.env\n")
+                job = joinpath(tmp, "job")
+                mkpath(job)
+                write(joinpath(job, "Project.toml"), "name = \"App\"\n")
+                write(joinpath(job, "Manifest.toml"), "# lock\n")
+                write(joinpath(job, "key.pem"), "secret\n")
+                write(joinpath(job, ".env"), "TOKEN=1\n")
+                run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+                run(pipeline(`git -C $tmp config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
+                run(pipeline(`git -C $tmp config user.name "Test"`; stdout = devnull, stderr = devnull))
+                run(pipeline(`git -C $tmp add -A`; stdout = devnull, stderr = devnull))
+                run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
+                text = mktemp() do _, io
+                    packed = redirect_stdout(io) do
+                        DistSSHRun.pack_ship_tar(job)
+                    end
+                    try
+                        dest = mktempdir()
+                        DistSSHRun.Tar.extract(packed.tar_path, dest)
+                        @test isfile(joinpath(dest, "key.pem"))
+                        @test isfile(joinpath(dest, ".env"))
+                    finally
+                        rm(packed.tmpd; force = true, recursive = true)
+                    end
+                    flush(io)
+                    seekstart(io)
+                    return read(io, String)
+                end
+                @test occursin("will be shipped", text)
+                @test occursin("key.pem", text) || occursin(".env", text)
             end
         end
     end

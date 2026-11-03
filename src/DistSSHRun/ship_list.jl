@@ -33,9 +33,9 @@ function _ship_gitignore_send_list(root::AbstractString)::Vector{String}
             name == ".distsshkit" && continue
             child = joinpath(cur, name)
             rel = replace(relpath(child, root_c), '\\' => '/')
-            _reject_newline_send_path(rel)
             is_dir = isdir(child) && !islink(child)
             Base.invokelatest(GitIgnore.isignored, matcher, rel, is_dir) && continue
+            _reject_newline_send_path(rel)
             push!(out, rel)
             is_dir && push!(stack, child)
         end
