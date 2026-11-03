@@ -221,15 +221,11 @@ function _resolved_source_path(project_file::AbstractString, raw::AbstractString
     return canonical_local_path(joinpath(dirname(String(project_file)), expanded))
 end
 
-"""`(name, path)` for each Manifest dep that names a `path` (format 1 or 2).
-
-Entries without `path` are skipped. A `url` source is not listed here.
-"""
-function _manifest_path_deps(manifest_file::AbstractString)::Vector{Tuple{String, String}}
-    data = TOML.parsefile(String(manifest_file))
-    deps = get(data, "deps", nothing)
-    deps isa AbstractDict || return Tuple{String, String}[]
-    found = Tuple{String, String}[]
+function _collect_manifest_path_deps!(
+        found::Vector{Tuple{String, String}},
+        deps,
+    )
+    deps isa AbstractDict || return found
     for (name, entry) in deps
         tables = if entry isa AbstractDict
             Any[entry]
@@ -246,6 +242,24 @@ function _manifest_path_deps(manifest_file::AbstractString)::Vector{Tuple{String
             push!(found, (String(name), s))
         end
     end
+    return found
+end
+
+"""`(name, path)` for each Manifest dep that names a `path` (format 1 or 2).
+
+Format 2 nests package tables under `deps`. Format 1 has no `manifest_format`
+and stores those tables at the top level. Entries without `path` are skipped.
+A `url` source is not listed here.
+"""
+function _manifest_path_deps(manifest_file::AbstractString)::Vector{Tuple{String, String}}
+    data = TOML.parsefile(String(manifest_file))
+    found = Tuple{String, String}[]
+    if haskey(data, "manifest_format")
+        _collect_manifest_path_deps!(found, get(data, "deps", nothing))
+    else
+        _collect_manifest_path_deps!(found, data)
+    end
+    unique!(found)
     return found
 end
 

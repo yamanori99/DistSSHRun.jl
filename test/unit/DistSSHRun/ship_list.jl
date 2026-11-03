@@ -244,7 +244,9 @@ using Test
     end
 
     @testset "a Manifest path of the env root is the clone itself" begin
-        Sys.which("git") === nothing && return
+        if Sys.which("git") === nothing
+            @test_skip "git is not on PATH"
+        else
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\nuuid = \"aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee\"\n")
             write(
@@ -271,6 +273,36 @@ using Test
             finally
                 rm(packed.tmpd; force = true, recursive = true)
             end
+        end
+        end
+    end
+
+    @testset "a format-1 Manifest path dep is refused" begin
+        _with_tempdir() do tmp
+            foo = joinpath(tmp, "vendor", "Foo")
+            mkpath(joinpath(foo, "src"))
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            write(
+                joinpath(tmp, "Manifest.toml"), """
+                [[Foo]]
+                path = "vendor/Foo"
+                uuid = "00000000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                [deps]
+                Foo = "00000000-0000-0000-0000-000000000001"
+                """
+            )
+            write(joinpath(tmp, ".gitignore"), "vendor/\n")
+            write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
+            write(joinpath(foo, "src", "Foo.jl"), "module Foo end\n")
+            err = try
+                DistSSHRun.pack_ship_tar(tmp)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("Source path vendor/Foo for Foo is not in the rsync send list", err.msg)
         end
     end
 
