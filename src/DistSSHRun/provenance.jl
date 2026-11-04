@@ -299,7 +299,7 @@ function _sha256_hex(bytes::AbstractVector{UInt8})::String
 end
 
 function _sha256_file(path::AbstractString)::String
-    open(path, "r") do io
+    return open(path, "r") do io
         return _sha256_stream() do buf
             return readbytes!(io, buf)
         end
