@@ -109,10 +109,12 @@ using Test
             mkpath(work)
             _init_commit!(work)
             out, raw = _capture_stdio() do _, _
-                DistSSHRun.git_sync_project_to_hosts!(
-                    ["192.0.2.1"], work, "~/App.jl";
-                    do_push = true, do_pull = true,
-                )
+                redirect_stderr(devnull) do
+                    DistSSHRun.git_sync_project_to_hosts!(
+                        ["192.0.2.1"], work, "~/App.jl";
+                        do_push = true, do_pull = true,
+                    )
+                end
             end
             @test !raw.ok
             @test isempty(raw.host_results)
@@ -121,10 +123,12 @@ using Test
 
             write(joinpath(work, "dirty.txt"), "x\n")
             out_dirty, raw_dirty = _capture_stdio() do _, _
-                DistSSHRun.git_sync_project_to_hosts!(
-                    ["192.0.2.1"], work, "~/App.jl";
-                    do_push = false, do_pull = true,
-                )
+                redirect_stderr(devnull) do
+                    DistSSHRun.git_sync_project_to_hosts!(
+                        ["192.0.2.1"], work, "~/App.jl";
+                        do_push = false, do_pull = true,
+                    )
+                end
             end
             @test !raw_dirty.ok
             @test isempty(raw_dirty.host_results)
@@ -178,10 +182,12 @@ using Test
                         end
                     end
                     _, raw_skip = _capture_stdio() do _, _
-                        DistSSHRun.git_sync_project_to_hosts!(
-                            ["192.0.2.1"], work, "~/App.jl";
-                            do_push = true, do_pull = false, confirm = false,
-                        )
+                        redirect_stderr(devnull) do
+                            DistSSHRun.git_sync_project_to_hosts!(
+                                ["192.0.2.1"], work, "~/App.jl";
+                                do_push = true, do_pull = false, confirm = false,
+                            )
+                        end
                     end
                     @test !raw_skip.ok
                     @test !raw_skip.cancelled
@@ -200,10 +206,12 @@ using Test
                 work = joinpath(tmp, "work")
                 mkpath(work)
                 _init_commit!(work)
-                raw = DistSSHRun.git_sync_project_to_hosts!(
-                    ["192.0.2.1", "192.0.2.2"], work, "~/App.jl";
-                    do_push = false, do_pull = true, confirm = false,
-                )
+                _, raw = _capture_stdio() do _, _
+                    DistSSHRun.git_sync_project_to_hosts!(
+                        ["192.0.2.1", "192.0.2.2"], work, "~/App.jl";
+                        do_push = false, do_pull = true, confirm = false,
+                    )
+                end
                 @test !raw.ok
                 @test length(raw.host_results) == 1
                 @test raw.host_results[1].host == "192.0.2.1"
