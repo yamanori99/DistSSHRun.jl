@@ -230,7 +230,10 @@ function _provenance_lookup(d::AbstractDict, key::String)
 end
 
 const _SHA256_BUF = 1 << 16
+const _SHA256_EMPTY = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+const _SHA256_OPENSSL = Ref{Union{Nothing, Bool}}(nothing)
 
+"""SHA-256 hex from `feed!` via stdlib `SHA`. `feed!` returns 0 at the end."""
 function _sha256_stdlib(feed!::Function)::String
     ctx = SHA.SHA256_CTX()
     buf = Vector{UInt8}(undef, _SHA256_BUF)
@@ -242,6 +245,7 @@ function _sha256_stdlib(feed!::Function)::String
     return SHA.bytes2hex(SHA.digest!(ctx))
 end
 
+"""SHA-256 hex from `feed!` via OpenSSL EVP. `feed!` returns 0 at the end."""
 function _sha256_openssl(feed!::Function)::String
     ctx = ccall((:EVP_MD_CTX_new, OpenSSL_jll.libcrypto), Ptr{Cvoid}, ())
     ctx == C_NULL && error("EVP_MD_CTX_new failed")
@@ -278,15 +282,26 @@ function _sha256_openssl(feed!::Function)::String
     end
 end
 
-"""SHA-256 hex. OpenSSL EVP when it loads; stdlib `SHA` otherwise. Same digest."""
-function _sha256_stream(feed!::Function)::String
-    try
-        return _sha256_openssl(feed!)
-    catch
-        return _sha256_stdlib(feed!)
+"""True when an empty OpenSSL SHA-256 matches stdlib `SHA`. Cached for the process."""
+function _openssl_sha256_ok()::Bool
+    cached = _SHA256_OPENSSL[]
+    cached === nothing || return cached
+    ok = try
+        _sha256_openssl(_ -> 0) == _SHA256_EMPTY
+    catch e
+        e isa InterruptException && rethrow()
+        false
     end
+    _SHA256_OPENSSL[] = ok
+    return ok
 end
 
+"""SHA-256 hex. OpenSSL EVP when the empty probe succeeds; stdlib `SHA` otherwise."""
+function _sha256_stream(feed!::Function)::String
+    return _openssl_sha256_ok() ? _sha256_openssl(feed!) : _sha256_stdlib(feed!)
+end
+
+"""SHA-256 hex of `bytes`, streamed. Same digest as hashing the bytes in one shot."""
 function _sha256_hex(bytes::AbstractVector{UInt8})::String
     pos = Ref(1)
     return _sha256_stream() do buf
@@ -298,6 +313,7 @@ function _sha256_hex(bytes::AbstractVector{UInt8})::String
     end
 end
 
+"""SHA-256 hex of the file at `path`, streamed. Does not read the whole file first."""
 function _sha256_file(path::AbstractString)::String
     return open(path, "r") do io
         return _sha256_stream() do buf
