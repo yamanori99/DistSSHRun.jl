@@ -28,7 +28,37 @@ end
 
 using Test
 using Distributed
+using Logging
 using DistSSHRun
+
+# The product warning stays. This suite drops only that line while `terminate!`
+# reaps the detached ride, so a missed `pkill` ssh does not print.
+struct _DropTaggedPkillWarn <: AbstractLogger
+    logger::AbstractLogger
+end
+
+function Logging.handle_message(
+        l::_DropTaggedPkillWarn,
+        level,
+        message,
+        _module,
+        group,
+        id,
+        filepath,
+        line;
+        kwargs...,
+    )
+    if level == Logging.Warn && occursin("Tagged worker pkill did not reach", string(message))
+        return nothing
+    end
+    return Logging.handle_message(
+        l.logger, level, message, _module, group, id, filepath, line; kwargs...,
+    )
+end
+
+Logging.shouldlog(l::_DropTaggedPkillWarn, args...) = Logging.shouldlog(l.logger, args...)
+Logging.min_enabled_level(l::_DropTaggedPkillWarn) = Logging.min_enabled_level(l.logger)
+Logging.catch_exceptions(l::_DropTaggedPkillWarn) = Logging.catch_exceptions(l.logger)
 
 # Same include shape as `test/runtests.jl` so JETLS follows it. Do not route
 # through a non-`const` `kit_root` (JETLS then skips the include).
@@ -988,7 +1018,9 @@ end
             @test workers_ready
             @test !isempty(pids)
 
-            result = DistSSHRun.terminate!(kp; grace = 15)
+            result = with_logger(_DropTaggedPkillWarn(current_logger())) do
+                DistSSHRun.terminate!(kp; grace = 15)
+            end
             @test result isa DistSSHRun.KitRunResult
             @test result.kind === :ride
             @test !process_running(kp.process)
