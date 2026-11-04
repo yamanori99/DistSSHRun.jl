@@ -47,10 +47,56 @@ using Test
         @test occursin("Tar.create", sh)
         @test occursin("/remote/out", sh)
         @test occursin("julia", sh)
+        @test occursin("unset JULIA_PROJECT", sh)
+        @test occursin("JULIA_LOAD_PATH=@stdlib", sh)
+        @test occursin("--compiled-modules=existing", sh)
+        @test occursin("--startup-file=no", sh)
+        @test occursin("exec ", sh)
+        @test !occursin("env -u JULIA_PROJECT", sh)
         filtered = DistSSHRun._remote_tar_create_sh("/opt/julia/bin/julia", "/remote/out"; filtered = true)
         @test occursin("Tar.create", filtered)
         @test occursin("/opt/julia/bin/julia", filtered)
         @test occursin("stdin", filtered)
+        @test occursin("unset JULIA_PROJECT", filtered)
+        eq = DistSSHRun._remote_stdlib_julia_e("/opt/julia=1.13/bin/julia", "using Tar")
+        @test occursin("unset JULIA_PROJECT", eq)
+        @test occursin("exec ", eq)
+        @test occursin("/opt/julia=1.13/bin/julia", eq)
+        @test !occursin(r"env .*/opt/julia=1\.13/bin/julia", eq)
+    end
+
+    @testset "stdlib julia helper does not write an isolated depot" begin
+        julia = joinpath(Sys.BINDIR, Base.julia_exename())
+        extract = DistSSHRun._remote_stdlib_julia_e(
+            julia,
+            "using Tar; isdir(ARGS[1]) || mkdir(ARGS[1]); Tar.extract(stdin, ARGS[1])";
+            args = String["/src"],
+        )
+        @test occursin("Tar.extract", extract)
+        @test occursin("--compiled-modules=existing", extract)
+        _with_tempdir() do tmp
+            depot = joinpath(tmp, "depot")
+            dummy = joinpath(tmp, "proj")
+            mkpath(depot)
+            mkpath(dummy)
+            write(joinpath(dummy, "Project.toml"), "name = \"Dummy\"\n")
+            script = DistSSHRun._remote_stdlib_julia_e(julia, "using Tar; print(string(Tar))")
+            out = withenv(
+                "JULIA_DEPOT_PATH" => depot,
+                "JULIA_PROJECT" => dummy,
+                "JULIA_LOAD_PATH" => dummy,
+            ) do
+                return read(`sh -c $script`, String)
+            end
+            @test occursin("Tar", out)
+            @test !isdir(joinpath(depot, "compiled"))
+            @test !isdir(joinpath(depot, "packages"))
+            # 1.13 leaves the depot empty. 1.14+ (including 1.15-DEV) still writes
+            # `cache/v1.*/objcache-lmdb1/` even with `--compiled-modules=existing`
+            # and `--pkgimages=no` (not `compiled/` or `packages/`).
+            leftover = readdir(depot)
+            @test leftover ⊆ ["cache"]
+        end
     end
 
     @testset "tar pull checks each symlink hop and does not touch it" begin

@@ -55,6 +55,32 @@ end
 Tar.create(keep, root, stdout)
 """
 
+"""POSIX remote `julia -e` using stdlib Tar only; does not write compiled modules.
+
+A subshell unsets `JULIA_PROJECT` and sets `JULIA_LOAD_PATH`. Do not pass the
+Julia path to `env`: a path that contains `=` would be an `env` assignment.
+"""
+function _remote_stdlib_julia_e(
+        julia_bin::AbstractString,
+        expr::AbstractString;
+        args::Vector{String} = String[],
+    )::String
+    jb = _remote_julia_path_sh(julia_bin)
+    parts = String[
+        jb,
+        "--startup-file=no",
+        "--compiled-modules=existing",
+        "-e",
+        posix_quote(expr),
+    ]
+    if !isempty(args)
+        push!(parts, "--")
+        append!(parts, args)
+    end
+    inner = join(parts, " ")
+    return "(unset JULIA_PROJECT; JULIA_LOAD_PATH=@stdlib exec $(inner))"
+end
+
 """Remote Julia that writes a Tar of `remote_dir` to stdout.
 
 `filtered` reads the relative paths from stdin. File modes are not in the
@@ -65,10 +91,9 @@ function _remote_tar_create_sh(
         remote_dir::AbstractString;
         filtered::Bool = false,
     )::String
-    jb = _remote_julia_path_sh(julia_bin)
     q = _remote_shell_path_word(remote_dir)
-    body = posix_quote(filtered ? _TAR_PULL_FILTERED : _TAR_PULL_ALL)
-    return "$jb --startup-file=no -e $body -- $q"
+    body = filtered ? _TAR_PULL_FILTERED : _TAR_PULL_ALL
+    return _remote_stdlib_julia_e(julia_bin, body; args = String[q])
 end
 
 """Pinned remote Julia for a Tar pull. `spec` is `--julia` or auto-detect."""

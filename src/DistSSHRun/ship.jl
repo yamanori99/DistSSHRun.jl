@@ -1513,13 +1513,10 @@ function _remote_extract_tar!(
         julia_bin::AbstractString,
     )
     sq = _remote_shell_path_word(src)
-    jb = _remote_julia_path_sh(julia_bin)
-    inner = string(
-        jb,
-        " --startup-file=no -e ",
-        posix_quote("using Tar; isdir(ARGS[1]) || mkdir(ARGS[1]); Tar.extract(stdin, ARGS[1])"),
-        " -- ",
-        sq,
+    inner = _remote_stdlib_julia_e(
+        julia_bin,
+        "using Tar; isdir(ARGS[1]) || mkdir(ARGS[1]); Tar.extract(stdin, ARGS[1])";
+        args = String[sq],
     )
     err_buf = IOBuffer()
     out_buf = IOBuffer()
