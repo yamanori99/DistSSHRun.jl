@@ -174,6 +174,66 @@ end
     end
 end
 
+@testset "ship-tree size warnings" begin
+    _with_tempdir() do tmp
+        write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
+        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        mkpath(joinpath(tmp, "data"))
+        write(joinpath(tmp, "data", "big.bin"), "abcdef")
+        write(joinpath(tmp, "a.jl"), "1\n")
+        text = mktemp() do _, io
+            packed = withenv(
+                "DISTSSHKIT_SHIP_WARN_FILE_BYTES" => "1",
+                "DISTSSHKIT_SHIP_WARN_TOTAL_BYTES" => "1",
+            ) do
+                redirect_stdout(io) do
+                    redirect_stderr(() -> DistSSHRun.pack_ship_tar(tmp), io)
+                end
+            end
+            try
+                @test isfile(packed.tar_path)
+            finally
+                rm(packed.tmpd; force = true, recursive = true)
+            end
+            flush(io)
+            seekstart(io)
+            return read(io, String)
+        end
+        @test occursin("data/big.bin", text)
+        @test occursin("send list is", text)
+        @test occursin("Largest directories", text)
+        @test occursin("data (", text)
+        err = try
+            withenv("DISTSSHKIT_SHIP_WARN_TOTAL_BYTES" => "nope") do
+                DistSSHRun.pack_ship_tar(tmp)
+            end
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("DISTSSHKIT_SHIP_WARN_TOTAL_BYTES", err.msg)
+        warned = mktemp() do _, io
+            thrown = redirect_stdout(io) do
+                try
+                    withenv("DISTSSHKIT_SHIP_WARN_TOTAL_BYTES" => "0") do
+                        DistSSHRun.pack_ship_tar(tmp; ship_max_bytes = 1)
+                    end
+                    nothing
+                catch e
+                    e
+                end
+            end
+            flush(io)
+            seekstart(io)
+            return thrown, read(io, String)
+        end
+        @test warned[1] isa ArgumentError
+        @test occursin("cap 1", warned[1].msg)
+        @test occursin("send list is", warned[2])
+    end
+end
+
 @testset "gitignored project preferences stay out of the ship" begin
     _with_tempdir() do tmp
         write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\nJuliaLocalPreferences.toml\n")

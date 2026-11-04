@@ -41,7 +41,10 @@ A Manifest or path dependency outside that directory is left out with a
 warning. A gitignored `Project.toml`,
 `JuliaProject.toml`, `Manifest.toml`, or `JuliaManifest.toml` is left out
 with one warning. A gitignored `LocalPreferences.toml` is left out too;
-add `!LocalPreferences.toml` to ship it. Declared inputs are left out. Extract is into
+add `!LocalPreferences.toml` to ship it. A file over 50 MiB, or a send list over
+100 MiB, prints a warning (`DISTSSHKIT_SHIP_WARN_FILE_BYTES`,
+`DISTSSHKIT_SHIP_WARN_TOTAL_BYTES`; an invalid value is an error). The 256 MiB
+cap still stops the ship. Declared inputs are left out. Extract is into
 `<remote_root>/runs/<run_id>/src/`, with empty `out/`
 beside it and a minimal DistSSHRun `run.toml` stamp. The remote root must
 already exist (`setup --remote-root`). `--rsync` was removed

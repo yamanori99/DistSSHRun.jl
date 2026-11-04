@@ -2,6 +2,9 @@
 
 const SHIP_MAX_BYTES_DEFAULT = 256 * 1024 * 1024
 const SHIP_FILE_WARN_BYTES = 50 * 1024 * 1024
+const SHIP_WARN_TOTAL_BYTES_DEFAULT = 100 * 1024 * 1024
+const _SHIP_WARN_FILE_ENV = "DISTSSHKIT_SHIP_WARN_FILE_BYTES"
+const _SHIP_WARN_TOTAL_ENV = "DISTSSHKIT_SHIP_WARN_TOTAL_BYTES"
 
 const _LAST_SHIP = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 const _SHIP_LAYOUT_ACTIVE = Ref(false)
@@ -981,7 +984,52 @@ function _check_ship_symlinks!(
     return recorded
 end
 
+"""Non-negative byte limit from `name`, or `default` when unset. Read at pack time."""
+function _ship_warn_limit(name::AbstractString, default::Integer)::Int
+    raw = get(ENV, name, nothing)
+    raw === nothing && return Int(default)
+    n = tryparse(Int, strip(raw))
+    if n === nothing || n < 0
+        throw(ArgumentError("$name must be a non-negative integer, got $(repr(raw))"))
+    end
+    return n
+end
+
+function _ship_dir_bytes(sizes::Vector{Tuple{Int, String}})::Vector{Pair{String, Int}}
+    acc = Dict{String, Int}()
+    for (sz, rel) in sizes
+        parts = split(rel, '/')
+        length(parts) < 2 && continue
+        prefix = ""
+        for part in parts[1:(end - 1)]
+            prefix = isempty(prefix) ? String(part) : string(prefix, "/", part)
+            acc[prefix] = get(acc, prefix, 0) + sz
+        end
+    end
+    listed = collect(acc)
+    sort!(listed; by = last, rev = true)
+    return listed
+end
+
+function _warn_ship_list_size!(total::Integer, sizes::Vector{Tuple{Int, String}}, limit::Integer)
+    total > limit || return nothing
+    sort!(sizes; by = first, rev = true)
+    n = min(10, length(sizes))
+    files = join((string(rel, " (", sz, ")") for (sz, rel) in sizes[1:n]), "\n  ")
+    dirs = _ship_dir_bytes(sizes)
+    nd = min(10, length(dirs))
+    dir_lines = nd == 0 ? "" : join((string(rel, " (", sz, ")") for (rel, sz) in dirs[1:nd]), "\n  ")
+    msg = "Warning: ship-tree send list is $total bytes (> $limit). Largest files:\n  $files\n"
+    if !isempty(dir_lines)
+        msg *= "Largest directories:\n  $dir_lines\n"
+    end
+    print_warn(msg)
+    return nothing
+end
+
 function _ship_bytes_and_files(root::AbstractString, rels::Vector{String})
+    file_limit = _ship_warn_limit(_SHIP_WARN_FILE_ENV, SHIP_FILE_WARN_BYTES)
+    total_limit = _ship_warn_limit(_SHIP_WARN_TOTAL_ENV, SHIP_WARN_TOTAL_BYTES_DEFAULT)
     total = 0
     nfiles = 0
     sizes = Tuple{Int, String}[]
@@ -992,8 +1040,9 @@ function _ship_bytes_and_files(root::AbstractString, rels::Vector{String})
         total += sz
         nfiles += 1
         push!(sizes, (sz, rel))
-        sz > SHIP_FILE_WARN_BYTES && @warn "ship-tree: $rel is $(sz) bytes (> 50 MiB)"
+        sz > file_limit && @warn "ship-tree: $rel is $(sz) bytes (> $file_limit bytes)"
     end
+    _warn_ship_list_size!(total, sizes, total_limit)
     return total, nfiles, sizes
 end
 
@@ -1594,7 +1643,8 @@ function ship_project_to_hosts!(
             "run_dir_empty_at_start" => true,
         )
         allow_external_symlinks && (rec["external_symlinks_allowed"] = true)
-        packed.tree_matches_head && (rec["tree_matches_head"] = true)
+        # `nothing` means the tar was not compared to a git tree. Omit the key.
+        packed.tree_matches_head === true && (rec["tree_matches_head"] = true)
         if !isempty(ok_hosts)
             _LAST_SHIP[] = rec
             _SHIP_LAYOUT_ACTIVE[] = true

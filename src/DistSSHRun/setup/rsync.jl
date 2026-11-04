@@ -598,8 +598,6 @@ function _warn_ancestor_gitignore!(send_dir::AbstractString, listed::Vector{Stri
     return nothing
 end
 
-
-
 function _push_send_rel!(out::Vector{String}, prefix::AbstractString, rel::AbstractString)
     listed = _join_send_rel(prefix, rel)
     _send_rel_excluded(listed) && return nothing
