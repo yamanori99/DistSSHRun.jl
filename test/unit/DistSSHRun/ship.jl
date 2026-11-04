@@ -322,15 +322,16 @@ end
             rm(packed.tmpd; force = true, recursive = true)
         end
         probe = DistSSHRun._remote_input_probe_sh("/remote/data", false)
-        @test occursin("stat", probe)
-        @test occursin("files=%s", probe)
-        @test occursin("find . -type f", probe)
+        @test occursin("files=", probe)
         @test occursin("input filename contains a newline", probe)
+        @test occursin("JULIA_DEPOT_PATH=", probe)
+        @test !occursin("sha256sum", probe)
+        @test !occursin("shasum", probe)
         hashed = DistSSHRun._remote_input_probe_sh("/remote/data", true)
-        @test occursin("sha256sum", hashed)
-        @test occursin("cd ", hashed)
-        @test occursin("\${_f#./}", hashed)
-        @test occursin("|| exit 1", hashed)
+        @test occursin("sha256_file", hashed)
+        @test occursin("PROG ", hashed)
+        @test !occursin("sha256sum", hashed)
+        @test !occursin("shasum", hashed)
         run_dir = mktempdir()
         DistSSHRun._store_input_rows!(
             run_dir,
@@ -562,6 +563,46 @@ end
     finally
         rm(parent; force = true, recursive = true)
         rm(rec; force = true, recursive = true)
+    end
+end
+
+@testset "julia input probe matches the frozen sh probe" begin
+    root = mktempdir()
+    fixture = normpath(joinpath(@__DIR__, "..", "..", "fixtures", "remote_input_probe.sh"))
+    function capture(cmd)
+        out = IOBuffer()
+        err = IOBuffer()
+        proc = run(pipeline(ignorestatus(cmd); stdout = out, stderr = err); wait = true)
+        return (Int(something(proc.exitcode, 1)), String(take!(out)), String(take!(err)))
+    end
+    try
+        mkpath(joinpath(root, "sub"))
+        write(joinpath(root, "sub", "a.txt"), "hi\n")
+        write(joinpath(root, "z.txt"), "yo")
+        symlink("a.txt", joinpath(root, "sub", "via"))
+        symlink("missing-target", joinpath(root, "broken"))
+        file = joinpath(root, "z.txt")
+        for (path, flag) in ((root, "1"), (root, "0"), (file, "1"), (file, "0"), (joinpath(root, "broken"), "1"))
+            old = capture(`sh $fixture $path $flag`)
+            new = capture(`sh -c $(DistSSHRun._remote_input_probe_sh(path, flag == "1"))`)
+            @test new[1] == old[1]
+            @test new[2] == old[2]
+            @test new[3] == old[3]
+        end
+        hex = DistSSHRun._sha256_file(file)
+        summed = if Sys.which("sha256sum") !== nothing
+            read(`sha256sum $file`, String)
+        else
+            read(`shasum -a 256 $file`, String)
+        end
+        @test startswith(lowercase(summed), hex)
+        wide = joinpath(root, "wide.bin")
+        open(wide, "w") do io
+            write(io, zeros(UInt8, 65536 * 2 + 3))
+        end
+        @test DistSSHRun._sha256_file(wide) == DistSSHRun._sha256_hex(read(wide))
+    finally
+        rm(root; force = true, recursive = true)
     end
 end
 

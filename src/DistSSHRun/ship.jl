@@ -297,172 +297,168 @@ function _load_ship_inputs(root::AbstractString)::Vector{ShipInput}
     return out
 end
 
-function _remote_input_probe_sh(abs_path::AbstractString, do_hash::Bool)::String
-    q = _remote_shell_path_word(abs_path)
-    walk = do_hash ? _remote_input_hash_walk() : _remote_input_stat_walk()
-    return """
-        set -eu
-        if [ ! -e $q ] && [ ! -L $q ]; then printf '%s\\n' missing; exit 2; fi
-        if [ -L $q ]; then
-          _f=$q
-        $(_remote_input_readlink_sh())
-        fi
-        _dsk_hex() {
-          _line=
-          if command -v sha256sum >/dev/null 2>&1; then
-            _line=\$(sha256sum "\$1") || return 1
-          else
-            _line=\$(shasum -a 256 "\$1") || return 1
-          fi
-          _hex=\$(printf '%s\\n' "\$_line" | awk '{ print \$1; exit }')
-          printf '%s' "\$_hex" | awk 'length(\$0)==64 && \$0 ~ /^[0-9a-fA-F]+\$/ { found=1 } END { exit found ? 0 : 1 }' || return 1
-          printf '%s\\n' "\$_hex"
-        }
-        _dsk_stat() {
-          stat -c '%s %Y' "\$1" 2>/dev/null && return 0
-          stat -f '%z %m' "\$1"
-        }
-        if [ -d $q ]; then
-          _paths=\$(mktemp)
-          _sorted=\$(mktemp)
-          _rows=\$(mktemp)
-          trap 'rm -f "\$_paths" "\$_sorted" "\$_rows"' EXIT
-          cd $q || exit 1
-          find . '(' -type f -o -type l ')' -path '*
-    *' -print -quit > "\$_paths" || exit 1
-          if [ -s "\$_paths" ]; then
-            printf '%s\\n' 'input filename contains a newline'
-            exit 2
-          fi
-          find . -type f > "\$_paths" || exit 1
-          find . -type l >> "\$_paths" || exit 1
-          LC_ALL=C sort -o "\$_sorted" "\$_paths" || exit 1
-          : > "\$_rows"
-        $walk
-        elif [ -f $q ]; then
-        $(
-        if do_hash
-            """
-              if [ -L $q ]; then
-                printf 'link\\t%s\\t.\\n' "\$_target"
-              else
-            $(_remote_input_file_branch(q, true))
-              fi
-                    """
-        else
-            _remote_input_file_branch(q, false)
-        end
-    )
-        else
-          printf '%s\\n' 'not a file or directory'
-          exit 2
-        fi
-        """
+const _INPUT_PROBE_EXPR = """
+using SHA
+function _probe_main()
+path = ARGS[1]
+do_hash = ARGS[2] == "1"
+function fail(msg)
+    println(msg)
+    exit(2)
 end
-
-function _remote_input_file_branch(q::AbstractString, do_hash::Bool)::String
-    if do_hash
-        return """
-          _st=\$(_dsk_stat $q) || exit 1
-          _size=\$(printf '%s\\n' "\$_st" | awk '{ print \$1; exit }')
-          [ -n "\$_size" ] || exit 1
-          _sum=\$(_dsk_hex $q) || exit 1
-          printf 'PROG %s %s\\n' "\$_size" "\$_size" >&2
-          printf 'file\\t%s\\t%s\\t.\\n' "\$_size" "\$_sum"
-        """
+function lstat_pair(p)
+    local st
+    try
+        st = lstat(p)
+    catch
+        exit(1)
     end
-    return """
-      _st=\$(_dsk_stat $q) || exit 1
-      _size=\$(printf '%s\\n' "\$_st" | awk '{ print \$1; exit }')
-      _mtime=\$(printf '%s\\n' "\$_st" | awk '{ print \$2; exit }')
-      [ -n "\$_size" ] && [ -n "\$_mtime" ] || exit 1
-      _one=\$(mktemp)
-      trap 'rm -f "\$_one"' EXIT
-      printf '.\\tfile\\t%s\\t%s\\n' "\$_size" "\$_mtime" > "\$_one"
-      _sum=\$(_dsk_hex "\$_one") || exit 1
-      printf 'files=1 bytes=%s newest=%s digest=%s\\n' "\$_size" "\$_mtime" "\$_sum"
-    """
+    return (Int(st.size), trunc(Int, st.mtime))
 end
-
-"""`readlink` into `\$_target`. A tab or newline in the link text is refused.
-
-Command substitution drops trailing newlines from `readlink`. Compare the
-byte length to `stat` on the symlink; a shorter value means a trailing
-newline was stripped. An embedded newline still fails the awk check.
+function sha256_hex(feed)
+    ctx = SHA.SHA256_CTX()
+    buf = Vector{UInt8}(undef, 65536)
+    while true
+        n = feed(buf)
+        n == 0 && break
+        SHA.update!(ctx, view(buf, 1:n))
+    end
+    return bytes2hex(SHA.digest!(ctx))
+end
+function sha256_bytes(s)
+    src = Vector{UInt8}(codeunits(s))
+    pos = Ref(1)
+    return sha256_hex() do buf
+        pos[] > length(src) && return 0
+        n = min(length(buf), length(src) - pos[] + 1)
+        copyto!(buf, 1, src, pos[], n)
+        pos[] += n
+        return n
+    end
+end
+function sha256_file(p)
+    open(p, "r") do io
+        return sha256_hex(buf -> readbytes!(io, buf))
+    end
+end
+function link_target(p)
+    sz, _ = lstat_pair(p)
+    target = readlink(p)
+    stripped = target
+    while endswith(stripped, "\n")
+        stripped = chop(stripped)
+    end
+    if sizeof(stripped) != sz || occursin("\n", stripped) || occursin("\t", stripped)
+        fail("input link target contains a newline")
+    end
+    return stripped
+end
+function c_lt(a, b)
+    ca = codeunits(a)
+    cb = codeunits(b)
+    n = min(length(ca), length(cb))
+    for i in 1:n
+        ca[i] == cb[i] && continue
+        return ca[i] < cb[i]
+    end
+    return length(ca) < length(cb)
+end
+function collect(dir, prefix, out)
+    for name in readdir(dir)
+        occursin("\n", name) && fail("input filename contains a newline")
+        rel = isempty(prefix) ? name : prefix * "/" * name
+        full = joinpath(dir, name)
+        if islink(full)
+            push!(out, rel)
+        elseif isdir(full)
+            collect(full, rel, out)
+        elseif isfile(full)
+            push!(out, rel)
+        end
+    end
+    return out
+end
+if !ispath(path) && !islink(path)
+    fail("missing")
+end
+root_target = islink(path) ? link_target(path) : nothing
+if isdir(path)
+    rels = String[]
+    collect(path, "", rels)
+    sort!(rels, lt = c_lt)
+    if do_hash
+        total = 0
+        for rel in rels
+            full = joinpath(path, rel)
+            islink(full) && continue
+            sz, _ = lstat_pair(full)
+            total += sz
+        end
+        done = 0
+        for rel in rels
+            full = joinpath(path, rel)
+            if islink(full)
+                println("link\\t", link_target(full), "\\t", rel)
+            else
+                sz, _ = lstat_pair(full)
+                hex = sha256_file(full)
+                done += sz
+                println("file\\t", sz, "\\t", hex, "\\t", rel)
+                println(stderr, "PROG ", done, " ", total)
+            end
+        end
+    else
+        files = 0
+        bytes = 0
+        newest = 0
+        rows = IOBuffer()
+        for rel in rels
+            full = joinpath(path, rel)
+            sz, mt = lstat_pair(full)
+            if islink(full)
+                println(rows, rel, "\\tlink\\t", sz, "\\t", mt, "\\t", link_target(full))
+            else
+                files += 1
+                bytes += sz
+                println(rows, rel, "\\tfile\\t", sz, "\\t", mt)
+            end
+            mt > newest && (newest = mt)
+        end
+        hex = sha256_bytes(String(take!(rows)))
+        println("files=", files, " bytes=", bytes, " newest=", newest, " digest=", hex)
+    end
+elseif isfile(path)
+    if do_hash && islink(path)
+        println("link\\t", root_target, "\\t.")
+    elseif do_hash
+        sz, _ = lstat_pair(path)
+        hex = sha256_file(path)
+        println(stderr, "PROG ", sz, " ", sz)
+        println("file\\t", sz, "\\t", hex, "\\t.")
+    else
+        sz, mt = lstat_pair(path)
+        hex = sha256_bytes(".\\tfile\\t" * string(sz) * "\\t" * string(mt) * "\\n")
+        println("files=1 bytes=", sz, " newest=", mt, " digest=", hex)
+    end
+else
+    fail("not a file or directory")
+end
+end
+_probe_main()
 """
-function _remote_input_readlink_sh()::String
-    return """
-          _linklen=\$(stat -c '%s' "\$_f" 2>/dev/null || stat -f '%z' "\$_f") || exit 1
-          _target=\$(readlink "\$_f") || exit 1
-          _got=\$(printf '%s' "\$_target" | wc -c | tr -d ' ')
-          [ "\$_got" -eq "\$_linklen" ] || {
-            printf '%s\\n' 'input link target contains a newline'
-            exit 2
-          }
-          printf '%s' "\$_target" | awk 'BEGIN { bad = 0 } index(\$0, "\\t") { bad = 1 } END { if (NR > 1 || bad) exit 2 }' || {
-            printf '%s\\n' 'input link target contains a newline'
-            exit 2
-          }
-    """
+
+function _remote_input_probe_sh(
+        abs_path::AbstractString,
+        do_hash::Bool;
+        julia_bin::AbstractString = joinpath(Sys.BINDIR, Base.julia_exename()),
+    )::String
+    return _remote_stdlib_julia_e(
+        julia_bin,
+        _INPUT_PROBE_EXPR;
+        args = String[_remote_shell_path_word(abs_path), do_hash ? "1" : "0"],
+    )
 end
 
-function _remote_input_hash_walk()::String
-    return """
-      _total=0
-      while IFS= read -r _f; do
-        [ -n "\$_f" ] || continue
-        [ -L "\$_f" ] && continue
-        _st=\$(_dsk_stat "\$_f") || exit 1
-        _size=\$(printf '%s\\n' "\$_st" | awk '{ print \$1; exit }')
-        [ -n "\$_size" ] || exit 1
-        _total=\$((_total + _size))
-      done < "\$_sorted"
-      _done=0
-      while IFS= read -r _f; do
-        [ -n "\$_f" ] || continue
-        _rel=\${_f#./}
-        if [ -L "\$_f" ]; then
-        $(_remote_input_readlink_sh())
-          printf 'link\\t%s\\t%s\\n' "\$_target" "\$_rel"
-        else
-          _st=\$(_dsk_stat "\$_f") || exit 1
-          _size=\$(printf '%s\\n' "\$_st" | awk '{ print \$1; exit }')
-          [ -n "\$_size" ] || exit 1
-          _hex=\$(_dsk_hex "\$_f") || exit 1
-          _done=\$((_done + _size))
-          printf 'file\\t%s\\t%s\\t%s\\n' "\$_size" "\$_hex" "\$_rel"
-          printf 'PROG %s %s\\n' "\$_done" "\$_total" >&2
-        fi
-      done < "\$_sorted"
-    """
-end
-
-function _remote_input_stat_walk()::String
-    return """
-      _files=0
-      _bytes=0
-      _newest=0
-      while IFS= read -r _f; do
-        [ -n "\$_f" ] || continue
-        _rel=\${_f#./}
-        _st=\$(_dsk_stat "\$_f") || exit 1
-        _size=\$(printf '%s\\n' "\$_st" | awk '{ print \$1; exit }')
-        _mtime=\$(printf '%s\\n' "\$_st" | awk '{ print \$2; exit }')
-        [ -n "\$_size" ] && [ -n "\$_mtime" ] || exit 1
-        if [ -L "\$_f" ]; then
-        $(_remote_input_readlink_sh())
-          printf '%s\\tlink\\t%s\\t%s\\t%s\\n' "\$_rel" "\$_size" "\$_mtime" "\$_target" >> "\$_rows" || exit 1
-        else
-          _files=\$((_files + 1))
-          _bytes=\$((_bytes + _size))
-          printf '%s\\tfile\\t%s\\t%s\\n' "\$_rel" "\$_size" "\$_mtime" >> "\$_rows" || exit 1
-        fi
-        if [ "\$_mtime" -gt "\$_newest" ]; then _newest=\$_mtime; fi
-      done < "\$_sorted"
-      _sum=\$(_dsk_hex "\$_rows") || exit 1
-      printf 'files=%s bytes=%s newest=%s digest=%s\\n' "\$_files" "\$_bytes" "\$_newest" "\$_sum"
-    """
-end
 
 const _INPUT_MANIFEST_LOCK = ReentrantLock()
 
@@ -657,7 +653,7 @@ function check_input_manifest(manifest::AbstractString, root::AbstractString)
         got = if islink(full)
             _sha256_hex(codeunits(readlink(full)))
         elseif isfile(full)
-            _sha256_hex(read(full))
+            _sha256_file(full)
         else
             throw(ArgumentError("input manifest path is missing: $rel"))
         end
@@ -835,6 +831,7 @@ function _record_remote_inputs!(
         host::AbstractString,
         abs_root::AbstractString,
         local_root::AbstractString,
+        julia_bin::AbstractString,
     )
     inputs = _load_ship_inputs(local_root)
     isempty(inputs) && return nothing
@@ -851,7 +848,7 @@ function _record_remote_inputs!(
         last_pct = Ref(-1)
         code, out, err = _remote_script_output(
             String(host),
-            _remote_input_probe_sh(remote, input.hash),
+            _remote_input_probe_sh(remote, input.hash; julia_bin = julia_bin),
         ) do line
             input.hash && _show_input_progress!(input.name, line, t0, last_pct)
             return nothing
@@ -875,6 +872,7 @@ function _start_remote_input_hashes!(
         host::AbstractString,
         abs_root::AbstractString,
         local_root::AbstractString,
+        julia_bin::AbstractString,
     )
     inputs = _load_ship_inputs(local_root)
     isempty(inputs) && return nothing
@@ -883,7 +881,7 @@ function _start_remote_input_hashes!(
             "ship-tree: declared inputs need DISTSSHKIT_RUN_DIR; refusing to write next to the project",
         ),
     )
-    task = @async _record_remote_inputs!(host, abs_root, local_root)
+    task = @async _record_remote_inputs!(host, abs_root, local_root, julia_bin)
     lock(_PENDING_INPUT_HASH_LOCK) do
         push!(_PENDING_INPUT_HASH_TASKS, task)
     end
@@ -1606,9 +1604,9 @@ function ship_project_to_hosts!(
                     pinned === nothing && throw(ArgumentError("Julia not found on $host"))
                     _remote_extract_tar!(host, src, packed.tar_path, pinned)
                     if await_inputs
-                        _record_remote_inputs!(host, abs_root, packed.root)
+                        _record_remote_inputs!(host, abs_root, packed.root, pinned)
                     else
-                        _start_remote_input_hashes!(host, abs_root, packed.root)
+                        _start_remote_input_hashes!(host, abs_root, packed.root, pinned)
                     end
                     if report
                         kit_print("  $host: ")

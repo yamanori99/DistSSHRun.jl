@@ -229,8 +229,81 @@ function _provenance_lookup(d::AbstractDict, key::String)
     return nothing
 end
 
+const _SHA256_BUF = 1 << 16
+
+function _sha256_stdlib(feed!::Function)::String
+    ctx = SHA.SHA256_CTX()
+    buf = Vector{UInt8}(undef, _SHA256_BUF)
+    while true
+        n = feed!(buf)
+        n == 0 && break
+        SHA.update!(ctx, view(buf, 1:n))
+    end
+    return SHA.bytes2hex(SHA.digest!(ctx))
+end
+
+function _sha256_openssl(feed!::Function)::String
+    ctx = ccall((:EVP_MD_CTX_new, OpenSSL_jll.libcrypto), Ptr{Cvoid}, ())
+    ctx == C_NULL && error("EVP_MD_CTX_new failed")
+    try
+        md = ccall((:EVP_sha256, OpenSSL_jll.libcrypto), Ptr{Cvoid}, ())
+        md == C_NULL && error("EVP_sha256 failed")
+        ccall((:EVP_DigestInit_ex, OpenSSL_jll.libcrypto), Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}), ctx, md, C_NULL) == 1 ||
+            error("EVP_DigestInit_ex failed")
+        buf = Vector{UInt8}(undef, _SHA256_BUF)
+        while true
+            n = feed!(buf)
+            n == 0 && break
+            GC.@preserve buf ccall(
+                (:EVP_DigestUpdate, OpenSSL_jll.libcrypto),
+                Cint,
+                (Ptr{Cvoid}, Ptr{UInt8}, Csize_t),
+                ctx,
+                buf,
+                n,
+            ) == 1 || error("EVP_DigestUpdate failed")
+        end
+        out = Vector{UInt8}(undef, 32)
+        ccall(
+            (:EVP_DigestFinal_ex, OpenSSL_jll.libcrypto),
+            Cint,
+            (Ptr{Cvoid}, Ptr{UInt8}, Ptr{Cuint}),
+            ctx,
+            out,
+            C_NULL,
+        ) == 1 || error("EVP_DigestFinal_ex failed")
+        return SHA.bytes2hex(out)
+    finally
+        ccall((:EVP_MD_CTX_free, OpenSSL_jll.libcrypto), Cvoid, (Ptr{Cvoid},), ctx)
+    end
+end
+
+"""SHA-256 hex. OpenSSL EVP when it loads; stdlib `SHA` otherwise. Same digest."""
+function _sha256_stream(feed!::Function)::String
+    try
+        return _sha256_openssl(feed!)
+    catch
+        return _sha256_stdlib(feed!)
+    end
+end
+
 function _sha256_hex(bytes::AbstractVector{UInt8})::String
-    return SHA.bytes2hex(SHA.sha256(bytes))
+    pos = Ref(1)
+    return _sha256_stream() do buf
+        pos[] > length(bytes) && return 0
+        n = min(length(buf), length(bytes) - pos[] + 1)
+        copyto!(buf, 1, bytes, pos[], n)
+        pos[] += n
+        return n
+    end
+end
+
+function _sha256_file(path::AbstractString)::String
+    open(path, "r") do io
+        return _sha256_stream() do buf
+            return readbytes!(io, buf)
+        end
+    end
 end
 
 """SHA-256 of `cmd`'s stdout, read in chunks. `nothing` when the process fails."""
