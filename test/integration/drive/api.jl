@@ -244,7 +244,9 @@ end
     args = String[]
     lookup() = DistSSHRun._drive_script_init_output_dir_method(args)
     before = lookup()
-    Base.include(Main, path)
+    redirect_stderr(devnull) do
+        Base.include(Main, path)
+    end
     mktemp() do err_path, err_io
         after = redirect_stderr(err_io) do
             lookup()

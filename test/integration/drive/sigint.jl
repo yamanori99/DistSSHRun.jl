@@ -130,12 +130,6 @@ end
             stopped === :ok || kill(proc, Base.SIGKILL)
             wait(proc)
             fetch(reader)
-            if elapsed + 15 < budget
-                println(
-                    stderr,
-                    "pmap cancel finished early: $(round(elapsed; digits = 1))s, budget $(budget)s. SIGINT during pmap may have improved.",
-                )
-            end
             @test stopped === :ok
             @test elapsed <= budget
         end

@@ -91,7 +91,9 @@ end
     @test !occursin(".distssh", sh)
     session = DistSSHRun.KitSession(; workers = ["child:host.test"], yes = true)
     err = try
-        DistSSHRun.setup!(session, :remote_root)
+        _capture_stdio() do _, _
+            DistSSHRun.setup!(session, :remote_root)
+        end
         nothing
     catch e
         e
