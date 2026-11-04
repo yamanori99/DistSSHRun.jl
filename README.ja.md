@@ -31,7 +31,9 @@ Julia **1.13+**。ホストには **`ssh`** が要る。collect と go の slot 
 SSH 上の stdlib Tar で、元の mtime は残らない。pull-back は展開したファイルを
 `touch` する。ship は `touch` せず、展開したときの時刻のままである。
 実行可能でないファイルはモード`0644`、実行可能なファイルは`0755`になる。
-`push_cache!` と ship は SSH 上の stdlib Tar を使う。
+`push_cache!` は SSH 上の stdlib Tar を使い、リモートの Julia 実行ファイルが要る
+（`--julia`、または自動検出）。stdlib の `Tar` と `SHA` を読む。ship も
+SSH 上の stdlib Tar を使う。
 git で配るときは **`git`** も要る。`setup --ship-tree`、`go --ship-tree`、
 `drive --ship-tree` は ship の根を歩き、各ディレクトリの `.gitignore`
 を適用する（大文字小文字を区別する）。`.git/info/exclude`、

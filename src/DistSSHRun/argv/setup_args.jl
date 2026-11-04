@@ -24,7 +24,7 @@ function show_requirements(; io::IO = stdout)
         "Declared inputs do not ship.",
         "Ship and collect use Tar. Original mtimes are not kept.",
         "Pull-back touches extracted files. Ship keeps extract-time mtime.",
-        "Modes are 0644, or 0755 if executable. push_cache! uses Tar.",
+        "Modes are 0644, or 0755 if executable. push_cache! uses Tar and a remote Julia.",
         "Remote login shell must be POSIX (sh, bash, dash, or zsh).",
         "ssh runs a command as \$SHELL -c, not a login shell.",
         "Distributed starts workers with sh -l -c; that wrap cannot be changed.",
