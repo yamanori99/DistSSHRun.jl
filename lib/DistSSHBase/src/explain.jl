@@ -128,27 +128,25 @@ function explain_bare_placement_tokens(
     return join_explained_message(head, hint)
 end
 
-# --- local host tools (ssh / rsync / git) ------------------------------------
+# --- local host tools (ssh / git) --------------------------------------------
 
-const _HOST_TOOL_NAMES = ("ssh", "rsync", "git")
+const _HOST_TOOL_NAMES = ("ssh", "git")
 
 function _normalize_host_tool(name::AbstractString)::String
     n = String(name)
-    n == "ssh" || n == "scp" || n == "rsync" || n == "git" ||
-        throw(ArgumentError("host tool must be ssh, scp, rsync, or git, got $(repr(n))"))
+    n == "ssh" || n == "scp" || n == "git" ||
+        throw(ArgumentError("host tool must be ssh, scp, or git, got $(repr(n))"))
     return n
 end
 
-"""Hint line when `ssh` / `rsync` / `git` is absent from `PATH`."""
+"""Hint line when `ssh` / `git` is absent from `PATH`."""
 function explain_host_tool_hint(tool::AbstractString; surface::Symbol = :api)::String
     _normalize_hint_surface(surface)
     t = _normalize_host_tool(tool)
     pkg = cli_entry()
     t == "ssh" && return "Hint: $pkg does not install OpenSSH; see Requirements"
     t == "scp" && return "Hint: $pkg does not install OpenSSH (scp); see Requirements"
-    t == "rsync" &&
-        return "Hint: $pkg does not install rsync; needed for collect and setup --rsync (see Requirements)"
-    return "Hint: $pkg does not install git; needed for clone / push / pull (see Requirements)"
+    return "Hint: $pkg does not install git; needed for clone / sync / pull (see Requirements)"
 end
 
 """Full message when a required host tool is not on `PATH`."""

@@ -11,7 +11,7 @@ CI names Julia versions in the job (`1.13`, `1.14-pre`, `nightly`). `1.14-pre` i
 
 ## Requirements
 
-macOS, Linux, or WSL2 Ubuntu. Not native Windows (the kit shells out to `ssh` / `rsync`).
+macOS, Linux, or WSL2 Ubuntu. Not native Windows (the kit shells out to `ssh`). Git clone, sync, and pull also need `git`.
 
 | What | Need |
 | --- | --- |

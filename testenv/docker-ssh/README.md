@@ -1,6 +1,6 @@
 # Docker SSH workers (CI E2E)
 
-Real OpenSSH + rsync Linux workers. CI remote SSH coverage uses this stack
+Real OpenSSH Linux workers. CI remote SSH coverage uses this stack
 ([`SSH E2E`](../../.github/workflows/CI.yml)). Optional Mac-only path
 (same image and `test/e2e.jl`):
 [`../apple-container-ssh`](../apple-container-ssh) — `./scripts/up.sh --e2e`
@@ -31,7 +31,6 @@ Suite inventory: [`test/README.md`](../../test/README.md#ssh-e2e).
   (`clone` from a bare on child-1 → `--sync` → `drive --require-git`).
   Mismatch before `--sync` must fail. `--pull` after a kit parent `git push`
   is checked by reading `e2e_sync_marker.txt` on the workers.
-  The rsync path still excludes `.git/` and does not claim parity.
 
 Worker image installs **two** juliaup channels from
 [`.github/julia-slots.env`](../../.github/julia-slots.env):

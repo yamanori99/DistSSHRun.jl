@@ -35,8 +35,7 @@ non-executable file arrives as mode `0644`, and an executable file as
 `0755`. A symlink that points outside the copied tree is refused.
 `push_cache!` uses stdlib Tar over SSH and needs a remote Julia executable
 (`--julia`, or auto-detect) that can load stdlib `Tar` and `SHA`. Ship uses
-stdlib Tar over SSH. Git
-deploys also need **`git`**.
+stdlib Tar over SSH. Git clone, sync, and pull also need **`git`**.
 
 `setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` walk the
 ship root and apply each directory's `.gitignore` (case-sensitive).

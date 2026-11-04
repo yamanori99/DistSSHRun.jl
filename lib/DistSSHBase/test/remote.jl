@@ -238,7 +238,7 @@ using Test
                 "no-such-host.invalid", ["--version"],
             )
             @test_throws ["ArgumentError:", "OpenSSH"] DistSSHBase._host_tool_exe("ssh")
-            @test_throws ["ArgumentError:", "rsync not found"] DistSSHBase._host_tool_exe("rsync")
+            @test_throws ["ArgumentError:", "host tool must be"] DistSSHBase._host_tool_exe("rsync")
             @test_throws ["ArgumentError:", "git not found"] DistSSHBase._host_tool_exe("git")
             @test_throws ["ArgumentError:", "scp not found"] DistSSHBase._host_tool_exe("scp")
         end

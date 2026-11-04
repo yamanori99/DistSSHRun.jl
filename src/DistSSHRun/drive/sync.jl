@@ -1,4 +1,4 @@
-# sync! — rsync or git sync via shared DistSSHRun cores (not CLI argv).
+# sync! — git sync via shared DistSSHRun cores (not CLI argv).
 
 """
     sync!(session::KitSession; mode=:sync)

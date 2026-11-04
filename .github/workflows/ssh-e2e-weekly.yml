@@ -183,7 +183,7 @@ jobs:
       - name: docker-ssh up + SSH E2E in WSL2
         shell: wsl-bash -u root {0}
         run: |
-          bash ./.github/wsl-apt.sh ca-certificates curl git rsync openssh-client docker.io docker-compose-v2 iptables
+          bash ./.github/wsl-apt.sh ca-certificates curl git openssh-client docker.io docker-compose-v2 iptables
           src="$(pwd)"
           dest="$HOME/DistSSHRun.jl"
           cache="$src/.ci-cache/wsl-julia"
@@ -463,7 +463,7 @@ jobs:
       - name: docker-ssh up + SSH E2E in WSL2
         shell: wsl-bash -u root {0}
         run: |
-          bash ./.github/wsl-apt.sh ca-certificates curl git rsync openssh-client docker.io docker-compose-v2 iptables
+          bash ./.github/wsl-apt.sh ca-certificates curl git openssh-client docker.io docker-compose-v2 iptables
           src="$(pwd)"
           dest="$HOME/DistSSHRun.jl"
           cache="$src/.ci-cache/wsl-julia"
@@ -568,7 +568,7 @@ jobs:
       - name: docker-ssh up + SSH E2E in WSL2
         shell: wsl-bash -u root {0}
         run: |
-          bash ./.github/wsl-apt.sh ca-certificates curl git rsync openssh-client docker.io docker-compose-v2 iptables
+          bash ./.github/wsl-apt.sh ca-certificates curl git openssh-client docker.io docker-compose-v2 iptables
           src="$(pwd)"
           dest="$HOME/DistSSHRun.jl"
           cache="$src/.ci-cache/wsl-julia"

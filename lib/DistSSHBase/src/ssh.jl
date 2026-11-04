@@ -55,7 +55,7 @@ end
 """
     ssh_opts(; request_tty=false) -> Vector{String}
 
-SSH argv flags for `ssh` / `scp` / rsync `-e`.
+SSH argv flags for `ssh` / `scp`.
 
 Reads `DISTRIBUTED_SSH_OPTS` **live** (not frozen at package precompile). Prefer
 this over a `const` so E2E / ProxyJump overrides apply in the same process.
@@ -74,7 +74,7 @@ function ssh_opts(; request_tty::Bool = false)::Vector{String}
     return String[String(x) for x in build_ssh_opts(; request_tty = request_tty)]
 end
 
-"""`ssh` / `rsync` / `git` on `PATH`, or throw `ArgumentError`."""
+"""`ssh` / `scp` / `git` on `PATH`, or throw `ArgumentError`."""
 function _host_tool_exe(name::AbstractString)::String
     n = _normalize_host_tool(name)
     exe = Sys.which(n)
@@ -757,7 +757,7 @@ end
 """
 Absolute path for `remote_path` on `host` — the kit-parent/remote path boundary.
 
-Use this before any kit-parent-side join, compare, `relpath`, or rsync URI that
+Use this before any kit-parent-side join, compare, or `relpath` that
 involves a remote path. Already-absolute paths (`/` prefix) are returned
 unchanged. Paths starting with `~` are resolved **on the remote** via
 [`resolve_remote_abs_path_on_host`](@ref). Returns `nothing` when resolution fails.
@@ -1097,12 +1097,12 @@ function remote_layout_path(
     return ld
 end
 
-"""Test doubles replace ssh, rsync, and local juliaup only when this is `1`."""
+"""Test doubles replace ssh and local juliaup only when this is `1`."""
 function _test_doubles_on()::Bool
     return strip(get(ENV, "DISTSSHKIT_TEST", "")) == "1"
 end
 
-"""Julia argv for `DISTSSHKIT_TEST_SSH` / `.jl` rsync doubles (`--compile=min`)."""
+"""Julia argv for a `DISTSSHKIT_TEST_SSH` `.jl` double (`--compile=min`)."""
 function _test_double_julia_argv(script::AbstractString)::Vector{String}
     julia = joinpath(Sys.BINDIR, Base.julia_exename())
     return [julia, "--startup-file=no", "--compile=min", abspath(script)]

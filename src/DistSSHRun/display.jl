@@ -169,8 +169,8 @@ end
 """
 Lock path after following symlinks.
 
-`resolve_pkg_env` keeps the path `Base.active_manifest` returned. rsync `-a`
-copies a symlink as a symlink, so a target outside `env_dir` would not be the
+`resolve_pkg_env` keeps the path `Base.active_manifest` returned. Ship copies
+a symlink as a symlink, so a target outside `env_dir` would not be the
 lock workers instantiate.
 """
 function manifest_link_target(manifest::AbstractString)::String
@@ -224,11 +224,11 @@ end
 """
 Throw when a `[sources]` `path` would not arrive inside `root`.
 
-`git=false` is the rsync tree (`env_dir`). `git=true` is the git work tree.
+`git=false` is the ship tree (`env_dir`). `git=true` is the git work tree.
 An absolute path, including after `expanduser`, is rejected even when it
-sits inside `root`: rsync and git copy `Project.toml` unchanged, and Pkg
+sits inside `root`: ship and git copy `Project.toml` unchanged, and Pkg
 resolves that path on the worker. For `git=false`, an absolute symlink
-is rejected the same way: rsync keeps the link text. For `git=true`, the
+is rejected the same way: ship keeps the link text. For `git=true`, the
 path must also be in `HEAD`. A clone or git sync omits an untracked or
 ignored directory.
 The symlink target that matters is the one stored in that commit: an
@@ -262,7 +262,7 @@ function _ensure_one_path_dep!(
     else
         _path_is_under(location, root_c) || throw(
             ArgumentError(
-                "Source path $location for $name is outside the tree setup/rsync would send ($root_c). Workers would not see this path.",
+                "Source path $location for $name is outside the tree setup would send ($root_c). Workers would not see this path.",
             ),
         )
     end
@@ -271,7 +271,7 @@ function _ensure_one_path_dep!(
         if isabspath(expanduser(link_text))
             throw(
                 ArgumentError(
-                    "Source path $location for $name is a symlink to $link_text. rsync keeps that absolute target, so workers would not see the staged tree.",
+                    "Source path $location for $name is a symlink to $link_text. Ship keeps that absolute target, so workers would not see the staged tree.",
                 ),
             )
         end
@@ -292,7 +292,7 @@ function _ensure_one_path_dep!(
             if git
                 "Source path $location for $name points at $target, outside the git work tree ($root_real). The path would not reach a clone or git sync."
             else
-                "Source path $location for $name points at $target, outside the tree setup/rsync would send ($root_real). Workers would not see this path."
+                "Source path $location for $name points at $target, outside the tree setup would send ($root_real). Workers would not see this path."
             end,
         ),
     )
@@ -385,14 +385,14 @@ function _ensure_path_source_git_files!(
     return nothing
 end
 
-"""Problems when Manifest is missing from the rsync send list."""
+"""Problems when Manifest is missing from the send list."""
 function _manifest_ship_problems(env, listed::Vector{String})::Vector{String}
     manifest = env.manifest
     manifest isa String || return String[]
     rel = relpath(canonical_local_path(manifest), canonical_local_path(env.env_dir))
     rel in listed && return String[]
     return String[
-        "Manifest $rel is not in the rsync send list. It is untracked and ignored, so workers would instantiate a different resolution. Stop ignoring it, or do not use setup --instantiate.",
+        "Manifest $rel is not in the send list. It is untracked and ignored, so workers would instantiate a different resolution. Stop ignoring it, or do not use setup --instantiate.",
     ]
 end
 
@@ -592,10 +592,10 @@ end
 Throw when `manifest`, or a `[sources]` path, is not inside `env_dir`
 together with `project_dir`.
 
-One rsync cannot carry both. A symlink whose target leaves that tree is the
+One ship cannot carry both. A symlink whose target leaves that tree is the
 same failure. A `url` source is fetched on the worker. A project file with
 no Manifest is an error. A directory with no project file is not. A Manifest
-left out of the rsync send list is an error (it is untracked and ignored).
+left out of the send list is an error (it is untracked and ignored).
 `warn_send_list=false` is the `gitignore=false` send, which includes that file.
 """
 function ensure_manifest_ships!(
@@ -610,14 +610,14 @@ function ensure_manifest_ships!(
     manifest isa String || return env
     _path_is_under(env.project_dir, env.env_dir) || throw(
         ArgumentError(
-            "Manifest $manifest is outside the tree setup/rsync would send ($(env.env_dir)). Workers would instantiate a different resolution.",
+            "Manifest $manifest is outside the tree setup would send ($(env.env_dir)). Workers would instantiate a different resolution.",
         ),
     )
     target = manifest_link_target(manifest)
     root = canonical_local_path(realpath(env.env_dir))
     _path_is_under(target, root) || throw(
         ArgumentError(
-            "Manifest $manifest points at $target, outside the tree setup/rsync would send ($root). Workers would instantiate a different resolution.",
+            "Manifest $manifest points at $target, outside the tree setup would send ($root). Workers would instantiate a different resolution.",
         ),
     )
     if warn_send_list
@@ -1992,7 +1992,7 @@ function _kit_progress_phase_hint(
     event === :item && return "host"
     label == "start" && return "kit"
     label == "ready" && return "remote project / Julia"
-    label == "sync" && return "rsync / git deploy"
+    label == "sync" && return "git deploy"
     label == "git" && return "require-git / working tree"
     label == "cleanup" && return "stale Distributed workers"
     label == "workers" && return "addprocs + Julia detect"
@@ -2004,7 +2004,7 @@ function _kit_progress_phase_hint(
     label == "spi" && return "sequential compare"
     label == "run" && return "driver script"
     label == "collect" && return "gather results"
-    label == "rsync" && return "push tree"
+    label == "rsync" && return "ship"
     label == "instantiate" && return "Pkg.instantiate"
     label == "check" && return "SSH, Julia, project"
     label == "clone" && return "git clone"

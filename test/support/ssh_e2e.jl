@@ -44,7 +44,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
 
     # `ssh -F docker-ssh config HOST REMOTE_CMD` (same RequestTTY policy as kit defaults).
     #
-    # Setup existence checks (`test -e` / `test -d`), git, rsync, and `pgrep` stay
+    # Setup existence checks (`test -e` / `test -d`), git, and `pgrep` stay
     # here. Remote Julia work uses `_e2e_run_on_host`.
     function _ssh_e2e_ssh(host::AbstractString, remote_cmd::AbstractString)
         g = _docker_ssh_generated()
@@ -68,7 +68,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
 
     # SSH Host names of the two workers (`child-1`, `child-2`).
     _ssh_e2e_hosts() = ("child-1", "child-2")
-    # Remote project root for the main rsync suite.
+    # Remote project root for the main ship suite.
     _ssh_e2e_remote_root() = "/home/dev/distsshkit-e2e"
 
     # Ship refuses a missing root. Delete removes it, so recreate it as the
@@ -172,9 +172,9 @@ if !isdefined(Main, :_ssh_e2e_enabled)
     function _ssh_e2e_local_juliaup_default_channel()::String
         return DistSSHRun.juliaup_channel(_ssh_e2e_local_juliaup_julia_version())
     end
-    # Empty-tree `go --rsync` root. A later nonempty `--rsync` check uses another path.
+    # Empty-tree `go` root. A later nonempty check uses another path.
     _ssh_e2e_go_rsync_remote_root() = "/home/dev/distsshkit-e2e-go-rsync"
-    # Separate tree for git clone/sync/`--require-git` (rsync excludes `.git/`).
+    # Separate tree for git clone/sync/`--require-git` (ship does not send `.git/`).
     _ssh_e2e_git_remote_root() = "/home/dev/distsshkit-e2e-git"
     # Tilde layout for collect path-boundary coverage (`dev` → `/home/dev/…`).
     _ssh_e2e_tilde_remote_root() = "~/distsshkit-e2e-tilde"

@@ -1,4 +1,4 @@
-# Clone / delete / instantiate / cleanup / rsync CLI ops (shared display + counts).
+# Clone / delete / instantiate / cleanup / ship CLI ops (shared display + counts).
 
 remote_dir_exists(host::String, remote_path::String)::Bool =
     _remote_dir_exists(host, remote_path)
@@ -7,16 +7,16 @@ ensure_remote_dir(host::String, remote_path::String)::Bool =
     _ensure_remote_dir(host, remote_path)
 
 """
-    rsync_push_to_remotes(hosts, remote_path, project; path_anchor=project)
+    ship_to_remotes(hosts, remote_path, project; path_anchor=project)
 
 Ship the project as a tar into `remote_path/runs/<run_id>/src/` on each
-host (`setup --ship-tree`). The name is historical; this is not rsync.
+host (`setup --ship-tree`).
 
 Returns `(cancelled, succeeded, failed)`:
 - `cancelled=true` when the user did not confirm
 - otherwise per-host ship outcomes (`succeeded` / `failed` counts)
 """
-function rsync_push_to_remotes(
+function ship_to_remotes(
         hosts::Vector{String},
         remote_path::String,
         project::AbstractString;

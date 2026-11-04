@@ -129,7 +129,7 @@ public manifest_path
 using .DistSSHBase: CliCursor, OUTPUT_WIDTH, PARENT_HOST_NAME, _HOST_TOOL_NAMES,
     _NS_CACHE_DIR, _checked_remote_dest, _ensure_posix_login_shell!, _git_cmd,
     _host_sync_remote_shell_cmd,
-    _host_tool_exe, _host_tool_present, _julia_spec_is_auto, _located_project_file,
+    _host_tool_present, _julia_spec_is_auto, _located_project_file,
     _normalize_hint_surface,
     _path_is_under, _path_under_resolved, _print_colored, _remote_julia_path_sh,
     _remote_shell_path_word, _remote_shell_status,

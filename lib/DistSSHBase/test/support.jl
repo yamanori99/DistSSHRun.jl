@@ -41,7 +41,6 @@ if !isdefined(Main, :_with_tempdir)
         return Dict{String, String}(
             "DISTSSHKIT_TEST" => "1",
             "DISTSSHKIT_TEST_SSH" => joinpath(fixtures, "fake_setup_ssh.jl"),
-            "DISTSSHKIT_TEST_RSYNC" => joinpath(fixtures, "fake_setup_rsync.sh"),
             "DISTSSHKIT_TEST_STATE_ROOT" => abspath(string(state_dir)),
             "DISTSSHKIT_YES" => "1",
         )
