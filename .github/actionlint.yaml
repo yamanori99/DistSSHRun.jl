@@ -1,0 +1,7 @@
+# actionlint 1.7.12 does not list the GitHub-hosted xcode-27 label.
+# The macOS runner probe uses that label on purpose. This ignore is
+# scoped to that workflow. Drop it when actionlint knows the label.
+paths:
+  .github/workflows/macos-runner-probe.yml:
+    ignore:
+      - 'label "xcode-27" is unknown.+'

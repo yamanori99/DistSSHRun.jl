@@ -1,0 +1,46 @@
+# Investigation only. Does not change CI.yml runner labels or required checks.
+# One job per label. Queue-to-start is the time until the job leaves the queue.
+# After a runner is assigned, the steps print the OS, architecture, and
+# `ps -o lstart=`, then install Julia 1.13 and print versioninfo.
+name: macOS runner probe
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/macos-runner-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: probe (${{ matrix.runs-on }})
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        runs-on:
+          - macos-latest
+          - macos-15
+          # actionlint 1.7.12 does not know this label. GitHub does.
+          # .github/actionlint.yaml ignores that finding for this file.
+          - xcode-27
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Host
+        shell: bash
+        run: |
+          set -euo pipefail
+          sw_vers
+          uname -m
+          ps -o lstart= -p $$
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - name: Julia
+        shell: bash
+        run: julia -e 'using InteractiveUtils; versioninfo()'
