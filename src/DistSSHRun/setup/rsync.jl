@@ -601,32 +601,61 @@ end
 """
 Warn when files in `listed` match a `.gitignore` above `send_dir`.
 
-The walker does not apply that file, so those paths are shipped. Git
-`info/exclude` and `core.excludesFile` are not this warning.
+The walker does not apply that file, so those paths are shipped. A match in
+`send_dir`'s own `.gitignore` does not hide an ancestor match. Git
+`info/exclude` and `core.excludesFile` are not this warning. Failure of the
+probe does not refuse the ship.
 """
 function _warn_ancestor_gitignore_shipped!(send_dir::AbstractString, listed::Vector{String})
+    try
+        _warn_ancestor_gitignore_shipped_inner!(send_dir, listed)
+    catch
+        return nothing
+    end
+    return nothing
+end
+
+function _warn_ancestor_gitignore_shipped_inner!(send_dir::AbstractString, listed::Vector{String})
     top = git_work_tree(send_dir)
     top isa String || return nothing
     _same_resolved_dir(top, send_dir) && return nothing
-    files = String[]
+    send_c = canonical_local_path(send_dir)
+    top_c = canonical_local_path(top)
+    files = Tuple{String, String}[]
     for rel in listed
         r = replace(String(rel), '\\' => '/')
         isempty(r) && continue
-        full = joinpath(send_dir, r)
+        full = joinpath(send_c, r)
         (isfile(full) || islink(full)) || continue
-        push!(files, r)
+        push!(files, (r, full))
     end
     isempty(files) && return nothing
-    hits = Tuple{String, String, String}[]
+    hits = Tuple{String, String}[]
     seen = Set{String}()
-    for rec in _git_check_ignore_records(send_dir, files; nonmatching = true)
-        isempty(rec.source) && continue
-        _info_exclude_source(rec.source) && continue
-        startswith(rec.pattern, "!") && continue
-        _gitignore_source_above(top, send_dir, rec.source) || continue
-        rec.path in seen && continue
-        push!(seen, rec.path)
-        push!(hits, (rec.path, rec.source, rec.line))
+    dir = dirname(send_c)
+    while true
+        gi = joinpath(dir, ".gitignore")
+        if isfile(gi) && !islink(gi)
+            shown = replace(relpath(gi, send_c), '\\' => '/')
+            GitIgnore = _ship_gitignore_mod()
+            mktempdir() do tmp
+                write(joinpath(tmp, ".gitignore"), read(gi))
+                matcher = Base.invokelatest(GitIgnore.IgnoreMatcher, tmp; excludes = false)
+                for (rel, full) in files
+                    rel in seen && continue
+                    from_anc = replace(relpath(full, dir), '\\' => '/')
+                    Base.invokelatest(GitIgnore.isignored, matcher, from_anc, false) || continue
+                    push!(seen, rel)
+                    push!(hits, (rel, shown))
+                end
+                return nothing
+            end
+        end
+        _same_resolved_dir(dir, top_c) && break
+        parent = dirname(dir)
+        parent == dir && break
+        _path_under_resolved(parent, top_c) || _same_resolved_dir(parent, top_c) || break
+        dir = parent
     end
     isempty(hits) && return nothing
     n = length(hits)
@@ -635,8 +664,8 @@ function _warn_ancestor_gitignore_shipped!(send_dir::AbstractString, listed::Vec
     noun = n == 1 ? "file" : "files"
     println(buf, "Warning: $n $noun match a .gitignore above this directory and will be shipped.")
     for i in 1:show_n
-        path, source, line = hits[i]
-        println(buf, "  $path ($source:$line)")
+        path, source = hits[i]
+        println(buf, "  $path ($source)")
     end
     extra = n - show_n
     extra > 0 && println(buf, "  and $extra more.")

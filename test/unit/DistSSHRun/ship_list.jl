@@ -551,12 +551,14 @@ using Test
             write(joinpath(bar, "Project.toml"), "name = \"Bar\"\n")
             write(joinpath(bar, "src", "Bar.jl"), "module Bar end\n")
             if Sys.which("git") !== nothing
-                run(pipeline(`git -C $app init -q`; stdout = devnull, stderr = devnull))
-                run(pipeline(`git -C $app config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
-                run(pipeline(`git -C $app config user.name "Test"`; stdout = devnull, stderr = devnull))
-                run(pipeline(`git -C $app add Project.toml Manifest.toml`; stdout = devnull, stderr = devnull))
-                run(pipeline(`git -C $app -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
-                @test DistSSHRun.ensure_manifest_in_git_worktree!(app) === nothing
+                withenv("GIT_DIR" => nothing, "GIT_WORK_TREE" => nothing, "GIT_INDEX_FILE" => nothing) do
+                    run(pipeline(`git -C $app init -q`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $app config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $app config user.name "Test"`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $app add Project.toml Manifest.toml`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $app -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
+                    @test DistSSHRun.ensure_manifest_in_git_worktree!(app) === nothing
+                end
             end
             err = try
                 DistSSHRun.pack_ship_tar(app)
@@ -579,13 +581,16 @@ using Test
                 mkpath(job)
                 write(joinpath(job, "Project.toml"), "name = \"App\"\n")
                 write(joinpath(job, "Manifest.toml"), "# lock\n")
+                write(joinpath(job, ".gitignore"), "!key.pem\n")
                 write(joinpath(job, "key.pem"), "secret\n")
                 write(joinpath(job, ".env"), "TOKEN=1\n")
-                run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
-                run(pipeline(`git -C $tmp config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
-                run(pipeline(`git -C $tmp config user.name "Test"`; stdout = devnull, stderr = devnull))
-                run(pipeline(`git -C $tmp add -A`; stdout = devnull, stderr = devnull))
-                run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
+                withenv("GIT_DIR" => nothing, "GIT_WORK_TREE" => nothing, "GIT_INDEX_FILE" => nothing) do
+                    run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $tmp config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $tmp config user.name "Test"`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $tmp add -A`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
+                end
                 text = mktemp() do _, io
                     packed = redirect_stdout(io) do
                         DistSSHRun.pack_ship_tar(job)
