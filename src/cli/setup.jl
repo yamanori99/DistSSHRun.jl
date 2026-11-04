@@ -271,7 +271,7 @@ if !isdefined(@__MODULE__, :setup_main)
             if mode === :ship_tree
                 ok = finish_host_op!(
                     "ship-tree",
-                    rsync_push_to_remotes(
+                    ship_to_remotes(
                         opts.hosts,
                         op_path,
                         project;

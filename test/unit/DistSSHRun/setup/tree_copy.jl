@@ -1,6 +1,6 @@
 using Test
 
-# Module setup rsync / clone dest messaging (CLI exit codes in integration/setup/exit.jl).
+# Tar pull, dest status, ship confirm, and the gitignore send list.
 
 @testset "setup rsync" begin
     remote_path = "~/App.jl"
@@ -189,94 +189,9 @@ using Test
         end
     end
 
-    @testset "pull rsync uses --safe-links" begin
-        opts = DistSSHRun._pull_rsync_opts("ssh -o BatchMode=yes")
-        @test opts[1] == "-az"
-        @test "--safe-links" in opts
-        @test "-e" in opts
-        system_rsync = Sys.which("rsync")
-        system_rsync === nothing && return
-        mktempdir() do tmp::String
-            src = joinpath(tmp, "src")
-            dest = joinpath(tmp, "dest")
-            outside = joinpath(tmp, "secret.txt")
-            mkpath(src)
-            mkpath(dest)
-            write(outside, "secret\n")
-            write(joinpath(src, "ok.txt"), "ok\n")
-            symlink(outside, joinpath(src, "escape"))
-            DistSSHRun._run_rsync_files_from(
-                [String(system_rsync)],
-                DistSSHRun._pull_rsync_opts("ssh"),
-                src * "/",
-                dest * "/",
-                ["ok.txt", "escape"],
-            )
-            @test isfile(joinpath(dest, "ok.txt"))
-            @test !ispath(joinpath(dest, "escape"))
-        end
-    end
-
-    @testset "files-from uses NUL and protects comment prefixes" begin
-        mktempdir() do tmp::String
-            rsync = joinpath(tmp, "rsync")
-            argv = joinpath(tmp, "argv")
-            list = joinpath(tmp, "list")
-            write(
-                rsync,
-                """
-                #!/bin/sh
-                printf '%s\\n' "\$@" > "\$FAKE_RSYNC_ARGV"
-                for arg in "\$@"; do
-                  case "\$arg" in
-                    --files-from=*)
-                      cp "\${arg#--files-from=}" "\$FAKE_RSYNC_LIST"
-                      ;;
-                  esac
-                done
-                """,
-            )
-            chmod(rsync, 0o755)
-            withenv("FAKE_RSYNC_ARGV" => argv, "FAKE_RSYNC_LIST" => list) do
-                DistSSHRun._run_rsync_files_from(
-                    [rsync],
-                    ["-az"],
-                    "/source/",
-                    "host:/dest/",
-                    ["plain.txt", "#hash.txt", ";semi.txt"],
-                )
-            end
-            args = read(argv, String)
-            @test occursin("--from0", args)
-            @test occursin("--files-from=", args)
-            entries = Set(split(read(list, String), '\0'; keepempty = false))
-            @test entries == Set(["plain.txt", "./#hash.txt", "./;semi.txt"])
-
-            system_rsync = Sys.which("rsync")
-            if system_rsync !== nothing
-                src = joinpath(tmp, "src")
-                dest = joinpath(tmp, "dest")
-                mkpath(src)
-                for name in ("plain.txt", "#hash.txt", ";semi.txt")
-                    write(joinpath(src, name), name)
-                end
-                DistSSHRun._run_rsync_files_from(
-                    [String(system_rsync)],
-                    ["-a"],
-                    src * "/",
-                    dest * "/",
-                    ["plain.txt", "#hash.txt", ";semi.txt"],
-                )
-                @test Set(readdir(dest)) == Set(["plain.txt", "#hash.txt", ";semi.txt"])
-            end
-        end
-    end
-
-    @testset "rsync -e quotes ssh" begin
+    @testset "ssh -e quotes the transport" begin
         Sys.which("ssh") === nothing && return
         withenv("DISTSSHKIT_TEST_SSH" => nothing) do
-            t = DistSSHRun._host_sync_rsync_transport()
-            @test startswith(t, Base.shell_escape(DistSSHRun._ssh_exe()))
             cmd = DistSSHRun._host_sync_remote_shell_cmd("host.test", "true")
             @test cmd.exec[1] == DistSSHRun._ssh_exe()
             @test "-n" in cmd.exec
@@ -288,14 +203,10 @@ using Test
         withenv(
             "DISTSSHKIT_TEST" => nothing,
             "DISTSSHKIT_TEST_SSH" => "/tmp/distsshkit-not-a-test.jl",
-            "DISTSSHKIT_TEST_RSYNC" => "/tmp/distsshkit-not-a-test.sh",
             "DISTSSHKIT_TEST_LOCAL_JULIAUP" => "/tmp/distsshkit-not-a-juliaup",
         ) do
             cmd = DistSSHRun._host_sync_remote_shell_cmd("host.test", "true")
             @test cmd.exec[1] == DistSSHRun._ssh_exe()
-            if Sys.which("rsync") !== nothing
-                @test DistSSHRun._host_sync_rsync_argv() != ["sh", "/tmp/distsshkit-not-a-test.sh"]
-            end
             @test !in("/tmp/distsshkit-not-a-juliaup", DistSSHRun.DistSSHBase.local_juliaup_candidates())
         end
         withenv(
@@ -304,8 +215,6 @@ using Test
             "DISTRIBUTED_SSH_OPTS" => "-F \"/tmp/cfg dir/config\" -o BatchMode=yes",
         ) do
             @test DistSSHRun.ssh_opts() == ["-F", "/tmp/cfg dir/config", "-o", "BatchMode=yes"]
-            t = DistSSHRun._host_sync_rsync_transport()
-            @test occursin(Base.shell_escape("/tmp/cfg dir/config"), t)
         end
         withenv("DISTRIBUTED_SSH_OPTS" => "-F \"unterminated") do
             @test_throws ArgumentError DistSSHRun.ssh_opts()
@@ -370,49 +279,6 @@ using Test
             end
         end
 
-        _with_fake_remotes(extra_env = Dict("DISTSSHKIT_TEST_MKDIR_FAIL" => "1")) do _
-            raw = DistSSHRun.rsync_project_to_hosts!(
-                ["host1"], smoke_project, remote_path; confirm = false, report = false,
-            )
-            @test raw.succeeded == 0 && raw.failed == 1
-        end
-
-        _with_fake_remotes() do _
-            raw = DistSSHRun.rsync_project_to_hosts!(
-                ["host1"], smoke_project, remote_path; confirm = false, report = false,
-            )
-            @test raw.succeeded == 1 && raw.failed == 0
-        end
-
-        _with_fake_remotes() do _
-            withenv("DISTSSHKIT_JOBS" => "2") do
-                raw = DistSSHRun.rsync_project_to_hosts!(
-                    ["host1", "host2"], smoke_project, remote_path; confirm = false, report = false,
-                )
-                @test raw.succeeded == 2 && raw.failed == 0
-                @test [hr.host for hr in raw.host_results] == ["host1", "host2"]
-            end
-        end
-
-        _with_fake_remotes() do state_dir
-            host = "user@host.test"
-            _mark_nonempty!(state_dir, host)
-            DistSSHRun.apply_kit_cli_session!(DistSSHRun.KitCliSession(quiet = false, yes = true))
-            _, result = _capture_stdio() do _, _
-                DistSSHRun.rsync_project_to_hosts!(
-                    [host], smoke_project, remote_path; confirm = false, report = false,
-                )
-            end
-            @test result.cancelled == false && result.failed == 1
-            @test occursin("refusing to overwrite", result.host_results[1].message)
-        end
-
-        _with_fake_remotes(extra_env = Dict("DISTSSHKIT_TEST_RSYNC_FAIL" => "1")) do _
-            raw = DistSSHRun.rsync_project_to_hosts!(
-                ["host1"], smoke_project, remote_path; confirm = false, report = false,
-            )
-            @test raw.succeeded == 0 && raw.failed == 1
-        end
     end
 
     @testset "probe failure is not a nonempty tree" begin
@@ -451,102 +317,24 @@ function _gitignore_git!(dir::String)
     return nothing
 end
 
-function _gitignore_names(dest::String)::Set{String}
-    out = Set{String}()
-    for (root, _, files) in walkdir(dest)
-        rel = relpath(root, dest)
-        for f in files
-            push!(out, rel == "." ? f : joinpath(rel, f))
-        end
-    end
-    return out
-end
-
-const _GITIGNORE_ALL5 = Set(
-    [
-        "data/input.csv",
-        "data/tmp.csv",
-        "Manifest.toml",
-        "Manifest-v1.13.toml",
-        "src/a.jl",
-    ]
-)
-
-function _gitignore_copy_list!(bin::String, src::String, dest::String)
-    env = DistSSHRun.resolve_pkg_env(src)
-    listed = DistSSHRun._rsync_send_list(env.env_dir, env; warn = false)
-    @test listed isa Vector
-    DistSSHRun._run_rsync_files_from(
-        [bin],
-        ["-a", "--exclude", ".git/", "--exclude", ".distsshkit/"],
-        src * "/",
-        dest * "/",
-        listed,
-    )
-    return nothing
-end
-
-function _gitignore_copy_tree!(bin::String, src::String, dest::String; gitignore::Bool)
-    run(
-        pipeline(
-            DistSSHRun._rsync_tree_cmd([bin], "ssh", src, dest * "/"; gitignore = gitignore);
-            stderr = devnull,
-        )
-    )
-    return nothing
-end
-
 @testset "rsync gitignore keyword" begin
-    raw = Sys.which("rsync")
-    raw === nothing && return
-    bin = String(raw)
+    Sys.which("git") === nothing && return
 
     _with_tempdir() do tmp
         src = joinpath(tmp, "proj")
         mkpath(src)
         _gitignore_tree!(src)
         _gitignore_git!(src)
-        dest = joinpath(tmp, "dest")
-        mkpath(dest)
-        _gitignore_copy_list!(bin, src, dest)
-        got = _gitignore_names(dest)
+        env = DistSSHRun.resolve_pkg_env(src)
+        listed = DistSSHRun._rsync_send_list(env.env_dir, env; warn = false)
+        @test listed isa Vector
+        got = Set(listed)
         @test "data/input.csv" in got
         @test "Manifest.toml" in got
         @test "src/a.jl" in got
         @test "data/tmp.csv" ∉ got
         @test "Manifest-v1.13.toml" ∉ got
         @test ".distsshkit/marker" ∉ got
-    end
-
-    _with_tempdir() do tmp
-        src = joinpath(tmp, "proj")
-        mkpath(src)
-        _gitignore_tree!(src)
-        dest = joinpath(tmp, "dest")
-        mkpath(dest)
-        _gitignore_copy_tree!(bin, src, dest; gitignore = true)
-        got = _gitignore_names(dest)
-        @test "data/input.csv" ∉ got
-        @test "Manifest.toml" ∉ got
-        @test "data/tmp.csv" ∉ got
-        @test "Manifest-v1.13.toml" ∉ got
-        @test "src/a.jl" in got
-    end
-
-    for inside in (false, true)
-        _with_tempdir() do tmp
-            src = joinpath(tmp, "proj")
-            mkpath(src)
-            _gitignore_tree!(src)
-            inside && _gitignore_git!(src)
-            dest = joinpath(tmp, "dest")
-            mkpath(dest)
-            _gitignore_copy_tree!(bin, src, dest; gitignore = false)
-            got = _gitignore_names(dest)
-            @test _GITIGNORE_ALL5 ⊆ got
-            @test ".distsshkit/marker" ∉ got
-            @test !any(n -> n == ".git" || startswith(n, ".git/"), got)
-        end
     end
 
     session = DistSSHRun.KitSession(

@@ -8,7 +8,6 @@ const _SHIP_WARN_TOTAL_ENV = "DISTSSHKIT_SHIP_WARN_TOTAL_BYTES"
 
 const _LAST_SHIP = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 const _SHIP_LAYOUT_ACTIVE = Ref(false)
-const _OPENRSYNC_WARNED = Ref(false)
 const _SSHFLAGS_WARNED = Ref(false)
 
 struct ShipTreeResult
@@ -1652,26 +1651,6 @@ function ship_project_to_hosts!(
     finally
         rm(packed.tmpd; force = true, recursive = true)
     end
-end
-
-function warn_openrsync_once()
-    _OPENRSYNC_WARNED[] && return nothing
-    argv = try
-        _host_sync_rsync_argv()
-    catch
-        return nothing
-    end
-    # Collect tests spawn `sh` plus `DISTSSHKIT_TEST_RSYNC`. PATH rsync is unused.
-    length(argv) == 1 || return nothing
-    ver = try
-        lowercase(read(`$(argv[1]) --version`, String))
-    catch
-        return nothing
-    end
-    occursin("openrsync", ver) || return nothing
-    _OPENRSYNC_WARNED[] = true
-    @warn "rsync on PATH is openrsync; cache pull uses it, not GNU rsync"
-    return nothing
 end
 
 function warn_project_sshflags(project::AbstractString)

@@ -152,7 +152,7 @@ using Test
             @test !result.cancelled && result.succeeded == 1 && result.failed == 0
             @test length(result.hosts) == 1 && result.hosts[1].ok
         end
-        # Nonempty refuse: return value here; message text in setup/rsync.jl.
+        # Nonempty refuse: return value here; message text in setup/send_list.jl.
         # `_capture_stdio`: `print_err` ignores quiet, so otherwise a red ✗ leaks.
         _with_fake_remotes() do state_dir
             host = "host1"

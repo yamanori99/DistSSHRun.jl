@@ -111,7 +111,7 @@ using Pkg
                 end
             end
         end
-        !t.ssh && !t.rsync && !t.git
+        !t.ssh && !t.git
     end
 
     expr = DistSSHRun._project_deps_probe_expr()
@@ -614,12 +614,12 @@ using Pkg
             symlink(abs_vendor, link)
             link_loc = DistSSHRun.canonical_local_path(link)
             @test_throws ArgumentError(
-                "Source path $link_loc for Foo is a symlink to $abs_vendor. rsync keeps that absolute target, so workers would not see the staged tree.",
+                "Source path $link_loc for Foo is a symlink to $abs_vendor. Ship keeps that absolute target, so workers would not see the staged tree.",
             ) DistSSHRun.ensure_manifest_ships!(job)
             rm(link)
             symlink("~/nope", link)
             @test_throws ArgumentError(
-                "Source path $link_loc for Foo is a symlink to ~/nope. rsync keeps that absolute target, so workers would not see the staged tree.",
+                "Source path $link_loc for Foo is a symlink to ~/nope. Ship keeps that absolute target, so workers would not see the staged tree.",
             ) DistSSHRun.ensure_manifest_ships!(job)
 
             if Sys.which("git") !== nothing
@@ -750,7 +750,7 @@ using Pkg
                 e
             end
             @test rsync_err isa ArgumentError
-            @test occursin("not in the rsync send list", rsync_err.msg)
+            @test occursin("not in the send list", rsync_err.msg)
             @test !occursin("will be an error", rsync_err.msg)
             git_err = try
                 DistSSHRun.ensure_manifest_in_git_worktree!(tmp)

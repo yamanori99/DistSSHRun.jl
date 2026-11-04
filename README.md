@@ -25,40 +25,62 @@ The longer guide is the
 pkg> add DistSSHRun
 ```
 
-Julia **1.13+**. Hosts need **`ssh`**. Collect and go slot pull-back also need
-a remote Julia executable (`--julia`, or auto-detect) and use stdlib Tar over
-SSH. Original mtimes are not kept. Pull-back `touch`es extracted files.
-Ship does not `touch`; files keep the extract-time mtime. A non-executable
-file arrives as mode `0644`, and an executable file as `0755`.
-`push_cache!` uses stdlib Tar over SSH and needs a remote Julia executable
-(`--julia`, or auto-detect) that can load stdlib `Tar` and `SHA`. Ship uses
-stdlib Tar over SSH. Git
-deploys also need **`git`**.
-`setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` walk the
-ship root and apply each directory's `.gitignore` (case-sensitive).
-`.git/info/exclude`, `core.excludesFile`, and a `.gitignore` above the
-ship root are not used. No git binary is run. The ship root is the
-project directory that was passed, not a workspace Manifest directory above it.
-A Manifest or path dependency outside that directory is left out with a
-warning. A gitignored `Project.toml`,
-`JuliaProject.toml`, `Manifest.toml`, or `JuliaManifest.toml` is left out
-with one warning. A gitignored `LocalPreferences.toml` is left out too;
-add `!LocalPreferences.toml` to ship it. A file over 50 MiB, or a send list over
-100 MiB, prints a warning (`DISTSSHKIT_SHIP_WARN_FILE_BYTES`,
-`DISTSSHKIT_SHIP_WARN_TOTAL_BYTES`; an invalid value is an error). The 256 MiB
-cap still stops the ship. Declared inputs are left out. Extract is into
-`<remote_root>/runs/<run_id>/src/`, with empty `out/`
-beside it and a minimal DistSSHRun `run.toml` stamp. The remote root must
-already exist (`setup --remote-root`). `--rsync` was removed
-in 0.2.0. `setup --delete` and `--prune` need `--confirm-path`; `-y` does
-not authorize them. A present unowned stamp is refused. The remote login shell (`$SHELL`) must be POSIX-compatible
-(`sh`, `bash`, `dash`, or `zsh`). `ssh host command` runs `$SHELL -c`, not
-a login shell. Distributed's `SSHManager` starts workers with `sh -l -c`,
-and that wrap cannot be changed. `fish` and `csh` are unsupported. `fish`
-can silently change quoting (a backslash inside single quotes). An SSH
-name that starts with `-`, including `user@-host`, is rejected. A host or
-remote path that contains a control character (NUL, newline, or any other)
-is rejected. See `julia -m DistSSHRun help setup`.
+Julia **1.13+**.
+
+### Hosts
+
+- **`ssh`** is required. Collect, go slot pull-back, ship, and
+  `push_cache!` send bytes with stdlib Tar over SSH.
+- Collect, pull-back, and `push_cache!` need a remote Julia
+  executable (`--julia`, or auto-detect). `push_cache!` also needs
+  that Julia to load stdlib `Tar` and `SHA`.
+- **`git`** is required only for clone, sync, and pull.
+
+### Copied files
+
+- Original mtimes are not kept. Pull-back `touch`es extracted files.
+  Ship does not `touch`; files keep the extract-time mtime.
+- A non-executable file arrives as mode `0644`, and an executable
+  file as `0755`.
+
+### Ship
+
+`setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree`:
+
+- Walk the ship root and apply each directory's `.gitignore`
+  (case-sensitive). `.git/info/exclude`, `core.excludesFile`, and a
+  `.gitignore` above the ship root are not used. No git binary is run.
+- The ship root is the project directory that was passed, not a
+  workspace Manifest directory above it. A Manifest or path dependency
+  outside that directory is left out with a warning.
+- A gitignored `Project.toml`, `JuliaProject.toml`, `Manifest.toml`,
+  or `JuliaManifest.toml` is left out with one warning. A gitignored
+  `LocalPreferences.toml` is left out too; add `!LocalPreferences.toml`
+  to ship it.
+- A file over 50 MiB, or a send list over 100 MiB, prints a warning
+  (`DISTSSHKIT_SHIP_WARN_FILE_BYTES`,
+  `DISTSSHKIT_SHIP_WARN_TOTAL_BYTES`; an invalid value is an error).
+  The 256 MiB cap still stops the ship. Declared inputs are left out.
+- Extract is into `<remote_root>/runs/<run_id>/src/`, with empty
+  `out/` beside it and a minimal DistSSHRun `run.toml` stamp. The
+  remote root must already exist (`setup --remote-root`).
+- `--rsync` was removed in 0.2.0. `setup --delete` and `--prune` need
+  `--confirm-path`; `-y` does not authorize them. A present unowned
+  stamp is refused.
+
+### Remote shell
+
+- The login shell (`$SHELL`) must be POSIX-compatible (`sh`, `bash`,
+  `dash`, or `zsh`). `ssh host command` runs `$SHELL -c`, not a login
+  shell.
+- Distributed's `SSHManager` starts workers with `sh -l -c`, and that
+  wrap cannot be changed. `fish` and `csh` are unsupported. `fish` can
+  silently change quoting (a backslash inside single quotes).
+- An SSH name that starts with `-`, including `user@-host`, is
+  rejected. A host or remote path that contains a control character
+  (NUL, newline, or any other) is rejected.
+
+See `julia -m DistSSHRun help setup`.
 
 ## Commands
 

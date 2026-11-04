@@ -68,7 +68,7 @@ using Test
             DistSSHBase.explain_host_tool_missing("ssh"; surface = :api)
         @test occursin("scp not found", DistSSHBase.explain_host_tool_missing("scp"))
         @test occursin("OpenSSH", DistSSHBase.explain_host_tool_missing("scp"))
-        @test occursin("rsync", DistSSHBase.explain_host_tool_missing("rsync"))
+        @test_throws ArgumentError DistSSHBase.explain_host_tool_missing("rsync")
         @test occursin("clone", DistSSHBase.explain_host_tool_missing("git"))
     end
 

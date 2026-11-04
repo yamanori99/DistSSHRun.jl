@@ -4,7 +4,7 @@ FROM ubuntu:26.04
 # https://docs.github.com/packages/working-with-a-github-packages-registry/working-with-the-container-registry
 LABEL org.opencontainers.image.source="https://github.com/yamanori99/DistSSHRun.jl"
 LABEL org.opencontainers.image.documentation="https://github.com/yamanori99/DistSSHRun.jl/blob/main/testenv/docker-ssh/README.md"
-LABEL org.opencontainers.image.description="Linux SSH worker for DistSSHRun E2E (sshd, rsync, git, Julia via juliaup). Not the DistSSHRun runtime."
+LABEL org.opencontainers.image.description="Linux SSH worker for DistSSHRun E2E (sshd, git, Julia via juliaup). Not the DistSSHRun runtime."
 LABEL org.opencontainers.image.licenses="MIT"
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -25,7 +25,6 @@ RUN apt-get update && apt-get install -y \
     git \
     openssh-client \
     openssh-server \
-    rsync \
     sudo \
     vim-tiny \
     && rm -rf /var/lib/apt/lists/*

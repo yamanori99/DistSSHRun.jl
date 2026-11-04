@@ -77,9 +77,9 @@ Green on one layer does not imply the others. `Pkg.test()` does not run
 - **unit** (~45 s): parse, paths, fake setup, throws. Not child julia,
   `addprocs`, SSH.
 - **integration** (~3 min): child CLI and/or **local** `addprocs`. Not
-  real SSH / rsync. `integration/drive/interrupt_grace.jl` is a detached
+  real SSH. `integration/drive/interrupt_grace.jl` is a detached
   `drive` plus `terminate!`.
-- **e2e** (~15–25 min): real SSH + rsync, two Linux workers; **PR** /
+- **e2e** (~15–25 min): real SSH, two Linux workers; **PR** /
   **main** (path filter), a `Project.toml` version increase, weekly, or
   dispatch (Compose). Not markdown-only allowlisted PRs. Not local-only
   CLI wiring.
@@ -225,21 +225,21 @@ only return numbers. Collect tests use files workers write.
 
 Child-1 can SSH to child-2 (compose DNS).
 
-Not this file: macOS workers, dead hosts, fake `ssh`/`rsync`, local
+Not this file: macOS workers, dead hosts, fake `ssh`, local
 `with_kit` recipes (`test/integration/demos/`).
 
 ## Fakes vs real SSH
 
-- **setup:** core work is `ssh` / `rsync`. `Pkg.test()` uses fixtures
-  `DISTSSHKIT_TEST_SSH` / `_RSYNC`, and only when `DISTSSHKIT_TEST=1`.
-  Bytes on a real remote: e2e.
+- **setup:** core work is `ssh`. Git clone, sync, and pull also need `git`.
+  `Pkg.test()` uses the `DISTSSHKIT_TEST_SSH` fixture, and only when
+  `DISTSSHKIT_TEST=1`. Bytes on a real remote: e2e.
 - **drive / go:** core work is `Distributed` workers. `Pkg.test()` uses
   real **local** `addprocs` (no SSH fake). Bytes on a real remote: e2e.
 - **drive collect:** core work is `ssh` and stdlib Tar of result trees.
   Remote mtimes are not kept. File modes are not kept (`0644`, or `0755`
   if executable). An escaping symlink is refused. Remote Julia is `--julia`
   or auto-detect.
-  Cache pull is still rsync. Bytes on a real remote: e2e.
+  Cache push uses stdlib Tar over SSH. Bytes on a real remote: e2e.
 - **size:** plan math (+ optional RSS). `Pkg.test()` is unit + local
   probe in `integration/size/`. Bytes on a real remote: e2e if needed.
 

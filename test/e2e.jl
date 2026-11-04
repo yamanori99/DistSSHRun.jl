@@ -1,6 +1,6 @@
 #!/usr/bin/env julia
 # Real-SSH E2E against testenv/docker-ssh workers. Not part of Pkg.test().
-# Oracle: OpenSSH + rsync + remote Julia (setup / drive / go / ride / git). Assert
+# Oracle: OpenSSH + remote Julia (setup / drive / go / ride / git). Assert
 # files workers write (`run_on_host` / collect). Kit-parent-side demo CSV is not
 # a remote collect. Inventory: test/README.md § SSH E2E.
 # Local with_kit recipes are test/integration/demos/.
@@ -160,9 +160,9 @@ end
 
         @testset "setup --check (major.minor; no --ignore-julia-version)" begin
             _e2e_announce("setup --check (major.minor; no --ignore-julia-version)")
-            # rsync excludes .git/; --check warns on missing remote hash but must
-            # still pass Julia major.minor + project/deps. Git parity is not
-            # claimed for the rsync path (see docker-ssh README).
+            # Ship does not send .git/; --check warns on a missing remote hash but
+            # must still pass Julia major.minor + project/deps. Git parity is not
+            # claimed for the ship path (see docker-ssh README).
             proc, out = _run_kit_setup(;
                 setup_args = ["--check", "--remote-path", remote_root, setup_hosts...],
                 project_root = proj,

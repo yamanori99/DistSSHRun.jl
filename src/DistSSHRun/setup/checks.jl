@@ -1,13 +1,12 @@
 check_ssh(host::String)::Bool = probe_setup_ssh(host) === nothing
 
-"""Print local `ssh` / `rsync` / `git` PATH status. `ssh` missing is a failure; others warn."""
+"""Print local `ssh` / `git` PATH status. `ssh` missing is a failure; `git` missing warns."""
 function _report_local_host_tools!(warnings::Vector{SetupWarning} = SetupWarning[])
-    ssh = rsync = git = true
+    ssh = git = true
     for name in _HOST_TOOL_NAMES
         exe = Sys.which(name)
         found = exe !== nothing
         name == "ssh" && (ssh = found)
-        name == "rsync" && (rsync = found)
         name == "git" && (git = found)
         if !found
             if name == "ssh"
@@ -22,7 +21,7 @@ function _report_local_host_tools!(warnings::Vector{SetupWarning} = SetupWarning
             ok("$name ($exe)")
         end
     end
-    return (; ssh, rsync, git)
+    return (; ssh, git)
 end
 
 """Print the remote Julia line. `false` when this host fails the check.
