@@ -68,9 +68,17 @@ end
 function _run_cache_extract(cache::AbstractString, tar::Vector{UInt8})
     julia = joinpath(Sys.BINDIR, Base.julia_exename())
     cmd = `$(julia) --startup-file=no --compiled-modules=existing -e $(DistSSHRun._CACHE_EXTRACT_EXPR) -- $cache`
+    # Same environment as the remote helper. Pkg.test leaves `JULIA_PROJECT`
+    # set, and that project does not load stdlib `Tar`.
     out = IOBuffer()
     err = IOBuffer()
-    proc = open(pipeline(ignorestatus(cmd); stdout = out, stderr = err); write = true)
+    proc = withenv(
+        "JULIA_PROJECT" => nothing,
+        "JULIA_LOAD_PATH" => "@stdlib",
+        "JULIA_DEPOT_PATH" => "",
+    ) do
+        return open(pipeline(ignorestatus(cmd); stdout = out, stderr = err); write = true)
+    end
     write(proc, tar)
     close(proc)
     wait(proc)
