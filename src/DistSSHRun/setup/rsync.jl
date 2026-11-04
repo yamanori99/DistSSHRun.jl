@@ -55,7 +55,11 @@ end
 Tar.create(keep, root, stdout)
 """
 
-"""POSIX remote `julia -e` using stdlib Tar only; does not write compiled modules."""
+"""POSIX remote `julia -e` using stdlib Tar only; does not write compiled modules.
+
+A subshell unsets `JULIA_PROJECT` and sets `JULIA_LOAD_PATH`. Do not pass the
+Julia path to `env`: a path that contains `=` would be an `env` assignment.
+"""
 function _remote_stdlib_julia_e(
         julia_bin::AbstractString,
         expr::AbstractString;
@@ -63,10 +67,6 @@ function _remote_stdlib_julia_e(
     )::String
     jb = _remote_julia_path_sh(julia_bin)
     parts = String[
-        "env",
-        "-u",
-        "JULIA_PROJECT",
-        "JULIA_LOAD_PATH=@stdlib",
         jb,
         "--startup-file=no",
         "--compiled-modules=existing",
@@ -77,7 +77,8 @@ function _remote_stdlib_julia_e(
         push!(parts, "--")
         append!(parts, args)
     end
-    return join(parts, " ")
+    inner = join(parts, " ")
+    return "(unset JULIA_PROJECT; JULIA_LOAD_PATH=@stdlib exec $(inner))"
 end
 
 """Remote Julia that writes a Tar of `remote_dir` to stdout.
