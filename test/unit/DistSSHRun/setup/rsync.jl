@@ -48,6 +48,7 @@ using Test
         @test occursin("/remote/out", sh)
         @test occursin("julia", sh)
         @test occursin("unset JULIA_PROJECT", sh)
+        @test occursin("JULIA_DEPOT_PATH=", sh)
         @test occursin("JULIA_LOAD_PATH=@stdlib", sh)
         @test occursin("--compiled-modules=existing", sh)
         @test occursin("--startup-file=no", sh)
@@ -74,6 +75,7 @@ using Test
         )
         @test occursin("Tar.extract", extract)
         @test occursin("--compiled-modules=existing", extract)
+        @test occursin("JULIA_DEPOT_PATH=", extract)
         _with_tempdir() do tmp
             depot = joinpath(tmp, "depot")
             dummy = joinpath(tmp, "proj")
@@ -91,11 +93,8 @@ using Test
             @test occursin("Tar", out)
             @test !isdir(joinpath(depot, "compiled"))
             @test !isdir(joinpath(depot, "packages"))
-            # 1.13 leaves the depot empty. 1.14+ (including 1.15-DEV) still writes
-            # `cache/v1.*/objcache-lmdb1/` even with `--compiled-modules=existing`
-            # and `--pkgimages=no` (not `compiled/` or `packages/`).
             leftover = readdir(depot)
-            @test leftover ⊆ ["cache"]
+            @test isempty(leftover)
         end
     end
 
