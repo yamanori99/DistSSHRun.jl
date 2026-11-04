@@ -103,6 +103,115 @@ function _warn_excluded_ship_project_files!(root::AbstractString, listed::Vector
     return nothing
 end
 
+"""Directory `--ship-tree` walks. The project directory, not the Manifest directory."""
+function _ship_tree_root(local_root::AbstractString)::String
+    return resolve_pkg_env(canonical_local_path(local_root)).project_dir
+end
+
+function _path_outside_ship_root(path::AbstractString, root::AbstractString)::Bool
+    rel = replace(relpath(canonical_local_path(path), canonical_local_path(root)), '\\' => '/')
+    return rel == ".." || startswith(rel, "../")
+end
+
+function _collect_ship_manifest_paths!(found::Vector{Tuple{String, String}}, deps)
+    deps isa AbstractDict || return found
+    for (name, entry) in deps
+        tables = if entry isa AbstractDict
+            Any[entry]
+        elseif entry isa AbstractVector
+            Any[t for t in entry if t isa AbstractDict]
+        else
+            continue
+        end
+        for tab in tables
+            raw = get(tab, "path", nothing)
+            raw isa AbstractString || continue
+            s = strip(String(raw))
+            isempty(s) && continue
+            push!(found, (String(name), s))
+        end
+    end
+    return found
+end
+
+"""`(name, path)` for Manifest deps that name a `path` (format 1 or 2)."""
+function _ship_manifest_path_deps(manifest_file::AbstractString)::Vector{Tuple{String, String}}
+    data = TOML.parsefile(String(manifest_file))
+    found = Tuple{String, String}[]
+    if haskey(data, "manifest_format")
+        _collect_ship_manifest_paths!(found, get(data, "deps", nothing))
+    else
+        _collect_ship_manifest_paths!(found, data)
+    end
+    unique!(found)
+    return found
+end
+
+function _warn_ship_manifest_paths!(manifest::AbstractString, root::AbstractString)
+    for (name, raw) in _ship_manifest_path_deps(manifest)
+        if isabspath(expanduser(raw))
+            print_warn(
+                "Warning: Manifest path $raw for $name is absolute and is not part of the ship.\n",
+            )
+            continue
+        end
+        location = _resolved_source_path(manifest, raw)
+        _path_outside_ship_root(location, root) || continue
+        print_warn(
+            "Warning: Manifest path $location for $name is outside the ship root and will not be shipped.\n",
+        )
+    end
+    return nothing
+end
+
+"""
+Warn when the Manifest or a relative path dependency sits outside `root`.
+
+An absolute `[sources]` path still throws. Those workers resolve on their
+own filesystem. `go` and `rsync_send_list` are unchanged.
+"""
+function _warn_ship_outside!(user_path::AbstractString, root::AbstractString)
+    given = canonical_local_path(user_path)
+    env = resolve_pkg_env(given)
+    _require_manifest!(given)
+    root_c = canonical_local_path(root)
+    root_real = ispath(root_c) ? canonical_local_path(realpath(root_c)) : root_c
+    manifest = env.manifest
+    if manifest isa String
+        if _path_outside_ship_root(manifest, root_c)
+            print_warn("Warning: Manifest $manifest is outside the ship root and will not be shipped.\n")
+        else
+            target = manifest_link_target(manifest)
+            if !_path_is_under(target, root_real)
+                print_warn(
+                    "Warning: Manifest $manifest points at $target, outside the ship root, and will not be shipped.\n",
+                )
+            end
+            _warn_ship_manifest_paths!(String(manifest), root_c)
+        end
+    end
+    project_file = _located_project_file(root_c)
+    project_file isa String || return nothing
+    for (name, raw) in _project_path_sources(project_file)
+        if isabspath(expanduser(raw))
+            throw(
+                ArgumentError(
+                    "Source path $raw for $name is absolute. Workers resolve it on their own filesystem, so it would not be the staged tree.",
+                ),
+            )
+        end
+        location = _resolved_source_path(project_file, raw)
+        if _path_outside_ship_root(location, root_c)
+            print_warn(
+                "Warning: Source path $location for $name is outside the ship root and will not be shipped.\n",
+            )
+            continue
+        end
+        _ensure_one_path_dep!(name, raw, project_file, root_c, root_real; git = false)
+    end
+    return nothing
+end
+
 function _ship_rel_paths(ship_root::AbstractString)::Vector{String}
     root = canonical_local_path(ship_root)
     send_list = _ship_gitignore_send_list(root)
@@ -902,8 +1011,8 @@ function pack_ship_tar(
         ship_max_bytes::Integer = SHIP_MAX_BYTES_DEFAULT,
     )
     local_dir = canonical_local_path(local_root)
-    root = resolve_pkg_env(local_dir).env_dir
-    ensure_manifest_ships!(local_dir; warn_send_list = false)
+    root = _ship_tree_root(local_dir)
+    _warn_ship_outside!(local_dir, root)
     rels = _ship_rel_paths(root)
     allowed_links = _check_ship_symlinks!(
         root, rels; allow_external = allow_external_symlinks,

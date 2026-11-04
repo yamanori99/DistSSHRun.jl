@@ -246,7 +246,7 @@ using Test
         end
     end
 
-    @testset "a workspace source at the env root is covered" begin
+    @testset "a workspace member ships alone" begin
         _with_tempdir() do lab
             member = joinpath(lab, "member")
             mkpath(member)
@@ -265,15 +265,99 @@ using Test
                 Lab = {path = ".."}
                 """
             )
-            packed = DistSSHRun.pack_ship_tar(member)
+            text = mktemp() do _, io
+                packed = redirect_stdout(io) do
+                    DistSSHRun.pack_ship_tar(member)
+                end
+                try
+                    dest = mktempdir()
+                    DistSSHRun.Tar.extract(packed.tar_path, dest)
+                    @test isfile(joinpath(dest, "Project.toml"))
+                    @test occursin("Run1", read(joinpath(dest, "Project.toml"), String))
+                    @test !isfile(joinpath(dest, "Manifest.toml"))
+                    @test !isdir(joinpath(dest, "member"))
+                finally
+                    rm(packed.tmpd; force = true, recursive = true)
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
+            end
+            @test occursin("outside the ship root", text)
+            wider = DistSSHRun.pack_ship_tar(lab)
             try
                 dest = mktempdir()
-                DistSSHRun.Tar.extract(packed.tar_path, dest)
+                DistSSHRun.Tar.extract(wider.tar_path, dest)
                 @test isfile(joinpath(dest, "Project.toml"))
                 @test isfile(joinpath(dest, "member", "Project.toml"))
+                @test isfile(joinpath(dest, "Manifest.toml"))
             finally
-                rm(packed.tmpd; force = true, recursive = true)
+                rm(wider.tmpd; force = true, recursive = true)
             end
+        end
+    end
+
+    @testset "a Manifest path outside the ship root warns" begin
+        _with_tempdir() do tmp
+            app = joinpath(tmp, "app")
+            bar = joinpath(tmp, "shared", "Bar")
+            mkpath(app)
+            mkpath(joinpath(bar, "src"))
+            write(joinpath(app, "Project.toml"), "name = \"App\"\n")
+            write(
+                joinpath(app, "Manifest.toml"), """
+                julia_version = "1.13.0"
+                manifest_format = "2.0"
+                [[deps.Bar]]
+                path = "../shared/Bar"
+                uuid = "00000000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                """
+            )
+            write(joinpath(bar, "Project.toml"), "name = \"Bar\"\n")
+            text = mktemp() do _, io
+                packed = redirect_stdout(io) do
+                    DistSSHRun.pack_ship_tar(app)
+                end
+                try
+                    dest = mktempdir()
+                    DistSSHRun.Tar.extract(packed.tar_path, dest)
+                    @test isfile(joinpath(dest, "Project.toml"))
+                    @test !isdir(joinpath(dest, "shared"))
+                finally
+                    rm(packed.tmpd; force = true, recursive = true)
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
+            end
+            @test occursin("outside the ship root", text)
+            @test occursin("Bar", text)
+        end
+    end
+
+    @testset "an absolute source path is still refused" begin
+        _with_tempdir() do tmp
+            foo = joinpath(tmp, "vendor", "Foo")
+            mkpath(foo)
+            write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
+            absfoo = replace(foo, '\\' => '/')
+            write(
+                joinpath(tmp, "Project.toml"), """
+                name = "App"
+                [sources]
+                Foo = {path = "$absfoo"}
+                """
+            )
+            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
+            err = try
+                DistSSHRun.pack_ship_tar(tmp)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("absolute", err.msg)
         end
     end
 

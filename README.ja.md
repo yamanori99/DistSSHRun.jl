@@ -36,6 +36,8 @@ git で配るときは **`git`** も要る。`setup --ship-tree`、`go --ship-tr
 `drive --ship-tree` は ship の根を歩き、各ディレクトリの `.gitignore`
 を適用する（大文字小文字を区別する）。`.git/info/exclude`、
 `core.excludesFile`、根より上の `.gitignore` は使わない。git は起動しない。
+送る根は渡したプロジェクトのディレクトリであり、その上の workspace の
+Manifest ディレクトリには広げない。根の外の Manifest と path 依存は載せず、警告する。
 gitignore された `Project.toml`、`JuliaProject.toml`、`Manifest.toml`、
 `JuliaManifest.toml` は載せず、警告を 1 行出す。gitignore された
 `LocalPreferences.toml` も載らない。載せるには `!LocalPreferences.toml` を書く。

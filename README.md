@@ -35,7 +35,10 @@ deploys also need **`git`**.
 `setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` walk the
 ship root and apply each directory's `.gitignore` (case-sensitive).
 `.git/info/exclude`, `core.excludesFile`, and a `.gitignore` above the
-ship root are not used. No git binary is run. A gitignored `Project.toml`,
+ship root are not used. No git binary is run. The ship root is the
+project directory that was passed, not a workspace Manifest directory above it.
+A Manifest or path dependency outside that directory is left out with a
+warning. A gitignored `Project.toml`,
 `JuliaProject.toml`, `Manifest.toml`, or `JuliaManifest.toml` is left out
 with one warning. A gitignored `LocalPreferences.toml` is left out too;
 add `!LocalPreferences.toml` to ship it. Declared inputs are left out. Extract is into
