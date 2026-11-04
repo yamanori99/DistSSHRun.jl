@@ -33,7 +33,7 @@ or auto-detect. Original mtimes are not kept. Pull-back `touch`es extracted
 files. Ship does not `touch`; files keep the extract-time mtime. A
 non-executable file arrives as mode `0644`, and an executable file as
 `0755`. A symlink that points outside the copied tree is refused.
-`push_cache!` still needs **`rsync`**. Ship uses stdlib Tar over SSH. Git
+`push_cache!` and ship use stdlib Tar over SSH. Git
 deploys also need **`git`**.
 
 `setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` walk the

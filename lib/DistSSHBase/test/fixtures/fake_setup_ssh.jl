@@ -420,6 +420,24 @@ function main()
         exit(2)
     end
 
+    if occursin("distssh-cache-", script)
+        if get(ENV, "DISTSSHKIT_TEST_CACHE_PUSH_FAIL", "") == "1"
+            println(stderr, "cache push failed")
+            exit(1)
+        end
+        if occursin("distssh-cache-extract", script)
+            data = read(stdin)
+            seen = Set{String}()
+            for m in eachmatch(r"[0-9a-f]{64}", String(data))
+                name = m.match
+                name in seen && continue
+                push!(seen, name)
+                println(name)
+            end
+        end
+        exit(0)
+    end
+
     return exit(0)
 end
 
