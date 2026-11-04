@@ -615,6 +615,31 @@ function _warn_ancestor_gitignore_shipped!(send_dir::AbstractString, listed::Vec
     return nothing
 end
 
+function _match_ancestor_gitignore!(
+        hits::Vector{Tuple{String, String}},
+        seen::Set{String},
+        files::Vector{Tuple{String, String}},
+        gi::AbstractString,
+        anc::AbstractString,
+        shown::AbstractString,
+    )
+    GitIgnore = _ship_gitignore_mod()
+    body = read(gi)
+    mktempdir() do tmp
+        write(joinpath(tmp, ".gitignore"), body)
+        matcher = Base.invokelatest(GitIgnore.IgnoreMatcher, tmp; excludes = false)
+        for (rel, full) in files
+            rel in seen && continue
+            from_anc = replace(relpath(full, anc), '\\' => '/')
+            Base.invokelatest(GitIgnore.isignored, matcher, from_anc, false) || continue
+            push!(seen, rel)
+            push!(hits, (rel, shown))
+        end
+        return nothing
+    end
+    return nothing
+end
+
 function _warn_ancestor_gitignore_shipped_inner!(send_dir::AbstractString, listed::Vector{String})
     top = git_work_tree(send_dir)
     top isa String || return nothing
@@ -637,19 +662,7 @@ function _warn_ancestor_gitignore_shipped_inner!(send_dir::AbstractString, liste
         gi = joinpath(dir, ".gitignore")
         if isfile(gi) && !islink(gi)
             shown = replace(relpath(gi, send_c), '\\' => '/')
-            GitIgnore = _ship_gitignore_mod()
-            mktempdir() do tmp
-                write(joinpath(tmp, ".gitignore"), read(gi))
-                matcher = Base.invokelatest(GitIgnore.IgnoreMatcher, tmp; excludes = false)
-                for (rel, full) in files
-                    rel in seen && continue
-                    from_anc = replace(relpath(full, dir), '\\' => '/')
-                    Base.invokelatest(GitIgnore.isignored, matcher, from_anc, false) || continue
-                    push!(seen, rel)
-                    push!(hits, (rel, shown))
-                end
-                return nothing
-            end
+            _match_ancestor_gitignore!(hits, seen, files, gi, dir, shown)
         end
         _same_resolved_dir(dir, top_c) && break
         parent = dirname(dir)
