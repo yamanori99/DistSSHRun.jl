@@ -613,7 +613,7 @@ using Test
         end
     end
 
-    @testset "an ancestor-gitignored Manifest is refused" begin
+    @testset "an ancestor-gitignored Manifest still ships" begin
         if Sys.which("git") === nothing
             @test_skip "git is not on PATH"
         else
@@ -630,14 +630,57 @@ using Test
                     run(pipeline(`git -C $tmp add -A`; stdout = devnull, stderr = devnull))
                     run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
                 end
-                err = try
-                    DistSSHRun.pack_ship_tar(job)
-                    nothing
-                catch e
-                    e
+                text = mktemp() do _, io
+                    packed = redirect_stdout(io) do
+                        DistSSHRun.pack_ship_tar(job)
+                    end
+                    try
+                        dest = mktempdir()
+                        DistSSHRun.Tar.extract(packed.tar_path, dest)
+                        @test isfile(joinpath(dest, "Manifest.toml"))
+                    finally
+                        rm(packed.tmpd; force = true, recursive = true)
+                    end
+                    flush(io)
+                    seekstart(io)
+                    return read(io, String)
                 end
-                @test err isa ArgumentError
-                @test occursin("Manifest Manifest.toml matches a .gitignore above this directory", err.msg)
+                @test occursin("will be shipped", text)
+                @test occursin("Manifest.toml", text)
+            end
+        end
+    end
+
+    @testset "nested git does not apply parent gitignore" begin
+        if Sys.which("git") === nothing
+            @test_skip "git is not on PATH"
+        else
+            _with_tempdir() do tmp
+                write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+                write(joinpath(tmp, "Manifest.toml"), "# lock\n")
+                write(joinpath(tmp, ".gitignore"), "*.csv\n")
+                child = joinpath(tmp, "child-src")
+                mkpath(joinpath(child, "assets"))
+                write(joinpath(child, "inside.jl"), "i = 1\n")
+                write(joinpath(child, "assets", "table.csv"), "a,b\n")
+                withenv("GIT_DIR" => nothing, "GIT_WORK_TREE" => nothing, "GIT_INDEX_FILE" => nothing) do
+                    run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $tmp config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $tmp config user.name "Test"`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $child init -q`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $child config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $child config user.name "Test"`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $child add -A`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $child -c commit.gpgsign=false commit -q -m child`; stdout = devnull, stderr = devnull))
+                    sub = joinpath(tmp, "sub")
+                    run(pipeline(`git clone -q $child $sub`; stdout = devnull, stderr = devnull))
+                    sha = strip(read(`git -C $sub rev-parse HEAD`, String))
+                    run(pipeline(`git -C $tmp update-index --add --cacheinfo 160000,$sha,sub`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $tmp add -A`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m gitlink`; stdout = devnull, stderr = devnull))
+                end
+                listed = DistSSHRun._ship_gitignore_send_list(tmp)
+                @test "sub/assets/table.csv" in listed
             end
         end
     end

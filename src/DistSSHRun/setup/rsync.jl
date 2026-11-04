@@ -602,32 +602,15 @@ end
 Warn when files in `listed` match a `.gitignore` above `send_dir`.
 
 The walker does not apply that file, so those paths are shipped. A match in
-`send_dir`'s own `.gitignore` does not hide an ancestor match. The selected
-Manifest or project file is refused instead. Git `info/exclude` and
-`core.excludesFile` are not this warning. Failure of the probe does not
-refuse the ship.
+`send_dir`'s own `.gitignore` does not hide an ancestor match. Git
+`info/exclude` and `core.excludesFile` are not this warning. Failure of
+the probe does not refuse the ship.
 """
-function _warn_ancestor_gitignore_shipped!(
-        send_dir::AbstractString,
-        listed::Vector{String};
-        required::Vector{String} = String[],
-    )
+function _warn_ancestor_gitignore_shipped!(send_dir::AbstractString, listed::Vector{String})
     hits = try
         _ancestor_gitignore_ship_hits(send_dir, listed)
     catch
         return nothing
-    end
-    req = Set{String}(required)
-    for (rel, _) in hits
-        rel in req || continue
-        kind = let b = basename(rel)
-            (b == "Manifest.toml" || b == "JuliaManifest.toml") ? "Manifest" : "Project"
-        end
-        throw(
-            ArgumentError(
-                "$kind $rel matches a .gitignore above this directory. Stop ignoring it.",
-            ),
-        )
     end
     _print_ancestor_gitignore_shipped!(hits)
     return nothing

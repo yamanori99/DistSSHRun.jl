@@ -228,6 +228,91 @@ using Dates
                 @test r.ok
             end
         end
+        function _go_git_init!(dir)
+            withenv("GIT_DIR" => nothing, "GIT_WORK_TREE" => nothing, "GIT_INDEX_FILE" => nothing) do
+                run(pipeline(`git -C $dir init -q`; stdout = devnull, stderr = devnull))
+                run(pipeline(`git -C $dir config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
+                run(pipeline(`git -C $dir config user.name "Test"`; stdout = devnull, stderr = devnull))
+                run(pipeline(`git -C $dir add -A`; stdout = devnull, stderr = devnull))
+                run(pipeline(`git -C $dir -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
+            end
+            return nothing
+        end
+        function _go_ok(script, proj)
+            r = redirect_stdout(devnull) do
+                DistSSHRun.go!(script, ["parent:1"]; project = proj, quiet = true, yes = true)
+            end
+            @test r.ok
+            return nothing
+        end
+        @testset "gitignored Project.toml" begin
+            if Sys.which("git") === nothing
+                @test_skip "git is not on PATH"
+            else
+                _with_tempdir() do proj
+                    write(joinpath(proj, "Project.toml"), "name = \"GoIgn\"\n")
+                    write(joinpath(proj, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+                    write(joinpath(proj, ".gitignore"), "Project.toml\n")
+                    script = joinpath(proj, "job.jl")
+                    write(script, "true\n")
+                    _go_git_init!(proj)
+                    _go_ok(script, proj)
+                end
+            end
+        end
+        @testset "gitignored Manifest symlink hop" begin
+            if Sys.which("git") === nothing
+                @test_skip "git is not on PATH"
+            else
+                _with_tempdir() do proj
+                    write(joinpath(proj, "Project.toml"), "name = \"GoHop\"\n")
+                    write(joinpath(proj, "Manifest.lock"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+                    symlink("Manifest.lock", joinpath(proj, "Manifest.toml"))
+                    write(joinpath(proj, ".gitignore"), "Manifest.lock\n")
+                    script = joinpath(proj, "job.jl")
+                    write(script, "true\n")
+                    _go_git_init!(proj)
+                    _go_ok(script, proj)
+                end
+            end
+        end
+        @testset "gitignored sources symlink hop" begin
+            if Sys.which("git") === nothing
+                @test_skip "git is not on PATH"
+            else
+                _with_tempdir() do proj
+                    foo = joinpath(proj, "vendor", "Foo")
+                    mkpath(foo)
+                    write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
+                    mkpath(joinpath(proj, "dev"))
+                    symlink(joinpath("..", "vendor", "Foo"), joinpath(proj, "dev", "Foo"))
+                    write(
+                        joinpath(proj, "Project.toml"), """
+                        name = "GoSrc"
+                        [deps]
+                        Foo = "00000000-0000-0000-0000-000000000001"
+                        [sources]
+                        Foo = {path = "dev/Foo"}
+                        """
+                    )
+                    write(
+                        joinpath(proj, "Manifest.toml"), """
+                        julia_version = "1.13.0"
+                        manifest_format = "2.0"
+                        [[deps.Foo]]
+                        path = "dev/Foo"
+                        uuid = "00000000-0000-0000-0000-000000000001"
+                        version = "0.1.0"
+                        """
+                    )
+                    write(joinpath(proj, ".gitignore"), "vendor/\n")
+                    script = joinpath(proj, "job.jl")
+                    write(script, "true\n")
+                    _go_git_init!(proj)
+                    _go_ok(script, proj)
+                end
+            end
+        end
     end
 
     @testset "a project file with no Manifest is refused" begin

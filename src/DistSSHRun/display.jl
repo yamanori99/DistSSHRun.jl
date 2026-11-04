@@ -606,30 +606,6 @@ function _path_source_send_list_problems(
     return msgs
 end
 
-"""Send-list rels that must arrive: selected project files, Manifest, hops."""
-function _required_ship_rels(env)::Vector{String}
-    env_dir = canonical_local_path(env.env_dir)
-    out = String[]
-    for project_file in _pkg_env_project_files(env)
-        rel = _ship_list_rel(project_file, env_dir)
-        _rel_is_outside_tree(rel) && continue
-        push!(out, rel)
-    end
-    manifest = env.manifest
-    if manifest isa String
-        rel = _ship_list_rel(manifest, env_dir)
-        if !_rel_is_outside_tree(rel)
-            push!(out, rel)
-            for hop in _ship_symlink_hop_rels(manifest, env_dir)
-                hop == rel && continue
-                push!(out, hop)
-            end
-        end
-    end
-    unique!(out)
-    return out
-end
-
 """Problems when the selected project file is missing from the send list."""
 function _project_file_ship_problems(env, listed::Vector{String})::Vector{String}
     env_dir = canonical_local_path(env.env_dir)
@@ -857,8 +833,9 @@ A Manifest symlink whose target is left out, a `[sources]` or Manifest
 is not forced into the tar. Manifest deps without `path` are not checked
 here; a `url` source is fetched on the worker.
 `warn_send_list=false` is the `gitignore=false` send, which includes that file.
-`ship_tree=true` also checks Manifest `path` deps. `go!` and instantiate leave
-that off.
+`ship_tree=true` checks the send list for the selected project file, Manifest
+hops, `[sources]`, and Manifest `path` deps. `go!` and instantiate leave
+that off and still check selected `[sources]` locations only.
 """
 function ensure_manifest_ships!(
         project::AbstractString;
@@ -883,13 +860,13 @@ function ensure_manifest_ships!(
             "Manifest $manifest points at $target, outside the tree setup/rsync would send ($root). Workers would instantiate a different resolution.",
         ),
     )
-    if warn_send_list
+    if warn_send_list && ship_tree
         listed = send_list isa Vector{String} ? send_list : _rsync_send_list(env.env_dir, env)
         if listed isa Vector
             problems = vcat(
                 _project_file_ship_problems(env, listed),
                 _manifest_ship_problems(env, listed),
-                _path_source_send_list_problems(env, listed; ship_tree = ship_tree),
+                _path_source_send_list_problems(env, listed; ship_tree = true),
             )
             isempty(problems) || throw(ArgumentError(problems[1]))
         end
