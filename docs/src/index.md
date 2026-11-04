@@ -36,11 +36,19 @@ non-executable file arrives as mode `0644`, and an executable file as
 `push_cache!` still needs **`rsync`**. Ship uses stdlib Tar over SSH. Git
 deploys also need **`git`**.
 
-`setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` need a git
-work tree. Git decides what is sent
-(`git ls-files --cached --others --exclude-per-directory=.gitignore`;
-`.git/info/exclude` and `core.excludesFile` are not used). Preference files
-next to a shipped `Project.toml` are still added, and declared inputs are
+`setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` walk the
+ship root and apply each directory's `.gitignore` (case-sensitive).
+`.git/info/exclude`, `core.excludesFile`, and a `.gitignore` above the
+ship root are not used. No git binary is run. The ship root is the
+project directory that was passed, not a workspace Manifest directory above it.
+A Manifest or path dependency outside that directory is left out with a
+warning. A gitignored `Project.toml`,
+`JuliaProject.toml`, `Manifest.toml`, or `JuliaManifest.toml` is left out
+with one warning. A gitignored `LocalPreferences.toml` is left out too;
+add `!LocalPreferences.toml` to ship it. A file over 50 MiB, or a send list over
+100 MiB, prints a warning (`DISTSSHKIT_SHIP_WARN_FILE_BYTES`,
+`DISTSSHKIT_SHIP_WARN_TOTAL_BYTES`; an invalid value is an error). The 256 MiB
+cap still stops the ship. Declared inputs are
 left out. Extract is into `<remote_root>/runs/<run_id>/src/` (`run_id` is UTC
 plus 6 hex). The same leaf also gets an empty
 `<remote_root>/runs/<run_id>/out/`. A repeated host is refused. The

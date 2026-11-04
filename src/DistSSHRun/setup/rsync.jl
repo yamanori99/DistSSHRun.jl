@@ -793,15 +793,15 @@ end
 """
     rsync_send_list(local_root, env; warn=false) -> Union{Nothing, Vector{String}}
 
-Git send list for a work tree, relative to `local_root`. This is the rsync
-file list. `setup --ship-tree` starts from it and also sends
-`LocalPreferences.toml` and `JuliaLocalPreferences.toml` beside a shipped
-`Project.toml`, including when those files are gitignored.
+Git send list for a work tree, relative to `local_root`. `--clone`, `--sync`,
+and `--pull` still use this list. `setup --ship-tree` does not: it walks the
+ship root and applies each directory's `.gitignore` there and below.
+A gitignored preference file is not added back.
 
-Returns `nothing` outside a git work tree. The caller then uses rsync's
-per-directory `.gitignore` filter (dir-merge). An empty list throws
-`ArgumentError`. `warn=true` prints the ancestor-`.gitignore` warning once.
-The default does not print it, so a second call does not repeat the warning.
+Returns `nothing` outside a git work tree. An empty list throws
+`ArgumentError`. `warn=true` prints the ancestor-`.gitignore` warning once
+for this git list (files left out). The default does not print it, so a
+second call does not repeat the warning.
 
 A 0.x patch does not change the paths this function returns.
 """

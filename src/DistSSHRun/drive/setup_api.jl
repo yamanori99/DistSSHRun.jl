@@ -25,7 +25,7 @@ Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup --…`.
 | `mode` | CLI | Notes |
 | --- | --- | --- |
 | `:delete` | `--delete` | Destructive. Requires `confirm_path`. `session.yes` does not delete. Refuses a present unowned Ship `run.toml` |
-| `:ship_tree` | `--ship-tree` | Git work tree; Tar of `git ls-files --cached --others --exclude-per-directory=.gitignore` into `runs/<run_id>/src/`, empty `out/`, DistSSHRun stamp |
+| `:ship_tree` | `--ship-tree` | Walk the ship root and each directory's `.gitignore` (case-sensitive). No git binary. A gitignored project or Manifest file is omitted with one warning. `!LocalPreferences.toml` ships that file. Declared inputs do not. Tar into `runs/<run_id>/src/`, empty `out/`, DistSSHRun stamp |
 | `:clone` | `--clone` | Requires `repo=`; clone runs **on the remote** |
 | `:sync` | `--sync` | Push the local branch to origin, then detach each remote at that commit; confirm unless `session.yes`. A dirty tree is refused |
 | `:pull` | `--pull` | Detach each remote at the local commit. Does not push to origin and does not run `git pull`; confirm unless `session.yes`. A dirty tree is refused |

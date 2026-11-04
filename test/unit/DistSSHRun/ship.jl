@@ -174,111 +174,100 @@ end
     end
 end
 
-@testset "gitignored project preferences ship" begin
-    Sys.which("git") === nothing && return
+@testset "ship-tree size warnings" begin
     _with_tempdir() do tmp
-        run(`git -C $tmp init --quiet`)
-        run(`git -C $tmp config user.email t@t.t`)
-        run(`git -C $tmp config user.name t`)
+        write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
+        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        mkpath(joinpath(tmp, "data"))
+        write(joinpath(tmp, "data", "big.bin"), "abcdef")
+        write(joinpath(tmp, "a.jl"), "1\n")
+        text = mktemp() do _, io
+            packed = withenv(
+                "DISTSSHKIT_SHIP_WARN_FILE_BYTES" => "1",
+                "DISTSSHKIT_SHIP_WARN_TOTAL_BYTES" => "1",
+            ) do
+                redirect_stdout(io) do
+                    redirect_stderr(() -> DistSSHRun.pack_ship_tar(tmp), io)
+                end
+            end
+            try
+                @test isfile(packed.tar_path)
+            finally
+                rm(packed.tmpd; force = true, recursive = true)
+            end
+            flush(io)
+            seekstart(io)
+            return read(io, String)
+        end
+        @test occursin("data/big.bin", text)
+        @test occursin("send list is", text)
+        @test occursin("Largest directories", text)
+        @test occursin("data (", text)
+        err = try
+            withenv("DISTSSHKIT_SHIP_WARN_TOTAL_BYTES" => "nope") do
+                DistSSHRun.pack_ship_tar(tmp)
+            end
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("DISTSSHKIT_SHIP_WARN_TOTAL_BYTES", err.msg)
+        warned = mktemp() do _, io
+            thrown = redirect_stdout(io) do
+                try
+                    withenv("DISTSSHKIT_SHIP_WARN_TOTAL_BYTES" => "0") do
+                        DistSSHRun.pack_ship_tar(tmp; ship_max_bytes = 1)
+                    end
+                    nothing
+                catch e
+                    e
+                end
+            end
+            flush(io)
+            seekstart(io)
+            return thrown, read(io, String)
+        end
+        @test warned[1] isa ArgumentError
+        @test occursin("cap 1", warned[1].msg)
+        @test occursin("send list is", warned[2])
+    end
+end
+
+@testset "gitignored project preferences stay out of the ship" begin
+    _with_tempdir() do tmp
         write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\nJuliaLocalPreferences.toml\n")
         write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
         write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
         write(joinpath(tmp, "LocalPreferences.toml"), "[ShipT]\nx = 1\n")
         write(joinpath(tmp, "JuliaLocalPreferences.toml"), "[ShipT]\ny = 2\n")
-        run(`git -C $tmp add -A`)
-        run(`git -C $tmp commit --quiet -m init`)
-        listed = DistSSHRun.rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
-        @test listed isa Vector
-        @test "LocalPreferences.toml" ∉ listed
         packed = DistSSHRun.pack_ship_tar(tmp)
         try
             dest = mktempdir()
             DistSSHRun.Tar.extract(packed.tar_path, dest)
-            @test isfile(joinpath(dest, "LocalPreferences.toml"))
-            @test isfile(joinpath(dest, "JuliaLocalPreferences.toml"))
+            @test !isfile(joinpath(dest, "LocalPreferences.toml"))
+            @test !islink(joinpath(dest, "LocalPreferences.toml"))
+            @test !isfile(joinpath(dest, "JuliaLocalPreferences.toml"))
         finally
             rm(packed.tmpd; force = true, recursive = true)
         end
     end
 end
 
-@testset "symlinked project preference is refused" begin
-    Sys.which("git") === nothing && return
+@testset "a project preference symlink ships as a symlink" begin
     _with_tempdir() do tmp
-        run(`git -C $tmp init --quiet`)
-        run(`git -C $tmp config user.email t@t.t`)
-        run(`git -C $tmp config user.name t`)
         write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
         write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
         write(joinpath(tmp, "prefs.toml"), "[ShipT]\nx = 1\n")
         symlink("prefs.toml", joinpath(tmp, "LocalPreferences.toml"))
-        run(`git -C $tmp add -A`)
-        run(`git -C $tmp commit --quiet -m init`)
-        err = try
-            DistSSHRun.pack_ship_tar(tmp)
-            nothing
-        catch e
-            e
+        packed = DistSSHRun.pack_ship_tar(tmp)
+        try
+            dest = mktempdir()
+            DistSSHRun.Tar.extract(packed.tar_path, dest)
+            @test islink(joinpath(dest, "LocalPreferences.toml"))
+        finally
+            rm(packed.tmpd; force = true, recursive = true)
         end
-        @test err isa ArgumentError
-        @test occursin("symlinked project preference", err.msg)
-        @test occursin("LocalPreferences.toml", err.msg)
-    end
-    _with_tempdir() do tmp
-        run(`git -C $tmp init --quiet`)
-        run(`git -C $tmp config user.email t@t.t`)
-        run(`git -C $tmp config user.name t`)
-        write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
-        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
-        symlink("missing.toml", joinpath(tmp, "LocalPreferences.toml"))
-        run(`git -C $tmp add -A`)
-        run(`git -C $tmp commit --quiet -m init`)
-        err = try
-            DistSSHRun.pack_ship_tar(tmp)
-            nothing
-        catch e
-            e
-        end
-        @test err isa ArgumentError
-        @test occursin("LocalPreferences.toml", err.msg)
-    end
-    _with_tempdir() do tmp
-        run(`git -C $tmp init --quiet`)
-        run(`git -C $tmp config user.email t@t.t`)
-        run(`git -C $tmp config user.name t`)
-        write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
-        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
-        mkpath(joinpath(tmp, "prefsdir"))
-        symlink("prefsdir", joinpath(tmp, "JuliaLocalPreferences.toml"))
-        run(`git -C $tmp add -A`)
-        run(`git -C $tmp commit --quiet -m init`)
-        err = try
-            DistSSHRun.pack_ship_tar(tmp)
-            nothing
-        catch e
-            e
-        end
-        @test err isa ArgumentError
-        @test occursin("JuliaLocalPreferences.toml", err.msg)
-    end
-    _with_tempdir() do tmp
-        run(`git -C $tmp init --quiet`)
-        run(`git -C $tmp config user.email t@t.t`)
-        run(`git -C $tmp config user.name t`)
-        write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\n")
-        write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
-        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
-        symlink("missing.toml", joinpath(tmp, "LocalPreferences.toml"))
-        run(`git -C $tmp add -A`)
-        run(`git -C $tmp commit --quiet -m init`)
-        err = try
-            DistSSHRun.pack_ship_tar(tmp)
-            nothing
-        catch e
-            e
-        end
-        @test err isa ArgumentError
-        @test occursin("LocalPreferences.toml", err.msg)
     end
 end
 

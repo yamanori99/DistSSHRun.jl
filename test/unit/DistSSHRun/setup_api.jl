@@ -420,25 +420,21 @@ using Test
         end
     end
 
-    @testset "multi-mode ship-tree needs a git work tree" begin
-        _with_fake_remotes() do state_dir
-            _with_tempdir() do proj
-                write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
-                write(joinpath(proj, "Manifest.toml"), "# lock\n")
-                host = "host1"
-                slot = replace(host, r"[@:/]" => "_")
-                tree = joinpath(state_dir, slot, "tree")
-                mkpath(tree)
-                touch(joinpath(tree, "keepme.txt"))
-                session = DistSSHRun.KitSession(
-                    project = proj,
-                    workers = ["child:$host"],
-                    remote = "~/App.jl",
-                    yes = true,
-                    quiet = true,
-                )
-                @test_throws ArgumentError DistSSHRun.setup!(session, :ship_tree, :instantiate)
-                @test isfile(joinpath(tree, "keepme.txt"))
+    @testset "multi-mode ship-tree without a git work tree" begin
+        _with_tempdir() do proj
+            write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
+            write(joinpath(proj, "Manifest.toml"), "# lock\n")
+            write(joinpath(proj, "a.jl"), "1\n")
+            listed = DistSSHRun._ship_gitignore_send_list(proj)
+            @test "Project.toml" in listed
+            @test "a.jl" in listed
+            packed = DistSSHRun.pack_ship_tar(proj)
+            try
+                dest = mktempdir()
+                DistSSHRun.Tar.extract(packed.tar_path, dest)
+                @test isfile(joinpath(dest, "a.jl"))
+            finally
+                rm(packed.tmpd; force = true, recursive = true)
             end
         end
     end

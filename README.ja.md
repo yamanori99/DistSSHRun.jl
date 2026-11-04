@@ -33,9 +33,18 @@ SSH 上の stdlib Tar で、元の mtime は残らない。pull-back は展開�
 実行可能でないファイルはモード`0644`、実行可能なファイルは`0755`になる。
 `push_cache!` には **`rsync`** が要る。ship は SSH 上の stdlib Tar を使う。
 git で配るときは **`git`** も要る。`setup --ship-tree`、`go --ship-tree`、
-`drive --ship-tree` には git work tree が要る。送る中身は git が決める
-（`git ls-files --cached --others --exclude-per-directory=.gitignore`。
-`.git/info/exclude` と `core.excludesFile` は使わない）。展開先は
+`drive --ship-tree` は ship の根を歩き、各ディレクトリの `.gitignore`
+を適用する（大文字小文字を区別する）。`.git/info/exclude`、
+`core.excludesFile`、根より上の `.gitignore` は使わない。git は起動しない。
+送る根は渡したプロジェクトのディレクトリであり、その上の workspace の
+Manifest ディレクトリには広げない。根の外の Manifest と path 依存は載せず、警告する。
+gitignore された `Project.toml`、`JuliaProject.toml`、`Manifest.toml`、
+`JuliaManifest.toml` は載せず、警告を 1 行出す。gitignore された
+`LocalPreferences.toml` も載らない。載せるには `!LocalPreferences.toml` を書く。
+1 ファイルが 50 MiB を超える、または送る合計が 100 MiB を超えると警告する
+（`DISTSSHKIT_SHIP_WARN_FILE_BYTES`、`DISTSSHKIT_SHIP_WARN_TOTAL_BYTES`。不正な値はエラー）。
+256 MiB の上限は従来どおり失敗する。
+宣言した入力は載らない。展開先は
 `<remote_root>/runs/<run_id>/src/` で、横に空の `out/` と DistSSHRun の短い
 `run.toml` stamp を置く。リモート根は先に存在しなければならない
 （`setup --remote-root`）。`--rsync` は 0.2.0 で削除した。`setup --delete` と `--prune` は `--confirm-path` が要る。`-y` では

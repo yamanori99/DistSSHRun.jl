@@ -183,13 +183,13 @@ function manifest_link_target(manifest::AbstractString)::String
     return canonical_local_path(realpath(path))
 end
 
-"""Project.toml files whose `[sources]` paths must ride along with `env`."""
+"""Project files whose `[sources]` paths must ride along with `env`."""
 function _pkg_env_project_files(env)::Vector{String}
     files = String[]
-    member = canonical_local_path(joinpath(env.project_dir, "Project.toml"))
-    isfile(member) && push!(files, member)
-    root = canonical_local_path(joinpath(env.env_dir, "Project.toml"))
-    if isfile(root) && root != member
+    member = _located_project_file(env.project_dir)
+    member isa String && push!(files, member)
+    root = _located_project_file(env.env_dir)
+    if root isa String && root != member
         push!(files, root)
     end
     return files
@@ -237,70 +237,86 @@ working-tree link currently points inside. A `url` source is fetched on
 the worker and is not checked. A symlink whose target leaves `root` is
 the same failure as a path that starts outside it.
 """
-function _ensure_path_sources_in_tree!(env, root::AbstractString; git::Bool)
+function _ensure_one_path_dep!(
+        name::AbstractString,
+        raw::AbstractString,
+        declared_file::AbstractString,
+        root_c::AbstractString,
+        root_real::AbstractString;
+        git::Bool,
+    )
+    if isabspath(expanduser(raw))
+        throw(
+            ArgumentError(
+                "Source path $raw for $name is absolute. Workers resolve it on their own filesystem, so it would not be the staged tree.",
+            ),
+        )
+    end
+    location = _resolved_source_path(declared_file, raw)
+    if git
+        _path_under_resolved(location, root_c) || throw(
+            ArgumentError(
+                "Source path $location for $name is outside the git work tree ($root_c). The path would not reach a clone or git sync.",
+            ),
+        )
+    else
+        _path_is_under(location, root_c) || throw(
+            ArgumentError(
+                "Source path $location for $name is outside the tree setup/rsync would send ($root_c). Workers would not see this path.",
+            ),
+        )
+    end
+    if !git && islink(location)
+        link_text = String(readlink(location))
+        if isabspath(expanduser(link_text))
+            throw(
+                ArgumentError(
+                    "Source path $location for $name is a symlink to $link_text. rsync keeps that absolute target, so workers would not see the staged tree.",
+                ),
+            )
+        end
+    end
+    ispath(location) || throw(
+        ArgumentError(
+            "Source path $location for $name does not exist. Workers would not see this path.",
+        ),
+    )
+    target = canonical_local_path(realpath(location))
+    inside = if git
+        _path_under_resolved(target, root_real)
+    else
+        _path_is_under(target, root_real)
+    end
+    inside || throw(
+        ArgumentError(
+            if git
+                "Source path $location for $name points at $target, outside the git work tree ($root_real). The path would not reach a clone or git sync."
+            else
+                "Source path $location for $name points at $target, outside the tree setup/rsync would send ($root_real). Workers would not see this path."
+            end,
+        ),
+    )
+    isdir(location) || throw(
+        ArgumentError(
+            "Source path $location for $name is not a directory. Workers would not see this path.",
+        ),
+    )
+    git || return nothing
+    _ensure_git_head_source!(root_c, location, name)
+    _ensure_path_source_git_files!(root_c, location, name)
+    return nothing
+end
+
+function _ensure_path_sources_in_tree!(
+        env,
+        root::AbstractString;
+        git::Bool,
+    )
     root_c = canonical_local_path(root)
     root_real = ispath(root_c) ? canonical_local_path(realpath(root_c)) : root_c
     for project_file in _pkg_env_project_files(env)
         for (name, raw) in _project_path_sources(project_file)
-            if isabspath(expanduser(raw))
-                throw(
-                    ArgumentError(
-                        "Source path $raw for $name is absolute. Workers resolve it on their own filesystem, so it would not be the staged tree.",
-                    ),
-                )
-            end
-            location = _resolved_source_path(project_file, raw)
-            if git
-                _path_under_resolved(location, root_c) || throw(
-                    ArgumentError(
-                        "Source path $location for $name is outside the git work tree ($root_c). The path would not reach a clone or git sync.",
-                    ),
-                )
-            else
-                _path_is_under(location, root_c) || throw(
-                    ArgumentError(
-                        "Source path $location for $name is outside the tree setup/rsync would send ($root_c). Workers would not see this path.",
-                    ),
-                )
-            end
-            if !git && islink(location)
-                link_text = String(readlink(location))
-                if isabspath(expanduser(link_text))
-                    throw(
-                        ArgumentError(
-                            "Source path $location for $name is a symlink to $link_text. rsync keeps that absolute target, so workers would not see the staged tree.",
-                        ),
-                    )
-                end
-            end
-            ispath(location) || throw(
-                ArgumentError(
-                    "Source path $location for $name does not exist. Workers would not see this path.",
-                ),
-            )
-            target = canonical_local_path(realpath(location))
-            inside = if git
-                _path_under_resolved(target, root_real)
-            else
-                _path_is_under(target, root_real)
-            end
-            inside || throw(
-                ArgumentError(
-                    if git
-                        "Source path $location for $name points at $target, outside the git work tree ($root_real). The path would not reach a clone or git sync."
-                    else
-                        "Source path $location for $name points at $target, outside the tree setup/rsync would send ($root_real). Workers would not see this path."
-                    end,
-                ),
-            )
-            isdir(location) || throw(
-                ArgumentError(
-                    "Source path $location for $name is not a directory. Workers would not see this path.",
-                ),
-            )
-            git || continue
-            _ensure_git_head_source!(root_c, location, name)
-            _ensure_path_source_git_files!(root_c, location, name)
+            _ensure_one_path_dep!(name, raw, project_file, root_c, root_real; git = git)
         end
     end
     return nothing
