@@ -32,7 +32,7 @@ using Test
         @test !occursin("ancestor", text)
         @test occursin("Pull-back touches extracted files", text)
         @test occursin("Ship keeps extract-time mtime", text)
-        @test occursin("push_cache! still needs rsync", text)
+        @test occursin("push_cache! uses Tar and a remote Julia", text)
         @test occursin("control character", text)
         @test !occursin("fish is refused", text)
     end
