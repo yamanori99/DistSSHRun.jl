@@ -598,102 +598,7 @@ function _warn_ancestor_gitignore!(send_dir::AbstractString, listed::Vector{Stri
     return nothing
 end
 
-"""
-Warn when files in `listed` match a `.gitignore` above `send_dir`.
 
-The walker does not apply that file, so those paths are shipped. A match in
-`send_dir`'s own `.gitignore` does not hide an ancestor match. Git
-`info/exclude` and `core.excludesFile` are not this warning. Failure of
-the probe does not refuse the ship.
-"""
-function _warn_ancestor_gitignore_shipped!(send_dir::AbstractString, listed::Vector{String})
-    hits = try
-        _ancestor_gitignore_ship_hits(send_dir, listed)
-    catch
-        return nothing
-    end
-    _print_ancestor_gitignore_shipped!(hits)
-    return nothing
-end
-
-function _match_ancestor_gitignore!(
-        hits::Vector{Tuple{String, String}},
-        seen::Set{String},
-        files::Vector{Tuple{String, String}},
-        gi::AbstractString,
-        anc::AbstractString,
-        shown::AbstractString,
-    )
-    GitIgnore = _ship_gitignore_mod()
-    body = read(gi)
-    mktempdir() do tmp
-        write(joinpath(tmp, ".gitignore"), body)
-        matcher = Base.invokelatest(GitIgnore.IgnoreMatcher, tmp; excludes = false)
-        for (rel, full) in files
-            rel in seen && continue
-            from_anc = replace(relpath(full, anc), '\\' => '/')
-            Base.invokelatest(GitIgnore.isignored, matcher, from_anc, false) || continue
-            push!(seen, rel)
-            push!(hits, (rel, shown))
-        end
-        return nothing
-    end
-    return nothing
-end
-
-function _ancestor_gitignore_ship_hits(
-        send_dir::AbstractString,
-        listed::Vector{String},
-    )::Vector{Tuple{String, String}}
-    top = git_work_tree(send_dir)
-    empty = Tuple{String, String}[]
-    top isa String || return empty
-    _same_resolved_dir(top, send_dir) && return empty
-    send_c = canonical_local_path(send_dir)
-    top_c = canonical_local_path(top)
-    files = Tuple{String, String}[]
-    for rel in listed
-        r = replace(String(rel), '\\' => '/')
-        isempty(r) && continue
-        full = joinpath(send_c, r)
-        (isfile(full) || islink(full)) || continue
-        push!(files, (r, full))
-    end
-    isempty(files) && return empty
-    hits = Tuple{String, String}[]
-    seen = Set{String}()
-    dir = dirname(send_c)
-    while true
-        gi = joinpath(dir, ".gitignore")
-        if isfile(gi) && !islink(gi)
-            shown = replace(relpath(gi, send_c), '\\' => '/')
-            _match_ancestor_gitignore!(hits, seen, files, gi, dir, shown)
-        end
-        _same_resolved_dir(dir, top_c) && break
-        parent = dirname(dir)
-        parent == dir && break
-        _path_under_resolved(parent, top_c) || _same_resolved_dir(parent, top_c) || break
-        dir = parent
-    end
-    return hits
-end
-
-function _print_ancestor_gitignore_shipped!(hits::Vector{Tuple{String, String}})
-    isempty(hits) && return nothing
-    n = length(hits)
-    show_n = min(3, n)
-    buf = IOBuffer()
-    noun = n == 1 ? "file" : "files"
-    println(buf, "Warning: $n $noun match a .gitignore above this directory and will be shipped.")
-    for i in 1:show_n
-        path, source = hits[i]
-        println(buf, "  $path ($source)")
-    end
-    extra = n - show_n
-    extra > 0 && println(buf, "  and $extra more.")
-    print_warn(String(take!(buf)))
-    return nothing
-end
 
 function _push_send_rel!(out::Vector{String}, prefix::AbstractString, rel::AbstractString)
     listed = _join_send_rel(prefix, rel)
@@ -892,9 +797,8 @@ end
 
 Git send list for a work tree, relative to `local_root`. `--clone`, `--sync`,
 and `--pull` still use this list. `setup --ship-tree` does not: it walks the
-project and each directory's `.gitignore`, then adds `LocalPreferences.toml`
-and `JuliaLocalPreferences.toml` beside a shipped `Project.toml` or
-`JuliaProject.toml`, including when those files are gitignored.
+ship root and applies each directory's `.gitignore` there and below.
+A gitignored preference file is not added back.
 
 Returns `nothing` outside a git work tree. An empty list throws
 `ArgumentError`. `warn=true` prints the ancestor-`.gitignore` warning once

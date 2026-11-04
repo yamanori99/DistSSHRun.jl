@@ -155,7 +155,8 @@ using Test
         end
     end
 
-    @testset "a gitignored path source is refused" begin
+
+    @testset "a gitignored path source is left out" begin
         _with_tempdir() do tmp
             foo = joinpath(tmp, "vendor", "Foo")
             mkpath(joinpath(foo, "src"))
@@ -170,69 +171,24 @@ using Test
             write(joinpath(tmp, ".gitignore"), "vendor/\n")
             write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
             write(joinpath(foo, "src", "Foo.jl"), "module Foo end\n")
-            err = try
-                DistSSHRun.pack_ship_tar(tmp)
-                nothing
-            catch e
-                e
+            text = mktemp() do _, io
+                packed = redirect_stdout(io) do
+                    DistSSHRun.pack_ship_tar(tmp)
+                end
+                try
+                    dest = mktempdir()
+                    DistSSHRun.Tar.extract(packed.tar_path, dest)
+                    @test !isdir(joinpath(dest, "vendor"))
+                    @test isfile(joinpath(dest, "Project.toml"))
+                finally
+                    rm(packed.tmpd; force = true, recursive = true)
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
             end
-            @test err isa ArgumentError
-            @test occursin("Source path vendor/Foo for Foo is not in the rsync send list", err.msg)
-        end
-    end
-
-    @testset "a gitignored path-source Project.toml is refused" begin
-        _with_tempdir() do tmp
-            foo = joinpath(tmp, "vendor", "Foo")
-            mkpath(joinpath(foo, "src"))
-            write(
-                joinpath(tmp, "Project.toml"), """
-                name = "App"
-                [sources]
-                Foo = {path = "vendor/Foo"}
-                """
-            )
-            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
-            write(joinpath(tmp, ".gitignore"), "vendor/Foo/Project.toml\n")
-            write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
-            write(joinpath(foo, "src", "Foo.jl"), "module Foo end\n")
-            err = try
-                DistSSHRun.pack_ship_tar(tmp)
-                nothing
-            catch e
-                e
-            end
-            @test err isa ArgumentError
-            @test occursin("Source path vendor/Foo/Project.toml for Foo is not in the rsync send list", err.msg)
-        end
-    end
-
-    @testset "a gitignored Manifest path dep is refused" begin
-        _with_tempdir() do tmp
-            foo = joinpath(tmp, "vendor", "Foo")
-            mkpath(joinpath(foo, "src"))
-            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
-            write(
-                joinpath(tmp, "Manifest.toml"), """
-                julia_version = "1.13.0"
-                manifest_format = "2.0"
-                [[deps.Foo]]
-                path = "vendor/Foo"
-                uuid = "00000000-0000-0000-0000-000000000001"
-                version = "0.1.0"
-                """
-            )
-            write(joinpath(tmp, ".gitignore"), "vendor/\n")
-            write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
-            write(joinpath(foo, "src", "Foo.jl"), "module Foo end\n")
-            err = try
-                DistSSHRun.pack_ship_tar(tmp)
-                nothing
-            catch e
-                e
-            end
-            @test err isa ArgumentError
-            @test occursin("Source path vendor/Foo for Foo is not in the rsync send list", err.msg)
+            @test occursin("vendor/Foo/Project.toml", text)
+            @test occursin("will not be shipped", text)
         end
     end
 
@@ -262,102 +218,31 @@ using Test
         end
     end
 
-    @testset "a Manifest path of the env root is the clone itself" begin
-        if Sys.which("git") === nothing
-            @test_skip "git is not on PATH"
-        else
-            _with_tempdir() do tmp
-                write(joinpath(tmp, "Project.toml"), "name = \"App\"\nuuid = \"aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee\"\n")
-                write(
-                    joinpath(tmp, "Manifest.toml"), """
-                    julia_version = "1.13.0"
-                    manifest_format = "2.0"
-                    [[deps.App]]
-                    path = "."
-                    uuid = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
-                    version = "0.0.1"
-                    """
-                )
-                run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
-                run(pipeline(`git -C $tmp config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
-                run(pipeline(`git -C $tmp config user.name "Test"`; stdout = devnull, stderr = devnull))
-                run(pipeline(`git -C $tmp add Project.toml Manifest.toml`; stdout = devnull, stderr = devnull))
-                run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
-                @test DistSSHRun.ensure_manifest_in_git_worktree!(tmp) === nothing
-                packed = DistSSHRun.pack_ship_tar(tmp)
-                try
-                    dest = mktempdir()
-                    DistSSHRun.Tar.extract(packed.tar_path, dest)
-                    @test isfile(joinpath(dest, "Project.toml"))
-                finally
-                    rm(packed.tmpd; force = true, recursive = true)
-                end
-            end
-        end
-    end
-
-    @testset "a format-1 Manifest path dep is refused" begin
-        _with_tempdir() do tmp
-            foo = joinpath(tmp, "vendor", "Foo")
-            mkpath(joinpath(foo, "src"))
-            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
-            write(
-                joinpath(tmp, "Manifest.toml"), """
-                [[Foo]]
-                path = "vendor/Foo"
-                uuid = "00000000-0000-0000-0000-000000000001"
-                version = "0.1.0"
-                [deps]
-                Foo = "00000000-0000-0000-0000-000000000001"
-                """
-            )
-            write(joinpath(tmp, ".gitignore"), "vendor/\n")
-            write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
-            write(joinpath(foo, "src", "Foo.jl"), "module Foo end\n")
-            err = try
-                DistSSHRun.pack_ship_tar(tmp)
-                nothing
-            catch e
-                e
-            end
-            @test err isa ArgumentError
-            @test occursin("Source path vendor/Foo for Foo is not in the rsync send list", err.msg)
-        end
-    end
-
-    @testset "a gitignored selected Project.toml is refused" begin
+    @testset "a gitignored selected Project.toml warns and the rest ships" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
             write(joinpath(tmp, "Manifest.toml"), "# lock\n")
             write(joinpath(tmp, "a.jl"), "1\n")
             write(joinpath(tmp, ".gitignore"), "Project.toml\n")
-            err = try
-                DistSSHRun.pack_ship_tar(tmp)
-                nothing
-            catch e
-                e
+            text = mktemp() do _, io
+                packed = redirect_stdout(io) do
+                    DistSSHRun.pack_ship_tar(tmp)
+                end
+                try
+                    dest = mktempdir()
+                    DistSSHRun.Tar.extract(packed.tar_path, dest)
+                    @test !isfile(joinpath(dest, "Project.toml"))
+                    @test isfile(joinpath(dest, "a.jl"))
+                    @test isfile(joinpath(dest, "Manifest.toml"))
+                finally
+                    rm(packed.tmpd; force = true, recursive = true)
+                end
+                flush(io)
+                seekstart(io)
+                return read(io, String)
             end
-            @test err isa ArgumentError
-            @test occursin("Project Project.toml is not in the rsync send list", err.msg)
-        end
-    end
-
-    @testset "a gitignored Manifest symlink target is refused" begin
-        _with_tempdir() do tmp
-            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
-            mkpath(joinpath(tmp, "hidden"))
-            write(joinpath(tmp, "hidden", "Manifest.toml"), "# lock\n")
-            symlink(joinpath("hidden", "Manifest.toml"), joinpath(tmp, "Manifest.toml"))
-            write(joinpath(tmp, ".gitignore"), "hidden/\n")
-            err = try
-                DistSSHRun.pack_ship_tar(tmp)
-                nothing
-            catch e
-                e
-            end
-            @test err isa ArgumentError
-            @test occursin("points at hidden/Manifest.toml", err.msg)
-            @test occursin("not in the rsync send list", err.msg)
+            @test occursin("Project.toml", text)
+            @test occursin("will not be shipped", text)
         end
     end
 
@@ -392,81 +277,6 @@ using Test
         end
     end
 
-    @testset "a gitignored ..vendor path source is refused" begin
-        _with_tempdir() do tmp
-            foo = joinpath(tmp, "..vendor", "Foo")
-            mkpath(joinpath(foo, "src"))
-            write(
-                joinpath(tmp, "Project.toml"), """
-                name = "App"
-                [sources]
-                Foo = {path = "..vendor/Foo"}
-                """
-            )
-            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
-            write(joinpath(tmp, ".gitignore"), "..vendor/\n")
-            write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
-            write(joinpath(foo, "src", "Foo.jl"), "module Foo end\n")
-            err = try
-                DistSSHRun.pack_ship_tar(tmp)
-                nothing
-            catch e
-                e
-            end
-            @test err isa ArgumentError
-            @test occursin("Source path ..vendor/Foo for Foo is not in the rsync send list", err.msg)
-        end
-    end
-
-    @testset "an intermediate Manifest symlink must be listed" begin
-        _with_tempdir() do tmp
-            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
-            mkpath(joinpath(tmp, "hidden"))
-            mkpath(joinpath(tmp, "visible"))
-            write(joinpath(tmp, "visible", "Manifest.toml"), "# lock\n")
-            symlink(joinpath("..", "visible", "Manifest.toml"), joinpath(tmp, "hidden", "mid"))
-            symlink(joinpath("hidden", "mid"), joinpath(tmp, "Manifest.toml"))
-            write(joinpath(tmp, ".gitignore"), "hidden/\n")
-            err = try
-                DistSSHRun.pack_ship_tar(tmp)
-                nothing
-            catch e
-                e
-            end
-            @test err isa ArgumentError
-            @test occursin("points at hidden/mid", err.msg)
-            @test occursin("not in the rsync send list", err.msg)
-        end
-    end
-
-    @testset "a path-source symlink to a gitignored target is refused" begin
-        _with_tempdir() do tmp
-            real = joinpath(tmp, "vendor", "real")
-            mkpath(joinpath(real, "src"))
-            write(joinpath(real, "Project.toml"), "name = \"Foo\"\n")
-            write(joinpath(real, "src", "Foo.jl"), "module Foo end\n")
-            mkpath(joinpath(tmp, "vendor"))
-            symlink("real", joinpath(tmp, "vendor", "Foo"))
-            write(
-                joinpath(tmp, "Project.toml"), """
-                name = "App"
-                [sources]
-                Foo = {path = "vendor/Foo"}
-                """
-            )
-            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
-            write(joinpath(tmp, ".gitignore"), "vendor/real/\n")
-            err = try
-                DistSSHRun.pack_ship_tar(tmp)
-                nothing
-            catch e
-                e
-            end
-            @test err isa ArgumentError
-            @test occursin("Source path vendor/Foo for Foo is not in the rsync send list", err.msg)
-        end
-    end
-
     @testset "a path source under a directory symlink uses the target" begin
         _with_tempdir() do tmp
             real = joinpath(tmp, "vendor", "real", "Foo")
@@ -495,11 +305,29 @@ using Test
         end
     end
 
-    @testset "gitignored project preferences still ship" begin
+    @testset "gitignored project preferences stay out" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\n")
             write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
             write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+            write(joinpath(tmp, "LocalPreferences.toml"), "[ShipT]\nx = 1\n")
+            packed = DistSSHRun.pack_ship_tar(tmp)
+            try
+                dest = mktempdir()
+                DistSSHRun.Tar.extract(packed.tar_path, dest)
+                @test !isfile(joinpath(dest, "LocalPreferences.toml"))
+                @test isfile(joinpath(dest, "Project.toml"))
+            finally
+                rm(packed.tmpd; force = true, recursive = true)
+            end
+        end
+    end
+
+    @testset "a negation pattern ships LocalPreferences.toml" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\n!LocalPreferences.toml\n")
+            write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
+            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
             write(joinpath(tmp, "LocalPreferences.toml"), "[ShipT]\nx = 1\n")
             packed = DistSSHRun.pack_ship_tar(tmp)
             try
@@ -531,161 +359,24 @@ using Test
         end
     end
 
-    @testset "a Manifest path outside the git tree is a ship-tree check" begin
+    @testset "nested git still applies the parent gitignore" begin
         _with_tempdir() do tmp
-            app = joinpath(tmp, "app")
-            bar = joinpath(tmp, "shared", "Bar")
-            mkpath(app)
-            mkpath(joinpath(bar, "src"))
-            write(joinpath(app, "Project.toml"), "name = \"App\"\n")
-            write(
-                joinpath(app, "Manifest.toml"), """
-                julia_version = "1.13.0"
-                manifest_format = "2.0"
-                [[deps.Bar]]
-                path = "../shared/Bar"
-                uuid = "00000000-0000-0000-0000-000000000001"
-                version = "0.1.0"
-                """
-            )
-            write(joinpath(bar, "Project.toml"), "name = \"Bar\"\n")
-            write(joinpath(bar, "src", "Bar.jl"), "module Bar end\n")
-            if Sys.which("git") !== nothing
-                withenv("GIT_DIR" => nothing, "GIT_WORK_TREE" => nothing, "GIT_INDEX_FILE" => nothing) do
-                    run(pipeline(`git -C $app init -q`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $app config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $app config user.name "Test"`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $app add Project.toml Manifest.toml`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $app -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
-                    @test DistSSHRun.ensure_manifest_in_git_worktree!(app) === nothing
-                end
-            end
-            err = try
-                DistSSHRun.pack_ship_tar(app)
-                nothing
-            catch e
-                e
-            end
-            @test err isa ArgumentError
-            @test occursin("Source path", err.msg)
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
+            write(joinpath(tmp, ".gitignore"), "*.csv\n")
+            sub = joinpath(tmp, "sub", "assets")
+            mkpath(sub)
+            write(joinpath(tmp, "sub", "inside.jl"), "i = 1\n")
+            write(joinpath(sub, "table.csv"), "a,b\n")
+            mkpath(joinpath(tmp, "sub", ".git"))
+            write(joinpath(tmp, "sub", ".git", "HEAD"), "ref: refs/heads/main\n")
+            listed = DistSSHRun._ship_gitignore_send_list(tmp)
+            @test "sub/inside.jl" in listed
+            @test !("sub/assets/table.csv" in listed)
         end
     end
 
-    @testset "ancestor gitignore files are shipped with a warning" begin
-        if Sys.which("git") === nothing
-            @test_skip "git is not on PATH"
-        else
-            _with_tempdir() do tmp
-                write(joinpath(tmp, ".gitignore"), "*.pem\n.env\n")
-                job = joinpath(tmp, "job")
-                mkpath(job)
-                write(joinpath(job, "Project.toml"), "name = \"App\"\n")
-                write(joinpath(job, "Manifest.toml"), "# lock\n")
-                write(joinpath(job, ".gitignore"), "!key.pem\n")
-                write(joinpath(job, "key.pem"), "secret\n")
-                write(joinpath(job, ".env"), "TOKEN=1\n")
-                withenv("GIT_DIR" => nothing, "GIT_WORK_TREE" => nothing, "GIT_INDEX_FILE" => nothing) do
-                    run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $tmp config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $tmp config user.name "Test"`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $tmp add -A`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
-                end
-                text = mktemp() do _, io
-                    packed = redirect_stdout(io) do
-                        DistSSHRun.pack_ship_tar(job)
-                    end
-                    try
-                        dest = mktempdir()
-                        DistSSHRun.Tar.extract(packed.tar_path, dest)
-                        @test isfile(joinpath(dest, "key.pem"))
-                        @test isfile(joinpath(dest, ".env"))
-                    finally
-                        rm(packed.tmpd; force = true, recursive = true)
-                    end
-                    flush(io)
-                    seekstart(io)
-                    return read(io, String)
-                end
-                @test occursin("will be shipped", text)
-                @test occursin("key.pem", text) || occursin(".env", text)
-            end
-        end
-    end
-
-    @testset "an ancestor-gitignored Manifest still ships" begin
-        if Sys.which("git") === nothing
-            @test_skip "git is not on PATH"
-        else
-            _with_tempdir() do tmp
-                write(joinpath(tmp, ".gitignore"), "Manifest.toml\n")
-                job = joinpath(tmp, "job")
-                mkpath(job)
-                write(joinpath(job, "Project.toml"), "name = \"App\"\n")
-                write(joinpath(job, "Manifest.toml"), "# lock\n")
-                withenv("GIT_DIR" => nothing, "GIT_WORK_TREE" => nothing, "GIT_INDEX_FILE" => nothing) do
-                    run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $tmp config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $tmp config user.name "Test"`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $tmp add -A`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
-                end
-                text = mktemp() do _, io
-                    packed = redirect_stdout(io) do
-                        DistSSHRun.pack_ship_tar(job)
-                    end
-                    try
-                        dest = mktempdir()
-                        DistSSHRun.Tar.extract(packed.tar_path, dest)
-                        @test isfile(joinpath(dest, "Manifest.toml"))
-                    finally
-                        rm(packed.tmpd; force = true, recursive = true)
-                    end
-                    flush(io)
-                    seekstart(io)
-                    return read(io, String)
-                end
-                @test occursin("will be shipped", text)
-                @test occursin("Manifest.toml", text)
-            end
-        end
-    end
-
-    @testset "nested git does not apply parent gitignore" begin
-        if Sys.which("git") === nothing
-            @test_skip "git is not on PATH"
-        else
-            _with_tempdir() do tmp
-                write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
-                write(joinpath(tmp, "Manifest.toml"), "# lock\n")
-                write(joinpath(tmp, ".gitignore"), "*.csv\n")
-                child = joinpath(tmp, "child-src")
-                mkpath(joinpath(child, "assets"))
-                write(joinpath(child, "inside.jl"), "i = 1\n")
-                write(joinpath(child, "assets", "table.csv"), "a,b\n")
-                withenv("GIT_DIR" => nothing, "GIT_WORK_TREE" => nothing, "GIT_INDEX_FILE" => nothing) do
-                    run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $tmp config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $tmp config user.name "Test"`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $child init -q`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $child config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $child config user.name "Test"`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $child add -A`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $child -c commit.gpgsign=false commit -q -m child`; stdout = devnull, stderr = devnull))
-                    sub = joinpath(tmp, "sub")
-                    run(pipeline(`git clone -q $child $sub`; stdout = devnull, stderr = devnull))
-                    sha = strip(read(`git -C $sub rev-parse HEAD`, String))
-                    run(pipeline(`git -C $tmp update-index --add --cacheinfo 160000,$sha,sub`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $tmp add -A`; stdout = devnull, stderr = devnull))
-                    run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m gitlink`; stdout = devnull, stderr = devnull))
-                end
-                listed = DistSSHRun._ship_gitignore_send_list(tmp)
-                @test "sub/assets/table.csv" in listed
-            end
-        end
-    end
-
-    @testset "gitignored preferences beside JuliaProject.toml still ship" begin
+    @testset "gitignored preferences beside JuliaProject.toml stay out" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\n")
             write(joinpath(tmp, "JuliaProject.toml"), "name = \"ShipT\"\n")
@@ -695,7 +386,8 @@ using Test
             try
                 dest = mktempdir()
                 DistSSHRun.Tar.extract(packed.tar_path, dest)
-                @test isfile(joinpath(dest, "LocalPreferences.toml"))
+                @test !isfile(joinpath(dest, "LocalPreferences.toml"))
+                @test isfile(joinpath(dest, "JuliaProject.toml"))
             finally
                 rm(packed.tmpd; force = true, recursive = true)
             end

@@ -16,7 +16,9 @@ struct ShipTreeResult
     algorithm::String
     bytes::Int
     files::Int
-    tree_matches_head::Bool
+    # `nothing`: `--ship-tree` does not compare the tar to a git tree.
+    # Schema 1 `run.toml` does not carry this field.
+    tree_matches_head::Union{Nothing, Bool}
     external_symlinks_allowed::Bool
     host_results::Vector{HostResult}
     cancelled::Bool
@@ -62,13 +64,49 @@ function _ship_unshippable(path::AbstractString)::Bool
     return true
 end
 
-function _ship_rel_paths(local_root::AbstractString)::Vector{String}
-    root = canonical_local_path(local_root)
-    env0 = resolve_pkg_env(root)
-    send_list = _ship_gitignore_send_list(env0.env_dir)
-    ensure_manifest_ships!(
-        root; send_list = send_list, warn_send_list = true, ship_tree = true,
-    )
+const _SHIP_IGNORED_PROJECT_NAMES = (
+    "Project.toml",
+    "JuliaProject.toml",
+    "Manifest.toml",
+    "JuliaManifest.toml",
+)
+
+"""One line when a project or Manifest file under `root` is left out of `listed`."""
+function _warn_excluded_ship_project_files!(root::AbstractString, listed::Vector{String})
+    root_c = canonical_local_path(root)
+    present = Set{String}(replace(String(rel), '\\' => '/') for rel in listed)
+    hits = String[]
+    stack = String[root_c]
+    while !isempty(stack)
+        cur = pop!(stack)
+        names = try
+            readdir(cur; join = false, sort = false)
+        catch
+            continue
+        end
+        for name in names
+            name == ".git" && continue
+            name == ".distsshkit" && continue
+            child = joinpath(cur, name)
+            rel = replace(relpath(child, root_c), '\\' => '/')
+            if name in _SHIP_IGNORED_PROJECT_NAMES && (isfile(child) || islink(child))
+                rel in present || push!(hits, rel)
+            end
+            isdir(child) && !islink(child) && push!(stack, child)
+        end
+    end
+    isempty(hits) && return nothing
+    sort!(unique!(hits))
+    shown = join(hits, ", ")
+    noun = length(hits) == 1 ? "file is" : "files are"
+    print_warn("Warning: $shown $noun excluded by .gitignore and will not be shipped.\n")
+    return nothing
+end
+
+function _ship_rel_paths(ship_root::AbstractString)::Vector{String}
+    root = canonical_local_path(ship_root)
+    send_list = _ship_gitignore_send_list(root)
+    _warn_excluded_ship_project_files!(root, send_list)
     rels = String[replace(r, '\\' => '/') for r in send_list]
     extras = String[]
     for rel in rels
@@ -79,7 +117,6 @@ function _ship_rel_paths(local_root::AbstractString)::Vector{String}
         end
     end
     out = unique!(vcat(rels, extras))
-    _append_project_preference_rels!(root, out)
     filter!(rel -> !_ship_unshippable(joinpath(root, rel)), out)
     declared = _load_ship_inputs(root)
     if !isempty(declared)
@@ -87,7 +124,6 @@ function _ship_rel_paths(local_root::AbstractString)::Vector{String}
             return !_ship_input_covers(rel, declared)
         end
     end
-    _warn_ancestor_gitignore_shipped!(env0.env_dir, out)
     sort!(out)
     isempty(out) && throw(ArgumentError("nothing to ship from $root"))
     return out
@@ -852,25 +888,6 @@ function _ship_bytes_and_files(root::AbstractString, rels::Vector{String})
     return total, nfiles, sizes
 end
 
-function _head_tree(root::AbstractString)::Union{Nothing, String}
-    git = Sys.which("git")
-    git === nothing && return nothing
-    out = try
-        strip(
-            read(
-                pipeline(
-                    Cmd([git, "-C", String(root), "rev-parse", "HEAD^{tree}"]);
-                    stderr = devnull,
-                ),
-                String,
-            ),
-        )
-    catch
-        return nothing
-    end
-    return isempty(out) ? nothing : String(out)
-end
-
 function _ship_keep(want::Set{String}, root::AbstractString, path::AbstractString)::Bool
     r = replace(relpath(String(path), root), '\\' => '/')
     (isempty(r) || r == ".") && return true
@@ -885,13 +902,8 @@ function pack_ship_tar(
         ship_max_bytes::Integer = SHIP_MAX_BYTES_DEFAULT,
     )
     local_dir = canonical_local_path(local_root)
-    env0 = resolve_pkg_env(local_dir)
-    root = ensure_manifest_ships!(
-        local_dir;
-        send_list = _ship_gitignore_send_list(env0.env_dir),
-        warn_send_list = true,
-        ship_tree = true,
-    ).env_dir
+    root = resolve_pkg_env(local_dir).env_dir
+    ensure_manifest_ships!(local_dir; warn_send_list = false)
     rels = _ship_rel_paths(root)
     allowed_links = _check_ship_symlinks!(
         root, rels; allow_external = allow_external_symlinks,
@@ -915,14 +927,13 @@ function pack_ship_tar(
     try
         Tar.create(p -> _ship_keep(want, root, p), root, tar_path)
         hash = Tar.tree_hash(tar_path; algorithm = "git-sha1", skip_empty = true)
-        head = _head_tree(root)
         return (
             tar_path = tar_path,
             tmpd = tmpd,
             hash = String(hash),
             bytes = total,
             files = nfiles,
-            tree_matches_head = head !== nothing && head == hash,
+            tree_matches_head = nothing,
             external_symlinks = allowed_links,
             root = root,
         )
@@ -933,27 +944,6 @@ function pack_ship_tar(
 end
 
 const _PROJECT_PREFERENCE_NAMES = ("LocalPreferences.toml", "JuliaLocalPreferences.toml")
-
-"""Add preference files next to a shipped project file, even when gitignored."""
-function _append_project_preference_rels!(root::AbstractString, out::Vector{String})
-    projects = String[]
-    for rel in out
-        basename(rel) in Base.project_names && push!(projects, rel)
-    end
-    for rel in projects
-        dir = dirname(rel)
-        for name in _PROJECT_PREFERENCE_NAMES
-            pref = dir == "" || dir == "." ? name : dir * "/" * name
-            path = joinpath(root, pref)
-            islink(path) && throw(
-                ArgumentError("ship-tree: symlinked project preference is not supported: $pref"),
-            )
-            isfile(path) || continue
-            pref in out || push!(out, pref)
-        end
-    end
-    return nothing
-end
 
 function _depot_preference_paths()::Vector{String}
     paths = String[]

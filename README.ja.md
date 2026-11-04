@@ -33,10 +33,13 @@ SSH 上の stdlib Tar で、元の mtime は残らない。pull-back は展開�
 実行可能でないファイルはモード`0644`、実行可能なファイルは`0755`になる。
 `push_cache!` には **`rsync`** が要る。ship は SSH 上の stdlib Tar を使う。
 git で配るときは **`git`** も要る。`setup --ship-tree`、`go --ship-tree`、
-`drive --ship-tree` はプロジェクトを歩き、各ディレクトリの `.gitignore`
+`drive --ship-tree` は ship の根を歩き、各ディレクトリの `.gitignore`
 を適用する（大文字小文字を区別する）。`.git/info/exclude`、
-`core.excludesFile`、プロジェクトより上の `.gitignore` は送りリストには使わない。祖先の `.gitignore` に当たれば警告し、そのファイルは送る。入れ子の `.git` では親のルールを切る。同梱する
-`Project.toml` の横の preference は載り、宣言した入力は載らない。展開先は
+`core.excludesFile`、根より上の `.gitignore` は使わない。git は起動しない。
+gitignore された `Project.toml`、`JuliaProject.toml`、`Manifest.toml`、
+`JuliaManifest.toml` は載せず、警告を 1 行出す。gitignore された
+`LocalPreferences.toml` も載らない。載せるには `!LocalPreferences.toml` を書く。
+宣言した入力は載らない。展開先は
 `<remote_root>/runs/<run_id>/src/` で、横に空の `out/` と DistSSHRun の短い
 `run.toml` stamp を置く。リモート根は先に存在しなければならない
 （`setup --remote-root`）。`--rsync` は 0.2.0 で削除した。`setup --delete` と `--prune` は `--confirm-path` が要る。`-y` では

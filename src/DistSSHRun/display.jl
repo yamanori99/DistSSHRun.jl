@@ -221,50 +221,8 @@ function _resolved_source_path(project_file::AbstractString, raw::AbstractString
     return canonical_local_path(joinpath(dirname(String(project_file)), expanded))
 end
 
-function _collect_manifest_path_deps!(
-        found::Vector{Tuple{String, String}},
-        deps,
-    )
-    deps isa AbstractDict || return found
-    for (name, entry) in deps
-        tables = if entry isa AbstractDict
-            Any[entry]
-        elseif entry isa AbstractVector
-            Any[t for t in entry if t isa AbstractDict]
-        else
-            continue
-        end
-        for tab in tables
-            raw = get(tab, "path", nothing)
-            raw isa AbstractString || continue
-            s = strip(String(raw))
-            isempty(s) && continue
-            push!(found, (String(name), s))
-        end
-    end
-    return found
-end
-
-"""`(name, path)` for each Manifest dep that names a `path` (format 1 or 2).
-
-Format 2 nests package tables under `deps`. Format 1 has no `manifest_format`
-and stores those tables at the top level. Entries without `path` are skipped.
-A `url` source is not listed here.
 """
-function _manifest_path_deps(manifest_file::AbstractString)::Vector{Tuple{String, String}}
-    data = TOML.parsefile(String(manifest_file))
-    found = Tuple{String, String}[]
-    if haskey(data, "manifest_format")
-        _collect_manifest_path_deps!(found, get(data, "deps", nothing))
-    else
-        _collect_manifest_path_deps!(found, data)
-    end
-    unique!(found)
-    return found
-end
-
-"""
-Throw when a `[sources]` or Manifest `path` would not arrive inside `root`.
+Throw when a `[sources]` `path` would not arrive inside `root`.
 
 `git=false` is the rsync tree (`env_dir`). `git=true` is the git work tree.
 An absolute path, including after `expanduser`, is rejected even when it
@@ -344,42 +302,21 @@ function _ensure_one_path_dep!(
         ),
     )
     git || return nothing
-    # The env root is the clone itself. `ls-tree` has no directory entry for `.`.
-    _path_is_env_root(location, root_c) && return nothing
     _ensure_git_head_source!(root_c, location, name)
     _ensure_path_source_git_files!(root_c, location, name)
     return nothing
-end
-
-function _path_is_env_root(path::AbstractString, root::AbstractString)::Bool
-    a = canonical_local_path(path)
-    b = canonical_local_path(root)
-    a == b && return true
-    ispath(a) && ispath(b) || return false
-    return canonical_local_path(realpath(a)) == canonical_local_path(realpath(b))
 end
 
 function _ensure_path_sources_in_tree!(
         env,
         root::AbstractString;
         git::Bool,
-        ship_tree::Bool = false,
     )
     root_c = canonical_local_path(root)
     root_real = ispath(root_c) ? canonical_local_path(realpath(root_c)) : root_c
     for project_file in _pkg_env_project_files(env)
         for (name, raw) in _project_path_sources(project_file)
             _ensure_one_path_dep!(name, raw, project_file, root_c, root_real; git = git)
-        end
-    end
-    # Manifest `path` deps are a ship-tree check. Clone / git sync / go keep
-    # the selected project's `[sources]` only, as before this change.
-    ship_tree || return nothing
-    git && return nothing
-    manifest = env.manifest
-    if manifest isa String && isfile(manifest)
-        for (name, raw) in _manifest_path_deps(manifest)
-            _ensure_one_path_dep!(name, raw, manifest, root_c, root_real; git = git)
         end
     end
     return nothing
@@ -448,178 +385,15 @@ function _ensure_path_source_git_files!(
     return nothing
 end
 
-function _ship_list_rel(path::AbstractString, root::AbstractString)::String
-    return replace(relpath(canonical_local_path(path), canonical_local_path(root)), '\\' => '/')
-end
-
-function _rel_is_outside_tree(rel::AbstractString)::Bool
-    return rel == ".." || startswith(rel, "../")
-end
-
-function _send_list_covers(listed::Vector{String}, rel::AbstractString)::Bool
-    (rel == "." || rel == "") && return true
-    rel in listed && return true
-    prefix = rel * "/"
-    return any(p -> startswith(p, prefix), listed)
-end
-
-function _abspath_from_ship_rel(env_dir::AbstractString, rel::AbstractString)::String
-    (rel == "." || rel == "") && return canonical_local_path(env_dir)
-    return canonical_local_path(joinpath(env_dir, rel))
-end
-
-function _follow_link_abs(path::AbstractString)::String
-    text = String(readlink(path))
-    if isabspath(expanduser(text))
-        return canonical_local_path(expanduser(text))
-    end
-    return canonical_local_path(joinpath(dirname(String(path)), text))
-end
-
-"""Each send-list relative path from `start` along symlink hops inside `env_dir`."""
-function _ship_symlink_hop_rels(start::AbstractString, env_dir::AbstractString)::Vector{String}
-    hops = String[]
-    current = canonical_local_path(start)
-    seen = Set{String}()
-    while true
-        current in seen && break
-        push!(seen, current)
-        rel = _ship_list_rel(current, env_dir)
-        _rel_is_outside_tree(rel) && break
-        push!(hops, rel)
-        islink(current) || break
-        current = _follow_link_abs(current)
-        ispath(current) || break
-    end
-    return hops
-end
-
-function _send_list_covers_source(
-        listed::Vector{String},
-        rel::AbstractString,
-        env_dir::AbstractString,
-        seen::Set{String} = Set{String}(),
-    )::Bool
-    _rel_is_outside_tree(rel) && return false
-    rel in seen && return false
-    push!(seen, rel)
-    if _send_list_covers(listed, rel)
-        path = _abspath_from_ship_rel(env_dir, rel)
-        islink(path) || return true
-        target_rel = _ship_list_rel(_follow_link_abs(path), env_dir)
-        _rel_is_outside_tree(target_rel) && return false
-        return _send_list_covers_source(listed, target_rel, env_dir, seen)
-    end
-    parts = split(rel, '/'; keepempty = false)
-    for i in 1:(length(parts) - 1)
-        prefix = join(parts[1:i], "/")
-        prefix in listed || continue
-        p = _abspath_from_ship_rel(env_dir, prefix)
-        islink(p) || continue
-        target_rel = _ship_list_rel(_follow_link_abs(p), env_dir)
-        _rel_is_outside_tree(target_rel) && return false
-        rest = join(parts[(i + 1):end], "/")
-        next = (target_rel == "." || target_rel == "") ? rest : string(target_rel, "/", rest)
-        return _send_list_covers_source(listed, next, env_dir, seen)
-    end
-    return false
-end
-
 """Problems when Manifest is missing from the rsync send list."""
 function _manifest_ship_problems(env, listed::Vector{String})::Vector{String}
     manifest = env.manifest
     manifest isa String || return String[]
-    env_dir = canonical_local_path(env.env_dir)
-    rel = _ship_list_rel(manifest, env_dir)
-    msgs = String[]
-    if !(rel in listed)
-        push!(
-            msgs,
-            "Manifest $rel is not in the rsync send list, so workers would instantiate a different resolution. Stop ignoring it.",
-        )
-    end
-    hops = _ship_symlink_hop_rels(manifest, env_dir)
-    for hop in hops
-        hop == rel && continue
-        _send_list_covers_source(listed, hop, env_dir) && continue
-        push!(
-            msgs,
-            "Manifest $rel points at $hop, which is not in the rsync send list, so workers would instantiate a different resolution. Stop ignoring it.",
-        )
-        break
-    end
-    return msgs
-end
-
-function _append_path_dep_send_problems!(
-        msgs::Vector{String},
-        listed::Vector{String},
-        env_dir::AbstractString,
-        name::AbstractString,
-        declared_file::AbstractString,
-        raw::AbstractString,
-    )
-    location = _resolved_source_path(declared_file, raw)
-    rel = _ship_list_rel(location, env_dir)
-    _rel_is_outside_tree(rel) && return nothing
-    if !_send_list_covers_source(listed, rel, env_dir)
-        push!(
-            msgs,
-            "Source path $rel for $name is not in the rsync send list, so workers would not see this path. Stop ignoring it.",
-        )
-        return nothing
-    end
-    source_proj = _located_project_file(location)
-    source_proj isa String || return nothing
-    prel = _ship_list_rel(source_proj, env_dir)
-    _rel_is_outside_tree(prel) && return nothing
-    _send_list_covers_source(listed, prel, env_dir) && return nothing
-    push!(
-        msgs,
-        "Source path $prel for $name is not in the rsync send list, so workers would not see this path. Stop ignoring it.",
-    )
-    return nothing
-end
-
-"""Problems when a `[sources]` or Manifest `path` is missing from the send list."""
-function _path_source_send_list_problems(
-        env,
-        listed::Vector{String};
-        ship_tree::Bool = false,
-    )::Vector{String}
-    env_dir = canonical_local_path(env.env_dir)
-    msgs = String[]
-    for project_file in _pkg_env_project_files(env)
-        for (name, raw) in _project_path_sources(project_file)
-            _append_path_dep_send_problems!(msgs, listed, env_dir, name, project_file, raw)
-        end
-    end
-    if ship_tree
-        manifest = env.manifest
-        if manifest isa String && isfile(manifest)
-            for (name, raw) in _manifest_path_deps(manifest)
-                _append_path_dep_send_problems!(msgs, listed, env_dir, name, manifest, raw)
-            end
-        end
-    end
-    unique!(msgs)
-    return msgs
-end
-
-"""Problems when the selected project file is missing from the send list."""
-function _project_file_ship_problems(env, listed::Vector{String})::Vector{String}
-    env_dir = canonical_local_path(env.env_dir)
-    msgs = String[]
-    for project_file in _pkg_env_project_files(env)
-        rel = _ship_list_rel(project_file, env_dir)
-        _rel_is_outside_tree(rel) && continue
-        _send_list_covers_source(listed, rel, env_dir) && continue
-        push!(
-            msgs,
-            "Project $rel is not in the rsync send list, so workers would not see this environment. Stop ignoring it.",
-        )
-    end
-    return msgs
+    rel = relpath(canonical_local_path(manifest), canonical_local_path(env.env_dir))
+    rel in listed && return String[]
+    return String[
+        "Manifest $rel is not in the rsync send list. It is untracked and ignored, so workers would instantiate a different resolution. Stop ignoring it, or do not use setup --instantiate.",
+    ]
 end
 
 """`realpath` of the parent, with the final component left as written.
@@ -807,12 +581,7 @@ Other errors return false so the caller can rethrow them.
 function _report_manifest_refusal(e)::Bool
     e isa ArgumentError || return false
     msg = e.msg
-    if !(
-            startswith(msg, "No Manifest for ") ||
-                startswith(msg, "Manifest ") ||
-                startswith(msg, "Project ") ||
-                startswith(msg, "Source path ")
-        )
+    if !(startswith(msg, "No Manifest for ") || startswith(msg, "Manifest "))
         return false
     end
     print_cli_error(msg)
@@ -826,26 +595,17 @@ together with `project_dir`.
 One rsync cannot carry both. A symlink whose target leaves that tree is the
 same failure. A `url` source is fetched on the worker. A project file with
 no Manifest is an error. A directory with no project file is not. A Manifest
-left out of the rsync send list is an error.
-A Manifest symlink whose target is left out, a `[sources]` or Manifest
-`path` left out by `.gitignore`, or the selected `Project.toml` /
-`JuliaProject.toml` left out, is the same kind of error. The ignored file
-is not forced into the tar. Manifest deps without `path` are not checked
-here; a `url` source is fetched on the worker.
+left out of the rsync send list is an error (it is untracked and ignored).
 `warn_send_list=false` is the `gitignore=false` send, which includes that file.
-`ship_tree=true` checks the send list for the selected project file, Manifest
-hops, `[sources]`, and Manifest `path` deps. `go!` and instantiate leave
-that off and still check selected `[sources]` locations only.
 """
 function ensure_manifest_ships!(
         project::AbstractString;
         send_list::Union{Nothing, Vector{String}} = nothing,
         warn_send_list::Bool = true,
-        ship_tree::Bool = false,
     )
     _require_manifest!(project)
     env = resolve_pkg_env(project)
-    _ensure_path_sources_in_tree!(env, env.env_dir; git = false, ship_tree = ship_tree)
+    _ensure_path_sources_in_tree!(env, env.env_dir; git = false)
     manifest = env.manifest
     manifest isa String || return env
     _path_is_under(env.project_dir, env.env_dir) || throw(
@@ -860,14 +620,10 @@ function ensure_manifest_ships!(
             "Manifest $manifest points at $target, outside the tree setup/rsync would send ($root). Workers would instantiate a different resolution.",
         ),
     )
-    if warn_send_list && ship_tree
+    if warn_send_list
         listed = send_list isa Vector{String} ? send_list : _rsync_send_list(env.env_dir, env)
         if listed isa Vector
-            problems = vcat(
-                _project_file_ship_problems(env, listed),
-                _manifest_ship_problems(env, listed),
-                _path_source_send_list_problems(env, listed; ship_tree = true),
-            )
+            problems = _manifest_ship_problems(env, listed)
             isempty(problems) || throw(ArgumentError(problems[1]))
         end
     end

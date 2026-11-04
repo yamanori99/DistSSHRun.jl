@@ -33,13 +33,12 @@ file arrives as mode `0644`, and an executable file as `0755`.
 `push_cache!` still needs **`rsync`**. Ship uses stdlib Tar over SSH. Git
 deploys also need **`git`**.
 `setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` walk the
-project and apply each directory's `.gitignore` (case-sensitive).
+ship root and apply each directory's `.gitignore` (case-sensitive).
 `.git/info/exclude`, `core.excludesFile`, and a `.gitignore` above the
-project are not used to build the send list. A match against an ancestor
-`.gitignore` is a warning; that file still ships. A nested `.git` starts a
-new ignore matcher.
-Preference files next to a shipped `Project.toml`
-are still added, and declared inputs are left out. Extract is into
+ship root are not used. No git binary is run. A gitignored `Project.toml`,
+`JuliaProject.toml`, `Manifest.toml`, or `JuliaManifest.toml` is left out
+with one warning. A gitignored `LocalPreferences.toml` is left out too;
+add `!LocalPreferences.toml` to ship it. Declared inputs are left out. Extract is into
 `<remote_root>/runs/<run_id>/src/`, with empty `out/`
 beside it and a minimal DistSSHRun `run.toml` stamp. The remote root must
 already exist (`setup --remote-root`). `--rsync` was removed

@@ -1,9 +1,7 @@
-# Ship send list: walk `env_dir` and apply each directory's `.gitignore`.
+# Ship send list: walk the ship root and apply each directory's `.gitignore`.
 # GitIgnore.jl 0.1.1 (`IgnoreMatcher(; excludes=false)`). First release 2026-08.
-# 2026-11-02: watch send-list surprises; the matcher may still disagree with git.
-# `.git` and `.distsshkit` are dropped by name. A nested `.git` starts a new
-# matcher so parent rules do not apply inside that directory. The index is
-# not consulted.
+# Rules above the ship root are not read. `.git/info/exclude` is not read.
+# `.git` and `.distsshkit` are dropped by name. The index is not consulted.
 # Load GitIgnore here, not at DistSSHRun import: a worker may precompile
 # DistSSHRun from LOAD_PATH without this dep (same as PrecompileTools).
 
@@ -16,19 +14,13 @@ function _ship_gitignore_mod()
     return Base.require(_GITIGNORE_PKG)
 end
 
-function _nested_git_root(path::AbstractString)::Bool
-    g = joinpath(path, ".git")
-    return isdir(g) || isfile(g)
-end
-
 function _ship_gitignore_visit_dir!(
         out::Vector{String},
-        stack::Vector{Tuple{String, Any, String}},
+        stack::Vector{String},
         GitIgnore,
         root_c::AbstractString,
         cur::AbstractString,
         matcher,
-        match_root::AbstractString,
     )
     names = try
         readdir(cur; join = false, sort = false)
@@ -41,21 +33,10 @@ function _ship_gitignore_visit_dir!(
         child = joinpath(cur, name)
         rel = replace(relpath(child, root_c), '\\' => '/')
         is_dir = isdir(child) && !islink(child)
-        nested = is_dir && _nested_git_root(child)
-        if !nested
-            from_m = replace(relpath(child, match_root), '\\' => '/')
-            Base.invokelatest(GitIgnore.isignored, matcher, from_m, is_dir) && continue
-        end
+        Base.invokelatest(GitIgnore.isignored, matcher, rel, is_dir) && continue
         _reject_newline_send_path(rel)
         push!(out, rel)
-        if is_dir
-            if nested
-                child_m = Base.invokelatest(GitIgnore.IgnoreMatcher, child; excludes = false)
-                push!(stack, (child, child_m, child))
-            else
-                push!(stack, (child, matcher, match_root))
-            end
-        end
+        is_dir && push!(stack, child)
     end
     return nothing
 end
@@ -66,10 +47,10 @@ function _ship_gitignore_send_list(root::AbstractString)::Vector{String}
     # `require` advances world age; call through `invokelatest`.
     matcher0 = Base.invokelatest(GitIgnore.IgnoreMatcher, root_c; excludes = false)
     out = String[]
-    stack = Tuple{String, Any, String}[(root_c, matcher0, root_c)]
+    stack = String[root_c]
     while !isempty(stack)
-        cur, matcher, match_root = pop!(stack)
-        _ship_gitignore_visit_dir!(out, stack, GitIgnore, root_c, cur, matcher, match_root)
+        cur = pop!(stack)
+        _ship_gitignore_visit_dir!(out, stack, GitIgnore, root_c, cur, matcher0)
     end
     unique!(out)
     isempty(out) && throw(ArgumentError("nothing to send from $root_c"))
