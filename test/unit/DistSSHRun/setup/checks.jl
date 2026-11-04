@@ -163,7 +163,7 @@ using Pkg
             run(pipeline(`git -C $dir config user.name "Test"`; stdout = devnull, stderr = devnull))
             run(pipeline(`git -C $dir add Project.toml`; stdout = devnull, stderr = devnull))
             run(pipeline(`git -C $dir -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
-            if Sys.which("ssh") !== nothing && Sys.which("rsync") !== nothing
+            if Sys.which("ssh") !== nothing
                 _, result_clean = with_kit_verbosity(:verbose) do
                     _capture_stdio() do _, _
                         DistSSHRun.check_prerequisites(
