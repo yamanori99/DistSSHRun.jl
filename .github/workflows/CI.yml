@@ -69,7 +69,7 @@ jobs:
   # Linux E2E (1.13 required, 1.14-pre continue-on-error): path filter on PR /
   # main push; always on a version
   # increase and dispatch. JETLS uses `.github/actions/jetls-check` (no nested
-  # cache; julia-actions/cache#236). JETLS 2026-10-26 supports 1.12.2 through
+  # cache; julia-actions/cache#236). JETLS 2026-11-04 supports 1.12.2 through
   # 1.14. The required job is 1.13. The 1.14-pre job is continue-on-error
   # and is not a required check.
   detect:
@@ -783,7 +783,7 @@ jobs:
         run: ./.github/aqua-check.sh
 
   # Literal name: a skipped job must still be this string.
-  # Required check. JETLS 2026-10-26 supports Julia 1.12.2 through 1.14.
+  # Required check. JETLS 2026-11-04 supports Julia 1.12.2 through 1.14.
   jetls:
     name: JETLS (1.13, ubuntu-latest, x64)
     needs: detect
