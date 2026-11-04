@@ -120,11 +120,13 @@ using Test
         end
         function _inst_fake_h1(proj)
             _with_tempdir() do state
-                out, inst = _capture_stdio() do _, _
-                    withenv(_fake_setup_remote_env(state)...) do
-                        DistSSHRun.instantiate_remotes(
-                            ["h1"], "/bin/echo", "~/App.jl", proj,
-                        )
+                out, inst = with_kit_verbosity(:verbose) do
+                    _capture_stdio() do _, _
+                        withenv(_fake_setup_remote_env(state)...) do
+                            DistSSHRun.instantiate_remotes(
+                                ["h1"], "/bin/echo", "~/App.jl", proj,
+                            )
+                        end
                     end
                 end
                 @test inst.failed == 0 && inst.succeeded == 1
