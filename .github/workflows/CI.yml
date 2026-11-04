@@ -33,7 +33,7 @@ permissions:
   contents: read
 
 jobs:
-  # `Pkg.test` 1.13 on a pull request is ubuntu-latest and macos-latest.
+  # `Pkg.test` 1.13 on a pull request is ubuntu-latest and xcode-27.
   # WSL2 Ubuntu is a main push and CI weekly, not a pull request.
   # macOS is required. The macOS job exercises `ps -o lstart=`
   # in kit_process_start_key (no /proc). Coverage uploads from Ubuntu only.
@@ -194,13 +194,13 @@ jobs:
           upload: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
   test-macos:
-    name: DistSSHRun (1.13, macos-latest, aarch64)
+    name: DistSSHRun (1.13, xcode-27, aarch64)
     needs: [detect, runic, jetls, aqua, base-test-macos, up-test-macos]
     # success() is false when a needed job is skipped, which would skip Run
     # after a path-gated Base or Up. Failure still blocks; skip does not.
     # The static gate is result == success, so a skipped Runic does not start Run.
     if: ${{ needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && !cancelled() && !failure() }}
-    runs-on: macos-latest
+    runs-on: xcode-27
     timeout-minutes: 30
     permissions:
       contents: read
@@ -351,11 +351,11 @@ jobs:
           fail_ci_if_error: true
 
   up-test-macos:
-    name: DistSSHUp (1.13, macos-latest, aarch64)
+    name: DistSSHUp (1.13, xcode-27, aarch64)
     needs: [detect, runic, jetls, aqua, base-test-macos]
     # A skipped Base must not skip Up. A failed Base still does.
     if: ${{ needs.detect.outputs.heavy == 'true' && needs.detect.outputs.up == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && !cancelled() && !failure() }}
-    runs-on: macos-latest
+    runs-on: xcode-27
     timeout-minutes: 30
     permissions:
       contents: read
@@ -487,10 +487,10 @@ jobs:
           fail_ci_if_error: true
 
   base-test-macos:
-    name: DistSSHBase (1.13, macos-latest, aarch64)
+    name: DistSSHBase (1.13, xcode-27, aarch64)
     needs: [detect, runic, jetls, aqua]
     if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.base == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && success()
-    runs-on: macos-latest
+    runs-on: xcode-27
     timeout-minutes: 30
     permissions:
       contents: read
@@ -583,7 +583,7 @@ jobs:
   # A skipped job does not expand a matrix name, so these titles stay literal.
   # Version string is ~1.14.0-0. The title is 1.14-pre, shared with Queue and Kit.
   # Required: a driver blocked in pmap must cancel within interrupt_grace + 11s
-  # (#212). The macOS job is that suite on macos-latest. It waits for the
+  # (#212). The macOS job is that suite on xcode-27. It waits for the
   # same Runic / JETLS 1.13 / Aqua 1.13 gate as Run 1.13, then runs beside
   # that chain. Nightly stays continue-on-error.
   # Aqua, JETLS, and Linux E2E on 1.14-pre stay continue-on-error.
@@ -609,10 +609,10 @@ jobs:
       - uses: ./.github/actions/pkg-test
 
   test-1-14-pre-macos:
-    name: DistSSHRun (1.14-pre, macos-latest, aarch64)
+    name: DistSSHRun (1.14-pre, xcode-27, aarch64)
     needs: [detect, runic, jetls, aqua]
     if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
-    runs-on: macos-latest
+    runs-on: xcode-27
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
