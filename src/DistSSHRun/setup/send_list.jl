@@ -880,4 +880,3 @@ function _ensure_remote_dir(host::String, remote_path::String)::Bool
         return false
     end
 end
-
