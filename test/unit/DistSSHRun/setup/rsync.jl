@@ -84,7 +84,11 @@ using Test
             @test occursin("Tar", out)
             @test !isdir(joinpath(depot, "compiled"))
             @test !isdir(joinpath(depot, "packages"))
-            @test isempty(readdir(depot))
+            # 1.13 leaves the depot empty. 1.14 still writes
+            # `cache/v1.14/objcache-lmdb1/` even with `--compiled-modules=existing`
+            # and `--pkgimages=no` (not `compiled/` or `packages/`).
+            leftover = readdir(depot)
+            @test leftover ⊆ ["cache"]
         end
     end
 
