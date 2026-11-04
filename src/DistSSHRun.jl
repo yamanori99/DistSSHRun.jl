@@ -13,6 +13,7 @@ module DistSSHRun
 using Dates
 using Distributed
 using Pkg
+import OpenSSL_jll
 import SHA
 using Tar
 using TOML
