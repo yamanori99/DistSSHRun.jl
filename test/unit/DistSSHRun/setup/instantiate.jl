@@ -100,6 +100,53 @@ using Test
         return dst
     end
 
+    @testset "instantiate_remotes does not check Manifest path deps" begin
+        function _inst_manifest_path_proj(proj, raw)
+            foo = joinpath(proj, "dev", "Foo")
+            mkpath(foo)
+            write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
+            write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
+            write(
+                joinpath(proj, "Manifest.toml"), """
+                julia_version = "1.13.0"
+                manifest_format = "2.0"
+                [[deps.Foo]]
+                path = $(repr(raw))
+                uuid = "00000000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                """
+            )
+            return nothing
+        end
+        function _inst_fake_h1(proj)
+            _with_tempdir() do state
+                out, inst = _capture_stdio() do _, _
+                    withenv(_fake_setup_remote_env(state)...) do
+                        DistSSHRun.instantiate_remotes(
+                            ["h1"], "/bin/echo", "~/App.jl", proj,
+                        )
+                    end
+                end
+                @test inst.failed == 0 && inst.succeeded == 1
+                @test occursin("h1: done", out)
+            end
+        end
+        @testset "absolute path" begin
+            _with_tempdir() do proj
+                foo = joinpath(proj, "dev", "Foo")
+                _inst_manifest_path_proj(proj, replace(foo, '\\' => '/'))
+                _inst_fake_h1(proj)
+            end
+        end
+        @testset "gitignored dev/" begin
+            _with_tempdir() do proj
+                _inst_manifest_path_proj(proj, "dev/Foo")
+                write(joinpath(proj, ".gitignore"), "dev/\n")
+                _inst_fake_h1(proj)
+            end
+        end
+    end
+
     @testset "remote command" begin
         _with_tempdir() do state
             logp = joinpath(state, "ssh.log")

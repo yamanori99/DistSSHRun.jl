@@ -359,7 +359,12 @@ function _path_is_env_root(path::AbstractString, root::AbstractString)::Bool
     return canonical_local_path(realpath(a)) == canonical_local_path(realpath(b))
 end
 
-function _ensure_path_sources_in_tree!(env, root::AbstractString; git::Bool)
+function _ensure_path_sources_in_tree!(
+        env,
+        root::AbstractString;
+        git::Bool,
+        ship_tree::Bool = false,
+    )
     root_c = canonical_local_path(root)
     root_real = ispath(root_c) ? canonical_local_path(realpath(root_c)) : root_c
     for project_file in _pkg_env_project_files(env)
@@ -369,6 +374,7 @@ function _ensure_path_sources_in_tree!(env, root::AbstractString; git::Bool)
     end
     # Manifest `path` deps are a ship-tree check. Clone / git sync / go keep
     # the selected project's `[sources]` only, as before this change.
+    ship_tree || return nothing
     git && return nothing
     manifest = env.manifest
     if manifest isa String && isfile(manifest)
@@ -576,7 +582,11 @@ function _append_path_dep_send_problems!(
 end
 
 """Problems when a `[sources]` or Manifest `path` is missing from the send list."""
-function _path_source_send_list_problems(env, listed::Vector{String})::Vector{String}
+function _path_source_send_list_problems(
+        env,
+        listed::Vector{String};
+        ship_tree::Bool = false,
+    )::Vector{String}
     env_dir = canonical_local_path(env.env_dir)
     msgs = String[]
     for project_file in _pkg_env_project_files(env)
@@ -584,14 +594,40 @@ function _path_source_send_list_problems(env, listed::Vector{String})::Vector{St
             _append_path_dep_send_problems!(msgs, listed, env_dir, name, project_file, raw)
         end
     end
-    manifest = env.manifest
-    if manifest isa String && isfile(manifest)
-        for (name, raw) in _manifest_path_deps(manifest)
-            _append_path_dep_send_problems!(msgs, listed, env_dir, name, manifest, raw)
+    if ship_tree
+        manifest = env.manifest
+        if manifest isa String && isfile(manifest)
+            for (name, raw) in _manifest_path_deps(manifest)
+                _append_path_dep_send_problems!(msgs, listed, env_dir, name, manifest, raw)
+            end
         end
     end
     unique!(msgs)
     return msgs
+end
+
+"""Send-list rels that must arrive: selected project files, Manifest, hops."""
+function _required_ship_rels(env)::Vector{String}
+    env_dir = canonical_local_path(env.env_dir)
+    out = String[]
+    for project_file in _pkg_env_project_files(env)
+        rel = _ship_list_rel(project_file, env_dir)
+        _rel_is_outside_tree(rel) && continue
+        push!(out, rel)
+    end
+    manifest = env.manifest
+    if manifest isa String
+        rel = _ship_list_rel(manifest, env_dir)
+        if !_rel_is_outside_tree(rel)
+            push!(out, rel)
+            for hop in _ship_symlink_hop_rels(manifest, env_dir)
+                hop == rel && continue
+                push!(out, hop)
+            end
+        end
+    end
+    unique!(out)
+    return out
 end
 
 """Problems when the selected project file is missing from the send list."""
@@ -821,15 +857,18 @@ A Manifest symlink whose target is left out, a `[sources]` or Manifest
 is not forced into the tar. Manifest deps without `path` are not checked
 here; a `url` source is fetched on the worker.
 `warn_send_list=false` is the `gitignore=false` send, which includes that file.
+`ship_tree=true` also checks Manifest `path` deps. `go!` and instantiate leave
+that off.
 """
 function ensure_manifest_ships!(
         project::AbstractString;
         send_list::Union{Nothing, Vector{String}} = nothing,
         warn_send_list::Bool = true,
+        ship_tree::Bool = false,
     )
     _require_manifest!(project)
     env = resolve_pkg_env(project)
-    _ensure_path_sources_in_tree!(env, env.env_dir; git = false)
+    _ensure_path_sources_in_tree!(env, env.env_dir; git = false, ship_tree = ship_tree)
     manifest = env.manifest
     manifest isa String || return env
     _path_is_under(env.project_dir, env.env_dir) || throw(
@@ -850,7 +889,7 @@ function ensure_manifest_ships!(
             problems = vcat(
                 _project_file_ship_problems(env, listed),
                 _manifest_ship_problems(env, listed),
-                _path_source_send_list_problems(env, listed),
+                _path_source_send_list_problems(env, listed; ship_tree = ship_tree),
             )
             isempty(problems) || throw(ArgumentError(problems[1]))
         end

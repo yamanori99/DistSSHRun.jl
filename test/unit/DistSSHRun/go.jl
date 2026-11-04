@@ -188,6 +188,48 @@ using Dates
         @test_throws ArgumentError DistSSHRun._go_resolve_julia("auto"; host = "no-such-host.invalid")
     end
 
+    @testset "go! does not check Manifest path deps" begin
+        function _go_manifest_path_proj(proj, raw)
+            foo = joinpath(proj, "dev", "Foo")
+            mkpath(foo)
+            write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
+            write(joinpath(proj, "Project.toml"), "name = \"GoPath\"\n")
+            write(
+                joinpath(proj, "Manifest.toml"), """
+                julia_version = "1.13.0"
+                manifest_format = "2.0"
+                [[deps.Foo]]
+                path = $(repr(raw))
+                uuid = "00000000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                """
+            )
+            script = joinpath(proj, "job.jl")
+            write(script, "true\n")
+            return script
+        end
+        @testset "absolute path" begin
+            _with_tempdir() do proj
+                foo = joinpath(proj, "dev", "Foo")
+                script = _go_manifest_path_proj(proj, replace(foo, '\\' => '/'))
+                r = redirect_stdout(devnull) do
+                    DistSSHRun.go!(script, ["parent:1"]; project = proj, quiet = true, yes = true)
+                end
+                @test r.ok
+            end
+        end
+        @testset "gitignored dev/" begin
+            _with_tempdir() do proj
+                script = _go_manifest_path_proj(proj, "dev/Foo")
+                write(joinpath(proj, ".gitignore"), "dev/\n")
+                r = redirect_stdout(devnull) do
+                    DistSSHRun.go!(script, ["parent:1"]; project = proj, quiet = true, yes = true)
+                end
+                @test r.ok
+            end
+        end
+    end
+
     @testset "a project file with no Manifest is refused" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"GoBare\"\n")

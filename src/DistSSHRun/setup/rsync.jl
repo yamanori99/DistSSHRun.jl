@@ -602,16 +602,34 @@ end
 Warn when files in `listed` match a `.gitignore` above `send_dir`.
 
 The walker does not apply that file, so those paths are shipped. A match in
-`send_dir`'s own `.gitignore` does not hide an ancestor match. Git
-`info/exclude` and `core.excludesFile` are not this warning. Failure of the
-probe does not refuse the ship.
+`send_dir`'s own `.gitignore` does not hide an ancestor match. The selected
+Manifest or project file is refused instead. Git `info/exclude` and
+`core.excludesFile` are not this warning. Failure of the probe does not
+refuse the ship.
 """
-function _warn_ancestor_gitignore_shipped!(send_dir::AbstractString, listed::Vector{String})
-    try
-        _warn_ancestor_gitignore_shipped_inner!(send_dir, listed)
+function _warn_ancestor_gitignore_shipped!(
+        send_dir::AbstractString,
+        listed::Vector{String};
+        required::Vector{String} = String[],
+    )
+    hits = try
+        _ancestor_gitignore_ship_hits(send_dir, listed)
     catch
         return nothing
     end
+    req = Set{String}(required)
+    for (rel, _) in hits
+        rel in req || continue
+        kind = let b = basename(rel)
+            (b == "Manifest.toml" || b == "JuliaManifest.toml") ? "Manifest" : "Project"
+        end
+        throw(
+            ArgumentError(
+                "$kind $rel matches a .gitignore above this directory. Stop ignoring it.",
+            ),
+        )
+    end
+    _print_ancestor_gitignore_shipped!(hits)
     return nothing
 end
 
@@ -640,10 +658,14 @@ function _match_ancestor_gitignore!(
     return nothing
 end
 
-function _warn_ancestor_gitignore_shipped_inner!(send_dir::AbstractString, listed::Vector{String})
+function _ancestor_gitignore_ship_hits(
+        send_dir::AbstractString,
+        listed::Vector{String},
+    )::Vector{Tuple{String, String}}
     top = git_work_tree(send_dir)
-    top isa String || return nothing
-    _same_resolved_dir(top, send_dir) && return nothing
+    empty = Tuple{String, String}[]
+    top isa String || return empty
+    _same_resolved_dir(top, send_dir) && return empty
     send_c = canonical_local_path(send_dir)
     top_c = canonical_local_path(top)
     files = Tuple{String, String}[]
@@ -654,7 +676,7 @@ function _warn_ancestor_gitignore_shipped_inner!(send_dir::AbstractString, liste
         (isfile(full) || islink(full)) || continue
         push!(files, (r, full))
     end
-    isempty(files) && return nothing
+    isempty(files) && return empty
     hits = Tuple{String, String}[]
     seen = Set{String}()
     dir = dirname(send_c)
@@ -670,6 +692,10 @@ function _warn_ancestor_gitignore_shipped_inner!(send_dir::AbstractString, liste
         _path_under_resolved(parent, top_c) || _same_resolved_dir(parent, top_c) || break
         dir = parent
     end
+    return hits
+end
+
+function _print_ancestor_gitignore_shipped!(hits::Vector{Tuple{String, String}})
     isempty(hits) && return nothing
     n = length(hits)
     show_n = min(3, n)

@@ -613,6 +613,35 @@ using Test
         end
     end
 
+    @testset "an ancestor-gitignored Manifest is refused" begin
+        if Sys.which("git") === nothing
+            @test_skip "git is not on PATH"
+        else
+            _with_tempdir() do tmp
+                write(joinpath(tmp, ".gitignore"), "Manifest.toml\n")
+                job = joinpath(tmp, "job")
+                mkpath(job)
+                write(joinpath(job, "Project.toml"), "name = \"App\"\n")
+                write(joinpath(job, "Manifest.toml"), "# lock\n")
+                withenv("GIT_DIR" => nothing, "GIT_WORK_TREE" => nothing, "GIT_INDEX_FILE" => nothing) do
+                    run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $tmp config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $tmp config user.name "Test"`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $tmp add -A`; stdout = devnull, stderr = devnull))
+                    run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))
+                end
+                err = try
+                    DistSSHRun.pack_ship_tar(job)
+                    nothing
+                catch e
+                    e
+                end
+                @test err isa ArgumentError
+                @test occursin("Manifest Manifest.toml matches a .gitignore above this directory", err.msg)
+            end
+        end
+    end
+
     @testset "gitignored preferences beside JuliaProject.toml still ship" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\n")

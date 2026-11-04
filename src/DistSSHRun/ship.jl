@@ -66,8 +66,8 @@ function _ship_rel_paths(local_root::AbstractString)::Vector{String}
     root = canonical_local_path(local_root)
     env0 = resolve_pkg_env(root)
     send_list = _ship_gitignore_send_list(env0.env_dir)
-    ensure_manifest_ships!(
-        root; send_list = send_list, warn_send_list = true,
+    env = ensure_manifest_ships!(
+        root; send_list = send_list, warn_send_list = true, ship_tree = true,
     )
     rels = String[replace(r, '\\' => '/') for r in send_list]
     extras = String[]
@@ -87,7 +87,9 @@ function _ship_rel_paths(local_root::AbstractString)::Vector{String}
             return !_ship_input_covers(rel, declared)
         end
     end
-    _warn_ancestor_gitignore_shipped!(env0.env_dir, out)
+    _warn_ancestor_gitignore_shipped!(
+        env0.env_dir, out; required = _required_ship_rels(env),
+    )
     sort!(out)
     isempty(out) && throw(ArgumentError("nothing to ship from $root"))
     return out
@@ -890,6 +892,7 @@ function pack_ship_tar(
         local_dir;
         send_list = _ship_gitignore_send_list(env0.env_dir),
         warn_send_list = true,
+        ship_tree = true,
     ).env_dir
     rels = _ship_rel_paths(root)
     allowed_links = _check_ship_symlinks!(
