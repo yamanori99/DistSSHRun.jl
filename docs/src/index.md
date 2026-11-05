@@ -66,7 +66,13 @@ Confirmation is required unless `-y` is used.
 The directory must be owned by the SSH user and must not be group-writable
 or world-writable. No marker file is written, and `runs/` is not created.
 Controller provenance lives under `DISTSSHKIT_RUN_DIR/run.toml`
-(`schema = 1`, `writer = "DistSSHRun x.y.z"`). Each remote
+(`schema = 1`, `writer = "DistSSHRun x.y.z"`). When the run that wrote
+this file shipped a tree, `provenance.shipped` records `content_tree_hash`
+(`git-sha1`) and `run_id` (the remote `runs/<run_id>/` leaf). An absent
+or empty key means that ship was not recorded. `result_content_tree_hash`
+and `result_remote_run_id` read those strings from a `DriveResult`,
+`GoResult`, or `KitRunResult`. `result_run_dir` reads
+`DISTSSHKIT_RUN_DIR` from those results and from `KitProcess`. Each remote
 `runs/<run_id>/` also gets a minimal `run.toml` with only `schema`,
 `writer`, and `kind = "ship"` so `setup --delete` can refuse a Ship leaf
 that is not DistSSHRun-owned. That stamp is not controller provenance.

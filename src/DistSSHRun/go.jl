@@ -11,7 +11,9 @@ end
 
 `run_dir` is this run's `DISTSSHKIT_RUN_DIR` when one is active.
 Read it with [`result_run_dir`](@ref). [`result_provenance`](@ref) reads
-`run.toml` from it. Omitted `run_dir` uses [`kit_run_dir`](@ref), which
+`run.toml` from it. [`result_content_tree_hash`](@ref) and
+[`result_remote_run_id`](@ref) read `provenance.shipped` in that file.
+Omitted `run_dir` uses [`kit_run_dir`](@ref), which
 is `nothing` outside a run.
 
 Result fields and positional constructors are not API. Result structs are

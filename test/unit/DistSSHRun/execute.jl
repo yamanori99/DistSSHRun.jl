@@ -1401,4 +1401,20 @@ using Test
         end
     end
 
+    @testset "result_run_dir on KitProcess" begin
+        julia = joinpath(Sys.BINDIR, Base.julia_exename())
+        proc = run(
+            pipeline(`$julia --startup-file=no -e nothing`; stdout = devnull, stderr = devnull);
+            wait = true,
+        )
+        bare = DistSSHRun.KitProcess(proc; kind = :go)
+        @test DistSSHRun.result_run_dir(bare) === nothing
+        @test_throws MethodError DistSSHRun.result_content_tree_hash(bare)
+        @test_throws MethodError DistSSHRun.result_remote_run_id(bare)
+        _with_tempdir() do run_dir
+            held = DistSSHRun.KitProcess(proc; kind = :drive, run_dir = run_dir)
+            @test DistSSHRun.result_run_dir(held) == run_dir
+        end
+    end
+
 end

@@ -46,6 +46,12 @@ using Test
     @test :result_provenance in ns
     @test :result_run_dir in ns && Base.ispublic(DistSSHRun, :result_run_dir)
     @test !Base.isexported(DistSSHRun, :result_run_dir)
+    @test :result_content_tree_hash in ns &&
+        Base.ispublic(DistSSHRun, :result_content_tree_hash)
+    @test !Base.isexported(DistSSHRun, :result_content_tree_hash)
+    @test :result_remote_run_id in ns &&
+        Base.ispublic(DistSSHRun, :result_remote_run_id)
+    @test !Base.isexported(DistSSHRun, :result_remote_run_id)
     @test :parse_progress_line ∉ ns && :kit_progress_latest ∉ ns
     @test :kit_progress_phases ∉ ns
     @test :execute_detached_accepts in ns && :kit_pid_alive ∉ ns

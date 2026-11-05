@@ -14,6 +14,14 @@ include(joinpath(@__DIR__, "..", "..", "..", ".github", "downstream_public.jl"))
         src = joinpath(tmp, "src")
         mkpath(src)
         write(joinpath(src, "ok.jl"), "DistSSHRun.print_cli_error(\"x\")\n")
+        write(
+            joinpath(src, "shipread.jl"),
+            """
+            DistSSHRun.result_run_dir(kp)
+            DistSSHRun.result_content_tree_hash(result)
+            DistSSHRun.result_remote_run_id(result)
+            """,
+        )
         write(joinpath(src, "field.jl"), "DistSSHRun.KitProcess.run_dir\n")
         write(joinpath(src, "allow.jl"), "DistSSHRun.print_header(\"t\")\n")
         write(joinpath(src, "imp.jl"), "using DistSSHRun.DistSSHBase: _ssh_host_args\n")

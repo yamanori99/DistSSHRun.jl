@@ -136,7 +136,8 @@ Handle to a detached [`execute!`](@ref) child (`detached=true`).
 
 `process` is the `julia -m DistSSHKit go|drive|ride` subprocess.
 `run_dir` is always allocated in the parent before spawn (pid / `kit.out` /
-`run.toml`). `output_dir` is the artifact root when known at spawn (`go` /
+`run.toml`). Read it with [`result_run_dir`](@ref). The field is not API.
+`output_dir` is the artifact root when known at spawn (`go` /
 `ride`, explicit `output_dir=`, or inherited `DISTRIBUTED_OUTPUT_DIR`).
 Detached `:drive` without those leaves `output_dir` as `nothing` so the child
 can honor `init_output_dir!`. `log_dir` is `nothing` for `:go` / `:ride`.
@@ -187,7 +188,8 @@ Block until the detached child exits, then return a [`KitRunResult`](@ref).
 
 Does not mutate `kp.output_dir` / `kp.log_dir`. After a detached `:drive`
 that deferred the artifact leaf, read the returned result (or
-[`kit_result_from_dir`](@ref) / [`read_kit_run_toml`](@ref) on `kp.run_dir`).
+[`kit_result_from_dir`](@ref) / [`read_kit_run_toml`](@ref) on the
+directory from [`result_run_dir`](@ref)).
 
 `timeout` is wall-clock seconds until the **child process** exits (not the
 drive worker heartbeat). `nothing` waits forever. On timeout the child is

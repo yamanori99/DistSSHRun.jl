@@ -888,7 +888,7 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     if ship !== nothing
         shipped = Dict{String, Any}()
         for key in (
-                "content_tree_hash", "algorithm", "bytes", "files", "host",
+                "content_tree_hash", "run_id", "algorithm", "bytes", "files", "host",
                 "run_dir_empty_at_start",
             )
             haskey(ship, key) || continue
@@ -932,11 +932,11 @@ end
 This run's `DISTSSHKIT_RUN_DIR`, or `nothing` when the result has none.
 
 `result` is a [`DriveResult`](@ref), [`GoResult`](@ref),
-[`KitRunResult`](@ref), or [`RideResult`](@ref). Result fields and
-positional constructors are not API.
+[`KitRunResult`](@ref), [`RideResult`](@ref), or [`KitProcess`](@ref).
+Result fields and positional constructors are not API.
 """
 function result_run_dir(
-        result::Union{DriveResult, GoResult, KitRunResult, RideResult},
+        result::Union{DriveResult, GoResult, KitRunResult, RideResult, KitProcess},
     )::Union{Nothing, String}
     return result.run_dir
 end
@@ -950,10 +950,64 @@ directory is unset or the file is missing.
 
 `result` is a [`DriveResult`](@ref), [`GoResult`](@ref), or
 [`KitRunResult`](@ref). A [`RideResult`](@ref) is not accepted; convert
-it with [`kit_run_result`](@ref) first.
+it with [`kit_run_result`](@ref) first. A [`KitProcess`](@ref) is not
+accepted; [`wait`](@ref) it first.
 """
 function result_provenance(result::Union{DriveResult, GoResult, KitRunResult})
     rd = result_run_dir(result)
     rd === nothing && return nothing
     return read_kit_run_toml(rd)
 end
+
+"""String recorded under `provenance.shipped`, or `nothing` when absent or blank."""
+function _result_shipped_string(
+        result::Union{DriveResult, GoResult, KitRunResult},
+        key::AbstractString,
+    )::Union{Nothing, String}
+    raw = result_provenance(result)
+    raw isa AbstractDict || return nothing
+    provenance = get(raw, "provenance", nothing)
+    provenance isa AbstractDict || return nothing
+    shipped = get(provenance, "shipped", nothing)
+    shipped isa AbstractDict || return nothing
+    value = get(shipped, String(key), nothing)
+    value isa AbstractString || return nothing
+    text = String(value)
+    return isempty(text) ? nothing : text
+end
+
+"""
+    result_content_tree_hash(result) -> Union{Nothing, String}
+
+`content_tree_hash` from this run's controller `run.toml`
+(`provenance.shipped`), or `nothing` when that ship was not recorded.
+
+Schema stays 1. An absent or empty key means not recorded.
+`result` is a [`DriveResult`](@ref), [`GoResult`](@ref), or
+[`KitRunResult`](@ref). A [`RideResult`](@ref) goes through
+[`kit_run_result`](@ref) first.
+"""
+function result_content_tree_hash(
+        result::Union{DriveResult, GoResult, KitRunResult},
+    )::Union{Nothing, String}
+    return _result_shipped_string(result, "content_tree_hash")
+end
+public result_content_tree_hash
+
+"""
+    result_remote_run_id(result) -> Union{Nothing, String}
+
+Remote `runs/<run_id>/` id from this run's controller `run.toml`
+(`provenance.shipped.run_id`), or `nothing` when that ship was not recorded.
+
+Schema stays 1. An absent or empty key means not recorded. This is not
+`DISTSSHKIT_RUN_DIR`. `result` is a [`DriveResult`](@ref), [`GoResult`](@ref),
+or [`KitRunResult`](@ref). A [`RideResult`](@ref) goes through
+[`kit_run_result`](@ref) first.
+"""
+function result_remote_run_id(
+        result::Union{DriveResult, GoResult, KitRunResult},
+    )::Union{Nothing, String}
+    return _result_shipped_string(result, "run_id")
+end
+public result_remote_run_id
