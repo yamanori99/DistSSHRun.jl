@@ -40,6 +40,11 @@ using Test
             end
         end
         @test parse_plan_args(["--gb-per-worker", "1.5", "--help"]).show_help
+        help_buf = IOBuffer()
+        DistSSHRun.show_plan_usage(; io = help_buf)
+        help = String(take!(help_buf))
+        @test occursin("Experimental.", help)
+        @test occursin("=0.2.0", help)
         let err = try
                 parse_plan_args(["--parent-gb", "--nope"])
                 error("expected ArgumentError")

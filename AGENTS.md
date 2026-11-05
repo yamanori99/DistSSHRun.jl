@@ -16,6 +16,8 @@ When reviewing a diff, follow [REVIEW.md](REVIEW.md).
 
 Label a pull request `breaking` when it changes public behavior, including the CLI (flags, confirmation, exit codes, what is deleted). Do not mix a breaking change with other changes.
 
+`plan`, `KitPlan`, `PlanFinding`, `print_plan`, and the `plan` CLI are experimental in 0.2. A patch may change them. That change does not take the `breaking` label. Users who want that surface to stay put pin `DistSSHRun = "=0.2.0"`. `size!` and `WorkerPlan` are not experimental. A patch that changes them still takes the `breaking` label.
+
 Ask before editing `.coderabbit.yaml` or `.github/`.
 
 If a failure comes from a bug in Julia itself or in a dependency, do not work around it in this repository on your own. Report it to the user first: what fails, where the bug is (file and line or commit), how to reproduce it, and whether an upstream issue or fix exists and which release has it. Then wait for the user to decide what to do. Do not open issues, pull requests, or comments on other repositories.
