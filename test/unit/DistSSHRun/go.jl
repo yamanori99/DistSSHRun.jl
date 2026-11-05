@@ -2,7 +2,8 @@ using Test
 using Dates
 
 # Oracle: slot plan, batch paths, julia resolve, missing-script surfaces, remote
-# shell strings. Concurrent local `go!` is integration/go/overlap.jl.
+# shell strings, and a signal-killed remote slot with no go.exitcode.
+# Concurrent local `go!` is integration/go/overlap.jl.
 
 @testset "go" begin
     @testset "_go_plan_slots" begin
@@ -156,6 +157,81 @@ using Dates
             @test DistSSHRun._go_slot_exitcode(ssh0, ec; scp_failed = false) == 3
             write(ec, "0\n")
             @test DistSSHRun._go_slot_exitcode(ssh0, ec; scp_failed = true) == 1
+        end
+    end
+
+    # The slot `ssh` is SIGTERM'd and never writes `go.exitcode`. `scp` exits 0
+    # and leaves that file absent, so the slot keeps `128 + signal`.
+    @testset "_go_run_remote_slot! signal without go.exitcode" begin
+        _with_tempdir() do dir
+            proj = joinpath(dir, "proj")
+            mkdir(proj)
+            script = joinpath(proj, "job.jl")
+            write(script, "true\n")
+            slot = joinpath(dir, "slot")
+            bindir = joinpath(dir, "bin")
+            mkdir(bindir)
+            ready = joinpath(dir, "ssh.ready")
+            ssh = joinpath(bindir, "ssh")
+            scp = joinpath(bindir, "scp")
+            write(
+                ssh,
+                raw"""#!/bin/sh
+ready="$GO_SLOT_SSH_READY"
+for arg in "$@"; do
+  case "$arg" in
+    *go.exitcode*)
+      printf '%s\n' "$$" > "$ready"
+      exec sleep 30
+      ;;
+    *--version*)
+      printf '%s\n' 'julia version 1.10.10'
+      exit 0
+      ;;
+    *__DSR_POSIX_OK_*)
+      printf '%s\n' "$arg" | sed -n 's/.*\(__DSR_POSIX_OK_[0-9a-fA-F][0-9a-fA-F]*__\).*/\1/p'
+      exit 0
+      ;;
+  esac
+done
+printf '%s\n' /usr/bin/julia
+exit 0
+""",
+            )
+            write(scp, "#!/bin/sh\nexit 0\n")
+            chmod(ssh, 0o755)
+            chmod(scp, 0o755)
+            host = "go-slot-sig.test"
+            path = string(bindir, ":", get(ENV, "PATH", ""))
+            result = try
+                withenv(
+                    "PATH" => path,
+                    "GO_SLOT_SSH_READY" => ready,
+                    "DISTSSHKIT_TEST" => nothing,
+                    "DISTSSHKIT_TEST_SSH" => nothing,
+                    "DISTSSHKIT_JOB_ID" => nothing,
+                ) do
+                    task = @async DistSSHRun._go_run_remote_slot!(
+                        host,
+                        proj,
+                        "/remote/proj",
+                        script,
+                        String[],
+                        "slot",
+                        slot;
+                        quiet = true,
+                        julia = "/usr/bin/julia",
+                    )
+                    _kill_ready_child(ready; signal = Base.SIGTERM)
+                    return fetch(task)::DistSSHRun.DriveResult
+                end
+            finally
+                DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!(host)
+                delete!(DistSSHRun._PINNED_JULIA, host * "\0/usr/bin/julia")
+            end
+            @test !result.ok
+            @test result.exit_code == 143
+            @test !isfile(joinpath(slot, "go.exitcode"))
         end
     end
 
