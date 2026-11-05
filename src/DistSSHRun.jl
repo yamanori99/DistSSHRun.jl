@@ -123,6 +123,7 @@ let _base_src = joinpath(@__DIR__, "..", "lib", "DistSSHBase", "src", "DistSSHBa
 end
 include(joinpath(@__DIR__, "..", "lib", "DistSSHBase", "src", "DistSSHBase.jl"))
 include("DistSSHRun/up_module.jl")
+include("DistSSHRun/size_module.jl")
 using .DistSSHBase
 import .DistSSHBase: manifest_path
 using .DistSSHBase: DEFAULT_MEM_HEADROOM, DEFAULT_PARENT_GB,

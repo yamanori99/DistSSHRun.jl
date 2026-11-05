@@ -1,0 +1,13 @@
+[deps]
+DistSSHBase = "f0a69307-14e5-4272-8c28-20680d05bac8"
+DistSSHSize = "17f52fb7-f663-4779-9b89-d421e48561db"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[sources]
+DistSSHBase = {path = "../../DistSSHBase"}
+DistSSHSize = {path = ".."}
+
+[compat]
+DistSSHBase = "0.1"
+DistSSHSize = "0.1"
+Test = "1"

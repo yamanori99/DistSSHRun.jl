@@ -18,8 +18,9 @@ on:
 # Ordinary pull requests skip DistSSHBase unless lib/DistSSHBase, root
 # Project.toml, .github/julia-slots.env, this file, or .github/actions
 # changed (`**/*.md` excluded). DistSSHUp also runs when lib/DistSSHUp
-# changed. A main push, version-cut PR, workflow_dispatch, and CI weekly
-# still run both. Codecov stays a main push.
+# changed, and DistSSHSize when lib/DistSSHSize changed. A main push,
+# version-cut PR, and workflow_dispatch still run all three in this
+# workflow. Codecov stays a main push.
 # Registry install follows the heavy gate, including ordinary pull requests.
 # PkgEval follows the heavy gate
 # (ordinary PRs too) and is continue-on-error. No label is involved.
@@ -37,10 +38,11 @@ jobs:
   # WSL2 Ubuntu is a main push and CI weekly, not a pull request.
   # macOS is required. The macOS job exercises `ps -o lstart=`
   # in kit_process_start_key (no /proc). Coverage uploads from Ubuntu only.
-  # Run's check titles are `DistSSHRun (...)`, the same shape as DistSSHBase
-  # and DistSSHUp. macOS 1.13 runs Base, then Up, then Run, one runner at a
-  # time. A skipped Base or Up does not skip the next (`!cancelled()` and
-  # `!failure()`, and Run also needs Base so a Base failure still blocks it).
+  # Run's check titles are `DistSSHRun (...)`, the same shape as DistSSHBase,
+  # DistSSHUp, and DistSSHSize. macOS 1.13 runs Base, then Up, then Size, then
+  # Run, one runner at a time. A skipped Base, Up, or Size does not skip the
+  # next (`!cancelled()` and `!failure()`, and Run also needs Base so a Base
+  # failure still blocks it).
   # Runic, JETLS 1.13, and Aqua 1.13 start after detect. Pkg.test, Registry,
   # PkgEval, downstream, and SSH E2E start only after those three succeed.
   # An `if` drops the implicit success() check, so each of those jobs names
@@ -53,8 +55,8 @@ jobs:
   # A closed gate skips that job, so the check is skipping. Do not
   # put those titles in one matrix: a job-level if runs before the matrix
   # expands, and the required names never report.
-  # Coverage uploads from the Ubuntu Run job and the Ubuntu DistSSHBase /
-  # DistSSHUp jobs (flag pkgtest, main push).
+  # Coverage uploads from the Ubuntu Run job and the Ubuntu DistSSHBase,
+  # DistSSHUp, and DistSSHSize jobs (flag pkgtest, main push).
   # Slow SSH E2E kit parents are `E2E weekly`
   # (macos-15-intel Colima, not this job).
   # PRs run `DistSSHRun (1.13, ubuntu-latest → ubuntu-26.04)` in this workflow.
@@ -84,9 +86,10 @@ jobs:
       version_cut: ${{ steps.heavy.outputs.version_cut }}
       e2e: ${{ steps.gate.outputs.e2e }}
       coverage: ${{ steps.gate.outputs.coverage }}
-      # DistSSHBase / DistSSHUp path gates. True except on an ordinary pull request.
+      # DistSSHBase / DistSSHUp / DistSSHSize path gates. True except on an ordinary pull request.
       base: ${{ steps.gate.outputs.base }}
       up: ${{ steps.gate.outputs.up }}
+      size: ${{ steps.gate.outputs.size }}
       # Queue's Linux SSH E2E against this checkout. Not the path-filtered `e2e` gate.
       queue_e2e: ${{ steps.gate.outputs.queue_e2e }}
     steps:
@@ -124,11 +127,15 @@ jobs:
             up:
               - "lib/DistSSHUp/**"
               - "!lib/DistSSHUp/**/*.md"
+            size:
+              - "lib/DistSSHSize/**"
+              - "!lib/DistSSHSize/**/*.md"
       - id: gate
         env:
           FILTER_E2E: ${{ steps.filter.outputs.e2e }}
           FILTER_BASE: ${{ steps.filter.outputs.base }}
           FILTER_UP: ${{ steps.filter.outputs.up }}
+          FILTER_SIZE: ${{ steps.filter.outputs.size }}
           CUT: ${{ steps.heavy.outputs.version_cut }}
           HEAVY: ${{ steps.heavy.outputs.heavy }}
         run: |
@@ -153,19 +160,28 @@ jobs:
           else
             echo "queue_e2e=false" >> "$GITHUB_OUTPUT"
           fi
-          # Ordinary pull requests only. Push, dispatch, and a version cut run both.
+          # Ordinary pull requests only. Push, dispatch, and a version cut run all three.
           # CI weekly is a separate workflow and does not read these outputs.
           if [ "$GITHUB_EVENT_NAME" != "pull_request" ] || [ "$CUT" = "true" ]; then
-            echo "base=true" >> "$GITHUB_OUTPUT"
-            echo "up=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "base=true"
+              echo "up=true"
+              echo "size=true"
+            } >> "$GITHUB_OUTPUT"
           else
             base="${FILTER_BASE:-false}"
             up_paths="${FILTER_UP:-false}"
+            size_paths="${FILTER_SIZE:-false}"
             echo "base=${base}" >> "$GITHUB_OUTPUT"
             if [ "$base" = "true" ] || [ "$up_paths" = "true" ]; then
               echo "up=true" >> "$GITHUB_OUTPUT"
             else
               echo "up=false" >> "$GITHUB_OUTPUT"
+            fi
+            if [ "$base" = "true" ] || [ "$size_paths" = "true" ]; then
+              echo "size=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "size=false" >> "$GITHUB_OUTPUT"
             fi
           fi
   test:
@@ -195,7 +211,7 @@ jobs:
 
   test-macos:
     name: DistSSHRun (1.13, xcode-27, aarch64)
-    needs: [detect, runic, jetls, aqua, base-test-macos, up-test-macos]
+    needs: [detect, runic, jetls, aqua, base-test-macos, up-test-macos, size-test-macos]
     # success() is false when a needed job is skipped, which would skip Run
     # after a path-gated Base or Up. Failure still blocks; skip does not.
     # The static gate is result == success, so a skipped Runic does not start Run.
@@ -440,6 +456,141 @@ jobs:
         run: |
           ./testenv/docker-ssh/scripts/up.sh
           julia --project=lib/DistSSHUp lib/DistSSHUp/test/e2e.jl
+      - name: Teardown workers
+        if: ${{ always() }}
+        run: ./testenv/docker-ssh/scripts/down.sh || true
+
+  size-test-ubuntu:
+    name: DistSSHSize (1.13, ubuntu-latest, x64)
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.size == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # Codecov OIDC on main push
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - name: Pkg.test
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            julia --project=lib/DistSSHSize -e 'using Pkg; Pkg.test(; coverage=true)'
+          else
+            julia --project=lib/DistSSHSize -e 'using Pkg; Pkg.test()'
+          fi
+      - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          directories: lib/DistSSHSize/src
+      - name: Upload coverage to Codecov
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: lcov.info
+          slug: ${{ github.repository }}
+          use_oidc: true
+          flags: pkgtest
+          fail_ci_if_error: true
+
+  size-test-macos:
+    name: DistSSHSize (1.13, xcode-27, aarch64)
+    needs: [detect, runic, jetls, aqua, base-test-macos, up-test-macos]
+    # A skipped Base or Up must not skip Size. A failed Base or Up still does.
+    if: ${{ needs.detect.outputs.heavy == 'true' && needs.detect.outputs.size == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && !cancelled() && !failure() }}
+    runs-on: xcode-27
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - name: Pkg.test
+        run: julia --project=lib/DistSSHSize -e 'using Pkg; Pkg.test()'
+
+  size-test-wsl:
+    name: DistSSHSize (1.13, WSL2 ubuntu-24.04, x64)
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.size == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/wsl-install
+      - uses: Vampire/setup-wsl@4c48163d9f981914dd8caa0fc335fe19cca5bff4 # v7.2.0
+        timeout-minutes: 10
+        with:
+          distribution: Ubuntu-24.04
+          wsl-version: 2
+          # Already registered by ./.github/actions/wsl-install. See
+          # wsl-install.ps1 for #43, #96, and #134. This step must not run
+          # `wsl --install` or apt-get. A stuck wsl.exe keeps stdio open, so
+          # timeout-minutes does not reap it.
+          use-cache: true
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ci-cache/wsl-julia
+          # ci's depot, compiled files included. SSH E2E uses wsl-julia-size.
+          key: wsl-julia-1.13-size-${{ hashFiles('lib/DistSSHSize/Project.toml', 'lib/DistSSHSize/test/Project.toml', '.github/julia-slots.env') }}
+      - name: Pkg.test in WSL2
+        shell: wsl-bash {0}
+        run: ./.github/wsl-julia.sh 1.13 julia --project=lib/DistSSHSize -e 'using Pkg; Pkg.test()'
+
+  size-ssh-e2e:
+    name: DistSSHSize (ubuntu-latest → ubuntu-26.04)
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.e2e == 'true' && needs.detect.outputs.size == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: write # buildx type=gha cache for the worker image
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        id: julia
+        with:
+          version: "1.13"
+      - name: Julia ${{ steps.julia.outputs.version }}
+        run: julia --version
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
+        with:
+          project: lib/DistSSHSize
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+      - name: docker-ssh up + SSH E2E
+        env:
+          DISTSSHKIT_BUILD_CACHE: gha
+          DISTSSHKIT_SSH_E2E: "1"
+        run: |
+          ./testenv/docker-ssh/scripts/up.sh
+          julia --project=lib/DistSSHSize lib/DistSSHSize/test/e2e.jl
       - name: Teardown workers
         if: ${{ always() }}
         run: ./testenv/docker-ssh/scripts/down.sh || true
