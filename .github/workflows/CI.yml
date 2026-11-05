@@ -163,9 +163,11 @@ jobs:
           # Ordinary pull requests only. Push, dispatch, and a version cut run all three.
           # CI weekly is a separate workflow and does not read these outputs.
           if [ "$GITHUB_EVENT_NAME" != "pull_request" ] || [ "$CUT" = "true" ]; then
-            echo "base=true" >> "$GITHUB_OUTPUT"
-            echo "up=true" >> "$GITHUB_OUTPUT"
-            echo "size=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "base=true"
+              echo "up=true"
+              echo "size=true"
+            } >> "$GITHUB_OUTPUT"
           else
             base="${FILTER_BASE:-false}"
             up_paths="${FILTER_UP:-false}"
