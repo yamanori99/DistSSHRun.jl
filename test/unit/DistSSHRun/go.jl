@@ -177,26 +177,26 @@ using Dates
             write(
                 ssh,
                 raw"""#!/bin/sh
-ready="$GO_SLOT_SSH_READY"
-for arg in "$@"; do
-  case "$arg" in
-    *go.exitcode*)
-      printf '%s\n' "$$" > "$ready"
-      exec sleep 30
-      ;;
-    *--version*)
-      printf '%s\n' 'julia version 1.10.10'
-      exit 0
-      ;;
-    *__DSR_POSIX_OK_*)
-      printf '%s\n' "$arg" | sed -n 's/.*\(__DSR_POSIX_OK_[0-9a-fA-F][0-9a-fA-F]*__\).*/\1/p'
-      exit 0
-      ;;
-  esac
-done
-printf '%s\n' /usr/bin/julia
-exit 0
-""",
+                ready="$GO_SLOT_SSH_READY"
+                for arg in "$@"; do
+                  case "$arg" in
+                    *go.exitcode*)
+                      printf '%s\n' "$$" > "$ready"
+                      exec sleep 30
+                      ;;
+                    *--version*)
+                      printf '%s\n' 'julia version 1.10.10'
+                      exit 0
+                      ;;
+                    *__DSR_POSIX_OK_*)
+                      printf '%s\n' "$arg" | sed -n 's/.*\(__DSR_POSIX_OK_[0-9a-fA-F][0-9a-fA-F]*__\).*/\1/p'
+                      exit 0
+                      ;;
+                  esac
+                done
+                printf '%s\n' /usr/bin/julia
+                exit 0
+                """,
             )
             write(scp, "#!/bin/sh\nexit 0\n")
             chmod(ssh, 0o755)
