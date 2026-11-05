@@ -41,6 +41,11 @@ wait(::KitProcess)
 
 ## Plan and size
 
+!!! warning "Experimental"
+    `plan`, `KitPlan`, `PlanFinding`, and `print_plan` are experimental in 0.2.
+    A patch release may change them. Pin `DistSSHRun = "=0.2.0"` to keep that
+    surface. `size!` and `WorkerPlan` are not experimental. `pool!` is not either.
+
 `plan` reads a script and reports how it would split. `size!` and `pool!`
 measure memory and the free slots on a host.
 

@@ -2440,7 +2440,7 @@ function print_kit_root_usage(io::IO = stderr)
         "  go                 Run an as-is complete job",
         "  ride               Experimental auto-split of map / filter",
         "  drive              Distributed workers + collect",
-        "  plan               Inspect a script; do not run",
+        "  plan               Experimental inspect; do not run",
         "  size               Estimate worker counts",
         "  pool               Cluster cores / health (no job)",
         "  demo               Install or list example scripts",

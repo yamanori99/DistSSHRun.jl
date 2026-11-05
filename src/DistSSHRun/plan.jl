@@ -22,7 +22,11 @@ const _PLAN_DRIVE_MACROS = (
     Symbol("@fetchfrom"),
 )
 
-"""One syntax finding from [`plan`](@ref)."""
+"""Experimental. One syntax finding from [`plan`](@ref).
+
+`plan` may change in a 0.2 patch. Pin `DistSSHRun = "=0.2.0"` to keep this surface.
+[`size!`](@ref) and [`WorkerPlan`](@ref) are not experimental.
+"""
 struct PlanFinding
     line::Int
     kind::Symbol
@@ -30,7 +34,11 @@ struct PlanFinding
     excerpt::String
 end
 
-"""Result of [`plan`](@ref). Does not start a job."""
+"""Experimental. Result of [`plan`](@ref). Does not start a job.
+
+`plan` may change in a 0.2 patch. Pin `DistSSHRun = "=0.2.0"` to keep this surface.
+[`size!`](@ref) and [`WorkerPlan`](@ref) are not experimental.
+"""
 struct KitPlan
     script::String
     suggest::Symbol
@@ -197,7 +205,11 @@ end
     plan(script; session=nothing, workers=[], project=pwd(),
          gb_per_worker=nothing, probe=nothing, mem_headroom, parent_gb) -> KitPlan
 
-Inspect `script` without starting a job. Syntax only: Distributed vocabulary,
+Experimental. Inspect `script` without starting a job. May change in a 0.2 patch.
+Pin `DistSSHRun = "=0.2.0"` to keep this surface. [`size!`](@ref) and
+[`WorkerPlan`](@ref) are not experimental.
+
+Syntax only: Distributed vocabulary,
 `map` / `filter` / comprehensions, and independent indexed `for`
 (`dest[i] = …` with loop-var indices and no `return` in the RHS).
 Accumulating, stencil, or multi-statement `for` is out of scope.
@@ -275,7 +287,11 @@ function _plan_status_label(st::Symbol)::String
     return String(st)
 end
 
-"""Print a [`KitPlan`](@ref) (CLI and tests)."""
+"""Experimental. Print a [`KitPlan`](@ref) (CLI and tests).
+
+`plan` may change in a 0.2 patch. Pin `DistSSHRun = "=0.2.0"` to keep this surface.
+[`size!`](@ref) and [`WorkerPlan`](@ref) are not experimental.
+"""
 function print_plan(kp::KitPlan; io::IO = stdout)
     println(io, "Planning ", kp.script, "...")
     println(io)

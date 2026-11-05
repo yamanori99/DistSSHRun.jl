@@ -28,6 +28,7 @@ function show_plan_usage(; io::IO = stdout)
     print_help_chrome(cli_heading("plan"); io = io)
     print_help_lines(
         io,
+        "Experimental. May change in a 0.2 patch. Pin DistSSHRun =0.2.0 to keep plan.",
         "Inspect a script. Does not start a job.",
         "Suggests go, ride, or drive from syntax (map / filter / comprehension /",
         "independent indexed for; other for is out of scope; Distributed → drive).",
