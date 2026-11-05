@@ -509,4 +509,142 @@ using Test
             DistSSHRun._SHIP_LAYOUT_ACTIVE[] = previous_active
         end
     end
+
+    @testset "ride retargets SSH project to runs/*/src" begin
+        double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_ride_work_root_ssh.jl"))
+        previous = DistSSHRun._LAST_SHIP[]
+        previous_active = DistSSHRun._SHIP_LAYOUT_ACTIVE[]
+        old_remote = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
+        function restore_remote!()
+            if old_remote === nothing
+                delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+            else
+                ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = old_remote
+            end
+            return nothing
+        end
+        try
+            _with_tempdir() do tmp
+                local_proj = joinpath(tmp, "local")
+                mkpath(local_proj)
+                write(joinpath(local_proj, "Project.toml"), "name = \"RideRoot\"\n")
+                script = joinpath(local_proj, "job.jl")
+                write(script, "nothing\n")
+                remote = joinpath(tmp, "remote")
+                older = joinpath(remote, "runs", "20200101T000000Z-aaaaaa", "src")
+                newer = joinpath(remote, "runs", "20200102T000000Z-bbbbbb", "src")
+                mkpath(older)
+                mkpath(newer)
+                write(joinpath(older, "Project.toml"), "name = \"Old\"\n")
+                write(joinpath(newer, "Project.toml"), "name = \"New\"\n")
+                write(joinpath(newer, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+                logp = joinpath(tmp, "ssh.log")
+                bindir = joinpath(tmp, "bin")
+                mkpath(bindir)
+                ssh_bin = joinpath(bindir, "ssh")
+                # Version check uses `ssh`, not the test double. Answer that, fail the rest.
+                write(
+                    ssh_bin,
+                    """
+                    #!/bin/sh
+                    for a in "\$@"; do
+                      case "\$a" in
+                        *--version*)
+                          printf '%s\\n' "julia version 1.13.3"
+                          exit 0
+                          ;;
+                      esac
+                    done
+                    exit 255
+                    """,
+                )
+                chmod(ssh_bin, 0o755)
+                fake = Dict(
+                    "DISTSSHKIT_TEST" => "1",
+                    "DISTSSHKIT_TEST_SSH" => double,
+                    "DISTSSHKIT_TEST_SSH_LOG" => logp,
+                    "PATH" => bindir * ":" * get(ENV, "PATH", ""),
+                )
+                host = "ridework.test"
+                want = DistSSHRun.canonical_local_path(newer)
+                parent_env = joinpath(tmp, "parent-env.txt")
+                write(
+                    script,
+                    """
+                    open($(repr(parent_env)), "w") do io
+                        println(io, get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
+                    end
+                    """,
+                )
+
+                withenv(fake...) do
+                    ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = remote * "\nbad"
+                    DistSSHRun._assign_remote_work_root_env!([host], local_proj)
+                    @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] == remote * "\nbad"
+                    delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+                    DistSSHRun._assign_remote_work_root_env!(String[], local_proj)
+                    @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+
+                    touch(logp)
+                    parent = redirect_stdout(devnull) do
+                        redirect_stderr(devnull) do
+                            DistSSHRun.ride!(
+                                script, ["parent:0"];
+                                project = local_proj,
+                                remote = remote,
+                                output_dir = joinpath(tmp, "parent-out"),
+                                spi_check = false,
+                            )
+                        end
+                    end
+                    @test parent.ok
+                    @test !occursin("__DSR_SHIP_SRC__", read(logp, String))
+                    @test strip(read(parent_env, String)) == remote
+
+                    write(script, "nothing\n")
+                    rm(logp; force = true)
+                    touch(logp)
+                    DistSSHRun._LAST_SHIP[] = Dict{String, Any}(
+                        "src" => "/wrong/runs/old/src",
+                        "hosts" => String[host],
+                        "remote_root" => remote,
+                    )
+                    DistSSHRun._SHIP_LAYOUT_ACTIVE[] = true
+                    child = redirect_stdout(devnull) do
+                        redirect_stderr(devnull) do
+                            DistSSHRun.ride!(
+                                script, ["child:$(host):1"];
+                                project = local_proj,
+                                remote = remote,
+                                julia = "/usr/bin/julia",
+                                output_dir = joinpath(tmp, "child-out"),
+                                spi_check = false,
+                                require_all_hosts = false,
+                            )
+                        end
+                    end
+                    logged = read(logp, String)
+                    @test child.workers == 0
+                    @test child.error isa AbstractString
+                    @test occursin("No workers available", something(child.error, ""))
+                    @test occursin("__DSR_SHIP_SRC__", logged)
+                    @test occursin("--project=" * DistSSHRun.posix_quote(want), logged)
+                    @test !occursin("--project=" * DistSSHRun.posix_quote("/wrong/runs/old/src"), logged)
+                    @test !occursin("--project=" * DistSSHRun.posix_quote(remote), logged)
+
+                    write(joinpath(remote, "Project.toml"), "name = \"RootWins\"\n")
+                    ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = remote
+                    DistSSHRun._clear_last_ship!()
+                    DistSSHRun._assign_remote_work_root_env!([host], local_proj)
+                    @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] ==
+                        DistSSHRun.canonical_local_path(remote)
+                end
+            end
+        finally
+            DistSSHRun._LAST_SHIP[] = previous
+            DistSSHRun._SHIP_LAYOUT_ACTIVE[] = previous_active
+            restore_remote!()
+            delete!(DistSSHRun._PINNED_JULIA, "ridework.test\0/usr/bin/julia")
+        end
+    end
 end

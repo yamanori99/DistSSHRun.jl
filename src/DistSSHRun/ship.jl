@@ -1250,6 +1250,34 @@ function _project_work_root(
     return _rehome_under_work_root(mapped, deploy, wr)
 end
 
+"""Point `DISTRIBUTED_REMOTE_PROJECT_ROOT` at [`_project_work_root`](@ref).
+
+No hosts leaves the env alone. `cli_override=nothing` reads the current env.
+A control character in that override or in the resolved root leaves the env alone.
+Shared by `drive` (no pre-run sync) and `ride` (SSH children).
+"""
+function _assign_remote_work_root_env!(
+        hosts::AbstractVector{<:AbstractString},
+        local_project::AbstractString;
+        cli_override::Union{Nothing, AbstractString} = nothing,
+    )::Nothing
+    isempty(hosts) && return nothing
+    cli = if cli_override === nothing
+        env_rr = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
+        isempty(env_rr) ? nothing : env_rr
+    else
+        s = strip(String(cli_override))
+        isempty(s) ? nothing : s
+    end
+    if cli === nothing || !any(iscntrl, String(cli))
+        wr = _project_work_root(hosts, local_project; cli_override = cli)
+        if !any(iscntrl, String(wr))
+            ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = remote_env_project_root(wr)
+        end
+    end
+    return nothing
+end
+
 """Rewrite `mapped` from under `deploy` onto `work` (`runs/<id>/src` when that is the project)."""
 function _rehome_under_work_root(
         mapped::AbstractString,
