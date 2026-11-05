@@ -38,6 +38,9 @@ using Test
         mx2 = Meta.parse("map(+, xs, ys)")
         @test DistSSHRun._ride_rewrite(mx2).args[1] === :map
 
+        itmap = Meta.parse("Iterators.map(identity, xs)")
+        @test DistSSHRun._ride_rewrite(itmap).args[1] isa Expr
+
         cx = Meta.parse("[x^2 for x in xs]")
         cr = DistSSHRun._ride_rewrite(cx)
         @test cr.args[1] === GlobalRef(DistSSHRun, :_ride_map)

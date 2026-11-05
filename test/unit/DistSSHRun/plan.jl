@@ -1,5 +1,15 @@
 using Test
 
+function _plan_each_subexpr(f, ex)
+    ex isa LineNumberNode && return nothing
+    f(ex)
+    ex isa Expr || return nothing
+    for a in ex.args
+        _plan_each_subexpr(f, a)
+    end
+    return nothing
+end
+
 @testset "plan" begin
     _with_tempdir() do tmp
         map_path = joinpath(tmp, "mapped.jl")
@@ -115,5 +125,58 @@ using Test
         buf2 = IOBuffer()
         DistSSHRun.print_plan(sized; io = buf2)
         @test occursin("slots:", String(take!(buf2)))
+
+        function _plan_write(name, src)
+            path = joinpath(tmp, name)
+            write(path, src)
+            return DistSSHRun.plan(path)
+        end
+        @test _plan_write("defworkers.jl", "workers() = 4\n").suggest === :go
+        @test _plan_write("fnworkers.jl", "function workers()\n    4\nend\n").suggest === :go
+        @test _plan_write("foopmap.jl", "Foo.pmap(identity, 1:2)\n").suggest === :go
+        @test _plan_write("itmap.jl", "Iterators.map(identity, 1:2)\n").suggest === :go
+        @test _plan_write(
+            "thspawn.jl",
+            "using Base.Threads: @spawn\n@spawn 1\n",
+        ).suggest === :go
+        @test _plan_write("map2.jl", "map(f, a, b)\n").suggest === :go
+        @test _plan_write("mapdo.jl", "map(xs) do x\n    x\nend\n").suggest === :go
+        @test _plan_write("typed.jl", "Int[x for x in 1:3]\n").suggest === :go
+        dist_every = _plan_write("devery.jl", "Distributed.@everywhere x = 1\n")
+        @test dist_every.suggest === :drive
+        @test any(f -> f.status === :drive_vocab, dist_every.findings)
+        dist_pmap = _plan_write("dpmap.jl", "Distributed.pmap(identity, 1:2)\n")
+        @test dist_pmap.suggest === :drive
+        bare_spawn = _plan_write("bspawn.jl", "@spawn 1\n")
+        @test bare_spawn.suggest === :drive
+        bad = _plan_write("bad.jl", "function foo(\n")
+        @test !bad.ok
+        @test bad.suggest === :go
+        bad_error = bad.error
+        @test bad_error !== nothing
+        @test occursin("ParseError", bad_error)
+
+        for src in (
+                "map(f, 1:8)\n",
+                "filter(iseven, 1:10)\n",
+                "ys = [x^2 for x in 1:4]\n",
+                """
+                for i in eachindex(xs)
+                    results[i] = xs[i]
+                end
+                """,
+                "map(f, a, b)\n",
+                "map(xs) do x\n    x\nend\n",
+                "Int[x for x in 1:3]\n",
+                "Iterators.map(identity, 1:2)\n",
+                "workers() = 4\n",
+            )
+            ex = Meta.parseall(src)
+            _plan_each_subexpr(ex) do node
+                kind = DistSSHRun._plan_candidate_kind(node)
+                kind === nothing && return
+                @test DistSSHRun._ride_rewrite(node) != node
+            end
+        end
     end
 end
