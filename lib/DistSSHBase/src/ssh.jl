@@ -1195,7 +1195,7 @@ function _remote_shell_capture(
                 stderr = err_buf,
             );
             wait = true,
-        )
+        )::Base.Process
     catch
         return nothing
     end
