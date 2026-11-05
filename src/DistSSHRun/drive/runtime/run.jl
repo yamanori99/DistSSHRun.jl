@@ -596,20 +596,9 @@ function _run_drive_parsed_locked!(
             end
             writeln_both("")
         elseif !isempty(host_names)
-            # Do not SSH-probe or reject the remote path here. `kit.hosts` is
-            # written around join; `add_drive_workers!` then rejects a
-            # newline in the path, and an invalid SSH name fails that host.
-            env_rr = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
-            cli = isempty(env_rr) ? nothing : env_rr
-            if cli === nothing || !any(iscntrl, String(cli))
-                wr = DistSSHRun._project_work_root(
-                    host_names, project_root; cli_override = cli,
-                )
-                if !any(iscntrl, String(wr))
-                    ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] =
-                        DistSSHRun.remote_env_project_root(wr)
-                end
-            end
+            # A newline in the override stays for `add_drive_workers!`.
+            # An invalid SSH name fails that host. The work root is still probed.
+            DistSSHRun._assign_remote_work_root_env!(host_names, project_root)
         end
 
         kit_progress_step!("git")

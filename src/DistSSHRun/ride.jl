@@ -722,6 +722,12 @@ function _ride_run!(
             rr = strip(String(remote))
             !isempty(rr) && (ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = rr)
         end
+        # After `:ship_tree` the project is `remote/runs/<id>/src`.
+        # `_clear_last_ship!` dropped this process's ship record, so this
+        # probes (`Project.toml` at the root, else latest `runs/*/src`).
+        # A parent-only ride has no SSH host to probe.
+        child_hosts = String[h for (h, n) in wp.child_workers if n > 0]
+        _assign_remote_work_root_env!(child_hosts, project)
         empty!(ARGS)
         append!(ARGS, String[String(a) for a in args])
         job_raw = strip(get(ENV, "DISTSSHKIT_JOB_ID", ""))
