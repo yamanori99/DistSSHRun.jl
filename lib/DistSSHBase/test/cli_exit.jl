@@ -15,9 +15,8 @@ function _cli_exit_stderr(f)
     old = stderr
     rd, wr = redirect_stderr()
     reader = @async read(rd, String)
-    local result
-    try
-        result = f()
+    result = try
+        f()
     finally
         redirect_stderr(old)
         close(wr)
@@ -52,7 +51,6 @@ end
         code, text = _cli_exit_stderr() do
             return DistSSHBase.with_cli_exit() do
                 throw(ArgumentError("no Julia on host"))
-                return Cint(0)
             end
         end
         @test code == Cint(1)
@@ -110,7 +108,6 @@ end
         code, text = _cli_exit_stderr() do
             return DistSSHBase.with_cli_exit() do
                 throw(Base.IOError("write: broken pipe (EPIPE)", Base.UV_EPIPE))
-                return Cint(0)
             end
         end
         @test code == Cint(141)
@@ -118,7 +115,6 @@ end
         code, text = _cli_exit_stderr() do
             return DistSSHBase.with_cli_exit() do
                 throw(Base.IOError("no such file", Base.UV_ENOENT))
-                return Cint(0)
             end
         end
         @test code == Cint(1)
