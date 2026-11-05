@@ -149,3 +149,9 @@ Filter = function (x)
     return !(n in grouped) && !family_only
 end
 ```
+
+`shell_status` is public on DistSSHBase and is not exported.
+
+```@docs
+DistSSHBase.shell_status
+```
