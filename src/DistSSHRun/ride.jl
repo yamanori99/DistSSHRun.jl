@@ -675,6 +675,7 @@ function _ride_run!(
     run_dir = kit_run_dir()
     project_root_abs = canonical_local_path(project)
     _reset_run_provenance!(project_root_abs)
+    _clear_last_ship!()
     tok = String[String(t) for t in tokens]
     wp = try
         _ride_resolve_plan(tok)

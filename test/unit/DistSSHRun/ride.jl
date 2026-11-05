@@ -451,4 +451,59 @@ using Test
             @test !isfile(joinpath(dirty, "kit.pid"))
         end
     end
+
+    @testset "ride does not record an earlier ship" begin
+        previous = DistSSHRun._LAST_SHIP[]
+        previous_active = DistSSHRun._SHIP_LAYOUT_ACTIVE[]
+        function seed_earlier_ship!()
+            DistSSHRun._LAST_SHIP[] = Dict{String, Any}(
+                "algorithm" => "git-sha1",
+                "content_tree_hash" => "deadbeef",
+                "bytes" => 1,
+                "files" => 1,
+                "run_id" => "20260101T000000Z-abcdef",
+                "host" => "host.test",
+                "run_dir_empty_at_start" => true,
+            )
+            DistSSHRun._SHIP_LAYOUT_ACTIVE[] = true
+            return nothing
+        end
+        function assert_no_shipped(result)
+            rd = result.run_dir
+            @test rd isa AbstractString
+            raw = DistSSHRun.read_kit_run_toml(rd)
+            @test raw isa AbstractDict
+            prov = raw["provenance"]
+            @test prov isa AbstractDict
+            @test !haskey(prov, "shipped")
+            return nothing
+        end
+        try
+            _with_tempdir() do tmp
+                script = joinpath(tmp, "job.jl")
+                write(script, "println(\"ok\")\n")
+                bad = joinpath(tmp, "bad.jl")
+                write(bad, "error(\"boom\")\n")
+                seed_earlier_ship!()
+                ok = redirect_stdout(devnull) do
+                    redirect_stderr(devnull) do
+                        DistSSHRun.ride!(script; project = tmp)
+                    end
+                end
+                @test ok.ok
+                assert_no_shipped(ok)
+                seed_earlier_ship!()
+                failed = redirect_stdout(devnull) do
+                    redirect_stderr(devnull) do
+                        DistSSHRun.ride!(bad; project = tmp)
+                    end
+                end
+                @test !failed.ok
+                assert_no_shipped(failed)
+            end
+        finally
+            DistSSHRun._LAST_SHIP[] = previous
+            DistSSHRun._SHIP_LAYOUT_ACTIVE[] = previous_active
+        end
+    end
 end
