@@ -193,6 +193,8 @@ include("DistSSHRun/drive/runtime/results.jl")
 include("DistSSHRun/drive/runtime/run.jl")
 include("DistSSHRun/argv/size_report.jl")
 include("DistSSHRun/plan.jl")
+# After `plan.jl`: publish extract and the plain-script hint call `plan` and `KitPlan`.
+include("DistSSHRun/drive/runtime/script_hint.jl")
 include("DistSSHRun/go.jl")
 include("DistSSHRun/ride.jl")
 include("DistSSHRun/execute.jl")
