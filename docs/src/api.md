@@ -23,6 +23,7 @@ Filter = function (x)
         :drive!, :DriveResult, :HostRunResult, :DriveHostStatus, :drive_host_status,
         :KitRunResult, :KitProcess, :kit_run_result, :report_run_errors,
         :terminate!, :terminate_run!, :kit_result_from_dir, :result_run_dir, :result_provenance,
+        :result_content_tree_hash, :result_remote_run_id,
         :ride!, :RideResult, :print_ride,
     )
     n = try
@@ -124,6 +125,7 @@ Filter = function (x)
         :drive!, :DriveResult, :HostRunResult, :DriveHostStatus, :drive_host_status,
         :KitRunResult, :KitProcess, :kit_run_result, :report_run_errors,
         :terminate!, :terminate_run!, :kit_result_from_dir, :result_run_dir, :result_provenance,
+        :result_content_tree_hash, :result_remote_run_id,
         :ride!, :RideResult, :print_ride,
         :plan, :KitPlan, :PlanFinding, :print_plan,
         :size!, :WorkerPlan, :pool!, :ResourcePool, :HostInventory, :print_pool,

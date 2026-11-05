@@ -519,4 +519,89 @@ end
             end
         end
     end
+
+    @testset "shipped hash and run_id" begin
+        previous = DistSSHRun._LAST_SHIP[]
+        try
+            DistSSHRun._LAST_SHIP[] = nothing
+            _with_tempdir() do tmp
+                prov = DistSSHRun.assemble_provenance(tmp)
+                @test prov["schema"] == 1
+                @test !haskey(prov, "shipped")
+                DistSSHRun.write_kit_run_toml!(tmp; kind = :go, provenance = prov)
+                raw = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
+                @test raw["schema"] == 1
+                @test !haskey(raw["provenance"], "shipped")
+                held = DistSSHRun.DriveResult(true, 0; run_dir = tmp)
+                @test DistSSHRun.result_content_tree_hash(held) === nothing
+                @test DistSSHRun.result_remote_run_id(held) === nothing
+                go = DistSSHRun.GoResult(
+                    true, nothing, held, nothing, "job.jl", tmp; run_dir = tmp,
+                )
+                @test DistSSHRun.result_content_tree_hash(go) === nothing
+                @test DistSSHRun.result_remote_run_id(go) === nothing
+            end
+            DistSSHRun._LAST_SHIP[] = Dict{String, Any}(
+                "algorithm" => "git-sha1",
+                "content_tree_hash" => "abc123",
+                "run_id" => "20260101T000000Z-abcdef",
+                "bytes" => 4,
+                "files" => 1,
+                "host" => "lab",
+                "run_dir_empty_at_start" => true,
+            )
+            _with_tempdir() do tmp
+                prov = DistSSHRun.assemble_provenance(tmp)
+                @test prov["schema"] == 1
+                @test prov["shipped"]["content_tree_hash"] == "abc123"
+                @test prov["shipped"]["run_id"] == "20260101T000000Z-abcdef"
+                DistSSHRun.write_kit_run_toml!(tmp; kind = :drive, provenance = prov)
+                raw = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
+                @test raw["schema"] == 1
+                @test raw["provenance"]["schema"] == 1
+                @test raw["provenance"]["shipped"]["content_tree_hash"] == "abc123"
+                @test raw["provenance"]["shipped"]["run_id"] == "20260101T000000Z-abcdef"
+                held = DistSSHRun.KitRunResult(
+                    true, :drive, nothing, nothing, nothing, 0; run_dir = tmp,
+                )
+                @test DistSSHRun.result_content_tree_hash(held) == "abc123"
+                @test DistSSHRun.result_remote_run_id(held) == "20260101T000000Z-abcdef"
+                drive = DistSSHRun.DriveResult(true, 0; run_dir = tmp)
+                @test DistSSHRun.result_remote_run_id(DistSSHRun.kit_run_result(drive)) ==
+                    "20260101T000000Z-abcdef"
+            end
+            DistSSHRun._LAST_SHIP[] = Dict{String, Any}(
+                "content_tree_hash" => "abc123",
+                "run_id" => "",
+                "algorithm" => "git-sha1",
+            )
+            _with_tempdir() do tmp
+                prov = DistSSHRun.assemble_provenance(tmp)
+                @test prov["shipped"]["content_tree_hash"] == "abc123"
+                @test !haskey(prov["shipped"], "run_id")
+                DistSSHRun.write_kit_run_toml!(tmp; kind = :go, provenance = prov)
+                held = DistSSHRun.DriveResult(true, 0; run_dir = tmp)
+                @test DistSSHRun.result_content_tree_hash(held) == "abc123"
+                @test DistSSHRun.result_remote_run_id(held) === nothing
+            end
+            _with_tempdir() do tmp
+                DistSSHRun.write_kit_run_toml!(
+                    tmp;
+                    kind = :go,
+                    provenance = Dict{String, Any}(
+                        "schema" => 1,
+                        "shipped" => Dict{String, Any}(
+                            "content_tree_hash" => "",
+                            "run_id" => "",
+                        ),
+                    ),
+                )
+                held = DistSSHRun.DriveResult(true, 0; run_dir = tmp)
+                @test DistSSHRun.result_content_tree_hash(held) === nothing
+                @test DistSSHRun.result_remote_run_id(held) === nothing
+            end
+        finally
+            DistSSHRun._LAST_SHIP[] = previous
+        end
+    end
 end
