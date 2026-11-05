@@ -134,4 +134,36 @@ using Test
             @test occursin("older than 1.22", err)
         end
     end
+
+    mktempdir() do d
+        ju = joinpath(d, "juliaup")
+        ready = joinpath(d, "ready")
+        write(
+            ju,
+            """
+            #!/bin/sh
+            echo '     *  1.13     1.13.2+0.aarch64'
+            echo \$\$ > '$ready'
+            exec sleep 30
+            """,
+        )
+        chmod(ju, 0o755)
+        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+            task = @async DistSSHUp.juliaup_default_patch("parent")
+            _kill_ready_child(ready; signal = Base.SIGTERM)
+            @test fetch(task) == "-"
+        end
+        write(
+            ju,
+            """
+            #!/bin/sh
+            echo '     *  1.13     1.13.2+0.aarch64'
+            exit 3
+            """,
+        )
+        chmod(ju, 0o755)
+        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+            @test DistSSHUp.juliaup_default_patch("parent") == "-"
+        end
+    end
 end

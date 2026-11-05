@@ -1417,4 +1417,31 @@ using Test
         end
     end
 
+    @testset "wait(::KitProcess) uses shell_status" begin
+        function _wait_code(proc)
+            return _with_tempdir() do dir
+                kp = DistSSHRun.KitProcess(proc; kind = :go, output_dir = dir)
+                result = wait(kp)
+                return result
+            end
+        end
+        for (code, ok) in ((0, true), (3, false), (255, false))
+            proc = run(ignorestatus(`sh -c "exit $code"`); wait = true)
+            result = _wait_code(proc)
+            @test result.ok == ok
+            @test result.exit_code == code
+            ok || @test result.failed_step == "go"
+        end
+        for (sig, status) in ((Base.SIGTERM, 143), (Base.SIGKILL, 137))
+            proc = run(ignorestatus(`sleep 30`); wait = false)
+            process_running(proc) || error("sleep exited before $(sig)")
+            kill(proc, sig)
+            wait(proc)
+            result = _wait_code(proc)
+            @test result.ok == false
+            @test result.exit_code == status
+            @test result.failed_step == "go"
+        end
+    end
+
 end

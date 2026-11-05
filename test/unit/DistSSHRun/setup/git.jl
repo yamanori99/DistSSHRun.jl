@@ -342,3 +342,54 @@ using Test
         end
     end
 end
+
+@testset "git LFS check uses shell_status" begin
+    proc = run(ignorestatus(`sh -c "exit 3"`); wait = true)
+    @test DistSSHRun._process_failed_code(ProcessFailedException(Base.Process[proc])) == 3
+    signaled = run(ignorestatus(`sleep 30`); wait = false)
+    process_running(signaled) || error("sleep exited before SIGTERM")
+    kill(signaled, Base.SIGTERM)
+    wait(signaled)
+    @test DistSSHRun._process_failed_code(ProcessFailedException(Base.Process[signaled])) == 143
+
+    double = joinpath(@__DIR__, "..", "..", "..", "..", "lib", "DistSSHBase", "test", "fixtures", "fake_shell_ssh.jl")
+    @test isfile(double)
+    _with_tempdir() do dir
+        logp = joinpath(dir, "ssh.log")
+        ready = joinpath(dir, "ready")
+        base = Dict{String, String}(
+            "DISTSSHKIT_TEST" => "1",
+            "DISTSSHKIT_TEST_SSH" => double,
+            "SHELL_DOUBLE_LOG" => logp,
+            "DISTSSHKIT_TEST_POSIX_SHELL" => "1",
+        )
+        try
+            withenv(merge(base, Dict("SHELL_DOUBLE_MODE" => "exit0"))...) do
+                none = DistSSHRun._remote_lfs_required("lfs-none.test", "/repo")
+                @test none.ok
+                @test !none.uses
+            end
+            withenv(merge(base, Dict("SHELL_DOUBLE_MODE" => "exit1"))...) do
+                missing = DistSSHRun._remote_lfs_required("lfs-missing.test", "/repo")
+                @test missing.ok
+                @test !missing.uses
+            end
+            killed = withenv(
+                merge(
+                    base, Dict(
+                        "SHELL_DOUBLE_MODE" => "sleep",
+                        "SHELL_DOUBLE_READY" => ready,
+                    )
+                )...
+            ) do
+                task = @async DistSSHRun._remote_lfs_required("lfs-sig.test", "/repo")
+                _kill_ready_child(ready)
+                return fetch(task)
+            end
+            @test !killed.ok
+            @test !killed.uses
+        finally
+            DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
+        end
+    end
+end

@@ -170,5 +170,22 @@ end
             @test DistSSHBase._DETECT_JULIA_PATH_CACHE["host1"] == "/kept"
         end
         delete!(DistSSHBase._DETECT_JULIA_PATH_CACHE, "host1")
+
+        ready = joinpath(d, "ready")
+        write(
+            ssh,
+            """
+            println("     *  1.13     1.13.2+0.aarch64")
+            open($(repr(ready)), "w") do io
+                println(io, getpid())
+            end
+            sleep(30)
+            """,
+        )
+        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_SSH" => ssh) do
+            task = @async DistSSHUp.juliaup_default_patch("signal-host")
+            _kill_ready_child(ready; signal = Base.SIGTERM)
+            @test fetch(task) == "-"
+        end
     end
 end

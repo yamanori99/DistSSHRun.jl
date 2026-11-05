@@ -808,7 +808,7 @@ function _remote_script_output(
     wait(proc)
     out = fetch(out_task)
     err = fetch(err_task)
-    code = Int(something(proc.exitcode, 1))
+    code = DistSSHBase.shell_status(proc)
     if code == 255
         throw(
             ArgumentError(
@@ -1524,7 +1524,7 @@ function _remote_extract_tar!(
             wait = true,
         )
     end
-    code = Int(something(proc.exitcode, 1))
+    code = DistSSHBase.shell_status(proc)
     err = String(take!(err_buf))
     out = String(take!(out_buf))
     if code == 255

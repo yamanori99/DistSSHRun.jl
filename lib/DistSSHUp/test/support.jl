@@ -30,6 +30,24 @@ if !isdefined(Main, :_with_tempdir)
     end
 end
 
+if !isdefined(Main, :_kill_ready_child)
+    function _kill_ready_child(ready::AbstractString; signal::Integer = Base.SIGTERM)
+        t0 = time()
+        pid = nothing
+        while time() - t0 < 20
+            if isfile(ready)
+                pid = tryparse(Int, strip(read(ready, String)))
+                pid === nothing || break
+            end
+            sleep(0.02)
+        end
+        pid === nothing && error("timed out waiting for $(ready)")
+        ccall(:kill, Cint, (Cint, Cint), Cint(pid), Cint(signal)) == 0 ||
+            error("kill $(pid) failed")
+        return pid
+    end
+end
+
 if !isdefined(Main, :_write_aligned_fake_juliaup)
     # Fake local juliaup already on this process's channel, with `julia` beside it.
     function _write_aligned_fake_juliaup(dir::AbstractString)

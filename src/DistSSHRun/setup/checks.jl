@@ -140,7 +140,7 @@ function probe_project_deps(
     err = IOBuffer()
     out = IOBuffer()
     proc = run(pipeline(cmd; stdout = out, stderr = err); wait = true)
-    proc.exitcode == 0 && occursin("ok", String(take!(out))) && return nothing
+    DistSSHBase.shell_status(proc) == 0 && occursin("ok", String(take!(out))) && return nothing
     msg = strip(String(take!(err)))
     isempty(msg) && (msg = strip(String(take!(out))))
     m = match(r"not instantiated \(([^)]+)\)", msg)
@@ -175,7 +175,8 @@ function probe_remote_project_deps(
             );
             wait = true,
         )
-        proc.exitcode == 0 && occursin("ok", String(take!(out))) && return nothing
+        code = DistSSHBase.shell_status(proc)
+        code == 0 && occursin("ok", String(take!(out))) && return nothing
         msg = strip(String(take!(err)))
         isempty(msg) && (msg = strip(String(take!(out))))
         m = match(r"not instantiated \(([^)]+)\)", msg)
@@ -187,7 +188,6 @@ function probe_remote_project_deps(
         else
             first(split(msg, '\n'))
         end
-        code = proc.exitcode isa Integer ? Int(proc.exitcode) : 1
         return DistSSHBase._append_remote_shell_hint(String(host), code, shown)
     catch e
         return "dependency check failed: $(sprint(showerror, e))"
