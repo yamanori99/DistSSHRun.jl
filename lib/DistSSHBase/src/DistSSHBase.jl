@@ -23,6 +23,7 @@ include("host_tokens.jl")
 include("cli_entry.jl")
 include("sigint.jl")
 include("cli_exit.jl")
+include("shell_status.jl")
 include("budgets.jl")
 include("help.jl")
 include("ssh.jl")
@@ -35,7 +36,7 @@ public cli_entry, cli_heading, cli_m, cli_m_project, cli_qhost, cli_qhost_headin
 public format_placement_token, get_remote_julia_version, get_remote_julia_version_full, is_sigint
 public julia_project_rel, manifest_path, parse_julia_version_full
 public parse_placement_token, posix_quote, remote_env_project_root, resolve_remote_julia
-public resolve_remote_project_root, shield_sigint, with_cli_entry, without_cancel
+public resolve_remote_project_root, shell_status, shield_sigint, with_cli_entry, without_cancel
 public CliUsageError, cli_parse, with_cli_exit
 public wait_seconds
 
