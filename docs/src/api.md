@@ -50,7 +50,7 @@ wait(::KitProcess)
 measure memory and the free slots on a host.
 
 ```@autodocs
-Modules = [DistSSHRun]
+Modules = [DistSSHRun, DistSSHRun.DistSSHBase]
 Public = true
 Private = false
 Filter = function (x)
