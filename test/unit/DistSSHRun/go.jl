@@ -148,6 +148,8 @@ using Dates
             @test DistSSHRun._go_slot_exitcode(ssh0, missing; scp_failed = false) == 0
             @test DistSSHRun._go_slot_exitcode(ssh0, missing; scp_failed = true) == 1
             @test DistSSHRun._go_slot_exitcode(7, missing; scp_failed = false) == 7
+            @test DistSSHRun._go_slot_exitcode(143, missing; scp_failed = false) == 143
+            @test DistSSHRun._go_slot_exitcode(137, missing; scp_failed = false) == 137
             ec = joinpath(d, "go.exitcode")
             write(ec, "3\n")
             @test DistSSHRun._go_slot_exitcode(ssh0, ec; scp_failed = true) == 1

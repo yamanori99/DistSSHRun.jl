@@ -197,7 +197,10 @@ end
 function _process_failed_code(e)::Int
     e isa ProcessFailedException || return 1
     procs = e.procs
-    return isempty(procs) ? 1 : procs[end].exitcode
+    isempty(procs) && return 1
+    proc = procs[end]
+    process_exited(proc) || return 1
+    return DistSSHBase.shell_status(proc)
 end
 
 function _git_run_capture(args::Vector{String}; git_ssh::Union{Nothing, String} = nothing)

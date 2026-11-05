@@ -473,7 +473,10 @@ function clear_detect_julia_path_cache!(host::Union{Nothing, AbstractString} = n
     return nothing
 end
 
-"""Run `script` on `host`. Returns `(exitcode, stdout)`.
+"""Run `script` on `host`. Returns `(status, stdout)`.
+
+`status` is [`shell_status`](@ref): a signal is `128 + termsignal`, and any
+other exit is `exitcode`.
 
 SSH's own failure (exit 255) throws `ArgumentError` from [`summarize_ssh_error`](@ref).
 A non-POSIX login shell throws `ArgumentError` and points to `help setup`
@@ -492,7 +495,7 @@ function _remote_shell_status(host::String, script::AbstractString)::Tuple{Int, 
         _rethrow_missing_host_tool(e)
         rethrow()
     end
-    code = Int(something(proc.exitcode, 1))
+    code = shell_status(proc)
     out = String(take!(out_buf))
     err = String(take!(err_buf))
     if code == 255
@@ -1196,9 +1199,8 @@ function _remote_shell_capture(
     catch
         return nothing
     end
-    code = proc.exitcode
-    code isa Integer || return nothing
-    return (code = Int(code), out = String(take!(out_buf)))
+    process_exited(proc) || return nothing
+    return (code = shell_status(proc), out = String(take!(out_buf)))
 end
 
 """A `DISTSSHKIT_TEST_SSH` double is not a login shell unless the test asks."""
@@ -1345,9 +1347,8 @@ end
 function _remote_failure_exit_code(err)::Union{Nothing, Int}
     err isa Base.ProcessFailedException || return nothing
     for proc in err.procs
-        code = proc.exitcode
-        code isa Integer || continue
-        return Int(code)
+        process_exited(proc) || continue
+        return shell_status(proc)
     end
     return nothing
 end

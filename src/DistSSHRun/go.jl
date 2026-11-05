@@ -362,7 +362,7 @@ function _go_assert_remote_ready!(host::AbstractString, remote_root::AbstractStr
     out = IOBuffer()
     err = IOBuffer()
     proc = run(pipeline(ignorestatus(cmd), stdout = out, stderr = err), wait = true)
-    code = proc.exitcode isa Integer ? Int(proc.exitcode) : 1
+    code = DistSSHBase.shell_status(proc)
     if code != 0
         err_text = strip(String(take!(err)))
         ssh_hint = _go_host_ssh_hint(host)
@@ -583,7 +583,7 @@ function _go_run_local_slot!(
             writeln_both("")
         end
     end
-    code = proc.exitcode isa Integer ? Int(proc.exitcode) : 1
+    code = DistSSHBase.shell_status(proc)
     return DriveResult(code == 0, code; output_dir = slot_dir)
 end
 
@@ -702,7 +702,8 @@ function _go_run_remote_slot!(
             write(stdout, out)
         end
     end
-    ssh_code = proc.exitcode isa Integer ? Int(proc.exitcode) : 1
+    # A dead ssh with no exit file must not become success (`exitcode` is 0).
+    ssh_code = DistSSHBase.shell_status(proc)
     # Prefer the remote-written exit file when ssh status is unreliable.
     ec_path = joinpath(slot_dir, "go.exitcode")
     scp_failed = false

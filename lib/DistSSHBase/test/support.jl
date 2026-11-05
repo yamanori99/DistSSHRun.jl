@@ -30,6 +30,23 @@ if !isdefined(Main, :_with_tempdir)
         end
     end
 
+    # Poll until `ready` holds a pid, then signal that process.
+    function _kill_ready_child(ready::AbstractString; signal::Integer = Base.SIGTERM)
+        t0 = time()
+        pid = nothing
+        while time() - t0 < 20
+            if isfile(ready)
+                pid = tryparse(Int, strip(read(ready, String)))
+                pid === nothing || break
+            end
+            sleep(0.02)
+        end
+        pid === nothing && error("timed out waiting for $(ready)")
+        ccall(:kill, Cint, (Cint, Cint), Cint(pid), Cint(signal)) == 0 ||
+            error("kill $(pid) failed")
+        return pid
+    end
+
     function _run_subprocess(cmd::Cmd)
         out = IOBuffer()
         proc = run(pipeline(ignorestatus(cmd), stdout = out, stderr = out), wait = true)

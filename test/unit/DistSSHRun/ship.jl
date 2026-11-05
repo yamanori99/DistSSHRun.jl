@@ -1068,3 +1068,46 @@ end
         @test !any(startswith(r, ".git") for r in listed)
     end
 end
+
+@testset "ship remote status uses shell_status" begin
+    double = joinpath(@__DIR__, "..", "..", "..", "lib", "DistSSHBase", "test", "fixtures", "fake_shell_ssh.jl")
+    @test isfile(double)
+    _with_tempdir() do dir
+        logp = joinpath(dir, "ssh.log")
+        ready = joinpath(dir, "ready")
+        env = Dict{String, String}(
+            "DISTSSHKIT_TEST" => "1",
+            "DISTSSHKIT_TEST_SSH" => double,
+            "SHELL_DOUBLE_LOG" => logp,
+            "SHELL_DOUBLE_MODE" => "sleep",
+            "SHELL_DOUBLE_READY" => ready,
+            "DISTSSHKIT_TEST_POSIX_SHELL" => "1",
+        )
+        try
+            withenv(env...) do
+                task = @async DistSSHRun._remote_script_output((_ -> nothing), "ship-sig.test", "sleep")
+                _kill_ready_child(ready; signal = Base.SIGTERM)
+                code, _, _ = fetch(task)
+                @test code == 143
+            end
+
+            rm(ready; force = true)
+            tar = joinpath(dir, "pull.tar")
+            write(tar, "")
+            err = withenv(env...) do
+                err_task = @async try
+                    DistSSHRun._remote_extract_tar!("ship-tar.test", "/remote/src", tar, "julia")
+                    nothing
+                catch e
+                    e
+                end
+                _kill_ready_child(ready; signal = Base.SIGTERM)
+                return fetch(err_task)
+            end
+            @test err isa ArgumentError
+            @test occursin("tar extract failed", err.msg)
+        finally
+            DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
+        end
+    end
+end

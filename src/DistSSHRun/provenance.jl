@@ -338,7 +338,7 @@ function _sha256_process(cmd::Cmd)::Union{Nothing, String}
     catch
         return nothing
     end
-    proc.exitcode == 0 || return nothing
+    DistSSHBase.shell_status(proc) == 0 || return nothing
     return SHA.bytes2hex(SHA.digest!(ctx))
 end
 
@@ -512,7 +512,7 @@ function _git_capture_bytes(cmd::Cmd)::Union{Nothing, Vector{UInt8}}
     out = IOBuffer()
     ok = try
         proc = run(pipeline(ignorestatus(cmd); stdout = out, stderr = devnull))
-        proc.exitcode == 0
+        DistSSHBase.shell_status(proc) == 0
     catch
         false
     end

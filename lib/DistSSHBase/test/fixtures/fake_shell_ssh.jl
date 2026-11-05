@@ -37,6 +37,23 @@ function main()
         end
         exit(0)
     end
+    # The parent kills this process. Probe and `echo $SHELL` stay above.
+    if mode == "sleep"
+        ready = get(ENV, "SHELL_DOUBLE_READY", "")
+        if !isempty(ready)
+            open(ready, "w") do io
+                println(io, getpid())
+            end
+        end
+        sleep(30)
+        exit(0)
+    elseif mode == "exit0"
+        exit(0)
+    elseif mode == "exit1"
+        exit(1)
+    elseif mode == "exit3"
+        exit(3)
+    end
     if script == "ok"
         println("ok")
         exit(0)

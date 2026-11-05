@@ -232,7 +232,7 @@ function _extract_remote_tar!(
             pipeline(ignorestatus(cmd); stdin = filtered ? list : devnull, stdout = blob, stderr = err);
             wait = true,
         )
-        proc.exitcode == 0 || throw(
+        DistSSHBase.shell_status(proc) == 0 || throw(
             ArgumentError("tar pull failed on $(host): $(strip(String(take!(err))))"),
         )
         Tar.extract(blob, dest)
@@ -378,7 +378,8 @@ function _check_ignore_no_match(e)::Bool
     e isa ProcessFailedException || return false
     saw_one = false
     for proc in e.procs
-        code = proc.exitcode
+        process_exited(proc) || return false
+        code = DistSSHBase.shell_status(proc)
         code == 0 && continue
         code == 1 || return false
         saw_one = true

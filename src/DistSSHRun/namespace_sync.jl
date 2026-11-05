@@ -248,7 +248,7 @@ function _cache_send_batch(
         close(proc)
     end
     wait(proc)
-    code = Int(something(proc.exitcode, 1))
+    code = DistSSHBase.shell_status(proc)
     return code, _parse_cache_accepted(String(take!(out_buf)))
 end
 

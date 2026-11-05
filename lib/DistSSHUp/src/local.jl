@@ -3,7 +3,7 @@ function _require_juliaup_version(ju::AbstractString)
     proc, out, err = _juliaup_run_captured(ju, ["--version"])
     seen = strip(out)
     isempty(seen) && (seen = strip(err))
-    ver = proc.exitcode == 0 ? _juliaup_version(seen) : nothing
+    ver = DistSSHBase.shell_status(proc) == 0 ? _juliaup_version(seen) : nothing
     return _reject_old_juliaup(ver, seen)
 end
 
@@ -27,7 +27,7 @@ function _juliaup_captured_fail_msg(
     )::String
     msg = strip(String(stderr_s))
     isempty(msg) && (msg = strip(String(stdout_s)))
-    isempty(msg) && (msg = "juliaup $(join(args, " ")) exit $(proc.exitcode)")
+    isempty(msg) && (msg = "juliaup $(join(args, " ")) exit $(DistSSHBase.shell_status(proc))")
     return first(split(msg, '\n'))
 end
 
@@ -38,7 +38,7 @@ function _juliaup_local_already_aligned(
     )::Union{Nothing, VersionNumber}
     ch = String(channel)
     proc, out, _ = _juliaup_run_captured(ju, ["status"])
-    proc.exitcode == 0 || return nothing
+    DistSSHBase.shell_status(proc) == 0 || return nothing
     default_ch = _juliaup_default_channel_from_status(out)
     default_ch === nothing && return nothing
     default_ch == ch || return nothing
@@ -65,7 +65,7 @@ function juliaup_align_local!(
         return (; ver, changed = false)
     end
     add, add_out, add_err = _juliaup_run_captured(ju, ["add", ch])
-    if add.exitcode != 0
+    if DistSSHBase.shell_status(add) != 0
         st = sprint() do io
             try
                 run(pipeline(Cmd([ju, "status"]); stdout = io, stderr = devnull); wait = true)
@@ -78,7 +78,7 @@ function juliaup_align_local!(
     end
     for args in (["update", ch], ["default", ch])
         proc, out_s, err_s = _juliaup_run_captured(ju, args)
-        proc.exitcode == 0 || error(_juliaup_captured_fail_msg(args, proc, out_s, err_s))
+        DistSSHBase.shell_status(proc) == 0 || error(_juliaup_captured_fail_msg(args, proc, out_s, err_s))
     end
     jl = _local_julia_beside_juliaup(ju)
     isfile(jl) || error("Julia not found after juliaup align ($jl)")
@@ -118,7 +118,7 @@ function juliaup_update_local!(
     )
     _require_juliaup_version(ju)
     proc, out_s, err_s = _juliaup_run_captured(ju, ["update"])
-    proc.exitcode == 0 || error(_juliaup_captured_fail_msg(["update"], proc, out_s, err_s))
+    DistSSHBase.shell_status(proc) == 0 || error(_juliaup_captured_fail_msg(["update"], proc, out_s, err_s))
     return nothing
 end
 
@@ -134,7 +134,7 @@ function juliaup_add_local!(
     )
     _require_juliaup_version(ju)
     add, add_out, add_err = _juliaup_run_captured(ju, ["add", ch])
-    if add.exitcode != 0
+    if DistSSHBase.shell_status(add) != 0
         _, st, _ = _juliaup_run_captured(ju, ["status"])
         occursin(ch, st) || error(
             _juliaup_captured_fail_msg(["add", ch], add, add_out, add_err),
@@ -155,7 +155,7 @@ function juliaup_default_local!(
     )
     _require_juliaup_version(ju)
     proc, out_s, err_s = _juliaup_run_captured(ju, ["default", ch])
-    proc.exitcode == 0 || error(_juliaup_captured_fail_msg(["default", ch], proc, out_s, err_s))
+    DistSSHBase.shell_status(proc) == 0 || error(_juliaup_captured_fail_msg(["default", ch], proc, out_s, err_s))
     return nothing
 end
 
@@ -171,6 +171,6 @@ function juliaup_update_local!(
     )
     _require_juliaup_version(ju)
     proc, out_s, err_s = _juliaup_run_captured(ju, ["update", ch])
-    proc.exitcode == 0 || error(_juliaup_captured_fail_msg(["update", ch], proc, out_s, err_s))
+    DistSSHBase.shell_status(proc) == 0 || error(_juliaup_captured_fail_msg(["update", ch], proc, out_s, err_s))
     return nothing
 end

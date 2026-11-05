@@ -636,14 +636,14 @@ function _pkg_e_on_remotes(
                         );
                         wait = true,
                     )
-                    if proc.exitcode == 0
+                    code = DistSSHBase.shell_status(proc)
+                    if code == 0
                         oks[i] = true
                     else
                         oks[i] = false
                         msg = strip(String(take!(err)))
                         isempty(msg) && (msg = strip(String(take!(out))))
-                        shown = isempty(msg) ? "exit $(proc.exitcode)" : first(split(msg, '\n'))
-                        code = proc.exitcode isa Integer ? Int(proc.exitcode) : 1
+                        shown = isempty(msg) ? "exit $(code)" : first(split(msg, '\n'))
                         fail_msgs[i] = DistSSHBase._append_remote_shell_hint(host, code, shown)
                     end
                 catch e

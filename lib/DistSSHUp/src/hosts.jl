@@ -14,12 +14,12 @@ function _juliaup_remote_capture(host::AbstractString, script::AbstractString)
     )
     out_s = strip(String(take!(out_buf)))
     err_s = strip(String(take!(err_buf)))
-    if proc.exitcode != 0
+    code = DistSSHBase.shell_status(proc)
+    if code != 0
         msg = err_s
         isempty(msg) && (msg = out_s)
-        isempty(msg) && (msg = "exit $(proc.exitcode)")
+        isempty(msg) && (msg = "exit $(code)")
         shown = first(split(msg, '\n'))
-        code = proc.exitcode isa Integer ? Int(proc.exitcode) : 1
         error(DistSSHBase._append_remote_shell_hint(String(host), code, shown))
     end
     return out_s
@@ -73,7 +73,7 @@ function juliaup_default_patch(host::AbstractString)::String
         ju = find_local_juliaup()
         ju === nothing && return "-"
         proc, out, _ = _juliaup_run_captured(ju, ["status"])
-        Int(something(proc.exitcode, 1)) == 0 || return "-"
+        DistSSHBase.shell_status(proc) == 0 || return "-"
         return _juliaup_patch_from_status(out)
     end
     try
@@ -86,7 +86,7 @@ function juliaup_default_patch(host::AbstractString)::String
             );
             wait = true,
         )
-        Int(something(proc.exitcode, 1)) == 0 || return "-"
+        DistSSHBase.shell_status(proc) == 0 || return "-"
         return _juliaup_patch_from_status(String(take!(out_buf)))
     catch
         return "-"
@@ -157,7 +157,7 @@ function juliaup_status_lines(
         ju = find_local_juliaup()
         ju === nothing && return String[]
         proc, out, _ = _juliaup_run_captured(ju, ["status"])
-        Int(something(proc.exitcode, 1)) == 0 || return String[]
+        DistSSHBase.shell_status(proc) == 0 || return String[]
         return _installed_status_lines(out; channel = ch)
     end
     try

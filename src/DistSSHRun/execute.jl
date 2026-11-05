@@ -238,7 +238,7 @@ function Base.wait(
             child_pid, kp.output_dir, kp.log_dir; run_dir = kp.run_dir,
         )
         recovered !== nothing && return recovered
-        code = Int(something(kp.process.exitcode, 1))
+        code = DistSSHBase.shell_status(kp.process)
         ok = code == 0
         return KitRunResult(
             ok,

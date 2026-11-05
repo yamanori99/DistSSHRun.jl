@@ -266,6 +266,37 @@ let _BASE = DistSSHBase
         end
     end
 
+    @testset "shell status of the remote command" begin
+        double = joinpath(@__DIR__, "fixtures", "fake_shell_ssh.jl")
+        _with_tempdir() do dir
+            logp = joinpath(dir, "ssh.log")
+            ready = joinpath(dir, "ready")
+            try
+                withenv(_nonposix_shell_env(double, logp; mode = "exit3")...) do
+                    code, out = _BASE._remote_shell_status("status-exit3.test", "ignored")
+                    @test code == 3
+                    @test out == ""
+                end
+                rm(logp; force = true)
+                for (sig, status) in ((Base.SIGTERM, 143), (Base.SIGKILL, 137))
+                    rm(ready; force = true)
+                    host = "status-sig-$(Int(sig)).test"
+                    withenv(
+                        _nonposix_shell_env(double, logp; mode = "sleep")...,
+                        "SHELL_DOUBLE_READY" => ready,
+                    ) do
+                        task = @async _BASE._remote_shell_status(host, "sleep")
+                        _kill_ready_child(ready; signal = sig)
+                        code, _ = fetch(task)
+                        @test code == status
+                    end
+                end
+            finally
+                _BASE._clear_remote_posix_shell_cache!()
+            end
+        end
+    end
+
     @testset "ssh -n vs stdin forward" begin
         Sys.which("ssh") === nothing && return
         withenv("DISTSSHKIT_TEST" => nothing, "DISTSSHKIT_TEST_SSH" => nothing) do
