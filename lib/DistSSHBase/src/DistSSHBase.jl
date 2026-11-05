@@ -19,7 +19,6 @@ include("paths.jl")
 include("explain.jl")
 include("argv.jl")
 include("hosts.jl")
-include("worker_plan.jl")
 include("host_tokens.jl")
 include("cli_entry.jl")
 include("sigint.jl")
@@ -33,11 +32,6 @@ include("namespace.jl")
 
 # Queue and Kit import these. Underscore names stay private.
 public PARENT_HOST_NAME
-export WorkerPlan
-public DEFAULT_MEM_HEADROOM, DEFAULT_PARENT_GB
-public WORKER_MEMORY_GB_FALLBACK, WORKER_MEMORY_GB_FLOOR, WORKER_RSS_SAFETY_FACTOR
-public get_local_resources, resolved_placement_tokens, rss_bytes_to_worker_gb, size_worker_count
-public WorkerMemorySample, effective_worker_gb, per_worker_gb_dict
 public cli_entry, cli_heading, cli_m, cli_m_project, cli_qhost, cli_qhost_heading
 public format_placement_token, get_remote_julia_version, get_remote_julia_version_full, is_sigint
 public julia_project_rel, manifest_path, parse_julia_version_full

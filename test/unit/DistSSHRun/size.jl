@@ -26,14 +26,21 @@ using Test
         @test DistSSHRun.rss_bytes_to_worker_gb(one_gb) ==
             round(
             max(
-                1.0 * DistSSHRun.DistSSHBase.WORKER_RSS_SAFETY_FACTOR,
-                DistSSHRun.DistSSHBase.WORKER_MEMORY_GB_FLOOR,
+                1.0 * DistSSHRun.DistSSHSize.WORKER_RSS_SAFETY_FACTOR,
+                DistSSHRun.DistSSHSize.WORKER_MEMORY_GB_FLOOR,
             ),
             digits = 2,
         )
         @test !isdefined(DistSSHRun, :MEMORY_CAPACITY_FRACTION)
-        @test DistSSHRun.WorkerPlan === DistSSHRun.DistSSHBase.WorkerPlan
-        @test parentmodule(DistSSHRun.WorkerPlan) === DistSSHRun.DistSSHBase
+        @test DistSSHRun.WorkerPlan === DistSSHRun.DistSSHSize.WorkerPlan
+        @test parentmodule(DistSSHRun.WorkerPlan) === DistSSHRun.DistSSHSize
+        @test DistSSHRun.compute_worker_plan === DistSSHRun.DistSSHSize.compute_worker_plan
+        @test parentmodule(DistSSHRun.compute_worker_plan) === DistSSHRun.DistSSHSize
+        @test parentmodule(DistSSHRun.size_worker_count) === DistSSHRun.DistSSHSize
+        @test parentmodule(DistSSHRun.get_local_resources) === DistSSHRun.DistSSHSize
+        @test !isdefined(DistSSHRun.DistSSHBase, :WorkerPlan)
+        @test !isdefined(DistSSHRun.DistSSHBase, :size_worker_count)
+        @test !isdefined(DistSSHRun.DistSSHBase, :get_local_resources)
         @test DistSSHRun.resolved_placement_tokens(DistSSHRun.WorkerPlan(1, Dict("h" => 2))) ==
             ["parent:1", "child:h:2"]
     end

@@ -19,7 +19,6 @@ include(joinpath(@__DIR__, "support.jl"))
     include(joinpath(@__DIR__, "sigint.jl"))
     include(joinpath(@__DIR__, "shell_status.jl"))
     include(joinpath(@__DIR__, "ssh.jl"))
-    include(joinpath(@__DIR__, "worker_plan.jl"))
     include(joinpath(@__DIR__, "shell_quote.jl"))
     include(joinpath(@__DIR__, "detect_julia.jl"))
 end
