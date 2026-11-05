@@ -1,3 +1,3 @@
-category: changed
+category: breaking
 
-- `size_worker_count` and `get_local_resources` are defined in `DistSSHBase`. Callers in `DistSSHRun` use those functions. Counts are unchanged, including `nproc === nothing` (RAM only) and a missing remote `nproc` coerced to 1.
+- `size_worker_count` and `get_local_resources` are defined in `DistSSHBase`. `parentmodule` is `DistSSHBase`. `DistSSHRun.size_worker_count` and `DistSSHRun.get_local_resources` are the same functions. Counts are unchanged.
