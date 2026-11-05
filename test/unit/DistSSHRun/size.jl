@@ -24,8 +24,18 @@ using Test
         @test DistSSHRun.rss_bytes_to_worker_gb(0) == DistSSHRun.WORKER_MEMORY_GB_FALLBACK
         one_gb = 1024^3
         @test DistSSHRun.rss_bytes_to_worker_gb(one_gb) ==
-            round(max(1.0 * DistSSHRun.WORKER_RSS_SAFETY_FACTOR, DistSSHRun.WORKER_MEMORY_GB_FLOOR), digits = 2)
+            round(
+            max(
+                1.0 * DistSSHRun.DistSSHBase.WORKER_RSS_SAFETY_FACTOR,
+                DistSSHRun.DistSSHBase.WORKER_MEMORY_GB_FLOOR,
+            ),
+            digits = 2,
+        )
         @test !isdefined(DistSSHRun, :MEMORY_CAPACITY_FRACTION)
+        @test DistSSHRun.WorkerPlan === DistSSHRun.DistSSHBase.WorkerPlan
+        @test parentmodule(DistSSHRun.WorkerPlan) === DistSSHRun.DistSSHBase
+        @test DistSSHRun.resolved_placement_tokens(DistSSHRun.WorkerPlan(1, Dict("h" => 2))) ==
+            ["parent:1", "child:h:2"]
     end
 
     @testset "compute_worker_plan matches size_worker_count" begin

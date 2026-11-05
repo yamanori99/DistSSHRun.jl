@@ -16,7 +16,7 @@ using Distributed
         samples = DistSSHRun.measure_rss(tmp, String[]; include_parent = true, probe = probe)
         @test haskey(samples, "parent")
         s = samples["parent"]
-        @test s.baseline_gb >= DistSSHRun.WORKER_MEMORY_GB_FLOOR
+        @test s.baseline_gb >= DistSSHRun.DistSSHBase.WORKER_MEMORY_GB_FLOOR
         @test s.peak_gb >= s.baseline_gb
         @test DistSSHRun.effective_worker_gb(s) == max(s.baseline_gb, s.peak_gb)
     end
