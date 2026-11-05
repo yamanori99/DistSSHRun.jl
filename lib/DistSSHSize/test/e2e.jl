@@ -108,15 +108,22 @@ end
         _size_e2e_ship!(_child)
         project = "$_remote_root/DistSSHSize"
         script = _size_e2e_remote_script()
-        out_io = IOBuffer()
-        err_io = IOBuffer()
-        proc = redirect_stdout(out_io) do
-            redirect_stderr(err_io) do
-                run_on_host(_child, ["--startup-file=no", "--project=$project", "-e", script])
+        # `redirect_stdout` needs a file stream. Same capture as `test/e2e.jl`.
+        out, err, proc = mktemp() do out_path, out_io
+            mktemp() do err_path, err_io
+                proc = redirect_stdout(out_io) do
+                    redirect_stderr(err_io) do
+                        run_on_host(
+                            _child,
+                            ["--startup-file=no", "--project=$project", "-e", script],
+                        )
+                    end
+                end
+                flush(out_io)
+                flush(err_io)
+                (read(out_path, String), read(err_path, String), proc)
             end
         end
-        out = String(take!(out_io))
-        err = String(take!(err_io))
         proc.exitcode == 0 ||
             error("child DistSSHSize exited $(proc.exitcode)\nstdout:\n$out\nstderr:\n$err")
         got = _size_e2e_parse(out)
