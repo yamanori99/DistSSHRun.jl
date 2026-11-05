@@ -1,28 +1,6 @@
 # Result types for the drive / sync API.
-# `WorkerPlan`, the RSS→GB constants, and `resolved_placement_tokens` live in DistSSHBase.
-
-"""
-    size_worker_count(total_gb, nproc, per_worker_gb; mem_headroom, parent_gb, is_parent)
-
-Pure RAM/CPU cap for one host (shared by CLI and `compute_worker_plan`).
-`nproc === nothing` skips the CPU term (RAM budget only).
-"""
-function size_worker_count(
-        total_gb::Real,
-        nproc::Union{Nothing, Integer},
-        per_worker_gb::Real;
-        mem_headroom::Real = DEFAULT_MEM_HEADROOM,
-        parent_gb::Real = DEFAULT_PARENT_GB,
-        is_parent::Bool = false,
-    )::Int
-    pw = Float64(per_worker_gb)
-    pw <= 0 && return 0
-    avail = Float64(total_gb) * Float64(mem_headroom) - (is_parent ? Float64(parent_gb) : 0.0)
-    ram = max(0, floor(Int, avail / pw))
-    nproc === nothing && return ram
-    cpu_reserve = is_parent ? 2 : 1
-    return min(ram, max(1, Int(nproc) - cpu_reserve))
-end
+# `WorkerPlan`, `size_worker_count`, `get_local_resources`, and the RSS→GB
+# helpers live in DistSSHBase.
 
 """Per-host outcome for sync and similar operations."""
 struct HostResult

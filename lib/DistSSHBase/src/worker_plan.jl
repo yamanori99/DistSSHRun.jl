@@ -1,5 +1,5 @@
-# Worker counts and the RSS→GB estimate shared by DistSSHRun and DistSSHPlan.
-# The formula that turns these numbers into a count stays in DistSSHRun for now.
+# Worker counts, the local resource probe, and the RSS→GB estimate shared by
+# DistSSHRun and DistSSHPlan. `size!` and RSS measurement stay in DistSSHRun.
 
 """Default RAM fraction usable for workers (`size!` / `size` / drive preflight).
 
@@ -74,4 +74,39 @@ effective_worker_gb(s::WorkerMemorySample)::Float64 = max(s.baseline_gb, s.peak_
 """Map host → effective GB for `compute_worker_plan`."""
 function per_worker_gb_dict(samples::Dict{String, WorkerMemorySample})::Dict{String, Float64}
     return Dict{String, Float64}(h => effective_worker_gb(s) for (h, s) in samples)
+end
+
+"""
+    size_worker_count(total_gb, nproc, per_worker_gb; mem_headroom, parent_gb, is_parent)
+
+Pure RAM/CPU cap for one host (shared by CLI and `compute_worker_plan`).
+`nproc === nothing` skips the CPU term (RAM budget only).
+"""
+function size_worker_count(
+        total_gb::Real,
+        nproc::Union{Nothing, Integer},
+        per_worker_gb::Real;
+        mem_headroom::Real = DEFAULT_MEM_HEADROOM,
+        parent_gb::Real = DEFAULT_PARENT_GB,
+        is_parent::Bool = false,
+    )::Int
+    pw = Float64(per_worker_gb)
+    pw <= 0 && return 0
+    avail = Float64(total_gb) * Float64(mem_headroom) - (is_parent ? Float64(parent_gb) : 0.0)
+    ram = max(0, floor(Int, avail / pw))
+    nproc === nothing && return ram
+    cpu_reserve = is_parent ? 2 : 1
+    return min(ram, max(1, Int(nproc) - cpu_reserve))
+end
+
+"""Get total memory (GB) and CPU cores for localhost."""
+function get_local_resources()
+    total_gb = Sys.total_memory() / 1024^3
+    nproc = try
+        s = strip(read(pipeline(`sysctl -n hw.ncpu`, stderr = devnull), String))
+        isempty(s) ? Sys.CPU_THREADS : parse(Int, s)
+    catch
+        Sys.CPU_THREADS
+    end
+    return (total_gb = total_gb, nproc = nproc)
 end

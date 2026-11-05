@@ -533,17 +533,7 @@ function local_git_clean(proj_dir::AbstractString)::Bool
 end
 
 
-"""Get total memory (GB) and CPU cores for localhost."""
-function get_local_resources()
-    total_gb = Sys.total_memory() / 1024^3
-    nproc = try
-        s = strip(read(pipeline(`sysctl -n hw.ncpu`, stderr = devnull), String))
-        isempty(s) ? Sys.CPU_THREADS : parse(Int, s)
-    catch
-        Sys.CPU_THREADS
-    end
-    return (total_gb = total_gb, nproc = nproc)
-end
+# `get_local_resources` lives in DistSSHBase.
 
 # Remote path resolution & result collection
 
