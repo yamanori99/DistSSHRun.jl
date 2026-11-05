@@ -19,4 +19,10 @@ using Test
     @test DistSSHBase.effective_worker_gb(sample) == 1.2
     @test DistSSHBase.per_worker_gb_dict(Dict("h" => sample))["h"] == 1.2
     @test parentmodule(DistSSHBase.WorkerPlan) === DistSSHBase
+    @test DistSSHBase.size_worker_count(32.0, 2, 1.0; is_parent = true) == 1
+    @test DistSSHBase.size_worker_count(32.0, nothing, 1.0; is_parent = true) ==
+        max(0, floor(Int, (32.0 * DistSSHBase.DEFAULT_MEM_HEADROOM - DistSSHBase.DEFAULT_PARENT_GB) / 1.0))
+    local_res = DistSSHBase.get_local_resources()
+    @test local_res.total_gb > 0
+    @test local_res.nproc > 0
 end
