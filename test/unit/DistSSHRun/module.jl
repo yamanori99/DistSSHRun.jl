@@ -80,7 +80,7 @@ using Test
     @test DistSSHRun.ssh_opts === DistSSHRun.DistSSHBase.ssh_opts
     @test parentmodule(DistSSHRun.ssh_opts) === DistSSHRun.DistSSHBase
     @test parentmodule(DistSSHRun.juliaup_add_host!) === DistSSHRun.DistSSHUp
-    @test :DistSSHBase ∉ ns && :DistSSHUp ∉ ns
+    @test :DistSSHBase ∉ ns && :DistSSHUp ∉ ns && :DistSSHSize ∉ ns
     @test :parse_worker_tokens ∉ ns && :ParsedWorkerTokens ∉ ns
     @test :worker_tokens_fully_specified ∉ ns && :child_hosts_from_tokens ∉ ns
     @test :worker_plan_from_tokens ∉ ns
