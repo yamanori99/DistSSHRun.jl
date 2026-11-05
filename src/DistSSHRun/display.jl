@@ -1143,6 +1143,8 @@ end
 function print_cli_error(msg::AbstractString; io::IO = stderr)
     print_err("Error: "; io = io, bold = true)
     println(io, msg)
+    # `print_err` logs only its own argument. The body follows on that line.
+    _kit_log_writeln(msg)
     return nothing
 end
 
