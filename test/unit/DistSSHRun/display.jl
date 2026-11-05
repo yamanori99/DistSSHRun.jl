@@ -112,6 +112,23 @@ using Test
         @test occursin("Error:", String(take!(buf)))
     end
 
+    @testset "print_cli_error logs the body" begin
+        _with_tempdir() do tmp
+            log_path = DistSSHRun.init_log_file(tmp; prefix = "clierror")
+            buf = IOBuffer()
+            try
+                DistSSHRun.print_cli_error("body-message-xyz"; io = buf)
+            finally
+                DistSSHRun.close_log_file()
+            end
+            shown = String(take!(buf))
+            @test occursin("Error:", shown)
+            @test occursin("body-message-xyz", shown)
+            logged = read(log_path, String)
+            @test occursin("Error: body-message-xyz", logged)
+        end
+    end
+
     @testset "verbosity gates" begin
         @testset "writeln_both: verbose terminal, quiet log-only" begin
             _with_tempdir() do tmp
