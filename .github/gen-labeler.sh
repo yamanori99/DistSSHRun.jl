@@ -11,7 +11,7 @@
 #   - Documenter → area:docs (docs/**)
 #   - GitHub / repo prose → area:project-docs (README, NEWS, changelog.d,
 #     CONTRIBUTING, SECURITY, AGENTS, REVIEW, CODEOWNERS)
-#   - .github/**, bench/**, codecov.yml, .coderabbit.yaml,
+#   - .cursor/**, .github/**, bench/**, codecov.yml, .coderabbit.yaml,
 #     .JETLSConfig.toml → area:ci
 #
 # Product tests live only under the trees in `product_test_trees`. Shared
@@ -57,6 +57,7 @@ trap 'rm -f "$tmp"' EXIT
 "area:ci":
   - changed-files:
       - any-glob-to-any-file:
+          - ".cursor/**"
           - ".github/**"
           - "bench/**"
           - "codecov.yml"
