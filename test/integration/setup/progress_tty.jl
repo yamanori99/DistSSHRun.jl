@@ -40,6 +40,8 @@ using Test
             unset DISTSSHKIT_QUIET
             unset DISTSSHKIT_PROGRESS
             unset DISTSSHKIT_VERBOSE
+            unset DISTSSHKIT_CLI_SUBCOMMAND_DONE
+            unset DIST_SSH_KIT_CLI_INCLUDE
             export DISTSSHKIT_TEST=1
             export DISTSSHKIT_TEST_LOCAL_JULIAUP=$(sh_quote(ju))
             export PATH=$(sh_quote(empty_path))
@@ -60,8 +62,15 @@ using Test
             else
                 `script -q -c $script_path $dest`
             end
+            skip = (
+                "NO_COLOR",
+                "JULIA_LOAD_PATH",
+                "JULIA_PROJECT",
+                "DISTSSHKIT_CLI_SUBCOMMAND_DONE",
+                "DIST_SSH_KIT_CLI_INCLUDE",
+            )
             env = Dict{String, String}(
-                String(k) => String(v) for (k, v) in ENV if String(k) != "NO_COLOR" && !isempty(v)
+                String(k) => String(v) for (k, v) in ENV if !(String(k) in skip) && !isempty(v)
             )
             run(ignorestatus(setenv(cmd, env)))
             return isfile(dest) ? read(dest, String) : ""
