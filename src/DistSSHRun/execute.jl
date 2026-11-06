@@ -474,17 +474,20 @@ passes `--history-file=no`. `threads` defaults to `1`, passed as
 `threads=:inherit` passes this process's resolved `--threads` spec.
 `threads=:unset` omits the flag. The child environment keeps an allowlist
 (`PATH`, `HOME`, `JULIA_DEPOT_PATH`, `DISTSSHKIT_*`, `DISTRIBUTED_*`, and
-the other baseline names). `env_allow` adds names, or `:all` copies every
-non-empty parent variable except the hard drops. `env` sets values on the
-child and does not write this process. Names containing `COOKIE`,
-`JULIA_LOAD_PATH`, and the CLI include guards are never copied. A proxy
-value that contains userinfo is dropped unless that name is in
-`env_allow` or `env`. A substring denylist (`SECRET`, `TOKEN`, and the
-other parts listed with the implementation) drops prefix copies and
-`:all` copies. An explicit `env_allow` or `env` name wins and is recorded
-as sensitive. A count of dropped names is logged. The names, not
-the values, are in [`detached_launch`](@ref), `run.toml` `[launch]`, and
-the debug log (`JULIA_DEBUG=DistSSHRun`). `schema` stays 1.
+the other baseline names). `env_allow` adds names to that baseline.
+`:all` copies every non-empty parent variable except the drops below.
+`env` sets values on the child and does not write this process. Names
+containing `COOKIE`, `JULIA_LOAD_PATH`, and the CLI include guards are
+never copied. A recognized proxy value that contains userinfo
+(`http_proxy`, `https_proxy`, `all_proxy`, `no_proxy`, and the uppercase
+names) is dropped unless that name is in `env_allow` or `env`. A
+case-sensitive substring denylist (`SECRET`, `PASSWORD`, `PASSWD`,
+`TOKEN`, `API_KEY`, `APIKEY`, `ACCESS_KEY`, `PRIVATE_KEY`, `CREDENTIAL`)
+drops baseline, prefix, and `:all` copies. An explicit `env_allow` or
+`env` name wins and is recorded as sensitive. A count of dropped names
+is logged. The names, not the values, are in [`detached_launch`](@ref),
+`run.toml` `[launch]`, and the debug log (`JULIA_DEBUG=DistSSHRun`).
+`schema` stays 1.
 
 Local go slots and local drive workers inherit that environment, including
 `SSH_AUTH_SOCK` when it was kept. SSH workers do not receive this
@@ -496,8 +499,13 @@ not use this policy.
 execute!(kind, script, tokens; detached=true, dir=pwd(), threads=:unset, env_allow=:all)
 ```
 
-That restore still drops `JULIA_LOAD_PATH`, the CLI include guards, and
-names that contain `COOKIE`.
+That restore still drops `JULIA_LOAD_PATH`, the CLI include guards, names
+that contain `COOKIE`, names that contain a denylist substring, and a
+recognized proxy value that contains userinfo. Set a denylisted name or
+such a proxy value with `env`, or name it in an `env_allow` list. The
+list keeps the baseline and those names. It does not copy the rest of
+the parent environment. `JULIA_LOAD_PATH`, the CLI include guards, and
+names that contain `COOKIE` cannot be passed that way.
 """
 function execute!(
         kind::Symbol,
