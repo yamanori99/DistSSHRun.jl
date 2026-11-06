@@ -94,7 +94,7 @@ Public = true
 Private = false
 Filter = function (x)
     names = (
-        :setup!, :sync!, :instantiate!,
+        :setup!, :sync!, :instantiate!, :ship_send_list,
         :KitSession, :HostResult, :SyncResult,
         :ConfirmPathMismatch, :normalize_remote_confirm_path,
     )
@@ -129,7 +129,7 @@ Filter = function (x)
         :pipeline!, :PipelineConfig, :PipelineResult, :pipeline_config_from_env,
         :report_pipeline_errors,
         :collect!, :CollectResult,
-        :setup!, :sync!, :instantiate!,
+        :setup!, :sync!, :instantiate!, :ship_send_list,
         :KitSession, :HostResult, :SyncResult,
         :ALLOW_MISMATCH_FIELDS,
     )

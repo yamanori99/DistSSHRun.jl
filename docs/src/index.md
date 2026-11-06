@@ -50,8 +50,10 @@ add `!LocalPreferences.toml` to ship it. A file over 50 MiB, or a send list over
 100 MiB, prints a warning (`DISTSSHKIT_SHIP_WARN_FILE_BYTES`,
 `DISTSSHKIT_SHIP_WARN_TOTAL_BYTES`; an invalid value is an error). The 256 MiB
 cap still stops the ship. Declared inputs are
-left out. Extract is into `<remote_root>/runs/<run_id>/src/` (`run_id` is UTC
-plus 6 hex). The same leaf also gets an empty
+left out. `ship_send_list(root)` is that path list for the directory it is
+given. It is public and is not exported. `rsync_send_list` remains the git
+list for clone, sync, and pull. Extract is into
+`<remote_root>/runs/<run_id>/src/` (`run_id` is UTC plus 6 hex). The same leaf also gets an empty
 `<remote_root>/runs/<run_id>/out/`. A repeated host is refused. The
 `remote_root` must already exist on the host; ship does not create it from
 `$HOME` or the environment. Later

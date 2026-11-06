@@ -478,3 +478,181 @@ using Test
         end
     end
 end
+
+function _extracted_ship_rels(dest::AbstractString)::Vector{String}
+    out = String[]
+    for (dir, _, files) in walkdir(dest)
+        rel = replace(relpath(dir, dest), '\\' => '/')
+        rel == "." || push!(out, rel)
+        for name in files
+            child = rel == "." ? name : rel * "/" * name
+            push!(out, child)
+        end
+    end
+    return sort!(out)
+end
+
+@testset "ship_send_list" begin
+    @testset "public and not exported" begin
+        @test Base.ispublic(DistSSHRun, :ship_send_list)
+        @test !Base.isexported(DistSSHRun, :ship_send_list)
+    end
+
+    @testset "an empty directory throws" begin
+        _with_tempdir() do tmp
+            @test_throws ArgumentError DistSSHRun.ship_send_list(tmp)
+        end
+    end
+
+    @testset "a directory without a project file is listed" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "keep.jl"), "k = 1\n")
+            @test DistSSHRun.ship_send_list(tmp) == ["keep.jl"]
+        end
+    end
+
+    @testset "does not warn and does not run git" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "Project.toml\n")
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(tmp, "keep.jl"), "k = 1\n")
+            listed, text = mktemp() do _, io
+                got = redirect_stderr(io) do
+                    redirect_stdout(io) do
+                        DistSSHRun.ship_send_list(tmp)
+                    end
+                end
+                flush(io)
+                seekstart(io)
+                return got, read(io, String)
+            end
+            @test listed == [".gitignore", "keep.jl"]
+            @test !occursin("Warning", text)
+            @test !occursin("fatal:", text)
+        end
+    end
+
+    @testset "LocalPreferences.toml follows the gitignore" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "keep.jl"), "k = 1\n")
+            write(joinpath(tmp, "LocalPreferences.toml"), "[App]\nx = 1\n")
+            write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\n")
+            @test !("LocalPreferences.toml" in DistSSHRun.ship_send_list(tmp))
+            write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\n!LocalPreferences.toml\n")
+            @test "LocalPreferences.toml" in DistSSHRun.ship_send_list(tmp)
+        end
+    end
+
+    @testset "a newline in a path is an error" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "keep.jl"), "k = 1\n")
+            write(joinpath(tmp, "a\nb.txt"), "x\n")
+            @test_throws ArgumentError DistSSHRun.ship_send_list(tmp)
+        end
+    end
+
+    @testset "an ignored newline path is skipped" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, ".gitignore"), "*.tmp\n")
+            write(joinpath(tmp, "keep.jl"), "k = 1\n")
+            write(joinpath(tmp, "a\nb.tmp"), "x\n")
+            listed = DistSSHRun.ship_send_list(tmp)
+            @test listed == [".gitignore", "keep.jl"]
+            @test !any(occursin('\n', r) for r in listed)
+        end
+    end
+
+    @testset "tar members, declared inputs, and a fifo" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
+            write(
+                joinpath(tmp, "Manifest.toml"),
+                "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
+            )
+            write(joinpath(tmp, "keep.jl"), "k = 1\n")
+            mkpath(joinpath(tmp, "nested", "sub"))
+            write(joinpath(tmp, "nested", "sub", "a.jl"), "a = 1\n")
+            mkpath(joinpath(tmp, "empty"))
+            write(joinpath(tmp, ".gitignore"), "skip.txt\n")
+            write(joinpath(tmp, "skip.txt"), "nope\n")
+            mkpath(joinpath(tmp, "data"))
+            write(joinpath(tmp, "data", "big.bin"), "payload\n")
+            mkpath(joinpath(tmp, ".distsshkit"))
+            write(
+                joinpath(tmp, ".distsshkit", "inputs.toml"),
+                """
+                [[inputs]]
+                name = "big"
+                path = "data"
+                hash = false
+                """,
+            )
+            write(joinpath(tmp, ".distsshkit", "note.txt"), "kit\n")
+            run(`mkfifo $(joinpath(tmp, "pipe"))`)
+            listed = DistSSHRun.ship_send_list(tmp)
+            @test listed == sort(listed)
+            @test DistSSHRun.ship_send_list(tmp) == listed
+            @test "keep.jl" in listed
+            @test "nested" in listed
+            @test "nested/sub" in listed
+            @test "nested/sub/a.jl" in listed
+            @test "empty" in listed
+            @test !("skip.txt" in listed)
+            @test !("data" in listed)
+            @test !("data/big.bin" in listed)
+            @test !("pipe" in listed)
+            @test !any(
+                r -> r == ".git" || startswith(r, ".git/") ||
+                    r == ".distsshkit" || startswith(r, ".distsshkit/"), listed
+            )
+            @test !any(occursin('\\', r) for r in listed)
+            packed = DistSSHRun.pack_ship_tar(tmp)
+            try
+                @test DistSSHRun.ship_send_list(packed.root) == listed
+                dest = mktempdir()
+                DistSSHRun.Tar.extract(packed.tar_path, dest)
+                @test _extracted_ship_rels(dest) == listed
+            finally
+                rm(packed.tmpd; force = true, recursive = true)
+            end
+        end
+    end
+
+    @testset "the same paths with and without .git" begin
+        Sys.which("git") === nothing && return
+        _with_tempdir() do tmp
+            repo = joinpath(tmp, "repo")
+            mkpath(repo)
+            write(joinpath(repo, "Project.toml"), "name = \"App\"\n")
+            write(
+                joinpath(repo, "Manifest.toml"),
+                "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
+            )
+            write(joinpath(repo, "tracked.jl"), "t = 1\n")
+            write(joinpath(repo, "ignored.jl"), "i = 1\n")
+            run(`git -C $repo init --quiet`)
+            run(`git -C $repo config user.email t@t.t`)
+            run(`git -C $repo config user.name t`)
+            run(`git -C $repo add -A`)
+            run(`git -C $repo commit --quiet -m init`)
+            write(joinpath(repo, ".gitignore"), "ignored.jl\n")
+            run(`git -C $repo add .gitignore`)
+            run(`git -C $repo commit --quiet -m ignore`)
+            write(joinpath(repo, "extra.jl"), "e = 1\n")
+            plain = joinpath(tmp, "plain")
+            cp(repo, plain)
+            rm(joinpath(plain, ".git"); force = true, recursive = true)
+            listed = DistSSHRun.ship_send_list(repo)
+            @test listed == DistSSHRun.ship_send_list(plain)
+            @test "tracked.jl" in listed
+            @test "extra.jl" in listed
+            @test ".gitignore" in listed
+            @test !("ignored.jl" in listed)
+            @test !any(r == ".git" || startswith(r, ".git/") for r in listed)
+            env = DistSSHRun.resolve_pkg_env(repo)
+            rsync = DistSSHRun.rsync_send_list(repo, env)
+            @test rsync isa Vector
+            @test "ignored.jl" in rsync
+        end
+    end
+end
