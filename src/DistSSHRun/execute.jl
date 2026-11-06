@@ -185,6 +185,17 @@ function execute_detached_accepts(kw::Symbol; kind::Symbol)::Bool
     return !(kw in (:repeat, :spi_check))
 end
 
+# Copy `dir`, `threads`, `env_allow`, and `env` when `parsed` has a non-`nothing` value.
+function _parsed_launch_kwargs!(kw::Dict{Symbol, Any}, parsed)
+    for key in (:dir, :threads, :env_allow, :env)
+        hasproperty(parsed, key) || continue
+        value = getproperty(parsed, key)
+        value === nothing && continue
+        kw[key] = value
+    end
+    return kw
+end
+
 """
     execute_kwargs_from_parsed(parsed; kind) -> Dict{Symbol,Any}
 
@@ -198,16 +209,6 @@ when the parser set `default_workers`. `dir`, `threads`, `env_allow`, and
 `env` are copied only when `parsed` has that property and the value is
 not `nothing`. The go / drive / ride parsers do not grow those fields.
 """
-function _parsed_launch_kwargs!(kw::Dict{Symbol, Any}, parsed)
-    for key in (:dir, :threads, :env_allow, :env)
-        hasproperty(parsed, key) || continue
-        value = getproperty(parsed, key)
-        value === nothing && continue
-        kw[key] = value
-    end
-    return kw
-end
-
 function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
     _require_execute_kind!(kind)
     session = parsed.cli_session
