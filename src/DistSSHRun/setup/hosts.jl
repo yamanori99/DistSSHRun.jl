@@ -116,30 +116,34 @@ Cancelled ops return `true` without printing a success line (caller already said
 """
 function finish_host_op!(label::AbstractString, result)::Bool
     result.cancelled && return true
-    kit_println()
+    kit_payload_println()
     if result.succeeded == 0
         print_err("$label did not succeed on any host.")
-        kit_println()
-        kit_println("    Fix: ssh -o BatchMode=yes -o ConnectTimeout=5 HOST echo ok")
-        kit_println()
+        kit_payload_println()
+        kit_payload_println("    Fix: ssh -o BatchMode=yes -o ConnectTimeout=5 HOST echo ok")
+        kit_payload_println()
         return false
     end
     if result.failed > 0
         print_err("$label failed on $(result.failed) host(s) ($(result.succeeded) ok).")
-        kit_println()
-        kit_println()
+        kit_payload_println()
+        kit_payload_println()
         return false
     end
-    print_ok("$label complete ($(result.succeeded) host(s)).")
-    kit_println()
-    kit_println()
+    kit_payload_ok("$label complete ($(result.succeeded) host(s)).")
+    kit_payload_println()
+    kit_payload_println()
     return true
 end
 
 """Print a remote-op failure line using [`summarize_ssh_error`](@ref)."""
 function report_remote_failure(err; stderr::AbstractString = "")
-    print_progress_err("✗")
-    kit_println()
-    kit_println("    $(summarize_ssh_error(err; stderr = stderr))")
+    detail = summarize_ssh_error(err; stderr = stderr)
+    if kit_payload_visible()
+        print_err("✗\n")
+    else
+        _kit_log_writeln("✗")
+    end
+    kit_payload_println("    $detail")
     return nothing
 end

@@ -1063,6 +1063,33 @@ function print_ok(msg; io = stdout, bold = false)
     return nothing
 end
 
+"""Terminal for up results and `setup --check` diagnostics.
+
+`:verbose` and `:progress` print. `:quiet` stays on the kit log.
+"""
+kit_payload_visible()::Bool = !kit_output_quiet()
+
+"""`println` for a payload line (`:verbose` and `:progress`)."""
+function kit_payload_println(args...; io::IO = stdout)
+    if kit_payload_visible()
+        println(io, args...)
+    end
+    if LOG_FILE_HANDLE[] !== nothing
+        println(LOG_FILE_HANDLE[], args...)
+        flush(LOG_FILE_HANDLE[])
+    end
+    return nothing
+end
+
+"""Green payload mark. Same terminal gate as [`kit_payload_println`](@ref)."""
+function kit_payload_ok(msg; io = stdout, bold = false)
+    if kit_payload_visible()
+        _print_colored(io, msg, :green, bold)
+    end
+    _kit_log_write(string(msg))
+    return nothing
+end
+
 # Wait spinner (`:verbose` TTY only)
 
 """Frames for the kit TTY spinner (`kit_spin!`) and matching queue chrome."""
@@ -2460,7 +2487,27 @@ function print_kit_root_usage(io::IO = stderr)
     return nothing
 end
 
-"""Setup-style status line (`:verbose` on terminal; otherwise kit log only)."""
+"""Setup-style success line (`:verbose` on the terminal; otherwise the kit log)."""
 ok(msg) = (write_both("  "); print_ok("✓ $msg"); writeln_both(""))
-fail(msg) = (write_both("  "); print_progress_err("✗ $msg"); writeln_both(""))
-warn(msg) = (write_both("  "); print_progress_warn("! $msg"); writeln_both(""))
+
+"""Setup diagnostic. Terminal in `:verbose` and `:progress`. `:quiet` is the kit log."""
+function fail(msg)
+    text = "  ✗ " * string(msg)
+    if kit_payload_visible()
+        print_err(text * "\n")
+    else
+        _kit_log_writeln(text)
+    end
+    return nothing
+end
+
+"""Setup warning. Same terminal gate as [`fail`](@ref)."""
+function warn(msg)
+    text = "  ! " * string(msg)
+    if kit_payload_visible()
+        print_warn(text * "\n")
+    else
+        _kit_log_writeln(text)
+    end
+    return nothing
+end

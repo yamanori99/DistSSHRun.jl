@@ -10,16 +10,16 @@ function print_juliaup_align_fix!(
     )
     ch = String(channel)
     h = String(host)
-    kit_println("    Fix: $(cli_m_project()) up add $ch $(setup_cli_host_token(h))")
-    kit_println("         $(cli_m_project()) up default $ch $(setup_cli_host_token(h))")
-    kit_println("         (or on $h: juliaup add $ch && juliaup update $ch && \\")
-    kit_println("          juliaup default $ch —")
-    kit_println("          \$HOME/.juliaup/bin/juliaup, /opt/homebrew/bin/juliaup,")
-    kit_println("          or /usr/local/bin/juliaup; changes host default Julia)")
-    kit_println("         No juliaup? install it first (see Requirements), or use --julia PATH /")
-    kit_println("         JULIA_DISTRIBUTED_EXE.")
+    kit_payload_println("    Fix: $(cli_m_project()) up add $ch $(setup_cli_host_token(h))")
+    kit_payload_println("         $(cli_m_project()) up default $ch $(setup_cli_host_token(h))")
+    kit_payload_println("         (or on $h: juliaup add $ch && juliaup update $ch && \\")
+    kit_payload_println("          juliaup default $ch —")
+    kit_payload_println("          \$HOME/.juliaup/bin/juliaup, /opt/homebrew/bin/juliaup,")
+    kit_payload_println("          or /usr/local/bin/juliaup; changes host default Julia)")
+    kit_payload_println("         No juliaup? install it first (see Requirements), or use --julia PATH /")
+    kit_payload_println("         JULIA_DISTRIBUTED_EXE.")
     if kind === :mismatch
-        kit_println("         Or pass --ignore-julia-version to continue anyway.")
+        kit_payload_println("         Or pass --ignore-julia-version to continue anyway.")
     end
     return nothing
 end
@@ -45,12 +45,12 @@ function print_juliaup_parent_patch_note!(
     ch = String(channel)
     if _juliaup_channel_moves(ch)
         warn("kit parent Julia $local_version is behind channel $ch latest on remotes ($remote_version)")
-        kit_println("    Tip: $(cli_m_project()) up update $ch $PARENT_HOST_NAME")
-        kit_println("         $(cli_m_project()) up default $ch $PARENT_HOST_NAME")
-        kit_println("         (or: juliaup update $ch && juliaup default $ch), then re-run workers.")
+        kit_payload_println("    Tip: $(cli_m_project()) up update $ch $PARENT_HOST_NAME")
+        kit_payload_println("         $(cli_m_project()) up default $ch $PARENT_HOST_NAME")
+        kit_payload_println("         (or: juliaup update $ch && juliaup default $ch), then re-run workers.")
     else
         warn("pinned channel $ch may not be installed on the worker")
-        kit_println("    Check the result of `juliaup add $ch` on the worker.")
+        kit_payload_println("    Check the result of `juliaup add $ch` on the worker.")
     end
     return true
 end
@@ -119,10 +119,10 @@ function juliaup_align_remotes(
             if r.already
                 print_juliaup_already_on!(label, ch)
             else
-                print_ok("✓ Julia $(r.ver) (channel $ch)")
-                kit_println()
+                kit_payload_ok("✓ Julia $(r.ver) (channel $ch)")
+                kit_payload_println()
                 if is_parent_host_name(host)
-                    kit_println("    Note: this process still runs Julia $VERSION until you restart.")
+                    kit_payload_println("    Note: this process still runs Julia $VERSION until you restart.")
                 else
                     ver = r.ver
                     ver isa VersionNumber || error("juliaup align returned no version")
@@ -136,7 +136,7 @@ function juliaup_align_remotes(
             detail = e isa ErrorException ? e.msg : sprint(showerror, e)
             report_remote_failure(e)
             if occursin("juliaup not found", detail) || occursin("127", detail)
-                kit_println("    Install juliaup on $label first (see Requirements), then retry.")
+                kit_payload_println("    Install juliaup on $label first (see Requirements), then retry.")
             end
             failed += 1
             push!(host_results, HostResult(label, false, detail))
@@ -185,8 +185,8 @@ function juliaup_update_remotes(
             kit_spin!("  $label: ") do
                 juliaup_update_host!(host)
             end
-            print_ok("✓ juliaup update")
-            kit_println()
+            kit_payload_ok("✓ juliaup update")
+            kit_payload_println()
             succeeded += 1
             push!(host_results, HostResult(label, true, "juliaup update"))
             _setup_host_span!(host, :ok)
@@ -194,7 +194,7 @@ function juliaup_update_remotes(
             detail = e isa ErrorException ? e.msg : sprint(showerror, e)
             report_remote_failure(e)
             if occursin("juliaup not found", detail) || occursin("127", detail)
-                kit_println("    Install juliaup on $label first (see Requirements), then retry.")
+                kit_payload_println("    Install juliaup on $label first (see Requirements), then retry.")
             end
             failed += 1
             push!(host_results, HostResult(label, false, detail))
@@ -245,10 +245,10 @@ function juliaup_verb_remotes(
             if v == "status"
                 lines = juliaup_status_lines(host; channel = ch)
                 if isempty(lines)
-                    kit_println("  $label: (none)")
+                    kit_payload_println("  $label: (none)")
                 else
                     for line in lines
-                        kit_println("  $label: $line")
+                        kit_payload_println("  $label: $line")
                     end
                 end
             else
@@ -263,8 +263,8 @@ function juliaup_verb_remotes(
                         error("unknown juliaup verb: $v")
                     end
                 end
-                print_ok("✓ juliaup $v$(ch === nothing ? "" : " $ch")")
-                kit_println()
+                kit_payload_ok("✓ juliaup $v$(ch === nothing ? "" : " $ch")")
+                kit_payload_println()
             end
             succeeded += 1
             push!(host_results, HostResult(label, true, "juliaup $v"))
@@ -273,7 +273,7 @@ function juliaup_verb_remotes(
             detail = e isa ErrorException ? e.msg : sprint(showerror, e)
             report_remote_failure(e)
             if occursin("juliaup not found", detail) || occursin("127", detail)
-                kit_println("    Install juliaup on $label first (see Requirements), then retry.")
+                kit_payload_println("    Install juliaup on $label first (see Requirements), then retry.")
             end
             failed += 1
             push!(host_results, HostResult(label, false, detail))
