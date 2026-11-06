@@ -31,26 +31,11 @@ function _juliaup_captured_fail_msg(
     return first(split(msg, '\n'))
 end
 
-"""When the default channel and the Julia beside juliaup already match, return that version."""
-function _juliaup_local_already_aligned(
-        ju::AbstractString,
-        channel::AbstractString,
-    )::Union{Nothing, VersionNumber}
-    ch = String(channel)
-    proc, out, _ = _juliaup_run_captured(ju, ["status"])
-    DistSSHBase.shell_status(proc) == 0 || return nothing
-    default_ch = _juliaup_default_channel_from_status(out)
-    default_ch === nothing && return nothing
-    default_ch == ch || return nothing
-    jl = _local_julia_beside_juliaup(ju)
-    isfile(jl) || return nothing
-    ver = parse_julia_version_full(read(`$jl --version`, String))
-    ver === nothing && return nothing
-    julia_version_mismatch_kind(VERSION, ver) == :minor && return nothing
-    return ver
-end
+"""Run local `juliaup add` / `update` / `default` for `channel`.
 
-"""Run local `juliaup add` / `update` / `default` for `channel`."""
+The channel name does not skip `update`. A matching default still runs
+`add`, then `update`, then `default`.
+"""
 function juliaup_align_local!(
         channel::AbstractString;
         candidates::Vector{String} = local_juliaup_candidates(),
@@ -61,9 +46,6 @@ function juliaup_align_local!(
         "juliaup not found (tried: $(join(candidates, ", ")))",
     )
     _require_juliaup_version(ju)
-    if (ver = _juliaup_local_already_aligned(ju, ch)) !== nothing
-        return (; ver, changed = false)
-    end
     add, add_out, add_err = _juliaup_run_captured(ju, ["add", ch])
     if DistSSHBase.shell_status(add) != 0
         st = sprint() do io

@@ -34,9 +34,14 @@ function _juliaup_patch_from_status(status_out::AbstractString)::String
     return "-"
 end
 
-"""SSH body: `juliaup status`, or empty success when juliaup is absent."""
-function _juliaup_status_sh()::String
+"""SSH body: `juliaup status`.
+
+`missing_ok` exits 0 when no juliaup candidate exists. Otherwise that case
+exits 127 so a strict reader can tell “absent” from an empty status.
+"""
+function _juliaup_status_sh(; missing_ok::Bool = true)::String
     words = join(_juliaup_candidate_sh_word.(remote_juliaup_candidates()), " ")
+    missing = missing_ok ? "exit 0" : "exit 127"
     return """
     JU=\"\"
     for c in $words; do
@@ -45,7 +50,7 @@ function _juliaup_status_sh()::String
         break
       fi
     done
-    [ -z \"\$JU\" ] && exit 0
+    [ -z \"\$JU\" ] && $missing
     \"\$JU\" status 2>/dev/null
     """
 end

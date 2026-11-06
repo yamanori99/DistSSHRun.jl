@@ -49,7 +49,9 @@ function _write_ssh_double(
             occursin("/usr/bin/julia", script) && println("/usr/bin/julia")
         elseif script == "command -v julia || which julia"
             println("/usr/bin/julia")
-        elseif occursin("--version", script) && !occursin("echo already", script)
+        elseif occursin("update", script) && occursin("juliaup", script)
+            println("ok")
+        elseif occursin("--version", script)
             println($(repr(version_line)))
         else
             println("ok")
@@ -302,6 +304,51 @@ end
             )
             withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
                 @test occursin("unreadable", _err_msg(() -> DistSSHUp.juliaup_update_local!()))
+            end
+        end
+    end
+
+    @testset "strict status fails only when the state cannot be read" begin
+        mktempdir() do d
+            missing = joinpath(d, "missing")
+            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => missing) do
+                @test DistSSHUp.juliaup_status_lines("parent") == String[]
+                @test occursin(
+                    "juliaup not found",
+                    _err_msg(() -> DistSSHUp.juliaup_status_lines("parent"; strict = true)),
+                )
+            end
+            ju = joinpath(d, "juliaup")
+            _write_sh(
+                ju,
+                """
+                case "\$1" in
+                  status) exit 1 ;;
+                  *) exit 1 ;;
+                esac
+                """,
+            )
+            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+                @test DistSSHUp.juliaup_status_lines("parent") == String[]
+                @test occursin(
+                    "status",
+                    _err_msg(() -> DistSSHUp.juliaup_status_lines("parent"; strict = true)),
+                )
+            end
+            _write_sh(ju, "exit 0\n")
+            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+                @test DistSSHUp.juliaup_status_lines("parent"; strict = true) == String[]
+            end
+        end
+        mktempdir() do d
+            ssh = joinpath(d, "ssh.jl")
+            write(ssh, "println(stderr, \"ssh down\")\nexit(1)\n")
+            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_SSH" => ssh) do
+                @test DistSSHUp.juliaup_status_lines("status-host") == String[]
+                @test occursin(
+                    "ssh down",
+                    _err_msg(() -> DistSSHUp.juliaup_status_lines("status-host"; strict = true)),
+                )
             end
         end
     end

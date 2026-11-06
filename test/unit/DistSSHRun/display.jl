@@ -784,4 +784,29 @@ using Test
             @test isfile(p1) && isfile(p2)
         end
     end
+
+    @testset "progress prints check diagnostics and up payload" begin
+        out, _ = with_kit_verbosity(:progress) do
+            _capture_stdio() do _, _
+                DistSSHRun.fail("ssh not found in PATH")
+                DistSSHRun.warn("Julia patch version differs")
+                DistSSHRun.kit_payload_println("  parent: status-row")
+                DistSSHRun.kit_payload_ok("✓ juliaup update")
+                return nothing
+            end
+        end
+        @test occursin("ssh not found in PATH", out)
+        @test occursin("Julia patch version differs", out)
+        @test occursin("status-row", out)
+        @test occursin("juliaup update", out)
+        quiet, _ = with_kit_verbosity(:quiet) do
+            _capture_stdio() do _, _
+                DistSSHRun.fail("ssh not found in PATH")
+                DistSSHRun.kit_payload_println("  parent: status-row")
+                return nothing
+            end
+        end
+        @test !occursin("ssh not found in PATH", quiet)
+        @test !occursin("status-row", quiet)
+    end
 end

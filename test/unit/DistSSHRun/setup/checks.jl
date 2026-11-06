@@ -52,17 +52,34 @@ using Pkg
                 "worker",
                 "/usr/bin/julia",
                 (found = true, version = v"1.14.0-alpha1", mismatch_kind = :prerelease),
-                true,
+                false,
                 pre_warnings,
             )
         end
     end
-    @test pre_ok
+    @test !pre_ok
     @test occursin("prerelease", pre_out)
-    @test !occursin("✗", pre_out)
-    @test length(pre_warnings) == 1
-    @test pre_warnings[1].kind === :julia_prerelease
-    @test pre_warnings[1].host == "worker"
+    @test occursin("✗", pre_out)
+    @test isempty(pre_warnings)
+    pre_ignored = DistSSHRun.SetupWarning[]
+    pre_warn, pre_warn_ok = with_kit_verbosity(:verbose) do
+        _capture_stdio() do _, _
+            DistSSHRun._report_remote_julia!(
+                "worker",
+                "/usr/bin/julia",
+                (found = true, version = v"1.14.0-alpha1", mismatch_kind = :prerelease),
+                true,
+                pre_ignored,
+            )
+        end
+    end
+    @test pre_warn_ok
+    @test occursin("prerelease", pre_warn)
+    @test occursin("--ignore-julia-version", pre_warn)
+    @test !occursin("✗", pre_warn)
+    @test length(pre_ignored) == 1
+    @test pre_ignored[1].kind === :julia_prerelease
+    @test pre_ignored[1].host == "worker"
     patch_warnings = DistSSHRun.SetupWarning[]
     patch_out, patch_ok = with_kit_verbosity(:verbose) do
         _capture_stdio() do _, _
@@ -70,16 +87,66 @@ using Pkg
                 "worker",
                 "/usr/bin/julia",
                 (found = true, version = v"1.13.2", mismatch_kind = :patch),
-                true,
+                false,
                 patch_warnings,
             )
         end
     end
-    @test patch_ok
+    @test !patch_ok
     @test occursin("patch", patch_out)
-    @test length(patch_warnings) == 1
-    @test patch_warnings[1].kind === :julia_patch
-    @test patch_warnings[1].host == "worker"
+    @test occursin("✗", patch_out)
+    @test isempty(patch_warnings)
+    patch_ignored = DistSSHRun.SetupWarning[]
+    patch_warn, patch_warn_ok = with_kit_verbosity(:verbose) do
+        _capture_stdio() do _, _
+            DistSSHRun._report_remote_julia!(
+                "worker",
+                "/usr/bin/julia",
+                (found = true, version = v"1.13.2", mismatch_kind = :patch),
+                true,
+                patch_ignored,
+            )
+        end
+    end
+    @test patch_warn_ok
+    @test occursin("patch", patch_warn)
+    @test occursin("--ignore-julia-version", patch_warn)
+    @test length(patch_ignored) == 1
+    @test patch_ignored[1].kind === :julia_patch
+    @test patch_ignored[1].host == "worker"
+    @test DistSSHRun.julia_version_mismatch_kind(v"1.13.3", v"1.13.0") == :patch
+    pair_out, pair_ok = with_kit_verbosity(:verbose) do
+        _capture_stdio() do _, _
+            DistSSHRun._report_remote_julia!(
+                "worker",
+                "/usr/bin/julia",
+                (found = true, version = v"1.13.0", mismatch_kind = :patch),
+                false;
+                local_version = v"1.13.3",
+            )
+        end
+    end
+    @test !pair_ok
+    @test occursin("local 1.13.3", pair_out)
+    @test occursin("1.13.0", pair_out)
+    id_lines = DistSSHRun.identity_mismatches(
+        Dict("version" => "1.13.3", "commit" => "parent-commit"),
+        Dict("version" => "1.13.0", "commit" => "worker-commit"),
+    )
+    @test any(line -> occursin("parent=1.13.3", line) && occursin("worker=1.13.0", line), id_lines)
+    @test any(line -> occursin("commit", line) && occursin("parent-commit", line), id_lines)
+    build_out, build_ok = with_kit_verbosity(:verbose) do
+        _capture_stdio() do _, _
+            DistSSHRun._report_remote_julia!(
+                "worker",
+                "/usr/bin/julia",
+                (found = true, version = v"1.13.3+0.aarch64.apple.darwin14", mismatch_kind = :none),
+                false,
+            )
+        end
+    end
+    @test build_ok
+    @test !occursin("✗", build_out)
     _, minor_fail = with_kit_verbosity(:verbose) do
         _capture_stdio() do _, _
             DistSSHRun._report_remote_julia!(
@@ -99,7 +166,10 @@ using Pkg
                     DistSSHRun.juliaup_align_remotes(["parent"]; confirm = false)
                 end
             end
-            @test occursin("parent: already on $(fake.ch)", out)
+            @test !occursin("already on", out)
+            @test occursin(fake.ch, out)
+            logged = read(fake.log, String)
+            @test count(==("update $(fake.ch)"), split(logged, '\n'; keepempty = false)) == 1
         end
     end
 

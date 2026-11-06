@@ -95,6 +95,8 @@ end
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "host_project_toml.jl"))
         _runtest_announce("unit/DistSSHRun/setup_api.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup_api.jl"))
+        _runtest_announce("unit/DistSSHRun/setup/status_summary.jl")
+        include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "status_summary.jl"))
         _runtest_announce("unit/DistSSHRun/setup/checks.jl")
         if !_distsshrun_short_skip("unit/DistSSHRun/setup/checks.jl")
             include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "checks.jl"))
@@ -150,6 +152,8 @@ end
         if !_distsshrun_short_skip("integration/setup/exit.jl")
             include(joinpath(@__DIR__, "integration", "setup", "exit.jl"))
         end
+        _runtest_announce("integration/setup/progress_tty.jl")
+        include(joinpath(@__DIR__, "integration", "setup", "progress_tty.jl"))
         _runtest_announce("integration/go/cli.jl")
         include(joinpath(@__DIR__, "integration", "go", "cli.jl"))
         _runtest_announce("integration/go/overlap.jl")

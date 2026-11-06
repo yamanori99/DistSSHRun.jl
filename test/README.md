@@ -170,7 +170,7 @@ DISTSSHKIT_CODE_COVERAGE=1 \
 
 ### Setup (ship-tree)
 
-- Julia resolve: kit parent and remotes share major.minor
+- Julia resolve: kit parent and remotes share patch and prerelease (a build suffix may differ)
 - `run_on_host`: `--version` exit 0; `-e exit(3)` is `.exitcode == 3`
   (no throw)
 - `--delete`: remote `Project.toml` is gone
@@ -274,6 +274,10 @@ Do not search-replace a host name into a token (that produced
 5. Pin verbosity with `with_kit_verbosity` if you assert kit detail
    lines. `Pkg.test` defaults to `:progress`. `kit_confirm` and consent
    warnings must show in `:quiet`, `:progress`, and `:verbose`.
+6. `integration/setup/progress_tty.jl`: `script` typescripts stack each
+   `\r` spinner redraw when `\r` is turned into `\n` (CI log look). That
+   is not the live TTY. The file documents it and checks a `\r` / CSI-K
+   screen peak of at most one spinner bar.
 
 Helpers (via `support.jl`): `_child_julia_env`, `_run_kit_drive` /
 `_run_kit_setup` / `_run_kit_go` / `_run_kit_size`, `_mktemp_host` /

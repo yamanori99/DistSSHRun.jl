@@ -29,8 +29,9 @@ end
 `juliaup add` / `update` / `default` for one target.
 
 `parent` is this machine. Anything else is an SSH host. Returns
-`(host, channel, already, ver)`. `ver` is `nothing` when a child was already
-on the channel.
+`(host, channel, already, ver)`. The script always runs `juliaup update`.
+`already` is true only when that remote body prints `already`. `ver` is
+`nothing` in that case.
 """
 function juliaup_align_host!(
         host::AbstractString;
@@ -146,24 +147,37 @@ function juliaup_default_host!(host::AbstractString, channel::AbstractString)
     return (; host = h, channel = ch)
 end
 
-"""Installed `juliaup status` rows on `host`. Optional `channel` keeps that row."""
+"""Installed `juliaup status` rows on `host`. Optional `channel` keeps that row.
+
+`strict` throws when juliaup is missing, `status` fails, or SSH fails.
+An empty status from a juliaup that did run is still an empty vector.
+The default stays quiet: those failures are `String[]`.
+"""
 function juliaup_status_lines(
         host::AbstractString;
         channel::Union{Nothing, AbstractString} = nothing,
+        strict::Bool = false,
     )::Vector{String}
     h = String(host)
     ch = channel === nothing ? nothing : String(channel)
     if is_parent_host_name(h)
         ju = find_local_juliaup()
-        ju === nothing && return String[]
-        proc, out, _ = _juliaup_run_captured(ju, ["status"])
-        DistSSHBase.shell_status(proc) == 0 || return String[]
+        if ju === nothing
+            strict && error("juliaup not found")
+            return String[]
+        end
+        proc, out, err = _juliaup_run_captured(ju, ["status"])
+        if DistSSHBase.shell_status(proc) != 0
+            strict && error(_juliaup_captured_fail_msg(["status"], proc, out, err))
+            return String[]
+        end
         return _installed_status_lines(out; channel = ch)
     end
     try
-        out = _juliaup_remote_capture(h, _juliaup_status_sh())
+        out = _juliaup_remote_capture(h, _juliaup_status_sh(; missing_ok = !strict))
         return _installed_status_lines(out; channel = ch)
     catch
+        strict && rethrow()
         return String[]
     end
 end

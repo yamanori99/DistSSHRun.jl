@@ -1063,6 +1063,33 @@ function print_ok(msg; io = stdout, bold = false)
     return nothing
 end
 
+"""Terminal for up results and `setup --check` diagnostics.
+
+`:verbose` and `:progress` print. `:quiet` stays on the kit log.
+"""
+kit_payload_visible()::Bool = !kit_output_quiet()
+
+"""`println` for a payload line (`:verbose` and `:progress`)."""
+function kit_payload_println(args...; io::IO = stdout)
+    if kit_payload_visible()
+        println(io, args...)
+    end
+    if LOG_FILE_HANDLE[] !== nothing
+        println(LOG_FILE_HANDLE[], args...)
+        flush(LOG_FILE_HANDLE[])
+    end
+    return nothing
+end
+
+"""Green payload mark. Same terminal gate as [`kit_payload_println`](@ref)."""
+function kit_payload_ok(msg; io = stdout, bold = false)
+    if kit_payload_visible()
+        _print_colored(io, msg, :green, bold)
+    end
+    _kit_log_write(string(msg))
+    return nothing
+end
+
 # Wait spinner (`:verbose` TTY only)
 
 """Frames for the kit TTY spinner (`kit_spin!`) and matching queue chrome."""
@@ -1266,6 +1293,10 @@ mutable struct KitProgressState
     drawn::Int
     cursor_hidden::Bool
     job_id::Union{Nothing, String}
+    # Phase bar has no trailing newline. Set once that line is finished so a
+    # later diagnostic is not glued on, and so a second diagnostic does not
+    # insert a blank line.
+    released::Bool
 end
 
 function KitProgressState(
@@ -1291,6 +1322,7 @@ function KitProgressState(
         0,
         false,
         job_id === nothing ? nothing : String(job_id),
+        false,
     )
 end
 
@@ -1505,6 +1537,25 @@ kit_stdout_is_live()::Bool = stdout isa Base.TTY && !haskey(ENV, "NO_COLOR")
 
 _progress_can_draw()::Bool =
     kit_output_progress() && _progress_io() isa Base.TTY && !haskey(ENV, "NO_COLOR")
+
+"""Stop the live bar and finish its line before a diagnostic.
+
+A phase bar is redrawn with `\r` and no newline. Printing on that line glues
+the text to the bar. Item rows already end with a newline. The spinner is not
+started again; [`kit_progress_done!`](@ref) draws the finished line later.
+"""
+function _progress_release_line!()
+    raw = KIT_PROGRESS[]
+    raw isa KitProgressState || return nothing
+    _progress_can_draw() || return nothing
+    _progress_stop_spinner!(raw)
+    raw.released && return nothing
+    io = _progress_io()
+    isempty(raw.items) && println(io)
+    raw.released = true
+    flush(io)
+    return nothing
+end
 
 function _progress_stop_spinner!(state::KitProgressState)
     state.spinning || return nothing
@@ -2460,7 +2511,37 @@ function print_kit_root_usage(io::IO = stderr)
     return nothing
 end
 
-"""Setup-style status line (`:verbose` on terminal; otherwise kit log only)."""
+"""Setup-style success line (`:verbose` on the terminal; otherwise the kit log)."""
 ok(msg) = (write_both("  "); print_ok("✓ $msg"); writeln_both(""))
-fail(msg) = (write_both("  "); print_progress_err("✗ $msg"); writeln_both(""))
-warn(msg) = (write_both("  "); print_progress_warn("! $msg"); writeln_both(""))
+
+"""Setup diagnostic. Terminal in `:verbose` and `:progress`. `:quiet` is the kit log."""
+function fail(msg)
+    text = "  ✗ " * string(msg)
+    if kit_payload_visible()
+        _progress_release_line!()
+        print_err(text * "\n")
+    else
+        _kit_log_writeln(text)
+    end
+    return nothing
+end
+
+"""Setup warning. Same terminal gate as [`fail`](@ref)."""
+function warn(msg)
+    text = "  ! " * string(msg)
+    if kit_payload_visible()
+        _progress_release_line!()
+        print_warn(text * "\n")
+    else
+        _kit_log_writeln(text)
+    end
+    return nothing
+end
+
+"""One error line after a live phase bar; two-space indent like [`fail`](@ref)."""
+function println_err_after_progress(msg)
+    text = "  " * string(msg)
+    _progress_release_line!()
+    print_err(text * "\n")
+    return nothing
+end

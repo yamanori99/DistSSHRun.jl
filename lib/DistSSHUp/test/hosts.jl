@@ -10,8 +10,7 @@
             case "\$1" in
               --version) echo 'Juliaup 1.22.7'; exit 0 ;;
               status) echo '       *  $ch     julia version'; exit 0 ;;
-              update) exit 0 ;;
-              add|default) echo "unexpected \$1" >&2; exit 1 ;;
+              add|update|default) exit 0 ;;
               *) exit 1 ;;
             esac
             """,
@@ -28,7 +27,7 @@
         withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
             r = DistSSHUp.juliaup_align_host!("parent")
             @test r.host == "parent"
-            @test r.already
+            @test !r.already
             @test r.channel == ch
             DistSSHUp.juliaup_update_host!("parent")
         end

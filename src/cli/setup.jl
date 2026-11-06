@@ -390,8 +390,7 @@ if !isdefined(@__MODULE__, :setup_main)
             )
 
             if !result.ok
-                print_err("Prerequisites not met. Fix issues above and retry.")
-                kit_println()
+                println_err_after_progress("Prerequisites not met. Fix issues above and retry.")
                 return Cint(1)
             end
 

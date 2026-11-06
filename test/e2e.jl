@@ -161,7 +161,8 @@ end
         @testset "setup --check (major.minor; no --ignore-julia-version)" begin
             _e2e_announce("setup --check (major.minor; no --ignore-julia-version)")
             # Ship does not send .git/; --check warns on a missing remote hash but
-            # must still pass Julia major.minor + project/deps. Git parity is not
+            # must still pass the Julia version string (patch and prerelease)
+            # plus project/deps. A build suffix may differ. Git parity is not
             # claimed for the ship path (see docker-ssh README).
             proc, out = _run_kit_setup(;
                 setup_args = ["--check", "--remote-path", remote_root, setup_hosts...],
@@ -209,6 +210,7 @@ end
                     ver isa VersionNumber || error("expected remote version")
                     @test ver.major == VERSION.major
                     @test ver.minor == VERSION.minor
+                    @test ver.patch == VERSION.patch
                     _assert_ssh_e2e_api_ok(
                         suite,
                         "juliaup_aligned_$(host)",

@@ -22,5 +22,9 @@ using Test
     @test isempty(DistSSHUp._installed_status_lines(st; channel = "nightly"))
     sh = DistSSHUp._juliaup_status_sh()
     @test occursin("status", sh)
+    @test occursin("exit 0", sh)
     @test occursin(raw"$HOME/.juliaup/bin/juliaup", sh)
+    strict_sh = DistSSHUp._juliaup_status_sh(; missing_ok = false)
+    @test occursin("exit 127", strict_sh)
+    @test !occursin("&& exit 0", strict_sh)
 end
