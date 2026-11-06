@@ -11,6 +11,7 @@ function print_juliaup_align_fix!(
     ch = String(channel)
     h = String(host)
     kit_payload_println("    Fix: $(cli_m_project()) up add $ch $(setup_cli_host_token(h))")
+    kit_payload_println("         $(cli_m_project()) up update $ch $(setup_cli_host_token(h))")
     kit_payload_println("         $(cli_m_project()) up default $ch $(setup_cli_host_token(h))")
     kit_payload_println("         (or on $h: juliaup add $ch && juliaup update $ch && \\")
     kit_payload_println("          juliaup default $ch —")

@@ -29,8 +29,9 @@ end
 `juliaup add` / `update` / `default` for one target.
 
 `parent` is this machine. Anything else is an SSH host. Returns
-`(host, channel, already, ver)`. `ver` is `nothing` when a child was already
-on the channel.
+`(host, channel, already, ver)`. The script always runs `juliaup update`.
+`already` is true only when that remote body prints `already`. `ver` is
+`nothing` in that case.
 """
 function juliaup_align_host!(
         host::AbstractString;

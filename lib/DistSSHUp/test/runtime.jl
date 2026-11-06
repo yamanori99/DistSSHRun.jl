@@ -49,7 +49,9 @@ function _write_ssh_double(
             occursin("/usr/bin/julia", script) && println("/usr/bin/julia")
         elseif script == "command -v julia || which julia"
             println("/usr/bin/julia")
-        elseif occursin("--version", script) && !occursin("echo already", script)
+        elseif occursin("update", script) && occursin("juliaup", script)
+            println("ok")
+        elseif occursin("--version", script)
             println($(repr(version_line)))
         else
             println("ok")

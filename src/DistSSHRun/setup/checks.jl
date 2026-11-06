@@ -26,33 +26,48 @@ end
 
 """Print the remote Julia line. `false` when this host fails the check.
 
-`:minor` fails unless `ignore` is set. `:patch` and `:prerelease` warn either way.
+`:minor`, `:patch`, and `:prerelease` fail unless `ignore` is set. That
+matches go/drive identity, which compares `string(VERSION)` and the commit.
+A prerelease changes that version string, so it fails too. A build-only
+difference is `:none` (`julia_version_mismatch_kind` ignores build, and a
+release `string(VERSION)` has no `+build`) and still passes.
+`local_version` is the parent version in the message. It defaults to this
+process.
 """
 function _report_remote_julia!(
         host::AbstractString,
         checked::AbstractString,
         julia_check,
         ignore::Bool,
-        warnings::Vector{SetupWarning} = SetupWarning[],
+        warnings::Vector{SetupWarning} = SetupWarning[];
+        local_version::VersionNumber = VERSION,
     )::Bool
+    local_s = string(local_version)
+    kind = julia_check.mismatch_kind
     if !julia_check.found
         fail("Julia not found (checked: $checked)")
         print_juliaup_align_fix!(host; kind = :missing)
         return false
-    elseif julia_check.mismatch_kind == :minor && !ignore
-        fail("Julia version mismatch: local $(VERSION), $host has $(julia_check.version) (at $checked)")
+    elseif kind in (:minor, :patch, :prerelease) && !ignore
+        if kind == :minor
+            fail("Julia version mismatch: local $(local_s), $host has $(julia_check.version) (at $checked)")
+        elseif kind == :patch
+            fail("Julia patch version differs: local $(local_s), $host has $(julia_check.version) (at $checked)")
+        else
+            fail("Julia prerelease differs: local $(local_s), $host has $(julia_check.version) (at $checked)")
+        end
         print_juliaup_align_fix!(host; kind = :mismatch)
         return false
-    elseif julia_check.mismatch_kind == :minor
-        msg = "Julia version differs: local $(VERSION), $host has $(julia_check.version) (--ignore-julia-version)"
+    elseif kind == :minor
+        msg = "Julia version differs: local $(local_s), $host has $(julia_check.version) (--ignore-julia-version)"
         warn(msg)
         push!(warnings, SetupWarning(String(host), :julia_minor_ignored, msg))
-    elseif julia_check.mismatch_kind == :patch
-        msg = "Julia patch version differs: local $(VERSION), $host has $(julia_check.version)"
+    elseif kind == :patch
+        msg = "Julia patch version differs: local $(local_s), $host has $(julia_check.version) (--ignore-julia-version)"
         warn(msg)
         push!(warnings, SetupWarning(String(host), :julia_patch, msg))
-    elseif julia_check.mismatch_kind == :prerelease
-        msg = "Julia prerelease differs: local $(VERSION), $host has $(julia_check.version)"
+    elseif kind == :prerelease
+        msg = "Julia prerelease differs: local $(local_s), $host has $(julia_check.version) (--ignore-julia-version)"
         warn(msg)
         push!(warnings, SetupWarning(String(host), :julia_prerelease, msg))
     else

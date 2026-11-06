@@ -49,11 +49,6 @@ function _juliaup_align_remote_sh(
     cq = posix_quote(ch)
     return """
     $(_juliaup_locate_sh(candidates))
-    default=\$( \"\$JU\" status 2>/dev/null | awk '\$1==\"*\" { print \$2; exit }' )
-    if [ \"\$default\" = $cq ]; then
-      echo already
-      exit 0
-    fi
     if ! \"\$JU\" add $cq; then
       if ! \"\$JU\" status 2>/dev/null | grep -F -q $cq; then
         # `$cq` (not raw `$ch`): channel may come from the API; keep it shell-safe.

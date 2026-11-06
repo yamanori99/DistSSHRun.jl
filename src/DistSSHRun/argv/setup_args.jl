@@ -33,6 +33,8 @@ function show_requirements(; io::IO = stdout)
         "An SSH name must not start with '-' (including user@-host).",
         "A host or remote path must not contain NUL, a newline, or another control character.",
         "Git parity is drive --require-git (off by default).",
+        "setup --check fails when Julia patch or prerelease differs from this process.",
+        "A build suffix alone still passes. --ignore-julia-version turns skew into a warning.",
     )
     print_help_blank(io)
     print_help_section("Usage"; io = io)
@@ -55,7 +57,7 @@ function show_requirements(; io::IO = stdout)
         "                       --delete first to replace a clone dest",
         "  --sync / --pull      git update (confirm unless -y)",
         "  --instantiate        Pkg.instantiate on remotes",
-        "  --check              SSH, Julia, project, deps",
+        "  --check              SSH, Julia, project, deps (patch and prerelease must match)",
         "  --runtest            Pkg.test of the job project on remotes",
         "  --cleanup            stale workers",
         "  --delete             remote project tree (needs --confirm-path;",
@@ -71,6 +73,7 @@ function show_requirements(; io::IO = stdout)
         "  --remote-path PATH   remote project root",
         "  --allow-external-symlinks  with --ship-tree: keep escaping symlinks",
         "  --julia PATH         remote Julia",
+        "  --ignore-julia-version  warn on Julia version skew instead of failing",
         "  $(KIT_QUIET_FLAG_HELP)",
         "  $(KIT_PROGRESS_FLAG_HELP)",
         "  $(KIT_VERBOSE_FLAG_HELP)",

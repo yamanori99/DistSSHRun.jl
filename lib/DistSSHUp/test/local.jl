@@ -50,6 +50,7 @@ using Test
     mktempdir() do d
         ju = joinpath(d, "juliaup")
         jl = joinpath(d, "julia")
+        log = joinpath(d, "log")
         ch = "$(VERSION.major).$(VERSION.minor)"
         write(
             ju,
@@ -58,7 +59,7 @@ using Test
             case "\$1" in
               --version) echo 'Juliaup 1.22.7'; exit 0 ;;
               status) echo '       *  $ch     julia version'; exit 0 ;;
-              add|update|default) echo "unexpected \$1" >&2; exit 1 ;;
+              add|update|default) echo "\$*" >> '$log'; exit 0 ;;
               *) exit 1 ;;
             esac
             """,
@@ -74,8 +75,10 @@ using Test
         chmod(jl, 0o755)
         withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
             r = DistSSHUp.juliaup_align_local!(ch)
-            @test !r.changed
+            @test r.changed
             @test DistSSHUp.julia_version_mismatch_kind(VERSION, r.ver) != :minor
+            logged = read(log, String)
+            @test count(==("update $ch"), split(logged, '\n'; keepempty = false)) == 1
         end
     end
 

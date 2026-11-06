@@ -49,10 +49,12 @@ if !isdefined(Main, :_kill_ready_child)
 end
 
 if !isdefined(Main, :_write_aligned_fake_juliaup)
-    # Fake local juliaup already on this process's channel, with `julia` beside it.
+    # Fake local juliaup whose default channel already matches, with `julia` beside it.
+    # `add` / `update` / `default` succeed and are appended to `log`.
     function _write_aligned_fake_juliaup(dir::AbstractString)
         ju = joinpath(dir, "juliaup")
         jl = joinpath(dir, "julia")
+        log = joinpath(dir, "log")
         # The two test entries load different packages. Spell neither name as a
         # global: this file is analyzed from both, and the unused branch warns.
         up = Symbol("DistSSH" * "Up")
@@ -63,10 +65,11 @@ if !isdefined(Main, :_write_aligned_fake_juliaup)
             ju,
             """
             #!/bin/sh
+            echo "\$*" >> '$log'
             case "\$1" in
               --version) echo 'Juliaup 1.22.7'; exit 0 ;;
               status) echo '       *  $ch     julia version'; exit 0 ;;
-              add|update|default) echo "unexpected \$1" >&2; exit 1 ;;
+              add|update|default) exit 0 ;;
               *) exit 1 ;;
             esac
             """,
@@ -80,6 +83,6 @@ if !isdefined(Main, :_write_aligned_fake_juliaup)
         )
         chmod(ju, 0o755)
         chmod(jl, 0o755)
-        return (; ju, ch)
+        return (; ju, ch, log)
     end
 end

@@ -170,7 +170,7 @@ DISTSSHKIT_CODE_COVERAGE=1 \
 
 ### Setup (ship-tree)
 
-- Julia resolve: kit parent and remotes share major.minor
+- Julia resolve: kit parent and remotes share patch and prerelease (a build suffix may differ)
 - `run_on_host`: `--version` exit 0; `-e exit(3)` is `.exitcode == 3`
   (no throw)
 - `--delete`: remote `Project.toml` is gone

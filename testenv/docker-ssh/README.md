@@ -53,8 +53,9 @@ in that case (`no reachable package registries`). The registry lives in
 path it also resolves each channel's current release from `versions.json`
 (`JULIA_DEFAULT_RELEASE` / `JULIA_ALT_RELEASE`). That string is the image
 cache key, so a new patch, or a prerelease becoming stable, rebuilds the
-juliaup layer. The image build checks `julia --version` against it. Only
-major.minor is required at runtime. Install policy:
+juliaup layer. The image build checks `julia --version` against it.
+`setup --check` and go/drive require the same version string, including
+patch and prerelease. A build suffix may differ. Install policy:
 [Requirements](https://yamanori99.github.io/DistSSHKit.jl/stable/requirements/).
 `--e2e` also runs
 [`scripts/ensure-kit-parent-juliaup.sh`](scripts/ensure-kit-parent-juliaup.sh)
