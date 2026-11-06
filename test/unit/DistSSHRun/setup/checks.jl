@@ -905,10 +905,37 @@ using Pkg
         @test Base.ispublic(DistSSHRun, :SetupWarning)
         @test !Base.isexported(DistSSHRun, :SetupWarning)
         positional = DistSSHRun.SyncResult(true, DistSSHRun.HostResult[], false)
+        four = DistSSHRun.SyncResult(true, DistSSHRun.HostResult[], false, DistSSHRun.SetupWarning[])
         keyword = DistSSHRun.SyncResult(false, DistSSHRun.HostResult[]; ok = true)
         @test isempty(positional.warnings)
+        @test isempty(four.warnings)
         @test isempty(keyword.warnings)
         @test positional.ok
+        @test four.ok
         @test keyword.ok
+        @test getfield(positional, 1) === true
+        @test getfield(positional, 2) isa Vector{DistSSHRun.HostResult}
+        @test getfield(positional, 3) === false
+        @test getfield(positional, 4) isa Vector{DistSSHRun.SetupWarning}
+        @test DistSSHRun.result_content_tree_hash(positional) === nothing
+        @test DistSSHRun.result_remote_run_id(positional) === nothing
+        @test DistSSHRun.result_content_tree_hash(keyword) === nothing
+        @test DistSSHRun.result_remote_run_id(keyword) === nothing
+        shipped = DistSSHRun.SyncResult(
+            false, DistSSHRun.HostResult[];
+            ok = true,
+            content_tree_hash = "abc",
+            run_id = "20260101T000000Z-abcdef",
+        )
+        @test DistSSHRun.result_content_tree_hash(shipped) == "abc"
+        @test DistSSHRun.result_remote_run_id(shipped) == "20260101T000000Z-abcdef"
+        blank = DistSSHRun.SyncResult(
+            false, DistSSHRun.HostResult[];
+            ok = true,
+            content_tree_hash = "",
+            run_id = "",
+        )
+        @test DistSSHRun.result_content_tree_hash(blank) === nothing
+        @test DistSSHRun.result_remote_run_id(blank) === nothing
     end
 end
