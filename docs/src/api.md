@@ -125,15 +125,15 @@ content_tree_hash
 ## Hosts, cache, and run directories
 
 Names the commands above call: host tokens and SSH, the file cache, run
-directories, and help text.
+directories, and help text. Every other public name is in this list too,
+including DistSSHBase, DistSSHUp, and DistSSHSize.
 
 ```@autodocs
-Modules = [DistSSHRun, DistSSHRun.DistSSHBase]
+Modules = [DistSSHRun, DistSSHRun.DistSSHBase, DistSSHRun.DistSSHUp, DistSSHRun.DistSSHSize]
 Public = true
 Private = false
 Filter = function (x)
     grouped = (
-        :DistSSHBase,
         :worker_pmap, :worker_seed, :go!, :GoResult, :report_go_errors,
         :drive!, :DriveResult, :HostRunResult, :DriveHostStatus, :drive_host_status,
         :KitRunResult, :KitProcess, :kit_run_result, :report_run_errors,
@@ -150,22 +150,29 @@ Filter = function (x)
         :snapshot_directory, :snapshot_tar, :content_tree_hash,
         :execute_kwargs_from_parsed, :detached_launch,
         :ALLOW_MISMATCH_FIELDS,
+        :wait, :shell_status, :run_identity, :identity_mismatches, :parse_allow_mismatch,
+        :ConfirmPathMismatch, :normalize_remote_confirm_path,
+        :NO_COMMAND_HINT_LINES, :RUN_SUBCOMMAND_EXPECTATION,
     )
     n = try
         nameof(x)
     catch
-        # A tuple has no `nameof`. Identity documents this constant.
+        # A tuple or a `String` has no `nameof`. The blocks below document these.
         x === DistSSHRun.ALLOW_MISMATCH_FIELDS && return false
+        x === DistSSHRun.NO_COMMAND_HINT_LINES && return false
+        x === DistSSHRun.RUN_SUBCOMMAND_EXPECTATION && return false
         return true
     end
-    # Family contract (`public`), not the user manual. Exported names stay.
-    family_only = try
-        Base.ispublic(parentmodule(x), n) && !Base.isexported(parentmodule(x), n)
-    catch
-        false
-    end
-    return !(n in grouped) && !family_only
+    return !(n in grouped)
 end
+```
+
+`NO_COMMAND_HINT_LINES` and `RUN_SUBCOMMAND_EXPECTATION` are public and are
+not exported. `print_rejected_command` prints them.
+
+```@docs
+NO_COMMAND_HINT_LINES
+RUN_SUBCOMMAND_EXPECTATION
 ```
 
 `shell_status` is public on DistSSHBase and is not exported.

@@ -2,7 +2,7 @@
 Parse `julia --version`, keeping prerelease and build.
 
 `julia version 1.14.0-alpha1` is `v"1.14.0-alpha1"`. Unreadable text is `nothing`.
-[`parse_julia_version`](@ref) still returns major.minor.patch only.
+`parse_julia_version` still returns major.minor.patch only.
 """
 function parse_julia_version_full(version_output::AbstractString)::Union{Nothing, VersionNumber}
     m = match(r"julia version (\d+\.\d+\.\d+(?:[-+][^\s]+)?)", String(version_output))

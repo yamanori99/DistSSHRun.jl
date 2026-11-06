@@ -333,8 +333,8 @@ One POSIX single-quoted word for a remote `sh` command.
 
 A `'` inside `word` becomes `'\\''`. Every other byte is copied, including
 newline. NUL throws `ArgumentError` (a remote process cannot carry it).
-A path goes through [`_remote_shell_path_word`](@ref), which rejects a control
-character. A host goes through [`validate_ssh_host`](@ref), which rejects a
+A path goes through `_remote_shell_path_word`, which rejects a control
+character. A host goes through `validate_ssh_host`, which rejects a
 name that starts with `-` and a control character.
 """
 function posix_quote(word::AbstractString)::String
@@ -856,7 +856,7 @@ end
 """
 Worker `--project` path for `local_project_root`.
 
-Same override rules as [`remote_deploy_root`](@ref). When the Manifest lives in
+Same override rules as `remote_deploy_root`. When the Manifest lives in
 a parent of the member, this is `deploy_root` plus that relative path.
 A single-project tree returns the deploy root unchanged. Does not `abspath`
 tilde paths.
