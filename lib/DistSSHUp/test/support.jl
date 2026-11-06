@@ -61,11 +61,19 @@ if !isdefined(Main, :_write_aligned_fake_juliaup)
         other = Symbol("DistSSH" * "Run")
         mod = getfield(Main, isdefined(Main, up) ? up : other)
         ch = mod.juliaup_channel()
+        base_sym = Symbol("DistSSH" * "Base")
+        run_sym = Symbol("DistSSH" * "Run")
+        base = if isdefined(Main, base_sym)
+            getfield(Main, base_sym)
+        else
+            getfield(getfield(Main, run_sym), base_sym)
+        end
+        qlog = base.posix_quote(log)
         write(
             ju,
             """
             #!/bin/sh
-            echo "\$*" >> '$log'
+            echo "\$*" >> $qlog
             case "\$1" in
               --version) echo 'Juliaup 1.22.7'; exit 0 ;;
               status) echo '       *  $ch     julia version'; exit 0 ;;

@@ -56,6 +56,36 @@ function print_juliaup_parent_patch_note!(
     return true
 end
 
+"""Result text for one host.
+
+`:verbose` leaves the `kit_spin!` prefix (`  host: `) on the line, so `text`
+stays as it is. `:progress` draws no prefix, so the line names `label`.
+"""
+function _juliaup_host_mark(label::AbstractString, text::AbstractString)::String
+    kit_output_detail() && return String(text)
+    return "  $(String(label)): $(String(text))"
+end
+
+function _juliaup_result_line(label::AbstractString, text::AbstractString)
+    kit_payload_ok(_juliaup_host_mark(label, text))
+    kit_payload_println()
+    return nothing
+end
+
+"""Parent patch for a status summary, or `-` when that juliaup cannot be launched.
+
+A missing juliaup is already `-`. A binary that exists but will not start
+must not fail the host whose status was just read.
+"""
+function _juliaup_parent_patch_or_unknown()::String
+    try
+        return DistSSHUp.juliaup_default_patch(PARENT_HOST_NAME)
+    catch e
+        e isa InterruptException && rethrow()
+        return "-"
+    end
+end
+
 """One host line visible under `:progress` when juliaup is already on `channel`."""
 function print_juliaup_already_on!(host::AbstractString, channel::AbstractString)
     msg = "  $(String(host)): already on $(String(channel))"
@@ -120,8 +150,7 @@ function juliaup_align_remotes(
             if r.already
                 print_juliaup_already_on!(label, ch)
             else
-                kit_payload_ok("✓ Julia $(r.ver) (channel $ch)")
-                kit_payload_println()
+                _juliaup_result_line(label, "✓ Julia $(r.ver) (channel $ch)")
                 if is_parent_host_name(host)
                     kit_payload_println("    Note: this process still runs Julia $VERSION until you restart.")
                 else
@@ -135,7 +164,7 @@ function juliaup_align_remotes(
             _setup_host_span!(host, :ok)
         catch e
             detail = e isa ErrorException ? e.msg : sprint(showerror, e)
-            report_remote_failure(e)
+            report_remote_failure(e; host = label)
             if occursin("juliaup not found", detail) || occursin("127", detail)
                 kit_payload_println("    Install juliaup on $label first (see Requirements), then retry.")
             end
@@ -186,14 +215,13 @@ function juliaup_update_remotes(
             kit_spin!("  $label: ") do
                 juliaup_update_host!(host)
             end
-            kit_payload_ok("✓ juliaup update")
-            kit_payload_println()
+            _juliaup_result_line(label, "✓ juliaup update")
             succeeded += 1
             push!(host_results, HostResult(label, true, "juliaup update"))
             _setup_host_span!(host, :ok)
         catch e
             detail = e isa ErrorException ? e.msg : sprint(showerror, e)
-            report_remote_failure(e)
+            report_remote_failure(e; host = label)
             if occursin("juliaup not found", detail) || occursin("127", detail)
                 kit_payload_println("    Install juliaup on $label first (see Requirements), then retry.")
             end
@@ -242,15 +270,16 @@ end
 
 """`same as parent`, `behind parent V`, `ahead of parent V`, or `parent unknown`.
 
-`parent` is always `same as parent`. Other hosts compare patch strings as
-`VersionNumber`. A missing or unparseable patch is `parent unknown`.
+Compares patch strings as `VersionNumber`. A missing or unparseable patch is
+`parent unknown`. The parent host does not use this: that line would only
+compare the parent to itself.
 """
 function _juliaup_patch_relation(
         host::AbstractString,
         installed::AbstractString,
         parent_patch::AbstractString,
     )::String
-    is_parent_host_name(host) && return "same as parent"
+    is_parent_host_name(host) && return ""
     parent_patch == "-" && return "parent unknown"
     installed == "-" && return "parent unknown"
     parent_v = tryparse(VersionNumber, String(parent_patch))
@@ -264,9 +293,9 @@ end
 """One `up status` line for `host`.
 
 `rows` are installed `juliaup status` lines. Empty rows are `(none)`.
-The line names the channel, the installed patch, how that patch sits
-against `parent_patch`, and the available update. It does not include the
-juliaup build triplet.
+The line names the channel, the installed patch, and the available update.
+A worker also says how that patch sits against `parent_patch`. The parent
+line does not. The line does not include the juliaup build triplet.
 """
 function juliaup_status_summary_line(
         host::AbstractString,
@@ -278,7 +307,8 @@ function juliaup_status_summary_line(
     row === nothing && return "  $label: (none)"
     channel, installed, available = _juliaup_summary_fields(row)
     rel = _juliaup_patch_relation(label, installed, String(parent_patch))
-    return "  $label: channel $channel, installed $installed, $rel, available $available"
+    rel_part = isempty(rel) ? "" : ", $rel"
+    return "  $label: channel $channel, installed $installed$rel_part, available $available"
 end
 
 """
@@ -321,7 +351,7 @@ function juliaup_verb_remotes(
         try
             if v == "status"
                 lines = juliaup_status_lines(host; channel = ch, strict = true)
-                parent_patch = DistSSHUp.juliaup_default_patch(PARENT_HOST_NAME)
+                parent_patch = _juliaup_parent_patch_or_unknown()
                 kit_payload_println(
                     juliaup_status_summary_line(host, lines; parent_patch = parent_patch),
                 )
@@ -342,15 +372,14 @@ function juliaup_verb_remotes(
                         error("unknown juliaup verb: $v")
                     end
                 end
-                kit_payload_ok("✓ juliaup $v$(ch === nothing ? "" : " $ch")")
-                kit_payload_println()
+                _juliaup_result_line(label, "✓ juliaup $v$(ch === nothing ? "" : " $ch")")
             end
             succeeded += 1
             push!(host_results, HostResult(label, true, "juliaup $v"))
             _setup_host_span!(host, :ok)
         catch e
             detail = e isa ErrorException ? e.msg : sprint(showerror, e)
-            report_remote_failure(e)
+            report_remote_failure(e; host = label)
             if occursin("juliaup not found", detail) || occursin("127", detail)
                 kit_payload_println("    Install juliaup on $label first (see Requirements), then retry.")
             end

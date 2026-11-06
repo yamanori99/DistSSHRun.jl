@@ -704,8 +704,7 @@ function _setup_one!(
             print_ok("All prerequisites met.")
             kit_println()
         else
-            print_err("Prerequisites not met. Fix issues above and retry.")
-            kit_println()
+            println_err_after_progress("Prerequisites not met. Fix issues above and retry.")
         end
         return SyncResult(false, HostResult[]; ok = result.ok, warnings = result.warnings)
     elseif mode === :cleanup

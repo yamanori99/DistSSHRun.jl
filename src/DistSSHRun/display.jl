@@ -1293,6 +1293,10 @@ mutable struct KitProgressState
     drawn::Int
     cursor_hidden::Bool
     job_id::Union{Nothing, String}
+    # Phase bar has no trailing newline. Set once that line is finished so a
+    # later diagnostic is not glued on, and so a second diagnostic does not
+    # insert a blank line.
+    released::Bool
 end
 
 function KitProgressState(
@@ -1318,6 +1322,7 @@ function KitProgressState(
         0,
         false,
         job_id === nothing ? nothing : String(job_id),
+        false,
     )
 end
 
@@ -1532,6 +1537,25 @@ kit_stdout_is_live()::Bool = stdout isa Base.TTY && !haskey(ENV, "NO_COLOR")
 
 _progress_can_draw()::Bool =
     kit_output_progress() && _progress_io() isa Base.TTY && !haskey(ENV, "NO_COLOR")
+
+"""Stop the live bar and finish its line before a diagnostic.
+
+A phase bar is redrawn with `\r` and no newline. Printing on that line glues
+the text to the bar. Item rows already end with a newline. The spinner is not
+started again; [`kit_progress_done!`](@ref) draws the finished line later.
+"""
+function _progress_release_line!()
+    raw = KIT_PROGRESS[]
+    raw isa KitProgressState || return nothing
+    _progress_can_draw() || return nothing
+    _progress_stop_spinner!(raw)
+    raw.released && return nothing
+    io = _progress_io()
+    isempty(raw.items) && println(io)
+    raw.released = true
+    flush(io)
+    return nothing
+end
 
 function _progress_stop_spinner!(state::KitProgressState)
     state.spinning || return nothing
@@ -2494,6 +2518,7 @@ ok(msg) = (write_both("  "); print_ok("✓ $msg"); writeln_both(""))
 function fail(msg)
     text = "  ✗ " * string(msg)
     if kit_payload_visible()
+        _progress_release_line!()
         print_err(text * "\n")
     else
         _kit_log_writeln(text)
@@ -2505,9 +2530,18 @@ end
 function warn(msg)
     text = "  ! " * string(msg)
     if kit_payload_visible()
+        _progress_release_line!()
         print_warn(text * "\n")
     else
         _kit_log_writeln(text)
     end
+    return nothing
+end
+
+"""One error line after a live phase bar (the bar line is finished first)."""
+function println_err_after_progress(msg)
+    text = string(msg)
+    _progress_release_line!()
+    print_err(text * "\n")
     return nothing
 end

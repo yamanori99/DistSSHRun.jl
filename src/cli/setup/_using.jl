@@ -17,6 +17,7 @@ using .DistSSHRun:
     print_err,
     print_header,
     print_ok,
+    println_err_after_progress,
     println_fatal,
     prune_kit_leaves,
     resolve_clone_url,

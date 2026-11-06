@@ -137,12 +137,22 @@ function finish_host_op!(label::AbstractString, result)::Bool
 end
 
 """Print a remote-op failure line using [`summarize_ssh_error`](@ref)."""
-function report_remote_failure(err; stderr::AbstractString = "")
+function report_remote_failure(
+        err;
+        stderr::AbstractString = "",
+        host::Union{Nothing, AbstractString} = nothing,
+    )
     detail = summarize_ssh_error(err; stderr = stderr)
-    if kit_payload_visible()
-        print_err("✗\n")
+    # `:verbose` keeps the `kit_spin!` prefix. `:progress` has no prefix.
+    mark = if host !== nothing && !kit_output_detail()
+        "  $(String(host)): ✗\n"
     else
-        _kit_log_writeln("✗")
+        "✗\n"
+    end
+    if kit_payload_visible()
+        print_err(mark)
+    else
+        _kit_log_writeln(chomp(mark))
     end
     kit_payload_println("    $detail")
     return nothing

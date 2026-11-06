@@ -35,6 +35,7 @@ function show_requirements(; io::IO = stdout)
         "Git parity is drive --require-git (off by default).",
         "setup --check fails when Julia patch or prerelease differs from this process.",
         "A build suffix alone still passes. --ignore-julia-version turns skew into a warning.",
+        "go and drive compare the full VERSION string and the Julia commit.",
     )
     print_help_blank(io)
     print_help_section("Usage"; io = io)

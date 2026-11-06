@@ -141,10 +141,11 @@ is rejected. See `julia -m DistSSHRun help setup`.
 ## Commands
 
 `setup --check` fails when the worker Julia patch or prerelease differs
-from this process, the same rule `go` and `drive` use for the version
-string. A build suffix alone still passes. `--ignore-julia-version`
-turns that skew into a warning. `up` and `setup --juliaup` run
-`juliaup update` even when the channel name already matches.
+from this process. A build suffix alone still passes.
+`--ignore-julia-version` turns that skew into a warning. `go` and
+`drive` compare the full VERSION string and the Julia commit. `up` and
+`setup --juliaup` run `juliaup update` even when the channel name
+already matches.
 
 ```bash
 julia -m DistSSHRun setup --check child:host1

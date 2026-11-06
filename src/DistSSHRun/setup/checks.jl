@@ -26,9 +26,9 @@ end
 
 """Print the remote Julia line. `false` when this host fails the check.
 
-`:minor`, `:patch`, and `:prerelease` fail unless `ignore` is set. That
-matches go/drive identity, which compares `string(VERSION)` and the commit.
-A prerelease changes that version string, so it fails too. A build-only
+`:minor`, `:patch`, and `:prerelease` fail unless `ignore` is set.
+`go` and `drive` compare `string(VERSION)` and the Julia commit. This
+check does not. It fails on patch and prerelease skew. A build-only
 difference is `:none` (`julia_version_mismatch_kind` ignores build, and a
 release `string(VERSION)` has no `+build`) and still passes.
 `local_version` is the parent version in the message. It defaults to this
