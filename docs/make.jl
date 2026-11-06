@@ -18,7 +18,7 @@ makedocs(;
         "Home" => "index.md",
         "API" => "api.md",
     ],
-    checkdocs = :none,
+    checkdocs = :public,
 )
 
 # A pull request from this repository deploys previews/PR<n>.

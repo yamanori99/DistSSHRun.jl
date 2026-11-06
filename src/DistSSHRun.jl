@@ -432,14 +432,14 @@ function no_command_message(name::AbstractString)::String
     return "No command (got $(repr(String(name)))). Kit does not infer go / ride / drive."
 end
 
-# Lines under `no_command_message`. DistSSHKit prints the same three lines.
+"""Three hint lines `print_rejected_command` prints under `no_command_message`."""
 const NO_COMMAND_HINT_LINES = (
     "  go SCRIPT.jl      as-is complete job (timing without rewrite)",
     "  ride … SCRIPT.jl  experimental map / filter",
     "  drive … SCRIPT.jl Distributed",
 )
 
-# The run-command list under `unknown_subcommand_message`. Order is the sentence.
+"""Expected-command sentence `print_rejected_command` prints under `unknown_subcommand_message`."""
 const RUN_SUBCOMMAND_EXPECTATION =
     "Expected: setup | up | go | ride | drive | size | pool | demo | progress"
 

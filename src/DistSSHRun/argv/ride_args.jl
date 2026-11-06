@@ -71,6 +71,7 @@ function show_ride_usage(; io::IO = stdout)
     return nothing
 end
 
+"""Parse `ride` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_ride_args(args::AbstractVector{<:AbstractString})
     cli_session, rest = peel_kit_cli_flags(args)
     hosts = String[]
