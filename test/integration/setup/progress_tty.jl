@@ -3,6 +3,12 @@ using Test
 # Pseudo-TTY (`script`) versus a pipe. The TTY default is `:progress`.
 # A pipe is `:verbose`. `NO_COLOR` forces the non-TTY default, so this
 # runner unsets it before `julia` starts.
+#
+# CI / `script` typescripts look like they stack many `check` spinner rows.
+# That is the byte stream: each redraw is `\r` + line + `\e[K` with no
+# newline. Turning `\r` into `\n` (see `tty_lines`) makes each frame its own
+# log line. A live terminal overwrites the same row; `live_spinner_bar_peak`
+# applies `\r` / `\e[K` and asserts at most one spinner bar is visible.
 
 @testset "TTY progress keeps up status and setup --check lines" begin
     status_cmd = _kit_cli_cmd(["up", "status", "parent", "child:host1"])
@@ -104,6 +110,7 @@ using Test
             return replace(String(s), r"\e\[[0-9;?]*[A-Za-z]" => "")
         end
         function tty_lines(s::AbstractString)
+            # Log-style view: each `\r` redraw becomes its own line (CI look).
             return split(strip_ansi(replace(String(s), "\r" => "\n")), '\n')
         end
         function bar_line(line::AbstractString)
@@ -112,8 +119,68 @@ using Test
                 occursin("╺", line) ||
                 any(c -> occursin(c, line), "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
         end
+        function spinner_bar_line(line::AbstractString)
+            return any(c -> occursin(c, line), "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏") &&
+                (occursin("━", line) || occursin("╺", line))
+        end
         function message_line(line::AbstractString)
             return occursin("not found in PATH", line) || occursin("Prerequisites not met", line)
+        end
+        # Live TTY: `\r` returns to column 0; CSI K after that clears the row.
+        # Snapshot after each erase / newline and track how many spinner bars
+        # would be on screen at once (must stay ≤ 1).
+        function live_spinner_bar_peak(raw::AbstractString)
+            finished = String[]
+            cur = ""
+            at_home = false
+            peak = 0
+            function note!()
+                rows = strip_ansi.(isempty(cur) ? finished : vcat(finished, String[cur]))
+                peak = max(peak, count(spinner_bar_line, rows))
+                return nothing
+            end
+            i = firstindex(raw)
+            while i <= lastindex(raw)
+                ch = raw[i]
+                if ch == '\r'
+                    at_home = true
+                    i = nextind(raw, i)
+                elseif ch == '\n'
+                    push!(finished, cur)
+                    cur = ""
+                    at_home = false
+                    note!()
+                    i = nextind(raw, i)
+                elseif ch == '\e'
+                    j = nextind(raw, i)
+                    if j <= lastindex(raw) && raw[j] == '['
+                        k = nextind(raw, j)
+                        while k <= lastindex(raw) && !isletter(raw[k])
+                            k = nextind(raw, k)
+                        end
+                        k <= lastindex(raw) || break
+                        if raw[k] == 'K'
+                            if at_home
+                                cur = ""
+                                at_home = false
+                            end
+                            note!()
+                        end
+                        i = nextind(raw, k)
+                    else
+                        i = j
+                    end
+                else
+                    if at_home
+                        cur = ""
+                        at_home = false
+                    end
+                    cur *= string(ch)
+                    i = nextind(raw, i)
+                end
+            end
+            note!()
+            return peak
         end
 
         pty = capture_pty(runner)
@@ -139,6 +206,9 @@ using Test
         @test finals[1] == "  Prerequisites not met. Fix issues above and retry."
         @test !bar_line(finals[1])
         @test !occursin("[K", finals[1])
+        # Flattened log may list many `check` frames; the live screen never stacks them.
+        @test count(spinner_bar_line, check_lines) >= 1
+        @test live_spinner_bar_peak(check_tty) <= 1
         ssh_at = findfirst("ssh not found in PATH", check_tty)
         pre_at = findfirst("Prerequisites not met", check_tty)
         @test ssh_at !== nothing && pre_at !== nothing && first(ssh_at) < first(pre_at)
