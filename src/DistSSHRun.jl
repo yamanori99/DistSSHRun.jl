@@ -1,7 +1,7 @@
 """
 DistSSHRun — the DistSSHKit execution layer moved into this package.
 
-One SSH run (`setup`, `go`, `ride`, `drive`, `plan`, `size`, `pool`, `demo`, `progress`) and the bang API (`go!`, `plan`, `ride!`, `pool!`, `drive!`, `pipeline!`).
+One SSH run (`setup`, `go`, `ride`, `drive`, `size`, `pool`, `demo`, `progress`) and the bang API (`go!`, `ride!`, `pool!`, `drive!`, `pipeline!`).
 
 DistSSHKit depends on DistSSHRun and DistSSHQueue and reexports their public names. Users add DistSSHKit and run `julia -m DistSSHKit`. This package can still be added on its own. The command is then `julia -m DistSSHRun`.
 
@@ -20,7 +20,7 @@ using TOML
 using Unicode
 
 # Public surface. Prefer `julia -m DistSSHKit …` for day-to-day CLI.
-#   user — go! / ride! / drive! / plan / pool! / size! / setup! / pipeline!
+#   user — go! / ride! / drive! / pool! / size! / setup! / pipeline!
 #   occupancy — size! (RSS WorkerPlan; CLI size / pool; not implied by omit :N)
 #   queue — execute!(; detached=true), parsers, paths, help chrome
 #   argv wrappers `go` / `drive` stay unexported (`main` / tests)
@@ -48,9 +48,6 @@ export size!
 export pool!
 export ResourcePool
 export HostInventory
-export plan
-export KitPlan
-export PlanFinding
 export stored_path
 export file_sha256
 public check_input_manifest
@@ -93,7 +90,6 @@ export resolve_pkg_env
 export explain_script_not_found
 # Display helpers stay public and are not exported. DistSSHKit 0.11 drops them.
 public print_pool
-public print_plan
 public report_pipeline_errors
 public report_run_errors
 public report_go_errors
@@ -179,7 +175,6 @@ include("DistSSHRun/ship_list.jl")
 include("DistSSHRun/ship.jl")
 include("DistSSHRun/argv/drive_args.jl")
 include("DistSSHRun/argv/go_args.jl")
-include("DistSSHRun/argv/plan_args.jl")
 include("DistSSHRun/argv/setup_args.jl")
 include("DistSSHRun/argv/up_args.jl")
 include("DistSSHRun/argv/size_args.jl")
@@ -198,10 +193,9 @@ include("DistSSHRun/drive/runtime/init.jl")
 include("DistSSHRun/drive/runtime/results.jl")
 include("DistSSHRun/drive/runtime/run.jl")
 include("DistSSHRun/argv/size_report.jl")
-include("DistSSHRun/plan.jl")
-# After `plan.jl`: publish extract and the plain-script hint call `plan` and `KitPlan`.
 include("DistSSHRun/drive/runtime/script_hint.jl")
 include("DistSSHRun/go.jl")
+include("DistSSHRun/script_scan.jl")
 include("DistSSHRun/ride.jl")
 include("DistSSHRun/execute.jl")
 include("DistSSHRun/provenance.jl")
@@ -238,12 +232,11 @@ dist_ssh_kit_version()::VersionNumber = DIST_SSH_KIT_VERSION
 #   julia --project=. -m DistSSHKit drive parent:2 script.jl
 
 const _KIT_CLI_LOADED = Set{String}()
-const _KIT_CLI_SCRIPTS = ("drive.jl", "go.jl", "plan.jl", "pool.jl", "ride.jl", "setup.jl", "size.jl", "up.jl")
+const _KIT_CLI_SCRIPTS = ("drive.jl", "go.jl", "pool.jl", "ride.jl", "setup.jl", "size.jl", "up.jl")
 
 const _KIT_CLI_MAIN = Dict(
     "drive.jl" => :drive_main,
     "go.jl" => :go_main,
-    "plan.jl" => :plan_main,
     "pool.jl" => :pool_main,
     "ride.jl" => :ride_main,
     "setup.jl" => :setup_main,
@@ -384,13 +377,6 @@ Run the `ride` CLI (`ride.jl`) with `args`. Prefer `julia -m DistSSHKit ride …
 run_ride(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("ride.jl", args)
 
 """
-    run_plan(args::Vector{String}=copy(ARGS))
-
-Run the `plan` CLI (`plan.jl`) with `args`. Prefer `julia -m DistSSHKit plan …`.
-"""
-run_plan(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("plan.jl", args)
-
-"""
     main(args::Vector{String}=copy(ARGS))
 
 CLI entry. Prefer Julia 1.13+ and `julia -m DistSSHKit SUBCOMMAND …`:
@@ -399,7 +385,6 @@ CLI entry. Prefer Julia 1.13+ and `julia -m DistSSHKit SUBCOMMAND …`:
     julia --project=. -m DistSSHKit go SCRIPT.jl
     julia --project=. -m DistSSHKit ride parent:2 SCRIPT.jl
     julia --project=. -m DistSSHKit drive parent:2 script.jl
-    julia --project=. -m DistSSHKit plan SCRIPT.jl
     julia --project=. -m DistSSHKit size parent child:host1
     julia --project=. -m DistSSHKit pool parent child:host1
     julia --project=. -m DistSSHKit progress DIR
@@ -430,7 +415,6 @@ const _RUN_CALLS = Dict{String, Function}(
     "demo" => (rest -> demo(rest)::Cint),
     "setup" => (rest -> setup(rest)::Cint),
     "up" => (rest -> up(rest)::Cint),
-    "plan" => (rest -> run_plan(rest)::Cint),
     "ride" => (rest -> run_ride(rest)::Cint),
     "size" => (rest -> run_size(rest)::Cint),
     "pool" => (rest -> run_pool(rest)::Cint),
@@ -447,17 +431,16 @@ function no_command_message(name::AbstractString)::String
     return "No command (got $(repr(String(name)))). Kit does not infer go / ride / drive."
 end
 
-# Lines under `no_command_message`. DistSSHKit prints the same four lines.
+# Lines under `no_command_message`. DistSSHKit prints the same three lines.
 const NO_COMMAND_HINT_LINES = (
     "  go SCRIPT.jl      as-is complete job (timing without rewrite)",
     "  ride … SCRIPT.jl  experimental map / filter",
     "  drive … SCRIPT.jl Distributed",
-    "  plan SCRIPT.jl    inspect; do not run",
 )
 
 # The run-command list under `unknown_subcommand_message`. Order is the sentence.
 const RUN_SUBCOMMAND_EXPECTATION =
-    "Expected: setup | up | go | ride | drive | plan | size | pool | demo | progress"
+    "Expected: setup | up | go | ride | drive | size | pool | demo | progress"
 
 """Print the shared rejection lines. The caller prints the usage page.
 

@@ -1,4 +1,4 @@
-# Argument parsing for `ride` (run-only; analysis is `plan`).
+# Argument parsing for `ride` (run-only).
 
 function _ride_parsed(;
         help::Bool,
@@ -32,7 +32,7 @@ function show_ride_usage(; io::IO = stdout)
         io,
         "Experimental. Split map / filter / simple comprehensions / indexed for",
         "on Distributed workers.",
-        "Does not analyze (see plan). Rejects Distributed vocabulary (use drive).",
+        "Rejects Distributed vocabulary (use drive).",
         "SSH child: uses the same worker-add path as drive (setup the project first).",
     )
     print_help_blank(io)
@@ -65,7 +65,7 @@ function show_ride_usage(; io::IO = stdout)
     print_help_blank(io)
     print_help_lines(
         io,
-        "See also: plan, go, drive, setup.",
+        "See also: go, drive, setup.",
         "API: ride!(script, \"parent:2\", \"child:host:1\"; spi_check=false).",
     )
     return nothing
@@ -85,7 +85,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
     while !cli_at_end(c)
         arg = cli_current(c)::String
         if arg == "--analyze"
-            throw(ArgumentError("ride: analysis is plan, not ride --analyze"))
+            throw(ArgumentError("ride: ride --analyze is not a flag"))
         elseif arg == "--output-dir"
             output_dir = cli_take_value!(c, arg)
         elseif arg == "--julia"

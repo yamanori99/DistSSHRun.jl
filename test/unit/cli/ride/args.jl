@@ -31,7 +31,6 @@ using Test
         rm(path; force = true)
         @test occursin("DistSSHKit ride", help)
         @test occursin("-m DistSSHKit", help)
-        @test occursin("plan", help)
         @test occursin("child:", help)
         @test occursin("--allow-mismatch", help)
         @test !occursin("--analyze", help)

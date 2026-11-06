@@ -361,16 +361,18 @@ function _ride_rewrite(ex)
     return Expr(h, Any[_ride_rewrite(a) for a in args]...)
 end
 
-function _ride_drive_vocab_error(kp::KitPlan)::String
-    hit = findfirst(f -> f.status === :drive_vocab, kp.findings)
-    loc = hit === nothing ? kp.script : "$(kp.script):$(kp.findings[hit].line)"
-    excerpt = hit === nothing ? "Distributed vocabulary" : kp.findings[hit].excerpt
+function _ride_drive_vocab_error(
+        path::AbstractString,
+        line::Union{Nothing, Int},
+        excerpt::AbstractString,
+    )::String
+    loc = line === nothing ? String(path) : "$(path):$(line)"
     return string(
         "ride: script uses Distributed vocabulary at $loc\n",
         "  $excerpt\n\n",
         "  ride expects a plain script; it distributes automatically.\n",
         "  For explicit distribution, use drive instead:\n\n",
-        "    julia --project=. -m DistSSHKit drive $(kp.script) ...",
+        "    julia --project=. -m DistSSHKit drive $(path) ...",
     )
 end
 
@@ -549,8 +551,8 @@ the parent (no driver `include` on workers). Named functions used by `map` /
 `filter` are sent to workers as a prelude.
 
 `--spi-check` (default off) compares the distributed result to a sequential
-`map` / `filter`. Unknown syntax stays sequential. Inspect first with
-[`plan`](@ref). Listed `child:` hosts are fail-closed (`require_all_hosts=true`).
+`map` / `filter`. Unknown syntax stays sequential. Listed `child:` hosts are
+fail-closed (`require_all_hosts=true`).
 Queue: [`execute!`](@ref) `:ride` (`detached=true` writes `kit.result` like go;
 SSH `child:` also writes `kit.hosts` for [`terminate!`](@ref)).
 """
@@ -636,10 +638,15 @@ function ride!(
     )::RideResult
     path = canonical_local_path(script)
     julia_s = string(VERSION)
-    kp = plan(path; project = project)
-    !kp.ok && return RideResult(false, path, 0, nothing, something(kp.error, "plan failed"), julia_s)
-    any(f -> f.status === :drive_vocab, kp.findings) &&
-        return RideResult(false, path, 0, nothing, _ride_drive_vocab_error(kp), julia_s)
+    scan = _script_scan(path)
+    scan.error !== nothing &&
+        return RideResult(false, path, 0, nothing, something(scan.error, "scan failed"), julia_s)
+    scan.drive_line !== nothing &&
+        return RideResult(
+        false, path, 0, nothing,
+        _ride_drive_vocab_error(path, scan.drive_line, something(scan.drive_excerpt, "Distributed vocabulary")),
+        julia_s,
+    )
     _acquire_kit_inproc_run!(:ride)
     old_run = get(ENV, DISTSSHKIT_RUN_DIR_ENV, nothing)
     inherited_run = old_run isa AbstractString && !isempty(strip(old_run))

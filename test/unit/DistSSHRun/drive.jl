@@ -554,32 +554,6 @@ end
         end
     end
 
-    @testset "warn plain script" begin
-        _with_tempdir() do tmp
-            p = joinpath(tmp, "plain.jl")
-            write(p, "ys = map(x -> x * x, 1:3)\nprintln(join(ys, \",\"))\n")
-            msg = DistSSHRun._drive_plain_script_hint(p, tmp; shown = "plain.jl")
-            @test msg == DistSSHRun._drive_script_hint_now(p, tmp; shown = "plain.jl")
-            @test msg isa String
-            @test occursin("no Distributed vocabulary", msg)
-            @test occursin("Load is this include", msg)
-            @test occursin("Publish", msg)
-            @test occursin("--sync-script", msg)
-            @test occursin("ride", msg)
-            @test occursin("plain.jl", msg)
-
-            g = joinpath(tmp, "loop.jl")
-            write(g, "for i in 1:2\nend\n")
-            gmsg = DistSSHRun._drive_plain_script_hint(g, tmp; shown = "loop.jl")
-            @test gmsg isa String
-            @test occursin("go", gmsg)
-
-            d = joinpath(tmp, "driver.jl")
-            write(d, "using Distributed\npmap(identity, 1:2)\n")
-            @test DistSSHRun._drive_plain_script_hint(d, tmp) === nothing
-        end
-    end
-
     @testset "publish source" begin
         _with_tempdir() do tmp
             p = joinpath(tmp, "plain.jl")

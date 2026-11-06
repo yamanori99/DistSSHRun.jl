@@ -6,7 +6,7 @@
   julia --project=. -m DistSSHKit ride parent:2 SCRIPT.jl
   julia --project=. -m DistSSHKit ride parent:1 child:host1:2 SCRIPT.jl
 
-See `--help`. Analysis is `plan`, not this command.
+See `--help`.
 """
 
 # `find_package` is nothing when this environment does not provide DistSSHRun.
