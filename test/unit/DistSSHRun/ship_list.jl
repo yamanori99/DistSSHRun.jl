@@ -601,8 +601,10 @@ end
             @test !("data" in listed)
             @test !("data/big.bin" in listed)
             @test !("pipe" in listed)
-            @test !any(r -> r == ".git" || startswith(r, ".git/") ||
-                    r == ".distsshkit" || startswith(r, ".distsshkit/"), listed)
+            @test !any(
+                r -> r == ".git" || startswith(r, ".git/") ||
+                    r == ".distsshkit" || startswith(r, ".distsshkit/"), listed
+            )
             @test !any(occursin('\\', r) for r in listed)
             packed = DistSSHRun.pack_ship_tar(tmp)
             try
