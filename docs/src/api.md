@@ -37,6 +37,8 @@ end
 
 ```@docs
 wait(::KitProcess)
+execute_kwargs_from_parsed
+detached_launch
 ```
 
 ## Size
@@ -94,10 +96,8 @@ Public = true
 Private = false
 Filter = function (x)
     names = (
-        :setup!, :sync!, :instantiate!, :ship_send_list,
+        :setup!, :sync!, :instantiate!,
         :KitSession, :HostResult, :SyncResult,
-        :snapshot, :ship, :ShipSnapshot, :ShipTreeResult,
-        :snapshot_directory, :snapshot_tar, :content_tree_hash,
         :ConfirmPathMismatch, :normalize_remote_confirm_path,
     )
     n = try
@@ -107,6 +107,19 @@ Filter = function (x)
     end
     return n in names
 end
+```
+
+`snapshot`, `ship`, and `ship_send_list` are public and are not exported.
+
+```@docs
+ship_send_list
+snapshot
+ship
+ShipSnapshot
+ShipTreeResult
+snapshot_directory
+snapshot_tar
+content_tree_hash
 ```
 
 ## Hosts, cache, and run directories
@@ -135,6 +148,7 @@ Filter = function (x)
         :KitSession, :HostResult, :SyncResult,
         :snapshot, :ship, :ShipSnapshot, :ShipTreeResult,
         :snapshot_directory, :snapshot_tar, :content_tree_hash,
+        :execute_kwargs_from_parsed, :detached_launch,
         :ALLOW_MISMATCH_FIELDS,
     )
     n = try
