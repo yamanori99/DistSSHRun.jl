@@ -54,8 +54,9 @@ path it also resolves each channel's current release from `versions.json`
 (`JULIA_DEFAULT_RELEASE` / `JULIA_ALT_RELEASE`). That string is the image
 cache key, so a new patch, or a prerelease becoming stable, rebuilds the
 juliaup layer. The image build checks `julia --version` against it.
-`setup --check` and go/drive require the same version string, including
-patch and prerelease. A build suffix may differ. Install policy:
+By default, `setup --check` requires matching patch and prerelease versions
+but ignores build suffixes. `go` and `drive` require matching `string(VERSION)`
+and Julia commit unless `--allow-mismatch julia` is set. Install policy:
 [Requirements](https://yamanori99.github.io/DistSSHKit.jl/stable/requirements/).
 `--e2e` also runs
 [`scripts/ensure-kit-parent-juliaup.sh`](scripts/ensure-kit-parent-juliaup.sh)
