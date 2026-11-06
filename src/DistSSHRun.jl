@@ -113,7 +113,8 @@ public SPINNER_FRAMES
 
 # Implementation
 
-# Host talking lives in DistSSHBase, and the juliaup verbs in DistSSHUp.
+# Host talking lives in DistSSHBase, the juliaup verbs in DistSSHUp,
+# and worker sizing in DistSSHSize.
 # Confirm text and progress stay in setup/juliaup.jl.
 # `lib/` sits beside `src/`. A copy of `src/` alone cannot load.
 let _base_src = joinpath(@__DIR__, "..", "lib", "DistSSHBase", "src", "DistSSHBase.jl")
@@ -126,10 +127,10 @@ include("DistSSHRun/up_module.jl")
 include("DistSSHRun/size_module.jl")
 using .DistSSHBase
 import .DistSSHBase: manifest_path
-using .DistSSHBase: DEFAULT_MEM_HEADROOM, DEFAULT_PARENT_GB,
-    WORKER_MEMORY_GB_FALLBACK, WorkerMemorySample, WorkerPlan, effective_worker_gb,
-    get_local_resources, per_worker_gb_dict, resolved_placement_tokens, rss_bytes_to_worker_gb,
-    size_worker_count
+using .DistSSHSize: DEFAULT_MEM_HEADROOM, DEFAULT_PARENT_GB,
+    WORKER_MEMORY_GB_FALLBACK, WorkerMemorySample, WorkerPlan, compute_worker_plan,
+    effective_worker_gb, get_local_resources, per_worker_gb_dict, resolved_placement_tokens,
+    rss_bytes_to_worker_gb, size_worker_count
 public manifest_path
 using .DistSSHBase: CliCursor, OUTPUT_WIDTH, PARENT_HOST_NAME, _HOST_TOOL_NAMES,
     _NS_CACHE_DIR, _checked_remote_dest, _ensure_posix_login_shell!, _git_cmd,

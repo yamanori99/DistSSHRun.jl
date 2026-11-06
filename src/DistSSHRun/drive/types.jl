@@ -1,6 +1,6 @@
 # Result types for the drive / sync API.
 # `WorkerPlan`, `size_worker_count`, `get_local_resources`, and the RSS→GB
-# helpers live in DistSSHBase.
+# helpers live in DistSSHSize.
 
 """Per-host outcome for sync and similar operations."""
 struct HostResult
