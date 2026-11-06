@@ -25,16 +25,27 @@ public SetupWarning
 """Outcome of `sync!` (rsync or git sync). `cancelled` is set when a confirm prompt is aborted.
 
 `warnings` is empty except for `setup!(session, :check)`, which records each warning it printed.
+[`result_content_tree_hash`](@ref) and [`result_remote_run_id`](@ref) read the
+ship hash and remote `run_id` from a `:ship_tree` result, and return `nothing`
+for any other mode. Fields are not API.
 """
 struct SyncResult
     ok::Bool
     hosts::Vector{HostResult}
     cancelled::Bool
     warnings::Vector{SetupWarning}
-end
-
-function SyncResult(ok::Bool, hosts::Vector{HostResult}, cancelled::Bool)
-    return SyncResult(ok, hosts, cancelled, SetupWarning[])
+    content_tree_hash::Union{Nothing, String}
+    run_id::Union{Nothing, String}
+    function SyncResult(
+            ok::Bool,
+            hosts::Vector{HostResult},
+            cancelled::Bool,
+            warnings::Vector{SetupWarning} = SetupWarning[],
+            content_tree_hash::Union{Nothing, String} = nothing,
+            run_id::Union{Nothing, String} = nothing,
+        )
+        return new(ok, hosts, cancelled, warnings, content_tree_hash, run_id)
+    end
 end
 
 """
@@ -595,9 +606,13 @@ function SyncResult(
         host_results::Vector{HostResult};
         ok::Union{Nothing, Bool} = nothing,
         warnings::Vector{SetupWarning} = SetupWarning[],
+        content_tree_hash::Union{Nothing, String} = nothing,
+        run_id::Union{Nothing, String} = nothing,
     )
     if ok === nothing
         ok = !cancelled && all(hr.ok for hr in host_results)
     end
-    return SyncResult(ok, host_results, cancelled, warnings)
+    return SyncResult(
+        ok, host_results, cancelled, warnings, content_tree_hash, run_id,
+    )
 end

@@ -986,13 +986,32 @@ Schema stays 1. An absent or empty key means not recorded.
 `result` is a [`DriveResult`](@ref), [`GoResult`](@ref), or
 [`KitRunResult`](@ref). A [`RideResult`](@ref) goes through
 [`kit_run_result`](@ref) first.
+
+A [`SyncResult`](@ref) from `setup!` / `sync!` with `:ship_tree`, and a
+[`ShipTreeResult`](@ref) from [`ship`](@ref), return the hash of that ship.
+Any other [`SyncResult`](@ref) returns `nothing`.
 """
 function result_content_tree_hash(
         result::Union{DriveResult, GoResult, KitRunResult},
     )::Union{Nothing, String}
     return _result_shipped_string(result, "content_tree_hash")
 end
+
+function result_content_tree_hash(result::SyncResult)::Union{Nothing, String}
+    return _blank_ship_string(result.content_tree_hash)
+end
+
+function result_content_tree_hash(result::ShipTreeResult)::Union{Nothing, String}
+    return _blank_ship_string(result.content_tree_hash)
+end
 public result_content_tree_hash
+
+"""String, or `nothing` when missing or blank."""
+function _blank_ship_string(value::Union{Nothing, AbstractString})::Union{Nothing, String}
+    value isa AbstractString || return nothing
+    text = String(value)
+    return isempty(text) ? nothing : text
+end
 
 """
     result_remote_run_id(result) -> Union{Nothing, String}
@@ -1004,10 +1023,22 @@ Schema stays 1. An absent or empty key means not recorded. This is not
 `DISTSSHKIT_RUN_DIR`. `result` is a [`DriveResult`](@ref), [`GoResult`](@ref),
 or [`KitRunResult`](@ref). A [`RideResult`](@ref) goes through
 [`kit_run_result`](@ref) first.
+
+A [`SyncResult`](@ref) from `setup!` / `sync!` with `:ship_tree`, and a
+[`ShipTreeResult`](@ref) from [`ship`](@ref), return that remote `run_id`.
+Any other [`SyncResult`](@ref) returns `nothing`.
 """
 function result_remote_run_id(
         result::Union{DriveResult, GoResult, KitRunResult},
     )::Union{Nothing, String}
     return _result_shipped_string(result, "run_id")
+end
+
+function result_remote_run_id(result::SyncResult)::Union{Nothing, String}
+    return _blank_ship_string(result.run_id)
+end
+
+function result_remote_run_id(result::ShipTreeResult)::Union{Nothing, String}
+    return _blank_ship_string(result.run_id)
 end
 public result_remote_run_id

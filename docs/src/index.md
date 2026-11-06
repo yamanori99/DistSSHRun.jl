@@ -60,6 +60,16 @@ list for clone, sync, and pull. Extract is into
 `--instantiate` / `--check` / `go` use the latest `src/` when
 the remote root has no `Project.toml` (or pass `--remote-path` to that tree).
 `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
+`snapshot(local_root)` builds that tar in a temporary directory and records
+`content_tree_hash` (`git-sha1`). The caller deletes `snapshot_directory`.
+The tar is `snapshot_tar` (`ship.tar` in that directory). `snapshot` does not
+read depot preferences. `ship(snapshot, hosts, remote_root)` sends that tar
+and does not pack again or delete it. It refuses depot preferences, hashes
+the tar again immediately before sending, and throws `ArgumentError` when
+the hash differs or the tar is missing. `confirm` defaults to false, so a
+library `ship` does not prompt. `record=false` does not keep the ship for
+controller `run.toml` in this process. `setup --ship-tree` still confirms
+unless `-y` is used, and that path deletes its temporary directory.
 `setup --remote-root --remote-path /absolute/path` creates that one
 directory with mode `700`. Group and other write are cleared again after
 `mkdir`. The parent must already exist. `~` and
@@ -73,7 +83,9 @@ this file shipped a tree, `provenance.shipped` records `content_tree_hash`
 (`git-sha1`) and `run_id` (the remote `runs/<run_id>/` leaf). An absent
 or empty key means that ship was not recorded. `result_content_tree_hash`
 and `result_remote_run_id` read those strings from a `DriveResult`,
-`GoResult`, or `KitRunResult`. `result_run_dir` reads
+`GoResult`, or `KitRunResult`. They also read a `:ship_tree` `SyncResult`
+and a `ShipTreeResult`. A `SyncResult` from any other mode returns `nothing`
+for both. `result_run_dir` reads
 `DISTSSHKIT_RUN_DIR` from those results and from `KitProcess`. Each remote
 `runs/<run_id>/` also gets a minimal `run.toml` with only `schema`,
 `writer`, and `kind = "ship"` so `setup --delete` can refuse a Ship leaf

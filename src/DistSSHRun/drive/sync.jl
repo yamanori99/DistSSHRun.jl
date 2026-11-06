@@ -11,7 +11,8 @@ Sync local project to SSH hosts (call explicitly; go/drive do not call this by d
 
 Also available as `setup!(session, :ship_tree)` / `setup!(session, :sync)`.
 
-Returns [`SyncResult`](@ref).
+Returns [`SyncResult`](@ref). For `:ship_tree`, [`result_content_tree_hash`](@ref)
+and [`result_remote_run_id`](@ref) read that ship. Other modes return `nothing`.
 """
 function sync!(
         session::KitSession;
@@ -51,11 +52,7 @@ function sync!(
                 allow_external_symlinks = allow_external_symlinks,
                 await_inputs = await_inputs,
             )
-            if raw.cancelled
-                return SyncResult(true, HostResult[]; ok = false)
-            end
-            failed = count(hr -> !hr.ok, raw.host_results)
-            return SyncResult(false, raw.host_results; ok = failed == 0)
+            return _sync_result_from_ship(raw)
         else
             remote_path = session_remote_root(session)
             raw = git_sync_project_to_hosts!(
@@ -72,4 +69,22 @@ function sync!(
             return SyncResult(false, raw.host_results; ok = raw.ok)
         end
     end
+end
+
+function _sync_result_from_ship(raw::ShipTreeResult)::SyncResult
+    if raw.cancelled
+        return SyncResult(
+            true, HostResult[];
+            ok = false,
+            content_tree_hash = raw.content_tree_hash,
+            run_id = raw.run_id,
+        )
+    end
+    failed = count(hr -> !hr.ok, raw.host_results)
+    return SyncResult(
+        false, raw.host_results;
+        ok = failed == 0,
+        content_tree_hash = raw.content_tree_hash,
+        run_id = raw.run_id,
+    )
 end

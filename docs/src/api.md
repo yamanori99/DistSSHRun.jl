@@ -96,6 +96,8 @@ Filter = function (x)
     names = (
         :setup!, :sync!, :instantiate!, :ship_send_list,
         :KitSession, :HostResult, :SyncResult,
+        :snapshot, :ship, :ShipSnapshot, :ShipTreeResult,
+        :snapshot_directory, :snapshot_tar, :content_tree_hash,
         :ConfirmPathMismatch, :normalize_remote_confirm_path,
     )
     n = try
@@ -131,6 +133,8 @@ Filter = function (x)
         :collect!, :CollectResult,
         :setup!, :sync!, :instantiate!, :ship_send_list,
         :KitSession, :HostResult, :SyncResult,
+        :snapshot, :ship, :ShipSnapshot, :ShipTreeResult,
+        :snapshot_directory, :snapshot_tar, :content_tree_hash,
         :ALLOW_MISMATCH_FIELDS,
     )
     n = try

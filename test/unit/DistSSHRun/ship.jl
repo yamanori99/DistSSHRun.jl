@@ -1111,3 +1111,216 @@ end
         end
     end
 end
+
+@testset "snapshot is sent without packing again" begin
+    function _project!(dir::String)
+        write(joinpath(dir, "Project.toml"), "name = \"Snap\"\n")
+        write(joinpath(dir, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        write(joinpath(dir, "a.jl"), "1\n")
+        return dir
+    end
+    function _restore_ship!(previous, active)
+        DistSSHRun._LAST_SHIP[] = previous
+        DistSSHRun._SHIP_LAYOUT_ACTIVE[] = active
+        return nothing
+    end
+    function _with_saved_project_env(f::Function)
+        old_proj = get(ENV, "DISTRIBUTED_PROJECT_ROOT", nothing)
+        old_remote = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
+        try
+            return f()
+        finally
+            if old_proj === nothing
+                delete!(ENV, "DISTRIBUTED_PROJECT_ROOT")
+            else
+                ENV["DISTRIBUTED_PROJECT_ROOT"] = old_proj
+            end
+            if old_remote === nothing
+                delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+            else
+                ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = old_remote
+            end
+        end
+    end
+
+    _with_tempdir() do proj
+        _project!(proj)
+        snap = DistSSHRun.snapshot(proj)
+        try
+            tar = DistSSHRun.snapshot_tar(snap)
+            @test tar == joinpath(DistSSHRun.snapshot_directory(snap), "ship.tar")
+            @test isfile(tar)
+            @test DistSSHRun.content_tree_hash(snap) ==
+                DistSSHRun._ship_tar_tree_hash(tar)
+            @test DistSSHRun.content_tree_hash(snap) != ""
+            write(joinpath(proj, "a.jl"), "2\n")
+            other = DistSSHRun.snapshot(proj)
+            try
+                @test DistSSHRun.content_tree_hash(other) != DistSSHRun.content_tree_hash(snap)
+                cp(DistSSHRun.snapshot_tar(other), tar; force = true)
+                err = try
+                    DistSSHRun.ship(snap, ["host1"], "/home/distsshkit/app"; confirm = false)
+                    nothing
+                catch e
+                    e
+                end
+                @test err isa ArgumentError
+                @test occursin("does not match snapshot", sprint(showerror, err))
+                @test isfile(tar)
+            finally
+                rm(DistSSHRun.snapshot_directory(other); force = true, recursive = true)
+            end
+        finally
+            rm(DistSSHRun.snapshot_directory(snap); force = true, recursive = true)
+        end
+    end
+
+    _with_tempdir() do proj
+        _project!(proj)
+        depot = mktempdir()
+        mkpath(joinpath(depot, "artifacts"))
+        write(joinpath(depot, "artifacts", "Overrides.toml"), "x = 1\n")
+        old = copy(Base.DEPOT_PATH)
+        empty!(Base.DEPOT_PATH)
+        push!(Base.DEPOT_PATH, depot)
+        snap = nothing
+        try
+            snap = DistSSHRun.snapshot(proj)
+            @test isfile(DistSSHRun.snapshot_tar(snap))
+            err = try
+                DistSSHRun.ship(snap, ["host1"], "/home/distsshkit/app")
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("depot preferences", sprint(showerror, err))
+            @test isfile(DistSSHRun.snapshot_tar(snap))
+        finally
+            empty!(Base.DEPOT_PATH)
+            append!(Base.DEPOT_PATH, old)
+            snap === nothing || rm(DistSSHRun.snapshot_directory(snap); force = true, recursive = true)
+            rm(depot; force = true, recursive = true)
+        end
+    end
+
+    _with_tempdir() do proj
+        _project!(proj)
+        previous = DistSSHRun._LAST_SHIP[]
+        active = DistSSHRun._SHIP_LAYOUT_ACTIVE[]
+        prev_ni = DistSSHRun.kit_noninteractive()
+        DistSSHRun.set_kit_noninteractive!(false)
+        try
+            _with_saved_project_env() do
+                session = DistSSHRun.KitSession(
+                    project = proj,
+                    workers = ["child:host1"],
+                    remote = "/home/distsshkit/app",
+                    yes = false,
+                    quiet = true,
+                )
+                out, res = _capture_stdio() do stdin_io, _
+                    println(stdin_io, "")
+                    flush(stdin_io)
+                    seekstart(stdin_io)
+                    return DistSSHRun.sync!(session; mode = :ship_tree)
+                end
+                @test res.cancelled
+                @test !res.ok
+                @test occursin("Cancelled.", out)
+                @test DistSSHRun.result_content_tree_hash(res) !== nothing
+                @test occursin(DistSSHRun._RUN_ID_PATTERN, something(DistSSHRun.result_remote_run_id(res)))
+            end
+        finally
+            DistSSHRun.set_kit_noninteractive!(prev_ni)
+            _restore_ship!(previous, active)
+        end
+    end
+
+    _with_tempdir() do state_dir
+        prev_ni = DistSSHRun.kit_noninteractive()
+        prev_verb = DistSSHRun.kit_verbosity()
+        try
+            _with_saved_project_env() do
+                withenv(
+                    merge(
+                        _fake_setup_remote_env(state_dir),
+                        Dict("DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia"),
+                    )...,
+                ) do
+                    _apply_quiet_setup_session!()
+                    _with_tempdir() do proj
+                        _project!(proj)
+                        previous = DistSSHRun._LAST_SHIP[]
+                        active = DistSSHRun._SHIP_LAYOUT_ACTIVE[]
+                        snap = DistSSHRun.snapshot(proj)
+                        try
+                            sentinel = Dict{String, Any}("content_tree_hash" => "keep-me")
+                            DistSSHRun._LAST_SHIP[] = sentinel
+                            DistSSHRun._SHIP_LAYOUT_ACTIVE[] = false
+                            quiet = DistSSHRun.ship(
+                                snap, ["host1"], "/home/distsshkit/app";
+                                confirm = false, record = false,
+                            )
+                            @test quiet isa DistSSHRun.ShipTreeResult
+                            @test !quiet.cancelled
+                            @test all(hr -> hr.ok, quiet.host_results)
+                            @test DistSSHRun._LAST_SHIP[] === sentinel
+                            @test DistSSHRun._SHIP_LAYOUT_ACTIVE[] == false
+                            @test isfile(DistSSHRun.snapshot_tar(snap))
+                            @test DistSSHRun.result_content_tree_hash(quiet) ==
+                                DistSSHRun.content_tree_hash(snap)
+                            @test occursin(
+                                DistSSHRun._RUN_ID_PATTERN,
+                                something(DistSSHRun.result_remote_run_id(quiet)),
+                            )
+                            recorded = DistSSHRun.ship(
+                                snap, ["host1"], "/home/distsshkit/app";
+                                confirm = false, record = true,
+                            )
+                            kept = something(DistSSHRun._LAST_SHIP[])
+                            @test kept isa Dict{String, Any}
+                            @test kept["content_tree_hash"] ==
+                                DistSSHRun.content_tree_hash(snap)
+                            @test kept["run_id"] ==
+                                DistSSHRun.result_remote_run_id(recorded)
+                            @test DistSSHRun._SHIP_LAYOUT_ACTIVE[]
+                            @test isfile(DistSSHRun.snapshot_tar(snap))
+
+                            before = Set(readdir(tempdir()))
+                            wrapped = DistSSHRun.ship_project_to_hosts!(
+                                ["host1"], proj, "/home/distsshkit/app"; confirm = false,
+                            )
+                            @test all(hr -> hr.ok, wrapped.host_results)
+                            for name in setdiff(Set(readdir(tempdir())), before)
+                                @test !isfile(joinpath(tempdir(), name, "ship.tar"))
+                            end
+                            session = DistSSHRun.KitSession(
+                                project = proj,
+                                workers = ["child:host1"],
+                                remote = "/home/distsshkit/app",
+                                yes = true,
+                                quiet = true,
+                            )
+                            synced = DistSSHRun.setup!(session, :ship_tree)
+                            @test synced isa DistSSHRun.SyncResult
+                            @test synced.ok && !synced.cancelled
+                            @test DistSSHRun.result_content_tree_hash(synced) ==
+                                DistSSHRun.content_tree_hash(snap)
+                            @test DistSSHRun.result_remote_run_id(synced) !== nothing
+                            other = DistSSHRun.SyncResult(false, DistSSHRun.HostResult[]; ok = true)
+                            @test DistSSHRun.result_content_tree_hash(other) === nothing
+                            @test DistSSHRun.result_remote_run_id(other) === nothing
+                        finally
+                            rm(DistSSHRun.snapshot_directory(snap); force = true, recursive = true)
+                            _restore_ship!(previous, active)
+                        end
+                    end
+                end
+            end
+        finally
+            DistSSHRun.set_kit_noninteractive!(prev_ni)
+            DistSSHRun.set_kit_verbosity!(prev_verb)
+        end
+    end
+end

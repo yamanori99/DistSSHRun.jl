@@ -10,6 +10,36 @@ const _LAST_SHIP = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 const _SHIP_LAYOUT_ACTIVE = Ref(false)
 const _SSHFLAGS_WARNED = Ref(false)
 
+"""
+Tar built by [`snapshot`](@ref) and sent by [`ship`](@ref).
+
+[`snapshot_directory`](@ref) is the temporary directory the caller deletes.
+[`snapshot_tar`](@ref) is the `ship.tar` inside it.
+[`content_tree_hash`](@ref) is the `git-sha1` tree hash recorded when the tar
+was built. Fields are not API.
+"""
+struct ShipSnapshot
+    directory::String
+    tar_path::String
+    content_tree_hash::String
+    bytes::Int
+    files::Int
+    # `nothing`: the tar is not compared to a git tree.
+    tree_matches_head::Union{Nothing, Bool}
+    external_symlinks_allowed::Bool
+    # Resolved project directory the tar was packed from.
+    root::String
+    # `snapshot` argument, used for the confirm line.
+    local_root::String
+end
+public ShipSnapshot
+
+"""
+Result of [`ship`](@ref) and `ship_project_to_hosts!`.
+
+[`result_content_tree_hash`](@ref) and [`result_remote_run_id`](@ref) read
+the ship hash and the remote `runs/<run_id>/` id. Fields are not API.
+"""
 struct ShipTreeResult
     run_id::String
     remote_root::String
@@ -25,6 +55,7 @@ struct ShipTreeResult
     host_results::Vector{HostResult}
     cancelled::Bool
 end
+public ShipTreeResult
 
 function last_ship_result()::Union{Nothing, Dict{String, Any}}
     return _LAST_SHIP[]
@@ -1106,6 +1137,74 @@ function pack_ship_tar(
     end
 end
 
+"""
+    snapshot(local_root; allow_external_symlinks=false, ship_max_bytes=SHIP_MAX_BYTES_DEFAULT) -> ShipSnapshot
+
+Build the ship tar in a temporary directory and record its `content_tree_hash`.
+
+The caller owns [`snapshot_directory`](@ref) and deletes it, including the
+[`snapshot_tar`](@ref) file (`ship.tar`). This does not read depot
+preferences and does not send anything.
+"""
+function snapshot(
+        local_root::AbstractString;
+        allow_external_symlinks::Bool = false,
+        ship_max_bytes::Integer = SHIP_MAX_BYTES_DEFAULT,
+    )::ShipSnapshot
+    packed = pack_ship_tar(
+        local_root;
+        allow_external_symlinks = allow_external_symlinks,
+        ship_max_bytes = ship_max_bytes,
+    )
+    return ShipSnapshot(
+        packed.tmpd,
+        packed.tar_path,
+        packed.hash,
+        packed.bytes,
+        packed.files,
+        packed.tree_matches_head,
+        allow_external_symlinks,
+        packed.root,
+        String(local_root),
+    )
+end
+public snapshot
+
+"""Temporary directory that holds a [`ShipSnapshot`](@ref) tar. The caller deletes it."""
+function snapshot_directory(snapshot::ShipSnapshot)::String
+    return snapshot.directory
+end
+public snapshot_directory
+
+"""`ship.tar` inside [`snapshot_directory`](@ref)."""
+function snapshot_tar(snapshot::ShipSnapshot)::String
+    return snapshot.tar_path
+end
+public snapshot_tar
+
+"""`git-sha1` tree hash recorded by [`snapshot`](@ref)."""
+function content_tree_hash(snapshot::ShipSnapshot)::String
+    return snapshot.content_tree_hash
+end
+public content_tree_hash
+
+function _ship_tar_tree_hash(tar_path::AbstractString)::String
+    return String(Tar.tree_hash(tar_path; algorithm = "git-sha1", skip_empty = true))
+end
+
+"""Throw `ArgumentError` when the tar bytes no longer match the recorded hash."""
+function _require_snapshot_unchanged!(snapshot::ShipSnapshot)
+    tar_path = snapshot.tar_path
+    isfile(tar_path) || throw(ArgumentError("ship: snapshot tar is missing"))
+    got = _ship_tar_tree_hash(tar_path)
+    got == snapshot.content_tree_hash || throw(
+        ArgumentError(
+            "ship: tar content_tree_hash $(got) does not match snapshot $(snapshot.content_tree_hash)",
+        ),
+    )
+    return nothing
+end
+
 const _PROJECT_PREFERENCE_NAMES = ("LocalPreferences.toml", "JuliaLocalPreferences.toml")
 
 function _depot_preference_paths()::Vector{String}
@@ -1576,6 +1675,124 @@ function _remote_extract_tar!(
     return nothing
 end
 
+"""
+    ship(snapshot, hosts, remote_root; confirm=false, record=true) -> ShipTreeResult
+
+Send `snapshot`'s tar to `runs/<run_id>/src/` on each host. Does not pack again
+and does not delete the tar.
+
+The tar is hashed again immediately before sending. A different `git-sha1`
+tree hash, or a missing tar, throws `ArgumentError`. Depot preferences that
+would apply and are not in the ship are refused here. `confirm=false` does
+not prompt. `record=false` does not keep this ship for controller `run.toml`
+in this process.
+"""
+function ship(
+        snapshot::ShipSnapshot,
+        hosts::Vector{String},
+        remote_root::AbstractString;
+        confirm::Bool = false,
+        record::Bool = true,
+        report::Bool = false,
+        path_anchor::AbstractString = snapshot.local_root,
+        run_id::Union{Nothing, AbstractString} = nothing,
+        julia = nothing,
+        await_inputs::Bool = true,
+    )::ShipTreeResult
+    isempty(hosts) && throw(ArgumentError("ship-tree: no hosts"))
+    length(unique(hosts)) == length(hosts) ||
+        throw(ArgumentError("ship-tree: hosts must be unique"))
+    rid = run_id === nothing ? allocate_remote_run_id() : validate_run_id(run_id)
+    src_logical = _posix_join(String(remote_root), "runs", rid, "src")
+    _refuse_unshipped_depot_prefs!()
+    if !isempty(_load_ship_inputs(snapshot.root)) && kit_run_dir() === nothing
+        throw(
+            ArgumentError(
+                "ship-tree: declared inputs need DISTSSHKIT_RUN_DIR; refusing to write next to the project",
+            ),
+        )
+    end
+    if confirm && !kit_noninteractive()
+        cancelled = with_kit_progress_suspended() do
+            writeln_both(
+                "ship-tree $(display_path(path_anchor, snapshot.local_root)) to $(length(hosts)) host(s) into runs/$rid/src/",
+            )
+            writeln_both(
+                "  files=$(snapshot.files) bytes=$(snapshot.bytes) hash=$(snapshot.content_tree_hash)",
+            )
+            if !kit_confirm("Type 'ship-tree' to confirm: "; keyword = "ship-tree")
+                println_fatal("Cancelled.")
+                return true
+            end
+            println_fatal()
+            return false
+        end
+        cancelled && return ShipTreeResult(
+            rid, String(remote_root), src_logical, snapshot.content_tree_hash, "git-sha1",
+            snapshot.bytes, snapshot.files, snapshot.tree_matches_head,
+            snapshot.external_symlinks_allowed, HostResult[], true,
+        )
+    end
+    _require_snapshot_unchanged!(snapshot)
+    n = length(hosts)
+    host_results = Vector{HostResult}(undef, n)
+    map_host_jobs(hosts) do i, host
+        host_results[i] = _setup_host_call!(host) do
+            try
+                abs_root = _probe_expanded_remote_root(host, remote_root)
+                src = _remote_prepare_run_leaf!(host, abs_root, rid)
+                pinned = something(pin_remote_julia(host, julia), resolve_remote_julia(host, julia))
+                pinned === nothing && throw(ArgumentError("Julia not found on $host"))
+                _remote_extract_tar!(host, src, snapshot.tar_path, pinned)
+                if await_inputs
+                    _record_remote_inputs!(host, abs_root, snapshot.root, pinned)
+                else
+                    _start_remote_input_hashes!(host, abs_root, snapshot.root, pinned)
+                end
+                if report
+                    kit_print("  $host: ")
+                    print_ok("✓")
+                    kit_println()
+                end
+                return HostResult(host, true, "ship-tree ok")
+            catch e
+                if report
+                    kit_print("  $host: ")
+                    print_err("✗")
+                    kit_println()
+                end
+                return HostResult(host, false, sprint(showerror, e))
+            end
+        end
+    end
+    ok_hosts = String[String(hr.host) for hr in host_results if hr.ok]
+    rec = Dict{String, Any}(
+        "algorithm" => "git-sha1",
+        "content_tree_hash" => snapshot.content_tree_hash,
+        "bytes" => snapshot.bytes,
+        "files" => snapshot.files,
+        "run_id" => rid,
+        "src" => src_logical,
+        "host" => _record_host_alias(first(hosts)),
+        "hosts" => ok_hosts,
+        "remote_root" => String(remote_root),
+        "run_dir_empty_at_start" => true,
+    )
+    snapshot.external_symlinks_allowed && (rec["external_symlinks_allowed"] = true)
+    # `nothing` means the tar was not compared to a git tree. Omit the key.
+    snapshot.tree_matches_head === true && (rec["tree_matches_head"] = true)
+    if record && !isempty(ok_hosts)
+        _LAST_SHIP[] = rec
+        _SHIP_LAYOUT_ACTIVE[] = true
+    end
+    return ShipTreeResult(
+        rid, String(remote_root), src_logical, snapshot.content_tree_hash, "git-sha1",
+        snapshot.bytes, snapshot.files, snapshot.tree_matches_head,
+        snapshot.external_symlinks_allowed, host_results, false,
+    )
+end
+public ship
+
 function ship_project_to_hosts!(
         hosts::Vector{String},
         local_root::AbstractString,
@@ -1592,100 +1809,25 @@ function ship_project_to_hosts!(
     isempty(hosts) && throw(ArgumentError("ship-tree: no hosts"))
     length(unique(hosts)) == length(hosts) ||
         throw(ArgumentError("ship-tree: hosts must be unique"))
-    rid = run_id === nothing ? allocate_remote_run_id() : validate_run_id(run_id)
-    src_logical = _posix_join(String(remote_root), "runs", rid, "src")
     warn_project_sshflags(canonical_local_path(local_root))
-    _refuse_unshipped_depot_prefs!()
-    packed = pack_ship_tar(
+    snap = snapshot(
         local_root;
         allow_external_symlinks = allow_external_symlinks,
         ship_max_bytes = ship_max_bytes,
     )
     try
-        if !isempty(_load_ship_inputs(packed.root)) && kit_run_dir() === nothing
-            throw(
-                ArgumentError(
-                    "ship-tree: declared inputs need DISTSSHKIT_RUN_DIR; refusing to write next to the project",
-                ),
-            )
-        end
-        if confirm && !kit_noninteractive()
-            cancelled = with_kit_progress_suspended() do
-                writeln_both(
-                    "ship-tree $(display_path(path_anchor, local_root)) to $(length(hosts)) host(s) into runs/$rid/src/",
-                )
-                writeln_both("  files=$(packed.files) bytes=$(packed.bytes) hash=$(packed.hash)")
-                if !kit_confirm("Type 'ship-tree' to confirm: "; keyword = "ship-tree")
-                    println_fatal("Cancelled.")
-                    return true
-                end
-                println_fatal()
-                return false
-            end
-            cancelled && return ShipTreeResult(
-                rid, String(remote_root), src_logical, packed.hash, "git-sha1",
-                packed.bytes, packed.files, packed.tree_matches_head,
-                allow_external_symlinks, HostResult[], true,
-            )
-        end
-        n = length(hosts)
-        host_results = Vector{HostResult}(undef, n)
-        map_host_jobs(hosts) do i, host
-            host_results[i] = _setup_host_call!(host) do
-                try
-                    abs_root = _probe_expanded_remote_root(host, remote_root)
-                    src = _remote_prepare_run_leaf!(host, abs_root, rid)
-                    pinned = something(pin_remote_julia(host, julia), resolve_remote_julia(host, julia))
-                    pinned === nothing && throw(ArgumentError("Julia not found on $host"))
-                    _remote_extract_tar!(host, src, packed.tar_path, pinned)
-                    if await_inputs
-                        _record_remote_inputs!(host, abs_root, packed.root, pinned)
-                    else
-                        _start_remote_input_hashes!(host, abs_root, packed.root, pinned)
-                    end
-                    if report
-                        kit_print("  $host: ")
-                        print_ok("✓")
-                        kit_println()
-                    end
-                    return HostResult(host, true, "ship-tree ok")
-                catch e
-                    if report
-                        kit_print("  $host: ")
-                        print_err("✗")
-                        kit_println()
-                    end
-                    return HostResult(host, false, sprint(showerror, e))
-                end
-            end
-        end
-        ok_hosts = String[String(hr.host) for hr in host_results if hr.ok]
-        rec = Dict{String, Any}(
-            "algorithm" => "git-sha1",
-            "content_tree_hash" => packed.hash,
-            "bytes" => packed.bytes,
-            "files" => packed.files,
-            "run_id" => rid,
-            "src" => src_logical,
-            "host" => _record_host_alias(first(hosts)),
-            "hosts" => ok_hosts,
-            "remote_root" => String(remote_root),
-            "run_dir_empty_at_start" => true,
-        )
-        allow_external_symlinks && (rec["external_symlinks_allowed"] = true)
-        # `nothing` means the tar was not compared to a git tree. Omit the key.
-        packed.tree_matches_head === true && (rec["tree_matches_head"] = true)
-        if !isempty(ok_hosts)
-            _LAST_SHIP[] = rec
-            _SHIP_LAYOUT_ACTIVE[] = true
-        end
-        return ShipTreeResult(
-            rid, String(remote_root), src_logical, packed.hash, "git-sha1",
-            packed.bytes, packed.files, packed.tree_matches_head,
-            allow_external_symlinks, host_results, false,
+        return ship(
+            snap, hosts, remote_root;
+            confirm = confirm,
+            record = true,
+            report = report,
+            path_anchor = path_anchor,
+            run_id = run_id,
+            julia = julia,
+            await_inputs = await_inputs,
         )
     finally
-        rm(packed.tmpd; force = true, recursive = true)
+        rm(snapshot_directory(snap); force = true, recursive = true)
     end
 end
 
