@@ -245,10 +245,11 @@ function _warn_ship_outside!(user_path::AbstractString, root::AbstractString)
     return nothing
 end
 
-function _ship_rel_paths(ship_root::AbstractString)::Vector{String}
-    root = canonical_local_path(ship_root)
-    send_list = _ship_gitignore_send_list(root)
-    _warn_excluded_ship_project_files!(root, send_list)
+"""Tar member paths for one walk of `root`. Does not warn."""
+function _ship_members_from_walk(
+        root::AbstractString,
+        send_list::Vector{String},
+    )::Vector{String}
     rels = String[replace(r, '\\' => '/') for r in send_list]
     extras = String[]
     for rel in rels
@@ -269,6 +270,13 @@ function _ship_rel_paths(ship_root::AbstractString)::Vector{String}
     sort!(out)
     isempty(out) && throw(ArgumentError("nothing to ship from $root"))
     return out
+end
+
+function _ship_rel_paths(ship_root::AbstractString)::Vector{String}
+    root = canonical_local_path(ship_root)
+    send_list = _ship_gitignore_send_list(root)
+    _warn_excluded_ship_project_files!(root, send_list)
+    return _ship_members_from_walk(root, send_list)
 end
 
 struct ShipInput

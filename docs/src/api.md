@@ -94,7 +94,7 @@ Public = true
 Private = false
 Filter = function (x)
     names = (
-        :setup!, :sync!, :instantiate!,
+        :setup!, :sync!, :instantiate!, :ship_send_list,
         :KitSession, :HostResult, :SyncResult,
         :snapshot, :ship, :ShipSnapshot, :ShipTreeResult,
         :snapshot_directory, :snapshot_tar, :content_tree_hash,
@@ -131,7 +131,7 @@ Filter = function (x)
         :pipeline!, :PipelineConfig, :PipelineResult, :pipeline_config_from_env,
         :report_pipeline_errors,
         :collect!, :CollectResult,
-        :setup!, :sync!, :instantiate!,
+        :setup!, :sync!, :instantiate!, :ship_send_list,
         :KitSession, :HostResult, :SyncResult,
         :snapshot, :ship, :ShipSnapshot, :ShipTreeResult,
         :snapshot_directory, :snapshot_tar, :content_tree_hash,

@@ -63,6 +63,8 @@ using Test
         @test name in ns && Base.ispublic(DistSSHRun, name)
         @test !Base.isexported(DistSSHRun, name)
     end
+    @test :ship_send_list in ns && Base.ispublic(DistSSHRun, :ship_send_list)
+    @test !Base.isexported(DistSSHRun, :ship_send_list)
     @test :parse_progress_line ∉ ns && :kit_progress_latest ∉ ns
     @test :kit_progress_phases ∉ ns
     @test :execute_detached_accepts in ns && :kit_pid_alive ∉ ns

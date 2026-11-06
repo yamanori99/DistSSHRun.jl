@@ -5,7 +5,7 @@ include(joinpath(@__DIR__, "..", "..", "..", ".github", "downstream_public.jl"))
 @testset "downstream public names" begin
     @test Base.ispublic(DistSSHRun, :main)
     @test !Base.isexported(DistSSHRun, :main)
-    @test length(DOWNSTREAM_PUBLIC_ALLOW) == 37
+    @test length(DOWNSTREAM_PUBLIC_ALLOW) == 35
     @test !Base.ispublic(DistSSHRun, :_main)
     @test !Base.ispublic(DistSSHRun.DistSSHBase, :_scp_cmd)
     @test !Base.ispublic(DistSSHRun, :kit_confirm!)
@@ -20,6 +20,7 @@ include(joinpath(@__DIR__, "..", "..", "..", ".github", "downstream_public.jl"))
             DistSSHRun.result_run_dir(kp)
             DistSSHRun.result_content_tree_hash(result)
             DistSSHRun.result_remote_run_id(result)
+            DistSSHRun.ship_send_list(root)
             """,
         )
         write(joinpath(src, "field.jl"), "DistSSHRun.KitProcess.run_dir\n")
