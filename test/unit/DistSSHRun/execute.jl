@@ -6,6 +6,13 @@ function _must_run_toml(path::AbstractString)::AbstractDict
     return raw::AbstractDict
 end
 
+function _log_kw(record, key)
+    for (k, v) in record.kwargs
+        k === key && return v
+    end
+    return nothing
+end
+
 # Oracle: dispatcher only (plus detached `:go`, which is out-of-process).
 # `execute!(:drive, …)` includes a driver into `Main` and lives in
 # `integration/drive/execute.jl` (after `api.jl`, which is the first
@@ -911,17 +918,19 @@ end
             )
             mktemp() do _, out_io
                 mktemp() do _, err_io
-                    kp = DistSSHRun.execute!(
-                        :go,
-                        script,
-                        ["parent:1"];
-                        detached = true,
-                        project = proj,
-                        args = ["8"],
-                        quiet = true,
-                        stdout = out_io,
-                        stderr = err_io,
-                    )
+                    _, kp = _capture_detached_env_log() do
+                        DistSSHRun.execute!(
+                            :go,
+                            script,
+                            ["parent:1"];
+                            detached = true,
+                            project = proj,
+                            args = ["8"],
+                            quiet = true,
+                            stdout = out_io,
+                            stderr = err_io,
+                        )
+                    end
                     out_dir = kp.output_dir
                     @test out_dir !== nothing
                     pid_path = joinpath(out_dir, "kit.pid")
@@ -980,17 +989,19 @@ end
             )
             mktemp() do _, out_io
                 mktemp() do _, err_io
-                    kp = DistSSHRun.execute!(
-                        :go,
-                        script,
-                        ["parent:1"];
-                        detached = true,
-                        project = proj,
-                        verbosity = :progress,
-                        job_id = "q-1",
-                        stdout = out_io,
-                        stderr = err_io,
-                    )
+                    _, kp = _capture_detached_env_log() do
+                        DistSSHRun.execute!(
+                            :go,
+                            script,
+                            ["parent:1"];
+                            detached = true,
+                            project = proj,
+                            verbosity = :progress,
+                            job_id = "q-1",
+                            stdout = out_io,
+                            stderr = err_io,
+                        )
+                    end
                     result = wait(kp)
                     @test result.ok
                     out_dir = result.output_dir
@@ -1019,14 +1030,16 @@ end
                 mkpath(out)
                 """
             )
-            kp = DistSSHRun.execute!(
-                :go,
-                script,
-                ["parent:1"];
-                detached = true,
-                project = proj,
-                quiet = true,
-            )
+            _, kp = _capture_detached_env_log() do
+                DistSSHRun.execute!(
+                    :go,
+                    script,
+                    ["parent:1"];
+                    detached = true,
+                    project = proj,
+                    quiet = true,
+                )
+            end
             result = wait(kp)
             @test result.ok
             @test kp.run_dir !== nothing
@@ -1068,14 +1081,16 @@ end
                 sleep(60)
                 """
             )
-            kp = DistSSHRun.execute!(
-                :go,
-                script,
-                ["parent:1"];
-                detached = true,
-                project = proj,
-                quiet = true,
-            )
+            _, kp = _capture_detached_env_log() do
+                DistSSHRun.execute!(
+                    :go,
+                    script,
+                    ["parent:1"];
+                    detached = true,
+                    project = proj,
+                    quiet = true,
+                )
+            end
             hung = wait(kp; timeout = 0.4)
             @test hung.ok === false
             @test hung.failed_step == "hung"
@@ -1100,17 +1115,19 @@ end
             )
             mktemp() do _, out_io
                 mktemp() do _, err_io
-                    kp = DistSSHRun.execute!(
-                        :go,
-                        script,
-                        ["parent:1"];
-                        detached = true,
-                        project = proj,
-                        verbosity = :progress,
-                        job_id = "t-1",
-                        stdout = out_io,
-                        stderr = err_io,
-                    )
+                    _, kp = _capture_detached_env_log() do
+                        DistSSHRun.execute!(
+                            :go,
+                            script,
+                            ["parent:1"];
+                            detached = true,
+                            project = proj,
+                            verbosity = :progress,
+                            job_id = "t-1",
+                            stdout = out_io,
+                            stderr = err_io,
+                        )
+                    end
                     result = DistSSHRun.terminate!(kp; grace = 2)
                     @test result isa DistSSHRun.KitRunResult
                     @test !process_running(kp.process)
@@ -1131,17 +1148,19 @@ end
             )
             mktemp() do _, out_io
                 mktemp() do _, err_io
-                    kp = DistSSHRun.execute!(
-                        :ride,
-                        script,
-                        ["parent:1"];
-                        detached = true,
-                        project = proj,
-                        verbosity = :progress,
-                        job_id = "t-ride",
-                        stdout = out_io,
-                        stderr = err_io,
-                    )
+                    _, kp = _capture_detached_env_log() do
+                        DistSSHRun.execute!(
+                            :ride,
+                            script,
+                            ["parent:1"];
+                            detached = true,
+                            project = proj,
+                            verbosity = :progress,
+                            job_id = "t-ride",
+                            stdout = out_io,
+                            stderr = err_io,
+                        )
+                    end
                     result = DistSSHRun.terminate!(kp; grace = 2)
                     @test result isa DistSSHRun.KitRunResult
                     @test !process_running(kp.process)
@@ -1668,7 +1687,7 @@ end
                 joinpath(proj, "missing"), proj,
             )
             @test DistSSHRun._detached_launch_dir(nothing, proj) ==
-                DistSSHRun.canonical_local_path(proj)
+                DistSSHRun.canonical_local_path(realpath(proj))
             @test pwd() == here
             DistSSHRun.write_kit_run_toml!(proj; kind = :go, project_root = proj)
             plain = _must_run_toml(proj)
@@ -1690,6 +1709,27 @@ end
         end
     end
 
+    @testset "dropped env log" begin
+        logs, _ = _capture_detached_env_log(; min_level = Test.Logging.Debug) do
+            DistSSHRun._log_detached_dropped!(["SECRET_TOKEN", "ZZZ"])
+        end
+        infos = filter(r -> r.level == Test.Logging.Info, logs)
+        @test length(infos) == 1
+        @test occursin(
+            "dropped 2 environment variables not on the allowlist",
+            infos[1].message,
+        )
+        @test !occursin("SECRET_TOKEN", infos[1].message)
+        @test !occursin("ZZZ", infos[1].message)
+        debugs = filter(r -> r.level == Test.Logging.Debug, logs)
+        @test length(debugs) == 1
+        @test _log_kw(debugs[1], :names) == "SECRET_TOKEN, ZZZ"
+        empty_logs, _ = _capture_detached_env_log(; min_level = Test.Logging.Debug) do
+            DistSSHRun._log_detached_dropped!(String[])
+        end
+        @test isempty(empty_logs)
+    end
+
     @testset "detached launch spawn" begin
         _with_tempdir() do proj
             _write_job_with_distsshrun!(proj)
@@ -1709,84 +1749,95 @@ end
                 """,
             )
             parent_pwd = pwd()
-            err_path = joinpath(proj, "parent-stderr.txt")
-            open(err_path, "w") do err_io
-                redirect_stderr(err_io) do
-                    withenv(
-                        "SECRET_TOKEN" => "nope",
-                        "CUSTOM_JOB_PATH" => "kept",
-                    ) do
-                        kp = DistSSHRun.execute!(
-                            :go,
-                            script,
-                            ["parent:1"];
-                            detached = true,
-                            project = proj,
-                            quiet = true,
-                            stdout = devnull,
-                            stderr = devnull,
-                        )
-                        result = wait(kp)
-                        @test result.ok
-                        report = DistSSHRun.detached_launch(kp)
-                        @test report.threads == "1"
-                        @test report.dir == DistSSHRun.canonical_local_path(proj)
-                        @test "SECRET_TOKEN" in report.dropped
-                        @test "CUSTOM_JOB_PATH" in report.dropped
-                        @test "HOME" ∉ report.dropped
-                        raw = _must_run_toml(kp.run_dir::AbstractString)
-                        @test raw["schema"] == 1
-                        launch = raw["launch"]::AbstractDict
-                        @test launch["threads"] == "1"
-                        @test "SECRET_TOKEN" in String.(launch["dropped"])
-                    end
+            withenv(
+                "SECRET_TOKEN" => "nope",
+                "CUSTOM_JOB_PATH" => "kept",
+            ) do
+                logs, kp = _capture_detached_env_log(; min_level = Test.Logging.Debug) do
+                    DistSSHRun.execute!(
+                        :go,
+                        script,
+                        ["parent:1"];
+                        detached = true,
+                        project = proj,
+                        quiet = true,
+                        stdout = devnull,
+                        stderr = devnull,
+                    )
                 end
+                result = wait(kp)
+                @test result.ok
+                report = DistSSHRun.detached_launch(kp)
+                @test report.threads == "1"
+                @test report.dir == DistSSHRun._detached_launch_dir(nothing, proj)
+                @test "SECRET_TOKEN" in report.dropped
+                @test "CUSTOM_JOB_PATH" in report.dropped
+                @test "HOME" ∉ report.dropped
+                raw = _must_run_toml(kp.run_dir::AbstractString)
+                @test raw["schema"] == 1
+                launch = raw["launch"]::AbstractDict
+                @test launch["threads"] == "1"
+                @test "SECRET_TOKEN" in String.(launch["dropped"])
+                infos = filter(r -> r.level == Test.Logging.Info, logs)
+                @test length(infos) == 1
+                @test occursin(
+                    "dropped $(length(report.dropped)) environment variables not on the allowlist",
+                    infos[1].message,
+                )
+                @test !occursin("SECRET_TOKEN", infos[1].message)
+                @test !occursin("nope", infos[1].message)
+                debugs = filter(r -> r.level == Test.Logging.Debug, logs)
+                @test length(debugs) == 1
+                names = String(_log_kw(debugs[1], :names))
+                @test occursin("SECRET_TOKEN", names)
+                @test !occursin("nope", names)
             end
             @test pwd() == parent_pwd
             body = read(marker, String)
-            @test occursin("pwd=$(DistSSHRun.canonical_local_path(proj))", body)
+            @test occursin(
+                "pwd=$(DistSSHRun._detached_launch_dir(nothing, proj))",
+                body,
+            )
             @test occursin("n=1", body)
             @test occursin("ni=0", body)
             @test occursin("secret=false", body)
             @test occursin("home=true", body)
             @test occursin("custom=", body)
             @test !occursin("custom=kept", body)
-            parent_err = read(err_path, String)
-            @test occursin("detached execute!: dropped env:", parent_err)
-            @test occursin("SECRET_TOKEN", parent_err)
 
-            open(err_path, "w") do err_io
-                redirect_stderr(err_io) do
-                    withenv(
-                        "SECRET_TOKEN" => "nope",
-                        "CUSTOM_JOB_PATH" => "kept",
-                    ) do
-                        kp = DistSSHRun.execute!(
-                            :go,
-                            script,
-                            ["parent:1"];
-                            detached = true,
-                            project = proj,
-                            quiet = true,
-                            stdout = devnull,
-                            stderr = devnull,
-                            dir = parent_pwd,
-                            threads = :unset,
-                            env_allow = :all,
-                        )
-                        result = wait(kp)
-                        @test result.ok
-                        report = DistSSHRun.detached_launch(kp)
-                        @test report.threads == "unset"
-                        @test report.dir == DistSSHRun.canonical_local_path(parent_pwd)
-                        @test "CUSTOM_JOB_PATH" ∉ report.dropped
-                        @test "SECRET_TOKEN" in report.dropped
-                    end
+            withenv(
+                "SECRET_TOKEN" => "nope",
+                "CUSTOM_JOB_PATH" => "kept",
+            ) do
+                _, kp = _capture_detached_env_log() do
+                    DistSSHRun.execute!(
+                        :go,
+                        script,
+                        ["parent:1"];
+                        detached = true,
+                        project = proj,
+                        quiet = true,
+                        stdout = devnull,
+                        stderr = devnull,
+                        dir = parent_pwd,
+                        threads = :unset,
+                        env_allow = :all,
+                    )
                 end
+                result = wait(kp)
+                @test result.ok
+                report = DistSSHRun.detached_launch(kp)
+                @test report.threads == "unset"
+                @test report.dir == DistSSHRun._detached_launch_dir(parent_pwd, proj)
+                @test "CUSTOM_JOB_PATH" ∉ report.dropped
+                @test "SECRET_TOKEN" in report.dropped
             end
             @test pwd() == parent_pwd
             restored = read(marker, String)
-            @test occursin("pwd=$(DistSSHRun.canonical_local_path(parent_pwd))", restored)
+            @test occursin(
+                "pwd=$(DistSSHRun._detached_launch_dir(parent_pwd, proj))",
+                restored,
+            )
             @test occursin("custom=kept", restored)
             @test occursin("secret=false", restored)
         end

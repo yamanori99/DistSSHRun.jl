@@ -54,14 +54,16 @@ using Test
         ready = joinpath(proj, "ready")
         mark = joinpath(proj, "caught")
         write(script, catch_script(ready, mark))
-        kp = DistSSHRun.execute!(
-            :drive,
-            script,
-            ["parent:1"];
-            detached = true,
-            project = proj,
-            quiet = true,
-        )
+        _, kp = _capture_detached_env_log() do
+            DistSSHRun.execute!(
+                :drive,
+                script,
+                ["parent:1"];
+                detached = true,
+                project = proj,
+                quiet = true,
+            )
+        end
         try
             @test wait_file(ready, 90)
             stopped = DistSSHRun.terminate!(kp; interrupt_grace = 5, grace = 2)
@@ -72,14 +74,16 @@ using Test
         end
         rm(ready; force = true)
         rm(mark; force = true)
-        kp0 = DistSSHRun.execute!(
-            :drive,
-            script,
-            ["parent:1"];
-            detached = true,
-            project = proj,
-            quiet = true,
-        )
+        _, kp0 = _capture_detached_env_log() do
+            DistSSHRun.execute!(
+                :drive,
+                script,
+                ["parent:1"];
+                detached = true,
+                project = proj,
+                quiet = true,
+            )
+        end
         try
             @test wait_file(ready, 90)
             skipped = DistSSHRun.terminate!(kp0; interrupt_grace = 0, grace = 2)
@@ -122,14 +126,16 @@ end
             end
             """,
         )
-        kp = DistSSHRun.execute!(
-            :drive,
-            script,
-            ["parent:1"];
-            detached = true,
-            project = proj,
-            quiet = true,
-        )
+        _, kp = _capture_detached_env_log() do
+            DistSSHRun.execute!(
+                :drive,
+                script,
+                ["parent:1"];
+                detached = true,
+                project = proj,
+                quiet = true,
+            )
+        end
         try
             t0 = time()
             while !isfile(ready) && (time() - t0) < 90

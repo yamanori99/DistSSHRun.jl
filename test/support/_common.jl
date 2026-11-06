@@ -107,4 +107,10 @@ if !isdefined(Main, :_test_root)
         return true
     end
 
+    # Keep the detached-env count off the test console. `min_level=Debug`
+    # also keeps the name list, which is not written at Info.
+    function _capture_detached_env_log(f; min_level = Test.Logging.Info)
+        return Test.collect_test_logs(f; min_level = min_level)
+    end
+
 end

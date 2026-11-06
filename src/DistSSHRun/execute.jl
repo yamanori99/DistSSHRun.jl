@@ -482,9 +482,9 @@ value that contains userinfo is dropped unless that name is in
 `env_allow` or `env`. A substring denylist (`SECRET`, `TOKEN`, and the
 other parts listed with the implementation) drops prefix copies and
 `:all` copies. An explicit `env_allow` or `env` name wins and is recorded
-as sensitive. Dropped names, not values, are printed to stderr and stored
-by [`detached_launch`](@ref) and in `run.toml` under `[launch]`. `schema`
-stays 1.
+as sensitive. A count of dropped names is logged. The names, not
+the values, are in [`detached_launch`](@ref), `run.toml` `[launch]`, and
+the debug log (`JULIA_DEBUG=DistSSHRun`). `schema` stays 1.
 
 Local go slots and local drive workers inherit that environment, including
 `SSH_AUTH_SOCK` when it was kept. SSH workers do not receive this
@@ -862,9 +862,7 @@ function _execute_detached!(
         launch_dir = launch_dir,
         source = source,
     )
-    if !isempty(built.dropped)
-        println(stderr, "detached execute!: dropped env: ", join(built.dropped, ", "))
-    end
+    _log_detached_dropped!(built.dropped)
     julia_bin = resolve_controller_julia(julia)
     child_proj = _detached_julia_project(proj)
     julia_argv = String[
@@ -1943,6 +1941,15 @@ function _execute_detached_argv(
     return argv
 end
 
+"""Log how many names were dropped. The name list is debug-only. Never log values."""
+function _log_detached_dropped!(dropped::AbstractVector{<:AbstractString})
+    isempty(dropped) && return nothing
+    n = length(dropped)
+    @info "detached execute!: dropped $n environment variables not on the allowlist. Names are in detached_launch, run.toml [launch], and the debug log (JULIA_DEBUG=DistSSHRun)."
+    @debug "detached execute!: dropped environment variable names" names = join(dropped, ", ")
+    return nothing
+end
+
 function _reject_inprocess_launch!(dir, threads, env_allow, env)
     dir === nothing || throw(
         ArgumentError(
@@ -2028,7 +2035,10 @@ function _detached_launch_dir(dir, project::AbstractString)::String
     raw = dir === nothing ? String(project) : String(dir)
     d = canonical_local_path(raw)
     isdir(d) || throw(ArgumentError("detached execute! dir is not a directory: $(d)"))
-    return d
+    # `canonical_local_path` is `abspath` and does not resolve symlinks.
+    # macOS `getcwd` turns `/var` into `/private/var`, so the child `pwd()`
+    # would not match the directory we passed. Pass the physical path.
+    return canonical_local_path(realpath(d))
 end
 
 function _detached_env_name_ok(name::AbstractString)
