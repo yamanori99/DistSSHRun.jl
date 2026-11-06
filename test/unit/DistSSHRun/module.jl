@@ -56,6 +56,8 @@ using Test
     @test :result_remote_run_id in ns &&
         Base.ispublic(DistSSHRun, :result_remote_run_id)
     @test !Base.isexported(DistSSHRun, :result_remote_run_id)
+    @test :ship_send_list in ns && Base.ispublic(DistSSHRun, :ship_send_list)
+    @test !Base.isexported(DistSSHRun, :ship_send_list)
     @test :parse_progress_line ∉ ns && :kit_progress_latest ∉ ns
     @test :kit_progress_phases ∉ ns
     @test :execute_detached_accepts in ns && :kit_pid_alive ∉ ns

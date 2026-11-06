@@ -20,6 +20,7 @@ include(joinpath(@__DIR__, "..", "..", "..", ".github", "downstream_public.jl"))
             DistSSHRun.result_run_dir(kp)
             DistSSHRun.result_content_tree_hash(result)
             DistSSHRun.result_remote_run_id(result)
+            DistSSHRun.ship_send_list(root)
             """,
         )
         write(joinpath(src, "field.jl"), "DistSSHRun.KitProcess.run_dir\n")
