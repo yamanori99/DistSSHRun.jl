@@ -204,6 +204,82 @@ function juliaup_update_remotes(
     return (; host_op_result(succeeded = succeeded, failed = failed)..., hosts = host_results)
 end
 
+"""`*` row when juliaup marked one, otherwise the first kept row."""
+function _juliaup_summary_row(
+        rows::AbstractVector{<:AbstractString},
+    )::Union{Nothing, String}
+    isempty(rows) && return nothing
+    for row in rows
+        startswith(strip(row), "*") && return String(row)
+    end
+    return String(first(rows))
+end
+
+"""Channel, installed patch, and the update column (build suffix stripped).
+
+The installed patch of a `*` row is [`DistSSHUp._juliaup_patch_from_status`](@ref).
+"""
+function _juliaup_summary_fields(row::AbstractString)
+    installed = if startswith(strip(row), "*")
+        DistSSHUp._juliaup_patch_from_status(row)
+    else
+        raw = split(strip(row))
+        length(raw) < 2 ? "-" : String(first(split(String(raw[2]), '+'; limit = 2)))
+    end
+    parts = split(strip(row))
+    if !isempty(parts) && parts[1] == "*"
+        parts = parts[2:end]
+    end
+    channel = isempty(parts) ? "-" : String(parts[1])
+    available = if length(parts) < 3
+        "none"
+    else
+        String(first(split(String(parts[3]), '+'; limit = 2)))
+    end
+    return channel, installed, available
+end
+
+"""`same as parent`, `behind parent V`, `ahead of parent V`, or `parent unknown`.
+
+`parent` is always `same as parent`. Other hosts compare patch strings as
+`VersionNumber`. A missing or unparseable patch is `parent unknown`.
+"""
+function _juliaup_patch_relation(
+        host::AbstractString,
+        installed::AbstractString,
+        parent_patch::AbstractString,
+    )::String
+    is_parent_host_name(host) && return "same as parent"
+    parent_patch == "-" && return "parent unknown"
+    installed == "-" && return "parent unknown"
+    parent_v = tryparse(VersionNumber, String(parent_patch))
+    installed_v = tryparse(VersionNumber, String(installed))
+    (parent_v === nothing || installed_v === nothing) && return "parent unknown"
+    installed_v == parent_v && return "same as parent"
+    installed_v < parent_v && return "behind parent $parent_patch"
+    return "ahead of parent $parent_patch"
+end
+
+"""One `up status` line for `host`.
+
+`rows` are installed `juliaup status` lines. Empty rows are `(none)`.
+The line names the channel, the installed patch, how that patch sits
+against `parent_patch`, and the available update. It does not include the
+juliaup build triplet.
+"""
+function juliaup_status_summary_line(
+        host::AbstractString,
+        rows::AbstractVector{<:AbstractString};
+        parent_patch::AbstractString,
+    )::String
+    label = is_parent_host_name(host) ? PARENT_HOST_NAME : String(host)
+    row = _juliaup_summary_row(rows)
+    row === nothing && return "  $label: (none)"
+    channel, installed, available = _juliaup_summary_fields(row)
+    rel = _juliaup_patch_relation(label, installed, String(parent_patch))
+    return "  $label: channel $channel, installed $installed, $rel, available $available"
+end
+
 """
 Run one juliaup verb on each target.
 
@@ -243,10 +319,12 @@ function juliaup_verb_remotes(
         label = is_parent_host_name(host) ? PARENT_HOST_NAME : host
         try
             if v == "status"
-                lines = juliaup_status_lines(host; channel = ch)
-                if isempty(lines)
-                    kit_payload_println("  $label: (none)")
-                else
+                lines = juliaup_status_lines(host; channel = ch, strict = true)
+                parent_patch = DistSSHUp.juliaup_default_patch(PARENT_HOST_NAME)
+                kit_payload_println(
+                    juliaup_status_summary_line(host, lines; parent_patch = parent_patch),
+                )
+                if kit_output_detail()
                     for line in lines
                         kit_payload_println("  $label: $line")
                     end

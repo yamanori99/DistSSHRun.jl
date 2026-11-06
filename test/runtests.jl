@@ -95,6 +95,8 @@ end
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "host_project_toml.jl"))
         _runtest_announce("unit/DistSSHRun/setup_api.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup_api.jl"))
+        _runtest_announce("unit/DistSSHRun/setup/status_summary.jl")
+        include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "status_summary.jl"))
         _runtest_announce("unit/DistSSHRun/setup/checks.jl")
         if !_distsshrun_short_skip("unit/DistSSHRun/setup/checks.jl")
             include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "checks.jl"))

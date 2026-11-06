@@ -6,6 +6,8 @@ function show_up_usage(; io::IO = stdout)
         "Hosts: child:NAME[:N] and parent[:N] (:N ignored).",
         "add installs a channel. default switches to it.",
         "update with no channel updates every installed channel.",
+        "status prints one line per host (channel, installed patch, parent, available update).",
+        "--verbose also prints the juliaup rows. Skew in that line is not an error.",
     )
     print_help_blank(io)
     print_help_section("Usage"; io = io)

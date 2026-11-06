@@ -306,6 +306,51 @@ end
         end
     end
 
+    @testset "strict status fails only when the state cannot be read" begin
+        mktempdir() do d
+            missing = joinpath(d, "missing")
+            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => missing) do
+                @test DistSSHUp.juliaup_status_lines("parent") == String[]
+                @test occursin(
+                    "juliaup not found",
+                    _err_msg(() -> DistSSHUp.juliaup_status_lines("parent"; strict = true)),
+                )
+            end
+            ju = joinpath(d, "juliaup")
+            _write_sh(
+                ju,
+                """
+                case "\$1" in
+                  status) exit 1 ;;
+                  *) exit 1 ;;
+                esac
+                """,
+            )
+            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+                @test DistSSHUp.juliaup_status_lines("parent") == String[]
+                @test occursin(
+                    "status",
+                    _err_msg(() -> DistSSHUp.juliaup_status_lines("parent"; strict = true)),
+                )
+            end
+            _write_sh(ju, "exit 0\n")
+            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+                @test DistSSHUp.juliaup_status_lines("parent"; strict = true) == String[]
+            end
+        end
+        mktempdir() do d
+            ssh = joinpath(d, "ssh.jl")
+            write(ssh, "println(stderr, \"ssh down\")\nexit(1)\n")
+            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_SSH" => ssh) do
+                @test DistSSHUp.juliaup_status_lines("status-host") == String[]
+                @test occursin(
+                    "ssh down",
+                    _err_msg(() -> DistSSHUp.juliaup_status_lines("status-host"; strict = true)),
+                )
+            end
+        end
+    end
+
     @testset "status hides a dead juliaup and keeps real rows" begin
         mktempdir() do d
             ju = joinpath(d, "juliaup")
