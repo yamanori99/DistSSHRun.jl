@@ -131,12 +131,14 @@ using Test
         # would be on screen at once (must stay ≤ 1).
         function live_spinner_bar_peak(raw::AbstractString)
             finished = String[]
-            cur = ""
+            cur = Ref("")
             at_home = false
-            peak = 0
+            peak = Ref(0)
             function note!()
-                rows = strip_ansi.(isempty(cur) ? finished : vcat(finished, String[cur]))
-                peak = max(peak, count(spinner_bar_line, rows))
+                rows = strip_ansi.(
+                    isempty(cur[]) ? finished : vcat(finished, String[cur[]]),
+                )
+                peak[] = max(peak[], count(spinner_bar_line, rows))
                 return nothing
             end
             i = firstindex(raw)
@@ -146,8 +148,8 @@ using Test
                     at_home = true
                     i = nextind(raw, i)
                 elseif ch == '\n'
-                    push!(finished, cur)
-                    cur = ""
+                    push!(finished, cur[])
+                    cur[] = ""
                     at_home = false
                     note!()
                     i = nextind(raw, i)
@@ -161,7 +163,7 @@ using Test
                         k <= lastindex(raw) || break
                         if raw[k] == 'K'
                             if at_home
-                                cur = ""
+                                cur[] = ""
                                 at_home = false
                             end
                             note!()
@@ -172,15 +174,15 @@ using Test
                     end
                 else
                     if at_home
-                        cur = ""
+                        cur[] = ""
                         at_home = false
                     end
-                    cur *= string(ch)
+                    cur[] *= string(ch)
                     i = nextind(raw, i)
                 end
             end
             note!()
-            return peak
+            return peak[]
         end
 
         pty = capture_pty(runner)
