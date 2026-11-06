@@ -60,6 +60,7 @@ using Test
     @test Base.isexported(DistSSHRun, :parse_go_args) &&
         Base.isexported(DistSSHRun, :parse_drive_args)
     @test :execute_kwargs_from_parsed in ns
+    @test :detached_launch in ns && Base.isexported(DistSSHRun, :detached_launch)
     @test not_exported(:show_go_usage)
     @test not_exported(:show_drive_usage)
     @test not_exported(:println_kit_version)

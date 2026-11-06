@@ -1,5 +1,11 @@
 using Test
 
+function _must_run_toml(path::AbstractString)::AbstractDict
+    raw = DistSSHRun.read_kit_run_toml(path)
+    raw isa AbstractDict || error("run.toml missing at $(path)")
+    return raw::AbstractDict
+end
+
 # Oracle: dispatcher only (plus detached `:go`, which is out-of-process).
 # `execute!(:drive, …)` includes a driver into `Main` and lives in
 # `integration/drive/execute.jl` (after `api.jl`, which is the first
@@ -1441,6 +1447,348 @@ using Test
             @test result.ok == false
             @test result.exit_code == status
             @test result.failed_step == "go"
+        end
+    end
+
+    @testset "detached launch policy" begin
+        parent = Dict{String, String}(
+            "PATH" => "/usr/bin",
+            "HOME" => "/home/me",
+            "JULIA_DEPOT_PATH" => "/depot",
+            "DISTSSHKIT_SSH_TUNNEL" => "0",
+            "DISTRIBUTED_OUTPUT_DIR" => "/out",
+            "AWS_SECRET_ACCESS_KEY" => "sek",
+            "JULIA_PROJECT" => "/queue",
+            "JULIA_LOAD_PATH" => "@",
+            "EMPTY_SKIP" => "",
+            "JULIA_WORKER_COOKIE" => "abc",
+            "JULIA_NUM_THREADS" => "8",
+            "OPENBLAS_NUM_THREADS" => "8",
+            "OPENBLAS_DEFAULT_NUM_THREADS" => "4",
+            "CUSTOM_JOB_PATH" => "kept",
+            "DISTSSHQUEUE_STORE" => "/q",
+            "DISTSSHKIT_FOO_TOKEN" => "t",
+            "http_proxy" => "http://user:pass@proxy:8080",
+            "https_proxy" => "http://proxy:8080",
+            "LC_ALL" => "C",
+            "DISTSSHKIT_BLAS_THREADS" => "3",
+        )
+        built = DistSSHRun._detached_child_env(
+            parent, Dict{String, String}();
+            threads = 1,
+            env_allow = nothing,
+            env = nothing,
+            launch_dir = "/work",
+            source = nothing,
+        )
+        @test built.env["PATH"] == "/usr/bin"
+        @test built.env["HOME"] == "/home/me"
+        @test built.env["JULIA_DEPOT_PATH"] == "/depot"
+        @test built.env["DISTSSHKIT_SSH_TUNNEL"] == "0"
+        @test built.env["DISTRIBUTED_OUTPUT_DIR"] == "/out"
+        @test built.env["LC_ALL"] == "C"
+        @test built.env["https_proxy"] == "http://proxy:8080"
+        @test built.env["OPENBLAS_NUM_THREADS"] == "3"
+        @test built.env["OMP_NUM_THREADS"] == "3"
+        @test built.env["MKL_NUM_THREADS"] == "3"
+        @test built.env["GOTO_NUM_THREADS"] == "3"
+        @test built.env["VECLIB_MAXIMUM_THREADS"] == "3"
+        @test !haskey(built.env, "OPENBLAS_DEFAULT_NUM_THREADS")
+        @test !haskey(built.env, "JULIA_NUM_THREADS")
+        @test !haskey(built.env, "AWS_SECRET_ACCESS_KEY")
+        @test !haskey(built.env, "JULIA_PROJECT")
+        @test !haskey(built.env, "JULIA_LOAD_PATH")
+        @test !haskey(built.env, "EMPTY_SKIP")
+        @test !haskey(built.env, "JULIA_WORKER_COOKIE")
+        @test !haskey(built.env, "CUSTOM_JOB_PATH")
+        @test !haskey(built.env, "DISTSSHQUEUE_STORE")
+        @test !haskey(built.env, "DISTSSHKIT_FOO_TOKEN")
+        @test !haskey(built.env, "http_proxy")
+        @test built.threads == "1"
+        @test built.env["DISTSSHKIT_LAUNCH_THREADS"] == "1"
+        @test built.env["DISTSSHKIT_LAUNCH_DIR"] == "/work"
+        @test built.env["DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL"] == "1"
+        @test "AWS_SECRET_ACCESS_KEY" in built.dropped
+        @test "JULIA_LOAD_PATH" in built.dropped
+        @test "JULIA_WORKER_COOKIE" in built.dropped
+        @test "http_proxy" in built.dropped
+        @test "EMPTY_SKIP" ∉ built.dropped
+        @test isempty(built.sensitive)
+
+        allowed = DistSSHRun._detached_child_env(
+            parent, Dict{String, String}();
+            threads = 1,
+            env_allow = ["AWS_SECRET_ACCESS_KEY", "http_proxy"],
+            env = nothing,
+            launch_dir = "/work",
+            source = nothing,
+        )
+        @test allowed.env["AWS_SECRET_ACCESS_KEY"] == "sek"
+        @test allowed.env["http_proxy"] == "http://user:pass@proxy:8080"
+        @test "AWS_SECRET_ACCESS_KEY" in allowed.sensitive
+        @test "AWS_SECRET_ACCESS_KEY" ∉ allowed.dropped
+        @test "http_proxy" ∉ allowed.dropped
+
+        wide = DistSSHRun._detached_child_env(
+            parent, Dict{String, String}();
+            threads = 1,
+            env_allow = :all,
+            env = nothing,
+            launch_dir = "/work",
+            source = nothing,
+        )
+        @test wide.env["HOME"] == "/home/me"
+        @test wide.env["CUSTOM_JOB_PATH"] == "kept"
+        @test !haskey(wide.env, "JULIA_NUM_THREADS")
+        @test !haskey(wide.env, "OPENBLAS_NUM_THREADS") || wide.env["OPENBLAS_NUM_THREADS"] == "3"
+        @test wide.env["OPENBLAS_NUM_THREADS"] == "3"
+        @test !haskey(wide.env, "AWS_SECRET_ACCESS_KEY")
+        @test !haskey(wide.env, "JULIA_LOAD_PATH")
+        @test !haskey(wide.env, "http_proxy")
+        @test "JULIA_NUM_THREADS" in wide.dropped
+
+        legacy = DistSSHRun._detached_child_env(
+            parent, Dict{String, String}();
+            threads = :unset,
+            env_allow = :all,
+            env = nothing,
+            launch_dir = "/work",
+            source = nothing,
+        )
+        @test legacy.threads == "unset"
+        @test legacy.env["JULIA_NUM_THREADS"] == "8"
+        @test legacy.env["OPENBLAS_NUM_THREADS"] == "8"
+        @test !haskey(legacy.env, "OPENBLAS_DEFAULT_NUM_THREADS") ||
+            legacy.env["OPENBLAS_DEFAULT_NUM_THREADS"] == "4"
+        @test legacy.env["OPENBLAS_DEFAULT_NUM_THREADS"] == "4"
+        @test !haskey(legacy.env, "JULIA_LOAD_PATH")
+        @test !haskey(legacy.env, "AWS_SECRET_ACCESS_KEY")
+
+        named = DistSSHRun._detached_child_env(
+            parent, Dict{String, String}();
+            threads = :unset,
+            env_allow = ["JULIA_NUM_THREADS", "DISTSSHKIT_FOO_TOKEN"],
+            env = Dict("TZ" => "UTC", "HOME" => "", "BRAND_NEW" => "1"),
+            launch_dir = "/work",
+            source = nothing,
+        )
+        @test named.env["JULIA_NUM_THREADS"] == "8"
+        @test named.env["DISTSSHKIT_FOO_TOKEN"] == "t"
+        @test "DISTSSHKIT_FOO_TOKEN" in named.sensitive
+        @test named.env["TZ"] == "UTC"
+        @test named.env["BRAND_NEW"] == "1"
+        @test !haskey(named.env, "HOME")
+        @test "HOME" in named.dropped
+
+        @test_throws ArgumentError DistSSHRun._detached_child_env(
+            parent, Dict{String, String}();
+            threads = 1,
+            env_allow = ["JULIA_LOAD_PATH"],
+            env = nothing,
+            launch_dir = "/work",
+            source = nothing,
+        )
+        @test_throws ArgumentError DistSSHRun._detached_child_env(
+            parent, Dict{String, String}();
+            threads = 1,
+            env_allow = ["JULIA_NUM_THREADS"],
+            env = nothing,
+            launch_dir = "/work",
+            source = nothing,
+        )
+        @test_throws ArgumentError DistSSHRun._detached_thread_flag(true)
+        @test_throws ArgumentError DistSSHRun._detached_thread_flag(0)
+        @test_throws ArgumentError DistSSHRun._detached_thread_flag("0,1")
+        @test DistSSHRun._detached_thread_flag(4) == "4"
+        @test DistSSHRun._detached_thread_flag("auto") == "auto"
+        @test DistSSHRun._detached_thread_flag("4,1") == "4,1"
+        @test DistSSHRun._detached_thread_flag("1,0") == "1,0"
+        @test DistSSHRun._detached_threads_from_counts(1, 0) == "1"
+        @test DistSSHRun._detached_threads_from_counts(4, 1) == "4,1"
+        @test DistSSHRun._detached_thread_flag(:inherit) == DistSSHRun._launch_thread_spec()
+        @test DistSSHRun.execute_detached_accepts(:threads; kind = :go)
+        @test DistSSHRun.execute_detached_accepts(:threads; kind = :ride)
+        @test DistSSHRun.execute_detached_accepts(:threads; kind = :drive)
+        @test DistSSHRun.execute_detached_accepts(:dir; kind = :go)
+        @test DistSSHRun.execute_detached_accepts(:env_allow; kind = :ride)
+        @test DistSSHRun.execute_detached_accepts(:env; kind = :drive)
+
+        session = (quiet = false, verbosity = nothing)
+        parsed = (
+            cli_session = session,
+            script_args = String[],
+            output_dir = nothing,
+            julia = nothing,
+            allow_mismatch = Symbol[],
+            sync = nothing,
+            repeat = nothing,
+            allow_external_symlinks = false,
+            threads = 4,
+            dir = "/work",
+            env_allow = ["FOO"],
+            env = Dict{String, String}("TZ" => "UTC"),
+        )
+        kw = DistSSHRun.execute_kwargs_from_parsed(parsed; kind = :go)
+        @test kw[:threads] == 4
+        @test kw[:dir] == "/work"
+        @test kw[:env_allow] == ["FOO"]
+        @test kw[:env] == Dict{String, String}("TZ" => "UTC")
+        go = DistSSHRun.parse_go_args(["job.jl"])
+        @test !haskey(DistSSHRun.execute_kwargs_from_parsed(go; kind = :go), :threads)
+        @test !haskey(DistSSHRun.execute_kwargs_from_parsed(go; kind = :go), :dir)
+        @test !haskey(DistSSHRun.execute_kwargs_from_parsed(go; kind = :go), :env_allow)
+        @test !haskey(DistSSHRun.execute_kwargs_from_parsed(go; kind = :go), :env)
+
+        @test_throws ArgumentError DistSSHRun.execute!(:go, "job.jl"; threads = 4)
+        @test_throws ArgumentError DistSSHRun.execute!(:go, "job.jl"; dir = "/tmp")
+        @test_throws ArgumentError DistSSHRun.execute!(:go, "job.jl"; env_allow = String[])
+        @test_throws ArgumentError DistSSHRun.execute!(
+            :go, "job.jl"; env = Dict("A" => "B"),
+        )
+
+        julia = joinpath(Sys.BINDIR, Base.julia_exename())
+        proc = run(
+            pipeline(
+                `$julia --startup-file=no -e nothing`;
+                stdout = devnull,
+                stderr = devnull,
+            );
+            wait = true,
+        )
+        bare = DistSSHRun.KitProcess(proc; kind = :go)
+        bare_launch = DistSSHRun.detached_launch(bare)
+        @test bare_launch.dir == ""
+        @test bare_launch.threads == "unset"
+        @test bare_launch.dropped == String[]
+        @test bare_launch.sensitive == String[]
+
+        _with_tempdir() do proj
+            here = pwd()
+            @test_throws ArgumentError DistSSHRun._detached_launch_dir(
+                joinpath(proj, "missing"), proj,
+            )
+            @test DistSSHRun._detached_launch_dir(nothing, proj) ==
+                DistSSHRun.canonical_local_path(proj)
+            @test pwd() == here
+            DistSSHRun.write_kit_run_toml!(proj; kind = :go, project_root = proj)
+            plain = _must_run_toml(proj)
+            @test plain["schema"] == 1
+            @test !haskey(plain, "launch")
+            withenv(
+                "DISTSSHKIT_LAUNCH_THREADS" => "1",
+                "DISTSSHKIT_LAUNCH_DIR" => proj,
+                "DISTSSHKIT_LAUNCH_DROPPED" => "SECRET_TOKEN,ZZZ",
+            ) do
+                DistSSHRun.write_kit_run_toml!(proj; kind = :go, project_root = proj)
+            end
+            stamped = _must_run_toml(proj)
+            @test stamped["schema"] == 1
+            launch = stamped["launch"]::AbstractDict
+            @test launch["threads"] == "1"
+            @test launch["dir"] == "."
+            @test String.(launch["dropped"]) == ["SECRET_TOKEN", "ZZZ"]
+        end
+    end
+
+    @testset "detached launch spawn" begin
+        _with_tempdir() do proj
+            _write_job_with_distsshrun!(proj)
+            script = joinpath(proj, "job.jl")
+            marker = joinpath(proj, "launch.txt")
+            write(
+                script,
+                """
+                open($(repr(marker)), "w") do io
+                    println(io, "pwd=", pwd())
+                    println(io, "n=", Threads.nthreads())
+                    println(io, "ni=", Threads.nthreads(:interactive))
+                    println(io, "secret=", haskey(ENV, "SECRET_TOKEN"))
+                    println(io, "home=", haskey(ENV, "HOME"))
+                    println(io, "custom=", get(ENV, "CUSTOM_JOB_PATH", ""))
+                end
+                """,
+            )
+            parent_pwd = pwd()
+            err_path = joinpath(proj, "parent-stderr.txt")
+            open(err_path, "w") do err_io
+                redirect_stderr(err_io) do
+                    withenv(
+                        "SECRET_TOKEN" => "nope",
+                        "CUSTOM_JOB_PATH" => "kept",
+                    ) do
+                        kp = DistSSHRun.execute!(
+                            :go,
+                            script,
+                            ["parent:1"];
+                            detached = true,
+                            project = proj,
+                            quiet = true,
+                            stdout = devnull,
+                            stderr = devnull,
+                        )
+                        result = wait(kp)
+                        @test result.ok
+                        report = DistSSHRun.detached_launch(kp)
+                        @test report.threads == "1"
+                        @test report.dir == DistSSHRun.canonical_local_path(proj)
+                        @test "SECRET_TOKEN" in report.dropped
+                        @test "CUSTOM_JOB_PATH" in report.dropped
+                        @test "HOME" ∉ report.dropped
+                        raw = _must_run_toml(kp.run_dir::AbstractString)
+                        @test raw["schema"] == 1
+                        launch = raw["launch"]::AbstractDict
+                        @test launch["threads"] == "1"
+                        @test "SECRET_TOKEN" in String.(launch["dropped"])
+                    end
+                end
+            end
+            @test pwd() == parent_pwd
+            body = read(marker, String)
+            @test occursin("pwd=$(DistSSHRun.canonical_local_path(proj))", body)
+            @test occursin("n=1", body)
+            @test occursin("ni=0", body)
+            @test occursin("secret=false", body)
+            @test occursin("home=true", body)
+            @test occursin("custom=", body)
+            @test !occursin("custom=kept", body)
+            parent_err = read(err_path, String)
+            @test occursin("detached execute!: dropped env:", parent_err)
+            @test occursin("SECRET_TOKEN", parent_err)
+
+            open(err_path, "w") do err_io
+                redirect_stderr(err_io) do
+                    withenv(
+                        "SECRET_TOKEN" => "nope",
+                        "CUSTOM_JOB_PATH" => "kept",
+                    ) do
+                        kp = DistSSHRun.execute!(
+                            :go,
+                            script,
+                            ["parent:1"];
+                            detached = true,
+                            project = proj,
+                            quiet = true,
+                            stdout = devnull,
+                            stderr = devnull,
+                            dir = parent_pwd,
+                            threads = :unset,
+                            env_allow = :all,
+                        )
+                        result = wait(kp)
+                        @test result.ok
+                        report = DistSSHRun.detached_launch(kp)
+                        @test report.threads == "unset"
+                        @test report.dir == DistSSHRun.canonical_local_path(parent_pwd)
+                        @test "CUSTOM_JOB_PATH" ∉ report.dropped
+                        @test "SECRET_TOKEN" in report.dropped
+                    end
+                end
+            end
+            @test pwd() == parent_pwd
+            restored = read(marker, String)
+            @test occursin("pwd=$(DistSSHRun.canonical_local_path(parent_pwd))", restored)
+            @test occursin("custom=kept", restored)
+            @test occursin("secret=false", restored)
         end
     end
 
