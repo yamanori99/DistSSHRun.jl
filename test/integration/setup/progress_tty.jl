@@ -5,7 +5,6 @@ using Test
 # runner unsets it before `julia` starts.
 
 @testset "TTY progress keeps up status and setup --check lines" begin
-    julia = _julia_exe()
     status_cmd = _kit_cli_cmd(["up", "status", "parent"])
     check_cmd = _kit_cli_cmd(["setup", "--check", "child:host1"])
     mktempdir() do dir
