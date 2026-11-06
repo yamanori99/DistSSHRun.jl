@@ -2440,7 +2440,6 @@ function print_kit_root_usage(io::IO = stderr)
         "  go                 Run an as-is complete job",
         "  ride               Experimental auto-split of map / filter",
         "  drive              Distributed workers + collect",
-        "  plan               Experimental inspect; do not run",
         "  size               Estimate worker counts",
         "  pool               Cluster cores / health (no job)",
         "  demo               Install or list example scripts",
@@ -2455,7 +2454,6 @@ function print_kit_root_usage(io::IO = stderr)
         "  $(cli_m_project()) go SCRIPT.jl",
         "  $(cli_m_project()) ride parent:2 SCRIPT.jl",
         "  $(cli_m_project()) drive parent:2 SCRIPT.jl",
-        "  $(cli_m_project()) plan SCRIPT.jl",
     )
     print_help_blank(io)
     println(io, "Run `$(cli_m()) help <command>` for flags.")

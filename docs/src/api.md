@@ -39,15 +39,9 @@ end
 wait(::KitProcess)
 ```
 
-## Plan and size
+## Size
 
-!!! warning "Experimental"
-    `plan`, `KitPlan`, `PlanFinding`, and `print_plan` are experimental in 0.2.
-    A patch release may change them. Pin `DistSSHRun = "=0.2.0"` to keep that
-    surface. `size!` and `WorkerPlan` are not experimental. `pool!` is not either.
-
-`plan` reads a script and reports how it would split. `size!` and `pool!`
-measure memory and the free slots on a host.
+`size!` and `pool!` measure memory and the free slots on a host.
 
 ```@autodocs
 Modules = [DistSSHRun, DistSSHRun.DistSSHSize]
@@ -55,7 +49,6 @@ Public = true
 Private = false
 Filter = function (x)
     names = (
-        :plan, :KitPlan, :PlanFinding, :print_plan,
         :size!, :WorkerPlan, :pool!, :ResourcePool, :HostInventory, :print_pool,
     )
     n = try
@@ -132,17 +125,19 @@ Filter = function (x)
         :terminate!, :terminate_run!, :kit_result_from_dir, :result_run_dir, :result_provenance,
         :result_content_tree_hash, :result_remote_run_id,
         :ride!, :RideResult, :print_ride,
-        :plan, :KitPlan, :PlanFinding, :print_plan,
         :size!, :WorkerPlan, :pool!, :ResourcePool, :HostInventory, :print_pool,
         :pipeline!, :PipelineConfig, :PipelineResult, :pipeline_config_from_env,
         :report_pipeline_errors,
         :collect!, :CollectResult,
         :setup!, :sync!, :instantiate!,
         :KitSession, :HostResult, :SyncResult,
+        :ALLOW_MISMATCH_FIELDS,
     )
     n = try
         nameof(x)
     catch
+        # A tuple has no `nameof`. Identity documents this constant.
+        x === DistSSHRun.ALLOW_MISMATCH_FIELDS && return false
         return true
     end
     # Family contract (`public`), not the user manual. Exported names stay.
@@ -159,4 +154,20 @@ end
 
 ```@docs
 DistSSHBase.shell_status
+```
+
+## Identity
+
+[`run_identity`](@ref), [`identity_mismatches`](@ref), and
+[`parse_allow_mismatch`](@ref) are public and are not exported.
+[`go!`](@ref), [`ride!`](@ref), and [`drive!`](@ref) keep
+`--allow-mismatch` and these lines. Add
+[DistSSHKit](https://github.com/yamanori99/DistSSHKit.jl).
+These names are not a command.
+
+```@docs
+ALLOW_MISMATCH_FIELDS
+run_identity
+identity_mismatches
+parse_allow_mismatch
 ```

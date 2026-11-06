@@ -1,7 +1,5 @@
 # First `drive` pays this compile unless it already ran here.
 # A missing script throws before workers, SSH, or a run directory.
-# The hint calls run on a real file: `plan` is syntax-only unless sizing
-# was requested, so this does not start workers either.
 
 using PrecompileTools
 
@@ -23,13 +21,6 @@ using PrecompileTools
                 err isa ErrorException || rethrow()
                 occursin("Script not found", err.msg) || rethrow()
             end
-
-            plain = joinpath(dir, "plain.jl")
-            drive = joinpath(dir, "drive.jl")
-            write(plain, "ys = map(x -> x * x, 1:3)\n")
-            write(drive, "using Distributed\nprintln(pmap(x -> x * x, 1:2))\n")
-            _drive_script_hint_now(plain, dir; shown = "plain.jl")
-            _drive_script_hint_now(drive, dir; shown = "drive.jl")
         finally
             rm(dir; force = true, recursive = true)
         end

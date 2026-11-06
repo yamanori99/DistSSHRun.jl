@@ -305,16 +305,6 @@ function _run_drive_parsed_specialized!(
     proj_dir = resolve_pkg_project_dir(script_dir)
     project_root_abs = canonical_local_path(something(project_root, proj_dir))
     path_anchor = canonical_local_path(project_root_abs)
-    shown = display_path(script_path, path_anchor)
-    # `plan` (and, through it, `size!`) stays out of this method. The hint
-    # runs the same function; only the compile is separate.
-    hint = DistSSHRun._drive_script_hint_now(script_path, proj_dir; shown = shown)
-    if hint !== nothing
-        print_warn("WARNING: "; bold = true)
-        println_fatal(hint)
-        println_fatal()
-    end
-
     DistSSHRun._acquire_kit_inproc_run!(:drive)
     old_run = get(ENV, DistSSHRun.DISTSSHKIT_RUN_DIR_ENV, nothing)
     run_dir = DistSSHRun._ensure_kit_run_dir!(

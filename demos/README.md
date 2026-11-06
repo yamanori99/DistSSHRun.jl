@@ -9,7 +9,7 @@ refused).
   `pipeline!`
 - [`without_kit/`](without_kit/): standalone Julia. `julia …`, `go`, or
   `go!`
-- [`ride/`](ride/): plain scripts for `plan` / `go` / `ride` (`map`, `filter`,
+- [`ride/`](ride/): plain scripts for `go` / `ride` (`map`, `filter`,
   indexed `for`)
 
 ```text
@@ -82,11 +82,10 @@ file (`setup!` first).
 
 - `map_echo.jl` / `map_file.jl` — `map` (ride candidate)
 - `filter_echo.jl` — `filter`
-- `for_loop.jl` — independent indexed `for` (`plan` suggests ride)
+- `for_loop.jl` — independent indexed `for`
 
 ```bash
 julia --project=. -m DistSSHRun demo install ride
-julia --project=. -m DistSSHRun plan distsshkit_demos/ride/map_echo.jl
 julia --project=. -m DistSSHRun ride parent:2 distsshkit_demos/ride/map_echo.jl
 ```
 

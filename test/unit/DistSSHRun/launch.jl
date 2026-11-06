@@ -209,6 +209,7 @@ using TOML
     @test unset_at !== nothing && set_at !== nothing && first(unset_at) < first(set_at)
     @test occursin("OMP_NUM_THREADS=", capped)
 
+    @test DistSSHRun.ALLOW_MISMATCH_FIELDS == (:julia, :distssh, :manifest)
     @test DistSSHRun.parse_allow_mismatch("julia,distssh") == [:julia, :distssh]
     @test DistSSHRun.parse_allow_mismatch(" manifest ") == [:manifest]
     @test_throws ArgumentError DistSSHRun.parse_allow_mismatch("cpu")
@@ -229,12 +230,12 @@ using TOML
         "manifest" => "/job/Manifest.toml",
         "pkg.DistSSHRun" => "0.1.0",
     )
-    lines = DistSSHRun._identity_mismatch_lines(
+    lines = DistSSHRun.identity_mismatches(
         parent, worker;
         shipped_manifest = "/job/Manifest.toml",
     )
     @test any(occursin("julia version", l) for l in lines)
-    allowed = DistSSHRun._identity_mismatch_lines(
+    allowed = DistSSHRun.identity_mismatches(
         parent, worker;
         allow = [:julia],
         shipped_manifest = "/job/Manifest.toml",
@@ -250,19 +251,19 @@ using TOML
         "manifest" => "",
         "pkg.DistSSHRun" => "0.1.0",
     )
-    miss = DistSSHRun._identity_mismatch_lines(
+    miss = DistSSHRun.identity_mismatches(
         parent, missing_man;
         shipped_manifest = "/remote/job/Manifest.toml",
     )
     @test any(occursin("manifest missing", l) for l in miss)
-    waived_man = DistSSHRun._identity_mismatch_lines(
+    waived_man = DistSSHRun.identity_mismatches(
         parent, missing_man;
         allow = [:manifest],
         shipped_manifest = "/remote/job/Manifest.toml",
     )
     @test !any(occursin("manifest", l) for l in waived_man)
 
-    julia_man = DistSSHRun._identity_mismatch_lines(
+    julia_man = DistSSHRun.identity_mismatches(
         parent,
         Dict(
             "version" => "1.13.1",
@@ -274,7 +275,7 @@ using TOML
     )
     @test any(occursin("manifest path", l) for l in julia_man)
 
-    none = DistSSHRun._identity_mismatch_lines(
+    none = DistSSHRun.identity_mismatches(
         Dict(
             "version" => "1.13.1",
             "commit" => "abc",
@@ -290,6 +291,72 @@ using TOML
         shipped_manifest = "",
     )
     @test !any(occursin("manifest", l) for l in none)
+
+    commit_only = DistSSHRun.identity_mismatches(
+        Dict(
+            "version" => "1.13.1",
+            "commit" => "abc",
+            "manifest" => "",
+            "pkg.DistSSHRun" => "0.1.0",
+        ),
+        Dict(
+            "version" => "1.13.1",
+            "commit" => "def",
+            "manifest" => "",
+            "pkg.DistSSHRun" => "0.1.0",
+        ),
+    )
+    @test commit_only == ["julia commit parent=abc worker=def"]
+    waived_commit = DistSSHRun.identity_mismatches(
+        Dict("version" => "1.13.1", "commit" => "abc", "manifest" => ""),
+        Dict("version" => "1.13.1", "commit" => "def", "manifest" => "");
+        allow = [:julia],
+    )
+    @test isempty(waived_commit)
+
+    missing_pkg = DistSSHRun.identity_mismatches(
+        parent,
+        Dict(
+            "version" => "1.13.0",
+            "commit" => "abc",
+            "manifest" => "/job/Manifest.toml",
+        );
+        shipped_manifest = "/job/Manifest.toml",
+    )
+    @test !any(startswith(l, "pkg.") for l in missing_pkg)
+    extra_pkg = DistSSHRun.identity_mismatches(
+        Dict("version" => "1.13.0", "commit" => "abc", "manifest" => ""),
+        Dict(
+            "version" => "1.13.0",
+            "commit" => "abc",
+            "manifest" => "",
+            "pkg.DistSSHQueue" => "0.9.0",
+        ),
+    )
+    @test isempty(extra_pkg)
+    paths = DistSSHRun.identity_mismatches(
+        Dict("version" => "1", "commit" => "a", "julia" => "/a/julia", "manifest" => ""),
+        Dict("version" => "1", "commit" => "a", "julia" => "/b/julia", "manifest" => ""),
+    )
+    @test isempty(paths)
+    same_shipped = DistSSHRun.identity_mismatches(
+        Dict("version" => "1", "commit" => "a", "manifest" => "/parent/Manifest.toml"),
+        Dict("version" => "1", "commit" => "a", "manifest" => "/remote/Manifest.toml");
+        shipped_manifest = "/remote/Manifest.toml",
+    )
+    @test !any(occursin("manifest", l) for l in same_shipped)
+    overridden = DistSSHRun.identity_mismatches(
+        Dict("version" => "1", "commit" => "a", "manifest" => "/parent/Manifest.toml"),
+        Dict("version" => "1", "commit" => "a", "manifest" => "/parent/Manifest.toml");
+        shipped_manifest = "/shipped/Manifest.toml",
+    )
+    @test overridden == ["manifest path parent=/shipped/Manifest.toml worker=/parent/Manifest.toml"]
+    unknown_allow = DistSSHRun.identity_mismatches(
+        parent, worker;
+        allow = [:cpu],
+        shipped_manifest = "/job/Manifest.toml",
+    )
+    @test any(occursin("julia version", l) for l in unknown_allow)
 
     pin = DistSSHRun.pin_local_julia(nothing)
     @test isabspath(pin)
@@ -372,6 +439,13 @@ using TOML
             """
         )
         @test DistSSHRun._existing_project_manifest(proj) == vman
+        ident = DistSSHRun.run_identity(proj)
+        @test ident["manifest"] == vman
+        @test ident["pkg.DistSSHRun"] == "0.1.16"
+        @test ident["version"] == string(VERSION)
+        @test ident["commit"] == string(Base.GIT_VERSION_INFO.commit)
+        @test ident["julia"] == joinpath(Sys.BINDIR, "julia")
+        @test !haskey(ident, "pkg.DistSSHKit")
         old = Base.active_project()
         try
             Pkg.activate(proj; io = devnull)

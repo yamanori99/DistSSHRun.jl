@@ -1,8 +1,7 @@
 #!/usr/bin/env julia
-# Plain script for `plan` / `go` / `ride` (no Distributed).
+# Plain script for `go` / `ride` (no Distributed).
 #
 #   julia demos/ride/map_echo.jl
-#   julia --project=. -m DistSSHRun plan demos/ride/map_echo.jl
 #   julia --project=. -m DistSSHRun ride parent:2 demos/ride/map_echo.jl
 
 function work(x)

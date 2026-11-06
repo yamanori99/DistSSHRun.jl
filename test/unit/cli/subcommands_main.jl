@@ -23,7 +23,7 @@ using Test
         end
     end
 
-    @testset "go, ride, drive, plan empty args and error paths" begin
+    @testset "go, ride, drive empty args and error paths" begin
         let (code, out, err) = _cli_capture(() -> DistSSHRun.go(String[]))
             @test code == 0
             @test occursin("Usage", out * err)
@@ -35,22 +35,6 @@ using Test
         let (code, out, err) = _cli_capture(() -> DistSSHRun.drive(String[]))
             @test code == 0
             @test occursin("Usage", out * err)
-        end
-        let (code, out, err) = _cli_capture(() -> DistSSHRun.run_plan(String[]))
-            @test code == 0
-            @test occursin("Usage", out * err)
-        end
-        let (code, _, _) = _cli_capture(() -> DistSSHRun.run_plan(["/no/such/script.jl"]))
-            @test code == 1
-        end
-        let (code, out, err) = _cli_capture(() -> DistSSHRun.run_plan(["--help", "--nope"]))
-            shown = out * err
-            @test code == 1
-            @test occursin("unknown plan option: --nope", shown)
-            @test occursin("help plan", shown)
-            @test !occursin("--help", shown)
-            @test !occursin("Usage", shown)
-            @test !occursin("Stacktrace", shown)
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.run_size(["--nope", "-h"]))
             shown = out * err
@@ -112,16 +96,12 @@ using Test
                 mkpath(proj_b)
                 write(joinpath(proj_a, "Project.toml"), "name = \"SwitchOne\"\n")
                 write(joinpath(proj_b, "Project.toml"), "name = \"SwitchTwo\"\n")
-                script_a = joinpath(proj_a, "job.jl")
-                script_b = joinpath(proj_b, "job.jl")
-                write(script_a, "println(\"ok_a\")\n")
-                write(script_b, "println(\"ok_b\")\n")
 
                 withenv("DISTRIBUTED_PROJECT_ROOT" => nothing) do
                     let (code_a, out_a, err_a) = cd(proj_a) do
                             _cli_capture(
-                                () -> DistSSHRun.run_plan(
-                                    ["parent", "--gb-per-worker", "0.5", script_a],
+                                () -> DistSSHRun.run_size(
+                                    ["parent", "--gb-per-worker", "0.5"],
                                 ),
                             )
                         end
@@ -131,8 +111,8 @@ using Test
 
                     let (code_b, out_b, err_b) = cd(proj_b) do
                             _cli_capture(
-                                () -> DistSSHRun.run_plan(
-                                    ["parent", "--gb-per-worker", "0.5", script_b],
+                                () -> DistSSHRun.run_size(
+                                    ["parent", "--gb-per-worker", "0.5"],
                                 ),
                             )
                         end
