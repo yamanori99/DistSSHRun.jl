@@ -72,6 +72,7 @@ export read_kit_run_toml
 export result_provenance
 export execute_detached_accepts
 export execute_kwargs_from_parsed
+export detached_launch
 export kit_pid_file_running
 export terminate!
 export terminate_run!

@@ -37,13 +37,111 @@ const _EXECUTE_DETACHED_DRIVE_ONLY = (
     :workers,
     :sync_script,
 )
-const _EXECUTE_DETACHED_ENV_SKIP = Set(
-    (
-        "JULIA_LOAD_PATH",
-        "DISTSSHKIT_CLI_SUBCOMMAND_DONE",
-        "DIST_SSH_KIT_CLI_INCLUDE",
-    )
+const _EXECUTE_DETACHED_HARD_DROP = (
+    "JULIA_LOAD_PATH",
+    "DISTSSHKIT_CLI_SUBCOMMAND_DONE",
+    "DIST_SSH_KIT_CLI_INCLUDE",
 )
+# Removed from the child unless `threads=:unset`. `OPENBLAS_DEFAULT_NUM_THREADS`
+# is dropped and not rewritten. The five BLAS names below are then set to `1`
+# or to `DISTSSHKIT_BLAS_THREADS`.
+const _EXECUTE_DETACHED_THREAD_VARS = (
+    "JULIA_NUM_THREADS",
+    "JULIA_NUM_GC_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "OPENBLAS_DEFAULT_NUM_THREADS",
+    "GOTO_NUM_THREADS",
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "MKL_DOMAIN_NUM_THREADS",
+    "VECLIB_MAXIMUM_THREADS",
+    "BLIS_NUM_THREADS",
+)
+const _EXECUTE_DETACHED_BLAS_SET = (
+    "OPENBLAS_NUM_THREADS",
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "GOTO_NUM_THREADS",
+    "VECLIB_MAXIMUM_THREADS",
+)
+const _EXECUTE_DETACHED_DENY_PARTS = (
+    "SECRET",
+    "PASSWORD",
+    "PASSWD",
+    "TOKEN",
+    "API_KEY",
+    "APIKEY",
+    "ACCESS_KEY",
+    "PRIVATE_KEY",
+    "CREDENTIAL",
+)
+const _EXECUTE_DETACHED_PROXY_NAMES = (
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+    "no_proxy",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "NO_PROXY",
+)
+const _EXECUTE_DETACHED_BASELINE = (
+    "PATH",
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+    "LANG",
+    "LANGUAGE",
+    "TZ",
+    "TERM",
+    "NO_COLOR",
+    "JULIA_DEPOT_PATH",
+    "JULIA_PKG_SERVER",
+    "JULIA_PKG_SERVER_REGISTRY_PREFERENCE",
+    "JULIA_PKG_OFFLINE",
+    "JULIA_PKG_PRECOMPILE_AUTO",
+    "JULIA_PKG_USE_CLI_GIT",
+    "JULIA_SSL_CA_ROOTS_PATH",
+    "JULIA_DISTRIBUTED_EXE",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+    "CURL_CA_BUNDLE",
+    "GIT_SSL_CAINFO",
+    "GIT_SSL_CAPATH",
+    "GIT_SSH_COMMAND",
+    "GIT_EXEC_PATH",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+    "no_proxy",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "NO_PROXY",
+    "LD_LIBRARY_PATH",
+    "DYLD_LIBRARY_PATH",
+    "DYLD_FALLBACK_LIBRARY_PATH",
+    "SSH_AUTH_SOCK",
+    "SSH_AGENT_PID",
+    "KRB5CCNAME",
+    "XDG_RUNTIME_DIR",
+    "XDG_CACHE_HOME",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "CUDA_VISIBLE_DEVICES",
+    "NVIDIA_VISIBLE_DEVICES",
+    "HIP_VISIBLE_DEVICES",
+    "ROCR_VISIBLE_DEVICES",
+    "GPU_DEVICE_ORDINAL",
+)
+const _EXECUTE_DETACHED_PROXY_USERINFO = r"^[A-Za-z][A-Za-z0-9+.-]*://[^/\s]*@"
+# Reports for detached children. The process key keeps `KitProcess` construction unchanged.
+const _DETACHED_LAUNCH = WeakKeyDict{Base.Process, NamedTuple}()
+const _DETACHED_LAUNCH_LOCK = ReentrantLock()
 # Named `execute!` kwargs (not in `_EXECUTE_DETACHED_KW`; they are not `kwargs...`).
 const _EXECUTE_DETACHED_NAMED = (
     :output_dir,
@@ -53,6 +151,10 @@ const _EXECUTE_DETACHED_NAMED = (
     :julia,
     :detached,
     :source,
+    :dir,
+    :threads,
+    :env_allow,
+    :env,
 )
 
 """
@@ -60,9 +162,12 @@ const _EXECUTE_DETACHED_NAMED = (
 
 Whether `execute!(kind, ...; detached=true)` accepts keyword `kw`.
 Uses the same tables as the detached throw path, plus the named parameters
-(`output_dir`, `args`, `project`, `sync`, `julia`, `detached`, `source`).
+(`output_dir`, `args`, `project`, `sync`, `julia`, `detached`, `source`,
+`dir`, `threads`, `env_allow`, `env`).
 `source` is a provenance dict. Detached passes it to the child as
 `DISTSSHKIT_SOURCE_*`. It is not a `go!` / `ride!` / `drive!` keyword.
+`dir`, `threads`, `env_allow`, and `env` are detached launch policy, not
+`go!` / `ride!` / `drive!` keywords.
 """
 function execute_detached_accepts(kw::Symbol; kind::Symbol)::Bool
     _require_execute_kind!(kind)
@@ -89,8 +194,20 @@ Keywords for [`execute!`](@ref) (`detached=true`) from `parse_go_args` /
 Does not include `hosts_file` / `--hosts`: those tokens belong in
 [`host_tokens`](@ref) (`kind` required). Does not set `project`, `detached`,
 `yes`, `job_id`, `remote`, or stdio. Drive `--workers` is `:workers` only
-when the parser set `default_workers`.
+when the parser set `default_workers`. `dir`, `threads`, `env_allow`, and
+`env` are copied only when `parsed` has that property and the value is
+not `nothing`. The go / drive / ride parsers do not grow those fields.
 """
+function _parsed_launch_kwargs!(kw::Dict{Symbol, Any}, parsed)
+    for key in (:dir, :threads, :env_allow, :env)
+        hasproperty(parsed, key) || continue
+        value = getproperty(parsed, key)
+        value === nothing && continue
+        kw[key] = value
+    end
+    return kw
+end
+
 function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
     _require_execute_kind!(kind)
     session = parsed.cli_session
@@ -109,11 +226,11 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
         get(parsed, :allow_external_symlinks, false) &&
             (kw[:allow_external_symlinks] = true)
         parsed.repeat === nothing || (kw[:repeat] = parsed.repeat)
-        return kw
+        return _parsed_launch_kwargs!(kw, parsed)
     end
     if kind === :ride
         kw[:spi_check] = parsed.spi_check
-        return kw
+        return _parsed_launch_kwargs!(kw, parsed)
     end
     kw[:sync] = parsed.sync_mode
     get(parsed, :allow_external_symlinks, false) &&
@@ -128,7 +245,7 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
     get(parsed, :sync_script, false) && (kw[:sync_script] = true)
     dw = parsed.default_workers
     dw === nothing || (kw[:workers] = Int(dw))
-    return kw
+    return _parsed_launch_kwargs!(kw, parsed)
 end
 
 """
@@ -168,6 +285,53 @@ function KitProcess(
         process, kind, _optional_path(output_dir), _optional_path(log_dir),
         stdout_owned, stderr_owned, _optional_path(run_dir),
     )
+end
+
+"""
+    detached_launch(kp::KitProcess) -> NamedTuple
+
+`(dir, threads, dropped, sensitive)` for a detached [`execute!`](@ref) child.
+
+`dir` is the child working directory. `threads` is the `--threads` value,
+or `"unset"` when that flag was omitted. `dropped` is the sorted list of
+parent environment names that were not passed through. `sensitive` is the
+sorted list of names the caller set with `env_allow` or `env` even though
+they match the secret-name denylist. Values are not included.
+
+A handle this function did not record returns `dir=""`, `threads="unset"`,
+and empty lists. Local go slots and local drive workers inherit the child
+environment, so a kept `SSH_AUTH_SOCK` reaches them. SSH workers do not
+receive this process's agent socket.
+"""
+function detached_launch(kp::KitProcess)
+    return lock(_DETACHED_LAUNCH_LOCK) do
+        found = get(_DETACHED_LAUNCH, kp.process, nothing)
+        found === nothing && return (
+            dir = "",
+            threads = "unset",
+            dropped = String[],
+            sensitive = String[],
+        )
+        return (
+            dir = String(found.dir),
+            threads = String(found.threads),
+            dropped = String[String(x) for x in found.dropped],
+            sensitive = String[String(x) for x in found.sensitive],
+        )
+    end
+end
+
+function _remember_detached_launch!(proc::Base.Process, report)
+    stored = (
+        dir = String(report.dir),
+        threads = String(report.threads),
+        dropped = String[String(x) for x in report.dropped],
+        sensitive = String[String(x) for x in report.sensitive],
+    )
+    return lock(_DETACHED_LAUNCH_LOCK) do
+        _DETACHED_LAUNCH[proc] = stored
+        return nothing
+    end
 end
 
 function _close_owned_stdio!(kp::KitProcess)
@@ -281,7 +445,8 @@ Keywords are then an allow-list (unknown names throw):
 `remote`, `hosts_file`, `job_id`, `source`, `allow_mismatch`, and drive-only `log_dir`,
 `enable_log`, `package`, `require_all_hosts`, `skip_hash_check`,
 `mem_headroom`, `parent_gb`, `workers`, `sync_script`,
-`allow_external_symlinks`. `source` is a provenance
+`allow_external_symlinks`, `dir`, `threads`, `env_allow`, and `env`.
+`source` is a provenance
 dict for every kind. Detached passes it as `DISTSSHKIT_SOURCE_*`. Go-only
 `repeat`. Ride: `spi_check` (default
 `false`). Detached argv passes `--spi-check` when true and `--no-spi-check`
@@ -302,6 +467,45 @@ adds `job=<id>` to every `progress:` log line. `DISTSSHKIT_PROGRESS=1` is
 `--progress` verbosity, not a watcher; read lines with
 `DistSSHRun.parse_progress_line` / `DistSSHRun.kit_progress_latest`.
 Omitted entirely when unset.
+
+The detached child starts in `dir` (default: the `project` directory) and
+passes `--history-file=no`. `threads` defaults to `1`, passed as
+`--threads=1` (`Threads.nthreads(:interactive)` is 0 on Julia 1.13).
+`threads=:inherit` passes this process's resolved `--threads` spec.
+`threads=:unset` omits the flag. The child environment keeps an allowlist
+(`PATH`, `HOME`, `JULIA_DEPOT_PATH`, `DISTSSHKIT_*`, `DISTRIBUTED_*`, and
+the other baseline names). `env_allow` adds names to that baseline.
+`:all` copies every non-empty parent variable except the drops below.
+`env` sets values on the child and does not write this process. Names
+containing `COOKIE`, `JULIA_LOAD_PATH`, and the CLI include guards are
+never copied. A recognized proxy value that contains userinfo
+(`http_proxy`, `https_proxy`, `all_proxy`, `no_proxy`, and the uppercase
+names) is dropped unless that name is in `env_allow` or `env`. A
+case-sensitive substring denylist (`SECRET`, `PASSWORD`, `PASSWD`,
+`TOKEN`, `API_KEY`, `APIKEY`, `ACCESS_KEY`, `PRIVATE_KEY`, `CREDENTIAL`)
+drops baseline, prefix, and `:all` copies. An explicit `env_allow` or
+`env` name wins and is recorded as sensitive. A count of dropped names
+is logged. The names, not the values, are in [`detached_launch`](@ref),
+`run.toml` `[launch]`, and the debug log (`JULIA_DEBUG=DistSSHRun`).
+`schema` stays 1.
+
+Local go slots and local drive workers inherit that environment, including
+`SSH_AUTH_SOCK` when it was kept. SSH workers do not receive this
+process's agent socket. A `drive --isolated` grandchild inherits the
+filtered environment. In-process `execute!` and `julia -m DistSSHKit` do
+not use this policy.
+
+```julia
+execute!(kind, script, tokens; detached=true, dir=pwd(), threads=:unset, env_allow=:all)
+```
+
+That restore still drops `JULIA_LOAD_PATH`, the CLI include guards, names
+that contain `COOKIE`, names that contain a denylist substring, and a
+recognized proxy value that contains userinfo. Set a denylisted name or
+such a proxy value with `env`, or name it in an `env_allow` list. The
+list keeps the baseline and those names. It does not copy the rest of
+the parent environment. `JULIA_LOAD_PATH`, the CLI include guards, and
+names that contain `COOKIE` cannot be passed that way.
 """
 function execute!(
         kind::Symbol,
@@ -314,6 +518,10 @@ function execute!(
         julia::Union{Nothing, AbstractString} = nothing,
         detached::Bool = false,
         source::Union{Nothing, AbstractDict} = nothing,
+        dir::Union{Nothing, AbstractString} = nothing,
+        threads::Union{Integer, AbstractString, Symbol} = 1,
+        env_allow = nothing,
+        env::Union{Nothing, AbstractDict} = nothing,
         kwargs...,
     )
     _require_execute_kind!(kind)
@@ -328,9 +536,14 @@ function execute!(
             sync = sync,
             julia = julia,
             source = source,
+            dir = dir,
+            threads = threads,
+            env_allow = env_allow,
+            env = env,
             kwargs...,
         )
     end
+    _reject_inprocess_launch!(dir, threads, env_allow, env)
     _set_provenance_source!(source)
     result = try
         if kind === :go
@@ -459,6 +672,10 @@ function _execute_detached!(
         sync::Union{Symbol, Bool, Nothing},
         julia::Union{Nothing, AbstractString},
         source::Union{Nothing, AbstractDict} = nothing,
+        dir::Union{Nothing, AbstractString} = nothing,
+        threads::Union{Integer, AbstractString, Symbol} = 1,
+        env_allow = nothing,
+        env::Union{Nothing, AbstractDict} = nothing,
         kwargs...,
     )::KitProcess
     for k in keys(kwargs)
@@ -587,6 +804,7 @@ function _execute_detached!(
         output_dir = _prepare_output_dir!(String(output_dir); command = kind, surface = :api)
     end
     proj = canonical_local_path(project)
+    launch_dir = _detached_launch_dir(dir, proj)
     script_path = canonical_local_path(script)
     job_id = get(kwargs, :job_id, nothing)
     job_id_s = if job_id !== nothing && !isempty(strip(String(job_id)))
@@ -644,21 +862,31 @@ function _execute_detached!(
     for (envk, envv) in _provenance_source_env(source)
         extra[envk] = envv
     end
-    env = _execute_detached_env(extra)
-    _drop_unspecified_source_env!(env, source, extra)
+    built = _detached_child_env(
+        ENV, extra;
+        threads = threads,
+        env_allow = env_allow,
+        env = env,
+        launch_dir = launch_dir,
+        source = source,
+    )
+    _log_detached_dropped!(built.dropped)
     julia_bin = resolve_controller_julia(julia)
     child_proj = _detached_julia_project(proj)
-    cmd = Cmd(
-        String[
-            julia_bin,
-            "--startup-file=no",
-            "--project=$(child_proj)",
-            "-m",
-            _detached_m_package(child_proj),
-            argv...,
-        ]
+    julia_argv = String[
+        julia_bin,
+        "--startup-file=no",
+        "--history-file=no",
+    ]
+    built.threads == "unset" || push!(julia_argv, "--threads=$(built.threads)")
+    push!(
+        julia_argv,
+        "--project=$(child_proj)",
+        "-m",
+        _detached_m_package(child_proj),
     )
-    child = ignorestatus(setenv(cmd, env))
+    append!(julia_argv, argv)
+    child = ignorestatus(setenv(Cmd(julia_argv), built.env; dir = launch_dir))
     stdio_out, stdio_err, owned_out, owned_err = _execute_detached_stdio(kwargs, run_dir)
     proc = try
         run(pipeline(child; stdout = stdio_out, stderr = stdio_err); wait = false)
@@ -668,6 +896,15 @@ function _execute_detached!(
         end
         rethrow()
     end
+    _remember_detached_launch!(
+        proc,
+        (
+            dir = launch_dir,
+            threads = built.threads,
+            dropped = built.dropped,
+            sensitive = built.sensitive,
+        ),
+    )
     _write_detached_kit_pid_file!(
         proc, resolved_output, resolved_log;
         job_id = job_id_s,
@@ -1712,15 +1949,314 @@ function _execute_detached_argv(
     return argv
 end
 
-function _execute_detached_env(extra::AbstractDict{<:AbstractString, <:AbstractString})::Dict{String, String}
-    env = Dict{String, String}(
-        String(k) => String(v) for (k, v) in ENV if !isempty(v) && !(String(k) in _EXECUTE_DETACHED_ENV_SKIP)
+"""Log how many names were dropped. The name list is debug-only. Never log values."""
+function _log_detached_dropped!(dropped::AbstractVector{<:AbstractString})
+    isempty(dropped) && return nothing
+    n = length(dropped)
+    @info "detached execute!: dropped $n environment variables not on the allowlist. Names are in detached_launch, run.toml [launch], and the debug log (JULIA_DEBUG=DistSSHRun)."
+    @debug "detached execute!: dropped environment variable names" names = join(dropped, ", ")
+    return nothing
+end
+
+function _reject_inprocess_launch!(dir, threads, env_allow, env)
+    dir === nothing || throw(
+        ArgumentError(
+            "execute!(...; detached=false) does not accept dir",
+        )
     )
-    env["DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL"] = "1"
-    for (k, v) in extra
-        env[String(k)] = String(v)
+    _detached_threads_is_default(threads) || throw(
+        ArgumentError(
+            "execute!(...; detached=false) does not accept threads",
+        )
+    )
+    env_allow === nothing || throw(
+        ArgumentError(
+            "execute!(...; detached=false) does not accept env_allow",
+        )
+    )
+    env === nothing || throw(
+        ArgumentError(
+            "execute!(...; detached=false) does not accept env",
+        )
+    )
+    return nothing
+end
+
+function _detached_threads_is_default(threads)::Bool
+    threads isa Bool && return false
+    threads isa Integer || return false
+    return Int(threads) == 1
+end
+
+"""`N` or `N,M` from resolved counts. `ni == 0` omits the interactive pool."""
+function _detached_threads_from_counts(n::Integer, ni::Integer)::String
+    n isa Bool && throw(ArgumentError("threads must be >= 1, got $(repr(n))"))
+    ni isa Bool && throw(ArgumentError("interactive threads must be >= 0, got $(repr(ni))"))
+    nn = Int(n)
+    nni = Int(ni)
+    nn >= 1 || throw(ArgumentError("threads must be >= 1, got $nn"))
+    nni >= 0 || throw(ArgumentError("interactive threads must be >= 0, got $nni"))
+    return nni > 0 ? "$(nn),$(nni)" : string(nn)
+end
+
+function _detached_thread_flag(threads)::String
+    threads isa Bool && throw(
+        ArgumentError(
+            "threads must be an integer, a thread spec, :inherit, or :unset, got $(repr(threads))",
+        )
+    )
+    if threads isa Integer
+        return _detached_threads_from_counts(threads, 0)
     end
-    return env
+    if threads isa Symbol
+        threads === :inherit && return _launch_thread_spec()
+        threads === :unset && return "unset"
+        throw(
+            ArgumentError(
+                "threads must be an integer, a thread spec, :inherit, or :unset, got $(repr(threads))",
+            )
+        )
+    end
+    threads isa AbstractString || throw(
+        ArgumentError(
+            "threads must be an integer, a thread spec, :inherit, or :unset, got $(repr(threads))",
+        )
+    )
+    s = strip(String(threads))
+    s == "auto" && return "auto"
+    if occursin(r"^[1-9][0-9]*$", s)
+        return s
+    end
+    m = match(r"^([1-9][0-9]*),([0-9]+)$", s)
+    m === nothing && throw(
+        ArgumentError(
+            "threads must be an integer, auto, N,M, :inherit, or :unset, got $(repr(threads))",
+        )
+    )
+    n = parse(Int, String(something(m.captures[1], "")))
+    ni = parse(Int, String(something(m.captures[2], "")))
+    ni >= 0 || throw(ArgumentError("interactive threads must be >= 0, got $ni"))
+    return "$(n),$(ni)"
+end
+
+function _detached_launch_dir(dir, project::AbstractString)::String
+    raw = dir === nothing ? String(project) : String(dir)
+    d = canonical_local_path(raw)
+    isdir(d) || throw(ArgumentError("detached execute! dir is not a directory: $(d)"))
+    # `canonical_local_path` is `abspath` and does not resolve symlinks.
+    # macOS `getcwd` turns `/var` into `/private/var`, so the child `pwd()`
+    # would not match the directory we passed. Pass the physical path.
+    return canonical_local_path(realpath(d))
+end
+
+function _detached_env_name_ok(name::AbstractString)
+    s = String(name)
+    (isempty(s) || occursin('=', s) || occursin('\0', s)) && throw(
+        ArgumentError(
+            "detached execute! env name is invalid: $(repr(s))",
+        )
+    )
+    occursin(r"^[A-Za-z_][A-Za-z0-9_]*$", s) || throw(
+        ArgumentError(
+            "detached execute! env name is invalid: $(repr(s))",
+        )
+    )
+    return s
+end
+
+_detached_cookie_name(name::AbstractString)::Bool = occursin("COOKIE", uppercase(String(name)))
+
+function _detached_sensitive_name(name::AbstractString)::Bool
+    s = String(name)
+    for part in _EXECUTE_DETACHED_DENY_PARTS
+        occursin(part, s) && return true
+    end
+    return false
+end
+
+function _detached_prefix_keep(name::AbstractString)::Bool
+    s = String(name)
+    return startswith(s, "LC_") || startswith(s, "DISTSSHKIT_") || startswith(s, "DISTRIBUTED_")
+end
+
+function _detached_proxy_userinfo(name::AbstractString, value::AbstractString)::Bool
+    String(name) in _EXECUTE_DETACHED_PROXY_NAMES || return false
+    return occursin(_EXECUTE_DETACHED_PROXY_USERINFO, String(value))
+end
+
+function _detached_reject_explicit_name!(name::AbstractString; threads_unset::Bool)
+    s = _detached_env_name_ok(name)
+    if s in _EXECUTE_DETACHED_HARD_DROP
+        throw(ArgumentError("detached execute! cannot pass $(s)"))
+    end
+    if s == "JULIA_NUM_THREADS" && !threads_unset
+        throw(
+            ArgumentError(
+                "detached execute! cannot pass JULIA_NUM_THREADS unless threads=:unset",
+            )
+        )
+    end
+    return s
+end
+
+function _detached_normalize_allow(env_allow, threads_unset::Bool)
+    env_allow === nothing && return String[]
+    env_allow === :all && return :all
+    env_allow isa AbstractVector || throw(
+        ArgumentError(
+            "env_allow must be nothing, a list of names, or :all, got $(repr(env_allow))",
+        )
+    )
+    out = String[]
+    for item in env_allow
+        item isa AbstractString || throw(
+            ArgumentError(
+                "env_allow names must be strings, got $(repr(item))",
+            )
+        )
+        push!(out, _detached_reject_explicit_name!(item; threads_unset = threads_unset))
+    end
+    return out
+end
+
+function _detached_normalize_sets(env, threads_unset::Bool)::Dict{String, String}
+    env === nothing && return Dict{String, String}()
+    env isa AbstractDict || throw(
+        ArgumentError(
+            "env must be nothing or a Dict of strings, got $(repr(env))",
+        )
+    )
+    out = Dict{String, String}()
+    for (k, v) in env
+        k isa AbstractString || throw(
+            ArgumentError(
+                "env names must be strings, got $(repr(k))",
+            )
+        )
+        v isa AbstractString || throw(
+            ArgumentError(
+                "env values must be strings, got $(repr(v))",
+            )
+        )
+        name = _detached_reject_explicit_name!(k; threads_unset = threads_unset)
+        out[name] = String(v)
+    end
+    return out
+end
+
+"""Child environment, dropped parent names, and sensitive explicit names.
+
+`parent` is not modified. Thread and BLAS variables stay out unless
+`threads` is `:unset`. The five BLAS variables are then set to
+`DISTSSHKIT_BLAS_THREADS` or `"1"`. `OPENBLAS_DEFAULT_NUM_THREADS` is not
+set. Bookkeeping `DISTSSHKIT_LAUNCH_*` and `DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL`
+are written on the child only.
+"""
+function _detached_child_env(
+        parent::AbstractDict,
+        extra::AbstractDict{<:AbstractString, <:AbstractString};
+        threads,
+        env_allow,
+        env,
+        launch_dir::AbstractString,
+        source::Union{Nothing, AbstractDict},
+    )
+    flag = _detached_thread_flag(threads)
+    unset = flag == "unset"
+    allow = _detached_normalize_allow(env_allow, unset)
+    sets = _detached_normalize_sets(env, unset)
+    allow_set = allow === :all ? Set{String}() : Set{String}(allow)
+    child = Dict{String, String}()
+    sensitive = String[]
+    baseline = Set{String}(_EXECUTE_DETACHED_BASELINE)
+    hard = Set{String}(_EXECUTE_DETACHED_HARD_DROP)
+    thread_vars = Set{String}(_EXECUTE_DETACHED_THREAD_VARS)
+
+    function take_parent!(name::AbstractString, value::AbstractString; explicit_name::Bool)
+        isempty(value) && return nothing
+        _detached_cookie_name(name) && return nothing
+        name in hard && return nothing
+        !unset && name in thread_vars && return nothing
+        if !explicit_name && _detached_proxy_userinfo(name, value)
+            return nothing
+        end
+        if _detached_sensitive_name(name) && !explicit_name
+            return nothing
+        end
+        child[String(name)] = String(value)
+        if explicit_name && _detached_sensitive_name(name)
+            push!(sensitive, String(name))
+        end
+        return nothing
+    end
+
+    for (k, v) in parent
+        name = String(k)
+        value = v isa AbstractString ? String(v) : string(v)
+        isempty(value) && continue
+        explicit_name = name in allow_set
+        take = allow === :all || explicit_name || name in baseline || _detached_prefix_keep(name)
+        take || continue
+        take_parent!(name, value; explicit_name = explicit_name)
+    end
+
+    for (name, value) in sets
+        if isempty(value)
+            delete!(child, name)
+            continue
+        end
+        if _detached_cookie_name(name) || name in hard
+            continue
+        end
+        if !unset && name in thread_vars
+            continue
+        end
+        child[name] = value
+        _detached_sensitive_name(name) && push!(sensitive, name)
+    end
+
+    for (k, v) in extra
+        child[String(k)] = String(v)
+    end
+    _drop_unspecified_source_env!(child, source, extra)
+
+    if !unset
+        for name in thread_vars
+            delete!(child, name)
+        end
+        blas = strip(get(child, "DISTSSHKIT_BLAS_THREADS", ""))
+        blas_value = isempty(blas) ? "1" : blas
+        for name in _EXECUTE_DETACHED_BLAS_SET
+            child[name] = blas_value
+        end
+    end
+
+    dropped = String[]
+    for (k, v) in parent
+        name = String(k)
+        value = v isa AbstractString ? String(v) : string(v)
+        isempty(value) && continue
+        haskey(child, name) || push!(dropped, name)
+    end
+    for name in keys(sets)
+        _detached_cookie_name(name) || continue
+        name in dropped || push!(dropped, name)
+    end
+    sort!(dropped)
+    unique!(dropped)
+    sort!(sensitive)
+    unique!(sensitive)
+
+    child["DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL"] = "1"
+    child["DISTSSHKIT_LAUNCH_THREADS"] = flag
+    child["DISTSSHKIT_LAUNCH_DIR"] = String(launch_dir)
+    child["DISTSSHKIT_LAUNCH_DROPPED"] = join(dropped, ",")
+    return (
+        env = child,
+        dropped = dropped,
+        sensitive = sensitive,
+        threads = flag,
+    )
 end
 
 function _result_with_stop(result::KitRunResult, stop::Union{Nothing, Symbol})::KitRunResult

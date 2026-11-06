@@ -213,6 +213,27 @@ function _recorded_env_names()::Vector{String}
     return names
 end
 
+"""`[launch]` when this process is a detached child (`DISTSSHKIT_LAUNCH_THREADS`).
+
+`dir` is recorded with the same path rules as `output_dir`. `dropped` is
+the comma-separated name list. Schema stays 1. In-process runs leave the
+table out.
+"""
+function _launch_table_from_env(project_root)::Union{Nothing, Dict{String, Any}}
+    threads = strip(get(ENV, "DISTSSHKIT_LAUNCH_THREADS", ""))
+    isempty(threads) && return nothing
+    table = Dict{String, Any}("threads" => threads)
+    dir = strip(get(ENV, "DISTSSHKIT_LAUNCH_DIR", ""))
+    isempty(dir) || (table["dir"] = _record_path(dir, project_root))
+    dropped = String[]
+    for part in split(get(ENV, "DISTSSHKIT_LAUNCH_DROPPED", ""), ',')
+        name = strip(String(part))
+        isempty(name) || push!(dropped, name)
+    end
+    table["dropped"] = dropped
+    return table
+end
+
 """Write machine-readable `run.toml` under `run_dir`. Never throws."""
 function write_kit_run_toml!(
         run_dir::AbstractString;
@@ -244,6 +265,8 @@ function write_kit_run_toml!(
     isempty(cols) || (data["collect_dirs"] = String[_record_path(p, project_root) for p in cols])
     env_names = _recorded_env_names()
     isempty(env_names) || (data["env"] = env_names)
+    launch = _launch_table_from_env(project_root)
+    launch === nothing || (data["launch"] = launch)
     if result !== nothing
         data["ok"] = result.ok
         data["exit_code"] = result.exit_code

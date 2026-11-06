@@ -61,18 +61,20 @@ end
         cp(fixture, script; force = true)
         mktemp() do out_path, out_io
             mktemp() do _, err_io
-                kp = DistSSHRun.execute!(
-                    :drive,
-                    script,
-                    ["parent:2"];
-                    detached = true,
-                    project = proj,
-                    verbosity = :verbose,
-                    mem_headroom = 0.5,
-                    parent_gb = 0.2,
-                    stdout = out_io,
-                    stderr = err_io,
-                )
+                _, kp = _capture_detached_env_log() do
+                    DistSSHRun.execute!(
+                        :drive,
+                        script,
+                        ["parent:2"];
+                        detached = true,
+                        project = proj,
+                        verbosity = :verbose,
+                        mem_headroom = 0.5,
+                        parent_gb = 0.2,
+                        stdout = out_io,
+                        stderr = err_io,
+                    )
+                end
                 @test kp isa DistSSHRun.KitProcess
                 @test kp.kind === :drive
                 @test kp.run_dir !== nothing
@@ -106,18 +108,20 @@ end
         dest = joinpath(proj, "from_hook")
         mktemp() do _, out_io
             mktemp() do _, err_io
-                kp = DistSSHRun.execute!(
-                    :drive,
-                    script,
-                    ["parent:1"];
-                    detached = true,
-                    project = proj,
-                    args = ["--out", dest],
-                    verbosity = :quiet,
-                    yes = true,
-                    stdout = out_io,
-                    stderr = err_io,
-                )
+                _, kp = _capture_detached_env_log() do
+                    DistSSHRun.execute!(
+                        :drive,
+                        script,
+                        ["parent:1"];
+                        detached = true,
+                        project = proj,
+                        args = ["--out", dest],
+                        verbosity = :quiet,
+                        yes = true,
+                        stdout = out_io,
+                        stderr = err_io,
+                    )
+                end
                 result = wait(kp)
                 @test result.ok
                 @test result.output_dir == DistSSHRun.canonical_local_path(dest)
