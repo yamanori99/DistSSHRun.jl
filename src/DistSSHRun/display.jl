@@ -2538,9 +2538,9 @@ function warn(msg)
     return nothing
 end
 
-"""One error line after a live phase bar (the bar line is finished first)."""
+"""One error line after a live phase bar; two-space indent like [`fail`](@ref)."""
 function println_err_after_progress(msg)
-    text = string(msg)
+    text = "  " * string(msg)
     _progress_release_line!()
     print_err(text * "\n")
     return nothing

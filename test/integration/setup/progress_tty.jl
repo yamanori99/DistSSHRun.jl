@@ -136,7 +136,9 @@ using Test
         @test any(l -> strip(l) == "✗ ssh not found in PATH" || strip(l) == "  ✗ ssh not found in PATH", check_lines)
         finals = filter(l -> occursin("Prerequisites not met", l), check_lines)
         @test length(finals) == 1
-        @test strip(finals[1]) == "Prerequisites not met. Fix issues above and retry."
+        @test finals[1] == "  Prerequisites not met. Fix issues above and retry."
+        @test !bar_line(finals[1])
+        @test !occursin("[K", finals[1])
         ssh_at = findfirst("ssh not found in PATH", check_tty)
         pre_at = findfirst("Prerequisites not met", check_tty)
         @test ssh_at !== nothing && pre_at !== nothing && first(ssh_at) < first(pre_at)
@@ -170,5 +172,8 @@ using Test
         pipe_ssh = findfirst("ssh not found in PATH", check_pipe)
         pipe_pre = findfirst("Prerequisites not met", check_pipe)
         @test pipe_ssh !== nothing && pipe_pre !== nothing && first(pipe_ssh) < first(pipe_pre)
+        pipe_finals = filter(l -> occursin("Prerequisites not met", l), tty_lines(check_pipe))
+        @test length(pipe_finals) == 1
+        @test pipe_finals[1] == "  Prerequisites not met. Fix issues above and retry."
     end
 end
