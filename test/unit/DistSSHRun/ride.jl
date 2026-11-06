@@ -105,6 +105,40 @@ using Test
         @test DistSSHRun.kit_run_result(bad).failed_step == "ride"
     end
 
+    @testset "script scan" begin
+        _with_tempdir() do tmp
+            function _scan(name, src)
+                path = joinpath(tmp, name)
+                write(path, src)
+                return DistSSHRun._script_scan(path)
+            end
+            @test _scan("defworkers.jl", "workers() = 4\n").drive_line === nothing
+            @test _scan("fnworkers.jl", "function workers()\n    4\nend\n").drive_line === nothing
+            @test _scan("foopmap.jl", "Foo.pmap(identity, 1:2)\n").drive_line === nothing
+            @test _scan("itmap.jl", "Iterators.map(identity, 1:2)\n").drive_line === nothing
+            @test _scan(
+                "thspawn.jl",
+                "using Base.Threads: @spawn\n@spawn 1\n",
+            ).drive_line === nothing
+            @test _scan("map2.jl", "map(f, a, b)\n").drive_line === nothing
+            dist_every = _scan("devery.jl", "Distributed.@everywhere x = 1\n")
+            @test dist_every.error === nothing
+            @test dist_every.drive_line !== nothing
+            dist_pmap = _scan("dpmap.jl", "Distributed.pmap(identity, 1:2)\n")
+            @test dist_pmap.drive_line !== nothing
+            bare_spawn = _scan("bspawn.jl", "@spawn 1\n")
+            @test bare_spawn.drive_line !== nothing
+            missing = DistSSHRun._script_scan(joinpath(tmp, "nope.jl"))
+            missing_error = missing.error
+            @test missing_error isa String
+            @test occursin("file not found", missing_error::String)
+            bad = _scan("bad.jl", "function foo(\n")
+            bad_error = bad.error
+            @test bad_error isa String
+            @test occursin("ParseError", bad_error::String)
+        end
+    end
+
     _with_tempdir() do tmp
         out = joinpath(tmp, "out.txt")
         map_path = joinpath(tmp, "mapped.jl")

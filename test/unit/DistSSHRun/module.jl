@@ -19,15 +19,15 @@ using Test
     # `names` lists public names too. Whether `using` imports a name is `isexported`.
     ns = names(DistSSHRun)
     not_exported(name) = !Base.isexported(DistSSHRun, name) && Base.ispublic(DistSSHRun, name)
-    @test :size! in ns && :go! in ns && :drive! in ns && :plan in ns
+    @test :size! in ns && :go! in ns && :drive! in ns && :plan ∉ ns
     @test :pool! in ns && :ResourcePool in ns && :HostInventory in ns
     @test not_exported(:print_pool)
     @test :worker_plan_from_pool ∉ ns
     @test :ride! in ns && :RideResult in ns
     @test not_exported(:print_ride)
     @test Base.isexported(DistSSHRun, :parse_ride_args) && :show_ride_usage ∉ ns
-    @test :plan! ∉ ns && :KitPlan in ns && :PlanFinding in ns
-    @test not_exported(:print_plan)
+    @test :plan! ∉ ns && :KitPlan ∉ ns && :PlanFinding ∉ ns
+    @test :print_plan ∉ ns
     @test :parse_plan_args ∉ ns && :show_plan_usage ∉ ns
     @test :parse_pool_args ∉ ns && :show_pool_usage ∉ ns
     @test :stored_path in ns && :file_sha256 in ns && :cache_file in ns

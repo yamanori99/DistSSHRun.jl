@@ -1,7 +1,7 @@
 # DistSSHRun
 
 DistSSHRun is one run on shared machines over SSH: `setup`, `go`,
-`ride`, `drive`, `plan`, `size`, `pool`, `demo`, and `progress`.
+`ride`, `drive`, `size`, `pool`, `demo`, and `progress`.
 Supported on **macOS, Linux, and WSL2 Ubuntu** (not native Windows).
 
 The command is `julia -m DistSSHRun`.
@@ -131,7 +131,6 @@ julia -m DistSSHRun setup --check child:host1
 julia -m DistSSHRun go SCRIPT.jl
 julia -m DistSSHRun ride parent:2 SCRIPT.jl
 julia -m DistSSHRun drive parent:2 SCRIPT.jl
-julia -m DistSSHRun plan SCRIPT.jl
 julia -m DistSSHRun size
 julia -m DistSSHRun pool
 ```

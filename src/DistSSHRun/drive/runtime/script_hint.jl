@@ -1,6 +1,9 @@
-# Drive publish extract and the plain-script hint.
-# Included after `plan.jl`: these call `_plan_call_name`, `plan`, and `KitPlan`.
-# `_drive_script_hint_now` uses `invokelatest` so `run_drive_parsed!` does not infer `plan`.
+# Drive publish extract. Independent of `script_scan.jl`.
+
+function _drive_call_name(f)::Union{Nothing, Symbol}
+    f isa Symbol && return f
+    return nothing
+end
 
 function _drive_is_short_method(ex::Expr)::Bool
     ex.head === :(=) || return false
@@ -14,7 +17,7 @@ end
 
 function _drive_is_include_call(ex::Expr)::Bool
     ex.head === :call && !isempty(ex.args) || return false
-    return _plan_call_name(ex.args[1]) === :include
+    return _drive_call_name(ex.args[1]) === :include
 end
 
 function _drive_keep_publish(ex)::Bool
@@ -119,50 +122,4 @@ function _drive_publish_source(
     src, warns = _drive_publish_extract(script_path)
     warn_skipped_include && _drive_print_skipped_include_warns!(warns)
     return src
-end
-
-function _drive_plain_script_hint(
-        kp::KitPlan;
-        shown::AbstractString = kp.script,
-    )::String
-    cmd = String(kp.suggest)
-    shown_s = String(shown)
-    return string(
-        "drive: no Distributed vocabulary in this file (plan suggests $cmd)\n",
-        "  $shown_s\n\n",
-        "  Load is this include (once). Publish sends defs / using / include to workers.\n",
-        "  Run is main() if defined; otherwise Load is the run. plan scans this file only.\n",
-        "  Full-file worker include: --sync-script. Rewrite or independent slots:\n\n",
-        "    julia --project=. -m DistSSHKit $cmd $shown_s",
-    )
-end
-
-"""Same words as [`_drive_plain_script_hint`](@ref), compiled apart from `drive`.
-
-`plan` is syntax-only here, but inferring it also infers `size!`. Resolving
-the call when the hint runs keeps that tree out of `run_drive_parsed!`.
-"""
-function _drive_script_hint_now(
-        script_path::AbstractString,
-        project::AbstractString;
-        shown::AbstractString,
-    )::Union{Nothing, String}
-    return Base.invokelatest(
-        _drive_plain_script_hint,
-        script_path,
-        project;
-        shown = shown,
-    )
-end
-
-"""`nothing` if this file has Distributed vocabulary; otherwise a warning body."""
-function _drive_plain_script_hint(
-        script_path::AbstractString,
-        project::AbstractString;
-        shown::AbstractString = script_path,
-    )::Union{Nothing, String}
-    kp = plan(script_path; project = project)
-    kp.ok || return nothing
-    any(f -> f.status === :drive_vocab, kp.findings) && return nothing
-    return _drive_plain_script_hint(kp; shown = shown)
 end

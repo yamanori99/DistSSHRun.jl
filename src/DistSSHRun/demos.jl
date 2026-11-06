@@ -320,7 +320,7 @@ function show_demo_usage(io::IO = stdout)
         io,
         "  with_kit/     Drivers for drive / pipeline!",
         "  without_kit/  Kit-independent scripts (julia / go / go!)",
-        "  ride/         Plain scripts for plan / go / ride (map, filter, for)",
+        "  ride/         Plain scripts for go / ride (map, filter, for)",
     )
     print_help_blank(io)
     print_help_section("Demos (demo install)"; io = io)
@@ -392,7 +392,6 @@ function demo(args::Vector{String} = copy(ARGS))::Cint
                 println("  $(cli_m_project()) drive parent:2 $rel_demos/with_kit/square_file.jl")
                 println("  julia --project=. $rel_demos/with_kit/pipeline_square.jl")
             elseif family == "ride"
-                println("  $(cli_m_project()) plan $rel_demos/ride/map_echo.jl")
                 println("  $(cli_m_project()) ride parent:2 $rel_demos/ride/map_echo.jl")
             else
                 println("  julia --project=. $rel_demos/without_kit/pipeline_pi.jl")

@@ -1,7 +1,6 @@
 #!/usr/bin/env julia
-# Independent indexed `for` (`dest[i] = …`). `plan` suggests ride.
+# Independent indexed `for` (`dest[i] = …`).
 #
-#   julia --project=. -m DistSSHRun plan demos/ride/for_loop.jl
 #   julia --project=. -m DistSSHRun ride parent:2 demos/ride/for_loop.jl
 
 xs = 1:4

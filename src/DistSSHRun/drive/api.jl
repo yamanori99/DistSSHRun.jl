@@ -6,9 +6,8 @@
     drive!(script, workers::AbstractVector; kwargs...)
 
 Run a driver script on workers. Tokens match the CLI (`parent:2`, `child:user@host:1`).
-A file with no Distributed vocabulary warns (this-file scan only) and still runs.
 Load is the master `include`. Publish sends definitions to workers (not top-level
-work). Run is `main()` when defined. Use [`plan`](@ref) / [`go!`](@ref) / [`ride!`](@ref)
+work). Run is `main()` when defined. Use [`go!`](@ref) / [`ride!`](@ref)
 when that matches the script.
 
 ```julia

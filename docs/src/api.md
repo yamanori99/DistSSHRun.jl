@@ -39,15 +39,9 @@ end
 wait(::KitProcess)
 ```
 
-## Plan and size
+## Size
 
-!!! warning "Experimental"
-    `plan`, `KitPlan`, `PlanFinding`, and `print_plan` are experimental in 0.2.
-    A patch release may change them. Pin `DistSSHRun = "=0.2.0"` to keep that
-    surface. `size!` and `WorkerPlan` are not experimental. `pool!` is not either.
-
-`plan` reads a script and reports how it would split. `size!` and `pool!`
-measure memory and the free slots on a host.
+`size!` and `pool!` measure memory and the free slots on a host.
 
 ```@autodocs
 Modules = [DistSSHRun, DistSSHRun.DistSSHSize]
@@ -55,7 +49,6 @@ Public = true
 Private = false
 Filter = function (x)
     names = (
-        :plan, :KitPlan, :PlanFinding, :print_plan,
         :size!, :WorkerPlan, :pool!, :ResourcePool, :HostInventory, :print_pool,
     )
     n = try
@@ -132,7 +125,6 @@ Filter = function (x)
         :terminate!, :terminate_run!, :kit_result_from_dir, :result_run_dir, :result_provenance,
         :result_content_tree_hash, :result_remote_run_id,
         :ride!, :RideResult, :print_ride,
-        :plan, :KitPlan, :PlanFinding, :print_plan,
         :size!, :WorkerPlan, :pool!, :ResourcePool, :HostInventory, :print_pool,
         :pipeline!, :PipelineConfig, :PipelineResult, :pipeline_config_from_env,
         :report_pipeline_errors,
