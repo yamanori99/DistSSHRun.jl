@@ -139,10 +139,13 @@ Filter = function (x)
         :collect!, :CollectResult,
         :setup!, :sync!, :instantiate!,
         :KitSession, :HostResult, :SyncResult,
+        :ALLOW_MISMATCH_FIELDS,
     )
     n = try
         nameof(x)
     catch
+        # A tuple has no `nameof`. Identity documents this constant.
+        x === DistSSHRun.ALLOW_MISMATCH_FIELDS && return false
         return true
     end
     # Family contract (`public`), not the user manual. Exported names stay.
@@ -159,4 +162,20 @@ end
 
 ```@docs
 DistSSHBase.shell_status
+```
+
+## Identity
+
+[`run_identity`](@ref), [`identity_mismatches`](@ref), and
+[`parse_allow_mismatch`](@ref) are public and are not exported.
+[`go!`](@ref), [`ride!`](@ref), and [`drive!`](@ref) keep
+`--allow-mismatch` and these lines. Add
+[DistSSHKit](https://github.com/yamanori99/DistSSHKit.jl).
+These names are not a command.
+
+```@docs
+ALLOW_MISMATCH_FIELDS
+run_identity
+identity_mismatches
+parse_allow_mismatch
 ```

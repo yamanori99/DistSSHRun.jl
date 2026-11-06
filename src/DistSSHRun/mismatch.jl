@@ -1,6 +1,13 @@
 # Worker identity vs the job tree. Default is error; `--allow-mismatch` waives fields.
 
+"""
+    ALLOW_MISMATCH_FIELDS
+
+`--allow-mismatch` tokens: `:julia`, `:distssh`, and `:manifest`.
+"""
 const ALLOW_MISMATCH_FIELDS = (:julia, :distssh, :manifest)
+public ALLOW_MISMATCH_FIELDS
+
 const _ALLOW_MISMATCH = Ref{Vector{Symbol}}(Symbol[])
 
 function with_allow_mismatch(f::Function, syms)
@@ -13,6 +20,12 @@ function with_allow_mismatch(f::Function, syms)
     end
 end
 
+"""
+    parse_allow_mismatch(raw::AbstractString) -> Vector{Symbol}
+
+Comma-separated `--allow-mismatch` list. Spaces are ignored and duplicates
+are dropped. An unknown token throws `ArgumentError`.
+"""
 function parse_allow_mismatch(raw::AbstractString)::Vector{Symbol}
     out = Symbol[]
     for part in split(String(raw), ',')
@@ -28,6 +41,7 @@ function parse_allow_mismatch(raw::AbstractString)::Vector{Symbol}
     end
     return out
 end
+public parse_allow_mismatch
 
 function merge_allow_mismatch!(
         dest::Vector{Symbol},
@@ -102,7 +116,20 @@ function _existing_project_manifest(project::AbstractString)::String
     return ""
 end
 
-function parent_run_identity(project::AbstractString)::Dict{String, String}
+"""
+    run_identity(project::AbstractString) -> Dict{String,String}
+
+This process, plus the Manifest of `project`.
+
+- `"version"` is `string(VERSION)`.
+- `"commit"` is this Julia's git commit.
+- `"julia"` is `joinpath(Sys.BINDIR, "julia")`. [`identity_mismatches`](@ref) does not compare it.
+- `"manifest"` is the Manifest path Julia selects for `project`, or `""`.
+- `"pkg.DistSSHRun"`, `"pkg.DistSSHKit"`, `"pkg.DistSSHQueue"`, and `"pkg.DistSSHBase"` are version strings from that Manifest. Loaded `pkgversion` is not read.
+
+Reads the project tree. Does not activate it, write the depot, set environment variables, or SSH.
+"""
+function run_identity(project::AbstractString)::Dict{String, String}
     proj = canonical_local_path(project)
     man = _existing_project_manifest(proj)
     ident = Dict{String, String}(
@@ -116,6 +143,7 @@ function parent_run_identity(project::AbstractString)::Dict{String, String}
     end
     return ident
 end
+public run_identity
 
 """Base-only snapshot on a worker (no DistSSHRun)."""
 function _worker_identity_expr()
@@ -176,32 +204,50 @@ function _worker_identity_expr()
     end
 end
 
-function _identity_mismatch_lines(
+"""
+    identity_mismatches(parent, other; allow=Symbol[], shipped_manifest="") -> Vector{String}
+
+Same lines as [`go!`](@ref), [`ride!`](@ref), and [`drive!`](@ref). An empty
+vector matches. This does not throw, print, or read `DISTSSHKIT_QUIET`.
+
+`:julia` in `allow` skips both `"version"` and `"commit"`. `:distssh` skips
+`pkg.*`. `:manifest` skips the Manifest path. Any other symbol does not throw
+and waives nothing. Parse a CLI list with [`parse_allow_mismatch`](@ref).
+
+A `pkg.*` key is compared only when `parent` has it and `other` has a
+non-empty value. Keys that exist only on `other` are ignored. The expected
+Manifest path is `shipped_manifest` when that is non-empty, otherwise
+`parent["manifest"]`. An empty expected path is not a mismatch. `"julia"` is
+not compared.
+
+Line text uses `parent=` and `worker=`.
+"""
+function identity_mismatches(
         parent::AbstractDict,
-        worker::AbstractDict;
+        other::AbstractDict;
         allow::AbstractVector{Symbol} = Symbol[],
         shipped_manifest::AbstractString = "",
     )::Vector{String}
     lines = String[]
     if !(:julia in allow)
         pv = get(parent, "version", "")
-        wv = get(worker, "version", "")
+        wv = get(other, "version", "")
         pv == wv || push!(lines, "julia version parent=$(pv) worker=$(wv)")
         pc = get(parent, "commit", "")
-        wc = get(worker, "commit", "")
+        wc = get(other, "commit", "")
         pc == wc || push!(lines, "julia commit parent=$(pc) worker=$(wc)")
     end
     if !(:distssh in allow)
         for (k, pv) in parent
             startswith(k, "pkg.") || continue
-            wv = get(worker, k, "")
+            wv = get(other, k, "")
             isempty(wv) && continue
             pv == wv || push!(lines, "$(k) parent=$(pv) worker=$(wv)")
         end
     end
     if !(:manifest in allow)
         want = isempty(shipped_manifest) ? get(parent, "manifest", "") : String(shipped_manifest)
-        got = get(worker, "manifest", "")
+        got = get(other, "manifest", "")
         if !isempty(want)
             if isempty(got)
                 push!(lines, "manifest missing (expected $(want))")
@@ -212,13 +258,14 @@ function _identity_mismatch_lines(
     end
     return lines
 end
+public identity_mismatches
 
 function verify_workers_match_job!(
         project::AbstractString;
         allow::AbstractVector{Symbol} = Symbol[],
         host_manifests = nothing,
     )
-    parent = parent_run_identity(project)
+    parent = run_identity(project)
     mismatches = String[]
     for w in workers()
         snap = remotecall_fetch(Core.eval, w, Main, _worker_identity_expr())
@@ -229,7 +276,7 @@ function verify_workers_match_job!(
         else
             get(parent, "manifest", "")
         end
-        for line in _identity_mismatch_lines(
+        for line in identity_mismatches(
                 parent, worker;
                 allow = allow, shipped_manifest = shipped,
             )
@@ -316,7 +363,7 @@ function verify_go_slots_match_job!(
         julia = nothing,
         allow::AbstractVector{Symbol} = Symbol[],
     )
-    parent = parent_run_identity(project)
+    parent = run_identity(project)
     mismatches = String[]
     if any(s -> s.kind === :parent, slots)
         spec = julia isa AbstractString ? String(julia) : nothing
@@ -337,7 +384,7 @@ function verify_go_slots_match_job!(
             local_id[k] = val
         end
         shipped = get(parent, "manifest", "")
-        for line in _identity_mismatch_lines(
+        for line in identity_mismatches(
                 parent, local_id;
                 allow = allow, shipped_manifest = shipped,
             )
@@ -359,7 +406,7 @@ function verify_go_slots_match_job!(
         else
             joinpath(String(remote_root), basename(local_man))
         end
-        for line in _identity_mismatch_lines(
+        for line in identity_mismatches(
                 parent, worker;
                 allow = allow, shipped_manifest = shipped,
             )
