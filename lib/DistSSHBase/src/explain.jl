@@ -174,4 +174,3 @@ function explain_clone_origin_missing(; surface::Symbol = :cli)::String
     end
     return "Could not read git remote `origin`; pass --repo URL"
 end
-

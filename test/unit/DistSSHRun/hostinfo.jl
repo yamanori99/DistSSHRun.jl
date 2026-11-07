@@ -16,10 +16,11 @@ using Test
 
     buf = IOBuffer()
     DistSSHRun.print_hostinfo([facts]; io = buf)
-    out = String(take!(buf))
-    @test occursin("Hostinfo:", out)
-    @test occursin("ok", out)
-    @test occursin("parent", out)
+    let printed = String(take!(buf))
+        @test occursin("Hostinfo:", printed)
+        @test occursin("ok", printed)
+        @test occursin("parent", printed)
+    end
 
     failed = DistSSHRun.DistSSHBase.HostFacts(
         "ghost", "ghost", false, "connection refused",

@@ -53,4 +53,3 @@ function print_hostinfo(rows::AbstractVector{HostFacts}; io::IO = stdout)
     end
     return nothing
 end
-

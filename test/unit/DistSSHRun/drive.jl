@@ -56,17 +56,10 @@ end
             @test !kw.parent_autosize
         end
 
-        _with_tempdir() do tmp
-            session = DistSSHRun.KitSession(
-                project = tmp,
-                workers = ["parent"],
-                include_parent_for_size = true,
-            )
-            @test_throws ArgumentError DistSSHRun.worker_plan_from_tokens(["parent"])
-            plan = DistSSHRun.worker_plan_from_tokens(["parent:2"])
-            @test plan.parent_workers == 2
-            @test isempty(plan.child_workers)
-        end
+        @test_throws ArgumentError DistSSHRun.worker_plan_from_tokens(["parent"])
+        plan = DistSSHRun.worker_plan_from_tokens(["parent:2"])
+        @test plan.parent_workers == 2
+        @test isempty(plan.child_workers)
     end
 
     @testset "KitSession" begin

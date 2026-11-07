@@ -116,4 +116,3 @@ end
 
 """Explain surface for this session (`:cli` or `:api`)."""
 hint_surface(session::KitSession)::Symbol = session.cli_session.hint_surface
-
