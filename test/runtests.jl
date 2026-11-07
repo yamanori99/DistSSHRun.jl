@@ -168,6 +168,10 @@ end
         include(joinpath(@__DIR__, "integration", "drive", "api.jl"))
         _runtest_announce("integration/cli/project.jl")
         include(joinpath(@__DIR__, "integration", "cli", "project.jl"))
+        _runtest_announce("integration/drive/progress_tty.jl")
+        if !_distsshrun_short_skip("integration/drive/progress_tty.jl")
+            include(joinpath(@__DIR__, "integration", "drive", "progress_tty.jl"))
+        end
         _runtest_announce("integration/drive/execute.jl")
         if !_distsshrun_short_skip("integration/drive/execute.jl")
             include(joinpath(@__DIR__, "integration", "drive", "execute.jl"))

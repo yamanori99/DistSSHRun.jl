@@ -92,9 +92,10 @@ if !isdefined(Main, :_test_root)
             "unit/DistSSHRun/setup/send_list.jl",
             "integration/cli/help.jl",
             "integration/setup/exit.jl",
-            # Pseudo-TTY (`script`) suite: ordinary checkout CI keeps it.
-            # PkgEval and Registry install set JULIA_PKGEVAL=true and skip it.
+            # Pseudo-TTY (`script`) suites: ordinary checkout CI keeps them.
+            # PkgEval and Registry install set JULIA_PKGEVAL=true and skip them.
             "integration/setup/progress_tty.jl",
+            "integration/drive/progress_tty.jl",
             "integration/drive/execute.jl",
             "integration/drive/interrupt_grace.jl",
             "integration/drive/pkg.jl",

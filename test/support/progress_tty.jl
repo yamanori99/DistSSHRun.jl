@@ -29,7 +29,12 @@ if !isdefined(Main, :_tty_strip_ansi)
             occursin("Prerequisites", line) ||
             occursin("complete", line) ||
             occursin("SSH preflight failed", line) ||
-            occursin("exit", line)
+            occursin("exit", line) ||
+            occursin("ERROR:", line) ||
+            occursin("DISTSSHKIT_RUNNER_BOOM", line) ||
+            occursin("DISTSSHKIT_RIDE_BOOM", line) ||
+            occursin("DISTSSHKIT_E2E_REMOTE_FAIL", line) ||
+            occursin("DISTSSHKIT_RUNNER_SMOKE_OK", line)
     end
 
     function _tty_fail_or_warn_line(line::AbstractString)
@@ -112,7 +117,19 @@ if !isdefined(Main, :_tty_strip_ansi)
             end
         end
         # No cursor-up bar redraw after the last payload line in the byte stream.
-        payload_keys = ("✗", "!", "Prerequisites", "complete", "SSH preflight failed", "exit")
+        payload_keys = (
+            "✗",
+            "!",
+            "Prerequisites",
+            "complete",
+            "SSH preflight failed",
+            "exit",
+            "ERROR:",
+            "DISTSSHKIT_RUNNER_BOOM",
+            "DISTSSHKIT_RIDE_BOOM",
+            "DISTSSHKIT_E2E_REMOTE_FAIL",
+            "DISTSSHKIT_RUNNER_SMOKE_OK",
+        )
         last_payload = nothing
         for key in payload_keys
             at = findlast(key, raw)
@@ -134,5 +151,55 @@ if !isdefined(Main, :_tty_strip_ansi)
             # requiring each host on a fail line above).
         end
         return nothing
+    end
+
+    # Run `script_path` under `script(1)` and return the raw typescript.
+    # Hang bound only (not a performance gate). Kills only this `script` child.
+    function _tty_capture_script(
+            script_path::AbstractString;
+            typescript::AbstractString,
+            hang_s::Real = 300.0,
+            columns::Integer = 120,
+            lines::Integer = 40,
+            extra_env::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
+        )::String
+        dest = String(typescript)
+        rm(dest; force = true)
+        cmd = if Sys.isapple()
+            `script -q $dest /bin/sh $script_path`
+        else
+            `script -q -c $script_path $dest`
+        end
+        skip = (
+            "NO_COLOR",
+            "JULIA_LOAD_PATH",
+            "JULIA_PROJECT",
+            "DISTSSHKIT_CLI_SUBCOMMAND_DONE",
+            "DIST_SSH_KIT_CLI_INCLUDE",
+            "DISTSSHKIT_QUIET",
+            "DISTSSHKIT_PROGRESS",
+            "DISTSSHKIT_VERBOSE",
+            "COLUMNS",
+            "LINES",
+        )
+        env = Dict{String, String}(
+            String(k) => String(v) for (k, v) in ENV if !(String(k) in skip) && !isempty(v)
+        )
+        env["COLUMNS"] = string(Int(columns))
+        env["LINES"] = string(Int(lines))
+        for (k, v) in extra_env
+            env[String(k)] = String(v)
+        end
+        proc = run(ignorestatus(setenv(cmd, env)); wait = false)
+        done = timedwait(() -> !process_running(proc), Float64(hang_s); pollint = 0.5)
+        if done !== :ok
+            process_running(proc) && kill(proc, Base.SIGTERM)
+            timedwait(() -> !process_running(proc), 5.0; pollint = 0.2)
+            process_running(proc) && kill(proc, Base.SIGKILL)
+            timedwait(() -> !process_running(proc), 5.0; pollint = 0.2)
+            error("progress_tty script exceeded $(hang_s)s")
+        end
+        wait(proc)
+        return isfile(dest) ? read(dest, String) : ""
     end
 end

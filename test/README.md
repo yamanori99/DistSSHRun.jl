@@ -13,12 +13,13 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 
 That is `test/runtests.jl` (unit + integration), sequential `@testset`s,
 `test/Project.toml`. Aqua is a separate CI job, not `Pkg.test()`.
-Unset, all 56 files run. `DISTSSHRUN_TEST_SHORT=1` (`true`, `yes`, and `on`
+Unset, all 57 files run. `DISTSSHRUN_TEST_SHORT=1` (`true`, `yes`, and `on`
 too) skips the heavy files and the extra `ride!` cases. `JULIA_PKGEVAL=true`
 does the same so a PkgEval run stays inside the 45 minute limit. That short
-list includes `integration/setup/progress_tty.jl` (pseudo-TTY via `script`)
-so Registry install and PkgEval skip only that suite; ordinary checkout
-`Pkg.test` still runs it.
+list includes `integration/setup/progress_tty.jl` and
+`integration/drive/progress_tty.jl` (pseudo-TTY via `script`) so Registry
+install and PkgEval skip those files; ordinary checkout `Pkg.test` still
+runs them.
 `Pkg.test()` on this checkout is not a registry install and is not the PkgEval sandbox. Job smokes pass
 `-y`; real `ssh` / `git` spawn runs only when that binary is on `PATH`;
 real SSH clusters stay in `e2e.jl`. Reproduce that sandbox:
@@ -126,9 +127,9 @@ assertions, so its Julia is not this tarball.
 CI: `Registry install (1.13, ubuntu-latest, x64)` on the heavy gate
 (ordinary pull requests and **main**). It `Pkg.add`s the head commit
 into a job-local depot and runs `Pkg.test` with `--check-bounds=yes`.
-`JULIA_PKGEVAL=true` selects the short file list above (including the
-pseudo-TTY suite). Dependencies resolve from General. The installed tree
-includes `lib/`.
+`JULIA_PKGEVAL=true` selects the short file list above (which skips the
+pseudo-TTY files among other heavy files). Dependencies resolve from
+General. The installed tree includes `lib/`.
 `PkgEval (nightly, ubuntu-latest, x64)` stays on ordinary PRs (heavy gate)
 and **main** (`continue-on-error`; not a required check). The sandbox sets
 `JULIA_PKGEVAL=true`, which selects the same short file list.
@@ -278,10 +279,12 @@ Do not search-replace a host name into a token (that produced
 5. Pin verbosity with `with_kit_verbosity` if you assert kit detail
    lines. `Pkg.test` defaults to `:progress`. `kit_confirm` and consent
    warnings must show in `:quiet`, `:progress`, and `:verbose`.
-6. `integration/setup/progress_tty.jl`: `script` typescripts stack each
+6. `integration/setup/progress_tty.jl` and
+   `integration/drive/progress_tty.jl`: `script` typescripts stack each
    `\r` spinner redraw when `\r` is turned into `\n` (CI log look). That
-   is not the live TTY. The file documents it and checks a `\r` / CSI-K
-   screen peak of at most one spinner bar.
+   is not the live TTY. The files document it and check a `\r` / CSI-K
+   screen peak of at most one spinner bar. Drive/ride TTY coverage lives
+   in the latter; remote TTY cases stay in `e2e.jl`.
 
 Helpers (via `support.jl`): `_child_julia_env`, `_run_kit_drive` /
 `_run_kit_setup` / `_run_kit_go` / `_run_kit_size`, `_mktemp_host` /

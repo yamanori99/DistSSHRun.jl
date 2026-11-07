@@ -183,6 +183,13 @@ function run_driver_script!(enable_log::Bool)
                         redirect_stdout(orig_stdout)
                     end
                 end
+            elseif DistSSHRun.kit_output_progress()
+                # `--no-log` still captures under `:progress` so script stdout
+                # does not glue onto the live bar. Replay is in the drive
+                # frame after `kit_progress_done!`.
+                DistSSHRun._with_progress_job_stdio_capture!() do
+                    call_main()
+                end
             else
                 call_main()
             end
