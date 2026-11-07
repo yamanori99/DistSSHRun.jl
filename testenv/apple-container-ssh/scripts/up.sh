@@ -2,12 +2,50 @@
 # Start two Linux SSH workers with Apple `container` (same image/keys/aliases
 # as docker-ssh). Optional: ./scripts/up.sh --e2e
 #
+# Manual DistSSHRun in this shell: source ./scripts/up.sh
+# (re-execs this file as a child so `set -e` cannot kill the interactive shell,
+#  then sources docker-ssh/.generated/env.sh here. CI keeps ./scripts/up.sh --e2e.)
+#
 # Writes testenv/docker-ssh/.generated/ssh_config so test/e2e.jl works unchanged.
 # Do not run docker-ssh compose workers at the same time (shared ssh_config).
+
+# Detect source vs execute before `set -e` (must not run set -e in an interactive shell).
+_KIT_UP_SOURCED=0
+if [[ -n "${ZSH_VERSION:-}" ]]; then
+  case "${ZSH_EVAL_CONTEXT:-}" in *:file*) _KIT_UP_SOURCED=1 ;; esac
+elif [[ -n "${BASH_VERSION:-}" && "${BASH_SOURCE[0]:-}" != "$0" ]]; then
+  _KIT_UP_SOURCED=1
+fi
+
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+  _KIT_UP_SELF="${BASH_SOURCE[0]}"
+elif [[ -n "${ZSH_VERSION:-}" ]]; then
+  # shellcheck disable=SC2296
+  _KIT_UP_SELF="${(%):-%x}"
+else
+  _KIT_UP_SELF="$0"
+fi
+_KIT_UP_SELF="$(cd "$(dirname "${_KIT_UP_SELF}")" && pwd)/$(basename "${_KIT_UP_SELF}")"
+_KIT_UP_APPLE_ROOT="$(cd "$(dirname "${_KIT_UP_SELF}")/.." && pwd)"
+_KIT_UP_DOCKER_ROOT="$(cd "${_KIT_UP_APPLE_ROOT}/../docker-ssh" && pwd)"
+
+if [[ "${_KIT_UP_SOURCED}" -eq 1 ]]; then
+  bash "${_KIT_UP_SELF}" "$@" || return $?
+  _KIT_UP_ENV="${_KIT_UP_DOCKER_ROOT}/.generated/env.sh"
+  if [[ -f "${_KIT_UP_ENV}" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "${_KIT_UP_ENV}"
+    set +a
+    echo "Sourced ${_KIT_UP_ENV} into this shell."
+  fi
+  return 0
+fi
+
 set -euo pipefail
 
-APPLE_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-DOCKER_ROOT="$(cd "${APPLE_ROOT}/../docker-ssh" && pwd)"
+APPLE_ROOT="${_KIT_UP_APPLE_ROOT}"
+DOCKER_ROOT="${_KIT_UP_DOCKER_ROOT}"
 KIT_ROOT="$(cd "${APPLE_ROOT}/../.." && pwd)"
 LOCAL_IMAGE="local/linux-ssh-worker:latest"
 NAMES=(child-1 child-2)
@@ -18,6 +56,7 @@ for arg in "$@"; do
     --e2e) RUN_E2E=1 ;;
     -h|--help)
       echo "usage: $0 [--e2e]"
+      echo "  Manual DistSSHRun: source $0   (activates .generated/env.sh in this shell)"
       echo "  Same E2E as docker-ssh (child-1 / child-2)."
       echo "  Needs macOS 26+ Apple silicon and the container CLI."
       echo "  DISTSSHKIT_CODE_COVERAGE=1  e2e with --code-coverage=user"
@@ -171,6 +210,11 @@ ssh -F "${DOCKER_ROOT}/.generated/ssh_config" child-1 \
   "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=5 dev@child-2 true"
 ssh -F "${DOCKER_ROOT}/.generated/ssh_config" child-2 \
   "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=5 dev@child-1 true"
+
+"${DOCKER_ROOT}/scripts/prepare-manual-remote-root.sh"
+"${DOCKER_ROOT}/scripts/write-kit-env.sh"
+echo "DistSSHRun in this shell: source ${APPLE_ROOT}/scripts/up.sh"
+echo "One-shot: ${DOCKER_ROOT}/scripts/with-env.sh julia --project=. -m DistSSHRun …"
 
 if [[ "$RUN_E2E" -eq 1 ]]; then
   export DISTSSHKIT_SSH_E2E=1

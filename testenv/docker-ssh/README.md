@@ -78,6 +78,7 @@ Network Privacy does not block SSH from the kit parent.
 | [`scripts/gen-keys.sh`](scripts/gen-keys.sh) | Keys and SSH config |
 | [`scripts/up.sh`](scripts/up.sh) | Keys → compose up → wait |
 | [`scripts/wait-ready.sh`](scripts/wait-ready.sh) | SSH + Julia probe |
+| [`scripts/prepare-manual-remote-root.sh`](scripts/prepare-manual-remote-root.sh) | Default `~/Parent/Repo` on workers (755) for manual ship |
 | [`scripts/down.sh`](scripts/down.sh) | Compose down |
 | [`scripts/setup-colima-ci.sh`](scripts/setup-colima-ci.sh) | Colima CI |
 | `.generated/` | gitignored SSH config / keys (created by scripts) |
@@ -94,7 +95,7 @@ visible from the distro). Keep a WSL tree under `~/…`, not `/mnt/c/…`.
 
 ```bash
 ./scripts/up.sh --e2e    # workers + suite (always from kit root)
-./scripts/up.sh          # workers only
+source ./scripts/up.sh   # workers + activate DistSSHRun SSH env in this shell
 ./scripts/down.sh
 ```
 
@@ -125,10 +126,23 @@ plus `JULIA_PATHS.txt`).
 
 Manual smoke:
 
+`up.sh` also creates the DistSSHRun default remote root
+(`~/Parent/RepoName`, mode 755) on both workers so `setup --ship-tree`
+without `--remote-path` is not refused for group/world writable. E2E still
+uses `/home/dev/distsshkit-e2e` and its own ensure helper.
+
 ```bash
-./scripts/up.sh
+# source (not ./) so DistSSHRun SSH env is loaded into this shell:
+source ./scripts/up.sh
+julia --project=../.. -m DistSSHRun \
+  up status parent child:child-1 child:child-2 --verbose
+# One-shot without sourcing the shell:
+# ./scripts/with-env.sh julia --project=../.. -m DistSSHRun …
+# Or plain ssh:
 ssh -F .generated/ssh_config child-1 'echo ok; julia --version'
 ```
+
+CI and `./scripts/up.sh --e2e` still run as a normal executable (no parent export).
 
 ## CI
 
