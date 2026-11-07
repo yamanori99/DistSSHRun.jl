@@ -104,6 +104,8 @@ function _nolog_stdio_cases()
                             flush(err_io)
                             out = read(out_path, String)
                             err = read(err_path, String)
+                            @test out == "DISTSSHKIT_STDOUT_MARK\n"
+                            @test err == "DISTSSHKIT_STDERR_MARK\n"
                             @test occursin("DISTSSHKIT_STDOUT_MARK", out)
                             @test occursin("DISTSSHKIT_STDERR_MARK", err)
                             @test !occursin("DISTSSHKIT_STDERR_MARK", out)
@@ -159,6 +161,7 @@ function _nolog_stdio_cases()
                         end
                         flush(out_io)
                         out = read(out_path, String)
+                        @test out == "DISTSSHKIT_PROMPT>DISTSSHKIT_GOT:yes-please\n"
                         @test occursin("DISTSSHKIT_PROMPT>", out)
                         @test occursin("DISTSSHKIT_GOT:yes-please", out)
                         prompt_at = findfirst("DISTSSHKIT_PROMPT>", out)
@@ -210,16 +213,22 @@ function _nolog_stdio_cases()
                     DistSSHRun.kit_progress_begin!("drive"; steps = 2, kind = :drive)
                     orig_out = stdout
                     orig_err = stderr
-                    err = try
-                        DistSSHRun.run_driver_script!(false)
-                        nothing
-                    catch e
-                        e
+                    mktemp() do out_path, out_io
+                        err = try
+                            redirect_stdout(out_io) do
+                                DistSSHRun.run_driver_script!(false)
+                            end
+                            nothing
+                        catch e
+                            e
+                        end
+                        flush(out_io)
+                        @test err isa ErrorException
+                        @test occursin("DISTSSHKIT_DRIVER_BOOM", sprint(showerror, err))
+                        @test stdout === orig_out
+                        @test stderr === orig_err
+                        @test read(out_path, String) == "DISTSSHKIT_BEFORE_BOOM\n"
                     end
-                    @test err isa ErrorException
-                    @test occursin("DISTSSHKIT_DRIVER_BOOM", sprint(showerror, err))
-                    @test stdout === orig_out
-                    @test stderr === orig_err
                 end
             end
         end

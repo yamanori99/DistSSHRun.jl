@@ -193,12 +193,17 @@ function run_driver_script!(enable_log::Bool)
                 try
                     call_main()
                 finally
-                    # Driver may leave the cursor mid-line (prompt without `\n`).
-                    # Finished-bar redraw uses `\r`; start a fresh line first.
-                    try
-                        println(stdout)
-                        flush(stdout)
-                    catch
+                    # Mid-line driver output (prompt without `\n`) would sit on
+                    # the same row as the finished bar's `\r`. Separate them
+                    # only when that bar can draw; redirected / `NO_COLOR`
+                    # stdout must not gain a stray newline.
+                    if DistSSHRun._progress_can_draw()
+                        try
+                            io = DistSSHRun._progress_io()
+                            println(io)
+                            flush(io)
+                        catch
+                        end
                     end
                 end
             else
