@@ -98,8 +98,16 @@ using Test
     let r = parse_setup_args(["--check", "--remote-path", "~/work/App.jl", "child:host1"])
         @test r.remote_path_override == "~/work/App.jl"
     end
-    let r = parse_setup_args(["--check", "--remote-dir", "/tmp/App.jl", "child:host1"])
-        @test r.remote_path_override == "/tmp/App.jl"
+    let err = try
+            parse_setup_args(["--check", "--remote-dir", "/tmp/App.jl", "child:host1"])
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("setup --remote-dir was removed", err.msg)
+        @test occursin("--remote-path", err.msg)
+        @test occursin("help setup", err.msg)
     end
     let r = parse_setup_args(["--check", "--remote-path", " /tmp/App.jl ", "child:host1"])
         @test r.remote_path_override == "/tmp/App.jl"
@@ -156,20 +164,34 @@ using Test
         @test !occursin("--help", err.msg)
     end
 
-    let r = parse_setup_args(["--juliaup", "parent", "child:host1"])
-        @test r.mode == :juliaup
-        @test r.hosts == ["parent", "host1"]
+    let err = try
+            parse_setup_args(["--juliaup", "parent", "child:host1"])
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("setup --juliaup was removed", err.msg)
+        @test occursin("up add CHANNEL", err.msg)
+        @test occursin("up default CHANNEL", err.msg)
+        @test occursin("help up", err.msg)
     end
-    let r = parse_setup_args(["--juliaup-update", "child:host1"])
-        @test r.mode == :juliaup_update
-        @test r.hosts == ["host1"]
+    let err = try
+            parse_setup_args(["--juliaup-update", "child:host1"])
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("setup --juliaup-update was removed", err.msg)
+        @test occursin("up update", err.msg)
+        @test occursin("help up", err.msg)
     end
     let r = parse_setup_args(["--check", "child:update"])
         @test r.mode == :check
         @test r.hosts == ["update"]
     end
     @test_throws ArgumentError parse_setup_args(["update", "child:host1"])
-    @test_throws ArgumentError parse_setup_args(["--juliaup", "child:host1", "update"])
 
     let r = parse_setup_args(["--check", "--hosts-file", _sample_hosts_file(), "child:host-cli"])
         @test r.hosts == ["host-cli", "host-a", "host-b"]
@@ -195,6 +217,7 @@ using Test
         @test occursin("--older-than", txt)
         @test occursin("--runtest", txt)
         @test !occursin("--juliaup", txt)
+        @test !occursin("--remote-dir", txt)
         @test occursin("--hosts", txt)
         @test occursin("child:host1", txt)
         @test occursin("parent", txt)

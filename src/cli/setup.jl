@@ -123,7 +123,7 @@ if !isdefined(@__MODULE__, :setup_main)
         try
             validate_setup_hosts(
                 opts.hosts;
-                allow_parent = setup_mode_allows_parent(opts.mode::Symbol),
+                allow_parent = false,
             )
         catch e
             e isa ArgumentError || rethrow()
@@ -156,17 +156,10 @@ if !isdefined(@__MODULE__, :setup_main)
                 :ship_tree => "ship-tree",
                 :remote_root => "remote-root",
                 :instantiate => "Instantiate",
-                :juliaup => "juliaup (align Julia)",
-                :juliaup_update => "juliaup update",
                 :runtest => "Pkg.test (job)",
                 :cleanup => "Cleanup Workers",
                 :prune => "Prune kit leaves",
             )[mode]
-            if mode === :juliaup || mode === :juliaup_update
-                flag = mode === :juliaup_update ? "--juliaup-update" : "--juliaup"
-                instead = mode === :juliaup_update ? "up update" : "up"
-                @warn "setup $flag is deprecated and will be removed. Use `$(DistSSHRun.cli_m()) $instead`. The command still runs."
-            end
             op_path = try
                 if mode === :delete
                     DistSSHRun.remote_delete_root(
@@ -217,13 +210,6 @@ if !isdefined(@__MODULE__, :setup_main)
             if mode === :clone || mode === :ship_tree || mode === :remote_root ||
                     mode === :instantiate || mode === :runtest
                 if !preflight_setup_ssh(opts.hosts)
-                    print_err("SSH preflight failed. Fix connectivity, then retry.\n")
-                    kit_println()
-                    return Cint(1)
-                end
-            elseif setup_mode_allows_parent(mode)
-                ssh_hosts = setup_juliaup_ssh_hosts(opts.hosts)
-                if !isempty(ssh_hosts) && !preflight_setup_ssh(ssh_hosts)
                     print_err("SSH preflight failed. Fix connectivity, then retry.\n")
                     kit_println()
                     return Cint(1)
@@ -307,24 +293,6 @@ if !isdefined(@__MODULE__, :setup_main)
                                 opts.hosts, opts.julia_path, op_path, project;
                                 path_anchor = path_anchor,
                             ),
-                        ) ? 0 : 1
-                )
-            end
-
-            if mode === :juliaup
-                return Cint(
-                    finish_host_op!(
-                            "juliaup",
-                            juliaup_align_remotes(opts.hosts),
-                        ) ? 0 : 1
-                )
-            end
-
-            if mode === :juliaup_update
-                return Cint(
-                    finish_host_op!(
-                            "juliaup update",
-                            juliaup_update_remotes(opts.hosts),
                         ) ? 0 : 1
                 )
             end
