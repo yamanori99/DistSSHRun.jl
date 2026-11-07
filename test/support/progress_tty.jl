@@ -153,8 +153,35 @@ if !isdefined(Main, :_tty_strip_ansi)
         return nothing
     end
 
+    # Signal the detached capture process group (script + nested sh/julia).
+    # `detach=true` puts the child in its own group; `-pid` stays inside that
+    # group and must not be used on a non-detached process.
+    function _tty_kill_capture_tree!(proc::Base.Process)
+        process_running(proc) || return nothing
+        pid = Int(getpid(proc))
+        if Sys.isunix()
+            ccall(:kill, Cint, (Cint, Cint), Cint(-pid), Base.SIGTERM)
+            timedwait(() -> !process_running(proc), 5.0; pollint = 0.2)
+            if process_running(proc)
+                ccall(:kill, Cint, (Cint, Cint), Cint(-pid), Base.SIGKILL)
+                timedwait(() -> !process_running(proc), 5.0; pollint = 0.2)
+            end
+        else
+            kill(proc, Base.SIGTERM)
+            timedwait(() -> !process_running(proc), 5.0; pollint = 0.2)
+            process_running(proc) && kill(proc, Base.SIGKILL)
+            timedwait(() -> !process_running(proc), 5.0; pollint = 0.2)
+        end
+        process_running(proc) || try
+            wait(proc)
+        catch
+        end
+        return nothing
+    end
+
     # Run `script_path` under `script(1)` and return the raw typescript.
-    # Hang bound only (not a performance gate). Kills only this `script` child.
+    # Hang bound only (not a performance gate). The child is detached into its
+    # own process group so timeout cleanup can reap nested sh/julia too.
     function _tty_capture_script(
             script_path::AbstractString;
             typescript::AbstractString,
@@ -190,16 +217,31 @@ if !isdefined(Main, :_tty_strip_ansi)
         for (k, v) in extra_env
             env[String(k)] = String(v)
         end
-        proc = run(ignorestatus(setenv(cmd, env)); wait = false)
-        done = timedwait(() -> !process_running(proc), Float64(hang_s); pollint = 0.5)
-        if done !== :ok
-            process_running(proc) && kill(proc, Base.SIGTERM)
-            timedwait(() -> !process_running(proc), 5.0; pollint = 0.2)
-            process_running(proc) && kill(proc, Base.SIGKILL)
-            timedwait(() -> !process_running(proc), 5.0; pollint = 0.2)
-            error("progress_tty script exceeded $(hang_s)s")
+        # New process group: timeout uses `kill(-pid, …)` scoped to this tree.
+        # Bind `proc` once (no later reassignment) so the try/finally close does
+        # not box it; `run` on a plain Cmd returns `Base.Process`.
+        launched = Cmd(setenv(cmd, env); detach = true)
+        proc = run(ignorestatus(launched); wait = false)::Base.Process
+        timed_out = false
+        try
+            done = timedwait(() -> !process_running(proc), Float64(hang_s); pollint = 0.5)
+            if done !== :ok
+                timed_out = true
+                _tty_kill_capture_tree!(proc)
+                error("progress_tty script exceeded $(hang_s)s")
+            end
+            wait(proc)
+            return isfile(dest) ? read(dest, String) : ""
+        finally
+            if process_running(proc)
+                _tty_kill_capture_tree!(proc)
+            elseif timed_out
+                # Ensure the Process is reaped after a group kill.
+                try
+                    wait(proc)
+                catch
+                end
+            end
         end
-        wait(proc)
-        return isfile(dest) ? read(dest, String) : ""
     end
 end

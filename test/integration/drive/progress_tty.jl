@@ -16,10 +16,82 @@ using Test
         chmod(path, 0o755)
         return path
     end
+    function pid_alive(pid::Integer)::Bool
+        Sys.isunix() || return false
+        return ccall(:kill, Cint, (Cint, Cint), Cint(pid), Cint(0)) == 0
+    end
 
     hang_s = 300.0
 
-    @testset "drive success failure and quiet" begin
+    @testset "capture timeout reaps descendants" begin
+        Sys.isunix() || return
+        mktempdir() do dir
+            alive = joinpath(dir, "DSR_TTY_HANG_ALIVE")
+            gpid_file = joinpath(dir, "grandchild.pid")
+            ready = joinpath(dir, "ready")
+            hang = joinpath(dir, "hang.sh")
+            write_runner(
+                hang,
+                """
+                alive=$(sh_quote(alive))
+                gpidf=$(sh_quote(gpid_file))
+                ready=$(sh_quote(ready))
+                touch "\$alive"
+                # Nested sh grandchild in the same detached process group.
+                sh -c 'while [ -f "\$1" ]; do sleep 0.1; done' _ "\$alive" &
+                echo \$! > "\$gpidf"
+                touch "\$ready"
+                while [ -f "\$alive" ]; do sleep 0.1; done
+                """,
+            )
+            # Unrelated process: not in the capture group; must survive cleanup.
+            unrelated = run(ignorestatus(`sleep 60`); wait = false)
+            try
+                # Hang bound is generous relative to startup, not a perf gate.
+                # Grandchild must exist before the helper times out and kills.
+                err_box = Ref{Any}(nothing)
+                task = @async begin
+                    try
+                        _tty_capture_script(
+                            hang;
+                            typescript = joinpath(dir, "hang_typescript.txt"),
+                            hang_s = 8.0,
+                        )
+                    catch e
+                        err_box[] = e
+                    end
+                end
+                for _ in 1:100
+                    isfile(ready) && break
+                    sleep(0.05)
+                end
+                @test isfile(ready)
+                @test isfile(gpid_file)
+                gpid = parse(Int, strip(read(gpid_file, String)))
+                @test pid_alive(gpid)
+                # Wait out the hang bound; cleanup runs in the helper (and finally).
+                wait(task)
+                err = err_box[]
+                @test err isa ErrorException
+                @test occursin("exceeded", sprint(showerror, err))
+                for _ in 1:60
+                    pid_alive(gpid) || break
+                    sleep(0.05)
+                end
+                @test !pid_alive(gpid)
+                @test process_running(unrelated)
+            finally
+                rm(alive; force = true)
+                process_running(unrelated) && kill(unrelated, Base.SIGKILL)
+                try
+                    wait(unrelated)
+                catch
+                end
+            end
+        end
+    end
+
+    @testset "drive success failure quiet and verbose" begin
         mktempdir() do dir
             proj = joinpath(dir, "drive-proj")
             mkpath(proj)
@@ -29,6 +101,7 @@ using Test
             fail_script = joinpath(proj, "fail.jl")
             write(fail_script, "error(\"DISTSSHKIT_RUNNER_BOOM\")\n")
 
+            # `--no-log` is the production-fix path (capture even without a kit log).
             drive_ok = _kit_drive_cmd(;
                 script = ok_script,
                 host_root = proj,
@@ -39,6 +112,7 @@ using Test
                 host_root = proj,
                 parent_workers = 2,
             )
+            @test occursin("--no-log", join(String.(drive_ok.exec), " "))
 
             runner = joinpath(dir, "drive_runner.sh")
             write_runner(
@@ -62,6 +136,10 @@ using Test
                 echo '___SPLIT___'
                 export DISTSSHKIT_QUIET=1
                 $(argv_line(drive_fail))
+                echo '___SPLIT___'
+                unset DISTSSHKIT_QUIET
+                export DISTSSHKIT_VERBOSE=1
+                $(argv_line(drive_ok))
                 """,
             )
 
@@ -75,16 +153,28 @@ using Test
             @info "drive progress_tty script child wall" elapsed
 
             parts = split(pty, "___SPLIT___")
-            @test length(parts) == 3
-            ok_tty = length(parts) == 3 ? parts[1] : ""
-            fail_tty = length(parts) == 3 ? parts[2] : ""
-            quiet_tty = length(parts) == 3 ? parts[3] : ""
+            @test length(parts) == 4
+            ok_tty = length(parts) == 4 ? parts[1] : ""
+            fail_tty = length(parts) == 4 ? parts[2] : ""
+            quiet_tty = length(parts) == 4 ? parts[3] : ""
+            verbose_tty = length(parts) == 4 ? parts[4] : ""
 
             ok_plain = _tty_strip_ansi(ok_tty)
             @test occursin("DISTSSHKIT_RUNNER_SMOKE_OK", ok_plain)
             @test occursin("parent", ok_plain) || occursin("nw=2", ok_plain)
             ok_lines = _tty_lines(ok_tty)
-            @test any(l -> occursin("DISTSSHKIT_RUNNER_SMOKE_OK", l) && !_tty_bar_line(l), ok_lines)
+            smoke_lines = filter(
+                l -> occursin("DISTSSHKIT_RUNNER_SMOKE_OK", l) && !_tty_bar_line(l),
+                ok_lines,
+            )
+            @test !isempty(smoke_lines)
+            # Capture/replay: smoke is after progress chrome, not glued mid-bar.
+            smoke_at = findfirst("DISTSSHKIT_RUNNER_SMOKE_OK", ok_tty)
+            @test smoke_at !== nothing
+            before_smoke = SubString(ok_tty, 1, first(smoke_at) - 1)
+            @test occursin('━', before_smoke) || occursin('╺', before_smoke) ||
+                any(c -> occursin(c, before_smoke), "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+            @test !occursin(r"[━╺⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*DISTSSHKIT_RUNNER_SMOKE_OK", ok_tty)
             _assert_tty_progress_payload(ok_tty)
 
             fail_plain = _tty_strip_ansi(fail_tty)
@@ -99,12 +189,25 @@ using Test
 
             quiet_plain = _tty_strip_ansi(quiet_tty)
             @test occursin("DISTSSHKIT_RUNNER_BOOM", quiet_plain)
-            # Quiet keeps the boom; progress chrome (spinner glyphs) stays off.
             quiet_lines = _tty_lines(quiet_tty)
             @test !any(_tty_spinner_bar_line, quiet_lines)
-            # `:progress` failure path may draw a bar; quiet must not be denser.
             @test length(filter(!isempty ∘ strip, quiet_lines)) <=
                 length(filter(!isempty ∘ strip, fail_lines))
+
+            # Explicit verbose: live detail path (not progress capture/replay).
+            verbose_plain = _tty_strip_ansi(verbose_tty)
+            @test occursin("DISTSSHKIT_RUNNER_SMOKE_OK", verbose_plain)
+            @test occursin("Running script", verbose_plain)
+            verbose_lines = _tty_lines(verbose_tty)
+            @test any(
+                l -> occursin("DISTSSHKIT_RUNNER_SMOKE_OK", l) && !_tty_bar_line(l),
+                verbose_lines,
+            )
+            # Verbose shows the running step before the smoke marker.
+            run_at = findfirst("Running script", verbose_tty)
+            vsmoke_at = findfirst("DISTSSHKIT_RUNNER_SMOKE_OK", verbose_tty)
+            @test run_at !== nothing && vsmoke_at !== nothing
+            @test first(run_at) < first(vsmoke_at)
         end
     end
 
@@ -117,8 +220,22 @@ using Test
             od_fail = joinpath(dir, "ride-out-fail")
             mkpath(od_ok)
             mkpath(od_fail)
+            marker = joinpath(od_ok, "ride_ok_marker.txt")
             ok_script = joinpath(proj, "ok.jl")
-            write(ok_script, "map(identity, 1:2)\n")
+            # Ride rewrites `map`; write a unique success marker from the body.
+            write(
+                ok_script,
+                """
+                map(1:2) do x
+                    if x == 1
+                        open($(repr(marker)), "w") do io
+                            println(io, "DISTSSHKIT_RIDE_OK_MARKER")
+                        end
+                    end
+                    x
+                end
+                """,
+            )
             fail_script = joinpath(proj, "fail.jl")
             write(fail_script, "map(x -> error(\"DISTSSHKIT_RIDE_BOOM\"), 1:2)\n")
 
@@ -171,10 +288,14 @@ using Test
             ok_tty = length(parts) == 2 ? parts[1] : ""
             fail_tty = length(parts) == 2 ? parts[2] : ""
 
+            # Success is observed via the rewritten map side effect + progress done.
+            @test isfile(marker)
+            @test occursin("DISTSSHKIT_RIDE_OK_MARKER", read(marker, String))
+            _assert_kit_progress_done(od_ok; kind = :ride)
             ok_plain = _tty_strip_ansi(ok_tty)
-            # Ride success may hide the result table at `:progress`; the bar
-            # must still finish without cursor-up over a prior payload.
-            @test !isempty(strip(ok_plain)) || occursin("ride", lowercase(ok_plain))
+            @test !isempty(strip(ok_plain))
+            # `:progress` success hides `print_ride`; the finished bar must not
+            # cursor-up over earlier payload.
             _assert_tty_progress_payload(ok_tty)
 
             fail_plain = _tty_strip_ansi(fail_tty)
