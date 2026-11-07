@@ -9,6 +9,8 @@ using Test
     glued_kit = "  ⠋  workers         ━━━━━━━╺━━━━━━━━━━━━  3/7  0:00  ! host1: ssh slow"
     boom = "ERROR: DISTSSHKIT_RUNNER_BOOM"
     smoke = "DISTSSHKIT_RUNNER_SMOKE_OK nw=2"
+    ride_ok = "DISTSSHKIT_RIDE_REMOTE_OK"
+    ride_boom = "DISTSSHKIT_RIDE_REMOTE_BOOM"
 
     @test !_tty_payload_line(mem)
     @test _tty_bar_line(mem)
@@ -19,6 +21,10 @@ using Test
     @test _tty_bar_line(glued_kit)
     @test _tty_payload_line(boom)
     @test _tty_payload_line(smoke)
+    @test _tty_payload_line(ride_ok)
+    @test _tty_payload_line(ride_boom)
+    @test !_tty_bar_line(ride_ok)
+    @test !_tty_bar_line(ride_boom)
 
     # Host `'!'` glued onto a live bar is not a payload line; cursor-up after
     # that `'!'` must not be treated as a post-payload redraw.

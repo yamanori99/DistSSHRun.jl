@@ -36,6 +36,8 @@ if !isdefined(Main, :_tty_strip_ansi)
             occursin("ERROR:", s) ||
             occursin("DISTSSHKIT_RUNNER_BOOM", s) ||
             occursin("DISTSSHKIT_RIDE_BOOM", s) ||
+            occursin("DISTSSHKIT_RIDE_REMOTE_OK", s) ||
+            occursin("DISTSSHKIT_RIDE_REMOTE_BOOM", s) ||
             occursin("DISTSSHKIT_E2E_REMOTE_FAIL", s) ||
             occursin("DISTSSHKIT_RUNNER_SMOKE_OK", s)
     end
@@ -139,6 +141,8 @@ if !isdefined(Main, :_tty_strip_ansi)
             "ERROR:",
             "DISTSSHKIT_RUNNER_BOOM",
             "DISTSSHKIT_RIDE_BOOM",
+            "DISTSSHKIT_RIDE_REMOTE_OK",
+            "DISTSSHKIT_RIDE_REMOTE_BOOM",
             "DISTSSHKIT_E2E_REMOTE_FAIL",
             "DISTSSHKIT_RUNNER_SMOKE_OK",
         )
