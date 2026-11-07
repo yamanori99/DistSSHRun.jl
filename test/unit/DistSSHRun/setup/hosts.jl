@@ -74,6 +74,199 @@ using Test
         end
     end
 
+    @testset "preflight kit log has one host prefix" begin
+        function _result_lines(body::AbstractString)
+            return filter(
+                l -> startswith(l, "  ") && occursin(r": [✓✗]", l),
+                split(body, '\n'; keepempty = false),
+            )
+        end
+        function _count_host_prefix(body::AbstractString, host::AbstractString)
+            needle = "  $(host): "
+            n = 0
+            for line in split(body, '\n'; keepempty = false)
+                @test count(needle, line) <= 1
+                count(needle, line) == 1 && startswith(line, needle) && (n += 1)
+            end
+            return n
+        end
+
+        function _with_preflight_log(f; fail_hosts::Vector{String} = String[])
+            return _with_tempdir() do tmp
+                state_dir = joinpath(tmp, "state")
+                mkpath(state_dir)
+                ssh = joinpath(tmp, "ssh.jl")
+                fail_lit = join(repr.(fail_hosts), ", ")
+                write(
+                    ssh,
+                    """
+                    host = length(ARGS) >= 1 ? ARGS[1] : ""
+                    script = length(ARGS) >= 2 ? ARGS[2] : ""
+                    if occursin("case x in x)", script)
+                        m = match(r"__DSR_POSIX_OK_[0-9a-fA-F]+__", script)
+                        m === nothing || println(m.match)
+                        exit(0)
+                    end
+                    if host in String[$fail_lit]
+                        println(stderr, "Permission denied (publickey).")
+                        exit(255)
+                    end
+                    if strip(script) == "echo ok" || strip(script) == "true"
+                        println("ok")
+                        exit(0)
+                    end
+                    if strip(script) == "echo \\\$SHELL"
+                        println("/bin/sh")
+                        exit(0)
+                    end
+                    println("ok")
+                    """,
+                )
+                env = merge(
+                    _fake_setup_remote_env(state_dir),
+                    Dict("DISTSSHKIT_TEST_SSH" => ssh),
+                )
+                withenv(env...) do
+                    return f(tmp)
+                end
+            end
+        end
+
+        @testset "quiet success and failure" begin
+            _with_preflight_log() do tmp
+                with_kit_verbosity(:quiet) do
+                    out, log_path = _capture_stdio() do _, _
+                        path = DistSSHRun.init_log_file(tmp; prefix = "preflight_q_ok")
+                        @test DistSSHRun.preflight_setup_ssh(["host1", "host2"])
+                        return path
+                    end
+                    body = read(log_path, String)
+                    @test !occursin("host1", out)
+                    @test !occursin("host2", out)
+                    @test !occursin("SSH preflight", out)
+                    @test _count_host_prefix(body, "host1") == 1
+                    @test _count_host_prefix(body, "host2") == 1
+                    @test any(l -> startswith(l, "  host1: ✓"), _result_lines(body))
+                    @test any(l -> startswith(l, "  host2: ✓"), _result_lines(body))
+                end
+            end
+            _with_preflight_log(; fail_hosts = ["host1"]) do tmp
+                with_kit_verbosity(:quiet) do
+                    out, log_path = _capture_stdio() do _, _
+                        path = DistSSHRun.init_log_file(tmp; prefix = "preflight_q_fail")
+                        @test DistSSHRun.preflight_setup_ssh(["host1"]) == false
+                        return path
+                    end
+                    body = read(log_path, String)
+                    @test !occursin("host1", out)
+                    @test !occursin("✗", out)
+                    @test _count_host_prefix(body, "host1") == 1
+                    @test any(l -> startswith(l, "  host1: ✗"), _result_lines(body))
+                end
+            end
+        end
+
+        @testset "progress success and failure" begin
+            _with_preflight_log() do tmp
+                with_kit_verbosity(:progress) do
+                    out, log_path = _capture_stdio() do _, _
+                        path = DistSSHRun.init_log_file(tmp; prefix = "preflight_p_ok")
+                        @test DistSSHRun.preflight_setup_ssh(["host1"])
+                        return path
+                    end
+                    body = read(log_path, String)
+                    @test !occursin("host1: ✓", out)
+                    @test _count_host_prefix(body, "host1") == 1
+                    @test any(l -> startswith(l, "  host1: ✓"), _result_lines(body))
+                end
+            end
+            _with_preflight_log(; fail_hosts = ["host1"]) do tmp
+                with_kit_verbosity(:progress) do
+                    out, log_path = _capture_stdio() do _, _
+                        path = DistSSHRun.init_log_file(tmp; prefix = "preflight_p_fail")
+                        @test DistSSHRun.preflight_setup_ssh(["host1"]) == false
+                        return path
+                    end
+                    body = read(log_path, String)
+                    @test occursin("host1", out)
+                    @test occursin("✗", out)
+                    @test _count_host_prefix(body, "host1") == 1
+                    @test any(l -> startswith(l, "  host1: ✗"), _result_lines(body))
+                    @test count("  host1: ", out) == 1
+                end
+            end
+        end
+
+        @testset "verbose keeps heading form" begin
+            _with_preflight_log() do tmp
+                with_kit_verbosity(:verbose) do
+                    out, log_path = _capture_stdio() do _, _
+                        path = DistSSHRun.init_log_file(tmp; prefix = "preflight_v_ok")
+                        @test DistSSHRun.preflight_setup_ssh(["host1"])
+                        return path
+                    end
+                    body = read(log_path, String)
+                    @test occursin("SSH preflight:", out)
+                    @test occursin("host1:", out)
+                    @test occursin("✓", out)
+                    @test _count_host_prefix(body, "host1") == 1
+                    @test occursin("  host1: ✓", replace(body, '\r' => ""))
+                end
+            end
+            _with_preflight_log(; fail_hosts = ["host1"]) do tmp
+                with_kit_verbosity(:verbose) do
+                    out, log_path = _capture_stdio() do _, _
+                        path = DistSSHRun.init_log_file(tmp; prefix = "preflight_v_fail")
+                        @test DistSSHRun.preflight_setup_ssh(["host1"]) == false
+                        return path
+                    end
+                    body = read(log_path, String)
+                    @test occursin("host1:", out)
+                    @test occursin("✗", out)
+                    @test _count_host_prefix(body, "host1") == 1
+                    @test occursin("  host1: ✗", replace(body, '\r' => ""))
+                end
+            end
+        end
+
+        @testset "mixed multi-host results" begin
+            _with_preflight_log(; fail_hosts = ["host2"]) do tmp
+                for v in (:quiet, :progress, :verbose)
+                    with_kit_verbosity(v) do
+                        out, log_path = _capture_stdio() do _, _
+                            path = DistSSHRun.init_log_file(tmp; prefix = "preflight_mix_$(v)")
+                            @test DistSSHRun.preflight_setup_ssh(["host1", "host2"]) == false
+                            return path
+                        end
+                        body = read(log_path, String)
+                        @test _count_host_prefix(body, "host1") == 1
+                        @test _count_host_prefix(body, "host2") == 1
+                        lines = _result_lines(replace(body, '\r' => ""))
+                        if v === :verbose
+                            @test occursin("  host1: ✓", replace(body, '\r' => ""))
+                            @test occursin("  host2: ✗", replace(body, '\r' => ""))
+                        else
+                            @test any(l -> startswith(l, "  host1: ✓"), lines)
+                            @test any(l -> startswith(l, "  host2: ✗"), lines)
+                        end
+                        if v === :quiet
+                            @test !occursin("host1", out)
+                            @test !occursin("host2", out)
+                        elseif v === :progress
+                            @test occursin("host2", out)
+                            @test occursin("✗", out)
+                            @test !occursin("host1: ✓", out)
+                            @test count("  host2: ", out) == 1
+                        else
+                            @test occursin("host1:", out)
+                            @test occursin("host2:", out)
+                        end
+                    end
+                end
+            end
+        end
+    end
+
     @testset "delete_remotes" begin
         withenv("DISTSSHKIT_YES" => nothing) do
             prev_ni = DistSSHRun.kit_noninteractive()

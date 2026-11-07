@@ -217,14 +217,14 @@ if !isdefined(@__MODULE__, :setup_main)
             if mode === :clone || mode === :ship_tree || mode === :remote_root ||
                     mode === :instantiate || mode === :runtest
                 if !preflight_setup_ssh(opts.hosts)
-                    print_err("SSH preflight failed. Fix connectivity, then retry.")
+                    print_err("SSH preflight failed. Fix connectivity, then retry.\n")
                     kit_println()
                     return Cint(1)
                 end
             elseif setup_mode_allows_parent(mode)
                 ssh_hosts = setup_juliaup_ssh_hosts(opts.hosts)
                 if !isempty(ssh_hosts) && !preflight_setup_ssh(ssh_hosts)
-                    print_err("SSH preflight failed. Fix connectivity, then retry.")
+                    print_err("SSH preflight failed. Fix connectivity, then retry.\n")
                     kit_println()
                     return Cint(1)
                 end
@@ -237,7 +237,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 plan = _setup_confirm_plan(opts.hosts, :delete, opts.confirm_paths, delete_path)
                 plan isa Cint && return plan
                 if plan !== nothing && !preflight_setup_ssh(opts.hosts)
-                    print_err("SSH preflight failed. Fix connectivity, then retry.")
+                    print_err("SSH preflight failed. Fix connectivity, then retry.\n")
                     kit_println()
                     return Cint(1)
                 end
@@ -351,7 +351,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 plan = _setup_confirm_plan(opts.hosts, :prune, opts.confirm_paths, op_path)
                 plan isa Cint && return plan
                 if plan !== nothing && !preflight_setup_ssh(opts.hosts)
-                    print_err("SSH preflight failed. Fix connectivity, then retry.")
+                    print_err("SSH preflight failed. Fix connectivity, then retry.\n")
                     kit_println()
                     return Cint(1)
                 end

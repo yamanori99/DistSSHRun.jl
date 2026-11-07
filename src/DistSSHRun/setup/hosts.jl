@@ -92,20 +92,27 @@ function preflight_setup_ssh(hosts::Vector{String})::Bool
     kit_println("SSH preflight:")
     all_ok = true
     for host in hosts
-        kit_print("  $host: ")
-        flush(stdout)
-        err = probe_setup_ssh(host)
-        if err === nothing
-            print_ok("✓")
-            kit_println()
-        else
-            all_ok = false
-            if kit_output_detail()
+        if kit_output_detail()
+            # `:verbose`: heading on the terminal, then ✓ / ✗ + detail.
+            kit_print("  $host: ")
+            flush(stdout)
+            err = probe_setup_ssh(host)
+            if err === nothing
+                print_ok("✓")
+                kit_println()
+            else
+                all_ok = false
                 print_progress_err("✗")
                 kit_println()
                 kit_println("    $err")
+            end
+        else
+            # `:progress` / `:quiet`: one complete kit-log line (no advance prefix).
+            err = probe_setup_ssh(host)
+            if err === nothing
+                _kit_log_writeln("  $(String(host)): ✓")
             else
-                # `:progress`: host + one-line reason (verbose keeps the heading form).
+                all_ok = false
                 _progress_release_line!()
                 text = "  $(String(host)): ✗ $err"
                 if kit_payload_visible()

@@ -153,7 +153,9 @@ end
             include(joinpath(@__DIR__, "integration", "setup", "exit.jl"))
         end
         _runtest_announce("integration/setup/progress_tty.jl")
-        include(joinpath(@__DIR__, "integration", "setup", "progress_tty.jl"))
+        if !_distsshrun_short_skip("integration/setup/progress_tty.jl")
+            include(joinpath(@__DIR__, "integration", "setup", "progress_tty.jl"))
+        end
         _runtest_announce("integration/go/cli.jl")
         include(joinpath(@__DIR__, "integration", "go", "cli.jl"))
         _runtest_announce("integration/go/overlap.jl")

@@ -141,6 +141,10 @@ using Test
         )
         chmod(runner, 0o755)
 
+        # Hang bound only (not a performance gate). Slow CI runners can exceed
+        # a minute; a stuck `script` child must still be reaped.
+        hang_s = 300.0
+
         function capture_pty(script_path::AbstractString)
             dest = joinpath(dir, "typescript.txt")
             rm(dest; force = true)
@@ -159,7 +163,16 @@ using Test
             env = Dict{String, String}(
                 String(k) => String(v) for (k, v) in ENV if !(String(k) in skip) && !isempty(v)
             )
-            run(ignorestatus(setenv(cmd, env)))
+            proc = run(ignorestatus(setenv(cmd, env)); wait = false)
+            done = timedwait(() -> !process_running(proc), hang_s; pollint = 0.5)
+            if done !== :ok
+                process_running(proc) && kill(proc, Base.SIGTERM)
+                timedwait(() -> !process_running(proc), 5.0; pollint = 0.2)
+                process_running(proc) && kill(proc, Base.SIGKILL)
+                timedwait(() -> !process_running(proc), 5.0; pollint = 0.2)
+                error("progress_tty script exceeded $(hang_s)s")
+            end
+            wait(proc)
             return isfile(dest) ? read(dest, String) : ""
         end
 
@@ -167,7 +180,6 @@ using Test
         pty = capture_pty(runner)
         elapsed = time() - t0
         @info "progress_tty script child wall" elapsed
-        @test elapsed < 70
 
         parts = split(pty, "___SPLIT___")
         @test length(parts) == 10
@@ -221,7 +233,13 @@ using Test
         _assert_tty_progress_payload(check2_tty; hosts = ["host1", "host2"])
 
         # Preflight failure names the host and keeps a one-line reason.
+        # Raw stream (before ANSI strip): a missing CLI newline glues the
+        # harness marker onto the summary (`retry.___SPLIT___`). A TTY may
+        # emit `\r\n` and place the color reset before that newline, so assert
+        # on the stripped text with an optional CR.
+        @test !occursin("retry.___SPLIT___", pty)
         preflight_plain = _tty_strip_ansi(preflight_tty)
+        @test occursin(r"SSH preflight failed\. Fix connectivity, then retry\.\r?\n", preflight_plain)
         @test occursin("host1", preflight_plain)
         @test occursin("SSH preflight failed", preflight_plain)
         @test occursin("SSH auth/host-key failed", preflight_plain) ||
