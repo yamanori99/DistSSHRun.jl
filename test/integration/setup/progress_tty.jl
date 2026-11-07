@@ -6,14 +6,21 @@ using Test
 #
 # CI / `script` typescripts look like they stack many `check` spinner rows.
 # That is the byte stream: each redraw is `\r` + line + `\e[K` with no
-# newline. Turning `\r` into `\n` (see `tty_lines`) makes each frame its own
-# log line. A live terminal overwrites the same row; `live_spinner_bar_peak`
+# newline. Turning `\r` into `\n` (see `_tty_lines`) makes each frame its own
+# log line. A live terminal overwrites the same row; `_tty_live_spinner_bar_peak`
 # applies `\r` / `\e[K` and asserts at most one spinner bar is visible.
+#
+# One `script` child covers the happy path, multi-host SSH fail, preflight,
+# size/pool, go success/exit 3, and a `:quiet` summary check.
 
 @testset "TTY progress keeps up status and setup --check lines" begin
     status_cmd = _kit_cli_cmd(["up", "status", "parent", "child:host1"])
     update_cmd = _kit_cli_cmd(["up", "update", "parent", "child:host1"])
     check_cmd = _kit_cli_cmd(["setup", "--check", "child:host1"])
+    check2_cmd = _kit_cli_cmd(["setup", "--check", "child:host1", "child:host2"])
+    preflight_cmd = _kit_cli_cmd(["up", "status", "child:host1"])
+    size_cmd = _kit_cli_cmd(["size", "parent", "--gb-per-worker", "0.5"])
+    pool_cmd = _kit_cli_cmd(["pool", "parent"])
     mktempdir() do dir
         ju = joinpath(dir, "juliaup")
         write(
@@ -51,6 +58,32 @@ using Test
             end
             """,
         )
+        fail_ssh = joinpath(dir, "fail_ssh.jl")
+        write(
+            fail_ssh,
+            """
+            println(stderr, "Permission denied (publickey).")
+            exit(255)
+            """,
+        )
+        stub_bin = joinpath(dir, "stub-bin")
+        mkpath(stub_bin)
+        write(joinpath(stub_bin, "ssh"), "#!/bin/sh\nexit 1\n")
+        write(joinpath(stub_bin, "git"), "#!/bin/sh\nexit 1\n")
+        chmod(joinpath(stub_bin, "ssh"), 0o755)
+        chmod(joinpath(stub_bin, "git"), 0o755)
+
+        go_proj = joinpath(dir, "go-proj")
+        mkpath(go_proj)
+        write(joinpath(go_proj, "Project.toml"), "name = \"TtyGo\"\nuuid = \"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\"\n")
+        write(joinpath(go_proj, "Manifest.toml"), "# lock\n")
+        go_ok = joinpath(go_proj, "ok.jl")
+        write(go_ok, "println(\"go-ok-marker\")\n")
+        go_fail = joinpath(go_proj, "fail.jl")
+        write(go_fail, "println(\"go-fail-marker\")\nexit(3)\n")
+        go_ok_cmd = _kit_cli_cmd(["go", "-y", "parent:1", go_ok])
+        go_fail_cmd = _kit_cli_cmd(["go", "-y", "parent:1", go_fail])
+
         empty_path = mktempdir()
         runner = joinpath(dir, "runner.sh")
         function sh_quote(s::AbstractString)
@@ -80,6 +113,30 @@ using Test
             $(argv_line(update_cmd))
             echo '___SPLIT___'
             $(argv_line(check_cmd))
+            echo '___SPLIT___'
+            # Local ssh/git stubs so --check reaches remote probes; fail-fast SSH double.
+            export PATH=$(sh_quote(stub_bin))
+            export DISTSSHKIT_TEST_SSH=$(sh_quote(fail_ssh))
+            $(argv_line(check2_cmd))
+            echo '___SPLIT___'
+            $(argv_line(preflight_cmd))
+            echo '___SPLIT___'
+            export DISTSSHKIT_TEST_SSH=$(sh_quote(ssh))
+            export DISTRIBUTED_PROJECT_ROOT=$(sh_quote(go_proj))
+            export DISTSSHKIT_YES=1
+            $(argv_line(size_cmd))
+            echo '___SPLIT___'
+            $(argv_line(pool_cmd))
+            echo '___SPLIT___'
+            $(argv_line(go_ok_cmd))
+            echo '___SPLIT___'
+            $(argv_line(go_fail_cmd))
+            echo '___SPLIT___'
+            unset DISTSSHKIT_YES
+            export DISTSSHKIT_QUIET=1
+            export PATH=$(sh_quote(empty_path))
+            export DISTSSHKIT_TEST_SSH=$(sh_quote(ssh))
+            $(argv_line(check_cmd))
             """,
         )
         chmod(runner, 0o755)
@@ -106,115 +163,103 @@ using Test
             return isfile(dest) ? read(dest, String) : ""
         end
 
-        function strip_ansi(s::AbstractString)
-            return replace(String(s), r"\e\[[0-9;?]*[A-Za-z]" => "")
-        end
-        function tty_lines(s::AbstractString)
-            # Log-style view: each `\r` redraw becomes its own line (CI look).
-            return split(strip_ansi(replace(String(s), "\r" => "\n")), '\n')
-        end
-        function bar_line(line::AbstractString)
-            return occursin("[K", line) ||
-                occursin("━", line) ||
-                occursin("╺", line) ||
-                any(c -> occursin(c, line), "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
-        end
-        function spinner_bar_line(line::AbstractString)
-            return any(c -> occursin(c, line), "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏") &&
-                (occursin("━", line) || occursin("╺", line))
-        end
-        function message_line(line::AbstractString)
-            return occursin("not found in PATH", line) || occursin("Prerequisites not met", line)
-        end
-        # Live TTY: `\r` returns to column 0; CSI K after that clears the row.
-        # Snapshot after each erase / newline and track how many spinner bars
-        # would be on screen at once (must stay ≤ 1).
-        function live_spinner_bar_peak(raw::AbstractString)
-            finished = String[]
-            cur = Ref("")
-            at_home = false
-            peak = Ref(0)
-            function note!()
-                rows = strip_ansi.(
-                    isempty(cur[]) ? finished : vcat(finished, String[cur[]]),
-                )
-                peak[] = max(peak[], count(spinner_bar_line, rows))
-                return nothing
-            end
-            i = firstindex(raw)
-            while i <= lastindex(raw)
-                ch = raw[i]
-                if ch == '\r'
-                    at_home = true
-                    i = nextind(raw, i)
-                elseif ch == '\n'
-                    push!(finished, cur[])
-                    cur[] = ""
-                    at_home = false
-                    note!()
-                    i = nextind(raw, i)
-                elseif ch == '\e'
-                    j = nextind(raw, i)
-                    if j <= lastindex(raw) && raw[j] == '['
-                        k = nextind(raw, j)
-                        while k <= lastindex(raw) && !isletter(raw[k])
-                            k = nextind(raw, k)
-                        end
-                        k <= lastindex(raw) || break
-                        if raw[k] == 'K'
-                            if at_home
-                                cur[] = ""
-                                at_home = false
-                            end
-                            note!()
-                        end
-                        i = nextind(raw, k)
-                    else
-                        i = j
-                    end
-                else
-                    if at_home
-                        cur[] = ""
-                        at_home = false
-                    end
-                    cur[] *= string(ch)
-                    i = nextind(raw, i)
-                end
-            end
-            note!()
-            return peak[]
-        end
-
+        t0 = time()
         pty = capture_pty(runner)
+        elapsed = time() - t0
+        @info "progress_tty script child wall" elapsed
+        @test elapsed < 70
+
         parts = split(pty, "___SPLIT___")
-        @test length(parts) == 3
-        status_tty = length(parts) == 3 ? parts[1] : ""
-        update_tty = length(parts) == 3 ? parts[2] : ""
-        check_tty = length(parts) == 3 ? parts[3] : ""
-        status_lines = tty_lines(status_tty)
+        @test length(parts) == 10
+        status_tty = length(parts) == 10 ? parts[1] : ""
+        update_tty = length(parts) == 10 ? parts[2] : ""
+        check_tty = length(parts) == 10 ? parts[3] : ""
+        check2_tty = length(parts) == 10 ? parts[4] : ""
+        preflight_tty = length(parts) == 10 ? parts[5] : ""
+        size_tty = length(parts) == 10 ? parts[6] : ""
+        pool_tty = length(parts) == 10 ? parts[7] : ""
+        go_ok_tty = length(parts) == 10 ? parts[8] : ""
+        go_fail_tty = length(parts) == 10 ? parts[9] : ""
+        quiet_tty = length(parts) == 10 ? parts[10] : ""
+
+        status_lines = _tty_lines(status_tty)
         parent_rows = filter(l -> occursin("parent:", l) && occursin("installed", l), status_lines)
         child_rows = filter(l -> occursin("host1:", l) && occursin("installed", l), status_lines)
         @test !isempty(parent_rows)
         @test !isempty(child_rows)
         @test all(l -> !occursin("same as parent", l), parent_rows)
         @test any(l -> occursin("installed 1.13.0", l), child_rows)
-        @test occursin("parent: ✓ juliaup update", strip_ansi(update_tty))
-        @test occursin("host1: ✓ juliaup update", strip_ansi(update_tty))
-        check_lines = tty_lines(check_tty)
-        @test !any(l -> bar_line(l) && message_line(l), check_lines)
+        @test occursin("parent: ✓ juliaup update", _tty_strip_ansi(update_tty))
+        @test occursin("host1: ✓ juliaup update", _tty_strip_ansi(update_tty))
+        check_lines = _tty_lines(check_tty)
+        @test !any(l -> _tty_bar_line(l) && (occursin("not found in PATH", l) || occursin("Prerequisites not met", l)), check_lines)
         @test any(l -> strip(l) == "✗ ssh not found in PATH" || strip(l) == "  ✗ ssh not found in PATH", check_lines)
         finals = filter(l -> occursin("Prerequisites not met", l), check_lines)
         @test length(finals) == 1
         @test finals[1] == "  Prerequisites not met. Fix issues above and retry."
-        @test !bar_line(finals[1])
+        @test !_tty_bar_line(finals[1])
         @test !occursin("[K", finals[1])
         # Flattened log may list many `check` frames; the live screen never stacks them.
-        @test count(spinner_bar_line, check_lines) >= 1
-        @test live_spinner_bar_peak(check_tty) <= 1
+        @test count(_tty_spinner_bar_line, check_lines) >= 1
+        @test _tty_live_spinner_bar_peak(check_tty) <= 1
         ssh_at = findfirst("ssh not found in PATH", check_tty)
         pre_at = findfirst("Prerequisites not met", check_tty)
         @test ssh_at !== nothing && pre_at !== nothing && first(ssh_at) < first(pre_at)
         @test !occursin("Checking prerequisites", check_tty)
+        _assert_tty_progress_payload(check_tty)
+
+        # Two-host SSH fail: each fail line names its host; reason stays on TTY.
+        check2_lines = _tty_lines(check2_tty)
+        @test any(l -> occursin("host1", l) && occursin("✗", l) && occursin("SSH connection failed", l), check2_lines)
+        @test any(l -> occursin("host2", l) && occursin("✗", l) && occursin("SSH connection failed", l), check2_lines)
+        @test any(
+            l -> occursin("SSH auth/host-key failed", l) || occursin("Permission denied", l) ||
+                occursin("publickey", l),
+            check2_lines,
+        )
+        @test any(l -> occursin("Prerequisites not met", l), check2_lines)
+        _assert_tty_progress_payload(check2_tty; hosts = ["host1", "host2"])
+
+        # Preflight failure names the host and keeps a one-line reason.
+        preflight_plain = _tty_strip_ansi(preflight_tty)
+        @test occursin("host1", preflight_plain)
+        @test occursin("SSH preflight failed", preflight_plain)
+        @test occursin("SSH auth/host-key failed", preflight_plain) ||
+            occursin("Permission denied", preflight_plain) || occursin("✗", preflight_plain)
+        _assert_tty_progress_payload(preflight_tty; hosts = ["host1"])
+
+        # size / pool: tables remain (headings may be hidden at :progress).
+        @test occursin("parent", _tty_strip_ansi(size_tty)) || occursin("GB", _tty_strip_ansi(size_tty)) ||
+            occursin("worker", lowercase(_tty_strip_ansi(size_tty)))
+        @test occursin("parent", _tty_strip_ansi(pool_tty)) || occursin("pool", lowercase(_tty_strip_ansi(pool_tty))) ||
+            !isempty(strip(_tty_strip_ansi(pool_tty)))
+
+        # go success: item names parent; stdout after the final bar.
+        go_ok_plain = _tty_strip_ansi(go_ok_tty)
+        @test occursin("parent", go_ok_plain)
+        @test occursin("go-ok-marker", go_ok_plain)
+        go_ok_lines = _tty_lines(go_ok_tty)
+        @test any(l -> occursin("go-ok-marker", l) && !_tty_bar_line(l), go_ok_lines)
+        _assert_tty_progress_payload(go_ok_tty)
+
+        # go exit 3: failure line names parent; no cursor-up redraw after it.
+        go_fail_plain = _tty_strip_ansi(go_fail_tty)
+        @test occursin("parent", go_fail_plain)
+        @test occursin("exit 3", go_fail_plain) || occursin("(exit 3)", go_fail_plain)
+        go_fail_lines = _tty_lines(go_fail_tty)
+        @test any(l -> occursin("✗", l) && occursin("parent", l) && occursin("exit", l), go_fail_lines)
+        _assert_tty_progress_payload(go_fail_tty)
+
+        # :quiet setup --check: only the summary line on the terminal.
+        quiet_lines = filter(l -> !isempty(strip(l)), _tty_lines(quiet_tty))
+        # script(1) may emit a status line; ignore blank / typescript chrome.
+        payload = filter(
+            l -> occursin("Prerequisites", l) || occursin("✗", l) || occursin("Checking", l),
+            quiet_lines,
+        )
+        @test length(payload) == 1
+        @test occursin("Prerequisites not met", payload[1])
+        @test startswith(payload[1], "  ")
 
         pipe_env = _child_julia_env(
             Dict(
@@ -235,8 +280,8 @@ using Test
         @test occursin("aarch64", status_pipe)
         @test occursin("parent:", status_pipe)
         @test occursin("host1:", status_pipe)
-        @test any(l -> occursin("parent:", l) && occursin("installed", l) && !occursin("same as parent", l), tty_lines(status_pipe))
-        @test any(l -> occursin("host1:", l) && occursin("installed 1.13.0", l), tty_lines(status_pipe))
+        @test any(l -> occursin("parent:", l) && occursin("installed", l) && !occursin("same as parent", l), _tty_lines(status_pipe))
+        @test any(l -> occursin("host1:", l) && occursin("installed 1.13.0", l), _tty_lines(status_pipe))
         @test occursin("✓ juliaup update", update_pipe)
         @test !occursin("parent: ✓ juliaup", update_pipe)
         @test !occursin("host1: ✓ juliaup", update_pipe)
@@ -244,8 +289,19 @@ using Test
         pipe_ssh = findfirst("ssh not found in PATH", check_pipe)
         pipe_pre = findfirst("Prerequisites not met", check_pipe)
         @test pipe_ssh !== nothing && pipe_pre !== nothing && first(pipe_ssh) < first(pipe_pre)
-        pipe_finals = filter(l -> occursin("Prerequisites not met", l), tty_lines(check_pipe))
+        pipe_finals = filter(l -> occursin("Prerequisites not met", l), _tty_lines(check_pipe))
         @test length(pipe_finals) == 1
         @test pipe_finals[1] == "  Prerequisites not met. Fix issues above and retry."
+
+        # :verbose / pipe: host heading form for multi-host SSH fail (unchanged).
+        pipe2_env = copy(pipe_env)
+        pipe2_env["PATH"] = stub_bin
+        pipe2_env["DISTSSHKIT_TEST_SSH"] = fail_ssh
+        check2_pipe = read(ignorestatus(setenv(check2_cmd, pipe2_env)), String)
+        @test occursin("host1:", check2_pipe)
+        @test occursin("host2:", check2_pipe)
+        @test occursin("SSH connection failed", check2_pipe)
+        @test !occursin("host1: SSH connection failed", check2_pipe)
+        @test !occursin("host2: SSH connection failed", check2_pipe)
     end
 end

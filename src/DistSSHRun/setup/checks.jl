@@ -1,5 +1,25 @@
 check_ssh(host::String)::Bool = probe_setup_ssh(host) === nothing
 
+"""Per-host `setup --check` failure. `:progress` prefixes the host; `:verbose` keeps the host heading."""
+function _fail_host(host::AbstractString, msg)
+    return fail(kit_output_detail() ? string(msg) : "$(String(host)): $msg")
+end
+
+"""Per-host `setup --check` warning. Same host gate as [`_fail_host`](@ref)."""
+function _warn_host(host::AbstractString, msg)
+    return warn(kit_output_detail() ? string(msg) : "$(String(host)): $msg")
+end
+
+"""Indented detail under a check line. Visible at `:progress` via the payload path."""
+function _host_check_detail(msg)
+    if kit_output_detail()
+        kit_println("    $msg")
+    else
+        kit_payload_println("    $msg")
+    end
+    return nothing
+end
+
 """Print local `ssh` / `git` PATH status. `ssh` missing is a failure; `git` missing warns."""
 function _report_local_host_tools!(warnings::Vector{SetupWarning} = SetupWarning[])
     ssh = git = true
@@ -45,30 +65,39 @@ function _report_remote_julia!(
     local_s = string(local_version)
     kind = julia_check.mismatch_kind
     if !julia_check.found
-        fail("Julia not found (checked: $checked)")
+        _fail_host(host, "Julia not found (checked: $checked)")
         print_juliaup_align_fix!(host; kind = :missing)
         return false
     elseif kind in (:minor, :patch, :prerelease) && !ignore
         if kind == :minor
-            fail("Julia version mismatch: local $(local_s), $host has $(julia_check.version) (at $checked)")
+            _fail_host(
+                host,
+                "Julia version mismatch: local $(local_s), $host has $(julia_check.version) (at $checked)",
+            )
         elseif kind == :patch
-            fail("Julia patch version differs: local $(local_s), $host has $(julia_check.version) (at $checked)")
+            _fail_host(
+                host,
+                "Julia patch version differs: local $(local_s), $host has $(julia_check.version) (at $checked)",
+            )
         else
-            fail("Julia prerelease differs: local $(local_s), $host has $(julia_check.version) (at $checked)")
+            _fail_host(
+                host,
+                "Julia prerelease differs: local $(local_s), $host has $(julia_check.version) (at $checked)",
+            )
         end
         print_juliaup_align_fix!(host; kind = :mismatch)
         return false
     elseif kind == :minor
         msg = "Julia version differs: local $(local_s), $host has $(julia_check.version) (--ignore-julia-version)"
-        warn(msg)
+        _warn_host(host, msg)
         push!(warnings, SetupWarning(String(host), :julia_minor_ignored, msg))
     elseif kind == :patch
         msg = "Julia patch version differs: local $(local_s), $host has $(julia_check.version) (--ignore-julia-version)"
-        warn(msg)
+        _warn_host(host, msg)
         push!(warnings, SetupWarning(String(host), :julia_patch, msg))
     elseif kind == :prerelease
         msg = "Julia prerelease differs: local $(local_s), $host has $(julia_check.version) (--ignore-julia-version)"
-        warn(msg)
+        _warn_host(host, msg)
         push!(warnings, SetupWarning(String(host), :julia_prerelease, msg))
     else
         ok("Julia $(julia_check.version) found at $checked")
@@ -281,8 +310,8 @@ function check_prerequisites(
         if ssh_err === nothing
             ok("SSH connection")
         else
-            fail("SSH connection failed")
-            kit_println("    $ssh_err")
+            _fail_host(host, "SSH connection failed")
+            _host_check_detail(ssh_err)
             all_ok = false
             host_ok[] = false
             kit_println()
@@ -297,7 +326,7 @@ function check_prerequisites(
                 host_julia = detect_julia_path(host)
             catch e
                 e isa ArgumentError || rethrow()
-                fail(e.msg)
+                _fail_host(host, e.msg)
                 all_ok = false
                 host_ok[] = false
                 kit_println()
@@ -318,8 +347,10 @@ function check_prerequisites(
         if check_project(host, remote_path)
             ok("Project found at $project_path")
         else
-            fail("Project not found at $project_path")
-            kit_println("    Fix: --clone $(setup_cli_host_token(host))  (or --ship-tree $(setup_cli_host_token(host)))")
+            _fail_host(host, "Project not found at $project_path")
+            _host_check_detail(
+                "Fix: --clone $(setup_cli_host_token(host))  (or --ship-tree $(setup_cli_host_token(host)))",
+            )
             all_ok = false
             host_ok[] = false
             kit_println()
@@ -328,7 +359,7 @@ function check_prerequisites(
         end
 
         if host_julia === nothing || !julia_check.found
-            fail("Skipping dependency check (no usable remote Julia)")
+            _fail_host(host, "Skipping dependency check (no usable remote Julia)")
             all_ok = false
             host_ok[] = false
         else
@@ -338,8 +369,10 @@ function check_prerequisites(
             if deps_err === nothing
                 ok("Project dependencies resolvable")
             else
-                fail(deps_err)
-                kit_println("    Fix: julia --project=. -m DistSSHKit setup --instantiate $(setup_cli_host_token(host))")
+                _fail_host(host, deps_err)
+                _host_check_detail(
+                    "Fix: julia --project=. -m DistSSHKit setup --instantiate $(setup_cli_host_token(host))",
+                )
                 all_ok = false
                 host_ok[] = false
             end
@@ -349,12 +382,12 @@ function check_prerequisites(
             remote_hash = get_remote_git_hash(host, remote_path; short = 12)
             if remote_hash === nothing
                 msg = "Could not get remote git commit"
-                warn(msg)
+                _warn_host(host, msg)
                 push!(warnings, SetupWarning(String(host), :git_commit_unknown, msg))
                 needs_sync = true
             elseif local_hash === nothing
                 msg = "Git commit not comparable (no local commit)"
-                warn(msg)
+                _warn_host(host, msg)
                 push!(warnings, SetupWarning(String(host), :git_commit_unknown, msg))
                 needs_sync = true
             elseif remote_hash == local_hash
@@ -362,15 +395,18 @@ function check_prerequisites(
             else
                 needs_sync = true
                 if check_code_sync
-                    fail("Git commit differs (local: $local_hash, remote: $remote_hash)")
-                    kit_println("    Fix: --pull or --sync to update remote")
+                    _fail_host(
+                        host,
+                        "Git commit differs (local: $local_hash, remote: $remote_hash)",
+                    )
+                    _host_check_detail("Fix: --pull or --sync to update remote")
                     all_ok = false
                     host_ok[] = false
                 else
                     msg = "Git commit differs (local: $local_hash, remote: $remote_hash)"
-                    warn(msg)
+                    _warn_host(host, msg)
                     push!(warnings, SetupWarning(String(host), :git_commit_differs, msg))
-                    kit_println("    Will be synced by this operation")
+                    _host_check_detail("Will be synced by this operation")
                 end
             end
         end

@@ -1283,12 +1283,14 @@ function _go_run!(
                     if err !== nothing
                         any_run_fail[] = true
                         kit_progress_item!(slot.label; status = :fail)
+                        _progress_release_line!()
                         write(stderr, "  ")
                         print_err("✗ $(slot.label): $(sprint(showerror, err))"; io = stderr)
                         println(stderr)
                     elseif !outcome.run.ok
                         any_run_fail[] = true
                         kit_progress_item!(slot.label; status = :fail)
+                        _progress_release_line!()
                         write(stderr, "  ")
                         print_err(
                             "✗ $(slot.label) (exit $(outcome.run.exit_code))$(_go_trace_suffix(outcome.run.output_dir))";
@@ -1331,6 +1333,7 @@ function _go_run!(
                             any_collect_fail[] = true
                         end
                         if err !== nothing
+                            _progress_release_line!()
                             write(stderr, "  ")
                             print_err(
                                 "✗ $(slot.label): $(sprint(showerror, err))";
