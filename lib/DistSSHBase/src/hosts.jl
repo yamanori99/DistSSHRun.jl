@@ -6,7 +6,7 @@ const PARENT_HOST_NAME = "parent"
 """Prefix for an SSH child (`child:NAME` / `child:NAME:N`)."""
 const CHILD_TOKEN_PREFIX = "child:"
 
-"""Whether `host` denotes this job's parent in drive/go/size.
+"""Whether `host` denotes this job's parent in drive/go/hostinfo.
 
 Only `parent` matches. `parenthost` is rejected by `parse_placement_token`.
 A token `local` / `localhost` / `l` is an ordinary SSH child (`child:local`).
@@ -56,7 +56,7 @@ function _placement_count_suffix(spec::AbstractString)::Tuple{String, Union{Noth
     return s, nothing
 end
 
-"""Format a go/drive/size token (`parent[:N]` or `child:NAME[:N]`)."""
+"""Format a go/drive/hostinfo token (`parent[:N]` or `child:NAME[:N]`)."""
 function format_placement_token(
         role::Symbol,
         name::String,
@@ -80,7 +80,7 @@ format_placement_token(
 ) = format_placement_token(role, name isa String ? name : string(name), n)
 
 const _PLACEMENT_HINT =
-    "use `parent[:N]` or `child:NAME[:N]` (setup / size ignore `:N`)"
+    "use `parent[:N]` or `child:NAME[:N]` (setup / hostinfo ignore `:N`)"
 
 """Hostname inside `user@host`, `host:path`, or `[::1]:path`."""
 function _ssh_host_label(dest::AbstractString)::String
@@ -133,10 +133,10 @@ function throw_legacy_placement_token(raw::AbstractString)
 end
 
 """
-Classify a go/drive/size placement token.
+Classify a go/drive/hostinfo placement token.
 
 Returns `(role, name, n)` where `role` is `:parent` or `:child`, `name` is
-`parent` or the SSH host, and `n` is the explicit count or `nothing` (`-w` / size).
+`parent` or the SSH host, and `n` is the explicit count or `nothing`.
 """
 function parse_placement_token(
         spec::AbstractString,

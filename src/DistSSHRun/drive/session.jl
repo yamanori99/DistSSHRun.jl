@@ -1,6 +1,6 @@
 # KitSession — shared context for drive / sync / collect APIs.
 
-"""Runtime context for `sync!`, `size!`, `drive!`, `collect!`."""
+"""Runtime context for `sync!`, `drive!`, `collect!`."""
 mutable struct KitSession
     project::String
     hosts::Vector{String}
@@ -18,7 +18,7 @@ end
                quiet=false, verbosity=nothing, yes=true, include_parent_for_size=false)
 
 Build a session for drive APIs. `workers` is a CLI-style host list.
-`setup!` / `size!` / `pool!` / `sync!` / `collect!` accept a bare list
+`setup!` / `pool!` / `sync!` / `collect!` accept a bare list
 (`child:user@host`). `go!` / `drive!` / `ride!` / `pipeline!` require `:N`
 on listed tokens (`parent:2`, `child:user@host:1`).
 
@@ -117,11 +117,3 @@ end
 """Explain surface for this session (`:cli` or `:api`)."""
 hint_surface(session::KitSession)::Symbol = session.cli_session.hint_surface
 
-"""SSH host names used for [`size!`](@ref) (`parent` first when `include_parent_for_size`)."""
-function session_size_hosts(session::KitSession)::Tuple{Vector{String}, Vector{String}}
-    child_hosts = copy(session.hosts)
-    if session.include_parent_for_size
-        return [PARENT_HOST_NAME; child_hosts], child_hosts
-    end
-    return child_hosts, child_hosts
-end

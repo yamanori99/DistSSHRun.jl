@@ -11,7 +11,7 @@ using Test
 # applies `\r` / `\e[K` and asserts at most one spinner bar is visible.
 #
 # One `script` child covers the happy path, multi-host SSH fail, preflight,
-# size/pool, go success/exit 3, and a `:quiet` summary check.
+# hostinfo/pool, go success/exit 3, and a `:quiet` summary check.
 
 @testset "TTY progress keeps up status and setup --check lines" begin
     status_cmd = _kit_cli_cmd(["up", "status", "parent", "child:host1"])
@@ -19,7 +19,7 @@ using Test
     check_cmd = _kit_cli_cmd(["setup", "--check", "child:host1"])
     check2_cmd = _kit_cli_cmd(["setup", "--check", "child:host1", "child:host2"])
     preflight_cmd = _kit_cli_cmd(["up", "status", "child:host1"])
-    size_cmd = _kit_cli_cmd(["size", "parent", "--gb-per-worker", "0.5"])
+    size_cmd = _kit_cli_cmd(["hostinfo", "parent"])
     pool_cmd = _kit_cli_cmd(["pool", "parent"])
     mktempdir() do dir
         ju = joinpath(dir, "juliaup")
@@ -246,9 +246,9 @@ using Test
             occursin("Permission denied", preflight_plain) || occursin("✗", preflight_plain)
         _assert_tty_progress_payload(preflight_tty; hosts = ["host1"])
 
-        # size / pool: tables remain (headings may be hidden at :progress).
+        # hostinfo / pool: tables remain (headings may be hidden at :progress).
         @test occursin("parent", _tty_strip_ansi(size_tty)) || occursin("GB", _tty_strip_ansi(size_tty)) ||
-            occursin("worker", lowercase(_tty_strip_ansi(size_tty)))
+            occursin("hostinfo", lowercase(_tty_strip_ansi(size_tty)))
         @test occursin("parent", _tty_strip_ansi(pool_tty)) || occursin("pool", lowercase(_tty_strip_ansi(pool_tty))) ||
             !isempty(strip(_tty_strip_ansi(pool_tty)))
 

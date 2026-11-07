@@ -18,7 +18,6 @@ files=(
     test/e2e.jl
     lib/DistSSHBase/test/runtests.jl
     lib/DistSSHUp/test/runtests.jl
-    lib/DistSSHSize/test/runtests.jl
     bench/compile/report.jl
     bench/compile/measure.jl
 )

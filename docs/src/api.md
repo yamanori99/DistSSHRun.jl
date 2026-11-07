@@ -41,17 +41,18 @@ execute_kwargs_from_parsed
 detached_launch
 ```
 
-## Size
+## Placement and host facts
 
-`size!` and `pool!` measure memory and the free slots on a host.
+`WorkerPlan` is explicit `parent:N` / `child:NAME:N`. `pool!` inventories cores
+and RAM. `hostinfo` prints structured `DistSSHBase.HostFacts`.
 
 ```@autodocs
-Modules = [DistSSHRun, DistSSHRun.DistSSHSize]
+Modules = [DistSSHRun]
 Public = true
 Private = false
 Filter = function (x)
     names = (
-        :size!, :WorkerPlan, :pool!, :ResourcePool, :HostInventory, :print_pool,
+        :WorkerPlan, :pool!, :ResourcePool, :HostInventory, :print_pool, :print_hostinfo,
     )
     n = try
         nameof(x)
@@ -126,10 +127,10 @@ content_tree_hash
 
 Names the commands above call: host tokens and SSH, the file cache, run
 directories, and help text. Every other public name is in this list too,
-including DistSSHBase, DistSSHUp, and DistSSHSize.
+including DistSSHBase and DistSSHUp.
 
 ```@autodocs
-Modules = [DistSSHRun, DistSSHRun.DistSSHBase, DistSSHRun.DistSSHUp, DistSSHRun.DistSSHSize]
+Modules = [DistSSHRun, DistSSHRun.DistSSHBase, DistSSHRun.DistSSHUp]
 Public = true
 Private = false
 Filter = function (x)
@@ -140,7 +141,7 @@ Filter = function (x)
         :terminate!, :terminate_run!, :kit_result_from_dir, :result_run_dir, :result_provenance,
         :result_content_tree_hash, :result_remote_run_id,
         :ride!, :RideResult, :print_ride,
-        :size!, :WorkerPlan, :pool!, :ResourcePool, :HostInventory, :print_pool,
+        :WorkerPlan, :pool!, :ResourcePool, :HostInventory, :print_pool, :print_hostinfo,
         :pipeline!, :PipelineConfig, :PipelineResult, :pipeline_config_from_env,
         :report_pipeline_errors,
         :collect!, :CollectResult,

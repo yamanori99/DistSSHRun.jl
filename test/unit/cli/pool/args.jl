@@ -8,9 +8,6 @@ using Test
             @test !r.show_help
             @test r.include_parent
             @test r.hosts == ["host1", "host2"]
-            @test r.gb_per_worker === nothing
-            @test r.mem_headroom == DistSSHRun.DEFAULT_MEM_HEADROOM
-            @test r.parent_gb == DistSSHRun.DEFAULT_PARENT_GB
         end
         let r = parse_pool_args(["child:local", "child:host1"])
             @test !r.include_parent
@@ -21,16 +18,9 @@ using Test
         @test_throws ArgumentError parse_pool_args(["--master-gb", "0.2"])
         @test_throws ArgumentError parse_pool_args(["--local", "child:host1"])
         @test_throws ArgumentError parse_pool_args(["--probe", "warmup.jl"])
+        @test_throws ArgumentError parse_pool_args(["--gb-per-worker", "1.5", "child:host1"])
         let r = parse_pool_args(["--hosts", "child:h1:4,child:h2", "child:host-cli"])
             @test r.hosts == ["host-cli", "h1", "h2"]
-        end
-        let r = parse_pool_args(["--gb-per-worker", "1.5", "child:host1"])
-            @test r.gb_per_worker == 1.5
-            @test r.hosts == ["host1"]
-        end
-        let r = parse_pool_args(["--mem-headroom", "0.5", "--parent-gb", "0.2"])
-            @test r.mem_headroom == 0.5
-            @test r.parent_gb == 0.2
         end
         for args in (["--nope", "parent"], ["--nope", "--help"], ["--help", "--nope"])
             let err = try
@@ -57,9 +47,8 @@ using Test
             @test occursin("DistSSHKit pool", help)
             @test occursin("-m DistSSHKit", help)
             @test occursin("parent", help)
-            @test occursin("--gb-per-worker", help)
-            @test !occursin("--probe PATH", help)
-            @test occursin("size / size!", help)
+            @test !occursin("--gb-per-worker", help)
+            @test occursin("hostinfo", help)
             @test !occursin("--local", help)
             @test !occursin("#!/usr/bin/env julia", help)
         end

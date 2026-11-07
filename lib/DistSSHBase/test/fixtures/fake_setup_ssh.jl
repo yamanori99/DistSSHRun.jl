@@ -57,6 +57,15 @@ function main()
         exit(0)
     end
 
+    # Before `uname -s`: the hostinfo probe also contains that substring.
+    if occursin("DISTSSHKIT_HOSTINFO", script) || occursin("DISTSSHKIT_POOL", script)
+        println("DISTSSHKIT_HOSTINFO")
+        println(get(ENV, "DISTSSHKIT_TEST_POOL_MEM", "17179869184"))
+        println(get(ENV, "DISTSSHKIT_TEST_POOL_NCPU", "4"))
+        println(get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OS", "Linux"))
+        exit(0)
+    end
+
     if occursin("uname -s", script)
         if get(ENV, "DISTSSHKIT_TEST_UNAME_FAIL", "") == "1"
             exit(1)
@@ -117,13 +126,6 @@ function main()
     if occursin("--version", script)
         ver = strip(get(ENV, "DISTSSHKIT_TEST_JULIA_VERSION", ""))
         println(isempty(ver) ? "julia version $VERSION" : ver)
-        exit(0)
-    end
-
-    if occursin("DISTSSHKIT_POOL", script)
-        println("DISTSSHKIT_POOL")
-        println(get(ENV, "DISTSSHKIT_TEST_POOL_MEM", "17179869184"))
-        println(get(ENV, "DISTSSHKIT_TEST_POOL_NCPU", "4"))
         exit(0)
     end
 

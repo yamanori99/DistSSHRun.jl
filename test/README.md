@@ -63,11 +63,11 @@ unit/
     argv/         # ↔ DistSSHRun/argv/
     setup/        # ↔ DistSSHRun/setup/
   cli/            # ↔ src/cli/
-    drive/, go/, setup/, size/
+    drive/, go/, setup/, hostinfo/
 ```
 
 `integration/` is grouped by area (`DistSSHRun/`, `drive/`, `demos/`,
-`setup/`, `go/`, `size/`).
+`setup/`, `go/`, `hostinfo/`).
 
 ## Layers
 
@@ -190,12 +190,12 @@ DISTSSHKIT_CODE_COVERAGE=1 \
 - `--ship-tree` onto an existing root: a new `run_id` leaf
 - `~/…` remote path: delete → ship-tree → instantiate → drive still run
 
-### Drive / go / size
+### Drive / go / hostinfo
 
 `square_file` writes the CSV in `main()` on the **kit parent**. Workers
 only return numbers. Collect tests use files workers write.
 
-- `size`: both hosts, `GB`, `Total:`
+- `hostinfo`: both hosts, `GB`, `Hostinfo:`
 - `square_echo`: remote compute; stdout has `param^2:`
 - `square_file`: local CSV exists; absent on the remote
 - `worker_*.txt`: on the worker; `run_on_host` read;
@@ -248,8 +248,8 @@ Not this file: macOS workers, dead hosts, fake `ssh`, local
   if executable). An escaping symlink is refused. Remote Julia is `--julia`
   or auto-detect.
   Cache push uses stdlib Tar over SSH. Bytes on a real remote: e2e.
-- **size:** plan math (+ optional RSS). `Pkg.test()` is unit + local
-  probe in `integration/size/`. Bytes on a real remote: e2e if needed.
+- **hostinfo:** structured host facts. `Pkg.test()` is unit + local
+  collection. Bytes on a real remote: e2e if needed.
 
 Do not fake Julia SSH worker launch. Local workers stand in for drive/go;
 they cannot stand in for setup. `_run_kit_setup` / `_run_kit_go` use an
@@ -260,9 +260,9 @@ ephemeral project unless `project_root` is set (E2E uses
 
 Tests follow the same two surfaces as the kit. No extra test harness:
 
-- CLI (`setup` / `go` / `drive` / `size`), `KitSession(workers=…)`, and
+- CLI (`setup` / `go` / `drive` / `hostinfo`), `KitSession(workers=…)`, and
   hosts files use placement tokens (`parent:2`, `child:host-a:4`).
-  setup / size ignore `:N`; `up` accepts `parent`
+  setup / hostinfo ignore `:N`; `up` accepts `parent`
 - Internal SSH names stay bare (`host-a`): `session.hosts`,
   `HostRunResult.host`, collect-only `HOST`, and fake SSH trees
 - `_sample_hosts_file` / `_sample_setup_hosts_file` are placement tokens
@@ -290,7 +290,7 @@ Do not search-replace a host name into a token (that produced
    in the latter; remote TTY cases stay in `e2e.jl`.
 
 Helpers (via `support.jl`): `_child_julia_env`, `_run_kit_drive` /
-`_run_kit_setup` / `_run_kit_go` / `_run_kit_size`, `_mktemp_host` /
+`_run_kit_setup` / `_run_kit_go` / `_run_kit_hostinfo`, `_mktemp_host` /
 `_with_tempdir` / `_stage_with_kit_demos!`, `_with_ssh_e2e_suite`,
 `_capture_stdio` / `with_kit_verbosity`.
 

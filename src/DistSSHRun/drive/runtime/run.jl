@@ -18,8 +18,8 @@ end
 
 # Options that take the next argv word. A word equal to `--isolated` there is a value.
 const _DRIVE_VALUE_FLAGS = (
-    "--workers", "-w", "--julia", "--allow-mismatch", "--mem-headroom",
-    "--parent-gb", "--log-dir", "--output-dir", "--package", "--hosts", "--hosts-file",
+    "--workers", "-w", "--julia", "--allow-mismatch",
+    "--log-dir", "--output-dir", "--package", "--hosts", "--hosts-file",
 )
 
 """Index of the drive `--isolated` option in already-peeled argv, or `nothing`."""
@@ -642,15 +642,6 @@ function _run_drive_parsed_locked!(
         cleanup_stale_workers!(hosts)
 
         kit_progress_step!("workers")
-        if (parent_workers > 0 || !isempty(hosts)) &&
-                !check_memory_capacity(
-                parent_workers, hosts, default_workers;
-                mem_headroom = parsed.mem_headroom,
-                parent_gb = parsed.parent_gb,
-            )
-            DistSSHRun.await_declared_input_hashes!()
-            return 1
-        end
 
         # Planned SSH names land in `kit.hosts` before `add_drive_workers!`.
         # A kill during join can still find those hosts. The list is replaced

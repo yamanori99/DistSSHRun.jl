@@ -31,10 +31,6 @@ A collect root that is the project or a parent of it stops the run before
 `main` and before collect, with exit code 1. That includes
 `DISTRIBUTED_COLLECT_DIRS` and a default root from `DISTRIBUTED_OUTPUT_DIR`.
 
-`mem_headroom` / `parent_gb` are the RAM budget for drive preflight (same as
-[`size!`](@ref) / CLI `--mem-headroom` / `--parent-gb`). [`pipeline!`](@ref)
-passes `config.mem_headroom` and `config.parent_gb`.
-
 `julia` sets the remote Julia binary (`nothing` / `"auto"` → detect; same as
 CLI `--julia`). `plan` is an optional explicit [`WorkerPlan`](@ref).
 [`pipeline!`](@ref) syncs separately and does not pass `sync=` into `drive!`,
@@ -63,8 +59,6 @@ function drive!(
         sync::Union{Nothing, Symbol, Bool} = nothing,
         julia::Union{Nothing, AbstractString} = nothing,
         require_all_hosts::Bool = true,
-        mem_headroom::Real = DEFAULT_MEM_HEADROOM,
-        parent_gb::Real = DEFAULT_PARENT_GB,
         sync_script::Bool = false,
         allow_mismatch = Symbol[],
         allow_external_symlinks::Bool = false,
@@ -92,8 +86,6 @@ function drive!(
                     sync = sync,
                     julia = julia,
                     require_all_hosts = require_all_hosts,
-                    mem_headroom = mem_headroom,
-                    parent_gb = parent_gb,
                     sync_script = sync_script,
                     allow_mismatch = allow_mismatch,
                     allow_external_symlinks = allow_external_symlinks,

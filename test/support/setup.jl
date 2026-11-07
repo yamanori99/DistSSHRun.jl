@@ -226,18 +226,18 @@ if !isdefined(Main, :_run_kit_setup)
         end
     end
 
-    # Run the kit `size` CLI as a subprocess.
+    # Run the kit `hostinfo` CLI as a subprocess.
     #
     # Same project-root rule as [`_run_kit_setup`](@ref).
-    function _run_kit_size(;
-            size_args::Vector{String},
+    function _run_kit_hostinfo(;
+            hostinfo_args::Vector{String},
             kit_root::String = _kit_root(),
             julia::String = _julia_exe(),
             project_root = nothing,
             extra_env::Dict{String, String} = Dict{String, String}(),
         )
         function _run(proj)
-            cmd = _kit_cli_cmd(vcat(["size"], size_args); julia = julia, project = kit_root)
+            cmd = _kit_cli_cmd(vcat(["hostinfo"], hostinfo_args); julia = julia, project = kit_root)
             base = Dict{String, String}(
                 "DISTSSHKIT_YES" => "1",
                 "DISTRIBUTED_PROJECT_ROOT" => proj,
@@ -249,7 +249,7 @@ if !isdefined(Main, :_run_kit_setup)
             return _run(abspath(string(project_root)))
         end
         return _with_tempdir() do proj
-            _write_host_project!(proj, "SizeCliHost")
+            _write_host_project!(proj, "HostinfoCliHost")
             return _run(proj)
         end
     end

@@ -1,7 +1,7 @@
 # Cross-cutting user-facing errors: diagnose (facts) then explain (words).
 #
 # This file owns shared `surface=:cli|:api` helpers and message builders used by
-# more than one entry point (drive / go / setup / size / pipeline! / …).
+# more than one entry point (drive / go / setup / hostinfo / pipeline! / …).
 # Domain-specific diagnose/explain pairs stay next to their domain
 # (`demos.jl` for demo-install tips, etc.).
 #
@@ -61,17 +61,17 @@ function explain_hosts_file_empty(
 end
 
 """
-No SSH / size hosts on a session.
+No SSH / inventory hosts on a session.
 
-`kind` is `:ssh` (sync/setup/instantiate), `:collect`, `:size`, or `:pool`.
+`kind` is `:ssh` (sync/setup/instantiate), `:collect`, `:hostinfo`, or `:pool`.
 """
 function explain_no_hosts(;
         surface::Symbol = :api,
         kind::Symbol = :ssh,
     )::String
     surface = _normalize_hint_surface(surface)
-    kind in (:ssh, :collect, :size, :pool) ||
-        throw(ArgumentError("explain_no_hosts kind must be :ssh, :collect, :size, or :pool"))
+    kind in (:ssh, :collect, :hostinfo, :pool) ||
+        throw(ArgumentError("explain_no_hosts kind must be :ssh, :collect, :hostinfo, or :pool"))
     if kind === :pool
         head = "KitSession has no hosts for pool!"
         hint = if surface === :api
@@ -80,12 +80,12 @@ function explain_no_hosts(;
             "Hint: pass local and/or SSH hosts (see help pool)"
         end
         return join_explained_message(head, hint)
-    elseif kind === :size
-        head = "KitSession has no hosts for size!"
+    elseif kind === :hostinfo
+        head = "KitSession has no hosts for hostinfo"
         hint = if surface === :api
-            "Hint: pass workers=[\"parent\", …] or workers=[\"child:user@host\", …] (`size!` ignores :N)"
+            "Hint: pass workers=[\"parent\", …] or workers=[\"child:user@host\", …]"
         else
-            "Hint: pass local and/or SSH hosts (see help size)"
+            "Hint: pass local and/or SSH hosts (see help hostinfo)"
         end
         return join_explained_message(head, hint)
     elseif kind === :collect
@@ -121,9 +121,9 @@ function explain_bare_placement_tokens(
     listed = join(bare, ' ')
     head = "each go / drive / ride token needs :N; bare $(listed) is not allowed"
     hint = if surface === :api
-        "Hint: write parent:1 / child:NAME:2 (or omit tokens for one parent slot). Autosize is size! / CLI size, then pass the printed tokens. go --repeat still treats omit :N as an uncapped pool host."
+        "Hint: write parent:1 / child:NAME:2 (or omit tokens for one parent slot). go --repeat still treats omit :N as an uncapped pool host."
     else
-        "Hint: write parent:1 or child:NAME:2. No tokens = one parent slot. Estimate with `size`, then paste parent:N / child:NAME:N. go --repeat: omit :N is an uncapped cap, not a count."
+        "Hint: write parent:1 or child:NAME:2. No tokens = one parent slot. go --repeat: omit :N is an uncapped cap, not a count."
     end
     return join_explained_message(head, hint)
 end
@@ -175,19 +175,3 @@ function explain_clone_origin_missing(; surface::Symbol = :cli)::String
     return "Could not read git remote `origin`; pass --repo URL"
 end
 
-# --- size probe --------------------------------------------------------------
-
-function explain_size_probe_not_found(
-        path::AbstractString;
-        surface::Symbol = :api,
-    )::String
-    surface = _normalize_hint_surface(surface)
-    p = String(path)
-    head = "size probe not found: $p"
-    hint = if surface === :api
-        "Hint: pass probe=\"relative/or/absolute.jl\" under the project, or omit probe="
-    else
-        "Hint: pass --probe PATH under the project, or omit --probe"
-    end
-    return join_explained_message(head, hint)
-end

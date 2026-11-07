@@ -16,7 +16,7 @@ function _reject_obsolete_pipeline_size_env()
         isempty(raw) && continue
         throw(
             ArgumentError(
-                "$name is no longer used by pipeline!; occupancy is CLI size / size!, then paste parent:N / child:NAME:N",
+                "$name is no longer used by pipeline!; pass explicit parent:N / child:NAME:N",
             ),
         )
     end
@@ -244,8 +244,6 @@ function _pipeline_run!(config::PipelineConfig, session::KitSession, driver::Str
             log_dir = config.log_dir,
             package = config.package,
             julia = config.julia,
-            mem_headroom = config.mem_headroom,
-            parent_gb = config.parent_gb,
         )
     finally
         if do_collect

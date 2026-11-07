@@ -460,7 +460,7 @@ function run_on_host(
 end
 
 # Process-local auto-detect results (`nothing` included). Same host in
-# `size!` then `drive!` / `--check` then `--instantiate` skips repeat SSH.
+# `--check` then `--instantiate` skips repeat SSH.
 const _DETECT_JULIA_PATH_CACHE = Dict{String, Union{Nothing, String}}()
 
 """Drop cached `detect_julia_path` results (`host=nothing` → all hosts)."""
@@ -640,7 +640,7 @@ function resolve_host_path_abs(
 end
 
 """
-Absolute project root for `addprocs` / size probe on `host`.
+Absolute project root for `addprocs` on `host`.
 
 Equivalent to [`resolve_host_path_abs`](@ref)`(host, local_project, local_project)`.
 """
@@ -708,53 +708,21 @@ function get_remote_git_hash(host::String, remote_repo_dir::AbstractString; shor
     end
 end
 
-# Remote resource detection
+# Remote resource detection (same probe as collect_host_facts; missing is nothing).
 
 """Get total memory (GB) for a remote host via SSH."""
 function get_remote_total_gb(host::String)
-    try
-        s = strip(
-            read(
-                pipeline(
-                    _ssh_cmd(
-                        [
-                            ssh_opts()..., _ssh_host_args(host)...,
-                            "sysctl -n hw.memsize 2>/dev/null || awk '/MemTotal/{print \$2*1024}' /proc/meminfo 2>/dev/null",
-                        ]
-                    );
-                    stderr = devnull
-                ), String
-            )
-        )
-        isempty(s) && return nothing
-        return parse(Float64, s) / 1024^3
-    catch e
-        _throw_if_nonposix_shell(host, e)
-    end
-    return nothing
+    facts = collect_host_facts(host)
+    facts.reachable || return nothing
+    facts.total_memory_bytes === nothing && return nothing
+    return Float64(facts.total_memory_bytes) / 1024^3
 end
 
 """Get CPU core count for a remote host via SSH."""
 function get_remote_nproc(host::String)
-    try
-        s = strip(
-            read(
-                pipeline(
-                    _ssh_cmd(
-                        [
-                            ssh_opts()..., _ssh_host_args(host)...,
-                            "sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null",
-                        ]
-                    ); stderr = devnull
-                ), String
-            )
-        )
-        isempty(s) && return nothing
-        return parse(Int, s)
-    catch e
-        _throw_if_nonposix_shell(host, e)
-    end
-    return nothing
+    facts = collect_host_facts(host)
+    facts.reachable || return nothing
+    return facts.ncpu
 end
 
 """

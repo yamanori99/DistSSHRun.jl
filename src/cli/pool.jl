@@ -66,12 +66,7 @@ function pool_main()::Cint
         verbosity = opts.cli_session.verbosity,
         yes = opts.cli_session.yes,
     )
-    result = pool!(
-        session;
-        gb_per_worker = opts.gb_per_worker,
-        mem_headroom = opts.mem_headroom,
-        parent_gb = opts.parent_gb,
-    )
+    result = pool!(session)
     print_pool(result)
     return result.ok ? 0 : 1
 end

@@ -374,18 +374,19 @@ end
             end
         end
 
-        @testset "size two remotes" begin
-            _e2e_announce("size two remotes")
-            proc, out = _run_kit_size(;
-                size_args = ["-q", remote_tokens...],
+        @testset "hostinfo two remotes" begin
+            _e2e_announce("hostinfo two remotes")
+            proc, out = _run_kit_hostinfo(;
+                hostinfo_args = ["-q", remote_tokens...],
                 project_root = proj,
                 extra_env = merge(_e2e_base_env(), Dict("DISTSSHKIT_QUIET" => "0")),
             )
-            _assert_ssh_e2e_ok(suite, "size_remotes", proc, out)
+            _assert_ssh_e2e_ok(suite, "hostinfo_remotes", proc, out)
             @test occursin(hosts[1], out)
             @test occursin(hosts[2], out)
             @test occursin(" GB", out)
-            @test occursin("Total:", out)
+            @test occursin("Hostinfo:", out)
+            @test !occursin("Total:", out)
         end
 
         @testset "drive square_echo two remotes" begin

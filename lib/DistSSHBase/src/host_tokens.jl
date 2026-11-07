@@ -13,7 +13,7 @@ end
 """
 Parse `host` or `host:N` into `(hostname, workers)`.
 
-`N` is a worker/slot count for `drive` / `go`. `setup` / `size` keep
+`N` is a worker/slot count for `drive` / `go`. `setup` / `hostinfo` keep
 the hostname only (`split_worker_token(…)[1]`).
 """
 function split_worker_token(spec::AbstractString)::Tuple{String, Union{Nothing, Int}}

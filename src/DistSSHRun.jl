@@ -1,7 +1,7 @@
 """
 DistSSHRun — the DistSSHKit execution layer moved into this package.
 
-One SSH run (`setup`, `go`, `ride`, `drive`, `size`, `pool`, `demo`, `progress`) and the bang API (`go!`, `ride!`, `pool!`, `drive!`, `pipeline!`).
+One SSH run (`setup`, `go`, `ride`, `drive`, `hostinfo`, `pool`, `demo`, `progress`) and the bang API (`go!`, `ride!`, `pool!`, `drive!`, `pipeline!`).
 
 DistSSHKit depends on DistSSHRun and DistSSHQueue and reexports their public names. Users add DistSSHKit and run `julia -m DistSSHKit`. This package can still be added on its own. The command is then `julia -m DistSSHRun`.
 
@@ -20,8 +20,8 @@ using TOML
 using Unicode
 
 # Public surface. Prefer `julia -m DistSSHKit …` for day-to-day CLI.
-#   user — go! / ride! / drive! / pool! / size! / setup! / pipeline!
-#   occupancy — size! (RSS WorkerPlan; CLI size / pool; not implied by omit :N)
+#   user — go! / ride! / drive! / pool! / setup! / pipeline!
+#   placement — WorkerPlan from explicit parent:N / child:NAME:N
 #   queue — execute!(; detached=true), parsers, paths, help chrome
 #   argv wrappers `go` / `drive` stay unexported (`main` / tests)
 export worker_pmap
@@ -44,7 +44,6 @@ export PipelineResult
 export sync!
 export instantiate!
 export setup!
-export size!
 export pool!
 export ResourcePool
 export HostInventory
@@ -91,6 +90,7 @@ export resolve_pkg_env
 export explain_script_not_found
 # Display helpers stay public and are not exported. DistSSHKit 0.11 drops them.
 public print_pool
+public print_hostinfo
 public report_pipeline_errors
 public report_run_errors
 public report_go_errors
@@ -110,8 +110,7 @@ public SPINNER_FRAMES
 
 # Implementation
 
-# Host talking lives in DistSSHBase, the juliaup verbs in DistSSHUp,
-# and worker sizing in DistSSHSize.
+# Host talking lives in DistSSHBase, the juliaup verbs in DistSSHUp.
 # Confirm text and progress stay in setup/juliaup.jl.
 # `lib/` sits beside `src/`. A copy of `src/` alone cannot load.
 let _base_src = joinpath(@__DIR__, "..", "lib", "DistSSHBase", "src", "DistSSHBase.jl")
@@ -121,13 +120,8 @@ let _base_src = joinpath(@__DIR__, "..", "lib", "DistSSHBase", "src", "DistSSHBa
 end
 include(joinpath(@__DIR__, "..", "lib", "DistSSHBase", "src", "DistSSHBase.jl"))
 include("DistSSHRun/up_module.jl")
-include("DistSSHRun/size_module.jl")
 using .DistSSHBase
 import .DistSSHBase: manifest_path
-using .DistSSHSize: DEFAULT_MEM_HEADROOM, DEFAULT_PARENT_GB,
-    WORKER_MEMORY_GB_FALLBACK, WorkerMemorySample, WorkerPlan, compute_worker_plan,
-    effective_worker_gb, get_local_resources, per_worker_gb_dict, resolved_placement_tokens,
-    rss_bytes_to_worker_gb, size_worker_count
 public manifest_path
 using .DistSSHBase: CliCursor, OUTPUT_WIDTH, PARENT_HOST_NAME, _HOST_TOOL_NAMES,
     _NS_CACHE_DIR, _checked_remote_dest, _ensure_posix_login_shell!, _git_cmd,
@@ -144,8 +138,9 @@ using .DistSSHBase: CliCursor, OUTPUT_WIDTH, PARENT_HOST_NAME, _HOST_TOOL_NAMES,
     display_path, ensure_remote_abs_path, explain_bare_placement_tokens,
     explain_clone_origin_missing, explain_clone_repo_required, explain_host_tool_hint,
     explain_host_tool_missing, explain_no_hosts, explain_pipeline_driver_missing,
-    explain_size_probe_not_found, format_placement_token, get_remote_git_hash,
+    format_placement_token, get_remote_git_hash,
     get_remote_julia_version_full, get_remote_nproc, get_remote_total_gb,
+    HostFacts, collect_host_facts,
     git_work_tree,
     is_sigint, join_explained_message, looks_like_path_host, normalize_git_clone_url,
     parse_placement_token, posix_quote, project_package_name, read_hosts_file, read_hosts_file_lines,
@@ -167,9 +162,9 @@ include("DistSSHRun/launch.jl")
 include("DistSSHRun/mismatch.jl")
 include("DistSSHRun/demos.jl")
 include("DistSSHRun/distributed.jl")
+include("DistSSHRun/worker_plan.jl")
 include("DistSSHRun/drive/types.jl")
 include("DistSSHRun/run_manifest.jl")
-include("DistSSHRun/size/measure.jl")
 include("DistSSHRun/setup.jl")
 include("DistSSHRun/run_layout.jl")
 include("DistSSHRun/ship_list.jl")
@@ -178,12 +173,13 @@ include("DistSSHRun/argv/drive_args.jl")
 include("DistSSHRun/argv/go_args.jl")
 include("DistSSHRun/argv/setup_args.jl")
 include("DistSSHRun/argv/up_args.jl")
-include("DistSSHRun/argv/size_args.jl")
+include("DistSSHRun/argv/hostinfo_args.jl")
 include("DistSSHRun/argv/pool_args.jl")
 include("DistSSHRun/argv/ride_args.jl")
 include("DistSSHRun/drive.jl")
 include("DistSSHRun/namespace_sync.jl")
 include("DistSSHRun/pool.jl")
+include("DistSSHRun/hostinfo.jl")
 include("DistSSHRun/drive/runtime/heartbeat.jl")
 include("DistSSHRun/drive/runtime/_common.jl")
 include("DistSSHRun/drive/runtime/cancel_frame.jl")
@@ -193,7 +189,6 @@ include("DistSSHRun/drive/runtime/workers.jl")
 include("DistSSHRun/drive/runtime/init.jl")
 include("DistSSHRun/drive/runtime/results.jl")
 include("DistSSHRun/drive/runtime/run.jl")
-include("DistSSHRun/argv/size_report.jl")
 include("DistSSHRun/drive/runtime/script_hint.jl")
 include("DistSSHRun/go.jl")
 include("DistSSHRun/script_scan.jl")
@@ -233,15 +228,15 @@ dist_ssh_kit_version()::VersionNumber = DIST_SSH_KIT_VERSION
 #   julia --project=. -m DistSSHKit drive parent:2 script.jl
 
 const _KIT_CLI_LOADED = Set{String}()
-const _KIT_CLI_SCRIPTS = ("drive.jl", "go.jl", "pool.jl", "ride.jl", "setup.jl", "size.jl", "up.jl")
+const _KIT_CLI_SCRIPTS = ("drive.jl", "go.jl", "hostinfo.jl", "pool.jl", "ride.jl", "setup.jl", "up.jl")
 
 const _KIT_CLI_MAIN = Dict(
     "drive.jl" => :drive_main,
     "go.jl" => :go_main,
+    "hostinfo.jl" => :hostinfo_main,
     "pool.jl" => :pool_main,
     "ride.jl" => :ride_main,
     "setup.jl" => :setup_main,
-    "size.jl" => :size_main,
     "up.jl" => :up_main,
 )
 
@@ -356,12 +351,11 @@ Run `up.jl` (juliaup align / update) with `args` (same as `julia -m DistSSHKit u
 up(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("up.jl", args)
 
 """
-    run_size(args::Vector{String}=copy(ARGS))
+    run_hostinfo(args::Vector{String}=copy(ARGS))
 
-Run the `size` CLI (`size.jl`) with `args`. Named `run_size` so it does not
-shadow `Base.size`. Prefer `julia -m DistSSHKit size …` day-to-day.
+Run the `hostinfo` CLI (`hostinfo.jl`) with `args`. Prefer `julia -m DistSSHKit hostinfo …`.
 """
-run_size(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("size.jl", args)
+run_hostinfo(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("hostinfo.jl", args)
 
 """
     run_pool(args::Vector{String}=copy(ARGS))
@@ -386,7 +380,7 @@ CLI entry. Prefer Julia 1.13+ and `julia -m DistSSHKit SUBCOMMAND …`:
     julia --project=. -m DistSSHKit go SCRIPT.jl
     julia --project=. -m DistSSHKit ride parent:2 SCRIPT.jl
     julia --project=. -m DistSSHKit drive parent:2 script.jl
-    julia --project=. -m DistSSHKit size parent child:host1
+    julia --project=. -m DistSSHKit hostinfo parent child:host1
     julia --project=. -m DistSSHKit pool parent child:host1
     julia --project=. -m DistSSHKit progress DIR
 
@@ -417,7 +411,7 @@ const _RUN_CALLS = Dict{String, Function}(
     "setup" => (rest -> setup(rest)::Cint),
     "up" => (rest -> up(rest)::Cint),
     "ride" => (rest -> run_ride(rest)::Cint),
-    "size" => (rest -> run_size(rest)::Cint),
+    "hostinfo" => (rest -> run_hostinfo(rest)::Cint),
     "pool" => (rest -> run_pool(rest)::Cint),
     "progress" => (rest -> progress(rest)::Cint),
 )
@@ -441,7 +435,7 @@ const NO_COMMAND_HINT_LINES = (
 
 """Expected-command sentence `print_rejected_command` prints under `unknown_subcommand_message`."""
 const RUN_SUBCOMMAND_EXPECTATION =
-    "Expected: setup | up | go | ride | drive | size | pool | demo | progress"
+    "Expected: setup | up | go | ride | drive | hostinfo | pool | demo | progress"
 
 """Print the shared rejection lines. The caller prints the usage page.
 
