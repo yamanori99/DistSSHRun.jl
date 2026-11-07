@@ -92,17 +92,35 @@ function preflight_setup_ssh(hosts::Vector{String})::Bool
     kit_println("SSH preflight:")
     all_ok = true
     for host in hosts
-        kit_print("  $host: ")
-        flush(stdout)
-        err = probe_setup_ssh(host)
-        if err === nothing
-            print_ok("✓")
-            kit_println()
+        if kit_output_detail()
+            # `:verbose`: heading on the terminal, then ✓ / ✗ + detail.
+            kit_print("  $host: ")
+            flush(stdout)
+            err = probe_setup_ssh(host)
+            if err === nothing
+                print_ok("✓")
+                kit_println()
+            else
+                all_ok = false
+                print_progress_err("✗")
+                kit_println()
+                kit_println("    $err")
+            end
         else
-            all_ok = false
-            print_progress_err("✗")
-            kit_println()
-            kit_println("    $err")
+            # `:progress` / `:quiet`: one complete kit-log line (no advance prefix).
+            err = probe_setup_ssh(host)
+            if err === nothing
+                _kit_log_writeln("  $(String(host)): ✓")
+            else
+                all_ok = false
+                _progress_release_line!()
+                text = "  $(String(host)): ✗ $err"
+                if kit_payload_visible()
+                    print_err(text * "\n")
+                else
+                    _kit_log_writeln(text)
+                end
+            end
         end
     end
     kit_println()
@@ -116,6 +134,7 @@ Cancelled ops return `true` without printing a success line (caller already said
 """
 function finish_host_op!(label::AbstractString, result)::Bool
     result.cancelled && return true
+    _progress_release_line!()
     kit_payload_println()
     if result.succeeded == 0
         print_err("$label did not succeed on any host.")
@@ -150,6 +169,7 @@ function report_remote_failure(
         "✗\n"
     end
     if kit_payload_visible()
+        _progress_release_line!()
         print_err(mark)
     else
         _kit_log_writeln(chomp(mark))

@@ -15,7 +15,10 @@ That is `test/runtests.jl` (unit + integration), sequential `@testset`s,
 `test/Project.toml`. Aqua is a separate CI job, not `Pkg.test()`.
 Unset, all 56 files run. `DISTSSHRUN_TEST_SHORT=1` (`true`, `yes`, and `on`
 too) skips the heavy files and the extra `ride!` cases. `JULIA_PKGEVAL=true`
-does the same so a PkgEval run stays inside the 45 minute limit.
+does the same so a PkgEval run stays inside the 45 minute limit. That short
+list includes `integration/setup/progress_tty.jl` (pseudo-TTY via `script`)
+so Registry install and PkgEval skip only that suite; ordinary checkout
+`Pkg.test` still runs it.
 `Pkg.test()` on this checkout is not a registry install and is not the PkgEval sandbox. Job smokes pass
 `-y`; real `ssh` / `git` spawn runs only when that binary is on `PATH`;
 real SSH clusters stay in `e2e.jl`. Reproduce that sandbox:
@@ -123,8 +126,9 @@ assertions, so its Julia is not this tarball.
 CI: `Registry install (1.13, ubuntu-latest, x64)` on the heavy gate
 (ordinary pull requests and **main**). It `Pkg.add`s the head commit
 into a job-local depot and runs `Pkg.test` with `--check-bounds=yes`.
-`JULIA_PKGEVAL=true` selects the short file list above. Dependencies
-resolve from General. The installed tree includes `lib/`.
+`JULIA_PKGEVAL=true` selects the short file list above (including the
+pseudo-TTY suite). Dependencies resolve from General. The installed tree
+includes `lib/`.
 `PkgEval (nightly, ubuntu-latest, x64)` stays on ordinary PRs (heavy gate)
 and **main** (`continue-on-error`; not a required check). The sandbox sets
 `JULIA_PKGEVAL=true`, which selects the same short file list.

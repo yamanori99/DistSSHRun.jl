@@ -1519,6 +1519,9 @@ function _progress_draw!(
         ok::Bool = true,
     )
     !_progress_can_draw() && return nothing
+    # After a diagnostic releases the live bar, skip redraws so payload lines
+    # are not overwritten. `kit_progress_done!` still draws with `finished=true`.
+    state.released && !finished && return nothing
     if !isempty(state.items)
         _progress_draw_items!(state; finished = finished, ok = ok)
         return nothing
@@ -1551,7 +1554,13 @@ function _progress_release_line!()
     _progress_stop_spinner!(raw)
     raw.released && return nothing
     io = _progress_io()
-    isempty(raw.items) && println(io)
+    if isempty(raw.items)
+        println(io)
+    else
+        # Item rows already end with a newline. Reset `drawn` so a later
+        # finished draw does not cursor-up over payload lines that follow.
+        raw.drawn = 0
+    end
     raw.released = true
     flush(io)
     return nothing
@@ -1582,7 +1591,7 @@ function _progress_spinner_tick!(state::KitProgressState)
 end
 
 function _progress_start_spinner!(state::KitProgressState)
-    (_progress_can_draw() && !state.spinning) || return nothing
+    (_progress_can_draw() && !state.spinning && !state.released) || return nothing
     state.spinning = true
     state.spinner_task = @async begin
         shield_sigint() do

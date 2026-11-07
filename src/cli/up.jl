@@ -68,7 +68,7 @@ if !isdefined(@__MODULE__, :up_main)
 
         ssh_hosts = setup_juliaup_ssh_hosts(opts.hosts)
         if !isempty(ssh_hosts) && !preflight_setup_ssh(ssh_hosts)
-            print_err("SSH preflight failed. Fix connectivity, then retry.")
+            print_err("SSH preflight failed. Fix connectivity, then retry.\n")
             kit_println()
             return Cint(1)
         end
