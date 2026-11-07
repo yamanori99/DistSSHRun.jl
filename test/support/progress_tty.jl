@@ -24,23 +24,35 @@ if !isdefined(Main, :_tty_strip_ansi)
     end
 
     function _tty_payload_line(line::AbstractString)
-        return occursin("✗", line) ||
-            occursin("!", line) ||
-            occursin("Prerequisites", line) ||
-            occursin("complete", line) ||
-            occursin("SSH preflight failed", line) ||
-            occursin("exit", line) ||
-            occursin("ERROR:", line) ||
-            occursin("DISTSSHKIT_RUNNER_BOOM", line) ||
-            occursin("DISTSSHKIT_RIDE_BOOM", line) ||
-            occursin("DISTSSHKIT_E2E_REMOTE_FAIL", line) ||
-            occursin("DISTSSHKIT_RUNNER_SMOKE_OK", line)
+        s = String(line)
+        # Kit `warn()` is `"  ! "` (`display.jl`). A bare `'!'` also matches
+        # host noise such as `WARNING: Memory pressure detected!`.
+        return occursin("✗", s) ||
+            occursin("  !", s) ||
+            occursin("Prerequisites", s) ||
+            occursin("complete", s) ||
+            occursin("SSH preflight failed", s) ||
+            occursin("exit", s) ||
+            occursin("ERROR:", s) ||
+            occursin("DISTSSHKIT_RUNNER_BOOM", s) ||
+            occursin("DISTSSHKIT_RIDE_BOOM", s) ||
+            occursin("DISTSSHKIT_E2E_REMOTE_FAIL", s) ||
+            occursin("DISTSSHKIT_RUNNER_SMOKE_OK", s)
     end
 
     function _tty_fail_or_warn_line(line::AbstractString)
         s = String(line)
         return startswith(s, "  ✗") || startswith(s, "  !") ||
             startswith(s, "  Prerequisites")
+    end
+
+    function _tty_typescript_excerpt(dest::AbstractString; limit::Int = 2048)
+        isfile(dest) || return "(no typescript file)"
+        raw = read(dest, String)
+        isempty(raw) && return "(empty typescript)"
+        n = ncodeunits(raw)
+        n <= limit && return raw
+        return raw[1:prevind(raw, limit + 1)] * "\n… truncated $(n) bytes …\n"
     end
 
     # Live TTY: `\r` returns to column 0; CSI K after that clears the row.
@@ -119,7 +131,7 @@ if !isdefined(Main, :_tty_strip_ansi)
         # No cursor-up bar redraw after the last payload line in the byte stream.
         payload_keys = (
             "✗",
-            "!",
+            "  !",
             "Prerequisites",
             "complete",
             "SSH preflight failed",
@@ -263,7 +275,10 @@ if !isdefined(Main, :_tty_strip_ansi)
         cmd = if Sys.isapple()
             `script -q $dest /bin/sh $script_path`
         else
-            `script -q -c $script_path $dest`
+            # util-linux `script` buffers the typescript until exit unless `-f`.
+            # Expect polls that file before writing stdin, so a missing flush
+            # deadlocks: empty log, child blocked on `read`, 300s hang.
+            `script -q -f -c $script_path $dest`
         end
         skip = (
             "NO_COLOR",
@@ -311,7 +326,9 @@ if !isdefined(Main, :_tty_strip_ansi)
                 end
                 if !process_running(proc)
                     close(pin.in)
-                    error("progress_tty expect: process exited before $(repr(expect))")
+                    error(
+                        "progress_tty expect: process exited before $(repr(expect)); typescript=$(_tty_typescript_excerpt(dest))",
+                    )
                 end
                 if (time() - t0) > Float64(hang_s)
                     timed_out = true
@@ -323,7 +340,9 @@ if !isdefined(Main, :_tty_strip_ansi)
                     timedwait(() -> !process_running(proc), 5.0; pollint = 0.2)
                     process_running(proc) && kill(proc, Base.SIGKILL)
                     timedwait(() -> !process_running(proc), 5.0; pollint = 0.2)
-                    error("progress_tty expect exceeded $(hang_s)s waiting for $(repr(expect))")
+                    error(
+                        "progress_tty expect exceeded $(hang_s)s waiting for $(repr(expect)); typescript=$(_tty_typescript_excerpt(dest))",
+                    )
                 end
                 sleep(0.05)
             end

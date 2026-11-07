@@ -23,6 +23,36 @@ using Test
 
     hang_s = 300.0
 
+    @testset "expect observes prompt in typescript before reply" begin
+        Sys.isunix() || return
+        mktempdir() do dir
+            runner = joinpath(dir, "prompt.sh")
+            write_runner(
+                runner,
+                """
+                printf 'DISTSSHKIT_PROMPT>'
+                read line
+                printf 'DISTSSHKIT_GOT:%s\\n' "\$line"
+                """,
+            )
+            t0 = time()
+            pty = _tty_expect_script(
+                runner;
+                typescript = joinpath(dir, "prompt_typescript.txt"),
+                expect = "DISTSSHKIT_PROMPT>",
+                reply = "pong\n",
+                hang_s = 30.0,
+            )
+            @info "harness expect flush wall" elapsed = (time() - t0)
+            @test occursin("DISTSSHKIT_PROMPT>", pty)
+            @test occursin("DISTSSHKIT_GOT:pong", pty)
+            prompt_at = findfirst("DISTSSHKIT_PROMPT>", pty)
+            got_at = findfirst("DISTSSHKIT_GOT:pong", pty)
+            @test prompt_at !== nothing && got_at !== nothing
+            @test first(prompt_at) < first(got_at)
+        end
+    end
+
     @testset "capture timeout reaps descendants" begin
         Sys.isunix() || return
         mktempdir() do dir
