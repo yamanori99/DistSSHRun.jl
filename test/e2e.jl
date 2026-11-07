@@ -545,6 +545,99 @@ end
             @test occursin("DISTSSHKIT_RUNNER_SMOKE_OK nw=3", out)
         end
 
+        # Focused pseudo-TTY (`script`) coverage for remote drive. Ride under
+        # a PTY is not covered here: non-TTY ride terminate/reap already runs
+        # below, and a reliable remote ride TTY path needs more fixture work.
+        @testset "drive remote pseudo-TTY success and failure" begin
+            _e2e_announce("drive remote pseudo-TTY success and failure")
+            function sh_quote(s::AbstractString)
+                return "'" * replace(String(s), "'" => "'\\''") * "'"
+            end
+            function argv_line(cmd::Cmd)
+                return join(sh_quote.(String.(cmd.exec)), " ")
+            end
+            tty_extra = merge(
+                _e2e_base_env(),
+                Dict(
+                    "DISTSSHKIT_QUIET" => "0",
+                    "DISTSSHKIT_YES" => "1",
+                    "DISTRIBUTED_INIT_DELAY_SEC" => "0",
+                ),
+            )
+            delete!(tty_extra, "DISTSSHKIT_PROGRESS")
+            delete!(tty_extra, "DISTSSHKIT_VERBOSE")
+            tty_env = _drive_host_env(proj; extra_env = tty_extra)
+            ok_cmd = _kit_drive_cmd(;
+                script = smoke,
+                host_root = proj,
+                parent_workers = 1,
+                child_hosts = remote_tokens,
+                drive_flags = ["-y"],
+                extra_env = tty_extra,
+            )
+            fail_cmd = _kit_drive_cmd(;
+                script = joinpath(proj, "fail.jl"),
+                host_root = proj,
+                parent_workers = 0,
+                child_hosts = remote_tokens,
+                drive_flags = ["-y"],
+                extra_env = tty_extra,
+            )
+            mktempdir() do dir
+                runner = joinpath(dir, "drive_remote_tty.sh")
+                exports = join(
+                    ["export $(sh_quote(k))=$(sh_quote(v))" for (k, v) in sort!(collect(pairs(tty_env)))],
+                    "\n",
+                )
+                write(
+                    runner,
+                    """
+                    #!/bin/sh
+                    unset NO_COLOR
+                    unset DISTSSHKIT_QUIET
+                    unset DISTSSHKIT_PROGRESS
+                    unset DISTSSHKIT_VERBOSE
+                    unset DISTSSHKIT_CLI_SUBCOMMAND_DONE
+                    unset DIST_SSH_KIT_CLI_INCLUDE
+                    export JULIA_LOAD_PATH=$(sh_quote(_child_load_path()))
+                    unset JULIA_PROJECT
+                    $exports
+                    $(argv_line(ok_cmd))
+                    echo '___SPLIT___'
+                    $(argv_line(fail_cmd))
+                    """,
+                )
+                chmod(runner, 0o755)
+                t0 = time()
+                pty = _tty_capture_script(
+                    runner;
+                    typescript = joinpath(dir, "drive_remote_typescript.txt"),
+                    hang_s = 600.0,
+                )
+                elapsed = time() - t0
+                @info "e2e drive remote progress_tty script child wall" elapsed
+                parts = split(pty, "___SPLIT___")
+                @test length(parts) == 2
+                ok_tty = length(parts) == 2 ? parts[1] : ""
+                fail_tty = length(parts) == 2 ? parts[2] : ""
+                ok_plain = _tty_strip_ansi(ok_tty)
+                fail_plain = _tty_strip_ansi(fail_tty)
+                @test occursin("DISTSSHKIT_RUNNER_SMOKE_OK", ok_plain)
+                @test occursin("child-1", ok_plain) || occursin("child-2", ok_plain) ||
+                    occursin("parent", ok_plain) || occursin("nw=3", ok_plain)
+                _assert_tty_progress_payload(ok_tty)
+                @test occursin("DISTSSHKIT_E2E_REMOTE_FAIL", fail_plain)
+                @test any(
+                    l -> occursin("DISTSSHKIT_E2E_REMOTE_FAIL", l) && !_tty_bar_line(l),
+                    _tty_lines(fail_tty),
+                )
+                _assert_tty_progress_payload(fail_tty)
+                _assert_ssh_e2e_api_ok(
+                    suite, "drive_remote_tty", true, "pty ok/fail captured",
+                )
+            end
+        end
+
         @testset "go pi_echo both remotes" begin
             _e2e_announce("go pi_echo both remotes")
             proc, out = _run_kit_go(;

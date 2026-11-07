@@ -183,6 +183,29 @@ function run_driver_script!(enable_log::Bool)
                         redirect_stdout(orig_stdout)
                     end
                 end
+            elseif DistSSHRun.kit_output_progress()
+                # `--no-log` + `:progress`: release the live `\r` bar, then let
+                # `main` own stdout/stderr on their original destinations.
+                # Capturing would hide flushed prompts, merge stderr into the
+                # replay buffer, and retain unbounded driver output in memory.
+                # `kit_progress_done!` draws the finished bar on a later line.
+                DistSSHRun._progress_release_line!()
+                try
+                    call_main()
+                finally
+                    # Mid-line driver output (prompt without `\n`) would sit on
+                    # the same row as the finished bar's `\r`. Separate them
+                    # only when that bar can draw; redirected / `NO_COLOR`
+                    # stdout must not gain a stray newline.
+                    if DistSSHRun._progress_can_draw()
+                        try
+                            io = DistSSHRun._progress_io()
+                            println(io)
+                            flush(io)
+                        catch
+                        end
+                    end
+                end
             else
                 call_main()
             end
