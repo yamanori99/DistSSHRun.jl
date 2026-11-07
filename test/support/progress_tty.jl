@@ -273,7 +273,13 @@ if !isdefined(Main, :_tty_strip_ansi)
         dest = String(typescript)
         rm(dest; force = true)
         cmd = if Sys.isapple()
-            `script -q $dest /bin/sh $script_path`
+            # Apple/BSD `script` (shell_cmds): default `flushtime = 30`, so the
+            # typescript stays empty until that interval or exit. Expect polls
+            # the file before writing stdin; a 30s hang bound then times out
+            # with an empty log. `-t 0` flushes after each character I/O
+            # (`script.1`; `tvec - start >= flushtime` in `script.c`). Do not
+            # rely on `-F` here: older Apple `script` only documented `-t`.
+            `script -q -t 0 $dest /bin/sh $script_path`
         else
             # util-linux `script` buffers the typescript until exit unless `-f`.
             # Expect polls that file before writing stdin, so a missing flush
