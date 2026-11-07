@@ -74,8 +74,6 @@ result = pipeline!(driver, "parent:2"; args = ARGS, collect = false, enable_log 
 #       # log_dir=nothing,
 #       # package=nothing,              # package name hint on workers
 #       # skip_hash_check=nothing,      # false → require remote git parity
-#       # mem_headroom=0.75,
-#       # parent_gb=0.4,
 #   )
 
 demo = @eval $_DEMO_PACKAGE

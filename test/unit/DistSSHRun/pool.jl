@@ -2,7 +2,7 @@ using Test
 
 @testset "pool" begin
     @testset "hostinfo probe parse" begin
-        p = DistSSHRun.DistSSHBase._hostinfo_parse_probe("DISTSSHKIT_HOSTINFO\n17179869184\n4\nLinux\n")
+        p = DistSSHRun.DistSSHBase._hostinfo_parse_probe("DISTSSHKIT_HOSTINFO\nmem=17179869184\nncpu=4\nos=Linux\n")
         @test p !== nothing
         if p !== nothing
             @test p.ncpu == 4
@@ -58,6 +58,20 @@ using Test
                 facts = DistSSHRun.DistSSHBase.collect_host_facts("host1")
                 @test facts.ncpu == 8
                 @test facts.os == "Linux"
+            end
+            withenv(merge(env, Dict("DISTSSHKIT_TEST_POOL_MEM" => ""))...) do
+                DistSSHRun.apply_kit_cli_session!(DistSSHRun.KitCliSession(quiet = true, yes = true))
+                sess = DistSSHRun.KitSession(
+                    project = proj,
+                    workers = ["child:host1"],
+                    remote = "/fake/remote/PoolHost",
+                )
+                partial = DistSSHRun.pool!(sess)
+                @test partial.ok
+                @test partial.hosts[1].nproc == 8
+                @test partial.hosts[1].total_gb === nothing
+                @test partial.gb === nothing
+                @test partial.cores == 8
             end
             fail_env = merge(env, Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1"))
             withenv(fail_env...) do

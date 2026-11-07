@@ -245,6 +245,8 @@ end
         @test cfg_jl.julia == "/opt/julia/bin/julia"
         @test DistSSHRun.PipelineConfig(driver = "job.jl", julia = "auto").julia === nothing
         @test DistSSHRun.PipelineConfig(driver = "job.jl", julia = "").julia === nothing
+        @test_throws MethodError DistSSHRun.PipelineConfig(; driver = "job.jl", mem_headroom = 0.75)
+        @test_throws MethodError DistSSHRun.PipelineConfig(; driver = "job.jl", parent_gb = 0.4)
     end
 
     @testset "drive_parsed_from_session sync / parity" begin

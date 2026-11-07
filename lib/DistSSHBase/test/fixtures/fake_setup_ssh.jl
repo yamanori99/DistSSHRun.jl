@@ -60,9 +60,12 @@ function main()
     # Before `uname -s`: the hostinfo probe also contains that substring.
     if occursin("DISTSSHKIT_HOSTINFO", script) || occursin("DISTSSHKIT_POOL", script)
         println("DISTSSHKIT_HOSTINFO")
-        println(get(ENV, "DISTSSHKIT_TEST_POOL_MEM", "17179869184"))
-        println(get(ENV, "DISTSSHKIT_TEST_POOL_NCPU", "4"))
-        println(get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OS", "Linux"))
+        omit_mem = get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OMIT_MEM", "") == "1"
+        omit_ncpu = get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OMIT_NCPU", "") == "1"
+        omit_os = get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OMIT_OS", "") == "1"
+        omit_mem || println("mem=", get(ENV, "DISTSSHKIT_TEST_POOL_MEM", "17179869184"))
+        omit_ncpu || println("ncpu=", get(ENV, "DISTSSHKIT_TEST_POOL_NCPU", "4"))
+        omit_os || println("os=", get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OS", "Linux"))
         exit(0)
     end
 

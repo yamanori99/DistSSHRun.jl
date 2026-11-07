@@ -20,18 +20,32 @@ struct HostFacts
     julia_version::Union{Nothing, String}
 end
 
+# Labeled lines so a missing RAM/CPU/OS command cannot shift later fields.
+# awk uses printf "%.0f" so MemTotal*1024 stays decimal; the parser still
+# accepts scientific notation if a remote awk uses default OFMT.
 const _HOSTINFO_PROBE_SCRIPT = string(
     "echo DISTSSHKIT_HOSTINFO; ",
-    "sysctl -n hw.memsize 2>/dev/null || awk '/MemTotal/{print \$2*1024}' /proc/meminfo 2>/dev/null; ",
-    "sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null; ",
-    "uname -s 2>/dev/null",
+    "echo mem=\$(sysctl -n hw.memsize 2>/dev/null || awk '/MemTotal/{printf \"%.0f\\n\", \$2*1024}' /proc/meminfo 2>/dev/null); ",
+    "echo ncpu=\$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null); ",
+    "echo os=\$(uname -s 2>/dev/null)",
 )
 
 function _hostinfo_parse_u64(s::AbstractString)::Union{Nothing, UInt64}
-    n = tryparse(UInt64, strip(String(s)))
-    n === nothing && return nothing
-    n == 0 && return nothing
-    return n
+    t = strip(String(s))
+    isempty(t) && return nothing
+    n = tryparse(UInt64, t)
+    if n !== nothing
+        n == 0 && return nothing
+        return n
+    end
+    f = tryparse(Float64, t)
+    f === nothing && return nothing
+    isfinite(f) || return nothing
+    f < 1 && return nothing
+    f > Float64(typemax(UInt64)) && return nothing
+    r = round(UInt64, f)
+    r == 0 && return nothing
+    return r
 end
 
 function _hostinfo_parse_ncpu(s::AbstractString)::Union{Nothing, Int}
@@ -46,16 +60,33 @@ function _hostinfo_parse_os(s::AbstractString)::Union{Nothing, String}
     return isempty(t) ? nothing : t
 end
 
+function _hostinfo_labeled_value(
+        lines::AbstractVector{<:AbstractString},
+        key::AbstractString,
+    )::Union{Nothing, String}
+    prefix = String(key) * "="
+    for l in lines
+        startswith(l, prefix) || continue
+        return String(SubString(l, ncodeunits(prefix) + 1))
+    end
+    return nothing
+end
+
 function _hostinfo_parse_probe(
         out::AbstractString,
     )::Union{Nothing, NamedTuple{(:total_memory_bytes, :ncpu, :os), Tuple{Union{Nothing, UInt64}, Union{Nothing, Int}, Union{Nothing, String}}}}
     lines = String[strip(l) for l in split(String(out), '\n') if !isempty(strip(l))]
     i = findfirst(==("DISTSSHKIT_HOSTINFO"), lines)
     i === nothing && return nothing
-    mem = length(lines) >= i + 1 ? _hostinfo_parse_u64(lines[i + 1]) : nothing
-    ncpu = length(lines) >= i + 2 ? _hostinfo_parse_ncpu(lines[i + 2]) : nothing
-    os = length(lines) >= i + 3 ? _hostinfo_parse_os(lines[i + 3]) : nothing
-    return (total_memory_bytes = mem, ncpu = ncpu, os = os)
+    rest = lines[(i + 1):end]
+    mem_raw = _hostinfo_labeled_value(rest, "mem")
+    ncpu_raw = _hostinfo_labeled_value(rest, "ncpu")
+    os_raw = _hostinfo_labeled_value(rest, "os")
+    return (
+        total_memory_bytes = mem_raw === nothing ? nothing : _hostinfo_parse_u64(mem_raw),
+        ncpu = ncpu_raw === nothing ? nothing : _hostinfo_parse_ncpu(ncpu_raw),
+        os = os_raw === nothing ? nothing : _hostinfo_parse_os(os_raw),
+    )
 end
 
 function _local_ncpu()::Union{Nothing, Int}
