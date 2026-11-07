@@ -132,13 +132,25 @@ using Test
             end
         end
 
+        # Open a kit log, run `body`, then close even when a test fails.
+        # `body` is first so `do` syntax works (`with_kit_verbosity` same order).
+        function _with_kit_log_handle(body, tmp::AbstractString, prefix::AbstractString)
+            path = DistSSHRun.init_log_file(tmp; prefix = prefix)
+            try
+                body()
+                return path
+            finally
+                DistSSHRun.close_log_file()
+            end
+        end
+
         @testset "quiet success and failure" begin
             _with_preflight_log() do tmp
                 with_kit_verbosity(:quiet) do
                     out, log_path = _capture_stdio() do _, _
-                        path = DistSSHRun.init_log_file(tmp; prefix = "preflight_q_ok")
-                        @test DistSSHRun.preflight_setup_ssh(["host1", "host2"])
-                        return path
+                        _with_kit_log_handle(tmp, "preflight_q_ok") do
+                            @test DistSSHRun.preflight_setup_ssh(["host1", "host2"])
+                        end
                     end
                     body = read(log_path, String)
                     @test !occursin("host1", out)
@@ -153,9 +165,9 @@ using Test
             _with_preflight_log(; fail_hosts = ["host1"]) do tmp
                 with_kit_verbosity(:quiet) do
                     out, log_path = _capture_stdio() do _, _
-                        path = DistSSHRun.init_log_file(tmp; prefix = "preflight_q_fail")
-                        @test DistSSHRun.preflight_setup_ssh(["host1"]) == false
-                        return path
+                        _with_kit_log_handle(tmp, "preflight_q_fail") do
+                            @test DistSSHRun.preflight_setup_ssh(["host1"]) == false
+                        end
                     end
                     body = read(log_path, String)
                     @test !occursin("host1", out)
@@ -170,9 +182,9 @@ using Test
             _with_preflight_log() do tmp
                 with_kit_verbosity(:progress) do
                     out, log_path = _capture_stdio() do _, _
-                        path = DistSSHRun.init_log_file(tmp; prefix = "preflight_p_ok")
-                        @test DistSSHRun.preflight_setup_ssh(["host1"])
-                        return path
+                        _with_kit_log_handle(tmp, "preflight_p_ok") do
+                            @test DistSSHRun.preflight_setup_ssh(["host1"])
+                        end
                     end
                     body = read(log_path, String)
                     @test !occursin("host1: ✓", out)
@@ -183,9 +195,9 @@ using Test
             _with_preflight_log(; fail_hosts = ["host1"]) do tmp
                 with_kit_verbosity(:progress) do
                     out, log_path = _capture_stdio() do _, _
-                        path = DistSSHRun.init_log_file(tmp; prefix = "preflight_p_fail")
-                        @test DistSSHRun.preflight_setup_ssh(["host1"]) == false
-                        return path
+                        _with_kit_log_handle(tmp, "preflight_p_fail") do
+                            @test DistSSHRun.preflight_setup_ssh(["host1"]) == false
+                        end
                     end
                     body = read(log_path, String)
                     @test occursin("host1", out)
@@ -201,9 +213,9 @@ using Test
             _with_preflight_log() do tmp
                 with_kit_verbosity(:verbose) do
                     out, log_path = _capture_stdio() do _, _
-                        path = DistSSHRun.init_log_file(tmp; prefix = "preflight_v_ok")
-                        @test DistSSHRun.preflight_setup_ssh(["host1"])
-                        return path
+                        _with_kit_log_handle(tmp, "preflight_v_ok") do
+                            @test DistSSHRun.preflight_setup_ssh(["host1"])
+                        end
                     end
                     body = read(log_path, String)
                     @test occursin("SSH preflight:", out)
@@ -216,9 +228,9 @@ using Test
             _with_preflight_log(; fail_hosts = ["host1"]) do tmp
                 with_kit_verbosity(:verbose) do
                     out, log_path = _capture_stdio() do _, _
-                        path = DistSSHRun.init_log_file(tmp; prefix = "preflight_v_fail")
-                        @test DistSSHRun.preflight_setup_ssh(["host1"]) == false
-                        return path
+                        _with_kit_log_handle(tmp, "preflight_v_fail") do
+                            @test DistSSHRun.preflight_setup_ssh(["host1"]) == false
+                        end
                     end
                     body = read(log_path, String)
                     @test occursin("host1:", out)
@@ -234,9 +246,9 @@ using Test
                 for v in (:quiet, :progress, :verbose)
                     with_kit_verbosity(v) do
                         out, log_path = _capture_stdio() do _, _
-                            path = DistSSHRun.init_log_file(tmp; prefix = "preflight_mix_$(v)")
-                            @test DistSSHRun.preflight_setup_ssh(["host1", "host2"]) == false
-                            return path
+                            _with_kit_log_handle(tmp, "preflight_mix_$(v)") do
+                                @test DistSSHRun.preflight_setup_ssh(["host1", "host2"]) == false
+                            end
                         end
                         body = read(log_path, String)
                         @test _count_host_prefix(body, "host1") == 1
