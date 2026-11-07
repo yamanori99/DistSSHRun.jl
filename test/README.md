@@ -211,6 +211,9 @@ only return numbers. Collect tests use files workers write.
 - detached drive SIGKILL: wait until heartbeat monitors start, then
   remote `--worker` gone (#148)
 - detached SSH ride `terminate!`: `kit.hosts` then remote `--worker` gone
+- remote ride pseudo-TTY: success parent-side marker after the finished
+  bar (`log_dir` absent in controller `run.toml`); failure boom is a
+  plain line (not drive host-label contract)
 - `go pi_echo`: π on both hosts
 - `go --ship-tree` empty dedicated root: no prior `--instantiate`; π on
   both; remote `runs/<run_id>/src/Project.toml` appears

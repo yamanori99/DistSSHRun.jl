@@ -545,9 +545,8 @@ end
             @test occursin("DISTSSHKIT_RUNNER_SMOKE_OK nw=3", out)
         end
 
-        # Focused pseudo-TTY (`script`) coverage for remote drive. Ride under
-        # a PTY is not covered here: non-TTY ride terminate/reap already runs
-        # below, and a reliable remote ride TTY path needs more fixture work.
+        # Focused pseudo-TTY (`script`) coverage for remote drive. Remote
+        # ride under a PTY is the next inner testset (parent-side marker).
         @testset "drive remote pseudo-TTY success and failure" begin
             _e2e_announce("drive remote pseudo-TTY success and failure")
             function sh_quote(s::AbstractString)
@@ -634,6 +633,148 @@ end
                 _assert_tty_progress_payload(fail_tty)
                 _assert_ssh_e2e_api_ok(
                     suite, "drive_remote_tty", true, "pty ok/fail captured",
+                )
+            end
+        end
+
+        # Ride progress stdout is buffered then replayed after
+        # `kit_progress_done!` (unlike drive `--no-log` live). Success must
+        # not print `Script:`; controller `run.toml` has no `log_dir`.
+        @testset "ride remote pseudo-TTY success and failure" begin
+            _e2e_announce("ride remote pseudo-TTY success and failure")
+            function sh_quote(s::AbstractString)
+                return "'" * replace(String(s), "'" => "'\\''") * "'"
+            end
+            function argv_line(cmd::Cmd)
+                return join(sh_quote.(String.(cmd.exec)), " ")
+            end
+            tty_extra = merge(
+                _e2e_base_env(),
+                Dict(
+                    "DISTSSHKIT_QUIET" => "0",
+                    "DISTSSHKIT_YES" => "1",
+                    "DISTRIBUTED_INIT_DELAY_SEC" => "0",
+                ),
+            )
+            delete!(tty_extra, "DISTSSHKIT_PROGRESS")
+            delete!(tty_extra, "DISTSSHKIT_VERBOSE")
+            tty_env = _drive_host_env(proj; extra_env = tty_extra)
+            mktempdir() do dir
+                ok_script = joinpath(dir, "ride_remote_ok.jl")
+                fail_script = joinpath(dir, "ride_remote_fail.jl")
+                cp(_fixture("ride_remote_ok.jl"), ok_script; force = true)
+                cp(_fixture("ride_remote_fail.jl"), fail_script; force = true)
+                od_ok = joinpath(dir, "ride-out-ok")
+                od_fail = joinpath(dir, "ride-out-fail")
+                mkpath(od_ok)
+                mkpath(od_fail)
+                ride_ok = _kit_cli_cmd(
+                    [
+                        "ride", "-y", "--no-spi-check",
+                        "--output-dir", od_ok, remote_tokens..., ok_script,
+                    ]
+                )
+                ride_fail = _kit_cli_cmd(
+                    [
+                        "ride", "-y", "--no-spi-check",
+                        "--output-dir", od_fail, remote_tokens..., fail_script,
+                    ]
+                )
+                runner = joinpath(dir, "ride_remote_tty.sh")
+                exports = join(
+                    ["export $(sh_quote(k))=$(sh_quote(v))" for (k, v) in sort!(collect(pairs(tty_env)))],
+                    "\n",
+                )
+                write(
+                    runner,
+                    """
+                    #!/bin/sh
+                    unset NO_COLOR
+                    unset DISTSSHKIT_QUIET
+                    unset DISTSSHKIT_PROGRESS
+                    unset DISTSSHKIT_VERBOSE
+                    unset DISTSSHKIT_CLI_SUBCOMMAND_DONE
+                    unset DIST_SSH_KIT_CLI_INCLUDE
+                    export JULIA_LOAD_PATH=$(sh_quote(_child_load_path()))
+                    unset JULIA_PROJECT
+                    $exports
+                    $(argv_line(ride_ok))
+                    echo "___OK_EXIT_\$?___"
+                    echo '___SPLIT___'
+                    $(argv_line(ride_fail))
+                    echo "___FAIL_EXIT_\$?___"
+                    """,
+                )
+                chmod(runner, 0o755)
+                t0 = time()
+                pty = _tty_capture_script(
+                    runner;
+                    typescript = joinpath(dir, "ride_remote_typescript.txt"),
+                    hang_s = 600.0,
+                )
+                elapsed = time() - t0
+                @info "e2e ride remote progress_tty script child wall" elapsed
+                parts = split(pty, "___SPLIT___")
+                @test length(parts) == 2
+                ok_tty = length(parts) == 2 ? parts[1] : ""
+                fail_tty = length(parts) == 2 ? parts[2] : ""
+                ok_plain = _tty_strip_ansi(ok_tty)
+                fail_plain = _tty_strip_ansi(fail_tty)
+                ok_m = match(r"___OK_EXIT_(\d+)___", ok_plain)
+                fail_m = match(r"___FAIL_EXIT_(\d+)___", fail_plain)
+                @test ok_m !== nothing && ok_m.captures[1] == "0"
+                @test fail_m !== nothing && fail_m.captures[1] != "0"
+                @test occursin("DISTSSHKIT_RIDE_REMOTE_OK", ok_plain)
+                @test !occursin("Script: ", ok_plain)
+                @test any(
+                    l -> occursin("DISTSSHKIT_RIDE_REMOTE_OK", l) && !_tty_bar_line(l),
+                    _tty_lines(ok_tty),
+                )
+                @test !occursin(
+                    r"[━╺⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*DISTSSHKIT_RIDE_REMOTE_OK",
+                    ok_tty,
+                )
+                _assert_tty_progress_payload(ok_tty)
+                rec = _assert_kit_progress_done(od_ok; kind = :ride)
+                @test rec.kind === :ride && rec.ok === true
+                kr_ok = DistSSHRun.kit_result_from_dir(od_ok)
+                @test kr_ok !== nothing
+                kr_ok === nothing && error("expected kit.result for remote ride success")
+                @test kr_ok.kind === :ride
+                @test kr_ok.ok === true
+                @test kr_ok.exit_code == 0
+                @test kr_ok.log_dir === nothing
+                rd_ok = kr_ok.run_dir
+                if rd_ok === nothing
+                    side = joinpath(od_ok, "kit.run_dir")
+                    @test isfile(side)
+                    rd_ok = isfile(side) ? strip(read(side, String)) : ""
+                end
+                @test !isempty(rd_ok)
+                raw_ok = DistSSHRun.read_kit_run_toml(rd_ok)
+                @test raw_ok isa AbstractDict
+                raw_ok isa AbstractDict && begin
+                    @test get(raw_ok, "kind", nothing) == "ride"
+                    @test !haskey(raw_ok, "log_dir")
+                end
+                @test occursin("DISTSSHKIT_RIDE_REMOTE_BOOM", fail_plain)
+                @test any(
+                    l -> occursin("DISTSSHKIT_RIDE_REMOTE_BOOM", l) && !_tty_bar_line(l),
+                    _tty_lines(fail_tty),
+                )
+                @test !occursin(
+                    r"[━╺⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*DISTSSHKIT_RIDE_REMOTE_BOOM",
+                    fail_tty,
+                )
+                _assert_tty_progress_payload(fail_tty)
+                kr_fail = DistSSHRun.kit_result_from_dir(od_fail)
+                @test kr_fail !== nothing
+                kr_fail === nothing && error("expected kit.result for remote ride failure")
+                @test kr_fail.kind === :ride
+                @test kr_fail.ok === false
+                @test kr_fail.exit_code != 0
+                _assert_ssh_e2e_api_ok(
+                    suite, "ride_remote_tty", true, "pty ok/fail captured",
                 )
             end
         end
