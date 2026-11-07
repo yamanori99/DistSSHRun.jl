@@ -101,7 +101,7 @@ using Test
             fail_script = joinpath(proj, "fail.jl")
             write(fail_script, "error(\"DISTSSHKIT_RUNNER_BOOM\")\n")
 
-            # `--no-log` is the production-fix path (capture even without a kit log).
+            # `--no-log` + `:progress`: release the live bar, then print live.
             drive_ok = _kit_drive_cmd(;
                 script = ok_script,
                 host_root = proj,
@@ -168,7 +168,8 @@ using Test
                 ok_lines,
             )
             @test !isempty(smoke_lines)
-            # Capture/replay: smoke is after progress chrome, not glued mid-bar.
+            # Live after release: smoke is not glued mid-bar. A finished bar
+            # below the marker is allowed (not a cursor-up overwrite).
             smoke_at = findfirst("DISTSSHKIT_RUNNER_SMOKE_OK", ok_tty)
             @test smoke_at !== nothing
             before_smoke = SubString(ok_tty, 1, first(smoke_at) - 1)
@@ -194,7 +195,7 @@ using Test
             @test length(filter(!isempty ∘ strip, quiet_lines)) <=
                 length(filter(!isempty ∘ strip, fail_lines))
 
-            # Explicit verbose: live detail path (not progress capture/replay).
+            # Explicit verbose: live detail path (unchanged by the --no-log fix).
             verbose_plain = _tty_strip_ansi(verbose_tty)
             @test occursin("DISTSSHKIT_RUNNER_SMOKE_OK", verbose_plain)
             @test occursin("Running script", verbose_plain)
@@ -306,6 +307,128 @@ using Test
                 fail_lines,
             )
             _assert_tty_progress_payload(fail_tty)
+        end
+    end
+
+    @testset "drive --no-log stderr redirect stays off stdout" begin
+        mktempdir() do dir
+            proj = joinpath(dir, "stdio-proj")
+            mkpath(proj)
+            _write_host_project!(proj, "TtyStdio")
+            script = joinpath(proj, "stdio.jl")
+            write(
+                script,
+                """
+                println(stdout, "DISTSSHKIT_STDOUT_MARK")
+                println(stderr, "DISTSSHKIT_STDERR_MARK")
+                """,
+            )
+            out_file = joinpath(dir, "stdout.txt")
+            err_file = joinpath(dir, "stderr.txt")
+            drive_cmd = _kit_drive_cmd(;
+                script = script,
+                host_root = proj,
+                parent_workers = 1,
+            )
+            @test occursin("--no-log", join(String.(drive_cmd.exec), " "))
+            runner = joinpath(dir, "stdio_runner.sh")
+            write_runner(
+                runner,
+                """
+                unset NO_COLOR
+                unset DISTSSHKIT_QUIET
+                unset DISTSSHKIT_VERBOSE
+                unset DISTSSHKIT_CLI_SUBCOMMAND_DONE
+                unset DIST_SSH_KIT_CLI_INCLUDE
+                export DISTSSHKIT_TEST=1
+                export DISTSSHKIT_YES=1
+                export DISTSSHKIT_PROGRESS=1
+                export JULIA_LOAD_PATH=$(sh_quote(_child_load_path()))
+                unset JULIA_PROJECT
+                export DISTRIBUTED_PROJECT_ROOT=$(sh_quote(proj))
+                export DISTRIBUTED_INIT_DELAY_SEC=0
+                $(argv_line(drive_cmd)) >$(sh_quote(out_file)) 2>$(sh_quote(err_file))
+                """,
+            )
+            t0 = time()
+            _tty_capture_script(
+                runner;
+                typescript = joinpath(dir, "stdio_typescript.txt"),
+                hang_s = hang_s,
+            )
+            @info "drive stdio redirect progress_tty wall" elapsed = (time() - t0)
+            @test isfile(out_file) && isfile(err_file)
+            out = read(out_file, String)
+            err = read(err_file, String)
+            @test occursin("DISTSSHKIT_STDOUT_MARK", out)
+            @test occursin("DISTSSHKIT_STDERR_MARK", err)
+            @test !occursin("DISTSSHKIT_STDERR_MARK", out)
+        end
+    end
+
+    @testset "drive --no-log interactive prompt before stdin" begin
+        Sys.isunix() || return
+        mktempdir() do dir
+            proj = joinpath(dir, "prompt-proj")
+            mkpath(proj)
+            _write_host_project!(proj, "TtyPrompt")
+            script = joinpath(proj, "prompt.jl")
+            write(
+                script,
+                """
+                print("DISTSSHKIT_PROMPT>")
+                flush(stdout)
+                line = readline(stdin)
+                println("DISTSSHKIT_GOT:", line)
+                """,
+            )
+            drive_cmd = _kit_drive_cmd(;
+                script = script,
+                host_root = proj,
+                parent_workers = 1,
+            )
+            runner = joinpath(dir, "prompt_runner.sh")
+            write_runner(
+                runner,
+                """
+                unset NO_COLOR
+                unset DISTSSHKIT_QUIET
+                unset DISTSSHKIT_PROGRESS
+                unset DISTSSHKIT_VERBOSE
+                unset DISTSSHKIT_CLI_SUBCOMMAND_DONE
+                unset DIST_SSH_KIT_CLI_INCLUDE
+                export DISTSSHKIT_TEST=1
+                export DISTSSHKIT_YES=1
+                export JULIA_LOAD_PATH=$(sh_quote(_child_load_path()))
+                unset JULIA_PROJECT
+                export DISTRIBUTED_PROJECT_ROOT=$(sh_quote(proj))
+                export DISTRIBUTED_INIT_DELAY_SEC=0
+                $(argv_line(drive_cmd))
+                """,
+            )
+            t0 = time()
+            pty = _tty_expect_script(
+                runner;
+                typescript = joinpath(dir, "prompt_typescript.txt"),
+                expect = "DISTSSHKIT_PROMPT>",
+                reply = "pong\n",
+                hang_s = hang_s,
+            )
+            @info "drive interactive progress_tty wall" elapsed = (time() - t0)
+            plain = _tty_strip_ansi(pty)
+            @test occursin("DISTSSHKIT_PROMPT>", plain)
+            @test occursin("DISTSSHKIT_GOT:pong", plain)
+            prompt_at = findfirst("DISTSSHKIT_PROMPT>", pty)
+            got_at = findfirst("DISTSSHKIT_GOT:pong", pty)
+            @test prompt_at !== nothing && got_at !== nothing
+            @test first(prompt_at) < first(got_at)
+            @test !occursin(r"[━╺⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*DISTSSHKIT_PROMPT>", pty)
+            # Visible model: prompt is its own payload line, not bar-glued.
+            prompt_lines = filter(
+                l -> occursin("DISTSSHKIT_PROMPT>", l) && !_tty_bar_line(l),
+                _tty_lines(pty),
+            )
+            @test !isempty(prompt_lines)
         end
     end
 end

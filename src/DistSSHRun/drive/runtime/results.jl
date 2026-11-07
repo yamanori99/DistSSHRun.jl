@@ -184,11 +184,22 @@ function run_driver_script!(enable_log::Bool)
                     end
                 end
             elseif DistSSHRun.kit_output_progress()
-                # `--no-log` still captures under `:progress` so script stdout
-                # does not glue onto the live bar. Replay is in the drive
-                # frame after `kit_progress_done!`.
-                DistSSHRun._with_progress_job_stdio_capture!() do
+                # `--no-log` + `:progress`: release the live `\r` bar, then let
+                # `main` own stdout/stderr on their original destinations.
+                # Capturing would hide flushed prompts, merge stderr into the
+                # replay buffer, and retain unbounded driver output in memory.
+                # `kit_progress_done!` draws the finished bar on a later line.
+                DistSSHRun._progress_release_line!()
+                try
                     call_main()
+                finally
+                    # Driver may leave the cursor mid-line (prompt without `\n`).
+                    # Finished-bar redraw uses `\r`; start a fresh line first.
+                    try
+                        println(stdout)
+                        flush(stdout)
+                    catch
+                    end
                 end
             else
                 call_main()

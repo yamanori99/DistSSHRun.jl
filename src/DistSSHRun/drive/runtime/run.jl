@@ -763,8 +763,8 @@ function _run_drive_parsed_locked!(
             _interrupt_drive_workers!()
         end
         kit_progress_done!(; ok = progress_ok)
-        # Same order as `ride` / `go`: finish the bar, then replay captured
-        # script stdout so `:progress` never glues markers onto the bar row.
+        # Replay any job-stdout capture (log-enabled `:progress`, worker sync).
+        # `--no-log` drivers print live after `_progress_release_line!` instead.
         DistSSHRun._print_job_stdout_after_progress!()
         DistSSHRun._maybe_print_kit_progress_phases(kit_out)
         DistSSHRun._set_kit_progress_sidecar!(nothing)

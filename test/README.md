@@ -13,7 +13,7 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 
 That is `test/runtests.jl` (unit + integration), sequential `@testset`s,
 `test/Project.toml`. Aqua is a separate CI job, not `Pkg.test()`.
-Unset, all 57 files run. `DISTSSHRUN_TEST_SHORT=1` (`true`, `yes`, and `on`
+Unset, all 58 files run. `DISTSSHRUN_TEST_SHORT=1` (`true`, `yes`, and `on`
 too) skips the heavy files and the extra `ride!` cases. `JULIA_PKGEVAL=true`
 does the same so a PkgEval run stays inside the 45 minute limit. That short
 list includes `integration/setup/progress_tty.jl` and
