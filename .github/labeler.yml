@@ -33,11 +33,11 @@
   - changed-files:
       - any-glob-to-any-file:
           - "testenv/**"
-          - "test/Project.toml"
-          - "test/README.md"
           - "test/artifacts/**"
           - "test/e2e.jl"
           - "test/fixtures/**"
+          - "test/Project.toml"
+          - "test/README.md"
           - "test/runtests.jl"
           - "test/support/**"
           - "test/support.jl"
