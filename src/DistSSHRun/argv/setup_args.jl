@@ -255,6 +255,7 @@ function parse_setup_args(args::Vector{String})
             "--confirm-path", "--older-than", "--id", "--julia", "--repo",
             "--remote-path", DEPLOY_ROOT_FLAG, "--snapshot",
         ),
+        prefixes = ("--remote-path=",),
         known = (
             "--check", "--pull", "--sync", "--instantiate", "--juliaup",
             "--juliaup-update", "--runtest", "--cleanup", "--clone",
@@ -333,7 +334,7 @@ function parse_setup_args(args::Vector{String})
             repo_url = String(strip(cli_take_value!(c, arg)))
         elseif arg == "--remote-dir"
             _throw_setup_remote_dir_removed()
-        elseif arg == "--remote-path"
+        elseif _legacy_remote_path_arg(arg)
             _throw_legacy_remote_path("setup")
         elseif arg == DEPLOY_ROOT_FLAG
             deploy_root = _set_deploy_root!(

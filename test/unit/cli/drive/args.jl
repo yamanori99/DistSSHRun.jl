@@ -322,6 +322,7 @@ using Test
             @test r.script_args == ["--deploy-root", "/tmp/x"]
         end
         @test_throws ArgumentError parse_drive_args(["--remote-path", "/tmp/App", "s.jl"])
+        @test_throws ArgumentError parse_drive_args(["--remote-path=/tmp/App", "s.jl"])
         @test_throws ArgumentError parse_drive_args(["--deploy-root"])
     end
 

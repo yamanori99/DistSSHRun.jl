@@ -187,7 +187,7 @@ function parse_drive_args(args::Vector{String})
             isempty(raw) && throw(ArgumentError("drive: --snapshot needs a non-empty id"))
             snapshot_id = validate_snapshot_id(raw)
             i += 2
-        elseif arg == "--remote-path"
+        elseif _legacy_remote_path_arg(arg)
             _throw_legacy_remote_path("drive")
         elseif arg == DEPLOY_ROOT_FLAG
             i >= length(args) && throw(ArgumentError("drive: $(DEPLOY_ROOT_FLAG) requires a value"))

@@ -46,6 +46,7 @@ using Test
             @test r.script_args == ["--deploy-root", "/tmp/x"]
         end
         @test_throws ArgumentError parse_ride_args(["--remote-path", "/tmp/App", "job.jl"])
+        @test_throws ArgumentError parse_ride_args(["--remote-path=/tmp/App", "job.jl"])
         @test !occursin("#!/usr/bin/env julia", help)
     end
 end

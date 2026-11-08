@@ -183,6 +183,7 @@ using Test
         @test err isa ArgumentError
         @test occursin("go --remote-path was removed", err.msg)
         @test occursin("--deploy-root", err.msg)
+        @test_throws ArgumentError parse_go_args(["--remote-path=/tmp/App", "parent:1", "job.jl"])
         @test_throws ArgumentError parse_go_args(["--deploy-root"])
     end
 

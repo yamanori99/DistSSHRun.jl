@@ -264,6 +264,11 @@ end
 """CLI location override. Not `DISTRIBUTED_REMOTE_PROJECT_ROOT` and not `session.remote`."""
 const DEPLOY_ROOT_FLAG = "--deploy-root"
 
+function _legacy_remote_path_arg(arg::AbstractString)::Bool
+    s = String(arg)
+    return s == "--remote-path" || startswith(s, "--remote-path=")
+end
+
 function _throw_legacy_remote_path(command::AbstractString)
     throw(
         ArgumentError(

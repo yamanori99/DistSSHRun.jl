@@ -128,6 +128,16 @@ using Test
         @test occursin("--deploy-root", err.msg)
         @test !occursin("deprecated", lowercase(err.msg))
     end
+    let err = try
+            parse_setup_args(["check", "--remote-path=~/work/App.jl", "child:host1"])
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("setup --remote-path was removed", err.msg)
+        @test occursin("--deploy-root", err.msg)
+    end
     let r = parse_setup_args(["check", "--deploy-root", " /tmp/App.jl ", "child:host1"])
         @test r.deploy_root == "/tmp/App.jl"
     end
