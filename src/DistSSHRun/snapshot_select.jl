@@ -429,6 +429,7 @@ function _set_active_selection!(sel::Union{Nothing, SnapshotSelection})
     return nothing
 end
 
+"""Process-wide [`SnapshotSelection`](@ref) from the last resolve or ship, or `nothing`."""
 function active_snapshot_selection()::Union{Nothing, SnapshotSelection}
     return _ACTIVE_SELECTION[]
 end

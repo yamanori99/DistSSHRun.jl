@@ -1174,8 +1174,8 @@ function _go_run!(
         run_rr = if sync_mode === false
             rr = isempty(child_hosts) ? sess_rr :
                 _project_work_root(
-                child_hosts, proj; cli_override = remote, snapshot = snap_arg,
-            )
+                    child_hosts, proj; cli_override = remote, snapshot = snap_arg,
+                )
             _go_assert_remotes_ready!(child_hosts, rr)
             rr
         elseif !isempty(child_hosts)
