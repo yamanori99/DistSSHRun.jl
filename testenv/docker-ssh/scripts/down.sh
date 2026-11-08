@@ -20,3 +20,4 @@ if command -v docker >/dev/null 2>&1; then
 fi
 
 "${COMPOSE[@]}" -f compose.yml down --remove-orphans
+rm -f "${ROOT}/.generated/env.sh"

@@ -2,12 +2,50 @@
 # Build once, then start docker-ssh workers (ports 2222 / 2223).
 # Optional: ./scripts/up.sh --e2e  → also run the SSH E2E suite from kit root.
 #
+# Manual DistSSHRun in this shell: source ./scripts/up.sh
+# (re-execs this file as a child so `set -e` cannot kill the interactive shell,
+#  then sources .generated/env.sh here. CI keeps ./scripts/up.sh --e2e.)
+#
 # CI: DISTSSHKIT_WORKER_IMAGE=ghcr.io/…:sha pulls instead of building.
 # DISTSSHKIT_PUSH_IMAGE=… tags+pushes after a local build (retries for GHCR).
 # DISTSSHKIT_SKIP_UP=1 skips compose up (image job: build+push only).
+
+# Detect source vs execute before `set -e` (must not run set -e in an interactive shell).
+_KIT_UP_SOURCED=0
+if [[ -n "${ZSH_VERSION:-}" ]]; then
+  case "${ZSH_EVAL_CONTEXT:-}" in *:file*) _KIT_UP_SOURCED=1 ;; esac
+elif [[ -n "${BASH_VERSION:-}" && "${BASH_SOURCE[0]:-}" != "$0" ]]; then
+  _KIT_UP_SOURCED=1
+fi
+
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+  _KIT_UP_SELF="${BASH_SOURCE[0]}"
+elif [[ -n "${ZSH_VERSION:-}" ]]; then
+  # zsh: path of the file being sourced/executed
+  # shellcheck disable=SC2296
+  _KIT_UP_SELF="${(%):-%x}"
+else
+  _KIT_UP_SELF="$0"
+fi
+_KIT_UP_SELF="$(cd "$(dirname "${_KIT_UP_SELF}")" && pwd)/$(basename "${_KIT_UP_SELF}")"
+_KIT_UP_ROOT="$(cd "$(dirname "${_KIT_UP_SELF}")/.." && pwd)"
+
+if [[ "${_KIT_UP_SOURCED}" -eq 1 ]]; then
+  bash "${_KIT_UP_SELF}" "$@" || return $?
+  _KIT_UP_ENV="${_KIT_UP_ROOT}/.generated/env.sh"
+  if [[ -f "${_KIT_UP_ENV}" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "${_KIT_UP_ENV}"
+    set +a
+    echo "Sourced ${_KIT_UP_ENV} into this shell."
+  fi
+  return 0
+fi
+
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="${_KIT_UP_ROOT}"
 KIT_ROOT="$(cd "${ROOT}/../.." && pwd)"
 RUN_E2E=0
 LOCAL_IMAGE="local/linux-ssh-worker:latest"
@@ -17,6 +55,7 @@ for arg in "$@"; do
     --e2e) RUN_E2E=1 ;;
     -h|--help)
       echo "usage: $0 [--e2e]"
+      echo "  Manual DistSSHRun: source $0   (activates .generated/env.sh in this shell)"
       echo "  DISTSSHKIT_WORKER_IMAGE  pull this tag (skip compose build)"
       echo "  DISTSSHKIT_PUSH_IMAGE    after build, tag and push (retried)"
       echo "  DISTSSHKIT_SKIP_UP=1     skip compose up (push-only)"
@@ -108,6 +147,10 @@ fi
 ./scripts/wait-ready.sh
 echo "Workers ready: child-1 (2222), child-2 (2223)"
 echo "SSH config: ${ROOT}/.generated/ssh_config"
+./scripts/prepare-manual-remote-root.sh
+./scripts/write-kit-env.sh
+echo "DistSSHRun in this shell: source ${ROOT}/scripts/up.sh"
+echo "One-shot: ${ROOT}/scripts/with-env.sh julia --project=. -m DistSSHRun …"
 
 if [[ "$RUN_E2E" -eq 1 ]]; then
   export DISTSSHKIT_SSH_E2E=1

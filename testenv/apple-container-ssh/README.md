@@ -22,8 +22,8 @@ Do not run `docker-ssh` compose workers at the same time: both write
 From this directory (kit root also works if you keep the path):
 
 ```bash
-./scripts/up.sh --e2e    # workers + suite
-./scripts/up.sh          # workers only
+./scripts/up.sh --e2e    # workers + suite (executable; CI-style)
+source ./scripts/up.sh   # workers + activate DistSSHRun SSH env in this shell
 ./scripts/down.sh
 ```
 
@@ -47,6 +47,13 @@ SSH aliases after `up.sh`:
 - `child-2` → the other child
 
 ```bash
+# source (not ./) so DistSSHRun SSH env is loaded into this shell:
+source ./scripts/up.sh
+julia --project=../.. -m DistSSHRun \
+  up status parent child:child-1 child:child-2 --verbose
+# One-shot without sourcing the shell:
+# ../docker-ssh/scripts/with-env.sh julia --project=../.. -m DistSSHRun …
+# Or plain ssh:
 ssh -F ../docker-ssh/.generated/ssh_config child-1 \
   'echo ok; julia --version'
 ```
@@ -57,7 +64,15 @@ E2E (`dev@child-1`) matches Compose DNS.
 
 ## Manual smoke (no E2E)
 
-`./scripts/up.sh` is enough. `container exec` has no `--` (that flag is Docker):
+`source ./scripts/up.sh` starts workers and sources
+`../docker-ssh/.generated/env.sh` into that shell. `./scripts/up.sh` alone
+cannot change the parent (CI still uses `./scripts/up.sh --e2e`).
+After workers are ready, `up.sh` always runs
+[`../docker-ssh/scripts/prepare-manual-remote-root.sh`](../docker-ssh/scripts/prepare-manual-remote-root.sh)
+then `write-kit-env.sh` (including before `--e2e`), so the DistSSHRun
+default remote root (`~/Parent/RepoName`, mode 755) exists for manual
+`setup --ship-tree` without `--remote-path`. A prepare failure aborts
+`up` before E2E. `container exec` has no `--` (that flag is Docker):
 
 ```bash
 container exec -it -u dev child-1 bash -l

@@ -78,6 +78,10 @@ Network Privacy does not block SSH from the kit parent.
 | [`scripts/gen-keys.sh`](scripts/gen-keys.sh) | Keys and SSH config |
 | [`scripts/up.sh`](scripts/up.sh) | Keys → compose up → wait |
 | [`scripts/wait-ready.sh`](scripts/wait-ready.sh) | SSH + Julia probe |
+| [`scripts/prepare-manual-remote-root.sh`](scripts/prepare-manual-remote-root.sh) | Default `~/Parent/Repo` on workers (755) for manual ship |
+| [`scripts/write-kit-env.sh`](scripts/write-kit-env.sh) | `.generated/env.sh` with absolute `-F` for DistSSHRun / git |
+| [`scripts/with-env.sh`](scripts/with-env.sh) | One-shot command under that env (no parent export) |
+| [`scripts/check-manual-smoke-quoting.sh`](scripts/check-manual-smoke-quoting.sh) | Quoting regression for env.sh / remote_root (`--live` optional) |
 | [`scripts/down.sh`](scripts/down.sh) | Compose down |
 | [`scripts/setup-colima-ci.sh`](scripts/setup-colima-ci.sh) | Colima CI |
 | `.generated/` | gitignored SSH config / keys (created by scripts) |
@@ -94,7 +98,7 @@ visible from the distro). Keep a WSL tree under `~/…`, not `/mnt/c/…`.
 
 ```bash
 ./scripts/up.sh --e2e    # workers + suite (always from kit root)
-./scripts/up.sh          # workers only
+source ./scripts/up.sh   # workers + activate DistSSHRun SSH env in this shell
 ./scripts/down.sh
 ```
 
@@ -125,10 +129,29 @@ plus `JULIA_PATHS.txt`).
 
 Manual smoke:
 
+After workers are ready, `up.sh` always runs
+`prepare-manual-remote-root.sh` then `write-kit-env.sh` (including when
+you pass `--e2e`). That creates the DistSSHRun default remote root
+(`~/Parent/RepoName`, mode 755) so manual `setup --ship-tree` without
+`--remote-path` is not refused for group/world writable, and writes
+`.generated/env.sh`. The E2E suite still uses `/home/dev/distsshkit-e2e`
+and its own ensure helper; a failure in those prepare steps aborts `up`
+before E2E starts.
+
 ```bash
-./scripts/up.sh
+# source (not ./) so DistSSHRun SSH env is loaded into this shell:
+source ./scripts/up.sh
+julia --project=../.. -m DistSSHRun \
+  up status parent child:child-1 child:child-2 --verbose
+# One-shot without sourcing the shell:
+# ./scripts/with-env.sh julia --project=../.. -m DistSSHRun …
+# Or plain ssh:
 ssh -F .generated/ssh_config child-1 'echo ok; julia --version'
 ```
+
+CI and `./scripts/up.sh --e2e` still run as a normal executable (no parent
+export). Quoting checks: `./scripts/check-manual-smoke-quoting.sh`
+(add `--live` when workers are up).
 
 ## CI
 
