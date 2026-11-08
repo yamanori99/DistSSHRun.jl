@@ -11,6 +11,7 @@ function _ride_parsed(;
         output_dir,
         julia = nothing,
         snapshot = nothing,
+        deploy_root = nothing,
         allow_mismatch = Symbol[],
     )
     return (
@@ -24,6 +25,7 @@ function _ride_parsed(;
         output_dir = output_dir,
         julia = julia,
         snapshot = snapshot,
+        deploy_root = deploy_root,
         allow_mismatch = allow_mismatch,
     )
 end
@@ -56,6 +58,9 @@ function show_ride_usage(; io::IO = stdout)
         "  --no-spi-check      skip that compare",
         "  --output-dir PATH   DISTRIBUTED_OUTPUT_DIR for the script (must be missing or empty)",
         "  --julia PATH        remote Julia (ENV or auto)",
+        "  --deploy-root PATH  remote deployment root (location, not snapshot id).",
+        "                      Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
+        "                      ~/Parent/RepoName layout from the local env_dir.",
         "  --snapshot ID       use runs/<ID>/src under the deploy root",
         "  --allow-mismatch F  waive julia, distssh, and/or manifest (comma list)",
         "  SSH workers: project-root cwd, bind 127.0.0.1; mismatch is an error unless waived.",
@@ -84,11 +89,30 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
     output_dir = nothing
     julia_exe = nothing
     snapshot_id = nothing
+    deploy_root = nothing
     allow_mismatch = Symbol[]
     spi_check = false
+    options_done = false
     c = CliCursor(collect(String, rest))
     while !cli_at_end(c)
         arg = cli_current(c)::String
+        if options_done
+            if endswith(arg, ".jl")
+                script_path = arg
+                cli_consume!(c)
+                while !cli_at_end(c)
+                    push!(script_args, cli_current(c)::String)
+                    cli_consume!(c)
+                end
+                break
+            elseif !startswith(arg, "-")
+                push!(host_tokens, arg)
+                cli_consume!(c)
+            else
+                throw(ArgumentError("unknown ride option: $arg"))
+            end
+            continue
+        end
         if arg == "--analyze"
             throw(ArgumentError("ride: ride --analyze is not a flag"))
         elseif arg == "--output-dir"
@@ -99,6 +123,15 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
             raw = strip(cli_take_value!(c, arg))
             isempty(raw) && throw(ArgumentError("ride: --snapshot needs a non-empty id"))
             snapshot_id = validate_snapshot_id(raw)
+        elseif arg == "--remote-path"
+            _throw_legacy_remote_path("ride")
+        elseif arg == DEPLOY_ROOT_FLAG
+            deploy_root = _set_deploy_root!(
+                deploy_root, _take_deploy_root!(c, "ride"), "ride",
+            )
+        elseif arg == "--"
+            options_done = true
+            cli_consume!(c)
         elseif arg == "--allow-mismatch"
             merge_allow_mismatch!(allow_mismatch, cli_take_value!(c, arg))
         elseif arg == "--spi-check"
@@ -128,6 +161,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
                 output_dir = output_dir,
                 julia = julia_exe,
                 snapshot = snapshot_id,
+                deploy_root = deploy_root,
                 allow_mismatch = allow_mismatch,
             )
         elseif endswith(arg, ".jl")
@@ -171,6 +205,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
         output_dir = output_dir,
         julia = julia_exe,
         snapshot = snapshot_id,
+        deploy_root = deploy_root,
         allow_mismatch = allow_mismatch,
     )
 end

@@ -392,7 +392,7 @@ function _manifest_ship_problems(env, listed::Vector{String})::Vector{String}
     rel = relpath(canonical_local_path(manifest), canonical_local_path(env.env_dir))
     rel in listed && return String[]
     return String[
-        "Manifest $rel is not in the send list. It is untracked and ignored, so workers would instantiate a different resolution. Stop ignoring it, or do not use setup --instantiate.",
+        "Manifest $rel is not in the send list. It is untracked and ignored, so workers would instantiate a different resolution. Stop ignoring it, or do not use setup instantiate.",
     ]
 end
 
@@ -2509,7 +2509,7 @@ function print_kit_root_usage(io::IO = stderr)
     print_help_section("Examples"; io = io)
     print_help_lines(
         io,
-        "  $(cli_m_project()) setup --check child:host1",
+        "  $(cli_m_project()) setup check child:host1",
         "  $(cli_m_project()) up child:host1",
         "  $(cli_m_project()) go SCRIPT.jl",
         "  $(cli_m_project()) ride parent:2 SCRIPT.jl",

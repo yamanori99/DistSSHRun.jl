@@ -156,6 +156,34 @@ using Test
         @test occursin("parent", txt)
         @test occursin("progress DIR", txt)
         @test occursin("slot pull-back uses Tar", txt)
+        @test occursin("--deploy-root", txt)
+        @test occursin("Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT", txt)
+        @test !occursin("--remote-path PATH", txt)
+    end
+
+    @testset "deploy-root" begin
+        let r = parse_go_args(["--deploy-root", "/tmp/my dir", "parent:1", "job.jl"])
+            @test r.deploy_root == "/tmp/my dir"
+            @test r.script_path == "job.jl"
+        end
+        let r = parse_go_args(["--deploy-root", "/tmp/App", "--", "parent:1", "job.jl", "--n", "1"])
+            @test r.deploy_root == "/tmp/App"
+            @test r.script_args == ["--n", "1"]
+        end
+        let r = parse_go_args(["parent:1", "job.jl", "--deploy-root", "/tmp/swallowed"])
+            @test r.deploy_root === nothing
+            @test r.script_args == ["--deploy-root", "/tmp/swallowed"]
+        end
+        err = try
+            parse_go_args(["--remote-path", "/tmp/App", "parent:1", "job.jl"])
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("go --remote-path was removed", err.msg)
+        @test occursin("--deploy-root", err.msg)
+        @test_throws ArgumentError parse_go_args(["--deploy-root"])
     end
 
     @testset "unknown option and missing script" begin

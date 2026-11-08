@@ -2,13 +2,13 @@
 # `julia -m DistSSHKit setup` — deploy and verify the project on SSH hosts.
 #
 # Recommended workflow:
-#   1. --ship-tree → 2. --instantiate → 3. --check → 4. --runtest (optional) → `go` / `drive`
-#   instantiate/check/go follow latest runs/<run_id>/src when the root has no Project.toml.
-#   Optional git: --clone → --instantiate → --check → --sync / --pull
-#   Replace a clone dest: --delete, then --clone
+#   1. ship-tree → 2. instantiate → 3. check → 4. runtest (optional) → `go` / `drive`
+#   instantiate/check/go follow the selected snapshot when the root has no Project.toml.
+#   Optional git: clone → instantiate → check → sync / pull
+#   Replace a clone dest: delete, then clone
 #
-#   julia --project=. -m DistSSHKit setup --ship-tree child:host1 child:host2
-#   julia --project=. -m DistSSHKit setup --sync child:host1 child:host2   # git updates
+#   julia --project=. -m DistSSHKit setup ship-tree child:host1 child:host2
+#   julia --project=. -m DistSSHKit setup sync child:host1 child:host2   # git updates
 #
 # See `--help`.
 
@@ -54,7 +54,7 @@ function _setup_reject_yes_delete(
     isempty(confirm_paths) || return nothing
     print_err("Error: "; bold = true)
     println_fatal(
-        "-y, --yes, and DISTSSHKIT_YES do not authorize setup --delete or setup --prune. " *
+        "-y, --yes, and DISTSSHKIT_YES do not authorize setup delete or setup prune. " *
             "Pass --confirm-path. See help setup.",
     )
     return Cint(1)
@@ -139,11 +139,11 @@ if !isdefined(@__MODULE__, :setup_main)
         path_anchor = DistSSHRun.canonical_local_path(project)
         remote_path = resolve_remote_project_root(
             project;
-            cli_override = opts.remote_path_override,
+            cli_override = opts.deploy_root,
         )
         deploy_path = DistSSHRun.remote_deploy_root(
             project;
-            cli_override = opts.remote_path_override,
+            cli_override = opts.deploy_root,
         )
 
         function setup_job!(mode::Symbol)::Cint
@@ -164,21 +164,21 @@ if !isdefined(@__MODULE__, :setup_main)
                 if mode === :delete
                     DistSSHRun.remote_delete_root(
                         project;
-                        cli_override = opts.remote_path_override,
+                        cli_override = opts.deploy_root,
                     )
                 elseif mode === :clone
                     DistSSHRun.remote_git_clone_dest(
                         project;
-                        cli_override = opts.remote_path_override,
+                        cli_override = opts.deploy_root,
                     )
                 elseif mode === :ship_tree
                     DistSSHRun._checked_remote_dest(deploy_path)
                 elseif mode === :remote_root
-                    override = opts.remote_path_override
+                    override = opts.deploy_root
                     if !(override isa AbstractString)
                         throw(
                             ArgumentError(
-                                "setup --remote-root needs --remote-path as an absolute path",
+                                "setup remote-root needs --deploy-root as an absolute path",
                             ),
                         )
                     end
@@ -199,7 +199,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 try
                     op_path = DistSSHRun._project_work_root(
                         opts.hosts, project;
-                        cli_override = opts.remote_path_override,
+                        cli_override = opts.deploy_root,
                         snapshot = opts.snapshot_id,
                     )
                 catch e
@@ -261,7 +261,7 @@ if !isdefined(@__MODULE__, :setup_main)
                     DistSSHRun.forget_last_snapshot_default!(project, deploy_path)
                     if !result.cancelled && result.failed == 0 &&
                             (
-                            opts.remote_path_override !== nothing ||
+                            opts.deploy_root !== nothing ||
                                 !isempty(strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", "")))
                         )
                         kit_println("  Tip: export DISTRIBUTED_REMOTE_PROJECT_ROOT=$deploy_path")
@@ -287,21 +287,21 @@ if !isdefined(@__MODULE__, :setup_main)
                 if ok && rec !== nothing
                     rid = get(rec, "run_id", nothing)
                     src = get(rec, "src", nothing)
-                    path_flag = opts.remote_path_override isa AbstractString ?
-                        " --remote-path $(opts.remote_path_override)" : ""
+                    path_flag = opts.deploy_root isa AbstractString ?
+                        " --deploy-root $(opts.deploy_root)" : ""
                     if rid isa AbstractString && !isempty(rid)
                         kit_println(
-                            "  Next: $(DistSSHRun.cli_m()) setup --instantiate --snapshot $rid$path_flag",
+                            "  Next: $(DistSSHRun.cli_m()) setup instantiate --snapshot $rid$path_flag",
                         )
                         kit_println(
-                            "        $(DistSSHRun.cli_m()) setup --check --snapshot $rid$path_flag",
+                            "        $(DistSSHRun.cli_m()) setup check --snapshot $rid$path_flag",
                         )
                     elseif src isa AbstractString
                         kit_println(
-                            "  Next: $(DistSSHRun.cli_m()) setup --instantiate --remote-path $src",
+                            "  Next: $(DistSSHRun.cli_m()) setup instantiate --deploy-root $src",
                         )
                         kit_println(
-                            "        $(DistSSHRun.cli_m()) setup --check --remote-path $src",
+                            "        $(DistSSHRun.cli_m()) setup check --deploy-root $src",
                         )
                     end
                     kit_println()

@@ -304,6 +304,25 @@ using Test
         @test occursin("DISTSSHKIT_BEST_EFFORT", txt)
         @test occursin("--best-effort", txt)
         @test !occursin("required after `setup --rsync`", txt)
+        @test occursin("--deploy-root", txt)
+        @test occursin("Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT", txt)
+    end
+
+    @testset "deploy-root" begin
+        let r = parse_drive_args(["--deploy-root", "/tmp/my dir", "parent:1", "s.jl"])
+            @test r.deploy_root == "/tmp/my dir"
+            @test r.script_path == "s.jl"
+        end
+        let r = parse_drive_args(["--deploy-root", "/tmp/App", "--", "parent:1", "s.jl", "1"])
+            @test r.deploy_root == "/tmp/App"
+            @test r.script_args == ["1"]
+        end
+        let r = parse_drive_args(["parent:1", "s.jl", "--deploy-root", "/tmp/x"])
+            @test r.deploy_root === nothing
+            @test r.script_args == ["--deploy-root", "/tmp/x"]
+        end
+        @test_throws ArgumentError parse_drive_args(["--remote-path", "/tmp/App", "s.jl"])
+        @test_throws ArgumentError parse_drive_args(["--deploy-root"])
     end
 
     @testset "require-all-hosts" begin

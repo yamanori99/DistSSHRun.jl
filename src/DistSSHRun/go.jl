@@ -381,10 +381,10 @@ function _go_assert_remote_ready!(host::AbstractString, remote_root::AbstractStr
 
         msg = "remote project not ready on $host ($remote_root).\n" *
             "Run setup first (pick one deploy path), then instantiate:\n" *
-            "  ship:   julia --project=. -m DistSSHKit setup --ship-tree $(setup_cli_host_token(host))\n" *
-            "  git:    julia --project=. -m DistSSHKit setup --clone $(setup_cli_host_token(host))\n" *
-            "          (later updates: setup --sync $(setup_cli_host_token(host)))\n" *
-            "  then:   julia --project=. -m DistSSHKit setup --instantiate $(setup_cli_host_token(host))\n" *
+            "  ship:   julia --project=. -m DistSSHKit setup ship-tree $(setup_cli_host_token(host))\n" *
+            "  git:    julia --project=. -m DistSSHKit setup clone $(setup_cli_host_token(host))\n" *
+            "          (later updates: setup sync $(setup_cli_host_token(host)))\n" *
+            "  then:   julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host))\n" *
             "Or one-shot: go --ship-tree (extracts to runs/<run_id>/src/ and instantiates).\n" *
             "Or from Julia: setup!(session, :ship_tree, :instantiate)\n" *
             "  (or go!(…; sync=:ship_tree); or :clone; repo=\"…\" then :instantiate; later :sync)\n" *
@@ -398,7 +398,7 @@ function _go_assert_remote_ready!(host::AbstractString, remote_root::AbstractStr
         throw(
             ArgumentError(
                 "remote project deps not ready on $host ($remote_root): $deps_err\n" *
-                    "Fix: julia --project=. -m DistSSHKit setup --instantiate $(setup_cli_host_token(host))\n" *
+                    "Fix: julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host))\n" *
                     "  (or setup!(session, :instantiate) after :ship_tree / :clone)",
             )
         )

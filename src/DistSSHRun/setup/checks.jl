@@ -371,7 +371,7 @@ function check_prerequisites(
             else
                 _fail_host(host, deps_err)
                 _host_check_detail(
-                    "Fix: julia --project=. -m DistSSHKit setup --instantiate $(setup_cli_host_token(host))",
+                    "Fix: julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host))",
                 )
                 all_ok = false
                 host_ok[] = false

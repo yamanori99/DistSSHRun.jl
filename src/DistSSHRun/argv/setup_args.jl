@@ -1,20 +1,64 @@
+# Grammar (CLI contract):
+#
+#   julia -m DistSSHKit setup [shared] SUBCOMMAND [options] [child:HOST...]
+#
+# Top-level `setup` is a preparation/maintenance namespace, not a job runner.
+# Exactly one SUBCOMMAND per invocation. Shared kit flags (`-q`, `--yes`,
+# `--hosts`, `--hosts-file`, `--version`) may appear anywhere and are peeled
+# first. `--` ends option parsing; remaining tokens are hosts.
+#
+# SUBCOMMAND (canonical names; one per run):
+#   ship-tree     transfer/verify only (does not instantiate)
+#   instantiate   Pkg.instantiate on the selected snapshot or git work root
+#   check         verify selected snapshot / git checkout (not a marker later
+#                 executions require)
+#   runtest       Pkg.test of the job project
+#   cleanup       stale workers
+#   clone         git clone onto an empty dest
+#   delete        remove the computed remote tree (--confirm-path)
+#   prune         kit leaves (--confirm-path; --older-than / --id)
+#   remote-root   BOOLEAN mkdir of an absolute --deploy-root PATH (not a
+#                 path-valued option; parent must exist; not mkdir -p)
+#   sync          git push + detach
+#   pull          git detach (no push)
+#   requirements  print this page (same as `setup` with no subcommand)
+#
+# Location:
+#   --deploy-root PATH   deployment root override (not snapshot id). Omit to
+#                        use DISTRIBUTED_REMOTE_PROJECT_ROOT, else ~/Parent/Repo
+#                        from the local package env_dir (workspace Manifest
+#                        member maps under that root). Does not rename ENV.
+#   --snapshot ID        instantiate / check / runtest only
+#
+# Legacy (error, not aliases):
+#   setup --ship-tree / --instantiate / --check / … → setup <subcommand>
+#   --remote-path PATH → --deploy-root PATH
+#   --remote-dir → --deploy-root
+#   --juliaup / --juliaup-update / --rsync remain removed
+#   go / drive --ship-tree stay convenience flags (not this namespace)
+#
+# Ambiguous combinations fail before remote side effects.
+
 function show_requirements(; io::IO = stdout)
     print_help_chrome(cli_heading("setup"); io = io)
     print_help_lines(
         io,
         "Deploy and check the project on SSH hosts before go / drive.",
-        "Recommended: --ship-tree, --instantiate, --check, then optional --runtest.",
-        "  After --ship-tree, instantiate/check/go use that snapshot id (local",
+        "Recommended: ship-tree, instantiate, check, then optional runtest.",
+        "  After ship-tree, instantiate/check/go use that snapshot id (local",
         "  last-snapshot record, or pass --snapshot ID). Lexical latest is not used.",
         "  A git checkout at the deploy root remains usable without --snapshot;",
         "  delete/clone/sync/pull clear the matching local last-snapshot record.",
         "Hosts: child:NAME[:N] (same as go / drive; :N ignored).",
         "       parent is up, not setup.",
-        "Remote path: ~/Parent/RepoName, or --remote-path / ENV.",
+        "Remote path: omit --deploy-root to use DISTRIBUTED_REMOTE_PROJECT_ROOT,",
+        "  else ~/Parent/RepoName from the local package env_dir (a workspace",
+        "  Manifest member maps under that root). Pass --deploy-root PATH to override.",
         "Ship creates a missing remote_root when safe: ~/… under home (mode 700),",
-        "  or an absolute path when its parent already exists (same as --remote-root).",
+        "  or an absolute path when its parent already exists (same leaf rule as",
+        "  setup remote-root).",
         "  Absolute roots also refuse /, a single dir under /, . / .., and this home.",
-        "setup --remote-root still requires an absolute --remote-path.",
+        "setup remote-root still requires an absolute --deploy-root PATH.",
         "--ship-tree walks the project directory you passed and each .gitignore",
         "  there and below (case-sensitive). It does not widen to a workspace Manifest.",
         ".git/info/exclude, core.excludesFile, and a .gitignore above that",
@@ -38,7 +82,7 @@ function show_requirements(; io::IO = stdout)
         "An SSH name must not start with '-' (including user@-host).",
         "A host or remote path must not contain NUL, a newline, or another control character.",
         "Git parity is drive --require-git (off by default).",
-        "setup --check fails when Julia patch or prerelease differs from this process.",
+        "setup check fails when Julia patch or prerelease differs from this process.",
         "A build suffix alone still passes. --ignore-julia-version turns skew into a warning.",
         "go and drive compare the full VERSION string and the Julia commit.",
     )
@@ -46,51 +90,55 @@ function show_requirements(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  $(cli_m_project()) setup MODE child:host1 child:host2",
-        "  setup --ship-tree child:host1 child:host2",
-        "  setup --instantiate child:host1 child:host2",
-        "  setup --check child:host1 child:host2",
-        "  setup --runtest child:host1 child:host2",
+        "  $(cli_m_project()) setup SUBCOMMAND child:host1 child:host2",
+        "  setup ship-tree child:host1 child:host2",
+        "  setup instantiate child:host1 child:host2",
+        "  setup check child:host1 child:host2",
+        "  setup runtest child:host1 child:host2",
+        "  setup ship-tree --deploy-root /abs/deploy child:host1",
+        "  setup remote-root --deploy-root /abs/deploy child:host1",
     )
     print_help_blank(io)
-    print_help_section("Modes (one per run)"; io = io)
+    print_help_section("Subcommands (one per run)"; io = io)
     print_help_lines(
         io,
-        "  --remote-root        create that absolute --remote-path only",
-        "  --ship-tree / --clone  --ship-tree writes runs/<run_id>/src/, out/,",
-        "                       and a DistSSHRun run.toml stamp",
-        "                       --clone needs an empty remote path",
-        "                       --delete first to replace a clone dest",
-        "  --sync / --pull      git update (confirm unless -y)",
-        "  --instantiate        Pkg.instantiate on remotes",
-        "  --check              SSH, Julia, project, deps (patch and prerelease must match)",
-        "  --runtest            Pkg.test of the job project on remotes",
-        "  --cleanup            stale workers",
-        "  --delete             remote project tree (needs --confirm-path;",
-        "                       refuses an unowned Ship run.toml)",
-        "  --prune              .distsshkit go/drive/setup/runs leaves (needs --confirm-path;",
-        "                       same ownership check on those candidates)",
+        "  remote-root        create that absolute --deploy-root PATH only",
+        "  ship-tree / clone  ship-tree writes runs/<run_id>/src/, out/,",
+        "                     and a DistSSHRun run.toml stamp; does not instantiate",
+        "                     clone needs an empty remote path",
+        "                     delete first to replace a clone dest",
+        "  sync / pull        git update (confirm unless -y)",
+        "  instantiate        Pkg.instantiate on remotes",
+        "  check              SSH, Julia, project, deps (patch and prerelease must match)",
+        "  runtest            Pkg.test of the job project on remotes",
+        "  cleanup            stale workers",
+        "  delete             remote project tree (needs --confirm-path;",
+        "                     refuses an unowned Ship run.toml)",
+        "  prune              .distsshkit go/drive/setup/runs leaves (needs --confirm-path;",
+        "                     same ownership check on those candidates)",
     )
     print_help_blank(io)
     print_help_section("Options"; io = io)
     print_help_lines(
         io,
         "  --repo URL           clone URL (default: origin)",
-        "  --remote-path PATH   remote deployment root (location, not snapshot id)",
+        "  --deploy-root PATH   remote deployment root (location, not snapshot id).",
+        "                       Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
+        "                       ~/Parent/RepoName layout from the local env_dir.",
         "  --snapshot ID        runs/<ID>/ under that root (instantiate/check/runtest)",
-        "  --allow-external-symlinks  with --ship-tree: keep escaping symlinks",
+        "  --allow-external-symlinks  with ship-tree: keep escaping symlinks",
         "  --julia PATH         remote Julia",
         "  --ignore-julia-version  warn on Julia version skew instead of failing",
         "  $(KIT_QUIET_FLAG_HELP)",
         "  $(KIT_PROGRESS_FLAG_HELP)",
         "  $(KIT_VERBOSE_FLAG_HELP)",
-        "  -y, --yes           skip confirmations except --delete and --prune",
-        "  --confirm-path PATH  with --delete or --prune: the computed path (quote ~)",
+        "  -y, --yes           skip confirmations except delete and prune",
+        "  --confirm-path PATH  with delete or prune: the computed path (quote ~)",
         "  --hosts CSV          child:NAME[:N] (:N stripped)",
         "  --hosts-file PATH    one token per line (:N stripped)",
         "  --version, -v        print version and exit",
-        "  --older-than DAYS    with --prune: mtime at least DAYS old",
-        "  --id TOKEN           with --prune: go / runs leaf name contains TOKEN",
+        "  --older-than DAYS    with prune: mtime at least DAYS old",
+        "  --id TOKEN           with prune: go / runs leaf name contains TOKEN",
     )
     print_help_blank(io)
     print_help_lines(io, "  $(KIT_TIME_HELP)")
@@ -100,7 +148,7 @@ function show_requirements(; io::IO = stdout)
         io,
         "  $(KIT_SKIP_PKILL_ENV_HELP)",
         "  $(KIT_JOBS_ENV_HELP)",
-        "  DISTSSHKIT_YES            same as -y; does not authorize --delete or --prune",
+        "  DISTSSHKIT_YES            same as -y; does not authorize delete or prune",
     )
     print_help_blank(io)
     return print_help_lines(
@@ -123,28 +171,79 @@ end
 function _throw_setup_remote_dir_removed()
     throw(
         ArgumentError(
-            "setup --remote-dir was removed in 0.2.0; use --remote-path. See help setup.",
+            "setup --remote-dir was removed; use $(DEPLOY_ROOT_FLAG) PATH. See help setup.",
         ),
     )
 end
 
-function _setup_flag_mode(arg::AbstractString)::Union{Nothing, Symbol}
-    arg == "--check" && return :check
-    arg == "--pull" && return :pull
-    arg == "--sync" && return :sync
-    arg == "--instantiate" && return :instantiate
-    arg == "--juliaup" && _throw_setup_juliaup_removed(arg)
-    arg == "--juliaup-update" && _throw_setup_juliaup_removed(arg)
-    arg == "--runtest" && return :runtest
-    arg == "--cleanup" && return :cleanup
-    arg == "--clone" && return :clone
-    arg == "--delete" && return :delete
-    arg == "--prune" && return :prune
-    arg == "--ship-tree" && return :ship_tree
-    arg == "--remote-root" && return :remote_root
-    arg == "--rsync" && _throw_rsync_removed()
-    arg == "--requirements" && return :requirements
+const _SETUP_SUBCOMMANDS = (
+    "check" => :check,
+    "pull" => :pull,
+    "sync" => :sync,
+    "instantiate" => :instantiate,
+    "runtest" => :runtest,
+    "cleanup" => :cleanup,
+    "clone" => :clone,
+    "delete" => :delete,
+    "prune" => :prune,
+    "ship-tree" => :ship_tree,
+    "remote-root" => :remote_root,
+    "requirements" => :requirements,
+)
+
+function _setup_subcommand(arg::AbstractString)::Union{Nothing, Symbol}
+    for (name, mode) in _SETUP_SUBCOMMANDS
+        arg == name && return mode
+    end
     return nothing
+end
+
+function _setup_legacy_mode_name(flag::AbstractString)::Union{Nothing, String}
+    flag == "--check" && return "check"
+    flag == "--pull" && return "pull"
+    flag == "--sync" && return "sync"
+    flag == "--instantiate" && return "instantiate"
+    flag == "--runtest" && return "runtest"
+    flag == "--cleanup" && return "cleanup"
+    flag == "--clone" && return "clone"
+    flag == "--delete" && return "delete"
+    flag == "--prune" && return "prune"
+    flag == "--ship-tree" && return "ship-tree"
+    flag == "--remote-root" && return "remote-root"
+    flag == "--requirements" && return "requirements"
+    return nothing
+end
+
+function _throw_setup_legacy_mode(flag::AbstractString)
+    name = _setup_legacy_mode_name(flag)
+    name === nothing && return nothing
+    throw(
+        ArgumentError(
+            join_explained_message(
+                "setup $(flag) was removed; use `$(cli_m()) setup $(name)`.",
+                "Run `$(cli_m()) help setup` for flags.",
+            ),
+        )
+    )
+end
+
+function _setup_set_mode!(
+        mode::Union{Nothing, Symbol},
+        mode_flag::Union{Nothing, String},
+        next::Symbol,
+        shown::AbstractString,
+    )
+    if mode_flag !== nothing
+        throw(
+            ArgumentError(
+                join_explained_message(
+                    "setup: more than one mode ($(mode_flag) and $(shown))",
+                    "Run `$(cli_m()) help setup` for flags.",
+                )
+            )
+        )
+    end
+    return next, String(shown)
 end
 
 function parse_setup_args(args::Vector{String})
@@ -154,7 +253,7 @@ function parse_setup_args(args::Vector{String})
         "setup";
         valued = (
             "--confirm-path", "--older-than", "--id", "--julia", "--repo",
-            "--remote-path", "--snapshot",
+            "--remote-path", DEPLOY_ROOT_FLAG, "--snapshot",
         ),
         known = (
             "--check", "--pull", "--sync", "--instantiate", "--juliaup",
@@ -162,7 +261,7 @@ function parse_setup_args(args::Vector{String})
             "--delete", "--prune", "--rsync", "--ship-tree", "--remote-root",
             "--remote-dir",
             "--allow-external-symlinks", "--requirements",
-            "--ignore-julia-version", "-h", "--help",
+            "--ignore-julia-version", "-h", "--help", "--",
         ),
         bare_dash = true,
     )
@@ -171,7 +270,7 @@ function parse_setup_args(args::Vector{String})
     mode_flag::Union{Nothing, String} = nothing
     julia_path = get(ENV, "JULIA_DISTRIBUTED_EXE", "auto")  # default to env or auto-detect
     repo_url = nothing
-    remote_path_override = nothing
+    deploy_root = nothing
     snapshot_id = nothing
     hosts = String[]
     show_help = false
@@ -180,25 +279,34 @@ function parse_setup_args(args::Vector{String})
     prune_id = nothing
     confirm_paths = String[]
     allow_external_symlinks = false
+    options_done = false
 
     c = CliCursor(args)
     while !cli_at_end(c)
         arg = cli_current(c)::String
-        flag_mode = _setup_flag_mode(arg)
-        if flag_mode !== nothing
-            if mode_flag !== nothing
-                throw(
-                    ArgumentError(
-                        join_explained_message(
-                            "setup: more than one mode ($(mode_flag) and $(arg))",
-                            "Run `$(cli_m()) help setup` for flags.",
-                        )
-                    )
-                )
+        if options_done
+            let p = parse_placement_token(arg)
+                push!(hosts, p.role === :parent ? PARENT_HOST_NAME : p.name)
             end
-            mode_flag = String(arg)
-            mode = flag_mode
             cli_consume!(c)
+            continue
+        end
+        if arg == "--"
+            options_done = true
+            cli_consume!(c)
+            continue
+        end
+        sub = _setup_subcommand(arg)
+        if sub !== nothing
+            mode, mode_flag = _setup_set_mode!(mode, mode_flag, sub, arg)
+            cli_consume!(c)
+            continue
+        end
+        _throw_setup_legacy_mode(arg)
+        if arg == "--juliaup" || arg == "--juliaup-update"
+            _throw_setup_juliaup_removed(arg)
+        elseif arg == "--rsync"
+            _throw_rsync_removed()
         elseif arg == "--confirm-path"
             raw = String(cli_take_value!(c, arg))
             _confirm_path_control_char(raw) && throw(
@@ -226,11 +334,11 @@ function parse_setup_args(args::Vector{String})
         elseif arg == "--remote-dir"
             _throw_setup_remote_dir_removed()
         elseif arg == "--remote-path"
-            raw = String(cli_take_value!(c, arg))
-            any(c -> c == '\n' || c == '\r' || c == '\0' || iscntrl(c), raw) && throw(
-                ArgumentError("--remote-path cannot contain a control character"),
+            _throw_legacy_remote_path("setup")
+        elseif arg == DEPLOY_ROOT_FLAG
+            deploy_root = _set_deploy_root!(
+                deploy_root, _take_deploy_root!(c, "setup"), "setup",
             )
-            remote_path_override = strip(raw)
         elseif arg == "--snapshot"
             raw = String(strip(cli_take_value!(c, arg)))
             isempty(raw) && throw(ArgumentError("--snapshot needs a non-empty id"))
@@ -258,16 +366,16 @@ function parse_setup_args(args::Vector{String})
     apply_kit_cli_session!(cli_session)
 
     if (older_days !== nothing || prune_id !== nothing) && mode !== :prune
-        throw(ArgumentError("--older-than / --id only apply to setup --prune"))
+        throw(ArgumentError("--older-than / --id only apply to setup prune"))
     end
     if !isempty(confirm_paths) && mode !== :delete && mode !== :prune
-        throw(ArgumentError("--confirm-path only applies to setup --delete or setup --prune"))
+        throw(ArgumentError("--confirm-path only applies to setup delete or setup prune"))
     end
     if snapshot_id !== nothing &&
             mode !== :instantiate && mode !== :check && mode !== :runtest
         throw(
             ArgumentError(
-                "--snapshot only applies to setup --instantiate, --check, or --runtest",
+                "--snapshot only applies to setup instantiate, check, or runtest",
             ),
         )
     end
@@ -276,7 +384,7 @@ function parse_setup_args(args::Vector{String})
         mode = mode,
         julia_path = julia_path,
         repo_url = repo_url,
-        remote_path_override = remote_path_override,
+        deploy_root = deploy_root,
         snapshot_id = snapshot_id,
         hosts = hosts,
         show_help = show_help,

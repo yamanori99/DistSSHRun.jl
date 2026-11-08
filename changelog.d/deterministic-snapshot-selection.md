@@ -1,7 +1,7 @@
 category: breaking
 
 - Snapshot source selection is explicit. `--snapshot ID` / `snapshot=` names
-  `runs/<ID>/` under the already resolved deployment root (`--remote-path`
+  `runs/<ID>/` under the already resolved deployment root (`--deploy-root`
   stays location only). IDs must match `YYYYMMDDTHHMMSSZ-xxxxxx`; traversal
   and multi-component paths are refused. An explicit ID never falls back to
   the deploy root, lexical latest, or another ID. Every target host is

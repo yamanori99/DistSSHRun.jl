@@ -66,8 +66,8 @@ Julia **1.13+**.
   missing remote root is created when safe (`~/…` under home, or absolute
   with an existing parent; see `help setup`). Absolute roots also refuse
   `/`, a single directory under `/`, `.`/`..`, and this machine's home.
-  `setup --remote-root` still creates one absolute path only.
-- `--rsync` was removed in 0.2.0. `setup --delete` and `--prune` need
+  `setup remote-root` still creates one absolute path only (`--deploy-root PATH`).
+- `--rsync` was removed in 0.2.0. `setup delete` and `setup prune` need
   `--confirm-path`; `-y` does not authorize them. A present unowned
   stamp is refused.
 
@@ -91,7 +91,7 @@ The command is `julia -m DistSSHRun`.
 See flags with `julia -m DistSSHRun help go`.
 
 ```bash
-julia -m DistSSHRun setup --check child:host1
+julia -m DistSSHRun setup check child:host1
 julia -m DistSSHRun go SCRIPT.jl
 julia -m DistSSHRun ride parent:2 SCRIPT.jl
 julia -m DistSSHRun drive parent:2 SCRIPT.jl

@@ -80,6 +80,7 @@ function drive_parsed_from_session(
         allow_mismatch = collect(Symbol, allow_mismatch),
         allow_external_symlinks = allow_external_symlinks,
         snapshot = snap,
+        deploy_root = session.remote,
         isolated = false,
     )
 end

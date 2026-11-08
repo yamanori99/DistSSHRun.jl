@@ -261,6 +261,42 @@ function _unknown_cli_option_message(command::AbstractString, arg::AbstractStrin
     )
 end
 
+"""CLI location override. Not `DISTRIBUTED_REMOTE_PROJECT_ROOT` and not `session.remote`."""
+const DEPLOY_ROOT_FLAG = "--deploy-root"
+
+function _throw_legacy_remote_path(command::AbstractString)
+    throw(
+        ArgumentError(
+            join_explained_message(
+                "$(command) --remote-path was removed; use $(DEPLOY_ROOT_FLAG) PATH.",
+                "Run `$(cli_m()) help $(command)` for flags.",
+            ),
+        )
+    )
+end
+
+function _parse_deploy_root_value(raw::AbstractString, flag::AbstractString)::String
+    any(c -> c == '\n' || c == '\r' || c == '\0' || iscntrl(c), raw) && throw(
+        ArgumentError("$(flag) cannot contain a control character"),
+    )
+    return strip(String(raw))
+end
+
+function _take_deploy_root!(c::CliCursor, command::AbstractString)::String
+    return _parse_deploy_root_value(cli_take_value!(c, DEPLOY_ROOT_FLAG), DEPLOY_ROOT_FLAG)
+end
+
+function _set_deploy_root!(
+        current::Union{Nothing, String},
+        next::AbstractString,
+        command::AbstractString,
+    )::String
+    current === nothing || throw(
+        ArgumentError("$(command): $(DEPLOY_ROOT_FLAG) given more than once"),
+    )
+    return String(next)
+end
+
 """
 Reject the first unknown `-` option before help and before other flag handling.
 

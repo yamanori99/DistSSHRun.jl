@@ -20,6 +20,7 @@ end
 const _DRIVE_VALUE_FLAGS = (
     "--workers", "-w", "--julia", "--allow-mismatch",
     "--log-dir", "--output-dir", "--package", "--hosts", "--hosts-file",
+    "--snapshot", "--deploy-root",
 )
 
 """Index of the drive `--isolated` option in already-peeled argv, or `nothing`."""
@@ -536,6 +537,7 @@ function _run_drive_parsed_locked!(
             sync_session = DistSSHRun.KitSession(
                 project = proj_dir,
                 workers = host_names,
+                remote = get(parsed, :deploy_root, nothing),
                 quiet = parsed.cli_session.quiet,
                 verbosity = parsed.cli_session.verbosity,
                 yes = parsed.cli_session.yes || DistSSHRun.kit_noninteractive(),
@@ -595,6 +597,7 @@ function _run_drive_parsed_locked!(
             # An invalid SSH name fails that host. Selection uses --snapshot / record / git.
             DistSSHRun._assign_remote_work_root_env!(
                 host_names, project_root;
+                cli_override = get(parsed, :deploy_root, nothing),
                 snapshot = get(parsed, :snapshot, nothing),
             )
         end
@@ -622,21 +625,21 @@ function _run_drive_parsed_locked!(
                         println_fatal("Git hash mismatch on $(join(mismatches, ", "))")
                         println_fatal()
                         println_fatal("To re-deploy with git:")
-                        println_fatal("  julia --project=. -m DistSSHKit setup --sync $(join(setup_cli_host_token.(mismatches), " "))")
+                        println_fatal("  julia --project=. -m DistSSHKit setup sync $(join(setup_cli_host_token.(mismatches), " "))")
                         println_fatal()
                         println_fatal("Or re-deploy with ship-tree:")
-                        println_fatal("  julia --project=. -m DistSSHKit setup --ship-tree $(join(setup_cli_host_token.(mismatches), " "))")
+                        println_fatal("  julia --project=. -m DistSSHKit setup ship-tree $(join(setup_cli_host_token.(mismatches), " "))")
                         println_fatal()
                     end
                     if !isempty(unverifiable)
                         println_fatal("Git commit could not be verified on $(join(unverifiable, ", "))")
-                        println_fatal("(remote tree may lack .git/ — e.g. after `setup --ship-tree`)")
+                        println_fatal("(remote tree may lack .git/ — e.g. after `setup ship-tree`)")
                         println_fatal()
                         println_fatal("For ship-tree remotes, omit --require-git (the default).")
                         println_fatal()
                         println_fatal("Or use git-managed remotes:")
-                        println_fatal("  julia --project=. -m DistSSHKit setup --clone child:HOST ...")
-                        println_fatal("  julia --project=. -m DistSSHKit setup --sync child:HOST ...")
+                        println_fatal("  julia --project=. -m DistSSHKit setup clone child:HOST ...")
+                        println_fatal("  julia --project=. -m DistSSHKit setup sync child:HOST ...")
                         println_fatal()
                     end
                     println_fatal("Or omit --require-git and run without git parity.")

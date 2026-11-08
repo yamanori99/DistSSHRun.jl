@@ -75,14 +75,14 @@ end
 
 @testset "setup --snapshot argv" begin
     p = DistSSHRun.parse_setup_args(
-        String["--instantiate", "--snapshot", _SNAP_ID_OLD, "child:h1"],
+        String["instantiate", "--snapshot", _SNAP_ID_OLD, "child:h1"],
     )
     @test p.snapshot_id == _SNAP_ID_OLD
     @test_throws ArgumentError DistSSHRun.parse_setup_args(
-        String["--ship-tree", "--snapshot", _SNAP_ID_OLD, "child:h1"],
+        String["ship-tree", "--snapshot", _SNAP_ID_OLD, "child:h1"],
     )
     @test_throws ArgumentError DistSSHRun.parse_setup_args(
-        String["--instantiate", "--snapshot", "../x", "child:h1"],
+        String["instantiate", "--snapshot", "../x", "child:h1"],
     )
 end
 

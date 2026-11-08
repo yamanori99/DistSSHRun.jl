@@ -17,8 +17,8 @@ using Test
 @testset "TTY progress keeps up status and setup --check lines" begin
     status_cmd = _kit_cli_cmd(["up", "status", "parent", "child:host1"])
     update_cmd = _kit_cli_cmd(["up", "update", "parent", "child:host1"])
-    check_cmd = _kit_cli_cmd(["setup", "--check", "child:host1"])
-    check2_cmd = _kit_cli_cmd(["setup", "--check", "child:host1", "child:host2"])
+    check_cmd = _kit_cli_cmd(["setup", "check", "child:host1"])
+    check2_cmd = _kit_cli_cmd(["setup", "check", "child:host1", "child:host2"])
     preflight_cmd = _kit_cli_cmd(["up", "status", "child:host1"])
     size_cmd = _kit_cli_cmd(["hostinfo", "parent"])
     pool_cmd = _kit_cli_cmd(["pool", "parent"])

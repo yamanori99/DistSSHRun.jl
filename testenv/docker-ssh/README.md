@@ -44,7 +44,7 @@ Worker image installs **two** juliaup channels from
   `up` to realign. Not a supported floor and not a Pkg.test slot.
 
 The image also `Pkg.Registry.add("General")` on the default channel. A
-fresh juliaup depot has no registries, and `setup --instantiate` fail-closes
+fresh juliaup depot has no registries, and `setup instantiate` fail-closes
 in that case (`no reachable package registries`). The registry lives in
 `~/.julia/registries` and is shared by both channels.
 
@@ -54,7 +54,7 @@ path it also resolves each channel's current release from `versions.json`
 (`JULIA_DEFAULT_RELEASE` / `JULIA_ALT_RELEASE`). That string is the image
 cache key, so a new patch, or a prerelease becoming stable, rebuilds the
 juliaup layer. The image build checks `julia --version` against it.
-By default, `setup --check` requires matching patch and prerelease versions
+By default, `setup check` requires matching patch and prerelease versions
 but ignores build suffixes. `go` and `drive` require matching `string(VERSION)`
 and Julia commit unless `--allow-mismatch julia` is set. Install policy:
 [Requirements](https://yamanori99.github.io/DistSSHKit.jl/stable/requirements/).
@@ -132,8 +132,8 @@ Manual smoke:
 After workers are ready, `up.sh` always runs
 `prepare-manual-remote-root.sh` then `write-kit-env.sh` (including when
 you pass `--e2e`). That creates the DistSSHRun default remote root
-(`~/Parent/RepoName`, mode 755) so manual `setup --ship-tree` without
-`--remote-path` is not refused for group/world writable, and writes
+(`~/Parent/RepoName`, mode 755) so manual `setup ship-tree` without
+`--deploy-root` is not refused for group/world writable, and writes
 `.generated/env.sh`. The E2E suite still uses `/home/dev/distsshkit-e2e`
 and its own ensure helper; a failure in those prepare steps aborts `up`
 before E2E starts.

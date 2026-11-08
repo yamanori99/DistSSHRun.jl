@@ -376,7 +376,7 @@ run_ride(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("ride.jl
 
 CLI entry. Prefer Julia 1.13+ and `julia -m DistSSHKit SUBCOMMAND …`:
 
-    julia --project=. -m DistSSHKit setup --clone child:host1 child:host2
+    julia --project=. -m DistSSHKit setup clone child:host1 child:host2
     julia --project=. -m DistSSHKit go SCRIPT.jl
     julia --project=. -m DistSSHKit ride parent:2 SCRIPT.jl
     julia --project=. -m DistSSHKit drive parent:2 script.jl

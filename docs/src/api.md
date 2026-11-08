@@ -91,7 +91,7 @@ end
 ## Setup
 
 `setup!` prepares a host. `sync!` and `instantiate!` are the same jobs as
-`setup --sync` and `setup --instantiate`.
+`setup sync` and `setup instantiate`.
 
 ```@autodocs
 Modules = [DistSSHRun]

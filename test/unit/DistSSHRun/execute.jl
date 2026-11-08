@@ -751,6 +751,24 @@ end
         )
         @test "--snapshot" in argv_snap
         @test "20260101T000000Z-aaaaaa" in argv_snap
+        argv_root = DistSSHRun._execute_detached_argv(
+            :go, "job.jl", ["parent:1"], String[];
+            output_dir = "/tmp/out",
+            log_dir = nothing,
+            sync = nothing,
+            julia = nothing,
+            quiet = true,
+            verbosity = nothing,
+            hosts_file = nothing,
+            enable_log = false,
+            package = nothing,
+            require_all_hosts = true,
+            skip_hash_check = true,
+            remote = "/tmp/App",
+        )
+        @test "--deploy-root" in argv_root
+        @test "/tmp/App" in argv_root
+        @test !("--remote-path" in argv_root)
     end
 
     @testset "execute_kwargs_from_parsed" begin
@@ -767,6 +785,10 @@ end
         )
         gsnap = DistSSHRun.execute_kwargs_from_parsed(go_snap; kind = :go)
         @test gsnap[:snapshot] == "20260101T000000Z-aaaaaa"
+        go_root = DistSSHRun.parse_go_args(
+            ["--deploy-root", "/tmp/App", "parent:1", "job.jl"],
+        )
+        @test DistSSHRun.execute_kwargs_from_parsed(go_root; kind = :go)[:remote] == "/tmp/App"
         @test gkw[:verbosity] === :progress
         @test gkw[:julia] == "/opt/julia/bin/julia"
         @test gkw[:output_dir] == "my_runs"

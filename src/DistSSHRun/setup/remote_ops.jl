@@ -395,7 +395,7 @@ function clone_to_remotes(
             println_fatal("  Hosts: $(join(hosts, ", "))")
             println_fatal()
             print_warn("  Safety: refuses if the remote path already has any files.\n")
-            println_fatal("  To replace an existing tree, run `setup --delete` first, then `--clone`.")
+            println_fatal("  To replace an existing tree, run `setup delete` first, then `setup clone`.")
             println_fatal()
             kit_confirm("Proceed? [y/N]: ") || begin
                 println_fatal("Cancelled.")

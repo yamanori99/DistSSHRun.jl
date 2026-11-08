@@ -41,12 +41,26 @@ using Test
         @test occursin("setup --juliaup-update was removed", shown)
         @test occursin("up update", shown)
     end
-    let (code, out, err) = _setup_capture(["--check", "--remote-dir", "/tmp/App.jl", "child:host1"])
+    let (code, out, err) = _setup_capture(["check", "--remote-dir", "/tmp/App.jl", "child:host1"])
         shown = out * err
         @test code == 1
         @test occursin("setup --remote-dir was removed", shown)
-        @test occursin("--remote-path", shown)
+        @test occursin("--deploy-root", shown)
         @test occursin("help setup", shown)
+    end
+    let (code, out, err) = _setup_capture(["check", "--remote-path", "/tmp/App.jl", "child:host1"])
+        shown = out * err
+        @test code == 1
+        @test occursin("setup --remote-path was removed", shown)
+        @test occursin("--deploy-root", shown)
+        @test !occursin("SSH preflight", shown)
+    end
+    let (code, out, err) = _setup_capture(["--ship-tree", "child:host1"])
+        shown = out * err
+        @test code == 1
+        @test occursin("setup --ship-tree was removed", shown)
+        @test occursin("setup ship-tree", shown)
+        @test !occursin("SSH preflight", shown)
     end
     let (code, out, err) = _setup_capture(["--not-a-flag"])
         shown = out * err
@@ -56,27 +70,33 @@ using Test
         @test !occursin("--help", shown)
         @test !occursin("Modes (one per run)", shown)
     end
-    let (code, out, err) = _setup_capture(["--help", "--check", "--sync"])
+    let (code, out, err) = _setup_capture(["--help", "check", "sync"])
         shown = out * err
         @test code == 1
-        @test occursin("more than one mode (--check and --sync)", shown)
+        @test occursin("more than one mode (check and sync)", shown)
         @test occursin("help setup", shown)
         @test !occursin("--help", shown)
     end
     let (code, out, _) = _setup_capture(String[])
         @test code == 0
         @test occursin("Recommended", out)
-        @test occursin("--ship-tree", out)
+        @test occursin("ship-tree", out)
     end
-    let (code, out, _) = _setup_capture(["--requirements"])
+    let (code, out, _) = _setup_capture(["requirements"])
         @test code == 0
-        @test occursin("--instantiate", out)
+        @test occursin("instantiate", out)
     end
-    let (code, out, err) = _setup_capture(["--delete", "parent"])
+    let (code, out, err) = _setup_capture(["--requirements"])
+        shown = out * err
+        @test code == 1
+        @test occursin("setup --requirements was removed", shown)
+        @test occursin("setup requirements", shown)
+    end
+    let (code, out, err) = _setup_capture(["delete", "parent"])
         @test code == 1
         @test occursin("only for up", out * err)
     end
-    let (code, out, err) = _setup_capture(["--delete", "host1"])
+    let (code, out, err) = _setup_capture(["delete", "host1"])
         @test code == 1
         combined = out * err
         @test occursin("child:NAME", combined) || occursin("parent[:N]", combined)
@@ -85,7 +105,7 @@ using Test
             "DISTSSHKIT_TEST" => "1",
             "DISTSSHKIT_TEST_SSH" => "/no/such/fake-ssh.jl",
         ) do
-            _setup_capture(["--delete", "--yes", "child:host1"])
+            _setup_capture(["delete", "--yes", "child:host1"])
         end
         combined = out * err
         @test code == 1
@@ -96,7 +116,7 @@ using Test
         @test !occursin("SSH preflight failed", combined)
     end
     let (code, out, err) = _setup_capture(
-            ["--delete", "--yes", "--confirm-path", "~/nope", "child:host1"],
+            ["delete", "--yes", "--confirm-path", "~/nope", "child:host1"],
         )
         combined = out * err
         @test code == 1
@@ -105,7 +125,7 @@ using Test
         @test !occursin("--help", combined)
         @test !occursin("do not authorize", combined)
     end
-    let (code, out, err) = _setup_capture(["--prune", "child:host1"])
+    let (code, out, err) = _setup_capture(["prune", "child:host1"])
         @test code == 0
         @test occursin("Type 'prune' to confirm", out)
         @test occursin("Cancelled.", out)

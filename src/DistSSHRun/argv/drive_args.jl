@@ -96,6 +96,7 @@ function parse_drive_args(args::Vector{String})
     sync_mode = nothing
     allow_external_symlinks = false
     snapshot_id = nothing
+    deploy_root = nothing
     isolated = false
     sync_script = false
     require_git = false
@@ -109,8 +110,31 @@ function parse_drive_args(args::Vector{String})
     script_args = String[]
 
     i = 1
+    options_done = false
     while i <= length(args)
         arg = String(args[i])
+        if options_done
+            if endswith(arg, ".jl")
+                script_path = arg
+                script_args = args[(i + 1):end]
+                break
+            elseif startswith(arg, "-")
+                throw(
+                    ArgumentError(
+                        "unknown or incomplete drive option: $arg (use parent:N / child:NAME:N, e.g. parent:2 child:host1:4)",
+                    )
+                )
+            else
+                parent_workers = _drive_push_host_token!(
+                    hosts,
+                    parent_workers,
+                    arg,
+                    parent_listed,
+                )
+                i += 1
+            end
+            continue
+        end
 
         if arg == "--parenthost" || startswith(arg, "--parenthost:") ||
                 arg == "--masterhost" || startswith(arg, "--masterhost:") ||
@@ -157,11 +181,25 @@ function parse_drive_args(args::Vector{String})
         elseif arg == "--allow-external-symlinks"
             allow_external_symlinks = true
             i += 1
-        elseif arg == "--snapshot" && i < length(args)
+        elseif arg == "--snapshot"
+            i >= length(args) && throw(ArgumentError("drive: --snapshot needs a non-empty id"))
             raw = String(strip(args[i + 1]))
             isempty(raw) && throw(ArgumentError("drive: --snapshot needs a non-empty id"))
             snapshot_id = validate_snapshot_id(raw)
             i += 2
+        elseif arg == "--remote-path"
+            _throw_legacy_remote_path("drive")
+        elseif arg == DEPLOY_ROOT_FLAG
+            i >= length(args) && throw(ArgumentError("drive: $(DEPLOY_ROOT_FLAG) requires a value"))
+            deploy_root = _set_deploy_root!(
+                deploy_root,
+                _parse_deploy_root_value(args[i + 1], DEPLOY_ROOT_FLAG),
+                "drive",
+            )
+            i += 2
+        elseif arg == "--"
+            options_done = true
+            i += 1
         elseif arg == "--isolated"
             isolated && throw(ArgumentError("drive: --isolated specified more than once"))
             isolated = true
@@ -304,6 +342,7 @@ function parse_drive_args(args::Vector{String})
                 allow_mismatch = allow_mismatch,
                 allow_external_symlinks = allow_external_symlinks,
                 snapshot = snapshot_id,
+                deploy_root = deploy_root,
                 isolated = isolated,
             )
         elseif arg == "--help" || arg == "-h"
@@ -332,6 +371,7 @@ function parse_drive_args(args::Vector{String})
                 allow_mismatch = allow_mismatch,
                 allow_external_symlinks = false,
                 snapshot = nothing,
+                deploy_root = nothing,
                 isolated = false,
             )
         elseif endswith(arg, ".jl")
@@ -433,6 +473,7 @@ function parse_drive_args(args::Vector{String})
         allow_mismatch = allow_mismatch,
         allow_external_symlinks = allow_external_symlinks,
         snapshot = snapshot_id,
+        deploy_root = deploy_root,
         isolated = isolated,
     )
 end
@@ -443,7 +484,7 @@ function show_drive_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "Driver + Distributed workers (pmap), then collect new files.",
-        "Remotes: setup --ship-tree or --clone, then --instantiate.",
+        "Remotes: setup ship-tree or setup clone, then setup instantiate.",
         "Or drive --ship-tree (extracts to runs/<run_id>/src/ and instantiates).",
     )
     print_help_blank(io)
@@ -469,6 +510,9 @@ function show_drive_usage(; io::IO = stdout)
         io,
         "  -w, --workers N     parent:N when no parent token is listed",
         "  --sync / --ship-tree  optional pre-run; --ship-tree instantiates src/",
+        "  --deploy-root PATH  remote deployment root (location, not snapshot id).",
+        "                      Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
+        "                      ~/Parent/RepoName layout from the local env_dir.",
         "  --snapshot ID       use runs/<ID>/src under the deploy root",
         "                      (not with --sync / --ship-tree; those pick their own source)",
         "  --allow-external-symlinks  with --ship-tree: keep escaping symlinks",
