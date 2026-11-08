@@ -53,7 +53,9 @@ jobs:
               github.com/suzuki-shunsuke/pinact/v5/cmd/pinact
             python3 -m pip install --user --break-system-packages -r requirements.txt
           )
-          export PATH="$(go env GOPATH)/bin:${HOME}/.local/bin:${PATH}"
+          # SC2155: split declare/assign so a failed `go env` is not masked.
+          go_bin="$(go env GOPATH)/bin"
+          export PATH="${go_bin}:${HOME}/.local/bin:${PATH}"
 
           actionlint -version
           zizmor --version
