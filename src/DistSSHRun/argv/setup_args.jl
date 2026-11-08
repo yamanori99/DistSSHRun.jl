@@ -6,7 +6,7 @@ function show_requirements(; io::IO = stdout)
         "Recommended: --ship-tree, --instantiate, --check, then optional --runtest.",
         "  After --ship-tree, instantiate/check/go use latest runs/<run_id>/src",
         "  when the remote root has no Project.toml. Or pass --remote-path.",
-        "Hosts: child:NAME[:N] (same as go / drive / size; :N ignored).",
+        "Hosts: child:NAME[:N] (same as go / drive; :N ignored).",
         "       parent is up, not setup.",
         "Remote path: ~/Parent/RepoName, or --remote-path / ENV.",
         "Ship needs an existing remote_root (setup --remote-root); not created from HOME.",
@@ -99,7 +99,7 @@ function show_requirements(; io::IO = stdout)
     print_help_blank(io)
     return print_help_lines(
         io,
-        "Details: docs (manual/setup). See also: go, drive, size.",
+        "Details: docs (manual/setup). See also: go, drive, hostinfo.",
     )
 end
 

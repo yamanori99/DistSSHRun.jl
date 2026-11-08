@@ -69,8 +69,6 @@ end
                         detached = true,
                         project = proj,
                         verbosity = :verbose,
-                        mem_headroom = 0.5,
-                        parent_gb = 0.2,
                         stdout = out_io,
                         stderr = err_io,
                     )

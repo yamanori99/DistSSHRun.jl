@@ -15,11 +15,12 @@ using Test
     @test DistSSHRun.dist_ssh_kit_version() isa VersionNumber
     @test DistSSHRun.dist_ssh_kit_version() != v"0.0.0"
 
-    # Public surface: sizing is `size!`; argv `go` / `drive` are unexported.
+    # Public surface: placement is `WorkerPlan`; argv `go` / `drive` are unexported.
     # `names` lists public names too. Whether `using` imports a name is `isexported`.
     ns = names(DistSSHRun)
     not_exported(name) = !Base.isexported(DistSSHRun, name) && Base.ispublic(DistSSHRun, name)
-    @test :size! in ns && :go! in ns && :drive! in ns && :plan ∉ ns
+    @test :size! ∉ ns && :go! in ns && :drive! in ns && :plan ∉ ns
+    @test :WorkerPlan in ns
     @test :pool! in ns && :ResourcePool in ns && :HostInventory in ns
     @test not_exported(:print_pool)
     @test :worker_plan_from_pool ∉ ns
@@ -94,7 +95,8 @@ using Test
     @test DistSSHRun.ssh_opts === DistSSHRun.DistSSHBase.ssh_opts
     @test parentmodule(DistSSHRun.ssh_opts) === DistSSHRun.DistSSHBase
     @test parentmodule(DistSSHRun.juliaup_add_host!) === DistSSHRun.DistSSHUp
-    @test :DistSSHBase ∉ ns && :DistSSHUp ∉ ns && :DistSSHSize ∉ ns
+    @test :DistSSHBase ∉ ns && :DistSSHUp ∉ ns
+    @test !isdefined(DistSSHRun, :DistSSHSize)
     @test :parse_worker_tokens ∉ ns && :ParsedWorkerTokens ∉ ns
     @test :worker_tokens_fully_specified ∉ ns && :child_hosts_from_tokens ∉ ns
     @test :worker_plan_from_tokens ∉ ns

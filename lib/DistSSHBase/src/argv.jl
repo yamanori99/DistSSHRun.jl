@@ -1,4 +1,4 @@
-# Small helpers for hand-rolled CLI parsers (drive/setup/size/demo).
+# Small helpers for hand-rolled CLI parsers (drive/setup/hostinfo/demo).
 
 """Cursor over `args` for incremental CLI parsing."""
 mutable struct CliCursor

@@ -667,7 +667,7 @@ using Test
 
         @testset "in-process run gate" begin
             DistSSHRun._with_kit_inproc_run!(:go) do
-                DistSSHRun._with_kit_inproc_run!(:size) do
+                DistSSHRun._with_kit_inproc_run!(:hostinfo) do
                     @test DistSSHRun._kit_inproc_run_kind() === :go
                 end
             end

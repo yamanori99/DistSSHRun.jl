@@ -7,7 +7,7 @@ host_op_result(; cancelled::Bool = false, succeeded::Int = 0, failed::Int = 0) =
 """
 Validate normalized setup hosts (SSH names after CLI placement parse).
 
-CLI entry is the same vocabulary as go / drive / size (`parent[:N]` /
+CLI entry is the same vocabulary as go / drive (`parent[:N]` /
 `child:NAME[:N]`; `:N` ignored). After parse, this checks the stripped
 names. `up` also accepts [`PARENT_HOST_NAME`](@ref) when `allow_parent=true`.
 """

@@ -49,7 +49,7 @@ function show_ride_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  parent:N / child:NAME:N  Distributed workers (default: no tokens → parent:1)",
-        "  omit :N             error (use size, then paste counts)",
+        "  omit :N             error (pass parent:N / child:NAME:N)",
         "  --spi-check         compare to sequential map/filter (default off)",
         "  --no-spi-check      skip that compare",
         "  --output-dir PATH   DISTRIBUTED_OUTPUT_DIR for the script (must be missing or empty)",

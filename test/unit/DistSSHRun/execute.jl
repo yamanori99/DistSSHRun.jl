@@ -522,8 +522,7 @@ end
         @test DistSSHRun.execute_detached_accepts(:log_dir; kind = :drive)
         @test !DistSSHRun.execute_detached_accepts(:log_dir; kind = :go)
         @test DistSSHRun.execute_detached_accepts(:skip_hash_check; kind = :drive)
-        @test DistSSHRun.execute_detached_accepts(:mem_headroom; kind = :drive)
-        @test DistSSHRun.execute_detached_accepts(:parent_gb; kind = :drive)
+        @test !DistSSHRun.execute_detached_accepts(:mem_headroom; kind = :drive)
         @test DistSSHRun.execute_detached_accepts(:repeat; kind = :go)
         @test !DistSSHRun.execute_detached_accepts(:repeat; kind = :drive)
         @test DistSSHRun.execute_detached_accepts(:workers; kind = :drive)
@@ -559,7 +558,7 @@ end
         @test occursin(":go, :drive, or :ride", sprint(showerror, err))
     end
 
-    @testset "detached drive argv mem_headroom" begin
+    @testset "detached drive argv require-all-hosts" begin
         argv = DistSSHRun._execute_detached_argv(
             :drive, "job.jl", ["parent:1"], String[];
             output_dir = "/tmp/out",
@@ -573,13 +572,8 @@ end
             package = nothing,
             require_all_hosts = false,
             skip_hash_check = true,
-            mem_headroom = 0.5,
-            parent_gb = 0.2,
         )
-        @test "--mem-headroom" in argv
-        @test "0.5" in argv
-        @test "--parent-gb" in argv
-        @test "0.2" in argv
+        @test !("--mem-headroom" in argv)
         @test "--best-effort" in argv
         @test !("--require-all-hosts" in argv)
         @test !("--allow-external-symlinks" in argv)
@@ -782,16 +776,13 @@ end
         hosts_file = _sample_hosts_file()
         drive = DistSSHRun.parse_drive_args(
             [
-                "--no-log", "--package", "Foo", "--mem-headroom", "0.5",
-                "--parent-gb", "0.2", "--workers", "4",
+                "--no-log", "--package", "Foo", "--workers", "4",
                 "--hosts-file", hosts_file, "s.jl",
             ]
         )
         dkw = DistSSHRun.execute_kwargs_from_parsed(drive; kind = :drive)
         @test dkw[:enable_log] === false
         @test dkw[:package] == "Foo"
-        @test dkw[:mem_headroom] == 0.5
-        @test dkw[:parent_gb] == 0.2
         @test dkw[:workers] == 4
         @test !haskey(dkw, :hosts_file)
         @test DistSSHRun.host_tokens(drive; kind = :drive) ==

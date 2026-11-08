@@ -50,6 +50,12 @@ using Test
         @test code == 1
         @test occursin("Unknown subcommand: bogus", err)
     end
+    let (code, _, err) = _main_capture(["size"])
+        @test code == 1
+        @test occursin("Unknown subcommand: size", err)
+        @test occursin("hostinfo", err)
+        @test !occursin("Stacktrace", err)
+    end
     let (code, _, err) = _main_capture(["map_echo.jl"])
         @test code == 1
         @test occursin("does not infer go / ride / drive", err)
@@ -101,7 +107,7 @@ using Test
 
     # Subcommand --help / --version load `src/cli/*.jl` in-process (no SSH / addprocs).
     @testset "subcommand help and version" begin
-        for cmd in ("drive", "go", "ride", "setup", "size", "pool")
+        for cmd in ("drive", "go", "ride", "setup", "hostinfo", "pool")
             let (code, out, err) = _main_capture([cmd, "--help"])
                 combined = out * err
                 @test code == 0
@@ -131,7 +137,7 @@ using Test
 
     @testset "help <command> is <command> --help" begin
         for cmd in (
-                "drive", "go", "ride", "setup", "size", "pool", "up", "demo", "progress",
+                "drive", "go", "ride", "setup", "hostinfo", "pool", "up", "demo", "progress",
             )
             direct = _main_capture([cmd, "--help"])
             via = _main_capture(["help", cmd])
@@ -203,7 +209,7 @@ using Test
         @test DistSSHRun.no_command_message("map_echo.jl") ==
             "No command (got \"map_echo.jl\"). Kit does not infer go / ride / drive."
         @test DistSSHRun.RUN_SUBCOMMAND_EXPECTATION ==
-            "Expected: setup | up | go | ride | drive | size | pool | demo | progress"
+            "Expected: setup | up | go | ride | drive | hostinfo | pool | demo | progress"
         @test DistSSHRun.NO_COMMAND_HINT_LINES == (
             "  go SCRIPT.jl      as-is complete job (timing without rewrite)",
             "  ride … SCRIPT.jl  experimental map / filter",
@@ -251,7 +257,7 @@ using Test
         try
             empty!(ARGS)
             append!(ARGS, ["sentinel-a", "sentinel-b"])
-            let (code, _, _) = _main_capture(["size", "--version"])
+            let (code, _, _) = _main_capture(["hostinfo", "--version"])
                 @test code == 0
             end
             @test ARGS == ["sentinel-a", "sentinel-b"]
@@ -270,13 +276,13 @@ using Test
                 write(joinpath(proj_b, "Project.toml"), "name = \"ProjBeta\"\n")
 
                 let (code_a, out_a, err_a) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_a) do
-                        _main_capture(["size", "parent", "--gb-per-worker", "0.5"])
+                        _main_capture(["hostinfo", "parent"])
                     end
                     @test code_a == 0
                     @test occursin("ProjAlpha", out_a * err_a)
                 end
                 let (code_b, out_b, err_b) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_b) do
-                        _main_capture(["size", "parent", "--gb-per-worker", "0.5"])
+                        _main_capture(["hostinfo", "parent"])
                     end
                     @test code_b == 0
                     @test occursin("ProjBeta", out_b * err_b)

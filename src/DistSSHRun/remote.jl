@@ -533,8 +533,6 @@ function local_git_clean(proj_dir::AbstractString)::Bool
 end
 
 
-# `get_local_resources` lives in DistSSHSize.
-
 # Remote path resolution & result collection
 
 """Split `find -print0` output. Paths that contain a newline are skipped."""

@@ -15,8 +15,6 @@ const _EXECUTE_DETACHED_KW = Set{Symbol}(
         :package,
         :require_all_hosts,
         :skip_hash_check,
-        :mem_headroom,
-        :parent_gb,
         :workers,
         :repeat,
         :stdout,
@@ -174,11 +172,11 @@ function execute_detached_accepts(kw::Symbol; kind::Symbol)::Bool
     kw in _EXECUTE_DETACHED_NAMED && return true
     kw in _EXECUTE_DETACHED_KW || return false
     kind === :go && return !(kw in _EXECUTE_DETACHED_DRIVE_ONLY) &&
-        !(kw in (:spi_check, :mem_headroom, :parent_gb))
+        !(kw in (:spi_check,))
     kind === :ride && return !(
         kw in (
             :repeat, :sync_script, :package, :log_dir, :enable_log, :skip_hash_check,
-            :workers, :require_all_hosts, :mem_headroom, :parent_gb,
+            :workers, :require_all_hosts,
             :allow_external_symlinks,
         )
     )
@@ -241,8 +239,6 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
     kw[:package] = parsed.explicit_package
     kw[:require_all_hosts] = parsed.require_all_hosts
     kw[:skip_hash_check] = parsed.skip_hash_check
-    kw[:mem_headroom] = parsed.mem_headroom
-    kw[:parent_gb] = parsed.parent_gb
     get(parsed, :sync_script, false) && (kw[:sync_script] = true)
     dw = parsed.default_workers
     dw === nothing || (kw[:workers] = Int(dw))
@@ -445,7 +441,7 @@ Keywords are then an allow-list (unknown names throw):
 `output_dir`, `args`, `project`, `sync`, `julia`, `quiet`, `verbosity`, `yes`,
 `remote`, `hosts_file`, `job_id`, `source`, `allow_mismatch`, and drive-only `log_dir`,
 `enable_log`, `package`, `require_all_hosts`, `skip_hash_check`,
-`mem_headroom`, `parent_gb`, `workers`, `sync_script`,
+`workers`, `sync_script`,
 `allow_external_symlinks`, `dir`, `threads`, `env_allow`, and `env`.
 `source` is a provenance
 dict for every kind. Detached passes it as `DISTSSHKIT_SOURCE_*`. Go-only
@@ -453,7 +449,7 @@ dict for every kind. Detached passes it as `DISTSSHKIT_SOURCE_*`. Go-only
 `false`). Detached argv passes `--spi-check` when true and `--no-spi-check`
 when false, so an older child whose default is on still skips the compare.
 Neither go nor
-ride takes `size!` flags. `yes` must be `true` (the
+ride takes sizing flags. `yes` must be `true` (the
 default): an unattended child cannot answer a prompt. `remote` that starts
 with `~` is stored in `DISTRIBUTED_REMOTE_PROJECT_ROOT` as a layout path
 (not `expanduser` on the kit parent). Child stdio defaults to
@@ -699,13 +695,6 @@ function _execute_detached!(
                 "execute!(:go, ...; detached=true) does not accept keyword :spi_check",
             )
         )
-        for k in (:mem_headroom, :parent_gb)
-            haskey(kwargs, k) && throw(
-                ArgumentError(
-                    "execute!(:go, ...; detached=true) does not accept keyword $(repr(k))",
-                )
-            )
-        end
     elseif kind === :ride
         haskey(kwargs, :repeat) && throw(
             ArgumentError(
@@ -714,7 +703,7 @@ function _execute_detached!(
         )
         for k in (
                 :sync_script, :package, :log_dir, :enable_log, :skip_hash_check,
-                :workers, :require_all_hosts, :mem_headroom, :parent_gb,
+                :workers, :require_all_hosts,
                 :allow_external_symlinks,
             )
             haskey(kwargs, k) && throw(
@@ -762,8 +751,6 @@ function _execute_detached!(
         )
     end
     skip_hash_check = get(kwargs, :skip_hash_check, true)
-    mem_headroom = get(kwargs, :mem_headroom, nothing)
-    parent_gb = get(kwargs, :parent_gb, nothing)
     workers = get(kwargs, :workers, nothing)
     repeat = get(kwargs, :repeat, nothing)
     sync_script = get(kwargs, :sync_script, false)
@@ -841,8 +828,6 @@ function _execute_detached!(
         package = package,
         require_all_hosts = require_all_hosts,
         skip_hash_check = skip_hash_check,
-        mem_headroom = mem_headroom,
-        parent_gb = parent_gb,
         workers = workers,
         repeat = repeat,
         sync_script = sync_script,
@@ -1857,8 +1842,6 @@ function _execute_detached_argv(
         package,
         require_all_hosts,
         skip_hash_check,
-        mem_headroom = nothing,
-        parent_gb = nothing,
         workers = nothing,
         repeat = nothing,
         sync_script::Bool = false,
@@ -1919,12 +1902,6 @@ function _execute_detached_argv(
             push!(argv, "--best-effort")
         end
         skip_hash_check === false && push!(argv, "--require-git")
-        if mem_headroom !== nothing
-            push!(argv, "--mem-headroom", string(Float64(mem_headroom)))
-        end
-        if parent_gb !== nothing
-            push!(argv, "--parent-gb", string(Float64(parent_gb)))
-        end
         if workers !== nothing
             push!(argv, "--workers", string(Int(workers)))
         end

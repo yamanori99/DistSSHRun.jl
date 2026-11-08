@@ -16,7 +16,7 @@ When reviewing a diff, follow [REVIEW.md](REVIEW.md).
 
 Label a pull request `breaking` when it changes public behavior, including the CLI (flags, confirmation, exit codes, what is deleted). Do not mix a breaking change with other changes.
 
-`size!` and `WorkerPlan` are not experimental. A patch that changes them still takes the `breaking` label.
+`WorkerPlan` is not experimental. A patch that changes it still takes the `breaking` label. Removing `size` / `size!` is breaking.
 
 Ask before editing `.coderabbit.yaml` or `.github/`.
 

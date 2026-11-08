@@ -1,6 +1,5 @@
 # Result types for the drive / sync API.
-# `WorkerPlan`, `size_worker_count`, `get_local_resources`, and the RSS→GB
-# helpers live in DistSSHSize.
+# `WorkerPlan` lives in `worker_plan.jl`.
 
 """Per-host outcome for sync and similar operations."""
 struct HostResult
@@ -49,7 +48,7 @@ struct SyncResult
 end
 
 """
-Parsed drive/go worker tokens (counts may still need [`size!`](@ref)).
+Parsed drive/go worker tokens (explicit `:N` only).
 
 Build with `DistSSHRun.parse_worker_tokens`; the keyword constructor here only
 coerces types (same convenience shape as [`DriveResult`](@ref) /
@@ -88,7 +87,7 @@ end
 """
     parse_worker_tokens(tokens) -> ParsedWorkerTokens
 
-Classify CLI-style tokens. `size` / `pool` / `setup` may omit `:N` (host list).
+Classify CLI-style tokens. `hostinfo` / `pool` / `setup` may omit `:N` (host list).
 go / drive / ride placement requires `:N` except `go --repeat` (omit = uncapped).
 """
 function parse_worker_tokens(
@@ -393,8 +392,6 @@ mutable struct PipelineConfig
     driver::String
     args::Vector{String}
     sync::Union{Symbol, Bool, Nothing}
-    mem_headroom::Float64
-    parent_gb::Float64
     skip_hash_check::Union{Nothing, Bool}
     collect_spec::Union{Symbol, Bool, AbstractString, Nothing}
     collect_merge::Bool
@@ -416,8 +413,6 @@ function PipelineConfig(;
         driver::AbstractString,
         args::AbstractVector{<:AbstractString} = String[],
         sync::Union{Symbol, Bool, Nothing} = nothing,
-        mem_headroom::Real = DEFAULT_MEM_HEADROOM,
-        parent_gb::Real = DEFAULT_PARENT_GB,
         skip_hash_check::Union{Nothing, Bool} = nothing,
         collect::Union{Symbol, Bool, AbstractString, Nothing} = nothing,
         collect_merge::Bool = false,
@@ -451,8 +446,6 @@ function PipelineConfig(;
         String(driver),
         Base.collect(String, args),
         sync,
-        Float64(mem_headroom),
-        Float64(parent_gb),
         skip_hash_check,
         collect,
         collect_merge,

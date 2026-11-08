@@ -10,7 +10,7 @@ using Test
     cmds = Cmd[]
     kinds = Symbol[]
     labels = String[]
-    for cmd in ("drive", "go", "ride", "setup", "size", "pool")
+    for cmd in ("drive", "go", "ride", "setup", "hostinfo", "pool")
         push!(cmds, setenv(_kit_cli_cmd([cmd, "--help"]), env))
         push!(kinds, :help)
         push!(labels, cmd)
@@ -19,8 +19,8 @@ using Test
         push!(labels, cmd)
     end
     for (argv, kind) in (
-            (["drive", "--mem-headroom", "0.5", "--parent-gb", "0.2", "--help"], :drive_flags),
-            (["size", "--gb-per-worker", "1.5", "--help"], :size_flags),
+            (["drive", "--require-git", "--help"], :drive_flags),
+            (["hostinfo", "--help"], :hostinfo_flags),
             (
                 ["go", "--julia", "/opt/julia/bin/julia", "--output-dir", "my_runs", "--help"],
                 :go_flags,
@@ -41,12 +41,12 @@ using Test
             @test occursin("DistSSHRun $(DistSSHRun.dist_ssh_kit_version())", out)
         elseif kind === :drive_flags
             @test occursin("Usage", out)
-            @test occursin("--mem-headroom", out)
-            @test occursin("--parent-gb", out)
-        elseif kind === :size_flags
+            @test occursin("--require-git", out)
+            @test !occursin("--mem-headroom", out)
+        elseif kind === :hostinfo_flags
             @test occursin("Usage", out)
-            @test occursin("--gb-per-worker", out)
-            @test occursin("--probe", out)
+            @test occursin("hostinfo", lowercase(out))
+            @test !occursin("--gb-per-worker", out)
         else
             @test kind === :go_flags
             @test occursin("Usage", out)

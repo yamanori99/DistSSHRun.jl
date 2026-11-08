@@ -1,9 +1,8 @@
 #!/usr/bin/env julia
 """
-`julia -m DistSSHKit size` — estimate worker counts from RAM/CPU.
+`julia -m DistSSHKit hostinfo` — host identity, RAM, CPU, OS, Julia.
 
-  julia --project=. -m DistSSHKit size parent child:host1 child:host2
-  julia --project=. -m DistSSHKit size --gb-per-worker 1.5 child:host1
+  julia --project=. -m DistSSHKit hostinfo parent child:host1 child:host2
 
 See `--help`.
 """
@@ -25,52 +24,57 @@ if !isdefined(@__MODULE__, :DistSSHRun)
         import DistSSHRun
     end
 end
-include(joinpath(@__DIR__, "size", "_using.jl"))
+include(joinpath(@__DIR__, "hostinfo", "_using.jl"))
 
-function size_main()::Cint
+function hostinfo_main()::Cint
     project_root = cli_project_root(@__DIR__)
     path_anchor = DistSSHRun.canonical_local_path(project_root)
     opts = try
-        parse_size_args(ARGS)
+        parse_hostinfo_args(ARGS)
     catch e
         e isa ArgumentError || rethrow()
-        startswith(e.msg, "unknown size option:") || rethrow()
+        startswith(e.msg, "unknown hostinfo option:") || rethrow()
         DistSSHRun.print_cli_error(e.msg)
         return Cint(1)
     end
     if opts.show_help
-        show_size_usage()
+        show_hostinfo_usage()
         return 0
     end
     if opts.show_version
         DistSSHRun.println_kit_version()
         return 0
     end
-    hosts = opts.hosts
-    all_hosts = opts.include_parent ? [DistSSHRun.PARENT_HOST_NAME; hosts] : hosts
-
-    if isempty(all_hosts)
-        show_size_usage()
+    tokens = String[]
+    opts.include_parent && push!(tokens, "parent")
+    for h in opts.hosts
+        push!(tokens, "child:$h")
+    end
+    if isempty(tokens)
+        show_hostinfo_usage()
         return 0
     end
 
-    print_header(DistSSHRun.cli_heading("size"))
+    print_header(DistSSHRun.cli_heading("hostinfo"))
     DistSSHRun.writeln_field("Project", cli_project_disp(project_root, path_anchor))
     DistSSHRun.kit_println()
 
-    samples = resolve_worker_memory_samples(project_root, all_hosts, hosts, opts)
-    samples === nothing && return 1
-    DistSSHRun.kit_println()
-
-    print_size_report(
-        all_hosts, hosts, samples, opts;
-        show_peak = (opts.probe !== nothing && opts.gb_per_worker === nothing),
+    session = DistSSHRun.KitSession(
+        project = project_root,
+        workers = tokens,
+        quiet = opts.cli_session.quiet,
+        verbosity = opts.cli_session.verbosity,
+        yes = opts.cli_session.yes,
     )
-    return 0
+    DistSSHRun.apply_session_env!(session)
+    hosts = DistSSHRun.session_inventory_hosts(session)
+    rows = DistSSHRun.DistSSHBase.collect_host_facts(hosts; julia = opts.julia)
+    print_hostinfo(rows)
+    return all(r -> r.reachable, rows) ? 0 : 1
 end
 
 if get(ENV, "DIST_SSH_KIT_CLI_INCLUDE", "") != "1" &&
         !isempty(PROGRAM_FILE) &&
         abspath(PROGRAM_FILE) == abspath(@__FILE__)
-    exit(size_main())
+    exit(hostinfo_main())
 end

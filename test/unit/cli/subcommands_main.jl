@@ -36,11 +36,11 @@ using Test
             @test code == 0
             @test occursin("Usage", out * err)
         end
-        let (code, out, err) = _cli_capture(() -> DistSSHRun.run_size(["--nope", "-h"]))
+        let (code, out, err) = _cli_capture(() -> DistSSHRun.run_hostinfo(["--nope", "-h"]))
             shown = out * err
             @test code == 1
-            @test occursin("unknown size option: --nope", shown)
-            @test occursin("help size", shown)
+            @test occursin("unknown hostinfo option: --nope", shown)
+            @test occursin("help hostinfo", shown)
             @test !occursin("--help", shown)
             @test !occursin("Usage", shown)
         end
@@ -57,8 +57,8 @@ using Test
         end
     end
 
-    @testset "size, pool, up, progress entrypoints" begin
-        let (code, out, err) = _cli_capture(() -> DistSSHRun.run_size(String[]))
+    @testset "hostinfo, pool, up, progress entrypoints" begin
+        let (code, out, err) = _cli_capture(() -> DistSSHRun.run_hostinfo(String[]))
             @test code == 0
             @test occursin("Usage", out * err)
         end
@@ -100,8 +100,8 @@ using Test
                 withenv("DISTRIBUTED_PROJECT_ROOT" => nothing) do
                     let (code_a, out_a, err_a) = cd(proj_a) do
                             _cli_capture(
-                                () -> DistSSHRun.run_size(
-                                    ["parent", "--gb-per-worker", "0.5"],
+                                () -> DistSSHRun.run_hostinfo(
+                                    ["parent"],
                                 ),
                             )
                         end
@@ -111,8 +111,8 @@ using Test
 
                     let (code_b, out_b, err_b) = cd(proj_b) do
                             _cli_capture(
-                                () -> DistSSHRun.run_size(
-                                    ["parent", "--gb-per-worker", "0.5"],
+                                () -> DistSSHRun.run_hostinfo(
+                                    ["parent"],
                                 ),
                             )
                         end

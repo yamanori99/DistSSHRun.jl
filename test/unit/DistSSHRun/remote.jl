@@ -11,9 +11,9 @@ function _remote_delete_fixture(root::String, parts::Vector{String})
 end
 
 @testset "remote" begin
-    let r = DistSSHRun.get_local_resources()
-        @test r.total_gb > 0
-        @test r.nproc >= 1
+    let r = DistSSHRun.DistSSHBase.collect_host_facts("parent")
+        @test r.total_memory_bytes !== nothing && r.total_memory_bytes > 0
+        @test r.ncpu !== nothing && r.ncpu >= 1
     end
 
     _with_tempdir() do tmp

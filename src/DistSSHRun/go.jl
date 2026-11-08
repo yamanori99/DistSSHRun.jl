@@ -968,7 +968,7 @@ started together. `repeat=N` (CLI `--repeat N`) is the total number of those
 runs, spread round-robin across listed hosts (no tokens → all on parent).
 `:N` on a token is a per-host cap when `repeat` is set; omit it to leave that
 host uncapped. Without `repeat`, every listed token needs `:N` (omitting it is
-not 1 and not [`size!`](@ref)). Empty tokens stay one parent slot.
+not 1). Empty tokens stay one parent slot.
 `path_anchor` shortens displayed paths (CLI passes kit project root).
 """
 function go!(

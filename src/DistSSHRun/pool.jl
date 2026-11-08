@@ -1,29 +1,26 @@
-# Cluster inventory: cores / RAM / slot hint + fail-closed health.
-# Does not start jobs. Does not drop unreachable hosts from the list.
+# Cluster inventory: cores / RAM + fail-closed health. No slot estimate.
 
-"""One host in a [`ResourcePool`](@ref). `slots` is 0 when `ok` is false."""
+"""One host in a [`ResourcePool`](@ref). Missing numbers are `nothing`, not `0`."""
 struct HostInventory
     host::String
     ok::Bool
-    nproc::Int
-    total_gb::Float64
-    slots::Int
+    nproc::Union{Nothing, Int}
+    total_gb::Union{Nothing, Float64}
     message::String
 end
 
 """
 Cluster view of listed hosts: totals plus per-host health.
 
-`ok` is false if any listed host failed the probe (fail-closed). `cores`,
-`gb`, and `slots` sum **reachable** hosts only; failed rows stay in `hosts`.
-Does not change `go` / `drive` `--best-effort`.
+`ok` is false if any listed host failed the probe (fail-closed). `cores` and
+`gb` sum **reachable** hosts that reported that field; failed rows stay in
+`hosts`. Does not change `go` / `drive` `--best-effort`.
 """
 struct ResourcePool
     ok::Bool
     hosts::Vector{HostInventory}
-    cores::Int
-    gb::Float64
-    slots::Int
+    cores::Union{Nothing, Int}
+    gb::Union{Nothing, Float64}
 end
 
 function Base.show(io::IO, pool::ResourcePool)
@@ -32,9 +29,7 @@ function Base.show(io::IO, pool::ResourcePool)
         "ResourcePool(ok=",
         pool.ok,
         ", cores=",
-        pool.cores,
-        ", slots=",
-        pool.slots,
+        pool.cores === nothing ? "-" : string(pool.cores),
         ", hosts=",
         length(pool.hosts),
         ")",
@@ -42,114 +37,59 @@ function Base.show(io::IO, pool::ResourcePool)
     return nothing
 end
 
-const _POOL_PROBE_SCRIPT = string(
-    "echo DISTSSHKIT_POOL; ",
-    "sysctl -n hw.memsize 2>/dev/null || awk '/MemTotal/{print \$2*1024}' /proc/meminfo 2>/dev/null; ",
-    "sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null",
-)
-
-function _pool_parse_probe(out::AbstractString)::Union{Nothing, NamedTuple{(:total_gb, :nproc), Tuple{Float64, Int}}}
-    lines = String[strip(l) for l in split(String(out), '\n') if !isempty(strip(l))]
-    i = findfirst(==("DISTSSHKIT_POOL"), lines)
-    i === nothing && return nothing
-    length(lines) >= i + 2 || return nothing
-    mem = tryparse(Float64, lines[i + 1])
-    ncpu = tryparse(Int, lines[i + 2])
-    mem === nothing && return nothing
-    ncpu === nothing && return nothing
-    ncpu <= 0 && return nothing
-    return (total_gb = mem / 1024^3, nproc = ncpu)
+function _gb_from_bytes(bytes::Union{Nothing, UInt64})::Union{Nothing, Float64}
+    bytes === nothing && return nothing
+    return Float64(bytes) / 1024^3
 end
 
-function _pool_slots(
-        total_gb::Float64,
-        nproc::Int,
-        per_worker_gb::Float64;
-        mem_headroom::Real,
-        parent_gb::Real,
-        is_parent::Bool,
-    )::Int
-    return size_worker_count(
-        total_gb,
-        nproc,
-        per_worker_gb;
-        mem_headroom = mem_headroom,
-        parent_gb = parent_gb,
-        is_parent = is_parent,
+function _inventory_from_facts(facts::HostFacts)::HostInventory
+    msg = facts.reachable ? (facts.error === nothing ? "ok" : facts.error) :
+        something(facts.error, "unreachable")
+    return HostInventory(
+        facts.identity,
+        facts.reachable && facts.error === nothing,
+        facts.ncpu,
+        _gb_from_bytes(facts.total_memory_bytes),
+        msg,
     )
 end
 
-function _inventory_parent(;
-        per_worker_gb::Float64,
-        mem_headroom::Real,
-        parent_gb::Real,
-    )::HostInventory
-    res = get_local_resources()
-    n = _pool_slots(
-        res.total_gb,
-        res.nproc,
-        per_worker_gb;
-        mem_headroom = mem_headroom,
-        parent_gb = parent_gb,
-        is_parent = true,
-    )
-    return HostInventory(PARENT_HOST_NAME, true, res.nproc, res.total_gb, n, "ok")
-end
-
-function _inventory_child(
-        host::AbstractString;
-        per_worker_gb::Float64,
-        mem_headroom::Real,
-        parent_gb::Real,
-    )::HostInventory
-    h = String(host)
-    try
-        raw = read(
-            pipeline(_host_sync_remote_shell_cmd(h, _POOL_PROBE_SCRIPT); stderr = devnull),
-            String,
-        )
-        parsed = _pool_parse_probe(raw)
-        if parsed === nothing
-            return HostInventory(h, false, 0, 0.0, 0, "resource probe failed")
-        end
-        n = _pool_slots(
-            parsed.total_gb,
-            parsed.nproc,
-            per_worker_gb;
-            mem_headroom = mem_headroom,
-            parent_gb = parent_gb,
-            is_parent = false,
-        )
-        return HostInventory(h, true, parsed.nproc, parsed.total_gb, n, "ok")
-    catch e
-        _rethrow_missing_host_tool(e)
-        return HostInventory(h, false, 0, 0.0, 0, sprint(showerror, e))
+function _sum_present(vals)::Union{Nothing, Int}
+    acc = 0
+    any = false
+    for v in vals
+        v === nothing && continue
+        any = true
+        acc += v
     end
+    return any ? acc : nothing
+end
+
+function _sum_present_f(vals)::Union{Nothing, Float64}
+    acc = 0.0
+    any = false
+    for v in vals
+        v === nothing && continue
+        any = true
+        acc += v
+    end
+    return any ? acc : nothing
 end
 
 """
-    pool!(session; gb_per_worker=nothing, mem_headroom, parent_gb) -> ResourcePool
+    pool!(session) -> ResourcePool
 
-Probe listed hosts for cores and RAM, then a slot hint via the same
-RAM/CPU formula as [`size!`](@ref) (no RSS `measure_rss`; that stays on
-[`size!`](@ref)). Unreachable hosts stay in the list with `ok=false`.
-The pool is `ok` only when every listed host probed successfully.
-
-Does not start workers or rewrite `go` / `drive` membership.
+Probe listed hosts for cores and RAM via [`collect_host_facts`](@ref).
+Unreachable hosts stay in the list with `ok=false`. The pool is `ok` only
+when every listed host probed successfully. Does not start workers.
 """
-function pool!(
-        session::KitSession;
-        gb_per_worker::Union{Nothing, Real} = nothing,
-        mem_headroom::Real = DEFAULT_MEM_HEADROOM,
-        parent_gb::Real = DEFAULT_PARENT_GB,
-    )::ResourcePool
+function pool!(session::KitSession)::ResourcePool
     parsed = parse_worker_tokens(session.tokens)
     want_parent = session.include_parent_for_size ||
         parsed.parent_autosize || parsed.parent_workers > 0
     all_hosts = String[]
     want_parent && push!(all_hosts, PARENT_HOST_NAME)
     append!(all_hosts, session.hosts)
-    child_hosts = session.hosts
     isempty(all_hosts) && throw(
         ArgumentError(
             explain_no_hosts(; surface = hint_surface(session), kind = :pool),
@@ -157,62 +97,35 @@ function pool!(
     )
     return _with_kit_inproc_run!(:pool) do
         apply_session_env!(session)
-        pw = Float64(something(gb_per_worker, WORKER_MEMORY_GB_FALLBACK))
-        rows = HostInventory[]
-        for host in all_hosts
-            if is_parent_host_name(host)
-                push!(
-                    rows, _inventory_parent(;
-                        per_worker_gb = pw,
-                        mem_headroom = mem_headroom,
-                        parent_gb = parent_gb,
-                    )
-                )
-            elseif host in child_hosts
-                push!(
-                    rows, _inventory_child(
-                        host;
-                        per_worker_gb = pw,
-                        mem_headroom = mem_headroom,
-                        parent_gb = parent_gb,
-                    )
-                )
-            end
-        end
+        rows = HostInventory[_inventory_from_facts(f) for f in collect_host_facts(all_hosts)]
         healthy = [r for r in rows if r.ok]
-        cores = sum(r -> r.nproc, healthy; init = 0)
-        gb = sum(r -> r.total_gb, healthy; init = 0.0)
-        slots = sum(r -> r.slots, healthy; init = 0)
-        return ResourcePool(all(r -> r.ok, rows), rows, cores, gb, slots)
+        cores = _sum_present(r.nproc for r in healthy)
+        gb = _sum_present_f(r.total_gb for r in healthy)
+        return ResourcePool(all(r -> r.ok, rows), rows, cores, gb)
     end
 end
 
-"""[`WorkerPlan`](@ref) from pool slot hints (failed hosts contribute 0)."""
-function worker_plan_from_pool(pool::ResourcePool)::WorkerPlan
-    parent_workers = 0
-    child_workers = Dict{String, Int}()
-    for row in pool.hosts
-        if is_parent_host_name(row.host)
-            parent_workers = row.slots
-        else
-            child_workers[row.host] = row.slots
-        end
-    end
-    return WorkerPlan(parent_workers, child_workers)
+function _fmt_cores(n::Union{Nothing, Int})::String
+    n === nothing && return "-"
+    return string(n, " cores")
 end
 
-"""Print cluster totals first, then per-host health."""
+function _fmt_gb(g::Union{Nothing, Float64})::String
+    g === nothing && return "-"
+    return string(round(g; digits = 1), " GB")
+end
+
+"""Print cluster totals first, then per-host health. Always writes `io` (stdout)."""
 function print_pool(pool::ResourcePool; io::IO = stdout)
     failed = count(r -> !r.ok, pool.hosts)
     extra = failed == 0 ? "" : "  ($failed host$(failed == 1 ? "" : "s") unreachable)"
-    println(io, "Pool: $(pool.cores) cores  $(round(pool.gb; digits = 1)) GB  $(pool.slots) slots$extra")
+    println(io, "Pool: $(_fmt_cores(pool.cores))  $(_fmt_gb(pool.gb))$extra")
     for row in pool.hosts
         shown = is_parent_host_name(row.host) ? PARENT_HOST_NAME : row.host
         if row.ok
             println(
                 io,
-                "  $(rpad(shown, 16)) ok    $(row.nproc) cores  ",
-                "$(round(row.total_gb; digits = 1)) GB  $(row.slots) slots",
+                "  $(rpad(shown, 16)) ok    $(_fmt_cores(row.nproc))  $(_fmt_gb(row.total_gb))",
             )
         else
             println(io, "  $(rpad(shown, 16)) fail  $(row.message)")

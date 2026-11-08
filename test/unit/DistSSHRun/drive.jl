@@ -56,20 +56,10 @@ end
             @test !kw.parent_autosize
         end
 
-        _with_tempdir() do tmp
-            session = DistSSHRun.KitSession(
-                project = tmp,
-                workers = ["parent"],
-                include_parent_for_size = true,
-            )
-            @test_throws ArgumentError DistSSHRun.worker_plan_from_tokens(["parent"])
-            plan = DistSSHRun.size!(session; gb_per_worker = 2.0)
-            local_total, local_nproc = DistSSHRun.get_local_resources()
-            @test plan.parent_workers == DistSSHRun.size_worker_count(
-                local_total, local_nproc, 2.0; is_parent = true,
-            )
-            @test isempty(plan.child_workers)
-        end
+        @test_throws ArgumentError DistSSHRun.worker_plan_from_tokens(["parent"])
+        plan = DistSSHRun.worker_plan_from_tokens(["parent:2"])
+        @test plan.parent_workers == 2
+        @test isempty(plan.child_workers)
     end
 
     @testset "KitSession" begin
@@ -255,6 +245,8 @@ end
         @test cfg_jl.julia == "/opt/julia/bin/julia"
         @test DistSSHRun.PipelineConfig(driver = "job.jl", julia = "auto").julia === nothing
         @test DistSSHRun.PipelineConfig(driver = "job.jl", julia = "").julia === nothing
+        @test_throws MethodError DistSSHRun.PipelineConfig(; driver = "job.jl", mem_headroom = 0.75)
+        @test_throws MethodError DistSSHRun.PipelineConfig(; driver = "job.jl", parent_gb = 0.4)
     end
 
     @testset "drive_parsed_from_session sync / parity" begin
@@ -272,18 +264,10 @@ end
             @test parsed.skip_hash_check == true
             @test parsed.hint_surface === :api
             @test parsed.julia === nothing
-            @test parsed.mem_headroom == DistSSHRun.DEFAULT_MEM_HEADROOM
-            @test parsed.parent_gb == DistSSHRun.DEFAULT_PARENT_GB
             @test parsed.require_all_hosts
             @test DistSSHRun.drive_parsed_from_session(
                 session, script; require_all_hosts = false,
             ).require_all_hosts == false
-            @test DistSSHRun.drive_parsed_from_session(
-                session, script; mem_headroom = 0.5, parent_gb = 0.2,
-            ).mem_headroom == 0.5
-            @test DistSSHRun.drive_parsed_from_session(
-                session, script; mem_headroom = 0.5, parent_gb = 0.2,
-            ).parent_gb == 0.2
 
             parsed_jl = DistSSHRun.drive_parsed_from_session(
                 session,
@@ -339,17 +323,12 @@ end
     @testset "drive runtime helpers" begin
         # `checks.jl` / `workers.jl` live in DistSSHRun (not Main fragments).
         _with_tempdir() do tmp
-            @test DistSSHRun.estimate_worker_memory_gb() > 0
-            total, avail = DistSSHRun.estimate_available_gb()
-            @test total > 0
-            @test avail > 0
             with_kit_verbosity(:progress) do
                 DistSSHRun.apply_kit_cli_session!(
                     DistSSHRun.KitCliSession(quiet = true, yes = true),
                 )
                 redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
-                        @test DistSSHRun.check_memory_capacity(1, Tuple{String, Union{Int, Nothing}}[], nothing)
                         ok, mm, uv = DistSSHRun.check_git_hashes(String[], tmp)
                         @test ok
                         @test isempty(mm)

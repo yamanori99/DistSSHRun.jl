@@ -102,8 +102,6 @@ function parse_drive_args(args::Vector{String})
     require_all_hosts = true
     require_all_hosts_cli = false
     best_effort_cli = false
-    mem_headroom = DEFAULT_MEM_HEADROOM
-    parent_gb = DEFAULT_PARENT_GB
     hosts = Tuple{String, Union{Int, Nothing}}[]
     parent_listed = Ref(false)
     script_path = nothing
@@ -217,14 +215,8 @@ function parse_drive_args(args::Vector{String})
             best_effort_cli = true
             require_all_hosts = false
             i += 1
-        elseif arg == "--mem-headroom" && i < length(args)
-            mem_headroom = parse(Float64, args[i + 1])
-            i += 2
-        elseif arg == "--master-gb" || startswith(arg, "--master-gb:")
-            throw(ArgumentError("drive: use `--parent-gb N`, not `--master-gb`"))
-        elseif arg == "--parent-gb" && i < length(args)
-            parent_gb = parse(Float64, args[i + 1])
-            i += 2
+        elseif arg == "--mem-headroom" || arg == "--parent-gb" || arg == "--master-gb" || startswith(arg, "--master-gb:")
+            throw(ArgumentError("drive: worker-count sizing was removed; pass explicit parent:N / child:NAME:N"))
         elseif arg == "--no-log"
             enable_log = false
             i += 1
@@ -303,8 +295,6 @@ function parse_drive_args(args::Vector{String})
                 show_version = cli_session.show_version,
                 cli_session = cli_session,
                 hint_surface = :cli,
-                mem_headroom = mem_headroom,
-                parent_gb = parent_gb,
                 allow_mismatch = allow_mismatch,
                 allow_external_symlinks = allow_external_symlinks,
                 isolated = isolated,
@@ -332,8 +322,6 @@ function parse_drive_args(args::Vector{String})
                 show_version = cli_session.show_version,
                 cli_session = cli_session,
                 hint_surface = :cli,
-                mem_headroom = mem_headroom,
-                parent_gb = parent_gb,
                 allow_mismatch = allow_mismatch,
                 allow_external_symlinks = false,
                 isolated = false,
@@ -427,8 +415,6 @@ function parse_drive_args(args::Vector{String})
         show_version = cli_session.show_version,
         cli_session = cli_session,
         hint_surface = :cli,
-        mem_headroom = mem_headroom,
-        parent_gb = parent_gb,
         allow_mismatch = allow_mismatch,
         allow_external_symlinks = allow_external_symlinks,
         isolated = isolated,
@@ -457,7 +443,7 @@ function show_drive_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  parent:N / child:NAME:N  required :N (no tokens → parent:1)",
-        "  omit :N             error (use size, then paste parent:8)",
+        "  omit :N             error (pass parent:N / child:NAME:N)",
         "  $(KIT_HOSTS_FLAG_HELP)",
         "  --hosts-file PATH   one token per line",
     )
@@ -477,8 +463,6 @@ function show_drive_usage(; io::IO = stdout)
         "  --julia PATH        remote Julia",
         "  --allow-mismatch F  waive julia, distssh, and/or manifest (comma list)",
         "  SSH workers: project-root cwd, bind 127.0.0.1, tunnel unless DISTSSHKIT_SSH_TUNNEL=0.",
-        "  --mem-headroom N    RAM fraction (default $(DEFAULT_MEM_HEADROOM); same as size)",
-        "  --parent-gb N       parent process reserve (default $(DEFAULT_PARENT_GB); same as size)",
         "  --no-log            skip drive_*.log",
         "  $(KIT_QUIET_FLAG_HELP)",
         "  $(KIT_PROGRESS_FLAG_HELP)",
@@ -516,7 +500,7 @@ function show_drive_usage(; io::IO = stdout)
     print_help_blank(io)
     return print_help_lines(
         io,
-        "Details: docs (manual/drive). See also: setup, size, go.",
+        "Details: docs (manual/drive). See also: setup, hostinfo, go.",
     )
 end
 

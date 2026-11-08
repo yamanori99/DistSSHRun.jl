@@ -1,14 +1,14 @@
 # DistSSHRun
 
 DistSSHRun is one run on shared machines over SSH: `setup`, `go`,
-`ride`, `drive`, `size`, `pool`, `demo`, and `progress`.
+`ride`, `drive`, `hostinfo`, `pool`, `demo`, and `progress`.
 Supported on **macOS, Linux, and WSL2 Ubuntu** (not native Windows).
 
 The command is `julia -m DistSSHRun`.
 
 `pkg> app add DistSSHRun` still installs `distsshrun`. That command is
 experimental. The binary is the Apps copy, not `--project=.`. Apps
-fixes `JULIA_LOAD_PATH`, so `drive`, `size`, and `pool` still need
+fixes `JULIA_LOAD_PATH`, so `drive`, `hostinfo`, and `pool` still need
 `julia -m DistSSHRun`. Worker processes (local and SSH) set
 `JULIA_LOAD_PATH=@:@stdlib` and `--project=` of the job tree; they do not
 see `@v#.#`. Local workers also put the parent project, then DistSSHRun's
@@ -152,7 +152,7 @@ julia -m DistSSHRun setup --check child:host1
 julia -m DistSSHRun go SCRIPT.jl
 julia -m DistSSHRun ride parent:2 SCRIPT.jl
 julia -m DistSSHRun drive parent:2 SCRIPT.jl
-julia -m DistSSHRun size
+julia -m DistSSHRun hostinfo parent
 julia -m DistSSHRun pool
 ```
 

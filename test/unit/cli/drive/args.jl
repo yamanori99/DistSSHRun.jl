@@ -217,18 +217,9 @@ using Test
         let r = parse_drive_args(["s.jl"])
             @test r.sync_mode === nothing
             @test r.skip_hash_check == true
-            @test r.mem_headroom == DistSSHRun.DEFAULT_MEM_HEADROOM
-            @test r.parent_gb == DistSSHRun.DEFAULT_PARENT_GB
         end
-        let r = parse_drive_args(["--mem-headroom", "0.5", "--parent-gb", "0.2", "s.jl"])
-            @test r.mem_headroom == 0.5
-            @test r.parent_gb == 0.2
-        end
-        let r = parse_drive_args(["--mem-headroom", "0.5", "--parent-gb", "0.2", "--help"])
-            @test r.help
-            @test r.mem_headroom == 0.5
-            @test r.parent_gb == 0.2
-        end
+        @test_throws ArgumentError parse_drive_args(["--mem-headroom", "0.5", "s.jl"])
+        @test_throws ArgumentError parse_drive_args(["--parent-gb", "0.2", "s.jl"])
         let r = parse_drive_args(["--sync", "child:host1:1", "s.jl"])
             @test r.sync_mode === :sync
             @test r.skip_hash_check == true
@@ -306,8 +297,8 @@ using Test
         @test occursin("--allow-mismatch", txt)
         @test !occursin(r"--parent(?!-gb)", txt)
         @test !occursin("--local", txt)
-        @test occursin("--mem-headroom", txt)
-        @test occursin("--parent-gb", txt)
+        @test !occursin("--mem-headroom", txt)
+        @test !occursin("--parent-gb", txt)
         @test occursin("DISTSSHKIT_JOBS", txt)
         @test occursin("DISTSSHKIT_REQUIRE_ALL_HOSTS", txt)
         @test occursin("DISTSSHKIT_BEST_EFFORT", txt)

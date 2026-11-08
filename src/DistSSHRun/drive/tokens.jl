@@ -3,8 +3,7 @@
 """
 Build a [`WorkerPlan`](@ref) from tokens.
 
-Every token must have `:N`. Omitted counts are not sized here (`size!` / CLI
-`size` are separate; paste the printed tokens).
+Every token must have `:N`. Omitted counts are not filled in here.
 """
 function worker_plan_from_tokens(
         tokens::AbstractVector{<:AbstractString},
