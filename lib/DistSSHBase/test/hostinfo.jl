@@ -7,12 +7,31 @@ using Test
     @test localf.total_memory_bytes !== nothing
     @test localf.ncpu !== nothing
     @test localf.os !== nothing
-    parsed = DistSSHBase._hostinfo_parse_probe("DISTSSHKIT_HOSTINFO\nmem=17179869184\nncpu=4\nos=Linux\n")
+    @test localf.arch !== nothing
+    @test localf.kernel_release !== nothing
+    parsed = DistSSHBase._hostinfo_parse_probe(
+        """
+        DISTSSHKIT_HOSTINFO
+        mem=17179869184
+        ncpu=4
+        os=Linux
+        kernel=6.8.0-40-generic
+        arch=x86_64
+        os_version=24.04
+        os_pretty=Ubuntu 24.04.1 LTS
+        cpu_model=Test CPU
+        """,
+    )
     @test parsed !== nothing
     if parsed !== nothing
         @test parsed.ncpu == 4
         @test parsed.total_memory_bytes == UInt64(17179869184)
         @test parsed.os == "Linux"
+        @test parsed.kernel_release == "6.8.0-40-generic"
+        @test parsed.arch == "x86_64"
+        @test parsed.os_version == "24.04"
+        @test parsed.os_pretty == "Ubuntu 24.04.1 LTS"
+        @test parsed.cpu_model == "Test CPU"
     end
     @test DistSSHBase._hostinfo_parse_probe("nope") === nothing
     @test DistSSHBase._hostinfo_parse_u64("0") === nothing
@@ -25,26 +44,60 @@ using Test
         @test shifted.total_memory_bytes === nothing
         @test shifted.ncpu === nothing
         @test shifted.os === nothing
+        @test shifted.arch === nothing
+        @test shifted.kernel_release === nothing
+        @test shifted.os_version === nothing
+        @test shifted.os_pretty === nothing
+        @test shifted.cpu_model === nothing
     end
-    empty_mem = DistSSHBase._hostinfo_parse_probe("DISTSSHKIT_HOSTINFO\nmem=\nncpu=4\nos=Linux\n")
+    empty_mem = DistSSHBase._hostinfo_parse_probe(
+        "DISTSSHKIT_HOSTINFO\nmem=\nncpu=4\nos=Linux\nkernel=1\narch=x86_64\n",
+    )
     @test empty_mem !== nothing
     if empty_mem !== nothing
         @test empty_mem.total_memory_bytes === nothing
         @test empty_mem.ncpu == 4
         @test empty_mem.os == "Linux"
+        @test empty_mem.arch == "x86_64"
     end
-    empty_cpu = DistSSHBase._hostinfo_parse_probe("DISTSSHKIT_HOSTINFO\nmem=8589934592\nncpu=\nos=Darwin\n")
+    empty_cpu = DistSSHBase._hostinfo_parse_probe(
+        "DISTSSHKIT_HOSTINFO\nmem=8589934592\nncpu=\nos=Darwin\narch=arm64\nos_version=27.2\nos_pretty=macOS\n",
+    )
     @test empty_cpu !== nothing
     if empty_cpu !== nothing
         @test empty_cpu.total_memory_bytes == UInt64(8589934592)
         @test empty_cpu.ncpu === nothing
         @test empty_cpu.os == "Darwin"
+        @test empty_cpu.os_version == "27.2"
+        @test empty_cpu.os_pretty == "macOS"
+        @test empty_cpu.arch == "arm64"
     end
-    empty_os = DistSSHBase._hostinfo_parse_probe("DISTSSHKIT_HOSTINFO\nmem=8589934592\nncpu=2\nos=\n")
+    empty_os = DistSSHBase._hostinfo_parse_probe(
+        "DISTSSHKIT_HOSTINFO\nmem=8589934592\nncpu=2\nos=\narch=x86_64\n",
+    )
     @test empty_os !== nothing
     if empty_os !== nothing
         @test empty_os.ncpu == 2
         @test empty_os.os === nothing
+        @test empty_os.arch == "x86_64"
+    end
+    # Partial labels must not shift later keys.
+    partial = DistSSHBase._hostinfo_parse_probe(
+        """
+        DISTSSHKIT_HOSTINFO
+        mem=8589934592
+        ncpu=2
+        os=Linux
+        arch=x86_64
+        """,
+    )
+    @test partial !== nothing
+    if partial !== nothing
+        @test partial.kernel_release === nothing
+        @test partial.os_version === nothing
+        @test partial.os_pretty === nothing
+        @test partial.cpu_model === nothing
+        @test partial.arch == "x86_64"
     end
     @test DistSSHBase._hostinfo_parse_u64("not-a-number") === nothing
     @test DistSSHBase._hostinfo_parse_ncpu("Linux") === nothing
@@ -58,6 +111,11 @@ using Test
                 "DISTSSHKIT_TEST_POOL_MEM" => "8589934592",
                 "DISTSSHKIT_TEST_POOL_NCPU" => "8",
                 "DISTSSHKIT_TEST_HOSTINFO_OS" => "Linux",
+                "DISTSSHKIT_TEST_HOSTINFO_KERNEL" => "6.8.0-microsoft-standard-WSL2",
+                "DISTSSHKIT_TEST_HOSTINFO_ARCH" => "x86_64",
+                "DISTSSHKIT_TEST_HOSTINFO_OS_VERSION" => "24.04",
+                "DISTSSHKIT_TEST_HOSTINFO_OS_PRETTY" => "Ubuntu 24.04.1 LTS",
+                "DISTSSHKIT_TEST_HOSTINFO_CPU_MODEL" => "Intel(R) Test",
             ),
         )
         withenv(env...) do
@@ -66,6 +124,11 @@ using Test
             @test facts.ncpu == 8
             @test facts.total_memory_bytes == UInt64(8589934592)
             @test facts.os == "Linux"
+            @test facts.kernel_release == "6.8.0-microsoft-standard-WSL2"
+            @test facts.arch == "x86_64"
+            @test facts.os_version == "24.04"
+            @test facts.os_pretty == "Ubuntu 24.04.1 LTS"
+            @test facts.cpu_model == "Intel(R) Test"
             @test DistSSHBase.get_remote_nproc("host1") == 8
         end
         withenv(merge(env, Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1"))...) do
@@ -74,6 +137,11 @@ using Test
             @test bad.ncpu === nothing
             @test bad.total_memory_bytes === nothing
             @test bad.os === nothing
+            @test bad.arch === nothing
+            @test bad.kernel_release === nothing
+            @test bad.os_version === nothing
+            @test bad.os_pretty === nothing
+            @test bad.cpu_model === nothing
         end
         withenv(merge(env, Dict("DISTSSHKIT_TEST_POOL_MEM" => ""))...) do
             nomem = DistSSHBase.collect_host_facts("host1")
@@ -89,6 +157,49 @@ using Test
             @test omit.reachable
             @test omit.total_memory_bytes === nothing
             @test omit.ncpu == 8
+            @test omit.arch == "x86_64"
+        end
+        withenv(
+            merge(
+                env,
+                Dict(
+                    "DISTSSHKIT_TEST_HOSTINFO_OMIT_ARCH" => "1",
+                    "DISTSSHKIT_TEST_HOSTINFO_OMIT_OS_VERSION" => "1",
+                    "DISTSSHKIT_TEST_HOSTINFO_OMIT_OS_PRETTY" => "1",
+                    "DISTSSHKIT_TEST_HOSTINFO_OMIT_CPU_MODEL" => "1",
+                    "DISTSSHKIT_TEST_HOSTINFO_OMIT_KERNEL" => "1",
+                ),
+            )...,
+        ) do
+            sparse = DistSSHBase.collect_host_facts("host1")
+            @test sparse.reachable
+            @test sparse.os == "Linux"
+            @test sparse.arch === nothing
+            @test sparse.kernel_release === nothing
+            @test sparse.os_version === nothing
+            @test sparse.os_pretty === nothing
+            @test sparse.cpu_model === nothing
+        end
+        darwin_env = merge(
+            env,
+            Dict(
+                "DISTSSHKIT_TEST_HOSTINFO_OS" => "Darwin",
+                "DISTSSHKIT_TEST_HOSTINFO_KERNEL" => "27.2.0",
+                "DISTSSHKIT_TEST_HOSTINFO_ARCH" => "arm64",
+                "DISTSSHKIT_TEST_HOSTINFO_OS_VERSION" => "27.2",
+                "DISTSSHKIT_TEST_HOSTINFO_OS_PRETTY" => "macOS",
+                "DISTSSHKIT_TEST_HOSTINFO_CPU_MODEL" => "Apple M4",
+            ),
+        )
+        withenv(darwin_env...) do
+            mac = DistSSHBase.collect_host_facts("host1")
+            @test mac.reachable
+            @test mac.os == "Darwin"
+            @test mac.os_version == "27.2"
+            @test mac.os_pretty == "macOS"
+            @test mac.kernel_release == "27.2.0"
+            @test mac.arch == "arm64"
+            @test mac.cpu_model == "Apple M4"
         end
     end
 end

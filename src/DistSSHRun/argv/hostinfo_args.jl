@@ -37,7 +37,8 @@ function show_hostinfo_usage(; io::IO = stdout)
     print_help_chrome(cli_heading("hostinfo"); io = io)
     print_help_lines(
         io,
-        "Show host identity, RAM, CPU, OS, and Julia --version.",
+        "Show host identity, reachability, Julia, OS, CPU, and RAM.",
+        "Per-host labeled layout (inspired by InteractiveUtils.versioninfo).",
         "Does not start a job. Missing fields print as `-`, not 0.",
         "A reachable host with missing Julia is still ok (exit 0).",
         "A failed host still gets a row; other hosts still print; exit 1.",
@@ -67,7 +68,7 @@ function show_hostinfo_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "Details: docs (API hostinfo). See also: pool, setup.",
-        "Collection: DistSSHRun.DistSSHBase.collect_host_facts.",
+        "Collection: DistSSHRun.DistSSHBase.collect_host_facts; print: print_hostinfo.",
     )
     return nothing
 end
