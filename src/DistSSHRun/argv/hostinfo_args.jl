@@ -68,7 +68,7 @@ function show_hostinfo_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "Details: docs (API hostinfo). See also: pool, setup.",
-        "Collection/print: DistSSHRun.DistSSHBase.collect_host_facts / print_hostinfo.",
+        "Collection: DistSSHRun.DistSSHBase.collect_host_facts; print: print_hostinfo.",
     )
     return nothing
 end
