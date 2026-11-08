@@ -2,9 +2,10 @@ name: Actions lint
 
 # actionlint, zizmor, and pinact on workflow files. The generated job
 # shellchecks remote sh that this package builds. ShellCheck comes from
-# Ubuntu apt (not a pinned GitHub release). actionlint / zizmor / pinact
-# stay release binaries. No token: zizmor stays offline, and pinact only
-# checks that each uses: is a full commit SHA.
+# Ubuntu apt. actionlint and pinact come from `go install` via
+# proxy.golang.org; zizmor comes from PyPI. None of these use GitHub
+# Releases (avoids release-asset CDN 504s). No token: zizmor stays
+# offline, and pinact only checks that each uses: is a full commit SHA.
 
 on:
   push:
@@ -24,7 +25,8 @@ jobs:
   lint:
     name: actionlint, zizmor, pinact
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # go install compiles actionlint and pinact from module source.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -34,38 +36,39 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y shellcheck
+          sudo apt-get install -y shellcheck python3-pip
           shellcheck --version
-          dest="${RUNNER_TEMP}/actions-lint"
-          mkdir -p "$dest"
-          fetch() {
-            local url="$1" sum="$2" archive="$3"
-            curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 -o "$archive" "$url"
-            echo "${sum}  ${archive}" | sha256sum -c -
-          }
-          fetch \
-            "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz" \
-            "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8" \
-            "${dest}/actionlint.tar.gz"
-          tar -xzf "${dest}/actionlint.tar.gz" -C "$dest" actionlint
-          fetch \
-            "https://github.com/zizmorcore/zizmor/releases/download/v1.30.1/zizmor-x86_64-unknown-linux-gnu.tar.gz" \
-            "e65324f4430c2717591937edcec90ccbefaf14c174f8ec9415e03ca875b46e1a" \
-            "${dest}/zizmor.tar.gz"
-          tar -xzf "${dest}/zizmor.tar.gz" -C "$dest" zizmor
-          fetch \
-            "https://github.com/suzuki-shunsuke/pinact/releases/download/v5.0.0/pinact_linux_amd64.tar.gz" \
-            "d005bbb85da80dacdc07816f24a5da723a9f6d1e9f3d3e7e73df33f9caa1358f" \
-            "${dest}/pinact.tar.gz"
-          tar -xzf "${dest}/pinact.tar.gz" -C "$dest" pinact
-          chmod +x "${dest}/actionlint" "${dest}/zizmor" "${dest}/pinact"
-          export PATH="${dest}:${PATH}"
+
+          # Go toolchain from go.dev (not GitHub Releases). pinact@v5 needs Go ≥1.27.1.
+          go_ver=1.27.3
+          go_sum=65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40
+          go_archive="${RUNNER_TEMP}/go${go_ver}.linux-amd64.tar.gz"
+          curl -fsSL --connect-timeout 30 --retry 8 --retry-all-errors \
+            --retry-max-time 180 -o "$go_archive" \
+            "https://go.dev/dl/go${go_ver}.linux-amd64.tar.gz"
+          echo "${go_sum}  ${go_archive}" | sha256sum -c -
+          sudo rm -rf /usr/local/go
+          sudo tar -C /usr/local -xzf "$go_archive"
+          export PATH="/usr/local/go/bin:${PATH}"
+          export GOPATH="${RUNNER_TEMP}/gopath"
+          export GOBIN="${GOPATH}/bin"
+          mkdir -p "$GOBIN"
+          export PATH="${GOBIN}:${HOME}/.local/bin:${PATH}"
+
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          go install github.com/suzuki-shunsuke/pinact/v5/cmd/pinact@v5.0.0
+          python3 -m pip install --user --break-system-packages "zizmor==1.30.1"
+
+          actionlint -version
+          zizmor --version
+          pinact --version
+
           # 1.7.12 rejects concurrency.queue, which Documentation.yml uses on purpose.
           actionlint -ignore 'unexpected key "queue" for "concurrency"'
           zizmor --offline --no-progress .github
           # v5 rejects `pinact run --check --no-api`. --check is the alias, but
-          # --no-api still requires --fix=false.
-          pinact run --fix=false --no-api
+          # --no-api still requires --check=false.
+          pinact run --check=false --no-api
 
   generated:
     name: shellcheck generated
