@@ -82,6 +82,7 @@ end
 
     @testset "apply_session_env!" begin
         _with_tempdir() do tmp
+            delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
             session = DistSSHRun.KitSession(
                 project = tmp,
                 workers = ["child:host-a"],
@@ -91,11 +92,13 @@ end
             )
             DistSSHRun.apply_session_env!(session)
             @test ENV["DISTRIBUTED_PROJECT_ROOT"] == abspath(tmp)
-            @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] == "/remote/App.jl"
+            @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+            @test DistSSHRun.session_remote_root(session) == "/remote/App.jl"
             @test DistSSHRun.kit_output_quiet()
             @test DistSSHRun.kit_noninteractive()
         end
         _with_tempdir() do tmp
+            delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
             tilde = DistSSHRun.KitSession(
                 project = tmp,
                 workers = ["child:host-a"],
@@ -104,7 +107,8 @@ end
                 yes = true,
             )
             DistSSHRun.apply_session_env!(tilde)
-            @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] == "~/jobs/abc"
+            @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+            @test DistSSHRun.session_remote_root(tilde) == "~/jobs/abc"
         end
         _with_tempdir() do tmp
             ambient = DistSSHRun.KitSession(
@@ -118,10 +122,75 @@ end
                 @test ambient.verbosity === :progress
             end
         end
+        _with_tempdir() do tmp
+            delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+            a = DistSSHRun.KitSession(
+                project = tmp, workers = ["child:host-a"],
+                remote = "/remote/A", quiet = true, yes = true,
+            )
+            DistSSHRun.apply_session_env!(a)
+            b = DistSSHRun.KitSession(
+                project = tmp, workers = ["child:host-b"], quiet = true, yes = true,
+            )
+            default = DistSSHRun.remote_deploy_root(tmp)
+            @test DistSSHRun.session_remote_root(b) == default
+            @test DistSSHRun.session_remote_root(b) != "/remote/A"
+            ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = "/caller/Keep"
+            DistSSHRun.apply_session_env!(
+                DistSSHRun.KitSession(
+                    project = tmp, workers = ["child:h"],
+                    remote = "/session/Override", quiet = true, yes = true,
+                ),
+            )
+            @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] == "/caller/Keep"
+            err = try
+                DistSSHRun.apply_session_env!(
+                    DistSSHRun.KitSession(
+                        project = tmp, workers = ["child:h"],
+                        remote = "/after/Error", quiet = true, yes = true,
+                    ),
+                )
+                throw(ErrorException("force-fail"))
+            catch e
+                e
+            end
+            @test err isa ErrorException
+            @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] == "/caller/Keep"
+            delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+            DistSSHRun.apply_session_env!(
+                DistSSHRun.KitSession(
+                    project = tmp, workers = ["child:h"],
+                    remote = "/was/absent", quiet = true, yes = true,
+                ),
+            )
+            @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+        end
         delete!(ENV, "DISTRIBUTED_PROJECT_ROOT")
         delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
         DistSSHRun.set_kit_output_quiet!(false)
         DistSSHRun.set_kit_noninteractive!(false)
+    end
+
+    @testset "overlapping in-process kit runs are refused" begin
+        DistSSHRun._with_kit_inproc_run!(:setup) do
+            t = @async begin
+                try
+                    DistSSHRun._acquire_kit_inproc_run!(:sync)
+                    nothing
+                catch e
+                    e
+                end
+            end
+            err = fetch(t)
+            @test err isa ArgumentError
+            @test occursin("overlapping in-process", sprint(showerror, err))
+        end
+        # Nested same-task is allowed.
+        DistSSHRun._with_kit_inproc_run!(:pipeline) do
+            DistSSHRun._with_kit_inproc_run!(:drive) do
+                @test DistSSHRun._kit_inproc_run_kind() === :pipeline
+            end
+        end
     end
 
     @testset "session_remote_root / session_size_hosts" begin

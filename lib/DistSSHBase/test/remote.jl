@@ -34,7 +34,18 @@ using Test
             "/Users/z/GitHub/MyApp.jl";
             cli_override = "~/work/MyApp.jl",
         ) == "~/work/MyApp.jl"
+        @test DistSSHBase.remote_deploy_root(
+            "/Users/z/GitHub/MyApp.jl";
+            cli_override = "~/work/MyApp.jl",
+        ) == "~/work/MyApp.jl"
     end
+    # Remote `~` is a layout string; local expanduser must not rewrite it.
+    @test DistSSHBase.default_remote_project_path("/Users/z/GitHub/MyApp.jl") ==
+        joinpath("~", "GitHub", "MyApp.jl")
+    @test !startswith(
+        DistSSHBase.default_remote_project_path("/Users/z/GitHub/MyApp.jl"),
+        expanduser("~"),
+    )
 
     @test DistSSHBase.local_dir_from_remote_mirror(
         "/Volumes/r/MyRepo/data/sweep/slug/20260101_120000",

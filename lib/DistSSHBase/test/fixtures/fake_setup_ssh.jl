@@ -272,6 +272,20 @@ function main()
         exit(0)
     end
 
+    # Ship / remote-root ensure: create the fake destination tree.
+    if occursin("__DSR_ENSURE_REMOTE_ROOT__", script) ||
+            (occursin("mkdir -m 700", script) && occursin("remote_root", script))
+        if get(ENV, "DISTSSHKIT_TEST_MKDIR_FAIL", "") == "1"
+            println(stderr, "remote_root mkdir failed")
+            exit(1)
+        end
+        existed = isdir(tree)
+        mkpath(tree)
+        chmod(tree, 0o700)
+        println(existed ? "EXISTED" : "CREATED")
+        exit(0)
+    end
+
     # Quoted argv is `'git' … 'clone'`, which does not contain the substring `git clone`.
     if occursin("git clone", script) ||
             (occursin("'clone'", script) && occursin("hooksPath=/dev/null", script))
@@ -419,6 +433,10 @@ function main()
     end
 
     if occursin("Tar.extract", script)
+        if get(ENV, "DISTSSHKIT_TEST_TAR_EXTRACT_FAIL", "") == "1"
+            println(stderr, "tar extract failed")
+            exit(1)
+        end
         mkpath(tree)
         exit(0)
     end
@@ -433,10 +451,11 @@ function main()
         exit(0)
     end
 
-    # Ship no longer uses `mkdir -p` for the project root. The sad ship-tree
-    # case still sets DISTSSHKIT_TEST_MKDIR_FAIL.
+    # Leaf prepare still refuses a missing root after ensure. MKDIR_FAIL is
+    # handled on the ensure script above.
     if occursin("remote_root does not exist", script) &&
-            get(ENV, "DISTSSHKIT_TEST_MKDIR_FAIL", "") == "1"
+            get(ENV, "DISTSSHKIT_TEST_MKDIR_FAIL", "") == "1" &&
+            !occursin("__DSR_ENSURE_REMOTE_ROOT__", script)
         println(stderr, "remote_root does not exist")
         exit(2)
     end

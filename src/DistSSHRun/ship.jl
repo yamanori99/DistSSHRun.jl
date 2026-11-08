@@ -1475,13 +1475,29 @@ end
 """Create `abs_path` with mode `700` when it is missing. The parent must already exist.
 
 `chmod go-w` clears group and other write again when a default ACL added it.
+A concurrent creator that leaves a safe directory is accepted; an unsafe
+replacement is still refused by [`_remote_root_mode_sh`](@ref). Existing
+directories are not chmod'd or chown'd. When `report=true`, prints
+`CREATED` or `EXISTED` after validation.
 """
-function _remote_root_create_script(abs_path::AbstractString)::String
+function _remote_root_create_script(
+        abs_path::AbstractString;
+        report::Bool = false,
+    )::String
     path = explicit_remote_root_path(abs_path)
     q = _remote_shell_path_word(path)
     parent = dirname(path)
     pq = _remote_shell_path_word(parent)
+    report_sh = report ? """
+        if [ \"\$__dsr_rr_created\" = 1 ]; then
+          printf 'CREATED\\n'
+        else
+          printf 'EXISTED\\n'
+        fi
+        """ : ""
     return """
+    # __DSR_ENSURE_REMOTE_ROOT__
+    __dsr_rr_created=0
     if [ -L $q ]; then
       printf 'remote_root is a symlink: %s\\n' $q
       exit 2
@@ -1495,11 +1511,153 @@ function _remote_root_create_script(abs_path::AbstractString)::String
         printf 'remote_root parent does not exist: %s\\n' $pq
         exit 2
       fi
-      mkdir -m 700 $q || exit 1
-      chmod go-w $q || exit 1
+      if mkdir -m 700 $q 2>/dev/null; then
+        chmod go-w $q || exit 1
+        __dsr_rr_created=1
+      else
+        if [ -L $q ]; then
+          printf 'remote_root is a symlink: %s\\n' $q
+          exit 2
+        fi
+        if [ ! -d $q ]; then
+          printf 'remote_root mkdir failed: %s\\n' $q
+          exit 1
+        fi
+      fi
     fi
     $(_remote_root_mode_sh(q))
+    $report_sh
     """
+end
+
+"""Create missing components of `abs_root` under the remote home with mode `700`.
+
+`abs_root` and `home` are already absolute. Existing ancestor symlinks that
+resolve to directories are followed; a symlink at the final target, or at a
+component this script creates (including a raced symlink), is refused.
+Existing directories are not chmod'd. Prints `CREATED` or `EXISTED`.
+"""
+function _remote_root_ensure_under_home_script(
+        abs_root::AbstractString,
+        home::AbstractString,
+    )::String
+    root = validate_expanded_remote_root(String(abs_root), String(home))
+    h = rstrip(String(home), '/')
+    isempty(h) && throw(ArgumentError("remote \$HOME is empty"))
+    startswith(root, h * "/") || throw(
+        ArgumentError(
+            "remote_root $(repr(root)) is not under remote home $(repr(h))",
+        ),
+    )
+    rq = _remote_shell_path_word(root)
+    hq = _remote_shell_path_word(h)
+    return """
+    # __DSR_ENSURE_REMOTE_ROOT__
+    root=$rq
+    home=$hq
+    case \"\$root\" in
+      \"\$home\"/*) ;;
+      *)
+        printf 'remote_root is not under home: %s\\n' \"\$root\"
+        exit 2
+        ;;
+    esac
+    rel=\${root#\"\$home\"/}
+    cur=\"\$home\"
+    created=0
+    oldifs=\$IFS
+    IFS=/
+    set -f
+    set -- \$rel
+    set +f
+    IFS=\$oldifs
+    for part in \"\$@\"; do
+      [ -n \"\$part\" ] || continue
+      if [ \"\$part\" = \".\" ] || [ \"\$part\" = \"..\" ]; then
+        printf 'remote_root path contains . or ..\\n'
+        exit 2
+      fi
+      next=\"\$cur/\$part\"
+      if [ -L \"\$next\" ]; then
+        if [ \"\$next\" = \"\$root\" ]; then
+          printf 'remote_root is a symlink: %s\\n' \"\$next\"
+          exit 2
+        fi
+        if [ -d \"\$next\" ]; then
+          cur=\"\$next\"
+          continue
+        fi
+        printf 'remote_root component is a symlink: %s\\n' \"\$next\"
+        exit 2
+      fi
+      if [ ! -e \"\$next\" ]; then
+        if mkdir -m 700 \"\$next\" 2>/dev/null; then
+          chmod go-w \"\$next\" || exit 1
+          created=1
+        else
+          if [ -L \"\$next\" ]; then
+            printf 'remote_root component is a symlink: %s\\n' \"\$next\"
+            exit 2
+          fi
+          if [ ! -d \"\$next\" ]; then
+            printf 'remote_root mkdir failed: %s\\n' \"\$next\"
+            exit 1
+          fi
+        fi
+      elif [ ! -d \"\$next\" ]; then
+        printf 'remote_root exists and is not a directory: %s\\n' \"\$next\"
+        exit 2
+      fi
+      cur=\"\$next\"
+    done
+    if [ -L \"\$root\" ]; then
+      printf 'remote_root is a symlink: %s\\n' \"\$root\"
+      exit 2
+    fi
+    $(_remote_root_mode_sh(rq))
+    if [ \"\$created\" = 1 ]; then
+      printf 'CREATED\\n'
+    else
+      printf 'EXISTED\\n'
+    fi
+    """
+end
+
+"""Ensure `remote_root` exists for ship. Returns `(; abs_root, created)`.
+
+A layout that starts with `~` may create missing components under the remote
+home. An absolute layout requires the parent and creates only the final
+component (same rule as [`create_remote_roots!`](@ref)). Does not instantiate.
+"""
+function _ensure_ship_remote_root!(
+        host::AbstractString,
+        remote_root::AbstractString,
+    )::NamedTuple{(:abs_root, :created), Tuple{String, Bool}}
+    layout = strip(String(remote_root))
+    isempty(layout) && throw(ArgumentError("remote_root is empty"))
+    abs_root = _probe_expanded_remote_root(host, layout)
+    script = if startswith(layout, "~")
+        code, home_out = _remote_shell_status(String(host), "cd -P ~ && pwd -P")
+        code == 0 || throw(ArgumentError("could not resolve \$HOME on $(host)"))
+        home = strip(home_out)
+        isempty(home) && throw(ArgumentError("could not resolve \$HOME on $(host)"))
+        _remote_root_ensure_under_home_script(abs_root, home)
+    else
+        startswith(abs_root, "/") || throw(
+            ArgumentError(
+                "ship remote_root must be absolute or ~/…; got $(repr(layout))",
+            ),
+        )
+        _remote_root_create_script(abs_root; report = true)
+    end
+    code, out = _remote_shell_status(String(host), script)
+    if code != 0
+        msg = strip(out)
+        isempty(msg) && (msg = "remote_root ensure failed")
+        throw(ArgumentError(msg))
+    end
+    created = occursin(r"(^|\n)CREATED(\n|$)", out)
+    return (; abs_root = abs_root, created = created)
 end
 
 function create_remote_roots!(
@@ -1739,7 +1897,14 @@ function ship(
     map_host_jobs(hosts) do i, host
         host_results[i] = _setup_host_call!(host) do
             try
-                abs_root = _probe_expanded_remote_root(host, remote_root)
+                ensured = _ensure_ship_remote_root!(host, remote_root)
+                abs_root = ensured.abs_root
+                if report
+                    kit_println(
+                        "  $host: remote_root $(abs_root) (" *
+                            (ensured.created ? "created" : "existed") * ")",
+                    )
+                end
                 src = _remote_prepare_run_leaf!(host, abs_root, rid)
                 pinned = something(pin_remote_julia(host, julia), resolve_remote_julia(host, julia))
                 pinned === nothing && throw(ArgumentError("Julia not found on $host"))
@@ -1754,7 +1919,9 @@ function ship(
                     print_ok("✓")
                     kit_println()
                 end
-                return HostResult(host, true, "ship-tree ok")
+                msg = ensured.created ? "ship-tree ok (created remote_root)" :
+                    "ship-tree ok"
+                return HostResult(host, true, msg)
             catch e
                 if report
                     kit_print("  $host: ")

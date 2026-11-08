@@ -66,9 +66,16 @@ function drive!(
     return _drive_frame(; cli = false) do
         return _with_kit_inproc_run!(:drive) do
             # Outside `run_drive_parsed!`: `apply_session_env!` runs first, and
-            # this frame restores it after the inner drive frame returns.
+            # this frame restores DISTRIBUTED_* after the inner drive returns.
             return _with_drive_process!(session.project) do
                 apply_session_env!(session)
+                # Scoped for `remote_layout_path` / worker path mapping only.
+                # Not a persistent default; restored by `_with_drive_process!`.
+                rr = session.remote
+                if rr isa AbstractString
+                    ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] =
+                        remote_env_project_root(rr)
+                end
                 resolved = plan
                 if resolved === nothing && !isempty(session.tokens)
                     resolved = worker_plan_from_tokens(session.tokens)

@@ -54,10 +54,17 @@ left out. `ship_send_list(root)` is that path list for the directory it is
 given. It is public and is not exported. `rsync_send_list` remains the git
 list for clone, sync, and pull. Extract is into
 `<remote_root>/runs/<run_id>/src/` (`run_id` is UTC plus 6 hex). The same leaf also gets an empty
-`<remote_root>/runs/<run_id>/out/`. A repeated host is refused. The
-`remote_root` must already exist on the host; ship does not create it from
-`$HOME` or the environment. Later
-`--instantiate` / `--check` / `go` use the latest `src/` when
+`<remote_root>/runs/<run_id>/out/`. A repeated host is refused. A missing
+`remote_root` is created when safe: a `~/…` layout may create components
+under the remote home with mode `700`; an absolute path requires its parent
+and creates only the final component (same rule as `setup --remote-root`).
+A symlink at the target, unsafe ownership or permissions, `/`, and the
+remote home itself are refused. Existing ancestor directory symlinks are
+followed; components this operation creates must not be symlinks. Existing
+directories are not chmod'd. Transfer failure after create leaves the safe
+directory. `go` / `drive` `--ship-tree` and `sync!(mode=:ship_tree)` use the
+same ensure path; they still instantiate after ship when those entry points
+do today. Later `--instantiate` / `--check` / `go` use the latest `src/` when
 the remote root has no `Project.toml` (or pass `--remote-path` to that tree).
 `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
 `snapshot(local_root)` builds that tar in a temporary directory and records

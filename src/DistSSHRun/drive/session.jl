@@ -84,13 +84,18 @@ function KitSession(;
     )
 end
 
-"""Apply session fields to `ENV` and kit CLI session flags."""
+"""Apply session fields to `ENV` and kit CLI session flags.
+
+Sets `DISTRIBUTED_PROJECT_ROOT` from `session.project`. Does **not** write
+`DISTRIBUTED_REMOTE_PROJECT_ROOT`: `session.remote` is passed as
+`cli_override` into location helpers. Callers that must expose a remote
+layout to `remote_layout_path` / workers (drive / ride) set that ENV only
+inside a frame that restores the caller's value. Overlapping in-process kit
+runs are refused (`_acquire_kit_inproc_run!`); nested same-task runs share
+one owner task.
+"""
 function apply_session_env!(session::KitSession)
     ENV["DISTRIBUTED_PROJECT_ROOT"] = session.project
-    rr = session.remote
-    if rr !== nothing
-        ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = remote_env_project_root(rr)
-    end
     session.cli_session.quiet = session.quiet
     session.cli_session.yes = session.yes
     # Non-explicit sessions auto-resolve to `:verbose` when stdout is a pipe
