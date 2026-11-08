@@ -12,7 +12,9 @@ category: breaking
   `sync!(mode=:ship_tree)` create a missing deployment root when safe: a
   `~/…` layout may create components under the remote home with mode
   `700`; an absolute path still requires its parent and creates only the
-  final component. Symlink targets, unsafe ownership or permissions, `/`,
+  final component. When `$HOME` is a symlink, `~/…` expansion is remapped
+  onto `cd -P ~ && pwd -P` so a logical path is not refused as outside the
+  physical home. Symlink targets, unsafe ownership or permissions, `/`,
   and the remote home are refused. Existing directories are not chmod'd.
   Transfer failure after create leaves the directory.
   `setup --remote-root` is unchanged (absolute `--remote-path` only).

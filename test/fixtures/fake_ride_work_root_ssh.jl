@@ -15,6 +15,10 @@ if script == "cd -P ~ && pwd -P"
     println("/home/dev")
     exit(0)
 end
+if script == "cd ~ && pwd"
+    println("/home/dev")
+    exit(0)
+end
 if occursin("__DSR_SHIP_SRC__", script)
     cmd = run(pipeline(ignorestatus(`sh -c $script`); stdout = stdout, stderr = stderr); wait = true)
     exit(cmd.exitcode)

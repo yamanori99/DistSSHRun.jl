@@ -164,6 +164,68 @@ end
     end
 end
 
+@testset "tilde ensure remaps a logical home onto a physical home" begin
+    logical = "/Users/dev"
+    physical = "/var/home/dev"
+    @test DistSSHRun._rehome_logical_under_physical_home(
+        "/Users/dev/Parent/Repo", logical, physical,
+    ) == "/var/home/dev/Parent/Repo"
+    @test DistSSHRun._rehome_logical_under_physical_home(
+        "/var/home/dev/Parent/Repo", logical, physical,
+    ) == "/var/home/dev/Parent/Repo"
+    @test DistSSHRun._rehome_logical_under_physical_home(
+        "/Users/dev/Parent/Repo", logical, logical,
+    ) == "/Users/dev/Parent/Repo"
+    @test_throws ArgumentError DistSSHRun._rehome_logical_under_physical_home(
+        "/Users/dev", logical, physical,
+    )
+    @test_throws ArgumentError DistSSHRun._rehome_logical_under_physical_home(
+        "/tmp/other", logical, physical,
+    )
+    if !Sys.iswindows()
+        _with_tempdir() do base
+            physical_home = joinpath(base, "physical")
+            logical_home = joinpath(base, "logical")
+            mkpath(physical_home)
+            symlink(physical_home, logical_home)
+            logical_root = joinpath(logical_home, "Parent", "Repo")
+            physical_root = DistSSHRun._rehome_logical_under_physical_home(
+                logical_root, logical_home, physical_home,
+            )
+            @test physical_root == joinpath(physical_home, "Parent", "Repo")
+            under = DistSSHRun._remote_root_ensure_under_home_script(
+                physical_root, physical_home,
+            )
+            @test occursin("CREATED", read(`sh -c $under`, String))
+            @test isdir(physical_root)
+            @test (filemode(physical_root) & 0o022) == 0
+            # Without remapping, a logical expansion fails the under-home check.
+            @test_throws ArgumentError DistSSHRun._remote_root_ensure_under_home_script(
+                logical_root, physical_home,
+            )
+        end
+        _with_tempdir() do state_dir
+            withenv(
+                merge(
+                    _fake_setup_remote_env(state_dir),
+                    Dict(
+                        "DISTSSHKIT_TEST_REMOTE_HOME" => "/var/home/dev",
+                        "DISTSSHKIT_TEST_REMOTE_HOME_LOGICAL" => "/Users/dev",
+                        "DISTSSHKIT_TEST_REMOTE_EXPAND" => "/Users/dev/Parent/Repo",
+                    ),
+                )...,
+            ) do
+                ensured = DistSSHRun._ensure_ship_remote_root!(
+                    "host1", "~/Parent/Repo",
+                )
+                @test ensured.abs_root == "/var/home/dev/Parent/Repo"
+                @test ensured.created
+                @test isdir(joinpath(state_dir, "host1", "tree"))
+            end
+        end
+    end
+end
+
 @testset "setup --remote-root creates only that directory" begin
     @test_throws ArgumentError DistSSHRun.explicit_remote_root_path("~/jobs/app")
     @test_throws ArgumentError DistSSHRun.explicit_remote_root_path("jobs/app")

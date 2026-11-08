@@ -1248,7 +1248,18 @@ function _refuse_unshipped_depot_prefs!(paths::AbstractVector{<:AbstractString} 
     )
 end
 
-function _probe_expanded_remote_root(host::AbstractString, remote_root::AbstractString)::String
+"""Remote login home. `physical=true` uses `cd -P ~ && pwd -P`."""
+function _remote_home(host::AbstractString; physical::Bool = true)::String
+    script = physical ? "cd -P ~ && pwd -P" : "cd ~ && pwd"
+    code, home_out = _remote_shell_status(String(host), script)
+    code == 0 || throw(ArgumentError("could not resolve \$HOME on $(host)"))
+    home = strip(home_out)
+    isempty(home) && throw(ArgumentError("could not resolve \$HOME on $(host)"))
+    return home
+end
+
+"""Expand `remote_root` to an absolute path on `host` (tilde may stay logical)."""
+function _expand_remote_root_abs(host::AbstractString, remote_root::AbstractString)::String
     path = strip(String(remote_root))
     abs_root = if startswith(path, "/")
         path
@@ -1265,10 +1276,44 @@ function _probe_expanded_remote_root(host::AbstractString, remote_root::Abstract
     isempty(abs_root) && throw(
         ArgumentError("could not resolve remote_root on $(host): $remote_root"),
     )
-    code, home_out = _remote_shell_status(String(host), "cd -P ~ && pwd -P")
-    code == 0 || throw(ArgumentError("could not resolve \$HOME on $(host)"))
-    home = strip(home_out)
-    isempty(home) && throw(ArgumentError("could not resolve \$HOME on $(host)"))
+    return String(abs_root)
+end
+
+"""
+Rewrite a login-home path onto the physical home used by under-home ensure.
+
+`~/…` expansion and `cd ~ && pwd` are often logical when \$HOME is a symlink,
+while under-home creation keys off `cd -P ~ && pwd -P`. Paths already under
+`physical_home` are returned unchanged.
+"""
+function _rehome_logical_under_physical_home(
+        abs_root::AbstractString,
+        logical_home::AbstractString,
+        physical_home::AbstractString,
+    )::String
+    al = rstrip(String(abs_root), '/')
+    lh = rstrip(String(logical_home), '/')
+    ph = rstrip(String(physical_home), '/')
+    isempty(al) && throw(ArgumentError("remote_root is empty"))
+    isempty(lh) && throw(ArgumentError("remote \$HOME is empty"))
+    isempty(ph) && throw(ArgumentError("remote \$HOME is empty"))
+    al == lh && throw(ArgumentError("remote_root must not be \$HOME"))
+    al == ph && throw(ArgumentError("remote_root must not be \$HOME"))
+    if startswith(al, lh * "/")
+        return ph * al[(ncodeunits(lh) + 1):end]
+    elseif startswith(al, ph * "/")
+        return al
+    end
+    throw(
+        ArgumentError(
+            "remote_root $(repr(al)) is not under remote home $(repr(ph))",
+        ),
+    )
+end
+
+function _probe_expanded_remote_root(host::AbstractString, remote_root::AbstractString)::String
+    abs_root = _expand_remote_root_abs(host, remote_root)
+    home = _remote_home(host; physical = true)
     return validate_expanded_remote_root(String(abs_root), String(home))
 end
 
@@ -1628,6 +1673,9 @@ end
 A layout that starts with `~` may create missing components under the remote
 home. An absolute layout requires the parent and creates only the final
 component (same rule as [`create_remote_roots!`](@ref)). Does not instantiate.
+
+For `~/…`, the deploy path is re-homed onto `cd -P ~ && pwd -P` so a symlinked
+\$HOME does not make a logical expansion look outside the physical home.
 """
 function _ensure_ship_remote_root!(
         host::AbstractString,
@@ -1635,20 +1683,23 @@ function _ensure_ship_remote_root!(
     )::NamedTuple{(:abs_root, :created), Tuple{String, Bool}}
     layout = strip(String(remote_root))
     isempty(layout) && throw(ArgumentError("remote_root is empty"))
-    abs_root = _probe_expanded_remote_root(host, layout)
-    script = if startswith(layout, "~")
-        code, home_out = _remote_shell_status(String(host), "cd -P ~ && pwd -P")
-        code == 0 || throw(ArgumentError("could not resolve \$HOME on $(host)"))
-        home = strip(home_out)
-        isempty(home) && throw(ArgumentError("could not resolve \$HOME on $(host)"))
-        _remote_root_ensure_under_home_script(abs_root, home)
+    abs_root, script = if startswith(layout, "~")
+        physical_home = _remote_home(host; physical = true)
+        logical_home = _remote_home(host; physical = false)
+        expanded = _expand_remote_root_abs(host, layout)
+        rooted = _rehome_logical_under_physical_home(
+            expanded, logical_home, physical_home,
+        )
+        rooted = validate_expanded_remote_root(rooted, physical_home)
+        rooted, _remote_root_ensure_under_home_script(rooted, physical_home)
     else
-        startswith(abs_root, "/") || throw(
+        rooted = _probe_expanded_remote_root(host, layout)
+        startswith(rooted, "/") || throw(
             ArgumentError(
                 "ship remote_root must be absolute or ~/…; got $(repr(layout))",
             ),
         )
-        _remote_root_create_script(abs_root; report = true)
+        rooted, _remote_root_create_script(rooted; report = true)
     end
     code, out = _remote_shell_status(String(host), script)
     if code != 0

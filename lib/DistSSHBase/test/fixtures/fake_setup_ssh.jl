@@ -419,10 +419,26 @@ function main()
         println(get(ENV, "DISTSSHKIT_TEST_REMOTE_HOME", "/home/distsshkit"))
         exit(0)
     end
+    if strip(script) == "cd ~ && pwd"
+        println(
+            get(
+                ENV,
+                "DISTSSHKIT_TEST_REMOTE_HOME_LOGICAL",
+                get(ENV, "DISTSSHKIT_TEST_REMOTE_HOME", "/home/distsshkit"),
+            ),
+        )
+        exit(0)
+    end
 
     if occursin("elif test -e", script) && occursin("printf", script)
-        home = get(ENV, "DISTSSHKIT_TEST_REMOTE_HOME", "/home/distsshkit")
-        println(home * "/ship-root")
+        home = get(
+            ENV,
+            "DISTSSHKIT_TEST_REMOTE_HOME_LOGICAL",
+            get(ENV, "DISTSSHKIT_TEST_REMOTE_HOME", "/home/distsshkit"),
+        )
+        # Prefer an explicit expanded root; else keep the historical ship-root.
+        expanded = get(ENV, "DISTSSHKIT_TEST_REMOTE_EXPAND", "")
+        println(isempty(expanded) ? (home * "/ship-root") : expanded)
         exit(0)
     end
 
