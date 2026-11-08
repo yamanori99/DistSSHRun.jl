@@ -478,19 +478,22 @@ function resolve_snapshot_selection(
         rid = validate_snapshot_id(rid_raw)
         hash = _validate_snapshot_on_hosts!(host_list, deploy, rid)
         stored_hash = get(rec, "content_tree_hash", nothing)
-        if stored_hash isa AbstractString && !isempty(strip(String(stored_hash)))
-            stored = String(stored_hash)
-            _valid_content_tree_hash(stored) || throw(
-                _selection_error(
-                    "local last-snapshot record content_tree_hash is not a 40-digit git-sha1 value; pass --snapshot ID",
-                ),
-            )
-            stored == hash || throw(
-                _selection_error(
-                    "local last-snapshot record content_tree_hash $(stored) does not match remote $(hash); pass --snapshot ID",
-                ),
-            )
-        end
+        stored = stored_hash isa AbstractString ? strip(String(stored_hash)) : ""
+        isempty(stored) && throw(
+            _selection_error(
+                "local last-snapshot record has no content_tree_hash; pass --snapshot ID",
+            ),
+        )
+        _valid_content_tree_hash(stored) || throw(
+            _selection_error(
+                "local last-snapshot record content_tree_hash is not a 40-digit git-sha1 value; pass --snapshot ID",
+            ),
+        )
+        stored == hash || throw(
+            _selection_error(
+                "local last-snapshot record content_tree_hash $(stored) does not match remote $(hash); pass --snapshot ID",
+            ),
+        )
         return SnapshotSelection(
             :snapshot,
             rid,
@@ -572,6 +575,7 @@ function _controller_collect_source()
     deploy = get(shipped, "deploy_root", nothing)
     work = get(shipped, "work_root", nothing)
     rid_raw = get(shipped, "run_id", nothing)
+    hash_raw = get(shipped, "content_tree_hash", nothing)
     source_kind = if kind_s isa AbstractString && String(kind_s) == "git"
         :git
     else
@@ -591,11 +595,23 @@ function _controller_collect_source()
         String(deploy) : nothing
     work_s = work isa AbstractString && !isempty(strip(String(work))) ?
         String(work) : nothing
+    hash_s = if hash_raw isa AbstractString && !isempty(strip(String(hash_raw)))
+        h = String(hash_raw)
+        _valid_content_tree_hash(h) || throw(
+            _selection_error(
+                "controller provenance.shipped content_tree_hash is not a 40-digit git-sha1 value; pass --snapshot ID",
+            ),
+        )
+        h
+    else
+        nothing
+    end
     return (
         source_kind = source_kind,
         snapshot_id = rid,
         deploy_root = deploy_s,
         work_root = work_s,
+        content_tree_hash = hash_s,
     )
 end
 
@@ -603,8 +619,13 @@ end
 function _collect_source_plan(
         explicit::Union{Nothing, AbstractString},
     )::NamedTuple{
-        (:snapshot, :skip_local_record, :deploy_root),
-        Tuple{Union{Nothing, String}, Bool, Union{Nothing, String}},
+        (:snapshot, :skip_local_record, :deploy_root, :content_tree_hash),
+        Tuple{
+            Union{Nothing, String},
+            Bool,
+            Union{Nothing, String},
+            Union{Nothing, String},
+        },
     }
     snap = explicit === nothing ? nothing : validate_snapshot_id(explicit)
     src = _controller_collect_source()
@@ -612,6 +633,7 @@ function _collect_source_plan(
         snapshot = snap,
         skip_local_record = false,
         deploy_root = nothing,
+        content_tree_hash = nothing,
     )
     if snap !== nothing
         if src.snapshot_id !== nothing && String(src.snapshot_id) != snap
@@ -625,6 +647,7 @@ function _collect_source_plan(
             snapshot = snap,
             skip_local_record = true,
             deploy_root = src.deploy_root,
+            content_tree_hash = src.content_tree_hash,
         )
     end
     if src.source_kind === :git
@@ -632,12 +655,14 @@ function _collect_source_plan(
             snapshot = nothing,
             skip_local_record = true,
             deploy_root = src.deploy_root,
+            content_tree_hash = src.content_tree_hash,
         )
     end
     return (
         snapshot = src.snapshot_id,
         skip_local_record = true,
         deploy_root = src.deploy_root,
+        content_tree_hash = src.content_tree_hash,
     )
 end
 

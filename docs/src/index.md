@@ -79,7 +79,10 @@ re-hash). Selection requires DistSSHRun ownership, `complete = true`,
 `algorithm = "git-sha1"`, and a 40-digit hex hash on every host. Incomplete
 or legacy leaves are not selectable. Collect recovery with
 `DISTSSHKIT_RUN_DIR` uses that execution's `provenance.shipped` instead of a
-newer last-snapshot record. `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
+newer last-snapshot record. A recorded `content_tree_hash` there must match
+the selected remote stamp. A local last-snapshot record without a matching
+40-digit hash is not used. `setup --check` still prints SSH diagnostics
+when selection cannot probe, then fails closed if the snapshot is invalid. `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
 `snapshot(local_root)` builds that tar in a temporary directory and records
 `content_tree_hash` (`git-sha1`). The caller deletes `snapshot_directory`.
 The tar is `snapshot_tar` (`ship.tar` in that directory). `snapshot` does not

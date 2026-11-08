@@ -14,9 +14,10 @@ category: breaking
   Selection fail-closes unless every host stamp has DistSSHRun ownership
   (`schema` / `writer` / `kind = "ship"`), `complete = true`,
   `algorithm = "git-sha1"`, and a 40-digit hex `content_tree_hash`, and those
-  hashes match across hosts. A local last-snapshot record whose stored hash
-  disagrees with the remote stamp is refused. Incomplete, legacy, or
-  `complete = true` stamps that omit those fields are not selectable.
+  hashes match across hosts. A local last-snapshot record must store a
+  40-digit hash that matches the remote stamp; a missing or disagreeing
+  stored hash is refused. Incomplete, legacy, or `complete = true` stamps
+  that omit those fields are not selectable.
 - When `--snapshot` is omitted, a local
   `<env_dir>/.distsshkit/last-snapshot.toml` may supply the ID (keyed by
   deploy root and successful host aliases). A missing or incompatible host
@@ -36,10 +37,14 @@ category: breaking
   present controller `DISTSSHKIT_RUN_DIR/run.toml` with
   `provenance.shipped` selects that original source (not a later local
   last-snapshot record or `_LAST_SHIP`). A DistSSHRun stamp without
-  `provenance.shipped` is refused rather than falling back. In-flight runs
+  `provenance.shipped` is refused rather than falling back. When
+  `provenance.shipped` records `content_tree_hash`, collect mapping refuses
+  a remote stamp whose hash differs. In-flight runs
   that have not written `run.toml` still use the active selection. Deploy
   root and snapshot work root stay distinct: `drive --ship-tree` instantiates
   against the deploy root, then assigns the work-root ENV. Detached
   `execute!` forwards `snapshot=` / `--snapshot` to the child argv.
   Standalone `setup --ship-tree` remains transfer-only. Git `--sync` /
-  `--pull` / `--clone` are unchanged.
+  `--pull` / `--clone` are unchanged. `setup --check` still reaches SSH
+  diagnostics when selection cannot probe, then fails closed instead of
+  reporting prerequisites met for an invalid snapshot.

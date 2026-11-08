@@ -3,7 +3,8 @@
 #
 # Recommended workflow:
 #   1. --ship-tree → 2. --instantiate → 3. --check → 4. --runtest (optional) → `go` / `drive`
-#   instantiate/check/go follow latest runs/<run_id>/src when the root has no Project.toml.
+#   instantiate/check/go use --snapshot ID, else last-snapshot.toml, else a git
+#   checkout with Project.toml at the deploy root. Lexical latest is not used.
 #   Optional git: --clone → --instantiate → --check → --sync / --pull
 #   Replace a clone dest: --delete, then --clone
 #
@@ -160,6 +161,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 :cleanup => "Cleanup Workers",
                 :prune => "Prune kit leaves",
             )[mode]
+            selection_err = nothing
             op_path = try
                 if mode === :delete
                     DistSSHRun.remote_delete_root(
@@ -204,9 +206,14 @@ if !isdefined(@__MODULE__, :setup_main)
                     )
                 catch e
                     e isa ArgumentError || rethrow()
-                    # --check still has to reach SSH preflight diagnostics
-                    # (`ssh not found`) when selection cannot probe yet.
-                    if mode !== :check
+                    # --check still has to reach SSH diagnostics (`ssh not
+                    # found`) when selection cannot probe yet. After
+                    # prerequisites succeed, this error still fails the
+                    # command so an incomplete snapshot is not reported as
+                    # met.
+                    if mode === :check
+                        selection_err = e
+                    else
                         print_err("Error: "; bold = true)
                         println_fatal(e.msg)
                         return Cint(1)
@@ -397,6 +404,12 @@ if !isdefined(@__MODULE__, :setup_main)
             end
 
             if mode === :check
+                if selection_err !== nothing
+                    print_err("Error: "; bold = true)
+                    println_fatal(selection_err.msg)
+                    kit_println()
+                    return Cint(1)
+                end
                 DistSSHRun._warn_git_worktree_ship!(project)
                 print_ok("All prerequisites met.")
                 kit_println()

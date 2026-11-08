@@ -439,6 +439,38 @@ end
     end
 end
 
+@testset "local-record missing content hash fails closed" begin
+    double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+    _with_tempdir() do state
+        remote = joinpath(state, "remote")
+        _write_complete_leaf!(remote, _SNAP_ID_OLD, _SNAP_HASH_OLD)
+        _with_tempdir() do proj
+            _snap_project!(proj)
+            DistSSHRun.write_last_snapshot_record!(
+                proj, remote, ["child-1"], _SNAP_ID_OLD,
+            )
+            DistSSHRun._clear_last_ship!()
+            try
+                withenv(_snap_ssh_env(double)...) do
+                    err = try
+                        DistSSHRun.resolve_snapshot_selection(
+                            ["child-1"], remote, proj,
+                        )
+                        nothing
+                    catch e
+                        e
+                    end
+                    @test err isa ArgumentError
+                    @test occursin("no content_tree_hash", sprint(showerror, err))
+                end
+            finally
+                DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
+                DistSSHRun._clear_last_ship!()
+            end
+        end
+    end
+end
+
 @testset "local-record content hash mismatch fails closed" begin
     double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
     _with_tempdir() do state
@@ -568,6 +600,38 @@ end
                     @test err isa ArgumentError
                     @test occursin("legacy", sprint(showerror, err))
                 end
+                mismatch = joinpath(state, "runMismatch")
+                mkpath(mismatch)
+                DistSSHRun.write_kit_run_toml!(
+                    mismatch;
+                    kind = :drive,
+                    project_root = proj,
+                    provenance = Dict{String, Any}(
+                        "schema" => 1,
+                        "writer" => "DistSSHRun test",
+                        "shipped" => Dict{String, Any}(
+                            "source_kind" => "snapshot",
+                            "run_id" => _SNAP_ID_OLD,
+                            "deploy_root" => remote,
+                            "work_root" => joinpath(remote, "runs", _SNAP_ID_OLD, "src"),
+                            "content_tree_hash" => _SNAP_HASH_NEW,
+                            "algorithm" => "git-sha1",
+                        ),
+                    ),
+                )
+                withenv(
+                    _snap_ssh_env(double)...,
+                    DistSSHRun.DISTSSHKIT_RUN_DIR_ENV => mismatch,
+                ) do
+                    errh = try
+                        DistSSHRun._remote_work_layout_path(out, proj, ["child-1"])
+                        nothing
+                    catch e
+                        e
+                    end
+                    @test errh isa ArgumentError
+                    @test occursin("content_tree_hash", sprint(showerror, errh))
+                end
             finally
                 DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
                 DistSSHRun._clear_last_ship!()
@@ -614,3 +678,65 @@ end
         end
     end
 end
+
+@testset "setup --check does not claim success on incomplete snapshot" begin
+    double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+    _with_tempdir() do state
+        roots = joinpath(state, "hosts")
+        h1 = joinpath(roots, "child-1")
+        mkpath(h1)
+        write(joinpath(h1, "Project.toml"), "name = \"GitRoot\"\n")
+        leaf = joinpath(h1, "runs", _SNAP_ID_OLD)
+        mkpath(joinpath(leaf, "src"))
+        write(joinpath(leaf, "src", "Project.toml"), "name = \"SnapSel\"\n")
+        write(
+            joinpath(leaf, "run.toml"),
+            DistSSHRun._ship_run_leaf_stamp_toml() * "complete = true\n",
+        )
+        _with_tempdir() do proj
+            _snap_project!(proj)
+            DistSSHRun.clear_last_snapshot_record!(proj)
+            DistSSHRun._clear_last_ship!()
+            env = merge(
+                _snap_ssh_env(double),
+                Dict(
+                    "DISTSSHKIT_TEST_SSH_LOGICAL_ROOT" => "/__dsr_logical__",
+                    "DISTSSHKIT_TEST_SSH_HOST_ROOTS" => roots,
+                    "DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "",
+                    "DISTSSHKIT_YES" => nothing,
+                ),
+            )
+            try
+                withenv(env...) do
+                    mktemp() do out_path, out_io
+                        mktemp() do err_path, err_io
+                            code = redirect_stdin(devnull) do
+                                redirect_stdout(out_io) do
+                                    redirect_stderr(err_io) do
+                                        DistSSHRun.setup(
+                                            [
+                                                "--check",
+                                                "--snapshot", _SNAP_ID_OLD,
+                                                "--remote-path", "/__dsr_logical__",
+                                                "child:child-1",
+                                            ],
+                                        )
+                                    end
+                                end
+                            end
+                            flush(out_io)
+                            flush(err_io)
+                            shown = read(out_path, String) * read(err_path, String)
+                            @test code == 1
+                            @test !occursin("All prerequisites met", shown)
+                        end
+                    end
+                end
+            finally
+                DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
+                DistSSHRun._clear_last_ship!()
+            end
+        end
+    end
+end
+
