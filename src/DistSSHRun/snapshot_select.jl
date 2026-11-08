@@ -420,24 +420,20 @@ function resolve_snapshot_selection(
         )
     end
     if rec !== nothing
-        # Record exists but host set / deploy root do not match: never fall back
-        # to another source based on that record.
+        # Same deploy root but hosts do not cover: refuse (no silent other ID).
+        # A record for a different deploy root is ignored so a second root
+        # (git clone path, tilde root, …) can still select its checkout.
         stored_root = get(rec, "deploy_root", nothing)
-        if stored_root isa AbstractString && String(stored_root) != deploy
-            throw(
-                _selection_error(
-                    "local last-snapshot record is for deploy root $(repr(stored_root)), not $(repr(deploy)); pass --snapshot ID",
-                ),
-            )
-        end
-        stored_hosts = get(rec, "hosts", nothing)
-        if stored_hosts isa AbstractVector &&
-                !_hosts_covered(String[String(h) for h in stored_hosts], host_list)
-            throw(
-                _selection_error(
-                    "local last-snapshot record hosts $(stored_hosts) do not cover $(host_list); pass --snapshot ID",
-                ),
-            )
+        if stored_root isa AbstractString && String(stored_root) == deploy
+            stored_hosts = get(rec, "hosts", nothing)
+            if stored_hosts isa AbstractVector &&
+                    !_hosts_covered(String[String(h) for h in stored_hosts], host_list)
+                throw(
+                    _selection_error(
+                        "local last-snapshot record hosts $(stored_hosts) do not cover $(host_list); pass --snapshot ID",
+                    ),
+                )
+            end
         end
     end
     _validate_git_on_hosts!(host_list, deploy)

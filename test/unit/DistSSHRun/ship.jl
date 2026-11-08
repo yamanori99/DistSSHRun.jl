@@ -1143,6 +1143,40 @@ end
     ) == "/home/dev/app/output"
 end
 
+@testset "work layout ignores poisoned DISTRIBUTED_REMOTE_PROJECT_ROOT" begin
+    _with_tempdir() do proj
+        write(joinpath(proj, "Project.toml"), "name = \"LayoutPoison\"\n")
+        write(
+            joinpath(proj, "Manifest.toml"),
+            "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
+        )
+        mkpath(joinpath(proj, "output"))
+        deploy = "/home/dev/app"
+        work = "/home/dev/app/runs/20260101T000000Z-abcdef/src"
+        DistSSHRun._set_active_selection!(
+            DistSSHRun.SnapshotSelection(
+                :snapshot,
+                "20260101T000000Z-abcdef",
+                deploy,
+                work,
+                "deadbeef",
+                ["child-1"],
+            ),
+        )
+        try
+            withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => work) do
+                got = DistSSHRun._remote_work_layout_path(
+                    joinpath(proj, "output"), proj, ["child-1"],
+                )
+                @test got == "$work/output"
+                @test !occursin("/runs/20260101T000000Z-abcdef/src/runs/", got)
+            end
+        finally
+            DistSSHRun._clear_last_ship!()
+        end
+    end
+end
+
 @testset "record host and path" begin
     @test DistSSHRun._record_host_alias("mini") == "mini"
     @test DistSSHRun._record_host_alias("user@mini") == "mini"

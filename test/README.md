@@ -294,6 +294,9 @@ Helpers (via `support.jl`): `_child_julia_env`, `_run_kit_drive` /
 `_with_tempdir` / `_stage_with_kit_demos!`, `_with_ssh_e2e_suite`,
 `_capture_stdio` / `with_kit_verbosity`.
 
+- `_child_julia_env` drops parent `NO_COLOR` so TTY children keep the live
+  `:progress` default. Pass `NO_COLOR` in `extra` when a child must keep it.
+  `_tty_capture_script` / `_tty_expect_script` also strip `NO_COLOR`.
 - `DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL` (default `1` in test children):
   skip drive leftover tagged remote `pkill`; each child `rmprocs`es its own
   local workers. Untagged sweep is `setup --cleanup` only.

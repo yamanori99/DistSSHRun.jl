@@ -233,6 +233,8 @@ if !isdefined(Main, :_tty_strip_ansi)
         for (k, v) in extra_env
             env[String(k)] = String(v)
         end
+        # Progress TTY helpers need a live default; never reintroduce parent NO_COLOR.
+        delete!(env, "NO_COLOR")
         # New process group: timeout uses `kill(-pid, …)` scoped to this tree.
         # Bind `proc` once (no later reassignment) so the try/finally close does
         # not box it; `run` on a plain Cmd returns `Base.Process`.
@@ -310,6 +312,8 @@ if !isdefined(Main, :_tty_strip_ansi)
         for (k, v) in extra_env
             env[String(k)] = String(v)
         end
+        # Progress TTY helpers need a live default; never reintroduce parent NO_COLOR.
+        delete!(env, "NO_COLOR")
         pin = Pipe()
         Base.link_pipe!(pin)
         # `run(cmd, stdin, stdout, stderr)` — same shape as `_start_subprocess`.

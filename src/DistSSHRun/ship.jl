@@ -1450,20 +1450,43 @@ function _rehome_under_work_root(
     return w * m[(ncodeunits(d) + 1):end]
 end
 
-"""`remote_layout_path` re-homed onto the remote work root for `hosts`."""
+"""`remote_layout_path` re-homed onto the remote work root for `hosts`.
+
+After [`_assign_remote_work_root_env!`](@ref), `DISTRIBUTED_REMOTE_PROJECT_ROOT`
+holds the work root (`runs/<id>/src`), not the deploy root. Mapping must use
+the deploy root (via [`active_snapshot_selection`](@ref) or a temporary ENV),
+then rehome onto the work root — otherwise `remote_layout_path` already returns
+a work-root path and rehome nests `runs/<id>/src/runs/<id>`.
+"""
 function _remote_work_layout_path(
         local_abs::AbstractString,
         local_repo::AbstractString,
         hosts::AbstractVector{<:AbstractString};
         snapshot::Union{Nothing, AbstractString} = nothing,
     )::String
-    mapped = remote_layout_path(local_abs, local_repo)
-    deploy = remote_deploy_root(local_repo)
-    wr = _work_root_for_hosts(
-        hosts, deploy;
-        local_project = local_repo, snapshot = snapshot,
+    sel = active_snapshot_selection()
+    snap_ok = sel !== nothing && (
+        snapshot === nothing ||
+            (sel.snapshot_id !== nothing && String(sel.snapshot_id) == String(snapshot))
     )
-    return _rehome_under_work_root(mapped, deploy, wr)
+    if !snap_ok
+        deploy = remote_deploy_root(local_repo)
+        _work_root_for_hosts(
+            hosts, deploy;
+            local_project = local_repo, snapshot = snapshot,
+        )
+        sel = active_snapshot_selection()
+    end
+    sel isa SnapshotSelection || throw(
+        ArgumentError(
+            "remote work layout: no snapshot selection after resolve for $(hosts)",
+        ),
+    )
+    chosen = sel::SnapshotSelection
+    mapped = withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => chosen.deploy_root) do
+        remote_layout_path(local_abs, local_repo)
+    end
+    return _rehome_under_work_root(mapped, chosen.deploy_root, chosen.work_root)
 end
 
 """Shell that refuses a missing, unreadable, group-writable, world-writable, or foreign `remote_root`."""

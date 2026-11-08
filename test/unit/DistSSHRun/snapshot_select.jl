@@ -114,6 +114,42 @@ end
     end
 end
 
+@testset "record for another deploy root does not block git" begin
+    double = abspath(
+        joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"),
+    )
+    _with_tempdir() do state
+        remote_a = joinpath(state, "remote_a")
+        remote_b = joinpath(state, "remote_b")
+        mkpath(remote_b)
+        write(joinpath(remote_b, "Project.toml"), "name = \"GitB\"\n")
+        _with_tempdir() do proj
+            _snap_project!(proj)
+            DistSSHRun.write_last_snapshot_record!(
+                proj, remote_a, ["child-1"], _SNAP_ID_OLD,
+            )
+            DistSSHRun._clear_last_ship!()
+            env = Dict{String, String}(
+                "DISTSSHKIT_TEST" => "1",
+                "DISTSSHKIT_TEST_SSH" => double,
+                "DISTSSHKIT_TEST_POSIX_SHELL" => "1",
+                "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
+            )
+            try
+                withenv(env...) do
+                    sel = DistSSHRun.resolve_snapshot_selection(
+                        ["child-1"], remote_b, proj,
+                    )
+                    @test sel.source_kind === :git
+                    @test sel.work_root == remote_b
+                end
+            finally
+                DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
+            end
+        end
+    end
+end
+
 @testset "help no longer advertises lexical latest" begin
     text = DistSSHRun.setup_help_text()
     @test occursin("--snapshot", text)

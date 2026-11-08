@@ -11,6 +11,8 @@ if !isdefined(Main, :_child_julia_env)
     # Replace `JULIA_LOAD_PATH` (do not keep `Pkg.test`'s path) and drop
     # `JULIA_PROJECT` so the child's `--project=` is the one on the command.
     # `JULIA_DEPOT_PATH` is copied through with the rest of `ENV`.
+    # Drop parent `NO_COLOR` so a TTY child can use the live `:progress` default
+    # (`kit_stdout_is_live`). Pass `NO_COLOR` in `extra` when a child must keep it.
     function _child_julia_env(extra::AbstractDict = Dict{String, String}())
         # In-process `_run_kit_cli_script` sets DISTSSHKIT_CLI_SUBCOMMAND_DONE so a
         # nested `main` does not run twice. Children must not inherit that, or
@@ -21,6 +23,7 @@ if !isdefined(Main, :_child_julia_env)
                 "JULIA_PROJECT",
                 "DISTSSHKIT_CLI_SUBCOMMAND_DONE",
                 "DIST_SSH_KIT_CLI_INCLUDE",
+                "NO_COLOR",
             )
         )
         env = Dict{String, String}(

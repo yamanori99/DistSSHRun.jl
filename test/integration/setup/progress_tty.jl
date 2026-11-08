@@ -1,8 +1,9 @@
 using Test
 
 # Pseudo-TTY (`script`) versus a pipe. The TTY default is `:progress`.
-# A pipe is `:verbose`. `NO_COLOR` forces the non-TTY default, so this
-# runner unsets it before `julia` starts.
+# A pipe is `:verbose`. Parent `NO_COLOR` would force the non-TTY default;
+# `_child_julia_env` / `_tty_capture_script` drop it, and this runner unsets
+# it again before `julia` starts.
 #
 # CI / `script` typescripts look like they stack many `check` spinner rows.
 # That is the byte stream: each redraw is `\r` + line + `\e[K` with no
@@ -287,7 +288,7 @@ using Test
                 "PATH" => empty_path,
             ),
         )
-        delete!(pipe_env, "NO_COLOR")
+        @test !haskey(pipe_env, "NO_COLOR")
         delete!(pipe_env, "DISTSSHKIT_QUIET")
         delete!(pipe_env, "DISTSSHKIT_PROGRESS")
         delete!(pipe_env, "DISTSSHKIT_VERBOSE")
