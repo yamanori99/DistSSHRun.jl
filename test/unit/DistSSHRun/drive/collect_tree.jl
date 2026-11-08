@@ -73,6 +73,9 @@ end
                         "DISTRIBUTED_PROJECT_ROOT" => proj,
                         "DISTRIBUTED_REMOTE_PROJECT_ROOT" => remote,
                         "DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia",
+                        # Absolute fake remotes are not a real git tree; selection
+                        # still requires a Project.toml probe. Force the git path.
+                        "DISTSSHKIT_TEST_SNAP_GIT_YES" => "1",
                     ),
                     extra_env,
                 )

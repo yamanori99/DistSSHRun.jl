@@ -189,6 +189,46 @@ function main()
         exit(0)
     end
 
+    # Snapshot selection probes. This double's `tree/` is the remote deploy root
+    # content; absolute paths in the script are not local. Answer from `tree/`.
+    if occursin("__DSR_SNAP_GIT__", script)
+        if isfile(joinpath(tree, "Project.toml")) ||
+                isfile(joinpath(tree, "JuliaProject.toml")) ||
+                get(ENV, "DISTSSHKIT_TEST_SNAP_GIT_YES", "") == "1"
+            println("yes")
+        else
+            println("no")
+        end
+        exit(0)
+    end
+    if occursin("__DSR_SNAP_COMPLETE__", script)
+        # Collect/drive fixtures rarely need a completed leaf; refuse unless seeded.
+        runs = joinpath(tree, "runs")
+        if isdir(runs)
+            for id in readdir(runs)
+                leaf = joinpath(runs, id)
+                stamp = joinpath(leaf, "run.toml")
+                if isfile(stamp) && occursin("complete = true", read(stamp, String)) &&
+                        (
+                        isfile(joinpath(leaf, "src", "Project.toml")) ||
+                            isfile(joinpath(leaf, "src", "JuliaProject.toml"))
+                    )
+                    println("ok")
+                    for line in eachline(stamp)
+                        if startswith(strip(line), "content_tree_hash")
+                            m = match(r"content_tree_hash\s*=\s*\"([^\"]+)\"", line)
+                            m === nothing || println(m.captures[1])
+                            break
+                        end
+                    end
+                    exit(0)
+                end
+            end
+        end
+        println("incomplete")
+        exit(0)
+    end
+
     if occursin("test -f", script) && occursin("Project.toml", script)
         if isfile(joinpath(tree, "Project.toml"))
             println("ok")

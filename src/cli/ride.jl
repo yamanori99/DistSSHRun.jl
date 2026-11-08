@@ -56,6 +56,7 @@ function ride_main()::Cint
             julia = parsed.julia,
             allow_mismatch = parsed.allow_mismatch,
             remote = isempty(remote_raw) ? nothing : remote_raw,
+            snapshot = parsed.snapshot,
             hint_surface = :cli,
         )
     catch e

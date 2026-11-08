@@ -544,7 +544,7 @@ using Test
         end
     end
 
-    @testset "ride retargets SSH project to runs/*/src" begin
+    @testset "ride retargets SSH project to completed snapshot src" begin
         double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_ride_work_root_ssh.jl"))
         previous = DistSSHRun._LAST_SHIP[]
         previous_active = DistSSHRun._SHIP_LAYOUT_ACTIVE[]
@@ -562,16 +562,22 @@ using Test
                 local_proj = joinpath(tmp, "local")
                 mkpath(local_proj)
                 write(joinpath(local_proj, "Project.toml"), "name = \"RideRoot\"\n")
+                DistSSHRun.clear_last_snapshot_record!(local_proj)
                 script = joinpath(local_proj, "job.jl")
                 write(script, "nothing\n")
                 remote = joinpath(tmp, "remote")
+                snap_id = "20200102T000000Z-bbbbbb"
                 older = joinpath(remote, "runs", "20200101T000000Z-aaaaaa", "src")
-                newer = joinpath(remote, "runs", "20200102T000000Z-bbbbbb", "src")
+                newer = joinpath(remote, "runs", snap_id, "src")
                 mkpath(older)
                 mkpath(newer)
                 write(joinpath(older, "Project.toml"), "name = \"Old\"\n")
                 write(joinpath(newer, "Project.toml"), "name = \"New\"\n")
                 write(joinpath(newer, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+                write(
+                    joinpath(remote, "runs", snap_id, "run.toml"),
+                    DistSSHRun._ship_run_leaf_complete_toml("deadbeef"),
+                )
                 logp = joinpath(tmp, "ssh.log")
                 bindir = joinpath(tmp, "bin")
                 mkpath(bindir)
@@ -597,6 +603,7 @@ using Test
                     "DISTSSHKIT_TEST" => "1",
                     "DISTSSHKIT_TEST_SSH" => double,
                     "DISTSSHKIT_TEST_SSH_LOG" => logp,
+                    "DISTSSHKIT_TEST_POSIX_SHELL" => "1",
                     "PATH" => bindir * ":" * get(ENV, "PATH", ""),
                 )
                 host = "ridework.test"
@@ -632,24 +639,20 @@ using Test
                         end
                     end
                     @test parent.ok
-                    @test !occursin("__DSR_SHIP_SRC__", read(logp, String))
+                    @test !occursin("__DSR_SNAP_COMPLETE__", read(logp, String))
                     @test strip(read(parent_env, String)) == remote
 
                     write(script, "nothing\n")
                     rm(logp; force = true)
                     touch(logp)
-                    DistSSHRun._LAST_SHIP[] = Dict{String, Any}(
-                        "src" => "/wrong/runs/old/src",
-                        "hosts" => String[host],
-                        "remote_root" => remote,
-                    )
-                    DistSSHRun._SHIP_LAYOUT_ACTIVE[] = true
+                    # ride! clears `_LAST_SHIP`; pass an explicit snapshot id.
                     child = redirect_stdout(devnull) do
                         redirect_stderr(devnull) do
                             DistSSHRun.ride!(
                                 script, ["child:$(host):1"];
                                 project = local_proj,
                                 remote = remote,
+                                snapshot = snap_id,
                                 julia = "/usr/bin/julia",
                                 output_dir = joinpath(tmp, "child-out"),
                                 spi_check = false,
@@ -661,14 +664,14 @@ using Test
                     @test child.workers == 0
                     @test child.error isa AbstractString
                     @test occursin("No workers available", something(child.error, ""))
-                    @test occursin("__DSR_SHIP_SRC__", logged)
+                    @test occursin("__DSR_SNAP_COMPLETE__", logged)
                     @test occursin("--project=" * DistSSHRun.posix_quote(want), logged)
-                    @test !occursin("--project=" * DistSSHRun.posix_quote("/wrong/runs/old/src"), logged)
                     @test !occursin("--project=" * DistSSHRun.posix_quote(remote), logged)
 
                     write(joinpath(remote, "Project.toml"), "name = \"RootWins\"\n")
                     ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = remote
                     DistSSHRun._clear_last_ship!()
+                    DistSSHRun.clear_last_snapshot_record!(local_proj)
                     DistSSHRun._assign_remote_work_root_env!([host], local_proj)
                     @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] ==
                         DistSSHRun.canonical_local_path(remote)

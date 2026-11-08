@@ -447,37 +447,46 @@ end
     end
 
     @testset "collect! scopes session.remote into ENV" begin
-        _with_tempdir() do tmp
-            ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = "/caller/Keep"
-            session = DistSSHRun.KitSession(
-                project = tmp,
-                workers = ["child:host1"],
-                remote = "/session/Custom",
-                quiet = true,
-                yes = true,
-            )
-            seen = Ref{Union{Nothing, String}}(nothing)
-            DistSSHRun._with_session_remote_env!(session) do
-                seen[] = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
-                @test DistSSHRun.remote_deploy_root(tmp) == "/session/Custom"
-                @test DistSSHRun._remote_work_layout_path(
-                    tmp, tmp, ["host1"],
-                ) == "/session/Custom"
-            end
-            @test seen[] == DistSSHRun.remote_env_project_root("/session/Custom")
-            @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] == "/caller/Keep"
-            delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
-            err = try
-                DistSSHRun._with_session_remote_env!(session) do
-                    @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] ==
-                        DistSSHRun.remote_env_project_root("/session/Custom")
-                    error("force-fail")
+        _with_tempdir() do state_dir
+            _with_tempdir() do tmp
+                write(joinpath(tmp, "Project.toml"), "name = \"DriveRemoteEnv\"\n")
+                ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = "/caller/Keep"
+                session = DistSSHRun.KitSession(
+                    project = tmp,
+                    workers = ["child:host1"],
+                    remote = "/session/Custom",
+                    quiet = true,
+                    yes = true,
+                )
+                seen = Ref{Union{Nothing, String}}(nothing)
+                fake = merge(
+                    _fake_setup_remote_env(state_dir),
+                    Dict("DISTSSHKIT_TEST_SNAP_GIT_YES" => "1"),
+                )
+                withenv(fake...) do
+                    DistSSHRun._with_session_remote_env!(session) do
+                        seen[] = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
+                        @test DistSSHRun.remote_deploy_root(tmp) == "/session/Custom"
+                        @test DistSSHRun._remote_work_layout_path(
+                            tmp, tmp, ["host1"],
+                        ) == "/session/Custom"
+                    end
                 end
-            catch e
-                e
+                @test seen[] == DistSSHRun.remote_env_project_root("/session/Custom")
+                @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] == "/caller/Keep"
+                delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+                err = try
+                    DistSSHRun._with_session_remote_env!(session) do
+                        @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] ==
+                            DistSSHRun.remote_env_project_root("/session/Custom")
+                        error("force-fail")
+                    end
+                catch e
+                    e
+                end
+                @test err isa ErrorException
+                @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
             end
-            @test err isa ErrorException
-            @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
         end
     end
 
@@ -1007,43 +1016,47 @@ end
             return (err = err, out = out)
         end
 
-        ssh_env = (
-            "DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes -o ConnectTimeout=1",
-            "DISTSSHKIT_JOB_ID" => nothing,
-            "DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL" => "1",
-        )
-        _mktemp_host() do proj
-            _write_host_project!(proj, "HostsKeep")
-            got = withenv(
-                ssh_env...,
-                "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/tmp/distsshkit-remote\nbad",
-            ) do
-                _drive_bad_host(proj)
+        _with_tempdir() do state_dir
+            ssh_base = (
+                _fake_setup_remote_env(state_dir)...,
+                "DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes -o ConnectTimeout=1",
+                "DISTSSHKIT_JOB_ID" => nothing,
+                "DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL" => "1",
+                "DISTSSHKIT_TEST_SNAP_GIT_YES" => "1",
+            )
+            _mktemp_host() do proj
+                _write_host_project!(proj, "HostsKeep")
+                got = withenv(
+                    ssh_base...,
+                    "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/tmp/distsshkit-remote\nbad",
+                ) do
+                    _drive_bad_host(proj)
+                end
+                @test got.err isa ArgumentError
+                @test occursin("newline", sprint(showerror, got.err))
+                listed = DistSSHRun._read_kit_hosts(got.out)
+                @test listed == ["-orphan"]
+                copies = vcat(_hosts_on_disk(proj), _hosts_on_disk(got.out))
+                @test !isempty(copies)
+                for path in unique(copies)
+                    @test DistSSHRun._read_kit_hosts(dirname(path)) == ["-orphan"]
+                end
             end
-            @test got.err isa ArgumentError
-            @test occursin("newline", sprint(showerror, got.err))
-            listed = DistSSHRun._read_kit_hosts(got.out)
-            @test listed == ["-orphan"]
-            copies = vcat(_hosts_on_disk(proj), _hosts_on_disk(got.out))
-            @test !isempty(copies)
-            for path in unique(copies)
-                @test DistSSHRun._read_kit_hosts(dirname(path)) == ["-orphan"]
-            end
-        end
 
-        _mktemp_host() do proj
-            _write_host_project!(proj, "HostsDrop")
-            got = withenv(
-                ssh_env...,
-                "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/tmp/distsshkit-remote",
-            ) do
-                _drive_bad_host(proj)
+            _mktemp_host() do proj
+                _write_host_project!(proj, "HostsDrop")
+                got = withenv(
+                    ssh_base...,
+                    "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/tmp/distsshkit-remote",
+                ) do
+                    _drive_bad_host(proj)
+                end
+                @test got.err isa ErrorException
+                @test got.err.msg == DistSSHRun._NO_WORKERS_JOINED
+                @test !isfile(joinpath(got.out, "kit.hosts"))
+                @test isempty(_hosts_on_disk(proj))
+                @test isempty(_hosts_on_disk(got.out))
             end
-            @test got.err isa ErrorException
-            @test got.err.msg == DistSSHRun._NO_WORKERS_JOINED
-            @test !isfile(joinpath(got.out, "kit.hosts"))
-            @test isempty(_hosts_on_disk(proj))
-            @test isempty(_hosts_on_disk(got.out))
         end
     end
 end
