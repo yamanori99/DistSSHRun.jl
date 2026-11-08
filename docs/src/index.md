@@ -65,9 +65,15 @@ directory symlinks are followed; components this operation creates must not
 be symlinks. Existing directories are not chmod'd. Transfer failure after
 create leaves the safe directory. `go` / `drive` `--ship-tree` and `sync!(mode=:ship_tree)` use the
 same ensure path; they still instantiate after ship when those entry points
-do today. Later `--instantiate` / `--check` / `go` use the latest `src/` when
-the remote root has no `Project.toml` (or pass `--remote-path` to that tree).
-`--rsync` was removed in 0.2.0. Workers `--project=` that tree.
+do today. Later `--instantiate` / `--check` / `go` / `drive` select a snapshot
+with `--snapshot ID` (or `snapshot=`), else the local
+`.distsshkit/last-snapshot.toml` written after a successful ship, else a git
+checkout that has `Project.toml` at the deploy root on every host. Lexical
+latest `runs/*/src` is not used. An explicit ID is validated on every host and
+never falls back. After extract, the remote leaf `run.toml` records
+`complete = true` and the shipped `content_tree_hash` (transfer finished, not
+a fresh remote re-hash). Incomplete or legacy leaves without `complete` are
+not selectable. `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
 `snapshot(local_root)` builds that tar in a temporary directory and records
 `content_tree_hash` (`git-sha1`). The caller deletes `snapshot_directory`.
 The tar is `snapshot_tar` (`ship.tar` in that directory). `snapshot` does not

@@ -29,8 +29,12 @@ end
     @test occursin("schema = 1", stamp)
     @test occursin("kind = \"ship\"", stamp)
     @test occursin("writer = \"DistSSHRun ", stamp)
+    @test !occursin("complete = true", stamp)
     raw = TOML.parse(stamp)
     @test DistSSHRun._kit_run_toml_owned(raw)
+    complete = DistSSHRun._ship_run_leaf_complete_toml("deadbeef")
+    @test occursin("complete = true", complete)
+    @test DistSSHRun._kit_run_toml_owned(TOML.parse(complete))
     @test !DistSSHRun._kit_run_toml_owned(
         Dict("schema" => 1, "writer" => "Other 1.0", "kind" => "ship"),
     )
@@ -40,6 +44,10 @@ end
     sh = DistSSHRun._remote_run_leaf_stamp_sh("/work/app/runs/20260101T000000Z-abcd")
     @test occursin("/work/app/runs/20260101T000000Z-abcd/run.toml", sh)
     @test occursin("kind = \"ship\"", sh)
+    csh = DistSSHRun._remote_run_leaf_complete_sh(
+        "/work/app/runs/20260101T000000Z-abcd", "deadbeef",
+    )
+    @test occursin("complete = true", csh)
 end
 
 @testset "remote run leaf still validates an existing root" begin
@@ -1075,63 +1083,36 @@ end
     end
 end
 
-@testset "last-ship src is scoped to hosts and remote_root" begin
+@testset "last-ship src helper is scoped to hosts and remote_root" begin
     DistSSHRun._clear_last_ship!()
     DistSSHRun._LAST_SHIP[] = Dict{String, Any}(
-        "src" => "/home/dev/app/runs/id/src",
+        "src" => "/home/dev/app/runs/20260101T000000Z-abcdef/src",
+        "run_id" => "20260101T000000Z-abcdef",
         "hosts" => String["child-1"],
         "remote_root" => "/home/dev/app",
     )
     DistSSHRun._SHIP_LAYOUT_ACTIVE[] = true
     try
-        @test DistSSHRun._work_root_for_hosts(["child-1"], "/home/dev/app") ==
-            "/home/dev/app/runs/id/src"
-        @test DistSSHRun._work_root_for_hosts(["-other"], "/home/dev/app") ==
-            "/home/dev/app"
-        @test DistSSHRun._work_root_for_hosts(["child-1"], "/other") !=
-            "/home/dev/app/runs/id/src"
+        @test DistSSHRun._last_ship_src_for(["child-1"], "/home/dev/app") ==
+            "/home/dev/app/runs/20260101T000000Z-abcdef/src"
+        @test DistSSHRun._last_ship_src_for(["child-2"], "/home/dev/app") === nothing
+        @test DistSSHRun._last_ship_src_for(["child-1"], "/other") === nothing
         @test DistSSHRun._last_ship_src_for(["child-1"], "/home/dev/app/pkg") === nothing
-        wr = DistSSHRun._work_root_for_hosts(["child-1"], "/home/dev/app")
+        wr = "/home/dev/app/runs/20260101T000000Z-abcdef/src"
         @test DistSSHRun._rehome_under_work_root(
             "/home/dev/app/pkg", "/home/dev/app", wr,
-        ) == "/home/dev/app/runs/id/src/pkg"
+        ) == "/home/dev/app/runs/20260101T000000Z-abcdef/src/pkg"
     finally
         DistSSHRun._clear_last_ship!()
     end
 end
 
-@testset "project work root rehomes workspace member onto shipped src" begin
-    DistSSHRun._clear_last_ship!()
-    DistSSHRun._LAST_SHIP[] = Dict{String, Any}(
-        "src" => "/home/dev/app/runs/id/src",
-        "hosts" => String["child-1"],
-        "remote_root" => "/home/dev/app",
-    )
-    DistSSHRun._SHIP_LAYOUT_ACTIVE[] = true
-    try
-        _with_tempdir() do tmp
-            write(
-                joinpath(tmp, "Project.toml"),
-                "[workspace]\nprojects = [\"pkg\"]\n",
-            )
-            write(
-                joinpath(tmp, "Manifest.toml"),
-                "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
-            )
-            mkpath(joinpath(tmp, "pkg"))
-            write(
-                joinpath(tmp, "pkg", "Project.toml"),
-                "name = \"Pkg\"\nuuid = \"11111111-1111-1111-1111-111111111111\"\n",
-            )
-            got = DistSSHRun._project_work_root(
-                ["child-1"], joinpath(tmp, "pkg");
-                cli_override = "/home/dev/app",
-            )
-            @test got == "/home/dev/app/runs/id/src/pkg"
-        end
-    finally
-        DistSSHRun._clear_last_ship!()
-    end
+@testset "project work root rehomes workspace member onto selected src" begin
+    # Pure rehome mapping (selection itself is covered in snapshot_select.jl).
+    wr = "/home/dev/app/runs/20260101T000000Z-abcdef/src"
+    @test DistSSHRun._rehome_under_work_root(
+        "/home/dev/app/pkg", "/home/dev/app", wr,
+    ) == "/home/dev/app/runs/20260101T000000Z-abcdef/src/pkg"
 end
 
 @testset "rehome collect path onto work root" begin

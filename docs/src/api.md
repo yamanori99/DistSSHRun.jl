@@ -112,7 +112,10 @@ Filter = function (x)
 end
 ```
 
-`snapshot`, `ship`, and `ship_send_list` are public and are not exported.
+`snapshot`, `ship`, `ship_send_list`, `validate_snapshot_id`,
+`resolve_snapshot_selection`, `read_last_snapshot_record`,
+`write_last_snapshot_record!`, and `active_snapshot_selection` are public and
+are not exported.
 
 ```@docs
 ship_send_list
@@ -120,6 +123,12 @@ snapshot
 ship
 ShipSnapshot
 ShipTreeResult
+SnapshotSelection
+validate_snapshot_id
+resolve_snapshot_selection
+read_last_snapshot_record
+write_last_snapshot_record!
+active_snapshot_selection
 snapshot_directory
 snapshot_tar
 content_tree_hash
@@ -149,7 +158,10 @@ Filter = function (x)
         :collect!, :CollectResult,
         :setup!, :sync!, :instantiate!, :ship_send_list,
         :KitSession, :HostResult, :SyncResult,
-        :snapshot, :ship, :ShipSnapshot, :ShipTreeResult,
+        :snapshot, :ship, :ShipSnapshot, :ShipTreeResult, :SnapshotSelection,
+        :validate_snapshot_id, :resolve_snapshot_selection,
+        :read_last_snapshot_record, :write_last_snapshot_record!,
+        :active_snapshot_selection,
         :snapshot_directory, :snapshot_tar, :content_tree_hash,
         :execute_kwargs_from_parsed, :detached_launch,
         :ALLOW_MISMATCH_FIELDS,

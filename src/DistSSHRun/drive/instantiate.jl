@@ -26,6 +26,7 @@ Also available as [`setup!`](@ref)`(session, :instantiate; julia=…)`.
 function instantiate!(
         session::KitSession;
         julia::AbstractString = "auto",
+        snapshot::Union{Nothing, AbstractString} = nothing,
     )::SyncResult
     isempty(session.hosts) && throw(
         ArgumentError(
@@ -33,6 +34,7 @@ function instantiate!(
         )
     )
     validate_setup_hosts(session.hosts)
+    snap = snapshot === nothing ? nothing : validate_snapshot_id(snapshot)
     return _with_kit_inproc_run!(:instantiate) do
         apply_session_env!(session)
         preflight_setup_ssh(session.hosts) || return SyncResult(
@@ -41,7 +43,8 @@ function instantiate!(
             ok = false,
         )
         remote_path = _project_work_root(
-            session.hosts, session.project; cli_override = session.remote,
+            session.hosts, session.project;
+            cli_override = session.remote, snapshot = snap,
         )
         julia_path = isempty(strip(String(julia))) ? "auto" : String(julia)
         raw = instantiate_remotes(
@@ -63,22 +66,26 @@ end
 """After `sync!(; mode=:ship_tree)`, instantiate on hosts that still lack deps.
 
 Returns `nothing` when every host already resolves, else [`instantiate!`](@ref).
+Pass `snapshot=` to force the ID from that ship when the local record is not enough.
 """
 function instantiate_after_ship!(
         session::KitSession;
         julia::AbstractString = "auto",
+        snapshot::Union{Nothing, AbstractString} = nothing,
     )::Union{Nothing, SyncResult}
     isempty(session.hosts) && return nothing
+    snap = snapshot === nothing ? nothing : validate_snapshot_id(snapshot)
     return _with_kit_inproc_run!(:instantiate) do
         apply_session_env!(session)
         rr = _project_work_root(
-            session.hosts, session.project; cli_override = session.remote,
+            session.hosts, session.project;
+            cli_override = session.remote, snapshot = snap,
         )
         any(h -> probe_remote_project_deps(h, rr) !== nothing, session.hosts) ||
             return nothing
-        return instantiate!(session; julia = julia)
+        return instantiate!(session; julia = julia, snapshot = snap)
     end
 end
 
-instantiate_after_rsync!(session::KitSession; julia::AbstractString = "auto") =
-    instantiate_after_ship!(session; julia = julia)
+instantiate_after_rsync!(session::KitSession; julia::AbstractString = "auto", snapshot = nothing) =
+    instantiate_after_ship!(session; julia = julia, snapshot = snapshot)

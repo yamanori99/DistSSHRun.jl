@@ -991,8 +991,10 @@ function go!(
         repeat::Union{Nothing, Integer} = nothing,
         allow_mismatch = Symbol[],
         allow_external_symlinks::Bool = false,
+        snapshot::Union{Nothing, AbstractString} = nothing,
     )::GoResult
     script_path = canonical_local_path(script)
+    snap_arg = snapshot === nothing ? nothing : validate_snapshot_id(snapshot)
     proj = canonical_local_path(project)
     if !isfile(script_path)
         throw(
@@ -1035,6 +1037,7 @@ function go!(
                 repeat,
                 inherited_run,
                 allow_external_symlinks,
+                snap_arg,
             )
         end
     finally
@@ -1063,6 +1066,7 @@ function _go_run!(
         repeat,
         inherited_run::Bool,
         allow_external_symlinks::Bool = false,
+        snap_arg::Union{Nothing, String} = nothing,
     )
     anchor = something(path_anchor, proj)
 
@@ -1169,7 +1173,9 @@ function _go_run!(
         # `run_rr` is assigned once so later `@async` does not capture a boxed bind.
         run_rr = if sync_mode === false
             rr = isempty(child_hosts) ? sess_rr :
-                _project_work_root(child_hosts, proj; cli_override = remote)
+                _project_work_root(
+                child_hosts, proj; cli_override = remote, snapshot = snap_arg,
+            )
             _go_assert_remotes_ready!(child_hosts, rr)
             rr
         elseif !isempty(child_hosts)
@@ -1208,10 +1214,14 @@ function _go_run!(
                     place,
                 )
             end
+            ship_snap = sync_mode === :ship_tree ?
+                something(result_remote_run_id(sync_result), snap_arg) : snap_arg
             if sync_mode === :ship_tree
                 inst_julia = julia === nothing || strip(String(julia)) == "auto" ?
                     "auto" : String(julia)
-                inst = instantiate_after_ship!(sync_session; julia = inst_julia)
+                inst = instantiate_after_ship!(
+                    sync_session; julia = inst_julia, snapshot = ship_snap,
+                )
                 if inst !== nothing && !inst.ok
                     await_declared_input_hashes!()
                     completed = true
@@ -1234,7 +1244,9 @@ function _go_run!(
                 end
                 await_declared_input_hashes!()
             end
-            rr = _project_work_root(child_hosts, proj; cli_override = remote)
+            rr = _project_work_root(
+                child_hosts, proj; cli_override = remote, snapshot = ship_snap,
+            )
             _go_assert_remotes_ready!(child_hosts, rr)
             rr
         else

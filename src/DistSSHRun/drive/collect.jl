@@ -30,6 +30,7 @@ function collect!(
         merge::Bool = false,
         hosts::Union{Nothing, AbstractVector{<:AbstractString}} = nothing,
         julia::Union{Nothing, AbstractString} = nothing,
+        snapshot::Union{Nothing, AbstractString} = nothing,
     )::CollectResult
     host_list = hosts === nothing ? session.hosts : collect(String, hosts)
     isempty(host_list) && throw(
@@ -37,6 +38,7 @@ function collect!(
             explain_no_hosts(; surface = hint_surface(session), kind = :collect),
         )
     )
+    snap = snapshot === nothing ? nothing : validate_snapshot_id(snapshot)
     return _with_kit_inproc_run!(:collect) do
         apply_session_env!(session)
         return _with_session_remote_env!(session) do
@@ -47,6 +49,7 @@ function collect!(
                 project_root = session.project,
                 path_anchor = canonical_local_path(session.project),
                 julia = julia,
+                snapshot = snap,
             )
             return CollectResult(ok, ok ? 0 : 1)
         end

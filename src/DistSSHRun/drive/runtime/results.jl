@@ -41,8 +41,12 @@ function place_drive_sentinels!(
         _early_local = DistSSHRun.canonical_local_path(local_rd)
         for host in unique(successful_hosts)
             try
+                snap = let sel = DistSSHRun.active_snapshot_selection()
+                    sel === nothing ? nothing : sel.snapshot_id
+                end
                 remote_early = DistSSHRun._remote_work_layout_path(
-                    _early_local, repo_ra, String[String(host)],
+                    _early_local, repo_ra, String[String(host)];
+                    snapshot = snap,
                 )
                 remote_early_abs = ensure_remote_abs_path(host, remote_early)
                 if remote_early_abs === nothing
@@ -305,8 +309,12 @@ function collect_drive_results!(
         try
             for local_rd in collect_roots
                 local_abs = DistSSHRun.canonical_local_path(local_rd)
+                snap = let sel = DistSSHRun.active_snapshot_selection()
+                    sel === nothing ? nothing : sel.snapshot_id
+                end
                 remote_rd_collect = DistSSHRun._remote_work_layout_path(
-                    local_abs, repo_ra, String[String(host)],
+                    local_abs, repo_ra, String[String(host)];
+                    snapshot = snap,
                 )
                 remote_rd_abs = ensure_remote_abs_path(host, remote_rd_collect)
                 if remote_rd_abs === nothing

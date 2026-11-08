@@ -885,8 +885,9 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     source = started ? _PROVENANCE_SOURCE_SNAP[] : _resolve_source(proj)
     source === nothing || (data["source"] = source)
     ship = last_ship_result()
+    sel = active_snapshot_selection()
+    shipped = Dict{String, Any}()
     if ship !== nothing
-        shipped = Dict{String, Any}()
         for key in (
                 "content_tree_hash", "run_id", "algorithm", "bytes", "files", "host",
                 "run_dir_empty_at_start",
@@ -898,8 +899,22 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
         end
         get(ship, "external_symlinks_allowed", false) &&
             (shipped["external_symlinks_allowed"] = true)
-        isempty(shipped) || (data["shipped"] = shipped)
+        rr = get(ship, "remote_root", nothing)
+        rr isa AbstractString && !isempty(rr) && (shipped["deploy_root"] = String(rr))
+        shipped["source_kind"] = "snapshot"
+    elseif sel !== nothing
+        shipped["source_kind"] = String(sel.source_kind)
+        shipped["deploy_root"] = sel.deploy_root
+        if sel.snapshot_id !== nothing
+            shipped["run_id"] = sel.snapshot_id
+        end
+        if sel.content_tree_hash !== nothing
+            shipped["content_tree_hash"] = sel.content_tree_hash
+            shipped["algorithm"] = "git-sha1"
+        end
+        shipped["work_root"] = sel.work_root
     end
+    isempty(shipped) || (data["shipped"] = shipped)
     return data
 end
 

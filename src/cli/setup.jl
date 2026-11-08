@@ -197,7 +197,9 @@ if !isdefined(@__MODULE__, :setup_main)
             if (mode === :instantiate || mode === :runtest || mode === :check) &&
                     !isempty(opts.hosts)
                 op_path = DistSSHRun._project_work_root(
-                    opts.hosts, project; cli_override = opts.remote_path_override,
+                    opts.hosts, project;
+                    cli_override = opts.remote_path_override,
+                    snapshot = opts.snapshot_id,
                 )
             end
             print_header("$(DistSSHRun.cli_heading("setup")) · $mode_name")
@@ -267,9 +269,23 @@ if !isdefined(@__MODULE__, :setup_main)
                 )
                 rec = DistSSHRun.last_ship_result()
                 if ok && rec !== nothing
-                    src = rec["src"]
-                    kit_println("  Next: $(DistSSHRun.cli_m()) setup --instantiate --remote-path $src")
-                    kit_println("        $(DistSSHRun.cli_m()) setup --check --remote-path $src")
+                    rid = get(rec, "run_id", nothing)
+                    src = get(rec, "src", nothing)
+                    if rid isa AbstractString && !isempty(rid)
+                        kit_println(
+                            "  Next: $(DistSSHRun.cli_m()) setup --instantiate --snapshot $rid",
+                        )
+                        kit_println(
+                            "        $(DistSSHRun.cli_m()) setup --check --snapshot $rid",
+                        )
+                    elseif src isa AbstractString
+                        kit_println(
+                            "  Next: $(DistSSHRun.cli_m()) setup --instantiate --remote-path $src",
+                        )
+                        kit_println(
+                            "        $(DistSSHRun.cli_m()) setup --check --remote-path $src",
+                        )
+                    end
                     kit_println()
                 end
                 return Cint(ok ? 0 : 1)

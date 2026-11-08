@@ -36,6 +36,7 @@ function show_go_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  --sync / --ship-tree  optional pre-run; --ship-tree instantiates src/",
+        "  --snapshot ID       use runs/<ID>/src under the deploy root",
         "  --allow-external-symlinks  with --ship-tree: keep escaping symlinks",
         "  --julia PATH        remote Julia (ENV or auto)",
         "  --allow-mismatch F  waive julia, distssh, and/or manifest (comma list)",
@@ -106,6 +107,7 @@ function _go_parsed(;
         repeat,
         allow_mismatch = Symbol[],
         allow_external_symlinks = false,
+        snapshot = nothing,
     )
     return (
         help = help,
@@ -120,6 +122,7 @@ function _go_parsed(;
         repeat = repeat,
         allow_mismatch = allow_mismatch,
         allow_external_symlinks = allow_external_symlinks,
+        snapshot = snapshot,
     )
 end
 
@@ -136,6 +139,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
     # nothing → go! default (false); :sync / :ship_tree / false (= skip)
     sync::Union{Nothing, Symbol, Bool} = nothing
     allow_external_symlinks = false
+    snapshot_id = nothing
     repeat_n::Union{Nothing, Int} = nothing
     c = CliCursor(collect(String, rest))
     while !cli_at_end(c)
@@ -144,6 +148,10 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
             output_dir = cli_take_value!(c, arg)
         elseif arg == "--julia"
             julia_exe = cli_take_value!(c, arg)
+        elseif arg == "--snapshot"
+            raw = String(strip(cli_take_value!(c, arg)))
+            isempty(raw) && throw(ArgumentError("go: --snapshot needs a non-empty id"))
+            snapshot_id = validate_snapshot_id(raw)
         elseif arg == "--allow-mismatch"
             merge_allow_mismatch!(allow_mismatch, cli_take_value!(c, arg))
         elseif arg == "--repeat"
@@ -186,6 +194,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
                 repeat = repeat_n,
                 allow_mismatch = allow_mismatch,
                 allow_external_symlinks = allow_external_symlinks,
+                snapshot = snapshot_id,
             )
         elseif endswith(arg, ".jl")
             script_path = arg
@@ -230,5 +239,6 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
         repeat = repeat_n,
         allow_mismatch = allow_mismatch,
         allow_external_symlinks = allow_external_symlinks,
+        snapshot = snapshot_id,
     )
 end

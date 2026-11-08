@@ -4,8 +4,9 @@ function show_requirements(; io::IO = stdout)
         io,
         "Deploy and check the project on SSH hosts before go / drive.",
         "Recommended: --ship-tree, --instantiate, --check, then optional --runtest.",
-        "  After --ship-tree, instantiate/check/go use latest runs/<run_id>/src",
-        "  when the remote root has no Project.toml. Or pass --remote-path.",
+        "  After --ship-tree, instantiate/check/go use that snapshot id (local",
+        "  last-snapshot record, or pass --snapshot ID). Lexical latest is not used.",
+        "  A git checkout at the deploy root remains usable without --snapshot.",
         "Hosts: child:NAME[:N] (same as go / drive; :N ignored).",
         "       parent is up, not setup.",
         "Remote path: ~/Parent/RepoName, or --remote-path / ENV.",
@@ -74,7 +75,8 @@ function show_requirements(; io::IO = stdout)
     print_help_lines(
         io,
         "  --repo URL           clone URL (default: origin)",
-        "  --remote-path PATH   remote project root",
+        "  --remote-path PATH   remote deployment root (location, not snapshot id)",
+        "  --snapshot ID        runs/<ID>/ under that root (instantiate/check/runtest)",
         "  --allow-external-symlinks  with --ship-tree: keep escaping symlinks",
         "  --julia PATH         remote Julia",
         "  --ignore-julia-version  warn on Julia version skew instead of failing",
@@ -151,7 +153,7 @@ function parse_setup_args(args::Vector{String})
         "setup";
         valued = (
             "--confirm-path", "--older-than", "--id", "--julia", "--repo",
-            "--remote-path",
+            "--remote-path", "--snapshot",
         ),
         known = (
             "--check", "--pull", "--sync", "--instantiate", "--juliaup",
@@ -169,6 +171,7 @@ function parse_setup_args(args::Vector{String})
     julia_path = get(ENV, "JULIA_DISTRIBUTED_EXE", "auto")  # default to env or auto-detect
     repo_url = nothing
     remote_path_override = nothing
+    snapshot_id = nothing
     hosts = String[]
     show_help = false
     ignore_julia_version = false
@@ -227,6 +230,10 @@ function parse_setup_args(args::Vector{String})
                 ArgumentError("--remote-path cannot contain a control character"),
             )
             remote_path_override = strip(raw)
+        elseif arg == "--snapshot"
+            raw = String(strip(cli_take_value!(c, arg)))
+            isempty(raw) && throw(ArgumentError("--snapshot needs a non-empty id"))
+            snapshot_id = validate_snapshot_id(raw)
         elseif arg == "--allow-external-symlinks"
             allow_external_symlinks = true
             cli_consume!(c)
@@ -255,12 +262,21 @@ function parse_setup_args(args::Vector{String})
     if !isempty(confirm_paths) && mode !== :delete && mode !== :prune
         throw(ArgumentError("--confirm-path only applies to setup --delete or setup --prune"))
     end
+    if snapshot_id !== nothing &&
+            mode !== :instantiate && mode !== :check && mode !== :runtest
+        throw(
+            ArgumentError(
+                "--snapshot only applies to setup --instantiate, --check, or --runtest",
+            ),
+        )
+    end
 
     return (
         mode = mode,
         julia_path = julia_path,
         repo_url = repo_url,
         remote_path_override = remote_path_override,
+        snapshot_id = snapshot_id,
         hosts = hosts,
         show_help = show_help,
         ignore_julia_version = ignore_julia_version,
