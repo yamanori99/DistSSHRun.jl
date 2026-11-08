@@ -93,6 +93,17 @@ using Test
         @test occursin("go --ship-tree was removed", err_ship.msg)
         @test occursin("setup ship-tree", err_ship.msg)
         @test occursin("--snapshot", err_ship.msg)
+        DistSSHRun.DistSSHBase.with_cli_entry(:DistSSHQueue) do
+            qerr = try
+                parse_go_args(["--ship-tree", "child:h1:1", "job.jl"])
+                error("expected ArgumentError")
+            catch e
+                e
+            end
+            @test qerr isa ArgumentError
+            @test occursin("julia -m DistSSHKit setup ship-tree", qerr.msg)
+            @test !occursin("DistSSHQueue setup ship-tree", qerr.msg)
+        end
         err_ext = try
             parse_go_args(["--allow-external-symlinks", "child:h1:1", "job.jl"])
             error("expected ArgumentError")

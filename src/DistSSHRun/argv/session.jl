@@ -280,14 +280,20 @@ function _throw_legacy_remote_path(command::AbstractString)
     )
 end
 
+"""User-facing `-m` for setup/go/drive. Queue's entry is not those commands."""
+function _kit_user_cli_m()::String
+    return cli_entry() === :DistSSHQueue ? "julia -m DistSSHKit" : cli_m()
+end
+
 """`go` / `drive` `--ship-tree` and `--allow-external-symlinks` are setup-only."""
 function _throw_go_drive_ship_cli_removed(command::AbstractString, flag::AbstractString)
+    m = _kit_user_cli_m()
     if flag == "--allow-external-symlinks"
         throw(
             ArgumentError(
                 join_explained_message(
-                    "$(command) $(flag) was removed; pass it to `$(cli_m()) setup ship-tree`.",
-                    "Run `$(cli_m()) help setup`.",
+                    "$(command) $(flag) was removed; pass it to `$(m) setup ship-tree`.",
+                    "Run `$(m) help setup`.",
                 ),
             )
         )
@@ -296,11 +302,11 @@ function _throw_go_drive_ship_cli_removed(command::AbstractString, flag::Abstrac
         ArgumentError(
             join_explained_message(
                 string(
-                    "$(command) --ship-tree was removed; use `$(cli_m()) setup ship-tree`, ",
-                    "then `$(cli_m()) setup instantiate`, then `$(cli_m()) $(command) --snapshot ID`.",
+                    "$(command) --ship-tree was removed; use `$(m) setup ship-tree`, ",
+                    "then `$(m) setup instantiate`, then `$(m) $(command) --snapshot ID`.",
                 ),
                 string(
-                    "Run `$(cli_m()) help $(command)` and `$(cli_m()) help setup`. ",
+                    "Run `$(m) help $(command)` and `$(m) help setup`. ",
                     "go! / drive! still accept sync=:ship_tree.",
                 ),
             ),

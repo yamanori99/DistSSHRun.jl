@@ -38,7 +38,7 @@ non-executable file arrives as mode `0644`, and an executable file as
 stdlib Tar over SSH. Git clone, sync, and pull also need **`git`**.
 
 `setup ship-tree` walks the
-ship root and apply each directory's `.gitignore` (case-sensitive).
+ship root and applies each directory's `.gitignore` (case-sensitive).
 `.git/info/exclude`, `core.excludesFile`, and a `.gitignore` above the
 ship root are not used. No git binary is run. The ship root is the
 project directory that was passed, not a workspace Manifest directory above it.

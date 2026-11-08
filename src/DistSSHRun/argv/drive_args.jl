@@ -464,7 +464,7 @@ function show_drive_usage(; io::IO = stdout)
         io,
         "Driver + Distributed workers (pmap), then collect new files.",
         "Remotes: setup ship-tree or setup clone, then setup instantiate.",
-        "Then drive --snapshot ID (execution; not a ship/instantiate entry).",
+        "Then drive --snapshot ID (or last-snapshot.toml / git checkout).",
     )
     print_help_blank(io)
     print_help_section("Usage"; io = io)

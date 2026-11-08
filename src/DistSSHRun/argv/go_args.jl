@@ -7,7 +7,7 @@ function show_go_usage(; io::IO = stdout)
         io,
         "Standalone script. One full run per slot; slots start together.",
         "Remotes: setup ship-tree or setup clone, then setup instantiate.",
-        "Then go --snapshot ID (execution; not a ship/instantiate entry).",
+        "Then go --snapshot ID (or last-snapshot.toml / git checkout).",
     )
     print_help_blank(io)
     print_help_section("Usage"; io = io)

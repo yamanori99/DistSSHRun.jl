@@ -890,6 +890,44 @@ end
         @test occursin(":go, :drive, or :ride", sprint(showerror, errk))
     end
 
+    @testset "Queue submit parse boundary (DistSSHQueue 461e85b9)" begin
+        # Queue `submit_kind` (src/client/submit.jl): kit_parse_args then
+        # execute_kwargs_from_parsed. Queue `_main` print_cli_error(e.msg).
+        function kit_parse_args(kind::Symbol, args::Vector{String})
+            kind === :go && return DistSSHRun.parse_go_args(args)
+            kind === :drive && return DistSSHRun.parse_drive_args(args)
+            throw(ArgumentError("submit: unknown kit command $(repr(kind))"))
+        end
+        err = try
+            kit_parse_args(:go, String["--ship-tree", "parent:1", "job.jl"])
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        shown = sprint(io -> DistSSHRun.print_cli_error(err.msg; io = io))
+        @test occursin("Error:", shown)
+        @test occursin("go --ship-tree was removed", shown)
+        @test occursin("setup ship-tree", shown)
+        @test occursin("--snapshot", shown)
+        errd = try
+            kit_parse_args(:drive, String["--ship-tree", "parent:1", "s.jl"])
+            nothing
+        catch e
+            e
+        end
+        @test errd isa ArgumentError
+        @test occursin("drive --ship-tree was removed", errd.msg)
+        parsed = kit_parse_args(
+            :go, String["--snapshot", "20260101T000000Z-aaaaaa", "parent:1", "job.jl"],
+        )
+        bag = DistSSHRun.execute_kwargs_from_parsed(parsed; kind = :go)
+        @test bag[:snapshot] == "20260101T000000Z-aaaaaa"
+        @test bag[:sync] === nothing
+        parsed_sync = kit_parse_args(:go, String["--sync", "parent:1", "job.jl"])
+        @test DistSSHRun.execute_kwargs_from_parsed(parsed_sync; kind = :go)[:sync] === :sync
+    end
+
     @testset "kind not :go / :drive / :ride" begin
         err = try
             DistSSHRun.execute!(:pipeline, "job.jl", String[])
@@ -955,6 +993,34 @@ end
         end
         @test err6 isa ArgumentError
         @test occursin(":spi_check", sprint(showerror, err6))
+
+        err_ship = try
+            DistSSHRun.execute!(
+                :go, "/no/such/job.jl", ["parent:1"];
+                detached = true, sync = :ship_tree, yes = true,
+            )
+            nothing
+        catch e
+            e
+        end
+        @test err_ship isa ArgumentError
+        @test occursin("sync=:ship_tree", err_ship.msg)
+        @test occursin("setup!", err_ship.msg)
+        @test occursin("snapshot", err_ship.msg)
+        @test occursin("go! / drive! still accept sync=:ship_tree", err_ship.msg)
+        @test !occursin("Project.toml", err_ship.msg)
+        err_ext = try
+            DistSSHRun.execute!(
+                :go, "/no/such/job.jl", ["parent:1"];
+                detached = true, allow_external_symlinks = true, yes = true,
+            )
+            nothing
+        catch e
+            e
+        end
+        @test err_ext isa ArgumentError
+        @test occursin("--allow-external-symlinks was removed", err_ext.msg)
+        @test !occursin("Project.toml", err_ext.msg)
     end
 
     @testset ":go dispatch" begin
