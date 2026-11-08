@@ -181,7 +181,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
             _throw_legacy_remote_path("go")
         elseif arg == DEPLOY_ROOT_FLAG
             deploy_root = _set_deploy_root!(
-                deploy_root, _take_deploy_root!(c, "go"), "go",
+                deploy_root, _take_deploy_root!(c), "go",
             )
         elseif arg == "--"
             options_done = true

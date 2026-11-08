@@ -228,7 +228,6 @@ function _throw_setup_legacy_mode(flag::AbstractString)
 end
 
 function _setup_set_mode!(
-        mode::Union{Nothing, Symbol},
         mode_flag::Union{Nothing, String},
         next::Symbol,
         shown::AbstractString,
@@ -299,7 +298,7 @@ function parse_setup_args(args::Vector{String})
         end
         sub = _setup_subcommand(arg)
         if sub !== nothing
-            mode, mode_flag = _setup_set_mode!(mode, mode_flag, sub, arg)
+            mode, mode_flag = _setup_set_mode!(mode_flag, sub, arg)
             cli_consume!(c)
             continue
         end
@@ -338,7 +337,7 @@ function parse_setup_args(args::Vector{String})
             _throw_legacy_remote_path("setup")
         elseif arg == DEPLOY_ROOT_FLAG
             deploy_root = _set_deploy_root!(
-                deploy_root, _take_deploy_root!(c, "setup"), "setup",
+                deploy_root, _take_deploy_root!(c), "setup",
             )
         elseif arg == "--snapshot"
             raw = String(strip(cli_take_value!(c, arg)))

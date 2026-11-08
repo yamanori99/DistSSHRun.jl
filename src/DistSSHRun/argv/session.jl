@@ -287,7 +287,7 @@ function _parse_deploy_root_value(raw::AbstractString, flag::AbstractString)::St
     return strip(String(raw))
 end
 
-function _take_deploy_root!(c::CliCursor, command::AbstractString)::String
+function _take_deploy_root!(c::CliCursor)::String
     return _parse_deploy_root_value(cli_take_value!(c, DEPLOY_ROOT_FLAG), DEPLOY_ROOT_FLAG)
 end
 
