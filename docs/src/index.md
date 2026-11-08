@@ -37,7 +37,7 @@ non-executable file arrives as mode `0644`, and an executable file as
 (`--julia`, or auto-detect) that can load stdlib `Tar` and `SHA`. Ship uses
 stdlib Tar over SSH. Git clone, sync, and pull also need **`git`**.
 
-`setup ship-tree`, `go --ship-tree`, and `drive --ship-tree` walk the
+`setup ship-tree` walks the
 ship root and apply each directory's `.gitignore` (case-sensitive).
 `.git/info/exclude`, `core.excludesFile`, and a `.gitignore` above the
 ship root are not used. No git binary is run. The ship root is the
@@ -63,15 +63,18 @@ directory under `/` (for example `/scratch`), a path with `.` or `..`, this
 machine's home, and the remote home itself are refused. Existing ancestor
 directory symlinks are followed; components this operation creates must not
 be symlinks. Existing directories are not chmod'd. Transfer failure after
-create leaves the safe directory. `go` / `drive` `--ship-tree` and `sync!(mode=:ship_tree)` use the
-same ensure path; they still instantiate after ship when those entry points
-do today. Later `setup instantiate` / `setup check` / `go` / `drive` / `ride` select a
+create leaves the safe directory. `sync!(mode=:ship_tree)` and
+`go!(…; sync=:ship_tree)` / `drive!(…; sync=:ship_tree)` use the
+same ensure path; those Julia entry points still instantiate after ship.
+The `go` / `drive` CLI does not take `--ship-tree`: run `setup ship-tree`,
+then `setup instantiate`, then `go` / `drive` with `--snapshot ID`.
+Later `setup instantiate` / `setup check` / `go` / `drive` / `ride` select a
 snapshot with `--snapshot ID` (or `snapshot=` on `setup!` / `go!` / `drive!` /
 `ride!`), else the local `.distsshkit/last-snapshot.toml` written after a
 successful ship, else a git checkout that has `Project.toml` at the deploy
 root on every host. A successful delete / clone / sync / pull clears that
 local record for the matching deploy root. `--snapshot` cannot combine with
-`--sync` / `--ship-tree`. Lexical latest `runs/*/src` is not used. An explicit
+`--sync`. Lexical latest `runs/*/src` is not used. An explicit
 ID is validated on every host and never falls back. After extract, the remote
 leaf `run.toml` records `complete = true` and the shipped `content_tree_hash`
 (Git tree hash of the tar contents; transfer finished, not a fresh remote
@@ -134,7 +137,7 @@ opens paths literally, so use `check_input_manifest` for those trees.
 `hash = false` records only stat fields in `run.toml` and does not write
 a manifest. A later ship into the same run directory replaces the row
 for the same input name and host. Standalone `setup ship-tree` waits
-for hashing before it returns. `drive` / `go` with `--ship-tree` start
+for hashing before it returns. `drive!` / `go!` with `sync=:ship_tree` start
 hashing after extract and finish it while instantiate, worker launch,
 and precompile run. `outputs` is reserved and not written. There is no
 `run.private.toml`; public records keep relative paths and aliases only.

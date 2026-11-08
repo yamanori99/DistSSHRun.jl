@@ -55,6 +55,31 @@ using Test
         let (code, _, _) = _cli_capture(() -> DistSSHRun.run_ride(["/no/such/script.jl"]))
             @test code == 1
         end
+        let (code, out, err) = _cli_capture(
+                () -> DistSSHRun.go(["--ship-tree", "child:h1:1", "job.jl"]),
+            )
+            shown = out * err
+            @test code == 1
+            @test occursin("go --ship-tree was removed", shown)
+            @test occursin("setup ship-tree", shown)
+            @test !occursin("SSH preflight", shown)
+        end
+        let (code, out, err) = _cli_capture(
+                () -> DistSSHRun.drive(["--ship-tree", "parent:1", "s.jl"]),
+            )
+            shown = out * err
+            @test code == 1
+            @test occursin("drive --ship-tree was removed", shown)
+            @test !occursin("SSH preflight", shown)
+        end
+        let (code, out, err) = _cli_capture(
+                () -> DistSSHRun.main(["go", "--ship-tree", "child:h1:1", "job.jl"]),
+            )
+            shown = out * err
+            @test code == 1
+            @test occursin("go --ship-tree was removed", shown)
+            @test !occursin("SSH preflight", shown)
+        end
     end
 
     @testset "hostinfo, pool, up, progress entrypoints" begin

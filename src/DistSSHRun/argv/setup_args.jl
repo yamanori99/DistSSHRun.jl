@@ -35,7 +35,7 @@
 #   --remote-path PATH → --deploy-root PATH
 #   --remote-dir → --deploy-root
 #   --juliaup / --juliaup-update / --rsync remain removed
-#   go / drive --ship-tree stay convenience flags (not this namespace)
+#   go / drive --ship-tree error (use this namespace, then go/drive --snapshot)
 #
 # Ambiguous combinations fail before remote side effects.
 
@@ -59,7 +59,7 @@ function show_requirements(; io::IO = stdout)
         "  setup remote-root).",
         "  Absolute roots also refuse /, a single dir under /, . / .., and this home.",
         "setup remote-root still requires an absolute --deploy-root PATH.",
-        "--ship-tree walks the project directory you passed and each .gitignore",
+        "ship-tree walks the project directory you passed and each .gitignore",
         "  there and below (case-sensitive). It does not widen to a workspace Manifest.",
         ".git/info/exclude, core.excludesFile, and a .gitignore above that",
         "  directory are not used. No git binary is run.",

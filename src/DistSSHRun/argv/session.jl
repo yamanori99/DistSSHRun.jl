@@ -79,9 +79,9 @@ function _kit_set_sync_mode!(
     next === :rsync && _throw_rsync_removed()
     if current !== nothing && current !== next
         msg = if source == "go"
-            "$source: use only one of --sync / --ship-tree / --skip-sync / --skip-git-guard"
+            "$source: use only one of --sync / --skip-sync / --skip-git-guard"
         else
-            "$source: use only one of --sync / --ship-tree"
+            "$source: use only one of --sync"
         end
         throw(ArgumentError(msg))
     end
@@ -275,6 +275,48 @@ function _throw_legacy_remote_path(command::AbstractString)
             join_explained_message(
                 "$(command) --remote-path was removed; use $(DEPLOY_ROOT_FLAG) PATH.",
                 "Run `$(cli_m()) help $(command)` for flags.",
+            ),
+        )
+    )
+end
+
+"""`go` / `drive` `--ship-tree` and `--allow-external-symlinks` are setup-only."""
+function _throw_go_drive_ship_cli_removed(command::AbstractString, flag::AbstractString)
+    if flag == "--allow-external-symlinks"
+        throw(
+            ArgumentError(
+                join_explained_message(
+                    "$(command) $(flag) was removed; pass it to `$(cli_m()) setup ship-tree`.",
+                    "Run `$(cli_m()) help setup`.",
+                ),
+            )
+        )
+    end
+    throw(
+        ArgumentError(
+            join_explained_message(
+                string(
+                    "$(command) --ship-tree was removed; use `$(cli_m()) setup ship-tree`, ",
+                    "then `$(cli_m()) setup instantiate`, then `$(cli_m()) $(command) --snapshot ID`.",
+                ),
+                string(
+                    "Run `$(cli_m()) help $(command)` and `$(cli_m()) help setup`. ",
+                    "go! / drive! still accept sync=:ship_tree.",
+                ),
+            ),
+        )
+    )
+end
+
+function _throw_detached_ship_tree_removed()
+    throw(
+        ArgumentError(
+            join_explained_message(
+                "execute!(...; detached=true, sync=:ship_tree) cannot pass --ship-tree to go/drive.",
+                string(
+                    "Call setup!(session, :ship_tree, :instantiate), then execute!(...; snapshot=id). ",
+                    "In-process go! / drive! still accept sync=:ship_tree.",
+                ),
             ),
         )
     )

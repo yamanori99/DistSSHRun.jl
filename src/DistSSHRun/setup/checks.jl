@@ -349,7 +349,7 @@ function check_prerequisites(
         else
             _fail_host(host, "Project not found at $project_path")
             _host_check_detail(
-                "Fix: --clone $(setup_cli_host_token(host))  (or --ship-tree $(setup_cli_host_token(host)))",
+                "Fix: setup clone $(setup_cli_host_token(host))  (or setup ship-tree $(setup_cli_host_token(host)))",
             )
             all_ok = false
             host_ok[] = false

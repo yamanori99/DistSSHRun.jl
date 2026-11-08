@@ -215,8 +215,9 @@ only return numbers. Collect tests use files workers write.
   bar (`log_dir` absent in controller `run.toml`); failure boom is a
   plain line (not drive host-label contract)
 - `go pi_echo`: π on both hosts
-- `go --ship-tree` empty dedicated root: no prior `--instantiate`; π on
-  both; remote `runs/<run_id>/src/Project.toml` appears
+- empty dedicated root: `setup ship-tree` then `setup instantiate --snapshot`
+  then `go --snapshot`; π on both; remote `runs/<run_id>/src/Project.toml`
+  appears (`go --ship-tree` is an error before SSH)
 - `go pi_file`: slot `pi_results.txt` after go collect;
   `DISTSSHKIT_JOB_ID` set so remote `-L` mark is collected
 - `go --output-dir`: `pi_results.txt` under the given batch root

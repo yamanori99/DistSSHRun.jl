@@ -385,7 +385,7 @@ function _go_assert_remote_ready!(host::AbstractString, remote_root::AbstractStr
             "  git:    julia --project=. -m DistSSHKit setup clone $(setup_cli_host_token(host))\n" *
             "          (later updates: setup sync $(setup_cli_host_token(host)))\n" *
             "  then:   julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host))\n" *
-            "Or one-shot: go --ship-tree (extracts to runs/<run_id>/src/ and instantiates).\n" *
+            "  then:   julia --project=. -m DistSSHKit go --snapshot ID …\n" *
             "Or from Julia: setup!(session, :ship_tree, :instantiate)\n" *
             "  (or go!(…; sync=:ship_tree); or :clone; repo=\"…\" then :instantiate; later :sync)\n" *
             "Set DISTRIBUTED_REMOTE_PROJECT_ROOT if the remote path is not the default."
@@ -945,7 +945,10 @@ both `output_dir` and `collect_spec::String` is an error. `collect_spec === fals
 means "skip collect" and is orthogonal to `output_dir`.
 
 Default `sync` is `false` (no pre-run sync; remotes are checked first — setup
-is assumed done). Pass `sync=:sync` or `sync=:ship_tree` to copy, then check. After `:ship_tree`,
+is assumed done). The `go` CLI does not take `--ship-tree`; prepare with
+`setup ship-tree` then `setup instantiate`, then `go --snapshot ID`.
+Pass `sync=:sync` or `sync=:ship_tree` on [`go!`](@ref) to copy, then check.
+After `:ship_tree`,
 hosts that still lack Manifest deps get [`instantiate!`](@ref) before the
 check. `snapshot` (CLI `--snapshot`) selects `runs/<ID>/src` when `sync` is
 omitted or `false`; it cannot combine with `sync=:sync` / `sync=:ship_tree`.

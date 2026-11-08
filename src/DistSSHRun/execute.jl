@@ -1880,7 +1880,7 @@ function _execute_detached_argv(
     if sync === :sync
         push!(argv, "--sync")
     elseif sync === :ship_tree
-        push!(argv, "--ship-tree")
+        _throw_detached_ship_tree_removed()
     elseif sync === :rsync
         _throw_rsync_removed()
     elseif sync === false && kind === :go
@@ -1888,8 +1888,9 @@ function _execute_detached_argv(
     elseif sync !== nothing && sync !== false
         throw(ArgumentError("sync must be nothing, false, :sync, or :ship_tree, got $(repr(sync))"))
     end
-    allow_external_symlinks && sync === :ship_tree &&
-        push!(argv, "--allow-external-symlinks")
+    if allow_external_symlinks
+        _throw_go_drive_ship_cli_removed(String(kind), "--allow-external-symlinks")
+    end
     if snapshot !== nothing
         push!(argv, "--snapshot", validate_snapshot_id(snapshot))
     end

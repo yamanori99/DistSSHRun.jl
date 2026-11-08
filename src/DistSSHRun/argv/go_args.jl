@@ -7,7 +7,7 @@ function show_go_usage(; io::IO = stdout)
         io,
         "Standalone script. One full run per slot; slots start together.",
         "Remotes: setup ship-tree or setup clone, then setup instantiate.",
-        "Or go --ship-tree (extracts to runs/<run_id>/src/ and instantiates).",
+        "Then go --snapshot ID (execution; not a ship/instantiate entry).",
     )
     print_help_blank(io)
     print_help_section("Usage"; io = io)
@@ -35,13 +35,12 @@ function show_go_usage(; io::IO = stdout)
     print_help_section("Options"; io = io)
     print_help_lines(
         io,
-        "  --sync / --ship-tree  optional pre-run; --ship-tree instantiates src/",
+        "  --sync              optional git pre-run copy (not ship-tree)",
         "  --deploy-root PATH  remote deployment root (location, not snapshot id).",
         "                      Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
         "                      ~/Parent/RepoName layout from the local env_dir.",
         "  --snapshot ID       use runs/<ID>/src under the deploy root",
-        "                      (not with --sync / --ship-tree; those pick their own source)",
-        "  --allow-external-symlinks  with --ship-tree: keep escaping symlinks",
+        "                      (not with --sync; that copies a git checkout)",
         "  --julia PATH        remote Julia (ENV or auto)",
         "  --allow-mismatch F  waive julia, distssh, and/or manifest (comma list)",
         "  Remote slots cd to the project root and pin the real julia binary.",
@@ -195,11 +194,9 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
             cli_consume!(c)
             sync = _go_set_sync!(sync, :sync)
         elseif arg == "--ship-tree"
-            cli_consume!(c)
-            sync = _go_set_sync!(sync, :ship_tree)
+            _throw_go_drive_ship_cli_removed("go", arg)
         elseif arg == "--allow-external-symlinks"
-            cli_consume!(c)
-            allow_external_symlinks = true
+            _throw_go_drive_ship_cli_removed("go", arg)
         elseif arg == "--rsync"
             _throw_rsync_removed()
         elseif arg == "--skip-sync" || arg == "--skip-git-guard"
@@ -261,10 +258,10 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
     if script_path !== nothing && repeat_n === nothing
         require_counted_placement_tokens(hosts; surface = :cli)
     end
-    if snapshot_id !== nothing && (sync === :sync || sync === :ship_tree)
+    if snapshot_id !== nothing && sync === :sync
         throw(
             ArgumentError(
-                "go: --snapshot cannot be combined with --sync / --ship-tree",
+                "go: --snapshot cannot be combined with --sync",
             ),
         )
     end

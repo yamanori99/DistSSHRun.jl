@@ -95,8 +95,18 @@ end
         String["--snapshot", _SNAP_ID_NEW, "parent:1", "job.jl"],
     )
     @test d.snapshot == _SNAP_ID_NEW
+    err_combo = try
+        DistSSHRun.parse_go_args(
+            String["--ship-tree", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
+        )
+        nothing
+    catch e
+        e
+    end
+    @test err_combo isa ArgumentError
+    @test occursin("go --ship-tree was removed", err_combo.msg)
     @test_throws ArgumentError DistSSHRun.parse_go_args(
-        String["--ship-tree", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
+        String["--sync", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
     )
     @test_throws ArgumentError DistSSHRun.parse_drive_args(
         String["--sync", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],

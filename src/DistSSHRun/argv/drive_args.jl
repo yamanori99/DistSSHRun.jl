@@ -171,16 +171,9 @@ function parse_drive_args(args::Vector{String})
             sync_script = true
             i += 1
         elseif arg == "--ship-tree"
-            require_git && throw(
-                ArgumentError(
-                    "drive: --require-git cannot be combined with --ship-tree",
-                )
-            )
-            sync_mode = _kit_set_sync_mode!(sync_mode, :ship_tree; source = "drive")
-            i += 1
+            _throw_go_drive_ship_cli_removed("drive", arg)
         elseif arg == "--allow-external-symlinks"
-            allow_external_symlinks = true
-            i += 1
+            _throw_go_drive_ship_cli_removed("drive", arg)
         elseif arg == "--snapshot"
             i >= length(args) && throw(ArgumentError("drive: --snapshot needs a non-empty id"))
             raw = String(strip(args[i + 1]))
@@ -207,11 +200,6 @@ function parse_drive_args(args::Vector{String})
         elseif arg == "--rsync"
             _throw_rsync_removed()
         elseif arg == "--require-git"
-            sync_mode === :ship_tree && throw(
-                ArgumentError(
-                    "drive: --require-git cannot be combined with --ship-tree",
-                )
-            )
             skip_git_guard && throw(
                 ArgumentError(
                     "drive: --require-git cannot be combined with --skip-git-guard",
@@ -222,7 +210,7 @@ function parse_drive_args(args::Vector{String})
             skip_hash_check = false
             i += 1
         elseif arg == "--skip-git-guard"
-            # Compat no-op for parity (already off). Independent of --sync / --ship-tree.
+            # Compat no-op for parity (already off). Independent of --sync.
             require_git && throw(
                 ArgumentError(
                     "drive: --skip-git-guard cannot be combined with --require-git",
@@ -287,7 +275,7 @@ function parse_drive_args(args::Vector{String})
             sync_mode !== nothing &&
                 throw(
                 ArgumentError(
-                    "$(flag) cannot be combined with --sync / --ship-tree",
+                    "$(flag) cannot be combined with --sync",
                 )
             )
             !isempty(hosts) &&
@@ -413,19 +401,10 @@ function parse_drive_args(args::Vector{String})
         julia_exe = nothing
     end
 
-    # --ship-tree deploys without remote .git/; never run git parity.
-    if sync_mode === :ship_tree
-        require_git && throw(
-            ArgumentError(
-                "drive: --require-git cannot be combined with --ship-tree",
-            )
-        )
-        skip_hash_check = true
-    end
-    if snapshot_id !== nothing && (sync_mode === :sync || sync_mode === :ship_tree)
+    if snapshot_id !== nothing && sync_mode === :sync
         throw(
             ArgumentError(
-                "drive: --snapshot cannot be combined with --sync / --ship-tree",
+                "drive: --snapshot cannot be combined with --sync",
             ),
         )
     end
@@ -485,7 +464,7 @@ function show_drive_usage(; io::IO = stdout)
         io,
         "Driver + Distributed workers (pmap), then collect new files.",
         "Remotes: setup ship-tree or setup clone, then setup instantiate.",
-        "Or drive --ship-tree (extracts to runs/<run_id>/src/ and instantiates).",
+        "Then drive --snapshot ID (execution; not a ship/instantiate entry).",
     )
     print_help_blank(io)
     print_help_section("Usage"; io = io)
@@ -509,13 +488,12 @@ function show_drive_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  -w, --workers N     parent:N when no parent token is listed",
-        "  --sync / --ship-tree  optional pre-run; --ship-tree instantiates src/",
+        "  --sync              optional git pre-run copy (not ship-tree)",
         "  --deploy-root PATH  remote deployment root (location, not snapshot id).",
         "                      Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
         "                      ~/Parent/RepoName layout from the local env_dir.",
         "  --snapshot ID       use runs/<ID>/src under the deploy root",
-        "                      (not with --sync / --ship-tree; those pick their own source)",
-        "  --allow-external-symlinks  with --ship-tree: keep escaping symlinks",
+        "                      (not with --sync; that copies a git checkout)",
         "  --sync-script       re-include the full driver on workers (default: defs only)",
         "  --require-git       $(REQUIRE_GIT_MEANING)",
         "  --require-all-hosts listed parent/child tokens must join, stay, and collect (default)",

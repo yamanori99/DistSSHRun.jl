@@ -224,10 +224,24 @@ using Test
             @test r.sync_mode === :sync
             @test r.skip_hash_check == true
         end
-        let r = parse_drive_args(["--ship-tree", "s.jl"])
-            @test r.sync_mode === :ship_tree
-            @test r.skip_hash_check == true
+        err_ship = try
+            parse_drive_args(["--ship-tree", "s.jl"])
+            error("expected ArgumentError")
+        catch e
+            e
         end
+        @test err_ship isa ArgumentError
+        @test occursin("drive --ship-tree was removed", err_ship.msg)
+        @test occursin("setup ship-tree", err_ship.msg)
+        @test occursin("--snapshot", err_ship.msg)
+        err_ext = try
+            parse_drive_args(["--allow-external-symlinks", "s.jl"])
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err_ext isa ArgumentError
+        @test occursin("drive --allow-external-symlinks was removed", err_ext.msg)
         let r = parse_drive_args(["--require-git", "child:host1:1", "s.jl"])
             @test r.sync_mode === nothing
             @test r.skip_hash_check == false
@@ -287,8 +301,10 @@ using Test
         @test occursin("--require-git", txt)
         @test occursin("--sync", txt)
         @test occursin("--sync-script", txt)
-        @test occursin("--ship-tree", txt)
-        @test occursin("runs/<run_id>/src/", txt)
+        @test !occursin("--ship-tree", txt)
+        @test occursin("setup ship-tree", txt)
+        @test occursin("--snapshot", txt)
+        @test occursin("runs/<ID>/src", txt)
         @test occursin("post-run-new", txt)
         @test occursin("Pull-back uses Tar", txt)
         @test occursin("off by default", lowercase(txt))
@@ -321,6 +337,23 @@ using Test
             @test r.deploy_root === nothing
             @test r.script_args == ["--deploy-root", "/tmp/x"]
         end
+        let r = parse_drive_args(["--", "parent:1", "s.jl", "--ship-tree"])
+            @test r.sync_mode === nothing
+            @test r.script_args == ["--ship-tree"]
+        end
+        let r = parse_drive_args(["parent:1", "s.jl", "--ship-tree"])
+            @test r.sync_mode === nothing
+            @test r.script_args == ["--ship-tree"]
+        end
+        err_after = try
+            parse_drive_args(["--", "--ship-tree", "parent:1", "s.jl"])
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err_after isa ArgumentError
+        @test occursin("unknown or incomplete drive option: --ship-tree", err_after.msg)
+        @test !occursin("was removed", err_after.msg)
         @test_throws ArgumentError parse_drive_args(["--remote-path", "/tmp/App", "s.jl"])
         @test_throws ArgumentError parse_drive_args(["--remote-path=/tmp/App", "s.jl"])
         @test_throws ArgumentError parse_drive_args(["--deploy-root"])
