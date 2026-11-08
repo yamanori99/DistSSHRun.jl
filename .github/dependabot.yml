@@ -14,6 +14,33 @@ updates:
         patterns:
           - "*"
 
+  # Actions lint CLIs: actionlint / pinact (gomod) and zizmor (pip).
+  # tools.go keeps the direct requires; Dependabot does not update Go
+  # `tool` directives yet (dependabot-core#12050).
+  - package-ecosystem: gomod
+    directory: "/.github/actions-lint"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    groups:
+      actions-lint-go:
+        patterns:
+          - "*"
+
+  - package-ecosystem: pip
+    directory: "/.github/actions-lint"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    groups:
+      actions-lint-pip:
+        patterns:
+          - "*"
+
   # Ignore stdlibs, not an allow-list of third-party names. A new
   # registry dep is picked up automatically; a new stdlib [deps]
   # entry should be added here. The Julia updater appends `< 0.0.1`
