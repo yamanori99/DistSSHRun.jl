@@ -67,11 +67,12 @@ E2E (`dev@child-1`) matches Compose DNS.
 `source ./scripts/up.sh` starts workers and sources
 `../docker-ssh/.generated/env.sh` into that shell. `./scripts/up.sh` alone
 cannot change the parent (CI still uses `./scripts/up.sh --e2e`).
-`up.sh` also prepares the DistSSHRun default remote root
-(`~/Parent/RepoName`, mode 755) via
+After workers are ready, `up.sh` always runs
 [`../docker-ssh/scripts/prepare-manual-remote-root.sh`](../docker-ssh/scripts/prepare-manual-remote-root.sh)
-so manual `setup --ship-tree` works without `--remote-path`.
-`container exec` has no `--` (that flag is Docker):
+then `write-kit-env.sh` (including before `--e2e`), so the DistSSHRun
+default remote root (`~/Parent/RepoName`, mode 755) exists for manual
+`setup --ship-tree` without `--remote-path`. A prepare failure aborts
+`up` before E2E. `container exec` has no `--` (that flag is Docker):
 
 ```bash
 container exec -it -u dev child-1 bash -l
