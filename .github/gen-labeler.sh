@@ -70,7 +70,13 @@ trap 'rm -f "$tmp"' EXIT
           - "testenv/**"
 EOF
   shopt -s nullglob
-  for entry in "${ROOT}/test/"*; do
+  test_entries=("${ROOT}/test/"*)
+  shopt -u nullglob
+  # LC_ALL=C so CI merge checkouts and local filesystems emit the same order.
+  if ((${#test_entries[@]} > 0)); then
+    mapfile -t test_entries < <(printf '%s\n' "${test_entries[@]}" | LC_ALL=C sort)
+  fi
+  for entry in "${test_entries[@]}"; do
     name="$(basename "$entry")"
     skip=false
     for tree in "${product_test_trees[@]}"; do
@@ -84,7 +90,6 @@ EOF
       printf '          - "test/%s"\n' "$name"
     fi
   done
-  shopt -u nullglob
 
   cat <<'EOF'
 
