@@ -47,8 +47,7 @@ end
             tmp, "~/App/SnapSel", ["h2", "h1", "h1"], _SNAP_ID_OLD;
             content_tree_hash = "abc",
         )
-        rec = DistSSHRun.read_last_snapshot_record(tmp)
-        @test rec !== nothing
+        rec = something(DistSSHRun.read_last_snapshot_record(tmp))
         @test rec["snapshot_id"] == _SNAP_ID_OLD
         @test rec["deploy_root"] == "~/App/SnapSel"
         @test rec["hosts"] == ["h1", "h2"]
@@ -57,7 +56,7 @@ end
         DistSSHRun.write_last_snapshot_record!(
             tmp, "~/App/SnapSel", ["h1"], _SNAP_ID_NEW,
         )
-        rec2 = DistSSHRun.read_last_snapshot_record(tmp)
+        rec2 = something(DistSSHRun.read_last_snapshot_record(tmp))
         @test rec2["snapshot_id"] == _SNAP_ID_NEW
         @test rec2["hosts"] == ["h1"]
     end
