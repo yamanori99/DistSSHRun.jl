@@ -498,6 +498,7 @@ function show_drive_usage(; io::IO = stdout)
         "  After main(): post-run-new (files newer than run start).",
         "  Later: --collect-missing / --collect-overwrite ROOT HOST...",
         "  Pass --snapshot ID so collect maps onto that ship, not a newer one.",
+        "  With DISTSSHKIT_RUN_DIR, omitted recovery uses that run's provenance.shipped.",
         "  Pull-back uses Tar. Remote mtimes and file modes are not kept.",
         "  Modes are 0644, or 0755 if executable. Remote Julia is --julia or auto-detect.",
         "  Escaping symlinks are refused.",

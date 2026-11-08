@@ -11,7 +11,12 @@ category: breaking
   true`, `algorithm = "git-sha1"`, and `content_tree_hash` (the Git tree hash
   of the shipped tar contents, not a byte hash of the tar file). That marks
   transfer+extract finished; it is not a fresh remote tree re-hash.
-  Incomplete or legacy stamps without `complete` are not selectable.
+  Selection fail-closes unless every host stamp has DistSSHRun ownership
+  (`schema` / `writer` / `kind = "ship"`), `complete = true`,
+  `algorithm = "git-sha1"`, and a 40-digit hex `content_tree_hash`, and those
+  hashes match across hosts. A local last-snapshot record whose stored hash
+  disagrees with the remote stamp is refused. Incomplete, legacy, or
+  `complete = true` stamps that omit those fields are not selectable.
 - When `--snapshot` is omitted, a local
   `<env_dir>/.distsshkit/last-snapshot.toml` may supply the ID (keyed by
   deploy root and successful host aliases). A missing or incompatible host
@@ -27,6 +32,14 @@ category: breaking
   `--ship-tree`.
 - Controller `provenance.shipped` may record `source_kind`, `deploy_root`,
   and `work_root` for runs that did not ship in-process. Collect / recovery
-  mapping honors `--snapshot` / `snapshot=` (or the active selection) and
-  does not rediscover today's latest leaf. Standalone `setup --ship-tree`
-  remains transfer-only. Git `--sync` / `--pull` / `--clone` are unchanged.
+  mapping honors `--snapshot` / `snapshot=` when given. When omitted, a
+  present controller `DISTSSHKIT_RUN_DIR/run.toml` with
+  `provenance.shipped` selects that original source (not a later local
+  last-snapshot record or `_LAST_SHIP`). A DistSSHRun stamp without
+  `provenance.shipped` is refused rather than falling back. In-flight runs
+  that have not written `run.toml` still use the active selection. Deploy
+  root and snapshot work root stay distinct: `drive --ship-tree` instantiates
+  against the deploy root, then assigns the work-root ENV. Detached
+  `execute!` forwards `snapshot=` / `--snapshot` to the child argv.
+  Standalone `setup --ship-tree` remains transfer-only. Git `--sync` /
+  `--pull` / `--clone` are unchanged.

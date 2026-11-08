@@ -32,7 +32,9 @@ end
     @test !occursin("complete = true", stamp)
     raw = TOML.parse(stamp)
     @test DistSSHRun._kit_run_toml_owned(raw)
-    complete = DistSSHRun._ship_run_leaf_complete_toml("deadbeef")
+    complete = DistSSHRun._ship_run_leaf_complete_toml(
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    )
     @test occursin("complete = true", complete)
     @test DistSSHRun._kit_run_toml_owned(TOML.parse(complete))
     @test !DistSSHRun._kit_run_toml_owned(
@@ -45,7 +47,8 @@ end
     @test occursin("/work/app/runs/20260101T000000Z-abcd/run.toml", sh)
     @test occursin("kind = \"ship\"", sh)
     csh = DistSSHRun._remote_run_leaf_complete_sh(
-        "/work/app/runs/20260101T000000Z-abcd", "deadbeef",
+        "/work/app/runs/20260101T000000Z-abcd",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     )
     @test occursin("complete = true", csh)
 end

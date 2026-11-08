@@ -566,14 +566,6 @@ function _run_drive_parsed_locked!(
                     DistSSHRun.result_remote_run_id(sync_result),
                     get(parsed, :snapshot, nothing),
                 )
-                wr = DistSSHRun._project_work_root(
-                    host_names,
-                    sync_session.project;
-                    cli_override = sync_session.remote,
-                    snapshot = ship_snap,
-                )
-                ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] =
-                    DistSSHRun.remote_env_project_root(wr)
                 inst_julia = julia_exe === nothing ? "auto" : String(julia_exe)
                 inst = DistSSHRun.instantiate_after_ship!(
                     sync_session;
@@ -590,6 +582,12 @@ function _run_drive_parsed_locked!(
                     DistSSHRun.await_declared_input_hashes!()
                     return 1
                 end
+                DistSSHRun._assign_remote_work_root_env!(
+                    host_names,
+                    sync_session.project;
+                    cli_override = sync_session.remote,
+                    snapshot = ship_snap,
+                )
             end
             writeln_both("")
         elseif !isempty(host_names)

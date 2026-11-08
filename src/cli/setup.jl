@@ -196,11 +196,22 @@ if !isdefined(@__MODULE__, :setup_main)
             end
             if (mode === :instantiate || mode === :runtest || mode === :check) &&
                     !isempty(opts.hosts)
-                op_path = DistSSHRun._project_work_root(
-                    opts.hosts, project;
-                    cli_override = opts.remote_path_override,
-                    snapshot = opts.snapshot_id,
-                )
+                try
+                    op_path = DistSSHRun._project_work_root(
+                        opts.hosts, project;
+                        cli_override = opts.remote_path_override,
+                        snapshot = opts.snapshot_id,
+                    )
+                catch e
+                    e isa ArgumentError || rethrow()
+                    # --check still has to reach SSH preflight diagnostics
+                    # (`ssh not found`) when selection cannot probe yet.
+                    if mode !== :check
+                        print_err("Error: "; bold = true)
+                        println_fatal(e.msg)
+                        return Cint(1)
+                    end
+                end
             end
             print_header("$(DistSSHRun.cli_heading("setup")) · $mode_name")
             kit_println()

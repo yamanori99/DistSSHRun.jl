@@ -75,7 +75,11 @@ local record for the matching deploy root. `--snapshot` cannot combine with
 ID is validated on every host and never falls back. After extract, the remote
 leaf `run.toml` records `complete = true` and the shipped `content_tree_hash`
 (Git tree hash of the tar contents; transfer finished, not a fresh remote
-re-hash). Incomplete or legacy leaves without `complete` are not selectable. `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
+re-hash). Selection requires DistSSHRun ownership, `complete = true`,
+`algorithm = "git-sha1"`, and a 40-digit hex hash on every host. Incomplete
+or legacy leaves are not selectable. Collect recovery with
+`DISTSSHKIT_RUN_DIR` uses that execution's `provenance.shipped` instead of a
+newer last-snapshot record. `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
 `snapshot(local_root)` builds that tar in a temporary directory and records
 `content_tree_hash` (`git-sha1`). The caller deletes `snapshot_directory`.
 The tar is `snapshot_tar` (`ship.tar` in that directory). `snapshot` does not

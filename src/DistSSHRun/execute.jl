@@ -24,6 +24,7 @@ const _EXECUTE_DETACHED_KW = Set{Symbol}(
         :spi_check,
         :allow_mismatch,
         :allow_external_symlinks,
+        :snapshot,
     )
 )
 const _EXECUTE_DETACHED_DRIVE_ONLY = (
@@ -220,6 +221,8 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
     )
     am = get(parsed, :allow_mismatch, Symbol[])
     isempty(am) || (kw[:allow_mismatch] = am)
+    snap0 = get(parsed, :snapshot, nothing)
+    snap0 === nothing || (kw[:snapshot] = snap0)
     if kind === :go
         kw[:sync] = parsed.sync
         get(parsed, :allow_external_symlinks, false) &&
@@ -757,6 +760,10 @@ function _execute_detached!(
     spi_check = get(kwargs, :spi_check, false)
     allow_mismatch = get(kwargs, :allow_mismatch, Symbol[])
     allow_external_symlinks = get(kwargs, :allow_external_symlinks, false)
+    snapshot = get(kwargs, :snapshot, nothing)
+    if snapshot !== nothing
+        snapshot = validate_snapshot_id(snapshot)
+    end
     sync_script isa Bool || throw(
         ArgumentError(
             "sync_script must be a Bool, got $(repr(sync_script))",
@@ -834,6 +841,7 @@ function _execute_detached!(
         spi_check = spi_check,
         allow_mismatch = allow_mismatch,
         allow_external_symlinks = allow_external_symlinks === true,
+        snapshot = snapshot,
     )
     extra = Dict{String, String}(
         "DISTRIBUTED_PROJECT_ROOT" => proj,
@@ -1848,6 +1856,7 @@ function _execute_detached_argv(
         spi_check::Bool = false,
         allow_mismatch = Symbol[],
         allow_external_symlinks::Bool = false,
+        snapshot::Union{Nothing, AbstractString} = nothing,
     )::Vector{String}
     argv = String[String(kind)]
     push!(argv, "-y")
@@ -1877,6 +1886,9 @@ function _execute_detached_argv(
     end
     allow_external_symlinks && sync === :ship_tree &&
         push!(argv, "--allow-external-symlinks")
+    if snapshot !== nothing
+        push!(argv, "--snapshot", validate_snapshot_id(snapshot))
+    end
     if !_julia_spec_is_auto(julia)
         push!(argv, "--julia", String(strip(String(julia))))
     end

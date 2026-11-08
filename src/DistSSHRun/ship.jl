@@ -1374,11 +1374,13 @@ function _work_root_for_hosts(
         remote_root::AbstractString;
         local_project::Union{Nothing, AbstractString} = nothing,
         snapshot::Union{Nothing, AbstractString} = nothing,
+        skip_local_record::Bool = false,
     )::String
     isempty(hosts) && return String(remote_root)
     proj = local_project === nothing ? pwd() : String(local_project)
     sel = resolve_snapshot_selection(
-        hosts, remote_root, proj; snapshot = snapshot,
+        hosts, remote_root, proj;
+        snapshot = snapshot, skip_local_record = skip_local_record,
     )
     _set_active_selection!(sel)
     return sel.work_root
@@ -1389,14 +1391,27 @@ end
 Matches `remote_deploy_root`, not `session_remote_root`. A workspace member is
 then joined onto that work root. Pass `snapshot=` for an explicit ID.
 """
+function _resolved_deploy_root_for_work(
+        local_project::AbstractString;
+        cli_override::Union{Nothing, AbstractString} = nothing,
+    )::String
+    if cli_override !== nothing
+        s = strip(String(cli_override))
+        isempty(s) || return remote_deploy_root(local_project; cli_override = cli_override)
+    end
+    return _layout_intended_deploy_root(local_project, active_snapshot_selection())
+end
+
 function _project_work_root(
         hosts::AbstractVector{<:AbstractString},
         local_project::AbstractString;
         cli_override::Union{Nothing, AbstractString} = nothing,
         snapshot::Union{Nothing, AbstractString} = nothing,
     )::String
-    deploy = remote_deploy_root(local_project; cli_override = cli_override)
-    mapped = resolve_remote_project_root(local_project; cli_override = cli_override)
+    deploy = _resolved_deploy_root_for_work(
+        local_project; cli_override = cli_override,
+    )
+    mapped = resolve_remote_project_root(local_project; cli_override = deploy)
     wr = _work_root_for_hosts(
         hosts, deploy;
         local_project = local_project, snapshot = snapshot,
@@ -1467,23 +1482,36 @@ function _remote_work_layout_path(
         local_repo::AbstractString,
         hosts::AbstractVector{<:AbstractString};
         snapshot::Union{Nothing, AbstractString} = nothing,
+        skip_local_record::Bool = false,
+        deploy_root::Union{Nothing, AbstractString} = nothing,
     )::String
+    plan = _collect_source_plan(snapshot)
+    snap = plan.snapshot
+    skip_rec = skip_local_record || plan.skip_local_record
     sel = active_snapshot_selection()
-    deploy = _layout_intended_deploy_root(local_repo, sel)
+    deploy = if deploy_root !== nothing
+        String(deploy_root)
+    elseif plan.deploy_root !== nothing
+        String(plan.deploy_root)
+    else
+        _layout_intended_deploy_root(local_repo, sel)
+    end
     reuse = sel !== nothing &&
+        !skip_rec &&
         _deploy_roots_equivalent(sel.deploy_root, deploy) &&
         _hosts_covered(sel.hosts, hosts) &&
         (
-        snapshot === nothing ||
+        snap === nothing ||
             (
             sel.snapshot_id !== nothing &&
-                String(sel.snapshot_id) == String(snapshot)
+                String(sel.snapshot_id) == String(snap)
         )
     )
     if !reuse
         _work_root_for_hosts(
             hosts, deploy;
-            local_project = local_repo, snapshot = snapshot,
+            local_project = local_repo, snapshot = snap,
+            skip_local_record = skip_rec,
         )
         sel = active_snapshot_selection()
     end
@@ -1875,11 +1903,17 @@ end
 
 """Ownership stamp plus completion fields written only after extract succeeds."""
 function _ship_run_leaf_complete_toml(content_tree_hash::AbstractString)::String
+    h = String(content_tree_hash)
+    _valid_content_tree_hash(h) || throw(
+        ArgumentError(
+            "content_tree_hash must be a 40-digit git-sha1 hex string, got $(repr(h))",
+        ),
+    )
     return string(
         _ship_run_leaf_stamp_toml(),
         "complete = true\n",
         "algorithm = \"git-sha1\"\n",
-        "content_tree_hash = $(repr(String(content_tree_hash)))\n",
+        "content_tree_hash = $(repr(h))\n",
     )
 end
 

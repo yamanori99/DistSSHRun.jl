@@ -576,7 +576,9 @@ using Test
                 write(joinpath(newer, "Manifest.toml"), "manifest_format = \"2.0\"\n")
                 write(
                     joinpath(remote, "runs", snap_id, "run.toml"),
-                    DistSSHRun._ship_run_leaf_complete_toml("deadbeef"),
+                    DistSSHRun._ship_run_leaf_complete_toml(
+                        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    ),
                 )
                 logp = joinpath(tmp, "ssh.log")
                 bindir = joinpath(tmp, "bin")

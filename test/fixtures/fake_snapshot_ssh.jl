@@ -4,6 +4,12 @@
 
 host = length(ARGS) >= 1 ? ARGS[1] : ""
 script = length(ARGS) >= 2 ? ARGS[2] : ""
+logical = strip(get(ENV, "DISTSSHKIT_TEST_SSH_LOGICAL_ROOT", ""))
+host_roots = strip(get(ENV, "DISTSSHKIT_TEST_SSH_HOST_ROOTS", ""))
+if !isempty(logical) && !isempty(host_roots) && !isempty(host)
+    host_fs = joinpath(host_roots, host)
+    script = replace(script, logical => host_fs)
+end
 logp = get(ENV, "DISTSSHKIT_TEST_SSH_LOG", "")
 if !isempty(logp)
     open(logp, "a") do io

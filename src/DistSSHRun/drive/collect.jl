@@ -23,6 +23,9 @@ Distinct from drive's automatic **post-run-new** (sentinel / newer-than-run) and
 
 A root that is the session project or a parent of it is refused (`ok=false`,
 exit code 1). Point it at a result directory inside the project.
+`snapshot=` selects `runs/<ID>/src`. When omitted, a present controller
+`DISTSSHKIT_RUN_DIR/run.toml` with `provenance.shipped` recovers that
+execution's source instead of a later last-snapshot record.
 """
 function collect!(
         session::KitSession,

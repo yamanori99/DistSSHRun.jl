@@ -538,6 +538,9 @@ end
         @test DistSSHRun.execute_detached_accepts(:allow_mismatch; kind = :go)
         @test DistSSHRun.execute_detached_accepts(:allow_mismatch; kind = :drive)
         @test DistSSHRun.execute_detached_accepts(:allow_mismatch; kind = :ride)
+        @test DistSSHRun.execute_detached_accepts(:snapshot; kind = :go)
+        @test DistSSHRun.execute_detached_accepts(:snapshot; kind = :drive)
+        @test DistSSHRun.execute_detached_accepts(:snapshot; kind = :ride)
         @test DistSSHRun.execute_detached_accepts(:spi_check; kind = :ride)
         @test !DistSSHRun.execute_detached_accepts(:gb_per_worker; kind = :ride)
         @test !DistSSHRun.execute_detached_accepts(:mem_headroom; kind = :ride)
@@ -731,6 +734,23 @@ end
         )
         @test "--spi-check" in argv_ride_spi
         @test !("--no-spi-check" in argv_ride_spi)
+        argv_snap = DistSSHRun._execute_detached_argv(
+            :go, "job.jl", ["parent:1"], String[];
+            output_dir = "/tmp/out",
+            log_dir = nothing,
+            sync = nothing,
+            julia = nothing,
+            quiet = true,
+            verbosity = nothing,
+            hosts_file = nothing,
+            enable_log = false,
+            package = nothing,
+            require_all_hosts = true,
+            skip_hash_check = true,
+            snapshot = "20260101T000000Z-aaaaaa",
+        )
+        @test "--snapshot" in argv_snap
+        @test "20260101T000000Z-aaaaaa" in argv_snap
     end
 
     @testset "execute_kwargs_from_parsed" begin
@@ -741,6 +761,12 @@ end
             ]
         )
         gkw = DistSSHRun.execute_kwargs_from_parsed(go; kind = :go)
+        @test !haskey(gkw, :snapshot)
+        go_snap = DistSSHRun.parse_go_args(
+            ["--snapshot", "20260101T000000Z-aaaaaa", "parent:1", "job.jl"],
+        )
+        gsnap = DistSSHRun.execute_kwargs_from_parsed(go_snap; kind = :go)
+        @test gsnap[:snapshot] == "20260101T000000Z-aaaaaa"
         @test gkw[:verbosity] === :progress
         @test gkw[:julia] == "/opt/julia/bin/julia"
         @test gkw[:output_dir] == "my_runs"
@@ -1831,6 +1857,33 @@ end
             )
             @test occursin("custom=kept", restored)
             @test occursin("secret=false", restored)
+
+            marker_snap = joinpath(proj, "launch_snap.txt")
+            script_snap = joinpath(proj, "job_snap.jl")
+            write(
+                script_snap,
+                """
+                open($(repr(marker_snap)), "w") do io
+                    println(io, "ok")
+                end
+                """,
+            )
+            _, kp_snap = _capture_detached_env_log() do
+                DistSSHRun.execute!(
+                    :go,
+                    script_snap,
+                    ["parent:1"];
+                    detached = true,
+                    project = proj,
+                    quiet = true,
+                    snapshot = "20260101T000000Z-aaaaaa",
+                    stdout = devnull,
+                    stderr = devnull,
+                )
+            end
+            result_snap = wait(kp_snap)
+            @test result_snap.ok
+            @test isfile(marker_snap)
         end
     end
 

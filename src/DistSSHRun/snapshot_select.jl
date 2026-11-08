@@ -40,6 +40,13 @@ function validate_snapshot_id(snapshot_id::AbstractString)::String
 end
 public validate_snapshot_id
 
+const _CONTENT_TREE_HASH_RE = r"^[0-9a-fA-F]{40}$"
+
+"""True when `hash` is a 40-digit hex Git tree hash (`git-sha1`)."""
+function _valid_content_tree_hash(hash::AbstractString)::Bool
+    return occursin(_CONTENT_TREE_HASH_RE, String(hash))
+end
+
 function _snapshot_src_logical(deploy_root::AbstractString, snapshot_id::AbstractString)::String
     return _posix_join(String(deploy_root), "runs", validate_snapshot_id(snapshot_id), "src")
 end
@@ -241,13 +248,48 @@ function _probe_snapshot_complete(
       printf 'no_project\\n'
       exit 0
     fi
-    if ! grep -Eq '^[[:space:]]*complete[[:space:]]*=[[:space:]]*true[[:space:]]*\$' $tq; then
+    n_schema=\$(grep -c '^schema = ' $tq || true)
+    n_writer=\$(grep -c '^writer = ' $tq || true)
+    n_kind=\$(grep -c '^kind = ' $tq || true)
+    n_complete=\$(grep -c '^complete = ' $tq || true)
+    n_algo=\$(grep -c '^algorithm = ' $tq || true)
+    n_hash=\$(grep -c '^content_tree_hash = ' $tq || true)
+    if [ "\$n_schema" != 1 ] || [ "\$n_writer" != 1 ] || [ "\$n_kind" != 1 ] ||
+       [ "\$n_complete" != 1 ] || [ "\$n_algo" != 1 ] || [ "\$n_hash" != 1 ]; then
+      printf 'stamp\\n'
+      exit 0
+    fi
+    if ! grep -Eq '^schema = 1\$' $tq; then
+      printf 'stamp\\n'
+      exit 0
+    fi
+    if ! grep -Eq '^writer = "DistSSHRun [^"]*"\$' $tq; then
+      printf 'stamp\\n'
+      exit 0
+    fi
+    if ! grep -Eq '^kind = "ship"\$' $tq; then
+      printf 'stamp\\n'
+      exit 0
+    fi
+    if ! grep -Eq '^complete = true\$' $tq; then
       printf 'incomplete\\n'
       exit 0
     fi
-    hash=\$(grep -E '^[[:space:]]*content_tree_hash[[:space:]]*=' $tq | head -n 1 | sed -E 's/.*=[[:space:]]*\"?([^\"]*)\"?.*/\\1/')
-    printf 'ok\\n'
-    printf '%s\\n' "\$hash"
+    if ! grep -Eq '^algorithm = "git-sha1"\$' $tq; then
+      printf 'stamp\\n'
+      exit 0
+    fi
+    hash=\$(grep -E '^content_tree_hash = "' $tq | head -n 1 | sed -E 's/^content_tree_hash = "([0-9a-fA-F]+)"\$/\\1/')
+    case "\$hash" in
+      [0-9a-fA-F][0-9a-fA-F]*)
+        if [ \${#hash} -eq 40 ]; then
+          printf 'ok\\n'
+          printf '%s\\n' "\$hash"
+          exit 0
+        fi
+        ;;
+    esac
+    printf 'stamp\\n'
     exit 0
     """
     code, out = _remote_shell_status(String(host), script)
@@ -272,11 +314,17 @@ function _probe_snapshot_complete(
         content_tree_hash = nothing,
     )
     hash = length(lines) >= 2 ? strip(String(lines[2])) : ""
+    _valid_content_tree_hash(hash) || return (
+        ok = false,
+        reason = "stamp",
+        message = "snapshot $(rid) on $(host): missing or invalid content_tree_hash",
+        content_tree_hash = nothing,
+    )
     return (
         ok = true,
         reason = "ok",
         message = "",
-        content_tree_hash = isempty(hash) ? nothing : hash,
+        content_tree_hash = hash,
     )
 end
 
@@ -313,7 +361,7 @@ function _validate_snapshot_on_hosts!(
         hosts::AbstractVector{<:AbstractString},
         deploy_root::AbstractString,
         snapshot_id::AbstractString,
-    )::Union{Nothing, String}
+    )::String
     rid = validate_snapshot_id(snapshot_id)
     isempty(hosts) && throw(_selection_error("snapshot selection needs at least one host"))
     hash = nothing
@@ -324,13 +372,17 @@ function _validate_snapshot_on_hosts!(
             push!(problems, "$(host): $(probe.message)")
             continue
         end
+        got = probe.content_tree_hash
+        if !(got isa AbstractString) || !_valid_content_tree_hash(got)
+            push!(problems, "$(host): missing or invalid content_tree_hash")
+            continue
+        end
         if hash === nothing
-            hash = probe.content_tree_hash
-        elseif probe.content_tree_hash !== nothing && hash !== nothing &&
-                probe.content_tree_hash != hash
+            hash = String(got)
+        elseif String(got) != hash
             push!(
                 problems,
-                "$(host): content_tree_hash $(probe.content_tree_hash) != $(hash)",
+                "$(host): content_tree_hash $(got) != $(hash)",
             )
         end
     end
@@ -340,7 +392,12 @@ function _validate_snapshot_on_hosts!(
                 join(problems, "\n  "),
         ),
     )
-    return hash isa AbstractString ? String(hash) : nothing
+    hash isa AbstractString || throw(
+        _selection_error(
+            "snapshot $(rid) is not selectable: no content_tree_hash on any host",
+        ),
+    )
+    return String(hash)
 end
 
 function _validate_git_on_hosts!(
@@ -375,6 +432,7 @@ function resolve_snapshot_selection(
         deploy_root::AbstractString,
         local_project::AbstractString;
         snapshot::Union{Nothing, AbstractString} = nothing,
+        skip_local_record::Bool = false,
     )::SnapshotSelection
     deploy = String(deploy_root)
     host_list = String[String(h) for h in hosts]
@@ -392,7 +450,7 @@ function resolve_snapshot_selection(
         )
     end
     # Same-process ship: use the recorded run_id, still validate on every host.
-    last = last_ship_result()
+    last = skip_local_record ? nothing : last_ship_result()
     if last !== nothing && _SHIP_LAYOUT_ACTIVE[] &&
             _last_ship_src_for(host_list, deploy) !== nothing
         rid_raw = get(last, "run_id", nothing)
@@ -409,7 +467,7 @@ function resolve_snapshot_selection(
             )
         end
     end
-    rec = read_last_snapshot_record(env.env_dir)
+    rec = skip_local_record ? nothing : read_last_snapshot_record(env.env_dir)
     if rec !== nothing && _record_matches_selection(rec, deploy, host_list)
         rid_raw = get(rec, "snapshot_id", nothing)
         rid_raw isa AbstractString || throw(
@@ -420,8 +478,18 @@ function resolve_snapshot_selection(
         rid = validate_snapshot_id(rid_raw)
         hash = _validate_snapshot_on_hosts!(host_list, deploy, rid)
         stored_hash = get(rec, "content_tree_hash", nothing)
-        if hash === nothing && stored_hash isa AbstractString && !isempty(stored_hash)
-            hash = String(stored_hash)
+        if stored_hash isa AbstractString && !isempty(strip(String(stored_hash)))
+            stored = String(stored_hash)
+            _valid_content_tree_hash(stored) || throw(
+                _selection_error(
+                    "local last-snapshot record content_tree_hash is not a 40-digit git-sha1 value; pass --snapshot ID",
+                ),
+            )
+            stored == hash || throw(
+                _selection_error(
+                    "local last-snapshot record content_tree_hash $(stored) does not match remote $(hash); pass --snapshot ID",
+                ),
+            )
         end
         return SnapshotSelection(
             :snapshot,
@@ -461,6 +529,117 @@ function resolve_snapshot_selection(
     )
 end
 public resolve_snapshot_selection
+
+"""Controller `DISTSSHKIT_RUN_DIR/run.toml` shipped source for collect recovery.
+
+`nothing` when no run dir is set, or when the stamp is not written yet
+(in-flight execute). A present DistSSHRun stamp without `provenance.shipped`
+is legacy and cannot recover the original source.
+"""
+function _controller_collect_source()
+    rd = kit_run_dir()
+    rd === nothing && return nothing
+    path = kit_run_toml_path(rd)
+    isfile(path) || return nothing
+    raw = read_kit_run_toml(rd)
+    raw === nothing && throw(
+        _selection_error(
+            "controller run.toml at $(path) is unreadable; pass --snapshot ID (legacy metadata cannot recover the original source)",
+        ),
+    )
+    _kit_run_toml_owned(raw) || throw(
+        _selection_error(
+            "controller run.toml is not a DistSSHRun schema 1 stamp; refusing collect recovery",
+        ),
+    )
+    prov = get(raw, "provenance", nothing)
+    if !(prov isa AbstractDict)
+        throw(
+            _selection_error(
+                "controller run.toml has no provenance.shipped; pass --snapshot ID (legacy metadata cannot recover the original source)",
+            ),
+        )
+    end
+    shipped = get(prov, "shipped", nothing)
+    if !(shipped isa AbstractDict)
+        throw(
+            _selection_error(
+                "controller run.toml has no provenance.shipped; pass --snapshot ID (legacy metadata cannot recover the original source)",
+            ),
+        )
+    end
+    kind_s = get(shipped, "source_kind", nothing)
+    deploy = get(shipped, "deploy_root", nothing)
+    work = get(shipped, "work_root", nothing)
+    rid_raw = get(shipped, "run_id", nothing)
+    source_kind = if kind_s isa AbstractString && String(kind_s) == "git"
+        :git
+    else
+        :snapshot
+    end
+    rid = if rid_raw isa AbstractString && !isempty(strip(String(rid_raw)))
+        validate_snapshot_id(rid_raw)
+    else
+        nothing
+    end
+    source_kind === :snapshot && rid === nothing && throw(
+        _selection_error(
+            "controller provenance.shipped has no run_id; pass --snapshot ID (legacy metadata cannot recover the original source)",
+        ),
+    )
+    deploy_s = deploy isa AbstractString && !isempty(strip(String(deploy))) ?
+        String(deploy) : nothing
+    work_s = work isa AbstractString && !isempty(strip(String(work))) ?
+        String(work) : nothing
+    return (
+        source_kind = source_kind,
+        snapshot_id = rid,
+        deploy_root = deploy_s,
+        work_root = work_s,
+    )
+end
+
+"""Snapshot / record policy for collect mapping, honoring controller provenance."""
+function _collect_source_plan(
+        explicit::Union{Nothing, AbstractString},
+    )::NamedTuple{
+        (:snapshot, :skip_local_record, :deploy_root),
+        Tuple{Union{Nothing, String}, Bool, Union{Nothing, String}},
+    }
+    snap = explicit === nothing ? nothing : validate_snapshot_id(explicit)
+    src = _controller_collect_source()
+    src === nothing && return (
+        snapshot = snap,
+        skip_local_record = false,
+        deploy_root = nothing,
+    )
+    if snap !== nothing
+        if src.snapshot_id !== nothing && String(src.snapshot_id) != snap
+            throw(
+                _selection_error(
+                    "controller provenance snapshot $(src.snapshot_id) does not match --snapshot $(snap)",
+                ),
+            )
+        end
+        return (
+            snapshot = snap,
+            skip_local_record = true,
+            deploy_root = src.deploy_root,
+        )
+    end
+    if src.source_kind === :git
+        return (
+            snapshot = nothing,
+            skip_local_record = true,
+            deploy_root = src.deploy_root,
+        )
+    end
+    return (
+        snapshot = src.snapshot_id,
+        skip_local_record = true,
+        deploy_root = src.deploy_root,
+    )
+end
 
 """Process-wide selection used for provenance when an execution did not ship."""
 const _ACTIVE_SELECTION = Ref{Union{Nothing, SnapshotSelection}}(nothing)
