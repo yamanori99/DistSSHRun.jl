@@ -45,7 +45,7 @@ const _HOSTINFO_PROBE_SCRIPT = string(
     "echo arch=\$(uname -m 2>/dev/null); ",
     "echo os_version=\$(sw_vers -productVersion 2>/dev/null || awk -F= '/^VERSION_ID=/{gsub(/\"/,\"\",\$2); print \$2; exit}' /etc/os-release 2>/dev/null); ",
     "echo os_pretty=\$(sw_vers -productName 2>/dev/null || awk -F= '/^PRETTY_NAME=/{gsub(/\"/,\"\",\$2); print \$2; exit}' /etc/os-release 2>/dev/null); ",
-    "echo cpu_model=\$(sysctl -n machdep.cpu.brand_string 2>/dev/null || awk -F': ' '/^[Mm]odel name/{print \$2; exit}' /proc/cpuinfo 2>/dev/null || awk -F': ' '/^Hardware/{print \$2; exit}' /proc/cpuinfo 2>/dev/null)",
+    "echo cpu_model=\$(sysctl -n machdep.cpu.brand_string 2>/dev/null || awk -F': ' '/^[Mm]odel name/{print \$2; exit} /^Hardware/{print \$2; exit}' /proc/cpuinfo 2>/dev/null)",
 )
 
 const _HOSTINFO_PROBE_KEYS = (
