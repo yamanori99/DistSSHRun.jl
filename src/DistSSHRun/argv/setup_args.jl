@@ -11,6 +11,7 @@ function show_requirements(; io::IO = stdout)
         "Remote path: ~/Parent/RepoName, or --remote-path / ENV.",
         "Ship creates a missing remote_root when safe: ~/… under home (mode 700),",
         "  or an absolute path when its parent already exists (same as --remote-root).",
+        "  Absolute roots also refuse /, a single dir under /, . / .., and this home.",
         "setup --remote-root still requires an absolute --remote-path.",
         "--ship-tree walks the project directory you passed and each .gitignore",
         "  there and below (case-sensitive). It does not widen to a workspace Manifest.",

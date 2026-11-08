@@ -58,11 +58,12 @@ list for clone, sync, and pull. Extract is into
 `remote_root` is created when safe: a `~/…` layout may create components
 under the remote home with mode `700`; an absolute path requires its parent
 and creates only the final component (same rule as `setup --remote-root`).
-A symlink at the target, unsafe ownership or permissions, `/`, and the
-remote home itself are refused. Existing ancestor directory symlinks are
-followed; components this operation creates must not be symlinks. Existing
-directories are not chmod'd. Transfer failure after create leaves the safe
-directory. `go` / `drive` `--ship-tree` and `sync!(mode=:ship_tree)` use the
+A symlink at the target, unsafe ownership or permissions, `/`, a single
+directory under `/` (for example `/scratch`), a path with `.` or `..`, this
+machine's home, and the remote home itself are refused. Existing ancestor
+directory symlinks are followed; components this operation creates must not
+be symlinks. Existing directories are not chmod'd. Transfer failure after
+create leaves the safe directory. `go` / `drive` `--ship-tree` and `sync!(mode=:ship_tree)` use the
 same ensure path; they still instantiate after ship when those entry points
 do today. Later `--instantiate` / `--check` / `go` use the latest `src/` when
 the remote root has no `Project.toml` (or pass `--remote-path` to that tree).

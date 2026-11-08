@@ -114,6 +114,28 @@ function apply_session_env!(session::KitSession)
     return session
 end
 
+"""Run `f` with `session.remote` in `DISTRIBUTED_REMOTE_PROJECT_ROOT`, then restore.
+
+Needed for `remote_layout_path` / collect mapping when `apply_session_env!`
+does not persist the remote. `session.remote === nothing` leaves the ENV alone.
+"""
+function _with_session_remote_env!(f, session::KitSession)
+    prev = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
+    try
+        rr = session.remote
+        if rr isa AbstractString
+            ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = remote_env_project_root(rr)
+        end
+        return f()
+    finally
+        if prev === nothing
+            delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+        else
+            ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = prev
+        end
+    end
+end
+
 """Resolved remote repository root for this session."""
 function session_remote_root(session::KitSession)::String
     return resolve_remote_project_root(session.project; cli_override = session.remote)

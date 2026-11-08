@@ -64,8 +64,9 @@ Julia **1.13+**.
 - Extract is into `<remote_root>/runs/<run_id>/src/`, with empty
   `out/` beside it and a minimal DistSSHRun `run.toml` stamp. The
   missing remote root is created when safe (`~/…` under home, or absolute
-  with an existing parent; see `help setup`). `setup --remote-root` still
-  creates one absolute path only.
+  with an existing parent; see `help setup`). Absolute roots also refuse
+  `/`, a single directory under `/`, `.`/`..`, and this machine's home.
+  `setup --remote-root` still creates one absolute path only.
 - `--rsync` was removed in 0.2.0. `setup --delete` and `--prune` need
   `--confirm-path`; `-y` does not authorize them. A present unowned
   stamp is refused.

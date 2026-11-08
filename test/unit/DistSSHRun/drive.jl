@@ -446,6 +446,41 @@ end
         end
     end
 
+    @testset "collect! scopes session.remote into ENV" begin
+        _with_tempdir() do tmp
+            ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = "/caller/Keep"
+            session = DistSSHRun.KitSession(
+                project = tmp,
+                workers = ["child:host1"],
+                remote = "/session/Custom",
+                quiet = true,
+                yes = true,
+            )
+            seen = Ref{Union{Nothing, String}}(nothing)
+            DistSSHRun._with_session_remote_env!(session) do
+                seen[] = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
+                @test DistSSHRun.remote_deploy_root(tmp) == "/session/Custom"
+                @test DistSSHRun._remote_work_layout_path(
+                    tmp, tmp, ["host1"],
+                ) == "/session/Custom"
+            end
+            @test seen[] == DistSSHRun.remote_env_project_root("/session/Custom")
+            @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] == "/caller/Keep"
+            delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+            err = try
+                DistSSHRun._with_session_remote_env!(session) do
+                    @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] ==
+                        DistSSHRun.remote_env_project_root("/session/Custom")
+                    error("force-fail")
+                end
+            catch e
+                e
+            end
+            @test err isa ErrorException
+            @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+        end
+    end
+
     @testset "report_pipeline_errors" begin
         ok = DistSSHRun.PipelineResult(
             true, nothing, nothing, nothing, nothing, "job.jl",

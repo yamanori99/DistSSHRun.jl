@@ -70,60 +70,57 @@ function drive!(
             return _with_drive_process!(session.project) do
                 apply_session_env!(session)
                 # Scoped for `remote_layout_path` / worker path mapping only.
-                # Not a persistent default; restored by `_with_drive_process!`.
-                rr = session.remote
-                if rr isa AbstractString
-                    ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] =
-                        remote_env_project_root(rr)
-                end
-                resolved = plan
-                if resolved === nothing && !isempty(session.tokens)
-                    resolved = worker_plan_from_tokens(session.tokens)
-                end
-                parsed = drive_parsed_from_session(
-                    session,
-                    script;
-                    workers = resolved,
-                    script_args = args,
-                    skip_hash_check = skip_hash_check,
-                    output_dir = output_dir,
-                    enable_log = enable_log,
-                    log_dir = log_dir,
-                    package = package,
-                    sync = sync,
-                    julia = julia,
-                    require_all_hosts = require_all_hosts,
-                    sync_script = sync_script,
-                    allow_mismatch = allow_mismatch,
-                    allow_external_symlinks = allow_external_symlinks,
-                )
-                apply_kit_cli_session!(parsed.cli_session)
-                original_args = copy(ARGS)
-                resolved_output_dir = Ref{Union{Nothing, String}}(nothing)
-                resolved_log_dir = Ref{Union{Nothing, String}}(nothing)
-                resolved_hosts = Ref{Vector{HostRunResult}}(HostRunResult[])
-                resolved_run_dir = Ref{Union{Nothing, String}}(nothing)
-                try
-                    code = run_drive_parsed!(
-                        parsed;
-                        original_args = original_args,
-                        resolved_output_dir = resolved_output_dir,
-                        resolved_log_dir = resolved_log_dir,
-                        resolved_hosts = resolved_hosts,
-                        resolved_run_dir = resolved_run_dir,
-                        project_root = session.project,
+                # Restored here and again by `_with_drive_process!`.
+                return _with_session_remote_env!(session) do
+                    resolved = plan
+                    if resolved === nothing && !isempty(session.tokens)
+                        resolved = worker_plan_from_tokens(session.tokens)
+                    end
+                    parsed = drive_parsed_from_session(
+                        session,
+                        script;
+                        workers = resolved,
+                        script_args = args,
+                        skip_hash_check = skip_hash_check,
+                        output_dir = output_dir,
+                        enable_log = enable_log,
+                        log_dir = log_dir,
+                        package = package,
+                        sync = sync,
+                        julia = julia,
+                        require_all_hosts = require_all_hosts,
+                        sync_script = sync_script,
+                        allow_mismatch = allow_mismatch,
+                        allow_external_symlinks = allow_external_symlinks,
                     )
-                    return DriveResult(
-                        code == 0, Int(code);
-                        output_dir = resolved_output_dir[],
-                        log_dir = resolved_log_dir[],
-                        failed_step = code == 0 ? nothing : "drive",
-                        hosts = resolved_hosts[],
-                        run_dir = resolved_run_dir[],
-                    )
-                finally
-                    empty!(ARGS)
-                    append!(ARGS, original_args)
+                    apply_kit_cli_session!(parsed.cli_session)
+                    original_args = copy(ARGS)
+                    resolved_output_dir = Ref{Union{Nothing, String}}(nothing)
+                    resolved_log_dir = Ref{Union{Nothing, String}}(nothing)
+                    resolved_hosts = Ref{Vector{HostRunResult}}(HostRunResult[])
+                    resolved_run_dir = Ref{Union{Nothing, String}}(nothing)
+                    try
+                        code = run_drive_parsed!(
+                            parsed;
+                            original_args = original_args,
+                            resolved_output_dir = resolved_output_dir,
+                            resolved_log_dir = resolved_log_dir,
+                            resolved_hosts = resolved_hosts,
+                            resolved_run_dir = resolved_run_dir,
+                            project_root = session.project,
+                        )
+                        return DriveResult(
+                            code == 0, Int(code);
+                            output_dir = resolved_output_dir[],
+                            log_dir = resolved_log_dir[],
+                            failed_step = code == 0 ? nothing : "drive",
+                            hosts = resolved_hosts[],
+                            run_dir = resolved_run_dir[],
+                        )
+                    finally
+                        empty!(ARGS)
+                        append!(ARGS, original_args)
+                    end
                 end
             end
         end
