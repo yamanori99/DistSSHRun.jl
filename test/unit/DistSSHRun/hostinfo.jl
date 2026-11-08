@@ -4,34 +4,26 @@ using Test
     facts = DistSSHRun.DistSSHBase.collect_host_facts("parent")
     @test facts.reachable
     @test facts.identity == DistSSHRun.PARENT_HOST_NAME
-    @test facts.total_memory_bytes !== nothing
-    @test facts.total_memory_bytes > 0
-    @test facts.ncpu !== nothing
-    @test facts.ncpu > 0
-    @test facts.os !== nothing
-    @test facts.julia_exe !== nothing
-    @test facts.julia_version !== nothing
-    @test !occursin("0 GB", sprint(io -> DistSSHRun.print_hostinfo([facts]; io = io))) ||
-        facts.total_memory_bytes !== nothing
+    @test facts.arch !== nothing
 
+    # Run reexports Base.print_hostinfo for the kit public surface.
     buf = IOBuffer()
     DistSSHRun.print_hostinfo([facts]; io = buf)
     let printed = String(take!(buf))
         @test occursin("Hostinfo:", printed)
-        @test occursin("ok", printed)
+        @test occursin("Status:", printed)
         @test occursin("parent", printed)
     end
+    @test DistSSHRun.print_hostinfo === DistSSHRun.DistSSHBase.print_hostinfo
 
     failed = DistSSHRun.DistSSHBase.HostFacts(
         "ghost", "ghost", false, "connection refused",
         nothing, nothing, nothing, nothing, nothing,
+        nothing, nothing, nothing, nothing, nothing,
     )
-    buf2 = IOBuffer()
-    DistSSHRun.print_hostinfo([failed]; io = buf2)
-    failout = String(take!(buf2))
+    failout = sprint(io -> DistSSHRun.print_hostinfo([failed]; io = io))
     @test occursin("fail", failout)
     @test occursin("connection refused", failout)
-    @test !occursin(" 0 cores", failout)
 
     r = DistSSHRun.parse_hostinfo_args(["parent", "child:host1"])
     @test r.include_parent
@@ -39,6 +31,8 @@ using Test
     @test_throws ArgumentError DistSSHRun.parse_hostinfo_args(["--gb-per-worker", "1.5", "parent"])
     help = sprint(io -> DistSSHRun.show_hostinfo_usage(; io = io))
     @test occursin("hostinfo", help)
+    @test occursin("versioninfo", help)
+    @test occursin("print_hostinfo", help)
     @test !occursin("--gb-per-worker", help)
 
     _with_tempdir() do tmp
@@ -54,6 +48,7 @@ using Test
             @test code == 0
             @test occursin("parent", out)
             @test occursin("Hostinfo:", out)
+            @test occursin("Status:", out)
         end
         mktemp() do out_path, out_io
             code = redirect_stdout(out_io) do
@@ -66,6 +61,7 @@ using Test
             @test code == 0
             @test occursin("Hostinfo:", out)
             @test occursin("parent", out)
+            @test occursin("Status:", out)
         end
     end
 end

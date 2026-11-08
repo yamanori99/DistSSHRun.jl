@@ -135,6 +135,7 @@ using .DistSSHBase: CliCursor, HostFacts, OUTPUT_WIDTH, PARENT_HOST_NAME, _HOST_
     _truncate_ssh_message,
     cli_at_end, cli_consume!, cli_current, cli_entry, cli_heading, cli_m, cli_m_project,
     cli_match, cli_take_value!, clone_url_from_local_origin, collect_host_facts, detect_julia_path,
+    print_hostinfo,
     display_path, ensure_remote_abs_path, explain_bare_placement_tokens,
     explain_clone_origin_missing, explain_clone_repo_required, explain_host_tool_hint,
     explain_host_tool_missing, explain_no_hosts, explain_pipeline_driver_missing,

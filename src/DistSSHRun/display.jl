@@ -2500,7 +2500,7 @@ function print_kit_root_usage(io::IO = stderr)
         "  go                 Run an as-is complete job",
         "  ride               Experimental auto-split of map / filter",
         "  drive              Distributed workers + collect",
-        "  hostinfo           Host RAM, CPU, OS, Julia --version",
+        "  hostinfo           Host identity, Julia, OS, CPU, RAM",
         "  pool               Cluster cores / health (no job)",
         "  demo               Install or list example scripts",
         "  progress           Phase seconds from kit.progress",

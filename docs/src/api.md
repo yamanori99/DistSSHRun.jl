@@ -44,7 +44,9 @@ detached_launch
 ## Placement and host facts
 
 `WorkerPlan` is explicit `parent:N` / `child:NAME:N`. `pool!` inventories cores
-and RAM. `hostinfo` prints structured `DistSSHBase.HostFacts`.
+and RAM. `hostinfo` uses `DistSSHBase.collect_host_facts` /
+`DistSSHBase.print_hostinfo` (per-host labeled layout; OS product vs kernel
+kept separate; missing fields are `-`).
 
 ```@autodocs
 Modules = [DistSSHRun]

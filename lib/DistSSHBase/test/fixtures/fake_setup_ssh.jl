@@ -63,9 +63,25 @@ function main()
         omit_mem = get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OMIT_MEM", "") == "1"
         omit_ncpu = get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OMIT_NCPU", "") == "1"
         omit_os = get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OMIT_OS", "") == "1"
+        omit_kernel = get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OMIT_KERNEL", "") == "1"
+        omit_arch = get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OMIT_ARCH", "") == "1"
+        omit_os_version = get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OMIT_OS_VERSION", "") == "1"
+        omit_os_pretty = get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OMIT_OS_PRETTY", "") == "1"
+        omit_cpu_model = get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OMIT_CPU_MODEL", "") == "1"
         omit_mem || println("mem=", get(ENV, "DISTSSHKIT_TEST_POOL_MEM", "17179869184"))
         omit_ncpu || println("ncpu=", get(ENV, "DISTSSHKIT_TEST_POOL_NCPU", "4"))
         omit_os || println("os=", get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OS", "Linux"))
+        omit_kernel || println("kernel=", get(ENV, "DISTSSHKIT_TEST_HOSTINFO_KERNEL", "6.8.0-test"))
+        omit_arch || println("arch=", get(ENV, "DISTSSHKIT_TEST_HOSTINFO_ARCH", "x86_64"))
+        omit_os_version || println(
+            "os_version=", get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OS_VERSION", "24.04"),
+        )
+        omit_os_pretty || println(
+            "os_pretty=", get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OS_PRETTY", "Ubuntu 24.04.1 LTS"),
+        )
+        omit_cpu_model || println(
+            "cpu_model=", get(ENV, "DISTSSHKIT_TEST_HOSTINFO_CPU_MODEL", "Test CPU"),
+        )
         exit(0)
     end
 

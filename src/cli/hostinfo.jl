@@ -1,6 +1,6 @@
 #!/usr/bin/env julia
 """
-`julia -m DistSSHKit hostinfo` — host identity, RAM, CPU, OS, Julia.
+`julia -m DistSSHKit hostinfo` — per-host identity, Julia, OS, CPU, RAM.
 
   julia --project=. -m DistSSHKit hostinfo parent child:host1 child:host2
 
