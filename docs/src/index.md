@@ -57,7 +57,7 @@ list for clone, sync, and pull. Extract is into
 `<remote_root>/runs/<run_id>/out/`. A repeated host is refused. A missing
 `remote_root` is created when safe: a `~/…` layout may create components
 under the remote home with mode `700`; an absolute path requires its parent
-and creates only the final component (same rule as `setup --remote-root`).
+and creates only the final component (same rule as `setup remote-root`).
 A symlink at the target, unsafe ownership or permissions, `/`, a single
 directory under `/` (for example `/scratch`), a path with `.` or `..`, this
 machine's home, and the remote home itself are refused. Existing ancestor
@@ -65,7 +65,7 @@ directory symlinks are followed; components this operation creates must not
 be symlinks. Existing directories are not chmod'd. Transfer failure after
 create leaves the safe directory. `go` / `drive` `--ship-tree` and `sync!(mode=:ship_tree)` use the
 same ensure path; they still instantiate after ship when those entry points
-do today. Later `--instantiate` / `--check` / `go` / `drive` / `ride` select a
+do today. Later `setup instantiate` / `setup check` / `go` / `drive` / `ride` select a
 snapshot with `--snapshot ID` (or `snapshot=` on `setup!` / `go!` / `drive!` /
 `ride!`), else the local `.distsshkit/last-snapshot.toml` written after a
 successful ship, else a git checkout that has `Project.toml` at the deploy
@@ -79,7 +79,10 @@ re-hash). Selection requires DistSSHRun ownership, `complete = true`,
 `algorithm = "git-sha1"`, and a 40-digit hex hash on every host. Incomplete
 or legacy leaves are not selectable. Collect recovery with
 `DISTSSHKIT_RUN_DIR` uses that execution's `provenance.shipped` instead of a
-newer last-snapshot record. `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
+newer last-snapshot record. A recorded `content_tree_hash` there must match
+the selected remote stamp. A local last-snapshot record without a matching
+40-digit hash is not used. `setup check` still prints SSH diagnostics
+when selection cannot probe, then fails closed if the snapshot is invalid. `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
 `snapshot(local_root)` builds that tar in a temporary directory and records
 `content_tree_hash` (`git-sha1`). The caller deletes `snapshot_directory`.
 The tar is `snapshot_tar` (`ship.tar` in that directory). `snapshot` does not

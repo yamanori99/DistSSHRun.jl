@@ -1521,6 +1521,17 @@ function _remote_work_layout_path(
         ),
     )
     chosen = sel::SnapshotSelection
+    expect_hash = plan.content_tree_hash
+    if expect_hash isa AbstractString
+        got_hash = chosen.content_tree_hash
+        (
+            got_hash isa AbstractString && String(got_hash) == String(expect_hash)
+        ) || throw(
+            ArgumentError(
+                "controller provenance content_tree_hash $(expect_hash) does not match selected $(got_hash)",
+            ),
+        )
+    end
     mapped = withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => chosen.deploy_root) do
         remote_layout_path(local_abs, local_repo)
     end
