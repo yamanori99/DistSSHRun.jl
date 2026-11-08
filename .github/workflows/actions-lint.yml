@@ -67,8 +67,8 @@ jobs:
           actionlint -ignore 'unexpected key "queue" for "concurrency"'
           zizmor --offline --no-progress .github
           # v5 rejects `pinact run --check --no-api`. --check is the alias, but
-          # --no-api still requires --check=false.
-          pinact run --check=false --no-api
+          # --no-api still requires --fix=false.
+          pinact run --fix=false --no-api
 
   generated:
     name: shellcheck generated
