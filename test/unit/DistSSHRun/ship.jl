@@ -1177,6 +1177,41 @@ end
     end
 end
 
+@testset "work layout does not reuse selection for another deploy root" begin
+    _with_tempdir() do proj
+        write(joinpath(proj, "Project.toml"), "name = \"LayoutOther\"\n")
+        write(
+            joinpath(proj, "Manifest.toml"),
+            "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
+        )
+        mkpath(joinpath(proj, "output"))
+        other = "/home/dev/other"
+        other_work = "/home/dev/other/runs/20260101T000000Z-abcdef/src"
+        DistSSHRun._set_active_selection!(
+            DistSSHRun.SnapshotSelection(
+                :snapshot,
+                "20260101T000000Z-abcdef",
+                other,
+                other_work,
+                "deadbeef",
+                ["child-1"],
+            ),
+        )
+        try
+            # Session/ENV points at a different deploy root than the stale selection.
+            withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/home/dev/app") do
+                deploy = DistSSHRun._layout_intended_deploy_root(
+                    proj, DistSSHRun.active_snapshot_selection(),
+                )
+                @test deploy == "/home/dev/app"
+                @test !DistSSHRun._deploy_roots_equivalent(deploy, other)
+            end
+        finally
+            DistSSHRun._clear_last_ship!()
+        end
+    end
+end
+
 @testset "record host and path" begin
     @test DistSSHRun._record_host_alias("mini") == "mini"
     @test DistSSHRun._record_host_alias("user@mini") == "mini"

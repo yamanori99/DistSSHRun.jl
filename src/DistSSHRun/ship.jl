@@ -1364,7 +1364,7 @@ function _last_ship_src_for(
     all(h -> String(h) in have, hosts) || return nothing
     stored = get(rec, "remote_root", nothing)
     stored isa AbstractString || return nothing
-    String(stored) == String(remote_root) || return nothing
+    _deploy_roots_equivalent(stored, remote_root) || return nothing
     return src
 end
 
@@ -1457,6 +1457,10 @@ holds the work root (`runs/<id>/src`), not the deploy root. Mapping must use
 the deploy root (via [`active_snapshot_selection`](@ref) or a temporary ENV),
 then rehome onto the work root — otherwise `remote_layout_path` already returns
 a work-root path and rehome nests `runs/<id>/src/runs/<id>`.
+
+Reuse the active selection only when its deploy root and hosts cover this call
+(so a later standalone `collect!` after a ship to another root/host set
+re-resolves instead of collecting the wrong tree).
 """
 function _remote_work_layout_path(
         local_abs::AbstractString,
@@ -1465,12 +1469,18 @@ function _remote_work_layout_path(
         snapshot::Union{Nothing, AbstractString} = nothing,
     )::String
     sel = active_snapshot_selection()
-    snap_ok = sel !== nothing && (
-        snapshot === nothing ||
-            (sel.snapshot_id !== nothing && String(sel.snapshot_id) == String(snapshot))
-    )
-    if !snap_ok
-        deploy = remote_deploy_root(local_repo)
+    deploy = _layout_intended_deploy_root(local_repo, sel)
+    reuse = sel !== nothing &&
+        _deploy_roots_equivalent(sel.deploy_root, deploy) &&
+        _hosts_covered(sel.hosts, hosts) &&
+        (
+            snapshot === nothing ||
+                (
+                sel.snapshot_id !== nothing &&
+                    String(sel.snapshot_id) == String(snapshot)
+            )
+        )
+    if !reuse
         _work_root_for_hosts(
             hosts, deploy;
             local_project = local_repo, snapshot = snapshot,

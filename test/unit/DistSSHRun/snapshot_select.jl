@@ -114,6 +114,24 @@ end
     end
 end
 
+@testset "forget_last_snapshot_default treats trailing slash as same root" begin
+    _with_tempdir() do proj
+        _snap_project!(proj)
+        DistSSHRun.write_last_snapshot_record!(
+            proj, "/deploy/a/", ["h1"], _SNAP_ID_OLD,
+        )
+        rec = something(DistSSHRun.read_last_snapshot_record(proj))
+        @test rec["deploy_root"] == "/deploy/a"
+        DistSSHRun.forget_last_snapshot_default!(proj, "/deploy/a")
+        @test DistSSHRun.read_last_snapshot_record(proj) === nothing
+        DistSSHRun.write_last_snapshot_record!(
+            proj, "/deploy/a", ["h1"], _SNAP_ID_OLD,
+        )
+        DistSSHRun.forget_last_snapshot_default!(proj, "/deploy/a/")
+        @test DistSSHRun.read_last_snapshot_record(proj) === nothing
+    end
+end
+
 @testset "record for another deploy root does not block git" begin
     double = abspath(
         joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"),

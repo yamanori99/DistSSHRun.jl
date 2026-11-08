@@ -69,6 +69,16 @@ function _hosts_covered(
     return all(h -> h in have_set, _sorted_host_aliases(need))
 end
 
+"""Strip surrounding space and a trailing `/` so `/srv/app` and `/srv/app/` match."""
+function _normalize_deploy_root(path::AbstractString)::String
+    return rstrip(strip(String(path)), '/')
+end
+
+"""True when two deploy-root spellings name the same tree after normalization."""
+function _deploy_roots_equivalent(a::AbstractString, b::AbstractString)::Bool
+    return _normalize_deploy_root(a) == _normalize_deploy_root(b)
+end
+
 """Read the local last-snapshot record, or `nothing` when absent or unreadable."""
 function read_last_snapshot_record(
         env_dir::AbstractString,
@@ -95,7 +105,7 @@ function _record_matches_selection(
     )::Bool
     stored_root = get(rec, "deploy_root", nothing)
     stored_root isa AbstractString || return false
-    String(stored_root) == String(deploy_root) || return false
+    _deploy_roots_equivalent(stored_root, deploy_root) || return false
     stored_hosts = get(rec, "hosts", nothing)
     stored_hosts isa AbstractVector || return false
     return _hosts_covered(String[String(h) for h in stored_hosts], hosts)
@@ -121,7 +131,7 @@ function write_last_snapshot_record!(
     isempty(aliases) && throw(ArgumentError("last-snapshot record needs at least one host"))
     data = Dict{String, Any}(
         "schema" => _SNAPSHOT_RECORD_SCHEMA,
-        "deploy_root" => String(deploy_root),
+        "deploy_root" => _normalize_deploy_root(deploy_root),
         "hosts" => aliases,
         "snapshot_id" => rid,
         "written_at" => Dates.format(Dates.now(Dates.UTC), dateformat"yyyy-mm-ddTHH:MM:SS") * "Z",
@@ -157,7 +167,8 @@ function clear_last_snapshot_record!(
                 Dict{String, Any}()
             end
             stored = get(rec, "deploy_root", nothing)
-            if stored isa AbstractString && String(stored) != String(deploy_root)
+            if stored isa AbstractString &&
+                    !_deploy_roots_equivalent(stored, deploy_root)
                 return nothing
             end
         end
@@ -172,6 +183,7 @@ Call after a successful `:delete`, `:clone`, `:sync`, or `:pull` so a later
 instantiate / check / go / drive can select a git checkout at that root. Does
 not delete remote `runs/<id>/` leaves. An explicit `--snapshot` still works.
 Also clears this process's ship cache when it targeted the same deploy root.
+`/srv/app` and `/srv/app/` are the same root.
 """
 function forget_last_snapshot_default!(
         local_project::AbstractString,
@@ -182,7 +194,8 @@ function forget_last_snapshot_default!(
     last = last_ship_result()
     if last !== nothing
         stored = get(last, "remote_root", nothing)
-        if stored isa AbstractString && String(stored) == String(deploy_root)
+        if stored isa AbstractString &&
+                _deploy_roots_equivalent(stored, deploy_root)
             _clear_last_ship!()
         end
     end
@@ -424,7 +437,8 @@ function resolve_snapshot_selection(
         # A record for a different deploy root is ignored so a second root
         # (git clone path, tilde root, …) can still select its checkout.
         stored_root = get(rec, "deploy_root", nothing)
-        if stored_root isa AbstractString && String(stored_root) == deploy
+        if stored_root isa AbstractString &&
+                _deploy_roots_equivalent(stored_root, deploy)
             stored_hosts = get(rec, "hosts", nothing)
             if stored_hosts isa AbstractVector &&
                     !_hosts_covered(String[String(h) for h in stored_hosts], host_list)
@@ -469,3 +483,19 @@ function active_snapshot_selection()::Union{Nothing, SnapshotSelection}
     return _ACTIVE_SELECTION[]
 end
 public active_snapshot_selection
+
+"""Deploy root intended for layout when ENV may already be a work root."""
+function _layout_intended_deploy_root(
+        local_repo::AbstractString,
+        sel::Union{Nothing, SnapshotSelection},
+    )::String
+    env_rr = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
+    if sel !== nothing && !isempty(env_rr) &&
+            _deploy_roots_equivalent(env_rr, sel.work_root)
+        # After assign, ENV is the work root; keep the selection's deploy root.
+        return String(sel.deploy_root)
+    elseif !isempty(env_rr)
+        return String(env_rr)
+    end
+    return remote_deploy_root(local_repo)
+end
