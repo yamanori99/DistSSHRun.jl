@@ -74,17 +74,9 @@ using Test
             setup_args = ["--runtest", "--julia", "/bin/echo", "child:host1", "child:host2"],
             extra_env = _fake_setup_remote_env(fresh_state()),
         ),
-        (;
-            setup_args = ["--juliaup-update", "child:host1"],
-            extra_env = merge(
-                _fake_setup_remote_env(fresh_state()),
-                Dict("DISTSSHKIT_TEST_NO_JULIAUP" => "1"),
-            ),
-        ),
-        (;
-            setup_args = ["--juliaup-update", "child:host1", "child:host2"],
-            extra_env = _fake_setup_remote_env(fresh_state()),
-        ),
+        (; setup_args = ["--juliaup-update", "child:host1"]),
+        (; setup_args = ["--juliaup", "child:host1"]),
+        (; setup_args = ["--check", "--remote-dir", "/tmp/App.jl", "child:host1"]),
     ]
     try
         got = _run_kit_setups(calls)
@@ -145,16 +137,22 @@ using Test
             @test occursin("Pkg.test complete (2 host(s))", combined)
         end
 
-        @testset "juliaup-update" begin
+        @testset "removed setup flags" begin
             proc, combined = got[11]
             @test proc.exitcode == 1
-            @test occursin("deprecated", combined)
-            @test occursin("juliaup update did not succeed on any host", combined)
+            @test occursin("setup --juliaup-update was removed", combined)
+            @test occursin("up update", combined)
+            @test !occursin("deprecated", lowercase(combined))
 
             proc, combined = got[12]
-            @test proc.exitcode == 0
-            @test occursin("deprecated", combined)
-            @test occursin("juliaup update complete (2 host(s))", combined)
+            @test proc.exitcode == 1
+            @test occursin("setup --juliaup was removed", combined)
+            @test occursin("up add CHANNEL", combined)
+
+            proc, combined = got[13]
+            @test proc.exitcode == 1
+            @test occursin("setup --remote-dir was removed", combined)
+            @test occursin("--remote-path", combined)
         end
     finally
         for d in state_dirs

@@ -99,7 +99,7 @@ function main()
         exit(1)
     end
 
-    # setup --juliaup remote body (home install and/or Homebrew candidates)
+    # `up` / setup!(session, :juliaup) remote body (home install and/or Homebrew candidates)
     if (occursin(".juliaup/bin/juliaup", script) || occursin("/opt/homebrew/bin/juliaup", script)) &&
             occursin("status 2>/dev/null", script) &&
             get(ENV, "DISTSSHKIT_TEST_JULIAUP_ALREADY", "") == "1"

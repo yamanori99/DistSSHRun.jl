@@ -204,7 +204,7 @@ end
                 withenv(_e2e_base_env()...) do
                     found = DistSSHRun.resolve_remote_julia(host, "auto")
                     @test found isa AbstractString
-                    found isa AbstractString || error("expected remote julia after --juliaup")
+                    found isa AbstractString || error("expected remote julia after up")
                     ver = DistSSHRun.DistSSHBase.get_remote_julia_version(host, found)
                     @test ver isa VersionNumber
                     ver isa VersionNumber || error("expected remote version")
@@ -282,7 +282,7 @@ end
                 withenv(_e2e_base_env()...) do
                     found = DistSSHRun.resolve_remote_julia(host, "auto")
                     @test found isa AbstractString
-                    found isa AbstractString || error("expected remote julia after --juliaup")
+                    found isa AbstractString || error("expected remote julia after up")
                     ver = DistSSHRun.DistSSHBase.get_remote_julia_version(host, found)
                     @test ver isa VersionNumber
                     ver isa VersionNumber || error("expected remote version")

@@ -27,6 +27,27 @@ using Test
         end
     end
 
+    let (code, out, err) = _setup_capture(["--juliaup", "child:host1"])
+        shown = out * err
+        @test code == 1
+        @test occursin("setup --juliaup was removed", shown)
+        @test occursin("up add CHANNEL", shown)
+        @test occursin("help up", shown)
+        @test !occursin("deprecated", lowercase(shown))
+    end
+    let (code, out, err) = _setup_capture(["--juliaup-update", "child:host1"])
+        shown = out * err
+        @test code == 1
+        @test occursin("setup --juliaup-update was removed", shown)
+        @test occursin("up update", shown)
+    end
+    let (code, out, err) = _setup_capture(["--check", "--remote-dir", "/tmp/App.jl", "child:host1"])
+        shown = out * err
+        @test code == 1
+        @test occursin("setup --remote-dir was removed", shown)
+        @test occursin("--remote-path", shown)
+        @test occursin("help setup", shown)
+    end
     let (code, out, err) = _setup_capture(["--not-a-flag"])
         shown = out * err
         @test code == 1

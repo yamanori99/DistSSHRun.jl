@@ -103,13 +103,32 @@ function show_requirements(; io::IO = stdout)
     )
 end
 
+function _throw_setup_juliaup_removed(flag::AbstractString)
+    instead = flag == "--juliaup-update" ?
+        "`$(cli_m()) up update`" :
+        "`$(cli_m()) up add CHANNEL`, `$(cli_m()) up update CHANNEL`, and `$(cli_m()) up default CHANNEL`"
+    throw(
+        ArgumentError(
+            "setup $flag was removed in 0.2.0; use $instead. See help up.",
+        ),
+    )
+end
+
+function _throw_setup_remote_dir_removed()
+    throw(
+        ArgumentError(
+            "setup --remote-dir was removed in 0.2.0; use --remote-path. See help setup.",
+        ),
+    )
+end
+
 function _setup_flag_mode(arg::AbstractString)::Union{Nothing, Symbol}
     arg == "--check" && return :check
     arg == "--pull" && return :pull
     arg == "--sync" && return :sync
     arg == "--instantiate" && return :instantiate
-    arg == "--juliaup" && return :juliaup
-    arg == "--juliaup-update" && return :juliaup_update
+    arg == "--juliaup" && _throw_setup_juliaup_removed(arg)
+    arg == "--juliaup-update" && _throw_setup_juliaup_removed(arg)
     arg == "--runtest" && return :runtest
     arg == "--cleanup" && return :cleanup
     arg == "--clone" && return :clone
@@ -129,12 +148,13 @@ function parse_setup_args(args::Vector{String})
         "setup";
         valued = (
             "--confirm-path", "--older-than", "--id", "--julia", "--repo",
-            "--remote-path", "--remote-dir",
+            "--remote-path",
         ),
         known = (
             "--check", "--pull", "--sync", "--instantiate", "--juliaup",
             "--juliaup-update", "--runtest", "--cleanup", "--clone",
             "--delete", "--prune", "--rsync", "--ship-tree", "--remote-root",
+            "--remote-dir",
             "--allow-external-symlinks", "--requirements",
             "--ignore-julia-version", "-h", "--help",
         ),
@@ -196,7 +216,9 @@ function parse_setup_args(args::Vector{String})
             julia_path = cli_take_value!(c, arg)
         elseif arg == "--repo"
             repo_url = String(strip(cli_take_value!(c, arg)))
-        elseif arg in ("--remote-path", "--remote-dir")
+        elseif arg == "--remote-dir"
+            _throw_setup_remote_dir_removed()
+        elseif arg == "--remote-path"
             raw = String(cli_take_value!(c, arg))
             any(c -> c == '\n' || c == '\r' || c == '\0' || iscntrl(c), raw) && throw(
                 ArgumentError("--remote-path cannot contain a control character"),
