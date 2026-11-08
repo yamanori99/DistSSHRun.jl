@@ -47,7 +47,7 @@ Julia **1.13+**。
 
 ### Ship
 
-`setup --ship-tree`、`go --ship-tree`、`drive --ship-tree`:
+`setup ship-tree`、`go --ship-tree`、`drive --ship-tree`:
 
 - ship の根を歩き、各ディレクトリの `.gitignore` を適用する
   （大文字小文字を区別する）。`.git/info/exclude`、

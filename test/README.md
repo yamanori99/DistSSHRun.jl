@@ -299,7 +299,7 @@ Helpers (via `support.jl`): `_child_julia_env`, `_run_kit_drive` /
   `_tty_capture_script` / `_tty_expect_script` also strip `NO_COLOR`.
 - `DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL` (default `1` in test children):
   skip drive leftover tagged remote `pkill`; each child `rmprocs`es its own
-  local workers. Untagged sweep is `setup --cleanup` only.
+  local workers. Untagged sweep is `setup cleanup` only.
 - `DISTSSHKIT_SSH_E2E` (unset): `1` runs `test/e2e.jl` (needs docker-ssh
   workers)
 - `DISTSSHKIT_CODE_COVERAGE` (unset): `1` with `up.sh --e2e` →

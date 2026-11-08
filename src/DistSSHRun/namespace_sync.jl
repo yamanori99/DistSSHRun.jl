@@ -310,7 +310,7 @@ Stream local `.distsshkit/cache/sha256/` blobs onto each SSH host with stdlib
 Tar. Does not delete remote blobs that were not in this push.
 Hosts run at most `DISTSSHKIT_JOBS` at a time (default 1). Host result order
 matches `session.hosts`.
-Project `setup --ship-tree` still excludes `.distsshkit/`; this call is the
+Project `setup ship-tree` still excludes `.distsshkit/`; this call is the
 dedicated transfer.
 
 `hashes` limits the push to those digests. `nothing` pushes every local blob.

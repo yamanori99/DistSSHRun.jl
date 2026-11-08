@@ -37,7 +37,7 @@ non-executable file arrives as mode `0644`, and an executable file as
 (`--julia`, or auto-detect) that can load stdlib `Tar` and `SHA`. Ship uses
 stdlib Tar over SSH. Git clone, sync, and pull also need **`git`**.
 
-`setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` walk the
+`setup ship-tree`, `go --ship-tree`, and `drive --ship-tree` walk the
 ship root and apply each directory's `.gitignore` (case-sensitive).
 `.git/info/exclude`, `core.excludesFile`, and a `.gitignore` above the
 ship root are not used. No git binary is run. The ship root is the
@@ -91,7 +91,7 @@ and does not pack again or delete it. It refuses depot preferences, hashes
 the tar again immediately before sending, and throws `ArgumentError` when
 the hash differs or the tar is missing. `confirm` defaults to false, so a
 library `ship` does not prompt. `record=false` does not keep the ship for
-controller `run.toml` in this process. `setup --ship-tree` still confirms
+controller `run.toml` in this process. `setup ship-tree` still confirms
 unless `-y` is used, and that path deletes its temporary directory.
 `setup remote-root --deploy-root /absolute/path` creates that one
 directory with mode `700`. Group and other write are cleared again after
@@ -111,9 +111,9 @@ and a `ShipTreeResult`. A `SyncResult` from any other mode returns `nothing`
 for both. `result_run_dir` reads
 `DISTSSHKIT_RUN_DIR` from those results and from `KitProcess`. Each remote
 `runs/<run_id>/` also gets a minimal `run.toml` with only `schema`,
-`writer`, and `kind = "ship"` so `setup --delete` can refuse a Ship leaf
+`writer`, and `kind = "ship"` so `setup delete` can refuse a Ship leaf
 that is not DistSSHRun-owned. That stamp is not controller provenance.
-`setup --prune` searches `.distsshkit` candidates and applies the same
+`setup prune` searches `.distsshkit` candidates and applies the same
 ownership check there; it does not inspect those Ship leaves. Older leaves
 without that file still use structural checks only. DistSSHQueue
 `teardown` is a different command; it may reuse the same remote stamp later.
@@ -133,7 +133,7 @@ path component by NFC form when the filesystem kept NFD. `sha256sum -c`
 opens paths literally, so use `check_input_manifest` for those trees.
 `hash = false` records only stat fields in `run.toml` and does not write
 a manifest. A later ship into the same run directory replaces the row
-for the same input name and host. Standalone `setup --ship-tree` waits
+for the same input name and host. Standalone `setup ship-tree` waits
 for hashing before it returns. `drive` / `go` with `--ship-tree` start
 hashing after extract and finish it while instantiate, worker launch,
 and precompile run. `outputs` is reserved and not written. There is no

@@ -825,7 +825,7 @@ function _remote_tree_root(
 end
 
 """
-Directory on the worker that receives `setup --ship-tree` of [`resolve_pkg_env`](@ref) `env_dir`.
+Directory on the worker that receives `setup ship-tree` of [`resolve_pkg_env`](@ref) `env_dir`.
 
 An override (`--deploy-root` / `DISTRIBUTED_REMOTE_PROJECT_ROOT`) is this tree
 root, not the member directory. Workspace member relative paths are applied
@@ -897,7 +897,7 @@ function remote_git_clone_dest(
 end
 
 """
-Path `setup --delete` removes.
+Path `setup delete` removes.
 
 When the git work tree contains `env_dir` and the deploy path ends with that
 relative path, this is [`remote_git_clone_dest`](@ref), so a clone that landed
@@ -1065,8 +1065,8 @@ That result is the local absolute path, not a remote path.
 
 A path under the repo root is the same relative path under
 [`resolve_remote_project_root`](@ref). The default root matches
-`setup --clone` (`~/Parent/RepoName`). Override with
-`DISTRIBUTED_REMOTE_PROJECT_ROOT` or `setup --deploy-root`.
+`setup clone` (`~/Parent/RepoName`). Override with
+`DISTRIBUTED_REMOTE_PROJECT_ROOT` or `--deploy-root`.
 """
 function remote_layout_path(
         local_abs_dir::AbstractString,

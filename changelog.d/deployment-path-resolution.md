@@ -9,7 +9,7 @@ category: breaking
   restoring frame so `remote_layout_path` / worker mapping and collect
   still see `session.remote`. Overlapping in-process kit runs remain
   unsupported.
-- `setup --ship-tree`, `go` / `drive` `--ship-tree`, and
+- `setup ship-tree`, `go` / `drive` `--ship-tree`, and
   `sync!(mode=:ship_tree)` create a missing deployment root when safe: a
   `~/…` layout may create components under the remote home with mode
   `700`; an absolute path still requires its parent and creates only the

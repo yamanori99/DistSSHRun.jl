@@ -1,4 +1,4 @@
-# instantiate! — Pkg.instantiate on remotes (same core as `setup --instantiate`).
+# instantiate! — Pkg.instantiate on remotes (same core as `setup instantiate`).
 
 """
     instantiate!(session::KitSession; julia="auto") -> SyncResult
@@ -12,7 +12,7 @@ or its minor differs from that Julia. Otherwise the worker runs
 `Pkg.instantiate(; manifest=true, update_registry=false, julia_version_strict=true)`.
 
 `julia` is the remote Julia path (`"auto"` detects per host, same as
-`setup --instantiate` / `drive --julia`). Returns [`SyncResult`](@ref).
+`setup instantiate` / `drive --julia`). Returns [`SyncResult`](@ref).
 
 Typical first-time remote prep:
 

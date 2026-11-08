@@ -6,7 +6,7 @@ const JULIA_WORKER_PKILL_PATTERNS = ("julia.*--worker", "julia.*--bind-to")
 """
 Kill local Julia worker processes matching [`JULIA_WORKER_PKILL_PATTERNS`](@ref).
 
-Used by `setup --cleanup` (explicit machine-wide sweep). `drive` does not call
+Used by `setup cleanup` (explicit machine-wide sweep). `drive` does not call
 this: local workers are torn down with `rmprocs`. `pkill -f` may match its own
 argv (patterns contain `--worker` / `--bind-to`); exit status is ignored.
 """
@@ -436,7 +436,7 @@ end
 Warn about a lock or path source that git sync would not ship.
 
 Skips structural errors. Those stay on the clone and git-sync path, which
-throws. `--check` warns. `setup --sync` and `--pull` check the commit out
+throws. `setup check` warns. `setup sync` and `setup pull` check the commit out
 instead of stopping when the hashes already match.
 """
 function _warn_git_worktree_ship!(project::AbstractString)
@@ -507,7 +507,7 @@ end
 
 Returns `true` if clean, if `git` is missing, or if `proj_dir` is not a git work tree.
 If this is a work tree but `git status` fails, returns `false` so `--require-git` /
-`setup --check` still warn. This check does not block a run."""
+`setup check` still warn. This check does not block a run."""
 function local_git_clean(proj_dir::AbstractString)::Bool
     _host_tool_present("git") || return true
     resolved = canonical_local_path(proj_dir)

@@ -26,7 +26,7 @@ end
 # (parallel tests, another drive). Local teardown is `rmprocs` at atexit.
 # Remote untagged `pkill` is the same class (shared SSH host). Drive only
 # `pkill`s argv containing `distsshkit-job:<id>` when `DISTSSHKIT_JOB_ID` is set.
-# Machine-wide sweep remains `setup --cleanup`. Skip leftover tagged pkill with
+# Machine-wide sweep remains `setup cleanup`. Skip leftover tagged pkill with
 # DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL=1.
 function cleanup_stale_workers!(hosts::Vector{Tuple{String, Union{Int, Nothing}}})
     if _skip_global_worker_pkill() || isempty(hosts)
@@ -130,8 +130,8 @@ function add_drive_workers!(
                     remote_layout_path(script_path, repo_ra)
                 print_progress_err("✗ (remote path not found: $missing)")
                 writeln_both("")
-                writeln_both("    hint: julia --project=. -m DistSSHKit setup --ship-tree $(setup_cli_host_token(host_name))")
-                writeln_both("          julia --project=. -m DistSSHKit setup --instantiate $(setup_cli_host_token(host_name))")
+                writeln_both("    hint: julia --project=. -m DistSSHKit setup ship-tree $(setup_cli_host_token(host_name))")
+                writeln_both("          julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host_name))")
                 writeln_both("          or drive --ship-tree (extracts to runs/<run_id>/src/ and instantiates)")
                 writeln_both("           or export DISTRIBUTED_REMOTE_PROJECT_ROOT=<abs path on host>")
                 continue
@@ -165,7 +165,7 @@ function add_drive_workers!(
                 write_both("$host_name ($host_workers workers): ")
                 print_progress_err("✗ ($deps_err)")
                 writeln_both("")
-                writeln_both("    hint: julia --project=. -m DistSSHKit setup --instantiate $(setup_cli_host_token(host_name))")
+                writeln_both("    hint: julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host_name))")
                 continue
             end
 

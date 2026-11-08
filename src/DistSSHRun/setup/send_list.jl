@@ -765,7 +765,7 @@ end
     rsync_send_list(local_root, env; warn=false) -> Union{Nothing, Vector{String}}
 
 Git send list for a work tree, relative to `local_root`. `--clone`, `--sync`,
-and `--pull` still use this list. `setup --ship-tree` does not: it walks the
+and `--pull` still use this list. `setup ship-tree` does not: it walks the
 ship root and applies each directory's `.gitignore` there and below.
 A gitignored preference file is not added back.
 

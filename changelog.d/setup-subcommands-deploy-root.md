@@ -3,7 +3,8 @@ category: breaking
 - `setup` operation modes are subcommands under the existing `setup`
   namespace (`setup ship-tree`, `setup instantiate`, `setup check`,
   `setup runtest`, `setup clone`, `setup sync`, `setup pull`,
-  `setup cleanup`, `setup delete`, `setup prune`, `setup remote-root`).
+  `setup cleanup`, `setup delete`, `setup prune`, `setup remote-root`,
+  `setup requirements`).
   There is no top-level `ship` command. Legacy `setup --ship-tree` /
   `--instantiate` / `--check` and the other mode flags error with a
   migration line; they are not aliases. Multiple subcommands in one

@@ -1063,7 +1063,7 @@ function print_ok(msg; io = stdout, bold = false)
     return nothing
 end
 
-"""Terminal for up results and `setup --check` diagnostics.
+"""Terminal for up results and `setup check` diagnostics.
 
 `:verbose` and `:progress` print. `:quiet` stays on the kit log.
 """
