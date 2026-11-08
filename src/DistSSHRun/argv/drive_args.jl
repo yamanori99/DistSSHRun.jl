@@ -382,6 +382,13 @@ function parse_drive_args(args::Vector{String})
         )
         skip_hash_check = true
     end
+    if snapshot_id !== nothing && (sync_mode === :sync || sync_mode === :ship_tree)
+        throw(
+            ArgumentError(
+                "drive: --snapshot cannot be combined with --sync / --ship-tree",
+            ),
+        )
+    end
 
     for tok in kit_host_source_tokens(cli_session; keep_counts = true)
         parent_workers = _drive_push_host_token!(
@@ -463,6 +470,7 @@ function show_drive_usage(; io::IO = stdout)
         "  -w, --workers N     parent:N when no parent token is listed",
         "  --sync / --ship-tree  optional pre-run; --ship-tree instantiates src/",
         "  --snapshot ID       use runs/<ID>/src under the deploy root",
+        "                      (not with --sync / --ship-tree; those pick their own source)",
         "  --allow-external-symlinks  with --ship-tree: keep escaping symlinks",
         "  --sync-script       re-include the full driver on workers (default: defs only)",
         "  --require-git       $(REQUIRE_GIT_MEANING)",

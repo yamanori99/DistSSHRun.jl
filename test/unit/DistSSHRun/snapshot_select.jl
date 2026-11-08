@@ -93,6 +93,25 @@ end
         String["--snapshot", _SNAP_ID_NEW, "parent:1", "job.jl"],
     )
     @test d.snapshot == _SNAP_ID_NEW
+    @test_throws ArgumentError DistSSHRun.parse_go_args(
+        String["--ship-tree", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
+    )
+    @test_throws ArgumentError DistSSHRun.parse_drive_args(
+        String["--sync", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
+    )
+end
+
+@testset "forget_last_snapshot_default clears matching record" begin
+    _with_tempdir() do proj
+        _snap_project!(proj)
+        DistSSHRun.write_last_snapshot_record!(
+            proj, "/deploy/a", ["h1"], _SNAP_ID_OLD,
+        )
+        DistSSHRun.forget_last_snapshot_default!(proj, "/deploy/b")
+        @test DistSSHRun.read_last_snapshot_record(proj) !== nothing
+        DistSSHRun.forget_last_snapshot_default!(proj, "/deploy/a")
+        @test DistSSHRun.read_last_snapshot_record(proj) === nothing
+    end
 end
 
 @testset "help no longer advertises lexical latest" begin

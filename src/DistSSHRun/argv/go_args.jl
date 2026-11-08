@@ -37,6 +37,7 @@ function show_go_usage(; io::IO = stdout)
         io,
         "  --sync / --ship-tree  optional pre-run; --ship-tree instantiates src/",
         "  --snapshot ID       use runs/<ID>/src under the deploy root",
+        "                      (not with --sync / --ship-tree; those pick their own source)",
         "  --allow-external-symlinks  with --ship-tree: keep escaping symlinks",
         "  --julia PATH        remote Julia (ENV or auto)",
         "  --allow-mismatch F  waive julia, distssh, and/or manifest (comma list)",
@@ -225,6 +226,13 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
     apply_kit_cli_session!(cli_session)
     if script_path !== nothing && repeat_n === nothing
         require_counted_placement_tokens(hosts; surface = :cli)
+    end
+    if snapshot_id !== nothing && (sync === :sync || sync === :ship_tree)
+        throw(
+            ArgumentError(
+                "go: --snapshot cannot be combined with --sync / --ship-tree",
+            ),
+        )
     end
     return _go_parsed(;
         help = false,

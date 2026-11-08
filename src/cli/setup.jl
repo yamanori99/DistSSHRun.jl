@@ -235,7 +235,9 @@ if !isdefined(@__MODULE__, :setup_main)
                         confirm = true, deploy_root = deploy_path,
                     ) :
                     DistSSHRun._apply_confirmed_delete(opts.hosts, plan, deploy_path)
-                return Cint(finish_host_op!("Delete", result) ? 0 : 1)
+                ok = finish_host_op!("Delete", result)
+                ok && DistSSHRun.forget_last_snapshot_default!(project, deploy_path)
+                return Cint(ok ? 0 : 1)
             end
 
             if mode === :clone
@@ -244,14 +246,17 @@ if !isdefined(@__MODULE__, :setup_main)
                 clone_dest = op_path
                 result = clone_to_remotes(opts.hosts, clone_dest, clone_url)
                 ok = finish_host_op!("Clone", result)
-                if ok && !result.cancelled && result.failed == 0 &&
-                        (
-                        opts.remote_path_override !== nothing ||
-                            !isempty(strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", "")))
-                    )
-                    kit_println("  Tip: export DISTRIBUTED_REMOTE_PROJECT_ROOT=$deploy_path")
-                    kit_println("       so drive.jl uses the same remote root for workers / collect.")
-                    kit_println()
+                if ok
+                    DistSSHRun.forget_last_snapshot_default!(project, deploy_path)
+                    if !result.cancelled && result.failed == 0 &&
+                            (
+                            opts.remote_path_override !== nothing ||
+                                !isempty(strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", "")))
+                        )
+                        kit_println("  Tip: export DISTRIBUTED_REMOTE_PROJECT_ROOT=$deploy_path")
+                        kit_println("       so drive.jl uses the same remote root for workers / collect.")
+                        kit_println()
+                    end
                 end
                 return Cint(ok ? 0 : 1)
             end
@@ -271,12 +276,14 @@ if !isdefined(@__MODULE__, :setup_main)
                 if ok && rec !== nothing
                     rid = get(rec, "run_id", nothing)
                     src = get(rec, "src", nothing)
+                    path_flag = opts.remote_path_override isa AbstractString ?
+                        " --remote-path $(opts.remote_path_override)" : ""
                     if rid isa AbstractString && !isempty(rid)
                         kit_println(
-                            "  Next: $(DistSSHRun.cli_m()) setup --instantiate --snapshot $rid",
+                            "  Next: $(DistSSHRun.cli_m()) setup --instantiate --snapshot $rid$path_flag",
                         )
                         kit_println(
-                            "        $(DistSSHRun.cli_m()) setup --check --snapshot $rid",
+                            "        $(DistSSHRun.cli_m()) setup --check --snapshot $rid$path_flag",
                         )
                     elseif src isa AbstractString
                         kit_println(
@@ -408,6 +415,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 return Cint(1)
             end
 
+            DistSSHRun.forget_last_snapshot_default!(project, deploy_path)
             print_ok("$mode_name complete.")
             kit_println()
             return Cint(0)

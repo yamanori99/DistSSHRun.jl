@@ -32,9 +32,11 @@ A collect root that is the project or a parent of it stops the run before
 `DISTRIBUTED_COLLECT_DIRS` and a default root from `DISTRIBUTED_OUTPUT_DIR`.
 
 `julia` sets the remote Julia binary (`nothing` / `"auto"` → detect; same as
-CLI `--julia`). `plan` is an optional explicit [`WorkerPlan`](@ref).
-[`pipeline!`](@ref) syncs separately and does not pass `sync=` into `drive!`,
-so it does not instantiate after rsync.
+CLI `--julia`). `snapshot` (CLI `--snapshot`) selects `runs/<ID>/src` under the
+deploy root when `sync` is omitted or `false`; it cannot combine with
+`sync=:sync` / `sync=:ship_tree`. `plan` is an optional explicit
+[`WorkerPlan`](@ref). [`pipeline!`](@ref) syncs separately and does not pass
+`sync=` into `drive!`, so it does not instantiate after rsync.
 
 `sync_script=true` (CLI `--sync-script`) re-`include`s the full driver on
 workers. The default publishes definitions / `using` / `import` / `include`
@@ -62,6 +64,7 @@ function drive!(
         sync_script::Bool = false,
         allow_mismatch = Symbol[],
         allow_external_symlinks::Bool = false,
+        snapshot::Union{Nothing, AbstractString} = nothing,
     )::DriveResult
     return _drive_frame(; cli = false) do
         return _with_kit_inproc_run!(:drive) do
@@ -92,6 +95,7 @@ function drive!(
                         sync_script = sync_script,
                         allow_mismatch = allow_mismatch,
                         allow_external_symlinks = allow_external_symlinks,
+                        snapshot = snapshot,
                     )
                     apply_kit_cli_session!(parsed.cli_session)
                     original_args = copy(ARGS)

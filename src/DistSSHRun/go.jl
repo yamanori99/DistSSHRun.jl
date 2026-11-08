@@ -947,9 +947,10 @@ means "skip collect" and is orthogonal to `output_dir`.
 Default `sync` is `false` (no pre-run sync; remotes are checked first — setup
 is assumed done). Pass `sync=:sync` or `sync=:ship_tree` to copy, then check. After `:ship_tree`,
 hosts that still lack Manifest deps get [`instantiate!`](@ref) before the
-check. `go!` has no git-parity
-gate; use [`drive!`](@ref) with `skip_hash_check=false` (CLI: `drive --require-git`)
-when you need that.
+check. `snapshot` (CLI `--snapshot`) selects `runs/<ID>/src` when `sync` is
+omitted or `false`; it cannot combine with `sync=:sync` / `sync=:ship_tree`.
+`go!` has no git-parity gate; use [`drive!`](@ref) with
+`skip_hash_check=false` (CLI: `drive --require-git`) when you need that.
 
 `julia` sets the Julia binary for each slot (`nothing` / `"auto"` → detect;
 same as CLI `--julia`).
@@ -995,6 +996,13 @@ function go!(
     )::GoResult
     script_path = canonical_local_path(script)
     snap_arg = snapshot === nothing ? nothing : validate_snapshot_id(snapshot)
+    if snap_arg !== nothing && (sync === :sync || sync === :ship_tree)
+        throw(
+            ArgumentError(
+                "go!: snapshot= cannot be combined with sync=:$sync",
+            ),
+        )
+    end
     proj = canonical_local_path(project)
     if !isfile(script_path)
         throw(

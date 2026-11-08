@@ -995,12 +995,15 @@ end
     result_content_tree_hash(result) -> Union{Nothing, String}
 
 `content_tree_hash` from this run's controller `run.toml`
-(`provenance.shipped`), or `nothing` when that ship was not recorded.
+(`provenance.shipped`), or `nothing` when neither a ship nor an active
+snapshot selection recorded one.
 
 Schema stays 1. An absent or empty key means not recorded.
 `result` is a [`DriveResult`](@ref), [`GoResult`](@ref), or
 [`KitRunResult`](@ref). A [`RideResult`](@ref) goes through
-[`kit_run_result`](@ref) first.
+[`kit_run_result`](@ref) first. A run that selected an existing completed
+snapshot (without shipping in-process) may still record the hash from that
+selection.
 
 A [`SyncResult`](@ref) from `setup!` / `sync!` with `:ship_tree`, and a
 [`ShipTreeResult`](@ref) from [`ship`](@ref), return the hash of that ship.
@@ -1032,12 +1035,15 @@ end
     result_remote_run_id(result) -> Union{Nothing, String}
 
 Remote `runs/<run_id>/` id from this run's controller `run.toml`
-(`provenance.shipped.run_id`), or `nothing` when that ship was not recorded.
+(`provenance.shipped.run_id`), or `nothing` when neither a ship nor an active
+snapshot selection recorded one.
 
 Schema stays 1. An absent or empty key means not recorded. This is not
 `DISTSSHKIT_RUN_DIR`. `result` is a [`DriveResult`](@ref), [`GoResult`](@ref),
 or [`KitRunResult`](@ref). A [`RideResult`](@ref) goes through
-[`kit_run_result`](@ref) first.
+[`kit_run_result`](@ref) first. A run that selected an existing completed
+snapshot (without shipping in-process) may still record that snapshot's
+`run_id`.
 
 A [`SyncResult`](@ref) from `setup!` / `sync!` with `:ship_tree`, and a
 [`ShipTreeResult`](@ref) from [`ship`](@ref), return that remote `run_id`.

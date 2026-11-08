@@ -143,13 +143,52 @@ function write_last_snapshot_record!(
 end
 public write_last_snapshot_record!
 
-function clear_last_snapshot_record!(env_dir::AbstractString)::Nothing
+function clear_last_snapshot_record!(
+        env_dir::AbstractString;
+        deploy_root::Union{Nothing, AbstractString} = nothing,
+    )::Nothing
     path = _snapshot_record_path(env_dir)
     lock(_SNAPSHOT_RECORD_LOCK) do
-        isfile(path) && rm(path; force = true)
+        isfile(path) || return nothing
+        if deploy_root !== nothing
+            rec = try
+                TOML.parsefile(path)
+            catch
+                Dict{String, Any}()
+            end
+            stored = get(rec, "deploy_root", nothing)
+            if stored isa AbstractString && String(stored) != String(deploy_root)
+                return nothing
+            end
+        end
+        rm(path; force = true)
     end
     return nothing
 end
+
+"""Drop the local last-snapshot convenience default for `deploy_root`.
+
+Call after a successful `:delete`, `:clone`, `:sync`, or `:pull` so a later
+instantiate / check / go / drive can select a git checkout at that root. Does
+not delete remote `runs/<id>/` leaves. An explicit `--snapshot` still works.
+Also clears this process's ship cache when it targeted the same deploy root.
+"""
+function forget_last_snapshot_default!(
+        local_project::AbstractString,
+        deploy_root::AbstractString,
+    )::Nothing
+    env = resolve_pkg_env(local_project)
+    clear_last_snapshot_record!(env.env_dir; deploy_root = String(deploy_root))
+    last = last_ship_result()
+    if last !== nothing
+        stored = get(last, "remote_root", nothing)
+        if stored isa AbstractString && String(stored) == String(deploy_root)
+            _clear_last_ship!()
+        end
+    end
+    return nothing
+end
+public forget_last_snapshot_default!
 
 """Probe whether `host` has a completed snapshot leaf under `deploy_root`."""
 function _probe_snapshot_complete(
