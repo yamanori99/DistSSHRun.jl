@@ -43,6 +43,14 @@ jobs:
   # Run, one runner at a time. A skipped Base or Up does not skip the
   # next (`!cancelled()` and `!failure()`, and Run also needs Base so a Base
   # failure still blocks it).
+  # WSL2 1.13 also runs Base, then Up, then Run, one windows-latest
+  # runner at a time within a single ordinary CI run. Ordering is
+  # scheduling only (`!cancelled()`): a failed or skipped Base or Up
+  # does not skip the next eligible WSL job. Run still needs Base so a
+  # skipped Up does not start Run while Base is still running. Static
+  # gates stay result == success. This does not serialize across separate
+  # workflow runs or repositories, and it raises total elapsed time when
+  # all three WSL jobs run.
   # Runic, JETLS 1.13, and Aqua 1.13 start after detect. Pkg.test, Registry,
   # PkgEval, downstream, and SSH E2E start only after those three succeed.
   # An `if` drops the implicit success() check, so each of those jobs names
@@ -223,8 +231,11 @@ jobs:
 
   test-wsl:
     name: DistSSHRun (1.13, WSL2 ubuntu-24.04, x64)
-    needs: [detect, runic, jetls, aqua]
-    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request'
+    needs: [detect, runic, jetls, aqua, base-test-wsl, up-test-wsl]
+    # Scheduling only after Base/Up WSL. A failed or skipped WSL peer must
+    # not skip Run. Static gates stay result == success; cancel still skips.
+    # Needs Base as well as Up so a skipped Up does not overlap Base.
+    if: ${{ needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request' && !cancelled() }}
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
@@ -379,8 +390,10 @@ jobs:
 
   up-test-wsl:
     name: DistSSHUp (1.13, WSL2 ubuntu-24.04, x64)
-    needs: [detect, runic, jetls, aqua]
-    if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.up == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request'
+    needs: [detect, runic, jetls, aqua, base-test-wsl]
+    # Scheduling only after Base WSL. A failed or skipped Base must not
+    # skip Up. Static gates stay result == success; cancel still skips.
+    if: ${{ needs.detect.outputs.heavy == 'true' && needs.detect.outputs.up == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request' && !cancelled() }}
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
