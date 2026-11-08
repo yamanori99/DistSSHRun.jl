@@ -1474,12 +1474,12 @@ function _remote_work_layout_path(
         _deploy_roots_equivalent(sel.deploy_root, deploy) &&
         _hosts_covered(sel.hosts, hosts) &&
         (
-            snapshot === nothing ||
-                (
-                sel.snapshot_id !== nothing &&
-                    String(sel.snapshot_id) == String(snapshot)
-            )
+        snapshot === nothing ||
+            (
+            sel.snapshot_id !== nothing &&
+                String(sel.snapshot_id) == String(snapshot)
         )
+    )
     if !reuse
         _work_root_for_hosts(
             hosts, deploy;
