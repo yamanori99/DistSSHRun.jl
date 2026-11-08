@@ -46,7 +46,7 @@ detached_launch
 `WorkerPlan` is explicit `parent:N` / `child:NAME:N`. `pool!` inventories cores
 and RAM. `hostinfo` uses `DistSSHBase.collect_host_facts` /
 `DistSSHBase.print_hostinfo` (per-host labeled layout; OS product vs kernel
-kept separate; missing fields are `-`).
+kept separate; missing fields are `-`). DistSSHRun reexports `print_hostinfo`.
 
 ```@autodocs
 Modules = [DistSSHRun]
@@ -54,7 +54,7 @@ Public = true
 Private = false
 Filter = function (x)
     names = (
-        :WorkerPlan, :pool!, :ResourcePool, :HostInventory, :print_pool, :print_hostinfo,
+        :WorkerPlan, :pool!, :ResourcePool, :HostInventory, :print_pool,
     )
     n = try
         nameof(x)
@@ -63,6 +63,10 @@ Filter = function (x)
     end
     return n in names
 end
+```
+
+```@docs
+DistSSHBase.print_hostinfo
 ```
 
 ## Pipeline
