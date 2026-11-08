@@ -39,14 +39,16 @@ function collect!(
     )
     return _with_kit_inproc_run!(:collect) do
         apply_session_env!(session)
-        ok = drive_collect_tree(
-            String(local_root),
-            host_list;
-            merge = merge,
-            project_root = session.project,
-            path_anchor = canonical_local_path(session.project),
-            julia = julia,
-        )
-        return CollectResult(ok, ok ? 0 : 1)
+        return _with_session_remote_env!(session) do
+            ok = drive_collect_tree(
+                String(local_root),
+                host_list;
+                merge = merge,
+                project_root = session.project,
+                path_anchor = canonical_local_path(session.project),
+                julia = julia,
+            )
+            return CollectResult(ok, ok ? 0 : 1)
+        end
     end
 end

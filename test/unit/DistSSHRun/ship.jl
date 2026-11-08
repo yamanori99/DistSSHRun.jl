@@ -42,7 +42,7 @@ end
     @test occursin("kind = \"ship\"", sh)
 end
 
-@testset "remote_root must already exist" begin
+@testset "remote run leaf still validates an existing root" begin
     sh = DistSSHRun._remote_run_leaf_script("/work/app", "20260101T000000Z-abcd")
     @test occursin("remote_root does not exist", sh)
     @test occursin("ls -ldL", sh)
@@ -70,6 +70,159 @@ end
         @test isempty(readdir(out))
     finally
         rm(parent; force = true, recursive = true)
+    end
+end
+
+@testset "ship ensure creates safe remote roots" begin
+    abs_sh = DistSSHRun._remote_root_create_script("/tmp/jobs/app"; report = true)
+    @test occursin("__DSR_ENSURE_REMOTE_ROOT__", abs_sh)
+    @test occursin("CREATED", abs_sh)
+    @test occursin("EXISTED", abs_sh)
+    @test occursin("mkdir -m 700 ", abs_sh)
+    @test !occursin("mkdir -p", abs_sh)
+    home = mktempdir()
+    try
+        root = joinpath(home, "Parent", "Repo")
+        under = DistSSHRun._remote_root_ensure_under_home_script(root, home)
+        @test occursin("__DSR_ENSURE_REMOTE_ROOT__", under)
+        @test occursin("remote_root is not under home", under)
+        out = read(`sh -c $under`, String)
+        @test isdir(root)
+        @test (filemode(root) & 0o022) == 0
+        @test occursin("CREATED", out)
+        again = read(`sh -c $under`, String)
+        @test occursin("EXISTED", again)
+        @test (filemode(root) & 0o022) == 0
+        missing_parent = joinpath(home, "nope", "leaf")
+        abs_missing = DistSSHRun._remote_root_create_script(missing_parent; report = true)
+        bad = run(pipeline(`sh -c $abs_missing`; stdout = devnull, stderr = devnull); wait = false)
+        wait(bad)
+        @test bad.exitcode == 2
+        @test !isdir(missing_parent)
+        parent = joinpath(home, "absparent")
+        mkpath(parent)
+        leaf = joinpath(parent, "leaf")
+        abs_ok = DistSSHRun._remote_root_create_script(leaf; report = true)
+        @test occursin("CREATED", read(`sh -c $abs_ok`, String))
+        @test isdir(leaf)
+        @test (filemode(leaf) & 0o022) == 0
+        chmod(leaf, 0o755)
+        @test occursin("EXISTED", read(`sh -c $abs_ok`, String))
+        @test (filemode(leaf) & 0o777) == 0o755
+        chmod(leaf, 0o775)
+        loose = run(pipeline(`sh -c $abs_ok`; stdout = devnull, stderr = devnull); wait = false)
+        wait(loose)
+        @test loose.exitcode == 2
+        chmod(leaf, 0o755)
+        file_path = joinpath(parent, "fileleaf")
+        write(file_path, "x")
+        file_sh = DistSSHRun._remote_root_create_script(file_path; report = true)
+        file_bad = run(pipeline(`sh -c $file_sh`; stdout = devnull, stderr = devnull); wait = false)
+        wait(file_bad)
+        @test file_bad.exitcode == 2
+        if !Sys.iswindows()
+            link_parent = joinpath(home, "linkparent")
+            mkpath(link_parent)
+            real_leaf = joinpath(link_parent, "real")
+            mkpath(real_leaf)
+            link_leaf = joinpath(link_parent, "link")
+            symlink(real_leaf, link_leaf)
+            link_sh = DistSSHRun._remote_root_create_script(link_leaf; report = true)
+            link_bad = run(pipeline(`sh -c $link_sh`; stdout = devnull, stderr = devnull); wait = false)
+            wait(link_bad)
+            @test link_bad.exitcode == 2
+            trav = DistSSHRun._remote_root_ensure_under_home_script(
+                home * "/a/../b", home,
+            )
+            trav_bad = run(pipeline(`sh -c $trav`; stdout = devnull, stderr = devnull); wait = false)
+            wait(trav_bad)
+            @test trav_bad.exitcode != 0
+        end
+        @test_throws ArgumentError DistSSHRun._remote_root_ensure_under_home_script("/", home)
+        @test_throws ArgumentError DistSSHRun._remote_root_ensure_under_home_script(home, home)
+        @test_throws ArgumentError DistSSHRun._remote_root_ensure_under_home_script(
+            joinpath("/other", "x"), home,
+        )
+        # Concurrent ensure of the same absolute leaf.
+        race_parent = joinpath(home, "race")
+        mkpath(race_parent)
+        race_leaf = joinpath(race_parent, "app")
+        race_sh = DistSSHRun._remote_root_create_script(race_leaf; report = true)
+        results = Vector{Int}(undef, 8)
+        @sync for i in 1:8
+            @async begin
+                p = run(pipeline(`sh -c $race_sh`; stdout = devnull, stderr = devnull); wait = false)
+                wait(p)
+                results[i] = p.exitcode
+            end
+        end
+        @test all(iszero, results)
+        @test isdir(race_leaf)
+        @test (filemode(race_leaf) & 0o022) == 0
+    finally
+        rm(home; force = true, recursive = true)
+    end
+end
+
+@testset "tilde ensure remaps a logical home onto a physical home" begin
+    logical = "/Users/dev"
+    physical = "/var/home/dev"
+    @test DistSSHRun._rehome_logical_under_physical_home(
+        "/Users/dev/Parent/Repo", logical, physical,
+    ) == "/var/home/dev/Parent/Repo"
+    @test DistSSHRun._rehome_logical_under_physical_home(
+        "/var/home/dev/Parent/Repo", logical, physical,
+    ) == "/var/home/dev/Parent/Repo"
+    @test DistSSHRun._rehome_logical_under_physical_home(
+        "/Users/dev/Parent/Repo", logical, logical,
+    ) == "/Users/dev/Parent/Repo"
+    @test_throws ArgumentError DistSSHRun._rehome_logical_under_physical_home(
+        "/Users/dev", logical, physical,
+    )
+    @test_throws ArgumentError DistSSHRun._rehome_logical_under_physical_home(
+        "/tmp/other", logical, physical,
+    )
+    if !Sys.iswindows()
+        _with_tempdir() do base
+            physical_home = joinpath(base, "physical")
+            logical_home = joinpath(base, "logical")
+            mkpath(physical_home)
+            symlink(physical_home, logical_home)
+            logical_root = joinpath(logical_home, "Parent", "Repo")
+            physical_root = DistSSHRun._rehome_logical_under_physical_home(
+                logical_root, logical_home, physical_home,
+            )
+            @test physical_root == joinpath(physical_home, "Parent", "Repo")
+            under = DistSSHRun._remote_root_ensure_under_home_script(
+                physical_root, physical_home,
+            )
+            @test occursin("CREATED", read(`sh -c $under`, String))
+            @test isdir(physical_root)
+            @test (filemode(physical_root) & 0o022) == 0
+            # Without remapping, a logical expansion fails the under-home check.
+            @test_throws ArgumentError DistSSHRun._remote_root_ensure_under_home_script(
+                logical_root, physical_home,
+            )
+        end
+        _with_tempdir() do state_dir
+            withenv(
+                merge(
+                    _fake_setup_remote_env(state_dir),
+                    Dict(
+                        "DISTSSHKIT_TEST_REMOTE_HOME" => "/var/home/dev",
+                        "DISTSSHKIT_TEST_REMOTE_HOME_LOGICAL" => "/Users/dev",
+                        "DISTSSHKIT_TEST_REMOTE_EXPAND" => "/Users/dev/Parent/Repo",
+                    ),
+                )...,
+            ) do
+                ensured = DistSSHRun._ensure_ship_remote_root!(
+                    "host1", "~/Parent/Repo",
+                )
+                @test ensured.abs_root == "/var/home/dev/Parent/Repo"
+                @test ensured.created
+                @test isdir(joinpath(state_dir, "host1", "tree"))
+            end
+        end
     end
 end
 
@@ -1308,11 +1461,84 @@ end
                             @test DistSSHRun.result_content_tree_hash(synced) ==
                                 DistSSHRun.content_tree_hash(snap)
                             @test DistSSHRun.result_remote_run_id(synced) !== nothing
+                            @test any(hr -> occursin("ship-tree ok", hr.message), synced.hosts)
                             other = DistSSHRun.SyncResult(false, DistSSHRun.HostResult[]; ok = true)
                             @test DistSSHRun.result_content_tree_hash(other) === nothing
                             @test DistSSHRun.result_remote_run_id(other) === nothing
                         finally
                             rm(DistSSHRun.snapshot_directory(snap); force = true, recursive = true)
+                            _restore_ship!(previous, active)
+                        end
+                    end
+                end
+            end
+        finally
+            DistSSHRun.set_kit_noninteractive!(prev_ni)
+            DistSSHRun.set_kit_verbosity!(prev_verb)
+        end
+    end
+
+    # Fresh absolute root: ensure creates it; extract failure leaves the directory.
+    _with_tempdir() do state_dir
+        prev_ni = DistSSHRun.kit_noninteractive()
+        prev_verb = DistSSHRun.kit_verbosity()
+        try
+            _with_saved_project_env() do
+                withenv(
+                    merge(
+                        _fake_setup_remote_env(state_dir),
+                        Dict(
+                            "DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia",
+                            "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
+                        ),
+                    )...,
+                ) do
+                    _apply_quiet_setup_session!()
+                    _with_tempdir() do proj
+                        _project!(proj)
+                        tree = joinpath(state_dir, "host1", "tree")
+                        @test !isdir(tree)
+                        previous = DistSSHRun._LAST_SHIP[]
+                        active = DistSSHRun._SHIP_LAYOUT_ACTIVE[]
+                        try
+                            created = DistSSHRun.ship_project_to_hosts!(
+                                ["host1"], proj, "/home/distsshkit/app"; confirm = false,
+                            )
+                            @test all(hr -> hr.ok, created.host_results)
+                            @test any(
+                                hr -> occursin("created remote_root", hr.message),
+                                created.host_results,
+                            )
+                            @test isdir(tree)
+                        finally
+                            _restore_ship!(previous, active)
+                        end
+                    end
+                end
+                # Transfer failure after ensure must keep the root.
+                withenv(
+                    merge(
+                        _fake_setup_remote_env(state_dir),
+                        Dict(
+                            "DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia",
+                            "DISTSSHKIT_TEST_TAR_EXTRACT_FAIL" => "1",
+                        ),
+                    )...,
+                ) do
+                    _apply_quiet_setup_session!()
+                    _with_tempdir() do proj
+                        _project!(proj)
+                        tree = joinpath(state_dir, "host1", "tree")
+                        @test isdir(tree)
+                        previous = DistSSHRun._LAST_SHIP[]
+                        active = DistSSHRun._SHIP_LAYOUT_ACTIVE[]
+                        try
+                            failed = DistSSHRun.ship_project_to_hosts!(
+                                ["host1"], proj, "/home/distsshkit/app"; confirm = false,
+                            )
+                            @test any(hr -> !hr.ok, failed.host_results)
+                            @test isdir(tree)
+                        finally
                             _restore_ship!(previous, active)
                         end
                     end

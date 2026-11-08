@@ -776,9 +776,26 @@ function local_dir_from_remote_mirror(
     return String(abspath(joinpath(lr, rel)))
 end
 
+# Remote location roles (do not collapse these into one path):
+# - deployment/container root: [`remote_deploy_root`](@ref) — receives ship `runs/`
+# - git clone destination: [`remote_git_clone_dest`](@ref)
+# - worker `--project`: [`resolve_remote_project_root`](@ref) (deploy + member rel)
+# - snapshot source: local pack root (unchanged by these helpers)
+# - output / recovery collect: mapped via [`remote_layout_path`](@ref) under the
+#   active remote project root
+#
+# Precedence for a deployment root:
+# 1. Explicit per-call `cli_override` (`--remote-path` / `session.remote`)
+# 2. Caller `DISTRIBUTED_REMOTE_PROJECT_ROOT`
+# 3. [`default_remote_project_path`](@ref) from local `env_dir`
+# A per-call override must not be written back as a process-global default.
+
 """
 Default remote layout used by `setup.jl` when paths are not overridden:
 `~/basename(parent)/basename(local_project_root)` (tilde for remote-shell expansion).
+
+`local_project_root` is normally [`resolve_pkg_env`](@ref) `env_dir` (Manifest
+directory when present). Tilde is expanded on the remote host only.
 """
 function default_remote_project_path(local_project_root::AbstractString)::String
     root = canonical_local_path(local_project_root)
@@ -811,7 +828,8 @@ end
 Directory on the worker that receives `setup --ship-tree` of [`resolve_pkg_env`](@ref) `env_dir`.
 
 An override (`--remote-path` / `DISTRIBUTED_REMOTE_PROJECT_ROOT`) is this tree
-root, not the member directory.
+root, not the member directory. Workspace member relative paths are applied
+only by [`resolve_remote_project_root`](@ref), not here.
 """
 function remote_deploy_root(
         local_project_root::AbstractString;
@@ -825,9 +843,9 @@ end
 Worker `--project` path for `local_project_root`.
 
 Same override rules as `remote_deploy_root`. When the Manifest lives in
-a parent of the member, this is `deploy_root` plus that relative path.
-A single-project tree returns the deploy root unchanged. Does not `abspath`
-tilde paths.
+a parent of the member, this is `deploy_root` plus that relative path once
+([`julia_project_rel`](@ref)). A single-project tree returns the deploy root
+unchanged. Does not `abspath` tilde paths.
 """
 function resolve_remote_project_root(
         local_project_root::AbstractString;

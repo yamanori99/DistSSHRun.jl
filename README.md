@@ -63,7 +63,10 @@ Julia **1.13+**.
   The 256 MiB cap still stops the ship. Declared inputs are left out.
 - Extract is into `<remote_root>/runs/<run_id>/src/`, with empty
   `out/` beside it and a minimal DistSSHRun `run.toml` stamp. The
-  remote root must already exist (`setup --remote-root`).
+  missing remote root is created when safe (`~/…` under home, or absolute
+  with an existing parent; see `help setup`). Absolute roots also refuse
+  `/`, a single directory under `/`, `.`/`..`, and this machine's home.
+  `setup --remote-root` still creates one absolute path only.
 - `--rsync` was removed in 0.2.0. `setup --delete` and `--prune` need
   `--confirm-path`; `-y` does not authorize them. A present unowned
   stamp is refused.

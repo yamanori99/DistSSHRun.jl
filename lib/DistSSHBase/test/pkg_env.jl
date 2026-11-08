@@ -29,10 +29,32 @@ using Test
             julia_remote = DistSSHBase.resolve_remote_project_root(member)
             @test deploy == joinpath("~", basename(dirname(lab)), "lab")
             @test julia_remote == joinpath(deploy, "experiments", "run1")
+            # Member rel is applied once (no double `experiments/run1`).
+            @test julia_remote != joinpath(deploy, "experiments", "run1", "experiments", "run1")
+            @test DistSSHBase.remote_deploy_root(member; cli_override = "/srv/lab") == "/srv/lab"
+            @test DistSSHBase.resolve_remote_project_root(
+                member; cli_override = "/srv/lab",
+            ) == joinpath("/srv/lab", "experiments", "run1")
             if Sys.which("git") !== nothing
                 run(pipeline(`git -C $lab init -q`; stdout = devnull, stderr = devnull))
                 @test DistSSHBase.remote_git_clone_dest(member) == deploy
+                @test DistSSHBase.remote_delete_root(member) == deploy
             end
+        end
+        # Custom Manifest directory: deploy root follows env_dir (Manifest dir).
+        custom = joinpath(root, "custom")
+        locks = joinpath(custom, "locks")
+        mkpath(locks)
+        write(joinpath(custom, "Project.toml"), "name = \"Custom\"\nmanifest = \"locks/Mine.toml\"\n")
+        write(joinpath(locks, "Mine.toml"), "# lock\n")
+        cenv = DistSSHBase.resolve_pkg_env(custom)
+        @test cenv.env_dir == DistSSHBase.canonical_local_path(locks)
+        withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => nothing) do
+            @test DistSSHBase.remote_deploy_root(custom) ==
+                joinpath("~", basename(dirname(locks)), basename(locks))
+            # Worker project is deploy + relpath(project_dir, env_dir).
+            @test DistSSHBase.resolve_remote_project_root(custom) ==
+                joinpath(DistSSHBase.remote_deploy_root(custom), "..")
         end
 
         solo = joinpath(root, "solo")
