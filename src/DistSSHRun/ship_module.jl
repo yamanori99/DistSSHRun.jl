@@ -30,6 +30,9 @@ include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "transfer.jl
 
 public EXTERNAL_DIR_NAME
 public resolve_ship_project
+public gitignore_paths
+public selected_paths
+public send_paths
 public snapshot
 public transfer_tree
 public ShipProject

@@ -122,8 +122,21 @@ function selected_paths(
         end
     end
     sort!(rels)
+    isempty(rels) && throw(ArgumentError("nothing to ship from $root_c"))
     return rels
 end
+
+"""
+    send_paths(root; omit=String[]) -> Vector{String}
+
+Relative paths under `root` that a ship tar for this directory contains,
+sorted. Same rules as [`selected_paths`](@ref): each `.gitignore` under
+`root`, ancestor directories of kept paths, `.git` and `.distsshkit`
+dropped, unshippable nodes omitted. `omit` drops declared inputs
+(Run passes `.distsshkit/inputs.toml` paths).
+"""
+send_paths(root::AbstractString; omit::Vector{String} = String[])::Vector{String} =
+    selected_paths(root; omit = omit)
 
 function warn_excluded_project_files(
         root::AbstractString,

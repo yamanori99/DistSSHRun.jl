@@ -153,6 +153,9 @@ names below on `DistSSHRun.DistSSHShip`.
 DistSSHShip
 DistSSHShip.ShipProject
 DistSSHShip.resolve_ship_project
+DistSSHShip.gitignore_paths
+DistSSHShip.selected_paths
+DistSSHShip.send_paths
 DistSSHShip.ShipSnapshot
 DistSSHShip.snapshot
 DistSSHShip.transfer_tree
