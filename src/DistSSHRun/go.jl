@@ -1200,6 +1200,7 @@ function _go_run!(
         sess_rr = session_remote_root(go_session)
 
         child_hosts = unique(String[s.host for s in slots if s.kind === :child])
+        remote_argv = _remote_script_argv(script_path)
         if !_script_inside_project(proj, script_path) &&
                 !remote_argv &&
                 sync_mode_early !== :ship_tree &&

@@ -283,9 +283,9 @@ function _run_drive_parsed_specialized!(
     end
 
     hosts = parsed.hosts
-    remote_argv = DistSSHRun._remote_script_argv(parsed.script_path::String)
-    script_path = remote_argv ? String(parsed.script_path) :
-        DistSSHRun.canonical_local_path(parsed.script_path::String)
+    raw_script = String(parsed.script_path)::String
+    remote_argv = DistSSHRun._remote_script_argv(raw_script)
+    script_path = remote_argv ? raw_script : DistSSHRun.canonical_local_path(raw_script)
     script_args = parsed.script_args
     parent_workers = parsed.parent_workers
     default_workers = parsed.default_workers

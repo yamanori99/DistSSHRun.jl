@@ -82,7 +82,7 @@ Detached `execute!(…; sync=:ship_tree)` is an error before spawn. Ship with
 `setup!` / `setup ship-tree`, including one outside script as `extra_files`
 / `--extra-file`, then `execute!(…; snapshot=id)` or `go` / `drive --snapshot ID`
 with that same local script. The remote command is
-[`remote_script_path`](@ref) (`_distsshrun_external/<basename>` under the
+[`remote_script_path`](@ref DistSSHRun.remote_script_path) (`_distsshrun_external/<basename>` under the
 selected project). The `go` / `drive` CLI does not take `--ship-tree`: run
 `setup ship-tree`, then `setup instantiate`, then `go` / `drive` with
 `--snapshot ID`.

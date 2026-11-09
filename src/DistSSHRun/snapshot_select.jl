@@ -59,9 +59,11 @@ function _ship_project_rel(project_rel::AbstractString)::String
         ArgumentError("project_rel must be a relative directory, got $(repr(project_rel))"),
     )
     for part in split(rel, '/')
-        (isempty(part) || part == "." || part == ".." || occursin('"', part) ||
-            occursin('\'', part) || occursin('$', part) || occursin('`', part) ||
-            occursin(' ', part) || occursin('\n', part)) && throw(
+        (
+            isempty(part) || part == "." || part == ".." || occursin('"', part) ||
+                occursin('\'', part) || occursin('$', part) || occursin('`', part) ||
+                occursin(' ', part) || occursin('\n', part)
+        ) && throw(
             ArgumentError("project_rel must be a relative directory, got $(repr(project_rel))"),
         )
     end
@@ -256,6 +258,7 @@ function _probe_snapshot_complete(
             reason = "deploy_root",
             message = "could not resolve deploy root on $(host): $(sprint(showerror, e))",
             content_tree_hash = nothing,
+            project_rel = nothing,
         )
     end
     leaf = _posix_join(abs_root, "runs", rid)
