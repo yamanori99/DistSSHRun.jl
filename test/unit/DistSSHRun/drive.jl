@@ -1100,7 +1100,7 @@ end
             write(script, "write($(repr(marker)), \"yes\")\n")
             result = redirect_stdout(devnull) do
                 mktemp() do err_path, err_io
-                    result = redirect_stderr(err_io) do
+                    inner = redirect_stderr(err_io) do
                         DistSSHRun.drive!(
                             script, ["parent:1"];
                             project = app,
@@ -1115,7 +1115,7 @@ end
                     @test !occursin("heartbeat", lowercase(err))
                     @test !isdefined(Main, :stop_heartbeat_monitor)
                     @test !isdefined(Main, :start_heartbeat_monitor)
-                    return result
+                    return inner
                 end
             end
             @test result.ok

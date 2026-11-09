@@ -141,6 +141,10 @@ check_setup_options!
 Workers receive `DistSSHRun.DistSSHHeartbeat.WORKER_SOURCE`, not a
 Manifest copy of DistSSHRun.
 
+```@docs
+DistSSHHeartbeat
+```
+
 `DistSSHShip` is included by DistSSHRun and is not a `[deps]` entry.
 `DistSSHRun.snapshot` still builds the tar Run ships. Queue calls the
 names below on `DistSSHRun.DistSSHShip`.

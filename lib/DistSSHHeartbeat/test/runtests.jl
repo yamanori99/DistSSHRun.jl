@@ -132,12 +132,12 @@ end
         w = workers()[end]
         try
             DistSSHHeartbeat._remote_include_nothing(w, DistSSHHeartbeat.WORKER_SOURCE)
-            @test remotecall_fetch(w) do
-                hb = getfield(Main, :DistSSHHeartbeat)
+            @test remotecall_fetch(w, :DistSSHHeartbeat) do sym
+                hb = getfield(Main, sym)
                 Base.invokelatest(hb.ping_master)
             end
-            @test_throws RemoteException remotecall_fetch(w) do
-                hb = getfield(Main, :DistSSHHeartbeat)
+            @test_throws RemoteException remotecall_fetch(w, :DistSSHHeartbeat) do sym
+                hb = getfield(Main, sym)
                 Core.eval(hb, :(remotecall_fetch(() -> true, 1)))
             end
         finally
@@ -197,8 +197,8 @@ end
                 interval = 1.0,
                 deadline = 5.0,
             )
-            @test remotecall_fetch(w) do
-                hb = isdefined(Main, :DistSSHHeartbeat) ? getfield(Main, :DistSSHHeartbeat) : nothing
+            @test remotecall_fetch(w, :DistSSHHeartbeat) do sym
+                hb = isdefined(Main, sym) ? getfield(Main, sym) : nothing
                 !isdefined(Main, :DistSSHRun) &&
                     hb !== nothing &&
                     Base.invokelatest(hb.ping_master)
@@ -238,8 +238,8 @@ end
                     deadline = 5.0,
                 )
                 ver = DistSSHHeartbeat.HEARTBEAT_CODE_VERSION
-                @test remotecall_fetch(w, ver) do v
-                    hb = getfield(Main, :DistSSHHeartbeat)
+                @test remotecall_fetch(w, :DistSSHHeartbeat, ver) do sym, v
+                    hb = getfield(Main, sym)
                     Base.invokelatest(hb.ping_master) && hb.HEARTBEAT_CODE_VERSION == v
                 end
             finally
