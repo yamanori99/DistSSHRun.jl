@@ -75,6 +75,14 @@ end
     @test occursin("deploy.toml", sh)
 end
 
+@testset "deploy record tmp path unique for same deploy_id" begin
+    abs = "/home/user/App/.distssh/deploy.toml"
+    same_id = "a"^40
+    p1 = DistSSHRun._deploy_record_tmp_path(abs, same_id)
+    p2 = DistSSHRun._deploy_record_tmp_path(abs, same_id)
+    @test p1 != p2
+end
+
 @testset "deploy record scp host vs path validation" begin
     remote = "/home/a@-b/project/.distssh/deploy.toml.x.tmp"
     argv = DistSSHRun._deploy_record_scp_upload_argv("child-1", remote, "/tmp/body.toml")

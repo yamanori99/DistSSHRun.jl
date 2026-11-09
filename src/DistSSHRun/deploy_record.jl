@@ -188,11 +188,17 @@ function read_deploy_record_consensus(
     return reference
 end
 
+function _deploy_record_write_nonce()::String
+    seed = string(time_ns(), '-', objectid(current_task()), '-', Threads.threadid())
+    return lowercase(bytes2hex(SHA.sha256(codeunits(seed))))[1:16]
+end
+
 function _deploy_record_tmp_tag(deploy_id::AbstractString)::String
     tag = replace(strip(String(deploy_id)), r"[^A-Za-z0-9._-]" => "_")
     isempty(tag) && throw(ArgumentError("deploy record deploy_id is empty"))
     stamp = replace(_deploy_record_timestamp(), ':' => '-')
-    return string(tag, "-", stamp)
+    nonce = _deploy_record_write_nonce()
+    return string(tag, "-", stamp, "-", nonce)
 end
 
 """Absolute remote path for a per-write temporary deploy record."""
