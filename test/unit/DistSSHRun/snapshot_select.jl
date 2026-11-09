@@ -749,3 +749,38 @@ end
         end
     end
 end
+
+@testset "snapshot selection uses project_rel under src" begin
+    double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+    _with_tempdir() do state
+        remote = joinpath(state, "remote")
+        leaf = joinpath(remote, "runs", _SNAP_ID_OLD)
+        mkpath(joinpath(leaf, "src", "app"))
+        write(joinpath(leaf, "src", "app", "Project.toml"), "name = \"Nested\"\n")
+        write(
+            joinpath(leaf, "run.toml"),
+            DistSSHRun._ship_run_leaf_complete_toml(_SNAP_HASH_OLD; project_rel = "app"),
+        )
+        _with_tempdir() do proj
+            _snap_project!(proj)
+            withenv(
+                "DISTSSHKIT_TEST" => "1",
+                "DISTSSHKIT_TEST_SSH" => double,
+                "DISTSSHKIT_TEST_POSIX_SHELL" => "1",
+                "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
+            ) do
+                DistSSHRun.clear_last_snapshot_record!(proj)
+                sel = DistSSHRun.resolve_snapshot_selection(
+                    ["child-1"], remote, proj; snapshot = _SNAP_ID_OLD,
+                )
+                @test endswith(sel.work_root, "/runs/$_SNAP_ID_OLD/src/app")
+                DistSSHRun.write_last_snapshot_record!(
+                    proj, remote, ["child-1"], _SNAP_ID_OLD;
+                    content_tree_hash = _SNAP_HASH_OLD, project_rel = "app",
+                )
+                sel2 = DistSSHRun.resolve_snapshot_selection(["child-1"], remote, proj)
+                @test sel2.work_root == sel.work_root
+            end
+        end
+    end
+end

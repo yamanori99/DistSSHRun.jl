@@ -1901,18 +1901,24 @@ function _ship_run_leaf_stamp_toml()::String
 end
 
 """Ownership stamp plus completion fields written only after extract succeeds."""
-function _ship_run_leaf_complete_toml(content_tree_hash::AbstractString)::String
+function _ship_run_leaf_complete_toml(
+        content_tree_hash::AbstractString;
+        project_rel::AbstractString = ".",
+    )::String
     h = String(content_tree_hash)
     _valid_content_tree_hash(h) || throw(
         ArgumentError(
             "content_tree_hash must be a 40-digit git-sha1 hex string, got $(repr(h))",
         ),
     )
+    rel = _ship_project_rel(project_rel)
+    extra = rel == "." ? "" : "project_rel = $(repr(rel))\n"
     return string(
         _ship_run_leaf_stamp_toml(),
         "complete = true\n",
         "algorithm = \"git-sha1\"\n",
         "content_tree_hash = $(repr(h))\n",
+        extra,
     )
 end
 
@@ -1926,10 +1932,11 @@ end
 
 function _remote_run_leaf_complete_sh(
         leaf::AbstractString,
-        content_tree_hash::AbstractString,
+        content_tree_hash::AbstractString;
+        project_rel::AbstractString = ".",
     )::String
     dest = _remote_shell_path_word(_posix_join(leaf, "run.toml"))
-    cq = posix_quote(_ship_run_leaf_complete_toml(content_tree_hash))
+    cq = posix_quote(_ship_run_leaf_complete_toml(content_tree_hash; project_rel = project_rel))
     return """
     printf '%s\\n' $cq > $dest || exit 1
     """
@@ -2050,7 +2057,10 @@ function ship(
                 leaf = _posix_join(abs_root, "runs", rid)
                 code_c, out_c = _remote_shell_status(
                     String(host),
-                    _remote_run_leaf_complete_sh(leaf, snapshot.content_tree_hash),
+                    _remote_run_leaf_complete_sh(
+                        leaf, snapshot.content_tree_hash;
+                        project_rel = snapshot.project_rel,
+                    ),
                 )
                 code_c == 0 || throw(
                     ArgumentError(
@@ -2107,6 +2117,7 @@ function ship(
                 ok_hosts,
                 rid;
                 content_tree_hash = snapshot.content_tree_hash,
+                project_rel = snapshot.project_rel,
             )
         catch e
             e isa InterruptException && rethrow()

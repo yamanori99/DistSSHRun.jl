@@ -36,6 +36,19 @@ end
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     )
     @test occursin("complete = true", complete)
+    @test !occursin("project_rel", complete)
+    nested = DistSSHRun._ship_run_leaf_complete_toml(
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        project_rel = "app",
+    )
+    @test occursin("project_rel = \"app\"", nested)
+    @test DistSSHRun._snapshot_project_logical(
+        "/srv/app", "20260101T000000Z-abcdef", "app",
+    ) == "/srv/app/runs/20260101T000000Z-abcdef/src/app"
+    @test_throws ArgumentError DistSSHRun._ship_run_leaf_complete_toml(
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        project_rel = "/app",
+    )
     @test DistSSHRun._kit_run_toml_owned(TOML.parse(complete))
     @test !DistSSHRun._kit_run_toml_owned(
         Dict("schema" => 1, "writer" => "Other 1.0", "kind" => "ship"),

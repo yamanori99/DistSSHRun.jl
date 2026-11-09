@@ -51,6 +51,33 @@ function _snapshot_src_logical(deploy_root::AbstractString, snapshot_id::Abstrac
     return _posix_join(String(deploy_root), "runs", validate_snapshot_id(snapshot_id), "src")
 end
 
+"""Relative project directory inside `runs/<id>/src`. `"."` is the tar root."""
+function _ship_project_rel(project_rel::AbstractString)::String
+    rel = replace(String(project_rel), '\\' => '/')
+    rel == "." && return rel
+    (isempty(rel) || startswith(rel, "/") || occursin("//", rel)) && throw(
+        ArgumentError("project_rel must be a relative directory, got $(repr(project_rel))"),
+    )
+    for part in split(rel, '/')
+        (isempty(part) || part == "." || part == ".." || occursin('"', part) ||
+            occursin('\'', part) || occursin('$', part) || occursin('`', part) ||
+            occursin(' ', part) || occursin('\n', part)) && throw(
+            ArgumentError("project_rel must be a relative directory, got $(repr(project_rel))"),
+        )
+    end
+    return rel
+end
+
+function _snapshot_project_logical(
+        deploy_root::AbstractString,
+        snapshot_id::AbstractString,
+        project_rel::AbstractString,
+    )::String
+    src = _snapshot_src_logical(deploy_root, snapshot_id)
+    rel = _ship_project_rel(project_rel)
+    return rel == "." ? src : _posix_join(src, rel)
+end
+
 function _snapshot_leaf_logical(deploy_root::AbstractString, snapshot_id::AbstractString)::String
     return _posix_join(String(deploy_root), "runs", validate_snapshot_id(snapshot_id))
 end
@@ -132,6 +159,7 @@ function write_last_snapshot_record!(
         hosts::AbstractVector{<:AbstractString},
         snapshot_id::AbstractString;
         content_tree_hash::Union{Nothing, AbstractString} = nothing,
+        project_rel::Union{Nothing, AbstractString} = nothing,
     )::String
     rid = validate_snapshot_id(snapshot_id)
     aliases = _sorted_host_aliases(hosts)
@@ -143,6 +171,8 @@ function write_last_snapshot_record!(
         "snapshot_id" => rid,
         "written_at" => Dates.format(Dates.now(Dates.UTC), dateformat"yyyy-mm-ddTHH:MM:SS") * "Z",
     )
+    rel = _ship_project_rel(something(project_rel, "."))
+    rel == "." || (data["project_rel"] = rel)
     if content_tree_hash isa AbstractString && !isempty(strip(String(content_tree_hash)))
         data["content_tree_hash"] = String(content_tree_hash)
     end
@@ -244,10 +274,6 @@ function _probe_snapshot_complete(
       printf 'legacy\\n'
       exit 0
     fi
-    if test ! -f $sq/Project.toml && test ! -f $sq/JuliaProject.toml; then
-      printf 'no_project\\n'
-      exit 0
-    fi
     n_schema=\$(grep -c '^schema = ' $tq || true)
     n_writer=\$(grep -c '^writer = ' $tq || true)
     n_kind=\$(grep -c '^kind = ' $tq || true)
@@ -283,8 +309,27 @@ function _probe_snapshot_complete(
     case "\$hash" in
       [0-9a-fA-F][0-9a-fA-F]*)
         if [ \${#hash} -eq 40 ]; then
+          rel=\$(grep -E '^project_rel = "' $tq | head -n 1 | sed -E 's/^project_rel = "([^"]*)"\$/\\1/')
+          if [ -z "\$rel" ]; then
+            rel=.
+          fi
+          case "\$rel" in
+            *..*|/*|*/|*' '*|*"'"*)
+              printf 'stamp\\n'
+              exit 0
+              ;;
+          esac
+          proj=$sq
+          if [ "\$rel" != "." ]; then
+            proj=$sq/\$rel
+          fi
+          if test ! -f \$proj/Project.toml && test ! -f \$proj/JuliaProject.toml; then
+            printf 'no_project\\n'
+            exit 0
+          fi
           printf 'ok\\n'
           printf '%s\\n' "\$hash"
+          printf '%s\\n' "\$rel"
           exit 0
         fi
         ;;
@@ -298,6 +343,7 @@ function _probe_snapshot_complete(
         reason = "probe",
         message = "snapshot probe failed on $(host): $(strip(out))",
         content_tree_hash = nothing,
+        project_rel = nothing,
     )
     lines = split(strip(out), '\n'; keepempty = false)
     isempty(lines) && return (
@@ -305,6 +351,7 @@ function _probe_snapshot_complete(
         reason = "probe",
         message = "empty snapshot probe on $(host)",
         content_tree_hash = nothing,
+        project_rel = nothing,
     )
     status = String(lines[1])
     status == "ok" || return (
@@ -312,6 +359,7 @@ function _probe_snapshot_complete(
         reason = status,
         message = "snapshot $(rid) on $(host): $(status)",
         content_tree_hash = nothing,
+        project_rel = nothing,
     )
     hash = length(lines) >= 2 ? strip(String(lines[2])) : ""
     _valid_content_tree_hash(hash) || return (
@@ -319,12 +367,26 @@ function _probe_snapshot_complete(
         reason = "stamp",
         message = "snapshot $(rid) on $(host): missing or invalid content_tree_hash",
         content_tree_hash = nothing,
+        project_rel = nothing,
     )
+    rel_raw = length(lines) >= 3 ? strip(String(lines[3])) : "."
+    rel = try
+        _ship_project_rel(isempty(rel_raw) ? "." : rel_raw)
+    catch
+        return (
+            ok = false,
+            reason = "stamp",
+            message = "snapshot $(rid) on $(host): invalid project_rel",
+            content_tree_hash = nothing,
+            project_rel = nothing,
+        )
+    end
     return (
         ok = true,
         reason = "ok",
         message = "",
         content_tree_hash = hash,
+        project_rel = rel,
     )
 end
 
@@ -361,10 +423,11 @@ function _validate_snapshot_on_hosts!(
         hosts::AbstractVector{<:AbstractString},
         deploy_root::AbstractString,
         snapshot_id::AbstractString,
-    )::String
+    )
     rid = validate_snapshot_id(snapshot_id)
     isempty(hosts) && throw(_selection_error("snapshot selection needs at least one host"))
     hash = nothing
+    project_rel = nothing
     problems = String[]
     for host in hosts
         probe = _probe_snapshot_complete(host, deploy_root, rid)
@@ -377,12 +440,22 @@ function _validate_snapshot_on_hosts!(
             push!(problems, "$(host): missing or invalid content_tree_hash")
             continue
         end
+        rel = probe.project_rel
+        if !(rel isa AbstractString)
+            push!(problems, "$(host): missing project_rel")
+            continue
+        end
         if hash === nothing
             hash = String(got)
-        elseif String(got) != hash
-            push!(
+            project_rel = String(rel)
+        else
+            String(got) == hash || push!(
                 problems,
                 "$(host): content_tree_hash $(got) != $(hash)",
+            )
+            String(rel) == project_rel || push!(
+                problems,
+                "$(host): project_rel $(rel) != $(project_rel)",
             )
         end
     end
@@ -397,7 +470,12 @@ function _validate_snapshot_on_hosts!(
             "snapshot $(rid) is not selectable: no content_tree_hash on any host",
         ),
     )
-    return String(hash)
+    project_rel isa AbstractString || throw(
+        _selection_error(
+            "snapshot $(rid) is not selectable: no project_rel on any host",
+        ),
+    )
+    return (hash = String(hash), project_rel = String(project_rel))
 end
 
 function _validate_git_on_hosts!(
@@ -439,13 +517,13 @@ function resolve_snapshot_selection(
     env = resolve_pkg_env(local_project)
     if snapshot !== nothing
         rid = validate_snapshot_id(snapshot)
-        hash = _validate_snapshot_on_hosts!(host_list, deploy, rid)
+        checked = _validate_snapshot_on_hosts!(host_list, deploy, rid)
         return SnapshotSelection(
             :snapshot,
             rid,
             deploy,
-            _snapshot_src_logical(deploy, rid),
-            hash,
+            _snapshot_project_logical(deploy, rid, checked.project_rel),
+            checked.hash,
             host_list,
         )
     end
@@ -456,13 +534,13 @@ function resolve_snapshot_selection(
         rid_raw = get(last, "run_id", nothing)
         if rid_raw isa AbstractString && !isempty(strip(String(rid_raw)))
             rid = validate_snapshot_id(rid_raw)
-            hash = _validate_snapshot_on_hosts!(host_list, deploy, rid)
+            checked = _validate_snapshot_on_hosts!(host_list, deploy, rid)
             return SnapshotSelection(
                 :snapshot,
                 rid,
                 deploy,
-                _snapshot_src_logical(deploy, rid),
-                hash,
+                _snapshot_project_logical(deploy, rid, checked.project_rel),
+                checked.hash,
                 host_list,
             )
         end
@@ -476,7 +554,8 @@ function resolve_snapshot_selection(
             ),
         )
         rid = validate_snapshot_id(rid_raw)
-        hash = _validate_snapshot_on_hosts!(host_list, deploy, rid)
+        checked = _validate_snapshot_on_hosts!(host_list, deploy, rid)
+        hash = checked.hash
         stored_hash = get(rec, "content_tree_hash", nothing)
         stored = stored_hash isa AbstractString ? strip(String(stored_hash)) : ""
         isempty(stored) && throw(
@@ -494,11 +573,31 @@ function resolve_snapshot_selection(
                 "local last-snapshot record content_tree_hash $(stored) does not match remote $(hash); pass --snapshot ID",
             ),
         )
+        stored_rel = get(rec, "project_rel", ".")
+        stored_rel isa AbstractString || throw(
+            _selection_error(
+                "local last-snapshot record project_rel is not a relative directory; pass --snapshot ID",
+            ),
+        )
+        try
+            _ship_project_rel(stored_rel)
+        catch
+            throw(
+                _selection_error(
+                    "local last-snapshot record project_rel is not a relative directory; pass --snapshot ID",
+                ),
+            )
+        end
+        String(stored_rel) == checked.project_rel || throw(
+            _selection_error(
+                "local last-snapshot record project_rel $(stored_rel) does not match remote $(checked.project_rel); pass --snapshot ID",
+            ),
+        )
         return SnapshotSelection(
             :snapshot,
             rid,
             deploy,
-            _snapshot_src_logical(deploy, rid),
+            _snapshot_project_logical(deploy, rid, checked.project_rel),
             hash,
             host_list,
         )

@@ -308,6 +308,36 @@ using Pkg
                 "name = \"Out\"\nmanifest = \"$(outside_manifest)\"\n",
             )
             @test_throws ArgumentError DistSSHRun.ensure_manifest_ships!(elsewhere)
+            side = joinpath(root, "sideapp")
+            dep = joinpath(root, "shared", "Bar")
+            mkpath(side)
+            mkpath(dep)
+            write(joinpath(dep, "Project.toml"), "name = \"Bar\"\n")
+            write(
+                joinpath(side, "Project.toml"),
+                """
+                name = "Side"
+                [sources]
+                Bar = {path = "../shared/Bar"}
+                """,
+            )
+            write(joinpath(side, "Manifest.toml"), "# lock\n")
+            @test_throws ArgumentError DistSSHRun.ensure_manifest_ships!(side)
+            DistSSHRun._set_active_selection!(
+                DistSSHRun.SnapshotSelection(
+                    :snapshot,
+                    "20260101T000000Z-abcdef",
+                    "/remote",
+                    "/remote/runs/20260101T000000Z-abcdef/src/sideapp",
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    String["child"],
+                ),
+            )
+            try
+                @test DistSSHRun._require_manifest_for_instantiate!(side) === nothing
+            finally
+                DistSSHRun._clear_active_selection!()
+            end
 
             linked = joinpath(root, "linked")
             mkpath(linked)
