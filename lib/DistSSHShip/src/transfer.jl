@@ -130,9 +130,13 @@ Extract `snapshot` into `dest` on each SSH host and verify the tree hash.
 
 `dest` is the ship anchor (the project directory when there is no path
 dependency outside it). `TransferResult.project_rel` is the project inside
-that directory. This does not allocate a run id, write `run.toml`,
+that directory. This does not allocate a run id, write Run `run.toml`,
 instantiate, or delete `dest`. A non-empty `dest` is an error and is left
 in place. A failed extract can leave a partial tree.
+
+When `write_record=true` (default), writes `<dest>/.distssh/shipped.toml`
+before extract (`complete = false`) and again after verification
+(`complete = true`).
 """
 function transfer_tree(
         snapshot::ShipSnapshot,
@@ -140,6 +144,7 @@ function transfer_tree(
         dest::AbstractString;
         allow_external_symlinks::Bool = false,
         julia::Union{Nothing, AbstractString} = nothing,
+        write_record::Bool = true,
     )::TransferResult
     host_list = String[String(h) for h in hosts]
     isempty(host_list) && throw(ArgumentError("transfer_tree: no hosts"))
@@ -165,6 +170,7 @@ function transfer_tree(
         try
             code, out = DistSSHBase._remote_shell_status(host, _prepare_dest_script(checked))
             code == 0 || throw(ArgumentError("could not prepare dest on $(host): $(strip(out))"))
+            write_record && _write_in_progress_record!(host, checked, snapshot)
             pinned = DistSSHBase.resolve_remote_julia(host, julia)
             pinned === nothing && throw(ArgumentError("Julia not found on $host"))
             extract_verified!(
@@ -172,6 +178,7 @@ function transfer_tree(
                 allow_external_symlinks = allow_external_symlinks,
                 expect_hash = snapshot.content_tree_hash,
             )
+            write_record && _write_complete_record!(host, checked, snapshot)
             push!(rows, TransferHostResult(host, true, "transfer ok"))
         catch e
             e isa InterruptException && rethrow()

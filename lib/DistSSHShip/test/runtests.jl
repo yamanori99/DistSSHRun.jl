@@ -478,4 +478,36 @@ end
             ) === nothing
         end
     end
+
+    @testset "shipped record format" begin
+        _tmp() do dir
+            _project!(dir)
+            snap = DistSSHShip.snapshot(dir)
+            try
+                prog = DistSSHShip.build_shipped_record(snap; complete = false)
+                @test prog["schema"] == 1
+                @test prog["complete"] === false
+                @test prog["content_tree_hash"] == snap.content_tree_hash
+                @test startswith(String(prog["writer"]), "DistSSHShip")
+                done = DistSSHShip.build_shipped_record(snap; complete = true)
+                @test done["complete"] === true
+                @test DistSSHShip.shipped_record_status(done) == :complete
+                @test DistSSHShip.shipped_record_status(prog) == :in_progress
+                path = DistSSHShip.shipped_record_logical_path("/stage/tree")
+                @test path == "/stage/tree/.distssh/shipped.toml"
+                path2 = DistSSHShip.shipped_record_logical_path("~/q/stage")
+                @test path2 == "~/q/stage/.distssh/shipped.toml"
+            finally
+                rm(snap.directory; force = true, recursive = true)
+            end
+        end
+        bad = Dict(
+            "schema" => 1,
+            "writer" => "Other",
+            "complete" => true,
+            "algorithm" => "git-sha1",
+            "content_tree_hash" => "a"^40,
+        )
+        @test DistSSHShip.shipped_record_status(bad) == :invalid
+    end
 end

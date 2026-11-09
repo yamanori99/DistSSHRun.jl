@@ -162,6 +162,13 @@ DistSSHShip.transfer_tree
 DistSSHShip.TransferResult
 DistSSHShip.TransferHostResult
 DistSSHShip.assert_extracted_tree_contained!
+DistSSHShip.shipped_record_logical_path
+DistSSHShip.build_shipped_record
+DistSSHShip.write_shipped_record!
+DistSSHShip.read_shipped_record
+DistSSHShip.read_shipped_record_status
+DistSSHShip.shipped_record_status
+DistSSHShip.verify_shipped_record
 ```
 
 ## Hosts, cache, and run directories

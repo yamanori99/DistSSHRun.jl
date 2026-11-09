@@ -6,6 +6,7 @@ the same way it includes DistSSHUp. DistSSHShip is not registered.
 """
 module DistSSHShip
 
+using Dates
 using ..DistSSHBase
 using TOML
 using Tar
@@ -26,6 +27,7 @@ include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "select.jl")
 include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "deps.jl"))
 include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "contain.jl"))
 include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "snapshot.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "record.jl"))
 include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "transfer.jl"))
 
 public EXTERNAL_DIR_NAME
@@ -41,5 +43,12 @@ public TransferResult
 public TransferHostResult
 public content_tree_hash
 public assert_extracted_tree_contained!
+public shipped_record_logical_path
+public build_shipped_record
+public write_shipped_record!
+public read_shipped_record
+public read_shipped_record_status
+public shipped_record_status
+public verify_shipped_record
 
 end # module DistSSHShip

@@ -10,6 +10,6 @@ DistSSHShip = {path = ".."}
 
 [compat]
 DistSSHBase = "0.1"
-DistSSHShip = "0.1"
+DistSSHShip = "0.2"
 Test = "1"
 TOML = "1"

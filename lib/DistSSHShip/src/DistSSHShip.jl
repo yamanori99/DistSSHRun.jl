@@ -12,6 +12,7 @@ does not need an unregistered package.
 """
 module DistSSHShip
 
+using Dates
 using DistSSHBase
 using TOML
 using Tar
@@ -24,6 +25,7 @@ include("select.jl")
 include("deps.jl")
 include("contain.jl")
 include("snapshot.jl")
+include("record.jl")
 include("transfer.jl")
 
 public EXTERNAL_DIR_NAME
@@ -39,5 +41,12 @@ public TransferResult
 public TransferHostResult
 public content_tree_hash
 public assert_extracted_tree_contained!
+public shipped_record_logical_path
+public build_shipped_record
+public write_shipped_record!
+public read_shipped_record
+public read_shipped_record_status
+public shipped_record_status
+public verify_shipped_record
 
 end # module DistSSHShip
