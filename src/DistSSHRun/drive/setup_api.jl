@@ -139,6 +139,7 @@ function setup!(
                 gitignore = gitignore,
                 allow_external_symlinks = allow_external_symlinks,
                 extra_files = extra_files,
+                allow_dirty = allow_dirty,
             )
         end
     end
@@ -659,6 +660,7 @@ function _setup_one!(
         gitignore::Bool = true,
         allow_external_symlinks::Bool = false,
         extra_files::Vector{String} = String[],
+        allow_dirty::Bool = false,
     )::SyncResult
     if !gitignore
         throw(ArgumentError("setup! gitignore is not valid on setup!(session, :$(mode))"))
