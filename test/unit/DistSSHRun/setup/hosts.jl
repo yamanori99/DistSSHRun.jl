@@ -65,12 +65,23 @@ using Test
 
     @testset "probe / preflight" begin
         _with_fake_remotes() do _
-            @test DistSSHRun.probe_setup_ssh("host1") === nothing
-            @test DistSSHRun.preflight_setup_ssh(["host1", "host2"])
+            with_kit_verbosity(:verbose) do
+                out, _ = _capture_stdio() do _, _
+                    @test DistSSHRun.probe_setup_ssh("host1") === nothing
+                    @test DistSSHRun.preflight_setup_ssh(["host1", "host2"])
+                end
+                @test occursin("SSH preflight:\n", out)
+            end
         end
         _with_fake_remotes(extra_env = Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1")) do _
-            @test DistSSHRun.probe_setup_ssh("host1") isa String
-            @test DistSSHRun.preflight_setup_ssh(["host1"]) == false
+            with_kit_verbosity(:verbose) do
+                out, _ = _capture_stdio() do _, _
+                    @test DistSSHRun.probe_setup_ssh("host1") isa String
+                    @test DistSSHRun.preflight_setup_ssh(["host1"]) == false
+                end
+                @test occursin("SSH auth/host-key failed", out)
+                @test match(r"SSH auth/host-key failed[^\n]*\n", out) !== nothing
+            end
         end
     end
 
