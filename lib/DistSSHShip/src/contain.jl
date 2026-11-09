@@ -99,7 +99,12 @@ function remote_extract_expr()::String
     Tar.extract(stdin, dest)
     $(_WALK_SOURCE)
     distsshship_assert_tree!(dest, allow)
-    got = string(Tar.tree_hash(dest; algorithm="git-sha1", skip_empty=true))
+    # `Tar.tree_hash` reads a tar, not a directory. Rebuild one so the hash
+    # matches the tar `snapshot` recorded (`git-sha1` ignores mtime and order).
+    buf = IOBuffer()
+    Tar.create(dest, buf)
+    seekstart(buf)
+    got = string(Tar.tree_hash(buf; algorithm="git-sha1", skip_empty=true))
     got == expected || error("content_tree_hash mismatch: " * got * " != " * expected)
     """
 end
