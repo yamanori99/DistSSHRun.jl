@@ -12,14 +12,19 @@ table starts open.
 
 ## Flagged
 
-No sample grew past the watch line.
+- 1.13: go method new -> 476.6 ms: Tuple{DistSSHRun.var"#_go_run!##4#_go_run!##5"{String, String, Bool, Array{String, 1}, Nothing, Stri...
+- 1.13: go method new -> 1049.0 ms: Tuple{typeof(Core.kwcall), NamedTuple{(:project, :quiet, :verbosity, :yes, :args, :path_anchor, :out...
+- 1.14-pre: go method new -> 276.8 ms: Tuple{DistSSHRun.var"#_go_run!##4#_go_run!##5"{String, String, Bool, Array{String, 1}, Nothing, Stri...
+- 1.14-pre: go method new -> 785.6 ms: Tuple{typeof(Core.kwcall), NamedTuple{(:project, :quiet, :verbosity, :yes, :args, :path_anchor, :out...
+- nightly: julia 1.15.0-DEV.619 -> 1.15.0-DEV.622
+- nightly: go method new -> 324.0 ms: Tuple{DistSSHRun.var"#_go_run!##4#_go_run!##5"{String, String, Bool, Array{String, 1}, Nothing, Stri...
+- nightly: go method new -> 897.3 ms: Tuple{typeof(Core.kwcall), NamedTuple{(:project, :quiet, :verbosity, :yes, :args, :path_anchor, :out...
 
 <details open>
 <summary>1.13</summary>
 
 | date | commit | version | julia | os | arch | src files | code lines | full s | pkg s | using s | help s | go s | drive s |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-11-08 | 15d4833 | 0.2.0-DEV | 1.13.3 | Ubuntu 26.04.1 LTS | x86_64 | 75 | 24762 | 23.45 | 20.08 | 0.39 | 0.82 | 7.06 | 18.73 |
 | 2026-11-08 | 96439b6 | 0.2.0-DEV | 1.13.3 | Ubuntu 26.04.1 LTS | x86_64 | 75 | 25004 | 18.53 | 15.97 | 0.35 | 0.72 | 5.86 | 16.17 |
 | 2026-11-09 | 96439b6 | 0.2.0-DEV | 1.13.3 | Ubuntu 26.04.1 LTS | x86_64 | 75 | 25004 | 24.47 | 21.25 | 0.43 | 0.86 | 7.45 | 20.06 |
 | 2026-11-09 | 93d5b66 | 0.2.0-DEV | 1.13.3 | Ubuntu 26.04.1 LTS | x86_64 | 76 | 26049 | 23.67 | 20.68 | 0.39 | 0.82 | 6.98 | 18.71 |
@@ -31,6 +36,7 @@ No sample grew past the watch line.
 | 2026-11-09 | 1ffc25b | 0.2.0-DEV | 1.13.3 | Ubuntu 26.04.1 LTS | x86_64 | 77 | 26598 | 24.76 | 21.14 | 0.41 | 0.87 | 7.65 | 19.1 |
 | 2026-11-09 | 52c0fb9 | 0.2.0-DEV | 1.13.3 | Ubuntu 26.04.1 LTS | x86_64 | 78 | 26779 | 15.87 | 13.67 | 0.32 | 0.61 | 5.38 | 13.84 |
 | 2026-11-09 | c995378 | 0.2.0-DEV | 1.13.3 | Ubuntu 26.04.1 LTS | x86_64 | 79 | 27283 | 15.52 | 13.41 | 0.26 | 0.59 | 4.91 | 12.95 |
+| 2026-11-09 | 1561e63 | 0.2.0-DEV | 1.13.3 | Ubuntu 26.04.1 LTS | x86_64 | 80 | 27050 | 22.33 | 19.38 | 0.37 | 0.79 | 4.83 | 17.28 |
 
 </details>
 
@@ -59,7 +65,6 @@ No sample grew past the watch line.
 
 | date | commit | version | julia | os | arch | src files | code lines | full s | pkg s | using s | help s | go s | drive s |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-11-08 | 15d4833 | 0.2.0-DEV | 1.14.0-alpha2 | Ubuntu 26.04.1 LTS | x86_64 | 75 | 24762 | 15.79 | 11.48 | 0.28 | 0.54 | 2.88 | 8.64 |
 | 2026-11-08 | 96439b6 | 0.2.0-DEV | 1.14.0-alpha2 | Ubuntu 26.04.1 LTS | x86_64 | 75 | 25004 | 18.87 | 13.83 | 0.34 | 0.63 | 3.54 | 10.08 |
 | 2026-11-09 | 96439b6 | 0.2.0-DEV | 1.14.0-alpha2 | Ubuntu 26.04.1 LTS | x86_64 | 75 | 25004 | 16.75 | 12.18 | 0.28 | 0.56 | 2.99 | 8.9 |
 | 2026-11-09 | 93d5b66 | 0.2.0-DEV | 1.14.0-alpha2 | Ubuntu 26.04.1 LTS | x86_64 | 76 | 26049 | 14.54 | 10.27 | 0.28 | 0.54 | 2.88 | 8.16 |
@@ -71,6 +76,7 @@ No sample grew past the watch line.
 | 2026-11-09 | 1ffc25b | 0.2.0-DEV | 1.14.0-alpha2 | Ubuntu 26.04.1 LTS | x86_64 | 77 | 26598 | 21.23 | 15.55 | 0.34 | 0.64 | 3.76 | 10.07 |
 | 2026-11-09 | 52c0fb9 | 0.2.0-DEV | 1.14.0-alpha2 | Ubuntu 26.04.1 LTS | x86_64 | 78 | 26779 | 22.0 | 15.97 | 0.36 | 0.69 | 4.01 | 10.27 |
 | 2026-11-09 | c995378 | 0.2.0-DEV | 1.14.0-alpha2 | Ubuntu 26.04.1 LTS | x86_64 | 79 | 27283 | 13.0 | 9.49 | 0.24 | 0.48 | 2.57 | 7.27 |
+| 2026-11-09 | 1561e63 | 0.2.0-DEV | 1.14.0-alpha2 | Ubuntu 26.04.1 LTS | x86_64 | 80 | 27050 | 13.89 | 10.28 | 0.27 | 0.49 | 1.95 | 7.43 |
 
 </details>
 
@@ -79,7 +85,6 @@ No sample grew past the watch line.
 
 | date | commit | version | julia | os | arch | src files | code lines | full s | pkg s | using s | help s | go s | drive s |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-11-08 | 15d4833 | 0.2.0-DEV | 1.15.0-DEV.605 | Ubuntu 26.04.1 LTS | x86_64 | 75 | 24762 | 16.31 | 12.01 | 0.22 | 0.47 | 2.9 | 8.94 |
 | 2026-11-08 | 96439b6 | 0.2.0-DEV | 1.15.0-DEV.607 | Ubuntu 26.04.1 LTS | x86_64 | 75 | 25004 | 19.95 | 14.61 | 0.26 | 0.57 | 3.37 | 10.04 |
 | 2026-11-09 | 96439b6 | 0.2.0-DEV | 1.15.0-DEV.610 | Ubuntu 26.04.1 LTS | x86_64 | 75 | 25004 | 19.99 | 14.64 | 0.26 | 0.55 | 3.37 | 9.99 |
 | 2026-11-09 | 93d5b66 | 0.2.0-DEV | 1.15.0-DEV.611 | Ubuntu 26.04.1 LTS | x86_64 | 76 | 26049 | 20.81 | 14.95 | 0.28 | 0.6 | 3.55 | 10.24 |
@@ -91,6 +96,7 @@ No sample grew past the watch line.
 | 2026-11-09 | 1ffc25b | 0.2.0-DEV | 1.15.0-DEV.619 | Ubuntu 26.04.1 LTS | x86_64 | 77 | 26598 | 12.7 | 9.44 | 0.19 | 0.41 | 2.33 | 7.12 |
 | 2026-11-09 | 52c0fb9 | 0.2.0-DEV | 1.15.0-DEV.619 | Ubuntu 26.04.1 LTS | x86_64 | 78 | 26779 | 17.51 | 12.96 | 0.25 | 0.51 | 3.11 | 8.9 |
 | 2026-11-09 | c995378 | 0.2.0-DEV | 1.15.0-DEV.619 | Ubuntu 26.04.1 LTS | x86_64 | 79 | 27283 | 17.34 | 12.75 | 0.23 | 0.5 | 3.05 | 8.75 |
+| 2026-11-09 | 1561e63 | 0.2.0-DEV | 1.15.0-DEV.622 | Ubuntu 26.04.1 LTS | x86_64 | 80 | 27050 | 16.33 | 12.56 | 0.22 | 0.49 | 2.09 | 8.51 |
 
 </details>
 
