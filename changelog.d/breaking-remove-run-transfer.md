@@ -1,4 +1,4 @@
-### Breaking
+category: breaking
 
 - `go` / `drive` / `execute!` / `pipeline!` no longer copy code on run.
   `--git-sync`, `--ship-tree`, `--sync`, `--skip-git-guard`, and related API
