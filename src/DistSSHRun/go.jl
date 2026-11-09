@@ -368,14 +368,9 @@ function _go_kit_parent(
         script::AbstractString,
     )::String
     proj = canonical_local_path(project)
+    script_path = canonical_local_path(script)
     if _script_inside_project(project, script)
-        script_path = canonical_local_path(script)
-        try
-            ispath(script_path) && (script_path = canonical_local_path(realpath(script_path)))
-        catch
-        end
-        dir = dirname(script_path)
-        return kit_dir_beside_script(dir, :go)
+        return kit_dir_beside_script(dirname(script_path), :go)
     end
     return kit_dir_beside_script(proj, :go)
 end
