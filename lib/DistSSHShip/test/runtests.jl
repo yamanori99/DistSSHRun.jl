@@ -558,10 +558,9 @@ end
         try
             order = Symbol[]
             hooks = DistSSHShip._TransferTreeHooks(
-                (h, d) -> push!(order, :prepare),
-                (h, d, s, j; allow_external_symlinks = false, expect_hash = "") ->
-                push!(order, :extract),
-                (h, d, s) -> push!(order, :record),
+                (_, _) -> push!(order, :prepare),
+                (_, _, _, _; _...) -> push!(order, :extract),
+                (_, _, _) -> push!(order, :record),
             )
             DistSSHShip._transfer_tree_one_host!(
                 "host.test", "/stage/tree", snap, false, true; hooks = hooks,
