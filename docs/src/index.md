@@ -78,11 +78,14 @@ be symlinks. Existing directories are not chmod'd. Transfer failure after
 create leaves the safe directory. `sync!(mode=:ship_tree)` and
 `go!(…; sync=:ship_tree)` / `drive!(…; sync=:ship_tree)` use the
 same ensure path; those Julia entry points still instantiate after ship.
-Detached `execute!(…; sync=:ship_tree)` does that ship in the parent, then
-starts the child with `--snapshot`. One script outside the project is the
-extra file. [`remote_script_path`](@ref) is the path the child runs.
-The `go` / `drive` CLI does not take `--ship-tree`: run `setup ship-tree`,
-then `setup instantiate`, then `go` / `drive` with `--snapshot ID`.
+Detached `execute!(…; sync=:ship_tree)` is an error before spawn. Ship with
+`setup!` / `setup ship-tree`, including one outside script as `extra_files`
+/ `--extra-file`, then `execute!(…; snapshot=id)` or `go` / `drive --snapshot ID`
+with that same local script. The remote command is
+[`remote_script_path`](@ref) (`_distsshrun_external/<basename>` under the
+selected project). The `go` / `drive` CLI does not take `--ship-tree`: run
+`setup ship-tree`, then `setup instantiate`, then `go` / `drive` with
+`--snapshot ID`.
 Later `setup instantiate` / `setup check` / `go` / `drive` / `ride` select a
 snapshot with `--snapshot ID` (or `snapshot=` on `setup!` / `go!` / `drive!` /
 `ride!`), else the local `.distsshkit/last-snapshot.toml` written after a

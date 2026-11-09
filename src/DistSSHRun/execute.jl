@@ -439,10 +439,11 @@ and [`drive!`](@ref) already share (`ride!` ignores `sync`). With `detached=fals
 (default), any other keyword is forwarded to the chosen function.
 
 `detached=true` spawns `julia -m DistSSHKit go|ride|drive` and returns a
-[`KitProcess`](@ref). `sync=:ship_tree` ships in this process (the child
-CLI has no `--ship-tree`), including one script outside the project at
-`_distsshrun_external/<basename>`, then spawns the child with `--snapshot`
-and that remote path. `snapshot=` cannot be combined with `sync=:ship_tree`.
+[`KitProcess`](@ref). `sync=:ship_tree` is an error before spawn (the child
+CLI has no `--ship-tree`). Ship first with [`setup!`](@ref) `:ship_tree`.
+A script outside the project is `extra_files=[script]` (one file, at
+`_distsshrun_external/<basename>`), then `setup!(session, :instantiate; snapshot=id)`,
+then `execute!(...; snapshot=id)` with that same local script.
 In-process [`go!`](@ref) / [`drive!`](@ref) still accept `sync=:ship_tree`.
 `sync=:sync`, omitted/`false` sync, and `snapshot=` are unchanged.
 `--project=` is always the job `project=` when that
@@ -740,7 +741,9 @@ function _execute_detached!(
             )
         )
     end
-    # Child argv cannot emit `--ship-tree`. The parent ships, then passes `--snapshot`.
+    if sync === :ship_tree
+        _throw_detached_ship_tree_removed()
+    end
     ship_external = get(kwargs, :allow_external_symlinks, false) === true
     yes = get(kwargs, :yes, true)
     yes === true || throw(ArgumentError("execute!(...; detached=true) requires yes=true"))
@@ -811,30 +814,6 @@ function _execute_detached!(
     proj = canonical_local_path(project)
     launch_dir = _detached_launch_dir(dir, proj)
     script_path = _remote_script_argv(script) ? String(script) : canonical_local_path(script)
-    if sync === :ship_tree
-        if snapshot !== nothing
-            throw(ArgumentError("execute!: snapshot= cannot be combined with sync=:ship_tree"))
-        end
-        child_hosts = child_hosts_from_tokens(tokens)
-        isempty(child_hosts) && throw(
-            ArgumentError(
-                "execute!(...; detached=true, sync=:ship_tree) needs a child host",
-            ),
-        )
-        shipped_script = _detached_ship_tree!(
-            kind, script_path, child_hosts, proj;
-            remote = remote,
-            quiet = quiet,
-            verbosity = verbosity,
-            julia = julia,
-            allow_external_symlinks = ship_external,
-        )
-        script_path = shipped_script.script
-        snapshot = shipped_script.snapshot
-        sync = nothing
-        ship_external = false
-        allow_external_symlinks = false
-    end
     if ship_external
         _throw_go_drive_ship_cli_removed(String(kind), "--allow-external-symlinks")
     end
@@ -1870,65 +1849,6 @@ function _execute_detached_dirs(
         canonical_local_path(run_dir)
     end
     return resolved_output, resolved_log
-end
-
-"""Ship in the parent, then hand the child `--snapshot` and the remote script path."""
-function _detached_ship_tree!(
-        kind::Symbol,
-        script_path::AbstractString,
-        child_hosts::Vector{String},
-        project::AbstractString;
-        remote::Union{Nothing, AbstractString},
-        quiet::Bool,
-        verbosity::Union{Nothing, Symbol},
-        julia::Union{Nothing, AbstractString},
-        allow_external_symlinks::Bool,
-    )
-    kind === :go || kind === :drive || throw(
-        ArgumentError("execute!(...; sync=:ship_tree) kind must be :go or :drive"),
-    )
-    session = KitSession(
-        project = project,
-        workers = [format_placement_token(:child, h) for h in child_hosts],
-        remote = remote,
-        quiet = quiet,
-        verbosity = verbosity,
-        yes = true,
-    )
-    outside = !_script_inside_project(project, script_path)
-    extras = outside ? String[script_path] : String[]
-    shipped = sync!(
-        session;
-        mode = :ship_tree,
-        allow_external_symlinks = allow_external_symlinks,
-        await_inputs = true,
-        extra_files = extras,
-    )
-    shipped.ok || throw(
-        ArgumentError(
-            "detached ship-tree failed: " *
-                join((hr.message for hr in shipped.hosts if !hr.ok), "; "),
-        ),
-    )
-    rid = result_remote_run_id(shipped)
-    rid === nothing && throw(
-        ArgumentError("detached ship-tree succeeded without a snapshot id"),
-    )
-    inst_julia = julia === nothing || strip(String(julia)) == "auto" ? "auto" : String(julia)
-    inst = instantiate_after_ship!(session; julia = inst_julia, snapshot = rid)
-    if inst !== nothing && !inst.ok
-        throw(
-            ArgumentError(
-                "detached instantiate failed: " *
-                    join((hr.message for hr in inst.hosts if !hr.ok), "; "),
-            ),
-        )
-    end
-    work = _project_work_root(
-        child_hosts, project; cli_override = remote, snapshot = rid,
-    )
-    child_script = outside ? remote_script_path(work, project, script_path) : script_path
-    return (script = child_script, snapshot = rid)
 end
 
 function _execute_detached_argv(

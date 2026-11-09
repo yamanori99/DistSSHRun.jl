@@ -1634,13 +1634,49 @@ end
             end
         end
 
-        @testset "detached execute ships an outside script" begin
-            _e2e_announce("detached execute ships an outside script")
+        @testset "detached execute runs an outside script from a snapshot" begin
+            _e2e_announce("detached execute runs an outside script from a snapshot")
             outside = joinpath(dirname(proj), "outside_marker.jl")
             write(outside, "println(\"OUTSIDE_SCRIPT_OK\")\n")
             outside_root = remote_root * "-outside"
+            outside_env = _ssh_e2e_env(; remote_project = outside_root)
+            proc, out = _run_kit_setup(;
+                setup_args = [
+                    "delete", "--deploy-root", outside_root, "--confirm-path", outside_root,
+                    setup_hosts...,
+                ],
+                project_root = proj,
+                extra_env = outside_env,
+            )
+            _assert_ssh_e2e_ok(suite, "detached_outside_delete", proc, out; project = proj, kit = :setup)
             _ssh_e2e_ensure_remote_root!(hosts, outside_root)
-            kp = withenv(_e2e_base_env()...) do
+            proc, out = _run_kit_setup(;
+                setup_args = [
+                    "ship-tree", "--deploy-root", outside_root, "--extra-file", outside,
+                    setup_hosts...,
+                ],
+                project_root = proj,
+                extra_env = outside_env,
+            )
+            _assert_ssh_e2e_ok(suite, "detached_outside_ship", proc, out; project = proj, kit = :setup)
+            p_src, src_out = _ssh_e2e_ssh(
+                hosts[1], "ls -1d $(outside_root)/runs/*/src 2>/dev/null | tail -n 1",
+            )
+            _assert_proc_ok(p_src, src_out; label = "outside ship src leaf")
+            snap_id = basename(dirname(strip(src_out)))
+            @test !isempty(snap_id)
+            proc, out = _run_kit_setup(;
+                setup_args = [
+                    "instantiate", "--deploy-root", outside_root, "--snapshot", snap_id,
+                    setup_hosts...,
+                ],
+                project_root = proj,
+                extra_env = outside_env,
+            )
+            _assert_ssh_e2e_ok(
+                suite, "detached_outside_instantiate", proc, out; project = proj, kit = :setup,
+            )
+            kp = withenv(outside_env...) do
                 DistSSHRun.execute!(
                     :go,
                     outside,
@@ -1648,7 +1684,7 @@ end
                     project = proj,
                     remote = outside_root,
                     detached = true,
-                    sync = :ship_tree,
+                    snapshot = snap_id,
                     yes = true,
                     quiet = true,
                 )
@@ -1664,9 +1700,9 @@ end
             @test result.exit_code == 0
             p, ssh_out = _ssh_e2e_ssh(
                 hosts[1],
-                "test -f \$(ls -1d $(outside_root)/runs/*/src/_distsshrun_external/outside_marker.jl | tail -n 1)",
+                "test -f $(outside_root)/runs/$(snap_id)/src/_distsshrun_external/outside_marker.jl",
             )
-            _assert_proc_ok(p, ssh_out; label = "outside script shipped")
+            _assert_proc_ok(p, ssh_out; label = "outside script in snapshot")
         end
     end
 end

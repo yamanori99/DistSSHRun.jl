@@ -320,7 +320,9 @@ function _throw_detached_ship_tree_removed()
             join_explained_message(
                 "execute!(...; detached=true, sync=:ship_tree) cannot pass --ship-tree to go/drive.",
                 string(
-                    "Call setup!(session, :ship_tree, :instantiate), then execute!(...; snapshot=id). ",
+                    "Call setup!(session, :ship_tree; extra_files=[script]) when the script is outside the project ",
+                    "(one file, at _distsshrun_external/<basename>), then setup!(session, :instantiate; snapshot=id), ",
+                    "then execute!(...; snapshot=id). ",
                     "In-process go! / drive! still accept sync=:ship_tree.",
                 ),
             ),

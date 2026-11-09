@@ -987,6 +987,10 @@ After `:ship_tree`,
 hosts that still lack Manifest deps get [`instantiate!`](@ref) before the
 check. `snapshot` (CLI `--snapshot`) selects `runs/<ID>/src` when `sync` is
 omitted or `false`; it cannot combine with `sync=:sync` / `sync=:ship_tree`.
+A script outside the project is allowed with `snapshot` when that ship used
+`extra_files=[script]`. The remote command is
+[`remote_script_path`](@ref): `_distsshrun_external/<basename>` under the
+selected project directory.
 `go!` has no git-parity gate; use [`drive!`](@ref) with
 `skip_hash_check=false` (CLI: `drive --require-git`) when you need that.
 
@@ -1198,7 +1202,9 @@ function _go_run!(
         child_hosts = unique(String[s.host for s in slots if s.kind === :child])
         if !_script_inside_project(proj, script_path) &&
                 !remote_argv &&
-                sync_mode_early !== :ship_tree && !isempty(child_hosts)
+                sync_mode_early !== :ship_tree &&
+                snap_arg === nothing &&
+                !isempty(child_hosts)
             throw(
                 ArgumentError(
                     "script must be inside project ($proj): $(canonical_local_path(script_path))",

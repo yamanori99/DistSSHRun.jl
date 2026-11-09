@@ -306,8 +306,12 @@ function _run_drive_parsed_specialized!(
         error(drive_script_not_found_message(script_path, root0; surface = surface))
     end
 
-    script_dir = if remote_argv
-        canonical_local_path(something(project_root, pwd()))
+    root_hint = project_root === nothing ? nothing : canonical_local_path(project_root)
+    outside_snapshot = root_hint !== nothing &&
+        snap_for_script !== nothing &&
+        !DistSSHRun._script_inside_project(root_hint, script_path)
+    script_dir = if remote_argv || outside_snapshot
+        canonical_local_path(something(root_hint, pwd()))
     else
         dirname(script_path)
     end
@@ -525,7 +529,8 @@ function _run_drive_parsed_locked!(
     sync_mode = get(parsed, :sync_mode, nothing)
     outside_script = !DistSSHRun._script_inside_project(proj_dir, script_path)
     remote_argv = DistSSHRun._remote_script_argv(script_path)
-    if outside_script && !remote_argv && sync_mode !== :ship_tree && !isempty(host_names)
+    if outside_script && !remote_argv && sync_mode !== :ship_tree &&
+            get(parsed, :snapshot, nothing) === nothing && !isempty(host_names)
         throw(
             ArgumentError(
                 "script must be inside project ($proj_dir): $(DistSSHRun.canonical_local_path(script_path))",

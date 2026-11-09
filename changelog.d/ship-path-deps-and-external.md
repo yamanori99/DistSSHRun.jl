@@ -15,15 +15,21 @@ category: breaking
   message apply to `setup!`, `sync!`, and `snapshot` `extra_files`.
   The file is stored at `_distsshrun_external/<basename>` under the remote
   project. A symlink is followed once. Siblings are not sent. In-process
-  `go!` / `drive!` and detached `execute!(…; sync=:ship_tree)` use that
-  path for one script outside the project. The detached parent ships, then
-  the child argv is `--snapshot` plus `remote_script_path`.
-  Without `:ship_tree` or `snapshot=`, an outside script is still an error.
+  `go!` / `drive!` with `sync=:ship_tree` use that path for one script
+  outside the project. Detached `execute!(…; sync=:ship_tree)` stays an
+  error before spawn. After the ship, `execute!(…; snapshot=id)` and
+  `go` / `drive --snapshot ID` run that same local script; the remote
+  command is `remote_script_path`. Without `:ship_tree` or `snapshot=`,
+  an outside script is still an error.
 - The content hash covers project files, path dependencies, and that extra
   file by relative path and content. After extract, ship, pull, and
   `DistSSHShip.transfer_tree` walk symlinks and compare the `git-sha1` tree
   hash. `--allow-external-symlinks` keeps the old escape allowance.
 - Shipping lives in `lib/DistSSHShip`, included by DistSSHRun the same way
   as DistSSHUp. It is not a `[deps]` entry and it is not registered.
-  A detached Queue job ships with `extra_files=[script]`, then
-  `execute!(…; detached=true, snapshot=id)` and `remote_script_path`.
+  Queue packs with `DistSSHShip.snapshot(project; extra_files=[script])`,
+  places that tar with `transfer_tree` or `ship`, and runs
+  `execute!(…; detached=true, snapshot=id)` on the same local script.
+  `ship` writes the run id and completion stamp that `snapshot=` selects.
+  `transfer_tree` extracts the same tar, including
+  `_distsshrun_external/<basename>`, and does not allocate that id.

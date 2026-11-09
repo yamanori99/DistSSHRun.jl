@@ -1004,9 +1004,15 @@ end
             e
         end
         @test err_ship isa ArgumentError
-        @test occursin("needs a child host", err_ship.msg)
-        @test !occursin("cannot pass --ship-tree", err_ship.msg)
+        @test occursin("cannot pass --ship-tree", err_ship.msg)
+        @test occursin("extra_files", err_ship.msg)
+        @test occursin("_distsshrun_external", err_ship.msg)
+        @test occursin("snapshot=id", err_ship.msg)
+        @test occursin("go! / drive! still accept sync=:ship_tree", err_ship.msg)
         @test !occursin("Project.toml", err_ship.msg)
+        @test DistSSHRun._go_script_relpath("/local/app", "/local/job.jl") ==
+            joinpath("_distsshrun_external", "job.jl")
+        @test DistSSHRun._go_script_relpath("/local/app", "/local/app/job.jl") == "job.jl"
         @test DistSSHRun.remote_script_path("/remote/src/app", "/local/app", "/local/job.jl") ==
             "/remote/src/app/_distsshrun_external/job.jl"
         @test DistSSHRun.remote_script_path("/remote/src/app", "/local/app", "/local/app/job.jl") ==
@@ -1045,6 +1051,46 @@ end
         @test err_ext isa ArgumentError
         @test occursin("--allow-external-symlinks was removed", err_ext.msg)
         @test !occursin("Project.toml", err_ext.msg)
+
+        mktempdir() do dir
+            proj = joinpath(dir, "app")
+            mkpath(proj)
+            write(joinpath(proj, "Project.toml"), "name = \"Out\"\n")
+            write(
+                joinpath(proj, "Manifest.toml"),
+                "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
+            )
+            script = joinpath(dir, "job.jl")
+            write(script, "println(\"OUTSIDE_SCRIPT_OK\")\n")
+            fake = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+            err_out = try
+                withenv(
+                    "DISTSSHKIT_TEST" => "1",
+                    "DISTSSHKIT_TEST_SSH" => fake,
+                    "DISTSSHKIT_TEST_POSIX_SHELL" => "1",
+                    "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
+                    "DISTSSHKIT_TEST_SSH_FAIL" => "1",
+                ) do
+                    DistSSHRun.go!(
+                        script, ["child:h:1"];
+                        project = proj,
+                        remote = "/home/dev/app",
+                        snapshot = "20260101T000000Z-aaaaaa",
+                        yes = true,
+                        quiet = true,
+                    )
+                end
+                nothing
+            catch e
+                e
+            finally
+                DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
+            end
+            shown = sprint(showerror, err_out)
+            @test err_out isa Exception
+            @test !occursin("must be inside project", shown)
+            @test !occursin("cannot pass --ship-tree", shown)
+        end
     end
 
     @testset ":go dispatch" begin
