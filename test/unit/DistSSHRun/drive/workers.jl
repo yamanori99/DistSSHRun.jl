@@ -310,9 +310,9 @@ end
     end
 
     @testset "_master_alive" begin
-        @test DistSSHRun._master_alive(0.0, 10.0, 10.0)
-        @test DistSSHRun._master_alive(0.0, 10.0, 9.9)
-        @test !DistSSHRun._master_alive(0.0, 10.0, 10.1)
+        @test DistSSHRun.DistSSHHeartbeat._master_alive(0.0, 10.0, 10.0)
+        @test DistSSHRun.DistSSHHeartbeat._master_alive(0.0, 10.0, 9.9)
+        @test !DistSSHRun.DistSSHHeartbeat._master_alive(0.0, 10.0, 10.1)
     end
 
     function _wait_flag(flag::Ref{Bool}; timeout::Float64 = 2.0)
@@ -327,7 +327,7 @@ end
         stop = Ref(false)
         dead = Ref(false)
         ch = Channel{Nothing}(0)
-        hb = DistSSHRun._run_heartbeat!(
+        hb = DistSSHRun.DistSSHHeartbeat._run_heartbeat!(
             stop, 0.05, 0.12;
             ping = () -> take!(ch),
             on_dead = () -> (dead[] = true),
@@ -345,7 +345,7 @@ end
     @testset "_run_heartbeat! live ping does not trip" begin
         stop = Ref(false)
         dead = Ref(false)
-        DistSSHRun._run_heartbeat!(
+        DistSSHRun.DistSSHHeartbeat._run_heartbeat!(
             stop, 0.05, 1.0;
             ping = () -> true,
             on_dead = () -> (dead[] = true),
@@ -362,7 +362,7 @@ end
         stop = Ref(false)
         dead = Ref(false)
         n = Ref(0)
-        DistSSHRun._run_heartbeat!(
+        DistSSHRun.DistSSHHeartbeat._run_heartbeat!(
             stop, 0.04, 0.35;
             ping = () -> (n[] += 1; n[] <= 2 && error("blip"); true),
             on_dead = () -> (dead[] = true),
@@ -378,7 +378,7 @@ end
 
     @testset "_run_heartbeat! stop ends both tasks" begin
         stop = Ref(false)
-        hb = DistSSHRun._run_heartbeat!(
+        hb = DistSSHRun.DistSSHHeartbeat._run_heartbeat!(
             stop, 0.03, 10.0;
             ping = () -> true,
             on_dead = () -> error("should not die"),
@@ -388,6 +388,26 @@ end
         wait(hb.watchdog)
         @test istaskdone(hb.prober)
         @test istaskdone(hb.watchdog)
+    end
+
+    @testset "_run_heartbeat! stall while master is healthy" begin
+        stop = Ref(false)
+        dead = Ref(false)
+        DistSSHRun.DistSSHHeartbeat._run_heartbeat!(
+            stop, 0.2, 0.8;
+            ping = () -> true,
+            on_dead = () -> (dead[] = true),
+        )
+        try
+            sleep(0.3)
+            t_end = time() + 1.6
+            while time() < t_end
+            end
+            sleep(0.5)
+            @test !dead[]
+        finally
+            stop[] = true
+        end
     end
 
     @testset "publish defs skip top-level work on workers" begin

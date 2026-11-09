@@ -167,7 +167,12 @@ include("DistSSHRun/run_manifest.jl")
 include("DistSSHRun/setup.jl")
 include("DistSSHRun/run_layout.jl")
 include("DistSSHRun/ship_module.jl")
+include("DistSSHRun/heartbeat_module.jl")
 using .DistSSHShip: EXTERNAL_DIR_NAME
+using .DistSSHHeartbeat:
+    _heartbeat_config,
+    install_and_start_heartbeat!,
+    stop_heartbeat_on_workers!
 include("DistSSHRun/ship_list.jl")
 include("DistSSHRun/ship.jl")
 include("DistSSHRun/snapshot_select.jl")
@@ -182,7 +187,6 @@ include("DistSSHRun/drive.jl")
 include("DistSSHRun/namespace_sync.jl")
 include("DistSSHRun/pool.jl")
 include("DistSSHRun/hostinfo.jl")
-include("DistSSHRun/drive/runtime/heartbeat.jl")
 include("DistSSHRun/drive/runtime/_common.jl")
 include("DistSSHRun/drive/runtime/cancel_frame.jl")
 include("DistSSHRun/drive/runtime/checks.jl")

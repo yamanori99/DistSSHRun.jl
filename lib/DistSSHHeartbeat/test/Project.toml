@@ -1,0 +1,15 @@
+[deps]
+DistSSHBase = "f0a69307-14e5-4272-8c28-20680d05bac8"
+DistSSHHeartbeat = "7d4a9c2e-1f83-4b6a-9e20-c1ab23de45f6"
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[sources]
+DistSSHBase = {path = "../../DistSSHBase"}
+DistSSHHeartbeat = {path = ".."}
+
+[compat]
+DistSSHBase = "0.1"
+DistSSHHeartbeat = "0.1"
+Distributed = "1.11"
+Test = "1"

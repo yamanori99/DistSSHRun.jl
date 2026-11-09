@@ -1099,15 +1099,23 @@ end
             marker = joinpath(root, "RAN")
             write(script, "write($(repr(marker)), \"yes\")\n")
             result = redirect_stdout(devnull) do
-                redirect_stderr(devnull) do
-                    DistSSHRun.drive!(
-                        script, ["parent:1"];
-                        project = app,
-                        snapshot = "20260101T000000Z-aaaaaa",
-                        yes = true,
-                        quiet = true,
-                        enable_log = false,
-                    )
+                mktemp() do err_path, err_io
+                    inner = redirect_stderr(err_io) do
+                        DistSSHRun.drive!(
+                            script, ["parent:1"];
+                            project = app,
+                            snapshot = "20260101T000000Z-aaaaaa",
+                            yes = true,
+                            quiet = true,
+                            enable_log = false,
+                        )
+                    end
+                    flush(err_io)
+                    err = read(err_path, String)
+                    @test !occursin("heartbeat", lowercase(err))
+                    @test !isdefined(Main, :stop_heartbeat_monitor)
+                    @test !isdefined(Main, :start_heartbeat_monitor)
+                    return inner
                 end
             end
             @test result.ok

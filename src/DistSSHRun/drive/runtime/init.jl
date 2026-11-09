@@ -6,7 +6,8 @@ function _drive_eval_main(w, ex)
 end
 
 function _drive_include_main(w, src::String)
-    return remotecall_fetch(Base.include_string, Int(w), Main, src)
+    DistSSHHeartbeat._remote_include_nothing(Int(w), src)
+    return nothing
 end
 
 function _drive_eval_workers(ex)
@@ -333,24 +334,11 @@ function init_drive_workers!(proj_dir::String, explicit_package, path_anchor::St
         write_both("  Starting heartbeat monitors... ")
         flush(stdout)
         hb = _heartbeat_config()
-        hb_src = read(joinpath(@__DIR__, "heartbeat.jl"), String)
-        hb_boot = """
-        include_string(Main, $(repr(hb_src)))
-        const HEARTBEAT_STOP = Ref(false)
-        function stop_heartbeat_monitor()
-            HEARTBEAT_STOP[] = true
-        end
-        function start_heartbeat_monitor()
-            myid() == 1 && return
-            _run_heartbeat!(HEARTBEAT_STOP, $(hb.interval), $(hb.deadline))
-            return nothing
-        end
-        """
-        include_string(Main, hb_boot)
-        for w in workers()
-            _drive_include_main(w, hb_boot)
-        end
-        _drive_eval_workers(:(start_heartbeat_monitor()))
+        nprocs() > 1 && install_and_start_heartbeat!(
+            workers();
+            interval = hb.interval,
+            deadline = hb.deadline,
+        )
 
         for w in workers()
             _drive_eval_main(w, :(flush(stdout); flush(stderr); true))

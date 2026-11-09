@@ -421,7 +421,7 @@ function register_worker_cleanup!(successful_hosts::Vector{String})
         # nworkers() > 0 would rmprocs([1]) and warn "process 1 not removed".
         if nprocs() > 1
             try
-                @everywhere stop_heartbeat_monitor()
+                stop_heartbeat_on_workers!(workers())
                 sleep(_HEARTBEAT_STOP_S)
             catch
             end

@@ -49,17 +49,20 @@ test/
   Project.toml
 ```
 
-`unit/` mirrors Run's own sources. DistSSHBase, DistSSHUp, and DistSSHShip
-tests live with those packages and run as their own `Pkg.test`
-(`lib/DistSSHBase`, `lib/DistSSHUp`, `lib/DistSSHShip`). SSH e2e for Base and
-Up is `lib/<pkg>/test/e2e.jl` (`DISTSSHKIT_SSH_E2E=1` after
-`testenv/docker-ssh/scripts/up.sh`). DistSSHShip's real transfer is in
-`test/e2e.jl`. DistSSHRun's `test/runtests.jl` does not include them.
+`unit/` mirrors Run's own sources. DistSSHBase, DistSSHUp, DistSSHShip,
+and DistSSHHeartbeat tests live with those packages and run as their own
+`Pkg.test` (`lib/DistSSHBase`, `lib/DistSSHUp`, `lib/DistSSHShip`,
+`lib/DistSSHHeartbeat`). SSH e2e for Base and Up is `lib/<pkg>/test/e2e.jl`
+(`DISTSSHKIT_SSH_E2E=1` after `testenv/docker-ssh/scripts/up.sh`).
+DistSSHHeartbeat's SSH file is the same env gate and is skipped without
+`sshd`. DistSSHShip's real transfer is in `test/e2e.jl`. DistSSHRun's
+`test/runtests.jl` does not include them.
 
 ```text
 lib/DistSSHBase/test/   # Pkg.test of DistSSHBase; e2e.jl is SSH only
 lib/DistSSHUp/test/     # Pkg.test of DistSSHUp; e2e.jl is SSH only
 lib/DistSSHShip/test/   # Pkg.test of DistSSHShip; SSH transfer is test/e2e.jl
+lib/DistSSHHeartbeat/test/  # Pkg.test of DistSSHHeartbeat; e2e.jl is SSH only
 unit/
   DistSSHRun/     # ↔ src/DistSSHRun/ (API, setup cores, argv)
     argv/         # ↔ DistSSHRun/argv/

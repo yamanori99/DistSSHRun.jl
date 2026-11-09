@@ -15,6 +15,16 @@ see `@v#.#`. Local workers also put the parent project, then DistSSHRun's
 package directory, on that path so `ride` can load DistSSHRun when the job
 tree does not. Parent `LOAD_PATH` mutations do not otherwise affect workers.
 
+Drive workers ping pid 1 on interval `DISTRIBUTED_HEARTBEAT_INTERVAL_SEC`
+(default 30) and exit with status 75 if the master does not answer within
+`DISTRIBUTED_HEARTBEAT_DEADLINE_SEC` (default the `:peer_silent` wait, 600
+seconds). That deadline is also the longest the master may go without
+yielding. A worker that itself does not yield for more than twice the
+interval resets its last-success time so that stall is not treated as a
+dead master. The monitor stays on the default thread. Run always evals its
+own `DistSSHHeartbeat` source into `Main.DistSSHHeartbeat` on workers; it
+does not `using` DistSSHRun from the job Manifest.
+
 DistSSHKit does not install a terminal command. When that package is
 installed, `julia -m DistSSHKit` is the same entry.
 

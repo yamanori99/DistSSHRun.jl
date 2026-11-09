@@ -19,6 +19,7 @@ files=(
     lib/DistSSHBase/test/runtests.jl
     lib/DistSSHUp/test/runtests.jl
     lib/DistSSHShip/test/runtests.jl
+    lib/DistSSHHeartbeat/test/runtests.jl
     bench/compile/report.jl
     bench/compile/measure.jl
 )

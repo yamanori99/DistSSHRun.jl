@@ -24,7 +24,7 @@ runs:
     - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
       if: inputs.coverage == 'true'
       with:
-        directories: src,lib/DistSSHBase/src,lib/DistSSHUp/src,lib/DistSSHShip/src
+        directories: src,lib/DistSSHBase/src,lib/DistSSHUp/src,lib/DistSSHShip/src,lib/DistSSHHeartbeat/src
     # Public repo + OIDC. A failed upload fails the job (no silent green).
     - name: Upload coverage to Codecov
       if: inputs.upload == 'true'
@@ -48,6 +48,7 @@ runs:
             process_folder("lib/DistSSHBase/src"),
             process_folder("lib/DistSSHUp/src"),
             process_folder("lib/DistSSHShip/src"),
+            process_folder("lib/DistSSHHeartbeat/src"),
         )
         for fc in files
             c, t = get_summary(fc)
