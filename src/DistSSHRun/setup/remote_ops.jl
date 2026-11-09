@@ -22,6 +22,7 @@ function ship_to_remotes(
         project::AbstractString;
         path_anchor::AbstractString = project,
         allow_external_symlinks::Bool = false,
+        extra_files::Vector{String} = String[],
     )::NamedTuple
     raw = ship_project_to_hosts!(
         hosts,
@@ -31,6 +32,7 @@ function ship_to_remotes(
         report = true,
         path_anchor = path_anchor,
         allow_external_symlinks = allow_external_symlinks,
+        extra_files = extra_files,
     )
     ok = count(hr -> hr.ok, raw.host_results)
     failed = count(hr -> !hr.ok, raw.host_results)

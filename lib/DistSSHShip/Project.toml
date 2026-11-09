@@ -1,0 +1,21 @@
+name = "DistSSHShip"
+uuid = "244696c4-bcd4-4083-82f2-371517554186"
+license = "MIT"
+version = "0.1.0"
+authors = ["Yamamoto, Takanori <takanori.yamamoto.99@gmail.com>", "Ampuku, Honoka <ampk.hono@gmail.com>"]
+
+[deps]
+DistSSHBase = "f0a69307-14e5-4272-8c28-20680d05bac8"
+GitIgnore = "a0010394-fc0d-43eb-a3e0-33caa976912f"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+Tar = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
+
+[sources]
+DistSSHBase = {path = "../DistSSHBase"}
+
+[compat]
+DistSSHBase = "0.1"
+GitIgnore = "0.1.1"
+TOML = "1"
+Tar = "1"
+julia = "1.13"

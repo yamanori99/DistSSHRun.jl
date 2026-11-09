@@ -113,7 +113,9 @@ using Dates
             mkpath(dirname(nested))
             touch(nested)
             @test DistSSHRun._go_script_relpath(proj, nested) == joinpath("demos", "job.jl")
-            @test_throws ArgumentError DistSSHRun._go_script_relpath(proj, "/tmp/outside.jl")
+            @test DistSSHRun._go_script_relpath(proj, "/tmp/outside.jl") ==
+                joinpath("_distsshrun_external", "outside.jl")
+            @test !DistSSHRun._script_inside_project(proj, "/tmp/outside.jl")
         end
     end
 

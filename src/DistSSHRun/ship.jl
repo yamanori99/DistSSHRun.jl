@@ -31,6 +31,9 @@ struct ShipSnapshot
     root::String
     # `snapshot` argument, used for the confirm line.
     local_root::String
+    # `"."` when the tar root is the project directory. Otherwise the project
+    # directory inside the extract root (`runs/<run_id>/src`).
+    project_rel::String
 end
 public ShipSnapshot
 
@@ -1098,47 +1101,29 @@ function pack_ship_tar(
         local_root::AbstractString;
         allow_external_symlinks::Bool = false,
         ship_max_bytes::Integer = SHIP_MAX_BYTES_DEFAULT,
+        extra_files::Vector{String} = String[],
     )
     local_dir = canonical_local_path(local_root)
-    root = _ship_tree_root(local_dir)
-    _warn_ship_outside!(local_dir, root)
-    rels = _ship_rel_paths(root)
-    allowed_links = _check_ship_symlinks!(
-        root, rels; allow_external = allow_external_symlinks,
+    omit = String[input.path for input in _load_ship_inputs(local_dir)]
+    packed = DistSSHShip.snapshot(
+        local_dir;
+        extra_files = extra_files,
+        allow_external_symlinks = allow_external_symlinks,
+        ship_max_bytes = ship_max_bytes,
+        omit_project_rels = omit,
+        warn = print_warn,
     )
-    total, nfiles, sizes = _ship_bytes_and_files(root, rels)
-    if total > Int(ship_max_bytes)
-        sort!(sizes; by = first, rev = true)
-        top = join(
-            (string(rel, " (", sz, ")") for (sz, rel) in sizes[1:min(10, length(sizes))]),
-            "\n  ",
-        )
-        throw(
-            ArgumentError(
-                "ship-tree: tree is $total bytes (cap $(Int(ship_max_bytes))). Largest:\n  $top\n.gitignore them or declare data directories (0.3.0).",
-            ),
-        )
-    end
-    want = Set{String}(rels)
-    tmpd = mktempdir()
-    tar_path = joinpath(tmpd, "ship.tar")
-    try
-        Tar.create(p -> _ship_keep(want, root, p), root, tar_path)
-        hash = Tar.tree_hash(tar_path; algorithm = "git-sha1", skip_empty = true)
-        return (
-            tar_path = tar_path,
-            tmpd = tmpd,
-            hash = String(hash),
-            bytes = total,
-            files = nfiles,
-            tree_matches_head = nothing,
-            external_symlinks = allowed_links,
-            root = root,
-        )
-    catch
-        rm(tmpd; force = true, recursive = true)
-        rethrow()
-    end
+    return (
+        tar_path = packed.tar_path,
+        tmpd = packed.directory,
+        hash = packed.content_tree_hash,
+        bytes = packed.bytes,
+        files = packed.files,
+        tree_matches_head = nothing,
+        external_symlinks = packed.external_symlinks,
+        root = packed.project_dir,
+        project_rel = packed.project_rel,
+    )
 end
 
 """
@@ -1154,11 +1139,13 @@ function snapshot(
         local_root::AbstractString;
         allow_external_symlinks::Bool = false,
         ship_max_bytes::Integer = SHIP_MAX_BYTES_DEFAULT,
+        extra_files::Vector{String} = String[],
     )::ShipSnapshot
     packed = pack_ship_tar(
         local_root;
         allow_external_symlinks = allow_external_symlinks,
         ship_max_bytes = ship_max_bytes,
+        extra_files = extra_files,
     )
     return ShipSnapshot(
         packed.tmpd,
@@ -1170,6 +1157,7 @@ function snapshot(
         allow_external_symlinks,
         packed.root,
         String(local_root),
+        packed.project_rel,
     )
 end
 public snapshot
@@ -1959,31 +1947,16 @@ function _remote_extract_tar!(
         host::AbstractString,
         src::AbstractString,
         tar_path::AbstractString,
-        julia_bin::AbstractString,
+        julia_bin::AbstractString;
+        allow_external_symlinks::Bool = false,
+        expect_hash::AbstractString = "",
+    )
+    DistSSHShip.extract_verified!(
+        host, src, tar_path, julia_bin;
+        allow_external_symlinks = allow_external_symlinks,
+        expect_hash = expect_hash,
     )
     sq = _remote_shell_path_word(src)
-    inner = _remote_stdlib_julia_e(
-        julia_bin,
-        "using Tar; isdir(ARGS[1]) || mkdir(ARGS[1]); Tar.extract(stdin, ARGS[1])";
-        args = String[sq],
-    )
-    err_buf = IOBuffer()
-    out_buf = IOBuffer()
-    cmd = _host_sync_remote_shell_cmd(String(host), inner; forward_stdin = true)
-    proc = open(tar_path) do io
-        return run(
-            pipeline(ignorestatus(cmd); stdin = io, stdout = out_buf, stderr = err_buf);
-            wait = true,
-        )
-    end
-    code = DistSSHBase.shell_status(proc)
-    err = String(take!(err_buf))
-    out = String(take!(out_buf))
-    if code == 255
-        throw(ArgumentError(summarize_ssh_error(Base.ProcessFailedException(Base.Process[proc]); stderr = err)))
-    end
-    code == 0 || DistSSHBase._throw_if_nonposix_shell(String(host), code, err)
-    code == 0 || throw(ArgumentError("tar extract failed on $(host): $(strip(err) * strip(out))"))
     filled, _ = _remote_shell_status(
         String(host),
         "test -n \"\$(ls -A $sq 2>/dev/null)\"",
@@ -2020,7 +1993,9 @@ function ship(
     length(unique(hosts)) == length(hosts) ||
         throw(ArgumentError("ship-tree: hosts must be unique"))
     rid = run_id === nothing ? allocate_remote_run_id() : validate_run_id(run_id)
-    src_logical = _posix_join(String(remote_root), "runs", rid, "src")
+    extract_logical = _posix_join(String(remote_root), "runs", rid, "src")
+    src_logical = snapshot.project_rel == "." ? extract_logical :
+        _posix_join(extract_logical, snapshot.project_rel)
     _refuse_unshipped_depot_prefs!()
     if !isempty(_load_ship_inputs(snapshot.root)) && kit_run_dir() === nothing
         throw(
@@ -2067,7 +2042,11 @@ function ship(
                 src = _remote_prepare_run_leaf!(host, abs_root, rid)
                 pinned = something(pin_remote_julia(host, julia), resolve_remote_julia(host, julia))
                 pinned === nothing && throw(ArgumentError("Julia not found on $host"))
-                _remote_extract_tar!(host, src, snapshot.tar_path, pinned)
+                _remote_extract_tar!(
+                    host, src, snapshot.tar_path, pinned;
+                    allow_external_symlinks = snapshot.external_symlinks_allowed,
+                    expect_hash = snapshot.content_tree_hash,
+                )
                 leaf = _posix_join(abs_root, "runs", rid)
                 code_c, out_c = _remote_shell_status(
                     String(host),
@@ -2161,6 +2140,7 @@ function ship_project_to_hosts!(
         path_anchor::AbstractString = local_root,
         allow_external_symlinks::Bool = false,
         ship_max_bytes::Integer = SHIP_MAX_BYTES_DEFAULT,
+        extra_files::Vector{String} = String[],
         run_id::Union{Nothing, AbstractString} = nothing,
         julia = nothing,
         await_inputs::Bool = true,
@@ -2173,6 +2153,7 @@ function ship_project_to_hosts!(
         local_root;
         allow_external_symlinks = allow_external_symlinks,
         ship_max_bytes = ship_max_bytes,
+        extra_files = extra_files,
     )
     try
         return ship(

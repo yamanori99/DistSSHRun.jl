@@ -25,7 +25,7 @@ Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup …`.
 | `mode` | CLI | Notes |
 | --- | --- | --- |
 | `:delete` | `delete` | Destructive. Requires `confirm_path`. `session.yes` does not delete. Refuses a present unowned Ship `run.toml` |
-| `:ship_tree` | `ship-tree` | Walk the ship root and each directory's `.gitignore` (case-sensitive). No git binary. A gitignored project or Manifest file is omitted with one warning. `!LocalPreferences.toml` ships that file. Declared inputs do not. Creates a missing remote root when safe (`~/…` under home, or absolute with an existing parent). Tar into `runs/<run_id>/src/`, empty `out/`, DistSSHRun stamp. Does not instantiate |
+| `:ship_tree` | `ship-tree` | Walk the project and each directory's `.gitignore` (case-sensitive). No git binary. Relative path dependencies outside the project ship under a common ancestor. A gitignored project or Manifest file is omitted with one warning. `!LocalPreferences.toml` ships that file. Declared inputs do not. `extra_files` is one external file at `_distsshrun_external/<basename>` (a second file errors). Creates a missing remote root when safe (`~/…` under home, or absolute with an existing parent). Tar into `runs/<run_id>/src/`, empty `out/`, DistSSHRun stamp. Does not instantiate |
 | `:clone` | `clone` | Requires `repo=`; clone runs **on the remote** |
 | `:sync` | `sync` | Push the local branch to origin, then detach each remote at that commit; confirm unless `session.yes`. A dirty tree is refused |
 | `:pull` | `pull` | Detach each remote at the local commit. Does not push to origin and does not run `git pull`; confirm unless `session.yes`. A dirty tree is refused |
@@ -67,7 +67,16 @@ function setup!(
         confirm_path = nothing,
         gitignore::Bool = true,
         allow_external_symlinks::Bool = false,
+        extra_files::Vector{String} = String[],
     )::SyncResult
+    if !isempty(extra_files) && mode !== :ship_tree
+        throw(ArgumentError("setup! extra_files only applies to :ship_tree"))
+    end
+    length(extra_files) > 1 && throw(
+        ArgumentError(
+            "more than one extra file is not yet supported",
+        )
+    )
     if !gitignore
         throw(ArgumentError("setup! gitignore is not valid on setup!(session, :$(mode))"))
     end
@@ -109,6 +118,7 @@ function setup!(
                 bound_plan = bound_plan,
                 gitignore = gitignore,
                 allow_external_symlinks = allow_external_symlinks,
+                extra_files = extra_files,
             )
         end
     end
@@ -627,6 +637,7 @@ function _setup_one!(
         bound_plan::Union{Nothing, Dict{String, String}} = nothing,
         gitignore::Bool = true,
         allow_external_symlinks::Bool = false,
+        extra_files::Vector{String} = String[],
     )::SyncResult
     if !gitignore
         throw(ArgumentError("setup! gitignore is not valid on setup!(session, :$(mode))"))
@@ -652,6 +663,7 @@ function _setup_one!(
             session;
             mode = :ship_tree,
             allow_external_symlinks = allow_external_symlinks,
+            extra_files = extra_files,
         )
     elseif mode === :clone
         ensure_manifest_in_git_worktree!(session.project)

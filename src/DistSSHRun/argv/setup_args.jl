@@ -60,12 +60,21 @@ function show_requirements(; io::IO = stdout)
         "  Absolute roots also refuse /, a single dir under /, . / .., and this home.",
         "setup remote-root still requires an absolute --deploy-root PATH.",
         "ship-tree walks the project directory you passed and each .gitignore",
-        "  there and below (case-sensitive). It does not widen to a workspace Manifest.",
+        "  there and below (case-sensitive). A workspace member also ships the",
+        "  workspace Project.toml and the shared workspace Manifest. The tar root",
+        "  is their common ancestor. Sibling workspace members are not walked.",
         ".git/info/exclude, core.excludesFile, and a .gitignore above that",
         "  directory are not used. No git binary is run.",
-        "A Manifest or path dependency outside that directory is left out, with a warning.",
+        "A relative path dependency outside the project is shipped so its path",
+        "  still resolves. The tar root is the common ancestor. An absolute path,",
+        "  or a path that would root the tar at \$HOME or /, is an error.",
+        "A parent .gitignore does not drop a declared path dependency. Files that",
+        "  dependency's own .gitignore excludes are left out.",
         "A gitignored Project.toml, JuliaProject.toml, Manifest.toml, or",
         "  JuliaManifest.toml is left out, with one warning.",
+        "--extra-file PATH (ship-tree only, once) stores that file at",
+        "  _distsshrun_external/<basename> under the remote project. A symlink",
+        "  is followed once. Siblings of that file are not sent.",
         "A gitignored LocalPreferences.toml is left out. Add !LocalPreferences.toml to ship it.",
         "A file over 50 MiB, or a send list over 100 MiB, prints a warning (local sizes).",
         "DISTSSHKIT_SHIP_WARN_FILE_BYTES and DISTSSHKIT_SHIP_WARN_TOTAL_BYTES set those",
@@ -252,7 +261,7 @@ function parse_setup_args(args::Vector{String})
         "setup";
         valued = (
             "--confirm-path", "--older-than", "--id", "--julia", "--repo",
-            "--remote-path", DEPLOY_ROOT_FLAG, "--snapshot",
+            "--remote-path", DEPLOY_ROOT_FLAG, "--snapshot", "--extra-file",
         ),
         prefixes = ("--remote-path=",),
         known = (
@@ -279,6 +288,7 @@ function parse_setup_args(args::Vector{String})
     prune_id = nothing
     confirm_paths = String[]
     allow_external_symlinks = false
+    extra_files = String[]
     options_done = false
 
     c = CliCursor(args)
@@ -343,6 +353,15 @@ function parse_setup_args(args::Vector{String})
             raw = String(strip(cli_take_value!(c, arg)))
             isempty(raw) && throw(ArgumentError("--snapshot needs a non-empty id"))
             snapshot_id = validate_snapshot_id(raw)
+        elseif arg == "--extra-file"
+            raw = String(strip(cli_take_value!(c, arg)))
+            isempty(raw) && throw(ArgumentError("setup --extra-file needs a path"))
+            push!(extra_files, raw)
+            length(extra_files) > 1 && throw(
+                ArgumentError(
+                    "setup --extra-file: more than one extra file is not yet supported",
+                )
+            )
         elseif arg == "--allow-external-symlinks"
             allow_external_symlinks = true
             cli_consume!(c)
@@ -371,6 +390,9 @@ function parse_setup_args(args::Vector{String})
     if !isempty(confirm_paths) && mode !== :delete && mode !== :prune
         throw(ArgumentError("--confirm-path only applies to setup delete or setup prune"))
     end
+    if !isempty(extra_files) && mode !== :ship_tree
+        throw(ArgumentError("setup --extra-file only applies to setup ship-tree"))
+    end
     if snapshot_id !== nothing &&
             mode !== :instantiate && mode !== :check && mode !== :runtest
         throw(
@@ -393,6 +415,7 @@ function parse_setup_args(args::Vector{String})
         prune_id = prune_id,
         confirm_paths = confirm_paths,
         allow_external_symlinks = allow_external_symlinks,
+        extra_files = extra_files,
         show_version = cli_session.show_version,
         cli_session = cli_session,
     )

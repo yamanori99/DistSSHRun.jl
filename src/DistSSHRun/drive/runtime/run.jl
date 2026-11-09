@@ -516,6 +516,14 @@ function _run_drive_parsed_locked!(
     writeln_both("")
 
     sync_mode = get(parsed, :sync_mode, nothing)
+    outside_script = !DistSSHRun._script_inside_project(proj_dir, script_path)
+    if outside_script && sync_mode !== :ship_tree && !isempty(host_names)
+        throw(
+            ArgumentError(
+                "script must be inside project ($proj_dir): $(DistSSHRun.canonical_local_path(script_path))",
+            )
+        )
+    end
     do_sync = sync_mode isa Symbol && !isempty(host_names)
     # sync? + git + cleanup + workers + wait + init + run + collect
     progress_steps = (do_sync ? 1 : 0) + 7
@@ -549,6 +557,7 @@ function _run_drive_parsed_locked!(
                 mode = sync_mode,
                 allow_external_symlinks = allow_ext,
                 await_inputs = sync_mode !== :ship_tree,
+                extra_files = outside_script ? String[script_path] : String[],
             )
             if !sync_result.ok
                 print_err("ERROR: "; bold = true)

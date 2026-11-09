@@ -50,9 +50,11 @@ Julia **1.13+**.
 - Walk the ship root and apply each directory's `.gitignore`
   (case-sensitive). `.git/info/exclude`, `core.excludesFile`, and a
   `.gitignore` above the ship root are not used. No git binary is run.
-- The ship root is the project directory that was passed, not a
-  workspace Manifest directory above it. A Manifest or path dependency
-  outside that directory is left out with a warning.
+- The tar root is the project directory when every path dependency stays
+  inside it. A relative path dependency outside it, or a workspace member,
+  ships under the common ancestor. An absolute path, or a root of `$HOME`
+  or `/`, is an error. `setup ship-tree --extra-file PATH` (once) stores
+  that file at `_distsshrun_external/<basename>`.
 - A gitignored `Project.toml`, `JuliaProject.toml`, `Manifest.toml`,
   or `JuliaManifest.toml` is left out with one warning. A gitignored
   `LocalPreferences.toml` is left out too; add `!LocalPreferences.toml`

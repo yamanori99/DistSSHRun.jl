@@ -1547,5 +1547,91 @@ end
                 end
             end
         end
+
+        @testset "ship-tree path dep and external script" begin
+            _e2e_announce("ship-tree path dep and external script")
+            dep_root = "/home/dev/distsshkit-e2e-shipdep"
+            _with_tempdir() do parent_path
+                parent = String(parent_path)
+                app = joinpath(parent, "app")
+                bar = joinpath(parent, "Bar")
+                mkpath(joinpath(app, "src"))
+                mkpath(joinpath(bar, "src"))
+                write(
+                    joinpath(bar, "Project.toml"),
+                    """
+                    name = "Bar"
+                    uuid = "22222222-2222-4222-8222-222222222222"
+                    version = "0.1.0"
+                    """,
+                )
+                write(
+                    joinpath(bar, "src", "Bar.jl"),
+                    "module Bar\ngreet() = \"from-bar\"\nend\n",
+                )
+                write(
+                    joinpath(app, "Project.toml"),
+                    """
+                    name = "ShipE2E"
+                    uuid = "11111111-1111-4111-8111-111111111111"
+                    version = "0.1.0"
+
+                    [deps]
+                    Bar = "22222222-2222-4222-8222-222222222222"
+
+                    [sources]
+                    Bar = {path = "../Bar"}
+                    """,
+                )
+                write(joinpath(app, "src", "ShipE2E.jl"), "module ShipE2E\nend\n")
+                helper = joinpath(parent, "use_bar.jl")
+                write(helper, "using Bar\nprint(Bar.greet())\n")
+                depot = mktempdir()
+                try
+                    run(
+                        setenv(
+                            `$(Base.julia_cmd()) --project=$app -e 'using Pkg; Pkg.resolve()'`,
+                            merge(ENV, Dict("JULIA_DEPOT_PATH" => depot)),
+                        )
+                    )
+                finally
+                    rm(depot; force = true, recursive = true)
+                end
+                dep_env = _ssh_e2e_env(; remote_project = dep_root)
+                proc, out = _run_kit_setup(;
+                    setup_args = [
+                        "delete", "--deploy-root", dep_root, "--confirm-path", dep_root, setup_hosts...,
+                    ],
+                    project_root = app,
+                    extra_env = dep_env,
+                )
+                _assert_ssh_e2e_ok(suite, "shipdep_delete", proc, out; project = app, kit = :setup)
+                _ssh_e2e_ensure_remote_root!(hosts, dep_root)
+                proc, out = _run_kit_setup(;
+                    setup_args = [
+                        "ship-tree", "--deploy-root", dep_root, "--extra-file", helper, setup_hosts...,
+                    ],
+                    project_root = app,
+                    extra_env = dep_env,
+                )
+                _assert_ssh_e2e_ok(suite, "shipdep_ship", proc, out; project = app, kit = :setup)
+                proc, out = _run_kit_setup(;
+                    setup_args = ["instantiate", "--deploy-root", dep_root, setup_hosts...],
+                    project_root = app,
+                    extra_env = dep_env,
+                )
+                _assert_ssh_e2e_ok(suite, "shipdep_instantiate", proc, out; project = app, kit = :setup)
+                for host in hosts
+                    remote = """
+                    leaf=\$(ls -1d $(dep_root)/runs/*/src/app | tail -n 1)
+                    test -f "\$leaf/../Bar/src/Bar.jl"
+                    \$HOME/.juliaup/bin/julia --startup-file=no --project="\$leaf" "\$leaf/_distsshrun_external/use_bar.jl"
+                    """
+                    p, ssh_out = _ssh_e2e_ssh(host, remote)
+                    _assert_proc_ok(p, ssh_out; label = "path dep script $(host)")
+                    @test strip(ssh_out) == "from-bar"
+                end
+            end
+        end
     end
 end

@@ -40,10 +40,20 @@ stdlib Tar over SSH. Git clone, sync, and pull also need **`git`**.
 `setup ship-tree` walks the
 ship root and applies each directory's `.gitignore` (case-sensitive).
 `.git/info/exclude`, `core.excludesFile`, and a `.gitignore` above the
-ship root are not used. No git binary is run. The ship root is the
-project directory that was passed, not a workspace Manifest directory above it.
-A Manifest or path dependency outside that directory is left out with a
-warning. A gitignored `Project.toml`,
+project directory are not used. No git binary is run. The tar root is that
+project directory when every path dependency stays inside it. A relative
+path dependency outside it, or a workspace member, is shipped under the
+common ancestor so the relative path still resolves. The recorded project
+path is `runs/<run_id>/src/` plus that relative directory. An absolute
+`[sources]` path, or a layout that would root the tar at `$HOME` or `/`,
+is an error. A parent `.gitignore` does not drop a declared path dependency.
+Files that dependency's own `.gitignore` excludes are left out. A workspace
+member also ships the workspace `Project.toml` and the shared Manifest.
+Sibling workspace members are not walked. One external file can be passed
+with `setup ship-tree --extra-file PATH` (a second file is an error). It is
+stored at `_distsshrun_external/<basename>` under the remote project. A
+symlink is followed once: the archive name is the link name and the bytes
+are the target. Siblings of that file are not sent. A gitignored `Project.toml`,
 `JuliaProject.toml`, `Manifest.toml`, or `JuliaManifest.toml` is left out
 with one warning. A gitignored `LocalPreferences.toml` is left out too;
 add `!LocalPreferences.toml` to ship it. A file over 50 MiB, or a send list over

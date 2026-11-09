@@ -156,7 +156,7 @@ using Test
     end
 
 
-    @testset "a gitignored path source is left out" begin
+    @testset "a declared path source is shipped even when the parent gitignore names it" begin
         _with_tempdir() do tmp
             foo = joinpath(tmp, "vendor", "Foo")
             mkpath(joinpath(foo, "src"))
@@ -178,7 +178,8 @@ using Test
                 try
                     dest = mktempdir()
                     DistSSHRun.Tar.extract(packed.tar_path, dest)
-                    @test !isdir(joinpath(dest, "vendor"))
+                    @test isfile(joinpath(dest, "vendor", "Foo", "Project.toml"))
+                    @test isfile(joinpath(dest, "vendor", "Foo", "src", "Foo.jl"))
                     @test isfile(joinpath(dest, "Project.toml"))
                 finally
                     rm(packed.tmpd; force = true, recursive = true)
@@ -187,8 +188,7 @@ using Test
                 seekstart(io)
                 return read(io, String)
             end
-            @test occursin("vendor/Foo/Project.toml", text)
-            @test occursin("will not be shipped", text)
+            @test !occursin("vendor/Foo/Project.toml", text)
         end
     end
 
@@ -246,7 +246,7 @@ using Test
         end
     end
 
-    @testset "a workspace member ships alone" begin
+    @testset "a workspace member ships under the workspace root" begin
         _with_tempdir() do lab
             member = joinpath(lab, "member")
             mkpath(member)
@@ -272,10 +272,12 @@ using Test
                 try
                     dest = mktempdir()
                     DistSSHRun.Tar.extract(packed.tar_path, dest)
+                    @test isfile(joinpath(dest, "member", "Project.toml"))
+                    @test occursin("Run1", read(joinpath(dest, "member", "Project.toml"), String))
                     @test isfile(joinpath(dest, "Project.toml"))
-                    @test occursin("Run1", read(joinpath(dest, "Project.toml"), String))
-                    @test !isfile(joinpath(dest, "Manifest.toml"))
-                    @test !isdir(joinpath(dest, "member"))
+                    @test occursin("Lab", read(joinpath(dest, "Project.toml"), String))
+                    @test isfile(joinpath(dest, "Manifest.toml"))
+                    @test packed.project_rel == "member"
                 finally
                     rm(packed.tmpd; force = true, recursive = true)
                 end
@@ -283,7 +285,7 @@ using Test
                 seekstart(io)
                 return read(io, String)
             end
-            @test occursin("outside the ship root", text)
+            @test !occursin("outside the ship root", text)
             wider = DistSSHRun.pack_ship_tar(lab)
             try
                 dest = mktempdir()
@@ -297,7 +299,7 @@ using Test
         end
     end
 
-    @testset "a Manifest path outside the ship root warns" begin
+    @testset "a Manifest path outside the project ships under the common ancestor" begin
         _with_tempdir() do tmp
             app = joinpath(tmp, "app")
             bar = joinpath(tmp, "shared", "Bar")
@@ -322,8 +324,10 @@ using Test
                 try
                     dest = mktempdir()
                     DistSSHRun.Tar.extract(packed.tar_path, dest)
-                    @test isfile(joinpath(dest, "Project.toml"))
-                    @test !isdir(joinpath(dest, "shared"))
+                    @test isfile(joinpath(dest, "app", "Project.toml"))
+                    @test isfile(joinpath(dest, "app", "Manifest.toml"))
+                    @test isfile(joinpath(dest, "shared", "Bar", "Project.toml"))
+                    @test packed.project_rel == "app"
                 finally
                     rm(packed.tmpd; force = true, recursive = true)
                 end
@@ -331,8 +335,7 @@ using Test
                 seekstart(io)
                 return read(io, String)
             end
-            @test occursin("outside the ship root", text)
-            @test occursin("Bar", text)
+            @test !occursin("outside the ship root", text)
         end
     end
 

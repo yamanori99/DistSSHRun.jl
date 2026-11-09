@@ -305,14 +305,22 @@ function placement_tokens_from_go_slots(slots::Vector{GoSlot})::Vector{String}
     return out
 end
 
+function _script_inside_project(project::AbstractString, script::AbstractString)::Bool
+    proj = canonical_local_path(project)
+    path = canonical_local_path(script)
+    prefix = joinpath(proj, "")
+    return startswith(path, prefix) || path == proj
+end
+
 function _go_script_relpath(project::AbstractString, script::AbstractString)::String
     proj = canonical_local_path(project)
     path = canonical_local_path(script)
     parent_prefix = joinpath(proj, "")
-    startswith(path, parent_prefix) || path == proj ||
-        throw(ArgumentError("script must be inside project ($proj): $path"))
-    rel = relpath(path, proj)
-    return rel == "." ? basename(path) : rel
+    if startswith(path, parent_prefix) || path == proj
+        rel = relpath(path, proj)
+        return rel == "." ? basename(path) : rel
+    end
+    return joinpath(EXTERNAL_DIR_NAME, basename(path))
 end
 
 """`{script}/.distsshkit/go` when the script is in `project`, else `{project}/.distsshkit/go`."""
@@ -1107,7 +1115,12 @@ function _go_run!(
             )
         )
     end
-    ensure_manifest_ships!(proj)
+    sync_mode_early = something(sync, false)
+    if sync_mode_early === :ship_tree
+        _require_manifest!(proj)
+    else
+        ensure_manifest_ships!(proj)
+    end
     batch_dir = if output_dir !== nothing
         _prepare_output_dir!(
             output_dir;
@@ -1155,6 +1168,14 @@ function _go_run!(
         sess_rr = session_remote_root(go_session)
 
         child_hosts = unique(String[s.host for s in slots if s.kind === :child])
+        if !_script_inside_project(proj, script_path) &&
+                sync_mode_early !== :ship_tree && !isempty(child_hosts)
+            throw(
+                ArgumentError(
+                    "script must be inside project ($proj): $(canonical_local_path(script_path))",
+                )
+            )
+        end
         _write_kit_hosts_file(child_hosts, batch_dir, nothing)
 
         skip_collect = collect_spec === false
@@ -1204,6 +1225,7 @@ function _go_run!(
                 mode = sync_mode,
                 allow_external_symlinks = allow_external_symlinks,
                 await_inputs = sync_mode !== :ship_tree,
+                extra_files = _script_inside_project(proj, script_path) ? String[] : String[script_path],
             )
             if !sync_result.ok
                 await_declared_input_hashes!()

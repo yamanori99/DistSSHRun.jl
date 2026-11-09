@@ -288,6 +288,7 @@ if !isdefined(@__MODULE__, :setup_main)
                         project;
                         path_anchor = path_anchor,
                         allow_external_symlinks = opts.allow_external_symlinks,
+                        extra_files = opts.extra_files,
                     ),
                 )
                 rec = DistSSHRun.last_ship_result()

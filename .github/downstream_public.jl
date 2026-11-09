@@ -51,6 +51,8 @@ function _owner_module(owner::Symbol)::Module
         return DistSSHRun.DistSSHBase
     elseif owner === :DistSSHUp
         return DistSSHRun.DistSSHUp
+    elseif owner === :DistSSHShip
+        return DistSSHRun.DistSSHShip
     else
         error("downstream_public: unknown owner $(owner)")
     end
@@ -66,6 +68,8 @@ function _binding_label(owner::Symbol, name::Symbol)::String
         return "DistSSHRun.DistSSHBase.$(name)"
     elseif owner === :DistSSHUp
         return "DistSSHRun.DistSSHUp.$(name)"
+    elseif owner === :DistSSHShip
+        return "DistSSHRun.DistSSHShip.$(name)"
     else
         return "DistSSHRun.$(name)"
     end
@@ -106,6 +110,9 @@ function _owner_and_name(chain::Vector{Symbol})::Union{Nothing, Tuple{Symbol, Sy
     elseif chain[2] === :DistSSHUp
         length(chain) < 3 && return nothing
         return (:DistSSHUp, chain[3])
+    elseif chain[2] === :DistSSHShip
+        length(chain) < 3 && return nothing
+        return (:DistSSHShip, chain[3])
     else
         return (:DistSSHRun, chain[2])
     end
@@ -171,6 +178,8 @@ function _walk_import(arg, file::String, line::Int, hits::Vector{Tuple{String, I
         :DistSSHBase
     elseif length(chain) == 2 && chain[1] === :DistSSHRun && chain[2] === :DistSSHUp
         :DistSSHUp
+    elseif length(chain) == 2 && chain[1] === :DistSSHRun && chain[2] === :DistSSHShip
+        :DistSSHShip
     elseif length(chain) == 1 && chain[1] === :DistSSHRun
         :DistSSHRun
     else
