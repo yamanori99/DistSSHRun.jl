@@ -128,8 +128,19 @@ end
             @test DistSSHRun._is_deploy_metadata_status_entry("??", ".distssh/shipped.toml")
             @test !DistSSHRun._is_deploy_metadata_status_entry("??", "extra.txt")
             @test !DistSSHRun._is_deploy_metadata_status_entry("??", "nested/.distssh/deploy.toml")
+            @test !DistSSHRun._is_deploy_metadata_status_entry("??", ".distssh-foo/")
+            @test !DistSSHRun._is_deploy_metadata_status_entry("??", ".distssh-foo/deploy.toml")
             @test !DistSSHRun._is_deploy_metadata_status_entry(" M", ".distssh/deploy.toml")
             @test !DistSSHRun._is_deploy_metadata_status_entry("M ", ".distssh/deploy.toml")
+            @test !DistSSHRun._is_deploy_metadata_status_entry("R ", ".distssh/deploy.toml")
+            @test !DistSSHRun._is_deploy_metadata_status_entry("C ", ".distssh/deploy.toml")
+            @test DistSSHRun._remote_git_has_blocking_dirty("?? .distssh-foo/\0")
+            @test DistSSHRun._remote_git_has_blocking_dirty(
+                "R  .distssh/deploy.toml\0.distssh/deploy.toml.old\0",
+            )
+            @test DistSSHRun._remote_git_has_blocking_dirty(
+                "C  .distssh/shipped.toml\0.distssh/deploy.toml\0",
+            )
             @test !DistSSHRun._remote_git_has_blocking_dirty("?? .distssh/\0")
             @test !DistSSHRun._remote_git_has_blocking_dirty(
                 "?? .distssh/deploy.toml\0?? .distssh/deploy.toml.x.tmp\0",
@@ -139,6 +150,19 @@ end
                 "?? .distssh/\0?? extra.txt\0",
             )
             @test DistSSHRun._remote_git_has_blocking_dirty(" M .distssh/deploy.toml\0")
+            probe = DistSSHRun._commit_tracks_deploy_metadata_dir("/nonexistent-distsshkit-repo", "a"^40)
+            @test !probe.ok
+            @test !probe.tracks
+            @test !isempty(probe.detail)
+            collision = DistSSHRun._detach_sha_deploy_metadata_collision(
+                "dest",
+                "/nonexistent-distsshkit-repo",
+                "a"^40,
+                "?? .distssh/deploy.toml\0",
+            )
+            @test collision isa String
+            @test occursin("could not read whether commit", collision)
+            @test occursin("Refusing checkout", collision)
         end
 
         @testset "git_sync stops on local failure" begin

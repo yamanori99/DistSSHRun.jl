@@ -347,19 +347,31 @@ function _remote_has_untracked_deploy_metadata(status_out::AbstractString)::Bool
     return false
 end
 
-"""Whether `sha` in the local `project` repo tracks paths under `.distssh/` (pre-push checkout probe)."""
-function _commit_tracks_deploy_metadata_dir(project::AbstractString, sha::AbstractString)::Bool
+"""
+Whether `sha` in the local `project` repo tracks paths under `.distssh/` (pre-push checkout probe).
+
+Returns `(; ok, tracks, detail)`. When `ok` is false, `tracks` is false and `detail` explains the
+failed `git ls-tree` (callers must refuse checkout — fail closed).
+"""
+function _commit_tracks_deploy_metadata_dir(
+        project::AbstractString,
+        sha::AbstractString,
+    )::NamedTuple{(:ok, :tracks, :detail), Tuple{Bool, Bool, String}}
     r = _git_run_capture(
         String["-C", String(project), "ls-tree", "-r", "--name-only", String(sha)],
     )
-    r.ok || return false
+    if !r.ok
+        detail = isempty(r.detail) ? "git ls-tree failed" : r.detail
+        return (; ok = false, tracks = false, detail = detail)
+    end
     prefix = _DEPLOY_METADATA_DIR * "/"
     for line in eachsplit(strip(r.out), '\n'; keepempty = false)
         p = replace(String(line), '\\' => '/')
-        p == _DEPLOY_METADATA_DIR && return true
-        startswith(p, prefix) && return true
+        if p == _DEPLOY_METADATA_DIR || startswith(p, prefix)
+            return (; ok = true, tracks = true, detail = "")
+        end
     end
-    return false
+    return (; ok = true, tracks = false, detail = "")
 end
 
 """
@@ -373,7 +385,13 @@ function _detach_sha_deploy_metadata_collision(
         status_out::AbstractString,
     )::Union{Nothing, String}
     _remote_has_untracked_deploy_metadata(status_out) || return nothing
-    _commit_tracks_deploy_metadata_dir(project, sha) || return nothing
+    tree = _commit_tracks_deploy_metadata_dir(project, sha)
+    if !tree.ok
+        detail = isempty(tree.detail) ? "git ls-tree failed" : tree.detail
+        return "$host: could not read whether commit $sha tracks .distssh/ ($detail). " *
+            "Refusing checkout. See help setup."
+    end
+    tree.tracks || return nothing
     return "$host: commit $sha tracks files under .distssh/, which would collide with the " *
         "untracked deploy metadata on disk. Refusing checkout. See help setup."
 end
