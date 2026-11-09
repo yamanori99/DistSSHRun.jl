@@ -399,7 +399,7 @@ function check_prerequisites(
                         host,
                         "Git commit differs (local: $local_hash, remote: $remote_hash)",
                     )
-                    _host_check_detail("Fix: --git-pull or --git-sync to update remote")
+                    _host_check_detail("Fix: $(cli_m()) setup git-pull or setup git-sync HOST")
                     all_ok = false
                     host_ok[] = false
                 else

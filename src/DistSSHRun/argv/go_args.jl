@@ -35,12 +35,11 @@ function show_go_usage(; io::IO = stdout)
     print_help_section("Options"; io = io)
     print_help_lines(
         io,
-        "  --git-sync          optional git pre-run copy (not ship-tree)",
         "  --deploy-root PATH  remote deployment root (location, not snapshot id).",
         "                      Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
         "                      ~/Parent/RepoName layout from the local env_dir.",
         "  --snapshot ID       use runs/<ID>/src under the deploy root",
-        "                      (not with --git-sync; that copies a git checkout)",
+        "                      (after setup ship-tree + setup instantiate)",
         "  --julia PATH        remote Julia (ENV or auto)",
         "  --allow-mismatch F  waive julia, distssh, and/or manifest (comma list)",
         "  Remote slots cd to the project root and pin the real julia binary.",
@@ -80,13 +79,6 @@ function show_go_usage(; io::IO = stdout)
     )
 end
 
-function _go_set_sync!(
-        current::Union{Nothing, Symbol, Bool},
-        next::Union{Symbol, Bool},
-    )
-    return _kit_set_sync_mode!(current, next; source = "go")
-end
-
 function _go_parse_repeat(raw::AbstractString)::Int
     n = tryparse(Int, strip(String(raw)))
     (n === nothing || n < 1) && throw(
@@ -104,12 +96,10 @@ function _go_parsed(;
         script_path,
         script_args,
         hosts,
-        sync,
         output_dir,
         julia,
         repeat,
         allow_mismatch = Symbol[],
-        allow_external_symlinks = false,
         snapshot = nothing,
         deploy_root = nothing,
     )
@@ -120,12 +110,10 @@ function _go_parsed(;
         script_path = script_path,
         script_args = script_args,
         hosts = hosts,
-        sync = sync,
         output_dir = output_dir,
         julia = julia,
         repeat = repeat,
         allow_mismatch = allow_mismatch,
-        allow_external_symlinks = allow_external_symlinks,
         snapshot = snapshot,
         deploy_root = deploy_root,
     )
@@ -141,9 +129,6 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
     output_dir = nothing
     julia_exe = nothing
     allow_mismatch = Symbol[]
-    # nothing → go! default (false); :git_sync / :ship_tree / false (= skip)
-    sync::Union{Nothing, Symbol, Bool} = nothing
-    allow_external_symlinks = false
     snapshot_id = nothing
     deploy_root = nothing
     repeat_n::Union{Nothing, Int} = nothing
@@ -190,22 +175,19 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
         elseif arg == "--repeat"
             repeat_n === nothing || throw(ArgumentError("go: --repeat given more than once"))
             repeat_n = _go_parse_repeat(cli_take_value!(c, arg))
-        elseif arg == "--sync"
-            _throw_drive_go_removed_git_sync_flag!("go")
-        elseif arg == "--git-sync"
+        elseif arg in (
+                "--sync",
+                "--git-sync",
+                "--ship-tree",
+                "--allow-external-symlinks",
+                "--skip-sync",
+                "--skip-git-sync",
+                "--skip-git-guard",
+            )
             cli_consume!(c)
-            sync = _go_set_sync!(sync, :git_sync)
-        elseif arg == "--ship-tree"
-            _throw_go_drive_ship_cli_removed("go", arg)
-        elseif arg == "--allow-external-symlinks"
-            _throw_go_drive_ship_cli_removed("go", arg)
+            _reject_run_transfer_cli!("go", arg)
         elseif arg == "--rsync"
             _throw_rsync_removed()
-        elseif arg == "--skip-sync"
-            _throw_go_removed_skip_sync_flag!()
-        elseif arg == "--skip-git-sync" || arg == "--skip-git-guard"
-            cli_consume!(c)
-            sync = _go_set_sync!(sync, false)
         elseif arg == "--help" || arg == "-h"
             cli_consume!(c)
             append!(hosts, host_tokens)
@@ -223,12 +205,10 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
                 script_path = script_path,
                 script_args = script_args,
                 hosts = hosts,
-                sync = sync,
                 output_dir = output_dir,
                 julia = julia_exe,
                 repeat = repeat_n,
                 allow_mismatch = allow_mismatch,
-                allow_external_symlinks = allow_external_symlinks,
                 snapshot = snapshot_id,
                 deploy_root = deploy_root,
             )
@@ -269,12 +249,10 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
         script_path = script_path,
         script_args = script_args,
         hosts = hosts,
-        sync = sync,
         output_dir = output_dir,
         julia = julia_exe,
         repeat = repeat_n,
         allow_mismatch = allow_mismatch,
-        allow_external_symlinks = allow_external_symlinks,
         snapshot = snapshot_id,
         deploy_root = deploy_root,
     )

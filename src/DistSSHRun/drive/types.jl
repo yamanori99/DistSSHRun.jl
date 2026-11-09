@@ -435,6 +435,7 @@ function PipelineConfig(;
     else
         String(julia)
     end
+    _reject_pipeline_sync_kw!(sync)
     return PipelineConfig(
         canonical_local_path(project),
         String[String(t) for t in workers],

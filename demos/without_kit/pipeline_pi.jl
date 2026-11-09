@@ -42,7 +42,7 @@ result = go!(script, "parent:2"; args = ARGS)
 #       remote="/path/to/project",
 #       yes=true,
 #   )
-#   setup!(session, :rsync, :instantiate)
+#   setup!(session, :ship_tree); setup!(session, :instantiate)
 #   # or: setup!(session, :git_clone; repo="https://…"); setup!(session, :instantiate)
 #   result = go!(
 #       script,

@@ -1106,25 +1106,25 @@ end
     end
 end
 
-@testset "last-ship src helper is scoped to hosts and remote_root" begin
-    DistSSHRun._clear_last_ship!()
-    DistSSHRun._LAST_SHIP[] = Dict{String, Any}(
-        "src" => "/home/dev/app/runs/20260101T000000Z-abcdef/src",
-        "run_id" => "20260101T000000Z-abcdef",
-        "hosts" => String["child-1"],
-        "remote_root" => "/home/dev/app",
+@testset "active selection is scoped to hosts and deploy root" begin
+    sel = DistSSHRun.SnapshotSelection(
+        :snapshot,
+        "20260101T000000Z-abcdef",
+        "/home/dev/app",
+        "/home/dev/app/runs/20260101T000000Z-abcdef/src",
+        "deadbeef",
+        ["child-1"],
     )
-    DistSSHRun._SHIP_LAYOUT_ACTIVE[] = true
+    DistSSHRun._clear_last_ship!()
+    DistSSHRun._set_active_selection!(sel)
     try
-        @test DistSSHRun._last_ship_src_for(["child-1"], "/home/dev/app") ==
-            "/home/dev/app/runs/20260101T000000Z-abcdef/src"
-        @test DistSSHRun._last_ship_src_for(["child-2"], "/home/dev/app") === nothing
-        @test DistSSHRun._last_ship_src_for(["child-1"], "/other") === nothing
-        @test DistSSHRun._last_ship_src_for(["child-1"], "/home/dev/app/pkg") === nothing
-        wr = "/home/dev/app/runs/20260101T000000Z-abcdef/src"
+        got = something(DistSSHRun.active_snapshot_selection())
+        @test got.work_root == "/home/dev/app/runs/20260101T000000Z-abcdef/src"
         @test DistSSHRun._rehome_under_work_root(
-            "/home/dev/app/pkg", "/home/dev/app", wr,
+            "/home/dev/app/pkg", "/home/dev/app", got.work_root,
         ) == "/home/dev/app/runs/20260101T000000Z-abcdef/src/pkg"
+        @test got.hosts == ["child-1"]
+        @test got.deploy_root == "/home/dev/app"
     finally
         DistSSHRun._clear_last_ship!()
     end
@@ -1246,7 +1246,7 @@ end
     end
     DistSSHRun._clear_last_ship!()
     @test DistSSHRun.last_ship_result() === nothing
-    @test DistSSHRun._shipped_src() === nothing
+    @test DistSSHRun.active_snapshot_selection() === nothing
 end
 
 @testset "--rsync removed" begin
@@ -1346,9 +1346,12 @@ end
         write(joinpath(dir, "a.jl"), "1\n")
         return dir
     end
-    function _restore_ship!(previous, active)
-        DistSSHRun._LAST_SHIP[] = previous
-        DistSSHRun._SHIP_LAYOUT_ACTIVE[] = active
+    function _restore_selection!(previous)
+        if previous === nothing
+            DistSSHRun._clear_last_ship!()
+        else
+            DistSSHRun._set_active_selection!(previous)
+        end
         return nothing
     end
     function _with_saved_project_env(f::Function)
@@ -1433,8 +1436,7 @@ end
 
     _with_tempdir() do proj
         _project!(proj)
-        previous = DistSSHRun._LAST_SHIP[]
-        active = DistSSHRun._SHIP_LAYOUT_ACTIVE[]
+        previous = DistSSHRun.active_snapshot_selection()
         prev_ni = DistSSHRun.kit_noninteractive()
         DistSSHRun.set_kit_noninteractive!(false)
         try
@@ -1460,7 +1462,7 @@ end
             end
         finally
             DistSSHRun.set_kit_noninteractive!(prev_ni)
-            _restore_ship!(previous, active)
+            _restore_selection!(previous)
         end
     end
 
@@ -1478,13 +1480,18 @@ end
                     _apply_quiet_setup_session!()
                     _with_tempdir() do proj
                         _project!(proj)
-                        previous = DistSSHRun._LAST_SHIP[]
-                        active = DistSSHRun._SHIP_LAYOUT_ACTIVE[]
+                        previous = DistSSHRun.active_snapshot_selection()
                         snap = DistSSHRun.snapshot(proj)
                         try
-                            sentinel = Dict{String, Any}("content_tree_hash" => "keep-me")
-                            DistSSHRun._LAST_SHIP[] = sentinel
-                            DistSSHRun._SHIP_LAYOUT_ACTIVE[] = false
+                            sentinel = DistSSHRun.SnapshotSelection(
+                                :snapshot,
+                                "sentinel-run",
+                                "/other",
+                                "/other/runs/sentinel-run/src",
+                                "sentinel-hash",
+                                ["host9"],
+                            )
+                            DistSSHRun._set_active_selection!(sentinel)
                             quiet = DistSSHRun.ship(
                                 snap, ["host1"], "/home/distsshkit/app";
                                 confirm = false, record = false,
@@ -1492,8 +1499,7 @@ end
                             @test quiet isa DistSSHRun.ShipTreeResult
                             @test !quiet.cancelled
                             @test all(hr -> hr.ok, quiet.host_results)
-                            @test DistSSHRun._LAST_SHIP[] === sentinel
-                            @test DistSSHRun._SHIP_LAYOUT_ACTIVE[] == false
+                            @test DistSSHRun.active_snapshot_selection() === sentinel
                             @test isfile(DistSSHRun.snapshot_tar(snap))
                             @test DistSSHRun.result_content_tree_hash(quiet) ==
                                 DistSSHRun.content_tree_hash(snap)
@@ -1505,13 +1511,11 @@ end
                                 snap, ["host1"], "/home/distsshkit/app";
                                 confirm = false, record = true,
                             )
-                            kept = something(DistSSHRun._LAST_SHIP[])
-                            @test kept isa Dict{String, Any}
-                            @test kept["content_tree_hash"] ==
+                            kept = something(DistSSHRun.active_snapshot_selection())
+                            @test kept.content_tree_hash ==
                                 DistSSHRun.content_tree_hash(snap)
-                            @test kept["run_id"] ==
+                            @test kept.snapshot_id ==
                                 DistSSHRun.result_remote_run_id(recorded)
-                            @test DistSSHRun._SHIP_LAYOUT_ACTIVE[]
                             @test isfile(DistSSHRun.snapshot_tar(snap))
 
                             before = Set(readdir(tempdir()))
@@ -1541,7 +1545,7 @@ end
                             @test DistSSHRun.result_remote_run_id(other) === nothing
                         finally
                             rm(DistSSHRun.snapshot_directory(snap); force = true, recursive = true)
-                            _restore_ship!(previous, active)
+                            _restore_selection!(previous)
                         end
                     end
                 end
@@ -1572,8 +1576,7 @@ end
                         _project!(proj)
                         tree = joinpath(state_dir, "host1", "tree")
                         @test !isdir(tree)
-                        previous = DistSSHRun._LAST_SHIP[]
-                        active = DistSSHRun._SHIP_LAYOUT_ACTIVE[]
+                        previous = DistSSHRun.active_snapshot_selection()
                         try
                             created = DistSSHRun.ship_project_to_hosts!(
                                 ["host1"], proj, "/home/distsshkit/app"; confirm = false,
@@ -1585,7 +1588,7 @@ end
                             )
                             @test isdir(tree)
                         finally
-                            _restore_ship!(previous, active)
+                            _restore_selection!(previous)
                         end
                     end
                 end
@@ -1604,8 +1607,7 @@ end
                         _project!(proj)
                         tree = joinpath(state_dir, "host1", "tree")
                         @test isdir(tree)
-                        previous = DistSSHRun._LAST_SHIP[]
-                        active = DistSSHRun._SHIP_LAYOUT_ACTIVE[]
+                        previous = DistSSHRun.active_snapshot_selection()
                         try
                             failed = DistSSHRun.ship_project_to_hosts!(
                                 ["host1"], proj, "/home/distsshkit/app"; confirm = false,
@@ -1613,7 +1615,7 @@ end
                             @test any(hr -> !hr.ok, failed.host_results)
                             @test isdir(tree)
                         finally
-                            _restore_ship!(previous, active)
+                            _restore_selection!(previous)
                         end
                     end
                 end

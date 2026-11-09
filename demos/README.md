@@ -54,8 +54,8 @@ julia --project=. distsshkit_demos/without_kit/pipeline_pi.jl --n 5000
 
 Drivers use `init_output_dir!` + `main` + `pmap`. Work count is `--n N`
 (default 8), not a positional integer. Optional hooks: `help drive`.
-`pipeline_square.jl` is the thin API entry (optional sync → drive! →
-collect) over `square_file.jl`. Same tokens as the CLI:
+`pipeline_square.jl` is the thin API entry (drive! → optional collect) over
+`square_file.jl`. Same tokens as the CLI:
 `pipeline!(driver, "parent:2"; args=[…])`. A commented remote example is at
 the bottom of that file (`setup!` first, or CLI `setup`).
 

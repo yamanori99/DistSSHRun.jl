@@ -6,8 +6,6 @@ const SHIP_WARN_TOTAL_BYTES_DEFAULT = 100 * 1024 * 1024
 const _SHIP_WARN_FILE_ENV = "DISTSSHKIT_SHIP_WARN_FILE_BYTES"
 const _SHIP_WARN_TOTAL_ENV = "DISTSSHKIT_SHIP_WARN_TOTAL_BYTES"
 
-const _LAST_SHIP = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
-const _SHIP_LAYOUT_ACTIVE = Ref(false)
 const _SSHFLAGS_WARNED = Ref(false)
 
 """
@@ -60,29 +58,17 @@ struct ShipTreeResult
 end
 public ShipTreeResult
 
-function last_ship_result()::Union{Nothing, Dict{String, Any}}
-    return _LAST_SHIP[]
-end
-
-# `snapshot_select.jl` replaces this so clear also drops active selection.
+# `snapshot_select.jl` registers a hook so ship clear also drops active selection.
 const _CLEAR_SELECTION_HOOK = Ref{Any}(() -> nothing)
 
 function _clear_last_ship!()
-    _LAST_SHIP[] = nothing
-    _SHIP_LAYOUT_ACTIVE[] = false
     _CLEAR_SELECTION_HOOK[]()
     return nothing
 end
 
-"""`runs/<run_id>/src` from the last successful ship in this process, else `nothing`."""
-function _shipped_src()::Union{Nothing, String}
-    _SHIP_LAYOUT_ACTIVE[] || return nothing
-    rec = last_ship_result()
-    rec === nothing && return nothing
-    src = get(rec, "src", nothing)
-    src isa AbstractString || return nothing
-    s = String(src)
-    return isempty(strip(s)) ? nothing : s
+"""Removed with run-time transfer (#386); always `nothing`."""
+function last_ship_result()::Union{Nothing, Dict{String, Any}}
+    return nothing
 end
 
 function _record_host_alias(host::AbstractString)::String
@@ -1338,24 +1324,6 @@ function _remote_project_work_root(host::AbstractString, remote_root::AbstractSt
     return isempty(s) ? given : s
 end
 
-function _last_ship_src_for(
-        hosts::AbstractVector{<:AbstractString},
-        remote_root::AbstractString,
-    )::Union{Nothing, String}
-    src = _shipped_src()
-    src === nothing && return nothing
-    rec = last_ship_result()
-    rec === nothing && return nothing
-    shipped = get(rec, "hosts", nothing)
-    shipped isa AbstractVector || return nothing
-    have = Set{String}(String(h) for h in shipped)
-    all(h -> String(h) in have, hosts) || return nothing
-    stored = get(rec, "remote_root", nothing)
-    stored isa AbstractString || return nothing
-    _deploy_roots_equivalent(stored, remote_root) || return nothing
-    return src
-end
-
 """Resolve the remote work root via explicit snapshot, local record, or git."""
 function _work_root_for_hosts(
         hosts::AbstractVector{<:AbstractString},
@@ -2091,24 +2059,7 @@ function ship(
         end
     end
     ok_hosts = String[String(hr.host) for hr in host_results if hr.ok]
-    rec = Dict{String, Any}(
-        "algorithm" => "git-sha1",
-        "content_tree_hash" => snapshot.content_tree_hash,
-        "bytes" => snapshot.bytes,
-        "files" => snapshot.files,
-        "run_id" => rid,
-        "src" => src_logical,
-        "host" => _record_host_alias(first(hosts)),
-        "hosts" => ok_hosts,
-        "remote_root" => String(remote_root),
-        "run_dir_empty_at_start" => true,
-    )
-    snapshot.external_symlinks_allowed && (rec["external_symlinks_allowed"] = true)
-    # `nothing` means the tar was not compared to a git tree. Omit the key.
-    snapshot.tree_matches_head === true && (rec["tree_matches_head"] = true)
     if record && !isempty(ok_hosts)
-        _LAST_SHIP[] = rec
-        _SHIP_LAYOUT_ACTIVE[] = true
         try
             env = resolve_pkg_env(snapshot.root)
             write_last_snapshot_record!(

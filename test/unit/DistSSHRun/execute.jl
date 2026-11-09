@@ -602,9 +602,8 @@ end
             e
         end
         @test err_ship isa ArgumentError
-        @test occursin("sync=:ship_tree", err_ship.msg)
-        @test occursin("setup!", err_ship.msg)
-        @test occursin("snapshot", err_ship.msg)
+        @test occursin("sync=:ship_tree was removed", err_ship.msg)
+        @test occursin("setup", err_ship.msg)
         err_ext = try
             DistSSHRun._execute_detached_argv(
                 :go, "job.jl", ["child:h1:1"], String[];
@@ -805,8 +804,8 @@ end
         go = DistSSHRun.parse_go_args(
             [
                 "--progress", "--julia", "/opt/julia/bin/julia",
-                "--output-dir", "my_runs", "--git-sync", "child:h1:1", "job.jl", "8",
-            ]
+                "--output-dir", "my_runs", "child:h1:1", "job.jl", "8",
+            ],
         )
         gkw = DistSSHRun.execute_kwargs_from_parsed(go; kind = :go)
         @test !haskey(gkw, :snapshot)
@@ -820,7 +819,7 @@ end
         )
         dsnap = DistSSHRun.execute_kwargs_from_parsed(drive_snap; kind = :drive)
         @test dsnap[:snapshot] == "20260101T000000Z-aaaaaa"
-        @test dsnap[:sync] === nothing
+        @test !haskey(dsnap, :sync)
         go_root = DistSSHRun.parse_go_args(
             ["--deploy-root", "/tmp/App", "parent:1", "job.jl"],
         )
@@ -828,15 +827,15 @@ end
         @test gkw[:verbosity] === :progress
         @test gkw[:julia] == "/opt/julia/bin/julia"
         @test gkw[:output_dir] == "my_runs"
-        @test gkw[:sync] === :git_sync
         @test gkw[:args] == ["8"]
         @test !haskey(gkw, :hosts_file)
         @test !haskey(gkw, :workers)
+        @test !haskey(gkw, :sync)
         @test DistSSHRun.host_tokens(go; kind = :go) == ["child:h1:1"]
         @test Set(keys(gkw)) == Set(
             [
-                :output_dir, :args, :julia, :quiet, :verbosity, :sync,
-            ]
+                :output_dir, :args, :julia, :quiet, :verbosity,
+            ],
         )
         err_kw = try
             DistSSHRun.parse_go_args(
@@ -847,10 +846,10 @@ end
             e
         end
         @test err_kw isa ArgumentError
-        @test occursin("go --ship-tree was removed", err_kw.msg)
+        @test occursin("go: --ship-tree was removed", err_kw.msg)
         go_plain = DistSSHRun.parse_go_args(["child:h1:1", "job.jl"])
         gplain = DistSSHRun.execute_kwargs_from_parsed(go_plain; kind = :go)
-        @test gplain[:sync] === nothing
+        @test !haskey(gplain, :sync)
         @test !haskey(gplain, :allow_external_symlinks)
         go_r = DistSSHRun.parse_go_args(["--repeat", "8", "job.jl"])
         @test DistSSHRun.execute_kwargs_from_parsed(go_r; kind = :go)[:repeat] == 8
@@ -909,7 +908,7 @@ end
         @test err isa ArgumentError
         shown = sprint(io -> DistSSHRun.print_cli_error(err.msg; io = io))
         @test occursin("Error:", shown)
-        @test occursin("go --ship-tree was removed", shown)
+        @test occursin("go: --ship-tree was removed", shown)
         @test occursin("setup ship-tree", shown)
         @test occursin("--snapshot", shown)
         errd = try
@@ -919,13 +918,13 @@ end
             e
         end
         @test errd isa ArgumentError
-        @test occursin("drive --ship-tree was removed", errd.msg)
+        @test occursin("drive: --ship-tree was removed", errd.msg)
         parsed = kit_parse_args(
             :go, String["--snapshot", "20260101T000000Z-aaaaaa", "parent:1", "job.jl"],
         )
         bag = DistSSHRun.execute_kwargs_from_parsed(parsed; kind = :go)
         @test bag[:snapshot] == "20260101T000000Z-aaaaaa"
-        @test bag[:sync] === nothing
+        @test !haskey(bag, :sync)
         err_go_sync = try
             kit_parse_args(:go, String["--sync", "parent:1", "job.jl"])
             nothing
@@ -933,9 +932,15 @@ end
             e
         end
         @test err_go_sync isa ArgumentError
-        @test occursin("go --sync was removed", err_go_sync.msg)
-        parsed_sync = kit_parse_args(:go, String["--git-sync", "parent:1", "job.jl"])
-        @test DistSSHRun.execute_kwargs_from_parsed(parsed_sync; kind = :go)[:sync] === :git_sync
+        @test occursin("go: --sync was removed", err_go_sync.msg)
+        err_go_git = try
+            kit_parse_args(:go, String["--git-sync", "parent:1", "job.jl"])
+            nothing
+        catch e
+            e
+        end
+        @test err_go_git isa ArgumentError
+        @test occursin("go: --git-sync was removed", err_go_git.msg)
     end
 
     @testset "kind not :go / :drive / :ride" begin
@@ -1014,11 +1019,7 @@ end
             e
         end
         @test err_ship isa ArgumentError
-        @test occursin("cannot pass --ship-tree", err_ship.msg)
-        @test occursin("extra_files", err_ship.msg)
-        @test occursin("_distsshrun_external", err_ship.msg)
-        @test occursin("snapshot=id", err_ship.msg)
-        @test occursin("go! / drive! still accept sync=:ship_tree", err_ship.msg)
+        @test occursin("sync=:ship_tree was removed", err_ship.msg)
         @test !occursin("Project.toml", err_ship.msg)
         @test DistSSHRun._go_script_relpath("/local/app", "/local/job.jl") ==
             joinpath("_distsshrun_external", "job.jl")

@@ -224,39 +224,22 @@ using Test
         end
     end
 
-    @testset "sync and git parity" begin
-        # Two axes: pre-run git sync (--git-sync/--rsync) and git parity (--require-git).
-        # Defaults: no sync, no parity (skip_hash_check=true).
+    @testset "transfer flags and git parity" begin
         let r = parse_drive_args(["s.jl"])
-            @test r.sync_mode === nothing
             @test r.skip_hash_check == true
         end
-        let err_sync = try
-                parse_drive_args(["--sync", "child:host1:1", "s.jl"])
+        for flag in ("--sync", "--git-sync", "--ship-tree", "--skip-git-guard")
+            err = try
+                parse_drive_args([flag, "child:host1:1", "s.jl"])
                 error("expected ArgumentError")
             catch e
                 e
             end
-            @test err_sync isa ArgumentError
-            @test occursin("drive --sync was removed", err_sync.msg)
-            @test occursin("--git-sync", err_sync.msg)
+            @test err isa ArgumentError
+            @test occursin("was removed", err.msg)
         end
         @test_throws ArgumentError parse_drive_args(["--mem-headroom", "0.5", "s.jl"])
         @test_throws ArgumentError parse_drive_args(["--parent-gb", "0.2", "s.jl"])
-        let r = parse_drive_args(["--git-sync", "child:host1:1", "s.jl"])
-            @test r.sync_mode === :git_sync
-            @test r.skip_hash_check == true
-        end
-        err_ship = try
-            parse_drive_args(["--ship-tree", "s.jl"])
-            error("expected ArgumentError")
-        catch e
-            e
-        end
-        @test err_ship isa ArgumentError
-        @test occursin("drive --ship-tree was removed", err_ship.msg)
-        @test occursin("setup ship-tree", err_ship.msg)
-        @test occursin("--snapshot", err_ship.msg)
         err_ext = try
             parse_drive_args(["--allow-external-symlinks", "s.jl"])
             error("expected ArgumentError")
@@ -264,46 +247,18 @@ using Test
             e
         end
         @test err_ext isa ArgumentError
-        @test occursin("drive --allow-external-symlinks was removed", err_ext.msg)
+        @test occursin("drive: --allow-external-symlinks was removed", err_ext.msg)
         let r = parse_drive_args(["--require-git", "child:host1:1", "s.jl"])
-            @test r.sync_mode === nothing
             @test r.skip_hash_check == false
-        end
-        let r = parse_drive_args(["--require-git", "--git-sync", "child:host1:1", "s.jl"])
-            @test r.sync_mode === :git_sync
-            @test r.skip_hash_check == false
-        end
-        # Compat no-op; independent of sync axis
-        let r = parse_drive_args(["--skip-git-guard", "s.jl"])
-            @test r.sync_mode === nothing
-            @test r.skip_hash_check == true
-        end
-        let r = parse_drive_args(["--git-sync", "--skip-git-guard", "child:host1:1", "s.jl"])
-            @test r.sync_mode === :git_sync
-            @test r.skip_hash_check == true
         end
         err = try
-            parse_drive_args(["--git-sync", "--rsync", "s.jl"])
+            parse_drive_args(["--require-git", "--rsync", "s.jl"])
             error("expected ArgumentError")
         catch e
             e
         end
         @test err isa ArgumentError
         @test err.msg == DistSSHRun.RSYNC_REMOVED_MSG
-        err2 = try
-            parse_drive_args(["--require-git", "--rsync", "s.jl"])
-            error("expected ArgumentError")
-        catch e
-            e
-        end
-        @test err2 isa ArgumentError
-        @test err2.msg == DistSSHRun.RSYNC_REMOVED_MSG
-        @test_throws ArgumentError parse_drive_args(["--require-git", "--skip-git-guard", "s.jl"])
-        @test_throws ArgumentError parse_drive_args(["--git-sync", "--collect-missing", "out", "child:h1"])
-        # Duplicate same sync flag is a no-op (only mixed flags throw).
-        let r = parse_drive_args(["--git-sync", "--git-sync", "child:host1:1", "s.jl"])
-            @test r.sync_mode === :git_sync
-        end
         @test_throws ArgumentError parse_drive_args(["child:host1", "--collect-missing", "out", "child:h1"])
         # Shared flags are peeled even after `--collect-missing` (not treated as HOST).
         let r = parse_drive_args(["--collect-missing", "out", "--quiet", "h1"])
@@ -322,7 +277,7 @@ using Test
         @test occursin("--quiet", txt)
         @test occursin("--hosts", txt)
         @test occursin("--require-git", txt)
-        @test occursin("--git-sync", txt)
+        @test !occursin("--git-sync", txt)
         @test occursin("--worker-include", txt)
         @test !occursin("--sync-script", txt)
         @test !occursin("--ship-tree", txt)
@@ -362,11 +317,9 @@ using Test
             @test r.script_args == ["--deploy-root", "/tmp/x"]
         end
         let r = parse_drive_args(["--", "parent:1", "s.jl", "--ship-tree"])
-            @test r.sync_mode === nothing
             @test r.script_args == ["--ship-tree"]
         end
         let r = parse_drive_args(["parent:1", "s.jl", "--ship-tree"])
-            @test r.sync_mode === nothing
             @test r.script_args == ["--ship-tree"]
         end
         err_after = try

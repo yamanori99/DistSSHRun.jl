@@ -102,8 +102,11 @@ snapshot with `--snapshot ID` (or `snapshot=` on `setup!` / `go!` / `drive!` /
 `ride!`), else the local `.distsshkit/last-snapshot.toml` written after a
 successful ship, else a git checkout that has `Project.toml` at the deploy
 root on every host. A successful delete / git-clone / git-sync / git-pull
-clears that local record for the matching deploy root. `--snapshot` cannot
-combine with `--git-sync`. Lexical latest `runs/*/src` is not used. An explicit
+clears that local record for the matching deploy root. `go` / `drive` do not
+copy on run (`--git-sync` / `--ship-tree` were removed); deploy with
+`setup git-sync` or `setup ship-tree` first. Do not run `setup git-sync` on
+hosts that are running `go` / `drive` against the same deploy root. Lexical
+latest `runs/*/src` is not used. An explicit
 ID is validated on every host and never falls back. After extract, the remote
 leaf `run.toml` records `complete = true` and the shipped `content_tree_hash`
 (Git tree hash of the tar contents; transfer finished, not a fresh remote

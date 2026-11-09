@@ -213,27 +213,35 @@ end
     end
 
     @testset "pipeline helpers" begin
-        cfg = DistSSHRun.PipelineConfig(
-            driver = "job.jl",
-            workers = ["child:host-a"],
-            sync = :ship_tree,
-        )
-        session = DistSSHRun.kit_session_from_config(cfg)
-        @test DistSSHRun.resolve_pipeline_sync(cfg, session) === :ship_tree
-        @test DistSSHRun.resolve_pipeline_collect(cfg, session)
+        err_pipe_ship = try
+            DistSSHRun.PipelineConfig(
+                driver = "job.jl",
+                workers = ["child:host-a"],
+                sync = :ship_tree,
+            )
+            nothing
+        catch e
+            e
+        end
+        @test err_pipe_ship isa ArgumentError
+        @test occursin("pipeline!: sync=:ship_tree was removed", err_pipe_ship.msg)
 
-        # Git parity off by default; sync mode does not flip it.
         default_cfg = DistSSHRun.PipelineConfig(driver = "job.jl", workers = ["child:host-a"])
         default_session = DistSSHRun.kit_session_from_config(default_cfg)
-        @test DistSSHRun.resolve_pipeline_sync(default_cfg, default_session) === false
+        @test default_cfg.sync === nothing
+        @test DistSSHRun.resolve_pipeline_collect(default_cfg, default_session)
         @test DistSSHRun.pipeline_skip_hash_check(default_cfg)
         @test default_cfg.yes == true
         @test DistSSHRun.kit_session_from_config(default_cfg).yes == true
-        @test DistSSHRun.pipeline_skip_hash_check(
+        err_pipe_git = try
             DistSSHRun.PipelineConfig(
                 driver = "job.jl", workers = ["child:host-a"], sync = :git_sync,
-            ),
-        )
+            )
+            nothing
+        catch e
+            e
+        end
+        @test err_pipe_git isa ArgumentError
         @test !DistSSHRun.pipeline_skip_hash_check(
             DistSSHRun.PipelineConfig(
                 driver = "job.jl",
@@ -249,7 +257,7 @@ end
             collect = false,
         )
         local_session = DistSSHRun.kit_session_from_config(local_cfg)
-        @test DistSSHRun.resolve_pipeline_sync(local_cfg, local_session) === false
+        @test local_cfg.sync === false
         @test !DistSSHRun.resolve_pipeline_collect(local_cfg, local_session)
 
         _with_tempdir() do tmp
@@ -273,30 +281,48 @@ end
         end
 
         err = try
-            DistSSHRun._parse_env_sync_mode("rsync")
+            DistSSHRun._reject_pipeline_sync_env!("rsync")
             error("expected ArgumentError")
         catch e
             e
         end
         @test err isa ArgumentError
-        @test err.msg == DistSSHRun.RSYNC_REMOVED_MSG
+        @test occursin("SYNC_MODE=", err.msg)
         err_sync_env = try
-            DistSSHRun._parse_env_sync_mode("sync")
+            DistSSHRun._reject_pipeline_sync_env!("sync")
             error("expected ArgumentError")
         catch e
             e
         end
         @test err_sync_env isa ArgumentError
         @test occursin("SYNC_MODE=sync was removed", err_sync_env.msg)
-        @test DistSSHRun._parse_env_sync_mode("ship-tree") === :ship_tree
-        @test DistSSHRun._parse_env_sync_mode("git-sync") === :git_sync
-        @test DistSSHRun._parse_env_sync_mode("off") === false
-        @test DistSSHRun._parse_env_sync_mode("skip") === false
-        @test DistSSHRun._parse_env_sync_mode("no") === false
-        @test DistSSHRun._parse_env_sync_mode("") === nothing
-        @test DistSSHRun._parse_env_sync_mode("  ") === nothing
-        @test_throws ArgumentError DistSSHRun._parse_env_sync_mode("true")
-        @test_throws ArgumentError DistSSHRun._parse_env_sync_mode("1")
+        err_ship_env = try
+            DistSSHRun._reject_pipeline_sync_env!("ship-tree")
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err_ship_env isa ArgumentError
+        @test occursin("no longer syncs", err_ship_env.msg)
+        @test DistSSHRun._reject_pipeline_sync_env!("off") === nothing
+        @test DistSSHRun._reject_pipeline_sync_env!("skip") === nothing
+        @test DistSSHRun._reject_pipeline_sync_env!("no") === nothing
+        @test DistSSHRun._reject_pipeline_sync_env!("") === nothing
+        @test DistSSHRun._reject_pipeline_sync_env!("  ") === nothing
+        err_true = try
+            DistSSHRun._reject_pipeline_sync_env!("true")
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err_true isa ArgumentError
+        err_one = try
+            DistSSHRun._reject_pipeline_sync_env!("1")
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err_one isa ArgumentError
 
         withenv(
             "DRIVER" => "",
@@ -335,7 +361,6 @@ end
             session = DistSSHRun.KitSession(project = tmp, workers = ["child:host-a"])
 
             parsed = DistSSHRun.drive_parsed_from_session(session, script)
-            @test parsed.sync_mode === nothing
             @test parsed.worker_include == false
             err_ss = try
                 DistSSHRun.drive_parsed_from_session(session, script; sync_script = true)
@@ -377,27 +402,28 @@ end
             @test err_old_sync isa ArgumentError
             @test occursin("sync=:sync was removed", err_old_sync.msg)
 
-            parsed_sync = DistSSHRun.drive_parsed_from_session(session, script; sync = :git_sync)
-            @test parsed_sync.sync_mode === :git_sync
-            @test parsed_sync.skip_hash_check == true
+            err_git_sync = try
+                DistSSHRun.drive_parsed_from_session(session, script; sync = :git_sync)
+                nothing
+            catch e
+                e
+            end
+            @test err_git_sync isa ArgumentError
+            @test occursin("no longer transfers", err_git_sync.msg)
 
-            parsed_require = DistSSHRun.drive_parsed_from_session(
-                session,
-                script;
-                sync = :git_sync,
-                skip_hash_check = false,
-            )
-            @test parsed_require.skip_hash_check == false
-
-            # rsync has no remote .git/; parity stays off even if requested via API
-            parsed_ship = DistSSHRun.drive_parsed_from_session(
-                session,
-                script;
-                sync = :ship_tree,
-                skip_hash_check = false,
-            )
-            @test parsed_ship.sync_mode === :ship_tree
-            @test parsed_ship.skip_hash_check == true
+            err_ship_sync = try
+                DistSSHRun.drive_parsed_from_session(
+                    session,
+                    script;
+                    sync = :ship_tree,
+                    skip_hash_check = false,
+                )
+                nothing
+            catch e
+                e
+            end
+            @test err_ship_sync isa ArgumentError
+            @test occursin("sync=:ship_tree was removed", err_ship_sync.msg)
 
             err_drive_ss = try
                 DistSSHRun.drive!(script, ["parent:1"]; sync_script = true, yes = true)

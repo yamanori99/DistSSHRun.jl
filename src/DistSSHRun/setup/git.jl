@@ -321,7 +321,7 @@ function _local_status_dirty(project::AbstractString)
 end
 
 """`(ok, sha, message)`. `message` is the refusal, already ending in `help setup`."""
-function _local_sync_sha(project::AbstractString)
+function _local_sync_sha(project::AbstractString; allow_dirty::Bool = false)
     sha = get_local_git_hash(project)
     if !(sha isa String)
         return (;
@@ -342,12 +342,12 @@ function _local_sync_sha(project::AbstractString)
         detail = isempty(st.detail) ? "git status failed" : st.detail
         return (; ok = false, sha = "", message = detail * "\nSee help setup.")
     end
-    if !isempty(st.out)
+    if !allow_dirty && !isempty(st.out)
         return (;
             ok = false,
             sha = "",
             message = "Local git tree is dirty, so sync would not match $sha. " *
-                "Commit the changes. A dirty tree is not sent as a patch. See help setup.",
+                "Commit the changes, or use `setup git-sync --skip-git-guard`. See help setup.",
         )
     end
     return (; ok = true, sha = sha, message = "")
@@ -541,12 +541,13 @@ function git_sync_project_to_hosts!(
         do_push::Bool = true,
         do_pull::Bool = true,
         confirm::Bool = true,
+        allow_dirty::Bool = false,
     )
     ensure_manifest_in_git_worktree!(project)
     proj = canonical_local_path(project)
     remote = String(remote_path)
     host_results = HostResult[]
-    local_sha = _local_sync_sha(proj)
+    local_sha = _local_sync_sha(proj; allow_dirty = allow_dirty)
     if !local_sha.ok
         println_fatal(local_sha.message)
         return (; ok = false, cancelled = false, host_results = host_results)

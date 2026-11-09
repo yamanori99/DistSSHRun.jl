@@ -3,12 +3,9 @@
 """One-line meaning of `--require-git` (drive opt-in git parity)."""
 const REQUIRE_GIT_MEANING = "opt-in git parity (off by default)"
 
-"""Drive `--skip-git-guard`: compat no-op (parity already off)."""
-const SKIP_GIT_GUARD_MEANING = "compat no-op (parity already off)"
-
-"""Go `--skip-git-guard`: alias of `--skip-git-sync`."""
-const GO_SKIP_GIT_GUARD_MEANING =
-    "Same as --skip-git-sync (compat shared name with drive; default is already no pre-run sync)."
+"""Setup `git-sync --skip-git-guard`: deploy when the local tree may be dirty."""
+const SETUP_SKIP_GIT_GUARD_MEANING =
+    "git-sync only: skip local dirty check; deploy record marks dirty=true."
 
 """Shared collect-mode labels for help / docs."""
 const COLLECT_MODE_HELP = """
@@ -70,21 +67,18 @@ function _env_verbosity()::Union{Nothing, Symbol}
     return nothing
 end
 
-"""Set exclusive sync mode (`:git_sync` / `:ship_tree` / `false`); throw if conflicting."""
+"""Removed run-time sync flags delegate to `_reject_run_transfer_cli!`."""
 function _kit_set_sync_mode!(
         current::Union{Nothing, Symbol, Bool},
         next::Union{Symbol, Bool};
         source::AbstractString = "kit",
     )
+    next === :git_sync && _reject_run_transfer_cli!(String(source), "--git-sync")
+    next === :ship_tree && _reject_run_transfer_cli!(String(source), "--ship-tree")
     next === :rsync && _throw_rsync_removed()
-    next === :sync && _reject_removed_pre_run_git_sync!(next; api = String(source))
+    next === :sync && _reject_run_transfer_cli!(String(source), "--sync")
     if current !== nothing && current !== next
-        msg = if source == "go"
-            "$source: use only one of --git-sync / --skip-git-sync / --skip-git-guard"
-        else
-            "$source: use only one of --git-sync"
-        end
-        throw(ArgumentError(msg))
+        throw(ArgumentError("$source: conflicting removed transfer flags"))
     end
     return next
 end
@@ -286,33 +280,9 @@ function _kit_user_cli_m()::String
     return cli_entry() === :DistSSHQueue ? "julia -m DistSSHKit" : cli_m()
 end
 
-"""`go` / `drive` `--ship-tree` and `--allow-external-symlinks` are setup-only."""
+"""`go` / `drive` transfer flags are setup-only (#386)."""
 function _throw_go_drive_ship_cli_removed(command::AbstractString, flag::AbstractString)
-    m = _kit_user_cli_m()
-    if flag == "--allow-external-symlinks"
-        throw(
-            ArgumentError(
-                join_explained_message(
-                    "$(command) $(flag) was removed; pass it to `$(m) setup ship-tree`.",
-                    "Run `$(m) help setup`.",
-                ),
-            )
-        )
-    end
-    throw(
-        ArgumentError(
-            join_explained_message(
-                string(
-                    "$(command) --ship-tree was removed; use `$(m) setup ship-tree`, ",
-                    "then `$(m) setup instantiate`, then `$(m) $(command) --snapshot ID`.",
-                ),
-                string(
-                    "Run `$(m) help $(command)` and `$(m) help setup`. ",
-                    "go! / drive! still accept sync=:ship_tree.",
-                ),
-            ),
-        )
-    )
+    return _reject_run_transfer_cli!(command, flag)
 end
 
 function _throw_detached_ship_tree_removed()

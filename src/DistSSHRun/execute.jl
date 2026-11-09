@@ -226,9 +226,6 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
     dr0 = get(parsed, :deploy_root, nothing)
     dr0 === nothing || (kw[:remote] = dr0)
     if kind === :go
-        kw[:sync] = parsed.sync
-        get(parsed, :allow_external_symlinks, false) &&
-            (kw[:allow_external_symlinks] = true)
         parsed.repeat === nothing || (kw[:repeat] = parsed.repeat)
         return _parsed_launch_kwargs!(kw, parsed)
     end
@@ -236,9 +233,6 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
         kw[:spi_check] = parsed.spi_check
         return _parsed_launch_kwargs!(kw, parsed)
     end
-    kw[:sync] = parsed.sync_mode
-    get(parsed, :allow_external_symlinks, false) &&
-        (kw[:allow_external_symlinks] = true)
     kw[:log_dir] = parsed.log_dir
     kw[:enable_log] = parsed.enable_log
     kw[:package] = parsed.explicit_package
@@ -553,6 +547,9 @@ function execute!(
         )
     end
     _reject_inprocess_launch!(dir, threads, env_allow, env)
+    _reject_run_transfer_kw!("execute!", sync; surface = :api)
+    get(kwargs, :allow_external_symlinks, false) === true &&
+        _reject_run_transfer_cli!("execute!", "--allow-external-symlinks")
     _set_provenance_source!(source)
     result = try
         if kind === :go
@@ -562,7 +559,6 @@ function execute!(
                 output_dir = output_dir,
                 args = args,
                 project = project,
-                sync = sync,
                 julia = julia,
                 kwargs...,
             )
@@ -588,7 +584,6 @@ function execute!(
                 output_dir = output_dir,
                 args = args,
                 project = project,
-                sync = sync,
                 julia = julia,
                 kwargs...,
             )
@@ -741,10 +736,9 @@ function _execute_detached!(
             )
         )
     end
-    if sync === :ship_tree
-        _throw_detached_ship_tree_removed()
-    end
-    ship_external = get(kwargs, :allow_external_symlinks, false) === true
+    _reject_run_transfer_kw!("execute!", sync; surface = :api)
+    get(kwargs, :allow_external_symlinks, false) === true &&
+        _reject_run_transfer_cli!("execute!", "--allow-external-symlinks")
     yes = get(kwargs, :yes, true)
     yes === true || throw(ArgumentError("execute!(...; detached=true) requires yes=true"))
     quiet = get(kwargs, :quiet, false)
@@ -816,9 +810,6 @@ function _execute_detached!(
     proj = canonical_local_path(project)
     launch_dir = _detached_launch_dir(dir, proj)
     script_path = _remote_script_argv(script) ? String(script) : canonical_local_path(script)
-    if ship_external
-        _throw_go_drive_ship_cli_removed(String(kind), "--allow-external-symlinks")
-    end
     job_id = get(kwargs, :job_id, nothing)
     job_id_s = if job_id !== nothing && !isempty(strip(String(job_id)))
         _parse_kit_job_id(String(job_id))
@@ -1893,22 +1884,9 @@ function _execute_detached_argv(
         throw(ArgumentError("verbosity must be :quiet, :progress, or :verbose, got $(repr(verbosity))"))
     end
     output_dir !== nothing && push!(argv, "--output-dir", String(output_dir))
-    if sync === :sync
-        _reject_removed_pre_run_git_sync!(:sync; api = String(kind))
-    elseif sync === :git_sync
-        push!(argv, "--git-sync")
-    elseif sync === :ship_tree
-        _throw_detached_ship_tree_removed()
-    elseif sync === :rsync
-        _throw_rsync_removed()
-    elseif sync === false && kind === :go
-        push!(argv, "--skip-git-sync")
-    elseif sync !== nothing && sync !== false
-        throw(ArgumentError("sync must be nothing, false, :git_sync, or :ship_tree, got $(repr(sync))"))
-    end
-    if allow_external_symlinks
-        _throw_go_drive_ship_cli_removed(String(kind), "--allow-external-symlinks")
-    end
+    _reject_run_transfer_kw!("execute!", sync; surface = :api)
+    allow_external_symlinks &&
+        _reject_run_transfer_cli!(String(kind), "--allow-external-symlinks")
     if snapshot !== nothing
         push!(argv, "--snapshot", validate_snapshot_id(snapshot))
     end

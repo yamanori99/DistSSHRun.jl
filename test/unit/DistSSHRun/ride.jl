@@ -488,19 +488,18 @@ using Test
     end
 
     @testset "ride does not record an earlier ship" begin
-        previous = DistSSHRun._LAST_SHIP[]
-        previous_active = DistSSHRun._SHIP_LAYOUT_ACTIVE[]
+        previous = DistSSHRun.active_snapshot_selection()
         function seed_earlier_ship!()
-            DistSSHRun._LAST_SHIP[] = Dict{String, Any}(
-                "algorithm" => "git-sha1",
-                "content_tree_hash" => "deadbeef",
-                "bytes" => 1,
-                "files" => 1,
-                "run_id" => "20260101T000000Z-abcdef",
-                "host" => "host.test",
-                "run_dir_empty_at_start" => true,
+            DistSSHRun._set_active_selection!(
+                DistSSHRun.SnapshotSelection(
+                    :snapshot,
+                    "20260101T000000Z-abcdef",
+                    "/home/distsshkit/app",
+                    "/home/distsshkit/app/runs/20260101T000000Z-abcdef/src",
+                    "deadbeef",
+                    ["host.test"],
+                ),
             )
-            DistSSHRun._SHIP_LAYOUT_ACTIVE[] = true
             return nothing
         end
         function assert_no_shipped(result)
@@ -537,15 +536,17 @@ using Test
                 assert_no_shipped(failed)
             end
         finally
-            DistSSHRun._LAST_SHIP[] = previous
-            DistSSHRun._SHIP_LAYOUT_ACTIVE[] = previous_active
+            if previous === nothing
+                DistSSHRun._clear_last_ship!()
+            else
+                DistSSHRun._set_active_selection!(previous)
+            end
         end
     end
 
     @testset "ride retargets SSH project to completed snapshot src" begin
         double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_ride_work_root_ssh.jl"))
-        previous = DistSSHRun._LAST_SHIP[]
-        previous_active = DistSSHRun._SHIP_LAYOUT_ACTIVE[]
+        previous = DistSSHRun.active_snapshot_selection()
         old_remote = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
         function restore_remote!()
             if old_remote === nothing
@@ -645,7 +646,7 @@ using Test
                     write(script, "nothing\n")
                     rm(logp; force = true)
                     touch(logp)
-                    # ride! clears `_LAST_SHIP`; pass an explicit snapshot id.
+                    # ride! clears the active selection; pass an explicit snapshot id.
                     child = redirect_stdout(devnull) do
                         redirect_stderr(devnull) do
                             DistSSHRun.ride!(
@@ -678,8 +679,11 @@ using Test
                 end
             end
         finally
-            DistSSHRun._LAST_SHIP[] = previous
-            DistSSHRun._SHIP_LAYOUT_ACTIVE[] = previous_active
+            if previous === nothing
+                DistSSHRun._clear_last_ship!()
+            else
+                DistSSHRun._set_active_selection!(previous)
+            end
             restore_remote!()
             delete!(DistSSHRun._PINNED_JULIA, "ridework.test\0/usr/bin/julia")
         end

@@ -69,6 +69,9 @@ function drive!(
         snapshot::Union{Nothing, AbstractString} = nothing,
     )::DriveResult
     _reject_removed_drive_worker_include_kw!(sync_script)
+    _reject_run_transfer_kw!("drive!", sync; surface = hint_surface(session))
+    allow_external_symlinks &&
+        _reject_run_transfer_cli!("drive!", "--allow-external-symlinks")
     return _drive_frame(; cli = false) do
         return _with_kit_inproc_run!(:drive) do
             # Outside `run_drive_parsed!`: `apply_session_env!` runs first, and
@@ -92,12 +95,10 @@ function drive!(
                         enable_log = enable_log,
                         log_dir = log_dir,
                         package = package,
-                        sync = sync,
                         julia = julia,
                         require_all_hosts = require_all_hosts,
                         worker_include = worker_include,
                         allow_mismatch = allow_mismatch,
-                        allow_external_symlinks = allow_external_symlinks,
                         snapshot = snapshot,
                     )
                     apply_kit_cli_session!(parsed.cli_session)

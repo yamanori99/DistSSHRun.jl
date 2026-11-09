@@ -60,7 +60,7 @@ using Test
             )
             shown = out * err
             @test code == 1
-            @test occursin("go --ship-tree was removed", shown)
+            @test occursin("go: --ship-tree was removed", shown)
             @test occursin("setup ship-tree", shown)
             @test !occursin("SSH preflight", shown)
         end
@@ -69,7 +69,7 @@ using Test
             )
             shown = out * err
             @test code == 1
-            @test occursin("drive --ship-tree was removed", shown)
+            @test occursin("drive: --ship-tree was removed", shown)
             @test !occursin("SSH preflight", shown)
         end
         let (code, out, err) = _cli_capture(
@@ -77,7 +77,7 @@ using Test
             )
             shown = out * err
             @test code == 1
-            @test occursin("go --ship-tree was removed", shown)
+            @test occursin("go: --ship-tree was removed", shown)
             @test !occursin("SSH preflight", shown)
         end
     end

@@ -521,9 +521,9 @@ end
     end
 
     @testset "shipped hash and run_id" begin
-        previous = DistSSHRun._LAST_SHIP[]
+        previous = DistSSHRun.active_snapshot_selection()
         try
-            DistSSHRun._LAST_SHIP[] = nothing
+            DistSSHRun._clear_last_ship!()
             _with_tempdir() do tmp
                 prov = DistSSHRun.assemble_provenance(tmp)
                 @test prov["schema"] == 1
@@ -541,14 +541,15 @@ end
                 @test DistSSHRun.result_content_tree_hash(go) === nothing
                 @test DistSSHRun.result_remote_run_id(go) === nothing
             end
-            DistSSHRun._LAST_SHIP[] = Dict{String, Any}(
-                "algorithm" => "git-sha1",
-                "content_tree_hash" => "abc123",
-                "run_id" => "20260101T000000Z-abcdef",
-                "bytes" => 4,
-                "files" => 1,
-                "host" => "lab",
-                "run_dir_empty_at_start" => true,
+            DistSSHRun._set_active_selection!(
+                DistSSHRun.SnapshotSelection(
+                    :snapshot,
+                    "20260101T000000Z-abcdef",
+                    "/home/lab",
+                    "/home/lab/runs/20260101T000000Z-abcdef/src",
+                    "abc123",
+                    ["lab"],
+                ),
             )
             _with_tempdir() do tmp
                 prov = DistSSHRun.assemble_provenance(tmp)
@@ -570,10 +571,15 @@ end
                 @test DistSSHRun.result_remote_run_id(DistSSHRun.kit_run_result(drive)) ==
                     "20260101T000000Z-abcdef"
             end
-            DistSSHRun._LAST_SHIP[] = Dict{String, Any}(
-                "content_tree_hash" => "abc123",
-                "run_id" => "",
-                "algorithm" => "git-sha1",
+            DistSSHRun._set_active_selection!(
+                DistSSHRun.SnapshotSelection(
+                    :snapshot,
+                    nothing,
+                    "/home/lab",
+                    "/home/lab/runs/x/src",
+                    "abc123",
+                    String[],
+                ),
             )
             _with_tempdir() do tmp
                 prov = DistSSHRun.assemble_provenance(tmp)
@@ -601,7 +607,11 @@ end
                 @test DistSSHRun.result_remote_run_id(held) === nothing
             end
         finally
-            DistSSHRun._LAST_SHIP[] = previous
+            if previous === nothing
+                DistSSHRun._clear_last_ship!()
+            else
+                DistSSHRun._set_active_selection!(previous)
+            end
         end
     end
 end
