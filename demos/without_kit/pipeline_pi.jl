@@ -43,7 +43,7 @@ result = go!(script, "parent:2"; args = ARGS)
 #       yes=true,
 #   )
 #   setup!(session, :rsync, :instantiate)
-#   # or: setup!(session, :clone; repo="https://…"); setup!(session, :instantiate)
+#   # or: setup!(session, :git_clone; repo="https://…"); setup!(session, :instantiate)
 #   result = go!(
 #       script,
 #       "child:user@host1:1",

@@ -40,20 +40,28 @@ function validate_snapshot_id(snapshot_id::AbstractString)::String
 end
 public validate_snapshot_id
 
-"""Refuse `snapshot=` with git pre-run sync (`:sync` / `:ship_tree`). `surface=:cli` names flags."""
+"""Refuse `snapshot=` with git pre-run sync (`:git_sync` / `:ship_tree`). `surface=:cli` names flags."""
 function _snapshot_sync_exclusive!(
         snapshot::Union{Nothing, AbstractString},
         sync::Union{Nothing, Symbol, Bool};
         kind::Symbol,
         surface::Symbol,
     )
-    snapshot === nothing && return nothing
     sym = sync isa Symbol ? sync : nothing
-    sym === :sync || sym === :ship_tree || return nothing
+    if sym === :sync
+        api = if surface === :cli
+            kind === :drive ? "drive" : "go"
+        else
+            kind === :drive ? "drive!" : "go!"
+        end
+        _reject_removed_pre_run_git_sync!(sym; api = api)
+    end
+    snapshot === nothing && return nothing
+    sym === :git_sync || sym === :ship_tree || return nothing
     validate_snapshot_id(snapshot)
     if surface === :cli
         cmd = kind === :drive ? "drive" : "go"
-        flag = sym === :sync ? "--sync" : "--ship-tree"
+        flag = sym === :git_sync ? "--git-sync" : "--ship-tree"
         throw(ArgumentError("$cmd: --snapshot cannot be combined with $flag"))
     end
     api = kind === :drive ? "drive!" : "go!"
@@ -238,7 +246,7 @@ end
 
 """Drop the local last-snapshot convenience default for `deploy_root`.
 
-Call after a successful `:delete`, `:clone`, `:sync`, or `:pull` so a later
+Call after a successful `:delete`, `:git_clone`, `:git_sync`, or `:git_pull` so a later
 instantiate / check / go / drive can select a git checkout at that root. Does
 not delete remote `runs/<id>/` leaves. An explicit `--snapshot` still works.
 Also clears this process's ship cache when it targeted the same deploy root.

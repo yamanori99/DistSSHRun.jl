@@ -45,7 +45,8 @@ non-executable file arrives as mode `0644`, and an executable file as
 `0755`. A symlink that points outside the copied tree is refused.
 `push_cache!` uses stdlib Tar over SSH and needs a remote Julia executable
 (`--julia`, or auto-detect) that can load stdlib `Tar` and `SHA`. Ship uses
-stdlib Tar over SSH. Git clone, sync, and pull also need **`git`**.
+stdlib Tar over SSH. Git `setup git-clone`, `setup git-sync`, and
+`setup git-pull` also need **`git`**.
 
 `setup ship-tree` walks the
 ship root and applies each directory's `.gitignore` (case-sensitive).
@@ -74,7 +75,7 @@ add `!LocalPreferences.toml` to ship it. A file over 50 MiB, or a send list over
 cap still stops the ship. Declared inputs are
 left out. `ship_send_list(root)` is that path list for the directory it is
 given. It is public and is not exported. `rsync_send_list` remains the git
-list for clone, sync, and pull. Extract is into
+list for git-clone, git-sync, and git-pull. Extract is into
 `<remote_root>/runs/<run_id>/src/` (`run_id` is UTC plus 6 hex). The same leaf also gets an empty
 `<remote_root>/runs/<run_id>/out/`. A repeated host is refused. A missing
 `remote_root` is created when safe: a `~/…` layout may create components
@@ -100,9 +101,9 @@ Later `setup instantiate` / `setup check` / `go` / `drive` / `ride` select a
 snapshot with `--snapshot ID` (or `snapshot=` on `setup!` / `go!` / `drive!` /
 `ride!`), else the local `.distsshkit/last-snapshot.toml` written after a
 successful ship, else a git checkout that has `Project.toml` at the deploy
-root on every host. A successful delete / clone / sync / pull clears that
-local record for the matching deploy root. `--snapshot` cannot combine with
-`--sync`. Lexical latest `runs/*/src` is not used. An explicit
+root on every host. A successful delete / git-clone / git-sync / git-pull
+clears that local record for the matching deploy root. `--snapshot` cannot
+combine with `--git-sync`. Lexical latest `runs/*/src` is not used. An explicit
 ID is validated on every host and never falls back. After extract, the remote
 leaf `run.toml` records `complete = true` and the shipped `content_tree_hash`
 (Git tree hash of the tar contents; transfer finished, not a fresh remote

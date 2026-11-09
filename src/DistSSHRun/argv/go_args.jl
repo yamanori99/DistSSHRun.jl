@@ -6,7 +6,7 @@ function show_go_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "Standalone script. One full run per slot; slots start together.",
-        "Remotes: setup ship-tree or setup clone, then setup instantiate.",
+        "Remotes: setup ship-tree or setup git-clone, then setup instantiate.",
         "Then go --snapshot ID (or last-snapshot.toml / git checkout).",
     )
     print_help_blank(io)
@@ -35,12 +35,12 @@ function show_go_usage(; io::IO = stdout)
     print_help_section("Options"; io = io)
     print_help_lines(
         io,
-        "  --sync              optional git pre-run copy (not ship-tree)",
+        "  --git-sync          optional git pre-run copy (not ship-tree)",
         "  --deploy-root PATH  remote deployment root (location, not snapshot id).",
         "                      Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
         "                      ~/Parent/RepoName layout from the local env_dir.",
         "  --snapshot ID       use runs/<ID>/src under the deploy root",
-        "                      (not with --sync; that copies a git checkout)",
+        "                      (not with --git-sync; that copies a git checkout)",
         "  --julia PATH        remote Julia (ENV or auto)",
         "  --allow-mismatch F  waive julia, distssh, and/or manifest (comma list)",
         "  Remote slots cd to the project root and pin the real julia binary.",
@@ -141,7 +141,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
     output_dir = nothing
     julia_exe = nothing
     allow_mismatch = Symbol[]
-    # nothing → go! default (false); :sync / :ship_tree / false (= skip)
+    # nothing → go! default (false); :git_sync / :ship_tree / false (= skip)
     sync::Union{Nothing, Symbol, Bool} = nothing
     allow_external_symlinks = false
     snapshot_id = nothing
@@ -191,15 +191,19 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
             repeat_n === nothing || throw(ArgumentError("go: --repeat given more than once"))
             repeat_n = _go_parse_repeat(cli_take_value!(c, arg))
         elseif arg == "--sync"
+            _throw_drive_go_removed_git_sync_flag!("go")
+        elseif arg == "--git-sync"
             cli_consume!(c)
-            sync = _go_set_sync!(sync, :sync)
+            sync = _go_set_sync!(sync, :git_sync)
         elseif arg == "--ship-tree"
             _throw_go_drive_ship_cli_removed("go", arg)
         elseif arg == "--allow-external-symlinks"
             _throw_go_drive_ship_cli_removed("go", arg)
         elseif arg == "--rsync"
             _throw_rsync_removed()
-        elseif arg == "--skip-sync" || arg == "--skip-git-guard"
+        elseif arg == "--skip-sync"
+            _throw_go_removed_skip_sync_flag!()
+        elseif arg == "--skip-git-sync" || arg == "--skip-git-guard"
             cli_consume!(c)
             sync = _go_set_sync!(sync, false)
         elseif arg == "--help" || arg == "-h"

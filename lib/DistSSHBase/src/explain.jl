@@ -160,17 +160,17 @@ end
 function explain_clone_repo_required(; surface::Symbol = :api)::String
     surface = _normalize_hint_surface(surface)
     if surface === :api
-        return "setup!(session, :clone) requires repo=\"git-url\" " *
+        return "setup!(session, :git_clone) requires repo=\"git-url\" " *
             "(no silent origin lookup; clone runs on the remote)"
     end
-    return "setup clone requires --repo URL " *
+    return "setup git-clone requires --repo URL " *
         "(no silent origin lookup; clone runs on the remote)"
 end
 
 function explain_clone_origin_missing(; surface::Symbol = :cli)::String
     surface = _normalize_hint_surface(surface)
     if surface === :api
-        return "Could not read git remote `origin`; pass repo=\"git-url\" to setup!(…, :clone)"
+        return "Could not read git remote `origin`; pass repo=\"git-url\" to setup!(…, :git_clone)"
     end
     return "Could not read git remote `origin`; pass --repo URL"
 end

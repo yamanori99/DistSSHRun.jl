@@ -6,9 +6,9 @@ const REQUIRE_GIT_MEANING = "opt-in git parity (off by default)"
 """Drive `--skip-git-guard`: compat no-op (parity already off)."""
 const SKIP_GIT_GUARD_MEANING = "compat no-op (parity already off)"
 
-"""Go `--skip-git-guard`: alias of `--skip-sync`."""
+"""Go `--skip-git-guard`: alias of `--skip-git-sync`."""
 const GO_SKIP_GIT_GUARD_MEANING =
-    "Same as --skip-sync (compat shared name with drive; default is already no pre-run sync)."
+    "Same as --skip-git-sync (compat shared name with drive; default is already no pre-run sync)."
 
 """Shared collect-mode labels for help / docs."""
 const COLLECT_MODE_HELP = """
@@ -70,18 +70,19 @@ function _env_verbosity()::Union{Nothing, Symbol}
     return nothing
 end
 
-"""Set exclusive sync mode (`:sync` / `:ship_tree` / `false`); throw if conflicting."""
+"""Set exclusive sync mode (`:git_sync` / `:ship_tree` / `false`); throw if conflicting."""
 function _kit_set_sync_mode!(
         current::Union{Nothing, Symbol, Bool},
         next::Union{Symbol, Bool};
         source::AbstractString = "kit",
     )
     next === :rsync && _throw_rsync_removed()
+    next === :sync && _reject_removed_pre_run_git_sync!(next; api = String(source))
     if current !== nothing && current !== next
         msg = if source == "go"
-            "$source: use only one of --sync / --skip-sync / --skip-git-guard"
+            "$source: use only one of --git-sync / --skip-git-sync / --skip-git-guard"
         else
-            "$source: use only one of --sync"
+            "$source: use only one of --git-sync"
         end
         throw(ArgumentError(msg))
     end

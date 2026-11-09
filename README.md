@@ -34,7 +34,8 @@ Julia **1.13+**.
 - Collect, pull-back, and `push_cache!` need a remote Julia
   executable (`--julia`, or auto-detect). `push_cache!` also needs
   that Julia to load stdlib `Tar` and `SHA`.
-- **`git`** is required only for clone, sync, and pull.
+- **`git`** is required only for `setup git-clone`, `setup git-sync`, and
+  `setup git-pull`.
 
 ### Copied files
 

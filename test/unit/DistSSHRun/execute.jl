@@ -547,6 +547,8 @@ end
         @test DistSSHRun.execute_detached_accepts(:output_dir; kind = :ride)
         @test !DistSSHRun.execute_detached_accepts(:repeat; kind = :ride)
         @test !DistSSHRun.execute_detached_accepts(:sync_script; kind = :ride)
+        @test DistSSHRun.execute_detached_accepts(:worker_include; kind = :drive)
+        @test !DistSSHRun.execute_detached_accepts(:worker_include; kind = :go)
         @test !DistSSHRun.execute_detached_accepts(:log_dir; kind = :ride)
         @test !DistSSHRun.execute_detached_accepts(:require_all_hosts; kind = :ride)
         @test !DistSSHRun.execute_detached_accepts(:spi_check; kind = :go)
@@ -803,7 +805,7 @@ end
         go = DistSSHRun.parse_go_args(
             [
                 "--progress", "--julia", "/opt/julia/bin/julia",
-                "--output-dir", "my_runs", "--sync", "child:h1:1", "job.jl", "8",
+                "--output-dir", "my_runs", "--git-sync", "child:h1:1", "job.jl", "8",
             ]
         )
         gkw = DistSSHRun.execute_kwargs_from_parsed(go; kind = :go)
@@ -826,7 +828,7 @@ end
         @test gkw[:verbosity] === :progress
         @test gkw[:julia] == "/opt/julia/bin/julia"
         @test gkw[:output_dir] == "my_runs"
-        @test gkw[:sync] === :sync
+        @test gkw[:sync] === :git_sync
         @test gkw[:args] == ["8"]
         @test !haskey(gkw, :hosts_file)
         @test !haskey(gkw, :workers)
@@ -924,8 +926,16 @@ end
         bag = DistSSHRun.execute_kwargs_from_parsed(parsed; kind = :go)
         @test bag[:snapshot] == "20260101T000000Z-aaaaaa"
         @test bag[:sync] === nothing
-        parsed_sync = kit_parse_args(:go, String["--sync", "parent:1", "job.jl"])
-        @test DistSSHRun.execute_kwargs_from_parsed(parsed_sync; kind = :go)[:sync] === :sync
+        err_go_sync = try
+            kit_parse_args(:go, String["--sync", "parent:1", "job.jl"])
+            nothing
+        catch e
+            e
+        end
+        @test err_go_sync isa ArgumentError
+        @test occursin("go --sync was removed", err_go_sync.msg)
+        parsed_sync = kit_parse_args(:go, String["--git-sync", "parent:1", "job.jl"])
+        @test DistSSHRun.execute_kwargs_from_parsed(parsed_sync; kind = :go)[:sync] === :git_sync
     end
 
     @testset "kind not :go / :drive / :ride" begin

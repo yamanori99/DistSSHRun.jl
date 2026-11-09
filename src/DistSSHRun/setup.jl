@@ -1,5 +1,6 @@
 # Setup cores shared by CLI `setup` and API `sync!` (ship + git + ops).
 
+include(joinpath(@__DIR__, "setup", "git_modes.jl"))
 include(joinpath(@__DIR__, "setup", "progress.jl"))
 include(joinpath(@__DIR__, "setup", "send_list.jl"))
 include(joinpath(@__DIR__, "setup", "git.jl"))

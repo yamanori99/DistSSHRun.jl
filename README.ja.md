@@ -36,7 +36,8 @@ Julia **1.13+**。
   実行ファイルが要る（`--julia`、または自動検出）。
   `push_cache!` はその Julia が stdlib の `Tar` と `SHA` を
   読めることも要る。
-- **`git`** が要るのは clone / sync / pull のときだけである。
+- **`git`** が要るのは `setup git-clone` / `setup git-sync` /
+  `setup git-pull` のときだけである。
 
 ### コピーしたファイル
 

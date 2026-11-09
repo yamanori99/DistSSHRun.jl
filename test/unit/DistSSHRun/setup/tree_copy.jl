@@ -342,7 +342,7 @@ end
             project = pwd(), workers = ["child:h"], yes = true, quiet = true,
         )
         sync_err = try
-            DistSSHRun.sync!(session; mode = :sync, gitignore = false)
+            DistSSHRun.sync!(session; mode = :git_sync, gitignore = false)
             nothing
         catch e
             e

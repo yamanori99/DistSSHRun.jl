@@ -14,13 +14,13 @@
 #                 executions require)
 #   runtest       Pkg.test of the job project
 #   cleanup       stale workers
-#   clone         git clone onto an empty dest
+#   git-clone     git clone onto an empty dest
 #   delete        remove the computed remote tree (--confirm-path)
 #   prune         kit leaves (--confirm-path; --older-than / --id)
 #   remote-root   BOOLEAN mkdir of an absolute --deploy-root PATH (not a
 #                 path-valued option; parent must exist; not mkdir -p)
-#   sync          git push + detach
-#   pull          git detach (no push)
+#   git-sync      git push + detach
+#   git-pull      git detach (no push)
 #   requirements  print this page (same as `setup` with no subcommand)
 #
 # Location:
@@ -48,7 +48,7 @@ function show_requirements(; io::IO = stdout)
         "  After ship-tree, instantiate/check/go use that snapshot id (local",
         "  last-snapshot record, or pass --snapshot ID). Lexical latest is not used.",
         "  A git checkout at the deploy root remains usable without --snapshot;",
-        "  delete/clone/sync/pull clear the matching local last-snapshot record.",
+        "  delete/git-clone/git-sync/git-pull clear the matching local last-snapshot record.",
         "Hosts: child:NAME[:N] (same as go / drive; :N ignored).",
         "       parent is up, not setup.",
         "Remote path: omit --deploy-root to use DISTRIBUTED_REMOTE_PROJECT_ROOT,",
@@ -113,11 +113,11 @@ function show_requirements(; io::IO = stdout)
     print_help_lines(
         io,
         "  remote-root        create that absolute --deploy-root PATH only",
-        "  ship-tree / clone  ship-tree writes runs/<run_id>/src/, out/,",
-        "                     and a DistSSHRun run.toml stamp; does not instantiate",
-        "                     clone needs an empty remote path",
-        "                     delete first to replace a clone dest",
-        "  sync / pull        git update (confirm unless -y)",
+        "  ship-tree / git-clone  ship-tree writes runs/<run_id>/src/, out/,",
+        "                         and a DistSSHRun run.toml stamp; does not instantiate",
+        "                         git-clone needs an empty remote path",
+        "                         delete first to replace a clone dest",
+        "  git-sync / git-pull git update (confirm unless -y)",
         "  instantiate        Pkg.instantiate on remotes",
         "  check              SSH, Julia, project, deps (patch and prerelease must match)",
         "  runtest            Pkg.test of the job project on remotes",
@@ -188,12 +188,12 @@ end
 
 const _SETUP_SUBCOMMANDS = (
     "check" => :check,
-    "pull" => :pull,
-    "sync" => :sync,
+    "git-pull" => :git_pull,
+    "git-sync" => :git_sync,
     "instantiate" => :instantiate,
     "runtest" => :runtest,
     "cleanup" => :cleanup,
-    "clone" => :clone,
+    "git-clone" => :git_clone,
     "delete" => :delete,
     "prune" => :prune,
     "ship-tree" => :ship_tree,
@@ -208,14 +208,18 @@ function _setup_subcommand(arg::AbstractString)::Union{Nothing, Symbol}
     return nothing
 end
 
+function _setup_legacy_git_subcommand(flag::AbstractString)::Union{Nothing, String}
+    flag == "--pull" && return "git-pull"
+    flag == "--sync" && return "git-sync"
+    flag == "--clone" && return "git-clone"
+    return nothing
+end
+
 function _setup_legacy_mode_name(flag::AbstractString)::Union{Nothing, String}
     flag == "--check" && return "check"
-    flag == "--pull" && return "pull"
-    flag == "--sync" && return "sync"
     flag == "--instantiate" && return "instantiate"
     flag == "--runtest" && return "runtest"
     flag == "--cleanup" && return "cleanup"
-    flag == "--clone" && return "clone"
     flag == "--delete" && return "delete"
     flag == "--prune" && return "prune"
     flag == "--ship-tree" && return "ship-tree"
@@ -225,6 +229,17 @@ function _setup_legacy_mode_name(flag::AbstractString)::Union{Nothing, String}
 end
 
 function _throw_setup_legacy_mode(flag::AbstractString)
+    git = _setup_legacy_git_subcommand(flag)
+    if git !== nothing
+        throw(
+            ArgumentError(
+                join_explained_message(
+                    "setup $(flag) was removed; use `$(cli_m()) setup $(git)`.",
+                    "Run `$(cli_m()) help setup` for flags.",
+                ),
+            ),
+        )
+    end
     name = _setup_legacy_mode_name(flag)
     name === nothing && return nothing
     throw(
@@ -307,6 +322,7 @@ function parse_setup_args(args::Vector{String})
             cli_consume!(c)
             continue
         end
+        _throw_setup_removed_git_subcommand!(arg)
         sub = _setup_subcommand(arg)
         if sub !== nothing
             mode, mode_flag = _setup_set_mode!(mode_flag, sub, arg)

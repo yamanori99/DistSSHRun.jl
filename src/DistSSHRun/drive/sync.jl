@@ -1,22 +1,22 @@
 # sync! — git sync via shared DistSSHRun cores (not CLI argv).
 
 """
-    sync!(session::KitSession; mode=:sync)
+    sync!(session::KitSession; mode=:git_sync)
 
 Sync local project to SSH hosts (call explicitly; go/drive do not call this by default).
 
-- `mode=:sync` — push the local branch to origin, then check out that commit on each remote as a detached HEAD (confirm unless `session.yes`). Does not run `git pull`. A dirty tree is refused.
+- `mode=:git_sync` — push the local branch to origin, then check out that commit on each remote as a detached HEAD (confirm unless `session.yes`). Does not run `git pull`. A dirty tree is refused.
 - `mode=:ship_tree` — pack the project (each directory's `.gitignore`) into a tar and extract under
   `runs/<run_id>/src/` (confirm unless `session.yes`).
 
-Also available as `setup!(session, :ship_tree)` / `setup!(session, :sync)`.
+Also available as `setup!(session, :ship_tree)` / `setup!(session, :git_sync)`.
 
 Returns [`SyncResult`](@ref). For `:ship_tree`, [`result_content_tree_hash`](@ref)
 and [`result_remote_run_id`](@ref) read that ship. Other modes return `nothing`.
 """
 function sync!(
         session::KitSession;
-        mode = :sync,
+        mode = :git_sync,
         gitignore::Bool = true,
         allow_external_symlinks::Bool = false,
         await_inputs::Bool = true,
@@ -25,10 +25,11 @@ function sync!(
     # Untyped kw: JETLS treats omitted kwargs as `nothing`, not `Union{Symbol,Bool}`.
     mode === false && throw(ArgumentError("sync!: mode=false means skip sync; do not call sync!"))
     kind = mode
+    _reject_removed_sync_mode!(kind)
     kind === :rsync && _throw_rsync_removed()
-    kind === :ship_tree || kind === :sync || throw(
+    kind === :ship_tree || kind === :git_sync || throw(
         ArgumentError(
-            "sync! mode must be :ship_tree or :sync, got $(repr(kind))",
+            "sync! mode must be :ship_tree or :git_sync, got $(repr(kind))",
         )
     )
     check_setup_options!(kind; extra_files = extra_files)

@@ -349,7 +349,7 @@ function check_prerequisites(
         else
             _fail_host(host, "Project not found at $project_path")
             _host_check_detail(
-                "Fix: setup clone $(setup_cli_host_token(host))  (or setup ship-tree $(setup_cli_host_token(host)))",
+                "Fix: setup git-clone $(setup_cli_host_token(host))  (or setup ship-tree $(setup_cli_host_token(host)))",
             )
             all_ok = false
             host_ok[] = false
@@ -399,7 +399,7 @@ function check_prerequisites(
                         host,
                         "Git commit differs (local: $local_hash, remote: $remote_hash)",
                     )
-                    _host_check_detail("Fix: --pull or --sync to update remote")
+                    _host_check_detail("Fix: --git-pull or --git-sync to update remote")
                     all_ok = false
                     host_ok[] = false
                 else

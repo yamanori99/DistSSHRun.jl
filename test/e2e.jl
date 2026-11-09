@@ -1352,7 +1352,7 @@ end
 
             proc, out = _run_kit_setup(;
                 setup_args = [
-                    "clone",
+                    "git-clone",
                     "--repo", seed.origin_workers,
                     "--deploy-root", git_root,
                     setup_hosts...,
@@ -1404,7 +1404,7 @@ end
             @test occursin("mismatch", lowercase(out)) || occursin("could not be verified", lowercase(out))
 
             proc, out = _run_kit_setup(;
-                setup_args = ["sync", "--deploy-root", git_root, setup_hosts...],
+                setup_args = ["git-sync", "--deploy-root", git_root, setup_hosts...],
                 project_root = proj,
                 extra_env = merge(git_env, Dict("DISTSSHKIT_QUIET" => "0")),
             )
@@ -1440,7 +1440,7 @@ end
             marker = read(joinpath(proj, "e2e_sync_marker.txt"), String)
 
             proc, out = _run_kit_setup(;
-                setup_args = ["pull", "--deploy-root", git_root, setup_hosts...],
+                setup_args = ["git-pull", "--deploy-root", git_root, setup_hosts...],
                 project_root = proj,
                 extra_env = merge(git_env, Dict("DISTSSHKIT_QUIET" => "0")),
             )
@@ -1473,7 +1473,7 @@ end
                 end
                 feature_sha = strip(read(`git -C $proj rev-parse HEAD`, String))
                 proc, out = _run_kit_setup(;
-                    setup_args = ["sync", "--deploy-root", git_root, setup_hosts...],
+                    setup_args = ["git-sync", "--deploy-root", git_root, setup_hosts...],
                     project_root = proj,
                     extra_env = merge(git_env, Dict("DISTSSHKIT_QUIET" => "0")),
                 )

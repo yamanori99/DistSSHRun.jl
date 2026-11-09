@@ -463,7 +463,7 @@ end
                     DistSSHRun.sync_driver_to_workers!(g)
                 end
                 @test occursin("is not published", out)
-                @test occursin("--sync-script", out)
+                @test occursin("--worker-include", out)
                 @test remotecall_fetch(w) do
                     isdefined(Main, :work) && Base.invokelatest(getfield(Main, :work), 3) == 9
                 end

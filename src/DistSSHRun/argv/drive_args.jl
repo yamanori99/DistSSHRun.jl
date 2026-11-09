@@ -92,13 +92,13 @@ function parse_drive_args(args::Vector{String})
     log_dir = nothing
     output_dir = nothing
     explicit_package = nothing
-    # nothing → no pre-run sync; :sync / :ship_tree → sync!
+    # nothing → no pre-run sync; :git_sync / :ship_tree → sync!
     sync_mode = nothing
     allow_external_symlinks = false
     snapshot_id = nothing
     deploy_root = nothing
     isolated = false
-    sync_script = false
+    worker_include = false
     require_git = false
     skip_git_guard = false
     require_all_hosts = true
@@ -160,15 +160,19 @@ function parse_drive_args(args::Vector{String})
             merge_allow_mismatch!(allow_mismatch, args[i + 1])
             i += 2
         elseif arg == "--sync"
-            sync_mode = _kit_set_sync_mode!(sync_mode, :sync; source = "drive")
+            _throw_drive_go_removed_git_sync_flag!("drive")
+        elseif arg == "--git-sync"
+            sync_mode = _kit_set_sync_mode!(sync_mode, :git_sync; source = "drive")
             i += 1
         elseif arg == "--sync-script"
-            sync_script && throw(
+            _throw_drive_removed_sync_script_flag!()
+        elseif arg == "--worker-include"
+            worker_include && throw(
                 ArgumentError(
-                    "drive: --sync-script specified more than once",
-                )
+                    "drive: --worker-include specified more than once",
+                ),
             )
-            sync_script = true
+            worker_include = true
             i += 1
         elseif arg == "--ship-tree"
             _throw_go_drive_ship_cli_removed("drive", arg)
@@ -275,7 +279,7 @@ function parse_drive_args(args::Vector{String})
             sync_mode !== nothing &&
                 throw(
                 ArgumentError(
-                    "$(flag) cannot be combined with --sync",
+                    "$(flag) cannot be combined with --git-sync",
                 )
             )
             !isempty(hosts) &&
@@ -321,7 +325,7 @@ function parse_drive_args(args::Vector{String})
                 collect_hosts = tree_hosts,
                 collect_overwrite = merge,
                 sync_mode = nothing,
-                sync_script = sync_script,
+                worker_include = worker_include,
                 require_all_hosts = require_all_hosts,
                 help = false,
                 show_version = cli_session.show_version,
@@ -350,7 +354,7 @@ function parse_drive_args(args::Vector{String})
                 collect_hosts = nothing,
                 collect_overwrite = nothing,
                 sync_mode = nothing,
-                sync_script = false,
+                worker_include = false,
                 require_all_hosts = false,
                 help = true,
                 show_version = cli_session.show_version,
@@ -435,7 +439,7 @@ function parse_drive_args(args::Vector{String})
         collect_hosts = nothing,
         collect_overwrite = nothing,
         sync_mode = (sync_mode isa Symbol ? sync_mode : nothing),
-        sync_script = sync_script,
+        worker_include = worker_include,
         require_all_hosts = require_all_hosts,
         help = false,
         show_version = cli_session.show_version,
@@ -455,7 +459,7 @@ function show_drive_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "Driver + Distributed workers (pmap), then collect new files.",
-        "Remotes: setup ship-tree or setup clone, then setup instantiate.",
+        "Remotes: setup ship-tree or setup git-clone, then setup instantiate.",
         "Then drive --snapshot ID (or last-snapshot.toml / git checkout).",
     )
     print_help_blank(io)
@@ -480,13 +484,13 @@ function show_drive_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  -w, --workers N     parent:N when no parent token is listed",
-        "  --sync              optional git pre-run copy (not ship-tree)",
+        "  --git-sync          optional git pre-run copy (not ship-tree)",
         "  --deploy-root PATH  remote deployment root (location, not snapshot id).",
         "                      Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
         "                      ~/Parent/RepoName layout from the local env_dir.",
         "  --snapshot ID       use runs/<ID>/src under the deploy root",
-        "                      (not with --sync; that copies a git checkout)",
-        "  --sync-script       re-include the full driver on workers (default: defs only)",
+        "                      (not with --git-sync; that copies a git checkout)",
+        "  --worker-include    re-include the full driver on workers (default: defs only)",
         "  --require-git       $(REQUIRE_GIT_MEANING)",
         "  --require-all-hosts listed parent/child tokens must join, stay, and collect (default)",
         "  --best-effort       allow a partial run (missing join is not a failure)",

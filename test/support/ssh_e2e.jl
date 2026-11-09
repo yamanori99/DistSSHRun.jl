@@ -36,7 +36,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
             "DISTSSHKIT_QUIET" => get(ENV, "DISTSSHKIT_QUIET", "1"),
             "DISTRIBUTED_SSH_OPTS" => "-F $(g.ssh_config) -o RequestTTY=no",
             "DISTRIBUTED_REMOTE_PROJECT_ROOT" => String(remote_project),
-            # setup --sync / git push use this; DistSSHRun's git_push_project! has no -F flag.
+            # setup git-sync / git push use this; DistSSHRun's git_push_project! has no -F flag.
             "GIT_SSH_COMMAND" => "ssh -F $(g.ssh_config) -o RequestTTY=no",
         )
         return merge(base, extra)
@@ -481,7 +481,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         cp(_fixture("drive_sleep.jl"), joinpath(proj, "sleep.jl"); force = true)
         cp(_fixture("ride_sleep.jl"), joinpath(proj, "ride_sleep.jl"); force = true)
 
-        # Kit logs / demo outputs must not dirty the tree: setup --sync requires clean git.
+        # Kit logs / demo outputs must not dirty the tree: setup git-sync requires clean git.
         write(
             joinpath(proj, ".gitignore"),
             """

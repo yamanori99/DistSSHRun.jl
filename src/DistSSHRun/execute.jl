@@ -20,7 +20,7 @@ const _EXECUTE_DETACHED_KW = Set{Symbol}(
         :stdout,
         :stderr,
         :job_id,
-        :sync_script,
+        :worker_include,
         :spi_check,
         :allow_mismatch,
         :allow_external_symlinks,
@@ -34,7 +34,7 @@ const _EXECUTE_DETACHED_DRIVE_ONLY = (
     :require_all_hosts,
     :skip_hash_check,
     :workers,
-    :sync_script,
+    :worker_include,
 )
 const _EXECUTE_DETACHED_HARD_DROP = (
     "JULIA_LOAD_PATH",
@@ -176,7 +176,7 @@ function execute_detached_accepts(kw::Symbol; kind::Symbol)::Bool
         !(kw in (:spi_check,))
     kind === :ride && return !(
         kw in (
-            :repeat, :sync_script, :package, :log_dir, :enable_log, :skip_hash_check,
+            :repeat, :worker_include, :package, :log_dir, :enable_log, :skip_hash_check,
             :workers, :require_all_hosts,
             :allow_external_symlinks,
         )
@@ -244,7 +244,7 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
     kw[:package] = parsed.explicit_package
     kw[:require_all_hosts] = parsed.require_all_hosts
     kw[:skip_hash_check] = parsed.skip_hash_check
-    get(parsed, :sync_script, false) && (kw[:sync_script] = true)
+    get(parsed, :worker_include, false) && (kw[:worker_include] = true)
     dw = parsed.default_workers
     dw === nothing || (kw[:workers] = Int(dw))
     return _parsed_launch_kwargs!(kw, parsed)
@@ -445,7 +445,7 @@ A script outside the project is `extra_files=[script]` (one file, at
 `_distsshrun_external/<basename>`), then `setup!(session, :instantiate; snapshot=id)`,
 then `execute!(...; snapshot=id)` with that same local script.
 In-process [`go!`](@ref) / [`drive!`](@ref) still accept `sync=:ship_tree`.
-`sync=:sync`, omitted/`false` sync, and `snapshot=` are unchanged.
+`sync=:git_sync`, omitted/`false` sync, and `snapshot=` are unchanged.
 `--project=` is always the job `project=` when that
 tree has a `Project.toml`. The job must list DistSSHKit or DistSSHRun in
 `[deps]`; otherwise this throws instead of using serve's active project.
@@ -453,7 +453,7 @@ Keywords are then an allow-list (unknown names throw):
 `output_dir`, `args`, `project`, `sync`, `julia`, `quiet`, `verbosity`, `yes`,
 `remote`, `hosts_file`, `job_id`, `source`, `allow_mismatch`, and drive-only `log_dir`,
 `enable_log`, `package`, `require_all_hosts`, `skip_hash_check`,
-`workers`, `sync_script`,
+`workers`, `worker_include`,
 `allow_external_symlinks`, `dir`, `threads`, `env_allow`, and `env`.
 `source` is a provenance
 dict for every kind. Detached passes it as `DISTSSHKIT_SOURCE_*`. Go-only
@@ -714,7 +714,7 @@ function _execute_detached!(
             )
         )
         for k in (
-                :sync_script, :package, :log_dir, :enable_log, :skip_hash_check,
+                :worker_include, :package, :log_dir, :enable_log, :skip_hash_check,
                 :workers, :require_all_hosts,
                 :allow_external_symlinks,
             )
@@ -769,7 +769,9 @@ function _execute_detached!(
     skip_hash_check = get(kwargs, :skip_hash_check, true)
     workers = get(kwargs, :workers, nothing)
     repeat = get(kwargs, :repeat, nothing)
-    sync_script = get(kwargs, :sync_script, false)
+    get(kwargs, :sync_script, nothing) !== nothing &&
+        _reject_removed_drive_worker_include_kw!(true)
+    worker_include = get(kwargs, :worker_include, false)
     spi_check = get(kwargs, :spi_check, false)
     allow_mismatch = get(kwargs, :allow_mismatch, Symbol[])
     allow_external_symlinks = get(kwargs, :allow_external_symlinks, false)
@@ -777,9 +779,9 @@ function _execute_detached!(
     if snapshot !== nothing
         snapshot = validate_snapshot_id(snapshot)
     end
-    sync_script isa Bool || throw(
+    worker_include isa Bool || throw(
         ArgumentError(
-            "sync_script must be a Bool, got $(repr(sync_script))",
+            "worker_include must be a Bool, got $(repr(worker_include))",
         )
     )
     spi_check isa Bool || throw(
@@ -853,7 +855,7 @@ function _execute_detached!(
         skip_hash_check = skip_hash_check,
         workers = workers,
         repeat = repeat,
-        sync_script = sync_script,
+        worker_include = worker_include,
         spi_check = spi_check,
         allow_mismatch = allow_mismatch,
         allow_external_symlinks = allow_external_symlinks === true,
@@ -1869,7 +1871,7 @@ function _execute_detached_argv(
         skip_hash_check,
         workers = nothing,
         repeat = nothing,
-        sync_script::Bool = false,
+        worker_include::Bool = false,
         spi_check::Bool = false,
         allow_mismatch = Symbol[],
         allow_external_symlinks::Bool = false,
@@ -1892,15 +1894,17 @@ function _execute_detached_argv(
     end
     output_dir !== nothing && push!(argv, "--output-dir", String(output_dir))
     if sync === :sync
-        push!(argv, "--sync")
+        _reject_removed_pre_run_git_sync!(:sync; api = String(kind))
+    elseif sync === :git_sync
+        push!(argv, "--git-sync")
     elseif sync === :ship_tree
         _throw_detached_ship_tree_removed()
     elseif sync === :rsync
         _throw_rsync_removed()
     elseif sync === false && kind === :go
-        push!(argv, "--skip-sync")
+        push!(argv, "--skip-git-sync")
     elseif sync !== nothing && sync !== false
-        throw(ArgumentError("sync must be nothing, false, :sync, or :ship_tree, got $(repr(sync))"))
+        throw(ArgumentError("sync must be nothing, false, :git_sync, or :ship_tree, got $(repr(sync))"))
     end
     if allow_external_symlinks
         _throw_go_drive_ship_cli_removed(String(kind), "--allow-external-symlinks")
@@ -1939,7 +1943,7 @@ function _execute_detached_argv(
         if workers !== nothing
             push!(argv, "--workers", string(Int(workers)))
         end
-        sync_script && push!(argv, "--sync-script")
+        worker_include && push!(argv, "--worker-include")
     elseif kind === :ride
         if spi_check
             push!(argv, "--spi-check")

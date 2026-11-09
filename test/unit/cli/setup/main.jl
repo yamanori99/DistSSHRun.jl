@@ -73,7 +73,8 @@ using Test
     let (code, out, err) = _setup_capture(["--help", "check", "sync"])
         shown = out * err
         @test code == 1
-        @test occursin("more than one mode (check and sync)", shown)
+        @test occursin("setup sync was removed", shown)
+        @test occursin("setup git-sync", shown)
         @test occursin("help setup", shown)
         @test !occursin("--help", shown)
     end

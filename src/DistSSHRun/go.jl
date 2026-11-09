@@ -417,12 +417,12 @@ function _go_assert_remote_ready!(host::AbstractString, remote_root::AbstractStr
         msg = "remote project not ready on $host ($remote_root).\n" *
             "Run setup first (pick one deploy path), then instantiate:\n" *
             "  ship:   julia --project=. -m DistSSHKit setup ship-tree $(setup_cli_host_token(host))\n" *
-            "  git:    julia --project=. -m DistSSHKit setup clone $(setup_cli_host_token(host))\n" *
-            "          (later updates: setup sync $(setup_cli_host_token(host)))\n" *
+            "  git:    julia --project=. -m DistSSHKit setup git-clone $(setup_cli_host_token(host))\n" *
+            "          (later updates: setup git-sync $(setup_cli_host_token(host)))\n" *
             "  then:   julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host))\n" *
             "  then:   julia --project=. -m DistSSHKit go --snapshot ID …\n" *
             "Or from Julia: setup!(session, :ship_tree, :instantiate)\n" *
-            "  (or go!(…; sync=:ship_tree); or :clone; repo=\"…\" then :instantiate; later :sync)\n" *
+            "  (or go!(…; sync=:ship_tree); or :git_clone; repo=\"…\" then :instantiate; later :git_sync)\n" *
             "Set DISTRIBUTED_REMOTE_PROJECT_ROOT if the remote path is not the default."
         !isempty(ssh_hint) && (msg *= "\n  $ssh_hint")
         throw(ArgumentError(DistSSHBase._append_remote_shell_hint(String(host), code, msg)))
@@ -434,7 +434,7 @@ function _go_assert_remote_ready!(host::AbstractString, remote_root::AbstractStr
             ArgumentError(
                 "remote project deps not ready on $host ($remote_root): $deps_err\n" *
                     "Fix: julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host))\n" *
-                    "  (or setup!(session, :instantiate) after :ship_tree / :clone)",
+                    "  (or setup!(session, :instantiate) after :ship_tree / :git_clone)",
             )
         )
     end
@@ -982,11 +982,11 @@ means "skip collect" and is orthogonal to `output_dir`.
 Default `sync` is `false` (no pre-run sync; remotes are checked first — setup
 is assumed done). The `go` CLI does not take `--ship-tree`; prepare with
 `setup ship-tree` then `setup instantiate`, then `go --snapshot ID`.
-Pass `sync=:sync` or `sync=:ship_tree` on [`go!`](@ref) to copy, then check.
+Pass `sync=:git_sync` or `sync=:ship_tree` on [`go!`](@ref) to copy, then check.
 After `:ship_tree`,
 hosts that still lack Manifest deps get [`instantiate!`](@ref) before the
 check. `snapshot` (CLI `--snapshot`) selects `runs/<ID>/src` when `sync` is
-omitted or `false`; it cannot combine with `sync=:sync` / `sync=:ship_tree`.
+omitted or `false`; it cannot combine with `sync=:git_sync` / `sync=:ship_tree`.
 A script outside the project is allowed with `snapshot` when that ship used
 `extra_files=[script]`. The remote command is
 [`remote_script_path`](@ref): `_distsshrun_external/<basename>` under the
@@ -1234,7 +1234,7 @@ function _go_run!(
         sync_mode = something(sync, false)
         n_slots > 0 && _kit_progress_mark!("sync")
         # `sync=false`: remotes must already have Project.toml + deps.
-        # With `:ship_tree` / `:sync`, copy first.
+        # With `:ship_tree` / `:git_sync`, copy first.
         # `run_rr` is assigned once so later `@async` does not capture a boxed bind.
         run_rr = if sync_mode === false
             rr = isempty(child_hosts) ? sess_rr :

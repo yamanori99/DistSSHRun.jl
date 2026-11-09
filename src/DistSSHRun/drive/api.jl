@@ -19,7 +19,7 @@ With `sync` omitted or `false`, prepare remotes with [`setup!`](@ref) or CLI
 `setup` first; remotes are checked before execution. The `drive` CLI does not
 take `--ship-tree`; prepare with `setup ship-tree` then `setup instantiate`,
 then `drive --snapshot ID`. Optional
-`sync=:sync` / `sync=:ship_tree` on [`drive!`](@ref) copies, then checks. After `:ship_tree`, hosts that
+`sync=:git_sync` / `sync=:ship_tree` on [`drive!`](@ref) copies, then checks. After `:ship_tree`, hosts that
 still lack Manifest deps get [`instantiate!`](@ref).
 Git parity is off by default (`skip_hash_check=true`). With `sync=:ship_tree`, parity
 stays off even if `skip_hash_check=false` (no remote `.git/`).
@@ -35,11 +35,11 @@ A collect root that is the project or a parent of it stops the run before
 `julia` sets the remote Julia binary (`nothing` / `"auto"` → detect; same as
 CLI `--julia`). `snapshot` (CLI `--snapshot`) selects `runs/<ID>/src` under the
 deploy root when `sync` is omitted or `false`; it cannot combine with
-`sync=:sync` / `sync=:ship_tree`. `plan` is an optional explicit
+`sync=:git_sync` / `sync=:ship_tree`. `plan` is an optional explicit
 [`WorkerPlan`](@ref). [`pipeline!`](@ref) syncs separately and does not pass
 `sync=` into `drive!`, so it does not instantiate after rsync.
 
-`sync_script=true` (CLI `--sync-script`) re-`include`s the full driver on
+`worker_include=true` (CLI `--worker-include`) re-`include`s the full driver on
 workers. The default publishes definitions / `using` / `import` / `include`
 only, so top-level work on Load is not repeated on workers.
 
@@ -62,11 +62,13 @@ function drive!(
         sync::Union{Nothing, Symbol, Bool} = nothing,
         julia::Union{Nothing, AbstractString} = nothing,
         require_all_hosts::Bool = true,
-        sync_script::Bool = false,
+        worker_include::Bool = false,
+        sync_script::Union{Nothing, Bool} = nothing,
         allow_mismatch = Symbol[],
         allow_external_symlinks::Bool = false,
         snapshot::Union{Nothing, AbstractString} = nothing,
     )::DriveResult
+    _reject_removed_drive_worker_include_kw!(sync_script)
     return _drive_frame(; cli = false) do
         return _with_kit_inproc_run!(:drive) do
             # Outside `run_drive_parsed!`: `apply_session_env!` runs first, and
@@ -93,7 +95,7 @@ function drive!(
                         sync = sync,
                         julia = julia,
                         require_all_hosts = require_all_hosts,
-                        sync_script = sync_script,
+                        worker_include = worker_include,
                         allow_mismatch = allow_mismatch,
                         allow_external_symlinks = allow_external_symlinks,
                         snapshot = snapshot,

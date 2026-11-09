@@ -43,7 +43,7 @@ result = pipeline!(driver, "parent:2"; args = ARGS, collect = false, enable_log 
 #       yes=true,
 #   )
 #   setup!(session, :rsync, :instantiate)
-#   # or: setup!(session, :clone; repo="https://…"); setup!(session, :instantiate)
+#   # or: setup!(session, :git_clone; repo="https://…"); setup!(session, :instantiate)
 #   result = pipeline!(
 #       driver,
 #       "child:user@host1:1",

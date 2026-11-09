@@ -5,11 +5,11 @@
 #   1. ship-tree → 2. instantiate → 3. check → 4. runtest (optional) → `go` / `drive`
 #   instantiate/check/go use --snapshot ID, else last-snapshot.toml, else a git
 #   checkout with Project.toml at the deploy root. Lexical latest is not used.
-#   Optional git: clone → instantiate → check → sync / pull
-#   Replace a clone dest: delete, then clone
+#   Optional git: git-clone → instantiate → check → git-sync / git-pull
+#   Replace a clone dest: delete, then git-clone
 #
 #   julia --project=. -m DistSSHKit setup ship-tree child:host1 child:host2
-#   julia --project=. -m DistSSHKit setup sync child:host1 child:host2   # git updates
+#   julia --project=. -m DistSSHKit setup git-sync child:host1 child:host2   # git updates
 #
 # See `--help`.
 
@@ -164,11 +164,11 @@ if !isdefined(@__MODULE__, :setup_main)
 
         function setup_job!(mode::Symbol)::Cint
             mode_name = Dict(
-                :clone => "Clone",
+                :git_clone => "git-clone",
                 :delete => "Delete",
                 :check => "Check Prerequisites",
-                :pull => "Pull",
-                :sync => "Sync",
+                :git_pull => "git-pull",
+                :git_sync => "git-sync",
                 :ship_tree => "ship-tree",
                 :remote_root => "remote-root",
                 :instantiate => "Instantiate",
@@ -183,7 +183,7 @@ if !isdefined(@__MODULE__, :setup_main)
                         project;
                         cli_override = opts.deploy_root,
                     )
-                elseif mode === :clone
+                elseif mode === :git_clone
                     DistSSHRun.remote_git_clone_dest(
                         project;
                         cli_override = opts.deploy_root,
@@ -242,7 +242,7 @@ if !isdefined(@__MODULE__, :setup_main)
 
             # Mutating / multi-host SSH ops: fail fast before confirmations.
             # `--delete` and `--prune` stay off SSH until `--confirm-path` matches.
-            if mode === :clone || mode === :ship_tree || mode === :remote_root ||
+            if mode === :git_clone || mode === :ship_tree || mode === :remote_root ||
                     mode === :instantiate || mode === :runtest
                 if !preflight_setup_ssh(opts.hosts)
                     print_err("SSH preflight failed. Fix connectivity, then retry.\n")
@@ -273,7 +273,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 return Cint(ok ? 0 : 1)
             end
 
-            if mode === :clone
+            if mode === :git_clone
                 DistSSHRun.ensure_manifest_in_git_worktree!(project)
                 clone_url = resolve_clone_url(opts.repo_url, project)
                 clone_dest = op_path
@@ -401,10 +401,10 @@ if !isdefined(@__MODULE__, :setup_main)
                 return Cint(finish_host_op!("Prune", result) ? 0 : 1)
             end
 
-            # --pull/--sync: a commit mismatch is fixed by checkout --detach.
+            # --git-pull/--git-sync: a commit mismatch is fixed by checkout --detach.
             # --check: require the commits to match already.
             # Both git modes refuse a dirty local tree (a patch is not shipped).
-            require_clean = (mode === :sync || mode === :pull)
+            require_clean = (mode === :git_sync || mode === :git_pull)
             check_code_sync = (mode === :check)
             result = check_prerequisites(
                 opts.hosts, opts.julia_path, op_path, project;
@@ -438,9 +438,9 @@ if !isdefined(@__MODULE__, :setup_main)
             kit_println()
             kit_println()
 
-            # --sync also pushes the local branch to origin.
-            # --pull does not. Neither mode runs git pull.
-            do_push = (mode === :sync)
+            # --git-sync also pushes the local branch to origin.
+            # --git-pull does not. Neither mode runs git pull.
+            do_push = (mode === :git_sync)
             raw = git_sync_project_to_hosts!(
                 opts.hosts,
                 project,

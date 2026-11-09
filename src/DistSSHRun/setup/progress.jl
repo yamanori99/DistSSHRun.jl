@@ -7,6 +7,9 @@ function setup_progress_step_name(mode::Symbol)::String
     mode === :rsync && return "ship-tree"
     mode === :ship_tree && return "ship-tree"
     mode === :juliaup_update && return "juliaup-update"
+    mode === :git_sync && return "git-sync"
+    mode === :git_clone && return "git-clone"
+    mode === :git_pull && return "git-pull"
     return String(mode)
 end
 

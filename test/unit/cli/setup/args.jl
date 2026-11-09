@@ -63,9 +63,9 @@ using Test
     end
 
     for (name, mode) in (
-            "clone" => :clone,
-            "sync" => :sync,
-            "pull" => :pull,
+            "git-clone" => :git_clone,
+            "git-sync" => :git_sync,
+            "git-pull" => :git_pull,
             "instantiate" => :instantiate,
             "cleanup" => :cleanup,
             "prune" => :prune,
@@ -76,6 +76,40 @@ using Test
         let r = parse_setup_args([name, "child:host1"])
             @test r.mode == mode
             @test r.hosts == ["host1"]
+        end
+    end
+
+    for (name, repl) in (
+            "clone" => "git-clone",
+            "sync" => "git-sync",
+            "pull" => "git-pull",
+        )
+        let err = try
+                parse_setup_args([name, "child:host1"])
+                error("expected ArgumentError")
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("setup $(name) was removed", err.msg)
+            @test occursin("setup $(repl)", err.msg)
+            @test occursin("help setup", err.msg)
+        end
+    end
+    for (flag, repl) in (
+            "--clone" => "git-clone",
+            "--sync" => "git-sync",
+            "--pull" => "git-pull",
+        )
+        let err = try
+                parse_setup_args([flag, "child:host1"])
+                error("expected ArgumentError")
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("setup $(flag) was removed", err.msg)
+            @test occursin("setup $(repl)", err.msg)
         end
     end
 
@@ -93,14 +127,15 @@ using Test
     end
     @test_throws ArgumentError parse_setup_args(["check", "check", "child:host1"])
     @test_throws ArgumentError parse_setup_args(["--help", "delete", "sync"])
+    @test_throws ArgumentError parse_setup_args(["delete", "sync", "child:host1"])
     let r = parse_setup_args(["delete", "--help"])
         @test r.show_help
         @test r.mode == :delete
     end
 
-    let r = parse_setup_args(["clone", "--repo", "git@ex/app.git", "child:host1"])
+    let r = parse_setup_args(["git-clone", "--repo", "git@ex/app.git", "child:host1"])
         @test r.repo_url == "git@ex/app.git"
-        @test r.mode == :clone
+        @test r.mode == :git_clone
     end
     let r = parse_setup_args(["check", "--deploy-root", "~/work/App.jl", "child:host1"])
         @test r.deploy_root == "~/work/App.jl"
@@ -359,6 +394,6 @@ using Test
             e
         end
         @test err_sync isa ArgumentError
-        @test err_sync.msg == err_mode.msg
+        @test occursin("mode=:sync was removed", err_sync.msg)
     end
 end

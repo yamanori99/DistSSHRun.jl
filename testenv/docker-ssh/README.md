@@ -28,8 +28,8 @@ Suite inventory: [`test/README.md`](../../test/README.md#ssh-e2e).
   (local: [`apple-container-ssh`](../apple-container-ssh/README.md)
   `./scripts/up.sh --e2e`).
 - **Git parity (`--require-git`):** covered via a separate git remote root
-  (`clone` from a bare on child-1 → `--sync` → `drive --require-git`).
-  Mismatch before `--sync` must fail. `--pull` after a kit parent `git push`
+  (`git-clone` from a bare on child-1 → `git-sync` → `drive --require-git`).
+  Mismatch before `git-sync` must fail. `git-pull` after a kit parent `git push`
   is checked by reading `e2e_sync_marker.txt` on the workers.
 
 Worker image installs **two** juliaup channels from
