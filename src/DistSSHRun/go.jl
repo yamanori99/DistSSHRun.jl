@@ -308,6 +308,11 @@ end
 function _script_inside_project(project::AbstractString, script::AbstractString)::Bool
     proj = canonical_local_path(project)
     path = canonical_local_path(script)
+    try
+        ispath(proj) && (proj = canonical_local_path(realpath(proj)))
+        ispath(path) && (path = canonical_local_path(realpath(path)))
+    catch
+    end
     prefix = joinpath(proj, "")
     return startswith(path, prefix) || path == proj
 end

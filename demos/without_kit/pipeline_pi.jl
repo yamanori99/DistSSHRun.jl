@@ -31,9 +31,10 @@ isempty(ARGS) || (length(ARGS) == 2 && ARGS[1] == "--n") ||
     error("pass --n N (a bare number looks like parent:N)")
 
 script = joinpath(@__DIR__, "pi_file.jl")
+project = @__DIR__
 
 # Local-only: two concurrent full-job slots on this machine (not Distributed workers).
-result = go!(script, "parent:2"; args = ARGS)
+result = go!(script, "parent:2"; args = ARGS, project = project)
 
 # First-time remotes: setup!, then go!.
 #

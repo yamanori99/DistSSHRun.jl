@@ -561,6 +561,7 @@ using Test
                 local_proj = joinpath(tmp, "local")
                 mkpath(local_proj)
                 write(joinpath(local_proj, "Project.toml"), "name = \"RideRoot\"\n")
+                write(joinpath(local_proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
                 DistSSHRun.clear_last_snapshot_record!(local_proj)
                 script = joinpath(local_proj, "job.jl")
                 write(script, "nothing\n")
