@@ -6,13 +6,13 @@ function _parse_env_sync_mode(raw::AbstractString)::Union{Symbol, Bool, Nothing}
     s in ("off", "false", "0", "skip", "no") && return false
     s == "sync" &&
         throw(
-            ArgumentError(
-                join_explained_message(
-                    "SYNC_MODE=sync was removed; use git-sync",
-                    "Or omit SYNC_MODE for no pre-run sync.",
-                ),
+        ArgumentError(
+            join_explained_message(
+                "SYNC_MODE=sync was removed; use git-sync",
+                "Or omit SYNC_MODE for no pre-run sync.",
             ),
-        )
+        ),
+    )
     s in ("git-sync", "git_sync") && return :git_sync
     s == "rsync" && _throw_rsync_removed()
     s in ("ship-tree", "ship_tree") && return :ship_tree
