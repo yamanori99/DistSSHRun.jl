@@ -1,7 +1,7 @@
 category: breaking
 
 - Snapshot source selection is explicit. `--snapshot ID` / `snapshot=` names
-  `runs/<ID>/` under the already resolved deployment root (`--remote-path`
+  `runs/<ID>/` under the already resolved deployment root (`--deploy-root`
   stays location only). IDs must match `YYYYMMDDTHHMMSSZ-xxxxxx`; traversal
   and multi-component paths are refused. An explicit ID never falls back to
   the deploy root, lexical latest, or another ID. Every target host is
@@ -24,8 +24,8 @@ category: breaking
   set fails. Otherwise a git checkout with `Project.toml` at the deploy root
   on every host is used. Lexical latest `runs/*/src` is removed. The local
   record is a convenience default only; another local deployer can overwrite
-  it between commands. A successful `setup --delete` / `--clone` / `--sync` /
-  `--pull` (and the matching `setup!` / `sync!` modes) clears that record for
+  it between commands. A successful `setup delete` / `clone` / `sync` /
+  `pull` (and the matching `setup!` / `sync!` modes) clears that record for
   the matching deploy root so a later command can select the git checkout.
   Programmatic callers should pass `result_remote_run_id` / the returned ID.
   `go` / `drive --ship-tree` pass that invocation's ID into instantiate and
@@ -44,7 +44,7 @@ category: breaking
   root and snapshot work root stay distinct: `drive --ship-tree` instantiates
   against the deploy root, then assigns the work-root ENV. Detached
   `execute!` forwards `snapshot=` / `--snapshot` to the child argv.
-  Standalone `setup --ship-tree` remains transfer-only. Git `--sync` /
-  `--pull` / `--clone` are unchanged. `setup --check` still reaches SSH
+  Standalone `setup ship-tree` remains transfer-only. Git `setup sync` /
+  `pull` / `clone` are unchanged. `setup check` still reaches SSH
   diagnostics when selection cannot probe, then fails closed instead of
   reporting prerequisites met for an invalid snapshot.

@@ -146,7 +146,7 @@ end
             catch e
                 e isa ArgumentError ? e.msg : sprint(showerror, e)
             end
-            @test occursin("--remote-path", clone_err)
+            @test occursin("--deploy-root", clone_err)
             @test DistSSHRun.remote_delete_root(proj; cli_override = "/a/proj") == "/a/proj"
             @test DistSSHRun.remote_delete_root(proj; cli_override = "/var/a/proj") == "/var/a/proj"
             @test_throws ArgumentError DistSSHRun.remote_delete_root(proj; cli_override = "~")

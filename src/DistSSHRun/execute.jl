@@ -223,6 +223,8 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
     isempty(am) || (kw[:allow_mismatch] = am)
     snap0 = get(parsed, :snapshot, nothing)
     snap0 === nothing || (kw[:snapshot] = snap0)
+    dr0 = get(parsed, :deploy_root, nothing)
+    dr0 === nothing || (kw[:remote] = dr0)
     if kind === :go
         kw[:sync] = parsed.sync
         get(parsed, :allow_external_symlinks, false) &&
@@ -842,6 +844,7 @@ function _execute_detached!(
         allow_mismatch = allow_mismatch,
         allow_external_symlinks = allow_external_symlinks === true,
         snapshot = snapshot,
+        remote = remote,
     )
     extra = Dict{String, String}(
         "DISTRIBUTED_PROJECT_ROOT" => proj,
@@ -1857,6 +1860,7 @@ function _execute_detached_argv(
         allow_mismatch = Symbol[],
         allow_external_symlinks::Bool = false,
         snapshot::Union{Nothing, AbstractString} = nothing,
+        remote::Union{Nothing, AbstractString} = nothing,
     )::Vector{String}
     argv = String[String(kind)]
     push!(argv, "-y")
@@ -1888,6 +1892,9 @@ function _execute_detached_argv(
         push!(argv, "--allow-external-symlinks")
     if snapshot !== nothing
         push!(argv, "--snapshot", validate_snapshot_id(snapshot))
+    end
+    if remote !== nothing && !isempty(strip(String(remote)))
+        push!(argv, DEPLOY_ROOT_FLAG, String(strip(String(remote))))
     end
     if !_julia_spec_is_auto(julia)
         push!(argv, "--julia", String(strip(String(julia))))

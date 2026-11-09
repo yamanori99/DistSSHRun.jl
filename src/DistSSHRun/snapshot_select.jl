@@ -413,7 +413,7 @@ function _validate_git_on_hosts!(
         _selection_error(
             "no completed snapshot selected and deploy root has no Project.toml on: " *
                 join(missing, ", ") *
-                ". Pass --snapshot ID after setup --ship-tree, or deploy a git checkout.",
+                ". Pass --snapshot ID after setup ship-tree, or deploy a git checkout.",
         ),
     )
     return nothing

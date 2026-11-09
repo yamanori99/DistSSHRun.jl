@@ -1,4 +1,4 @@
-# Git SHA checkout on SSH hosts (shared by `setup --sync` / `--pull` and `sync!`).
+# Git SHA checkout on SSH hosts (shared by `setup sync` / `setup pull` and `sync!`).
 
 """Last lines of captured stdout and stderr, for a failed git or ssh command."""
 function _captured_output_tail(out::AbstractString, err::AbstractString; n::Int = 20)::String
@@ -524,8 +524,8 @@ end
         do_push=true, do_pull=true, confirm=true,
     ) -> (; ok, cancelled, host_results)
 
-Make each remote a detached HEAD at the local commit. Used by `setup --sync` /
-`--pull` and [`sync!`](@ref) (`mode=:sync`).
+Make each remote a detached HEAD at the local commit. Used by `setup sync` /
+`setup pull` and [`sync!`](@ref) (`mode=:sync`).
 
 Does not run `git pull`. `do_push` still updates `origin`. `do_pull` delivers
 the commit with `git push <host>:<path> <sha>:refs/distssh/<sha>` and checks

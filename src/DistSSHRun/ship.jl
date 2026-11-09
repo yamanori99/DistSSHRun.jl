@@ -1579,7 +1579,7 @@ function _remote_root_mode_sh(rootq::AbstractString)::String
     """
 end
 
-"""Absolute `remote_root` from an explicit `--remote-path` or `session.remote`.
+"""Absolute `remote_root` from an explicit `--deploy-root` or `session.remote`.
 
 A `~` path, a relative path, and a path this package will not use as a clone
 or delete target are refused. Nothing is read from the environment.
@@ -1592,7 +1592,7 @@ function explicit_remote_root_path(path::AbstractString)::String
     s = strip(raw)
     startswith(s, "/") || throw(
         ArgumentError(
-            "setup --remote-root needs an absolute path; refusing $(repr(s))",
+            "setup remote-root needs an absolute path; refusing $(repr(s))",
         ),
     )
     return _checked_remote_dest(rstrip(s, '/'))
@@ -1800,7 +1800,7 @@ function create_remote_roots!(
     path = explicit_remote_root_path(abs_path)
     script = _remote_root_create_script(path)
     host_list = String[String(h) for h in hosts]
-    isempty(host_list) && throw(ArgumentError("setup --remote-root: no hosts"))
+    isempty(host_list) && throw(ArgumentError("setup remote-root: no hosts"))
     if confirm && !kit_noninteractive()
         cancelled = with_kit_progress_suspended() do
             writeln_both("remote-root $(path) on $(length(host_list)) host(s)")

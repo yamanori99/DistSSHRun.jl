@@ -36,6 +36,17 @@ using Test
         @test !occursin("--analyze", help)
         @test !occursin("--gb-per-worker", help)
         @test_throws ArgumentError parse_ride_args(["--gb-per-worker", "1.5", "job.jl"])
+        @test occursin("--deploy-root", help)
+        let r = parse_ride_args(["--deploy-root", "/tmp/App", "parent:1", "job.jl", "--n", "2"])
+            @test r.deploy_root == "/tmp/App"
+            @test r.script_args == ["--n", "2"]
+        end
+        let r = parse_ride_args(["parent:1", "job.jl", "--deploy-root", "/tmp/x"])
+            @test r.deploy_root === nothing
+            @test r.script_args == ["--deploy-root", "/tmp/x"]
+        end
+        @test_throws ArgumentError parse_ride_args(["--remote-path", "/tmp/App", "job.jl"])
+        @test_throws ArgumentError parse_ride_args(["--remote-path=/tmp/App", "job.jl"])
         @test !occursin("#!/usr/bin/env julia", help)
     end
 end

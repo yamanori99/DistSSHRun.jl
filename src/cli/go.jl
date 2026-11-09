@@ -67,6 +67,7 @@ function go_main()::Cint
             allow_external_symlinks = get(kw, :allow_external_symlinks, false),
             repeat = get(kw, :repeat, nothing),
             snapshot = get(parsed, :snapshot, nothing),
+            remote = get(parsed, :deploy_root, nothing),
             hint_surface = :cli,
             original_args = original_args,
         )

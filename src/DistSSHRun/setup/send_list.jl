@@ -765,7 +765,7 @@ end
     rsync_send_list(local_root, env; warn=false) -> Union{Nothing, Vector{String}}
 
 Git send list for a work tree, relative to `local_root`. `--clone`, `--sync`,
-and `--pull` still use this list. `setup --ship-tree` does not: it walks the
+and `--pull` still use this list. `setup ship-tree` does not: it walks the
 ship root and applies each directory's `.gitignore` there and below.
 A gitignored preference file is not added back.
 
@@ -854,7 +854,7 @@ function remote_dest_busy_message(host::AbstractString, remote_path::AbstractStr
         ": ",
         remote_path,
         " (refusing to overwrite). ",
-        "Delete it first, e.g.: julia --project=. -m DistSSHKit setup --delete ",
+        "Delete it first, e.g.: julia --project=. -m DistSSHKit setup delete ",
         setup_cli_host_token(host),
     )
 end

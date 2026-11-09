@@ -71,7 +71,7 @@ After workers are ready, `up.sh` always runs
 [`../docker-ssh/scripts/prepare-manual-remote-root.sh`](../docker-ssh/scripts/prepare-manual-remote-root.sh)
 then `write-kit-env.sh` (including before `--e2e`), so the DistSSHRun
 default remote root (`~/Parent/RepoName`, mode 755) exists for manual
-`setup --ship-tree` without `--remote-path`. A prepare failure aborts
+`setup ship-tree` without `--deploy-root`. A prepare failure aborts
 `up` before E2E. `container exec` has no `--` (that flag is Docker):
 
 ```bash

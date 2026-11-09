@@ -1,7 +1,7 @@
 category: breaking
 
 - Deployment location resolution keeps the existing precedence (per-call
-  `--remote-path` / `session.remote`, then caller
+  `--deploy-root` / `session.remote`, then caller
   `DISTRIBUTED_REMOTE_PROJECT_ROOT`, then the default `~/Parent/Repo` from
   the local package `env_dir`). `apply_session_env!` no longer writes
   `DISTRIBUTED_REMOTE_PROJECT_ROOT`, so one session's `remote=` cannot leak
@@ -9,7 +9,7 @@ category: breaking
   restoring frame so `remote_layout_path` / worker mapping and collect
   still see `session.remote`. Overlapping in-process kit runs remain
   unsupported.
-- `setup --ship-tree`, `go` / `drive` `--ship-tree`, and
+- `setup ship-tree`, `go` / `drive` `--ship-tree`, and
   `sync!(mode=:ship_tree)` create a missing deployment root when safe: a
   `~/…` layout may create components under the remote home with mode
   `700`; an absolute path still requires its parent and creates only the
@@ -19,7 +19,7 @@ category: breaking
   ownership or permissions, `/`, a single directory under `/`, paths with
   `.` or `..`, this machine's home, and the remote home. Existing
   directories are not chmod'd. Transfer failure after create leaves the
-  directory. `setup --remote-root` is unchanged (absolute `--remote-path`
+  directory. `setup remote-root` is unchanged (absolute `--deploy-root`
   only). Ship still does not instantiate; go/drive instantiate after ship
   as before. This is location and root preparation only, not deterministic
   snapshot-source selection.

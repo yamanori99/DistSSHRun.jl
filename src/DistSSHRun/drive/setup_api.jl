@@ -1,4 +1,4 @@
-# setup! — Julian mirror of `julia -m DistSSHKit setup --<mode>`.
+# setup! — Julian mirror of `julia -m DistSSHKit setup <subcommand>`.
 
 const _SETUP_BANG_MODES = (
     :delete,
@@ -20,23 +20,23 @@ const _SETUP_BANG_MODES = (
     setup!(session::KitSession, mode::Symbol; kwargs...) -> SyncResult
     setup!(session::KitSession, modes::Symbol...) -> SyncResult
 
-Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup --…`.
+Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup …`.
 
 | `mode` | CLI | Notes |
 | --- | --- | --- |
-| `:delete` | `--delete` | Destructive. Requires `confirm_path`. `session.yes` does not delete. Refuses a present unowned Ship `run.toml` |
-| `:ship_tree` | `--ship-tree` | Walk the ship root and each directory's `.gitignore` (case-sensitive). No git binary. A gitignored project or Manifest file is omitted with one warning. `!LocalPreferences.toml` ships that file. Declared inputs do not. Creates a missing remote root when safe (`~/…` under home, or absolute with an existing parent). Tar into `runs/<run_id>/src/`, empty `out/`, DistSSHRun stamp. Does not instantiate |
-| `:clone` | `--clone` | Requires `repo=`; clone runs **on the remote** |
-| `:sync` | `--sync` | Push the local branch to origin, then detach each remote at that commit; confirm unless `session.yes`. A dirty tree is refused |
-| `:pull` | `--pull` | Detach each remote at the local commit. Does not push to origin and does not run `git pull`; confirm unless `session.yes`. A dirty tree is refused |
-| `:instantiate` | `--instantiate` | `julia=` (default `"auto"`) |
+| `:delete` | `delete` | Destructive. Requires `confirm_path`. `session.yes` does not delete. Refuses a present unowned Ship `run.toml` |
+| `:ship_tree` | `ship-tree` | Walk the ship root and each directory's `.gitignore` (case-sensitive). No git binary. A gitignored project or Manifest file is omitted with one warning. `!LocalPreferences.toml` ships that file. Declared inputs do not. Creates a missing remote root when safe (`~/…` under home, or absolute with an existing parent). Tar into `runs/<run_id>/src/`, empty `out/`, DistSSHRun stamp. Does not instantiate |
+| `:clone` | `clone` | Requires `repo=`; clone runs **on the remote** |
+| `:sync` | `sync` | Push the local branch to origin, then detach each remote at that commit; confirm unless `session.yes`. A dirty tree is refused |
+| `:pull` | `pull` | Detach each remote at the local commit. Does not push to origin and does not run `git pull`; confirm unless `session.yes`. A dirty tree is refused |
+| `:instantiate` | `instantiate` | `julia=` (default `"auto"`) |
 | `:juliaup` | `up` | Align Julia via juliaup on `child:NAME` and/or `parent` (`\$HOME/.juliaup` or Homebrew); confirm unless `session.yes`. Tip if kit parent patch lags channel latest |
 | `:juliaup_update` | `up update` | `juliaup update` on those hosts (no `default`); confirm unless `session.yes` |
-| `:check` | `--check` | `ignore_julia_version=`, `check_code_sync=` |
-| `:runtest` | `--runtest` | job `Pkg.test()` on remotes; `julia=` |
-| `:cleanup` | `--cleanup` | Kill stale workers (no confirm) |
-| `:prune` | `--prune` | `.distsshkit` go/drive/setup/runs leaves. Requires `confirm_path`. `session.yes` does not delete. `older_days=`, `id=` |
-| `:remote_root` | `--remote-root` | `remote=` must be absolute. Creates that directory only when the parent exists. Confirm unless `session.yes` |
+| `:check` | `check` | `ignore_julia_version=`, `check_code_sync=` |
+| `:runtest` | `runtest` | job `Pkg.test()` on remotes; `julia=` |
+| `:cleanup` | `cleanup` | Kill stale workers (no confirm) |
+| `:prune` | `prune` | `.distsshkit` go/drive/setup/runs leaves. Requires `confirm_path`. `session.yes` does not delete. `older_days=`, `id=` |
+| `:remote_root` | `remote-root` | `remote=` must be absolute (`--deploy-root` on the CLI). Creates that directory only when the parent exists. Confirm unless `session.yes` |
 
 Confirmations for other modes follow `session.yes` (CLI `-y`). `:delete` and
 `:prune` authorize only `confirm_path`: a `String` when the session has one

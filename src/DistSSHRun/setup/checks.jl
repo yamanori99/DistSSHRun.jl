@@ -1,11 +1,11 @@
 check_ssh(host::String)::Bool = probe_setup_ssh(host) === nothing
 
-"""Per-host `setup --check` failure. `:progress` prefixes the host; `:verbose` keeps the host heading."""
+"""Per-host `setup check` failure. `:progress` prefixes the host; `:verbose` keeps the host heading."""
 function _fail_host(host::AbstractString, msg)
     return fail(kit_output_detail() ? string(msg) : "$(String(host)): $msg")
 end
 
-"""Per-host `setup --check` warning. Same host gate as [`_fail_host`](@ref)."""
+"""Per-host `setup check` warning. Same host gate as [`_fail_host`](@ref)."""
 function _warn_host(host::AbstractString, msg)
     return warn(kit_output_detail() ? string(msg) : "$(String(host)): $msg")
 end
@@ -371,7 +371,7 @@ function check_prerequisites(
             else
                 _fail_host(host, deps_err)
                 _host_check_detail(
-                    "Fix: julia --project=. -m DistSSHKit setup --instantiate $(setup_cli_host_token(host))",
+                    "Fix: julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host))",
                 )
                 all_ok = false
                 host_ok[] = false

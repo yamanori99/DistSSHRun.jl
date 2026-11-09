@@ -47,7 +47,7 @@ Julia **1.13+**。
 
 ### Ship
 
-`setup --ship-tree`、`go --ship-tree`、`drive --ship-tree`:
+`setup ship-tree`、`go --ship-tree`、`drive --ship-tree`:
 
 - ship の根を歩き、各ディレクトリの `.gitignore` を適用する
   （大文字小文字を区別する）。`.git/info/exclude`、
@@ -66,8 +66,8 @@ Julia **1.13+**。
   256 MiB の上限は従来どおり失敗する。宣言した入力は載らない。
 - 展開先は `<remote_root>/runs/<run_id>/src/` で、横に空の `out/`
   と DistSSHRun の短い `run.toml` stamp を置く。リモート根は先に
-  存在しなければならない（`setup --remote-root`）。
-- `--rsync` は 0.2.0 で削除した。`setup --delete` と `--prune` は
+  存在しなければならない（`setup remote-root`）。
+- `--rsync` は 0.2.0 で削除した。`setup delete` と `setup prune` は
   `--confirm-path` が要る。`-y` では消さない。ある stamp が
   DistSSHRun 所有でなければ拒否する。
 
@@ -90,7 +90,7 @@ Julia **1.13+**。
 フラグは `julia -m DistSSHRun help go` で見る。
 
 ```bash
-julia -m DistSSHRun setup --check child:host1
+julia -m DistSSHRun setup check child:host1
 julia -m DistSSHRun go SCRIPT.jl
 julia -m DistSSHRun ride parent:2 SCRIPT.jl
 julia -m DistSSHRun drive parent:2 SCRIPT.jl

@@ -44,6 +44,7 @@ function ride_main()::Cint
         return 0
     end
     tok = parsed.hosts
+    remote_cli = get(parsed, :deploy_root, nothing)
     remote_raw = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
     result = try
         ride!(
@@ -55,7 +56,8 @@ function ride_main()::Cint
             project = project_root,
             julia = parsed.julia,
             allow_mismatch = parsed.allow_mismatch,
-            remote = isempty(remote_raw) ? nothing : remote_raw,
+            remote = remote_cli isa AbstractString ? remote_cli :
+                (isempty(remote_raw) ? nothing : remote_raw),
             snapshot = parsed.snapshot,
             hint_surface = :cli,
         )

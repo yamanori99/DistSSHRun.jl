@@ -163,7 +163,7 @@ function explain_clone_repo_required(; surface::Symbol = :api)::String
         return "setup!(session, :clone) requires repo=\"git-url\" " *
             "(no silent origin lookup; clone runs on the remote)"
     end
-    return "setup --clone requires --repo URL " *
+    return "setup clone requires --repo URL " *
         "(no silent origin lookup; clone runs on the remote)"
 end
 

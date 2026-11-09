@@ -109,10 +109,10 @@ end
         pi_echo = joinpath(proj, "demos", "without_kit", "pi_echo.jl")
         pi_file = joinpath(proj, "demos", "without_kit", "pi_file.jl")
 
-        @testset "setup --delete (clean slate)" begin
-            _e2e_announce("setup --delete (clean slate)")
+        @testset "setup delete (clean slate)" begin
+            _e2e_announce("setup delete (clean slate)")
             proc, out = _run_kit_setup(;
-                setup_args = ["--delete", "--remote-path", remote_root, "--confirm-path", remote_root, setup_hosts...],
+                setup_args = ["delete", "--deploy-root", remote_root, "--confirm-path", remote_root, setup_hosts...],
                 project_root = proj,
                 extra_env = _e2e_base_env(),
             )
@@ -123,11 +123,11 @@ end
             end
         end
 
-        @testset "setup --ship-tree" begin
-            _e2e_announce("setup --ship-tree")
+        @testset "setup ship-tree" begin
+            _e2e_announce("setup ship-tree")
             _ssh_e2e_ensure_remote_root!(hosts, remote_root)
             proc, out = _run_kit_setup(;
-                setup_args = ["--ship-tree", "--remote-path", remote_root, setup_hosts...],
+                setup_args = ["ship-tree", "--deploy-root", remote_root, setup_hosts...],
                 project_root = proj,
                 extra_env = _e2e_base_env(),
             )
@@ -145,9 +145,9 @@ end
             end
         end
 
-        @testset "setup --instantiate" begin
-            _e2e_announce("setup --instantiate")
-            # `--remote-path` is the deploy root only. The ship leaf is
+        @testset "setup instantiate" begin
+            _e2e_announce("setup instantiate")
+            # `--deploy-root` is the deploy root only. The ship leaf is
             # `runs/<id>/src`; select it with `--snapshot` (or the local
             # last-snapshot record written by ship-tree).
             p_src, src_out = _ssh_e2e_ssh(hosts[1], "ls -1d $(remote_root)/runs/*/src 2>/dev/null | tail -n 1")
@@ -157,7 +157,7 @@ end
             snap_id = basename(dirname(ship_src))
             proc, out = _run_kit_setup(;
                 setup_args = [
-                    "--instantiate", "--remote-path", remote_root, "--snapshot", snap_id,
+                    "instantiate", "--deploy-root", remote_root, "--snapshot", snap_id,
                     setup_hosts...,
                 ],
                 project_root = proj,
@@ -166,14 +166,14 @@ end
             _assert_ssh_e2e_ok(suite, "setup_instantiate", proc, out; project = proj, kit = :setup)
         end
 
-        @testset "setup --check (major.minor; no --ignore-julia-version)" begin
-            _e2e_announce("setup --check (major.minor; no --ignore-julia-version)")
+        @testset "setup check (major.minor; no --ignore-julia-version)" begin
+            _e2e_announce("setup check (major.minor; no --ignore-julia-version)")
             # Ship does not send .git/; --check warns on a missing remote hash but
             # must still pass the Julia version string (patch and prerelease)
             # plus project/deps. A build suffix may differ. Git parity is not
             # claimed for the ship path (see docker-ssh README).
             proc, out = _run_kit_setup(;
-                setup_args = ["--check", "--remote-path", remote_root, setup_hosts...],
+                setup_args = ["check", "--deploy-root", remote_root, setup_hosts...],
                 project_root = proj,
                 extra_env = merge(_e2e_base_env(), Dict("DISTSSHKIT_QUIET" => "0")),
             )
@@ -189,7 +189,7 @@ end
             try
                 _ssh_e2e_juliaup_default!(host, ch.alt)
                 proc_bad, out_bad = _run_kit_setup(;
-                    setup_args = ["--check", "--remote-path", remote_root, setup_hosts...],
+                    setup_args = ["check", "--deploy-root", remote_root, setup_hosts...],
                     project_root = proj,
                     extra_env = merge(_e2e_base_env(), Dict("DISTSSHKIT_QUIET" => "0")),
                 )
@@ -228,7 +228,7 @@ end
                 end
 
                 proc_ok, out_ok = _run_kit_setup(;
-                    setup_args = ["--check", "--remote-path", remote_root, setup_hosts...],
+                    setup_args = ["check", "--deploy-root", remote_root, setup_hosts...],
                     project_root = proj,
                     extra_env = merge(_e2e_base_env(), Dict("DISTSSHKIT_QUIET" => "0")),
                 )
@@ -306,7 +306,7 @@ end
 
                 # Second remote was not a target; leave it alone. Re-check listed hosts.
                 proc_ok, out_ok = _run_kit_setup(;
-                    setup_args = ["--check", "--remote-path", remote_root, DistSSHRun.setup_cli_host_token(host)],
+                    setup_args = ["check", "--deploy-root", remote_root, DistSSHRun.setup_cli_host_token(host)],
                     project_root = proj,
                     extra_env = merge(_e2e_base_env(), Dict("DISTSSHKIT_QUIET" => "0")),
                 )
@@ -353,22 +353,22 @@ end
             )
         end
 
-        @testset "setup --runtest (job Pkg.test)" begin
-            _e2e_announce("setup --runtest (job Pkg.test)")
+        @testset "setup runtest (job Pkg.test)" begin
+            _e2e_announce("setup runtest (job Pkg.test)")
             proc, out = _run_kit_setup(;
-                setup_args = ["--runtest", "--remote-path", remote_root, setup_hosts...],
+                setup_args = ["runtest", "--deploy-root", remote_root, setup_hosts...],
                 project_root = proj,
                 extra_env = _e2e_base_env(),
             )
             _assert_ssh_e2e_ok(suite, "setup_runtest", proc, out; project = proj, kit = :setup)
         end
 
-        @testset "setup --runtest fails when job tests fail" begin
-            _e2e_announce("setup --runtest fails when job tests fail")
+        @testset "setup runtest fails when job tests fail" begin
+            _e2e_announce("setup runtest fails when job tests fail")
             try
                 _ssh_e2e_push_job_runtests!(hosts, remote_root; fail = true)
                 proc, out = _run_kit_setup(;
-                    setup_args = ["--runtest", "--remote-path", remote_root, setup_hosts...],
+                    setup_args = ["runtest", "--deploy-root", remote_root, setup_hosts...],
                     project_root = proj,
                     extra_env = merge(_e2e_base_env(), Dict("DISTSSHKIT_QUIET" => "0")),
                 )
@@ -872,7 +872,7 @@ end
             oneshot_env = _ssh_e2e_env(; remote_project = oneshot)
             try
                 proc, out = _run_kit_setup(;
-                    setup_args = ["--delete", "--remote-path", oneshot, "--confirm-path", oneshot, setup_hosts...],
+                    setup_args = ["delete", "--deploy-root", oneshot, "--confirm-path", oneshot, setup_hosts...],
                     project_root = proj,
                     extra_env = oneshot_env,
                 )
@@ -908,7 +908,7 @@ end
                 end
             finally
                 proc, out = _run_kit_setup(;
-                    setup_args = ["--delete", "--remote-path", oneshot, "--confirm-path", oneshot, setup_hosts...],
+                    setup_args = ["delete", "--deploy-root", oneshot, "--confirm-path", oneshot, setup_hosts...],
                     project_root = proj,
                     extra_env = oneshot_env,
                 )
@@ -930,7 +930,7 @@ end
             out_csv = joinpath(out_dir, "square_results.csv")
 
             proc, out = _run_kit_setup(;
-                setup_args = ["--delete", "--remote-path", tilde_root, "--confirm-path", tilde_root, setup_hosts...],
+                setup_args = ["delete", "--deploy-root", tilde_root, "--confirm-path", tilde_root, setup_hosts...],
                 project_root = proj,
                 extra_env = tilde_env,
             )
@@ -938,14 +938,14 @@ end
             _ssh_e2e_ensure_remote_root!(hosts, tilde_root)
 
             proc, out = _run_kit_setup(;
-                setup_args = ["--ship-tree", "--remote-path", tilde_root, setup_hosts...],
+                setup_args = ["ship-tree", "--deploy-root", tilde_root, setup_hosts...],
                 project_root = proj,
                 extra_env = tilde_env,
             )
             _assert_ssh_e2e_ok(suite, "tilde_rsync", proc, out; project = proj, kit = :setup)
 
             proc, out = _run_kit_setup(;
-                setup_args = ["--instantiate", "--remote-path", tilde_root, setup_hosts...],
+                setup_args = ["instantiate", "--deploy-root", tilde_root, setup_hosts...],
                 project_root = proj,
                 extra_env = tilde_env,
             )
@@ -1286,10 +1286,10 @@ end
             @test gone
         end
 
-        @testset "setup --ship-tree onto an existing root" begin
-            _e2e_announce("setup --ship-tree onto an existing root")
+        @testset "setup ship-tree onto an existing root" begin
+            _e2e_announce("setup ship-tree onto an existing root")
             proc, out = _run_kit_setup(;
-                setup_args = ["--ship-tree", "--remote-path", remote_root, setup_hosts[1]],
+                setup_args = ["ship-tree", "--deploy-root", remote_root, setup_hosts[1]],
                 project_root = proj,
                 extra_env = merge(_e2e_base_env(), Dict("DISTSSHKIT_QUIET" => "0")),
             )
@@ -1323,7 +1323,7 @@ end
 
             proc, out = _run_kit_setup(;
                 setup_args = [
-                    "--delete", "--remote-path", git_root, "--confirm-path", git_root, setup_hosts...,
+                    "delete", "--deploy-root", git_root, "--confirm-path", git_root, setup_hosts...,
                 ],
                 project_root = proj,
                 extra_env = git_env,
@@ -1332,9 +1332,9 @@ end
 
             proc, out = _run_kit_setup(;
                 setup_args = [
-                    "--clone",
+                    "clone",
                     "--repo", seed.origin_workers,
-                    "--remote-path", git_root,
+                    "--deploy-root", git_root,
                     setup_hosts...,
                 ],
                 project_root = proj,
@@ -1344,7 +1344,7 @@ end
 
             proc, out = _run_kit_setup(;
                 setup_args = [
-                    "--instantiate", "--remote-path", git_root, setup_hosts...,
+                    "instantiate", "--deploy-root", git_root, setup_hosts...,
                 ],
                 project_root = proj,
                 extra_env = git_env,
@@ -1352,7 +1352,7 @@ end
             _assert_ssh_e2e_ok(suite, "git_instantiate", proc, out; project = proj, kit = :setup)
 
             proc, out = _run_kit_setup(;
-                setup_args = ["--check", "--remote-path", git_root, setup_hosts...],
+                setup_args = ["check", "--deploy-root", git_root, setup_hosts...],
                 project_root = proj,
                 extra_env = merge(git_env, Dict("DISTSSHKIT_QUIET" => "0")),
             )
@@ -1384,14 +1384,14 @@ end
             @test occursin("mismatch", lowercase(out)) || occursin("could not be verified", lowercase(out))
 
             proc, out = _run_kit_setup(;
-                setup_args = ["--sync", "--remote-path", git_root, setup_hosts...],
+                setup_args = ["sync", "--deploy-root", git_root, setup_hosts...],
                 project_root = proj,
                 extra_env = merge(git_env, Dict("DISTSSHKIT_QUIET" => "0")),
             )
             _assert_ssh_e2e_ok(suite, "git_sync", proc, out; project = proj, kit = :setup)
 
             proc, out = _run_kit_setup(;
-                setup_args = ["--check", "--remote-path", git_root, setup_hosts...],
+                setup_args = ["check", "--deploy-root", git_root, setup_hosts...],
                 project_root = proj,
                 extra_env = merge(git_env, Dict("DISTSSHKIT_QUIET" => "0")),
             )
@@ -1420,7 +1420,7 @@ end
             marker = read(joinpath(proj, "e2e_sync_marker.txt"), String)
 
             proc, out = _run_kit_setup(;
-                setup_args = ["--pull", "--remote-path", git_root, setup_hosts...],
+                setup_args = ["pull", "--deploy-root", git_root, setup_hosts...],
                 project_root = proj,
                 extra_env = merge(git_env, Dict("DISTSSHKIT_QUIET" => "0")),
             )
@@ -1453,7 +1453,7 @@ end
                 end
                 feature_sha = strip(read(`git -C $proj rev-parse HEAD`, String))
                 proc, out = _run_kit_setup(;
-                    setup_args = ["--sync", "--remote-path", git_root, setup_hosts...],
+                    setup_args = ["sync", "--deploy-root", git_root, setup_hosts...],
                     project_root = proj,
                     extra_env = merge(git_env, Dict("DISTSSHKIT_QUIET" => "0")),
                 )
@@ -1487,8 +1487,8 @@ end
             end
         end
 
-        @testset "setup --ship-tree sends a gitignore negation" begin
-            _e2e_announce("setup --ship-tree sends a gitignore negation")
+        @testset "setup ship-tree sends a gitignore negation" begin
+            _e2e_announce("setup ship-tree sends a gitignore negation")
             neg_root = "/home/dev/distsshkit-e2e-negation"
             _with_tempdir() do app_path
                 app = String(app_path)
@@ -1506,7 +1506,7 @@ end
                 neg_env = _ssh_e2e_env(; remote_project = neg_root)
                 proc, out = _run_kit_setup(;
                     setup_args = [
-                        "--delete", "--remote-path", neg_root, "--confirm-path", neg_root, setup_hosts...,
+                        "delete", "--deploy-root", neg_root, "--confirm-path", neg_root, setup_hosts...,
                     ],
                     project_root = app,
                     extra_env = neg_env,
@@ -1514,7 +1514,7 @@ end
                 _assert_ssh_e2e_ok(suite, "negation_delete", proc, out; project = app, kit = :setup)
                 _ssh_e2e_ensure_remote_root!(hosts, neg_root)
                 proc, out = _run_kit_setup(;
-                    setup_args = ["--ship-tree", "--remote-path", neg_root, setup_hosts...],
+                    setup_args = ["ship-tree", "--deploy-root", neg_root, setup_hosts...],
                     project_root = app,
                     extra_env = neg_env,
                 )

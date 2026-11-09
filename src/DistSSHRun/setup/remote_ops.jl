@@ -10,7 +10,7 @@ ensure_remote_dir(host::String, remote_path::String)::Bool =
     ship_to_remotes(hosts, remote_path, project; path_anchor=project)
 
 Ship the project as a tar into `remote_path/runs/<run_id>/src/` on each
-host (`setup --ship-tree`).
+host (`setup ship-tree`).
 
 Returns `(cancelled, succeeded, failed)`:
 - `cancelled=true` when the user did not confirm
@@ -307,7 +307,7 @@ Delete remote repositories.
 Returns `(cancelled, succeeded, failed, hosts)`. Caller should use
 [`finish_host_op!`](@ref) so partial failure is not reported as success.
 Pass `confirm=false` to skip the typed `delete` prompt. `-y` /
-`DISTSSHKIT_YES` do not skip it. `setup --delete` sets `confirm=false`
+`DISTSSHKIT_YES` do not skip it. `setup delete` sets `confirm=false`
 only after `--confirm-path` matches, or after the typed `delete` prompt.
 """
 function delete_remotes(
@@ -395,7 +395,7 @@ function clone_to_remotes(
             println_fatal("  Hosts: $(join(hosts, ", "))")
             println_fatal()
             print_warn("  Safety: refuses if the remote path already has any files.\n")
-            println_fatal("  To replace an existing tree, run `setup --delete` first, then `--clone`.")
+            println_fatal("  To replace an existing tree, run `setup delete` first, then `setup clone`.")
             println_fatal()
             kit_confirm("Proceed? [y/N]: ") || begin
                 println_fatal("Cancelled.")

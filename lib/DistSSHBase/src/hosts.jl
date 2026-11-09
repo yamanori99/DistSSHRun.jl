@@ -195,7 +195,7 @@ end
 """
 True when a CLI token looks like a local filesystem path (not `user@host`).
 
-Rejects path-like tokens so `setup --delete demos/foo.jl` fails early.
+Rejects path-like tokens so `setup delete demos/foo.jl` fails early.
 
 # Examples
 ```jldoctest

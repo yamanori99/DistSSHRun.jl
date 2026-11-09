@@ -74,7 +74,7 @@ let _BASE = DistSSHBase
         catch e
             e isa ArgumentError ? e.msg : sprint(showerror, e)
         end
-        @test occursin("--remote-path", err)
+        @test occursin("--deploy-root", err)
         @test occursin("git root", err)
     end
 end

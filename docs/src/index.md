@@ -37,7 +37,7 @@ non-executable file arrives as mode `0644`, and an executable file as
 (`--julia`, or auto-detect) that can load stdlib `Tar` and `SHA`. Ship uses
 stdlib Tar over SSH. Git clone, sync, and pull also need **`git`**.
 
-`setup --ship-tree`, `go --ship-tree`, and `drive --ship-tree` walk the
+`setup ship-tree`, `go --ship-tree`, and `drive --ship-tree` walk the
 ship root and apply each directory's `.gitignore` (case-sensitive).
 `.git/info/exclude`, `core.excludesFile`, and a `.gitignore` above the
 ship root are not used. No git binary is run. The ship root is the
@@ -57,7 +57,7 @@ list for clone, sync, and pull. Extract is into
 `<remote_root>/runs/<run_id>/out/`. A repeated host is refused. A missing
 `remote_root` is created when safe: a `~/…` layout may create components
 under the remote home with mode `700`; an absolute path requires its parent
-and creates only the final component (same rule as `setup --remote-root`).
+and creates only the final component (same rule as `setup remote-root`).
 A symlink at the target, unsafe ownership or permissions, `/`, a single
 directory under `/` (for example `/scratch`), a path with `.` or `..`, this
 machine's home, and the remote home itself are refused. Existing ancestor
@@ -65,7 +65,7 @@ directory symlinks are followed; components this operation creates must not
 be symlinks. Existing directories are not chmod'd. Transfer failure after
 create leaves the safe directory. `go` / `drive` `--ship-tree` and `sync!(mode=:ship_tree)` use the
 same ensure path; they still instantiate after ship when those entry points
-do today. Later `--instantiate` / `--check` / `go` / `drive` / `ride` select a
+do today. Later `setup instantiate` / `setup check` / `go` / `drive` / `ride` select a
 snapshot with `--snapshot ID` (or `snapshot=` on `setup!` / `go!` / `drive!` /
 `ride!`), else the local `.distsshkit/last-snapshot.toml` written after a
 successful ship, else a git checkout that has `Project.toml` at the deploy
@@ -81,7 +81,7 @@ or legacy leaves are not selectable. Collect recovery with
 `DISTSSHKIT_RUN_DIR` uses that execution's `provenance.shipped` instead of a
 newer last-snapshot record. A recorded `content_tree_hash` there must match
 the selected remote stamp. A local last-snapshot record without a matching
-40-digit hash is not used. `setup --check` still prints SSH diagnostics
+40-digit hash is not used. `setup check` still prints SSH diagnostics
 when selection cannot probe, then fails closed if the snapshot is invalid. `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
 `snapshot(local_root)` builds that tar in a temporary directory and records
 `content_tree_hash` (`git-sha1`). The caller deletes `snapshot_directory`.
@@ -91,9 +91,9 @@ and does not pack again or delete it. It refuses depot preferences, hashes
 the tar again immediately before sending, and throws `ArgumentError` when
 the hash differs or the tar is missing. `confirm` defaults to false, so a
 library `ship` does not prompt. `record=false` does not keep the ship for
-controller `run.toml` in this process. `setup --ship-tree` still confirms
+controller `run.toml` in this process. `setup ship-tree` still confirms
 unless `-y` is used, and that path deletes its temporary directory.
-`setup --remote-root --remote-path /absolute/path` creates that one
+`setup remote-root --deploy-root /absolute/path` creates that one
 directory with mode `700`. Group and other write are cleared again after
 `mkdir`. The parent must already exist. `~` and
 `DISTRIBUTED_REMOTE_PROJECT_ROOT` are not a source for this command.
@@ -111,9 +111,9 @@ and a `ShipTreeResult`. A `SyncResult` from any other mode returns `nothing`
 for both. `result_run_dir` reads
 `DISTSSHKIT_RUN_DIR` from those results and from `KitProcess`. Each remote
 `runs/<run_id>/` also gets a minimal `run.toml` with only `schema`,
-`writer`, and `kind = "ship"` so `setup --delete` can refuse a Ship leaf
+`writer`, and `kind = "ship"` so `setup delete` can refuse a Ship leaf
 that is not DistSSHRun-owned. That stamp is not controller provenance.
-`setup --prune` searches `.distsshkit` candidates and applies the same
+`setup prune` searches `.distsshkit` candidates and applies the same
 ownership check there; it does not inspect those Ship leaves. Older leaves
 without that file still use structural checks only. DistSSHQueue
 `teardown` is a different command; it may reuse the same remote stamp later.
@@ -133,7 +133,7 @@ path component by NFC form when the filesystem kept NFD. `sha256sum -c`
 opens paths literally, so use `check_input_manifest` for those trees.
 `hash = false` records only stat fields in `run.toml` and does not write
 a manifest. A later ship into the same run directory replaces the row
-for the same input name and host. Standalone `setup --ship-tree` waits
+for the same input name and host. Standalone `setup ship-tree` waits
 for hashing before it returns. `drive` / `go` with `--ship-tree` start
 hashing after extract and finish it while instantiate, worker launch,
 and precompile run. `outputs` is reserved and not written. There is no
@@ -163,14 +163,14 @@ is rejected. See `julia -m DistSSHRun help setup`.
 
 ## Commands
 
-`setup --check` fails when the worker Julia patch or prerelease differs
+`setup check` fails when the worker Julia patch or prerelease differs
 from this process. A build suffix alone still passes.
 `--ignore-julia-version` turns that skew into a warning. `go` and
 `drive` compare the full VERSION string and the Julia commit. `up`
 runs `juliaup update` even when the channel name already matches.
 
 ```bash
-julia -m DistSSHRun setup --check child:host1
+julia -m DistSSHRun setup check child:host1
 julia -m DistSSHRun go SCRIPT.jl
 julia -m DistSSHRun ride parent:2 SCRIPT.jl
 julia -m DistSSHRun drive parent:2 SCRIPT.jl
@@ -185,16 +185,16 @@ go!("job.jl")
 
 ## Delete and prune
 
-`setup --delete` and `setup --prune` remove a remote tree only when
+`setup delete` and `setup prune` remove a remote tree only when
 `--confirm-path` is the path that command prints. `-y`, `--yes`, and
 `DISTSSHKIT_YES` do not authorize those two modes. Without that flag and
 without `-y`, the command still asks you to type `delete` or `prune`.
 
-`--delete` also refuses when a present `runs/<run_id>/run.toml` under the
+`delete` also refuses when a present `runs/<run_id>/run.toml` under the
 deploy root is not DistSSHRun-owned, including a symlink `runs/` or a
 symlink directly under `runs/`. The confirmed path may be a git-work-tree
 ancestor of that deploy root; the stamp check still uses the deploy root.
-`--prune` uses the same ownership rule on `.distsshkit` candidates. A
+`prune` uses the same ownership rule on `.distsshkit` candidates. A
 missing stamp (older trees) still uses structural checks only.
 
 From Julia, `setup!(session, :delete; confirm_path)` and `:prune` follow

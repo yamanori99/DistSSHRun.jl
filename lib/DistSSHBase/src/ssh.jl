@@ -785,7 +785,7 @@ end
 #   active remote project root
 #
 # Precedence for a deployment root:
-# 1. Explicit per-call `cli_override` (`--remote-path` / `session.remote`)
+# 1. Explicit per-call `cli_override` (`--deploy-root` / `session.remote`)
 # 2. Caller `DISTRIBUTED_REMOTE_PROJECT_ROOT`
 # 3. [`default_remote_project_path`](@ref) from local `env_dir`
 # A per-call override must not be written back as a process-global default.
@@ -825,9 +825,9 @@ function _remote_tree_root(
 end
 
 """
-Directory on the worker that receives `setup --ship-tree` of [`resolve_pkg_env`](@ref) `env_dir`.
+Directory on the worker that receives `setup ship-tree` of [`resolve_pkg_env`](@ref) `env_dir`.
 
-An override (`--remote-path` / `DISTRIBUTED_REMOTE_PROJECT_ROOT`) is this tree
+An override (`--deploy-root` / `DISTRIBUTED_REMOTE_PROJECT_ROOT`) is this tree
 root, not the member directory. Workspace member relative paths are applied
 only by [`resolve_remote_project_root`](@ref), not here.
 """
@@ -864,7 +864,7 @@ When the git work tree root is [`resolve_pkg_env`](@ref) `env_dir`, this is
 [`remote_deploy_root`](@ref). When `env_dir` sits under that work tree, the
 destination is the ancestor of the deploy root by the same relative path, so
 the Manifest directory still lands on the deploy root. That ancestor is refused
-when it is `~`, `/`, or a single directory under `/`. Pass `--remote-path` so
+when it is `~`, `/`, or a single directory under `/`. Pass `--deploy-root` so
 the git root stays below those. No git work tree keeps
 [`resolve_remote_project_root`](@ref) (the member).
 """
@@ -890,14 +890,14 @@ function remote_git_clone_dest(
     _remote_path_forbidden(walked) && throw(
         ArgumentError(
             "refusing to clone into $(repr(walked)); " *
-                "pass --remote-path so the git root is not ~, /, or a single directory under /",
+                "pass --deploy-root so the git root is not ~, /, or a single directory under /",
         ),
     )
     return _checked_remote_dest(walked)
 end
 
 """
-Path `setup --delete` removes.
+Path `setup delete` removes.
 
 When the git work tree contains `env_dir` and the deploy path ends with that
 relative path, this is [`remote_git_clone_dest`](@ref), so a clone that landed
@@ -956,7 +956,7 @@ function _remote_ancestor(remote_path::AbstractString, rel::AbstractString)::Str
         ArgumentError(
             "Remote path $remote_path does not end with $rel, " *
                 "so clone cannot keep the Manifest directory there. " *
-                "Pass --remote-path for the remote path of the git root.",
+                "Pass --deploy-root for the remote path of the git root.",
         ),
     )
     return mapped
@@ -1065,8 +1065,8 @@ That result is the local absolute path, not a remote path.
 
 A path under the repo root is the same relative path under
 [`resolve_remote_project_root`](@ref). The default root matches
-`setup --clone` (`~/Parent/RepoName`). Override with
-`DISTRIBUTED_REMOTE_PROJECT_ROOT` or `setup --remote-path`.
+`setup clone` (`~/Parent/RepoName`). Override with
+`DISTRIBUTED_REMOTE_PROJECT_ROOT` or `--deploy-root`.
 """
 function remote_layout_path(
         local_abs_dir::AbstractString,

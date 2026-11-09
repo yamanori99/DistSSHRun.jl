@@ -90,10 +90,10 @@ using Test
     end
 
     @testset "refused rsync and prune paths print Error" begin
-        for mode in ("--ship-tree", "--prune")
+        for mode in ("ship-tree", "prune")
             let (code, out, err) = _main_capture(
                     [
-                        "setup", mode, "--remote-path", "/", "child:host1",
+                        "setup", mode, "--deploy-root", "/", "child:host1",
                     ]
                 )
                 shown = out * err
@@ -150,8 +150,8 @@ using Test
             @test via == direct
             @test occursin("-h, --help", via[2])
         end
-        let via = _main_capture(["help", "setup", "--check"])
-            direct = _main_capture(["setup", "--help", "--check"])
+        let via = _main_capture(["help", "setup", "check"])
+            direct = _main_capture(["setup", "--help", "check"])
             @test via[1] == 0
             @test via == direct
             @test occursin("Usage", via[2])

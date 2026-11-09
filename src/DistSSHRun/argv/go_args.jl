@@ -6,7 +6,7 @@ function show_go_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "Standalone script. One full run per slot; slots start together.",
-        "Remotes: setup --ship-tree or --clone, then --instantiate.",
+        "Remotes: setup ship-tree or setup clone, then setup instantiate.",
         "Or go --ship-tree (extracts to runs/<run_id>/src/ and instantiates).",
     )
     print_help_blank(io)
@@ -36,6 +36,9 @@ function show_go_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  --sync / --ship-tree  optional pre-run; --ship-tree instantiates src/",
+        "  --deploy-root PATH  remote deployment root (location, not snapshot id).",
+        "                      Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
+        "                      ~/Parent/RepoName layout from the local env_dir.",
         "  --snapshot ID       use runs/<ID>/src under the deploy root",
         "                      (not with --sync / --ship-tree; those pick their own source)",
         "  --allow-external-symlinks  with --ship-tree: keep escaping symlinks",
@@ -109,6 +112,7 @@ function _go_parsed(;
         allow_mismatch = Symbol[],
         allow_external_symlinks = false,
         snapshot = nothing,
+        deploy_root = nothing,
     )
     return (
         help = help,
@@ -124,6 +128,7 @@ function _go_parsed(;
         allow_mismatch = allow_mismatch,
         allow_external_symlinks = allow_external_symlinks,
         snapshot = snapshot,
+        deploy_root = deploy_root,
     )
 end
 
@@ -141,10 +146,29 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
     sync::Union{Nothing, Symbol, Bool} = nothing
     allow_external_symlinks = false
     snapshot_id = nothing
+    deploy_root = nothing
     repeat_n::Union{Nothing, Int} = nothing
+    options_done = false
     c = CliCursor(collect(String, rest))
     while !cli_at_end(c)
         arg = cli_current(c)::String
+        if options_done
+            if endswith(arg, ".jl")
+                script_path = arg
+                cli_consume!(c)
+                while !cli_at_end(c)
+                    push!(script_args, cli_current(c)::String)
+                    cli_consume!(c)
+                end
+                break
+            elseif !startswith(arg, "-")
+                push!(host_tokens, arg)
+                cli_consume!(c)
+            else
+                throw(ArgumentError("unknown go option: $arg"))
+            end
+            continue
+        end
         if arg == "--output-dir"
             output_dir = cli_take_value!(c, arg)
         elseif arg == "--julia"
@@ -153,6 +177,15 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
             raw = String(strip(cli_take_value!(c, arg)))
             isempty(raw) && throw(ArgumentError("go: --snapshot needs a non-empty id"))
             snapshot_id = validate_snapshot_id(raw)
+        elseif _legacy_remote_path_arg(arg)
+            _throw_legacy_remote_path("go")
+        elseif arg == DEPLOY_ROOT_FLAG
+            deploy_root = _set_deploy_root!(
+                deploy_root, _take_deploy_root!(c), "go",
+            )
+        elseif arg == "--"
+            options_done = true
+            cli_consume!(c)
         elseif arg == "--allow-mismatch"
             merge_allow_mismatch!(allow_mismatch, cli_take_value!(c, arg))
         elseif arg == "--repeat"
@@ -196,6 +229,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
                 allow_mismatch = allow_mismatch,
                 allow_external_symlinks = allow_external_symlinks,
                 snapshot = snapshot_id,
+                deploy_root = deploy_root,
             )
         elseif endswith(arg, ".jl")
             script_path = arg
@@ -248,5 +282,6 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
         allow_mismatch = allow_mismatch,
         allow_external_symlinks = allow_external_symlinks,
         snapshot = snapshot_id,
+        deploy_root = deploy_root,
     )
 end
