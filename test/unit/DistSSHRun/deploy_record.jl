@@ -89,14 +89,17 @@ end
     same_id = "b"^40
     n = 48
     paths = Vector{String}(undef, n)
-    nthreads() >= 2 || @test_skip("concurrent deploy tmp path needs JULIA_NUM_THREADS >= 2")
-    @sync begin
-        for i in 1:n
-            Threads.@spawn paths[i] = DistSSHRun._deploy_record_tmp_path(abs, same_id)
+    if nthreads() >= 2
+        @sync begin
+            for i in 1:n
+                Threads.@spawn paths[i] = DistSSHRun._deploy_record_tmp_path(abs, same_id)
+            end
         end
+        @test all(!isempty, paths)
+        @test length(unique(paths)) == n
+    else
+        @test_skip("concurrent deploy tmp path needs JULIA_NUM_THREADS >= 2")
     end
-    @test all(!isempty, paths)
-    @test length(unique(paths)) == n
 end
 
 @testset "deploy record scp host vs path validation" begin
