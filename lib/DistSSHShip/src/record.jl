@@ -1,4 +1,6 @@
 # Shipped-record at `<extract_dest>/.distssh/shipped.toml` (schema 1).
+# `transfer_tree` writes `complete = true` only after verified extract.
+# Readers treat a missing record or `complete = false` as not usable.
 
 const SHIPPED_RECORD_SCHEMA = 1
 const SHIPPED_RECORD_DIR = ".distssh"
@@ -49,9 +51,8 @@ function _normalize_project_rel(project_rel::AbstractString)::String
     )
     for part in split(rel, '/')
         (
-            isempty(part) || part == "." || part == ".." || occursin('"', part) ||
-                occursin('\'', part) || occursin('$', part) || occursin('`', part) ||
-                occursin(' ', part) || occursin('\n', part)
+            isempty(part) || part == "." || part == ".." || occursin('\n', part) ||
+                any(iscntrl, part)
         ) && throw(
             ArgumentError("project_rel must be a relative directory, got $(repr(project_rel))"),
         )
@@ -61,6 +62,9 @@ end
 
 """
 Build a schema-1 shipped record table (not yet written).
+
+`project_rel` is stored in TOML only; remote shell paths for the record use
+`DistSSHBase._remote_shell_path_word` (POSIX-quoted).
 """
 function build_shipped_record(
         snapshot::ShipSnapshot;

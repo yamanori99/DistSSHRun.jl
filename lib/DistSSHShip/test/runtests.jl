@@ -1,3 +1,4 @@
+using TOML
 using Test
 using DistSSHShip
 
@@ -20,6 +21,47 @@ function _extract(snapshot)
     dest = mktempdir()
     DistSSHShip.Tar.extract(snapshot.tar_path, dest)
     return dest
+end
+
+function _local_extract_verified!(
+        dest::AbstractString,
+        tar_path::AbstractString,
+        expect_hash::AbstractString;
+        allow_external_symlinks::Bool = false,
+    )
+    open(tar_path) do io
+        DistSSHShip.Tar.extract(io, dest)
+    end
+    DistSSHShip.assert_extracted_tree_contained!(
+        dest; allow_external_symlinks = allow_external_symlinks,
+    )
+    buf = IOBuffer()
+    DistSSHShip.Tar.create(dest, buf)
+    seekstart(buf)
+    got = String(
+        DistSSHShip.Tar.tree_hash(buf; algorithm = "git-sha1", skip_empty = true),
+    )
+    got == expect_hash ||
+        throw(ArgumentError("content_tree_hash mismatch: " * got * " != " * expect_hash))
+    return nothing
+end
+
+function _minimal_snapshot(project_rel::String)::DistSSHShip.ShipSnapshot
+    bundle = mktempdir()
+    tar_path = joinpath(bundle, "snap.tar")
+    src = joinpath(bundle, "src")
+    mkdir(src)
+    _project!(src)
+    open(tar_path, "w") do io
+        DistSSHShip.Tar.create(src, io)
+    end
+    hash = String(DistSSHShip.Tar.tree_hash(tar_path; algorithm = "git-sha1", skip_empty = true))
+    bytes = filesize(tar_path)
+    files = 2
+    return DistSSHShip.ShipSnapshot(
+        bundle, tar_path, hash, bytes, files, src, src, project_rel,
+        String[], String[],
+    )
 end
 
 @testset "DistSSHShip" verbose = true begin
@@ -509,5 +551,71 @@ end
             "content_tree_hash" => "a"^40,
         )
         @test DistSSHShip.shipped_record_status(bad) == :invalid
+    end
+
+    @testset "shipped record ordering vs tar extract" begin
+        _tmp() do dir
+            _project!(dir)
+            snap = DistSSHShip.snapshot(dir)
+            try
+                dest = mktempdir()
+                try
+                    mkpath(joinpath(dest, ".distssh"))
+                    write(joinpath(dest, ".distssh", "shipped.toml"), "complete = false\n")
+                    @test_throws ErrorException DistSSHShip.Tar.extract(snap.tar_path, dest)
+                    dest2 = mktempdir()
+                    try
+                        _local_extract_verified!(
+                            dest2, snap.tar_path, snap.content_tree_hash,
+                        )
+                        rec = DistSSHShip.build_shipped_record(snap; complete = true)
+                        @test rec["complete"] === true
+                        mkpath(joinpath(dest2, ".distssh"))
+                        write(
+                            joinpath(dest2, ".distssh", "shipped.toml"),
+                            sprint(TOML.print, rec),
+                        )
+                        buf = IOBuffer()
+                        DistSSHShip.Tar.create(dest2, buf)
+                        seekstart(buf)
+                        got = String(
+                            DistSSHShip.Tar.tree_hash(
+                                buf; algorithm = "git-sha1", skip_empty = true,
+                            ),
+                        )
+                        @test got != snap.content_tree_hash
+                    finally
+                        rm(dest2; force = true, recursive = true)
+                    end
+                finally
+                    rm(dest; force = true, recursive = true)
+                end
+            finally
+                rm(snap.directory; force = true, recursive = true)
+            end
+        end
+    end
+
+    @testset "project_rel in shipped record" begin
+        tricky = "my app/x\"'\$`part"
+        snap = _minimal_snapshot(tricky)
+        try
+            rec = DistSSHShip.build_shipped_record(snap; complete = true)
+            @test rec["project_rel"] == tricky
+            body = sprint(TOML.print, rec)
+            parsed = TOML.parse(body)
+            @test parsed["project_rel"] == tricky
+            @test DistSSHShip.shipped_record_status(rec) == :complete
+            for bad in ("", "/", "a//b", "..", "a/../b", "a\nb")
+                bad_snap = _minimal_snapshot(bad)
+                try
+                    @test_throws ArgumentError DistSSHShip.build_shipped_record(bad_snap)
+                finally
+                    rm(bad_snap.directory; force = true, recursive = true)
+                end
+            end
+        finally
+            rm(snap.directory; force = true, recursive = true)
+        end
     end
 end

@@ -134,9 +134,10 @@ that directory. This does not allocate a run id, write Run `run.toml`,
 instantiate, or delete `dest`. A non-empty `dest` is an error and is left
 in place. A failed extract can leave a partial tree.
 
-When `write_record=true` (default), writes `<dest>/.distssh/shipped.toml`
-before extract (`complete = false`) and again after verification
-(`complete = true`).
+When `write_record=true` (default), writes
+`<dest>/.distssh/shipped.toml` with `complete = true` only after hash
+verification succeeds. There is no in-flight marker: a missing or
+incomplete record means the tree is not usable.
 """
 function transfer_tree(
         snapshot::ShipSnapshot,
@@ -170,7 +171,6 @@ function transfer_tree(
         try
             code, out = DistSSHBase._remote_shell_status(host, _prepare_dest_script(checked))
             code == 0 || throw(ArgumentError("could not prepare dest on $(host): $(strip(out))"))
-            write_record && _write_in_progress_record!(host, checked, snapshot)
             pinned = DistSSHBase.resolve_remote_julia(host, julia)
             pinned === nothing && throw(ArgumentError("Julia not found on $host"))
             extract_verified!(
