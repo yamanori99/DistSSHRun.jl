@@ -160,9 +160,15 @@ end
 
 """Like `_path_is_under` after `realpath`, so `/var` and `/private/var` match."""
 function _path_under_resolved(path::AbstractString, root::AbstractString)::Bool
-    _path_is_under(path, root) && return true
     p = canonical_local_path(path)
     r = canonical_local_path(root)
-    (ispath(p) && ispath(r)) || return false
-    return _path_is_under(canonical_local_path(realpath(p)), canonical_local_path(realpath(r)))
+    if ispath(p) && ispath(r)
+        try
+            pr = canonical_local_path(realpath(p))
+            rr = canonical_local_path(realpath(r))
+            return _path_is_under(pr, rr)
+        catch
+        end
+    end
+    return _path_is_under(p, r)
 end

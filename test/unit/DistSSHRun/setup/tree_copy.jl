@@ -361,7 +361,7 @@ end
     end # _test_skip_unless_git()
 end
 
-@testset "setup clone dest safety" begin
+@testset "setup git-clone dest safety" begin
     remote_path = "~/App.jl"
 
     _with_tempdir() do state_dir

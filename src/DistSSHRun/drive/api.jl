@@ -34,8 +34,9 @@ A collect root that is the project or a parent of it stops the run before
 `julia` sets the remote Julia binary (`nothing` / `"auto"` → detect; same as
 CLI `--julia`). `snapshot` (CLI `--snapshot`) selects `runs/<ID>/src` under the
 deploy root when `sync` is omitted or `false`. `plan` is an optional explicit
-[`WorkerPlan`](@ref). [`pipeline!`](@ref) syncs separately and does not pass
-`sync=` into `drive!`, so it does not instantiate after rsync.
+[`WorkerPlan`](@ref). [`pipeline!`](@ref) runs setup then drive only; it does not pass run-time
+`sync=` into `drive!`. Use [`setup!`](@ref) `:instantiate` when Manifest deps
+must be present on remotes.
 
 `worker_include=true` (CLI `--worker-include`) re-`include`s the full driver on
 workers. The default publishes definitions / `using` / `import` / `include`

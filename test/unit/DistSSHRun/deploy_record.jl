@@ -53,3 +53,113 @@ end
     @test slice["mode"] == "ship-tree"
     @test slice["snapshot_id"] == "20260101T000000Z-aaaaaa"
 end
+
+@testset "deploy record scp upload argv is local then remote" begin
+    local_tmp = "/tmp/deploy-record-body.toml"
+    remote_abs = "/home/user/proj/.distssh/deploy.toml.tmp"
+    argv = DistSSHRun._deploy_record_scp_upload_argv("child-1", remote_abs, local_tmp)
+    @test argv[1:(end - 2)] == DistSSHRun.ssh_opts()
+    @test argv[end - 1] == local_tmp
+    @test argv[end] == "child-1:$remote_abs"
+    @test length(argv) == length(DistSSHRun.ssh_opts()) + 2
+end
+
+@testset "deploy record atomic install script" begin
+    abs = "/home/user/App/.distssh/deploy.toml"
+    sh = DistSSHRun._deploy_record_atomic_install_script(abs)
+    @test occursin("mv -f", sh)
+    @test occursin("deploy.toml.tmp", sh)
+    @test occursin("deploy.toml", sh)
+end
+
+@testset "deploy record staleness warns on ship-tree hash mismatch" begin
+    _with_tempdir() do log_root
+        _with_tempdir() do proj
+            write(joinpath(proj, "Project.toml"), "name = \"WarnDep\"\n")
+            write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+            snap = DistSSHRun.snapshot(proj)
+            rm(DistSSHRun.snapshot_directory(snap); recursive = true, force = true)
+            rec = Dict(
+                "schema" => 1,
+                "mode" => "ship-tree",
+                "deploy_id" => "rid",
+                "content_tree_hash" => "f"^40,
+            )
+            write(joinpath(proj, "extra.txt"), "change\n")
+            log_path = DistSSHRun.init_log_file(log_root; prefix = "deploy_warn")
+            try
+                DistSSHRun._warn_deploy_staleness!(proj, rec)
+            finally
+                DistSSHRun.close_log_file()
+            end
+            body = read(log_path, String)
+            @test occursin("ship-tree hash", body)
+        end
+    end
+end
+
+@testset "deploy record write failure warns per host" begin
+    _with_tempdir() do log_root
+        _with_tempdir() do state_dir
+            withenv(merge(_fake_setup_remote_env(state_dir), Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1"))...) do
+                log_path = DistSSHRun.init_log_file(log_root; prefix = "deploy_write")
+                try
+                    DistSSHRun.write_deploy_record_to_hosts!(
+                        ["host1"],
+                        "/remote/proj",
+                        pwd(),
+                        :git_sync;
+                        deploy_id = "a"^40,
+                        commit_sha = "a"^40,
+                    )
+                finally
+                    DistSSHRun.close_log_file()
+                end
+                body = read(log_path, String)
+                @test occursin("Deploy record write failed on host1", body)
+                @test occursin("Deploy record was not written on any host", body)
+            end
+        end
+    end
+end
+
+@testset "deploy record read on host (injected file)" begin
+    double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+    _with_tempdir() do state
+        remote = joinpath(state, "remote")
+        body = sprint(
+            TOML.print, Dict(
+                "schema" => 1,
+                "deploy_id" => "a"^40,
+                "mode" => "git-sync",
+                "commit_sha" => "a"^40,
+            )
+        )
+        deploy_dir = joinpath(remote, ".distssh")
+        mkpath(deploy_dir)
+        write(joinpath(deploy_dir, "deploy.toml"), body)
+        _with_tempdir() do proj
+            write(joinpath(proj, "Project.toml"), "name = \"ReadDep\"\n")
+            try
+                withenv(
+                    "DISTSSHKIT_TEST" => "1",
+                    "DISTSSHKIT_TEST_SSH" => double,
+                    "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
+                ) do
+                    rec = DistSSHRun.read_deploy_record_on_host("child-1", remote)
+                    @test rec !== nothing
+                    @test rec["mode"] == "git-sync"
+                    @test rec["deploy_id"] == "a"^40
+                    active = DistSSHRun.record_deploy_status_for_run!(
+                        ["child-1"], remote, proj,
+                    )
+                    @test active !== nothing
+                    @test DistSSHRun.active_deploy_record()["mode"] == "git-sync"
+                end
+            finally
+                DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
+                DistSSHRun._clear_active_deploy_record!()
+            end
+        end
+    end
+end
