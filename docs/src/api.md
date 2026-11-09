@@ -135,11 +135,27 @@ snapshot_tar
 content_tree_hash
 ```
 
+`DistSSHShip` is included by DistSSHRun and is not a `[deps]` entry.
+`DistSSHRun.snapshot` still builds the tar Run ships. Queue calls the
+names below on `DistSSHRun.DistSSHShip`.
+
+```@docs
+DistSSHShip
+DistSSHShip.ShipProject
+DistSSHShip.resolve_ship_project
+DistSSHShip.ShipSnapshot
+DistSSHShip.snapshot
+DistSSHShip.transfer_tree
+DistSSHShip.TransferResult
+DistSSHShip.TransferHostResult
+DistSSHShip.assert_extracted_tree_contained!
+```
+
 ## Hosts, cache, and run directories
 
 Names the commands above call: host tokens and SSH, the file cache, run
 directories, and help text. Every other public name is in this list too,
-including DistSSHBase and DistSSHUp.
+including DistSSHBase, DistSSHUp, and DistSSHShip.
 
 ```@autodocs
 Modules = [DistSSHRun, DistSSHRun.DistSSHBase, DistSSHRun.DistSSHUp]
