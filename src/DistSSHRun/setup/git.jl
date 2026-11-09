@@ -529,7 +529,9 @@ Make each remote a detached HEAD at the local commit. Used by `setup git-sync` /
 
 Does not run `git pull`. `do_push` still updates `origin`. `do_pull` delivers
 the commit with `git push <host>:<path> <sha>:refs/distssh/<sha>` and checks
-it out. A dirty local or remote tree is refused and is not sent as a patch.
+it out. A dirty local tree is refused unless `allow_dirty=true` (same as CLI
+`setup git-sync --skip-git-guard`). A dirty remote tree is still refused and
+is not sent as a patch.
 
 When `confirm=true`, prints the planned git steps and requires `y` (unless
 [`kit_noninteractive`](@ref) / `--yes` is active).

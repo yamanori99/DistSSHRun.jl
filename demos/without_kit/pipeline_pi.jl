@@ -66,7 +66,7 @@ result = go!(script, "parent:2"; args = ARGS)
 #       # yes=true,                     # skip confirm prompts (API default)
 #       # quiet=false,
 #       # verbosity=nothing,            # :quiet | :progress | :verbose
-#       # sync=false,                   # or :sync / :rsync (rsync: empty remote only)
+#       # sync=false,                   # run no longer syncs; use setup! first
 #       # output_dir=nothing,           # batch root (PATH/<slot>/); same name as drive!
 #       # collect_spec=nothing,         # false → skip pull; path is a compat alias for output_dir
 #       # path_anchor=nothing,          # shorten displayed paths

@@ -86,10 +86,9 @@ directory under `/` (for example `/scratch`), a path with `.` or `..`, this
 machine's home, and the remote home itself are refused. Existing ancestor
 directory symlinks are followed; components this operation creates must not
 be symlinks. Existing directories are not chmod'd. Transfer failure after
-create leaves the safe directory. `sync!(mode=:ship_tree)` and
-`go!(…; sync=:ship_tree)` / `drive!(…; sync=:ship_tree)` use the
-same ensure path; those Julia entry points still instantiate after ship.
-Detached `execute!(…; sync=:ship_tree)` is an error before spawn. Ship with
+create leaves the safe directory. Run-time `sync=` on
+`go!` / `drive!` / `pipeline!` / detached `execute!` is an error; deploy with
+[`sync!`](@ref) / [`setup!`](@ref) or CLI `setup` first. Ship with
 `setup!` / `setup ship-tree`, including one outside script as `extra_files`
 / `--extra-file`, then `execute!(…; snapshot=id)` or `go` / `drive --snapshot ID`
 with that same local script. The remote command is
@@ -169,9 +168,9 @@ opens paths literally, so use `check_input_manifest` for those trees.
 `hash = false` records only stat fields in `run.toml` and does not write
 a manifest. A later ship into the same run directory replaces the row
 for the same input name and host. Standalone `setup ship-tree` waits
-for hashing before it returns. `drive!` / `go!` with `sync=:ship_tree` start
-hashing after extract and finish it while instantiate, worker launch,
-and precompile run. `outputs` is reserved and not written. There is no
+for hashing before it returns. `go` / `drive` / `ride` do not copy on run;
+hashing for a ship finishes under `setup ship-tree` before selection.
+`outputs` is reserved and not written. There is no
 `run.private.toml`; public records keep relative paths and aliases only.
 
 `terminate!` and `terminate_run!` record how the stop ended. `KitRunResult.stop`

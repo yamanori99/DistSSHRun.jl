@@ -294,7 +294,7 @@ function _throw_detached_ship_tree_removed()
                     "Call setup!(session, :ship_tree; extra_files=[script]) when the script is outside the project ",
                     "(one file, at _distsshrun_external/<basename>), then setup!(session, :instantiate; snapshot=id), ",
                     "then execute!(...; snapshot=id). ",
-                    "In-process go! / drive! still accept sync=:ship_tree.",
+                    "In-process go! / drive! reject sync=:ship_tree the same way.",
                 ),
             ),
         )

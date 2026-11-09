@@ -433,13 +433,15 @@ and [`drive!`](@ref) already share (`ride!` ignores `sync`). With `detached=fals
 (default), any other keyword is forwarded to the chosen function.
 
 `detached=true` spawns `julia -m DistSSHKit go|ride|drive` and returns a
-[`KitProcess`](@ref). `sync=:ship_tree` is an error before spawn (the child
-CLI has no `--ship-tree`). Ship first with [`setup!`](@ref) `:ship_tree`.
+[`KitProcess`](@ref). `sync=:ship_tree` or `sync=:git_sync` is an error before
+spawn (run no longer transfers). Ship or git-sync first with [`setup!`](@ref)
+`:ship_tree` / `:git_sync`, or CLI `setup ship-tree` / `setup git-sync`.
 A script outside the project is `extra_files=[script]` (one file, at
 `_distsshrun_external/<basename>`), then `setup!(session, :instantiate; snapshot=id)`,
 then `execute!(...; snapshot=id)` with that same local script.
-In-process [`go!`](@ref) / [`drive!`](@ref) still accept `sync=:ship_tree`.
-`sync=:git_sync`, omitted/`false` sync, and `snapshot=` are unchanged.
+In-process [`go!`](@ref) / [`drive!`](@ref) reject `sync=:ship_tree` and
+`sync=:git_sync` the same way. Omitted/`false` `sync` and `snapshot=` are
+unchanged.
 `--project=` is always the job `project=` when that
 tree has a `Project.toml`. The job must list DistSSHKit or DistSSHRun in
 `[deps]`; otherwise this throws instead of using serve's active project.

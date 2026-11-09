@@ -975,13 +975,11 @@ both `output_dir` and `collect_spec::String` is an error. `collect_spec === fals
 means "skip collect" and is orthogonal to `output_dir`.
 
 Default `sync` is `false` (no pre-run sync; remotes are checked first — setup
-is assumed done). The `go` CLI does not take `--ship-tree`; prepare with
-`setup ship-tree` then `setup instantiate`, then `go --snapshot ID`.
-Pass `sync=:git_sync` or `sync=:ship_tree` on [`go!`](@ref) to copy, then check.
-After `:ship_tree`,
-hosts that still lack Manifest deps get [`instantiate!`](@ref) before the
-check. `snapshot` (CLI `--snapshot`) selects `runs/<ID>/src` when `sync` is
-omitted or `false`; it cannot combine with `sync=:git_sync` / `sync=:ship_tree`.
+is assumed done). The `go` CLI does not take `--ship-tree` or `--git-sync`;
+prepare with `setup ship-tree` or `setup git-sync`, then `setup instantiate`
+when needed, then `go --snapshot ID`. Passing `sync=:git_sync` or
+`sync=:ship_tree` on [`go!`](@ref) is an `ArgumentError`. `snapshot`
+(CLI `--snapshot`) selects `runs/<ID>/src` when `sync` is omitted or `false`.
 A script outside the project is allowed with `snapshot` when that ship used
 `extra_files=[script]`. The remote command is
 [`remote_script_path`](@ref): `_distsshrun_external/<basename>` under the

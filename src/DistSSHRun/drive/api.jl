@@ -15,14 +15,13 @@ drive!("job.jl", "parent:2"; args=["8"])
 drive!(session, "job.jl")  # uses `session.tokens`
 ```
 
-With `sync` omitted or `false`, prepare remotes with [`setup!`](@ref) or CLI
-`setup` first; remotes are checked before execution. The `drive` CLI does not
-take `--ship-tree`; prepare with `setup ship-tree` then `setup instantiate`,
-then `drive --snapshot ID`. Optional
-`sync=:git_sync` / `sync=:ship_tree` on [`drive!`](@ref) copies, then checks. After `:ship_tree`, hosts that
-still lack Manifest deps get [`instantiate!`](@ref).
-Git parity is off by default (`skip_hash_check=true`). With `sync=:ship_tree`, parity
-stays off even if `skip_hash_check=false` (no remote `.git/`).
+With `sync` omitted or `false` (the default), prepare remotes with
+[`setup!`](@ref) or CLI `setup` first; remotes are checked before execution.
+The `drive` CLI does not take `--ship-tree` or `--git-sync`; prepare with
+`setup ship-tree` or `setup git-sync`, then `setup instantiate` when needed,
+then `drive --snapshot ID`. Passing `sync=:git_sync` or `sync=:ship_tree` on
+[`drive!`](@ref) is an `ArgumentError` (transfer on run was removed).
+Git parity is off by default (`skip_hash_check=true`).
 `require_all_hosts=true` (the default; CLI `--require-all-hosts`) fails unless
 every explicit `parent:N` / `child:NAME:N` joined, stayed through the run,
 and collect succeeded. Pass `require_all_hosts=false` or CLI `--best-effort`
@@ -34,8 +33,7 @@ A collect root that is the project or a parent of it stops the run before
 
 `julia` sets the remote Julia binary (`nothing` / `"auto"` → detect; same as
 CLI `--julia`). `snapshot` (CLI `--snapshot`) selects `runs/<ID>/src` under the
-deploy root when `sync` is omitted or `false`; it cannot combine with
-`sync=:git_sync` / `sync=:ship_tree`. `plan` is an optional explicit
+deploy root when `sync` is omitted or `false`. `plan` is an optional explicit
 [`WorkerPlan`](@ref). [`pipeline!`](@ref) syncs separately and does not pass
 `sync=` into `drive!`, so it does not instantiate after rsync.
 

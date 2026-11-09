@@ -28,6 +28,10 @@ function check_setup_options!(
         mode::Symbol;
         extra_files::Vector{String} = String[],
         snapshot::Union{Nothing, AbstractString} = nothing,
+        allow_dirty::Bool = false,
+    )
+    allow_dirty && mode !== :git_sync && throw(
+        ArgumentError("allow_dirty only applies to :git_sync"),
     )
     if !isempty(extra_files) && mode !== :ship_tree
         throw(ArgumentError("setup! extra_files only applies to :ship_tree"))
@@ -57,7 +61,7 @@ Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup …`.
 | `:delete` | `delete` | Destructive. Requires `confirm_path`. `session.yes` does not delete. Refuses a present unowned Ship `run.toml` |
 | `:ship_tree` | `ship-tree` | Walk the project and each directory's `.gitignore` (case-sensitive). No git binary. Relative path dependencies outside the project ship under a common ancestor. A gitignored project or Manifest file is omitted with one warning. `!LocalPreferences.toml` ships that file. Declared inputs do not. `extra_files` is one external file at `_distsshrun_external/<basename>` (a second file errors). Creates a missing remote root when safe (`~/…` under home, or absolute with an existing parent). Tar into `runs/<run_id>/src/`, empty `out/`, DistSSHRun stamp. Does not instantiate |
 | `:git_clone` | `git-clone` | Requires `repo=`; clone runs **on the remote** |
-| `:git_sync` | `git-sync` | Push the local branch to origin, then detach each remote at that commit; confirm unless `session.yes`. A dirty tree is refused |
+| `:git_sync` | `git-sync` | Push the local branch to origin, then detach each remote at that commit; confirm unless `session.yes`. A dirty tree is refused unless `allow_dirty=true` (CLI `--skip-git-guard`; deploy record `dirty=true`) |
 | `:git_pull` | `git-pull` | Detach each remote at the local commit. Does not push to origin and does not run `git pull`; confirm unless `session.yes`. A dirty tree is refused |
 | `:instantiate` | `instantiate` | `julia=` (default `"auto"`) |
 | `:juliaup` | `up` | Align Julia via juliaup on `child:NAME` and/or `parent` (`\$HOME/.juliaup` or Homebrew); confirm unless `session.yes`. Tip if kit parent patch lags channel latest |
@@ -98,8 +102,9 @@ function setup!(
         gitignore::Bool = true,
         allow_external_symlinks::Bool = false,
         extra_files::Vector{String} = String[],
+        allow_dirty::Bool = false,
     )::SyncResult
-    check_setup_options!(mode; extra_files = extra_files, snapshot = snapshot)
+    check_setup_options!(mode; extra_files = extra_files, snapshot = snapshot, allow_dirty = allow_dirty)
     if !gitignore
         throw(ArgumentError("setup! gitignore is not valid on setup!(session, :$(mode))"))
     end
@@ -698,7 +703,7 @@ function _setup_one!(
         end
         return result
     elseif mode === :git_sync
-        return sync!(session; mode = :git_sync)
+        return sync!(session; mode = :git_sync, allow_dirty = allow_dirty)
     elseif mode === :git_pull
         apply_session_env!(session)
         deploy = remote_deploy_root(session.project; cli_override = session.remote)
