@@ -1093,6 +1093,62 @@ end
         end
     end
 
+    @testset "detached go snapshot skips a sibling path source" begin
+        _with_tempdir() do root
+            app = joinpath(root, "app")
+            mkpath(app)
+            _write_job_with_distsshrun!(app)
+            bar = joinpath(root, "Bar")
+            mkpath(joinpath(bar, "src"))
+            write(joinpath(bar, "src", "Bar.jl"), "module Bar\nend\n")
+            write(
+                joinpath(bar, "Project.toml"),
+                """
+                name = "Bar"
+                uuid = "22222222-2222-4222-8222-222222222222"
+                version = "0.1.0"
+                """,
+            )
+            cmd = setenv(
+                `$(_julia_exe()) --project=$app --startup-file=no -e "using Pkg; Pkg.develop(path=$(repr(bar)))"`,
+                _child_julia_env(),
+            )
+            proc, combined = _run_subprocess(cmd)
+            _assert_proc_ok(proc, combined; label = "Pkg.develop Bar")
+            for name in ("Project.toml", "Manifest.toml")
+                path = joinpath(app, name)
+                write(path, replace(read(path, String), "path = \"$bar\"" => "path = \"../Bar\""))
+            end
+            @test occursin("path = \"../Bar\"", read(joinpath(app, "Project.toml"), String))
+            script = joinpath(app, "job.jl")
+            marker = joinpath(root, "RAN")
+            write(script, "write($(repr(marker)), \"yes\")\n")
+            mktemp() do _, out_io
+                mktemp() do _, err_io
+                    _, kp = _capture_detached_env_log() do
+                        DistSSHRun.execute!(
+                            :go,
+                            script,
+                            ["parent:1"];
+                            detached = true,
+                            project = app,
+                            snapshot = "20260101T000000Z-aaaaaa",
+                            yes = true,
+                            quiet = true,
+                            stdout = out_io,
+                            stderr = err_io,
+                        )
+                    end
+                    result = wait(kp)
+                    @test result isa DistSSHRun.KitRunResult
+                    @test result.ok
+                    @test result.exit_code == 0
+                    @test isfile(marker)
+                end
+            end
+        end
+    end
+
     @testset ":go dispatch" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"ExecuteGo\"\n")

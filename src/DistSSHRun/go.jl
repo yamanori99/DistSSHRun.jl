@@ -990,7 +990,8 @@ omitted or `false`; it cannot combine with `sync=:sync` / `sync=:ship_tree`.
 A script outside the project is allowed with `snapshot` when that ship used
 `extra_files=[script]`. The remote command is
 [`remote_script_path`](@ref): `_distsshrun_external/<basename>` under the
-selected project directory.
+selected project directory. `snapshot` also skips the in-tree
+`[sources]` check: a sibling path dependency was already shipped.
 `go!` has no git-parity gate; use [`drive!`](@ref) with
 `skip_hash_check=false` (CLI: `drive --require-git`) when you need that.
 
@@ -1148,7 +1149,9 @@ function _go_run!(
         )
     end
     sync_mode_early = something(sync, false)
-    if sync_mode_early === :ship_tree
+    # A selected snapshot already contains the sibling path. Skip the
+    # in-tree `[sources]` check. A plain go still uses `ensure_manifest_ships!`.
+    if sync_mode_early === :ship_tree || snap_arg !== nothing
         _require_manifest!(proj)
     else
         ensure_manifest_ships!(proj)

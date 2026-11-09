@@ -19,8 +19,11 @@ category: breaking
   outside the project. Detached `execute!(…; sync=:ship_tree)` stays an
   error before spawn. After the ship, `execute!(…; snapshot=id)` and
   `go` / `drive --snapshot ID` run that same local script; the remote
-  command is `remote_script_path`. Without `:ship_tree` or `snapshot=`,
-  an outside script is still an error.
+  command is `remote_script_path`. `go!(...; snapshot=)` does not apply
+  the in-tree `[sources]` check, so a sibling path the snapshot already
+  shipped is allowed. Without `:ship_tree` or `snapshot=`, an outside
+  script is still an error, and a sibling `[sources]` path is still an
+  error.
 - The content hash covers project files, path dependencies, and that extra
   file by relative path and content. After extract, ship, pull, and
   `DistSSHShip.transfer_tree` walk symlinks and compare the `git-sha1` tree
