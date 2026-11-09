@@ -282,6 +282,14 @@ function _run_drive_parsed_specialized!(
         return 0
     end
 
+    surface = hasproperty(parsed, :hint_surface) ? parsed.hint_surface::Symbol : :cli
+    _snapshot_sync_exclusive!(
+        get(parsed, :snapshot, nothing),
+        get(parsed, :sync_mode, nothing);
+        kind = :drive,
+        surface = surface,
+    )
+
     hosts = parsed.hosts
     raw_script = String(parsed.script_path)::String
     remote_argv = DistSSHRun._remote_script_argv(raw_script)

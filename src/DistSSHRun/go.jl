@@ -1040,13 +1040,7 @@ function go!(
     remote_argv = _remote_script_argv(script)
     script_path = remote_argv ? String(script) : canonical_local_path(script)
     snap_arg = snapshot === nothing ? nothing : validate_snapshot_id(snapshot)
-    if snap_arg !== nothing && (sync === :sync || sync === :ship_tree)
-        throw(
-            ArgumentError(
-                "go!: snapshot= cannot be combined with sync=:$sync",
-            ),
-        )
-    end
+    _snapshot_sync_exclusive!(snap_arg, sync; kind = :go, surface = hint_surface)
     proj = canonical_local_path(project)
     if !isfile(script_path) && !(remote_argv && snap_arg !== nothing)
         throw(
