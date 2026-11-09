@@ -305,27 +305,34 @@ function placement_tokens_from_go_slots(slots::Vector{GoSlot})::Vector{String}
     return out
 end
 
+# Resolve symlinks first so an in-tree link to outside counts as outside; else `_path_under_resolved`.
 function _script_inside_project(project::AbstractString, script::AbstractString)::Bool
-    proj = canonical_local_path(project)
+    p = canonical_local_path(script)
+    r = canonical_local_path(project)
+    if ispath(p) && ispath(r)
+        try
+            ps = canonical_local_path(realpath(p))
+            pr = canonical_local_path(realpath(r))
+            return _path_is_under(ps, pr)
+        catch
+        end
+    end
+    return _path_under_resolved(p, r)
+end
+
+function _go_script_relpath(project::AbstractString, script::AbstractString)::String
     path = canonical_local_path(script)
+    if !_script_inside_project(project, script)
+        return joinpath(EXTERNAL_DIR_NAME, basename(path))
+    end
+    proj = canonical_local_path(project)
     try
         ispath(proj) && (proj = canonical_local_path(realpath(proj)))
         ispath(path) && (path = canonical_local_path(realpath(path)))
     catch
     end
-    prefix = joinpath(proj, "")
-    return startswith(path, prefix) || path == proj
-end
-
-function _go_script_relpath(project::AbstractString, script::AbstractString)::String
-    proj = canonical_local_path(project)
-    path = canonical_local_path(script)
-    parent_prefix = joinpath(proj, "")
-    if startswith(path, parent_prefix) || path == proj
-        rel = relpath(path, proj)
-        return rel == "." ? basename(path) : rel
-    end
-    return joinpath(EXTERNAL_DIR_NAME, basename(path))
+    rel = relpath(path, proj)
+    return rel == "." ? basename(path) : rel
 end
 
 """
@@ -361,14 +368,16 @@ function _go_kit_parent(
         script::AbstractString,
     )::String
     proj = canonical_local_path(project)
-    script_path = canonical_local_path(script)
-    proj_prefix = joinpath(proj, "")
-    dir = if startswith(script_path, proj_prefix) || dirname(script_path) == proj
-        dirname(script_path)
-    else
-        proj
+    if _script_inside_project(project, script)
+        script_path = canonical_local_path(script)
+        try
+            ispath(script_path) && (script_path = canonical_local_path(realpath(script_path)))
+        catch
+        end
+        dir = dirname(script_path)
+        return kit_dir_beside_script(dir, :go)
     end
-    return kit_dir_beside_script(dir, :go)
+    return kit_dir_beside_script(proj, :go)
 end
 
 """Batch output directory: `{.distsshkit/go}/<stem>_<UTC>/` (`kit.progress` + slots).

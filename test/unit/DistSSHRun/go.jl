@@ -108,34 +108,82 @@ using Dates
     end
 
     @testset "_go_script_relpath" begin
+        ext = joinpath("_distsshrun_external", "outside.jl")
         _with_tempdir() do proj
             nested = joinpath(proj, "demos", "job.jl")
             mkpath(dirname(nested))
             touch(nested)
             @test DistSSHRun._go_script_relpath(proj, nested) == joinpath("demos", "job.jl")
-            @test DistSSHRun._go_script_relpath(proj, "/tmp/outside.jl") ==
-                joinpath("_distsshrun_external", "outside.jl")
+            @test DistSSHRun._go_script_relpath(proj, "/tmp/outside.jl") == ext
             @test !DistSSHRun._script_inside_project(proj, "/tmp/outside.jl")
+        end
+
+        _with_tempdir() do base
+            real_proj = joinpath(base, "real_proj")
+            mkpath(joinpath(real_proj, "sub"))
+            write(joinpath(real_proj, "sub", "job.jl"), "1\n")
+            link_proj = joinpath(base, "link_proj")
+            symlink(real_proj, link_proj)
+            script_via_link = joinpath(link_proj, "sub", "job.jl")
+            want = joinpath("sub", "job.jl")
+            @test DistSSHRun._script_inside_project(real_proj, script_via_link)
+            @test DistSSHRun._go_script_relpath(real_proj, script_via_link) == want
+            @test DistSSHRun._script_inside_project(link_proj, script_via_link)
+            @test DistSSHRun._go_script_relpath(link_proj, script_via_link) == want
+
+            symlink(joinpath(real_proj, "sub"), joinpath(real_proj, "sub_link"))
+            script_sub_link = joinpath(real_proj, "sub_link", "job.jl")
+            @test DistSSHRun._go_script_relpath(real_proj, script_sub_link) == want
+
+            outside = joinpath(base, "outside.jl")
+            write(outside, "2\n")
+            escape = joinpath(real_proj, "escape.jl")
+            symlink(outside, escape)
+            @test !DistSSHRun._script_inside_project(real_proj, escape)
+            @test DistSSHRun._go_script_relpath(real_proj, escape) ==
+                joinpath("_distsshrun_external", "escape.jl")
+            @test !DistSSHRun._script_inside_project(real_proj, outside)
+            @test DistSSHRun._go_script_relpath(real_proj, outside) ==
+                joinpath("_distsshrun_external", "outside.jl")
+
+            write(joinpath(base, "x.jl"), "3\n")
+            priv_base = "/private" * base
+            if ispath(priv_base)
+                want_x = "x.jl"
+                @test DistSSHRun._script_inside_project(base, joinpath(base, "x.jl"))
+                @test DistSSHRun._go_script_relpath(base, joinpath(base, "x.jl")) == want_x
+                @test DistSSHRun._script_inside_project(priv_base, joinpath(priv_base, "x.jl"))
+                @test DistSSHRun._go_script_relpath(priv_base, joinpath(priv_base, "x.jl")) == want_x
+                @test DistSSHRun._script_inside_project(base, joinpath(priv_base, "x.jl"))
+                @test DistSSHRun._go_script_relpath(base, joinpath(priv_base, "x.jl")) == want_x
+                @test DistSSHRun._script_inside_project(priv_base, joinpath(base, "x.jl"))
+                @test DistSSHRun._go_script_relpath(priv_base, joinpath(base, "x.jl")) == want_x
+            end
         end
     end
 
     @testset "_go_batch_output_dir" begin
+        function _norm_path(p)
+            return DistSSHRun.canonical_local_path(realpath(p))
+        end
         _with_tempdir() do proj
             script = joinpath(proj, "demos", "demo.jl")
             mkpath(dirname(script))
             touch(script)
             t = DateTime(2026, 8, 3, 13, 44, 28)
             batch = DistSSHRun._go_batch_output_dir(proj, script; now = t)
-            @test batch == joinpath(proj, "demos", ".distsshkit", "go", "demo_20260803T134428Z")
+            want_batch = joinpath(proj, "demos", ".distsshkit", "go", "demo_20260803T134428Z")
+            @test _norm_path(batch) == _norm_path(want_batch)
             nested = joinpath(proj, "demos", "without_kit", "job.jl")
             mkpath(dirname(nested))
             touch(nested)
             nested_batch = DistSSHRun._go_batch_output_dir(proj, nested; now = t)
-            @test nested_batch == joinpath(proj, "demos", "without_kit", ".distsshkit", "go", "job_20260803T134428Z")
+            want_nested = joinpath(proj, "demos", "without_kit", ".distsshkit", "go", "job_20260803T134428Z")
+            @test _norm_path(nested_batch) == _norm_path(want_nested)
             outside = joinpath(tempdir(), "outside-job.jl")
             write(outside, "nothing\n")
             other = DistSSHRun._go_batch_output_dir(proj, outside; now = t)
-            @test other == joinpath(proj, ".distsshkit", "go", "outside-job_20260803T134428Z")
+            @test _norm_path(other) == _norm_path(joinpath(proj, ".distsshkit", "go", "outside-job_20260803T134428Z"))
             @test isdir(batch)
             again = DistSSHRun._go_batch_output_dir(proj, script; now = t)
             @test again != batch
