@@ -259,8 +259,24 @@ function _write_deploy_record_via_scp!(
             );
             wait = true,
         )
-        DistSSHBase.shell_status(proc_mv) == 0 ||
+        if DistSSHBase.shell_status(proc_mv) != 0
+            tmp_q = _remote_shell_path_word(record_tmp_abs)
+            try
+                run(
+                    pipeline(
+                        ignorestatus(
+                            _host_sync_remote_shell_cmd(String(host), "rm -f $tmp_q"),
+                        );
+                        stdout = devnull,
+                        stderr = devnull,
+                    );
+                    wait = true,
+                )
+            catch e
+                e isa InterruptException && rethrow()
+            end
             throw(ArgumentError("deploy record: install on $(host) failed"))
+        end
     catch e
         _rethrow_missing_host_tool(e)
         rethrow()
@@ -331,11 +347,17 @@ function _local_ship_content_tree_hash(project::AbstractString)::Union{Nothing, 
     end
 end
 
+"""
+Read deploy records for run headers and staleness warnings.
+
+Returns `(record, warn_unknown)` where `warn_unknown` is false when a
+disagreement warning was already emitted (do not also say provenance unknown).
+"""
 function _read_deploy_record_for_run_status(
         hosts::AbstractVector{<:AbstractString},
         deploy_root::AbstractString,
-    )::Union{Nothing, Dict{String, Any}}
-    isempty(hosts) && return nothing
+    )::Tuple{Union{Nothing, Dict{String, Any}}, Bool}
+    isempty(hosts) && return nothing, true
     present = Dict{String, Dict{String, Any}}()
     missing_hosts = String[]
     for h in hosts
@@ -347,7 +369,7 @@ function _read_deploy_record_for_run_status(
             present[host_s] = rec
         end
     end
-    isempty(present) && return nothing
+    isempty(present) && return nothing, true
     reference = first(values(present))
     disagree = false
     disagree_host = nothing
@@ -365,7 +387,7 @@ function _read_deploy_record_for_run_status(
                 "; run setup on every host.",
         )
         kit_println()
-        return nothing
+        return nothing, false
     end
     if !isempty(missing_hosts)
         print_warn(
@@ -374,7 +396,7 @@ function _read_deploy_record_for_run_status(
         )
         kit_println()
     end
-    return reference
+    return reference, true
 end
 
 function _selection_from_deploy_record(
@@ -415,8 +437,13 @@ function _selection_from_deploy_record(
     throw(_selection_error("deploy record mode $(repr(mode_s)) is not recognized; pass --snapshot ID"))
 end
 
-function _warn_deploy_staleness!(project::AbstractString, rec::Union{Nothing, AbstractDict})
+function _warn_deploy_staleness!(
+        project::AbstractString,
+        rec::Union{Nothing, AbstractDict};
+        warn_unknown::Bool = true,
+    )
     if rec === nothing
+        warn_unknown || return nothing
         print_warn("Deploy provenance unknown (no .distssh/deploy.toml on remotes).")
         kit_println()
         return nothing
@@ -503,14 +530,14 @@ function record_deploy_status_for_run!(
     )
     isempty(hosts) && return nothing
     skip_deploy_record && return nothing
-    rec = try
+    rec, warn_unknown = try
         _read_deploy_record_for_run_status(hosts, deploy_root)
     catch e
         e isa ArgumentError && rethrow()
-        nothing
+        nothing, true
     end
     _set_active_deploy_record!(rec)
-    _warn_deploy_staleness!(project, rec)
+    _warn_deploy_staleness!(project, rec; warn_unknown = warn_unknown)
     _log_deploy_record_fields!(rec)
     return rec
 end

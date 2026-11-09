@@ -153,16 +153,14 @@ end
                     active = DistSSHRun.record_deploy_status_for_run!(
                         ["child-1"], remote, proj,
                     )
+                    @test active !== nothing
                     if active !== nothing
                         @test active["mode"] == "git-sync"
                         stored = DistSSHRun.active_deploy_record()
+                        @test stored !== nothing
                         if stored !== nothing
                             @test stored["mode"] == active["mode"]
-                        else
-                            @test false
                         end
-                    else
-                        @test false
                     end
                 end
             finally
