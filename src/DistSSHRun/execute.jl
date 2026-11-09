@@ -439,7 +439,12 @@ and [`drive!`](@ref) already share (`ride!` ignores `sync`). With `detached=fals
 (default), any other keyword is forwarded to the chosen function.
 
 `detached=true` spawns `julia -m DistSSHKit go|ride|drive` and returns a
-[`KitProcess`](@ref). `--project=` is always the job `project=` when that
+[`KitProcess`](@ref). `sync=:ship_tree` is an error before spawn (the child
+CLI no longer has `--ship-tree`); call [`setup!`](@ref) `:ship_tree` /
+`:instantiate`, then `execute!(...; snapshot=id)`. In-process
+[`go!`](@ref) / [`drive!`](@ref) still accept `sync=:ship_tree`.
+`sync=:sync`, omitted/`false` sync, and `snapshot=` are unchanged.
+`--project=` is always the job `project=` when that
 tree has a `Project.toml`. The job must list DistSSHKit or DistSSHRun in
 `[deps]`; otherwise this throws instead of using serve's active project.
 Keywords are then an allow-list (unknown names throw):
@@ -733,6 +738,13 @@ function _execute_detached!(
                 "execute!(:drive, ...; detached=true) does not accept keyword :spi_check",
             )
         )
+    end
+    # Before `allocate_run_dir` / `run(...)`. Child argv cannot emit `--ship-tree`.
+    if sync === :ship_tree
+        _throw_detached_ship_tree_removed()
+    end
+    if get(kwargs, :allow_external_symlinks, false) === true
+        _throw_go_drive_ship_cli_removed(String(kind), "--allow-external-symlinks")
     end
     yes = get(kwargs, :yes, true)
     yes === true || throw(ArgumentError("execute!(...; detached=true) requires yes=true"))
@@ -1880,7 +1892,7 @@ function _execute_detached_argv(
     if sync === :sync
         push!(argv, "--sync")
     elseif sync === :ship_tree
-        push!(argv, "--ship-tree")
+        _throw_detached_ship_tree_removed()
     elseif sync === :rsync
         _throw_rsync_removed()
     elseif sync === false && kind === :go
@@ -1888,8 +1900,9 @@ function _execute_detached_argv(
     elseif sync !== nothing && sync !== false
         throw(ArgumentError("sync must be nothing, false, :sync, or :ship_tree, got $(repr(sync))"))
     end
-    allow_external_symlinks && sync === :ship_tree &&
-        push!(argv, "--allow-external-symlinks")
+    if allow_external_symlinks
+        _throw_go_drive_ship_cli_removed(String(kind), "--allow-external-symlinks")
+    end
     if snapshot !== nothing
         push!(argv, "--snapshot", validate_snapshot_id(snapshot))
     end

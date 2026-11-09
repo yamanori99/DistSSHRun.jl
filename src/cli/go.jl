@@ -33,7 +33,15 @@ function go_main()::Cint
     project_root = cli_project_root(@__DIR__)
     path_anchor = DistSSHRun.canonical_local_path(project_root)
     original_args = copy(ARGS)
-    parsed = parse_go_args(ARGS)
+    parsed = try
+        parse_go_args(ARGS)
+    catch e
+        if e isa ArgumentError
+            DistSSHRun.print_cli_error(e.msg)
+            return Cint(1)
+        end
+        rethrow()
+    end
     if parsed.show_version
         println_kit_version()
         return 0

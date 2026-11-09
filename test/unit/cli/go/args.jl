@@ -83,9 +83,36 @@ using Test
         let r = parse_go_args(["--sync", "child:h1:1", "job.jl"])
             @test r.sync === :sync
         end
-        let r = parse_go_args(["--ship-tree", "child:h1:1", "job.jl"])
-            @test r.sync === :ship_tree
+        err_ship = try
+            parse_go_args(["--ship-tree", "child:h1:1", "job.jl"])
+            error("expected ArgumentError")
+        catch e
+            e
         end
+        @test err_ship isa ArgumentError
+        @test occursin("go --ship-tree was removed", err_ship.msg)
+        @test occursin("setup ship-tree", err_ship.msg)
+        @test occursin("--snapshot", err_ship.msg)
+        DistSSHRun.DistSSHBase.with_cli_entry(:DistSSHQueue) do
+            qerr = try
+                parse_go_args(["--ship-tree", "child:h1:1", "job.jl"])
+                error("expected ArgumentError")
+            catch e
+                e
+            end
+            @test qerr isa ArgumentError
+            @test occursin("julia -m DistSSHKit setup ship-tree", qerr.msg)
+            @test !occursin("DistSSHQueue setup ship-tree", qerr.msg)
+        end
+        err_ext = try
+            parse_go_args(["--allow-external-symlinks", "child:h1:1", "job.jl"])
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err_ext isa ArgumentError
+        @test occursin("go --allow-external-symlinks was removed", err_ext.msg)
+        @test occursin("setup ship-tree", err_ext.msg)
         let r = parse_go_args(["--skip-sync", "child:local:1", "child:h1:2", "job.jl"])
             @test r.sync === false
             @test r.hosts == ["child:local:1", "child:h1:2"]
@@ -148,8 +175,10 @@ using Test
         @test occursin("Usage", txt)
         @test occursin("--output-dir", txt)
         @test occursin("--sync", txt)
-        @test occursin("--ship-tree", txt)
-        @test occursin("runs/<run_id>/src/", txt)
+        @test !occursin("--ship-tree", txt)
+        @test occursin("setup ship-tree", txt)
+        @test occursin("--snapshot", txt)
+        @test occursin("runs/<ID>/src", txt)
         @test occursin("--hosts", txt)
         @test occursin("--repeat", txt)
         @test occursin("--allow-mismatch", txt)
@@ -174,6 +203,23 @@ using Test
             @test r.deploy_root === nothing
             @test r.script_args == ["--deploy-root", "/tmp/swallowed"]
         end
+        let r = parse_go_args(["--", "parent:1", "job.jl", "--ship-tree"])
+            @test r.sync === nothing
+            @test r.script_args == ["--ship-tree"]
+        end
+        let r = parse_go_args(["parent:1", "job.jl", "--ship-tree"])
+            @test r.sync === nothing
+            @test r.script_args == ["--ship-tree"]
+        end
+        err_after = try
+            parse_go_args(["--", "--ship-tree", "parent:1", "job.jl"])
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err_after isa ArgumentError
+        @test occursin("unknown go option: --ship-tree", err_after.msg)
+        @test !occursin("was removed", err_after.msg)
         err = try
             parse_go_args(["--remote-path", "/tmp/App", "parent:1", "job.jl"])
             error("expected ArgumentError")
@@ -205,6 +251,27 @@ using Test
             flush(io)
             @test code == 0
             @test occursin("SCRIPT.jl", read(path, String))
+        end
+        mktemp() do out_path, out_io
+            mktemp() do err_path, err_io
+                code = withenv("DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "") do
+                    redirect_stdin(devnull) do
+                        redirect_stdout(out_io) do
+                            redirect_stderr(err_io) do
+                                DistSSHRun.go(["--ship-tree", "child:h1:1", "job.jl"])
+                            end
+                        end
+                    end
+                end
+                flush(out_io)
+                flush(err_io)
+                shown = read(out_path, String) * read(err_path, String)
+                @test code == 1
+                @test occursin("go --ship-tree was removed", shown)
+                @test occursin("setup ship-tree", shown)
+                @test !occursin("SSH preflight", shown)
+                @test !occursin("cannot SSH", shown)
+            end
         end
     end
 

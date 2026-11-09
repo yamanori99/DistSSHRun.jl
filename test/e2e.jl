@@ -866,8 +866,8 @@ end
             end
         end
 
-        @testset "go --ship-tree empty remote" begin
-            _e2e_announce("go --ship-tree empty remote")
+        @testset "setup ship-tree then go --snapshot empty remote" begin
+            _e2e_announce("setup ship-tree then go --snapshot empty remote")
             oneshot = _ssh_e2e_go_rsync_remote_root()
             oneshot_env = _ssh_e2e_env(; remote_project = oneshot)
             try
@@ -879,19 +879,39 @@ end
                 _assert_ssh_e2e_ok(suite, "go_rsync_empty_delete", proc, out; project = proj, kit = :setup)
                 for host in hosts
                     p, ssh_out = _ssh_e2e_ssh(host, "test ! -e $(oneshot)/Project.toml")
-                    _assert_proc_ok(p, ssh_out; label = "go --ship-tree empty $(host) gone")
+                    _assert_proc_ok(p, ssh_out; label = "go snapshot empty $(host) gone")
                 end
                 _ssh_e2e_ensure_remote_root!(hosts, oneshot)
+
+                proc, out = _run_kit_setup(;
+                    setup_args = ["ship-tree", "--deploy-root", oneshot, setup_hosts...],
+                    project_root = proj,
+                    extra_env = oneshot_env,
+                )
+                _assert_ssh_e2e_ok(suite, "go_snapshot_empty_ship", proc, out; project = proj, kit = :setup)
+                p_src, src_out = _ssh_e2e_ssh(hosts[1], "ls -1d $(oneshot)/runs/*/src 2>/dev/null | tail -n 1")
+                _assert_proc_ok(p_src, src_out; label = "oneshot ship src leaf")
+                snap_id = basename(dirname(strip(src_out)))
+                @test !isempty(snap_id)
+                proc, out = _run_kit_setup(;
+                    setup_args = [
+                        "instantiate", "--deploy-root", oneshot, "--snapshot", snap_id,
+                        setup_hosts...,
+                    ],
+                    project_root = proj,
+                    extra_env = oneshot_env,
+                )
+                _assert_ssh_e2e_ok(suite, "go_snapshot_empty_instantiate", proc, out; project = proj, kit = :setup)
 
                 proc, out = _run_kit_go(;
                     script = pi_echo,
                     hosts = remote_tokens,
                     script_args = ["--n", "32"],
                     project_root = proj,
-                    go_flags = ["-y", "--ship-tree"],
+                    go_flags = ["-y", "--snapshot", snap_id],
                     extra_env = merge(oneshot_env, Dict("DISTSSHKIT_QUIET" => "0")),
                 )
-                _assert_ssh_e2e_ok(suite, "go_ship_tree_empty", proc, out; project = proj, kit = :go)
+                _assert_ssh_e2e_ok(suite, "go_snapshot_empty", proc, out; project = proj, kit = :go)
                 @test occursin(hosts[1], out)
                 @test occursin(hosts[2], out)
                 @test count(r"π ≈", out) >= 2
@@ -904,7 +924,7 @@ end
                             ]
                         )
                     )
-                    _assert_proc_ok(p, ssh_out; label = "go --ship-tree $(host) Project.toml")
+                    _assert_proc_ok(p, ssh_out; label = "go snapshot $(host) Project.toml")
                 end
             finally
                 proc, out = _run_kit_setup(;

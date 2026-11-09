@@ -16,10 +16,11 @@ drive!(session, "job.jl")  # uses `session.tokens`
 ```
 
 With `sync` omitted or `false`, prepare remotes with [`setup!`](@ref) or CLI
-`setup` first; remotes are checked before execution. Optional
-`sync=:sync` / `sync=:ship_tree` copies, then checks. After `:ship_tree`, hosts that
-still lack Manifest deps get [`instantiate!`](@ref) (same as CLI
-`drive --ship-tree`).
+`setup` first; remotes are checked before execution. The `drive` CLI does not
+take `--ship-tree`; prepare with `setup ship-tree` then `setup instantiate`,
+then `drive --snapshot ID`. Optional
+`sync=:sync` / `sync=:ship_tree` on [`drive!`](@ref) copies, then checks. After `:ship_tree`, hosts that
+still lack Manifest deps get [`instantiate!`](@ref).
 Git parity is off by default (`skip_hash_check=true`). With `sync=:ship_tree`, parity
 stays off even if `skip_hash_check=false` (no remote `.git/`).
 `require_all_hosts=true` (the default; CLI `--require-all-hosts`) fails unless

@@ -140,7 +140,7 @@ function _warn_excluded_ship_project_files!(root::AbstractString, listed::Vector
     return nothing
 end
 
-"""Directory `--ship-tree` walks. The project directory, not the Manifest directory."""
+"""Directory `setup ship-tree` walks. The project directory, not the Manifest directory."""
 function _ship_tree_root(local_root::AbstractString)::String
     return resolve_pkg_env(canonical_local_path(local_root)).project_dir
 end
