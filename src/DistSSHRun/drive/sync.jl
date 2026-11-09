@@ -25,7 +25,7 @@ function sync!(
     # Untyped kw: JETLS treats omitted kwargs as `nothing`, not `Union{Symbol,Bool}`.
     mode === false && throw(ArgumentError("sync!: mode=false means skip sync; do not call sync!"))
     kind = mode
-    _reject_removed_sync_mode!(kind)
+    kind isa Symbol && _reject_removed_sync_mode!(kind)
     kind === :rsync && _throw_rsync_removed()
     kind === :ship_tree || kind === :git_sync || throw(
         ArgumentError(
