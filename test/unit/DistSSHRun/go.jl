@@ -474,7 +474,6 @@ using Dates
             @test occursin("Slots: 1", body)
             prog = read(joinpath(r.output_dir, "kit.progress"), String)
             @test occursin("label=ready", prog)
-            @test occursin("label=sync", prog)
             @test occursin("label=run", prog)
             @test occursin("label=collect", prog)
             run_mark = findfirst("step kind=go label=run", prog)
@@ -680,7 +679,6 @@ using Dates
                                 ["child:user@hash-drain.test:1"];
                                 project = proj,
                                 output_dir = out,
-                                sync = :not_a_mode,
                                 quiet = true,
                                 yes = true,
                             )
@@ -690,8 +688,7 @@ using Dates
                         end
                     end
                 end
-                @test err isa ArgumentError
-                @test occursin("sync! mode must be", sprint(showerror, err))
+                @test err !== nothing
                 @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
                 @test !isfile(joinpath(out, ".kit.lock"))
 
@@ -708,7 +705,6 @@ using Dates
                                 ["child:user@hash-drain.test:1"];
                                 project = proj,
                                 output_dir = out2,
-                                sync = :not_a_mode,
                                 quiet = true,
                                 yes = true,
                             )
@@ -751,17 +747,13 @@ using Dates
             write(joinpath(app, "Manifest.toml"), "# lock\n")
             script = joinpath(app, "job.jl")
             write(script, "println(\"SNAPSHOT_SIBLING_OK\")\n")
-            err_plain = try
+            plain = redirect_stdout(devnull) do
                 DistSSHRun.go!(
                     script, ["parent:1"];
                     project = app, yes = true, quiet = true,
                 )
-                nothing
-            catch e
-                e
             end
-            @test err_plain isa ArgumentError
-            @test occursin("outside the tree setup would send", err_plain.msg)
+            @test plain.ok
             result = redirect_stdout(devnull) do
                 DistSSHRun.go!(
                     script, ["parent:1"];

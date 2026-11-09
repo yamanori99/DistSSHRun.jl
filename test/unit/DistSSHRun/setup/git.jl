@@ -133,7 +133,7 @@ using Test
                 @test !raw_dirty.ok
                 @test isempty(raw_dirty.host_results)
                 @test occursin("dirty", out_dirty)
-                @test occursin("not sent as a patch", out_dirty)
+                @test occursin("--skip-git-guard", out_dirty)
                 @test occursin("help setup", out_dirty)
                 @test !occursin("--help", out_dirty)
             end

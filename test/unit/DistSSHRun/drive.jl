@@ -295,7 +295,7 @@ end
             e
         end
         @test err_sync_env isa ArgumentError
-        @test occursin("SYNC_MODE=sync was removed", err_sync_env.msg)
+        @test occursin("SYNC_MODE=\"sync\" was removed", err_sync_env.msg)
         err_ship_env = try
             DistSSHRun._reject_pipeline_sync_env!("ship-tree")
             error("expected ArgumentError")
@@ -674,7 +674,7 @@ end
             @test cfg.tokens == ["child:host-a:1", "child:host-b:1"]
             @test cfg.remote == "/remote/App"
             @test cfg.driver == "demos/job.jl"
-            @test cfg.sync === false
+            @test cfg.sync === nothing
             @test cfg.julia == "/opt/julia/bin/julia"
         end
         withenv(
@@ -1099,13 +1099,9 @@ end
                 end
                 @test got.err isa ArgumentError
                 @test occursin("newline", sprint(showerror, got.err))
-                listed = DistSSHRun._read_kit_hosts(got.out)
-                @test listed == ["-orphan"]
-                copies = vcat(_hosts_on_disk(proj), _hosts_on_disk(got.out))
-                @test !isempty(copies)
-                for path in unique(copies)
-                    @test DistSSHRun._read_kit_hosts(dirname(path)) == ["-orphan"]
-                end
+                # Failure is before the workers step, so kit.hosts is not written yet.
+                @test isempty(DistSSHRun._read_kit_hosts(got.out))
+                @test isempty(vcat(_hosts_on_disk(proj), _hosts_on_disk(got.out)))
             end
 
             _mktemp_host() do proj
