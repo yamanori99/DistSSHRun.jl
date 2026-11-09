@@ -130,9 +130,14 @@ Extract `snapshot` into `dest` on each SSH host and verify the tree hash.
 
 `dest` is the ship anchor (the project directory when there is no path
 dependency outside it). `TransferResult.project_rel` is the project inside
-that directory. This does not allocate a run id, write `run.toml`,
+that directory. This does not allocate a run id, write Run `run.toml`,
 instantiate, or delete `dest`. A non-empty `dest` is an error and is left
 in place. A failed extract can leave a partial tree.
+
+When `write_record=true` (default), writes
+`<dest>/.distssh/shipped.toml` with `complete = true` only after hash
+verification succeeds. There is no in-flight marker: a missing or
+incomplete record means the tree is not usable.
 """
 function transfer_tree(
         snapshot::ShipSnapshot,
@@ -140,6 +145,7 @@ function transfer_tree(
         dest::AbstractString;
         allow_external_symlinks::Bool = false,
         julia::Union{Nothing, AbstractString} = nothing,
+        write_record::Bool = true,
     )::TransferResult
     host_list = String[String(h) for h in hosts]
     isempty(host_list) && throw(ArgumentError("transfer_tree: no hosts"))
@@ -172,6 +178,7 @@ function transfer_tree(
                 allow_external_symlinks = allow_external_symlinks,
                 expect_hash = snapshot.content_tree_hash,
             )
+            write_record && _write_complete_record!(host, checked, snapshot)
             push!(rows, TransferHostResult(host, true, "transfer ok"))
         catch e
             e isa InterruptException && rethrow()
