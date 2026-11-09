@@ -3,7 +3,7 @@
 const _DEPLOY_RECORD_SCHEMA = 1
 const _DEPLOY_RECORD_DIR = ".distssh"
 const _DEPLOY_RECORD_NAME = "deploy.toml"
-const _DEPLOY_RECORD_TMP_SUFFIX = ".tmp"
+const _DEPLOY_RECORD_TMP_TAIL = ".tmp"
 
 const _ACTIVE_DEPLOY_RECORD = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 
@@ -188,20 +188,39 @@ function read_deploy_record_consensus(
     return reference
 end
 
+function _deploy_record_tmp_tag(deploy_id::AbstractString)::String
+    tag = replace(strip(String(deploy_id)), r"[^A-Za-z0-9._-]" => "_")
+    isempty(tag) && throw(ArgumentError("deploy record deploy_id is empty"))
+    stamp = replace(_deploy_record_timestamp(), ':' => '-')
+    return string(tag, "-", stamp)
+end
+
+"""Absolute remote path for a per-write temporary deploy record."""
+function _deploy_record_tmp_path(record_abs::AbstractString, deploy_id::AbstractString)::String
+    return string(record_abs, ".", _deploy_record_tmp_tag(deploy_id), _DEPLOY_RECORD_TMP_TAIL)
+end
+
 """`scp` argv for uploading a local deploy record to an absolute remote path (`local` then `host:path`)."""
 function _deploy_record_scp_upload_argv(
         host::AbstractString,
         record_abs::AbstractString,
         local_path::AbstractString,
     )::Vector{String}
-    dest = validate_ssh_host(string(String(host), ":", String(record_abs)))
+    h = validate_ssh_host(String(host))
+    remote = String(record_abs)
+    any(iscntrl, remote) && throw(
+        ArgumentError("deploy record remote path contains a control character"),
+    )
+    dest = string(h, ":", remote)
     return String[ssh_opts()..., String(local_path), dest]
 end
 
-function _deploy_record_atomic_install_script(record_abs::AbstractString)::String
+function _deploy_record_atomic_install_script(
+        record_abs::AbstractString,
+        record_tmp_abs::AbstractString,
+    )::String
     final_q = _remote_shell_path_word(record_abs)
-    tmp_abs = string(record_abs, _DEPLOY_RECORD_TMP_SUFFIX)
-    tmp_q = _remote_shell_path_word(tmp_abs)
+    tmp_q = _remote_shell_path_word(record_tmp_abs)
     return "mv -f $tmp_q $final_q"
 end
 
@@ -218,7 +237,8 @@ function _write_deploy_record_via_scp!(
             print(io, body)
         end
         record_abs = _probe_expanded_remote_root(String(host), record_path)
-        record_tmp_abs = string(record_abs, _DEPLOY_RECORD_TMP_SUFFIX)
+        deploy_id = String(get(data, "deploy_id", ""))
+        record_tmp_abs = _deploy_record_tmp_path(record_abs, deploy_id)
         parent = record_abs
         i = findlast(==('/'), parent)
         i !== nothing && (parent = parent[1:prevind(parent, i)])
@@ -250,7 +270,7 @@ function _write_deploy_record_via_scp!(
         )
         DistSSHBase.shell_status(proc_scp) == 0 ||
             throw(ArgumentError("deploy record: scp to $(host) failed"))
-        install = _deploy_record_atomic_install_script(record_abs)
+        install = _deploy_record_atomic_install_script(record_abs, record_tmp_abs)
         proc_mv = run(
             pipeline(
                 ignorestatus(_host_sync_remote_shell_cmd(String(host), install));

@@ -77,7 +77,10 @@ using Test
             escape = joinpath(root, "escape.jl")
             symlink(outside, escape)
             @test !DistSSHBase._path_under_resolved(escape, root)
+            missing_via = joinpath(root, "escape.jl", "missing.jl")
+            @test !DistSSHBase._path_under_resolved(missing_via, root)
             @test DistSSHBase._path_under_resolved(joinpath(root, "in", "ok.jl"), root)
+            @test DistSSHBase._path_under_resolved(joinpath(root, "in", "missing.jl"), root)
 
             link_root = joinpath(base, "link_proj")
             symlink(root, link_root)

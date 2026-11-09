@@ -64,12 +64,21 @@ end
     @test length(argv) == length(DistSSHRun.ssh_opts()) + 2
 end
 
-@testset "deploy record atomic install script" begin
+@testset "deploy record tmp path and atomic install script" begin
     abs = "/home/user/App/.distssh/deploy.toml"
-    sh = DistSSHRun._deploy_record_atomic_install_script(abs)
+    tmp = DistSSHRun._deploy_record_tmp_path(abs, "20260101T000000Z-aaaaaa")
+    @test tmp != abs
+    @test endswith(tmp, ".tmp")
+    @test occursin("deploy.toml.", tmp)
+    sh = DistSSHRun._deploy_record_atomic_install_script(abs, tmp)
     @test occursin("mv -f", sh)
-    @test occursin("deploy.toml.tmp", sh)
     @test occursin("deploy.toml", sh)
+end
+
+@testset "deploy record scp host vs path validation" begin
+    remote = "/home/a@-b/project/.distssh/deploy.toml.x.tmp"
+    argv = DistSSHRun._deploy_record_scp_upload_argv("child-1", remote, "/tmp/body.toml")
+    @test argv[end] == "child-1:$remote"
 end
 
 @testset "deploy record staleness warns on ship-tree hash mismatch" begin

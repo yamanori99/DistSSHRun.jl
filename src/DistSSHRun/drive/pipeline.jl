@@ -153,8 +153,9 @@ pipeline!(driver, "parent:2"; args=["8"])
 pipeline!(driver, "child:user@h1:1", "child:user@h2:1"; remote="/path/to/project", args=["8"], collect=true)
 ```
 
-Remote hosts default to **no** run-time transfer; call [`setup!`](@ref)
-`:git_sync`, `:ship_tree`, and `:instantiate` before `pipeline!`.
+Remote hosts default to **no** run-time transfer; prepare with one of
+[`setup!`](@ref) `:git_sync` or `:ship_tree`, then `:instantiate` when needed,
+before `pipeline!`.
 Collect defaults on when remotes are present (`collect=false` to skip).
 
 Returns [`PipelineResult`](@ref); check `result.ok` or use [`report_pipeline_errors`](@ref).
