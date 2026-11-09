@@ -71,8 +71,36 @@ end
             @test "Project.toml" in listed
             @test !("skip.log" in listed)
             @test !("secret.jl" in listed)
+            @test DistSSHShip.send_paths(dir) == listed
             write(joinpath(dir, "a\nb.jl"), "x\n")
             @test_throws ArgumentError DistSSHShip.selected_paths(dir)
+            @test_throws ArgumentError DistSSHShip.send_paths(dir)
+        end
+    end
+
+    @testset "send_paths matches a flat snapshot tar" begin
+        _tmp() do dir
+            _project!(dir)
+            write(joinpath(dir, "keep.jl"), "1\n")
+            listed = DistSSHShip.send_paths(dir)
+            snap = DistSSHShip.snapshot(dir)
+            try
+                tree = _extract(snap)
+                on_disk = String[]
+                for (root, _, files) in walkdir(tree)
+                    for f in files
+                        rel = replace(relpath(joinpath(root, f), tree), '\\' => '/')
+                        push!(on_disk, rel)
+                    end
+                end
+                sort!(on_disk)
+                @test on_disk == listed
+                @test snap.content_tree_hash == String(
+                    DistSSHShip.Tar.tree_hash(snap.tar_path; algorithm = "git-sha1", skip_empty = true),
+                )
+            finally
+                rm(snap.directory; force = true, recursive = true)
+            end
         end
     end
 
@@ -135,6 +163,42 @@ end
                     @test isfile(joinpath(dest, "app", "Manifest.toml"))
                     @test isfile(joinpath(dest, "shared", "Bar", "src", "Bar.jl"))
                     @test !isfile(joinpath(dest, "shared", "Bar", "skip.log"))
+                finally
+                    rm(dest; force = true, recursive = true)
+                end
+            finally
+                rm(snap.directory; force = true, recursive = true)
+            end
+        end
+    end
+
+    @testset "a path dependency with no selected files does not break snapshot" begin
+        _tmp() do root
+            app = joinpath(root, "app")
+            dep = joinpath(root, "dep")
+            mkpath(app)
+            mkpath(dep)
+            write(joinpath(app, "keep.jl"), "1\n")
+            write(joinpath(app, "Project.toml"), "name = \"App\"\n")
+            write(
+                joinpath(app, "Manifest.toml"),
+                """
+                julia_version = "1.13.0"
+                manifest_format = "2.0"
+                [[deps.Dep]]
+                path = "../dep"
+                uuid = "00000000-0000-0000-0000-000000000002"
+                version = "0.1.0"
+                """,
+            )
+            write(joinpath(dep, ".gitignore"), "*\n")
+            write(joinpath(dep, "note.txt"), "ignored\n")
+            @test_throws ArgumentError DistSSHShip.selected_paths(dep)
+            snap = DistSSHShip.snapshot(app)
+            try
+                dest = _extract(snap)
+                try
+                    @test isfile(joinpath(dest, "app", "keep.jl"))
                 finally
                     rm(dest; force = true, recursive = true)
                 end

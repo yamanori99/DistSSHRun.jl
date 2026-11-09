@@ -100,13 +100,7 @@ function _with_parents(rels::Vector{String})::Vector{String}
     return unique!(vcat(rels, extras))
 end
 
-"""
-Selected paths under `root`, relative to `root`, including ancestor directories.
-
-`omit` paths are relative to `root`. A path equal to an omit entry, or under it,
-is dropped. That is how declared inputs stay out of a Run ship.
-"""
-function selected_paths(
+function _selected_paths(
         root::AbstractString;
         omit::Vector{String} = String[],
     )::Vector{String}
@@ -124,6 +118,34 @@ function selected_paths(
     sort!(rels)
     return rels
 end
+
+"""
+Selected paths under `root`, relative to `root`, including ancestor directories.
+
+`omit` paths are relative to `root`. A path equal to an omit entry, or under it,
+is dropped. That is how declared inputs stay out of a Run ship.
+"""
+function selected_paths(
+        root::AbstractString;
+        omit::Vector{String} = String[],
+    )::Vector{String}
+    root_c = canonical_local_path(root)
+    rels = _selected_paths(root_c; omit = omit)
+    isempty(rels) && throw(ArgumentError("nothing to ship from $root_c"))
+    return rels
+end
+
+"""
+    send_paths(root; omit=String[]) -> Vector{String}
+
+Relative paths under `root` that a ship tar for this directory contains,
+sorted. Same rules as [`selected_paths`](@ref): each `.gitignore` under
+`root`, ancestor directories of kept paths, `.git` and `.distsshkit`
+dropped, unshippable nodes omitted. `omit` drops declared inputs
+(Run passes `.distsshkit/inputs.toml` paths).
+"""
+send_paths(root::AbstractString; omit::Vector{String} = String[])::Vector{String} =
+    selected_paths(root; omit = omit)
 
 function warn_excluded_project_files(
         root::AbstractString,

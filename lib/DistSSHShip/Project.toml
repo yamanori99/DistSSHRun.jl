@@ -1,7 +1,7 @@
 name = "DistSSHShip"
 uuid = "244696c4-bcd4-4083-82f2-371517554186"
 license = "MIT"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Yamamoto, Takanori <takanori.yamamoto.99@gmail.com>", "Ampuku, Honoka <ampk.hono@gmail.com>"]
 
 [deps]
