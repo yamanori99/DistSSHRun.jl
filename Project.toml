@@ -30,7 +30,7 @@ SHA = "1"
 TOML = "1"
 Tar = "1"
 Unicode = "1"
-julia = "1.13.3"
+julia = "1.13"
 
 [apps.distsshrun]
 julia_flags = ["--startup-file=no"]

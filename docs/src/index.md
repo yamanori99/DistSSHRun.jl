@@ -37,7 +37,7 @@ The longer guide is the
 pkg> add DistSSHRun
 ```
 
-Julia **1.13.3+**. Hosts need **`ssh`**. Collect, `collect!`, and go slot
+Julia **1.13+**. Hosts need **`ssh`**. Collect, `collect!`, and go slot
 pull-back use stdlib Tar over SSH. The remote Julia executable is `--julia`,
 or auto-detect. Original mtimes are not kept. Pull-back `touch`es extracted
 files. Ship does not `touch`; files keep the extract-time mtime. A

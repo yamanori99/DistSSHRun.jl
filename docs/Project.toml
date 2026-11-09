@@ -7,4 +7,4 @@ DistSSHRun = {path = ".."}
 
 [compat]
 Documenter = "1.19"
-julia = "1.13.3"
+julia = "1.13"

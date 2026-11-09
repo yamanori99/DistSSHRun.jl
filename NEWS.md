@@ -11,9 +11,9 @@ The version-cut PR copies them into this file.
 
 ### Planned breaking (next minor)
 
-- Supported Julia is **1.13.3+**. Drive worker heartbeat moves to
-  `lib/DistSSHHeartbeat` (always shipped by Run; workers exit 75 on a
-  dead master). See `changelog.d/heartbeat-lib.md`.
+- Drive worker heartbeat moves to `lib/DistSSHHeartbeat` (always shipped
+  by Run; workers exit 75 on a dead master). See
+  `changelog.d/heartbeat-lib.md`.
 
 ## 0.1.16
 

@@ -806,6 +806,8 @@ jobs:
       - test-wsl
       - downstream
       - up-test
+      - ship-test
+      - heartbeat-test
       - base-test
       - jetls
       - aqua

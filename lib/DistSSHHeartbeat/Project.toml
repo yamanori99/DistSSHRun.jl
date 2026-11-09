@@ -14,4 +14,4 @@ DistSSHBase = {path = "../DistSSHBase"}
 [compat]
 DistSSHBase = "0.1"
 Distributed = "1.11"
-julia = "1.13.3"
+julia = "1.13"
