@@ -303,9 +303,11 @@ using Test
     @testset "extra-file is collected and rejected by the API" begin
         one = parse_setup_args(["ship-tree", "--extra-file", "/tmp/job.jl", "child:h1"])
         @test one.extra_files == ["/tmp/job.jl"]
-        two = parse_setup_args([
-            "ship-tree", "--extra-file", "/tmp/a.jl", "--extra-file", "/tmp/b.jl", "child:h1",
-        ])
+        two = parse_setup_args(
+            [
+                "ship-tree", "--extra-file", "/tmp/a.jl", "--extra-file", "/tmp/b.jl", "child:h1",
+            ]
+        )
         @test two.extra_files == ["/tmp/a.jl", "/tmp/b.jl"]
         other = parse_setup_args(["instantiate", "--extra-file", "/tmp/a.jl", "child:h1"])
         @test other.extra_files == ["/tmp/a.jl"]
