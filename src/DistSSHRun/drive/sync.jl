@@ -55,6 +55,9 @@ function sync!(
             return _sync_result_from_ship(raw)
         else
             remote_path = session_remote_root(session)
+            deploy = remote_deploy_root(
+                session.project; cli_override = session.remote,
+            )
             raw = git_sync_project_to_hosts!(
                 session.hosts,
                 session.project,
@@ -66,7 +69,9 @@ function sync!(
             if raw.cancelled
                 return SyncResult(true, HostResult[]; ok = false)
             end
-            return SyncResult(false, raw.host_results; ok = raw.ok)
+            result = SyncResult(false, raw.host_results; ok = raw.ok)
+            result.ok && forget_last_snapshot_default!(session.project, deploy)
+            return result
         end
     end
 end

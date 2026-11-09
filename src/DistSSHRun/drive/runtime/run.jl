@@ -270,6 +270,7 @@ function _run_drive_parsed_specialized!(
                 project_root = root,
                 path_anchor = anchor,
                 julia = parsed.julia,
+                snapshot = get(parsed, :snapshot, nothing),
             )
             return ok ? 0 : 1
         end
@@ -561,17 +562,15 @@ function _run_drive_parsed_locked!(
                 DistSSHRun._throw_rsync_removed()
             end
             if sync_mode === :ship_tree
-                wr = DistSSHRun._project_work_root(
-                    host_names,
-                    sync_session.project;
-                    cli_override = sync_session.remote,
+                ship_snap = something(
+                    DistSSHRun.result_remote_run_id(sync_result),
+                    get(parsed, :snapshot, nothing),
                 )
-                ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] =
-                    DistSSHRun.remote_env_project_root(wr)
                 inst_julia = julia_exe === nothing ? "auto" : String(julia_exe)
                 inst = DistSSHRun.instantiate_after_ship!(
                     sync_session;
                     julia = inst_julia,
+                    snapshot = ship_snap,
                 )
                 if inst !== nothing && !inst.ok
                     print_err("ERROR: "; bold = true)
@@ -583,12 +582,21 @@ function _run_drive_parsed_locked!(
                     DistSSHRun.await_declared_input_hashes!()
                     return 1
                 end
+                DistSSHRun._assign_remote_work_root_env!(
+                    host_names,
+                    sync_session.project;
+                    cli_override = sync_session.remote,
+                    snapshot = ship_snap,
+                )
             end
             writeln_both("")
         elseif !isempty(host_names)
             # A newline in the override stays for `add_drive_workers!`.
-            # An invalid SSH name fails that host. The work root is still probed.
-            DistSSHRun._assign_remote_work_root_env!(host_names, project_root)
+            # An invalid SSH name fails that host. Selection uses --snapshot / record / git.
+            DistSSHRun._assign_remote_work_root_env!(
+                host_names, project_root;
+                snapshot = get(parsed, :snapshot, nothing),
+            )
         end
 
         kit_progress_step!("git")

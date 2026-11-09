@@ -632,12 +632,14 @@ function ride!(
         project::AbstractString = pwd(),
         julia::Union{Nothing, AbstractString} = nothing,
         remote::Union{Nothing, AbstractString} = nothing,
+        snapshot::Union{Nothing, AbstractString} = nothing,
         require_all_hosts::Bool = true,
         hint_surface::Symbol = :api,
         allow_mismatch = Symbol[],
     )::RideResult
     path = canonical_local_path(script)
     julia_s = string(VERSION)
+    snap = snapshot === nothing ? nothing : validate_snapshot_id(snapshot)
     scan = _script_scan(path)
     scan.error !== nothing &&
         return RideResult(false, path, 0, nothing, something(scan.error, "scan failed"), julia_s)
@@ -655,7 +657,7 @@ function ride!(
         return with_allow_mismatch(allow_mismatch) do
             return _ride_run!(
                 path, julia_s, tokens, args, spi_check, output_dir, project, julia,
-                remote, require_all_hosts, hint_surface, inherited_run,
+                remote, snap, require_all_hosts, hint_surface, inherited_run,
             )
         end
     finally
@@ -674,6 +676,7 @@ function _ride_run!(
         project,
         julia,
         remote,
+        snapshot,
         require_all_hosts,
         hint_surface::Symbol,
         inherited_run::Bool,
@@ -730,11 +733,11 @@ function _ride_run!(
             !isempty(rr) && (ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = rr)
         end
         # After `:ship_tree` the project is `remote/runs/<id>/src`.
-        # `_clear_last_ship!` dropped this process's ship record, so this
-        # probes (`Project.toml` at the root, else latest `runs/*/src`).
-        # A parent-only ride has no SSH host to probe.
+        # `_clear_last_ship!` dropped this process's ship cache; selection uses
+        # the local last-snapshot record, `snapshot=` / `--snapshot`, or a git
+        # checkout. A parent-only ride has no SSH host to probe.
         child_hosts = String[h for (h, n) in wp.child_workers if n > 0]
-        _assign_remote_work_root_env!(child_hosts, project)
+        _assign_remote_work_root_env!(child_hosts, project; snapshot = snapshot)
         empty!(ARGS)
         append!(ARGS, String[String(a) for a in args])
         job_raw = strip(get(ENV, "DISTSSHKIT_JOB_ID", ""))

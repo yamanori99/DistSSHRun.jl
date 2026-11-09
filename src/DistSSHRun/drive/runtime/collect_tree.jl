@@ -16,6 +16,7 @@ function drive_collect_tree(
         project_root::AbstractString,
         path_anchor::AbstractString,
         julia::Union{Nothing, AbstractString} = nothing,
+        snapshot::Union{Nothing, AbstractString} = nothing,
     )
     repo_root = canonical_local_path(project_root)
     local_root = DistSSHRun.canonical_local_path(local_root)
@@ -41,7 +42,9 @@ function drive_collect_tree(
         end
     end
 
-    shown_root = DistSSHRun._remote_work_layout_path(local_root, repo_root, host_names)
+    shown_root = DistSSHRun._remote_work_layout_path(
+        local_root, repo_root, host_names; snapshot = snapshot,
+    )
     if shown_root != local_root
         writeln_field("Remote root", shown_root)
         writeln_both("")
@@ -52,7 +55,8 @@ function drive_collect_tree(
         write_both("  $host: ")
         try
             remote_root = DistSSHRun._remote_work_layout_path(
-                local_root, repo_root, String[String(host)],
+                local_root, repo_root, String[String(host)];
+                snapshot = snapshot,
             )
             host_remote = ensure_remote_abs_path(host, remote_root)
             if host_remote === nothing

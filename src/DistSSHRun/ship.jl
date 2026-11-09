@@ -61,9 +61,13 @@ function last_ship_result()::Union{Nothing, Dict{String, Any}}
     return _LAST_SHIP[]
 end
 
+# `snapshot_select.jl` replaces this so clear also drops active selection.
+const _CLEAR_SELECTION_HOOK = Ref{Any}(() -> nothing)
+
 function _clear_last_ship!()
     _LAST_SHIP[] = nothing
     _SHIP_LAYOUT_ACTIVE[] = false
+    _CLEAR_SELECTION_HOOK[]()
     return nothing
 end
 
@@ -1317,7 +1321,11 @@ function _probe_expanded_remote_root(host::AbstractString, remote_root::Abstract
     return validate_expanded_remote_root(String(abs_root), String(home))
 end
 
-"""Project cwd on `host`: `remote_root` when it has `Project.toml`, else latest `runs/*/src`."""
+"""Deprecated probe kept for fixtures that still emit `__DSR_SHIP_SRC__`.
+
+Selection no longer uses lexical latest `runs/*/src`. Prefer
+[`resolve_snapshot_selection`](@ref).
+"""
 function _remote_project_work_root(host::AbstractString, remote_root::AbstractString)::String
     given = strip(String(remote_root))
     isempty(given) && return given
@@ -1329,13 +1337,8 @@ function _remote_project_work_root(host::AbstractString, remote_root::AbstractSt
     rq = _remote_shell_path_word(abs_root)
     script = """
     # __DSR_SHIP_SRC__
-    if test -f $rq/Project.toml; then
+    if test -f $rq/Project.toml || test -f $rq/JuliaProject.toml; then
       printf '%s\\n' $rq
-      exit 0
-    fi
-    latest=\$(ls -1d $rq/runs/*/src 2>/dev/null | sort | tail -n 1)
-    if test -n "\$latest" && test -f "\$latest/Project.toml"; then
-      printf '%s\\n' "\$latest"
       exit 0
     fi
     printf '%s\\n' $rq
@@ -1361,44 +1364,58 @@ function _last_ship_src_for(
     all(h -> String(h) in have, hosts) || return nothing
     stored = get(rec, "remote_root", nothing)
     stored isa AbstractString || return nothing
-    String(stored) == String(remote_root) || return nothing
+    _deploy_roots_equivalent(stored, remote_root) || return nothing
     return src
 end
 
+"""Resolve the remote work root via explicit snapshot, local record, or git."""
 function _work_root_for_hosts(
         hosts::AbstractVector{<:AbstractString},
-        remote_root::AbstractString,
+        remote_root::AbstractString;
+        local_project::Union{Nothing, AbstractString} = nothing,
+        snapshot::Union{Nothing, AbstractString} = nothing,
+        skip_local_record::Bool = false,
     )::String
-    src = _last_ship_src_for(hosts, remote_root)
-    src !== nothing && return src
     isempty(hosts) && return String(remote_root)
-    host = first(hosts)
-    try
-        validate_ssh_host(host)
-    catch
-        return String(remote_root)
-    end
-    try
-        return _remote_project_work_root(host, remote_root)
-    catch e
-        e isa InterruptException && rethrow()
-        return String(remote_root)
-    end
+    proj = local_project === nothing ? pwd() : String(local_project)
+    sel = resolve_snapshot_selection(
+        hosts, remote_root, proj;
+        snapshot = snapshot, skip_local_record = skip_local_record,
+    )
+    _set_active_selection!(sel)
+    return sel.work_root
 end
 
-"""Worker `--project` after ship: last-ship `src` under the deploy root, plus member rel.
+"""Worker `--project` after selection: snapshot `src` or git deploy root, plus member rel.
 
-`_last_ship_src_for` matches `remote_deploy_root`, not `session_remote_root`.
-A workspace member is then joined onto that `src`.
+Matches `remote_deploy_root`, not `session_remote_root`. A workspace member is
+then joined onto that work root. Pass `snapshot=` for an explicit ID.
 """
+function _resolved_deploy_root_for_work(
+        local_project::AbstractString;
+        cli_override::Union{Nothing, AbstractString} = nothing,
+    )::String
+    if cli_override !== nothing
+        s = strip(String(cli_override))
+        isempty(s) || return remote_deploy_root(local_project; cli_override = cli_override)
+    end
+    return _layout_intended_deploy_root(local_project, active_snapshot_selection())
+end
+
 function _project_work_root(
         hosts::AbstractVector{<:AbstractString},
         local_project::AbstractString;
         cli_override::Union{Nothing, AbstractString} = nothing,
+        snapshot::Union{Nothing, AbstractString} = nothing,
     )::String
-    deploy = remote_deploy_root(local_project; cli_override = cli_override)
-    mapped = resolve_remote_project_root(local_project; cli_override = cli_override)
-    wr = _work_root_for_hosts(hosts, deploy)
+    deploy = _resolved_deploy_root_for_work(
+        local_project; cli_override = cli_override,
+    )
+    mapped = resolve_remote_project_root(local_project; cli_override = deploy)
+    wr = _work_root_for_hosts(
+        hosts, deploy;
+        local_project = local_project, snapshot = snapshot,
+    )
     return _rehome_under_work_root(mapped, deploy, wr)
 end
 
@@ -1412,6 +1429,7 @@ function _assign_remote_work_root_env!(
         hosts::AbstractVector{<:AbstractString},
         local_project::AbstractString;
         cli_override::Union{Nothing, AbstractString} = nothing,
+        snapshot::Union{Nothing, AbstractString} = nothing,
     )::Nothing
     isempty(hosts) && return nothing
     cli = if cli_override === nothing
@@ -1422,7 +1440,9 @@ function _assign_remote_work_root_env!(
         isempty(s) ? nothing : s
     end
     if cli === nothing || !any(iscntrl, String(cli))
-        wr = _project_work_root(hosts, local_project; cli_override = cli)
+        wr = _project_work_root(
+            hosts, local_project; cli_override = cli, snapshot = snapshot,
+        )
         if !any(iscntrl, String(wr))
             ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = remote_env_project_root(wr)
         end
@@ -1445,16 +1465,77 @@ function _rehome_under_work_root(
     return w * m[(ncodeunits(d) + 1):end]
 end
 
-"""`remote_layout_path` re-homed onto the remote work root for `hosts`."""
+"""`remote_layout_path` re-homed onto the remote work root for `hosts`.
+
+After [`_assign_remote_work_root_env!`](@ref), `DISTRIBUTED_REMOTE_PROJECT_ROOT`
+holds the work root (`runs/<id>/src`), not the deploy root. Mapping must use
+the deploy root (via [`active_snapshot_selection`](@ref) or a temporary ENV),
+then rehome onto the work root — otherwise `remote_layout_path` already returns
+a work-root path and rehome nests `runs/<id>/src/runs/<id>`.
+
+Reuse the active selection only when its deploy root and hosts cover this call
+(so a later standalone `collect!` after a ship to another root/host set
+re-resolves instead of collecting the wrong tree).
+"""
 function _remote_work_layout_path(
         local_abs::AbstractString,
         local_repo::AbstractString,
-        hosts::AbstractVector{<:AbstractString},
+        hosts::AbstractVector{<:AbstractString};
+        snapshot::Union{Nothing, AbstractString} = nothing,
+        skip_local_record::Bool = false,
+        deploy_root::Union{Nothing, AbstractString} = nothing,
     )::String
-    mapped = remote_layout_path(local_abs, local_repo)
-    deploy = remote_deploy_root(local_repo)
-    wr = _work_root_for_hosts(hosts, deploy)
-    return _rehome_under_work_root(mapped, deploy, wr)
+    plan = _collect_source_plan(snapshot)
+    snap = plan.snapshot
+    skip_rec = skip_local_record || plan.skip_local_record
+    sel = active_snapshot_selection()
+    deploy = if deploy_root !== nothing
+        String(deploy_root)
+    elseif plan.deploy_root !== nothing
+        String(plan.deploy_root)
+    else
+        _layout_intended_deploy_root(local_repo, sel)
+    end
+    reuse = sel !== nothing &&
+        !skip_rec &&
+        _deploy_roots_equivalent(sel.deploy_root, deploy) &&
+        _hosts_covered(sel.hosts, hosts) &&
+        (
+        snap === nothing ||
+            (
+            sel.snapshot_id !== nothing &&
+                String(sel.snapshot_id) == String(snap)
+        )
+    )
+    if !reuse
+        _work_root_for_hosts(
+            hosts, deploy;
+            local_project = local_repo, snapshot = snap,
+            skip_local_record = skip_rec,
+        )
+        sel = active_snapshot_selection()
+    end
+    sel isa SnapshotSelection || throw(
+        ArgumentError(
+            "remote work layout: no snapshot selection after resolve for $(hosts)",
+        ),
+    )
+    chosen = sel::SnapshotSelection
+    expect_hash = plan.content_tree_hash
+    if expect_hash isa AbstractString
+        got_hash = chosen.content_tree_hash
+        (
+            got_hash isa AbstractString && String(got_hash) == String(expect_hash)
+        ) || throw(
+            ArgumentError(
+                "controller provenance content_tree_hash $(expect_hash) does not match selected $(got_hash)",
+            ),
+        )
+    end
+    mapped = withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => chosen.deploy_root) do
+        remote_layout_path(local_abs, local_repo)
+    end
+    return _rehome_under_work_root(mapped, chosen.deploy_root, chosen.work_root)
 end
 
 """Shell that refuses a missing, unreadable, group-writable, world-writable, or foreign `remote_root`."""
@@ -1831,9 +1912,36 @@ function _ship_run_leaf_stamp_toml()::String
     )
 end
 
+"""Ownership stamp plus completion fields written only after extract succeeds."""
+function _ship_run_leaf_complete_toml(content_tree_hash::AbstractString)::String
+    h = String(content_tree_hash)
+    _valid_content_tree_hash(h) || throw(
+        ArgumentError(
+            "content_tree_hash must be a 40-digit git-sha1 hex string, got $(repr(h))",
+        ),
+    )
+    return string(
+        _ship_run_leaf_stamp_toml(),
+        "complete = true\n",
+        "algorithm = \"git-sha1\"\n",
+        "content_tree_hash = $(repr(h))\n",
+    )
+end
+
 function _remote_run_leaf_stamp_sh(leaf::AbstractString)::String
     dest = _remote_shell_path_word(_posix_join(leaf, "run.toml"))
     cq = posix_quote(_ship_run_leaf_stamp_toml())
+    return """
+    printf '%s\\n' $cq > $dest || exit 1
+    """
+end
+
+function _remote_run_leaf_complete_sh(
+        leaf::AbstractString,
+        content_tree_hash::AbstractString,
+    )::String
+    dest = _remote_shell_path_word(_posix_join(leaf, "run.toml"))
+    cq = posix_quote(_ship_run_leaf_complete_toml(content_tree_hash))
     return """
     printf '%s\\n' $cq > $dest || exit 1
     """
@@ -1960,6 +2068,16 @@ function ship(
                 pinned = something(pin_remote_julia(host, julia), resolve_remote_julia(host, julia))
                 pinned === nothing && throw(ArgumentError("Julia not found on $host"))
                 _remote_extract_tar!(host, src, snapshot.tar_path, pinned)
+                leaf = _posix_join(abs_root, "runs", rid)
+                code_c, out_c = _remote_shell_status(
+                    String(host),
+                    _remote_run_leaf_complete_sh(leaf, snapshot.content_tree_hash),
+                )
+                code_c == 0 || throw(
+                    ArgumentError(
+                        "could not mark snapshot complete on $(host): $(strip(out_c))",
+                    ),
+                )
                 if await_inputs
                     _record_remote_inputs!(host, abs_root, snapshot.root, pinned)
                 else
@@ -2002,6 +2120,29 @@ function ship(
     if record && !isempty(ok_hosts)
         _LAST_SHIP[] = rec
         _SHIP_LAYOUT_ACTIVE[] = true
+        try
+            env = resolve_pkg_env(snapshot.root)
+            write_last_snapshot_record!(
+                env.env_dir,
+                String(remote_root),
+                ok_hosts,
+                rid;
+                content_tree_hash = snapshot.content_tree_hash,
+            )
+        catch e
+            e isa InterruptException && rethrow()
+            # Record is a convenience default; ship itself already succeeded.
+        end
+        _set_active_selection!(
+            SnapshotSelection(
+                :snapshot,
+                rid,
+                String(remote_root),
+                src_logical,
+                snapshot.content_tree_hash,
+                ok_hosts,
+            ),
+        )
     end
     return ShipTreeResult(
         rid, String(remote_root), src_logical, snapshot.content_tree_hash, "git-sha1",

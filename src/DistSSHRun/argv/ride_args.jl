@@ -10,6 +10,7 @@ function _ride_parsed(;
         spi_check::Bool,
         output_dir,
         julia = nothing,
+        snapshot = nothing,
         allow_mismatch = Symbol[],
     )
     return (
@@ -22,6 +23,7 @@ function _ride_parsed(;
         spi_check = spi_check,
         output_dir = output_dir,
         julia = julia,
+        snapshot = snapshot,
         allow_mismatch = allow_mismatch,
     )
 end
@@ -54,6 +56,7 @@ function show_ride_usage(; io::IO = stdout)
         "  --no-spi-check      skip that compare",
         "  --output-dir PATH   DISTRIBUTED_OUTPUT_DIR for the script (must be missing or empty)",
         "  --julia PATH        remote Julia (ENV or auto)",
+        "  --snapshot ID       use runs/<ID>/src under the deploy root",
         "  --allow-mismatch F  waive julia, distssh, and/or manifest (comma list)",
         "  SSH workers: project-root cwd, bind 127.0.0.1; mismatch is an error unless waived.",
         "  $(KIT_HOSTS_FLAG_HELP)",
@@ -66,7 +69,7 @@ function show_ride_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "See also: go, drive, setup.",
-        "API: ride!(script, \"parent:2\", \"child:host:1\"; spi_check=false).",
+        "API: ride!(script, \"parent:2\", \"child:host:1\"; spi_check=false, snapshot=\"…\").",
     )
     return nothing
 end
@@ -80,6 +83,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
     script_args = String[]
     output_dir = nothing
     julia_exe = nothing
+    snapshot_id = nothing
     allow_mismatch = Symbol[]
     spi_check = false
     c = CliCursor(collect(String, rest))
@@ -91,6 +95,10 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
             output_dir = cli_take_value!(c, arg)
         elseif arg == "--julia"
             julia_exe = cli_take_value!(c, arg)
+        elseif arg == "--snapshot"
+            raw = strip(cli_take_value!(c, arg))
+            isempty(raw) && throw(ArgumentError("ride: --snapshot needs a non-empty id"))
+            snapshot_id = validate_snapshot_id(raw)
         elseif arg == "--allow-mismatch"
             merge_allow_mismatch!(allow_mismatch, cli_take_value!(c, arg))
         elseif arg == "--spi-check"
@@ -119,6 +127,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
                 spi_check = spi_check,
                 output_dir = output_dir,
                 julia = julia_exe,
+                snapshot = snapshot_id,
                 allow_mismatch = allow_mismatch,
             )
         elseif endswith(arg, ".jl")
@@ -161,6 +170,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
         spi_check = spi_check,
         output_dir = output_dir,
         julia = julia_exe,
+        snapshot = snapshot_id,
         allow_mismatch = allow_mismatch,
     )
 end

@@ -3,7 +3,8 @@
 #
 # Recommended workflow:
 #   1. --ship-tree → 2. --instantiate → 3. --check → 4. --runtest (optional) → `go` / `drive`
-#   instantiate/check/go follow latest runs/<run_id>/src when the root has no Project.toml.
+#   instantiate/check/go use --snapshot ID, else last-snapshot.toml, else a git
+#   checkout with Project.toml at the deploy root. Lexical latest is not used.
 #   Optional git: --clone → --instantiate → --check → --sync / --pull
 #   Replace a clone dest: --delete, then --clone
 #
@@ -160,6 +161,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 :cleanup => "Cleanup Workers",
                 :prune => "Prune kit leaves",
             )[mode]
+            selection_err = nothing
             op_path = try
                 if mode === :delete
                     DistSSHRun.remote_delete_root(
@@ -196,9 +198,27 @@ if !isdefined(@__MODULE__, :setup_main)
             end
             if (mode === :instantiate || mode === :runtest || mode === :check) &&
                     !isempty(opts.hosts)
-                op_path = DistSSHRun._project_work_root(
-                    opts.hosts, project; cli_override = opts.remote_path_override,
-                )
+                try
+                    op_path = DistSSHRun._project_work_root(
+                        opts.hosts, project;
+                        cli_override = opts.remote_path_override,
+                        snapshot = opts.snapshot_id,
+                    )
+                catch e
+                    e isa ArgumentError || rethrow()
+                    # --check still has to reach SSH diagnostics (`ssh not
+                    # found`) when selection cannot probe yet. After
+                    # prerequisites succeed, this error still fails the
+                    # command so an incomplete snapshot is not reported as
+                    # met.
+                    if mode === :check
+                        selection_err = e
+                    else
+                        print_err("Error: "; bold = true)
+                        println_fatal(e.msg)
+                        return Cint(1)
+                    end
+                end
             end
             print_header("$(DistSSHRun.cli_heading("setup")) · $mode_name")
             kit_println()
@@ -233,7 +253,9 @@ if !isdefined(@__MODULE__, :setup_main)
                         confirm = true, deploy_root = deploy_path,
                     ) :
                     DistSSHRun._apply_confirmed_delete(opts.hosts, plan, deploy_path)
-                return Cint(finish_host_op!("Delete", result) ? 0 : 1)
+                ok = finish_host_op!("Delete", result)
+                ok && DistSSHRun.forget_last_snapshot_default!(project, deploy_path)
+                return Cint(ok ? 0 : 1)
             end
 
             if mode === :clone
@@ -242,14 +264,17 @@ if !isdefined(@__MODULE__, :setup_main)
                 clone_dest = op_path
                 result = clone_to_remotes(opts.hosts, clone_dest, clone_url)
                 ok = finish_host_op!("Clone", result)
-                if ok && !result.cancelled && result.failed == 0 &&
-                        (
-                        opts.remote_path_override !== nothing ||
-                            !isempty(strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", "")))
-                    )
-                    kit_println("  Tip: export DISTRIBUTED_REMOTE_PROJECT_ROOT=$deploy_path")
-                    kit_println("       so drive.jl uses the same remote root for workers / collect.")
-                    kit_println()
+                if ok
+                    DistSSHRun.forget_last_snapshot_default!(project, deploy_path)
+                    if !result.cancelled && result.failed == 0 &&
+                            (
+                            opts.remote_path_override !== nothing ||
+                                !isempty(strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", "")))
+                        )
+                        kit_println("  Tip: export DISTRIBUTED_REMOTE_PROJECT_ROOT=$deploy_path")
+                        kit_println("       so drive.jl uses the same remote root for workers / collect.")
+                        kit_println()
+                    end
                 end
                 return Cint(ok ? 0 : 1)
             end
@@ -267,9 +292,25 @@ if !isdefined(@__MODULE__, :setup_main)
                 )
                 rec = DistSSHRun.last_ship_result()
                 if ok && rec !== nothing
-                    src = rec["src"]
-                    kit_println("  Next: $(DistSSHRun.cli_m()) setup --instantiate --remote-path $src")
-                    kit_println("        $(DistSSHRun.cli_m()) setup --check --remote-path $src")
+                    rid = get(rec, "run_id", nothing)
+                    src = get(rec, "src", nothing)
+                    path_flag = opts.remote_path_override isa AbstractString ?
+                        " --remote-path $(opts.remote_path_override)" : ""
+                    if rid isa AbstractString && !isempty(rid)
+                        kit_println(
+                            "  Next: $(DistSSHRun.cli_m()) setup --instantiate --snapshot $rid$path_flag",
+                        )
+                        kit_println(
+                            "        $(DistSSHRun.cli_m()) setup --check --snapshot $rid$path_flag",
+                        )
+                    elseif src isa AbstractString
+                        kit_println(
+                            "  Next: $(DistSSHRun.cli_m()) setup --instantiate --remote-path $src",
+                        )
+                        kit_println(
+                            "        $(DistSSHRun.cli_m()) setup --check --remote-path $src",
+                        )
+                    end
                     kit_println()
                 end
                 return Cint(ok ? 0 : 1)
@@ -363,6 +404,12 @@ if !isdefined(@__MODULE__, :setup_main)
             end
 
             if mode === :check
+                if selection_err !== nothing
+                    print_err("Error: "; bold = true)
+                    println_fatal(selection_err.msg)
+                    kit_println()
+                    return Cint(1)
+                end
                 DistSSHRun._warn_git_worktree_ship!(project)
                 print_ok("All prerequisites met.")
                 kit_println()
@@ -392,6 +439,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 return Cint(1)
             end
 
+            DistSSHRun.forget_last_snapshot_default!(project, deploy_path)
             print_ok("$mode_name complete.")
             kit_println()
             return Cint(0)

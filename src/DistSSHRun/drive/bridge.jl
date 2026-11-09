@@ -15,6 +15,7 @@ function drive_parsed_from_session(
         sync_script::Bool = false,
         allow_mismatch = Symbol[],
         allow_external_symlinks::Bool = false,
+        snapshot::Union{Nothing, AbstractString} = nothing,
     )
     parent_workers = 0
     hosts = Tuple{String, Union{Int, Nothing}}[]
@@ -37,6 +38,14 @@ function drive_parsed_from_session(
         hint_surface = hint_surface(session),
     )
     sync_mode = sync isa Symbol ? sync : nothing
+    snap = snapshot === nothing ? nothing : validate_snapshot_id(snapshot)
+    if snap !== nothing && (sync_mode === :sync || sync_mode === :ship_tree)
+        throw(
+            ArgumentError(
+                "drive!: snapshot= cannot be combined with sync=:$sync_mode",
+            ),
+        )
+    end
     # Default skip=true; --require-git / skip_hash_check=false enables checks.
     # ship-tree never has remote .git/ parity.
     effective_skip = skip_hash_check || sync_mode === :ship_tree
@@ -70,6 +79,7 @@ function drive_parsed_from_session(
         hint_surface = hint_surface(session),
         allow_mismatch = collect(Symbol, allow_mismatch),
         allow_external_symlinks = allow_external_symlinks,
+        snapshot = snap,
         isolated = false,
     )
 end

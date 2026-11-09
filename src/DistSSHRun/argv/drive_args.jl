@@ -95,6 +95,7 @@ function parse_drive_args(args::Vector{String})
     # nothing → no pre-run sync; :sync / :ship_tree → sync!
     sync_mode = nothing
     allow_external_symlinks = false
+    snapshot_id = nothing
     isolated = false
     sync_script = false
     require_git = false
@@ -156,6 +157,11 @@ function parse_drive_args(args::Vector{String})
         elseif arg == "--allow-external-symlinks"
             allow_external_symlinks = true
             i += 1
+        elseif arg == "--snapshot" && i < length(args)
+            raw = String(strip(args[i + 1]))
+            isempty(raw) && throw(ArgumentError("drive: --snapshot needs a non-empty id"))
+            snapshot_id = validate_snapshot_id(raw)
+            i += 2
         elseif arg == "--isolated"
             isolated && throw(ArgumentError("drive: --isolated specified more than once"))
             isolated = true
@@ -297,6 +303,7 @@ function parse_drive_args(args::Vector{String})
                 hint_surface = :cli,
                 allow_mismatch = allow_mismatch,
                 allow_external_symlinks = allow_external_symlinks,
+                snapshot = snapshot_id,
                 isolated = isolated,
             )
         elseif arg == "--help" || arg == "-h"
@@ -324,6 +331,7 @@ function parse_drive_args(args::Vector{String})
                 hint_surface = :cli,
                 allow_mismatch = allow_mismatch,
                 allow_external_symlinks = false,
+                snapshot = nothing,
                 isolated = false,
             )
         elseif endswith(arg, ".jl")
@@ -374,6 +382,13 @@ function parse_drive_args(args::Vector{String})
         )
         skip_hash_check = true
     end
+    if snapshot_id !== nothing && (sync_mode === :sync || sync_mode === :ship_tree)
+        throw(
+            ArgumentError(
+                "drive: --snapshot cannot be combined with --sync / --ship-tree",
+            ),
+        )
+    end
 
     for tok in kit_host_source_tokens(cli_session; keep_counts = true)
         parent_workers = _drive_push_host_token!(
@@ -417,6 +432,7 @@ function parse_drive_args(args::Vector{String})
         hint_surface = :cli,
         allow_mismatch = allow_mismatch,
         allow_external_symlinks = allow_external_symlinks,
+        snapshot = snapshot_id,
         isolated = isolated,
     )
 end
@@ -453,6 +469,8 @@ function show_drive_usage(; io::IO = stdout)
         io,
         "  -w, --workers N     parent:N when no parent token is listed",
         "  --sync / --ship-tree  optional pre-run; --ship-tree instantiates src/",
+        "  --snapshot ID       use runs/<ID>/src under the deploy root",
+        "                      (not with --sync / --ship-tree; those pick their own source)",
         "  --allow-external-symlinks  with --ship-tree: keep escaping symlinks",
         "  --sync-script       re-include the full driver on workers (default: defs only)",
         "  --require-git       $(REQUIRE_GIT_MEANING)",
@@ -479,6 +497,8 @@ function show_drive_usage(; io::IO = stdout)
         io,
         "  After main(): post-run-new (files newer than run start).",
         "  Later: --collect-missing / --collect-overwrite ROOT HOST...",
+        "  Pass --snapshot ID so collect maps onto that ship, not a newer one.",
+        "  With DISTSSHKIT_RUN_DIR, omitted recovery uses that run's provenance.shipped.",
         "  Pull-back uses Tar. Remote mtimes and file modes are not kept.",
         "  Modes are 0644, or 0755 if executable. Remote Julia is --julia or auto-detect.",
         "  Escaping symlinks are refused.",

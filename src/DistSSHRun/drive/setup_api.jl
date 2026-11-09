@@ -63,6 +63,7 @@ function setup!(
         check_code_sync::Bool = true,
         older_days::Union{Nothing, Integer} = nothing,
         id::Union{Nothing, AbstractString} = nothing,
+        snapshot::Union{Nothing, AbstractString} = nothing,
         confirm_path = nothing,
         gitignore::Bool = true,
         allow_external_symlinks::Bool = false,
@@ -70,6 +71,15 @@ function setup!(
     if !gitignore
         throw(ArgumentError("setup! gitignore is not valid on setup!(session, :$(mode))"))
     end
+    if snapshot !== nothing &&
+            mode !== :instantiate && mode !== :check && mode !== :runtest
+        throw(
+            ArgumentError(
+                "setup! snapshot= only applies to :instantiate, :check, or :runtest",
+            ),
+        )
+    end
+    snap = snapshot === nothing ? nothing : validate_snapshot_id(snapshot)
     _setup_bang_preflight!(session, mode; repo = repo)
     hosts = _setup_bang_host_list(session)
     if isempty(hosts)
@@ -95,6 +105,7 @@ function setup!(
                 check_code_sync = check_code_sync,
                 older_days = older_days,
                 id = id,
+                snapshot = snap,
                 bound_plan = bound_plan,
                 gitignore = gitignore,
                 allow_external_symlinks = allow_external_symlinks,
@@ -612,6 +623,7 @@ function _setup_one!(
         check_code_sync::Bool = true,
         older_days::Union{Nothing, Integer} = nothing,
         id::Union{Nothing, AbstractString} = nothing,
+        snapshot::Union{Nothing, AbstractString} = nothing,
         bound_plan::Union{Nothing, Dict{String, String}} = nothing,
         gitignore::Bool = true,
         allow_external_symlinks::Bool = false,
@@ -628,12 +640,11 @@ function _setup_one!(
         plan = _setup_require_plan(bound_plan)
         touch = _hosts_named_in_plan(hosts, plan)
         preflight_setup_ssh(touch) || return SyncResult(false, HostResult[]; ok = false)
-        raw = _apply_confirmed_delete(
-            touch,
-            plan,
-            remote_deploy_root(session.project; cli_override = session.remote),
-        )
-        return _sync_result_from_host_op(raw)
+        deploy = remote_deploy_root(session.project; cli_override = session.remote)
+        raw = _apply_confirmed_delete(touch, plan, deploy)
+        result = _sync_result_from_host_op(raw)
+        result.ok && forget_last_snapshot_default!(session.project, deploy)
+        return result
     elseif mode === :rsync
         _throw_rsync_removed()
     elseif mode === :ship_tree
@@ -647,12 +658,16 @@ function _setup_one!(
         url = normalize_git_clone_url(_setup_clone_url(repo; surface = hint_surface(session)))
         preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
         clone_dest = remote_git_clone_dest(session.project; cli_override = session.remote)
+        deploy = remote_deploy_root(session.project; cli_override = session.remote)
         raw = clone_to_remotes(hosts, clone_dest, url; confirm = !session.yes)
-        return _sync_result_from_host_op(raw)
+        result = _sync_result_from_host_op(raw)
+        result.ok && forget_last_snapshot_default!(session.project, deploy)
+        return result
     elseif mode === :sync
         return sync!(session; mode = :sync)
     elseif mode === :pull
         apply_session_env!(session)
+        deploy = remote_deploy_root(session.project; cli_override = session.remote)
         raw = git_sync_project_to_hosts!(
             hosts,
             session.project,
@@ -664,9 +679,11 @@ function _setup_one!(
         if raw.cancelled
             return SyncResult(true, HostResult[]; ok = false)
         end
-        return SyncResult(false, raw.host_results; ok = raw.ok)
+        result = SyncResult(false, raw.host_results; ok = raw.ok)
+        result.ok && forget_last_snapshot_default!(session.project, deploy)
+        return result
     elseif mode === :instantiate
-        return instantiate!(session; julia = julia_path)
+        return instantiate!(session; julia = julia_path, snapshot = snapshot)
     elseif mode === :juliaup || mode === :juliaup_update
         ssh_hosts = setup_juliaup_ssh_hosts(hosts)
         if !isempty(ssh_hosts)
@@ -679,7 +696,8 @@ function _setup_one!(
     elseif mode === :runtest
         preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
         work_path = _project_work_root(
-            hosts, session.project; cli_override = session.remote,
+            hosts, session.project;
+            cli_override = session.remote, snapshot = snapshot,
         )
         raw = runtest_remotes(
             hosts, julia_path, work_path, session.project;
@@ -688,7 +706,8 @@ function _setup_one!(
         return _sync_result_from_host_op(raw)
     elseif mode === :check
         work_path = _project_work_root(
-            hosts, session.project; cli_override = session.remote,
+            hosts, session.project;
+            cli_override = session.remote, snapshot = snapshot,
         )
         result = check_prerequisites(
             hosts,

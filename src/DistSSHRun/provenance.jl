@@ -885,8 +885,9 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     source = started ? _PROVENANCE_SOURCE_SNAP[] : _resolve_source(proj)
     source === nothing || (data["source"] = source)
     ship = last_ship_result()
+    sel = active_snapshot_selection()
+    shipped = Dict{String, Any}()
     if ship !== nothing
-        shipped = Dict{String, Any}()
         for key in (
                 "content_tree_hash", "run_id", "algorithm", "bytes", "files", "host",
                 "run_dir_empty_at_start",
@@ -898,8 +899,22 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
         end
         get(ship, "external_symlinks_allowed", false) &&
             (shipped["external_symlinks_allowed"] = true)
-        isempty(shipped) || (data["shipped"] = shipped)
+        rr = get(ship, "remote_root", nothing)
+        rr isa AbstractString && !isempty(rr) && (shipped["deploy_root"] = String(rr))
+        shipped["source_kind"] = "snapshot"
+    elseif sel !== nothing
+        shipped["source_kind"] = String(sel.source_kind)
+        shipped["deploy_root"] = sel.deploy_root
+        if sel.snapshot_id !== nothing
+            shipped["run_id"] = sel.snapshot_id
+        end
+        if sel.content_tree_hash !== nothing
+            shipped["content_tree_hash"] = sel.content_tree_hash
+            shipped["algorithm"] = "git-sha1"
+        end
+        shipped["work_root"] = sel.work_root
     end
+    isempty(shipped) || (data["shipped"] = shipped)
     return data
 end
 
@@ -980,12 +995,15 @@ end
     result_content_tree_hash(result) -> Union{Nothing, String}
 
 `content_tree_hash` from this run's controller `run.toml`
-(`provenance.shipped`), or `nothing` when that ship was not recorded.
+(`provenance.shipped`), or `nothing` when neither a ship nor an active
+snapshot selection recorded one.
 
 Schema stays 1. An absent or empty key means not recorded.
 `result` is a [`DriveResult`](@ref), [`GoResult`](@ref), or
 [`KitRunResult`](@ref). A [`RideResult`](@ref) goes through
-[`kit_run_result`](@ref) first.
+[`kit_run_result`](@ref) first. A run that selected an existing completed
+snapshot (without shipping in-process) may still record the hash from that
+selection.
 
 A [`SyncResult`](@ref) from `setup!` / `sync!` with `:ship_tree`, and a
 [`ShipTreeResult`](@ref) from [`ship`](@ref), return the hash of that ship.
@@ -1017,12 +1035,15 @@ end
     result_remote_run_id(result) -> Union{Nothing, String}
 
 Remote `runs/<run_id>/` id from this run's controller `run.toml`
-(`provenance.shipped.run_id`), or `nothing` when that ship was not recorded.
+(`provenance.shipped.run_id`), or `nothing` when neither a ship nor an active
+snapshot selection recorded one.
 
 Schema stays 1. An absent or empty key means not recorded. This is not
 `DISTSSHKIT_RUN_DIR`. `result` is a [`DriveResult`](@ref), [`GoResult`](@ref),
 or [`KitRunResult`](@ref). A [`RideResult`](@ref) goes through
-[`kit_run_result`](@ref) first.
+[`kit_run_result`](@ref) first. A run that selected an existing completed
+snapshot (without shipping in-process) may still record that snapshot's
+`run_id`.
 
 A [`SyncResult`](@ref) from `setup!` / `sync!` with `:ship_tree`, and a
 [`ShipTreeResult`](@ref) from [`ship`](@ref), return that remote `run_id`.

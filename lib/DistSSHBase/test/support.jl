@@ -60,6 +60,9 @@ if !isdefined(Main, :_with_tempdir)
             "DISTSSHKIT_TEST_SSH" => joinpath(fixtures, "fake_setup_ssh.jl"),
             "DISTSSHKIT_TEST_STATE_ROOT" => abspath(string(state_dir)),
             "DISTSSHKIT_YES" => "1",
+            # Absolute fake remotes are not a real git tree. Snapshot unit tests
+            # that need a real Project.toml probe use `fake_snapshot_ssh.jl`.
+            "DISTSSHKIT_TEST_SNAP_GIT_YES" => "1",
         )
     end
 end

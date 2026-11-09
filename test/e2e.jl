@@ -147,11 +147,19 @@ end
 
         @testset "setup --instantiate" begin
             _e2e_announce("setup --instantiate")
+            # `--remote-path` is the deploy root only. The ship leaf is
+            # `runs/<id>/src`; select it with `--snapshot` (or the local
+            # last-snapshot record written by ship-tree).
             p_src, src_out = _ssh_e2e_ssh(hosts[1], "ls -1d $(remote_root)/runs/*/src 2>/dev/null | tail -n 1")
-            _assert_proc_ok(p_src, src_out; label = "latest ship src")
+            _assert_proc_ok(p_src, src_out; label = "ship src leaf")
             ship_src = strip(src_out)
+            @test !isempty(ship_src)
+            snap_id = basename(dirname(ship_src))
             proc, out = _run_kit_setup(;
-                setup_args = ["--instantiate", "--remote-path", ship_src, setup_hosts...],
+                setup_args = [
+                    "--instantiate", "--remote-path", remote_root, "--snapshot", snap_id,
+                    setup_hosts...,
+                ],
                 project_root = proj,
                 extra_env = _e2e_base_env(),
             )
@@ -593,7 +601,6 @@ end
                     runner,
                     """
                     #!/bin/sh
-                    unset NO_COLOR
                     unset DISTSSHKIT_QUIET
                     unset DISTSSHKIT_PROGRESS
                     unset DISTSSHKIT_VERBOSE
@@ -602,6 +609,7 @@ end
                     export JULIA_LOAD_PATH=$(sh_quote(_child_load_path()))
                     unset JULIA_PROJECT
                     $exports
+                    unset NO_COLOR
                     $(argv_line(ok_cmd))
                     echo '___SPLIT___'
                     $(argv_line(fail_cmd))
@@ -690,7 +698,6 @@ end
                     runner,
                     """
                     #!/bin/sh
-                    unset NO_COLOR
                     unset DISTSSHKIT_QUIET
                     unset DISTSSHKIT_PROGRESS
                     unset DISTSSHKIT_VERBOSE
@@ -699,6 +706,7 @@ end
                     export JULIA_LOAD_PATH=$(sh_quote(_child_load_path()))
                     unset JULIA_PROJECT
                     $exports
+                    unset NO_COLOR
                     $(argv_line(ride_ok))
                     echo "___OK_EXIT_\$?___"
                     echo '___SPLIT___'
