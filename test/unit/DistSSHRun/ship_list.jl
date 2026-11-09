@@ -622,40 +622,41 @@ end
     end
 
     @testset "the same paths with and without .git" begin
-        Sys.which("git") === nothing && return
-        _with_tempdir() do tmp
-            repo = joinpath(tmp, "repo")
-            mkpath(repo)
-            write(joinpath(repo, "Project.toml"), "name = \"App\"\n")
-            write(
-                joinpath(repo, "Manifest.toml"),
-                "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
-            )
-            write(joinpath(repo, "tracked.jl"), "t = 1\n")
-            write(joinpath(repo, "ignored.jl"), "i = 1\n")
-            run(`git -C $repo init --quiet`)
-            run(`git -C $repo config user.email t@t.t`)
-            run(`git -C $repo config user.name t`)
-            run(`git -C $repo add -A`)
-            run(`git -C $repo commit --quiet -m init`)
-            write(joinpath(repo, ".gitignore"), "ignored.jl\n")
-            run(`git -C $repo add .gitignore`)
-            run(`git -C $repo commit --quiet -m ignore`)
-            write(joinpath(repo, "extra.jl"), "e = 1\n")
-            plain = joinpath(tmp, "plain")
-            cp(repo, plain)
-            rm(joinpath(plain, ".git"); force = true, recursive = true)
-            listed = DistSSHRun.ship_send_list(repo)
-            @test listed == DistSSHRun.ship_send_list(plain)
-            @test "tracked.jl" in listed
-            @test "extra.jl" in listed
-            @test ".gitignore" in listed
-            @test !("ignored.jl" in listed)
-            @test !any(r == ".git" || startswith(r, ".git/") for r in listed)
-            env = DistSSHRun.resolve_pkg_env(repo)
-            rsync = DistSSHRun.rsync_send_list(repo, env)
-            @test rsync isa Vector
-            @test "ignored.jl" in rsync
+        if _test_skip_unless_git()
+            _with_tempdir() do tmp
+                repo = joinpath(tmp, "repo")
+                mkpath(repo)
+                write(joinpath(repo, "Project.toml"), "name = \"App\"\n")
+                write(
+                    joinpath(repo, "Manifest.toml"),
+                    "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
+                )
+                write(joinpath(repo, "tracked.jl"), "t = 1\n")
+                write(joinpath(repo, "ignored.jl"), "i = 1\n")
+                run(`git -C $repo init --quiet`)
+                run(`git -C $repo config user.email t@t.t`)
+                run(`git -C $repo config user.name t`)
+                run(`git -C $repo add -A`)
+                run(`git -C $repo commit --quiet -m init`)
+                write(joinpath(repo, ".gitignore"), "ignored.jl\n")
+                run(`git -C $repo add .gitignore`)
+                run(`git -C $repo commit --quiet -m ignore`)
+                write(joinpath(repo, "extra.jl"), "e = 1\n")
+                plain = joinpath(tmp, "plain")
+                cp(repo, plain)
+                rm(joinpath(plain, ".git"); force = true, recursive = true)
+                listed = DistSSHRun.ship_send_list(repo)
+                @test listed == DistSSHRun.ship_send_list(plain)
+                @test "tracked.jl" in listed
+                @test "extra.jl" in listed
+                @test ".gitignore" in listed
+                @test !("ignored.jl" in listed)
+                @test !any(r == ".git" || startswith(r, ".git/") for r in listed)
+                env = DistSSHRun.resolve_pkg_env(repo)
+                rsync = DistSSHRun.rsync_send_list(repo, env)
+                @test rsync isa Vector
+                @test "ignored.jl" in rsync
+            end
         end
     end
 end

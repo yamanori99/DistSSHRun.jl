@@ -83,6 +83,25 @@ if !isdefined(Main, :_test_root)
         return strip(get(ENV, "JULIA_PKGEVAL", "")) == "true"
     end
 
+    # Record @test_skip (not `return`) when a tool or OS guard would drop a testset.
+    function _test_skip_unless_git()::Bool
+        Sys.which("git") !== nothing && return true
+        @test_skip "git not in PATH"
+        return false
+    end
+
+    function _test_skip_unless_ssh()::Bool
+        Sys.which("ssh") !== nothing && return true
+        @test_skip "ssh not in PATH"
+        return false
+    end
+
+    function _test_skip_unless_unix()::Bool
+        Sys.isunix() && return true
+        @test_skip "requires Unix (script/kill)"
+        return false
+    end
+
     function _distsshrun_short_skip(rel::AbstractString)::Bool
         _distsshrun_test_short() || return false
         skipped = (

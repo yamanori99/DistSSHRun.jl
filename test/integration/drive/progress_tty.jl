@@ -24,98 +24,100 @@ using Test
     hang_s = 300.0
 
     @testset "expect observes prompt in typescript before reply" begin
-        Sys.isunix() || return
-        mktempdir() do dir
-            runner = joinpath(dir, "prompt.sh")
-            write_runner(
-                runner,
-                """
-                printf 'DISTSSHKIT_PROMPT>'
-                read line
-                printf 'DISTSSHKIT_GOT:%s\\n' "\$line"
-                """,
-            )
-            t0 = time()
-            pty = _tty_expect_script(
-                runner;
-                typescript = joinpath(dir, "prompt_typescript.txt"),
-                expect = "DISTSSHKIT_PROMPT>",
-                reply = "pong\n",
-                hang_s = 30.0,
-            )
-            @info "harness expect flush wall" elapsed = (time() - t0)
-            @test occursin("DISTSSHKIT_PROMPT>", pty)
-            @test occursin("DISTSSHKIT_GOT:pong", pty)
-            prompt_at = findfirst("DISTSSHKIT_PROMPT>", pty)
-            got_at = findfirst("DISTSSHKIT_GOT:pong", pty)
-            @test prompt_at !== nothing && got_at !== nothing
-            @test first(prompt_at) < first(got_at)
+        if _test_skip_unless_unix()
+            mktempdir() do dir
+                runner = joinpath(dir, "prompt.sh")
+                write_runner(
+                    runner,
+                    """
+                    printf 'DISTSSHKIT_PROMPT>'
+                    read line
+                    printf 'DISTSSHKIT_GOT:%s\\n' "\$line"
+                    """,
+                )
+                t0 = time()
+                pty = _tty_expect_script(
+                    runner;
+                    typescript = joinpath(dir, "prompt_typescript.txt"),
+                    expect = "DISTSSHKIT_PROMPT>",
+                    reply = "pong\n",
+                    hang_s = 30.0,
+                )
+                @info "harness expect flush wall" elapsed = (time() - t0)
+                @test occursin("DISTSSHKIT_PROMPT>", pty)
+                @test occursin("DISTSSHKIT_GOT:pong", pty)
+                prompt_at = findfirst("DISTSSHKIT_PROMPT>", pty)
+                got_at = findfirst("DISTSSHKIT_GOT:pong", pty)
+                @test prompt_at !== nothing && got_at !== nothing
+                @test first(prompt_at) < first(got_at)
+            end
         end
     end
 
     @testset "capture timeout reaps descendants" begin
-        Sys.isunix() || return
-        mktempdir() do dir
-            alive = joinpath(dir, "DSR_TTY_HANG_ALIVE")
-            gpid_file = joinpath(dir, "grandchild.pid")
-            ready = joinpath(dir, "ready")
-            hang = joinpath(dir, "hang.sh")
-            write_runner(
-                hang,
-                """
-                alive=$(sh_quote(alive))
-                gpidf=$(sh_quote(gpid_file))
-                ready=$(sh_quote(ready))
-                touch "\$alive"
-                # Nested sh grandchild in the same detached process group.
-                sh -c 'while [ -f "\$1" ]; do sleep 0.1; done' _ "\$alive" &
-                echo \$! > "\$gpidf"
-                touch "\$ready"
-                while [ -f "\$alive" ]; do sleep 0.1; done
-                """,
-            )
-            # Unrelated process: not in the capture group; must survive cleanup.
-            unrelated = run(ignorestatus(`sleep 60`); wait = false)
-            try
-                # Hang bound is generous relative to startup, not a perf gate.
-                # Grandchild must exist before the helper times out and kills.
-                err_box = Ref{Any}(nothing)
-                task = @async begin
-                    try
-                        _tty_capture_script(
-                            hang;
-                            typescript = joinpath(dir, "hang_typescript.txt"),
-                            hang_s = 8.0,
-                        )
-                    catch e
-                        err_box[] = e
-                    end
-                end
-                for _ in 1:100
-                    isfile(ready) && break
-                    sleep(0.05)
-                end
-                @test isfile(ready)
-                @test isfile(gpid_file)
-                gpid = parse(Int, strip(read(gpid_file, String)))
-                @test pid_alive(gpid)
-                # Wait out the hang bound; cleanup runs in the helper (and finally).
-                wait(task)
-                err = err_box[]
-                @test err isa ErrorException
-                @test occursin("exceeded", sprint(showerror, err))
-                for _ in 1:60
-                    pid_alive(gpid) || break
-                    sleep(0.05)
-                end
-                @test !pid_alive(gpid)
-                @test process_running(unrelated)
-            finally
-                rm(alive; force = true)
-                process_running(unrelated) && kill(unrelated, Base.SIGKILL)
+        if _test_skip_unless_unix()
+            mktempdir() do dir
+                alive = joinpath(dir, "DSR_TTY_HANG_ALIVE")
+                gpid_file = joinpath(dir, "grandchild.pid")
+                ready = joinpath(dir, "ready")
+                hang = joinpath(dir, "hang.sh")
+                write_runner(
+                    hang,
+                    """
+                    alive=$(sh_quote(alive))
+                    gpidf=$(sh_quote(gpid_file))
+                    ready=$(sh_quote(ready))
+                    touch "\$alive"
+                    # Nested sh grandchild in the same detached process group.
+                    sh -c 'while [ -f "\$1" ]; do sleep 0.1; done' _ "\$alive" &
+                    echo \$! > "\$gpidf"
+                    touch "\$ready"
+                    while [ -f "\$alive" ]; do sleep 0.1; done
+                    """,
+                )
+                # Unrelated process: not in the capture group; must survive cleanup.
+                unrelated = run(ignorestatus(`sleep 60`); wait = false)
                 try
-                    wait(unrelated)
-                catch
+                    # Hang bound is generous relative to startup, not a perf gate.
+                    # Grandchild must exist before the helper times out and kills.
+                    err_box = Ref{Any}(nothing)
+                    task = @async begin
+                        try
+                            _tty_capture_script(
+                                hang;
+                                typescript = joinpath(dir, "hang_typescript.txt"),
+                                hang_s = 8.0,
+                            )
+                        catch e
+                            err_box[] = e
+                        end
+                    end
+                    for _ in 1:100
+                        isfile(ready) && break
+                        sleep(0.05)
+                    end
+                    @test isfile(ready)
+                    @test isfile(gpid_file)
+                    gpid = parse(Int, strip(read(gpid_file, String)))
+                    @test pid_alive(gpid)
+                    # Wait out the hang bound; cleanup runs in the helper (and finally).
+                    wait(task)
+                    err = err_box[]
+                    @test err isa ErrorException
+                    @test occursin("exceeded", sprint(showerror, err))
+                    for _ in 1:60
+                        pid_alive(gpid) || break
+                        sleep(0.05)
+                    end
+                    @test !pid_alive(gpid)
+                    @test process_running(unrelated)
+                finally
+                    rm(alive; force = true)
+                    process_running(unrelated) && kill(unrelated, Base.SIGKILL)
+                    try
+                        wait(unrelated)
+                    catch
+                    end
                 end
             end
         end
@@ -397,68 +399,69 @@ using Test
     end
 
     @testset "drive --no-log interactive prompt before stdin" begin
-        Sys.isunix() || return
-        mktempdir() do dir
-            proj = joinpath(dir, "prompt-proj")
-            mkpath(proj)
-            _write_host_project!(proj, "TtyPrompt")
-            script = joinpath(proj, "prompt.jl")
-            write(
-                script,
-                """
-                print("DISTSSHKIT_PROMPT>")
-                flush(stdout)
-                line = readline(stdin)
-                println("DISTSSHKIT_GOT:", line)
-                """,
-            )
-            drive_cmd = _kit_drive_cmd(;
-                script = script,
-                host_root = proj,
-                parent_workers = 1,
-            )
-            runner = joinpath(dir, "prompt_runner.sh")
-            write_runner(
-                runner,
-                """
-                unset NO_COLOR
-                unset DISTSSHKIT_QUIET
-                unset DISTSSHKIT_PROGRESS
-                unset DISTSSHKIT_VERBOSE
-                unset DISTSSHKIT_CLI_SUBCOMMAND_DONE
-                unset DIST_SSH_KIT_CLI_INCLUDE
-                export DISTSSHKIT_TEST=1
-                export DISTSSHKIT_YES=1
-                export JULIA_LOAD_PATH=$(sh_quote(_child_load_path()))
-                unset JULIA_PROJECT
-                export DISTRIBUTED_PROJECT_ROOT=$(sh_quote(proj))
-                export DISTRIBUTED_INIT_DELAY_SEC=0
-                $(argv_line(drive_cmd))
-                """,
-            )
-            t0 = time()
-            pty = _tty_expect_script(
-                runner;
-                typescript = joinpath(dir, "prompt_typescript.txt"),
-                expect = "DISTSSHKIT_PROMPT>",
-                reply = "pong\n",
-                hang_s = hang_s,
-            )
-            @info "drive interactive progress_tty wall" elapsed = (time() - t0)
-            plain = _tty_strip_ansi(pty)
-            @test occursin("DISTSSHKIT_PROMPT>", plain)
-            @test occursin("DISTSSHKIT_GOT:pong", plain)
-            prompt_at = findfirst("DISTSSHKIT_PROMPT>", pty)
-            got_at = findfirst("DISTSSHKIT_GOT:pong", pty)
-            @test prompt_at !== nothing && got_at !== nothing
-            @test first(prompt_at) < first(got_at)
-            @test !occursin(r"[━╺⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*DISTSSHKIT_PROMPT>", pty)
-            # Visible model: prompt is its own payload line, not bar-glued.
-            prompt_lines = filter(
-                l -> occursin("DISTSSHKIT_PROMPT>", l) && !_tty_bar_line(l),
-                _tty_lines(pty),
-            )
-            @test !isempty(prompt_lines)
+        if _test_skip_unless_unix()
+            mktempdir() do dir
+                proj = joinpath(dir, "prompt-proj")
+                mkpath(proj)
+                _write_host_project!(proj, "TtyPrompt")
+                script = joinpath(proj, "prompt.jl")
+                write(
+                    script,
+                    """
+                    print("DISTSSHKIT_PROMPT>")
+                    flush(stdout)
+                    line = readline(stdin)
+                    println("DISTSSHKIT_GOT:", line)
+                    """,
+                )
+                drive_cmd = _kit_drive_cmd(;
+                    script = script,
+                    host_root = proj,
+                    parent_workers = 1,
+                )
+                runner = joinpath(dir, "prompt_runner.sh")
+                write_runner(
+                    runner,
+                    """
+                    unset NO_COLOR
+                    unset DISTSSHKIT_QUIET
+                    unset DISTSSHKIT_PROGRESS
+                    unset DISTSSHKIT_VERBOSE
+                    unset DISTSSHKIT_CLI_SUBCOMMAND_DONE
+                    unset DIST_SSH_KIT_CLI_INCLUDE
+                    export DISTSSHKIT_TEST=1
+                    export DISTSSHKIT_YES=1
+                    export JULIA_LOAD_PATH=$(sh_quote(_child_load_path()))
+                    unset JULIA_PROJECT
+                    export DISTRIBUTED_PROJECT_ROOT=$(sh_quote(proj))
+                    export DISTRIBUTED_INIT_DELAY_SEC=0
+                    $(argv_line(drive_cmd))
+                    """,
+                )
+                t0 = time()
+                pty = _tty_expect_script(
+                    runner;
+                    typescript = joinpath(dir, "prompt_typescript.txt"),
+                    expect = "DISTSSHKIT_PROMPT>",
+                    reply = "pong\n",
+                    hang_s = hang_s,
+                )
+                @info "drive interactive progress_tty wall" elapsed = (time() - t0)
+                plain = _tty_strip_ansi(pty)
+                @test occursin("DISTSSHKIT_PROMPT>", plain)
+                @test occursin("DISTSSHKIT_GOT:pong", plain)
+                prompt_at = findfirst("DISTSSHKIT_PROMPT>", pty)
+                got_at = findfirst("DISTSSHKIT_GOT:pong", pty)
+                @test prompt_at !== nothing && got_at !== nothing
+                @test first(prompt_at) < first(got_at)
+                @test !occursin(r"[━╺⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*DISTSSHKIT_PROMPT>", pty)
+                # Visible model: prompt is its own payload line, not bar-glued.
+                prompt_lines = filter(
+                    l -> occursin("DISTSSHKIT_PROMPT>", l) && !_tty_bar_line(l),
+                    _tty_lines(pty),
+                )
+                @test !isempty(prompt_lines)
+            end
         end
     end
 end

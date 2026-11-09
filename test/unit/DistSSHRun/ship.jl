@@ -322,34 +322,35 @@ end
 end
 
 @testset "ship tar pack" begin
-    Sys.which("git") === nothing && return
-    _with_tempdir() do tmp
-        run(`git -C $tmp init --quiet`)
-        run(`git -C $tmp config user.email t@t.t`)
-        run(`git -C $tmp config user.name t`)
-        write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
-        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
-        write(joinpath(tmp, "a.jl"), "1\n")
-        mkpath(joinpath(tmp, "sub"))
-        write(joinpath(tmp, "sub", "b.txt"), "b\n")
-        run(`git -C $tmp add -A`)
-        run(`git -C $tmp commit --quiet -m init`)
-        packed = DistSSHRun.pack_ship_tar(tmp)
-        try
-            @test isfile(packed.tar_path)
-            @test packed.files >= 3
-            @test packed.bytes > 0
-            @test packed.hash isa String
-            @test length(packed.hash) == 40
-            dest = mktempdir()
-            DistSSHRun.Tar.extract(packed.tar_path, dest)
-            @test isfile(joinpath(dest, "Project.toml"))
-            @test isfile(joinpath(dest, "a.jl"))
-            @test !isdir(joinpath(dest, ".git"))
-        finally
-            rm(packed.tmpd; force = true, recursive = true)
+    if _test_skip_unless_git()
+        _with_tempdir() do tmp
+            run(`git -C $tmp init --quiet`)
+            run(`git -C $tmp config user.email t@t.t`)
+            run(`git -C $tmp config user.name t`)
+            write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
+            write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+            write(joinpath(tmp, "a.jl"), "1\n")
+            mkpath(joinpath(tmp, "sub"))
+            write(joinpath(tmp, "sub", "b.txt"), "b\n")
+            run(`git -C $tmp add -A`)
+            run(`git -C $tmp commit --quiet -m init`)
+            packed = DistSSHRun.pack_ship_tar(tmp)
+            try
+                @test isfile(packed.tar_path)
+                @test packed.files >= 3
+                @test packed.bytes > 0
+                @test packed.hash isa String
+                @test length(packed.hash) == 40
+                dest = mktempdir()
+                DistSSHRun.Tar.extract(packed.tar_path, dest)
+                @test isfile(joinpath(dest, "Project.toml"))
+                @test isfile(joinpath(dest, "a.jl"))
+                @test !isdir(joinpath(dest, ".git"))
+            finally
+                rm(packed.tmpd; force = true, recursive = true)
+            end
+            @test_throws ArgumentError DistSSHRun.pack_ship_tar(tmp; ship_max_bytes = 1)
         end
-        @test_throws ArgumentError DistSSHRun.pack_ship_tar(tmp; ship_max_bytes = 1)
     end
 end
 
@@ -468,73 +469,74 @@ end
 end
 
 @testset "declared inputs stay out of the ship" begin
-    Sys.which("git") === nothing && return
-    _with_tempdir() do tmp
-        run(`git -C $tmp init --quiet`)
-        run(`git -C $tmp config user.email t@t.t`)
-        run(`git -C $tmp config user.name t`)
-        write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
-        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
-        mkpath(joinpath(tmp, "data"))
-        write(joinpath(tmp, "data", "big.bin"), "payload\n")
-        mkpath(joinpath(tmp, ".distsshkit"))
-        write(
-            joinpath(tmp, ".distsshkit", "inputs.toml"),
-            """
-            [[inputs]]
-            name = "big"
-            path = "data"
-            hash = false
-            """,
-        )
-        run(`git -C $tmp add -A`)
-        run(`git -C $tmp commit --quiet -m init`)
-        packed = DistSSHRun.pack_ship_tar(tmp)
-        try
-            dest = mktempdir()
-            DistSSHRun.Tar.extract(packed.tar_path, dest)
-            @test !isfile(joinpath(dest, "data", "big.bin"))
-            @test isfile(joinpath(dest, "Project.toml"))
-        finally
-            rm(packed.tmpd; force = true, recursive = true)
-        end
-        probe = DistSSHRun._remote_input_probe_sh("/remote/data", false)
-        @test occursin("files=", probe)
-        @test occursin("input filename contains a newline", probe)
-        @test occursin("JULIA_DEPOT_PATH=", probe)
-        @test !occursin("sha256sum", probe)
-        @test !occursin("shasum", probe)
-        hashed = DistSSHRun._remote_input_probe_sh("/remote/data", true)
-        @test occursin("sha256_file", hashed)
-        @test occursin("PROG ", hashed)
-        @test !occursin("sha256sum", hashed)
-        @test !occursin("shasum", hashed)
-        run_dir = mktempdir()
-        DistSSHRun._store_input_rows!(
-            run_dir,
-            [
-                Dict{String, Any}(
-                    "name" => "big",
-                    "path" => "data",
-                    "host" => "h",
-                    "verification" => "stat",
-                ),
-            ],
-        )
-        @test isfile(joinpath(run_dir, "inputs", "records.toml"))
-        @test !isfile(joinpath(tmp, "inputs.toml"))
-        @test !isfile(joinpath(tmp, "inputs", "records.toml"))
-        withenv("DISTSSHKIT_RUN_DIR" => nothing) do
-            err = try
-                DistSSHRun.ship_project_to_hosts!(
-                    ["host.test"], tmp, "/remote/app"; confirm = false, report = false,
-                )
-                nothing
-            catch e
-                e
+    if _test_skip_unless_git()
+        _with_tempdir() do tmp
+            run(`git -C $tmp init --quiet`)
+            run(`git -C $tmp config user.email t@t.t`)
+            run(`git -C $tmp config user.name t`)
+            write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
+            write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+            mkpath(joinpath(tmp, "data"))
+            write(joinpath(tmp, "data", "big.bin"), "payload\n")
+            mkpath(joinpath(tmp, ".distsshkit"))
+            write(
+                joinpath(tmp, ".distsshkit", "inputs.toml"),
+                """
+                [[inputs]]
+                name = "big"
+                path = "data"
+                hash = false
+                """,
+            )
+            run(`git -C $tmp add -A`)
+            run(`git -C $tmp commit --quiet -m init`)
+            packed = DistSSHRun.pack_ship_tar(tmp)
+            try
+                dest = mktempdir()
+                DistSSHRun.Tar.extract(packed.tar_path, dest)
+                @test !isfile(joinpath(dest, "data", "big.bin"))
+                @test isfile(joinpath(dest, "Project.toml"))
+            finally
+                rm(packed.tmpd; force = true, recursive = true)
             end
-            @test err isa ArgumentError
-            @test occursin("DISTSSHKIT_RUN_DIR", sprint(showerror, err))
+            probe = DistSSHRun._remote_input_probe_sh("/remote/data", false)
+            @test occursin("files=", probe)
+            @test occursin("input filename contains a newline", probe)
+            @test occursin("JULIA_DEPOT_PATH=", probe)
+            @test !occursin("sha256sum", probe)
+            @test !occursin("shasum", probe)
+            hashed = DistSSHRun._remote_input_probe_sh("/remote/data", true)
+            @test occursin("sha256_file", hashed)
+            @test occursin("PROG ", hashed)
+            @test !occursin("sha256sum", hashed)
+            @test !occursin("shasum", hashed)
+            run_dir = mktempdir()
+            DistSSHRun._store_input_rows!(
+                run_dir,
+                [
+                    Dict{String, Any}(
+                        "name" => "big",
+                        "path" => "data",
+                        "host" => "h",
+                        "verification" => "stat",
+                    ),
+                ],
+            )
+            @test isfile(joinpath(run_dir, "inputs", "records.toml"))
+            @test !isfile(joinpath(tmp, "inputs.toml"))
+            @test !isfile(joinpath(tmp, "inputs", "records.toml"))
+            withenv("DISTSSHKIT_RUN_DIR" => nothing) do
+                err = try
+                    DistSSHRun.ship_project_to_hosts!(
+                        ["host.test"], tmp, "/remote/app"; confirm = false, report = false,
+                    )
+                    nothing
+                catch e
+                    e
+                end
+                @test err isa ArgumentError
+                @test occursin("DISTSSHKIT_RUN_DIR", sprint(showerror, err))
+            end
         end
     end
 end
@@ -791,12 +793,16 @@ end
         write(joinpath(root, nfd), "hi\n")
         names = readdir(root)
         stored = only(filter(!=("."), names))
-        DistSSHRun.Unicode.normalize(stored, :NFC) == nfc || return
-        stored == nfc && return
-        hex = DistSSHRun._sha256_hex(Vector{UInt8}("hi\n"))
-        man = joinpath(root, "m.manifest")
-        write(man, "$hex *$nfc\n")
-        @test DistSSHRun.check_input_manifest(man, root) === nothing
+        if DistSSHRun.Unicode.normalize(stored, :NFC) != nfc
+            @test_skip "filesystem name does not normalize to expected NFC"
+        elseif stored == nfc
+            @test_skip "filename stored as NFC; NFD-on-disk case not exercised"
+        else
+            hex = DistSSHRun._sha256_hex(Vector{UInt8}("hi\n"))
+            man = joinpath(root, "m.manifest")
+            write(man, "$hex *$nfc\n")
+            @test DistSSHRun.check_input_manifest(man, root) === nothing
+        end
     finally
         rm(root; force = true, recursive = true)
     end
@@ -1080,22 +1086,23 @@ end
 end
 
 @testset "escaping symlink" begin
-    Sys.which("git") === nothing && return
-    _with_tempdir() do tmp
-        run(`git -C $tmp init --quiet`)
-        run(`git -C $tmp config user.email t@t.t`)
-        run(`git -C $tmp config user.name t`)
-        write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
-        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
-        outside = joinpath(dirname(tmp), "outside-secret")
-        write(outside, "secret\n")
-        symlink(outside, joinpath(tmp, "link"))
-        run(`git -C $tmp add -A`)
-        run(`git -C $tmp commit --quiet -m init`)
-        @test_throws ArgumentError DistSSHRun.pack_ship_tar(tmp)
-        packed = DistSSHRun.pack_ship_tar(tmp; allow_external_symlinks = true)
-        rm(packed.tmpd; force = true, recursive = true)
-        rm(outside; force = true)
+    if _test_skip_unless_git()
+        _with_tempdir() do tmp
+            run(`git -C $tmp init --quiet`)
+            run(`git -C $tmp config user.email t@t.t`)
+            run(`git -C $tmp config user.name t`)
+            write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
+            write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+            outside = joinpath(dirname(tmp), "outside-secret")
+            write(outside, "secret\n")
+            symlink(outside, joinpath(tmp, "link"))
+            run(`git -C $tmp add -A`)
+            run(`git -C $tmp commit --quiet -m init`)
+            @test_throws ArgumentError DistSSHRun.pack_ship_tar(tmp)
+            packed = DistSSHRun.pack_ship_tar(tmp; allow_external_symlinks = true)
+            rm(packed.tmpd; force = true, recursive = true)
+            rm(outside; force = true)
+        end
     end
 end
 
@@ -1270,21 +1277,22 @@ end
 end
 
 @testset "rsync_send_list is the git send list" begin
-    Sys.which("git") === nothing && return
-    _with_tempdir() do tmp
-        run(`git -C $tmp init --quiet`)
-        run(`git -C $tmp config user.email t@t.t`)
-        run(`git -C $tmp config user.name t`)
-        write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
-        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
-        write(joinpath(tmp, "tracked.jl"), "1\n")
-        run(`git -C $tmp add -A`)
-        run(`git -C $tmp commit --quiet -m init`)
-        env = DistSSHRun.resolve_pkg_env(tmp)
-        listed = DistSSHRun.rsync_send_list(tmp, env)
-        @test listed isa Vector
-        @test "tracked.jl" in listed
-        @test !any(startswith(r, ".git") for r in listed)
+    if _test_skip_unless_git()
+        _with_tempdir() do tmp
+            run(`git -C $tmp init --quiet`)
+            run(`git -C $tmp config user.email t@t.t`)
+            run(`git -C $tmp config user.name t`)
+            write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
+            write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+            write(joinpath(tmp, "tracked.jl"), "1\n")
+            run(`git -C $tmp add -A`)
+            run(`git -C $tmp commit --quiet -m init`)
+            env = DistSSHRun.resolve_pkg_env(tmp)
+            listed = DistSSHRun.rsync_send_list(tmp, env)
+            @test listed isa Vector
+            @test "tracked.jl" in listed
+            @test !any(startswith(r, ".git") for r in listed)
+        end
     end
 end
 

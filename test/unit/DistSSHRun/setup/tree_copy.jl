@@ -190,37 +190,38 @@ using Test
     end
 
     @testset "ssh -e quotes the transport" begin
-        Sys.which("ssh") === nothing && return
-        withenv("DISTSSHKIT_TEST_SSH" => nothing) do
-            cmd = DistSSHRun._host_sync_remote_shell_cmd("host.test", "true")
-            @test cmd.exec[1] == DistSSHRun._ssh_exe()
-            @test "-n" in cmd.exec
-            fed = DistSSHRun._host_sync_remote_shell_cmd(
-                "host.test", "true"; forward_stdin = true,
-            )
-            @test !("-n" in fed.exec)
-        end
-        withenv(
-            "DISTSSHKIT_TEST" => nothing,
-            "DISTSSHKIT_TEST_SSH" => "/tmp/distsshkit-not-a-test.jl",
-            "DISTSSHKIT_TEST_LOCAL_JULIAUP" => "/tmp/distsshkit-not-a-juliaup",
-        ) do
-            cmd = DistSSHRun._host_sync_remote_shell_cmd("host.test", "true")
-            @test cmd.exec[1] == DistSSHRun._ssh_exe()
-            @test !in("/tmp/distsshkit-not-a-juliaup", DistSSHRun.DistSSHBase.local_juliaup_candidates())
-        end
-        withenv(
-            "DISTSSHKIT_TEST" => nothing,
-            "DISTSSHKIT_TEST_SSH" => nothing,
-            "DISTRIBUTED_SSH_OPTS" => "-F \"/tmp/cfg dir/config\" -o BatchMode=yes",
-        ) do
-            @test DistSSHRun.ssh_opts() == ["-F", "/tmp/cfg dir/config", "-o", "BatchMode=yes"]
-        end
-        withenv("DISTRIBUTED_SSH_OPTS" => "-F \"unterminated") do
-            @test_throws ArgumentError DistSSHRun.ssh_opts()
-        end
-        withenv("DISTRIBUTED_SSH_OPTS" => nothing) do
-            @test "BatchMode=yes" in DistSSHRun.ssh_opts()
+        if _test_skip_unless_ssh()
+            withenv("DISTSSHKIT_TEST_SSH" => nothing) do
+                cmd = DistSSHRun._host_sync_remote_shell_cmd("host.test", "true")
+                @test cmd.exec[1] == DistSSHRun._ssh_exe()
+                @test "-n" in cmd.exec
+                fed = DistSSHRun._host_sync_remote_shell_cmd(
+                    "host.test", "true"; forward_stdin = true,
+                )
+                @test !("-n" in fed.exec)
+            end
+            withenv(
+                "DISTSSHKIT_TEST" => nothing,
+                "DISTSSHKIT_TEST_SSH" => "/tmp/distsshkit-not-a-test.jl",
+                "DISTSSHKIT_TEST_LOCAL_JULIAUP" => "/tmp/distsshkit-not-a-juliaup",
+            ) do
+                cmd = DistSSHRun._host_sync_remote_shell_cmd("host.test", "true")
+                @test cmd.exec[1] == DistSSHRun._ssh_exe()
+                @test !in("/tmp/distsshkit-not-a-juliaup", DistSSHRun.DistSSHBase.local_juliaup_candidates())
+            end
+            withenv(
+                "DISTSSHKIT_TEST" => nothing,
+                "DISTSSHKIT_TEST_SSH" => nothing,
+                "DISTRIBUTED_SSH_OPTS" => "-F \"/tmp/cfg dir/config\" -o BatchMode=yes",
+            ) do
+                @test DistSSHRun.ssh_opts() == ["-F", "/tmp/cfg dir/config", "-o", "BatchMode=yes"]
+            end
+            withenv("DISTRIBUTED_SSH_OPTS" => "-F \"unterminated") do
+                @test_throws ArgumentError DistSSHRun.ssh_opts()
+            end
+            withenv("DISTRIBUTED_SSH_OPTS" => nothing) do
+                @test "BatchMode=yes" in DistSSHRun.ssh_opts()
+            end
         end
     end
 
@@ -318,44 +319,46 @@ function _gitignore_git!(dir::String)
 end
 
 @testset "rsync gitignore keyword" begin
-    Sys.which("git") === nothing && return
+    if _test_skip_unless_git()
 
-    _with_tempdir() do tmp
-        src = joinpath(tmp, "proj")
-        mkpath(src)
-        _gitignore_tree!(src)
-        _gitignore_git!(src)
-        env = DistSSHRun.resolve_pkg_env(src)
-        listed = DistSSHRun._rsync_send_list(env.env_dir, env; warn = false)
-        @test listed isa Vector
-        got = Set(listed)
-        @test "data/input.csv" in got
-        @test "Manifest.toml" in got
-        @test "src/a.jl" in got
-        @test "data/tmp.csv" ∉ got
-        @test "Manifest-v1.13.toml" ∉ got
-        @test ".distsshkit/marker" ∉ got
-    end
+        _with_tempdir() do tmp
+            src = joinpath(tmp, "proj")
+            mkpath(src)
+            _gitignore_tree!(src)
+            _gitignore_git!(src)
+            env = DistSSHRun.resolve_pkg_env(src)
+            listed = DistSSHRun._rsync_send_list(env.env_dir, env; warn = false)
+            @test listed isa Vector
+            got = Set(listed)
+            @test "data/input.csv" in got
+            @test "Manifest.toml" in got
+            @test "src/a.jl" in got
+            @test "data/tmp.csv" ∉ got
+            @test "Manifest-v1.13.toml" ∉ got
+            @test ".distsshkit/marker" ∉ got
+        end
 
-    session = DistSSHRun.KitSession(
-        project = pwd(), workers = ["child:h"], yes = true, quiet = true,
-    )
-    sync_err = try
-        DistSSHRun.sync!(session; mode = :sync, gitignore = false)
-        nothing
-    catch e
-        e
-    end
-    @test sync_err isa ArgumentError
-    @test occursin("gitignore", sync_err.msg)
-    setup_err = try
-        DistSSHRun.setup!(session, :check; gitignore = false)
-        nothing
-    catch e
-        e
-    end
-    @test setup_err isa ArgumentError
-    @test occursin("gitignore", setup_err.msg)
+        session = DistSSHRun.KitSession(
+            project = pwd(), workers = ["child:h"], yes = true, quiet = true,
+        )
+        sync_err = try
+            DistSSHRun.sync!(session; mode = :sync, gitignore = false)
+            nothing
+        catch e
+            e
+        end
+        @test sync_err isa ArgumentError
+        @test occursin("gitignore", sync_err.msg)
+        setup_err = try
+            DistSSHRun.setup!(session, :check; gitignore = false)
+            nothing
+        catch e
+            e
+        end
+        @test setup_err isa ArgumentError
+        @test occursin("gitignore", setup_err.msg)
+
+    end # _test_skip_unless_git()
 end
 
 @testset "setup clone dest safety" begin
