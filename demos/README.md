@@ -54,8 +54,8 @@ julia --project=. distsshkit_demos/without_kit/pipeline_pi.jl --n 5000
 
 Drivers use `init_output_dir!` + `main` + `pmap`. Work count is `--n N`
 (default 8), not a positional integer. Optional hooks: `help drive`.
-`pipeline_square.jl` is the thin API entry (optional sync → drive! →
-collect) over `square_file.jl`. Same tokens as the CLI:
+`pipeline_square.jl` is the thin API entry (drive! → optional collect) over
+`square_file.jl`. Same tokens as the CLI:
 `pipeline!(driver, "parent:2"; args=[…])`. A commented remote example is at
 the bottom of that file (`setup!` first, or CLI `setup`).
 
@@ -91,5 +91,6 @@ julia --project=. -m DistSSHRun ride parent:2 distsshkit_demos/ride/map_echo.jl
 
 Remote: set `DISTRIBUTED_REMOTE_PROJECT_ROOT` when needed. Optional:
 `DISTSSHKIT_HOSTS` (comma-separated `parent:N` / `child:NAME:N` for
-`go` / `drive` / `pipeline!`; `go --repeat` may omit `:N`), `SYNC_MODE=sync|rsync|off`
-(pipeline env).
+`go` / `drive` / `pipeline!`; `go --repeat` may omit `:N`). Deploy with
+`setup git-sync` / `setup ship-tree` before `go` / `drive`; omit
+`SYNC_MODE` or set `SYNC_MODE=off` for `pipeline!`.

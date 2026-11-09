@@ -305,22 +305,34 @@ function placement_tokens_from_go_slots(slots::Vector{GoSlot})::Vector{String}
     return out
 end
 
+# Resolve symlinks first so an in-tree link to outside counts as outside; else `_path_under_resolved`.
 function _script_inside_project(project::AbstractString, script::AbstractString)::Bool
-    proj = canonical_local_path(project)
-    path = canonical_local_path(script)
-    prefix = joinpath(proj, "")
-    return startswith(path, prefix) || path == proj
+    p = canonical_local_path(script)
+    r = canonical_local_path(project)
+    if ispath(p) && ispath(r)
+        try
+            ps = canonical_local_path(realpath(p))
+            pr = canonical_local_path(realpath(r))
+            return _path_is_under(ps, pr)
+        catch
+        end
+    end
+    return _path_under_resolved(p, r)
 end
 
 function _go_script_relpath(project::AbstractString, script::AbstractString)::String
-    proj = canonical_local_path(project)
     path = canonical_local_path(script)
-    parent_prefix = joinpath(proj, "")
-    if startswith(path, parent_prefix) || path == proj
-        rel = relpath(path, proj)
-        return rel == "." ? basename(path) : rel
+    if !_script_inside_project(project, script)
+        return joinpath(EXTERNAL_DIR_NAME, basename(path))
     end
-    return joinpath(EXTERNAL_DIR_NAME, basename(path))
+    proj = canonical_local_path(project)
+    try
+        ispath(proj) && (proj = canonical_local_path(realpath(proj)))
+        ispath(path) && (path = canonical_local_path(realpath(path)))
+    catch
+    end
+    rel = relpath(path, proj)
+    return rel == "." ? basename(path) : rel
 end
 
 """
@@ -357,13 +369,10 @@ function _go_kit_parent(
     )::String
     proj = canonical_local_path(project)
     script_path = canonical_local_path(script)
-    proj_prefix = joinpath(proj, "")
-    dir = if startswith(script_path, proj_prefix) || dirname(script_path) == proj
-        dirname(script_path)
-    else
-        proj
+    if _script_inside_project(project, script)
+        return kit_dir_beside_script(dirname(script_path), :go)
     end
-    return kit_dir_beside_script(dir, :go)
+    return kit_dir_beside_script(proj, :go)
 end
 
 """Batch output directory: `{.distsshkit/go}/<stem>_<UTC>/` (`kit.progress` + slots).
@@ -629,11 +638,6 @@ function _go_remote_slot_rel(
         batch_dir::AbstractString,
         slot_label::AbstractString,
     )::String
-    if _SHIP_LAYOUT_ACTIVE[]
-        label = String(slot_label)
-        (isempty(label) || label == "." || label == "..") && (label = "slot")
-        return string("..", "/", label)
-    end
     proj_abs = canonical_local_path(proj)
     slot_abs = canonical_local_path(slot_dir)
     if _path_under_resolved(slot_abs, proj_abs) && slot_abs != proj_abs
@@ -980,13 +984,11 @@ both `output_dir` and `collect_spec::String` is an error. `collect_spec === fals
 means "skip collect" and is orthogonal to `output_dir`.
 
 Default `sync` is `false` (no pre-run sync; remotes are checked first — setup
-is assumed done). The `go` CLI does not take `--ship-tree`; prepare with
-`setup ship-tree` then `setup instantiate`, then `go --snapshot ID`.
-Pass `sync=:git_sync` or `sync=:ship_tree` on [`go!`](@ref) to copy, then check.
-After `:ship_tree`,
-hosts that still lack Manifest deps get [`instantiate!`](@ref) before the
-check. `snapshot` (CLI `--snapshot`) selects `runs/<ID>/src` when `sync` is
-omitted or `false`; it cannot combine with `sync=:git_sync` / `sync=:ship_tree`.
+is assumed done). The `go` CLI does not take `--ship-tree` or `--git-sync`;
+prepare with `setup ship-tree` or `setup git-sync`, then `setup instantiate`
+when needed, then `go --snapshot ID`. Passing `sync=:git_sync` or
+`sync=:ship_tree` on [`go!`](@ref) is an `ArgumentError`. `snapshot`
+(CLI `--snapshot`) selects `runs/<ID>/src` when `sync` is omitted or `false`.
 A script outside the project is allowed with `snapshot` when that ship used
 `extra_files=[script]`. The remote command is
 [`remote_script_path`](@ref): `_distsshrun_external/<basename>` under the
@@ -1024,7 +1026,6 @@ function go!(
         quiet::Bool = false,
         verbosity::Union{Nothing, Symbol} = nothing,
         yes::Bool = true,
-        sync::Union{Symbol, Bool, Nothing} = nothing,
         output_dir::Union{Nothing, AbstractString} = nothing,
         collect_spec::Union{Bool, AbstractString, Nothing} = nothing,
         args::AbstractVector{<:AbstractString} = String[],
@@ -1034,13 +1035,16 @@ function go!(
         original_args::Vector{String} = String[],
         repeat::Union{Nothing, Integer} = nothing,
         allow_mismatch = Symbol[],
-        allow_external_symlinks::Bool = false,
         snapshot::Union{Nothing, AbstractString} = nothing,
+        sync::Union{Symbol, Bool, Nothing} = nothing,
+        allow_external_symlinks::Bool = false,
     )::GoResult
+    _reject_run_transfer_kw!("go!", sync; surface = hint_surface)
+    allow_external_symlinks &&
+        _reject_run_transfer_cli!(hint_surface === :cli ? "go" : "go", "--allow-external-symlinks")
     remote_argv = _remote_script_argv(script)
     script_path = remote_argv ? String(script) : canonical_local_path(script)
     snap_arg = snapshot === nothing ? nothing : validate_snapshot_id(snapshot)
-    _snapshot_sync_exclusive!(snap_arg, sync; kind = :go, surface = hint_surface)
     proj = canonical_local_path(project)
     if !isfile(script_path) && !(remote_argv && snap_arg !== nothing)
         throw(
@@ -1059,7 +1063,8 @@ function go!(
     inherited_run = old_run isa AbstractString && !isempty(strip(old_run))
     try
         _reset_run_provenance!(proj)
-        _clear_last_ship!()
+        _clear_active_selection!()
+        _clear_active_deploy_record!()
         warn_project_sshflags(proj)
         _ensure_kit_run_dir!(:go, script_path; project = proj)
         return with_allow_mismatch(allow_mismatch) do
@@ -1072,7 +1077,6 @@ function go!(
                 quiet,
                 verbosity,
                 yes,
-                sync,
                 output_dir,
                 collect_spec,
                 args,
@@ -1082,7 +1086,6 @@ function go!(
                 original_args,
                 repeat,
                 inherited_run,
-                allow_external_symlinks,
                 snap_arg,
             )
         end
@@ -1101,7 +1104,6 @@ function _go_run!(
         quiet,
         verbosity,
         yes,
-        sync,
         output_dir,
         collect_spec,
         args,
@@ -1111,7 +1113,6 @@ function _go_run!(
         original_args,
         repeat,
         inherited_run::Bool,
-        allow_external_symlinks::Bool = false,
         snap_arg::Union{Nothing, String} = nothing,
     )
     anchor = something(path_anchor, proj)
@@ -1142,14 +1143,7 @@ function _go_run!(
             )
         )
     end
-    sync_mode_early = something(sync, false)
-    # A selected snapshot already contains the sibling path. Skip the
-    # in-tree `[sources]` check. A plain go still uses `ensure_manifest_ships!`.
-    if sync_mode_early === :ship_tree || snap_arg !== nothing
-        _require_manifest!(proj)
-    else
-        ensure_manifest_ships!(proj)
-    end
+    _require_manifest!(proj)
     batch_dir = if output_dir !== nothing
         _prepare_output_dir!(
             output_dir;
@@ -1198,17 +1192,13 @@ function _go_run!(
 
         child_hosts = unique(String[s.host for s in slots if s.kind === :child])
         remote_argv = _remote_script_argv(script_path)
-        if !_script_inside_project(proj, script_path) &&
-                !remote_argv &&
-                sync_mode_early !== :ship_tree &&
-                snap_arg === nothing &&
-                !isempty(child_hosts)
-            throw(
-                ArgumentError(
-                    "script must be inside project ($proj): $(canonical_local_path(script_path))",
-                )
-            )
-        end
+        _reject_script_outside_project_run!(
+            "go!",
+            proj,
+            script_path;
+            snapshot = snap_arg,
+            remote_argv = remote_argv,
+        )
         _write_kit_hosts_file(child_hosts, batch_dir, nothing)
 
         skip_collect = collect_spec === false
@@ -1231,92 +1221,14 @@ function _go_run!(
             _kit_progress_mark!("ready")
         end
         sync_result = nothing
-        sync_mode = something(sync, false)
-        n_slots > 0 && _kit_progress_mark!("sync")
-        # `sync=false`: remotes must already have Project.toml + deps.
-        # With `:ship_tree` / `:git_sync`, copy first.
-        # `run_rr` is assigned once so later `@async` does not capture a boxed bind.
-        run_rr = if sync_mode === false
-            rr = isempty(child_hosts) ? sess_rr :
-                _project_work_root(
-                    child_hosts, proj; cli_override = remote, snapshot = snap_arg,
-                )
-            _go_assert_remotes_ready!(child_hosts, rr)
-            rr
-        elseif !isempty(child_hosts)
-            sync_mode === :rsync && _throw_rsync_removed()
-            sync_session = KitSession(
-                project = proj,
-                workers = [format_placement_token(:child, h) for h in child_hosts],
-                remote = remote,
-                quiet = quiet,
-                verbosity = verbosity,
-                yes = yes,
-            )
-            sync_result = sync!(
-                sync_session;
-                mode = sync_mode,
-                allow_external_symlinks = allow_external_symlinks,
-                await_inputs = sync_mode !== :ship_tree,
-                extra_files = _script_inside_project(proj, script_path) ? String[] : String[script_path],
-            )
-            if !sync_result.ok
-                await_declared_input_hashes!()
-                completed = true
-                return _go_complete!(
-                    GoResult(
-                        false,
-                        sync_result,
-                        nothing,
-                        nothing,
-                        script_path,
-                        batch_dir;
-                        failed_step = "sync",
-                    ),
-                    batch_dir,
-                    release_lock,
-                    false,
-                    anchor,
-                    place,
-                )
-            end
-            ship_snap = sync_mode === :ship_tree ?
-                something(result_remote_run_id(sync_result), snap_arg) : snap_arg
-            if sync_mode === :ship_tree
-                inst_julia = julia === nothing || strip(String(julia)) == "auto" ?
-                    "auto" : String(julia)
-                inst = instantiate_after_ship!(
-                    sync_session; julia = inst_julia, snapshot = ship_snap,
-                )
-                if inst !== nothing && !inst.ok
-                    await_declared_input_hashes!()
-                    completed = true
-                    return _go_complete!(
-                        GoResult(
-                            false,
-                            inst,
-                            nothing,
-                            nothing,
-                            script_path,
-                            batch_dir;
-                            failed_step = "instantiate",
-                        ),
-                        batch_dir,
-                        release_lock,
-                        false,
-                        anchor,
-                        place,
-                    )
-                end
-                await_declared_input_hashes!()
-            end
-            rr = _project_work_root(
-                child_hosts, proj; cli_override = remote, snapshot = ship_snap,
-            )
-            _go_assert_remotes_ready!(child_hosts, rr)
-            rr
-        else
+        run_rr = if isempty(child_hosts)
             sess_rr
+        else
+            rr = _project_work_root(
+                child_hosts, proj; cli_override = remote, snapshot = snap_arg,
+            )
+            _go_assert_remotes_ready!(child_hosts, rr)
+            rr
         end
 
         if !isempty(child_hosts)

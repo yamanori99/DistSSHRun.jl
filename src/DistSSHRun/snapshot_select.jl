@@ -40,34 +40,6 @@ function validate_snapshot_id(snapshot_id::AbstractString)::String
 end
 public validate_snapshot_id
 
-"""Refuse `snapshot=` with git pre-run sync (`:git_sync` / `:ship_tree`). `surface=:cli` names flags."""
-function _snapshot_sync_exclusive!(
-        snapshot::Union{Nothing, AbstractString},
-        sync::Union{Nothing, Symbol, Bool};
-        kind::Symbol,
-        surface::Symbol,
-    )
-    sym = sync isa Symbol ? sync : nothing
-    if sym === :sync
-        api = if surface === :cli
-            kind === :drive ? "drive" : "go"
-        else
-            kind === :drive ? "drive!" : "go!"
-        end
-        _reject_removed_pre_run_git_sync!(sym; api = api)
-    end
-    snapshot === nothing && return nothing
-    sym === :git_sync || sym === :ship_tree || return nothing
-    validate_snapshot_id(snapshot)
-    if surface === :cli
-        cmd = kind === :drive ? "drive" : "go"
-        flag = sym === :git_sync ? "--git-sync" : "--ship-tree"
-        throw(ArgumentError("$cmd: --snapshot cannot be combined with $flag"))
-    end
-    api = kind === :drive ? "drive!" : "go!"
-    throw(ArgumentError("$api: snapshot= cannot be combined with sync=:$sym"))
-end
-
 const _CONTENT_TREE_HASH_RE = r"^[0-9a-fA-F]{40}$"
 
 """True when `hash` is a 40-digit hex Git tree hash (`git-sha1`)."""
@@ -258,14 +230,6 @@ function forget_last_snapshot_default!(
     )::Nothing
     env = resolve_pkg_env(local_project)
     clear_last_snapshot_record!(env.env_dir; deploy_root = String(deploy_root))
-    last = last_ship_result()
-    if last !== nothing
-        stored = get(last, "remote_root", nothing)
-        if stored isa AbstractString &&
-                _deploy_roots_equivalent(stored, deploy_root)
-            _clear_last_ship!()
-        end
-    end
     return nothing
 end
 public forget_last_snapshot_default!
@@ -574,24 +538,6 @@ function resolve_snapshot_selection(
             return _selection_from_deploy_record(dep, deploy, host_list)
         end
         _set_active_deploy_record!(nothing)
-    end
-    # Same-process ship: use the recorded run_id, still validate on every host.
-    last = skip_local_record ? nothing : last_ship_result()
-    if last !== nothing && _SHIP_LAYOUT_ACTIVE[] &&
-            _last_ship_src_for(host_list, deploy) !== nothing
-        rid_raw = get(last, "run_id", nothing)
-        if rid_raw isa AbstractString && !isempty(strip(String(rid_raw)))
-            rid = validate_snapshot_id(rid_raw)
-            checked = _validate_snapshot_on_hosts!(host_list, deploy, rid)
-            return SnapshotSelection(
-                :snapshot,
-                rid,
-                deploy,
-                _snapshot_project_logical(deploy, rid, checked.project_rel),
-                checked.hash,
-                host_list,
-            )
-        end
     end
     rec = skip_local_record ? nothing : read_last_snapshot_record(env.env_dir)
     if rec !== nothing && _record_matches_selection(rec, deploy, host_list)

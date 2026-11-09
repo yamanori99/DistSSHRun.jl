@@ -314,10 +314,10 @@ if !isdefined(@__MODULE__, :setup_main)
                         extra_files = opts.extra_files,
                     ),
                 )
-                rec = DistSSHRun.last_ship_result()
-                if ok && rec !== nothing
-                    rid = get(rec, "run_id", nothing)
-                    src = get(rec, "src", nothing)
+                sel = ok ? DistSSHRun.active_snapshot_selection() : nothing
+                if ok && sel !== nothing
+                    rid = sel.snapshot_id
+                    src = sel.work_root
                     path_flag = opts.deploy_root isa AbstractString ?
                         " --deploy-root $(opts.deploy_root)" : ""
                     if rid isa AbstractString && !isempty(rid)
@@ -412,7 +412,8 @@ if !isdefined(@__MODULE__, :setup_main)
             # --git-pull/--git-sync: a commit mismatch is fixed by checkout --detach.
             # --check: require the commits to match already.
             # Both git modes refuse a dirty local tree (a patch is not shipped).
-            require_clean = (mode === :git_sync || mode === :git_pull)
+            require_clean = mode === :git_pull ||
+                (mode === :git_sync && !opts.skip_git_guard)
             check_code_sync = (mode === :check)
             result = check_prerequisites(
                 opts.hosts, opts.julia_path, op_path, project;
@@ -455,6 +456,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 remote_path;
                 do_push = do_push,
                 do_pull = true,
+                allow_dirty = opts.skip_git_guard,
             )
             raw.cancelled && return Cint(0)
             if !raw.ok
@@ -468,7 +470,8 @@ if !isdefined(@__MODULE__, :setup_main)
                 opts.hosts,
                 deploy_path,
                 project,
-                mode === :git_sync ? :git_sync : :git_pull,
+                mode === :git_sync ? :git_sync : :git_pull;
+                dirty = mode === :git_sync && opts.skip_git_guard,
             )
             print_ok("$mode_name complete.")
             kit_println()

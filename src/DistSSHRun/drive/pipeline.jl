@@ -1,24 +1,5 @@
 # pipeline! — sync → drive → collect.
 
-function _parse_env_sync_mode(raw::AbstractString)::Union{Symbol, Bool, Nothing}
-    s = lowercase(strip(String(raw)))
-    isempty(s) && return nothing
-    s in ("off", "false", "0", "skip", "no") && return false
-    s == "sync" &&
-        throw(
-        ArgumentError(
-            join_explained_message(
-                "SYNC_MODE=sync was removed; use git-sync",
-                "Or omit SYNC_MODE for no pre-run sync.",
-            ),
-        ),
-    )
-    s in ("git-sync", "git_sync") && return :git_sync
-    s == "rsync" && _throw_rsync_removed()
-    s in ("ship-tree", "ship_tree") && return :ship_tree
-    throw(ArgumentError("invalid SYNC_MODE=$(repr(raw)); use ship-tree, git-sync, or off"))
-end
-
 function _reject_obsolete_pipeline_size_env()
     for name in ("GB_PER_WORKER", "DISTSSHKIT_SIZE_PROBE")
         raw = strip(get(ENV, name, ""))
@@ -65,6 +46,7 @@ function pipeline_config_from_env(;
     driver_path = _pipeline_config_driver_path(driver)
     remote_raw = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
     sync_raw = strip(get(ENV, "SYNC_MODE", ""))
+    _reject_pipeline_sync_env!(sync_raw)
     project_root = strip(get(ENV, "DISTRIBUTED_PROJECT_ROOT", ""))
     cli = default_kit_cli_session()
     cli.hint_surface = :api
@@ -78,7 +60,7 @@ function pipeline_config_from_env(;
         quiet = env_v === :quiet,
         verbosity = env_v,
         driver = String(driver_path),
-        sync = _parse_env_sync_mode(sync_raw),
+        sync = nothing,
         julia = let j = strip(get(ENV, "JULIA_DISTRIBUTED_EXE", ""))
             isempty(j) || lowercase(j) == "auto" ? nothing : String(j)
         end,
@@ -96,16 +78,6 @@ function kit_session_from_config(config::PipelineConfig)::KitSession
         verbosity = config.verbosity,
         yes = config.yes,
     )
-end
-
-"""Resolve sync mode for [`pipeline!`](@ref): `false`, `:ship_tree`, or `:git_sync`."""
-function resolve_pipeline_sync(
-        config::PipelineConfig,
-        session::KitSession,
-    )::Union{Symbol, Bool}
-    config.sync === false && return false
-    isempty(session.hosts) && return false
-    return something(config.sync, false)
 end
 
 """Whether [`pipeline!`](@ref) should rsync results back from remotes."""
@@ -211,25 +183,7 @@ function pipeline!(config::PipelineConfig)::PipelineResult
 end
 
 function _pipeline_run!(config::PipelineConfig, session::KitSession, driver::String)
-    sync_mode = resolve_pipeline_sync(config, session)
     sync_result = nothing
-    if sync_mode !== false
-        sync_result = sync!(session; mode = sync_mode)
-        if !sync_result.ok
-            return PipelineResult(
-                false,
-                sync_result,
-                nothing,
-                nothing,
-                nothing,
-                driver;
-                failed_step = "sync",
-                output_dir = config.output_dir,
-                log_dir = config.log_dir,
-            )
-        end
-    end
-
     plan = if isempty(session.tokens)
         WorkerPlan()
     else

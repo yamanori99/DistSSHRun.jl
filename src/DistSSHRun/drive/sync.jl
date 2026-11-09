@@ -5,7 +5,7 @@
 
 Sync local project to SSH hosts (call explicitly; go/drive do not call this by default).
 
-- `mode=:git_sync` — push the local branch to origin, then check out that commit on each remote as a detached HEAD (confirm unless `session.yes`). Does not run `git pull`. A dirty tree is refused.
+- `mode=:git_sync` — push the local branch to origin, then check out that commit on each remote as a detached HEAD (confirm unless `session.yes`). Does not run `git pull`. A dirty tree is refused unless `allow_dirty=true` (CLI `setup git-sync --skip-git-guard`; deploy record `dirty=true`).
 - `mode=:ship_tree` — pack the project (each directory's `.gitignore`) into a tar and extract under
   `runs/<run_id>/src/` (confirm unless `session.yes`).
 
@@ -21,6 +21,7 @@ function sync!(
         allow_external_symlinks::Bool = false,
         await_inputs::Bool = true,
         extra_files::Vector{String} = String[],
+        allow_dirty::Bool = false,
     )::SyncResult
     # Untyped kw: JETLS treats omitted kwargs as `nothing`, not `Union{Symbol,Bool}`.
     mode === false && throw(ArgumentError("sync!: mode=false means skip sync; do not call sync!"))
@@ -32,7 +33,7 @@ function sync!(
             "sync! mode must be :ship_tree or :git_sync, got $(repr(kind))",
         )
     )
-    check_setup_options!(kind; extra_files = extra_files)
+    check_setup_options!(kind; extra_files = extra_files, allow_dirty = allow_dirty)
     gitignore || throw(ArgumentError("sync! gitignore is not valid for mode=:$kind"))
     isempty(session.hosts) && throw(
         ArgumentError(
@@ -69,6 +70,7 @@ function sync!(
                 do_push = true,
                 do_pull = true,
                 confirm = !session.yes,
+                allow_dirty = allow_dirty,
             )
             if raw.cancelled
                 return SyncResult(true, HostResult[]; ok = false)
@@ -78,7 +80,8 @@ function sync!(
                 forget_last_snapshot_default!(session.project, deploy)
                 ok_hosts = String[String(hr.host) for hr in result.hosts if hr.ok]
                 commit_deploy_record_after_git!(
-                    ok_hosts, deploy, session.project, :git_sync,
+                    ok_hosts, deploy, session.project, :git_sync;
+                    dirty = allow_dirty,
                 )
             end
             return result

@@ -137,7 +137,7 @@ end
         e
     end
     @test err_combo isa ArgumentError
-    @test occursin("go --ship-tree was removed", err_combo.msg)
+    @test occursin("go: --ship-tree was removed", err_combo.msg)
     err_go_sync_flag = try
         DistSSHRun.parse_go_args(
             String["--sync", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
@@ -147,155 +147,43 @@ end
         e
     end
     @test err_go_sync_flag isa ArgumentError
-    @test occursin("go --sync was removed", err_go_sync_flag.msg)
-    gsync = DistSSHRun.parse_go_args(
-        String["--git-sync", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
-    )
-    @test gsync.snapshot == _SNAP_ID_OLD
-    err_go = try
-        DistSSHRun.go!("job.jl", ["parent:1"]; sync = :git_sync, snapshot = gsync.snapshot)
-        nothing
-    catch e
-        e
-    end
-    @test err_go isa ArgumentError
-    @test occursin("snapshot= cannot be combined with sync=:git_sync", err_go.msg)
-    err_go_api = try
-        DistSSHRun.go!("job.jl", ["parent:1"]; sync = :sync, snapshot = _SNAP_ID_OLD)
-        nothing
-    catch e
-        e
-    end
-    @test err_go_api isa ArgumentError
-    @test occursin("sync=:sync was removed", err_go_api.msg)
-    err_drive_sync_flag = try
-        DistSSHRun.parse_drive_args(
-            String["--sync", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
+    @test occursin("go: --sync was removed", err_go_sync_flag.msg)
+    err_git_combo = try
+        DistSSHRun.parse_go_args(
+            String["--git-sync", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
         )
         nothing
     catch e
         e
     end
-    @test err_drive_sync_flag isa ArgumentError
-    @test occursin("drive --sync was removed", err_drive_sync_flag.msg)
-    dsync = DistSSHRun.parse_drive_args(
-        String["--git-sync", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
-    )
-    @test dsync.snapshot == _SNAP_ID_OLD
+    @test err_git_combo isa ArgumentError
+    @test occursin("--git-sync was removed", err_git_combo.msg)
+    err_go_api = try
+        DistSSHRun.go!(
+            "job.jl", ["parent:1"];
+            sync = :git_sync,
+            snapshot = _SNAP_ID_OLD,
+            yes = true,
+        )
+        nothing
+    catch e
+        e
+    end
+    @test err_go_api isa ArgumentError
+    @test occursin("no longer transfers", err_go_api.msg)
     err_drive = try
         DistSSHRun.drive!(
-            "job.jl", ["parent:1"]; sync = :git_sync, snapshot = dsync.snapshot, yes = true,
+            "job.jl", ["parent:1"];
+            sync = :git_sync,
+            snapshot = _SNAP_ID_OLD,
+            yes = true,
         )
         nothing
     catch e
         e
     end
     @test err_drive isa ArgumentError
-    @test occursin("snapshot= cannot be combined with sync=:git_sync", err_drive.msg)
-end
-
-@testset "snapshot sync exclusivity parity" begin
-    err_go_legacy = try
-        DistSSHRun.go!(
-            "job.jl", ["parent:1"]; sync = :sync, snapshot = _SNAP_ID_OLD, yes = true,
-        )
-        nothing
-    catch e
-        e
-    end
-    @test err_go_legacy isa ArgumentError
-    @test occursin("sync=:sync was removed", err_go_legacy.msg)
-
-    for sym in (:git_sync, :ship_tree)
-        err_go = try
-            DistSSHRun.go!(
-                "job.jl", ["parent:1"]; sync = sym, snapshot = _SNAP_ID_OLD, yes = true,
-            )
-            nothing
-        catch e
-            e
-        end
-        @test err_go isa ArgumentError
-        @test occursin("snapshot= cannot be combined with sync=:$sym", err_go.msg)
-        err_drive = try
-            DistSSHRun.drive!(
-                "job.jl", ["parent:1"]; sync = sym, snapshot = _SNAP_ID_OLD, yes = true,
-            )
-            nothing
-        catch e
-            e
-        end
-        @test err_drive isa ArgumentError
-        @test occursin("snapshot= cannot be combined with sync=:$sym", err_drive.msg)
-    end
-
-    err_go_cli = try
-        DistSSHRun.go!(
-            "job.jl", ["parent:1"];
-            sync = :ship_tree,
-            snapshot = _SNAP_ID_OLD,
-            yes = true,
-            hint_surface = :cli,
-        )
-        nothing
-    catch e
-        e
-    end
-    @test err_go_cli isa ArgumentError
-    @test occursin("go: --snapshot cannot be combined with --ship-tree", err_go_cli.msg)
-
-    _with_tempdir() do proj
-        _snap_project!(proj)
-        script = joinpath(proj, "job.jl")
-        write(script, "main() = 1\n")
-        for sym in (:git_sync, :ship_tree)
-            parsed = if sym === :git_sync
-                DistSSHRun.parse_drive_args(
-                    String["--git-sync", "--snapshot", _SNAP_ID_OLD, "parent:1", script],
-                )
-            else
-                base = DistSSHRun.parse_drive_args(String["parent:1", script])
-                merge(base, (sync_mode = :ship_tree, snapshot = _SNAP_ID_OLD))
-            end
-            surface = get(parsed, :hint_surface, :cli)
-            err_run = try
-                DistSSHRun.run_drive_parsed!(parsed; project_root = proj)
-                nothing
-            catch e
-                e
-            end
-            @test err_run isa ArgumentError
-            if surface === :cli
-                cli_flag = sym === :git_sync ? "--git-sync" : "--ship-tree"
-                @test occursin("drive: --snapshot cannot be combined with $cli_flag", err_run.msg)
-            else
-                @test occursin("snapshot= cannot be combined with sync=:$sym", err_run.msg)
-            end
-        end
-        env = _child_julia_env(
-            Dict(
-                "DISTSSHKIT_YES" => "1",
-                "DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL" => "1",
-            ),
-        )
-        for (sub, cli_flag) in (("drive", "--git-sync"), ("go", "--git-sync"))
-            cmd = _kit_cli_cmd(
-                String[
-                    sub,
-                    "-y",
-                    "-q",
-                    cli_flag,
-                    "--snapshot",
-                    _SNAP_ID_OLD,
-                    "parent:1",
-                    "job.jl",
-                ],
-            )
-            proc, out = _run_subprocess(setenv(cmd, env))
-            @test proc.exitcode != 0
-            @test occursin("$sub: --snapshot cannot be combined with --git-sync", out)
-        end
-    end
+    @test occursin("no longer transfers", err_drive.msg)
 end
 
 @testset "forget_last_snapshot_default clears matching record" begin
@@ -830,45 +718,6 @@ end
             finally
                 DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
                 DistSSHRun._clear_last_ship!()
-            end
-        end
-    end
-end
-
-@testset "skip_local_record ignores _LAST_SHIP" begin
-    double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
-    _with_tempdir() do state
-        remote = joinpath(state, "remote")
-        _write_complete_leaf!(remote, _SNAP_ID_OLD, _SNAP_HASH_OLD)
-        _write_complete_leaf!(remote, _SNAP_ID_NEW, _SNAP_HASH_NEW)
-        previous = DistSSHRun._LAST_SHIP[]
-        DistSSHRun._LAST_SHIP[] = Dict{String, Any}(
-            "src" => joinpath(remote, "runs", _SNAP_ID_NEW, "src"),
-            "run_id" => _SNAP_ID_NEW,
-            "hosts" => String["child-1"],
-            "remote_root" => remote,
-        )
-        DistSSHRun._SHIP_LAYOUT_ACTIVE[] = true
-        _with_tempdir() do proj
-            _snap_project!(proj)
-            DistSSHRun.clear_last_snapshot_record!(proj)
-            write(joinpath(remote, "Project.toml"), "name = \"GitRoot\"\n")
-            try
-                withenv(_snap_ssh_env(double)...) do
-                    used_last = DistSSHRun.resolve_snapshot_selection(
-                        ["child-1"], remote, proj,
-                    )
-                    @test used_last.snapshot_id == _SNAP_ID_NEW
-                    sel2 = DistSSHRun.resolve_snapshot_selection(
-                        ["child-1"], remote, proj; skip_local_record = true,
-                    )
-                    @test sel2.source_kind === :git
-                    @test sel2.snapshot_id === nothing
-                end
-            finally
-                DistSSHRun._LAST_SHIP[] = previous
-                DistSSHRun._SHIP_LAYOUT_ACTIVE[] = false
-                DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
             end
         end
     end

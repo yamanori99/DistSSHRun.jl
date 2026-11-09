@@ -133,10 +133,49 @@ using Test
                 @test !raw_dirty.ok
                 @test isempty(raw_dirty.host_results)
                 @test occursin("dirty", out_dirty)
-                @test occursin("not sent as a patch", out_dirty)
+                @test occursin("--skip-git-guard", out_dirty)
                 @test occursin("help setup", out_dirty)
                 @test !occursin("--help", out_dirty)
+
+                out_allow, raw_allow = _capture_stdio() do _, _
+                    redirect_stderr(devnull) do
+                        DistSSHRun.git_sync_project_to_hosts!(
+                            ["192.0.2.1"], work, "~/App.jl";
+                            do_push = false, do_pull = true, allow_dirty = true,
+                            confirm = false,
+                        )
+                    end
+                end
+                @test !raw_allow.ok
+                @test !occursin("--skip-git-guard", out_allow)
+                @test !occursin("Local git tree is dirty", out_allow)
+
+                session = DistSSHRun.KitSession(
+                    project = work, workers = ["child:192.0.2.1"], yes = true, quiet = true,
+                )
+                out_sync, _ = _capture_stdio() do _, _
+                    redirect_stderr(devnull) do
+                        DistSSHRun.sync!(session; mode = :git_sync, allow_dirty = true)
+                    end
+                end
+                @test !occursin("--skip-git-guard", out_sync)
+                @test !occursin("Local git tree is dirty", out_sync)
             end
+        end
+
+        @testset "allow_dirty option wiring" begin
+            @test_throws ArgumentError DistSSHRun.check_setup_options!(
+                :ship_tree; allow_dirty = true,
+            )
+            session = DistSSHRun.KitSession(project = pwd(), workers = ["child:h"], yes = true)
+            err = try
+                DistSSHRun.sync!(session; mode = :ship_tree, allow_dirty = true)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("allow_dirty", err.msg)
         end
 
         @testset "setup host outcome reads NamedTuple ok" begin

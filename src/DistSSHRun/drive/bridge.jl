@@ -19,6 +19,9 @@ function drive_parsed_from_session(
         snapshot::Union{Nothing, AbstractString} = nothing,
     )
     _reject_removed_drive_worker_include_kw!(sync_script)
+    _reject_run_transfer_kw!("drive!", sync; surface = hint_surface(session))
+    allow_external_symlinks &&
+        _reject_run_transfer_cli!("drive!", "--allow-external-symlinks")
     parent_workers = 0
     hosts = Tuple{String, Union{Int, Nothing}}[]
     if workers !== nothing
@@ -39,12 +42,7 @@ function drive_parsed_from_session(
         hosts_file = session.cli_session.hosts_file,
         hint_surface = hint_surface(session),
     )
-    sync_mode = sync isa Symbol ? sync : nothing
     snap = snapshot === nothing ? nothing : validate_snapshot_id(snapshot)
-    _snapshot_sync_exclusive!(snap, sync_mode; kind = :drive, surface = :api)
-    # Default skip=true; --require-git / skip_hash_check=false enables checks.
-    # ship-tree never has remote .git/ parity.
-    effective_skip = skip_hash_check || sync_mode === :ship_tree
     julia_exe = if julia === nothing || strip(String(julia)) == "" ||
             lowercase(strip(String(julia))) == "auto"
         nothing
@@ -55,7 +53,7 @@ function drive_parsed_from_session(
         parent_workers = parent_workers,
         default_workers = nothing,
         julia = julia_exe,
-        skip_hash_check = effective_skip,
+        skip_hash_check = skip_hash_check,
         enable_log = enable_log,
         log_dir = log_dir === nothing ? nothing : String(log_dir),
         output_dir = output_dir === nothing ? nothing : String(output_dir),
@@ -66,7 +64,6 @@ function drive_parsed_from_session(
         collect_root = nothing,
         collect_hosts = nothing,
         collect_overwrite = nothing,
-        sync_mode = sync_mode,
         worker_include = worker_include,
         require_all_hosts = require_all_hosts,
         help = false,
@@ -74,7 +71,6 @@ function drive_parsed_from_session(
         cli_session = cli_session,
         hint_surface = hint_surface(session),
         allow_mismatch = collect(Symbol, allow_mismatch),
-        allow_external_symlinks = allow_external_symlinks,
         snapshot = snap,
         deploy_root = session.remote,
         isolated = false,

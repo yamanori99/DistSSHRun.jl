@@ -140,6 +140,10 @@ using Test
     end
 
     _with_tempdir() do tmp
+        _write_host_project!(tmp, "RideHost")
+        function ride_local(args...; kwargs...)
+            return DistSSHRun.ride!(args...; project = tmp, kwargs...)
+        end
         out = joinpath(tmp, "out.txt")
         map_path = joinpath(tmp, "mapped.jl")
         write(
@@ -148,7 +152,7 @@ using Test
             write($(repr(out)), join(string.(ys), ","))
             """
         )
-        r = DistSSHRun.ride!(map_path, "parent:1"; spi_check = true)
+        r = ride_local(map_path, "parent:1"; spi_check = true)
         @test r.ok
         @test r.workers == 1
         @test r.spi_ok === true
@@ -193,7 +197,7 @@ using Test
                 write($(repr(fout)), join(string.(ys), ","))
                 """
             )
-            rf = DistSSHRun.ride!(filt, "parent:1"; spi_check = true)
+            rf = ride_local(filt, "parent:1"; spi_check = true)
             @test rf.ok
             @test read(fout, String) == "2,4,6"
 
@@ -208,7 +212,7 @@ using Test
                 write($(repr(nout)), join(string.(ys), ","))
                 """
             )
-            rn = DistSSHRun.ride!(named, "parent:1"; spi_check = true)
+            rn = ride_local(named, "parent:1"; spi_check = true)
             @test rn.ok
             @test read(nout, String) == "1,4,9"
 
@@ -224,7 +228,7 @@ using Test
                 write($(repr(lout)), join(string.(ys), ","))
                 """
             )
-            rl = DistSSHRun.ride!(loop, "parent:1"; spi_check = true)
+            rl = ride_local(loop, "parent:1"; spi_check = true)
             @test rl.ok
             @test rl.spi_ok !== false
             @test read(lout, String) == "1,4,9,16"
@@ -240,7 +244,7 @@ using Test
                 write($(repr(vout)), string(x === nothing) * ";" * join(string.(ys), ","))
                 """
             )
-            rv = DistSSHRun.ride!(val_path, "parent:1"; spi_check = true)
+            rv = ride_local(val_path, "parent:1"; spi_check = true)
             @test rv.ok
             @test read(vout, String) == "true;1,4,9"
 
@@ -256,7 +260,7 @@ using Test
                 write($(repr(stout)), join(string.(ys), ","))
                 """
             )
-            rs = DistSSHRun.ride!(st_path, "parent:1"; spi_check = false)
+            rs = ride_local(st_path, "parent:1"; spi_check = false)
             @test rs.ok
             @test read(stout, String) == "1,4,9,16"
 
@@ -272,7 +276,7 @@ using Test
                 write($(repr(aout)), join(string.(dest), ","))
                 """
             )
-            ra = DistSSHRun.ride!(alias_path, "parent:1"; spi_check = false)
+            ra = ride_local(alias_path, "parent:1"; spi_check = false)
             @test ra.ok
             @test read(aout, String) == "1,1,1"
 
@@ -289,7 +293,7 @@ using Test
                 write($(repr(oout)), join(string.(seen), ",") * ";" * join(string.(dest), ","))
                 """
             )
-            ro = DistSSHRun.ride!(obs_path, "parent:1"; spi_check = false)
+            ro = ride_local(obs_path, "parent:1"; spi_check = false)
             @test ro.ok
             @test read(oout, String) == "1,0,0;0,0,0"
 
@@ -314,7 +318,7 @@ using Test
                 write($(repr(gout)), join(string.(dest), ","))
                 """
             )
-            rg = DistSSHRun.ride!(gen_path, "parent:1"; spi_check = false)
+            rg = ride_local(gen_path, "parent:1"; spi_check = false)
             @test rg.ok
             @test read(gout, String) == "1,2,3"
 
@@ -340,7 +344,7 @@ using Test
                 write($(repr(hout)), join(string.(dest), ","))
                 """
             )
-            rh = DistSSHRun.ride!(haslen_path, "parent:1"; spi_check = false)
+            rh = ride_local(haslen_path, "parent:1"; spi_check = false)
             @test rh.ok
             @test read(hout, String) == "1,2,3"
 
@@ -364,7 +368,7 @@ using Test
                 write($(repr(pout)), join(out, ";"))
                 """
             )
-            rp = DistSSHRun.ride!(pmapnest_path, "parent:2"; spi_check = false)
+            rp = ride_local(pmapnest_path, "parent:2"; spi_check = false)
             @test rp.ok
             @test read(pout, String) == "1,1,1;1,1,1;1,1,1;1,1,1"
 
@@ -441,18 +445,18 @@ using Test
                 opath = joinpath(tmp, stem * ".jl")
                 oout = joinpath(tmp, stem * ".txt")
                 write(opath, replace(body, "ARGS[1]" => repr(oout)))
-                rr = DistSSHRun.ride!(opath, "parent:1"; spi_check = spi)
+                rr = ride_local(opath, "parent:1"; spi_check = spi)
                 @test rr.ok
                 @test read(oout, String) == "1,1,1"
             end
 
-            child = DistSSHRun.ride!(map_path, "child:host1")
+            child = ride_local(map_path, "child:host1")
             @test !child.ok
             @test occursin(":N", something(child.error, ""))
 
             drive_path = joinpath(tmp, "driver.jl")
             write(drive_path, "using Distributed\npmap(x -> x, 1:2)\n")
-            rd = DistSSHRun.ride!(drive_path)
+            rd = ride_local(drive_path)
             @test !rd.ok
             @test occursin("drive", something(rd.error, ""))
             @test occursin("pmap", something(rd.error, ""))
@@ -461,6 +465,7 @@ using Test
 
     @testset "non-empty output directory" begin
         _with_tempdir() do tmp
+            _write_host_project!(tmp, "RideOut")
             script = joinpath(tmp, "job.jl")
             write(script, "println(\"hi\")\n")
             dirty = joinpath(tmp, "out")
@@ -488,19 +493,18 @@ using Test
     end
 
     @testset "ride does not record an earlier ship" begin
-        previous = DistSSHRun._LAST_SHIP[]
-        previous_active = DistSSHRun._SHIP_LAYOUT_ACTIVE[]
+        previous = DistSSHRun.active_snapshot_selection()
         function seed_earlier_ship!()
-            DistSSHRun._LAST_SHIP[] = Dict{String, Any}(
-                "algorithm" => "git-sha1",
-                "content_tree_hash" => "deadbeef",
-                "bytes" => 1,
-                "files" => 1,
-                "run_id" => "20260101T000000Z-abcdef",
-                "host" => "host.test",
-                "run_dir_empty_at_start" => true,
+            DistSSHRun._set_active_selection!(
+                DistSSHRun.SnapshotSelection(
+                    :snapshot,
+                    "20260101T000000Z-abcdef",
+                    "/home/distsshkit/app",
+                    "/home/distsshkit/app/runs/20260101T000000Z-abcdef/src",
+                    "deadbeef",
+                    ["host.test"],
+                ),
             )
-            DistSSHRun._SHIP_LAYOUT_ACTIVE[] = true
             return nothing
         end
         function assert_no_shipped(result)
@@ -515,6 +519,7 @@ using Test
         end
         try
             _with_tempdir() do tmp
+                _write_host_project!(tmp, "RideProv")
                 script = joinpath(tmp, "job.jl")
                 write(script, "println(\"ok\")\n")
                 bad = joinpath(tmp, "bad.jl")
@@ -537,15 +542,17 @@ using Test
                 assert_no_shipped(failed)
             end
         finally
-            DistSSHRun._LAST_SHIP[] = previous
-            DistSSHRun._SHIP_LAYOUT_ACTIVE[] = previous_active
+            if previous === nothing
+                DistSSHRun._clear_last_ship!()
+            else
+                DistSSHRun._set_active_selection!(previous)
+            end
         end
     end
 
     @testset "ride retargets SSH project to completed snapshot src" begin
         double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_ride_work_root_ssh.jl"))
-        previous = DistSSHRun._LAST_SHIP[]
-        previous_active = DistSSHRun._SHIP_LAYOUT_ACTIVE[]
+        previous = DistSSHRun.active_snapshot_selection()
         old_remote = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
         function restore_remote!()
             if old_remote === nothing
@@ -560,6 +567,7 @@ using Test
                 local_proj = joinpath(tmp, "local")
                 mkpath(local_proj)
                 write(joinpath(local_proj, "Project.toml"), "name = \"RideRoot\"\n")
+                write(joinpath(local_proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
                 DistSSHRun.clear_last_snapshot_record!(local_proj)
                 script = joinpath(local_proj, "job.jl")
                 write(script, "nothing\n")
@@ -645,7 +653,7 @@ using Test
                     write(script, "nothing\n")
                     rm(logp; force = true)
                     touch(logp)
-                    # ride! clears `_LAST_SHIP`; pass an explicit snapshot id.
+                    # ride! clears the active selection; pass an explicit snapshot id.
                     child = redirect_stdout(devnull) do
                         redirect_stderr(devnull) do
                             DistSSHRun.ride!(
@@ -678,8 +686,11 @@ using Test
                 end
             end
         finally
-            DistSSHRun._LAST_SHIP[] = previous
-            DistSSHRun._SHIP_LAYOUT_ACTIVE[] = previous_active
+            if previous === nothing
+                DistSSHRun._clear_last_ship!()
+            else
+                DistSSHRun._set_active_selection!(previous)
+            end
             restore_remote!()
             delete!(DistSSHRun._PINNED_JULIA, "ridework.test\0/usr/bin/julia")
         end

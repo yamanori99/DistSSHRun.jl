@@ -108,14 +108,62 @@ using Dates
     end
 
     @testset "_go_script_relpath" begin
+        ext = joinpath("_distsshrun_external", "outside.jl")
         _with_tempdir() do proj
             nested = joinpath(proj, "demos", "job.jl")
             mkpath(dirname(nested))
             touch(nested)
             @test DistSSHRun._go_script_relpath(proj, nested) == joinpath("demos", "job.jl")
-            @test DistSSHRun._go_script_relpath(proj, "/tmp/outside.jl") ==
-                joinpath("_distsshrun_external", "outside.jl")
+            @test DistSSHRun._go_script_relpath(proj, "/tmp/outside.jl") == ext
             @test !DistSSHRun._script_inside_project(proj, "/tmp/outside.jl")
+        end
+
+        _with_tempdir() do base
+            real_proj = joinpath(base, "real_proj")
+            mkpath(joinpath(real_proj, "sub"))
+            write(joinpath(real_proj, "sub", "job.jl"), "1\n")
+            link_proj = joinpath(base, "link_proj")
+            symlink(real_proj, link_proj)
+            script_via_link = joinpath(link_proj, "sub", "job.jl")
+            want = joinpath("sub", "job.jl")
+            @test DistSSHRun._script_inside_project(real_proj, script_via_link)
+            @test DistSSHRun._go_script_relpath(real_proj, script_via_link) == want
+            @test DistSSHRun._script_inside_project(link_proj, script_via_link)
+            @test DistSSHRun._go_script_relpath(link_proj, script_via_link) == want
+
+            symlink(joinpath(real_proj, "sub"), joinpath(real_proj, "sub_link"))
+            script_sub_link = joinpath(real_proj, "sub_link", "job.jl")
+            @test DistSSHRun._go_script_relpath(real_proj, script_sub_link) == want
+
+            outside = joinpath(base, "outside.jl")
+            write(outside, "2\n")
+            escape = joinpath(real_proj, "escape.jl")
+            symlink(outside, escape)
+            @test !DistSSHRun._script_inside_project(real_proj, escape)
+            @test DistSSHRun._go_script_relpath(real_proj, escape) ==
+                joinpath("_distsshrun_external", "escape.jl")
+            @test !DistSSHRun._script_inside_project(real_proj, outside)
+            @test DistSSHRun._go_script_relpath(real_proj, outside) ==
+                joinpath("_distsshrun_external", "outside.jl")
+
+            write(joinpath(base, "x.jl"), "3\n")
+            priv_base = "/private" * base
+            if ispath(priv_base)
+                want_x = "x.jl"
+                @test DistSSHRun._script_inside_project(base, joinpath(base, "x.jl"))
+                @test DistSSHRun._go_script_relpath(base, joinpath(base, "x.jl")) == want_x
+                @test DistSSHRun._script_inside_project(priv_base, joinpath(priv_base, "x.jl"))
+                @test DistSSHRun._go_script_relpath(priv_base, joinpath(priv_base, "x.jl")) == want_x
+                @test DistSSHRun._script_inside_project(base, joinpath(priv_base, "x.jl"))
+                @test DistSSHRun._go_script_relpath(base, joinpath(priv_base, "x.jl")) == want_x
+                @test DistSSHRun._script_inside_project(priv_base, joinpath(base, "x.jl"))
+                @test DistSSHRun._go_script_relpath(priv_base, joinpath(base, "x.jl")) == want_x
+                batch = DistSSHRun._go_batch_output_dir(base, joinpath(base, "x.jl"))
+                @test startswith(batch, base)
+                if startswith(base, "/var/") && !startswith(base, "/private")
+                    @test !startswith(batch, "/private/var")
+                end
+            end
         end
     end
 
@@ -474,7 +522,6 @@ using Dates
             @test occursin("Slots: 1", body)
             prog = read(joinpath(r.output_dir, "kit.progress"), String)
             @test occursin("label=ready", prog)
-            @test occursin("label=sync", prog)
             @test occursin("label=run", prog)
             @test occursin("label=collect", prog)
             run_mark = findfirst("step kind=go label=run", prog)
@@ -680,7 +727,6 @@ using Dates
                                 ["child:user@hash-drain.test:1"];
                                 project = proj,
                                 output_dir = out,
-                                sync = :not_a_mode,
                                 quiet = true,
                                 yes = true,
                             )
@@ -690,8 +736,7 @@ using Dates
                         end
                     end
                 end
-                @test err isa ArgumentError
-                @test occursin("sync! mode must be", sprint(showerror, err))
+                @test err !== nothing
                 @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
                 @test !isfile(joinpath(out, ".kit.lock"))
 
@@ -708,7 +753,6 @@ using Dates
                                 ["child:user@hash-drain.test:1"];
                                 project = proj,
                                 output_dir = out2,
-                                sync = :not_a_mode,
                                 quiet = true,
                                 yes = true,
                             )
@@ -751,17 +795,13 @@ using Dates
             write(joinpath(app, "Manifest.toml"), "# lock\n")
             script = joinpath(app, "job.jl")
             write(script, "println(\"SNAPSHOT_SIBLING_OK\")\n")
-            err_plain = try
+            plain = redirect_stdout(devnull) do
                 DistSSHRun.go!(
                     script, ["parent:1"];
                     project = app, yes = true, quiet = true,
                 )
-                nothing
-            catch e
-                e
             end
-            @test err_plain isa ArgumentError
-            @test occursin("outside the tree setup would send", err_plain.msg)
+            @test plain.ok
             result = redirect_stdout(devnull) do
                 DistSSHRun.go!(
                     script, ["parent:1"];

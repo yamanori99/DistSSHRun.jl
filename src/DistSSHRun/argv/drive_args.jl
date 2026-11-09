@@ -92,15 +92,11 @@ function parse_drive_args(args::Vector{String})
     log_dir = nothing
     output_dir = nothing
     explicit_package = nothing
-    # nothing → no pre-run sync; :git_sync / :ship_tree → sync!
-    sync_mode = nothing
-    allow_external_symlinks = false
     snapshot_id = nothing
     deploy_root = nothing
     isolated = false
     worker_include = false
     require_git = false
-    skip_git_guard = false
     require_all_hosts = true
     require_all_hosts_cli = false
     best_effort_cli = false
@@ -159,10 +155,16 @@ function parse_drive_args(args::Vector{String})
         elseif arg == "--allow-mismatch" && i < length(args)
             merge_allow_mismatch!(allow_mismatch, args[i + 1])
             i += 2
-        elseif arg == "--sync"
-            _throw_drive_go_removed_git_sync_flag!("drive")
-        elseif arg == "--git-sync"
-            sync_mode = _kit_set_sync_mode!(sync_mode, :git_sync; source = "drive")
+        elseif arg in (
+                "--sync",
+                "--git-sync",
+                "--ship-tree",
+                "--skip-git-sync",
+                "--skip-sync",
+                "--skip-git-guard",
+                "--allow-external-symlinks",
+            )
+            _reject_run_transfer_cli!("drive", arg)
             i += 1
         elseif arg == "--sync-script"
             _throw_drive_removed_sync_script_flag!()
@@ -174,10 +176,6 @@ function parse_drive_args(args::Vector{String})
             )
             worker_include = true
             i += 1
-        elseif arg == "--ship-tree"
-            _throw_go_drive_ship_cli_removed("drive", arg)
-        elseif arg == "--allow-external-symlinks"
-            _throw_go_drive_ship_cli_removed("drive", arg)
         elseif arg == "--snapshot"
             i >= length(args) && throw(ArgumentError("drive: --snapshot needs a non-empty id"))
             raw = String(strip(args[i + 1]))
@@ -204,24 +202,9 @@ function parse_drive_args(args::Vector{String})
         elseif arg == "--rsync"
             _throw_rsync_removed()
         elseif arg == "--require-git"
-            skip_git_guard && throw(
-                ArgumentError(
-                    "drive: --require-git cannot be combined with --skip-git-guard",
-                )
-            )
             require_git && throw(ArgumentError("drive: --require-git specified more than once"))
             require_git = true
             skip_hash_check = false
-            i += 1
-        elseif arg == "--skip-git-guard"
-            # Compat no-op for parity (already off). Independent of --sync.
-            require_git && throw(
-                ArgumentError(
-                    "drive: --skip-git-guard cannot be combined with --require-git",
-                )
-            )
-            skip_git_guard = true
-            skip_hash_check = true
             i += 1
         elseif arg == "--require-all-hosts"
             require_all_hosts_cli && throw(
@@ -276,12 +259,6 @@ function parse_drive_args(args::Vector{String})
                 arg == "--collect-overwrite"
             flag = arg
             merge = flag == "--collect-overwrite"
-            sync_mode !== nothing &&
-                throw(
-                ArgumentError(
-                    "$(flag) cannot be combined with --git-sync",
-                )
-            )
             !isempty(hosts) &&
                 throw(
                 ArgumentError(
@@ -324,7 +301,6 @@ function parse_drive_args(args::Vector{String})
                 collect_root = tree_root,
                 collect_hosts = tree_hosts,
                 collect_overwrite = merge,
-                sync_mode = nothing,
                 worker_include = worker_include,
                 require_all_hosts = require_all_hosts,
                 help = false,
@@ -332,7 +308,6 @@ function parse_drive_args(args::Vector{String})
                 cli_session = cli_session,
                 hint_surface = :cli,
                 allow_mismatch = allow_mismatch,
-                allow_external_symlinks = allow_external_symlinks,
                 snapshot = snapshot_id,
                 deploy_root = deploy_root,
                 isolated = isolated,
@@ -353,7 +328,6 @@ function parse_drive_args(args::Vector{String})
                 collect_root = nothing,
                 collect_hosts = nothing,
                 collect_overwrite = nothing,
-                sync_mode = nothing,
                 worker_include = false,
                 require_all_hosts = false,
                 help = true,
@@ -361,7 +335,6 @@ function parse_drive_args(args::Vector{String})
                 cli_session = cli_session,
                 hint_surface = :cli,
                 allow_mismatch = allow_mismatch,
-                allow_external_symlinks = false,
                 snapshot = nothing,
                 deploy_root = nothing,
                 isolated = false,
@@ -438,7 +411,6 @@ function parse_drive_args(args::Vector{String})
         collect_root = nothing,
         collect_hosts = nothing,
         collect_overwrite = nothing,
-        sync_mode = (sync_mode isa Symbol ? sync_mode : nothing),
         worker_include = worker_include,
         require_all_hosts = require_all_hosts,
         help = false,
@@ -446,7 +418,6 @@ function parse_drive_args(args::Vector{String})
         cli_session = cli_session,
         hint_surface = :cli,
         allow_mismatch = allow_mismatch,
-        allow_external_symlinks = allow_external_symlinks,
         snapshot = snapshot_id,
         deploy_root = deploy_root,
         isolated = isolated,
@@ -484,12 +455,11 @@ function show_drive_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  -w, --workers N     parent:N when no parent token is listed",
-        "  --git-sync          optional git pre-run copy (not ship-tree)",
         "  --deploy-root PATH  remote deployment root (location, not snapshot id).",
         "                      Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
         "                      ~/Parent/RepoName layout from the local env_dir.",
         "  --snapshot ID       use runs/<ID>/src under the deploy root",
-        "                      (not with --git-sync; that copies a git checkout)",
+        "                      (after setup ship-tree + setup instantiate)",
         "  --worker-include    re-include the full driver on workers (default: defs only)",
         "  --require-git       $(REQUIRE_GIT_MEANING)",
         "  --require-all-hosts listed parent/child tokens must join, stay, and collect (default)",

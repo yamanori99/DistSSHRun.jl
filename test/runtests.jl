@@ -119,6 +119,8 @@ end
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "ship.jl"))
         _runtest_announce("unit/DistSSHRun/deploy_record.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "deploy_record.jl"))
+        _runtest_announce("unit/DistSSHRun/run_transfer_removed.jl")
+        include(joinpath(@__DIR__, "unit", "DistSSHRun", "run_transfer_removed.jl"))
         _runtest_announce("unit/DistSSHRun/snapshot_select.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "snapshot_select.jl"))
         _runtest_announce("unit/DistSSHRun/ship_list.jl")

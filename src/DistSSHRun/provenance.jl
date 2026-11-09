@@ -884,26 +884,10 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     git_tool === nothing || (data["tools"] = Dict{String, Any}[git_tool])
     source = started ? _PROVENANCE_SOURCE_SNAP[] : _resolve_source(proj)
     source === nothing || (data["source"] = source)
-    ship = last_ship_result()
     sel = active_snapshot_selection()
     deploy_rec = _deploy_record_for_provenance(active_deploy_record())
     shipped = Dict{String, Any}()
-    if ship !== nothing
-        for key in (
-                "content_tree_hash", "run_id", "algorithm", "bytes", "files", "host",
-                "run_dir_empty_at_start",
-            )
-            haskey(ship, key) || continue
-            val = ship[key]
-            (val isa AbstractString && isempty(val)) && continue
-            shipped[key] = val
-        end
-        get(ship, "external_symlinks_allowed", false) &&
-            (shipped["external_symlinks_allowed"] = true)
-        rr = get(ship, "remote_root", nothing)
-        rr isa AbstractString && !isempty(rr) && (shipped["deploy_root"] = String(rr))
-        shipped["source_kind"] = "snapshot"
-    elseif sel !== nothing
+    if sel !== nothing
         shipped["source_kind"] = String(sel.source_kind)
         shipped["deploy_root"] = sel.deploy_root
         if sel.snapshot_id !== nothing

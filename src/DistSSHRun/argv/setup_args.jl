@@ -118,6 +118,7 @@ function show_requirements(; io::IO = stdout)
         "                         git-clone needs an empty remote path",
         "                         delete first to replace a clone dest",
         "  git-sync / git-pull git update (confirm unless -y)",
+        "  git-sync --skip-git-guard  allow dirty local tree; deploy record marks dirty",
         "  instantiate        Pkg.instantiate on remotes",
         "  check              SSH, Julia, project, deps (patch and prerelease must match)",
         "  runtest            Pkg.test of the job project on remotes",
@@ -286,7 +287,8 @@ function parse_setup_args(args::Vector{String})
             "--delete", "--prune", "--rsync", "--ship-tree", "--remote-root",
             "--remote-dir",
             "--allow-external-symlinks", "--requirements",
-            "--ignore-julia-version", "-h", "--help", "--",
+            "--ignore-julia-version", "--skip-git-guard",
+            "-h", "--help", "--",
         ),
         bare_dash = true,
     )
@@ -305,6 +307,7 @@ function parse_setup_args(args::Vector{String})
     confirm_paths = String[]
     allow_external_symlinks = false
     extra_files = String[]
+    skip_git_guard = false
     options_done = false
 
     c = CliCursor(args)
@@ -380,6 +383,9 @@ function parse_setup_args(args::Vector{String})
         elseif arg == "--ignore-julia-version"
             ignore_julia_version = true
             cli_consume!(c)
+        elseif arg == "--skip-git-guard"
+            skip_git_guard = true
+            cli_consume!(c)
         elseif cli_match(c, ["-h", "--help"])
             show_help = true
             cli_consume!(c)
@@ -402,6 +408,9 @@ function parse_setup_args(args::Vector{String})
     if !isempty(confirm_paths) && mode !== :delete && mode !== :prune
         throw(ArgumentError("--confirm-path only applies to setup delete or setup prune"))
     end
+    skip_git_guard && mode !== :git_sync && throw(
+        ArgumentError("setup: --skip-git-guard only applies to setup git-sync"),
+    )
     return (
         mode = mode,
         julia_path = julia_path,
@@ -416,6 +425,7 @@ function parse_setup_args(args::Vector{String})
         confirm_paths = confirm_paths,
         allow_external_symlinks = allow_external_symlinks,
         extra_files = extra_files,
+        skip_git_guard = skip_git_guard,
         show_version = cli_session.show_version,
         cli_session = cli_session,
     )

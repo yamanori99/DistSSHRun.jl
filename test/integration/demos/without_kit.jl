@@ -7,10 +7,17 @@ using Test
     julia = _julia_exe()
     echo = joinpath(kit_root, "demos", "without_kit", "pi_echo.jl")
     file = joinpath(kit_root, "demos", "without_kit", "pi_file.jl")
-    pipe_script = joinpath(kit_root, "demos", "without_kit", "pipeline_pi.jl")
     env = _child_julia_env()
 
     _with_tempdir() do tmp
+        demo_dir = joinpath(kit_root, "demos", "without_kit")
+        for name in ("pi_echo.jl", "pi_file.jl", "pipeline_pi.jl")
+            cp(joinpath(demo_dir, name), joinpath(tmp, name); force = true)
+        end
+        echo_local = joinpath(tmp, "pi_echo.jl")
+        file_local = joinpath(tmp, "pi_file.jl")
+        pipe_local = joinpath(tmp, "pipeline_pi.jl")
+
         solo_echo_proc, solo_echo_out = _run_subprocess(
             setenv(
                 Cmd([julia, "--startup-file=no", "--project=$kit_root", echo, "--n", "4"]),
@@ -22,7 +29,7 @@ using Test
         @test echo_line !== nothing
 
         go_echo_proc, go_echo_out = _run_kit_go(;
-            script = echo,
+            script = echo_local,
             script_args = ["--n", "4"],
             project_root = tmp,
             go_flags = ["-y"],
@@ -47,7 +54,7 @@ using Test
         @test occursin("pi=", solo_body)
 
         go_file_proc, go_file_out = _run_kit_go(;
-            script = file,
+            script = file_local,
             script_args = ["--n", "4"],
             project_root = tmp,
             go_flags = ["-y"],
@@ -61,7 +68,7 @@ using Test
 
         pipe_proc, pipe_out = _run_subprocess(
             setenv(
-                Cmd(Cmd([julia, "--startup-file=no", "--project=$kit_root", pipe_script, "--n", "4"]); dir = tmp),
+                Cmd(Cmd([julia, "--startup-file=no", "--project=$kit_root", pipe_local, "--n", "4"]); dir = tmp),
                 env,
             )
         )

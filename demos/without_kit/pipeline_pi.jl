@@ -31,9 +31,10 @@ isempty(ARGS) || (length(ARGS) == 2 && ARGS[1] == "--n") ||
     error("pass --n N (a bare number looks like parent:N)")
 
 script = joinpath(@__DIR__, "pi_file.jl")
+project = @__DIR__
 
 # Local-only: two concurrent full-job slots on this machine (not Distributed workers).
-result = go!(script, "parent:2"; args = ARGS)
+result = go!(script, "parent:2"; args = ARGS, project = project)
 
 # First-time remotes: setup!, then go!.
 #
@@ -42,7 +43,7 @@ result = go!(script, "parent:2"; args = ARGS)
 #       remote="/path/to/project",
 #       yes=true,
 #   )
-#   setup!(session, :rsync, :instantiate)
+#   setup!(session, :ship_tree); setup!(session, :instantiate)
 #   # or: setup!(session, :git_clone; repo="https://…"); setup!(session, :instantiate)
 #   result = go!(
 #       script,
@@ -66,7 +67,7 @@ result = go!(script, "parent:2"; args = ARGS)
 #       # yes=true,                     # skip confirm prompts (API default)
 #       # quiet=false,
 #       # verbosity=nothing,            # :quiet | :progress | :verbose
-#       # sync=false,                   # or :sync / :rsync (rsync: empty remote only)
+#       # sync=false,                   # run no longer syncs; use setup! first
 #       # output_dir=nothing,           # batch root (PATH/<slot>/); same name as drive!
 #       # collect_spec=nothing,         # false → skip pull; path is a compat alias for output_dir
 #       # path_anchor=nothing,          # shorten displayed paths

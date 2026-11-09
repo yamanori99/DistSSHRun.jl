@@ -6,19 +6,31 @@ using Test
     @testset "help flags" begin
         @test parse_go_args(["--help"]).help
         @test parse_go_args(["-h"]).help
-        let r = parse_go_args(
+        err_help = try
+            parse_go_args(
                 [
                     "--julia", "/opt/julia/bin/julia",
                     "--output-dir", "my_runs",
                     "--git-sync", "child:h1",
                     "--help",
-                ]
+                ],
+            )
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err_help isa ArgumentError
+        @test occursin("go: --git-sync was removed", err_help.msg)
+        let r = parse_go_args(
+                [
+                    "--julia", "/opt/julia/bin/julia",
+                    "--output-dir", "my_runs",
+                    "--help",
+                ],
             )
             @test r.help
             @test r.julia == "/opt/julia/bin/julia"
             @test r.output_dir == "my_runs"
-            @test r.sync === :git_sync
-            @test r.hosts == ["child:h1"]
         end
     end
 
@@ -76,9 +88,8 @@ using Test
     end
 
     @testset "sync flags" begin
-        # Parser leaves sync=nothing; go! maps nothing → false (no pre-run sync).
         let r = parse_go_args(["child:local:2", "child:h1:1", "job.jl"])
-            @test r.sync === nothing
+            @test r.script_path == "job.jl"
         end
         let err_sync = try
                 parse_go_args(["--sync", "child:h1:1", "job.jl"])
@@ -87,11 +98,17 @@ using Test
                 e
             end
             @test err_sync isa ArgumentError
-            @test occursin("go --sync was removed", err_sync.msg)
-            @test occursin("--git-sync", err_sync.msg)
+            @test occursin("go: --sync was removed", err_sync.msg)
+            @test occursin("setup git-sync", err_sync.msg)
         end
-        let r = parse_go_args(["--git-sync", "child:h1:1", "job.jl"])
-            @test r.sync === :git_sync
+        let err_git = try
+                parse_go_args(["--git-sync", "child:h1:1", "job.jl"])
+                error("expected ArgumentError")
+            catch e
+                e
+            end
+            @test err_git isa ArgumentError
+            @test occursin("go: --git-sync was removed", err_git.msg)
         end
         err_ship = try
             parse_go_args(["--ship-tree", "child:h1:1", "job.jl"])
@@ -100,7 +117,7 @@ using Test
             e
         end
         @test err_ship isa ArgumentError
-        @test occursin("go --ship-tree was removed", err_ship.msg)
+        @test occursin("go: --ship-tree was removed", err_ship.msg)
         @test occursin("setup ship-tree", err_ship.msg)
         @test occursin("--snapshot", err_ship.msg)
         DistSSHRun.DistSSHBase.with_cli_entry(:DistSSHQueue) do
@@ -121,7 +138,7 @@ using Test
             e
         end
         @test err_ext isa ArgumentError
-        @test occursin("go --allow-external-symlinks was removed", err_ext.msg)
+        @test occursin("go: --allow-external-symlinks was removed", err_ext.msg)
         @test occursin("setup ship-tree", err_ext.msg)
         let err_skip = try
                 parse_go_args(["--skip-sync", "child:local:1", "child:h1:2", "job.jl"])
@@ -130,15 +147,26 @@ using Test
                 e
             end
             @test err_skip isa ArgumentError
-            @test occursin("go --skip-sync was removed", err_skip.msg)
-            @test occursin("--skip-git-sync", err_skip.msg)
+            @test occursin("go: --skip-sync was removed", err_skip.msg)
+            @test occursin("no pre-run sync", err_skip.msg)
         end
-        let r = parse_go_args(["--skip-git-sync", "child:local:1", "child:h1:2", "job.jl"])
-            @test r.sync === false
-            @test r.hosts == ["child:local:1", "child:h1:2"]
+        let err_skip = try
+                parse_go_args(["--skip-git-sync", "child:local:1", "child:h1:2", "job.jl"])
+                error("expected ArgumentError")
+            catch e
+                e
+            end
+            @test err_skip isa ArgumentError
+            @test occursin("go: --skip-git-sync was removed", err_skip.msg)
         end
-        let r = parse_go_args(["--skip-git-guard", "child:h1:1", "job.jl"])
-            @test r.sync === false
+        let err_guard = try
+                parse_go_args(["--skip-git-guard", "child:h1:1", "job.jl"])
+                error("expected ArgumentError")
+            catch e
+                e
+            end
+            @test err_guard isa ArgumentError
+            @test occursin("go: --skip-git-guard was removed", err_guard.msg)
         end
         err = try
             parse_go_args(["--skip-git-sync", "--rsync", "job.jl"])
@@ -147,8 +175,8 @@ using Test
             e
         end
         @test err isa ArgumentError
-        @test err.msg == DistSSHRun.RSYNC_REMOVED_MSG
-        @test_throws ArgumentError parse_go_args(["--git-sync", "--skip-git-sync", "job.jl"])
+        @test occursin("go: --skip-git-sync was removed", err.msg)
+        @test_throws ArgumentError parse_go_args(["--git-sync", "job.jl"])
         err2 = try
             parse_go_args(["--git-sync", "--rsync", "job.jl"])
             error("expected ArgumentError")
@@ -156,7 +184,7 @@ using Test
             e
         end
         @test err2 isa ArgumentError
-        @test err2.msg == DistSSHRun.RSYNC_REMOVED_MSG
+        @test occursin("go: --git-sync was removed", err2.msg)
     end
 
     @testset "version, quiet, and hosts env" begin
@@ -194,7 +222,7 @@ using Test
         txt = sprint(io -> DistSSHRun.show_go_usage(; io = io))
         @test occursin("Usage", txt)
         @test occursin("--output-dir", txt)
-        @test occursin("--git-sync", txt)
+        @test !occursin("--git-sync", txt)
         @test !occursin("--skip-sync", txt)
         @test !occursin("--ship-tree", txt)
         @test occursin("setup ship-tree", txt)
@@ -225,11 +253,9 @@ using Test
             @test r.script_args == ["--deploy-root", "/tmp/swallowed"]
         end
         let r = parse_go_args(["--", "parent:1", "job.jl", "--ship-tree"])
-            @test r.sync === nothing
             @test r.script_args == ["--ship-tree"]
         end
         let r = parse_go_args(["parent:1", "job.jl", "--ship-tree"])
-            @test r.sync === nothing
             @test r.script_args == ["--ship-tree"]
         end
         err_after = try
@@ -288,7 +314,7 @@ using Test
                 flush(err_io)
                 shown = read(out_path, String) * read(err_path, String)
                 @test code == 1
-                @test occursin("go --ship-tree was removed", shown)
+                @test occursin("go: --ship-tree was removed", shown)
                 @test occursin("setup ship-tree", shown)
                 @test !occursin("SSH preflight", shown)
                 @test !occursin("cannot SSH", shown)

@@ -1,6 +1,6 @@
 #!/usr/bin/env julia
 # DistSSHRun API demo: run square_file.jl through `pipeline!`
-# (optional sync → drive! → collect) instead of the `drive` CLI.
+# (drive! → optional collect) instead of the `drive` CLI.
 #
 # Local (this script):
 #
@@ -42,7 +42,7 @@ result = pipeline!(driver, "parent:2"; args = ARGS, collect = false, enable_log 
 #       remote="/path/to/project",
 #       yes=true,
 #   )
-#   setup!(session, :rsync, :instantiate)
+#   setup!(session, :ship_tree); setup!(session, :instantiate)
 #   # or: setup!(session, :git_clone; repo="https://…"); setup!(session, :instantiate)
 #   result = pipeline!(
 #       driver,
@@ -67,7 +67,7 @@ result = pipeline!(driver, "parent:2"; args = ARGS, collect = false, enable_log 
 #       # yes=true,                     # skip confirm prompts (API default)
 #       # quiet=false,
 #       # verbosity=nothing,            # :quiet | :progress | :verbose
-#       # sync=false,                   # or :sync / :rsync (rsync: empty remote only)
+#       # sync=false,                   # removed (#386); deploy with setup first
 #       # collect_merge=false,          # merge into existing collect tree
 #       # output_dir=nothing,           # also used as collect root when set
 #       # enable_log=true,

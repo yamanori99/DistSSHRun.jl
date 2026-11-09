@@ -214,10 +214,7 @@ function run_drive_parsed!(
     if get(parsed, :isolated, false) === true
         return _drive_isolated_process(original_args, project_root)
     end
-    # `parse_drive_args` is inferred as one NamedTuple whose fields are unions
-    # (`sync_mode::Union{Nothing,Symbol}`, and the same for paths and counts).
-    # The value for one argv is narrower. Lookup at runtime specializes the
-    # pipeline on that value, so a drive without `--git-sync` does not infer sync.
+    # `parse_drive_args` is inferred as one NamedTuple whose fields are unions.
     # CLI `drive_main` already opened the frame (`cli=true`). A direct call,
     # including `drive!`, opens it here when none is active (`cli=false`).
     am = get(parsed, :allow_mismatch, Symbol[])
@@ -282,14 +279,6 @@ function _run_drive_parsed_specialized!(
         return 0
     end
 
-    surface = hasproperty(parsed, :hint_surface) ? parsed.hint_surface::Symbol : :cli
-    _snapshot_sync_exclusive!(
-        get(parsed, :snapshot, nothing),
-        get(parsed, :sync_mode, nothing);
-        kind = :drive,
-        surface = surface,
-    )
-
     hosts = parsed.hosts
     raw_script = String(parsed.script_path)::String
     remote_argv = DistSSHRun._remote_script_argv(raw_script)
@@ -334,7 +323,8 @@ function _run_drive_parsed_specialized!(
     resolved_run_dir isa Base.RefValue && (resolved_run_dir[] = run_dir)
     return try
         DistSSHRun._reset_run_provenance!(project_root_abs)
-        DistSSHRun._clear_last_ship!()
+        DistSSHRun._clear_active_selection!()
+        DistSSHRun._clear_active_deploy_record!()
         # Inside `_drive_frame`: this `finally` restores after `rmprocs`.
         return _with_drive_process!(proj_dir) do
             local release_output_dir_lock
@@ -534,20 +524,17 @@ function _run_drive_parsed_locked!(
     writeln_field("App git", app_git === nothing ? "unavailable" : app_git)
     writeln_both("")
 
-    sync_mode = get(parsed, :sync_mode, nothing)
-    outside_script = !DistSSHRun._script_inside_project(proj_dir, script_path)
     remote_argv = DistSSHRun._remote_script_argv(script_path)
-    if outside_script && !remote_argv && sync_mode !== :ship_tree &&
-            get(parsed, :snapshot, nothing) === nothing && !isempty(host_names)
-        throw(
-            ArgumentError(
-                "script must be inside project ($proj_dir): $(DistSSHRun.canonical_local_path(script_path))",
-            )
-        )
-    end
-    do_sync = sync_mode isa Symbol && !isempty(host_names)
-    # sync? + git + cleanup + workers + wait + init + run + collect
-    progress_steps = (do_sync ? 1 : 0) + 7
+    DistSSHRun._reject_script_outside_project_run!(
+        "drive",
+        proj_dir,
+        script_path;
+        snapshot = get(parsed, :snapshot, nothing),
+        remote_argv = remote_argv,
+    )
+    DistSSHRun._require_manifest!(proj_dir)
+    # git + cleanup + workers + wait + init + run + collect
+    progress_steps = 7
     progress_ok = false
     # Set once `add_drive_workers!` returns (registers rmprocs-at-atexit for
     # whatever joined). `finally` below always calls it so local/SSH workers
@@ -560,77 +547,8 @@ function _run_drive_parsed_locked!(
     DistSSHRun._set_kit_progress_sidecar!(kit_out)
     kit_progress_begin!("drive"; steps = progress_steps, kind = :drive)
     try
-        if do_sync
-            kit_progress_step!("sync")
-            writeln_both("Syncing to remotes ($(sync_mode))...")
-            sync_session = DistSSHRun.KitSession(
-                project = proj_dir,
-                workers = host_names,
-                remote = get(parsed, :deploy_root, nothing),
-                quiet = parsed.cli_session.quiet,
-                verbosity = parsed.cli_session.verbosity,
-                yes = parsed.cli_session.yes || DistSSHRun.kit_noninteractive(),
-            )
-            DistSSHRun.warn_project_sshflags(proj_dir)
-            allow_ext = get(parsed, :allow_external_symlinks, false)
-            sync_result = DistSSHRun.sync!(
-                sync_session;
-                mode = sync_mode,
-                allow_external_symlinks = allow_ext,
-                await_inputs = sync_mode !== :ship_tree,
-                extra_files = outside_script ? String[script_path] : String[],
-            )
-            if !sync_result.ok
-                print_err("ERROR: "; bold = true)
-                println_fatal("pre-run sync failed")
-                for hr in sync_result.hosts
-                    !hr.ok && println_fatal("  $(hr.host): $(hr.message)")
-                end
-                println_fatal()
-                DistSSHRun.await_declared_input_hashes!()
-                return 1
-            end
-            if sync_mode === :rsync
-                DistSSHRun._throw_rsync_removed()
-            end
-            if sync_mode === :ship_tree
-                ship_snap = something(
-                    DistSSHRun.result_remote_run_id(sync_result),
-                    get(parsed, :snapshot, nothing),
-                )
-                inst_julia = julia_exe === nothing ? "auto" : String(julia_exe)
-                inst = DistSSHRun.instantiate_after_ship!(
-                    sync_session;
-                    julia = inst_julia,
-                    snapshot = ship_snap,
-                )
-                if inst !== nothing && !inst.ok
-                    print_err("ERROR: "; bold = true)
-                    println_fatal("pre-run instantiate failed")
-                    for hr in inst.hosts
-                        !hr.ok && println_fatal("  $(hr.host): $(hr.message)")
-                    end
-                    println_fatal()
-                    DistSSHRun.await_declared_input_hashes!()
-                    return 1
-                end
-                DistSSHRun._assign_remote_work_root_env!(
-                    host_names,
-                    sync_session.project;
-                    cli_override = sync_session.remote,
-                    snapshot = ship_snap,
-                )
-            end
-            deploy_root = DistSSHRun._resolved_deploy_root_for_work(
-                proj_dir; cli_override = get(parsed, :deploy_root, nothing),
-            )
-            DistSSHRun.record_deploy_status_for_run!(
-                host_names, deploy_root, proj_dir,
-            )
-            writeln_both("")
-        elseif !isempty(host_names)
-            # A newline in the override stays for `add_drive_workers!`.
-            # An invalid SSH name fails that host. Selection uses --snapshot / record / git.
+        if !isempty(host_names)
+            # Selection uses --snapshot / deploy record / git (setup deploys first).
             DistSSHRun._assign_remote_work_root_env!(
                 host_names, project_root;
                 cli_override = get(parsed, :deploy_root, nothing),
