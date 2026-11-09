@@ -21,46 +21,49 @@ end
         @test DistSSHRun.get_local_git_hash(d) === nothing
         @test DistSSHRun.local_git_clean(d)
 
-        Sys.which("git") === nothing && return
-        run(Cmd(["git", "-C", d, "init", "-q"]))
-        run(Cmd(["git", "-C", d, "config", "user.email", "test@example.com"]))
-        run(Cmd(["git", "-C", d, "config", "user.name", "Test"]))
-        @test DistSSHRun.local_git_clean(d)
+        if Sys.which("git") === nothing
+            @test_skip "git not in PATH"
+        else
+            run(Cmd(["git", "-C", d, "init", "-q"]))
+            run(Cmd(["git", "-C", d, "config", "user.email", "test@example.com"]))
+            run(Cmd(["git", "-C", d, "config", "user.name", "Test"]))
+            @test DistSSHRun.local_git_clean(d)
 
-        write(joinpath(d, "f.txt"), "hi")
-        @test !DistSSHRun.local_git_clean(d)
+            write(joinpath(d, "f.txt"), "hi")
+            @test !DistSSHRun.local_git_clean(d)
 
-        run(Cmd(["git", "-C", d, "add", "f.txt"]))
-        run(Cmd(["git", "-C", d, "commit", "-q", "-m", "init"]))
-        @test DistSSHRun.local_git_clean(d)
+            run(Cmd(["git", "-C", d, "add", "f.txt"]))
+            run(Cmd(["git", "-C", d, "commit", "-q", "-m", "init"]))
+            @test DistSSHRun.local_git_clean(d)
 
-        write(joinpath(d, "f.txt"), "hi2")
-        @test !DistSSHRun.local_git_clean(d)
+            write(joinpath(d, "f.txt"), "hi2")
+            @test !DistSSHRun.local_git_clean(d)
 
-        run(Cmd(["git", "-C", d, "add", "f.txt"]))
-        run(Cmd(["git", "-C", d, "commit", "-q", "-m", "dirty"]))
-        @test DistSSHRun.local_git_clean(d)
-        idx = joinpath(d, ".git", "index")
-        if isfile(idx)
-            backup = read(idx)
-            write(idx, "not-a-git-index")
-            try
-                @test DistSSHRun.get_local_git_hash(d) isa String
-                @test !DistSSHRun.local_git_clean(d)
-            finally
-                write(idx, backup)
+            run(Cmd(["git", "-C", d, "add", "f.txt"]))
+            run(Cmd(["git", "-C", d, "commit", "-q", "-m", "dirty"]))
+            @test DistSSHRun.local_git_clean(d)
+            idx = joinpath(d, ".git", "index")
+            if isfile(idx)
+                backup = read(idx)
+                write(idx, "not-a-git-index")
+                try
+                    @test DistSSHRun.get_local_git_hash(d) isa String
+                    @test !DistSSHRun.local_git_clean(d)
+                finally
+                    write(idx, backup)
+                end
             end
-        end
 
-        full = DistSSHRun.get_local_git_hash(d)
-        @test full isa String
-        full isa String || error("expected full git hash")
-        @test length(full) == 40
-        short = DistSSHRun.get_local_git_hash(d; short = 8)
-        @test short isa String
-        short isa String || error("expected short git hash")
-        @test length(short) == 8
-        @test startswith(full, short)
+            full = DistSSHRun.get_local_git_hash(d)
+            @test full isa String
+            full isa String || error("expected full git hash")
+            @test length(full) == 40
+            short = DistSSHRun.get_local_git_hash(d; short = 8)
+            @test short isa String
+            short isa String || error("expected short git hash")
+            @test length(short) == 8
+            @test startswith(full, short)
+        end
     end
 
     @testset "compat remote git shells" begin
@@ -131,31 +134,32 @@ end
     end
 
     @testset "delete root does not climb to home or slash" begin
-        Sys.which("git") === nothing && return
-        mktempdir() do root
-            proj = _remote_delete_fixture(root, ["proj"])
-            @test DistSSHRun.remote_delete_root(proj) == "~/Repo"
-            @test DistSSHRun.remote_git_clone_dest(proj) == "~/Repo"
-        end
-        mktempdir() do root
-            proj = _remote_delete_fixture(root, ["a", "proj"])
-            @test DistSSHRun.remote_delete_root(proj) == "~/a/proj"
-            clone_err = try
-                DistSSHRun.remote_git_clone_dest(proj)
-                ""
-            catch e
-                e isa ArgumentError ? e.msg : sprint(showerror, e)
+        if _test_skip_unless_git()
+            mktempdir() do root
+                proj = _remote_delete_fixture(root, ["proj"])
+                @test DistSSHRun.remote_delete_root(proj) == "~/Repo"
+                @test DistSSHRun.remote_git_clone_dest(proj) == "~/Repo"
             end
-            @test occursin("--deploy-root", clone_err)
-            @test DistSSHRun.remote_delete_root(proj; cli_override = "/a/proj") == "/a/proj"
-            @test DistSSHRun.remote_delete_root(proj; cli_override = "/var/a/proj") == "/var/a/proj"
-            @test_throws ArgumentError DistSSHRun.remote_delete_root(proj; cli_override = "~")
-            @test_throws ArgumentError DistSSHRun.delete_remotes(String[], "~")
-            @test_throws ArgumentError DistSSHRun.delete_remotes(String[], "~/../u")
-        end
-        mktempdir() do root
-            proj = _remote_delete_fixture(root, ["x", "b", "proj"])
-            @test DistSSHRun.remote_delete_root(proj) == "~/b/proj"
+            mktempdir() do root
+                proj = _remote_delete_fixture(root, ["a", "proj"])
+                @test DistSSHRun.remote_delete_root(proj) == "~/a/proj"
+                clone_err = try
+                    DistSSHRun.remote_git_clone_dest(proj)
+                    ""
+                catch e
+                    e isa ArgumentError ? e.msg : sprint(showerror, e)
+                end
+                @test occursin("--deploy-root", clone_err)
+                @test DistSSHRun.remote_delete_root(proj; cli_override = "/a/proj") == "/a/proj"
+                @test DistSSHRun.remote_delete_root(proj; cli_override = "/var/a/proj") == "/var/a/proj"
+                @test_throws ArgumentError DistSSHRun.remote_delete_root(proj; cli_override = "~")
+                @test_throws ArgumentError DistSSHRun.delete_remotes(String[], "~")
+                @test_throws ArgumentError DistSSHRun.delete_remotes(String[], "~/../u")
+            end
+            mktempdir() do root
+                proj = _remote_delete_fixture(root, ["x", "b", "proj"])
+                @test DistSSHRun.remote_delete_root(proj) == "~/b/proj"
+            end
         end
     end
 

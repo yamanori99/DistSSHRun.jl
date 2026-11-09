@@ -379,22 +379,26 @@ using Test
                 "progress: step kind=drive job=q-1 label=sync done=0 total=2 cur=1",
             )
             @test rec !== nothing
-            rec isa NamedTuple || return
-            @test rec.event === :step
-            @test rec.kind === :drive
-            @test rec.job == "q-1"
-            @test rec.label == "sync"
-            @test rec.done == 0
-            @test rec.total == 2
-            @test rec.cur == 1
-            @test rec.status === nothing
-            @test rec.ok === nothing
-            @test rec.t === nothing
+            @test rec isa NamedTuple
+            if rec isa NamedTuple
+                @test rec.event === :step
+                @test rec.kind === :drive
+                @test rec.job == "q-1"
+                @test rec.label == "sync"
+                @test rec.done == 0
+                @test rec.total == 2
+                @test rec.cur == 1
+                @test rec.status === nothing
+                @test rec.ok === nothing
+                @test rec.t === nothing
+            end
             timed = DistSSHRun.parse_progress_line(
                 "progress: done kind=drive ok=true done=1 total=1 t=1710000000.5",
             )
-            timed isa NamedTuple || return
-            @test timed.t == 1710000000.5
+            @test timed isa NamedTuple
+            if timed isa NamedTuple
+                @test timed.t == 1710000000.5
+            end
             _with_tempdir() do tmp
                 p = joinpath(tmp, "kit.progress")
                 write(
@@ -569,25 +573,33 @@ using Test
             done = DistSSHRun.parse_progress_line(
                 "progress: done kind=go ok=true done=2 total=2",
             )
-            done isa NamedTuple || return
-            @test done.event === :done
-            @test done.ok === true
-            @test done.job === nothing
+            @test done isa NamedTuple
+            if done isa NamedTuple
+                @test done.event === :done
+                @test done.ok === true
+                @test done.job === nothing
+            end
             _with_tempdir() do tmp
                 a = joinpath(tmp, "a.log")
                 b = joinpath(tmp, "b.log")
                 write(a, "noise\nprogress: begin kind=drive job=old label=drive total=1\n")
                 write(b, "progress: done kind=drive job=new ok=true done=1 total=1\n")
                 latest = DistSSHRun.kit_progress_latest(tmp)
-                latest isa NamedTuple || return
-                @test latest.event === :done
-                @test latest.job == "new"
+                @test latest isa NamedTuple
+                if latest isa NamedTuple
+                    @test latest.event === :done
+                    @test latest.job == "new"
+                end
                 oldrec = DistSSHRun.kit_progress_latest(a)
-                oldrec isa NamedTuple || return
-                @test oldrec.event === :begin
+                @test oldrec isa NamedTuple
+                if oldrec isa NamedTuple
+                    @test oldrec.event === :begin
+                end
                 by_job = DistSSHRun.kit_progress_latest(tmp; job_id = "old")
-                by_job isa NamedTuple || return
-                @test by_job.job == "old"
+                @test by_job isa NamedTuple
+                if by_job isa NamedTuple
+                    @test by_job.job == "old"
+                end
                 @test DistSSHRun.kit_progress_latest(tmp; job_id = "missing") === nothing
             end
             _with_tempdir() do tmp
@@ -603,11 +615,15 @@ using Test
                     @test occursin("progress: begin kind=drive", body)
                     @test occursin("progress: done kind=drive ok=true", body)
                     got = DistSSHRun.kit_progress_latest(tmp)
-                    got isa NamedTuple || return
-                    @test got.event === :done
+                    @test got isa NamedTuple
+                    if got isa NamedTuple
+                        @test got.event === :done
+                    end
                     side = DistSSHRun.kit_progress_latest(sidecar)
-                    side isa NamedTuple || return
-                    @test side.event === :done
+                    @test side isa NamedTuple
+                    if side isa NamedTuple
+                        @test side.event === :done
+                    end
                 finally
                     DistSSHRun._set_kit_progress_sidecar!(nothing)
                 end

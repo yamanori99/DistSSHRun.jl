@@ -811,17 +811,20 @@ end
     end
 
     @testset "SIGINT disposition is restored on 1.13" begin
-        isdefined(Base, :CANCEL_TOKEN) && return
-        before = _sigint_sa_handler()
-        DistSSHRun._drive_frame() do
-            DistSSHRun._drive_cancellable() do
-                return nothing
+        if isdefined(Base, :CANCEL_TOKEN)
+            @test_skip "Julia 1.14+ (Base.CANCEL_TOKEN); SIGINT sa handler restoration is 1.13-only"
+        else
+            before = _sigint_sa_handler()
+            DistSSHRun._drive_frame() do
+                DistSSHRun._drive_cancellable() do
+                    return nothing
+                end
             end
+            @test _sigint_sa_handler() == before
+            DistSSHRun._arm_second_sigint!()
+            DistSSHRun._disarm_second_sigint!()
+            @test _sigint_sa_handler() == before
         end
-        @test _sigint_sa_handler() == before
-        DistSSHRun._arm_second_sigint!()
-        DistSSHRun._disarm_second_sigint!()
-        @test _sigint_sa_handler() == before
     end
 
     @testset "init delay" begin

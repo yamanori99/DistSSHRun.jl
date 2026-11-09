@@ -161,32 +161,35 @@ using Test
 
     _with_tempdir() do tmp
         @test DistSSHBase.clone_url_from_local_origin(tmp) === nothing
-        Sys.which("git") === nothing && return
-        # Isolate this fixture from the runner's global `url.*.insteadOf`
-        # (Cloud/CI often rewrites `https://github.com/` to a token URL).
-        # Do not rewrite the workspace origin or credentials.
-        empty_cfg = joinpath(tmp, "empty.gitconfig")
-        write(empty_cfg, "")
-        withenv(
-            "GIT_CONFIG_GLOBAL" => empty_cfg,
-            "GIT_CONFIG_SYSTEM" => empty_cfg,
-            "GIT_CONFIG_NOSYSTEM" => "1",
-        ) do
-            run(Cmd(["git", "-C", tmp, "init", "-q"]))
-            run(
-                Cmd(
-                    [
-                        "git", "-C", tmp, "remote", "add", "origin",
-                        "https://github.com/org/App.jl.git",
-                    ],
-                ),
-            )
-            stored = strip(
-                read(Cmd(["git", "-C", tmp, "remote", "get-url", "origin"]), String),
-            )
-            @test stored == "https://github.com/org/App.jl.git"
-            @test DistSSHBase.clone_url_from_local_origin(tmp) ==
-                "git@github.com:org/App.jl.git"
+        if Sys.which("git") === nothing
+            @test_skip "git not in PATH"
+        else
+            # Isolate this fixture from the runner's global `url.*.insteadOf`
+            # (Cloud/CI often rewrites `https://github.com/` to a token URL).
+            # Do not rewrite the workspace origin or credentials.
+            empty_cfg = joinpath(tmp, "empty.gitconfig")
+            write(empty_cfg, "")
+            withenv(
+                "GIT_CONFIG_GLOBAL" => empty_cfg,
+                "GIT_CONFIG_SYSTEM" => empty_cfg,
+                "GIT_CONFIG_NOSYSTEM" => "1",
+            ) do
+                run(Cmd(["git", "-C", tmp, "init", "-q"]))
+                run(
+                    Cmd(
+                        [
+                            "git", "-C", tmp, "remote", "add", "origin",
+                            "https://github.com/org/App.jl.git",
+                        ],
+                    ),
+                )
+                stored = strip(
+                    read(Cmd(["git", "-C", tmp, "remote", "get-url", "origin"]), String),
+                )
+                @test stored == "https://github.com/org/App.jl.git"
+                @test DistSSHBase.clone_url_from_local_origin(tmp) ==
+                    "git@github.com:org/App.jl.git"
+            end
         end
     end
 
