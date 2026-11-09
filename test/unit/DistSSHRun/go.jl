@@ -158,6 +158,11 @@ using Dates
                 @test DistSSHRun._go_script_relpath(base, joinpath(priv_base, "x.jl")) == want_x
                 @test DistSSHRun._script_inside_project(priv_base, joinpath(base, "x.jl"))
                 @test DistSSHRun._go_script_relpath(priv_base, joinpath(base, "x.jl")) == want_x
+                batch = DistSSHRun._go_batch_output_dir(base, joinpath(base, "x.jl"))
+                @test startswith(batch, base)
+                if startswith(base, "/var/") && !startswith(base, "/private")
+                    @test !startswith(batch, "/private/var")
+                end
             end
         end
     end
@@ -184,19 +189,6 @@ using Dates
             @test again != batch
             @test isdir(again)
             @test startswith(basename(again), "demo_20260803T134428Z")
-        end
-        if ispath("/private/var")
-            _with_tempdir() do proj
-                script = joinpath(proj, "job.jl")
-                write(script, "1\n")
-                batch = DistSSHRun._go_batch_output_dir(proj, script)
-                @test startswith(batch, proj)
-                if startswith(proj, "/var/") && !startswith(proj, "/private")
-                    @test !startswith(batch, "/private/var")
-                end
-            end
-        else
-            @test_skip "macOS /private/var layout not present"
         end
     end
 
