@@ -55,9 +55,20 @@ function _resolve_decl(declared_file::AbstractString, raw::AbstractString)::Stri
     return canonical_local_path(joinpath(dirname(String(declared_file)), expanded))
 end
 
+# `abspath` keeps a symlink spelling (`/var` on macOS). `realpath` follows it
+# (`/private/var`). Mixing the two makes their common ancestor `/`.
+function _fs_path(path::AbstractString)::String
+    raw = canonical_local_path(path)
+    try
+        return canonical_local_path(realpath(raw))
+    catch
+        return raw
+    end
+end
+
 function _contains_dir(parent::AbstractString, child::AbstractString)::Bool
-    p = canonical_local_path(parent)
-    c = canonical_local_path(child)
+    p = _fs_path(parent)
+    c = _fs_path(child)
     c == p && return true
     return startswith(c, p * Base.Filesystem.path_separator)
 end
@@ -181,15 +192,15 @@ Directory the tar is rooted at so every relative path dependency still
 resolves. Refuses `\$HOME` and the filesystem root.
 """
 function ship_anchor(project::ShipProject, deps::Vector{PathDep})::String
-    paths = String[project.project_dir]
-    project.workspace_root isa String && push!(paths, project.workspace_root)
+    paths = String[_fs_path(project.project_dir)]
+    project.workspace_root isa String && push!(paths, _fs_path(project.workspace_root))
     if project.manifest isa String
-        push!(paths, dirname(project.manifest))
+        push!(paths, _fs_path(dirname(project.manifest)))
     end
     for dep in deps
-        push!(paths, dep.dir)
+        push!(paths, _fs_path(dep.dir))
         written = _resolve_decl(dep.declared_in, dep.raw)
-        push!(paths, written)
+        push!(paths, _fs_path(written))
     end
     anchor = common_ancestor(paths)
     if _anchor_is_unsafe(anchor)
@@ -204,7 +215,7 @@ function ship_anchor(project::ShipProject, deps::Vector{PathDep})::String
 end
 
 function project_relpath(project::ShipProject, anchor::AbstractString)::String
-    rel = replace(relpath(project.project_dir, canonical_local_path(anchor)), '\\' => '/')
+    rel = replace(relpath(_fs_path(project.project_dir), _fs_path(anchor)), '\\' => '/')
     rel == "" && return "."
     return rel
 end

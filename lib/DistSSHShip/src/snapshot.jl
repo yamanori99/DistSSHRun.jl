@@ -163,7 +163,7 @@ function _warn_omitted!(
         push!(
             roots, (
                 canonical_local_path(dep.dir),
-                replace(relpath(dep.dir, anchor), '\\' => '/'),
+                replace(relpath(_fs_path(dep.dir), _fs_path(anchor)), '\\' => '/'),
             )
         )
     end
@@ -171,7 +171,7 @@ function _warn_omitted!(
         push!(
             roots, (
                 canonical_local_path(project.workspace_root),
-                replace(relpath(project.workspace_root, anchor), '\\' => '/'),
+                replace(relpath(_fs_path(project.workspace_root), _fs_path(anchor)), '\\' => '/'),
             )
         )
     end
@@ -278,7 +278,7 @@ function _collect_entries(
     prel = project_relpath(project, anchor)
     add_tree!(project.project_dir, prel; omit = omit_project_rels)
     for dep in deps
-        dep_rel = replace(relpath(dep.dir, anchor), '\\' => '/')
+        dep_rel = replace(relpath(_fs_path(dep.dir), _fs_path(anchor)), '\\' => '/')
         add_tree!(dep.dir, dep_rel)
     end
     if project.workspace_root isa String
@@ -286,9 +286,9 @@ function _collect_entries(
         for file in (DistSSHBase._located_project_file(ws), project.manifest)
             file isa String || continue
             isfile(file) || continue
-            rel = replace(relpath(file, anchor), '\\' => '/')
+            rel = replace(relpath(_fs_path(file), _fs_path(anchor)), '\\' => '/')
             rel in seen && continue
-            inside = replace(relpath(file, ws), '\\' => '/')
+            inside = replace(relpath(_fs_path(file), _fs_path(ws)), '\\' => '/')
             if path_ignored(ws, inside, false)
                 continue
             end
@@ -297,7 +297,7 @@ function _collect_entries(
         end
     elseif project.manifest isa String && !_contains_dir(project.project_dir, dirname(project.manifest))
         man = project.manifest
-        rel = replace(relpath(man, anchor), '\\' => '/')
+        rel = replace(relpath(_fs_path(man), _fs_path(anchor)), '\\' => '/')
         if !(rel in seen) && isfile(man)
             if path_ignored(dirname(man), basename(man), false)
                 # Final warning pass names it.

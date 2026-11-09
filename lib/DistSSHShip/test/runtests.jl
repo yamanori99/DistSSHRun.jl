@@ -338,6 +338,68 @@ end
         end
         @test h1 == h2
         @test !isempty(h1)
+        _tmp() do root
+            snap = DistSSHShip.snapshot(tree!(root))
+            try
+                dest = _extract(snap)
+                try
+                    buf = IOBuffer()
+                    DistSSHShip.Tar.create(dest, buf)
+                    seekstart(buf)
+                    got = String(
+                        DistSSHShip.Tar.tree_hash(buf; algorithm = "git-sha1", skip_empty = true),
+                    )
+                    @test got == snap.content_tree_hash
+                finally
+                    rm(dest; force = true, recursive = true)
+                end
+            finally
+                rm(snap.directory; force = true, recursive = true)
+            end
+        end
+    end
+
+    @testset "a symlink spelling of the project keeps the relative layout" begin
+        _tmp() do real
+            app = joinpath(real, "app")
+            bar = joinpath(real, "shared", "Bar")
+            mkpath(app)
+            mkpath(joinpath(bar, "src"))
+            write(
+                joinpath(app, "Manifest.toml"),
+                """
+                julia_version = "1.13.0"
+                manifest_format = "2.0"
+                [[deps.Bar]]
+                path = "../shared/Bar"
+                uuid = "00000000-0000-0000-0000-000000000001"
+                version = "0.1.0"
+                """,
+            )
+            write(joinpath(app, "Project.toml"), "name = \"App\"\n")
+            write(joinpath(bar, "Project.toml"), "name = \"Bar\"\n")
+            write(joinpath(bar, "src", "Bar.jl"), "module Bar end\n")
+            link_parent = mktempdir()
+            try
+                via = joinpath(link_parent, "via")
+                symlink(real, via)
+                snap = DistSSHShip.snapshot(joinpath(via, "app"))
+                try
+                    @test snap.project_rel == "app"
+                    dest = _extract(snap)
+                    try
+                        @test isfile(joinpath(dest, "app", "Project.toml"))
+                        @test isfile(joinpath(dest, "shared", "Bar", "src", "Bar.jl"))
+                    finally
+                        rm(dest; force = true, recursive = true)
+                    end
+                finally
+                    rm(snap.directory; force = true, recursive = true)
+                end
+            finally
+                rm(link_parent; force = true, recursive = true)
+            end
+        end
     end
 
     @testset "extracted symlink containment" begin
