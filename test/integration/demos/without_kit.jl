@@ -7,7 +7,6 @@ using Test
     julia = _julia_exe()
     echo = joinpath(kit_root, "demos", "without_kit", "pi_echo.jl")
     file = joinpath(kit_root, "demos", "without_kit", "pi_file.jl")
-    pipe_script = joinpath(kit_root, "demos", "without_kit", "pipeline_pi.jl")
     env = _child_julia_env()
 
     _with_tempdir() do tmp
