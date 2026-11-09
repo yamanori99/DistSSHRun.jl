@@ -1,5 +1,21 @@
 using Test
 
+function _git_sync_via_ssh_shim!(bindir, work, remote; hosts = ["dest"])
+    path0 = get(ENV, "PATH", "")
+    return withenv(
+        "PATH" => bindir * ":" * path0,
+        "DISTSSHKIT_TEST" => nothing,
+        "DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes",
+    ) do
+        return _capture_stdio() do _, _
+            DistSSHRun.git_sync_project_to_hosts!(
+                hosts, work, remote;
+                do_push = false, do_pull = true, confirm = false,
+            )
+        end
+    end
+end
+
 # Oracle: local `git` CLI for the origin push, and `git_sync` stopping before
 # remotes when that push fails or the tree is dirty. Remote checkout is a local
 # `ssh` shim that speaks `receive-pack` and runs the remote shell. Unreachable
@@ -407,21 +423,6 @@ using Test
 
         @testset "deploy metadata on remote checkout" begin
             _apply_quiet_setup_session!()
-            function _sync_remote!(bindir, work, remote; hosts = ["dest"])
-                path0 = get(ENV, "PATH", "")
-                withenv(
-                    "PATH" => bindir * ":" * path0,
-                    "DISTSSHKIT_TEST" => nothing,
-                    "DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes",
-                ) do
-                    return _capture_stdio() do _, _
-                        DistSSHRun.git_sync_project_to_hosts!(
-                            hosts, work, remote;
-                            do_push = false, do_pull = true, confirm = false,
-                        )
-                    end
-                end
-            end
             _with_tempdir() do tmp
                 bindir = joinpath(tmp, "bin")
                 mkdir(bindir)
@@ -432,7 +433,7 @@ using Test
                 mkpath(remote)
                 _init_commit!(work)
                 run(pipeline(`git init -q $remote`; stdout = devnull, stderr = devnull))
-                _, raw0 = _sync_remote!(bindir, work, remote)
+                _, raw0 = _git_sync_via_ssh_shim!(bindir, work, remote)
                 @test raw0.ok
 
                 mkpath(joinpath(remote, ".distssh"))
@@ -445,7 +446,7 @@ using Test
                         stdout = devnull, stderr = devnull,
                     )
                 )
-                _, raw1 = _sync_remote!(bindir, work, remote)
+                _, raw1 = _git_sync_via_ssh_shim!(bindir, work, remote)
                 @test raw1.ok
                 @test strip(read(`git -C $remote rev-parse HEAD`, String)) ==
                     strip(read(`git -C $work rev-parse HEAD`, String))
@@ -462,7 +463,7 @@ using Test
                         stdout = devnull, stderr = devnull,
                     )
                 )
-                _, raw2 = _sync_remote!(bindir, work, remote)
+                _, raw2 = _git_sync_via_ssh_shim!(bindir, work, remote)
                 @test !raw2.ok
                 @test occursin("untracked or uncommitted", raw2.host_results[1].message)
                 @test strip(read(`git -C $remote rev-parse HEAD`, String)) == head_before_block
@@ -478,7 +479,7 @@ using Test
                         stdout = devnull, stderr = devnull,
                     )
                 )
-                _, raw3a = _sync_remote!(bindir, work, remote)
+                _, raw3a = _git_sync_via_ssh_shim!(bindir, work, remote)
                 @test raw3a.ok
                 mkpath(joinpath(remote, ".distssh"))
                 write(joinpath(remote, ".distssh", "deploy.toml"), "schema = 1\n")
@@ -492,7 +493,7 @@ using Test
                         stdout = devnull, stderr = devnull,
                     )
                 )
-                _, raw3 = _sync_remote!(bindir, work, remote)
+                _, raw3 = _git_sync_via_ssh_shim!(bindir, work, remote)
                 @test !raw3.ok
                 msg3 = raw3.host_results[1].message
                 @test occursin("untracked or uncommitted", msg3) ||
@@ -515,7 +516,7 @@ using Test
                         )
                     )
                     run(pipeline(`git init -q $remote2`; stdout = devnull, stderr = devnull))
-                    _, raw_base = _sync_remote!(bindir, work2, remote2)
+                    _, raw_base = _git_sync_via_ssh_shim!(bindir, work2, remote2)
                     @test raw_base.ok
                     head0 = strip(read(`git -C $remote2 rev-parse HEAD`, String))
                     mkpath(joinpath(remote2, ".distssh"))
@@ -529,7 +530,7 @@ using Test
                         )
                     )
                     sha_collide = strip(read(`git -C $work2 rev-parse HEAD`, String))
-                    _, raw4 = _sync_remote!(bindir, work2, remote2)
+                    _, raw4 = _git_sync_via_ssh_shim!(bindir, work2, remote2)
                     @test !raw4.ok
                     @test occursin("tracks files under .distssh/", raw4.host_results[1].message)
                     @test occursin(sha_collide, raw4.host_results[1].message)
