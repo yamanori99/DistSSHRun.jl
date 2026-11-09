@@ -266,7 +266,7 @@ function _collect_entries(
     function add_tree!(tree_root::AbstractString, prefix::AbstractString; omit::Vector{String} = String[])
         root_c = canonical_local_path(tree_root)
         isdir(root_c) || return nothing
-        listed = selected_paths(root_c; omit = omit)
+        listed = _selected_paths(root_c; omit = omit)
         for rel in listed
             full = prefix == "" || prefix == "." ? rel : string(prefix, "/", rel)
             full in seen && continue

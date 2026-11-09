@@ -100,13 +100,7 @@ function _with_parents(rels::Vector{String})::Vector{String}
     return unique!(vcat(rels, extras))
 end
 
-"""
-Selected paths under `root`, relative to `root`, including ancestor directories.
-
-`omit` paths are relative to `root`. A path equal to an omit entry, or under it,
-is dropped. That is how declared inputs stay out of a Run ship.
-"""
-function selected_paths(
+function _selected_paths(
         root::AbstractString;
         omit::Vector{String} = String[],
     )::Vector{String}
@@ -122,6 +116,21 @@ function selected_paths(
         end
     end
     sort!(rels)
+    return rels
+end
+
+"""
+Selected paths under `root`, relative to `root`, including ancestor directories.
+
+`omit` paths are relative to `root`. A path equal to an omit entry, or under it,
+is dropped. That is how declared inputs stay out of a Run ship.
+"""
+function selected_paths(
+        root::AbstractString;
+        omit::Vector{String} = String[],
+    )::Vector{String}
+    root_c = canonical_local_path(root)
+    rels = _selected_paths(root_c; omit = omit)
     isempty(rels) && throw(ArgumentError("nothing to ship from $root_c"))
     return rels
 end

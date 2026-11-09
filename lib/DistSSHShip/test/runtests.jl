@@ -172,6 +172,42 @@ end
         end
     end
 
+    @testset "a path dependency with no selected files does not break snapshot" begin
+        _tmp() do root
+            app = joinpath(root, "app")
+            dep = joinpath(root, "dep")
+            mkpath(app)
+            mkpath(dep)
+            write(joinpath(app, "keep.jl"), "1\n")
+            write(joinpath(app, "Project.toml"), "name = \"App\"\n")
+            write(
+                joinpath(app, "Manifest.toml"),
+                """
+                julia_version = "1.13.0"
+                manifest_format = "2.0"
+                [[deps.Dep]]
+                path = "../dep"
+                uuid = "00000000-0000-0000-0000-000000000002"
+                version = "0.1.0"
+                """,
+            )
+            write(joinpath(dep, ".gitignore"), "*\n")
+            write(joinpath(dep, "note.txt"), "ignored\n")
+            @test_throws ArgumentError DistSSHShip.selected_paths(dep)
+            snap = DistSSHShip.snapshot(app)
+            try
+                dest = _extract(snap)
+                try
+                    @test isfile(joinpath(dest, "app", "keep.jl"))
+                finally
+                    rm(dest; force = true, recursive = true)
+                end
+            finally
+                rm(snap.directory; force = true, recursive = true)
+            end
+        end
+    end
+
     @testset "a parent gitignore does not drop a declared path dependency" begin
         _tmp() do dir
             foo = joinpath(dir, "vendor", "Foo")
