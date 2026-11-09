@@ -542,6 +542,7 @@ function resolve_snapshot_selection(
         local_project::AbstractString;
         snapshot::Union{Nothing, AbstractString} = nothing,
         skip_local_record::Bool = false,
+        skip_deploy_record::Bool = false,
     )::SnapshotSelection
     deploy = String(deploy_root)
     host_list = String[String(h) for h in hosts]
@@ -549,6 +550,14 @@ function resolve_snapshot_selection(
     if snapshot !== nothing
         rid = validate_snapshot_id(snapshot)
         checked = _validate_snapshot_on_hosts!(host_list, deploy, rid)
+        if !skip_deploy_record
+            try
+                dep = read_deploy_record_consensus(host_list, deploy)
+                _set_active_deploy_record!(dep)
+            catch e
+                e isa ArgumentError && throw(e)
+            end
+        end
         return SnapshotSelection(
             :snapshot,
             rid,
@@ -557,6 +566,14 @@ function resolve_snapshot_selection(
             checked.hash,
             host_list,
         )
+    end
+    if !skip_deploy_record
+        dep = read_deploy_record_consensus(host_list, deploy)
+        if dep !== nothing
+            _set_active_deploy_record!(dep)
+            return _selection_from_deploy_record(dep, deploy, host_list)
+        end
+        _set_active_deploy_record!(nothing)
     end
     # Same-process ship: use the recorded run_id, still validate on every host.
     last = skip_local_record ? nothing : last_ship_result()

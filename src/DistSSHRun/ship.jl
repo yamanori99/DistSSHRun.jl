@@ -2133,6 +2133,14 @@ function ship(
                 ok_hosts,
             ),
         )
+        commit_deploy_record_after_ship!(
+            ok_hosts,
+            String(remote_root),
+            snapshot.root,
+            rid,
+            snapshot.content_tree_hash;
+            project_rel = snapshot.project_rel,
+        )
     end
     return ShipTreeResult(
         rid, String(remote_root), src_logical, snapshot.content_tree_hash, "git-sha1",

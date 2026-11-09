@@ -621,6 +621,12 @@ function _run_drive_parsed_locked!(
                     snapshot = ship_snap,
                 )
             end
+            deploy_root = DistSSHRun._resolved_deploy_root_for_work(
+                proj_dir; cli_override = get(parsed, :deploy_root, nothing),
+            )
+            DistSSHRun.record_deploy_status_for_run!(
+                host_names, deploy_root, proj_dir,
+            )
             writeln_both("")
         elseif !isempty(host_names)
             # A newline in the override stays for `add_drive_workers!`.
@@ -629,6 +635,12 @@ function _run_drive_parsed_locked!(
                 host_names, project_root;
                 cli_override = get(parsed, :deploy_root, nothing),
                 snapshot = get(parsed, :snapshot, nothing),
+            )
+            deploy_root = DistSSHRun._resolved_deploy_root_for_work(
+                proj_dir; cli_override = get(parsed, :deploy_root, nothing),
+            )
+            DistSSHRun.record_deploy_status_for_run!(
+                host_names, deploy_root, proj_dir,
             )
         end
 

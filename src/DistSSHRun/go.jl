@@ -1319,6 +1319,13 @@ function _go_run!(
             sess_rr
         end
 
+        if !isempty(child_hosts)
+            deploy_root = _resolved_deploy_root_for_work(
+                proj; cli_override = remote,
+            )
+            record_deploy_status_for_run!(child_hosts, deploy_root, proj)
+        end
+
         verify_go_slots_match_job!(
             proj,
             slots;
