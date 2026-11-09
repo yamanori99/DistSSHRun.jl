@@ -431,7 +431,7 @@ function _go_assert_remote_ready!(host::AbstractString, remote_root::AbstractStr
             "  then:   julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host))\n" *
             "  then:   julia --project=. -m DistSSHKit go --snapshot ID …\n" *
             "Or from Julia: setup!(session, :ship_tree, :instantiate)\n" *
-            "  (or go!(…; sync=:ship_tree); or :git_clone; repo=\"…\" then :instantiate; later :git_sync)\n" *
+            "  (or :git_clone, :instantiate; repo=\"…\" for clone; later :git_sync)\n" *
             "Set DISTRIBUTED_REMOTE_PROJECT_ROOT if the remote path is not the default."
         !isempty(ssh_hint) && (msg *= "\n  $ssh_hint")
         throw(ArgumentError(DistSSHBase._append_remote_shell_hint(String(host), code, msg)))

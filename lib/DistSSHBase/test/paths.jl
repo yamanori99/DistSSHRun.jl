@@ -67,6 +67,36 @@ using Test
         @test !DistSSHBase._path_is_under("/a/bother", "/a/b")
     end
 
+    @testset "_path_under_resolved" begin
+        _with_tempdir() do base
+            root = joinpath(base, "proj")
+            mkpath(joinpath(root, "in"))
+            write(joinpath(root, "in", "ok.jl"), "")
+            outside = joinpath(base, "outside.jl")
+            write(outside, "")
+            escape = joinpath(root, "escape.jl")
+            symlink(outside, escape)
+            @test !DistSSHBase._path_under_resolved(escape, root)
+            missing_via = joinpath(root, "escape.jl", "missing.jl")
+            @test !DistSSHBase._path_under_resolved(missing_via, root)
+            @test DistSSHBase._path_under_resolved(joinpath(root, "in", "ok.jl"), root)
+            @test DistSSHBase._path_under_resolved(joinpath(root, "in", "missing.jl"), root)
+
+            link_root = joinpath(base, "link_proj")
+            symlink(root, link_root)
+            @test DistSSHBase._path_under_resolved(joinpath(link_root, "in", "ok.jl"), link_root)
+            @test DistSSHBase._path_under_resolved(joinpath(link_root, "in", "ok.jl"), root)
+        end
+        _with_tempdir() do base
+            write(joinpath(base, "x.jl"), "")
+            priv = "/private" * base
+            if ispath(priv)
+                @test DistSSHBase._path_under_resolved(joinpath(base, "x.jl"), priv)
+                @test DistSSHBase._path_under_resolved(joinpath(priv, "x.jl"), base)
+            end
+        end
+    end
+
     @testset "resolve_host_project_abs parent" begin
         _with_tempdir() do tmp
             p = abspath(tmp)

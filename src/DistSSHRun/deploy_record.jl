@@ -3,6 +3,7 @@
 const _DEPLOY_RECORD_SCHEMA = 1
 const _DEPLOY_RECORD_DIR = ".distssh"
 const _DEPLOY_RECORD_NAME = "deploy.toml"
+const _DEPLOY_RECORD_TMP_TAIL = ".tmp"
 
 const _ACTIVE_DEPLOY_RECORD = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 
@@ -187,6 +188,48 @@ function read_deploy_record_consensus(
     return reference
 end
 
+function _deploy_record_write_nonce()::String
+    seed = string(time_ns(), '-', objectid(current_task()), '-', Threads.threadid())
+    return lowercase(bytes2hex(SHA.sha256(codeunits(seed))))[1:16]
+end
+
+function _deploy_record_tmp_tag(deploy_id::AbstractString)::String
+    tag = replace(strip(String(deploy_id)), r"[^A-Za-z0-9._-]" => "_")
+    isempty(tag) && throw(ArgumentError("deploy record deploy_id is empty"))
+    stamp = replace(_deploy_record_timestamp(), ':' => '-')
+    nonce = _deploy_record_write_nonce()
+    return string(tag, "-", stamp, "-", nonce)
+end
+
+"""Absolute remote path for a per-write temporary deploy record."""
+function _deploy_record_tmp_path(record_abs::AbstractString, deploy_id::AbstractString)::String
+    return string(record_abs, ".", _deploy_record_tmp_tag(deploy_id), _DEPLOY_RECORD_TMP_TAIL)
+end
+
+"""`scp` argv for uploading a local deploy record to an absolute remote path (`local` then `host:path`)."""
+function _deploy_record_scp_upload_argv(
+        host::AbstractString,
+        record_abs::AbstractString,
+        local_path::AbstractString,
+    )::Vector{String}
+    h = validate_ssh_host(String(host))
+    remote = String(record_abs)
+    any(iscntrl, remote) && throw(
+        ArgumentError("deploy record remote path contains a control character"),
+    )
+    dest = string(h, ":", remote)
+    return String[ssh_opts()..., String(local_path), dest]
+end
+
+function _deploy_record_atomic_install_script(
+        record_abs::AbstractString,
+        record_tmp_abs::AbstractString,
+    )::String
+    final_q = _remote_shell_path_word(record_abs)
+    tmp_q = _remote_shell_path_word(record_tmp_abs)
+    return "mv -f $tmp_q $final_q"
+end
+
 function _write_deploy_record_via_scp!(
         host::AbstractString,
         deploy_root::AbstractString,
@@ -200,11 +243,13 @@ function _write_deploy_record_via_scp!(
             print(io, body)
         end
         record_abs = _probe_expanded_remote_root(String(host), record_path)
+        deploy_id = String(get(data, "deploy_id", ""))
+        record_tmp_abs = _deploy_record_tmp_path(record_abs, deploy_id)
         parent = record_abs
         i = findlast(==('/'), parent)
         i !== nothing && (parent = parent[1:prevind(parent, i)])
         pq_parent = _remote_shell_path_word(parent)
-        run(
+        proc_mk = run(
             pipeline(
                 ignorestatus(
                     _host_sync_remote_shell_cmd(
@@ -214,16 +259,53 @@ function _write_deploy_record_via_scp!(
                 );
                 stdout = devnull,
                 stderr = devnull,
-            ),
+            );
+            wait = true,
         )
-        dest = string(String(host), ":", record_path)
-        run(
+        DistSSHBase.shell_status(proc_mk) == 0 ||
+            throw(ArgumentError("deploy record: mkdir on $(host) failed"))
+        proc_scp = run(
             pipeline(
-                _scp_cmd(String[ssh_opts()..., _ssh_host_args(dest)..., tmp]);
+                ignorestatus(
+                    _scp_cmd(_deploy_record_scp_upload_argv(String(host), record_tmp_abs, tmp)),
+                );
                 stdout = devnull,
                 stderr = devnull,
-            ),
+            );
+            wait = true,
         )
+        DistSSHBase.shell_status(proc_scp) == 0 ||
+            throw(ArgumentError("deploy record: scp to $(host) failed"))
+        install = _deploy_record_atomic_install_script(record_abs, record_tmp_abs)
+        proc_mv = run(
+            pipeline(
+                ignorestatus(_host_sync_remote_shell_cmd(String(host), install));
+                stdout = devnull,
+                stderr = devnull,
+            );
+            wait = true,
+        )
+        if DistSSHBase.shell_status(proc_mv) != 0
+            tmp_q = _remote_shell_path_word(record_tmp_abs)
+            try
+                run(
+                    pipeline(
+                        ignorestatus(
+                            _host_sync_remote_shell_cmd(String(host), "rm -f $tmp_q"),
+                        );
+                        stdout = devnull,
+                        stderr = devnull,
+                    );
+                    wait = true,
+                )
+            catch e
+                e isa InterruptException && rethrow()
+            end
+            throw(ArgumentError("deploy record: install on $(host) failed"))
+        end
+    catch e
+        _rethrow_missing_host_tool(e)
+        rethrow()
     finally
         isfile(tmp) && rm(tmp; force = true)
     end
@@ -256,15 +338,91 @@ function write_deploy_record_to_hosts!(
         content_tree_hash = content_tree_hash,
         project_rel = project_rel,
     )
+    ok_hosts = String[]
+    fail_hosts = String[]
     for h in hosts
+        host_s = String(h)
         try
-            _write_deploy_record_via_scp!(String(h), deploy_root, data)
+            _write_deploy_record_via_scp!(host_s, deploy_root, data)
+            push!(ok_hosts, host_s)
         catch e
             e isa InterruptException && rethrow()
-            # Deploy record is metadata; the tree transfer already succeeded.
+            push!(fail_hosts, host_s)
+            print_warn("Deploy record write failed on $(host_s): $(sprint(showerror, e))")
+            kit_println()
         end
     end
+    if isempty(ok_hosts) && !isempty(fail_hosts)
+        print_warn(
+            "Deploy record was not written on any host ($(join(fail_hosts, ", "))). " *
+                "Setup transfer succeeded; re-run setup or fix SSH if you need deploy.toml.",
+        )
+        kit_println()
+    end
     return data
+end
+
+function _local_ship_content_tree_hash(project::AbstractString)::Union{Nothing, String}
+    try
+        snap = snapshot(project)
+        hash = content_tree_hash(snap)
+        rm(snapshot_directory(snap); recursive = true, force = true)
+        return hash
+    catch
+        return nothing
+    end
+end
+
+"""
+Read deploy records for run headers and staleness warnings.
+
+Returns `(record, warn_unknown)` where `warn_unknown` is false when a
+disagreement warning was already emitted (do not also say provenance unknown).
+"""
+function _read_deploy_record_for_run_status(
+        hosts::AbstractVector{<:AbstractString},
+        deploy_root::AbstractString,
+    )::Tuple{Union{Nothing, Dict{String, Any}}, Bool}
+    isempty(hosts) && return nothing, true
+    present = Dict{String, Dict{String, Any}}()
+    missing_hosts = String[]
+    for h in hosts
+        host_s = String(h)
+        rec = read_deploy_record_on_host(host_s, deploy_root)
+        if rec === nothing
+            push!(missing_hosts, host_s)
+        else
+            present[host_s] = rec
+        end
+    end
+    isempty(present) && return nothing, true
+    reference = first(values(present))
+    disagree = false
+    disagree_host = nothing
+    for (host_s, rec) in present
+        if !_deploy_records_equivalent(reference, rec)
+            disagree = true
+            disagree_host = host_s
+            break
+        end
+    end
+    if disagree
+        print_warn(
+            "Deploy records disagree across hosts" *
+                (disagree_host === nothing ? "" : " (first mismatch on $(disagree_host))") *
+                "; run setup on every host.",
+        )
+        kit_println()
+        return nothing, false
+    end
+    if !isempty(missing_hosts)
+        print_warn(
+            "Deploy record missing on: $(join(missing_hosts, ", ")) " *
+                "(using record from other hosts).",
+        )
+        kit_println()
+    end
+    return reference, true
 end
 
 function _selection_from_deploy_record(
@@ -305,8 +463,13 @@ function _selection_from_deploy_record(
     throw(_selection_error("deploy record mode $(repr(mode_s)) is not recognized; pass --snapshot ID"))
 end
 
-function _warn_deploy_staleness!(project::AbstractString, rec::Union{Nothing, AbstractDict})
+function _warn_deploy_staleness!(
+        project::AbstractString,
+        rec::Union{Nothing, AbstractDict};
+        warn_unknown::Bool = true,
+    )
     if rec === nothing
+        warn_unknown || return nothing
         print_warn("Deploy provenance unknown (no .distssh/deploy.toml on remotes).")
         kit_println()
         return nothing
@@ -327,9 +490,17 @@ function _warn_deploy_staleness!(project::AbstractString, rec::Union{Nothing, Ab
     end
     if mode_s == "ship-tree"
         remote_hash = get(rec, "content_tree_hash", nothing)
-        remote_hash isa AbstractString || return nothing
-        local_mf = manifest_path(project)
+        if remote_hash isa AbstractString && !isempty(strip(String(remote_hash)))
+            local_hash = _local_ship_content_tree_hash(project)
+            if local_hash isa String && local_hash != strip(String(remote_hash))
+                print_warn(
+                    "Local ship-tree hash $(local_hash[1:min(end, 12)]) differs from deploy record $(strip(String(remote_hash))[1:min(end, 12)]) (setup may be stale).",
+                )
+                kit_println()
+            end
+        end
         remote_mh = get(rec, "manifest_hash", nothing)
+        local_mf = manifest_path(project)
         if local_mf isa String && isfile(local_mf) && remote_mh isa AbstractString
             local_mh = _deploy_record_manifest_hash(project)
             local_mh !== nothing && local_mh != strip(String(remote_mh)) && begin
@@ -385,14 +556,14 @@ function record_deploy_status_for_run!(
     )
     isempty(hosts) && return nothing
     skip_deploy_record && return nothing
-    rec = try
-        read_deploy_record_consensus(hosts, deploy_root)
+    rec, warn_unknown = try
+        _read_deploy_record_for_run_status(hosts, deploy_root)
     catch e
         e isa ArgumentError && rethrow()
-        nothing
+        nothing, true
     end
     _set_active_deploy_record!(rec)
-    _warn_deploy_staleness!(project, rec)
+    _warn_deploy_staleness!(project, rec; warn_unknown = warn_unknown)
     _log_deploy_record_fields!(rec)
     return rec
 end

@@ -48,4 +48,8 @@ if occursin("pwd -P", script) || occursin("printf '%s\\n'", script)
     cmd = run(pipeline(ignorestatus(`sh -c $script`); stdout = stdout, stderr = stderr); wait = true)
     exit(cmd.exitcode)
 end
+if occursin(".distssh/deploy.toml", script) && occursin("cat", script)
+    cmd = run(pipeline(ignorestatus(`sh -c $script`); stdout = stdout, stderr = stderr); wait = true)
+    exit(cmd.exitcode)
+end
 exit(0)

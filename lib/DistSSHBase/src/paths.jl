@@ -158,11 +158,40 @@ function _path_is_under(path::AbstractString, root::AbstractString)::Bool
     return startswith(p, r * Base.Filesystem.path_separator)
 end
 
+"""Longest existing ancestor of `path`, or `nothing` when none exists."""
+function _longest_existing_ancestor(path::AbstractString)::Union{Nothing, String}
+    cur = canonical_local_path(path)
+    while !ispath(cur)
+        parent = dirname(cur)
+        parent == cur && return nothing
+        cur = parent
+    end
+    return cur
+end
+
 """Like `_path_is_under` after `realpath`, so `/var` and `/private/var` match."""
 function _path_under_resolved(path::AbstractString, root::AbstractString)::Bool
-    _path_is_under(path, root) && return true
     p = canonical_local_path(path)
     r = canonical_local_path(root)
-    (ispath(p) && ispath(r)) || return false
-    return _path_is_under(canonical_local_path(realpath(p)), canonical_local_path(realpath(r)))
+    if ispath(p) && ispath(r)
+        try
+            pr = canonical_local_path(realpath(p))
+            rr = canonical_local_path(realpath(r))
+            return _path_is_under(pr, rr)
+        catch
+        end
+    end
+    if ispath(r)
+        anchor = _longest_existing_ancestor(p)
+        if anchor isa String
+            try
+                pr = canonical_local_path(realpath(anchor))
+                rr = canonical_local_path(realpath(r))
+                _path_is_under(pr, rr) || return false
+            catch
+                return false
+            end
+        end
+    end
+    return _path_is_under(p, r)
 end

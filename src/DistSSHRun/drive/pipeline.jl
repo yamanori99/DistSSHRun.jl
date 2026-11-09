@@ -35,7 +35,7 @@ Build [`PipelineConfig`](@ref) from environment variables.
 | `DISTRIBUTED_REMOTE_PROJECT_ROOT` | Remote repo root |
 | `DISTRIBUTED_PROJECT_ROOT` | Local project root |
 | `DRIVER` | Driver script path |
-| `SYNC_MODE` | `git-sync`, `ship-tree`, or `off` |
+| `SYNC_MODE` | Deprecated; omit or use `off` (prepare with `setup!` instead) |
 | `JULIA_DISTRIBUTED_EXE` | Remote Julia path (same as CLI `--julia`; `auto` / unset → detect) |
 | `DISTSSHKIT_YES` / `DISTSSHKIT_QUIET` / `DISTSSHKIT_PROGRESS` / `DISTSSHKIT_VERBOSE` | Same as CLI `-y` / `-q` / `--progress` / `--verbose` |
 """
@@ -153,11 +153,11 @@ pipeline!(driver, "parent:2"; args=["8"])
 pipeline!(driver, "child:user@h1:1", "child:user@h2:1"; remote="/path/to/project", args=["8"], collect=true)
 ```
 
-Remote hosts default to **no** pre-run sync; set `sync=:git_sync` / `:ship_tree` explicitly.
+Remote hosts default to **no** run-time transfer; prepare with one of
+[`setup!`](@ref) `:git_sync` or `:ship_tree`, then `:instantiate` when needed,
+before `pipeline!`. `:git_sync` checks out in an existing remote tree; on a
+**new** target run [`setup!`](@ref)(`session`, `:git_clone`; `repo=...`) first.
 Collect defaults on when remotes are present (`collect=false` to skip).
-`pipeline!` `sync=:ship_tree` copies only; it does not instantiate missing
-Manifest deps. Use [`drive!`](@ref) with `sync=:ship_tree`, or [`setup!`](@ref)
-`:instantiate`, for that.
 
 Returns [`PipelineResult`](@ref); check `result.ok` or use [`report_pipeline_errors`](@ref).
 """
