@@ -73,6 +73,60 @@ end
     @test DistSSHRun._kit_run_toml_owned(TOML.parse(complete))
 end
 
+function _snap_run_leaf_probe_out(
+        deploy::AbstractString,
+        snapshot_id::AbstractString,
+        stamp_body::AbstractString,
+        src_project::AbstractString,
+        project_rel::AbstractString,
+    )::String
+    leaf = joinpath(deploy, "runs", snapshot_id)
+    src = joinpath(leaf, "src")
+    dest = project_rel == "." ? src : joinpath(src, project_rel)
+    mkpath(dest)
+    write(joinpath(dest, "Project.toml"), src_project)
+    write(joinpath(leaf, "run.toml"), stamp_body)
+    script = DistSSHRun._snapshot_complete_probe_script(leaf, src, joinpath(leaf, "run.toml"))
+    return read(`sh -c $script`, String)
+end
+
+@testset "snapshot complete probe script quotes project paths" begin
+    _with_tempdir() do root
+        spaced = joinpath(root, "Deploy Root")
+        out = _snap_run_leaf_probe_out(
+            spaced,
+            _SNAP_ID_OLD,
+            DistSSHRun._ship_run_leaf_complete_toml(_SNAP_HASH_OLD),
+            "name = \"Spaced\"\n",
+            ".",
+        )
+        lines = split(strip(out), '\n'; keepempty = false)
+        @test lines[1] == "ok"
+        @test lines[2] == _SNAP_HASH_OLD
+        @test lines[3] == "."
+    end
+    _with_tempdir() do root
+        deploy = joinpath(root, "app")
+        rel = "pkg*1"
+        out = _snap_run_leaf_probe_out(
+            deploy,
+            _SNAP_ID_OLD,
+            DistSSHRun._ship_run_leaf_complete_toml(_SNAP_HASH_OLD; project_rel = rel),
+            "name = \"Glob\"\n",
+            rel,
+        )
+        lines = split(strip(out), '\n'; keepempty = false)
+        @test lines[1] == "ok"
+        @test lines[2] == _SNAP_HASH_OLD
+        @test lines[3] == rel
+    end
+    script = DistSSHRun._snapshot_complete_probe_script("/x/r", "/x/r/src", "/x/r/run.toml")
+    @test occursin("proj=\"\$proj/", script)
+    @test occursin("\"\$proj/Project.toml\"", script)
+    @test occursin("\"\$proj/JuliaProject.toml\"", script)
+    @test !occursin("test ! -f \$proj/Project.toml", script)
+end
+
 @testset "setup --snapshot argv" begin
     p = DistSSHRun.parse_setup_args(
         String["instantiate", "--snapshot", _SNAP_ID_OLD, "child:h1"],
