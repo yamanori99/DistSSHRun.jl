@@ -1,9 +1,9 @@
 # Drive API — session, sync!, instantiate!, setup!,
 # drive!, collect!, pipeline!.
 # Result types live in `drive/types.jl` (included from `DistSSHRun.jl` before `setup/`).
-# Worker execution core lives in `drive/runtime/` (included from `DistSSHRun.jl`
-# after heartbeat.jl). Worker bootstrap is `include_string` / `Core.eval` on
-# Main so remotes do not need DistSSHRun.
+# Worker execution core lives in `drive/runtime/` (included from `DistSSHRun.jl`).
+# Worker bootstrap is `include_string` / `Core.eval` on Main so remotes do not
+# need DistSSHRun. Heartbeat source is `DistSSHHeartbeat.WORKER_SOURCE`.
 
 include(joinpath(@__DIR__, "drive", "session.jl"))
 include(joinpath(@__DIR__, "drive", "bridge.jl"))

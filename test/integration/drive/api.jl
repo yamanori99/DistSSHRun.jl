@@ -59,8 +59,10 @@ end
                     # No explicit output_dir=/log_dir= — still resolved (not the raw `nothing` kwarg).
                     @test result.output_dir !== nothing
                     @test result.log_dir !== nothing
-                    # `@everywhere` must not redefine master helpers (warn-overwrite).
+                    # Heartbeat must not redefine master helpers (warn-overwrite).
                     @test !occursin("overwritten", err)
+                    @test !isdefined(Main, :stop_heartbeat_monitor)
+                    @test !isdefined(Main, :start_heartbeat_monitor)
                 end
             end
             @testset "active project unchanged after drive! (Run #184/#185)" begin

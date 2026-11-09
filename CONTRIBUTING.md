@@ -15,7 +15,7 @@ macOS, Linux, or WSL2 Ubuntu. Not native Windows (the kit shells out to `ssh`). 
 
 | What | Need |
 | --- | --- |
-| Library, `Pkg.test()`, `julia -m DistSSHKit`, docs | Julia **1.13+** |
+| Library, `Pkg.test()`, `julia -m DistSSHKit`, docs | Julia **1.13.3+** |
 | DistSSHKit | **0.9.x** from General (`execute!`, `job_id`, `run_dir` / `kit.pid` / `kit.result`). Not a git sibling. |
 
 Prefer [juliaup](https://github.com/JuliaLang/juliaup). Details: [Requirements](https://yamanori99.github.io/DistSSHKit.jl/stable/requirements/).
@@ -101,7 +101,7 @@ Workflows pass the version to `julia-actions/setup-julia`. The stable line and `
 
 | Version | Role | Required |
 | --- | --- | --- |
-| **1.13** | `Project.toml` julia floor. Pkg.test, Aqua, JETLS, Documenter, draw, E2E, Runic. Codecov `pkgtest` on **main push** only | yes |
+| **1.13** | `Project.toml` julia floor (**1.13.3+**). Pkg.test, Aqua, JETLS, Documenter, draw, E2E, Runic. Codecov `pkgtest` on **main push** only | yes |
 | **1.14-pre** | setup-julia `~1.14.0-0` (1.14.0 alpha, then beta, then rc, then 1.14.0; not 1.15). Ubuntu and macOS `Pkg.test` are required. Aqua, JETLS, and Linux SSH E2E stay `continue-on-error` | Ubuntu and macOS `Pkg.test` |
 | **nightly** | Published `julia-latest` tarball. It follows master and can lag a `VERSION` bump. Pkg.test and Aqua. No JETLS. `continue-on-error` | no |
 
@@ -193,7 +193,7 @@ Codecov too). macOS and WSL SSH E2E stay on `E2E weekly`, not the PR.
 Register when the required checks below are green. Intel / WSL weekly are
 watchers, not the register gate.
 
-CI uploads Codecov on **main push** only (Run `Pkg.test` on 1.13, plus Ubuntu `Pkg.test` of DistSSHBase, DistSSHUp, and DistSSHShip, flag `pkgtest`). PR E2E does not upload; a version-increase PR and **E2E weekly** Linux upload flag `e2e`. Public repo + Codecov OIDC (`id-token: write`). Status checks are informational (`codecov.yml`). Local coverage:
+CI uploads Codecov on **main push** only (Run `Pkg.test` on 1.13, plus Ubuntu `Pkg.test` of DistSSHBase, DistSSHUp, DistSSHShip, and DistSSHHeartbeat, flag `pkgtest`). PR E2E does not upload; a version-increase PR and **E2E weekly** Linux upload flag `e2e`. Public repo + Codecov OIDC (`id-token: write`). Status checks are informational (`codecov.yml`). Local coverage:
 
 ```bash
 julia --project=. -e 'using Pkg; Pkg.test(; coverage=true)'
@@ -213,6 +213,8 @@ Required to merge (ruleset `main` uses these names). **nightly** jobs, and **1.1
 - `DistSSHUp (1.13, xcode-27, aarch64)`
 - `DistSSHShip (1.13, ubuntu-latest, x64)`
 - `DistSSHShip (1.13, xcode-27, aarch64)`
+- `DistSSHHeartbeat (1.13, ubuntu-latest, x64)`
+- `DistSSHHeartbeat (1.13, xcode-27, aarch64)`
 - `JETLS (1.13, ubuntu-latest, x64)`
 - `Aqua (1.13, ubuntu-latest, x64)`
 - `Documenter (1.13, ubuntu-latest, x64)`

@@ -15,7 +15,7 @@ on:
     paths:
       # Measurement inputs. report.jl, charts.jl, and compile-bench-render.sh stay on
       # Compile bench render: that workflow rebuilds the page and does not measure.
-      # lib/ is included source (DistSSHBase, DistSSHUp, DistSSHShip), not a separate package root.
+      # lib/ is included source (DistSSHBase, DistSSHUp, DistSSHShip, DistSSHHeartbeat), not a separate package root.
       - "src/**"
       - "lib/**"
       - "bench/compile/measure.jl"

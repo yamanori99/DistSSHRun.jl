@@ -27,6 +27,7 @@ updates:
       - "/lib/DistSSHBase"
       - "/lib/DistSSHUp"
       - "/lib/DistSSHShip"
+      - "/lib/DistSSHHeartbeat"
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
@@ -34,6 +35,7 @@ updates:
       - dependencies
     ignore:
       - dependency-name: Dates
+      - dependency-name: Distributed
       - dependency-name: Pkg
       - dependency-name: TOML
       - dependency-name: Test

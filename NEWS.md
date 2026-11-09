@@ -11,6 +11,10 @@ The version-cut PR copies them into this file.
 
 ### Planned breaking (next minor)
 
+- Supported Julia is **1.13.3+**. Drive worker heartbeat moves to
+  `lib/DistSSHHeartbeat` (always shipped by Run; workers exit 75 on a
+  dead master). See `changelog.d/heartbeat-lib.md`.
+
 ## 0.1.16
 
 - `unknown_subcommand_message`, `no_command_message`, `print_rejected_command`, `NO_COMMAND_HINT_LINES`, and `RUN_SUBCOMMAND_EXPECTATION` are public. They are the sentences an unknown `julia -m DistSSHRun` command already prints. The text and the exit code do not change. DistSSHKit calls these names.

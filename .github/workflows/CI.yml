@@ -18,8 +18,9 @@ on:
 # Ordinary pull requests skip DistSSHBase unless lib/DistSSHBase, root
 # Project.toml, .github/julia-slots.env, this file, or .github/actions
 # changed (`**/*.md` excluded). DistSSHUp also runs when lib/DistSSHUp
-# changed. DistSSHShip also runs when lib/DistSSHShip changed. A main push,
-# version-cut PR, and workflow_dispatch still run Base, Up, and Ship in this
+# changed. DistSSHShip also runs when lib/DistSSHShip changed.
+# DistSSHHeartbeat also runs when lib/DistSSHHeartbeat changed. A main push,
+# version-cut PR, and workflow_dispatch still run Base, Up, Ship, and Heartbeat in this
 # workflow. Codecov stays a main push.
 # Registry install follows the heavy gate, including ordinary pull requests.
 # PkgEval follows the heavy gate
@@ -39,11 +40,11 @@ jobs:
   # macOS is required. The macOS job exercises `ps -o lstart=`
   # in kit_process_start_key (no /proc). Coverage uploads from Ubuntu only.
   # Run's check titles are `DistSSHRun (...)`, the same shape as DistSSHBase,
-  # DistSSHUp, and DistSSHShip. macOS 1.13 runs Base, then Up, then Ship, then
-  # Run, one runner at a time. A skipped Base, Up, or Ship does not skip the
+  # DistSSHUp, DistSSHShip, and DistSSHHeartbeat. macOS 1.13 runs Base, then Up, then Ship, then
+  # Heartbeat, then Run, one runner at a time. A skipped Base, Up, Ship, or Heartbeat does not skip the
   # next (`!cancelled()` and `!failure()`, and Run also needs Base so a Base
   # failure still blocks it).
-  # WSL2 1.13 also runs Base, then Up, then Ship, then Run, one windows-latest
+  # WSL2 1.13 also runs Base, then Up, then Ship, then Heartbeat, then Run, one windows-latest
   # runner at a time within a single ordinary CI run. Ordering is
   # scheduling only (`!cancelled()`): a failed or skipped Base, Up, or Ship
   # does not skip the next eligible WSL job. Run still needs Base so a
@@ -58,13 +59,13 @@ jobs:
   # continue-on-error and do not hold the hosts. Ubuntu stays parallel once
   # the gate is green. Downstream is one
   # matrix (DistSSHQueue, DistSSHKit). Each required DistSSHBase, DistSSHUp,
-  # and DistSSHShip title is its own job (Ubuntu, macOS, Ubuntu SSH
+  # DistSSHShip, and DistSSHHeartbeat title is its own job (Ubuntu, macOS, Ubuntu SSH
   # E2E for Base and Up). WSL2 titles run on a main push and CI weekly, not a pull request.
   # A closed gate skips that job, so the check is skipping. Do not
   # put those titles in one matrix: a job-level if runs before the matrix
   # expands, and the required names never report.
   # Coverage uploads from the Ubuntu Run job and the Ubuntu DistSSHBase,
-  # DistSSHUp, and DistSSHShip jobs (flag pkgtest, main push).
+  # DistSSHUp, DistSSHShip, and DistSSHHeartbeat jobs (flag pkgtest, main push).
   # Slow SSH E2E kit parents are `E2E weekly`
   # (macos-15-intel Colima, not this job).
   # PRs run `DistSSHRun (1.13, ubuntu-latest → ubuntu-26.04)` in this workflow.
@@ -98,6 +99,7 @@ jobs:
       base: ${{ steps.gate.outputs.base }}
       up: ${{ steps.gate.outputs.up }}
       ship: ${{ steps.gate.outputs.ship }}
+      heartbeat: ${{ steps.gate.outputs.heartbeat }}
       # Queue's Linux SSH E2E against this checkout. Not the path-filtered `e2e` gate.
       queue_e2e: ${{ steps.gate.outputs.queue_e2e }}
     steps:
@@ -138,12 +140,16 @@ jobs:
             ship:
               - "lib/DistSSHShip/**"
               - "!lib/DistSSHShip/**/*.md"
+            heartbeat:
+              - "lib/DistSSHHeartbeat/**"
+              - "!lib/DistSSHHeartbeat/**/*.md"
       - id: gate
         env:
           FILTER_E2E: ${{ steps.filter.outputs.e2e }}
           FILTER_BASE: ${{ steps.filter.outputs.base }}
           FILTER_UP: ${{ steps.filter.outputs.up }}
           FILTER_SHIP: ${{ steps.filter.outputs.ship }}
+          FILTER_HEARTBEAT: ${{ steps.filter.outputs.heartbeat }}
           CUT: ${{ steps.heavy.outputs.version_cut }}
           HEAVY: ${{ steps.heavy.outputs.heavy }}
         run: |
@@ -175,11 +181,13 @@ jobs:
               echo "base=true"
               echo "up=true"
               echo "ship=true"
+              echo "heartbeat=true"
             } >> "$GITHUB_OUTPUT"
           else
             base="${FILTER_BASE:-false}"
             up_paths="${FILTER_UP:-false}"
             ship_paths="${FILTER_SHIP:-false}"
+            heartbeat_paths="${FILTER_HEARTBEAT:-false}"
             echo "base=${base}" >> "$GITHUB_OUTPUT"
             if [ "$base" = "true" ] || [ "$up_paths" = "true" ]; then
               echo "up=true" >> "$GITHUB_OUTPUT"
@@ -190,6 +198,11 @@ jobs:
               echo "ship=true" >> "$GITHUB_OUTPUT"
             else
               echo "ship=false" >> "$GITHUB_OUTPUT"
+            fi
+            if [ "$base" = "true" ] || [ "$heartbeat_paths" = "true" ]; then
+              echo "heartbeat=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "heartbeat=false" >> "$GITHUB_OUTPUT"
             fi
           fi
   test:
@@ -219,7 +232,7 @@ jobs:
 
   test-macos:
     name: DistSSHRun (1.13, xcode-27, aarch64)
-    needs: [detect, runic, jetls, aqua, base-test-macos, up-test-macos, ship-test-macos]
+    needs: [detect, runic, jetls, aqua, base-test-macos, up-test-macos, ship-test-macos, heartbeat-test-macos]
     # success() is false when a needed job is skipped, which would skip Run
     # after a path-gated Base or Up. Failure still blocks; skip does not.
     # The static gate is result == success, so a skipped Runic does not start Run.
@@ -243,7 +256,7 @@ jobs:
 
   test-wsl:
     name: DistSSHRun (1.13, WSL2 ubuntu-24.04, x64)
-    needs: [detect, runic, jetls, aqua, base-test-wsl, up-test-wsl, ship-test-wsl]
+    needs: [detect, runic, jetls, aqua, base-test-wsl, up-test-wsl, ship-test-wsl, heartbeat-test-wsl]
     # Scheduling only after Base/Up/Ship WSL. A failed or skipped WSL peer must
     # not skip Run. Static gates stay result == success; cancel still skips.
     # Needs Base as well as Up and Ship so a skipped peer does not overlap.
@@ -432,6 +445,96 @@ jobs:
       - name: Pkg.test in WSL2
         shell: wsl-bash {0}
         run: ./.github/wsl-julia.sh 1.13 julia --project=lib/DistSSHShip -e 'using Pkg; Pkg.test()'
+
+  heartbeat-test-ubuntu:
+    name: DistSSHHeartbeat (1.13, ubuntu-latest, x64)
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.heartbeat == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # Codecov OIDC on main push
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - name: Pkg.test
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            julia --project=lib/DistSSHHeartbeat -e 'using Pkg; Pkg.test(; coverage=true)'
+          else
+            julia --project=lib/DistSSHHeartbeat -e 'using Pkg; Pkg.test()'
+          fi
+      - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          directories: lib/DistSSHHeartbeat/src
+      - name: Upload coverage to Codecov
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: lcov.info
+          slug: ${{ github.repository }}
+          use_oidc: true
+          flags: pkgtest
+          fail_ci_if_error: true
+
+  heartbeat-test-macos:
+    name: DistSSHHeartbeat (1.13, xcode-27, aarch64)
+    needs: [detect, runic, jetls, aqua, ship-test-macos]
+    if: ${{ needs.detect.outputs.heavy == 'true' && needs.detect.outputs.heartbeat == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && !cancelled() && !failure() }}
+    runs-on: xcode-27
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - name: Pkg.test
+        run: julia --project=lib/DistSSHHeartbeat -e 'using Pkg; Pkg.test()'
+
+  heartbeat-test-wsl:
+    name: DistSSHHeartbeat (1.13, WSL2 ubuntu-24.04, x64)
+    needs: [detect, runic, jetls, aqua, ship-test-wsl]
+    if: ${{ needs.detect.outputs.heavy == 'true' && needs.detect.outputs.heartbeat == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request' && !cancelled() }}
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/wsl-install
+      - uses: Vampire/setup-wsl@4c48163d9f981914dd8caa0fc335fe19cca5bff4 # v7.2.0
+        timeout-minutes: 10
+        with:
+          distribution: Ubuntu-24.04
+          wsl-version: 2
+          use-cache: true
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ci-cache/wsl-julia
+          key: wsl-julia-1.13-heartbeat-${{ hashFiles('lib/DistSSHHeartbeat/Project.toml', 'lib/DistSSHHeartbeat/test/Project.toml', '.github/julia-slots.env') }}
+      - name: Pkg.test in WSL2
+        shell: wsl-bash {0}
+        run: ./.github/wsl-julia.sh 1.13 julia --project=lib/DistSSHHeartbeat -e 'using Pkg; Pkg.test()'
 
   up-test-ubuntu:
     name: DistSSHUp (1.13, ubuntu-latest, x64)

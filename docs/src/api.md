@@ -137,6 +137,10 @@ remote_script_path
 check_setup_options!
 ```
 
+`DistSSHHeartbeat` is included by DistSSHRun and is not a `[deps]` entry.
+Workers receive `DistSSHRun.DistSSHHeartbeat.WORKER_SOURCE`, not a
+Manifest copy of DistSSHRun.
+
 `DistSSHShip` is included by DistSSHRun and is not a `[deps]` entry.
 `DistSSHRun.snapshot` still builds the tar Run ships. Queue calls the
 names below on `DistSSHRun.DistSSHShip`.
@@ -157,7 +161,7 @@ DistSSHShip.assert_extracted_tree_contained!
 
 Names the commands above call: host tokens and SSH, the file cache, run
 directories, and help text. Every other public name is in this list too,
-including DistSSHBase, DistSSHUp, and DistSSHShip.
+including DistSSHBase, DistSSHUp, DistSSHShip, and DistSSHHeartbeat.
 
 ```@autodocs
 Modules = [DistSSHRun, DistSSHRun.DistSSHBase, DistSSHRun.DistSSHUp]

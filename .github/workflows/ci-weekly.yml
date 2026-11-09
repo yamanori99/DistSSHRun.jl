@@ -5,7 +5,7 @@ name: CI weekly
 # 1.14-pre and nightly jobs are continue-on-error and omitted from notify.
 # A 1.13 compile bench failure on main opens "Compile bench failed".
 # 1.13 matches a main push of Test: DistSSHRun titles, then downstream,
-# DistSSHUp, DistSSHShip, and DistSSHBase as separate matrices (no coverage). WSL2
+# DistSSHUp, DistSSHShip, DistSSHHeartbeat, and DistSSHBase as separate matrices (no coverage). WSL2
 # 1.13 runs here and on a main push, not on a pull request.
 # macOS nightly, and 1.14-pre and nightly Pkg.test and Aqua on WSL2, run here
 # only, and stay out of notify. Ubuntu 1.14-pre and macOS 1.14-pre Pkg.test
@@ -251,6 +251,54 @@ jobs:
       - name: Pkg.test
         if: ${{ !matrix.slot.wsl }}
         run: julia --project=lib/DistSSHShip -e 'using Pkg; Pkg.test()'
+
+  heartbeat-test:
+    name: DistSSHHeartbeat (1.13, ${{ matrix.slot.name }}, ${{ matrix.slot.arch }})
+    runs-on: ${{ matrix.slot.runs }}
+    timeout-minutes: ${{ matrix.slot.timeout }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        slot:
+          - { runs: ubuntu-latest, name: ubuntu-latest, arch: x64, timeout: 20, wsl: false }
+          - { runs: xcode-27, name: xcode-27, arch: aarch64, timeout: 30, wsl: false }
+          - { runs: windows-latest, name: "WSL2 ubuntu-24.04", arch: x64, timeout: 45, wsl: true }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/wsl-install
+        if: matrix.slot.wsl
+      - uses: Vampire/setup-wsl@4c48163d9f981914dd8caa0fc335fe19cca5bff4 # v7.2.0
+        if: matrix.slot.wsl
+        timeout-minutes: 10
+        with:
+          distribution: Ubuntu-24.04
+          wsl-version: 2
+          use-cache: true
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: matrix.slot.wsl
+        with:
+          path: .ci-cache/wsl-julia
+          key: wsl-julia-1.13-heartbeat-${{ hashFiles('lib/DistSSHHeartbeat/Project.toml', 'lib/DistSSHHeartbeat/test/Project.toml', '.github/julia-slots.env') }}
+      - name: Pkg.test in WSL2
+        if: matrix.slot.wsl
+        shell: wsl-bash {0}
+        run: ./.github/wsl-julia.sh 1.13 julia --project=lib/DistSSHHeartbeat -e 'using Pkg; Pkg.test()'
+      - uses: ./.github/actions/julia-slot
+        if: ${{ !matrix.slot.wsl }}
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        if: ${{ !matrix.slot.wsl }}
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - name: Pkg.test
+        if: ${{ !matrix.slot.wsl }}
+        run: julia --project=lib/DistSSHHeartbeat -e 'using Pkg; Pkg.test()'
 
   base-test:
     name: DistSSHBase (1.13, ${{ matrix.slot.name }}, ${{ matrix.slot.arch }})
