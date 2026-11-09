@@ -689,7 +689,13 @@ function _setup_one!(
         deploy = remote_deploy_root(session.project; cli_override = session.remote)
         raw = clone_to_remotes(hosts, clone_dest, url; confirm = !session.yes)
         result = _sync_result_from_host_op(raw)
-        result.ok && forget_last_snapshot_default!(session.project, deploy)
+        if result.ok
+            forget_last_snapshot_default!(session.project, deploy)
+            ok_hosts = String[String(hr.host) for hr in result.hosts if hr.ok]
+            commit_deploy_record_after_git!(
+                ok_hosts, deploy, session.project, :git_clone,
+            )
+        end
         return result
     elseif mode === :git_sync
         return sync!(session; mode = :git_sync)
@@ -708,7 +714,13 @@ function _setup_one!(
             return SyncResult(true, HostResult[]; ok = false)
         end
         result = SyncResult(false, raw.host_results; ok = raw.ok)
-        result.ok && forget_last_snapshot_default!(session.project, deploy)
+        if result.ok
+            forget_last_snapshot_default!(session.project, deploy)
+            ok_hosts = String[String(hr.host) for hr in result.hosts if hr.ok]
+            commit_deploy_record_after_git!(
+                ok_hosts, deploy, session.project, :git_pull,
+            )
+        end
         return result
     elseif mode === :instantiate
         return instantiate!(session; julia = julia_path, snapshot = snapshot)

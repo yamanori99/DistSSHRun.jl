@@ -738,6 +738,12 @@ function _ride_run!(
         # checkout. A parent-only ride has no SSH host to probe.
         child_hosts = String[h for (h, n) in wp.child_workers if n > 0]
         _assign_remote_work_root_env!(child_hosts, project; snapshot = snapshot)
+        if !isempty(child_hosts)
+            deploy_root = _resolved_deploy_root_for_work(
+                project; cli_override = remote,
+            )
+            record_deploy_status_for_run!(child_hosts, deploy_root, project)
+        end
         empty!(ARGS)
         append!(ARGS, String[String(a) for a in args])
         job_raw = strip(get(ENV, "DISTSSHKIT_JOB_ID", ""))

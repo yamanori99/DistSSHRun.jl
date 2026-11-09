@@ -886,6 +886,7 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     source === nothing || (data["source"] = source)
     ship = last_ship_result()
     sel = active_snapshot_selection()
+    deploy_rec = _deploy_record_for_provenance(active_deploy_record())
     shipped = Dict{String, Any}()
     if ship !== nothing
         for key in (
@@ -915,6 +916,7 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
         shipped["work_root"] = sel.work_root
     end
     isempty(shipped) || (data["shipped"] = shipped)
+    deploy_rec !== nothing && (data["deploy"] = deploy_rec)
     return data
 end
 

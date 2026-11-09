@@ -281,6 +281,14 @@ if !isdefined(@__MODULE__, :setup_main)
                 ok = finish_host_op!("Clone", result)
                 if ok
                     DistSSHRun.forget_last_snapshot_default!(project, deploy_path)
+                    if result.failed == 0
+                        ok_hosts = String[
+                            hr.host for hr in result.hosts if hr.ok
+                        ]
+                        DistSSHRun.commit_deploy_record_after_git!(
+                            ok_hosts, deploy_path, project, :git_clone,
+                        )
+                    end
                     if !result.cancelled && result.failed == 0 &&
                             (
                             opts.deploy_root !== nothing ||
@@ -456,6 +464,12 @@ if !isdefined(@__MODULE__, :setup_main)
             end
 
             DistSSHRun.forget_last_snapshot_default!(project, deploy_path)
+            DistSSHRun.commit_deploy_record_after_git!(
+                opts.hosts,
+                deploy_path,
+                project,
+                mode === :git_sync ? :git_sync : :git_pull,
+            )
             print_ok("$mode_name complete.")
             kit_println()
             return Cint(0)

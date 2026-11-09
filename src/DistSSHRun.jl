@@ -176,6 +176,7 @@ using .DistSSHHeartbeat:
 include("DistSSHRun/ship_list.jl")
 include("DistSSHRun/ship.jl")
 include("DistSSHRun/snapshot_select.jl")
+include("DistSSHRun/deploy_record.jl")
 include("DistSSHRun/argv/drive_args.jl")
 include("DistSSHRun/argv/go_args.jl")
 include("DistSSHRun/argv/setup_args.jl")
