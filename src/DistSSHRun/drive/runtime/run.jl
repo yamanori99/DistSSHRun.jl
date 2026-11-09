@@ -283,7 +283,9 @@ function _run_drive_parsed_specialized!(
     end
 
     hosts = parsed.hosts
-    script_path = DistSSHRun.canonical_local_path(parsed.script_path::String)
+    raw_script = String(parsed.script_path)::String
+    remote_argv = DistSSHRun._remote_script_argv(raw_script)
+    script_path = remote_argv ? raw_script : DistSSHRun.canonical_local_path(raw_script)
     script_args = parsed.script_args
     parent_workers = parsed.parent_workers
     default_workers = parsed.default_workers
@@ -297,13 +299,22 @@ function _run_drive_parsed_specialized!(
 
     host_names = [h[1] for h in hosts]
 
-    if !isfile(script_path)
+    snap_for_script = get(parsed, :snapshot, nothing)
+    if !isfile(script_path) && !(remote_argv && snap_for_script !== nothing)
         surface = hasproperty(parsed, :hint_surface) ? parsed.hint_surface::Symbol : :cli
         root0 = canonical_local_path(something(project_root, dirname(script_path)))
         error(drive_script_not_found_message(script_path, root0; surface = surface))
     end
 
-    script_dir = dirname(script_path)
+    root_hint = project_root === nothing ? nothing : canonical_local_path(project_root)
+    outside_snapshot = root_hint !== nothing &&
+        snap_for_script !== nothing &&
+        !DistSSHRun._script_inside_project(root_hint, script_path)
+    script_dir = if remote_argv || outside_snapshot
+        canonical_local_path(something(root_hint, pwd()))
+    else
+        dirname(script_path)
+    end
     proj_dir = resolve_pkg_project_dir(script_dir)
     project_root_abs = canonical_local_path(something(project_root, proj_dir))
     path_anchor = canonical_local_path(project_root_abs)
@@ -516,6 +527,16 @@ function _run_drive_parsed_locked!(
     writeln_both("")
 
     sync_mode = get(parsed, :sync_mode, nothing)
+    outside_script = !DistSSHRun._script_inside_project(proj_dir, script_path)
+    remote_argv = DistSSHRun._remote_script_argv(script_path)
+    if outside_script && !remote_argv && sync_mode !== :ship_tree &&
+            get(parsed, :snapshot, nothing) === nothing && !isempty(host_names)
+        throw(
+            ArgumentError(
+                "script must be inside project ($proj_dir): $(DistSSHRun.canonical_local_path(script_path))",
+            )
+        )
+    end
     do_sync = sync_mode isa Symbol && !isempty(host_names)
     # sync? + git + cleanup + workers + wait + init + run + collect
     progress_steps = (do_sync ? 1 : 0) + 7
@@ -549,6 +570,7 @@ function _run_drive_parsed_locked!(
                 mode = sync_mode,
                 allow_external_symlinks = allow_ext,
                 await_inputs = sync_mode !== :ship_tree,
+                extra_files = outside_script ? String[script_path] : String[],
             )
             if !sync_result.ok
                 print_err("ERROR: "; bold = true)

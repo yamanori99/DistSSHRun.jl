@@ -121,21 +121,14 @@ function _assert_extracted_symlink_under!(path::AbstractString, root::AbstractSt
 end
 
 function _finish_extracted_tree!(dest::AbstractString; allow_external_symlinks::Bool = false)
+    DistSSHShip.assert_extracted_tree_contained!(
+        dest; allow_external_symlinks = allow_external_symlinks,
+    )
     root = canonical_local_path(dest)
-    for (dir, dirs, files) in walkdir(root)
-        for name in dirs
-            path = joinpath(dir, name)
-            islink(path) || continue
-            allow_external_symlinks && continue
-            _assert_extracted_symlink_under!(path, root)
-        end
+    for (dir, _, files) in walkdir(root)
         for name in files
             path = joinpath(dir, name)
-            if islink(path)
-                allow_external_symlinks || _assert_extracted_symlink_under!(path, root)
-            else
-                touch(path)
-            end
+            islink(path) || touch(path)
         end
     end
     return nothing

@@ -20,6 +20,7 @@ function sync!(
         gitignore::Bool = true,
         allow_external_symlinks::Bool = false,
         await_inputs::Bool = true,
+        extra_files::Vector{String} = String[],
     )::SyncResult
     # Untyped kw: JETLS treats omitted kwargs as `nothing`, not `Union{Symbol,Bool}`.
     mode === false && throw(ArgumentError("sync!: mode=false means skip sync; do not call sync!"))
@@ -30,6 +31,7 @@ function sync!(
             "sync! mode must be :ship_tree or :sync, got $(repr(kind))",
         )
     )
+    check_setup_options!(kind; extra_files = extra_files)
     gitignore || throw(ArgumentError("sync! gitignore is not valid for mode=:$kind"))
     isempty(session.hosts) && throw(
         ArgumentError(
@@ -51,6 +53,7 @@ function sync!(
                 path_anchor = session.project,
                 allow_external_symlinks = allow_external_symlinks,
                 await_inputs = await_inputs,
+                extra_files = extra_files,
             )
             return _sync_result_from_ship(raw)
         else

@@ -175,7 +175,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
         elseif arg == "--snapshot"
             raw = String(strip(cli_take_value!(c, arg)))
             isempty(raw) && throw(ArgumentError("go: --snapshot needs a non-empty id"))
-            snapshot_id = validate_snapshot_id(raw)
+            snapshot_id = raw
         elseif _legacy_remote_path_arg(arg)
             _throw_legacy_remote_path("go")
         elseif arg == DEPLOY_ROOT_FLAG
@@ -257,13 +257,6 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
     apply_kit_cli_session!(cli_session)
     if script_path !== nothing && repeat_n === nothing
         require_counted_placement_tokens(hosts; surface = :cli)
-    end
-    if snapshot_id !== nothing && sync === :sync
-        throw(
-            ArgumentError(
-                "go: --snapshot cannot be combined with --sync",
-            ),
-        )
     end
     return _go_parsed(;
         help = false,

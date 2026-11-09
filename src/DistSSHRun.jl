@@ -166,6 +166,8 @@ include("DistSSHRun/drive/types.jl")
 include("DistSSHRun/run_manifest.jl")
 include("DistSSHRun/setup.jl")
 include("DistSSHRun/run_layout.jl")
+include("DistSSHRun/ship_module.jl")
+using .DistSSHShip: EXTERNAL_DIR_NAME
 include("DistSSHRun/ship_list.jl")
 include("DistSSHRun/ship.jl")
 include("DistSSHRun/snapshot_select.jl")

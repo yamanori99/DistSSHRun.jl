@@ -305,14 +305,49 @@ function placement_tokens_from_go_slots(slots::Vector{GoSlot})::Vector{String}
     return out
 end
 
+function _script_inside_project(project::AbstractString, script::AbstractString)::Bool
+    proj = canonical_local_path(project)
+    path = canonical_local_path(script)
+    prefix = joinpath(proj, "")
+    return startswith(path, prefix) || path == proj
+end
+
 function _go_script_relpath(project::AbstractString, script::AbstractString)::String
     proj = canonical_local_path(project)
     path = canonical_local_path(script)
     parent_prefix = joinpath(proj, "")
-    startswith(path, parent_prefix) || path == proj ||
-        throw(ArgumentError("script must be inside project ($proj): $path"))
-    rel = relpath(path, proj)
-    return rel == "." ? basename(path) : rel
+    if startswith(path, parent_prefix) || path == proj
+        rel = relpath(path, proj)
+        return rel == "." ? basename(path) : rel
+    end
+    return joinpath(EXTERNAL_DIR_NAME, basename(path))
+end
+
+"""
+    remote_script_path(work_root, project, script) -> String
+
+Remote path of `script` after a ship. `work_root` is the remote project
+directory (`runs/<id>/src` plus the project directory inside the tar).
+
+A script inside `project` keeps its relative path under `work_root`. A script
+outside it is `work_root/_distsshrun_external/<basename>`, the same place
+`extra_files` uses. One external file is the limit; a second is an error at
+[`snapshot`](@ref).
+"""
+function remote_script_path(
+        work_root::AbstractString,
+        project::AbstractString,
+        script::AbstractString,
+    )::String
+    rel = replace(_go_script_relpath(project, script), '\\' => '/')
+    root = rstrip(replace(String(work_root), '\\' => '/'), '/')
+    return rel == "." ? root : string(root, "/", rel)
+end
+public remote_script_path
+
+"""Absolute path that is not a local file: the child was given the remote script."""
+function _remote_script_argv(script::AbstractString)::Bool
+    return isabspath(String(script)) && !isfile(String(script))
 end
 
 """`{script}/.distsshkit/go` when the script is in `project`, else `{project}/.distsshkit/go`."""
@@ -952,6 +987,11 @@ After `:ship_tree`,
 hosts that still lack Manifest deps get [`instantiate!`](@ref) before the
 check. `snapshot` (CLI `--snapshot`) selects `runs/<ID>/src` when `sync` is
 omitted or `false`; it cannot combine with `sync=:sync` / `sync=:ship_tree`.
+A script outside the project is allowed with `snapshot` when that ship used
+`extra_files=[script]`. The remote command is
+[`remote_script_path`](@ref): `_distsshrun_external/<basename>` under the
+selected project directory. `snapshot` also skips the in-tree
+`[sources]` check: a sibling path dependency was already shipped.
 `go!` has no git-parity gate; use [`drive!`](@ref) with
 `skip_hash_check=false` (CLI: `drive --require-git`) when you need that.
 
@@ -997,7 +1037,8 @@ function go!(
         allow_external_symlinks::Bool = false,
         snapshot::Union{Nothing, AbstractString} = nothing,
     )::GoResult
-    script_path = canonical_local_path(script)
+    remote_argv = _remote_script_argv(script)
+    script_path = remote_argv ? String(script) : canonical_local_path(script)
     snap_arg = snapshot === nothing ? nothing : validate_snapshot_id(snapshot)
     if snap_arg !== nothing && (sync === :sync || sync === :ship_tree)
         throw(
@@ -1007,7 +1048,7 @@ function go!(
         )
     end
     proj = canonical_local_path(project)
-    if !isfile(script_path)
+    if !isfile(script_path) && !(remote_argv && snap_arg !== nothing)
         throw(
             ArgumentError(
                 explain_script_not_found(
@@ -1107,7 +1148,14 @@ function _go_run!(
             )
         )
     end
-    ensure_manifest_ships!(proj)
+    sync_mode_early = something(sync, false)
+    # A selected snapshot already contains the sibling path. Skip the
+    # in-tree `[sources]` check. A plain go still uses `ensure_manifest_ships!`.
+    if sync_mode_early === :ship_tree || snap_arg !== nothing
+        _require_manifest!(proj)
+    else
+        ensure_manifest_ships!(proj)
+    end
     batch_dir = if output_dir !== nothing
         _prepare_output_dir!(
             output_dir;
@@ -1155,6 +1203,18 @@ function _go_run!(
         sess_rr = session_remote_root(go_session)
 
         child_hosts = unique(String[s.host for s in slots if s.kind === :child])
+        remote_argv = _remote_script_argv(script_path)
+        if !_script_inside_project(proj, script_path) &&
+                !remote_argv &&
+                sync_mode_early !== :ship_tree &&
+                snap_arg === nothing &&
+                !isempty(child_hosts)
+            throw(
+                ArgumentError(
+                    "script must be inside project ($proj): $(canonical_local_path(script_path))",
+                )
+            )
+        end
         _write_kit_hosts_file(child_hosts, batch_dir, nothing)
 
         skip_collect = collect_spec === false
@@ -1204,6 +1264,7 @@ function _go_run!(
                 mode = sync_mode,
                 allow_external_symlinks = allow_external_symlinks,
                 await_inputs = sync_mode !== :ship_tree,
+                extra_files = _script_inside_project(proj, script_path) ? String[] : String[script_path],
             )
             if !sync_result.ok
                 await_declared_input_hashes!()

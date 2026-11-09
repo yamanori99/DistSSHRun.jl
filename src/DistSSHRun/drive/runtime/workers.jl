@@ -123,7 +123,13 @@ function add_drive_workers!(
 
             repo_ra = canonical_local_path(project_root)
             remote_proj = resolve_host_path_abs(host_name, proj_dir, repo_ra)
-            remote_script = resolve_host_path_abs(host_name, script_path, repo_ra)
+            remote_script = if DistSSHRun._script_inside_project(proj_dir, script_path)
+                resolve_host_path_abs(host_name, script_path, repo_ra)
+            elseif remote_proj === nothing
+                nothing
+            else
+                joinpath(remote_proj, DistSSHRun._go_script_relpath(proj_dir, script_path))
+            end
             if remote_proj === nothing || remote_script === nothing
                 write_both("$host_name ($host_workers workers): ")
                 missing = remote_proj === nothing ? remote_layout_path(proj_dir, repo_ra) :

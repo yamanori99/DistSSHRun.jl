@@ -1004,11 +1004,41 @@ end
             e
         end
         @test err_ship isa ArgumentError
-        @test occursin("sync=:ship_tree", err_ship.msg)
-        @test occursin("setup!", err_ship.msg)
-        @test occursin("snapshot", err_ship.msg)
+        @test occursin("cannot pass --ship-tree", err_ship.msg)
+        @test occursin("extra_files", err_ship.msg)
+        @test occursin("_distsshrun_external", err_ship.msg)
+        @test occursin("snapshot=id", err_ship.msg)
         @test occursin("go! / drive! still accept sync=:ship_tree", err_ship.msg)
         @test !occursin("Project.toml", err_ship.msg)
+        @test DistSSHRun._go_script_relpath("/local/app", "/local/job.jl") ==
+            joinpath("_distsshrun_external", "job.jl")
+        @test DistSSHRun._go_script_relpath("/local/app", "/local/app/job.jl") == "job.jl"
+        @test DistSSHRun.remote_script_path("/remote/src/app", "/local/app", "/local/job.jl") ==
+            "/remote/src/app/_distsshrun_external/job.jl"
+        @test DistSSHRun.remote_script_path("/remote/src/app", "/local/app", "/local/app/job.jl") ==
+            "/remote/src/app/job.jl"
+        argv = DistSSHRun._execute_detached_argv(
+            :go,
+            "/remote/src/app/_distsshrun_external/job.jl",
+            ["child:h:1"],
+            String[];
+            output_dir = nothing,
+            log_dir = nothing,
+            sync = nothing,
+            julia = nothing,
+            quiet = true,
+            verbosity = nothing,
+            hosts_file = nothing,
+            enable_log = true,
+            package = nothing,
+            require_all_hosts = true,
+            skip_hash_check = true,
+            snapshot = "20260101T000000Z-aaaaaa",
+            remote = "/remote",
+        )
+        @test !any(==("--ship-tree"), argv)
+        @test "--snapshot" in argv
+        @test argv[end] == "/remote/src/app/_distsshrun_external/job.jl"
         err_ext = try
             DistSSHRun.execute!(
                 :go, "/no/such/job.jl", ["parent:1"];
@@ -1021,6 +1051,102 @@ end
         @test err_ext isa ArgumentError
         @test occursin("--allow-external-symlinks was removed", err_ext.msg)
         @test !occursin("Project.toml", err_ext.msg)
+
+        mktempdir() do dir
+            proj = joinpath(dir, "app")
+            mkpath(proj)
+            write(joinpath(proj, "Project.toml"), "name = \"Out\"\n")
+            write(
+                joinpath(proj, "Manifest.toml"),
+                "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
+            )
+            script = joinpath(dir, "job.jl")
+            write(script, "println(\"OUTSIDE_SCRIPT_OK\")\n")
+            fake = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+            err_out = try
+                withenv(
+                    "DISTSSHKIT_TEST" => "1",
+                    "DISTSSHKIT_TEST_SSH" => fake,
+                    "DISTSSHKIT_TEST_POSIX_SHELL" => "1",
+                    "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
+                    "DISTSSHKIT_TEST_SSH_FAIL" => "1",
+                ) do
+                    DistSSHRun.go!(
+                        script, ["child:h:1"];
+                        project = proj,
+                        remote = "/home/dev/app",
+                        snapshot = "20260101T000000Z-aaaaaa",
+                        yes = true,
+                        quiet = true,
+                    )
+                end
+                nothing
+            catch e
+                e
+            finally
+                DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
+            end
+            shown = sprint(showerror, err_out)
+            @test err_out isa Exception
+            @test !occursin("must be inside project", shown)
+            @test !occursin("cannot pass --ship-tree", shown)
+        end
+    end
+
+    @testset "detached go snapshot skips a sibling path source" begin
+        _with_tempdir() do root
+            app = joinpath(root, "app")
+            mkpath(app)
+            _write_job_with_distsshrun!(app)
+            bar = joinpath(root, "Bar")
+            mkpath(joinpath(bar, "src"))
+            write(joinpath(bar, "src", "Bar.jl"), "module Bar\nend\n")
+            write(
+                joinpath(bar, "Project.toml"),
+                """
+                name = "Bar"
+                uuid = "22222222-2222-4222-8222-222222222222"
+                version = "0.1.0"
+                """,
+            )
+            cmd = setenv(
+                `$(_julia_exe()) --project=$app --startup-file=no -e "using Pkg; Pkg.develop(path=$(repr(bar)))"`,
+                _child_julia_env(),
+            )
+            proc, combined = _run_subprocess(cmd)
+            _assert_proc_ok(proc, combined; label = "Pkg.develop Bar")
+            for name in ("Project.toml", "Manifest.toml")
+                path = joinpath(app, name)
+                write(path, replace(read(path, String), "path = \"$bar\"" => "path = \"../Bar\""))
+            end
+            @test occursin("path = \"../Bar\"", read(joinpath(app, "Project.toml"), String))
+            script = joinpath(app, "job.jl")
+            marker = joinpath(root, "RAN")
+            write(script, "write($(repr(marker)), \"yes\")\n")
+            mktemp() do _, out_io
+                mktemp() do _, err_io
+                    _, kp = _capture_detached_env_log() do
+                        DistSSHRun.execute!(
+                            :go,
+                            script,
+                            ["parent:1"];
+                            detached = true,
+                            project = app,
+                            snapshot = "20260101T000000Z-aaaaaa",
+                            yes = true,
+                            quiet = true,
+                            stdout = out_io,
+                            stderr = err_io,
+                        )
+                    end
+                    result = wait(kp)
+                    @test result isa DistSSHRun.KitRunResult
+                    @test result.ok
+                    @test result.exit_code == 0
+                    @test isfile(marker)
+                end
+            end
+        end
     end
 
     @testset ":go dispatch" begin

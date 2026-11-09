@@ -122,7 +122,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
         elseif arg == "--snapshot"
             raw = strip(cli_take_value!(c, arg))
             isempty(raw) && throw(ArgumentError("ride: --snapshot needs a non-empty id"))
-            snapshot_id = validate_snapshot_id(raw)
+            snapshot_id = raw
         elseif _legacy_remote_path_arg(arg)
             _throw_legacy_remote_path("ride")
         elseif arg == DEPLOY_ROOT_FLAG

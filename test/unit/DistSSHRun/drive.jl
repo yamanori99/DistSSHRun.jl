@@ -1059,4 +1059,60 @@ end
             end
         end
     end
+
+    @testset "snapshot does not reject a sibling path source" begin
+        _with_tempdir() do root
+            app = joinpath(root, "app")
+            bar = joinpath(root, "Bar")
+            mkpath(joinpath(app, "src"))
+            mkpath(joinpath(bar, "src"))
+            write(joinpath(app, "src", "App.jl"), "module App\nend\n")
+            write(joinpath(bar, "src", "Bar.jl"), "module Bar\nend\n")
+            write(
+                joinpath(bar, "Project.toml"),
+                """
+                name = "Bar"
+                uuid = "22222222-2222-4222-8222-222222222222"
+                version = "0.1.0"
+                """,
+            )
+            write(
+                joinpath(app, "Project.toml"),
+                """
+                name = "App"
+                uuid = "11111111-1111-4111-8111-111111111111"
+                version = "0.1.0"
+                """,
+            )
+            cmd = setenv(
+                `$(_julia_exe()) --project=$app --startup-file=no -e "using Pkg; Pkg.develop(path=$(repr(bar)))"`,
+                _child_julia_env(),
+            )
+            proc, combined = _run_subprocess(cmd)
+            _assert_proc_ok(proc, combined; label = "Pkg.develop Bar")
+            for name in ("Project.toml", "Manifest.toml")
+                path = joinpath(app, name)
+                write(path, replace(read(path, String), "path = \"$bar\"" => "path = \"../Bar\""))
+            end
+            @test occursin("path = \"../Bar\"", read(joinpath(app, "Project.toml"), String))
+            script = joinpath(app, "job.jl")
+            marker = joinpath(root, "RAN")
+            write(script, "write($(repr(marker)), \"yes\")\n")
+            result = redirect_stdout(devnull) do
+                redirect_stderr(devnull) do
+                    DistSSHRun.drive!(
+                        script, ["parent:1"];
+                        project = app,
+                        snapshot = "20260101T000000Z-aaaaaa",
+                        yes = true,
+                        quiet = true,
+                        enable_log = false,
+                    )
+                end
+            end
+            @test result.ok
+            @test result.exit_code == 0
+            @test isfile(marker)
+        end
+    end
 end

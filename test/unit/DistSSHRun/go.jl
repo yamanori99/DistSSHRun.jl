@@ -113,7 +113,9 @@ using Dates
             mkpath(dirname(nested))
             touch(nested)
             @test DistSSHRun._go_script_relpath(proj, nested) == joinpath("demos", "job.jl")
-            @test_throws ArgumentError DistSSHRun._go_script_relpath(proj, "/tmp/outside.jl")
+            @test DistSSHRun._go_script_relpath(proj, "/tmp/outside.jl") ==
+                joinpath("_distsshrun_external", "outside.jl")
+            @test !DistSSHRun._script_inside_project(proj, "/tmp/outside.jl")
         end
     end
 
@@ -725,6 +727,52 @@ using Dates
                 catch
                 end
             end
+        end
+    end
+
+    @testset "snapshot skips the in-tree path-source check" begin
+        _with_tempdir() do root
+            app = joinpath(root, "app")
+            bar = joinpath(root, "Bar")
+            mkpath(app)
+            mkpath(joinpath(bar, "src"))
+            write(joinpath(bar, "src", "Bar.jl"), "module Bar\nend\n")
+            write(joinpath(bar, "Project.toml"), "name = \"Bar\"\n")
+            write(
+                joinpath(app, "Project.toml"),
+                """
+                name = "App"
+                [deps]
+                Bar = "22222222-2222-4222-8222-222222222222"
+                [sources]
+                Bar = {path = "../Bar"}
+                """,
+            )
+            write(joinpath(app, "Manifest.toml"), "# lock\n")
+            script = joinpath(app, "job.jl")
+            write(script, "println(\"SNAPSHOT_SIBLING_OK\")\n")
+            err_plain = try
+                DistSSHRun.go!(
+                    script, ["parent:1"];
+                    project = app, yes = true, quiet = true,
+                )
+                nothing
+            catch e
+                e
+            end
+            @test err_plain isa ArgumentError
+            @test occursin("outside the tree setup would send", err_plain.msg)
+            result = redirect_stdout(devnull) do
+                DistSSHRun.go!(
+                    script, ["parent:1"];
+                    project = app,
+                    snapshot = "20260101T000000Z-aaaaaa",
+                    yes = true,
+                    quiet = true,
+                )
+            end
+            @test result.ok
+            @test occursin("SNAPSHOT_SIBLING_OK", read(joinpath(result.output_dir, "parent", "julia.stdout.log"), String))
         end
     end
 end

@@ -440,9 +440,11 @@ and [`drive!`](@ref) already share (`ride!` ignores `sync`). With `detached=fals
 
 `detached=true` spawns `julia -m DistSSHKit go|ride|drive` and returns a
 [`KitProcess`](@ref). `sync=:ship_tree` is an error before spawn (the child
-CLI no longer has `--ship-tree`); call [`setup!`](@ref) `:ship_tree` /
-`:instantiate`, then `execute!(...; snapshot=id)`. In-process
-[`go!`](@ref) / [`drive!`](@ref) still accept `sync=:ship_tree`.
+CLI has no `--ship-tree`). Ship first with [`setup!`](@ref) `:ship_tree`.
+A script outside the project is `extra_files=[script]` (one file, at
+`_distsshrun_external/<basename>`), then `setup!(session, :instantiate; snapshot=id)`,
+then `execute!(...; snapshot=id)` with that same local script.
+In-process [`go!`](@ref) / [`drive!`](@ref) still accept `sync=:ship_tree`.
 `sync=:sync`, omitted/`false` sync, and `snapshot=` are unchanged.
 `--project=` is always the job `project=` when that
 tree has a `Project.toml`. The job must list DistSSHKit or DistSSHRun in
@@ -739,13 +741,10 @@ function _execute_detached!(
             )
         )
     end
-    # Before `allocate_run_dir` / `run(...)`. Child argv cannot emit `--ship-tree`.
     if sync === :ship_tree
         _throw_detached_ship_tree_removed()
     end
-    if get(kwargs, :allow_external_symlinks, false) === true
-        _throw_go_drive_ship_cli_removed(String(kind), "--allow-external-symlinks")
-    end
+    ship_external = get(kwargs, :allow_external_symlinks, false) === true
     yes = get(kwargs, :yes, true)
     yes === true || throw(ArgumentError("execute!(...; detached=true) requires yes=true"))
     quiet = get(kwargs, :quiet, false)
@@ -814,7 +813,10 @@ function _execute_detached!(
     end
     proj = canonical_local_path(project)
     launch_dir = _detached_launch_dir(dir, proj)
-    script_path = canonical_local_path(script)
+    script_path = _remote_script_argv(script) ? String(script) : canonical_local_path(script)
+    if ship_external
+        _throw_go_drive_ship_cli_removed(String(kind), "--allow-external-symlinks")
+    end
     job_id = get(kwargs, :job_id, nothing)
     job_id_s = if job_id !== nothing && !isempty(strip(String(job_id)))
         _parse_kit_job_id(String(job_id))

@@ -22,6 +22,7 @@ function ship_to_remotes(
         project::AbstractString;
         path_anchor::AbstractString = project,
         allow_external_symlinks::Bool = false,
+        extra_files::Vector{String} = String[],
     )::NamedTuple
     raw = ship_project_to_hosts!(
         hosts,
@@ -31,6 +32,7 @@ function ship_to_remotes(
         report = true,
         path_anchor = path_anchor,
         allow_external_symlinks = allow_external_symlinks,
+        extra_files = extra_files,
     )
     ok = count(hr -> hr.ok, raw.host_results)
     failed = count(hr -> !hr.ok, raw.host_results)
@@ -734,6 +736,15 @@ function _instantiate_remote_e()::String
     )
 end
 
+"""Manifest must exist. A selected snapshot already shipped path dependencies."""
+function _require_manifest_for_instantiate!(project::AbstractString)
+    sel = active_snapshot_selection()
+    if sel !== nothing && sel.source_kind === :snapshot
+        return _require_manifest!(project)
+    end
+    return ensure_manifest_ships!(project)
+end
+
 function instantiate_remotes(
         hosts::Vector{String},
         julia_path::String,
@@ -741,7 +752,7 @@ function instantiate_remotes(
         project::AbstractString;
         path_anchor::AbstractString = project,
     )::NamedTuple
-    ensure_manifest_ships!(project)
+    _require_manifest_for_instantiate!(project)
     return _pkg_e_on_remotes(
         hosts, julia_path, remote_path, project;
         path_anchor = path_anchor,

@@ -78,12 +78,45 @@ end
         String["instantiate", "--snapshot", _SNAP_ID_OLD, "child:h1"],
     )
     @test p.snapshot_id == _SNAP_ID_OLD
-    @test_throws ArgumentError DistSSHRun.parse_setup_args(
+    ship = DistSSHRun.parse_setup_args(
         String["ship-tree", "--snapshot", _SNAP_ID_OLD, "child:h1"],
     )
-    @test_throws ArgumentError DistSSHRun.parse_setup_args(
+    @test ship.snapshot_id == _SNAP_ID_OLD
+    err_mode = try
+        DistSSHRun.check_setup_options!(:ship_tree; snapshot = ship.snapshot_id)
+        nothing
+    catch e
+        e
+    end
+    session = DistSSHRun.KitSession(workers = ["child:h1"], project = pwd(), yes = true)
+    err_api = try
+        DistSSHRun.setup!(session, :ship_tree; snapshot = ship.snapshot_id)
+        nothing
+    catch e
+        e
+    end
+    @test err_mode isa ArgumentError
+    @test err_api isa ArgumentError
+    @test err_mode.msg == err_api.msg
+    bad = DistSSHRun.parse_setup_args(
         String["instantiate", "--snapshot", "../x", "child:h1"],
     )
+    @test bad.snapshot_id == "../x"
+    err_id_api = try
+        DistSSHRun.validate_snapshot_id(bad.snapshot_id)
+        nothing
+    catch e
+        e
+    end
+    err_id = try
+        DistSSHRun.setup!(session, :instantiate; snapshot = bad.snapshot_id)
+        nothing
+    catch e
+        e
+    end
+    @test err_id_api isa ArgumentError
+    @test err_id isa ArgumentError
+    @test err_id.msg == err_id_api.msg
 end
 
 @testset "go/drive --snapshot argv" begin
@@ -105,12 +138,32 @@ end
     end
     @test err_combo isa ArgumentError
     @test occursin("go --ship-tree was removed", err_combo.msg)
-    @test_throws ArgumentError DistSSHRun.parse_go_args(
+    gsync = DistSSHRun.parse_go_args(
         String["--sync", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
     )
-    @test_throws ArgumentError DistSSHRun.parse_drive_args(
+    @test gsync.snapshot == _SNAP_ID_OLD
+    err_go = try
+        DistSSHRun.go!("job.jl", ["parent:1"]; sync = :sync, snapshot = gsync.snapshot)
+        nothing
+    catch e
+        e
+    end
+    @test err_go isa ArgumentError
+    @test occursin("snapshot= cannot be combined with sync=:sync", err_go.msg)
+    dsync = DistSSHRun.parse_drive_args(
         String["--sync", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
     )
+    @test dsync.snapshot == _SNAP_ID_OLD
+    err_drive = try
+        DistSSHRun.drive!(
+            "job.jl", ["parent:1"]; sync = :sync, snapshot = dsync.snapshot, yes = true,
+        )
+        nothing
+    catch e
+        e
+    end
+    @test err_drive isa ArgumentError
+    @test occursin("snapshot= cannot be combined with sync=:sync", err_drive.msg)
 end
 
 @testset "forget_last_snapshot_default clears matching record" begin
@@ -745,6 +798,41 @@ end
             finally
                 DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
                 DistSSHRun._clear_last_ship!()
+            end
+        end
+    end
+end
+
+@testset "snapshot selection uses project_rel under src" begin
+    double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+    _with_tempdir() do state
+        remote = joinpath(state, "remote")
+        leaf = joinpath(remote, "runs", _SNAP_ID_OLD)
+        mkpath(joinpath(leaf, "src", "app"))
+        write(joinpath(leaf, "src", "app", "Project.toml"), "name = \"Nested\"\n")
+        write(
+            joinpath(leaf, "run.toml"),
+            DistSSHRun._ship_run_leaf_complete_toml(_SNAP_HASH_OLD; project_rel = "app"),
+        )
+        _with_tempdir() do proj
+            _snap_project!(proj)
+            withenv(
+                "DISTSSHKIT_TEST" => "1",
+                "DISTSSHKIT_TEST_SSH" => double,
+                "DISTSSHKIT_TEST_POSIX_SHELL" => "1",
+                "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
+            ) do
+                DistSSHRun.clear_last_snapshot_record!(proj)
+                sel = DistSSHRun.resolve_snapshot_selection(
+                    ["child-1"], remote, proj; snapshot = _SNAP_ID_OLD,
+                )
+                @test endswith(sel.work_root, "/runs/$_SNAP_ID_OLD/src/app")
+                DistSSHRun.write_last_snapshot_record!(
+                    proj, remote, ["child-1"], _SNAP_ID_OLD;
+                    content_tree_hash = _SNAP_HASH_OLD, project_rel = "app",
+                )
+                sel2 = DistSSHRun.resolve_snapshot_selection(["child-1"], remote, proj)
+                @test sel2.work_root == sel.work_root
             end
         end
     end

@@ -1,0 +1,15 @@
+[deps]
+DistSSHBase = "f0a69307-14e5-4272-8c28-20680d05bac8"
+DistSSHShip = "244696c4-bcd4-4083-82f2-371517554186"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+
+[sources]
+DistSSHBase = {path = "../../DistSSHBase"}
+DistSSHShip = {path = ".."}
+
+[compat]
+DistSSHBase = "0.1"
+DistSSHShip = "0.1"
+Test = "1"
+TOML = "1"
