@@ -160,22 +160,6 @@ using Dates
                 @test DistSSHRun._go_script_relpath(priv_base, joinpath(base, "x.jl")) == want_x
             end
         end
-
-        @testset "batch dir stays under user project spelling (macOS /var)" begin
-            if ispath("/private/var")
-                _with_tempdir() do proj
-                    script = joinpath(proj, "job.jl")
-                    write(script, "1\n")
-                    batch = DistSSHRun._go_batch_output_dir(proj, script)
-                    @test startswith(batch, proj)
-                    if startswith(proj, "/var/") && !startswith(proj, "/private")
-                        @test !startswith(batch, "/private/var")
-                    end
-                end
-            else
-                @test_skip "macOS /private/var layout not present"
-            end
-        end
     end
 
     @testset "_go_batch_output_dir" begin
@@ -200,6 +184,19 @@ using Dates
             @test again != batch
             @test isdir(again)
             @test startswith(basename(again), "demo_20260803T134428Z")
+        end
+        if ispath("/private/var")
+            _with_tempdir() do proj
+                script = joinpath(proj, "job.jl")
+                write(script, "1\n")
+                batch = DistSSHRun._go_batch_output_dir(proj, script)
+                @test startswith(batch, proj)
+                if startswith(proj, "/var/") && !startswith(proj, "/private")
+                    @test !startswith(batch, "/private/var")
+                end
+            end
+        else
+            @test_skip "macOS /private/var layout not present"
         end
     end
 
