@@ -95,6 +95,55 @@ function extract_verified!(
     return nothing
 end
 
+"""Internal test hooks for `_transfer_tree_one_host!`; not exported."""
+struct _TransferTreeHooks
+    prepare_dest!::Union{Nothing, Function}
+    extract_verified!::Union{Nothing, Function}
+    write_complete_record!::Union{Nothing, Function}
+end
+
+_TransferTreeHooks() = _TransferTreeHooks(nothing, nothing, nothing)
+
+function _transfer_tree_one_host!(
+        host::AbstractString,
+        checked::AbstractString,
+        snapshot::ShipSnapshot,
+        allow_external_symlinks::Bool,
+        write_record::Bool;
+        julia::Union{Nothing, AbstractString} = nothing,
+        hooks::_TransferTreeHooks = _TransferTreeHooks(),
+    )
+    if hooks.prepare_dest! === nothing
+        code, out = DistSSHBase._remote_shell_status(host, _prepare_dest_script(checked))
+        code == 0 || throw(ArgumentError("could not prepare dest on $(host): $(strip(out))"))
+    else
+        hooks.prepare_dest!(host, checked)
+    end
+    if hooks.extract_verified! === nothing
+        pinned = DistSSHBase.resolve_remote_julia(host, julia)
+        pinned === nothing && throw(ArgumentError("Julia not found on $host"))
+        extract_verified!(
+            host, checked, snapshot.tar_path, pinned;
+            allow_external_symlinks = allow_external_symlinks,
+            expect_hash = snapshot.content_tree_hash,
+        )
+    else
+        hooks.extract_verified!(
+            host, checked, snapshot, julia;
+            allow_external_symlinks = allow_external_symlinks,
+            expect_hash = snapshot.content_tree_hash,
+        )
+    end
+    if write_record
+        if hooks.write_complete_record! === nothing
+            _write_complete_record!(host, checked, snapshot)
+        else
+            hooks.write_complete_record!(host, checked, snapshot)
+        end
+    end
+    return nothing
+end
+
 function _prepare_dest_script(dest::AbstractString)::String
     q = DistSSHBase._remote_shell_path_word(dest)
     parent = dirname(rstrip(String(dest), '/'))
@@ -138,6 +187,11 @@ When `write_record=true` (default), writes
 `<dest>/.distssh/shipped.toml` with `complete = true` only after hash
 verification succeeds. There is no in-flight marker: a missing or
 incomplete record means the tree is not usable.
+
+`content_tree_hash` names the extracted **project tree only**. Files under
+`<dest>/.distssh/` are written after verification and are not included in that
+hash. Callers that re-hash an on-disk `dest` must exclude `.distssh/` when
+comparing to `content_tree_hash`.
 """
 function transfer_tree(
         snapshot::ShipSnapshot,
@@ -169,16 +223,10 @@ function transfer_tree(
     for host in host_list
         DistSSHBase.validate_ssh_host(host)
         try
-            code, out = DistSSHBase._remote_shell_status(host, _prepare_dest_script(checked))
-            code == 0 || throw(ArgumentError("could not prepare dest on $(host): $(strip(out))"))
-            pinned = DistSSHBase.resolve_remote_julia(host, julia)
-            pinned === nothing && throw(ArgumentError("Julia not found on $host"))
-            extract_verified!(
-                host, checked, snapshot.tar_path, pinned;
-                allow_external_symlinks = allow_external_symlinks,
-                expect_hash = snapshot.content_tree_hash,
+            _transfer_tree_one_host!(
+                host, checked, snapshot, allow_external_symlinks, write_record;
+                julia = julia,
             )
-            write_record && _write_complete_record!(host, checked, snapshot)
             push!(rows, TransferHostResult(host, true, "transfer ok"))
         catch e
             e isa InterruptException && rethrow()

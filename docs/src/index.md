@@ -119,6 +119,9 @@ the selected remote stamp. A local last-snapshot record without a matching
 when selection cannot probe, then fails closed if the snapshot is invalid. `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
 `snapshot(local_root)` builds that tar in a temporary directory and records
 `content_tree_hash` (`git-sha1`). The caller deletes `snapshot_directory`.
+After [`transfer_tree`](@ref), files under `<dest>/.distssh/` (for example
+`shipped.toml`) are remote metadata and are **not** part of `content_tree_hash`;
+any code that re-hashes an extracted tree must exclude `.distssh/`.
 The tar is `snapshot_tar` (`ship.tar` in that directory). `snapshot` does not
 read depot preferences. `ship(snapshot, hosts, remote_root)` sends that tar
 and does not pack again or delete it. It refuses depot preferences, hashes

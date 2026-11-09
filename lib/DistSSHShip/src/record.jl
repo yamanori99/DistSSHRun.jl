@@ -271,6 +271,11 @@ end
 
 """
 Require a complete record at `extract_dest`. `expect_hash`, when set, must match.
+
+This checks the record on the host (`complete` and optional hash field). It does
+not re-hash the tree. Tree equality is defined by `content_tree_hash` of the
+shipped payload; files under `<extract_dest>/.distssh/` are not part of that
+hash.
 """
 function verify_shipped_record(
         host::AbstractString,
@@ -292,16 +297,6 @@ function verify_shipped_record(
         )
     end
     return status, rec
-end
-
-function _write_in_progress_record!(
-        host::AbstractString,
-        extract_dest::AbstractString,
-        snapshot::ShipSnapshot,
-    )
-    data = build_shipped_record(snapshot; complete = false)
-    write_shipped_record!(host, extract_dest, data)
-    return nothing
 end
 
 function _write_complete_record!(
