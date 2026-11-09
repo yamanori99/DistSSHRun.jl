@@ -560,7 +560,7 @@ end
             hooks = DistSSHShip._TransferTreeHooks(
                 (h, d) -> push!(order, :prepare),
                 (h, d, s, j; allow_external_symlinks = false, expect_hash = "") ->
-                    push!(order, :extract),
+                push!(order, :extract),
                 (h, d, s) -> push!(order, :record),
             )
             DistSSHShip._transfer_tree_one_host!(
