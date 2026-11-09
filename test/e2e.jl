@@ -1633,5 +1633,40 @@ end
                 end
             end
         end
+
+        @testset "detached execute ships an outside script" begin
+            _e2e_announce("detached execute ships an outside script")
+            outside = joinpath(dirname(proj), "outside_marker.jl")
+            write(outside, "println(\"OUTSIDE_SCRIPT_OK\")\n")
+            outside_root = remote_root * "-outside"
+            _ssh_e2e_ensure_remote_root!(hosts, outside_root)
+            kp = withenv(_e2e_base_env()...) do
+                DistSSHRun.execute!(
+                    :go,
+                    outside,
+                    ["child:$(hosts[1]):1"];
+                    project = proj,
+                    remote = outside_root,
+                    detached = true,
+                    sync = :ship_tree,
+                    yes = true,
+                    quiet = true,
+                )
+            end
+            result = wait(kp)
+            _assert_ssh_e2e_api_ok(
+                suite,
+                "detached_outside_script",
+                result.ok && result.exit_code == 0,
+                "ok=$(result.ok) exit=$(result.exit_code) step=$(result.failed_step)",
+            )
+            @test result.ok
+            @test result.exit_code == 0
+            p, ssh_out = _ssh_e2e_ssh(
+                hosts[1],
+                "test -f \$(ls -1d $(outside_root)/runs/*/src/_distsshrun_external/outside_marker.jl | tail -n 1)",
+            )
+            _assert_proc_ok(p, ssh_out; label = "outside script shipped")
+        end
     end
 end

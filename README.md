@@ -53,7 +53,8 @@ Julia **1.13+**.
 - The tar root is the project directory when every path dependency stays
   inside it. A relative path dependency outside it, or a workspace member,
   ships under the common ancestor. An absolute path, or a root of `$HOME`
-  or `/`, is an error. `setup ship-tree --extra-file PATH` (once) stores
+  or `/`, is an error. `setup ship-tree --extra-file PATH` (repeatable;
+  this version accepts one path) stores
   that file at `_distsshrun_external/<basename>`.
 - A gitignored `Project.toml`, `JuliaProject.toml`, `Manifest.toml`,
   or `JuliaManifest.toml` is left out with one warning. A gitignored

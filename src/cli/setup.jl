@@ -122,6 +122,21 @@ if !isdefined(@__MODULE__, :setup_main)
         end
 
         try
+            DistSSHRun.check_setup_options!(
+                opts.mode;
+                extra_files = opts.extra_files,
+                snapshot = opts.snapshot_id,
+            )
+        catch e
+            e isa ArgumentError || rethrow()
+            print_err("Error: "; bold = true)
+            println_fatal(e.msg)
+            println_fatal()
+            show_usage()
+            return 1
+        end
+
+        try
             validate_setup_hosts(
                 opts.hosts;
                 allow_parent = false,

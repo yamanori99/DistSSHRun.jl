@@ -1004,11 +1004,35 @@ end
             e
         end
         @test err_ship isa ArgumentError
-        @test occursin("sync=:ship_tree", err_ship.msg)
-        @test occursin("setup!", err_ship.msg)
-        @test occursin("snapshot", err_ship.msg)
-        @test occursin("go! / drive! still accept sync=:ship_tree", err_ship.msg)
+        @test occursin("needs a child host", err_ship.msg)
+        @test !occursin("cannot pass --ship-tree", err_ship.msg)
         @test !occursin("Project.toml", err_ship.msg)
+        @test DistSSHRun.remote_script_path("/remote/src/app", "/local/app", "/local/job.jl") ==
+            "/remote/src/app/_distsshrun_external/job.jl"
+        @test DistSSHRun.remote_script_path("/remote/src/app", "/local/app", "/local/app/job.jl") ==
+            "/remote/src/app/job.jl"
+        argv = DistSSHRun._execute_detached_argv(
+            :go,
+            "/remote/src/app/_distsshrun_external/job.jl",
+            ["child:h:1"],
+            String[];
+            output_dir = nothing,
+            log_dir = nothing,
+            sync = nothing,
+            julia = nothing,
+            quiet = true,
+            verbosity = nothing,
+            hosts_file = nothing,
+            enable_log = true,
+            package = nothing,
+            require_all_hosts = true,
+            skip_hash_check = true,
+            snapshot = "20260101T000000Z-aaaaaa",
+            remote = "/remote",
+        )
+        @test !any(==("--ship-tree"), argv)
+        @test "--snapshot" in argv
+        @test argv[end] == "/remote/src/app/_distsshrun_external/job.jl"
         err_ext = try
             DistSSHRun.execute!(
                 :go, "/no/such/job.jl", ["parent:1"];

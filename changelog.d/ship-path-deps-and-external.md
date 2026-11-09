@@ -9,17 +9,21 @@ category: breaking
   `[sources]` path is still an error. A layout that would root the tar at
   `$HOME` or `/` is an error. The recorded project path is
   `runs/<run_id>/src` plus the project directory inside that tar.
-- `setup ship-tree --extra-file PATH` (single-use flag, a second occurrence
-  is an error, only valid for `ship-tree`) stores that one file at
-  `_distsshrun_external/<basename>` under the remote project. A symlink is
-  followed once. Siblings are not sent. In-process `go!` / `drive!` with
-  `sync=:ship_tree` use the same path for a script outside the project.
-  Without `:ship_tree`, an outside script is still an error. Detached
-  `execute!(…; sync=:ship_tree)` remains an error.
+- `setup ship-tree --extra-file PATH` may be repeated and is only valid
+  for `ship-tree`. This version accepts one path; a second is
+  `more than one extra file is not yet supported`. The same limit and
+  message apply to `setup!`, `sync!`, and `snapshot` `extra_files`.
+  The file is stored at `_distsshrun_external/<basename>` under the remote
+  project. A symlink is followed once. Siblings are not sent. In-process
+  `go!` / `drive!` and detached `execute!(…; sync=:ship_tree)` use that
+  path for one script outside the project. The detached parent ships, then
+  the child argv is `--snapshot` plus `remote_script_path`.
+  Without `:ship_tree` or `snapshot=`, an outside script is still an error.
 - The content hash covers project files, path dependencies, and that extra
   file by relative path and content. After extract, ship, pull, and
   `DistSSHShip.transfer_tree` walk symlinks and compare the `git-sha1` tree
   hash. `--allow-external-symlinks` keeps the old escape allowance.
 - Shipping lives in `lib/DistSSHShip`, included by DistSSHRun the same way
   as DistSSHUp. It is not a `[deps]` entry and it is not registered.
-  Queue should call `DistSSHShip.snapshot` then `DistSSHShip.transfer_tree`.
+  A detached Queue job ships with `extra_files=[script]`, then
+  `execute!(…; detached=true, snapshot=id)` and `remote_script_path`.

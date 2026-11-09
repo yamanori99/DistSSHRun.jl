@@ -78,12 +78,45 @@ end
         String["instantiate", "--snapshot", _SNAP_ID_OLD, "child:h1"],
     )
     @test p.snapshot_id == _SNAP_ID_OLD
-    @test_throws ArgumentError DistSSHRun.parse_setup_args(
+    ship = DistSSHRun.parse_setup_args(
         String["ship-tree", "--snapshot", _SNAP_ID_OLD, "child:h1"],
     )
-    @test_throws ArgumentError DistSSHRun.parse_setup_args(
+    @test ship.snapshot_id == _SNAP_ID_OLD
+    err_mode = try
+        DistSSHRun.check_setup_options!(:ship_tree; snapshot = ship.snapshot_id)
+        nothing
+    catch e
+        e
+    end
+    session = DistSSHRun.KitSession(workers = ["child:h1"], project = pwd(), yes = true)
+    err_api = try
+        DistSSHRun.setup!(session, :ship_tree; snapshot = ship.snapshot_id)
+        nothing
+    catch e
+        e
+    end
+    @test err_mode isa ArgumentError
+    @test err_api isa ArgumentError
+    @test err_mode.msg == err_api.msg
+    bad = DistSSHRun.parse_setup_args(
         String["instantiate", "--snapshot", "../x", "child:h1"],
     )
+    @test bad.snapshot_id == "../x"
+    err_id_api = try
+        DistSSHRun.validate_snapshot_id(bad.snapshot_id)
+        nothing
+    catch e
+        e
+    end
+    err_id = try
+        DistSSHRun.setup!(session, :instantiate; snapshot = bad.snapshot_id)
+        nothing
+    catch e
+        e
+    end
+    @test err_id_api isa ArgumentError
+    @test err_id isa ArgumentError
+    @test err_id.msg == err_id_api.msg
 end
 
 @testset "go/drive --snapshot argv" begin
@@ -105,12 +138,32 @@ end
     end
     @test err_combo isa ArgumentError
     @test occursin("go --ship-tree was removed", err_combo.msg)
-    @test_throws ArgumentError DistSSHRun.parse_go_args(
+    gsync = DistSSHRun.parse_go_args(
         String["--sync", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
     )
-    @test_throws ArgumentError DistSSHRun.parse_drive_args(
+    @test gsync.snapshot == _SNAP_ID_OLD
+    err_go = try
+        DistSSHRun.go!("job.jl", ["parent:1"]; sync = :sync, snapshot = gsync.snapshot)
+        nothing
+    catch e
+        e
+    end
+    @test err_go isa ArgumentError
+    @test occursin("snapshot= cannot be combined with sync=:sync", err_go.msg)
+    dsync = DistSSHRun.parse_drive_args(
         String["--sync", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
     )
+    @test dsync.snapshot == _SNAP_ID_OLD
+    err_drive = try
+        DistSSHRun.drive!(
+            "job.jl", ["parent:1"]; sync = :sync, snapshot = dsync.snapshot, yes = true,
+        )
+        nothing
+    catch e
+        e
+    end
+    @test err_drive isa ArgumentError
+    @test occursin("snapshot= cannot be combined with sync=:sync", err_drive.msg)
 end
 
 @testset "forget_last_snapshot_default clears matching record" begin

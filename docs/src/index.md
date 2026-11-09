@@ -49,9 +49,11 @@ path is `runs/<run_id>/src/` plus that relative directory. An absolute
 is an error. A parent `.gitignore` does not drop a declared path dependency.
 Files that dependency's own `.gitignore` excludes are left out. A workspace
 member also ships the workspace `Project.toml` and the shared Manifest.
-Sibling workspace members are not walked. One external file can be passed
-with `setup ship-tree --extra-file PATH` (a second file is an error). It is
-stored at `_distsshrun_external/<basename>` under the remote project. A
+Sibling workspace members are not walked. `--extra-file PATH` may be
+repeated; this version accepts one file and a second is an error
+(`more than one extra file is not yet supported`). `setup!`, `sync!`, and
+`snapshot` take `extra_files::Vector{String}` with that same error. The file
+is stored at `_distsshrun_external/<basename>` under the remote project. A
 symlink is followed once: the archive name is the link name and the bytes
 are the target. Siblings of that file are not sent. A gitignored `Project.toml`,
 `JuliaProject.toml`, `Manifest.toml`, or `JuliaManifest.toml` is left out
@@ -76,6 +78,9 @@ be symlinks. Existing directories are not chmod'd. Transfer failure after
 create leaves the safe directory. `sync!(mode=:ship_tree)` and
 `go!(…; sync=:ship_tree)` / `drive!(…; sync=:ship_tree)` use the
 same ensure path; those Julia entry points still instantiate after ship.
+Detached `execute!(…; sync=:ship_tree)` does that ship in the parent, then
+starts the child with `--snapshot`. One script outside the project is the
+extra file. [`remote_script_path`](@ref) is the path the child runs.
 The `go` / `drive` CLI does not take `--ship-tree`: run `setup ship-tree`,
 then `setup instantiate`, then `go` / `drive` with `--snapshot ID`.
 Later `setup instantiate` / `setup check` / `go` / `drive` / `ride` select a

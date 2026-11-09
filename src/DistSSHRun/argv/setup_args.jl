@@ -72,7 +72,8 @@ function show_requirements(; io::IO = stdout)
         "  dependency's own .gitignore excludes are left out.",
         "A gitignored Project.toml, JuliaProject.toml, Manifest.toml, or",
         "  JuliaManifest.toml is left out, with one warning.",
-        "--extra-file PATH (ship-tree only, once) stores that file at",
+        "--extra-file PATH (ship-tree only) may be repeated. This version",
+        "  accepts one path; a second is an error. The file is stored at",
         "  _distsshrun_external/<basename> under the remote project. A symlink",
         "  is followed once. Siblings of that file are not sent.",
         "A gitignored LocalPreferences.toml is left out. Add !LocalPreferences.toml to ship it.",
@@ -352,16 +353,11 @@ function parse_setup_args(args::Vector{String})
         elseif arg == "--snapshot"
             raw = String(strip(cli_take_value!(c, arg)))
             isempty(raw) && throw(ArgumentError("--snapshot needs a non-empty id"))
-            snapshot_id = validate_snapshot_id(raw)
+            snapshot_id = raw
         elseif arg == "--extra-file"
             raw = String(strip(cli_take_value!(c, arg)))
             isempty(raw) && throw(ArgumentError("setup --extra-file needs a path"))
             push!(extra_files, raw)
-            length(extra_files) > 1 && throw(
-                ArgumentError(
-                    "setup --extra-file: more than one extra file is not yet supported",
-                )
-            )
         elseif arg == "--allow-external-symlinks"
             allow_external_symlinks = true
             cli_consume!(c)
@@ -390,18 +386,6 @@ function parse_setup_args(args::Vector{String})
     if !isempty(confirm_paths) && mode !== :delete && mode !== :prune
         throw(ArgumentError("--confirm-path only applies to setup delete or setup prune"))
     end
-    if !isempty(extra_files) && mode !== :ship_tree
-        throw(ArgumentError("setup --extra-file only applies to setup ship-tree"))
-    end
-    if snapshot_id !== nothing &&
-            mode !== :instantiate && mode !== :check && mode !== :runtest
-        throw(
-            ArgumentError(
-                "--snapshot only applies to setup instantiate, check, or runtest",
-            ),
-        )
-    end
-
     return (
         mode = mode,
         julia_path = julia_path,

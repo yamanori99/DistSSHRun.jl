@@ -133,6 +133,8 @@ active_snapshot_selection
 snapshot_directory
 snapshot_tar
 content_tree_hash
+remote_script_path
+check_setup_options!
 ```
 
 `DistSSHShip` is included by DistSSHRun and is not a `[deps]` entry.
@@ -181,6 +183,7 @@ Filter = function (x)
         :forget_last_snapshot_default!,
         :active_snapshot_selection,
         :snapshot_directory, :snapshot_tar, :content_tree_hash,
+        :remote_script_path, :check_setup_options!,
         :execute_kwargs_from_parsed, :detached_launch,
         :ALLOW_MISMATCH_FIELDS,
         :wait, :shell_status, :run_identity, :identity_mismatches, :parse_allow_mismatch,

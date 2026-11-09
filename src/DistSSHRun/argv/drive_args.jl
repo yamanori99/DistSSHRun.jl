@@ -178,7 +178,7 @@ function parse_drive_args(args::Vector{String})
             i >= length(args) && throw(ArgumentError("drive: --snapshot needs a non-empty id"))
             raw = String(strip(args[i + 1]))
             isempty(raw) && throw(ArgumentError("drive: --snapshot needs a non-empty id"))
-            snapshot_id = validate_snapshot_id(raw)
+            snapshot_id = raw
             i += 2
         elseif _legacy_remote_path_arg(arg)
             _throw_legacy_remote_path("drive")
@@ -399,14 +399,6 @@ function parse_drive_args(args::Vector{String})
         julia_exe = env_val == "auto" ? nothing : env_val
     elseif julia_exe == "auto"
         julia_exe = nothing
-    end
-
-    if snapshot_id !== nothing && sync_mode === :sync
-        throw(
-            ArgumentError(
-                "drive: --snapshot cannot be combined with --sync",
-            ),
-        )
     end
 
     for tok in kit_host_source_tokens(cli_session; keep_counts = true)

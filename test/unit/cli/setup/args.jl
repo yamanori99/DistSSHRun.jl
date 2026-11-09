@@ -299,4 +299,64 @@ using Test
         @test !occursin("day-to-day default", lowercase(txt))
         @test !occursin("drive needs --skip-git-guard", lowercase(txt))
     end
+
+    @testset "extra-file is collected and rejected by the API" begin
+        one = parse_setup_args(["ship-tree", "--extra-file", "/tmp/job.jl", "child:h1"])
+        @test one.extra_files == ["/tmp/job.jl"]
+        two = parse_setup_args([
+            "ship-tree", "--extra-file", "/tmp/a.jl", "--extra-file", "/tmp/b.jl", "child:h1",
+        ])
+        @test two.extra_files == ["/tmp/a.jl", "/tmp/b.jl"]
+        other = parse_setup_args(["instantiate", "--extra-file", "/tmp/a.jl", "child:h1"])
+        @test other.extra_files == ["/tmp/a.jl"]
+        err_n = try
+            DistSSHRun.check_setup_options!(:ship_tree; extra_files = two.extra_files)
+            nothing
+        catch e
+            e
+        end
+        err_mode = try
+            DistSSHRun.check_setup_options!(:instantiate; extra_files = other.extra_files)
+            nothing
+        catch e
+            e
+        end
+        session = DistSSHRun.KitSession(workers = ["child:h1"], project = pwd(), yes = true)
+        err_api = try
+            DistSSHRun.setup!(session, :ship_tree; extra_files = two.extra_files)
+            nothing
+        catch e
+            e
+        end
+        err_api_mode = try
+            DistSSHRun.setup!(session, :instantiate; extra_files = other.extra_files)
+            nothing
+        catch e
+            e
+        end
+        @test err_n isa ArgumentError
+        @test err_api isa ArgumentError
+        @test err_n.msg == err_api.msg
+        @test err_n.msg == "more than one extra file is not yet supported"
+        @test err_mode isa ArgumentError
+        @test err_api_mode isa ArgumentError
+        @test err_mode.msg == err_api_mode.msg
+        snap = DistSSHRun.DistSSHShip.snapshot
+        err_ship = try
+            snap(pwd(); extra_files = two.extra_files)
+            nothing
+        catch e
+            e
+        end
+        @test err_ship isa ArgumentError
+        @test err_ship.msg == err_n.msg
+        err_sync = try
+            DistSSHRun.sync!(session; mode = :sync, extra_files = other.extra_files)
+            nothing
+        catch e
+            e
+        end
+        @test err_sync isa ArgumentError
+        @test err_sync.msg == err_mode.msg
+    end
 end

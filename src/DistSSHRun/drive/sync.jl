@@ -31,6 +31,7 @@ function sync!(
             "sync! mode must be :ship_tree or :sync, got $(repr(kind))",
         )
     )
+    check_setup_options!(kind; extra_files = extra_files)
     gitignore || throw(ArgumentError("sync! gitignore is not valid for mode=:$kind"))
     isempty(session.hosts) && throw(
         ArgumentError(

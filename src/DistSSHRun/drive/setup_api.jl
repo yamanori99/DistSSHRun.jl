@@ -17,6 +17,36 @@ const _SETUP_BANG_MODES = (
 )
 
 """
+    check_setup_options!(mode; extra_files=String[], snapshot=nothing)
+
+Reject setup options the mode does not accept. `extra_files` is only valid
+for `:ship_tree`. This version accepts one path. `snapshot` is only valid
+for `:instantiate`, `:check`, and `:runtest`. The `setup` CLI collects flags
+and calls this; it does not apply those rules itself.
+"""
+function check_setup_options!(
+        mode::Symbol;
+        extra_files::Vector{String} = String[],
+        snapshot::Union{Nothing, AbstractString} = nothing,
+    )
+    if !isempty(extra_files) && mode !== :ship_tree
+        throw(ArgumentError("setup! extra_files only applies to :ship_tree"))
+    end
+    length(extra_files) > 1 &&
+        throw(ArgumentError("more than one extra file is not yet supported"))
+    if snapshot !== nothing &&
+            mode !== :instantiate && mode !== :check && mode !== :runtest
+        throw(
+            ArgumentError(
+                "setup! snapshot= only applies to :instantiate, :check, or :runtest",
+            ),
+        )
+    end
+    return nothing
+end
+public check_setup_options!
+
+"""
     setup!(session::KitSession, mode::Symbol; kwargs...) -> SyncResult
     setup!(session::KitSession, modes::Symbol...) -> SyncResult
 
@@ -69,24 +99,9 @@ function setup!(
         allow_external_symlinks::Bool = false,
         extra_files::Vector{String} = String[],
     )::SyncResult
-    if !isempty(extra_files) && mode !== :ship_tree
-        throw(ArgumentError("setup! extra_files only applies to :ship_tree"))
-    end
-    length(extra_files) > 1 && throw(
-        ArgumentError(
-            "more than one extra file is not yet supported",
-        )
-    )
+    check_setup_options!(mode; extra_files = extra_files, snapshot = snapshot)
     if !gitignore
         throw(ArgumentError("setup! gitignore is not valid on setup!(session, :$(mode))"))
-    end
-    if snapshot !== nothing &&
-            mode !== :instantiate && mode !== :check && mode !== :runtest
-        throw(
-            ArgumentError(
-                "setup! snapshot= only applies to :instantiate, :check, or :runtest",
-            ),
-        )
     end
     snap = snapshot === nothing ? nothing : validate_snapshot_id(snapshot)
     _setup_bang_preflight!(session, mode; repo = repo)

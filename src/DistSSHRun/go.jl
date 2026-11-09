@@ -323,6 +323,33 @@ function _go_script_relpath(project::AbstractString, script::AbstractString)::St
     return joinpath(EXTERNAL_DIR_NAME, basename(path))
 end
 
+"""
+    remote_script_path(work_root, project, script) -> String
+
+Remote path of `script` after a ship. `work_root` is the remote project
+directory (`runs/<id>/src` plus the project directory inside the tar).
+
+A script inside `project` keeps its relative path under `work_root`. A script
+outside it is `work_root/_distsshrun_external/<basename>`, the same place
+`extra_files` uses. One external file is the limit; a second is an error at
+[`snapshot`](@ref).
+"""
+function remote_script_path(
+        work_root::AbstractString,
+        project::AbstractString,
+        script::AbstractString,
+    )::String
+    rel = replace(_go_script_relpath(project, script), '\\' => '/')
+    root = rstrip(replace(String(work_root), '\\' => '/'), '/')
+    return rel == "." ? root : string(root, "/", rel)
+end
+public remote_script_path
+
+"""Absolute path that is not a local file: the child was given the remote script."""
+function _remote_script_argv(script::AbstractString)::Bool
+    return isabspath(String(script)) && !isfile(String(script))
+end
+
 """`{script}/.distsshkit/go` when the script is in `project`, else `{project}/.distsshkit/go`."""
 function _go_kit_parent(
         project::AbstractString,
@@ -1005,7 +1032,8 @@ function go!(
         allow_external_symlinks::Bool = false,
         snapshot::Union{Nothing, AbstractString} = nothing,
     )::GoResult
-    script_path = canonical_local_path(script)
+    remote_argv = _remote_script_argv(script)
+    script_path = remote_argv ? String(script) : canonical_local_path(script)
     snap_arg = snapshot === nothing ? nothing : validate_snapshot_id(snapshot)
     if snap_arg !== nothing && (sync === :sync || sync === :ship_tree)
         throw(
@@ -1015,7 +1043,7 @@ function go!(
         )
     end
     proj = canonical_local_path(project)
-    if !isfile(script_path)
+    if !isfile(script_path) && !(remote_argv && snap_arg !== nothing)
         throw(
             ArgumentError(
                 explain_script_not_found(
@@ -1169,6 +1197,7 @@ function _go_run!(
 
         child_hosts = unique(String[s.host for s in slots if s.kind === :child])
         if !_script_inside_project(proj, script_path) &&
+                !remote_argv &&
                 sync_mode_early !== :ship_tree && !isempty(child_hosts)
             throw(
                 ArgumentError(
