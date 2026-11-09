@@ -234,32 +234,16 @@ function forget_last_snapshot_default!(
 end
 public forget_last_snapshot_default!
 
-"""Probe whether `host` has a completed snapshot leaf under `deploy_root`."""
-function _probe_snapshot_complete(
-        host::AbstractString,
-        deploy_root::AbstractString,
-        snapshot_id::AbstractString,
-    )::NamedTuple
-    rid = validate_snapshot_id(snapshot_id)
-    abs_root = try
-        _probe_expanded_remote_root(host, deploy_root)
-    catch e
-        e isa InterruptException && rethrow()
-        return (
-            ok = false,
-            reason = "deploy_root",
-            message = "could not resolve deploy root on $(host): $(sprint(showerror, e))",
-            content_tree_hash = nothing,
-            project_rel = nothing,
-        )
-    end
-    leaf = _posix_join(abs_root, "runs", rid)
-    src = _posix_join(leaf, "src")
-    stamp = _posix_join(leaf, "run.toml")
+"""POSIX `sh` body for `__DSR_SNAP_COMPLETE__` (fixtures and unit tests)."""
+function _snapshot_complete_probe_script(
+        leaf::AbstractString,
+        src::AbstractString,
+        stamp::AbstractString,
+    )::String
     lq = _remote_shell_path_word(leaf)
     sq = _remote_shell_path_word(src)
     tq = _remote_shell_path_word(stamp)
-    script = """
+    return """
     # __DSR_SNAP_COMPLETE__
     if test ! -d $lq; then
       printf 'missing\\n'
@@ -316,9 +300,9 @@ function _probe_snapshot_complete(
           esac
           proj=$sq
           if [ "\$rel" != "." ]; then
-            proj=$sq/\$rel
+            proj="\$proj/\$rel"
           fi
-          if test ! -f \$proj/Project.toml && test ! -f \$proj/JuliaProject.toml; then
+          if test ! -f "\$proj/Project.toml" && test ! -f "\$proj/JuliaProject.toml"; then
             printf 'no_project\\n'
             exit 0
           fi
@@ -332,6 +316,31 @@ function _probe_snapshot_complete(
     printf 'stamp\\n'
     exit 0
     """
+end
+
+"""Probe whether `host` has a completed snapshot leaf under `deploy_root`."""
+function _probe_snapshot_complete(
+        host::AbstractString,
+        deploy_root::AbstractString,
+        snapshot_id::AbstractString,
+    )::NamedTuple
+    rid = validate_snapshot_id(snapshot_id)
+    abs_root = try
+        _probe_expanded_remote_root(host, deploy_root)
+    catch e
+        e isa InterruptException && rethrow()
+        return (
+            ok = false,
+            reason = "deploy_root",
+            message = "could not resolve deploy root on $(host): $(sprint(showerror, e))",
+            content_tree_hash = nothing,
+            project_rel = nothing,
+        )
+    end
+    leaf = _posix_join(abs_root, "runs", rid)
+    src = _posix_join(leaf, "src")
+    stamp = _posix_join(leaf, "run.toml")
+    script = _snapshot_complete_probe_script(leaf, src, stamp)
     code, out = _remote_shell_status(String(host), script)
     code == 0 || return (
         ok = false,
