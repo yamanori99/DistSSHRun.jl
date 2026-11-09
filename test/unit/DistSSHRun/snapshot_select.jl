@@ -166,6 +166,99 @@ end
     @test occursin("snapshot= cannot be combined with sync=:sync", err_drive.msg)
 end
 
+@testset "snapshot sync exclusivity parity" begin
+    for sym in (:sync, :ship_tree)
+        err_go = try
+            DistSSHRun.go!(
+                "job.jl", ["parent:1"]; sync = sym, snapshot = _SNAP_ID_OLD, yes = true,
+            )
+            nothing
+        catch e
+            e
+        end
+        @test err_go isa ArgumentError
+        @test occursin("snapshot= cannot be combined with sync=:$sym", err_go.msg)
+        err_drive = try
+            DistSSHRun.drive!(
+                "job.jl", ["parent:1"]; sync = sym, snapshot = _SNAP_ID_OLD, yes = true,
+            )
+            nothing
+        catch e
+            e
+        end
+        @test err_drive isa ArgumentError
+        @test occursin("snapshot= cannot be combined with sync=:$sym", err_drive.msg)
+    end
+
+    err_go_cli = try
+        DistSSHRun.go!(
+            "job.jl", ["parent:1"];
+            sync = :ship_tree,
+            snapshot = _SNAP_ID_OLD,
+            yes = true,
+            hint_surface = :cli,
+        )
+        nothing
+    catch e
+        e
+    end
+    @test err_go_cli isa ArgumentError
+    @test occursin("go: --snapshot cannot be combined with --ship-tree", err_go_cli.msg)
+
+    _with_tempdir() do proj
+        _snap_project!(proj)
+        script = joinpath(proj, "job.jl")
+        write(script, "main() = 1\n")
+        for sym in (:sync, :ship_tree)
+            parsed = if sym === :sync
+                DistSSHRun.parse_drive_args(
+                    String["--sync", "--snapshot", _SNAP_ID_OLD, "parent:1", script],
+                )
+            else
+                base = DistSSHRun.parse_drive_args(String["parent:1", script])
+                merge(base, (sync_mode = :ship_tree, snapshot = _SNAP_ID_OLD))
+            end
+            surface = get(parsed, :hint_surface, :cli)
+            err_run = try
+                DistSSHRun.run_drive_parsed!(parsed; project_root = proj)
+                nothing
+            catch e
+                e
+            end
+            @test err_run isa ArgumentError
+            if surface === :cli
+                cli_flag = sym === :sync ? "--sync" : "--ship-tree"
+                @test occursin("drive: --snapshot cannot be combined with $cli_flag", err_run.msg)
+            else
+                @test occursin("snapshot= cannot be combined with sync=:$sym", err_run.msg)
+            end
+        end
+        env = _child_julia_env(
+            Dict(
+                "DISTSSHKIT_YES" => "1",
+                "DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL" => "1",
+            ),
+        )
+        for (sub, cli_flag) in (("drive", "--sync"), ("go", "--sync"))
+            cmd = _kit_cli_cmd(
+                String[
+                    sub,
+                    "-y",
+                    "-q",
+                    cli_flag,
+                    "--snapshot",
+                    _SNAP_ID_OLD,
+                    "parent:1",
+                    "job.jl",
+                ],
+            )
+            proc, out = _run_subprocess(setenv(cmd, env))
+            @test proc.exitcode != 0
+            @test occursin("$sub: --snapshot cannot be combined with --sync", out)
+        end
+    end
+end
+
 @testset "forget_last_snapshot_default clears matching record" begin
     _with_tempdir() do proj
         _snap_project!(proj)

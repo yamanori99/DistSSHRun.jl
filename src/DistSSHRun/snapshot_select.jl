@@ -40,6 +40,26 @@ function validate_snapshot_id(snapshot_id::AbstractString)::String
 end
 public validate_snapshot_id
 
+"""Refuse `snapshot=` with git pre-run sync (`:sync` / `:ship_tree`). `surface=:cli` names flags."""
+function _snapshot_sync_exclusive!(
+        snapshot::Union{Nothing, AbstractString},
+        sync::Union{Nothing, Symbol, Bool};
+        kind::Symbol,
+        surface::Symbol,
+    )
+    snapshot === nothing && return nothing
+    sym = sync isa Symbol ? sync : nothing
+    sym === :sync || sym === :ship_tree || return nothing
+    validate_snapshot_id(snapshot)
+    if surface === :cli
+        cmd = kind === :drive ? "drive" : "go"
+        flag = sym === :sync ? "--sync" : "--ship-tree"
+        throw(ArgumentError("$cmd: --snapshot cannot be combined with $flag"))
+    end
+    api = kind === :drive ? "drive!" : "go!"
+    throw(ArgumentError("$api: snapshot= cannot be combined with sync=:$sym"))
+end
+
 const _CONTENT_TREE_HASH_RE = r"^[0-9a-fA-F]{40}$"
 
 """True when `hash` is a 40-digit hex Git tree hash (`git-sha1`)."""
