@@ -230,7 +230,9 @@ end
         @test default_cfg.yes == true
         @test DistSSHRun.kit_session_from_config(default_cfg).yes == true
         @test DistSSHRun.pipeline_skip_hash_check(
-            DistSSHRun.PipelineConfig(driver = "job.jl", workers = ["child:host-a"], sync = :sync),
+            DistSSHRun.PipelineConfig(
+                driver = "job.jl", workers = ["child:host-a"], sync = :git_sync,
+            ),
         )
         @test !DistSSHRun.pipeline_skip_hash_check(
             DistSSHRun.PipelineConfig(
@@ -278,8 +280,16 @@ end
         end
         @test err isa ArgumentError
         @test err.msg == DistSSHRun.RSYNC_REMOVED_MSG
+        err_sync_env = try
+            DistSSHRun._parse_env_sync_mode("sync")
+            error("expected ArgumentError")
+        catch e
+            e
+        end
+        @test err_sync_env isa ArgumentError
+        @test occursin("SYNC_MODE=sync was removed", err_sync_env.msg)
         @test DistSSHRun._parse_env_sync_mode("ship-tree") === :ship_tree
-        @test DistSSHRun._parse_env_sync_mode("sync") === :sync
+        @test DistSSHRun._parse_env_sync_mode("git-sync") === :git_sync
         @test DistSSHRun._parse_env_sync_mode("off") === false
         @test DistSSHRun._parse_env_sync_mode("skip") === false
         @test DistSSHRun._parse_env_sync_mode("no") === false
@@ -326,10 +336,18 @@ end
 
             parsed = DistSSHRun.drive_parsed_from_session(session, script)
             @test parsed.sync_mode === nothing
-            @test parsed.sync_script == false
+            @test parsed.worker_include == false
+            err_ss = try
+                DistSSHRun.drive_parsed_from_session(session, script; sync_script = true)
+                nothing
+            catch e
+                e
+            end
+            @test err_ss isa ArgumentError
+            @test occursin("sync_script= was removed", err_ss.msg)
             @test DistSSHRun.drive_parsed_from_session(
-                session, script; sync_script = true,
-            ).sync_script == true
+                session, script; worker_include = true,
+            ).worker_include == true
             @test parsed.skip_hash_check == true
             @test parsed.hint_surface === :api
             @test parsed.julia === nothing
@@ -350,14 +368,23 @@ end
                 julia = "auto",
             ).julia === nothing
 
-            parsed_sync = DistSSHRun.drive_parsed_from_session(session, script; sync = :sync)
-            @test parsed_sync.sync_mode === :sync
+            err_old_sync = try
+                DistSSHRun.drive_parsed_from_session(session, script; sync = :sync)
+                nothing
+            catch e
+                e
+            end
+            @test err_old_sync isa ArgumentError
+            @test occursin("sync=:sync was removed", err_old_sync.msg)
+
+            parsed_sync = DistSSHRun.drive_parsed_from_session(session, script; sync = :git_sync)
+            @test parsed_sync.sync_mode === :git_sync
             @test parsed_sync.skip_hash_check == true
 
             parsed_require = DistSSHRun.drive_parsed_from_session(
                 session,
                 script;
-                sync = :sync,
+                sync = :git_sync,
                 skip_hash_check = false,
             )
             @test parsed_require.skip_hash_check == false
@@ -371,6 +398,15 @@ end
             )
             @test parsed_ship.sync_mode === :ship_tree
             @test parsed_ship.skip_hash_check == true
+
+            err_drive_ss = try
+                DistSSHRun.drive!(script, ["parent:1"]; sync_script = true, yes = true)
+                nothing
+            catch e
+                e
+            end
+            @test err_drive_ss isa ArgumentError
+            @test occursin("sync_script= was removed", err_drive_ss.msg)
         end
     end
 
@@ -707,13 +743,13 @@ end
             @test length(gwarns) == 2
             @test occursin("line 3:", gwarns[1])
             @test occursin("inside if/||/&&", gwarns[1])
-            @test occursin("--sync-script", gwarns[1])
+            @test occursin("--worker-include", gwarns[1])
             @test occursin("line 4:", gwarns[2]) || occursin("line 5:", gwarns[2])
             gout, _ = _capture_stdio() do _, _
                 DistSSHRun._drive_publish_source(g)
             end
             @test occursin("is not published", gout)
-            @test occursin("--sync-script", gout)
+            @test occursin("--worker-include", gout)
         end
     end
 

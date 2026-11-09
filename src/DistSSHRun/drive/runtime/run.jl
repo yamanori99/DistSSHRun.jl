@@ -217,7 +217,7 @@ function run_drive_parsed!(
     # `parse_drive_args` is inferred as one NamedTuple whose fields are unions
     # (`sync_mode::Union{Nothing,Symbol}`, and the same for paths and counts).
     # The value for one argv is narrower. Lookup at runtime specializes the
-    # pipeline on that value, so a drive without `--sync` does not infer sync.
+    # pipeline on that value, so a drive without `--git-sync` does not infer sync.
     # CLI `drive_main` already opened the frame (`cli=true`). A direct call,
     # including `drive!`, opens it here when none is active (`cli=false`).
     am = get(parsed, :allow_mismatch, Symbol[])
@@ -655,7 +655,7 @@ function _run_drive_parsed_locked!(
                         println_fatal("Git hash mismatch on $(join(mismatches, ", "))")
                         println_fatal()
                         println_fatal("To re-deploy with git:")
-                        println_fatal("  julia --project=. -m DistSSHKit setup sync $(join(setup_cli_host_token.(mismatches), " "))")
+                        println_fatal("  julia --project=. -m DistSSHKit setup git-sync $(join(setup_cli_host_token.(mismatches), " "))")
                         println_fatal()
                         println_fatal("Or re-deploy with ship-tree:")
                         println_fatal("  julia --project=. -m DistSSHKit setup ship-tree $(join(setup_cli_host_token.(mismatches), " "))")
@@ -668,8 +668,8 @@ function _run_drive_parsed_locked!(
                         println_fatal("For ship-tree remotes, omit --require-git (the default).")
                         println_fatal()
                         println_fatal("Or use git-managed remotes:")
-                        println_fatal("  julia --project=. -m DistSSHKit setup clone child:HOST ...")
-                        println_fatal("  julia --project=. -m DistSSHKit setup sync child:HOST ...")
+                        println_fatal("  julia --project=. -m DistSSHKit setup git-clone child:HOST ...")
+                        println_fatal("  julia --project=. -m DistSSHKit setup git-sync child:HOST ...")
                         println_fatal()
                     end
                     println_fatal("Or omit --require-git and run without git parity.")
@@ -732,8 +732,8 @@ function _run_drive_parsed_locked!(
         kit_progress_step!("init")
         init_drive_workers!(proj_dir, explicit_package, path_anchor)
         DistSSHRun._start_drive_host_status_monitor!(kit_out, kit_log)
-        sync_script = get(parsed, :sync_script, false)
-        sync_driver_to_workers!(script_path; sync_script = sync_script)
+        worker_include = get(parsed, :worker_include, false)
+        sync_driver_to_workers!(script_path; worker_include = worker_include)
         run_prepare_workers!()
 
         empty!(ARGS)

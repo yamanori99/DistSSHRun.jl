@@ -457,7 +457,7 @@ using Test
         end
     end
 
-    @testset "clone requires repo=" begin
+    @testset "git_clone requires repo=" begin
         _with_tempdir() do proj
             session = DistSSHRun.KitSession(
                 project = proj,
@@ -468,6 +468,10 @@ using Test
             out, _ = _capture_stdio() do _, _
                 @test_throws ArgumentError DistSSHRun.setup!(session, :clone)
                 @test_throws ArgumentError DistSSHRun.setup!(session, :clone; repo = "")
+                @test_throws ArgumentError DistSSHRun.setup!(session, :sync)
+                @test_throws ArgumentError DistSSHRun.setup!(session, :pull)
+                @test_throws ArgumentError DistSSHRun.setup!(session, :git_clone)
+                @test_throws ArgumentError DistSSHRun.setup!(session, :git_clone; repo = "")
             end
             @test !occursin("Log file:", out)
             @test !isdir(joinpath(proj, ".distsshkit", "setup"))
@@ -482,7 +486,9 @@ using Test
                     yes = true,
                     quiet = true,
                 )
-                res = DistSSHRun.setup!(session, :clone; repo = "https://github.com/example/App.jl.git")
+                res = DistSSHRun.setup!(
+                    session, :git_clone; repo = "https://github.com/example/App.jl.git",
+                )
                 @test res.ok && !res.cancelled
                 @test length(res.hosts) == 1 && res.hosts[1].ok
             end

@@ -54,7 +54,7 @@ function _drive_skipped_include_warn(line::Int)::String
     return string(
         "  warn: line ",
         line,
-        ": include(...) inside if/||/&& is not published (use a bare include, or --sync-script)\n",
+        ": include(...) inside if/||/&& is not published (use a bare include, or --worker-include)\n",
     )
 end
 

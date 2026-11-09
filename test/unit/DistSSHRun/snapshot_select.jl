@@ -138,36 +138,75 @@ end
     end
     @test err_combo isa ArgumentError
     @test occursin("go --ship-tree was removed", err_combo.msg)
+    err_go_sync_flag = try
+        DistSSHRun.parse_go_args(
+            String["--sync", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
+        )
+        nothing
+    catch e
+        e
+    end
+    @test err_go_sync_flag isa ArgumentError
+    @test occursin("go --sync was removed", err_go_sync_flag.msg)
     gsync = DistSSHRun.parse_go_args(
-        String["--sync", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
+        String["--git-sync", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
     )
     @test gsync.snapshot == _SNAP_ID_OLD
     err_go = try
-        DistSSHRun.go!("job.jl", ["parent:1"]; sync = :sync, snapshot = gsync.snapshot)
+        DistSSHRun.go!("job.jl", ["parent:1"]; sync = :git_sync, snapshot = gsync.snapshot)
         nothing
     catch e
         e
     end
     @test err_go isa ArgumentError
-    @test occursin("snapshot= cannot be combined with sync=:sync", err_go.msg)
+    @test occursin("snapshot= cannot be combined with sync=:git_sync", err_go.msg)
+    err_go_api = try
+        DistSSHRun.go!("job.jl", ["parent:1"]; sync = :sync, snapshot = _SNAP_ID_OLD)
+        nothing
+    catch e
+        e
+    end
+    @test err_go_api isa ArgumentError
+    @test occursin("sync=:sync was removed", err_go_api.msg)
+    err_drive_sync_flag = try
+        DistSSHRun.parse_drive_args(
+            String["--sync", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
+        )
+        nothing
+    catch e
+        e
+    end
+    @test err_drive_sync_flag isa ArgumentError
+    @test occursin("drive --sync was removed", err_drive_sync_flag.msg)
     dsync = DistSSHRun.parse_drive_args(
-        String["--sync", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
+        String["--git-sync", "--snapshot", _SNAP_ID_OLD, "parent:1", "job.jl"],
     )
     @test dsync.snapshot == _SNAP_ID_OLD
     err_drive = try
         DistSSHRun.drive!(
-            "job.jl", ["parent:1"]; sync = :sync, snapshot = dsync.snapshot, yes = true,
+            "job.jl", ["parent:1"]; sync = :git_sync, snapshot = dsync.snapshot, yes = true,
         )
         nothing
     catch e
         e
     end
     @test err_drive isa ArgumentError
-    @test occursin("snapshot= cannot be combined with sync=:sync", err_drive.msg)
+    @test occursin("snapshot= cannot be combined with sync=:git_sync", err_drive.msg)
 end
 
 @testset "snapshot sync exclusivity parity" begin
-    for sym in (:sync, :ship_tree)
+    err_go_legacy = try
+        DistSSHRun.go!(
+            "job.jl", ["parent:1"]; sync = :sync, snapshot = _SNAP_ID_OLD, yes = true,
+        )
+        nothing
+    catch e
+        e
+    end
+    @test err_go_legacy isa ArgumentError
+    @test occursin("sync=:sync was removed", err_go_legacy.msg)
+
+    for sym in (:git_sync, :ship_tree)
         err_go = try
             DistSSHRun.go!(
                 "job.jl", ["parent:1"]; sync = sym, snapshot = _SNAP_ID_OLD, yes = true,
@@ -209,10 +248,10 @@ end
         _snap_project!(proj)
         script = joinpath(proj, "job.jl")
         write(script, "main() = 1\n")
-        for sym in (:sync, :ship_tree)
-            parsed = if sym === :sync
+        for sym in (:git_sync, :ship_tree)
+            parsed = if sym === :git_sync
                 DistSSHRun.parse_drive_args(
-                    String["--sync", "--snapshot", _SNAP_ID_OLD, "parent:1", script],
+                    String["--git-sync", "--snapshot", _SNAP_ID_OLD, "parent:1", script],
                 )
             else
                 base = DistSSHRun.parse_drive_args(String["parent:1", script])
@@ -227,7 +266,7 @@ end
             end
             @test err_run isa ArgumentError
             if surface === :cli
-                cli_flag = sym === :sync ? "--sync" : "--ship-tree"
+                cli_flag = sym === :git_sync ? "--git-sync" : "--ship-tree"
                 @test occursin("drive: --snapshot cannot be combined with $cli_flag", err_run.msg)
             else
                 @test occursin("snapshot= cannot be combined with sync=:$sym", err_run.msg)
@@ -239,7 +278,7 @@ end
                 "DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL" => "1",
             ),
         )
-        for (sub, cli_flag) in (("drive", "--sync"), ("go", "--sync"))
+        for (sub, cli_flag) in (("drive", "--git-sync"), ("go", "--git-sync"))
             cmd = _kit_cli_cmd(
                 String[
                     sub,
@@ -254,7 +293,7 @@ end
             )
             proc, out = _run_subprocess(setenv(cmd, env))
             @test proc.exitcode != 0
-            @test occursin("$sub: --snapshot cannot be combined with --sync", out)
+            @test occursin("$sub: --snapshot cannot be combined with --git-sync", out)
         end
     end
 end

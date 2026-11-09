@@ -38,7 +38,7 @@ using Test
             end
             let r = parse_drive_args(["s.jl"])
                 @test r.hint_surface === :cli
-                @test r.sync_script == false
+                @test r.worker_include == false
                 @test r.isolated == false
             end
             let r = parse_drive_args(["--isolated", "s.jl", "--", "1"])
@@ -96,10 +96,23 @@ using Test
                 catch
                 end
             end
-            let r = parse_drive_args(["--sync-script", "s.jl"])
-                @test r.sync_script == true
+            let err_ss = try
+                    parse_drive_args(["--sync-script", "s.jl"])
+                    error("expected ArgumentError")
+                catch e
+                    e
+                end
+                @test err_ss isa ArgumentError
+                @test occursin("drive --sync-script was removed", err_ss.msg)
+                @test occursin("--worker-include", err_ss.msg)
             end
-            @test_throws ArgumentError parse_drive_args(["--sync-script", "--sync-script", "s.jl"])
+            @test_throws ArgumentError parse_drive_args(
+                ["--sync-script", "--sync-script", "s.jl"],
+            )
+            let r = parse_drive_args(["--worker-include", "s.jl"])
+                @test r.worker_include == true
+            end
+            @test_throws ArgumentError parse_drive_args(["--worker-include", "--worker-include", "s.jl"])
             let r = parse_drive_args(["parent:4", "myscript.jl", "a", "b"])
                 @test r.parent_workers == 4
                 @test r.script_path == "myscript.jl"
@@ -212,16 +225,26 @@ using Test
     end
 
     @testset "sync and git parity" begin
-        # Two axes: pre-run sync (--sync/--rsync) and git parity (--require-git).
+        # Two axes: pre-run git sync (--git-sync/--rsync) and git parity (--require-git).
         # Defaults: no sync, no parity (skip_hash_check=true).
         let r = parse_drive_args(["s.jl"])
             @test r.sync_mode === nothing
             @test r.skip_hash_check == true
         end
+        let err_sync = try
+                parse_drive_args(["--sync", "child:host1:1", "s.jl"])
+                error("expected ArgumentError")
+            catch e
+                e
+            end
+            @test err_sync isa ArgumentError
+            @test occursin("drive --sync was removed", err_sync.msg)
+            @test occursin("--git-sync", err_sync.msg)
+        end
         @test_throws ArgumentError parse_drive_args(["--mem-headroom", "0.5", "s.jl"])
         @test_throws ArgumentError parse_drive_args(["--parent-gb", "0.2", "s.jl"])
-        let r = parse_drive_args(["--sync", "child:host1:1", "s.jl"])
-            @test r.sync_mode === :sync
+        let r = parse_drive_args(["--git-sync", "child:host1:1", "s.jl"])
+            @test r.sync_mode === :git_sync
             @test r.skip_hash_check == true
         end
         err_ship = try
@@ -246,8 +269,8 @@ using Test
             @test r.sync_mode === nothing
             @test r.skip_hash_check == false
         end
-        let r = parse_drive_args(["--require-git", "--sync", "child:host1:1", "s.jl"])
-            @test r.sync_mode === :sync
+        let r = parse_drive_args(["--require-git", "--git-sync", "child:host1:1", "s.jl"])
+            @test r.sync_mode === :git_sync
             @test r.skip_hash_check == false
         end
         # Compat no-op; independent of sync axis
@@ -255,12 +278,12 @@ using Test
             @test r.sync_mode === nothing
             @test r.skip_hash_check == true
         end
-        let r = parse_drive_args(["--sync", "--skip-git-guard", "child:host1:1", "s.jl"])
-            @test r.sync_mode === :sync
+        let r = parse_drive_args(["--git-sync", "--skip-git-guard", "child:host1:1", "s.jl"])
+            @test r.sync_mode === :git_sync
             @test r.skip_hash_check == true
         end
         err = try
-            parse_drive_args(["--sync", "--rsync", "s.jl"])
+            parse_drive_args(["--git-sync", "--rsync", "s.jl"])
             error("expected ArgumentError")
         catch e
             e
@@ -276,10 +299,10 @@ using Test
         @test err2 isa ArgumentError
         @test err2.msg == DistSSHRun.RSYNC_REMOVED_MSG
         @test_throws ArgumentError parse_drive_args(["--require-git", "--skip-git-guard", "s.jl"])
-        @test_throws ArgumentError parse_drive_args(["--sync", "--collect-missing", "out", "child:h1"])
+        @test_throws ArgumentError parse_drive_args(["--git-sync", "--collect-missing", "out", "child:h1"])
         # Duplicate same sync flag is a no-op (only mixed flags throw).
-        let r = parse_drive_args(["--sync", "--sync", "child:host1:1", "s.jl"])
-            @test r.sync_mode === :sync
+        let r = parse_drive_args(["--git-sync", "--git-sync", "child:host1:1", "s.jl"])
+            @test r.sync_mode === :git_sync
         end
         @test_throws ArgumentError parse_drive_args(["child:host1", "--collect-missing", "out", "child:h1"])
         # Shared flags are peeled even after `--collect-missing` (not treated as HOST).
@@ -299,8 +322,9 @@ using Test
         @test occursin("--quiet", txt)
         @test occursin("--hosts", txt)
         @test occursin("--require-git", txt)
-        @test occursin("--sync", txt)
-        @test occursin("--sync-script", txt)
+        @test occursin("--git-sync", txt)
+        @test occursin("--worker-include", txt)
+        @test !occursin("--sync-script", txt)
         @test !occursin("--ship-tree", txt)
         @test occursin("setup ship-tree", txt)
         @test occursin("--snapshot", txt)

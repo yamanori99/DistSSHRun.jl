@@ -4,10 +4,19 @@ function _parse_env_sync_mode(raw::AbstractString)::Union{Symbol, Bool, Nothing}
     s = lowercase(strip(String(raw)))
     isempty(s) && return nothing
     s in ("off", "false", "0", "skip", "no") && return false
-    s == "sync" && return :sync
+    s == "sync" &&
+        throw(
+        ArgumentError(
+            join_explained_message(
+                "SYNC_MODE=sync was removed; use git-sync",
+                "Or omit SYNC_MODE for no pre-run sync.",
+            ),
+        ),
+    )
+    s in ("git-sync", "git_sync") && return :git_sync
     s == "rsync" && _throw_rsync_removed()
     s in ("ship-tree", "ship_tree") && return :ship_tree
-    throw(ArgumentError("invalid SYNC_MODE=$(repr(raw)); use ship-tree, sync, or off"))
+    throw(ArgumentError("invalid SYNC_MODE=$(repr(raw)); use ship-tree, git-sync, or off"))
 end
 
 function _reject_obsolete_pipeline_size_env()
@@ -45,7 +54,7 @@ Build [`PipelineConfig`](@ref) from environment variables.
 | `DISTRIBUTED_REMOTE_PROJECT_ROOT` | Remote repo root |
 | `DISTRIBUTED_PROJECT_ROOT` | Local project root |
 | `DRIVER` | Driver script path |
-| `SYNC_MODE` | `rsync`, `sync`, or `off` |
+| `SYNC_MODE` | `git-sync`, `ship-tree`, or `off` |
 | `JULIA_DISTRIBUTED_EXE` | Remote Julia path (same as CLI `--julia`; `auto` / unset → detect) |
 | `DISTSSHKIT_YES` / `DISTSSHKIT_QUIET` / `DISTSSHKIT_PROGRESS` / `DISTSSHKIT_VERBOSE` | Same as CLI `-y` / `-q` / `--progress` / `--verbose` |
 """
@@ -89,7 +98,7 @@ function kit_session_from_config(config::PipelineConfig)::KitSession
     )
 end
 
-"""Resolve sync mode for [`pipeline!`](@ref): `false`, `:ship_tree`, or `:sync`."""
+"""Resolve sync mode for [`pipeline!`](@ref): `false`, `:ship_tree`, or `:git_sync`."""
 function resolve_pipeline_sync(
         config::PipelineConfig,
         session::KitSession,
@@ -172,7 +181,7 @@ pipeline!(driver, "parent:2"; args=["8"])
 pipeline!(driver, "child:user@h1:1", "child:user@h2:1"; remote="/path/to/project", args=["8"], collect=true)
 ```
 
-Remote hosts default to **no** pre-run sync; set `sync=:sync` / `:ship_tree` explicitly.
+Remote hosts default to **no** pre-run sync; set `sync=:git_sync` / `:ship_tree` explicitly.
 Collect defaults on when remotes are present (`collect=false` to skip).
 `pipeline!` `sync=:ship_tree` copies only; it does not instantiate missing
 Manifest deps. Use [`drive!`](@ref) with `sync=:ship_tree`, or [`setup!`](@ref)

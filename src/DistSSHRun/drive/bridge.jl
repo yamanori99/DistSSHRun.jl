@@ -12,11 +12,13 @@ function drive_parsed_from_session(
         sync::Union{Nothing, Symbol, Bool} = nothing,
         julia::Union{Nothing, AbstractString} = nothing,
         require_all_hosts::Bool = true,
-        sync_script::Bool = false,
+        worker_include::Bool = false,
+        sync_script::Union{Nothing, Bool} = nothing,
         allow_mismatch = Symbol[],
         allow_external_symlinks::Bool = false,
         snapshot::Union{Nothing, AbstractString} = nothing,
     )
+    _reject_removed_drive_worker_include_kw!(sync_script)
     parent_workers = 0
     hosts = Tuple{String, Union{Int, Nothing}}[]
     if workers !== nothing
@@ -65,7 +67,7 @@ function drive_parsed_from_session(
         collect_hosts = nothing,
         collect_overwrite = nothing,
         sync_mode = sync_mode,
-        sync_script = sync_script,
+        worker_include = worker_include,
         require_all_hosts = require_all_hosts,
         help = false,
         show_version = false,

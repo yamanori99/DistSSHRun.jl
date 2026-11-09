@@ -1065,7 +1065,7 @@ That result is the local absolute path, not a remote path.
 
 A path under the repo root is the same relative path under
 [`resolve_remote_project_root`](@ref). The default root matches
-`setup clone` (`~/Parent/RepoName`). Override with
+`setup git-clone` (`~/Parent/RepoName`). Override with
 `DISTRIBUTED_REMOTE_PROJECT_ROOT` or `--deploy-root`.
 """
 function remote_layout_path(

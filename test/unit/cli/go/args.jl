@@ -10,14 +10,14 @@ using Test
                 [
                     "--julia", "/opt/julia/bin/julia",
                     "--output-dir", "my_runs",
-                    "--sync", "child:h1",
+                    "--git-sync", "child:h1",
                     "--help",
                 ]
             )
             @test r.help
             @test r.julia == "/opt/julia/bin/julia"
             @test r.output_dir == "my_runs"
-            @test r.sync === :sync
+            @test r.sync === :git_sync
             @test r.hosts == ["child:h1"]
         end
     end
@@ -80,8 +80,18 @@ using Test
         let r = parse_go_args(["child:local:2", "child:h1:1", "job.jl"])
             @test r.sync === nothing
         end
-        let r = parse_go_args(["--sync", "child:h1:1", "job.jl"])
-            @test r.sync === :sync
+        let err_sync = try
+                parse_go_args(["--sync", "child:h1:1", "job.jl"])
+                error("expected ArgumentError")
+            catch e
+                e
+            end
+            @test err_sync isa ArgumentError
+            @test occursin("go --sync was removed", err_sync.msg)
+            @test occursin("--git-sync", err_sync.msg)
+        end
+        let r = parse_go_args(["--git-sync", "child:h1:1", "job.jl"])
+            @test r.sync === :git_sync
         end
         err_ship = try
             parse_go_args(["--ship-tree", "child:h1:1", "job.jl"])
@@ -113,24 +123,34 @@ using Test
         @test err_ext isa ArgumentError
         @test occursin("go --allow-external-symlinks was removed", err_ext.msg)
         @test occursin("setup ship-tree", err_ext.msg)
-        let r = parse_go_args(["--skip-sync", "child:local:1", "child:h1:2", "job.jl"])
+        let err_skip = try
+                parse_go_args(["--skip-sync", "child:local:1", "child:h1:2", "job.jl"])
+                error("expected ArgumentError")
+            catch e
+                e
+            end
+            @test err_skip isa ArgumentError
+            @test occursin("go --skip-sync was removed", err_skip.msg)
+            @test occursin("--skip-git-sync", err_skip.msg)
+        end
+        let r = parse_go_args(["--skip-git-sync", "child:local:1", "child:h1:2", "job.jl"])
             @test r.sync === false
             @test r.hosts == ["child:local:1", "child:h1:2"]
         end
         let r = parse_go_args(["--skip-git-guard", "child:h1:1", "job.jl"])
-            @test r.sync === false  # go alias of --skip-sync
+            @test r.sync === false
         end
         err = try
-            parse_go_args(["--skip-sync", "--rsync", "job.jl"])
+            parse_go_args(["--skip-git-sync", "--rsync", "job.jl"])
             error("expected ArgumentError")
         catch e
             e
         end
         @test err isa ArgumentError
         @test err.msg == DistSSHRun.RSYNC_REMOVED_MSG
-        @test_throws ArgumentError parse_go_args(["--sync", "--skip-git-guard", "job.jl"])
+        @test_throws ArgumentError parse_go_args(["--git-sync", "--skip-git-sync", "job.jl"])
         err2 = try
-            parse_go_args(["--sync", "--rsync", "job.jl"])
+            parse_go_args(["--git-sync", "--rsync", "job.jl"])
             error("expected ArgumentError")
         catch e
             e
@@ -174,7 +194,8 @@ using Test
         txt = sprint(io -> DistSSHRun.show_go_usage(; io = io))
         @test occursin("Usage", txt)
         @test occursin("--output-dir", txt)
-        @test occursin("--sync", txt)
+        @test occursin("--git-sync", txt)
+        @test !occursin("--skip-sync", txt)
         @test !occursin("--ship-tree", txt)
         @test occursin("setup ship-tree", txt)
         @test occursin("--snapshot", txt)

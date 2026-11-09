@@ -231,10 +231,10 @@ only return numbers. Collect tests use files workers write.
 
 ### Git (separate remote root)
 
-- `--clone` / `--instantiate` / `--check`: remote hash matches
+- `git-clone` / `--instantiate` / `--check`: remote hash matches
 - `--require-git` after a local bump: fails
-- `--sync` then `--require-git`: pass
-- `--pull` after kit parent `git push`: `e2e_sync_marker.txt` on the
+- `git-sync` then `--require-git`: pass
+- `git-pull` after kit parent `git push`: `e2e_sync_marker.txt` on the
   workers matches
 
 Child-1 can SSH to child-2 (compose DNS).
@@ -244,7 +244,8 @@ Not this file: macOS workers, dead hosts, fake `ssh`, local
 
 ## Fakes vs real SSH
 
-- **setup:** core work is `ssh`. Git clone, sync, and pull also need `git`.
+- **setup:** core work is `ssh`. `setup git-clone`, `setup git-sync`, and
+  `setup git-pull` also need `git`.
   `Pkg.test()` uses the `DISTSSHKIT_TEST_SSH` fixture, and only when
   `DISTSSHKIT_TEST=1`. Bytes on a real remote: e2e.
 - **drive / go:** core work is `Distributed` workers. `Pkg.test()` uses

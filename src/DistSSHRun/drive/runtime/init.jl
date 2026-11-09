@@ -81,11 +81,11 @@ function activate_drive_project!(proj_dir::String)
 end
 
 """
-    sync_driver_to_workers!(script_path; sync_script=false)
+    sync_driver_to_workers!(script_path; worker_include = false)
 
 Publish driver code onto workers after the project package has been loaded.
 Default: definitions / `using` / `import` / `include` (not top-level work).
-`sync_script=true` re-`include`s the full file (opt-in side effects on every
+`worker_include=true` re-`include`s the full file (opt-in side effects on every
 process). Definitions on the master are compiled in the post-package-load
 world (Julia 1.12+ world age).
 
@@ -95,11 +95,11 @@ paths. See [Publishing to workers](@ref Manual-drive-publish).
 
 `init_output_dir!` is invoked separately on the master before workers start.
 """
-function sync_driver_to_workers!(script_path::String; sync_script::Bool = false)
+function sync_driver_to_workers!(script_path::String; worker_include::Bool = false)
     sp = abspath(String(script_path))
     write_both("  Syncing driver to workers... ")
     flush(stdout)
-    src = if sync_script
+    src = if worker_include
         ""
     else
         extracted, warns = DistSSHRun._drive_publish_extract(sp)
@@ -108,7 +108,7 @@ function sync_driver_to_workers!(script_path::String; sync_script::Bool = false)
     end
     return try
         DistSSHRun._with_progress_job_stdio_capture!() do
-            if sync_script
+            if worker_include
                 for w in workers()
                     worker_script = get(RUNNER_WORKER_SCRIPT_PATHS, w, sp)
                     _drive_invokelatest_main(w, :_drive_worker_include!, worker_script)
