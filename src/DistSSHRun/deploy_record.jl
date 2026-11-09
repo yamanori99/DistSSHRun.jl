@@ -348,16 +348,14 @@ function write_deploy_record_to_hosts!(
         catch e
             e isa InterruptException && rethrow()
             push!(fail_hosts, host_s)
-            print_warn("Deploy record write failed on $(host_s): $(sprint(showerror, e))")
-            kit_println()
+            print_warn("Deploy record write failed on $(host_s): $(sprint(showerror, e))\n")
         end
     end
     if isempty(ok_hosts) && !isempty(fail_hosts)
         print_warn(
             "Deploy record was not written on any host ($(join(fail_hosts, ", "))). " *
-                "Setup transfer succeeded; re-run setup or fix SSH if you need deploy.toml.",
+                "Setup transfer succeeded; re-run setup or fix SSH if you need deploy.toml.\n",
         )
-        kit_println()
     end
     return data
 end
@@ -410,17 +408,15 @@ function _read_deploy_record_for_run_status(
         print_warn(
             "Deploy records disagree across hosts" *
                 (disagree_host === nothing ? "" : " (first mismatch on $(disagree_host))") *
-                "; run setup on every host.",
+                "; run setup on every host.\n",
         )
-        kit_println()
         return nothing, false
     end
     if !isempty(missing_hosts)
         print_warn(
             "Deploy record missing on: $(join(missing_hosts, ", ")) " *
-                "(using record from other hosts).",
+                "(using record from other hosts).\n",
         )
-        kit_println()
     end
     return reference, true
 end
@@ -470,8 +466,7 @@ function _warn_deploy_staleness!(
     )
     if rec === nothing
         warn_unknown || return nothing
-        print_warn("Deploy provenance unknown (no .distssh/deploy.toml on remotes).")
-        kit_println()
+        print_warn("Deploy provenance unknown (no .distssh/deploy.toml on remotes).\n")
         return nothing
     end
     mode_s = String(get(rec, "mode", ""))
@@ -483,9 +478,8 @@ function _warn_deploy_staleness!(
         end
         local_sha == strip(String(remote_sha)) && return nothing
         print_warn(
-            "Local git commit $(local_sha[1:min(end, 12)]) differs from deployed $(strip(String(remote_sha))[1:min(end, 12)]) (setup may be stale).",
+            "Local git commit $(local_sha[1:min(end, 12)]) differs from deployed $(strip(String(remote_sha))[1:min(end, 12)]) (setup may be stale).\n",
         )
-        kit_println()
         return nothing
     end
     if mode_s == "ship-tree"
@@ -494,9 +488,8 @@ function _warn_deploy_staleness!(
             local_hash = _local_ship_content_tree_hash(project)
             if local_hash isa String && local_hash != strip(String(remote_hash))
                 print_warn(
-                    "Local ship-tree hash $(local_hash[1:min(end, 12)]) differs from deploy record $(strip(String(remote_hash))[1:min(end, 12)]) (setup may be stale).",
+                    "Local ship-tree hash $(local_hash[1:min(end, 12)]) differs from deploy record $(strip(String(remote_hash))[1:min(end, 12)]) (setup may be stale).\n",
                 )
-                kit_println()
             end
         end
         remote_mh = get(rec, "manifest_hash", nothing)
@@ -504,8 +497,7 @@ function _warn_deploy_staleness!(
         if local_mf isa String && isfile(local_mf) && remote_mh isa AbstractString
             local_mh = _deploy_record_manifest_hash(project)
             local_mh !== nothing && local_mh != strip(String(remote_mh)) && begin
-                print_warn("Local Manifest hash differs from deploy record (tree may be stale).")
-                kit_println()
+                print_warn("Local Manifest hash differs from deploy record (tree may be stale).\n")
             end
         end
     end

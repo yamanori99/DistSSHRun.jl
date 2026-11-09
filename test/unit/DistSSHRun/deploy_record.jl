@@ -122,14 +122,20 @@ end
                 "content_tree_hash" => "f"^40,
             )
             write(joinpath(proj, "extra.txt"), "change\n")
-            log_path = DistSSHRun.init_log_file(log_root; prefix = "deploy_warn")
-            try
-                DistSSHRun._warn_deploy_staleness!(proj, rec)
-            finally
-                DistSSHRun.close_log_file()
+            with_kit_verbosity(:verbose) do
+                log_path = DistSSHRun.init_log_file(log_root; prefix = "deploy_warn")
+                out, _ = _capture_stdio() do _, _
+                    try
+                        DistSSHRun._warn_deploy_staleness!(proj, rec)
+                    finally
+                        DistSSHRun.close_log_file()
+                    end
+                end
+                body = read(log_path, String)
+                @test occursin("ship-tree hash", body)
+                @test occursin("differs from deploy record", out)
+                @test match(r"differs from deploy record[^\n]*\n", out) !== nothing
             end
-            body = read(log_path, String)
-            @test occursin("ship-tree hash", body)
         end
     end
 end
@@ -138,22 +144,30 @@ end
     _with_tempdir() do log_root
         _with_tempdir() do state_dir
             withenv(merge(_fake_setup_remote_env(state_dir), Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1"))...) do
-                log_path = DistSSHRun.init_log_file(log_root; prefix = "deploy_write")
-                try
-                    DistSSHRun.write_deploy_record_to_hosts!(
-                        ["host1"],
-                        "/remote/proj",
-                        pwd(),
-                        :git_sync;
-                        deploy_id = "a"^40,
-                        commit_sha = "a"^40,
-                    )
-                finally
-                    DistSSHRun.close_log_file()
+                with_kit_verbosity(:verbose) do
+                    log_path = DistSSHRun.init_log_file(log_root; prefix = "deploy_write")
+                    out, _ = _capture_stdio() do _, _
+                        try
+                            DistSSHRun.write_deploy_record_to_hosts!(
+                                ["host1"],
+                                "/remote/proj",
+                                pwd(),
+                                :git_sync;
+                                deploy_id = "a"^40,
+                                commit_sha = "a"^40,
+                            )
+                        finally
+                            DistSSHRun.close_log_file()
+                        end
+                    end
+                    body = read(log_path, String)
+                    @test occursin("Deploy record write failed on host1", body)
+                    @test occursin("Deploy record was not written on any host", body)
+                    @test occursin("Deploy record write failed on host1", out)
+                    @test occursin("Deploy record was not written on any host", out)
+                    @test match(r"Deploy record write failed on host1:[^\n]*\n", out) !== nothing
+                    @test match(r"Deploy record was not written on any host[^\n]*\n", out) !== nothing
                 end
-                body = read(log_path, String)
-                @test occursin("Deploy record write failed on host1", body)
-                @test occursin("Deploy record was not written on any host", body)
             end
         end
     end
