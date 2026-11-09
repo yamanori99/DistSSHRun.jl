@@ -102,6 +102,29 @@ using Test
             @test !occursin("unshallow", DistSSHRun._missing_sha_message("h", "abc", false))
         end
 
+        @testset "remote deploy metadata status filter" begin
+            @test DistSSHRun._is_deploy_metadata_status_entry("??", ".distssh/")
+            @test DistSSHRun._is_deploy_metadata_status_entry("??", ".distssh")
+            @test DistSSHRun._is_deploy_metadata_status_entry("??", ".distssh/deploy.toml")
+            @test DistSSHRun._is_deploy_metadata_status_entry(
+                "??", ".distssh/deploy.toml.20260101T000000Z-aaaaaa.tmp",
+            )
+            @test DistSSHRun._is_deploy_metadata_status_entry("??", ".distssh/shipped.toml")
+            @test !DistSSHRun._is_deploy_metadata_status_entry("??", "extra.txt")
+            @test !DistSSHRun._is_deploy_metadata_status_entry("??", "nested/.distssh/deploy.toml")
+            @test !DistSSHRun._is_deploy_metadata_status_entry(" M", ".distssh/deploy.toml")
+            @test !DistSSHRun._is_deploy_metadata_status_entry("M ", ".distssh/deploy.toml")
+            @test !DistSSHRun._remote_git_has_blocking_dirty("?? .distssh/\0")
+            @test !DistSSHRun._remote_git_has_blocking_dirty(
+                "?? .distssh/deploy.toml\0?? .distssh/deploy.toml.x.tmp\0",
+            )
+            @test DistSSHRun._remote_git_has_blocking_dirty("?? extra.txt\0")
+            @test DistSSHRun._remote_git_has_blocking_dirty(
+                "?? .distssh/\0?? extra.txt\0",
+            )
+            @test DistSSHRun._remote_git_has_blocking_dirty(" M .distssh/deploy.toml\0")
+        end
+
         @testset "git_sync stops on local failure" begin
             _apply_quiet_setup_session!()
             _with_tempdir() do tmp
@@ -378,6 +401,139 @@ using Test
                     @test occursin("help setup", out2)
                     @test strip(read(`git -C $remote rev-parse HEAD`, String)) == sha
                     @test sha2 != sha
+                end
+            end
+        end
+
+        @testset "deploy metadata on remote checkout" begin
+            _apply_quiet_setup_session!()
+            function _sync_remote!(bindir, work, remote; hosts = ["dest"])
+                path0 = get(ENV, "PATH", "")
+                withenv(
+                    "PATH" => bindir * ":" * path0,
+                    "DISTSSHKIT_TEST" => nothing,
+                    "DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes",
+                ) do
+                    return _capture_stdio() do _, _
+                        DistSSHRun.git_sync_project_to_hosts!(
+                            hosts, work, remote;
+                            do_push = false, do_pull = true, confirm = false,
+                        )
+                    end
+                end
+            end
+            _with_tempdir() do tmp
+                bindir = joinpath(tmp, "bin")
+                mkdir(bindir)
+                _write_git_ssh_shim!(bindir)
+                work = joinpath(tmp, "work")
+                remote = joinpath(tmp, "remote")
+                mkpath(work)
+                mkpath(remote)
+                _init_commit!(work)
+                run(pipeline(`git init -q $remote`; stdout = devnull, stderr = devnull))
+                _, raw0 = _sync_remote!(bindir, work, remote)
+                @test raw0.ok
+
+                mkpath(joinpath(remote, ".distssh"))
+                write(joinpath(remote, ".distssh", "deploy.toml"), "schema = 1\n")
+                write(joinpath(work, "f.txt"), "after-deploy-record\n")
+                run(pipeline(`git -C $work add f.txt`; stdout = devnull, stderr = devnull))
+                run(
+                    pipeline(
+                        `git -C $work -c commit.gpgsign=false commit -q -m sync-with-record`;
+                        stdout = devnull, stderr = devnull,
+                    )
+                )
+                _, raw1 = _sync_remote!(bindir, work, remote)
+                @test raw1.ok
+                @test strip(read(`git -C $remote rev-parse HEAD`, String)) ==
+                    strip(read(`git -C $work rev-parse HEAD`, String))
+
+                head_before_block = strip(read(`git -C $remote rev-parse HEAD`, String))
+                mkpath(joinpath(remote, ".distssh"))
+                write(joinpath(remote, ".distssh", "deploy.toml"), "schema = 1\n")
+                write(joinpath(remote, "shadow.txt"), "untracked\n")
+                write(joinpath(work, "f.txt"), "blocked\n")
+                run(pipeline(`git -C $work add f.txt`; stdout = devnull, stderr = devnull))
+                run(
+                    pipeline(
+                        `git -C $work -c commit.gpgsign=false commit -q -m blocked`;
+                        stdout = devnull, stderr = devnull,
+                    )
+                )
+                _, raw2 = _sync_remote!(bindir, work, remote)
+                @test !raw2.ok
+                @test occursin("untracked or uncommitted", raw2.host_results[1].message)
+                @test strip(read(`git -C $remote rev-parse HEAD`, String)) == head_before_block
+
+                rm(joinpath(remote, "shadow.txt"); force = true)
+                rm(joinpath(remote, ".distssh", "deploy.toml"); force = true)
+                mkpath(joinpath(work, ".distssh"))
+                write(joinpath(work, ".distssh", "tracked.toml"), "in-repo\n")
+                run(pipeline(`git -C $work add .distssh`; stdout = devnull, stderr = devnull))
+                run(
+                    pipeline(
+                        `git -C $work -c commit.gpgsign=false commit -q -m track-distssh`;
+                        stdout = devnull, stderr = devnull,
+                    )
+                )
+                _, raw3a = _sync_remote!(bindir, work, remote)
+                @test raw3a.ok
+                mkpath(joinpath(remote, ".distssh"))
+                write(joinpath(remote, ".distssh", "deploy.toml"), "schema = 1\n")
+                write(joinpath(remote, ".distssh", "tracked.toml"), "dirty\n")
+                head_before_mod = strip(read(`git -C $remote rev-parse HEAD`, String))
+                write(joinpath(work, "f.txt"), "tracked-mod-blocked\n")
+                run(pipeline(`git -C $work add f.txt`; stdout = devnull, stderr = devnull))
+                run(
+                    pipeline(
+                        `git -C $work -c commit.gpgsign=false commit -q -m tracked-mod`;
+                        stdout = devnull, stderr = devnull,
+                    )
+                )
+                _, raw3 = _sync_remote!(bindir, work, remote)
+                @test !raw3.ok
+                msg3 = raw3.host_results[1].message
+                @test occursin("untracked or uncommitted", msg3) ||
+                    occursin("tracks files under .distssh/", msg3)
+                @test strip(read(`git -C $remote rev-parse HEAD`, String)) == head_before_mod
+
+                _with_tempdir() do tmp2
+                    work2 = joinpath(tmp2, "work")
+                    remote2 = joinpath(tmp2, "remote")
+                    mkpath(work2)
+                    mkpath(remote2)
+                    _init_commit!(work2)
+                    mkpath(joinpath(work2, ".distssh"))
+                    write(joinpath(work2, ".distssh", "tracked.toml"), "in-repo\n")
+                    run(pipeline(`git -C $work2 add .distssh`; stdout = devnull, stderr = devnull))
+                    run(
+                        pipeline(
+                            `git -C $work2 -c commit.gpgsign=false commit -q -m distssh-in-repo`;
+                            stdout = devnull, stderr = devnull,
+                        )
+                    )
+                    run(pipeline(`git init -q $remote2`; stdout = devnull, stderr = devnull))
+                    _, raw_base = _sync_remote!(bindir, work2, remote2)
+                    @test raw_base.ok
+                    head0 = strip(read(`git -C $remote2 rev-parse HEAD`, String))
+                    mkpath(joinpath(remote2, ".distssh"))
+                    write(joinpath(remote2, ".distssh", "deploy.toml"), "schema = 1\n")
+                    write(joinpath(work2, "f.txt"), "collide\n")
+                    run(pipeline(`git -C $work2 add f.txt`; stdout = devnull, stderr = devnull))
+                    run(
+                        pipeline(
+                            `git -C $work2 -c commit.gpgsign=false commit -q -m collide`;
+                            stdout = devnull, stderr = devnull,
+                        )
+                    )
+                    sha_collide = strip(read(`git -C $work2 rev-parse HEAD`, String))
+                    _, raw4 = _sync_remote!(bindir, work2, remote2)
+                    @test !raw4.ok
+                    @test occursin("tracks files under .distssh/", raw4.host_results[1].message)
+                    @test occursin(sha_collide, raw4.host_results[1].message)
+                    @test strip(read(`git -C $remote2 rev-parse HEAD`, String)) == head0
                 end
             end
         end

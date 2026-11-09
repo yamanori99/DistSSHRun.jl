@@ -310,6 +310,74 @@ function _git_status_args()::Vector{String}
     return String["status", "--porcelain", "-z", "--untracked-files=normal"]
 end
 
+const _DEPLOY_METADATA_DIR = ".distssh"
+
+"""True when `rel` is the deploy-root `.distssh` directory or a path beneath it."""
+function _path_is_deploy_metadata(rel::AbstractString)::Bool
+    p = replace(rstrip(String(rel), '/'), '\\' => '/')
+    return p == _DEPLOY_METADATA_DIR || startswith(p, _DEPLOY_METADATA_DIR * "/")
+end
+
+"""
+True for porcelain `??` rows that name only DistSSHRun deploy metadata under `.distssh/`
+at the repo root (deploy record, tmp installs, future `shipped.toml`). Tracked or modified
+rows are never deploy-metadata entries.
+"""
+function _is_deploy_metadata_status_entry(xy::AbstractString, path::AbstractString)::Bool
+    String(xy) == "??" || return false
+    return _path_is_deploy_metadata(path)
+end
+
+function _remote_status_records(status_out::AbstractString)::Vector{Tuple{String, String}}
+    return _git_status_records(Vector{UInt8}(status_out))
+end
+
+"""Any porcelain row that is not untracked deploy metadata at `.distssh/`."""
+function _remote_git_has_blocking_dirty(status_out::AbstractString)::Bool
+    for (xy, path) in _remote_status_records(status_out)
+        _is_deploy_metadata_status_entry(xy, path) || return true
+    end
+    return false
+end
+
+function _remote_has_untracked_deploy_metadata(status_out::AbstractString)::Bool
+    for (xy, path) in _remote_status_records(status_out)
+        _is_deploy_metadata_status_entry(xy, path) && return true
+    end
+    return false
+end
+
+"""Whether `sha` in the local `project` repo tracks paths under `.distssh/` (pre-push checkout probe)."""
+function _commit_tracks_deploy_metadata_dir(project::AbstractString, sha::AbstractString)::Bool
+    r = _git_run_capture(
+        String["-C", String(project), "ls-tree", "-r", "--name-only", String(sha)],
+    )
+    r.ok || return false
+    prefix = _DEPLOY_METADATA_DIR * "/"
+    for line in eachsplit(strip(r.out), '\n'; keepempty = false)
+        p = replace(String(line), '\\' => '/')
+        p == _DEPLOY_METADATA_DIR && return true
+        startswith(p, prefix) && return true
+    end
+    return false
+end
+
+"""
+When the target commit already tracks `.distssh/` and the work tree still has our untracked
+deploy record there, checkout would collide. Returns a refusal message or `nothing`.
+"""
+function _detach_sha_deploy_metadata_collision(
+        host::AbstractString,
+        project::AbstractString,
+        sha::AbstractString,
+        status_out::AbstractString,
+    )::Union{Nothing, String}
+    _remote_has_untracked_deploy_metadata(status_out) || return nothing
+    _commit_tracks_deploy_metadata_dir(project, sha) || return nothing
+    return "$host: commit $sha tracks files under .distssh/, which would collide with the " *
+        "untracked deploy metadata on disk. Refusing checkout. See help setup."
+end
+
 function _local_status_dirty(project::AbstractString)
     args = String[
         "-C", String(project),
@@ -424,12 +492,16 @@ function _detach_sha_on_host(
         detail = isempty(st.detail) ? "git status failed" : st.detail
         return (; ok = false, message = "$host: $detail\nSee help setup.")
     end
-    if !isempty(st.out)
+    if _remote_git_has_blocking_dirty(st.out)
         return (;
             ok = false,
             message = "$host has untracked or uncommitted files, so checkout would not match $sha. " *
                 "Refusing to overwrite them. See help setup.",
         )
+    end
+    collision = _detach_sha_deploy_metadata_collision(host, project, sha, st.out)
+    if collision !== nothing
+        return (; ok = false, message = collision)
     end
     pushed = _git_push_sha_detail(project, host, abs_path, sha)
     if !pushed.ok
@@ -486,7 +558,7 @@ function _detach_sha_on_host(
         )
     end
     after = _remote_git_run(host, abs_path, _git_status_args())
-    if !after.ok || !isempty(after.out)
+    if !after.ok || _remote_git_has_blocking_dirty(after.out)
         msg = "$host is dirty after checkout of $sha. See help setup."
         after.ok || (msg = _with_nonposix_hint(msg, after.detail))
         return (; ok = false, message = msg)
