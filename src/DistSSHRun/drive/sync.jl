@@ -5,7 +5,7 @@
 
 Sync local project to SSH hosts (call explicitly; go/drive do not call this by default).
 
-- `mode=:git_sync` — push the local branch to origin, then check out that commit on each remote as a detached HEAD (confirm unless `session.yes`). Does not run `git pull`. A dirty tree is refused unless `allow_dirty=true` (CLI `setup git-sync --skip-git-guard`; deploy record `dirty=true`).
+- `mode=:git_sync` — push the local branch to origin, then check out that commit on each remote as a detached HEAD (confirm unless `session.yes`). Does not run `git pull`. Requires an existing clone at `session.remote`; on a new target run `setup!(session, :git_clone; repo=...)` first. A dirty tree is refused unless `allow_dirty=true` (CLI `setup git-sync --skip-git-guard`; deploy record `dirty=true`).
 - `mode=:ship_tree` — pack the project (each directory's `.gitignore`) into a tar and extract under
   `runs/<run_id>/src/` (confirm unless `session.yes`).
 

@@ -155,7 +155,8 @@ pipeline!(driver, "child:user@h1:1", "child:user@h2:1"; remote="/path/to/project
 
 Remote hosts default to **no** run-time transfer; prepare with one of
 [`setup!`](@ref) `:git_sync` or `:ship_tree`, then `:instantiate` when needed,
-before `pipeline!`.
+before `pipeline!`. `:git_sync` checks out in an existing remote tree; on a
+**new** target run [`setup!`](@ref)(`session`, `:git_clone`; `repo=...`) first.
 Collect defaults on when remotes are present (`collect=false` to skip).
 
 Returns [`PipelineResult`](@ref); check `result.ok` or use [`report_pipeline_errors`](@ref).
