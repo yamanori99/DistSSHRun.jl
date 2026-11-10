@@ -825,4 +825,23 @@ using Test
         @test !occursin("ssh not found in PATH", quiet)
         @test !occursin("status-row", quiet)
     end
+
+    @testset "manifest refusal CLI classification" begin
+        ship_pack_err = ArgumentError(
+            "Manifest.toml file is excluded by ignore rules and will not be shipped. " *
+                "Workers would instantiate a different resolution.",
+        )
+        project_pack_err = ArgumentError(
+            "Project.toml file is excluded by ignore rules and will not be shipped. " *
+                "Workers would instantiate a different resolution.",
+        )
+        buf = IOBuffer()
+        @test DistSSHRun._report_manifest_refusal(ship_pack_err; io = buf)
+        shown = String(take!(buf))
+        @test occursin("excluded by ignore rules", shown)
+        buf2 = IOBuffer()
+        @test DistSSHRun._report_manifest_refusal(project_pack_err; io = buf2)
+        @test occursin("Project.toml", String(take!(buf2)))
+        @test !DistSSHRun._report_manifest_refusal(ArgumentError("unrelated failure"))
+    end
 end

@@ -120,6 +120,24 @@ end
         end
     end
 
+    @testset "external Manifest path gitignored is refused at pack" begin
+        _with_tempdir() do root
+            ext = joinpath(root, "extapp")
+            locks = joinpath(root, "locks")
+            mkpath(ext)
+            mkpath(locks)
+            outside_manifest = joinpath(locks, "Manifest.toml")
+            write(outside_manifest, "# lock\n")
+            write(
+                joinpath(ext, "Project.toml"),
+                "name = \"Ext\"\nmanifest = \"../locks/Manifest.toml\"\n",
+            )
+            write(joinpath(locks, ".gitignore"), "Manifest.toml\n")
+            @test_throws ArgumentError DistSSHRun.DistSSHShip.pack_entry_paths(ext)
+            @test_throws ArgumentError DistSSHRun.pack_ship_tree(ext)
+        end
+    end
+
     @testset "workspace member: ship_send_list differs, oracle matches tar" begin
         _with_tempdir() do root
             lab = joinpath(root, "lab")

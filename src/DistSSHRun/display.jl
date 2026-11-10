@@ -573,18 +573,33 @@ function _require_manifest!(project::AbstractString)
     throw(ArgumentError(missing_manifest_message(project)))
 end
 
+"""Whether `msg` is a ship/pack or send-list Manifest or project-file refusal."""
+function _cli_manifest_refusal_message(msg::AbstractString)::Bool
+    startswith(msg, "No Manifest for ") && return true
+    startswith(msg, "Manifest ") && return true
+    occursin(" excluded by ignore rules and will not be shipped", msg) || return false
+    for prefix in (
+        "Manifest.toml",
+        "JuliaManifest.toml",
+        "Project.toml",
+        "JuliaProject.toml",
+        "Manifest-v",
+        "JuliaManifest-v",
+    )
+        startswith(msg, prefix) && return true
+    end
+    return false
+end
+
 """
 Print a Manifest refusal as one stderr line and return true.
 
 Other errors return false so the caller can rethrow them.
 """
-function _report_manifest_refusal(e)::Bool
+function _report_manifest_refusal(e; io::IO = stderr)::Bool
     e isa ArgumentError || return false
-    msg = e.msg
-    if !(startswith(msg, "No Manifest for ") || startswith(msg, "Manifest "))
-        return false
-    end
-    print_cli_error(msg)
+    _cli_manifest_refusal_message(e.msg) || return false
+    print_cli_error(e.msg; io = io)
     return true
 end
 

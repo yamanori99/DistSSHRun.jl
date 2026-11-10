@@ -149,6 +149,43 @@ function _require_manifest(project::ShipProject)
     )
 end
 
+function _throw_ship_omitted_project_files!(hits::Vector{String})
+    isempty(hits) && return nothing
+    sort!(hits)
+    joined = length(hits) == 1 ? hits[1] : join(hits, ", ")
+    word = length(hits) == 1 ? "file is" : "files are"
+    throw(
+        ArgumentError(
+            "$joined $word excluded by ignore rules and will not be shipped. " *
+                "Workers would instantiate a different resolution. " *
+                "Stop ignoring them, add a negation pattern, or change the ignore rules.",
+        ),
+    )
+end
+
+"""Manifest outside scanned trees but ignored on disk (e.g. `manifest =` elsewhere)."""
+function _append_external_ignored_manifest_hits!(
+        project::ShipProject,
+        anchor::String,
+        included::Set{String},
+        hits::Vector{String},
+        seen::Set{String},
+    )
+    man = project.manifest
+    man isa String || return nothing
+    isfile(man) || return nothing
+    rel_anchor = replace(relpath(_fs_path(man), _fs_path(anchor)), '\\' => '/')
+    rel_anchor in included && return nothing
+    rel_anchor in seen && return nothing
+    man_dir = canonical_local_path(dirname(man))
+    inside = replace(relpath(_fs_path(man), _fs_path(man_dir)), '\\' => '/')
+    _projectish_name(basename(man)) || return nothing
+    path_ignored(man_dir, inside, false) || return nothing
+    push!(seen, rel_anchor)
+    push!(hits, rel_anchor)
+    return nothing
+end
+
 function _refuse_omitted_project_files!(
         project::ShipProject,
         anchor::String,
@@ -197,17 +234,8 @@ function _refuse_omitted_project_files!(
             end
         end
     end
-    isempty(hits) && return nothing
-    sort!(hits)
-    joined = length(hits) == 1 ? hits[1] : join(hits, ", ")
-    word = length(hits) == 1 ? "file is" : "files are"
-    throw(
-        ArgumentError(
-            "$joined $word excluded by ignore rules and will not be shipped. " *
-                "Workers would instantiate a different resolution. " *
-                "Stop ignoring them, add a negation pattern, or change the ignore rules.",
-        ),
-    )
+    _append_external_ignored_manifest_hits!(project, anchor, included, hits, seen)
+    _throw_ship_omitted_project_files!(hits)
 end
 
 """Follow one symlink. The remote name is the link's basename. The bytes are the target's."""
