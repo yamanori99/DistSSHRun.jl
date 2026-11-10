@@ -225,6 +225,7 @@ RUN_SUBCOMMAND_EXPECTATION
 `shell_status` is public on DistSSHBase and is not exported.
 
 ```@docs
+DistSSHBase.HostResult
 DistSSHBase.shell_status
 ```
 

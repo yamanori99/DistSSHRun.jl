@@ -344,7 +344,7 @@ directory (`runs/<id>/src` plus the project directory inside the tar).
 A script inside `project` keeps its relative path under `work_root`. A script
 outside it is `work_root/_distsshrun_external/<basename>`, the same place
 `extra_files` uses. One external file is the limit; a second is an error at
-[`snapshot`](@ref).
+[`ship_tree!`](@ref).
 """
 function remote_script_path(
         work_root::AbstractString,

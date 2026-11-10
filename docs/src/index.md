@@ -63,7 +63,7 @@ member also ships the workspace `Project.toml` and the shared Manifest.
 Sibling workspace members are not walked. `--extra-file PATH` may be
 repeated; this version accepts one file and a second is an error
 (`more than one extra file is not yet supported`). `setup!`, `sync!`, and
-`snapshot` take `extra_files::Vector{String}` with that same error. The file
+`ship_tree!` take `extra_files::Vector{String}` with that same error. The file
 is stored at `_distsshrun_external/<basename>` under the remote project. A
 symlink is followed once: the archive name is the link name and the bytes
 are the target. Siblings of that file are not sent. A gitignored `Project.toml`,
@@ -120,7 +120,7 @@ when selection cannot probe, then fails closed if the snapshot is invalid. `--rs
 `ship_tree!(project, hosts, deploy_root)` packs with `DistSSHShip.pack_tree`
 (declared-input omission and warnings), ships into `runs/<run_id>/src/`, then
 deletes the temporary pack directory. `ship_tree!(pack, hosts, deploy_root)`
-sends an existing [`DistSSHShip.ShipPack`](@ref) without repacking or
+sends an existing [`ShipPack`](@ref DistSSHShip.ShipPack) without repacking or
 deleting it (a pack from a project with declared inputs is refused; use the
 project method). After `DistSSHShip.ship`, files under `<dest>/.distssh/`
 (for example `ship.toml`) are remote metadata and are **not** part of

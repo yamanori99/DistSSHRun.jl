@@ -1830,7 +1830,7 @@ end
 """
     ship_tree!(pack, hosts, deploy_root; confirm=false, provenance=true) -> ShipTreeResult
 
-Send an existing [`DistSSHShip.ShipPack`](@ref) to `runs/<run_id>/src/` on
+Send an existing [`ShipPack`](@ref DistSSHShip.ShipPack) to `runs/<run_id>/src/` on
 each host. Does not pack again and does not delete the pack directory.
 
 The tar is hashed again immediately before sending. A different `git-sha1`
