@@ -543,7 +543,7 @@ end
             end
             DistSSHRun._set_active_selection!(
                 DistSSHRun.SourceSelection(
-                    :snapshot,
+                    :ship,
                     "20260101T000000Z-abcdef",
                     "/home/lab",
                     "/home/lab/runs/20260101T000000Z-abcdef/src",
@@ -573,7 +573,7 @@ end
             end
             DistSSHRun._set_active_selection!(
                 DistSSHRun.SourceSelection(
-                    :snapshot,
+                    :ship,
                     nothing,
                     "/home/lab",
                     "/home/lab/runs/x/src",

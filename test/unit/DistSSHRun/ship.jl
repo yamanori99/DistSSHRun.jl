@@ -1108,7 +1108,7 @@ end
 
 @testset "active selection is scoped to hosts and deploy root" begin
     sel = DistSSHRun.SourceSelection(
-        :snapshot,
+        :ship,
         "20260101T000000Z-abcdef",
         "/home/dev/app",
         "/home/dev/app/runs/20260101T000000Z-abcdef/src",
@@ -1178,7 +1178,7 @@ end
         work = "/home/dev/app/runs/20260101T000000Z-abcdef/src"
         DistSSHRun._set_active_selection!(
             DistSSHRun.SourceSelection(
-                :snapshot,
+                :ship,
                 "20260101T000000Z-abcdef",
                 deploy,
                 work,
@@ -1212,7 +1212,7 @@ end
         other_work = "/home/dev/other/runs/20260101T000000Z-abcdef/src"
         DistSSHRun._set_active_selection!(
             DistSSHRun.SourceSelection(
-                :snapshot,
+                :ship,
                 "20260101T000000Z-abcdef",
                 other,
                 other_work,
@@ -1485,7 +1485,7 @@ end
                         pack = DistSSHRun._pack_project_tree(proj)
                         try
                             sentinel = DistSSHRun.SourceSelection(
-                                :snapshot,
+                                :ship,
                                 "sentinel-run",
                                 "/other",
                                 "/other/runs/sentinel-run/src",

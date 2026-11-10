@@ -62,7 +62,7 @@ function _drive_print_skipped_include_warns!(warns::Vector{String})
     isempty(warns) && return nothing
     return with_kit_progress_suspended() do
         for msg in warns
-            print_warn(msg)
+            print_warn(endswith(msg, '\n') ? msg : msg * "\n")
         end
         return nothing
     end
