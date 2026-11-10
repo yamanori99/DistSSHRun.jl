@@ -638,14 +638,17 @@ jobs:
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: yamanori99/DistSSHQueue.jl
-          ref: main
-          path: downstream
-          persist-credentials: false
+      # Outside the Run git worktree so Queue's DISTSSHQUEUE_DEV_RUN porcelain check stays clean.
+      - name: Check out DistSSHQueue
+        env:
+          DISTSSHQUEUE_CHECKOUT: ${{ runner.temp }}/DistSSHQueue
+        run: |
+          rm -rf "$DISTSSHQUEUE_CHECKOUT"
+          git clone --depth 1 --branch main \
+            https://github.com/yamanori99/DistSSHQueue.jl.git \
+            "$DISTSSHQUEUE_CHECKOUT"
       - name: docker-ssh up + SSH E2E
-        working-directory: downstream
+        working-directory: ${{ runner.temp }}/DistSSHQueue
         env:
           DISTSSHQUEUE_DEV_RUN: ${{ github.workspace }}
           DISTSSHQUEUE_WORKER_IMAGE: ghcr.io/yamanori99/distsshqueue-linux-ssh-worker:latest
@@ -653,9 +656,11 @@ jobs:
         run: ./testenv/docker-ssh/scripts/up.sh --e2e
       - name: Teardown workers
         if: always()
+        env:
+          DISTSSHQUEUE_CHECKOUT: ${{ runner.temp }}/DistSSHQueue
         run: |
-          if [[ -d downstream ]]; then
-            (cd downstream && ./testenv/docker-ssh/scripts/down.sh) || true
+          if [[ -d "$DISTSSHQUEUE_CHECKOUT" ]]; then
+            (cd "$DISTSSHQUEUE_CHECKOUT" && ./testenv/docker-ssh/scripts/down.sh) || true
           fi
 
   # Schedule / post-cut runs are not PR checks, and github-actions[bot] does not email.
