@@ -695,4 +695,23 @@ using Test
             delete!(DistSSHRun._PINNED_JULIA, "ridework.test\0/usr/bin/julia")
         end
     end
+
+    @testset "run_id kw reaches work-root assign" begin
+        _with_tempdir() do tmp
+            _write_host_project!(tmp, "RideRunId")
+            script = joinpath(tmp, "noop.jl")
+            write(script, "nothing\n")
+            rid = "20260101T000000Z-aaaaaa"
+            r = redirect_stdout(devnull) do
+                redirect_stderr(devnull) do
+                    return DistSSHRun.ride!(
+                        script, ["parent:1"];
+                        project = tmp,
+                        run_id = rid,
+                    )
+                end
+            end
+            @test r.ok
+        end
+    end
 end

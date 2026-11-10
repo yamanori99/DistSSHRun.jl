@@ -1184,4 +1184,26 @@ end
             @test isfile(marker)
         end
     end
+
+    @testset "run_id keyword on drive collect and outside-script guard" begin
+        _with_tempdir() do proj
+            mkpath(proj)
+            write(joinpath(proj, "Project.toml"), "name = \"DrvKw\"\nversion = \"0.1.0\"\n")
+            outside = abspath(joinpath(proj, "..", "outside.jl"))
+            write(outside, "1\n")
+            @test DistSSHRun._reject_script_outside_project_run!(
+                "drive", proj, outside;
+                run_id = "20260101T000000Z-aaaaaa",
+                remote_argv = false,
+            ) === nothing
+        end
+        collect_m = methods(DistSSHRun.drive_collect_tree)[1]
+        kws = Base.kwarg_decl(collect_m)
+        @test :run_id in kws
+        @test :snapshot ∉ kws
+        rej_m = methods(DistSSHRun._reject_script_outside_project_run!)[1]
+        rej_kws = Base.kwarg_decl(rej_m)
+        @test :run_id in rej_kws
+        @test :snapshot ∉ rej_kws
+    end
 end

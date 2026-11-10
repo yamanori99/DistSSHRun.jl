@@ -676,7 +676,7 @@ function _ride_run!(
         project,
         julia,
         remote,
-        snapshot,
+        run_id::Union{Nothing, String},
         require_all_hosts,
         hint_surface::Symbol,
         inherited_run::Bool,

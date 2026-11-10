@@ -268,7 +268,7 @@ function _run_drive_parsed_specialized!(
                 project_root = root,
                 path_anchor = anchor,
                 julia = parsed.julia,
-                snapshot = get(parsed, :run_id, nothing),
+                run_id = get(parsed, :run_id, nothing),
             )
             return ok ? 0 : 1
         end
@@ -529,7 +529,7 @@ function _run_drive_parsed_locked!(
         "drive",
         proj_dir,
         script_path;
-        snapshot = get(parsed, :run_id, nothing),
+        run_id = get(parsed, :run_id, nothing),
         remote_argv = remote_argv,
     )
     DistSSHRun._require_manifest!(proj_dir)
@@ -552,7 +552,7 @@ function _run_drive_parsed_locked!(
             DistSSHRun._assign_remote_work_root_env!(
                 host_names, project_root;
                 cli_override = get(parsed, :deploy_root, nothing),
-                snapshot = get(parsed, :run_id, nothing),
+                run_id = get(parsed, :run_id, nothing),
             )
             deploy_root = DistSSHRun._resolved_deploy_root_for_work(
                 proj_dir; cli_override = get(parsed, :deploy_root, nothing),
