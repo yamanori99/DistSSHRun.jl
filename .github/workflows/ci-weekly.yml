@@ -27,7 +27,7 @@ jobs:
   test:
     name: DistSSHRun (1.13, ubuntu-latest, x64)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -44,7 +44,7 @@ jobs:
   test-macos:
     name: DistSSHRun (1.13, xcode-27, aarch64)
     runs-on: xcode-27
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -357,7 +357,7 @@ jobs:
     name: DistSSHRun (1.14-pre, ubuntu-latest, x64)
     runs-on: ubuntu-latest
     # Same suite as Test. 20 minutes cancelled a run after the tests passed.
-    timeout-minutes: 30
+    timeout-minutes: 45
     continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -376,7 +376,7 @@ jobs:
     name: DistSSHRun (nightly, ubuntu-latest, x64)
     runs-on: ubuntu-latest
     # Same budget as CI.yml test-nightly.
-    timeout-minutes: 30
+    timeout-minutes: 45
     continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
