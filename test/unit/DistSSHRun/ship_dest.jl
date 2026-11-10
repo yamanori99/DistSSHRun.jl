@@ -110,6 +110,7 @@ end
                 _minimal_project!(proj)
                 host = "host1"
                 dest = "/home/distsshkit/.distsshqueue/stage/job-1"
+                DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!(host)
                 withenv(_fake_arbitrary_dest_ship_env(state)...) do
                     pack = DistSSHRun.pack_ship_tree(proj)
                     withenv("DISTSSHKIT_TEST_EXPECT_TREE_HASH" => pack.content_tree_hash) do
@@ -125,6 +126,7 @@ end
                     end
                 end
                 DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
+                DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!(host)
             end
         end
     end
@@ -133,10 +135,11 @@ end
         _with_tempdir() do state
             mktempdir() do proj
                 _minimal_project!(proj)
+                host = "host1"
                 pack = DistSSHRun.pack_ship_tree(proj)
                 try
-                    host = "host1"
                     dest = "/home/distsshkit/.distsshqueue/stage/test-uuid"
+                    DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!(host)
                     withenv(
                         merge(
                             _fake_arbitrary_dest_ship_env(state),
@@ -155,6 +158,7 @@ end
                 finally
                     rm(pack.directory; force = true, recursive = true)
                     DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
+                    DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!(host)
                 end
             end
         end

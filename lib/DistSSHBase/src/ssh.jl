@@ -514,10 +514,12 @@ end
 
 """Detect Julia path on remote host via SSH (executable + parseable `--version`).
 
-Returns `nothing` when the remote shell ran and no Julia was found. That result
-is cached. SSH transport failure (exit 255) throws `ArgumentError` and is not
-cached. A failed command whose login shell is non-POSIX also throws
-`ArgumentError` (see `help setup`) and is not cached.
+Returns `nothing` when the remote shell ran and no Julia was found. That miss
+is not cached, so a later call in the same process can pick up Julia after the
+environment or install changes. A found path is cached. SSH transport failure
+(exit 255) throws `ArgumentError` and is not cached. A failed command whose
+login shell is non-POSIX also throws `ArgumentError` (see `help setup`) and is
+not cached.
 """
 function detect_julia_path(host::String)::Union{Nothing, String}
     h = String(strip(host))
@@ -526,7 +528,9 @@ function detect_julia_path(host::String)::Union{Nothing, String}
         return _DETECT_JULIA_PATH_CACHE[h]
     end
     found = _detect_julia_path_uncached(h)
-    _DETECT_JULIA_PATH_CACHE[h] = found
+    if found !== nothing
+        _DETECT_JULIA_PATH_CACHE[h] = found
+    end
     return found
 end
 
