@@ -173,7 +173,8 @@ jobs:
     needs: [detect, runic, jetls, aqua]
     if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Suite runtime on main approached 30m; repeated job-limit kills near the end.
+    timeout-minutes: 60
     permissions:
       contents: read
       id-token: write # Codecov OIDC on main push
@@ -201,7 +202,7 @@ jobs:
     # The static gate is result == success, so a skipped Runic does not start Run.
     if: ${{ needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && !cancelled() && !failure() }}
     runs-on: xcode-27
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:
@@ -593,8 +594,8 @@ jobs:
     if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     # 1.14-pre precompile plus the suite crossed 20 minutes after the tests
-    # had already passed. Ubuntu 1.13 uses 30.
-    timeout-minutes: 30
+    # had already passed. Ubuntu 1.13 uses 60.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -632,9 +633,8 @@ jobs:
     needs: [detect, runic, jetls, aqua]
     if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && (github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true')
     runs-on: ubuntu-latest
-    # Cold nightly precompile plus the full suite does not fit in 20 minutes.
-    # The same suite on 1.13 does.
-    timeout-minutes: 30
+    # Cold nightly precompile plus the full suite needs more than the 1.13 gate.
+    timeout-minutes: 45
     continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
