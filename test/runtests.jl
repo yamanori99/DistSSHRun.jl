@@ -57,6 +57,8 @@ end
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "drive.jl"))
         _runtest_announce("unit/DistSSHRun/drive/collect_tree.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "drive", "collect_tree.jl"))
+        _runtest_announce("unit/DistSSHRun/drive/warn_newline.jl")
+        include(joinpath(@__DIR__, "unit", "DistSSHRun", "drive", "warn_newline.jl"))
         _runtest_announce("unit/DistSSHRun/drive/progress_nolog_stdio.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "drive", "progress_nolog_stdio.jl"))
         _runtest_announce("unit/DistSSHRun/drive/progress_tty_payload.jl")

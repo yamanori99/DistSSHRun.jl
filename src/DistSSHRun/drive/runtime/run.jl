@@ -568,7 +568,7 @@ function _run_drive_parsed_locked!(
                 msg =
                     "⚠ Local working tree has uncommitted changes (this run may not match any git commit)"
                 write_both("  ")
-                print_warn(msg)
+                print_warn(msg * "\n")
                 println_fatal()
                 println_fatal("  Omit --require-git to skip this check")
                 println_fatal()

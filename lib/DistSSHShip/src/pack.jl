@@ -2,7 +2,7 @@
 # Tar's git tree hash of that tar, so it depends on relative path and content,
 # not on the local absolute path.
 
-"""Tar plus the relative layout [`ship`](@ref) extracts."""
+"""Tar plus the relative layout [`ship`](@ref DistSSHRun.DistSSHShip.ship) extracts."""
 struct ShipPack
     directory::String
     tar_path::String

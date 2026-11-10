@@ -40,6 +40,31 @@ end
     @test_throws ArgumentError DistSSHRun.validate_run_id("not-a-run-id")
 end
 
+@testset "SourceSelection rejects programmatic :snapshot" begin
+    @test_throws ArgumentError DistSSHRun.SourceSelection(
+        :snapshot,
+        "20260101T000000Z-aaaaaa",
+        "/remote",
+        "/remote/runs/20260101T000000Z-aaaaaa/src",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        String["child-1"],
+    )
+    err = try
+        DistSSHRun.SourceSelection(
+            :snapshot,
+            "20260101T000000Z-aaaaaa",
+            "/remote",
+            "/remote/runs/20260101T000000Z-aaaaaa/src",
+            nothing,
+            String[],
+        )
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("use :ship", sprint(showerror, err))
+end
+
 @testset "legacy deploy record snapshot_id selection" begin
     double = abspath(
         joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"),

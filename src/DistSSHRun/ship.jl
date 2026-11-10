@@ -208,13 +208,6 @@ function _warn_ship_outside!(user_path::AbstractString, root::AbstractString)
     return nothing
 end
 
-function _ship_rel_paths(ship_root::AbstractString)::Vector{String}
-    root = canonical_local_path(ship_root)
-    send_list = _ship_gitignore_send_list(root)
-    _warn_excluded_ship_project_files!(root, send_list)
-    return ship_send_list(root)
-end
-
 struct ShipInput
     name::String
     path::String
@@ -928,32 +921,6 @@ function _symlink_escapes_root(
         a == b || return true
     end
     return false
-end
-
-function _check_ship_symlinks!(
-        root::AbstractString,
-        rels::Vector{String};
-        allow_external::Bool,
-    )::Vector{String}
-    recorded = String[]
-    for rel in rels
-        p = joinpath(root, rel)
-        islink(p) || continue
-        target = readlink(p)
-        if _symlink_escapes_root(root, rel, target)
-            allow_external || throw(
-                ArgumentError(
-                    "escaping symlink $(repr(rel)) -> $(repr(target)); pass --allow-external-symlinks",
-                ),
-            )
-            push!(recorded, string(rel, " -> ", target))
-        end
-        dest = isabspath(target) ? target : joinpath(dirname(p), target)
-        if !isdir(dest) && !isfile(dest) && !islink(dest)
-            @warn "ship-tree: dangling symlink $rel -> $target"
-        end
-    end
-    return recorded
 end
 
 """Non-negative byte limit from `name`, or `default` when unset. Read at pack time."""
@@ -1827,6 +1794,67 @@ function _remote_extract_tar!(
     return nothing
 end
 
+function _ship_run_tree_one_host!(
+        host::AbstractString,
+        deploy_root::AbstractString,
+        run_id::AbstractString,
+        pack::DistSSHShip.ShipPack;
+        allow_external_symlinks::Bool,
+        julia,
+        await_inputs::Bool,
+    )::Tuple{Bool, String}
+    ensured = _ensure_ship_remote_root!(host, deploy_root)
+    abs_root = ensured.abs_root
+    src = _remote_prepare_run_leaf!(host, abs_root, run_id)
+    pinned = something(pin_remote_julia(host, julia), resolve_remote_julia(host, julia))
+    pinned === nothing && throw(ArgumentError("Julia not found on $host"))
+    leaf = _posix_join(abs_root, "runs", run_id)
+    project_rel = pack.project_rel
+    content_hash = pack.content_tree_hash
+
+    function _ship_run_extract_hook(
+            h,
+            checked,
+            snap,
+            julia_bin;
+            allow_external_symlinks::Bool,
+            expect_hash::AbstractString,
+        )
+        return _remote_extract_tar!(
+            h, checked, snap.tar_path, julia_bin;
+            allow_external_symlinks = allow_external_symlinks,
+            expect_hash = expect_hash,
+        )
+    end
+
+    function _ship_run_complete_hook(h, ::AbstractString, ::DistSSHShip.ShipPack)
+        code_c, out_c = _remote_shell_status(
+            String(h),
+            _remote_run_leaf_complete_sh(leaf, content_hash; project_rel = project_rel),
+        )
+        code_c == 0 || throw(
+            ArgumentError("could not mark snapshot complete on $(h): $(strip(out_c))"),
+        )
+        return nothing
+    end
+
+    DistSSHShip._ship_one_host!(
+        host, src, pack, allow_external_symlinks, true;
+        julia = pinned,
+        hooks = DistSSHShip._ShipHooks(
+            (_, _) -> nothing,
+            _ship_run_extract_hook,
+            _ship_run_complete_hook,
+        ),
+    )
+    if await_inputs
+        _record_remote_inputs!(host, abs_root, pack.project_dir, pinned)
+    else
+        _start_remote_input_hashes!(host, abs_root, pack.project_dir, pinned)
+    end
+    return (ensured.created, abs_root)
+end
+
 """
     ship_tree!(pack, hosts, deploy_root; confirm=false, provenance=true) -> ShipTreeResult
 
@@ -1973,46 +2001,24 @@ function _ship_tree_to_hosts!(
     map_host_jobs(hosts) do i, host
         host_results[i] = _setup_host_call!(host) do
             try
-                ensured = _ensure_ship_remote_root!(host, deploy_root)
-                abs_root = ensured.abs_root
+                created, abs_root = _ship_run_tree_one_host!(
+                    host, deploy_root, rid, pack;
+                    allow_external_symlinks = allow_external_symlinks,
+                    julia = julia,
+                    await_inputs = await_inputs,
+                )
                 if report
                     kit_println(
                         "  $host: remote_root $(abs_root) (" *
-                            (ensured.created ? "created" : "existed") * ")",
+                            (created ? "created" : "existed") * ")",
                     )
-                end
-                src = _remote_prepare_run_leaf!(host, abs_root, rid)
-                pinned = something(pin_remote_julia(host, julia), resolve_remote_julia(host, julia))
-                pinned === nothing && throw(ArgumentError("Julia not found on $host"))
-                _remote_extract_tar!(
-                    host, src, pack.tar_path, pinned;
-                    allow_external_symlinks = allow_external_symlinks,
-                    expect_hash = pack.content_tree_hash,
-                )
-                leaf = _posix_join(abs_root, "runs", rid)
-                code_c, out_c = _remote_shell_status(
-                    String(host),
-                    _remote_run_leaf_complete_sh(
-                        leaf, pack.content_tree_hash;
-                        project_rel = pack.project_rel,
-                    ),
-                )
-                code_c == 0 || throw(
-                    ArgumentError(
-                        "could not mark snapshot complete on $(host): $(strip(out_c))",
-                    ),
-                )
-                if await_inputs
-                    _record_remote_inputs!(host, abs_root, pack.project_dir, pinned)
-                else
-                    _start_remote_input_hashes!(host, abs_root, pack.project_dir, pinned)
                 end
                 if report
                     kit_print("  $host: ")
                     print_ok("✓")
                     kit_println()
                 end
-                msg = ensured.created ? "ship-tree ok (created remote_root)" :
+                msg = created ? "ship-tree ok (created remote_root)" :
                     "ship-tree ok"
                 return HostResult(host, true, msg)
             catch e

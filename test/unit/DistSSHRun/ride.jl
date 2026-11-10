@@ -497,7 +497,7 @@ using Test
         function seed_earlier_ship!()
             DistSSHRun._set_active_selection!(
                 DistSSHRun.SourceSelection(
-                    :snapshot,
+                    :ship,
                     "20260101T000000Z-abcdef",
                     "/home/distsshkit/app",
                     "/home/distsshkit/app/runs/20260101T000000Z-abcdef/src",
