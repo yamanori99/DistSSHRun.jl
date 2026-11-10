@@ -9,5 +9,4 @@ category: breaking
   `provenance`. `ShipTreeResult.remote_root` → `deploy_root`; drop
   `tree_matches_head`.
 - Move [`HostResult`](@ref) to `DistSSHRun.DistSSHBase`; remove
-  `DistSSHShip.ShipHostResult`. Bump in-repo `DistSSHBase` 0.1.3 and
-  `DistSSHShip` 0.4.0.
+  `DistSSHShip.ShipHostResult` (in-repo lib versions stay lockstep with Run).

@@ -25,7 +25,15 @@ jobs:
         with:
           fetch-depth: 0
       - name: Pkg compat
-        run: ./.github/pkg-compat-check.sh
+        run: |
+          set -euo pipefail
+          ./.github/pkg-compat-check.sh
+          ./.github/lib-lockstep-check.sh --self-test
+          if [ -n "${GITHUB_BASE_SHA:-}" ]; then
+            ./.github/lib-lockstep-check.sh --base "$GITHUB_BASE_SHA"
+          else
+            ./.github/lib-lockstep-check.sh
+          fi
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

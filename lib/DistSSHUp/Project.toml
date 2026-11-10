@@ -1,7 +1,7 @@
 name = "DistSSHUp"
 uuid = "76a6745a-cbcc-444e-a19a-dcac12a79e7c"
 license = "MIT"
-version = "0.1.0"
+version = "0.2.0-DEV"
 authors = ["Yamamoto, Takanori <takanori.yamamoto.99@gmail.com>", "Ampuku, Honoka <ampk.hono@gmail.com>"]
 
 [deps]
@@ -11,5 +11,5 @@ DistSSHBase = "f0a69307-14e5-4272-8c28-20680d05bac8"
 DistSSHBase = {path = "../DistSSHBase"}
 
 [compat]
-DistSSHBase = "0.1"
+DistSSHBase = "=0.2.0"
 julia = "1.13"
