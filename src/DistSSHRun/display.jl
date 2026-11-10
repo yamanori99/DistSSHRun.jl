@@ -579,13 +579,13 @@ function _cli_manifest_refusal_message(msg::AbstractString)::Bool
     startswith(msg, "Manifest ") && return true
     occursin(" excluded by ignore rules and will not be shipped", msg) || return false
     for prefix in (
-        "Manifest.toml",
-        "JuliaManifest.toml",
-        "Project.toml",
-        "JuliaProject.toml",
-        "Manifest-v",
-        "JuliaManifest-v",
-    )
+            "Manifest.toml",
+            "JuliaManifest.toml",
+            "Project.toml",
+            "JuliaProject.toml",
+            "Manifest-v",
+            "JuliaManifest-v",
+        )
         startswith(msg, prefix) && return true
     end
     return false
