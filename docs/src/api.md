@@ -151,6 +151,7 @@ DistSSHShip.resolve_ship_project
 DistSSHShip.gitignore_paths
 DistSSHShip.selected_paths
 DistSSHShip.pack_paths
+DistSSHShip.pack_entry_paths
 DistSSHShip.Shipment
 DistSSHShip.pack_tree
 DistSSHShip.ship

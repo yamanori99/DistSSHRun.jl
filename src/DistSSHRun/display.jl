@@ -634,7 +634,7 @@ end
 function _require_manifest_in_pack_paths!(project::AbstractString)
     given = canonical_local_path(project)
     omit = String[input.path for input in _load_ship_inputs(given)]
-    man_rel = DistSSHShip.manifest_pack_anchor_rel(given; omit_project_rels = omit)
+    man_rel = DistSSHShip._manifest_pack_anchor_rel(given; omit_project_rels = omit)
     paths = Set(DistSSHShip.pack_entry_paths(given; omit_project_rels = omit))
     man_rel in paths && return nothing
     throw(

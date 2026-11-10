@@ -362,8 +362,8 @@ function pack_entry_paths(
     return out
 end
 
-"""Manifest path relative to the ship anchor (same layout as [`pack_entry_paths`](@ref))."""
-function manifest_pack_anchor_rel(
+# Manifest path relative to the ship anchor (same layout as `pack_entry_paths`).
+function _manifest_pack_anchor_rel(
         project::AbstractString;
         script::Union{Nothing, AbstractString} = nothing,
         cwd::AbstractString = pwd(),
@@ -412,7 +412,7 @@ function pack_tree(
             "more than one extra file is not yet supported",
         )
     )
-    resolved, anchor, deps, entries, prel = _prepare_ship_entries(
+    resolved, anchor, _, entries, prel = _prepare_ship_entries(
         project;
         script = script,
         cwd = cwd,
