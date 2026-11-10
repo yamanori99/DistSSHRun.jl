@@ -491,17 +491,17 @@ function main()
     end
 
     if occursin("Tar.extract(stdin", script) && occursin("content_tree_hash mismatch", script)
-        if get(ENV, "DISTSSHKIT_TEST_TAR_EXTRACT_FAIL", "") == "1"
-            println(stderr, "tar extract failed")
-            exit(1)
-        end
-        mkpath(tree)
-        data = read(stdin)
-        buf = IOBuffer(data)
-        seekstart(buf)
-        Tar.extract(buf, tree)
         expect = strip(get(ENV, "DISTSSHKIT_TEST_EXPECT_TREE_HASH", ""))
         if !isempty(expect)
+            if get(ENV, "DISTSSHKIT_TEST_TAR_EXTRACT_FAIL", "") == "1"
+                println(stderr, "tar extract failed")
+                exit(1)
+            end
+            mkpath(tree)
+            data = read(stdin)
+            buf = IOBuffer(data)
+            seekstart(buf)
+            Tar.extract(buf, tree)
             buf = IOBuffer()
             Tar.create(tree, buf)
             seekstart(buf)
@@ -510,11 +510,12 @@ function main()
                 println(stderr, "content_tree_hash mismatch: ", got, " != ", expect)
                 exit(1)
             end
+            exit(0)
         end
-        exit(0)
     end
 
-    if occursin("dest is not empty", script) && occursin("ls -A", script)
+    # DistSSHShip `_prepare_dest_script` only (not run-tree `extract dest …` scripts).
+    if occursin("printf 'dest is not empty", script) && occursin("ls -A", script)
         if !isdir(tree)
             mkpath(tree)
             exit(0)
@@ -526,8 +527,8 @@ function main()
         exit(3)
     end
 
-    if occursin("dest parent does not exist", script) ||
-            (occursin("dest exists and is not a directory", script))
+    if occursin("printf 'dest parent does not exist", script) ||
+            occursin("printf 'dest exists and is not a directory", script)
         mkpath(tree)
         exit(0)
     end
