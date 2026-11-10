@@ -3,6 +3,28 @@ using Test
 # Included from `test/runtests.jl` (support helpers already loaded). Standalone:
 #   julia --project=. --startup-file=no -e 'using Test; using DistSSHRun; include("test/support.jl"); include("test/unit/DistSSHRun/ship_dest.jl")'
 
+const _FAKE_ARBITRARY_DEST_SHIP_SSH = joinpath(
+    @__DIR__,
+    "..",
+    "..",
+    "..",
+    "lib",
+    "DistSSHBase",
+    "test",
+    "fixtures",
+    "fake_arbitrary_dest_ship_ssh.jl",
+)
+
+function _fake_arbitrary_dest_ship_env(state_dir::AbstractString)
+    return merge(
+        _fake_setup_remote_env(state_dir),
+        Dict(
+            "DISTSSHKIT_TEST_SSH" => abspath(_FAKE_ARBITRARY_DEST_SHIP_SSH),
+            "DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia",
+        ),
+    )
+end
+
 function _minimal_project!(dir::AbstractString)
     write(joinpath(dir, "Project.toml"), "name = \"StageShip\"\n")
     write(
@@ -88,14 +110,7 @@ end
                 _minimal_project!(proj)
                 host = "host1"
                 dest = "/home/distsshkit/.distsshqueue/stage/job-1"
-                withenv(
-                    merge(
-                        _fake_setup_remote_env(state),
-                        Dict(
-                            "DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia",
-                        ),
-                    )...,
-                ) do
+                withenv(_fake_arbitrary_dest_ship_env(state)...) do
                     pack = DistSSHRun.pack_ship_tree(proj)
                     withenv("DISTSSHKIT_TEST_EXPECT_TREE_HASH" => pack.content_tree_hash) do
                         bundle = pack.directory
@@ -124,11 +139,8 @@ end
                     dest = "/home/distsshkit/.distsshqueue/stage/test-uuid"
                     withenv(
                         merge(
-                            _fake_setup_remote_env(state),
-                            Dict(
-                                "DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia",
-                                "DISTSSHKIT_TEST_EXPECT_TREE_HASH" => pack.content_tree_hash,
-                            ),
+                            _fake_arbitrary_dest_ship_env(state),
+                            Dict("DISTSSHKIT_TEST_EXPECT_TREE_HASH" => pack.content_tree_hash),
                         )...,
                     ) do
                         result = DistSSHRun.ship_pack(
