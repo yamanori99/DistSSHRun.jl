@@ -317,6 +317,32 @@ end
     @test occursin("no longer transfers", err_drive.msg)
 end
 
+@testset "clear_last_ship_record removes legacy last-snapshot.toml" begin
+    _with_tempdir() do proj
+        _snap_project!(proj)
+        env = DistSSHRun.resolve_pkg_env(proj)
+        kit = joinpath(env.env_dir, ".distsshkit")
+        mkpath(kit)
+        write(
+            joinpath(kit, "last-snapshot.toml"),
+            sprint(
+                TOML.print,
+                Dict(
+                    "schema" => 1,
+                    "deploy_root" => "/deploy/a",
+                    "hosts" => ["h1"],
+                    "snapshot_id" => _SNAP_ID_OLD,
+                ),
+            ),
+        )
+        @test DistSSHRun.read_last_ship_record(proj) !== nothing
+        DistSSHRun.clear_last_ship_record!(proj; deploy_root = "/deploy/a")
+        @test DistSSHRun.read_last_ship_record(proj) === nothing
+        DistSSHRun.forget_last_ship_default!(proj, "/deploy/b")
+        @test DistSSHRun.read_last_ship_record(proj) === nothing
+    end
+end
+
 @testset "forget_last_snapshot_default clears matching record" begin
     _with_tempdir() do proj
         _snap_project!(proj)

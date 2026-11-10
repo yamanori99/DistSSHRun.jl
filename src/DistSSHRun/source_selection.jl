@@ -13,6 +13,24 @@ struct SourceSelection
     work_root::String
     content_tree_hash::Union{Nothing, String}
     hosts::Vector{String}
+    function SourceSelection(
+            source_kind::Symbol,
+            run_id::Union{Nothing, String},
+            deploy_root::AbstractString,
+            work_root::AbstractString,
+            content_tree_hash::Union{Nothing, String},
+            hosts::AbstractVector{<:AbstractString},
+        )
+        sk = source_kind === :snapshot ? :ship : source_kind
+        return new(
+            sk,
+            run_id,
+            String(deploy_root),
+            String(work_root),
+            content_tree_hash,
+            String[String(h) for h in hosts],
+        )
+    end
 end
 public SourceSelection
 
@@ -198,21 +216,24 @@ function clear_last_ship_record!(
         deploy_root::Union{Nothing, AbstractString} = nothing,
     )::Nothing
     path = _ship_record_path(env_dir)
+    legacy_path = joinpath(_ship_record_dir(env_dir), _LEGACY_SHIP_RECORD_NAME)
     lock(_SHIP_RECORD_LOCK) do
-        isfile(path) || return nothing
-        if deploy_root !== nothing
-            rec = try
-                TOML.parsefile(path)
-            catch
-                Dict{String, Any}()
+        for rec_path in (path, legacy_path)
+            isfile(rec_path) || continue
+            if deploy_root !== nothing
+                rec = try
+                    TOML.parsefile(rec_path)
+                catch
+                    Dict{String, Any}()
+                end
+                stored = get(rec, "deploy_root", nothing)
+                if stored isa AbstractString &&
+                        !_deploy_roots_equivalent(stored, deploy_root)
+                    continue
+                end
             end
-            stored = get(rec, "deploy_root", nothing)
-            if stored isa AbstractString &&
-                    !_deploy_roots_equivalent(stored, deploy_root)
-                return nothing
-            end
+            rm(rec_path; force = true)
         end
-        rm(path; force = true)
     end
     return nothing
 end
@@ -505,7 +526,7 @@ end
 """
 Resolve the remote project work root for `hosts` under `deploy_root`.
 
-`snapshot` is an explicit snapshot ID (never falls back). When omitted, a local
+`run_id` is an explicit run ID (never falls back). When omitted, a local
 last-ship record may supply the ID. Otherwise a git checkout at the deploy
 root is used when every host has `Project.toml` there. Lexical latest
 `runs/*/src` is not consulted.

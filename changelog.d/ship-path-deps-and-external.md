@@ -12,7 +12,7 @@ category: breaking
 - `setup ship-tree --extra-file PATH` may be repeated and is only valid
   for `ship-tree`. This version accepts one path; a second is
   `more than one extra file is not yet supported`. The same limit and
-  message apply to `setup!`, `sync!`, and `snapshot` `extra_files`.
+  message apply to `setup!`, `sync!`, and `run_id` / `extra_files` on ship-tree.
   The file is stored at `_distsshrun_external/<basename>` under the remote
   project. A symlink is followed once. Siblings are not sent. In-process
   `go!` / `drive!` with `sync=:ship_tree` use that path for one script

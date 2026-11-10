@@ -987,12 +987,12 @@ Default `sync` is `false` (no pre-run sync; remotes are checked first — setup
 is assumed done). The `go` CLI does not take `--ship-tree` or `--git-sync`;
 prepare with `setup ship-tree` or `setup git-sync`, then `setup instantiate`
 when needed, then `go --run-id ID`. Passing `sync=:git_sync` or
-`sync=:ship_tree` on [`go!`](@ref) is an `ArgumentError`. `snapshot`
+`sync=:ship_tree` on [`go!`](@ref) is an `ArgumentError`. `run_id`
 (CLI `--run-id`) selects `runs/<ID>/src` when `sync` is omitted or `false`.
-A script outside the project is allowed with `snapshot` when that ship used
+A script outside the project is allowed with `run_id` when that ship used
 `extra_files=[script]`. The remote command is
 [`remote_script_path`](@ref): `_distsshrun_external/<basename>` under the
-selected project directory. `snapshot` also skips the in-tree
+selected project directory. `run_id` also skips the in-tree
 `[sources]` check: a sibling path dependency was already shipped.
 `go!` has no git-parity gate; use [`drive!`](@ref) with
 `skip_hash_check=false` (CLI: `drive --require-git`) when you need that.

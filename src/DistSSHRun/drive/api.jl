@@ -32,7 +32,7 @@ A collect root that is the project or a parent of it stops the run before
 `DISTRIBUTED_COLLECT_DIRS` and a default root from `DISTRIBUTED_OUTPUT_DIR`.
 
 `julia` sets the remote Julia binary (`nothing` / `"auto"` → detect; same as
-CLI `--julia`). `snapshot` (CLI `--run-id`) selects `runs/<ID>/src` under the
+CLI `--julia`). `run_id` (CLI `--run-id`) selects `runs/<ID>/src` under the
 deploy root when `sync` is omitted or `false`. `plan` is an optional explicit
 [`WorkerPlan`](@ref). [`pipeline!`](@ref) runs [`drive!`](@ref) and optional collect only; call
 [`setup!`](@ref) first. It does not pass run-time `sync=` into `drive!`.
