@@ -1294,7 +1294,7 @@ end
     @test err3.msg == DistSSHRun.RSYNC_REMOVED_MSG
 end
 
-@testset "rsync_send_list is the git send list" begin
+@testset "git_send_list is the git send list" begin
     if _test_skip_unless_git()
         _with_tempdir() do tmp
             run(`git -C $tmp init --quiet`)
@@ -1306,7 +1306,7 @@ end
             run(`git -C $tmp add -A`)
             run(`git -C $tmp commit --quiet -m init`)
             env = DistSSHRun.resolve_pkg_env(tmp)
-            listed = DistSSHRun.rsync_send_list(tmp, env)
+            listed = DistSSHRun.git_send_list(tmp, env)
             @test listed isa Vector
             @test "tracked.jl" in listed
             @test !any(startswith(r, ".git") for r in listed)

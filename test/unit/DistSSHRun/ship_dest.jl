@@ -37,7 +37,7 @@ end
 
 @testset "ship dest public API" verbose = true begin
     @testset "names are public and not exported" begin
-        for sym in (:pack_ship_tree, :ship_pack, :ship_project_to_dest)
+        for sym in (:pack_ship_tree, :pack_shipment, :ship_project_to_dest)
             @test sym in names(DistSSHRun)
             @test Base.ispublic(DistSSHRun, sym)
             @test !Base.isexported(DistSSHRun, sym)
@@ -76,7 +76,7 @@ end
         end
     end
 
-    @testset "ship_pack forwards transfer_id to the record builder" begin
+    @testset "pack_shipment forwards transfer_id to the record builder" begin
         pack = DistSSHRun.DistSSHShip.Shipment(
             mktempdir(),
             joinpath(mktempdir(), "x.tar"),
@@ -89,7 +89,7 @@ end
             String[],
             String[],
         )
-        rec = DistSSHRun.DistSSHShip.build_ship_record(pack; complete = true, transfer_id = "stage-uuid")
+        rec = DistSSHRun.DistSSHShip.build_shipment_record(pack; complete = true, transfer_id = "stage-uuid")
         @test rec["transfer_id"] == "stage-uuid"
         rm(pack.directory; force = true, recursive = true)
     end
@@ -123,7 +123,7 @@ end
         end
     end
 
-    @testset "fake ssh ship_pack extracts and verifies" begin
+    @testset "fake ssh pack_shipment extracts and verifies" begin
         _with_tempdir() do state
             mktempdir() do proj
                 _minimal_project!(proj)
@@ -138,14 +138,14 @@ end
                             Dict("DISTSSH_TEST_EXPECT_TREE_HASH" => pack.content_tree_hash),
                         )...,
                     ) do
-                        result = DistSSHRun.ship_pack(
+                        result = DistSSHRun.pack_shipment(
                             pack, [host], dest; write_record = false,
                         )
                         @test result isa DistSSHRun.DistSSHShip.ShipmentReceipt
-                        @test _test_shipment_receipt_ok(result; label = "ship_pack")
+                        @test _test_shipment_receipt_ok(result; label = "pack_shipment")
                         @test result.content_tree_hash == pack.content_tree_hash
                         @test length(result.hosts) == 1
-                        @test _test_host_result_ok(result.hosts[1]; label = "ship_pack")
+                        @test _test_host_result_ok(result.hosts[1]; label = "pack_shipment")
                     end
                 finally
                     rm(pack.directory; force = true, recursive = true)

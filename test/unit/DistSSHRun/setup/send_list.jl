@@ -1,8 +1,8 @@
 using Test
 
-# Oracle: `_rsync_send_list` against a temporary git repository. No rsync, no SSH.
+# Oracle: `_git_send_list` against a temporary git repository. No rsync, no SSH.
 
-@testset "rsync send list" begin
+@testset "git send list" begin
     function _ident!(dir)
         run(pipeline(`git -C $dir config user.email "test@example.com"`; stdout = devnull, stderr = devnull))
         run(pipeline(`git -C $dir config user.name "Test"`; stdout = devnull, stderr = devnull))
@@ -32,7 +32,7 @@ using Test
                 mkpath(joinpath(tmp, ".git", "info"))
                 write(joinpath(tmp, ".git", "info", "exclude"), "secret.txt\n")
                 write(joinpath(tmp, "secret.txt"), "nope\n")
-                listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+                listed = DistSSHRun._git_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
                 @test listed isa Vector
                 @test "data/keep.txt" in listed
                 @test !("data/a.dat" in listed)
@@ -55,7 +55,7 @@ using Test
                 run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
                 _ident!(tmp)
                 _commit!(tmp, "init")
-                listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+                listed = DistSSHRun._git_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
                 @test "output" in listed
                 @test !("output/x.bin" in listed)
                 @test "empty" in listed
@@ -73,7 +73,7 @@ using Test
                 mkpath(joinpath(tmp, "build"))
                 run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
                 _ident!(tmp)
-                listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+                listed = DistSSHRun._git_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
                 @test "keep" in listed
                 @test !("build" in listed)
             end
@@ -88,7 +88,7 @@ using Test
                 mkpath(joinpath(tmp, "build"))
                 run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
                 _ident!(tmp)
-                listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+                listed = DistSSHRun._git_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
                 @test "keep" in listed
                 @test "keep/a.txt" in listed
                 @test !("build" in listed)
@@ -103,7 +103,7 @@ using Test
                 mkpath(joinpath(tmp, "build"))
                 run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
                 _ident!(tmp)
-                listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+                listed = DistSSHRun._git_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
                 @test !("keep" in listed)
                 @test !("build" in listed)
             end
@@ -117,7 +117,7 @@ using Test
                 mkpath(joinpath(tmp, "plain"))
                 run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
                 _ident!(tmp)
-                listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+                listed = DistSSHRun._git_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
                 @test "plain" in listed
                 @test !("!keep" in listed)
             end
@@ -178,7 +178,7 @@ using Test
                 run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
                 _ident!(tmp)
                 _commit!(tmp, "init")
-                listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+                listed = DistSSHRun._git_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
                 @test "vendor/link" in listed
             end
         end
@@ -200,7 +200,7 @@ using Test
                 run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
                 _ident!(tmp)
                 _commit!(tmp, "init")
-                listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+                listed = DistSSHRun._git_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
                 @test "vendor/Foo/lib/x.jl" in listed
             end
         end
@@ -225,7 +225,7 @@ using Test
                 run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
                 _ident!(tmp)
                 _commit!(tmp, "app")
-                listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+                listed = DistSSHRun._git_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
                 @test "dep/keep.jl" in listed
                 @test !("dep/secret.txt" in listed)
             end
@@ -243,7 +243,7 @@ using Test
                 run(pipeline(`git -C $nested init -q`; stdout = devnull, stderr = devnull))
                 _ident!(nested)
                 _commit!(nested, "nested")
-                listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+                listed = DistSSHRun._git_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
                 @test "nested/a.jl" in listed
 
                 child = joinpath(tmp, "child-src")
@@ -257,7 +257,7 @@ using Test
                 sha = strip(read(`git -C $sub rev-parse HEAD`, String))
                 run(pipeline(`git -C $tmp update-index --add --cacheinfo 160000,$sha,sub`; stdout = devnull, stderr = devnull))
                 _commit!(tmp, "gitlink")
-                listed2 = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+                listed2 = DistSSHRun._git_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
                 @test "sub/inside.jl" in listed2
             end
         end
@@ -283,7 +283,7 @@ using Test
                 _commit!(lab, "init")
                 env = DistSSHRun.resolve_pkg_env(member)
                 @test env.env_dir == DistSSHRun.canonical_local_path(lab)
-                listed = DistSSHRun._rsync_send_list(env.env_dir, env)
+                listed = DistSSHRun._git_send_list(env.env_dir, env)
                 @test listed isa Vector
                 @test "lab.jl" in listed
                 @test "experiments/run1/job.jl" in listed
@@ -291,7 +291,7 @@ using Test
                     @test ispath(joinpath(env.env_dir, p))
                 end
                 # Listing from the member would not match the rsync source root (env_dir).
-                wrong = DistSSHRun._rsync_send_list(member, env)
+                wrong = DistSSHRun._git_send_list(member, env)
                 @test "job.jl" in wrong
                 @test !("lab.jl" in wrong)
                 @test !ispath(joinpath(env.env_dir, "job.jl"))
@@ -302,8 +302,8 @@ using Test
             _with_tempdir() do tmp
                 write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
                 env = DistSSHRun.resolve_pkg_env(tmp)
-                @test DistSSHRun._rsync_send_list(tmp, env) === nothing
-                @test DistSSHRun.rsync_send_list(tmp, env) === nothing
+                @test DistSSHRun._git_send_list(tmp, env) === nothing
+                @test DistSSHRun.git_send_list(tmp, env) === nothing
             end
         end
 
@@ -329,7 +329,7 @@ using Test
                 env = DistSSHRun.resolve_pkg_env(sub)
                 text = mktemp() do _, io
                     redirect_stdout(io) do
-                        listed = DistSSHRun.rsync_send_list(sub, env; warn = true)
+                        listed = DistSSHRun.git_send_list(sub, env; warn = true)
                         @test listed isa Vector
                         @test !("dropped.txt" in listed)
                         @test "keep.txt" in listed
@@ -359,7 +359,7 @@ using Test
                 mkpath(joinpath(sub, "build"))
                 run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
                 _ident!(tmp)
-                listed = DistSSHRun._rsync_send_list(sub, DistSSHRun.resolve_pkg_env(sub))
+                listed = DistSSHRun._git_send_list(sub, DistSSHRun.resolve_pkg_env(sub))
                 @test "keep" in listed
                 @test !("build" in listed)
             end
@@ -379,7 +379,7 @@ using Test
                 env = DistSSHRun.resolve_pkg_env(sub)
                 text = mktemp() do _, io
                     redirect_stdout(io) do
-                        listed = DistSSHRun.rsync_send_list(sub, env; warn = true)
+                        listed = DistSSHRun.git_send_list(sub, env; warn = true)
                         @test "kept.txt" in listed
                         @test !("dropped.txt" in listed)
                     end
@@ -415,7 +415,7 @@ using Test
                 env = DistSSHRun.resolve_pkg_env(sub)
                 text = mktemp() do _, io
                     redirect_stdout(io) do
-                        listed = DistSSHRun.rsync_send_list(sub, env; warn = true)
+                        listed = DistSSHRun.git_send_list(sub, env; warn = true)
                         @test "tracked.txt" in listed
                         @test !("local.txt" in listed)
                     end
@@ -442,7 +442,7 @@ using Test
                 env = DistSSHRun.resolve_pkg_env(sub)
                 text = mktemp() do _, io
                     redirect_stdout(io) do
-                        listed = DistSSHRun.rsync_send_list(sub, env; warn = true)
+                        listed = DistSSHRun.git_send_list(sub, env; warn = true)
                         for name in ("a.tmp", "b.tmp", "c.tmp", "d.tmp", "e.tmp")
                             @test !(name in listed)
                         end
@@ -494,7 +494,7 @@ using Test
                 @test !any(startswith(p, "output/") for p in probes)
                 quiet = mktemp() do _, io
                     redirect_stdout(io) do
-                        DistSSHRun.rsync_send_list(sub, env)
+                        DistSSHRun.git_send_list(sub, env)
                     end
                     flush(io)
                     seekstart(io)
@@ -503,7 +503,7 @@ using Test
                 @test !occursin("Warning:", quiet)
                 text = mktemp() do _, io
                     redirect_stdout(io) do
-                        DistSSHRun.rsync_send_list(sub, env; warn = true)
+                        DistSSHRun.git_send_list(sub, env; warn = true)
                     end
                     flush(io)
                     seekstart(io)
@@ -531,7 +531,7 @@ using Test
                 env = DistSSHRun.resolve_pkg_env(link)
                 text = mktemp() do _, io
                     redirect_stdout(io) do
-                        listed = DistSSHRun.rsync_send_list(link, env; warn = true)
+                        listed = DistSSHRun.git_send_list(link, env; warn = true)
                         @test !("dropped.txt" in listed)
                     end
                     flush(io)
@@ -562,7 +562,7 @@ using Test
                 env = DistSSHRun.resolve_pkg_env(sub)
                 text = mktemp() do _, io
                     redirect_stdout(io) do
-                        DistSSHRun.rsync_send_list(sub, env; warn = true)
+                        DistSSHRun.git_send_list(sub, env; warn = true)
                     end
                     flush(io)
                     seekstart(io)
@@ -597,8 +597,8 @@ using Test
                     :juliaup_status_lines, :juliaup_update_host!,
                 ]
             )
-            @test Base.ispublic(DistSSHRun, :rsync_send_list)
-            @test !Base.isexported(DistSSHRun, :rsync_send_list)
+            @test Base.ispublic(DistSSHRun, :git_send_list)
+            @test !Base.isexported(DistSSHRun, :git_send_list)
             @test Base.ispublic(DistSSHRun, :manifest_path)
             @test !Base.isexported(DistSSHRun, :manifest_path)
             @test Base.ispublic(DistSSHRun.DistSSHBase, :manifest_path)
@@ -612,7 +612,7 @@ using Test
                 run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
                 _ident!(tmp)
                 _commit!(tmp, "nl")
-                @test_throws ArgumentError DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+                @test_throws ArgumentError DistSSHRun._git_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
             end
         end
 

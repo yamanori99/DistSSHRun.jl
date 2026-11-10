@@ -178,12 +178,12 @@ function _record_matches_selection(
 end
 
 """
-Write the local last-snapshot convenience record.
+Write the local last-ship convenience record under `.distssh/last-ship.toml`.
 
 Keyed by local package `env_dir` and the resolved deployment root. Stores the
 successful host aliases from this ship. Another local deployer can overwrite
-this file between commands; pass the returned snapshot ID instead of rereading
-it in programmatic workflows. Does not detect local source changes.
+this file between commands; pass the returned run id instead of rereading it in
+programmatic workflows. Does not detect local source changes.
 """
 function write_last_ship_record!(
         env_dir::AbstractString,
@@ -249,7 +249,7 @@ function clear_last_ship_record!(
     return nothing
 end
 
-"""Drop the local last-snapshot convenience default for `deploy_root`.
+"""Drop the local last-ship convenience default for `deploy_root`.
 
 Call after a successful `:delete`, `:git_clone`, `:git_sync`, or `:git_pull` so a later
 instantiate / check / go / drive can select a git checkout at that root. Does
@@ -351,7 +351,7 @@ function _ship_run_complete_probe_script(
     """
 end
 
-"""Probe whether `host` has a completed snapshot leaf under `deploy_root`."""
+"""Probe whether `host` has a completed ship-tree leaf under `deploy_root`."""
 function _probe_ship_run_complete(
         host::AbstractString,
         deploy_root::AbstractString,
@@ -526,7 +526,7 @@ function _validate_git_on_hosts!(
     end
     isempty(missing) || throw(
         _selection_error(
-            "no completed snapshot selected and deploy root has no Project.toml on: " *
+            "no completed ship selection and deploy root has no Project.toml on: " *
                 join(missing, ", ") *
                 ". Pass --run-id ID after setup ship-tree, or deploy a git checkout.",
         ),

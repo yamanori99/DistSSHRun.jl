@@ -508,18 +508,18 @@ end
             _project!(dir)
             snap = DistSSHShip.pack_tree(dir)
             try
-                prog = DistSSHShip.build_ship_record(snap; complete = false)
+                prog = DistSSHShip.build_shipment_record(snap; complete = false)
                 @test prog["schema"] == 1
                 @test prog["complete"] === false
                 @test prog["content_tree_hash"] == snap.content_tree_hash
                 @test startswith(String(prog["writer"]), "DistSSHShip")
-                done = DistSSHShip.build_ship_record(snap; complete = true)
+                done = DistSSHShip.build_shipment_record(snap; complete = true)
                 @test done["complete"] === true
-                @test DistSSHShip.ship_record_status(done) == :complete
-                @test DistSSHShip.ship_record_status(prog) == :in_progress
-                path = DistSSHShip.ship_record_logical_path("/stage/tree")
+                @test DistSSHShip.shipment_record_status(done) == :complete
+                @test DistSSHShip.shipment_record_status(prog) == :in_progress
+                path = DistSSHShip.shipment_record_logical_path("/stage/tree")
                 @test path == "/stage/tree/.distssh/shipment.toml"
-                path2 = DistSSHShip.ship_record_logical_path("~/q/stage")
+                path2 = DistSSHShip.shipment_record_logical_path("~/q/stage")
                 @test path2 == "~/q/stage/.distssh/shipment.toml"
             finally
                 rm(snap.directory; force = true, recursive = true)
@@ -532,7 +532,7 @@ end
             "algorithm" => "git-sha1",
             "content_tree_hash" => "a"^40,
         )
-        @test DistSSHShip.ship_record_status(bad) == :invalid
+        @test DistSSHShip.shipment_record_status(bad) == :invalid
     end
 
     include("ship_record_read.jl")
@@ -545,7 +545,7 @@ end
                 (_, _) -> nothing,
                 (_, _, _, _; _...) -> nothing,
                 (_, _, s) -> begin
-                    recorded[] = DistSSHShip.build_ship_record(
+                    recorded[] = DistSSHShip.build_shipment_record(
                         s; complete = true, transfer_id = "job-1",
                     )
                 end,
@@ -601,7 +601,7 @@ end
                         _local_extract_verified!(
                             dest2, snap.tar_path, snap.content_tree_hash,
                         )
-                        rec = DistSSHShip.build_ship_record(snap; complete = true)
+                        rec = DistSSHShip.build_shipment_record(snap; complete = true)
                         @test rec["complete"] === true
                         mkpath(joinpath(dest2, ".distssh"))
                         write(
@@ -633,16 +633,16 @@ end
         tricky = "my app/x\"'\$`part"
         snap = _minimal_snapshot(tricky)
         try
-            rec = DistSSHShip.build_ship_record(snap; complete = true)
+            rec = DistSSHShip.build_shipment_record(snap; complete = true)
             @test rec["project_rel"] == tricky
             body = sprint(TOML.print, rec)
             parsed = TOML.parse(body)
             @test parsed["project_rel"] == tricky
-            @test DistSSHShip.ship_record_status(rec) == :complete
+            @test DistSSHShip.shipment_record_status(rec) == :complete
             for bad in ("", "/", "a//b", "..", "a/../b", "a\nb")
                 bad_snap = _minimal_snapshot(bad)
                 try
-                    @test_throws ArgumentError DistSSHShip.build_ship_record(bad_snap)
+                    @test_throws ArgumentError DistSSHShip.build_shipment_record(bad_snap)
                 finally
                     rm(bad_snap.directory; force = true, recursive = true)
                 end

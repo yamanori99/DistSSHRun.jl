@@ -61,7 +61,7 @@ using Test
         @test name in ns && Base.ispublic(DistSSHRun, name)
         @test !Base.isexported(DistSSHRun, name)
     end
-    for name in (:pack_ship_tree, :ship_pack, :ship_project_to_dest)
+    for name in (:pack_ship_tree, :pack_shipment, :ship_project_to_dest)
         @test name in ns && Base.ispublic(DistSSHRun, name)
         @test !Base.isexported(DistSSHRun, name)
     end

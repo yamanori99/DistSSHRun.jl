@@ -27,7 +27,7 @@ end
 public pack_ship_tree
 
 """
-    ship_pack(pack, hosts, dest; allow_external_symlinks=false, julia=nothing, write_record=true, transfer_id=nothing) -> ShipmentReceipt
+    pack_shipment(pack, hosts, dest; allow_external_symlinks=false, julia=nothing, write_record=true, transfer_id=nothing) -> ShipmentReceipt
 
 Send an existing [`DistSSHRun.DistSSHShip.Shipment`](@ref) to caller-chosen `dest`
 on each host using [`DistSSHRun.DistSSHShip.ship`](@ref).
@@ -42,7 +42,7 @@ extract. Optional `transfer_id` is stored in that record (for example a Queue st
 
 Returns [`DistSSHRun.DistSSHShip.ShipmentReceipt`](@ref).
 """
-function ship_pack(
+function pack_shipment(
         pack::DistSSHShip.Shipment,
         hosts::AbstractVector{<:AbstractString},
         dest::AbstractString;
@@ -59,12 +59,12 @@ function ship_pack(
         transfer_id = transfer_id,
     )
 end
-public ship_pack
+public pack_shipment
 
 """
     ship_project_to_dest(project, hosts, dest; pack keywords..., ship keywords...) -> ShipmentReceipt
 
-[`pack_ship_tree`](@ref)`(project)` then [`ship_pack`](@ref) to `dest`, then delete
+[`pack_ship_tree`](@ref)`(project)` then [`pack_shipment`](@ref) to `dest`, then delete
 the temporary pack directory. Keyword arguments after `dest` apply to both steps
 where the names match (`allow_external_symlinks`, `ship_max_bytes`, `extra_files` for
 pack; `julia`, `write_record`, `transfer_id` for ship only).
@@ -89,7 +89,7 @@ function ship_project_to_dest(
         extra_files = extra_files,
     )
     try
-        return ship_pack(
+        return pack_shipment(
             pack, hosts, dest;
             allow_external_symlinks = allow_external_symlinks,
             julia = julia,

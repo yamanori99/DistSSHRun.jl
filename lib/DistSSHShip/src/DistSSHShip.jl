@@ -42,12 +42,12 @@ public Shipment
 public ShipmentReceipt
 public content_tree_hash
 public assert_extracted_tree_contained!
-public ship_record_logical_path
-public build_ship_record
-public write_ship_record
-public read_ship_record
-public read_ship_record_status
-public ship_record_status
-public verify_ship_record
+public shipment_record_logical_path
+public build_shipment_record
+public write_shipment_record
+public read_shipment_record
+public read_shipment_record_status
+public shipment_record_status
+public verify_shipment_record
 
 end # module DistSSHShip

@@ -1,4 +1,4 @@
-# Tar pull helpers and the git send list (`rsync_send_list`).
+# Tar pull helpers and the git send list (`git_send_list`).
 
 
 const _TAR_PULL_ALL = "using Tar; Tar.create(ARGS[1], stdout)"
@@ -721,7 +721,7 @@ Send-list paths, relative to `local_root`.
 `nothing` when `local_root` is outside a git work tree.
 An empty list throws `ArgumentError`.
 """
-function _rsync_send_list(
+function _git_send_list(
         local_root::AbstractString,
         env;
         warn::Bool = false,
@@ -755,7 +755,7 @@ function _rsync_send_list(
 end
 
 """
-    rsync_send_list(local_root, env; warn=false) -> Union{Nothing, Vector{String}}
+    git_send_list(local_root, env; warn=false) -> Union{Nothing, Vector{String}}
 
 Git send list for a work tree, relative to `local_root`. `setup git-clone`,
 `setup git-sync`, and `setup git-pull` still use this list. `setup ship-tree` does not: it walks the
@@ -769,11 +769,11 @@ second call does not repeat the warning.
 
 A 0.x patch does not change the paths this function returns.
 """
-function rsync_send_list(local_root::AbstractString, env; warn::Bool = false)
-    return _rsync_send_list(local_root, env; warn = warn)
+function git_send_list(local_root::AbstractString, env; warn::Bool = false)
+    return _git_send_list(local_root, env; warn = warn)
 end
 
-public rsync_send_list
+public git_send_list
 
 
 """Remote shell snippet classifying `remote_path` as MISSING / EMPTY / NONEMPTY."""

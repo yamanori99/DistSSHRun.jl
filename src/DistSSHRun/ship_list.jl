@@ -20,7 +20,7 @@ pattern puts it back. Declared inputs and fifos and other unshippable
 nodes are omitted. Ancestor directories of a kept path are included.
 
 This does not print the gitignored-project warning. That warning stays on
-ship. `rsync_send_list` is the git list for `setup git-clone`, `setup git-sync`, and
+ship. `git_send_list` is the git list for `setup git-clone`, `setup git-sync`, and
 `setup git-pull`.
 
 The first call loads GitIgnore, which can write a compiled cache into the

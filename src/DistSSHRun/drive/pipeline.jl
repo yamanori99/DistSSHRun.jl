@@ -35,7 +35,6 @@ Build [`PipelineConfig`](@ref) from environment variables.
 | `DISTRIBUTED_REMOTE_PROJECT_ROOT` | Remote repo root |
 | `DISTRIBUTED_PROJECT_ROOT` | Local project root |
 | `DRIVER` | Driver script path |
-| `SYNC_MODE` | Deprecated; omit or use `off` (prepare with `setup!` instead) |
 | `JULIA_DISTRIBUTED_EXE` | Remote Julia path (same as CLI `--julia`; `auto` / unset → detect) |
 | `DISTSSH_YES` / `DISTSSH_QUIET` / `DISTSSH_PROGRESS` / `DISTSSH_VERBOSE` | Same as CLI `-y` / `-q` / `--progress` / `--verbose` |
 """
@@ -45,8 +44,6 @@ function pipeline_config_from_env(;
     _reject_obsolete_pipeline_size_env()
     driver_path = _pipeline_config_driver_path(driver)
     remote_raw = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
-    sync_raw = strip(get(ENV, "SYNC_MODE", ""))
-    _reject_pipeline_sync_env!(sync_raw)
     project_root = strip(get(ENV, "DISTRIBUTED_PROJECT_ROOT", ""))
     cli = default_kit_cli_session()
     cli.hint_surface = :api
@@ -60,7 +57,6 @@ function pipeline_config_from_env(;
         quiet = env_v === :quiet,
         verbosity = env_v,
         driver = String(driver_path),
-        sync = nothing,
         julia = let j = strip(get(ENV, "JULIA_DISTRIBUTED_EXE", ""))
             isempty(j) || lowercase(j) == "auto" ? nothing : String(j)
         end,
@@ -141,7 +137,7 @@ end
     pipeline!(driver, workers::AbstractVector; kwargs...) -> PipelineResult
     pipeline!(config::PipelineConfig) -> PipelineResult
 
-Run the usual remote workflow: optional sync, driver, optional collect.
+Run the usual remote workflow: driver, optional collect.
 Does not call [`setup!`](@ref); prepare remotes first.
 
 Worker tokens match the CLI (`parent:2`, `child:user@host:1`). Listed tokens

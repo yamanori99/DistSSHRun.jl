@@ -76,7 +76,7 @@ const _FAKE_ARBITRARY_DEST_SHIP_SSH = joinpath(
                     DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
                     pack = DistSSHRun.pack_ship_tree(proj)
                     try
-                        result = DistSSHRun.ship_pack(
+                        result = DistSSHRun.pack_shipment(
                             pack, [host], dest; write_record = false,
                         )
                         @test !result.ok

@@ -99,15 +99,11 @@ function setup!(
         id::Union{Nothing, AbstractString} = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
         confirm_path = nothing,
-        gitignore::Bool = true,
         allow_external_symlinks::Bool = false,
         extra_files::Vector{String} = String[],
         allow_dirty::Bool = false,
     )::SyncResult
     check_setup_options!(mode; extra_files = extra_files, run_id = run_id, allow_dirty = allow_dirty)
-    if !gitignore
-        throw(ArgumentError("setup! gitignore is not valid on setup!(session, :$(mode))"))
-    end
     snap = run_id === nothing ? nothing : validate_run_id(run_id)
     _setup_bang_preflight!(session, mode; repo = repo)
     hosts = _setup_bang_host_list(session)
@@ -136,7 +132,6 @@ function setup!(
                 id = id,
                 run_id = snap,
                 bound_plan = bound_plan,
-                gitignore = gitignore,
                 allow_external_symlinks = allow_external_symlinks,
                 extra_files = extra_files,
                 allow_dirty = allow_dirty,
@@ -657,14 +652,10 @@ function _setup_one!(
         id::Union{Nothing, AbstractString} = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
         bound_plan::Union{Nothing, Dict{String, String}} = nothing,
-        gitignore::Bool = true,
         allow_external_symlinks::Bool = false,
         extra_files::Vector{String} = String[],
         allow_dirty::Bool = false,
     )::SyncResult
-    if !gitignore
-        throw(ArgumentError("setup! gitignore is not valid on setup!(session, :$(mode))"))
-    end
     _setup_bang_preflight!(session, mode; repo = repo)
     hosts = _setup_bang_hosts!(session; allow_parent = setup_mode_allows_parent(mode))
     remote_path = session_remote_root(session)

@@ -52,7 +52,7 @@ const _EXTRACT_DEST = "/stage/tree"
     @testset "fail-closed when test -f returns non-1 error" begin
         snap = _minimal_snapshot(".")
         try
-            legacy = DistSSHShip.build_ship_record(snap; complete = true, transfer_id = "legacy")
+            legacy = DistSSHShip.build_shipment_record(snap; complete = true, transfer_id = "legacy")
             _with_tempdir() do state_dir
                 host = "record.testfail"
                 distssh = _record_distssh(host, state_dir)
@@ -66,8 +66,8 @@ const _EXTRACT_DEST = "/stage/tree"
                     ),
                 )
                 withenv(env...) do
-                    @test_throws ArgumentError DistSSHShip.read_ship_record(host, _EXTRACT_DEST)
-                    @test_throws ArgumentError DistSSHShip.read_ship_record_status(
+                    @test_throws ArgumentError DistSSHShip.read_shipment_record(host, _EXTRACT_DEST)
+                    @test_throws ArgumentError DistSSHShip.read_shipment_record_status(
                         host, _EXTRACT_DEST,
                     )
                 end
@@ -80,7 +80,7 @@ const _EXTRACT_DEST = "/stage/tree"
     @testset "fail-closed when shipment read errors but legacy is complete" begin
         snap = _minimal_snapshot(".")
         try
-            legacy = DistSSHShip.build_ship_record(snap; complete = true, transfer_id = "legacy")
+            legacy = DistSSHShip.build_shipment_record(snap; complete = true, transfer_id = "legacy")
             _with_tempdir() do state_dir
                 host = "record.readfail"
                 distssh = _record_distssh(host, state_dir)
@@ -91,8 +91,8 @@ const _EXTRACT_DEST = "/stage/tree"
                     Dict("DISTSSH_TEST_SHIP_RECORD_CAT_FAIL" => "shipment.toml"),
                 )
                 withenv(env...) do
-                    @test_throws ArgumentError DistSSHShip.read_ship_record(host, _EXTRACT_DEST)
-                    @test_throws ArgumentError DistSSHShip.read_ship_record_status(
+                    @test_throws ArgumentError DistSSHShip.read_shipment_record(host, _EXTRACT_DEST)
+                    @test_throws ArgumentError DistSSHShip.read_shipment_record_status(
                         host, _EXTRACT_DEST,
                     )
                 end
@@ -105,18 +105,18 @@ const _EXTRACT_DEST = "/stage/tree"
     @testset "current shipment.toml present and valid" begin
         snap = _minimal_snapshot(".")
         try
-            current = DistSSHShip.build_ship_record(snap; complete = true, transfer_id = "current")
+            current = DistSSHShip.build_shipment_record(snap; complete = true, transfer_id = "current")
             _with_tempdir() do state_dir
                 host = "record.current"
                 distssh = _record_distssh(host, state_dir)
                 write(joinpath(distssh, "shipment.toml"), sprint(TOML.print, current))
-                legacy = DistSSHShip.build_ship_record(snap; complete = true, transfer_id = "legacy")
+                legacy = DistSSHShip.build_shipment_record(snap; complete = true, transfer_id = "legacy")
                 write(joinpath(distssh, "ship.toml"), sprint(TOML.print, legacy))
                 withenv(_record_read_env(state_dir)...) do
-                    rec = DistSSHShip.read_ship_record(host, _EXTRACT_DEST)
+                    rec = DistSSHShip.read_shipment_record(host, _EXTRACT_DEST)
                     @test rec !== nothing
                     @test rec["transfer_id"] == "current"
-                    status, _ = DistSSHShip.read_ship_record_status(host, _EXTRACT_DEST)
+                    status, _ = DistSSHShip.read_shipment_record_status(host, _EXTRACT_DEST)
                     @test status == :complete
                 end
             end
@@ -128,16 +128,16 @@ const _EXTRACT_DEST = "/stage/tree"
     @testset "missing shipment.toml, legacy ship.toml present" begin
         snap = _minimal_snapshot(".")
         try
-            legacy = DistSSHShip.build_ship_record(snap; complete = true, transfer_id = "legacy")
+            legacy = DistSSHShip.build_shipment_record(snap; complete = true, transfer_id = "legacy")
             _with_tempdir() do state_dir
                 host = "record.legacyonly"
                 distssh = _record_distssh(host, state_dir)
                 write(joinpath(distssh, "ship.toml"), sprint(TOML.print, legacy))
                 withenv(_record_read_env(state_dir)...) do
-                    rec = DistSSHShip.read_ship_record(host, _EXTRACT_DEST)
+                    rec = DistSSHShip.read_shipment_record(host, _EXTRACT_DEST)
                     @test rec !== nothing
                     @test rec["transfer_id"] == "legacy"
-                    status, _ = DistSSHShip.read_ship_record_status(host, _EXTRACT_DEST)
+                    status, _ = DistSSHShip.read_shipment_record_status(host, _EXTRACT_DEST)
                     @test status == :complete
                 end
             end
@@ -149,14 +149,14 @@ const _EXTRACT_DEST = "/stage/tree"
     @testset "invalid shipment.toml, valid legacy ship.toml" begin
         snap = _minimal_snapshot(".")
         try
-            legacy = DistSSHShip.build_ship_record(snap; complete = true, transfer_id = "legacy")
+            legacy = DistSSHShip.build_shipment_record(snap; complete = true, transfer_id = "legacy")
             _with_tempdir() do state_dir
                 host = "record.invalidnew"
                 distssh = _record_distssh(host, state_dir)
                 write(joinpath(distssh, "shipment.toml"), "not-a-record")
                 write(joinpath(distssh, "ship.toml"), sprint(TOML.print, legacy))
                 withenv(_record_read_env(state_dir)...) do
-                    rec = DistSSHShip.read_ship_record(host, _EXTRACT_DEST)
+                    rec = DistSSHShip.read_shipment_record(host, _EXTRACT_DEST)
                     @test rec !== nothing
                     @test rec["transfer_id"] == "legacy"
                 end
@@ -167,7 +167,7 @@ const _EXTRACT_DEST = "/stage/tree"
     end
 
     @testset "read path order" begin
-        paths = DistSSHShip._ship_record_read_paths(_EXTRACT_DEST)
+        paths = DistSSHShip._shipment_record_read_paths(_EXTRACT_DEST)
         @test paths == String[
             "/stage/tree/.distssh/shipment.toml",
             "/stage/tree/.distssh/ship.toml",

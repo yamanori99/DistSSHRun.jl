@@ -363,10 +363,10 @@ end
 """
     PipelineConfig
 
-Settings for [`pipeline!`](@ref): sync, worker tokens, driver run, and optional collect.
+Settings for [`pipeline!`](@ref): worker tokens, driver run, and optional collect.
 
 Worker placement uses CLI-style tokens (`parent:2`, `child:user@host:1`).
-Listed tokens need `:N`. Set `sync=false` to skip sync. Set `collect=false`
+Listed tokens need `:N`. Set `collect=false`
 to skip rsync-back. Git parity is off by default; pass `skip_hash_check=false`
 (or CLI `--require-git`) to require matching remote commits.
 
@@ -384,7 +384,6 @@ mutable struct PipelineConfig
     yes::Bool
     driver::String
     args::Vector{String}
-    sync::Union{Symbol, Bool, Nothing}
     skip_hash_check::Union{Nothing, Bool}
     collect_spec::Union{Symbol, Bool, AbstractString, Nothing}
     collect_merge::Bool
@@ -405,7 +404,6 @@ function PipelineConfig(;
         yes::Bool = true,
         driver::AbstractString,
         args::AbstractVector{<:AbstractString} = String[],
-        sync::Union{Symbol, Bool, Nothing} = nothing,
         skip_hash_check::Union{Nothing, Bool} = nothing,
         collect::Union{Symbol, Bool, AbstractString, Nothing} = nothing,
         collect_merge::Bool = false,
@@ -428,7 +426,6 @@ function PipelineConfig(;
     else
         String(julia)
     end
-    _reject_pipeline_sync_kw!(sync)
     return PipelineConfig(
         canonical_local_path(project),
         String[String(t) for t in workers],
@@ -439,7 +436,6 @@ function PipelineConfig(;
         yes,
         String(driver),
         Base.collect(String, args),
-        sync,
         skip_hash_check,
         collect,
         collect_merge,

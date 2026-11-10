@@ -157,13 +157,13 @@ DistSSHShip.pack_tree
 DistSSHShip.ship
 DistSSHShip.ShipmentReceipt
 DistSSHShip.assert_extracted_tree_contained!
-DistSSHShip.ship_record_logical_path
-DistSSHShip.build_ship_record
-DistSSHShip.write_ship_record
-DistSSHShip.read_ship_record
-DistSSHShip.read_ship_record_status
-DistSSHShip.ship_record_status
-DistSSHShip.verify_ship_record
+DistSSHShip.shipment_record_logical_path
+DistSSHShip.build_shipment_record
+DistSSHShip.write_shipment_record
+DistSSHShip.read_shipment_record
+DistSSHShip.read_shipment_record_status
+DistSSHShip.shipment_record_status
+DistSSHShip.verify_shipment_record
 ```
 
 ## Hosts, cache, and run directories
