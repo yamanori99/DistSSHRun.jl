@@ -121,7 +121,9 @@ end
                             write_record = false,
                             transfer_id = "job-1",
                         )
-                        @test result.ok
+                        @test _test_shipment_receipt_ok(
+                            result; label = "ship_project_to_dest",
+                        )
                         @test !isdir(bundle)
                     end
                 end
@@ -150,10 +152,10 @@ end
                             pack, [host], dest; write_record = false,
                         )
                         @test result isa DistSSHRun.DistSSHShip.ShipmentReceipt
-                        @test result.ok
+                        @test _test_shipment_receipt_ok(result; label = "ship_pack")
                         @test result.content_tree_hash == pack.content_tree_hash
                         @test length(result.hosts) == 1
-                        @test result.hosts[1].ok
+                        @test _test_host_result_ok(result.hosts[1]; label = "ship_pack")
                     end
                 finally
                     rm(pack.directory; force = true, recursive = true)
