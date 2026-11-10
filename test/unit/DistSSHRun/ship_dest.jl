@@ -68,21 +68,11 @@ end
         end
     end
 
-    @testset "gitignored Manifest warns and is omitted" begin
+    @testset "gitignored Manifest is refused at pack" begin
         mktempdir() do tmp
             _minimal_project!(tmp)
             write(joinpath(tmp, ".gitignore"), "Manifest.toml\n")
-            text = mktemp() do _, io
-                pack = redirect_stdout(io) do
-                    DistSSHRun.pack_ship_tree(tmp)
-                end
-                rm(pack.directory; force = true, recursive = true)
-                flush(io)
-                seekstart(io)
-                return read(io, String)
-            end
-            @test occursin("Manifest.toml", text)
-            @test occursin("will not be shipped", text)
+            @test_throws ArgumentError DistSSHRun.pack_ship_tree(tmp)
         end
     end
 

@@ -36,6 +36,8 @@ public resolve_ship_project
 public gitignore_paths
 public selected_paths
 public pack_paths
+public pack_entry_paths
+public manifest_pack_anchor_rel
 public pack_tree
 public ship
 public ShipProject

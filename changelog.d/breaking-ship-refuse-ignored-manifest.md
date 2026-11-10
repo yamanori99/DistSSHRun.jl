@@ -1,0 +1,3 @@
+category: breaking
+
+- Ship pack refuses (instead of warning) when ignore rules would omit `Project.toml`, `JuliaProject.toml`, `Manifest.toml`, or `JuliaManifest.toml` from the tar. `pack_entry_paths` lists the same relative paths as `pack_tree` before extra files. Remote instantiate with an active ship selection still skips git send-list and path-dependency layout checks from #368, but requires the Manifest to appear in that pack path list (declared-input omission unchanged).

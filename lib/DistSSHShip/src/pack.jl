@@ -149,13 +149,12 @@ function _require_manifest(project::ShipProject)
     )
 end
 
-function _warn_omitted!(
+function _refuse_omitted_project_files!(
         project::ShipProject,
         anchor::String,
         deps::Vector{PathDep},
         entries::Vector{Tuple{String, String}},
-        prel::String;
-        warn::Function,
+        prel::String,
     )
     included = Set{String}(first(entry) for entry in entries)
     roots = Tuple{String, String}[(canonical_local_path(project.project_dir), prel)]
@@ -202,8 +201,13 @@ function _warn_omitted!(
     sort!(hits)
     joined = length(hits) == 1 ? hits[1] : join(hits, ", ")
     word = length(hits) == 1 ? "file is" : "files are"
-    warn("Warning: $joined $word excluded by .gitignore and will not be shipped.\n")
-    return nothing
+    throw(
+        ArgumentError(
+            "$joined $word excluded by ignore rules and will not be shipped. " *
+                "Workers would instantiate a different resolution. " *
+                "Stop ignoring them, add a negation pattern, or change the ignore rules.",
+        ),
+    )
 end
 
 """Follow one symlink. The remote name is the link's basename. The bytes are the target's."""
@@ -300,7 +304,7 @@ function _collect_entries(
         rel = replace(relpath(_fs_path(man), _fs_path(anchor)), '\\' => '/')
         if !(rel in seen) && isfile(man)
             if path_ignored(dirname(man), basename(man), false)
-                # Final warning pass names it.
+                # `_refuse_omitted_project_files!` reports ignored project files.
             else
                 push!(seen, rel)
                 push!(entries, (rel, man))
@@ -308,6 +312,75 @@ function _collect_entries(
         end
     end
     return entries, prel
+end
+
+function _prepare_ship_entries(
+        project::AbstractString;
+        script::Union{Nothing, AbstractString} = nothing,
+        cwd::AbstractString = pwd(),
+        omit_project_rels::Vector{String} = String[],
+    )::Tuple{ShipProject, String, Vector{PathDep}, Vector{Tuple{String, String}}, String}
+    resolved = resolve_ship_project(String(project); script = script, cwd = cwd)
+    _require_manifest(resolved)
+    if ispath(joinpath(resolved.project_dir, EXTERNAL_DIR_NAME))
+        throw(
+            ArgumentError(
+                "project $(resolved.project_dir) contains $(EXTERNAL_DIR_NAME), which ship reserves for an external script.",
+            ),
+        )
+    end
+    deps = path_dependencies(resolved)
+    anchor = ship_anchor(resolved, deps)
+    entries, prel = _collect_entries(
+        resolved, anchor, deps; omit_project_rels = omit_project_rels,
+    )
+    _refuse_omitted_project_files!(resolved, anchor, deps, entries, prel)
+    return resolved, anchor, deps, entries, prel
+end
+
+"""
+    pack_entry_paths(project; omit_project_rels=String[], kwargs...) -> Vector{String}
+
+Relative paths a ship tar would contain for `project`, in the same order
+[`pack_tree`](@ref) uses before extra files. Errors when ignore rules
+would omit a project or Manifest file.
+"""
+function pack_entry_paths(
+        project::AbstractString;
+        script::Union{Nothing, AbstractString} = nothing,
+        cwd::AbstractString = pwd(),
+        omit_project_rels::Vector{String} = String[],
+    )::Vector{String}
+    _, _, _, entries, _ = _prepare_ship_entries(
+        project;
+        script = script,
+        cwd = cwd,
+        omit_project_rels = omit_project_rels,
+    )
+    out = String[e[1] for e in entries]
+    sort!(out)
+    return out
+end
+
+"""Manifest path relative to the ship anchor (same layout as [`pack_entry_paths`](@ref))."""
+function manifest_pack_anchor_rel(
+        project::AbstractString;
+        script::Union{Nothing, AbstractString} = nothing,
+        cwd::AbstractString = pwd(),
+        omit_project_rels::Vector{String} = String[],
+    )::String
+    resolved, anchor, _, _, _ = _prepare_ship_entries(
+        project;
+        script = script,
+        cwd = cwd,
+        omit_project_rels = omit_project_rels,
+    )
+    resolved.manifest isa String || throw(
+        ArgumentError(
+            "No Manifest for $(repr(resolved.project_dir)). Run: julia --project=$(repr(resolved.project_dir)) -e 'using Pkg; Pkg.resolve()'",
+        ),
+    )
+    return replace(relpath(_fs_path(resolved.manifest), _fs_path(anchor)), '\\' => '/')
 end
 
 """
@@ -339,21 +412,12 @@ function pack_tree(
             "more than one extra file is not yet supported",
         )
     )
-    resolved = resolve_ship_project(String(project); script = script, cwd = cwd)
-    _require_manifest(resolved)
-    if ispath(joinpath(resolved.project_dir, EXTERNAL_DIR_NAME))
-        throw(
-            ArgumentError(
-                "project $(resolved.project_dir) contains $(EXTERNAL_DIR_NAME), which ship reserves for an external script.",
-            )
-        )
-    end
-    deps = path_dependencies(resolved)
-    anchor = ship_anchor(resolved, deps)
-    entries, prel = _collect_entries(
-        resolved, anchor, deps; omit_project_rels = omit_project_rels,
+    resolved, anchor, deps, entries, prel = _prepare_ship_entries(
+        project;
+        script = script,
+        cwd = cwd,
+        omit_project_rels = omit_project_rels,
     )
-    _warn_omitted!(resolved, anchor, deps, entries, prel; warn = warn)
     extra_rels = String[]
     extra_payload = nothing
     if length(extra_files) == 1

@@ -736,11 +736,13 @@ function _instantiate_remote_e()::String
     )
 end
 
-"""Manifest must exist. A selected snapshot already shipped path dependencies."""
+"""Manifest must exist. A selected ship already carried path dependencies."""
 function _require_manifest_for_instantiate!(project::AbstractString)
     sel = active_source_selection()
     if sel !== nothing && sel.source_kind === :ship
-        return _require_manifest!(project)
+        _require_manifest!(project)
+        _require_manifest_in_pack_paths!(project)
+        return nothing
     end
     return ensure_manifest_ships!(project)
 end
