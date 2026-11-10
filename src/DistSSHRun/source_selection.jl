@@ -152,9 +152,9 @@ function read_last_ship_record(
         env_dir::AbstractString,
     )::Union{Nothing, Dict{String, Any}}
     for base in (
-        DistSSHBase.local_state_write_root(env_dir),
-        DistSSHBase.resolve_local_state_dir(env_dir),
-    )
+            DistSSHBase.local_state_write_root(env_dir),
+            DistSSHBase.resolve_local_state_dir(env_dir),
+        )
         for name in (_SHIP_RECORD_NAME, _LEGACY_SHIP_RECORD_NAME)
             rec = _read_last_ship_record_at(joinpath(base, name))
             rec !== nothing && return rec
