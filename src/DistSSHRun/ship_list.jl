@@ -14,7 +14,7 @@ separators. The same paths with or without a `.git` directory.
 The walk applies each `.gitignore` at `root` and below (case-sensitive).
 `.git/info/exclude`, `core.excludesFile`, and a `.gitignore` above `root`
 are not used. The git index is not consulted, and git is not run. `.git`
-and `.distsshkit` are omitted. A tracked file that `.gitignore` names is
+and state directories (`.distssh`, legacy `.distsshkit`) are omitted. A tracked file that `.gitignore` names is
 omitted. A gitignored `LocalPreferences.toml` stays out unless a later `!`
 pattern puts it back. Declared inputs and fifos and other unshippable
 nodes are omitted. Ancestor directories of a kept path are included.

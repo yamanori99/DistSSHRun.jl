@@ -362,7 +362,7 @@ function _remote_script_argv(script::AbstractString)::Bool
     return isabspath(String(script)) && !isfile(String(script))
 end
 
-"""`{script}/.distsshkit/go` when the script is in `project`, else `{project}/.distsshkit/go`."""
+"""`{script}/.distssh/go` when the script is in `project`, else `{project}/.distssh/go`."""
 function _go_kit_parent(
         project::AbstractString,
         script::AbstractString,
@@ -375,7 +375,7 @@ function _go_kit_parent(
     return kit_dir_beside_script(proj, :go)
 end
 
-"""Batch output directory: `{.distsshkit/go}/<stem>_<UTC>/` (`kit.progress` + slots).
+"""Batch output directory: `{.distssh/go}/<stem>_<UTC>/` (`kit.progress` + slots).
 
 Creates the leaf with exclusive `mkdir`. Same-second collisions get a
 nanosecond suffix (`_mkdir_unique!`).
@@ -631,7 +631,7 @@ function _go_run_local_slot!(
     return DriveResult(code == 0, code; output_dir = slot_dir)
 end
 
-"""Remote path of a go slot: relative to `proj` when `slot_dir` is inside `proj`, else under `.distsshkit/go/`."""
+"""Remote path of a go slot: relative to `proj` when `slot_dir` is inside `proj`, else under `.distssh/go/`."""
 function _go_remote_slot_rel(
         proj::AbstractString,
         slot_dir::AbstractString,
@@ -977,7 +977,7 @@ go!("job.jl", "child:user@h1:1", "child:user@h2:1"; remote="/path/to/project")
 ```
 
 Each slot gets `DISTRIBUTED_OUTPUT_DIR` pointing at
-`{script}/.distsshkit/go/<stem>_<UTC>/<slot>/`.
+`{script}/.distssh/go/<stem>_<UTC>/<slot>/`.
 Override the batch root with `output_dir` (CLI: `--output-dir`). For backward
 compatibility `collect_spec::AbstractString` also sets the batch root, but passing
 both `output_dir` and `collect_spec::String` is an error. `collect_spec === false`

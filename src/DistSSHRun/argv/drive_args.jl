@@ -464,7 +464,7 @@ function show_drive_usage(; io::IO = stdout)
         "  --require-git       $(REQUIRE_GIT_MEANING)",
         "  --require-all-hosts listed parent/child tokens must join, stay, and collect (default)",
         "  --best-effort       allow a partial run (missing join is not a failure)",
-        "  --output-dir PATH   result root (default: {script}/.distsshkit/drive/<stem>_<UTC>/; must be missing or empty)",
+        "  --output-dir PATH   result root (default: {script}/.distssh/drive/<stem>_<UTC>/; must be missing or empty)",
         "  --isolated          run the driver in a child process (default: this process)",
         "  --julia PATH        remote Julia",
         "  --allow-mismatch F  waive julia, distssh, and/or manifest (comma list)",

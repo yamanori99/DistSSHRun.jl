@@ -69,7 +69,7 @@ Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup …`.
 | `:check` | `check` | `ignore_julia_version=`, `check_code_sync=` |
 | `:runtest` | `runtest` | job `Pkg.test()` on remotes; `julia=` |
 | `:cleanup` | `cleanup` | Kill stale workers (no confirm) |
-| `:prune` | `prune` | `.distsshkit` go/drive/setup/runs leaves. Requires `confirm_path`. `session.yes` does not delete. `older_days=`, `id=` |
+| `:prune` | `prune` | `.distssh` (and legacy `.distsshkit`) go/drive/setup/runs leaves. Requires `confirm_path`. `session.yes` does not delete. `older_days=`, `id=` |
 | `:remote_root` | `remote-root` | `remote=` must be absolute (`--deploy-root` on the CLI). Creates that directory only when the parent exists. Confirm unless `session.yes` |
 
 Confirmations for other modes follow `session.yes` (CLI `-y`). `:delete` and

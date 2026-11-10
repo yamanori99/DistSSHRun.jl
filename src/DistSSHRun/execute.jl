@@ -1760,7 +1760,7 @@ if it already exists (same-second collision), a nanosecond suffix is
 retried so two allocations do not share a directory.
 
 This matches omitted in-process defaults for go, ride, and drive:
-`{script}/.distsshkit/<kind>/<stem>_<UTC>/`. Drive still honors
+`{script}/.distssh/<kind>/<stem>_<UTC>/`. Drive still honors
 `output_dir` / `--output-dir` and a driver's `init_output_dir!`
 (`DISTRIBUTED_OUTPUT_DIR`) when those are set. Detached `execute!(:drive)`
 does not pin `--output-dir` unless `output_dir=` or inherited
@@ -1793,7 +1793,7 @@ end
 
 If the env is already non-blank (`--output-dir`, `output_dir=`, or
 `init_output_dir!`), canonicalize and keep it. Otherwise allocate a unique
-`{script}/.distsshkit/drive/<stem>_<UTC>/` leaf.
+`{script}/.distssh/drive/<stem>_<UTC>/` leaf.
 """
 function _ensure_drive_output_env!(
         script_path::AbstractString;

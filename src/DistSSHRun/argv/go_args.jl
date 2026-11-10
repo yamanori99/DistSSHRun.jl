@@ -57,7 +57,7 @@ function show_go_usage(; io::IO = stdout)
     print_help_section("Output"; io = io)
     print_help_lines(
         io,
-        "  {script}/.distsshkit/go/<stem>_<UTC>/<slot>/",
+        "  {script}/.distssh/go/<stem>_<UTC>/<slot>/",
         "  DISTRIBUTED_OUTPUT_DIR → that slot dir",
         "  --output-dir is the batch root (not drive's result root)",
         "  a non-empty --output-dir is an error",

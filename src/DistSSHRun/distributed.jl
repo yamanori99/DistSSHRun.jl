@@ -142,7 +142,7 @@ end
 
 Best-effort result root for a `drive` run: `ENV["DISTRIBUTED_OUTPUT_DIR"]` if
 set (explicit `--output-dir` / `output_dir=`, kit's unique batch dir, or a
-driver's own `init_output_dir!`), else `{script_dir}/.distsshkit/drive`
+driver's own `init_output_dir!`), else the resolved `.distssh` / legacy drive root beside `{script_dir}`
 (the kind root, not a per-run leaf). Live runs set ENV before lock / collect
 so this fallback is only for callers that never entered `drive`. Same
 priority `collect_drive_results!` uses to report `Results:`.

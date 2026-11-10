@@ -336,7 +336,7 @@ function _run_drive_parsed_specialized!(
                 ENV["DISTRIBUTED_OUTPUT_DIR"] = DistSSHRun.canonical_local_path(String(output_dir))
             end
             # Drivers may set `DISTRIBUTED_OUTPUT_DIR` in `init_output_dir!` (demos: `output/`).
-            # If still unset, kit allocates `{script}/.distsshkit/drive/<stem>_<UTC>/`.
+            # If still unset, kit allocates `{script}/.distssh/drive/<stem>_<UTC>/`.
             # Lock after that so `.kit.lock` is not the kind root when the driver
             # chose `output/` (or `--output-dir` / a unique batch dir).
             init_before = _drive_script_init_output_dir_method(script_args)
