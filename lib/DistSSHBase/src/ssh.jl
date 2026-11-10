@@ -484,7 +484,10 @@ before `script` runs. Other non-zero exits are returned so a missing command
 can stay `nothing`. A later failure still diagnoses the login shell when the
 up-front probe was unknown.
 """
-function _remote_shell_status(host::String, script::AbstractString)::Tuple{Int, String}
+function _remote_shell_status_parts(
+        host::String,
+        script::AbstractString,
+    )::Tuple{Int, String, String}
     _ensure_posix_login_shell!(host)
     err_buf = IOBuffer()
     out_buf = IOBuffer()
@@ -509,7 +512,27 @@ function _remote_shell_status(host::String, script::AbstractString)::Tuple{Int, 
         )
     end
     code == 0 || _throw_if_nonposix_shell(host, code, err)
+    return code, out, err
+end
+
+function _remote_shell_status(host::String, script::AbstractString)::Tuple{Int, String}
+    code, out, _ = _remote_shell_status_parts(host, script)
     return code, out
+end
+
+"""Stdout, stderr, and exit code for a failed remote shell invocation."""
+function shell_status_failure_message(
+        out::AbstractString,
+        err::AbstractString,
+        code::Int,
+    )::String
+    parts = String[]
+    o = strip(String(out))
+    e = strip(String(err))
+    !isempty(o) && push!(parts, o)
+    !isempty(e) && push!(parts, e)
+    isempty(parts) && return "exit $code"
+    return join(parts, " ") * " (exit $code)"
 end
 
 """Detect Julia path on remote host via SSH (executable + parseable `--version`).
@@ -1101,6 +1124,21 @@ function _test_double_julia_argv(script::AbstractString)::Vector{String}
     return [julia, "--startup-file=no", "--compile=min", abspath(script)]
 end
 
+"""ENV for a `DISTSSHKIT_TEST_SSH` Julia child (see `test/support/subprocess.jl`)."""
+function _fake_double_child_julia_env()::Dict{String, String}
+    skip = Set(("JULIA_PROJECT", "JULIA_LOAD_PATH"))
+    env = Dict{String, String}(
+        String(k) => String(v) for (k, v) in ENV if !isempty(v) && !(String(k) in skip)
+    )
+    env["JULIA_LOAD_PATH"] = _child_load_path_string()
+    return env
+end
+
+function _child_load_path_string()::String
+    sep = Sys.iswindows() ? ';' : ':'
+    return "@" * sep * "@stdlib"
+end
+
 function _host_sync_remote_shell_cmd(
         host::String,
         remote_script::String;
@@ -1108,7 +1146,8 @@ function _host_sync_remote_shell_cmd(
     )::Cmd
     custom = _test_doubles_on() ? strip(get(ENV, "DISTSSHKIT_TEST_SSH", "")) : ""
     if !isempty(custom)
-        return Cmd(vcat(_test_double_julia_argv(custom), [host, remote_script]))
+        base = Cmd(vcat(_test_double_julia_argv(custom), [host, remote_script]))
+        return setenv(base, _fake_double_child_julia_env())
     end
     # Default `-n`: do not forward kit stdin (juliaup/git must not wait on a TTY).
     # Tar ship needs stdin (`forward_stdin=true`).

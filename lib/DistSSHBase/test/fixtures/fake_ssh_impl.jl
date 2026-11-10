@@ -38,6 +38,7 @@ function main()
     script = length(ARGS) >= 2 ? ARGS[2] : ""
     state_root = get(ENV, "DISTSSHKIT_TEST_STATE_ROOT", "")
     if isempty(state_root)
+        println(stderr, "DISTSSHKIT_TEST_STATE_ROOT is empty")
         exit(1)
     end
     slot = if get(ENV, "DISTSSHKIT_TEST_SHARED_TREE", "") == "1"

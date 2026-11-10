@@ -108,8 +108,11 @@ function _ship_one_host!(
         hooks::_ShipHooks = _ShipHooks(),
     )
     if hooks.prepare_dest! === nothing
-        code, out = DistSSHBase._remote_shell_status(host, _prepare_dest_script(checked))
-        code == 0 || throw(ArgumentError("could not prepare dest on $(host): $(strip(out))"))
+        code, out, err = DistSSHBase._remote_shell_status_parts(host, _prepare_dest_script(checked))
+        if code != 0
+            detail = DistSSHBase.shell_status_failure_message(out, err, code)
+            throw(ArgumentError("could not prepare dest on $(host): $detail"))
+        end
     else
         hooks.prepare_dest!(host, checked)
     end
