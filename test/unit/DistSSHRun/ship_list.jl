@@ -218,31 +218,13 @@ using Test
         end
     end
 
-    @testset "a gitignored selected Project.toml warns and the rest ships" begin
+    @testset "a gitignored selected Project.toml is refused at pack" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
             write(joinpath(tmp, "Manifest.toml"), "# lock\n")
             write(joinpath(tmp, "a.jl"), "1\n")
             write(joinpath(tmp, ".gitignore"), "Project.toml\n")
-            text = mktemp() do _, io
-                packed = redirect_stdout(io) do
-                    DistSSHRun._pack_project_tree(tmp)
-                end
-                try
-                    dest = mktempdir()
-                    DistSSHRun.Tar.extract(packed.tar_path, dest)
-                    @test !isfile(joinpath(dest, "Project.toml"))
-                    @test isfile(joinpath(dest, "a.jl"))
-                    @test isfile(joinpath(dest, "Manifest.toml"))
-                finally
-                    rm(packed.directory; force = true, recursive = true)
-                end
-                flush(io)
-                seekstart(io)
-                return read(io, String)
-            end
-            @test occursin("Project.toml", text)
-            @test occursin("will not be shipped", text)
+            @test_throws ArgumentError DistSSHRun._pack_project_tree(tmp)
         end
     end
 

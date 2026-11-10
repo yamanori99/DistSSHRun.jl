@@ -20,6 +20,17 @@ function _omit_for(project::AbstractString)
     ]
 end
 
+function _git_commit_q!(repo::AbstractString, msg::AbstractString)
+    run(
+        pipeline(
+            `git -C $repo -c user.email=test@example.com -c user.name=Test -c commit.gpgsign=false commit -q -m $msg`;
+            stdout = devnull,
+            stderr = devnull,
+        ),
+    )
+    return nothing
+end
+
 function _oracle_matches_tar!(project::AbstractString)
     omit = _omit_for(project)
     listed = DistSSHRun.DistSSHShip.pack_entry_paths(project; omit_project_rels = omit)
@@ -52,22 +63,8 @@ end
                     "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
                 )
                 run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
-                run(
-                    pipeline(
-                        `git -C $tmp config user.email t@example.com`;
-                        stdout = devnull,
-                        stderr = devnull,
-                    ),
-                )
-                run(pipeline(`git -C $tmp config user.name Test`; stdout = devnull, stderr = devnull))
                 run(pipeline(`git -C $tmp add -A`; stdout = devnull, stderr = devnull))
-                run(
-                    pipeline(
-                        `git -C $tmp -c commit.gpgsign=false commit -q -m init`;
-                        stdout = devnull,
-                        stderr = devnull,
-                    ),
-                )
+                _git_commit_q!(tmp, "init")
                 listed = _oracle_matches_tar!(tmp)
                 @test "Manifest.toml" in listed
             end
@@ -91,13 +88,7 @@ end
                         stderr = devnull,
                     ),
                 )
-                run(
-                    pipeline(
-                        `git -C $tmp -c commit.gpgsign=false commit -q -m init`;
-                        stdout = devnull,
-                        stderr = devnull,
-                    ),
-                )
+                _git_commit_q!(tmp, "init")
                 omit = _omit_for(tmp)
                 @test_throws ArgumentError DistSSHRun.DistSSHShip.pack_entry_paths(
                     tmp; omit_project_rels = omit,
