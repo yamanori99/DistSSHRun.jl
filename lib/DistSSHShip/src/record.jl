@@ -43,14 +43,6 @@ function _ship_record_read_paths(extract_dest::AbstractString)::Vector{String}
     ]
 end
 
-function _coalesce_ship_record_bodies(bodies::AbstractVector{<:AbstractString})::Union{Nothing, Dict{String, Any}}
-    for body in bodies
-        rec = _parse_ship_record_body(body)
-        rec !== nothing && return rec
-    end
-    return nothing
-end
-
 function _ship_record_writer()::String
     return "DistSSHShip $_SHIP_PKG_VERSION"
 end
@@ -265,37 +257,66 @@ end
 function _read_ship_record_at_path(
         host::AbstractString,
         record_path::AbstractString,
-    )::Union{Nothing, Dict{String, Any}}
+    )::Tuple{Symbol, Union{Nothing, Dict{String, Any}}}
     pq = DistSSHBase._remote_shell_path_word(record_path)
-    out = IOBuffer()
-    err = IOBuffer()
-    proc = run(
+    proc_test = run(
         pipeline(
-            ignorestatus(DistSSHBase._host_sync_remote_shell_cmd(String(host), "test -f $pq && cat $pq"));
-            stdout = out,
-            stderr = err,
+            ignorestatus(
+                DistSSHBase._host_sync_remote_shell_cmd(String(host), "test -f $pq"),
+            );
+            stdout = devnull,
+            stderr = devnull,
         );
         wait = true,
     )
-    DistSSHBase.shell_status(proc) == 0 || return nothing
+    code_test = DistSSHBase.shell_status(proc_test)
+    if code_test == 255
+        return (:read_error, nothing)
+    elseif code_test != 0
+        return (:missing, nothing)
+    end
+    out = IOBuffer()
+    proc_cat = run(
+        pipeline(
+            ignorestatus(DistSSHBase._host_sync_remote_shell_cmd(String(host), "cat $pq"));
+            stdout = out,
+            stderr = devnull,
+        );
+        wait = true,
+    )
+    code_cat = DistSSHBase.shell_status(proc_cat)
+    if code_cat == 255 || code_cat != 0
+        return (:read_error, nothing)
+    end
     body = String(take!(out))
     rec = _parse_ship_record_body(body)
-    return rec
+    rec === nothing && return (:invalid, nothing)
+    return (:ok, rec)
 end
 
 """
 Read `<extract_dest>/.distssh/shipment.toml` on `host`, falling back to legacy
-`ship.toml` when the current file is absent. Returns `nothing` when both are
-missing or invalid.
+`ship.toml` when the current file is absent or unparsable. Returns `nothing`
+when both are missing or invalid.
+
+Throws `ArgumentError` when a record file is present but cannot be read
+(transient SSH or remote command failure on the primary or legacy path).
 """
 function read_ship_record(
         host::AbstractString,
         extract_dest::AbstractString,
     )::Union{Nothing, Dict{String, Any}}
-    for path in _ship_record_read_paths(extract_dest)
-        rec = _read_ship_record_at_path(host, path)
-        rec !== nothing && return rec
-    end
+    paths = _ship_record_read_paths(extract_dest)
+    outcome, rec = _read_ship_record_at_path(host, paths[1])
+    outcome == :ok && return rec
+    outcome == :read_error && throw(
+        ArgumentError("ship record: could not read $(paths[1]) on $(host)"),
+    )
+    outcome2, rec2 = _read_ship_record_at_path(host, paths[2])
+    outcome2 == :ok && return rec2
+    outcome2 == :read_error && throw(
+        ArgumentError("ship record: could not read $(paths[2]) on $(host)"),
+    )
     return nothing
 end
 

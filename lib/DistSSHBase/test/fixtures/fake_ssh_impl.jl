@@ -1,7 +1,7 @@
 # Shared fake SSH double for `DISTSSHKIT_TEST_SSH`.
 # Include from `fake_setup_ssh.jl` or `fake_arbitrary_dest_ship_ssh.jl`, which
-# must set `const _FAKE_SSH_ARBITRARY_DEST` first. Do not `using Tar` at top
-# level; arbitrary-dest hash verification loads Tar only inside that branch.
+# must set `const _FAKE_SSH_ARBITRARY_DEST` first. Do not use Tar here;
+# `fake_arbitrary_dest_ship_ssh.jl` loads Tar for the arbitrary-dest branches.
 #
 # Per-host state under DISTSSHKIT_TEST_STATE_ROOT/<slot>/tree represents the
 # remote destination directory (missing / empty / nonempty).
@@ -11,6 +11,26 @@ function _dest_status(tree::AbstractString)::String
         return "MISSING"
     end
     return isempty(readdir(tree)) ? "EMPTY" : "NONEMPTY"
+end
+
+function _fake_ship_record_quoted_path(script::AbstractString)
+    s = strip(String(script))
+    for prefix in ("test -f ", "cat ")
+        startswith(s, prefix) || continue
+        rest = strip(s[(length(prefix) + 1):end])
+        (startswith(rest, "'") && endswith(rest, "'")) || return nothing
+        path = rest[2:(end - 1)]
+        occursin("/.distssh/", path) || return nothing
+        name = basename(path)
+        name in ("shipment.toml", "ship.toml") || return nothing
+        return path
+    end
+    return nothing
+end
+
+function _fake_ship_record_local_file(tree::AbstractString, remote_path::AbstractString)
+    name = basename(String(remote_path))
+    return joinpath(tree, ".distssh", name)
 end
 
 function main()
@@ -229,6 +249,24 @@ function main()
         end
         println("incomplete")
         exit(0)
+    end
+
+    remote_ship = _fake_ship_record_quoted_path(script)
+    if remote_ship !== nothing
+        localp = _fake_ship_record_local_file(tree, remote_ship)
+        if startswith(strip(script), "test -f ")
+            isfile(localp) ? exit(0) : exit(1)
+        end
+        if startswith(strip(script), "cat ")
+            fail_name = get(ENV, "DISTSSHKIT_TEST_SHIP_RECORD_CAT_FAIL", "")
+            if !isempty(fail_name) && basename(localp) == fail_name
+                println(stderr, "cat: read error (test double)")
+                exit(1)
+            end
+            isfile(localp) || exit(1)
+            print(read(localp, String))
+            exit(0)
+        end
     end
 
     if occursin("test -f", script) && occursin("Project.toml", script)

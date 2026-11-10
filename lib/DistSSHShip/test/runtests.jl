@@ -553,27 +553,7 @@ end
         @test DistSSHShip.ship_record_status(bad) == :invalid
     end
 
-    @testset "ship record legacy read fallback" begin
-        snap = _minimal_snapshot(".")
-        try
-            current = DistSSHShip.build_ship_record(snap; complete = true, transfer_id = "current")
-            legacy = DistSSHShip.build_ship_record(snap; complete = true, transfer_id = "legacy")
-            bodies = String[sprint(TOML.print, current), sprint(TOML.print, legacy)]
-            chosen = DistSSHShip._coalesce_ship_record_bodies(bodies)
-            @test chosen !== nothing
-            @test chosen["transfer_id"] == "current"
-            legacy_only = DistSSHShip._coalesce_ship_record_bodies(String["not-a-record", bodies[2]])
-            @test legacy_only !== nothing
-            @test legacy_only["transfer_id"] == "legacy"
-            paths = DistSSHShip._ship_record_read_paths("/stage/tree")
-            @test paths == String[
-                "/stage/tree/.distssh/shipment.toml",
-                "/stage/tree/.distssh/ship.toml",
-            ]
-        finally
-            rm(snap.directory; force = true, recursive = true)
-        end
-    end
+    include("ship_record_read.jl")
 
     @testset "ship transfer_id keyword" begin
         snap = _minimal_snapshot(".")
