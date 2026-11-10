@@ -98,7 +98,7 @@ selected project). The `go` / `drive` CLI does not take `--ship-tree`: run
 `--run-id ID`.
 Later `setup instantiate` / `setup check` / `go` / `drive` / `ride` select a
 a shipped run with `--run-id ID` (or `run_id=` on `setup!` / `go!` / `drive!` /
-`ride!`), else the local `.distsshkit/last-ship.toml` written after a
+`ride!`), else the local `.distssh/last-ship.toml` written after a
 successful ship, else a git checkout that has `Project.toml` at the deploy
 root on every host. A successful delete / git-clone / git-sync / git-pull
 clears that local record for the matching deploy root. `go` / `drive` do not
@@ -156,7 +156,7 @@ ownership check there; it does not inspect those Ship leaves. Older leaves
 without that file still use structural checks only. DistSSHQueue
 `teardown` is a different command; it may reuse the same remote stamp later.
 Unknown keys are ignored when reading. A ship that sees
-`.distsshkit/inputs.toml` writes those inputs into this run's `run.toml`.
+`.distssh/inputs.toml` writes those inputs into this run's `run.toml`.
 With hashing on, it also writes a manifest under `inputs/<sha256>.manifest`.
 The file name is the SHA-256 of `ncodeunits(name):name`, a newline, and the
 host. Each line is `hex *path`. A regular file is the SHA-256 of its bytes.

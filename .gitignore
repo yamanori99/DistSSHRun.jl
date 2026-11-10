@@ -11,6 +11,7 @@ docs/site/
 #   legacy `.distsshkit/` is still ignored when present
 # Demo drivers still set output/ via init_output_dir!.
 # results/ is the old omitted drive/go default (leftover trees).
+.distssh/
 .distsshkit/
 output/
 results/
