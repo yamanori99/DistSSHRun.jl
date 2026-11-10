@@ -5,6 +5,7 @@
 # Usage: ./.github/version-cut.sh OLD NEW
 #        ./.github/version-cut.sh --versions OLD_VER NEW_VER
 #        ./.github/version-cut.sh --files OLD.toml NEW.toml
+#        ./.github/version-cut.sh --lockstep-write NEW_VER
 #        ./.github/version-cut.sh --self-test
 # --versions and --files compare version strings only. They do not fetch
 # git objects and they do not execute the file contents.
@@ -92,6 +93,73 @@ self_test() {
   echo "version-cut self-test ok"
 }
 
+lockstep_triple() {
+  local v="$1"
+  v="${v%%-*}"
+  printf '%s\n' "$v"
+}
+
+lockstep_compat_pin() {
+  printf '=%s\n' "$(lockstep_triple "$1")"
+}
+
+set_version_line() {
+  local file="$1" ver="$2"
+  if ! grep -q '^version[[:space:]]*=' "$file"; then
+    echo "version-cut: no version in ${file}" >&2
+    return 1
+  fi
+  # shellcheck disable=SC2016
+  sed -i "s/^version[[:space:]]*=.*/version = \"${ver}\"/" "$file"
+}
+
+set_compat_line() {
+  local file="$1" pkg="$2" spec="$3"
+  if ! grep -q '^\[compat\]' "$file"; then
+    return 0
+  fi
+  awk -v pkg="$pkg" -v spec="$spec" '
+    /^\[compat\]/ { incompat = 1 }
+    /^\[/ && $0 != "[compat]" { incompat = 0 }
+    incompat && $0 ~ "^" pkg "[[:space:]]*=" {
+      print pkg " = \"" spec "\""
+      next
+    }
+    { print }
+  ' "$file" >"${file}.lockstep.tmp" && mv "${file}.lockstep.tmp" "$file"
+}
+
+lockstep_write() {
+  local new_ver="${1:?new version}" pin root
+  root="$(cd "$(dirname "$0")/.." && pwd)"
+  cd "$root"
+  pin="$(lockstep_compat_pin "$new_ver")"
+
+  local vf
+  for vf in \
+    Project.toml \
+    lib/DistSSHBase/Project.toml \
+    lib/DistSSHUp/Project.toml \
+    lib/DistSSHShip/Project.toml \
+    lib/DistSSHHeartbeat/Project.toml; do
+    set_version_line "$vf" "$new_ver"
+  done
+
+  set_compat_line lib/DistSSHUp/Project.toml DistSSHBase "$pin"
+  set_compat_line lib/DistSSHShip/Project.toml DistSSHBase "$pin"
+  set_compat_line lib/DistSSHHeartbeat/Project.toml DistSSHBase "$pin"
+
+  set_compat_line lib/DistSSHBase/test/Project.toml DistSSHBase "$pin"
+  set_compat_line lib/DistSSHUp/test/Project.toml DistSSHBase "$pin"
+  set_compat_line lib/DistSSHUp/test/Project.toml DistSSHUp "$pin"
+  set_compat_line lib/DistSSHShip/test/Project.toml DistSSHBase "$pin"
+  set_compat_line lib/DistSSHShip/test/Project.toml DistSSHShip "$pin"
+  set_compat_line lib/DistSSHHeartbeat/test/Project.toml DistSSHBase "$pin"
+  set_compat_line lib/DistSSHHeartbeat/test/Project.toml DistSSHHeartbeat "$pin"
+
+  echo "lockstep-write: Run and lib packages at ${new_ver}, sibling compat ${pin}"
+}
+
 if [ "${1:-}" = "--self-test" ]; then
   self_test
   exit 0
@@ -104,6 +172,11 @@ fi
 
 if [ "${1:-}" = "--files" ]; then
   is_cut "$(ver_from_file "${2:?old Project.toml}")" "$(ver_from_file "${3:?new Project.toml}")"
+  exit 0
+fi
+
+if [ "${1:-}" = "--lockstep-write" ]; then
+  lockstep_write "${2:?new version}"
   exit 0
 fi
 

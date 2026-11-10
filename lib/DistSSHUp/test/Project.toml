@@ -8,6 +8,6 @@ DistSSHBase = {path = "../../DistSSHBase"}
 DistSSHUp = {path = ".."}
 
 [compat]
-DistSSHBase = "0.1"
-DistSSHUp = "0.1"
+DistSSHBase = "=0.2.0"
+DistSSHUp = "=0.2.0"
 Test = "1"

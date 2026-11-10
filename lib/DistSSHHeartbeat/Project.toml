@@ -1,7 +1,7 @@
 name = "DistSSHHeartbeat"
 uuid = "7d4a9c2e-1f83-4b6a-9e20-c1ab23de45f6"
 license = "MIT"
-version = "0.1.0"
+version = "0.2.0-DEV"
 authors = ["Yamamoto, Takanori <takanori.yamamoto.99@gmail.com>", "Ampuku, Honoka <ampk.hono@gmail.com>"]
 
 [deps]
@@ -12,6 +12,6 @@ Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 DistSSHBase = {path = "../DistSSHBase"}
 
 [compat]
-DistSSHBase = "0.1"
+DistSSHBase = "=0.2.0"
 Distributed = "1.11"
 julia = "1.13"

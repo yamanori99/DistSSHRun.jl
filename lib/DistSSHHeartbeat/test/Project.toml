@@ -9,7 +9,7 @@ DistSSHBase = {path = "../../DistSSHBase"}
 DistSSHHeartbeat = {path = ".."}
 
 [compat]
-DistSSHBase = "0.1"
-DistSSHHeartbeat = "0.1"
+DistSSHBase = "=0.2.0"
+DistSSHHeartbeat = "=0.2.0"
 Distributed = "1.11"
 Test = "1"

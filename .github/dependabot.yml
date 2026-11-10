@@ -39,3 +39,8 @@ updates:
       - dependency-name: Pkg
       - dependency-name: TOML
       - dependency-name: Test
+      # In-repo libs: lockstep with DistSSHRun; see .github/lib-lockstep-check.sh
+      - dependency-name: DistSSHBase
+      - dependency-name: DistSSHUp
+      - dependency-name: DistSSHShip
+      - dependency-name: DistSSHHeartbeat

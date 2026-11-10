@@ -274,6 +274,23 @@ lifts. Do not publish a later number in its place. If `Downstream SSH E2E
 until the cause is known, and open a DistSSHQueue issue when the cause is
 DistSSHQueue.
 
+### In-repo lib packages (lockstep)
+
+`DistSSHBase`, `DistSSHUp`, `DistSSHShip`, and `DistSSHHeartbeat` are not
+registered in General. They ship with DistSSHRun as nested modules and
+workspace members. Each lib's `Project.toml` `version` must equal Run's
+`version` (including `-DEV`). Do not bump a lib alone in an ordinary pull
+request. Sibling `[compat]` entries use an exact pin on the numeric
+triple, for example `DistSSHBase = "=0.2.0"` while Run is `0.2.0-DEV`
+(Julia Pkg rejects prereleases in `=` specifiers). The pin stays
+`=0.2.0` when Run cuts to `0.2.0`.
+
+On a release cut, after you set the new Run `version`, run
+`./.github/version-cut.sh --lockstep-write NEW_VER` so all lib `version`
+fields and in-repo `=` compat lines move together. The `Gitleaks` workflow runs
+[`.github/lib-lockstep-check.sh`](.github/lib-lockstep-check.sh) on every pull
+request.
+
 ### When to cut
 
 [Releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md#when-to-cut).
@@ -324,7 +341,10 @@ Every PR needs one of `bug` / `enhancement` / `breaking` / `chore`. Dependabot s
 
 Weekly Dependabot covers `github-actions` and Julia registry deps.
 Stdlib names are `ignore` in [`.github/dependabot.yml`](.github/dependabot.yml)
-(`Dates`, `Pkg`, `TOML`, `Test`). A new
+(`Dates`, `Pkg`, `TOML`, `Test`). In-repo
+`DistSSHBase` / `DistSSHUp` / `DistSSHShip` / `DistSSHHeartbeat` path deps are
+ignored too; sibling compat moves only with
+`./.github/version-cut.sh --lockstep-write`. A new
 third-party `[deps]` entry is picked up with no YAML change; a new
 stdlib must be added to that ignore list. Stdlib `[compat]` stays with
 the Julia floor. The Julia updater otherwise appends `< 0.0.1` for the
