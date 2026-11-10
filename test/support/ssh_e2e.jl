@@ -309,7 +309,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
                 batch = _ssh_e2e_latest_go_batch(project)
                 batch === nothing ? nothing : batch
             else
-                joinpath(project, ".distsshkit", String(kit))
+                joinpath(project, ".distssh", String(kit))
             end
             newest = log_dir === nothing ? nothing : _ssh_e2e_newest_log(log_dir)
             if newest !== nothing

@@ -369,7 +369,7 @@ end
     @testset "prune shell refuses a nested unowned stamp" begin
         mktempdir() do d
             root = joinpath(d, "app")
-            drive = joinpath(root, ".distsshkit", "drive")
+            drive = joinpath(root, ".distssh", "drive")
             nested = joinpath(drive, "nested")
             mkpath(nested)
             write(
@@ -410,7 +410,7 @@ end
     @testset "prune shell accepts a TOML.print run.toml" begin
         mktempdir() do d
             root = joinpath(d, "app")
-            go = joinpath(root, ".distsshkit", "go", "job")
+            go = joinpath(root, ".distssh", "go", "job")
             mkpath(go)
             DistSSHRun.write_kit_run_toml!(
                 go;
@@ -447,8 +447,8 @@ end
     @testset "prune shell inspects every victim before rm" begin
         mktempdir() do d
             root = joinpath(d, "app")
-            keep = joinpath(root, ".distsshkit", "go", "job_keep")
-            bad = joinpath(root, ".distsshkit", "go", "job_bad")
+            keep = joinpath(root, ".distssh", "go", "job_keep")
+            bad = joinpath(root, ".distssh", "go", "job_bad")
             mkpath(keep)
             mkpath(bad)
             write(joinpath(keep, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
@@ -474,7 +474,7 @@ end
     @testset "prune shell keeps a recursive stamp walk" begin
         mktempdir() do d
             root = joinpath(d, "app")
-            go = joinpath(root, ".distsshkit", "go", "job")
+            go = joinpath(root, ".distssh", "go", "job")
             mkpath(go)
             write(
                 joinpath(go, "run.toml"),
@@ -497,7 +497,7 @@ end
         end
         mktempdir() do d
             root = joinpath(d, "app")
-            deep = joinpath(root, ".distsshkit", "drive", "a", "b")
+            deep = joinpath(root, ".distssh", "drive", "a", "b")
             mkpath(deep)
             write(
                 joinpath(deep, "run.toml"),
@@ -671,7 +671,7 @@ end
     @testset "prune shell refuses a non-regular or newline stamp" begin
         mktempdir() do d
             root = joinpath(d, "app")
-            drive = joinpath(root, ".distsshkit", "drive")
+            drive = joinpath(root, ".distssh", "drive")
             mkpath(drive)
             mkdir(joinpath(drive, "run.toml"))
             err = IOBuffer()
@@ -691,7 +691,7 @@ end
         end
         mktempdir() do d
             root = joinpath(d, "app")
-            drive = joinpath(root, ".distsshkit", "drive")
+            drive = joinpath(root, ".distssh", "drive")
             mkpath(drive)
             run(`mkfifo $(joinpath(drive, "run.toml"))`)
             err = IOBuffer()
@@ -712,7 +712,7 @@ end
         end
         mktempdir() do d
             root = joinpath(d, "app")
-            drive = joinpath(root, ".distsshkit", "drive")
+            drive = joinpath(root, ".distssh", "drive")
             weird = joinpath(drive, "*\n*")
             mkpath(weird)
             write(
@@ -739,13 +739,13 @@ end
     end
 
     @testset "prune shell refuses a newline in the path to .distsshkit" begin
-        @test occursin("could not scan for .distsshkit", DistSSHRun._prune_remote_shell("/tmp/app"))
+        @test occursin("could not scan state directories", DistSSHRun._prune_remote_shell("/tmp/app"))
         mktempdir() do d
             root = joinpath(d, "app")
             keep = joinpath(root, "foo", "drive")
             mkpath(keep)
             write(joinpath(keep, "note"), "keep\n")
-            mkpath(joinpath(root, "foo\nbar", ".distsshkit"))
+            mkpath(joinpath(root, "foo\nbar", ".distssh"))
             err = IOBuffer()
             proc = run(
                 ignorestatus(
@@ -766,8 +766,8 @@ end
     @testset "prune shell refuses a newline in a go leaf name" begin
         mktempdir() do d
             root = joinpath(d, "app")
-            keep = joinpath(root, ".distsshkit", "go", "job_ok")
-            weird = joinpath(root, ".distsshkit", "go", "foo\nbar")
+            keep = joinpath(root, ".distssh", "go", "job_ok")
+            weird = joinpath(root, ".distssh", "go", "foo\nbar")
             mkpath(keep)
             mkpath(weird)
             write(joinpath(keep, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
@@ -1154,7 +1154,7 @@ end
         end
         mktempdir() do d
             root = joinpath(d, "app")
-            nested = joinpath(root, ".distsshkit", "drive", "nested")
+            nested = joinpath(root, ".distssh", "drive", "nested")
             mkpath(nested)
             outside = joinpath(d, "stamp.toml")
             write(outside, DistSSHRun._ship_run_leaf_stamp_toml())
@@ -1173,7 +1173,7 @@ end
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test islink(joinpath(nested, "run.toml"))
-            @test !isfile(joinpath(root, ".distsshkit", "drive", "run.toml"))
+            @test !isfile(joinpath(root, ".distssh", "drive", "run.toml"))
         end
     end
 

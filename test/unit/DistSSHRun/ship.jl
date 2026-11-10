@@ -468,6 +468,24 @@ end
     @test occursin("sha256=", sprint(showerror, err))
 end
 
+@testset "legacy .distsshkit inputs.toml is readable" begin
+    _with_tempdir() do tmp
+        mkpath(joinpath(tmp, ".distsshkit"))
+        write(
+            joinpath(tmp, ".distsshkit", "inputs.toml"),
+            """
+            [[inputs]]
+            name = "x"
+            path = "."
+            hash = false
+            """,
+        )
+        rows = DistSSHRun._load_ship_inputs(tmp)
+        @test length(rows) == 1
+        @test rows[1].name == "x"
+    end
+end
+
 @testset "declared inputs stay out of the ship" begin
     if _test_skip_unless_git()
         _with_tempdir() do tmp
@@ -478,9 +496,9 @@ end
             write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
             mkpath(joinpath(tmp, "data"))
             write(joinpath(tmp, "data", "big.bin"), "payload\n")
-            mkpath(joinpath(tmp, ".distsshkit"))
+            mkpath(joinpath(tmp, ".distssh"))
             write(
-                joinpath(tmp, ".distsshkit", "inputs.toml"),
+                joinpath(tmp, ".distssh", "inputs.toml"),
                 """
                 [[inputs]]
                 name = "big"
@@ -543,9 +561,9 @@ end
 
 @testset "declared input paths and probes" begin
     _with_tempdir() do tmp
-        mkpath(joinpath(tmp, ".distsshkit"))
+        mkpath(joinpath(tmp, ".distssh"))
         write(
-            joinpath(tmp, ".distsshkit", "inputs.toml"),
+            joinpath(tmp, ".distssh", "inputs.toml"),
             """
             [[inputs]]
             name = "big"
@@ -559,7 +577,7 @@ end
         @test DistSSHRun._ship_input_covers("data/big.bin", inputs)
         @test !DistSSHRun._ship_input_covers("database", inputs)
         write(
-            joinpath(tmp, ".distsshkit", "inputs.toml"),
+            joinpath(tmp, ".distssh", "inputs.toml"),
             """
             [[inputs]]
             name = "bad"
@@ -568,7 +586,7 @@ end
         )
         @test_throws ArgumentError DistSSHRun._load_ship_inputs(tmp)
         write(
-            joinpath(tmp, ".distsshkit", "inputs.toml"),
+            joinpath(tmp, ".distssh", "inputs.toml"),
             """
             [[inputs]]
             name = "bad"

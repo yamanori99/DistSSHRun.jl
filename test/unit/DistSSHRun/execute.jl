@@ -357,18 +357,18 @@ end
         _with_tempdir() do project
             d1 = DistSSHRun.allocate_output_dir(:go, "batch.jl"; project)
             @test isdir(d1)
-            @test occursin(joinpath(".distsshkit", "go"), d1)
+            @test occursin(joinpath(".distssh", "go"), d1)
             @test startswith(basename(d1), "batch_")
             d2 = DistSSHRun.allocate_output_dir(:drive, "run.jl"; project, job_id = "q1")
             @test isdir(d2)
-            @test occursin(joinpath(".distsshkit", "drive"), d2)
+            @test occursin(joinpath(".distssh", "drive"), d2)
             @test occursin("_q1", basename(d2))
             d3 = DistSSHRun.allocate_output_dir(:go, "batch.jl"; project)
             @test isdir(d3)
             @test d1 != d3
             d_ride = DistSSHRun.allocate_output_dir(:ride, "map.jl"; project)
             @test isdir(d_ride)
-            @test occursin(joinpath(".distsshkit", "ride"), d_ride)
+            @test occursin(joinpath(".distssh", "ride"), d_ride)
             err_kind = try
                 DistSSHRun.allocate_output_dir(:pipeline, "x.jl"; project)
                 nothing
@@ -399,7 +399,7 @@ end
                 d = DistSSHRun._ensure_drive_output_env!(script; project = project)
                 @test isdir(d)
                 @test startswith(basename(d), "job_")
-                @test occursin(joinpath(".distsshkit", "drive"), d)
+                @test occursin(joinpath(".distssh", "drive"), d)
                 @test ENV["DISTRIBUTED_OUTPUT_DIR"] == d
                 @test DistSSHRun._ensure_drive_output_env!(script; project = project) == d
             end
@@ -417,10 +417,10 @@ end
             write(script, "")
             d1 = DistSSHRun.allocate_run_dir(:drive, script; project)
             @test isdir(d1)
-            @test occursin(joinpath(".distsshkit", "runs", "drive"), d1)
+            @test occursin(joinpath(".distssh", "runs", "drive"), d1)
             @test startswith(basename(d1), "job_")
             d2 = DistSSHRun.allocate_run_dir(:go, "batch.jl"; project, job_id = "q1")
-            @test occursin(joinpath(".distsshkit", "runs", "go"), d2)
+            @test occursin(joinpath(".distssh", "runs", "go"), d2)
             @test occursin("_q1", basename(d2))
             @test DistSSHRun.read_kit_run_toml(d1) === nothing
             DistSSHRun.write_kit_run_toml!(
@@ -463,7 +463,7 @@ end
             try
                 d = DistSSHRun.allocate_run_dir(:go, script; project)
                 @test isdir(d)
-                @test occursin(joinpath(".distsshkit", "runs", "go"), d)
+                @test occursin(joinpath(".distssh", "runs", "go"), d)
                 @test startswith(d, DistSSHRun.canonical_local_path(project))
                 @test !startswith(d, DistSSHRun.canonical_local_path(ro))
             finally
@@ -1707,7 +1707,7 @@ end
             @test occursin("old.txt", err.msg)
             @test occursin("Omit output_dir or pass an empty directory.", err.msg)
             @test !occursin("--help", err.msg)
-            @test !isdir(joinpath(project, ".distsshkit", "runs"))
+            @test !isdir(joinpath(project, ".distssh", "runs"))
         end
     end
 

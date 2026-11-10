@@ -47,7 +47,7 @@ using Test
                 @test del.ok && !del.cancelled
                 @test length(del.hosts) == 1 && del.hosts[1].ok
                 @test !isdir(joinpath(state_dir, slot))
-                prog = joinpath(proj, ".distsshkit", "setup", "kit.progress")
+                prog = joinpath(proj, ".distssh", "setup", "kit.progress")
                 @test isfile(prog)
                 body = read(prog, String)
                 @test occursin("kind=setup", body)
@@ -64,15 +64,15 @@ using Test
 
     @testset "prune leaves" begin
         _with_tempdir() do proj
-            go_old = joinpath(proj, ".distsshkit", "go", "job_20200101T000000Z")
-            go_keep = joinpath(proj, "scripts", ".distsshkit", "go", "job_keep_id")
-            drive = joinpath(proj, "scripts", ".distsshkit", "drive")
+            go_old = joinpath(proj, ".distssh", "go", "job_20200101T000000Z")
+            go_keep = joinpath(proj, "scripts", ".distssh", "go", "job_keep_id")
+            drive = joinpath(proj, "scripts", ".distssh", "drive")
             mkpath(go_old)
             mkpath(go_keep)
             mkpath(drive)
             write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
-            run_keep = joinpath(proj, "scripts", ".distsshkit", "runs", "go", "job_keep_id")
-            run_old = joinpath(proj, ".distsshkit", "runs", "drive", "job_20200101T000000Z")
+            run_keep = joinpath(proj, "scripts", ".distssh", "runs", "go", "job_keep_id")
+            run_old = joinpath(proj, ".distssh", "runs", "drive", "job_20200101T000000Z")
             mkpath(run_keep)
             mkpath(run_old)
             n = DistSSHRun.prune_kit_leaf_dirs!(proj; id = "keep_id")
@@ -82,7 +82,7 @@ using Test
             @test isdir(drive)
             @test isdir(run_old)
             @test !isdir(run_keep)
-            fake = joinpath(proj, ".distsshkit", "go", "job_fake")
+            fake = joinpath(proj, ".distssh", "go", "job_fake")
             mkpath(fake)
             write(
                 joinpath(fake, "run.toml"),
@@ -133,7 +133,7 @@ using Test
             @test isdir(secret)
             rm(secret; recursive = true, force = true)
             rm(keep_note; recursive = true, force = true)
-            fifo_leaf = joinpath(proj, ".distsshkit", "go", "job_fifo")
+            fifo_leaf = joinpath(proj, ".distssh", "go", "job_fifo")
             mkpath(fifo_leaf)
             run(`mkfifo $(joinpath(fifo_leaf, "run.toml"))`)
             fifo_task = @async begin
@@ -151,7 +151,7 @@ using Test
             @test ispath(joinpath(fifo_leaf, "run.toml"))
             @test !isfile(joinpath(fifo_leaf, "run.toml"))
             rm(joinpath(fifo_leaf, "run.toml"); force = true)
-            dir_stamp = joinpath(proj, ".distsshkit", "go", "job_dir_stamp")
+            dir_stamp = joinpath(proj, ".distssh", "go", "job_dir_stamp")
             mkpath(joinpath(dir_stamp, "run.toml"))
             err_dir = try
                 DistSSHRun.prune_kit_leaf_dirs!(proj)
@@ -163,7 +163,7 @@ using Test
             @test occursin("unowned run leaf", err_dir.msg)
             @test isdir(joinpath(dir_stamp, "run.toml"))
             rm(joinpath(dir_stamp, "run.toml"); recursive = true, force = true)
-            link_leaf = joinpath(proj, ".distsshkit", "go", "job_link_stamp")
+            link_leaf = joinpath(proj, ".distssh", "go", "job_link_stamp")
             mkpath(link_leaf)
             outside = joinpath(proj, "owned.toml")
             write(outside, DistSSHRun._ship_run_leaf_stamp_toml())
@@ -192,7 +192,7 @@ using Test
                 host = "host1"
                 slot = replace(host, r"[@:/]" => "_")
                 tree = joinpath(state_dir, slot, "tree")
-                mkpath(joinpath(tree, ".distsshkit", "go", "batch_a"))
+                mkpath(joinpath(tree, ".distssh", "go", "batch_a"))
                 mkpath(joinpath(tree, "keep"))
                 write(joinpath(tree, "keep", "Project.toml"), "name = \"Tmp\"\n")
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
@@ -206,7 +206,7 @@ using Test
                 pr = DistSSHRun.setup!(session, :prune; confirm_path = "~/App.jl")
                 @test pr.ok && !pr.cancelled
                 @test isfile(joinpath(tree, "keep", "Project.toml"))
-                @test !isdir(joinpath(tree, ".distsshkit", "go", "batch_a"))
+                @test !isdir(joinpath(tree, ".distssh", "go", "batch_a"))
             end
         end
     end
@@ -392,7 +392,7 @@ using Test
                     end
                     @test del.ok && !del.cancelled
                     @test !occursin("Log file:", out)
-                    @test isfile(joinpath(proj, ".distsshkit", "setup", "kit.progress"))
+                    @test isfile(joinpath(proj, ".distssh", "setup", "kit.progress"))
                 end
             end
         end
@@ -474,7 +474,7 @@ using Test
                 @test_throws ArgumentError DistSSHRun.setup!(session, :git_clone; repo = "")
             end
             @test !occursin("Log file:", out)
-            @test !isdir(joinpath(proj, ".distsshkit", "setup"))
+            @test !isdir(joinpath(proj, ".distssh", "setup"))
         end
 
         _with_fake_remotes() do _
@@ -578,7 +578,7 @@ using Test
                 tree = joinpath(state_dir, slot, "tree")
                 mkpath(tree)
                 touch(joinpath(tree, "keepme.txt"))
-                mkpath(joinpath(tree, ".distsshkit", "go", "batch_a"))
+                mkpath(joinpath(tree, ".distssh", "go", "batch_a"))
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
                 session = DistSSHRun.KitSession(
                     project = proj,
@@ -591,7 +591,7 @@ using Test
                 pr = DistSSHRun.setup!(session, :prune; confirm_path = prune_path)
                 @test pr.ok && !pr.cancelled
                 @test isfile(joinpath(tree, "keepme.txt"))
-                @test !isdir(joinpath(tree, ".distsshkit", "go", "batch_a"))
+                @test !isdir(joinpath(tree, ".distssh", "go", "batch_a"))
             end
         end
 

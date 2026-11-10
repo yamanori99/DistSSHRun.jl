@@ -120,7 +120,7 @@ end
     _with_tempdir() do tmp
         _snap_project!(tmp)
         env = DistSSHRun.resolve_pkg_env(tmp)
-        kit = joinpath(env.env_dir, ".distsshkit")
+        kit = joinpath(env.env_dir, ".distssh")
         mkpath(kit)
         legacy_body = Dict(
             "schema" => 1,
@@ -346,7 +346,7 @@ end
     _with_tempdir() do proj
         _snap_project!(proj)
         env = DistSSHRun.resolve_pkg_env(proj)
-        kit = joinpath(env.env_dir, ".distsshkit")
+        kit = joinpath(env.env_dir, ".distssh")
         mkpath(kit)
         write(
             joinpath(kit, "last-snapshot.toml"),

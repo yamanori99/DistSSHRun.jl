@@ -82,7 +82,7 @@ using TOML
     @test first_worker["rank"] == 1
     slot = mktempdir()
     try
-        snap_dir = joinpath(slot, ".distsshkit")
+        snap_dir = joinpath(slot, ".distssh")
         mkpath(snap_dir)
         open(joinpath(snap_dir, "provenance-slot.toml"), "w") do io
             TOML.print(

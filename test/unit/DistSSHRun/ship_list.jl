@@ -562,9 +562,9 @@ end
             write(joinpath(tmp, "skip.txt"), "nope\n")
             mkpath(joinpath(tmp, "data"))
             write(joinpath(tmp, "data", "big.bin"), "payload\n")
-            mkpath(joinpath(tmp, ".distsshkit"))
+            mkpath(joinpath(tmp, ".distssh"))
             write(
-                joinpath(tmp, ".distsshkit", "inputs.toml"),
+                joinpath(tmp, ".distssh", "inputs.toml"),
                 """
                 [[inputs]]
                 name = "big"
@@ -572,7 +572,7 @@ end
                 hash = false
                 """,
             )
-            write(joinpath(tmp, ".distsshkit", "note.txt"), "kit\n")
+            write(joinpath(tmp, ".distssh", "note.txt"), "kit\n")
             run(`mkfifo $(joinpath(tmp, "pipe"))`)
             listed = DistSSHRun.ship_send_list(tmp)
             @test listed == sort(listed)
@@ -588,6 +588,7 @@ end
             @test !("pipe" in listed)
             @test !any(
                 r -> r == ".git" || startswith(r, ".git/") ||
+                    r == ".distssh" || startswith(r, ".distssh/") ||
                     r == ".distsshkit" || startswith(r, ".distsshkit/"), listed
             )
             @test !any(occursin('\\', r) for r in listed)

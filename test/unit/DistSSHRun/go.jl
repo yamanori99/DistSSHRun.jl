@@ -40,14 +40,14 @@ using Dates
         @test_throws ArgumentError DistSSHRun._go_plan_slots(["child:local:-1"])
         @test DistSSHRun._go_sanitize_label("user@lab") == "user@lab"
         _with_tempdir() do proj::String
-            in_batch = joinpath(proj, "scripts", ".distsshkit", "go", "job_1")
+            in_batch = joinpath(proj, "scripts", ".distssh", "go", "job_1")
             in_slot = joinpath(in_batch, "h1-1")
             @test DistSSHRun._go_remote_slot_rel(proj, in_slot, in_batch, "h1-1") ==
-                joinpath("scripts", ".distsshkit", "go", "job_1", "h1-1")
+                joinpath("scripts", ".distssh", "go", "job_1", "h1-1")
             _with_tempdir() do out_dir::String
                 out_slot = joinpath(out_dir, "h1-1")
                 rel = DistSSHRun._go_remote_slot_rel(proj, out_slot, out_dir, "h1-1")
-                @test rel == joinpath(".distsshkit", "go", basename(out_dir), "h1-1")
+                @test rel == joinpath(".distssh", "go", basename(out_dir), "h1-1")
                 @test !occursin("..", rel)
             end
         end
@@ -174,16 +174,16 @@ using Dates
             touch(script)
             t = DateTime(2026, 8, 3, 13, 44, 28)
             batch = DistSSHRun._go_batch_output_dir(proj, script; now = t)
-            @test batch == joinpath(proj, "demos", ".distsshkit", "go", "demo_20260803T134428Z")
+            @test batch == joinpath(proj, "demos", ".distssh", "go", "demo_20260803T134428Z")
             nested = joinpath(proj, "demos", "without_kit", "job.jl")
             mkpath(dirname(nested))
             touch(nested)
             nested_batch = DistSSHRun._go_batch_output_dir(proj, nested; now = t)
-            @test nested_batch == joinpath(proj, "demos", "without_kit", ".distsshkit", "go", "job_20260803T134428Z")
+            @test nested_batch == joinpath(proj, "demos", "without_kit", ".distssh", "go", "job_20260803T134428Z")
             outside = joinpath(tempdir(), "outside-job.jl")
             write(outside, "nothing\n")
             other = DistSSHRun._go_batch_output_dir(proj, outside; now = t)
-            @test other == joinpath(proj, ".distsshkit", "go", "outside-job_20260803T134428Z")
+            @test other == joinpath(proj, ".distssh", "go", "outside-job_20260803T134428Z")
             @test isdir(batch)
             again = DistSSHRun._go_batch_output_dir(proj, script; now = t)
             @test again != batch
@@ -368,7 +368,7 @@ using Dates
         @test startswith(inner, "cd ")
         slot = "demos/output/go_sim/root@192.0.2.10-1"
         @test occursin("cd $(DistSSHRun._remote_shell_path_word("~/proj")) && mkdir -p $(DistSSHRun._remote_shell_path_word(slot))", inner)
-        @test occursin("mkdir -p $(DistSSHRun._remote_shell_path_word(slot * "/.distsshkit"))", inner)
+        @test occursin("mkdir -p $(DistSSHRun._remote_shell_path_word(slot * "/.distssh"))", inner)
         @test occursin(">" * DistSSHRun._remote_shell_path_word(slot * "/julia.stdout.log"), inner)
         @test occursin("go.exitcode", inner)
         @test occursin("echo \$ec >", inner)
@@ -397,7 +397,7 @@ using Dates
         @test occursin(DistSSHRun._remote_shell_path_word("8"), with_args)
         @test occursin(DistSSHRun._remote_shell_path_word("a b"), with_args)
         @test occursin(
-            DistSSHRun._remote_shell_path_word("slot/.distsshkit/provenance-slot.jl"),
+            DistSSHRun._remote_shell_path_word("slot/.distssh/provenance-slot.jl"),
             with_args,
         )
         @test occursin("DISTSSH_PROVENANCE_SLOT", with_args)
@@ -447,7 +447,7 @@ using Dates
             @test abspath(strip(read(progf, String))) == abspath(script)
             @test isfile(joinpath(slot, DistSSHRun.kit_job_pkill_pattern("repro-1")))
             snap = DistSSHRun.TOML.parsefile(
-                joinpath(slot, ".distsshkit", "provenance-slot.toml"),
+                joinpath(slot, ".distssh", "provenance-slot.toml"),
             )
             @test snap["version"] == string(VERSION)
         end

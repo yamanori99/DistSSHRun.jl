@@ -178,7 +178,7 @@ end
                 )
             )
             slot = DistSSHRun._read_go_slot_snapshot(
-                joinpath(tmp, ".distsshkit", "provenance-slot.toml"),
+                joinpath(tmp, ".distssh", "provenance-slot.toml"),
             )
             @test slot["version"] == string(VERSION)
             @test haskey(slot, "commit")
@@ -260,7 +260,7 @@ end
             @test raw["provenance"]["project"]["manifest"] == "absent"
             @test raw["provenance"]["workers"] == []
             @test raw["provenance"]["julia"]["parent"]["version"] == "1.13.2"
-            side = DistSSHRun.TOML.parsefile(joinpath(out, ".distsshkit", "provenance.toml"))
+            side = DistSSHRun.TOML.parsefile(joinpath(out, ".distssh", "provenance.toml"))
             @test side == raw["provenance"]
             grouped = Dict{String, Any}(
                 "child:box" => [
@@ -282,7 +282,7 @@ end
             grouped_raw = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
             @test grouped_raw["schema"] == 1
             @test grouped_raw["provenance"]["workers"]["child:box"][1]["n"] == 2
-            grouped_side = DistSSHRun.TOML.parsefile(joinpath(out, ".distsshkit", "provenance.toml"))
+            grouped_side = DistSSHRun.TOML.parsefile(joinpath(out, ".distssh", "provenance.toml"))
             @test grouped_side == grouped_raw["provenance"]
             DistSSHRun.write_kit_run_toml!(tmp; kind = :go, output_dir = out)
             again = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
@@ -351,8 +351,8 @@ end
                     @test only_new["source"]["dirty"] == true
                     @test only_new["source"]["untracked"] >= 1
                     @test !haskey(only_new["source"], "diff_sha256")
-                    mkpath(joinpath(repo, ".distsshkit"))
-                    write(joinpath(repo, ".distsshkit", "provenance.toml"), "x\n")
+                    mkpath(joinpath(repo, ".distssh"))
+                    write(joinpath(repo, ".distssh", "provenance.toml"), "x\n")
                     rm(joinpath(repo, "extra.txt"))
                     kit_only = DistSSHRun.assemble_provenance(repo)
                     @test kit_only["source"]["dirty"] == false
@@ -494,7 +494,7 @@ end
                 od = String(raw["output_dir"])
                 side_root = isabspath(od) ? od : joinpath(proj, od)
                 side = DistSSHRun.TOML.parsefile(
-                    joinpath(side_root, ".distsshkit", "provenance.toml"),
+                    joinpath(side_root, ".distssh", "provenance.toml"),
                 )
                 @test side == raw["provenance"]
             end

@@ -301,13 +301,13 @@ function _gitignore_tree!(dir::String)
     )
     mkpath(joinpath(dir, "data"))
     mkpath(joinpath(dir, "src"))
-    mkpath(joinpath(dir, ".distsshkit"))
+    mkpath(joinpath(dir, ".distssh"))
     write(joinpath(dir, "data", "input.csv"), "in\n")
     write(joinpath(dir, "data", "tmp.csv"), "tmp\n")
     write(joinpath(dir, "Manifest.toml"), "manifest\n")
     write(joinpath(dir, "Manifest-v1.13.toml"), "old\n")
     write(joinpath(dir, "src", "a.jl"), "1\n")
-    write(joinpath(dir, ".distsshkit", "marker"), "x\n")
+    write(joinpath(dir, ".distssh", "marker"), "x\n")
     return nothing
 end
 
@@ -335,7 +335,7 @@ end
             @test "src/a.jl" in got
             @test "data/tmp.csv" ∉ got
             @test "Manifest-v1.13.toml" ∉ got
-            @test ".distsshkit/marker" ∉ got
+            @test ".distssh/marker" ∉ got
         end
 
         session = DistSSHRun.KitSession(
