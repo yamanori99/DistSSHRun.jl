@@ -1830,7 +1830,7 @@ end
 """
     ship_tree!(pack, hosts, deploy_root; confirm=false, provenance=true) -> ShipTreeResult
 
-Send an existing [`ShipPack`](@ref DistSSHShip.ShipPack) to `runs/<run_id>/src/` on
+Send an existing [`ShipPack`](@ref DistSSHRun.DistSSHShip.ShipPack) to `runs/<run_id>/src/` on
 each host. Does not pack again and does not delete the pack directory.
 
 The tar is hashed again immediately before sending. A different `git-sha1`
@@ -1874,7 +1874,7 @@ public ship_tree!
 Pack `project` (with declared-input omission and `warn = print_warn`), ship
 to `runs/<run_id>/src/` on each host, then delete the temporary pack directory.
 
-See the [`ShipPack`](@ref DistSSHShip.ShipPack) method for send-only behavior
+See the [`ShipPack`](@ref DistSSHRun.DistSSHShip.ShipPack) method for send-only behavior
 and keyword semantics.
 """
 function ship_tree!(

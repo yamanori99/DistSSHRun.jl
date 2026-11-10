@@ -120,7 +120,7 @@ when selection cannot probe, then fails closed if the snapshot is invalid. `--rs
 `ship_tree!(project, hosts, deploy_root)` packs with `DistSSHShip.pack_tree`
 (declared-input omission and warnings), ships into `runs/<run_id>/src/`, then
 deletes the temporary pack directory. `ship_tree!(pack, hosts, deploy_root)`
-sends an existing [`ShipPack`](@ref DistSSHShip.ShipPack) without repacking or
+sends an existing [`ShipPack`](@ref DistSSHRun.DistSSHShip.ShipPack) without repacking or
 deleting it (a pack from a project with declared inputs is refused; use the
 project method). After `DistSSHShip.ship`, files under `<dest>/.distssh/`
 (for example `ship.toml`) are remote metadata and are **not** part of
