@@ -16,7 +16,8 @@ const _GO_SLOT_PROVENANCE_NAME = "provenance-slot.toml"
 const _GO_SLOT_LOADER_NAME = "provenance-slot.jl"
 
 # Same fields as `_process_snapshot_expr`. A go slot has no DistSSHRun, so `-L` runs this text.
-const _GO_SLOT_LOADER_SRC = """
+const _GO_SLOT_LOADER_SRC = let _go_slot_state_dir = DistSSHBase.LOCAL_STATE_DIR
+    """
 import TOML
 try
     let blas = Ref("not loaded"), blas_threads = Ref("not loaded")
@@ -59,7 +60,7 @@ try
             end
         end
         dir = get(ENV, "DISTRIBUTED_OUTPUT_DIR", pwd())
-        dest = joinpath(dir, DistSSHBase.LOCAL_STATE_DIR)
+        dest = joinpath(dir, $(_go_slot_state_dir |> repr))
         mkpath(dest)
         open(joinpath(dest, "provenance-slot.toml"), "w") do io
             TOML.print(io, snap)
@@ -68,6 +69,7 @@ try
 catch
 end
 """
+end
 
 const _GIT_DIFF_FLAGS = (
     "-c",

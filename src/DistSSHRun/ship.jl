@@ -199,8 +199,7 @@ function _canonical_ship_input_path(path::AbstractString)::String
         end
         push!(parts, piece)
     end
-    isempty(parts) &&
-        throw(ArgumentError("inputs.toml: path must stay inside the project: $path"))
+    isempty(parts) && return "."
     return join(parts, "/")
 end
 

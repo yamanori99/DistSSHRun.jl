@@ -502,13 +502,14 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         return nothing
     end
 
-    # Newest go batch dir (`go_manifest.txt` under `.distsshkit/go/`), or `nothing`.
+    # Newest go batch dir (`go_manifest.txt` under `.distssh/go/` or legacy `.distsshkit/go/`), or `nothing`.
     function _ssh_e2e_latest_go_batch(proj::AbstractString)::Union{Nothing, String}
         candidates = String[]
         isdir(proj) || return nothing
         for (root, dirs, _) in walkdir(proj)
             basename(root) == "go" || continue
-            occursin(".distsshkit", root) || continue
+            state_parent = basename(dirname(root))
+            state_parent in (".distssh", ".distsshkit") || continue
             for name in dirs
                 p = joinpath(root, name)
                 isfile(joinpath(p, "go_manifest.txt")) && push!(candidates, p)
