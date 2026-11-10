@@ -639,7 +639,7 @@ function ride!(
     )::RideResult
     path = canonical_local_path(script)
     julia_s = string(VERSION)
-    snap = run_id === nothing ? nothing : validate_run_id(run_id)
+    validated_run_id = run_id === nothing ? nothing : validate_run_id(run_id)
     scan = _script_scan(path)
     scan.error !== nothing &&
         return RideResult(false, path, 0, nothing, something(scan.error, "scan failed"), julia_s)
@@ -657,7 +657,7 @@ function ride!(
         return with_allow_mismatch(allow_mismatch) do
             return _ride_run!(
                 path, julia_s, tokens, args, spi_check, output_dir, project, julia,
-                remote, snap, require_all_hosts, hint_surface, inherited_run,
+                remote, validated_run_id, require_all_hosts, hint_surface, inherited_run,
             )
         end
     finally
