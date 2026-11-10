@@ -112,22 +112,22 @@ Filter = function (x)
 end
 ```
 
-`ship_tree!`, `ship_send_list`, `validate_snapshot_id`,
-`resolve_snapshot_selection`, `read_last_snapshot_record`,
-`write_last_snapshot_record!`, `forget_last_snapshot_default!`, and
-`active_snapshot_selection` are public and are not exported.
+`ship_tree!`, `ship_send_list`, `validate_run_id`,
+`resolve_source_selection`, `read_last_ship_record`,
+`write_last_ship_record!`, `forget_last_ship_default!`, and
+`active_source_selection` are public and are not exported.
 
 ```@docs
 ship_send_list
 ship_tree!
 ShipTreeResult
-SnapshotSelection
-validate_snapshot_id
-resolve_snapshot_selection
-read_last_snapshot_record
-write_last_snapshot_record!
-forget_last_snapshot_default!
-active_snapshot_selection
+SourceSelection
+validate_run_id
+resolve_source_selection
+read_last_ship_record
+write_last_ship_record!
+forget_last_ship_default!
+active_source_selection
 remote_script_path
 check_setup_options!
 ```
@@ -189,11 +189,11 @@ Filter = function (x)
         :collect!, :CollectResult,
         :setup!, :sync!, :instantiate!, :ship_send_list,
         :KitSession, :HostResult, :SyncResult,
-        :ship_tree!, :ShipTreeResult, :SnapshotSelection,
-        :validate_snapshot_id, :resolve_snapshot_selection,
-        :read_last_snapshot_record, :write_last_snapshot_record!,
-        :forget_last_snapshot_default!,
-        :active_snapshot_selection,
+        :ship_tree!, :ShipTreeResult, :SourceSelection,
+        :validate_run_id, :resolve_source_selection,
+        :read_last_ship_record, :write_last_ship_record!,
+        :forget_last_ship_default!,
+        :active_source_selection,
         :remote_script_path, :check_setup_options!,
         :execute_kwargs_from_parsed, :detached_launch,
         :ALLOW_MISMATCH_FIELDS,

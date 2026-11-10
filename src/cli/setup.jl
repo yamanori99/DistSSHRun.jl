@@ -3,7 +3,7 @@
 #
 # Recommended workflow:
 #   1. ship-tree → 2. instantiate → 3. check → 4. runtest (optional) → `go` / `drive`
-#   instantiate/check/go use --snapshot ID, else last-snapshot.toml, else a git
+#   instantiate/check/go use --run-id ID, else last-ship.toml, else a git
 #   checkout with Project.toml at the deploy root. Lexical latest is not used.
 #   Optional git: git-clone → instantiate → check → git-sync / git-pull
 #   Replace a clone dest: delete, then git-clone
@@ -125,7 +125,7 @@ if !isdefined(@__MODULE__, :setup_main)
             DistSSHRun.check_setup_options!(
                 opts.mode;
                 extra_files = opts.extra_files,
-                snapshot = opts.snapshot_id,
+                run_id = opts.run_id,
             )
         catch e
             e isa ArgumentError || rethrow()
@@ -217,7 +217,7 @@ if !isdefined(@__MODULE__, :setup_main)
                     op_path = DistSSHRun._project_work_root(
                         opts.hosts, project;
                         cli_override = opts.deploy_root,
-                        snapshot = opts.snapshot_id,
+                        run_id = opts.run_id,
                     )
                 catch e
                     e isa ArgumentError || rethrow()
@@ -269,7 +269,7 @@ if !isdefined(@__MODULE__, :setup_main)
                     ) :
                     DistSSHRun._apply_confirmed_delete(opts.hosts, plan, deploy_path)
                 ok = finish_host_op!("Delete", result)
-                ok && DistSSHRun.forget_last_snapshot_default!(project, deploy_path)
+                ok && DistSSHRun.forget_last_ship_default!(project, deploy_path)
                 return Cint(ok ? 0 : 1)
             end
 
@@ -280,7 +280,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 result = clone_to_remotes(opts.hosts, clone_dest, clone_url)
                 ok = finish_host_op!("Clone", result)
                 if ok
-                    DistSSHRun.forget_last_snapshot_default!(project, deploy_path)
+                    DistSSHRun.forget_last_ship_default!(project, deploy_path)
                     if result.failed == 0
                         ok_hosts = String[
                             hr.host for hr in result.hosts if hr.ok
@@ -314,18 +314,18 @@ if !isdefined(@__MODULE__, :setup_main)
                         extra_files = opts.extra_files,
                     ),
                 )
-                sel = ok ? DistSSHRun.active_snapshot_selection() : nothing
+                sel = ok ? DistSSHRun.active_source_selection() : nothing
                 if ok && sel !== nothing
-                    rid = sel.snapshot_id
+                    rid = sel.run_id
                     src = sel.work_root
                     path_flag = opts.deploy_root isa AbstractString ?
                         " --deploy-root $(opts.deploy_root)" : ""
                     if rid isa AbstractString && !isempty(rid)
                         kit_println(
-                            "  Next: $(DistSSHRun.cli_m()) setup instantiate --snapshot $rid$path_flag",
+                            "  Next: $(DistSSHRun.cli_m()) setup instantiate --run-id $rid$path_flag",
                         )
                         kit_println(
-                            "        $(DistSSHRun.cli_m()) setup check --snapshot $rid$path_flag",
+                            "        $(DistSSHRun.cli_m()) setup check --run-id $rid$path_flag",
                         )
                     elseif src isa AbstractString
                         kit_println(
@@ -465,7 +465,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 return Cint(1)
             end
 
-            DistSSHRun.forget_last_snapshot_default!(project, deploy_path)
+            DistSSHRun.forget_last_ship_default!(project, deploy_path)
             DistSSHRun.commit_deploy_record_after_git!(
                 opts.hosts,
                 deploy_path,

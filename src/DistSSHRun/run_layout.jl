@@ -11,8 +11,20 @@ function allocate_remote_run_id()::String
     return string(stamp, "-", hex)
 end
 
+"""
+    validate_run_id(run_id) -> String
+
+Validate a remote `runs/<run_id>/` leaf id: `YYYYMMDDTHHMMSSZ-xxxxxx` (6 hex)
+and a single safe path component (no `/`, `\\`, `.`, or `..`).
+"""
 function validate_run_id(run_id::AbstractString)::String
     s = String(run_id)
+    (occursin('/', s) || occursin('\\', s) || occursin('\0', s) || s == "." || s == "..") &&
+        throw(
+        ArgumentError(
+            "run_id must be a single path component matching YYYYMMDDTHHMMSSZ-xxxxxx, got $(repr(s))",
+        ),
+    )
     occursin(_RUN_ID_PATTERN, s) || throw(
         ArgumentError(
             "run_id must match YYYYMMDDTHHMMSSZ-xxxxxx (6 hex), got $(repr(s))",
@@ -20,6 +32,7 @@ function validate_run_id(run_id::AbstractString)::String
     )
     return s
 end
+public validate_run_id
 
 function remote_runs_dir(remote_root::AbstractString)::String
     return joinpath(String(remote_root), "runs")

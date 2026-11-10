@@ -47,12 +47,12 @@ end
         "schema" => 1,
         "mode" => "ship-tree",
         "deploy_id" => "20260101T000000Z-aaaaaa",
-        "snapshot_id" => "20260101T000000Z-aaaaaa",
+        "run_id" => "20260101T000000Z-aaaaaa",
     )
     slice = DistSSHRun._deploy_record_for_provenance(rec)
     @test slice !== nothing
     @test slice["mode"] == "ship-tree"
-    @test slice["snapshot_id"] == "20260101T000000Z-aaaaaa"
+    @test slice["run_id"] == "20260101T000000Z-aaaaaa"
 end
 
 @testset "deploy record scp upload argv is local then remote" begin

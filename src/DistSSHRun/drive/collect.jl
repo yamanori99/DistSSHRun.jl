@@ -23,8 +23,8 @@ Distinct from drive's automatic **post-run-new** (sentinel / newer-than-run) and
 
 A root that is the session project or a parent of it is refused (`ok=false`,
 exit code 1). Point it at a result directory inside the project.
-`snapshot=` selects `runs/<ID>/src`. When omitted, a present controller
-`DISTSSHKIT_RUN_DIR/run.toml` with `provenance.shipped` recovers that
+`run_id=` selects `runs/<ID>/src`. When omitted, a present controller
+`DISTSSHKIT_RUN_DIR/run.toml` with `provenance.selection` recovers that
 execution's source instead of a later last-snapshot record.
 """
 function collect!(
@@ -33,7 +33,7 @@ function collect!(
         merge::Bool = false,
         hosts::Union{Nothing, AbstractVector{<:AbstractString}} = nothing,
         julia::Union{Nothing, AbstractString} = nothing,
-        snapshot::Union{Nothing, AbstractString} = nothing,
+        run_id::Union{Nothing, AbstractString} = nothing,
     )::CollectResult
     host_list = hosts === nothing ? session.hosts : collect(String, hosts)
     isempty(host_list) && throw(
@@ -41,7 +41,7 @@ function collect!(
             explain_no_hosts(; surface = hint_surface(session), kind = :collect),
         )
     )
-    snap = snapshot === nothing ? nothing : validate_snapshot_id(snapshot)
+    snap = run_id === nothing ? nothing : validate_run_id(run_id)
     return _with_kit_inproc_run!(:collect) do
         apply_session_env!(session)
         return _with_session_remote_env!(session) do
@@ -52,7 +52,7 @@ function collect!(
                 project_root = session.project,
                 path_anchor = canonical_local_path(session.project),
                 julia = julia,
-                snapshot = snap,
+                run_id = snap,
             )
             return CollectResult(ok, ok ? 0 : 1)
         end

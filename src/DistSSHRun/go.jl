@@ -12,7 +12,7 @@ end
 `run_dir` is this run's `DISTSSHKIT_RUN_DIR` when one is active.
 Read it with [`result_run_dir`](@ref). [`result_provenance`](@ref) reads
 `run.toml` from it. [`result_content_tree_hash`](@ref) and
-[`result_remote_run_id`](@ref) read `provenance.shipped` in that file.
+[`result_remote_run_id`](@ref) read `provenance.selection` in that file.
 Omitted `run_dir` uses [`kit_run_dir`](@ref), which
 is `nothing` outside a run.
 
@@ -429,7 +429,7 @@ function _go_assert_remote_ready!(host::AbstractString, remote_root::AbstractStr
             "  git:    julia --project=. -m DistSSHKit setup git-clone $(setup_cli_host_token(host))\n" *
             "          (later updates: setup git-sync $(setup_cli_host_token(host)))\n" *
             "  then:   julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host))\n" *
-            "  then:   julia --project=. -m DistSSHKit go --snapshot ID …\n" *
+            "  then:   julia --project=. -m DistSSHKit go --run-id ID …\n" *
             "Or from Julia: setup!(session, :ship_tree, :instantiate)\n" *
             "  (or :git_clone, :instantiate; repo=\"…\" for clone; later :git_sync)\n" *
             "Set DISTRIBUTED_REMOTE_PROJECT_ROOT if the remote path is not the default."
@@ -986,9 +986,9 @@ means "skip collect" and is orthogonal to `output_dir`.
 Default `sync` is `false` (no pre-run sync; remotes are checked first — setup
 is assumed done). The `go` CLI does not take `--ship-tree` or `--git-sync`;
 prepare with `setup ship-tree` or `setup git-sync`, then `setup instantiate`
-when needed, then `go --snapshot ID`. Passing `sync=:git_sync` or
+when needed, then `go --run-id ID`. Passing `sync=:git_sync` or
 `sync=:ship_tree` on [`go!`](@ref) is an `ArgumentError`. `snapshot`
-(CLI `--snapshot`) selects `runs/<ID>/src` when `sync` is omitted or `false`.
+(CLI `--run-id`) selects `runs/<ID>/src` when `sync` is omitted or `false`.
 A script outside the project is allowed with `snapshot` when that ship used
 `extra_files=[script]`. The remote command is
 [`remote_script_path`](@ref): `_distsshrun_external/<basename>` under the
@@ -1035,7 +1035,7 @@ function go!(
         original_args::Vector{String} = String[],
         repeat::Union{Nothing, Integer} = nothing,
         allow_mismatch = Symbol[],
-        snapshot::Union{Nothing, AbstractString} = nothing,
+        run_id::Union{Nothing, AbstractString} = nothing,
         sync::Union{Symbol, Bool, Nothing} = nothing,
         allow_external_symlinks::Bool = false,
     )::GoResult
@@ -1044,7 +1044,7 @@ function go!(
         _reject_run_transfer_cli!(hint_surface === :cli ? "go" : "go", "--allow-external-symlinks")
     remote_argv = _remote_script_argv(script)
     script_path = remote_argv ? String(script) : canonical_local_path(script)
-    snap_arg = snapshot === nothing ? nothing : validate_snapshot_id(snapshot)
+    snap_arg = run_id === nothing ? nothing : validate_run_id(run_id)
     proj = canonical_local_path(project)
     if !isfile(script_path) && !(remote_argv && snap_arg !== nothing)
         throw(
@@ -1196,7 +1196,7 @@ function _go_run!(
             "go!",
             proj,
             script_path;
-            snapshot = snap_arg,
+            run_id = snap_arg,
             remote_argv = remote_argv,
         )
         _write_kit_hosts_file(child_hosts, batch_dir, nothing)
@@ -1225,7 +1225,7 @@ function _go_run!(
             sess_rr
         else
             rr = _project_work_root(
-                child_hosts, proj; cli_override = remote, snapshot = snap_arg,
+                child_hosts, proj; cli_override = remote, run_id = snap_arg,
             )
             _go_assert_remotes_ready!(child_hosts, rr)
             rr

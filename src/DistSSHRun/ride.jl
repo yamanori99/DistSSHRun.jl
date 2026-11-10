@@ -632,14 +632,14 @@ function ride!(
         project::AbstractString = pwd(),
         julia::Union{Nothing, AbstractString} = nothing,
         remote::Union{Nothing, AbstractString} = nothing,
-        snapshot::Union{Nothing, AbstractString} = nothing,
+        run_id::Union{Nothing, AbstractString} = nothing,
         require_all_hosts::Bool = true,
         hint_surface::Symbol = :api,
         allow_mismatch = Symbol[],
     )::RideResult
     path = canonical_local_path(script)
     julia_s = string(VERSION)
-    snap = snapshot === nothing ? nothing : validate_snapshot_id(snapshot)
+    snap = run_id === nothing ? nothing : validate_run_id(run_id)
     scan = _script_scan(path)
     scan.error !== nothing &&
         return RideResult(false, path, 0, nothing, something(scan.error, "scan failed"), julia_s)
@@ -735,10 +735,10 @@ function _ride_run!(
         end
         # After `:ship_tree` the project is `remote/runs/<id>/src`.
         # `_clear_last_ship!` dropped this process's ship cache; selection uses
-        # the local last-snapshot record, `snapshot=` / `--snapshot`, or a git
+        # the local last-ship record, `run_id=` / `--run-id`, or a git
         # checkout. A parent-only ride has no SSH host to probe.
         child_hosts = String[h for (h, n) in wp.child_workers if n > 0]
-        _assign_remote_work_root_env!(child_hosts, project; snapshot = snapshot)
+        _assign_remote_work_root_env!(child_hosts, project; run_id = run_id)
         if !isempty(child_hosts)
             deploy_root = _resolved_deploy_root_for_work(
                 project; cli_override = remote,

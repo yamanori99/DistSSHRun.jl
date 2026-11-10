@@ -77,7 +77,7 @@ function sync!(
             end
             result = SyncResult(false, raw.host_results; ok = raw.ok)
             if result.ok
-                forget_last_snapshot_default!(session.project, deploy)
+                forget_last_ship_default!(session.project, deploy)
                 ok_hosts = String[String(hr.host) for hr in result.hosts if hr.ok]
                 commit_deploy_record_after_git!(
                     ok_hosts, deploy, session.project, :git_sync;

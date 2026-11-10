@@ -72,7 +72,7 @@ function go_main()::Cint
             julia = kw[:julia],
             allow_mismatch = get(kw, :allow_mismatch, Symbol[]),
             repeat = get(kw, :repeat, nothing),
-            snapshot = get(parsed, :snapshot, nothing),
+            run_id = get(parsed, :run_id, nothing),
             remote = get(parsed, :deploy_root, nothing),
             hint_surface = :cli,
             original_args = original_args,

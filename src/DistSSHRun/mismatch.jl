@@ -383,10 +383,10 @@ function verify_go_slots_match_job!(
             startswith(k, "pkg.") || continue
             local_id[k] = val
         end
-        shipped = get(parent, "manifest", "")
+        shipped_man = get(parent, "manifest", "")
         for line in identity_mismatches(
                 parent, local_id;
-                allow = allow, shipped_manifest = shipped,
+                allow = allow, shipped_manifest = shipped_man,
             )
             push!(mismatches, "parent slot: $(line)")
         end

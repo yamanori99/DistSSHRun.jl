@@ -148,8 +148,8 @@ end
         @testset "setup instantiate" begin
             _e2e_announce("setup instantiate")
             # `--deploy-root` is the deploy root only. The ship leaf is
-            # `runs/<id>/src`; select it with `--snapshot` (or the local
-            # last-snapshot record written by ship-tree).
+            # `runs/<id>/src`; select it with `--run-id` (or the local
+            # last-ship record written by ship-tree).
             p_src, src_out = _ssh_e2e_ssh(hosts[1], "ls -1d $(remote_root)/runs/*/src 2>/dev/null | tail -n 1")
             _assert_proc_ok(p_src, src_out; label = "ship src leaf")
             ship_src = strip(src_out)
@@ -157,7 +157,7 @@ end
             snap_id = basename(dirname(ship_src))
             proc, out = _run_kit_setup(;
                 setup_args = [
-                    "instantiate", "--deploy-root", remote_root, "--snapshot", snap_id,
+                    "instantiate", "--deploy-root", remote_root, "--run-id", snap_id,
                     setup_hosts...,
                 ],
                 project_root = proj,
@@ -866,8 +866,8 @@ end
             end
         end
 
-        @testset "setup ship-tree then go --snapshot empty remote" begin
-            _e2e_announce("setup ship-tree then go --snapshot empty remote")
+        @testset "setup ship-tree then go --run-id empty remote" begin
+            _e2e_announce("setup ship-tree then go --run-id empty remote")
             oneshot = _ssh_e2e_go_rsync_remote_root()
             oneshot_env = _ssh_e2e_env(; remote_project = oneshot)
             try
@@ -895,7 +895,7 @@ end
                 @test !isempty(snap_id)
                 proc, out = _run_kit_setup(;
                     setup_args = [
-                        "instantiate", "--deploy-root", oneshot, "--snapshot", snap_id,
+                        "instantiate", "--deploy-root", oneshot, "--run-id", snap_id,
                         setup_hosts...,
                     ],
                     project_root = proj,
@@ -908,7 +908,7 @@ end
                     hosts = remote_tokens,
                     script_args = ["--n", "32"],
                     project_root = proj,
-                    go_flags = ["-y", "--snapshot", snap_id],
+                    go_flags = ["-y", "--run-id", snap_id],
                     extra_env = merge(oneshot_env, Dict("DISTSSHKIT_QUIET" => "0")),
                 )
                 _assert_ssh_e2e_ok(suite, "go_snapshot_empty", proc, out; project = proj, kit = :go)
@@ -1667,7 +1667,7 @@ end
             @test !isempty(snap_id)
             proc, out = _run_kit_setup(;
                 setup_args = [
-                    "instantiate", "--deploy-root", outside_root, "--snapshot", snap_id,
+                    "instantiate", "--deploy-root", outside_root, "--run-id", snap_id,
                     setup_hosts...,
                 ],
                 project_root = proj,
@@ -1684,7 +1684,7 @@ end
                     project = proj,
                     remote = outside_root,
                     detached = true,
-                    snapshot = snap_id,
+                    run_id = snap_id,
                     yes = true,
                     quiet = true,
                 )

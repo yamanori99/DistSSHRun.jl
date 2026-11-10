@@ -17,7 +17,7 @@ using Test
         @test occursin("fish and csh are unsupported", text)
         @test occursin("backslashes inside single quotes", text)
         @test occursin("must not start with '-'", text)
-        @test occursin("--snapshot", text)
+        @test occursin("--run-id", text)
         @test occursin("Lexical latest is not used", text)
         @test !occursin("latest runs/<run_id>/src", text)
         @test occursin("Ship creates a missing remote_root", text)
@@ -299,11 +299,11 @@ using Test
         @test r.hosts == ["host1"]
     end
     let r = parse_setup_args(
-            ["instantiate", "--deploy-root", "/tmp/App.jl", "--snapshot", "20260101T000000Z-aaaaaa", "child:h1"],
+            ["instantiate", "--deploy-root", "/tmp/App.jl", "--run-id", "20260101T000000Z-aaaaaa", "child:h1"],
         )
         @test r.mode == :instantiate
         @test r.deploy_root == "/tmp/App.jl"
-        @test r.snapshot_id == "20260101T000000Z-aaaaaa"
+        @test r.run_id == "20260101T000000Z-aaaaaa"
     end
     let r = parse_setup_args(["--deploy-root", "/tmp/App.jl", "check", "child:h1"])
         @test r.mode == :check

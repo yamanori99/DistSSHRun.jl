@@ -806,7 +806,7 @@ using Dates
                 DistSSHRun.go!(
                     script, ["parent:1"];
                     project = app,
-                    snapshot = "20260101T000000Z-aaaaaa",
+                    run_id = "20260101T000000Z-aaaaaa",
                     yes = true,
                     quiet = true,
                 )

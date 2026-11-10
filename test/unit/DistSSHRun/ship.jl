@@ -42,7 +42,7 @@ end
         project_rel = "app",
     )
     @test occursin("project_rel = \"app\"", nested)
-    @test DistSSHRun._snapshot_project_logical(
+    @test DistSSHRun._ship_run_project_logical(
         "/srv/app", "20260101T000000Z-abcdef", "app",
     ) == "/srv/app/runs/20260101T000000Z-abcdef/src/app"
     @test_throws ArgumentError DistSSHRun._ship_run_leaf_complete_toml(
@@ -1107,7 +1107,7 @@ end
 end
 
 @testset "active selection is scoped to hosts and deploy root" begin
-    sel = DistSSHRun.SnapshotSelection(
+    sel = DistSSHRun.SourceSelection(
         :snapshot,
         "20260101T000000Z-abcdef",
         "/home/dev/app",
@@ -1118,7 +1118,7 @@ end
     DistSSHRun._clear_last_ship!()
     DistSSHRun._set_active_selection!(sel)
     try
-        got = something(DistSSHRun.active_snapshot_selection())
+        got = something(DistSSHRun.active_source_selection())
         @test got.work_root == "/home/dev/app/runs/20260101T000000Z-abcdef/src"
         @test DistSSHRun._rehome_under_work_root(
             "/home/dev/app/pkg", "/home/dev/app", got.work_root,
@@ -1131,7 +1131,7 @@ end
 end
 
 @testset "project work root rehomes workspace member onto selected src" begin
-    # Pure rehome mapping (selection itself is covered in snapshot_select.jl).
+    # Pure rehome mapping (selection itself is covered in source_selection.jl).
     wr = "/home/dev/app/runs/20260101T000000Z-abcdef/src"
     @test DistSSHRun._rehome_under_work_root(
         "/home/dev/app/pkg", "/home/dev/app", wr,
@@ -1177,7 +1177,7 @@ end
         deploy = "/home/dev/app"
         work = "/home/dev/app/runs/20260101T000000Z-abcdef/src"
         DistSSHRun._set_active_selection!(
-            DistSSHRun.SnapshotSelection(
+            DistSSHRun.SourceSelection(
                 :snapshot,
                 "20260101T000000Z-abcdef",
                 deploy,
@@ -1211,7 +1211,7 @@ end
         other = "/home/dev/other"
         other_work = "/home/dev/other/runs/20260101T000000Z-abcdef/src"
         DistSSHRun._set_active_selection!(
-            DistSSHRun.SnapshotSelection(
+            DistSSHRun.SourceSelection(
                 :snapshot,
                 "20260101T000000Z-abcdef",
                 other,
@@ -1224,7 +1224,7 @@ end
             # Session/ENV points at a different deploy root than the stale selection.
             withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/home/dev/app") do
                 deploy = DistSSHRun._layout_intended_deploy_root(
-                    proj, DistSSHRun.active_snapshot_selection(),
+                    proj, DistSSHRun.active_source_selection(),
                 )
                 @test deploy == "/home/dev/app"
                 @test !DistSSHRun._deploy_roots_equivalent(deploy, other)
@@ -1246,7 +1246,7 @@ end
     end
     DistSSHRun._clear_last_ship!()
     @test DistSSHRun.last_ship_result() === nothing
-    @test DistSSHRun.active_snapshot_selection() === nothing
+    @test DistSSHRun.active_source_selection() === nothing
 end
 
 @testset "--rsync removed" begin
@@ -1437,7 +1437,7 @@ end
 
     _with_tempdir() do proj
         _project!(proj)
-        previous = DistSSHRun.active_snapshot_selection()
+        previous = DistSSHRun.active_source_selection()
         prev_ni = DistSSHRun.kit_noninteractive()
         DistSSHRun.set_kit_noninteractive!(false)
         try
@@ -1481,10 +1481,10 @@ end
                     _apply_quiet_setup_session!()
                     _with_tempdir() do proj
                         _project!(proj)
-                        previous = DistSSHRun.active_snapshot_selection()
+                        previous = DistSSHRun.active_source_selection()
                         pack = DistSSHRun._pack_project_tree(proj)
                         try
-                            sentinel = DistSSHRun.SnapshotSelection(
+                            sentinel = DistSSHRun.SourceSelection(
                                 :snapshot,
                                 "sentinel-run",
                                 "/other",
@@ -1500,7 +1500,7 @@ end
                             @test quiet isa DistSSHRun.ShipTreeResult
                             @test !quiet.cancelled
                             @test all(hr -> hr.ok, quiet.host_results)
-                            @test DistSSHRun.active_snapshot_selection() === sentinel
+                            @test DistSSHRun.active_source_selection() === sentinel
                             @test isfile(pack.tar_path)
                             @test DistSSHRun.result_content_tree_hash(quiet) == pack.content_tree_hash
                             @test occursin(
@@ -1511,9 +1511,9 @@ end
                                 pack, ["host1"], "/home/distsshkit/app";
                                 confirm = false, provenance = true,
                             )
-                            kept = something(DistSSHRun.active_snapshot_selection())
+                            kept = something(DistSSHRun.active_source_selection())
                             @test kept.content_tree_hash == pack.content_tree_hash
-                            @test kept.snapshot_id ==
+                            @test kept.run_id ==
                                 DistSSHRun.result_remote_run_id(recorded)
                             @test isfile(pack.tar_path)
 
@@ -1575,7 +1575,7 @@ end
                         _project!(proj)
                         tree = joinpath(state_dir, "host1", "tree")
                         @test !isdir(tree)
-                        previous = DistSSHRun.active_snapshot_selection()
+                        previous = DistSSHRun.active_source_selection()
                         try
                             created = DistSSHRun.ship_tree!(
                                 proj, ["host1"], "/home/distsshkit/app"; confirm = false,
@@ -1606,7 +1606,7 @@ end
                         _project!(proj)
                         tree = joinpath(state_dir, "host1", "tree")
                         @test isdir(tree)
-                        previous = DistSSHRun.active_snapshot_selection()
+                        previous = DistSSHRun.active_source_selection()
                         try
                             failed = DistSSHRun.ship_tree!(
                                 proj, ["host1"], "/home/distsshkit/app"; confirm = false,

@@ -538,9 +538,9 @@ end
         @test DistSSHRun.execute_detached_accepts(:allow_mismatch; kind = :go)
         @test DistSSHRun.execute_detached_accepts(:allow_mismatch; kind = :drive)
         @test DistSSHRun.execute_detached_accepts(:allow_mismatch; kind = :ride)
-        @test DistSSHRun.execute_detached_accepts(:snapshot; kind = :go)
-        @test DistSSHRun.execute_detached_accepts(:snapshot; kind = :drive)
-        @test DistSSHRun.execute_detached_accepts(:snapshot; kind = :ride)
+        @test DistSSHRun.execute_detached_accepts(:run_id; kind = :go)
+        @test DistSSHRun.execute_detached_accepts(:run_id; kind = :drive)
+        @test DistSSHRun.execute_detached_accepts(:run_id; kind = :ride)
         @test DistSSHRun.execute_detached_accepts(:spi_check; kind = :ride)
         @test !DistSSHRun.execute_detached_accepts(:gb_per_worker; kind = :ride)
         @test !DistSSHRun.execute_detached_accepts(:mem_headroom; kind = :ride)
@@ -776,9 +776,9 @@ end
             package = nothing,
             require_all_hosts = true,
             skip_hash_check = true,
-            snapshot = "20260101T000000Z-aaaaaa",
+            run_id = "20260101T000000Z-aaaaaa",
         )
-        @test "--snapshot" in argv_snap
+        @test "--run-id" in argv_snap
         @test "20260101T000000Z-aaaaaa" in argv_snap
         argv_root = DistSSHRun._execute_detached_argv(
             :go, "job.jl", ["parent:1"], String[];
@@ -808,17 +808,17 @@ end
             ],
         )
         gkw = DistSSHRun.execute_kwargs_from_parsed(go; kind = :go)
-        @test !haskey(gkw, :snapshot)
+        @test !haskey(gkw, :run_id)
         go_snap = DistSSHRun.parse_go_args(
-            ["--snapshot", "20260101T000000Z-aaaaaa", "parent:1", "job.jl"],
+            ["--run-id", "20260101T000000Z-aaaaaa", "parent:1", "job.jl"],
         )
         gsnap = DistSSHRun.execute_kwargs_from_parsed(go_snap; kind = :go)
-        @test gsnap[:snapshot] == "20260101T000000Z-aaaaaa"
+        @test gsnap[:run_id] == "20260101T000000Z-aaaaaa"
         drive_snap = DistSSHRun.parse_drive_args(
-            ["--snapshot", "20260101T000000Z-aaaaaa", "parent:1", "s.jl"],
+            ["--run-id", "20260101T000000Z-aaaaaa", "parent:1", "s.jl"],
         )
         dsnap = DistSSHRun.execute_kwargs_from_parsed(drive_snap; kind = :drive)
-        @test dsnap[:snapshot] == "20260101T000000Z-aaaaaa"
+        @test dsnap[:run_id] == "20260101T000000Z-aaaaaa"
         @test !haskey(dsnap, :sync)
         go_root = DistSSHRun.parse_go_args(
             ["--deploy-root", "/tmp/App", "parent:1", "job.jl"],
@@ -910,7 +910,7 @@ end
         @test occursin("Error:", shown)
         @test occursin("go: --ship-tree was removed", shown)
         @test occursin("setup ship-tree", shown)
-        @test occursin("--snapshot", shown)
+        @test occursin("--run-id", shown)
         errd = try
             kit_parse_args(:drive, String["--ship-tree", "parent:1", "s.jl"])
             nothing
@@ -920,10 +920,10 @@ end
         @test errd isa ArgumentError
         @test occursin("drive: --ship-tree was removed", errd.msg)
         parsed = kit_parse_args(
-            :go, String["--snapshot", "20260101T000000Z-aaaaaa", "parent:1", "job.jl"],
+            :go, String["--run-id", "20260101T000000Z-aaaaaa", "parent:1", "job.jl"],
         )
         bag = DistSSHRun.execute_kwargs_from_parsed(parsed; kind = :go)
-        @test bag[:snapshot] == "20260101T000000Z-aaaaaa"
+        @test bag[:run_id] == "20260101T000000Z-aaaaaa"
         @test !haskey(bag, :sync)
         err_go_sync = try
             kit_parse_args(:go, String["--sync", "parent:1", "job.jl"])
@@ -1044,11 +1044,11 @@ end
             package = nothing,
             require_all_hosts = true,
             skip_hash_check = true,
-            snapshot = "20260101T000000Z-aaaaaa",
+            run_id = "20260101T000000Z-aaaaaa",
             remote = "/remote",
         )
         @test !any(==("--ship-tree"), argv)
-        @test "--snapshot" in argv
+        @test "--run-id" in argv
         @test argv[end] == "/remote/src/app/_distsshrun_external/job.jl"
         err_ext = try
             DistSSHRun.execute!(
@@ -1086,7 +1086,7 @@ end
                         script, ["child:h:1"];
                         project = proj,
                         remote = "/home/dev/app",
-                        snapshot = "20260101T000000Z-aaaaaa",
+                        run_id = "20260101T000000Z-aaaaaa",
                         yes = true,
                         quiet = true,
                     )
@@ -1143,7 +1143,7 @@ end
                             ["parent:1"];
                             detached = true,
                             project = app,
-                            snapshot = "20260101T000000Z-aaaaaa",
+                            run_id = "20260101T000000Z-aaaaaa",
                             yes = true,
                             quiet = true,
                             stdout = out_io,
@@ -2144,7 +2144,7 @@ end
                     detached = true,
                     project = proj,
                     quiet = true,
-                    snapshot = "20260101T000000Z-aaaaaa",
+                    run_id = "20260101T000000Z-aaaaaa",
                     stdout = devnull,
                     stderr = devnull,
                 )

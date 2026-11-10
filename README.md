@@ -46,7 +46,7 @@ Julia **1.13+**.
 
 ### Ship
 
-`setup ship-tree` (then `setup instantiate`, then `go` / `drive --snapshot ID`):
+`setup ship-tree` (then `setup instantiate`, then `go` / `drive --run-id ID`):
 
 - Walk the ship root and apply each directory's `.gitignore`
   (case-sensitive). `.git/info/exclude`, `core.excludesFile`, and a
