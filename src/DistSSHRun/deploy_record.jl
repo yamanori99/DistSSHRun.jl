@@ -110,7 +110,15 @@ function _parse_deploy_record_body(body::AbstractString)::Union{Nothing, Dict{St
         mode isa AbstractString && !isempty(strip(String(mode))) || return nothing
         deploy_id = get(raw, "deploy_id", nothing)
         deploy_id isa AbstractString && !isempty(strip(String(deploy_id))) || return nothing
-        return Dict{String, Any}(raw)
+        out = Dict{String, Any}(raw)
+        rid = get(out, "run_id", nothing)
+        if !(rid isa AbstractString && !isempty(strip(String(rid))))
+            legacy = get(out, "snapshot_id", nothing)
+            if legacy isa AbstractString && !isempty(strip(String(legacy)))
+                out["run_id"] = String(strip(legacy))
+            end
+        end
+        return out
     catch
         return nothing
     end

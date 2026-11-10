@@ -40,6 +40,83 @@ end
     @test_throws ArgumentError DistSSHRun.validate_run_id("not-a-run-id")
 end
 
+@testset "legacy deploy record snapshot_id selection" begin
+    double = abspath(
+        joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"),
+    )
+    _with_tempdir() do state
+        remote = joinpath(state, "remote")
+        leaf = joinpath(remote, "runs", _SNAP_ID_OLD)
+        mkpath(joinpath(leaf, "src"))
+        write(joinpath(leaf, "src", "Project.toml"), "name = \"SnapSel\"\n")
+        write(joinpath(leaf, "run.toml"), DistSSHRun._ship_run_leaf_complete_toml(_SNAP_HASH_OLD))
+        deploy_dir = joinpath(remote, ".distssh")
+        mkpath(deploy_dir)
+        write(
+            joinpath(deploy_dir, "deploy.toml"),
+            sprint(
+                TOML.print,
+                Dict(
+                    "schema" => 1,
+                    "deploy_id" => _SNAP_ID_OLD,
+                    "mode" => "ship-tree",
+                    "snapshot_id" => _SNAP_ID_OLD,
+                    "content_tree_hash" => _SNAP_HASH_OLD,
+                ),
+            ),
+        )
+        _with_tempdir() do proj
+            _snap_project!(proj)
+            DistSSHRun.clear_last_ship_record!(proj)
+            DistSSHRun._clear_last_ship!()
+            env = Dict{String, String}(
+                "DISTSSHKIT_TEST" => "1",
+                "DISTSSHKIT_TEST_SSH" => double,
+                "DISTSSHKIT_TEST_POSIX_SHELL" => "1",
+                "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
+            )
+            try
+                withenv(env...) do
+                    sel = DistSSHRun.resolve_source_selection(
+                        ["child-1"], remote, proj;
+                        skip_local_record = true,
+                    )
+                    @test sel.run_id == _SNAP_ID_OLD
+                end
+            finally
+                DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
+                DistSSHRun._clear_last_ship!()
+            end
+        end
+    end
+end
+
+@testset "legacy last-snapshot.toml and snapshot_id field" begin
+    _with_tempdir() do tmp
+        _snap_project!(tmp)
+        env = DistSSHRun.resolve_pkg_env(tmp)
+        kit = joinpath(env.env_dir, ".distsshkit")
+        mkpath(kit)
+        legacy_body = Dict(
+            "schema" => 1,
+            "deploy_root" => "~/App/Legacy",
+            "hosts" => ["h1"],
+            "snapshot_id" => _SNAP_ID_OLD,
+            "content_tree_hash" => _SNAP_HASH_OLD,
+        )
+        write(joinpath(kit, "last-snapshot.toml"), sprint(TOML.print, legacy_body))
+        rec = something(DistSSHRun.read_last_ship_record(tmp))
+        @test rec["run_id"] == _SNAP_ID_OLD
+        @test !haskey(rec, "snapshot_id") || rec["snapshot_id"] == _SNAP_ID_OLD
+        DistSSHRun.write_last_ship_record!(
+            tmp, "~/App/Legacy", ["h1"], _SNAP_ID_NEW;
+            content_tree_hash = _SNAP_HASH_NEW,
+        )
+        rec2 = something(DistSSHRun.read_last_ship_record(tmp))
+        @test rec2["run_id"] == _SNAP_ID_NEW
+    end
+end
+
 @testset "local last-ship record" begin
     _with_tempdir() do tmp
         _snap_project!(tmp)

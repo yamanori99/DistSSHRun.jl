@@ -2,6 +2,36 @@ using Test
 using TOML
 using Base.Threads
 
+@testset "deploy record parse maps legacy snapshot_id" begin
+    body = sprint(
+        TOML.print,
+        Dict(
+            "schema" => 1,
+            "deploy_id" => "20260101T000000Z-aaaaaa",
+            "mode" => "ship-tree",
+            "snapshot_id" => "20260101T000000Z-aaaaaa",
+            "content_tree_hash" => "a"^40,
+        ),
+    )
+    parsed = DistSSHRun._parse_deploy_record_body(body)
+    @test parsed !== nothing
+    @test something(parsed)["run_id"] == "20260101T000000Z-aaaaaa"
+    both = sprint(
+        TOML.print,
+        Dict(
+            "schema" => 1,
+            "deploy_id" => "20260102T000000Z-bbbbbb",
+            "mode" => "ship-tree",
+            "run_id" => "20260102T000000Z-bbbbbb",
+            "snapshot_id" => "20260101T000000Z-aaaaaa",
+            "content_tree_hash" => "b"^40,
+        ),
+    )
+    parsed2 = DistSSHRun._parse_deploy_record_body(both)
+    @test parsed2 !== nothing
+    @test something(parsed2)["run_id"] == "20260102T000000Z-bbbbbb"
+end
+
 @testset "deploy record build and parse" begin
     tmp = mktempdir()
     try

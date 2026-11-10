@@ -102,7 +102,7 @@ function _deploy_roots_equivalent(a::AbstractString, b::AbstractString)::Bool
     return _normalize_deploy_root(a) == _normalize_deploy_root(b)
 end
 
-const _LEGACY_SHIP_RECORD_NAME = "last-ship.toml"
+const _LEGACY_SHIP_RECORD_NAME = "last-snapshot.toml"
 
 function _read_last_ship_record_at(path::AbstractString)::Union{Nothing, Dict{String, Any}}
     isfile(path) || return nothing
@@ -117,7 +117,7 @@ function _read_last_ship_record_at(path::AbstractString)::Union{Nothing, Dict{St
     Int(schema) == _SHIP_RECORD_SCHEMA || return nothing
     out = Dict{String, Any}(String(k) => v for (k, v) in raw)
     if !haskey(out, "run_id")
-        legacy = get(out, "run_id", nothing)
+        legacy = get(out, "snapshot_id", nothing)
         legacy isa AbstractString && (out["run_id"] = String(legacy))
     end
     return out
