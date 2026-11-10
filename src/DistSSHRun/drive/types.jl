@@ -1,13 +1,6 @@
 # Result types for the drive / sync API.
 # `WorkerPlan` lives in `worker_plan.jl`.
 
-"""Per-host outcome for sync and similar operations."""
-struct HostResult
-    host::String
-    ok::Bool
-    message::String
-end
-
 """One warning printed by `setup!(session, :check)`.
 
 `host` is `PARENT_HOST_NAME` for a local warning. `kind` names the check.

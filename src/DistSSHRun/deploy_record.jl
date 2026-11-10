@@ -362,9 +362,9 @@ end
 
 function _local_ship_content_tree_hash(project::AbstractString)::Union{Nothing, String}
     try
-        snap = snapshot(project)
-        hash = content_tree_hash(snap)
-        rm(snapshot_directory(snap); recursive = true, force = true)
+        pack = _pack_project_tree(project)
+        hash = pack.content_tree_hash
+        rm(pack.directory; recursive = true, force = true)
         return hash
     catch
         return nothing

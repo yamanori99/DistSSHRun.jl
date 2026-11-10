@@ -24,9 +24,9 @@ function ship_to_remotes(
         allow_external_symlinks::Bool = false,
         extra_files::Vector{String} = String[],
     )::NamedTuple
-    raw = ship_project_to_hosts!(
-        hosts,
+    raw = ship_tree!(
         project,
+        hosts,
         remote_path;
         confirm = true,
         report = true,

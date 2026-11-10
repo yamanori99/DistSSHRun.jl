@@ -14,6 +14,7 @@ module DistSSHShip
 
 using Dates
 using DistSSHBase
+using DistSSHBase: HostResult
 using TOML
 using Tar
 
@@ -38,7 +39,6 @@ public ship
 public ShipProject
 public ShipPack
 public ShipResult
-public ShipHostResult
 public content_tree_hash
 public assert_extracted_tree_contained!
 public ship_record_logical_path

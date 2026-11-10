@@ -15,7 +15,7 @@ end
 
 @testset "ship-tree refuses a repeated host" begin
     err = try
-        DistSSHRun.ship_project_to_hosts!(["h", "h"], "/tmp", "/remote/app")
+        DistSSHRun.ship_tree!("/tmp", ["h", "h"], "/remote/app")
         nothing
     catch e
         e
@@ -334,22 +334,22 @@ end
             write(joinpath(tmp, "sub", "b.txt"), "b\n")
             run(`git -C $tmp add -A`)
             run(`git -C $tmp commit --quiet -m init`)
-            packed = DistSSHRun.pack_ship_tar(tmp)
+            packed = DistSSHRun._pack_project_tree(tmp)
             try
                 @test isfile(packed.tar_path)
                 @test packed.files >= 3
                 @test packed.bytes > 0
-                @test packed.hash isa String
-                @test length(packed.hash) == 40
+                @test packed.content_tree_hash isa String
+                @test length(packed.content_tree_hash) == 40
                 dest = mktempdir()
                 DistSSHRun.Tar.extract(packed.tar_path, dest)
                 @test isfile(joinpath(dest, "Project.toml"))
                 @test isfile(joinpath(dest, "a.jl"))
                 @test !isdir(joinpath(dest, ".git"))
             finally
-                rm(packed.tmpd; force = true, recursive = true)
+                rm(packed.directory; force = true, recursive = true)
             end
-            @test_throws ArgumentError DistSSHRun.pack_ship_tar(tmp; ship_max_bytes = 1)
+            @test_throws ArgumentError DistSSHRun._pack_project_tree(tmp; ship_max_bytes = 1)
         end
     end
 end
@@ -367,13 +367,13 @@ end
                 "DISTSSHKIT_SHIP_WARN_TOTAL_BYTES" => "1",
             ) do
                 redirect_stdout(io) do
-                    redirect_stderr(() -> DistSSHRun.pack_ship_tar(tmp), io)
+                    redirect_stderr(() -> DistSSHRun._pack_project_tree(tmp), io)
                 end
             end
             try
                 @test isfile(packed.tar_path)
             finally
-                rm(packed.tmpd; force = true, recursive = true)
+                rm(packed.directory; force = true, recursive = true)
             end
             flush(io)
             seekstart(io)
@@ -385,7 +385,7 @@ end
         @test occursin("data (", text)
         err = try
             withenv("DISTSSHKIT_SHIP_WARN_TOTAL_BYTES" => "nope") do
-                DistSSHRun.pack_ship_tar(tmp)
+                DistSSHRun._pack_project_tree(tmp)
             end
             nothing
         catch e
@@ -397,7 +397,7 @@ end
             thrown = redirect_stdout(io) do
                 try
                     withenv("DISTSSHKIT_SHIP_WARN_TOTAL_BYTES" => "0") do
-                        DistSSHRun.pack_ship_tar(tmp; ship_max_bytes = 1)
+                        DistSSHRun._pack_project_tree(tmp; ship_max_bytes = 1)
                     end
                     nothing
                 catch e
@@ -421,7 +421,7 @@ end
         write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
         write(joinpath(tmp, "LocalPreferences.toml"), "[ShipT]\nx = 1\n")
         write(joinpath(tmp, "JuliaLocalPreferences.toml"), "[ShipT]\ny = 2\n")
-        packed = DistSSHRun.pack_ship_tar(tmp)
+        packed = DistSSHRun._pack_project_tree(tmp)
         try
             dest = mktempdir()
             DistSSHRun.Tar.extract(packed.tar_path, dest)
@@ -429,7 +429,7 @@ end
             @test !islink(joinpath(dest, "LocalPreferences.toml"))
             @test !isfile(joinpath(dest, "JuliaLocalPreferences.toml"))
         finally
-            rm(packed.tmpd; force = true, recursive = true)
+            rm(packed.directory; force = true, recursive = true)
         end
     end
 end
@@ -440,13 +440,13 @@ end
         write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
         write(joinpath(tmp, "prefs.toml"), "[ShipT]\nx = 1\n")
         symlink("prefs.toml", joinpath(tmp, "LocalPreferences.toml"))
-        packed = DistSSHRun.pack_ship_tar(tmp)
+        packed = DistSSHRun._pack_project_tree(tmp)
         try
             dest = mktempdir()
             DistSSHRun.Tar.extract(packed.tar_path, dest)
             @test islink(joinpath(dest, "LocalPreferences.toml"))
         finally
-            rm(packed.tmpd; force = true, recursive = true)
+            rm(packed.directory; force = true, recursive = true)
         end
     end
 end
@@ -490,14 +490,14 @@ end
             )
             run(`git -C $tmp add -A`)
             run(`git -C $tmp commit --quiet -m init`)
-            packed = DistSSHRun.pack_ship_tar(tmp)
+            packed = DistSSHRun._pack_project_tree(tmp)
             try
                 dest = mktempdir()
                 DistSSHRun.Tar.extract(packed.tar_path, dest)
                 @test !isfile(joinpath(dest, "data", "big.bin"))
                 @test isfile(joinpath(dest, "Project.toml"))
             finally
-                rm(packed.tmpd; force = true, recursive = true)
+                rm(packed.directory; force = true, recursive = true)
             end
             probe = DistSSHRun._remote_input_probe_sh("/remote/data", false)
             @test occursin("files=", probe)
@@ -527,8 +527,8 @@ end
             @test !isfile(joinpath(tmp, "inputs", "records.toml"))
             withenv("DISTSSHKIT_RUN_DIR" => nothing) do
                 err = try
-                    DistSSHRun.ship_project_to_hosts!(
-                        ["host.test"], tmp, "/remote/app"; confirm = false, report = false,
+                    DistSSHRun.ship_tree!(
+                        tmp, ["host.test"], "/remote/app"; confirm = false, report = false,
                     )
                     nothing
                 catch e
@@ -906,8 +906,8 @@ end
     @test finished2[]
     @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
     @test hasmethod(
-        DistSSHRun.ship_project_to_hosts!,
-        Tuple{Vector{String}, String, String},
+        DistSSHRun.ship_tree!,
+        Tuple{String, Vector{String}, String},
         (:await_inputs,),
     )
 end
@@ -1098,9 +1098,9 @@ end
             symlink(outside, joinpath(tmp, "link"))
             run(`git -C $tmp add -A`)
             run(`git -C $tmp commit --quiet -m init`)
-            @test_throws ArgumentError DistSSHRun.pack_ship_tar(tmp)
-            packed = DistSSHRun.pack_ship_tar(tmp; allow_external_symlinks = true)
-            rm(packed.tmpd; force = true, recursive = true)
+            @test_throws ArgumentError DistSSHRun._pack_project_tree(tmp)
+            packed = DistSSHRun._pack_project_tree(tmp; allow_external_symlinks = true)
+            rm(packed.directory; force = true, recursive = true)
             rm(outside; force = true)
         end
     end
@@ -1375,33 +1375,34 @@ end
 
     _with_tempdir() do proj
         _project!(proj)
-        snap = DistSSHRun.snapshot(proj)
+        pack = DistSSHRun._pack_project_tree(proj)
         try
-            tar = DistSSHRun.snapshot_tar(snap)
-            @test tar == joinpath(DistSSHRun.snapshot_directory(snap), "ship.tar")
+            tar = pack.tar_path
+            @test tar == joinpath(pack.directory, "ship.tar")
             @test isfile(tar)
-            @test DistSSHRun.content_tree_hash(snap) ==
-                DistSSHRun._ship_tar_tree_hash(tar)
-            @test DistSSHRun.content_tree_hash(snap) != ""
+            @test pack.content_tree_hash == DistSSHRun._ship_tar_tree_hash(tar)
+            @test pack.content_tree_hash != ""
             write(joinpath(proj, "a.jl"), "2\n")
-            other = DistSSHRun.snapshot(proj)
+            other = DistSSHRun._pack_project_tree(proj)
             try
-                @test DistSSHRun.content_tree_hash(other) != DistSSHRun.content_tree_hash(snap)
-                cp(DistSSHRun.snapshot_tar(other), tar; force = true)
+                @test other.content_tree_hash != pack.content_tree_hash
+                cp(other.tar_path, tar; force = true)
                 err = try
-                    DistSSHRun.ship(snap, ["host1"], "/home/distsshkit/app"; confirm = false)
+                    DistSSHRun.ship_tree!(
+                        pack, ["host1"], "/home/distsshkit/app"; confirm = false,
+                    )
                     nothing
                 catch e
                     e
                 end
                 @test err isa ArgumentError
-                @test occursin("does not match snapshot", sprint(showerror, err))
+                @test occursin("does not match pack", sprint(showerror, err))
                 @test isfile(tar)
             finally
-                rm(DistSSHRun.snapshot_directory(other); force = true, recursive = true)
+                rm(other.directory; force = true, recursive = true)
             end
         finally
-            rm(DistSSHRun.snapshot_directory(snap); force = true, recursive = true)
+            rm(pack.directory; force = true, recursive = true)
         end
     end
 
@@ -1413,23 +1414,23 @@ end
         old = copy(Base.DEPOT_PATH)
         empty!(Base.DEPOT_PATH)
         push!(Base.DEPOT_PATH, depot)
-        snap = nothing
+        pack = nothing
         try
-            snap = DistSSHRun.snapshot(proj)
-            @test isfile(DistSSHRun.snapshot_tar(snap))
+            pack = DistSSHRun._pack_project_tree(proj)
+            @test isfile(pack.tar_path)
             err = try
-                DistSSHRun.ship(snap, ["host1"], "/home/distsshkit/app")
+                DistSSHRun.ship_tree!(pack, ["host1"], "/home/distsshkit/app")
                 nothing
             catch e
                 e
             end
             @test err isa ArgumentError
             @test occursin("depot preferences", sprint(showerror, err))
-            @test isfile(DistSSHRun.snapshot_tar(snap))
+            @test isfile(pack.tar_path)
         finally
             empty!(Base.DEPOT_PATH)
             append!(Base.DEPOT_PATH, old)
-            snap === nothing || rm(DistSSHRun.snapshot_directory(snap); force = true, recursive = true)
+            pack === nothing || rm(pack.directory; force = true, recursive = true)
             rm(depot; force = true, recursive = true)
         end
     end
@@ -1481,7 +1482,7 @@ end
                     _with_tempdir() do proj
                         _project!(proj)
                         previous = DistSSHRun.active_snapshot_selection()
-                        snap = DistSSHRun.snapshot(proj)
+                        pack = DistSSHRun._pack_project_tree(proj)
                         try
                             sentinel = DistSSHRun.SnapshotSelection(
                                 :snapshot,
@@ -1492,35 +1493,33 @@ end
                                 ["host9"],
                             )
                             DistSSHRun._set_active_selection!(sentinel)
-                            quiet = DistSSHRun.ship(
-                                snap, ["host1"], "/home/distsshkit/app";
-                                confirm = false, record = false,
+                            quiet = DistSSHRun.ship_tree!(
+                                pack, ["host1"], "/home/distsshkit/app";
+                                confirm = false, provenance = false,
                             )
                             @test quiet isa DistSSHRun.ShipTreeResult
                             @test !quiet.cancelled
                             @test all(hr -> hr.ok, quiet.host_results)
                             @test DistSSHRun.active_snapshot_selection() === sentinel
-                            @test isfile(DistSSHRun.snapshot_tar(snap))
-                            @test DistSSHRun.result_content_tree_hash(quiet) ==
-                                DistSSHRun.content_tree_hash(snap)
+                            @test isfile(pack.tar_path)
+                            @test DistSSHRun.result_content_tree_hash(quiet) == pack.content_tree_hash
                             @test occursin(
                                 DistSSHRun._RUN_ID_PATTERN,
                                 something(DistSSHRun.result_remote_run_id(quiet)),
                             )
-                            recorded = DistSSHRun.ship(
-                                snap, ["host1"], "/home/distsshkit/app";
-                                confirm = false, record = true,
+                            recorded = DistSSHRun.ship_tree!(
+                                pack, ["host1"], "/home/distsshkit/app";
+                                confirm = false, provenance = true,
                             )
                             kept = something(DistSSHRun.active_snapshot_selection())
-                            @test kept.content_tree_hash ==
-                                DistSSHRun.content_tree_hash(snap)
+                            @test kept.content_tree_hash == pack.content_tree_hash
                             @test kept.snapshot_id ==
                                 DistSSHRun.result_remote_run_id(recorded)
-                            @test isfile(DistSSHRun.snapshot_tar(snap))
+                            @test isfile(pack.tar_path)
 
                             before = Set(readdir(tempdir()))
-                            wrapped = DistSSHRun.ship_project_to_hosts!(
-                                ["host1"], proj, "/home/distsshkit/app"; confirm = false,
+                            wrapped = DistSSHRun.ship_tree!(
+                                proj, ["host1"], "/home/distsshkit/app"; confirm = false,
                             )
                             @test all(hr -> hr.ok, wrapped.host_results)
                             for name in setdiff(Set(readdir(tempdir())), before)
@@ -1537,14 +1536,14 @@ end
                             @test synced isa DistSSHRun.SyncResult
                             @test synced.ok && !synced.cancelled
                             @test DistSSHRun.result_content_tree_hash(synced) ==
-                                DistSSHRun.content_tree_hash(snap)
+                                pack.content_tree_hash
                             @test DistSSHRun.result_remote_run_id(synced) !== nothing
                             @test any(hr -> occursin("ship-tree ok", hr.message), synced.hosts)
                             other = DistSSHRun.SyncResult(false, DistSSHRun.HostResult[]; ok = true)
                             @test DistSSHRun.result_content_tree_hash(other) === nothing
                             @test DistSSHRun.result_remote_run_id(other) === nothing
                         finally
-                            rm(DistSSHRun.snapshot_directory(snap); force = true, recursive = true)
+                            rm(pack.directory; force = true, recursive = true)
                             _restore_selection!(previous)
                         end
                     end
@@ -1578,8 +1577,8 @@ end
                         @test !isdir(tree)
                         previous = DistSSHRun.active_snapshot_selection()
                         try
-                            created = DistSSHRun.ship_project_to_hosts!(
-                                ["host1"], proj, "/home/distsshkit/app"; confirm = false,
+                            created = DistSSHRun.ship_tree!(
+                                proj, ["host1"], "/home/distsshkit/app"; confirm = false,
                             )
                             @test all(hr -> hr.ok, created.host_results)
                             @test any(
@@ -1609,8 +1608,8 @@ end
                         @test isdir(tree)
                         previous = DistSSHRun.active_snapshot_selection()
                         try
-                            failed = DistSSHRun.ship_project_to_hosts!(
-                                ["host1"], proj, "/home/distsshkit/app"; confirm = false,
+                            failed = DistSSHRun.ship_tree!(
+                                proj, ["host1"], "/home/distsshkit/app"; confirm = false,
                             )
                             @test any(hr -> !hr.ok, failed.host_results)
                             @test isdir(tree)

@@ -47,9 +47,9 @@ function sync!(
             remote_path = remote_deploy_root(
                 session.project; cli_override = session.remote,
             )
-            raw = ship_project_to_hosts!(
-                session.hosts,
+            raw = ship_tree!(
                 session.project,
+                session.hosts,
                 remote_path;
                 confirm = !session.yes,
                 path_anchor = session.project,

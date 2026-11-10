@@ -262,8 +262,8 @@ using Test
                                 println(stdin_io, "")
                                 flush(stdin_io)
                                 seekstart(stdin_io)
-                                DistSSHRun.ship_project_to_hosts!(
-                                    ["host1"], smoke_project, remote_path; confirm = true,
+                                DistSSHRun.ship_tree!(
+                                    smoke_project, ["host1"], remote_path; confirm = true,
                                 )
                             end
                             @test result.cancelled

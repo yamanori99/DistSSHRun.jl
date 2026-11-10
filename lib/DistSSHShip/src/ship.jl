@@ -3,13 +3,6 @@
 # A failed host can leave a partial tree. The caller must not treat that
 # dest as a usable ship.
 
-"""One host row from [`ship`](@ref)."""
-struct ShipHostResult
-    host::String
-    ok::Bool
-    message::String
-end
-
 """
 Result of [`ship`](@ref).
 
@@ -24,7 +17,7 @@ struct ShipResult
     algorithm::String
     bytes::Int
     files::Int
-    hosts::Vector{ShipHostResult}
+    hosts::Vector{HostResult}
     ok::Bool
 end
 
@@ -219,7 +212,7 @@ function ship(
             "ship: tar content_tree_hash $(got) does not match pack $(snapshot.content_tree_hash)",
         )
     )
-    rows = ShipHostResult[]
+    rows = HostResult[]
     for host in host_list
         DistSSHBase.validate_ssh_host(host)
         try
@@ -227,10 +220,10 @@ function ship(
                 host, checked, snapshot, allow_external_symlinks, write_record;
                 julia = julia,
             )
-            push!(rows, ShipHostResult(host, true, "ship ok"))
+            push!(rows, HostResult(host, true, "ship ok"))
         catch e
             e isa InterruptException && rethrow()
-            push!(rows, ShipHostResult(host, false, sprint(showerror, e)))
+            push!(rows, HostResult(host, false, sprint(showerror, e)))
         end
     end
     ok = all(row -> row.ok, rows)

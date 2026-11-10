@@ -12,7 +12,7 @@ using Test
             @test "a.jl" in listed
             packed, err = mktemp() do _, io
                 p = redirect_stderr(io) do
-                    DistSSHRun.pack_ship_tar(tmp)
+                    DistSSHRun._pack_project_tree(tmp)
                 end
                 flush(io)
                 seekstart(io)
@@ -25,7 +25,7 @@ using Test
                 @test !isdir(joinpath(dest, ".git"))
                 @test !occursin("fatal:", err)
             finally
-                rm(packed.tmpd; force = true, recursive = true)
+                rm(packed.directory; force = true, recursive = true)
             end
         end
     end
@@ -173,7 +173,7 @@ using Test
             write(joinpath(foo, "src", "Foo.jl"), "module Foo end\n")
             text = mktemp() do _, io
                 packed = redirect_stdout(io) do
-                    DistSSHRun.pack_ship_tar(tmp)
+                    DistSSHRun._pack_project_tree(tmp)
                 end
                 try
                     dest = mktempdir()
@@ -182,7 +182,7 @@ using Test
                     @test isfile(joinpath(dest, "vendor", "Foo", "src", "Foo.jl"))
                     @test isfile(joinpath(dest, "Project.toml"))
                 finally
-                    rm(packed.tmpd; force = true, recursive = true)
+                    rm(packed.directory; force = true, recursive = true)
                 end
                 flush(io)
                 seekstart(io)
@@ -207,13 +207,13 @@ using Test
                 """
             )
             write(joinpath(tmp, "a.jl"), "1\n")
-            packed = DistSSHRun.pack_ship_tar(tmp)
+            packed = DistSSHRun._pack_project_tree(tmp)
             try
                 dest = mktempdir()
                 DistSSHRun.Tar.extract(packed.tar_path, dest)
                 @test isfile(joinpath(dest, "Project.toml"))
             finally
-                rm(packed.tmpd; force = true, recursive = true)
+                rm(packed.directory; force = true, recursive = true)
             end
         end
     end
@@ -226,7 +226,7 @@ using Test
             write(joinpath(tmp, ".gitignore"), "Project.toml\n")
             text = mktemp() do _, io
                 packed = redirect_stdout(io) do
-                    DistSSHRun.pack_ship_tar(tmp)
+                    DistSSHRun._pack_project_tree(tmp)
                 end
                 try
                     dest = mktempdir()
@@ -235,7 +235,7 @@ using Test
                     @test isfile(joinpath(dest, "a.jl"))
                     @test isfile(joinpath(dest, "Manifest.toml"))
                 finally
-                    rm(packed.tmpd; force = true, recursive = true)
+                    rm(packed.directory; force = true, recursive = true)
                 end
                 flush(io)
                 seekstart(io)
@@ -267,7 +267,7 @@ using Test
             )
             text = mktemp() do _, io
                 packed = redirect_stdout(io) do
-                    DistSSHRun.pack_ship_tar(member)
+                    DistSSHRun._pack_project_tree(member)
                 end
                 try
                     dest = mktempdir()
@@ -279,14 +279,14 @@ using Test
                     @test isfile(joinpath(dest, "Manifest.toml"))
                     @test packed.project_rel == "member"
                 finally
-                    rm(packed.tmpd; force = true, recursive = true)
+                    rm(packed.directory; force = true, recursive = true)
                 end
                 flush(io)
                 seekstart(io)
                 return read(io, String)
             end
             @test !occursin("outside the ship root", text)
-            wider = DistSSHRun.pack_ship_tar(lab)
+            wider = DistSSHRun._pack_project_tree(lab)
             try
                 dest = mktempdir()
                 DistSSHRun.Tar.extract(wider.tar_path, dest)
@@ -294,7 +294,7 @@ using Test
                 @test isfile(joinpath(dest, "member", "Project.toml"))
                 @test isfile(joinpath(dest, "Manifest.toml"))
             finally
-                rm(wider.tmpd; force = true, recursive = true)
+                rm(wider.directory; force = true, recursive = true)
             end
         end
     end
@@ -319,7 +319,7 @@ using Test
             write(joinpath(bar, "Project.toml"), "name = \"Bar\"\n")
             text = mktemp() do _, io
                 packed = redirect_stdout(io) do
-                    DistSSHRun.pack_ship_tar(app)
+                    DistSSHRun._pack_project_tree(app)
                 end
                 try
                     dest = mktempdir()
@@ -329,7 +329,7 @@ using Test
                     @test isfile(joinpath(dest, "shared", "Bar", "Project.toml"))
                     @test packed.project_rel == "app"
                 finally
-                    rm(packed.tmpd; force = true, recursive = true)
+                    rm(packed.directory; force = true, recursive = true)
                 end
                 flush(io)
                 seekstart(io)
@@ -354,7 +354,7 @@ using Test
             )
             write(joinpath(tmp, "Manifest.toml"), "# lock\n")
             err = try
-                DistSSHRun.pack_ship_tar(tmp)
+                DistSSHRun._pack_project_tree(tmp)
                 nothing
             catch e
                 e
@@ -380,14 +380,14 @@ using Test
                 """
             )
             write(joinpath(tmp, "Manifest.toml"), "# lock\n")
-            packed = DistSSHRun.pack_ship_tar(tmp)
+            packed = DistSSHRun._pack_project_tree(tmp)
             try
                 dest = mktempdir()
                 DistSSHRun.Tar.extract(packed.tar_path, dest)
                 @test islink(joinpath(dest, "vendor", "link"))
                 @test isfile(joinpath(dest, "vendor", "real", "Foo", "Project.toml"))
             finally
-                rm(packed.tmpd; force = true, recursive = true)
+                rm(packed.directory; force = true, recursive = true)
             end
         end
     end
@@ -398,14 +398,14 @@ using Test
             write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
             write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
             write(joinpath(tmp, "LocalPreferences.toml"), "[ShipT]\nx = 1\n")
-            packed = DistSSHRun.pack_ship_tar(tmp)
+            packed = DistSSHRun._pack_project_tree(tmp)
             try
                 dest = mktempdir()
                 DistSSHRun.Tar.extract(packed.tar_path, dest)
                 @test !isfile(joinpath(dest, "LocalPreferences.toml"))
                 @test isfile(joinpath(dest, "Project.toml"))
             finally
-                rm(packed.tmpd; force = true, recursive = true)
+                rm(packed.directory; force = true, recursive = true)
             end
         end
     end
@@ -416,13 +416,13 @@ using Test
             write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
             write(joinpath(tmp, "Manifest.toml"), "# lock\n")
             write(joinpath(tmp, "LocalPreferences.toml"), "[ShipT]\nx = 1\n")
-            packed = DistSSHRun.pack_ship_tar(tmp)
+            packed = DistSSHRun._pack_project_tree(tmp)
             try
                 dest = mktempdir()
                 DistSSHRun.Tar.extract(packed.tar_path, dest)
                 @test isfile(joinpath(dest, "LocalPreferences.toml"))
             finally
-                rm(packed.tmpd; force = true, recursive = true)
+                rm(packed.directory; force = true, recursive = true)
             end
         end
     end
@@ -434,14 +434,14 @@ using Test
             write(joinpath(tmp, "real", "Manifest.toml"), "# lock\n")
             symlink("real", joinpath(tmp, "link"))
             symlink(joinpath("link", "Manifest.toml"), joinpath(tmp, "Manifest.toml"))
-            packed = DistSSHRun.pack_ship_tar(tmp)
+            packed = DistSSHRun._pack_project_tree(tmp)
             try
                 dest = mktempdir()
                 DistSSHRun.Tar.extract(packed.tar_path, dest)
                 @test isfile(joinpath(dest, "Project.toml"))
                 @test islink(joinpath(dest, "Manifest.toml")) || isfile(joinpath(dest, "real", "Manifest.toml"))
             finally
-                rm(packed.tmpd; force = true, recursive = true)
+                rm(packed.directory; force = true, recursive = true)
             end
         end
     end
@@ -469,14 +469,14 @@ using Test
             write(joinpath(tmp, "JuliaProject.toml"), "name = \"ShipT\"\n")
             write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
             write(joinpath(tmp, "LocalPreferences.toml"), "[ShipT]\nx = 1\n")
-            packed = DistSSHRun.pack_ship_tar(tmp)
+            packed = DistSSHRun._pack_project_tree(tmp)
             try
                 dest = mktempdir()
                 DistSSHRun.Tar.extract(packed.tar_path, dest)
                 @test !isfile(joinpath(dest, "LocalPreferences.toml"))
                 @test isfile(joinpath(dest, "JuliaProject.toml"))
             finally
-                rm(packed.tmpd; force = true, recursive = true)
+                rm(packed.directory; force = true, recursive = true)
             end
         end
     end
@@ -611,9 +611,9 @@ end
             @test !any(occursin('\\', r) for r in listed)
             omit = String[i.path for i in DistSSHRun._load_ship_inputs(tmp)]
             @test listed == DistSSHRun.DistSSHShip.pack_paths(tmp; omit = omit)
-            packed = DistSSHRun.pack_ship_tar(tmp)
+            packed = DistSSHRun._pack_project_tree(tmp)
             try
-                @test DistSSHRun.ship_send_list(packed.root) == listed
+                @test DistSSHRun.ship_send_list(packed.project_dir) == listed
                 dest = mktempdir()
                 DistSSHRun.Tar.extract(packed.tar_path, dest)
                 @test _extracted_ship_rels(dest) == listed
@@ -621,12 +621,12 @@ end
                     tmp; omit_project_rels = omit,
                 )
                 try
-                    @test snap.content_tree_hash == packed.hash
+                    @test snap.content_tree_hash == packed.content_tree_hash
                 finally
                     rm(snap.directory; force = true, recursive = true)
                 end
             finally
-                rm(packed.tmpd; force = true, recursive = true)
+                rm(packed.directory; force = true, recursive = true)
             end
         end
     end

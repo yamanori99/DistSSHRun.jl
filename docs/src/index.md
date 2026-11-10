@@ -63,7 +63,7 @@ member also ships the workspace `Project.toml` and the shared Manifest.
 Sibling workspace members are not walked. `--extra-file PATH` may be
 repeated; this version accepts one file and a second is an error
 (`more than one extra file is not yet supported`). `setup!`, `sync!`, and
-`snapshot` take `extra_files::Vector{String}` with that same error. The file
+`ship_tree!` take `extra_files::Vector{String}` with that same error. The file
 is stored at `_distsshrun_external/<basename>` under the remote project. A
 symlink is followed once: the archive name is the link name and the bytes
 are the target. Siblings of that file are not sent. A gitignored `Project.toml`,
@@ -117,19 +117,20 @@ newer last-snapshot record. A recorded `content_tree_hash` there must match
 the selected remote stamp. A local last-snapshot record without a matching
 40-digit hash is not used. `setup check` still prints SSH diagnostics
 when selection cannot probe, then fails closed if the snapshot is invalid. `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
-`snapshot(local_root)` builds that tar in a temporary directory and records
-`content_tree_hash` (`git-sha1`). The caller deletes `snapshot_directory`.
-After `DistSSHShip.ship`, files under `<dest>/.distssh/` (for example
-`ship.toml`) are remote metadata and are **not** part of `content_tree_hash`;
-any code that re-hashes an extracted tree must exclude `.distssh/`.
-The tar is `snapshot_tar` (`ship.tar` in that directory). `snapshot` does not
-read depot preferences. `ship(snapshot, hosts, remote_root)` sends that tar
-and does not pack again or delete it. It refuses depot preferences, hashes
-the tar again immediately before sending, and throws `ArgumentError` when
-the hash differs or the tar is missing. `confirm` defaults to false, so a
-library `ship` does not prompt. `record=false` does not keep the ship for
-controller `run.toml` in this process. `setup ship-tree` still confirms
-unless `-y` is used, and that path deletes its temporary directory.
+`ship_tree!(project, hosts, deploy_root)` packs with `DistSSHShip.pack_tree`
+(declared-input omission and warnings), ships into `runs/<run_id>/src/`, then
+deletes the temporary pack directory. `ship_tree!(pack, hosts, deploy_root)`
+sends an existing [`ShipPack`](@ref DistSSHRun.DistSSHShip.ShipPack) without repacking or
+deleting it (a pack from a project with declared inputs is refused; use the
+project method). After `DistSSHShip.ship`, files under `<dest>/.distssh/`
+(for example `ship.toml`) are remote metadata and are **not** part of
+`content_tree_hash`; any code that re-hashes an extracted tree must exclude
+`.distssh/`. The tar is `ship.tar` under the pack directory. Sending refuses
+depot preferences, re-hashes the tar immediately before transfer, and throws
+`ArgumentError` when the hash differs or the tar is missing. The `ShipPack`
+method defaults `confirm=false`; the project method confirms unless disabled.
+`provenance=false` does not keep the ship for controller `run.toml` in this
+process. `setup ship-tree` still confirms unless `-y` is used.
 `setup remote-root --deploy-root /absolute/path` creates that one
 directory with mode `700`. Group and other write are cleared again after
 `mkdir`. The parent must already exist. `~` and
