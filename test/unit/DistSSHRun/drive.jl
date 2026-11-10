@@ -213,35 +213,18 @@ end
     end
 
     @testset "pipeline helpers" begin
-        err_pipe_ship = try
-            DistSSHRun.PipelineConfig(
-                driver = "job.jl",
-                workers = ["child:host-a"],
-                sync = :ship_tree,
-            )
-            nothing
-        catch e
-            e
-        end
-        @test err_pipe_ship isa ArgumentError
-        @test occursin("pipeline!: sync=:ship_tree was removed", err_pipe_ship.msg)
+        @test_throws MethodError DistSSHRun.PipelineConfig(;
+            driver = "job.jl",
+            workers = ["child:host-a"],
+            sync = :ship_tree,
+        )
 
         default_cfg = DistSSHRun.PipelineConfig(driver = "job.jl", workers = ["child:host-a"])
         default_session = DistSSHRun.kit_session_from_config(default_cfg)
-        @test default_cfg.sync === nothing
         @test DistSSHRun.resolve_pipeline_collect(default_cfg, default_session)
         @test DistSSHRun.pipeline_skip_hash_check(default_cfg)
         @test default_cfg.yes == true
         @test DistSSHRun.kit_session_from_config(default_cfg).yes == true
-        err_pipe_git = try
-            DistSSHRun.PipelineConfig(
-                driver = "job.jl", workers = ["child:host-a"], sync = :git_sync,
-            )
-            nothing
-        catch e
-            e
-        end
-        @test err_pipe_git isa ArgumentError
         @test !DistSSHRun.pipeline_skip_hash_check(
             DistSSHRun.PipelineConfig(
                 driver = "job.jl",
@@ -253,11 +236,9 @@ end
         local_cfg = DistSSHRun.PipelineConfig(
             driver = "job.jl",
             workers = ["parent:2"],
-            sync = false,
             collect = false,
         )
         local_session = DistSSHRun.kit_session_from_config(local_cfg)
-        @test local_cfg.sync === false
         @test !DistSSHRun.resolve_pipeline_collect(local_cfg, local_session)
 
         _with_tempdir() do tmp
@@ -279,50 +260,6 @@ end
             @test DistSSHRun.pipeline_collect_root(cfg_fallback) ==
                 joinpath(dirname(abspath(driver)), "output")
         end
-
-        err = try
-            DistSSHRun._reject_pipeline_sync_env!("rsync")
-            error("expected ArgumentError")
-        catch e
-            e
-        end
-        @test err isa ArgumentError
-        @test occursin("SYNC_MODE=", err.msg)
-        err_sync_env = try
-            DistSSHRun._reject_pipeline_sync_env!("sync")
-            error("expected ArgumentError")
-        catch e
-            e
-        end
-        @test err_sync_env isa ArgumentError
-        @test occursin("SYNC_MODE=\"sync\" was removed", err_sync_env.msg)
-        err_ship_env = try
-            DistSSHRun._reject_pipeline_sync_env!("ship-tree")
-            error("expected ArgumentError")
-        catch e
-            e
-        end
-        @test err_ship_env isa ArgumentError
-        @test occursin("no longer syncs", err_ship_env.msg)
-        @test DistSSHRun._reject_pipeline_sync_env!("off") === nothing
-        @test DistSSHRun._reject_pipeline_sync_env!("skip") === nothing
-        @test DistSSHRun._reject_pipeline_sync_env!("no") === nothing
-        @test DistSSHRun._reject_pipeline_sync_env!("") === nothing
-        @test DistSSHRun._reject_pipeline_sync_env!("  ") === nothing
-        err_true = try
-            DistSSHRun._reject_pipeline_sync_env!("true")
-            error("expected ArgumentError")
-        catch e
-            e
-        end
-        @test err_true isa ArgumentError
-        err_one = try
-            DistSSHRun._reject_pipeline_sync_env!("1")
-            error("expected ArgumentError")
-        catch e
-            e
-        end
-        @test err_one isa ArgumentError
 
         withenv(
             "DRIVER" => "",
@@ -485,7 +422,6 @@ end
             )
             with_kit_verbosity(:progress) do
                 @test_throws ArgumentError DistSSHRun.instantiate!(session)
-                @test DistSSHRun.instantiate_after_rsync!(session) === nothing
             end
         end
     end
@@ -674,7 +610,6 @@ end
             @test cfg.tokens == ["child:host-a:1", "child:host-b:1"]
             @test cfg.remote == "/remote/App"
             @test cfg.driver == "demos/job.jl"
-            @test cfg.sync === nothing
             @test cfg.julia == "/opt/julia/bin/julia"
         end
         withenv(

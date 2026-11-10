@@ -34,6 +34,16 @@ const _RETIRED_ENGINE_PATTERNS = [
     raw"\bShipHostResult\b",
     raw"\btree_matches_head\b",
     raw"\brecord\s*=\s*(?:true|false)",
+    raw"\bship_record_logical_path\b",
+    raw"\bbuild_ship_record\b",
+    raw"\bwrite_ship_record\b",
+    raw"\bread_ship_record\b",
+    raw"\bread_ship_record_status\b",
+    raw"\bship_record_status\b",
+    raw"\bverify_ship_record\b",
+    raw"\bship_pack\b",
+    raw"\brsync_send_list\b",
+    raw"\b_instantiate_after_rsync!\b",
 ]
 
 const _STALE_SCAN_ROOTS = [

@@ -945,7 +945,7 @@ using Pkg
                 end
                 @test occursin("ignored by this repo", out_jl)
                 @test occursin("will be an error", out_jl)
-                listed = DistSSHRun._rsync_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
+                listed = DistSSHRun._git_send_list(tmp, DistSSHRun.resolve_pkg_env(tmp))
                 @test "vendor/Foo/lib/x.jl" in listed
                 @test DistSSHRun.ensure_manifest_ships!(tmp).env_dir == DistSSHRun.canonical_local_path(tmp)
                 rm(joinpath(foo, "lib", "x.jl"))

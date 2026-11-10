@@ -134,28 +134,6 @@ function _reject_run_transfer_kw!(
     end
 end
 
-function _reject_pipeline_sync_env!(raw::AbstractString)
-    s = lowercase(strip(String(raw)))
-    isempty(s) && return nothing
-    s in ("off", "false", "0", "skip", "no") && return nothing
-    m = _run_transfer_m()
-    throw(
-        ArgumentError(
-            join_explained_message(
-                "SYNC_MODE=$(repr(raw)) was removed; pipeline! no longer syncs.",
-                string(
-                    "Deploy with `$(m) setup git-sync` or `$(m) setup ship-tree`, ",
-                    "then set SYNC_MODE=off or omit it.",
-                ),
-            ),
-        ),
-    )
-end
-
-function _reject_pipeline_sync_kw!(sync::Union{Symbol, Bool, Nothing})
-    return _reject_run_transfer_kw!("pipeline!", sync; surface = :api)
-end
-
 """Script outside `project` cannot run without setup ship-tree (and optional extra file)."""
 function _reject_script_outside_project_run!(
         command::AbstractString,

@@ -21,33 +21,33 @@ function _posix_rstrip_slash(path::AbstractString)::String
     return rstrip(replace(strip(String(path)), '\\' => '/'), '/')
 end
 
-function _ship_record_path(extract_dest::AbstractString, name::AbstractString)::String
+function _shipment_record_path(extract_dest::AbstractString, name::AbstractString)::String
     root = _posix_rstrip_slash(extract_dest)
     return string(root, "/", SHIP_RECORD_DIR, "/", name)
 end
 
 """POSIX path to the ship record under an extract directory."""
-function ship_record_logical_path(extract_dest::AbstractString)::String
-    return _ship_record_path(extract_dest, SHIP_RECORD_NAME)
+function shipment_record_logical_path(extract_dest::AbstractString)::String
+    return _shipment_record_path(extract_dest, SHIP_RECORD_NAME)
 end
 
-function _legacy_ship_record_logical_path(extract_dest::AbstractString)::String
-    return _ship_record_path(extract_dest, LEGACY_SHIP_RECORD_NAME)
+function _legacy_shipment_record_logical_path(extract_dest::AbstractString)::String
+    return _shipment_record_path(extract_dest, LEGACY_SHIP_RECORD_NAME)
 end
 
 """Candidate record paths in read order (current name, then legacy)."""
-function _ship_record_read_paths(extract_dest::AbstractString)::Vector{String}
+function _shipment_record_read_paths(extract_dest::AbstractString)::Vector{String}
     return String[
-        ship_record_logical_path(extract_dest),
-        _legacy_ship_record_logical_path(extract_dest),
+        shipment_record_logical_path(extract_dest),
+        _legacy_shipment_record_logical_path(extract_dest),
     ]
 end
 
-function _ship_record_writer()::String
+function _shipment_record_writer()::String
     return "DistSSHShip $_SHIP_PKG_VERSION"
 end
 
-function _ship_record_timestamp()::String
+function _shipment_record_timestamp()::String
     return Dates.format(Dates.now(Dates.UTC), "yyyy-mm-ddTHH:MM:SS") * "Z"
 end
 
@@ -83,7 +83,7 @@ Build a schema-1 ship record table (not yet written).
 `project_rel` is stored in TOML only; remote shell paths for the record use
 `DistSSHBase._remote_shell_path_word` (POSIX-quoted).
 """
-function build_ship_record(
+function build_shipment_record(
         snapshot::Shipment;
         complete::Bool = false,
         transfer_id::Union{Nothing, AbstractString} = nothing,
@@ -97,13 +97,13 @@ function build_ship_record(
     rel = _normalize_project_rel(snapshot.project_rel)
     data = Dict{String, Any}(
         "schema" => SHIP_RECORD_SCHEMA,
-        "writer" => _ship_record_writer(),
+        "writer" => _shipment_record_writer(),
         "complete" => complete,
         "algorithm" => TREE_HASH_ALGORITHM,
         "content_tree_hash" => h,
         "bytes" => snapshot.bytes,
         "files" => snapshot.files,
-        "timestamp" => _ship_record_timestamp(),
+        "timestamp" => _shipment_record_timestamp(),
     )
     rel == "." || (data["project_rel"] = rel)
     if !isempty(snapshot.extra_rels)
@@ -115,7 +115,7 @@ function build_ship_record(
     return data
 end
 
-function _parse_ship_record_body(body::AbstractString)::Union{Nothing, Dict{String, Any}}
+function _parse_shipment_record_body(body::AbstractString)::Union{Nothing, Dict{String, Any}}
     s = strip(String(body))
     isempty(s) && return nothing
     try
@@ -149,28 +149,28 @@ end
 """
 `:missing`, `:invalid`, `:in_progress`, or `:complete` for a parsed or absent record.
 """
-function ship_record_status(rec::Union{Nothing, AbstractDict})::Symbol
+function shipment_record_status(rec::Union{Nothing, AbstractDict})::Symbol
     rec === nothing && return :missing
-    parsed = _parse_ship_record_body(sprint(TOML.print, rec))
+    parsed = _parse_shipment_record_body(sprint(TOML.print, rec))
     parsed === nothing && return :invalid
     get(parsed, "complete", false) == true && return :complete
     return :in_progress
 end
 
-function _ship_record_write_nonce()::String
+function _shipment_record_write_nonce()::String
     salt = UInt64(0x244696c4bcd4083a)
     seed = hash((time_ns(), objectid(current_task()), Threads.threadid()), salt)
     hex = string(seed, base = 16, pad = 16)
     return lowercase(hex[1:min(end, 16)])
 end
 
-function _ship_record_tmp_path(record_path::AbstractString)::String
-    stamp = replace(_ship_record_timestamp(), ':' => '-')
-    nonce = _ship_record_write_nonce()
+function _shipment_record_tmp_path(record_path::AbstractString)::String
+    stamp = replace(_shipment_record_timestamp(), ':' => '-')
+    nonce = _shipment_record_write_nonce()
     return string(record_path, ".", stamp, "-", nonce, _SHIP_RECORD_TMP_TAIL)
 end
 
-function _ship_record_scp_argv(
+function _shipment_record_scp_argv(
         host::AbstractString,
         remote_tmp::AbstractString,
         local_path::AbstractString,
@@ -184,14 +184,14 @@ function _ship_record_scp_argv(
     return String[DistSSHBase.ssh_opts()..., String(local_path), dest]
 end
 
-function _ship_record_atomic_install_script(record_path::AbstractString, tmp_path::AbstractString)::String
+function _shipment_record_atomic_install_script(record_path::AbstractString, tmp_path::AbstractString)::String
     final_q = DistSSHBase._remote_shell_path_word(record_path)
     tmp_q = DistSSHBase._remote_shell_path_word(tmp_path)
     return "mv -f $tmp_q $final_q"
 end
 
-function _ship_record_mkdir_script(extract_dest::AbstractString)::String
-    record = ship_record_logical_path(extract_dest)
+function _shipment_record_mkdir_script(extract_dest::AbstractString)::String
+    record = shipment_record_logical_path(extract_dest)
     parent = dirname(record)
     pq = DistSSHBase._remote_shell_path_word(parent)
     return "mkdir -p $pq && chmod 755 $pq"
@@ -200,26 +200,26 @@ end
 """
 Write `data` to `<extract_dest>/.distssh/shipment.toml` on `host` (atomic tmp + mv).
 """
-function write_ship_record(
+function write_shipment_record(
         host::AbstractString,
         extract_dest::AbstractString,
         data::AbstractDict,
     )
     body = sprint(TOML.print, data)
-    parsed = _parse_ship_record_body(body)
+    parsed = _parse_shipment_record_body(body)
     parsed === nothing && throw(ArgumentError("ship record body is invalid before write"))
     tmp = tempname()
-    record_path = ship_record_logical_path(extract_dest)
-    record_tmp = _ship_record_tmp_path(record_path)
+    record_path = shipment_record_logical_path(extract_dest)
+    record_tmp = _shipment_record_tmp_path(record_path)
     try
         open(tmp, "w") do io
             print(io, body)
         end
-        code_mk, _ = DistSSHBase._remote_shell_status(String(host), _ship_record_mkdir_script(extract_dest))
+        code_mk, _ = DistSSHBase._remote_shell_status(String(host), _shipment_record_mkdir_script(extract_dest))
         code_mk == 0 || throw(ArgumentError("ship record: mkdir on $(host) failed"))
         proc_scp = run(
             pipeline(
-                ignorestatus(DistSSHBase._scp_cmd(_ship_record_scp_argv(String(host), record_tmp, tmp)));
+                ignorestatus(DistSSHBase._scp_cmd(_shipment_record_scp_argv(String(host), record_tmp, tmp)));
                 stdout = devnull,
                 stderr = devnull,
             );
@@ -227,7 +227,7 @@ function write_ship_record(
         )
         DistSSHBase.shell_status(proc_scp) == 0 ||
             throw(ArgumentError("ship record: scp to $(host) failed"))
-        install = _ship_record_atomic_install_script(record_path, record_tmp)
+        install = _shipment_record_atomic_install_script(record_path, record_tmp)
         code_mv, _ = DistSSHBase._remote_shell_status(String(host), install)
         code_mv == 0 || begin
             tmp_q = DistSSHBase._remote_shell_path_word(record_tmp)
@@ -254,7 +254,7 @@ function write_ship_record(
     return nothing
 end
 
-function _read_ship_record_at_path(
+function _read_shipment_record_at_path(
         host::AbstractString,
         record_path::AbstractString,
     )::Tuple{Symbol, Union{Nothing, Dict{String, Any}}}
@@ -284,7 +284,7 @@ function _read_ship_record_at_path(
     code_cat = DistSSHBase.shell_status(proc_cat)
     code_cat != 0 && return (:read_error, nothing)
     body = String(take!(out))
-    rec = _parse_ship_record_body(body)
+    rec = _parse_shipment_record_body(body)
     rec === nothing && return (:invalid, nothing)
     return (:ok, rec)
 end
@@ -297,17 +297,17 @@ when both are missing or invalid.
 Throws `ArgumentError` when a record file is present but cannot be read
 (transient SSH or remote command failure on the primary or legacy path).
 """
-function read_ship_record(
+function read_shipment_record(
         host::AbstractString,
         extract_dest::AbstractString,
     )::Union{Nothing, Dict{String, Any}}
-    paths = _ship_record_read_paths(extract_dest)
-    outcome, rec = _read_ship_record_at_path(host, paths[1])
+    paths = _shipment_record_read_paths(extract_dest)
+    outcome, rec = _read_shipment_record_at_path(host, paths[1])
     outcome == :ok && return rec
     outcome == :read_error && throw(
         ArgumentError("ship record: could not read $(paths[1]) on $(host)"),
     )
-    outcome2, rec2 = _read_ship_record_at_path(host, paths[2])
+    outcome2, rec2 = _read_shipment_record_at_path(host, paths[2])
     outcome2 == :ok && return rec2
     outcome2 == :read_error && throw(
         ArgumentError("ship record: could not read $(paths[2]) on $(host)"),
@@ -317,14 +317,14 @@ end
 
 """
 Read the record and return `(status, record)` where `status` is
-[`ship_record_status`](@ref).
+[`shipment_record_status`](@ref).
 """
-function read_ship_record_status(
+function read_shipment_record_status(
         host::AbstractString,
         extract_dest::AbstractString,
     )::Tuple{Symbol, Union{Nothing, Dict{String, Any}}}
-    rec = read_ship_record(host, extract_dest)
-    return ship_record_status(rec), rec
+    rec = read_shipment_record(host, extract_dest)
+    return shipment_record_status(rec), rec
 end
 
 """
@@ -335,12 +335,12 @@ not re-hash the tree. Tree equality is defined by `content_tree_hash` of the
 ship payload; files under `<extract_dest>/.distssh/` are not part of that
 hash.
 """
-function verify_ship_record(
+function verify_shipment_record(
         host::AbstractString,
         extract_dest::AbstractString;
         expect_hash::Union{Nothing, AbstractString} = nothing,
     )::Tuple{Symbol, Dict{String, Any}}
-    status, rec = read_ship_record_status(host, extract_dest)
+    status, rec = read_shipment_record_status(host, extract_dest)
     status == :complete || throw(
         ArgumentError("ship record on $(host) is not complete (status=$(status))"),
     )
@@ -363,7 +363,7 @@ function _write_complete_record!(
         snapshot::Shipment;
         transfer_id::Union{Nothing, AbstractString} = nothing,
     )
-    data = build_ship_record(snapshot; complete = true, transfer_id = transfer_id)
-    write_ship_record(host, extract_dest, data)
+    data = build_shipment_record(snapshot; complete = true, transfer_id = transfer_id)
+    write_shipment_record(host, extract_dest, data)
     return nothing
 end

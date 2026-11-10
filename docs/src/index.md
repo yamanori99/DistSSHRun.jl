@@ -74,7 +74,7 @@ add `!LocalPreferences.toml` to ship it. A file over 50 MiB, or a send list over
 `DISTSSH_SHIP_WARN_TOTAL_BYTES`; an invalid value is an error). The 256 MiB
 cap still stops the ship. Declared inputs are
 left out. `ship_send_list(root)` is that path list for the directory it is
-given. It is public and is not exported. `rsync_send_list` remains the git
+given. It is public and is not exported. `git_send_list` remains the git
 list for git-clone, git-sync, and git-pull. Extract is into
 `<remote_root>/runs/<run_id>/src/` (`run_id` is UTC plus 6 hex). The same leaf also gets an empty
 `<remote_root>/runs/<run_id>/out/`. A repeated host is refused. A missing

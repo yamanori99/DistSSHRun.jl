@@ -318,7 +318,7 @@ function _gitignore_git!(dir::String)
     return nothing
 end
 
-@testset "rsync gitignore keyword" begin
+@testset "git send list and removed gitignore keyword" begin
     if _test_skip_unless_git()
 
         _with_tempdir() do tmp
@@ -327,7 +327,7 @@ end
             _gitignore_tree!(src)
             _gitignore_git!(src)
             env = DistSSHRun.resolve_pkg_env(src)
-            listed = DistSSHRun._rsync_send_list(env.env_dir, env; warn = false)
+            listed = DistSSHRun._git_send_list(env.env_dir, env; warn = false)
             @test listed isa Vector
             got = Set(listed)
             @test "data/input.csv" in got
@@ -341,22 +341,8 @@ end
         session = DistSSHRun.KitSession(
             project = pwd(), workers = ["child:h"], yes = true, quiet = true,
         )
-        sync_err = try
-            DistSSHRun.sync!(session; mode = :git_sync, gitignore = false)
-            nothing
-        catch e
-            e
-        end
-        @test sync_err isa ArgumentError
-        @test occursin("gitignore", sync_err.msg)
-        setup_err = try
-            DistSSHRun.setup!(session, :check; gitignore = false)
-            nothing
-        catch e
-            e
-        end
-        @test setup_err isa ArgumentError
-        @test occursin("gitignore", setup_err.msg)
+        @test_throws MethodError DistSSHRun.sync!(session; mode = :git_sync, gitignore = false)
+        @test_throws MethodError DistSSHRun.setup!(session, :check; gitignore = false)
 
     end # _test_skip_unless_git()
 end

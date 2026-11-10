@@ -86,6 +86,3 @@ function instantiate_after_ship!(
         return instantiate!(session; julia = julia, run_id = snap)
     end
 end
-
-instantiate_after_rsync!(session::KitSession; julia::AbstractString = "auto", run_id = nothing) =
-    instantiate_after_ship!(session; julia = julia, run_id = run_id)

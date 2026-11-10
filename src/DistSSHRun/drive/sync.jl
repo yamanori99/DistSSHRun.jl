@@ -17,7 +17,6 @@ and [`result_remote_run_id`](@ref) read that ship. Other modes return `nothing`.
 function sync!(
         session::KitSession;
         mode = :git_sync,
-        gitignore::Bool = true,
         allow_external_symlinks::Bool = false,
         await_inputs::Bool = true,
         extra_files::Vector{String} = String[],
@@ -34,7 +33,6 @@ function sync!(
         )
     )
     check_setup_options!(kind; extra_files = extra_files, allow_dirty = allow_dirty)
-    gitignore || throw(ArgumentError("sync! gitignore is not valid for mode=:$kind"))
     isempty(session.hosts) && throw(
         ArgumentError(
             explain_no_hosts(; surface = hint_surface(session), kind = :ssh),

@@ -611,7 +611,7 @@ One ship cannot carry both. A symlink whose target leaves that tree is the
 same failure. A `url` source is fetched on the worker. A project file with
 no Manifest is an error. A directory with no project file is not. A Manifest
 left out of the send list is an error (it is untracked and ignored).
-`warn_send_list=false` is the `gitignore=false` send, which includes that file.
+`warn_send_list=false` omits the ancestor-git send warning, which can include that file.
 """
 function ensure_manifest_ships!(
         project::AbstractString;
@@ -636,7 +636,7 @@ function ensure_manifest_ships!(
         ),
     )
     if warn_send_list
-        listed = send_list isa Vector{String} ? send_list : _rsync_send_list(env.env_dir, env)
+        listed = send_list isa Vector{String} ? send_list : _git_send_list(env.env_dir, env)
         if listed isa Vector
             problems = _manifest_ship_problems(env, listed)
             isempty(problems) || throw(ArgumentError(problems[1]))

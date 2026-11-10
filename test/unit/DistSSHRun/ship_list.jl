@@ -646,7 +646,7 @@ end
                 @test !("ignored.jl" in listed)
                 @test !any(r == ".git" || startswith(r, ".git/") for r in listed)
                 env = DistSSHRun.resolve_pkg_env(repo)
-                rsync = DistSSHRun.rsync_send_list(repo, env)
+                rsync = DistSSHRun.git_send_list(repo, env)
                 @test rsync isa Vector
                 @test "ignored.jl" in rsync
             end

@@ -125,7 +125,7 @@ end
 Warn when the Manifest or a relative path dependency sits outside `root`.
 
 An absolute `[sources]` path still throws. Those workers resolve on their
-own filesystem. `go` and `rsync_send_list` are unchanged.
+own filesystem. `go` and `git_send_list` are unchanged.
 """
 function _warn_ship_outside!(user_path::AbstractString, root::AbstractString)
     given = canonical_local_path(user_path)
@@ -1138,7 +1138,7 @@ function _remote_project_work_root(host::AbstractString, remote_root::AbstractSt
     return isempty(s) ? given : s
 end
 
-"""Resolve the remote work root via explicit snapshot, local record, or git."""
+"""Resolve the remote work root via explicit run id, local last-ship record, or git."""
 function _work_root_for_hosts(
         hosts::AbstractVector{<:AbstractString},
         remote_root::AbstractString;
@@ -1156,7 +1156,7 @@ function _work_root_for_hosts(
     return sel.work_root
 end
 
-"""Worker `--project` after selection: snapshot `src` or git deploy root, plus member rel.
+"""Worker `--project` after selection: ship-tree `src` or git deploy root, plus member rel.
 
 Matches `remote_deploy_root`, not `session_remote_root`. A workspace member is
 then joined onto that work root. Pass `run_id=` for an explicit ID.
@@ -1287,7 +1287,7 @@ function _remote_work_layout_path(
     end
     sel isa SourceSelection || throw(
         ArgumentError(
-            "remote work layout: no snapshot selection after resolve for $(hosts)",
+            "remote work layout: no ship selection after resolve for $(hosts)",
         ),
     )
     chosen = sel::SourceSelection
@@ -1793,7 +1793,7 @@ function _ship_run_tree_one_host!(
             _remote_run_leaf_complete_sh(leaf, content_hash; project_rel = project_rel),
         )
         code_c == 0 || throw(
-            ArgumentError("could not mark snapshot complete on $(h): $(strip(out_c))"),
+            ArgumentError("could not mark ship-tree leaf complete on $(h): $(strip(out_c))"),
         )
         return nothing
     end
