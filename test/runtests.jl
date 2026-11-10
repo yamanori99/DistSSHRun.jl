@@ -125,6 +125,8 @@ end
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "snapshot_select.jl"))
         _runtest_announce("unit/DistSSHRun/ship_list.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "ship_list.jl"))
+        _runtest_announce("unit/DistSSHRun/ship_engine_contract.jl")
+        include(joinpath(@__DIR__, "unit", "DistSSHRun", "ship_engine_contract.jl"))
         _runtest_announce("unit/DistSSHRun/setup/send_list.jl")
         if !_distsshrun_short_skip("unit/DistSSHRun/setup/send_list.jl")
             include(joinpath(@__DIR__, "unit", "DistSSHRun", "setup", "send_list.jl"))

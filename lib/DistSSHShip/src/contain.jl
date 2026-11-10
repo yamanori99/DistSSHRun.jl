@@ -1,4 +1,4 @@
-# One post-extract symlink walk for ship, pull, and `transfer_tree`.
+# One post-extract symlink walk for `ship`, pull, and `extract_verified!`.
 # The source string is evaluated locally and sent to the remote Julia so the
 # two sides do not drift. It uses only Base.
 

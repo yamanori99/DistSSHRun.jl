@@ -1064,7 +1064,7 @@ function pack_ship_tar(
     )
     local_dir = canonical_local_path(local_root)
     omit = String[input.path for input in _load_ship_inputs(local_dir)]
-    packed = DistSSHShip.snapshot(
+    packed = DistSSHShip.pack_tree(
         local_dir;
         extra_files = extra_files,
         allow_external_symlinks = allow_external_symlinks,

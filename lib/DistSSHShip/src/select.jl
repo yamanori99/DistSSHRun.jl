@@ -136,7 +136,7 @@ function selected_paths(
 end
 
 """
-    send_paths(root; omit=String[]) -> Vector{String}
+    pack_paths(root; omit=String[]) -> Vector{String}
 
 Relative paths under `root` that a ship tar for this directory contains,
 sorted. Same rules as [`selected_paths`](@ref): each `.gitignore` under
@@ -144,7 +144,7 @@ sorted. Same rules as [`selected_paths`](@ref): each `.gitignore` under
 dropped, unshippable nodes omitted. `omit` drops declared inputs
 (Run passes `.distsshkit/inputs.toml` paths).
 """
-send_paths(root::AbstractString; omit::Vector{String} = String[])::Vector{String} =
+pack_paths(root::AbstractString; omit::Vector{String} = String[])::Vector{String} =
     selected_paths(root; omit = omit)
 
 function warn_excluded_project_files(

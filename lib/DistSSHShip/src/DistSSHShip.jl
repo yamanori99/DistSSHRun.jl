@@ -6,7 +6,7 @@ Not registered. DistSSHRun includes this source as `DistSSHRun.DistSSHShip`,
 the same way it includes DistSSHUp. Names marked `public` are a contract
 inside the DistSSH family. A 0.x patch does not change them.
 
-Queue should call this package directly (`snapshot` then `transfer_tree`).
+Queue should call this package directly (`pack_tree` then `ship`).
 DistSSHRun does not list it in `[deps]`, so a General install of DistSSHRun
 does not need an unregistered package.
 """
@@ -24,29 +24,29 @@ include("project.jl")
 include("select.jl")
 include("deps.jl")
 include("contain.jl")
-include("snapshot.jl")
+include("pack.jl")
 include("record.jl")
-include("transfer.jl")
+include("ship.jl")
 
 public EXTERNAL_DIR_NAME
 public resolve_ship_project
 public gitignore_paths
 public selected_paths
-public send_paths
-public snapshot
-public transfer_tree
+public pack_paths
+public pack_tree
+public ship
 public ShipProject
-public ShipSnapshot
-public TransferResult
-public TransferHostResult
+public ShipPack
+public ShipResult
+public ShipHostResult
 public content_tree_hash
 public assert_extracted_tree_contained!
-public shipped_record_logical_path
-public build_shipped_record
-public write_shipped_record!
-public read_shipped_record
-public read_shipped_record_status
-public shipped_record_status
-public verify_shipped_record
+public ship_record_logical_path
+public build_ship_record
+public write_ship_record
+public read_ship_record
+public read_ship_record_status
+public ship_record_status
+public verify_ship_record
 
 end # module DistSSHShip

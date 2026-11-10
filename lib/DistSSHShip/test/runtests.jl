@@ -46,7 +46,7 @@ function _local_extract_verified!(
     return nothing
 end
 
-function _minimal_snapshot(project_rel::String)::DistSSHShip.ShipSnapshot
+function _minimal_snapshot(project_rel::String)::DistSSHShip.ShipPack
     bundle = mktempdir()
     tar_path = joinpath(bundle, "snap.tar")
     src = joinpath(bundle, "src")
@@ -58,7 +58,7 @@ function _minimal_snapshot(project_rel::String)::DistSSHShip.ShipSnapshot
     hash = String(DistSSHShip.Tar.tree_hash(tar_path; algorithm = "git-sha1", skip_empty = true))
     bytes = filesize(tar_path)
     files = 2
-    return DistSSHShip.ShipSnapshot(
+    return DistSSHShip.ShipPack(
         bundle, tar_path, hash, bytes, files, src, src, project_rel,
         String[], String[],
     )
@@ -113,19 +113,19 @@ end
             @test "Project.toml" in listed
             @test !("skip.log" in listed)
             @test !("secret.jl" in listed)
-            @test DistSSHShip.send_paths(dir) == listed
+            @test DistSSHShip.pack_paths(dir) == listed
             write(joinpath(dir, "a\nb.jl"), "x\n")
             @test_throws ArgumentError DistSSHShip.selected_paths(dir)
-            @test_throws ArgumentError DistSSHShip.send_paths(dir)
+            @test_throws ArgumentError DistSSHShip.pack_paths(dir)
         end
     end
 
-    @testset "send_paths matches a flat snapshot tar" begin
+    @testset "pack_paths matches a flat snapshot tar" begin
         _tmp() do dir
             _project!(dir)
             write(joinpath(dir, "keep.jl"), "1\n")
-            listed = DistSSHShip.send_paths(dir)
-            snap = DistSSHShip.snapshot(dir)
+            listed = DistSSHShip.pack_paths(dir)
+            snap = DistSSHShip.pack_tree(dir)
             try
                 tree = _extract(snap)
                 on_disk = String[]
@@ -152,7 +152,7 @@ end
             write(joinpath(dir, ".gitignore"), "Manifest.toml\n")
             text = mktemp() do _, io
                 snap = redirect_stdout(io) do
-                    DistSSHShip.snapshot(dir)
+                    DistSSHShip.pack_tree(dir)
                 end
                 try
                     dest = _extract(snap)
@@ -196,7 +196,7 @@ end
             write(joinpath(bar, "src", "Bar.jl"), "module Bar end\n")
             write(joinpath(bar, ".gitignore"), "*.log\n")
             write(joinpath(bar, "skip.log"), "no\n")
-            snap = DistSSHShip.snapshot(app)
+            snap = DistSSHShip.pack_tree(app)
             try
                 @test snap.project_rel == "app"
                 dest = _extract(snap)
@@ -236,7 +236,7 @@ end
             write(joinpath(dep, ".gitignore"), "*\n")
             write(joinpath(dep, "note.txt"), "ignored\n")
             @test_throws ArgumentError DistSSHShip.selected_paths(dep)
-            snap = DistSSHShip.snapshot(app)
+            snap = DistSSHShip.pack_tree(app)
             try
                 dest = _extract(snap)
                 try
@@ -266,7 +266,7 @@ end
             write(joinpath(dir, ".gitignore"), "vendor/\n")
             write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
             write(joinpath(foo, "src", "Foo.jl"), "module Foo end\n")
-            snap = DistSSHShip.snapshot(dir)
+            snap = DistSSHShip.pack_tree(dir)
             try
                 dest = _extract(snap)
                 try
@@ -296,7 +296,7 @@ end
             )
             write(joinpath(dir, "Manifest.toml"), "# lock\n")
             err = try
-                DistSSHShip.snapshot(dir)
+                DistSSHShip.pack_tree(dir)
                 nothing
             catch e
                 e
@@ -319,7 +319,7 @@ end
                 """,
             )
             err = try
-                DistSSHShip.snapshot(a)
+                DistSSHShip.pack_tree(a)
                 nothing
             catch e
                 e
@@ -367,7 +367,7 @@ end
             )
             write(joinpath(other, "Project.toml"), "name = \"Other\"\n")
             write(joinpath(other, "secret.jl"), "no\n")
-            snap = DistSSHShip.snapshot(member)
+            snap = DistSSHShip.pack_tree(member)
             try
                 @test snap.project_rel == "member"
                 dest = _extract(snap)
@@ -394,7 +394,7 @@ end
             write(outside, "helper = 1\n")
             link = joinpath(parent, "helper-link.jl")
             symlink(outside, link)
-            snap = DistSSHShip.snapshot(dir; extra_files = String[abspath(link)])
+            snap = DistSSHShip.pack_tree(dir; extra_files = String[abspath(link)])
             try
                 dest = _extract(snap)
                 try
@@ -411,13 +411,13 @@ end
             end
             link2 = joinpath(parent, "double.jl")
             symlink(link, link2)
-            @test_throws ArgumentError DistSSHShip.snapshot(dir; extra_files = String[link2])
+            @test_throws ArgumentError DistSSHShip.pack_tree(dir; extra_files = String[link2])
             rm(link2; force = true)
-            @test_throws ArgumentError DistSSHShip.snapshot(
+            @test_throws ArgumentError DistSSHShip.pack_tree(
                 dir; extra_files = String[abspath(outside), abspath(outside)],
             )
             mkdir(joinpath(dir, "_distsshrun_external"))
-            @test_throws ArgumentError DistSSHShip.snapshot(dir; extra_files = String[abspath(outside)])
+            @test_throws ArgumentError DistSSHShip.pack_tree(dir; extra_files = String[abspath(outside)])
         end
     end
 
@@ -431,13 +431,13 @@ end
             return app
         end
         h1 = _tmp() do a
-            snap = DistSSHShip.snapshot(tree!(a))
+            snap = DistSSHShip.pack_tree(tree!(a))
             h = snap.content_tree_hash
             rm(snap.directory; force = true, recursive = true)
             return h
         end
         h2 = _tmp() do b
-            snap = DistSSHShip.snapshot(tree!(b))
+            snap = DistSSHShip.pack_tree(tree!(b))
             h = snap.content_tree_hash
             rm(snap.directory; force = true, recursive = true)
             return h
@@ -445,7 +445,7 @@ end
         @test h1 == h2
         @test !isempty(h1)
         _tmp() do root
-            snap = DistSSHShip.snapshot(tree!(root))
+            snap = DistSSHShip.pack_tree(tree!(root))
             try
                 dest = _extract(snap)
                 try
@@ -489,7 +489,7 @@ end
             try
                 via = joinpath(link_parent, "via")
                 symlink(real, via)
-                snap = DistSSHShip.snapshot(joinpath(via, "app"))
+                snap = DistSSHShip.pack_tree(joinpath(via, "app"))
                 try
                     @test snap.project_rel == "app"
                     dest = _extract(snap)
@@ -521,24 +521,24 @@ end
         end
     end
 
-    @testset "shipped record format" begin
+    @testset "ship record format" begin
         _tmp() do dir
             _project!(dir)
-            snap = DistSSHShip.snapshot(dir)
+            snap = DistSSHShip.pack_tree(dir)
             try
-                prog = DistSSHShip.build_shipped_record(snap; complete = false)
+                prog = DistSSHShip.build_ship_record(snap; complete = false)
                 @test prog["schema"] == 1
                 @test prog["complete"] === false
                 @test prog["content_tree_hash"] == snap.content_tree_hash
                 @test startswith(String(prog["writer"]), "DistSSHShip")
-                done = DistSSHShip.build_shipped_record(snap; complete = true)
+                done = DistSSHShip.build_ship_record(snap; complete = true)
                 @test done["complete"] === true
-                @test DistSSHShip.shipped_record_status(done) == :complete
-                @test DistSSHShip.shipped_record_status(prog) == :in_progress
-                path = DistSSHShip.shipped_record_logical_path("/stage/tree")
-                @test path == "/stage/tree/.distssh/shipped.toml"
-                path2 = DistSSHShip.shipped_record_logical_path("~/q/stage")
-                @test path2 == "~/q/stage/.distssh/shipped.toml"
+                @test DistSSHShip.ship_record_status(done) == :complete
+                @test DistSSHShip.ship_record_status(prog) == :in_progress
+                path = DistSSHShip.ship_record_logical_path("/stage/tree")
+                @test path == "/stage/tree/.distssh/ship.toml"
+                path2 = DistSSHShip.ship_record_logical_path("~/q/stage")
+                @test path2 == "~/q/stage/.distssh/ship.toml"
             finally
                 rm(snap.directory; force = true, recursive = true)
             end
@@ -550,24 +550,24 @@ end
             "algorithm" => "git-sha1",
             "content_tree_hash" => "a"^40,
         )
-        @test DistSSHShip.shipped_record_status(bad) == :invalid
+        @test DistSSHShip.ship_record_status(bad) == :invalid
     end
 
-    @testset "transfer_tree per-host step order" begin
+    @testset "ship per-host step order" begin
         snap = _minimal_snapshot(".")
         try
             order = Symbol[]
-            hooks = DistSSHShip._TransferTreeHooks(
+            hooks = DistSSHShip._ShipHooks(
                 (_, _) -> push!(order, :prepare),
                 (_, _, _, _; _...) -> push!(order, :extract),
                 (_, _, _) -> push!(order, :record),
             )
-            DistSSHShip._transfer_tree_one_host!(
+            DistSSHShip._ship_one_host!(
                 "host.test", "/stage/tree", snap, false, true; hooks = hooks,
             )
             @test order == [:prepare, :extract, :record]
             empty!(order)
-            DistSSHShip._transfer_tree_one_host!(
+            DistSSHShip._ship_one_host!(
                 "host.test", "/stage/tree", snap, false, false; hooks = hooks,
             )
             @test order == [:prepare, :extract]
@@ -576,26 +576,26 @@ end
         end
     end
 
-    @testset "shipped record ordering vs tar extract" begin
+    @testset "ship record ordering vs tar extract" begin
         _tmp() do dir
             _project!(dir)
-            snap = DistSSHShip.snapshot(dir)
+            snap = DistSSHShip.pack_tree(dir)
             try
                 dest = mktempdir()
                 try
                     mkpath(joinpath(dest, ".distssh"))
-                    write(joinpath(dest, ".distssh", "shipped.toml"), "complete = false\n")
+                    write(joinpath(dest, ".distssh", "ship.toml"), "complete = false\n")
                     @test_throws ErrorException DistSSHShip.Tar.extract(snap.tar_path, dest)
                     dest2 = mktempdir()
                     try
                         _local_extract_verified!(
                             dest2, snap.tar_path, snap.content_tree_hash,
                         )
-                        rec = DistSSHShip.build_shipped_record(snap; complete = true)
+                        rec = DistSSHShip.build_ship_record(snap; complete = true)
                         @test rec["complete"] === true
                         mkpath(joinpath(dest2, ".distssh"))
                         write(
-                            joinpath(dest2, ".distssh", "shipped.toml"),
+                            joinpath(dest2, ".distssh", "ship.toml"),
                             sprint(TOML.print, rec),
                         )
                         buf = IOBuffer()
@@ -619,20 +619,20 @@ end
         end
     end
 
-    @testset "project_rel in shipped record" begin
+    @testset "project_rel in ship record" begin
         tricky = "my app/x\"'\$`part"
         snap = _minimal_snapshot(tricky)
         try
-            rec = DistSSHShip.build_shipped_record(snap; complete = true)
+            rec = DistSSHShip.build_ship_record(snap; complete = true)
             @test rec["project_rel"] == tricky
             body = sprint(TOML.print, rec)
             parsed = TOML.parse(body)
             @test parsed["project_rel"] == tricky
-            @test DistSSHShip.shipped_record_status(rec) == :complete
+            @test DistSSHShip.ship_record_status(rec) == :complete
             for bad in ("", "/", "a//b", "..", "a/../b", "a\nb")
                 bad_snap = _minimal_snapshot(bad)
                 try
-                    @test_throws ArgumentError DistSSHShip.build_shipped_record(bad_snap)
+                    @test_throws ArgumentError DistSSHShip.build_ship_record(bad_snap)
                 finally
                     rm(bad_snap.directory; force = true, recursive = true)
                 end

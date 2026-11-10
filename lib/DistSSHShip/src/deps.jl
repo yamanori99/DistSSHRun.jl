@@ -9,7 +9,7 @@
 # is not copied as a second tree.
 #
 # Absolute paths are refused. They would be resolved on the remote filesystem,
-# not inside the shipped tree. An ancestor of `/` or the home directory is
+# not inside the ship tree. An ancestor of `/` or the home directory is
 # refused, because that ship would have to be rooted at `$HOME` or the
 # filesystem root.
 

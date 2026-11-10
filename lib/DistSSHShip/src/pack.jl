@@ -2,8 +2,8 @@
 # Tar's git tree hash of that tar, so it depends on relative path and content,
 # not on the local absolute path.
 
-"""Tar plus the relative layout [`transfer_tree`](@ref) extracts."""
-struct ShipSnapshot
+"""Tar plus the relative layout [`ship`](@ref) extracts."""
+struct ShipPack
     directory::String
     tar_path::String
     content_tree_hash::String
@@ -17,7 +17,7 @@ struct ShipSnapshot
     extra_rels::Vector{String}
 end
 
-function content_tree_hash(snapshot::ShipSnapshot)::String
+function content_tree_hash(snapshot::ShipPack)::String
     return snapshot.content_tree_hash
 end
 
@@ -311,10 +311,10 @@ function _collect_entries(
 end
 
 """
-    snapshot(project; extra_files=String[], kwargs...) -> ShipSnapshot
+    pack_tree(project; extra_files=String[], kwargs...) -> ShipPack
 
 Pack `project` (a directory, a project file, or a `--project` spec) into a
-temporary tar. The caller deletes `snapshot.directory`.
+temporary tar. The caller deletes `pack.directory`.
 
 `extra_files` has length 0 or 1. The one file is stored at
 `<project>/_distsshrun_external/<basename>`. A symlink is followed once:
@@ -324,7 +324,7 @@ one extra file throws `ArgumentError` (`not yet supported`).
 The hash covers project files, path dependencies, and that extra file by
 relative path and content.
 """
-function snapshot(
+function pack_tree(
         project::AbstractString;
         script::Union{Nothing, AbstractString} = nothing,
         cwd::AbstractString = pwd(),
@@ -333,7 +333,7 @@ function snapshot(
         ship_max_bytes::Integer = SHIP_MAX_BYTES_DEFAULT,
         omit_project_rels::Vector{String} = String[],
         warn::Function = print,
-    )::ShipSnapshot
+    )::ShipPack
     length(extra_files) > 1 && throw(
         ArgumentError(
             "more than one extra file is not yet supported",
@@ -404,7 +404,7 @@ function snapshot(
         end
         Tar.create(stage, tar_path)
         hash = String(Tar.tree_hash(tar_path; algorithm = TREE_HASH_ALGORITHM, skip_empty = true))
-        return ShipSnapshot(
+        return ShipPack(
             tmpd, tar_path, hash, total, nfiles, anchor, resolved.project_dir,
             prel, allowed, extra_rels,
         )
