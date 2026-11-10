@@ -992,7 +992,7 @@ snapshot (without shipping in-process) may still record the hash from that
 selection.
 
 A [`SyncResult`](@ref) from `setup!` / `sync!` with `:ship_tree`, and a
-[`ShipTreeResult`](@ref) from [`ship`](@ref), return the hash of that ship.
+[`ShipTreeResult`](@ref) from [`ship_tree!`](@ref), return the hash of that ship.
 Any other [`SyncResult`](@ref) returns `nothing`.
 """
 function result_content_tree_hash(
@@ -1032,7 +1032,7 @@ snapshot (without shipping in-process) may still record that snapshot's
 `run_id`.
 
 A [`SyncResult`](@ref) from `setup!` / `sync!` with `:ship_tree`, and a
-[`ShipTreeResult`](@ref) from [`ship`](@ref), return that remote `run_id`.
+[`ShipTreeResult`](@ref) from [`ship_tree!`](@ref), return that remote `run_id`.
 Any other [`SyncResult`](@ref) returns `nothing`.
 """
 function result_remote_run_id(

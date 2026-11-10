@@ -113,8 +113,8 @@ end
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"WarnDep\"\n")
             write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
-            snap = DistSSHRun.snapshot(proj)
-            rm(DistSSHRun.snapshot_directory(snap); recursive = true, force = true)
+            pack = DistSSHRun._pack_project_tree(proj)
+            rm(pack.directory; recursive = true, force = true)
             rec = Dict(
                 "schema" => 1,
                 "mode" => "ship-tree",

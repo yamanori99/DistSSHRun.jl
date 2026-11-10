@@ -112,16 +112,14 @@ Filter = function (x)
 end
 ```
 
-`snapshot`, `ship`, `ship_send_list`, `validate_snapshot_id`,
+`ship_tree!`, `ship_send_list`, `validate_snapshot_id`,
 `resolve_snapshot_selection`, `read_last_snapshot_record`,
 `write_last_snapshot_record!`, `forget_last_snapshot_default!`, and
 `active_snapshot_selection` are public and are not exported.
 
 ```@docs
 ship_send_list
-snapshot
-ship
-ShipSnapshot
+ship_tree!
 ShipTreeResult
 SnapshotSelection
 validate_snapshot_id
@@ -130,9 +128,6 @@ read_last_snapshot_record
 write_last_snapshot_record!
 forget_last_snapshot_default!
 active_snapshot_selection
-snapshot_directory
-snapshot_tar
-content_tree_hash
 remote_script_path
 check_setup_options!
 ```
@@ -146,8 +141,8 @@ DistSSHHeartbeat
 ```
 
 `DistSSHShip` is included by DistSSHRun and is not a `[deps]` entry.
-`DistSSHRun.snapshot` still builds the tar Run ships. Queue calls the
-names below on `DistSSHRun.DistSSHShip`.
+`ship_tree!` packs via `DistSSHShip.pack_tree` when given a project path.
+Queue calls the names below on `DistSSHRun.DistSSHShip`.
 
 ```@docs
 DistSSHShip
@@ -160,7 +155,6 @@ DistSSHShip.ShipPack
 DistSSHShip.pack_tree
 DistSSHShip.ship
 DistSSHShip.ShipResult
-DistSSHShip.ShipHostResult
 DistSSHShip.assert_extracted_tree_contained!
 DistSSHShip.ship_record_logical_path
 DistSSHShip.build_ship_record
@@ -195,12 +189,11 @@ Filter = function (x)
         :collect!, :CollectResult,
         :setup!, :sync!, :instantiate!, :ship_send_list,
         :KitSession, :HostResult, :SyncResult,
-        :snapshot, :ship, :ShipSnapshot, :ShipTreeResult, :SnapshotSelection,
+        :ship_tree!, :ShipTreeResult, :SnapshotSelection,
         :validate_snapshot_id, :resolve_snapshot_selection,
         :read_last_snapshot_record, :write_last_snapshot_record!,
         :forget_last_snapshot_default!,
         :active_snapshot_selection,
-        :snapshot_directory, :snapshot_tar, :content_tree_hash,
         :remote_script_path, :check_setup_options!,
         :execute_kwargs_from_parsed, :detached_launch,
         :ALLOW_MISMATCH_FIELDS,

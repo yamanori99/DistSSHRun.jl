@@ -26,6 +26,14 @@ const _RETIRED_ENGINE_PATTERNS = [
     raw"\bsend_paths\b",
     raw"DistSSHShip\.snapshot\b",
     raw"DistSSHShip\.ShipSnapshot\b",
+    raw"\bShipSnapshot\b",
+    raw"\bpack_ship_tar\b",
+    raw"\bsnapshot_directory\b",
+    raw"\bsnapshot_tar\b",
+    raw"\bship_project_to_hosts!\b",
+    raw"\bShipHostResult\b",
+    raw"\btree_matches_head\b",
+    raw"\brecord\s*=\s*(?:true|false)",
 ]
 
 const _STALE_SCAN_ROOTS = [

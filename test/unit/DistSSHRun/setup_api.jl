@@ -428,13 +428,13 @@ using Test
             listed = DistSSHRun._ship_gitignore_send_list(proj)
             @test "Project.toml" in listed
             @test "a.jl" in listed
-            packed = DistSSHRun.pack_ship_tar(proj)
+            packed = DistSSHRun._pack_project_tree(proj)
             try
                 dest = mktempdir()
                 DistSSHRun.Tar.extract(packed.tar_path, dest)
                 @test isfile(joinpath(dest, "a.jl"))
             finally
-                rm(packed.tmpd; force = true, recursive = true)
+                rm(packed.directory; force = true, recursive = true)
             end
         end
     end

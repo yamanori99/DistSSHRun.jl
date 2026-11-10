@@ -57,13 +57,12 @@ using Test
     @test :result_remote_run_id in ns &&
         Base.ispublic(DistSSHRun, :result_remote_run_id)
     @test !Base.isexported(DistSSHRun, :result_remote_run_id)
-    for name in (
-            :snapshot, :ship, :ShipSnapshot, :ShipTreeResult,
-            :snapshot_directory, :snapshot_tar, :content_tree_hash,
-        )
+    for name in (:ship_tree!, :ShipTreeResult)
         @test name in ns && Base.ispublic(DistSSHRun, name)
         @test !Base.isexported(DistSSHRun, name)
     end
+    @test Base.ispublic(DistSSHRun.DistSSHBase, :HostResult)
+    @test DistSSHRun.HostResult === DistSSHRun.DistSSHBase.HostResult
     @test :ship_send_list in ns && Base.ispublic(DistSSHRun, :ship_send_list)
     @test !Base.isexported(DistSSHRun, :ship_send_list)
     @test :parse_progress_line ∉ ns && :kit_progress_latest ∉ ns
