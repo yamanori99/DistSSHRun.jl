@@ -18,57 +18,57 @@ const _GO_SLOT_LOADER_NAME = "provenance-slot.jl"
 # Same fields as `_process_snapshot_expr`. A go slot has no DistSSHRun, so `-L` runs this text.
 const _GO_SLOT_LOADER_SRC = let _go_slot_state_dir = DistSSHBase.LOCAL_STATE_DIR
     """
-import TOML
-try
-    let blas = Ref("not loaded"), blas_threads = Ref("not loaded")
-        for (pkg, mod) in Base.loaded_modules
-            pkg.name == "LinearAlgebra" || continue
-            try
-                libs = mod.BLAS.get_config().loaded_libs
-                if !isempty(libs)
-                    blas[] = string(first(libs).libname)
+    import TOML
+    try
+        let blas = Ref("not loaded"), blas_threads = Ref("not loaded")
+            for (pkg, mod) in Base.loaded_modules
+                pkg.name == "LinearAlgebra" || continue
+                try
+                    libs = mod.BLAS.get_config().loaded_libs
+                    if !isempty(libs)
+                        blas[] = string(first(libs).libname)
+                    end
+                    blas_threads[] = string(mod.BLAS.get_num_threads())
+                catch
+                    blas[] = "not loaded"
+                    blas_threads[] = "not loaded"
                 end
-                blas_threads[] = string(mod.BLAS.get_num_threads())
-            catch
-                blas[] = "not loaded"
-                blas_threads[] = "not loaded"
             end
-        end
-        snap = Dict{String, String}(
-            "version" => string(VERSION),
-            "commit" => string(Base.GIT_VERSION_INFO.commit),
-            "cpu" => string(Sys.CPU_NAME),
-            "machine" => string(Sys.MACHINE),
-            "kernel" => string(Sys.KERNEL),
-            "nthreads" => string(Threads.nthreads()),
-            "hostname" => string(gethostname()),
-            "blas" => blas[],
-            "blas_threads" => blas_threads[],
-        )
-        # Same walk as `_julia_install_name`. This script cannot load DistSSHRun.
-        if isabspath(Sys.BINDIR)
-            dir = Sys.BINDIR
-            parent = dirname(dir)
-            while parent != dir
-                name = basename(parent)
-                if startswith(name, "julia-")
-                    snap["install"] = name
-                    break
-                end
-                dir = parent
+            snap = Dict{String, String}(
+                "version" => string(VERSION),
+                "commit" => string(Base.GIT_VERSION_INFO.commit),
+                "cpu" => string(Sys.CPU_NAME),
+                "machine" => string(Sys.MACHINE),
+                "kernel" => string(Sys.KERNEL),
+                "nthreads" => string(Threads.nthreads()),
+                "hostname" => string(gethostname()),
+                "blas" => blas[],
+                "blas_threads" => blas_threads[],
+            )
+            # Same walk as `_julia_install_name`. This script cannot load DistSSHRun.
+            if isabspath(Sys.BINDIR)
+                dir = Sys.BINDIR
                 parent = dirname(dir)
+                while parent != dir
+                    name = basename(parent)
+                    if startswith(name, "julia-")
+                        snap["install"] = name
+                        break
+                    end
+                    dir = parent
+                    parent = dirname(dir)
+                end
+            end
+            dir = get(ENV, "DISTRIBUTED_OUTPUT_DIR", pwd())
+            dest = joinpath(dir, $(_go_slot_state_dir |> repr))
+            mkpath(dest)
+            open(joinpath(dest, "provenance-slot.toml"), "w") do io
+                TOML.print(io, snap)
             end
         end
-        dir = get(ENV, "DISTRIBUTED_OUTPUT_DIR", pwd())
-        dest = joinpath(dir, $(_go_slot_state_dir |> repr))
-        mkpath(dest)
-        open(joinpath(dest, "provenance-slot.toml"), "w") do io
-            TOML.print(io, snap)
-        end
+    catch
     end
-catch
-end
-"""
+    """
 end
 
 const _GIT_DIFF_FLAGS = (
