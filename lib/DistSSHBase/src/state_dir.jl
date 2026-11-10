@@ -63,7 +63,7 @@ Optional `kind` is `go`, `drive`, `setup`, etc.
 """
 function resolve_local_state_dir(
         anchor::AbstractString,
-        kind::Union{Nothing, AbstractString} = nothing,
+        kind::Union{Nothing, AbstractString, Symbol} = nothing,
     )::String
     name = resolve_local_state_dir_name(anchor)
     base = joinpath(canonical_local_path(anchor), name)
