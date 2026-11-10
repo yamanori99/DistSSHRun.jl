@@ -39,8 +39,8 @@ public pack_paths
 public pack_tree
 public ship
 public ShipProject
-public ShipPack
-public ShipResult
+public Shipment
+public ShipmentReceipt
 public content_tree_hash
 public assert_extracted_tree_contained!
 public ship_record_logical_path

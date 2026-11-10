@@ -998,7 +998,7 @@ function _pack_project_tree(
         allow_external_symlinks::Bool = false,
         ship_max_bytes::Integer = SHIP_MAX_BYTES_DEFAULT,
         extra_files::Vector{String} = String[],
-    )::DistSSHShip.ShipPack
+    )::DistSSHShip.Shipment
     local_dir = canonical_local_path(local_root)
     omit = String[input.path for input in _load_ship_inputs(local_dir)]
     return DistSSHShip.pack_tree(
@@ -1016,7 +1016,7 @@ function _ship_tar_tree_hash(tar_path::AbstractString)::String
 end
 
 """Throw `ArgumentError` when the tar bytes no longer match the recorded hash."""
-function _require_pack_unchanged!(pack::DistSSHShip.ShipPack)
+function _require_pack_unchanged!(pack::DistSSHShip.Shipment)
     tar_path = pack.tar_path
     isfile(tar_path) || throw(ArgumentError("ship-tree: pack tar is missing"))
     got = _ship_tar_tree_hash(tar_path)
@@ -1028,7 +1028,7 @@ function _require_pack_unchanged!(pack::DistSSHShip.ShipPack)
     return nothing
 end
 
-function _refuse_pack_with_declared_inputs!(pack::DistSSHShip.ShipPack)
+function _refuse_pack_with_declared_inputs!(pack::DistSSHShip.Shipment)
     isempty(_load_ship_inputs(pack.project_dir)) || throw(
         ArgumentError(
             "ship-tree: pack was not built with declared-input omission; call ship_tree!(project, …)",
@@ -1798,7 +1798,7 @@ function _ship_run_tree_one_host!(
         host::AbstractString,
         deploy_root::AbstractString,
         run_id::AbstractString,
-        pack::DistSSHShip.ShipPack;
+        pack::DistSSHShip.Shipment;
         allow_external_symlinks::Bool,
         julia,
         await_inputs::Bool,
@@ -1827,7 +1827,7 @@ function _ship_run_tree_one_host!(
         )
     end
 
-    function _ship_run_complete_hook(h, ::AbstractString, ::DistSSHShip.ShipPack)
+    function _ship_run_complete_hook(h, ::AbstractString, ::DistSSHShip.Shipment)
         code_c, out_c = _remote_shell_status(
             String(h),
             _remote_run_leaf_complete_sh(leaf, content_hash; project_rel = project_rel),
@@ -1858,7 +1858,7 @@ end
 """
     ship_tree!(pack, hosts, deploy_root; confirm=false, provenance=true) -> ShipTreeResult
 
-Send an existing [`ShipPack`](@ref DistSSHRun.DistSSHShip.ShipPack) to `runs/<run_id>/src/` on
+Send an existing [`Shipment`](@ref DistSSHRun.DistSSHShip.Shipment) to `runs/<run_id>/src/` on
 each host. Does not pack again and does not delete the pack directory.
 
 The tar is hashed again immediately before sending. A different `git-sha1`
@@ -1869,7 +1869,7 @@ Depot preferences that would apply and are not in the ship are refused here.
 for controller `run.toml` in this process.
 """
 function ship_tree!(
-        pack::DistSSHShip.ShipPack,
+        pack::DistSSHShip.Shipment,
         hosts::Vector{String},
         deploy_root::AbstractString;
         confirm::Bool = false,
@@ -1902,7 +1902,7 @@ public ship_tree!
 Pack `project` (with declared-input omission and `warn = print_warn`), ship
 to `runs/<run_id>/src/` on each host, then delete the temporary pack directory.
 
-See the [`ShipPack`](@ref DistSSHRun.DistSSHShip.ShipPack) method for send-only behavior
+See the [`Shipment`](@ref DistSSHRun.DistSSHShip.Shipment) method for send-only behavior
 and keyword semantics.
 """
 function ship_tree!(
@@ -1948,7 +1948,7 @@ function ship_tree!(
 end
 
 function _ship_tree_to_hosts!(
-        pack::DistSSHShip.ShipPack,
+        pack::DistSSHShip.Shipment,
         hosts::Vector{String},
         deploy_root::AbstractString;
         confirm::Bool,

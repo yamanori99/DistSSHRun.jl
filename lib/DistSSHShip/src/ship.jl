@@ -10,7 +10,7 @@ Result of [`ship`](@ref).
 `project_rel` is the project directory inside `dest` (`.` when the tar root
 is the project). `ok` is false when any host failed. Nothing is deleted.
 """
-struct ShipResult
+struct ShipmentReceipt
     dest::String
     project_rel::String
     content_tree_hash::String
@@ -100,7 +100,7 @@ _ShipHooks() = _ShipHooks(nothing, nothing, nothing)
 function _ship_one_host!(
         host::AbstractString,
         checked::AbstractString,
-        snapshot::ShipPack,
+        snapshot::Shipment,
         allow_external_symlinks::Bool,
         write_record::Bool;
         julia::Union{Nothing, AbstractString} = nothing,
@@ -108,8 +108,11 @@ function _ship_one_host!(
         hooks::_ShipHooks = _ShipHooks(),
     )
     if hooks.prepare_dest! === nothing
-        code, out = DistSSHBase._remote_shell_status(host, _prepare_dest_script(checked))
-        code == 0 || throw(ArgumentError("could not prepare dest on $(host): $(strip(out))"))
+        code, out, err = DistSSHBase._remote_shell_status_parts(host, _prepare_dest_script(checked))
+        if code != 0
+            detail = DistSSHBase.shell_status_failure_message(out, err, code)
+            throw(ArgumentError("could not prepare dest on $(host): $detail"))
+        end
     else
         hooks.prepare_dest!(host, checked)
     end
@@ -167,18 +170,18 @@ function _prepare_dest_script(dest::AbstractString)::String
 end
 
 """
-    ship(pack, hosts, dest; allow_external_symlinks=false, julia=nothing) -> ShipResult
+    ship(pack, hosts, dest; allow_external_symlinks=false, julia=nothing) -> ShipmentReceipt
 
 Extract `pack` into `dest` on each SSH host and verify the tree hash.
 
 `dest` is the ship anchor (the project directory when there is no path
-dependency outside it). `ShipResult.project_rel` is the project inside
+dependency outside it). `ShipmentReceipt.project_rel` is the project inside
 that directory. This does not allocate a run id, write Run `run.toml`,
 instantiate, or delete `dest`. A non-empty `dest` is an error and is left
 in place. A failed extract can leave a partial tree.
 
 When `write_record=true` (default), writes
-`<dest>/.distssh/ship.toml` with `complete = true` only after hash
+`<dest>/.distssh/shipment.toml` with `complete = true` only after hash
 verification succeeds. There is no in-flight marker: a missing or
 incomplete record means the tree is not usable. Optional `transfer_id`
 is stored in the record (for example a Queue stage job id).
@@ -189,14 +192,14 @@ hash. Callers that re-hash an on-disk `dest` must exclude `.distssh/` when
 comparing to `content_tree_hash`.
 """
 function ship(
-        snapshot::ShipPack,
+        snapshot::Shipment,
         hosts::AbstractVector{<:AbstractString},
         dest::AbstractString;
         allow_external_symlinks::Bool = false,
         julia::Union{Nothing, AbstractString} = nothing,
         write_record::Bool = true,
         transfer_id::Union{Nothing, AbstractString} = nothing,
-    )::ShipResult
+    )::ShipmentReceipt
     host_list = String[String(h) for h in hosts]
     isempty(host_list) && throw(ArgumentError("ship: no hosts"))
     length(unique(host_list)) == length(host_list) ||
@@ -231,7 +234,7 @@ function ship(
         end
     end
     ok = all(row -> row.ok, rows)
-    return ShipResult(
+    return ShipmentReceipt(
         checked,
         snapshot.project_rel,
         snapshot.content_tree_hash,

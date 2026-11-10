@@ -1,10 +1,11 @@
-# Ship record at `<extract_dest>/.distssh/ship.toml` (schema 1).
+# Ship record at `<extract_dest>/.distssh/shipment.toml` (schema 1).
 # `ship` writes `complete = true` only after verified extract.
 # Readers treat a missing record or `complete = false` as not usable.
 
 const SHIP_RECORD_SCHEMA = 1
 const SHIP_RECORD_DIR = ".distssh"
-const SHIP_RECORD_NAME = "ship.toml"
+const SHIP_RECORD_NAME = "shipment.toml"
+const LEGACY_SHIP_RECORD_NAME = "ship.toml"
 const _SHIP_RECORD_TMP_TAIL = ".tmp"
 
 const _SHIP_PKG_VERSION = begin
@@ -20,10 +21,26 @@ function _posix_rstrip_slash(path::AbstractString)::String
     return rstrip(replace(strip(String(path)), '\\' => '/'), '/')
 end
 
+function _ship_record_path(extract_dest::AbstractString, name::AbstractString)::String
+    root = _posix_rstrip_slash(extract_dest)
+    return string(root, "/", SHIP_RECORD_DIR, "/", name)
+end
+
 """POSIX path to the ship record under an extract directory."""
 function ship_record_logical_path(extract_dest::AbstractString)::String
-    root = _posix_rstrip_slash(extract_dest)
-    return string(root, "/", SHIP_RECORD_DIR, "/", SHIP_RECORD_NAME)
+    return _ship_record_path(extract_dest, SHIP_RECORD_NAME)
+end
+
+function _legacy_ship_record_logical_path(extract_dest::AbstractString)::String
+    return _ship_record_path(extract_dest, LEGACY_SHIP_RECORD_NAME)
+end
+
+"""Candidate record paths in read order (current name, then legacy)."""
+function _ship_record_read_paths(extract_dest::AbstractString)::Vector{String}
+    return String[
+        ship_record_logical_path(extract_dest),
+        _legacy_ship_record_logical_path(extract_dest),
+    ]
 end
 
 function _ship_record_writer()::String
@@ -67,7 +84,7 @@ Build a schema-1 ship record table (not yet written).
 `DistSSHBase._remote_shell_path_word` (POSIX-quoted).
 """
 function build_ship_record(
-        snapshot::ShipPack;
+        snapshot::Shipment;
         complete::Bool = false,
         transfer_id::Union{Nothing, AbstractString} = nothing,
     )::Dict{String, Any}
@@ -181,7 +198,7 @@ function _ship_record_mkdir_script(extract_dest::AbstractString)::String
 end
 
 """
-Write `data` to `<extract_dest>/.distssh/ship.toml` on `host` (atomic tmp + mv).
+Write `data` to `<extract_dest>/.distssh/shipment.toml` on `host` (atomic tmp + mv).
 """
 function write_ship_record(
         host::AbstractString,
@@ -237,24 +254,70 @@ function write_ship_record(
     return nothing
 end
 
-"""Read `<extract_dest>/.distssh/ship.toml` on `host`, or `nothing` when missing or invalid."""
+function _read_ship_record_at_path(
+        host::AbstractString,
+        record_path::AbstractString,
+    )::Tuple{Symbol, Union{Nothing, Dict{String, Any}}}
+    pq = DistSSHBase._remote_shell_path_word(record_path)
+    proc_test = run(
+        pipeline(
+            ignorestatus(
+                DistSSHBase._host_sync_remote_shell_cmd(String(host), "test -f $pq"),
+            );
+            stdout = devnull,
+            stderr = devnull,
+        );
+        wait = true,
+    )
+    code_test = DistSSHBase.shell_status(proc_test)
+    if code_test == 255
+        return (:read_error, nothing)
+    elseif code_test != 0
+        return (:missing, nothing)
+    end
+    out = IOBuffer()
+    proc_cat = run(
+        pipeline(
+            ignorestatus(DistSSHBase._host_sync_remote_shell_cmd(String(host), "cat $pq"));
+            stdout = out,
+            stderr = devnull,
+        );
+        wait = true,
+    )
+    code_cat = DistSSHBase.shell_status(proc_cat)
+    if code_cat == 255 || code_cat != 0
+        return (:read_error, nothing)
+    end
+    body = String(take!(out))
+    rec = _parse_ship_record_body(body)
+    rec === nothing && return (:invalid, nothing)
+    return (:ok, rec)
+end
+
+"""
+Read `<extract_dest>/.distssh/shipment.toml` on `host`, falling back to legacy
+`ship.toml` when the current file is absent or unparsable. Returns `nothing`
+when both are missing or invalid.
+
+Throws `ArgumentError` when a record file is present but cannot be read
+(transient SSH or remote command failure on the primary or legacy path).
+"""
 function read_ship_record(
         host::AbstractString,
         extract_dest::AbstractString,
     )::Union{Nothing, Dict{String, Any}}
-    pq = DistSSHBase._remote_shell_path_word(ship_record_logical_path(extract_dest))
-    out = IOBuffer()
-    err = IOBuffer()
-    proc = run(
-        pipeline(
-            ignorestatus(DistSSHBase._host_sync_remote_shell_cmd(String(host), "test -f $pq && cat $pq"));
-            stdout = out,
-            stderr = err,
-        );
-        wait = true,
+    paths = _ship_record_read_paths(extract_dest)
+    outcome, rec = _read_ship_record_at_path(host, paths[1])
+    outcome == :ok && return rec
+    outcome == :read_error && throw(
+        ArgumentError("ship record: could not read $(paths[1]) on $(host)"),
     )
-    DistSSHBase.shell_status(proc) == 0 || return nothing
-    return _parse_ship_record_body(String(take!(out)))
+    outcome2, rec2 = _read_ship_record_at_path(host, paths[2])
+    outcome2 == :ok && return rec2
+    outcome2 == :read_error && throw(
+        ArgumentError("ship record: could not read $(paths[2]) on $(host)"),
+    )
+    return nothing
 end
 
 """
@@ -302,7 +365,7 @@ end
 function _write_complete_record!(
         host::AbstractString,
         extract_dest::AbstractString,
-        snapshot::ShipPack;
+        snapshot::Shipment;
         transfer_id::Union{Nothing, AbstractString} = nothing,
     )
     data = build_ship_record(snapshot; complete = true, transfer_id = transfer_id)

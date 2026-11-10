@@ -49,7 +49,7 @@ end
             _minimal_project!(tmp)
             pack = DistSSHRun.pack_ship_tree(tmp)
             try
-                @test pack isa DistSSHRun.DistSSHShip.ShipPack
+                @test pack isa DistSSHRun.DistSSHShip.Shipment
                 @test isfile(pack.tar_path)
                 @test pack.content_tree_hash == DistSSHRun.DistSSHShip.content_tree_hash(pack)
                 listed = DistSSHRun.ship_send_list(tmp)
@@ -87,7 +87,7 @@ end
     end
 
     @testset "ship_pack forwards transfer_id to the record builder" begin
-        pack = DistSSHRun.DistSSHShip.ShipPack(
+        pack = DistSSHRun.DistSSHShip.Shipment(
             mktempdir(),
             joinpath(mktempdir(), "x.tar"),
             "a"^40,
@@ -110,6 +110,7 @@ end
                 _minimal_project!(proj)
                 host = "host1"
                 dest = "/home/distsshkit/.distsshqueue/stage/job-1"
+                DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!(host)
                 withenv(_fake_arbitrary_dest_ship_env(state)...) do
                     pack = DistSSHRun.pack_ship_tree(proj)
                     withenv("DISTSSHKIT_TEST_EXPECT_TREE_HASH" => pack.content_tree_hash) do
@@ -120,11 +121,14 @@ end
                             write_record = false,
                             transfer_id = "job-1",
                         )
-                        @test result.ok
+                        @test _test_shipment_receipt_ok(
+                            result; label = "ship_project_to_dest",
+                        )
                         @test !isdir(bundle)
                     end
                 end
                 DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
+                DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!(host)
             end
         end
     end
@@ -133,10 +137,11 @@ end
         _with_tempdir() do state
             mktempdir() do proj
                 _minimal_project!(proj)
+                host = "host1"
                 pack = DistSSHRun.pack_ship_tree(proj)
                 try
-                    host = "host1"
                     dest = "/home/distsshkit/.distsshqueue/stage/test-uuid"
+                    DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!(host)
                     withenv(
                         merge(
                             _fake_arbitrary_dest_ship_env(state),
@@ -146,15 +151,16 @@ end
                         result = DistSSHRun.ship_pack(
                             pack, [host], dest; write_record = false,
                         )
-                        @test result isa DistSSHRun.DistSSHShip.ShipResult
-                        @test result.ok
+                        @test result isa DistSSHRun.DistSSHShip.ShipmentReceipt
+                        @test _test_shipment_receipt_ok(result; label = "ship_pack")
                         @test result.content_tree_hash == pack.content_tree_hash
                         @test length(result.hosts) == 1
-                        @test result.hosts[1].ok
+                        @test _test_host_result_ok(result.hosts[1]; label = "ship_pack")
                     end
                 finally
                     rm(pack.directory; force = true, recursive = true)
                     DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
+                    DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!(host)
                 end
             end
         end
