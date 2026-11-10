@@ -59,7 +59,7 @@ try
             end
         end
         dir = get(ENV, "DISTRIBUTED_OUTPUT_DIR", pwd())
-        dest = joinpath(dir, ".distsshkit")
+        dest = joinpath(dir, DistSSHBase.LOCAL_STATE_DIR)
         mkpath(dest)
         open(joinpath(dest, "provenance-slot.toml"), "w") do io
             TOML.print(io, snap)
@@ -198,7 +198,7 @@ end
 """Write the go-slot `-L` file. `nothing` when the directory cannot be written."""
 function write_go_slot_loader(slot_dir::AbstractString)::Union{Nothing, String}
     return try
-        dest = joinpath(slot_dir, ".distsshkit")
+        dest = joinpath(slot_dir, DistSSHBase.LOCAL_STATE_DIR)
         mkpath(dest)
         path = joinpath(dest, _GO_SLOT_LOADER_NAME)
         write(path, _GO_SLOT_LOADER_SRC)
@@ -210,7 +210,7 @@ end
 
 """Remember one go slot. `assemble_provenance` reads the toml after the slot exits."""
 function note_go_slot_provenance!(token::AbstractString, slot_dir::AbstractString)
-    path = joinpath(String(slot_dir), ".distsshkit", _GO_SLOT_PROVENANCE_NAME)
+    path = joinpath(String(slot_dir), DistSSHBase.LOCAL_STATE_DIR, _GO_SLOT_PROVENANCE_NAME)
     lock(_PROVENANCE_LOCK) do
         push!(_PROVENANCE_GO, String(token) => path)
     end
@@ -567,7 +567,11 @@ public git_source_snapshot
 
 """Kit and Queue write these directories inside the caller's tree. They are not the caller's edits."""
 function _git_status_is_kit(path::AbstractString)::Bool
-    for name in (".distsshkit", ".distsshqueue")
+    for name in (
+            DistSSHBase.LOCAL_STATE_DIR,
+            DistSSHBase.LEGACY_LOCAL_STATE_DIR,
+            ".distsshqueue",
+        )
         path == name && return true
         startswith(path, name * "/") && return true
         occursin("/" * name * "/", path) && return true
@@ -629,7 +633,7 @@ function _flush_go_slot_pmap_items!()
     try
         dir = strip(get(ENV, "DISTRIBUTED_OUTPUT_DIR", ""))
         isempty(dir) && return nothing
-        path = joinpath(dir, ".distsshkit", _GO_SLOT_PROVENANCE_NAME)
+        path = joinpath(dir, DistSSHBase.LOCAL_STATE_DIR, _GO_SLOT_PROVENANCE_NAME)
         isfile(path) || return nothing
         listed = Dict{String, Any}[]
         lock(_ITEM_LOCK) do
@@ -912,7 +916,7 @@ function _write_provenance_sidecar(
     output_dir === nothing && return nothing
     root = strip(String(output_dir))
     isempty(root) && return nothing
-    dest_dir = joinpath(canonical_local_path(root), ".distsshkit")
+    dest_dir = joinpath(canonical_local_path(root), DistSSHBase.LOCAL_STATE_DIR)
     try
         mkpath(dest_dir)
         dest = joinpath(dest_dir, "provenance.toml")

@@ -412,7 +412,9 @@ function main()
         end
         if isdir(tree)
             for (dir, _, _) in walkdir(tree)
-                basename(dir) == ".distsshkit" || continue
+                let n = basename(dir)
+                    (n == ".distssh" || n == ".distsshkit") || continue
+                end
                 go = joinpath(dir, "go")
                 if isdir(go)
                     for child in readdir(go; join = true)

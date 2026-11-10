@@ -124,7 +124,7 @@ using .DistSSHBase
 import .DistSSHBase: manifest_path
 public manifest_path
 using .DistSSHBase: CliCursor, HostFacts, HostResult, OUTPUT_WIDTH, PARENT_HOST_NAME, _HOST_TOOL_NAMES,
-    _NS_CACHE_DIR, _checked_remote_dest, _ensure_posix_login_shell!, _git_cmd,
+    _checked_remote_dest, _ensure_posix_login_shell!, _git_cmd,
     _host_sync_remote_shell_cmd,
     _host_tool_present, _julia_spec_is_auto, _located_project_file,
     _normalize_hint_surface,

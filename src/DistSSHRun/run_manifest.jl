@@ -48,13 +48,13 @@ end
 Create a unique Kit run directory (cancel / logs / `run.toml`), not the
 artifact `output_dir`.
 
-Layout: `{script dir}/.distsshkit/runs/<kind>/<script-stem>_<UTC-stamp>/`.
+Layout: `{script dir}/.distssh/runs/<kind>/<script-stem>_<UTC-stamp>/`.
 When `job_id` is set it is appended after the stamp (same charset as
 [`execute!`](@ref) `job_id`).
 
 If that parent tree is not writable (read-only `pkgdir` / Registry
-install), the same leaf is created under `{project}/.distsshkit/runs/…`,
-then under `tempdir()/distsshkit-runs/…`.
+install), the same leaf is created under `{project}/.distssh/runs/…`,
+then under `tempdir()/distssh-runs/…`.
 """
 function allocate_run_dir(
         kind::Symbol,
@@ -76,11 +76,11 @@ function allocate_run_dir(
     raw = String(script)
     script_path = isabspath(raw) ? raw : joinpath(proj, raw)
     script_dir = dirname(canonical_local_path(script_path))
-    rel = joinpath(".distsshkit", "runs", String(kind), leaf)
+    rel = DistSSHBase.local_state_relpath("runs", String(kind), leaf)
     candidates = (
         joinpath(script_dir, rel),
         joinpath(proj, rel),
-        joinpath(tempdir(), "distsshkit-runs", String(kind), leaf),
+        joinpath(tempdir(), "distssh-runs", String(kind), leaf),
     )
     last = nothing
     seen = Set{String}()
@@ -127,11 +127,11 @@ function _restore_kit_run_dir_env!(old)::Nothing
     return nothing
 end
 
-"""Setup log directory: this run's `DISTSSH_RUN_DIR`, else `{project}/.distsshkit/setup`."""
+"""Setup log directory: this run's `DISTSSH_RUN_DIR`, else `{project}/.distssh/setup`."""
 function setup_log_dir(project::AbstractString)::String
     rd = kit_run_dir()
     rd !== nothing && return rd
-    return joinpath(canonical_local_path(project), ".distsshkit", "setup")
+    return joinpath(DistSSHBase.local_state_write_root(project), "setup")
 end
 
 function kit_run_toml_path(run_dir::AbstractString)::String

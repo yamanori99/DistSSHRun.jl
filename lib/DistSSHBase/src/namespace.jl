@@ -1,7 +1,5 @@
 # Shared paths: project + `DISTRIBUTED_OUTPUT_DIR` + content-hash cache.
-# Does not mount FUSE. Project rsync excludes `.distsshkit/`.
-
-const _NS_CACHE_DIR = joinpath(".distsshkit", "cache", "sha256")
+# Does not mount FUSE. Project rsync excludes `.distssh/` (and legacy `.distsshkit/`).
 
 """SHA-256 hex digest of file contents at `path`."""
 function file_sha256(path::AbstractString)::String
@@ -18,29 +16,36 @@ function cache_relpath(hash::AbstractString)::String
             "cache_relpath: expected 64 hex chars, got $(repr(hash))",
         )
     )
-    return joinpath(_NS_CACHE_DIR, h)
+    return local_state_relpath("cache", "sha256", h)
 end
 
 """Absolute cache path under `project` for `hash`."""
 function cache_path(hash::AbstractString; project::AbstractString = pwd())::String
-    return joinpath(canonical_local_path(project), cache_relpath(hash))
+    return joinpath(
+        resolve_local_state_item(project, "cache", "sha256"),
+        lowercase(strip(String(hash))),
+    )
 end
 
 """
     cache_file(src; project=pwd()) -> String
 
-Copy `src` into `.distsshkit/cache/sha256/<digest>` if that blob is missing
+Copy `src` into `.distssh/cache/sha256/<digest>` if that blob is missing
 or stale. Same contents share one file (no second copy). Returns the cache
-path. Does not rsync by itself; `.distsshkit/` is excluded from project
+path. Does not rsync by itself; state directories are excluded from project
 sync.
 """
 function cache_file(src::AbstractString; project::AbstractString = pwd())::String
     srcp = canonical_local_path(src)
     isfile(srcp) || throw(ArgumentError("cache_file: not a file: $srcp"))
     h = file_sha256(srcp)
-    dest = cache_path(h; project = project)
+    dest = joinpath(local_state_write_root(project), "cache", "sha256", lowercase(strip(h)))
     if isfile(dest)
         file_sha256(dest) == h && return dest
+    end
+    existing = cache_path(h; project = project)
+    if isfile(existing) && file_sha256(existing) == h
+        return existing
     end
     mkpath(dirname(dest))
     cp(srcp, dest; force = true)

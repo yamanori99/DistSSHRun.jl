@@ -1,14 +1,12 @@
-# Push content-hash cache blobs over SSH (project ship excludes `.distsshkit/`).
+# Push content-hash cache blobs over SSH (project ship excludes state directories).
 
 """
     cache_remote_dir(remote_root) -> String
 
-Join `remote_root` with `.distsshkit/cache/sha256` (same layout as local
+Join `remote_root` with `.distssh/cache/sha256` for writes (same layout as local
 [`cache_relpath`](@ref)).
 """
-function cache_remote_dir(remote_root::AbstractString)::String
-    return joinpath(String(remote_root), _NS_CACHE_DIR)
-end
+cache_remote_dir(remote_root::AbstractString)::String = DistSSHBase.remote_cache_dir(remote_root)
 
 function _cache_blob_names(
         local_dir::AbstractString,
@@ -306,11 +304,11 @@ end
 """
     push_cache!(session; hashes=nothing) -> SyncResult
 
-Stream local `.distsshkit/cache/sha256/` blobs onto each SSH host with stdlib
+Stream local `.distssh/cache/sha256/` blobs onto each SSH host with stdlib
 Tar. Does not delete remote blobs that were not in this push.
 Hosts run at most `DISTSSH_JOBS` at a time (default 1). Host result order
 matches `session.hosts`.
-Project `setup ship-tree` still excludes `.distsshkit/`; this call is the
+Project `setup ship-tree` still excludes state directories; this call is the
 dedicated transfer.
 
 `hashes` limits the push to those digests. `nothing` pushes every local blob.
@@ -327,7 +325,7 @@ function push_cache!(
     )
     return _with_kit_inproc_run!(:sync) do
         apply_session_env!(session)
-        local_dir = joinpath(session.project, _NS_CACHE_DIR)
+        local_dir = DistSSHBase.resolve_local_state_item(session.project, "cache", "sha256")
         files = _cache_blob_names(local_dir, hashes)
         isempty(files) && return SyncResult(false, HostResult[]; ok = true)
         remote_dir = cache_remote_dir(session_remote_root(session))

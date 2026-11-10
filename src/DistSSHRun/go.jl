@@ -650,7 +650,7 @@ function _go_remote_slot_rel(
     label = String(slot_label)
     (isempty(batch) || batch == "." || batch == "..") && (batch = "batch")
     (isempty(label) || label == "." || label == "..") && (label = "slot")
-    return joinpath(".distsshkit", "go", batch, label)
+    return joinpath(DistSSHBase.LOCAL_STATE_DIR, "go", batch, label)
 end
 
 """Remote SSH shell snippet for one `go` slot (cd project root before mkdir/log paths)."""
@@ -691,8 +691,8 @@ function _go_remote_slot_shell_inner(
         job_mark = "printf '%s\\n' $comment_q > $mark_q && "
         job_load = " -L $mark_q"
     end
-    kit_q = _remote_shell_path_word(joinpath(slot_rel, ".distsshkit"))
-    loader_q = _remote_shell_path_word(joinpath(slot_rel, ".distsshkit", _GO_SLOT_LOADER_NAME))
+    kit_q = _remote_shell_path_word(joinpath(slot_rel, DistSSHBase.LOCAL_STATE_DIR))
+    loader_q = _remote_shell_path_word(joinpath(slot_rel, DistSSHBase.LOCAL_STATE_DIR, _GO_SLOT_LOADER_NAME))
     # Quoted heredoc: the slot has no DistSSHRun, so the snapshot source travels in the command.
     write_loader = "cat > $loader_q << 'DISTSSH_PROVENANCE_SLOT'\n$(_GO_SLOT_LOADER_SRC)\nDISTSSH_PROVENANCE_SLOT\n"
     prov_load = " -L $loader_q"
@@ -807,9 +807,9 @@ function _go_fetch_slot_provenance!(
         slot_dir::AbstractString,
     )
     remote_snap = string(
-        rstrip(remote_root, '/'), "/", slot_rel, "/.distsshkit/", _GO_SLOT_PROVENANCE_NAME,
+        rstrip(remote_root, '/'), "/", slot_rel, "/", DistSSHBase.LOCAL_STATE_DIR, "/", _GO_SLOT_PROVENANCE_NAME,
     )
-    local_dir = joinpath(slot_dir, ".distsshkit")
+    local_dir = joinpath(slot_dir, DistSSHBase.LOCAL_STATE_DIR)
     mkpath(local_dir)
     local_snap = joinpath(local_dir, _GO_SLOT_PROVENANCE_NAME)
     try

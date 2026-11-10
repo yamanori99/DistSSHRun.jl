@@ -297,7 +297,7 @@ end
 function _send_rel_excluded(rel::AbstractString)::Bool
     r = replace(String(rel), '\\' => '/')
     parts = split(r, '/')
-    return ".git" in parts || ".distsshkit" in parts
+    return ".git" in parts || any(DistSSHBase.is_local_state_dir_name, parts)
 end
 
 """`git ls-files -z` records. Throws when git fails (after missing-tool checks)."""
@@ -589,7 +589,7 @@ function _walk_send_files!(out::Vector{String}, dir::AbstractString, prefix::Abs
         end
         for name in readdir(cur; join = false, sort = false)
             name == ".git" && continue
-            name == ".distsshkit" && continue
+            DistSSHBase.is_local_state_dir_name(name) && continue
             child = joinpath(cur, name)
             if islink(child)
                 rel = rel_dir == "." ? name : joinpath(rel_dir, name)
@@ -628,7 +628,7 @@ function _append_gitignore_dirs!(
         end
         for name in readdir(cur; join = false, sort = false)
             name == ".git" && continue
-            name == ".distsshkit" && continue
+            DistSSHBase.is_local_state_dir_name(name) && continue
             child = joinpath(cur, name)
             islink(child) && continue
             isdir(child) || continue

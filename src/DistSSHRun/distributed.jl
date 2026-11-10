@@ -128,9 +128,13 @@ function _prepare_output_dir!(
     return canonical_local_path(path)
 end
 
-"""`{script_dir}/.distsshkit/{kind}` (parent of go / ride / drive batch dirs)."""
+"""`{script_dir}/.distssh/{kind}` (parent of go / ride / drive batch dirs; write target)."""
 function kit_dir_beside_script(script_dir::AbstractString, kind::Symbol)::String
-    return canonical_local_path(joinpath(String(script_dir), ".distsshkit", String(kind)))
+    return joinpath(
+        DistSSHBase.canonical_local_path(String(script_dir)),
+        DistSSHBase.LOCAL_STATE_DIR,
+        String(kind),
+    )
 end
 
 """
@@ -146,7 +150,7 @@ priority `collect_drive_results!` uses to report `Results:`.
 function resolve_drive_output_dir(script_dir::AbstractString)::String
     results_dir = get(ENV, "DISTRIBUTED_OUTPUT_DIR", nothing)
     if results_dir === nothing
-        results_dir = kit_dir_beside_script(script_dir, :drive)
+        results_dir = DistSSHBase.resolve_local_state_dir(script_dir, :drive)
     end
     return canonical_local_path(results_dir)
 end
@@ -156,8 +160,8 @@ end
 
 Log directory a `drive` run actually uses (single source of truth for
 `init_log_file`'s priority): explicit `log_dir` (`--log-dir` / `log_dir=`),
-else `ENV["DISTRIBUTED_OUTPUT_DIR"]`, else `{script_dir}/.distsshkit/drive`
-(kind root; live runs set ENV first).
+else `ENV["DISTRIBUTED_OUTPUT_DIR"]`, else the resolved `.distssh` / legacy drive root
+(live runs set ENV first).
 """
 function resolve_drive_log_dir(
         log_dir::Union{Nothing, AbstractString},
@@ -170,7 +174,7 @@ function resolve_drive_log_dir(
         resolved = get(ENV, "DISTRIBUTED_OUTPUT_DIR", nothing)
     end
     if resolved === nothing
-        resolved = kit_dir_beside_script(script_dir, :drive)
+        resolved = DistSSHBase.resolve_local_state_dir(script_dir, :drive)
     end
     return String(resolved)
 end

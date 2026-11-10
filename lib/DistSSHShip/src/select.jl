@@ -1,5 +1,5 @@
 # File selection under one directory. `.gitignore` via GitIgnore.jl, plus the
-# ship excludes `.git` and `.distsshkit` by name. The git index is not read,
+# ship excludes `.git` and state dirs (`.distssh`, legacy `.distsshkit`) by name. The git index is not read,
 # so a force-added file that `.gitignore` names is not selected.
 # GitIgnore is loaded on first use, not at module import.
 
@@ -67,7 +67,7 @@ function gitignore_paths(root::AbstractString)::Vector{String}
         end
         for name in names
             name == ".git" && continue
-            name == ".distsshkit" && continue
+            DistSSHBase.is_local_state_dir_name(name) && continue
             child = joinpath(cur, name)
             rel = replace(relpath(child, root_c), '\\' => '/')
             is_dir = isdir(child) && !islink(child)
@@ -142,9 +142,9 @@ end
 
 Relative paths under `root` that a ship tar for this directory contains,
 sorted. Same rules as [`selected_paths`](@ref): each `.gitignore` under
-`root`, ancestor directories of kept paths, `.git` and `.distsshkit`
-dropped, unshippable nodes omitted. `omit` drops declared inputs
-(Run passes `.distsshkit/inputs.toml` paths).
+`root`, ancestor directories of kept paths, state dirs dropped,
+unshippable nodes omitted. `omit` drops declared inputs
+(Run passes `.distssh/inputs.toml` paths).
 """
 pack_paths(root::AbstractString; omit::Vector{String} = String[])::Vector{String} =
     selected_paths(root; omit = omit)

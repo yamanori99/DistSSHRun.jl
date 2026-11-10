@@ -18,7 +18,7 @@ using Test
         other = joinpath(tmp, "b.bin")
         write(other, "hello ns")
         @test DistSSHBase.cache_file(other; project = tmp) == dest
-        @test DistSSHBase.cache_relpath(h) == joinpath(".distsshkit", "cache", "sha256", h)
+        @test DistSSHBase.cache_relpath(h) == joinpath(".distssh", "cache", "sha256", h)
         @test_throws ArgumentError DistSSHBase.cache_relpath("zz")
 
         withenv("DISTRIBUTED_OUTPUT_DIR" => nothing) do

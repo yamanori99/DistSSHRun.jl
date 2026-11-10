@@ -205,7 +205,7 @@ function _canonical_ship_input_path(path::AbstractString)::String
 end
 
 function _load_ship_inputs(root::AbstractString)::Vector{ShipInput}
-    file = joinpath(root, ".distsshkit", "inputs.toml")
+    file = DistSSHBase.resolve_local_state_item(root, "inputs.toml")
     isfile(file) || return ShipInput[]
     raw = TOML.parsefile(file)
     rows = get(raw, "inputs", Any[])
@@ -2048,11 +2048,12 @@ function warn_project_sshflags(project::AbstractString)
             push!(hits, "Project.toml sshflags")
         end
     end
-    for rel in (".distsshkit/sshflags", ".distsshkit/config.toml")
-        p = joinpath(d, rel)
+    for name in ("sshflags", "config.toml")
+        p = DistSSHBase.resolve_local_state_item(d, name)
         isfile(p) || continue
-        if rel == ".distsshkit/sshflags"
-            push!(hits, rel)
+        shown = joinpath(DistSSHBase.resolve_local_state_dir_name(d), name)
+        if name == "sshflags"
+            push!(hits, shown)
             continue
         end
         raw = try
@@ -2064,7 +2065,7 @@ function warn_project_sshflags(project::AbstractString)
                 haskey(raw, "sshflags") ||
                     haskey(get(raw, "ssh", Dict()), "sshflags")
             )
-            push!(hits, rel)
+            push!(hits, shown)
         end
     end
     isempty(hits) && return nothing
