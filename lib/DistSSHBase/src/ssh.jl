@@ -459,8 +459,7 @@ function run_on_host(
     return run(ignorestatus(_ssh_cmd(args)); wait = wait)
 end
 
-# Process-local auto-detect results (`nothing` included). Same host in
-# `--check` then `--instantiate` skips repeat SSH.
+# Process-local cache of found Julia paths only. A miss is not stored.
 const _DETECT_JULIA_PATH_CACHE = Dict{String, Union{Nothing, String}}()
 
 """Drop cached `detect_julia_path` results (`host=nothing` → all hosts)."""

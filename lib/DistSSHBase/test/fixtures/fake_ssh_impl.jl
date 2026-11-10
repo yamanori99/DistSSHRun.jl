@@ -256,6 +256,11 @@ function main()
     if remote_ship !== nothing
         localp = _fake_ship_record_local_file(tree, remote_ship)
         if startswith(strip(script), "test -f ")
+            fail_name = get(ENV, "DISTSSHKIT_TEST_SHIP_RECORD_TEST_FAIL", "")
+            fail_code = get(ENV, "DISTSSHKIT_TEST_SHIP_RECORD_TEST_FAIL_CODE", "127")
+            if !isempty(fail_name) && basename(localp) == fail_name
+                exit(parse(Int, fail_code))
+            end
             isfile(localp) ? exit(0) : exit(1)
         end
         if startswith(strip(script), "cat ")
