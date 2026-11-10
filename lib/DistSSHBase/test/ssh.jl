@@ -311,4 +311,18 @@ let _BASE = DistSSHBase
             end
         end
     end
+
+    @testset "fake double child env" begin
+        withenv(
+            "DISTSSHKIT_TEST_POOL_MEM" => "",
+            "DISTSSHKIT_TEST_STATE_ROOT" => "",
+            "JULIA_PROJECT" => "/throwaway/project",
+        ) do
+            child = _BASE._fake_double_child_julia_env()
+            @test child["DISTSSHKIT_TEST_POOL_MEM"] == ""
+            @test child["DISTSSHKIT_TEST_STATE_ROOT"] == ""
+            @test !haskey(child, "JULIA_PROJECT")
+            @test child["JULIA_LOAD_PATH"] == _BASE._child_load_path_string()
+        end
+    end
 end

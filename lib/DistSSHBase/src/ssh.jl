@@ -1127,9 +1127,14 @@ end
 """ENV for a `DISTSSHKIT_TEST_SSH` Julia child (see `test/support/subprocess.jl`)."""
 function _fake_double_child_julia_env()::Dict{String, String}
     skip = Set(("JULIA_PROJECT", "JULIA_LOAD_PATH"))
-    env = Dict{String, String}(
-        String(k) => String(v) for (k, v) in ENV if !isempty(v) && !(String(k) in skip)
-    )
+    env = Dict{String, String}()
+    for (k, v) in ENV
+        ks = String(k)
+        ks in skip && continue
+        vs = String(v)
+        isempty(vs) && !startswith(ks, "DISTSSHKIT_TEST") && continue
+        env[ks] = vs
+    end
     env["JULIA_LOAD_PATH"] = _child_load_path_string()
     return env
 end
