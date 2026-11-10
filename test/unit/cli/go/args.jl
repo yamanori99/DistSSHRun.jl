@@ -119,7 +119,7 @@ using Test
         @test err_ship isa ArgumentError
         @test occursin("go: --ship-tree was removed", err_ship.msg)
         @test occursin("setup ship-tree", err_ship.msg)
-        @test occursin("--snapshot", err_ship.msg)
+        @test occursin("--run-id", err_ship.msg)
         DistSSHRun.DistSSHBase.with_cli_entry(:DistSSHQueue) do
             qerr = try
                 parse_go_args(["--ship-tree", "child:h1:1", "job.jl"])
@@ -226,7 +226,7 @@ using Test
         @test !occursin("--skip-sync", txt)
         @test !occursin("--ship-tree", txt)
         @test occursin("setup ship-tree", txt)
-        @test occursin("--snapshot", txt)
+        @test occursin("--run-id", txt)
         @test occursin("runs/<ID>/src", txt)
         @test occursin("--hosts", txt)
         @test occursin("--repeat", txt)

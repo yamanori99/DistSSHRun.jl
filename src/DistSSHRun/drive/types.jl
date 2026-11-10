@@ -213,7 +213,7 @@ there too. `schema` stays 1. An unknown `stop` string is ignored.
 `run_dir` is this run's `DISTSSHKIT_RUN_DIR` when one is known. Read it
 with [`result_run_dir`](@ref). [`result_provenance`](@ref) reads
 `run.toml` from it. [`result_content_tree_hash`](@ref) and
-[`result_remote_run_id`](@ref) read `provenance.shipped` in that file.
+[`result_remote_run_id`](@ref) read `provenance.selection` in that file.
 A [`RideResult`](@ref) is not accepted there; convert
 it with [`kit_run_result`](@ref) first.
 
@@ -299,7 +299,7 @@ the order results were collected. Empty when no host-collection step ran
 `run_dir` is this run's `DISTSSHKIT_RUN_DIR` when the driver allocated one.
 Read it with [`result_run_dir`](@ref). [`result_provenance`](@ref) reads
 `run.toml` from it. [`result_content_tree_hash`](@ref) and
-[`result_remote_run_id`](@ref) read `provenance.shipped` in that file.
+[`result_remote_run_id`](@ref) read `provenance.selection` in that file.
 
 Result fields and positional constructors are not API. Result structs are
 not a stable serialization format. `serialize` and JLD2 of a result are

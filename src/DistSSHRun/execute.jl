@@ -24,7 +24,7 @@ const _EXECUTE_DETACHED_KW = Set{Symbol}(
         :spi_check,
         :allow_mismatch,
         :allow_external_symlinks,
-        :snapshot,
+        :run_id,
     )
 )
 const _EXECUTE_DETACHED_DRIVE_ONLY = (
@@ -221,8 +221,8 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
     )
     am = get(parsed, :allow_mismatch, Symbol[])
     isempty(am) || (kw[:allow_mismatch] = am)
-    snap0 = get(parsed, :snapshot, nothing)
-    snap0 === nothing || (kw[:snapshot] = snap0)
+    snap0 = get(parsed, :run_id, nothing)
+    snap0 === nothing || (kw[:run_id] = snap0)
     dr0 = get(parsed, :deploy_root, nothing)
     dr0 === nothing || (kw[:remote] = dr0)
     if kind === :go
@@ -437,10 +437,10 @@ and [`drive!`](@ref) already share (`ride!` ignores `sync`). With `detached=fals
 spawn (run no longer transfers). Ship or git-sync first with [`setup!`](@ref)
 `:ship_tree` / `:git_sync`, or CLI `setup ship-tree` / `setup git-sync`.
 A script outside the project is `extra_files=[script]` (one file, at
-`_distsshrun_external/<basename>`), then `setup!(session, :instantiate; snapshot=id)`,
-then `execute!(...; snapshot=id)` with that same local script.
+`_distsshrun_external/<basename>`), then `setup!(session, :instantiate; run_id=id)`,
+then `execute!(...; run_id=id)` with that same local script.
 In-process [`go!`](@ref) / [`drive!`](@ref) reject `sync=:ship_tree` and
-`sync=:git_sync` the same way. Omitted/`false` `sync` and `snapshot=` are
+`sync=:git_sync` the same way. Omitted/`false` `sync` and `run_id=` are
 unchanged.
 `--project=` is always the job `project=` when that
 tree has a `Project.toml`. The job must list DistSSHKit or DistSSHRun in
@@ -771,9 +771,9 @@ function _execute_detached!(
     spi_check = get(kwargs, :spi_check, false)
     allow_mismatch = get(kwargs, :allow_mismatch, Symbol[])
     allow_external_symlinks = get(kwargs, :allow_external_symlinks, false)
-    snapshot = get(kwargs, :snapshot, nothing)
-    if snapshot !== nothing
-        snapshot = validate_snapshot_id(snapshot)
+    run_id = get(kwargs, :run_id, nothing)
+    if run_id !== nothing
+        run_id = validate_run_id(run_id)
     end
     worker_include isa Bool || throw(
         ArgumentError(
@@ -852,7 +852,7 @@ function _execute_detached!(
         spi_check = spi_check,
         allow_mismatch = allow_mismatch,
         allow_external_symlinks = allow_external_symlinks === true,
-        snapshot = snapshot,
+        run_id = run_id,
         remote = remote,
     )
     extra = Dict{String, String}(
@@ -1868,7 +1868,7 @@ function _execute_detached_argv(
         spi_check::Bool = false,
         allow_mismatch = Symbol[],
         allow_external_symlinks::Bool = false,
-        snapshot::Union{Nothing, AbstractString} = nothing,
+        run_id::Union{Nothing, AbstractString} = nothing,
         remote::Union{Nothing, AbstractString} = nothing,
     )::Vector{String}
     argv = String[String(kind)]
@@ -1889,8 +1889,8 @@ function _execute_detached_argv(
     _reject_run_transfer_kw!("execute!", sync; surface = :api)
     allow_external_symlinks &&
         _reject_run_transfer_cli!(String(kind), "--allow-external-symlinks")
-    if snapshot !== nothing
-        push!(argv, "--snapshot", validate_snapshot_id(snapshot))
+    if run_id !== nothing
+        push!(argv, "--run-id", validate_run_id(run_id))
     end
     if remote !== nothing && !isempty(strip(String(remote)))
         push!(argv, DEPLOY_ROOT_FLAG, String(strip(String(remote))))

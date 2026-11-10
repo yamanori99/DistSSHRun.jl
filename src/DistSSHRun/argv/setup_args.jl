@@ -28,14 +28,14 @@
 #                        use DISTRIBUTED_REMOTE_PROJECT_ROOT, else ~/Parent/Repo
 #                        from the local package env_dir (workspace Manifest
 #                        member maps under that root). Does not rename ENV.
-#   --snapshot ID        instantiate / check / runtest only
+#   --run-id ID        instantiate / check / runtest only
 #
 # Legacy (error, not aliases):
 #   setup --ship-tree / --instantiate / --check / … → setup <subcommand>
 #   --remote-path PATH → --deploy-root PATH
 #   --remote-dir → --deploy-root
 #   --juliaup / --juliaup-update / --rsync remain removed
-#   go / drive --ship-tree error (use this namespace, then go/drive --snapshot)
+#   go / drive --ship-tree error (use this namespace, then go/drive --run-id)
 #
 # Ambiguous combinations fail before remote side effects.
 
@@ -45,10 +45,10 @@ function show_requirements(; io::IO = stdout)
         io,
         "Deploy and check the project on SSH hosts before go / drive.",
         "Recommended: ship-tree, instantiate, check, then optional runtest.",
-        "  After ship-tree, instantiate/check/go use that snapshot id (local",
-        "  last-snapshot record, or pass --snapshot ID). Lexical latest is not used.",
-        "  A git checkout at the deploy root remains usable without --snapshot;",
-        "  delete/git-clone/git-sync/git-pull clear the matching local last-snapshot record.",
+        "  After ship-tree, instantiate/check/go use that run id (local",
+        "  last-ship.toml, or pass --run-id ID). Lexical latest is not used.",
+        "  A git checkout at the deploy root remains usable without --run-id;",
+        "  delete/git-clone/git-sync/git-pull clear the matching local last-ship record.",
         "Hosts: child:NAME[:N] (same as go / drive; :N ignored).",
         "       parent is up, not setup.",
         "Remote path: omit --deploy-root to use DISTRIBUTED_REMOTE_PROJECT_ROOT,",
@@ -136,7 +136,7 @@ function show_requirements(; io::IO = stdout)
         "  --deploy-root PATH   remote deployment root (location, not snapshot id).",
         "                       Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
         "                       ~/Parent/RepoName layout from the local env_dir.",
-        "  --snapshot ID        runs/<ID>/ under that root (instantiate/check/runtest)",
+        "  --run-id ID        runs/<ID>/ under that root (instantiate/check/runtest)",
         "  --allow-external-symlinks  with ship-tree: keep escaping symlinks",
         "  --julia PATH         remote Julia",
         "  --ignore-julia-version  warn on Julia version skew instead of failing",
@@ -278,7 +278,7 @@ function parse_setup_args(args::Vector{String})
         "setup";
         valued = (
             "--confirm-path", "--older-than", "--id", "--julia", "--repo",
-            "--remote-path", DEPLOY_ROOT_FLAG, "--snapshot", "--extra-file",
+            "--remote-path", DEPLOY_ROOT_FLAG, "--run-id", "--extra-file",
         ),
         prefixes = ("--remote-path=",),
         known = (
@@ -298,7 +298,7 @@ function parse_setup_args(args::Vector{String})
     julia_path = get(ENV, "JULIA_DISTRIBUTED_EXE", "auto")  # default to env or auto-detect
     repo_url = nothing
     deploy_root = nothing
-    snapshot_id = nothing
+    run_id = nothing
     hosts = String[]
     show_help = false
     ignore_julia_version = false
@@ -369,10 +369,10 @@ function parse_setup_args(args::Vector{String})
             deploy_root = _set_deploy_root!(
                 deploy_root, _take_deploy_root!(c), "setup",
             )
-        elseif arg == "--snapshot"
+        elseif arg == "--run-id"
             raw = String(strip(cli_take_value!(c, arg)))
-            isempty(raw) && throw(ArgumentError("--snapshot needs a non-empty id"))
-            snapshot_id = raw
+            isempty(raw) && throw(ArgumentError("--run-id needs a non-empty id"))
+            run_id = raw
         elseif arg == "--extra-file"
             raw = String(strip(cli_take_value!(c, arg)))
             isempty(raw) && throw(ArgumentError("setup --extra-file needs a path"))
@@ -416,7 +416,7 @@ function parse_setup_args(args::Vector{String})
         julia_path = julia_path,
         repo_url = repo_url,
         deploy_root = deploy_root,
-        snapshot_id = snapshot_id,
+        run_id = run_id,
         hosts = hosts,
         show_help = show_help,
         ignore_julia_version = ignore_julia_version,

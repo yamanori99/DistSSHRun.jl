@@ -1,6 +1,6 @@
 category: breaking
 
-- Snapshot source selection is explicit. `--snapshot ID` / `snapshot=` names
+- Snapshot source selection is explicit. `--run-id ID` / `run_id=` names
   `runs/<ID>/` under the already resolved deployment root (`--deploy-root`
   stays location only). IDs must match `YYYYMMDDTHHMMSSZ-xxxxxx`; traversal
   and multi-component paths are refused. An explicit ID never falls back to
@@ -14,12 +14,12 @@ category: breaking
   Selection fail-closes unless every host stamp has DistSSHRun ownership
   (`schema` / `writer` / `kind = "ship"`), `complete = true`,
   `algorithm = "git-sha1"`, and a 40-digit hex `content_tree_hash`, and those
-  hashes match across hosts. A local last-snapshot record must store a
+  hashes match across hosts. A local last-ship record must store a
   40-digit hash that matches the remote stamp; a missing or disagreeing
   stored hash is refused. Incomplete, legacy, or `complete = true` stamps
   that omit those fields are not selectable.
-- When `--snapshot` is omitted, a local
-  `<env_dir>/.distsshkit/last-snapshot.toml` may supply the ID (keyed by
+- When `--run-id` is omitted, a local
+  `<env_dir>/.distsshkit/last-ship.toml` may supply the ID (keyed by
   deploy root and successful host aliases). A missing or incompatible host
   set fails. Otherwise a git checkout with `Project.toml` at the deploy root
   on every host is used. Lexical latest `runs/*/src` is removed. The local
@@ -29,21 +29,22 @@ category: breaking
   the matching deploy root so a later command can select the git checkout.
   Programmatic callers should pass `result_remote_run_id` / the returned ID.
   `go` / `drive --ship-tree` pass that invocation's ID into instantiate and
-  work-root resolution. `--snapshot` cannot combine with `--sync` /
+  work-root resolution. `--run-id` cannot combine with `--sync` /
   `--ship-tree`.
-- Controller `provenance.shipped` may record `source_kind`, `deploy_root`,
+- Controller `provenance.selection` may record `source_kind`, `deploy_root`,
   and `work_root` for runs that did not ship in-process. Collect / recovery
-  mapping honors `--snapshot` / `snapshot=` when given. When omitted, a
+  mapping honors `--run-id` / `run_id=` when given. When omitted, a
   present controller `DISTSSHKIT_RUN_DIR/run.toml` with
-  `provenance.shipped` selects that original source (not a later local
-  last-snapshot record or `_LAST_SHIP`). A DistSSHRun stamp without
-  `provenance.shipped` is refused rather than falling back. When
-  `provenance.shipped` records `content_tree_hash`, collect mapping refuses
+  `provenance.selection` selects that original source (not a later local
+  last-ship record or `_LAST_SHIP`). Collect recovery still reads legacy
+  `provenance.shipped` when `provenance.selection` is absent; only when both
+  are missing is the stamp refused. When
+  `provenance.selection` records `content_tree_hash`, collect mapping refuses
   a remote stamp whose hash differs. In-flight runs
   that have not written `run.toml` still use the active selection. Deploy
   root and snapshot work root stay distinct: `drive --ship-tree` instantiates
   against the deploy root, then assigns the work-root ENV. Detached
-  `execute!` forwards `snapshot=` / `--snapshot` to the child argv.
+  `execute!` forwards `run_id=` / `--run-id` to the child argv.
   Standalone `setup ship-tree` remains transfer-only. Git `setup sync` /
   `pull` / `clone` are unchanged. `setup check` still reaches SSH
   diagnostics when selection cannot probe, then fails closed instead of

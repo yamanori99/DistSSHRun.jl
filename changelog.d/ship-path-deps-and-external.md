@@ -12,16 +12,16 @@ category: breaking
 - `setup ship-tree --extra-file PATH` may be repeated and is only valid
   for `ship-tree`. This version accepts one path; a second is
   `more than one extra file is not yet supported`. The same limit and
-  message apply to `setup!`, `sync!`, and `snapshot` `extra_files`.
+  message apply to `setup!`, `sync!`, and `run_id` / `extra_files` on ship-tree.
   The file is stored at `_distsshrun_external/<basename>` under the remote
   project. A symlink is followed once. Siblings are not sent. In-process
   `go!` / `drive!` with `sync=:ship_tree` use that path for one script
   outside the project. Detached `execute!(…; sync=:ship_tree)` stays an
-  error before spawn. After the ship, `execute!(…; snapshot=id)` and
-  `go` / `drive --snapshot ID` run that same local script; the remote
-  command is `remote_script_path`. `go!(...; snapshot=)` does not apply
+  error before spawn. After the ship, `execute!(…; run_id=id)` and
+  `go` / `drive --run-id ID` run that same local script; the remote
+  command is `remote_script_path`. `go!(...; run_id=)` does not apply
   the in-tree `[sources]` check, so a sibling path the snapshot already
-  shipped is allowed. Without `:ship_tree` or `snapshot=`, an outside
+  shipped is allowed. Without `:ship_tree` or `run_id=`, an outside
   script is still an error, and a sibling `[sources]` path is still an
   error.
 - The content hash covers project files, path dependencies, and that extra
@@ -32,7 +32,7 @@ category: breaking
   as DistSSHUp. It is not a `[deps]` entry and it is not registered.
   Queue packs with `DistSSHShip.snapshot(project; extra_files=[script])`,
   places that tar with `transfer_tree` or `ship`, and runs
-  `execute!(…; detached=true, snapshot=id)` on the same local script.
-  `ship` writes the run id and completion stamp that `snapshot=` selects.
+  `execute!(…; detached=true, run_id=id)` on the same local script.
+  `ship` writes the run id and completion stamp that `run_id=` selects.
   `transfer_tree` extracts the same tar, including
   `_distsshrun_external/<basename>`, and does not allocate that id.

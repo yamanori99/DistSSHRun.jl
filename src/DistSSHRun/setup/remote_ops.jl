@@ -738,8 +738,8 @@ end
 
 """Manifest must exist. A selected snapshot already shipped path dependencies."""
 function _require_manifest_for_instantiate!(project::AbstractString)
-    sel = active_snapshot_selection()
-    if sel !== nothing && sel.source_kind === :snapshot
+    sel = active_source_selection()
+    if sel !== nothing && sel.source_kind === :ship
         return _require_manifest!(project)
     end
     return ensure_manifest_ships!(project)

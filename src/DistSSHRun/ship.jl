@@ -28,7 +28,7 @@ struct ShipTreeResult
 end
 public ShipTreeResult
 
-# `snapshot_select.jl` registers a hook so ship clear also drops active selection.
+# `source_selection.jl` registers a hook so ship clear also drops active selection.
 const _CLEAR_SELECTION_HOOK = Ref{Any}(() -> nothing)
 
 function _clear_last_ship!()
@@ -1185,7 +1185,7 @@ end
 """Deprecated probe kept for fixtures that still emit `__DSR_SHIP_SRC__`.
 
 Selection no longer uses lexical latest `runs/*/src`. Prefer
-[`resolve_snapshot_selection`](@ref).
+[`resolve_source_selection`](@ref).
 """
 function _remote_project_work_root(host::AbstractString, remote_root::AbstractString)::String
     given = strip(String(remote_root))
@@ -1216,14 +1216,14 @@ function _work_root_for_hosts(
         hosts::AbstractVector{<:AbstractString},
         remote_root::AbstractString;
         local_project::Union{Nothing, AbstractString} = nothing,
-        snapshot::Union{Nothing, AbstractString} = nothing,
+        run_id::Union{Nothing, AbstractString} = nothing,
         skip_local_record::Bool = false,
     )::String
     isempty(hosts) && return String(remote_root)
     proj = local_project === nothing ? pwd() : String(local_project)
-    sel = resolve_snapshot_selection(
+    sel = resolve_source_selection(
         hosts, remote_root, proj;
-        snapshot = snapshot, skip_local_record = skip_local_record,
+        run_id = run_id, skip_local_record = skip_local_record,
     )
     _set_active_selection!(sel)
     return sel.work_root
@@ -1232,7 +1232,7 @@ end
 """Worker `--project` after selection: snapshot `src` or git deploy root, plus member rel.
 
 Matches `remote_deploy_root`, not `session_remote_root`. A workspace member is
-then joined onto that work root. Pass `snapshot=` for an explicit ID.
+then joined onto that work root. Pass `run_id=` for an explicit ID.
 """
 function _resolved_deploy_root_for_work(
         local_project::AbstractString;
@@ -1242,14 +1242,14 @@ function _resolved_deploy_root_for_work(
         s = strip(String(cli_override))
         isempty(s) || return remote_deploy_root(local_project; cli_override = cli_override)
     end
-    return _layout_intended_deploy_root(local_project, active_snapshot_selection())
+    return _layout_intended_deploy_root(local_project, active_source_selection())
 end
 
 function _project_work_root(
         hosts::AbstractVector{<:AbstractString},
         local_project::AbstractString;
         cli_override::Union{Nothing, AbstractString} = nothing,
-        snapshot::Union{Nothing, AbstractString} = nothing,
+        run_id::Union{Nothing, AbstractString} = nothing,
     )::String
     deploy = _resolved_deploy_root_for_work(
         local_project; cli_override = cli_override,
@@ -1257,7 +1257,7 @@ function _project_work_root(
     mapped = resolve_remote_project_root(local_project; cli_override = deploy)
     wr = _work_root_for_hosts(
         hosts, deploy;
-        local_project = local_project, snapshot = snapshot,
+        local_project = local_project, run_id = run_id,
     )
     return _rehome_under_work_root(mapped, deploy, wr)
 end
@@ -1272,7 +1272,7 @@ function _assign_remote_work_root_env!(
         hosts::AbstractVector{<:AbstractString},
         local_project::AbstractString;
         cli_override::Union{Nothing, AbstractString} = nothing,
-        snapshot::Union{Nothing, AbstractString} = nothing,
+        run_id::Union{Nothing, AbstractString} = nothing,
     )::Nothing
     isempty(hosts) && return nothing
     cli = if cli_override === nothing
@@ -1284,7 +1284,7 @@ function _assign_remote_work_root_env!(
     end
     if cli === nothing || !any(iscntrl, String(cli))
         wr = _project_work_root(
-            hosts, local_project; cli_override = cli, snapshot = snapshot,
+            hosts, local_project; cli_override = cli, run_id = run_id,
         )
         if !any(iscntrl, String(wr))
             ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = remote_env_project_root(wr)
@@ -1312,7 +1312,7 @@ end
 
 After [`_assign_remote_work_root_env!`](@ref), `DISTRIBUTED_REMOTE_PROJECT_ROOT`
 holds the work root (`runs/<id>/src`), not the deploy root. Mapping must use
-the deploy root (via [`active_snapshot_selection`](@ref) or a temporary ENV),
+the deploy root (via [`active_source_selection`](@ref) or a temporary ENV),
 then rehome onto the work root — otherwise `remote_layout_path` already returns
 a work-root path and rehome nests `runs/<id>/src/runs/<id>`.
 
@@ -1324,14 +1324,14 @@ function _remote_work_layout_path(
         local_abs::AbstractString,
         local_repo::AbstractString,
         hosts::AbstractVector{<:AbstractString};
-        snapshot::Union{Nothing, AbstractString} = nothing,
+        run_id::Union{Nothing, AbstractString} = nothing,
         skip_local_record::Bool = false,
         deploy_root::Union{Nothing, AbstractString} = nothing,
     )::String
-    plan = _collect_source_plan(snapshot)
-    snap = plan.snapshot
+    plan = _collect_source_plan(run_id)
+    snap = plan.run_id
     skip_rec = skip_local_record || plan.skip_local_record
-    sel = active_snapshot_selection()
+    sel = active_source_selection()
     deploy = if deploy_root !== nothing
         String(deploy_root)
     elseif plan.deploy_root !== nothing
@@ -1346,24 +1346,24 @@ function _remote_work_layout_path(
         (
         snap === nothing ||
             (
-            sel.snapshot_id !== nothing &&
-                String(sel.snapshot_id) == String(snap)
+            sel.run_id !== nothing &&
+                String(sel.run_id) == String(snap)
         )
     )
     if !reuse
         _work_root_for_hosts(
             hosts, deploy;
-            local_project = local_repo, snapshot = snap,
+            local_project = local_repo, run_id = snap,
             skip_local_record = skip_rec,
         )
-        sel = active_snapshot_selection()
+        sel = active_source_selection()
     end
-    sel isa SnapshotSelection || throw(
+    sel isa SourceSelection || throw(
         ArgumentError(
             "remote work layout: no snapshot selection after resolve for $(hosts)",
         ),
     )
-    chosen = sel::SnapshotSelection
+    chosen = sel::SourceSelection
     expect_hash = plan.content_tree_hash
     if expect_hash isa AbstractString
         got_hash = chosen.content_tree_hash
@@ -2029,7 +2029,7 @@ function _ship_tree_to_hosts!(
     if provenance && !isempty(ok_hosts)
         try
             env = resolve_pkg_env(pack.project_dir)
-            write_last_snapshot_record!(
+            write_last_ship_record!(
                 env.env_dir,
                 String(deploy_root),
                 ok_hosts,
@@ -2042,8 +2042,8 @@ function _ship_tree_to_hosts!(
             # Record is a convenience default; ship itself already succeeded.
         end
         _set_active_selection!(
-            SnapshotSelection(
-                :snapshot,
+            SourceSelection(
+                :ship,
                 rid,
                 String(deploy_root),
                 src_logical,

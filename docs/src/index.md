@@ -90,15 +90,15 @@ create leaves the safe directory. Run-time `sync=` on
 `go!` / `drive!` / `pipeline!` / detached `execute!` is an error; deploy with
 [`sync!`](@ref) / [`setup!`](@ref) or CLI `setup` first. Ship with
 `setup!` / `setup ship-tree`, including one outside script as `extra_files`
-/ `--extra-file`, then `execute!(…; snapshot=id)` or `go` / `drive --snapshot ID`
+/ `--extra-file`, then `execute!(…; run_id=id)` or `go` / `drive --run-id ID`
 with that same local script. The remote command is
 [`remote_script_path`](@ref DistSSHRun.remote_script_path) (`_distsshrun_external/<basename>` under the
 selected project). The `go` / `drive` CLI does not take `--ship-tree`: run
 `setup ship-tree`, then `setup instantiate`, then `go` / `drive` with
-`--snapshot ID`.
+`--run-id ID`.
 Later `setup instantiate` / `setup check` / `go` / `drive` / `ride` select a
-snapshot with `--snapshot ID` (or `snapshot=` on `setup!` / `go!` / `drive!` /
-`ride!`), else the local `.distsshkit/last-snapshot.toml` written after a
+a shipped run with `--run-id ID` (or `run_id=` on `setup!` / `go!` / `drive!` /
+`ride!`), else the local `.distsshkit/last-ship.toml` written after a
 successful ship, else a git checkout that has `Project.toml` at the deploy
 root on every host. A successful delete / git-clone / git-sync / git-pull
 clears that local record for the matching deploy root. `go` / `drive` do not
@@ -112,11 +112,11 @@ leaf `run.toml` records `complete = true` and the shipped `content_tree_hash`
 re-hash). Selection requires DistSSHRun ownership, `complete = true`,
 `algorithm = "git-sha1"`, and a 40-digit hex hash on every host. Incomplete
 or legacy leaves are not selectable. Collect recovery with
-`DISTSSHKIT_RUN_DIR` uses that execution's `provenance.shipped` instead of a
-newer last-snapshot record. A recorded `content_tree_hash` there must match
-the selected remote stamp. A local last-snapshot record without a matching
+`DISTSSHKIT_RUN_DIR` uses that execution's `provenance.selection` instead of a
+newer last-ship record. A recorded `content_tree_hash` there must match
+the selected remote stamp. A local last-ship record without a matching
 40-digit hash is not used. `setup check` still prints SSH diagnostics
-when selection cannot probe, then fails closed if the snapshot is invalid. `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
+when selection cannot probe, then fails closed if the run id is invalid. `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
 `ship_tree!(project, hosts, deploy_root)` packs with `DistSSHShip.pack_tree`
 (declared-input omission and warnings), ships into `runs/<run_id>/src/`, then
 deletes the temporary pack directory. `ship_tree!(pack, hosts, deploy_root)`
@@ -140,7 +140,7 @@ The directory must be owned by the SSH user and must not be group-writable
 or world-writable. No marker file is written, and `runs/` is not created.
 Controller provenance lives under `DISTSSHKIT_RUN_DIR/run.toml`
 (`schema = 1`, `writer = "DistSSHRun x.y.z"`). When the run that wrote
-this file shipped a tree, `provenance.shipped` records `content_tree_hash`
+this file shipped a tree, `provenance.selection` records `content_tree_hash`
 (`git-sha1`) and `run_id` (the remote `runs/<run_id>/` leaf). An absent
 or empty key means that ship was not recorded. `result_content_tree_hash`
 and `result_remote_run_id` read those strings from a `DriveResult`,

@@ -16,7 +16,7 @@ function drive_parsed_from_session(
         sync_script::Union{Nothing, Bool} = nothing,
         allow_mismatch = Symbol[],
         allow_external_symlinks::Bool = false,
-        snapshot::Union{Nothing, AbstractString} = nothing,
+        run_id::Union{Nothing, AbstractString} = nothing,
     )
     _reject_removed_drive_worker_include_kw!(sync_script)
     _reject_run_transfer_kw!("drive!", sync; surface = hint_surface(session))
@@ -42,7 +42,7 @@ function drive_parsed_from_session(
         hosts_file = session.cli_session.hosts_file,
         hint_surface = hint_surface(session),
     )
-    snap = snapshot === nothing ? nothing : validate_snapshot_id(snapshot)
+    snap = run_id === nothing ? nothing : validate_run_id(run_id)
     julia_exe = if julia === nothing || strip(String(julia)) == "" ||
             lowercase(strip(String(julia))) == "auto"
         nothing
@@ -71,7 +71,7 @@ function drive_parsed_from_session(
         cli_session = cli_session,
         hint_surface = hint_surface(session),
         allow_mismatch = collect(Symbol, allow_mismatch),
-        snapshot = snap,
+        run_id = snap,
         deploy_root = session.remote,
         isolated = false,
     )

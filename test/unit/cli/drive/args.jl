@@ -282,7 +282,7 @@ using Test
         @test !occursin("--sync-script", txt)
         @test !occursin("--ship-tree", txt)
         @test occursin("setup ship-tree", txt)
-        @test occursin("--snapshot", txt)
+        @test occursin("--run-id", txt)
         @test occursin("runs/<ID>/src", txt)
         @test occursin("post-run-new", txt)
         @test occursin("Pull-back uses Tar", txt)

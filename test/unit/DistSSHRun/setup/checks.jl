@@ -325,7 +325,7 @@ using Pkg
             write(joinpath(side, "Manifest.toml"), "# lock\n")
             @test_throws ArgumentError DistSSHRun.ensure_manifest_ships!(side)
             DistSSHRun._set_active_selection!(
-                DistSSHRun.SnapshotSelection(
+                DistSSHRun.SourceSelection(
                     :snapshot,
                     "20260101T000000Z-abcdef",
                     "/remote",

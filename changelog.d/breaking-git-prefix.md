@@ -12,5 +12,5 @@ category: breaking
   errors. Use `drive --worker-include` and `drive! worker_include=`.
 - `pipeline!` / `SYNC_MODE=sync` is an error; use `git-sync` or omit for no
   pre-run sync.
-- `--git-sync` / `sync=:git_sync` cannot combine with `--snapshot` / `snapshot=`
+- `--git-sync` / `sync=:git_sync` cannot combine with `--run-id` / `run_id=`
   (same as the old `--sync` rule; error messages use the new flag names).

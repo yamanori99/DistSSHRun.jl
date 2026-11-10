@@ -92,7 +92,7 @@ function parse_drive_args(args::Vector{String})
     log_dir = nothing
     output_dir = nothing
     explicit_package = nothing
-    snapshot_id = nothing
+    run_id = nothing
     deploy_root = nothing
     isolated = false
     worker_include = false
@@ -176,11 +176,11 @@ function parse_drive_args(args::Vector{String})
             )
             worker_include = true
             i += 1
-        elseif arg == "--snapshot"
-            i >= length(args) && throw(ArgumentError("drive: --snapshot needs a non-empty id"))
+        elseif arg == "--run-id"
+            i >= length(args) && throw(ArgumentError("drive: --run-id needs a non-empty id"))
             raw = String(strip(args[i + 1]))
-            isempty(raw) && throw(ArgumentError("drive: --snapshot needs a non-empty id"))
-            snapshot_id = raw
+            isempty(raw) && throw(ArgumentError("drive: --run-id needs a non-empty id"))
+            run_id = raw
             i += 2
         elseif _legacy_remote_path_arg(arg)
             _throw_legacy_remote_path("drive")
@@ -308,7 +308,7 @@ function parse_drive_args(args::Vector{String})
                 cli_session = cli_session,
                 hint_surface = :cli,
                 allow_mismatch = allow_mismatch,
-                snapshot = snapshot_id,
+                run_id = run_id,
                 deploy_root = deploy_root,
                 isolated = isolated,
             )
@@ -335,7 +335,7 @@ function parse_drive_args(args::Vector{String})
                 cli_session = cli_session,
                 hint_surface = :cli,
                 allow_mismatch = allow_mismatch,
-                snapshot = nothing,
+                run_id = nothing,
                 deploy_root = nothing,
                 isolated = false,
             )
@@ -418,7 +418,7 @@ function parse_drive_args(args::Vector{String})
         cli_session = cli_session,
         hint_surface = :cli,
         allow_mismatch = allow_mismatch,
-        snapshot = snapshot_id,
+        run_id = run_id,
         deploy_root = deploy_root,
         isolated = isolated,
     )
@@ -431,7 +431,7 @@ function show_drive_usage(; io::IO = stdout)
         io,
         "Driver + Distributed workers (pmap), then collect new files.",
         "Remotes: setup ship-tree or setup git-clone, then setup instantiate.",
-        "Then drive --snapshot ID (or last-snapshot.toml / git checkout).",
+        "Then drive --run-id ID (or last-ship.toml / git checkout).",
     )
     print_help_blank(io)
     print_help_section("Usage"; io = io)
@@ -458,7 +458,7 @@ function show_drive_usage(; io::IO = stdout)
         "  --deploy-root PATH  remote deployment root (location, not snapshot id).",
         "                      Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
         "                      ~/Parent/RepoName layout from the local env_dir.",
-        "  --snapshot ID       use runs/<ID>/src under the deploy root",
+        "  --run-id ID       use runs/<ID>/src under the deploy root",
         "                      (after setup ship-tree + setup instantiate)",
         "  --worker-include    re-include the full driver on workers (default: defs only)",
         "  --require-git       $(REQUIRE_GIT_MEANING)",
@@ -485,8 +485,8 @@ function show_drive_usage(; io::IO = stdout)
         io,
         "  After main(): post-run-new (files newer than run start).",
         "  Later: --collect-missing / --collect-overwrite ROOT HOST...",
-        "  Pass --snapshot ID so collect maps onto that ship, not a newer one.",
-        "  With DISTSSHKIT_RUN_DIR, omitted recovery uses that run's provenance.shipped.",
+        "  Pass --run-id ID so collect maps onto that ship, not a newer one.",
+        "  With DISTSSHKIT_RUN_DIR, omitted recovery uses that run's provenance.selection.",
         "  Pull-back uses Tar. Remote mtimes and file modes are not kept.",
         "  Modes are 0644, or 0755 if executable. Remote Julia is --julia or auto-detect.",
         "  Escaping symlinks are refused.",

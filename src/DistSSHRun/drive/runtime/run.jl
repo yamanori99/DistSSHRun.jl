@@ -20,7 +20,7 @@ end
 const _DRIVE_VALUE_FLAGS = (
     "--workers", "-w", "--julia", "--allow-mismatch",
     "--log-dir", "--output-dir", "--package", "--hosts", "--hosts-file",
-    "--snapshot", "--deploy-root",
+    "--run-id", "--deploy-root",
 )
 
 """Index of the drive `--isolated` option in already-peeled argv, or `nothing`."""
@@ -268,7 +268,7 @@ function _run_drive_parsed_specialized!(
                 project_root = root,
                 path_anchor = anchor,
                 julia = parsed.julia,
-                snapshot = get(parsed, :snapshot, nothing),
+                run_id = get(parsed, :run_id, nothing),
             )
             return ok ? 0 : 1
         end
@@ -296,7 +296,7 @@ function _run_drive_parsed_specialized!(
 
     host_names = [h[1] for h in hosts]
 
-    snap_for_script = get(parsed, :snapshot, nothing)
+    snap_for_script = get(parsed, :run_id, nothing)
     if !isfile(script_path) && !(remote_argv && snap_for_script !== nothing)
         surface = hasproperty(parsed, :hint_surface) ? parsed.hint_surface::Symbol : :cli
         root0 = canonical_local_path(something(project_root, dirname(script_path)))
@@ -529,7 +529,7 @@ function _run_drive_parsed_locked!(
         "drive",
         proj_dir,
         script_path;
-        snapshot = get(parsed, :snapshot, nothing),
+        run_id = get(parsed, :run_id, nothing),
         remote_argv = remote_argv,
     )
     DistSSHRun._require_manifest!(proj_dir)
@@ -548,11 +548,11 @@ function _run_drive_parsed_locked!(
     kit_progress_begin!("drive"; steps = progress_steps, kind = :drive)
     try
         if !isempty(host_names)
-            # Selection uses --snapshot / deploy record / git (setup deploys first).
+            # Selection uses --run-id / deploy record / git (setup deploys first).
             DistSSHRun._assign_remote_work_root_env!(
                 host_names, project_root;
                 cli_override = get(parsed, :deploy_root, nothing),
-                snapshot = get(parsed, :snapshot, nothing),
+                run_id = get(parsed, :run_id, nothing),
             )
             deploy_root = DistSSHRun._resolved_deploy_root_for_work(
                 proj_dir; cli_override = get(parsed, :deploy_root, nothing),

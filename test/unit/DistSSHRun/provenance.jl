@@ -521,17 +521,17 @@ end
     end
 
     @testset "shipped hash and run_id" begin
-        previous = DistSSHRun.active_snapshot_selection()
+        previous = DistSSHRun.active_source_selection()
         try
             DistSSHRun._clear_last_ship!()
             _with_tempdir() do tmp
                 prov = DistSSHRun.assemble_provenance(tmp)
                 @test prov["schema"] == 1
-                @test !haskey(prov, "shipped")
+                @test !haskey(prov, "selection")
                 DistSSHRun.write_kit_run_toml!(tmp; kind = :go, provenance = prov)
                 raw = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
                 @test raw["schema"] == 1
-                @test !haskey(raw["provenance"], "shipped")
+                @test !haskey(raw["provenance"], "selection")
                 held = DistSSHRun.DriveResult(true, 0; run_dir = tmp)
                 @test DistSSHRun.result_content_tree_hash(held) === nothing
                 @test DistSSHRun.result_remote_run_id(held) === nothing
@@ -542,7 +542,7 @@ end
                 @test DistSSHRun.result_remote_run_id(go) === nothing
             end
             DistSSHRun._set_active_selection!(
-                DistSSHRun.SnapshotSelection(
+                DistSSHRun.SourceSelection(
                     :snapshot,
                     "20260101T000000Z-abcdef",
                     "/home/lab",
@@ -554,14 +554,14 @@ end
             _with_tempdir() do tmp
                 prov = DistSSHRun.assemble_provenance(tmp)
                 @test prov["schema"] == 1
-                @test prov["shipped"]["content_tree_hash"] == "abc123"
-                @test prov["shipped"]["run_id"] == "20260101T000000Z-abcdef"
+                @test prov["selection"]["content_tree_hash"] == "abc123"
+                @test prov["selection"]["run_id"] == "20260101T000000Z-abcdef"
                 DistSSHRun.write_kit_run_toml!(tmp; kind = :drive, provenance = prov)
                 raw = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
                 @test raw["schema"] == 1
                 @test raw["provenance"]["schema"] == 1
-                @test raw["provenance"]["shipped"]["content_tree_hash"] == "abc123"
-                @test raw["provenance"]["shipped"]["run_id"] == "20260101T000000Z-abcdef"
+                @test raw["provenance"]["selection"]["content_tree_hash"] == "abc123"
+                @test raw["provenance"]["selection"]["run_id"] == "20260101T000000Z-abcdef"
                 held = DistSSHRun.KitRunResult(
                     true, :drive, nothing, nothing, nothing, 0; run_dir = tmp,
                 )
@@ -572,7 +572,7 @@ end
                     "20260101T000000Z-abcdef"
             end
             DistSSHRun._set_active_selection!(
-                DistSSHRun.SnapshotSelection(
+                DistSSHRun.SourceSelection(
                     :snapshot,
                     nothing,
                     "/home/lab",
@@ -583,8 +583,8 @@ end
             )
             _with_tempdir() do tmp
                 prov = DistSSHRun.assemble_provenance(tmp)
-                @test prov["shipped"]["content_tree_hash"] == "abc123"
-                @test !haskey(prov["shipped"], "run_id")
+                @test prov["selection"]["content_tree_hash"] == "abc123"
+                @test !haskey(prov["selection"], "run_id")
                 DistSSHRun.write_kit_run_toml!(tmp; kind = :go, provenance = prov)
                 held = DistSSHRun.DriveResult(true, 0; run_dir = tmp)
                 @test DistSSHRun.result_content_tree_hash(held) == "abc123"

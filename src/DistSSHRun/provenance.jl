@@ -884,22 +884,22 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     git_tool === nothing || (data["tools"] = Dict{String, Any}[git_tool])
     source = started ? _PROVENANCE_SOURCE_SNAP[] : _resolve_source(proj)
     source === nothing || (data["source"] = source)
-    sel = active_snapshot_selection()
+    sel = active_source_selection()
     deploy_rec = _deploy_record_for_provenance(active_deploy_record())
-    shipped = Dict{String, Any}()
+    selection = Dict{String, Any}()
     if sel !== nothing
-        shipped["source_kind"] = String(sel.source_kind)
-        shipped["deploy_root"] = sel.deploy_root
-        if sel.snapshot_id !== nothing
-            shipped["run_id"] = sel.snapshot_id
+        selection["source_kind"] = String(sel.source_kind)
+        selection["deploy_root"] = sel.deploy_root
+        if sel.run_id !== nothing
+            selection["run_id"] = sel.run_id
         end
         if sel.content_tree_hash !== nothing
-            shipped["content_tree_hash"] = sel.content_tree_hash
-            shipped["algorithm"] = "git-sha1"
+            selection["content_tree_hash"] = sel.content_tree_hash
+            selection["algorithm"] = "git-sha1"
         end
-        shipped["work_root"] = sel.work_root
+        selection["work_root"] = sel.work_root
     end
-    isempty(shipped) || (data["shipped"] = shipped)
+    isempty(selection) || (data["selection"] = selection)
     deploy_rec !== nothing && (data["deploy"] = deploy_rec)
     return data
 end
@@ -960,8 +960,8 @@ function result_provenance(result::Union{DriveResult, GoResult, KitRunResult})
     return read_kit_run_toml(rd)
 end
 
-"""String recorded under `provenance.shipped`, or `nothing` when absent or blank."""
-function _result_shipped_string(
+"""String recorded under `provenance.selection`, or `nothing` when absent or blank."""
+function _result_selection_string(
         result::Union{DriveResult, GoResult, KitRunResult},
         key::AbstractString,
     )::Union{Nothing, String}
@@ -969,9 +969,12 @@ function _result_shipped_string(
     raw isa AbstractDict || return nothing
     provenance = get(raw, "provenance", nothing)
     provenance isa AbstractDict || return nothing
-    shipped = get(provenance, "shipped", nothing)
-    shipped isa AbstractDict || return nothing
-    value = get(shipped, String(key), nothing)
+    selection = get(provenance, "selection", nothing)
+    if !(selection isa AbstractDict)
+        selection = get(provenance, "shipped", nothing)
+    end
+    selection isa AbstractDict || return nothing
+    value = get(selection, String(key), nothing)
     value isa AbstractString || return nothing
     text = String(value)
     return isempty(text) ? nothing : text
@@ -981,7 +984,7 @@ end
     result_content_tree_hash(result) -> Union{Nothing, String}
 
 `content_tree_hash` from this run's controller `run.toml`
-(`provenance.shipped`), or `nothing` when neither a ship nor an active
+(`provenance.selection`), or `nothing` when neither a ship nor an active
 snapshot selection recorded one.
 
 Schema stays 1. An absent or empty key means not recorded.
@@ -998,7 +1001,7 @@ Any other [`SyncResult`](@ref) returns `nothing`.
 function result_content_tree_hash(
         result::Union{DriveResult, GoResult, KitRunResult},
     )::Union{Nothing, String}
-    return _result_shipped_string(result, "content_tree_hash")
+    return _result_selection_string(result, "content_tree_hash")
 end
 
 function result_content_tree_hash(result::SyncResult)::Union{Nothing, String}
@@ -1021,7 +1024,7 @@ end
     result_remote_run_id(result) -> Union{Nothing, String}
 
 Remote `runs/<run_id>/` id from this run's controller `run.toml`
-(`provenance.shipped.run_id`), or `nothing` when neither a ship nor an active
+(`provenance.selection.run_id`), or `nothing` when neither a ship nor an active
 snapshot selection recorded one.
 
 Schema stays 1. An absent or empty key means not recorded. This is not
@@ -1038,7 +1041,7 @@ Any other [`SyncResult`](@ref) returns `nothing`.
 function result_remote_run_id(
         result::Union{DriveResult, GoResult, KitRunResult},
     )::Union{Nothing, String}
-    return _result_shipped_string(result, "run_id")
+    return _result_selection_string(result, "run_id")
 end
 
 function result_remote_run_id(result::SyncResult)::Union{Nothing, String}

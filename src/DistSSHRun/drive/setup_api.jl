@@ -17,17 +17,17 @@ const _SETUP_BANG_MODES = (
 )
 
 """
-    check_setup_options!(mode; extra_files=String[], snapshot=nothing)
+    check_setup_options!(mode; extra_files=String[], run_id=nothing)
 
 Reject setup options the mode does not accept. `extra_files` is only valid
-for `:ship_tree`. This version accepts one path. `snapshot` is only valid
+for `:ship_tree`. This version accepts one path. `run_id` is only valid
 for `:instantiate`, `:check`, and `:runtest`. The `setup` CLI collects flags
 and calls this; it does not apply those rules itself.
 """
 function check_setup_options!(
         mode::Symbol;
         extra_files::Vector{String} = String[],
-        snapshot::Union{Nothing, AbstractString} = nothing,
+        run_id::Union{Nothing, AbstractString} = nothing,
         allow_dirty::Bool = false,
     )
     allow_dirty && mode !== :git_sync && throw(
@@ -38,11 +38,11 @@ function check_setup_options!(
     end
     length(extra_files) > 1 &&
         throw(ArgumentError("more than one extra file is not yet supported"))
-    if snapshot !== nothing &&
+    if run_id !== nothing &&
             mode !== :instantiate && mode !== :check && mode !== :runtest
         throw(
             ArgumentError(
-                "setup! snapshot= only applies to :instantiate, :check, or :runtest",
+                "setup! run_id= only applies to :instantiate, :check, or :runtest",
             ),
         )
     end
@@ -97,18 +97,18 @@ function setup!(
         check_code_sync::Bool = true,
         older_days::Union{Nothing, Integer} = nothing,
         id::Union{Nothing, AbstractString} = nothing,
-        snapshot::Union{Nothing, AbstractString} = nothing,
+        run_id::Union{Nothing, AbstractString} = nothing,
         confirm_path = nothing,
         gitignore::Bool = true,
         allow_external_symlinks::Bool = false,
         extra_files::Vector{String} = String[],
         allow_dirty::Bool = false,
     )::SyncResult
-    check_setup_options!(mode; extra_files = extra_files, snapshot = snapshot, allow_dirty = allow_dirty)
+    check_setup_options!(mode; extra_files = extra_files, run_id = run_id, allow_dirty = allow_dirty)
     if !gitignore
         throw(ArgumentError("setup! gitignore is not valid on setup!(session, :$(mode))"))
     end
-    snap = snapshot === nothing ? nothing : validate_snapshot_id(snapshot)
+    snap = run_id === nothing ? nothing : validate_run_id(run_id)
     _setup_bang_preflight!(session, mode; repo = repo)
     hosts = _setup_bang_host_list(session)
     if isempty(hosts)
@@ -134,7 +134,7 @@ function setup!(
                 check_code_sync = check_code_sync,
                 older_days = older_days,
                 id = id,
-                snapshot = snap,
+                run_id = snap,
                 bound_plan = bound_plan,
                 gitignore = gitignore,
                 allow_external_symlinks = allow_external_symlinks,
@@ -655,7 +655,7 @@ function _setup_one!(
         check_code_sync::Bool = true,
         older_days::Union{Nothing, Integer} = nothing,
         id::Union{Nothing, AbstractString} = nothing,
-        snapshot::Union{Nothing, AbstractString} = nothing,
+        run_id::Union{Nothing, AbstractString} = nothing,
         bound_plan::Union{Nothing, Dict{String, String}} = nothing,
         gitignore::Bool = true,
         allow_external_symlinks::Bool = false,
@@ -677,7 +677,7 @@ function _setup_one!(
         deploy = remote_deploy_root(session.project; cli_override = session.remote)
         raw = _apply_confirmed_delete(touch, plan, deploy)
         result = _sync_result_from_host_op(raw)
-        result.ok && forget_last_snapshot_default!(session.project, deploy)
+        result.ok && forget_last_ship_default!(session.project, deploy)
         return result
     elseif mode === :rsync
         _throw_rsync_removed()
@@ -697,7 +697,7 @@ function _setup_one!(
         raw = clone_to_remotes(hosts, clone_dest, url; confirm = !session.yes)
         result = _sync_result_from_host_op(raw)
         if result.ok
-            forget_last_snapshot_default!(session.project, deploy)
+            forget_last_ship_default!(session.project, deploy)
             ok_hosts = String[String(hr.host) for hr in result.hosts if hr.ok]
             commit_deploy_record_after_git!(
                 ok_hosts, deploy, session.project, :git_clone,
@@ -722,7 +722,7 @@ function _setup_one!(
         end
         result = SyncResult(false, raw.host_results; ok = raw.ok)
         if result.ok
-            forget_last_snapshot_default!(session.project, deploy)
+            forget_last_ship_default!(session.project, deploy)
             ok_hosts = String[String(hr.host) for hr in result.hosts if hr.ok]
             commit_deploy_record_after_git!(
                 ok_hosts, deploy, session.project, :git_pull,
@@ -730,7 +730,7 @@ function _setup_one!(
         end
         return result
     elseif mode === :instantiate
-        return instantiate!(session; julia = julia_path, snapshot = snapshot)
+        return instantiate!(session; julia = julia_path, run_id = run_id)
     elseif mode === :juliaup || mode === :juliaup_update
         ssh_hosts = setup_juliaup_ssh_hosts(hosts)
         if !isempty(ssh_hosts)
@@ -744,7 +744,7 @@ function _setup_one!(
         preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
         work_path = _project_work_root(
             hosts, session.project;
-            cli_override = session.remote, snapshot = snapshot,
+            cli_override = session.remote, run_id = run_id,
         )
         raw = runtest_remotes(
             hosts, julia_path, work_path, session.project;
@@ -754,7 +754,7 @@ function _setup_one!(
     elseif mode === :check
         work_path = _project_work_root(
             hosts, session.project;
-            cli_override = session.remote, snapshot = snapshot,
+            cli_override = session.remote, run_id = run_id,
         )
         result = check_prerequisites(
             hosts,

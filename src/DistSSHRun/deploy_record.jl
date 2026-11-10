@@ -63,7 +63,7 @@ function build_deploy_record(
         deploy_id::AbstractString,
         commit_sha::Union{Nothing, AbstractString} = nothing,
         dirty::Bool = false,
-        snapshot_id::Union{Nothing, AbstractString} = nothing,
+        run_id::Union{Nothing, AbstractString} = nothing,
         content_tree_hash::Union{Nothing, AbstractString} = nothing,
         project_rel::Union{Nothing, AbstractString} = nothing,
     )::Dict{String, Any}
@@ -80,8 +80,8 @@ function build_deploy_record(
     if commit_sha isa AbstractString && !isempty(strip(String(commit_sha)))
         data["commit_sha"] = String(commit_sha)
     end
-    if snapshot_id isa AbstractString && !isempty(strip(String(snapshot_id)))
-        data["snapshot_id"] = validate_snapshot_id(snapshot_id)
+    if run_id isa AbstractString && !isempty(strip(String(run_id)))
+        data["run_id"] = validate_run_id(run_id)
     end
     if content_tree_hash isa AbstractString && !isempty(strip(String(content_tree_hash)))
         h = String(content_tree_hash)
@@ -110,7 +110,15 @@ function _parse_deploy_record_body(body::AbstractString)::Union{Nothing, Dict{St
         mode isa AbstractString && !isempty(strip(String(mode))) || return nothing
         deploy_id = get(raw, "deploy_id", nothing)
         deploy_id isa AbstractString && !isempty(strip(String(deploy_id))) || return nothing
-        return Dict{String, Any}(raw)
+        out = Dict{String, Any}(raw)
+        rid = get(out, "run_id", nothing)
+        if !(rid isa AbstractString && !isempty(strip(String(rid))))
+            legacy = get(out, "snapshot_id", nothing)
+            if legacy isa AbstractString && !isempty(strip(String(legacy)))
+                out["run_id"] = String(strip(legacy))
+            end
+        end
+        return out
     catch
         return nothing
     end
@@ -151,7 +159,7 @@ function _deploy_records_equivalent(a::AbstractDict, b::AbstractDict)::Bool
         "dirty",
         "manifest_hash",
         "local_path",
-        "snapshot_id",
+        "run_id",
         "content_tree_hash",
         "project_rel",
     )
@@ -323,7 +331,7 @@ function write_deploy_record_to_hosts!(
         deploy_id::AbstractString,
         commit_sha::Union{Nothing, AbstractString} = nothing,
         dirty::Bool = false,
-        snapshot_id::Union{Nothing, AbstractString} = nothing,
+        run_id::Union{Nothing, AbstractString} = nothing,
         content_tree_hash::Union{Nothing, AbstractString} = nothing,
         project_rel::Union{Nothing, AbstractString} = nothing,
     )
@@ -334,7 +342,7 @@ function write_deploy_record_to_hosts!(
         deploy_id = deploy_id,
         commit_sha = commit_sha,
         dirty = dirty,
-        snapshot_id = snapshot_id,
+        run_id = run_id,
         content_tree_hash = content_tree_hash,
         project_rel = project_rel,
     )
@@ -425,38 +433,41 @@ function _selection_from_deploy_record(
         rec::AbstractDict,
         deploy::AbstractString,
         host_list::Vector{String},
-    )::SnapshotSelection
+    )::SourceSelection
     mode_s = String(get(rec, "mode", ""))
     if mode_s == "ship-tree"
-        rid_raw = get(rec, "snapshot_id", nothing)
+        rid_raw = get(rec, "run_id", nothing)
+        if !(rid_raw isa AbstractString)
+            rid_raw = get(rec, "snapshot_id", nothing)
+        end
         rid_raw isa AbstractString || throw(
-            _selection_error("deploy record is missing snapshot_id; pass --snapshot ID"),
+            _selection_error("deploy record is missing run_id; pass --run-id ID"),
         )
-        rid = validate_snapshot_id(rid_raw)
-        checked = _validate_snapshot_on_hosts!(host_list, deploy, rid)
+        rid = validate_run_id(rid_raw)
+        checked = _validate_ship_run_on_hosts!(host_list, deploy, rid)
         stored_hash = get(rec, "content_tree_hash", nothing)
         if stored_hash isa AbstractString && !isempty(strip(String(stored_hash)))
             stored = strip(String(stored_hash))
             stored == checked.hash || throw(
                 _selection_error(
-                    "deploy record content_tree_hash $(stored) does not match remote $(checked.hash); pass --snapshot ID",
+                    "deploy record content_tree_hash $(stored) does not match remote $(checked.hash); pass --run-id ID",
                 ),
             )
         end
-        return SnapshotSelection(
-            :snapshot,
+        return SourceSelection(
+            :ship,
             rid,
             deploy,
-            _snapshot_project_logical(deploy, rid, checked.project_rel),
+            _ship_run_project_logical(deploy, rid, checked.project_rel),
             checked.hash,
             host_list,
         )
     end
     if mode_s in ("git-clone", "git-sync", "git-pull")
         _validate_git_on_hosts!(host_list, deploy)
-        return SnapshotSelection(:git, nothing, deploy, deploy, nothing, host_list)
+        return SourceSelection(:git, nothing, deploy, deploy, nothing, host_list)
     end
-    throw(_selection_error("deploy record mode $(repr(mode_s)) is not recognized; pass --snapshot ID"))
+    throw(_selection_error("deploy record mode $(repr(mode_s)) is not recognized; pass --run-id ID"))
 end
 
 function _warn_deploy_staleness!(
@@ -510,7 +521,7 @@ function _log_deploy_record_fields!(rec::Union{Nothing, AbstractDict})
     writeln_field("Deploy mode", mode)
     haskey(rec, "deploy_id") && writeln_field("Deploy id", String(rec["deploy_id"]))
     haskey(rec, "commit_sha") && writeln_field("Deployed commit", String(rec["commit_sha"]))
-    haskey(rec, "snapshot_id") && writeln_field("Deployed snapshot", String(rec["snapshot_id"]))
+    haskey(rec, "run_id") && writeln_field("Deployed run", String(rec["run_id"]))
     haskey(rec, "content_tree_hash") && writeln_field("Deployed tree", String(rec["content_tree_hash"]))
     get(rec, "dirty", false) == true && writeln_field("Deployed dirty", "true")
     return nothing
@@ -528,7 +539,7 @@ function _deploy_record_for_provenance(rec::Union{Nothing, AbstractDict})::Union
             "manifest_hash",
             "local_path",
             "timestamp",
-            "snapshot_id",
+            "run_id",
             "content_tree_hash",
             "project_rel",
         )
@@ -594,7 +605,7 @@ function commit_deploy_record_after_ship!(
         project,
         :ship_tree;
         deploy_id = String(run_id),
-        snapshot_id = run_id,
+        run_id = run_id,
         content_tree_hash = content_tree_hash,
         project_rel = project_rel,
     )

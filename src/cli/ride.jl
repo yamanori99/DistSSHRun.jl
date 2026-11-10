@@ -58,7 +58,7 @@ function ride_main()::Cint
             allow_mismatch = parsed.allow_mismatch,
             remote = remote_cli isa AbstractString ? remote_cli :
                 (isempty(remote_raw) ? nothing : remote_raw),
-            snapshot = parsed.snapshot,
+            run_id = parsed.run_id,
             hint_surface = :cli,
         )
     catch e

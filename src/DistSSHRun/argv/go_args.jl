@@ -7,7 +7,7 @@ function show_go_usage(; io::IO = stdout)
         io,
         "Standalone script. One full run per slot; slots start together.",
         "Remotes: setup ship-tree or setup git-clone, then setup instantiate.",
-        "Then go --snapshot ID (or last-snapshot.toml / git checkout).",
+        "Then go --run-id ID (or last-ship.toml / git checkout).",
     )
     print_help_blank(io)
     print_help_section("Usage"; io = io)
@@ -38,7 +38,7 @@ function show_go_usage(; io::IO = stdout)
         "  --deploy-root PATH  remote deployment root (location, not snapshot id).",
         "                      Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
         "                      ~/Parent/RepoName layout from the local env_dir.",
-        "  --snapshot ID       use runs/<ID>/src under the deploy root",
+        "  --run-id ID       use runs/<ID>/src under the deploy root",
         "                      (after setup ship-tree + setup instantiate)",
         "  --julia PATH        remote Julia (ENV or auto)",
         "  --allow-mismatch F  waive julia, distssh, and/or manifest (comma list)",
@@ -100,7 +100,7 @@ function _go_parsed(;
         julia,
         repeat,
         allow_mismatch = Symbol[],
-        snapshot = nothing,
+        run_id = nothing,
         deploy_root = nothing,
     )
     return (
@@ -114,7 +114,7 @@ function _go_parsed(;
         julia = julia,
         repeat = repeat,
         allow_mismatch = allow_mismatch,
-        snapshot = snapshot,
+        run_id = run_id,
         deploy_root = deploy_root,
     )
 end
@@ -129,7 +129,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
     output_dir = nothing
     julia_exe = nothing
     allow_mismatch = Symbol[]
-    snapshot_id = nothing
+    run_id = nothing
     deploy_root = nothing
     repeat_n::Union{Nothing, Int} = nothing
     options_done = false
@@ -157,10 +157,10 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
             output_dir = cli_take_value!(c, arg)
         elseif arg == "--julia"
             julia_exe = cli_take_value!(c, arg)
-        elseif arg == "--snapshot"
+        elseif arg == "--run-id"
             raw = String(strip(cli_take_value!(c, arg)))
-            isempty(raw) && throw(ArgumentError("go: --snapshot needs a non-empty id"))
-            snapshot_id = raw
+            isempty(raw) && throw(ArgumentError("go: --run-id needs a non-empty id"))
+            run_id = raw
         elseif _legacy_remote_path_arg(arg)
             _throw_legacy_remote_path("go")
         elseif arg == DEPLOY_ROOT_FLAG
@@ -209,7 +209,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
                 julia = julia_exe,
                 repeat = repeat_n,
                 allow_mismatch = allow_mismatch,
-                snapshot = snapshot_id,
+                run_id = run_id,
                 deploy_root = deploy_root,
             )
         elseif endswith(arg, ".jl")
@@ -253,7 +253,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
         julia = julia_exe,
         repeat = repeat_n,
         allow_mismatch = allow_mismatch,
-        snapshot = snapshot_id,
+        run_id = run_id,
         deploy_root = deploy_root,
     )
 end

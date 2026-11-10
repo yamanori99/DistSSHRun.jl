@@ -493,10 +493,10 @@ using Test
     end
 
     @testset "ride does not record an earlier ship" begin
-        previous = DistSSHRun.active_snapshot_selection()
+        previous = DistSSHRun.active_source_selection()
         function seed_earlier_ship!()
             DistSSHRun._set_active_selection!(
-                DistSSHRun.SnapshotSelection(
+                DistSSHRun.SourceSelection(
                     :snapshot,
                     "20260101T000000Z-abcdef",
                     "/home/distsshkit/app",
@@ -514,7 +514,7 @@ using Test
             @test raw isa AbstractDict
             prov = raw["provenance"]
             @test prov isa AbstractDict
-            @test !haskey(prov, "shipped")
+            @test !haskey(prov, "selection")
             return nothing
         end
         try
@@ -552,7 +552,7 @@ using Test
 
     @testset "ride retargets SSH project to completed snapshot src" begin
         double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_ride_work_root_ssh.jl"))
-        previous = DistSSHRun.active_snapshot_selection()
+        previous = DistSSHRun.active_source_selection()
         old_remote = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
         function restore_remote!()
             if old_remote === nothing
@@ -568,7 +568,7 @@ using Test
                 mkpath(local_proj)
                 write(joinpath(local_proj, "Project.toml"), "name = \"RideRoot\"\n")
                 write(joinpath(local_proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
-                DistSSHRun.clear_last_snapshot_record!(local_proj)
+                DistSSHRun.clear_last_ship_record!(local_proj)
                 script = joinpath(local_proj, "job.jl")
                 write(script, "nothing\n")
                 remote = joinpath(tmp, "remote")
@@ -660,7 +660,7 @@ using Test
                                 script, ["child:$(host):1"];
                                 project = local_proj,
                                 remote = remote,
-                                snapshot = snap_id,
+                                run_id = snap_id,
                                 julia = "/usr/bin/julia",
                                 output_dir = joinpath(tmp, "child-out"),
                                 spi_check = false,
@@ -679,7 +679,7 @@ using Test
                     write(joinpath(remote, "Project.toml"), "name = \"RootWins\"\n")
                     ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = remote
                     DistSSHRun._clear_last_ship!()
-                    DistSSHRun.clear_last_snapshot_record!(local_proj)
+                    DistSSHRun.clear_last_ship_record!(local_proj)
                     DistSSHRun._assign_remote_work_root_env!([host], local_proj)
                     @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] ==
                         DistSSHRun.canonical_local_path(remote)
@@ -693,6 +693,25 @@ using Test
             end
             restore_remote!()
             delete!(DistSSHRun._PINNED_JULIA, "ridework.test\0/usr/bin/julia")
+        end
+    end
+
+    @testset "run_id kw reaches work-root assign" begin
+        _with_tempdir() do tmp
+            _write_host_project!(tmp, "RideRunId")
+            script = joinpath(tmp, "noop.jl")
+            write(script, "nothing\n")
+            rid = "20260101T000000Z-aaaaaa"
+            r = redirect_stdout(devnull) do
+                redirect_stderr(devnull) do
+                    return DistSSHRun.ride!(
+                        script, ["parent:1"];
+                        project = tmp,
+                        run_id = rid,
+                    )
+                end
+            end
+            @test r.ok
         end
     end
 end
