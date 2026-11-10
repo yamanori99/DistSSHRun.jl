@@ -61,10 +61,7 @@ if !isdefined(Main, :_write_host_project!)
 
     # Log per-host HostResult details when receipt.ok is false, then return
     # receipt.ok for use inside @test.
-    function _test_shipment_receipt_ok(
-            receipt::DistSSHRun.DistSSHShip.ShipmentReceipt;
-            label::AbstractString = "ShipmentReceipt",
-        )::Bool
+    function _test_shipment_receipt_ok(receipt; label::AbstractString = "ShipmentReceipt")::Bool
         receipt.ok && return true
         for hr in receipt.hosts
             @error "$(label) host failure" host = hr.host ok = hr.ok message = hr.message
@@ -74,7 +71,7 @@ if !isdefined(Main, :_write_host_project!)
     end
 
     # Log a failed HostResult for use inside @test.
-    function _test_host_result_ok(hr::DistSSHRun.DistSSHBase.HostResult; label::AbstractString = "host")::Bool
+    function _test_host_result_ok(hr; label::AbstractString = "host")::Bool
         hr.ok && return true
         @error "$(label) failed" host = hr.host ok = hr.ok message = hr.message
         return false
