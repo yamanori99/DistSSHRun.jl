@@ -19,8 +19,8 @@ function _sigint_child(proj::AbstractString; marker::AbstractString, restore::Ab
     return _kit_drive_cmd(;
         script, host_root = proj, parent_workers = 2,
         extra_env = Dict(
-            "DISTSSHKIT_TEST_SIGINT_MARKER" => marker,
-            "DISTSSHKIT_TEST_RESTORE_FILE" => restore,
+            "DISTSSH_TEST_SIGINT_MARKER" => marker,
+            "DISTSSH_TEST_RESTORE_FILE" => restore,
             "DISTRIBUTED_OUTPUT_DIR" => joinpath(proj, "keep-output"),
             "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "keep-remote",
         ),

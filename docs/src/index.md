@@ -70,8 +70,8 @@ are the target. Siblings of that file are not sent. A gitignored `Project.toml`,
 `JuliaProject.toml`, `Manifest.toml`, or `JuliaManifest.toml` is left out
 with one warning. A gitignored `LocalPreferences.toml` is left out too;
 add `!LocalPreferences.toml` to ship it. A file over 50 MiB, or a send list over
-100 MiB, prints a warning (`DISTSSHKIT_SHIP_WARN_FILE_BYTES`,
-`DISTSSHKIT_SHIP_WARN_TOTAL_BYTES`; an invalid value is an error). The 256 MiB
+100 MiB, prints a warning (`DISTSSH_SHIP_WARN_FILE_BYTES`,
+`DISTSSH_SHIP_WARN_TOTAL_BYTES`; an invalid value is an error). The 256 MiB
 cap still stops the ship. Declared inputs are
 left out. `ship_send_list(root)` is that path list for the directory it is
 given. It is public and is not exported. `rsync_send_list` remains the git
@@ -98,7 +98,7 @@ selected project). The `go` / `drive` CLI does not take `--ship-tree`: run
 `--run-id ID`.
 Later `setup instantiate` / `setup check` / `go` / `drive` / `ride` select a
 a shipped run with `--run-id ID` (or `run_id=` on `setup!` / `go!` / `drive!` /
-`ride!`), else the local `.distsshkit/last-ship.toml` written after a
+`ride!`), else the local `.distssh/last-ship.toml` written after a
 successful ship, else a git checkout that has `Project.toml` at the deploy
 root on every host. A successful delete / git-clone / git-sync / git-pull
 clears that local record for the matching deploy root. `go` / `drive` do not
@@ -112,7 +112,7 @@ leaf `run.toml` records `complete = true` and the shipped `content_tree_hash`
 re-hash). Selection requires DistSSHRun ownership, `complete = true`,
 `algorithm = "git-sha1"`, and a 40-digit hex hash on every host. Incomplete
 or legacy leaves are not selectable. Collect recovery with
-`DISTSSHKIT_RUN_DIR` uses that execution's `provenance.selection` instead of a
+`DISTSSH_RUN_DIR` uses that execution's `provenance.selection` instead of a
 newer last-ship record. A recorded `content_tree_hash` there must match
 the selected remote stamp. A local last-ship record without a matching
 40-digit hash is not used. `setup check` still prints SSH diagnostics
@@ -138,7 +138,7 @@ directory with mode `700`. Group and other write are cleared again after
 Confirmation is required unless `-y` is used.
 The directory must be owned by the SSH user and must not be group-writable
 or world-writable. No marker file is written, and `runs/` is not created.
-Controller provenance lives under `DISTSSHKIT_RUN_DIR/run.toml`
+Controller provenance lives under `DISTSSH_RUN_DIR/run.toml`
 (`schema = 1`, `writer = "DistSSHRun x.y.z"`). When the run that wrote
 this file shipped a tree, `provenance.selection` records `content_tree_hash`
 (`git-sha1`) and `run_id` (the remote `runs/<run_id>/` leaf). An absent
@@ -147,7 +147,7 @@ and `result_remote_run_id` read those strings from a `DriveResult`,
 `GoResult`, or `KitRunResult`. They also read a `:ship_tree` `SyncResult`
 and a `ShipTreeResult`. A `SyncResult` from any other mode returns `nothing`
 for both. `result_run_dir` reads
-`DISTSSHKIT_RUN_DIR` from those results and from `KitProcess`. Each remote
+`DISTSSH_RUN_DIR` from those results and from `KitProcess`. Each remote
 `runs/<run_id>/` also gets a minimal `run.toml` with only `schema`,
 `writer`, and `kind = "ship"` so `setup delete` can refuse a Ship leaf
 that is not DistSSHRun-owned. That stamp is not controller provenance.
@@ -156,7 +156,7 @@ ownership check there; it does not inspect those Ship leaves. Older leaves
 without that file still use structural checks only. DistSSHQueue
 `teardown` is a different command; it may reuse the same remote stamp later.
 Unknown keys are ignored when reading. A ship that sees
-`.distsshkit/inputs.toml` writes those inputs into this run's `run.toml`.
+`.distssh/inputs.toml` writes those inputs into this run's `run.toml`.
 With hashing on, it also writes a manifest under `inputs/<sha256>.manifest`.
 The file name is the SHA-256 of `ncodeunits(name):name`, a newline, and the
 host. Each line is `hex *path`. A regular file is the SHA-256 of its bytes.
@@ -225,7 +225,7 @@ go!("job.jl")
 
 `setup delete` and `setup prune` remove a remote tree only when
 `--confirm-path` is the path that command prints. `-y`, `--yes`, and
-`DISTSSHKIT_YES` do not authorize those two modes. Without that flag and
+`DISTSSH_YES` do not authorize those two modes. Without that flag and
 without `-y`, the command still asks you to type `delete` or `prune`.
 
 `delete` also refuses when a present `runs/<run_id>/run.toml` under the

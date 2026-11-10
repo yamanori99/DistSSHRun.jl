@@ -2,11 +2,11 @@ using Test
 using Distributed
 
 const _PROV_ENV_OFF = (
-    "DISTSSHKIT_SOURCE_COMMIT" => nothing,
-    "DISTSSHKIT_SOURCE_DIRTY" => nothing,
-    "DISTSSHKIT_SOURCE_DIFF_SHA256" => nothing,
-    "DISTSSHKIT_SOURCE_CAPTURED" => nothing,
-    "DISTSSHKIT_SOURCE_UNTRACKED" => nothing,
+    "DISTSSH_SOURCE_COMMIT" => nothing,
+    "DISTSSH_SOURCE_DIRTY" => nothing,
+    "DISTSSH_SOURCE_DIFF_SHA256" => nothing,
+    "DISTSSH_SOURCE_CAPTURED" => nothing,
+    "DISTSSH_SOURCE_UNTRACKED" => nothing,
 )
 
 function _prov_snap(;
@@ -178,7 +178,7 @@ end
                 )
             )
             slot = DistSSHRun._read_go_slot_snapshot(
-                joinpath(tmp, ".distsshkit", "provenance-slot.toml"),
+                joinpath(tmp, ".distssh", "provenance-slot.toml"),
             )
             @test slot["version"] == string(VERSION)
             @test haskey(slot, "commit")
@@ -260,7 +260,7 @@ end
             @test raw["provenance"]["project"]["manifest"] == "absent"
             @test raw["provenance"]["workers"] == []
             @test raw["provenance"]["julia"]["parent"]["version"] == "1.13.2"
-            side = DistSSHRun.TOML.parsefile(joinpath(out, ".distsshkit", "provenance.toml"))
+            side = DistSSHRun.TOML.parsefile(joinpath(out, ".distssh", "provenance.toml"))
             @test side == raw["provenance"]
             grouped = Dict{String, Any}(
                 "child:box" => [
@@ -282,7 +282,7 @@ end
             grouped_raw = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
             @test grouped_raw["schema"] == 1
             @test grouped_raw["provenance"]["workers"]["child:box"][1]["n"] == 2
-            grouped_side = DistSSHRun.TOML.parsefile(joinpath(out, ".distsshkit", "provenance.toml"))
+            grouped_side = DistSSHRun.TOML.parsefile(joinpath(out, ".distssh", "provenance.toml"))
             @test grouped_side == grouped_raw["provenance"]
             DistSSHRun.write_kit_run_toml!(tmp; kind = :go, output_dir = out)
             again = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
@@ -351,8 +351,8 @@ end
                     @test only_new["source"]["dirty"] == true
                     @test only_new["source"]["untracked"] >= 1
                     @test !haskey(only_new["source"], "diff_sha256")
-                    mkpath(joinpath(repo, ".distsshkit"))
-                    write(joinpath(repo, ".distsshkit", "provenance.toml"), "x\n")
+                    mkpath(joinpath(repo, ".distssh"))
+                    write(joinpath(repo, ".distssh", "provenance.toml"), "x\n")
                     rm(joinpath(repo, "extra.txt"))
                     kit_only = DistSSHRun.assemble_provenance(repo)
                     @test kit_only["source"]["dirty"] == false
@@ -398,37 +398,37 @@ end
                 "untracked" => 0,
             ),
         )
-        @test env["DISTSSHKIT_SOURCE_COMMIT"] == "abc"
-        @test env["DISTSSHKIT_SOURCE_DIRTY"] == "false"
-        @test !haskey(env, "DISTSSHKIT_SOURCE_DIFF_SHA256")
-        @test env["DISTSSHKIT_SOURCE_CAPTURED"] == "submit:client"
-        @test env["DISTSSHKIT_SOURCE_UNTRACKED"] == "0"
+        @test env["DISTSSH_SOURCE_COMMIT"] == "abc"
+        @test env["DISTSSH_SOURCE_DIRTY"] == "false"
+        @test !haskey(env, "DISTSSH_SOURCE_DIFF_SHA256")
+        @test env["DISTSSH_SOURCE_CAPTURED"] == "submit:client"
+        @test env["DISTSSH_SOURCE_UNTRACKED"] == "0"
         inherited = Dict{String, String}(
-            "DISTSSHKIT_SOURCE_COMMIT" => "new",
-            "DISTSSHKIT_SOURCE_DIRTY" => "true",
+            "DISTSSH_SOURCE_COMMIT" => "new",
+            "DISTSSH_SOURCE_DIRTY" => "true",
             "OTHER" => "keep",
         )
         DistSSHRun._drop_unspecified_source_env!(
             inherited,
             Dict("commit" => "new"),
-            Dict{String, String}("DISTSSHKIT_SOURCE_COMMIT" => "new"),
+            Dict{String, String}("DISTSSH_SOURCE_COMMIT" => "new"),
         )
-        @test inherited["DISTSSHKIT_SOURCE_COMMIT"] == "new"
-        @test !haskey(inherited, "DISTSSHKIT_SOURCE_DIRTY")
+        @test inherited["DISTSSH_SOURCE_COMMIT"] == "new"
+        @test !haskey(inherited, "DISTSSH_SOURCE_DIRTY")
         @test inherited["OTHER"] == "keep"
-        kept = Dict{String, String}("DISTSSHKIT_SOURCE_DIRTY" => "true")
+        kept = Dict{String, String}("DISTSSH_SOURCE_DIRTY" => "true")
         DistSSHRun._drop_unspecified_source_env!(kept, nothing, Dict{String, String}())
-        @test kept["DISTSSHKIT_SOURCE_DIRTY"] == "true"
+        @test kept["DISTSSH_SOURCE_DIRTY"] == "true"
         @test isempty(DistSSHRun._provenance_source_env(nothing))
         for kind in (:go, :ride, :drive)
             @test DistSSHRun.execute_detached_accepts(:source; kind = kind)
         end
         withenv(
-            "DISTSSHKIT_SOURCE_COMMIT" => "from-env",
-            "DISTSSHKIT_SOURCE_DIRTY" => "true",
-            "DISTSSHKIT_SOURCE_DIFF_SHA256" => "abc",
-            "DISTSSHKIT_SOURCE_CAPTURED" => "submit:client",
-            "DISTSSHKIT_SOURCE_UNTRACKED" => "2",
+            "DISTSSH_SOURCE_COMMIT" => "from-env",
+            "DISTSSH_SOURCE_DIRTY" => "true",
+            "DISTSSH_SOURCE_DIFF_SHA256" => "abc",
+            "DISTSSH_SOURCE_CAPTURED" => "submit:client",
+            "DISTSSH_SOURCE_UNTRACKED" => "2",
         ) do
             DistSSHRun._set_provenance_source!(nothing)
             _with_tempdir() do tmp
@@ -494,7 +494,7 @@ end
                 od = String(raw["output_dir"])
                 side_root = isabspath(od) ? od : joinpath(proj, od)
                 side = DistSSHRun.TOML.parsefile(
-                    joinpath(side_root, ".distsshkit", "provenance.toml"),
+                    joinpath(side_root, ".distssh", "provenance.toml"),
                 )
                 @test side == raw["provenance"]
             end

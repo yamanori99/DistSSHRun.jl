@@ -2,7 +2,7 @@ using Test
 
 # Oracle: `collect!` skip / empty / tar-pull wiring via setup SSH fakes.
 # Fake `Tar.create` exits 0 and writes no archive (or 1 when
-# `DISTSSHKIT_TEST_TAR_PULL_FAIL=1`). Real collect of remote files is ssh-e2e.
+# `DISTSSH_TEST_TAR_PULL_FAIL=1`). Real collect of remote files is ssh-e2e.
 
 # File scope: a local inside `@testset` is captured by `_capture_stdio` and boxed.
 function _collect!(
@@ -72,10 +72,10 @@ end
                     Dict(
                         "DISTRIBUTED_PROJECT_ROOT" => proj,
                         "DISTRIBUTED_REMOTE_PROJECT_ROOT" => remote,
-                        "DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia",
+                        "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia",
                         # Absolute fake remotes are not a real git tree; selection
                         # still requires a Project.toml probe. Force the git path.
-                        "DISTSSHKIT_TEST_SNAP_GIT_YES" => "1",
+                        "DISTSSH_TEST_SNAP_GIT_YES" => "1",
                     ),
                     extra_env,
                 )
@@ -168,7 +168,7 @@ end
     end
 
     @testset "tar pull failure" begin
-        _with_collect(; extra_env = Dict("DISTSSHKIT_TEST_TAR_PULL_FAIL" => "1")) do state_dir, proj
+        _with_collect(; extra_env = Dict("DISTSSH_TEST_TAR_PULL_FAIL" => "1")) do state_dir, proj
             _seed_tree!(state_dir, "host1", "a.txt")
             out_dir = joinpath(proj, "out")
             mkpath(out_dir)
@@ -184,7 +184,7 @@ end
     end
 
     @testset "collect-missing find failure is not empty success" begin
-        _with_collect(; extra_env = Dict("DISTSSHKIT_TEST_FIND_FAIL" => "1")) do state_dir, proj
+        _with_collect(; extra_env = Dict("DISTSSH_TEST_FIND_FAIL" => "1")) do state_dir, proj
             mkpath(joinpath(state_dir, "host1", "tree"))
             write(joinpath(state_dir, "host1", "tree", "a.txt"), "x\n")
             out_dir = joinpath(proj, "out")
@@ -201,7 +201,7 @@ end
     end
 
     @testset "post-run find failure sets HostRunResult" begin
-        _with_collect(; extra_env = Dict("DISTSSHKIT_TEST_FIND_FAIL" => "1")) do state_dir, proj
+        _with_collect(; extra_env = Dict("DISTSSH_TEST_FIND_FAIL" => "1")) do state_dir, proj
             mkpath(joinpath(state_dir, "host1", "tree"))
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
@@ -225,7 +225,7 @@ end
             logp = joinpath(state_dir, "ssh.log")
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
-            withenv("DISTSSHKIT_TEST_SSH_LOG" => logp) do
+            withenv("DISTSSH_TEST_SSH_LOG" => logp) do
                 name = DistSSHRun.place_drive_sentinels!(["host1"], dirname(script), true, proj)
                 @test name == ""
             end
@@ -241,7 +241,7 @@ end
         @test DistSSHRun.drive_sentinel_for_host("s", "a_b") == "s_a+5fb"
         @test DistSSHRun.drive_sentinel_for_host("s", "h1") !=
             DistSSHRun.drive_sentinel_for_host("s", "h2")
-        _with_collect(; extra_env = Dict("DISTSSHKIT_TEST_SHARED_TREE" => "1")) do state_dir, proj
+        _with_collect(; extra_env = Dict("DISTSSH_TEST_SHARED_TREE" => "1")) do state_dir, proj
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
             out = joinpath(proj, "out")
@@ -311,7 +311,7 @@ end
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
             withenv(
-                "DISTSSHKIT_TEST_SSH_LOG" => logp,
+                "DISTSSH_TEST_SSH_LOG" => logp,
                 "DISTRIBUTED_COLLECT_DIRS" => ".",
             ) do
                 captured, name = _capture_stdio() do _, _
@@ -348,7 +348,7 @@ end
         long = DistSSHRun._collect_find_failure("h", ErrorException("x"), "e"^300)
         @test endswith(long.msg, "…")
         @test length(long.msg) < 400
-        lines = withenv("DISTSSHKIT_JOBS" => "1") do
+        lines = withenv("DISTSSH_JOBS" => "1") do
             DistSSHRun._collect_dup_warning_lines(
                 Dict(
                     ("root", "b.txt") => ["z", "a", "a"],

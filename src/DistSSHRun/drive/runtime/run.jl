@@ -316,7 +316,7 @@ function _run_drive_parsed_specialized!(
     project_root_abs = canonical_local_path(something(project_root, proj_dir))
     path_anchor = canonical_local_path(project_root_abs)
     DistSSHRun._acquire_kit_inproc_run!(:drive)
-    old_run = get(ENV, DistSSHRun.DISTSSHKIT_RUN_DIR_ENV, nothing)
+    old_run = get(ENV, DistSSHRun.DISTSSH_RUN_DIR_ENV, nothing)
     run_dir = DistSSHRun._ensure_kit_run_dir!(
         :drive, script_path; project = proj_dir,
     )
@@ -336,7 +336,7 @@ function _run_drive_parsed_specialized!(
                 ENV["DISTRIBUTED_OUTPUT_DIR"] = DistSSHRun.canonical_local_path(String(output_dir))
             end
             # Drivers may set `DISTRIBUTED_OUTPUT_DIR` in `init_output_dir!` (demos: `output/`).
-            # If still unset, kit allocates `{script}/.distsshkit/drive/<stem>_<UTC>/`.
+            # If still unset, kit allocates `{script}/.distssh/drive/<stem>_<UTC>/`.
             # Lock after that so `.kit.lock` is not the kind root when the driver
             # chose `output/` (or `--output-dir` / a unique batch dir).
             init_before = _drive_script_init_output_dir_method(script_args)

@@ -2,15 +2,15 @@ using Test
 
 @testset "wait_seconds" begin
     withenv(
-        "DISTSSHKIT_WAIT_SCALE" => nothing,
-        "DISTSSHKIT_WAIT_CHILD_REPLY" => nothing,
-        "DISTSSHKIT_WAIT_GO_JOB" => nothing,
-        "DISTSSHKIT_WAIT_DRIVE_JOB" => nothing,
-        "DISTSSHKIT_WAIT_STOP_GRACE" => nothing,
-        "DISTSSHKIT_WAIT_SIGINT_GRACE" => nothing,
-        "DISTSSHKIT_WAIT_E2E_STOP" => nothing,
-        "DISTSSHKIT_WAIT_SSH_CONNECT" => nothing,
-        "DISTSSHKIT_WAIT_PEER_SILENT" => nothing,
+        "DISTSSH_WAIT_SCALE" => nothing,
+        "DISTSSH_WAIT_CHILD_REPLY" => nothing,
+        "DISTSSH_WAIT_GO_JOB" => nothing,
+        "DISTSSH_WAIT_DRIVE_JOB" => nothing,
+        "DISTSSH_WAIT_STOP_GRACE" => nothing,
+        "DISTSSH_WAIT_SIGINT_GRACE" => nothing,
+        "DISTSSH_WAIT_E2E_STOP" => nothing,
+        "DISTSSH_WAIT_SSH_CONNECT" => nothing,
+        "DISTSSH_WAIT_PEER_SILENT" => nothing,
     ) do
         @test DistSSHBase.wait_seconds(:child_reply, 300) == 300.0
         @test DistSSHBase.wait_seconds(:go_job, 120) == 120.0
@@ -23,7 +23,7 @@ using Test
         @test DistSSHBase.wait_seconds(:until_exit, 1) === Inf
         @test_throws ArgumentError DistSSHBase.wait_seconds(:not_a_wait, 1)
 
-        withenv("DISTSSHKIT_WAIT_SCALE" => "2") do
+        withenv("DISTSSH_WAIT_SCALE" => "2") do
             @test DistSSHBase.wait_seconds(:child_reply, 300) == 600.0
             @test DistSSHBase.wait_seconds(:go_job, 120) == 240.0
             @test DistSSHBase.wait_seconds(:stop_grace, 5) == 5.0
@@ -31,21 +31,21 @@ using Test
             @test DistSSHBase.wait_seconds(:until_exit, 3) === Inf
         end
 
-        withenv("DISTSSHKIT_WAIT_SCALE" => "0") do
+        withenv("DISTSSH_WAIT_SCALE" => "0") do
             @test DistSSHBase.wait_seconds(:child_reply, 300) == 300.0
         end
-        withenv("DISTSSHKIT_WAIT_SCALE" => "nope") do
+        withenv("DISTSSH_WAIT_SCALE" => "nope") do
             @test DistSSHBase.wait_seconds(:drive_job, 360) == 360.0
         end
 
-        withenv("DISTSSHKIT_WAIT_SCALE" => "2", "DISTSSHKIT_WAIT_CHILD_REPLY" => "9") do
+        withenv("DISTSSH_WAIT_SCALE" => "2", "DISTSSH_WAIT_CHILD_REPLY" => "9") do
             @test DistSSHBase.wait_seconds(:child_reply, 300) == 9.0
             @test DistSSHBase.wait_seconds(:go_job, 120) == 240.0
         end
-        withenv("DISTSSHKIT_WAIT_CHILD_REPLY" => "soon") do
+        withenv("DISTSSH_WAIT_CHILD_REPLY" => "soon") do
             @test DistSSHBase.wait_seconds(:child_reply, 300) == 300.0
         end
-        withenv("DISTSSHKIT_WAIT_STOP_GRACE" => "1.5") do
+        withenv("DISTSSH_WAIT_STOP_GRACE" => "1.5") do
             @test DistSSHBase.wait_seconds(:stop_grace, 5) == 1.5
         end
     end

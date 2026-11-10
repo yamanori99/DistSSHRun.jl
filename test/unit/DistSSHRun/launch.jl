@@ -22,21 +22,21 @@ using TOML
     @test env["JULIA_PROJECT"] == "/tmp/job"
     @test haskey(env, "JULIA_NUM_THREADS")
     @test !haskey(env, "OPENBLAS_NUM_THREADS")
-    withenv("DISTSSHKIT_BLAS_THREADS" => "1") do
+    withenv("DISTSSH_BLAS_THREADS" => "1") do
         pinned = Dict(DistSSHRun.worker_env_pairs("/tmp/job"))
         @test pinned["OPENBLAS_NUM_THREADS"] == "1"
         @test pinned["OMP_NUM_THREADS"] == "1"
     end
     DistSSHRun.reset_worker_seeds!()
-    a, b = withenv("DISTSSHKIT_JOB_SEED" => "11") do
+    a, b = withenv("DISTSSH_JOB_SEED" => "11") do
         aa = Dict(DistSSHRun.worker_env_pairs("/tmp/job"; rank = DistSSHRun.take_worker_rank()))
         bb = Dict(DistSSHRun.worker_env_pairs("/tmp/job"; rank = DistSSHRun.take_worker_rank()))
         aa, bb
     end
-    @test a["DISTSSHKIT_WORKER_RANK"] == "1"
-    @test b["DISTSSHKIT_WORKER_RANK"] == "2"
-    @test a["DISTSSHKIT_WORKER_SEED"] != b["DISTSSHKIT_WORKER_SEED"]
-    @test DistSSHRun.worker_seed(11, 1) == parse(UInt64, a["DISTSSHKIT_WORKER_SEED"])
+    @test a["DISTSSH_WORKER_RANK"] == "1"
+    @test b["DISTSSH_WORKER_RANK"] == "2"
+    @test a["DISTSSH_WORKER_SEED"] != b["DISTSSH_WORKER_SEED"]
+    @test DistSSHRun.worker_seed(11, 1) == parse(UInt64, a["DISTSSH_WORKER_SEED"])
     @test DistSSHRun.worker_seed(11, 1) == DistSSHRun.worker_seed(11, 1)
     built = DistSSHRun._source_from_user(Dict{String, Any}("commit" => "abc", "nope" => "x"))
     @test built["commit"] == "abc"
@@ -45,7 +45,7 @@ using TOML
     @test DistSSHRun.worker_pmap(identity, [10, 20]) == [10, 20]
     @test DistSSHRun._ITEM_MAP[(1, 1)] == 0
     @test DistSSHRun._ITEM_MAP[(1, 2)] == 0
-    withenv("DISTSSHKIT_WORKER_RANK" => "4") do
+    withenv("DISTSSH_WORKER_RANK" => "4") do
         @test DistSSHRun.worker_pmap(identity, [10]) == [10]
     end
     @test DistSSHRun._ITEM_MAP[(1, 1)] == 0
@@ -65,7 +65,7 @@ using TOML
     @test first_item["item"] == 1
     @test first_item["rank"] == 0
     DistSSHRun.reset_worker_seeds!()
-    withenv("DISTSSHKIT_JOB_SEED" => "11") do
+    withenv("DISTSSH_JOB_SEED" => "11") do
         DistSSHRun.job_seed()
         DistSSHRun.take_worker_rank()
     end
@@ -82,7 +82,7 @@ using TOML
     @test first_worker["rank"] == 1
     slot = mktempdir()
     try
-        snap_dir = joinpath(slot, ".distsshkit")
+        snap_dir = joinpath(slot, ".distssh")
         mkpath(snap_dir)
         open(joinpath(snap_dir, "provenance-slot.toml"), "w") do io
             TOML.print(
@@ -100,7 +100,7 @@ using TOML
             )
         end
         DistSSHRun.reset_worker_seeds!()
-        withenv("DISTRIBUTED_OUTPUT_DIR" => slot, "DISTSSHKIT_WORKER_RANK" => "3") do
+        withenv("DISTRIBUTED_OUTPUT_DIR" => slot, "DISTSSH_WORKER_RANK" => "3") do
             @test DistSSHRun.worker_pmap(identity, [7]) == [7]
             DistSSHRun._flush_go_slot_pmap_items!()
         end
@@ -201,7 +201,7 @@ using TOML
     @test !occursin("OPENBLAS_NUM_THREADS=", prefix)
     @test occursin("JULIA_LOAD_PATH=", prefix)
     @test occursin("--project=.", prefix)
-    capped = withenv("DISTSSHKIT_BLAS_THREADS" => "1") do
+    capped = withenv("DISTSSH_BLAS_THREADS" => "1") do
         DistSSHRun.go_remote_julia_prefix("julia"; blas = DistSSHRun._explicit_blas_threads())
     end
     unset_at = findfirst("-u OPENBLAS_NUM_THREADS", capped)

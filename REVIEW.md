@@ -18,7 +18,7 @@ say there is nothing to fix.
 - **Docs lie.** A manual, README, or NEWS states a flag, confirmation,
   exit code, or deleted path that the code does not implement. A doc
   tells the user to add or run DistSSHRun instead of DistSSHKit. A doc
-  mixes controller `DISTSSHKIT_RUN_DIR/run.toml` with the remote Ship
+  mixes controller `DISTSSH_RUN_DIR/run.toml` with the remote Ship
   stamp, or treats `teardown` as this package.
 - **Config misroutes.** A required check name, the heavy-job allowlist,
   or a label rule sends a change to the wrong gate.
@@ -30,7 +30,7 @@ say there is nothing to fix.
 - **Delete and prune.** A path calculation in this diff can remove a path
   the user did not confirm. `setup!(session, :delete)` and
   `setup!(session, :prune)` delete without a matching `confirm_path`, or
-  a host with no dict key is deleted. `-y`, `--yes`, and `DISTSSHKIT_YES`
+  a host with no dict key is deleted. `-y`, `--yes`, and `DISTSSH_YES`
   authorize `setup --delete` or `setup --prune` without `--confirm-path`.
   Delete scans `<target>/runs` when stamps live under a nested deploy
   root. This diff writes a `.distssh-run` / `.distsshrun` marker.

@@ -16,58 +16,60 @@ const _GO_SLOT_PROVENANCE_NAME = "provenance-slot.toml"
 const _GO_SLOT_LOADER_NAME = "provenance-slot.jl"
 
 # Same fields as `_process_snapshot_expr`. A go slot has no DistSSHRun, so `-L` runs this text.
-const _GO_SLOT_LOADER_SRC = """
-import TOML
-try
-    let blas = Ref("not loaded"), blas_threads = Ref("not loaded")
-        for (pkg, mod) in Base.loaded_modules
-            pkg.name == "LinearAlgebra" || continue
-            try
-                libs = mod.BLAS.get_config().loaded_libs
-                if !isempty(libs)
-                    blas[] = string(first(libs).libname)
+const _GO_SLOT_LOADER_SRC = let _go_slot_state_dir = DistSSHBase.LOCAL_STATE_DIR
+    """
+    import TOML
+    try
+        let blas = Ref("not loaded"), blas_threads = Ref("not loaded")
+            for (pkg, mod) in Base.loaded_modules
+                pkg.name == "LinearAlgebra" || continue
+                try
+                    libs = mod.BLAS.get_config().loaded_libs
+                    if !isempty(libs)
+                        blas[] = string(first(libs).libname)
+                    end
+                    blas_threads[] = string(mod.BLAS.get_num_threads())
+                catch
+                    blas[] = "not loaded"
+                    blas_threads[] = "not loaded"
                 end
-                blas_threads[] = string(mod.BLAS.get_num_threads())
-            catch
-                blas[] = "not loaded"
-                blas_threads[] = "not loaded"
             end
-        end
-        snap = Dict{String, String}(
-            "version" => string(VERSION),
-            "commit" => string(Base.GIT_VERSION_INFO.commit),
-            "cpu" => string(Sys.CPU_NAME),
-            "machine" => string(Sys.MACHINE),
-            "kernel" => string(Sys.KERNEL),
-            "nthreads" => string(Threads.nthreads()),
-            "hostname" => string(gethostname()),
-            "blas" => blas[],
-            "blas_threads" => blas_threads[],
-        )
-        # Same walk as `_julia_install_name`. This script cannot load DistSSHRun.
-        if isabspath(Sys.BINDIR)
-            dir = Sys.BINDIR
-            parent = dirname(dir)
-            while parent != dir
-                name = basename(parent)
-                if startswith(name, "julia-")
-                    snap["install"] = name
-                    break
-                end
-                dir = parent
+            snap = Dict{String, String}(
+                "version" => string(VERSION),
+                "commit" => string(Base.GIT_VERSION_INFO.commit),
+                "cpu" => string(Sys.CPU_NAME),
+                "machine" => string(Sys.MACHINE),
+                "kernel" => string(Sys.KERNEL),
+                "nthreads" => string(Threads.nthreads()),
+                "hostname" => string(gethostname()),
+                "blas" => blas[],
+                "blas_threads" => blas_threads[],
+            )
+            # Same walk as `_julia_install_name`. This script cannot load DistSSHRun.
+            if isabspath(Sys.BINDIR)
+                dir = Sys.BINDIR
                 parent = dirname(dir)
+                while parent != dir
+                    name = basename(parent)
+                    if startswith(name, "julia-")
+                        snap["install"] = name
+                        break
+                    end
+                    dir = parent
+                    parent = dirname(dir)
+                end
+            end
+            dir = get(ENV, "DISTRIBUTED_OUTPUT_DIR", pwd())
+            dest = joinpath(dir, $(_go_slot_state_dir |> repr))
+            mkpath(dest)
+            open(joinpath(dest, "provenance-slot.toml"), "w") do io
+                TOML.print(io, snap)
             end
         end
-        dir = get(ENV, "DISTRIBUTED_OUTPUT_DIR", pwd())
-        dest = joinpath(dir, ".distsshkit")
-        mkpath(dest)
-        open(joinpath(dest, "provenance-slot.toml"), "w") do io
-            TOML.print(io, snap)
-        end
+    catch
     end
-catch
+    """
 end
-"""
 
 const _GIT_DIFF_FLAGS = (
     "-c",
@@ -81,10 +83,10 @@ const _GIT_DIFF_FLAGS = (
 )
 
 const _PROVENANCE_SOURCE_ENV = (
-    commit = "DISTSSHKIT_SOURCE_COMMIT",
-    dirty = "DISTSSHKIT_SOURCE_DIRTY",
-    captured = "DISTSSHKIT_SOURCE_CAPTURED",
-    untracked = "DISTSSHKIT_SOURCE_UNTRACKED",
+    commit = "DISTSSH_SOURCE_COMMIT",
+    dirty = "DISTSSH_SOURCE_DIRTY",
+    captured = "DISTSSH_SOURCE_CAPTURED",
+    untracked = "DISTSSH_SOURCE_UNTRACKED",
 )
 
 const _SNAP_KEYS = (
@@ -198,7 +200,7 @@ end
 """Write the go-slot `-L` file. `nothing` when the directory cannot be written."""
 function write_go_slot_loader(slot_dir::AbstractString)::Union{Nothing, String}
     return try
-        dest = joinpath(slot_dir, ".distsshkit")
+        dest = joinpath(slot_dir, DistSSHBase.LOCAL_STATE_DIR)
         mkpath(dest)
         path = joinpath(dest, _GO_SLOT_LOADER_NAME)
         write(path, _GO_SLOT_LOADER_SRC)
@@ -210,7 +212,7 @@ end
 
 """Remember one go slot. `assemble_provenance` reads the toml after the slot exits."""
 function note_go_slot_provenance!(token::AbstractString, slot_dir::AbstractString)
-    path = joinpath(String(slot_dir), ".distsshkit", _GO_SLOT_PROVENANCE_NAME)
+    path = joinpath(String(slot_dir), DistSSHBase.LOCAL_STATE_DIR, _GO_SLOT_PROVENANCE_NAME)
     lock(_PROVENANCE_LOCK) do
         push!(_PROVENANCE_GO, String(token) => path)
     end
@@ -567,7 +569,11 @@ public git_source_snapshot
 
 """Kit and Queue write these directories inside the caller's tree. They are not the caller's edits."""
 function _git_status_is_kit(path::AbstractString)::Bool
-    for name in (".distsshkit", ".distsshqueue")
+    for name in (
+            DistSSHBase.LOCAL_STATE_DIR,
+            DistSSHBase.LEGACY_LOCAL_STATE_DIR,
+            ".distsshqueue",
+        )
         path == name && return true
         startswith(path, name * "/") && return true
         occursin("/" * name * "/", path) && return true
@@ -629,7 +635,7 @@ function _flush_go_slot_pmap_items!()
     try
         dir = strip(get(ENV, "DISTRIBUTED_OUTPUT_DIR", ""))
         isempty(dir) && return nothing
-        path = joinpath(dir, ".distsshkit", _GO_SLOT_PROVENANCE_NAME)
+        path = joinpath(dir, DistSSHBase.LOCAL_STATE_DIR, _GO_SLOT_PROVENANCE_NAME)
         isfile(path) || return nothing
         listed = Dict{String, Any}[]
         lock(_ITEM_LOCK) do
@@ -738,7 +744,7 @@ function _source_from_env()::Union{Nothing, Dict{String, Any}}
     return isempty(built) ? nothing : built
 end
 
-"""Drop inherited `DISTSSHKIT_SOURCE_*` keys that this explicit `source` did not set.
+"""Drop inherited `DISTSSH_SOURCE_*` keys that this explicit `source` did not set.
 
 `_execute_detached_env` copies the parent environment first. A partial `source`
 would otherwise keep stale fields from that copy.
@@ -912,7 +918,7 @@ function _write_provenance_sidecar(
     output_dir === nothing && return nothing
     root = strip(String(output_dir))
     isempty(root) && return nothing
-    dest_dir = joinpath(canonical_local_path(root), ".distsshkit")
+    dest_dir = joinpath(canonical_local_path(root), DistSSHBase.LOCAL_STATE_DIR)
     try
         mkpath(dest_dir)
         dest = joinpath(dest_dir, "provenance.toml")
@@ -930,7 +936,7 @@ end
 """
     result_run_dir(result) -> Union{Nothing, String}
 
-This run's `DISTSSHKIT_RUN_DIR`, or `nothing` when the result has none.
+This run's `DISTSSH_RUN_DIR`, or `nothing` when the result has none.
 
 `result` is a [`DriveResult`](@ref), [`GoResult`](@ref),
 [`KitRunResult`](@ref), [`RideResult`](@ref), or [`KitProcess`](@ref).
@@ -1028,7 +1034,7 @@ Remote `runs/<run_id>/` id from this run's controller `run.toml`
 snapshot selection recorded one.
 
 Schema stays 1. An absent or empty key means not recorded. This is not
-`DISTSSHKIT_RUN_DIR`. `result` is a [`DriveResult`](@ref), [`GoResult`](@ref),
+`DISTSSH_RUN_DIR`. `result` is a [`DriveResult`](@ref), [`GoResult`](@ref),
 or [`KitRunResult`](@ref). A [`RideResult`](@ref) goes through
 [`kit_run_result`](@ref) first. A run that selected an existing completed
 snapshot (without shipping in-process) may still record that snapshot's

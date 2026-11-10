@@ -665,8 +665,8 @@ jobs:
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
       - name: docker-ssh up + SSH E2E
         env:
-          DISTSSHKIT_BUILD_CACHE: gha
-          DISTSSHKIT_SSH_E2E: "1"
+          DISTSSH_BUILD_CACHE: gha
+          DISTSSH_SSH_E2E: "1"
         run: |
           ./testenv/docker-ssh/scripts/up.sh
           julia --project=lib/DistSSHUp lib/DistSSHUp/test/e2e.jl
@@ -799,8 +799,8 @@ jobs:
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
       - name: docker-ssh up + SSH E2E
         env:
-          DISTSSHKIT_BUILD_CACHE: gha
-          DISTSSHKIT_SSH_E2E: "1"
+          DISTSSH_BUILD_CACHE: gha
+          DISTSSH_SSH_E2E: "1"
         run: |
           ./testenv/docker-ssh/scripts/up.sh
           julia --project=lib/DistSSHBase lib/DistSSHBase/test/e2e.jl
@@ -1134,8 +1134,8 @@ jobs:
       - name: docker-ssh up + SSH E2E
         id: e2e
         env:
-          DISTSSHKIT_CODE_COVERAGE: ${{ needs.detect.outputs.coverage == 'true' && '1' || '' }}
-          DISTSSHKIT_BUILD_CACHE: gha
+          DISTSSH_CODE_COVERAGE: ${{ needs.detect.outputs.coverage == 'true' && '1' || '' }}
+          DISTSSH_BUILD_CACHE: gha
         run: ./testenv/docker-ssh/scripts/up.sh --e2e
 
       - uses: ./.github/actions/e2e-codecov
@@ -1180,7 +1180,7 @@ jobs:
 
       - name: docker-ssh up + SSH E2E
         env:
-          DISTSSHKIT_BUILD_CACHE: gha
+          DISTSSH_BUILD_CACHE: gha
           JULIA_DEFAULT_CHANNEL: "1.14"
         run: ./testenv/docker-ssh/scripts/up.sh --e2e
 

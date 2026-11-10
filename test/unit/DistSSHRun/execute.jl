@@ -282,7 +282,7 @@ end
                 )
                 empty_out = joinpath(other, "empty-out")
                 mkpath(empty_out)
-                withenv(DistSSHRun.DISTSSHKIT_RUN_DIR_ENV => stray) do
+                withenv(DistSSHRun.DISTSSH_RUN_DIR_ENV => stray) do
                     @test DistSSHRun._run_dir_for_stop(empty_out) === nothing
                     @test DistSSHRun._run_dir_for_stop(run_d) ==
                         DistSSHRun.canonical_local_path(run_d)
@@ -357,18 +357,18 @@ end
         _with_tempdir() do project
             d1 = DistSSHRun.allocate_output_dir(:go, "batch.jl"; project)
             @test isdir(d1)
-            @test occursin(joinpath(".distsshkit", "go"), d1)
+            @test occursin(joinpath(".distssh", "go"), d1)
             @test startswith(basename(d1), "batch_")
             d2 = DistSSHRun.allocate_output_dir(:drive, "run.jl"; project, job_id = "q1")
             @test isdir(d2)
-            @test occursin(joinpath(".distsshkit", "drive"), d2)
+            @test occursin(joinpath(".distssh", "drive"), d2)
             @test occursin("_q1", basename(d2))
             d3 = DistSSHRun.allocate_output_dir(:go, "batch.jl"; project)
             @test isdir(d3)
             @test d1 != d3
             d_ride = DistSSHRun.allocate_output_dir(:ride, "map.jl"; project)
             @test isdir(d_ride)
-            @test occursin(joinpath(".distsshkit", "ride"), d_ride)
+            @test occursin(joinpath(".distssh", "ride"), d_ride)
             err_kind = try
                 DistSSHRun.allocate_output_dir(:pipeline, "x.jl"; project)
                 nothing
@@ -399,7 +399,7 @@ end
                 d = DistSSHRun._ensure_drive_output_env!(script; project = project)
                 @test isdir(d)
                 @test startswith(basename(d), "job_")
-                @test occursin(joinpath(".distsshkit", "drive"), d)
+                @test occursin(joinpath(".distssh", "drive"), d)
                 @test ENV["DISTRIBUTED_OUTPUT_DIR"] == d
                 @test DistSSHRun._ensure_drive_output_env!(script; project = project) == d
             end
@@ -417,10 +417,10 @@ end
             write(script, "")
             d1 = DistSSHRun.allocate_run_dir(:drive, script; project)
             @test isdir(d1)
-            @test occursin(joinpath(".distsshkit", "runs", "drive"), d1)
+            @test occursin(joinpath(".distssh", "runs", "drive"), d1)
             @test startswith(basename(d1), "job_")
             d2 = DistSSHRun.allocate_run_dir(:go, "batch.jl"; project, job_id = "q1")
-            @test occursin(joinpath(".distsshkit", "runs", "go"), d2)
+            @test occursin(joinpath(".distssh", "runs", "go"), d2)
             @test occursin("_q1", basename(d2))
             @test DistSSHRun.read_kit_run_toml(d1) === nothing
             DistSSHRun.write_kit_run_toml!(
@@ -463,7 +463,7 @@ end
             try
                 d = DistSSHRun.allocate_run_dir(:go, script; project)
                 @test isdir(d)
-                @test occursin(joinpath(".distsshkit", "runs", "go"), d)
+                @test occursin(joinpath(".distssh", "runs", "go"), d)
                 @test startswith(d, DistSSHRun.canonical_local_path(project))
                 @test !startswith(d, DistSSHRun.canonical_local_path(ro))
             finally
@@ -1076,11 +1076,11 @@ end
             fake = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
             err_out = try
                 withenv(
-                    "DISTSSHKIT_TEST" => "1",
-                    "DISTSSHKIT_TEST_SSH" => fake,
-                    "DISTSSHKIT_TEST_POSIX_SHELL" => "1",
-                    "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
-                    "DISTSSHKIT_TEST_SSH_FAIL" => "1",
+                    "DISTSSH_TEST" => "1",
+                    "DISTSSH_TEST_SSH" => fake,
+                    "DISTSSH_TEST_POSIX_SHELL" => "1",
+                    "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit",
+                    "DISTSSH_TEST_SSH_FAIL" => "1",
                 ) do
                     DistSSHRun.go!(
                         script, ["child:h:1"];
@@ -1334,7 +1334,7 @@ end
     end
 
     @testset "job_id charset / kit_job_eval_arg" begin
-        withenv("DISTSSHKIT_JOB_ID" => nothing) do
+        withenv("DISTSSH_JOB_ID" => nothing) do
             @test DistSSHRun.resolved_kit_job_id() === nothing
         end
         @test DistSSHRun.kit_job_eval_arg("q-1") == "--eval=#distsshkit-job:q-1"
@@ -1498,7 +1498,7 @@ end
         end
     end
 
-    @testset "interrupt_grace default and DISTSSHKIT_WAIT_SIGINT_GRACE" begin
+    @testset "interrupt_grace default and DISTSSH_WAIT_SIGINT_GRACE" begin
         # Headroom for slow NFS / x86 / WSL2. The 30s default is not computed from this.
         margin = 10.0
         @test DistSSHRun._INTERRUPT_GRACE_DEFAULT_S >=
@@ -1508,25 +1508,25 @@ end
             DistSSHRun._RMPROCS_WAITFOR_S +
             margin
         @test DistSSHRun._SIGNAL_KILL_WAIT_S == 1.0
-        withenv("DISTSSHKIT_WAIT_SIGINT_GRACE" => nothing) do
+        withenv("DISTSSH_WAIT_SIGINT_GRACE" => nothing) do
             @test DistSSHRun._resolve_interrupt_grace(nothing) ==
                 DistSSHRun._INTERRUPT_GRACE_DEFAULT_S
             @test DistSSHRun._resolve_interrupt_grace(nothing) ==
                 DistSSHRun.DistSSHBase.wait_seconds(:sigint_grace, 30.0)
         end
-        withenv("DISTSSHKIT_WAIT_SIGINT_GRACE" => "4.5") do
+        withenv("DISTSSH_WAIT_SIGINT_GRACE" => "4.5") do
             @test DistSSHRun._resolve_interrupt_grace(nothing) == 4.5
             @test DistSSHRun._resolve_interrupt_grace(0) == 0.0
             @test DistSSHRun._resolve_interrupt_grace(1) == 1.0
         end
-        withenv("DISTSSHKIT_WAIT_SIGINT_GRACE" => "-1") do
+        withenv("DISTSSH_WAIT_SIGINT_GRACE" => "-1") do
             @test_throws ArgumentError DistSSHRun._resolve_interrupt_grace(nothing)
             @test DistSSHRun._resolve_interrupt_grace(2) == 2.0
         end
-        withenv("DISTSSHKIT_WAIT_SIGINT_GRACE" => "NaN") do
+        withenv("DISTSSH_WAIT_SIGINT_GRACE" => "NaN") do
             @test_throws ArgumentError DistSSHRun._resolve_interrupt_grace(nothing)
         end
-        withenv("DISTSSHKIT_WAIT_SIGINT_GRACE" => "Inf") do
+        withenv("DISTSSH_WAIT_SIGINT_GRACE" => "Inf") do
             @test_throws ArgumentError DistSSHRun._resolve_interrupt_grace(nothing)
         end
         @test_throws ArgumentError DistSSHRun._resolve_interrupt_grace(-0.1)
@@ -1707,7 +1707,7 @@ end
             @test occursin("old.txt", err.msg)
             @test occursin("Omit output_dir or pass an empty directory.", err.msg)
             @test !occursin("--help", err.msg)
-            @test !isdir(joinpath(project, ".distsshkit", "runs"))
+            @test !isdir(joinpath(project, ".distssh", "runs"))
         end
     end
 
@@ -1759,7 +1759,7 @@ end
             "PATH" => "/usr/bin",
             "HOME" => "/home/me",
             "JULIA_DEPOT_PATH" => "/depot",
-            "DISTSSHKIT_SSH_TUNNEL" => "0",
+            "DISTSSH_SSH_TUNNEL" => "0",
             "DISTRIBUTED_OUTPUT_DIR" => "/out",
             "AWS_SECRET_ACCESS_KEY" => "sek",
             "JULIA_PROJECT" => "/queue",
@@ -1771,11 +1771,11 @@ end
             "OPENBLAS_DEFAULT_NUM_THREADS" => "4",
             "CUSTOM_JOB_PATH" => "kept",
             "DISTSSHQUEUE_STORE" => "/q",
-            "DISTSSHKIT_FOO_TOKEN" => "t",
+            "DISTSSH_FOO_TOKEN" => "t",
             "http_proxy" => "http://user:pass@proxy:8080",
             "https_proxy" => "http://proxy:8080",
             "LC_ALL" => "C",
-            "DISTSSHKIT_BLAS_THREADS" => "3",
+            "DISTSSH_BLAS_THREADS" => "3",
         )
         built = DistSSHRun._detached_child_env(
             parent, Dict{String, String}();
@@ -1788,7 +1788,7 @@ end
         @test built.env["PATH"] == "/usr/bin"
         @test built.env["HOME"] == "/home/me"
         @test built.env["JULIA_DEPOT_PATH"] == "/depot"
-        @test built.env["DISTSSHKIT_SSH_TUNNEL"] == "0"
+        @test built.env["DISTSSH_SSH_TUNNEL"] == "0"
         @test built.env["DISTRIBUTED_OUTPUT_DIR"] == "/out"
         @test built.env["LC_ALL"] == "C"
         @test built.env["https_proxy"] == "http://proxy:8080"
@@ -1806,12 +1806,12 @@ end
         @test !haskey(built.env, "JULIA_WORKER_COOKIE")
         @test !haskey(built.env, "CUSTOM_JOB_PATH")
         @test !haskey(built.env, "DISTSSHQUEUE_STORE")
-        @test !haskey(built.env, "DISTSSHKIT_FOO_TOKEN")
+        @test !haskey(built.env, "DISTSSH_FOO_TOKEN")
         @test !haskey(built.env, "http_proxy")
         @test built.threads == "1"
-        @test built.env["DISTSSHKIT_LAUNCH_THREADS"] == "1"
-        @test built.env["DISTSSHKIT_LAUNCH_DIR"] == "/work"
-        @test built.env["DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL"] == "1"
+        @test built.env["DISTSSH_LAUNCH_THREADS"] == "1"
+        @test built.env["DISTSSH_LAUNCH_DIR"] == "/work"
+        @test built.env["DISTSSH_SKIP_GLOBAL_WORKER_PKILL"] == "1"
         @test "AWS_SECRET_ACCESS_KEY" in built.dropped
         @test "JULIA_LOAD_PATH" in built.dropped
         @test "JULIA_WORKER_COOKIE" in built.dropped
@@ -1871,14 +1871,14 @@ end
         named = DistSSHRun._detached_child_env(
             parent, Dict{String, String}();
             threads = :unset,
-            env_allow = ["JULIA_NUM_THREADS", "DISTSSHKIT_FOO_TOKEN"],
+            env_allow = ["JULIA_NUM_THREADS", "DISTSSH_FOO_TOKEN"],
             env = Dict("TZ" => "UTC", "HOME" => "", "BRAND_NEW" => "1"),
             launch_dir = "/work",
             source = nothing,
         )
         @test named.env["JULIA_NUM_THREADS"] == "8"
-        @test named.env["DISTSSHKIT_FOO_TOKEN"] == "t"
-        @test "DISTSSHKIT_FOO_TOKEN" in named.sensitive
+        @test named.env["DISTSSH_FOO_TOKEN"] == "t"
+        @test "DISTSSH_FOO_TOKEN" in named.sensitive
         @test named.env["TZ"] == "UTC"
         @test named.env["BRAND_NEW"] == "1"
         @test !haskey(named.env, "HOME")
@@ -1979,9 +1979,9 @@ end
             @test plain["schema"] == 1
             @test !haskey(plain, "launch")
             withenv(
-                "DISTSSHKIT_LAUNCH_THREADS" => "1",
-                "DISTSSHKIT_LAUNCH_DIR" => proj,
-                "DISTSSHKIT_LAUNCH_DROPPED" => "SECRET_TOKEN,ZZZ",
+                "DISTSSH_LAUNCH_THREADS" => "1",
+                "DISTSSH_LAUNCH_DIR" => proj,
+                "DISTSSH_LAUNCH_DROPPED" => "SECRET_TOKEN,ZZZ",
             ) do
                 DistSSHRun.write_kit_run_toml!(proj; kind = :go, project_root = proj)
             end

@@ -37,7 +37,7 @@ end
 # awk uses printf "%.0f" so MemTotal*1024 stays decimal; the parser still
 # accepts scientific notation if a remote awk uses default OFMT.
 const _HOSTINFO_PROBE_SCRIPT = string(
-    "echo DISTSSHKIT_HOSTINFO; ",
+    "echo DISTSSH_HOSTINFO; ",
     "echo mem=\$(sysctl -n hw.memsize 2>/dev/null || awk '/MemTotal/{printf \"%.0f\\n\", \$2*1024}' /proc/meminfo 2>/dev/null); ",
     "echo ncpu=\$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null); ",
     "echo os=\$(uname -s 2>/dev/null); ",
@@ -120,7 +120,7 @@ function _hostinfo_parse_probe(
         },
     }
     lines = String[strip(l) for l in split(String(out), '\n') if !isempty(strip(l))]
-    i = findfirst(==("DISTSSHKIT_HOSTINFO"), lines)
+    i = findfirst(==("DISTSSH_HOSTINFO"), lines)
     i === nothing && return nothing
     rest = lines[(i + 1):end]
     mem_raw = _hostinfo_labeled_value(rest, "mem")

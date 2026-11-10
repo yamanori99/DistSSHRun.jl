@@ -64,7 +64,7 @@ end
 
     @testset "KitSession" begin
         _with_tempdir() do tmp
-            withenv("DISTSSHKIT_HOSTS_FILE" => "") do
+            withenv("DISTSSH_HOSTS_FILE" => "") do
                 session = DistSSHRun.KitSession(project = tmp, workers = ["child:host-a", "child:host-b:4"])
                 @test session.project == abspath(tmp)
                 @test session.hosts == ["host-a", "host-b"]
@@ -326,18 +326,18 @@ end
 
         withenv(
             "DRIVER" => "",
-            "DISTSSHKIT_HOSTS" => "",
-            "DISTSSHKIT_HOSTS_FILE" => "",
+            "DISTSSH_HOSTS" => "",
+            "DISTSSH_HOSTS_FILE" => "",
         ) do
             @test_throws ArgumentError DistSSHRun.pipeline_config_from_env()
         end
         withenv(
             "DRIVER" => "job.jl",
-            "DISTSSHKIT_QUIET" => "1",
-            "DISTSSHKIT_VERBOSE" => "1",
-            "DISTSSHKIT_PROGRESS" => nothing,
-            "DISTSSHKIT_HOSTS" => "",
-            "DISTSSHKIT_HOSTS_FILE" => "",
+            "DISTSSH_QUIET" => "1",
+            "DISTSSH_VERBOSE" => "1",
+            "DISTSSH_PROGRESS" => nothing,
+            "DISTSSH_HOSTS" => "",
+            "DISTSSH_HOSTS_FILE" => "",
         ) do
             @test_throws ArgumentError DistSSHRun.pipeline_config_from_env()
         end
@@ -465,7 +465,7 @@ end
                         @test isempty(mm)
                         @test isempty(uv)
                         @test !DistSSHRun._skip_global_worker_pkill()
-                        withenv("DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL" => "1") do
+                        withenv("DISTSSH_SKIP_GLOBAL_WORKER_PKILL" => "1") do
                             @test DistSSHRun._skip_global_worker_pkill()
                             DistSSHRun.cleanup_stale_workers!(Tuple{String, Union{Int, Nothing}}[])
                         end
@@ -523,7 +523,7 @@ end
                 seen = Ref{Union{Nothing, String}}(nothing)
                 fake = merge(
                     _fake_setup_remote_env(state_dir),
-                    Dict("DISTSSHKIT_TEST_SNAP_GIT_YES" => "1"),
+                    Dict("DISTSSH_TEST_SNAP_GIT_YES" => "1"),
                 )
                 withenv(fake...) do
                     DistSSHRun._with_session_remote_env!(session) do
@@ -645,12 +645,12 @@ end
 
     @testset "pipeline_config_from_env" begin
         withenv(
-            "DISTSSHKIT_HOSTS" => "child:host-a:1, child:host-b:1",
+            "DISTSSH_HOSTS" => "child:host-a:1, child:host-b:1",
             "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/remote/App",
             "DRIVER" => "demos/job.jl",
             "SYNC_MODE" => "off",
             "GB_PER_WORKER" => "2.0",
-            "DISTSSHKIT_HOSTS_FILE" => "",
+            "DISTSSH_HOSTS_FILE" => "",
             "JULIA_DISTRIBUTED_EXE" => "/opt/julia/bin/julia",
         ) do
             err = try
@@ -663,11 +663,11 @@ end
             @test occursin("GB_PER_WORKER", sprint(showerror, err))
         end
         withenv(
-            "DISTSSHKIT_HOSTS" => "child:host-a:1, child:host-b:1",
+            "DISTSSH_HOSTS" => "child:host-a:1, child:host-b:1",
             "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/remote/App",
             "DRIVER" => "demos/job.jl",
             "SYNC_MODE" => "off",
-            "DISTSSHKIT_HOSTS_FILE" => "",
+            "DISTSSH_HOSTS_FILE" => "",
             "JULIA_DISTRIBUTED_EXE" => "/opt/julia/bin/julia",
         ) do
             cfg = DistSSHRun.pipeline_config_from_env()
@@ -679,8 +679,8 @@ end
         end
         withenv(
             "DRIVER" => "demos/job.jl",
-            "DISTSSHKIT_HOSTS" => "",
-            "DISTSSHKIT_HOSTS_FILE" => "",
+            "DISTSSH_HOSTS" => "",
+            "DISTSSH_HOSTS_FILE" => "",
             "JULIA_DISTRIBUTED_EXE" => "auto",
         ) do
             @test DistSSHRun.pipeline_config_from_env().julia === nothing
@@ -688,8 +688,8 @@ end
         let hosts_file = _sample_hosts_file()
             withenv(
                 "DRIVER" => "demos/job.jl",
-                "DISTSSHKIT_HOSTS" => "child:env-a:2",
-                "DISTSSHKIT_HOSTS_FILE" => hosts_file,
+                "DISTSSH_HOSTS" => "child:env-a:2",
+                "DISTSSH_HOSTS_FILE" => hosts_file,
                 "SYNC_MODE" => "off",
                 "JULIA_DISTRIBUTED_EXE" => "",
             ) do
@@ -699,7 +699,7 @@ end
             end
         end
         let hosts_file = _sample_hosts_file()
-            withenv("DISTSSHKIT_HOSTS_FILE" => hosts_file) do
+            withenv("DISTSSH_HOSTS_FILE" => hosts_file) do
                 s = DistSSHRun.KitSession(workers = ["parent:1"])
                 @test s.tokens == ["parent:1"]
                 empty = DistSSHRun.KitSession(workers = String[])
@@ -1085,9 +1085,9 @@ end
             ssh_base = (
                 _fake_setup_remote_env(state_dir)...,
                 "DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes -o ConnectTimeout=1",
-                "DISTSSHKIT_JOB_ID" => nothing,
-                "DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL" => "1",
-                "DISTSSHKIT_TEST_SNAP_GIT_YES" => "1",
+                "DISTSSH_JOB_ID" => nothing,
+                "DISTSSH_SKIP_GLOBAL_WORKER_PKILL" => "1",
+                "DISTSSH_TEST_SNAP_GIT_YES" => "1",
             )
             _mktemp_host() do proj
                 _write_host_project!(proj, "HostsKeep")

@@ -556,7 +556,7 @@ function detect_julia_path(host::String)::Union{Nothing, String}
     return found
 end
 
-"""`--version` over the setup SSH transport (honors `DISTSSHKIT_TEST_SSH`)."""
+"""`--version` over the setup SSH transport (honors `DISTSSH_TEST_SSH`)."""
 function _remote_julia_reports_version(host::String, path::AbstractString)::Bool
     pq = _remote_shell_path_word(String(path))
     try
@@ -1114,16 +1114,16 @@ end
 
 """Test doubles replace ssh and local juliaup only when this is `1`."""
 function _test_doubles_on()::Bool
-    return strip(get(ENV, "DISTSSHKIT_TEST", "")) == "1"
+    return strip(get(ENV, "DISTSSH_TEST", "")) == "1"
 end
 
-"""Julia argv for a `DISTSSHKIT_TEST_SSH` `.jl` double (`--compile=min`)."""
+"""Julia argv for a `DISTSSH_TEST_SSH` `.jl` double (`--compile=min`)."""
 function _test_double_julia_argv(script::AbstractString)::Vector{String}
     julia = joinpath(Sys.BINDIR, Base.julia_exename())
     return [julia, "--startup-file=no", "--compile=min", abspath(script)]
 end
 
-"""ENV for a `DISTSSHKIT_TEST_SSH` Julia child (see `test/support/subprocess.jl`)."""
+"""ENV for a `DISTSSH_TEST_SSH` Julia child (see `test/support/subprocess.jl`)."""
 function _fake_double_child_julia_env()::Dict{String, String}
     skip = Set(("JULIA_PROJECT", "JULIA_LOAD_PATH"))
     env = Dict{String, String}()
@@ -1131,7 +1131,7 @@ function _fake_double_child_julia_env()::Dict{String, String}
         ks = String(k)
         ks in skip && continue
         vs = String(v)
-        isempty(vs) && !startswith(ks, "DISTSSHKIT_TEST") && continue
+        isempty(vs) && !startswith(ks, "DISTSSH_TEST") && continue
         env[ks] = vs
     end
     env["JULIA_LOAD_PATH"] = _child_load_path_string()
@@ -1148,7 +1148,7 @@ function _host_sync_remote_shell_cmd(
         remote_script::String;
         forward_stdin::Bool = false,
     )::Cmd
-    custom = _test_doubles_on() ? strip(get(ENV, "DISTSSHKIT_TEST_SSH", "")) : ""
+    custom = _test_doubles_on() ? strip(get(ENV, "DISTSSH_TEST_SSH", "")) : ""
     if !isempty(custom)
         base = Cmd(vcat(_test_double_julia_argv(custom), [host, remote_script]))
         return setenv(base, _fake_double_child_julia_env())
@@ -1236,18 +1236,18 @@ function _remote_shell_capture(
     return (code = shell_status(proc), out = String(take!(out_buf)))
 end
 
-"""A `DISTSSHKIT_TEST_SSH` double is not a login shell unless the test asks."""
+"""A `DISTSSH_TEST_SSH` double is not a login shell unless the test asks."""
 function _posix_probe_is_strict()::Bool
     _test_doubles_on() || return true
-    isempty(strip(get(ENV, "DISTSSHKIT_TEST_SSH", ""))) && return true
+    isempty(strip(get(ENV, "DISTSSH_TEST_SSH", ""))) && return true
     # Test double only. Not a user setting, and it does not disable the probe.
-    return strip(get(ENV, "DISTSSHKIT_TEST_POSIX_SHELL", "1")) == "0"
+    return strip(get(ENV, "DISTSSH_TEST_POSIX_SHELL", "1")) == "0"
 end
 
 """`:pass`, `:fail`, or `:unknown`. Exit 255 and a probe that did not run are unknown.
 
 A test double that exits 0 without the marker is a pass (it is not a shell).
-Any other double exit is unknown. `DISTSSHKIT_TEST_POSIX_SHELL=0` keeps the strict check.
+Any other double exit is unknown. `DISTSSH_TEST_POSIX_SHELL=0` keeps the strict check.
 """
 function _probe_remote_login_shell(host::String)::Symbol
     nonce = _posix_probe_nonce()
@@ -1398,7 +1398,7 @@ end
 
 function _test_ssh_double_path()::Union{Nothing, String}
     _test_doubles_on() || return nothing
-    script = strip(get(ENV, "DISTSSHKIT_TEST_SSH", ""))
+    script = strip(get(ENV, "DISTSSH_TEST_SSH", ""))
     isempty(script) && return nothing
     return abspath(script)
 end

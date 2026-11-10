@@ -9,7 +9,7 @@ end
 
 """Outcome of [`go!`](@ref). On failure, `failed_step` is `"sync"`, `"run"`, or `"collect"`.
 
-`run_dir` is this run's `DISTSSHKIT_RUN_DIR` when one is active.
+`run_dir` is this run's `DISTSSH_RUN_DIR` when one is active.
 Read it with [`result_run_dir`](@ref). [`result_provenance`](@ref) reads
 `run.toml` from it. [`result_content_tree_hash`](@ref) and
 [`result_remote_run_id`](@ref) read `provenance.selection` in that file.
@@ -58,7 +58,7 @@ function GoResult(
 end
 
 # Positional `failed_step`, the shape from before `run_dir`. The run
-# directory still comes from the active `DISTSSHKIT_RUN_DIR`.
+# directory still comes from the active `DISTSSH_RUN_DIR`.
 function GoResult(
         ok::Bool,
         sync::Union{Nothing, SyncResult},
@@ -362,7 +362,7 @@ function _remote_script_argv(script::AbstractString)::Bool
     return isabspath(String(script)) && !isfile(String(script))
 end
 
-"""`{script}/.distsshkit/go` when the script is in `project`, else `{project}/.distsshkit/go`."""
+"""`{script}/.distssh/go` when the script is in `project`, else `{project}/.distssh/go`."""
 function _go_kit_parent(
         project::AbstractString,
         script::AbstractString,
@@ -375,7 +375,7 @@ function _go_kit_parent(
     return kit_dir_beside_script(proj, :go)
 end
 
-"""Batch output directory: `{.distsshkit/go}/<stem>_<UTC>/` (`kit.progress` + slots).
+"""Batch output directory: `{.distssh/go}/<stem>_<UTC>/` (`kit.progress` + slots).
 
 Creates the leaf with exclusive `mkdir`. Same-second collisions get a
 nanosecond suffix (`_mkdir_unique!`).
@@ -631,7 +631,7 @@ function _go_run_local_slot!(
     return DriveResult(code == 0, code; output_dir = slot_dir)
 end
 
-"""Remote path of a go slot: relative to `proj` when `slot_dir` is inside `proj`, else under `.distsshkit/go/`."""
+"""Remote path of a go slot: relative to `proj` when `slot_dir` is inside `proj`, else under `.distssh/go/`."""
 function _go_remote_slot_rel(
         proj::AbstractString,
         slot_dir::AbstractString,
@@ -650,7 +650,7 @@ function _go_remote_slot_rel(
     label = String(slot_label)
     (isempty(batch) || batch == "." || batch == "..") && (batch = "batch")
     (isempty(label) || label == "." || label == "..") && (label = "slot")
-    return joinpath(".distsshkit", "go", batch, label)
+    return joinpath(DistSSHBase.LOCAL_STATE_DIR, "go", batch, label)
 end
 
 """Remote SSH shell snippet for one `go` slot (cd project root before mkdir/log paths)."""
@@ -673,7 +673,7 @@ function _go_remote_slot_shell_inner(
     rank = take_worker_rank()
     seed = job_seed()
     wseed = worker_seed(seed, rank)
-    seed_export = "export DISTSSHKIT_JOB_SEED=$(seed) DISTSSHKIT_WORKER_RANK=$(rank) DISTSSHKIT_WORKER_SEED=$(wseed) && "
+    seed_export = "export DISTSSH_JOB_SEED=$(seed) DISTSSH_WORKER_RANK=$(rank) DISTSSH_WORKER_SEED=$(wseed) && "
     jb_launch = go_remote_julia_prefix(julia_bin; blas = _explicit_blas_threads())
     log_q = _remote_shell_path_word(joinpath(slot_rel, "julia.stdout.log"))
     exit_q = _remote_shell_path_word(joinpath(slot_rel, "go.exitcode"))
@@ -687,12 +687,12 @@ function _go_remote_slot_shell_inner(
         # The mark file is a shell comment. Quote it even though the path word
         # is already quoted: the printf argument is the comment text.
         comment_q = "'" * kit_job_mark_comment(job_id) * "'"
-        job_export = "export DISTSSHKIT_JOB_ID=$(_remote_shell_path_word(job_id)) && "
+        job_export = "export DISTSSH_JOB_ID=$(_remote_shell_path_word(job_id)) && "
         job_mark = "printf '%s\\n' $comment_q > $mark_q && "
         job_load = " -L $mark_q"
     end
-    kit_q = _remote_shell_path_word(joinpath(slot_rel, ".distsshkit"))
-    loader_q = _remote_shell_path_word(joinpath(slot_rel, ".distsshkit", _GO_SLOT_LOADER_NAME))
+    kit_q = _remote_shell_path_word(joinpath(slot_rel, DistSSHBase.LOCAL_STATE_DIR))
+    loader_q = _remote_shell_path_word(joinpath(slot_rel, DistSSHBase.LOCAL_STATE_DIR, _GO_SLOT_LOADER_NAME))
     # Quoted heredoc: the slot has no DistSSHRun, so the snapshot source travels in the command.
     write_loader = "cat > $loader_q << 'DISTSSH_PROVENANCE_SLOT'\n$(_GO_SLOT_LOADER_SRC)\nDISTSSH_PROVENANCE_SLOT\n"
     prov_load = " -L $loader_q"
@@ -807,9 +807,9 @@ function _go_fetch_slot_provenance!(
         slot_dir::AbstractString,
     )
     remote_snap = string(
-        rstrip(remote_root, '/'), "/", slot_rel, "/.distsshkit/", _GO_SLOT_PROVENANCE_NAME,
+        rstrip(remote_root, '/'), "/", slot_rel, "/", DistSSHBase.LOCAL_STATE_DIR, "/", _GO_SLOT_PROVENANCE_NAME,
     )
-    local_dir = joinpath(slot_dir, ".distsshkit")
+    local_dir = joinpath(slot_dir, DistSSHBase.LOCAL_STATE_DIR)
     mkpath(local_dir)
     local_snap = joinpath(local_dir, _GO_SLOT_PROVENANCE_NAME)
     try
@@ -977,7 +977,7 @@ go!("job.jl", "child:user@h1:1", "child:user@h2:1"; remote="/path/to/project")
 ```
 
 Each slot gets `DISTRIBUTED_OUTPUT_DIR` pointing at
-`{script}/.distsshkit/go/<stem>_<UTC>/<slot>/`.
+`{script}/.distssh/go/<stem>_<UTC>/<slot>/`.
 Override the batch root with `output_dir` (CLI: `--output-dir`). For backward
 compatibility `collect_spec::AbstractString` also sets the batch root, but passing
 both `output_dir` and `collect_spec::String` is an error. `collect_spec === false`
@@ -1005,7 +1005,7 @@ DistSSH* Manifest versions, and/or Manifest path when a slot does not match
 the job tree. Default is to error. Same tokens as `drive` / `ride`:
 `julia`, `distssh`, `manifest`.
 
-When `workers` is empty and `hosts_file` is omitted, `DISTSSHKIT_HOSTS_FILE`
+When `workers` is empty and `hosts_file` is omitted, `DISTSSH_HOSTS_FILE`
 is still read (API `go!("job.jl")`). Non-empty `workers` (CLI
 [`host_tokens`](@ref)) does not re-read that ENV.
 
@@ -1059,7 +1059,7 @@ function go!(
         )
     end
     _acquire_kit_inproc_run!(:go)
-    old_run = get(ENV, DISTSSHKIT_RUN_DIR_ENV, nothing)
+    old_run = get(ENV, DISTSSH_RUN_DIR_ENV, nothing)
     inherited_run = old_run isa AbstractString && !isempty(strip(old_run))
     try
         _reset_run_provenance!(proj)
@@ -1120,10 +1120,10 @@ function _go_run!(
     tokens = String[String(h) for h in workers]
     hf = hosts_file
     # CLI / [`host_tokens`](@ref) already merged `--hosts-file` / ENV into
-    # `workers`. Re-reading `DISTSSHKIT_HOSTS_FILE` would duplicate slots.
+    # `workers`. Re-reading `DISTSSH_HOSTS_FILE` would duplicate slots.
     # API `go!("job.jl")` with empty `workers` still honors the ENV file.
     if hf === nothing && isempty(tokens)
-        env_hf = strip(get(ENV, "DISTSSHKIT_HOSTS_FILE", ""))
+        env_hf = strip(get(ENV, "DISTSSH_HOSTS_FILE", ""))
         !isempty(env_hf) && (hf = env_hf)
     end
     if hf !== nothing && !isempty(strip(String(hf)))

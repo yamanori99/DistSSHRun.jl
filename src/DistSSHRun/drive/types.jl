@@ -210,7 +210,7 @@ process was still alive). The same string is `stop` in `kit.result`. When
 the kit run directory already has this package's `run.toml`, `stop` is set
 there too. `schema` stays 1. An unknown `stop` string is ignored.
 
-`run_dir` is this run's `DISTSSHKIT_RUN_DIR` when one is known. Read it
+`run_dir` is this run's `DISTSSH_RUN_DIR` when one is known. Read it
 with [`result_run_dir`](@ref). [`result_provenance`](@ref) reads
 `run.toml` from it. [`result_content_tree_hash`](@ref) and
 [`result_remote_run_id`](@ref) read `provenance.selection` in that file.
@@ -296,7 +296,7 @@ disabled.
 the order results were collected. Empty when no host-collection step ran
 (e.g. built by hand, or a run with no remote/local-only hosts).
 
-`run_dir` is this run's `DISTSSHKIT_RUN_DIR` when the driver allocated one.
+`run_dir` is this run's `DISTSSH_RUN_DIR` when the driver allocated one.
 Read it with [`result_run_dir`](@ref). [`result_provenance`](@ref) reads
 `run.toml` from it. [`result_content_tree_hash`](@ref) and
 [`result_remote_run_id`](@ref) read `provenance.selection` in that file.

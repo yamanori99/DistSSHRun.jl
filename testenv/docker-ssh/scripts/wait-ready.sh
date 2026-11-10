@@ -6,8 +6,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SSH_CONFIG="${ROOT}/.generated/ssh_config"
 KNOWN_HOSTS="${ROOT}/.generated/known_hosts"
 HOSTS=(child-1 child-2)
-MAX_ATTEMPTS="${DISTSSHKIT_SSH_WAIT_ATTEMPTS:-60}"
-SLEEP_SEC="${DISTSSHKIT_SSH_WAIT_SLEEP:-2}"
+MAX_ATTEMPTS="${DISTSSH_SSH_WAIT_ATTEMPTS:-60}"
+SLEEP_SEC="${DISTSSH_SSH_WAIT_SLEEP:-2}"
 
 if [[ ! -f "${SSH_CONFIG}" ]]; then
   echo "missing ${SSH_CONFIG}; run scripts/gen-keys.sh first" >&2

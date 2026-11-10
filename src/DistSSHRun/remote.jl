@@ -60,20 +60,20 @@ end
 # Visible on worker / go-slot argv so `pkill -f` can be run-scoped (see `terminate!`).
 const KIT_JOB_CMDLINE_MARK::String = "distsshkit-job:"
 
-"""`DISTSSHKIT_JOB_ID` if set and non-empty. Restricted charset for `pkill -f`."""
+"""`DISTSSH_JOB_ID` if set and non-empty. Restricted charset for `pkill -f`."""
 function _parse_kit_job_id(raw::AbstractString)::String
     s = strip(String(raw))
     isempty(s) && throw(ArgumentError("job_id must be non-empty"))
     occursin(r"^[A-Za-z0-9._:@+-]+$", s) || throw(
         ArgumentError(
-            "job_id / DISTSSHKIT_JOB_ID must match [A-Za-z0-9._:@+-]+, got $(repr(raw))",
+            "job_id / DISTSSH_JOB_ID must match [A-Za-z0-9._:@+-]+, got $(repr(raw))",
         )
     )
     return s
 end
 
 function resolved_kit_job_id()::Union{Nothing, String}
-    raw = strip(get(ENV, "DISTSSHKIT_JOB_ID", ""))
+    raw = strip(get(ENV, "DISTSSH_JOB_ID", ""))
     isempty(raw) && return nothing
     return _parse_kit_job_id(raw)
 end
@@ -89,7 +89,7 @@ A comment-only `--eval` does not replace Distributed's worker bootstrap.
 Do not put real code here, and do not pass this flag to a go slot — any
 `--eval` makes Julia skip `programfile`. Go uses [`kit_write_job_mark_file`](@ref)
 plus `-L` instead, so the user script stays the program file.
-`DISTSSHKIT_JOB_ID` is process env (`addenv` / `addprocs` `env`), not `--eval`.
+`DISTSSH_JOB_ID` is process env (`addenv` / `addprocs` `env`), not `--eval`.
 """
 function kit_job_eval_arg(job_id::AbstractString)::String
     return "--eval=$(kit_job_mark_comment(job_id))"
@@ -192,9 +192,9 @@ function _ssh_phase_opts()::Vector{String}
     return append!(forced, ssh_opts())
 end
 
-"""`ssh` argv for one short remote command, or the `DISTSSHKIT_TEST_SSH` double."""
+"""`ssh` argv for one short remote command, or the `DISTSSH_TEST_SSH` double."""
 function _ssh_phase_cmd(host::AbstractString, remote::AbstractString)::Cmd
-    custom = _test_doubles_on() ? strip(get(ENV, "DISTSSHKIT_TEST_SSH", "")) : ""
+    custom = _test_doubles_on() ? strip(get(ENV, "DISTSSH_TEST_SSH", "")) : ""
     if !isempty(custom)
         return Cmd(vcat(_test_double_julia_argv(custom), [String(host), String(remote)]))
     end
@@ -687,7 +687,7 @@ Each token is `canonical_local_path(token)` when absolute, otherwise `canonical_
 Empty tokens are skipped; duplicates removed (first occurrence order preserved).
 
 If unset or blank after trimming: a single root from [`resolve_drive_output_dir`](@ref)
-(`DISTRIBUTED_OUTPUT_DIR`, else `{script_dir}/.distsshkit/drive` kind root).
+(`DISTRIBUTED_OUTPUT_DIR`, else the resolved `.distssh` / legacy drive root beside `{script_dir}` kind root).
 
 Scripts should set `DISTRIBUTED_COLLECT_DIRS` to every tree that may receive new files on workers during the run
 (e.g. sweep output plus figures). Logs may stay under `DISTRIBUTED_OUTPUT_DIR` only; omit that path here if logs

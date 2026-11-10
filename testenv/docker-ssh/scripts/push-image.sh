@@ -4,8 +4,8 @@
 set -euo pipefail
 
 image="${1:?usage: $0 <registry/image:tag>}"
-local_image="${DISTSSHKIT_LOCAL_IMAGE:-local/linux-ssh-worker:latest}"
-retries="${DISTSSHKIT_WORKER_PUSH_RETRIES:-8}"
+local_image="${DISTSSH_LOCAL_IMAGE:-local/linux-ssh-worker:latest}"
+retries="${DISTSSH_WORKER_PUSH_RETRIES:-8}"
 
 remote_ok() {
   if docker buildx imagetools inspect "$image" >/dev/null 2>&1; then

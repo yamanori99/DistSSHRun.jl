@@ -30,24 +30,24 @@ using Test
                 write_runner(
                     runner,
                     """
-                    printf 'DISTSSHKIT_PROMPT>'
+                    printf 'DISTSSH_PROMPT>'
                     read line
-                    printf 'DISTSSHKIT_GOT:%s\\n' "\$line"
+                    printf 'DISTSSH_GOT:%s\\n' "\$line"
                     """,
                 )
                 t0 = time()
                 pty = _tty_expect_script(
                     runner;
                     typescript = joinpath(dir, "prompt_typescript.txt"),
-                    expect = "DISTSSHKIT_PROMPT>",
+                    expect = "DISTSSH_PROMPT>",
                     reply = "pong\n",
                     hang_s = 30.0,
                 )
                 @info "harness expect flush wall" elapsed = (time() - t0)
-                @test occursin("DISTSSHKIT_PROMPT>", pty)
-                @test occursin("DISTSSHKIT_GOT:pong", pty)
-                prompt_at = findfirst("DISTSSHKIT_PROMPT>", pty)
-                got_at = findfirst("DISTSSHKIT_GOT:pong", pty)
+                @test occursin("DISTSSH_PROMPT>", pty)
+                @test occursin("DISTSSH_GOT:pong", pty)
+                prompt_at = findfirst("DISTSSH_PROMPT>", pty)
+                got_at = findfirst("DISTSSH_GOT:pong", pty)
                 @test prompt_at !== nothing && got_at !== nothing
                 @test first(prompt_at) < first(got_at)
             end
@@ -131,7 +131,7 @@ using Test
             ok_script = joinpath(proj, "ok.jl")
             cp(_fixture("drive_local_smoke.jl"), ok_script; force = true)
             fail_script = joinpath(proj, "fail.jl")
-            write(fail_script, "error(\"DISTSSHKIT_RUNNER_BOOM\")\n")
+            write(fail_script, "error(\"DISTSSH_RUNNER_BOOM\")\n")
 
             # `--no-log` + `:progress`: release the live bar, then print live.
             drive_ok = _kit_drive_cmd(;
@@ -151,13 +151,13 @@ using Test
                 runner,
                 """
                 unset NO_COLOR
-                unset DISTSSHKIT_QUIET
-                unset DISTSSHKIT_PROGRESS
-                unset DISTSSHKIT_VERBOSE
-                unset DISTSSHKIT_CLI_SUBCOMMAND_DONE
+                unset DISTSSH_QUIET
+                unset DISTSSH_PROGRESS
+                unset DISTSSH_VERBOSE
+                unset DISTSSH_CLI_SUBCOMMAND_DONE
                 unset DIST_SSH_KIT_CLI_INCLUDE
-                export DISTSSHKIT_TEST=1
-                export DISTSSHKIT_YES=1
+                export DISTSSH_TEST=1
+                export DISTSSH_YES=1
                 export JULIA_LOAD_PATH=$(sh_quote(_child_load_path()))
                 unset JULIA_PROJECT
                 export DISTRIBUTED_PROJECT_ROOT=$(sh_quote(proj))
@@ -166,11 +166,11 @@ using Test
                 echo '___SPLIT___'
                 $(argv_line(drive_fail))
                 echo '___SPLIT___'
-                export DISTSSHKIT_QUIET=1
+                export DISTSSH_QUIET=1
                 $(argv_line(drive_fail))
                 echo '___SPLIT___'
-                unset DISTSSHKIT_QUIET
-                export DISTSSHKIT_VERBOSE=1
+                unset DISTSSH_QUIET
+                export DISTSSH_VERBOSE=1
                 $(argv_line(drive_ok))
                 """,
             )
@@ -192,36 +192,36 @@ using Test
             verbose_tty = length(parts) == 4 ? parts[4] : ""
 
             ok_plain = _tty_strip_ansi(ok_tty)
-            @test occursin("DISTSSHKIT_RUNNER_SMOKE_OK", ok_plain)
+            @test occursin("DISTSSH_RUNNER_SMOKE_OK", ok_plain)
             @test occursin("parent", ok_plain) || occursin("nw=2", ok_plain)
             ok_lines = _tty_lines(ok_tty)
             smoke_lines = filter(
-                l -> occursin("DISTSSHKIT_RUNNER_SMOKE_OK", l) && !_tty_bar_line(l),
+                l -> occursin("DISTSSH_RUNNER_SMOKE_OK", l) && !_tty_bar_line(l),
                 ok_lines,
             )
             @test !isempty(smoke_lines)
             # Live after release: smoke is not glued mid-bar. A finished bar
             # below the marker is allowed (not a cursor-up overwrite).
-            smoke_at = findfirst("DISTSSHKIT_RUNNER_SMOKE_OK", ok_tty)
+            smoke_at = findfirst("DISTSSH_RUNNER_SMOKE_OK", ok_tty)
             @test smoke_at !== nothing
             before_smoke = SubString(ok_tty, 1, first(smoke_at) - 1)
             @test occursin('━', before_smoke) || occursin('╺', before_smoke) ||
                 any(c -> occursin(c, before_smoke), "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
-            @test !occursin(r"[━╺⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*DISTSSHKIT_RUNNER_SMOKE_OK", ok_tty)
+            @test !occursin(r"[━╺⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*DISTSSH_RUNNER_SMOKE_OK", ok_tty)
             _assert_tty_progress_payload(ok_tty)
 
             fail_plain = _tty_strip_ansi(fail_tty)
-            @test occursin("DISTSSHKIT_RUNNER_BOOM", fail_plain)
+            @test occursin("DISTSSH_RUNNER_BOOM", fail_plain)
             fail_lines = _tty_lines(fail_tty)
             @test any(
-                l -> occursin("DISTSSHKIT_RUNNER_BOOM", l) && !_tty_bar_line(l),
+                l -> occursin("DISTSSH_RUNNER_BOOM", l) && !_tty_bar_line(l),
                 fail_lines,
             )
             @test !occursin("retry.___SPLIT___", pty)
             _assert_tty_progress_payload(fail_tty)
 
             quiet_plain = _tty_strip_ansi(quiet_tty)
-            @test occursin("DISTSSHKIT_RUNNER_BOOM", quiet_plain)
+            @test occursin("DISTSSH_RUNNER_BOOM", quiet_plain)
             quiet_lines = _tty_lines(quiet_tty)
             @test !any(_tty_spinner_bar_line, quiet_lines)
             @test length(filter(!isempty ∘ strip, quiet_lines)) <=
@@ -229,16 +229,16 @@ using Test
 
             # Explicit verbose: live detail path (unchanged by the --no-log fix).
             verbose_plain = _tty_strip_ansi(verbose_tty)
-            @test occursin("DISTSSHKIT_RUNNER_SMOKE_OK", verbose_plain)
+            @test occursin("DISTSSH_RUNNER_SMOKE_OK", verbose_plain)
             @test occursin("Running script", verbose_plain)
             verbose_lines = _tty_lines(verbose_tty)
             @test any(
-                l -> occursin("DISTSSHKIT_RUNNER_SMOKE_OK", l) && !_tty_bar_line(l),
+                l -> occursin("DISTSSH_RUNNER_SMOKE_OK", l) && !_tty_bar_line(l),
                 verbose_lines,
             )
             # Verbose shows the running step before the smoke marker.
             run_at = findfirst("Running script", verbose_tty)
-            vsmoke_at = findfirst("DISTSSHKIT_RUNNER_SMOKE_OK", verbose_tty)
+            vsmoke_at = findfirst("DISTSSH_RUNNER_SMOKE_OK", verbose_tty)
             @test run_at !== nothing && vsmoke_at !== nothing
             @test first(run_at) < first(vsmoke_at)
         end
@@ -262,7 +262,7 @@ using Test
                 map(1:2) do x
                     if x == 1
                         open($(repr(marker)), "w") do io
-                            println(io, "DISTSSHKIT_RIDE_OK_MARKER")
+                            println(io, "DISTSSH_RIDE_OK_MARKER")
                         end
                     end
                     x
@@ -270,7 +270,7 @@ using Test
                 """,
             )
             fail_script = joinpath(proj, "fail.jl")
-            write(fail_script, "map(x -> error(\"DISTSSHKIT_RIDE_BOOM\"), 1:2)\n")
+            write(fail_script, "map(x -> error(\"DISTSSH_RIDE_BOOM\"), 1:2)\n")
 
             ride_ok = _kit_cli_cmd(
                 [
@@ -290,13 +290,13 @@ using Test
                 runner,
                 """
                 unset NO_COLOR
-                unset DISTSSHKIT_QUIET
-                unset DISTSSHKIT_PROGRESS
-                unset DISTSSHKIT_VERBOSE
-                unset DISTSSHKIT_CLI_SUBCOMMAND_DONE
+                unset DISTSSH_QUIET
+                unset DISTSSH_PROGRESS
+                unset DISTSSH_VERBOSE
+                unset DISTSSH_CLI_SUBCOMMAND_DONE
                 unset DIST_SSH_KIT_CLI_INCLUDE
-                export DISTSSHKIT_TEST=1
-                export DISTSSHKIT_YES=1
+                export DISTSSH_TEST=1
+                export DISTSSH_YES=1
                 export JULIA_LOAD_PATH=$(sh_quote(_child_load_path()))
                 unset JULIA_PROJECT
                 export DISTRIBUTED_PROJECT_ROOT=$(sh_quote(proj))
@@ -323,7 +323,7 @@ using Test
 
             # Success is observed via the rewritten map side effect + progress done.
             @test isfile(marker)
-            @test occursin("DISTSSHKIT_RIDE_OK_MARKER", read(marker, String))
+            @test occursin("DISTSSH_RIDE_OK_MARKER", read(marker, String))
             _assert_kit_progress_done(od_ok; kind = :ride)
             ok_plain = _tty_strip_ansi(ok_tty)
             @test !isempty(strip(ok_plain))
@@ -332,10 +332,10 @@ using Test
             _assert_tty_progress_payload(ok_tty)
 
             fail_plain = _tty_strip_ansi(fail_tty)
-            @test occursin("DISTSSHKIT_RIDE_BOOM", fail_plain)
+            @test occursin("DISTSSH_RIDE_BOOM", fail_plain)
             fail_lines = _tty_lines(fail_tty)
             @test any(
-                l -> occursin("DISTSSHKIT_RIDE_BOOM", l) && !_tty_bar_line(l),
+                l -> occursin("DISTSSH_RIDE_BOOM", l) && !_tty_bar_line(l),
                 fail_lines,
             )
             _assert_tty_progress_payload(fail_tty)
@@ -351,8 +351,8 @@ using Test
             write(
                 script,
                 """
-                println(stdout, "DISTSSHKIT_STDOUT_MARK")
-                println(stderr, "DISTSSHKIT_STDERR_MARK")
+                println(stdout, "DISTSSH_STDOUT_MARK")
+                println(stderr, "DISTSSH_STDERR_MARK")
                 """,
             )
             out_file = joinpath(dir, "stdout.txt")
@@ -368,13 +368,13 @@ using Test
                 runner,
                 """
                 unset NO_COLOR
-                unset DISTSSHKIT_QUIET
-                unset DISTSSHKIT_VERBOSE
-                unset DISTSSHKIT_CLI_SUBCOMMAND_DONE
+                unset DISTSSH_QUIET
+                unset DISTSSH_VERBOSE
+                unset DISTSSH_CLI_SUBCOMMAND_DONE
                 unset DIST_SSH_KIT_CLI_INCLUDE
-                export DISTSSHKIT_TEST=1
-                export DISTSSHKIT_YES=1
-                export DISTSSHKIT_PROGRESS=1
+                export DISTSSH_TEST=1
+                export DISTSSH_YES=1
+                export DISTSSH_PROGRESS=1
                 export JULIA_LOAD_PATH=$(sh_quote(_child_load_path()))
                 unset JULIA_PROJECT
                 export DISTRIBUTED_PROJECT_ROOT=$(sh_quote(proj))
@@ -392,9 +392,9 @@ using Test
             @test isfile(out_file) && isfile(err_file)
             out = read(out_file, String)
             err = read(err_file, String)
-            @test occursin("DISTSSHKIT_STDOUT_MARK", out)
-            @test occursin("DISTSSHKIT_STDERR_MARK", err)
-            @test !occursin("DISTSSHKIT_STDERR_MARK", out)
+            @test occursin("DISTSSH_STDOUT_MARK", out)
+            @test occursin("DISTSSH_STDERR_MARK", err)
+            @test !occursin("DISTSSH_STDERR_MARK", out)
         end
     end
 
@@ -408,10 +408,10 @@ using Test
                 write(
                     script,
                     """
-                    print("DISTSSHKIT_PROMPT>")
+                    print("DISTSSH_PROMPT>")
                     flush(stdout)
                     line = readline(stdin)
-                    println("DISTSSHKIT_GOT:", line)
+                    println("DISTSSH_GOT:", line)
                     """,
                 )
                 drive_cmd = _kit_drive_cmd(;
@@ -424,13 +424,13 @@ using Test
                     runner,
                     """
                     unset NO_COLOR
-                    unset DISTSSHKIT_QUIET
-                    unset DISTSSHKIT_PROGRESS
-                    unset DISTSSHKIT_VERBOSE
-                    unset DISTSSHKIT_CLI_SUBCOMMAND_DONE
+                    unset DISTSSH_QUIET
+                    unset DISTSSH_PROGRESS
+                    unset DISTSSH_VERBOSE
+                    unset DISTSSH_CLI_SUBCOMMAND_DONE
                     unset DIST_SSH_KIT_CLI_INCLUDE
-                    export DISTSSHKIT_TEST=1
-                    export DISTSSHKIT_YES=1
+                    export DISTSSH_TEST=1
+                    export DISTSSH_YES=1
                     export JULIA_LOAD_PATH=$(sh_quote(_child_load_path()))
                     unset JULIA_PROJECT
                     export DISTRIBUTED_PROJECT_ROOT=$(sh_quote(proj))
@@ -442,22 +442,22 @@ using Test
                 pty = _tty_expect_script(
                     runner;
                     typescript = joinpath(dir, "prompt_typescript.txt"),
-                    expect = "DISTSSHKIT_PROMPT>",
+                    expect = "DISTSSH_PROMPT>",
                     reply = "pong\n",
                     hang_s = hang_s,
                 )
                 @info "drive interactive progress_tty wall" elapsed = (time() - t0)
                 plain = _tty_strip_ansi(pty)
-                @test occursin("DISTSSHKIT_PROMPT>", plain)
-                @test occursin("DISTSSHKIT_GOT:pong", plain)
-                prompt_at = findfirst("DISTSSHKIT_PROMPT>", pty)
-                got_at = findfirst("DISTSSHKIT_GOT:pong", pty)
+                @test occursin("DISTSSH_PROMPT>", plain)
+                @test occursin("DISTSSH_GOT:pong", plain)
+                prompt_at = findfirst("DISTSSH_PROMPT>", pty)
+                got_at = findfirst("DISTSSH_GOT:pong", pty)
                 @test prompt_at !== nothing && got_at !== nothing
                 @test first(prompt_at) < first(got_at)
-                @test !occursin(r"[━╺⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*DISTSSHKIT_PROMPT>", pty)
+                @test !occursin(r"[━╺⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*DISTSSH_PROMPT>", pty)
                 # Visible model: prompt is its own payload line, not bar-glued.
                 prompt_lines = filter(
-                    l -> occursin("DISTSSHKIT_PROMPT>", l) && !_tty_bar_line(l),
+                    l -> occursin("DISTSSH_PROMPT>", l) && !_tty_bar_line(l),
                     _tty_lines(pty),
                 )
                 @test !isempty(prompt_lines)

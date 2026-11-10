@@ -1,16 +1,16 @@
 #!/usr/bin/env julia
-# Test double for snapshot-selection probes (`DISTSSHKIT_TEST_SSH`).
+# Test double for snapshot-selection probes (`DISTSSH_TEST_SSH`).
 # Runs `__DSR_SNAP_COMPLETE__` / `__DSR_SNAP_GIT__` locally; other commands stay short.
 
 host = length(ARGS) >= 1 ? ARGS[1] : ""
 script = length(ARGS) >= 2 ? ARGS[2] : ""
-logical = strip(get(ENV, "DISTSSHKIT_TEST_SSH_LOGICAL_ROOT", ""))
-host_roots = strip(get(ENV, "DISTSSHKIT_TEST_SSH_HOST_ROOTS", ""))
+logical = strip(get(ENV, "DISTSSH_TEST_SSH_LOGICAL_ROOT", ""))
+host_roots = strip(get(ENV, "DISTSSH_TEST_SSH_HOST_ROOTS", ""))
 if !isempty(logical) && !isempty(host_roots) && !isempty(host)
     host_fs = joinpath(host_roots, host)
     script = replace(script, logical => host_fs)
 end
-logp = get(ENV, "DISTSSHKIT_TEST_SSH_LOG", "")
+logp = get(ENV, "DISTSSH_TEST_SSH_LOG", "")
 if !isempty(logp)
     open(logp, "a") do io
         println(io, "HOST ", host)
@@ -19,7 +19,7 @@ if !isempty(logp)
     end
 end
 
-if get(ENV, "DISTSSHKIT_TEST_SSH_FAIL", "") == "1"
+if get(ENV, "DISTSSH_TEST_SSH_FAIL", "") == "1"
     println(stderr, "Permission denied (publickey).")
     exit(255)
 end
@@ -35,7 +35,7 @@ if strip(script) == "echo \$SHELL"
     exit(0)
 end
 if script == "cd -P ~ && pwd -P" || script == "cd ~ && pwd"
-    println(get(ENV, "DISTSSHKIT_TEST_REMOTE_HOME", "/home/distsshkit"))
+    println(get(ENV, "DISTSSH_TEST_REMOTE_HOME", "/home/distsshkit"))
     exit(0)
 end
 if occursin("__DSR_SNAP_COMPLETE__", script) || occursin("__DSR_SNAP_GIT__", script)

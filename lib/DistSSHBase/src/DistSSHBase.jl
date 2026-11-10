@@ -13,9 +13,15 @@ export canonical_local_path, resolve_pkg_env, resolve_pkg_project_dir, short_pat
 export host_tokens, is_parent_host_name
 export print_colored, print_help_blank, print_help_chrome, print_help_lines, print_help_section
 export cache_file, cache_path, cache_relpath, file_sha256, stored_path
+export LEGACY_LOCAL_STATE_DIR, LOCAL_STATE_DIR
+export is_local_state_dir_name, local_state_dir_names, local_state_relpath
+export local_state_write_root, resolve_local_state_dir, resolve_local_state_dir_name
+export resolve_local_state_item, resolve_remote_state_item
+export remote_cache_dir, resolve_remote_cache_dir
 export resolve_controller_julia, run_on_host, ssh_opts
 
 include("paths.jl")
+include("state_dir.jl")
 include("explain.jl")
 include("argv.jl")
 include("hosts.jl")

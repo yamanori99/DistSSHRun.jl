@@ -19,8 +19,8 @@ function _fake_arbitrary_dest_ship_env(state_dir::AbstractString)
     return merge(
         _fake_setup_remote_env(state_dir),
         Dict(
-            "DISTSSHKIT_TEST_SSH" => abspath(_FAKE_ARBITRARY_DEST_SHIP_SSH),
-            "DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia",
+            "DISTSSH_TEST_SSH" => abspath(_FAKE_ARBITRARY_DEST_SHIP_SSH),
+            "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia",
         ),
     )
 end
@@ -103,7 +103,7 @@ end
                 DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!(host)
                 withenv(_fake_arbitrary_dest_ship_env(state)...) do
                     pack = DistSSHRun.pack_ship_tree(proj)
-                    withenv("DISTSSHKIT_TEST_EXPECT_TREE_HASH" => pack.content_tree_hash) do
+                    withenv("DISTSSH_TEST_EXPECT_TREE_HASH" => pack.content_tree_hash) do
                         bundle = pack.directory
                         rm(pack.directory; force = true, recursive = true)
                         result = DistSSHRun.ship_project_to_dest(
@@ -135,7 +135,7 @@ end
                     withenv(
                         merge(
                             _fake_arbitrary_dest_ship_env(state),
-                            Dict("DISTSSHKIT_TEST_EXPECT_TREE_HASH" => pack.content_tree_hash),
+                            Dict("DISTSSH_TEST_EXPECT_TREE_HASH" => pack.content_tree_hash),
                         )...,
                     ) do
                         result = DistSSHRun.ship_pack(

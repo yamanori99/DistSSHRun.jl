@@ -97,7 +97,7 @@ end
                   status) echo '      $ch     $ch.1+0'; exit 0 ;;
                 """,
             )
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                 DistSSHUp.juliaup_add_local!(ch)
                 add_log = read(log, String)
                 @test occursin("add $ch", add_log)
@@ -132,7 +132,7 @@ end
                   status) echo '      $ch     $ch.1+0'; exit 0 ;;
                 """,
             )
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                 @test DistSSHUp.juliaup_add_local!(ch) === nothing
                 @test !occursin("default", read(log, String))
             end
@@ -150,7 +150,7 @@ end
                 esac
                 """,
             )
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                 @test _err_msg(() -> DistSSHUp.juliaup_add_local!(ch)) == "first"
             end
         end
@@ -169,7 +169,7 @@ end
                 """,
             )
             _write_julia_beside(d, _this_version_line())
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                 @test _err_msg(() -> DistSSHUp.juliaup_align_local!(ch)) == "update broke"
                 seen = read(log, String)
                 @test occursin("add $ch", seen)
@@ -190,7 +190,7 @@ end
                 esac
                 """,
             )
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                 @test occursin("exit 3", _err_msg(() -> DistSSHUp.juliaup_update_local!(ch)))
             end
         end
@@ -209,7 +209,7 @@ end
                 esac
                 """,
             )
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                 DistSSHBase._DETECT_JULIA_PATH_CACHE["parent"] = "/kept"
                 @test _err_msg(() -> DistSSHUp.juliaup_default_local!(ch)) == "error: not installed"
                 @test _err_msg(() -> DistSSHUp.juliaup_default_host!("parent", ch)) ==
@@ -234,14 +234,14 @@ end
                 esac
                 """,
             )
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                 @test occursin(
                     "Julia not found",
                     _err_msg(() -> DistSSHUp.juliaup_align_local!(ch)),
                 )
             end
             _write_julia_beside(d, "not a version")
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                 @test occursin(
                     "unparseable",
                     _err_msg(() -> DistSSHUp.juliaup_align_local!(ch)),
@@ -249,7 +249,7 @@ end
             end
             other = VersionNumber(VERSION.major, VERSION.minor + 1, 0)
             _write_julia_beside(d, "julia version $other")
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                 msg = _err_msg(() -> DistSSHUp.juliaup_align_local!(ch))
                 @test occursin("still mismatched", msg)
                 @test occursin(string(VERSION), msg)
@@ -270,7 +270,7 @@ end
                 """,
             )
             _write_julia_beside(d, _this_version_line())
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                 r = DistSSHUp.juliaup_align_local!(ch)
                 @test r.changed
                 @test DistSSHUp.julia_version_mismatch_kind(VERSION, r.ver) != :minor
@@ -282,14 +282,14 @@ end
     @testset "missing or old juliaup fails before any verb" begin
         mktempdir() do d
             missing = joinpath(d, "missing")
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => missing) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => missing) do
                 @test occursin("juliaup not found", _err_msg(() -> DistSSHUp.juliaup_add_local!(ch)))
                 @test DistSSHUp.juliaup_status_lines("parent") == String[]
                 @test DistSSHUp.juliaup_default_patch("parent") == "-"
             end
             ju = joinpath(d, "juliaup")
             _write_sh(ju, "echo 'Juliaup 1.21.0'\n")
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                 @test occursin("older than 1.22", _err_msg(() -> DistSSHUp.juliaup_default_local!(ch)))
                 @test occursin("older than 1.22", _err_msg(() -> DistSSHUp.juliaup_add_local!(ch)))
             end
@@ -302,7 +302,7 @@ end
                 esac
                 """,
             )
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                 @test occursin("unreadable", _err_msg(() -> DistSSHUp.juliaup_update_local!()))
             end
         end
@@ -311,7 +311,7 @@ end
     @testset "strict status fails only when the state cannot be read" begin
         mktempdir() do d
             missing = joinpath(d, "missing")
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => missing) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => missing) do
                 @test DistSSHUp.juliaup_status_lines("parent") == String[]
                 @test occursin(
                     "juliaup not found",
@@ -328,7 +328,7 @@ end
                 esac
                 """,
             )
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                 @test DistSSHUp.juliaup_status_lines("parent") == String[]
                 @test occursin(
                     "status",
@@ -336,14 +336,14 @@ end
                 )
             end
             _write_sh(ju, "exit 0\n")
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                 @test DistSSHUp.juliaup_status_lines("parent"; strict = true) == String[]
             end
         end
         mktempdir() do d
             ssh = joinpath(d, "ssh.jl")
             write(ssh, "println(stderr, \"ssh down\")\nexit(1)\n")
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_SSH" => ssh) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_SSH" => ssh) do
                 @test DistSSHUp.juliaup_status_lines("status-host") == String[]
                 @test occursin(
                     "ssh down",
@@ -365,7 +365,7 @@ end
                 esac
                 """,
             )
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                 @test DistSSHUp.juliaup_status_lines("parent") == String[]
                 @test DistSSHUp.juliaup_default_patch("parent") == "-"
             end
@@ -378,7 +378,7 @@ end
                 echo '      release     1.11.6+0'
                 """,
             )
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                 rows = DistSSHUp.juliaup_status_lines("parent")
                 @test length(rows) == 2
                 @test !any(startswith(row, "Default") || startswith(row, "-") for row in rows)
@@ -393,7 +393,7 @@ end
             DistSSHBase.clear_detect_julia_path_cache!("align-host")
             DistSSHBase._DETECT_JULIA_PATH_CACHE["align-host"] = "/stale"
             _write_ssh_double(ssh)
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_SSH" => ssh) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_SSH" => ssh) do
                 r = DistSSHUp.juliaup_align_host!("align-host"; channel = ch)
                 @test r.host == "align-host"
                 @test !r.already
@@ -405,14 +405,14 @@ end
             other = VersionNumber(VERSION.major, VERSION.minor + 1, 0)
             _write_ssh_double(ssh; version_line = "julia version $other")
             DistSSHBase.clear_detect_julia_path_cache!("align-host")
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_SSH" => ssh) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_SSH" => ssh) do
                 msg = _err_msg(() -> DistSSHUp.juliaup_align_host!("align-host"; channel = ch))
                 @test occursin("still mismatched", msg)
                 @test occursin(string(other), msg)
             end
             _write_ssh_double(ssh; found = false)
             DistSSHBase.clear_detect_julia_path_cache!("align-host")
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_SSH" => ssh) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_SSH" => ssh) do
                 @test occursin(
                     "Julia not found",
                     _err_msg(() -> DistSSHUp.juliaup_align_host!("align-host"; channel = ch)),
@@ -425,7 +425,7 @@ end
                 """,
             )
             DistSSHBase._DETECT_JULIA_PATH_CACHE["align-host"] = "/kept"
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_SSH" => ssh) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_SSH" => ssh) do
                 r = DistSSHUp.juliaup_align_host!("align-host"; channel = ch)
                 @test r.already
                 @test r.ver === nothing
@@ -446,12 +446,12 @@ end
                 exit(1)
                 """,
             )
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_SSH" => ssh) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_SSH" => ssh) do
                 @test _err_msg(() -> DistSSHUp.juliaup_update_host!("quiet-host")) == "line1"
                 @test DistSSHUp.juliaup_status_lines("quiet-host") == String[]
             end
             write(ssh, "exit(2)\n")
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_SSH" => ssh) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_SSH" => ssh) do
                 @test _err_msg(() -> DistSSHUp.juliaup_add_host!("quiet-host", ch)) == "exit 2"
             end
             write(
@@ -460,7 +460,7 @@ end
                 println("ok")
                 """,
             )
-            withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_SSH" => ssh) do
+            withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_SSH" => ssh) do
                 @test DistSSHUp.juliaup_update_host!("quiet-host"; channel = "release").host ==
                     "quiet-host"
             end

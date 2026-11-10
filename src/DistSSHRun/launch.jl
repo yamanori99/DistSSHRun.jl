@@ -88,11 +88,11 @@ const _NEXT_PMAP_CALL = Ref(1)
 const _ITEM_MAP = Dict{Tuple{Int, Int}, Int}()
 const _ITEM_LOCK = ReentrantLock()
 
-"""One seed for this run. `DISTSSHKIT_JOB_SEED` wins when it is a `UInt64`."""
+"""One seed for this run. `DISTSSH_JOB_SEED` wins when it is a `UInt64`."""
 function job_seed()::UInt64
     existing = _JOB_SEED[]
     existing !== nothing && return existing
-    parsed = tryparse(UInt64, strip(get(ENV, "DISTSSHKIT_JOB_SEED", "")))
+    parsed = tryparse(UInt64, strip(get(ENV, "DISTSSH_JOB_SEED", "")))
     seed = parsed === nothing ? rand(UInt64) : parsed
     _JOB_SEED[] = seed
     return seed
@@ -141,9 +141,9 @@ function _note_item!(call::Integer, item::Integer, rank::Integer)
     return nothing
 end
 
-"""`DISTSSHKIT_BLAS_THREADS` when the operator set it, else `nothing`."""
+"""`DISTSSH_BLAS_THREADS` when the operator set it, else `nothing`."""
 function _explicit_blas_threads()::Union{Nothing, String}
-    raw = strip(get(ENV, "DISTSSHKIT_BLAS_THREADS", ""))
+    raw = strip(get(ENV, "DISTSSH_BLAS_THREADS", ""))
     isempty(raw) && return nothing
     return raw
 end
@@ -199,12 +199,12 @@ function worker_env_pairs(
     if rank !== nothing
         seed = job_seed()
         r = Int(rank)
-        push!(pairs, "DISTSSHKIT_JOB_SEED" => string(seed))
-        push!(pairs, "DISTSSHKIT_WORKER_RANK" => string(r))
-        push!(pairs, "DISTSSHKIT_WORKER_SEED" => string(worker_seed(seed, r)))
+        push!(pairs, "DISTSSH_JOB_SEED" => string(seed))
+        push!(pairs, "DISTSSH_WORKER_RANK" => string(r))
+        push!(pairs, "DISTSSH_WORKER_SEED" => string(worker_seed(seed, r)))
     end
     id = resolved_kit_job_id()
-    id === nothing || push!(pairs, "DISTSSHKIT_JOB_ID" => id)
+    id === nothing || push!(pairs, "DISTSSH_JOB_ID" => id)
     for p in extra
         push!(pairs, String(first(p)) => String(last(p)))
     end
@@ -285,7 +285,7 @@ function ssh_addprocs_bind_localhost(host::AbstractString)::String
 end
 
 function ssh_tunnel_enabled()::Bool
-    return get(ENV, "DISTSSHKIT_SSH_TUNNEL", "1") != "0"
+    return get(ENV, "DISTSSH_SSH_TUNNEL", "1") != "0"
 end
 
 """Random per-run cookie before the first worker. Never log the value."""

@@ -37,8 +37,8 @@ Then it removes and recreates
 Keys come from `docker-ssh/scripts/gen-keys.sh` (mounted from
 `docker-ssh/mounted-keys`).
 
-Each worker gets 1 CPU / 3.5GB (`DISTSSHKIT_APPLE_WORKER_CPUS` /
-`DISTSSHKIT_APPLE_WORKER_MEMORY` override), so the pair together matches one
+Each worker gets 1 CPU / 3.5GB (`DISTSSH_APPLE_WORKER_CPUS` /
+`DISTSSH_APPLE_WORKER_MEMORY` override), so the pair together matches one
 `ubuntu-latest` CI runner (2 CPU / 7GB).
 
 SSH aliases after `up.sh`:

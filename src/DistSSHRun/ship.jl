@@ -3,8 +3,8 @@
 const SHIP_MAX_BYTES_DEFAULT = 256 * 1024 * 1024
 const SHIP_FILE_WARN_BYTES = 50 * 1024 * 1024
 const SHIP_WARN_TOTAL_BYTES_DEFAULT = 100 * 1024 * 1024
-const _SHIP_WARN_FILE_ENV = "DISTSSHKIT_SHIP_WARN_FILE_BYTES"
-const _SHIP_WARN_TOTAL_ENV = "DISTSSHKIT_SHIP_WARN_TOTAL_BYTES"
+const _SHIP_WARN_FILE_ENV = "DISTSSH_SHIP_WARN_FILE_BYTES"
+const _SHIP_WARN_TOTAL_ENV = "DISTSSH_SHIP_WARN_TOTAL_BYTES"
 
 const _SSHFLAGS_WARNED = Ref(false)
 
@@ -199,13 +199,12 @@ function _canonical_ship_input_path(path::AbstractString)::String
         end
         push!(parts, piece)
     end
-    isempty(parts) &&
-        throw(ArgumentError("inputs.toml: path must stay inside the project: $path"))
+    isempty(parts) && return "."
     return join(parts, "/")
 end
 
 function _load_ship_inputs(root::AbstractString)::Vector{ShipInput}
-    file = joinpath(root, ".distsshkit", "inputs.toml")
+    file = DistSSHBase.resolve_local_state_item(root, "inputs.toml")
     isfile(file) || return ShipInput[]
     raw = TOML.parsefile(file)
     rows = get(raw, "inputs", Any[])
@@ -766,7 +765,7 @@ function _record_remote_inputs!(
     run_dir = kit_run_dir()
     run_dir === nothing && throw(
         ArgumentError(
-            "ship-tree: declared inputs need DISTSSHKIT_RUN_DIR; refusing to write next to the project",
+            "ship-tree: declared inputs need DISTSSH_RUN_DIR; refusing to write next to the project",
         ),
     )
     rows = Dict{String, Any}[]
@@ -806,7 +805,7 @@ function _start_remote_input_hashes!(
     isempty(inputs) && return nothing
     kit_run_dir() === nothing && throw(
         ArgumentError(
-            "ship-tree: declared inputs need DISTSSHKIT_RUN_DIR; refusing to write next to the project",
+            "ship-tree: declared inputs need DISTSSH_RUN_DIR; refusing to write next to the project",
         ),
     )
     task = @async _record_remote_inputs!(host, abs_root, local_root, julia_bin)
@@ -1932,7 +1931,7 @@ function _ship_tree_to_hosts!(
     if !isempty(_load_ship_inputs(pack.project_dir)) && kit_run_dir() === nothing
         throw(
             ArgumentError(
-                "ship-tree: declared inputs need DISTSSHKIT_RUN_DIR; refusing to write next to the project",
+                "ship-tree: declared inputs need DISTSSH_RUN_DIR; refusing to write next to the project",
             ),
         )
     end
@@ -2048,11 +2047,12 @@ function warn_project_sshflags(project::AbstractString)
             push!(hits, "Project.toml sshflags")
         end
     end
-    for rel in (".distsshkit/sshflags", ".distsshkit/config.toml")
-        p = joinpath(d, rel)
+    for name in ("sshflags", "config.toml")
+        p = DistSSHBase.resolve_local_state_item(d, name)
         isfile(p) || continue
-        if rel == ".distsshkit/sshflags"
-            push!(hits, rel)
+        shown = joinpath(DistSSHBase.resolve_local_state_dir_name(d), name)
+        if name == "sshflags"
+            push!(hits, shown)
             continue
         end
         raw = try
@@ -2064,7 +2064,7 @@ function warn_project_sshflags(project::AbstractString)
                 haskey(raw, "sshflags") ||
                     haskey(get(raw, "ssh", Dict()), "sshflags")
             )
-            push!(hits, rel)
+            push!(hits, shown)
         end
     end
     isempty(hits) && return nothing

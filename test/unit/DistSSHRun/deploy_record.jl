@@ -173,7 +173,7 @@ end
 @testset "deploy record write failure warns per host" begin
     _with_tempdir() do log_root
         _with_tempdir() do state_dir
-            withenv(merge(_fake_setup_remote_env(state_dir), Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1"))...) do
+            withenv(merge(_fake_setup_remote_env(state_dir), Dict("DISTSSH_TEST_SSH_FAIL" => "1"))...) do
                 with_kit_verbosity(:verbose) do
                     log_path = DistSSHRun.init_log_file(log_root; prefix = "deploy_write")
                     out, _ = _capture_stdio() do _, _
@@ -222,9 +222,9 @@ end
             write(joinpath(proj, "Project.toml"), "name = \"ReadDep\"\n")
             try
                 withenv(
-                    "DISTSSHKIT_TEST" => "1",
-                    "DISTSSHKIT_TEST_SSH" => double,
-                    "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
+                    "DISTSSH_TEST" => "1",
+                    "DISTSSH_TEST_SSH" => double,
+                    "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit",
                 ) do
                     rec = DistSSHRun.read_deploy_record_on_host("child-1", remote)
                     @test rec !== nothing
@@ -274,11 +274,11 @@ end
         end
         try
             withenv(
-                "DISTSSHKIT_TEST" => "1",
-                "DISTSSHKIT_TEST_SSH" => double,
-                "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
-                "DISTSSHKIT_TEST_SSH_LOGICAL_ROOT" => logical,
-                "DISTSSHKIT_TEST_SSH_HOST_ROOTS" => roots,
+                "DISTSSH_TEST" => "1",
+                "DISTSSH_TEST_SSH" => double,
+                "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit",
+                "DISTSSH_TEST_SSH_LOGICAL_ROOT" => logical,
+                "DISTSSH_TEST_SSH_HOST_ROOTS" => roots,
             ) do
                 out, (rec, warn_unknown) = _capture_stdio() do _, _
                     DistSSHRun._read_deploy_record_for_run_status(
@@ -317,11 +317,11 @@ end
         mkpath(joinpath(roots, "child-2"))
         try
             withenv(
-                "DISTSSHKIT_TEST" => "1",
-                "DISTSSHKIT_TEST_SSH" => double,
-                "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
-                "DISTSSHKIT_TEST_SSH_LOGICAL_ROOT" => logical,
-                "DISTSSHKIT_TEST_SSH_HOST_ROOTS" => roots,
+                "DISTSSH_TEST" => "1",
+                "DISTSSH_TEST_SSH" => double,
+                "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit",
+                "DISTSSH_TEST_SSH_LOGICAL_ROOT" => logical,
+                "DISTSSH_TEST_SSH_HOST_ROOTS" => roots,
             ) do
                 out, (rec, _) = _capture_stdio() do _, _
                     DistSSHRun._read_deploy_record_for_run_status(

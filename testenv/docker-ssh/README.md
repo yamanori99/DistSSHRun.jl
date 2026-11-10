@@ -49,7 +49,7 @@ in that case (`no reachable package registries`). The registry lives in
 `~/.julia/registries` and is shared by both channels.
 
 `up.sh` passes both as Docker / `container` build-args and exports
-`DISTSSHKIT_E2E_JULIA_{DEFAULT,ALT}_CHANNEL` for `test/e2e.jl`. On the build
+`DISTSSH_E2E_JULIA_{DEFAULT,ALT}_CHANNEL` for `test/e2e.jl`. On the build
 path it also resolves each channel's current release from `versions.json`
 (`JULIA_DEFAULT_RELEASE` / `JULIA_ALT_RELEASE`). That string is the image
 cache key, so a new patch, or a prerelease becoming stable, rebuilds the
@@ -105,19 +105,19 @@ source ./scripts/up.sh   # workers + activate DistSSHRun SSH env in this shell
 Skip the Julia-in-Docker build (macOS / WSL) by pulling the public image from
 `main`'s last successful `E2E weekly`. If you changed `Dockerfile` /
 `compose.yml`,
-build locally instead (omit `DISTSSHKIT_WORKER_IMAGE`).
+build locally instead (omit `DISTSSH_WORKER_IMAGE`).
 
 ```bash
-export DISTSSHKIT_WORKER_IMAGE=ghcr.io/yamanori99/\
+export DISTSSH_WORKER_IMAGE=ghcr.io/yamanori99/\
 distsshrun-linux-ssh-worker:latest
 ./scripts/up.sh --e2e
 ```
 
-A local image build retries up to three times (`DISTSSHKIT_BUILD_RETRIES`,
+A local image build retries up to three times (`DISTSSH_BUILD_RETRIES`,
 default 3; waits 30 s, then 60 s). juliaup fetches its version list from
 S3 after the installer download, and a short network failure there would
-otherwise fail the run. Set `DISTSSHKIT_BUILD_RETRIES=1` while debugging
-the Dockerfile. CI sets `DISTSSHKIT_BUILD_CACHE=gha`, which builds with
+otherwise fail the run. Set `DISTSSH_BUILD_RETRIES=1` while debugging
+the Dockerfile. CI sets `DISTSSH_BUILD_CACHE=gha`, which builds with
 buildx and the GitHub Actions cache. The juliaup layer is reused until the
 pinned Julia release changes, so most runs do not contact julialang-s3 during
 the build.
@@ -177,7 +177,7 @@ tag is inspectable (GHCR `unknown blob`). After the scheduled Linux suite,
 is pushed for
 local pull. The package is meant to be **public** (one-time: package Settings →
 Change visibility). Local `./scripts/up.sh` still builds unless you set
-`DISTSSHKIT_WORKER_IMAGE`. Colima on Intel runners uses `--cpu 3 --memory 8`
+`DISTSSH_WORKER_IMAGE`. Colima on Intel runners uses `--cpu 3 --memory 8`
 so the Darwin kit parent keeps RAM.
 
 Usual `Pkg.test()` does **not** start Docker and does **not** run this suite.

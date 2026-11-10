@@ -57,7 +57,7 @@ function show_go_usage(; io::IO = stdout)
     print_help_section("Output"; io = io)
     print_help_lines(
         io,
-        "  {script}/.distsshkit/go/<stem>_<UTC>/<slot>/",
+        "  {script}/.distssh/go/<stem>_<UTC>/<slot>/",
         "  DISTRIBUTED_OUTPUT_DIR → that slot dir",
         "  --output-dir is the batch root (not drive's result root)",
         "  a non-empty --output-dir is an error",
@@ -70,7 +70,7 @@ function show_go_usage(; io::IO = stdout)
         io,
         "  $(KIT_HOSTS_ENV_HELP)",
         "  JULIA_DISTRIBUTED_EXE        default remote Julia",
-        "  DISTSSHKIT_QUIET / PROGRESS / VERBOSE / YES",
+        "  DISTSSH_QUIET / PROGRESS / VERBOSE / YES",
     )
     print_help_blank(io)
     return print_help_lines(

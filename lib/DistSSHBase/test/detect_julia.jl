@@ -7,7 +7,7 @@ let _BASE = DistSSHBase
 
     @testset "detect_julia_path" begin
         _with_tempdir() do state_dir
-            withenv(merge(_fake_setup_remote_env(state_dir), Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1"))...) do
+            withenv(merge(_fake_setup_remote_env(state_dir), Dict("DISTSSH_TEST_SSH_FAIL" => "1"))...) do
                 _BASE.clear_detect_julia_path_cache!("detect-ssh-fail.test")
                 try
                     err = try
@@ -48,7 +48,7 @@ let _BASE = DistSSHBase
                 try
                     @test _BASE.detect_julia_path("detect-julia-retry.test") === nothing
                     @test !haskey(_BASE._DETECT_JULIA_PATH_CACHE, "detect-julia-retry.test")
-                    withenv("DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia") do
+                    withenv("DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia") do
                         got = _BASE.detect_julia_path("detect-julia-retry.test")
                         @test got == "/usr/bin/julia"
                         @test _BASE._DETECT_JULIA_PATH_CACHE["detect-julia-retry.test"] == "/usr/bin/julia"

@@ -4,9 +4,9 @@ Users run `julia -m DistSSHKit`. This repository is DistSSHRun.
 
 Do not call `setup!(session, :delete)` or `setup!(session, :prune)` unless each `confirm_path` is a path the user typed. `yes=true` does not delete. Never copy the target out of an error, including `ConfirmPathMismatch`, into a retry.
 
-Agents must not pass `-y`, `--yes`, or set `DISTSSHKIT_YES` for `setup delete` or `setup prune`. Without `--confirm-path`, that is an error. Use `--confirm-path` with the path the command printed.
+Agents must not pass `-y`, `--yes`, or set `DISTSSH_YES` for `setup delete` or `setup prune`. Without `--confirm-path`, that is an error. Use `--confirm-path` with the path the command printed.
 
-Remote `runs/<run_id>/run.toml` is a DistSSHRun stamp (`schema`, `writer`, `kind`). Controller provenance is `DISTSSHKIT_RUN_DIR/run.toml`. Do not write a `.distssh-run` or `.distsshrun` marker. `teardown` is DistSSHQueue, not this package.
+Remote `runs/<run_id>/run.toml` is a DistSSHRun stamp (`schema`, `writer`, `kind`). Controller provenance is `DISTSSH_RUN_DIR/run.toml`. Do not write a `.distssh-run` or `.distsshrun` marker. `teardown` is DistSSHQueue, not this package.
 
 Read [DistSSHKit releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md) before a pull request that raises the version or changes public behavior.
 

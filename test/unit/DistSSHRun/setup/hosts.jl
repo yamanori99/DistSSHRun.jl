@@ -73,7 +73,7 @@ using Test
                 @test occursin("SSH preflight:\n", out)
             end
         end
-        _with_fake_remotes(extra_env = Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1")) do _
+        _with_fake_remotes(extra_env = Dict("DISTSSH_TEST_SSH_FAIL" => "1")) do _
             with_kit_verbosity(:verbose) do
                 out, _ = _capture_stdio() do _, _
                     @test DistSSHRun.probe_setup_ssh("host1") isa String
@@ -135,7 +135,7 @@ using Test
                 )
                 env = merge(
                     _fake_setup_remote_env(state_dir),
-                    Dict("DISTSSHKIT_TEST_SSH" => ssh),
+                    Dict("DISTSSH_TEST_SSH" => ssh),
                 )
                 withenv(env...) do
                     return f(tmp)
@@ -291,7 +291,7 @@ using Test
     end
 
     @testset "delete_remotes" begin
-        withenv("DISTSSHKIT_YES" => nothing) do
+        withenv("DISTSSH_YES" => nothing) do
             prev_ni = DistSSHRun.kit_noninteractive()
             DistSSHRun.set_kit_noninteractive!(false)
             try
@@ -335,7 +335,7 @@ using Test
     end
 
     @testset "clone_to_remotes" begin
-        withenv("DISTSSHKIT_YES" => nothing) do
+        withenv("DISTSSH_YES" => nothing) do
             prev_ni = DistSSHRun.kit_noninteractive()
             DistSSHRun.set_kit_noninteractive!(false)
             try
@@ -386,7 +386,7 @@ using Test
             @test length(result.hosts) == 1 && !result.hosts[1].ok
         end
 
-        _with_fake_remotes(; extra_env = Dict("DISTSSHKIT_TEST_PROJECT_MODE" => "drwxrwxr-x")) do state_dir
+        _with_fake_remotes(; extra_env = Dict("DISTSSH_TEST_PROJECT_MODE" => "drwxrwxr-x")) do state_dir
             host = "host1"
             slot = replace(host, r"[@:/]" => "_")
             tree = joinpath(state_dir, slot, "tree")
@@ -401,7 +401,7 @@ using Test
             @test occursin("group-writable", result.hosts[1].message)
             @test !isdir(joinpath(tree, ".git"))
         end
-        _with_fake_remotes(; extra_env = Dict("DISTSSHKIT_TEST_PROJECT_MODE" => "drwxrwxrwx")) do state_dir
+        _with_fake_remotes(; extra_env = Dict("DISTSSH_TEST_PROJECT_MODE" => "drwxrwxrwx")) do state_dir
             host = "host1"
             slot = replace(host, r"[@:/]" => "_")
             tree = joinpath(state_dir, slot, "tree")
@@ -416,7 +416,7 @@ using Test
             @test !isdir(tree)
         end
 
-        _with_fake_remotes(; extra_env = Dict("DISTSSHKIT_TEST_GIT_CLONE_FAIL" => "1")) do _
+        _with_fake_remotes(; extra_env = Dict("DISTSSH_TEST_GIT_CLONE_FAIL" => "1")) do _
             result = DistSSHRun.clone_to_remotes(
                 ["host1"], "~/App.jl", "git@example.com:org/App.jl.git";
                 confirm = false,
@@ -427,7 +427,7 @@ using Test
     end
 
     @testset "prune_kit_leaves confirm abort" begin
-        withenv("DISTSSHKIT_YES" => nothing) do
+        withenv("DISTSSH_YES" => nothing) do
             prev_ni = DistSSHRun.kit_noninteractive()
             DistSSHRun.set_kit_noninteractive!(false)
             try

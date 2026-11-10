@@ -34,12 +34,12 @@ if !isdefined(Main, :_tty_strip_ansi)
             occursin("SSH preflight failed", s) ||
             occursin("exit", s) ||
             occursin("ERROR:", s) ||
-            occursin("DISTSSHKIT_RUNNER_BOOM", s) ||
-            occursin("DISTSSHKIT_RIDE_BOOM", s) ||
-            occursin("DISTSSHKIT_RIDE_REMOTE_OK", s) ||
-            occursin("DISTSSHKIT_RIDE_REMOTE_BOOM", s) ||
-            occursin("DISTSSHKIT_E2E_REMOTE_FAIL", s) ||
-            occursin("DISTSSHKIT_RUNNER_SMOKE_OK", s)
+            occursin("DISTSSH_RUNNER_BOOM", s) ||
+            occursin("DISTSSH_RIDE_BOOM", s) ||
+            occursin("DISTSSH_RIDE_REMOTE_OK", s) ||
+            occursin("DISTSSH_RIDE_REMOTE_BOOM", s) ||
+            occursin("DISTSSH_E2E_REMOTE_FAIL", s) ||
+            occursin("DISTSSH_RUNNER_SMOKE_OK", s)
     end
 
     function _tty_fail_or_warn_line(line::AbstractString)
@@ -139,12 +139,12 @@ if !isdefined(Main, :_tty_strip_ansi)
             "SSH preflight failed",
             "exit",
             "ERROR:",
-            "DISTSSHKIT_RUNNER_BOOM",
-            "DISTSSHKIT_RIDE_BOOM",
-            "DISTSSHKIT_RIDE_REMOTE_OK",
-            "DISTSSHKIT_RIDE_REMOTE_BOOM",
-            "DISTSSHKIT_E2E_REMOTE_FAIL",
-            "DISTSSHKIT_RUNNER_SMOKE_OK",
+            "DISTSSH_RUNNER_BOOM",
+            "DISTSSH_RIDE_BOOM",
+            "DISTSSH_RIDE_REMOTE_OK",
+            "DISTSSH_RIDE_REMOTE_BOOM",
+            "DISTSSH_E2E_REMOTE_FAIL",
+            "DISTSSH_RUNNER_SMOKE_OK",
         )
         last_payload = nothing
         for key in payload_keys
@@ -217,11 +217,11 @@ if !isdefined(Main, :_tty_strip_ansi)
             "NO_COLOR",
             "JULIA_LOAD_PATH",
             "JULIA_PROJECT",
-            "DISTSSHKIT_CLI_SUBCOMMAND_DONE",
+            "DISTSSH_CLI_SUBCOMMAND_DONE",
             "DIST_SSH_KIT_CLI_INCLUDE",
-            "DISTSSHKIT_QUIET",
-            "DISTSSHKIT_PROGRESS",
-            "DISTSSHKIT_VERBOSE",
+            "DISTSSH_QUIET",
+            "DISTSSH_PROGRESS",
+            "DISTSSH_VERBOSE",
             "COLUMNS",
             "LINES",
         )
@@ -296,11 +296,11 @@ if !isdefined(Main, :_tty_strip_ansi)
             "NO_COLOR",
             "JULIA_LOAD_PATH",
             "JULIA_PROJECT",
-            "DISTSSHKIT_CLI_SUBCOMMAND_DONE",
+            "DISTSSH_CLI_SUBCOMMAND_DONE",
             "DIST_SSH_KIT_CLI_INCLUDE",
-            "DISTSSHKIT_QUIET",
-            "DISTSSHKIT_PROGRESS",
-            "DISTSSHKIT_VERBOSE",
+            "DISTSSH_QUIET",
+            "DISTSSH_PROGRESS",
+            "DISTSSH_VERBOSE",
             "COLUMNS",
             "LINES",
         )

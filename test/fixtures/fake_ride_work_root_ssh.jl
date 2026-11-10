@@ -1,9 +1,9 @@
-# Test double for `ssh HOST SCRIPT` (`DISTSSHKIT_TEST_SSH`).
+# Test double for `ssh HOST SCRIPT` (`DISTSSH_TEST_SSH`).
 # Runs snapshot / ship work-root probes locally. Other commands stay short.
 
 host = length(ARGS) >= 1 ? ARGS[1] : ""
 script = length(ARGS) >= 2 ? ARGS[2] : ""
-logp = get(ENV, "DISTSSHKIT_TEST_SSH_LOG", "")
+logp = get(ENV, "DISTSSH_TEST_SSH_LOG", "")
 if !isempty(logp)
     open(logp, "a") do io
         println(io, "HOST ", host)

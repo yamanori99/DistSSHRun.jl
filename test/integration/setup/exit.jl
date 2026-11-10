@@ -35,7 +35,7 @@ using Test
             ],
             extra_env = merge(
                 _fake_setup_remote_env(fresh_state()),
-                Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1"),
+                Dict("DISTSSH_TEST_SSH_FAIL" => "1"),
             ),
         ),
         (;
@@ -50,8 +50,8 @@ using Test
             extra_env = merge(
                 _fake_setup_remote_env(fresh_state()),
                 Dict(
-                    "DISTSSHKIT_TEST_MKDIR_FAIL" => "1",
-                    "DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia",
+                    "DISTSSH_TEST_MKDIR_FAIL" => "1",
+                    "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia",
                 ),
             ),
         ),
@@ -59,7 +59,7 @@ using Test
             setup_args = ["ship-tree", "child:host1", "child:host2"],
             extra_env = merge(
                 _fake_setup_remote_env(fresh_state()),
-                Dict("DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia"),
+                Dict("DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia"),
             ),
         ),
         # `--julia` skips remote detect; fake ssh still sees `Pkg.test()`.
@@ -67,7 +67,7 @@ using Test
             setup_args = ["runtest", "--julia", "/bin/echo", "child:host1"],
             extra_env = merge(
                 _fake_setup_remote_env(fresh_state()),
-                Dict("DISTSSHKIT_TEST_PKG_TEST_FAIL" => "1"),
+                Dict("DISTSSH_TEST_PKG_TEST_FAIL" => "1"),
             ),
         ),
         (;

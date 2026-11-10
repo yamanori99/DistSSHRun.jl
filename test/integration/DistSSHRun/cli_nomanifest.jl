@@ -155,7 +155,7 @@ function _checkout_pkg_hidden_check(tmp::AbstractString)
         addenv(
             `$base --startup-file=no --project=$proj $script`,
             "JULIA_LOAD_PATH" => proj,
-            "DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "0",
+            "DISTSSH_CLI_SUBCOMMAND_DONE" => "0",
             "DIST_SSH_KIT_CLI_INCLUDE" => "0",
         ),
     )
@@ -258,7 +258,7 @@ end
         mod, mod_out = _run_subprocess(
             addenv(
                 _kit_cli_cmd(["drive", "--help"]),
-                "DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "0",
+                "DISTSSH_CLI_SUBCOMMAND_DONE" => "0",
             ),
         )
         _assert_proc_ok(mod, mod_out; label = "julia -m DistSSHRun drive --help")

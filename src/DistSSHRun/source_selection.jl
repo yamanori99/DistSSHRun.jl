@@ -96,11 +96,11 @@ function _ship_run_leaf_logical(deploy_root::AbstractString, run_id::AbstractStr
 end
 
 function _ship_record_dir(env_dir::AbstractString)::String
-    return joinpath(canonical_local_path(env_dir), ".distsshkit")
+    return DistSSHBase.resolve_local_state_dir(env_dir)
 end
 
 function _ship_record_path(env_dir::AbstractString)::String
-    return joinpath(_ship_record_dir(env_dir), _SHIP_RECORD_NAME)
+    return joinpath(DistSSHBase.local_state_write_root(env_dir), _SHIP_RECORD_NAME)
 end
 
 function _sorted_host_aliases(hosts::AbstractVector{<:AbstractString})::Vector{String}
@@ -151,11 +151,16 @@ end
 function read_last_ship_record(
         env_dir::AbstractString,
     )::Union{Nothing, Dict{String, Any}}
-    path = _ship_record_path(env_dir)
-    rec = _read_last_ship_record_at(path)
-    rec !== nothing && return rec
-    legacy = joinpath(_ship_record_dir(env_dir), _LEGACY_SHIP_RECORD_NAME)
-    return _read_last_ship_record_at(legacy)
+    for base in (
+            DistSSHBase.local_state_write_root(env_dir),
+            DistSSHBase.resolve_local_state_dir(env_dir),
+        )
+        for name in (_SHIP_RECORD_NAME, _LEGACY_SHIP_RECORD_NAME)
+            rec = _read_last_ship_record_at(joinpath(base, name))
+            rec !== nothing && return rec
+        end
+    end
+    return nothing
 end
 public read_last_ship_record
 
@@ -203,8 +208,8 @@ function write_last_ship_record!(
     if content_tree_hash isa AbstractString && !isempty(strip(String(content_tree_hash)))
         data["content_tree_hash"] = String(content_tree_hash)
     end
-    dest_dir = _ship_record_dir(env_dir)
-    dest = _ship_record_path(env_dir)
+    dest_dir = DistSSHBase.local_state_write_root(env_dir)
+    dest = joinpath(dest_dir, _SHIP_RECORD_NAME)
     lock(_SHIP_RECORD_LOCK) do
         mkpath(dest_dir)
         tmp = dest * ".tmp." * string(getpid()) * "." * bytes2hex(rand(UInt8, 4))
@@ -663,7 +668,7 @@ function resolve_source_selection(
 end
 public resolve_source_selection
 
-"""Controller `DISTSSHKIT_RUN_DIR/run.toml` shipped source for collect recovery.
+"""Controller `DISTSSH_RUN_DIR/run.toml` shipped source for collect recovery.
 
 `nothing` when no run dir is set, or when the stamp is not written yet
 (in-flight execute). A present DistSSHRun stamp without `provenance.selection`

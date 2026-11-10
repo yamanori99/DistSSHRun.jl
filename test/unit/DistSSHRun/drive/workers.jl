@@ -199,7 +199,7 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
         end
 
         @testset "cleanup_stale_workers! skips localhost with no SSH hosts" begin
-            withenv("DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL" => nothing) do
+            withenv("DISTSSH_SKIP_GLOBAL_WORKER_PKILL" => nothing) do
                 mktemp() do path, io
                     redirect_stdout(io) do
                         DistSSHRun.cleanup_stale_workers!(_EMPTY_DRIVE_HOSTS)
@@ -211,7 +211,7 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
         end
 
         @testset "cleanup_stale_workers! skips untagged remote pkill" begin
-            withenv("DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL" => nothing, "DISTSSHKIT_JOB_ID" => nothing) do
+            withenv("DISTSSH_SKIP_GLOBAL_WORKER_PKILL" => nothing, "DISTSSH_JOB_ID" => nothing) do
                 mktemp() do path, io
                     redirect_stdout(io) do
                         DistSSHRun.cleanup_stale_workers!(
@@ -224,8 +224,8 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             end
         end
 
-        @testset "cleanup_stale_workers! DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL" begin
-            withenv("DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL" => "1") do
+        @testset "cleanup_stale_workers! DISTSSH_SKIP_GLOBAL_WORKER_PKILL" begin
+            withenv("DISTSSH_SKIP_GLOBAL_WORKER_PKILL" => "1") do
                 mktemp() do path, io
                     redirect_stdout(io) do
                         DistSSHRun.cleanup_stale_workers!(
@@ -295,7 +295,7 @@ end
         )
         @test cfg.interval == 30.0
         @test cfg.deadline == 600.0
-        withenv("DISTSSHKIT_WAIT_PEER_SILENT" => "42") do
+        withenv("DISTSSH_WAIT_PEER_SILENT" => "42") do
             bare = DistSSHRun._heartbeat_config(Dict{String, String}())
             @test bare.deadline == 42.0
             named = DistSSHRun._heartbeat_config(
@@ -303,7 +303,7 @@ end
             )
             @test named.deadline == 9.0
         end
-        withenv("DISTSSHKIT_WAIT_PEER_SILENT" => "0") do
+        withenv("DISTSSH_WAIT_PEER_SILENT" => "0") do
             bare = DistSSHRun._heartbeat_config(Dict{String, String}())
             @test bare.deadline == 600.0
         end

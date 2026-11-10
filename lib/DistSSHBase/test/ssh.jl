@@ -16,12 +16,12 @@ function _nonposix_shell_env(
         noise::Bool = false,
     )::Dict{String, String}
     return Dict{String, String}(
-        "DISTSSHKIT_TEST" => "1",
-        "DISTSSHKIT_TEST_SSH" => String(double),
+        "DISTSSH_TEST" => "1",
+        "DISTSSH_TEST_SSH" => String(double),
         "SHELL_DOUBLE_LOG" => String(logp),
         "SHELL_DOUBLE_MODE" => String(mode),
         "SHELL_DOUBLE_NOISE" => noise ? "1" : "0",
-        "DISTSSHKIT_TEST_POSIX_SHELL" => mode == "fish" ? "0" : "1",
+        "DISTSSH_TEST_POSIX_SHELL" => mode == "fish" ? "0" : "1",
     )
 end
 
@@ -301,7 +301,7 @@ let _BASE = DistSSHBase
         if Sys.which("ssh") === nothing
             @test_skip "ssh not in PATH"
         else
-            withenv("DISTSSHKIT_TEST" => nothing, "DISTSSHKIT_TEST_SSH" => nothing) do
+            withenv("DISTSSH_TEST" => nothing, "DISTSSH_TEST_SSH" => nothing) do
                 cmd = _BASE._host_sync_remote_shell_cmd("host.test", "true")
                 @test "-n" in cmd.exec
                 fed = _BASE._host_sync_remote_shell_cmd(
@@ -314,13 +314,13 @@ let _BASE = DistSSHBase
 
     @testset "fake double child env" begin
         withenv(
-            "DISTSSHKIT_TEST_POOL_MEM" => "",
-            "DISTSSHKIT_TEST_STATE_ROOT" => "",
+            "DISTSSH_TEST_POOL_MEM" => "",
+            "DISTSSH_TEST_STATE_ROOT" => "",
             "JULIA_PROJECT" => "/throwaway/project",
         ) do
             child = _BASE._fake_double_child_julia_env()
-            @test child["DISTSSHKIT_TEST_POOL_MEM"] == ""
-            @test child["DISTSSHKIT_TEST_STATE_ROOT"] == ""
+            @test child["DISTSSH_TEST_POOL_MEM"] == ""
+            @test child["DISTSSH_TEST_STATE_ROOT"] == ""
             @test !haskey(child, "JULIA_PROJECT")
             @test child["JULIA_LOAD_PATH"] == _BASE._child_load_path_string()
         end

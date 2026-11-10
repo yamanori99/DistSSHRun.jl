@@ -6,7 +6,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
 
     # True when CI / local docker-ssh E2E should run.
     function _ssh_e2e_enabled()::Bool
-        return get(ENV, "DISTSSHKIT_SSH_E2E", "") == "1"
+        return get(ENV, "DISTSSH_SSH_E2E", "") == "1"
     end
 
     # Path to `testenv/docker-ssh` (repo-relative).
@@ -32,8 +32,8 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         g = _docker_ssh_generated()
         isfile(g.ssh_config) || error("missing $(g.ssh_config); run testenv/docker-ssh/scripts/up.sh")
         base = Dict{String, String}(
-            "DISTSSHKIT_YES" => "1",
-            "DISTSSHKIT_QUIET" => get(ENV, "DISTSSHKIT_QUIET", "1"),
+            "DISTSSH_YES" => "1",
+            "DISTSSH_QUIET" => get(ENV, "DISTSSH_QUIET", "1"),
             "DISTRIBUTED_SSH_OPTS" => "-F $(g.ssh_config) -o RequestTTY=no",
             "DISTRIBUTED_REMOTE_PROJECT_ROOT" => String(remote_project),
             # setup git-sync / git push use this; DistSSHRun's git_push_project! has no -F flag.
@@ -98,12 +98,12 @@ if !isdefined(Main, :_ssh_e2e_enabled)
 
     # juliaup channels baked into the worker image (from `up.sh` / julia-slots.env).
     function _ssh_e2e_julia_channels()::NamedTuple{(:default, :alt), Tuple{String, String}}
-        def = strip(get(ENV, "DISTSSHKIT_E2E_JULIA_DEFAULT_CHANNEL", ""))
-        alt = strip(get(ENV, "DISTSSHKIT_E2E_JULIA_ALT_CHANNEL", ""))
+        def = strip(get(ENV, "DISTSSH_E2E_JULIA_DEFAULT_CHANNEL", ""))
+        alt = strip(get(ENV, "DISTSSH_E2E_JULIA_ALT_CHANNEL", ""))
         isempty(def) && (def = DistSSHRun.juliaup_channel())
         isempty(alt) && throw(
             ArgumentError(
-                "DISTSSHKIT_E2E_JULIA_ALT_CHANNEL unset; run testenv/docker-ssh/scripts/up.sh --e2e " *
+                "DISTSSH_E2E_JULIA_ALT_CHANNEL unset; run testenv/docker-ssh/scripts/up.sh --e2e " *
                     "(or apple-container-ssh) so slots min/max are exported",
             )
         )
@@ -309,7 +309,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
                 batch = _ssh_e2e_latest_go_batch(project)
                 batch === nothing ? nothing : batch
             else
-                joinpath(project, ".distsshkit", String(kit))
+                joinpath(project, ".distssh", String(kit))
             end
             newest = log_dir === nothing ? nothing : _ssh_e2e_newest_log(log_dir)
             if newest !== nothing
@@ -502,13 +502,14 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         return nothing
     end
 
-    # Newest go batch dir (`go_manifest.txt` under `.distsshkit/go/`), or `nothing`.
+    # Newest go batch dir (`go_manifest.txt` under `.distssh/go/` or legacy `.distsshkit/go/`), or `nothing`.
     function _ssh_e2e_latest_go_batch(proj::AbstractString)::Union{Nothing, String}
         candidates = String[]
         isdir(proj) || return nothing
         for (root, dirs, _) in walkdir(proj)
             basename(root) == "go" || continue
-            occursin(".distsshkit", root) || continue
+            state_parent = basename(dirname(root))
+            state_parent in (".distssh", ".distsshkit") || continue
             for name in dirs
                 p = joinpath(root, name)
                 isfile(joinpath(p, "go_manifest.txt")) && push!(candidates, p)

@@ -61,7 +61,7 @@ function setup_juliaup_ssh_hosts(hosts::AbstractVector{<:AbstractString})::Vecto
 end
 
 """
-Probe one host via the setup SSH transport (honors `DISTSSHKIT_TEST_SSH`).
+Probe one host via the setup SSH transport (honors `DISTSSH_TEST_SSH`).
 
 Returns `nothing` on success, or a short error summary string on failure.
 """

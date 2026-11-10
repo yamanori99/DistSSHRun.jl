@@ -2,7 +2,7 @@
 # Defined inside a `let` (rather than as a top-level `function`) so repeated
 # `include`s of this fixture within the same process don't trigger Julia's
 # "Method definition ... overwritten" warning.
-let path = get(ENV, "_DISTSSHKIT_TEST_ARGS_FILE", "")
+let path = get(ENV, "_DISTSSH_TEST_ARGS_FILE", "")
     if !isempty(path)
         io = open(path, "w")
         try
@@ -13,7 +13,7 @@ let path = get(ENV, "_DISTSSHKIT_TEST_ARGS_FILE", "")
             close(io)
         end
     end
-    proj_file = get(ENV, "_DISTSSHKIT_TEST_PROJ_FILE", "")
+    proj_file = get(ENV, "_DISTSSH_TEST_PROJ_FILE", "")
     if !isempty(proj_file)
         write(proj_file, get(ENV, "DISTRIBUTED_PROJECT_ROOT", ""))
     end

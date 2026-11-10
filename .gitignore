@@ -5,11 +5,13 @@ docs/build/
 docs/site/
 
 # Kit dumps (matches any path named these):
-#   {script}/.distsshkit/go/     go batches
-#   {script}/.distsshkit/drive   omitted drive result root
-#   {project}/.distsshkit/setup  setup logs
+#   {script}/.distssh/go/       go batches
+#   {script}/.distssh/drive     omitted drive result root
+#   {project}/.distssh/setup    setup logs
+#   legacy `.distsshkit/` is still ignored when present
 # Demo drivers still set output/ via init_output_dir!.
 # results/ is the old omitted drive/go default (leftover trees).
+.distssh/
 .distsshkit/
 output/
 results/

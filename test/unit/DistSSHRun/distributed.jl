@@ -73,7 +73,7 @@ using Test
             mkpath(script_dir)
             withenv(
                 "DISTRIBUTED_OUTPUT_DIR" => nothing,
-                DistSSHRun.DISTSSHKIT_RUN_DIR_ENV => nothing,
+                DistSSHRun.DISTSSH_RUN_DIR_ENV => nothing,
             ) do
                 @test DistSSHRun.resolve_drive_log_dir(nothing, script_dir) ==
                     DistSSHRun.kit_dir_beside_script(script_dir, :drive)
@@ -82,7 +82,7 @@ using Test
             mkpath(run_dir)
             withenv(
                 "DISTRIBUTED_OUTPUT_DIR" => joinpath(tmp, "env-out"),
-                DistSSHRun.DISTSSHKIT_RUN_DIR_ENV => run_dir,
+                DistSSHRun.DISTSSH_RUN_DIR_ENV => run_dir,
             ) do
                 @test DistSSHRun.resolve_drive_log_dir(nothing, script_dir) ==
                     DistSSHRun.canonical_local_path(run_dir)
@@ -90,7 +90,7 @@ using Test
             env_dir = joinpath(tmp, "env-out")
             withenv(
                 "DISTRIBUTED_OUTPUT_DIR" => env_dir,
-                DistSSHRun.DISTSSHKIT_RUN_DIR_ENV => nothing,
+                DistSSHRun.DISTSSH_RUN_DIR_ENV => nothing,
             ) do
                 @test DistSSHRun.resolve_drive_log_dir(nothing, script_dir) == env_dir
                 explicit = joinpath(tmp, "explicit-logs")

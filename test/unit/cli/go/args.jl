@@ -196,7 +196,7 @@ using Test
             @test r.cli_session.yes
             DistSSHRun.apply_kit_cli_session!(DistSSHRun.KitCliSession())
         end
-        withenv("DISTSSHKIT_HOSTS" => "child:env-a:2,child:env-b:1") do
+        withenv("DISTSSH_HOSTS" => "child:env-a:2,child:env-b:1") do
             let r = parse_go_args(["job.jl"])
                 @test r.hosts == ["child:env-a:2", "child:env-b:1"]
             end
@@ -288,7 +288,7 @@ using Test
             @test !r.help
         end
         mktemp() do path, io
-            code = withenv("DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "") do
+            code = withenv("DISTSSH_CLI_SUBCOMMAND_DONE" => "") do
                 redirect_stderr(devnull) do
                     redirect_stdout(io) do
                         DistSSHRun.go(String[])
@@ -301,7 +301,7 @@ using Test
         end
         mktemp() do out_path, out_io
             mktemp() do err_path, err_io
-                code = withenv("DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "") do
+                code = withenv("DISTSSH_CLI_SUBCOMMAND_DONE" => "") do
                     redirect_stdin(devnull) do
                         redirect_stdout(out_io) do
                             redirect_stderr(err_io) do
@@ -324,7 +324,7 @@ using Test
 
     @testset "--hosts-file keeps host:N" begin
         hosts_file = _sample_hosts_file()
-        withenv("DISTSSHKIT_HOSTS" => nothing, "DISTSSHKIT_HOSTS_FILE" => nothing) do
+        withenv("DISTSSH_HOSTS" => nothing, "DISTSSH_HOSTS_FILE" => nothing) do
             let r = parse_go_args(["--hosts-file", hosts_file, "job.jl"])
                 @test r.hosts == ["child:host-a:1", "child:host-b:4"]
                 @test r.script_path == "job.jl"

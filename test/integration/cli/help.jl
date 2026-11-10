@@ -6,7 +6,7 @@ using Test
 # own process. The `ride` smoke stays after them so it does not share that wave.
 
 @testset "CLI child help and version" begin
-    env = _child_julia_env(Dict("DISTSSHKIT_YES" => "1"))
+    env = _child_julia_env(Dict("DISTSSH_YES" => "1"))
     cmds = Cmd[]
     kinds = Symbol[]
     labels = String[]

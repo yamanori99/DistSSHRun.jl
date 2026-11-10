@@ -34,7 +34,7 @@ category: breaking
 - Controller `provenance.selection` may record `source_kind`, `deploy_root`,
   and `work_root` for runs that did not ship in-process. Collect / recovery
   mapping honors `--run-id` / `run_id=` when given. When omitted, a
-  present controller `DISTSSHKIT_RUN_DIR/run.toml` with
+  present controller `DISTSSH_RUN_DIR/run.toml` with
   `provenance.selection` selects that original source (not a later local
   last-ship record or `_LAST_SHIP`). Collect recovery still reads legacy
   `provenance.shipped` when `provenance.selection` is absent; only when both

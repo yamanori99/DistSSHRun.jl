@@ -1,6 +1,6 @@
 #!/usr/bin/env julia
 # DistSSHRun Pkg.test() entry: unit + integration (Aqua is CI-only).
-# Does not include test/e2e.jl (real SSH; DISTSSHKIT_SSH_E2E=1 / up.sh --e2e).
+# Does not include test/e2e.jl (real SSH; DISTSSH_SSH_E2E=1 / up.sh --e2e).
 # From a standalone kit checkout (this directory as the active project):
 #   julia --project=. -e 'using Pkg; Pkg.test()'
 #   julia --project=. test/runtests.jl

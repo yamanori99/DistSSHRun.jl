@@ -62,8 +62,8 @@ Julia **1.13+**.
   `LocalPreferences.toml` is left out too; add `!LocalPreferences.toml`
   to ship it.
 - A file over 50 MiB, or a send list over 100 MiB, prints a warning
-  (`DISTSSHKIT_SHIP_WARN_FILE_BYTES`,
-  `DISTSSHKIT_SHIP_WARN_TOTAL_BYTES`; an invalid value is an error).
+  (`DISTSSH_SHIP_WARN_FILE_BYTES`,
+  `DISTSSH_SHIP_WARN_TOTAL_BYTES`; an invalid value is an error).
   The 256 MiB cap still stops the ship. Declared inputs are left out.
 - Extract is into `<remote_root>/runs/<run_id>/src/`, with empty
   `out/` beside it and a minimal DistSSHRun `run.toml` stamp. The

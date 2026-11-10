@@ -1,9 +1,9 @@
-# Shared fake SSH double for `DISTSSHKIT_TEST_SSH`.
+# Shared fake SSH double for `DISTSSH_TEST_SSH`.
 # Include from `fake_setup_ssh.jl` or `fake_arbitrary_dest_ship_ssh.jl`, which
 # must set `const _FAKE_SSH_ARBITRARY_DEST` first. Do not use Tar here;
 # `fake_arbitrary_dest_ship_ssh.jl` loads Tar for the arbitrary-dest branches.
 #
-# Per-host state under DISTSSHKIT_TEST_STATE_ROOT/<slot>/tree represents the
+# Per-host state under DISTSSH_TEST_STATE_ROOT/<slot>/tree represents the
 # remote destination directory (missing / empty / nonempty).
 
 function _dest_status(tree::AbstractString)::String
@@ -36,12 +36,12 @@ end
 function main()
     host = length(ARGS) >= 1 ? ARGS[1] : ""
     script = length(ARGS) >= 2 ? ARGS[2] : ""
-    state_root = get(ENV, "DISTSSHKIT_TEST_STATE_ROOT", "")
+    state_root = get(ENV, "DISTSSH_TEST_STATE_ROOT", "")
     if isempty(state_root)
-        println(stderr, "DISTSSHKIT_TEST_STATE_ROOT is empty")
+        println(stderr, "DISTSSH_TEST_STATE_ROOT is empty")
         exit(1)
     end
-    slot = if get(ENV, "DISTSSHKIT_TEST_SHARED_TREE", "") == "1"
+    slot = if get(ENV, "DISTSSH_TEST_SHARED_TREE", "") == "1"
         "shared"
     else
         replace(host, r"[@:/]" => "_")
@@ -50,12 +50,12 @@ function main()
     tree = joinpath(dir, "tree")
 
     # Force every probe/op to fail (preflight + delete/clone).
-    if get(ENV, "DISTSSHKIT_TEST_SSH_FAIL", "") == "1"
+    if get(ENV, "DISTSSH_TEST_SSH_FAIL", "") == "1"
         println(stderr, "Permission denied (publickey).")
         exit(255)
     end
 
-    logp = get(ENV, "DISTSSHKIT_TEST_SSH_LOG", "")
+    logp = get(ENV, "DISTSSH_TEST_SSH_LOG", "")
     if !isempty(logp)
         open(logp, "a") do io
             println(io, script)
@@ -75,57 +75,57 @@ function main()
         exit(0)
     end
 
-    if occursin("DISTSSHKIT_REMOTE_HOME", script)
-        println(get(ENV, "DISTSSHKIT_TEST_REMOTE_HOME", "/home/distsshkit"))
+    if occursin("DISTSSH_REMOTE_HOME", script)
+        println(get(ENV, "DISTSSH_TEST_REMOTE_HOME", "/home/distsshkit"))
         exit(0)
     end
 
     # Before `uname -s`: the hostinfo probe also contains that substring.
-    if occursin("DISTSSHKIT_HOSTINFO", script) || occursin("DISTSSHKIT_POOL", script)
-        println("DISTSSHKIT_HOSTINFO")
-        omit_mem = get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OMIT_MEM", "") == "1"
-        omit_ncpu = get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OMIT_NCPU", "") == "1"
-        omit_os = get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OMIT_OS", "") == "1"
-        omit_kernel = get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OMIT_KERNEL", "") == "1"
-        omit_arch = get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OMIT_ARCH", "") == "1"
-        omit_os_version = get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OMIT_OS_VERSION", "") == "1"
-        omit_os_pretty = get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OMIT_OS_PRETTY", "") == "1"
-        omit_cpu_model = get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OMIT_CPU_MODEL", "") == "1"
-        omit_mem || println("mem=", get(ENV, "DISTSSHKIT_TEST_POOL_MEM", "17179869184"))
-        omit_ncpu || println("ncpu=", get(ENV, "DISTSSHKIT_TEST_POOL_NCPU", "4"))
-        omit_os || println("os=", get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OS", "Linux"))
-        omit_kernel || println("kernel=", get(ENV, "DISTSSHKIT_TEST_HOSTINFO_KERNEL", "6.8.0-test"))
-        omit_arch || println("arch=", get(ENV, "DISTSSHKIT_TEST_HOSTINFO_ARCH", "x86_64"))
+    if occursin("DISTSSH_HOSTINFO", script) || occursin("DISTSSH_POOL", script)
+        println("DISTSSH_HOSTINFO")
+        omit_mem = get(ENV, "DISTSSH_TEST_HOSTINFO_OMIT_MEM", "") == "1"
+        omit_ncpu = get(ENV, "DISTSSH_TEST_HOSTINFO_OMIT_NCPU", "") == "1"
+        omit_os = get(ENV, "DISTSSH_TEST_HOSTINFO_OMIT_OS", "") == "1"
+        omit_kernel = get(ENV, "DISTSSH_TEST_HOSTINFO_OMIT_KERNEL", "") == "1"
+        omit_arch = get(ENV, "DISTSSH_TEST_HOSTINFO_OMIT_ARCH", "") == "1"
+        omit_os_version = get(ENV, "DISTSSH_TEST_HOSTINFO_OMIT_OS_VERSION", "") == "1"
+        omit_os_pretty = get(ENV, "DISTSSH_TEST_HOSTINFO_OMIT_OS_PRETTY", "") == "1"
+        omit_cpu_model = get(ENV, "DISTSSH_TEST_HOSTINFO_OMIT_CPU_MODEL", "") == "1"
+        omit_mem || println("mem=", get(ENV, "DISTSSH_TEST_POOL_MEM", "17179869184"))
+        omit_ncpu || println("ncpu=", get(ENV, "DISTSSH_TEST_POOL_NCPU", "4"))
+        omit_os || println("os=", get(ENV, "DISTSSH_TEST_HOSTINFO_OS", "Linux"))
+        omit_kernel || println("kernel=", get(ENV, "DISTSSH_TEST_HOSTINFO_KERNEL", "6.8.0-test"))
+        omit_arch || println("arch=", get(ENV, "DISTSSH_TEST_HOSTINFO_ARCH", "x86_64"))
         omit_os_version || println(
-            "os_version=", get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OS_VERSION", "24.04"),
+            "os_version=", get(ENV, "DISTSSH_TEST_HOSTINFO_OS_VERSION", "24.04"),
         )
         omit_os_pretty || println(
-            "os_pretty=", get(ENV, "DISTSSHKIT_TEST_HOSTINFO_OS_PRETTY", "Ubuntu 24.04.1 LTS"),
+            "os_pretty=", get(ENV, "DISTSSH_TEST_HOSTINFO_OS_PRETTY", "Ubuntu 24.04.1 LTS"),
         )
         omit_cpu_model || println(
-            "cpu_model=", get(ENV, "DISTSSHKIT_TEST_HOSTINFO_CPU_MODEL", "Test CPU"),
+            "cpu_model=", get(ENV, "DISTSSH_TEST_HOSTINFO_CPU_MODEL", "Test CPU"),
         )
         exit(0)
     end
 
     if occursin("uname -s", script)
-        if get(ENV, "DISTSSHKIT_TEST_UNAME_FAIL", "") == "1"
+        if get(ENV, "DISTSSH_TEST_UNAME_FAIL", "") == "1"
             exit(1)
         end
-        u = get(ENV, "DISTSSHKIT_TEST_UNAME", "")
+        u = get(ENV, "DISTSSH_TEST_UNAME", "")
         isempty(u) || println(u)
         exit(0)
     end
 
     if occursin("command -v julia", script) || occursin("which julia", script)
-        w = get(ENV, "DISTSSHKIT_TEST_JULIA_WHICH", "")
+        w = get(ENV, "DISTSSH_TEST_JULIA_WHICH", "")
         isempty(w) || println(w)
         exit(0)
     end
 
     # detect_julia_path candidates: `test -x PATH && echo PATH`
     if occursin("test -x", script) && occursin("&& echo", script)
-        if occursin("juliaup", script) && get(ENV, "DISTSSHKIT_TEST_NO_JULIAUP", "") == "1"
+        if occursin("juliaup", script) && get(ENV, "DISTSSH_TEST_NO_JULIAUP", "") == "1"
             exit(1)
         end
         m = match(r"&&\s*echo\s+(.+)$", script)
@@ -141,14 +141,14 @@ function main()
     # `up` / setup!(session, :juliaup) remote body (home install and/or Homebrew candidates)
     if (occursin(".juliaup/bin/juliaup", script) || occursin("/opt/homebrew/bin/juliaup", script)) &&
             occursin("status 2>/dev/null", script) &&
-            get(ENV, "DISTSSHKIT_TEST_JULIAUP_ALREADY", "") == "1"
+            get(ENV, "DISTSSH_TEST_JULIAUP_ALREADY", "") == "1"
         println("already")
         exit(0)
     end
     if (occursin(".juliaup/bin/juliaup", script) || occursin("/opt/homebrew/bin/juliaup", script)) &&
             occursin("\"\$JU\" update", script) &&
             !occursin("echo already", script)
-        if get(ENV, "DISTSSHKIT_TEST_NO_JULIAUP", "") == "1"
+        if get(ENV, "DISTSSH_TEST_NO_JULIAUP", "") == "1"
             println(stderr, "juliaup not found (tried: \$HOME/.juliaup/bin/juliaup, /opt/homebrew/bin/juliaup)")
             exit(127)
         end
@@ -157,7 +157,7 @@ function main()
     end
     if (occursin(".juliaup/bin/juliaup", script) || occursin("/opt/homebrew/bin/juliaup", script)) &&
             (occursin(" add ", script) || occursin("default", script))
-        if get(ENV, "DISTSSHKIT_TEST_NO_JULIAUP", "") == "1"
+        if get(ENV, "DISTSSH_TEST_NO_JULIAUP", "") == "1"
             println(stderr, "juliaup not found (tried: \$HOME/.juliaup/bin/juliaup, /opt/homebrew/bin/juliaup)")
             exit(127)
         end
@@ -166,13 +166,13 @@ function main()
     end
 
     if occursin("--version", script)
-        ver = strip(get(ENV, "DISTSSHKIT_TEST_JULIA_VERSION", ""))
+        ver = strip(get(ENV, "DISTSSH_TEST_JULIA_VERSION", ""))
         println(isempty(ver) ? "julia version $VERSION" : ver)
         exit(0)
     end
 
-    if occursin("DISTSSHKIT_DEST_STATUS", script)
-        println("DISTSSHKIT_DEST_STATUS")
+    if occursin("DISTSSH_DEST_STATUS", script)
+        println("DISTSSH_DEST_STATUS")
         println(_dest_status(tree))
         exit(0)
     end
@@ -192,7 +192,7 @@ function main()
     end
 
     if occursin("__DSR_SHIP_SRC__", script)
-        home = get(ENV, "DISTSSHKIT_TEST_REMOTE_HOME", "/home/distsshkit")
+        home = get(ENV, "DISTSSH_TEST_REMOTE_HOME", "/home/distsshkit")
         root = home * "/ship-root"
         if isfile(joinpath(tree, "Project.toml"))
             println(root)
@@ -217,7 +217,7 @@ function main()
     if occursin("__DSR_SNAP_GIT__", script)
         if isfile(joinpath(tree, "Project.toml")) ||
                 isfile(joinpath(tree, "JuliaProject.toml")) ||
-                get(ENV, "DISTSSHKIT_TEST_SNAP_GIT_YES", "") == "1"
+                get(ENV, "DISTSSH_TEST_SNAP_GIT_YES", "") == "1"
             println("yes")
         else
             println("no")
@@ -256,15 +256,15 @@ function main()
     if remote_ship !== nothing
         localp = _fake_ship_record_local_file(tree, remote_ship)
         if startswith(strip(script), "test -f ")
-            fail_name = get(ENV, "DISTSSHKIT_TEST_SHIP_RECORD_TEST_FAIL", "")
-            fail_code = get(ENV, "DISTSSHKIT_TEST_SHIP_RECORD_TEST_FAIL_CODE", "127")
+            fail_name = get(ENV, "DISTSSH_TEST_SHIP_RECORD_TEST_FAIL", "")
+            fail_code = get(ENV, "DISTSSH_TEST_SHIP_RECORD_TEST_FAIL_CODE", "127")
             if !isempty(fail_name) && basename(localp) == fail_name
                 exit(parse(Int, fail_code))
             end
             isfile(localp) ? exit(0) : exit(1)
         end
         if startswith(strip(script), "cat ")
-            fail_name = get(ENV, "DISTSSHKIT_TEST_SHIP_RECORD_CAT_FAIL", "")
+            fail_name = get(ENV, "DISTSSH_TEST_SHIP_RECORD_CAT_FAIL", "")
             if !isempty(fail_name) && basename(localp) == fail_name
                 println(stderr, "cat: read error (test double)")
                 exit(1)
@@ -285,7 +285,7 @@ function main()
     # Quoted argv is `'git' … 'pull'`, which does not contain the substring `git pull`.
     if occursin("git pull", script) ||
             (occursin("'pull'", script) && occursin("hooksPath=/dev/null", script))
-        if get(ENV, "DISTSSHKIT_TEST_GIT_PULL_FAIL", "") == "1"
+        if get(ENV, "DISTSSH_TEST_GIT_PULL_FAIL", "") == "1"
             println("fatal: not a git repository")
             exit(1)
         end
@@ -293,14 +293,14 @@ function main()
     end
 
     if occursin("rev-parse", script)
-        if get(ENV, "DISTSSHKIT_TEST_GIT_REV_PARSE_FAIL", "") == "1"
+        if get(ENV, "DISTSSH_TEST_GIT_REV_PARSE_FAIL", "") == "1"
             println(stderr, "fatal: not a git repository")
             exit(1)
         end
-        head = get(ENV, "DISTSSHKIT_TEST_GIT_HEAD", "")
+        head = get(ENV, "DISTSSH_TEST_GIT_HEAD", "")
         isempty(head) && exit(1)
         println(head)
-        occursin("--abbrev-ref", script) && println(get(ENV, "DISTSSHKIT_TEST_GIT_BRANCH", "main"))
+        occursin("--abbrev-ref", script) && println(get(ENV, "DISTSSH_TEST_GIT_BRANCH", "main"))
         exit(0)
     end
 
@@ -317,10 +317,10 @@ function main()
     end
 
     # Ownership scans remove a tempfile with `rm -f`. That is not the remote op.
-    # Delete (`rm -rf`) and prune (`DISTSSHKIT_PRUNE_KIT_LEAVES`) fall through.
+    # Delete (`rm -rf`) and prune (`DISTSSH_PRUNE_LEAVES`) fall through.
     if occursin("rm -f ", script) &&
             !occursin("rm -rf", script) &&
-            !occursin("DISTSSHKIT_PRUNE_KIT_LEAVES", script)
+            !occursin("DISTSSH_PRUNE_LEAVES", script)
         m = match(r"rm -f\s+(\S+)", script)
         if m !== nothing
             cap = m.captures[1]
@@ -339,7 +339,7 @@ function main()
             println("missing")
             exit(0)
         end
-        println(get(ENV, "DISTSSHKIT_TEST_PROJECT_MODE", "drwxr-xr-x"))
+        println(get(ENV, "DISTSSH_TEST_PROJECT_MODE", "drwxr-xr-x"))
         exit(0)
     end
 
@@ -351,7 +351,7 @@ function main()
     end
 
     if occursin("mkdir -p", script)
-        if get(ENV, "DISTSSHKIT_TEST_MKDIR_FAIL", "") == "1"
+        if get(ENV, "DISTSSH_TEST_MKDIR_FAIL", "") == "1"
             exit(1)
         end
         mkpath(tree)
@@ -361,7 +361,7 @@ function main()
     # Ship / remote-root ensure: create the fake destination tree.
     if occursin("__DSR_ENSURE_REMOTE_ROOT__", script) ||
             (occursin("mkdir -m 700", script) && occursin("remote_root", script))
-        if get(ENV, "DISTSSHKIT_TEST_MKDIR_FAIL", "") == "1"
+        if get(ENV, "DISTSSH_TEST_MKDIR_FAIL", "") == "1"
             println(stderr, "remote_root mkdir failed")
             exit(1)
         end
@@ -375,7 +375,7 @@ function main()
     # Quoted argv is `'git' … 'clone'`, which does not contain the substring `git clone`.
     if occursin("git clone", script) ||
             (occursin("'clone'", script) && occursin("hooksPath=/dev/null", script))
-        if get(ENV, "DISTSSHKIT_TEST_GIT_CLONE_FAIL", "") == "1"
+        if get(ENV, "DISTSSH_TEST_GIT_CLONE_FAIL", "") == "1"
             println("fatal: repository not found")
             exit(1)
         end
@@ -390,7 +390,7 @@ function main()
         exit(0)
     end
 
-    if occursin("DISTSSHKIT_PRUNE_KIT_LEAVES", script)
+    if occursin("DISTSSH_PRUNE_LEAVES", script)
         older = nothing
         m_old = match(r"older=([^\n]+)", script)
         if m_old !== nothing
@@ -412,7 +412,9 @@ function main()
         end
         if isdir(tree)
             for (dir, _, _) in walkdir(tree)
-                basename(dir) == ".distsshkit" || continue
+                let n = basename(dir)
+                    (n == ".distssh" || n == ".distsshkit") || continue
+                end
                 go = joinpath(dir, "go")
                 if isdir(go)
                     for child in readdir(go; join = true)
@@ -448,7 +450,7 @@ function main()
 
     # Job `setup --runtest` (`using Pkg; Pkg.test()`). Preflight is `echo ok`.
     if occursin("Pkg.test()", script)
-        if get(ENV, "DISTSSHKIT_TEST_PKG_TEST_FAIL", "") == "1"
+        if get(ENV, "DISTSSH_TEST_PKG_TEST_FAIL", "") == "1"
             println(stderr, "Test Failed")
             exit(1)
         end
@@ -456,7 +458,7 @@ function main()
     end
 
     if occursin("find ", script) && occursin("-type f", script)
-        if get(ENV, "DISTSSHKIT_TEST_FIND_FAIL", "") == "1"
+        if get(ENV, "DISTSSH_TEST_FIND_FAIL", "") == "1"
             println(stderr, "find: failed")
             exit(1)
         end
@@ -502,15 +504,15 @@ function main()
     end
 
     if strip(script) == "cd -P ~ && pwd -P"
-        println(get(ENV, "DISTSSHKIT_TEST_REMOTE_HOME", "/home/distsshkit"))
+        println(get(ENV, "DISTSSH_TEST_REMOTE_HOME", "/home/distsshkit"))
         exit(0)
     end
     if strip(script) == "cd ~ && pwd"
         println(
             get(
                 ENV,
-                "DISTSSHKIT_TEST_REMOTE_HOME_LOGICAL",
-                get(ENV, "DISTSSHKIT_TEST_REMOTE_HOME", "/home/distsshkit"),
+                "DISTSSH_TEST_REMOTE_HOME_LOGICAL",
+                get(ENV, "DISTSSH_TEST_REMOTE_HOME", "/home/distsshkit"),
             ),
         )
         exit(0)
@@ -519,26 +521,26 @@ function main()
     if occursin("elif test -e", script) && occursin("printf", script)
         home = get(
             ENV,
-            "DISTSSHKIT_TEST_REMOTE_HOME_LOGICAL",
-            get(ENV, "DISTSSHKIT_TEST_REMOTE_HOME", "/home/distsshkit"),
+            "DISTSSH_TEST_REMOTE_HOME_LOGICAL",
+            get(ENV, "DISTSSH_TEST_REMOTE_HOME", "/home/distsshkit"),
         )
         # Prefer an explicit expanded root; else keep the historical ship-root.
-        expanded = get(ENV, "DISTSSHKIT_TEST_REMOTE_EXPAND", "")
+        expanded = get(ENV, "DISTSSH_TEST_REMOTE_EXPAND", "")
         println(isempty(expanded) ? (home * "/ship-root") : expanded)
         exit(0)
     end
 
     if occursin("Sys.BINDIR", script)
-        w = get(ENV, "DISTSSHKIT_TEST_JULIA_WHICH", "")
+        w = get(ENV, "DISTSSH_TEST_JULIA_WHICH", "")
         println(isempty(w) ? "/usr/bin/julia" : w)
         exit(0)
     end
 
     if _FAKE_SSH_ARBITRARY_DEST &&
             occursin("Tar.extract(stdin", script) && occursin("content_tree_hash mismatch", script)
-        expect = strip(get(ENV, "DISTSSHKIT_TEST_EXPECT_TREE_HASH", ""))
+        expect = strip(get(ENV, "DISTSSH_TEST_EXPECT_TREE_HASH", ""))
         if !isempty(expect)
-            if get(ENV, "DISTSSHKIT_TEST_TAR_EXTRACT_FAIL", "") == "1"
+            if get(ENV, "DISTSSH_TEST_TAR_EXTRACT_FAIL", "") == "1"
                 println(stderr, "tar extract failed")
                 exit(1)
             end
@@ -581,7 +583,7 @@ function main()
     end
 
     if occursin("Tar.extract", script)
-        if get(ENV, "DISTSSHKIT_TEST_TAR_EXTRACT_FAIL", "") == "1"
+        if get(ENV, "DISTSSH_TEST_TAR_EXTRACT_FAIL", "") == "1"
             println(stderr, "tar extract failed")
             exit(1)
         end
@@ -592,7 +594,7 @@ function main()
     # Collect / go pull: `Tar.create(..., stdout)`. Exit 0 writes no archive,
     # matching the rsync double (success without copying bytes).
     if occursin("Tar.create", script)
-        if get(ENV, "DISTSSHKIT_TEST_TAR_PULL_FAIL", "") == "1"
+        if get(ENV, "DISTSSH_TEST_TAR_PULL_FAIL", "") == "1"
             println(stderr, "tar pull failed")
             exit(1)
         end
@@ -602,14 +604,14 @@ function main()
     # Leaf prepare still refuses a missing root after ensure. MKDIR_FAIL is
     # handled on the ensure script above.
     if occursin("remote_root does not exist", script) &&
-            get(ENV, "DISTSSHKIT_TEST_MKDIR_FAIL", "") == "1" &&
+            get(ENV, "DISTSSH_TEST_MKDIR_FAIL", "") == "1" &&
             !occursin("__DSR_ENSURE_REMOTE_ROOT__", script)
         println(stderr, "remote_root does not exist")
         exit(2)
     end
 
     if occursin("distssh-cache-", script)
-        if get(ENV, "DISTSSHKIT_TEST_CACHE_PUSH_FAIL", "") == "1"
+        if get(ENV, "DISTSSH_TEST_CACHE_PUSH_FAIL", "") == "1"
             println(stderr, "cache push failed")
             exit(1)
         end

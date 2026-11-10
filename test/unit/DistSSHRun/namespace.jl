@@ -2,7 +2,7 @@ using Test
 
 @testset "namespace" begin
     @test DistSSHRun.cache_remote_dir("/remote/App") == joinpath(
-        "/remote/App", ".distsshkit", "cache", "sha256",
+        "/remote/App", ".distssh", "cache", "sha256",
     )
 
     _with_tempdir() do proj
@@ -45,7 +45,7 @@ using Test
                 @test ok.hosts[1].ok
                 subset = DistSSHRun.push_cache!(sess; hashes = [h])
                 @test subset.ok
-                withenv("DISTSSHKIT_TEST_CACHE_PUSH_FAIL" => "1") do
+                withenv("DISTSSH_TEST_CACHE_PUSH_FAIL" => "1") do
                     fail = DistSSHRun.push_cache!(sess)
                     @test !fail.ok
                     @test !fail.hosts[1].ok

@@ -56,13 +56,13 @@ if !isdefined(Main, :_with_tempdir)
     function _fake_setup_remote_env(state_dir)::Dict{String, String}
         fixtures = joinpath(@__DIR__, "fixtures")
         return Dict{String, String}(
-            "DISTSSHKIT_TEST" => "1",
-            "DISTSSHKIT_TEST_SSH" => joinpath(fixtures, "fake_setup_ssh.jl"),
-            "DISTSSHKIT_TEST_STATE_ROOT" => abspath(string(state_dir)),
-            "DISTSSHKIT_YES" => "1",
+            "DISTSSH_TEST" => "1",
+            "DISTSSH_TEST_SSH" => joinpath(fixtures, "fake_setup_ssh.jl"),
+            "DISTSSH_TEST_STATE_ROOT" => abspath(string(state_dir)),
+            "DISTSSH_YES" => "1",
             # Absolute fake remotes are not a real git tree. Snapshot unit tests
             # that need a real Project.toml probe use `fake_snapshot_ssh.jl`.
-            "DISTSSHKIT_TEST_SNAP_GIT_YES" => "1",
+            "DISTSSH_TEST_SNAP_GIT_YES" => "1",
         )
     end
 end

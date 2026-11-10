@@ -109,7 +109,7 @@ using Test
                 withenv(
                     merge(
                         _fake_setup_remote_env(state),
-                        Dict("DISTSSHKIT_TEST_SSH_LOG" => logp),
+                        Dict("DISTSSH_TEST_SSH_LOG" => logp),
                     )...,
                 ) do
                     inst = DistSSHRun.instantiate_remotes(

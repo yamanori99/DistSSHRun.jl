@@ -155,7 +155,7 @@ if !isdefined(Main, :_run_kit_drive)
         proc, combined = _run_subprocess(cmd)
 
         _assert_proc_ok(proc, combined; label = "drive log smoke")
-        @test occursin("DISTSSHKIT_RUNNER_SMOKE_OK nw=2", combined)
+        @test occursin("DISTSSH_RUNNER_SMOKE_OK nw=2", combined)
         @test occursin("Results:", combined)
 
         log_files = String[
@@ -171,7 +171,7 @@ if !isdefined(Main, :_run_kit_drive)
                 "Script:",
                 "Workers:",
                 "Running script...",
-                "DISTSSHKIT_RUNNER_SMOKE_OK nw=2",
+                "DISTSSH_RUNNER_SMOKE_OK nw=2",
                 "Results:",
             )
             @test occursin(needle, log_content)

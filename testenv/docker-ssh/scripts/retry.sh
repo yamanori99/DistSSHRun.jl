@@ -4,14 +4,14 @@
 # juliaup fetches its version db from julialang-s3 after the installer
 # download, and `curl --retry` does not cover that request.
 #
-#   DISTSSHKIT_BUILD_RETRIES     attempts, default 3 (1 disables retry)
-#   DISTSSHKIT_BUILD_RETRY_WAIT  first wait in seconds, default 30; doubles
+#   DISTSSH_BUILD_RETRIES     attempts, default 3 (1 disables retry)
+#   DISTSSH_BUILD_RETRY_WAIT  first wait in seconds, default 30; doubles
 
 _distsshkit_retry() {
   local what="$1"
   shift
-  local tries="${DISTSSHKIT_BUILD_RETRIES:-3}"
-  local wait_s="${DISTSSHKIT_BUILD_RETRY_WAIT:-30}"
+  local tries="${DISTSSH_BUILD_RETRIES:-3}"
+  local wait_s="${DISTSSH_BUILD_RETRY_WAIT:-30}"
   local i
   for ((i = 1; ; i++)); do
     if "$@"; then

@@ -38,8 +38,8 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
       - name: docker-ssh build + push
         env:
-          DISTSSHKIT_PUSH_IMAGE: ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}
-          DISTSSHKIT_SKIP_UP: "1"
+          DISTSSH_PUSH_IMAGE: ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}
+          DISTSSH_SKIP_UP: "1"
         run: ./testenv/docker-ssh/scripts/up.sh
       - name: Teardown workers
         if: always()
@@ -74,9 +74,9 @@ jobs:
       - name: docker-ssh up + SSH E2E
         id: e2e
         env:
-          DISTSSHKIT_WORKER_IMAGE: ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}
-          DISTSSHKIT_WORKER_PULL_RETRIES: "8"
-          DISTSSHKIT_CODE_COVERAGE: "1"
+          DISTSSH_WORKER_IMAGE: ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}
+          DISTSSH_WORKER_PULL_RETRIES: "8"
+          DISTSSH_CODE_COVERAGE: "1"
         run: ./testenv/docker-ssh/scripts/up.sh --e2e
       - uses: ./.github/actions/e2e-codecov
         if: ${{ always() && steps.e2e.outcome == 'success' }}
@@ -135,8 +135,8 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
       - name: docker-ssh up + SSH E2E
         env:
-          DISTSSHKIT_WORKER_IMAGE: ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}
-          DISTSSHKIT_WORKER_PULL_RETRIES: "8"
+          DISTSSH_WORKER_IMAGE: ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}
+          DISTSSH_WORKER_PULL_RETRIES: "8"
         run: ./testenv/docker-ssh/scripts/up.sh --e2e
       - name: Teardown workers
         if: always()
@@ -187,8 +187,8 @@ jobs:
           src="$(pwd)"
           dest="$HOME/DistSSHRun.jl"
           cache="$src/.ci-cache/wsl-julia"
-          export DISTSSHKIT_WORKER_IMAGE="ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}"
-          export DISTSSHKIT_WORKER_PULL_RETRIES="8"
+          export DISTSSH_WORKER_IMAGE="ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}"
+          export DISTSSH_WORKER_PULL_RETRIES="8"
           mkdir -p "$cache"
           rm -rf "$dest"
           git clone "$src" "$dest"
@@ -266,9 +266,9 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
       - name: docker-ssh up + SSH E2E
         env:
-          DISTSSHKIT_WORKER_IMAGE: ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}
-          DISTSSHKIT_WORKER_PULL_RETRIES: "8"
-          DISTSSHKIT_SSH_E2E: "1"
+          DISTSSH_WORKER_IMAGE: ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}
+          DISTSSH_WORKER_PULL_RETRIES: "8"
+          DISTSSH_SSH_E2E: "1"
         run: |
           ./testenv/docker-ssh/scripts/up.sh
           julia --project=lib/DistSSHUp lib/DistSSHUp/test/e2e.jl
@@ -305,9 +305,9 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
       - name: docker-ssh up + SSH E2E
         env:
-          DISTSSHKIT_WORKER_IMAGE: ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}
-          DISTSSHKIT_WORKER_PULL_RETRIES: "8"
-          DISTSSHKIT_SSH_E2E: "1"
+          DISTSSH_WORKER_IMAGE: ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}
+          DISTSSH_WORKER_PULL_RETRIES: "8"
+          DISTSSH_SSH_E2E: "1"
         run: |
           ./testenv/docker-ssh/scripts/up.sh
           julia --project=lib/DistSSHBase lib/DistSSHBase/test/e2e.jl
@@ -359,9 +359,9 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
       - name: docker-ssh up + SSH E2E
         env:
-          DISTSSHKIT_WORKER_IMAGE: ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}
-          DISTSSHKIT_WORKER_PULL_RETRIES: "8"
-          DISTSSHKIT_SSH_E2E: "1"
+          DISTSSH_WORKER_IMAGE: ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}
+          DISTSSH_WORKER_PULL_RETRIES: "8"
+          DISTSSH_SSH_E2E: "1"
         run: |
           ./testenv/docker-ssh/scripts/up.sh
           julia --project=lib/DistSSHUp lib/DistSSHUp/test/e2e.jl
@@ -413,9 +413,9 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
       - name: docker-ssh up + SSH E2E
         env:
-          DISTSSHKIT_WORKER_IMAGE: ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}
-          DISTSSHKIT_WORKER_PULL_RETRIES: "8"
-          DISTSSHKIT_SSH_E2E: "1"
+          DISTSSH_WORKER_IMAGE: ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}
+          DISTSSH_WORKER_PULL_RETRIES: "8"
+          DISTSSH_SSH_E2E: "1"
         run: |
           ./testenv/docker-ssh/scripts/up.sh
           julia --project=lib/DistSSHBase lib/DistSSHBase/test/e2e.jl
@@ -467,9 +467,9 @@ jobs:
           src="$(pwd)"
           dest="$HOME/DistSSHRun.jl"
           cache="$src/.ci-cache/wsl-julia"
-          export DISTSSHKIT_WORKER_IMAGE="ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}"
-          export DISTSSHKIT_WORKER_PULL_RETRIES="8"
-          export DISTSSHKIT_SSH_E2E=1
+          export DISTSSH_WORKER_IMAGE="ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}"
+          export DISTSSH_WORKER_PULL_RETRIES="8"
+          export DISTSSH_SSH_E2E=1
           mkdir -p "$cache"
           rm -rf "$dest"
           git clone "$src" "$dest"
@@ -572,9 +572,9 @@ jobs:
           src="$(pwd)"
           dest="$HOME/DistSSHRun.jl"
           cache="$src/.ci-cache/wsl-julia"
-          export DISTSSHKIT_WORKER_IMAGE="ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}"
-          export DISTSSHKIT_WORKER_PULL_RETRIES="8"
-          export DISTSSHKIT_SSH_E2E=1
+          export DISTSSH_WORKER_IMAGE="ghcr.io/${{ github.repository_owner }}/distsshrun-linux-ssh-worker:${{ github.sha }}"
+          export DISTSSH_WORKER_PULL_RETRIES="8"
+          export DISTSSH_SSH_E2E=1
           mkdir -p "$cache"
           rm -rf "$dest"
           git clone "$src" "$dest"

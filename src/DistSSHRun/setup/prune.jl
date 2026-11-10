@@ -1,4 +1,4 @@
-# Prune `.distsshkit/{go,drive,setup,runs}` leaves without wiping the deploy tree.
+# Prune `.distssh` and legacy `.distsshkit` {go,drive,setup,runs} leaves without wiping the deploy tree.
 
 """Remove matching kit leaf dirs under `root`. Returns the number removed."""
 function prune_kit_leaf_dirs!(
@@ -12,7 +12,7 @@ function prune_kit_leaf_dirs!(
     skip = skip_setup === nothing ? nothing : realpath(String(skip_setup))
     victims = String[]
     for (dir, _, _) in walkdir(String(root); onerror = Returns(nothing))
-        basename(dir) == ".distsshkit" || continue
+        DistSSHBase.is_local_state_dir_name(basename(dir)) || continue
         go = joinpath(dir, "go")
         if isdir(go)
             for child in readdir(go; join = true)
@@ -107,7 +107,7 @@ function prune_kit_leaves(
     _refuse_depot_target(remote_path)
     if confirm
         cancelled = with_kit_progress_suspended() do
-            print_err("  This will DELETE .distsshkit go/drive/setup/runs leaves.\n")
+            print_err("  This will DELETE .distssh (and legacy .distsshkit) go/drive/setup/runs leaves.\n")
             println_fatal("  Local project: $project")
             println_fatal("  Remote path: $remote_path")
             println_fatal("  Hosts: $(join(hosts, ", "))")
@@ -180,7 +180,7 @@ function _prune_remote_shell(
     idq = posix_quote(idn)
     older_q = posix_quote(older)
     return """
-    # DISTSSHKIT_PRUNE_KIT_LEAVES
+    # DISTSSH_PRUNE_LEAVES
     $(_remote_run_toml_owned_check_sh())
     root=$pq
     older=$older_q
@@ -226,13 +226,13 @@ function _prune_remote_shell(
     # `.distsshkit` splits that path, and the prefix can be pruned.
     # `{}` is last so BSD find accepts it. The child reports a newline hit
     # on stdout, so a failed disk write cannot hide the hit.
-    if ! _dsk_nlhits=\$(find "\$root" -type d -name .distsshkit -exec sh -c '
+    if ! _dsk_nlhits=\$(find "\$root" \\( -type d -name .distssh -o -type d -name .distsshkit \\) -exec sh -c '
       if printf "%s" "\$1" | awk "NR>1 { e = 1 } END { exit e ? 0 : 1 }"; then
         printf x
       fi
       exit 0
     ' sh {} \\; 2>/dev/null); then
-      printf 'refusing to prune: could not scan for .distsshkit\\n' >&2
+      printf 'refusing to prune: could not scan state directories\\n' >&2
       exit 1
     fi
     if [ -n "\$_dsk_nlhits" ]; then
@@ -240,15 +240,15 @@ function _prune_remote_shell(
       exit 1
     fi
     _dsk_victims=\$(mktemp) || {
-      printf 'refusing to prune: could not scan for .distsshkit\\n' >&2
+      printf 'refusing to prune: could not scan state directories\\n' >&2
       exit 1
     }
     _dsk_nl=\$(mktemp) || {
       rm -f "\$_dsk_victims"
-      printf 'refusing to prune: could not scan for .distsshkit\\n' >&2
+      printf 'refusing to prune: could not scan state directories\\n' >&2
       exit 1
     }
-    find "\$root" -type d -name .distsshkit 2>/dev/null | while IFS= read -r kit; do
+    find "\$root" \\( -type d -name .distssh -o -type d -name .distsshkit \\) 2>/dev/null | while IFS= read -r kit; do
       go="\$kit/go"
       if [ -d "\$go" ]; then
         for child in "\$go"/*; do

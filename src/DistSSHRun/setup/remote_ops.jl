@@ -309,7 +309,7 @@ Delete remote repositories.
 Returns `(cancelled, succeeded, failed, hosts)`. Caller should use
 [`finish_host_op!`](@ref) so partial failure is not reported as success.
 Pass `confirm=false` to skip the typed `delete` prompt. `-y` /
-`DISTSSHKIT_YES` do not skip it. `setup delete` sets `confirm=false`
+`DISTSSH_YES` do not skip it. `setup delete` sets `confirm=false`
 only after `--confirm-path` matches, or after the typed `delete` prompt.
 """
 function delete_remotes(

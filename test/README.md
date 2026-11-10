@@ -53,7 +53,7 @@ test/
 and DistSSHHeartbeat tests live with those packages and run as their own
 `Pkg.test` (`lib/DistSSHBase`, `lib/DistSSHUp`, `lib/DistSSHShip`,
 `lib/DistSSHHeartbeat`). SSH e2e for Base and Up is `lib/<pkg>/test/e2e.jl`
-(`DISTSSHKIT_SSH_E2E=1` after `testenv/docker-ssh/scripts/up.sh`).
+(`DISTSSH_SSH_E2E=1` after `testenv/docker-ssh/scripts/up.sh`).
 DistSSHHeartbeat's SSH file is the same env gate and is skipped without
 `sshd`. DistSSHShip's real transfer is in `test/e2e.jl`. DistSSHRun's
 `test/runtests.jl` does not include them.
@@ -157,7 +157,7 @@ julia -e '
 
 ## SSH E2E
 
-Two Linux workers. `DISTSSHKIT_SSH_E2E=1`. Kit parent OS matrix:
+Two Linux workers. `DISTSSH_SSH_E2E=1`. Kit parent OS matrix:
 [`testenv/docker-ssh/README.md`](../testenv/docker-ssh/README.md). Apple
 silicon without Compose:
 [apple-container-ssh README](../testenv/apple-container-ssh/README.md)
@@ -170,11 +170,11 @@ open "$(cat test/artifacts/ssh-e2e/LATEST)/SUMMARY.txt"
 ```
 
 Coverage uploads on **main push** (`Pkg.test` on 1.13) and **E2E weekly** /
-version-cut PR E2E (`DISTSSHKIT_CODE_COVERAGE=1` on `up.sh --e2e`).
+version-cut PR E2E (`DISTSSH_CODE_COVERAGE=1` on `up.sh --e2e`).
 Path-filtered PR E2E runs without that upload. Local:
 
 ```bash
-DISTSSHKIT_CODE_COVERAGE=1 \
+DISTSSH_CODE_COVERAGE=1 \
   testenv/docker-ssh/scripts/up.sh --e2e
 ```
 
@@ -224,7 +224,7 @@ only return numbers. Collect tests use files workers write.
   then `go --run-id`; π on both; remote `runs/<run_id>/src/Project.toml`
   appears (`go --ship-tree` is an error before SSH)
 - `go pi_file`: slot `pi_results.txt` after go collect;
-  `DISTSSHKIT_JOB_ID` set so remote `-L` mark is collected
+  `DISTSSH_JOB_ID` set so remote `-L` mark is collected
 - `go --output-dir`: `pi_results.txt` under the given batch root
 - API: `setup!` / `go!(output_dir=)` / `pipeline!(collect=true)` on
   worker files
@@ -246,8 +246,8 @@ Not this file: macOS workers, dead hosts, fake `ssh`, local
 
 - **setup:** core work is `ssh`. `setup git-clone`, `setup git-sync`, and
   `setup git-pull` also need `git`.
-  `Pkg.test()` uses the `DISTSSHKIT_TEST_SSH` fixture, and only when
-  `DISTSSHKIT_TEST=1`. Bytes on a real remote: e2e.
+  `Pkg.test()` uses the `DISTSSH_TEST_SSH` fixture, and only when
+  `DISTSSH_TEST=1`. Bytes on a real remote: e2e.
 - **drive / go:** core work is `Distributed` workers. `Pkg.test()` uses
   real **local** `addprocs` (no SSH fake). Bytes on a real remote: e2e.
 - **drive collect:** core work is `ssh` and stdlib Tar of result trees.
@@ -304,17 +304,17 @@ Helpers (via `support.jl`): `_child_julia_env`, `_run_kit_drive` /
 - `_child_julia_env` drops parent `NO_COLOR` so TTY children keep the live
   `:progress` default. Pass `NO_COLOR` in `extra` when a child must keep it.
   `_tty_capture_script` / `_tty_expect_script` also strip `NO_COLOR`.
-- `DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL` (default `1` in test children):
+- `DISTSSH_SKIP_GLOBAL_WORKER_PKILL` (default `1` in test children):
   skip drive leftover tagged remote `pkill`; each child `rmprocs`es its own
   local workers. Untagged sweep is `setup cleanup` only.
-- `DISTSSHKIT_SSH_E2E` (unset): `1` runs `test/e2e.jl` (needs docker-ssh
+- `DISTSSH_SSH_E2E` (unset): `1` runs `test/e2e.jl` (needs docker-ssh
   workers)
-- `DISTSSHKIT_CODE_COVERAGE` (unset): `1` with `up.sh --e2e` →
+- `DISTSSH_CODE_COVERAGE` (unset): `1` with `up.sh --e2e` →
   `--code-coverage=user`
 
-CLI also honors `DISTSSHKIT_QUIET`, `DISTSSHKIT_PROGRESS`,
-`DISTSSHKIT_VERBOSE`, `DISTSSHKIT_YES`, `DISTSSHKIT_HOSTS`,
-`DISTSSHKIT_HOSTS_FILE` (`src/DistSSHRun/argv/session.jl`).
+CLI also honors `DISTSSH_QUIET`, `DISTSSH_PROGRESS`,
+`DISTSSH_VERBOSE`, `DISTSSH_YES`, `DISTSSH_HOSTS`,
+`DISTSSH_HOSTS_FILE` (`src/DistSSHRun/argv/session.jl`).
 
 ## Aqua
 

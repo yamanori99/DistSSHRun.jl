@@ -69,7 +69,7 @@ const _STATUS_ROW = "*  1.13  1.13.0+0.aarch64.apple.darwin14  1.13.3"
             """,
         )
         chmod(ju, 0o755)
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
             progress_out, progress = with_kit_verbosity(:progress) do
                 _capture_stdio() do _, _
                     return DistSSHRun.juliaup_verb_remotes(["parent"]; verb = "status")
@@ -92,7 +92,7 @@ const _STATUS_ROW = "*  1.13  1.13.0+0.aarch64.apple.darwin14  1.13.3"
             @test occursin("aarch64", verbose_out)
         end
         missing = joinpath(d, "missing")
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => missing) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => missing) do
             failed_out, failed = with_kit_verbosity(:progress) do
                 _capture_stdio() do _, _
                     return DistSSHRun.juliaup_verb_remotes(["parent"]; verb = "status")
@@ -121,9 +121,9 @@ const _STATUS_ROW = "*  1.13  1.13.0+0.aarch64.apple.darwin14  1.13.3"
         ssh = joinpath(d, "ssh.jl")
         write(ssh, "println(\"ok\")\n")
         withenv(
-            "DISTSSHKIT_TEST" => "1",
-            "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju,
-            "DISTSSHKIT_TEST_SSH" => ssh,
+            "DISTSSH_TEST" => "1",
+            "DISTSSH_TEST_LOCAL_JULIAUP" => ju,
+            "DISTSSH_TEST_SSH" => ssh,
         ) do
             progress_out, progress = with_kit_verbosity(:progress) do
                 _capture_stdio() do _, _
@@ -154,9 +154,9 @@ const _STATUS_ROW = "*  1.13  1.13.0+0.aarch64.apple.darwin14  1.13.3"
         end
         write(ssh, "println(stderr, \"ssh down\")\nexit(1)\n")
         withenv(
-            "DISTSSHKIT_TEST" => "1",
-            "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju,
-            "DISTSSHKIT_TEST_SSH" => ssh,
+            "DISTSSH_TEST" => "1",
+            "DISTSSH_TEST_LOCAL_JULIAUP" => ju,
+            "DISTSSH_TEST_SSH" => ssh,
         ) do
             progress_out, progress = with_kit_verbosity(:progress) do
                 _capture_stdio() do _, _
@@ -193,9 +193,9 @@ const _STATUS_ROW = "*  1.13  1.13.0+0.aarch64.apple.darwin14  1.13.3"
             "println(\"     *  1.13     1.13.0+0.aarch64.apple.darwin14  1.13.3\")\n",
         )
         withenv(
-            "DISTSSHKIT_TEST" => "1",
-            "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju,
-            "DISTSSHKIT_TEST_SSH" => ssh,
+            "DISTSSH_TEST" => "1",
+            "DISTSSH_TEST_LOCAL_JULIAUP" => ju,
+            "DISTSSH_TEST_SSH" => ssh,
         ) do
             out, result = with_kit_verbosity(:progress) do
                 _capture_stdio() do _, _

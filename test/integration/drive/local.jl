@@ -1,6 +1,6 @@
 using Test
 
-# Oracle: host `src/cli/drive.jl` + `parent:2` prints DISTSSHKIT_RUNNER_SMOKE_OK.
+# Oracle: host `src/cli/drive.jl` + `parent:2` prints DISTSSH_RUNNER_SMOKE_OK.
 # Does not cover kit module CLI, --log-dir, or external host deps.
 
 @testset "drive l:N" begin
@@ -16,6 +16,6 @@ using Test
 
         proc, combined = _run_host_drive(; script = script, host_project = proj)
         _assert_proc_ok(proc, combined; label = "drive l:N smoke")
-        @test occursin("DISTSSHKIT_RUNNER_SMOKE_OK nw=2", combined)
+        @test occursin("DISTSSH_RUNNER_SMOKE_OK nw=2", combined)
     end
 end

@@ -23,7 +23,7 @@ if !isdefined(Main, :_run_kit_setup)
             owned && _git_init_min!(proj)
             cmd = _kit_cli_cmd(vcat([String(command)], args); julia = julia, project = kit_root)
             base = Dict{String, String}(
-                "DISTSSHKIT_YES" => "1",
+                "DISTSSH_YES" => "1",
                 "DISTRIBUTED_PROJECT_ROOT" => proj,
             )
             env = _child_julia_env(merge(base, extra_env))
@@ -76,7 +76,7 @@ if !isdefined(Main, :_run_kit_setup)
     #
     # The old host-only `up` aligned in one shot. Verbs are separate: install the
     # kit channel, then switch the default. `default` confirms unless
-    # `DISTSSHKIT_YES` is set (`_run_kit_setup` sets it).
+    # `DISTSSH_YES` is set (`_run_kit_setup` sets it).
     function _run_kit_up_align(
             tail::AbstractVector;
             project_root,
@@ -211,7 +211,7 @@ if !isdefined(Main, :_run_kit_setup)
                 project = kit_root,
             )
             base = Dict{String, String}(
-                "DISTSSHKIT_YES" => "1",
+                "DISTSSH_YES" => "1",
                 "DISTRIBUTED_PROJECT_ROOT" => proj,
             )
             env = _child_julia_env(merge(base, extra_env))
@@ -239,7 +239,7 @@ if !isdefined(Main, :_run_kit_setup)
         function _run(proj)
             cmd = _kit_cli_cmd(vcat(["hostinfo"], hostinfo_args); julia = julia, project = kit_root)
             base = Dict{String, String}(
-                "DISTSSHKIT_YES" => "1",
+                "DISTSSH_YES" => "1",
                 "DISTRIBUTED_PROJECT_ROOT" => proj,
             )
             env = _child_julia_env(merge(base, extra_env))

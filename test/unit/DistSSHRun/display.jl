@@ -2,22 +2,22 @@ using Test
 
 @testset "display" begin
     @testset "progress accent theme" begin
-        withenv("DISTSSHKIT_PROGRESS_BG" => "light", "COLORFGBG" => nothing) do
+        withenv("DISTSSH_PROGRESS_BG" => "light", "COLORFGBG" => nothing) do
             @test DistSSHRun._term_light_background()
             rgb, idx = DistSSHRun._progress_accent_pair()
             @test rgb == (3, 105, 161)
             @test idx == 31
         end
-        withenv("DISTSSHKIT_PROGRESS_BG" => "dark") do
+        withenv("DISTSSH_PROGRESS_BG" => "dark") do
             @test !DistSSHRun._term_light_background()
             rgb, idx = DistSSHRun._progress_accent_pair()
             @test rgb == (56, 189, 248)
             @test idx == 81
         end
-        withenv("DISTSSHKIT_PROGRESS_BG" => nothing, "COLORFGBG" => "0;15") do
+        withenv("DISTSSH_PROGRESS_BG" => nothing, "COLORFGBG" => "0;15") do
             @test DistSSHRun._term_light_background()
         end
-        withenv("DISTSSHKIT_PROGRESS_BG" => nothing, "COLORFGBG" => "15;0") do
+        withenv("DISTSSH_PROGRESS_BG" => nothing, "COLORFGBG" => "15;0") do
             @test !DistSSHRun._term_light_background()
         end
     end
@@ -297,7 +297,7 @@ using Test
                     with_kit_verbosity(:progress) do
                         log_path = DistSSHRun.init_log_file(tmp; prefix = "progress_job")
                         redirect_stdout(devnull) do
-                            withenv("DISTSSHKIT_JOB_ID" => nothing) do
+                            withenv("DISTSSH_JOB_ID" => nothing) do
                                 DistSSHRun.kit_progress_begin!(
                                     "drive"; steps = 1, kind = :drive, job_id = "q-42",
                                 )
@@ -322,7 +322,7 @@ using Test
                     with_kit_verbosity(:progress) do
                         log_path = DistSSHRun.init_log_file(tmp; prefix = "progress_job_env")
                         redirect_stdout(devnull) do
-                            withenv("DISTSSHKIT_JOB_ID" => "env-7") do
+                            withenv("DISTSSH_JOB_ID" => "env-7") do
                                 DistSSHRun.kit_progress_begin!("go"; steps = 1, kind = :go)
                                 DistSSHRun.kit_progress_done!(; ok = true)
                             end
@@ -338,7 +338,7 @@ using Test
                     with_kit_verbosity(:progress) do
                         log_path = DistSSHRun.init_log_file(tmp; prefix = "progress_no_job")
                         redirect_stdout(devnull) do
-                            withenv("DISTSSHKIT_JOB_ID" => nothing) do
+                            withenv("DISTSSH_JOB_ID" => nothing) do
                                 DistSSHRun.kit_progress_begin!("go"; steps = 1, kind = :go)
                                 DistSSHRun.kit_progress_done!(; ok = true)
                             end

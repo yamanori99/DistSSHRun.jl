@@ -7,10 +7,10 @@ using Test
     host_bang = "WARNING: something went wrong!"
     kit_warn = "  ! host1: ssh slow"
     glued_kit = "  ⠋  workers         ━━━━━━━╺━━━━━━━━━━━━  3/7  0:00  ! host1: ssh slow"
-    boom = "ERROR: DISTSSHKIT_RUNNER_BOOM"
-    smoke = "DISTSSHKIT_RUNNER_SMOKE_OK nw=2"
-    ride_ok = "DISTSSHKIT_RIDE_REMOTE_OK"
-    ride_boom = "DISTSSHKIT_RIDE_REMOTE_BOOM"
+    boom = "ERROR: DISTSSH_RUNNER_BOOM"
+    smoke = "DISTSSH_RUNNER_SMOKE_OK nw=2"
+    ride_ok = "DISTSSH_RIDE_REMOTE_OK"
+    ride_boom = "DISTSSH_RIDE_REMOTE_BOOM"
 
     @test !_tty_payload_line(mem)
     @test _tty_bar_line(mem)

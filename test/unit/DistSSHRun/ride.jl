@@ -160,7 +160,7 @@ using Test
         @test r.output_dir !== nothing
         @test r.run_dir !== nothing
         @test r.run_dir != r.output_dir
-        withenv(DistSSHRun.DISTSSHKIT_RUN_DIR_ENV => nothing) do
+        withenv(DistSSHRun.DISTSSH_RUN_DIR_ENV => nothing) do
             @test DistSSHRun.result_run_dir(r) == r.run_dir
             @test DistSSHRun.kit_run_result(r).run_dir == r.run_dir
         end
@@ -608,10 +608,10 @@ using Test
                 )
                 chmod(ssh_bin, 0o755)
                 fake = Dict(
-                    "DISTSSHKIT_TEST" => "1",
-                    "DISTSSHKIT_TEST_SSH" => double,
-                    "DISTSSHKIT_TEST_SSH_LOG" => logp,
-                    "DISTSSHKIT_TEST_POSIX_SHELL" => "1",
+                    "DISTSSH_TEST" => "1",
+                    "DISTSSH_TEST_SSH" => double,
+                    "DISTSSH_TEST_SSH_LOG" => logp,
+                    "DISTSSH_TEST_POSIX_SHELL" => "1",
                     "PATH" => bindir * ":" * get(ENV, "PATH", ""),
                 )
                 host = "ridework.test"

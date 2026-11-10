@@ -208,7 +208,7 @@ end
     identity_mismatches(parent, other; allow=Symbol[], shipped_manifest="") -> Vector{String}
 
 Same lines as [`go!`](@ref), [`ride!`](@ref), and [`drive!`](@ref). An empty
-vector matches. This does not throw, print, or read `DISTSSHKIT_QUIET`.
+vector matches. This does not throw, print, or read `DISTSSH_QUIET`.
 
 `:julia` in `allow` skips both `"version"` and `"commit"`. `:distssh` skips
 `pkg.*`. `:manifest` skips the Manifest path. Any other symbol does not throw

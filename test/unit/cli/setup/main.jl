@@ -9,8 +9,8 @@ using Test
         mktemp() do out_path, out_io
             mktemp() do err_path, err_io
                 code = withenv(
-                    "DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "",
-                    "DISTSSHKIT_YES" => nothing,
+                    "DISTSSH_CLI_SUBCOMMAND_DONE" => "",
+                    "DISTSSH_YES" => nothing,
                 ) do
                     redirect_stdin(devnull) do
                         redirect_stdout(out_io) do
@@ -103,8 +103,8 @@ using Test
         @test occursin("child:NAME", combined) || occursin("parent[:N]", combined)
     end
     let (code, out, err) = withenv(
-            "DISTSSHKIT_TEST" => "1",
-            "DISTSSHKIT_TEST_SSH" => "/no/such/fake-ssh.jl",
+            "DISTSSH_TEST" => "1",
+            "DISTSSH_TEST_SSH" => "/no/such/fake-ssh.jl",
         ) do
             _setup_capture(["delete", "--yes", "child:host1"])
         end

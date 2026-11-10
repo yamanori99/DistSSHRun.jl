@@ -6,9 +6,9 @@
 # (re-execs this file as a child so `set -e` cannot kill the interactive shell,
 #  then sources .generated/env.sh here. CI keeps ./scripts/up.sh --e2e.)
 #
-# CI: DISTSSHKIT_WORKER_IMAGE=ghcr.io/…:sha pulls instead of building.
-# DISTSSHKIT_PUSH_IMAGE=… tags+pushes after a local build (retries for GHCR).
-# DISTSSHKIT_SKIP_UP=1 skips compose up (image job: build+push only).
+# CI: DISTSSH_WORKER_IMAGE=ghcr.io/…:sha pulls instead of building.
+# DISTSSH_PUSH_IMAGE=… tags+pushes after a local build (retries for GHCR).
+# DISTSSH_SKIP_UP=1 skips compose up (image job: build+push only).
 
 # Detect source vs execute before `set -e` (must not run set -e in an interactive shell).
 _KIT_UP_SOURCED=0
@@ -56,12 +56,12 @@ for arg in "$@"; do
     -h|--help)
       echo "usage: $0 [--e2e]"
       echo "  Manual DistSSHRun: source $0   (activates .generated/env.sh in this shell)"
-      echo "  DISTSSHKIT_WORKER_IMAGE  pull this tag (skip compose build)"
-      echo "  DISTSSHKIT_PUSH_IMAGE    after build, tag and push (retried)"
-      echo "  DISTSSHKIT_SKIP_UP=1     skip compose up (push-only)"
-      echo "  DISTSSHKIT_CODE_COVERAGE=1  e2e with --code-coverage=user (child CLI too)"
-      echo "  DISTSSHKIT_BUILD_RETRIES=N  image build attempts (default 3)"
-      echo "  DISTSSHKIT_BUILD_CACHE=gha  CI only: buildx with the GitHub Actions layer cache"
+      echo "  DISTSSH_WORKER_IMAGE  pull this tag (skip compose build)"
+      echo "  DISTSSH_PUSH_IMAGE    after build, tag and push (retried)"
+      echo "  DISTSSH_SKIP_UP=1     skip compose up (push-only)"
+      echo "  DISTSSH_CODE_COVERAGE=1  e2e with --code-coverage=user (child CLI too)"
+      echo "  DISTSSH_BUILD_RETRIES=N  image build attempts (default 3)"
+      echo "  DISTSSH_BUILD_CACHE=gha  CI only: buildx with the GitHub Actions layer cache"
       exit 0
       ;;
     *)
@@ -92,7 +92,7 @@ fi
 
 pull_worker_image() {
   local image="$1"
-  local retries="${DISTSSHKIT_WORKER_PULL_RETRIES:-1}"
+  local retries="${DISTSSH_WORKER_PULL_RETRIES:-1}"
   local attempt=1
   while true; do
     if docker pull "$image"; then
@@ -109,15 +109,15 @@ pull_worker_image() {
   done
 }
 
-if [[ -n "${DISTSSHKIT_WORKER_IMAGE:-}" ]]; then
-  pull_worker_image "$DISTSSHKIT_WORKER_IMAGE"
+if [[ -n "${DISTSSH_WORKER_IMAGE:-}" ]]; then
+  pull_worker_image "$DISTSSH_WORKER_IMAGE"
 else
   # Build a single service so logs are not interleaved (both share the same image).
   # Compose passes JULIA_*_CHANNEL and the resolved releases into Dockerfile ARGs.
   _distsshkit_export_julia_releases
   # A failed RUN layer is discarded, so a rebuild starts that layer clean
   # and reuses the cached layers before it.
-  if [[ "${DISTSSHKIT_BUILD_CACHE:-}" == "gha" ]]; then
+  if [[ "${DISTSSH_BUILD_CACHE:-}" == "gha" ]]; then
     # CI: reuse layers across runs. The release ARGs are the cache key for the
     # juliaup layer, so a hit skips julialang-s3 entirely.
     _distsshkit_retry "worker image build" docker buildx build --load \
@@ -132,13 +132,13 @@ else
   else
     _distsshkit_retry "worker image build" "${COMPOSE[@]}" -f compose.yml build child-1
   fi
-  if [[ -n "${DISTSSHKIT_PUSH_IMAGE:-}" ]]; then
-    DISTSSHKIT_LOCAL_IMAGE="$LOCAL_IMAGE" ./scripts/push-image.sh "$DISTSSHKIT_PUSH_IMAGE"
+  if [[ -n "${DISTSSH_PUSH_IMAGE:-}" ]]; then
+    DISTSSH_LOCAL_IMAGE="$LOCAL_IMAGE" ./scripts/push-image.sh "$DISTSSH_PUSH_IMAGE"
   fi
 fi
 
-if [[ "${DISTSSHKIT_SKIP_UP:-}" == "1" ]]; then
-  echo "DISTSSHKIT_SKIP_UP=1: image ready, not starting workers"
+if [[ "${DISTSSH_SKIP_UP:-}" == "1" ]]; then
+  echo "DISTSSH_SKIP_UP=1: image ready, not starting workers"
   exit 0
 fi
 
@@ -153,8 +153,8 @@ echo "DistSSHRun in this shell: source ${ROOT}/scripts/up.sh"
 echo "One-shot: ${ROOT}/scripts/with-env.sh julia --project=. -m DistSSHRun …"
 
 if [[ "$RUN_E2E" -eq 1 ]]; then
-  export DISTSSHKIT_SSH_E2E=1
-  export DISTSSHKIT_YES=1
+  export DISTSSH_SSH_E2E=1
+  export DISTSSH_YES=1
   # Parent --juliaup E2E needs local juliaup (CI setup-julia alone has none).
   "${ROOT}/scripts/ensure-kit-parent-juliaup.sh"
   cd "${KIT_ROOT}"
@@ -168,7 +168,7 @@ if [[ "$RUN_E2E" -eq 1 ]]; then
     Pkg.instantiate()
   '
   julia_e2e=(julia --project=. --color=yes)
-  if [[ "${DISTSSHKIT_CODE_COVERAGE:-}" == "1" ]]; then
+  if [[ "${DISTSSH_CODE_COVERAGE:-}" == "1" ]]; then
     julia_e2e+=(--code-coverage=user)
   fi
   e2e_status=0

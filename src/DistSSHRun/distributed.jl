@@ -80,7 +80,7 @@ end
 
 # Parent `execute!(detached=true)` writes these into the output directory after
 # spawn, once that directory was already empty. A child that inherited
-# `DISTSSHKIT_RUN_DIR` may see them and nothing else.
+# `DISTSSH_RUN_DIR` may see them and nothing else.
 const _OUTPUT_DIR_PARENT_SIDECARS = ("kit.job", "kit.pid", "kit.run_dir")
 
 """
@@ -93,7 +93,7 @@ directory, a file, or a symlink is refused. Call this before a lock or
 `kit.pid` write.
 
 `allow_parent_sidecars` is for a child that already inherited
-`DISTSSHKIT_RUN_DIR`. `kit.pid`, `kit.job`, and `kit.run_dir` alone do not
+`DISTSSH_RUN_DIR`. `kit.pid`, `kit.job`, and `kit.run_dir` alone do not
 refuse that directory. Any other name still does, and the error lists every name.
 """
 function _prepare_output_dir!(
@@ -128,9 +128,13 @@ function _prepare_output_dir!(
     return canonical_local_path(path)
 end
 
-"""`{script_dir}/.distsshkit/{kind}` (parent of go / ride / drive batch dirs)."""
+"""`{script_dir}/.distssh/{kind}` (parent of go / ride / drive batch dirs; write target)."""
 function kit_dir_beside_script(script_dir::AbstractString, kind::Symbol)::String
-    return canonical_local_path(joinpath(String(script_dir), ".distsshkit", String(kind)))
+    return joinpath(
+        DistSSHBase.canonical_local_path(String(script_dir)),
+        DistSSHBase.LOCAL_STATE_DIR,
+        String(kind),
+    )
 end
 
 """
@@ -138,7 +142,7 @@ end
 
 Best-effort result root for a `drive` run: `ENV["DISTRIBUTED_OUTPUT_DIR"]` if
 set (explicit `--output-dir` / `output_dir=`, kit's unique batch dir, or a
-driver's own `init_output_dir!`), else `{script_dir}/.distsshkit/drive`
+driver's own `init_output_dir!`), else the resolved `.distssh` / legacy drive root beside `{script_dir}`
 (the kind root, not a per-run leaf). Live runs set ENV before lock / collect
 so this fallback is only for callers that never entered `drive`. Same
 priority `collect_drive_results!` uses to report `Results:`.
@@ -146,7 +150,7 @@ priority `collect_drive_results!` uses to report `Results:`.
 function resolve_drive_output_dir(script_dir::AbstractString)::String
     results_dir = get(ENV, "DISTRIBUTED_OUTPUT_DIR", nothing)
     if results_dir === nothing
-        results_dir = kit_dir_beside_script(script_dir, :drive)
+        results_dir = DistSSHBase.resolve_local_state_dir(script_dir, :drive)
     end
     return canonical_local_path(results_dir)
 end
@@ -156,8 +160,8 @@ end
 
 Log directory a `drive` run actually uses (single source of truth for
 `init_log_file`'s priority): explicit `log_dir` (`--log-dir` / `log_dir=`),
-else `ENV["DISTRIBUTED_OUTPUT_DIR"]`, else `{script_dir}/.distsshkit/drive`
-(kind root; live runs set ENV first).
+else `ENV["DISTRIBUTED_OUTPUT_DIR"]`, else the resolved `.distssh` / legacy drive root
+(live runs set ENV first).
 """
 function resolve_drive_log_dir(
         log_dir::Union{Nothing, AbstractString},
@@ -170,7 +174,7 @@ function resolve_drive_log_dir(
         resolved = get(ENV, "DISTRIBUTED_OUTPUT_DIR", nothing)
     end
     if resolved === nothing
-        resolved = kit_dir_beside_script(script_dir, :drive)
+        resolved = DistSSHBase.resolve_local_state_dir(script_dir, :drive)
     end
     return String(resolved)
 end
@@ -189,7 +193,7 @@ function worker_pmap(f, collection)
     call = myid() == 1 ? _take_pmap_call() : remotecall_fetch(_take_pmap_call, 1)
     indexed = collect(enumerate(collection))
     return pmap(indexed) do (item, x)
-        raw = get(ENV, "DISTSSHKIT_WORKER_RANK", "")
+        raw = get(ENV, "DISTSSH_WORKER_RANK", "")
         rank = something(tryparse(Int, raw), 0)
         if myid() == 1
             _note_item!(call, item, rank)

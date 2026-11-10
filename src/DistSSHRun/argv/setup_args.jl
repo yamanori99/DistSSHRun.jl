@@ -78,7 +78,7 @@ function show_requirements(; io::IO = stdout)
         "  is followed once. Siblings of that file are not sent.",
         "A gitignored LocalPreferences.toml is left out. Add !LocalPreferences.toml to ship it.",
         "A file over 50 MiB, or a send list over 100 MiB, prints a warning (local sizes).",
-        "DISTSSHKIT_SHIP_WARN_FILE_BYTES and DISTSSHKIT_SHIP_WARN_TOTAL_BYTES set those",
+        "DISTSSH_SHIP_WARN_FILE_BYTES and DISTSSH_SHIP_WARN_TOTAL_BYTES set those",
         "  limits. An invalid value is an error. The 256 MiB cap still stops the ship.",
         "Declared inputs do not ship.",
         "Ship and collect use Tar. Original mtimes are not kept.",
@@ -159,7 +159,7 @@ function show_requirements(; io::IO = stdout)
         io,
         "  $(KIT_SKIP_PKILL_ENV_HELP)",
         "  $(KIT_JOBS_ENV_HELP)",
-        "  DISTSSHKIT_YES            same as -y; does not authorize delete or prune",
+        "  DISTSSH_YES            same as -y; does not authorize delete or prune",
     )
     print_help_blank(io)
     return print_help_lines(
