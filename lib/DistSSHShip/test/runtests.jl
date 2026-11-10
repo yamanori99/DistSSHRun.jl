@@ -553,6 +553,29 @@ end
         @test DistSSHShip.shipped_record_status(bad) == :invalid
     end
 
+    @testset "transfer_tree per-host step order" begin
+        snap = _minimal_snapshot(".")
+        try
+            order = Symbol[]
+            hooks = DistSSHShip._TransferTreeHooks(
+                (_, _) -> push!(order, :prepare),
+                (_, _, _, _; _...) -> push!(order, :extract),
+                (_, _, _) -> push!(order, :record),
+            )
+            DistSSHShip._transfer_tree_one_host!(
+                "host.test", "/stage/tree", snap, false, true; hooks = hooks,
+            )
+            @test order == [:prepare, :extract, :record]
+            empty!(order)
+            DistSSHShip._transfer_tree_one_host!(
+                "host.test", "/stage/tree", snap, false, false; hooks = hooks,
+            )
+            @test order == [:prepare, :extract]
+        finally
+            rm(snap.directory; force = true, recursive = true)
+        end
+    end
+
     @testset "shipped record ordering vs tar extract" begin
         _tmp() do dir
             _project!(dir)
