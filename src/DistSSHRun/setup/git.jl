@@ -320,7 +320,8 @@ end
 
 """
 True for porcelain `??` rows that name only DistSSHRun deploy metadata under `.distssh/`
-at the repo root (deploy record, tmp installs, engine `ship.toml`). Tracked or modified
+at the repo root (deploy record, tmp installs, engine `shipment.toml` or legacy
+`ship.toml`). Tracked or modified
 rows are never deploy-metadata entries.
 """
 function _is_deploy_metadata_status_entry(xy::AbstractString, path::AbstractString)::Bool

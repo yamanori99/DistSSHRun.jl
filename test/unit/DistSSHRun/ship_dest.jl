@@ -49,7 +49,7 @@ end
             _minimal_project!(tmp)
             pack = DistSSHRun.pack_ship_tree(tmp)
             try
-                @test pack isa DistSSHRun.DistSSHShip.ShipPack
+                @test pack isa DistSSHRun.DistSSHShip.Shipment
                 @test isfile(pack.tar_path)
                 @test pack.content_tree_hash == DistSSHRun.DistSSHShip.content_tree_hash(pack)
                 listed = DistSSHRun.ship_send_list(tmp)
@@ -87,7 +87,7 @@ end
     end
 
     @testset "ship_pack forwards transfer_id to the record builder" begin
-        pack = DistSSHRun.DistSSHShip.ShipPack(
+        pack = DistSSHRun.DistSSHShip.Shipment(
             mktempdir(),
             joinpath(mktempdir(), "x.tar"),
             "a"^40,
@@ -146,7 +146,7 @@ end
                         result = DistSSHRun.ship_pack(
                             pack, [host], dest; write_record = false,
                         )
-                        @test result isa DistSSHRun.DistSSHShip.ShipResult
+                        @test result isa DistSSHRun.DistSSHShip.ShipmentReceipt
                         @test result.ok
                         @test result.content_tree_hash == pack.content_tree_hash
                         @test length(result.hosts) == 1

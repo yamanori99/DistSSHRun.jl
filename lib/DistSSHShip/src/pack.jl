@@ -3,7 +3,7 @@
 # not on the local absolute path.
 
 """Tar plus the relative layout [`ship`](@ref DistSSHRun.DistSSHShip.ship) extracts."""
-struct ShipPack
+struct Shipment
     directory::String
     tar_path::String
     content_tree_hash::String
@@ -17,7 +17,7 @@ struct ShipPack
     extra_rels::Vector{String}
 end
 
-function content_tree_hash(snapshot::ShipPack)::String
+function content_tree_hash(snapshot::Shipment)::String
     return snapshot.content_tree_hash
 end
 
@@ -311,7 +311,7 @@ function _collect_entries(
 end
 
 """
-    pack_tree(project; extra_files=String[], kwargs...) -> ShipPack
+    pack_tree(project; extra_files=String[], kwargs...) -> Shipment
 
 Pack `project` (a directory, a project file, or a `--project` spec) into a
 temporary tar. The caller deletes `pack.directory`.
@@ -333,7 +333,7 @@ function pack_tree(
         ship_max_bytes::Integer = SHIP_MAX_BYTES_DEFAULT,
         omit_project_rels::Vector{String} = String[],
         warn::Function = print,
-    )::ShipPack
+    )::Shipment
     length(extra_files) > 1 && throw(
         ArgumentError(
             "more than one extra file is not yet supported",
@@ -404,7 +404,7 @@ function pack_tree(
         end
         Tar.create(stage, tar_path)
         hash = String(Tar.tree_hash(tar_path; algorithm = TREE_HASH_ALGORITHM, skip_empty = true))
-        return ShipPack(
+        return Shipment(
             tmpd, tar_path, hash, total, nfiles, anchor, resolved.project_dir,
             prel, allowed, extra_rels,
         )

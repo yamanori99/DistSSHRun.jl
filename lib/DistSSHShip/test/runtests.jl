@@ -46,7 +46,7 @@ function _local_extract_verified!(
     return nothing
 end
 
-function _minimal_snapshot(project_rel::String)::DistSSHShip.ShipPack
+function _minimal_snapshot(project_rel::String)::DistSSHShip.Shipment
     bundle = mktempdir()
     tar_path = joinpath(bundle, "snap.tar")
     src = joinpath(bundle, "src")
@@ -58,7 +58,7 @@ function _minimal_snapshot(project_rel::String)::DistSSHShip.ShipPack
     hash = String(DistSSHShip.Tar.tree_hash(tar_path; algorithm = "git-sha1", skip_empty = true))
     bytes = filesize(tar_path)
     files = 2
-    return DistSSHShip.ShipPack(
+    return DistSSHShip.Shipment(
         bundle, tar_path, hash, bytes, files, src, src, project_rel,
         String[], String[],
     )
@@ -536,9 +536,9 @@ end
                 @test DistSSHShip.ship_record_status(done) == :complete
                 @test DistSSHShip.ship_record_status(prog) == :in_progress
                 path = DistSSHShip.ship_record_logical_path("/stage/tree")
-                @test path == "/stage/tree/.distssh/ship.toml"
+                @test path == "/stage/tree/.distssh/shipment.toml"
                 path2 = DistSSHShip.ship_record_logical_path("~/q/stage")
-                @test path2 == "~/q/stage/.distssh/ship.toml"
+                @test path2 == "~/q/stage/.distssh/shipment.toml"
             finally
                 rm(snap.directory; force = true, recursive = true)
             end
@@ -551,6 +551,28 @@ end
             "content_tree_hash" => "a"^40,
         )
         @test DistSSHShip.ship_record_status(bad) == :invalid
+    end
+
+    @testset "ship record legacy read fallback" begin
+        snap = _minimal_snapshot(".")
+        try
+            current = DistSSHShip.build_ship_record(snap; complete = true, transfer_id = "current")
+            legacy = DistSSHShip.build_ship_record(snap; complete = true, transfer_id = "legacy")
+            bodies = String[sprint(TOML.print, current), sprint(TOML.print, legacy)]
+            chosen = DistSSHShip._coalesce_ship_record_bodies(bodies)
+            @test chosen !== nothing
+            @test chosen["transfer_id"] == "current"
+            legacy_only = DistSSHShip._coalesce_ship_record_bodies(String["not-a-record", bodies[2]])
+            @test legacy_only !== nothing
+            @test legacy_only["transfer_id"] == "legacy"
+            paths = DistSSHShip._ship_record_read_paths("/stage/tree")
+            @test paths == String[
+                "/stage/tree/.distssh/shipment.toml",
+                "/stage/tree/.distssh/ship.toml",
+            ]
+        finally
+            rm(snap.directory; force = true, recursive = true)
+        end
     end
 
     @testset "ship transfer_id keyword" begin
@@ -610,7 +632,7 @@ end
                 dest = mktempdir()
                 try
                     mkpath(joinpath(dest, ".distssh"))
-                    write(joinpath(dest, ".distssh", "ship.toml"), "complete = false\n")
+                    write(joinpath(dest, ".distssh", "shipment.toml"), "complete = false\n")
                     @test_throws ErrorException DistSSHShip.Tar.extract(snap.tar_path, dest)
                     dest2 = mktempdir()
                     try
@@ -621,7 +643,7 @@ end
                         @test rec["complete"] === true
                         mkpath(joinpath(dest2, ".distssh"))
                         write(
-                            joinpath(dest2, ".distssh", "ship.toml"),
+                            joinpath(dest2, ".distssh", "shipment.toml"),
                             sprint(TOML.print, rec),
                         )
                         buf = IOBuffer()

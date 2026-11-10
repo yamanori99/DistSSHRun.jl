@@ -1,10 +1,11 @@
-# Ship record at `<extract_dest>/.distssh/ship.toml` (schema 1).
+# Ship record at `<extract_dest>/.distssh/shipment.toml` (schema 1).
 # `ship` writes `complete = true` only after verified extract.
 # Readers treat a missing record or `complete = false` as not usable.
 
 const SHIP_RECORD_SCHEMA = 1
 const SHIP_RECORD_DIR = ".distssh"
-const SHIP_RECORD_NAME = "ship.toml"
+const SHIP_RECORD_NAME = "shipment.toml"
+const LEGACY_SHIP_RECORD_NAME = "ship.toml"
 const _SHIP_RECORD_TMP_TAIL = ".tmp"
 
 const _SHIP_PKG_VERSION = begin
@@ -20,10 +21,34 @@ function _posix_rstrip_slash(path::AbstractString)::String
     return rstrip(replace(strip(String(path)), '\\' => '/'), '/')
 end
 
+function _ship_record_path(extract_dest::AbstractString, name::AbstractString)::String
+    root = _posix_rstrip_slash(extract_dest)
+    return string(root, "/", SHIP_RECORD_DIR, "/", name)
+end
+
 """POSIX path to the ship record under an extract directory."""
 function ship_record_logical_path(extract_dest::AbstractString)::String
-    root = _posix_rstrip_slash(extract_dest)
-    return string(root, "/", SHIP_RECORD_DIR, "/", SHIP_RECORD_NAME)
+    return _ship_record_path(extract_dest, SHIP_RECORD_NAME)
+end
+
+function _legacy_ship_record_logical_path(extract_dest::AbstractString)::String
+    return _ship_record_path(extract_dest, LEGACY_SHIP_RECORD_NAME)
+end
+
+"""Candidate record paths in read order (current name, then legacy)."""
+function _ship_record_read_paths(extract_dest::AbstractString)::Vector{String}
+    return String[
+        ship_record_logical_path(extract_dest),
+        _legacy_ship_record_logical_path(extract_dest),
+    ]
+end
+
+function _coalesce_ship_record_bodies(bodies::AbstractVector{<:AbstractString})::Union{Nothing, Dict{String, Any}}
+    for body in bodies
+        rec = _parse_ship_record_body(body)
+        rec !== nothing && return rec
+    end
+    return nothing
 end
 
 function _ship_record_writer()::String
@@ -67,7 +92,7 @@ Build a schema-1 ship record table (not yet written).
 `DistSSHBase._remote_shell_path_word` (POSIX-quoted).
 """
 function build_ship_record(
-        snapshot::ShipPack;
+        snapshot::Shipment;
         complete::Bool = false,
         transfer_id::Union{Nothing, AbstractString} = nothing,
     )::Dict{String, Any}
@@ -181,7 +206,7 @@ function _ship_record_mkdir_script(extract_dest::AbstractString)::String
 end
 
 """
-Write `data` to `<extract_dest>/.distssh/ship.toml` on `host` (atomic tmp + mv).
+Write `data` to `<extract_dest>/.distssh/shipment.toml` on `host` (atomic tmp + mv).
 """
 function write_ship_record(
         host::AbstractString,
@@ -237,12 +262,11 @@ function write_ship_record(
     return nothing
 end
 
-"""Read `<extract_dest>/.distssh/ship.toml` on `host`, or `nothing` when missing or invalid."""
-function read_ship_record(
+function _read_ship_record_at_path(
         host::AbstractString,
-        extract_dest::AbstractString,
+        record_path::AbstractString,
     )::Union{Nothing, Dict{String, Any}}
-    pq = DistSSHBase._remote_shell_path_word(ship_record_logical_path(extract_dest))
+    pq = DistSSHBase._remote_shell_path_word(record_path)
     out = IOBuffer()
     err = IOBuffer()
     proc = run(
@@ -254,7 +278,25 @@ function read_ship_record(
         wait = true,
     )
     DistSSHBase.shell_status(proc) == 0 || return nothing
-    return _parse_ship_record_body(String(take!(out)))
+    body = String(take!(out))
+    rec = _parse_ship_record_body(body)
+    return rec
+end
+
+"""
+Read `<extract_dest>/.distssh/shipment.toml` on `host`, falling back to legacy
+`ship.toml` when the current file is absent. Returns `nothing` when both are
+missing or invalid.
+"""
+function read_ship_record(
+        host::AbstractString,
+        extract_dest::AbstractString,
+    )::Union{Nothing, Dict{String, Any}}
+    for path in _ship_record_read_paths(extract_dest)
+        rec = _read_ship_record_at_path(host, path)
+        rec !== nothing && return rec
+    end
+    return nothing
 end
 
 """
@@ -302,7 +344,7 @@ end
 function _write_complete_record!(
         host::AbstractString,
         extract_dest::AbstractString,
-        snapshot::ShipPack;
+        snapshot::Shipment;
         transfer_id::Union{Nothing, AbstractString} = nothing,
     )
     data = build_ship_record(snapshot; complete = true, transfer_id = transfer_id)

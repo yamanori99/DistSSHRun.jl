@@ -120,14 +120,14 @@ when selection cannot probe, then fails closed if the run id is invalid. `--rsyn
 `ship_tree!(project, hosts, deploy_root)` packs with `DistSSHShip.pack_tree`
 (declared-input omission and warnings), ships into `runs/<run_id>/src/`, then
 deletes the temporary pack directory. `ship_tree!(pack, hosts, deploy_root)`
-sends an existing [`ShipPack`](@ref DistSSHRun.DistSSHShip.ShipPack) without repacking or
+sends an existing [`Shipment`](@ref DistSSHRun.DistSSHShip.Shipment) without repacking or
 deleting it (a pack from a project with declared inputs is refused; use the
 project method). After `DistSSHShip.ship`, files under `<dest>/.distssh/`
-(for example `ship.toml`) are remote metadata and are **not** part of
+(for example `shipment.toml`) are remote metadata and are **not** part of
 `content_tree_hash`; any code that re-hashes an extracted tree must exclude
 `.distssh/`. The tar is `ship.tar` under the pack directory. Sending refuses
 depot preferences, re-hashes the tar immediately before transfer, and throws
-`ArgumentError` when the hash differs or the tar is missing. The `ShipPack`
+`ArgumentError` when the hash differs or the tar is missing. The `Shipment`
 method defaults `confirm=false`; the project method confirms unless disabled.
 `provenance=false` does not keep the ship for controller `run.toml` in this
 process. `setup ship-tree` still confirms unless `-y` is used.

@@ -151,10 +151,10 @@ DistSSHShip.resolve_ship_project
 DistSSHShip.gitignore_paths
 DistSSHShip.selected_paths
 DistSSHShip.pack_paths
-DistSSHShip.ShipPack
+DistSSHShip.Shipment
 DistSSHShip.pack_tree
 DistSSHShip.ship
-DistSSHShip.ShipResult
+DistSSHShip.ShipmentReceipt
 DistSSHShip.assert_extracted_tree_contained!
 DistSSHShip.ship_record_logical_path
 DistSSHShip.build_ship_record
