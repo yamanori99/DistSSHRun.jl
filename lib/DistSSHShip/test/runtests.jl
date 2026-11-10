@@ -553,6 +553,32 @@ end
         @test DistSSHShip.ship_record_status(bad) == :invalid
     end
 
+    @testset "ship transfer_id keyword" begin
+        snap = _minimal_snapshot(".")
+        try
+            recorded = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
+            hooks = DistSSHShip._ShipHooks(
+                (_, _) -> nothing,
+                (_, _, _, _; _...) -> nothing,
+                (_, _, s) -> begin
+                    recorded[] = DistSSHShip.build_ship_record(
+                        s; complete = true, transfer_id = "job-1",
+                    )
+                end,
+            )
+            DistSSHShip._ship_one_host!(
+                "host.test", "/stage/tree", snap, false, true;
+                transfer_id = "job-1",
+                hooks = hooks,
+            )
+            rec = recorded[]
+            rec !== nothing || error("write hook did not run")
+            @test rec["transfer_id"] == "job-1"
+        finally
+            rm(snap.directory; force = true, recursive = true)
+        end
+    end
+
     @testset "ship per-host step order" begin
         snap = _minimal_snapshot(".")
         try

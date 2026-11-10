@@ -104,6 +104,7 @@ function _ship_one_host!(
         allow_external_symlinks::Bool,
         write_record::Bool;
         julia::Union{Nothing, AbstractString} = nothing,
+        transfer_id::Union{Nothing, AbstractString} = nothing,
         hooks::_ShipHooks = _ShipHooks(),
     )
     if hooks.prepare_dest! === nothing
@@ -129,7 +130,7 @@ function _ship_one_host!(
     end
     if write_record
         if hooks.write_complete_record! === nothing
-            _write_complete_record!(host, checked, snapshot)
+            _write_complete_record!(host, checked, snapshot; transfer_id = transfer_id)
         else
             hooks.write_complete_record!(host, checked, snapshot)
         end
@@ -179,7 +180,8 @@ in place. A failed extract can leave a partial tree.
 When `write_record=true` (default), writes
 `<dest>/.distssh/ship.toml` with `complete = true` only after hash
 verification succeeds. There is no in-flight marker: a missing or
-incomplete record means the tree is not usable.
+incomplete record means the tree is not usable. Optional `transfer_id`
+is stored in the record (for example a Queue stage job id).
 
 `content_tree_hash` names the extracted **project tree only**. Files under
 `<dest>/.distssh/` are written after verification and are not included in that
@@ -193,6 +195,7 @@ function ship(
         allow_external_symlinks::Bool = false,
         julia::Union{Nothing, AbstractString} = nothing,
         write_record::Bool = true,
+        transfer_id::Union{Nothing, AbstractString} = nothing,
     )::ShipResult
     host_list = String[String(h) for h in hosts]
     isempty(host_list) && throw(ArgumentError("ship: no hosts"))
@@ -219,6 +222,7 @@ function ship(
             _ship_one_host!(
                 host, checked, snapshot, allow_external_symlinks, write_record;
                 julia = julia,
+                transfer_id = transfer_id,
             )
             push!(rows, HostResult(host, true, "ship ok"))
         catch e

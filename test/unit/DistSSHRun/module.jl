@@ -61,6 +61,10 @@ using Test
         @test name in ns && Base.ispublic(DistSSHRun, name)
         @test !Base.isexported(DistSSHRun, name)
     end
+    for name in (:pack_ship_tree, :ship_pack, :ship_project_to_dest)
+        @test name in ns && Base.ispublic(DistSSHRun, name)
+        @test !Base.isexported(DistSSHRun, name)
+    end
     @test Base.ispublic(DistSSHRun.DistSSHBase, :HostResult)
     @test DistSSHRun.HostResult === DistSSHRun.DistSSHBase.HostResult
     @test :ship_send_list in ns && Base.ispublic(DistSSHRun, :ship_send_list)
