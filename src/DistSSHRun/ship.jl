@@ -60,45 +60,6 @@ function _ship_unshippable(path::AbstractString)::Bool
     return true
 end
 
-const _SHIP_IGNORED_PROJECT_NAMES = (
-    "Project.toml",
-    "JuliaProject.toml",
-    "Manifest.toml",
-    "JuliaManifest.toml",
-)
-
-"""One line when a project or Manifest file under `root` is left out of `listed`."""
-function _warn_excluded_ship_project_files!(root::AbstractString, listed::Vector{String})
-    root_c = canonical_local_path(root)
-    present = Set{String}(replace(String(rel), '\\' => '/') for rel in listed)
-    hits = String[]
-    stack = String[root_c]
-    while !isempty(stack)
-        cur = pop!(stack)
-        names = try
-            readdir(cur; join = false, sort = false)
-        catch
-            continue
-        end
-        for name in names
-            name == ".git" && continue
-            name == ".distsshkit" && continue
-            child = joinpath(cur, name)
-            rel = replace(relpath(child, root_c), '\\' => '/')
-            if name in _SHIP_IGNORED_PROJECT_NAMES && (isfile(child) || islink(child))
-                rel in present || push!(hits, rel)
-            end
-            isdir(child) && !islink(child) && push!(stack, child)
-        end
-    end
-    isempty(hits) && return nothing
-    sort!(unique!(hits))
-    shown = join(hits, ", ")
-    noun = length(hits) == 1 ? "file is" : "files are"
-    print_warn("Warning: $shown $noun excluded by .gitignore and will not be shipped.\n")
-    return nothing
-end
-
 """Directory `setup ship-tree` walks. The project directory, not the Manifest directory."""
 function _ship_tree_root(local_root::AbstractString)::String
     return resolve_pkg_env(canonical_local_path(local_root)).project_dir

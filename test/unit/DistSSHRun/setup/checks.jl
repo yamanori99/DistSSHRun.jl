@@ -340,6 +340,44 @@ using Pkg
                 DistSSHRun._clear_active_selection!()
             end
 
+            if Sys.which("git") !== nothing
+                ignored_ship = joinpath(root, "ignored_ship")
+                mkpath(ignored_ship)
+                write(joinpath(ignored_ship, "Project.toml"), "name = \"IgnoreShip\"\n")
+                write(joinpath(ignored_ship, "Manifest.toml"), "# lock\n")
+                write(joinpath(ignored_ship, ".gitignore"), "Manifest.toml\n")
+                run(pipeline(`git -C $ignored_ship init -q`; stdout = devnull, stderr = devnull))
+                run(
+                    pipeline(
+                        `git -C $ignored_ship add Project.toml .gitignore`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    )
+                )
+                run(
+                    pipeline(
+                        `git -C $ignored_ship -c user.email=t@example.com -c user.name=Test -c commit.gpgsign=false commit -q -m init`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    )
+                )
+                DistSSHRun._set_active_selection!(
+                    DistSSHRun.SourceSelection(
+                        :ship,
+                        "20260101T000001Z-abcdef",
+                        "/remote",
+                        "/remote/runs/20260101T000001Z-abcdef/src/ignored_ship",
+                        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                        String["child"],
+                    ),
+                )
+                try
+                    @test_throws ArgumentError DistSSHRun._require_manifest_for_instantiate!(ignored_ship)
+                finally
+                    DistSSHRun._clear_active_selection!()
+                end
+            end
+
             linked = joinpath(root, "linked")
             mkpath(linked)
             write(joinpath(linked, "Project.toml"), "name = \"Linked\"\n[deps]\n")

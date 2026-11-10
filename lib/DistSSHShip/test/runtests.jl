@@ -146,31 +146,13 @@ end
         end
     end
 
-    @testset "gitignored manifest warns and is omitted" begin
+    @testset "gitignored manifest is refused at pack" begin
         _tmp() do dir
             _project!(dir)
             write(joinpath(dir, ".gitignore"), "Manifest.toml\n")
-            text = mktemp() do _, io
-                snap = redirect_stdout(io) do
-                    DistSSHShip.pack_tree(dir)
-                end
-                try
-                    dest = _extract(snap)
-                    try
-                        @test !isfile(joinpath(dest, "Manifest.toml"))
-                        @test isfile(joinpath(dest, "Project.toml"))
-                    finally
-                        rm(dest; force = true, recursive = true)
-                    end
-                finally
-                    rm(snap.directory; force = true, recursive = true)
-                end
-                flush(io)
-                seekstart(io)
-                return read(io, String)
-            end
-            @test occursin("Manifest.toml", text)
-            @test occursin("will not be shipped", text)
+            @test_throws ArgumentError DistSSHShip.pack_tree(dir)
+            omit = String[]
+            @test_throws ArgumentError DistSSHShip.pack_entry_paths(dir; omit_project_rels = omit)
         end
     end
 

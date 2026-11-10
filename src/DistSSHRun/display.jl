@@ -573,18 +573,33 @@ function _require_manifest!(project::AbstractString)
     throw(ArgumentError(missing_manifest_message(project)))
 end
 
+"""Whether `msg` is a ship/pack or send-list Manifest or project-file refusal."""
+function _cli_manifest_refusal_message(msg::AbstractString)::Bool
+    startswith(msg, "No Manifest for ") && return true
+    startswith(msg, "Manifest ") && return true
+    occursin(" excluded by ignore rules and will not be shipped", msg) || return false
+    for prefix in (
+            "Manifest.toml",
+            "JuliaManifest.toml",
+            "Project.toml",
+            "JuliaProject.toml",
+            "Manifest-v",
+            "JuliaManifest-v",
+        )
+        startswith(msg, prefix) && return true
+    end
+    return false
+end
+
 """
 Print a Manifest refusal as one stderr line and return true.
 
 Other errors return false so the caller can rethrow them.
 """
-function _report_manifest_refusal(e)::Bool
+function _report_manifest_refusal(e; io::IO = stderr)::Bool
     e isa ArgumentError || return false
-    msg = e.msg
-    if !(startswith(msg, "No Manifest for ") || startswith(msg, "Manifest "))
-        return false
-    end
-    print_cli_error(msg)
+    _cli_manifest_refusal_message(e.msg) || return false
+    print_cli_error(e.msg; io = io)
     return true
 end
 
@@ -628,6 +643,22 @@ function ensure_manifest_ships!(
         end
     end
     return env
+end
+
+"""Require the active Manifest to appear in [`pack_entry_paths`](@ref) (ship layout)."""
+function _require_manifest_in_pack_paths!(project::AbstractString)
+    given = canonical_local_path(project)
+    omit = String[input.path for input in _load_ship_inputs(given)]
+    man_rel = DistSSHShip._manifest_pack_anchor_rel(given; omit_project_rels = omit)
+    paths = Set(DistSSHShip.pack_entry_paths(given; omit_project_rels = omit))
+    man_rel in paths && return nothing
+    throw(
+        ArgumentError(
+            "Manifest $man_rel is not in the shipped tree. " *
+                "Workers would instantiate a different resolution. " *
+                "Stop ignoring it, add a negation pattern, or change the ignore rules.",
+        ),
+    )
 end
 
 """

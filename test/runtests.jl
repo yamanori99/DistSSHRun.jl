@@ -127,6 +127,8 @@ end
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "source_selection.jl"))
         _runtest_announce("unit/DistSSHRun/ship_list.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "ship_list.jl"))
+        _runtest_announce("unit/DistSSHRun/ship_manifest_oracle.jl")
+        include(joinpath(@__DIR__, "unit", "DistSSHRun", "ship_manifest_oracle.jl"))
         _runtest_announce("unit/DistSSHRun/ship_fake_ssh_child_env.jl")
         include(joinpath(@__DIR__, "unit", "DistSSHRun", "ship_fake_ssh_child_env.jl"))
         _runtest_announce("unit/DistSSHRun/ship_dest.jl")

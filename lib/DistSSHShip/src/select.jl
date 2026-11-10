@@ -54,6 +54,7 @@ end
 function gitignore_paths(root::AbstractString)::Vector{String}
     root_c = canonical_local_path(root)
     GitIgnore = _gitignore_mod()
+    # When `.shipignore` exists, it will fully replace `.gitignore` for ship here (same syntax).
     matcher = Base.invokelatest(GitIgnore.IgnoreMatcher, root_c; excludes = false)
     out = String[]
     stack = String[root_c]
@@ -83,6 +84,7 @@ end
 """True when `rel` (relative to `root`) is ignored. A missing matcher ignores nothing."""
 function path_ignored(root::AbstractString, rel::AbstractString, is_dir::Bool)::Bool
     GitIgnore = _gitignore_mod()
+    # When `.shipignore` exists, it will fully replace `.gitignore` for ship here (same syntax).
     matcher = Base.invokelatest(GitIgnore.IgnoreMatcher, canonical_local_path(root); excludes = false)
     shown = replace(String(rel), '\\' => '/')
     return Base.invokelatest(GitIgnore.isignored, matcher, shown, is_dir)
@@ -146,41 +148,6 @@ dropped, unshippable nodes omitted. `omit` drops declared inputs
 """
 pack_paths(root::AbstractString; omit::Vector{String} = String[])::Vector{String} =
     selected_paths(root; omit = omit)
-
-function warn_excluded_project_files(
-        root::AbstractString,
-        listed::Vector{String};
-        warn::Function = print,
-    )
-    root_c = canonical_local_path(root)
-    present = Set{String}(replace(String(rel), '\\' => '/') for rel in listed)
-    hits = String[]
-    stack = String[root_c]
-    while !isempty(stack)
-        cur = pop!(stack)
-        names = try
-            readdir(cur; join = false, sort = false)
-        catch
-            continue
-        end
-        for name in names
-            name == ".git" && continue
-            name == ".distsshkit" && continue
-            child = joinpath(cur, name)
-            rel = replace(relpath(child, root_c), '\\' => '/')
-            if _projectish_name(name) && (isfile(child) || islink(child))
-                rel in present || push!(hits, rel)
-            end
-            isdir(child) && !islink(child) && push!(stack, child)
-        end
-    end
-    isempty(hits) && return nothing
-    sort!(unique!(hits))
-    shown = join(hits, ", ")
-    noun = length(hits) == 1 ? "file is" : "files are"
-    warn("Warning: $shown $noun excluded by .gitignore and will not be shipped.\n")
-    return nothing
-end
 
 function _warn_limit(name::AbstractString, default::Integer)::Int
     raw = get(ENV, name, nothing)
