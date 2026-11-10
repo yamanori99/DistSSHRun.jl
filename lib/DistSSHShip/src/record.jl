@@ -270,11 +270,8 @@ function _read_ship_record_at_path(
         wait = true,
     )
     code_test = DistSSHBase.shell_status(proc_test)
-    if code_test == 255
-        return (:read_error, nothing)
-    elseif code_test != 0
-        return (:missing, nothing)
-    end
+    code_test == 1 && return (:missing, nothing)
+    code_test != 0 && return (:read_error, nothing)
     out = IOBuffer()
     proc_cat = run(
         pipeline(
@@ -285,9 +282,7 @@ function _read_ship_record_at_path(
         wait = true,
     )
     code_cat = DistSSHBase.shell_status(proc_cat)
-    if code_cat == 255 || code_cat != 0
-        return (:read_error, nothing)
-    end
+    code_cat != 0 && return (:read_error, nothing)
     body = String(take!(out))
     rec = _parse_ship_record_body(body)
     rec === nothing && return (:invalid, nothing)

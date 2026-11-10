@@ -49,6 +49,34 @@ end
 const _EXTRACT_DEST = "/stage/tree"
 
 @testset "ship record remote read (fake SSH)" verbose = true begin
+    @testset "fail-closed when test -f returns non-1 error" begin
+        snap = _minimal_snapshot(".")
+        try
+            legacy = DistSSHShip.build_ship_record(snap; complete = true, transfer_id = "legacy")
+            _with_tempdir() do state_dir
+                host = "record.testfail"
+                distssh = _record_distssh(host, state_dir)
+                write(joinpath(distssh, "ship.toml"), sprint(TOML.print, legacy))
+                write(joinpath(distssh, "shipment.toml"), sprint(TOML.print, legacy))
+                env = merge(
+                    _record_read_env(state_dir),
+                    Dict(
+                        "DISTSSHKIT_TEST_SHIP_RECORD_TEST_FAIL" => "shipment.toml",
+                        "DISTSSHKIT_TEST_SHIP_RECORD_TEST_FAIL_CODE" => "127",
+                    ),
+                )
+                withenv(env...) do
+                    @test_throws ArgumentError DistSSHShip.read_ship_record(host, _EXTRACT_DEST)
+                    @test_throws ArgumentError DistSSHShip.read_ship_record_status(
+                        host, _EXTRACT_DEST,
+                    )
+                end
+            end
+        finally
+            rm(snap.directory; force = true, recursive = true)
+        end
+    end
+
     @testset "fail-closed when shipment read errors but legacy is complete" begin
         snap = _minimal_snapshot(".")
         try
