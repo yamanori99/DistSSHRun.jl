@@ -1,10 +1,7 @@
 using Test
 
-# Standalone: `julia --project=. --startup-file=no test/unit/DistSSHRun/ship_dest.jl`
-if abspath(PROGRAM_FILE) == @__FILE__
-    using DistSSHRun
-    include(joinpath(@__DIR__, "..", "..", "support.jl"))
-end
+# Included from `test/runtests.jl` (support helpers already loaded). Standalone:
+#   julia --project=. --startup-file=no -e 'using Test; using DistSSHRun; include("test/support.jl"); include("test/unit/DistSSHRun/ship_dest.jl")'
 
 function _minimal_project!(dir::AbstractString)
     write(joinpath(dir, "Project.toml"), "name = \"StageShip\"\n")
