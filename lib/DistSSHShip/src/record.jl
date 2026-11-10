@@ -302,9 +302,10 @@ end
 function _write_complete_record!(
         host::AbstractString,
         extract_dest::AbstractString,
-        snapshot::ShipPack,
+        snapshot::ShipPack;
+        transfer_id::Union{Nothing, AbstractString} = nothing,
     )
-    data = build_ship_record(snapshot; complete = true)
+    data = build_ship_record(snapshot; complete = true, transfer_id = transfer_id)
     write_ship_record(host, extract_dest, data)
     return nothing
 end

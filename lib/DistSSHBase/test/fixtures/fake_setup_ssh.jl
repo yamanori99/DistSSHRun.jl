@@ -4,6 +4,8 @@
 # Per-host state under DISTSSHKIT_TEST_STATE_ROOT/<slot>/tree represents the
 # remote destination directory (missing / empty / nonempty).
 
+using Tar
+
 function _dest_status(tree::AbstractString)::String
     if !isdir(tree)
         return "MISSING"
@@ -485,6 +487,48 @@ function main()
     if occursin("Sys.BINDIR", script)
         w = get(ENV, "DISTSSHKIT_TEST_JULIA_WHICH", "")
         println(isempty(w) ? "/usr/bin/julia" : w)
+        exit(0)
+    end
+
+    if occursin("Tar.extract(stdin", script) && occursin("content_tree_hash mismatch", script)
+        if get(ENV, "DISTSSHKIT_TEST_TAR_EXTRACT_FAIL", "") == "1"
+            println(stderr, "tar extract failed")
+            exit(1)
+        end
+        mkpath(tree)
+        data = read(stdin)
+        buf = IOBuffer(data)
+        seekstart(buf)
+        Tar.extract(buf, tree)
+        expect = strip(get(ENV, "DISTSSHKIT_TEST_EXPECT_TREE_HASH", ""))
+        if !isempty(expect)
+            buf = IOBuffer()
+            Tar.create(tree, buf)
+            seekstart(buf)
+            got = string(Tar.tree_hash(buf; algorithm = "git-sha1", skip_empty = true))
+            got == expect || begin
+                println(stderr, "content_tree_hash mismatch: ", got, " != ", expect)
+                exit(1)
+            end
+        end
+        exit(0)
+    end
+
+    if occursin("dest is not empty", script) && occursin("ls -A", script)
+        if !isdir(tree)
+            mkpath(tree)
+            exit(0)
+        end
+        if isempty(readdir(tree))
+            exit(0)
+        end
+        println(stderr, "dest is not empty")
+        exit(3)
+    end
+
+    if occursin("dest parent does not exist", script) ||
+            (occursin("dest exists and is not a directory", script))
+        mkpath(tree)
         exit(0)
     end
 

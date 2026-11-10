@@ -176,6 +176,7 @@ using .DistSSHHeartbeat:
     stop_heartbeat_on_workers!
 include("DistSSHRun/ship_list.jl")
 include("DistSSHRun/ship.jl")
+include("DistSSHRun/ship_dest.jl")
 include("DistSSHRun/source_selection.jl")
 include("DistSSHRun/deploy_record.jl")
 include("DistSSHRun/argv/drive_args.jl")
