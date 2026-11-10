@@ -283,7 +283,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
     # Save capture as `logs/NN_<slug>.log` and append a SUMMARY row.
     #
     # When `project` + `kit` (`:setup` / `:go`) are set, prefer the kit log:
-    # setup under `project/.distsshkit/setup/`, go under the latest go batch
+    # setup under `project/.distssh/setup/` (or legacy `.distsshkit/setup/`), go under the latest go batch
     # (`go_*.log` next to `kit.progress`).
     function _ssh_e2e_record!(
             suite::SshE2ESuite,
@@ -309,7 +309,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
                 batch = _ssh_e2e_latest_go_batch(project)
                 batch === nothing ? nothing : batch
             else
-                joinpath(project, ".distssh", String(kit))
+                DistSSHRun.DistSSHBase.resolve_local_state_dir(project, kit)
             end
             newest = log_dir === nothing ? nothing : _ssh_e2e_newest_log(log_dir)
             if newest !== nothing

@@ -102,6 +102,89 @@ end
         @test_throws KeyError DistSSHRun._group_key(incomplete)
     end
 
+    @testset "go slot loader failure is visible" begin
+        _with_tempdir() do tmp
+            loader = DistSSHRun.write_go_slot_loader(tmp)
+            @test loader !== nothing
+            src = read(loader, String)
+            src = replace(
+                src,
+                "try\n    let" =>
+                    "try\n    error(\"loader-fail-test\")\n    let",
+                count = 1,
+            )
+            write(loader, src)
+            main = joinpath(tmp, "slot.jl")
+            write(main, "exit(0)\n")
+            err_io = IOBuffer()
+            out_io = IOBuffer()
+            cmd = setenv(
+                `$(Base.julia_cmd()) --startup-file=no -L $loader $main`,
+                "DISTRIBUTED_OUTPUT_DIR" => tmp,
+            )
+            proc = run(
+                pipeline(cmd; stdout = out_io, stderr = err_io);
+                wait = true,
+            )
+            @test proc.exitcode == 0
+            err = String(take!(err_io))
+            @test occursin("loader-fail-test", err)
+            @test occursin("DistSSH go-slot provenance loader failed", err)
+            slot_path = joinpath(tmp, ".distssh", "provenance-slot.toml")
+            @test isfile(slot_path)
+            parsed = DistSSHRun.TOML.parsefile(slot_path)
+            @test haskey(parsed, "error")
+            @test occursin("loader-fail-test", String(parsed["error"]))
+        end
+    end
+
+    @testset "go slot pmap flush" begin
+        _with_tempdir() do tmp
+            snap_dir = joinpath(tmp, ".distsshkit")
+            mkpath(snap_dir)
+            open(joinpath(snap_dir, "provenance-slot.toml"), "w") do io
+                DistSSHRun.TOML.print(
+                    io, Dict(
+                        "version" => string(VERSION),
+                        "commit" => "abc",
+                        "cpu" => "cpu",
+                        "machine" => "aarch64",
+                        "kernel" => "Linux",
+                        "nthreads" => "1",
+                        "blas" => "not loaded",
+                        "blas_threads" => "not loaded",
+                        "hostname" => "slot",
+                    ),
+                )
+            end
+            DistSSHRun.reset_worker_seeds!()
+            withenv("DISTRIBUTED_OUTPUT_DIR" => tmp, "DISTSSH_WORKER_RANK" => "2") do
+                @test_logs DistSSHRun.worker_pmap(identity, [1])
+                @test_logs DistSSHRun._flush_go_slot_pmap_items!()
+            end
+            parsed = DistSSHRun.TOML.parsefile(joinpath(snap_dir, "provenance-slot.toml"))
+            @test haskey(parsed, "pmap_items")
+            rows = parsed["pmap_items"]
+            @test rows isa AbstractVector
+            @test length(rows) == 1
+            row = rows[1]
+            @test row["rank"] == 2
+        end
+        _with_tempdir() do tmp
+            slot_dir = joinpath(tmp, ".distssh")
+            mkpath(slot_dir)
+            write(joinpath(slot_dir, "provenance-slot.toml"), "[[[")
+            DistSSHRun.reset_worker_seeds!()
+            withenv("DISTRIBUTED_OUTPUT_DIR" => tmp) do
+                @test_logs (:warn, r"go-slot provenance pmap flush failed") begin
+                    @test_logs DistSSHRun.worker_pmap(identity, [1])
+                    DistSSHRun._flush_go_slot_pmap_items!()
+                end
+            end
+        end
+        DistSSHRun.reset_worker_seeds!()
+    end
+
     @testset "install name" begin
         mac_plain = joinpath(
             "/Users/x/.julia/juliaup",

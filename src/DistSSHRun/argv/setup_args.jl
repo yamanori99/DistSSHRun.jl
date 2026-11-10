@@ -125,8 +125,8 @@ function show_requirements(; io::IO = stdout)
         "  cleanup            stale workers",
         "  delete             remote project tree (needs --confirm-path;",
         "                     refuses an unowned Ship run.toml)",
-        "  prune              .distsshkit go/drive/setup/runs leaves (needs --confirm-path;",
-        "                     same ownership check on those candidates)",
+        "  prune              .distssh (and legacy .distsshkit) go/drive/setup/runs",
+        "                     leaves (needs --confirm-path; same ownership check)",
     )
     print_help_blank(io)
     print_help_section("Options"; io = io)
