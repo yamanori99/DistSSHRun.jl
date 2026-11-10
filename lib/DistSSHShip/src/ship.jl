@@ -1,30 +1,30 @@
-# Verified copy of a snapshot onto a caller-chosen remote directory.
+# Verified copy of a pack onto a caller-chosen remote directory.
 # No run id, no run.toml, no instantiate, and no deletion of `dest`.
 # A failed host can leave a partial tree. The caller must not treat that
-# dest as a successful stage.
+# dest as a usable ship.
 
-"""One host row from [`transfer_tree`](@ref)."""
-struct TransferHostResult
+"""One host row from [`ship`](@ref)."""
+struct ShipHostResult
     host::String
     ok::Bool
     message::String
 end
 
 """
-Result of [`transfer_tree`](@ref).
+Result of [`ship`](@ref).
 
 `dest` is the remote directory the tar was extracted into (the ship anchor).
 `project_rel` is the project directory inside `dest` (`.` when the tar root
 is the project). `ok` is false when any host failed. Nothing is deleted.
 """
-struct TransferResult
+struct ShipResult
     dest::String
     project_rel::String
     content_tree_hash::String
     algorithm::String
     bytes::Int
     files::Int
-    hosts::Vector{TransferHostResult}
+    hosts::Vector{ShipHostResult}
     ok::Bool
 end
 
@@ -95,23 +95,23 @@ function extract_verified!(
     return nothing
 end
 
-"""Internal test hooks for `_transfer_tree_one_host!`; not exported."""
-struct _TransferTreeHooks
+"""Internal test hooks for `_ship_one_host!`; not exported."""
+struct _ShipHooks
     prepare_dest!::Union{Nothing, Function}
     extract_verified!::Union{Nothing, Function}
     write_complete_record!::Union{Nothing, Function}
 end
 
-_TransferTreeHooks() = _TransferTreeHooks(nothing, nothing, nothing)
+_ShipHooks() = _ShipHooks(nothing, nothing, nothing)
 
-function _transfer_tree_one_host!(
+function _ship_one_host!(
         host::AbstractString,
         checked::AbstractString,
-        snapshot::ShipSnapshot,
+        snapshot::ShipPack,
         allow_external_symlinks::Bool,
         write_record::Bool;
         julia::Union{Nothing, AbstractString} = nothing,
-        hooks::_TransferTreeHooks = _TransferTreeHooks(),
+        hooks::_ShipHooks = _ShipHooks(),
     )
     if hooks.prepare_dest! === nothing
         code, out = DistSSHBase._remote_shell_status(host, _prepare_dest_script(checked))
@@ -173,18 +173,18 @@ function _prepare_dest_script(dest::AbstractString)::String
 end
 
 """
-    transfer_tree(snapshot, hosts, dest; allow_external_symlinks=false, julia=nothing) -> TransferResult
+    ship(pack, hosts, dest; allow_external_symlinks=false, julia=nothing) -> ShipResult
 
-Extract `snapshot` into `dest` on each SSH host and verify the tree hash.
+Extract `pack` into `dest` on each SSH host and verify the tree hash.
 
 `dest` is the ship anchor (the project directory when there is no path
-dependency outside it). `TransferResult.project_rel` is the project inside
+dependency outside it). `ShipResult.project_rel` is the project inside
 that directory. This does not allocate a run id, write Run `run.toml`,
 instantiate, or delete `dest`. A non-empty `dest` is an error and is left
 in place. A failed extract can leave a partial tree.
 
 When `write_record=true` (default), writes
-`<dest>/.distssh/shipped.toml` with `complete = true` only after hash
+`<dest>/.distssh/ship.toml` with `complete = true` only after hash
 verification succeeds. There is no in-flight marker: a missing or
 incomplete record means the tree is not usable.
 
@@ -193,48 +193,48 @@ incomplete record means the tree is not usable.
 hash. Callers that re-hash an on-disk `dest` must exclude `.distssh/` when
 comparing to `content_tree_hash`.
 """
-function transfer_tree(
-        snapshot::ShipSnapshot,
+function ship(
+        snapshot::ShipPack,
         hosts::AbstractVector{<:AbstractString},
         dest::AbstractString;
         allow_external_symlinks::Bool = false,
         julia::Union{Nothing, AbstractString} = nothing,
         write_record::Bool = true,
-    )::TransferResult
+    )::ShipResult
     host_list = String[String(h) for h in hosts]
-    isempty(host_list) && throw(ArgumentError("transfer_tree: no hosts"))
+    isempty(host_list) && throw(ArgumentError("ship: no hosts"))
     length(unique(host_list)) == length(host_list) ||
-        throw(ArgumentError("transfer_tree: hosts must be unique"))
+        throw(ArgumentError("ship: hosts must be unique"))
     raw = strip(String(dest))
     (startswith(raw, "/") || startswith(raw, "~")) || throw(
         ArgumentError(
-            "transfer_tree dest must be absolute or start with ~, got $(repr(raw))",
+            "ship dest must be absolute or start with ~, got $(repr(raw))",
         )
     )
     checked = DistSSHBase._checked_remote_dest(raw)
-    isfile(snapshot.tar_path) || throw(ArgumentError("transfer_tree: snapshot tar is missing"))
+    isfile(snapshot.tar_path) || throw(ArgumentError("ship: pack tar is missing"))
     got = String(Tar.tree_hash(snapshot.tar_path; algorithm = TREE_HASH_ALGORITHM, skip_empty = true))
     got == snapshot.content_tree_hash || throw(
         ArgumentError(
-            "transfer_tree: tar content_tree_hash $(got) does not match snapshot $(snapshot.content_tree_hash)",
+            "ship: tar content_tree_hash $(got) does not match pack $(snapshot.content_tree_hash)",
         )
     )
-    rows = TransferHostResult[]
+    rows = ShipHostResult[]
     for host in host_list
         DistSSHBase.validate_ssh_host(host)
         try
-            _transfer_tree_one_host!(
+            _ship_one_host!(
                 host, checked, snapshot, allow_external_symlinks, write_record;
                 julia = julia,
             )
-            push!(rows, TransferHostResult(host, true, "transfer ok"))
+            push!(rows, ShipHostResult(host, true, "ship ok"))
         catch e
             e isa InterruptException && rethrow()
-            push!(rows, TransferHostResult(host, false, sprint(showerror, e)))
+            push!(rows, ShipHostResult(host, false, sprint(showerror, e)))
         end
     end
     ok = all(row -> row.ok, rows)
-    return TransferResult(
+    return ShipResult(
         checked,
         snapshot.project_rel,
         snapshot.content_tree_hash,

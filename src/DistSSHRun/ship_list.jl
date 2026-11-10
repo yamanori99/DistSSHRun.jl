@@ -1,4 +1,4 @@
-# Ship send list: paths a ship tar contains for one directory (see DistSSHShip.send_paths).
+# Ship send list: paths a ship tar contains for one directory (see DistSSHShip.pack_paths).
 
 """Gitignore walk only (no parent expansion, sort, or omit). Used in tests."""
 function _ship_gitignore_send_list(root::AbstractString)::Vector{String}
@@ -29,7 +29,7 @@ active depot. It does not write the project or `run.toml`.
 function ship_send_list(root::AbstractString)::Vector{String}
     root_c = canonical_local_path(root)
     omit = String[input.path for input in _load_ship_inputs(root_c)]
-    return DistSSHShip.send_paths(root_c; omit = omit)
+    return DistSSHShip.pack_paths(root_c; omit = omit)
 end
 
 public ship_send_list

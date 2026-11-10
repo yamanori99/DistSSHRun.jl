@@ -26,29 +26,29 @@ include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "project.jl"
 include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "select.jl"))
 include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "deps.jl"))
 include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "contain.jl"))
-include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "snapshot.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "pack.jl"))
 include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "record.jl"))
-include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "transfer.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "ship.jl"))
 
 public EXTERNAL_DIR_NAME
 public resolve_ship_project
 public gitignore_paths
 public selected_paths
-public send_paths
-public snapshot
-public transfer_tree
+public pack_paths
+public pack_tree
+public ship
 public ShipProject
-public ShipSnapshot
-public TransferResult
-public TransferHostResult
+public ShipPack
+public ShipResult
+public ShipHostResult
 public content_tree_hash
 public assert_extracted_tree_contained!
-public shipped_record_logical_path
-public build_shipped_record
-public write_shipped_record!
-public read_shipped_record
-public read_shipped_record_status
-public shipped_record_status
-public verify_shipped_record
+public ship_record_logical_path
+public build_ship_record
+public write_ship_record
+public read_ship_record
+public read_ship_record_status
+public ship_record_status
+public verify_ship_record
 
 end # module DistSSHShip

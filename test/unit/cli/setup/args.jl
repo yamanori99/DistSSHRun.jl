@@ -378,7 +378,7 @@ using Test
         @test err_mode isa ArgumentError
         @test err_api_mode isa ArgumentError
         @test err_mode.msg == err_api_mode.msg
-        snap = DistSSHRun.DistSSHShip.snapshot
+        snap = DistSSHRun.DistSSHShip.pack_tree
         err_ship = try
             snap(pwd(); extra_files = two.extra_files)
             nothing

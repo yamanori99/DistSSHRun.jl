@@ -610,14 +610,14 @@ end
             )
             @test !any(occursin('\\', r) for r in listed)
             omit = String[i.path for i in DistSSHRun._load_ship_inputs(tmp)]
-            @test listed == DistSSHRun.DistSSHShip.send_paths(tmp; omit = omit)
+            @test listed == DistSSHRun.DistSSHShip.pack_paths(tmp; omit = omit)
             packed = DistSSHRun.pack_ship_tar(tmp)
             try
                 @test DistSSHRun.ship_send_list(packed.root) == listed
                 dest = mktempdir()
                 DistSSHRun.Tar.extract(packed.tar_path, dest)
                 @test _extracted_ship_rels(dest) == listed
-                snap = DistSSHRun.DistSSHShip.snapshot(
+                snap = DistSSHRun.DistSSHShip.pack_tree(
                     tmp; omit_project_rels = omit,
                 )
                 try

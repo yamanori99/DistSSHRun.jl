@@ -125,7 +125,7 @@ end
             @test DistSSHRun._is_deploy_metadata_status_entry(
                 "??", ".distssh/deploy.toml.20260101T000000Z-aaaaaa.tmp",
             )
-            @test DistSSHRun._is_deploy_metadata_status_entry("??", ".distssh/shipped.toml")
+            @test DistSSHRun._is_deploy_metadata_status_entry("??", ".distssh/ship.toml")
             @test !DistSSHRun._is_deploy_metadata_status_entry("??", "extra.txt")
             @test !DistSSHRun._is_deploy_metadata_status_entry("??", "nested/.distssh/deploy.toml")
             @test !DistSSHRun._is_deploy_metadata_status_entry("??", ".distssh-foo/")
@@ -139,7 +139,7 @@ end
                 "R  .distssh/deploy.toml\0.distssh/deploy.toml.old\0",
             )
             @test DistSSHRun._remote_git_has_blocking_dirty(
-                "C  .distssh/shipped.toml\0.distssh/deploy.toml\0",
+                "C  .distssh/ship.toml\0.distssh/deploy.toml\0",
             )
             @test !DistSSHRun._remote_git_has_blocking_dirty("?? .distssh/\0")
             @test !DistSSHRun._remote_git_has_blocking_dirty(
