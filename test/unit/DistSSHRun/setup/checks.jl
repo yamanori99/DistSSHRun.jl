@@ -326,7 +326,7 @@ using Pkg
             @test_throws ArgumentError DistSSHRun.ensure_manifest_ships!(side)
             DistSSHRun._set_active_selection!(
                 DistSSHRun.SourceSelection(
-                    :snapshot,
+                    :ship,
                     "20260101T000000Z-abcdef",
                     "/remote",
                     "/remote/runs/20260101T000000Z-abcdef/src/sideapp",

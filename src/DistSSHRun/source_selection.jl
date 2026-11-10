@@ -21,9 +21,15 @@ struct SourceSelection
             content_tree_hash::Union{Nothing, String},
             hosts::AbstractVector{<:AbstractString},
         )
-        sk = source_kind === :snapshot ? :ship : source_kind
+        if source_kind === :snapshot
+            throw(
+                ArgumentError(
+                    "SourceSelection source_kind=:snapshot was removed; use :ship",
+                ),
+            )
+        end
         return new(
-            sk,
+            source_kind,
             run_id,
             String(deploy_root),
             String(work_root),

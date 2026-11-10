@@ -50,7 +50,7 @@ function place_drive_sentinels!(
                 )
                 remote_early_abs = ensure_remote_abs_path(host, remote_early)
                 if remote_early_abs === nothing
-                    print_warn("sentinel: cannot resolve collect root on $host")
+                    print_warn("sentinel: cannot resolve collect root on $host\n")
                     continue
                 end
                 remote_early_abs = remote_early_abs::String
@@ -71,7 +71,7 @@ function place_drive_sentinels!(
                 )
             catch e
                 DistSSHRun._rethrow_missing_host_tool(e)
-                print_warn("sentinel on $host: $(sprint(showerror, e))")
+                print_warn("sentinel on $host: $(sprint(showerror, e))\n")
             end
         end
     end

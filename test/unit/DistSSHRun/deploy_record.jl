@@ -250,3 +250,122 @@ end
         end
     end
 end
+
+@testset "deploy record read warns when hosts disagree" begin
+    double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+    logical = "/__dsr_deploy_logical__"
+    _with_tempdir() do state
+        roots = joinpath(state, "hosts")
+        for (host, deploy_id) in (("child-1", "a"^40), ("child-2", "b"^40))
+            rd = joinpath(roots, host)
+            mkpath(joinpath(rd, ".distssh"))
+            write(
+                joinpath(rd, ".distssh", "deploy.toml"),
+                sprint(
+                    TOML.print,
+                    Dict(
+                        "schema" => 1,
+                        "deploy_id" => deploy_id,
+                        "mode" => "git-sync",
+                        "commit_sha" => deploy_id,
+                    ),
+                ),
+            )
+        end
+        try
+            withenv(
+                "DISTSSHKIT_TEST" => "1",
+                "DISTSSHKIT_TEST_SSH" => double,
+                "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
+                "DISTSSHKIT_TEST_SSH_LOGICAL_ROOT" => logical,
+                "DISTSSHKIT_TEST_SSH_HOST_ROOTS" => roots,
+            ) do
+                out, (rec, warn_unknown) = _capture_stdio() do _, _
+                    DistSSHRun._read_deploy_record_for_run_status(
+                        ["child-1", "child-2"], logical,
+                    )
+                end
+                @test rec === nothing
+                @test !warn_unknown
+                @test match(r"Deploy records disagree[^\n]*\n", out) !== nothing
+            end
+        finally
+            DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
+        end
+    end
+end
+
+@testset "deploy record read warns when missing on some hosts" begin
+    double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+    logical = "/__dsr_deploy_logical__"
+    _with_tempdir() do state
+        roots = joinpath(state, "hosts")
+        rd1 = joinpath(roots, "child-1")
+        mkpath(joinpath(rd1, ".distssh"))
+        write(
+            joinpath(rd1, ".distssh", "deploy.toml"),
+            sprint(
+                TOML.print,
+                Dict(
+                    "schema" => 1,
+                    "deploy_id" => "a"^40,
+                    "mode" => "git-sync",
+                    "commit_sha" => "a"^40,
+                ),
+            ),
+        )
+        mkpath(joinpath(roots, "child-2"))
+        try
+            withenv(
+                "DISTSSHKIT_TEST" => "1",
+                "DISTSSHKIT_TEST_SSH" => double,
+                "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
+                "DISTSSHKIT_TEST_SSH_LOGICAL_ROOT" => logical,
+                "DISTSSHKIT_TEST_SSH_HOST_ROOTS" => roots,
+            ) do
+                out, (rec, _) = _capture_stdio() do _, _
+                    DistSSHRun._read_deploy_record_for_run_status(
+                        ["child-1", "child-2"], logical,
+                    )
+                end
+                @test rec !== nothing
+                @test match(r"Deploy record missing on:[^\n]*\n", out) !== nothing
+            end
+        finally
+            DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
+        end
+    end
+end
+
+@testset "deploy provenance unknown warning newline" begin
+    _with_tempdir() do proj
+        write(joinpath(proj, "Project.toml"), "name = \"NoRec\"\n")
+        with_kit_verbosity(:verbose) do
+            out, _ = _capture_stdio() do _, _
+                DistSSHRun._warn_deploy_staleness!(proj, nothing)
+            end
+            @test match(r"Deploy provenance unknown[^\n]*\n", out) !== nothing
+        end
+    end
+end
+
+@testset "deploy record manifest staleness warning newline" begin
+    _with_tempdir() do proj
+        write(joinpath(proj, "Project.toml"), "name = \"ManDep\"\n")
+        write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+        local_mh = DistSSHRun._deploy_record_manifest_hash(proj)
+        local_mh === nothing && error("expected manifest hash")
+        rec = Dict(
+            "schema" => 1,
+            "mode" => "ship-tree",
+            "deploy_id" => "rid",
+            "manifest_hash" => "f"^length(local_mh),
+        )
+        with_kit_verbosity(:verbose) do
+            out, _ = _capture_stdio() do _, _
+                DistSSHRun._warn_deploy_staleness!(proj, rec)
+            end
+            @test match(r"Local Manifest hash differs[^\n]*\n", out) !== nothing
+        end
+    end
+end
