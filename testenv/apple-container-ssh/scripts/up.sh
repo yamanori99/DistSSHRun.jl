@@ -59,7 +59,7 @@ for arg in "$@"; do
       echo "  Manual DistSSHRun: source $0   (activates .generated/env.sh in this shell)"
       echo "  Same E2E as docker-ssh (child-1 / child-2)."
       echo "  Needs macOS 26+ Apple silicon and the container CLI."
-      echo "  DISTSSHKIT_CODE_COVERAGE=1  e2e with --code-coverage=user"
+      echo "  DISTSSH_CODE_COVERAGE=1  e2e with --code-coverage=user"
       exit 0
       ;;
     *)
@@ -172,12 +172,12 @@ _distsshkit_retry "worker image build" _build_worker_image
 "${APPLE_ROOT}/scripts/down.sh"
 MOUNT="type=bind,source=${DOCKER_ROOT}/mounted-keys,target=/mounted-keys,readonly"
 # Sized to match one ubuntu-latest CI runner shared by both workers (2 CPU / 7GB).
-WORKER_CPUS="${DISTSSHKIT_APPLE_WORKER_CPUS:-1}"
-WORKER_MEMORY="${DISTSSHKIT_APPLE_WORKER_MEMORY:-3584M}"
+WORKER_CPUS="${DISTSSH_APPLE_WORKER_CPUS:-1}"
+WORKER_MEMORY="${DISTSSH_APPLE_WORKER_MEMORY:-3584M}"
 for name in "${NAMES[@]}"; do
   container create -d --name "${name}" --network default \
     -c "${WORKER_CPUS}" -m "${WORKER_MEMORY}" \
-    -e "DISTSSHKIT_HOSTNAME=${name}" \
+    -e "DISTSSH_HOSTNAME=${name}" \
     -u root --mount "${MOUNT}" "${LOCAL_IMAGE}"
   container start "${name}"
 done
@@ -217,8 +217,8 @@ echo "DistSSHRun in this shell: source ${APPLE_ROOT}/scripts/up.sh"
 echo "One-shot: ${DOCKER_ROOT}/scripts/with-env.sh julia --project=. -m DistSSHRun …"
 
 if [[ "$RUN_E2E" -eq 1 ]]; then
-  export DISTSSHKIT_SSH_E2E=1
-  export DISTSSHKIT_YES=1
+  export DISTSSH_SSH_E2E=1
+  export DISTSSH_YES=1
   "${DOCKER_ROOT}/scripts/ensure-kit-parent-juliaup.sh"
   cd "${KIT_ROOT}"
   # Same as docker-ssh: e2e loads DistSSHRun, so a fresh tree needs its deps.
@@ -230,7 +230,7 @@ if [[ "$RUN_E2E" -eq 1 ]]; then
     Pkg.instantiate()
   '
   julia_e2e=(julia --project=. --color=yes)
-  if [[ "${DISTSSHKIT_CODE_COVERAGE:-}" == "1" ]]; then
+  if [[ "${DISTSSH_CODE_COVERAGE:-}" == "1" ]]; then
     julia_e2e+=(--code-coverage=user)
   fi
   e2e_status=0

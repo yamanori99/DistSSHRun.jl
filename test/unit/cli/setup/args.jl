@@ -29,8 +29,8 @@ using Test
         @test occursin("!LocalPreferences.toml", text)
         @test occursin("one warning", text)
         @test occursin("Declared inputs do not", text)
-        @test occursin("DISTSSHKIT_SHIP_WARN_FILE_BYTES", text)
-        @test occursin("DISTSSHKIT_SHIP_WARN_TOTAL_BYTES", text)
+        @test occursin("DISTSSH_SHIP_WARN_FILE_BYTES", text)
+        @test occursin("DISTSSH_SHIP_WARN_TOTAL_BYTES", text)
         @test occursin("256 MiB cap", text)
         @test !occursin("git work tree", text)
         @test occursin("common ancestor", text)
@@ -288,7 +288,7 @@ using Test
         @test r.hosts == ["host-cli", "h1", "h2"]
     end
 
-    withenv("DISTSSHKIT_HOSTS" => "child:env-h:3") do
+    withenv("DISTSSH_HOSTS" => "child:env-h:3") do
         let r = parse_setup_args(["check", "child:host-cli"])
             @test r.hosts == ["host-cli", "env-h"]
         end
@@ -327,7 +327,7 @@ using Test
         @test occursin("progress DIR", txt)
         @test occursin("Recommended:", txt)
         @test occursin("--require-git", txt)
-        @test occursin("DISTSSHKIT_JOBS", txt)
+        @test occursin("DISTSSH_JOBS", txt)
         @test occursin("confirm unless -y", txt)
         @test occursin("does not authorize delete or prune", txt)
         @test occursin("except delete and prune", txt)

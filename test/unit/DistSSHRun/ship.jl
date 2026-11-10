@@ -233,9 +233,9 @@ end
                 merge(
                     _fake_setup_remote_env(state_dir),
                     Dict(
-                        "DISTSSHKIT_TEST_REMOTE_HOME" => "/var/home/dev",
-                        "DISTSSHKIT_TEST_REMOTE_HOME_LOGICAL" => "/Users/dev",
-                        "DISTSSHKIT_TEST_REMOTE_EXPAND" => "/Users/dev/Parent/Repo",
+                        "DISTSSH_TEST_REMOTE_HOME" => "/var/home/dev",
+                        "DISTSSH_TEST_REMOTE_HOME_LOGICAL" => "/Users/dev",
+                        "DISTSSH_TEST_REMOTE_EXPAND" => "/Users/dev/Parent/Repo",
                     ),
                 )...,
             ) do
@@ -363,8 +363,8 @@ end
         write(joinpath(tmp, "a.jl"), "1\n")
         text = mktemp() do _, io
             packed = withenv(
-                "DISTSSHKIT_SHIP_WARN_FILE_BYTES" => "1",
-                "DISTSSHKIT_SHIP_WARN_TOTAL_BYTES" => "1",
+                "DISTSSH_SHIP_WARN_FILE_BYTES" => "1",
+                "DISTSSH_SHIP_WARN_TOTAL_BYTES" => "1",
             ) do
                 redirect_stdout(io) do
                     redirect_stderr(() -> DistSSHRun._pack_project_tree(tmp), io)
@@ -384,7 +384,7 @@ end
         @test occursin("Largest directories", text)
         @test occursin("data (", text)
         err = try
-            withenv("DISTSSHKIT_SHIP_WARN_TOTAL_BYTES" => "nope") do
+            withenv("DISTSSH_SHIP_WARN_TOTAL_BYTES" => "nope") do
                 DistSSHRun._pack_project_tree(tmp)
             end
             nothing
@@ -392,11 +392,11 @@ end
             e
         end
         @test err isa ArgumentError
-        @test occursin("DISTSSHKIT_SHIP_WARN_TOTAL_BYTES", err.msg)
+        @test occursin("DISTSSH_SHIP_WARN_TOTAL_BYTES", err.msg)
         warned = mktemp() do _, io
             thrown = redirect_stdout(io) do
                 try
-                    withenv("DISTSSHKIT_SHIP_WARN_TOTAL_BYTES" => "0") do
+                    withenv("DISTSSH_SHIP_WARN_TOTAL_BYTES" => "0") do
                         DistSSHRun._pack_project_tree(tmp; ship_max_bytes = 1)
                     end
                     nothing
@@ -525,7 +525,7 @@ end
             @test isfile(joinpath(run_dir, "inputs", "records.toml"))
             @test !isfile(joinpath(tmp, "inputs.toml"))
             @test !isfile(joinpath(tmp, "inputs", "records.toml"))
-            withenv("DISTSSHKIT_RUN_DIR" => nothing) do
+            withenv("DISTSSH_RUN_DIR" => nothing) do
                 err = try
                     DistSSHRun.ship_tree!(
                         tmp, ["host.test"], "/remote/app"; confirm = false, report = false,
@@ -535,7 +535,7 @@ end
                     e
                 end
                 @test err isa ArgumentError
-                @test occursin("DISTSSHKIT_RUN_DIR", sprint(showerror, err))
+                @test occursin("DISTSSH_RUN_DIR", sprint(showerror, err))
             end
         end
     end
@@ -1303,12 +1303,12 @@ end
         logp = joinpath(dir, "ssh.log")
         ready = joinpath(dir, "ready")
         env = Dict{String, String}(
-            "DISTSSHKIT_TEST" => "1",
-            "DISTSSHKIT_TEST_SSH" => double,
+            "DISTSSH_TEST" => "1",
+            "DISTSSH_TEST_SSH" => double,
             "SHELL_DOUBLE_LOG" => logp,
             "SHELL_DOUBLE_MODE" => "sleep",
             "SHELL_DOUBLE_READY" => ready,
-            "DISTSSHKIT_TEST_POSIX_SHELL" => "1",
+            "DISTSSH_TEST_POSIX_SHELL" => "1",
         )
         try
             withenv(env...) do
@@ -1475,7 +1475,7 @@ end
                 withenv(
                     merge(
                         _fake_setup_remote_env(state_dir),
-                        Dict("DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia"),
+                        Dict("DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia"),
                     )...,
                 ) do
                     _apply_quiet_setup_session!()
@@ -1565,8 +1565,8 @@ end
                     merge(
                         _fake_setup_remote_env(state_dir),
                         Dict(
-                            "DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia",
-                            "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
+                            "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia",
+                            "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit",
                         ),
                     )...,
                 ) do
@@ -1596,8 +1596,8 @@ end
                     merge(
                         _fake_setup_remote_env(state_dir),
                         Dict(
-                            "DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia",
-                            "DISTSSHKIT_TEST_TAR_EXTRACT_FAIL" => "1",
+                            "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia",
+                            "DISTSSH_TEST_TAR_EXTRACT_FAIL" => "1",
                         ),
                     )...,
                 ) do

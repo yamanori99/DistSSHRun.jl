@@ -81,10 +81,10 @@ const _GIT_DIFF_FLAGS = (
 )
 
 const _PROVENANCE_SOURCE_ENV = (
-    commit = "DISTSSHKIT_SOURCE_COMMIT",
-    dirty = "DISTSSHKIT_SOURCE_DIRTY",
-    captured = "DISTSSHKIT_SOURCE_CAPTURED",
-    untracked = "DISTSSHKIT_SOURCE_UNTRACKED",
+    commit = "DISTSSH_SOURCE_COMMIT",
+    dirty = "DISTSSH_SOURCE_DIRTY",
+    captured = "DISTSSH_SOURCE_CAPTURED",
+    untracked = "DISTSSH_SOURCE_UNTRACKED",
 )
 
 const _SNAP_KEYS = (
@@ -738,7 +738,7 @@ function _source_from_env()::Union{Nothing, Dict{String, Any}}
     return isempty(built) ? nothing : built
 end
 
-"""Drop inherited `DISTSSHKIT_SOURCE_*` keys that this explicit `source` did not set.
+"""Drop inherited `DISTSSH_SOURCE_*` keys that this explicit `source` did not set.
 
 `_execute_detached_env` copies the parent environment first. A partial `source`
 would otherwise keep stale fields from that copy.
@@ -930,7 +930,7 @@ end
 """
     result_run_dir(result) -> Union{Nothing, String}
 
-This run's `DISTSSHKIT_RUN_DIR`, or `nothing` when the result has none.
+This run's `DISTSSH_RUN_DIR`, or `nothing` when the result has none.
 
 `result` is a [`DriveResult`](@ref), [`GoResult`](@ref),
 [`KitRunResult`](@ref), [`RideResult`](@ref), or [`KitProcess`](@ref).
@@ -1028,7 +1028,7 @@ Remote `runs/<run_id>/` id from this run's controller `run.toml`
 snapshot selection recorded one.
 
 Schema stays 1. An absent or empty key means not recorded. This is not
-`DISTSSHKIT_RUN_DIR`. `result` is a [`DriveResult`](@ref), [`GoResult`](@ref),
+`DISTSSH_RUN_DIR`. `result` is a [`DriveResult`](@ref), [`GoResult`](@ref),
 or [`KitRunResult`](@ref). A [`RideResult`](@ref) goes through
 [`kit_run_result`](@ref) first. A run that selected an existing completed
 snapshot (without shipping in-process) may still record that snapshot's

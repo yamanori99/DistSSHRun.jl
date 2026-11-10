@@ -7,9 +7,9 @@ using Test
     _mktemp_host() do proj
         _write_host_project!(proj, "FailApp")
         script = joinpath(proj, "job.jl")
-        write(script, "error(\"DISTSSHKIT_RUNNER_BOOM\")\n")
+        write(script, "error(\"DISTSSH_RUNNER_BOOM\")\n")
         proc, combined = _run_host_drive(; script = script, host_project = proj)
         @test proc.exitcode != 0
-        @test occursin("DISTSSHKIT_RUNNER_BOOM", combined)
+        @test occursin("DISTSSH_RUNNER_BOOM", combined)
     end
 end

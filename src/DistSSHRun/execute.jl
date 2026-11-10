@@ -38,12 +38,12 @@ const _EXECUTE_DETACHED_DRIVE_ONLY = (
 )
 const _EXECUTE_DETACHED_HARD_DROP = (
     "JULIA_LOAD_PATH",
-    "DISTSSHKIT_CLI_SUBCOMMAND_DONE",
+    "DISTSSH_CLI_SUBCOMMAND_DONE",
     "DIST_SSH_KIT_CLI_INCLUDE",
 )
 # Removed from the child unless `threads=:unset`. `OPENBLAS_DEFAULT_NUM_THREADS`
 # is dropped and not rewritten. The five BLAS names below are then set to `1`
-# or to `DISTSSHKIT_BLAS_THREADS`.
+# or to `DISTSSH_BLAS_THREADS`.
 const _EXECUTE_DETACHED_THREAD_VARS = (
     "JULIA_NUM_THREADS",
     "JULIA_NUM_GC_THREADS",
@@ -164,7 +164,7 @@ Uses the same tables as the detached throw path, plus the named parameters
 (`output_dir`, `args`, `project`, `sync`, `julia`, `detached`, `source`,
 `dir`, `threads`, `env_allow`, `env`).
 `source` is a provenance dict. Detached passes it to the child as
-`DISTSSHKIT_SOURCE_*`. It is not a `go!` / `ride!` / `drive!` keyword.
+`DISTSSH_SOURCE_*`. It is not a `go!` / `ride!` / `drive!` keyword.
 `dir`, `threads`, `env_allow`, and `env` are detached launch policy, not
 `go!` / `ride!` / `drive!` keywords.
 """
@@ -452,7 +452,7 @@ Keywords are then an allow-list (unknown names throw):
 `workers`, `worker_include`,
 `allow_external_symlinks`, `dir`, `threads`, `env_allow`, and `env`.
 `source` is a provenance
-dict for every kind. Detached passes it as `DISTSSHKIT_SOURCE_*`. Go-only
+dict for every kind. Detached passes it as `DISTSSH_SOURCE_*`. Go-only
 `repeat`. Ride: `spi_check` (default
 `false`). Detached argv passes `--spi-check` when true and `--no-spi-check`
 when false, so an older child whose default is on still skips the compare.
@@ -467,8 +467,8 @@ not apply to the subprocess. Detached `:drive` omits `--output-dir` unless
 `output_dir=` or inherited `DISTRIBUTED_OUTPUT_DIR` is set, so
 `init_output_dir!` can choose the artifact root.
 
-`job_id`, if given, is passed to the child as `DISTSSHKIT_JOB_ID`, which
-adds `job=<id>` to every `progress:` log line. `DISTSSHKIT_PROGRESS=1` is
+`job_id`, if given, is passed to the child as `DISTSSH_JOB_ID`, which
+adds `job=<id>` to every `progress:` log line. `DISTSSH_PROGRESS=1` is
 `--progress` verbosity, not a watcher; read lines with
 `DistSSHRun.parse_progress_line` / `DistSSHRun.kit_progress_latest`.
 Omitted entirely when unset.
@@ -478,7 +478,7 @@ passes `--history-file=no`. `threads` defaults to `1`, passed as
 `--threads=1` (`Threads.nthreads(:interactive)` is 0 on Julia 1.13).
 `threads=:inherit` passes this process's resolved `--threads` spec.
 `threads=:unset` omits the flag. The child environment keeps an allowlist
-(`PATH`, `HOME`, `JULIA_DEPOT_PATH`, `DISTSSHKIT_*`, `DISTRIBUTED_*`, and
+(`PATH`, `HOME`, `JULIA_DEPOT_PATH`, `DISTSSH_*`, `DISTRIBUTED_*`, and
 the other baseline names). `env_allow` adds names to that baseline.
 `:all` copies every non-empty parent variable except the drops below.
 `env` sets values on the child and does not write this process. Names
@@ -857,13 +857,13 @@ function _execute_detached!(
     )
     extra = Dict{String, String}(
         "DISTRIBUTED_PROJECT_ROOT" => proj,
-        DISTSSHKIT_RUN_DIR_ENV => run_dir,
+        DISTSSH_RUN_DIR_ENV => run_dir,
     )
     if remote !== nothing && !isempty(strip(String(remote)))
         extra["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = remote_env_project_root(String(remote))
     end
     if job_id_s !== nothing
-        extra["DISTSSHKIT_JOB_ID"] = job_id_s
+        extra["DISTSSH_JOB_ID"] = job_id_s
     end
     for (envk, envv) in _provenance_source_env(source)
         extra[envk] = envv
@@ -1484,7 +1484,7 @@ const _SIGNAL_KILL_WAIT_S = 1.0
 # checks that this constant still does.
 const _INTERRUPT_GRACE_DEFAULT_S = 30.0
 
-const _SIGINT_GRACE_ENV = "DISTSSHKIT_WAIT_SIGINT_GRACE"
+const _SIGINT_GRACE_ENV = "DISTSSH_WAIT_SIGINT_GRACE"
 
 function _require_interrupt_grace(name::AbstractString, value::Real)
     if isfinite(value) && value >= 0
@@ -1494,7 +1494,7 @@ function _require_interrupt_grace(name::AbstractString, value::Real)
 end
 
 """
-Keyword, else `DISTSSHKIT_WAIT_SIGINT_GRACE` in this process, else 30 seconds.
+Keyword, else `DISTSSH_WAIT_SIGINT_GRACE` in this process, else 30 seconds.
 
 The variable is read here, in the process calling `terminate!` or `cancel`,
 not on the driver host. `0` is kept. A negative value, `NaN`, or `Inf` errors.
@@ -2072,7 +2072,7 @@ end
 
 function _detached_prefix_keep(name::AbstractString)::Bool
     s = String(name)
-    return startswith(s, "LC_") || startswith(s, "DISTSSHKIT_") || startswith(s, "DISTRIBUTED_")
+    return startswith(s, "LC_") || startswith(s, "DISTSSH_") || startswith(s, "DISTRIBUTED_")
 end
 
 function _detached_proxy_userinfo(name::AbstractString, value::AbstractString)::Bool
@@ -2144,8 +2144,8 @@ end
 
 `parent` is not modified. Thread and BLAS variables stay out unless
 `threads` is `:unset`. The five BLAS variables are then set to
-`DISTSSHKIT_BLAS_THREADS` or `"1"`. `OPENBLAS_DEFAULT_NUM_THREADS` is not
-set. Bookkeeping `DISTSSHKIT_LAUNCH_*` and `DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL`
+`DISTSSH_BLAS_THREADS` or `"1"`. `OPENBLAS_DEFAULT_NUM_THREADS` is not
+set. Bookkeeping `DISTSSH_LAUNCH_*` and `DISTSSH_SKIP_GLOBAL_WORKER_PKILL`
 are written on the child only.
 """
 function _detached_child_env(
@@ -2220,7 +2220,7 @@ function _detached_child_env(
         for name in thread_vars
             delete!(child, name)
         end
-        blas = strip(get(child, "DISTSSHKIT_BLAS_THREADS", ""))
+        blas = strip(get(child, "DISTSSH_BLAS_THREADS", ""))
         blas_value = isempty(blas) ? "1" : blas
         for name in _EXECUTE_DETACHED_BLAS_SET
             child[name] = blas_value
@@ -2243,10 +2243,10 @@ function _detached_child_env(
     sort!(sensitive)
     unique!(sensitive)
 
-    child["DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL"] = "1"
-    child["DISTSSHKIT_LAUNCH_THREADS"] = flag
-    child["DISTSSHKIT_LAUNCH_DIR"] = String(launch_dir)
-    child["DISTSSHKIT_LAUNCH_DROPPED"] = join(dropped, ",")
+    child["DISTSSH_SKIP_GLOBAL_WORKER_PKILL"] = "1"
+    child["DISTSSH_LAUNCH_THREADS"] = flag
+    child["DISTSSH_LAUNCH_DIR"] = String(launch_dir)
+    child["DISTSSH_LAUNCH_DROPPED"] = join(dropped, ",")
     return (
         env = child,
         dropped = dropped,
@@ -2292,7 +2292,7 @@ end
     terminate!(kp::KitProcess; grace=10, interrupt_grace=nothing) -> KitRunResult
 
 Stop a detached run. Omit `interrupt_grace` and the wait is 30 seconds, or
-`DISTSSHKIT_WAIT_SIGINT_GRACE` when that variable is set in this process.
+`DISTSSH_WAIT_SIGINT_GRACE` when that variable is set in this process.
 The driver host does not read it. An explicit `interrupt_grace` keyword
 wins, including `0`, which sends no SIGINT. A negative value or `NaN` is
 an error. The 30 second default is a constant, chosen from the internal
@@ -2355,7 +2355,7 @@ end
 Like [`terminate!`](@ref) after losing [`KitProcess`](@ref): read `kit.pid` /
 `kit.job` / `kit.hosts` under `output_dir`. `interrupt_grace` is the same
 SIGINT stage, including the 30 second default and
-`DISTSSHKIT_WAIT_SIGINT_GRACE` in this process. `kind` is only used when
+`DISTSSH_WAIT_SIGINT_GRACE` in this process. `kind` is only used when
 `kit.result` is missing. `stop` is the ladder outcome, including on that
 synthetic result. `run.toml` is stamped in the kit run directory named by
 `kit.run_dir` next to `kit.pid`, or in `output_dir` when that directory

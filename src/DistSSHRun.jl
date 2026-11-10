@@ -259,9 +259,9 @@ function _kit_cli_run_entry(script_base::String)::Cint
 end
 
 function _append_script_arg_prelude!(args::Vector{String})
-    raw = get(ENV, "DISTSSHKIT_SCRIPT_ARG_PRELUDE", "")
+    raw = get(ENV, "DISTSSH_SCRIPT_ARG_PRELUDE", "")
     isempty(raw) && return
-    delete!(ENV, "DISTSSHKIT_SCRIPT_ARG_PRELUDE")
+    delete!(ENV, "DISTSSH_SCRIPT_ARG_PRELUDE")
     for line in split(raw, '\n')
         s = strip(String(line))
         !isempty(s) && push!(args, s)
@@ -276,12 +276,12 @@ function _merge_script_arg_prelude(rest::Vector{String})::Vector{String}
 end
 
 function _mark_kit_cli_subcommand_done!()
-    return ENV["DISTSSHKIT_CLI_SUBCOMMAND_DONE"] = "1"
+    return ENV["DISTSSH_CLI_SUBCOMMAND_DONE"] = "1"
 end
 
 function _consume_kit_cli_subcommand_done!()::Bool
-    if get(ENV, "DISTSSHKIT_CLI_SUBCOMMAND_DONE", "") == "1"
-        delete!(ENV, "DISTSSHKIT_CLI_SUBCOMMAND_DONE")
+    if get(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE", "") == "1"
+        delete!(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
         return true
     end
     return false
@@ -478,7 +478,7 @@ function _main(args::Vector{String})::Cint
         # A second `main` in this process must run. The handshake flag is
         # single-shot: consume clears it, and this deletes it again on every
         # return, including throw and drive interrupt.
-        delete!(ENV, "DISTSSHKIT_CLI_SUBCOMMAND_DONE")
+        delete!(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
     end
 end
 

@@ -14,6 +14,6 @@ end
 function main()
     out = ENV["DISTRIBUTED_OUTPUT_DIR"]
     write(joinpath(out, "hook.txt"), "ok\n")
-    println("DISTSSHKIT_INIT_OUTPUT_OK ", out)
+    println("DISTSSH_INIT_OUTPUT_OK ", out)
     return nothing
 end

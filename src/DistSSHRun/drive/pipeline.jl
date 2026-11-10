@@ -1,7 +1,7 @@
 # pipeline! — sync → drive → collect.
 
 function _reject_obsolete_pipeline_size_env()
-    for name in ("GB_PER_WORKER", "DISTSSHKIT_SIZE_PROBE")
+    for name in ("GB_PER_WORKER", "DISTSSH_SIZE_PROBE")
         raw = strip(get(ENV, name, ""))
         isempty(raw) && continue
         throw(
@@ -30,14 +30,14 @@ Build [`PipelineConfig`](@ref) from environment variables.
 
 | Variable | Role |
 |----------|------|
-| `DISTSSHKIT_HOSTS` | Comma-separated placement tokens (`parent:N` / `child:NAME:N`) |
-| `DISTSSHKIT_HOSTS_FILE` | Hosts file (appended after `DISTSSHKIT_HOSTS`, same order as CLI) |
+| `DISTSSH_HOSTS` | Comma-separated placement tokens (`parent:N` / `child:NAME:N`) |
+| `DISTSSH_HOSTS_FILE` | Hosts file (appended after `DISTSSH_HOSTS`, same order as CLI) |
 | `DISTRIBUTED_REMOTE_PROJECT_ROOT` | Remote repo root |
 | `DISTRIBUTED_PROJECT_ROOT` | Local project root |
 | `DRIVER` | Driver script path |
 | `SYNC_MODE` | Deprecated; omit or use `off` (prepare with `setup!` instead) |
 | `JULIA_DISTRIBUTED_EXE` | Remote Julia path (same as CLI `--julia`; `auto` / unset → detect) |
-| `DISTSSHKIT_YES` / `DISTSSHKIT_QUIET` / `DISTSSHKIT_PROGRESS` / `DISTSSHKIT_VERBOSE` | Same as CLI `-y` / `-q` / `--progress` / `--verbose` |
+| `DISTSSH_YES` / `DISTSSH_QUIET` / `DISTSSH_PROGRESS` / `DISTSSH_VERBOSE` | Same as CLI `-y` / `-q` / `--progress` / `--verbose` |
 """
 function pipeline_config_from_env(;
         driver::Union{Nothing, AbstractString} = nothing,

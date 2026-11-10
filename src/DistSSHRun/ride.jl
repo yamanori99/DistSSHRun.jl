@@ -9,7 +9,7 @@ const _RIDE_CAPTURE_DEPTH = 4
 """Outcome of [`ride!`](@ref). Experimental.
 
 `output_dir` is the ride batch directory. `run_dir` is the
-`DISTSSHKIT_RUN_DIR` captured while that run was active. [`ride!`](@ref)
+`DISTSSH_RUN_DIR` captured while that run was active. [`ride!`](@ref)
 restores the previous directory before it returns. Read the saved
 directory with [`result_run_dir`](@ref). [`result_provenance`](@ref) does
 not accept a `RideResult`; convert it with [`kit_run_result`](@ref) first.
@@ -650,7 +650,7 @@ function ride!(
         julia_s,
     )
     _acquire_kit_inproc_run!(:ride)
-    old_run = get(ENV, DISTSSHKIT_RUN_DIR_ENV, nothing)
+    old_run = get(ENV, DISTSSH_RUN_DIR_ENV, nothing)
     inherited_run = old_run isa AbstractString && !isempty(strip(old_run))
     try
         _ensure_kit_run_dir!(:ride, path; project = project)
@@ -681,7 +681,7 @@ function _ride_run!(
         hint_surface::Symbol,
         inherited_run::Bool,
     )
-    # `ride!` restores `DISTSSHKIT_RUN_DIR` after this returns.
+    # `ride!` restores `DISTSSH_RUN_DIR` after this returns.
     run_dir = kit_run_dir()
     project_root_abs = canonical_local_path(project)
     _require_manifest!(project_root_abs)
@@ -747,7 +747,7 @@ function _ride_run!(
         end
         empty!(ARGS)
         append!(ARGS, String[String(a) for a in args])
-        job_raw = strip(get(ENV, "DISTSSHKIT_JOB_ID", ""))
+        job_raw = strip(get(ENV, "DISTSSH_JOB_ID", ""))
         _write_kit_pid_file(
             getpid(),
             batch_dir,

@@ -781,7 +781,7 @@ function _remote_dest_status_script(remote_path::AbstractString)::String
     pq = _remote_shell_path_word(remote_path)
     # Leading marker keeps test doubles and parsers stable.
     return string(
-        "echo DISTSSHKIT_DEST_STATUS; ",
+        "echo DISTSSH_DEST_STATUS; ",
         "if [ ! -e $pq ]; then echo MISSING; ",
         "elif [ ! -d $pq ]; then echo NONEMPTY; ",
         "elif [ -z \"\$(ls -A $pq 2>/dev/null)\" ]; then echo EMPTY; ",
@@ -831,7 +831,7 @@ end
 """
 Classify `remote_path` on `host`: `:missing`, `:empty`, or `:nonempty`.
 
-Uses `_host_sync_remote_shell_cmd` (honors `DISTSSHKIT_TEST_SSH`).
+Uses `_host_sync_remote_shell_cmd` (honors `DISTSSH_TEST_SSH`).
 On SSH/script failure, returns `:nonempty` (fail closed — refuse overwrite).
 Callers that can report the failure use [`_remote_dest_probe`](@ref).
 """

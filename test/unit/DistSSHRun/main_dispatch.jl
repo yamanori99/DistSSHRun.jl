@@ -5,7 +5,7 @@ using Test
     function _main_capture(args)
         mktemp() do out_path, out_io
             mktemp() do err_path, err_io
-                code = withenv("DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "") do
+                code = withenv("DISTSSH_CLI_SUBCOMMAND_DONE" => "") do
                     redirect_stdout(out_io) do
                         redirect_stderr(err_io) do
                             DistSSHRun.main(args)
@@ -294,7 +294,7 @@ using Test
 
     # Not `_main_capture`: that `withenv` clears the handshake flag between calls.
     @testset "second main() in the same process (#184)" begin
-        had = get(ENV, "DISTSSHKIT_CLI_SUBCOMMAND_DONE", nothing)
+        had = get(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE", nothing)
         function _capture_main(args)
             mktemp() do out_path, out_io
                 mktemp() do err_path, err_io
@@ -310,17 +310,17 @@ using Test
             end
         end
         try
-            delete!(ENV, "DISTSSHKIT_CLI_SUBCOMMAND_DONE")
+            delete!(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
             ver = DistSSHRun.dist_ssh_kit_version()
             let (code, out, _) = _capture_main(["drive", "--version"])
                 @test code == 0
                 @test occursin("DistSSHRun $ver", out)
-                @test !haskey(ENV, "DISTSSHKIT_CLI_SUBCOMMAND_DONE")
+                @test !haskey(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
             end
             let (code, out, _) = _capture_main(["go", "--version"])
                 @test code == 0
                 @test occursin("DistSSHRun $ver", out)
-                @test !haskey(ENV, "DISTSSHKIT_CLI_SUBCOMMAND_DONE")
+                @test !haskey(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
             end
             mktempdir() do dir
                 missing = joinpath(dir, "missing.jl")
@@ -329,7 +329,7 @@ using Test
                         DistSSHRun.main(["drive", missing])
                     end
                 end
-                @test !haskey(ENV, "DISTSSHKIT_CLI_SUBCOMMAND_DONE")
+                @test !haskey(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
             end
             let (code, out, _) = _capture_main(["--version"])
                 @test code == 0
@@ -337,9 +337,9 @@ using Test
             end
         finally
             if had === nothing
-                delete!(ENV, "DISTSSHKIT_CLI_SUBCOMMAND_DONE")
+                delete!(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
             else
-                ENV["DISTSSHKIT_CLI_SUBCOMMAND_DONE"] = had
+                ENV["DISTSSH_CLI_SUBCOMMAND_DONE"] = had
             end
         end
     end

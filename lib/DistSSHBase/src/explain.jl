@@ -38,9 +38,9 @@ function explain_hosts_file_not_found(
     p = String(path)
     head = "hosts file not found: $p"
     hint = if surface === :api
-        "Hint: pass hosts_file=\"…\" to KitSession / go!, or set ENV[\"DISTSSHKIT_HOSTS_FILE\"]"
+        "Hint: pass hosts_file=\"…\" to KitSession / go!, or set ENV[\"DISTSSH_HOSTS_FILE\"]"
     else
-        "Hint: pass --hosts-file PATH, or set DISTSSHKIT_HOSTS_FILE"
+        "Hint: pass --hosts-file PATH, or set DISTSSH_HOSTS_FILE"
     end
     return join_explained_message(head, hint)
 end
@@ -101,7 +101,7 @@ function explain_no_hosts(;
     hint = if surface === :api
         "Hint: pass workers= with child:NAME tokens, or hosts_file="
     else
-        "Hint: pass child:NAME tokens, or --hosts-file / DISTSSHKIT_HOSTS_FILE"
+        "Hint: pass child:NAME tokens, or --hosts-file / DISTSSH_HOSTS_FILE"
     end
     return join_explained_message(head, hint)
 end

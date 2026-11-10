@@ -1,6 +1,6 @@
 # Per-run bundle (pid, logs, `run.toml`) separate from user artifact output.
 
-const DISTSSHKIT_RUN_DIR_ENV::String = "DISTSSHKIT_RUN_DIR"
+const DISTSSH_RUN_DIR_ENV::String = "DISTSSH_RUN_DIR"
 const _KIT_EXECUTE_KINDS = (:go, :drive, :ride)
 
 function _require_execute_kind!(kind::Symbol)
@@ -12,9 +12,9 @@ function _require_execute_kind!(kind::Symbol)
     return nothing
 end
 
-"""`ENV["DISTSSHKIT_RUN_DIR"]` when set and non-blank, else `nothing`."""
+"""`ENV["DISTSSH_RUN_DIR"]` when set and non-blank, else `nothing`."""
 function kit_run_dir()::Union{Nothing, String}
-    raw = strip(get(ENV, DISTSSHKIT_RUN_DIR_ENV, ""))
+    raw = strip(get(ENV, DISTSSH_RUN_DIR_ENV, ""))
     isempty(raw) && return nothing
     return canonical_local_path(raw)
 end
@@ -114,20 +114,20 @@ function _ensure_kit_run_dir!(
         jid = resolved_kit_job_id()
     end
     dir = allocate_run_dir(kind, script; project = project, job_id = jid)
-    ENV[DISTSSHKIT_RUN_DIR_ENV] = dir
+    ENV[DISTSSH_RUN_DIR_ENV] = dir
     return dir
 end
 
 function _restore_kit_run_dir_env!(old)::Nothing
     if old === nothing || (old isa AbstractString && isempty(strip(String(old))))
-        delete!(ENV, DISTSSHKIT_RUN_DIR_ENV)
+        delete!(ENV, DISTSSH_RUN_DIR_ENV)
     else
-        ENV[DISTSSHKIT_RUN_DIR_ENV] = String(old)
+        ENV[DISTSSH_RUN_DIR_ENV] = String(old)
     end
     return nothing
 end
 
-"""Setup log directory: this run's `DISTSSHKIT_RUN_DIR`, else `{project}/.distsshkit/setup`."""
+"""Setup log directory: this run's `DISTSSH_RUN_DIR`, else `{project}/.distsshkit/setup`."""
 function setup_log_dir(project::AbstractString)::String
     rd = kit_run_dir()
     rd !== nothing && return rd
@@ -206,27 +206,27 @@ function _recorded_env_names()::Vector{String}
     for k in keys(ENV)
         ks = String(k)
         occursin("COOKIE", uppercase(ks)) && continue
-        startswith(ks, "DISTSSHKIT_") || startswith(ks, "DISTRIBUTED_") || continue
+        startswith(ks, "DISTSSH_") || startswith(ks, "DISTRIBUTED_") || continue
         push!(names, ks)
     end
     sort!(names)
     return names
 end
 
-"""`[launch]` when this process is a detached child (`DISTSSHKIT_LAUNCH_THREADS`).
+"""`[launch]` when this process is a detached child (`DISTSSH_LAUNCH_THREADS`).
 
 `dir` is recorded with the same path rules as `output_dir`. `dropped` is
 the comma-separated name list. Schema stays 1. In-process runs leave the
 table out.
 """
 function _launch_table_from_env(project_root)::Union{Nothing, Dict{String, Any}}
-    threads = strip(get(ENV, "DISTSSHKIT_LAUNCH_THREADS", ""))
+    threads = strip(get(ENV, "DISTSSH_LAUNCH_THREADS", ""))
     isempty(threads) && return nothing
     table = Dict{String, Any}("threads" => threads)
-    dir = strip(get(ENV, "DISTSSHKIT_LAUNCH_DIR", ""))
+    dir = strip(get(ENV, "DISTSSH_LAUNCH_DIR", ""))
     isempty(dir) || (table["dir"] = _record_path(dir, project_root))
     dropped = String[]
-    for part in split(get(ENV, "DISTSSHKIT_LAUNCH_DROPPED", ""), ',')
+    for part in split(get(ENV, "DISTSSH_LAUNCH_DROPPED", ""), ',')
         name = strip(String(part))
         isempty(name) || push!(dropped, name)
     end

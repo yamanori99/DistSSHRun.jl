@@ -4,7 +4,7 @@ function _git_sync_via_ssh_shim!(bindir, work, remote; hosts = ["dest"])
     path0 = get(ENV, "PATH", "")
     return withenv(
         "PATH" => bindir * ":" * path0,
-        "DISTSSHKIT_TEST" => nothing,
+        "DISTSSH_TEST" => nothing,
         "DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes",
     ) do
         return _capture_stdio() do _, _
@@ -251,7 +251,7 @@ end
         end
 
         @testset "git_sync confirm abort" begin
-            withenv("DISTSSHKIT_YES" => nothing) do
+            withenv("DISTSSH_YES" => nothing) do
                 prev_ni = DistSSHRun.kit_noninteractive()
                 DistSSHRun.set_kit_noninteractive!(false)
                 try
@@ -396,7 +396,7 @@ end
                 path0 = get(ENV, "PATH", "")
                 withenv(
                     "PATH" => bindir * ":" * path0,
-                    "DISTSSHKIT_TEST" => nothing,
+                    "DISTSSH_TEST" => nothing,
                     "DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes",
                 ) do
                     out, raw = _capture_stdio() do _, _
@@ -582,10 +582,10 @@ end
         logp = joinpath(dir, "ssh.log")
         ready = joinpath(dir, "ready")
         base = Dict{String, String}(
-            "DISTSSHKIT_TEST" => "1",
-            "DISTSSHKIT_TEST_SSH" => double,
+            "DISTSSH_TEST" => "1",
+            "DISTSSH_TEST_SSH" => double,
             "SHELL_DOUBLE_LOG" => logp,
-            "DISTSSHKIT_TEST_POSIX_SHELL" => "1",
+            "DISTSSH_TEST_POSIX_SHELL" => "1",
         )
         try
             withenv(merge(base, Dict("SHELL_DOUBLE_MODE" => "exit0"))...) do

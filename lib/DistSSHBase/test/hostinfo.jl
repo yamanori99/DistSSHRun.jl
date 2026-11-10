@@ -11,7 +11,7 @@ using Test
     @test localf.kernel_release !== nothing
     parsed = DistSSHBase._hostinfo_parse_probe(
         """
-        DISTSSHKIT_HOSTINFO
+        DISTSSH_HOSTINFO
         mem=17179869184
         ncpu=4
         os=Linux
@@ -38,7 +38,7 @@ using Test
     @test DistSSHBase._hostinfo_parse_ncpu("0") === nothing
 
     # Positional shift: missing RAM leaves CPU then OS. Must not treat ncpu as RAM.
-    shifted = DistSSHBase._hostinfo_parse_probe("DISTSSHKIT_HOSTINFO\n4\nLinux\n")
+    shifted = DistSSHBase._hostinfo_parse_probe("DISTSSH_HOSTINFO\n4\nLinux\n")
     @test shifted !== nothing
     if shifted !== nothing
         @test shifted.total_memory_bytes === nothing
@@ -51,7 +51,7 @@ using Test
         @test shifted.cpu_model === nothing
     end
     empty_mem = DistSSHBase._hostinfo_parse_probe(
-        "DISTSSHKIT_HOSTINFO\nmem=\nncpu=4\nos=Linux\nkernel=1\narch=x86_64\n",
+        "DISTSSH_HOSTINFO\nmem=\nncpu=4\nos=Linux\nkernel=1\narch=x86_64\n",
     )
     @test empty_mem !== nothing
     if empty_mem !== nothing
@@ -61,7 +61,7 @@ using Test
         @test empty_mem.arch == "x86_64"
     end
     empty_cpu = DistSSHBase._hostinfo_parse_probe(
-        "DISTSSHKIT_HOSTINFO\nmem=8589934592\nncpu=\nos=Darwin\narch=arm64\nos_version=27.2\nos_pretty=macOS\n",
+        "DISTSSH_HOSTINFO\nmem=8589934592\nncpu=\nos=Darwin\narch=arm64\nos_version=27.2\nos_pretty=macOS\n",
     )
     @test empty_cpu !== nothing
     if empty_cpu !== nothing
@@ -73,7 +73,7 @@ using Test
         @test empty_cpu.arch == "arm64"
     end
     empty_os = DistSSHBase._hostinfo_parse_probe(
-        "DISTSSHKIT_HOSTINFO\nmem=8589934592\nncpu=2\nos=\narch=x86_64\n",
+        "DISTSSH_HOSTINFO\nmem=8589934592\nncpu=2\nos=\narch=x86_64\n",
     )
     @test empty_os !== nothing
     if empty_os !== nothing
@@ -84,7 +84,7 @@ using Test
     # Partial labels must not shift later keys.
     partial = DistSSHBase._hostinfo_parse_probe(
         """
-        DISTSSHKIT_HOSTINFO
+        DISTSSH_HOSTINFO
         mem=8589934592
         ncpu=2
         os=Linux
@@ -108,14 +108,14 @@ using Test
         env = merge(
             _fake_setup_remote_env(state_dir),
             Dict(
-                "DISTSSHKIT_TEST_POOL_MEM" => "8589934592",
-                "DISTSSHKIT_TEST_POOL_NCPU" => "8",
-                "DISTSSHKIT_TEST_HOSTINFO_OS" => "Linux",
-                "DISTSSHKIT_TEST_HOSTINFO_KERNEL" => "6.8.0-microsoft-standard-WSL2",
-                "DISTSSHKIT_TEST_HOSTINFO_ARCH" => "x86_64",
-                "DISTSSHKIT_TEST_HOSTINFO_OS_VERSION" => "24.04",
-                "DISTSSHKIT_TEST_HOSTINFO_OS_PRETTY" => "Ubuntu 24.04.1 LTS",
-                "DISTSSHKIT_TEST_HOSTINFO_CPU_MODEL" => "Intel(R) Test",
+                "DISTSSH_TEST_POOL_MEM" => "8589934592",
+                "DISTSSH_TEST_POOL_NCPU" => "8",
+                "DISTSSH_TEST_HOSTINFO_OS" => "Linux",
+                "DISTSSH_TEST_HOSTINFO_KERNEL" => "6.8.0-microsoft-standard-WSL2",
+                "DISTSSH_TEST_HOSTINFO_ARCH" => "x86_64",
+                "DISTSSH_TEST_HOSTINFO_OS_VERSION" => "24.04",
+                "DISTSSH_TEST_HOSTINFO_OS_PRETTY" => "Ubuntu 24.04.1 LTS",
+                "DISTSSH_TEST_HOSTINFO_CPU_MODEL" => "Intel(R) Test",
             ),
         )
         withenv(env...) do
@@ -131,7 +131,7 @@ using Test
             @test facts.cpu_model == "Intel(R) Test"
             @test DistSSHBase.get_remote_nproc("host1") == 8
         end
-        withenv(merge(env, Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1"))...) do
+        withenv(merge(env, Dict("DISTSSH_TEST_SSH_FAIL" => "1"))...) do
             bad = DistSSHBase.collect_host_facts("host1")
             @test !bad.reachable
             @test bad.ncpu === nothing
@@ -143,7 +143,7 @@ using Test
             @test bad.os_pretty === nothing
             @test bad.cpu_model === nothing
         end
-        withenv(merge(env, Dict("DISTSSHKIT_TEST_POOL_MEM" => ""))...) do
+        withenv(merge(env, Dict("DISTSSH_TEST_POOL_MEM" => ""))...) do
             nomem = DistSSHBase.collect_host_facts("host1")
             @test nomem.reachable
             @test nomem.total_memory_bytes === nothing
@@ -152,7 +152,7 @@ using Test
             @test DistSSHBase.get_remote_total_gb("host1") === nothing
             @test DistSSHBase.get_remote_nproc("host1") == 8
         end
-        withenv(merge(env, Dict("DISTSSHKIT_TEST_HOSTINFO_OMIT_MEM" => "1"))...) do
+        withenv(merge(env, Dict("DISTSSH_TEST_HOSTINFO_OMIT_MEM" => "1"))...) do
             omit = DistSSHBase.collect_host_facts("host1")
             @test omit.reachable
             @test omit.total_memory_bytes === nothing
@@ -163,11 +163,11 @@ using Test
             merge(
                 env,
                 Dict(
-                    "DISTSSHKIT_TEST_HOSTINFO_OMIT_ARCH" => "1",
-                    "DISTSSHKIT_TEST_HOSTINFO_OMIT_OS_VERSION" => "1",
-                    "DISTSSHKIT_TEST_HOSTINFO_OMIT_OS_PRETTY" => "1",
-                    "DISTSSHKIT_TEST_HOSTINFO_OMIT_CPU_MODEL" => "1",
-                    "DISTSSHKIT_TEST_HOSTINFO_OMIT_KERNEL" => "1",
+                    "DISTSSH_TEST_HOSTINFO_OMIT_ARCH" => "1",
+                    "DISTSSH_TEST_HOSTINFO_OMIT_OS_VERSION" => "1",
+                    "DISTSSH_TEST_HOSTINFO_OMIT_OS_PRETTY" => "1",
+                    "DISTSSH_TEST_HOSTINFO_OMIT_CPU_MODEL" => "1",
+                    "DISTSSH_TEST_HOSTINFO_OMIT_KERNEL" => "1",
                 ),
             )...,
         ) do
@@ -183,12 +183,12 @@ using Test
         darwin_env = merge(
             env,
             Dict(
-                "DISTSSHKIT_TEST_HOSTINFO_OS" => "Darwin",
-                "DISTSSHKIT_TEST_HOSTINFO_KERNEL" => "27.2.0",
-                "DISTSSHKIT_TEST_HOSTINFO_ARCH" => "arm64",
-                "DISTSSHKIT_TEST_HOSTINFO_OS_VERSION" => "27.2",
-                "DISTSSHKIT_TEST_HOSTINFO_OS_PRETTY" => "macOS",
-                "DISTSSHKIT_TEST_HOSTINFO_CPU_MODEL" => "Apple M4",
+                "DISTSSH_TEST_HOSTINFO_OS" => "Darwin",
+                "DISTSSH_TEST_HOSTINFO_KERNEL" => "27.2.0",
+                "DISTSSH_TEST_HOSTINFO_ARCH" => "arm64",
+                "DISTSSH_TEST_HOSTINFO_OS_VERSION" => "27.2",
+                "DISTSSH_TEST_HOSTINFO_OS_PRETTY" => "macOS",
+                "DISTSSH_TEST_HOSTINFO_CPU_MODEL" => "Apple M4",
             ),
         )
         withenv(darwin_env...) do

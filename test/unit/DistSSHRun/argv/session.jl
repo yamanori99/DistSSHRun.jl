@@ -12,13 +12,13 @@ end
 
 @testset "cli_session" begin
     clear_verbosity_env = (
-        "DISTSSHKIT_QUIET" => nothing,
-        "DISTSSHKIT_PROGRESS" => nothing,
-        "DISTSSHKIT_VERBOSE" => nothing,
+        "DISTSSH_QUIET" => nothing,
+        "DISTSSH_PROGRESS" => nothing,
+        "DISTSSH_VERBOSE" => nothing,
     )
 
     @testset "peel flags" begin
-        withenv(clear_verbosity_env..., "DISTSSHKIT_YES" => nothing) do
+        withenv(clear_verbosity_env..., "DISTSSH_YES" => nothing) do
             let (session, rest) = DistSSHRun.peel_kit_cli_flags(["--quiet", "--yes", "child:host1", "s.jl"])
                 @test session.quiet
                 @test session.verbosity === :quiet
@@ -54,28 +54,28 @@ end
             @test_throws ArgumentError DistSSHRun.peel_kit_cli_flags(["--verbose", "-q"])
             @test_throws ArgumentError DistSSHRun.KitCliSession(quiet = true, verbosity = :progress)
         end
-        withenv("DISTSSHKIT_QUIET" => "1", "DISTSSHKIT_PROGRESS" => "1") do
+        withenv("DISTSSH_QUIET" => "1", "DISTSSH_PROGRESS" => "1") do
             @test_throws ArgumentError DistSSHRun.default_kit_cli_session()
         end
-        withenv("DISTSSHKIT_VERBOSE" => "1", "DISTSSHKIT_PROGRESS" => "1", "DISTSSHKIT_QUIET" => nothing) do
+        withenv("DISTSSH_VERBOSE" => "1", "DISTSSH_PROGRESS" => "1", "DISTSSH_QUIET" => nothing) do
             @test_throws ArgumentError DistSSHRun.default_kit_cli_session()
         end
     end
 
     @testset "ENV defaults" begin
-        withenv("DISTSSHKIT_QUIET" => "1", "DISTSSHKIT_YES" => "true", "DISTSSHKIT_PROGRESS" => nothing, "DISTSSHKIT_VERBOSE" => nothing) do
+        withenv("DISTSSH_QUIET" => "1", "DISTSSH_YES" => "true", "DISTSSH_PROGRESS" => nothing, "DISTSSH_VERBOSE" => nothing) do
             session = DistSSHRun.default_kit_cli_session()
             @test session.quiet
             @test session.verbosity === :quiet
             @test session.yes
         end
-        withenv("DISTSSHKIT_QUIET" => nothing, "DISTSSHKIT_PROGRESS" => "1", "DISTSSHKIT_VERBOSE" => nothing, "DISTSSHKIT_YES" => nothing) do
+        withenv("DISTSSH_QUIET" => nothing, "DISTSSH_PROGRESS" => "1", "DISTSSH_VERBOSE" => nothing, "DISTSSH_YES" => nothing) do
             session = DistSSHRun.default_kit_cli_session()
             @test session.verbosity === :progress
             @test !session.quiet
             @test !session.yes
         end
-        withenv("DISTSSHKIT_QUIET" => nothing, "DISTSSHKIT_PROGRESS" => nothing, "DISTSSHKIT_VERBOSE" => "1", "DISTSSHKIT_YES" => nothing) do
+        withenv("DISTSSH_QUIET" => nothing, "DISTSSH_PROGRESS" => nothing, "DISTSSH_VERBOSE" => "1", "DISTSSH_YES" => nothing) do
             session = DistSSHRun.default_kit_cli_session()
             @test session.verbosity === :verbose
             @test !session.quiet
@@ -85,7 +85,7 @@ end
     end
 
     @testset "apply_kit_cli_session!" begin
-        withenv(clear_verbosity_env..., "DISTSSHKIT_YES" => nothing) do
+        withenv(clear_verbosity_env..., "DISTSSH_YES" => nothing) do
             prev = DistSSHRun.kit_verbosity()
             prev_ni = DistSSHRun.kit_noninteractive()
             try
@@ -109,7 +109,7 @@ end
     end
 
     @testset "kit_confirm stdin" begin
-        withenv("DISTSSHKIT_YES" => nothing) do
+        withenv("DISTSSH_YES" => nothing) do
             prev_ni = DistSSHRun.kit_noninteractive()
             DistSSHRun.set_kit_noninteractive!(false)
             try
@@ -137,26 +137,26 @@ end
         @test occursin("--progress", DistSSHRun.KIT_PROGRESS_FLAG_HELP)
         @test occursin("TTY default", DistSSHRun.KIT_PROGRESS_FLAG_HELP)
         @test occursin("--verbose", DistSSHRun.KIT_VERBOSE_FLAG_HELP)
-        @test occursin("DISTSSHKIT_PROGRESS", DistSSHRun.KIT_PROGRESS_ENV_HELP)
-        @test occursin("DISTSSHKIT_VERBOSE", DistSSHRun.KIT_VERBOSE_ENV_HELP)
+        @test occursin("DISTSSH_PROGRESS", DistSSHRun.KIT_PROGRESS_ENV_HELP)
+        @test occursin("DISTSSH_VERBOSE", DistSSHRun.KIT_VERBOSE_ENV_HELP)
         @test occursin("--hosts", DistSSHRun.KIT_HOSTS_FLAG_HELP)
-        @test occursin("DISTSSHKIT_HOSTS", DistSSHRun.KIT_HOSTS_ENV_HELP)
-        @test occursin("DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL", DistSSHRun.KIT_SKIP_PKILL_ENV_HELP)
-        @test occursin("DISTSSHKIT_JOBS", DistSSHRun.KIT_JOBS_ENV_HELP)
-        @test occursin("DISTSSHKIT_REQUIRE_ALL_HOSTS", DistSSHRun.KIT_REQUIRE_ALL_HOSTS_ENV_HELP)
+        @test occursin("DISTSSH_HOSTS", DistSSHRun.KIT_HOSTS_ENV_HELP)
+        @test occursin("DISTSSH_SKIP_GLOBAL_WORKER_PKILL", DistSSHRun.KIT_SKIP_PKILL_ENV_HELP)
+        @test occursin("DISTSSH_JOBS", DistSSHRun.KIT_JOBS_ENV_HELP)
+        @test occursin("DISTSSH_REQUIRE_ALL_HOSTS", DistSSHRun.KIT_REQUIRE_ALL_HOSTS_ENV_HELP)
     end
 
     @testset "kit_host_jobs" begin
-        withenv("DISTSSHKIT_JOBS" => nothing) do
+        withenv("DISTSSH_JOBS" => nothing) do
             @test DistSSHRun.kit_host_jobs() == 1
         end
-        withenv("DISTSSHKIT_JOBS" => "4") do
+        withenv("DISTSSH_JOBS" => "4") do
             @test DistSSHRun.kit_host_jobs() == 4
         end
-        withenv("DISTSSHKIT_JOBS" => "0") do
+        withenv("DISTSSH_JOBS" => "0") do
             @test DistSSHRun.kit_host_jobs() == 1
         end
-        withenv("DISTSSHKIT_JOBS" => "nope") do
+        withenv("DISTSSH_JOBS" => "nope") do
             @test DistSSHRun.kit_host_jobs() == 1
         end
         seen = Int[]
@@ -175,7 +175,7 @@ end
             @test count(s -> s.host == "host-b", slots) == 4
         end
 
-        withenv("DISTSSHKIT_HOSTS" => "child:env-a:2, child:env-b", "DISTSSHKIT_HOSTS_FILE" => nothing) do
+        withenv("DISTSSH_HOSTS" => "child:env-a:2, child:env-b", "DISTSSH_HOSTS_FILE" => nothing) do
             session = DistSSHRun.KitCliSession(hosts_flag = ["parent:3"], hosts_file = hosts_file)
             @test DistSSHRun.kit_host_source_tokens(session; keep_counts = true) ==
                 ["parent:3", "child:env-a:2", "child:env-b", "child:host-a:1", "child:host-b:4"]

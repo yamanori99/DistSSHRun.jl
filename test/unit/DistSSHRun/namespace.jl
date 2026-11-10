@@ -45,7 +45,7 @@ using Test
                 @test ok.hosts[1].ok
                 subset = DistSSHRun.push_cache!(sess; hashes = [h])
                 @test subset.ok
-                withenv("DISTSSHKIT_TEST_CACHE_PUSH_FAIL" => "1") do
+                withenv("DISTSSH_TEST_CACHE_PUSH_FAIL" => "1") do
                     fail = DistSSHRun.push_cache!(sess)
                     @test !fail.ok
                     @test !fail.hosts[1].ok

@@ -113,7 +113,7 @@ using Test
         mktemp() do args_file, _
             withenv(
                 "DISTRIBUTED_PROJECT_ROOT" => "/override",
-                "_DISTSSHKIT_TEST_ARGS_FILE" => args_file,
+                "_DISTSSH_TEST_ARGS_FILE" => args_file,
             ) do
                 empty!(ARGS)
                 append!(ARGS, ["--local", "2", "job.jl"])
@@ -127,8 +127,8 @@ using Test
                 mktemp() do proj_file, _
                     withenv(
                         "DISTRIBUTED_PROJECT_ROOT" => nothing,
-                        "_DISTSSHKIT_TEST_ARGS_FILE" => args_file,
-                        "_DISTSSHKIT_TEST_PROJ_FILE" => proj_file,
+                        "_DISTSSH_TEST_ARGS_FILE" => args_file,
+                        "_DISTSSH_TEST_PROJ_FILE" => proj_file,
                     ) do
                         cd(tmp) do
                             empty!(ARGS)
@@ -144,9 +144,9 @@ using Test
     end
 
     @testset "script arg prelude" begin
-        withenv("DISTSSHKIT_SCRIPT_ARG_PRELUDE" => "alpha\n\nbeta") do
+        withenv("DISTSSH_SCRIPT_ARG_PRELUDE" => "alpha\n\nbeta") do
             @test DistSSHRun._merge_script_arg_prelude(["job.jl"]) == ["job.jl", "alpha", "beta"]
         end
-        @test get(ENV, "DISTSSHKIT_SCRIPT_ARG_PRELUDE", nothing) === nothing
+        @test get(ENV, "DISTSSH_SCRIPT_ARG_PRELUDE", nothing) === nothing
     end
 end

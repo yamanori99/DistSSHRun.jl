@@ -9,7 +9,7 @@ end
 
 """Outcome of [`go!`](@ref). On failure, `failed_step` is `"sync"`, `"run"`, or `"collect"`.
 
-`run_dir` is this run's `DISTSSHKIT_RUN_DIR` when one is active.
+`run_dir` is this run's `DISTSSH_RUN_DIR` when one is active.
 Read it with [`result_run_dir`](@ref). [`result_provenance`](@ref) reads
 `run.toml` from it. [`result_content_tree_hash`](@ref) and
 [`result_remote_run_id`](@ref) read `provenance.selection` in that file.
@@ -58,7 +58,7 @@ function GoResult(
 end
 
 # Positional `failed_step`, the shape from before `run_dir`. The run
-# directory still comes from the active `DISTSSHKIT_RUN_DIR`.
+# directory still comes from the active `DISTSSH_RUN_DIR`.
 function GoResult(
         ok::Bool,
         sync::Union{Nothing, SyncResult},
@@ -673,7 +673,7 @@ function _go_remote_slot_shell_inner(
     rank = take_worker_rank()
     seed = job_seed()
     wseed = worker_seed(seed, rank)
-    seed_export = "export DISTSSHKIT_JOB_SEED=$(seed) DISTSSHKIT_WORKER_RANK=$(rank) DISTSSHKIT_WORKER_SEED=$(wseed) && "
+    seed_export = "export DISTSSH_JOB_SEED=$(seed) DISTSSH_WORKER_RANK=$(rank) DISTSSH_WORKER_SEED=$(wseed) && "
     jb_launch = go_remote_julia_prefix(julia_bin; blas = _explicit_blas_threads())
     log_q = _remote_shell_path_word(joinpath(slot_rel, "julia.stdout.log"))
     exit_q = _remote_shell_path_word(joinpath(slot_rel, "go.exitcode"))
@@ -687,7 +687,7 @@ function _go_remote_slot_shell_inner(
         # The mark file is a shell comment. Quote it even though the path word
         # is already quoted: the printf argument is the comment text.
         comment_q = "'" * kit_job_mark_comment(job_id) * "'"
-        job_export = "export DISTSSHKIT_JOB_ID=$(_remote_shell_path_word(job_id)) && "
+        job_export = "export DISTSSH_JOB_ID=$(_remote_shell_path_word(job_id)) && "
         job_mark = "printf '%s\\n' $comment_q > $mark_q && "
         job_load = " -L $mark_q"
     end
@@ -1005,7 +1005,7 @@ DistSSH* Manifest versions, and/or Manifest path when a slot does not match
 the job tree. Default is to error. Same tokens as `drive` / `ride`:
 `julia`, `distssh`, `manifest`.
 
-When `workers` is empty and `hosts_file` is omitted, `DISTSSHKIT_HOSTS_FILE`
+When `workers` is empty and `hosts_file` is omitted, `DISTSSH_HOSTS_FILE`
 is still read (API `go!("job.jl")`). Non-empty `workers` (CLI
 [`host_tokens`](@ref)) does not re-read that ENV.
 
@@ -1059,7 +1059,7 @@ function go!(
         )
     end
     _acquire_kit_inproc_run!(:go)
-    old_run = get(ENV, DISTSSHKIT_RUN_DIR_ENV, nothing)
+    old_run = get(ENV, DISTSSH_RUN_DIR_ENV, nothing)
     inherited_run = old_run isa AbstractString && !isempty(strip(old_run))
     try
         _reset_run_provenance!(proj)
@@ -1120,10 +1120,10 @@ function _go_run!(
     tokens = String[String(h) for h in workers]
     hf = hosts_file
     # CLI / [`host_tokens`](@ref) already merged `--hosts-file` / ENV into
-    # `workers`. Re-reading `DISTSSHKIT_HOSTS_FILE` would duplicate slots.
+    # `workers`. Re-reading `DISTSSH_HOSTS_FILE` would duplicate slots.
     # API `go!("job.jl")` with empty `workers` still honors the ENV file.
     if hf === nothing && isempty(tokens)
-        env_hf = strip(get(ENV, "DISTSSHKIT_HOSTS_FILE", ""))
+        env_hf = strip(get(ENV, "DISTSSH_HOSTS_FILE", ""))
         !isempty(env_hf) && (hf = env_hf)
     end
     if hf !== nothing && !isempty(strip(String(hf)))

@@ -132,7 +132,7 @@ using Test
     end
 
     mktemp() do path, io
-        code = withenv("DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "") do
+        code = withenv("DISTSSH_CLI_SUBCOMMAND_DONE" => "") do
             redirect_stderr(io) do
                 DistSSHRun.main(["demo", "install"])
             end
@@ -142,7 +142,7 @@ using Test
         @test occursin("with_kit or without_kit or ride", read(path, String))
     end
     _with_tempdir() do tmp
-        code = withenv("DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "") do
+        code = withenv("DISTSSH_CLI_SUBCOMMAND_DONE" => "") do
             redirect_stdout(devnull) do
                 DistSSHRun.demo(["install", "without_kit", "--dest", tmp])
             end
@@ -153,11 +153,11 @@ using Test
         @test !isdir(joinpath(tmp, "demos"))
     end
 
-    # A leftover DISTSSHKIT_CLI_SUBCOMMAND_DONE=1 makes `main` return 0
+    # A leftover DISTSSH_CLI_SUBCOMMAND_DONE=1 makes `main` return 0
     # without running `demo`. `_main` deletes that flag on return; this
     # `withenv` still isolates the call.
     mktemp() do path, io
-        code = withenv("DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "") do
+        code = withenv("DISTSSH_CLI_SUBCOMMAND_DONE" => "") do
             redirect_stderr(io) do
                 DistSSHRun.main(["demo", "bogus"])
             end

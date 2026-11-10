@@ -18,16 +18,16 @@ function _register_drive_workers!(
 end
 
 function _skip_global_worker_pkill()::Bool
-    return get(ENV, "DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL", "") == "1"
+    return get(ENV, "DISTSSH_SKIP_GLOBAL_WORKER_PKILL", "") == "1"
 end
 
 # Pre-run local `pkill -f julia.*--worker` is gone: it is not pid-scoped and
 # would reap workers belonging to other Julia processes on the same login
 # (parallel tests, another drive). Local teardown is `rmprocs` at atexit.
 # Remote untagged `pkill` is the same class (shared SSH host). Drive only
-# `pkill`s argv containing `distsshkit-job:<id>` when `DISTSSHKIT_JOB_ID` is set.
+# `pkill`s argv containing `distsshkit-job:<id>` when `DISTSSH_JOB_ID` is set.
 # Machine-wide sweep remains `setup cleanup`. Skip leftover tagged pkill with
-# DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL=1.
+# DISTSSH_SKIP_GLOBAL_WORKER_PKILL=1.
 function cleanup_stale_workers!(hosts::Vector{Tuple{String, Union{Int, Nothing}}})
     if _skip_global_worker_pkill() || isempty(hosts)
         return
@@ -178,7 +178,7 @@ function add_drive_workers!(
             write_both("$host_name ($host_workers workers): ")
             try
                 before = Set(workers())
-                # Default tunnel=true. Set DISTSSHKIT_SSH_TUNNEL=0 to disable.
+                # Default tunnel=true. Set DISTSSH_SSH_TUNNEL=0 to disable.
                 # Machine must be user@host: Distributed prefixes \$USER otherwise and
                 # overrides SSH config User (Host aliases then look like "No free port?").
                 # Bind 127.0.0.1 so the cluster cookie is not reachable on other interfaces.

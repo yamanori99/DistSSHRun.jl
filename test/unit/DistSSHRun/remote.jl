@@ -235,8 +235,8 @@ end
             marks = joinpath(dir, "marks")
             mkpath(marks)
             withenv(
-                "DISTSSHKIT_TEST" => "1",
-                "DISTSSHKIT_TEST_SSH" => script,
+                "DISTSSH_TEST" => "1",
+                "DISTSSH_TEST_SSH" => script,
                 "REAP_DIR" => marks,
                 "REAP_EXIT" => "1",
             ) do
@@ -246,8 +246,8 @@ end
             rm(joinpath(marks, "g"); force = true)
             rm(joinpath(marks, "h"); force = true)
             withenv(
-                "DISTSSHKIT_TEST" => "1",
-                "DISTSSHKIT_TEST_SSH" => script,
+                "DISTSSH_TEST" => "1",
+                "DISTSSH_TEST_SSH" => script,
                 "REAP_DIR" => marks,
                 "REAP_EXIT" => "255",
             ) do
@@ -256,8 +256,8 @@ end
                 end
             end
             withenv(
-                "DISTSSHKIT_TEST" => "1",
-                "DISTSSHKIT_TEST_SSH" => script,
+                "DISTSSH_TEST" => "1",
+                "DISTSSH_TEST_SSH" => script,
                 "REAP_DIR" => marks,
                 "REAP_EXIT" => "99",
             ) do

@@ -12,7 +12,7 @@ function write_worker_file()
     dir = joinpath(@__DIR__, "output")
     mkpath(dir)
     path = joinpath(dir, "worker_$(myid()).txt")
-    write(path, "DISTSSHKIT_E2E_WORKER_FILE id=$(myid())\n")
+    write(path, "DISTSSH_E2E_WORKER_FILE id=$(myid())\n")
     return path
 end
 

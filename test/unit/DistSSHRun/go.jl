@@ -257,9 +257,9 @@ using Dates
                 withenv(
                     "PATH" => path,
                     "GO_SLOT_SSH_READY" => ready,
-                    "DISTSSHKIT_TEST" => nothing,
-                    "DISTSSHKIT_TEST_SSH" => nothing,
-                    "DISTSSHKIT_JOB_ID" => nothing,
+                    "DISTSSH_TEST" => nothing,
+                    "DISTSSH_TEST_SSH" => nothing,
+                    "DISTSSH_JOB_ID" => nothing,
                 ) do
                     task = @async DistSSHRun._go_run_remote_slot!(
                         host,
@@ -402,7 +402,7 @@ using Dates
         )
         @test occursin("DISTSSH_PROVENANCE_SLOT", with_args)
 
-        withenv("DISTSSHKIT_JOB_ID" => "repro-1") do
+        withenv("DISTSSH_JOB_ID" => "repro-1") do
             tagged = DistSSHRun._go_remote_slot_shell_inner(
                 "~/proj",
                 "slot",
@@ -430,12 +430,12 @@ using Dates
                 script, """
                 write($(repr(mark)), "yes")
                 write($(repr(argsf)), join(ARGS, '\\n'))
-                write($(repr(envf)), get(ENV, "DISTSSHKIT_JOB_ID", ""))
+                write($(repr(envf)), get(ENV, "DISTSSH_JOB_ID", ""))
                 write($(repr(progf)), PROGRAM_FILE)
                 """
             )
             slot = joinpath(d, "slot")
-            withenv("DISTSSHKIT_JOB_ID" => "repro-1") do
+            withenv("DISTSSH_JOB_ID" => "repro-1") do
                 r = DistSSHRun._go_run_local_slot!(
                     d, script, ["a", "b c"], slot; quiet = true,
                 )
@@ -476,7 +476,7 @@ using Dates
         kr = DistSSHRun.kit_run_result(bad)
         @test kr.kind === :go
         mktempdir() do rd
-            withenv(DistSSHRun.DISTSSHKIT_RUN_DIR_ENV => rd) do
+            withenv(DistSSHRun.DISTSSH_RUN_DIR_ENV => rd) do
                 positional = DistSSHRun.GoResult(
                     false, nothing, nothing, nothing, "job.jl", "/out", "sync",
                 )
@@ -534,13 +534,13 @@ using Dates
         end
     end
 
-    @testset "DISTSSHKIT_HOSTS_FILE not reapplied when workers set" begin
+    @testset "DISTSSH_HOSTS_FILE not reapplied when workers set" begin
         _with_tempdir() do proj
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
             hf = joinpath(proj, "hosts")
             write(hf, "child:no-such-host.invalid:1\n")
-            withenv("DISTSSHKIT_HOSTS_FILE" => hf) do
+            withenv("DISTSSH_HOSTS_FILE" => hf) do
                 redirect_stdout(devnull) do
                     r = DistSSHRun.go!(
                         script, ["parent:1"];
@@ -689,7 +689,7 @@ using Dates
                     redirect_stderr(err_io) do
                         withenv(
                             "DISTRIBUTED_PROJECT_ROOT" => proj,
-                            "DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "",
+                            "DISTSSH_CLI_SUBCOMMAND_DONE" => "",
                         ) do
                             DistSSHRun.main(["go", "-q", "--output-dir", dirty, script])
                         end

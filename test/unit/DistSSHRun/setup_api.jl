@@ -225,8 +225,8 @@ using Test
                 )
                 empty!(DistSSHRun.DistSSHBase._DETECT_JULIA_PATH_CACHE)
                 ver_env = Dict(
-                    "DISTSSHKIT_TEST_JULIA_VERSION" => "julia version $(VERSION)",
-                    "DISTSSHKIT_TEST_UNAME" => "Linux",
+                    "DISTSSH_TEST_JULIA_VERSION" => "julia version $(VERSION)",
+                    "DISTSSH_TEST_UNAME" => "Linux",
                 )
                 withenv(ver_env...) do
                     up = DistSSHRun.setup!(session, :juliaup)
@@ -235,7 +235,7 @@ using Test
                 end
                 withenv(
                     ver_env...,
-                    "DISTSSHKIT_TEST_JULIAUP_ALREADY" => "1",
+                    "DISTSSH_TEST_JULIAUP_ALREADY" => "1",
                 ) do
                     empty!(DistSSHRun.DistSSHBase._DETECT_JULIA_PATH_CACHE)
                     # `quiet=true` would re-pin `:quiet` in `apply_session_env!`
@@ -255,13 +255,13 @@ using Test
                     ch = DistSSHRun.juliaup_channel()
                     @test occursin("$host: already on $ch", out)
                 end
-                withenv("DISTSSHKIT_TEST_NO_JULIAUP" => "1") do
+                withenv("DISTSSH_TEST_NO_JULIAUP" => "1") do
                     empty!(DistSSHRun.DistSSHBase._DETECT_JULIA_PATH_CACHE)
                     bad = DistSSHRun.setup!(session, :juliaup)
                     @test !bad.ok
                 end
                 ssh_log = joinpath(proj, "ssh.log")
-                withenv(ver_env..., "DISTSSHKIT_TEST_SSH_LOG" => ssh_log) do
+                withenv(ver_env..., "DISTSSH_TEST_SSH_LOG" => ssh_log) do
                     empty!(DistSSHRun.DistSSHBase._DETECT_JULIA_PATH_CACHE)
                     upd = DistSSHRun.setup!(session, :juliaup_update)
                     @test upd.ok && !upd.cancelled
@@ -273,7 +273,7 @@ using Test
                     @test !occursin(" add ", logged)
                     @test !occursin("default", logged)
                 end
-                withenv("DISTSSHKIT_TEST_NO_JULIAUP" => "1") do
+                withenv("DISTSSH_TEST_NO_JULIAUP" => "1") do
                     empty!(DistSSHRun.DistSSHBase._DETECT_JULIA_PATH_CACHE)
                     bad_up = DistSSHRun.setup!(session, :juliaup_update)
                     @test !bad_up.ok
@@ -311,7 +311,7 @@ using Test
                     yes = true,
                     quiet = true,
                 )
-                withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+                withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                     up = DistSSHRun.setup!(session, :juliaup)
                     @test up.ok && !up.cancelled
                     @test length(up.hosts) == 1 && up.hosts[1].ok
@@ -344,7 +344,7 @@ using Test
                     yes = true,
                     quiet = true,
                 )
-                withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+                withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                     upd = DistSSHRun.setup!(session, :juliaup_update)
                     @test upd.ok && !upd.cancelled
                     @test length(upd.hosts) == 1 && upd.hosts[1].ok
@@ -449,7 +449,7 @@ using Test
                     yes = true,
                     quiet = true,
                 )
-                withenv("DISTSSHKIT_TEST_SSH_FAIL" => "1") do
+                withenv("DISTSSH_TEST_SSH_FAIL" => "1") do
                     res = DistSSHRun.setup!(session, :instantiate; julia = "/bin/echo")
                     @test !res.ok
                 end
@@ -537,7 +537,7 @@ using Test
                     yes = true,
                     quiet = true,
                 )
-                withenv("DISTSSHKIT_TEST_SSH_FAIL" => "1") do
+                withenv("DISTSSH_TEST_SSH_FAIL" => "1") do
                     clean = DistSSHRun.setup!(session, :cleanup)
                     @test clean isa DistSSHRun.SyncResult
                     @test !clean.cancelled
@@ -767,7 +767,7 @@ using Test
                 )
                 home = "/home/distsshkit"
                 expanded = home * "/App.jl"
-                withenv("DISTSSHKIT_TEST_REMOTE_HOME" => home) do
+                withenv("DISTSSH_TEST_REMOTE_HOME" => home) do
                     del = DistSSHRun.setup!(session, :delete; confirm_path = expanded)
                     @test del.ok && !del.cancelled
                 end
@@ -787,8 +787,8 @@ using Test
                 quiet = true,
             )
             withenv(
-                "DISTSSHKIT_TEST" => "1",
-                "DISTSSHKIT_TEST_SSH" => "/no/such/fake-ssh.jl",
+                "DISTSSH_TEST" => "1",
+                "DISTSSH_TEST_SSH" => "/no/such/fake-ssh.jl",
             ) do
                 res_setup = DistSSHRun.setup!(session, :runtest; julia = "/bin/echo")
                 @test !res_setup.ok

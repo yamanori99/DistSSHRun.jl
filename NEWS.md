@@ -37,7 +37,7 @@ The version-cut PR copies them into this file.
 
 ## 0.1.12
 
-- `DistSSHBase.wait_seconds(name, default)` resolves a named wait. DistSSHBase does not pick the seconds. `:until_exit` is `Inf`. `DISTSSHKIT_WAIT_<NAME>` overrides a finite name when it is a finite number ≥ 0. `DISTSSHKIT_WAIT_SCALE` multiplies only `:child_reply`, `:go_job`, and `:drive_job`. SSH `ConnectTimeout` and `ServerAlive`, and the worker heartbeat deadline, use this. Defaults stay 10 seconds to connect and about 600 seconds of silence. A positive SSH budget below 1 second becomes 1 second, and a non-positive one stays at that default, so `ConnectTimeout=0` does not replace the 10 second connect. A heartbeat deadline that is not positive stays 600 seconds, including when `DISTSSHKIT_WAIT_PEER_SILENT` is `0`. `DISTRIBUTED_HEARTBEAT_DEADLINE_SEC` still wins when it is positive. The name is public on DistSSHBase and is not exported from DistSSHRun.
+- `DistSSHBase.wait_seconds(name, default)` resolves a named wait. DistSSHBase does not pick the seconds. `:until_exit` is `Inf`. `DISTSSH_WAIT_<NAME>` overrides a finite name when it is a finite number ≥ 0. `DISTSSH_WAIT_SCALE` multiplies only `:child_reply`, `:go_job`, and `:drive_job`. SSH `ConnectTimeout` and `ServerAlive`, and the worker heartbeat deadline, use this. Defaults stay 10 seconds to connect and about 600 seconds of silence. A positive SSH budget below 1 second becomes 1 second, and a non-positive one stays at that default, so `ConnectTimeout=0` does not replace the 10 second connect. A heartbeat deadline that is not positive stays 600 seconds, including when `DISTSSH_WAIT_PEER_SILENT` is `0`. `DISTRIBUTED_HEARTBEAT_DEADLINE_SEC` still wins when it is positive. The name is public on DistSSHBase and is not exported from DistSSHRun.
 
 ## 0.1.11
 
@@ -56,7 +56,7 @@ The version-cut PR copies them into this file.
 
 - Rsync `--files-from` lists use NUL separators and protect names beginning
   with `#` or `;` from comment parsing, so every selected path is transferred.
-- `push_cache!` transfers hosts with the same `DISTSSHKIT_JOBS` limit as
+- `push_cache!` transfers hosts with the same `DISTSSH_JOBS` limit as
   other host work. The returned host rows stay in session order.
 - A failed `collect` `find -newer` includes a short excerpt of that command's
   stderr. Collect warnings for an escaping path, and the host list on a path
@@ -90,7 +90,7 @@ The version-cut PR copies them into this file.
 - `drive` and `collect!` warn when a collect root is the project root or a parent of it. That includes `DISTRIBUTED_COLLECT_DIRS=.` and a default root from `DISTRIBUTED_OUTPUT_DIR`. Point collect at a result directory inside the project. collect-overwrite also skips `.git/`. This will be an error.
 - A failed `git push`, `git pull`, or `git clone` prints the command's own error text.
 - Each host touches its own drive sentinel, so collect still runs when hosts share a directory. A remote path that contains a newline is skipped with a warning.
-- `drive` warns when two hosts collect the same relative path. The last transfer remains. With `DISTSSHKIT_JOBS` greater than 1, which host remains is unspecified. Hosts that share one directory report every file, so the warning lists them all.
+- `drive` warns when two hosts collect the same relative path. The last transfer remains. With `DISTSSH_JOBS` greater than 1, which host remains is unspecified. Hosts that share one directory report every file, so the warning lists them all.
 - `run.toml` `collect_dirs` for `drive` resolves relative paths from the project root.
 - The DistSSHBase and DistSSHUp sources live under `lib/` with their own
   `Project.toml` and tests. DistSSHRun still includes them as submodules.
@@ -104,7 +104,7 @@ The version-cut PR copies them into this file.
 ## 0.1.6
 
 - `setup!(session, :delete; confirm_path)` and `setup!(session, :prune; confirm_path)` delete when that path matches the computed path, even when `yes=false`. Omitting `confirm_path` still follows `session.yes`. Other modes reject `confirm_path`.
-- `setup --delete` and `setup --prune` delete when `--confirm-path` matches the computed path. A mismatch names that path in single quotes and exits 1. Without `--confirm-path`, `-y` and `DISTSSHKIT_YES` still skip the prompt and delete. That skip stops in 0.2. With neither, they ask for `delete` or `prune`.
+- `setup --delete` and `setup --prune` delete when `--confirm-path` matches the computed path. A mismatch names that path in single quotes and exits 1. Without `--confirm-path`, `-y` and `DISTSSH_YES` still skip the prompt and delete. That skip stops in 0.2. With neither, they ask for `delete` or `prune`.
 - `setup --delete` and `setup --clone` refuse `~`, `/`, and a single directory under `/`.
 - `setup --clone` also refuses when the git root would land on one of those. Pass `--remote-path`.
 - A path containing `.` or `..` is refused. `setup --delete` stops when the remote path resolves to `~` or `/`.

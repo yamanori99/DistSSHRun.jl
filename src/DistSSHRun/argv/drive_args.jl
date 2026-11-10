@@ -361,11 +361,11 @@ function parse_drive_args(args::Vector{String})
     end
 
     if !require_all_hosts_cli && !best_effort_cli
-        want_all = _env_flag("DISTSSHKIT_REQUIRE_ALL_HOSTS")
-        want_best = _env_flag("DISTSSHKIT_BEST_EFFORT")
+        want_all = _env_flag("DISTSSH_REQUIRE_ALL_HOSTS")
+        want_best = _env_flag("DISTSSH_BEST_EFFORT")
         want_all && want_best && throw(
             ArgumentError(
-                "drive: cannot combine DISTSSHKIT_REQUIRE_ALL_HOSTS and DISTSSHKIT_BEST_EFFORT",
+                "drive: cannot combine DISTSSH_REQUIRE_ALL_HOSTS and DISTSSH_BEST_EFFORT",
             )
         )
         want_best && (require_all_hosts = false)
@@ -468,7 +468,7 @@ function show_drive_usage(; io::IO = stdout)
         "  --isolated          run the driver in a child process (default: this process)",
         "  --julia PATH        remote Julia",
         "  --allow-mismatch F  waive julia, distssh, and/or manifest (comma list)",
-        "  SSH workers: project-root cwd, bind 127.0.0.1, tunnel unless DISTSSHKIT_SSH_TUNNEL=0.",
+        "  SSH workers: project-root cwd, bind 127.0.0.1, tunnel unless DISTSSH_SSH_TUNNEL=0.",
         "  --no-log            skip drive_*.log",
         "  $(KIT_QUIET_FLAG_HELP)",
         "  $(KIT_PROGRESS_FLAG_HELP)",
@@ -486,7 +486,7 @@ function show_drive_usage(; io::IO = stdout)
         "  After main(): post-run-new (files newer than run start).",
         "  Later: --collect-missing / --collect-overwrite ROOT HOST...",
         "  Pass --run-id ID so collect maps onto that ship, not a newer one.",
-        "  With DISTSSHKIT_RUN_DIR, omitted recovery uses that run's provenance.selection.",
+        "  With DISTSSH_RUN_DIR, omitted recovery uses that run's provenance.selection.",
         "  Pull-back uses Tar. Remote mtimes and file modes are not kept.",
         "  Modes are 0644, or 0755 if executable. Remote Julia is --julia or auto-detect.",
         "  Escaping symlinks are refused.",
@@ -498,7 +498,7 @@ function show_drive_usage(; io::IO = stdout)
         io,
         "  $(KIT_HOSTS_ENV_HELP)",
         "  JULIA_DISTRIBUTED_EXE        default remote Julia",
-        "  DISTSSHKIT_QUIET / PROGRESS / VERBOSE / YES",
+        "  DISTSSH_QUIET / PROGRESS / VERBOSE / YES",
         "  $(KIT_SKIP_PKILL_ENV_HELP)",
         "  $(KIT_JOBS_ENV_HELP)",
         "  $(KIT_REQUIRE_ALL_HOSTS_ENV_HELP)",

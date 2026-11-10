@@ -1,7 +1,7 @@
 # Named waits. This module knows the names and how an environment value
 # replaces or scales them. The caller passes the seconds.
 
-const _WAIT_SCALE_ENV = "DISTSSHKIT_WAIT_SCALE"
+const _WAIT_SCALE_ENV = "DISTSSH_WAIT_SCALE"
 
 # A fresh child that must print or exit, and a job that keeps running after that.
 const _WAIT_RESPOND = (:child_reply, :go_job, :drive_job)
@@ -39,15 +39,15 @@ Resolve a named wait. `default` is the caller's seconds. This module does not
 choose them.
 
 `:until_exit` returns `Inf` and ignores `default`. For any other known name,
-`DISTSSHKIT_WAIT_<NAME>` wins when it is a finite number ≥ 0. An unreadable
-value is ignored. `DISTSSHKIT_WAIT_SCALE` then multiplies `:child_reply`,
+`DISTSSH_WAIT_<NAME>` wins when it is a finite number ≥ 0. An unreadable
+value is ignored. `DISTSSH_WAIT_SCALE` then multiplies `:child_reply`,
 `:go_job`, and `:drive_job` only. Scale `1` is used when that variable is
 missing, unreadable, or `0`.
 """
 function wait_seconds(name::Symbol, default::Real)::Float64
     _wait_known(name) || throw(ArgumentError("unknown wait name: $name"))
     name === :until_exit && return Inf
-    override = _wait_env_number("DISTSSHKIT_WAIT_" * uppercase(String(name)))
+    override = _wait_env_number("DISTSSH_WAIT_" * uppercase(String(name)))
     override !== nothing && return override
     seconds = Float64(default)
     name in _WAIT_RESPOND || return seconds

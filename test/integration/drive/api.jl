@@ -55,7 +55,7 @@ end
                     err = read(err_path, String)
                     @test result.ok
                     @test result.exit_code == 0
-                    @test occursin("DISTSSHKIT_RUNNER_SMOKE_OK nw=2", out)
+                    @test occursin("DISTSSH_RUNNER_SMOKE_OK nw=2", out)
                     # No explicit output_dir=/log_dir= — still resolved (not the raw `nothing` kwarg).
                     @test result.output_dir !== nothing
                     @test result.log_dir !== nothing
@@ -184,7 +184,7 @@ end
             end
             function main()
                 write(joinpath(ENV["DISTRIBUTED_OUTPUT_DIR"], "filled.txt"), "x")
-                println("DISTSSHKIT_INIT_RAN")
+                println("DISTSSH_INIT_RAN")
                 return nothing
             end
             """
@@ -193,7 +193,7 @@ end
         write(
             no_init, """
             function main()
-                println("DISTSSHKIT_NO_INIT_OUTPUT")
+                println("DISTSSH_NO_INIT_OUTPUT")
                 return nothing
             end
             """

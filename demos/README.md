@@ -90,7 +90,7 @@ julia --project=. -m DistSSHRun ride parent:2 distsshkit_demos/ride/map_echo.jl
 ```
 
 Remote: set `DISTRIBUTED_REMOTE_PROJECT_ROOT` when needed. Optional:
-`DISTSSHKIT_HOSTS` (comma-separated `parent:N` / `child:NAME:N` for
+`DISTSSH_HOSTS` (comma-separated `parent:N` / `child:NAME:N` for
 `go` / `drive` / `pipeline!`; `go --repeat` may omit `:N`). Deploy with
 `setup git-sync` / `setup ship-tree` (and `setup instantiate` when needed)
 before `go` / `drive` / `pipeline!`. Do not set legacy `SYNC_MODE` on

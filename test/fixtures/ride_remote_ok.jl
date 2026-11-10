@@ -3,4 +3,4 @@
 # parent-side `println` after `map` returns. Ride buffers that stdout and
 # replays it after `kit_progress_done!`.
 map(identity, 1:2)
-println("DISTSSHKIT_RIDE_REMOTE_OK")
+println("DISTSSH_RIDE_REMOTE_OK")

@@ -27,7 +27,7 @@ using Test
         )
         chmod(ju, 0o755)
         chmod(jl, 0o755)
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
             @test DistSSHBase.find_local_juliaup() == ju
             ch = "$(VERSION.major).$(VERSION.minor)"
             holder = Ref{Any}()
@@ -73,7 +73,7 @@ using Test
         )
         chmod(ju, 0o755)
         chmod(jl, 0o755)
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
             r = DistSSHUp.juliaup_align_local!(ch)
             @test r.changed
             @test DistSSHUp.julia_version_mismatch_kind(VERSION, r.ver) != :minor
@@ -104,7 +104,7 @@ using Test
         )
         chmod(ju, 0o755)
         chmod(jl, 0o755)
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
             err = try
                 DistSSHUp.juliaup_align_local!("$(VERSION.major).$(VERSION.minor)")
                 nothing
@@ -126,7 +126,7 @@ using Test
             """,
         )
         chmod(ju, 0o755)
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
             err = try
                 DistSSHUp.juliaup_update_local!()
                 ""
@@ -151,7 +151,7 @@ using Test
             """,
         )
         chmod(ju, 0o755)
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
             task = @async DistSSHUp.juliaup_default_patch("parent")
             _kill_ready_child(ready; signal = Base.SIGTERM)
             @test fetch(task) == "-"
@@ -165,7 +165,7 @@ using Test
             """,
         )
         chmod(ju, 0o755)
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
             @test DistSSHUp.juliaup_default_patch("parent") == "-"
         end
     end

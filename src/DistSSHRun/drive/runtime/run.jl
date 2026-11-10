@@ -316,7 +316,7 @@ function _run_drive_parsed_specialized!(
     project_root_abs = canonical_local_path(something(project_root, proj_dir))
     path_anchor = canonical_local_path(project_root_abs)
     DistSSHRun._acquire_kit_inproc_run!(:drive)
-    old_run = get(ENV, DistSSHRun.DISTSSHKIT_RUN_DIR_ENV, nothing)
+    old_run = get(ENV, DistSSHRun.DISTSSH_RUN_DIR_ENV, nothing)
     run_dir = DistSSHRun._ensure_kit_run_dir!(
         :drive, script_path; project = proj_dir,
     )

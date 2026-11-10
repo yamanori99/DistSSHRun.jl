@@ -45,7 +45,7 @@ function _confirm_path_quote(path::AbstractString)::String
     return "'" * replace(String(path), "'" => "'\\''") * "'"
 end
 
-# `-y` / `--yes` / `DISTSSHKIT_YES` do not authorize delete or prune.
+# `-y` / `--yes` / `DISTSSH_YES` do not authorize delete or prune.
 # A matching `--confirm-path` still deletes. With neither, the caller prompts.
 function _setup_reject_yes_delete(
         yes::Bool,
@@ -55,7 +55,7 @@ function _setup_reject_yes_delete(
     isempty(confirm_paths) || return nothing
     print_err("Error: "; bold = true)
     println_fatal(
-        "-y, --yes, and DISTSSHKIT_YES do not authorize setup delete or setup prune. " *
+        "-y, --yes, and DISTSSH_YES do not authorize setup delete or setup prune. " *
             "Pass --confirm-path. See help setup.",
     )
     return Cint(1)

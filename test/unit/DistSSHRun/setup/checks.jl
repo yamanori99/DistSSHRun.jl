@@ -160,7 +160,7 @@ using Pkg
     @test !minor_fail
     mktempdir() do d
         fake = _write_aligned_fake_juliaup(d)
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => fake.ju) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => fake.ju) do
             out, _ = with_kit_verbosity(:progress) do
                 _capture_stdio() do _, _
                     DistSSHRun.juliaup_align_remotes(["parent"]; confirm = false)

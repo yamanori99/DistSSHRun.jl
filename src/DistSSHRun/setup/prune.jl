@@ -180,7 +180,7 @@ function _prune_remote_shell(
     idq = posix_quote(idn)
     older_q = posix_quote(older)
     return """
-    # DISTSSHKIT_PRUNE_KIT_LEAVES
+    # DISTSSH_PRUNE_LEAVES
     $(_remote_run_toml_owned_check_sh())
     root=$pq
     older=$older_q

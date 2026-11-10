@@ -40,7 +40,7 @@ function _nolog_stdio_spawn_child()
     env = Dict{String, String}(
         String(k) => String(v) for (k, v) in ENV if !isempty(v)
     )
-    env["DISTSSHKIT_NOLOG_STDIO_CHILD"] = "1"
+    env["DISTSSH_NOLOG_STDIO_CHILD"] = "1"
     proc, reader = _start_subprocess(setenv(cmd, env))
     try
         done = timedwait(() -> !process_running(proc), hang_s; pollint = 0.2)
@@ -85,8 +85,8 @@ function _nolog_stdio_cases()
         @testset "stdout and stderr stay on original destinations" begin
             _with_nolog_driver_hook(
                 () -> begin
-                    println(stdout, "DISTSSHKIT_STDOUT_MARK")
-                    println(stderr, "DISTSSHKIT_STDERR_MARK")
+                    println(stdout, "DISTSSH_STDOUT_MARK")
+                    println(stderr, "DISTSSH_STDERR_MARK")
                     return nothing
                 end,
             ) do
@@ -104,15 +104,15 @@ function _nolog_stdio_cases()
                             flush(err_io)
                             out = read(out_path, String)
                             err = read(err_path, String)
-                            @test out == "DISTSSHKIT_STDOUT_MARK\n"
-                            @test err == "DISTSSHKIT_STDERR_MARK\n"
-                            @test occursin("DISTSSHKIT_STDOUT_MARK", out)
-                            @test occursin("DISTSSHKIT_STDERR_MARK", err)
-                            @test !occursin("DISTSSHKIT_STDERR_MARK", out)
+                            @test out == "DISTSSH_STDOUT_MARK\n"
+                            @test err == "DISTSSH_STDERR_MARK\n"
+                            @test occursin("DISTSSH_STDOUT_MARK", out)
+                            @test occursin("DISTSSH_STDERR_MARK", err)
+                            @test !occursin("DISTSSH_STDERR_MARK", out)
                             captured = String(take!(DistSSHRun.KIT_JOB_STDOUT[]))
                             DistSSHRun.KIT_JOB_STDOUT[] = IOBuffer()
-                            @test !occursin("DISTSSHKIT_STDOUT_MARK", captured)
-                            @test !occursin("DISTSSHKIT_STDERR_MARK", captured)
+                            @test !occursin("DISTSSH_STDOUT_MARK", captured)
+                            @test !occursin("DISTSSH_STDERR_MARK", captured)
                         end
                     end
                 end
@@ -122,10 +122,10 @@ function _nolog_stdio_cases()
         @testset "prompt is visible before stdin is supplied" begin
             _with_nolog_driver_hook(
                 () -> begin
-                    print(stdout, "DISTSSHKIT_PROMPT>")
+                    print(stdout, "DISTSSH_PROMPT>")
                     flush(stdout)
                     line = readline(stdin)
-                    println(stdout, "DISTSSHKIT_GOT:", line)
+                    println(stdout, "DISTSSH_GOT:", line)
                     return nothing
                 end,
             ) do
@@ -142,7 +142,7 @@ function _nolog_stdio_cases()
                                         t0 = time()
                                         while true
                                             flush(out_io)
-                                            if occursin("DISTSSHKIT_PROMPT>", read(out_path, String))
+                                            if occursin("DISTSSH_PROMPT>", read(out_path, String))
                                                 write(pin.in, "yes-please\n")
                                                 flush(pin.in)
                                                 return nothing
@@ -161,11 +161,11 @@ function _nolog_stdio_cases()
                         end
                         flush(out_io)
                         out = read(out_path, String)
-                        @test out == "DISTSSHKIT_PROMPT>DISTSSHKIT_GOT:yes-please\n"
-                        @test occursin("DISTSSHKIT_PROMPT>", out)
-                        @test occursin("DISTSSHKIT_GOT:yes-please", out)
-                        prompt_at = findfirst("DISTSSHKIT_PROMPT>", out)
-                        got_at = findfirst("DISTSSHKIT_GOT:yes-please", out)
+                        @test out == "DISTSSH_PROMPT>DISTSSH_GOT:yes-please\n"
+                        @test occursin("DISTSSH_PROMPT>", out)
+                        @test occursin("DISTSSH_GOT:yes-please", out)
+                        prompt_at = findfirst("DISTSSH_PROMPT>", out)
+                        got_at = findfirst("DISTSSH_GOT:yes-please", out)
                         @test prompt_at !== nothing && got_at !== nothing
                         @test first(prompt_at) < first(got_at)
                     end
@@ -178,7 +178,7 @@ function _nolog_stdio_cases()
             _with_nolog_driver_hook(
                 () -> begin
                     for i in 1:nlines
-                        println(stdout, "DISTSSHKIT_BULK_", i, "_", "x"^64)
+                        println(stdout, "DISTSSH_BULK_", i, "_", "x"^64)
                     end
                     return nothing
                 end,
@@ -192,8 +192,8 @@ function _nolog_stdio_cases()
                         end
                         flush(out_io)
                         out = read(out_path, String)
-                        @test occursin("DISTSSHKIT_BULK_1_", out)
-                        @test occursin("DISTSSHKIT_BULK_$(nlines)_", out)
+                        @test occursin("DISTSSH_BULK_1_", out)
+                        @test occursin("DISTSSH_BULK_$(nlines)_", out)
                         # Structural: --no-log progress must not feed the job buffer.
                         @test position(DistSSHRun.KIT_JOB_STDOUT[]) == 0
                     end
@@ -204,8 +204,8 @@ function _nolog_stdio_cases()
         @testset "stdio restored after driver exception" begin
             _with_nolog_driver_hook(
                 () -> begin
-                    println(stdout, "DISTSSHKIT_BEFORE_BOOM")
-                    error("DISTSSHKIT_DRIVER_BOOM")
+                    println(stdout, "DISTSSH_BEFORE_BOOM")
+                    error("DISTSSH_DRIVER_BOOM")
                 end,
             ) do
                 DistSSHRun._reset_job_stdout_capture!()
@@ -224,10 +224,10 @@ function _nolog_stdio_cases()
                         end
                         flush(out_io)
                         @test err isa ErrorException
-                        @test occursin("DISTSSHKIT_DRIVER_BOOM", sprint(showerror, err))
+                        @test occursin("DISTSSH_DRIVER_BOOM", sprint(showerror, err))
                         @test stdout === orig_out
                         @test stderr === orig_err
-                        @test read(out_path, String) == "DISTSSHKIT_BEFORE_BOOM\n"
+                        @test read(out_path, String) == "DISTSSH_BEFORE_BOOM\n"
                     end
                 end
             end
@@ -237,8 +237,8 @@ function _nolog_stdio_cases()
             # Shared enable_log path: stdout may be captured; stderr stays live.
             _with_nolog_driver_hook(
                 () -> begin
-                    println(stdout, "DISTSSHKIT_LOG_STDOUT")
-                    println(stderr, "DISTSSHKIT_LOG_STDERR")
+                    println(stdout, "DISTSSH_LOG_STDOUT")
+                    println(stderr, "DISTSSH_LOG_STDERR")
                     return nothing
                 end,
             ) do
@@ -261,13 +261,13 @@ function _nolog_stdio_cases()
                                     flush(log_io)
                                     out = read(out_path, String)
                                     err = read(err_path, String)
-                                    @test !occursin("DISTSSHKIT_LOG_STDOUT", out)
-                                    @test occursin("DISTSSHKIT_LOG_STDERR", err)
-                                    @test !occursin("DISTSSHKIT_LOG_STDERR", out)
+                                    @test !occursin("DISTSSH_LOG_STDOUT", out)
+                                    @test occursin("DISTSSH_LOG_STDERR", err)
+                                    @test !occursin("DISTSSH_LOG_STDERR", out)
                                     captured = String(take!(DistSSHRun.KIT_JOB_STDOUT[]))
                                     DistSSHRun.KIT_JOB_STDOUT[] = IOBuffer()
-                                    @test occursin("DISTSSHKIT_LOG_STDOUT", captured)
-                                    @test !occursin("DISTSSHKIT_LOG_STDERR", captured)
+                                    @test occursin("DISTSSH_LOG_STDOUT", captured)
+                                    @test !occursin("DISTSSH_LOG_STDERR", captured)
                                 end
                             end
                         finally
@@ -282,8 +282,8 @@ function _nolog_stdio_cases()
             for v in (:verbose, :quiet)
                 _with_nolog_driver_hook(
                     () -> begin
-                        println(stdout, "DISTSSHKIT_MODE_STDOUT")
-                        println(stderr, "DISTSSHKIT_MODE_STDERR")
+                        println(stdout, "DISTSSH_MODE_STDOUT")
+                        println(stderr, "DISTSSH_MODE_STDERR")
                         return nothing
                     end,
                 ) do
@@ -300,9 +300,9 @@ function _nolog_stdio_cases()
                                 flush(err_io)
                                 out = read(out_path, String)
                                 err = read(err_path, String)
-                                @test occursin("DISTSSHKIT_MODE_STDOUT", out)
-                                @test occursin("DISTSSHKIT_MODE_STDERR", err)
-                                @test !occursin("DISTSSHKIT_MODE_STDERR", out)
+                                @test occursin("DISTSSH_MODE_STDOUT", out)
+                                @test occursin("DISTSSH_MODE_STDERR", err)
+                                @test !occursin("DISTSSH_MODE_STDERR", out)
                                 @test position(DistSSHRun.KIT_JOB_STDOUT[]) == 0
                             end
                         end
@@ -313,7 +313,7 @@ function _nolog_stdio_cases()
     end
 end
 
-if get(ENV, "DISTSSHKIT_NOLOG_STDIO_CHILD", "") != "1"
+if get(ENV, "DISTSSH_NOLOG_STDIO_CHILD", "") != "1"
     @testset "drive --no-log progress stdio" begin
         proc, combined = _nolog_stdio_spawn_child()
         print(combined)

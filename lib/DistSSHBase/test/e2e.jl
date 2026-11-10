@@ -2,13 +2,13 @@
 # Real SSH for host talking only. Not part of Pkg.test().
 #
 #   testenv/docker-ssh/scripts/up.sh
-#   DISTSSHKIT_SSH_E2E=1 julia --project=lib/DistSSHBase lib/DistSSHBase/test/e2e.jl
+#   DISTSSH_SSH_E2E=1 julia --project=lib/DistSSHBase lib/DistSSHBase/test/e2e.jl
 
 using Test
 using DistSSHBase
 
-if get(ENV, "DISTSSHKIT_SSH_E2E", "") != "1"
-    @info "Skipping SSH E2E (set DISTSSHKIT_SSH_E2E=1 to enable)"
+if get(ENV, "DISTSSH_SSH_E2E", "") != "1"
+    @info "Skipping SSH E2E (set DISTSSH_SSH_E2E=1 to enable)"
     exit(0)
 end
 

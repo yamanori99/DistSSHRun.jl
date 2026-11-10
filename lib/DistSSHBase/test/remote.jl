@@ -121,8 +121,8 @@ using Test
 
     withenv(
         "DISTRIBUTED_SSH_OPTS" => nothing,
-        "DISTSSHKIT_WAIT_SSH_CONNECT" => nothing,
-        "DISTSSHKIT_WAIT_PEER_SILENT" => nothing,
+        "DISTSSH_WAIT_SSH_CONNECT" => nothing,
+        "DISTSSH_WAIT_PEER_SILENT" => nothing,
     ) do
         opts = DistSSHBase.build_ssh_opts()
         @test "-o" in opts
@@ -141,8 +141,8 @@ using Test
     end
     withenv(
         "DISTRIBUTED_SSH_OPTS" => nothing,
-        "DISTSSHKIT_WAIT_SSH_CONNECT" => "0.4",
-        "DISTSSHKIT_WAIT_PEER_SILENT" => "0",
+        "DISTSSH_WAIT_SSH_CONNECT" => "0.4",
+        "DISTSSH_WAIT_PEER_SILENT" => "0",
     ) do
         opts = DistSSHBase.build_ssh_opts()
         @test "ConnectTimeout=1" in opts

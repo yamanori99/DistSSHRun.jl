@@ -28,7 +28,7 @@ on listed tokens (`parent:2`, `child:user@host:1`).
 A value that starts with `~` stays a remote-shell layout (not `expanduser`
 on the kit parent).
 
-`hosts_file` is appended when given. `ENV["DISTSSHKIT_HOSTS_FILE"]` is used
+`hosts_file` is appended when given. `ENV["DISTSSH_HOSTS_FILE"]` is used
 only when `hosts_file` is omitted **and** `workers` is empty (same as
 [`go!`](@ref)). Non-empty `workers` do not re-read that ENV.
 `verbosity` is `:verbose` | `:progress` | `:quiet` (`quiet=true` implies `:quiet`).
@@ -48,7 +48,7 @@ function KitSession(;
     hf = if hosts_file !== nothing
         String(strip(hosts_file))
     elseif isempty(tokens)
-        strip(get(ENV, "DISTSSHKIT_HOSTS_FILE", ""))
+        strip(get(ENV, "DISTSSH_HOSTS_FILE", ""))
     else
         ""
     end

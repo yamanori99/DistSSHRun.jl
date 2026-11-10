@@ -389,7 +389,7 @@ end
 
 """One SSH call: the remote login home. The script is POSIX `sh`."""
 function _remote_login_home(host::AbstractString)::String
-    script = "printf '%s\\n' \"\$HOME\" # DISTSSHKIT_REMOTE_HOME"
+    script = "printf '%s\\n' \"\$HOME\" # DISTSSH_REMOTE_HOME"
     err_buf = IOBuffer()
     local out::String
     try

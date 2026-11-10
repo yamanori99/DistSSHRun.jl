@@ -265,7 +265,7 @@ function _tar_cache_one_host!(
         return HostResult(h, false, "could not create remote cache directory")
     end
     julia_bin = if _test_doubles_on()
-        w = strip(get(ENV, "DISTSSHKIT_TEST_JULIA_WHICH", ""))
+        w = strip(get(ENV, "DISTSSH_TEST_JULIA_WHICH", ""))
         isempty(w) ? "/usr/bin/julia" : w
     else
         try
@@ -308,7 +308,7 @@ end
 
 Stream local `.distsshkit/cache/sha256/` blobs onto each SSH host with stdlib
 Tar. Does not delete remote blobs that were not in this push.
-Hosts run at most `DISTSSHKIT_JOBS` at a time (default 1). Host result order
+Hosts run at most `DISTSSH_JOBS` at a time (default 1). Host result order
 matches `session.hosts`.
 Project `setup ship-tree` still excludes `.distsshkit/`; this call is the
 dedicated transfer.

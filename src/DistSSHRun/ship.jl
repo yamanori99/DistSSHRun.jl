@@ -3,8 +3,8 @@
 const SHIP_MAX_BYTES_DEFAULT = 256 * 1024 * 1024
 const SHIP_FILE_WARN_BYTES = 50 * 1024 * 1024
 const SHIP_WARN_TOTAL_BYTES_DEFAULT = 100 * 1024 * 1024
-const _SHIP_WARN_FILE_ENV = "DISTSSHKIT_SHIP_WARN_FILE_BYTES"
-const _SHIP_WARN_TOTAL_ENV = "DISTSSHKIT_SHIP_WARN_TOTAL_BYTES"
+const _SHIP_WARN_FILE_ENV = "DISTSSH_SHIP_WARN_FILE_BYTES"
+const _SHIP_WARN_TOTAL_ENV = "DISTSSH_SHIP_WARN_TOTAL_BYTES"
 
 const _SSHFLAGS_WARNED = Ref(false)
 
@@ -766,7 +766,7 @@ function _record_remote_inputs!(
     run_dir = kit_run_dir()
     run_dir === nothing && throw(
         ArgumentError(
-            "ship-tree: declared inputs need DISTSSHKIT_RUN_DIR; refusing to write next to the project",
+            "ship-tree: declared inputs need DISTSSH_RUN_DIR; refusing to write next to the project",
         ),
     )
     rows = Dict{String, Any}[]
@@ -806,7 +806,7 @@ function _start_remote_input_hashes!(
     isempty(inputs) && return nothing
     kit_run_dir() === nothing && throw(
         ArgumentError(
-            "ship-tree: declared inputs need DISTSSHKIT_RUN_DIR; refusing to write next to the project",
+            "ship-tree: declared inputs need DISTSSH_RUN_DIR; refusing to write next to the project",
         ),
     )
     task = @async _record_remote_inputs!(host, abs_root, local_root, julia_bin)
@@ -1932,7 +1932,7 @@ function _ship_tree_to_hosts!(
     if !isempty(_load_ship_inputs(pack.project_dir)) && kit_run_dir() === nothing
         throw(
             ArgumentError(
-                "ship-tree: declared inputs need DISTSSHKIT_RUN_DIR; refusing to write next to the project",
+                "ship-tree: declared inputs need DISTSSH_RUN_DIR; refusing to write next to the project",
             ),
         )
     end

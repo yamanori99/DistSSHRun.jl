@@ -95,10 +95,10 @@ end
             DistSSHRun.clear_last_ship_record!(proj)
             DistSSHRun._clear_last_ship!()
             env = Dict{String, String}(
-                "DISTSSHKIT_TEST" => "1",
-                "DISTSSHKIT_TEST_SSH" => double,
-                "DISTSSHKIT_TEST_POSIX_SHELL" => "1",
-                "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
+                "DISTSSH_TEST" => "1",
+                "DISTSSH_TEST_SSH" => double,
+                "DISTSSH_TEST_POSIX_SHELL" => "1",
+                "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit",
             )
             try
                 withenv(env...) do
@@ -415,10 +415,10 @@ end
             )
             DistSSHRun._clear_last_ship!()
             env = Dict{String, String}(
-                "DISTSSHKIT_TEST" => "1",
-                "DISTSSHKIT_TEST_SSH" => double,
-                "DISTSSHKIT_TEST_POSIX_SHELL" => "1",
-                "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
+                "DISTSSH_TEST" => "1",
+                "DISTSSH_TEST_SSH" => double,
+                "DISTSSH_TEST_POSIX_SHELL" => "1",
+                "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit",
             )
             try
                 withenv(env...) do
@@ -489,10 +489,10 @@ end
         _with_tempdir() do proj
             _snap_project!(proj)
             env = Dict{String, String}(
-                "DISTSSHKIT_TEST" => "1",
-                "DISTSSHKIT_TEST_SSH" => double,
-                "DISTSSHKIT_TEST_POSIX_SHELL" => "1",
-                "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
+                "DISTSSH_TEST" => "1",
+                "DISTSSH_TEST_SSH" => double,
+                "DISTSSH_TEST_POSIX_SHELL" => "1",
+                "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit",
             )
             try
                 withenv(env...) do
@@ -575,10 +575,10 @@ end
             DistSSHRun.clear_last_ship_record!(proj)
             DistSSHRun._clear_last_ship!()
             env = Dict{String, String}(
-                "DISTSSHKIT_TEST" => "1",
-                "DISTSSHKIT_TEST_SSH" => double,
-                "DISTSSHKIT_TEST_POSIX_SHELL" => "1",
-                "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
+                "DISTSSH_TEST" => "1",
+                "DISTSSH_TEST_SSH" => double,
+                "DISTSSH_TEST_POSIX_SHELL" => "1",
+                "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit",
             )
             try
                 withenv(env...) do
@@ -598,10 +598,10 @@ end
 
 function _snap_ssh_env(double::AbstractString)
     return Dict{String, String}(
-        "DISTSSHKIT_TEST" => "1",
-        "DISTSSHKIT_TEST_SSH" => double,
-        "DISTSSHKIT_TEST_POSIX_SHELL" => "1",
-        "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
+        "DISTSSH_TEST" => "1",
+        "DISTSSH_TEST_SSH" => double,
+        "DISTSSH_TEST_POSIX_SHELL" => "1",
+        "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit",
     )
 end
 
@@ -664,8 +664,8 @@ end
             env = merge(
                 _snap_ssh_env(double),
                 Dict(
-                    "DISTSSHKIT_TEST_SSH_LOGICAL_ROOT" => logical,
-                    "DISTSSHKIT_TEST_SSH_HOST_ROOTS" => roots,
+                    "DISTSSH_TEST_SSH_LOGICAL_ROOT" => logical,
+                    "DISTSSH_TEST_SSH_HOST_ROOTS" => roots,
                 ),
             )
             try
@@ -841,7 +841,7 @@ end
             try
                 withenv(
                     _snap_ssh_env(double)...,
-                    DistSSHRun.DISTSSHKIT_RUN_DIR_ENV => run_dir,
+                    DistSSHRun.DISTSSH_RUN_DIR_ENV => run_dir,
                 ) do
                     got = DistSSHRun._remote_work_layout_path(
                         out, proj, ["child-1"],
@@ -854,7 +854,7 @@ end
                 DistSSHRun.write_kit_run_toml!(legacy; kind = :drive, project_root = proj)
                 withenv(
                     _snap_ssh_env(double)...,
-                    DistSSHRun.DISTSSHKIT_RUN_DIR_ENV => legacy,
+                    DistSSHRun.DISTSSH_RUN_DIR_ENV => legacy,
                 ) do
                     err = try
                         DistSSHRun._remote_work_layout_path(out, proj, ["child-1"])
@@ -886,7 +886,7 @@ end
                 )
                 withenv(
                     _snap_ssh_env(double)...,
-                    DistSSHRun.DISTSSHKIT_RUN_DIR_ENV => mismatch,
+                    DistSSHRun.DISTSSH_RUN_DIR_ENV => mismatch,
                 ) do
                     errh = try
                         DistSSHRun._remote_work_layout_path(out, proj, ["child-1"])
@@ -926,10 +926,10 @@ end
             env = merge(
                 _snap_ssh_env(double),
                 Dict(
-                    "DISTSSHKIT_TEST_SSH_LOGICAL_ROOT" => "/__dsr_logical__",
-                    "DISTSSHKIT_TEST_SSH_HOST_ROOTS" => roots,
-                    "DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "",
-                    "DISTSSHKIT_YES" => nothing,
+                    "DISTSSH_TEST_SSH_LOGICAL_ROOT" => "/__dsr_logical__",
+                    "DISTSSH_TEST_SSH_HOST_ROOTS" => roots,
+                    "DISTSSH_CLI_SUBCOMMAND_DONE" => "",
+                    "DISTSSH_YES" => nothing,
                 ),
             )
             try
@@ -980,10 +980,10 @@ end
         _with_tempdir() do proj
             _snap_project!(proj)
             withenv(
-                "DISTSSHKIT_TEST" => "1",
-                "DISTSSHKIT_TEST_SSH" => double,
-                "DISTSSHKIT_TEST_POSIX_SHELL" => "1",
-                "DISTSSHKIT_TEST_REMOTE_HOME" => "/home/distsshkit",
+                "DISTSSH_TEST" => "1",
+                "DISTSSH_TEST_SSH" => double,
+                "DISTSSH_TEST_POSIX_SHELL" => "1",
+                "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit",
             ) do
                 DistSSHRun.clear_last_ship_record!(proj)
                 sel = DistSSHRun.resolve_source_selection(

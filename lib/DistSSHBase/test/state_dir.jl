@@ -10,6 +10,8 @@ using Test
     new_setup = joinpath(tmp, ".distssh", "setup", "x.log")
     mkpath(dirname(new_setup))
     write(new_setup, "new\n")
+    @test DistSSHBase.resolve_local_state_item(tmp, "setup", "x.log") == new_setup
+    @test DistSSHBase.resolve_local_state_dir_name(tmp) == ".distssh"
   end
 
   _with_tempdir() do tmp

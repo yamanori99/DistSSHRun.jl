@@ -2,13 +2,13 @@
 # Real SSH for juliaup status and default. Not part of Pkg.test().
 #
 #   testenv/docker-ssh/scripts/up.sh
-#   DISTSSHKIT_SSH_E2E=1 julia --project=lib/DistSSHUp lib/DistSSHUp/test/e2e.jl
+#   DISTSSH_SSH_E2E=1 julia --project=lib/DistSSHUp lib/DistSSHUp/test/e2e.jl
 
 using Test
 using DistSSHUp
 
-if get(ENV, "DISTSSHKIT_SSH_E2E", "") != "1"
-    @info "Skipping SSH E2E (set DISTSSHKIT_SSH_E2E=1 to enable)"
+if get(ENV, "DISTSSH_SSH_E2E", "") != "1"
+    @info "Skipping SSH E2E (set DISTSSH_SSH_E2E=1 to enable)"
     exit(0)
 end
 

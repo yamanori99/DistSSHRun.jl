@@ -42,7 +42,7 @@ using Test
                         od === nothing && error("expected execute! output_dir")
                         _assert_kit_progress_done(od; kind = :drive)
                     end
-                    @test occursin("DISTSSHKIT_RUNNER_SMOKE_OK nw=2", out)
+                    @test occursin("DISTSSH_RUNNER_SMOKE_OK nw=2", out)
                     # stderr: second `main` include after `api.jl` (warn-overwrite)
                     # plus Distributed worker teardown. Captured, not asserted.
                 end
@@ -85,7 +85,7 @@ end
                 @test result.ok
                 @test result.exit_code == 0
                 @test result.output_dir !== nothing
-                @test occursin("DISTSSHKIT_RUNNER_SMOKE_OK nw=2", out)
+                @test occursin("DISTSSH_RUNNER_SMOKE_OK nw=2", out)
                 recovered = DistSSHRun.kit_result_from_dir(kp.run_dir)
                 @test recovered isa DistSSHRun.KitRunResult
                 @test recovered.ok

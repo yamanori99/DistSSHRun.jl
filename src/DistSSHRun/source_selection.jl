@@ -663,7 +663,7 @@ function resolve_source_selection(
 end
 public resolve_source_selection
 
-"""Controller `DISTSSHKIT_RUN_DIR/run.toml` shipped source for collect recovery.
+"""Controller `DISTSSH_RUN_DIR/run.toml` shipped source for collect recovery.
 
 `nothing` when no run dir is set, or when the stamp is not written yet
 (in-flight execute). A present DistSSHRun stamp without `provenance.selection`

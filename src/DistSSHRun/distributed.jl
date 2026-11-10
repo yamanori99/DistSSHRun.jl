@@ -80,7 +80,7 @@ end
 
 # Parent `execute!(detached=true)` writes these into the output directory after
 # spawn, once that directory was already empty. A child that inherited
-# `DISTSSHKIT_RUN_DIR` may see them and nothing else.
+# `DISTSSH_RUN_DIR` may see them and nothing else.
 const _OUTPUT_DIR_PARENT_SIDECARS = ("kit.job", "kit.pid", "kit.run_dir")
 
 """
@@ -93,7 +93,7 @@ directory, a file, or a symlink is refused. Call this before a lock or
 `kit.pid` write.
 
 `allow_parent_sidecars` is for a child that already inherited
-`DISTSSHKIT_RUN_DIR`. `kit.pid`, `kit.job`, and `kit.run_dir` alone do not
+`DISTSSH_RUN_DIR`. `kit.pid`, `kit.job`, and `kit.run_dir` alone do not
 refuse that directory. Any other name still does, and the error lists every name.
 """
 function _prepare_output_dir!(
@@ -189,7 +189,7 @@ function worker_pmap(f, collection)
     call = myid() == 1 ? _take_pmap_call() : remotecall_fetch(_take_pmap_call, 1)
     indexed = collect(enumerate(collection))
     return pmap(indexed) do (item, x)
-        raw = get(ENV, "DISTSSHKIT_WORKER_RANK", "")
+        raw = get(ENV, "DISTSSH_WORKER_RANK", "")
         rank = something(tryparse(Int, raw), 0)
         if myid() == 1
             _note_item!(call, item, rank)

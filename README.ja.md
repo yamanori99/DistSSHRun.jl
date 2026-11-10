@@ -62,8 +62,8 @@ Julia **1.13+**。
   gitignore された `LocalPreferences.toml` も載らない。載せるには
   `!LocalPreferences.toml` を書く。
 - 1 ファイルが 50 MiB を超える、または送る合計が 100 MiB を超えると
-  警告する（`DISTSSHKIT_SHIP_WARN_FILE_BYTES`、
-  `DISTSSHKIT_SHIP_WARN_TOTAL_BYTES`。不正な値はエラー）。
+  警告する（`DISTSSH_SHIP_WARN_FILE_BYTES`、
+  `DISTSSH_SHIP_WARN_TOTAL_BYTES`。不正な値はエラー）。
   256 MiB の上限は従来どおり失敗する。宣言した入力は載らない。
 - 展開先は `<remote_root>/runs/<run_id>/src/` で、横に空の `out/`
   と DistSSHRun の短い `run.toml` stamp を置く。リモート根は先に

@@ -98,14 +98,14 @@ using Test
             """
             #!/bin/sh
             unset NO_COLOR
-            unset DISTSSHKIT_QUIET
-            unset DISTSSHKIT_PROGRESS
-            unset DISTSSHKIT_VERBOSE
-            unset DISTSSHKIT_CLI_SUBCOMMAND_DONE
+            unset DISTSSH_QUIET
+            unset DISTSSH_PROGRESS
+            unset DISTSSH_VERBOSE
+            unset DISTSSH_CLI_SUBCOMMAND_DONE
             unset DIST_SSH_KIT_CLI_INCLUDE
-            export DISTSSHKIT_TEST=1
-            export DISTSSHKIT_TEST_LOCAL_JULIAUP=$(sh_quote(ju))
-            export DISTSSHKIT_TEST_SSH=$(sh_quote(ssh))
+            export DISTSSH_TEST=1
+            export DISTSSH_TEST_LOCAL_JULIAUP=$(sh_quote(ju))
+            export DISTSSH_TEST_SSH=$(sh_quote(ssh))
             export PATH=$(sh_quote(empty_path))
             export JULIA_LOAD_PATH=$(sh_quote(_child_load_path()))
             unset JULIA_PROJECT
@@ -117,14 +117,14 @@ using Test
             echo '___SPLIT___'
             # Local ssh/git stubs so --check reaches remote probes; fail-fast SSH double.
             export PATH=$(sh_quote(stub_bin))
-            export DISTSSHKIT_TEST_SSH=$(sh_quote(fail_ssh))
+            export DISTSSH_TEST_SSH=$(sh_quote(fail_ssh))
             $(argv_line(check2_cmd))
             echo '___SPLIT___'
             $(argv_line(preflight_cmd))
             echo '___SPLIT___'
-            export DISTSSHKIT_TEST_SSH=$(sh_quote(ssh))
+            export DISTSSH_TEST_SSH=$(sh_quote(ssh))
             export DISTRIBUTED_PROJECT_ROOT=$(sh_quote(go_proj))
-            export DISTSSHKIT_YES=1
+            export DISTSSH_YES=1
             $(argv_line(size_cmd))
             echo '___SPLIT___'
             $(argv_line(pool_cmd))
@@ -133,10 +133,10 @@ using Test
             echo '___SPLIT___'
             $(argv_line(go_fail_cmd))
             echo '___SPLIT___'
-            unset DISTSSHKIT_YES
-            export DISTSSHKIT_QUIET=1
+            unset DISTSSH_YES
+            export DISTSSH_QUIET=1
             export PATH=$(sh_quote(empty_path))
-            export DISTSSHKIT_TEST_SSH=$(sh_quote(ssh))
+            export DISTSSH_TEST_SSH=$(sh_quote(ssh))
             $(argv_line(check_cmd))
             """,
         )
@@ -158,7 +158,7 @@ using Test
                 "NO_COLOR",
                 "JULIA_LOAD_PATH",
                 "JULIA_PROJECT",
-                "DISTSSHKIT_CLI_SUBCOMMAND_DONE",
+                "DISTSSH_CLI_SUBCOMMAND_DONE",
                 "DIST_SSH_KIT_CLI_INCLUDE",
             )
             env = Dict{String, String}(
@@ -282,16 +282,16 @@ using Test
 
         pipe_env = _child_julia_env(
             Dict(
-                "DISTSSHKIT_TEST" => "1",
-                "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju,
-                "DISTSSHKIT_TEST_SSH" => ssh,
+                "DISTSSH_TEST" => "1",
+                "DISTSSH_TEST_LOCAL_JULIAUP" => ju,
+                "DISTSSH_TEST_SSH" => ssh,
                 "PATH" => empty_path,
             ),
         )
         @test !haskey(pipe_env, "NO_COLOR")
-        delete!(pipe_env, "DISTSSHKIT_QUIET")
-        delete!(pipe_env, "DISTSSHKIT_PROGRESS")
-        delete!(pipe_env, "DISTSSHKIT_VERBOSE")
+        delete!(pipe_env, "DISTSSH_QUIET")
+        delete!(pipe_env, "DISTSSH_PROGRESS")
+        delete!(pipe_env, "DISTSSH_VERBOSE")
         status_pipe = read(setenv(status_cmd, pipe_env), String)
         update_pipe = read(setenv(update_cmd, pipe_env), String)
         check_pipe = read(ignorestatus(setenv(check_cmd, pipe_env)), String)
@@ -315,7 +315,7 @@ using Test
         # :verbose / pipe: host heading form for multi-host SSH fail (unchanged).
         pipe2_env = copy(pipe_env)
         pipe2_env["PATH"] = stub_bin
-        pipe2_env["DISTSSHKIT_TEST_SSH"] = fail_ssh
+        pipe2_env["DISTSSH_TEST_SSH"] = fail_ssh
         check2_pipe = read(ignorestatus(setenv(check2_cmd, pipe2_env)), String)
         @test occursin("host1:", check2_pipe)
         @test occursin("host2:", check2_pipe)

@@ -12,7 +12,7 @@ include(joinpath(@__DIR__, "..", "..", "DistSSHBase", "test", "support.jl"))
 function _record_read_env(state_dir::AbstractString)
     return merge(
         _fake_setup_remote_env(state_dir),
-        Dict("DISTSSHKIT_TEST_SSH" => _FAKE_SETUP_SSH),
+        Dict("DISTSSH_TEST_SSH" => _FAKE_SETUP_SSH),
     )
 end
 
@@ -61,8 +61,8 @@ const _EXTRACT_DEST = "/stage/tree"
                 env = merge(
                     _record_read_env(state_dir),
                     Dict(
-                        "DISTSSHKIT_TEST_SHIP_RECORD_TEST_FAIL" => "shipment.toml",
-                        "DISTSSHKIT_TEST_SHIP_RECORD_TEST_FAIL_CODE" => "127",
+                        "DISTSSH_TEST_SHIP_RECORD_TEST_FAIL" => "shipment.toml",
+                        "DISTSSH_TEST_SHIP_RECORD_TEST_FAIL_CODE" => "127",
                     ),
                 )
                 withenv(env...) do
@@ -88,7 +88,7 @@ const _EXTRACT_DEST = "/stage/tree"
                 write(joinpath(distssh, "shipment.toml"), "present-but-unreadable\n")
                 env = merge(
                     _record_read_env(state_dir),
-                    Dict("DISTSSHKIT_TEST_SHIP_RECORD_CAT_FAIL" => "shipment.toml"),
+                    Dict("DISTSSH_TEST_SHIP_RECORD_CAT_FAIL" => "shipment.toml"),
                 )
                 withenv(env...) do
                     @test_throws ArgumentError DistSSHShip.read_ship_record(host, _EXTRACT_DEST)

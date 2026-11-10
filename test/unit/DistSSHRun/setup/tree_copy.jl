@@ -191,7 +191,7 @@ using Test
 
     @testset "ssh -e quotes the transport" begin
         if _test_skip_unless_ssh()
-            withenv("DISTSSHKIT_TEST_SSH" => nothing) do
+            withenv("DISTSSH_TEST_SSH" => nothing) do
                 cmd = DistSSHRun._host_sync_remote_shell_cmd("host.test", "true")
                 @test cmd.exec[1] == DistSSHRun._ssh_exe()
                 @test "-n" in cmd.exec
@@ -201,17 +201,17 @@ using Test
                 @test !("-n" in fed.exec)
             end
             withenv(
-                "DISTSSHKIT_TEST" => nothing,
-                "DISTSSHKIT_TEST_SSH" => "/tmp/distsshkit-not-a-test.jl",
-                "DISTSSHKIT_TEST_LOCAL_JULIAUP" => "/tmp/distsshkit-not-a-juliaup",
+                "DISTSSH_TEST" => nothing,
+                "DISTSSH_TEST_SSH" => "/tmp/distsshkit-not-a-test.jl",
+                "DISTSSH_TEST_LOCAL_JULIAUP" => "/tmp/distsshkit-not-a-juliaup",
             ) do
                 cmd = DistSSHRun._host_sync_remote_shell_cmd("host.test", "true")
                 @test cmd.exec[1] == DistSSHRun._ssh_exe()
                 @test !in("/tmp/distsshkit-not-a-juliaup", DistSSHRun.DistSSHBase.local_juliaup_candidates())
             end
             withenv(
-                "DISTSSHKIT_TEST" => nothing,
-                "DISTSSHKIT_TEST_SSH" => nothing,
+                "DISTSSH_TEST" => nothing,
+                "DISTSSH_TEST_SSH" => nothing,
                 "DISTRIBUTED_SSH_OPTS" => "-F \"/tmp/cfg dir/config\" -o BatchMode=yes",
             ) do
                 @test DistSSHRun.ssh_opts() == ["-F", "/tmp/cfg dir/config", "-o", "BatchMode=yes"]
@@ -232,7 +232,7 @@ using Test
             @test DistSSHRun.ensure_remote_dir(host, remote_path) == true
             @test DistSSHRun.remote_dest_status(host, remote_path) === :empty
         end
-        _with_fake_remotes(extra_env = Dict("DISTSSHKIT_TEST_MKDIR_FAIL" => "1")) do _
+        _with_fake_remotes(extra_env = Dict("DISTSSH_TEST_MKDIR_FAIL" => "1")) do _
             @test DistSSHRun.ensure_remote_dir("user@host.test", remote_path) == false
         end
     end
@@ -251,7 +251,7 @@ using Test
             run(`git -C $smoke_project add -A`)
             run(`git -C $smoke_project commit --quiet -m init`)
         end
-        withenv("DISTSSHKIT_YES" => nothing) do
+        withenv("DISTSSH_YES" => nothing) do
             prev_ni = DistSSHRun.kit_noninteractive()
             DistSSHRun.set_kit_noninteractive!(false)
             try
@@ -283,7 +283,7 @@ using Test
     end
 
     @testset "probe failure is not a nonempty tree" begin
-        _with_fake_remotes(extra_env = Dict("DISTSSHKIT_TEST_SSH_FAIL" => "1")) do _
+        _with_fake_remotes(extra_env = Dict("DISTSSH_TEST_SSH_FAIL" => "1")) do _
             host = "user@host.test"
             status, detail = DistSSHRun._remote_dest_probe(host, remote_path)
             @test status === :error

@@ -1261,9 +1261,9 @@ const PROGRESS_HEAD_CHAR = '╺'
 const PROGRESS_EMPTY_CHAR = '━'
 
 # Ice (sky). Dark bg uses sky-400; light bg uses sky-700.
-# `DISTSSHKIT_PROGRESS_BG=dark|light` overrides `COLORFGBG`.
+# `DISTSSH_PROGRESS_BG=dark|light` overrides `COLORFGBG`.
 function _term_light_background()::Bool
-    v = lowercase(strip(get(ENV, "DISTSSHKIT_PROGRESS_BG", "")))
+    v = lowercase(strip(get(ENV, "DISTSSH_PROGRESS_BG", "")))
     v == "light" && return true
     v == "dark" && return false
     fgbg = get(ENV, "COLORFGBG", "")
@@ -2346,7 +2346,7 @@ slots (header + one live line each). Items start `:pending` until
 only.
 
 `kind` is `:go`, `:drive`, or `:ride` (written as `kind=` on every `progress:` log
-line). `job_id` (default: `ENV["DISTSSHKIT_JOB_ID"]` if set, else `nothing`)
+line). `job_id` (default: `ENV["DISTSSH_JOB_ID"]` if set, else `nothing`)
 is written as `job=<id>` on those lines, omitted when unset.
 """
 function kit_progress_begin!(
@@ -2362,7 +2362,7 @@ function kit_progress_begin!(
     _reset_job_stdout_capture!()
     resolved_job_id = job_id
     if resolved_job_id === nothing
-        env_job_id = get(ENV, "DISTSSHKIT_JOB_ID", "")
+        env_job_id = get(ENV, "DISTSSH_JOB_ID", "")
         isempty(env_job_id) || (resolved_job_id = env_job_id)
     end
     state = KitProgressState(

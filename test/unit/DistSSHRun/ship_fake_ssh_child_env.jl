@@ -27,8 +27,8 @@ const _FAKE_ARBITRARY_DEST_SHIP_SSH = joinpath(
                     env = merge(
                         _fake_setup_remote_env(state),
                         Dict(
-                            "DISTSSHKIT_TEST_SSH" => abspath(_FAKE_ARBITRARY_DEST_SHIP_SSH),
-                            "DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia",
+                            "DISTSSH_TEST_SSH" => abspath(_FAKE_ARBITRARY_DEST_SHIP_SSH),
+                            "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia",
                         ),
                     )
                     withenv(env...) do
@@ -52,16 +52,16 @@ const _FAKE_ARBITRARY_DEST_SHIP_SSH = joinpath(
             env = merge(
                 _fake_setup_remote_env(state),
                 Dict(
-                    "DISTSSHKIT_TEST_SSH" => abspath(_FAKE_ARBITRARY_DEST_SHIP_SSH),
-                    "DISTSSHKIT_TEST_STATE_ROOT" => "",
-                    "DISTSSHKIT_TEST_JULIA_WHICH" => "/usr/bin/julia",
+                    "DISTSSH_TEST_SSH" => abspath(_FAKE_ARBITRARY_DEST_SHIP_SSH),
+                    "DISTSSH_TEST_STATE_ROOT" => "",
+                    "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia",
                 ),
             )
             withenv(env...) do
                 code, out, err = DistSSHRun.DistSSHBase._remote_shell_status_parts("host1", "true")
                 @test code == 1
                 detail = DistSSHRun.DistSSHBase.shell_status_failure_message(out, err, code)
-                @test occursin("DISTSSHKIT_TEST_STATE_ROOT is empty", detail)
+                @test occursin("DISTSSH_TEST_STATE_ROOT is empty", detail)
                 @test occursin("exit 1", detail)
                 mktempdir() do proj
                     write(joinpath(proj, "Project.toml"), "name = \"Pkg\"\n")
@@ -82,7 +82,7 @@ const _FAKE_ARBITRARY_DEST_SHIP_SSH = joinpath(
                         @test !result.ok
                         @test length(result.hosts) == 1
                         msg = result.hosts[1].message
-                        @test occursin("DISTSSHKIT_TEST_STATE_ROOT is empty", msg)
+                        @test occursin("DISTSSH_TEST_STATE_ROOT is empty", msg)
                         @test occursin("could not prepare dest on host1:", msg)
                     finally
                         rm(pack.directory; force = true, recursive = true)

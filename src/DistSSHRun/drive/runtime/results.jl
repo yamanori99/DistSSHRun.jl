@@ -255,7 +255,7 @@ function _collect_dup_warning_lines(
         "$(length(dups)) result path(s) came from more than one host. The last transfer remains.",
     )
     if DistSSHRun.kit_host_jobs() > 1
-        push!(lines, "With DISTSSHKIT_JOBS>1, which host's bytes remain is unspecified.")
+        push!(lines, "With DISTSSH_JOBS>1, which host's bytes remain is unspecified.")
     end
     for (rel, hs) in dups[1:min(end, 10)]
         push!(lines, "  $rel ($(join(hs, ", ")))")

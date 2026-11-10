@@ -14,14 +14,14 @@ if !isdefined(Main, :_child_julia_env)
     # Drop parent `NO_COLOR` so a TTY child can use the live `:progress` default
     # (`kit_stdout_is_live`). Pass `NO_COLOR` in `extra` when a child must keep it.
     function _child_julia_env(extra::AbstractDict = Dict{String, String}())
-        # In-process `_run_kit_cli_script` sets DISTSSHKIT_CLI_SUBCOMMAND_DONE so a
+        # In-process `_run_kit_cli_script` sets DISTSSH_CLI_SUBCOMMAND_DONE so a
         # nested `main` does not run twice. Children must not inherit that, or
         # `DistSSHRun.main` / `-m DistSSHRun` returns 0 with empty output.
         skip = Set(
             (
                 "JULIA_LOAD_PATH",
                 "JULIA_PROJECT",
-                "DISTSSHKIT_CLI_SUBCOMMAND_DONE",
+                "DISTSSH_CLI_SUBCOMMAND_DONE",
                 "DIST_SSH_KIT_CLI_INCLUDE",
                 "NO_COLOR",
             )
@@ -32,7 +32,7 @@ if !isdefined(Main, :_child_julia_env)
         env["JULIA_LOAD_PATH"] = _child_load_path()
         env["JULIA_PKG_PRECOMPILE_AUTO"] = get(ENV, "JULIA_PKG_PRECOMPILE_AUTO", "0")
         # Avoid broad pkill in drive; each child cleans its own workers via rmprocs.
-        env["DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL"] = "1"
+        env["DISTSSH_SKIP_GLOBAL_WORKER_PKILL"] = "1"
         for (k, v) in extra
             env[String(k)] = String(v)
         end

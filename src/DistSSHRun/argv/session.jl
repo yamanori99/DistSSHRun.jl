@@ -30,35 +30,35 @@ const KIT_TIME_HELP =
 const KIT_HOSTS_FLAG_HELP =
     "--hosts CSV         parent[:N] / child:NAME[:N]"
 const KIT_QUIET_ENV_HELP =
-    "DISTSSHKIT_QUIET                  Same as --quiet"
+    "DISTSSH_QUIET                  Same as --quiet"
 const KIT_PROGRESS_ENV_HELP =
-    "DISTSSHKIT_PROGRESS               Same as --progress"
+    "DISTSSH_PROGRESS               Same as --progress"
 const KIT_VERBOSE_ENV_HELP =
-    "DISTSSHKIT_VERBOSE                Same as --verbose"
+    "DISTSSH_VERBOSE                Same as --verbose"
 const KIT_HOSTS_ENV_HELP =
-    "DISTSSHKIT_HOSTS                  Same as --hosts"
+    "DISTSSH_HOSTS                  Same as --hosts"
 const KIT_SKIP_PKILL_ENV_HELP =
-    "DISTSSHKIT_SKIP_GLOBAL_WORKER_PKILL  skip drive leftover tagged remote pkill"
+    "DISTSSH_SKIP_GLOBAL_WORKER_PKILL  skip drive leftover tagged remote pkill"
 const KIT_JOBS_ENV_HELP =
-    "DISTSSHKIT_JOBS                   max concurrent host jobs (default 1)"
+    "DISTSSH_JOBS                   max concurrent host jobs (default 1)"
 const KIT_REQUIRE_ALL_HOSTS_ENV_HELP =
-    "DISTSSHKIT_REQUIRE_ALL_HOSTS      Same as --require-all-hosts"
+    "DISTSSH_REQUIRE_ALL_HOSTS      Same as --require-all-hosts"
 const KIT_BEST_EFFORT_ENV_HELP =
-    "DISTSSHKIT_BEST_EFFORT            Same as --best-effort"
+    "DISTSSH_BEST_EFFORT            Same as --best-effort"
 
 """CLI default when no verbosity flag/env is set: live bar on a TTY, else verbose."""
 kit_cli_auto_verbosity(; live::Union{Nothing, Bool} = nothing)::Symbol =
     something(live, kit_stdout_is_live()) ? :progress : :verbose
 
-"""Read exclusive verbosity from env (`DISTSSHKIT_QUIET` / `_PROGRESS` / `_VERBOSE`)."""
+"""Read exclusive verbosity from env (`DISTSSH_QUIET` / `_PROGRESS` / `_VERBOSE`)."""
 function _env_verbosity()::Union{Nothing, Symbol}
-    want_quiet = _env_flag("DISTSSHKIT_QUIET")
-    want_progress = _env_flag("DISTSSHKIT_PROGRESS")
-    want_verbose = _env_flag("DISTSSHKIT_VERBOSE")
+    want_quiet = _env_flag("DISTSSH_QUIET")
+    want_progress = _env_flag("DISTSSH_PROGRESS")
+    want_verbose = _env_flag("DISTSSH_VERBOSE")
     n = count(identity, (want_quiet, want_progress, want_verbose))
     n > 1 && throw(
         ArgumentError(
-            "cannot combine DISTSSHKIT_QUIET, DISTSSHKIT_PROGRESS, and DISTSSHKIT_VERBOSE",
+            "cannot combine DISTSSH_QUIET, DISTSSH_PROGRESS, and DISTSSH_VERBOSE",
         )
     )
     want_quiet && return :quiet
@@ -145,9 +145,9 @@ function _env_flag(name::AbstractString)::Bool
     return v in ("1", "true", "yes", "on")
 end
 
-"""Max concurrent SSH host jobs (`DISTSSHKIT_JOBS`, default 1)."""
+"""Max concurrent SSH host jobs (`DISTSSH_JOBS`, default 1)."""
 function kit_host_jobs()::Int
-    raw = strip(get(ENV, "DISTSSHKIT_JOBS", "1"))
+    raw = strip(get(ENV, "DISTSSH_JOBS", "1"))
     n = tryparse(Int, raw)
     (n === nothing || n < 1) && return 1
     return n
@@ -178,14 +178,14 @@ function map_host_jobs(f, hosts::Vector{String})
     return nothing
 end
 
-"""Default session; honors `DISTSSHKIT_QUIET`, `DISTSSHKIT_PROGRESS`, `DISTSSHKIT_VERBOSE`, `DISTSSHKIT_YES`, `DISTSSHKIT_HOSTS_FILE`."""
+"""Default session; honors `DISTSSH_QUIET`, `DISTSSH_PROGRESS`, `DISTSSH_VERBOSE`, `DISTSSH_YES`, `DISTSSH_HOSTS_FILE`."""
 function default_kit_cli_session()::KitCliSession
-    hosts_file = let raw = strip(get(ENV, "DISTSSHKIT_HOSTS_FILE", ""))
+    hosts_file = let raw = strip(get(ENV, "DISTSSH_HOSTS_FILE", ""))
         isempty(raw) ? nothing : String(raw)
     end
     env_v = _env_verbosity()
     hosts_kw = (;
-        yes = _env_flag("DISTSSHKIT_YES"),
+        yes = _env_flag("DISTSSH_YES"),
         hosts_file = hosts_file,
         show_version = false,
     )
@@ -437,7 +437,7 @@ function _kit_host_token(
     return split_worker_token(tok)[1]
 end
 
-"""`--hosts`, `DISTSSHKIT_HOSTS`, then `--hosts-file` / `DISTSSHKIT_HOSTS_FILE`.
+"""`--hosts`, `DISTSSH_HOSTS`, then `--hosts-file` / `DISTSSH_HOSTS_FILE`.
 
 `keep_counts=true` (go / drive) keeps tokens as written. `false` (setup / size)
 strips `:N`. Size and setup pass `roles=true` so `child:NAME[:N]` becomes
@@ -449,7 +449,7 @@ function kit_host_source_tokens(
         roles::Bool = false,
     )::Vector{String}
     out = String[_kit_host_token(t, keep_counts; roles = roles) for t in session.hosts_flag]
-    for t in split_hosts_csv(get(ENV, "DISTSSHKIT_HOSTS", ""))
+    for t in split_hosts_csv(get(ENV, "DISTSSH_HOSTS", ""))
         push!(out, _kit_host_token(t, keep_counts; roles = roles))
     end
     hosts_file = session.hosts_file
@@ -515,7 +515,7 @@ The prompt is always written to the terminal (quiet / progress / verbose).
 Do not route it through [`kit_print`](@ref) (`:verbose` only).
 Pauses the live `\r` progress bar so the prompt is not overwritten.
 
-With `--yes` / `DISTSSHKIT_YES`, always returns `true` without prompting.
+With `--yes` / `DISTSSH_YES`, always returns `true` without prompting.
 `keyword=nothing` → accept `y` / `yes` (case-insensitive).
 Otherwise the answer must match `keyword` exactly.
 """

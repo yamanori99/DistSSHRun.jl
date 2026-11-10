@@ -44,11 +44,11 @@ end
         )
         @test cfg.interval == 30.0
         @test cfg.deadline == 600.0
-        withenv("DISTSSHKIT_WAIT_PEER_SILENT" => "42") do
+        withenv("DISTSSH_WAIT_PEER_SILENT" => "42") do
             bare = DistSSHHeartbeat._heartbeat_config(Dict{String, String}())
             @test bare.deadline == 42.0
         end
-        withenv("DISTSSHKIT_WAIT_PEER_SILENT" => "0") do
+        withenv("DISTSSH_WAIT_PEER_SILENT" => "0") do
             bare = DistSSHHeartbeat._heartbeat_config(Dict{String, String}())
             @test bare.deadline == 600.0
         end
@@ -252,10 +252,10 @@ end
     end
 
     @testset "SSH E2E" begin
-        if get(ENV, "DISTSSHKIT_SSH_E2E", "") == "1"
+        if get(ENV, "DISTSSH_SSH_E2E", "") == "1"
             include(joinpath(@__DIR__, "e2e.jl"))
         else
-            @info "DistSSHHeartbeat SSH E2E skipped (set DISTSSHKIT_SSH_E2E=1)"
+            @info "DistSSHHeartbeat SSH E2E skipped (set DISTSSH_SSH_E2E=1)"
         end
     end
 end

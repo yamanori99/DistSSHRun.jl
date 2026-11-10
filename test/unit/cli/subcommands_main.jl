@@ -5,8 +5,8 @@ using Test
         mktemp() do out_path, out_io
             mktemp() do err_path, err_io
                 code = withenv(
-                    "DISTSSHKIT_CLI_SUBCOMMAND_DONE" => "",
-                    "DISTSSHKIT_YES" => nothing,
+                    "DISTSSH_CLI_SUBCOMMAND_DONE" => "",
+                    "DISTSSH_YES" => nothing,
                 ) do
                     redirect_stdin(devnull) do
                         redirect_stdout(out_io) do

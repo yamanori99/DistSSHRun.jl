@@ -24,7 +24,7 @@
         )
         chmod(ju, 0o755)
         chmod(jl, 0o755)
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
             r = DistSSHUp.juliaup_align_host!("parent")
             @test r.host == "parent"
             @test !r.already
@@ -39,7 +39,7 @@
             println("already")
             """,
         )
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_SSH" => ssh) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_SSH" => ssh) do
             r = DistSSHUp.juliaup_align_host!("host1"; channel = ch)
             @test r.host == "host1"
             @test r.already
@@ -53,7 +53,7 @@
             exit(1)
             """,
         )
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_SSH" => ssh) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_SSH" => ssh) do
             @test_throws ErrorException DistSSHUp.juliaup_update_host!("host1")
         end
 
@@ -64,10 +64,10 @@
             echo '     *  $ch     $ch.2+0.aarch64'
             """,
         )
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
             @test DistSSHUp.juliaup_default_patch("parent") == "$ch.2"
         end
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => joinpath(d, "missing")) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => joinpath(d, "missing")) do
             @test DistSSHUp.juliaup_default_patch("parent") == "-"
         end
 
@@ -77,11 +77,11 @@
             println("     *  1.13     1.13.2+0.aarch64.apple.darwin14")
             """,
         )
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_SSH" => ssh) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_SSH" => ssh) do
             @test DistSSHUp.juliaup_default_patch("host1") == "1.13.2"
         end
         write(ssh, "exit(1)\n")
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_SSH" => ssh) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_SSH" => ssh) do
             @test DistSSHUp.juliaup_default_patch("host1") == "-"
         end
     end
@@ -109,7 +109,7 @@ end
             """,
         )
         chmod(ju, 0o755)
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_LOCAL_JULIAUP" => ju) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
             added = DistSSHUp.juliaup_add_host!("parent", "1.13")
             @test added.host == "parent"
             @test added.channel == "1.13"
@@ -136,7 +136,7 @@ end
             """,
         )
         DistSSHBase._DETECT_JULIA_PATH_CACHE["host1"] = "/old/julia"
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_SSH" => ssh) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_SSH" => ssh) do
             added = DistSSHUp.juliaup_add_host!("host1", "1.13")
             @test added == (; host = "host1", channel = "1.13")
             @test DistSSHBase._DETECT_JULIA_PATH_CACHE["host1"] == "/old/julia"
@@ -151,7 +151,7 @@ end
             println("      release     1.11.6+0")
             """,
         )
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_SSH" => ssh) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_SSH" => ssh) do
             lines = DistSSHUp.juliaup_status_lines("host1"; channel = "release")
             @test length(lines) == 1
             @test startswith(lines[1], "release")
@@ -164,7 +164,7 @@ end
             """,
         )
         DistSSHBase._DETECT_JULIA_PATH_CACHE["host1"] = "/kept"
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_SSH" => ssh) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_SSH" => ssh) do
             @test_throws ErrorException DistSSHUp.juliaup_default_host!("host1", "1.13")
             @test DistSSHBase._DETECT_JULIA_PATH_CACHE["host1"] == "/kept"
         end
@@ -181,7 +181,7 @@ end
             sleep(30)
             """,
         )
-        withenv("DISTSSHKIT_TEST" => "1", "DISTSSHKIT_TEST_SSH" => ssh) do
+        withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_SSH" => ssh) do
             task = @async DistSSHUp.juliaup_default_patch("signal-host")
             _kill_ready_child(ready; signal = Base.SIGTERM)
             @test fetch(task) == "-"

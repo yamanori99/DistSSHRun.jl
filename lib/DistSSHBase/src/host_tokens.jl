@@ -1,6 +1,6 @@
 # Host lists and worker counts. Placement grammar stays in hosts.jl.
 
-"""Split a `--hosts` / `DISTSSHKIT_HOSTS` CSV into tokens (empty pieces dropped)."""
+"""Split a `--hosts` / `DISTSSH_HOSTS` CSV into tokens (empty pieces dropped)."""
 function split_hosts_csv(raw::AbstractString)::Vector{String}
     out = String[]
     for h in split(String(raw), ',')
