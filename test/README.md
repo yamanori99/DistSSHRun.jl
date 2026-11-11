@@ -167,12 +167,17 @@ Two Linux workers. `DISTSSH_SSH_E2E=1`.
 
 ### DistSSHShip (`lib/DistSSHShip/test/e2e.jl`)
 
-Pack a small project, `ship` to `~/distssh-ship-e2e/<nonce>` on
-child-1 with `write_record=true` (default). Assert receipt ok, shipped
-files on the remote, `verify_shipment_record(...; expect_hash=...)`
-returns `:complete`, and remote `.distssh/shipment.toml` exists. A
-non-empty dest is refused. CI job: `DistSSHShip (ubuntu-latest →
-ubuntu-26.04)` (`ship-ssh-e2e` in `CI.yml`).
+Pack a project (spaces / Unicode names, executable bit, internal symlink,
+~4 MiB payload), `ship` to a unique `~/distssh-ship-e2e/<nonce>` on
+child-1 with `write_record=true` (default). Assert receipt ok, remote
+files, `verify_shipment_record(...; expect_hash=...)`, and
+`.distssh/shipment.toml`. Tamper remote payload + record hash and
+assert verify refuses `expect_hash`. Non-empty dest and failed extract
+(escaping symlink, pack with `allow_external_symlinks`) must not leave a
+`:complete` record. Cleanup is prefix-guarded. Probes worker `sshd -T`
+for the `sftp` subsystem (OpenSSH `scp`). CI job:
+`DistSSHShip (ubuntu-latest → ubuntu-26.04)` (`ship-ssh-e2e` in
+`CI.yml`); `testenv/**` path changes also trigger it (PR ship gate).
 
 Kit parent OS matrix:
 [`testenv/docker-ssh/README.md`](../testenv/docker-ssh/README.md). Apple

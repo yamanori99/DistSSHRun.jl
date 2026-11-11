@@ -140,6 +140,8 @@ jobs:
             ship:
               - "lib/DistSSHShip/**"
               - "!lib/DistSSHShip/**/*.md"
+              - "testenv/**"
+              - "!testenv/**/*.md"
             heartbeat:
               - "lib/DistSSHHeartbeat/**"
               - "!lib/DistSSHHeartbeat/**/*.md"
