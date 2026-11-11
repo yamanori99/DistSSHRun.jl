@@ -310,7 +310,7 @@ using Test
         @test r.deploy_root == "/tmp/App.jl"
     end
 
-    @testset "help smoke (rsync-first)" begin
+    @testset "help smoke (ship-tree-first)" begin
         txt = DistSSHRun.setup_help_text()
         @test occursin("prune", txt)
         @test occursin("remote-root", txt)

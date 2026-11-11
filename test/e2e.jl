@@ -1013,7 +1013,7 @@ end
 
         @testset "setup ship-tree then go --run-id empty remote" begin
             _e2e_announce("setup ship-tree then go --run-id empty remote")
-            oneshot = _ssh_e2e_go_rsync_remote_root()
+            oneshot = _ssh_e2e_go_ship_tree_remote_root()
             oneshot_env = _ssh_e2e_env(; remote_project = oneshot)
             try
                 proc, out = _run_kit_setup(;
@@ -1021,7 +1021,7 @@ end
                     project_root = proj,
                     extra_env = oneshot_env,
                 )
-                _assert_ssh_e2e_ok(suite, "go_rsync_empty_delete", proc, out; project = proj, kit = :setup)
+                _assert_ssh_e2e_ok(suite, "go_ship_tree_empty_delete", proc, out; project = proj, kit = :setup)
                 for host in hosts
                     p, ssh_out = _ssh_e2e_ssh(host, "test ! -e $(oneshot)/Project.toml")
                     _assert_proc_ok(p, ssh_out; label = "go snapshot empty $(host) gone")
@@ -1078,7 +1078,7 @@ end
                     extra_env = oneshot_env,
                 )
                 _assert_ssh_e2e_ok(
-                    suite, "go_rsync_empty_cleanup", proc, out;
+                    suite, "go_ship_tree_empty_cleanup", proc, out;
                     project = proj, kit = :setup,
                 )
             end
@@ -1107,7 +1107,7 @@ end
                 project_root = proj,
                 extra_env = tilde_env,
             )
-            _assert_ssh_e2e_ok(suite, "tilde_rsync", proc, out; project = proj, kit = :setup)
+            _assert_ssh_e2e_ok(suite, "tilde_ship_tree", proc, out; project = proj, kit = :setup)
 
             proc, out = _run_kit_setup(;
                 setup_args = ["instantiate", "--deploy-root", tilde_root, setup_hosts...],
@@ -1667,7 +1667,7 @@ end
                     project_root = app,
                     extra_env = neg_env,
                 )
-                _assert_ssh_e2e_ok(suite, "negation_rsync", proc, out; project = app, kit = :setup)
+                _assert_ssh_e2e_ok(suite, "negation_ship_tree", proc, out; project = app, kit = :setup)
                 for host in hosts
                     p, ssh_out = _ssh_e2e_ssh(host, "test -n \"\$(ls -d $(neg_root)/runs/*/src/data/keep.txt 2>/dev/null)\"")
                     _assert_proc_ok(p, ssh_out; label = "negation keep.txt $(host)")
