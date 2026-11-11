@@ -82,9 +82,9 @@ function _project_tree!(; large_bytes::Int = 0)
     mkpath(joinpath(empty_parent, "nested"))
     write(joinpath(empty_parent, "nested", "leaf.txt"), "x\n")
     if large_bytes > 0
-        open(joinpath(dir, "bulk.bin"), "w") do io
-            write(io, repeat(UInt8(0x41), large_bytes))
-        end
+        bulk = Vector{UInt8}(undef, large_bytes)
+        fill!(bulk, 0x41)
+        write(joinpath(dir, "bulk.bin"), bulk)
     end
     return dir
 end
