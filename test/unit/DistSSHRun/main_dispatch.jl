@@ -89,7 +89,7 @@ using Test
         @test occursin("DistSSHRun $(DistSSHRun.dist_ssh_kit_version())", out)
     end
 
-    @testset "refused rsync and prune paths print Error" begin
+    @testset "refused ship-tree and prune paths print Error" begin
         for mode in ("ship-tree", "prune")
             let (code, out, err) = _main_capture(
                     [

@@ -173,7 +173,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         return DistSSHRun.juliaup_channel(_ssh_e2e_local_juliaup_julia_version())
     end
     # Empty-tree `go` root. A later nonempty check uses another path.
-    _ssh_e2e_go_rsync_remote_root() = "/home/dev/distsshkit-e2e-go-rsync"
+    _ssh_e2e_go_ship_tree_remote_root() = "/home/dev/distsshkit-e2e-go-ship-tree"
     # Separate tree for git clone/sync/`--require-git` (ship does not send `.git/`).
     _ssh_e2e_git_remote_root() = "/home/dev/distsshkit-e2e-git"
     # Tilde layout for collect path-boundary coverage (`dev` → `/home/dev/…`).

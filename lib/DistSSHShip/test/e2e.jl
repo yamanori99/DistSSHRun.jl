@@ -184,9 +184,11 @@ end
                     )
                     wrong = repeat('0', 40)
                     old_h = snap.content_tree_hash
+                    sed_expr = "s/content_tree_hash = \"$(old_h)\"/content_tree_hash = \"$(wrong)\"/"
+                    sed_q = DistSSHBase._remote_sh_quote(sed_expr)
                     code_r, _ = DistSSHBase._remote_shell_status(
                         _host,
-                        "sed -i 's/content_tree_hash = \"$old_h\"/content_tree_hash = \"$wrong\"/' $record",
+                        "sed -i $sed_q $record",
                     )
                     @test code_r == 0
                     err = try
