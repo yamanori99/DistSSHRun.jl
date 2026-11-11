@@ -6,6 +6,7 @@
 
 using Random
 using Test
+using DistSSHBase
 using DistSSHShip
 
 if get(ENV, "DISTSSH_SSH_E2E", "") != "1"
