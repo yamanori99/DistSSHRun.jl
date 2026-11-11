@@ -18,6 +18,8 @@ services:
       - "2222:22"
     volumes:
       - ./mounted-keys:/mounted-keys:ro
+    cap_add:
+      - SYS_PTRACE
     restart: "no"
 
   child-2:
@@ -38,4 +40,6 @@ services:
       - "2223:22"
     volumes:
       - ./mounted-keys:/mounted-keys:ro
+    cap_add:
+      - SYS_PTRACE
     restart: "no"
