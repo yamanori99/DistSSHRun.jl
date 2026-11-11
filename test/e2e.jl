@@ -124,17 +124,18 @@ end
 
 function _e2e_hb_strace_begin!(host::AbstractString, pids::AbstractVector{<:Integer})
     isempty(pids) && return (false, "no worker pids")
-    pidlist = join(string.(pids), " ")
+    quoted_pids = join(DistSSHRun.DistSSHBase._remote_sh_quote(string(p)) for p in pids; delim = " ")
     inner = join(
         [
             "command -v strace >/dev/null",
             "rm -f /tmp/distssh_hb_trace.*",
-            "for pid in $pidlist; do nohup timeout 120 strace -qq -e write -s 500 -p \"\$pid\" 2>/tmp/distssh_hb_trace.\"\$pid\" >/dev/null & done",
+            "for pid in $quoted_pids; do nohup timeout 120 strace -qq -e write -s 500 -p \"\$pid\" 2>/tmp/distssh_hb_trace.\"\$pid\" >/dev/null & done",
             "echo started",
         ],
         "; ",
     )
-    proc, body = _ssh_e2e_ssh(host, "bash -lc $(repr(inner))")
+    inner_q = DistSSHRun.DistSSHBase._remote_sh_quote(inner)
+    proc, body = _ssh_e2e_ssh(host, "bash -lc $inner_q")
     ok = proc.exitcode == 0 && occursin("started", body)
     return (ok, proc.exitcode == 0 ? strip(body) : "exit=$(proc.exitcode) body=$(repr(strip(body)))")
 end
@@ -143,15 +144,17 @@ function _e2e_hb_tracers_attached(host::AbstractString, pids::AbstractVector{<:I
     samples = String[]
     all_attached = true
     for p in pids
+        status_path = DistSSHRun._remote_shell_path_word("/proc/$(p)/status")
         tp_proc, tp_body = _ssh_e2e_ssh(
             host,
-            "awk '/^TracerPid:/ {print \$2}' /proc/$(p)/status 2>/dev/null",
+            "awk '/^TracerPid:/ {print \$2}' $status_path 2>/dev/null",
         )
         tp = strip(tp_body)
         tracer_ok = tp_proc.exitcode == 0 && !isempty(tp) && tp != "0"
         if !tracer_ok
             all_attached = false
-            _, trace = _ssh_e2e_ssh(host, "head -n3 /tmp/distssh_hb_trace.$(p) 2>/dev/null")
+            trace_path = DistSSHRun._remote_shell_path_word("/tmp/distssh_hb_trace.$(p)")
+            _, trace = _ssh_e2e_ssh(host, "head -n3 $trace_path 2>/dev/null")
             push!(
                 samples,
                 "pid=$(p) TracerPid=$(repr(tp)) trace=$(repr(strip(trace)))",
@@ -1300,7 +1303,7 @@ end
                 suite,
                 "heartbeat_ready",
                 monitors_ready && !isempty(pids),
-                "ready=$(monitors_ready) pids=$(pids) log=$(repr(_e2e_hb_log_text(log_dir)[max(1, end - 400):end]))",
+                "ready=$(monitors_ready) pids=$(pids) log=$(repr(last(_e2e_hb_log_text(log_dir), 400)))",
             )
             @test monitors_ready
             @test !isempty(pids)
