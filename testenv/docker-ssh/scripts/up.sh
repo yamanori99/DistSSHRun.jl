@@ -120,9 +120,7 @@ else
   if [[ "${DISTSSH_BUILD_CACHE:-}" == "gha" ]]; then
     # CI: reuse layers across runs. The release ARGs are the cache key for the
     # juliaup layer, so a hit skips julialang-s3 entirely.
-    # buildkit default bridge DNS flakes on GHA; host network matches compose build.
     _distsshkit_retry "worker image build" docker buildx build --load \
-      --network=host \
       -t "${LOCAL_IMAGE}" \
       --cache-from "type=gha,scope=distsshrun-ssh-worker" \
       --cache-to "type=gha,scope=distsshrun-ssh-worker,mode=max" \
