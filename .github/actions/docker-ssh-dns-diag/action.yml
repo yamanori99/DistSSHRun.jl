@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-action.json
+name: docker-ssh-dns-diag
+description: Log host and container DNS before docker-ssh worker image build (non-fatal)
+
+runs:
+  using: composite
+  steps:
+    - name: DNS diagnostics (docker-ssh worker build)
+      shell: bash
+      run: |
+        cat /etc/resolv.conf || true
+        getent hosts archive.ubuntu.com || echo 'host: DNS NG'
+        docker run --rm ubuntu:26.04 getent hosts archive.ubuntu.com || echo 'docker run: DNS NG'
+        docker buildx inspect --bootstrap || true
