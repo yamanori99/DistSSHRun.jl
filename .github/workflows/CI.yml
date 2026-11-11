@@ -261,12 +261,18 @@ jobs:
           upload: true
 
   test-macos:
-    name: DistSSHRun (1.13, xcode-27, aarch64)
+    name: DistSSHRun (1.13, xcode-27, aarch64, ${{ matrix.group }})
     needs: [detect, runic, jetls, aqua, base-test-macos, up-test-macos, ship-test-macos, heartbeat-test-macos]
     # success() is false when a needed job is skipped, which would skip Run
     # after a path-gated Base or Up. Failure still blocks; skip does not.
     # The static gate is result == success, so a skipped Runic does not start Run.
     if: ${{ needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && !cancelled() && !failure() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [unit, integration]
+    env:
+      DISTSSH_TEST_GROUP: ${{ matrix.group }}
     runs-on: xcode-27
     timeout-minutes: 45
     permissions:
@@ -867,9 +873,15 @@ jobs:
       - uses: ./.github/actions/pkg-test
 
   test-1-14-pre-macos:
-    name: DistSSHRun (1.14-pre, xcode-27, aarch64)
+    name: DistSSHRun (1.14-pre, xcode-27, aarch64, ${{ matrix.group }})
     needs: [detect, runic, jetls, aqua]
     if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [unit, integration]
+    env:
+      DISTSSH_TEST_GROUP: ${{ matrix.group }}
     runs-on: xcode-27
     timeout-minutes: 45
     steps:
