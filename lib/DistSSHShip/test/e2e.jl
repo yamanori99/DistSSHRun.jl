@@ -26,9 +26,23 @@ const _host = "child-1"
 const _REMOTE_E2E_PREFIX = "~/distssh-ship-e2e/"
 
 const _E2E_NONCE_BYTES = 16
+const _E2E_RESERVE_MAX_TRIES = 8
 
 function _unique_e2e_dest()::String
     return string(_REMOTE_E2E_PREFIX, bytes2hex(rand(UInt8, _E2E_NONCE_BYTES)))
+end
+
+"""Reserve `~/distssh-ship-e2e/<nonce>` with plain `mkdir` (fails if present)."""
+function _reserve_e2e_dest!(host::AbstractString)::String
+    h = String(host)
+    for _ in 1:_E2E_RESERVE_MAX_TRIES
+        dest = _unique_e2e_dest()
+        _assert_dest_prefix(dest)
+        dq = DistSSHBase._remote_shell_path_word(dest)
+        code, _ = DistSSHBase._remote_shell_status(h, "mkdir $dq")
+        code == 0 && return dest
+    end
+    throw(ArgumentError("could not reserve unique e2e dest on $h after $_E2E_RESERVE_MAX_TRIES tries"))
 end
 
 function _ensure_e2e_parent!(host::AbstractString)
@@ -127,10 +141,13 @@ end
         _ensure_e2e_parent!(_host)
 
         @testset "verified ship and record" begin
-            dest = _unique_e2e_dest()
+            dest = nothing
+            owned = false
             project_dir = _project_tree!(; large_bytes = 4 * 1024 * 1024)
             snap = nothing
             try
+                dest = _reserve_e2e_dest!(_host)
+                owned = true
                 snap = DistSSHShip.pack_tree(project_dir)
                 receipt = DistSSHShip.ship(snap, [_host], dest; write_record = true)
                 @test receipt.ok
@@ -186,23 +203,28 @@ end
             finally
                 snap !== nothing && rm(snap.directory; force = true, recursive = true)
                 rm(project_dir; force = true, recursive = true)
-                try
-                    _guarded_remote_rm_rf(_host, dest)
-                catch e
-                    @warn "remote cleanup failed" exception = e dest = dest
+                if owned && dest isa AbstractString
+                    try
+                        _guarded_remote_rm_rf(_host, dest)
+                    catch e
+                        @warn "remote cleanup failed" exception = e dest = dest
+                    end
                 end
             end
         end
 
         @testset "non-empty dest is refused" begin
-            dest = _unique_e2e_dest()
+            dest = nothing
+            owned = false
             project_dir = _project_tree!()
             snap = nothing
             try
+                dest = _reserve_e2e_dest!(_host)
+                owned = true
                 snap = DistSSHShip.pack_tree(project_dir)
                 pq = DistSSHBase._remote_shell_path_word(dest)
                 code, _ = DistSSHBase._remote_shell_status(
-                    _host, "mkdir -p $pq && echo occupied > $pq/occupant.txt",
+                    _host, "echo occupied > $pq/occupant.txt",
                 )
                 @test code == 0
                 receipt = DistSSHShip.ship(snap, [_host], dest; write_record = true)
@@ -215,19 +237,24 @@ end
             finally
                 snap !== nothing && rm(snap.directory; force = true, recursive = true)
                 rm(project_dir; force = true, recursive = true)
-                try
-                    _guarded_remote_rm_rf(_host, dest)
-                catch e
-                    @warn "remote cleanup failed" exception = e dest = dest
+                if owned && dest isa AbstractString
+                    try
+                        _guarded_remote_rm_rf(_host, dest)
+                    catch e
+                        @warn "remote cleanup failed" exception = e dest = dest
+                    end
                 end
             end
         end
 
         @testset "failed extract leaves no complete record" begin
-            dest = _unique_e2e_dest()
+            dest = nothing
+            owned = false
             project_dir = mktempdir()
             snap = nothing
             try
+                dest = _reserve_e2e_dest!(_host)
+                owned = true
                 write(joinpath(project_dir, "Project.toml"), "name = \"BadSymlink\"\n")
                 write(
                     joinpath(project_dir, "Manifest.toml"),
@@ -245,10 +272,12 @@ end
             finally
                 snap !== nothing && rm(snap.directory; force = true, recursive = true)
                 rm(project_dir; force = true, recursive = true)
-                try
-                    _guarded_remote_rm_rf(_host, dest)
-                catch e
-                    @warn "remote cleanup failed" exception = e dest = dest
+                if owned && dest isa AbstractString
+                    try
+                        _guarded_remote_rm_rf(_host, dest)
+                    catch e
+                        @warn "remote cleanup failed" exception = e dest = dest
+                    end
                 end
             end
         end
