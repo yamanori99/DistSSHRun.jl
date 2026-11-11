@@ -485,6 +485,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         write(
             joinpath(proj, ".gitignore"),
             """
+            .distssh/
             .distsshkit/
             output/
             results/

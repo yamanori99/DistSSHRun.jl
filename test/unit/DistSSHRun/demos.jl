@@ -51,7 +51,9 @@ using Test
         @test !isdir(joinpath(tmp, DistSSHRun.DEMO_INSTALL_DIR, "without_kit"))
         @test !isdir(joinpath(tmp, "demos"))
         @test isfile(joinpath(tmp, DistSSHRun.DEMO_INSTALL_DIR, ".gitignore"))
-        @test occursin(".distsshkit/", read(joinpath(tmp, DistSSHRun.DEMO_INSTALL_DIR, ".gitignore"), String))
+        gitignore = read(joinpath(tmp, DistSSHRun.DEMO_INSTALL_DIR, ".gitignore"), String)
+        @test occursin(".distssh/", gitignore)
+        @test occursin(".distsshkit/", gitignore)
         @test occursin("output/", read(joinpath(tmp, DistSSHRun.DEMO_INSTALL_DIR, ".gitignore"), String))
         @test occursin("init_output_dir!", read(joinpath(tmp, DistSSHRun.DEMO_INSTALL_DIR, "with_kit", "square_file.jl"), String))
 

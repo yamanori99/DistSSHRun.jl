@@ -503,7 +503,24 @@ function get_local_git_hash(proj_dir::AbstractString; short::Union{Nothing, Int}
     end
 end
 
+"""True when `path` names only DistSSHRun / Queue state under the project tree."""
+function _git_worktree_kit_path(path::AbstractString)::Bool
+    for name in (
+            DistSSHBase.LOCAL_STATE_DIR,
+            DistSSHBase.LEGACY_LOCAL_STATE_DIR,
+            ".distsshqueue",
+        )
+        path == name && return true
+        startswith(path, name * "/") && return true
+        occursin("/" * name * "/", path) && return true
+    end
+    return false
+end
+
 """Whether the local git working tree at `proj_dir` is clean (no uncommitted changes).
+
+Untracked or modified paths under `.distssh/`, legacy `.distsshkit/`, and
+`.distsshqueue/` are ignored (same rule as [`git_source_snapshot`](@ref)).
 
 Returns `true` if clean, if `git` is missing, or if `proj_dir` is not a git work tree.
 If this is a work tree but `git status` fails, returns `false` so `--require-git` /
@@ -525,8 +542,19 @@ function local_git_clean(proj_dir::AbstractString)::Bool
     end
     inside == "true" || return true
     try
-        result = read(pipeline(_git_cmd(["-C", resolved, "status", "--porcelain"]); stderr = devnull), String)
-        return isempty(strip(result))
+        result = strip(
+            read(
+                pipeline(_git_cmd(["-C", resolved, "status", "--porcelain"]); stderr = devnull),
+                String,
+            ),
+        )
+        isempty(result) && return true
+        for line in split(result, '\n'; keepempty = false)
+            ncodeunits(line) < 4 && return false
+            path = line[4:end]
+            _git_worktree_kit_path(path) || return false
+        end
+        return true
     catch
         return false
     end
