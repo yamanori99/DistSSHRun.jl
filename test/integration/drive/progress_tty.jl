@@ -41,6 +41,7 @@ using Test
                     typescript = joinpath(dir, "prompt_typescript.txt"),
                     expect = "DISTSSH_PROMPT>",
                     reply = "pong\n",
+                    reply_marker = "DISTSSH_GOT:pong",
                     hang_s = 30.0,
                 )
                 @info "harness expect flush wall" elapsed = (time() - t0)
@@ -48,8 +49,10 @@ using Test
                 @test occursin("DISTSSH_GOT:pong", pty)
                 prompt_at = findfirst("DISTSSH_PROMPT>", pty)
                 got_at = findfirst("DISTSSH_GOT:pong", pty)
-                @test prompt_at !== nothing && got_at !== nothing
-                @test first(prompt_at) < first(got_at)
+                @test prompt_at !== nothing
+                @test got_at !== nothing
+                @test (prompt_at === nothing || got_at === nothing) ||
+                    (first(prompt_at) < first(got_at))
             end
         end
     end
@@ -444,6 +447,7 @@ using Test
                     typescript = joinpath(dir, "prompt_typescript.txt"),
                     expect = "DISTSSH_PROMPT>",
                     reply = "pong\n",
+                    reply_marker = "DISTSSH_GOT:pong",
                     hang_s = hang_s,
                 )
                 @info "drive interactive progress_tty wall" elapsed = (time() - t0)
@@ -452,8 +456,10 @@ using Test
                 @test occursin("DISTSSH_GOT:pong", plain)
                 prompt_at = findfirst("DISTSSH_PROMPT>", pty)
                 got_at = findfirst("DISTSSH_GOT:pong", pty)
-                @test prompt_at !== nothing && got_at !== nothing
-                @test first(prompt_at) < first(got_at)
+                @test prompt_at !== nothing
+                @test got_at !== nothing
+                @test (prompt_at === nothing || got_at === nothing) ||
+                    (first(prompt_at) < first(got_at))
                 @test !occursin(r"[━╺⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*DISTSSH_PROMPT>", pty)
                 # Visible model: prompt is its own payload line, not bar-glued.
                 prompt_lines = filter(
