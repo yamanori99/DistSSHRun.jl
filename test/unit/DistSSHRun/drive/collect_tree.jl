@@ -117,7 +117,7 @@ end
         end
     end
 
-    @testset "collect-missing lists files and calls rsync" begin
+    @testset "collect-missing lists files and calls tar pull" begin
         _with_collect() do state_dir, proj
             _seed_tree!(state_dir, "host1", joinpath("data", "a.txt"))
             out_dir = joinpath(proj, "out")
@@ -128,7 +128,7 @@ end
                 end
                 @test result.ok
                 @test occursin("1 file", captured)
-                # Parents may be mkdir'd; fake rsync does not write the file.
+                # Parents may be mkdir'd; fake tar pull does not write the file.
                 @test !isfile(joinpath(out_dir, "data", "a.txt"))
             end
         end
@@ -151,7 +151,7 @@ end
         end
     end
 
-    @testset "collect-overwrite calls rsync" begin
+    @testset "collect-overwrite calls tar pull" begin
         _with_collect() do state_dir, proj
             _seed_tree!(state_dir, "host1", "a.txt")
             out_dir = joinpath(proj, "out")

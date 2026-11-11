@@ -2,7 +2,7 @@ using Test
 
 # Tar pull, dest status, ship confirm, and the gitignore send list.
 
-@testset "setup rsync" begin
+@testset "setup tar pull" begin
     remote_path = "~/App.jl"
 
     function _with_fake_remotes(f::Function; extra_env = Dict{String, String}())
@@ -237,7 +237,7 @@ using Test
         end
     end
 
-    @testset "rsync outcomes" begin
+    @testset "ship-tree outcomes" begin
         # A user tree. The package checkout path-depends on this repo, which
         # setup correctly refuses to ship.
         smoke_project = mktempdir()
