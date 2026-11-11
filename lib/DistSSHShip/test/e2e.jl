@@ -26,7 +26,7 @@ const _host = "child-1"
 const _REMOTE_E2E_PREFIX = "~/distssh-ship-e2e/"
 
 function _unique_e2e_dest()::String
-    return string(_REMOTE_E2E_PREFIX, bytes2hex(rand(Random.bytes(4))))
+    return string(_REMOTE_E2E_PREFIX, bytes2hex(rand(UInt8, 4)))
 end
 
 function _assert_dest_prefix(dest::AbstractString)
