@@ -92,8 +92,6 @@ const _E2E_N = let n = count(eachline(@__FILE__)) do line
     n
 end
 const _E2E_I = Ref(0)
-const _HB_WORKER_EXIT_NEEDLE =
-    "DistSSHHeartbeat: master did not answer within the deadline"
 # Print `[i/N]` before an inner `@testset`.
 function _e2e_announce(label::AbstractString)
     _E2E_I[] += 1
@@ -1151,18 +1149,42 @@ end
                 _, body = _ssh_e2e_ssh(host, "pgrep -f 'julia.*--worker' || true")
                 return Int[parse(Int, s) for s in split(strip(body); keepempty = false)]
             end
-            # Worker @warn from `_heartbeat_die!` goes to stderr (not the kit log).
-            function _worker_stderr_tail(pid::Integer, nbytes::Integer = 12_000)
-                qpid = string(pid)
-                cmd = "tail -c $(nbytes) /proc/$(qpid)/fd/2 2>/dev/null || true"
-                _, body = _ssh_e2e_ssh(host, cmd)
-                return body
+            # Worker @warn does not land in the kit log or readable /proc/fd/2.
+            function _hb_worker_trace_begin!(pids::AbstractVector{<:Integer})
+                isempty(pids) && return (false, "no worker pids")
+                pidlist = join(string.(pids), " ")
+                inner = """
+                set -e
+                command -v strace >/dev/null || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq strace
+                rm -f /tmp/distssh_hb_trace.*
+                for pid in $pidlist; do
+                  nohup timeout 120 strace -qq -e write -s 500 -p "\$pid" 2>/tmp/distssh_hb_trace."\$pid" >/dev/null &
+                done
+                echo started
+                """
+                proc, body = _ssh_e2e_ssh(host, "bash -lc " * repr(strip(inner)))
+                ok = proc.exitcode == 0 && occursin("started", body)
+                return (ok, strip(body))
             end
-            function _worker_stderr_shows_heartbeat_exit(pids::AbstractVector{<:Integer})
-                for pid in pids
-                    occursin(_HB_WORKER_EXIT_NEEDLE, _worker_stderr_tail(pid)) && return true
+            function _hb_worker_trace_evidence(pids::AbstractVector{<:Integer})
+                _, hit = _ssh_e2e_ssh(
+                    host,
+                    "grep -l 'master did not answer' /tmp/distssh_hb_trace.* 2>/dev/null | head -n1 || true",
+                )
+                path = strip(hit)
+                if !isempty(path)
+                    _, snip = _ssh_e2e_ssh(host, "grep -m1 'master did not answer' $(path) 2>/dev/null || true")
+                    return (true, strip(snip))
                 end
-                return false
+                samples = String[]
+                for p in pids
+                    _, tail = _ssh_e2e_ssh(
+                        host,
+                        "tail -c 400 /tmp/distssh_hb_trace.$(p) 2>/dev/null || true",
+                    )
+                    push!(samples, "pid=$(p): " * repr(tail))
+                end
+                return (false, join(samples, " | "))
             end
             # A queue that lost its in-memory `KitProcess` (e.g. restarted
             # mid-job) falls back to `kit.pid` — assert it names this run's
@@ -1202,25 +1224,28 @@ end
             )
             @test ready
             @test !isempty(pids)
+            trace_started, trace_start_detail = _hb_worker_trace_begin!(pids)
+            _assert_ssh_e2e_api_ok(
+                suite,
+                "heartbeat_trace_start",
+                trace_started,
+                trace_start_detail,
+            )
+            @test trace_started
             # Kill by the `kit.pid`-derived pid, not `kp.process` — the path a
             # queue without the original `KitProcess` handle would take.
             run(`kill -9 $(detached_pid)`)
             wait(kp.process)
             gone = false
             heartbeat_exit = false
-            exit_samples = String[]
+            exit_detail = ""
             t1 = time()
             leftover = pids
             while (time() - t1) < 30
                 live = Set(_worker_pids())
                 leftover = Int[p for p in pids if p in live]
-                if !heartbeat_exit && !isempty(live)
-                    check = collect(live)
-                    heartbeat_exit = _worker_stderr_shows_heartbeat_exit(check)
-                    heartbeat_exit || append!(
-                        exit_samples,
-                        ["pid=$(p): " * repr(_worker_stderr_tail(p)[max(1, end - 200):end]) for p in check],
-                    )
+                if !heartbeat_exit
+                    heartbeat_exit, exit_detail = _hb_worker_trace_evidence(pids)
                 end
                 if isempty(leftover)
                     gone = true
@@ -1234,7 +1259,7 @@ end
                 suite,
                 "heartbeat_exit_evidence",
                 heartbeat_exit,
-                "samples=$(join(exit_samples[max(1, end - 2):end], " | "))",
+                exit_detail,
             )
             @test heartbeat_exit
         end
