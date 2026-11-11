@@ -30,6 +30,15 @@ julia_ok() {
     'test -x /usr/local/bin/julia && /usr/local/bin/julia --version' >/dev/null 2>&1
 }
 
+no_rsync_ok() {
+  local host="$1"
+  if ssh -F "${SSH_CONFIG}" -o ConnectTimeout=5 "${host}" \
+    'command -v rsync >/dev/null 2>&1'; then
+    echo "SSH E2E worker must not have rsync; transfers must not depend on it (${host})" >&2
+    return 1
+  fi
+}
+
 for host in "${HOSTS[@]}"; do
   echo "Waiting for SSH on ${host}..."
   ok=0
@@ -47,6 +56,9 @@ for host in "${HOSTS[@]}"; do
   fi
   if ! julia_ok "${host}"; then
     echo "Julia not ready on ${host}" >&2
+    exit 1
+  fi
+  if ! no_rsync_ok "${host}"; then
     exit 1
   fi
   echo "  ${host}: ok"
