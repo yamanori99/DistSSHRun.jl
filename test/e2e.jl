@@ -1168,22 +1168,38 @@ end
                 return (ok, strip(body))
             end
             function _hb_worker_trace_evidence(pids::AbstractVector{<:Integer})
-                _, hit = _ssh_e2e_ssh(
+                needle = "DistSSHHeartbeat: master did not answer within the deadline"
+                qneedle = DistSSHRun._remote_shell_path_word(needle)
+                list_proc, hit = _ssh_e2e_ssh(
                     host,
-                    "grep -l 'master did not answer' /tmp/distssh_hb_trace.* 2>/dev/null | head -n1 || true",
+                    "grep -l $(qneedle) /tmp/distssh_hb_trace.* 2>/dev/null | head -n1",
                 )
                 path = strip(hit)
-                if !isempty(path)
-                    _, snip = _ssh_e2e_ssh(host, "grep -m1 'master did not answer' $(path) 2>/dev/null || true")
-                    return (true, strip(snip))
-                end
-                samples = String[]
-                for p in pids
-                    _, tail = _ssh_e2e_ssh(
+                if list_proc.exitcode == 0 && !isempty(path)
+                    qpath = DistSSHRun._remote_shell_path_word(path)
+                    snip_proc, snip = _ssh_e2e_ssh(
                         host,
-                        "tail -c 400 /tmp/distssh_hb_trace.$(p) 2>/dev/null || true",
+                        "grep -m1 $(qneedle) $(qpath) 2>/dev/null",
                     )
-                    push!(samples, "pid=$(p): " * repr(tail))
+                    snip = strip(snip)
+                    if snip_proc.exitcode == 0 && occursin(needle, snip)
+                        return (true, snip)
+                    end
+                    return (
+                        false,
+                        "list_exit=$(list_proc.exitcode) snip_exit=$(snip_proc.exitcode) path=$(path) snip=$(repr(snip))",
+                    )
+                end
+                samples = String["list_exit=$(list_proc.exitcode) path=$(repr(path))"]
+                for p in pids
+                    tail_proc, tail = _ssh_e2e_ssh(
+                        host,
+                        "tail -c 400 /tmp/distssh_hb_trace.$(p) 2>/dev/null",
+                    )
+                    push!(
+                        samples,
+                        "pid=$(p) exit=$(tail_proc.exitcode): " * repr(tail),
+                    )
                 end
                 return (false, join(samples, " | "))
             end
