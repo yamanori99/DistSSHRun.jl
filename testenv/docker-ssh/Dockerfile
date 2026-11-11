@@ -18,6 +18,7 @@ ARG JULIA_ALT_CHANNEL=1.12
 ENV DISTSSH_WORKER_JULIA_DEFAULT=${JULIA_DEFAULT_CHANNEL}
 ENV DISTSSH_WORKER_JULIA_ALT=${JULIA_ALT_CHANNEL}
 
+# Keep this RUN byte-identical to main so GHA buildx cache hits skip apt during PRs.
 RUN apt-get update && apt-get install -y \
     build-essential \
     ca-certificates \
@@ -25,9 +26,11 @@ RUN apt-get update && apt-get install -y \
     git \
     openssh-client \
     openssh-server \
-    strace \
     sudo \
     vim-tiny \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && apt-get install -y --no-install-recommends strace \
     && rm -rf /var/lib/apt/lists/*
 
 RUN ! command -v rsync >/dev/null 2>&1 || { \
