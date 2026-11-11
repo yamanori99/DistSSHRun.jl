@@ -266,11 +266,14 @@ if !isdefined(Main, :_tty_strip_ansi)
     # Run under `script(1)` with a writable stdin pipe (not detached: detach
     # closes stdin). Poll the typescript until `expect` appears, then write
     # `reply`. Input is never supplied before the prompt is observed.
+    # With `reply_marker`, stdin stays open until that substring appears in
+    # the typescript (slow children, e.g. `drive`) so EOF does not win the race.
     function _tty_expect_script(
             script_path::AbstractString;
             typescript::AbstractString,
             expect::AbstractString,
             reply::AbstractString,
+            reply_marker::Union{Nothing, AbstractString} = nothing,
             hang_s::Real = 300.0,
             columns::Integer = 120,
             lines::Integer = 40,
@@ -334,8 +337,43 @@ if !isdefined(Main, :_tty_strip_ansi)
                 if isfile(dest) && occursin(expect, read(dest, String))
                     write(pin.in, reply)
                     flush(pin.in)
-                    close(pin.in)
-                    replied[] = true
+                    if reply_marker === nothing
+                        close(pin.in)
+                        replied[] = true
+                        break
+                    end
+                    t_reply = time()
+                    while true
+                        if isfile(dest) && occursin(String(reply_marker), read(dest, String))
+                            close(pin.in)
+                            replied[] = true
+                            break
+                        end
+                        if !process_running(proc)
+                            try
+                                close(pin.in)
+                            catch
+                            end
+                            error(
+                                "progress_tty expect: process exited before reply marker $(repr(reply_marker)); typescript=$(_tty_typescript_excerpt(dest))",
+                            )
+                        end
+                        if (time() - t_reply) > Float64(hang_s)
+                            timed_out = true
+                            try
+                                close(pin.in)
+                            catch
+                            end
+                            process_running(proc) && kill(proc, Base.SIGTERM)
+                            timedwait(() -> !process_running(proc), 5.0; pollint = 0.2)
+                            process_running(proc) && kill(proc, Base.SIGKILL)
+                            timedwait(() -> !process_running(proc), 5.0; pollint = 0.2)
+                            error(
+                                "progress_tty expect exceeded $(hang_s)s waiting for reply marker $(repr(reply_marker)); typescript=$(_tty_typescript_excerpt(dest))",
+                            )
+                        end
+                        sleep(0.05)
+                    end
                     break
                 end
                 if !process_running(proc)
