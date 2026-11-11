@@ -1156,7 +1156,7 @@ end
                 inner = join(
                     [
                         "set -e",
-                        "command -v strace >/dev/null || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq strace",
+                        "command -v strace >/dev/null || exit 127",
                         "rm -f /tmp/distssh_hb_trace.*",
                         "for pid in $pidlist; do nohup timeout 120 strace -qq -e write -s 500 -p \"\$pid\" 2>/tmp/distssh_hb_trace.\"\$pid\" >/dev/null & done",
                         "echo started",

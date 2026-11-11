@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y \
     git \
     openssh-client \
     openssh-server \
+    strace \
     sudo \
     vim-tiny \
     && rm -rf /var/lib/apt/lists/*
