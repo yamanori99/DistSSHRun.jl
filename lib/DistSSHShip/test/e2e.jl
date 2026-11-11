@@ -25,8 +25,17 @@ isfile(_ssh_config) ||
 const _host = "child-1"
 const _REMOTE_E2E_PREFIX = "~/distssh-ship-e2e/"
 
+const _E2E_NONCE_BYTES = 16
+
 function _unique_e2e_dest()::String
-    return string(_REMOTE_E2E_PREFIX, bytes2hex(rand(UInt8, 4)))
+    return string(_REMOTE_E2E_PREFIX, bytes2hex(rand(UInt8, _E2E_NONCE_BYTES)))
+end
+
+function _ensure_e2e_parent!(host::AbstractString)
+    pq = DistSSHBase._remote_shell_path_word(_REMOTE_E2E_PREFIX)
+    code, err = DistSSHBase._remote_shell_status(String(host), "mkdir -p $pq")
+    code == 0 || error("could not create e2e parent on $host: $err")
+    return nothing
 end
 
 function _assert_dest_prefix(dest::AbstractString)
@@ -114,6 +123,8 @@ end
         @testset "OpenSSH scp prerequisites" begin
             @test_nowarn _assert_sftp_subsystem!()
         end
+
+        _ensure_e2e_parent!(_host)
 
         @testset "verified ship and record" begin
             dest = _unique_e2e_dest()
