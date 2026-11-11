@@ -124,7 +124,7 @@ end
 
 function _e2e_hb_strace_begin!(host::AbstractString, pids::AbstractVector{<:Integer})
     isempty(pids) && return (false, "no worker pids")
-    quoted_pids = join(DistSSHRun.DistSSHBase._remote_sh_quote(string(p)) for p in pids; delim = " ")
+    quoted_pids = join(DistSSHRun.DistSSHBase._remote_sh_quote(string(p)) for p in pids, " ")
     inner = join(
         [
             "command -v strace >/dev/null",
