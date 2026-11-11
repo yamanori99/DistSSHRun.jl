@@ -92,6 +92,8 @@ const _E2E_N = let n = count(eachline(@__FILE__)) do line
     n
 end
 const _E2E_I = Ref(0)
+const _HB_WORKER_EXIT_NEEDLE =
+    "DistSSHHeartbeat: master did not answer within the deadline"
 # Print `[i/N]` before an inner `@testset`.
 function _e2e_announce(label::AbstractString)
     _E2E_I[] += 1
@@ -1145,8 +1147,6 @@ end
                 end
                 return String(take!(buf))
             end
-            const _HB_WORKER_EXIT_NEEDLE =
-                "DistSSHHeartbeat: master did not answer within the deadline"
             function _worker_pids()
                 _, body = _ssh_e2e_ssh(host, "pgrep -f 'julia.*--worker' || true")
                 return Int[parse(Int, s) for s in split(strip(body); keepempty = false)]
