@@ -23,8 +23,8 @@ on:
 # version-cut PR, and workflow_dispatch still run Base, Up, Ship, and Heartbeat in this
 # workflow. Codecov stays a main push.
 # Registry install follows the heavy gate, including ordinary pull requests.
-# PkgEval follows the heavy gate
-# (ordinary PRs too) and is continue-on-error. No label is involved.
+# PkgEval follows the heavy gate on push, workflow_dispatch, and version cuts;
+# ordinary pull_request skips it. continue-on-error. No label is involved.
 # A main push that changes only Project.toml and NEWS.md, and raises
 # version, skips Test and does not start Linux E2E.
 concurrency:
@@ -900,7 +900,7 @@ jobs:
   test-nightly:
     name: DistSSHRun (nightly, ubuntu-latest, x64)
     needs: [detect, runic, jetls, aqua]
-    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && (github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true')
+    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     # Cold nightly precompile plus the full suite needs more than the 1.13 gate.
     timeout-minutes: 45
@@ -950,7 +950,7 @@ jobs:
   pkgeval:
     name: PkgEval (nightly, ubuntu-latest, x64)
     needs: [detect, runic, jetls, aqua]
-    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     continue-on-error: true
@@ -1033,7 +1033,7 @@ jobs:
   aqua-nightly:
     name: Aqua (nightly, ubuntu-latest, x64)
     needs: detect
-    if: needs.detect.outputs.heavy == 'true' && (github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true')
+    if: needs.detect.outputs.heavy == 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     continue-on-error: true

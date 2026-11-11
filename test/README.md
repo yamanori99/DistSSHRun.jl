@@ -139,8 +139,9 @@ into a job-local depot and runs `Pkg.test` with `--check-bounds=yes`.
 `JULIA_PKGEVAL=true` selects the short file list above (which skips the
 pseudo-TTY files among other heavy files). Dependencies resolve from
 General. The installed tree includes `lib/`.
-`PkgEval (nightly, ubuntu-latest, x64)` stays on ordinary PRs (heavy gate)
-and **main** (`continue-on-error`; not a required check). The sandbox sets
+`PkgEval (nightly, ubuntu-latest, x64)` runs on **main** push and
+`workflow_dispatch` (heavy gate), not ordinary pull requests
+(`continue-on-error`; not a required check). The sandbox sets
 `JULIA_PKGEVAL=true`, which selects the same short file list.
 
 From this checkout:
