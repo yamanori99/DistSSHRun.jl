@@ -58,8 +58,9 @@ and DistSSHHeartbeat tests live with those packages and run as their own
 `lib/DistSSHHeartbeat`). SSH e2e for Base and Up is `lib/<pkg>/test/e2e.jl`
 (`DISTSSH_SSH_E2E=1` after `testenv/docker-ssh/scripts/up.sh`).
 DistSSHHeartbeat's SSH file is the same env gate and is skipped without
-`sshd`. DistSSHShip's real transfer is in `test/e2e.jl`. DistSSHRun's
-`test/runtests.jl` does not include them.
+`sshd`. DistSSHShip's real transfer (tar extract, `shipment.toml` via scp) is
+`lib/DistSSHShip/test/e2e.jl`. DistSSHRun's `test/runtests.jl` does not
+include them.
 
 ```text
 lib/DistSSHBase/test/   # Pkg.test of DistSSHBase; e2e.jl is SSH only
@@ -162,7 +163,18 @@ julia -e '
 
 ## SSH E2E
 
-Two Linux workers. `DISTSSH_SSH_E2E=1`. Kit parent OS matrix:
+Two Linux workers. `DISTSSH_SSH_E2E=1`.
+
+### DistSSHShip (`lib/DistSSHShip/test/e2e.jl`)
+
+Pack a small project, `ship` to `~/distssh-ship-e2e/<nonce>` on
+child-1 with `write_record=true` (default). Assert receipt ok, shipped
+files on the remote, `verify_shipment_record(...; expect_hash=...)`
+returns `:complete`, and remote `.distssh/shipment.toml` exists. A
+non-empty dest is refused. CI job: `DistSSHShip (ubuntu-latest →
+ubuntu-26.04)` (`ship-ssh-e2e` in `CI.yml`).
+
+Kit parent OS matrix:
 [`testenv/docker-ssh/README.md`](../testenv/docker-ssh/README.md). Apple
 silicon without Compose:
 [apple-container-ssh README](../testenv/apple-container-ssh/README.md)
