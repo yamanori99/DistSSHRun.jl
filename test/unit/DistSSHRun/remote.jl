@@ -42,6 +42,14 @@ end
             run(Cmd(["git", "-C", d, "add", "f.txt"]))
             run(Cmd(["git", "-C", d, "commit", "-q", "-m", "dirty"]))
             @test DistSSHRun.local_git_clean(d)
+
+            mkpath(joinpath(d, ".distssh", "setup"))
+            write(joinpath(d, ".distssh", "setup", "kit.progress"), "log\n")
+            @test DistSSHRun.local_git_clean(d)
+
+            write(joinpath(d, "user_edit.txt"), "tracked dirty\n")
+            @test !DistSSHRun.local_git_clean(d)
+
             idx = joinpath(d, ".git", "index")
             if isfile(idx)
                 backup = read(idx)
