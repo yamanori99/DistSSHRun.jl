@@ -58,8 +58,9 @@ and DistSSHHeartbeat tests live with those packages and run as their own
 `lib/DistSSHHeartbeat`). SSH e2e for Base and Up is `lib/<pkg>/test/e2e.jl`
 (`DISTSSH_SSH_E2E=1` after `testenv/docker-ssh/scripts/up.sh`).
 DistSSHHeartbeat's SSH file is the same env gate and is skipped without
-`sshd`. DistSSHShip's real transfer is in `test/e2e.jl`. DistSSHRun's
-`test/runtests.jl` does not include them.
+`sshd`. DistSSHShip's real transfer (tar extract, `shipment.toml` via scp) is
+`lib/DistSSHShip/test/e2e.jl`. DistSSHRun's `test/runtests.jl` does not
+include them.
 
 ```text
 lib/DistSSHBase/test/   # Pkg.test of DistSSHBase; e2e.jl is SSH only
@@ -162,7 +163,23 @@ julia -e '
 
 ## SSH E2E
 
-Two Linux workers. `DISTSSH_SSH_E2E=1`. Kit parent OS matrix:
+Two Linux workers. `DISTSSH_SSH_E2E=1`.
+
+### DistSSHShip (`lib/DistSSHShip/test/e2e.jl`)
+
+Pack a project (spaces / Unicode names, executable bit, internal symlink,
+~4 MiB payload), `ship` to a unique `~/distssh-ship-e2e/<nonce>` on
+child-1 with `write_record=true` (default). Assert receipt ok, remote
+files, `verify_shipment_record(...; expect_hash=...)`, and
+`.distssh/shipment.toml`. Tamper remote payload + record hash and
+assert verify refuses `expect_hash`. Non-empty dest and failed extract
+(escaping symlink, pack with `allow_external_symlinks`) must not leave a
+`:complete` record. Cleanup is prefix-guarded. Probes worker `sshd -T`
+for the `sftp` subsystem (OpenSSH `scp`). CI job:
+`DistSSHShip (ubuntu-latest → ubuntu-26.04)` (`ship-ssh-e2e` in
+`CI.yml`); `testenv/**` path changes also trigger it (PR ship gate).
+
+Kit parent OS matrix:
 [`testenv/docker-ssh/README.md`](../testenv/docker-ssh/README.md). Apple
 silicon without Compose:
 [apple-container-ssh README](../testenv/apple-container-ssh/README.md)
@@ -309,6 +326,8 @@ Helpers (via `support.jl`): `_child_julia_env`, `_run_kit_drive` /
 - `_child_julia_env` drops parent `NO_COLOR` so TTY children keep the live
   `:progress` default. Pass `NO_COLOR` in `extra` when a child must keep it.
   `_tty_capture_script` / `_tty_expect_script` also strip `NO_COLOR`.
+  `_tty_expect_script` optional `reply_marker`: keep stdin open until the
+  marker appears in the typescript (slow `drive` prompts).
 - `DISTSSH_SKIP_GLOBAL_WORKER_PKILL` (default `1` in test children):
   skip drive leftover tagged remote `pkill`; each child `rmprocs`es its own
   local workers. Untagged sweep is `setup cleanup` only.

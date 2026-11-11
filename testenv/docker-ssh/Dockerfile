@@ -30,6 +30,11 @@ RUN apt-get update && apt-get install -y \
     vim-tiny \
     && rm -rf /var/lib/apt/lists/*
 
+RUN ! command -v rsync >/dev/null 2>&1 || { \
+      echo "SSH E2E worker must not have rsync; transfers must not depend on it" >&2; \
+      exit 1; \
+    }
+
 RUN useradd -m -s /bin/bash "${SSH_USER}" \
     && echo "${SSH_USER} ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/${SSH_USER}" \
     && chmod 440 "/etc/sudoers.d/${SSH_USER}"
