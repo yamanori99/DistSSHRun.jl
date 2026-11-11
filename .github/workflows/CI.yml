@@ -53,8 +53,7 @@ jobs:
   # workflow runs or repositories, and it raises total elapsed time when
   # the WSL jobs run.
   # Runic, JETLS 1.13, and Aqua 1.13 start after detect. Pkg.test, Registry,
-  # PkgEval, downstream, and SSH E2E start after Runic/JETLS/Aqua; in-repo SSH
-  # E2E also needs the four Ubuntu lib Pkg.test jobs to succeed.
+  # PkgEval, downstream, and SSH E2E start only after those three succeed.
   # An `if` drops the implicit success() check, so each of those jobs names
   # needs.*.result == 'success'. 1.14-pre Aqua and JETLS stay
   # continue-on-error and do not hold the hosts. Ubuntu stays parallel once
@@ -673,8 +672,8 @@ jobs:
 
   up-ssh-e2e:
     name: DistSSHUp (ubuntu-latest → ubuntu-26.04)
-    needs: [detect, runic, jetls, aqua, base-test-ubuntu, up-test-ubuntu, ship-test-ubuntu, heartbeat-test-ubuntu]
-    if: needs.detect.outputs.e2e == 'true' && needs.detect.outputs.up == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && needs.base-test-ubuntu.result == 'success' && needs.up-test-ubuntu.result == 'success' && needs.ship-test-ubuntu.result == 'success' && needs.heartbeat-test-ubuntu.result == 'success'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.e2e == 'true' && needs.detect.outputs.up == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -807,8 +806,8 @@ jobs:
 
   base-ssh-e2e:
     name: DistSSHBase (ubuntu-latest → ubuntu-26.04)
-    needs: [detect, runic, jetls, aqua, base-test-ubuntu, up-test-ubuntu, ship-test-ubuntu, heartbeat-test-ubuntu]
-    if: needs.detect.outputs.e2e == 'true' && needs.detect.outputs.base == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && needs.base-test-ubuntu.result == 'success' && needs.up-test-ubuntu.result == 'success' && needs.ship-test-ubuntu.result == 'success' && needs.heartbeat-test-ubuntu.result == 'success'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.e2e == 'true' && needs.detect.outputs.base == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -1187,8 +1186,8 @@ jobs:
 
   ssh-e2e:
     name: DistSSHRun (1.13, ubuntu-latest → ubuntu-26.04)
-    needs: [detect, runic, jetls, aqua, base-test-ubuntu, up-test-ubuntu, ship-test-ubuntu, heartbeat-test-ubuntu]
-    if: needs.detect.outputs.e2e == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && needs.base-test-ubuntu.result == 'success' && needs.up-test-ubuntu.result == 'success' && needs.ship-test-ubuntu.result == 'success' && needs.heartbeat-test-ubuntu.result == 'success'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.e2e == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     # Full SSH E2E: main successes reach ~30 min; the last testset needs ~2 min more.
     timeout-minutes: 45
@@ -1235,8 +1234,8 @@ jobs:
   # Alt stays JULIA_E2E_MISMATCH_CHANNEL (1.12). continue-on-error; not a ruleset check.
   ssh-e2e-1-14-pre:
     name: DistSSHRun (1.14-pre, ubuntu-latest → ubuntu-26.04)
-    needs: [detect, runic, jetls, aqua, base-test-ubuntu, up-test-ubuntu, ship-test-ubuntu, heartbeat-test-ubuntu]
-    if: needs.detect.outputs.e2e == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && needs.base-test-ubuntu.result == 'success' && needs.up-test-ubuntu.result == 'success' && needs.ship-test-ubuntu.result == 'success' && needs.heartbeat-test-ubuntu.result == 'success'
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.e2e == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     continue-on-error: true
