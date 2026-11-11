@@ -1,5 +1,4 @@
 # Linux SSH children for DistSSHKit CI / local Docker E2E (`child:NAME[:N]`).
-# Heartbeat SSH E2E attaches strace to worker julia PIDs; default seccomp blocks PTRACE_SEIZE.
 services:
   child-1:
     build:

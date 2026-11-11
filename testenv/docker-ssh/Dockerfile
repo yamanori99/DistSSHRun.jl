@@ -18,7 +18,6 @@ ARG JULIA_ALT_CHANNEL=1.12
 ENV DISTSSH_WORKER_JULIA_DEFAULT=${JULIA_DEFAULT_CHANNEL}
 ENV DISTSSH_WORKER_JULIA_ALT=${JULIA_ALT_CHANNEL}
 
-# Keep this RUN byte-identical to main so GHA buildx cache hits skip apt during PRs.
 RUN apt-get update && apt-get install -y \
     build-essential \
     ca-certificates \
@@ -30,8 +29,14 @@ RUN apt-get update && apt-get install -y \
     vim-tiny \
     && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && apt-get install -y --no-install-recommends strace \
-    && rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+    for attempt in 1 2 3 4 5; do \
+        apt-get update \
+        && apt-get install -y --no-install-recommends strace \
+        && break; \
+        sleep $((attempt * 5)); \
+    done; \
+    rm -rf /var/lib/apt/lists/*
 
 RUN ! command -v rsync >/dev/null 2>&1 || { \
       echo "SSH E2E worker must not have rsync; transfers must not depend on it" >&2; \
