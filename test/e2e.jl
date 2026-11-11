@@ -1153,16 +1153,17 @@ end
             function _hb_worker_trace_begin!(pids::AbstractVector{<:Integer})
                 isempty(pids) && return (false, "no worker pids")
                 pidlist = join(string.(pids), " ")
-                inner = """
-                set -e
-                command -v strace >/dev/null || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq strace
-                rm -f /tmp/distssh_hb_trace.*
-                for pid in $pidlist; do
-                  nohup timeout 120 strace -qq -e write -s 500 -p "\$pid" 2>/tmp/distssh_hb_trace."\$pid" >/dev/null &
-                done
-                echo started
-                """
-                proc, body = _ssh_e2e_ssh(host, "bash -lc " * repr(strip(inner)))
+                inner = join(
+                    [
+                        "set -e",
+                        "command -v strace >/dev/null || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq strace",
+                        "rm -f /tmp/distssh_hb_trace.*",
+                        "for pid in $pidlist; do nohup timeout 120 strace -qq -e write -s 500 -p \"\$pid\" 2>/tmp/distssh_hb_trace.\"\$pid\" >/dev/null & done",
+                        "echo started",
+                    ],
+                    "; ",
+                )
+                proc, body = _ssh_e2e_ssh(host, "bash -lc $(repr(inner))")
                 ok = proc.exitcode == 0 && occursin("started", body)
                 return (ok, strip(body))
             end
