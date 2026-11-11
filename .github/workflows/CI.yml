@@ -852,9 +852,15 @@ jobs:
   # that chain. Nightly stays continue-on-error.
   # Aqua, JETLS, and Linux E2E on 1.14-pre stay continue-on-error.
   test-1-14-pre:
-    name: DistSSHRun (1.14-pre, ubuntu-latest, x64)
+    name: DistSSHRun (1.14-pre, ubuntu-latest, x64, ${{ matrix.group }})
     needs: [detect, runic, jetls, aqua]
     if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [unit, integration]
+    env:
+      DISTSSH_TEST_GROUP: ${{ matrix.group }}
     runs-on: ubuntu-latest
     # 1.14-pre precompile plus the suite crossed 20 minutes after the tests
     # had already passed. Ubuntu 1.13 uses 60.
