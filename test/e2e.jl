@@ -1145,9 +1145,24 @@ end
                 end
                 return String(take!(buf))
             end
+            const _HB_WORKER_EXIT_NEEDLE =
+                "DistSSHHeartbeat: master did not answer within the deadline"
             function _worker_pids()
                 _, body = _ssh_e2e_ssh(host, "pgrep -f 'julia.*--worker' || true")
                 return Int[parse(Int, s) for s in split(strip(body); keepempty = false)]
+            end
+            # Worker @warn from `_heartbeat_die!` goes to stderr (not the kit log).
+            function _worker_stderr_tail(pid::Integer, nbytes::Integer = 12_000)
+                qpid = string(pid)
+                cmd = "tail -c $(nbytes) /proc/$(qpid)/fd/2 2>/dev/null || true"
+                _, body = _ssh_e2e_ssh(host, cmd)
+                return body
+            end
+            function _worker_stderr_shows_heartbeat_exit(pids::AbstractVector{<:Integer})
+                for pid in pids
+                    occursin(_HB_WORKER_EXIT_NEEDLE, _worker_stderr_tail(pid)) && return true
+                end
+                return false
             end
             # A queue that lost its in-memory `KitProcess` (e.g. restarted
             # mid-job) falls back to `kit.pid` — assert it names this run's
@@ -1192,11 +1207,21 @@ end
             run(`kill -9 $(detached_pid)`)
             wait(kp.process)
             gone = false
+            heartbeat_exit = false
+            exit_samples = String[]
             t1 = time()
             leftover = pids
             while (time() - t1) < 30
                 live = Set(_worker_pids())
                 leftover = Int[p for p in pids if p in live]
+                if !heartbeat_exit && !isempty(live)
+                    check = collect(live)
+                    heartbeat_exit = _worker_stderr_shows_heartbeat_exit(check)
+                    heartbeat_exit || append!(
+                        exit_samples,
+                        ["pid=$(p): " * repr(_worker_stderr_tail(p)[max(1, end - 200):end]) for p in check],
+                    )
+                end
                 if isempty(leftover)
                     gone = true
                     break
@@ -1205,6 +1230,13 @@ end
             end
             _assert_ssh_e2e_api_ok(suite, "heartbeat_reap", gone, "leftover=$(leftover)")
             @test gone
+            _assert_ssh_e2e_api_ok(
+                suite,
+                "heartbeat_exit_evidence",
+                heartbeat_exit,
+                "samples=$(join(exit_samples[max(1, end - 2):end], " | "))",
+            )
+            @test heartbeat_exit
         end
 
         # Detached SSH ride writes `kit.hosts`; `terminate!` SIGTERMs then
