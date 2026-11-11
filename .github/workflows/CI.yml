@@ -23,8 +23,8 @@ on:
 # version-cut PR, and workflow_dispatch still run Base, Up, Ship, and Heartbeat in this
 # workflow. Codecov stays a main push.
 # Registry install follows the heavy gate, including ordinary pull requests.
-# PkgEval follows the heavy gate
-# (ordinary PRs too) and is continue-on-error. No label is involved.
+# PkgEval follows the heavy gate on push, workflow_dispatch, and version cuts;
+# ordinary pull_request skips it. continue-on-error. No label is involved.
 # A main push that changes only Project.toml and NEWS.md, and raises
 # version, skips Test and does not start Linux E2E.
 concurrency:
@@ -53,7 +53,8 @@ jobs:
   # workflow runs or repositories, and it raises total elapsed time when
   # the WSL jobs run.
   # Runic, JETLS 1.13, and Aqua 1.13 start after detect. Pkg.test, Registry,
-  # PkgEval, downstream, and SSH E2E start only after those three succeed.
+  # PkgEval, downstream, and SSH E2E start after Runic/JETLS/Aqua; in-repo SSH
+  # E2E also needs the four Ubuntu lib Pkg.test jobs to succeed.
   # An `if` drops the implicit success() check, so each of those jobs names
   # needs.*.result == 'success'. 1.14-pre Aqua and JETLS stay
   # continue-on-error and do not hold the hosts. Ubuntu stays parallel once
@@ -64,7 +65,7 @@ jobs:
   # A closed gate skips that job, so the check is skipping. Do not
   # put those titles in one matrix: a job-level if runs before the matrix
   # expands, and the required names never report.
-  # Coverage uploads from the Ubuntu Run job and the Ubuntu DistSSHBase,
+  # Coverage uploads from the Ubuntu Run coverage job and the Ubuntu DistSSHBase,
   # DistSSHUp, DistSSHShip, and DistSSHHeartbeat jobs (flag pkgtest, main push).
   # Slow SSH E2E kit parents are `E2E weekly`
   # (macos-15-intel Colima, not this job).
@@ -206,11 +207,40 @@ jobs:
             fi
           fi
   test:
-    name: DistSSHRun (1.13, ubuntu-latest, x64)
+    name: DistSSHRun (1.13, ubuntu-latest, x64, ${{ matrix.group }})
     needs: [detect, runic, jetls, aqua]
     if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
-    # Suite runtime on main approached 30m; repeated job-limit kills near the end.
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [unit, integration]
+    env:
+      DISTSSH_TEST_GROUP: ${{ matrix.group }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - uses: ./.github/actions/pkg-test
+        with:
+          coverage: false
+          upload: false
+
+  test-coverage:
+    name: DistSSHRun (1.13, ubuntu-latest, x64, coverage)
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
       contents: read
@@ -228,16 +258,22 @@ jobs:
           delete-old-caches: false
       - uses: ./.github/actions/pkg-test
         with:
-          coverage: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-          upload: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          coverage: true
+          upload: true
 
   test-macos:
-    name: DistSSHRun (1.13, xcode-27, aarch64)
+    name: DistSSHRun (1.13, xcode-27, aarch64, ${{ matrix.group }})
     needs: [detect, runic, jetls, aqua, base-test-macos, up-test-macos, ship-test-macos, heartbeat-test-macos]
     # success() is false when a needed job is skipped, which would skip Run
     # after a path-gated Base or Up. Failure still blocks; skip does not.
     # The static gate is result == success, so a skipped Runic does not start Run.
     if: ${{ needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && !cancelled() && !failure() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [unit, integration]
+    env:
+      DISTSSH_TEST_GROUP: ${{ matrix.group }}
     runs-on: xcode-27
     timeout-minutes: 45
     permissions:
@@ -637,8 +673,8 @@ jobs:
 
   up-ssh-e2e:
     name: DistSSHUp (ubuntu-latest → ubuntu-26.04)
-    needs: [detect, runic, jetls, aqua]
-    if: needs.detect.outputs.e2e == 'true' && needs.detect.outputs.up == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    needs: [detect, runic, jetls, aqua, base-test-ubuntu, up-test-ubuntu, ship-test-ubuntu, heartbeat-test-ubuntu]
+    if: needs.detect.outputs.e2e == 'true' && needs.detect.outputs.up == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && needs.base-test-ubuntu.result == 'success' && needs.up-test-ubuntu.result == 'success' && needs.ship-test-ubuntu.result == 'success' && needs.heartbeat-test-ubuntu.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -771,8 +807,8 @@ jobs:
 
   base-ssh-e2e:
     name: DistSSHBase (ubuntu-latest → ubuntu-26.04)
-    needs: [detect, runic, jetls, aqua]
-    if: needs.detect.outputs.e2e == 'true' && needs.detect.outputs.base == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    needs: [detect, runic, jetls, aqua, base-test-ubuntu, up-test-ubuntu, ship-test-ubuntu, heartbeat-test-ubuntu]
+    if: needs.detect.outputs.e2e == 'true' && needs.detect.outputs.base == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && needs.base-test-ubuntu.result == 'success' && needs.up-test-ubuntu.result == 'success' && needs.ship-test-ubuntu.result == 'success' && needs.heartbeat-test-ubuntu.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -817,9 +853,15 @@ jobs:
   # that chain. Nightly stays continue-on-error.
   # Aqua, JETLS, and Linux E2E on 1.14-pre stay continue-on-error.
   test-1-14-pre:
-    name: DistSSHRun (1.14-pre, ubuntu-latest, x64)
+    name: DistSSHRun (1.14-pre, ubuntu-latest, x64, ${{ matrix.group }})
     needs: [detect, runic, jetls, aqua]
     if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [unit, integration]
+    env:
+      DISTSSH_TEST_GROUP: ${{ matrix.group }}
     runs-on: ubuntu-latest
     # 1.14-pre precompile plus the suite crossed 20 minutes after the tests
     # had already passed. Ubuntu 1.13 uses 60.
@@ -838,9 +880,15 @@ jobs:
       - uses: ./.github/actions/pkg-test
 
   test-1-14-pre-macos:
-    name: DistSSHRun (1.14-pre, xcode-27, aarch64)
+    name: DistSSHRun (1.14-pre, xcode-27, aarch64, ${{ matrix.group }})
     needs: [detect, runic, jetls, aqua]
     if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [unit, integration]
+    env:
+      DISTSSH_TEST_GROUP: ${{ matrix.group }}
     runs-on: xcode-27
     timeout-minutes: 45
     steps:
@@ -859,7 +907,7 @@ jobs:
   test-nightly:
     name: DistSSHRun (nightly, ubuntu-latest, x64)
     needs: [detect, runic, jetls, aqua]
-    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && (github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true')
+    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     # Cold nightly precompile plus the full suite needs more than the 1.13 gate.
     timeout-minutes: 45
@@ -909,7 +957,7 @@ jobs:
   pkgeval:
     name: PkgEval (nightly, ubuntu-latest, x64)
     needs: [detect, runic, jetls, aqua]
-    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     continue-on-error: true
@@ -992,7 +1040,7 @@ jobs:
   aqua-nightly:
     name: Aqua (nightly, ubuntu-latest, x64)
     needs: detect
-    if: needs.detect.outputs.heavy == 'true' && (github.event_name != 'pull_request' || needs.detect.outputs.version_cut == 'true')
+    if: needs.detect.outputs.heavy == 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     continue-on-error: true
@@ -1101,8 +1149,8 @@ jobs:
 
   ssh-e2e:
     name: DistSSHRun (1.13, ubuntu-latest → ubuntu-26.04)
-    needs: [detect, runic, jetls, aqua]
-    if: needs.detect.outputs.e2e == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    needs: [detect, runic, jetls, aqua, base-test-ubuntu, up-test-ubuntu, ship-test-ubuntu, heartbeat-test-ubuntu]
+    if: needs.detect.outputs.e2e == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && needs.base-test-ubuntu.result == 'success' && needs.up-test-ubuntu.result == 'success' && needs.ship-test-ubuntu.result == 'success' && needs.heartbeat-test-ubuntu.result == 'success'
     runs-on: ubuntu-latest
     # Full SSH E2E: main successes reach ~30 min; the last testset needs ~2 min more.
     timeout-minutes: 45
@@ -1149,8 +1197,8 @@ jobs:
   # Alt stays JULIA_E2E_MISMATCH_CHANNEL (1.12). continue-on-error; not a ruleset check.
   ssh-e2e-1-14-pre:
     name: DistSSHRun (1.14-pre, ubuntu-latest → ubuntu-26.04)
-    needs: [detect, runic, jetls, aqua]
-    if: needs.detect.outputs.e2e == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    needs: [detect, runic, jetls, aqua, base-test-ubuntu, up-test-ubuntu, ship-test-ubuntu, heartbeat-test-ubuntu]
+    if: needs.detect.outputs.e2e == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && needs.base-test-ubuntu.result == 'success' && needs.up-test-ubuntu.result == 'success' && needs.ship-test-ubuntu.result == 'success' && needs.heartbeat-test-ubuntu.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     continue-on-error: true
