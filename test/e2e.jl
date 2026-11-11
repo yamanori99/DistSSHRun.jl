@@ -1115,11 +1115,14 @@ end
             mkpath(log_dir)
             # Detached drive skips global pkill; drop leftovers so pgrep is ours.
             _ssh_e2e_ssh(host, "pkill -f 'julia.*--worker' || true")
+            hb_job = "e2e-hb-kill"
+            hb_mark = "/tmp/distssh_hb_$(hb_job)"
             hb_env = merge(
                 _e2e_base_env(), Dict(
                     "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "1",
                     "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "5",
                     "DISTRIBUTED_INIT_DELAY_SEC" => "0",
+                    "DISTSSH_HEARTBEAT_TRACE" => "1",
                 )
             )
             kp = withenv(hb_env...) do
@@ -1134,6 +1137,7 @@ end
                     quiet = true,
                     enable_log = true,
                     log_dir = log_dir,
+                    job_id = hb_job,
                 )
             end
             function _hb_log_text()
@@ -1149,59 +1153,19 @@ end
                 _, body = _ssh_e2e_ssh(host, "pgrep -f 'julia.*--worker' || true")
                 return Int[parse(Int, s) for s in split(strip(body); keepempty = false)]
             end
-            # Worker @warn does not land in the kit log or readable /proc/fd/2.
-            function _hb_worker_trace_begin!(pids::AbstractVector{<:Integer})
-                isempty(pids) && return (false, "no worker pids")
-                pidlist = join(string.(pids), " ")
-                inner = join(
-                    [
-                        "set -e",
-                        "command -v strace >/dev/null || exit 127",
-                        "rm -f /tmp/distssh_hb_trace.*",
-                        "for pid in $pidlist; do nohup timeout 120 strace -qq -e write -s 500 -p \"\$pid\" 2>/tmp/distssh_hb_trace.\"\$pid\" >/dev/null & done",
-                        "echo started",
-                    ],
-                    "; ",
-                )
-                proc, body = _ssh_e2e_ssh(host, "bash -lc $(repr(inner))")
-                ok = proc.exitcode == 0 && occursin("started", body)
-                return (ok, strip(body))
-            end
-            function _hb_worker_trace_evidence(pids::AbstractVector{<:Integer})
-                needle = "DistSSHHeartbeat: master did not answer within the deadline"
-                qneedle = DistSSHRun._remote_shell_path_word(needle)
-                list_proc, hit = _ssh_e2e_ssh(
+            # Opt-in worker mark (`DISTSSH_HEARTBEAT_TRACE` + job id); not in kit logs.
+            hb_needle = "DistSSHHeartbeat: master did not answer within the deadline"
+            function _hb_worker_mark_evidence()
+                qmark = DistSSHRun._remote_shell_path_word(hb_mark)
+                qneedle = DistSSHRun._remote_shell_path_word(hb_needle)
+                snip_proc, snip = _ssh_e2e_ssh(
                     host,
-                    "grep -l $(qneedle) /tmp/distssh_hb_trace.* 2>/dev/null | head -n1",
+                    "grep -m1 $(qneedle) $(qmark) 2>/dev/null",
                 )
-                path = strip(hit)
-                if list_proc.exitcode == 0 && !isempty(path)
-                    qpath = DistSSHRun._remote_shell_path_word(path)
-                    snip_proc, snip = _ssh_e2e_ssh(
-                        host,
-                        "grep -m1 $(qneedle) $(qpath) 2>/dev/null",
-                    )
-                    snip = strip(snip)
-                    if snip_proc.exitcode == 0 && occursin(needle, snip)
-                        return (true, snip)
-                    end
-                    return (
-                        false,
-                        "list_exit=$(list_proc.exitcode) snip_exit=$(snip_proc.exitcode) path=$(path) snip=$(repr(snip))",
-                    )
-                end
-                samples = String["list_exit=$(list_proc.exitcode) path=$(repr(path))"]
-                for p in pids
-                    tail_proc, tail = _ssh_e2e_ssh(
-                        host,
-                        "tail -c 400 /tmp/distssh_hb_trace.$(p) 2>/dev/null",
-                    )
-                    push!(
-                        samples,
-                        "pid=$(p) exit=$(tail_proc.exitcode): " * repr(tail),
-                    )
-                end
-                return (false, join(samples, " | "))
+                snip = strip(snip)
+                ok = snip_proc.exitcode == 0 && occursin(hb_needle, snip)
+                detail = ok ? snip : "grep_exit=$(snip_proc.exitcode) snip=$(repr(snip)) mark=$(hb_mark)"
+                return (ok, detail)
             end
             # A queue that lost its in-memory `KitProcess` (e.g. restarted
             # mid-job) falls back to `kit.pid` — assert it names this run's
@@ -1241,14 +1205,8 @@ end
             )
             @test ready
             @test !isempty(pids)
-            trace_started, trace_start_detail = _hb_worker_trace_begin!(pids)
-            _assert_ssh_e2e_api_ok(
-                suite,
-                "heartbeat_trace_start",
-                trace_started,
-                trace_start_detail,
-            )
-            @test trace_started
+            qmark = DistSSHRun._remote_shell_path_word(hb_mark)
+            _ssh_e2e_ssh(host, "rm -f $(qmark)")
             # Kill by the `kit.pid`-derived pid, not `kp.process` — the path a
             # queue without the original `KitProcess` handle would take.
             run(`kill -9 $(detached_pid)`)
@@ -1262,7 +1220,7 @@ end
                 live = Set(_worker_pids())
                 leftover = Int[p for p in pids if p in live]
                 if !heartbeat_exit
-                    heartbeat_exit, exit_detail = _hb_worker_trace_evidence(pids)
+                    heartbeat_exit, exit_detail = _hb_worker_mark_evidence()
                 end
                 if isempty(leftover)
                     gone = true

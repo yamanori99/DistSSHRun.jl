@@ -205,6 +205,9 @@ function worker_env_pairs(
     end
     id = resolved_kit_job_id()
     id === nothing || push!(pairs, "DISTSSH_JOB_ID" => id)
+    if strip(get(ENV, "DISTSSH_HEARTBEAT_TRACE", "")) == "1"
+        push!(pairs, "DISTSSH_HEARTBEAT_TRACE" => "1")
+    end
     for p in extra
         push!(pairs, String(first(p)) => String(last(p)))
     end
