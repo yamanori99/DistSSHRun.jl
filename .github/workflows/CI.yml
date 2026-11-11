@@ -64,7 +64,7 @@ jobs:
   # A closed gate skips that job, so the check is skipping. Do not
   # put those titles in one matrix: a job-level if runs before the matrix
   # expands, and the required names never report.
-  # Coverage uploads from the Ubuntu Run job and the Ubuntu DistSSHBase,
+  # Coverage uploads from the Ubuntu Run coverage job and the Ubuntu DistSSHBase,
   # DistSSHUp, DistSSHShip, and DistSSHHeartbeat jobs (flag pkgtest, main push).
   # Slow SSH E2E kit parents are `E2E weekly`
   # (macos-15-intel Colima, not this job).
@@ -206,11 +206,40 @@ jobs:
             fi
           fi
   test:
-    name: DistSSHRun (1.13, ubuntu-latest, x64)
+    name: DistSSHRun (1.13, ubuntu-latest, x64, ${{ matrix.group }})
     needs: [detect, runic, jetls, aqua]
     if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
-    # Suite runtime on main approached 30m; repeated job-limit kills near the end.
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [unit, integration]
+    env:
+      DISTSSH_TEST_GROUP: ${{ matrix.group }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - uses: ./.github/actions/pkg-test
+        with:
+          coverage: false
+          upload: false
+
+  test-coverage:
+    name: DistSSHRun (1.13, ubuntu-latest, x64, coverage)
+    needs: [detect, runic, jetls, aqua]
+    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
       contents: read
@@ -228,8 +257,8 @@ jobs:
           delete-old-caches: false
       - uses: ./.github/actions/pkg-test
         with:
-          coverage: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-          upload: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          coverage: true
+          upload: true
 
   test-macos:
     name: DistSSHRun (1.13, xcode-27, aarch64)

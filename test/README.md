@@ -13,6 +13,9 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 
 That is `test/runtests.jl` (unit + integration), sequential `@testset`s,
 `test/Project.toml`. Aqua is a separate CI job, not `Pkg.test()`.
+Unset `DISTSSH_TEST_GROUP` runs both groups (default for `Pkg.test()` and
+PkgEval). `DISTSSH_TEST_GROUP=unit` or `integration` runs one group only
+(Ubuntu 1.13 CI merge gate).
 Unset, all 58 files run. `DISTSSHRUN_TEST_SHORT=1` (`true`, `yes`, and `on`
 too) skips the heavy files and the extra `ride!` cases. `JULIA_PKGEVAL=true`
 does the same so a PkgEval run stays inside the 45 minute limit. That short
@@ -83,9 +86,10 @@ Green on one layer does not imply the others. `Pkg.test()` does not run
 - **JETLS** (~25 s): types / hints on entry files. Not runtime.
 - **Aqua** (~5 s): ambiguities, exports, compat (latest registry Aqua).
   Not CLI / workers.
-- **unit** (~45 s): parse, paths, fake setup, throws. Not child julia,
-  `addprocs`, SSH.
-- **integration** (~3 min): child CLI and/or **local** `addprocs`. Not
+- **unit** (~9 min VM, fresh depot; CI warm cache often shorter): parse,
+  paths, fake setup, throws. Not child julia, `addprocs`, SSH.
+- **integration** (~12 min VM, fresh depot): child CLI and/or **local**
+  `addprocs`. Not
   real SSH. `integration/drive/interrupt_grace.jl` is a detached
   `drive` plus `terminate!`.
 - **e2e** (~15–25 min): real SSH, two Linux workers; **PR** /
