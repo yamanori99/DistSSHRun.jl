@@ -1115,14 +1115,12 @@ end
             mkpath(log_dir)
             # Detached drive skips global pkill; drop leftovers so pgrep is ours.
             _ssh_e2e_ssh(host, "pkill -f 'julia.*--worker' || true")
-            hb_job = "e2e-hb-kill"
-            hb_mark = "/tmp/distssh_hb_$(hb_job)"
+            hb_deadline_s = 5.0
             hb_env = merge(
                 _e2e_base_env(), Dict(
                     "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "1",
                     "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "5",
                     "DISTRIBUTED_INIT_DELAY_SEC" => "0",
-                    "DISTSSH_HEARTBEAT_TRACE" => "1",
                 )
             )
             kp = withenv(hb_env...) do
@@ -1137,7 +1135,6 @@ end
                     quiet = true,
                     enable_log = true,
                     log_dir = log_dir,
-                    job_id = hb_job,
                 )
             end
             function _hb_log_text()
@@ -1153,20 +1150,9 @@ end
                 _, body = _ssh_e2e_ssh(host, "pgrep -f 'julia.*--worker' || true")
                 return Int[parse(Int, s) for s in split(strip(body); keepempty = false)]
             end
-            # Opt-in worker mark (`DISTSSH_HEARTBEAT_TRACE` + job id); not in kit logs.
-            hb_needle = "DistSSHHeartbeat: master did not answer within the deadline"
-            function _hb_worker_mark_evidence()
-                qmark = DistSSHRun._remote_shell_path_word(hb_mark)
-                qneedle = DistSSHRun._remote_shell_path_word(hb_needle)
-                snip_proc, snip = _ssh_e2e_ssh(
-                    host,
-                    "grep -m1 $(qneedle) $(qmark) 2>/dev/null",
-                )
-                snip = strip(snip)
-                ok = snip_proc.exitcode == 0 && occursin(hb_needle, snip)
-                detail = ok ? snip : "grep_exit=$(snip_proc.exitcode) snip=$(repr(snip)) mark=$(hb_mark)"
-                return (ok, detail)
-            end
+            # Worker stderr is not readable on docker-ssh; reap slower than the
+            # configured deadline implies heartbeat, not immediate tunnel EOF.
+            min_reap_s = hb_deadline_s - 1.0
             # A queue that lost its in-memory `KitProcess` (e.g. restarted
             # mid-job) falls back to `kit.pid` — assert it names this run's
             # real OS pid before using it below instead of `kp.process`.
@@ -1205,29 +1191,28 @@ end
             )
             @test ready
             @test !isempty(pids)
-            qmark = DistSSHRun._remote_shell_path_word(hb_mark)
-            _ssh_e2e_ssh(host, "rm -f $(qmark)")
             # Kill by the `kit.pid`-derived pid, not `kp.process` — the path a
             # queue without the original `KitProcess` handle would take.
             run(`kill -9 $(detached_pid)`)
             wait(kp.process)
             gone = false
-            heartbeat_exit = false
-            exit_detail = ""
+            reap_elapsed = nothing
             t1 = time()
             leftover = pids
             while (time() - t1) < 30
                 live = Set(_worker_pids())
                 leftover = Int[p for p in pids if p in live]
-                if !heartbeat_exit
-                    heartbeat_exit, exit_detail = _hb_worker_mark_evidence()
-                end
                 if isempty(leftover)
                     gone = true
+                    reap_elapsed = time() - t1
                     break
                 end
                 sleep(0.5)
             end
+            heartbeat_exit =
+                gone && reap_elapsed !== nothing && reap_elapsed >= min_reap_s
+            exit_detail =
+                "reap_elapsed=$(reap_elapsed) min_reap_s=$(min_reap_s) deadline_s=$(hb_deadline_s)"
             _assert_ssh_e2e_api_ok(suite, "heartbeat_reap", gone, "leftover=$(leftover)")
             @test gone
             _assert_ssh_e2e_api_ok(

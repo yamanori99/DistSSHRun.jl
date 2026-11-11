@@ -7,31 +7,12 @@ function ping_master()
     return remotecall_fetch(myid, 1) == 1
 end
 
-function _heartbeat_trace_mark!()
-    get(ENV, "DISTSSH_HEARTBEAT_TRACE", "") == "1" || return nothing
-    jid = strip(get(ENV, "DISTSSH_JOB_ID", ""))
-    isempty(jid) && return nothing
-    mark = "/tmp/distssh_hb_$(jid)"
-    try
-        open(mark, "a") do io
-            println(
-                io,
-                "DistSSHHeartbeat: master did not answer within the deadline; worker exiting pid=",
-                myid(),
-            )
-        end
-    catch
-    end
-    return nothing
-end
-
 function _heartbeat_die!()
     # Keep `_exit` until a Julia 1.13.x ships with Distributed.jl #198.
     Timer(10) do _
         ccall(:_exit, Cvoid, (Cint,), HEARTBEAT_EXIT_CODE)
         return
     end
-    _heartbeat_trace_mark!()
     try
         @warn "DistSSHHeartbeat: master did not answer within the deadline; worker exiting" pid = myid()
     catch
