@@ -131,8 +131,9 @@ function _e2e_hb_strace_begin!(host::AbstractString, pids::AbstractVector{<:Inte
     inner = join(
         [
             "command -v strace >/dev/null",
+            "sudo sh -c 'echo 0 > /proc/sys/kernel/yama/ptrace_scope' 2>/dev/null || true",
             "rm -f /tmp/distssh_hb_trace.*",
-            "for pid in $quoted_pids; do nohup timeout 120 strace -qq -e write -s 500 -p \"\$pid\" 2>/tmp/distssh_hb_trace.\"\$pid\" >/dev/null & done",
+            "for pid in $quoted_pids; do nohup sudo timeout 120 strace -qq -e write -s 500 -p \"\$pid\" 2>/tmp/distssh_hb_trace.\"\$pid\" >/dev/null & done",
             "echo started",
         ],
         "; ",
