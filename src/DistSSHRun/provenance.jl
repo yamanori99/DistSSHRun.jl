@@ -66,7 +66,21 @@ const _GO_SLOT_LOADER_SRC = let _go_slot_state_dir = DistSSHBase.LOCAL_STATE_DIR
                 TOML.print(io, snap)
             end
         end
-    catch
+    catch err
+        let io = stderr
+            println(io, "DistSSH go-slot provenance loader failed:")
+            showerror(io, err)
+            println(io)
+        end
+        try
+            dir = get(ENV, "DISTRIBUTED_OUTPUT_DIR", pwd())
+            dest = joinpath(dir, $(_go_slot_state_dir |> repr))
+            mkpath(dest)
+            open(joinpath(dest, "provenance-slot.toml"), "w") do io
+                TOML.print(io, Dict("error" => sprint(showerror, err)))
+            end
+        catch
+        end
     end
     """
 end
@@ -559,7 +573,7 @@ Keys: `commit`, `dirty`, `diff_sha256`, `captured`, `untracked`.
 `captured` is `"run"`. `dirty` is a `Bool`. `untracked` is an `Int`.
 Schema 1 `run.toml` / `provenance.toml` omit `diff_sha256`; the snapshot
 dict still has it for Queue.
-`.distsshkit/` and `.distsshqueue/` are not uncommitted changes.
+`.distssh/` (and legacy `.distsshkit/`) and `.distsshqueue/` are not uncommitted changes.
 """
 function git_source_snapshot(project::AbstractString)::Union{Nothing, Dict{String, Any}}
     return _git_source(project)
@@ -635,7 +649,7 @@ function _flush_go_slot_pmap_items!()
     try
         dir = strip(get(ENV, "DISTRIBUTED_OUTPUT_DIR", ""))
         isempty(dir) && return nothing
-        path = joinpath(dir, DistSSHBase.LOCAL_STATE_DIR, _GO_SLOT_PROVENANCE_NAME)
+        path = DistSSHBase.resolve_local_state_item(dir, _GO_SLOT_PROVENANCE_NAME)
         isfile(path) || return nothing
         listed = Dict{String, Any}[]
         lock(_ITEM_LOCK) do
@@ -659,7 +673,8 @@ function _flush_go_slot_pmap_items!()
             TOML.print(io, raw)
         end
         mv(tmp, path; force = true)
-    catch
+    catch err
+        @warn "go-slot provenance pmap flush failed" exception = (err, catch_backtrace())
     end
     return nothing
 end

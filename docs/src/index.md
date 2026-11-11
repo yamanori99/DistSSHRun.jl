@@ -151,7 +151,7 @@ for both. `result_run_dir` reads
 `runs/<run_id>/` also gets a minimal `run.toml` with only `schema`,
 `writer`, and `kind = "ship"` so `setup delete` can refuse a Ship leaf
 that is not DistSSHRun-owned. That stamp is not controller provenance.
-`setup prune` searches `.distsshkit` candidates and applies the same
+`setup prune` searches `.distssh` (and legacy `.distsshkit`) candidates and applies the same
 ownership check there; it does not inspect those Ship leaves. Older leaves
 without that file still use structural checks only. DistSSHQueue
 `teardown` is a different command; it may reuse the same remote stamp later.
@@ -232,7 +232,8 @@ without `-y`, the command still asks you to type `delete` or `prune`.
 deploy root is not DistSSHRun-owned, including a symlink `runs/` or a
 symlink directly under `runs/`. The confirmed path may be a git-work-tree
 ancestor of that deploy root; the stamp check still uses the deploy root.
-`prune` uses the same ownership rule on `.distsshkit` candidates. A
+`prune` uses the same ownership rule on `.distssh` and legacy `.distsshkit`
+candidates. A
 missing stamp (older trees) still uses structural checks only.
 
 From Julia, `setup!(session, :delete; confirm_path)` and `:prune` follow

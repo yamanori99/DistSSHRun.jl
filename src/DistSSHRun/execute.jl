@@ -1753,7 +1753,8 @@ Create a unique output directory for a later detached [`execute!`](@ref)
 and return its path. `kind` is `:go`, `:drive`, or `:ride` (the same values as
 `execute!`). The directory is created; pass it as `output_dir=`.
 
-Layout is `{script dir}/.distsshkit/<kind>/<script-stem>_<UTC-stamp>/`. When
+Layout is `{script dir}/.distssh/<kind>/<script-stem>_<UTC-stamp>/` (legacy
+`.distsshkit/` is read-only). When
 `job_id` is set it is appended after the stamp (same charset as
 [`execute!`](@ref) `job_id`). The leaf is created with exclusive `mkdir`;
 if it already exists (same-second collision), a nanosecond suffix is
