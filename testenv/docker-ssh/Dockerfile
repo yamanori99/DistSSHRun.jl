@@ -25,21 +25,10 @@ RUN apt-get update && apt-get install -y \
     git \
     openssh-client \
     openssh-server \
+    strace \
     sudo \
     vim-tiny \
     && rm -rf /var/lib/apt/lists/*
-
-RUN set -eux; \
-    strace_ok=false; \
-    for attempt in 1 2 3 4 5; do \
-        apt-get update \
-        && apt-get install -y --no-install-recommends strace \
-        && strace_ok=true \
-        && break; \
-        sleep $((attempt * 5)); \
-    done; \
-    test "$strace_ok" = true; \
-    rm -rf /var/lib/apt/lists/*
 
 RUN ! command -v rsync >/dev/null 2>&1 || { \
       echo "SSH E2E worker must not have rsync; transfers must not depend on it" >&2; \
