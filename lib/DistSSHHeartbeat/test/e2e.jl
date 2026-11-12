@@ -417,8 +417,8 @@ end
                 isempty(pids_before) && _fail("no worker julia pids on $_host before STOP")
                 worker_os_pid[] in pids_before ||
                     _fail(
-                        "tracked worker_os_pid=$(worker_os_pid[]) not in pgrep before STOP: $pids_before",
-                    )
+                    "tracked worker_os_pid=$(worker_os_pid[]) not in pgrep before STOP: $pids_before",
+                )
 
                 sleep(_INTERVAL_SEC + 0.5)
                 run(`kill -STOP $(master_pid[])`)
