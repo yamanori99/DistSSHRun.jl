@@ -151,7 +151,7 @@ function _e2e_hb_strace_begin!(host::AbstractString, pids::AbstractVector{<:Inte
             "command -v strace >/dev/null",
             "sudo sh -c 'echo 0 > /proc/sys/kernel/yama/ptrace_scope' 2>/dev/null || true",
             "rm -f /tmp/distssh_hb_trace.*",
-            "for pid in $quoted_pids; do nohup sudo timeout 120 strace -qq -e write,writev -s 500 -p \"\$pid\" 2>/tmp/distssh_hb_trace.\"\$pid\" >/dev/null & done",
+            "for pid in $quoted_pids; do nohup sudo timeout 120 strace -q -f -tt -e trace=write,writev,exit_group -s 500 -p \"\$pid\" 2>/tmp/distssh_hb_trace.\"\$pid\" >/dev/null & done",
             "echo started",
         ],
         "; ",
@@ -227,6 +227,40 @@ function _e2e_hb_strace_evidence(host::AbstractString)
         false,
         "list_exit=$(list_proc.exitcode) path=$(repr(path)) grep_body=$(repr(strip(hit)))",
     )
+end
+
+function _e2e_hb_trace_failure_diag(
+        host::AbstractString,
+        pids::AbstractVector{Int},
+        kill_local_before::Real,
+        kill_local_after::Real,
+        remote_kill_before::AbstractString,
+        remote_kill_after::AbstractString,
+    )
+    needle_q = DistSSHRun._remote_shell_path_word(_E2E_HB_TRACE_NEEDLE)
+    parts = String[
+        "controller_kill_epoch_before=$(kill_local_before)",
+        "controller_kill_epoch_after=$(kill_local_after)",
+        "worker_date_kill_before=$(remote_kill_before)",
+        "worker_date_kill_after=$(remote_kill_after)",
+    ]
+    for p in pids
+        tp = DistSSHRun._remote_shell_path_word("/tmp/distssh_hb_trace.$(p)")
+        inner = join(
+            [
+                "echo trace_file=/tmp/distssh_hb_trace.$(p)",
+                "grep -E '\\+\\+\\+ (exited|killed)|exit_group' $tp 2>/dev/null || true",
+                "grep -F $needle_q $tp 2>/dev/null || true",
+                "wc -c < $tp 2>/dev/null || echo 0",
+                "tail -n 400 $tp 2>/dev/null || true",
+            ],
+            "; ",
+        )
+        inner_q = DistSSHRun.DistSSHBase._remote_sh_quote(inner)
+        _, body = _ssh_e2e_ssh(host, "bash -lc $inner_q")
+        push!(parts, "pid=$(p)=$(repr(strip(body)))")
+    end
+    return join(parts, " | ")
 end
 
 function _e2e_wait_isfile(path::AbstractString; timeout::Real = 10)
@@ -1350,9 +1384,41 @@ end
             @test trace_attached
             # Kill by the `kit.pid`-derived pid, not `kp.process` — the path a
             # queue without the original `KitProcess` handle would take.
+            _, remote_kill_before = _ssh_e2e_ssh(
+                host,
+                "date +%H:%M:%S.%N 2>/dev/null || date +%H:%M:%S",
+            )
+            kill_local_before = time()
             run(`kill -9 $(detached_pid)`)
+            kill_local_after = time()
+            _, remote_kill_after = _ssh_e2e_ssh(
+                host,
+                "date +%H:%M:%S.%N 2>/dev/null || date +%H:%M:%S",
+            )
+            println(
+                "heartbeat_kill_diag controller_epoch_before=$kill_local_before " *
+                "controller_epoch_after=$kill_local_after " *
+                "worker_date_before=$(strip(remote_kill_before)) " *
+                "worker_date_after=$(strip(remote_kill_after))",
+            )
+            flush(stdout)
             wait(kp.process)
             gone, heartbeat_exit, exit_detail, leftover = _e2e_wait_hb_reap(host, pids)
+            if !heartbeat_exit
+                trace_diag = _e2e_hb_trace_failure_diag(
+                    host,
+                    Int[p for p in pids],
+                    kill_local_before,
+                    kill_local_after,
+                    strip(remote_kill_before),
+                    strip(remote_kill_after),
+                )
+                println(stderr, "──── heartbeat_exit_evidence diagnostic ────")
+                println(stderr, trace_diag)
+                println(stderr, "──── end heartbeat_exit_evidence diagnostic ────")
+                exit_detail =
+                    isempty(exit_detail) ? trace_diag : string(exit_detail, " | ", trace_diag)
+            end
             _assert_ssh_e2e_api_ok(suite, "heartbeat_reap", gone, "leftover=$(leftover)")
             @test gone
             _assert_ssh_e2e_api_ok(
