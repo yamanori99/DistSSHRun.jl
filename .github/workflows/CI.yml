@@ -928,7 +928,7 @@ jobs:
         env:
           DISTSSH_BUILD_CACHE: gha
           DISTSSH_SSH_E2E: "1"
-          # TEMP (PR #425 soak): revert to "1" after owner approves post-soak commit.
+          # Standing soak: 3 SIGSTOP iterations per run (test default is 1; raise for a manual soak).
           DISTSSH_HEARTBEAT_E2E_N: "3"
         run: |
           ./testenv/docker-ssh/scripts/up.sh
