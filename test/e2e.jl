@@ -101,6 +101,8 @@ function _e2e_announce(label::AbstractString)
 end
 
 const _E2E_HB_TRACE_NEEDLE = "DistSSHHeartbeat: master did not answer within the deadline"
+# Bracketed `j` so `pgrep -f` does not match the SSH login shell running the query.
+const _E2E_JULIA_WORKER_PGREP_PATTERN = "[j]ulia.*--worker"
 
 function _e2e_hb_log_text(log_dir::AbstractString)
     isdir(log_dir) || return ""
@@ -113,8 +115,24 @@ function _e2e_hb_log_text(log_dir::AbstractString)
 end
 
 function _e2e_hb_worker_pids(host::AbstractString)
-    _, body = _ssh_e2e_ssh(host, "pgrep -f 'julia.*--worker' || true")
+    pat_q = DistSSHRun._remote_sh_quote(_E2E_JULIA_WORKER_PGREP_PATTERN)
+    _, body = _ssh_e2e_ssh(host, "pgrep -f $pat_q || true")
     return Int[parse(Int, s) for s in split(strip(body); keepempty = false)]
+end
+
+function _e2e_hb_worker_pid_diag(host::AbstractString, pids::AbstractVector{Int} = Int[])
+    pat_q = DistSSHRun._remote_sh_quote(_E2E_JULIA_WORKER_PGREP_PATTERN)
+    _, pgrep_af = _ssh_e2e_ssh(host, "pgrep -af -f $pat_q || true")
+    parts = String["pgrep -af=$(repr(strip(pgrep_af)))"]
+    if !isempty(pids)
+        pid_csv = join(string.(pids), ",")
+        _, ps_body = _ssh_e2e_ssh(
+            host,
+            "ps -o pid,ppid,args -p $(DistSSHRun._remote_sh_quote(pid_csv)) 2>/dev/null || true",
+        )
+        push!(parts, "ps=$(repr(strip(ps_body)))")
+    end
+    return join(parts, " ")
 end
 
 function _e2e_hb_leftover_worker_pids(host::AbstractString, pids::AbstractVector{Int})
@@ -180,7 +198,8 @@ function _e2e_hb_strace_wait_attached!(
         sleep(0.2)
     end
     _, last_detail = _e2e_hb_tracers_attached(host, pids)
-    return (false, "timeout=$(timeout)s $(last_detail)")
+    diag = _e2e_hb_worker_pid_diag(host, Int[Int(p) for p in pids])
+    return (false, "timeout=$(timeout)s $(last_detail) $(diag)")
 end
 
 function _e2e_hb_strace_evidence(host::AbstractString)
@@ -1266,7 +1285,8 @@ end
             log_dir = joinpath(suite.logs, "heartbeat-drive")
             mkpath(log_dir)
             # Detached drive skips global pkill; drop leftovers so pgrep is ours.
-            _ssh_e2e_ssh(host, "pkill -f 'julia.*--worker' || true")
+            worker_pkill = "pkill -f $(DistSSHRun._remote_sh_quote(_E2E_JULIA_WORKER_PGREP_PATTERN)) || true"
+            _ssh_e2e_ssh(host, worker_pkill)
             hb_env = merge(
                 _e2e_base_env(), Dict(
                     "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "1",
@@ -1303,11 +1323,12 @@ end
             # at 90s, with `--worker` pids already present. Monitors start after that load.
             monitors_ready = _e2e_wait_hb_monitors(kp, log_dir)
             pids = _e2e_hb_worker_pids(host)
+            pid_diag = _e2e_hb_worker_pid_diag(host, pids)
             _assert_ssh_e2e_api_ok(
                 suite,
                 "heartbeat_ready",
                 monitors_ready && !isempty(pids),
-                "ready=$(monitors_ready) pids=$(pids) log=$(repr(last(_e2e_hb_log_text(log_dir), 400)))",
+                "ready=$(monitors_ready) pids=$(pids) $(pid_diag) log=$(repr(last(_e2e_hb_log_text(log_dir), 400)))",
             )
             @test monitors_ready
             @test !isempty(pids)
@@ -1349,7 +1370,8 @@ end
             _e2e_announce("detached ride terminate! reaps remote workers")
             ride_script = joinpath(proj, "ride_sleep.jl")
             host = hosts[1]
-            _ssh_e2e_ssh(host, "pkill -f 'julia.*--worker' || true")
+            worker_pkill = "pkill -f $(DistSSHRun._remote_sh_quote(_E2E_JULIA_WORKER_PGREP_PATTERN)) || true"
+            _ssh_e2e_ssh(host, worker_pkill)
             kp = withenv(_e2e_base_env()...) do
                 DistSSHRun.execute!(
                     :ride,
@@ -1396,8 +1418,7 @@ end
             @test host in listed
 
             function _ride_worker_pids()
-                _, body = _ssh_e2e_ssh(host, "pgrep -f 'julia.*--worker' || true")
-                return Int[parse(Int, s) for s in split(strip(body); keepempty = false)]
+                return _e2e_hb_worker_pids(host)
             end
             workers_ready = false
             t0w = time()
