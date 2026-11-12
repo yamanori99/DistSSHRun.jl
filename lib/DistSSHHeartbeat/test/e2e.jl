@@ -1,4 +1,6 @@
-# Opt-in SSH checks. Drive SIGKILL/SIGSTOP coverage lives in test/e2e.jl.
+# Opt-in SSH checks. SIGKILL detached-drive worker reap (Distributed EOF exit 1,
+# not heartbeat exit 75) lives in test/e2e.jl. SIGSTOP/SIGKILL heartbeat timing
+# SSH E2E is a separate PR.
 # This file only confirms sshd is reachable when DISTSSH_SSH_E2E=1.
 
 @testset "ssh reachable" begin

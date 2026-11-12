@@ -100,6 +100,203 @@ function _e2e_announce(label::AbstractString)
     return nothing
 end
 
+const _E2E_HB_EXIT75_NEEDLE = "DistSSHHeartbeat: master did not answer within the deadline"
+# Bracketed `j` so `pgrep -f` does not match the SSH login shell running the query.
+const _E2E_JULIA_WORKER_PGREP_PATTERN = "[j]ulia.*--worker"
+const _E2E_EOF_TRACE_DIR = "/tmp"
+const _E2E_EOF_TRACE_PREFIX = "distssh_eof_trace"
+
+function _e2e_hb_log_text(log_dir::AbstractString)
+    isdir(log_dir) || return ""
+    buf = IOBuffer()
+    for f in readdir(log_dir; join = true)
+        endswith(f, ".log") || continue
+        print(buf, read(f, String))
+    end
+    return String(take!(buf))
+end
+
+function _e2e_hb_worker_pids(host::AbstractString)
+    pat_q = DistSSHRun.DistSSHBase._remote_sh_quote(_E2E_JULIA_WORKER_PGREP_PATTERN)
+    _, body = _ssh_e2e_ssh(host, "pgrep -f $pat_q || true")
+    return Int[parse(Int, s) for s in split(strip(body); keepempty = false)]
+end
+
+function _e2e_hb_worker_pid_diag(host::AbstractString, pids::AbstractVector{Int} = Int[])
+    pat_q = DistSSHRun.DistSSHBase._remote_sh_quote(_E2E_JULIA_WORKER_PGREP_PATTERN)
+    _, pgrep_af = _ssh_e2e_ssh(host, "pgrep -af -f $pat_q || true")
+    parts = String["pgrep -af=$(repr(strip(pgrep_af)))"]
+    if !isempty(pids)
+        pid_csv = join(string.(pids), ",")
+        _, ps_body = _ssh_e2e_ssh(
+            host,
+            "ps -o pid,ppid,args -p $(DistSSHRun.DistSSHBase._remote_sh_quote(pid_csv)) 2>/dev/null || true",
+        )
+        push!(parts, "ps=$(repr(strip(ps_body)))")
+    end
+    return join(parts, " ")
+end
+
+function _e2e_hb_leftover_worker_pids(host::AbstractString, pids::AbstractVector{Int})
+    live = Set(_e2e_hb_worker_pids(host))
+    return Int[p for p in pids if p in live]
+end
+
+function _e2e_eof_trace_path(pid::Integer)
+    return "$(_E2E_EOF_TRACE_DIR)/$(_E2E_EOF_TRACE_PREFIX).$(pid)"
+end
+
+# Remote worker exit codes are not visible to this host (workers are not our child
+# processes). `strace -e exit_group` is the smallest portable oracle for exit 1.
+function _e2e_eof_strace_begin!(host::AbstractString, pids::AbstractVector{<:Integer})
+    isempty(pids) && return (false, "no worker pids")
+    quoted_pids = join(
+        [DistSSHRun.DistSSHBase._remote_sh_quote(string(p)) for p in pids],
+        " ",
+    )
+    trace_rm_prefix = DistSSHRun._remote_shell_path_word(
+        "$(_E2E_EOF_TRACE_DIR)/$(_E2E_EOF_TRACE_PREFIX).",
+    )
+    inner = join(
+        [
+            "command -v strace >/dev/null",
+            "rm -f $trace_rm_prefix*",
+            "for pid in $quoted_pids; do nohup sudo timeout 120 strace -q -f -e trace=exit_group -p \"\$pid\" 2>$(_E2E_EOF_TRACE_DIR)/$(_E2E_EOF_TRACE_PREFIX).\"\$pid\" >/dev/null & done",
+            "echo started",
+        ],
+        "; ",
+    )
+    inner_q = DistSSHRun.DistSSHBase._remote_sh_quote(inner)
+    proc, body = _ssh_e2e_ssh(host, "bash -lc $inner_q")
+    ok = proc.exitcode == 0 && occursin("started", body)
+    return (ok, proc.exitcode == 0 ? strip(body) : "exit=$(proc.exitcode) body=$(repr(strip(body)))")
+end
+
+function _e2e_eof_strace_wait_attached!(
+        host::AbstractString,
+        pids::AbstractVector{<:Integer};
+        timeout::Real = 30,
+    )
+    t0a = time()
+    while (time() - t0a) < timeout
+        attached_ok, detail = _e2e_hb_tracers_attached(host, pids)
+        attached_ok && return (true, detail)
+        sleep(0.2)
+    end
+    _, last_detail = _e2e_hb_tracers_attached(host, pids)
+    diag = _e2e_hb_worker_pid_diag(host, Int[Int(p) for p in pids])
+    return (false, "timeout=$(timeout)s $(last_detail) $(diag)")
+end
+
+function _e2e_hb_tracers_attached(host::AbstractString, pids::AbstractVector{<:Integer})
+    samples = String[]
+    all_attached = true
+    for p in pids
+        status_path = DistSSHRun._remote_shell_path_word("/proc/$(p)/status")
+        tp_proc, tp_body = _ssh_e2e_ssh(
+            host,
+            "awk '/^TracerPid:/ {print \$2}' $status_path 2>/dev/null",
+        )
+        tp = strip(tp_body)
+        tracer_ok = tp_proc.exitcode == 0 && !isempty(tp) && tp != "0"
+        if !tracer_ok
+            all_attached = false
+            trace_path = DistSSHRun._remote_shell_path_word(_e2e_eof_trace_path(p))
+            _, trace = _ssh_e2e_ssh(host, "head -n3 $trace_path 2>/dev/null")
+            push!(
+                samples,
+                "pid=$(p) TracerPid=$(repr(tp)) trace=$(repr(strip(trace)))",
+            )
+        end
+    end
+    return (all_attached, isempty(samples) ? "attached" : join(samples, " | "))
+end
+
+function _e2e_worker_distributed_exit_evidence(
+        host::AbstractString,
+        pids::AbstractVector{Int},
+    )
+    needle_q = DistSSHRun._remote_shell_path_word(_E2E_HB_EXIT75_NEEDLE)
+    exit1_re = "'exit_group\\(1\\)|\\+\\+\\+ exited with 1 \\+\\+\\+'"
+    exit75_re = "'exit_group\\(75\\)|\\+\\+\\+ exited with 75 \\+\\+\\+'"
+    lines = String[]
+    ok_all = true
+    for p in pids
+        tp = DistSSHRun._remote_shell_path_word(_e2e_eof_trace_path(p))
+        inner = join(
+            [
+                "echo trace=$(_e2e_eof_trace_path(p))",
+                "grep -E $exit1_re $tp 2>/dev/null | head -n3 || true",
+                "grep -E $exit75_re $tp 2>/dev/null | head -n1 || true",
+                "grep -F $needle_q $tp 2>/dev/null | head -n1 || true",
+                "wc -c < $tp 2>/dev/null || echo 0",
+            ],
+            "; ",
+        )
+        inner_q = DistSSHRun.DistSSHBase._remote_sh_quote(inner)
+        _, body = _ssh_e2e_ssh(host, "bash -lc $inner_q")
+        body = strip(body)
+        has_exit1 =
+            occursin("exit_group(1)", body) || occursin("+++ exited with 1 +++", body)
+        has_exit75 =
+            occursin("exit_group(75)", body) || occursin("+++ exited with 75 +++", body)
+        has_needle = occursin(_E2E_HB_EXIT75_NEEDLE, body)
+        pid_ok = has_exit1 && !has_exit75 && !has_needle
+        ok_all = ok_all && pid_ok
+        push!(lines, "pid=$(p) exit1=$(has_exit1) exit75=$(has_exit75) needle=$(has_needle) dump=$(repr(body))")
+    end
+    detail = join(lines, " | ")
+    return (ok_all, detail)
+end
+
+function _e2e_wait_worker_distributed_exit_evidence(
+        host::AbstractString,
+        pids::AbstractVector{Int};
+        timeout::Real = 15,
+    )
+    t0 = time()
+    while (time() - t0) < timeout
+        ok, detail = _e2e_worker_distributed_exit_evidence(host, pids)
+        ok && return (true, detail)
+        sleep(0.2)
+    end
+    return _e2e_worker_distributed_exit_evidence(host, pids)
+end
+
+function _e2e_wait_isfile(path::AbstractString; timeout::Real = 10)
+    t0 = time()
+    while (time() - t0) < timeout
+        isfile(path) && return true
+        sleep(0.1)
+    end
+    return false
+end
+
+function _e2e_wait_hb_monitors(kp, log_dir::AbstractString; timeout::Real = 240)
+    t0 = time()
+    while (time() - t0) < timeout
+        occursin("Starting heartbeat monitors... ✓", _e2e_hb_log_text(log_dir)) && return true
+        process_running(kp.process) || return false
+        sleep(0.5)
+    end
+    return false
+end
+
+function _e2e_wait_worker_reap(
+        host::AbstractString,
+        pids::AbstractVector{Int};
+        timeout::Real = 30,
+    )
+    t0 = time()
+    while (time() - t0) < timeout
+        leftover = _e2e_hb_leftover_worker_pids(host, pids)
+        isempty(leftover) && return (true, leftover, time() - t0)
+        sleep(0.5)
+    end
+    leftover = _e2e_hb_leftover_worker_pids(host, pids)
+    return (isempty(leftover), leftover, time() - t0)
+end
+
 @testset "SSH E2E (docker-ssh)" verbose = true begin
     _with_ssh_e2e_suite() do suite
         proj = suite.project_remote
@@ -1103,10 +1300,13 @@ end
             end
         end
 
-        # #148: SIGKILL the detached master after heartbeat is *running*
-        # (`--worker` appears at addprocs, monitors start much later). atexit
-        # cannot help. The ssh child may keep the tunnel, so reap is the
-        # shortened deadline. Silent-stall scheduling is unit-tested.
+        # #148: SIGKILL the detached drive master once heartbeat monitors are
+        # running (`--worker` pids first; "Starting heartbeat monitors... ✓"
+        # later). We still require DistSSHRun to reap those workers, but SIGKILL
+        # does not wait out the heartbeat deadline: Distributed tears the TCP
+        # session down and workers exit with status 1. Heartbeat exit 75 after
+        # stalls (SIGSTOP/SIGKILL timing) is covered in a separate DistSSHHeartbeat
+        # SSH E2E PR — not this SIGKILL test.
         @testset "detached drive kill reaps remote workers" begin
             _e2e_announce("detached drive kill reaps remote workers")
             sleep_script = joinpath(proj, "sleep.jl")
@@ -1114,7 +1314,8 @@ end
             log_dir = joinpath(suite.logs, "heartbeat-drive")
             mkpath(log_dir)
             # Detached drive skips global pkill; drop leftovers so pgrep is ours.
-            _ssh_e2e_ssh(host, "pkill -f 'julia.*--worker' || true")
+            pat_q = DistSSHRun.DistSSHBase._remote_sh_quote(_E2E_JULIA_WORKER_PGREP_PATTERN)
+            _ssh_e2e_ssh(host, "pkill -f $pat_q || true")
             hb_env = merge(
                 _e2e_base_env(), Dict(
                     "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "1",
@@ -1136,75 +1337,86 @@ end
                     log_dir = log_dir,
                 )
             end
-            function _hb_log_text()
-                isdir(log_dir) || return ""
-                buf = IOBuffer()
-                for f in readdir(log_dir; join = true)
-                    endswith(f, ".log") || continue
-                    print(buf, read(f, String))
-                end
-                return String(take!(buf))
-            end
-            function _worker_pids()
-                _, body = _ssh_e2e_ssh(host, "pgrep -f 'julia.*--worker' || true")
-                return Int[parse(Int, s) for s in split(strip(body); keepempty = false)]
-            end
             # A queue that lost its in-memory `KitProcess` (e.g. restarted
             # mid-job) falls back to `kit.pid` — assert it names this run's
             # real OS pid before using it below instead of `kp.process`.
             pid_path = joinpath(log_dir, "kit.pid")
-            pid_ready = false
-            t0p = time()
-            while (time() - t0p) < 10
-                isfile(pid_path) && (pid_ready = true; break)
-                sleep(0.1)
-            end
+            pid_ready = _e2e_wait_isfile(pid_path; timeout = 10)
             _assert_ssh_e2e_api_ok(suite, "kit_pid_file", pid_ready, "path=$(pid_path)")
             @test pid_ready
             rec = pid_ready ? DistSSHRun._read_kit_pid_record(log_dir) : nothing
             detached_pid = rec === nothing ? -1 : rec.pid
             @test detached_pid == getpid(kp.process)
 
-            ready = false
-            t0 = time()
             # Intel weekly (2026-10-15) still logged "Loading packages on workers"
             # at 90s, with `--worker` pids already present. Monitors start after that load.
-            while (time() - t0) < 240
-                # Prefix is logged before `@everywhere`; the ✓ is after monitors start.
-                if occursin("Starting heartbeat monitors... ✓", _hb_log_text())
-                    ready = true
-                    break
-                end
-                process_running(kp.process) || break
-                sleep(0.5)
-            end
-            pids = _worker_pids()
+            monitors_ready = _e2e_wait_hb_monitors(kp, log_dir)
+            pids = _e2e_hb_worker_pids(host)
+            pid_diag = _e2e_hb_worker_pid_diag(host, pids)
             _assert_ssh_e2e_api_ok(
                 suite,
                 "heartbeat_ready",
-                ready && !isempty(pids),
-                "ready=$(ready) pids=$(pids) log=$(repr(_hb_log_text()[max(1, end - 400):end]))",
+                monitors_ready && !isempty(pids),
+                "ready=$(monitors_ready) pids=$(pids) $(pid_diag) log=$(repr(last(_e2e_hb_log_text(log_dir), 400)))",
             )
-            @test ready
+            @test monitors_ready
             @test !isempty(pids)
+            trace_started, trace_start_detail = _e2e_eof_strace_begin!(host, pids)
+            _assert_ssh_e2e_api_ok(
+                suite,
+                "eof_trace_start",
+                trace_started,
+                trace_start_detail,
+            )
+            @test trace_started
+            trace_attached, attach_detail = _e2e_eof_strace_wait_attached!(host, pids; timeout = 30)
+            _assert_ssh_e2e_api_ok(
+                suite,
+                "eof_trace_attach",
+                trace_attached,
+                attach_detail,
+            )
+            @test trace_attached
             # Kill by the `kit.pid`-derived pid, not `kp.process` — the path a
             # queue without the original `KitProcess` handle would take.
+            kill_t0 = time()
             run(`kill -9 $(detached_pid)`)
             wait(kp.process)
-            gone = false
-            t1 = time()
-            leftover = pids
-            while (time() - t1) < 30
-                live = Set(_worker_pids())
-                leftover = Int[p for p in pids if p in live]
-                if isempty(leftover)
-                    gone = true
-                    break
-                end
-                sleep(0.5)
-            end
-            _assert_ssh_e2e_api_ok(suite, "heartbeat_reap", gone, "leftover=$(leftover)")
+            gone, leftover, _ = _e2e_wait_worker_reap(host, pids)
+            reap_elapsed = time() - kill_t0
+            hb_log = _e2e_hb_log_text(log_dir)
+            hb_deadline = parse(Float64, get(hb_env, "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC", "5"))
+            no_hb_exit75 = !occursin(_E2E_HB_EXIT75_NEEDLE, hb_log)
+            fast_reap = reap_elapsed < hb_deadline
+            _assert_ssh_e2e_api_ok(
+                suite,
+                "worker_reap",
+                gone,
+                "leftover=$(leftover) reap_elapsed=$(round(reap_elapsed, digits = 3))s deadline=$(hb_deadline)s",
+            )
             @test gone
+            _assert_ssh_e2e_api_ok(
+                suite,
+                "controller_no_heartbeat_exit75",
+                no_hb_exit75,
+                "log_tail=$(repr(hb_log[max(1, end - 400):end]))",
+            )
+            @test no_hb_exit75
+            _assert_ssh_e2e_api_ok(
+                suite,
+                "worker_reap_before_heartbeat_deadline",
+                fast_reap,
+                "reap_elapsed=$(round(reap_elapsed, digits = 3))s deadline=$(hb_deadline)s kill_t0=$(kill_t0)",
+            )
+            @test fast_reap
+            dist_exit, dist_exit_detail = _e2e_wait_worker_distributed_exit_evidence(host, pids)
+            _assert_ssh_e2e_api_ok(
+                suite,
+                "worker_distributed_eof_exit1",
+                dist_exit,
+                dist_exit_detail,
+            )
+            @test dist_exit
         end
 
         # Detached SSH ride writes `kit.hosts`; `terminate!` SIGTERMs then
@@ -1213,7 +1425,8 @@ end
             _e2e_announce("detached ride terminate! reaps remote workers")
             ride_script = joinpath(proj, "ride_sleep.jl")
             host = hosts[1]
-            _ssh_e2e_ssh(host, "pkill -f 'julia.*--worker' || true")
+            pat_q = DistSSHRun.DistSSHBase._remote_sh_quote(_E2E_JULIA_WORKER_PGREP_PATTERN)
+            _ssh_e2e_ssh(host, "pkill -f $pat_q || true")
             kp = withenv(_e2e_base_env()...) do
                 DistSSHRun.execute!(
                     :ride,
@@ -1260,8 +1473,7 @@ end
             @test host in listed
 
             function _ride_worker_pids()
-                _, body = _ssh_e2e_ssh(host, "pgrep -f 'julia.*--worker' || true")
-                return Int[parse(Int, s) for s in split(strip(body); keepempty = false)]
+                return _e2e_hb_worker_pids(host)
             end
             workers_ready = false
             t0w = time()

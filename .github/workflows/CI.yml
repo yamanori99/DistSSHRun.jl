@@ -100,6 +100,8 @@ jobs:
       up: ${{ steps.gate.outputs.up }}
       ship: ${{ steps.gate.outputs.ship }}
       heartbeat: ${{ steps.gate.outputs.heartbeat }}
+      # docker-ssh worker image / sshd only (lib SSH E2E, not Pkg.test).
+      testenv: ${{ steps.gate.outputs.testenv }}
       # Queue's Linux SSH E2E against this checkout. Not the path-filtered `e2e` gate.
       queue_e2e: ${{ steps.gate.outputs.queue_e2e }}
     steps:
@@ -145,6 +147,9 @@ jobs:
             heartbeat:
               - "lib/DistSSHHeartbeat/**"
               - "!lib/DistSSHHeartbeat/**/*.md"
+            testenv:
+              - "testenv/**"
+              - "!testenv/**/*.md"
       - id: gate
         env:
           FILTER_E2E: ${{ steps.filter.outputs.e2e }}
@@ -152,6 +157,7 @@ jobs:
           FILTER_UP: ${{ steps.filter.outputs.up }}
           FILTER_SHIP: ${{ steps.filter.outputs.ship }}
           FILTER_HEARTBEAT: ${{ steps.filter.outputs.heartbeat }}
+          FILTER_TESTENV: ${{ steps.filter.outputs.testenv }}
           CUT: ${{ steps.heavy.outputs.version_cut }}
           HEAVY: ${{ steps.heavy.outputs.heavy }}
         run: |
@@ -184,6 +190,7 @@ jobs:
               echo "up=true"
               echo "ship=true"
               echo "heartbeat=true"
+              echo "testenv=true"
             } >> "$GITHUB_OUTPUT"
           else
             base="${FILTER_BASE:-false}"
@@ -206,6 +213,8 @@ jobs:
             else
               echo "heartbeat=false" >> "$GITHUB_OUTPUT"
             fi
+            testenv_paths="${FILTER_TESTENV:-false}"
+            echo "testenv=${testenv_paths}" >> "$GITHUB_OUTPUT"
           fi
   test:
     name: DistSSHRun (1.13, ubuntu-latest, x64, ${{ matrix.group }})
@@ -675,7 +684,7 @@ jobs:
   up-ssh-e2e:
     name: DistSSHUp (ubuntu-latest → ubuntu-26.04)
     needs: [detect, runic, jetls, aqua]
-    if: needs.detect.outputs.e2e == 'true' && needs.detect.outputs.up == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    if: needs.detect.outputs.e2e == 'true' && (needs.detect.outputs.up == 'true' || needs.detect.outputs.testenv == 'true') && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -700,6 +709,7 @@ jobs:
           project: lib/DistSSHUp
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+      - uses: ./.github/actions/docker-ssh-dns-diag
       - name: docker-ssh up + SSH E2E
         env:
           DISTSSH_BUILD_CACHE: gha
@@ -809,7 +819,7 @@ jobs:
   base-ssh-e2e:
     name: DistSSHBase (ubuntu-latest → ubuntu-26.04)
     needs: [detect, runic, jetls, aqua]
-    if: needs.detect.outputs.e2e == 'true' && needs.detect.outputs.base == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    if: needs.detect.outputs.e2e == 'true' && (needs.detect.outputs.base == 'true' || needs.detect.outputs.testenv == 'true') && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -834,6 +844,7 @@ jobs:
           project: lib/DistSSHBase
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+      - uses: ./.github/actions/docker-ssh-dns-diag
       - name: docker-ssh up + SSH E2E
         env:
           DISTSSH_BUILD_CACHE: gha
@@ -873,6 +884,7 @@ jobs:
           project: lib/DistSSHShip
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+      - uses: ./.github/actions/docker-ssh-dns-diag
       - name: docker-ssh up + SSH E2E
         env:
           DISTSSH_BUILD_CACHE: gha
@@ -1217,6 +1229,7 @@ jobs:
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+      - uses: ./.github/actions/docker-ssh-dns-diag
 
       - name: docker-ssh up + SSH E2E
         id: e2e
@@ -1264,6 +1277,7 @@ jobs:
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+      - uses: ./.github/actions/docker-ssh-dns-diag
 
       - name: docker-ssh up + SSH E2E
         env:
