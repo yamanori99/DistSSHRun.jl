@@ -899,7 +899,7 @@ jobs:
   heartbeat-ssh-e2e:
     name: DistSSHHeartbeat (ubuntu-latest → ubuntu-26.04)
     needs: [detect, runic, jetls, aqua]
-    if: needs.detect.outputs.e2e == 'true' && needs.detect.outputs.heartbeat == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    if: needs.detect.outputs.e2e == 'true' && (needs.detect.outputs.heartbeat == 'true' || needs.detect.outputs.testenv == 'true') && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
