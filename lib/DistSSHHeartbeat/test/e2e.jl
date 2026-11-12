@@ -69,7 +69,7 @@ function _install_worker_wrapper!(host::AbstractString, tag::AbstractString, jul
     echo '#!/bin/sh'
     echo "EXITF=$exitf_q"
     echo "JULIA=$julia_q"
-    echo '"\\\$JULIA" "\\\$@"'
+    echo '"\$JULIA" "\$@"'
     echo 'status=\$?'
     echo 'printf "%s\\n" "\$status" > "\$EXITF"'
     echo 'exit "\$status"'
