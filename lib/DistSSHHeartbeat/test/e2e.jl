@@ -108,7 +108,9 @@ function _read_remote_exit_code(host::AbstractString, path::AbstractString)::Uni
     pq = DistSSHBase._remote_shell_path_word(path)
     code, out = DistSSHBase._remote_shell_status(String(host), "cat $pq 2>/dev/null || true")
     code == 0 || return nothing
-    line = strip(first(split(strip(out); keepempty = true); init = ""))
+    lines = split(strip(out); keepempty = true)
+    isempty(lines) && return nothing
+    line = strip(first(lines))
     isempty(line) && return nothing
     parsed = tryparse(Int, line)
     return parsed
@@ -147,7 +149,7 @@ function _hb_strace_begin!(host::AbstractString, worker_pid::Int)::Tuple{Bool, S
         [
             "command -v strace >/dev/null",
             "rm -f $tp $tp_pid",
-            "nohup sudo -n timeout 120 strace -q -f -tt -e trace=write,writev,exit_group -s 300 -p $worker_pid >> $tp 2>&1 &",
+            "nohup sudo timeout 120 strace -q -f -tt -e trace=write,writev,exit_group -s 300 -p $worker_pid >> $tp 2>&1 &",
             "echo \$! > $tp_pid",
             "echo started",
         ],
