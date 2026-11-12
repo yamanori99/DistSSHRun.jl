@@ -115,20 +115,20 @@ function _e2e_hb_log_text(log_dir::AbstractString)
 end
 
 function _e2e_hb_worker_pids(host::AbstractString)
-    pat_q = DistSSHRun._remote_sh_quote(_E2E_JULIA_WORKER_PGREP_PATTERN)
+    pat_q = DistSSHRun.DistSSHBase._remote_sh_quote(_E2E_JULIA_WORKER_PGREP_PATTERN)
     _, body = _ssh_e2e_ssh(host, "pgrep -f $pat_q || true")
     return Int[parse(Int, s) for s in split(strip(body); keepempty = false)]
 end
 
 function _e2e_hb_worker_pid_diag(host::AbstractString, pids::AbstractVector{Int} = Int[])
-    pat_q = DistSSHRun._remote_sh_quote(_E2E_JULIA_WORKER_PGREP_PATTERN)
+    pat_q = DistSSHRun.DistSSHBase._remote_sh_quote(_E2E_JULIA_WORKER_PGREP_PATTERN)
     _, pgrep_af = _ssh_e2e_ssh(host, "pgrep -af -f $pat_q || true")
     parts = String["pgrep -af=$(repr(strip(pgrep_af)))"]
     if !isempty(pids)
         pid_csv = join(string.(pids), ",")
         _, ps_body = _ssh_e2e_ssh(
             host,
-            "ps -o pid,ppid,args -p $(DistSSHRun._remote_sh_quote(pid_csv)) 2>/dev/null || true",
+            "ps -o pid,ppid,args -p $(DistSSHRun.DistSSHBase._remote_sh_quote(pid_csv)) 2>/dev/null || true",
         )
         push!(parts, "ps=$(repr(strip(ps_body)))")
     end
