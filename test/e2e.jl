@@ -154,13 +154,13 @@ function _e2e_eof_strace_begin!(host::AbstractString, pids::AbstractVector{<:Int
         [DistSSHRun.DistSSHBase._remote_sh_quote(string(p)) for p in pids],
         " ",
     )
-    trace_glob = DistSSHRun._remote_shell_path_word(
-        "$(_E2E_EOF_TRACE_DIR)/$(_E2E_EOF_TRACE_PREFIX).*",
+    trace_rm_prefix = DistSSHRun._remote_shell_path_word(
+        "$(_E2E_EOF_TRACE_DIR)/$(_E2E_EOF_TRACE_PREFIX).",
     )
     inner = join(
         [
             "command -v strace >/dev/null",
-            "rm -f $trace_glob",
+            "rm -f $trace_rm_prefix*",
             "for pid in $quoted_pids; do nohup sudo timeout 120 strace -q -f -e trace=exit_group -p \"\$pid\" 2>$(_E2E_EOF_TRACE_DIR)/$(_E2E_EOF_TRACE_PREFIX).\"\$pid\" >/dev/null & done",
             "echo started",
         ],
@@ -217,8 +217,8 @@ function _e2e_worker_distributed_exit_evidence(
         pids::AbstractVector{Int},
     )
     needle_q = DistSSHRun._remote_shell_path_word(_E2E_HB_EXIT75_NEEDLE)
-    exit1_re = "'exit_group\\(1\\)|\\+\\+\\+ exited with 1'"
-    exit75_re = "'exit_group\\(75\\)|\\+\\+\\+ exited with 75'"
+    exit1_re = "'exit_group\\(1\\)|\\+\\+\\+ exited with 1 \\+\\+\\+'"
+    exit75_re = "'exit_group\\(75\\)|\\+\\+\\+ exited with 75 \\+\\+\\+'"
     lines = String[]
     ok_all = true
     for p in pids
@@ -236,8 +236,10 @@ function _e2e_worker_distributed_exit_evidence(
         inner_q = DistSSHRun.DistSSHBase._remote_sh_quote(inner)
         _, body = _ssh_e2e_ssh(host, "bash -lc $inner_q")
         body = strip(body)
-        has_exit1 = occursin("exit_group(1)", body) || occursin("exited with 1", body)
-        has_exit75 = occursin("exit_group(75)", body) || occursin("exited with 75", body)
+        has_exit1 =
+            occursin("exit_group(1)", body) || occursin("+++ exited with 1 +++", body)
+        has_exit75 =
+            occursin("exit_group(75)", body) || occursin("+++ exited with 75 +++", body)
         has_needle = occursin(_E2E_HB_EXIT75_NEEDLE, body)
         pid_ok = has_exit1 && !has_exit75 && !has_needle
         ok_all = ok_all && pid_ok
