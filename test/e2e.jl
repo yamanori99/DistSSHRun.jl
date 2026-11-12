@@ -1285,8 +1285,8 @@ end
             log_dir = joinpath(suite.logs, "heartbeat-drive")
             mkpath(log_dir)
             # Detached drive skips global pkill; drop leftovers so pgrep is ours.
-            worker_pkill = "pkill -f $(DistSSHRun._remote_sh_quote(_E2E_JULIA_WORKER_PGREP_PATTERN)) || true"
-            _ssh_e2e_ssh(host, worker_pkill)
+            pat_q = DistSSHRun.DistSSHBase._remote_sh_quote(_E2E_JULIA_WORKER_PGREP_PATTERN)
+            _ssh_e2e_ssh(host, "pkill -f $pat_q || true")
             hb_env = merge(
                 _e2e_base_env(), Dict(
                     "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "1",
@@ -1370,8 +1370,8 @@ end
             _e2e_announce("detached ride terminate! reaps remote workers")
             ride_script = joinpath(proj, "ride_sleep.jl")
             host = hosts[1]
-            worker_pkill = "pkill -f $(DistSSHRun._remote_sh_quote(_E2E_JULIA_WORKER_PGREP_PATTERN)) || true"
-            _ssh_e2e_ssh(host, worker_pkill)
+            pat_q = DistSSHRun.DistSSHBase._remote_sh_quote(_E2E_JULIA_WORKER_PGREP_PATTERN)
+            _ssh_e2e_ssh(host, "pkill -f $pat_q || true")
             kp = withenv(_e2e_base_env()...) do
                 DistSSHRun.execute!(
                     :ride,
