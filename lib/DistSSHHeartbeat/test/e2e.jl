@@ -24,6 +24,12 @@ const _ssh_config = abspath(
 isfile(_ssh_config) ||
     error("docker-ssh not ready: missing $(_ssh_config). Run testenv/docker-ssh/scripts/up.sh")
 
+"""`DISTRIBUTED_SSH_OPTS` for this E2E; config path is shell-quoted for `Base.shell_split`."""
+function _distributed_ssh_opts(config_path::AbstractString = _ssh_config)::String
+    cfg_q = DistSSHBase._remote_sh_quote(abspath(String(config_path)))
+    return "-F $cfg_q -o RequestTTY=no"
+end
+
 const _host = "child-1"
 const _INTERVAL_SEC = 1.0
 const _DEADLINE_SEC = 5.0
@@ -72,11 +78,11 @@ function _log_worker_process_tree!(host::AbstractString, worker_os_pid::Int)
     _, pgrep_af = DistSSHBase._remote_shell_status(String(host), "pgrep -af -f $pat_q || true")
     println(stderr, "[HB_E2E] worker_os_pid=$worker_os_pid pgrep -af: ", strip(String(pgrep_af)))
     if worker_os_pid > 0
-        pid_q = DistSSHBase._remote_shell_path_word("/proc/$worker_os_pid")
+        pid_q = DistSSHBase._remote_sh_quote(string(worker_os_pid))
         _, ps_out = DistSSHBase._remote_shell_status(
             String(host),
-            "ps -o pid=,ppid=,args= -p $worker_os_pid 2>&1; " *
-                "ps -o pid=,ppid=,args= -p \$(ps -o ppid= -p $worker_os_pid 2>/dev/null) 2>&1 || true",
+            "ps -o pid=,ppid=,args= -p $pid_q 2>&1; " *
+                "ps -o pid=,ppid=,args= -p \$(ps -o ppid= -p $pid_q 2>/dev/null) 2>&1 || true",
         )
         println(stderr, "[HB_E2E] worker tree ps: ", strip(String(ps_out)))
     end
@@ -132,9 +138,10 @@ end
 
 function _kill_worker_and_wrapper!(host::AbstractString, worker_os_pid::Int)
     worker_os_pid <= 0 && return nothing
+    pid_q = DistSSHBase._remote_sh_quote(string(worker_os_pid))
     script = """
-    wrapper_ppid=\$(ps -o ppid= -p $worker_os_pid 2>/dev/null | tr -d ' ')
-    kill -9 $worker_os_pid 2>/dev/null || true
+    wrapper_ppid=\$(ps -o ppid= -p $pid_q 2>/dev/null | tr -d ' ')
+    kill -9 $pid_q 2>/dev/null || true
     if [ -n "\$wrapper_ppid" ] && [ "\$wrapper_ppid" -gt 1 ]; then
       kill -9 "\$wrapper_ppid" 2>/dev/null || true
     fi
@@ -219,7 +226,7 @@ function _sigstop_heartbeat_e2e_case!()
         run_dir = mktempdir()
         ready_path = joinpath(run_dir, "ready.txt")
         master_script = joinpath(run_dir, "master.jl")
-        ssh_opts = "-F $(_ssh_config) -o RequestTTY=no"
+        ssh_opts = _distributed_ssh_opts()
         write(master_script, _master_script_contents(ready_path, wrap_path, ssh_opts))
         master_proc = withenv("DISTRIBUTED_SSH_OPTS" => ssh_opts) do
             return run(
@@ -374,7 +381,19 @@ end
         @test success(proc)
     end
 
-    withenv("DISTRIBUTED_SSH_OPTS" => "-F $(_ssh_config) -o RequestTTY=no") do
+    @testset "DISTRIBUTED_SSH_OPTS shell_split" begin
+        spaced_cfg = joinpath(mktempdir(), "ssh config with spaces")
+        opts = _distributed_ssh_opts(spaced_cfg)
+        split = Base.shell_split(opts)
+        fidx = findfirst(==("-F"), split)
+        @test fidx !== nothing
+        @test split[fidx + 1] == abspath(spaced_cfg)
+        withenv("DISTRIBUTED_SSH_OPTS" => opts) do
+            @test DistSSHBase.ssh_opts() == ["-F", abspath(spaced_cfg), "-o", "RequestTTY=no"]
+        end
+    end
+
+    withenv("DISTRIBUTED_SSH_OPTS" => _distributed_ssh_opts()) do
         n = try
             max(1, parse(Int, strip(get(ENV, "DISTSSH_HEARTBEAT_E2E_N", "1"))))
         catch
