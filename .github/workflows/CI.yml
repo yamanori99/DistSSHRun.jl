@@ -929,7 +929,7 @@ jobs:
           DISTSSH_BUILD_CACHE: gha
           DISTSSH_SSH_E2E: "1"
           # TEMP (PR #425 soak): revert to "1" after owner approves post-soak commit.
-          DISTSSH_HEARTBEAT_E2E_N: "20"
+          DISTSSH_HEARTBEAT_E2E_N: "3"
         run: |
           ./testenv/docker-ssh/scripts/up.sh
           julia --project=lib/DistSSHHeartbeat lib/DistSSHHeartbeat/test/e2e.jl
