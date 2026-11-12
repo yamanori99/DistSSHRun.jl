@@ -41,7 +41,10 @@ function _fail(msg::AbstractString)
 end
 
 function _stderr_snippet(master_stderr::IOBuffer; max_chars::Int = 4000)::String
-    s = String(master_stderr)
+    saved = position(master_stderr)
+    seekstart(master_stderr)
+    s = String(read(master_stderr))
+    seek(master_stderr, saved)
     return length(s) > max_chars ? s[(end - max_chars + 1):end] : s
 end
 
@@ -313,12 +316,13 @@ function _sigstop_heartbeat_e2e_case!()
                 "(allowed [$(_EXIT_DELAY_MIN_SEC), $(_EXIT_DELAY_MAX_SEC)])"
         )
         flush(stderr)
-        exit_delay < _EXIT_DELAY_MIN_SEC || exit_delay > _EXIT_DELAY_MAX_SEC ||
+        if exit_delay < _EXIT_DELAY_MIN_SEC || exit_delay > _EXIT_DELAY_MAX_SEC
             _fail_with_stderr(
-            "exit delay $(round(exit_delay; digits = 3))s outside " *
-                "[$(_EXIT_DELAY_MIN_SEC), $(_EXIT_DELAY_MAX_SEC)]; ",
-            master_stderr,
-        )
+                "exit delay $(round(exit_delay; digits = 3))s outside " *
+                    "[$(_EXIT_DELAY_MIN_SEC), $(_EXIT_DELAY_MAX_SEC)]; ",
+                master_stderr,
+            )
+        end
         @test _EXIT_DELAY_MIN_SEC <= exit_delay <= _EXIT_DELAY_MAX_SEC
     finally
         if master_proc !== nothing
