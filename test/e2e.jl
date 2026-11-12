@@ -1397,9 +1397,9 @@ end
             )
             println(
                 "heartbeat_kill_diag controller_epoch_before=$kill_local_before " *
-                "controller_epoch_after=$kill_local_after " *
-                "worker_date_before=$(strip(remote_kill_before)) " *
-                "worker_date_after=$(strip(remote_kill_after))",
+                    "controller_epoch_after=$kill_local_after " *
+                    "worker_date_before=$(strip(remote_kill_before)) " *
+                    "worker_date_after=$(strip(remote_kill_after))",
             )
             flush(stdout)
             wait(kp.process)
