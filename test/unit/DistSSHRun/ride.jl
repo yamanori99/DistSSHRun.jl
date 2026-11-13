@@ -740,7 +740,7 @@ using Distributed
         addprocs(1; topology = :master_worker)
         foreign = workers()[end]
         try
-            out = DistSSHRun._ride_map(x -> myid(), 1:6)
+            out = DistSSHRun._ride_map(_ -> myid(), 1:6)
             @test all(==(1), out)
             @test foreign in workers()
         finally
