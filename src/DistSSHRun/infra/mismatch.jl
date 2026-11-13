@@ -540,9 +540,8 @@ end
 function _remote_project_for_go(host::AbstractString, remote_root::AbstractString, project::AbstractString)::String
     rr = String(remote_root)
     isempty(rr) && return rr
-    repo = canonical_local_path(project)
-    ra = canonical_local_path(pwd())
-    resolved = resolve_host_path_abs(String(host), repo, ra)
+    proj = canonical_local_path(project)
+    resolved = resolve_host_path_abs(String(host), proj, proj)
     resolved isa AbstractString && !isempty(resolved) && return String(resolved)
     return rr
 end
