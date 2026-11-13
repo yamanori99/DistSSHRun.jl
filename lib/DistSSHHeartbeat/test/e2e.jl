@@ -37,6 +37,12 @@ const _HEARTBEAT_EXIT_CODE = DistSSHHeartbeat.HEARTBEAT_EXIT_CODE
 const _GONE_TIMEOUT_SEC = _DEADLINE_SEC + 2 * _INTERVAL_SEC + 10.0 + 8.0
 const _WORKER_PGREP_PATTERN = "[j]ulia.*--worker"
 const _LIVENESS_AFTER_STOP_SEC = 2.0
+# Brief SIGSTOP for negative control: must stay well under `_DEADLINE_SEC`.
+const _BRIEF_STOP_SEC = 1.0
+const _BRIEF_STOP_WALL_MAX_SEC = _DEADLINE_SEC - 2 * _INTERVAL_SEC
+const _POST_CONT_SETTLE_SEC = _INTERVAL_SEC + 1.0
+const _NEGATIVE_SURVIVE_AFTER_CONT_SEC = _DEADLINE_SEC + 2 * _INTERVAL_SEC + 3.0
+const _PROBE_TIMEOUT_SEC = 30.0
 # Worker-clock slack for SSH + wrapper + scheduler (see exit-delay assertion below).
 const _TIMING_SLACK_SEC = 3.0
 const _EXIT_DELAY_MIN_SEC = _DEADLINE_SEC - _INTERVAL_SEC - 0.5
@@ -152,10 +158,14 @@ end
 
 function _master_script_contents(
         ready_path::AbstractString,
+        probe_req_path::AbstractString,
+        probe_ok_path::AbstractString,
         wrap_remote::AbstractString,
         ssh_opts::AbstractString,
     )::String
     ready = repr(String(ready_path))
+    probe_req = repr(String(probe_req_path))
+    probe_ok = repr(String(probe_ok_path))
     wrap = repr(String(wrap_remote))
     interval = repr(_INTERVAL_SEC)
     deadline = repr(_DEADLINE_SEC)
@@ -168,10 +178,24 @@ function _master_script_contents(
 
     ENV["DISTRIBUTED_SSH_OPTS"] = $opts
     const _ready = $ready
+    const _probe_req = $probe_req
+    const _probe_ok = $probe_ok
     const _host = $host
     const _wrap = $wrap
     const _interval = $interval
     const _deadline = $deadline
+
+    function _publish_lines_atomic(path, lines)
+        dir = dirname(path)
+        part = joinpath(dir, ".pub.\$(getpid()).tmp")
+        open(part, "w") do io
+            for ln in lines
+                println(io, ln)
+            end
+        end
+        mv(part, path; force = true)
+        return nothing
+    end
 
     withenv(
         "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => string(_interval),
@@ -186,19 +210,17 @@ function _master_script_contents(
             DistSSHHeartbeat.install_and_start_heartbeat!([w]; interval = _interval, deadline = _deadline)
             remotecall_fetch(() -> myid(), w) == w || error("worker ping failed before STOP")
             worker_os_pid = remotecall_fetch(() -> getpid(), w)
-            open(_ready, "w") do io
-                println(io, getpid())
-                println(io, w)
-                println(io, worker_os_pid)
-            end
+            _publish_lines_atomic(_ready, [string(getpid()), string(w), string(worker_os_pid)])
             while true
-                sleep(3600)
+                if isfile(_probe_req)
+                    rm(_probe_req; force = true)
+                    remotecall_fetch(() -> myid(), w) == w || error("worker ping failed on probe")
+                    _publish_lines_atomic(_probe_ok, ["ok", string(w)])
+                end
+                sleep(0.2)
             end
         catch e
-            open(_ready, "w") do io
-                println(io, "error")
-                println(io, sprint(showerror, e))
-            end
+            _publish_lines_atomic(_ready, ["error", sprint(showerror, e)])
             rethrow()
         end
     end
@@ -211,95 +233,260 @@ function _julia_cmd_for_master(script_path::AbstractString)
     return `$julia --project=$proj --startup-file=no $script_path`
 end
 
-function _sigstop_heartbeat_e2e_case!()
+mutable struct _HeartbeatE2ECtx
+    wrap_path::Union{String, Nothing}
+    exit_path::Union{String, Nothing}
+    master_proc::Union{Base.Process, Nothing}
+    master_script::Union{String, Nothing}
+    run_dir::Union{String, Nothing}
+    ready_path::Union{String, Nothing}
+    probe_req_path::Union{String, Nothing}
+    probe_ok_path::Union{String, Nothing}
+    master_pid::Ref{Int}
+    worker_id::Ref{Int}
+    worker_os_pid::Ref{Int}
+    master_stderr::IOBuffer
+    master_was_stopped::Bool
+end
+
+function _wait_master_ready!(
+        ready_path::AbstractString,
+        master_proc::Base.Process,
+        master_stderr::IOBuffer,
+        master_pid::Ref{Int},
+        worker_id::Ref{Int},
+        worker_os_pid::Ref{Int};
+        timeout_sec::Real = 120,
+    )
+    t0 = time()
+    while (time() - t0) < timeout_sec
+        if isfile(ready_path)
+            lines = filter(!isempty, strip.(split(read(ready_path, String), '\n')))
+            if !isempty(lines)
+                if lines[1] == "error"
+                    length(lines) >= 2 || _fail("master error marker without message")
+                    _fail_with_stderr(
+                        "master failed before ready: $(join(lines[2:end], '\n')) ",
+                        master_stderr,
+                    )
+                elseif length(lines) >= 3
+                    master_pid[] = parse(Int, lines[1])
+                    worker_id[] = parse(Int, lines[2])
+                    worker_os_pid[] = parse(Int, lines[3])
+                    return nothing
+                end
+            end
+        end
+        process_running(master_proc) || break
+        sleep(0.2)
+    end
+    master_pid[] > 0 ||
+        _fail_with_stderr(
+        "master never became ready " *
+            "(ready=$(isfile(ready_path) ? read(ready_path, String) : ""); ",
+        master_stderr,
+    )
+    return nothing
+end
+
+function _heartbeat_e2e_begin!(; label::AbstractString = "STOP")::_HeartbeatE2ECtx
     tag = bytes2hex(rand(UInt8, 8))
     remote_julia = DistSSHBase.resolve_remote_julia(_host, "auto")
     remote_julia isa AbstractString || _fail("could not resolve remote julia on $_host")
-    wrap_path = exit_path = nothing
-    master_proc = nothing
-    master_script = ready_path = nothing
-    master_pid = Ref(0)
-    worker_os_pid = Ref(0)
     master_stderr = IOBuffer()
-    try
-        wrap_path, exit_path = _install_worker_wrapper!(_host, tag, remote_julia)
-        run_dir = mktempdir()
-        ready_path = joinpath(run_dir, "ready.txt")
-        master_script = joinpath(run_dir, "master.jl")
-        ssh_opts = _distributed_ssh_opts()
-        write(master_script, _master_script_contents(ready_path, wrap_path, ssh_opts))
-        master_proc = withenv("DISTRIBUTED_SSH_OPTS" => ssh_opts) do
-            return run(
-                pipeline(
-                    _julia_cmd_for_master(master_script);
-                    stdout = devnull,
-                    stderr = master_stderr,
-                );
-                wait = false,
-            )
-        end
-        worker_id = Ref(0)
-        t0 = time()
-        while (time() - t0) < 120
-            if isfile(ready_path)
-                lines = filter(!isempty, strip.(split(read(ready_path, String), '\n')))
-                if !isempty(lines)
-                    if lines[1] == "error"
-                        length(lines) >= 2 ||
-                            _fail("master error marker without message")
-                        _fail_with_stderr(
-                            "master failed before ready: $(join(lines[2:end], '\n')) ",
-                            master_stderr,
-                        )
-                    elseif length(lines) >= 3
-                        master_pid[] = parse(Int, lines[1])
-                        worker_id[] = parse(Int, lines[2])
-                        worker_os_pid[] = parse(Int, lines[3])
-                        break
-                    end
-                end
-            end
-            process_running(master_proc) || break
-            sleep(0.2)
-        end
-        master_pid[] > 0 ||
-            _fail_with_stderr(
-            "master never became ready " *
-                "(ready=$(isfile(ready_path) ? read(ready_path, String) : ""); ",
-            master_stderr,
+    master_pid = Ref(0)
+    worker_id = Ref(0)
+    worker_os_pid = Ref(0)
+    wrap_path, exit_path = _install_worker_wrapper!(_host, tag, remote_julia)
+    run_dir = mktempdir()
+    ready_path = joinpath(run_dir, "ready.txt")
+    probe_req_path = joinpath(run_dir, "probe.req")
+    probe_ok_path = joinpath(run_dir, "probe.ok")
+    master_script = joinpath(run_dir, "master.jl")
+    ssh_opts = _distributed_ssh_opts()
+    write(
+        master_script,
+        _master_script_contents(ready_path, probe_req_path, probe_ok_path, wrap_path, ssh_opts),
+    )
+    master_proc = withenv("DISTRIBUTED_SSH_OPTS" => ssh_opts) do
+        return run(
+            pipeline(
+                _julia_cmd_for_master(master_script);
+                stdout = devnull,
+                stderr = master_stderr,
+            );
+            wait = false,
         )
-        process_running(master_proc) ||
-            _fail_with_stderr("master exited before STOP ", master_stderr)
-        worker_id[] > 0 || _fail("invalid worker id from master")
-        worker_os_pid[] > 0 || _fail("invalid worker os pid from master")
-        _remote_pid_alive(_host, worker_os_pid[]) ||
-            _fail("worker os pid $(worker_os_pid[]) not alive on $_host before STOP")
+    end
+    _wait_master_ready!(
+        ready_path,
+        master_proc,
+        master_stderr,
+        master_pid,
+        worker_id,
+        worker_os_pid,
+    )
+    process_running(master_proc) ||
+        _fail_with_stderr("master exited before $label ", master_stderr)
+    worker_id[] > 0 || _fail("invalid worker id from master")
+    worker_os_pid[] > 0 || _fail("invalid worker os pid from master")
+    _remote_pid_alive(_host, worker_os_pid[]) ||
+        _fail("worker os pid $(worker_os_pid[]) not alive on $_host before $label")
+    return _HeartbeatE2ECtx(
+        wrap_path,
+        exit_path,
+        master_proc,
+        master_script,
+        run_dir,
+        ready_path,
+        probe_req_path,
+        probe_ok_path,
+        master_pid,
+        worker_id,
+        worker_os_pid,
+        master_stderr,
+        false,
+    )
+end
 
-        _log_worker_process_tree!(_host, worker_os_pid[])
+function _request_master_probe!(ctx::_HeartbeatE2ECtx)
+    isfile(ctx.probe_ok_path) && rm(ctx.probe_ok_path; force = true)
+    open(ctx.probe_req_path, "w") do io
+        println(io, "go")
+    end
+    t0 = time()
+    while (time() - t0) < _PROBE_TIMEOUT_SEC
+        if isfile(ctx.probe_ok_path)
+            lines = filter(!isempty, strip.(split(read(ctx.probe_ok_path, String), '\n')))
+            if length(lines) >= 1 && lines[1] == "ok"
+                return lines
+            end
+        end
+        sleep(0.2)
+    end
+    return _fail_with_stderr(
+        "master probe timed out (probe_ok=$(isfile(ctx.probe_ok_path) ? read(ctx.probe_ok_path, String) : "")); ",
+        ctx.master_stderr,
+    )
+end
+
+function _sigcont_master!(master_proc::Base.Process)
+    process_running(master_proc) || return nothing
+    run(`kill -CONT $(getpid(master_proc))`)
+    return nothing
+end
+
+function _heartbeat_e2e_cleanup!(ctx::_HeartbeatE2ECtx)
+    if ctx.master_proc !== nothing
+        try
+            ctx.master_was_stopped && _sigcont_master!(ctx.master_proc)
+        catch
+        end
+        try
+            process_running(ctx.master_proc) && kill(ctx.master_proc, Base.SIGKILL)
+        catch
+        end
+        try
+            wait(ctx.master_proc)
+        catch
+        end
+    end
+    if ctx.exit_path !== nothing
+        pq = DistSSHBase._remote_shell_path_word(ctx.exit_path)
+        try
+            DistSSHBase._remote_shell_status(_host, "rm -f $pq")
+        catch
+        end
+    end
+    if ctx.wrap_path !== nothing
+        pq = DistSSHBase._remote_shell_path_word(ctx.wrap_path)
+        try
+            DistSSHBase._remote_shell_status(_host, "rm -f $pq")
+        catch
+        end
+    end
+    try
+        _kill_worker_and_wrapper!(_host, ctx.worker_os_pid[])
+    catch
+    end
+    ctx.master_script !== nothing && isfile(ctx.master_script) && rm(ctx.master_script; force = true)
+    ctx.run_dir !== nothing && ispath(ctx.run_dir) && rm(ctx.run_dir; force = true, recursive = true)
+    return nothing
+end
+
+function _master_os_pid(ctx::_HeartbeatE2ECtx)
+    ctx.master_proc === nothing && _fail("no master process")
+    return getpid(ctx.master_proc)
+end
+
+function _sigstop_cont_negative_e2e_case!()
+    ctx = _heartbeat_e2e_begin!(; label = "brief STOP")
+    try
+        sleep(_INTERVAL_SEC + 0.5)
+        master_os_pid = _master_os_pid(ctx)
+        t_stop0 = time()
+        run(`kill -STOP $master_os_pid`)
+        ctx.master_was_stopped = true
+
+        sleep(_BRIEF_STOP_SEC)
+        @test _remote_pid_alive(_host, ctx.worker_os_pid[])
+
+        run(`kill -CONT $master_os_pid`)
+        ctx.master_was_stopped = false
+        stop_wall = time() - t_stop0
+        println(
+            stderr,
+            "[HB_E2E] brief STOP wall time: $(round(stop_wall; digits = 3))s " *
+                "(max $_BRIEF_STOP_WALL_MAX_SEC s)",
+        )
+        flush(stderr)
+        stop_wall <= _BRIEF_STOP_WALL_MAX_SEC ||
+            _fail("brief STOP wall time $(round(stop_wall; digits = 3))s exceeds $_BRIEF_STOP_WALL_MAX_SEC s")
+
+        sleep(_POST_CONT_SETTLE_SEC)
+        probe_lines = _request_master_probe!(ctx)
+        @test length(probe_lines) >= 2
+        @test parse(Int, probe_lines[2]) == ctx.worker_id[]
+
+        sleep(_NEGATIVE_SURVIVE_AFTER_CONT_SEC)
+        @test _remote_pid_alive(_host, ctx.worker_os_pid[])
+        exit_code, _ = _read_remote_exit_record(_host, ctx.exit_path)
+        @test exit_code !== _HEARTBEAT_EXIT_CODE
+    finally
+        _heartbeat_e2e_cleanup!(ctx)
+    end
+    return nothing
+end
+
+function _sigstop_heartbeat_e2e_case!()
+    ctx = _heartbeat_e2e_begin!(; label = "STOP")
+    try
+        _log_worker_process_tree!(_host, ctx.worker_os_pid[])
 
         sleep(_INTERVAL_SEC + 0.5)
         t_stop_worker = _remote_worker_timestamp(_host)
         t_stop_worker === nothing &&
             _fail("could not read worker clock before STOP on $_host")
-        master_os_pid = getpid(master_proc)
+        master_os_pid = _master_os_pid(ctx)
         run(`kill -STOP $master_os_pid`)
+        ctx.master_was_stopped = true
 
         sleep(_LIVENESS_AFTER_STOP_SEC)
-        @test _remote_pid_alive(_host, worker_os_pid[])
+        @test _remote_pid_alive(_host, ctx.worker_os_pid[])
 
         gone = false
         t1 = time()
         while (time() - t1) < _GONE_TIMEOUT_SEC
-            if !_remote_pid_alive(_host, worker_os_pid[])
+            if !_remote_pid_alive(_host, ctx.worker_os_pid[])
                 gone = true
                 break
             end
             sleep(0.25)
         end
         gone || _fail_with_stderr(
-            "worker os pid $(worker_os_pid[]) still alive after STOP " *
+            "worker os pid $(ctx.worker_os_pid[]) still alive after STOP " *
                 "(timeout=$(_GONE_TIMEOUT_SEC)s controller_elapsed=$(round(time() - t1; digits = 1))s); ",
-            master_stderr,
+            ctx.master_stderr,
         )
         @test gone
 
@@ -307,13 +494,13 @@ function _sigstop_heartbeat_e2e_case!()
         exit_ts = nothing
         t2 = time()
         while (time() - t2) < 5.0
-            exit_code, exit_ts = _read_remote_exit_record(_host, exit_path)
+            exit_code, exit_ts = _read_remote_exit_record(_host, ctx.exit_path)
             exit_code !== nothing && exit_ts !== nothing && break
             sleep(0.2)
         end
         (exit_code === nothing || exit_ts === nothing) && _fail_with_stderr(
-            "missing exit record on $exit_path (exit_code=$(repr(exit_code)) exit_ts=$(repr(exit_ts))); ",
-            master_stderr,
+            "missing exit record on $(ctx.exit_path) (exit_code=$(repr(exit_code)) exit_ts=$(repr(exit_ts))); ",
+            ctx.master_stderr,
         )
         @test exit_code == _HEARTBEAT_EXIT_CODE
 
@@ -327,41 +514,12 @@ function _sigstop_heartbeat_e2e_case!()
             _fail_with_stderr(
                 "exit delay $(round(exit_delay; digits = 3))s outside " *
                     "[$(_EXIT_DELAY_MIN_SEC), $(_EXIT_DELAY_MAX_SEC)]; ",
-                master_stderr,
+                ctx.master_stderr,
             )
         end
         @test _EXIT_DELAY_MIN_SEC <= exit_delay <= _EXIT_DELAY_MAX_SEC
     finally
-        if master_proc !== nothing
-            try
-                process_running(master_proc) && kill(master_proc, Base.SIGKILL)
-            catch
-            end
-            try
-                wait(master_proc)
-            catch
-            end
-        end
-        if exit_path !== nothing
-            pq = DistSSHBase._remote_shell_path_word(exit_path)
-            try
-                DistSSHBase._remote_shell_status(_host, "rm -f $pq")
-            catch
-            end
-        end
-        if wrap_path !== nothing
-            pq = DistSSHBase._remote_shell_path_word(wrap_path)
-            try
-                DistSSHBase._remote_shell_status(_host, "rm -f $pq")
-            catch
-            end
-        end
-        try
-            _kill_worker_and_wrapper!(_host, worker_os_pid[])
-        catch
-        end
-        master_script !== nothing && isfile(master_script) && rm(master_script; force = true)
-        ready_path !== nothing && ispath(dirname(ready_path)) && rm(dirname(ready_path); force = true, recursive = true)
+        _heartbeat_e2e_cleanup!(ctx)
     end
     return nothing
 end
@@ -398,6 +556,9 @@ end
             max(1, parse(Int, strip(get(ENV, "DISTSSH_HEARTBEAT_E2E_N", "1"))))
         catch
             1
+        end
+        @testset "SIGSTOP brief pause does not reap worker (negative control)" begin
+            _sigstop_cont_negative_e2e_case!()
         end
         for iter in 1:n
             @testset "SIGSTOP master reaps worker with heartbeat exit 75 (iter $iter/$n)" begin
