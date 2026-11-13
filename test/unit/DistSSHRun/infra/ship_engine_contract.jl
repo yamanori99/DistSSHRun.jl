@@ -1,7 +1,7 @@
 using Test
 using DistSSHRun
 
-const _REPO_ROOT = abspath(joinpath(@__DIR__, "..", "..", ".."))
+const _REPO_ROOT = abspath(joinpath(@__DIR__, "..", "..", "..", ".."))
 const _LIB_SHIP_ENTRY = joinpath(_REPO_ROOT, "lib", "DistSSHShip", "src", "DistSSHShip.jl")
 const _RUN_SHIP_MODULE = joinpath(_REPO_ROOT, "src", "DistSSHRun", "ship_module.jl")
 

@@ -765,7 +765,7 @@ end
 
 @testset "julia input probe matches the frozen sh probe" begin
     root = mktempdir()
-    fixture = normpath(joinpath(@__DIR__, "..", "..", "fixtures", "remote_input_probe.sh"))
+    fixture = normpath(joinpath(@__DIR__, "..", "..", "..", "fixtures", "remote_input_probe.sh"))
     function capture(cmd)
         out = IOBuffer()
         err = IOBuffer()
@@ -1315,7 +1315,7 @@ end
 end
 
 @testset "ship remote status uses shell_status" begin
-    double = joinpath(@__DIR__, "..", "..", "..", "lib", "DistSSHBase", "test", "fixtures", "fake_shell_ssh.jl")
+    double = joinpath(@__DIR__, "..", "..", "..", "..", "lib", "DistSSHBase", "test", "fixtures", "fake_shell_ssh.jl")
     @test isfile(double)
     _with_tempdir() do dir
         logp = joinpath(dir, "ssh.log")

@@ -1,4 +1,4 @@
-# Loaded first from support.jl (same role as DistSSHRun/drive/runtime/_common.jl).
+# Loaded first from support.jl (same role as DistSSHRun/core/drive/_common.jl).
 # Guard: JETLS may analyze this file both via support.jl and as an include leaf.
 
 if !isdefined(Main, :_test_root)
@@ -105,10 +105,10 @@ if !isdefined(Main, :_test_root)
     function _distsshrun_short_skip(rel::AbstractString)::Bool
         _distsshrun_test_short() || return false
         skipped = (
-            "unit/DistSSHRun/drive/workers.jl",
+            "unit/DistSSHRun/core/drive/workers.jl",
             "unit/DistSSHRun/execute.jl",
-            "unit/DistSSHRun/setup/checks.jl",
-            "unit/DistSSHRun/setup/send_list.jl",
+            "unit/DistSSHRun/core/setup/checks.jl",
+            "unit/DistSSHRun/core/setup/send_list.jl",
             "integration/cli/help.jl",
             "integration/setup/exit.jl",
             # Pseudo-TTY (`script`) suites: ordinary checkout CI keeps them.

@@ -70,7 +70,10 @@ lib/DistSSHHeartbeat/test/  # Pkg.test of DistSSHHeartbeat; e2e.jl is SSH only
 unit/
   DistSSHRun/     # ↔ src/DistSSHRun/ (API, setup cores, argv)
     argv/         # ↔ DistSSHRun/argv/
-    setup/        # ↔ DistSSHRun/setup/
+    core/drive/   # ↔ DistSSHRun/core/drive/
+    core/setup/   # ↔ DistSSHRun/core/setup/
+    messages/     # ↔ DistSSHRun/messages/
+    infra/        # ↔ DistSSHRun/infra/
   cli/            # ↔ src/cli/
     drive/, go/, setup/, hostinfo/
 ```

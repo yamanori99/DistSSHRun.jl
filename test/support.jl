@@ -1,4 +1,4 @@
-# Shared test infrastructure (barrel; mirrors cli/drive.jl + DistSSHRun/drive/runtime/).
+# Shared test infrastructure (barrel; mirrors cli/drive.jl + DistSSHRun/core/drive/).
 # Guard: runtests and some unit files may both `include` this path; JETLS should not reload fragments.
 
 if !isdefined(Main, :_child_julia_env)

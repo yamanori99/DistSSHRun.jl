@@ -2,7 +2,7 @@ using Test
 
 # Oracle: kit `setup` CLI in a child julia — exit code and a message needle
 # (1 sad + 1 happy per mode). Fake ssh only; not real OpenSSH.
-# Module-level validate / op outcomes live under unit/DistSSHRun/setup/.
+# Module-level validate / op outcomes live under unit/DistSSHRun/core/setup/.
 # Children run `_subprocess_width()` at a time. Each case still has its own
 # process, temp host, and fake-ssh state directory.
 

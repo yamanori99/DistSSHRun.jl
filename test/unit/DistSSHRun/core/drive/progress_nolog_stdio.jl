@@ -23,7 +23,7 @@ end
 
 function _nolog_stdio_spawn_child()
     test_root = _test_root()
-    this_file = joinpath(test_root, "unit", "DistSSHRun", "drive", "progress_nolog_stdio.jl")
+    this_file = abspath(@__FILE__)
     isdefined(Main, :TEST_PROJECT) || error("progress_nolog_stdio: TEST_PROJECT is not set")
     project = String(TEST_PROJECT::AbstractString)
     hang_s = 120.0

@@ -8,6 +8,7 @@ const _FAKE_ARBITRARY_DEST_SHIP_SSH = joinpath(
     "..",
     "..",
     "..",
+    "..",
     "lib",
     "DistSSHBase",
     "test",

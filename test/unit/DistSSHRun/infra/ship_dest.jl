@@ -1,10 +1,11 @@
 using Test
 
 # Included from `test/runtests.jl` (support helpers already loaded). Standalone:
-#   julia --project=. --startup-file=no -e 'using Test; using DistSSHRun; include("test/support.jl"); include("test/unit/DistSSHRun/ship_dest.jl")'
+#   julia --project=. --startup-file=no -e 'using Test; using DistSSHRun; include("test/support.jl"); include("test/unit/DistSSHRun/infra/ship_dest.jl")'
 
 const _FAKE_ARBITRARY_DEST_SHIP_SSH = joinpath(
     @__DIR__,
+    "..",
     "..",
     "..",
     "..",
