@@ -538,8 +538,9 @@ function _go_remote_run_identity(
 end
 
 function _remote_project_for_go(host::AbstractString, remote_root::AbstractString, project::AbstractString)::String
-    rr = String(remote_root)
-    isempty(rr) && return rr
+    rr = String(strip(remote_root))
+    # `go!` passes the remote work root (`runs/<id>/src`); use it for `--project=`.
+    !isempty(rr) && return rr
     proj = canonical_local_path(project)
     resolved = resolve_host_path_abs(String(host), proj, proj)
     resolved isa AbstractString && !isempty(resolved) && return String(resolved)
