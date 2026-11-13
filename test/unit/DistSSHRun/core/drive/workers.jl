@@ -276,8 +276,9 @@ end
 
 @testset "drive heartbeat" begin
     @testset "resolve_drive_heartbeat_policy" begin
+        empty_env = Dict{String, String}()
         cfg = DistSSHRun.resolve_drive_heartbeat_policy(
-            env = Dict{String, String}(),
+            env = empty_env,
             self_exit = false,
         )
         @test !cfg.self_exit
@@ -294,7 +295,7 @@ end
         @test cfg.interval == 2.0
         @test cfg.deadline == 9.0
         @test_throws ArgumentError DistSSHRun.resolve_drive_heartbeat_policy(
-            env = Dict{String, String}(),
+            env = empty_env,
             self_exit = true,
         )
         @test_throws ArgumentError DistSSHRun.resolve_drive_heartbeat_policy(
