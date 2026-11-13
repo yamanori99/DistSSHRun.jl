@@ -15,6 +15,17 @@ see `@v#.#`. Local workers also put the parent project, then DistSSHRun's
 package directory, on that path so `ride` can load DistSSHRun when the job
 tree does not. Parent `LOAD_PATH` mutations do not otherwise affect workers.
 
+`drive` and `ride` set the Distributed cluster cookie from
+`RandomDevice` before the first worker starts when you have not already
+initialized Distributed (for example with `Distributed.cluster_cookie` or
+`addprocs`). An existing cookie is kept. Launch runs inside a controller-task
+wrapper that saves and restores that task's default RNG afterward, so launch
+does not permanently perturb your random stream whether or not Distributed
+uses the default RNG internally. Julia has no public API to rewind child-task
+RNG streams spawned during launch; after the cluster is up, call `Random.seed!`
+again if you need bit-identical streams to a script that never started workers.
+The cookie is never logged.
+
 By default, drive workers **do not** self-exit when the controller (master)
 stops answering. The startup summary says so, and run provenance records
 `self_exit = false`.
@@ -157,10 +168,10 @@ this file shipped a tree, `provenance.selection` records `content_tree_hash`
 (`git-sha1`) and `run_id` (the remote `runs/<run_id>/` leaf). An absent
 or empty key means that ship was not recorded. `result_content_tree_hash`
 and `result_remote_run_id` read those strings from a `DriveResult`,
-`GoResult`, or `KitRunResult`. They also read a `:ship_tree` `SyncResult`
+`GoResult`, or `DistSSHJobResult`. They also read a `:ship_tree` `SyncResult`
 and a `ShipTreeResult`. A `SyncResult` from any other mode returns `nothing`
 for both. `result_run_dir` reads
-`DISTSSH_RUN_DIR` from those results and from `KitProcess`. Each remote
+`DISTSSH_RUN_DIR` from those results and from `DetachedProcess`. Each remote
 `runs/<run_id>/` also gets a minimal `run.toml` with only `schema`,
 `writer`, and `kind = "ship"` so `setup delete` can refuse a Ship leaf
 that is not DistSSHRun-owned. That stamp is not controller provenance.
@@ -190,7 +201,7 @@ hashing for a ship finishes under `setup ship-tree` before selection.
 `outputs` is reserved and not written. There is no
 `run.private.toml`; public records keep relative paths and aliases only.
 
-`terminate!` and `terminate_run!` record how the stop ended. `KitRunResult.stop`
+`terminate!` and `terminate_run!` record how the stop ended. `DistSSHJobResult.stop`
 is `:within_grace` when the process exited after one SIGINT and before
 SIGTERM, `:sigterm` or `:sigkill` when that `interrupt_grace` window ended
 and the ladder escalated, and `:no_sigint` when `interrupt_grace` was 0.

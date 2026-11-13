@@ -288,11 +288,73 @@ function ssh_tunnel_enabled()::Bool
     return get(ENV, "DISTSSH_SSH_TUNNEL", "1") != "0"
 end
 
-"""Random per-run cookie before the first worker. Never log the value."""
+"""
+Restore the caller's task-local default RNG after `f` returns (even when `f` throws).
+
+Uses only `Random.default_rng`, `copy`, and `copy!`. Worker launch may call
+`Distributed.cluster_cookie` and `addprocs`, which can advance the controller
+task's default RNG on some Julia versions; on others they may not. Restoring the
+saved RNG makes the outcome the same as if launch had not consumed that stream.
+`addprocs` can still spawn internal tasks that advance split RNG state; Julia
+does not expose a public API to rewind child-task streams, so only this task's
+default RNG is restored. Call `Random.seed!` again once the cluster is up when
+you need bit-identical streams to a script that never started workers.
+
+Call this around `ensure_run_cluster_cookie!` and every `addprocs` on the
+controller, in the task that calls `addprocs`.
+"""
+function preserve_task_local_default_rng(f::Function)
+    rng = default_rng()
+    saved = copy(rng)
+    try
+        return f()
+    finally
+        copy!(rng, saved)
+    end
+end
+
+# Distributed has no public "multiprocessing initialized" API. `inited` matches
+# whether `cluster_cookie` / `addprocs` have run on this process. Drop this probe
+# when stdlib exposes a stable replacement and update `verify_distributed_init_probe!`.
+function _distributed_inited_value()::Bool
+    flag = getfield(Distributed, :inited)
+    flag isa Ref{Bool} && return flag[]
+    flag isa Base.Threads.Atomic{Bool} && return flag[]
+    error(
+        "Distributed init probe: :inited has type $(typeof(flag)); " *
+            "update _distributed_inited_value",
+    )
+end
+
+function _distributed_multi_initialized()::Bool
+    nprocs() > 1 && return true
+    return _distributed_inited_value()
+end
+
+"""
+Loud check that the Distributed `inited` probe still matches stdlib layout.
+Called from cluster-cookie tests so CI fails if the internal layout changes.
+"""
+function verify_distributed_init_probe!()
+    isdefined(Distributed, :inited) ||
+        error("Distributed init probe: missing binding :inited; update _distributed_inited_value")
+    _distributed_inited_value()
+    return nothing
+end
+
+"""
+Set a per-run cluster cookie before the first worker. Never log the value.
+
+Runs inside [`preserve_task_local_default_rng`](@ref) on the controller. Does
+not replace a cookie you already chose: if Distributed is already initialized
+(for example after `Distributed.cluster_cookie` or `addprocs` in your script),
+the existing cookie is kept. The new cookie uses `RandomDevice`, not the
+default RNG.
+"""
 function ensure_run_cluster_cookie!()::Nothing
     nprocs() > 1 && return nothing
-    alphabet = ['0':'9'; 'A':'Z'; 'a':'z']
-    Distributed.cluster_cookie(String(rand(alphabet, 16)))
+    _distributed_multi_initialized() && return nothing
+    Distributed.cluster_cookie(randstring(RandomDevice(), 16))
     return nothing
 end
 

@@ -32,7 +32,7 @@ using Test
                     flush(out_io)
                     flush(err_io)
                     out = read(out_path, String)
-                    @test result isa DistSSHRun.KitRunResult
+                    @test result isa DistSSHRun.DistSSHJobResult
                     @test result.kind === :drive
                     @test result.ok
                     @test result.exit_code == 0
@@ -73,21 +73,21 @@ end
                         stderr = err_io,
                     )
                 end
-                @test kp isa DistSSHRun.KitProcess
+                @test kp isa DistSSHRun.DetachedProcess
                 @test kp.kind === :drive
                 @test kp.run_dir !== nothing
                 result = wait(kp)
                 flush(out_io)
                 flush(err_io)
                 out = read(out_path, String)
-                @test result isa DistSSHRun.KitRunResult
+                @test result isa DistSSHRun.DistSSHJobResult
                 @test result.kind === :drive
                 @test result.ok
                 @test result.exit_code == 0
                 @test result.output_dir !== nothing
                 @test occursin("DISTSSH_RUNNER_SMOKE_OK nw=2", out)
                 recovered = DistSSHRun.kit_result_from_dir(kp.run_dir)
-                @test recovered isa DistSSHRun.KitRunResult
+                @test recovered isa DistSSHRun.DistSSHJobResult
                 @test recovered.ok
                 raw = DistSSHRun.read_kit_run_toml(kp.run_dir)
                 @test raw isa AbstractDict

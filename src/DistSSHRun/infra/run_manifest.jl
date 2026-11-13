@@ -240,7 +240,7 @@ function write_kit_run_toml!(
         kind::Symbol,
         output_dir::Union{Nothing, AbstractString} = nothing,
         log_dir::Union{Nothing, AbstractString} = nothing,
-        result::Union{Nothing, KitRunResult} = nothing,
+        result::Union{Nothing, DistSSHJobResult} = nothing,
         project_root::Union{Nothing, AbstractString} = nothing,
         provenance::Union{Nothing, AbstractDict} = nothing,
     )

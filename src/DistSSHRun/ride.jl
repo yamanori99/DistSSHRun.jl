@@ -74,8 +74,8 @@ end
 function kit_run_result(
         result::RideResult,
         tokens::AbstractVector{<:AbstractString} = String[],
-    )::KitRunResult
-    return KitRunResult(
+    )::DistSSHJobResult
+    return DistSSHJobResult(
         result.ok,
         :ride,
         result.output_dir,
@@ -478,8 +478,10 @@ function _ride_add_workers!(
         if isempty(child_hosts)
             n = plan.parent_workers
             if n > 0
-                ensure_run_cluster_cookie!()
-                _add_local_drive_workers!(n, project, pin_local_julia(nothing))
+                preserve_task_local_default_rng() do
+                    ensure_run_cluster_cookie!()
+                    _add_local_drive_workers!(n, project, pin_local_julia(nothing))
+                end
             end
         else
             julia_exe = if julia === nothing || strip(String(julia)) == "" ||

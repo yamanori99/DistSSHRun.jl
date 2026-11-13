@@ -315,7 +315,7 @@ dedicated transfer.
 No SSH hosts → error. Empty cache → success with no host rows.
 """
 function push_cache!(
-        session::KitSession;
+        session::DistSSHSession;
         hashes::Union{Nothing, AbstractVector{<:AbstractString}} = nothing,
     )::SyncResult
     isempty(session.hosts) && throw(

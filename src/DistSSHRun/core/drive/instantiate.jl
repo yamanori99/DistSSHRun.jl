@@ -1,7 +1,7 @@
 # instantiate! — Pkg.instantiate on remotes (same core as `setup instantiate`).
 
 """
-    instantiate!(session::KitSession; julia="auto") -> SyncResult
+    instantiate!(session::DistSSHSession; julia="auto") -> SyncResult
 
 Run `Pkg.instantiate` on each SSH host in `session` (parallel).
 
@@ -17,14 +17,14 @@ or its minor differs from that Julia. Otherwise the worker runs
 Typical first-time remote prep:
 
 ```julia
-session = KitSession(workers=["child:user@h1"], remote="/path/to/project", yes=true)
+session = DistSSHSession(workers=["child:user@h1"], remote="/path/to/project", yes=true)
 setup!(session, :ship_tree, :instantiate)  # or sync!(…; mode=:ship_tree) then instantiate!
 ```
 
 Also available as [`setup!`](@ref)`(session, :instantiate; julia=…)`.
 """
 function instantiate!(
-        session::KitSession;
+        session::DistSSHSession;
         julia::AbstractString = "auto",
         run_id::Union{Nothing, AbstractString} = nothing,
     )::SyncResult
@@ -69,7 +69,7 @@ Returns `nothing` when every host already resolves, else [`instantiate!`](@ref).
 Pass `run_id=` to force the ID from that ship when the local record is not enough.
 """
 function instantiate_after_ship!(
-        session::KitSession;
+        session::DistSSHSession;
         julia::AbstractString = "auto",
         run_id::Union{Nothing, AbstractString} = nothing,
     )::Union{Nothing, SyncResult}

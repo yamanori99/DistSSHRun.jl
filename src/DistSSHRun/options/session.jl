@@ -1,7 +1,7 @@
-# KitSession — shared context for drive / sync / collect APIs.
+# DistSSHSession — shared context for drive / sync / collect APIs.
 
 """Runtime context for `sync!`, `drive!`, `collect!`."""
-mutable struct KitSession
+mutable struct DistSSHSession
     project::String
     hosts::Vector{String}
     tokens::Vector{String}
@@ -10,11 +10,11 @@ mutable struct KitSession
     verbosity::Symbol
     yes::Bool
     include_parent_for_size::Bool
-    cli_session::KitCliSession
+    cli_session::CliSharedFlags
 end
 
 """
-    KitSession(; project=pwd(), workers=[], remote=nothing, hosts_file=nothing,
+    DistSSHSession(; project=pwd(), workers=[], remote=nothing, hosts_file=nothing,
                quiet=false, verbosity=nothing, yes=true, include_parent_for_size=false)
 
 Build a session for drive APIs. `workers` is a CLI-style host list.
@@ -34,7 +34,7 @@ only when `hosts_file` is omitted **and** `workers` is empty (same as
 `verbosity` is `:verbose` | `:progress` | `:quiet` (`quiet=true` implies `:quiet`).
 API default `yes=true` skips confirm prompts.
 """
-function KitSession(;
+function DistSSHSession(;
         project::AbstractString = pwd(),
         workers::AbstractVector{<:AbstractString} = String[],
         remote::Union{Nothing, AbstractString} = nothing,
@@ -53,7 +53,7 @@ function KitSession(;
         ""
     end
     hf_path = isempty(hf) ? nothing : hf
-    cli = KitCliSession(
+    cli = CliSharedFlags(
         quiet = quiet,
         verbosity = verbosity,
         yes = yes,
@@ -71,7 +71,7 @@ function KitSession(;
     proj = canonical_local_path(project)
     rr = remote === nothing ? nothing : String(strip(String(remote)))
     rr !== nothing && isempty(rr) && (rr = nothing)
-    return KitSession(
+    return DistSSHSession(
         proj,
         copy(parsed.child_hosts),
         parsed.tokens,
@@ -94,7 +94,7 @@ inside a frame that restores the caller's value. Overlapping in-process kit
 runs are refused (`_acquire_kit_inproc_run!`); nested same-task runs share
 one owner task.
 """
-function apply_session_env!(session::KitSession)
+function apply_session_env!(session::DistSSHSession)
     ENV["DISTRIBUTED_PROJECT_ROOT"] = session.project
     session.cli_session.quiet = session.quiet
     session.cli_session.yes = session.yes
@@ -110,7 +110,7 @@ function apply_session_env!(session::KitSession)
         end
     end
     session.cli_session.verbosity = session.verbosity
-    apply_kit_cli_session!(session.cli_session)
+    apply_shared_cli_flags!(session.cli_session)
     return session
 end
 
@@ -119,7 +119,7 @@ end
 Needed for `remote_layout_path` / collect mapping when `apply_session_env!`
 does not persist the remote. `session.remote === nothing` leaves the ENV alone.
 """
-function _with_session_remote_env!(f, session::KitSession)
+function _with_session_remote_env!(f, session::DistSSHSession)
     prev = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
     try
         rr = session.remote
@@ -137,9 +137,9 @@ function _with_session_remote_env!(f, session::KitSession)
 end
 
 """Resolved remote repository root for this session."""
-function session_remote_root(session::KitSession)::String
+function session_remote_root(session::DistSSHSession)::String
     return resolve_remote_project_root(session.project; cli_override = session.remote)
 end
 
 """Explain surface for this session (`:cli` or `:api`)."""
-hint_surface(session::KitSession)::Symbol = session.cli_session.hint_surface
+hint_surface(session::DistSSHSession)::Symbol = session.cli_session.hint_surface

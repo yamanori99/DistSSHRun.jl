@@ -51,8 +51,8 @@ end
 public check_setup_options!
 
 """
-    setup!(session::KitSession, mode::Symbol; kwargs...) -> SyncResult
-    setup!(session::KitSession, modes::Symbol...) -> SyncResult
+    setup!(session::DistSSHSession, mode::Symbol; kwargs...) -> SyncResult
+    setup!(session::DistSSHSession, modes::Symbol...) -> SyncResult
 
 Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup …`.
 
@@ -80,7 +80,7 @@ place. An unknown key is an error. A mismatch throws
 mode rejects `confirm_path`. Multiple modes run in order and stop on the first failure:
 
 ```julia
-session = KitSession(workers=["child:user@h1"], remote="~/proj", yes=true)
+session = DistSSHSession(workers=["child:user@h1"], remote="~/proj", yes=true)
 setup!(session, :ship_tree, :instantiate)
 setup!(session, :check; ignore_julia_version=true)
 ```
@@ -89,7 +89,7 @@ setup!(session, :check; ignore_julia_version=true)
 deploy steps. Prefer `setup!` when you want the full CLI vocabulary in one place.
 """
 function setup!(
-        session::KitSession,
+        session::DistSSHSession,
         mode::Symbol;
         repo::Union{Nothing, AbstractString} = nothing,
         julia::AbstractString = "auto",
@@ -140,7 +140,7 @@ function setup!(
     end
 end
 
-function setup!(session::KitSession, mode::Symbol, more::Symbol...; kwargs...)
+function setup!(session::DistSSHSession, mode::Symbol, more::Symbol...; kwargs...)
     modes = (mode, more...)
     if !isempty(kwargs) && length(modes) > 1
         throw(
@@ -156,7 +156,7 @@ function setup!(session::KitSession, mode::Symbol, more::Symbol...; kwargs...)
     end
 end
 
-function _setup_bang_run_modes!(session::KitSession, modes; kwargs...)
+function _setup_bang_run_modes!(session::DistSSHSession, modes; kwargs...)
     result = SyncResult(false, HostResult[]; ok = true)
     for m in modes
         result = setup!(session, m; kwargs...)
@@ -181,7 +181,7 @@ function _setup_clone_url(
 end
 
 function _setup_bang_preflight!(
-        session::KitSession,
+        session::DistSSHSession,
         mode::Symbol;
         repo::Union{Nothing, AbstractString} = nothing,
     )
@@ -466,7 +466,7 @@ end
 
 """`host =>` path to delete. `nothing` when this mode does not take `confirm_path`."""
 function _setup_bind_confirm_path!(
-        session::KitSession,
+        session::DistSSHSession,
         mode::Symbol,
         confirm_path,
         hosts::AbstractVector{<:AbstractString},
@@ -642,7 +642,7 @@ function _apply_confirmed_prune(
 end
 
 function _setup_one!(
-        session::KitSession,
+        session::DistSSHSession,
         mode::Symbol;
         repo::Union{Nothing, AbstractString} = nothing,
         julia::AbstractString = "auto",
@@ -817,7 +817,7 @@ function _hosts_named_in_plan(
 end
 
 """SSH aliases plus `parent` when a token names the kit parent. Does not touch `ENV`."""
-function _setup_bang_host_list(session::KitSession)::Vector{String}
+function _setup_bang_host_list(session::DistSSHSession)::Vector{String}
     hosts = copy(session.hosts)
     # `session.hosts` is SSH children only; parent lives on `tokens`.
     # Always surface `parent` so non-juliaup modes hit validate_setup_hosts
@@ -837,7 +837,7 @@ function _setup_bang_host_list(session::KitSession)::Vector{String}
     return hosts
 end
 
-function _setup_bang_hosts!(session::KitSession; allow_parent::Bool = false)
+function _setup_bang_hosts!(session::DistSSHSession; allow_parent::Bool = false)
     apply_session_env!(session)
     hosts = _setup_bang_host_list(session)
     isempty(hosts) && throw(

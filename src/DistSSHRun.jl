@@ -12,6 +12,7 @@ module DistSSHRun
 
 using Dates
 using Distributed
+using Random: RandomDevice, default_rng, randstring
 using Pkg
 import OpenSSL_jll
 import SHA
@@ -26,7 +27,7 @@ using Unicode
 #   argv wrappers `go` / `drive` stay unexported (`main` / tests)
 export worker_pmap
 export worker_seed
-export KitSession
+export DistSSHSession
 export HostResult
 export SyncResult
 export WorkerPlan
@@ -36,8 +37,8 @@ export DriveResult
 export HostRunResult
 export DriveHostStatus
 export CollectResult
-export KitRunResult
-export KitProcess
+export DistSSHJobResult
+export DetachedProcess
 export kit_run_result
 export PipelineConfig
 export PipelineResult

@@ -81,7 +81,7 @@ end
 
 """Parse `ride` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_ride_args(args::AbstractVector{<:AbstractString})
-    cli_session, rest = peel_kit_cli_flags(args)
+    cli_session, rest = peel_shared_cli_flags(args)
     hosts = String[]
     host_tokens = String[]
     script_path = nothing
@@ -190,7 +190,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
     elseif julia_exe == "auto"
         julia_exe = nothing
     end
-    apply_kit_cli_session!(cli_session)
+    apply_shared_cli_flags!(cli_session)
     if script_path !== nothing
         require_counted_placement_tokens(hosts; surface = :cli)
     end

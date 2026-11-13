@@ -38,7 +38,7 @@ result = go!(script, "parent:2"; args = ARGS, project = project)
 
 # First-time remotes: setup!, then go!.
 #
-#   session = KitSession(
+#   session = DistSSHSession(
 #       workers=["child:user@host1", "child:user@host2"],
 #       remote="/path/to/project",
 #       yes=true,
