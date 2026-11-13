@@ -95,7 +95,7 @@ let _BASE = DistSSHBase
     end
 
     @testset "non-POSIX login shell is rejected before the first command" begin
-        double = joinpath(@__DIR__, "fixtures", "fake_shell_ssh.jl")
+        double = joinpath(@__DIR__, "..", "fixtures", "fake_shell_ssh.jl")
 
         @test _BASE._remote_shell_host_from_exec(
             ["/usr/bin/ssh", "-n", "--", "h.test", "true"],
@@ -267,7 +267,7 @@ let _BASE = DistSSHBase
     end
 
     @testset "shell status of the remote command" begin
-        double = joinpath(@__DIR__, "fixtures", "fake_shell_ssh.jl")
+        double = joinpath(@__DIR__, "..", "fixtures", "fake_shell_ssh.jl")
         _with_tempdir() do dir
             logp = joinpath(dir, "ssh.log")
             ready = joinpath(dir, "ready")

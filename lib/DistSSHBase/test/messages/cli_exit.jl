@@ -122,7 +122,7 @@ end
     end
 
     @testset "process sigint" begin
-        proj = dirname(@__DIR__)
+        proj = joinpath(@__DIR__, "..", "..")
         dir = mktempdir()
         marker = joinpath(dir, "ready")
         open(joinpath(dir, "CliExitTiny.jl"), "w") do io
