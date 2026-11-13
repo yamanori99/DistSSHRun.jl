@@ -139,6 +139,13 @@ function _ride_pmap_worker(f, x)
     end
 end
 
+function _ride_owned_pmap(f, xs)
+    owned = _live_owned_worker_ids()
+    isempty(owned) && return map(_ride_callable(f), xs)
+    pool = WorkerPool(owned)
+    return pmap(x -> _ride_pmap_worker(f, x), pool, xs)
+end
+
 function _ride_apply_named(name::Symbol, x)
     f = getglobal(Main, name)
     return Base.invokelatest(f, x)
@@ -159,6 +166,7 @@ function _can_distribute(f, xs)::Bool
         return false
     length(xs) == 0 && return false
     nprocs() < 2 && return false
+    isempty(_live_owned_worker_ids()) && return false
     T = eltype(xs)
     fn = try
         f isa Symbol ? getglobal(Main, f) : f
@@ -244,7 +252,7 @@ function _ride_map(f, xs)
         if !_can_distribute(f, xs)
             return map(_ride_callable(f), xs)
         end
-        dist = pmap(x -> _ride_pmap_worker(f, x), xs)
+        dist = _ride_owned_pmap(f, xs)
         if _RIDE_SPI[]
             seq = map(_ride_callable(f), xs)
             ok = _ride_compare(dist, seq)
@@ -265,7 +273,7 @@ function _ride_filter(f, xs)
         if !_can_distribute(f, xs)
             return filter(_ride_callable(f), xs)
         end
-        flags = pmap(x -> _ride_pmap_worker(f, x), xs)
+        flags = _ride_owned_pmap(f, xs)
         dist = xs[findall(identity, flags)]
         if _RIDE_SPI[]
             seq = filter(_ride_callable(f), xs)

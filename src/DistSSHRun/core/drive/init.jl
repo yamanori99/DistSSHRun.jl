@@ -287,6 +287,7 @@ function init_drive_workers!(
         for w in worker_ids
             Int(w) in mapped && continue
             Int(w) ∉ owned && continue
+            w in workers() || continue
             worker_proj = get(RUNNER_WORKER_PROJECT_DIRS, w, proj_dir)
             _drive_invokelatest_main(w, :_drive_worker_activate!, worker_proj)
         end

@@ -391,6 +391,75 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             end
         end
 
+        @testset "init_drive_workers! fallback activate skips removed probe failures" begin
+            _with_tempdir() do proj
+                write(
+                    joinpath(proj, "Project.toml"),
+                    """
+                    uuid = "dddddddd-eeee-ffff-1111-222222222222"
+                    version = "0.0.1"
+                    """,
+                )
+                for w in setdiff(workers(), [1])
+                    rmprocs(w; waitfor = 2.0)
+                end
+                addprocs(2; topology = :master_worker)
+                ws = sort!(Int[w for w in workers()])
+                @test length(ws) == 2
+                DistSSHRun._register_drive_host_worker_ids!(DistSSHRun.PARENT_HOST_NAME, ws)
+                for w in ws
+                    DistSSHRun.RUNNER_WORKER_PROJECT_DIRS[w] = proj
+                end
+                dead = ws[1]
+                alive = ws[2]
+                wrk = Distributed.map_pid_wrkr[dead]
+                ospid = wrk isa Distributed.Worker ? wrk.config.ospid : nothing
+                ospid isa Integer && ospid > 0 &&
+                    ccall(:kill, Cint, (Cint, Cint), Cint(ospid), Cint(9)) == 0
+                sleep(0.5)
+                try
+                    redirect_stdout(devnull) do
+                        DistSSHRun.init_drive_workers!(proj, nothing, proj)
+                    end
+                    @test alive in workers()
+                    @test dead ∉ workers()
+                finally
+                    DistSSHRun._clear_drive_host_worker_ids!()
+                    empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+                    for w in setdiff(workers(), [1])
+                        w in workers() && rmprocs(w; waitfor = 2.0)
+                    end
+                end
+            end
+        end
+
+        @testset "launch ownership uses addprocs return not workers diff" begin
+            for w in setdiff(workers(), [1])
+                rmprocs(w; waitfor = 2.0)
+            end
+            empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+            baseline = Set(workers())
+            concurrent = addprocs(1; topology = :master_worker)
+            foreign = first(concurrent)
+            ours = addprocs(1; topology = :master_worker)
+            joined = Int[Int(w) for w in ours]
+            DistSSHRun._mark_workers_launched!(joined, tmp)
+            wrong = Int[w for w in workers() if w ∉ baseline]
+            @test foreign in wrong
+            @test length(wrong) >= 2
+            @test !(foreign in keys(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS))
+            @test only(joined) in keys(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+            DistSSHRun._mark_workers_launched!(wrong, tmp)
+            @test foreign in keys(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+            empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+            DistSSHRun._mark_workers_launched!(joined, tmp)
+            @test !(foreign in keys(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS))
+            @test only(joined) in keys(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+            for w in setdiff(workers(), [1])
+                w in workers() && rmprocs(w; waitfor = 2.0)
+            end
+        end
+
         @testset "init_drive_workers! skips foreign worker ping teardown" begin
             _with_tempdir() do proj
                 write(
