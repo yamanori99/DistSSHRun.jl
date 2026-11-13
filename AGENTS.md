@@ -28,3 +28,15 @@ Source strings for child processes must not reference module bindings; embed
 constants as values at definition time (for example with `repr`).
 
 Do not write the Registrator register command in an issue, a pull request body, or a pull request comment. That text registers the package. The only place for it is a comment on the merge commit, and only when the user asked to register.
+
+## Job entry principles
+
+Read process environment for **job defaults in exactly one place** per invocation; pass the result downstream. Explicit argv and session fields override those defaults. Argv parsing and normalization must not call job execution; job execution must not read `ENV` for job defaults.
+
+Each feature has **exactly one implementation**. CLI entry scripts stay thin and must not duplicate job logic (for example a second setup path). Detached children and DistSSHQueue must reach the same implementation as the CLI and bang APIs, not a forked copy.
+
+A feature reachable from more than one entry (CLI, bang API, `execute!`, detached child, Queue) needs a **parity test** across those entries. Keep such tests out of PkgEval.
+
+User-facing errors, hints, and help belong in the dedicated messages layer. Do not hard-code a product or launcher module name in job logic or normalization code.
+
+Public API breaking renames ship **without compatibility aliases**. Cross-repo redesign work tracks each repository's `main`; do not rely on release tags or General registrations until that work has landed.
