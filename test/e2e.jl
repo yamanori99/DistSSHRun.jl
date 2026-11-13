@@ -276,8 +276,10 @@ function _e2e_wait_hb_monitors(kp, log_dir::AbstractString; timeout::Real = 240)
     t0 = time()
     while (time() - t0) < timeout
         log = _e2e_hb_log_text(log_dir)
-        (occursin("Starting heartbeat monitors... ✓", log) ||
-            occursin(DistSSHRun.HEARTBEAT_SELF_EXIT_OFF_LINE, log)) && return true
+        (
+            occursin("Starting heartbeat monitors... ✓", log) ||
+                occursin(DistSSHRun.HEARTBEAT_SELF_EXIT_OFF_LINE, log)
+        ) && return true
         process_running(kp.process) || return false
         sleep(0.5)
     end
