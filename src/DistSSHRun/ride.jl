@@ -645,12 +645,14 @@ function ride!(
     inherited_run = old_run isa AbstractString && !isempty(strip(old_run))
     try
         _ensure_kit_run_dir!(:ride, path; project = project)
-        return with_unsafe_heterogeneous(() -> begin
-            return _ride_run!(
-                path, julia_s, tokens, args, spi_check, output_dir, project, julia,
-                remote, validated_run_id, require_all_hosts, hint_surface, inherited_run,
-            )
-        end, unsafe_heterogeneous)
+        return with_unsafe_heterogeneous(
+            () -> begin
+                return _ride_run!(
+                    path, julia_s, tokens, args, spi_check, output_dir, project, julia,
+                    remote, validated_run_id, require_all_hosts, hint_surface, inherited_run,
+                )
+            end, unsafe_heterogeneous
+        )
     finally
         _restore_kit_run_dir_env!(old_run)
         _release_kit_inproc_run!()

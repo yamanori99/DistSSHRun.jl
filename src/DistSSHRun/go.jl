@@ -1066,28 +1066,30 @@ function go!(
         _clear_active_deploy_record!()
         warn_project_sshflags(proj)
         _ensure_kit_run_dir!(:go, script_path; project = proj)
-        return with_unsafe_heterogeneous(() -> begin
-            return _go_run!(
-                script_path,
-                proj,
-                workers,
-                remote,
-                hosts_file,
-                quiet,
-                verbosity,
-                yes,
-                output_dir,
-                collect_spec,
-                args,
-                path_anchor,
-                julia,
-                hint_surface,
-                original_args,
-                repeat,
-                inherited_run,
-                snap_arg,
-            )
-        end, unsafe_heterogeneous)
+        return with_unsafe_heterogeneous(
+            () -> begin
+                return _go_run!(
+                    script_path,
+                    proj,
+                    workers,
+                    remote,
+                    hosts_file,
+                    quiet,
+                    verbosity,
+                    yes,
+                    output_dir,
+                    collect_spec,
+                    args,
+                    path_anchor,
+                    julia,
+                    hint_surface,
+                    original_args,
+                    repeat,
+                    inherited_run,
+                    snap_arg,
+                )
+            end, unsafe_heterogeneous
+        )
     finally
         _restore_kit_run_dir_env!(old_run)
         _release_kit_inproc_run!()

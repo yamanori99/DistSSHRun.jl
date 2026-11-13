@@ -320,8 +320,8 @@ function verify_workers_match_job!(project::AbstractString)
             end
             isempty(lines) ||
                 lock(mismatch_lock) do
-                    append!(mismatches, lines)
-                end
+                append!(mismatches, lines)
+            end
         end
     end
     return _environment_mismatch_throw(mismatches)

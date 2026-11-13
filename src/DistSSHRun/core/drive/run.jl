@@ -218,20 +218,22 @@ function run_drive_parsed!(
     # CLI `drive_main` already opened the frame (`cli=true`). A direct call,
     # including `drive!`, opens it here when none is active (`cli=false`).
     uh = get(parsed, :unsafe_heterogeneous, false)
-    return with_unsafe_heterogeneous(() -> begin
-        return _drive_frame(; cli = false) do
-            return Base.invokelatest(
-                _run_drive_parsed_specialized!,
-                parsed,
-                original_args,
-                resolved_output_dir,
-                resolved_log_dir,
-                resolved_hosts,
-                resolved_run_dir,
-                project_root,
-            )
-        end
-    end, uh)
+    return with_unsafe_heterogeneous(
+        () -> begin
+            return _drive_frame(; cli = false) do
+                return Base.invokelatest(
+                    _run_drive_parsed_specialized!,
+                    parsed,
+                    original_args,
+                    resolved_output_dir,
+                    resolved_log_dir,
+                    resolved_hosts,
+                    resolved_run_dir,
+                    project_root,
+                )
+            end
+        end, uh
+    )
 end
 
 function _run_drive_parsed_specialized!(
