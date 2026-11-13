@@ -55,7 +55,7 @@ function _with_one_local_worker(worker_project::Union{Nothing, AbstractString}, 
     else
         `--startup-file=no --project=$(String(worker_project))`
     end
-    pids = addprocs(1; exeflags = project_flag, topology = :master_worker)
+    addprocs(1; exeflags = project_flag, topology = :master_worker)
     w = only(workers())
     remotecall_fetch(w) do
         return Core.eval(Main, :(using DistSSHRun))
@@ -124,13 +124,13 @@ end
             test_proj = old
             try
                 Pkg.activate(proj; io = devnull)
-                parent = DistSSHRun.run_identity(proj)
                 _with_one_local_worker(
                     test_proj, function (w)
                         remotecall_fetch(w, proj) do p
                             ENV["JULIA_PROJECT"] = String(p)
                             return nothing
                         end
+                        local parent = DistSSHRun.run_identity(proj)
 
                         @testset "manifest.sha256" begin
                             _env_verify_worker_toml_override!(
