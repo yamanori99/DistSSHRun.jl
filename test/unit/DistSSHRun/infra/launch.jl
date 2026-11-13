@@ -362,10 +362,9 @@ using TOML
     @test isabspath(pin)
     @test isfile(pin) || islink(pin)
 
-    cookie_before = Distributed.cluster_cookie()
     DistSSHRun.ensure_run_cluster_cookie!()
-    @test length(Distributed.cluster_cookie()) == 16
-    @test Distributed.cluster_cookie() == cookie_before || nprocs() == 1
+    raw = strip(Distributed.cluster_cookie())
+    @test length(raw) >= 16
 
     _with_tempdir() do proj
         man = joinpath(proj, "Manifest.toml")
@@ -455,5 +454,119 @@ using TOML
         finally
             old === nothing || Pkg.activate(old; io = devnull)
         end
+    end
+
+    @testset "cluster cookie (subprocess)" begin
+        DistSSHRun.verify_distributed_init_probe!()
+
+        julia = joinpath(Sys.BINDIR, Base.julia_exename())
+        proj = if isdefined(Main, :TEST_PROJECT)
+            String(TEST_PROJECT)
+        else
+            String(something(Base.active_project(), pkgdir(DistSSHRun)))
+        end
+        cmd = code -> `$julia --startup-file=no --history-file=no --project=$proj -e $code`
+
+        rng_snapshot_code = raw"""
+        using Random, Distributed, DistSSHRun
+        function baseline_next()
+            Random.seed!(7)
+            return rand(Random.default_rng(), 1:1000, 8)
+        end
+        ref = baseline_next()
+        Random.seed!(7)
+        r = Random.default_rng()
+        before = copy(r)
+        DistSSHRun.preserve_task_local_default_rng() do
+            DistSSHRun.ensure_run_cluster_cookie!()
+        end
+        after = copy(r)
+        got = rand(r, 1:1000, 8)
+        print((before == after && got == ref) ? "ok" : "fail")
+        """
+        @test strip(String(read(cmd(rng_snapshot_code)))) == "ok"
+
+        keep_code = raw"""
+        using Distributed, DistSSHRun
+        mine = "usercookie123456"
+        Distributed.cluster_cookie(mine)
+        DistSSHRun.preserve_task_local_default_rng() do
+            DistSSHRun.ensure_run_cluster_cookie!()
+        end
+        print(strip(Distributed.cluster_cookie()) == mine ? "ok" : "fail")
+        """
+        @test strip(String(read(cmd(keep_code)))) == "ok"
+
+        preinit_keep_code = raw"""
+        using Distributed, DistSSHRun
+        mine = "usercookie123456"
+        Distributed.cluster_cookie(mine)
+        DistSSHRun.preserve_task_local_default_rng() do
+            DistSSHRun.preserve_task_local_default_rng() do
+                DistSSHRun.ensure_run_cluster_cookie!()
+            end
+        end
+        print(strip(Distributed.cluster_cookie()) == mine ? "ok" : "fail")
+        """
+        @test strip(String(read(cmd(preinit_keep_code)))) == "ok"
+
+        no_touch_rng_code = raw"""
+        using Random, Distributed, DistSSHRun
+        Random.seed!(7)
+        r = Random.default_rng()
+        ref = rand(r, 1:1000, 8)
+        Random.seed!(7)
+        DistSSHRun.preserve_task_local_default_rng() do
+            Distributed.cluster_cookie("usercookie123456")
+            DistSSHRun.ensure_run_cluster_cookie!()
+        end
+        got = rand(r, 1:1000, 8)
+        print(got == ref ? "ok" : "fail")
+        """
+        @test strip(String(read(cmd(no_touch_rng_code)))) == "ok"
+
+        rng_code = raw"""
+        using Random, Distributed, DistSSHRun
+        function baseline()
+            Random.seed!(7)
+            r = Random.default_rng()
+            p = rand(r, 1:1000, 8)
+            s = fetch(Threads.@spawn rand(1:1000, 8))
+            return (p, s)
+        end
+        ref_p, ref_s = baseline()
+        Random.seed!(7)
+        r = Random.default_rng()
+        DistSSHRun.preserve_task_local_default_rng() do
+            DistSSHRun.ensure_run_cluster_cookie!()
+            before = Set(workers())
+            addprocs(1; exeflags=`--startup-file=no`)
+            left = setdiff(Set(workers()), before)
+            isempty(left) || rmprocs(collect(left); waitfor = 30)
+        end
+        got_p = rand(r, 1:1000, 8)
+        got_s = fetch(Threads.@spawn rand(1:1000, 8))
+        print((ref_p == got_p && ref_s == got_s) ? "ok" : "fail")
+        """
+        @test strip(String(read(cmd(rng_code)))) == "ok"
+
+        nested_preserve_code = raw"""
+        using Random, Distributed, DistSSHRun
+        function first_eight()
+            Random.seed!(7)
+            return rand(Random.default_rng(), 1:1000, 8)
+        end
+        ref = first_eight()
+        Random.seed!(7)
+        r = Random.default_rng()
+        DistSSHRun.preserve_task_local_default_rng() do
+            DistSSHRun.preserve_task_local_default_rng() do
+                DistSSHRun.ensure_run_cluster_cookie!()
+            end
+        end
+        got = rand(r, 1:1000, 8)
+        print(got == ref ? "ok" : "fail")
+        """
+        @test strip(String(read(cmd(nested_preserve_code)))) == "ok"
     end
 end

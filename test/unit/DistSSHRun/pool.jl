@@ -12,10 +12,10 @@ using Test
 
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"PoolHost\"\n")
-        empty = DistSSHRun.KitSession(project = proj, workers = String[])
+        empty = DistSSHRun.DistSSHSession(project = proj, workers = String[])
         @test_throws ArgumentError DistSSHRun.pool!(empty)
 
-        parent = DistSSHRun.KitSession(project = proj, workers = ["parent:1"])
+        parent = DistSSHRun.DistSSHSession(project = proj, workers = ["parent:1"])
         pool = DistSSHRun.pool!(parent)
         @test pool.ok
         @test length(pool.hosts) == 1
@@ -44,8 +44,8 @@ using Test
                 ),
             )
             withenv(env...) do
-                DistSSHRun.apply_kit_cli_session!(DistSSHRun.KitCliSession(quiet = true, yes = true))
-                sess = DistSSHRun.KitSession(
+                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true, yes = true))
+                sess = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["child:host1"],
                     remote = "/fake/remote/PoolHost",
@@ -60,8 +60,8 @@ using Test
                 @test facts.os == "Linux"
             end
             withenv(merge(env, Dict("DISTSSH_TEST_POOL_MEM" => ""))...) do
-                DistSSHRun.apply_kit_cli_session!(DistSSHRun.KitCliSession(quiet = true, yes = true))
-                sess = DistSSHRun.KitSession(
+                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true, yes = true))
+                sess = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["child:host1"],
                     remote = "/fake/remote/PoolHost",
@@ -75,8 +75,8 @@ using Test
             end
             fail_env = merge(env, Dict("DISTSSH_TEST_SSH_FAIL" => "1"))
             withenv(fail_env...) do
-                DistSSHRun.apply_kit_cli_session!(DistSSHRun.KitCliSession(quiet = true, yes = true))
-                sess = DistSSHRun.KitSession(
+                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true, yes = true))
+                sess = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["child:host1"],
                     remote = "/fake/remote/PoolHost",

@@ -45,7 +45,7 @@ function _up_host_token(arg::AbstractString)::Bool
 end
 
 function parse_up_args(args::Vector{String})
-    cli_session, args = peel_kit_cli_flags(args)
+    cli_session, args = peel_shared_cli_flags(args)
     verb = ""
     channel = nothing
     hosts = String[]
@@ -82,7 +82,7 @@ function parse_up_args(args::Vector{String})
     end
 
     append_kit_host_sources!(hosts, cli_session; keep_counts = false, roles = true)
-    apply_kit_cli_session!(cli_session)
+    apply_shared_cli_flags!(cli_session)
 
     return (
         verb = verb,

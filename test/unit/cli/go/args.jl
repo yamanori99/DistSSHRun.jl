@@ -194,7 +194,7 @@ using Test
         let r = parse_go_args(["-q", "-y", "job.jl"])
             @test r.cli_session.quiet
             @test r.cli_session.yes
-            DistSSHRun.apply_kit_cli_session!(DistSSHRun.KitCliSession())
+            DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags())
         end
         withenv("DISTSSH_HOSTS" => "child:env-a:2,child:env-b:1") do
             let r = parse_go_args(["job.jl"])
