@@ -522,6 +522,18 @@ function _run_drive_parsed_locked!(
     writeln_field("DistSSHRun", dist_ssh_kit_version())
     app_git = get_local_git_hash(proj_dir; short = 8)
     writeln_field("App git", app_git === nothing ? "unavailable" : app_git)
+    hb_self_exit = if hasproperty(parsed, :unsafe_master_silence_exit)
+        getfield(parsed, :unsafe_master_silence_exit)
+    else
+        missing
+    end
+    heartbeat_policy = if hb_self_exit === missing
+        resolve_drive_heartbeat_policy()
+    else
+        resolve_drive_heartbeat_policy(self_exit = hb_self_exit)
+    end
+    record_heartbeat_provenance!(heartbeat_policy)
+    write_heartbeat_startup_summary!(heartbeat_policy)
     writeln_both("")
 
     remote_argv = DistSSHRun._remote_script_argv(script_path)
@@ -660,7 +672,7 @@ function _run_drive_parsed_locked!(
         wait_for_worker_connections!(; ssh = !isempty(hosts))
 
         kit_progress_step!("init")
-        init_drive_workers!(proj_dir, explicit_package, path_anchor)
+        init_drive_workers!(proj_dir, explicit_package, path_anchor, heartbeat_policy)
         DistSSHRun._start_drive_host_status_monitor!(kit_out, kit_log)
         worker_include = get(parsed, :worker_include, false)
         sync_driver_to_workers!(script_path; worker_include = worker_include)
