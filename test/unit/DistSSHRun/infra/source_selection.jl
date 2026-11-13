@@ -244,7 +244,7 @@ end
     catch e
         e
     end
-    session = DistSSHRun.KitSession(workers = ["child:h1"], project = pwd(), yes = true)
+    session = DistSSHRun.DistSSHSession(workers = ["child:h1"], project = pwd(), yes = true)
     err_api = try
         DistSSHRun.setup!(session, :ship_tree; run_id = ship.run_id)
         nothing

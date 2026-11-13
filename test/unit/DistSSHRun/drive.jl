@@ -62,10 +62,10 @@ end
         @test isempty(plan.child_workers)
     end
 
-    @testset "KitSession" begin
+    @testset "DistSSHSession" begin
         _with_tempdir() do tmp
             withenv("DISTSSH_HOSTS_FILE" => "") do
-                session = DistSSHRun.KitSession(project = tmp, workers = ["child:host-a", "child:host-b:4"])
+                session = DistSSHRun.DistSSHSession(project = tmp, workers = ["child:host-a", "child:host-b:4"])
                 @test session.project == abspath(tmp)
                 @test session.hosts == ["host-a", "host-b"]
                 @test session.tokens == ["child:host-a", "child:host-b:4"]
@@ -83,7 +83,7 @@ end
     @testset "apply_session_env!" begin
         _with_tempdir() do tmp
             delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
-            session = DistSSHRun.KitSession(
+            session = DistSSHRun.DistSSHSession(
                 project = tmp,
                 workers = ["child:host-a"],
                 remote = "/remote/App.jl",
@@ -99,7 +99,7 @@ end
         end
         _with_tempdir() do tmp
             delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
-            tilde = DistSSHRun.KitSession(
+            tilde = DistSSHRun.DistSSHSession(
                 project = tmp,
                 workers = ["child:host-a"],
                 remote = "~/jobs/abc",
@@ -111,7 +111,7 @@ end
             @test DistSSHRun.session_remote_root(tilde) == "~/jobs/abc"
         end
         _with_tempdir() do tmp
-            ambient = DistSSHRun.KitSession(
+            ambient = DistSSHRun.DistSSHSession(
                 project = tmp,
                 workers = ["child:host-a"],
                 yes = true,
@@ -124,12 +124,12 @@ end
         end
         _with_tempdir() do tmp
             delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
-            a = DistSSHRun.KitSession(
+            a = DistSSHRun.DistSSHSession(
                 project = tmp, workers = ["child:host-a"],
                 remote = "/remote/A", quiet = true, yes = true,
             )
             DistSSHRun.apply_session_env!(a)
-            b = DistSSHRun.KitSession(
+            b = DistSSHRun.DistSSHSession(
                 project = tmp, workers = ["child:host-b"], quiet = true, yes = true,
             )
             default = DistSSHRun.remote_deploy_root(tmp)
@@ -137,7 +137,7 @@ end
             @test DistSSHRun.session_remote_root(b) != "/remote/A"
             ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = "/caller/Keep"
             DistSSHRun.apply_session_env!(
-                DistSSHRun.KitSession(
+                DistSSHRun.DistSSHSession(
                     project = tmp, workers = ["child:h"],
                     remote = "/session/Override", quiet = true, yes = true,
                 ),
@@ -145,7 +145,7 @@ end
             @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] == "/caller/Keep"
             err = try
                 DistSSHRun.apply_session_env!(
-                    DistSSHRun.KitSession(
+                    DistSSHRun.DistSSHSession(
                         project = tmp, workers = ["child:h"],
                         remote = "/after/Error", quiet = true, yes = true,
                     ),
@@ -158,7 +158,7 @@ end
             @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] == "/caller/Keep"
             delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
             DistSSHRun.apply_session_env!(
-                DistSSHRun.KitSession(
+                DistSSHRun.DistSSHSession(
                     project = tmp, workers = ["child:h"],
                     remote = "/was/absent", quiet = true, yes = true,
                 ),
@@ -195,7 +195,7 @@ end
 
     @testset "session_remote_root / session_size_hosts" begin
         _with_tempdir() do tmp
-            session = DistSSHRun.KitSession(
+            session = DistSSHRun.DistSSHSession(
                 project = tmp,
                 workers = ["child:h1:1"],
                 remote = "/remote/App.jl",
@@ -205,7 +205,7 @@ end
             all_h, remotes = DistSSHRun.session_size_hosts(session)
             @test all_h == ["parent", "h1"]
             @test remotes == ["h1"]
-            remote_only = DistSSHRun.KitSession(project = tmp, workers = ["child:h1:1"])
+            remote_only = DistSSHRun.DistSSHSession(project = tmp, workers = ["child:h1:1"])
             a2, r2 = DistSSHRun.session_size_hosts(remote_only)
             @test a2 == ["h1"]
             @test r2 == ["h1"]
@@ -295,7 +295,7 @@ end
         _with_tempdir() do tmp
             script = joinpath(tmp, "job.jl")
             write(script, "")
-            session = DistSSHRun.KitSession(project = tmp, workers = ["child:host-a"])
+            session = DistSSHRun.DistSSHSession(project = tmp, workers = ["child:host-a"])
 
             parsed = DistSSHRun.drive_parsed_from_session(session, script)
             @test parsed.worker_include == false
@@ -375,10 +375,10 @@ end
 
     @testset "sync! refusals" begin
         _with_tempdir() do tmp
-            local_only = DistSSHRun.KitSession(
+            local_only = DistSSHRun.DistSSHSession(
                 project = tmp, workers = ["parent:2"], quiet = true,
             )
-            remote = DistSSHRun.KitSession(project = tmp, workers = ["child:h1"], quiet = true)
+            remote = DistSSHRun.DistSSHSession(project = tmp, workers = ["child:h1"], quiet = true)
             with_kit_verbosity(:progress) do
                 @test_throws ArgumentError DistSSHRun.sync!(local_only)
                 @test_throws ArgumentError DistSSHRun.sync!(local_only; mode = false)
@@ -392,8 +392,8 @@ end
         # `checks.jl` / `workers.jl` live in DistSSHRun (not Main fragments).
         _with_tempdir() do tmp
             with_kit_verbosity(:progress) do
-                DistSSHRun.apply_kit_cli_session!(
-                    DistSSHRun.KitCliSession(quiet = true, yes = true),
+                DistSSHRun.apply_shared_cli_flags!(
+                    DistSSHRun.CliSharedFlags(quiet = true, yes = true),
                 )
                 redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
@@ -417,7 +417,7 @@ end
 
     @testset "instantiate! requires SSH hosts" begin
         _with_tempdir() do tmp
-            session = DistSSHRun.KitSession(
+            session = DistSSHRun.DistSSHSession(
                 project = tmp, workers = ["parent:2"], quiet = true,
             )
             with_kit_verbosity(:progress) do
@@ -428,7 +428,7 @@ end
 
     @testset "collect! requires hosts" begin
         _with_tempdir() do tmp
-            session = DistSSHRun.KitSession(
+            session = DistSSHRun.DistSSHSession(
                 project = tmp, workers = ["parent:2"], quiet = true,
             )
             err = try
@@ -449,7 +449,7 @@ end
             _with_tempdir() do tmp
                 write(joinpath(tmp, "Project.toml"), "name = \"DriveRemoteEnv\"\n")
                 ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = "/caller/Keep"
-                session = DistSSHRun.KitSession(
+                session = DistSSHRun.DistSSHSession(
                     project = tmp,
                     workers = ["child:host1"],
                     remote = "/session/Custom",
@@ -505,7 +505,7 @@ end
             DistSSHRun.write_kit_run_toml!(
                 run_dir;
                 kind = :drive,
-                result = DistSSHRun.KitRunResult(false, :drive, "/out", nothing, "drive", 7),
+                result = DistSSHRun.DistSSHJobResult(false, :drive, "/out", nothing, "drive", 7),
             )
             held = DistSSHRun.DriveResult(
                 false, 7;
@@ -635,9 +635,9 @@ end
         end
         let hosts_file = _sample_hosts_file()
             withenv("DISTSSH_HOSTS_FILE" => hosts_file) do
-                s = DistSSHRun.KitSession(workers = ["parent:1"])
+                s = DistSSHRun.DistSSHSession(workers = ["parent:1"])
                 @test s.tokens == ["parent:1"]
-                empty = DistSSHRun.KitSession(workers = String[])
+                empty = DistSSHRun.DistSSHSession(workers = String[])
                 @test empty.tokens == ["child:host-a:1", "child:host-b:4"]
             end
         end
@@ -986,7 +986,7 @@ end
             write(script, "# driver include only\n")
             out = joinpath(proj, "batch-out")
             mkpath(out)
-            session = DistSSHRun.KitSession(
+            session = DistSSHRun.DistSSHSession(
                 project = proj,
                 workers = String[],
                 quiet = true,

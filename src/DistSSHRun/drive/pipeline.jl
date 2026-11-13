@@ -50,7 +50,7 @@ function pipeline_config_from_env(;
     env_v = _env_verbosity()
     return PipelineConfig(
         project = isempty(project_root) ? pwd() : String(project_root),
-        workers = kit_host_source_tokens(cli; keep_counts = true),
+        workers = placement_source_tokens(cli; keep_counts = true),
         remote = isempty(remote_raw) ? nothing : String(remote_raw),
         hosts_file = nothing,
         yes = true,
@@ -63,9 +63,9 @@ function pipeline_config_from_env(;
     )
 end
 
-"""Build [`KitSession`](@ref) from a pipeline config."""
-function kit_session_from_config(config::PipelineConfig)::KitSession
-    return KitSession(
+"""Build [`DistSSHSession`](@ref) from a pipeline config."""
+function kit_session_from_config(config::PipelineConfig)::DistSSHSession
+    return DistSSHSession(
         project = config.project,
         workers = config.tokens,
         remote = config.remote,
@@ -77,7 +77,7 @@ function kit_session_from_config(config::PipelineConfig)::KitSession
 end
 
 """Whether [`pipeline!`](@ref) should rsync results back from remotes."""
-function resolve_pipeline_collect(config::PipelineConfig, session::KitSession)::Bool
+function resolve_pipeline_collect(config::PipelineConfig, session::DistSSHSession)::Bool
     if config.collect_spec === false
         return false
     end
@@ -178,7 +178,7 @@ function pipeline!(config::PipelineConfig)::PipelineResult
     end
 end
 
-function _pipeline_run!(config::PipelineConfig, session::KitSession, driver::String)
+function _pipeline_run!(config::PipelineConfig, session::DistSSHSession, driver::String)
     sync_result = nothing
     plan = if isempty(session.tokens)
         WorkerPlan()

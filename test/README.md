@@ -292,7 +292,7 @@ ephemeral project unless `project_root` is set (E2E uses
 
 Tests follow the same two surfaces as the kit. No extra test harness:
 
-- CLI (`setup` / `go` / `drive` / `hostinfo`), `KitSession(workers=…)`, and
+- CLI (`setup` / `go` / `drive` / `hostinfo`), `DistSSHSession(workers=…)`, and
   hosts files use placement tokens (`parent:2`, `child:host-a:4`).
   setup / hostinfo ignore `:N`; `up` accepts `parent`
 - Internal SSH names stay bare (`host-a`): `session.hosts`,

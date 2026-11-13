@@ -204,7 +204,7 @@ using Test
             let r = parse_drive_args(["-q", "-y", "s.jl"])
                 @test r.cli_session.quiet == true
                 @test r.cli_session.yes == true
-                DistSSHRun.apply_kit_cli_session!(DistSSHRun.KitCliSession())
+                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags())
             end
             withenv("DISTSSH_HOSTS" => "child:env-host:3, child:env-b:1") do
                 let r = parse_drive_args(["parent:2", "s.jl"])
@@ -264,7 +264,7 @@ using Test
         let r = parse_drive_args(["--collect-missing", "out", "--quiet", "h1"])
             @test r.collect_hosts == ["h1"]
             @test r.cli_session.quiet
-            DistSSHRun.apply_kit_cli_session!(DistSSHRun.KitCliSession())
+            DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags())
         end
         @test_throws ArgumentError parse_drive_args(["--collect-missing", "out", "--foo", "child:h1"])
         @test_throws ArgumentError parse_drive_args(["--collect-overwrite"])

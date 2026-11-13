@@ -38,7 +38,7 @@ function explain_hosts_file_not_found(
     p = String(path)
     head = "hosts file not found: $p"
     hint = if surface === :api
-        "Hint: pass hosts_file=\"…\" to KitSession / go!, or set ENV[\"DISTSSH_HOSTS_FILE\"]"
+        "Hint: pass hosts_file=\"…\" to DistSSHSession / go!, or set ENV[\"DISTSSH_HOSTS_FILE\"]"
     else
         "Hint: pass --hosts-file PATH, or set DISTSSH_HOSTS_FILE"
     end
@@ -73,7 +73,7 @@ function explain_no_hosts(;
     kind in (:ssh, :collect, :hostinfo, :pool) ||
         throw(ArgumentError("explain_no_hosts kind must be :ssh, :collect, :hostinfo, or :pool"))
     if kind === :pool
-        head = "KitSession has no hosts for pool!"
+        head = "DistSSHSession has no hosts for pool!"
         hint = if surface === :api
             "Hint: pass workers=[\"parent:2\", …] or workers=[\"child:user@host\", …]"
         else
@@ -81,7 +81,7 @@ function explain_no_hosts(;
         end
         return join_explained_message(head, hint)
     elseif kind === :hostinfo
-        head = "KitSession has no hosts for hostinfo"
+        head = "DistSSHSession has no hosts for hostinfo"
         hint = if surface === :api
             "Hint: pass workers=[\"parent\", …] or workers=[\"child:user@host\", …]"
         else
@@ -91,13 +91,13 @@ function explain_no_hosts(;
     elseif kind === :collect
         head = "collect! needs hosts in session or hosts= keyword"
         hint = if surface === :api
-            "Hint: KitSession(workers=[\"child:user@host\", …]) or collect!(…; hosts=[…])"
+            "Hint: DistSSHSession(workers=[\"child:user@host\", …]) or collect!(…; hosts=[…])"
         else
             "Hint: pass HOST after --collect-missing / --collect-overwrite ROOT"
         end
         return join_explained_message(head, hint)
     end
-    head = "KitSession has no SSH hosts"
+    head = "DistSSHSession has no SSH hosts"
     hint = if surface === :api
         "Hint: pass workers= with child:NAME tokens, or hosts_file="
     else

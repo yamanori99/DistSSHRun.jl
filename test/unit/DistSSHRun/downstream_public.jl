@@ -23,7 +23,7 @@ include(joinpath(@__DIR__, "..", "..", "..", ".github", "downstream_public.jl"))
             DistSSHRun.ship_send_list(root)
             """,
         )
-        write(joinpath(src, "field.jl"), "DistSSHRun.KitProcess.run_dir\n")
+        write(joinpath(src, "field.jl"), "DistSSHRun.DetachedProcess.run_dir\n")
         write(joinpath(src, "allow.jl"), "DistSSHRun.print_header(\"t\")\n")
         write(joinpath(src, "imp.jl"), "using DistSSHRun.DistSSHBase: _ssh_host_args\n")
         write(joinpath(src, "pkg.jl"), "import DistSSHRun\n")

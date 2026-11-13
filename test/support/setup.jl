@@ -100,7 +100,7 @@ if !isdefined(Main, :_run_kit_setup)
 
     # Apply a quiet+yes kit CLI session.
     function _apply_quiet_setup_session!()
-        DistSSHRun.apply_kit_cli_session!(DistSSHRun.KitCliSession(quiet = true, yes = true))
+        DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true, yes = true))
         return nothing
     end
 

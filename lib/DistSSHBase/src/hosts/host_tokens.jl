@@ -84,7 +84,7 @@ function read_hosts_file_lines(
     return hosts
 end
 
-"""SSH host names from a hosts file (`host:N` → `host` only; for setup / KitSession)."""
+"""SSH host names from a hosts file (`host:N` → `host` only; for setup / DistSSHSession)."""
 function read_hosts_file(
         path::AbstractString;
         surface::Symbol = :cli,

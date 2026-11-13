@@ -266,7 +266,7 @@ end
     @test occursin("group or world writable", sh)
     @test !occursin("runs", sh)
     @test !occursin(".distssh", sh)
-    session = DistSSHRun.KitSession(; workers = ["child:host.test"], yes = true)
+    session = DistSSHRun.DistSSHSession(; workers = ["child:host.test"], yes = true)
     err = try
         _capture_stdio() do _, _
             DistSSHRun.setup!(session, :remote_root)
@@ -1460,7 +1460,7 @@ end
         DistSSHRun.set_kit_noninteractive!(false)
         try
             _with_saved_project_env() do
-                session = DistSSHRun.KitSession(
+                session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["child:host1"],
                     remote = "/home/distsshkit/app",
@@ -1543,7 +1543,7 @@ end
                             for name in setdiff(Set(readdir(tempdir())), before)
                                 @test !isfile(joinpath(tempdir(), name, "ship.tar"))
                             end
-                            session = DistSSHRun.KitSession(
+                            session = DistSSHRun.DistSSHSession(
                                 project = proj,
                                 workers = ["child:host1"],
                                 remote = "/home/distsshkit/app",

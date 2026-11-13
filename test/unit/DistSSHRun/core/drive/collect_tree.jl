@@ -11,7 +11,7 @@ function _collect!(
         hosts::Vector{String};
         merge::Bool = false,
     )
-    session = DistSSHRun.KitSession(
+    session = DistSSHRun.DistSSHSession(
         project = proj,
         workers = hosts,
         remote = "/fake/remote/CollectHost",
@@ -81,7 +81,7 @@ end
                 )
                 DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!()
                 withenv(env...) do
-                    DistSSHRun.apply_kit_cli_session!(DistSSHRun.KitCliSession(quiet = true, yes = true))
+                    DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true, yes = true))
                     return f(state_dir, proj)
                 end
             end

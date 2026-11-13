@@ -74,8 +74,8 @@ end
 function kit_run_result(
         result::RideResult,
         tokens::AbstractVector{<:AbstractString} = String[],
-    )::KitRunResult
-    return KitRunResult(
+    )::DistSSHJobResult
+    return DistSSHJobResult(
         result.ok,
         :ride,
         result.output_dir,
