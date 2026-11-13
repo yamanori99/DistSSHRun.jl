@@ -193,6 +193,7 @@ function _reset_run_provenance!(project::AbstractString)
     proj = canonical_local_path(String(project))
     _PROVENANCE_PROJECT[] = proj
     _PROVENANCE_WORKERS[] = nothing
+    _PROVENANCE_HEARTBEAT[] = nothing
     lock(_PROVENANCE_LOCK) do
         empty!(_PROVENANCE_GO)
     end
@@ -216,7 +217,9 @@ function _reset_run_provenance!(project::AbstractString)
     catch
         nothing
     end
-    _PROVENANCE_UNSAFE[] = String[]
+    if !unsafe_heterogeneous_active()
+        _PROVENANCE_UNSAFE[] = String[]
+    end
     _PROVENANCE_AT_START[] = true
     reset_worker_seeds!()
     return nothing
@@ -935,6 +938,8 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     deploy_rec !== nothing && (data["deploy"] = deploy_rec)
     unsafe = _PROVENANCE_UNSAFE[]
     isempty(unsafe) || (data["unsafe"] = copy(unsafe))
+    hb = started ? _PROVENANCE_HEARTBEAT[] : nothing
+    hb !== nothing && (data["heartbeat"] = hb)
     return data
 end
 

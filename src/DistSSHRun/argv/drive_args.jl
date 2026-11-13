@@ -95,6 +95,8 @@ function parse_drive_args(args::Vector{String})
     run_id = nothing
     deploy_root = nothing
     isolated = false
+    unsafe_master_silence_exit = false
+    unsafe_master_silence_exit_cli = false
     worker_include = false
     require_git = false
     require_all_hosts = true
@@ -194,6 +196,13 @@ function parse_drive_args(args::Vector{String})
             i += 2
         elseif arg == "--"
             options_done = true
+            i += 1
+        elseif arg == UNSAFE_MASTER_SILENCE_EXIT_FLAG
+            unsafe_master_silence_exit_cli && throw(
+                ArgumentError("drive: $(UNSAFE_MASTER_SILENCE_EXIT_FLAG) specified more than once"),
+            )
+            unsafe_master_silence_exit = true
+            unsafe_master_silence_exit_cli = true
             i += 1
         elseif arg == "--isolated"
             isolated && throw(ArgumentError("drive: --isolated specified more than once"))
@@ -311,6 +320,7 @@ function parse_drive_args(args::Vector{String})
                 run_id = run_id,
                 deploy_root = deploy_root,
                 isolated = isolated,
+                unsafe_master_silence_exit = unsafe_master_silence_exit,
             )
         elseif arg == "--help" || arg == "-h"
             return (
@@ -338,6 +348,7 @@ function parse_drive_args(args::Vector{String})
                 run_id = nothing,
                 deploy_root = nothing,
                 isolated = false,
+                unsafe_master_silence_exit = false,
             )
         elseif endswith(arg, ".jl")
             script_path = arg
@@ -387,6 +398,11 @@ function parse_drive_args(args::Vector{String})
         )
     end
 
+    if !unsafe_master_silence_exit_cli &&
+            _env_flag(UNSAFE_MASTER_SILENCE_EXIT_ENV)
+        unsafe_master_silence_exit = true
+    end
+
     apply_kit_cli_session!(cli_session)
     if !parent_listed[] && default_workers !== nothing
         parent_workers = _drive_set_parent_workers!(
@@ -421,6 +437,7 @@ function parse_drive_args(args::Vector{String})
         run_id = run_id,
         deploy_root = deploy_root,
         isolated = isolated,
+        unsafe_master_silence_exit = unsafe_master_silence_exit,
     )
 end
 
@@ -466,6 +483,7 @@ function show_drive_usage(; io::IO = stdout)
         "  --best-effort       allow a partial run (missing join is not a failure)",
         "  --output-dir PATH   result root (default: {script}/.distssh/drive/<stem>_<UTC>/; must be missing or empty)",
         "  --isolated          run the driver in a child process (default: this process)",
+        "  $(DRIVE_UNSAFE_MASTER_SILENCE_EXIT_FLAG_HELP)",
         "  --julia PATH        remote Julia",
         "  --unsafe-heterogeneous  allow Julia, packages, and environment files to differ across workers",
         "  SSH workers: project-root cwd, bind 127.0.0.1, tunnel unless DISTSSH_SSH_TUNNEL=0.",
@@ -503,6 +521,9 @@ function show_drive_usage(; io::IO = stdout)
         "  $(KIT_JOBS_ENV_HELP)",
         "  $(KIT_REQUIRE_ALL_HOSTS_ENV_HELP)",
         "  $(KIT_BEST_EFFORT_ENV_HELP)",
+        "  $(DRIVE_UNSAFE_MASTER_SILENCE_EXIT_ENV_HELP)",
+        "  $(DRIVE_HEARTBEAT_DEADLINE_ENV_HELP)",
+        "  $(DRIVE_HEARTBEAT_INTERVAL_ENV_HELP)",
         "  DISTRIBUTED_SKIP_COLLECT=1 skip post-run collect",
     )
     print_help_blank(io)

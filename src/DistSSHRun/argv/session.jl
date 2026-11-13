@@ -46,6 +46,16 @@ const KIT_REQUIRE_ALL_HOSTS_ENV_HELP =
 const KIT_BEST_EFFORT_ENV_HELP =
     "DISTSSH_BEST_EFFORT            Same as --best-effort"
 
+"""Drive opt-in: workers exit when the controller (master) stops answering heartbeats."""
+const DRIVE_UNSAFE_MASTER_SILENCE_EXIT_FLAG_HELP =
+    "--unsafe-master-silence-exit  opt-in worker self-exit when the controller (master) is silent"
+const DRIVE_UNSAFE_MASTER_SILENCE_EXIT_ENV_HELP =
+    "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT  Same as --unsafe-master-silence-exit"
+const DRIVE_HEARTBEAT_DEADLINE_ENV_HELP =
+    "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC  required positive seconds when self-exit is on"
+const DRIVE_HEARTBEAT_INTERVAL_ENV_HELP =
+    "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC  heartbeat ping interval (default 30)"
+
 """CLI default when no verbosity flag/env is set: live bar on a TTY, else verbose."""
 kit_cli_auto_verbosity(; live::Union{Nothing, Bool} = nothing)::Symbol =
     something(live, kit_stdout_is_live()) ? :progress : :verbose

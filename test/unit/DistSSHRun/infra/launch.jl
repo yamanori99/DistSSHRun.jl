@@ -276,6 +276,38 @@ using TOML
     )
     @test any(occursin("julia version", l) for l in julia_lines)
 
+    combo_mismatch = DistSSHRun.identity_mismatches(
+        parent,
+        Dict(
+            "version" => "1.9.0",
+            "commit" => "0000000000000000000000000000000000000000",
+            "manifest.sha256" => "c"^64,
+            "project.sha256" => parent["project.sha256"],
+        ),
+    )
+    @test any(occursin("julia version", l) for l in combo_mismatch)
+    @test any(occursin("commit", l) for l in combo_mismatch)
+    @test any(occursin("manifest.sha256", l) for l in combo_mismatch)
+    @test isempty(
+        DistSSHRun.identity_mismatches(
+            parent,
+            Dict(
+                "version" => "1.9.0",
+                "commit" => "0000000000000000000000000000000000000000",
+                "manifest.sha256" => "c"^64,
+                "project.sha256" => parent["project.sha256"],
+            ),
+            unsafe_heterogeneous = true,
+        ),
+    )
+
+    _with_tempdir() do proj
+        write(joinpath(proj, "Project.toml"), "name = \"VerifyGate\"\n")
+        write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+        ident = DistSSHRun.run_identity(proj)
+        @test !isempty(ident["manifest.sha256"])
+    end
+
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"ShaJob\"\n")
         write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")

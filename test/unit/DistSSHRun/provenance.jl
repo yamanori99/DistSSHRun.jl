@@ -697,4 +697,16 @@ end
             end
         end
     end
+
+    @testset "unsafe heterogeneous survives provenance reset" begin
+        _with_tempdir() do proj
+            DistSSHRun.with_unsafe_heterogeneous(() -> begin
+                DistSSHRun._reset_run_provenance!(proj)
+                prov = DistSSHRun._assemble_provenance(proj)
+                unsafe = get(prov, "unsafe", String[])
+                @test unsafe isa AbstractVector
+                @test "heterogeneous" in unsafe
+            end, true)
+        end
+    end
 end

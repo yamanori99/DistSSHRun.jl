@@ -67,6 +67,14 @@ using Test
             child_args = DistSSHRun._drive_isolated_child_args(quieted)
             @test child_args == ["--output-dir", "--quiet", "result.jl", "driver.jl"]
             @test !DistSSHRun.parse_drive_args(child_args).isolated
+            uh_isolated = [
+                "--unsafe-heterogeneous", "--isolated", "parent:1", "job.jl",
+            ]
+            _, uh_peeled = DistSSHRun.peel_kit_cli_flags(uh_isolated)
+            @test DistSSHRun._peeled_isolated_option(uh_peeled) !== nothing
+            uh_child = DistSSHRun._drive_isolated_child_args(uh_isolated)
+            @test uh_child == ["--unsafe-heterogeneous", "parent:1", "job.jl"]
+            @test !DistSSHRun.parse_drive_args(uh_child).isolated
             rooted = DistSSHRun._drive_isolated_cmd(
                 ["--isolated", "s.jl"]; project_root = "/jobs/app",
             )

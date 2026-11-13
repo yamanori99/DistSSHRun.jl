@@ -24,34 +24,24 @@ end
         @test isdefined(hb, :stop_heartbeat_monitor)
     end
 
-    @testset "_heartbeat_config" begin
-        cfg = DistSSHHeartbeat._heartbeat_config(Dict{String, String}())
+    @testset "heartbeat env parsing" begin
+        @test DistSSHHeartbeat._heartbeat_interval(Dict{String, String}()) == 30.0
+        @test DistSSHHeartbeat._heartbeat_interval(
+            Dict("DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "2"),
+        ) == 2.0
+        @test DistSSHHeartbeat._heartbeat_interval(
+            Dict("DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "nope"),
+        ) == 30.0
+        @test DistSSHHeartbeat._heartbeat_deadline_explicit(Dict{String, String}()) === nothing
+        @test DistSSHHeartbeat._heartbeat_deadline_explicit(
+            Dict("DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "9"),
+        ) == 9.0
+        @test DistSSHHeartbeat._heartbeat_deadline_explicit(
+            Dict("DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "-1"),
+        ) === nothing
+        cfg = DistSSHHeartbeat._heartbeat_config(Dict{String, String}(); deadline = 12.0)
         @test cfg.interval == 30.0
-        @test cfg.deadline == 600.0
-        cfg = DistSSHHeartbeat._heartbeat_config(
-            Dict(
-                "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "2",
-                "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "9",
-            )
-        )
-        @test cfg.interval == 2.0
-        @test cfg.deadline == 9.0
-        cfg = DistSSHHeartbeat._heartbeat_config(
-            Dict(
-                "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "nope",
-                "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "-1",
-            )
-        )
-        @test cfg.interval == 30.0
-        @test cfg.deadline == 600.0
-        withenv("DISTSSH_WAIT_PEER_SILENT" => "42") do
-            bare = DistSSHHeartbeat._heartbeat_config(Dict{String, String}())
-            @test bare.deadline == 42.0
-        end
-        withenv("DISTSSH_WAIT_PEER_SILENT" => "0") do
-            bare = DistSSHHeartbeat._heartbeat_config(Dict{String, String}())
-            @test bare.deadline == 600.0
-        end
+        @test cfg.deadline == 12.0
     end
 
     @testset "_master_alive" begin
