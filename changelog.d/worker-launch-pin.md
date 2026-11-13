@@ -12,7 +12,7 @@ category: breaking
   `cd` to the project root (not the script directory) and bind `127.0.0.1`
   with `tunnel=true`. SSH adds `ExitOnForwardFailure=yes`. Drive / ride
   workers and go slots error on Julia / DistSSH* / Manifest path mismatch
-  unless `--allow-mismatch` lists `julia`, `distssh`, and/or `manifest`
+  unless `--unsafe-heterogeneous` is set
   (Manifest format 2 `[[deps.Name]]` tables are read; identity uses Julia's
   active Manifest, including `Manifest-v{major}.{minor}.toml`. A missing
   Manifest is a mismatch only when the parent job has one.

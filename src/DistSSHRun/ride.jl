@@ -139,6 +139,13 @@ function _ride_pmap_worker(f, x)
     end
 end
 
+function _ride_owned_pmap(f, xs)
+    owned = _live_owned_worker_ids()
+    isempty(owned) && return map(_ride_callable(f), xs)
+    pool = WorkerPool(owned)
+    return pmap(x -> _ride_pmap_worker(f, x), pool, xs)
+end
+
 function _ride_apply_named(name::Symbol, x)
     f = getglobal(Main, name)
     return Base.invokelatest(f, x)
@@ -159,6 +166,7 @@ function _can_distribute(f, xs)::Bool
         return false
     length(xs) == 0 && return false
     nprocs() < 2 && return false
+    isempty(_live_owned_worker_ids()) && return false
     T = eltype(xs)
     fn = try
         f isa Symbol ? getglobal(Main, f) : f
@@ -244,7 +252,7 @@ function _ride_map(f, xs)
         if !_can_distribute(f, xs)
             return map(_ride_callable(f), xs)
         end
-        dist = pmap(x -> _ride_pmap_worker(f, x), xs)
+        dist = _ride_owned_pmap(f, xs)
         if _RIDE_SPI[]
             seq = map(_ride_callable(f), xs)
             ok = _ride_compare(dist, seq)
@@ -265,7 +273,7 @@ function _ride_filter(f, xs)
         if !_can_distribute(f, xs)
             return filter(_ride_callable(f), xs)
         end
-        flags = pmap(x -> _ride_pmap_worker(f, x), xs)
+        flags = _ride_owned_pmap(f, xs)
         dist = xs[findall(identity, flags)]
         if _RIDE_SPI[]
             seq = filter(_ride_callable(f), xs)
@@ -407,7 +415,7 @@ end
 
 function _ride_load_self_on_workers!()
     pkg = Base.PkgId(DistSSHRun)
-    for w in workers()
+    for w in _live_owned_worker_ids()
         remotecall_fetch(Base.require, w, pkg)
     end
     return nothing
@@ -417,7 +425,7 @@ function _ride_push_prelude!(ex)
     prelude = _ride_worker_prelude(ex)
     isempty(prelude.args) && return
     src = sprint(print, prelude)
-    for w in workers()
+    for w in _live_owned_worker_ids()
         remotecall_fetch(_ride_eval_on_worker, w, src)
     end
     return nothing
@@ -509,10 +517,21 @@ function _ride_add_workers!(
             _ride_init_drive_workers!(project)
         end
         added = Int[w for w in workers() if w ∉ before]
+        if isempty(child_hosts) && !isempty(added)
+            _mark_workers_launched!(added, project)
+            _register_drive_host_worker_ids!(PARENT_HOST_NAME, added)
+        end
         isempty(added) || _ride_load_self_on_workers!()
         if isempty(child_hosts) && !isempty(added)
-            _register_drive_host_worker_ids!(PARENT_HOST_NAME, added)
-            verify_workers_match_job!(project)
+            local_man = _existing_project_manifest(project)
+            verify_workers_match_job!(
+                project;
+                host_manifests = if isempty(local_man)
+                    nothing
+                else
+                    Dict{Int, String}(w => local_man for w in added)
+                end,
+            )
         end
         capture_worker_provenance!()
         return added, ssh_hosts
@@ -525,7 +544,10 @@ function _ride_add_workers!(
             end
         end
         missing = Int[w for w in leftover if w ∉ known]
-        _register_leftover_workers!(missing)
+        missing_owned = Int[
+            w for w in missing if haskey(RUNNER_WORKER_PROJECT_DIRS, w)
+        ]
+        _register_leftover_workers!(missing_owned)
         capture_worker_provenance!()
         isempty(leftover) || rmprocs(leftover; waitfor = 30)
         rethrow()
@@ -832,7 +854,12 @@ function _ride_run!(
             if !progress_ok && !isempty(added)
                 _interrupt_drive_workers!(added)
             end
-            !isempty(added) && rmprocs(added; waitfor = 30)
+            if !isempty(added)
+                _warn_skipped_foreign_workers!("worker removal", added)
+                owned = Set(_drive_owned_worker_ids())
+                to_rm = Int[w for w in added if w ∈ owned]
+                isempty(to_rm) || rmprocs(to_rm; waitfor = 30)
+            end
             _clear_drive_host_worker_ids!()
             _RIDE_DEPTH[] = 0
         finally

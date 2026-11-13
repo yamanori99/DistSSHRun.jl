@@ -342,16 +342,19 @@ function verify_workers_match_job!(
         host_manifests = nothing,
     )
     unsafe_heterogeneous_active() && return nothing
-    if host_manifests isa AbstractDict && !isempty(host_manifests)
-        # Per-worker manifest paths from drive (local vs remote); comparison uses SHA digests only.
-        nothing
-    end
     parent = run_identity(project)
     want_man = get(parent, "manifest.sha256", "")
     isempty(want_man) && return nothing
+    owned_live = Set(_live_owned_worker_ids())
+    worker_ids = if host_manifests isa AbstractDict && !isempty(host_manifests)
+        # Per-worker manifest paths from drive (local vs remote); comparison uses SHA digests only.
+        sort!(Int[w for w in keys(host_manifests) if Int(w) ∈ owned_live])
+    else
+        _live_owned_worker_ids()
+    end
     mismatches = String[]
     mismatch_lock = ReentrantLock()
-    @sync for w in workers()
+    @sync for w in worker_ids
         @async begin
             snap = _fetch_worker_environment_snapshot(w)
             local lines = String[]
