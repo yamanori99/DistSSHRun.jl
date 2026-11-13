@@ -1129,6 +1129,51 @@ function _register_drive_host_worker_ids!(host::AbstractString, ids::AbstractVec
     return nothing
 end
 
+"""Worker ids recorded for this drive or ride run (`DRIVE_HOST_WORKER_IDS`)."""
+function _registered_drive_worker_ids()::Vector{Int}
+    out = Int[]
+    for ids in values(DRIVE_HOST_WORKER_IDS)
+        append!(out, ids)
+    end
+    return unique!(out)
+end
+
+"""Ids this run may interrupt, stop, or remove (registry plus runner layout)."""
+function _drive_owned_worker_ids()::Vector{Int}
+    owned = Set(_registered_drive_worker_ids())
+    for w in keys(RUNNER_WORKER_PROJECT_DIRS)
+        push!(owned, Int(w))
+    end
+    return sort!(collect(owned))
+end
+
+function _warn_skipped_foreign_workers!(
+        operation::AbstractString,
+        candidates::AbstractVector{<:Integer},
+    )
+    owned = Set(_drive_owned_worker_ids())
+    foreign = Int[
+        Int(w) for w in candidates if Int(w) ∉ owned && Int(w) != 1
+    ]
+    isempty(foreign) && return nothing
+    @warn "skipped $operation on workers not started by this run" foreign =
+        foreign controller_pid = getpid()
+    return nothing
+end
+
+function _rmprocs_drive_owned_workers!(; waitfor::Real)
+    live = Int[Int(w) for w in workers()]
+    _warn_skipped_foreign_workers!("worker removal", live)
+    owned = Set(_drive_owned_worker_ids())
+    ids = Int[w for w in live if w ∈ owned]
+    isempty(ids) && return nothing
+    try
+        rmprocs(ids; waitfor = waitfor)
+    catch
+    end
+    return nothing
+end
+
 """Host name for a worker that `addprocs` created but did not register.
 
 Local workers stay on the parent. An SSH worker uses the host in its

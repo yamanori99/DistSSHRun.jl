@@ -529,9 +529,15 @@ function _ride_add_workers!(
             end
         end
         missing = Int[w for w in leftover if w ∉ known]
-        _register_leftover_workers!(missing)
+        missing_owned = Int[
+            w for w in missing if haskey(RUNNER_WORKER_PROJECT_DIRS, w)
+        ]
+        _register_leftover_workers!(missing_owned)
         capture_worker_provenance!()
-        isempty(leftover) || rmprocs(leftover; waitfor = 30)
+        _warn_skipped_foreign_workers!("worker removal", leftover)
+        owned = Set(_drive_owned_worker_ids())
+        to_rm = Int[w for w in leftover if w ∈ owned]
+        isempty(to_rm) || rmprocs(to_rm; waitfor = 30)
         rethrow()
     end
 end
@@ -833,7 +839,12 @@ function _ride_run!(
             if !progress_ok && !isempty(added)
                 _interrupt_drive_workers!(added)
             end
-            !isempty(added) && rmprocs(added; waitfor = 30)
+            if !isempty(added)
+                _warn_skipped_foreign_workers!("worker removal", added)
+                owned = Set(_drive_owned_worker_ids())
+                to_rm = Int[w for w in added if w ∈ owned]
+                isempty(to_rm) || rmprocs(to_rm; waitfor = 30)
+            end
             _clear_drive_host_worker_ids!()
             _RIDE_DEPTH[] = 0
         finally

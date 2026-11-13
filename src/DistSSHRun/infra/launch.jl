@@ -334,8 +334,11 @@ end
 
 function _rmprocs_added_since(before::AbstractSet{<:Integer})
     leftover = Int[w for w in workers() if w ∉ before]
+    _warn_skipped_foreign_workers!("worker removal", leftover)
+    owned = Set(_drive_owned_worker_ids())
+    to_rm = Int[w for w in leftover if w ∈ owned]
     try
-        isempty(leftover) || rmprocs(leftover; waitfor = 30)
+        isempty(to_rm) || rmprocs(to_rm; waitfor = 30)
     catch
     end
     return nothing

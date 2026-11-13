@@ -1,4 +1,5 @@
 using Test
+using Distributed
 
 @testset "ride" begin
     @testset "activate project" begin
@@ -693,6 +694,37 @@ using Test
             end
             restore_remote!()
             delete!(DistSSHRun._PINNED_JULIA, "ridework.test\0/usr/bin/julia")
+        end
+    end
+
+    @testset "foreign worker survives ride add error cleanup" begin
+        _with_tempdir() do tmp
+            script = joinpath(tmp, "noop.jl")
+            write(script, "nothing\n")
+            addprocs(1; topology = :master_worker)
+            foreign = workers()[end]
+            task = @async sleep(120)
+            DistSSHRun.DRIVE_HOST_STATUS_STOP[] = false
+            DistSSHRun.DRIVE_HOST_STATUS_TASK[] = task
+            plan = DistSSHRun.WorkerPlan(0, Dict{String, Int}())
+            try
+                @test_throws ArgumentError DistSSHRun._ride_add_workers!(
+                    plan,
+                    tmp,
+                    script,
+                    nothing,
+                    false,
+                )
+                @test foreign in workers()
+            finally
+                DistSSHRun.DRIVE_HOST_STATUS_STOP[] = true
+                DistSSHRun.DRIVE_HOST_STATUS_TASK[] = nothing
+                DistSSHRun._clear_drive_host_worker_ids!()
+                empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+                for w in setdiff(workers(), [1])
+                    w in workers() && rmprocs(w; waitfor = 2.0)
+                end
+            end
         end
     end
 

@@ -210,12 +210,15 @@ function init_drive_workers!(proj_dir::String, explicit_package, path_anchor::St
     # Overlap deferred ship input hashing with activate / precompile.
     hash_task = @async DistSSHRun.await_declared_input_hashes!()
     try
-        worker_ids = workers()
+        all_live = Int[Int(w) for w in workers()]
+        _warn_skipped_foreign_workers!("worker initialization", all_live)
+        worker_ids = _drive_owned_worker_ids()
         responses = Int[]
         failed_workers = Int[]
 
         _ping_retries = something(tryparse(Int, get(ENV, "DISTRIBUTED_PING_RETRIES", "6")), 6)
         for w in worker_ids
+            w in workers() || continue
             local r_ok
             r_ok = nothing
             local last_ex
@@ -254,7 +257,10 @@ function init_drive_workers!(proj_dir::String, explicit_package, path_anchor::St
         write_both("  Loading packages on workers... ")
         flush(stdout)
 
-        _drive_include_workers(_DRIVE_WORKER_BOOTSTRAP)
+        for w in worker_ids
+            w in workers() || continue
+            _drive_include_main(w, _DRIVE_WORKER_BOOTSTRAP)
+        end
         mapped = Set{Int}()
         for (host, ids) in DistSSHRun.DRIVE_HOST_WORKER_IDS
             DistSSHRun._drive_host_span!(host, "init", :running)
@@ -271,8 +277,10 @@ function init_drive_workers!(proj_dir::String, explicit_package, path_anchor::St
                 rethrow()
             end
         end
-        for w in workers()
+        owned = Set(_drive_owned_worker_ids())
+        for w in worker_ids
             Int(w) in mapped && continue
+            Int(w) ∉ owned && continue
             worker_proj = get(RUNNER_WORKER_PROJECT_DIRS, w, proj_dir)
             _drive_invokelatest_main(w, :_drive_worker_activate!, worker_proj)
         end
