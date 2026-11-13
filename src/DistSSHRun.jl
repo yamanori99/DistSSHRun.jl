@@ -169,6 +169,7 @@ include("DistSSHRun/setup.jl")
 include("DistSSHRun/infra/run_layout.jl")
 include("DistSSHRun/ship_module.jl")
 include("DistSSHRun/heartbeat_module.jl")
+include("DistSSHRun/options/heartbeat.jl")
 using .DistSSHShip: EXTERNAL_DIR_NAME
 using .DistSSHHeartbeat:
     _heartbeat_config,

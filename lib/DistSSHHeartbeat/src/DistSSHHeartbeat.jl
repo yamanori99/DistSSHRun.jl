@@ -6,10 +6,11 @@ Not registered. DistSSHRun includes this source as
 The worker never `using`s DistSSHRun: Run always evals `WORKER_SOURCE`
 into `Main.DistSSHHeartbeat` on workers.
 
-The deadline is the maximum time the master may go without yielding.
+When enabled by the controller (master), the deadline is the maximum time
+the master may go without yielding before workers self-exit with code 75.
 A worker that does not yield for more than twice the ping interval
 resets its last-success time so the stall is not a false-positive exit.
-Silence for the deadline exits the worker with code 75 (`EX_TEMPFAIL`).
+DistSSHRun enables this monitor only with an explicit opt-in and deadline.
 """
 module DistSSHHeartbeat
 

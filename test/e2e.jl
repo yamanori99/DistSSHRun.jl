@@ -275,7 +275,9 @@ end
 function _e2e_wait_hb_monitors(kp, log_dir::AbstractString; timeout::Real = 240)
     t0 = time()
     while (time() - t0) < timeout
-        occursin("Starting heartbeat monitors... ✓", _e2e_hb_log_text(log_dir)) && return true
+        log = _e2e_hb_log_text(log_dir)
+        (occursin("Starting heartbeat monitors... ✓", log) ||
+            occursin(DistSSHRun.HEARTBEAT_SELF_EXIT_OFF_LINE, log)) && return true
         process_running(kp.process) || return false
         sleep(0.5)
     end
@@ -1318,6 +1320,7 @@ end
             _ssh_e2e_ssh(host, "pkill -f $pat_q || true")
             hb_env = merge(
                 _e2e_base_env(), Dict(
+                    "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1",
                     "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "1",
                     "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "5",
                     "DISTRIBUTED_INIT_DELAY_SEC" => "0",

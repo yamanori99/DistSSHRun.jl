@@ -12,8 +12,8 @@ The version-cut PR copies them into this file.
 ### Planned breaking (next minor)
 
 - Drive worker heartbeat moves to `lib/DistSSHHeartbeat` (always shipped
-  by Run; workers exit 75 on a dead master). See
-  `changelog.d/heartbeat-lib.md`.
+  by Run). Self-exit when the controller (master) is silent is opt-in; see
+  `changelog.d/heartbeat-self-exit-opt-in.md` and `changelog.d/heartbeat-lib.md`.
 
 ## 0.1.16
 
