@@ -84,16 +84,9 @@ function _distssh_versions_from_manifest(path::AbstractString)::Dict{String, Str
 end
 
 function _existing_project_manifest(project::AbstractString)::String
-    d = canonical_local_path(project)
-    pf = joinpath(d, "Project.toml")
-    isfile(pf) || return ""
-    man = try
-        Base.project_file_manifest_path(String(pf))
-    catch
-        nothing
-    end
-    man isa AbstractString && isfile(man) && return String(man)
-    return ""
+    mp = DistSSHBase.manifest_path(project)
+    mp === nothing && return ""
+    return String(mp)
 end
 
 """
@@ -513,6 +506,9 @@ function _go_remote_run_identity(
     pq = _remote_julia_path_sh(pinned)
     pr = _remote_shell_path_word(rp)
     inner = string(
+        "JULIA_LOAD_PATH=",
+        posix_quote(_LAUNCH_LOAD_PATH),
+        " ",
         pq,
         " --startup-file=no --project=",
         pr,

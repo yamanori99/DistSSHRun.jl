@@ -432,6 +432,38 @@ using TOML
         end
     end
 
+    @testset "run_identity uses DistSSHBase manifest_path" begin
+        _with_tempdir() do root
+            julia_only = joinpath(root, "julia-only")
+            mkpath(julia_only)
+            write(joinpath(julia_only, "JuliaProject.toml"), "name = \"JuliaOnly\"\n[deps]\n")
+            lock = joinpath(julia_only, "JuliaManifest.toml")
+            write(lock, "# julia lock\n")
+            @test DistSSHRun._existing_project_manifest(julia_only) == lock
+            ident = DistSSHRun.run_identity(julia_only)
+            @test ident["manifest"] == lock
+            @test ident["manifest.sha256"] == DistSSHRun.file_sha256(lock)
+        end
+    end
+
+    @testset "worker snapshot loads SHA without DistSSHRun on worker" begin
+        _with_tempdir() do proj
+            write(joinpath(proj, "Project.toml"), "name = \"ShaSnap\"\n")
+            write(joinpath(proj, "Manifest.toml"), "# lock\n")
+            worker_mod = Module()
+            old = Base.active_project()
+            try
+                Pkg.activate(proj; io = devnull)
+                snap = Core.eval(worker_mod, DistSSHRun._worker_identity_expr())
+                @test snap isa AbstractDict
+                @test !isempty(snap["manifest.sha256"])
+                @test !isdefined(worker_mod, :DistSSHRun)
+            finally
+                old === nothing || Pkg.activate(old; io = devnull)
+            end
+        end
+    end
+
     @testset "cluster cookie (subprocess)" begin
         DistSSHRun.verify_distributed_init_probe!()
 

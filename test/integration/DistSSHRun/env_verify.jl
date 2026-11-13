@@ -199,6 +199,36 @@ end
         end
     end
 
+    @testset "_remote_project_for_go prefers remote work root" begin
+        local_proj = "/home/controller/jobs/app"
+        remote_src = "/home/remote/runs/run123/src"
+        @test DistSSHRun._remote_project_for_go("host1", remote_src, local_proj) == remote_src
+    end
+
+    @testset "go remote identity probe uses launch JULIA_LOAD_PATH" begin
+        _with_tempdir() do state
+            logp = joinpath(state, "ssh.log")
+            base = _fake_setup_remote_env(state)
+            env = merge(
+                base,
+                Dict(
+                    "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia",
+                    "DISTSSH_TEST_POSIX_SHELL" => "1",
+                    "DISTSSH_TEST_SSH_LOG" => logp,
+                ),
+            )
+            _with_tempdir() do proj
+                _env_verify_job!(proj)
+                withenv(env...) do
+                    DistSSHRun._go_remote_run_identity("host1", proj, nothing)
+                end
+                script = isfile(logp) ? read(logp, String) : ""
+                @test occursin("JULIA_LOAD_PATH=", script)
+                @test occursin("@:@stdlib", script)
+            end
+        end
+    end
+
     @testset "verify_go_slots_match_job! child slot" begin
         _with_tempdir() do state
             base = _fake_setup_remote_env(state)

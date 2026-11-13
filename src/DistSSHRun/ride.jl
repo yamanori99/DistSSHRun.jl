@@ -684,6 +684,7 @@ function _ride_run!(
     project_root_abs = canonical_local_path(project)
     _require_manifest!(project_root_abs)
     _reset_run_provenance!(project_root_abs)
+    unsafe_heterogeneous_active() && _record_unsafe_heterogeneous!()
     _clear_last_ship!()
     tok = String[String(t) for t in tokens]
     wp = try

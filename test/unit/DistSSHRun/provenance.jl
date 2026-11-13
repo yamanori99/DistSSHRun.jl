@@ -711,4 +711,19 @@ end
             )
         end
     end
+
+    @testset "ride path re-records unsafe heterogeneous after provenance reset" begin
+        _with_tempdir() do proj
+            DistSSHRun.with_unsafe_heterogeneous(
+                () -> begin
+                    DistSSHRun._reset_run_provenance!(proj)
+                    DistSSHRun.unsafe_heterogeneous_active() &&
+                        DistSSHRun._record_unsafe_heterogeneous!()
+                    prov = DistSSHRun.assemble_provenance()
+                    unsafe = get(prov, "unsafe", String[])
+                    @test "heterogeneous" in unsafe
+                end, true
+            )
+        end
+    end
 end
