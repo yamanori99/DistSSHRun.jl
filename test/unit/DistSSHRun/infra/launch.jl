@@ -457,26 +457,42 @@ using TOML
     end
 
     @testset "cluster cookie (subprocess)" begin
+        DistSSHRun.verify_distributed_init_probe!()
+
         julia = joinpath(Sys.BINDIR, Base.julia_exename())
         proj = if isdefined(Main, :TEST_PROJECT)
             String(TEST_PROJECT)
         else
             String(something(Base.active_project(), pkgdir(DistSSHRun)))
         end
+        cmd = code -> `$julia --startup-file=no --history-file=no --project=$proj -e $code`
+
         cookie_code = raw"""
         using Random, Distributed, DistSSHRun
         Random.seed!(7)
         DistSSHRun.preserve_task_local_default_rng() do
             DistSSHRun.ensure_run_cluster_cookie!()
         end
-        print(strip(Distributed.cluster_cookie())[1:16])
+        print(strip(Distributed.cluster_cookie()))
         """
-        cmd = code -> `$julia --startup-file=no --history-file=no --project=$proj -e $code`
         c1 = strip(String(read(cmd(cookie_code))))
         c2 = strip(String(read(cmd(cookie_code))))
-        @test length(c1) == 16
-        @test length(c2) == 16
+        @test length(c1) >= 16
+        @test length(c2) >= 16
         @test c1 != c2
+
+        not_from_seed_code = raw"""
+        using Random, Distributed, DistSSHRun
+        Random.seed!(7)
+        DistSSHRun.preserve_task_local_default_rng() do
+            DistSSHRun.ensure_run_cluster_cookie!()
+        end
+        got = strip(Distributed.cluster_cookie())
+        Random.seed!(7)
+        from_default = randstring(Random.default_rng(), 16)
+        print(got != from_default ? "ok" : "fail")
+        """
+        @test strip(String(read(cmd(not_from_seed_code)))) == "ok"
 
         keep_code = raw"""
         using Distributed, DistSSHRun
@@ -485,9 +501,37 @@ using TOML
         DistSSHRun.preserve_task_local_default_rng() do
             DistSSHRun.ensure_run_cluster_cookie!()
         end
-        print(strip(Distributed.cluster_cookie())[1:16] == mine ? "ok" : "fail")
+        print(strip(Distributed.cluster_cookie()) == mine ? "ok" : "fail")
         """
         @test strip(String(read(cmd(keep_code)))) == "ok"
+
+        preinit_keep_code = raw"""
+        using Distributed, DistSSHRun
+        mine = "usercookie123456"
+        Distributed.cluster_cookie(mine)
+        DistSSHRun.preserve_task_local_default_rng() do
+            DistSSHRun.preserve_task_local_default_rng() do
+                DistSSHRun.ensure_run_cluster_cookie!()
+            end
+        end
+        print(strip(Distributed.cluster_cookie()) == mine ? "ok" : "fail")
+        """
+        @test strip(String(read(cmd(preinit_keep_code)))) == "ok"
+
+        no_touch_rng_code = raw"""
+        using Random, Distributed, DistSSHRun
+        Random.seed!(7)
+        r = Random.default_rng()
+        ref = rand(r, 1:1000, 8)
+        Random.seed!(7)
+        DistSSHRun.preserve_task_local_default_rng() do
+            Distributed.cluster_cookie("usercookie123456")
+            DistSSHRun.ensure_run_cluster_cookie!()
+        end
+        got = rand(r, 1:1000, 8)
+        print(got == ref ? "ok" : "fail")
+        """
+        @test strip(String(read(cmd(no_touch_rng_code)))) == "ok"
 
         rng_code = raw"""
         using Random, Distributed, DistSSHRun
@@ -513,5 +557,24 @@ using TOML
         print((ref_p == got_p && ref_s == got_s) ? "ok" : "fail")
         """
         @test strip(String(read(cmd(rng_code)))) == "ok"
+
+        nested_preserve_code = raw"""
+        using Random, Distributed, DistSSHRun
+        function first_eight()
+            Random.seed!(7)
+            return rand(Random.default_rng(), 1:1000, 8)
+        end
+        ref = first_eight()
+        Random.seed!(7)
+        r = Random.default_rng()
+        DistSSHRun.preserve_task_local_default_rng() do
+            DistSSHRun.preserve_task_local_default_rng() do
+                DistSSHRun.ensure_run_cluster_cookie!()
+            end
+        end
+        got = rand(r, 1:1000, 8)
+        print(got == ref ? "ok" : "fail")
+        """
+        @test strip(String(read(cmd(nested_preserve_code)))) == "ok"
     end
 end
