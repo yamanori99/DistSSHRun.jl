@@ -289,20 +289,52 @@ function ssh_tunnel_enabled()::Bool
 end
 
 """
+Restore the caller's task-local default RNG after `f` returns (even when `f` throws).
+
+`Distributed.cluster_cookie` and `addprocs` initialize multiprocessing on the
+first call. That calls `init_multi`, which draws the cookie from the default RNG,
+and `addprocs` can spawn internal tasks that advance the parent's split RNG state.
+Julia does not expose a public API to rewind child-task streams, so the wrapper
+runs `f` on the controller task and restores only that task's default RNG. After
+worker launch, streams on the controller should match a run with no launch when
+this same task drew from the default RNG and spawned children; if your code
+spawned child tasks during launch, call `Random.seed!` again once the cluster is
+up when you need exact comparison with a non-distributed run.
+
+Call this around `ensure_run_cluster_cookie!` and every `addprocs` on the
+controller, in the task that calls `addprocs`.
+"""
+function preserve_task_local_default_rng(f::Function)
+    rng = default_rng()
+    saved = copy(rng)
+    try
+        return f()
+    finally
+        copy!(rng, saved)
+    end
+end
+
+"""True when Distributed's multiprocessing layer is already initialized."""
+function _distributed_multi_initialized()::Bool
+    nprocs() > 1 && return true
+    return getfield(Distributed, :inited)[]
+end
+
+"""
 Set a per-run cluster cookie before the first worker. Never log the value.
 
-Julia's Distributed `init_multi` draws a cookie from the task-local default RNG
-on the first cluster use. DistSSH saves that RNG state, sets a cookie from
-[`RandomDevice`](@ref), then restores the state so user random streams stay
-unchanged.
+Runs inside [`preserve_task_local_default_rng`](@ref) on the controller. Does
+not replace a cookie you already chose: if Distributed is already initialized
+(for example after `Distributed.cluster_cookie` or `addprocs` in your script),
+the existing cookie is kept.
+
+`cluster_cookie` always calls `init_multi` first; when multiprocessing was not
+initialized yet, that draws from the default RNG before the cookie is stored.
 """
 function ensure_run_cluster_cookie!()::Nothing
     nprocs() > 1 && return nothing
-    rng = default_rng()
-    saved = copy(rng)
-    # `init_multi` runs inside `cluster_cookie` and would advance the user's RNG.
+    _distributed_multi_initialized() && return nothing
     Distributed.cluster_cookie(randstring(RandomDevice(), 16))
-    copy!(rng, saved)
     return nothing
 end
 

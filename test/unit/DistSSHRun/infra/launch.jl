@@ -466,7 +466,9 @@ using TOML
         cookie_code = raw"""
         using Random, Distributed, DistSSHRun
         Random.seed!(7)
-        DistSSHRun.ensure_run_cluster_cookie!()
+        DistSSHRun.preserve_task_local_default_rng() do
+            DistSSHRun.ensure_run_cluster_cookie!()
+        end
         print(strip(Distributed.cluster_cookie())[1:16])
         """
         cmd = code -> `$julia --startup-file=no --history-file=no --project=$proj -e $code`
@@ -476,25 +478,39 @@ using TOML
         @test length(c2) == 16
         @test c1 != c2
 
+        keep_code = raw"""
+        using Distributed, DistSSHRun
+        mine = "usercookie123456"
+        Distributed.cluster_cookie(mine)
+        DistSSHRun.preserve_task_local_default_rng() do
+            DistSSHRun.ensure_run_cluster_cookie!()
+        end
+        print(strip(Distributed.cluster_cookie())[1:16] == mine ? "ok" : "fail")
+        """
+        @test strip(String(read(cmd(keep_code)))) == "ok"
+
         rng_code = raw"""
         using Random, Distributed, DistSSHRun
-        function ref_draws()
+        function baseline()
             Random.seed!(7)
-            return rand(Random.default_rng(), 1:1000, 8)
+            r = Random.default_rng()
+            p = rand(r, 1:1000, 8)
+            s = fetch(Threads.@spawn rand(1:1000, 8))
+            return (p, s)
         end
-        ref = ref_draws()
+        ref_p, ref_s = baseline()
         Random.seed!(7)
         r = Random.default_rng()
-        DistSSHRun.ensure_run_cluster_cookie!()
-        before = Set(workers())
-        try
+        DistSSHRun.preserve_task_local_default_rng() do
+            DistSSHRun.ensure_run_cluster_cookie!()
+            before = Set(workers())
             addprocs(1; exeflags=`--startup-file=no`)
-            after = rand(r, 1:1000, 8)
-            print(ref == after ? "ok" : "fail")
-        finally
             left = setdiff(Set(workers()), before)
             isempty(left) || rmprocs(collect(left); waitfor = 30)
         end
+        got_p = rand(r, 1:1000, 8)
+        got_s = fetch(Threads.@spawn rand(1:1000, 8))
+        print((ref_p == got_p && ref_s == got_s) ? "ok" : "fail")
         """
         @test strip(String(read(cmd(rng_code)))) == "ok"
     end

@@ -16,10 +16,15 @@ package directory, on that path so `ride` can load DistSSHRun when the job
 tree does not. Parent `LOAD_PATH` mutations do not otherwise affect workers.
 
 `drive` and `ride` set the Distributed cluster cookie from
-`RandomDevice` before any worker starts, and restore the controller's
-default RNG afterward. Julia's first cluster initialization would otherwise
-draw from the default RNG and shift user random streams. The cookie is
-never logged.
+`RandomDevice` before the first worker starts when you have not already
+initialized Distributed (for example with `Distributed.cluster_cookie` or
+`addprocs`). An existing cookie is kept. Launch runs inside a controller-task
+wrapper that restores that task's default RNG afterward. `Distributed.cluster_cookie`
+and the first `addprocs` both call `init_multi`, which draws from the default
+RNG; the wrapper undoes that draw on the controller. Julia has no public API
+to rewind child-task RNG streams spawned during launch; after the cluster is up,
+call `Random.seed!` again if you need bit-identical streams to a script that
+never started workers. The cookie is never logged.
 
 Drive workers ping pid 1 on interval `DISTRIBUTED_HEARTBEAT_INTERVAL_SEC`
 (default 30) and exit with status 75 if the master does not answer within
