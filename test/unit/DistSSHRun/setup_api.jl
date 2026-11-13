@@ -35,7 +35,7 @@ using Test
                 touch(joinpath(tree, "keepme.txt"))
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
                 write(joinpath(proj, "Manifest.toml"), "# lock\n")
-                session = DistSSHRun.KitSession(
+                session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["child:$host"],
                     remote = "~/App.jl",
@@ -196,7 +196,7 @@ using Test
                 mkpath(joinpath(tree, "keep"))
                 write(joinpath(tree, "keep", "Project.toml"), "name = \"Tmp\"\n")
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
-                session = DistSSHRun.KitSession(
+                session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["child:$host"],
                     remote = "~/App.jl",
@@ -216,7 +216,7 @@ using Test
             _with_tempdir() do proj
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
                 host = "host1"
-                session = DistSSHRun.KitSession(
+                session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["child:$host"],
                     remote = "~/App.jl",
@@ -240,7 +240,7 @@ using Test
                     empty!(DistSSHRun.DistSSHBase._DETECT_JULIA_PATH_CACHE)
                     # `quiet=true` would re-pin `:quiet` in `apply_session_env!`
                     # and swallow the `:progress` already-on line.
-                    progress_session = DistSSHRun.KitSession(
+                    progress_session = DistSSHRun.DistSSHSession(
                         project = proj,
                         workers = ["child:$host"],
                         remote = "~/App.jl",
@@ -304,7 +304,7 @@ using Test
                 )
                 chmod(ju, 0o755)
                 chmod(jl, 0o755)
-                session = DistSSHRun.KitSession(
+                session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["parent"],
                     remote = "~/App.jl",
@@ -337,7 +337,7 @@ using Test
                     """
                 )
                 chmod(ju, 0o755)
-                session = DistSSHRun.KitSession(
+                session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["parent"],
                     remote = "~/App.jl",
@@ -355,7 +355,7 @@ using Test
         end
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
-            session = DistSSHRun.KitSession(
+            session = DistSSHRun.DistSSHSession(
                 project = proj,
                 workers = ["parent", "child:host1"],
                 remote = "~/App.jl",
@@ -376,7 +376,7 @@ using Test
                 mkpath(tree)
                 touch(joinpath(tree, "keepme.txt"))
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
-                session = DistSSHRun.KitSession(
+                session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["child:$host"],
                     remote = "~/App.jl",
@@ -403,7 +403,7 @@ using Test
             _with_tempdir() do proj
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
                 # No quiet=: auto session would resolve to :verbose under a pipe.
-                session = DistSSHRun.KitSession(
+                session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["child:host1"],
                     remote = "~/App.jl",
@@ -442,7 +442,7 @@ using Test
     @testset "instantiate preflight miss" begin
         _with_fake_remotes() do _
             _with_tempdir() do proj
-                session = DistSSHRun.KitSession(
+                session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["child:host1"],
                     remote = "~/App.jl",
@@ -459,7 +459,7 @@ using Test
 
     @testset "git_clone requires repo=" begin
         _with_tempdir() do proj
-            session = DistSSHRun.KitSession(
+            session = DistSSHRun.DistSSHSession(
                 project = proj,
                 workers = ["child:host1"],
                 remote = "~/App.jl",
@@ -479,7 +479,7 @@ using Test
 
         _with_fake_remotes() do _
             _with_tempdir() do proj
-                session = DistSSHRun.KitSession(
+                session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["child:host1"],
                     remote = "~/App.jl",
@@ -499,7 +499,7 @@ using Test
         _with_fake_remotes() do _
             _with_tempdir() do proj
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\nuuid = \"00000000-0000-0000-0000-000000000001\"\n")
-                session = DistSSHRun.KitSession(
+                session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["child:host1"],
                     remote = "~/App.jl",
@@ -530,7 +530,7 @@ using Test
 
         _with_fake_remotes() do _
             _with_tempdir() do proj
-                session = DistSSHRun.KitSession(
+                session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["child:host1"],
                     remote = "~/App.jl",
@@ -557,7 +557,7 @@ using Test
                 mkpath(tree)
                 touch(joinpath(tree, "keepme.txt"))
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
-                session = DistSSHRun.KitSession(
+                session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["child:$host"],
                     remote = "~/App.jl",
@@ -580,7 +580,7 @@ using Test
                 touch(joinpath(tree, "keepme.txt"))
                 mkpath(joinpath(tree, ".distssh", "go", "batch_a"))
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
-                session = DistSSHRun.KitSession(
+                session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["child:$host"],
                     remote = "~/App.jl",
@@ -603,7 +603,7 @@ using Test
                 mkpath(tree)
                 touch(joinpath(tree, "keepme.txt"))
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
-                session = DistSSHRun.KitSession(
+                session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["child:$host"],
                     remote = "~/App.jl",
@@ -694,7 +694,7 @@ using Test
                     mkpath(tree)
                     touch(joinpath(tree, "keepme.txt"))
                 end
-                session = DistSSHRun.KitSession(
+                session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["child:host1", "child:host2"],
                     remote = "~/App.jl",
@@ -758,7 +758,7 @@ using Test
                 mkpath(tree)
                 touch(joinpath(tree, "keepme.txt"))
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
-                session = DistSSHRun.KitSession(
+                session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["child:$host"],
                     remote = "~/App.jl",
@@ -779,7 +779,7 @@ using Test
     @testset "SSH preflight failure sets cancelled=false and map_host_jobs preserves order" begin
         _with_tempdir() do proj::String
             write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
-            session = DistSSHRun.KitSession(
+            session = DistSSHRun.DistSSHSession(
                 project = proj,
                 workers = ["child:h1", "child:h2"],
                 remote = "~/App.jl",

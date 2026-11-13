@@ -954,11 +954,11 @@ end
 This run's `DISTSSH_RUN_DIR`, or `nothing` when the result has none.
 
 `result` is a [`DriveResult`](@ref), [`GoResult`](@ref),
-[`KitRunResult`](@ref), [`RideResult`](@ref), or [`KitProcess`](@ref).
+[`DistSSHJobResult`](@ref), [`RideResult`](@ref), or [`DetachedProcess`](@ref).
 Result fields and positional constructors are not API.
 """
 function result_run_dir(
-        result::Union{DriveResult, GoResult, KitRunResult, RideResult, KitProcess},
+        result::Union{DriveResult, GoResult, DistSSHJobResult, RideResult, DetachedProcess},
     )::Union{Nothing, String}
     return result.run_dir
 end
@@ -971,11 +971,11 @@ Read `run.toml` from [`result_run_dir`](@ref). `nothing` when that
 directory is unset or the file is missing.
 
 `result` is a [`DriveResult`](@ref), [`GoResult`](@ref), or
-[`KitRunResult`](@ref). A [`RideResult`](@ref) is not accepted; convert
-it with [`kit_run_result`](@ref) first. A [`KitProcess`](@ref) is not
+[`DistSSHJobResult`](@ref). A [`RideResult`](@ref) is not accepted; convert
+it with [`kit_run_result`](@ref) first. A [`DetachedProcess`](@ref) is not
 accepted; [`wait`](@ref) it first.
 """
-function result_provenance(result::Union{DriveResult, GoResult, KitRunResult})
+function result_provenance(result::Union{DriveResult, GoResult, DistSSHJobResult})
     rd = result_run_dir(result)
     rd === nothing && return nothing
     return read_kit_run_toml(rd)
@@ -983,7 +983,7 @@ end
 
 """String recorded under `provenance.selection`, or `nothing` when absent or blank."""
 function _result_selection_string(
-        result::Union{DriveResult, GoResult, KitRunResult},
+        result::Union{DriveResult, GoResult, DistSSHJobResult},
         key::AbstractString,
     )::Union{Nothing, String}
     raw = result_provenance(result)
@@ -1010,7 +1010,7 @@ snapshot selection recorded one.
 
 Schema stays 1. An absent or empty key means not recorded.
 `result` is a [`DriveResult`](@ref), [`GoResult`](@ref), or
-[`KitRunResult`](@ref). A [`RideResult`](@ref) goes through
+[`DistSSHJobResult`](@ref). A [`RideResult`](@ref) goes through
 [`kit_run_result`](@ref) first. A run that selected an existing completed
 snapshot (without shipping in-process) may still record the hash from that
 selection.
@@ -1020,7 +1020,7 @@ A [`SyncResult`](@ref) from `setup!` / `sync!` with `:ship_tree`, and a
 Any other [`SyncResult`](@ref) returns `nothing`.
 """
 function result_content_tree_hash(
-        result::Union{DriveResult, GoResult, KitRunResult},
+        result::Union{DriveResult, GoResult, DistSSHJobResult},
     )::Union{Nothing, String}
     return _result_selection_string(result, "content_tree_hash")
 end
@@ -1050,7 +1050,7 @@ snapshot selection recorded one.
 
 Schema stays 1. An absent or empty key means not recorded. This is not
 `DISTSSH_RUN_DIR`. `result` is a [`DriveResult`](@ref), [`GoResult`](@ref),
-or [`KitRunResult`](@ref). A [`RideResult`](@ref) goes through
+or [`DistSSHJobResult`](@ref). A [`RideResult`](@ref) goes through
 [`kit_run_result`](@ref) first. A run that selected an existing completed
 snapshot (without shipping in-process) may still record that snapshot's
 `run_id`.
@@ -1060,7 +1060,7 @@ A [`SyncResult`](@ref) from `setup!` / `sync!` with `:ship_tree`, and a
 Any other [`SyncResult`](@ref) returns `nothing`.
 """
 function result_remote_run_id(
-        result::Union{DriveResult, GoResult, KitRunResult},
+        result::Union{DriveResult, GoResult, DistSSHJobResult},
     )::Union{Nothing, String}
     return _result_selection_string(result, "run_id")
 end

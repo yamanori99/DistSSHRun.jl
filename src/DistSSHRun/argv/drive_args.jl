@@ -82,7 +82,7 @@ end
 
 """Parse `drive` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_drive_args(args::Vector{String})
-    cli_session, args = peel_kit_cli_flags(args)
+    cli_session, args = peel_shared_cli_flags(args)
     parent_workers = 0
     default_workers = nothing
     julia_exe = nothing
@@ -279,7 +279,7 @@ function parse_drive_args(args::Vector{String})
             tree_root = canonical_local_path(tail[1])
             tree_hosts = String[_parse_worker_token(String(x))[1] for x in tail[2:end]]
             isempty(tree_hosts) && throw(ArgumentError("`$(flag)` requires at least one HOST after ROOT"))
-            apply_kit_cli_session!(cli_session)
+            apply_shared_cli_flags!(cli_session)
             if julia_exe === nothing
                 env_val = get(ENV, "JULIA_DISTRIBUTED_EXE", "auto")
                 julia_exe = env_val == "auto" ? nothing : env_val
@@ -378,7 +378,7 @@ function parse_drive_args(args::Vector{String})
         julia_exe = nothing
     end
 
-    for tok in kit_host_source_tokens(cli_session; keep_counts = true)
+    for tok in placement_source_tokens(cli_session; keep_counts = true)
         parent_workers = _drive_push_host_token!(
             hosts,
             parent_workers,
@@ -387,7 +387,7 @@ function parse_drive_args(args::Vector{String})
         )
     end
 
-    apply_kit_cli_session!(cli_session)
+    apply_shared_cli_flags!(cli_session)
     if !parent_listed[] && default_workers !== nothing
         parent_workers = _drive_set_parent_workers!(
             parent_workers,

@@ -1,7 +1,7 @@
 # sync! — git sync via shared DistSSHRun cores (not CLI argv).
 
 """
-    sync!(session::KitSession; mode=:git_sync)
+    sync!(session::DistSSHSession; mode=:git_sync)
 
 Sync local project to SSH hosts (call explicitly; go/drive do not call this by default).
 
@@ -15,7 +15,7 @@ Returns [`SyncResult`](@ref). For `:ship_tree`, [`result_content_tree_hash`](@re
 and [`result_remote_run_id`](@ref) read that ship. Other modes return `nothing`.
 """
 function sync!(
-        session::KitSession;
+        session::DistSSHSession;
         mode = :git_sync,
         allow_external_symlinks::Bool = false,
         await_inputs::Bool = true,

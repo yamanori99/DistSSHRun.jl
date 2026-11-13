@@ -1,6 +1,6 @@
 """Build a `parse_drive_args`-shaped NamedTuple from a session + options."""
 function drive_parsed_from_session(
-        session::KitSession,
+        session::DistSSHSession,
         script::AbstractString;
         workers::Union{Nothing, WorkerPlan} = nothing,
         script_args::AbstractVector{<:AbstractString} = String[],
@@ -34,7 +34,7 @@ function drive_parsed_from_session(
             push!(hosts, (h, nothing))
         end
     end
-    cli_session = KitCliSession(
+    cli_session = CliSharedFlags(
         quiet = session.quiet,
         verbosity = session.verbosity,
         yes = session.yes,

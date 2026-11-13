@@ -128,7 +128,7 @@ end
 
                 script = joinpath(proj, "stop.jl")
                 write(script, "function main()\n    throw(InterruptException())\nend\n")
-                session = DistSSHRun.KitSession(
+                session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = String[],
                     quiet = true,

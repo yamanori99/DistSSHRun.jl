@@ -338,7 +338,7 @@ end
             @test ".distssh/marker" ∉ got
         end
 
-        session = DistSSHRun.KitSession(
+        session = DistSSHRun.DistSSHSession(
             project = pwd(), workers = ["child:h"], yes = true, quiet = true,
         )
         @test_throws MethodError DistSSHRun.sync!(session; mode = :git_sync, gitignore = false)
@@ -352,7 +352,7 @@ end
 
     _with_tempdir() do state_dir
         withenv(_fake_setup_remote_env(state_dir)...) do
-            DistSSHRun.apply_kit_cli_session!(DistSSHRun.KitCliSession(quiet = false, yes = true))
+            DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = false, yes = true))
             host = "host1"
             slot = replace(host, r"[@:/]" => "_")
             tree = joinpath(state_dir, slot, "tree")

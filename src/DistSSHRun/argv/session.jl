@@ -103,7 +103,7 @@ function _resolve_kit_verbosity(;
 end
 
 """Runtime CLI session: verbosity, non-interactive mode, shared host list."""
-mutable struct KitCliSession
+mutable struct CliSharedFlags
     quiet::Bool
     verbosity::Symbol
     yes::Bool
@@ -114,7 +114,7 @@ mutable struct KitCliSession
     hosts_flag::Vector{String}
 end
 
-function KitCliSession(;
+function CliSharedFlags(;
         quiet::Bool = false,
         verbosity::Union{Nothing, Symbol} = nothing,
         yes::Bool = false,
@@ -128,7 +128,7 @@ function KitCliSession(;
     hf = hosts_file === nothing ? nothing : String(hosts_file)
     surface = _normalize_hint_surface(hint_surface)
     explicit = verbosity_explicit || quiet || verbosity !== nothing
-    return KitCliSession(
+    return CliSharedFlags(
         v === :quiet,
         v,
         yes,
@@ -179,7 +179,7 @@ function map_host_jobs(f, hosts::Vector{String})
 end
 
 """Default session; honors `DISTSSH_QUIET`, `DISTSSH_PROGRESS`, `DISTSSH_VERBOSE`, `DISTSSH_YES`, `DISTSSH_HOSTS_FILE`."""
-function default_kit_cli_session()::KitCliSession
+function default_kit_cli_session()::CliSharedFlags
     hosts_file = let raw = strip(get(ENV, "DISTSSH_HOSTS_FILE", ""))
         isempty(raw) ? nothing : String(raw)
     end
@@ -189,8 +189,8 @@ function default_kit_cli_session()::KitCliSession
         hosts_file = hosts_file,
         show_version = false,
     )
-    env_v === nothing && return KitCliSession(; hosts_kw...)
-    return KitCliSession(;
+    env_v === nothing && return CliSharedFlags(; hosts_kw...)
+    return CliSharedFlags(;
         quiet = env_v === :quiet,
         verbosity = env_v,
         verbosity_explicit = true,
@@ -198,7 +198,7 @@ function default_kit_cli_session()::KitCliSession
     )
 end
 
-function apply_kit_cli_session!(session::KitCliSession)
+function apply_shared_cli_flags!(session::CliSharedFlags)
     set_kit_verbosity!(session.verbosity)
     set_kit_noninteractive!(session.yes)
     return session
@@ -359,7 +359,7 @@ function _reject_unknown_cli_options(
     return nothing
 end
 
-function _set_session_verbosity!(session::KitCliSession, v::Symbol)
+function _set_session_verbosity!(session::CliSharedFlags, v::Symbol)
     if session.verbosity_explicit && session.verbosity !== v
         throw(ArgumentError("cannot combine --quiet (-q), --progress, and --verbose"))
     end
@@ -370,7 +370,7 @@ function _set_session_verbosity!(session::KitCliSession, v::Symbol)
 end
 
 """Consume one shared CLI flag from `c`; return `true` if consumed."""
-function consume_kit_cli_flag!(c::CliCursor, session::KitCliSession)::Bool
+function consume_kit_cli_flag!(c::CliCursor, session::CliSharedFlags)::Bool
     arg = cli_current(c)
     arg === nothing && return false
     if _flag_match(arg, _KIT_CLI_FLAGS.quiet)
@@ -409,7 +409,7 @@ Split leading shared flags from `args`.
 Returns `(session, rest)` where `rest` is every non-flag token (and tokens
 following flags that take values other than `--hosts-file` / `--hosts`).
 """
-function peel_kit_cli_flags(args::AbstractVector{<:AbstractString})::Tuple{KitCliSession, Vector{String}}
+function peel_shared_cli_flags(args::AbstractVector{<:AbstractString})::Tuple{CliSharedFlags, Vector{String}}
     session = default_kit_cli_session()
     rest = String[]
     c = CliCursor(collect(String, args))
@@ -443,8 +443,8 @@ end
 strips `:N`. Size and setup pass `roles=true` so `child:NAME[:N]` becomes
 `NAME` and `parent` stays `parent`.
 """
-function kit_host_source_tokens(
-        session::KitCliSession;
+function placement_source_tokens(
+        session::CliSharedFlags;
         keep_counts::Bool = true,
         roles::Bool = false,
     )::Vector{String}
@@ -469,15 +469,15 @@ end
 
 function append_kit_host_sources!(
         hosts::Vector{String},
-        session::KitCliSession;
+        session::CliSharedFlags;
         keep_counts::Bool = true,
         roles::Bool = false,
     )
-    append!(hosts, kit_host_source_tokens(session; keep_counts = keep_counts, roles = roles))
+    append!(hosts, placement_source_tokens(session; keep_counts = keep_counts, roles = roles))
     return hosts
 end
 
-function append_hosts_file!(hosts::Vector{String}, session::KitCliSession)
+function append_hosts_file!(hosts::Vector{String}, session::CliSharedFlags)
     hosts_file = session.hosts_file
     hosts_file === nothing && return hosts
     append!(hosts, read_hosts_file(hosts_file; surface = session.hint_surface))

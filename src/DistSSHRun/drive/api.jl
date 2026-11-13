@@ -1,7 +1,7 @@
 # drive! — API entry for driver execution (same core as CLI `drive`).
 
 """
-    drive!(session::KitSession, script; plan=nothing, args=[], ...)
+    drive!(session::DistSSHSession, script; plan=nothing, args=[], ...)
     drive!(script, workers...; kwargs...)
     drive!(script, workers::AbstractVector; kwargs...)
 
@@ -48,7 +48,7 @@ private CLI exception. On Julia 1.14 the caller's task stays cancelled after
 that exception.
 """
 function drive!(
-        session::KitSession,
+        session::DistSSHSession,
         script::AbstractString;
         plan::Union{Nothing, WorkerPlan} = nothing,
         args::AbstractVector{<:AbstractString} = String[],
@@ -99,7 +99,7 @@ function drive!(
                         allow_mismatch = allow_mismatch,
                         run_id = run_id,
                     )
-                    apply_kit_cli_session!(parsed.cli_session)
+                    apply_shared_cli_flags!(parsed.cli_session)
                     original_args = copy(ARGS)
                     resolved_output_dir = Ref{Union{Nothing, String}}(nothing)
                     resolved_log_dir = Ref{Union{Nothing, String}}(nothing)
@@ -144,7 +144,7 @@ function drive!(
         yes::Bool = true,
         kwargs...,
     )::DriveResult
-    session = KitSession(
+    session = DistSSHSession(
         project = project,
         workers = workers,
         remote = remote,

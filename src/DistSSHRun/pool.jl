@@ -83,7 +83,7 @@ Probe listed hosts for cores and RAM via [`collect_host_facts`](@ref).
 Unreachable hosts stay in the list with `ok=false`. The pool is `ok` only
 when every listed host probed successfully. Does not start workers.
 """
-function pool!(session::KitSession)::ResourcePool
+function pool!(session::DistSSHSession)::ResourcePool
     parsed = parse_worker_tokens(session.tokens)
     want_parent = session.include_parent_for_size ||
         parsed.parent_autosize || parsed.parent_workers > 0

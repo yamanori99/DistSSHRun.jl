@@ -44,7 +44,7 @@ using Test
 
     @testset "session wiring" begin
         _with_tempdir() do tmp
-            session = DistSSHRun.KitSession(project = tmp, workers = String[], quiet = true)
+            session = DistSSHRun.DistSSHSession(project = tmp, workers = String[], quiet = true)
             @test DistSSHRun.hint_surface(session) === :api
             @test session.cli_session.hint_surface === :api
 
@@ -60,7 +60,7 @@ using Test
             @test occursin("workers=", sprint(showerror, err))
             @test occursin("Hint:", sprint(showerror, err))
 
-            @test DistSSHRun.KitCliSession().hint_surface === :cli
+            @test DistSSHRun.CliSharedFlags().hint_surface === :cli
         end
     end
 end

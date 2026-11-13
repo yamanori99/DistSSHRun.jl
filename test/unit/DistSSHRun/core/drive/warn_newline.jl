@@ -31,7 +31,7 @@ end
         write(script, "true\n")
         out_dir = joinpath(proj, "out")
         mkpath(out_dir)
-        session = DistSSHRun.KitSession(
+        session = DistSSHRun.DistSSHSession(
             project = proj,
             workers = String[],
             quiet = true,

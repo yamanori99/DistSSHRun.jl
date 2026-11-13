@@ -90,7 +90,7 @@ function parse_hostinfo_args(args::Vector{String})
         ),
         prefixes = ("--local:", "-l:"),
     )
-    cli_session, args = peel_kit_cli_flags(args)
+    cli_session, args = peel_shared_cli_flags(args)
     include_parent = false
     hosts = String[]
     julia = nothing
@@ -133,7 +133,7 @@ function parse_hostinfo_args(args::Vector{String})
 
     append_kit_host_sources!(hosts, cli_session; keep_counts = false, roles = true)
     include_parent = _absorb_parent_hosts!(hosts, include_parent)
-    apply_kit_cli_session!(cli_session)
+    apply_shared_cli_flags!(cli_session)
 
     return _hostinfo_parsed(;
         show_help = false,

@@ -2,7 +2,7 @@
 
 """
     collect!(
-        session::KitSession,
+        session::DistSSHSession,
         local_root::AbstractString;
         merge=false,
         hosts=nothing,
@@ -28,7 +28,7 @@ exit code 1). Point it at a result directory inside the project.
 execution's source instead of a later last-snapshot record.
 """
 function collect!(
-        session::KitSession,
+        session::DistSSHSession,
         local_root::AbstractString;
         merge::Bool = false,
         hosts::Union{Nothing, AbstractVector{<:AbstractString}} = nothing,

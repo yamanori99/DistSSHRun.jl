@@ -115,7 +115,7 @@ The version-cut PR copies them into this file.
 
 ## 0.1.5
 
-- `wait` on a detached `KitProcess` is on the API page. `drive_host_status` points at `DriveResult`, not a field of it.
+- `wait` on a detached `DetachedProcess` is on the API page. `drive_host_status` points at `DriveResult`, not a field of it.
 
 ## 0.1.4
 
