@@ -50,8 +50,9 @@ calls `interrupted()` and returns that `Cint`. An EPIPE `IOError` returns
 141 and prints nothing. Any other exception, including a bare
 `ArgumentError`, is `showerror` on stderr and returns 1.
 
-`report` and `interrupted` run inside `without_cancel`. On Julia 1.13 a
-second Ctrl-C can still stop them. On 1.14 they finish.
+`report` and `interrupted` run inside `without_cancel`. Without
+`Base.CANCEL_TOKEN`, a second Ctrl-C can still stop them. With task
+cancellation they finish under that shield.
 """
 function with_cli_exit(
         @nospecialize(f::Function);

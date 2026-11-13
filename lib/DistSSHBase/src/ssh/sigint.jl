@@ -1,5 +1,6 @@
-# Julia 1.14 delivers Ctrl-C as `Base.CancellationRequest` through the scoped
-# `Base.CANCEL_TOKEN`. Julia 1.13 has neither.
+# With task cancellation, Ctrl-C may throw `Base.CancellationRequest` via
+# `Base.CANCEL_TOKEN` (1.14 alphas; absent 1.14.0-beta1+ after #64651; 1.15+).
+# Without it, only `InterruptException` (1.13, 1.14.0-beta1+).
 const _CANCELLATION_REQUEST = isdefined(Base, :CancellationRequest) ?
     getglobal(Base, :CancellationRequest) : Union{}
 const _CANCEL_TOKEN = isdefined(Base, :CANCEL_TOKEN) ? getglobal(Base, :CANCEL_TOKEN) : nothing
@@ -7,11 +8,11 @@ const _CANCEL_TOKEN = isdefined(Base, :CANCEL_TOKEN) ? getglobal(Base, :CANCEL_T
 """
     is_sigint(e) -> Bool
 
-True when `e` is Ctrl-C delivered as an exception. Julia 1.13 throws
-`InterruptException`. Julia 1.14 throws `Base.CancellationRequest` when
-`exit_on_sigint` is off. `include` wraps either in `LoadError`, a task wraps it in
-`TaskFailedException`, and a worker wraps it in `RemoteException`
-(`captured` / `ex`). Those wrappers are opened here.
+True when `e` is Ctrl-C delivered as an exception. Without task cancellation,
+Julia throws `InterruptException`. With `Base.CANCEL_TOKEN`, it may throw
+`Base.CancellationRequest` when `exit_on_sigint` is off. `include` wraps
+either in `LoadError`, a task wraps it in `TaskFailedException`, and a worker
+wraps it in `RemoteException` (`captured` / `ex`). Those wrappers are opened here.
 """
 function is_sigint(e)::Bool
     (e isa InterruptException || e isa _CANCELLATION_REQUEST) && return true
@@ -29,8 +30,8 @@ end
     shield_sigint(f)
 
 Run `f` so Ctrl-C reaches the main task, not this background task. Call it
-inside the task. On Julia 1.14 this is `without_cancel`. On 1.13 it is
-`disable_sigint`.
+inside the task. With `Base.CANCEL_TOKEN`, this is `without_cancel`. Otherwise
+`disable_sigint` (1.13, 1.14.0-beta1+).
 """
 function shield_sigint(f)
     _CANCEL_TOKEN === nothing && return disable_sigint(f)
@@ -40,10 +41,10 @@ end
 """
     without_cancel(f)
 
-Run `f` outside the Ctrl-C that is already being handled. On Julia 1.14 the
+Run `f` outside the Ctrl-C that is already being handled. With cancellation, the
 cancelled scope makes every later wait, write, and flush throw again, so
-cleanup after Ctrl-C runs here. On 1.13 this is `f()`, and a second Ctrl-C
-still stops the cleanup.
+cleanup after Ctrl-C runs here. Without cancellation this is `f()`, and a second
+Ctrl-C still stops the cleanup.
 """
 function without_cancel(f)
     _CANCEL_TOKEN === nothing && return f()
