@@ -645,7 +645,7 @@ end
                 @test raw["provenance"]["schema"] == 1
                 @test raw["provenance"]["selection"]["content_tree_hash"] == "abc123"
                 @test raw["provenance"]["selection"]["run_id"] == "20260101T000000Z-abcdef"
-                held = DistSSHRun.KitRunResult(
+                held = DistSSHRun.DistSSHJobResult(
                     true, :drive, nothing, nothing, nothing, 0; run_dir = tmp,
                 )
                 @test DistSSHRun.result_content_tree_hash(held) == "abc123"

@@ -65,7 +65,7 @@ end
 """Drop the drive `--isolated` option. Keep that word after the driver script, and as a flag value."""
 function _drive_isolated_child_args(original_args::AbstractVector{<:AbstractString})::Vector{String}
     raw = String[String(a) for a in original_args]
-    _, peeled = peel_kit_cli_flags(raw)
+    _, peeled = peel_shared_cli_flags(raw)
     drop_at = _peeled_isolated_option(peeled)
     drop_at === nothing && return raw
     deleteat!(raw, _raw_index_for_peeled(raw, drop_at))
@@ -256,7 +256,7 @@ function _run_drive_parsed_specialized!(
     end
 
     if parsed.collect_root !== nothing && parsed.collect_hosts !== nothing
-        apply_kit_cli_session!(parsed.cli_session)
+        apply_shared_cli_flags!(parsed.cli_session)
         root = canonical_local_path(
             something(project_root, get(ENV, "DISTRIBUTED_PROJECT_ROOT", pwd())),
         )
@@ -371,7 +371,7 @@ function _run_drive_parsed_specialized!(
                 _drive_was_interrupted() && (code = Cint(130))
                 out = DistSSHRun.resolve_drive_output_dir(script_dir)
                 log = enable_log ? DistSSHRun.resolve_drive_log_dir(log_dir, script_dir) : nothing
-                result = DistSSHRun.KitRunResult(
+                result = DistSSHRun.DistSSHJobResult(
                     code == 0,
                     :drive,
                     out,

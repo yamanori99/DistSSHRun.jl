@@ -147,12 +147,12 @@ end
         _with_tempdir() do d
             @test DistSSHRun.kit_result_from_dir(d) === nothing
             DistSSHRun._write_kit_result_file(
-                DistSSHRun.KitRunResult(
+                DistSSHRun.DistSSHJobResult(
                     false, :drive, d, nothing, "drive", 42,
                 )
             )
             got = DistSSHRun.kit_result_from_dir(d)
-            @test got isa DistSSHRun.KitRunResult
+            @test got isa DistSSHRun.DistSSHJobResult
             @test got.ok === false
             @test got.kind === :drive
             @test got.failed_step == "drive"
@@ -162,7 +162,7 @@ end
             @test got.hosts == DistSSHRun.HostRunResult[]
             @test got.stop === nothing
             DistSSHRun._write_kit_result_file(
-                DistSSHRun.KitRunResult(
+                DistSSHRun.DistSSHJobResult(
                     false, :drive, d, nothing, "drive", 1,
                     [
                         DistSSHRun.HostRunResult("h1", true),
@@ -179,7 +179,7 @@ end
             @test with_hosts.hosts[2].error == "boom"
             @test DistSSHRun.HostRunResult("h2", false, "boom").error == "boom"
             DistSSHRun._write_kit_result_file(
-                DistSSHRun.KitRunResult(
+                DistSSHRun.DistSSHJobResult(
                     true, :ride, d, nothing, nothing, 0,
                 )
             )
@@ -189,12 +189,12 @@ end
             @test ride_got.ok
             write(joinpath(d, "kit.result"), "not toml {")
             @test DistSSHRun.kit_result_from_dir(d) === nothing
-            stopped = DistSSHRun.KitRunResult(
+            stopped = DistSSHRun.DistSSHJobResult(
                 false, :go, d, nothing, "go", 1,
                 DistSSHRun.HostRunResult[], String[], :within_grace,
             )
             @test stopped.stop === :within_grace
-            @test_throws ArgumentError DistSSHRun.KitRunResult(
+            @test_throws ArgumentError DistSSHRun.DistSSHJobResult(
                 false, :go, d, nothing, "go", 1,
                 DistSSHRun.HostRunResult[], String[], :later,
             )
@@ -218,7 +218,7 @@ end
             DistSSHRun.write_kit_run_toml!(
                 d;
                 kind = :go,
-                result = DistSSHRun.KitRunResult(true, :go, d, nothing, nothing, 0),
+                result = DistSSHRun.DistSSHJobResult(true, :go, d, nothing, nothing, 0),
             )
             before = DistSSHRun.read_kit_run_toml(d)
             @test before isa AbstractDict
@@ -247,7 +247,7 @@ end
                 mkpath(out)
                 write(joinpath(out, "run.toml"), "name = \"artifact\"\n")
                 DistSSHRun._persist_stop(
-                    DistSSHRun.KitRunResult(false, :go, out, nothing, "go", 1),
+                    DistSSHRun.DistSSHJobResult(false, :go, out, nothing, "go", 1),
                     :sigterm;
                     run_dir = nothing,
                 )
@@ -257,13 +257,13 @@ end
                 DistSSHRun.write_kit_run_toml!(
                     run_d;
                     kind = :go,
-                    result = DistSSHRun.KitRunResult(true, :go, out, nothing, nothing, 0),
+                    result = DistSSHRun.DistSSHJobResult(true, :go, out, nothing, nothing, 0),
                 )
                 DistSSHRun._write_kit_pid_file(getpid(), out, nothing; run_dir = run_d)
                 @test DistSSHRun._run_dir_for_stop(out) ==
                     DistSSHRun.canonical_local_path(run_d)
                 DistSSHRun._persist_stop(
-                    DistSSHRun.KitRunResult(false, :go, out, nothing, "terminated", 1),
+                    DistSSHRun.DistSSHJobResult(false, :go, out, nothing, "terminated", 1),
                     :sigterm;
                     run_dir = DistSSHRun._run_dir_for_stop(out),
                 )
@@ -278,7 +278,7 @@ end
                 DistSSHRun.write_kit_run_toml!(
                     stray;
                     kind = :go,
-                    result = DistSSHRun.KitRunResult(true, :go, out, nothing, nothing, 0),
+                    result = DistSSHRun.DistSSHJobResult(true, :go, out, nothing, nothing, 0),
                 )
                 empty_out = joinpath(other, "empty-out")
                 mkpath(empty_out)
@@ -427,7 +427,7 @@ end
                 d1;
                 kind = :drive,
                 output_dir = joinpath(project, "out"),
-                result = DistSSHRun.KitRunResult(true, :drive, joinpath(project, "out"), nothing, nothing, 0),
+                result = DistSSHRun.DistSSHJobResult(true, :drive, joinpath(project, "out"), nothing, nothing, 0),
             )
             raw = DistSSHRun.read_kit_run_toml(d1)
             @test raw isa AbstractDict
@@ -1151,7 +1151,7 @@ end
                         )
                     end
                     result = wait(kp)
-                    @test result isa DistSSHRun.KitRunResult
+                    @test result isa DistSSHRun.DistSSHJobResult
                     @test result.ok
                     @test result.exit_code == 0
                     @test isfile(marker)
@@ -1181,7 +1181,7 @@ end
                 quiet = true,
                 yes = true,
             )
-            @test result isa DistSSHRun.KitRunResult
+            @test result isa DistSSHRun.DistSSHJobResult
             @test result.kind === :go
             @test result.ok
             @test result.exit_code == 0
@@ -1233,11 +1233,11 @@ end
                     result = wait(kp)
                     flush(out_io)
                     flush(err_io)
-                    @test kp isa DistSSHRun.KitProcess
+                    @test kp isa DistSSHRun.DetachedProcess
                     @test kp.kind === :go
                     @test kp.log_dir === nothing
                     @test kp.output_dir !== nothing
-                    @test result isa DistSSHRun.KitRunResult
+                    @test result isa DistSSHRun.DistSSHJobResult
                     @test result.kind === :go
                     @test result.ok
                     @test result.exit_code == 0
@@ -1248,7 +1248,7 @@ end
                     @test !isfile(joinpath(result.output_dir, "kit.out"))
                     @test !isfile(joinpath(result.output_dir, "kit.err"))
                     recovered = DistSSHRun.kit_result_from_dir(result.output_dir)
-                    @test recovered isa DistSSHRun.KitRunResult
+                    @test recovered isa DistSSHRun.DistSSHJobResult
                     @test recovered.ok
                     @test recovered.kind === :go
                     @test recovered.exit_code == 0
@@ -1383,7 +1383,7 @@ end
             @test process_running(kp.process)
             killed = DistSSHRun.terminate!(kp; grace = 2)
             @test !process_running(kp.process)
-            @test killed isa DistSSHRun.KitRunResult
+            @test killed isa DistSSHRun.DistSSHJobResult
         end
     end
 
@@ -1414,7 +1414,7 @@ end
                         )
                     end
                     result = DistSSHRun.terminate!(kp; grace = 2)
-                    @test result isa DistSSHRun.KitRunResult
+                    @test result isa DistSSHRun.DistSSHJobResult
                     @test !process_running(kp.process)
                     @test result.kind === :go
                 end
@@ -1447,7 +1447,7 @@ end
                         )
                     end
                     result = DistSSHRun.terminate!(kp; grace = 2)
-                    @test result isa DistSSHRun.KitRunResult
+                    @test result isa DistSSHRun.DistSSHJobResult
                     @test !process_running(kp.process)
                     @test result.kind === :ride
                 end
@@ -1458,7 +1458,7 @@ end
     @testset "terminate_run! missing pid" begin
         _with_tempdir() do d
             r = DistSSHRun.terminate_run!(d; grace = 0)
-            @test r isa DistSSHRun.KitRunResult
+            @test r isa DistSSHRun.DistSSHJobResult
             @test r.ok === false
             @test r.failed_step == "terminated"
             @test r.kind === :go
@@ -1488,7 +1488,7 @@ end
                 DistSSHRun.canonical_local_path(run_d) * "\n",
             )
             DistSSHRun._write_kit_result_file(
-                DistSSHRun.KitRunResult(false, :go, run_d, nothing, "collect", 7);
+                DistSSHRun.DistSSHJobResult(false, :go, run_d, nothing, "collect", 7);
                 run_dir = run_d,
             )
             r = DistSSHRun.terminate_run!(out; grace = 0)
@@ -1662,7 +1662,7 @@ end
                 );
                 wait = false,
             )
-            kp = DistSSHRun.KitProcess(proc; kind = :go, output_dir = dir)
+            kp = DistSSHRun.DetachedProcess(proc; kind = :go, output_dir = dir)
             try
                 t0 = time()
                 while !isfile(ready) && (time() - t0) < 60
@@ -1711,26 +1711,26 @@ end
         end
     end
 
-    @testset "result_run_dir on KitProcess" begin
+    @testset "result_run_dir on DetachedProcess" begin
         julia = joinpath(Sys.BINDIR, Base.julia_exename())
         proc = run(
             pipeline(`$julia --startup-file=no -e nothing`; stdout = devnull, stderr = devnull);
             wait = true,
         )
-        bare = DistSSHRun.KitProcess(proc; kind = :go)
+        bare = DistSSHRun.DetachedProcess(proc; kind = :go)
         @test DistSSHRun.result_run_dir(bare) === nothing
         @test_throws MethodError DistSSHRun.result_content_tree_hash(bare)
         @test_throws MethodError DistSSHRun.result_remote_run_id(bare)
         _with_tempdir() do run_dir
-            held = DistSSHRun.KitProcess(proc; kind = :drive, run_dir = run_dir)
+            held = DistSSHRun.DetachedProcess(proc; kind = :drive, run_dir = run_dir)
             @test DistSSHRun.result_run_dir(held) == run_dir
         end
     end
 
-    @testset "wait(::KitProcess) uses shell_status" begin
+    @testset "wait(::DetachedProcess) uses shell_status" begin
         function _wait_code(proc)
             return _with_tempdir() do dir
-                kp = DistSSHRun.KitProcess(proc; kind = :go, output_dir = dir)
+                kp = DistSSHRun.DetachedProcess(proc; kind = :go, output_dir = dir)
                 result = wait(kp)
                 return result
             end
@@ -1959,7 +1959,7 @@ end
             );
             wait = true,
         )
-        bare = DistSSHRun.KitProcess(proc; kind = :go)
+        bare = DistSSHRun.DetachedProcess(proc; kind = :go)
         bare_launch = DistSSHRun.detached_launch(bare)
         @test bare_launch.dir == ""
         @test bare_launch.threads == "unset"

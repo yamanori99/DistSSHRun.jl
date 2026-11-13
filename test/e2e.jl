@@ -1190,7 +1190,7 @@ end
         @testset "Julian API setup! + go!/pipeline!" begin
             _e2e_announce("Julian API setup! + go!/pipeline!")
             withenv(_e2e_base_env()...) do
-                session = KitSession(
+                session = DistSSHSession(
                     project = proj,
                     workers = remote_tokens,
                     remote = remote_root,
@@ -1342,7 +1342,7 @@ end
                     log_dir = log_dir,
                 )
             end
-            # A queue that lost its in-memory `KitProcess` (e.g. restarted
+            # A queue that lost its in-memory `DetachedProcess` (e.g. restarted
             # mid-job) falls back to `kit.pid` — assert it names this run's
             # real OS pid before using it below instead of `kp.process`.
             pid_path = joinpath(log_dir, "kit.pid")
@@ -1383,7 +1383,7 @@ end
             )
             @test trace_attached
             # Kill by the `kit.pid`-derived pid, not `kp.process` — the path a
-            # queue without the original `KitProcess` handle would take.
+            # queue without the original `DetachedProcess` handle would take.
             kill_t0 = time()
             run(`kill -9 $(detached_pid)`)
             wait(kp.process)
@@ -1503,7 +1503,7 @@ end
             result = with_logger(_DropTaggedPkillWarn(current_logger())) do
                 DistSSHRun.terminate!(kp; grace = 15)
             end
-            @test result isa DistSSHRun.KitRunResult
+            @test result isa DistSSHRun.DistSSHJobResult
             @test result.kind === :ride
             @test !process_running(kp.process)
 

@@ -19,26 +19,26 @@ end
 
     @testset "peel flags" begin
         withenv(clear_verbosity_env..., "DISTSSH_YES" => nothing) do
-            let (session, rest) = DistSSHRun.peel_kit_cli_flags(["--quiet", "--yes", "child:host1", "s.jl"])
+            let (session, rest) = DistSSHRun.peel_shared_cli_flags(["--quiet", "--yes", "child:host1", "s.jl"])
                 @test session.quiet
                 @test session.verbosity === :quiet
                 @test session.yes
                 @test rest == ["child:host1", "s.jl"]
             end
 
-            let (session, rest) = DistSSHRun.peel_kit_cli_flags(["--verbose", "child:host1"])
+            let (session, rest) = DistSSHRun.peel_shared_cli_flags(["--verbose", "child:host1"])
                 @test session.verbosity === :verbose
                 @test !session.quiet
                 @test rest == ["child:host1"]
             end
 
-            let (session, rest) = DistSSHRun.peel_kit_cli_flags(["--hosts", "a:1, b", "s.jl"])
+            let (session, rest) = DistSSHRun.peel_shared_cli_flags(["--hosts", "a:1, b", "s.jl"])
                 @test session.hosts_flag == ["a:1", "b"]
                 @test rest == ["s.jl"]
             end
 
             for flag in ("--version", "-v", "-V")
-                let (session, rest) = DistSSHRun.peel_kit_cli_flags([flag])
+                let (session, rest) = DistSSHRun.peel_shared_cli_flags([flag])
                     @test session.show_version
                     @test rest == String[]
                 end
@@ -48,11 +48,11 @@ end
 
     @testset "quiet vs progress exclusivity" begin
         withenv(clear_verbosity_env...) do
-            @test_throws ArgumentError DistSSHRun.peel_kit_cli_flags(["-q", "--progress"])
-            @test_throws ArgumentError DistSSHRun.peel_kit_cli_flags(["--progress", "--quiet"])
-            @test_throws ArgumentError DistSSHRun.peel_kit_cli_flags(["--progress", "--verbose"])
-            @test_throws ArgumentError DistSSHRun.peel_kit_cli_flags(["--verbose", "-q"])
-            @test_throws ArgumentError DistSSHRun.KitCliSession(quiet = true, verbosity = :progress)
+            @test_throws ArgumentError DistSSHRun.peel_shared_cli_flags(["-q", "--progress"])
+            @test_throws ArgumentError DistSSHRun.peel_shared_cli_flags(["--progress", "--quiet"])
+            @test_throws ArgumentError DistSSHRun.peel_shared_cli_flags(["--progress", "--verbose"])
+            @test_throws ArgumentError DistSSHRun.peel_shared_cli_flags(["--verbose", "-q"])
+            @test_throws ArgumentError DistSSHRun.CliSharedFlags(quiet = true, verbosity = :progress)
         end
         withenv("DISTSSH_QUIET" => "1", "DISTSSH_PROGRESS" => "1") do
             @test_throws ArgumentError DistSSHRun.default_kit_cli_session()
@@ -84,21 +84,21 @@ end
         @test DistSSHRun.kit_cli_auto_verbosity(; live = false) === :verbose
     end
 
-    @testset "apply_kit_cli_session!" begin
+    @testset "apply_shared_cli_flags!" begin
         withenv(clear_verbosity_env..., "DISTSSH_YES" => nothing) do
             prev = DistSSHRun.kit_verbosity()
             prev_ni = DistSSHRun.kit_noninteractive()
             try
-                DistSSHRun.apply_kit_cli_session!(DistSSHRun.KitCliSession(yes = true))
+                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(yes = true))
                 @test DistSSHRun.kit_confirm("ignored")
 
-                DistSSHRun.apply_kit_cli_session!(DistSSHRun.KitCliSession(verbosity = :progress))
+                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(verbosity = :progress))
                 @test DistSSHRun.kit_verbosity() === :progress
                 @test DistSSHRun.kit_output_progress()
                 @test !DistSSHRun.kit_output_detail()
                 @test !DistSSHRun.kit_output_quiet()
 
-                DistSSHRun.apply_kit_cli_session!(DistSSHRun.KitCliSession(verbosity = :verbose))
+                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(verbosity = :verbose))
                 @test DistSSHRun.kit_verbosity() === :verbose
                 @test DistSSHRun.kit_output_detail()
             finally
@@ -176,10 +176,10 @@ end
         end
 
         withenv("DISTSSH_HOSTS" => "child:env-a:2, child:env-b", "DISTSSH_HOSTS_FILE" => nothing) do
-            session = DistSSHRun.KitCliSession(hosts_flag = ["parent:3"], hosts_file = hosts_file)
-            @test DistSSHRun.kit_host_source_tokens(session; keep_counts = true) ==
+            session = DistSSHRun.CliSharedFlags(hosts_flag = ["parent:3"], hosts_file = hosts_file)
+            @test DistSSHRun.placement_source_tokens(session; keep_counts = true) ==
                 ["parent:3", "child:env-a:2", "child:env-b", "child:host-a:1", "child:host-b:4"]
-            @test DistSSHRun.kit_host_source_tokens(session; keep_counts = false, roles = true) ==
+            @test DistSSHRun.placement_source_tokens(session; keep_counts = false, roles = true) ==
                 ["parent", "env-a", "env-b", "host-a", "host-b"]
         end
     end

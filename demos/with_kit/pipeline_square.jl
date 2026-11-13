@@ -37,7 +37,7 @@ result = pipeline!(driver, "parent:2"; args = ARGS, collect = false, enable_log 
 
 # First-time remotes: setup!, then pipeline! (or drive!).
 #
-#   session = KitSession(
+#   session = DistSSHSession(
 #       workers=["child:user@host1", "child:user@host2"],
 #       remote="/path/to/project",
 #       yes=true,

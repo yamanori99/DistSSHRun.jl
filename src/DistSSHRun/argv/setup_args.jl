@@ -292,7 +292,7 @@ function parse_setup_args(args::Vector{String})
         ),
         bare_dash = true,
     )
-    cli_session, args = peel_kit_cli_flags(args)
+    cli_session, args = peel_shared_cli_flags(args)
     mode = nothing
     mode_flag::Union{Nothing, String} = nothing
     julia_path = get(ENV, "JULIA_DISTRIBUTED_EXE", "auto")  # default to env or auto-detect
@@ -400,7 +400,7 @@ function parse_setup_args(args::Vector{String})
     end
 
     append_kit_host_sources!(hosts, cli_session; keep_counts = false, roles = true)
-    apply_kit_cli_session!(cli_session)
+    apply_shared_cli_flags!(cli_session)
 
     if (older_days !== nothing || prune_id !== nothing) && mode !== :prune
         throw(ArgumentError("--older-than / --id only apply to setup prune"))

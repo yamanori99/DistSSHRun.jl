@@ -37,11 +37,11 @@ using Test
     @test not_exported(:identity_mismatches)
     @test :cache_path in ns && :cache_relpath in ns
     @test :push_cache! in ns && :cache_remote_dir in ns
-    @test :KitRunResult in ns && :kit_run_result in ns
+    @test :DistSSHJobResult in ns && :kit_run_result in ns
     @test not_exported(:report_run_errors)
     @test not_exported(:report_pipeline_errors)
     @test not_exported(:report_go_errors)
-    @test :execute! in ns && :KitProcess in ns && :kit_result_from_dir in ns
+    @test :execute! in ns && :DetachedProcess in ns && :kit_result_from_dir in ns
     @test :drive_host_status in ns && :DriveHostStatus in ns
     @test :allocate_output_dir in ns
     @test :allocate_run_dir in ns && :kit_run_dir in ns && :read_kit_run_toml in ns

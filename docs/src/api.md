@@ -21,7 +21,7 @@ Filter = function (x)
     names = (
         :worker_pmap, :worker_seed, :go!, :GoResult, :report_go_errors,
         :drive!, :DriveResult, :HostRunResult, :DriveHostStatus, :drive_host_status,
-        :KitRunResult, :KitProcess, :kit_run_result, :report_run_errors,
+        :DistSSHJobResult, :DetachedProcess, :kit_run_result, :report_run_errors,
         :terminate!, :terminate_run!, :kit_result_from_dir, :result_run_dir, :result_provenance,
         :result_content_tree_hash, :result_remote_run_id,
         :ride!, :RideResult, :print_ride,
@@ -36,7 +36,7 @@ end
 ```
 
 ```@docs
-wait(::KitProcess)
+wait(::DetachedProcess)
 execute_kwargs_from_parsed
 detached_launch
 ```
@@ -100,7 +100,7 @@ Private = false
 Filter = function (x)
     names = (
         :setup!, :sync!, :instantiate!,
-        :KitSession, :HostResult, :SyncResult,
+        :DistSSHSession, :HostResult, :SyncResult,
         :ConfirmPathMismatch, :normalize_remote_confirm_path,
     )
     n = try
@@ -180,7 +180,7 @@ Filter = function (x)
     grouped = (
         :worker_pmap, :worker_seed, :go!, :GoResult, :report_go_errors,
         :drive!, :DriveResult, :HostRunResult, :DriveHostStatus, :drive_host_status,
-        :KitRunResult, :KitProcess, :kit_run_result, :report_run_errors,
+        :DistSSHJobResult, :DetachedProcess, :kit_run_result, :report_run_errors,
         :terminate!, :terminate_run!, :kit_result_from_dir, :result_run_dir, :result_provenance,
         :result_content_tree_hash, :result_remote_run_id,
         :ride!, :RideResult, :print_ride,
@@ -189,7 +189,7 @@ Filter = function (x)
         :report_pipeline_errors,
         :collect!, :CollectResult,
         :setup!, :sync!, :instantiate!, :ship_send_list,
-        :KitSession, :HostResult, :SyncResult,
+        :DistSSHSession, :HostResult, :SyncResult,
         :ship_tree!, :ShipTreeResult, :SourceSelection,
         :validate_run_id, :resolve_source_selection,
         :read_last_ship_record, :write_last_ship_record!,

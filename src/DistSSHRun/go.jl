@@ -74,8 +74,8 @@ end
 function kit_run_result(
         result::GoResult,
         tokens::AbstractVector{<:AbstractString} = String[],
-    )::KitRunResult
-    return KitRunResult(
+    )::DistSSHJobResult
+    return DistSSHJobResult(
         result.ok,
         :go,
         _optional_path(result.output_dir),
@@ -1167,7 +1167,7 @@ function _go_run!(
     _go_write_batch_manifest!(batch_dir, script_path, slots)
     _set_kit_progress_sidecar!(batch_dir)
     apply_session_env!(
-        KitSession(
+        DistSSHSession(
             project = proj,
             workers = String[],
             remote = remote,
@@ -1181,7 +1181,7 @@ function _go_run!(
     progress_ok = false
     completed = false
     try
-        go_session = KitSession(
+        go_session = DistSSHSession(
             project = proj,
             workers = String[],
             remote = remote,

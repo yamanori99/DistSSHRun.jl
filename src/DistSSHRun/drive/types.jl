@@ -221,7 +221,7 @@ Result fields and positional constructors are not API. Result structs are
 not a stable serialization format. `serialize` and JLD2 of a result are
 unsupported. The supported record is `kit.result`.
 """
-struct KitRunResult
+struct DistSSHJobResult
     ok::Bool
     kind::Symbol
     output_dir::Union{Nothing, String}
@@ -232,7 +232,7 @@ struct KitRunResult
     tokens::Vector{String}
     stop::Union{Nothing, Symbol}
     run_dir::Union{Nothing, String}
-    function KitRunResult(
+    function DistSSHJobResult(
             ok::Bool,
             kind::Symbol,
             output_dir::Union{Nothing, String},
@@ -502,9 +502,9 @@ function PipelineResult(
     return PipelineResult(ok, sync, plan, drive, collect, driver, failed_step, od, ld, code)
 end
 
-"""Build [`KitRunResult`](@ref) from a kit outcome (`:go` / `:ride` / `:drive` / `:pipeline`)."""
-function kit_run_result(result::DriveResult)::KitRunResult
-    return KitRunResult(
+"""Build [`DistSSHJobResult`](@ref) from a kit outcome (`:go` / `:ride` / `:drive` / `:pipeline`)."""
+function kit_run_result(result::DriveResult)::DistSSHJobResult
+    return DistSSHJobResult(
         result.ok,
         :drive,
         result.output_dir,
@@ -516,8 +516,8 @@ function kit_run_result(result::DriveResult)::KitRunResult
     )
 end
 
-function kit_run_result(result::PipelineResult)::KitRunResult
-    return KitRunResult(
+function kit_run_result(result::PipelineResult)::DistSSHJobResult
+    return DistSSHJobResult(
         result.ok,
         :pipeline,
         result.output_dir,
@@ -531,7 +531,7 @@ function _report_run_label(kind::Symbol)::String
     return kind === :pipeline ? "pipeline!" : String(kind)
 end
 
-function _report_run_header!(io::IO, result::KitRunResult)
+function _report_run_header!(io::IO, result::DistSSHJobResult)
     step = something(result.failed_step, "unknown")
     println(io, "$(_report_run_label(result.kind)) failed at step: $step")
     if result.output_dir !== nothing
@@ -555,11 +555,11 @@ end
 """
     report_run_errors(result; io=stderr)
 
-Print a short summary when a kit run failed. Accepts [`KitRunResult`](@ref)
+Print a short summary when a kit run failed. Accepts [`DistSSHJobResult`](@ref)
 or a typed outcome (`GoResult` / `RideResult` / `DriveResult` / `PipelineResult`).
 Returns `result.ok`.
 """
-function report_run_errors(result::KitRunResult; io::IO = stderr)::Bool
+function report_run_errors(result::DistSSHJobResult; io::IO = stderr)::Bool
     result.ok && return true
     _report_run_header!(io, result)
     if result.exit_code != 0
