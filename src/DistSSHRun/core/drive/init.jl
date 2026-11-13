@@ -340,12 +340,15 @@ function init_drive_workers!(
             resolve_drive_heartbeat_policy() :
             heartbeat
         if policy.self_exit && nprocs() > 1
+            deadline = policy.deadline
+            deadline === nothing &&
+                error("heartbeat policy self_exit requires a positive deadline")
             write_both("  Starting heartbeat monitors... ")
             flush(stdout)
             install_and_start_heartbeat!(
                 workers();
                 interval = policy.interval,
-                deadline = policy.deadline,
+                deadline = deadline,
             )
             for w in workers()
                 _drive_eval_main(w, :(flush(stdout); flush(stderr); true))
