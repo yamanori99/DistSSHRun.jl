@@ -362,10 +362,9 @@ using TOML
     @test isabspath(pin)
     @test isfile(pin) || islink(pin)
 
-    cookie_before = Distributed.cluster_cookie()
     DistSSHRun.ensure_run_cluster_cookie!()
-    @test length(Distributed.cluster_cookie()) == 16
-    @test Distributed.cluster_cookie() == cookie_before || nprocs() == 1
+    raw = strip(Distributed.cluster_cookie())
+    @test length(raw) >= 16
 
     _with_tempdir() do proj
         man = joinpath(proj, "Manifest.toml")
@@ -455,5 +454,48 @@ using TOML
         finally
             old === nothing || Pkg.activate(old; io = devnull)
         end
+    end
+
+    @testset "cluster cookie (subprocess)" begin
+        julia = joinpath(Sys.BINDIR, Base.julia_exename())
+        proj = if isdefined(Main, :TEST_PROJECT)
+            String(TEST_PROJECT)
+        else
+            String(something(Base.active_project(), pkgdir(DistSSHRun)))
+        end
+        cookie_code = raw"""
+        using Random, Distributed, DistSSHRun
+        Random.seed!(7)
+        DistSSHRun.ensure_run_cluster_cookie!()
+        print(strip(Distributed.cluster_cookie())[1:16])
+        """
+        cmd = code -> `$julia --startup-file=no --history-file=no --project=$proj -e $code`
+        c1 = strip(String(read(cmd(cookie_code))))
+        c2 = strip(String(read(cmd(cookie_code))))
+        @test length(c1) == 16
+        @test length(c2) == 16
+        @test c1 != c2
+
+        rng_code = raw"""
+        using Random, Distributed, DistSSHRun
+        function ref_draws()
+            Random.seed!(7)
+            return rand(Random.default_rng(), 1:1000, 8)
+        end
+        ref = ref_draws()
+        Random.seed!(7)
+        r = Random.default_rng()
+        DistSSHRun.ensure_run_cluster_cookie!()
+        before = Set(workers())
+        try
+            addprocs(1; exeflags=`--startup-file=no`)
+            after = rand(r, 1:1000, 8)
+            print(ref == after ? "ok" : "fail")
+        finally
+            left = setdiff(Set(workers()), before)
+            isempty(left) || rmprocs(collect(left); waitfor = 30)
+        end
+        """
+        @test strip(String(read(cmd(rng_code)))) == "ok"
     end
 end

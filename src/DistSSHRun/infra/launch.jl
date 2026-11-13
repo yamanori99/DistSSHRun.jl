@@ -288,11 +288,21 @@ function ssh_tunnel_enabled()::Bool
     return get(ENV, "DISTSSH_SSH_TUNNEL", "1") != "0"
 end
 
-"""Random per-run cookie before the first worker. Never log the value."""
+"""
+Set a per-run cluster cookie before the first worker. Never log the value.
+
+Julia's Distributed `init_multi` draws a cookie from the task-local default RNG
+on the first cluster use. DistSSH saves that RNG state, sets a cookie from
+[`RandomDevice`](@ref), then restores the state so user random streams stay
+unchanged.
+"""
 function ensure_run_cluster_cookie!()::Nothing
     nprocs() > 1 && return nothing
-    alphabet = ['0':'9'; 'A':'Z'; 'a':'z']
-    Distributed.cluster_cookie(String(rand(alphabet, 16)))
+    rng = default_rng()
+    saved = copy(rng)
+    # `init_multi` runs inside `cluster_cookie` and would advance the user's RNG.
+    Distributed.cluster_cookie(randstring(RandomDevice(), 16))
+    copy!(rng, saved)
     return nothing
 end
 
