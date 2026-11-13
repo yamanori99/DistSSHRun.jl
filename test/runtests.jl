@@ -77,6 +77,8 @@ end
             if !_distsshrun_short_skip("unit/DistSSHRun/core/drive/workers.jl")
                 include(joinpath(@__DIR__, "unit", "DistSSHRun", "core", "drive", "workers.jl"))
             end
+            _runtest_announce("unit/DistSSHRun/options/heartbeat.jl")
+            include(joinpath(@__DIR__, "unit", "DistSSHRun", "options", "heartbeat.jl"))
             _runtest_announce("unit/DistSSHRun/infra/worker_plan.jl")
             include(joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "worker_plan.jl"))
             _runtest_announce("unit/DistSSHRun/hostinfo.jl")
