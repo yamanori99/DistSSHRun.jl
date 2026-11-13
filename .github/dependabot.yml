@@ -24,6 +24,7 @@ updates:
     directories:
       - "/"
       - "/docs"
+      - "/test"
       - "/lib/DistSSHBase"
       - "/lib/DistSSHUp"
       - "/lib/DistSSHShip"
@@ -37,9 +38,11 @@ updates:
       - dependency-name: Dates
       - dependency-name: Distributed
       - dependency-name: Pkg
+      - dependency-name: Random
       - dependency-name: TOML
       - dependency-name: Test
       # In-repo libs: lockstep with DistSSHRun; see .github/lib-lockstep-check.sh
+      - dependency-name: DistSSHRun
       - dependency-name: DistSSHBase
       - dependency-name: DistSSHUp
       - dependency-name: DistSSHShip
