@@ -299,16 +299,39 @@ function _environment_mismatch_throw(lines::Vector{String})
     )
 end
 
+"""Worker snapshot for environment verification (`Core.eval` on the worker)."""
+function _worker_identity_snapshot_on_worker()
+    if strip(get(ENV, "DISTSSH_TEST", "")) == "1"
+        kind = strip(get(ENV, "DISTSSH_TEST_WORKER_SNAP", ""))
+        kind == "non_dict" && return 42
+        raw = strip(get(ENV, "DISTSSH_TEST_WORKER_IDENTITY_TOML", ""))
+        if !isempty(raw)
+            parsed = TOML.parse(raw)
+            parsed isa AbstractDict || return parsed
+            d = Dict{String, String}()
+            for (k, v) in parsed
+                d[String(k)] = string(v)
+            end
+            return d
+        end
+    end
+    return Core.eval(Main, DistSSHRun._worker_identity_expr())
+end
+
+function _fetch_worker_environment_snapshot(pid::Integer)
+    return remotecall_fetch(_worker_identity_snapshot_on_worker, pid)
+end
+
 function verify_workers_match_job!(project::AbstractString)
     unsafe_heterogeneous_active() && return nothing
     parent = run_identity(project)
     want_man = get(parent, "manifest.sha256", "")
-    isempty(want_man) || return nothing
+    isempty(want_man) && return nothing
     mismatches = String[]
     mismatch_lock = ReentrantLock()
     @sync for w in workers()
         @async begin
-            snap = remotecall_fetch(Core.eval, w, Main, _worker_identity_expr())
+            snap = _fetch_worker_environment_snapshot(w)
             local lines = String[]
             if !(snap isa AbstractDict)
                 push!(
@@ -505,7 +528,7 @@ function verify_go_slots_match_job!(
     unsafe_heterogeneous_active() && return nothing
     parent = run_identity(project)
     want_man = get(parent, "manifest.sha256", "")
-    isempty(want_man) || return nothing
+    isempty(want_man) && return nothing
     mismatches = String[]
     if any(s -> s.kind === :parent, slots)
         local_id = _go_local_slot_identity(project, julia)

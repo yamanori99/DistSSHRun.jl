@@ -180,6 +180,8 @@ end
             include(joinpath(@__DIR__, "integration", "DistSSHRun", "vendor.jl"))
             _runtest_announce("integration/DistSSHRun/cli_nomanifest.jl")
             include(joinpath(@__DIR__, "integration", "DistSSHRun", "cli_nomanifest.jl"))
+            _runtest_announce("integration/DistSSHRun/env_verify.jl")
+            include(joinpath(@__DIR__, "integration", "DistSSHRun", "env_verify.jl"))
             _runtest_announce("integration/cli/help.jl")
             if !_distsshrun_short_skip("integration/cli/help.jl")
                 include(joinpath(@__DIR__, "integration", "cli", "help.jl"))
