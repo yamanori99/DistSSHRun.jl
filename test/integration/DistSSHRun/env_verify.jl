@@ -103,6 +103,7 @@ end
             _with_one_local_worker(
                 test_proj,
                 function (w)
+                    DistSSHRun._mark_workers_launched!([w], proj)
                     _env_verify_worker_toml_override!(
                         w,
                         merge(ident, Dict("manifest.sha256" => "f"^64)),
@@ -126,6 +127,7 @@ end
                 Pkg.activate(proj; io = devnull)
                 _with_one_local_worker(
                     test_proj, function (w)
+                        DistSSHRun._mark_workers_launched!([w], proj)
                         remotecall_fetch(w, proj) do p
                             ENV["JULIA_PROJECT"] = String(p)
                             return nothing
