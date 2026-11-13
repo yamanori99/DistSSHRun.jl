@@ -33,6 +33,10 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             @test DistSSHRun._interrupt_drive_workers!() === nothing
             addprocs(1; topology = :master_worker)
             added = workers()
+            DistSSHRun._register_drive_host_worker_ids!(
+                DistSSHRun.PARENT_HOST_NAME,
+                collect(added),
+            )
             seen = Int[]
             prev = DistSSHRun.INTERRUPT_DRIVE_WORKERS[]
             DistSSHRun.INTERRUPT_DRIVE_WORKERS[] = pids -> append!(seen, pids)
@@ -42,11 +46,193 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
                 @test workers() == added
             finally
                 DistSSHRun.INTERRUPT_DRIVE_WORKERS[] = prev
+                DistSSHRun._clear_drive_host_worker_ids!()
                 for w in added
                     w in workers() && rmprocs(w; waitfor = 2.0)
                 end
             end
             @test nprocs() == 1
+        end
+
+        @testset "foreign worker survives owned worker teardown" begin
+            addprocs(1; topology = :master_worker)
+            foreign = workers()[end]
+            before = Set(workers())
+            addprocs(1; topology = :master_worker)
+            owned = Int[w for w in workers() if w ∉ before]
+            DistSSHRun._register_drive_host_worker_ids!(DistSSHRun.PARENT_HOST_NAME, owned)
+            DistSSHRun.RUNNER_WORKER_PROJECT_DIRS[owned[1]] = tmp
+            try
+                cleanup = DistSSHRun.register_worker_cleanup!(String[])
+                cleanup()
+                @test foreign in workers()
+                @test !(owned[1] in workers())
+            finally
+                DistSSHRun._clear_drive_host_worker_ids!()
+                empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+                for w in setdiff(workers(), [1])
+                    rmprocs(w; waitfor = 2.0)
+                end
+            end
+        end
+
+        @testset "_rmprocs_added_since removes join before host registration" begin
+            for w in setdiff(workers(), [1])
+                rmprocs(w; waitfor = 2.0)
+            end
+            before = Set(workers())
+            addprocs(1; topology = :master_worker)
+            joined = Int[w for w in workers() if w ∉ before]
+            @test length(joined) == 1
+            try
+                error("rollback after join")
+            catch
+                DistSSHRun._rmprocs_added_since(before)
+            end
+            @test joined[1] ∉ workers()
+            @test nprocs() == 1
+        end
+
+        @testset "sync_driver_to_workers! skips foreign worker" begin
+            for w in setdiff(workers(), [1])
+                rmprocs(w; waitfor = 2.0)
+            end
+            DistSSHRun._clear_drive_host_worker_ids!()
+            empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+            empty!(DistSSHRun.RUNNER_WORKER_SCRIPT_PATHS)
+            addprocs(1; topology = :master_worker)
+            foreign = workers()[end]
+            before = Set(workers())
+            addprocs(1; topology = :master_worker)
+            owned = Int[w for w in workers() if w ∉ before]
+            write(
+                joinpath(tmp, "Project.toml"),
+                """
+                uuid = "cccccccc-dddd-eeee-ffff-111111111111"
+                version = "0.0.1"
+                """,
+            )
+            script = joinpath(tmp, "sync_job.jl")
+            write(script, "global _distssh_sync_hit = true\n")
+            DistSSHRun._register_drive_host_worker_ids!(DistSSHRun.PARENT_HOST_NAME, owned)
+            DistSSHRun.RUNNER_WORKER_PROJECT_DIRS[owned[1]] = tmp
+            DistSSHRun.RUNNER_WORKER_SCRIPT_PATHS[owned[1]] = script
+            @test foreign in workers()
+            @test owned[1] in workers()
+            try
+                redirect_stdout(devnull) do
+                    DistSSHRun.init_drive_workers!(tmp, nothing, tmp)
+                    DistSSHRun.sync_driver_to_workers!(script; worker_include = true)
+                end
+                @test !remotecall_fetch(() -> isdefined(Main, :_distssh_sync_hit), foreign)
+                @test remotecall_fetch(
+                    () -> isdefined(Main, :_distssh_sync_hit) && Main._distssh_sync_hit,
+                    owned[1],
+                )
+            finally
+                DistSSHRun._clear_drive_host_worker_ids!()
+                empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+                empty!(DistSSHRun.RUNNER_WORKER_SCRIPT_PATHS)
+                for w in setdiff(workers(), [1])
+                    w in workers() && rmprocs(w; waitfor = 2.0)
+                end
+            end
+        end
+
+        @testset "heartbeat install uses owned workers only" begin
+            for w in setdiff(workers(), [1])
+                rmprocs(w; waitfor = 2.0)
+            end
+            DistSSHRun._clear_drive_host_worker_ids!()
+            empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+            addprocs(1; topology = :master_worker)
+            foreign = workers()[end]
+            before = Set(workers())
+            addprocs(1; topology = :master_worker)
+            owned = Int[w for w in workers() if w ∉ before]
+            DistSSHRun._register_drive_host_worker_ids!(DistSSHRun.PARENT_HOST_NAME, owned)
+            DistSSHRun.RUNNER_WORKER_PROJECT_DIRS[owned[1]] = tmp
+            try
+                DistSSHRun.install_and_start_heartbeat!(
+                    DistSSHRun._live_owned_worker_ids();
+                    interval = 5.0,
+                    deadline = 120.0,
+                )
+                @test remotecall_fetch(
+                    () -> isdefined(Main, :DistSSHHeartbeat),
+                    foreign,
+                ) == false
+                @test remotecall_fetch(
+                    () -> isdefined(Main, :DistSSHHeartbeat),
+                    owned[1],
+                ) == true
+            finally
+                DistSSHRun.stop_heartbeat_on_workers!(DistSSHRun._live_owned_worker_ids())
+                DistSSHRun._clear_drive_host_worker_ids!()
+                empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+                for w in setdiff(workers(), [1])
+                    w in workers() && rmprocs(w; waitfor = 2.0)
+                end
+            end
+        end
+
+        @testset "ride registers local workers before package load boundary" begin
+            for w in setdiff(workers(), [1])
+                rmprocs(w; waitfor = 2.0)
+            end
+            DistSSHRun._clear_drive_host_worker_ids!()
+            empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+            addprocs(1; topology = :master_worker)
+            foreign = workers()[end]
+            before = Set(workers())
+            addprocs(1; topology = :master_worker)
+            owned = Int[w for w in workers() if w ∉ before]
+            DistSSHRun._mark_workers_launched!(owned, tmp)
+            DistSSHRun._register_drive_host_worker_ids!(DistSSHRun.PARENT_HOST_NAME, owned)
+            try
+                @test foreign ∉ DistSSHRun._live_owned_worker_ids()
+                @test owned[1] in DistSSHRun._live_owned_worker_ids()
+                touch = Dict{Int, Bool}()
+                for w in DistSSHRun._live_owned_worker_ids()
+                    touch[w] = true
+                end
+                DistSSHRun._ride_load_self_on_workers!()
+                @test !get(touch, foreign, false)
+                @test touch[owned[1]]
+            finally
+                DistSSHRun._clear_drive_host_worker_ids!()
+                empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+                for w in setdiff(workers(), [1])
+                    w in workers() && rmprocs(w; waitfor = 2.0)
+                end
+            end
+        end
+
+        @testset "foreign worker survives drive interrupt hook" begin
+            for w in setdiff(workers(), [1])
+                rmprocs(w; waitfor = 2.0)
+            end
+            DistSSHRun._clear_drive_host_worker_ids!()
+            addprocs(1; topology = :master_worker)
+            foreign = workers()[end]
+            before = Set(workers())
+            addprocs(1; topology = :master_worker)
+            owned = Int[w for w in workers() if w ∉ before]
+            DistSSHRun._register_drive_host_worker_ids!(DistSSHRun.PARENT_HOST_NAME, owned)
+            seen = Int[]
+            prev = DistSSHRun.INTERRUPT_DRIVE_WORKERS[]
+            DistSSHRun.INTERRUPT_DRIVE_WORKERS[] = pids -> append!(seen, pids)
+            try
+                DistSSHRun._interrupt_drive_workers!()
+                @test seen == owned
+                @test foreign in workers()
+            finally
+                DistSSHRun.INTERRUPT_DRIVE_WORKERS[] = prev
+                DistSSHRun._clear_drive_host_worker_ids!()
+                for w in setdiff(workers(), [1])
+                    rmprocs(w; waitfor = 2.0)
+                end
+            end
         end
 
         @testset "_group_interrupt_targets" begin
@@ -165,6 +351,10 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             addprocs(2; topology = :master_worker)
             added = workers()
             @test length(added) == 2
+            DistSSHRun._register_drive_host_worker_ids!(
+                DistSSHRun.PARENT_HOST_NAME,
+                collect(added),
+            )
             try
                 cleanup = DistSSHRun.register_worker_cleanup!(String[])
                 cleanup()
@@ -172,6 +362,7 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
                 @test workers() == [1]
                 @test cleanup() === nothing
             finally
+                DistSSHRun._clear_drive_host_worker_ids!()
                 for w in added
                     w in workers() && rmprocs(w; waitfor = 2.0)
                 end
@@ -181,6 +372,7 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
         @testset "register_worker_cleanup! guard trips before later workers" begin
             addprocs(1; topology = :master_worker)
             pre = workers()[end]
+            DistSSHRun._register_drive_host_worker_ids!(DistSSHRun.PARENT_HOST_NAME, [pre])
             try
                 cleanup = DistSSHRun.register_worker_cleanup!(String[])
                 cleanup()
@@ -194,7 +386,119 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
                     other in workers() && rmprocs(other; waitfor = 2.0)
                 end
             finally
+                DistSSHRun._clear_drive_host_worker_ids!()
                 pre in workers() && rmprocs(pre; waitfor = 2.0)
+            end
+        end
+
+        @testset "init_drive_workers! fallback activate skips removed probe failures" begin
+            _with_tempdir() do proj
+                write(
+                    joinpath(proj, "Project.toml"),
+                    """
+                    uuid = "dddddddd-eeee-ffff-1111-222222222222"
+                    version = "0.0.1"
+                    """,
+                )
+                for w in setdiff(workers(), [1])
+                    rmprocs(w; waitfor = 2.0)
+                end
+                addprocs(2; topology = :master_worker)
+                ws = sort!(Int[w for w in workers()])
+                @test length(ws) == 2
+                DistSSHRun._register_drive_host_worker_ids!(DistSSHRun.PARENT_HOST_NAME, ws)
+                for w in ws
+                    DistSSHRun.RUNNER_WORKER_PROJECT_DIRS[w] = proj
+                end
+                dead = ws[1]
+                alive = ws[2]
+                wrk = Distributed.map_pid_wrkr[dead]
+                ospid = wrk isa Distributed.Worker ? wrk.config.ospid : nothing
+                ospid isa Integer && ospid > 0 &&
+                    ccall(:kill, Cint, (Cint, Cint), Cint(ospid), Cint(9)) == 0
+                sleep(0.5)
+                try
+                    redirect_stdout(devnull) do
+                        DistSSHRun.init_drive_workers!(proj, nothing, proj)
+                    end
+                    @test alive in workers()
+                    @test dead ∉ workers()
+                finally
+                    DistSSHRun._clear_drive_host_worker_ids!()
+                    empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+                    for w in setdiff(workers(), [1])
+                        w in workers() && rmprocs(w; waitfor = 2.0)
+                    end
+                end
+            end
+        end
+
+        @testset "launch ownership uses addprocs return not workers diff" begin
+            for w in setdiff(workers(), [1])
+                rmprocs(w; waitfor = 2.0)
+            end
+            empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+            baseline = Set(workers())
+            concurrent = addprocs(1; topology = :master_worker)
+            foreign = first(concurrent)
+            ours = addprocs(1; topology = :master_worker)
+            joined = Int[Int(w) for w in ours]
+            DistSSHRun._mark_workers_launched!(joined, tmp)
+            wrong = Int[w for w in workers() if w ∉ baseline]
+            @test foreign in wrong
+            @test length(wrong) >= 2
+            @test !(foreign in keys(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS))
+            @test only(joined) in keys(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+            DistSSHRun._mark_workers_launched!(wrong, tmp)
+            @test foreign in keys(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+            empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+            DistSSHRun._mark_workers_launched!(joined, tmp)
+            @test !(foreign in keys(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS))
+            @test only(joined) in keys(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+            for w in setdiff(workers(), [1])
+                w in workers() && rmprocs(w; waitfor = 2.0)
+            end
+        end
+
+        @testset "init_drive_workers! skips foreign worker ping teardown" begin
+            _with_tempdir() do proj
+                write(
+                    joinpath(proj, "Project.toml"),
+                    """
+                    name = "OwnTear"
+                    uuid = "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
+                    version = "0.0.1"
+                    """,
+                )
+                addprocs(1; topology = :master_worker)
+                foreign = workers()[end]
+                before = Set(workers())
+                addprocs(1; topology = :master_worker)
+                owned = Int[w for w in workers() if w ∉ before]
+                DistSSHRun._register_drive_host_worker_ids!(DistSSHRun.PARENT_HOST_NAME, owned)
+                DistSSHRun.RUNNER_WORKER_PROJECT_DIRS[owned[1]] = proj
+                wrk = Distributed.map_pid_wrkr[owned[1]]
+                ospid = wrk isa Distributed.Worker ? wrk.config.ospid : nothing
+                if ospid isa Integer && ospid > 0
+                    @test ccall(:kill, Cint, (Cint, Cint), Cint(ospid), Cint(9)) == 0
+                    sleep(0.5)
+                end
+                try
+                    redirect_stdout(devnull) do
+                        DistSSHRun.init_drive_workers!(proj, nothing, proj)
+                    end
+                    @test foreign in workers()
+                catch e
+                    @test e isa ErrorException
+                    @test occursin("No workers responding", sprint(showerror, e))
+                    @test foreign in workers()
+                finally
+                    DistSSHRun._clear_drive_host_worker_ids!()
+                    empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+                    for w in setdiff(workers(), [1])
+                        w in workers() && rmprocs(w; waitfor = 2.0)
+                    end
+                end
             end
         end
 
@@ -239,6 +543,10 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
         end
 
         @testset "add_drive_workers! errors when nothing joins" begin
+            for w in workers()
+                w == 1 && continue
+                rmprocs(w; waitfor = 2.0)
+            end
             script = joinpath(tmp, "job.jl")
             write(script, "")
             @test_throws ErrorException redirect_stdout(devnull) do
@@ -460,6 +768,9 @@ end
             addprocs(1; topology = :master_worker)
             w = workers()[end]
             try
+                DistSSHRun._register_drive_host_worker_ids!(DistSSHRun.PARENT_HOST_NAME, [w])
+                DistSSHRun.RUNNER_WORKER_PROJECT_DIRS[w] = tmp
+                DistSSHRun.RUNNER_WORKER_SCRIPT_PATHS[w] = g
                 DistSSHRun._drive_include_workers(DistSSHRun._DRIVE_WORKER_BOOTSTRAP)
                 out, _ = _capture_stdio() do _, _
                     DistSSHRun.sync_driver_to_workers!(g)

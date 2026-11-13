@@ -1,4 +1,5 @@
 using Test
+using Distributed
 
 @testset "ride" begin
     @testset "activate project" begin
@@ -693,6 +694,90 @@ using Test
             end
             restore_remote!()
             delete!(DistSSHRun._PINNED_JULIA, "ridework.test\0/usr/bin/julia")
+        end
+    end
+
+    @testset "ride map dispatches only to owned workers" begin
+        for w in setdiff(workers(), [1])
+            rmprocs(w; waitfor = 2.0)
+        end
+        DistSSHRun._clear_drive_host_worker_ids!()
+        empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+        addprocs(1; topology = :master_worker)
+        foreign = workers()[end]
+        before = Set(workers())
+        addprocs(1; topology = :master_worker)
+        owned = Int[w for w in workers() if w ∉ before]
+        DistSSHRun._register_drive_host_worker_ids!(DistSSHRun.PARENT_HOST_NAME, owned)
+        DistSSHRun._mark_workers_launched!(owned, pwd())
+        try
+            probe_src = """
+            function ride_probe_pid(x)
+                return myid()
+            end
+            """
+            Core.eval(Main, Meta.parseall(probe_src))
+            DistSSHRun._ride_load_self_on_workers!()
+            DistSSHRun._ride_push_prelude!(Meta.parseall(probe_src))
+            out = DistSSHRun._ride_map(:ride_probe_pid, 1:12)
+            pids = unique(out)
+            @test foreign ∉ pids
+            @test all(p -> p == 1 || p in owned, pids)
+        finally
+            DistSSHRun._clear_drive_host_worker_ids!()
+            empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+            for w in setdiff(workers(), [1])
+                w in workers() && rmprocs(w; waitfor = 2.0)
+            end
+        end
+    end
+
+    @testset "ride map stays on driver when no owned workers" begin
+        for w in setdiff(workers(), [1])
+            rmprocs(w; waitfor = 2.0)
+        end
+        DistSSHRun._clear_drive_host_worker_ids!()
+        addprocs(1; topology = :master_worker)
+        foreign = workers()[end]
+        try
+            out = DistSSHRun._ride_map(_ -> myid(), 1:6)
+            @test all(==(1), out)
+            @test foreign in workers()
+        finally
+            for w in setdiff(workers(), [1])
+                w in workers() && rmprocs(w; waitfor = 2.0)
+            end
+        end
+    end
+
+    @testset "foreign worker survives ride add error cleanup" begin
+        _with_tempdir() do tmp
+            script = joinpath(tmp, "noop.jl")
+            write(script, "nothing\n")
+            addprocs(1; topology = :master_worker)
+            foreign = workers()[end]
+            task = @async sleep(120)
+            DistSSHRun.DRIVE_HOST_STATUS_STOP[] = false
+            DistSSHRun.DRIVE_HOST_STATUS_TASK[] = task
+            plan = DistSSHRun.WorkerPlan(0, Dict{String, Int}())
+            try
+                @test_throws ArgumentError DistSSHRun._ride_add_workers!(
+                    plan,
+                    tmp,
+                    script,
+                    nothing,
+                    false,
+                )
+                @test foreign in workers()
+            finally
+                DistSSHRun.DRIVE_HOST_STATUS_STOP[] = true
+                DistSSHRun.DRIVE_HOST_STATUS_TASK[] = nothing
+                DistSSHRun._clear_drive_host_worker_ids!()
+                empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+                for w in setdiff(workers(), [1])
+                    w in workers() && rmprocs(w; waitfor = 2.0)
+                end
+            end
         end
     end
 

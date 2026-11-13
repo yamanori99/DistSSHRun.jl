@@ -410,15 +410,17 @@ function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::A
     try
         for i in 1:n
             env = worker_env_pairs(project; rank = take_worker_rank())
-            addprocs(
+            joined = addprocs(
                 1;
                 exename = julia_bin,
                 exeflags = flags,
                 env = env,
                 topology = :master_worker,
             )
+            just = Int[Int(w) for w in joined]
+            _mark_workers_launched!(just, project)
             i == 1 || continue
-            added = sort!(Int[w for w in workers() if w ∉ before])
+            added = sort!(just)
             isempty(added) || _precompile_worker_project!(first(added))
         end
     catch
@@ -442,7 +444,7 @@ function _add_ssh_drive_workers!(
     try
         for i in 1:n
             env = worker_env_pairs(project; ssh = true, rank = take_worker_rank())
-            addprocs(
+            joined = addprocs(
                 [(machine, 1)];
                 exename = exename,
                 sshflags = sshflags,
@@ -453,8 +455,10 @@ function _add_ssh_drive_workers!(
                 env = env,
                 topology = :master_worker,
             )
+            just = Int[Int(w) for w in joined]
+            _mark_workers_launched!(just, project)
             i == 1 || continue
-            added = sort!(Int[w for w in workers() if w ∉ before])
+            added = sort!(just)
             isempty(added) && return nothing
             _precompile_worker_project!(first(added))
         end

@@ -403,11 +403,16 @@ end
 """SIGINT in-flight `pmap` work on workers before `rmprocs`."""
 const INTERRUPT_DRIVE_WORKERS = Ref{Function}(_interrupt_workers_grouped)
 
-function _interrupt_drive_workers!(pids = workers())
+function _interrupt_drive_workers!(pids = nothing)
     nprocs() <= 1 && return nothing
-    isempty(pids) && return nothing
+    targets = pids === nothing ? workers() : collect(pids)
+    isempty(targets) && return nothing
+    _warn_skipped_foreign_workers!("worker interrupt", targets)
+    owned = Set(_drive_owned_worker_ids())
+    ids = Int[Int(w) for w in targets if Int(w) ∈ owned]
+    isempty(ids) && return nothing
     try
-        INTERRUPT_DRIVE_WORKERS[](pids)
+        INTERRUPT_DRIVE_WORKERS[](ids)
     catch
     end
     return nothing
@@ -422,18 +427,18 @@ function register_worker_cleanup!(successful_hosts::Vector{String})
         # Alone, Julia reports nworkers()==1 and workers()==[1] (the driver).
         # nworkers() > 0 would rmprocs([1]) and warn "process 1 not removed".
         if nprocs() > 1
-            try
-                stop_heartbeat_on_workers!(workers())
-                sleep(_HEARTBEAT_STOP_S)
-            catch
+            owned = Int[Int(w) for w in _drive_owned_worker_ids() if w in workers()]
+            if !isempty(owned)
+                try
+                    stop_heartbeat_on_workers!(owned)
+                    sleep(_HEARTBEAT_STOP_S)
+                catch
+                end
             end
         end
 
         if nprocs() > 1
-            try
-                rmprocs(workers(); waitfor = _RMPROCS_WAITFOR_S)
-            catch
-            end
+            _rmprocs_drive_owned_workers!(waitfor = _RMPROCS_WAITFOR_S)
         end
 
         for host in successful_hosts

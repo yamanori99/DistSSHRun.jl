@@ -11,14 +11,14 @@ function _drive_include_main(w, src::String)
 end
 
 function _drive_eval_workers(ex)
-    for w in workers()
+    for w in DistSSHRun._live_owned_worker_ids()
         _drive_eval_main(w, ex)
     end
     return nothing
 end
 
 function _drive_include_workers(src::String)
-    for w in workers()
+    for w in DistSSHRun._live_owned_worker_ids()
         _drive_include_main(w, src)
     end
     return nothing
@@ -108,18 +108,19 @@ function sync_driver_to_workers!(script_path::String; worker_include::Bool = fal
     end
     return try
         DistSSHRun._with_progress_job_stdio_capture!() do
+            owned = DistSSHRun._live_owned_worker_ids()
             if worker_include
-                for w in workers()
+                for w in owned
                     worker_script = get(RUNNER_WORKER_SCRIPT_PATHS, w, sp)
                     _drive_invokelatest_main(w, :_drive_worker_include!, worker_script)
                 end
             elseif !isempty(src)
-                for w in workers()
+                for w in owned
                     worker_script = get(RUNNER_WORKER_SCRIPT_PATHS, w, sp)
                     _drive_invokelatest_main(w, :_drive_worker_publish!, src, worker_script)
                 end
             end
-            for w in workers()
+            for w in owned
                 _drive_eval_main(w, :(flush(stdout); flush(stderr); true))
             end
             yield()
@@ -215,12 +216,15 @@ function init_drive_workers!(
     # Overlap deferred ship input hashing with activate / precompile.
     hash_task = @async DistSSHRun.await_declared_input_hashes!()
     try
-        worker_ids = workers()
+        all_live = Int[Int(w) for w in workers()]
+        _warn_skipped_foreign_workers!("worker initialization", all_live)
+        worker_ids = DistSSHRun._live_owned_worker_ids()
         responses = Int[]
         failed_workers = Int[]
 
         _ping_retries = something(tryparse(Int, get(ENV, "DISTRIBUTED_PING_RETRIES", "6")), 6)
         for w in worker_ids
+            w in workers() || continue
             local r_ok
             r_ok = nothing
             local last_ex
@@ -259,7 +263,10 @@ function init_drive_workers!(
         write_both("  Loading packages on workers... ")
         flush(stdout)
 
-        _drive_include_workers(_DRIVE_WORKER_BOOTSTRAP)
+        for w in worker_ids
+            w in workers() || continue
+            _drive_include_main(w, _DRIVE_WORKER_BOOTSTRAP)
+        end
         mapped = Set{Int}()
         for (host, ids) in DistSSHRun.DRIVE_HOST_WORKER_IDS
             DistSSHRun._drive_host_span!(host, "init", :running)
@@ -276,8 +283,11 @@ function init_drive_workers!(
                 rethrow()
             end
         end
-        for w in workers()
+        owned = Set(_drive_owned_worker_ids())
+        for w in worker_ids
             Int(w) in mapped && continue
+            Int(w) ∉ owned && continue
+            w in workers() || continue
             worker_proj = get(RUNNER_WORKER_PROJECT_DIRS, w, proj_dir)
             _drive_invokelatest_main(w, :_drive_worker_activate!, worker_proj)
         end
@@ -287,7 +297,7 @@ function init_drive_workers!(
             pkg_sym = Symbol(pkg_name)
             try
                 host_workers = Dict{String, Int}()
-                for w in workers()
+                for w in DistSSHRun._live_owned_worker_ids()
                     host = _drive_eval_main(w, :(gethostname()))
                     if !haskey(host_workers, host)
                         host_workers[host] = w
@@ -307,7 +317,7 @@ function init_drive_workers!(
                 """
                 _drive_include_workers(load_src)
 
-                for w in workers()
+                for w in DistSSHRun._live_owned_worker_ids()
                     _drive_eval_main(w, :(true))
                 end
 
@@ -327,7 +337,7 @@ function init_drive_workers!(
 
         write_both("  Verifying workers... ")
         flush(stdout)
-        ws = workers()
+        ws = DistSSHRun._live_owned_worker_ids()
         test_results = Vector{Any}(undef, length(ws))
         @sync for (i, w) in enumerate(ws)
             @async test_results[i] = _drive_eval_main(w, :((myid(), 1 + 1)))
@@ -339,18 +349,19 @@ function init_drive_workers!(
         policy = heartbeat === nothing ?
             resolve_drive_heartbeat_policy() :
             heartbeat
-        if policy.self_exit && nprocs() > 1
+        owned_live = DistSSHRun._live_owned_worker_ids()
+        if policy.self_exit && !isempty(owned_live)
             deadline = policy.deadline
             deadline === nothing &&
                 error("heartbeat policy self_exit requires a positive deadline")
             write_both("  Starting heartbeat monitors... ")
             flush(stdout)
             install_and_start_heartbeat!(
-                workers();
+                owned_live;
                 interval = policy.interval,
                 deadline = deadline,
             )
-            for w in workers()
+            for w in owned_live
                 _drive_eval_main(w, :(flush(stdout); flush(stderr); true))
             end
             print_ok("✓")
