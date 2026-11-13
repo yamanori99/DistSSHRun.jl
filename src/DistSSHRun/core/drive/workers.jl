@@ -93,12 +93,6 @@ function add_drive_workers!(
                 DistSSHRun.PARENT_HOST_NAME,
                 added,
             )
-            local_man = DistSSHRun._existing_project_manifest(proj_dir)
-            if !isempty(local_man)
-                for w in added
-                    host_manifests[w] = local_man
-                end
-            end
             print_ok("✓")
             writeln_both("")
             DistSSHRun._drive_host_span!(DistSSHRun.PARENT_HOST_NAME, "workers", :ok)
