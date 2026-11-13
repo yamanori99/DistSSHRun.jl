@@ -1277,8 +1277,7 @@ jobs:
   jetls-1-14-pre:
     name: JETLS (1.14-pre, ubuntu-latest, x64)
     needs: detect
-    # Paused until JETLS supports Julia 1.14.0-beta1 (missing jl_datatype_super); restore via companion PR.
-    if: false
+    if: needs.detect.outputs.heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     continue-on-error: true
