@@ -1,7 +1,7 @@
 using Test
 using Distributed
 
-# Oracle: worker lifecycle helpers in drive/runtime/workers.jl (DistSSHRun module).
+# Oracle: worker lifecycle helpers in core/drive/workers.jl (DistSSHRun module).
 # Do not `include` the runtime sources from this file: JetLS follows top-level
 # `include()` from `test/runtests.jl` and would type-check production
 # `workers.jl` inside a test module.

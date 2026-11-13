@@ -1,4 +1,4 @@
-# Loaded first from support.jl (same role as DistSSHRun/drive/runtime/_common.jl).
+# Loaded first from support.jl (same role as DistSSHRun/core/drive/_common.jl).
 # Guard: JETLS may analyze this file both via support.jl and as an include leaf.
 
 if !isdefined(Main, :_test_root)
