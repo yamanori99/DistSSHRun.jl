@@ -2,7 +2,6 @@ using Test
 using Distributed
 using Pkg
 using TOML
-using DistSSHBase
 
 @testset "worker launch helper" begin
     flags = DistSSHRun.worker_exeflag_strings("/tmp/job"; local_cpu = false)
@@ -281,11 +280,11 @@ using DistSSHBase
         write(joinpath(proj, "Project.toml"), "name = \"ShaJob\"\n")
         write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
         ident = DistSSHRun.run_identity(proj)
-        @test ident["manifest.sha256"] == DistSSHBase.file_sha256(joinpath(proj, "Manifest.toml"))
-        @test ident["project.sha256"] == DistSSHBase.file_sha256(joinpath(proj, "Project.toml"))
+        @test ident["manifest.sha256"] == DistSSHRun.file_sha256(joinpath(proj, "Manifest.toml"))
+        @test ident["project.sha256"] == DistSSHRun.file_sha256(joinpath(proj, "Project.toml"))
         alt = joinpath(proj, "Manifest.toml")
         write(alt, "manifest_format = \"2.0\"\n# stale\n")
-        worker_sha = DistSSHBase.file_sha256(alt)
+        worker_sha = DistSSHRun.file_sha256(alt)
         @test worker_sha != ident["manifest.sha256"]
         lines = DistSSHRun.identity_mismatches(
             ident,
@@ -384,7 +383,7 @@ using DistSSHBase
         @test DistSSHRun._existing_project_manifest(proj) == vman
         ident = DistSSHRun.run_identity(proj)
         @test ident["manifest"] == vman
-        @test ident["manifest.sha256"] == DistSSHBase.file_sha256(vman)
+        @test ident["manifest.sha256"] == DistSSHRun.file_sha256(vman)
         @test ident["pkg.DistSSHRun"] == "0.1.16"
         @test ident["version"] == string(VERSION)
         @test ident["commit"] == string(Base.GIT_VERSION_INFO.commit)
