@@ -70,7 +70,7 @@ using Test
             uh_isolated = [
                 "--unsafe-heterogeneous", "--isolated", "parent:1", "job.jl",
             ]
-            _, uh_peeled = DistSSHRun.peel_kit_cli_flags(uh_isolated)
+            _, uh_peeled = DistSSHRun.peel_shared_cli_flags(uh_isolated)
             @test DistSSHRun._peeled_isolated_option(uh_peeled) !== nothing
             uh_child = DistSSHRun._drive_isolated_child_args(uh_isolated)
             @test uh_child == ["--unsafe-heterogeneous", "parent:1", "job.jl"]
