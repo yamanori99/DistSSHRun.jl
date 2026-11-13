@@ -11,14 +11,14 @@ function _drive_include_main(w, src::String)
 end
 
 function _drive_eval_workers(ex)
-    for w in workers()
+    for w in DistSSHRun._live_owned_worker_ids()
         _drive_eval_main(w, ex)
     end
     return nothing
 end
 
 function _drive_include_workers(src::String)
-    for w in workers()
+    for w in DistSSHRun._live_owned_worker_ids()
         _drive_include_main(w, src)
     end
     return nothing
@@ -108,18 +108,19 @@ function sync_driver_to_workers!(script_path::String; worker_include::Bool = fal
     end
     return try
         DistSSHRun._with_progress_job_stdio_capture!() do
+            owned = DistSSHRun._live_owned_worker_ids()
             if worker_include
-                for w in workers()
+                for w in owned
                     worker_script = get(RUNNER_WORKER_SCRIPT_PATHS, w, sp)
                     _drive_invokelatest_main(w, :_drive_worker_include!, worker_script)
                 end
             elseif !isempty(src)
-                for w in workers()
+                for w in owned
                     worker_script = get(RUNNER_WORKER_SCRIPT_PATHS, w, sp)
                     _drive_invokelatest_main(w, :_drive_worker_publish!, src, worker_script)
                 end
             end
-            for w in workers()
+            for w in owned
                 _drive_eval_main(w, :(flush(stdout); flush(stderr); true))
             end
             yield()
@@ -217,7 +218,7 @@ function init_drive_workers!(
     try
         all_live = Int[Int(w) for w in workers()]
         _warn_skipped_foreign_workers!("worker initialization", all_live)
-        worker_ids = _drive_owned_worker_ids()
+        worker_ids = DistSSHRun._live_owned_worker_ids()
         responses = Int[]
         failed_workers = Int[]
 
@@ -295,7 +296,7 @@ function init_drive_workers!(
             pkg_sym = Symbol(pkg_name)
             try
                 host_workers = Dict{String, Int}()
-                for w in workers()
+                for w in DistSSHRun._live_owned_worker_ids()
                     host = _drive_eval_main(w, :(gethostname()))
                     if !haskey(host_workers, host)
                         host_workers[host] = w
@@ -315,7 +316,7 @@ function init_drive_workers!(
                 """
                 _drive_include_workers(load_src)
 
-                for w in workers()
+                for w in DistSSHRun._live_owned_worker_ids()
                     _drive_eval_main(w, :(true))
                 end
 
@@ -335,7 +336,7 @@ function init_drive_workers!(
 
         write_both("  Verifying workers... ")
         flush(stdout)
-        ws = workers()
+        ws = DistSSHRun._live_owned_worker_ids()
         test_results = Vector{Any}(undef, length(ws))
         @sync for (i, w) in enumerate(ws)
             @async test_results[i] = _drive_eval_main(w, :((myid(), 1 + 1)))
@@ -347,18 +348,19 @@ function init_drive_workers!(
         policy = heartbeat === nothing ?
             resolve_drive_heartbeat_policy() :
             heartbeat
-        if policy.self_exit && nprocs() > 1
+        owned_live = DistSSHRun._live_owned_worker_ids()
+        if policy.self_exit && !isempty(owned_live)
             deadline = policy.deadline
             deadline === nothing &&
                 error("heartbeat policy self_exit requires a positive deadline")
             write_both("  Starting heartbeat monitors... ")
             flush(stdout)
             install_and_start_heartbeat!(
-                workers();
+                owned_live;
                 interval = policy.interval,
                 deadline = deadline,
             )
-            for w in workers()
+            for w in owned_live
                 _drive_eval_main(w, :(flush(stdout); flush(stderr); true))
             end
             print_ok("✓")

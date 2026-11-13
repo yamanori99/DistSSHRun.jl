@@ -1147,6 +1147,27 @@ function _drive_owned_worker_ids()::Vector{Int}
     return sort!(collect(owned))
 end
 
+"""Owned workers that are still connected to the controller (master)."""
+function _live_owned_worker_ids()::Vector{Int}
+    owned = Set(_drive_owned_worker_ids())
+    live = Set(Int[w for w in workers()])
+    return sort!(Int[w for w in owned if w in live])
+end
+
+"""Record workers that joined before host ids or runner layout are finalized."""
+function _mark_workers_launched!(
+        ids::AbstractVector{<:Integer},
+        project::AbstractString,
+    )
+    proj = String(project)
+    for w in ids
+        wid = Int(w)
+        haskey(RUNNER_WORKER_PROJECT_DIRS, wid) && continue
+        RUNNER_WORKER_PROJECT_DIRS[wid] = proj
+    end
+    return nothing
+end
+
 function _warn_skipped_foreign_workers!(
         operation::AbstractString,
         candidates::AbstractVector{<:Integer},

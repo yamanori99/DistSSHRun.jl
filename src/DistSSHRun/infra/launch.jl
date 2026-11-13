@@ -334,11 +334,8 @@ end
 
 function _rmprocs_added_since(before::AbstractSet{<:Integer})
     leftover = Int[w for w in workers() if w ∉ before]
-    _warn_skipped_foreign_workers!("worker removal", leftover)
-    owned = Set(_drive_owned_worker_ids())
-    to_rm = Int[w for w in leftover if w ∈ owned]
     try
-        isempty(to_rm) || rmprocs(to_rm; waitfor = 30)
+        isempty(leftover) || rmprocs(leftover; waitfor = 30)
     catch
     end
     return nothing
@@ -358,8 +355,10 @@ function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::A
                 env = env,
                 topology = :master_worker,
             )
+            just = Int[w for w in workers() if w ∉ before]
+            _mark_workers_launched!(just, project)
             i == 1 || continue
-            added = sort!(Int[w for w in workers() if w ∉ before])
+            added = sort!(just)
             isempty(added) || _precompile_worker_project!(first(added))
         end
     catch
@@ -394,8 +393,10 @@ function _add_ssh_drive_workers!(
                 env = env,
                 topology = :master_worker,
             )
+            just = Int[w for w in workers() if w ∉ before]
+            _mark_workers_launched!(just, project)
             i == 1 || continue
-            added = sort!(Int[w for w in workers() if w ∉ before])
+            added = sort!(just)
             isempty(added) && return nothing
             _precompile_worker_project!(first(added))
         end

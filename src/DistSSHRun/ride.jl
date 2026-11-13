@@ -407,7 +407,7 @@ end
 
 function _ride_load_self_on_workers!()
     pkg = Base.PkgId(DistSSHRun)
-    for w in workers()
+    for w in _live_owned_worker_ids()
         remotecall_fetch(Base.require, w, pkg)
     end
     return nothing
@@ -417,7 +417,7 @@ function _ride_push_prelude!(ex)
     prelude = _ride_worker_prelude(ex)
     isempty(prelude.args) && return
     src = sprint(print, prelude)
-    for w in workers()
+    for w in _live_owned_worker_ids()
         remotecall_fetch(_ride_eval_on_worker, w, src)
     end
     return nothing
@@ -507,9 +507,12 @@ function _ride_add_workers!(
             _ride_init_drive_workers!(project)
         end
         added = Int[w for w in workers() if w ∉ before]
+        if isempty(child_hosts) && !isempty(added)
+            _mark_workers_launched!(added, project)
+            _register_drive_host_worker_ids!(PARENT_HOST_NAME, added)
+        end
         isempty(added) || _ride_load_self_on_workers!()
         if isempty(child_hosts) && !isempty(added)
-            _register_drive_host_worker_ids!(PARENT_HOST_NAME, added)
             local_man = _existing_project_manifest(project)
             verify_workers_match_job!(
                 project;
@@ -537,10 +540,7 @@ function _ride_add_workers!(
         ]
         _register_leftover_workers!(missing_owned)
         capture_worker_provenance!()
-        _warn_skipped_foreign_workers!("worker removal", leftover)
-        owned = Set(_drive_owned_worker_ids())
-        to_rm = Int[w for w in leftover if w ∈ owned]
-        isempty(to_rm) || rmprocs(to_rm; waitfor = 30)
+        isempty(leftover) || rmprocs(leftover; waitfor = 30)
         rethrow()
     end
 end
