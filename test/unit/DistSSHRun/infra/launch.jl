@@ -467,32 +467,24 @@ using TOML
         end
         cmd = code -> `$julia --startup-file=no --history-file=no --project=$proj -e $code`
 
-        cookie_code = raw"""
+        rng_snapshot_code = raw"""
         using Random, Distributed, DistSSHRun
+        function baseline_next()
+            Random.seed!(7)
+            return rand(Random.default_rng(), 1:1000, 8)
+        end
+        ref = baseline_next()
         Random.seed!(7)
+        r = Random.default_rng()
+        before = copy(r)
         DistSSHRun.preserve_task_local_default_rng() do
             DistSSHRun.ensure_run_cluster_cookie!()
         end
-        print(strip(Distributed.cluster_cookie()))
+        after = copy(r)
+        got = rand(r, 1:1000, 8)
+        print((before == after && got == ref) ? "ok" : "fail")
         """
-        c1 = strip(String(read(cmd(cookie_code))))
-        c2 = strip(String(read(cmd(cookie_code))))
-        @test length(c1) >= 16
-        @test length(c2) >= 16
-        @test c1 != c2
-
-        not_from_seed_code = raw"""
-        using Random, Distributed, DistSSHRun
-        Random.seed!(7)
-        DistSSHRun.preserve_task_local_default_rng() do
-            DistSSHRun.ensure_run_cluster_cookie!()
-        end
-        got = strip(Distributed.cluster_cookie())
-        Random.seed!(7)
-        from_default = randstring(Random.default_rng(), 16)
-        print(got != from_default ? "ok" : "fail")
-        """
-        @test strip(String(read(cmd(not_from_seed_code)))) == "ok"
+        @test strip(String(read(cmd(rng_snapshot_code)))) == "ok"
 
         keep_code = raw"""
         using Distributed, DistSSHRun
