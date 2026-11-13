@@ -198,6 +198,7 @@ function _master_script_contents(
     end
 
     withenv(
+        "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1",
         "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => string(_interval),
         "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => string(_deadline),
     ) do

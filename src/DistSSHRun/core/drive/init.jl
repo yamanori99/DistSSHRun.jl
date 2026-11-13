@@ -204,7 +204,12 @@ function _join_overlapped_input_hash_keep_prior!(hash_task::Task)
     return nothing
 end
 
-function init_drive_workers!(proj_dir::String, explicit_package, path_anchor::String)
+function init_drive_workers!(
+        proj_dir::String,
+        explicit_package,
+        path_anchor::String,
+        heartbeat = nothing,
+    )
     write_both("Initializing workers... ")
     flush(stdout)
     # Overlap deferred ship input hashing with activate / precompile.
@@ -339,20 +344,26 @@ function init_drive_workers!(proj_dir::String, explicit_package, path_anchor::St
         print_ok("✓ ($working_count workers verified)")
         writeln_both("")
 
-        write_both("  Starting heartbeat monitors... ")
-        flush(stdout)
-        hb = _heartbeat_config()
-        nprocs() > 1 && install_and_start_heartbeat!(
-            workers();
-            interval = hb.interval,
-            deadline = hb.deadline,
-        )
-
-        for w in workers()
-            _drive_eval_main(w, :(flush(stdout); flush(stderr); true))
+        policy = heartbeat === nothing ?
+            resolve_drive_heartbeat_policy() :
+            heartbeat
+        if policy.self_exit && nprocs() > 1
+            deadline = policy.deadline
+            deadline === nothing &&
+                error("heartbeat policy self_exit requires a positive deadline")
+            write_both("  Starting heartbeat monitors... ")
+            flush(stdout)
+            install_and_start_heartbeat!(
+                workers();
+                interval = policy.interval,
+                deadline = deadline,
+            )
+            for w in workers()
+                _drive_eval_main(w, :(flush(stdout); flush(stderr); true))
+            end
+            print_ok("✓")
+            writeln_both("")
         end
-        print_ok("✓")
-        writeln_both("")
     catch e
         print_progress_err("✗")
         writeln_both("")

@@ -1345,7 +1345,7 @@ function _start_drive_host_status_monitor!(
     _require_drive_host_status_idle!()
     _stop_drive_host_status_monitor!()
     DRIVE_HOST_STATUS_STOP[] = false
-    interval = _heartbeat_config().interval
+    interval = DistSSHHeartbeat._heartbeat_interval(ENV)
     _refresh_drive_host_status_file!(output_dir, log_dir)
     DRIVE_HOST_STATUS_TASK[] = @async begin
         shield_sigint() do

@@ -65,6 +65,7 @@ function drive!(
         allow_mismatch = Symbol[],
         allow_external_symlinks::Bool = false,
         run_id::Union{Nothing, AbstractString} = nothing,
+        unsafe_master_silence_exit::Union{Nothing, Bool} = nothing,
     )::DriveResult
     _reject_removed_drive_worker_include_kw!(sync_script)
     _reject_run_transfer_kw!("drive!", sync; surface = hint_surface(session))
@@ -98,6 +99,7 @@ function drive!(
                         worker_include = worker_include,
                         allow_mismatch = allow_mismatch,
                         run_id = run_id,
+                        unsafe_master_silence_exit = unsafe_master_silence_exit,
                     )
                     apply_kit_cli_session!(parsed.cli_session)
                     original_args = copy(ARGS)

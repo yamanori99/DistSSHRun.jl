@@ -378,38 +378,40 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
 end
 
 @testset "drive heartbeat" begin
-    @testset "_heartbeat_config" begin
-        cfg = DistSSHRun._heartbeat_config(Dict{String, String}())
+    @testset "resolve_drive_heartbeat_policy" begin
+        empty_env = Dict{String, String}()
+        cfg = DistSSHRun.resolve_drive_heartbeat_policy(
+            env = empty_env,
+            self_exit = false,
+        )
+        @test !cfg.self_exit
         @test cfg.interval == 30.0
-        @test cfg.deadline == 600.0
-        cfg = DistSSHRun._heartbeat_config(
-            Dict(
+        @test cfg.deadline === nothing
+        cfg = DistSSHRun.resolve_drive_heartbeat_policy(
+            env = Dict(
                 "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "2",
                 "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "9",
-            )
+            ),
+            self_exit = true,
         )
+        @test cfg.self_exit
         @test cfg.interval == 2.0
         @test cfg.deadline == 9.0
-        cfg = DistSSHRun._heartbeat_config(
-            Dict(
-                "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "nope",
-                "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "-1",
-            )
+        @test_throws ArgumentError DistSSHRun.resolve_drive_heartbeat_policy(
+            env = empty_env,
+            self_exit = true,
         )
-        @test cfg.interval == 30.0
-        @test cfg.deadline == 600.0
-        withenv("DISTSSH_WAIT_PEER_SILENT" => "42") do
-            bare = DistSSHRun._heartbeat_config(Dict{String, String}())
-            @test bare.deadline == 42.0
-            named = DistSSHRun._heartbeat_config(
-                Dict("DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "9"),
-            )
-            @test named.deadline == 9.0
-        end
-        withenv("DISTSSH_WAIT_PEER_SILENT" => "0") do
-            bare = DistSSHRun._heartbeat_config(Dict{String, String}())
-            @test bare.deadline == 600.0
-        end
+        @test_throws ArgumentError DistSSHRun.resolve_drive_heartbeat_policy(
+            env = Dict("DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1"),
+        )
+        pol = DistSSHRun.resolve_drive_heartbeat_policy(
+            env = Dict(
+                "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1",
+                "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "7",
+            ),
+        )
+        @test pol.self_exit
+        @test pol.deadline == 7.0
     end
 
     @testset "_master_alive" begin

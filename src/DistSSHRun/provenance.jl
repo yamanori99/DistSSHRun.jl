@@ -183,6 +183,7 @@ function _reset_run_provenance!(project::AbstractString)
     proj = canonical_local_path(String(project))
     _PROVENANCE_PROJECT[] = proj
     _PROVENANCE_WORKERS[] = nothing
+    _PROVENANCE_HEARTBEAT[] = nothing
     lock(_PROVENANCE_LOCK) do
         empty!(_PROVENANCE_GO)
     end
@@ -922,6 +923,8 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     end
     isempty(selection) || (data["selection"] = selection)
     deploy_rec !== nothing && (data["deploy"] = deploy_rec)
+    hb = started ? _PROVENANCE_HEARTBEAT[] : nothing
+    hb !== nothing && (data["heartbeat"] = hb)
     return data
 end
 
