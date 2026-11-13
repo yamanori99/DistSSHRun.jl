@@ -125,17 +125,23 @@ end
 public run_identity
 
 const _WORKER_PKG_UUID_TOML = Base.UUID("fa267f1f-6049-4f14-aa54-33bafae1ed76")
-const _WORKER_SHA_BYTES2HEX = Expr(:., :SHA, :bytes2hex)
-const _WORKER_SHA_SHA256 = Expr(:., :SHA, :sha256)
+const _WORKER_PKG_UUID_SHA = Base.UUID("ea8e919c-243c-51af-8825-aaa63cd721ce")
 
 """Base-only snapshot on a worker (no DistSSHRun)."""
 function _worker_identity_expr()
     return quote
         let man = "", man_sha = "", pf = "", proj_sha = ""
+            sha_mod = try
+                Base.require(Base.PkgId($(_WORKER_PKG_UUID_SHA), "SHA"))
+                Base.loaded_modules[Base.PkgId($(_WORKER_PKG_UUID_SHA), "SHA")]
+            catch
+                nothing
+            end
             function __env_sha256(path)
                 isfile(path) || return ""
+                sha_mod === nothing && return ""
                 try
-                    return lowercase($(_WORKER_SHA_BYTES2HEX)($(_WORKER_SHA_SHA256)(read(path))))
+                    return lowercase(sha_mod.bytes2hex(sha_mod.sha256(read(path))))
                 catch
                     return ""
                 end
@@ -165,8 +171,8 @@ function _worker_identity_expr()
             )
             if !isempty(man) && isfile(man)
                 raw = try
-                    Base.require(Base.PkgId($(repr(_WORKER_PKG_UUID_TOML)), "TOML"))
-                    toml = Base.loaded_modules[Base.PkgId($(repr(_WORKER_PKG_UUID_TOML)), "TOML")]
+                    Base.require(Base.PkgId($(_WORKER_PKG_UUID_TOML), "TOML"))
+                    toml = Base.loaded_modules[Base.PkgId($(_WORKER_PKG_UUID_TOML), "TOML")]
                     toml.parsefile(man)
                 catch
                     nothing
