@@ -95,7 +95,10 @@ end
 
 function write_heartbeat_startup_summary!(policy)
     if policy.self_exit
-        line = _heartbeat_unsafe_summary_line(policy.interval, policy.deadline)
+        deadline = policy.deadline
+        deadline === nothing &&
+            throw(ArgumentError("heartbeat policy self_exit requires a positive deadline"))
+        line = _heartbeat_unsafe_summary_line(policy.interval, deadline)
         @warn line
         writeln_both(line)
     else

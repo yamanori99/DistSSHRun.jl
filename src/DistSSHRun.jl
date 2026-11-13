@@ -171,10 +171,7 @@ include("DistSSHRun/ship_module.jl")
 include("DistSSHRun/heartbeat_module.jl")
 include("DistSSHRun/options/heartbeat.jl")
 using .DistSSHShip: EXTERNAL_DIR_NAME
-using .DistSSHHeartbeat:
-    _heartbeat_config,
-    install_and_start_heartbeat!,
-    stop_heartbeat_on_workers!
+using .DistSSHHeartbeat: install_and_start_heartbeat!, stop_heartbeat_on_workers!
 include("DistSSHRun/infra/ship_list.jl")
 include("DistSSHRun/infra/ship.jl")
 include("DistSSHRun/infra/ship_dest.jl")
