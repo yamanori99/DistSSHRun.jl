@@ -70,7 +70,7 @@ function go_main()::Cint
             output_dir = kw[:output_dir],
             hosts_file = nothing,
             julia = kw[:julia],
-            allow_mismatch = get(kw, :allow_mismatch, Symbol[]),
+            unsafe_heterogeneous = get(parsed, :unsafe_heterogeneous, false),
             repeat = get(kw, :repeat, nothing),
             run_id = get(parsed, :run_id, nothing),
             remote = get(parsed, :deploy_root, nothing),

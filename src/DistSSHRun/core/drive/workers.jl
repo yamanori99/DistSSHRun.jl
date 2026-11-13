@@ -79,8 +79,6 @@ function add_drive_workers!(
     notice = DistSSHRun.launch_override_notice(DistSSHRun.PARENT_HOST_NAME, names)
     isempty(notice) || writeln_both(notice)
     local_julia = DistSSHRun.pin_local_julia(nothing)
-    host_manifests = Dict{Int, String}()
-
     if parent_workers > 0
         write_both("  $(DistSSHRun.PARENT_HOST_NAME) ($parent_workers workers): ")
         DistSSHRun._drive_host_span!(DistSSHRun.PARENT_HOST_NAME, "workers", :running)
@@ -201,13 +199,6 @@ function add_drive_workers!(
                 end
                 _register_drive_workers!(before, remote_proj, remote_script)
                 DistSSHRun._register_drive_host_worker_ids!(host_name, added)
-                parent_man = DistSSHRun._existing_project_manifest(proj_dir)
-                if !isempty(parent_man)
-                    remote_man = joinpath(remote_proj, basename(parent_man))
-                    for w in added
-                        host_manifests[w] = remote_man
-                    end
-                end
                 print_ok("✓")
                 writeln_both("")
                 push!(successful_hosts, host_name)
@@ -239,11 +230,7 @@ function add_drive_workers!(
     # Alone, Julia reports nworkers()==1 (the master). Fail when nothing joined.
     nprocs() <= 1 && error(_NO_WORKERS_JOINED)
     try
-        DistSSHRun.verify_workers_match_job!(
-            proj_dir;
-            allow = DistSSHRun._ALLOW_MISMATCH[],
-            host_manifests = host_manifests,
-        )
+        DistSSHRun.verify_workers_match_job!(proj_dir)
     catch
         DistSSHRun._rmprocs_added_since(before_all)
         rethrow()

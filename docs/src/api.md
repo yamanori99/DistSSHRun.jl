@@ -197,8 +197,7 @@ Filter = function (x)
         :active_source_selection,
         :remote_script_path, :check_setup_options!,
         :execute_kwargs_from_parsed, :detached_launch,
-        :ALLOW_MISMATCH_FIELDS,
-        :wait, :shell_status, :run_identity, :identity_mismatches, :parse_allow_mismatch,
+        :wait, :shell_status, :run_identity, :identity_mismatches,
         :ConfirmPathMismatch, :normalize_remote_confirm_path,
         :NO_COMMAND_HINT_LINES, :RUN_SUBCOMMAND_EXPECTATION,
     )
@@ -206,7 +205,6 @@ Filter = function (x)
         nameof(x)
     catch
         # A tuple or a `String` has no `nameof`. The blocks below document these.
-        x === DistSSHRun.ALLOW_MISMATCH_FIELDS && return false
         x === DistSSHRun.NO_COMMAND_HINT_LINES && return false
         x === DistSSHRun.RUN_SUBCOMMAND_EXPECTATION && return false
         return true
@@ -232,16 +230,15 @@ DistSSHBase.shell_status
 
 ## Identity
 
-[`run_identity`](@ref), [`identity_mismatches`](@ref), and
-[`parse_allow_mismatch`](@ref) are public and are not exported.
-[`go!`](@ref), [`ride!`](@ref), and [`drive!`](@ref) keep
-`--allow-mismatch` and these lines. Add
-[DistSSHKit](https://github.com/yamanori99/DistSSHKit.jl).
+[`run_identity`](@ref) and [`identity_mismatches`](@ref) are public and are
+not exported. [`go!`](@ref), [`ride!`](@ref), and [`drive!`](@ref) compare
+resolved Manifest and Project file SHA-256 digests (byte-exact; CRLF
+differences count) between the controller (master) and every worker or go
+slot before work runs. Use CLI `--unsafe-heterogeneous` to allow a mixed
+cluster. Add [DistSSHKit](https://github.com/yamanori99/DistSSHKit.jl).
 These names are not a command.
 
 ```@docs
-ALLOW_MISMATCH_FIELDS
 run_identity
 identity_mismatches
-parse_allow_mismatch
 ```

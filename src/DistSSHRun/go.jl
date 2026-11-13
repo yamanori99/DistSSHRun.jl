@@ -1000,10 +1000,9 @@ selected project directory. `run_id` also skips the in-tree
 `julia` sets the Julia binary for each slot (`nothing` / `"auto"` → detect;
 same as CLI `--julia`).
 
-`allow_mismatch` (CLI `--allow-mismatch`) waives Julia version / commit,
-DistSSH* Manifest versions, and/or Manifest path when a slot does not match
-the job tree. Default is to error. Same tokens as `drive` / `ride`:
-`julia`, `distssh`, `manifest`.
+`unsafe_heterogeneous` (CLI `--unsafe-heterogeneous`) allows Julia version,
+DistSSH* versions, and environment file bytes to differ across slots. Default
+is to error. Comparison is byte-exact (CRLF differences count).
 
 When `workers` is empty and `hosts_file` is omitted, `DISTSSH_HOSTS_FILE`
 is still read (API `go!("job.jl")`). Non-empty `workers` (CLI
@@ -1034,7 +1033,7 @@ function go!(
         hint_surface::Symbol = :api,
         original_args::Vector{String} = String[],
         repeat::Union{Nothing, Integer} = nothing,
-        allow_mismatch = Symbol[],
+        unsafe_heterogeneous = false,
         run_id::Union{Nothing, AbstractString} = nothing,
         sync::Union{Symbol, Bool, Nothing} = nothing,
         allow_external_symlinks::Bool = false,
@@ -1067,7 +1066,7 @@ function go!(
         _clear_active_deploy_record!()
         warn_project_sshflags(proj)
         _ensure_kit_run_dir!(:go, script_path; project = proj)
-        return with_allow_mismatch(allow_mismatch) do
+        return with_unsafe_heterogeneous(() -> begin
             return _go_run!(
                 script_path,
                 proj,
@@ -1088,7 +1087,7 @@ function go!(
                 inherited_run,
                 snap_arg,
             )
-        end
+        end, unsafe_heterogeneous)
     finally
         _restore_kit_run_dir_env!(old_run)
         _release_kit_inproc_run!()
@@ -1243,7 +1242,6 @@ function _go_run!(
             slots;
             remote_root = run_rr,
             julia = julia,
-            allow = _ALLOW_MISMATCH[],
         )
 
         n_slots > 0 && _kit_progress_mark!("run")

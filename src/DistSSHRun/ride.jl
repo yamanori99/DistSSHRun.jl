@@ -507,16 +507,7 @@ function _ride_add_workers!(
         isempty(added) || _ride_load_self_on_workers!()
         if isempty(child_hosts) && !isempty(added)
             _register_drive_host_worker_ids!(PARENT_HOST_NAME, added)
-            local_man = _existing_project_manifest(project)
-            verify_workers_match_job!(
-                project;
-                allow = _ALLOW_MISMATCH[],
-                host_manifests = if isempty(local_man)
-                    nothing
-                else
-                    Dict{Int, String}(w => local_man for w in added)
-                end,
-            )
+            verify_workers_match_job!(project)
         end
         capture_worker_provenance!()
         return added, ssh_hosts
@@ -635,7 +626,7 @@ function ride!(
         run_id::Union{Nothing, AbstractString} = nothing,
         require_all_hosts::Bool = true,
         hint_surface::Symbol = :api,
-        allow_mismatch = Symbol[],
+        unsafe_heterogeneous = false,
     )::RideResult
     path = canonical_local_path(script)
     julia_s = string(VERSION)
@@ -654,12 +645,12 @@ function ride!(
     inherited_run = old_run isa AbstractString && !isempty(strip(old_run))
     try
         _ensure_kit_run_dir!(:ride, path; project = project)
-        return with_allow_mismatch(allow_mismatch) do
+        return with_unsafe_heterogeneous(() -> begin
             return _ride_run!(
                 path, julia_s, tokens, args, spi_check, output_dir, project, julia,
                 remote, validated_run_id, require_all_hosts, hint_surface, inherited_run,
             )
-        end
+        end, unsafe_heterogeneous)
     finally
         _restore_kit_run_dir_env!(old_run)
         _release_kit_inproc_run!()

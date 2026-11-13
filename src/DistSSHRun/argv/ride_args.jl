@@ -12,7 +12,7 @@ function _ride_parsed(;
         julia = nothing,
         run_id = nothing,
         deploy_root = nothing,
-        allow_mismatch = Symbol[],
+        unsafe_heterogeneous = false,
     )
     return (
         help = help,
@@ -26,7 +26,7 @@ function _ride_parsed(;
         julia = julia,
         run_id = run_id,
         deploy_root = deploy_root,
-        allow_mismatch = allow_mismatch,
+        unsafe_heterogeneous = unsafe_heterogeneous,
     )
 end
 
@@ -62,8 +62,8 @@ function show_ride_usage(; io::IO = stdout)
         "                      Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
         "                      ~/Parent/RepoName layout from the local env_dir.",
         "  --run-id ID       use runs/<ID>/src under the deploy root",
-        "  --allow-mismatch F  waive julia, distssh, and/or manifest (comma list)",
-        "  SSH workers: project-root cwd, bind 127.0.0.1; mismatch is an error unless waived.",
+        "  --unsafe-heterogeneous  allow Julia, packages, and environment files to differ across workers",
+        "  SSH workers: project-root cwd, bind 127.0.0.1; environment mismatch is an error unless waived.",
         "  $(KIT_HOSTS_FLAG_HELP)",
         "  --hosts-file PATH   one token per line",
         "  $(KIT_QUIET_FLAG_HELP)",
@@ -90,7 +90,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
     julia_exe = nothing
     run_id = nothing
     deploy_root = nothing
-    allow_mismatch = Symbol[]
+    unsafe_heterogeneous = false
     spi_check = false
     options_done = false
     c = CliCursor(collect(String, rest))
@@ -132,8 +132,9 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
         elseif arg == "--"
             options_done = true
             cli_consume!(c)
-        elseif arg == "--allow-mismatch"
-            merge_allow_mismatch!(allow_mismatch, cli_take_value!(c, arg))
+        elseif arg == "--unsafe-heterogeneous"
+            unsafe_heterogeneous = true
+            cli_consume!(c)
         elseif arg == "--spi-check"
             cli_consume!(c)
             spi_check = true
@@ -162,7 +163,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
                 julia = julia_exe,
                 run_id = run_id,
                 deploy_root = deploy_root,
-                allow_mismatch = allow_mismatch,
+                unsafe_heterogeneous = unsafe_heterogeneous,
             )
         elseif endswith(arg, ".jl")
             script_path = arg
@@ -206,6 +207,6 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
         julia = julia_exe,
         run_id = run_id,
         deploy_root = deploy_root,
-        allow_mismatch = allow_mismatch,
+        unsafe_heterogeneous = unsafe_heterogeneous,
     )
 end

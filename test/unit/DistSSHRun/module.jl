@@ -35,8 +35,6 @@ using Test
     @test not_exported(:check_input_manifest)
     @test not_exported(:run_identity)
     @test not_exported(:identity_mismatches)
-    @test not_exported(:parse_allow_mismatch)
-    @test not_exported(:ALLOW_MISMATCH_FIELDS)
     @test :cache_path in ns && :cache_relpath in ns
     @test :push_cache! in ns && :cache_remote_dir in ns
     @test :KitRunResult in ns && :kit_run_result in ns

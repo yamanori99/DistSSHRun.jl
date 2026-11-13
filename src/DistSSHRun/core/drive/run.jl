@@ -18,7 +18,7 @@ end
 
 # Options that take the next argv word. A word equal to `--isolated` there is a value.
 const _DRIVE_VALUE_FLAGS = (
-    "--workers", "-w", "--julia", "--allow-mismatch",
+    "--workers", "-w", "--julia", "--unsafe-heterogeneous",
     "--log-dir", "--output-dir", "--package", "--hosts", "--hosts-file",
     "--run-id", "--deploy-root",
 )
@@ -217,8 +217,8 @@ function run_drive_parsed!(
     # `parse_drive_args` is inferred as one NamedTuple whose fields are unions.
     # CLI `drive_main` already opened the frame (`cli=true`). A direct call,
     # including `drive!`, opens it here when none is active (`cli=false`).
-    am = get(parsed, :allow_mismatch, Symbol[])
-    return with_allow_mismatch(am) do
+    uh = get(parsed, :unsafe_heterogeneous, false)
+    return with_unsafe_heterogeneous(() -> begin
         return _drive_frame(; cli = false) do
             return Base.invokelatest(
                 _run_drive_parsed_specialized!,
@@ -231,7 +231,7 @@ function run_drive_parsed!(
                 project_root,
             )
         end
-    end
+    end, uh)
 end
 
 function _run_drive_parsed_specialized!(

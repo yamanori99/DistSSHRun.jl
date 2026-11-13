@@ -62,7 +62,7 @@ function drive!(
         require_all_hosts::Bool = true,
         worker_include::Bool = false,
         sync_script::Union{Nothing, Bool} = nothing,
-        allow_mismatch = Symbol[],
+        unsafe_heterogeneous = false,
         allow_external_symlinks::Bool = false,
         run_id::Union{Nothing, AbstractString} = nothing,
     )::DriveResult
@@ -96,7 +96,7 @@ function drive!(
                         julia = julia,
                         require_all_hosts = require_all_hosts,
                         worker_include = worker_include,
-                        allow_mismatch = allow_mismatch,
+                        unsafe_heterogeneous = unsafe_heterogeneous,
                         run_id = run_id,
                     )
                     apply_kit_cli_session!(parsed.cli_session)

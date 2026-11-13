@@ -11,6 +11,7 @@ const _PROVENANCE_PROJECT_SNAP = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 const _PROVENANCE_SOURCE_SNAP = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 const _PROVENANCE_GIT_TOOL = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 const _PROVENANCE_GO = Pair{String, String}[]
+const _PROVENANCE_UNSAFE = Ref{Vector{String}}(String[])
 
 const _GO_SLOT_PROVENANCE_NAME = "provenance-slot.toml"
 const _GO_SLOT_LOADER_NAME = "provenance-slot.jl"
@@ -179,6 +180,15 @@ function _process_snapshot_expr()
     end
 end
 
+function _note_provenance_unsafe!(label::AbstractString)
+    s = strip(String(label))
+    isempty(s) && return nothing
+    lock(_PROVENANCE_LOCK) do
+        s in _PROVENANCE_UNSAFE[] || push!(_PROVENANCE_UNSAFE[], s)
+    end
+    return nothing
+end
+
 function _reset_run_provenance!(project::AbstractString)
     proj = canonical_local_path(String(project))
     _PROVENANCE_PROJECT[] = proj
@@ -206,6 +216,7 @@ function _reset_run_provenance!(project::AbstractString)
     catch
         nothing
     end
+    _PROVENANCE_UNSAFE[] = String[]
     _PROVENANCE_AT_START[] = true
     reset_worker_seeds!()
     return nothing
@@ -922,6 +933,8 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     end
     isempty(selection) || (data["selection"] = selection)
     deploy_rec !== nothing && (data["deploy"] = deploy_rec)
+    unsafe = _PROVENANCE_UNSAFE[]
+    isempty(unsafe) || (data["unsafe"] = copy(unsafe))
     return data
 end
 
