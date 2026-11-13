@@ -446,7 +446,10 @@ function _ride_restore_project!(prev)
 end
 
 function _ride_init_drive_workers!(proj_dir::AbstractString)
-    init_drive_workers!(String(proj_dir), nothing, canonical_local_path(proj_dir))
+    policy = resolve_drive_heartbeat_policy()
+    record_heartbeat_provenance!(policy)
+    write_heartbeat_startup_summary!(policy)
+    init_drive_workers!(String(proj_dir), nothing, canonical_local_path(proj_dir), policy)
     return nothing
 end
 

@@ -26,15 +26,28 @@ RNG streams spawned during launch; after the cluster is up, call `Random.seed!`
 again if you need bit-identical streams to a script that never started workers.
 The cookie is never logged.
 
-Drive workers ping pid 1 on interval `DISTRIBUTED_HEARTBEAT_INTERVAL_SEC`
-(default 30) and exit with status 75 if the master does not answer within
-`DISTRIBUTED_HEARTBEAT_DEADLINE_SEC` (default the `:peer_silent` wait, 600
-seconds). That deadline is also the longest the master may go without
-yielding. A worker that itself does not yield for more than twice the
-interval resets its last-success time so that stall is not treated as a
-dead master. The monitor stays on the default thread. Run always evals its
-own `DistSSHHeartbeat` source into `Main.DistSSHHeartbeat` on workers; it
-does not `using` DistSSHRun from the job Manifest.
+By default, drive workers **do not** self-exit when the controller (master)
+stops answering. The startup summary says so, and run provenance records
+`self_exit = false`.
+
+Opt in with CLI `--unsafe-master-silence-exit` or
+`DISTSSH_UNSAFE_MASTER_SILENCE_EXIT=1`, and set a **positive**
+`DISTRIBUTED_HEARTBEAT_DEADLINE_SEC` (seconds). There is no default
+deadline when self-exit is on. Optionally set
+`DISTRIBUTED_HEARTBEAT_INTERVAL_SEC` (default 30). When enabled, workers
+ping the controller on that interval; if it does not answer within the
+deadline, they exit with status 75. That deadline is also the longest the
+controller may go without yielding while the monitor runs. A worker that
+does not yield for more than twice the interval resets its last-success
+time so that stall is not treated as a dead controller. The monitor stays
+on the default thread.
+
+If the controller dies while self-exit is off, workers may keep running
+until Distributed tears down the session or you stop them. With
+`DISTSSH_JOB_ID` set, `terminate!` / `terminate_run!` can reap tagged
+workers on the hosts listed in `kit.hosts`. A machine-wide sweep remains
+`setup cleanup` (kills every `julia.*--worker` on listed hosts; not
+run-scoped).
 
 DistSSHKit does not install a terminal command. When that package is
 installed, `julia -m DistSSHKit` is the same entry.
