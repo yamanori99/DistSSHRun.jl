@@ -127,8 +127,7 @@ public run_identity
 const _WORKER_PKG_UUID_TOML = Base.UUID("fa267f1f-6049-4f14-aa54-33bafae1ed76")
 const _WORKER_PKG_UUID_SHA = Base.UUID("ea8e919c-243c-51af-8825-aaa63cd721ce")
 
-"""Base-only snapshot on a worker (no DistSSHRun)."""
-function _worker_identity_expr()
+function _worker_production_identity_expr()
     return quote
         let man = "", man_sha = "", pf = "", proj_sha = ""
             sha_mod = try
@@ -198,6 +197,47 @@ function _worker_identity_expr()
                 end
             end
             d
+        end
+    end
+end
+
+"""Base-only snapshot on a worker (no DistSSHRun module on the worker)."""
+function _worker_identity_expr()
+    production = _worker_production_identity_expr()
+    return quote
+        if strip(get(ENV, "DISTSSH_TEST", "")) == "1"
+            let kind = strip(get(ENV, "DISTSSH_TEST_WORKER_SNAP", ""))
+                if kind == "non_dict"
+                    42
+                else
+                    raw = strip(get(ENV, "DISTSSH_TEST_WORKER_IDENTITY_TOML", ""))
+                    if isempty(raw)
+                        $production
+                    else
+                        let parsed = try
+                                toml = Base.require(
+                                    Base.PkgId($(_WORKER_PKG_UUID_TOML), "TOML"),
+                                )
+                                toml.parse(raw)
+                            catch
+                                raw
+                            end
+                            if !(parsed isa AbstractDict)
+                                parsed
+                            else
+                                let d = Dict{String, String}()
+                                    for (k, v) in parsed
+                                        d[String(k)] = string(v)
+                                    end
+                                    d
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        else
+            $production
         end
     end
 end
@@ -300,26 +340,8 @@ function _environment_mismatch_throw(lines::Vector{String})
 end
 
 """Worker snapshot for environment verification (`Core.eval` on the worker)."""
-function _worker_identity_snapshot_on_worker()
-    if strip(get(ENV, "DISTSSH_TEST", "")) == "1"
-        kind = strip(get(ENV, "DISTSSH_TEST_WORKER_SNAP", ""))
-        kind == "non_dict" && return 42
-        raw = strip(get(ENV, "DISTSSH_TEST_WORKER_IDENTITY_TOML", ""))
-        if !isempty(raw)
-            parsed = TOML.parse(raw)
-            parsed isa AbstractDict || return parsed
-            d = Dict{String, String}()
-            for (k, v) in parsed
-                d[String(k)] = string(v)
-            end
-            return d
-        end
-    end
-    return Core.eval(Main, DistSSHRun._worker_identity_expr())
-end
-
 function _fetch_worker_environment_snapshot(pid::Integer)
-    return remotecall_fetch(_worker_identity_snapshot_on_worker, pid)
+    return remotecall_fetch(Core.eval, pid, Main, _worker_identity_expr())
 end
 
 function verify_workers_match_job!(project::AbstractString)
