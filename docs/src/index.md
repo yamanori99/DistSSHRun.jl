@@ -15,6 +15,17 @@ see `@v#.#`. Local workers also put the parent project, then DistSSHRun's
 package directory, on that path so `ride` can load DistSSHRun when the job
 tree does not. Parent `LOAD_PATH` mutations do not otherwise affect workers.
 
+`drive` and `ride` set the Distributed cluster cookie from
+`RandomDevice` before the first worker starts when you have not already
+initialized Distributed (for example with `Distributed.cluster_cookie` or
+`addprocs`). An existing cookie is kept. Launch runs inside a controller-task
+wrapper that saves and restores that task's default RNG afterward, so launch
+does not permanently perturb your random stream whether or not Distributed
+uses the default RNG internally. Julia has no public API to rewind child-task
+RNG streams spawned during launch; after the cluster is up, call `Random.seed!`
+again if you need bit-identical streams to a script that never started workers.
+The cookie is never logged.
+
 By default, drive workers **do not** self-exit when the controller (master)
 stops answering. The startup summary says so, and run provenance records
 `self_exit = false`.
