@@ -74,13 +74,13 @@ function add_drive_workers!(
     successful_hosts = String[]
 
     before_all = Set(workers())
+    host_manifests = Dict{Int, String}()
     DistSSHRun.preserve_task_local_default_rng() do
         DistSSHRun.ensure_run_cluster_cookie!()
         names = DistSSHRun.launch_override_names(ENV)
         notice = DistSSHRun.launch_override_notice(DistSSHRun.PARENT_HOST_NAME, names)
         isempty(notice) || writeln_both(notice)
         local_julia = DistSSHRun.pin_local_julia(nothing)
-        host_manifests = Dict{Int, String}()
 
         if parent_workers > 0
             write_both("  $(DistSSHRun.PARENT_HOST_NAME) ($parent_workers workers): ")
