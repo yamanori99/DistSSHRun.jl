@@ -204,7 +204,7 @@ end
 end
 
 @testset "deploy record read on host (injected file)" begin
-    double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+    double = abspath(joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
     _with_tempdir() do state
         remote = joinpath(state, "remote")
         body = sprint(
@@ -252,7 +252,7 @@ end
 end
 
 @testset "deploy record read warns when hosts disagree" begin
-    double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+    double = abspath(joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
     logical = "/__dsr_deploy_logical__"
     _with_tempdir() do state
         roots = joinpath(state, "hosts")
@@ -296,7 +296,7 @@ end
 end
 
 @testset "deploy record read warns when missing on some hosts" begin
-    double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+    double = abspath(joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
     logical = "/__dsr_deploy_logical__"
     _with_tempdir() do state
         roots = joinpath(state, "hosts")

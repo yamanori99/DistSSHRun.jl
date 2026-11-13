@@ -1,4 +1,4 @@
-# Loaded once from DistSSHRun.jl before other drive/runtime fragments.
+# Loaded once from DistSSHRun.jl before other core/drive fragments.
 using Dates
 using Distributed
 

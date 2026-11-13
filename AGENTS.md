@@ -42,3 +42,5 @@ User-facing errors, hints, and help belong in the dedicated messages layer. Do n
 Public API breaking renames ship **without compatibility aliases**. Cross-repo redesign work tracks each repository's `main`; do not rely on release tags or General registrations until that work has landed.
 
 `lib/DistSSHBase/src/` groups shared code by layer: `messages/` (CLI text), `argv/` (parse helpers), `hosts/` (naming and placement tokens), `ssh/` (remote execution and paths); `namespace.jl` stays at the package root.
+
+`src/DistSSHRun/` groups execution code by role: `options/` (session and future option types), `core/` (drive and setup job logic), `messages/` (Run-specific display), `infra/` (launch, ship, layout, and shared helpers); `argv/`, `drive.jl` / `setup.jl` include stubs, and unparsed job entry files stay at their current paths until later redesign PRs.

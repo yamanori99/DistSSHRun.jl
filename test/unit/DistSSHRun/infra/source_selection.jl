@@ -67,7 +67,7 @@ end
 
 @testset "legacy deploy record snapshot_id selection" begin
     double = abspath(
-        joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"),
+        joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"),
     )
     _with_tempdir() do state
         remote = joinpath(state, "remote")
@@ -401,7 +401,7 @@ end
 
 @testset "record for another deploy root does not block git" begin
     double = abspath(
-        joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"),
+        joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"),
     )
     _with_tempdir() do state
         remote_a = joinpath(state, "remote_a")
@@ -468,7 +468,7 @@ end
 
 @testset "fake-ssh complete snapshot selection" begin
     double = abspath(
-        joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"),
+        joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"),
     )
     @test isfile(double)
     _with_tempdir() do state
@@ -564,7 +564,7 @@ end
 
 @testset "git checkout remains selectable without snapshot" begin
     double = abspath(
-        joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"),
+        joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"),
     )
     _with_tempdir() do state
         remote = joinpath(state, "remote")
@@ -614,7 +614,7 @@ function _write_complete_leaf!(root, id, hash)
 end
 
 @testset "complete=true without required stamp fields is not selectable" begin
-    double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+    double = abspath(joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
     _with_tempdir() do state
         remote = joinpath(state, "remote")
         leaf = joinpath(remote, "runs", _SNAP_ID_OLD)
@@ -649,7 +649,7 @@ end
 end
 
 @testset "heterogeneous hosts: missing hash and hash mismatch fail closed" begin
-    double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+    double = abspath(joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
     logical = "/__dsr_logical__"
     _with_tempdir() do state
         roots = joinpath(state, "hosts")
@@ -705,7 +705,7 @@ end
 end
 
 @testset "local-record missing content hash fails closed" begin
-    double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+    double = abspath(joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
     _with_tempdir() do state
         remote = joinpath(state, "remote")
         _write_complete_leaf!(remote, _SNAP_ID_OLD, _SNAP_HASH_OLD)
@@ -737,7 +737,7 @@ end
 end
 
 @testset "local-record content hash mismatch fails closed" begin
-    double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+    double = abspath(joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
     _with_tempdir() do state
         remote = joinpath(state, "remote")
         _write_complete_leaf!(remote, _SNAP_ID_OLD, _SNAP_HASH_OLD)
@@ -770,7 +770,7 @@ end
 end
 
 @testset "ENV work root is not treated as deploy root for instantiate" begin
-    double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+    double = abspath(joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
     _with_tempdir() do state
         remote = joinpath(state, "remote")
         _write_complete_leaf!(remote, _SNAP_ID_OLD, _SNAP_HASH_OLD)
@@ -805,7 +805,7 @@ end
 end
 
 @testset "old execution collect recovery does not follow last-snapshot B" begin
-    double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+    double = abspath(joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
     _with_tempdir() do state
         remote = joinpath(state, "remote")
         _write_complete_leaf!(remote, _SNAP_ID_OLD, _SNAP_HASH_OLD)
@@ -906,7 +906,7 @@ end
 end
 
 @testset "setup --check does not claim success on incomplete snapshot" begin
-    double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+    double = abspath(joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
     _with_tempdir() do state
         roots = joinpath(state, "hosts")
         h1 = joinpath(roots, "child-1")
@@ -967,7 +967,7 @@ end
 end
 
 @testset "snapshot selection uses project_rel under src" begin
-    double = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+    double = abspath(joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
     _with_tempdir() do state
         remote = joinpath(state, "remote")
         leaf = joinpath(remote, "runs", _SNAP_ID_OLD)

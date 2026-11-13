@@ -576,7 +576,7 @@ end
     wait(signaled)
     @test DistSSHRun._process_failed_code(ProcessFailedException(Base.Process[signaled])) == 143
 
-    double = joinpath(@__DIR__, "..", "..", "..", "..", "lib", "DistSSHBase", "test", "fixtures", "fake_shell_ssh.jl")
+    double = joinpath(@__DIR__, "..", "..", "..", "..", "..", "lib", "DistSSHBase", "test", "fixtures", "fake_shell_ssh.jl")
     @test isfile(double)
     _with_tempdir() do dir
         logp = joinpath(dir, "ssh.log")
