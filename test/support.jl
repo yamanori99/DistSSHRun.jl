@@ -4,9 +4,7 @@
 if !isdefined(Main, :_child_julia_env)
     include(joinpath(@__DIR__, "..", "lib", "DistSSHBase", "test", "support.jl"))
     include(joinpath(@__DIR__, "..", "lib", "DistSSHUp", "test", "support.jl"))
-    if !isdefined(Main, :_binding_world_age_warning_text)
-        include(joinpath(@__DIR__, "support", "binding_world_stderr.jl"))
-    end
+    include(joinpath(@__DIR__, "support", "binding_world_stderr.jl"))
     include(joinpath(@__DIR__, "support", "_common.jl"))
     include(joinpath(@__DIR__, "support", "subprocess.jl"))
     include(joinpath(@__DIR__, "support", "progress_tty.jl"))
