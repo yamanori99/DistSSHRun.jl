@@ -54,7 +54,10 @@ jobs:
           elan toolchain install "$(cat lean-toolchain)"
           elan default "$(cat lean-toolchain)"
 
-      - name: Audit (build, escapes, registry)
+      - name: Install PyYAML for bug schema check
+        run: python3 -m pip install --user pyyaml
+
+      - name: Audit (build, escapes, registry, coverage, bugs)
         run: bash formal/scripts/audit.sh
 
       - name: Refutation reproducers
