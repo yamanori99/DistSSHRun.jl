@@ -1,0 +1,5 @@
+shell-status-signaled-branch	proven	general	2	lib/DistSSHBase/src/ssh/shell_status.jl	When termsignal > 0, status is 128 + termsignal (shell rule).	Integer exitcode and termsignal; termsignal > 0 branch.
+shell-status-plain-exit	proven	general	2	lib/DistSSHBase/src/ssh/shell_status.jl	When termsignal is not positive, status is exitcode unchanged.	¬ (termsignal > 0), including termsignal <= 0.
+shell-status-signaled-ge-129	proven	general	2	lib/DistSSHBase/src/ssh/shell_status.jl	Any signaled status is at least 129.	termsignal > 0.
+shell-status-proc-exited	proven	general	1	lib/DistSSHBase/src/ssh/shell_status.jl	When the child has exited, shell_status returns _shell_status on its codes.	process_exited(proc).
+shell-status-proc-not-exited	proven	general	1	lib/DistSSHBase/src/ssh/shell_status.jl	When the child has not exited, shell_status throws ArgumentError with the docstring message.	¬ process_exited(proc).
