@@ -34,7 +34,7 @@ jobs:
           persist-credentials: false
 
       - name: Cache elan and Lake build
-        uses: actions/cache@3273950bd1b5da0d745fc8c7fbf4df872b71e5f6 # v5.0.3
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.elan
