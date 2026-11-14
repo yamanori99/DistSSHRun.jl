@@ -702,7 +702,7 @@ end
     end
 
     @testset "unsafe heterogeneous records unverified environment" begin
-        _with_tempdir() do proj
+        _with_tempdir() do _
             DistSSHRun.with_unsafe_heterogeneous(
                 () -> begin
                     prov = DistSSHRun.assemble_provenance()
