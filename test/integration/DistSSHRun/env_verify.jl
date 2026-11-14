@@ -228,12 +228,12 @@ function _env_verify_guards()
                 ident = DistSSHRun.run_identity(proj)
                 @test !isempty(ident["sysimage"])
                 @test DistSSHRun.julia_sysimage_is_default()
-                @test ident["sysimage"] ==
-                    try
-                        abspath(realpath(DistSSHRun.julia_sysimage_path()))
-                    catch
-                        DistSSHRun.julia_sysimage_path()
-                    end
+                expected_sysimage = try
+                    abspath(realpath(DistSSHRun.julia_sysimage_path()))
+                catch
+                    DistSSHRun.julia_sysimage_path()
+                end
+                @test ident["sysimage"] == expected_sysimage
             end
         end
 
