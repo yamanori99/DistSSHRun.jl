@@ -1,0 +1,65 @@
+# Lean 4 formal model: independent of the Julia Test matrix.
+name: Formal
+
+on:
+  pull_request:
+    paths:
+      - "formal/**"
+      - "lib/DistSSHBase/src/ssh/shell_status.jl"
+      - ".github/workflows/formal.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "formal/**"
+      - "lib/DistSSHBase/src/ssh/shell_status.jl"
+      - ".github/workflows/formal.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: formal-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+
+permissions:
+  contents: read
+
+jobs:
+  lean:
+    name: Lean formal
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Cache elan and Lake build
+        uses: actions/cache@3273950bd1b5da0d745fc8c7fbf4df872b71e5f6 # v5.0.3
+        with:
+          path: |
+            ~/.elan
+            formal/DistSSHBase/.lake
+          key: formal-lean-${{ hashFiles('formal/DistSSHBase/lean-toolchain', 'formal/DistSSHBase/**/*.lean', 'formal/DistSSHBase/lakefile.lean') }}
+          restore-keys: |
+            formal-lean-
+
+      - name: Install elan
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Select toolchain
+        working-directory: formal/DistSSHBase
+        run: |
+          elan toolchain install "$(cat lean-toolchain)"
+          elan default "$(cat lean-toolchain)"
+
+      - name: Axiom audit (includes lake build)
+        run: bash formal/audit/run.sh
+
+      - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
+        with:
+          version: "1.13"
+
+      - name: Differential test
+        run: julia --project=lib/DistSSHBase formal/diff/shell_status.jl
