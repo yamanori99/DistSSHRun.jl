@@ -28,35 +28,20 @@ function _env_verify_job_distssh_pkg!(proj::AbstractString)
     return nothing
 end
 
-function _env_verify_worker_env!(w::Integer, d::Dict{String, String})
-    remotecall_fetch(w, d) do dict
-        ENV["DISTSSH_TEST"] = "1"
-        for (k, v) in dict
-            ENV[String(k)] = String(v)
-        end
-        return nothing
-    end
+function _env_verify_set_snapshot!(snap)
+    DistSSHRun._WORKER_ENV_SNAPSHOT_OVERRIDE[] = _ -> snap
     return nothing
 end
 
-function _env_verify_worker_toml_override!(w::Integer, parent::AbstractDict, tweak::Pair{String, String})
+function _env_verify_worker_toml_override!(::Integer, parent::AbstractDict, tweak::Pair{String, String})
     d = Dict{String, String}(String(k) => string(v) for (k, v) in parent)
     d[tweak[1]] = tweak[2]
-    io = IOBuffer()
-    TOML.print(io, d)
-    _env_verify_worker_env!(
-        w,
-        Dict("DISTSSH_TEST_WORKER_IDENTITY_TOML" => String(take!(io))),
-    )
+    _env_verify_set_snapshot!(d)
     return nothing
 end
 
-function _env_verify_clear_worker_test_env!(w::Integer)
-    remotecall_fetch(w) do
-        pop!(ENV, "DISTSSH_TEST_WORKER_SNAP", nothing)
-        pop!(ENV, "DISTSSH_TEST_WORKER_IDENTITY_TOML", nothing)
-        return nothing
-    end
+function _env_verify_clear_worker_test_env!(::Integer)
+    DistSSHRun._WORKER_ENV_SNAPSHOT_OVERRIDE[] = nothing
     return nothing
 end
 
@@ -348,15 +333,13 @@ end
                         _env_verify_clear_worker_test_env!(w)
 
                         @testset "non-dict worker snapshot" begin
-                            _env_verify_worker_env!(
-                                w,
-                                Dict("DISTSSH_TEST_WORKER_SNAP" => "non_dict"),
-                            )
+                            _env_verify_set_snapshot!(42)
                             @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
-                            @test_throws ErrorException DistSSHRun.with_unsafe_heterogeneous(
-                                () -> DistSSHRun.verify_workers_match_job!(proj), true,
-                            )
+                            @test_throws ErrorException DistSSHRun.with_unsafe_heterogeneous(true) do
+                                DistSSHRun.verify_workers_match_job!(proj)
+                            end
                         end
+                        _env_verify_clear_worker_test_env!(w)
                         return nothing
                     end
                 )
@@ -384,6 +367,69 @@ end
         finally
             w in workers() && rmprocs(w; waitfor = 5.0)
         end
+    end
+
+    @testset "snapshot fetch failure is reported with other mismatches" begin
+        _with_tempdir() do proj
+            _env_verify_job!(proj)
+            test_proj = Base.active_project()
+            _with_one_local_worker(
+                test_proj,
+                function (w)
+                    DistSSHRun._mark_workers_launched!([w], proj)
+                    DistSSHRun._WORKER_ENV_SNAPSHOT_OVERRIDE[] = _ -> error("snap boom")
+                    try
+                        err = try
+                            DistSSHRun.verify_workers_match_job!(proj)
+                            nothing
+                        catch e
+                            e
+                        end
+                        err isa ErrorException || error("expected ErrorException")
+                        msg = sprint(showerror, err)
+                        @test occursin("snapshot failed:", msg)
+                        @test occursin("snap boom", msg)
+                        @test occursin("pid=$(w)", msg)
+                    finally
+                        DistSSHRun._WORKER_ENV_SNAPSHOT_OVERRIDE[] = nothing
+                    end
+                    return nothing
+                end,
+            )
+        end
+    end
+
+    @testset "project identity script reads pkg versions" begin
+        _with_tempdir() do proj
+            _env_verify_job_distssh_pkg!(proj)
+            bin = joinpath(Sys.BINDIR, "julia")
+            cmd = `$bin --startup-file=no --project=$proj -e $(DistSSHRun._PROJECT_IDENTITY_EVAL)`
+            out = read(cmd, String)
+            @test occursin("pkg.DistSSHRun=0.2.0-DEV", out)
+            @test occursin("version=$(VERSION)", out)
+            @test occursin("commit=", out)
+        end
+    end
+
+    @testset "failed identity probe is not an empty commit" begin
+        parent = Dict(
+            "version" => "1.13.0",
+            "commit" => "abc",
+            "manifest.sha256" => "a"^64,
+            "project.sha256" => "b"^64,
+        )
+        worker = Dict(
+            "probe_error" => "identity probe failed on host h (exit 1)\nnot a julia",
+            "version" => "",
+            "commit" => "",
+        )
+        lines = DistSSHRun._described_identity_lines(
+            parent, worker, "host h"; unsafe_heterogeneous = false,
+        )
+        @test length(lines) == 1
+        @test occursin("exit 1", only(lines))
+        @test occursin("not a julia", only(lines))
+        @test !occursin("cannot determine the Julia build", only(lines))
     end
 
     @testset "_remote_project_for_go prefers remote work root" begin

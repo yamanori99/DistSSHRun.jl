@@ -523,15 +523,7 @@ function _ride_add_workers!(
         end
         isempty(added) || _ride_load_self_on_workers!()
         if isempty(child_hosts) && !isempty(added)
-            local_man = _existing_project_manifest(project)
-            verify_workers_match_job!(
-                project;
-                host_manifests = if isempty(local_man)
-                    nothing
-                else
-                    Dict{Int, String}(w => local_man for w in added)
-                end,
-            )
+            verify_workers_match_job!(project)
         end
         capture_worker_provenance!()
         return added, ssh_hosts
@@ -654,7 +646,9 @@ function ride!(
         require_all_hosts::Bool = true,
         hint_surface::Symbol = :api,
         unsafe_heterogeneous = false,
+        allow_mismatch = nothing,
     )::RideResult
+    _reject_removed_allow_mismatch!(allow_mismatch)
     path = canonical_local_path(script)
     julia_s = string(VERSION)
     validated_run_id = run_id === nothing ? nothing : validate_run_id(run_id)
@@ -672,14 +666,12 @@ function ride!(
     inherited_run = old_run isa AbstractString && !isempty(strip(old_run))
     try
         _ensure_kit_run_dir!(:ride, path; project = project)
-        return with_unsafe_heterogeneous(
-            () -> begin
-                return _ride_run!(
-                    path, julia_s, tokens, args, spi_check, output_dir, project, julia,
-                    remote, validated_run_id, require_all_hosts, hint_surface, inherited_run,
-                )
-            end, unsafe_heterogeneous
-        )
+        return with_unsafe_heterogeneous(unsafe_heterogeneous) do
+            return _ride_run!(
+                path, julia_s, tokens, args, spi_check, output_dir, project, julia,
+                remote, validated_run_id, require_all_hosts, hint_surface, inherited_run,
+            )
+        end
     finally
         _restore_kit_run_dir_env!(old_run)
         _release_kit_inproc_run!()
@@ -706,7 +698,6 @@ function _ride_run!(
     project_root_abs = canonical_local_path(project)
     assert_controller_manifest_for_environment_verify!(project_root_abs)
     _reset_run_provenance!(project_root_abs)
-    unsafe_heterogeneous_active() && _record_unsafe_heterogeneous!()
     _clear_last_ship!()
     tok = String[String(t) for t in tokens]
     wp = try

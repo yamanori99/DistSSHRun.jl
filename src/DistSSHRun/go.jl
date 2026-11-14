@@ -1038,7 +1038,9 @@ function go!(
         run_id::Union{Nothing, AbstractString} = nothing,
         sync::Union{Symbol, Bool, Nothing} = nothing,
         allow_external_symlinks::Bool = false,
+        allow_mismatch = nothing,
     )::GoResult
+    _reject_removed_allow_mismatch!(allow_mismatch)
     _reject_run_transfer_kw!("go!", sync; surface = hint_surface)
     allow_external_symlinks &&
         _reject_run_transfer_cli!(hint_surface === :cli ? "go" : "go", "--allow-external-symlinks")
@@ -1067,30 +1069,28 @@ function go!(
         _clear_active_deploy_record!()
         warn_project_sshflags(proj)
         _ensure_kit_run_dir!(:go, script_path; project = proj)
-        return with_unsafe_heterogeneous(
-            () -> begin
-                return _go_run!(
-                    script_path,
-                    proj,
-                    workers,
-                    remote,
-                    hosts_file,
-                    quiet,
-                    verbosity,
-                    yes,
-                    output_dir,
-                    collect_spec,
-                    args,
-                    path_anchor,
-                    julia,
-                    hint_surface,
-                    original_args,
-                    repeat,
-                    inherited_run,
-                    snap_arg,
-                )
-            end, unsafe_heterogeneous
-        )
+        return with_unsafe_heterogeneous(unsafe_heterogeneous) do
+            return _go_run!(
+                script_path,
+                proj,
+                workers,
+                remote,
+                hosts_file,
+                quiet,
+                verbosity,
+                yes,
+                output_dir,
+                collect_spec,
+                args,
+                path_anchor,
+                julia,
+                hint_surface,
+                original_args,
+                repeat,
+                inherited_run,
+                snap_arg,
+            )
+        end
     finally
         _restore_kit_run_dir_env!(old_run)
         _release_kit_inproc_run!()

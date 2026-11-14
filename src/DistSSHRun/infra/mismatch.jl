@@ -30,6 +30,19 @@ function _record_unsafe_heterogeneous!()
     return _note_provenance_unsafe!("heterogeneous")
 end
 
+const _ALLOW_MISMATCH_REMOVED =
+    "removed; use --unsafe-heterogeneous (Julia/DistSSH* can no longer be waived)"
+
+function _reject_removed_allow_mismatch!(allow_mismatch)
+    allow_mismatch === nothing && return nothing
+    throw(ArgumentError("allow_mismatch= was $(_ALLOW_MISMATCH_REMOVED)"))
+end
+
+function reject_removed_allow_mismatch_flag!(arg::AbstractString)
+    arg == "--allow-mismatch" || return nothing
+    throw(ArgumentError("--allow-mismatch was $(_ALLOW_MISMATCH_REMOVED)"))
+end
+
 function _located_project_file_for_identity(project::AbstractString)::String
     pf = DistSSHBase._located_project_file(project)
     pf isa String || return ""
@@ -200,44 +213,10 @@ end
 
 """Base-only snapshot on a worker (no DistSSHRun module on the worker)."""
 function _worker_identity_expr()
-    production = _worker_production_identity_expr()
-    return quote
-        if strip(get(ENV, "DISTSSH_TEST", "")) == "1"
-            let kind = strip(get(ENV, "DISTSSH_TEST_WORKER_SNAP", ""))
-                if kind == "non_dict"
-                    42
-                else
-                    raw = strip(get(ENV, "DISTSSH_TEST_WORKER_IDENTITY_TOML", ""))
-                    if isempty(raw)
-                        $production
-                    else
-                        let parsed = try
-                                toml = Base.require(
-                                    Base.PkgId($(_WORKER_PKG_UUID_TOML), "TOML"),
-                                )
-                                toml.parse(raw)
-                            catch
-                                raw
-                            end
-                            if !(parsed isa AbstractDict)
-                                parsed
-                            else
-                                let d = Dict{String, String}()
-                                    for (k, v) in parsed
-                                        d[String(k)] = string(v)
-                                    end
-                                    d
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        else
-            $production
-        end
-    end
+    return _worker_production_identity_expr()
 end
+
+const _WORKER_ENV_SNAPSHOT_OVERRIDE = Ref{Any}(nothing)
 
 function _identity_julia_build_mismatches(
         parent::AbstractDict,
@@ -453,41 +432,53 @@ end
 
 """Worker snapshot for environment verification (`Core.eval` on the worker)."""
 function _fetch_worker_environment_snapshot(pid::Integer)
+    override = _WORKER_ENV_SNAPSHOT_OVERRIDE[]
+    if override isa Function
+        return override(Int(pid))
+    end
     return remotecall_fetch(Core.eval, pid, Main, _worker_identity_expr())
 end
 
-function verify_workers_match_job!(
-        project::AbstractString;
-        host_manifests = nothing,
-    )
+function _record_environment_verify_outcome!(waive_env::Bool)
+    if waive_env
+        _record_environment_unverified!("unsafe-heterogeneous")
+    else
+        _record_environment_verified!()
+    end
+    return nothing
+end
+
+function verify_workers_match_job!(project::AbstractString)
     waive_env = unsafe_heterogeneous_active()
     parent = run_identity(project)
-    owned_live = Set(_live_owned_worker_ids())
-    worker_ids = if host_manifests isa AbstractDict && !isempty(host_manifests)
-        # Per-worker manifest paths from drive (local vs remote); comparison uses SHA digests only.
-        sort!(Int[w for w in keys(host_manifests) if Int(w) ∈ owned_live])
-    else
-        _live_owned_worker_ids()
-    end
+    worker_ids = _live_owned_worker_ids()
     worker_lines = String[]
     mismatch_lock = ReentrantLock()
     @sync for w in worker_ids
         @async begin
-            snap = _fetch_worker_environment_snapshot(w)
             local lines = String[]
-            if !(snap isa AbstractDict)
+            try
+                snap = _fetch_worker_environment_snapshot(w)
+                if !(snap isa AbstractDict)
+                    push!(
+                        lines,
+                        _format_worker_mismatch_line(
+                            w,
+                            "worker environment snapshot was not available",
+                        ),
+                    )
+                else
+                    worker = Dict{String, String}(String(k) => string(v) for (k, v) in snap)
+                    for line in identity_mismatches(parent, worker; unsafe_heterogeneous = waive_env)
+                        push!(lines, _format_worker_mismatch_line(w, line))
+                    end
+                end
+            catch e
+                detail = first(split(sprint(showerror, e), '\n'))
                 push!(
                     lines,
-                    _format_worker_mismatch_line(
-                        w,
-                        "worker environment snapshot was not available",
-                    ),
+                    _format_worker_mismatch_line(w, "snapshot failed: $(detail)"),
                 )
-            else
-                worker = Dict{String, String}(String(k) => string(v) for (k, v) in snap)
-                for line in identity_mismatches(parent, worker; unsafe_heterogeneous = waive_env)
-                    push!(lines, _format_worker_mismatch_line(w, line))
-                end
             end
             isempty(lines) ||
                 lock(mismatch_lock) do
@@ -499,7 +490,7 @@ function verify_workers_match_job!(
         project, parent, worker_lines; waive_env_issues = waive_env,
     )
     _environment_mismatch_throw(mismatches)
-    waive_env || _record_environment_verified!()
+    _record_environment_verify_outcome!(waive_env)
     return nothing
 end
 
@@ -526,7 +517,7 @@ function _parse_identity_kv_lines(out::AbstractString)::Dict{String, String}
 end
 
 const _PROJECT_IDENTITY_EVAL = raw"""
-using SHA
+using SHA, TOML
 function env_sha256(path)
     isfile(path) || return ""
     return lowercase(bytes2hex(sha256(read(path))))
@@ -556,9 +547,7 @@ print("manifest.sha256=", man_sha, '\n')
 print("project=", pf, '\n')
 print("project.sha256=", proj_sha, '\n')
 if !isempty(man) && isfile(man)
-    pkg = Base.require(Base.PkgId(Base.UUID("fa267f1f-6049-4f14-aa54-33bafae1ed76"), "TOML"))
-    toml = Base.loaded_modules[Base.PkgId(Base.UUID("fa267f1f-6049-4f14-aa54-33bafae1ed76"), "TOML")]
-    raw = toml.parsefile(man)
+    raw = TOML.parsefile(man)
     if raw isa AbstractDict
         deps = get(raw, "deps", nothing)
         if deps isa AbstractDict
@@ -579,6 +568,32 @@ if !isempty(man) && isfile(man)
     end
 end
 """
+
+function _identity_probe_failure_message(
+        host::AbstractString,
+        code::Integer,
+        err::AbstractString,
+    )::String
+    err_s = strip(String(err))
+    detail = isempty(err_s) ? "" : "\n$(err_s)"
+    return "identity probe failed on host $(host) (exit $(code))$(detail)"
+end
+
+function _described_identity_lines(
+        parent::AbstractDict,
+        other::AbstractDict,
+        prefix::AbstractString;
+        unsafe_heterogeneous::Bool,
+    )::Vector{String}
+    probe = strip(get(other, "probe_error", ""))
+    if !isempty(probe)
+        return String["$(prefix): $(probe)"]
+    end
+    return String[
+        "$(prefix): $(line)"
+            for line in identity_mismatches(parent, other; unsafe_heterogeneous)
+    ]
+end
 
 function _go_local_slot_identity(project::AbstractString, julia)::Dict{String, String}
     parent = run_identity(project)
@@ -641,7 +656,7 @@ function _go_remote_run_identity(
         " -e ",
         posix_quote(_PROJECT_IDENTITY_EVAL),
     )
-    code, out = _remote_shell_status(h, inner)
+    code, out, err = _remote_shell_status_parts(h, inner)
     ident = Dict{String, String}(
         "julia" => pinned,
         "version" => "",
@@ -651,7 +666,10 @@ function _go_remote_run_identity(
         "project" => "",
         "project.sha256" => "",
     )
-    code == 0 || return ident
+    if code != 0
+        ident["probe_error"] = _identity_probe_failure_message(h, code, err)
+        return ident
+    end
     parsed = _parse_identity_kv_lines(out)
     for (k, v) in parsed
         ident[k] = v
@@ -695,14 +713,17 @@ function verify_go_slots_match_job!(
         push!(seen, hs)
         remote_proj = _remote_project_for_go(hs, remote_root, project)
         worker = _go_remote_run_identity(hs, remote_proj, julia)
-        for line in identity_mismatches(parent, worker; unsafe_heterogeneous = waive_env)
-            push!(slot_lines, "host $(hs): $(line)")
-        end
+        append!(
+            slot_lines,
+            _described_identity_lines(
+                parent, worker, "host $(hs)"; unsafe_heterogeneous = waive_env,
+            ),
+        )
     end
     mismatches = _collect_environment_mismatches(
         project, parent, slot_lines; waive_env_issues = waive_env,
     )
     _environment_mismatch_throw(mismatches)
-    waive_env || _record_environment_verified!()
+    _record_environment_verify_outcome!(waive_env)
     return nothing
 end

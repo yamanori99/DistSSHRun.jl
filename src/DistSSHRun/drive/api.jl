@@ -64,9 +64,11 @@ function drive!(
         sync_script::Union{Nothing, Bool} = nothing,
         unsafe_heterogeneous = false,
         allow_external_symlinks::Bool = false,
+        allow_mismatch = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
         unsafe_master_silence_exit::Union{Nothing, Bool} = nothing,
     )::DriveResult
+    _reject_removed_allow_mismatch!(allow_mismatch)
     _reject_removed_drive_worker_include_kw!(sync_script)
     _reject_run_transfer_kw!("drive!", sync; surface = hint_surface(session))
     allow_external_symlinks &&

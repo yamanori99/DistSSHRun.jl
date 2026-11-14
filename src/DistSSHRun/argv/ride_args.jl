@@ -135,6 +135,8 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
         elseif arg == "--unsafe-heterogeneous"
             unsafe_heterogeneous = true
             cli_consume!(c)
+        elseif arg == "--allow-mismatch"
+            reject_removed_allow_mismatch_flag!(arg)
         elseif arg == "--spi-check"
             cli_consume!(c)
             spi_check = true

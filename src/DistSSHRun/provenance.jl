@@ -189,7 +189,9 @@ function _record_environment_verification!(
     if reason isa AbstractString && !isempty(strip(reason))
         d["reason"] = String(strip(reason))
     end
-    _PROVENANCE_ENVIRONMENT[] = d
+    lock(_PROVENANCE_LOCK) do
+        _PROVENANCE_ENVIRONMENT[] = d
+    end
     return nothing
 end
 
@@ -217,6 +219,10 @@ function _reset_run_provenance!(project::AbstractString)
     _PROVENANCE_HEARTBEAT[] = nothing
     lock(_PROVENANCE_LOCK) do
         empty!(_PROVENANCE_GO)
+        if !unsafe_heterogeneous_active()
+            empty!(_PROVENANCE_UNSAFE[])
+        end
+        _PROVENANCE_ENVIRONMENT[] = nothing
     end
     # Taken now. A long run must not record edits made while it was going.
     # A bad Project.toml, an unreadable manifest, or a git status that is not
@@ -238,10 +244,6 @@ function _reset_run_provenance!(project::AbstractString)
     catch
         nothing
     end
-    if !unsafe_heterogeneous_active()
-        _PROVENANCE_UNSAFE[] = String[]
-    end
-    _PROVENANCE_ENVIRONMENT[] = nothing
     _PROVENANCE_AT_START[] = true
     reset_worker_seeds!()
     return nothing
@@ -958,9 +960,10 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     end
     isempty(selection) || (data["selection"] = selection)
     deploy_rec !== nothing && (data["deploy"] = deploy_rec)
-    unsafe = _PROVENANCE_UNSAFE[]
-    isempty(unsafe) || (data["unsafe"] = copy(unsafe))
-    env_tbl = _PROVENANCE_ENVIRONMENT[]
+    unsafe, env_tbl = lock(_PROVENANCE_LOCK) do
+        (copy(_PROVENANCE_UNSAFE[]), _PROVENANCE_ENVIRONMENT[])
+    end
+    isempty(unsafe) || (data["unsafe"] = unsafe)
     env_tbl isa AbstractDict && !isempty(env_tbl) && (data["environment"] = copy(env_tbl))
     hb = started ? _PROVENANCE_HEARTBEAT[] : nothing
     hb !== nothing && (data["heartbeat"] = hb)

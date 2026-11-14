@@ -16,3 +16,6 @@ category: breaking
   does not waive Julia build or DistSSH* version checks. Worker snapshots load
   TOML in the same call that parses the Manifest; that parse uses
   `invokelatest` so `pkg.*` versions are read instead of being dropped.
+- A Julia whose `Base.GIT_VERSION_INFO.commit` is empty (some source builds and
+  distribution builds) cannot run DistSSH multi-host jobs. An unknown commit is
+  a mismatch on purpose, and `--unsafe-heterogeneous` does not waive it.

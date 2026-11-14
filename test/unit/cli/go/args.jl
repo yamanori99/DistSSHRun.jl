@@ -76,7 +76,17 @@ using Test
         let r = parse_go_args(["--unsafe-heterogeneous", "parent:1", "job.jl"])
             @test r.unsafe_heterogeneous
         end
-        @test_throws ArgumentError parse_go_args(["--allow-mismatch", "julia", "job.jl"])
+        err = try
+            parse_go_args(["--allow-mismatch", "julia", "job.jl"])
+            nothing
+        catch e
+            e
+        end
+        err isa ArgumentError || error("expected ArgumentError")
+        @test occursin(
+            "removed; use --unsafe-heterogeneous (Julia/DistSSH* can no longer be waived)",
+            err.msg,
+        )
         withenv("JULIA_DISTRIBUTED_EXE" => "/env/julia") do
             let r = parse_go_args(["job.jl"])
                 @test r.julia == "/env/julia"

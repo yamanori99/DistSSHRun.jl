@@ -183,6 +183,17 @@ using Test
             let r = parse_drive_args(["--unsafe-heterogeneous", "s.jl"])
                 @test r.unsafe_heterogeneous
             end
+            err = try
+                parse_drive_args(["--allow-mismatch", "s.jl"])
+                nothing
+            catch e
+                e
+            end
+            err isa ArgumentError || error("expected ArgumentError")
+            @test occursin(
+                "removed; use --unsafe-heterogeneous (Julia/DistSSH* can no longer be waived)",
+                err.msg,
+            )
             let r = parse_drive_args(["--no-log", "s.jl"])
                 @test r.enable_log == false
             end

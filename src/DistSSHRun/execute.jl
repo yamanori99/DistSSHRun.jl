@@ -770,6 +770,7 @@ function _execute_detached!(
     worker_include = get(kwargs, :worker_include, false)
     spi_check = get(kwargs, :spi_check, false)
     unsafe_heterogeneous = get(kwargs, :unsafe_heterogeneous, false)
+    _reject_removed_allow_mismatch!(get(kwargs, :allow_mismatch, nothing))
     allow_external_symlinks = get(kwargs, :allow_external_symlinks, false)
     run_id = get(kwargs, :run_id, nothing)
     if run_id !== nothing

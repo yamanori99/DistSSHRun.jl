@@ -157,6 +157,8 @@ function parse_drive_args(args::Vector{String})
         elseif arg == "--unsafe-heterogeneous"
             unsafe_heterogeneous = true
             i += 1
+        elseif arg == "--allow-mismatch"
+            reject_removed_allow_mismatch_flag!(arg)
         elseif arg in (
                 "--sync",
                 "--git-sync",

@@ -173,6 +173,8 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
         elseif arg == "--unsafe-heterogeneous"
             unsafe_heterogeneous = true
             cli_consume!(c)
+        elseif arg == "--allow-mismatch"
+            reject_removed_allow_mismatch_flag!(arg)
         elseif arg == "--repeat"
             repeat_n === nothing || throw(ArgumentError("go: --repeat given more than once"))
             repeat_n = _go_parse_repeat(cli_take_value!(c, arg))

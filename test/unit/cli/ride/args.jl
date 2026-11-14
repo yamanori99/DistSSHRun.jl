@@ -33,6 +33,17 @@ using Test
         @test occursin("-m DistSSHKit", help)
         @test occursin("child:", help)
         @test occursin("--unsafe-heterogeneous", help)
+        err = try
+            parse_ride_args(["--allow-mismatch", "job.jl"])
+            nothing
+        catch e
+            e
+        end
+        err isa ArgumentError || error("expected ArgumentError")
+        @test occursin(
+            "removed; use --unsafe-heterogeneous (Julia/DistSSH* can no longer be waived)",
+            err.msg,
+        )
         @test !occursin("--analyze", help)
         @test !occursin("--gb-per-worker", help)
         @test_throws ArgumentError parse_ride_args(["--gb-per-worker", "1.5", "job.jl"])

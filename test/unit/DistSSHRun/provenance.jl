@@ -728,18 +728,95 @@ end
         end
     end
 
-    @testset "ride path re-records unsafe heterogeneous after provenance reset" begin
+    @testset "reset keeps heterogeneous label without a second record" begin
         _with_tempdir() do proj
-            DistSSHRun.with_unsafe_heterogeneous(
-                () -> begin
-                    DistSSHRun._reset_run_provenance!(proj)
-                    DistSSHRun.unsafe_heterogeneous_active() &&
-                        DistSSHRun._record_unsafe_heterogeneous!()
-                    prov = DistSSHRun.assemble_provenance()
-                    unsafe = get(prov, "unsafe", String[])
-                    @test "heterogeneous" in unsafe
-                end, true
-            )
+            DistSSHRun.with_unsafe_heterogeneous(true) do
+                DistSSHRun._reset_run_provenance!(proj)
+                prov = DistSSHRun.assemble_provenance()
+                unsafe = get(prov, "unsafe", String[])
+                @test "heterogeneous" in unsafe
+                env = get(prov, "environment", nothing)
+                @test env === nothing
+            end
         end
+    end
+
+    @testset "drive! and ride! record unverified after unsafe heterogeneous" begin
+        _with_tempdir() do proj
+            _write_host_project!(proj, "ProvUnsafeDrive")
+            script = joinpath(proj, "job.jl")
+            write(script, "println(\"hi\")\n")
+            prev = DistSSHRun.kit_verbosity()
+            try
+                DistSSHRun.set_kit_verbosity!(:quiet)
+                result = DistSSHRun.drive!(
+                    script, ["parent:1"];
+                    project = proj,
+                    yes = true,
+                    enable_log = false,
+                    unsafe_heterogeneous = true,
+                )
+                @test result.ok
+                prov = DistSSHRun.assemble_provenance(proj)
+                env = get(prov, "environment", nothing)
+                @test env isa AbstractDict
+                @test env["verification"] == "unverified"
+                @test env["reason"] == "unsafe-heterogeneous"
+            finally
+                DistSSHRun.set_kit_verbosity!(prev)
+            end
+        end
+        _with_tempdir() do proj
+            _write_host_project!(proj, "ProvUnsafeRide")
+            script = joinpath(proj, "job.jl")
+            write(script, "println(\"hi\")\n")
+            prev = DistSSHRun.kit_verbosity()
+            try
+                DistSSHRun.set_kit_verbosity!(:quiet)
+                result = DistSSHRun.ride!(
+                    script, ["parent:1"];
+                    project = proj,
+                    unsafe_heterogeneous = true,
+                )
+                @test result.ok
+                prov = DistSSHRun.assemble_provenance(proj)
+                env = get(prov, "environment", nothing)
+                @test env isa AbstractDict
+                @test env["verification"] == "unverified"
+                @test env["reason"] == "unsafe-heterogeneous"
+            finally
+                DistSSHRun.set_kit_verbosity!(prev)
+            end
+        end
+    end
+
+    @testset "allow_mismatch keyword is a migration error" begin
+        err = try
+            DistSSHRun.drive!("missing.jl"; allow_mismatch = true)
+            nothing
+        catch e
+            e
+        end
+        err isa ArgumentError || error("expected ArgumentError")
+        @test occursin(
+            "removed; use --unsafe-heterogeneous (Julia/DistSSH* can no longer be waived)",
+            err.msg,
+        )
+        err = try
+            DistSSHRun.ride!("missing.jl"; allow_mismatch = true)
+            nothing
+        catch e
+            e
+        end
+        err isa ArgumentError || error("expected ArgumentError")
+        @test occursin("allow_mismatch= was removed", err.msg)
+        err = try
+            DistSSHRun.go!("missing.jl"; allow_mismatch = true)
+            nothing
+        catch e
+            e
+        end
+        err isa ArgumentError || error("expected ArgumentError")
+        @test occursin("allow_mismatch= was removed", err.msg)
     end
 end
