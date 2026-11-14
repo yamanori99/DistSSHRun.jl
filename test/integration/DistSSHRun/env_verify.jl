@@ -234,6 +234,7 @@ function _env_verify_guards()
                     DistSSHRun.julia_sysimage_path()
                 end
                 @test ident["sysimage"] == expected_sysimage
+                @test ident["sysimage.default"] == "true"
             end
         end
 

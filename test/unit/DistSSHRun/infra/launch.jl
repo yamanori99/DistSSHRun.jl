@@ -220,6 +220,7 @@ using TOML
         "project.sha256" => "b"^64,
         "pkg.DistSSHRun" => "0.1.0",
         "sysimage" => _test_sysimage,
+        "sysimage.default" => "true",
     )
     worker = Dict(
         "version" => string(VERSION),
@@ -228,8 +229,16 @@ using TOML
         "project.sha256" => "b"^64,
         "pkg.DistSSHRun" => "0.1.0",
         "sysimage" => _test_sysimage,
+        "sysimage.default" => "true",
     )
     @test isempty(DistSSHRun.identity_mismatches(parent, worker))
+
+    @test isempty(
+        DistSSHRun.identity_mismatches(
+            merge(parent, Dict("sysimage" => "/a/sys.so")),
+            merge(worker, Dict("sysimage" => "/b/sys.so")),
+        ),
+    )
 
     sha_miss = DistSSHRun.identity_mismatches(
         parent,

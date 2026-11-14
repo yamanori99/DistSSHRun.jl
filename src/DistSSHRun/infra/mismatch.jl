@@ -120,6 +120,7 @@ function run_identity(project::AbstractString)::Dict{String, String}
         "commit" => string(Base.GIT_VERSION_INFO.commit),
         "julia" => joinpath(Sys.BINDIR, "julia"),
         "sysimage" => DistSSHBase._resolved_sysimage_path(),
+        "sysimage.default" => string(DistSSHBase.julia_sysimage_is_default()),
         "manifest" => man,
         "manifest.sha256" => man_sha,
         "project" => pf,
@@ -177,11 +178,22 @@ function _worker_production_identity_expr()
                     return String(img)
                 end
             end
+            function __env_sysimage_is_default()
+                ext = Sys.isapple() ? ".dylib" : Sys.iswindows() ? ".dll" : ".so"
+                def = joinpath(Sys.BINDIR, "..", "lib", "julia", "sys" * ext)
+                img = Base.JLOptions().image_file
+                try
+                    return realpath(img) == realpath(def)
+                catch
+                    return false
+                end
+            end
             d = Dict{String, String}(
                 "version" => string(VERSION),
                 "commit" => string(Base.GIT_VERSION_INFO.commit),
                 "julia" => joinpath(Sys.BINDIR, "julia"),
                 "sysimage" => __env_sysimage_path(),
+                "sysimage.default" => string(__env_sysimage_is_default()),
                 "manifest" => man,
                 "manifest.sha256" => man_sha,
                 "project" => pf,
@@ -240,7 +252,15 @@ function _identity_sysimage_mismatches(parent::AbstractDict, other::AbstractDict
         push!(lines, "julia sysimage: cannot determine sysimage on the worker")
         return lines
     end
-    ps == ws || push!(lines, "julia sysimage parent=$(ps) worker=$(ws)")
+    if ps == ws
+        return lines
+    end
+    pd = strip(get(parent, "sysimage.default", ""))
+    wd = strip(get(other, "sysimage.default", ""))
+    if pd == "true" && wd == "true"
+        return lines
+    end
+    push!(lines, "julia sysimage parent=$(ps) worker=$(ws)")
     return lines
 end
 
