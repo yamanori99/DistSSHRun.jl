@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Build, reject forbidden proof escapes and user axioms, then run Audit.lean.
-# Pattern: https://github.com/MilesCranmer/julia-in-lean (dynamicexpressions/scripts/audit.sh)
+# Build, reject forbidden proof escapes, audit registry, coverage (julia-in-lean).
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -18,3 +17,5 @@ if grep -rnE '^\s*axiom\s' --include='*.lean' DistSSHLean DistSSHLean.lean Audit
 fi
 
 lake env lean Audit.lean | tee .lake/audit.out
+julia scripts/check-coverage.jl .lake/audit.out
+bash scripts/check-bugs.sh
