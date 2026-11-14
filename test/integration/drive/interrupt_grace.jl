@@ -14,7 +14,7 @@ using Test
         return """
         # macOS keeps SIGINT pending across a blocking wait. DistSSHRun's
         # 1.13 handler wakes through libuv (`sleep`). A `GC.safepoint` spin
-        # does not observe that wake. Julia 1.14 throws `CancellationRequest`
+        # does not observe that wake. With `Base.CANCEL_TOKEN`, `CancellationRequest`
         # from `sleep`. The worker test below uses the same wait.
         function _interrupt_seen(e)
             DistSSHRun.DistSSHBase.is_sigint(e) && return true

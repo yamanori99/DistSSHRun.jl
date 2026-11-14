@@ -6,17 +6,17 @@
 # `without_cancel` around the whole frame, and it does not clear or consume
 # the cancellation source.
 #
-# Julia 1.14+ has `Base.CANCEL_TOKEN` / `CancellationRequest`. Julia 1.13 does
-# not: those shims are `f()` / `false`.
+# Task cancellation (`Base.CANCEL_TOKEN`, `CancellationRequest`) exists only on
+# Julia builds that define it (e.g. some 1.14 alphas; reverted from 1.14.0-beta1
+# through 1.14.x, #64651). Later releases may add it again; paths follow
+# `isdefined(Base, :CANCEL_TOKEN)`. Without it, shims are `f()` / `false`.
 #
-# A second Ctrl-C during cleanup exits 130 and prints one line. Julia 1.13
-# installs that with `signal`. The handler must not call `jl_exit`: that
-# is not async-signal-safe, and on macOS 1.13 it can keep running worker
-# teardown, then SIGSEGV, so the wait status is not 130. `_exit` skips
-# atexit. Julia 1.14 owns SIGINT in its listener; `signal` and
-# `exit_on_sigint` there either drop the listener or deadlock in
-# `jl_exit_thread0`. The 1.14 press cancels a fresh episode, and a task
-# bound to that episode calls `jl_exit`.
+# A second Ctrl-C during cleanup exits 130 and prints one line. Without
+# cancellation (no `Base.CANCEL_TOKEN`), that uses `signal` and `_exit(130)`. The
+# handler must not call `jl_exit`: not async-signal-safe; on macOS, teardown can
+# SIGSEGV after worker cleanup. With cancellation, Julia owns SIGINT in its
+# listener; `signal` / `exit_on_sigint` can drop the listener or deadlock in
+# `jl_exit_thread0`. A fresh episode and a task bound to it call `jl_exit`.
 
 const _DRIVE_INTERRUPTED = Ref(false)
 const _DRIVE_FRAME_DEPTH = Ref(0)
@@ -24,9 +24,10 @@ const _FRAME_CANCEL_TOKEN = Ref{Any}(nothing)
 const _SECOND_SIGINT_ARMED = Ref(false)
 const _SECOND_SIGINT_BYTES = UInt8[]
 const _OLD_SIGINT_HANDLER = Ref{Ptr{Cvoid}}(C_NULL)
-# Julia 1.13 delivers SIGINT to whichever thread is outside `sigatomic`.
+# Without cancellation, SIGINT hits whichever thread is outside `sigatomic`.
 # A libuv helper that runs the Julia handler segfaults. Block SIGINT on those
-# helpers and wake the drive task from the event loop. 1.14 uses the token.
+# helpers and wake the drive task from the event loop. With `CANCEL_TOKEN`,
+# delivery uses the scoped token instead.
 const _JULIA_SIGINT_HANDLER = Ref{Ptr{Cvoid}}(C_NULL)
 const _MAIN_SIGINT_INSTALLED = Ref(false)
 const _MAIN_SIGINT_TASK = Ref{Any}(nothing)
@@ -94,7 +95,7 @@ function _interruptish(e)::Bool
     return isstructtype(typeof(e)) && hasfield(typeof(e), :captured)
 end
 
-"""True only for Julia 1.14's Ctrl-C exception, not `InterruptException`."""
+"""True for `Base.CancellationRequest` (cancellation builds), not `InterruptException`."""
 function _is_cancellation_request(e)::Bool
     if isdefined(Base, :CancellationRequest)
         return e isa Base.CancellationRequest
@@ -178,8 +179,9 @@ function _second_sigint_watch()
 end
 
 """
-On Julia 1.14, bind one task to a fresh ^C episode so the next press exits.
-Cleanup itself stays non-cancellable. No-op until the first press, and on 1.13.
+When `Base.CANCEL_TOKEN` exists, bind one task to a fresh ^C episode so the
+next press exits. Cleanup stays non-cancellable. No-op until the first press
+and on builds without cancellation.
 """
 function _ensure_second_sigint_watch!()
     if isdefined(Base, :CANCEL_TOKEN) &&

@@ -1590,10 +1590,10 @@ end
             # `InterruptException` at the next safepoint, so a file written
             # before this `try` (and before this toplevel thunk finishes
             # compiling) is killed with count 0. A blocking `sleep` is not
-            # that safepoint on macOS; `GC.safepoint` is. Julia 1.14 throws
-            # `CancellationRequest` from `sleep` and does not throw at a
-            # safepoint. Count that once, then `pause`, or `sleep` throws
-            # again and the count runs away.
+            # that safepoint on macOS; `GC.safepoint` is. With
+            # `Base.CANCEL_TOKEN`, `sleep` throws `CancellationRequest` and
+            # does not throw at a safepoint. Count that once, then `pause`, or
+            # `sleep` throws again and the count runs away.
             write(
                 script,
                 """

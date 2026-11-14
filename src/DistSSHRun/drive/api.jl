@@ -44,8 +44,8 @@ only, so top-level work on Load is not repeated on workers.
 Ctrl-C restores the active project and the `DISTRIBUTED_*` entries this call
 changed, then rethrows `InterruptException` or, when Julia has it,
 `Base.CancellationRequest`. `drive!` does not `exit` and does not throw the
-private CLI exception. On Julia 1.14 the caller's task stays cancelled after
-that exception.
+private CLI exception. With `Base.CANCEL_TOKEN`, the caller's task may stay
+cancelled after that exception.
 """
 function drive!(
         session::DistSSHSession,
