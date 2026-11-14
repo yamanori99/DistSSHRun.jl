@@ -2380,8 +2380,9 @@ plus `grace` (10) plus one second after SIGKILL, about 41 seconds, and
 then the tagged `pkill` below. A
 process-group SIGINT, as from a terminal Ctrl-C, also misses that path on
 Julia 1.13: the driver exits 1 and does not send `kill -INT`. Measured on
-macOS. On Julia 1.14 the driver exits 130, but a worker can be removed
-before it sees the interrupt.
+macOS. On builds without `Base.CANCEL_TOKEN` (e.g. 1.13 and 1.14.0-beta1 through
+1.14.x) the
+driver exits 130, but a worker can be removed before it sees the interrupt.
 A `go` or `ride` child is `julia -m` with
 exit-on-sigint, so SIGINT runs `atexit` and does not enter `catch` or
 `finally`. Then SIGTERM, wait up to `grace` seconds (`0` sends SIGTERM

@@ -809,7 +809,7 @@ end
 
     @testset "SIGINT disposition is restored on 1.13" begin
         if isdefined(Base, :CANCEL_TOKEN)
-            @test_skip "Julia 1.14+ (Base.CANCEL_TOKEN); SIGINT sa handler restoration is 1.13-only"
+            @test_skip "SIGINT sa handler restoration needs builds without Base.CANCEL_TOKEN (e.g. 1.13 and 1.14.0-beta1 through 1.14.x)"
         else
             before = _sigint_sa_handler()
             DistSSHRun._drive_frame() do

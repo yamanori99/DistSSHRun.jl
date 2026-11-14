@@ -109,7 +109,7 @@ end
 
 @testset "pmap cancel stays within interrupt_grace + 11s" begin
     if VERSION < v"1.14.0-"
-        @test_skip "Julia 1.13 pmap ignores SIGINT; budget is for 1.14-pre and nightly"
+        @test_skip "Julia 1.13: pmap SIGINT budget not exercised here (#123); builds with Base.CANCEL_TOKEN run it"
     else
         grace = DistSSHRun._resolve_interrupt_grace(nothing)
         budget = grace + 11
