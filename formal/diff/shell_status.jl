@@ -46,7 +46,7 @@ function main()
         ec, ts = pairs[i]
         error(
             "mismatch at case $i: exitcode=$ec termsignal=$ts " *
-            "julia=$(julia_out[i]) lean=$(lean_out[i])",
+                "julia=$(julia_out[i]) lean=$(lean_out[i])",
         )
     end
     println("differential ok: $NCASES cases matched")
