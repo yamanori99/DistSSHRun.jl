@@ -4,9 +4,9 @@
 if !isdefined(Main, :_assert_no_binding_world_stderr!)
     function _binding_world_age_warning_text(text::AbstractString)::Union{Nothing, String}
         for pat in (
-            "Detected access to binding",
-            "prior to its definition world",
-        )
+                "Detected access to binding",
+                "prior to its definition world",
+            )
             occursin(pat, text) && return pat
         end
         return nothing
