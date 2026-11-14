@@ -231,6 +231,41 @@ end
         end
     end
 
+    @testset "go remote identity keeps remote paths off the controller" begin
+        _with_tempdir() do state
+            logp = joinpath(state, "ssh.log")
+            base = _fake_setup_remote_env(state)
+            env = merge(
+                base,
+                Dict(
+                    "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia",
+                    "DISTSSH_TEST_POSIX_SHELL" => "1",
+                    "DISTSSH_TEST_SSH_LOG" => logp,
+                ),
+            )
+            controller_home = "/home/controller-user"
+            withenv(merge(env, Dict("HOME" => controller_home))...) do
+                isfile(logp) && rm(logp; force = true)
+                DistSSHRun._go_remote_run_identity("host1", "~/runs/job/src", nothing)
+                script = isfile(logp) ? read(logp, String) : ""
+                @test occursin("--project=", script)
+                @test occursin("~/", script)
+                @test !occursin(controller_home, script)
+                @test !occursin("/home/controller-user/runs", script)
+            end
+            rel = "./runs/src"
+            controller_expanded = abspath(rel)
+            withenv(env...) do
+                isfile(logp) && rm(logp)
+                DistSSHRun._go_remote_run_identity("host1", rel, nothing)
+                script = isfile(logp) ? read(logp, String) : ""
+                @test occursin("--project=", script)
+                @test !occursin(controller_expanded, script)
+                @test occursin("./runs", script) || occursin("./runs/src", script)
+            end
+        end
+    end
+
     @testset "verify_go_slots_match_job! child slot" begin
         _with_tempdir() do state
             base = _fake_setup_remote_env(state)

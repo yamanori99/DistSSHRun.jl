@@ -502,7 +502,8 @@ function _go_remote_run_identity(
         julia,
     )::Dict{String, String}
     h = String(host)
-    rp = canonical_local_path(remote_project)
+    # Remote `--project=` must expand on the worker host (`~`, relative paths).
+    rp = String(strip(remote_project))
     spec = julia isa AbstractString ? String(julia) : nothing
     pinned = pin_remote_julia(h, spec)
     pinned === nothing && throw(ArgumentError("Julia not found on remote host $(h)"))

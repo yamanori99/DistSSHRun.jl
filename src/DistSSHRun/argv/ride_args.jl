@@ -63,7 +63,7 @@ function show_ride_usage(; io::IO = stdout)
         "                      ~/Parent/RepoName layout from the local env_dir.",
         "  --run-id ID       use runs/<ID>/src under the deploy root",
         "  --unsafe-heterogeneous  allow Julia, packages, and environment files to differ across workers",
-        "  SSH workers: project-root cwd, bind 127.0.0.1; environment mismatch is an error unless waived.",
+        "  SSH workers: project-root cwd, bind 127.0.0.1; environment mismatch is an error unless --unsafe-heterogeneous.",
         "  $(KIT_HOSTS_FLAG_HELP)",
         "  --hosts-file PATH   one token per line",
         "  $(KIT_QUIET_FLAG_HELP)",
