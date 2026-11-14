@@ -1,0 +1,9 @@
+name = "DistSSHLean"
+defaultTargets = ["DistSSHLean", "shell_status_batch"]
+
+[[lean_lib]]
+name = "DistSSHLean"
+
+[[lean_exe]]
+name = "shell_status_batch"
+root = "ShellStatusBatch"

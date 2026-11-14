@@ -38,8 +38,8 @@ jobs:
         with:
           path: |
             ~/.elan
-            formal/DistSSHBase/.lake
-          key: formal-lean-${{ hashFiles('formal/DistSSHBase/lean-toolchain', 'formal/DistSSHBase/**/*.lean', 'formal/DistSSHBase/lakefile.lean') }}
+            formal/.lake
+          key: formal-lean-${{ hashFiles('formal/lean-toolchain', 'formal/**/*.lean', 'formal/lakefile.toml') }}
           restore-keys: |
             formal-lean-
 
@@ -49,13 +49,16 @@ jobs:
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
       - name: Select toolchain
-        working-directory: formal/DistSSHBase
+        working-directory: formal
         run: |
           elan toolchain install "$(cat lean-toolchain)"
           elan default "$(cat lean-toolchain)"
 
-      - name: Axiom audit (includes lake build)
-        run: bash formal/audit/run.sh
+      - name: Audit (build, escapes, registry)
+        run: bash formal/scripts/audit.sh
+
+      - name: Refutation reproducers
+        run: bash formal/scripts/run-repros.sh
 
       - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
         with:

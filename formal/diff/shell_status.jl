@@ -2,14 +2,18 @@
 """
 Differential test: `DistSSHBase._shell_status` vs the Lean `shellStatus` model.
 
-Requires `lake build` in `formal/DistSSHBase` so `shell_status_batch` exists.
+Run after `cd formal && lake build` (julia-in-lean: compare the model to Julia
+before and after proof work).
+
+CI and local:
+  julia --project=lib/DistSSHBase formal/diff/shell_status.jl
 """
 
 using Random
 using Pkg
 
 const REPO_ROOT = abspath(joinpath(@__DIR__, "..", ".."))
-const FORMAL_ROOT = joinpath(REPO_ROOT, "formal", "DistSSHBase")
+const FORMAL_ROOT = joinpath(REPO_ROOT, "formal")
 const LEAN_BATCH = joinpath(FORMAL_ROOT, ".lake", "build", "bin", "shell_status_batch")
 
 const EXIT_RANGE = -5:300
@@ -23,7 +27,7 @@ using DistSSHBase
 
 function lean_batch_status(pairs::Vector{Tuple{Int, Int}})::Vector{Int}
     ispath(LEAN_BATCH) ||
-        error("missing $LEAN_BATCH — run `lake build` in formal/DistSSHBase")
+        error("missing $LEAN_BATCH — run `lake build` in formal/")
     stdin = IOBuffer()
     for (ec, ts) in pairs
         println(stdin, ec, " ", ts)
