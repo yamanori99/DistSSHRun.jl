@@ -1,6 +1,8 @@
+#!/usr/bin/env julia
 # Check that Audit.lean COVER-* lines match the formalization scope.
 # Usage: julia scripts/check-coverage.jl .lake/audit.out
-include(joinpath(@__DIR__, "..", "scope", "expected.jl"))
+const EXPECTED_FILES = ["lib/DistSSHBase/src/ssh/shell_status.jl"]
+const EXPECTED_FNS = ["_shell_status", "shell_status"]
 
 audit_out = only(ARGS)
 lines = readlines(audit_out)
@@ -41,9 +43,9 @@ println(
 )
 
 if isempty(missing_files) &&
-   isempty(missing_fns) &&
-   isempty(unknown_files) &&
-   isempty(unknown_fns)
+        isempty(missing_fns) &&
+        isempty(unknown_files) &&
+        isempty(unknown_fns)
     println("COVERAGE OK")
 else
     println("COVERAGE FAIL")

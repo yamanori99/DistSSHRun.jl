@@ -56,7 +56,7 @@ julia --project=lib/DistSSHBase formal/diff/shell_status.jl
 | `DistSSHLean/` | Models, `Registry`, `Runtime` (`Jl`, `JlError`) |
 | `Audit.lean`, `Report.lean`, `registry.tsv` | Registry audit and export |
 | `scripts/audit.sh`, `check-coverage.jl`, `check-bugs.sh` | julia-in-lean checks |
-| `scope/expected.jl` | Files and functions in scope |
+| `scripts/check-coverage.jl` | Registry coverage vs in-scope file and functions |
 | `QUESTIONS.md` | Maintainer rulings on ambiguous behaviour |
 | `bugs/` | YAML write-ups for confirmed bugs |
 | `diff/shell_status.jl` | Differential test |
