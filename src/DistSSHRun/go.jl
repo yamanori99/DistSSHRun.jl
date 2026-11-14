@@ -1000,9 +1000,10 @@ selected project directory. `run_id` also skips the in-tree
 `julia` sets the Julia binary for each slot (`nothing` / `"auto"` → detect;
 same as CLI `--julia`).
 
-`unsafe_heterogeneous` (CLI `--unsafe-heterogeneous`) allows Julia version,
-DistSSH* versions, and environment file bytes to differ across slots. Default
-is to error. Comparison is byte-exact (CRLF differences count).
+`unsafe_heterogeneous` (CLI `--unsafe-heterogeneous`) waives only Manifest and
+Project byte digest checks across slots (recorded as unverified). Julia build
+and DistSSH* Manifest version strings must still match. Digest comparison is
+byte-exact (CRLF differences count).
 
 When `workers` is empty and `hosts_file` is omitted, `DISTSSH_HOSTS_FILE`
 is still read (API `go!("job.jl")`). Non-empty `workers` (CLI

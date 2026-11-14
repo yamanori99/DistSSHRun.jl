@@ -1,4 +1,4 @@
-# Worker environment vs the job tree. Default errors; `--unsafe-heterogeneous` waives checks.
+# Worker environment vs the job tree. `--unsafe-heterogeneous` waives package-environment checks only.
 
 const _UNSAFE_HETEROGENEOUS = Ref(false)
 
@@ -14,7 +14,7 @@ function with_unsafe_heterogeneous(f::Function, enabled::Bool)
     try
         _record_unsafe_heterogeneous!()
         _record_environment_unverified!("unsafe-heterogeneous")
-        @warn "unsafe: heterogeneous cluster (Julia, packages, and environment files may differ across workers)"
+        @warn "unsafe: heterogeneous package environment (Manifest/Project byte digests may differ; Julia build and DistSSH* versions must still match)"
         return f()
     finally
         _UNSAFE_HETEROGENEOUS[] = old
@@ -236,42 +236,47 @@ function _worker_identity_expr()
     end
 end
 
-"""
-    identity_mismatches(parent, other; unsafe_heterogeneous=false) -> Vector{String}
-
-Same lines as [`go!`](@ref), [`ride!`](@ref), and [`drive!`](@ref). An empty
-vector matches. This does not throw, print, or read `DISTSSH_QUIET`.
-
-When `unsafe_heterogeneous` is false, compares Julia version and commit,
-DistSSH* Manifest version strings, and **byte-exact** SHA-256 digests of the
-resolved Manifest and Project files (`manifest.sha256`, `project.sha256`).
-CRLF and other byte differences count.
-
-A `pkg.*` key is compared only when `parent` has it and `other` has a
-non-empty value. Keys that exist only on `other` are ignored. When the parent
-has a non-empty `manifest.sha256`, the worker must supply the same digest or
-the check fails; an empty worker snapshot is a mismatch. `"julia"` binary path
-is not compared.
-"""
-function identity_mismatches(
+function _identity_julia_build_mismatches(
         parent::AbstractDict,
-        other::AbstractDict;
-        unsafe_heterogeneous::Bool = false,
+        other::AbstractDict,
     )::Vector{String}
-    unsafe_heterogeneous && return String[]
     lines = String[]
     pv = get(parent, "version", "")
     wv = get(other, "version", "")
     pv == wv || push!(lines, "julia version parent=$(pv) worker=$(wv)")
-    pc = get(parent, "commit", "")
-    wc = get(other, "commit", "")
-    pc == wc || push!(lines, "julia commit parent=$(pc) worker=$(wc)")
+    pc = strip(get(parent, "commit", ""))
+    wc = strip(get(other, "commit", ""))
+    commit_ok = !isempty(pc) && !isempty(wc) && pc == wc
+    if !commit_ok
+        if isempty(pc)
+            push!(
+                lines,
+                "julia build: cannot determine the Julia build on the controller (commit missing)",
+            )
+        elseif isempty(wc)
+            push!(
+                lines,
+                "julia build: cannot determine the Julia build on the worker (commit missing)",
+            )
+        else
+            push!(lines, "julia commit parent=$(pc) worker=$(wc)")
+        end
+    end
+    return lines
+end
+
+function _identity_pkg_mismatches(parent::AbstractDict, other::AbstractDict)::Vector{String}
+    lines = String[]
     for (k, pval) in parent
         startswith(k, "pkg.") || continue
         wv = get(other, k, "")
-        isempty(wv) && continue
         pval == wv || push!(lines, "$(k) parent=$(pval) worker=$(wv)")
     end
+    return lines
+end
+
+function _identity_env_file_mismatches(parent::AbstractDict, other::AbstractDict)::Vector{String}
+    lines = String[]
     want_man = get(parent, "manifest.sha256", "")
     want_proj = get(parent, "project.sha256", "")
     if !isempty(want_man)
@@ -302,6 +307,35 @@ function identity_mismatches(
             )
         end
     end
+    return lines
+end
+
+"""
+    identity_mismatches(parent, other; unsafe_heterogeneous=false) -> Vector{String}
+
+Same lines as [`go!`](@ref), [`ride!`](@ref), and [`drive!`](@ref). An empty
+vector matches. This does not throw, print, or read `DISTSSH_QUIET`.
+
+Julia version and commit (Julia build) and DistSSH* `pkg.*` versions from the
+Manifest are always compared. An empty or missing commit on either side is a
+mismatch. When `unsafe_heterogeneous` is true, only **byte-exact** SHA-256
+digests of the resolved Manifest and Project files (`manifest.sha256`,
+`project.sha256`) are waived; Julia build and `pkg.*` mismatches are still
+reported. CRLF and other byte differences count for digests.
+
+When the parent has a non-empty `manifest.sha256`, the worker must supply the
+same digest or the check fails (unless `unsafe_heterogeneous`); an empty worker
+snapshot is a mismatch. `"julia"` binary path is not compared.
+"""
+function identity_mismatches(
+        parent::AbstractDict,
+        other::AbstractDict;
+        unsafe_heterogeneous::Bool = false,
+    )::Vector{String}
+    lines = String[]
+    append!(lines, _identity_julia_build_mismatches(parent, other))
+    append!(lines, _identity_pkg_mismatches(parent, other))
+    unsafe_heterogeneous || append!(lines, _identity_env_file_mismatches(parent, other))
     return lines
 end
 public identity_mismatches
@@ -371,7 +405,7 @@ function _controller_missing_manifest_error(project::AbstractString)::String
             exp_line,
             "why: workers may load different package versions when the controller Manifest is absent",
             fix_line,
-            "override: pass --unsafe-heterogeneous to launch without environment verification (recorded as unverified in provenance)",
+            "override: pass --unsafe-heterogeneous to skip Manifest/Project digest verification (recorded as unverified; Julia build and DistSSH* versions must still match)",
         ],
         "\n",
     )
@@ -393,8 +427,8 @@ function _environment_mismatch_throw(lines::Vector{String})
         ErrorException(
             "environment mismatch between controller (master) and worker(s):\n  " *
                 join(lines, "\n  ") *
-                "\nwhy: every worker must match the controller (master) Julia build, DistSSH* versions, and Manifest/Project byte digests before work runs.\n" *
-                "fix: run setup so each host deploys the same tree as the controller (master), or pass --unsafe-heterogeneous to allow a mixed cluster (unverified).",
+                "\nwhy: every worker must match the controller (master) Julia build and DistSSH* versions; Manifest/Project byte digests must match unless you opt out.\n" *
+                "fix: align Julia and DistSSH* versions on every host, deploy matching Manifest/Project bytes with setup, or pass --unsafe-heterogeneous to waive only Manifest/Project digest checks (unverified; Julia build and DistSSH* versions must still match).",
         ),
     )
 end
@@ -402,11 +436,14 @@ end
 function _collect_environment_mismatches(
         project::AbstractString,
         parent::AbstractDict,
-        worker_lines::Vector{String},
+        worker_lines::Vector{String};
+        waive_env_issues::Bool = false,
     )::Vector{String}
-    want_man = get(parent, "manifest.sha256", "")
     lines = String[]
-    isempty(want_man) && push!(lines, _controller_missing_manifest_issue(project))
+    if !waive_env_issues
+        want_man = get(parent, "manifest.sha256", "")
+        isempty(want_man) && push!(lines, _controller_missing_manifest_issue(project))
+    end
     append!(lines, worker_lines)
     return lines
 end
@@ -420,7 +457,7 @@ function verify_workers_match_job!(
         project::AbstractString;
         host_manifests = nothing,
     )
-    unsafe_heterogeneous_active() && return nothing
+    waive_env = unsafe_heterogeneous_active()
     parent = run_identity(project)
     owned_live = Set(_live_owned_worker_ids())
     worker_ids = if host_manifests isa AbstractDict && !isempty(host_manifests)
@@ -445,7 +482,7 @@ function verify_workers_match_job!(
                 )
             else
                 worker = Dict{String, String}(String(k) => string(v) for (k, v) in snap)
-                for line in identity_mismatches(parent, worker)
+                for line in identity_mismatches(parent, worker; unsafe_heterogeneous = waive_env)
                     push!(lines, _format_worker_mismatch_line(w, line))
                 end
             end
@@ -455,9 +492,11 @@ function verify_workers_match_job!(
             end
         end
     end
-    mismatches = _collect_environment_mismatches(project, parent, worker_lines)
+    mismatches = _collect_environment_mismatches(
+        project, parent, worker_lines; waive_env_issues = waive_env,
+    )
     _environment_mismatch_throw(mismatches)
-    _record_environment_verified!()
+    waive_env || _record_environment_verified!()
     return nothing
 end
 
@@ -634,12 +673,12 @@ function verify_go_slots_match_job!(
         remote_root::AbstractString = "",
         julia = nothing,
     )
-    unsafe_heterogeneous_active() && return nothing
+    waive_env = unsafe_heterogeneous_active()
     parent = run_identity(project)
     slot_lines = String[]
     if any(s -> s.kind === :parent, slots)
         local_id = _go_local_slot_identity(project, julia)
-        for line in identity_mismatches(parent, local_id)
+        for line in identity_mismatches(parent, local_id; unsafe_heterogeneous = waive_env)
             push!(slot_lines, "parent slot: $(line)")
         end
     end
@@ -653,12 +692,14 @@ function verify_go_slots_match_job!(
         push!(seen, hs)
         remote_proj = _remote_project_for_go(hs, remote_root, project)
         worker = _go_remote_run_identity(hs, remote_proj, julia)
-        for line in identity_mismatches(parent, worker)
+        for line in identity_mismatches(parent, worker; unsafe_heterogeneous = waive_env)
             push!(slot_lines, "host $(hs): $(line)")
         end
     end
-    mismatches = _collect_environment_mismatches(project, parent, slot_lines)
+    mismatches = _collect_environment_mismatches(
+        project, parent, slot_lines; waive_env_issues = waive_env,
+    )
     _environment_mismatch_throw(mismatches)
-    _record_environment_verified!()
+    waive_env || _record_environment_verified!()
     return nothing
 end

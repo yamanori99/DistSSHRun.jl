@@ -17,6 +17,17 @@ function _env_verify_job!(proj::AbstractString)
     return nothing
 end
 
+function _env_verify_job_distssh_pkg!(proj::AbstractString)
+    _env_verify_job!(proj)
+    open(joinpath(proj, "Manifest.toml"), "a") do io
+        println(
+            io,
+            "deps = {DistSSHRun = [{uuid = \"00000000-0000-0000-0000-000000000001\", version = \"0.2.0-DEV\"}]}",
+        )
+    end
+    return nothing
+end
+
 function _env_verify_worker_env!(w::Integer, d::Dict{String, String})
     remotecall_fetch(w, d) do dict
         ENV["DISTSSH_TEST"] = "1"
@@ -243,9 +254,16 @@ end
                                 w, parent, "version" => "1.0.0",
                             )
                             @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
-                            DistSSHRun.with_unsafe_heterogeneous(
-                                () -> DistSSHRun.verify_workers_match_job!(proj), true,
-                            )
+                            err = try
+                                DistSSHRun.with_unsafe_heterogeneous(
+                                    () -> DistSSHRun.verify_workers_match_job!(proj), true,
+                                )
+                                nothing
+                            catch e
+                                e
+                            end
+                            err isa ErrorException || error("expected ErrorException under unsafe")
+                            @test occursin("julia version", sprint(showerror, err))
                         end
                         _env_verify_clear_worker_test_env!(w)
 
@@ -257,8 +275,74 @@ end
                                 "commit" => "0000000000000000000000000000000000000000",
                             )
                             @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
+                            err = try
+                                DistSSHRun.with_unsafe_heterogeneous(
+                                    () -> DistSSHRun.verify_workers_match_job!(proj), true,
+                                )
+                                nothing
+                            catch e
+                                e
+                            end
+                            err isa ErrorException || error("expected ErrorException under unsafe")
+                            msg = sprint(showerror, err)
+                            @test occursin("julia commit", msg) || occursin("julia build", msg)
+                        end
+                        _env_verify_clear_worker_test_env!(w)
+
+                        @testset "empty julia commit" begin
+                            parent = DistSSHRun.run_identity(proj)
+                            _env_verify_worker_toml_override!(w, parent, "commit" => "")
+                            @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
+                            err = try
+                                DistSSHRun.with_unsafe_heterogeneous(
+                                    () -> DistSSHRun.verify_workers_match_job!(proj), true,
+                                )
+                                nothing
+                            catch e
+                                e
+                            end
+                            err isa ErrorException || error("expected ErrorException under unsafe")
+                            @test occursin("cannot determine the Julia build", sprint(showerror, err))
+                        end
+                        _env_verify_clear_worker_test_env!(w)
+
+                        @testset "pkg.DistSSHRun" begin
+                            _env_verify_job_distssh_pkg!(proj)
+                            parent = DistSSHRun.run_identity(proj)
+                            @test haskey(parent, "pkg.DistSSHRun")
+                            _env_verify_worker_toml_override!(
+                                w, parent, "pkg.DistSSHRun" => "9.9.9",
+                            )
+                            @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
+                            err = try
+                                DistSSHRun.with_unsafe_heterogeneous(
+                                    () -> DistSSHRun.verify_workers_match_job!(proj), true,
+                                )
+                                nothing
+                            catch e
+                                e
+                            end
+                            err isa ErrorException || error("expected ErrorException under unsafe")
+                            @test occursin("pkg.DistSSHRun", sprint(showerror, err))
+                        end
+                        _env_verify_clear_worker_test_env!(w)
+
+                        @testset "manifest digest waived under unsafe" begin
+                            parent = DistSSHRun.run_identity(proj)
+                            _env_verify_worker_toml_override!(
+                                w, parent, "manifest.sha256" => "c"^64,
+                            )
+                            @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
                             DistSSHRun.with_unsafe_heterogeneous(
-                                () -> DistSSHRun.verify_workers_match_job!(proj), true,
+                                () -> begin
+                                    DistSSHRun.verify_workers_match_job!(proj)
+                                    prov = DistSSHRun.assemble_provenance()
+                                    env = get(prov, "environment", nothing)
+                                    @test env isa AbstractDict
+                                    @test env["verification"] == "unverified"
+                                    @test env["reason"] == "unsafe-heterogeneous"
+                                end,
+                                true,
                             )
                         end
                         _env_verify_clear_worker_test_env!(w)
@@ -269,7 +353,7 @@ end
                                 Dict("DISTSSH_TEST_WORKER_SNAP" => "non_dict"),
                             )
                             @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
-                            DistSSHRun.with_unsafe_heterogeneous(
+                            @test_throws ErrorException DistSSHRun.with_unsafe_heterogeneous(
                                 () -> DistSSHRun.verify_workers_match_job!(proj), true,
                             )
                         end
@@ -363,23 +447,32 @@ end
                 slots = DistSSHRun.GoSlot[
                     DistSSHRun.GoSlot(:child, "host1", "child-1"),
                 ]
-                for (name, tweak_val) in (
-                        ("manifest.sha256", "c"^64),
-                        ("project.sha256", "d"^64),
-                        ("version", "1.0.0"),
-                        ("commit", "0000000000000000000000000000000000000000"),
+                for (name, tweak_val, unsafe_ok) in (
+                        ("manifest.sha256", "c"^64, true),
+                        ("project.sha256", "d"^64, true),
+                        ("version", "1.0.0", false),
+                        ("commit", "0000000000000000000000000000000000000000", false),
                     )
                     @testset "$(name)" begin
                         withenv(merge(env, _go_identity_env(parent; tweak = name => tweak_val))...) do
                             @test_throws ErrorException DistSSHRun.verify_go_slots_match_job!(
                                 proj, slots; remote_root = proj,
                             )
-                            DistSSHRun.with_unsafe_heterogeneous(
-                                () -> DistSSHRun.verify_go_slots_match_job!(
-                                    proj, slots; remote_root = proj,
-                                ),
-                                true,
-                            )
+                            if unsafe_ok
+                                DistSSHRun.with_unsafe_heterogeneous(
+                                    () -> DistSSHRun.verify_go_slots_match_job!(
+                                        proj, slots; remote_root = proj,
+                                    ),
+                                    true,
+                                )
+                            else
+                                @test_throws ErrorException DistSSHRun.with_unsafe_heterogeneous(
+                                    () -> DistSSHRun.verify_go_slots_match_job!(
+                                        proj, slots; remote_root = proj,
+                                    ),
+                                    true,
+                                )
+                            end
                         end
                     end
                 end

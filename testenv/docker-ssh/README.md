@@ -56,8 +56,10 @@ cache key, so a new patch, or a prerelease becoming stable, rebuilds the
 juliaup layer. The image build checks `julia --version` against it.
 By default, `setup check` requires matching patch and prerelease versions
 but ignores build suffixes. `go` and `drive` require matching `string(VERSION)`
-and Julia commit unless `--unsafe-heterogeneous` is set. Manifest and Project
-bytes must match the controller (master) byte-exactly unless that flag is set.
+and Julia commit always; DistSSH* versions must match. Manifest and Project
+bytes must match the controller (master) byte-exactly unless
+`--unsafe-heterogeneous` is set (that flag does not waive Julia build or
+DistSSH* versions).
 Install policy:
 [Requirements](https://yamanori99.github.io/DistSSHKit.jl/stable/requirements/).
 `--e2e` also runs

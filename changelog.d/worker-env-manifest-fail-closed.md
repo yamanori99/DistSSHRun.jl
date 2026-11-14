@@ -5,9 +5,12 @@ category: breaking
   workers or remote go slots are verified (no silent skip). The error states
   what failed, the controller host and project path, why unpinned versions are
   unsafe, fix steps (`Pkg.instantiate` when a project file exists, otherwise
-  check the `--project` path), and that `--unsafe-heterogeneous` skips
-  verification and records the run as unverified. Provenance carries
+  check the `--project` path), and that `--unsafe-heterogeneous` waives only
+  Manifest/Project digest verification (recorded as unverified). Julia build
+  and DistSSH* versions must still match. Provenance carries
   `environment.verification` = `verified` or `unverified` (with reason).
-- When verification runs, Julia version/commit, `pkg.*`, and Manifest/Project
-  byte mismatches are collected in one report (paths and lock file names are
-  not compared). Previously skipped checks can surface once a Manifest exists.
+- When verification runs, Julia build, `pkg.*`, and Manifest/Project byte
+  mismatches are collected in one report (paths and lock file names are not
+  compared). An empty Julia commit on either side is a mismatch. Previously
+  skipped checks can surface once a Manifest exists. `--unsafe-heterogeneous`
+  does not waive Julia build or DistSSH* version checks.

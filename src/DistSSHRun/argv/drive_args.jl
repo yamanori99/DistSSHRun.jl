@@ -485,7 +485,7 @@ function show_drive_usage(; io::IO = stdout)
         "  --isolated          run the driver in a child process (default: this process)",
         "  $(DRIVE_UNSAFE_MASTER_SILENCE_EXIT_FLAG_HELP)",
         "  --julia PATH        remote Julia",
-        "  --unsafe-heterogeneous  allow Julia, packages, and environment files to differ across workers",
+        "  --unsafe-heterogeneous  waive Manifest/Project digest checks only (unverified; Julia build and DistSSH* versions must match)",
         "  SSH workers: project-root cwd, bind 127.0.0.1, tunnel unless DISTSSH_SSH_TUNNEL=0.",
         "  --no-log            skip drive_*.log",
         "  $(KIT_QUIET_FLAG_HELP)",

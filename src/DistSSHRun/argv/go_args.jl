@@ -41,7 +41,7 @@ function show_go_usage(; io::IO = stdout)
         "  --run-id ID       use runs/<ID>/src under the deploy root",
         "                      (after setup ship-tree + setup instantiate)",
         "  --julia PATH        remote Julia (ENV or auto)",
-        "  --unsafe-heterogeneous  allow Julia, packages, and environment files to differ across slots",
+        "  --unsafe-heterogeneous  waive Manifest/Project digest checks only (unverified; Julia build and DistSSH* versions must match)",
         "  Remote slots cd to the project root and pin the real julia binary.",
         "  --output-dir PATH   batch root; slots are PATH/<slot>/",
         "  $(KIT_QUIET_FLAG_HELP)",

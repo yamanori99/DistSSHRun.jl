@@ -288,14 +288,62 @@ using TOML
     @test any(occursin("julia version", l) for l in combo_mismatch)
     @test any(occursin("commit", l) for l in combo_mismatch)
     @test any(occursin("manifest.sha256", l) for l in combo_mismatch)
-    @test isempty(
+    unsafe_combo = DistSSHRun.identity_mismatches(
+        parent,
+        Dict(
+            "version" => "1.9.0",
+            "commit" => "0000000000000000000000000000000000000000",
+            "manifest.sha256" => "c"^64,
+            "project.sha256" => parent["project.sha256"],
+        ),
+        unsafe_heterogeneous = true,
+    )
+    @test any(occursin("julia version", l) for l in unsafe_combo)
+    @test !any(occursin("manifest.sha256", l) for l in unsafe_combo)
+
+    empty_commit = DistSSHRun.identity_mismatches(
+        parent,
+        Dict(
+            "version" => parent["version"],
+            "commit" => "",
+            "manifest.sha256" => parent["manifest.sha256"],
+            "project.sha256" => parent["project.sha256"],
+        ),
+    )
+    @test any(occursin("cannot determine the Julia build", l) for l in empty_commit)
+    @test !isempty(
         DistSSHRun.identity_mismatches(
             parent,
             Dict(
-                "version" => "1.9.0",
-                "commit" => "0000000000000000000000000000000000000000",
-                "manifest.sha256" => "c"^64,
+                "version" => parent["version"],
+                "commit" => "",
+                "manifest.sha256" => parent["manifest.sha256"],
                 "project.sha256" => parent["project.sha256"],
+            ),
+            unsafe_heterogeneous = true,
+        ),
+    )
+
+    pkg_miss = DistSSHRun.identity_mismatches(
+        parent,
+        Dict(
+            "version" => parent["version"],
+            "commit" => parent["commit"],
+            "manifest.sha256" => parent["manifest.sha256"],
+            "project.sha256" => parent["project.sha256"],
+            "pkg.DistSSHRun" => "9.9.9",
+        ),
+    )
+    @test any(occursin("pkg.DistSSHRun", l) for l in pkg_miss)
+    @test !isempty(
+        DistSSHRun.identity_mismatches(
+            parent,
+            Dict(
+                "version" => parent["version"],
+                "commit" => parent["commit"],
+                "manifest.sha256" => parent["manifest.sha256"],
+                "project.sha256" => parent["project.sha256"],
+                "pkg.DistSSHRun" => "9.9.9",
             ),
             unsafe_heterogeneous = true,
         ),
