@@ -1,5 +1,6 @@
 # Commands measured by bench/compile/measure.jl. No SSH.
-# `{work}` is a fresh copy of bench/compile/fixtures. The process cwd is that directory.
+# Scripts live under bench/compile/fixtures. Child cwd is the repo root so the
+# CLI project root matches the Manifest (worker environment verification).
 package = "DistSSHRun"
 
 [[command]]
@@ -8,8 +9,8 @@ args = ["--help"]
 
 [[command]]
 name = "go"
-args = ["go", "{work}/pi_echo.jl"]
+args = ["go", "bench/compile/fixtures/pi_echo.jl"]
 
 [[command]]
 name = "drive"
-args = ["drive", "parent:2", "{work}/drive_square.jl"]
+args = ["drive", "parent:2", "bench/compile/fixtures/drive_square.jl"]
