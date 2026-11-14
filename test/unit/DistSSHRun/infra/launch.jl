@@ -256,20 +256,16 @@ using TOML
             w = only(Distributed.workers())
             try
                 remotecall_fetch(() -> Core.eval(Main, :(using DistSSHRun)), w)
-                snap = remotecall_fetch(Core.eval, w, Main, DistSSHRun._worker_identity_expr())
+                snap_raw = remotecall_fetch(Core.eval, w, Main, DistSSHRun._worker_identity_expr())
+                snap = Dict{String,String}(String(k) => String(v) for (k, v) in pairs(snap_raw))
                 parent_id = DistSSHRun.run_identity(proj)
                 @test snap["sysimage.default"] == "true"
-                parent_alt = merge(
-                    parent_id,
-                    Dict("sysimage" => "/opt/hostedtoolcache/julia/1.13.4/x64/lib/julia/sys.so"),
-                )
-                worker_alt = merge(
-                    snap,
-                    Dict(
-                        "sysimage" =>
-                            "/home/dev/.julia/juliaup/julia-1.13.4+0.x64.linux.gnu/lib/julia/sys.so",
-                    ),
-                )
+                parent_alt = Dict{String,String}(parent_id)
+                parent_alt["sysimage"] =
+                    "/opt/hostedtoolcache/julia/1.13.4/x64/lib/julia/sys.so"
+                worker_alt = Dict{String,String}(snap)
+                worker_alt["sysimage"] =
+                    "/home/dev/.julia/juliaup/julia-1.13.4+0.x64.linux.gnu/lib/julia/sys.so"
                 @test isempty(DistSSHRun.identity_mismatches(parent_alt, worker_alt))
             finally
                 rmprocs(w; waitfor = 5)
