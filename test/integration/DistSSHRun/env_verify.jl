@@ -351,22 +351,36 @@ function _env_verify_guards()
         end
 
         @testset "production worker snapshot reads Manifest pkg versions" begin
-            proj = something(pkgdir(DistSSHRun))
-            parent = DistSSHRun.run_identity(proj)
-            @test get(parent, "pkg.DistSSHRun", "") == "0.2.0-DEV"
-            flags = DistSSHRun.worker_exeflag_strings(proj)
-            env = Dict(DistSSHRun.worker_env_pairs(proj))
-            addprocs(1; exeflags = Cmd(flags), env = env)
-            w = only(workers())
-            try
-                snap = remotecall_fetch(Core.eval, w, Main, DistSSHRun._worker_identity_expr())
-                @test snap isa AbstractDict
-                @test get(snap, "pkg.DistSSHRun", "") == parent["pkg.DistSSHRun"]
-                @test get(snap, "manifest.sha256", "") == parent["manifest.sha256"]
-                lines = DistSSHRun.identity_mismatches(parent, snap)
-                @test isempty(lines)
-            finally
-                w in workers() && rmprocs(w; waitfor = 5.0)
+            # The installed package tree has no Manifest (`Manifest.toml` is
+            # not in the git tree). The job is a project whose Manifest lists
+            # DistSSHRun, which is what a registry install resolves.
+            _with_tempdir() do proj
+                _env_verify_job_distssh_pkg!(proj)
+                parent = DistSSHRun.run_identity(proj)
+                @test haskey(parent, "pkg.DistSSHRun")
+                parent_ver = get(parent, "pkg.DistSSHRun", "")
+                @test !isempty(parent_ver)
+                @test parent_ver == "0.2.0-DEV"
+                flags = DistSSHRun.worker_exeflag_strings(proj)
+                env = Dict(DistSSHRun.worker_env_pairs(proj))
+                addprocs(1; exeflags = Cmd(flags), env = env)
+                w = only(workers())
+                try
+                    snap = remotecall_fetch(
+                        Core.eval, w, Main, DistSSHRun._worker_identity_expr(),
+                    )
+                    @test snap isa AbstractDict
+                    @test haskey(snap, "pkg.DistSSHRun")
+                    snap_ver = get(snap, "pkg.DistSSHRun", "")
+                    @test !isempty(snap_ver)
+                    @test snap_ver == parent_ver
+                    @test get(snap, "manifest.sha256", "") == get(parent, "manifest.sha256", "")
+                    lines = DistSSHRun.identity_mismatches(parent, snap)
+                    @test isempty(lines)
+                finally
+                    w in workers() && rmprocs(w; waitfor = 5.0)
+                end
+                return nothing
             end
         end
 
