@@ -404,7 +404,14 @@ function _env_verify_guards()
             _with_tempdir() do proj
                 _env_verify_job_distssh_pkg!(proj)
                 bin = joinpath(Sys.BINDIR, "julia")
-                cmd = `$bin --startup-file=no --project=$proj -e $(DistSSHRun._PROJECT_IDENTITY_EVAL)`
+                # `Pkg.test` sets `JULIA_LOAD_PATH` to `@` plus this test
+                # directory, which does not include `@stdlib`. The go probe
+                # sets the launch path, and that path is what resolves
+                # `using SHA, TOML` on a job project that does not list them.
+                cmd = addenv(
+                    `$bin --startup-file=no --project=$proj -e $(DistSSHRun._PROJECT_IDENTITY_EVAL)`,
+                    "JULIA_LOAD_PATH" => DistSSHRun._LAUNCH_LOAD_PATH,
+                )
                 out = read(cmd, String)
                 @test occursin("pkg.DistSSHRun=0.2.0-DEV", out)
                 @test occursin("version=$(VERSION)", out)
