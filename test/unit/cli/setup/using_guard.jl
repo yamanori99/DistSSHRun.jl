@@ -7,7 +7,7 @@ using Test
 @testset "setup _using after cli_project_root" begin
     mod_name = Symbol(:SetupUsingAfterCli, "_", rand(UInt))
     Core.eval(Main, Meta.parse("module $mod_name end"))
-    m = getfield(Main, mod_name)
+    m = Base.invokelatest(getfield, Main, mod_name)
     Core.eval(m, :(const DistSSHRun = $(DistSSHRun)))
     Core.eval(
         m, quote
