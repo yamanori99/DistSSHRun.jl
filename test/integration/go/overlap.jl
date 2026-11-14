@@ -7,7 +7,7 @@ using Test
 @testset "local slots overlap" begin
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"GoOverlap\"\n")
-        write(joinpath(proj, "Manifest.toml"), "# lock\n")
+        _sync_test_project_manifest!(proj)
         script = joinpath(proj, "sleep_mark.jl")
         write(
             script, """
@@ -37,7 +37,7 @@ end
 @testset "repeat=2 matches parent:2 (local overlap)" begin
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"GoRepeatOverlap\"\n")
-        write(joinpath(proj, "Manifest.toml"), "# lock\n")
+        _sync_test_project_manifest!(proj)
         script = joinpath(proj, "sleep_mark.jl")
         write(
             script, """
@@ -67,7 +67,7 @@ end
 @testset "output_dir batch root (local:1)" begin
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"GoOutputDir\"\n")
-        write(joinpath(proj, "Manifest.toml"), "# lock\n")
+        _sync_test_project_manifest!(proj)
         script = joinpath(proj, "job.jl")
         write(
             script, """
@@ -95,7 +95,7 @@ end
 @testset "output_dir with collect_spec=false" begin
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"GoOutputDirSkip\"\n")
-        write(joinpath(proj, "Manifest.toml"), "# lock\n")
+        _sync_test_project_manifest!(proj)
         script = joinpath(proj, "job.jl")
         write(
             script, """

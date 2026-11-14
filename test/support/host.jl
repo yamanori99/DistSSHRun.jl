@@ -1,5 +1,21 @@
 if !isdefined(Main, :_write_host_project!)
 
+    # `Pkg.is_manifest_current` must be `true` before drive/ride/go verification.
+    function _sync_test_project_manifest!(proj::AbstractString)
+        proj = abspath(string(proj))
+        isfile(joinpath(proj, "Project.toml")) ||
+            isfile(joinpath(proj, "JuliaProject.toml")) ||
+            return nothing
+        julia = _julia_exe()
+        cmd = setenv(
+            `$julia --startup-file=no --project=$proj -e "using Pkg; Pkg.resolve()"`,
+            _child_julia_env(),
+        )
+        proc, combined = _run_subprocess(cmd)
+        _assert_proc_ok(proc, combined; label = "Pkg.resolve test project")
+        return nothing
+    end
+
     # Detached `execute!` `-m DistSSHRun` needs DistSSHRun as the job package.
     function _write_job_with_distsshrun!(proj)
         kit = _kit_root()
@@ -8,6 +24,7 @@ if !isdefined(Main, :_write_host_project!)
             ispath(src) || continue
             cp(src, joinpath(proj, name); force = true)
         end
+        _sync_test_project_manifest!(proj)
         return nothing
     end
 
@@ -24,10 +41,10 @@ if !isdefined(Main, :_write_host_project!)
             joinpath(proj, "Project.toml"),
             "name = \"$(name)\"\n$(uuid_line)version = \"0.0.1\"\n$(extra_toml)",
         )
-        write(joinpath(proj, "Manifest.toml"), "# lock\n")
         src = joinpath(proj, "src")
         mkpath(src)
         write(joinpath(src, "$(name).jl"), "module $(name)\nend\n")
+        _sync_test_project_manifest!(proj)
         return nothing
     end
 

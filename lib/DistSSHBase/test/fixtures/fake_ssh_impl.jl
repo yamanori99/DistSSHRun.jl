@@ -170,8 +170,16 @@ function main()
         c = get(ENV, "DISTSSH_TEST_RUN_IDENTITY_COMMIT", string(Base.GIT_VERSION_INFO.commit))
         man_sha = get(ENV, "DISTSSH_TEST_RUN_IDENTITY_MAN_SHA", "")
         proj_sha = get(ENV, "DISTSSH_TEST_RUN_IDENTITY_PROJ_SHA", "")
+        img = get(ENV, "DISTSSH_TEST_RUN_IDENTITY_SYSIMAGE") do
+            try
+                string(realpath(unsafe_string(Base.JLOptions().image_file)))
+            catch
+                unsafe_string(Base.JLOptions().image_file)
+            end
+        end
         print("version=", v, '\n')
         print("commit=", c, '\n')
+        print("sysimage=", img, '\n')
         print("manifest=\n")
         print("manifest.sha256=", man_sha, '\n')
         print("project=\n")

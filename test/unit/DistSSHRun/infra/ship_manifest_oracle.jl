@@ -101,7 +101,7 @@ end
     @testset "no git, gitignored Manifest" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
-            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(tmp)
             write(joinpath(tmp, ".gitignore"), "Manifest.toml\n")
             omit = _omit_for(tmp)
             @test_throws ArgumentError DistSSHRun.DistSSHShip.pack_entry_paths(
@@ -113,7 +113,7 @@ end
     @testset "negation pattern keeps Manifest" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
-            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(tmp)
             write(joinpath(tmp, ".gitignore"), "Manifest.toml\n!Manifest.toml\n")
             listed = _oracle_matches_tar!(tmp)
             @test "Manifest.toml" in listed
@@ -151,7 +151,7 @@ end
                 projects = ["experiments/run1"]
                 """,
             )
-            write(joinpath(lab, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(lab)
             write(joinpath(member, "Project.toml"), "name = \"Run1\"\n[deps]\n")
             tree_root = DistSSHRun._ship_tree_root(member)
             send_only = DistSSHRun.ship_send_list(tree_root)

@@ -98,6 +98,20 @@ using Test
         )
         @test versioned.env_dir == versioned.project_dir
 
+        prefs = joinpath(root, "prefs")
+        mkpath(prefs)
+        write(joinpath(prefs, "Project.toml"), "name = \"Prefs\"\n")
+        write(joinpath(prefs, "LocalPreferences.toml"), "[X]\ny = 1\n")
+        @test DistSSHBase.local_preferences_path(prefs) ==
+            DistSSHBase.canonical_local_path(joinpath(prefs, "LocalPreferences.toml"))
+        jprefs = joinpath(root, "jprefs")
+        mkpath(jprefs)
+        write(joinpath(jprefs, "JuliaProject.toml"), "name = \"JPrefs\"\n")
+        write(joinpath(jprefs, "JuliaLocalPreferences.toml"), "[X]\nz = 1\n")
+        write(joinpath(jprefs, "LocalPreferences.toml"), "[X]\ny = 2\n")
+        @test DistSSHBase.local_preferences_path(jprefs) ==
+            DistSSHBase.canonical_local_path(joinpath(jprefs, "JuliaLocalPreferences.toml"))
+
         if Sys.which("git") !== nothing
             nest = joinpath(root, "nest")
             nest_member = joinpath(nest, "lab", "experiments", "run1")

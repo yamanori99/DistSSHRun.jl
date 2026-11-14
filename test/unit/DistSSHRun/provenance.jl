@@ -554,7 +554,7 @@ end
             DistSSHRun._set_provenance_source!(nothing)
             _with_tempdir() do proj
                 write(joinpath(proj, "Project.toml"), "name = \"ProvGo\"\n")
-                write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+                _sync_test_project_manifest!(proj)
                 script = joinpath(proj, "job.jl")
                 write(script, "error(\"boom\")\n")
                 result = redirect_stdout(devnull) do

@@ -72,6 +72,7 @@ function _go_identity_env(parent::AbstractDict; tweak::Pair{String, String})
         "DISTSSH_TEST_RUN_IDENTITY_COMMIT" => get(
             parent, "commit", string(Base.GIT_VERSION_INFO.commit),
         ),
+        "DISTSSH_TEST_RUN_IDENTITY_SYSIMAGE" => get(parent, "sysimage", ""),
         "DISTSSH_TEST_RUN_IDENTITY_MAN_SHA" => get(parent, "manifest.sha256", ""),
         "DISTSSH_TEST_RUN_IDENTITY_PROJ_SHA" => get(parent, "project.sha256", ""),
     )
@@ -193,6 +194,89 @@ function _env_verify_guards()
                 @test DistSSHRun.manifest_path(ws) == root_man
                 @test !isempty(DistSSHRun.run_identity(ws)["manifest.sha256"])
                 DistSSHRun.assert_controller_manifest_for_environment_verify!(ws)
+            end
+        end
+
+        @testset "controller Manifest not current fails closed" begin
+            _with_tempdir() do proj
+                write(joinpath(proj, "Project.toml"), "name = \"Stale\"\n[deps]\nExample = \"7876af07-990d-54b4-ab0e-23690620f79a\"\n")
+                write(
+                    joinpath(proj, "Manifest.toml"),
+                    """
+                    manifest_format = "2.0"
+                    julia_version = "$(VERSION)"
+                    project_hash = "0123456789abcdef0123456789abcdef01234567"
+                    """,
+                )
+                @test_throws ErrorException DistSSHRun.assert_controller_manifest_current!(proj)
+                err = try
+                    DistSSHRun.assert_controller_environment_for_verify!(proj)
+                    nothing
+                catch e
+                    e
+                end
+                err isa ErrorException || error("expected ErrorException")
+                msg = sprint(showerror, err)
+                @test occursin("not current", msg)
+                @test occursin("unsafe-heterogeneous does not waive", msg)
+            end
+        end
+
+        @testset "manifest current without project file fails closed" begin
+            _with_tempdir() do root
+                bare = joinpath(root, "bare")
+                mkpath(bare)
+                write(joinpath(bare, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+                @test isempty(DistSSHRun._located_project_file_for_identity(bare))
+                err = try
+                    DistSSHRun.assert_controller_manifest_current!(bare)
+                    nothing
+                catch e
+                    e
+                end
+                err isa ErrorException || error("expected ErrorException")
+                msg = sprint(showerror, err)
+                @test occursin("not current", msg)
+                @test occursin("no Project.toml or JuliaProject.toml", msg)
+                @test occursin("unsafe-heterogeneous does not waive", msg)
+                DistSSHRun.with_unsafe_heterogeneous(true) do
+                    @test_throws ErrorException DistSSHRun.assert_controller_manifest_current!(bare)
+                end
+            end
+        end
+
+        @testset "manifest current checks JuliaProject.toml tree" begin
+            _with_tempdir() do root
+                julia_only = joinpath(root, "julia-only")
+                mkpath(julia_only)
+                write(joinpath(julia_only, "JuliaProject.toml"), "name = \"JuliaOnly\"\n")
+                write(
+                    joinpath(julia_only, "JuliaManifest.toml"),
+                    """
+                    manifest_format = "2.0"
+                    julia_version = "$(VERSION)"
+                    project_hash = "0123456789abcdef0123456789abcdef01234567"
+                    """,
+                )
+                @test_throws ErrorException DistSSHRun.assert_controller_manifest_current!(
+                    julia_only,
+                )
+            end
+        end
+
+        @testset "run_identity records default sysimage" begin
+            _with_tempdir() do proj
+                _env_verify_job!(proj)
+                ident = DistSSHRun.run_identity(proj)
+                @test !isempty(ident["sysimage"])
+                @test DistSSHRun.julia_sysimage_is_default()
+                expected_sysimage = try
+                    abspath(realpath(DistSSHRun.julia_sysimage_path()))
+                catch
+                    DistSSHRun.julia_sysimage_path()
+                end
+                @test ident["sysimage"] == expected_sysimage
+                @test ident["sysimage.default"] == "true"
             end
         end
 

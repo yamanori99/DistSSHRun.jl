@@ -242,7 +242,7 @@ using Test
         # setup correctly refuses to ship.
         smoke_project = mktempdir()
         write(joinpath(smoke_project, "Project.toml"), "name = \"RsyncSmoke\"\n")
-        write(joinpath(smoke_project, "Manifest.toml"), "# lock\n")
+        _sync_test_project_manifest!(smoke_project)
         write(joinpath(smoke_project, "smoke.jl"), "smoke = 1\n")
         if Sys.which("git") !== nothing
             run(`git -C $smoke_project init --quiet`)

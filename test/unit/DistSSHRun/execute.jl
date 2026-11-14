@@ -1130,6 +1130,7 @@ end
                 path = joinpath(app, name)
                 write(path, replace(read(path, String), "path = \"$bar\"" => "path = \"../Bar\""))
             end
+            _sync_test_project_manifest!(app)
             @test occursin("path = \"../Bar\"", read(joinpath(app, "Project.toml"), String))
             script = joinpath(app, "job.jl")
             marker = joinpath(root, "RAN")
@@ -1163,7 +1164,7 @@ end
     @testset ":go dispatch" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"ExecuteGo\"\n")
-            write(joinpath(proj, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(proj)
             script = joinpath(proj, "job.jl")
             write(
                 script, """

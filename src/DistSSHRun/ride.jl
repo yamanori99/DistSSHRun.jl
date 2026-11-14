@@ -696,7 +696,7 @@ function _ride_run!(
     # `ride!` restores `DISTSSH_RUN_DIR` after this returns.
     run_dir = kit_run_dir()
     project_root_abs = canonical_local_path(project)
-    assert_controller_manifest_for_environment_verify!(project_root_abs)
+    assert_controller_environment_for_verify!(project_root_abs)
     _reset_run_provenance!(project_root_abs)
     _clear_last_ship!()
     tok = String[String(t) for t in tokens]

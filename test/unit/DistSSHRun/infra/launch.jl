@@ -129,7 +129,7 @@ using TOML
         rm(slot; force = true, recursive = true)
     end
     mktempdir() do tmp
-        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        _sync_test_project_manifest!(tmp)
         write(joinpath(tmp, "CondaPkg.toml"), "[deps]\n")
         prov = DistSSHRun._project_provenance(tmp)
         @test haskey(prov, "locks")
@@ -212,12 +212,15 @@ using TOML
     @test DistSSHRun.unsafe_heterogeneous_argv(false) == String[]
     @test DistSSHRun.unsafe_heterogeneous_argv(true) == ["--unsafe-heterogeneous"]
 
+    _test_sysimage = DistSSHRun.julia_sysimage_path()
     parent = Dict(
         "version" => string(VERSION),
         "commit" => string(Base.GIT_VERSION_INFO.commit),
         "manifest.sha256" => "a"^64,
         "project.sha256" => "b"^64,
         "pkg.DistSSHRun" => "0.1.0",
+        "sysimage" => _test_sysimage,
+        "sysimage.default" => "true",
     )
     worker = Dict(
         "version" => string(VERSION),
@@ -225,8 +228,23 @@ using TOML
         "manifest.sha256" => "a"^64,
         "project.sha256" => "b"^64,
         "pkg.DistSSHRun" => "0.1.0",
+        "sysimage" => _test_sysimage,
+        "sysimage.default" => "true",
     )
     @test isempty(DistSSHRun.identity_mismatches(parent, worker))
+
+    @test isempty(
+        DistSSHRun.identity_mismatches(
+            merge(parent, Dict("sysimage" => "/a/sys.so")),
+            merge(worker, Dict("sysimage" => "/b/sys.so")),
+        ),
+    )
+
+    custom_sys = DistSSHRun.identity_mismatches(
+        merge(parent, Dict("sysimage" => "/opt/custom/sys.so", "sysimage.default" => "false")),
+        merge(worker, Dict("sysimage" => "/home/worker/sys.so", "sysimage.default" => "true")),
+    )
+    @test any(occursin("julia sysimage", l) for l in custom_sys)
 
     sha_miss = DistSSHRun.identity_mismatches(
         parent,
@@ -351,14 +369,14 @@ using TOML
 
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"VerifyGate\"\n")
-        write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+        _sync_test_project_manifest!(proj)
         ident = DistSSHRun.run_identity(proj)
         @test !isempty(ident["manifest.sha256"])
     end
 
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"ShaJob\"\n")
-        write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+        _sync_test_project_manifest!(proj)
         ident = DistSSHRun.run_identity(proj)
         @test ident["manifest.sha256"] == DistSSHRun.file_sha256(joinpath(proj, "Manifest.toml"))
         @test ident["project.sha256"] == DistSSHRun.file_sha256(joinpath(proj, "Project.toml"))
@@ -431,6 +449,22 @@ using TOML
         DistSSHRun.verify_go_slots_match_job!(proj, slots)
     end
 
+    @testset "go parent slot probes sysimage from --julia binary" begin
+        _with_tempdir() do proj
+            write(joinpath(proj, "Project.toml"), "name = \"GoSlotSys\"\n")
+            _sync_test_project_manifest!(proj)
+            bin = DistSSHRun.pin_local_julia(joinpath(Sys.BINDIR, "julia"))
+            local_id = DistSSHRun._go_local_slot_identity(proj, bin)
+            img, def = DistSSHRun._local_julia_sysimage_identity(bin)
+            @test !isempty(local_id["sysimage"])
+            @test local_id["sysimage"] == img
+            @test local_id["sysimage.default"] == def
+            @test isempty(
+                DistSSHRun.identity_mismatches(DistSSHRun.run_identity(proj), local_id),
+            )
+        end
+    end
+
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"VerMan\"\n")
         write(
@@ -497,7 +531,7 @@ using TOML
     @testset "worker snapshot loads SHA without DistSSHRun on worker" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"ShaSnap\"\n")
-            write(joinpath(proj, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(proj)
             worker_mod = Module()
             old = Base.active_project()
             try
@@ -624,5 +658,31 @@ using TOML
         print(got == ref ? "ok" : "fail")
         """
         @test strip(String(read(cmd(nested_preserve_code)))) == "ok"
+    end
+end
+
+@testset "distributed worker snapshot sysimage.default" begin
+    _with_tempdir() do proj
+        write(joinpath(proj, "Project.toml"), "name = \"WorkerDefSys\"\n")
+        _sync_test_project_manifest!(proj)
+        flags = DistSSHRun.worker_exeflag_strings(proj)
+        env = Dict(DistSSHRun.worker_env_pairs(proj))
+        addprocs(1; exeflags = Cmd(flags), env = env)
+        w = only(Distributed.workers())
+        try
+            remotecall_fetch(() -> Core.eval(Main, :(using DistSSHRun)), w)
+            snap_raw = remotecall_fetch(Core.eval, w, Main, DistSSHRun._worker_identity_expr())
+            snap = Dict{String, String}(String(k) => String(v) for (k, v) in pairs(snap_raw))
+            parent_id = DistSSHRun.run_identity(proj)
+            @test snap["sysimage.default"] == "true"
+            parent_alt = Dict{String, String}(parent_id)
+            parent_alt["sysimage"] = "/opt/hostedtoolcache/julia/1.13.4/x64/lib/julia/sys.so"
+            worker_alt = Dict{String, String}(snap)
+            worker_alt["sysimage"] =
+                "/home/dev/.julia/juliaup/julia-1.13.4+0.x64.linux.gnu/lib/julia/sys.so"
+            @test isempty(DistSSHRun.identity_mismatches(parent_alt, worker_alt))
+        finally
+            rmprocs(w; waitfor = 5)
+        end
     end
 end

@@ -1,7 +1,7 @@
 using Test
 
 @testset "paths" begin
-    @testset "resolve_pkg_project_dir skips vendored stubs" begin
+    @testset "resolve_pkg_project_dir matches Base.current_project" begin
         _with_tempdir() do tmp
             app = joinpath(tmp, "App")
             mkpath(app)
@@ -10,7 +10,8 @@ using Test
                 dir = joinpath(app, stub)
                 mkpath(dir)
                 write(joinpath(dir, "Project.toml"), "name = \"$(stub)\"\n")
-                @test DistSSHBase.resolve_pkg_project_dir(dir) == abspath(app)
+                @test DistSSHBase.resolve_pkg_project_dir(dir) == abspath(dir)
+                @test DistSSHBase.current_project_file(dir) == abspath(joinpath(dir, "Project.toml"))
             end
             other = joinpath(app, "Other")
             mkpath(other)
@@ -20,7 +21,15 @@ using Test
             mkpath(lone)
             write(joinpath(lone, "Project.toml"), "name = \"DistSSHRun\"\n")
             @test DistSSHBase.resolve_pkg_project_dir(lone) == abspath(lone)
+            scripts = joinpath(app, "scripts", "deep")
+            mkpath(scripts)
+            @test DistSSHBase.resolve_pkg_project_dir(scripts) == abspath(app)
         end
+    end
+
+    @testset "julia_sysimage_is_default" begin
+        @test DistSSHBase.julia_sysimage_is_default()
+        @test isfile(DistSSHBase.julia_sysimage_path())
     end
 
     @testset "local paths" begin
@@ -54,13 +63,6 @@ using Test
             @test DistSSHBase.project_package_name(tmp) === nothing
             write(joinpath(tmp, "Project.toml"), "name = \"FooBar\"\n")
             @test DistSSHBase.project_package_name(tmp) == "FooBar"
-        end
-        _with_tempdir() do tmp
-            app = joinpath(tmp, "MyApp")
-            scripts = joinpath(app, "scripts", "jobs")
-            mkpath(scripts)
-            write(joinpath(app, "Project.toml"), "name = \"MyApp\"\n")
-            @test DistSSHBase.resolve_pkg_project_dir(scripts) == app
         end
         @test DistSSHBase._path_is_under("/a/b/c", "/a/b")
         @test DistSSHBase._path_is_under("/a/b", "/a/b")

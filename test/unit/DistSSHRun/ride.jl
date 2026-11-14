@@ -568,7 +568,7 @@ using Distributed
                 local_proj = joinpath(tmp, "local")
                 mkpath(local_proj)
                 write(joinpath(local_proj, "Project.toml"), "name = \"RideRoot\"\n")
-                write(joinpath(local_proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+                _sync_test_project_manifest!(local_proj)
                 DistSSHRun.clear_last_ship_record!(local_proj)
                 script = joinpath(local_proj, "job.jl")
                 write(script, "nothing\n")
@@ -580,7 +580,7 @@ using Distributed
                 mkpath(newer)
                 write(joinpath(older, "Project.toml"), "name = \"Old\"\n")
                 write(joinpath(newer, "Project.toml"), "name = \"New\"\n")
-                write(joinpath(newer, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+                _sync_test_project_manifest!(newer)
                 write(
                     joinpath(remote, "runs", snap_id, "run.toml"),
                     DistSSHRun._ship_run_leaf_complete_toml(
