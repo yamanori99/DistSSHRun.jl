@@ -18,7 +18,7 @@ end
 
 # Options that take the next argv word. A word equal to `--isolated` there is a value.
 const _DRIVE_VALUE_FLAGS = (
-    "--workers", "-w", "--julia", "--allow-mismatch",
+    "--workers", "-w", "--julia",
     "--log-dir", "--output-dir", "--package", "--hosts", "--hosts-file",
     "--run-id", "--deploy-root",
 )
@@ -217,8 +217,8 @@ function run_drive_parsed!(
     # `parse_drive_args` is inferred as one NamedTuple whose fields are unions.
     # CLI `drive_main` already opened the frame (`cli=true`). A direct call,
     # including `drive!`, opens it here when none is active (`cli=false`).
-    am = get(parsed, :allow_mismatch, Symbol[])
-    return with_allow_mismatch(am) do
+    uh = get(parsed, :unsafe_heterogeneous, false)
+    return with_unsafe_heterogeneous(uh) do
         return _drive_frame(; cli = false) do
             return Base.invokelatest(
                 _run_drive_parsed_specialized!,
@@ -544,7 +544,7 @@ function _run_drive_parsed_locked!(
         run_id = get(parsed, :run_id, nothing),
         remote_argv = remote_argv,
     )
-    DistSSHRun._require_manifest!(proj_dir)
+    DistSSHRun.assert_controller_manifest_for_environment_verify!(proj_dir)
     # git + cleanup + workers + wait + init + run + collect
     progress_steps = 7
     progress_ok = false

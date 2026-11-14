@@ -41,7 +41,7 @@ function show_go_usage(; io::IO = stdout)
         "  --run-id ID       use runs/<ID>/src under the deploy root",
         "                      (after setup ship-tree + setup instantiate)",
         "  --julia PATH        remote Julia (ENV or auto)",
-        "  --allow-mismatch F  waive julia, distssh, and/or manifest (comma list)",
+        "  --unsafe-heterogeneous  waive Manifest/Project digest checks only (unverified; Julia build and DistSSH* versions must match)",
         "  Remote slots cd to the project root and pin the real julia binary.",
         "  --output-dir PATH   batch root; slots are PATH/<slot>/",
         "  $(KIT_QUIET_FLAG_HELP)",
@@ -99,7 +99,7 @@ function _go_parsed(;
         output_dir,
         julia,
         repeat,
-        allow_mismatch = Symbol[],
+        unsafe_heterogeneous = false,
         run_id = nothing,
         deploy_root = nothing,
     )
@@ -113,7 +113,7 @@ function _go_parsed(;
         output_dir = output_dir,
         julia = julia,
         repeat = repeat,
-        allow_mismatch = allow_mismatch,
+        unsafe_heterogeneous = unsafe_heterogeneous,
         run_id = run_id,
         deploy_root = deploy_root,
     )
@@ -128,7 +128,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
     script_args = String[]
     output_dir = nothing
     julia_exe = nothing
-    allow_mismatch = Symbol[]
+    unsafe_heterogeneous = false
     run_id = nothing
     deploy_root = nothing
     repeat_n::Union{Nothing, Int} = nothing
@@ -170,8 +170,11 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
         elseif arg == "--"
             options_done = true
             cli_consume!(c)
+        elseif arg == "--unsafe-heterogeneous"
+            unsafe_heterogeneous = true
+            cli_consume!(c)
         elseif arg == "--allow-mismatch"
-            merge_allow_mismatch!(allow_mismatch, cli_take_value!(c, arg))
+            reject_removed_allow_mismatch_flag!(arg)
         elseif arg == "--repeat"
             repeat_n === nothing || throw(ArgumentError("go: --repeat given more than once"))
             repeat_n = _go_parse_repeat(cli_take_value!(c, arg))
@@ -208,7 +211,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
                 output_dir = output_dir,
                 julia = julia_exe,
                 repeat = repeat_n,
-                allow_mismatch = allow_mismatch,
+                unsafe_heterogeneous = unsafe_heterogeneous,
                 run_id = run_id,
                 deploy_root = deploy_root,
             )
@@ -252,7 +255,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
         output_dir = output_dir,
         julia = julia_exe,
         repeat = repeat_n,
-        allow_mismatch = allow_mismatch,
+        unsafe_heterogeneous = unsafe_heterogeneous,
         run_id = run_id,
         deploy_root = deploy_root,
     )

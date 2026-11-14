@@ -209,154 +209,174 @@ using TOML
     @test unset_at !== nothing && set_at !== nothing && first(unset_at) < first(set_at)
     @test occursin("OMP_NUM_THREADS=", capped)
 
-    @test DistSSHRun.ALLOW_MISMATCH_FIELDS == (:julia, :distssh, :manifest)
-    @test DistSSHRun.parse_allow_mismatch("julia,distssh") == [:julia, :distssh]
-    @test DistSSHRun.parse_allow_mismatch(" manifest ") == [:manifest]
-    @test_throws ArgumentError DistSSHRun.parse_allow_mismatch("cpu")
-    dest = Symbol[]
-    DistSSHRun.merge_allow_mismatch!(dest, "julia")
-    DistSSHRun.merge_allow_mismatch!(dest, "julia,manifest")
-    @test dest == [:julia, :manifest]
+    @test DistSSHRun.unsafe_heterogeneous_argv(false) == String[]
+    @test DistSSHRun.unsafe_heterogeneous_argv(true) == ["--unsafe-heterogeneous"]
 
     parent = Dict(
-        "version" => "1.13.0",
-        "commit" => "abc",
-        "manifest" => "/job/Manifest.toml",
+        "version" => string(VERSION),
+        "commit" => string(Base.GIT_VERSION_INFO.commit),
+        "manifest.sha256" => "a"^64,
+        "project.sha256" => "b"^64,
         "pkg.DistSSHRun" => "0.1.0",
     )
     worker = Dict(
-        "version" => "1.13.1",
-        "commit" => "abc",
-        "manifest" => "/job/Manifest.toml",
+        "version" => string(VERSION),
+        "commit" => string(Base.GIT_VERSION_INFO.commit),
+        "manifest.sha256" => "a"^64,
+        "project.sha256" => "b"^64,
         "pkg.DistSSHRun" => "0.1.0",
     )
-    lines = DistSSHRun.identity_mismatches(
-        parent, worker;
-        shipped_manifest = "/job/Manifest.toml",
-    )
-    @test any(occursin("julia version", l) for l in lines)
-    allowed = DistSSHRun.identity_mismatches(
-        parent, worker;
-        allow = [:julia],
-        shipped_manifest = "/job/Manifest.toml",
-    )
-    @test isempty(allowed)
+    @test isempty(DistSSHRun.identity_mismatches(parent, worker))
 
-    @test DistSSHRun.allow_mismatch_argv([:julia, :manifest]) ==
-        ["--allow-mismatch", "julia,manifest"]
-
-    missing_man = Dict(
-        "version" => "1.13.1",
-        "commit" => "abc",
-        "manifest" => "",
-        "pkg.DistSSHRun" => "0.1.0",
-    )
-    miss = DistSSHRun.identity_mismatches(
-        parent, missing_man;
-        shipped_manifest = "/remote/job/Manifest.toml",
-    )
-    @test any(occursin("manifest missing", l) for l in miss)
-    waived_man = DistSSHRun.identity_mismatches(
-        parent, missing_man;
-        allow = [:manifest],
-        shipped_manifest = "/remote/job/Manifest.toml",
-    )
-    @test !any(occursin("manifest", l) for l in waived_man)
-
-    julia_man = DistSSHRun.identity_mismatches(
+    sha_miss = DistSSHRun.identity_mismatches(
         parent,
         Dict(
-            "version" => "1.13.1",
-            "commit" => "abc",
-            "manifest" => "/job/JuliaManifest.toml",
-            "pkg.DistSSHRun" => "0.1.0",
-        );
-        shipped_manifest = "/job/Manifest.toml",
-    )
-    @test any(occursin("manifest path", l) for l in julia_man)
-
-    none = DistSSHRun.identity_mismatches(
-        Dict(
-            "version" => "1.13.1",
-            "commit" => "abc",
-            "manifest" => "",
-            "pkg.DistSSHRun" => "0.1.0",
-        ),
-        Dict(
-            "version" => "1.13.1",
-            "commit" => "abc",
-            "manifest" => "",
-            "pkg.DistSSHRun" => "0.1.0",
-        );
-        shipped_manifest = "",
-    )
-    @test !any(occursin("manifest", l) for l in none)
-
-    commit_only = DistSSHRun.identity_mismatches(
-        Dict(
-            "version" => "1.13.1",
-            "commit" => "abc",
-            "manifest" => "",
-            "pkg.DistSSHRun" => "0.1.0",
-        ),
-        Dict(
-            "version" => "1.13.1",
-            "commit" => "def",
-            "manifest" => "",
-            "pkg.DistSSHRun" => "0.1.0",
+            "version" => string(VERSION),
+            "commit" => string(Base.GIT_VERSION_INFO.commit),
+            "manifest.sha256" => "c"^64,
+            "project.sha256" => "b"^64,
         ),
     )
-    @test commit_only == ["julia commit parent=abc worker=def"]
-    waived_commit = DistSSHRun.identity_mismatches(
-        Dict("version" => "1.13.1", "commit" => "abc", "manifest" => ""),
-        Dict("version" => "1.13.1", "commit" => "def", "manifest" => "");
-        allow = [:julia],
-    )
-    @test isempty(waived_commit)
+    @test any(occursin("manifest.sha256", l) for l in sha_miss)
 
-    missing_pkg = DistSSHRun.identity_mismatches(
-        parent,
+    same_path_diff = DistSSHRun.identity_mismatches(
         Dict(
-            "version" => "1.13.0",
-            "commit" => "abc",
+            "version" => "1",
+            "commit" => "a",
+            "manifest.sha256" => "d"^64,
+            "project.sha256" => "e"^64,
+        ),
+        Dict(
+            "version" => "1",
+            "commit" => "a",
             "manifest" => "/job/Manifest.toml",
-        );
-        shipped_manifest = "/job/Manifest.toml",
-    )
-    @test !any(startswith(l, "pkg.") for l in missing_pkg)
-    extra_pkg = DistSSHRun.identity_mismatches(
-        Dict("version" => "1.13.0", "commit" => "abc", "manifest" => ""),
-        Dict(
-            "version" => "1.13.0",
-            "commit" => "abc",
-            "manifest" => "",
-            "pkg.DistSSHQueue" => "0.9.0",
+            "manifest.sha256" => "f"^64,
+            "project.sha256" => "e"^64,
         ),
     )
-    @test isempty(extra_pkg)
-    paths = DistSSHRun.identity_mismatches(
-        Dict("version" => "1", "commit" => "a", "julia" => "/a/julia", "manifest" => ""),
-        Dict("version" => "1", "commit" => "a", "julia" => "/b/julia", "manifest" => ""),
+    want_d = "d"^64
+    @test any(occursin("manifest.sha256 parent=$(want_d)", l) for l in same_path_diff)
+
+    missing_snap = DistSSHRun.identity_mismatches(
+        parent,
+        Dict("version" => "1", "commit" => "a", "manifest.sha256" => "", "project.sha256" => ""),
     )
-    @test isempty(paths)
-    same_shipped = DistSSHRun.identity_mismatches(
-        Dict("version" => "1", "commit" => "a", "manifest" => "/parent/Manifest.toml"),
-        Dict("version" => "1", "commit" => "a", "manifest" => "/remote/Manifest.toml");
-        shipped_manifest = "/remote/Manifest.toml",
+    @test any(occursin("manifest.sha256 missing", l) for l in missing_snap)
+
+    @test isempty(DistSSHRun.identity_mismatches(parent, worker; unsafe_heterogeneous = true))
+
+    julia_lines = DistSSHRun.identity_mismatches(
+        parent,
+        Dict(
+            "version" => "1.9.0",
+            "commit" => parent["commit"],
+            "manifest.sha256" => parent["manifest.sha256"],
+            "project.sha256" => parent["project.sha256"],
+        ),
     )
-    @test !any(occursin("manifest", l) for l in same_shipped)
-    overridden = DistSSHRun.identity_mismatches(
-        Dict("version" => "1", "commit" => "a", "manifest" => "/parent/Manifest.toml"),
-        Dict("version" => "1", "commit" => "a", "manifest" => "/parent/Manifest.toml");
-        shipped_manifest = "/shipped/Manifest.toml",
+    @test any(occursin("julia version", l) for l in julia_lines)
+
+    combo_mismatch = DistSSHRun.identity_mismatches(
+        parent,
+        Dict(
+            "version" => "1.9.0",
+            "commit" => "0000000000000000000000000000000000000000",
+            "manifest.sha256" => "c"^64,
+            "project.sha256" => parent["project.sha256"],
+        ),
     )
-    @test overridden == ["manifest path parent=/shipped/Manifest.toml worker=/parent/Manifest.toml"]
-    unknown_allow = DistSSHRun.identity_mismatches(
-        parent, worker;
-        allow = [:cpu],
-        shipped_manifest = "/job/Manifest.toml",
+    @test any(occursin("julia version", l) for l in combo_mismatch)
+    @test any(occursin("commit", l) for l in combo_mismatch)
+    @test any(occursin("manifest.sha256", l) for l in combo_mismatch)
+    unsafe_combo = DistSSHRun.identity_mismatches(
+        parent,
+        Dict(
+            "version" => "1.9.0",
+            "commit" => "0000000000000000000000000000000000000000",
+            "manifest.sha256" => "c"^64,
+            "project.sha256" => parent["project.sha256"],
+        ),
+        unsafe_heterogeneous = true,
     )
-    @test any(occursin("julia version", l) for l in unknown_allow)
+    @test any(occursin("julia version", l) for l in unsafe_combo)
+    @test !any(occursin("manifest.sha256", l) for l in unsafe_combo)
+
+    empty_commit = DistSSHRun.identity_mismatches(
+        parent,
+        Dict(
+            "version" => parent["version"],
+            "commit" => "",
+            "manifest.sha256" => parent["manifest.sha256"],
+            "project.sha256" => parent["project.sha256"],
+        ),
+    )
+    @test any(occursin("cannot determine the Julia build", l) for l in empty_commit)
+    @test !isempty(
+        DistSSHRun.identity_mismatches(
+            parent,
+            Dict(
+                "version" => parent["version"],
+                "commit" => "",
+                "manifest.sha256" => parent["manifest.sha256"],
+                "project.sha256" => parent["project.sha256"],
+            ),
+            unsafe_heterogeneous = true,
+        ),
+    )
+
+    pkg_miss = DistSSHRun.identity_mismatches(
+        parent,
+        Dict(
+            "version" => parent["version"],
+            "commit" => parent["commit"],
+            "manifest.sha256" => parent["manifest.sha256"],
+            "project.sha256" => parent["project.sha256"],
+            "pkg.DistSSHRun" => "9.9.9",
+        ),
+    )
+    @test any(occursin("pkg.DistSSHRun", l) for l in pkg_miss)
+    @test !isempty(
+        DistSSHRun.identity_mismatches(
+            parent,
+            Dict(
+                "version" => parent["version"],
+                "commit" => parent["commit"],
+                "manifest.sha256" => parent["manifest.sha256"],
+                "project.sha256" => parent["project.sha256"],
+                "pkg.DistSSHRun" => "9.9.9",
+            ),
+            unsafe_heterogeneous = true,
+        ),
+    )
+
+    _with_tempdir() do proj
+        write(joinpath(proj, "Project.toml"), "name = \"VerifyGate\"\n")
+        write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+        ident = DistSSHRun.run_identity(proj)
+        @test !isempty(ident["manifest.sha256"])
+    end
+
+    _with_tempdir() do proj
+        write(joinpath(proj, "Project.toml"), "name = \"ShaJob\"\n")
+        write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+        ident = DistSSHRun.run_identity(proj)
+        @test ident["manifest.sha256"] == DistSSHRun.file_sha256(joinpath(proj, "Manifest.toml"))
+        @test ident["project.sha256"] == DistSSHRun.file_sha256(joinpath(proj, "Project.toml"))
+        alt = joinpath(proj, "Manifest.toml")
+        write(alt, "manifest_format = \"2.0\"\n# stale\n")
+        worker_sha = DistSSHRun.file_sha256(alt)
+        @test worker_sha != ident["manifest.sha256"]
+        lines = DistSSHRun.identity_mismatches(
+            ident,
+            Dict(
+                "version" => ident["version"],
+                "commit" => ident["commit"],
+                "manifest.sha256" => worker_sha,
+                "project.sha256" => ident["project.sha256"],
+            ),
+        )
+        @test any(occursin("manifest.sha256", l) for l in lines)
+    end
 
     pin = DistSSHRun.pin_local_julia(nothing)
     @test isabspath(pin)
@@ -402,6 +422,8 @@ using TOML
             @test snap isa AbstractDict
             @test snap["pkg.DistSSHRun"] == "0.1.16"
             @test snap["pkg.DistSSHKit"] == "0.9.0"
+            rid = DistSSHRun.run_identity(proj)
+            @test snap["manifest.sha256"] == rid["manifest.sha256"]
         finally
             old === nothing || Pkg.activate(old; io = devnull)
         end
@@ -440,6 +462,7 @@ using TOML
         @test DistSSHRun._existing_project_manifest(proj) == vman
         ident = DistSSHRun.run_identity(proj)
         @test ident["manifest"] == vman
+        @test ident["manifest.sha256"] == DistSSHRun.file_sha256(vman)
         @test ident["pkg.DistSSHRun"] == "0.1.16"
         @test ident["version"] == string(VERSION)
         @test ident["commit"] == string(Base.GIT_VERSION_INFO.commit)
@@ -450,9 +473,42 @@ using TOML
             Pkg.activate(proj; io = devnull)
             snap = Core.eval(Main, DistSSHRun._worker_identity_expr())
             @test snap["manifest"] == vman
+            @test snap["manifest.sha256"] == ident["manifest.sha256"]
             @test snap["pkg.DistSSHRun"] == "0.1.16"
         finally
             old === nothing || Pkg.activate(old; io = devnull)
+        end
+    end
+
+    @testset "run_identity uses DistSSHBase manifest_path" begin
+        _with_tempdir() do root
+            julia_only = joinpath(root, "julia-only")
+            mkpath(julia_only)
+            write(joinpath(julia_only, "JuliaProject.toml"), "name = \"JuliaOnly\"\n[deps]\n")
+            lock = joinpath(julia_only, "JuliaManifest.toml")
+            write(lock, "# julia lock\n")
+            @test DistSSHRun._existing_project_manifest(julia_only) == lock
+            ident = DistSSHRun.run_identity(julia_only)
+            @test ident["manifest"] == lock
+            @test ident["manifest.sha256"] == DistSSHRun.file_sha256(lock)
+        end
+    end
+
+    @testset "worker snapshot loads SHA without DistSSHRun on worker" begin
+        _with_tempdir() do proj
+            write(joinpath(proj, "Project.toml"), "name = \"ShaSnap\"\n")
+            write(joinpath(proj, "Manifest.toml"), "# lock\n")
+            worker_mod = Module()
+            old = Base.active_project()
+            try
+                Pkg.activate(proj; io = devnull)
+                snap = Core.eval(worker_mod, DistSSHRun._worker_identity_expr())
+                @test snap isa AbstractDict
+                @test !isempty(snap["manifest.sha256"])
+                @test !isdefined(worker_mod, :DistSSHRun)
+            finally
+                old === nothing || Pkg.activate(old; io = devnull)
+            end
         end
     end
 

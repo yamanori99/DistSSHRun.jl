@@ -29,6 +29,7 @@ end
 
 @testset "drive SIGINT" begin
     _mktemp_host() do proj
+        _write_host_project!(proj, "DriveSigint")
         marker = joinpath(proj, "main_started")
         restore = joinpath(proj, "restored.txt")
         cmd = _sigint_child(proj; marker = marker, restore = restore)
@@ -61,6 +62,7 @@ end
 
 @testset "drive second SIGINT skips cleanup" begin
     _mktemp_host() do proj
+        _write_host_project!(proj, "DriveSigint2")
         marker = joinpath(proj, "main_started")
         restore = joinpath(proj, "restored.txt")
         cmd = _sigint_child(proj; marker = marker, restore = restore)
@@ -114,6 +116,7 @@ end
         grace = DistSSHRun._resolve_interrupt_grace(nothing)
         budget = grace + 11
         _mktemp_host() do proj
+            _write_host_project!(proj, "DriveSigintPmap")
             marker = joinpath(proj, "main_started")
             in_pmap = joinpath(proj, "pmap_entered")
             restore = joinpath(proj, "restored.txt")

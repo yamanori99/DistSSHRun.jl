@@ -86,7 +86,7 @@ function parse_drive_args(args::Vector{String})
     parent_workers = 0
     default_workers = nothing
     julia_exe = nothing
-    allow_mismatch = Symbol[]
+    unsafe_heterogeneous = false
     skip_hash_check = true  # default: no git parity; --require-git turns checks on
     enable_log = true
     log_dir = nothing
@@ -154,9 +154,11 @@ function parse_drive_args(args::Vector{String})
         elseif arg == "--julia" && i < length(args)
             julia_exe = args[i + 1]
             i += 2
-        elseif arg == "--allow-mismatch" && i < length(args)
-            merge_allow_mismatch!(allow_mismatch, args[i + 1])
-            i += 2
+        elseif arg == "--unsafe-heterogeneous"
+            unsafe_heterogeneous = true
+            i += 1
+        elseif arg == "--allow-mismatch"
+            reject_removed_allow_mismatch_flag!(arg)
         elseif arg in (
                 "--sync",
                 "--git-sync",
@@ -316,7 +318,7 @@ function parse_drive_args(args::Vector{String})
                 show_version = cli_session.show_version,
                 cli_session = cli_session,
                 hint_surface = :cli,
-                allow_mismatch = allow_mismatch,
+                unsafe_heterogeneous = unsafe_heterogeneous,
                 run_id = run_id,
                 deploy_root = deploy_root,
                 isolated = isolated,
@@ -344,7 +346,7 @@ function parse_drive_args(args::Vector{String})
                 show_version = cli_session.show_version,
                 cli_session = cli_session,
                 hint_surface = :cli,
-                allow_mismatch = allow_mismatch,
+                unsafe_heterogeneous = unsafe_heterogeneous,
                 run_id = nothing,
                 deploy_root = nothing,
                 isolated = false,
@@ -433,7 +435,7 @@ function parse_drive_args(args::Vector{String})
         show_version = cli_session.show_version,
         cli_session = cli_session,
         hint_surface = :cli,
-        allow_mismatch = allow_mismatch,
+        unsafe_heterogeneous = unsafe_heterogeneous,
         run_id = run_id,
         deploy_root = deploy_root,
         isolated = isolated,
@@ -485,7 +487,7 @@ function show_drive_usage(; io::IO = stdout)
         "  --isolated          run the driver in a child process (default: this process)",
         "  $(DRIVE_UNSAFE_MASTER_SILENCE_EXIT_FLAG_HELP)",
         "  --julia PATH        remote Julia",
-        "  --allow-mismatch F  waive julia, distssh, and/or manifest (comma list)",
+        "  --unsafe-heterogeneous  waive Manifest/Project digest checks only (unverified; Julia build and DistSSH* versions must match)",
         "  SSH workers: project-root cwd, bind 127.0.0.1, tunnel unless DISTSSH_SSH_TUNNEL=0.",
         "  --no-log            skip drive_*.log",
         "  $(KIT_QUIET_FLAG_HELP)",

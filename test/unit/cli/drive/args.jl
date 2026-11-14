@@ -67,6 +67,14 @@ using Test
             child_args = DistSSHRun._drive_isolated_child_args(quieted)
             @test child_args == ["--output-dir", "--quiet", "result.jl", "driver.jl"]
             @test !DistSSHRun.parse_drive_args(child_args).isolated
+            uh_isolated = [
+                "--unsafe-heterogeneous", "--isolated", "parent:1", "job.jl",
+            ]
+            _, uh_peeled = DistSSHRun.peel_shared_cli_flags(uh_isolated)
+            @test DistSSHRun._peeled_isolated_option(uh_peeled) !== nothing
+            uh_child = DistSSHRun._drive_isolated_child_args(uh_isolated)
+            @test uh_child == ["--unsafe-heterogeneous", "parent:1", "job.jl"]
+            @test !DistSSHRun.parse_drive_args(uh_child).isolated
             rooted = DistSSHRun._drive_isolated_cmd(
                 ["--isolated", "s.jl"]; project_root = "/jobs/app",
             )
@@ -172,9 +180,20 @@ using Test
             let r = parse_drive_args(["--julia", "auto", "s.jl"])
                 @test r.julia === nothing
             end
-            let r = parse_drive_args(["--allow-mismatch", "manifest", "s.jl"])
-                @test r.allow_mismatch == [:manifest]
+            let r = parse_drive_args(["--unsafe-heterogeneous", "s.jl"])
+                @test r.unsafe_heterogeneous
             end
+            err = try
+                parse_drive_args(["--allow-mismatch", "s.jl"])
+                nothing
+            catch e
+                e
+            end
+            err isa ArgumentError || error("expected ArgumentError")
+            @test occursin(
+                "removed; use --unsafe-heterogeneous (Julia/DistSSH* can no longer be waived)",
+                err.msg,
+            )
             let r = parse_drive_args(["--no-log", "s.jl"])
                 @test r.enable_log == false
             end
@@ -289,7 +308,7 @@ using Test
         @test occursin("off by default", lowercase(txt))
         @test occursin("parent:N", txt)
         @test occursin("progress DIR", txt)
-        @test occursin("--allow-mismatch", txt)
+        @test occursin("--unsafe-heterogeneous", txt)
         @test !occursin(r"--parent(?!-gb)", txt)
         @test !occursin("--local", txt)
         @test !occursin("--mem-headroom", txt)

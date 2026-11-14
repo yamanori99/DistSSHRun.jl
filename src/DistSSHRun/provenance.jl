@@ -11,6 +11,8 @@ const _PROVENANCE_PROJECT_SNAP = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 const _PROVENANCE_SOURCE_SNAP = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 const _PROVENANCE_GIT_TOOL = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 const _PROVENANCE_GO = Pair{String, String}[]
+const _PROVENANCE_UNSAFE = Ref{Vector{String}}(String[])
+const _PROVENANCE_ENVIRONMENT = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 
 const _GO_SLOT_PROVENANCE_NAME = "provenance-slot.toml"
 const _GO_SLOT_LOADER_NAME = "provenance-slot.jl"
@@ -179,6 +181,37 @@ function _process_snapshot_expr()
     end
 end
 
+function _record_environment_verification!(
+        status::AbstractString,
+        reason::Union{Nothing, AbstractString} = nothing,
+    )
+    d = Dict{String, Any}("verification" => String(status))
+    if reason isa AbstractString && !isempty(strip(reason))
+        d["reason"] = String(strip(reason))
+    end
+    lock(_PROVENANCE_LOCK) do
+        _PROVENANCE_ENVIRONMENT[] = d
+    end
+    return nothing
+end
+
+function _record_environment_verified!()
+    return _record_environment_verification!("verified")
+end
+
+function _record_environment_unverified!(reason::AbstractString)
+    return _record_environment_verification!("unverified", reason)
+end
+
+function _note_provenance_unsafe!(label::AbstractString)
+    s = strip(String(label))
+    isempty(s) && return nothing
+    lock(_PROVENANCE_LOCK) do
+        s in _PROVENANCE_UNSAFE[] || push!(_PROVENANCE_UNSAFE[], s)
+    end
+    return nothing
+end
+
 function _reset_run_provenance!(project::AbstractString)
     proj = canonical_local_path(String(project))
     _PROVENANCE_PROJECT[] = proj
@@ -186,6 +219,10 @@ function _reset_run_provenance!(project::AbstractString)
     _PROVENANCE_HEARTBEAT[] = nothing
     lock(_PROVENANCE_LOCK) do
         empty!(_PROVENANCE_GO)
+        if !unsafe_heterogeneous_active()
+            empty!(_PROVENANCE_UNSAFE[])
+        end
+        _PROVENANCE_ENVIRONMENT[] = nothing
     end
     # Taken now. A long run must not record edits made while it was going.
     # A bad Project.toml, an unreadable manifest, or a git status that is not
@@ -923,6 +960,11 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     end
     isempty(selection) || (data["selection"] = selection)
     deploy_rec !== nothing && (data["deploy"] = deploy_rec)
+    unsafe, env_tbl = lock(_PROVENANCE_LOCK) do
+        (copy(_PROVENANCE_UNSAFE[]), _PROVENANCE_ENVIRONMENT[])
+    end
+    isempty(unsafe) || (data["unsafe"] = unsafe)
+    env_tbl isa AbstractDict && !isempty(env_tbl) && (data["environment"] = copy(env_tbl))
     hb = started ? _PROVENANCE_HEARTBEAT[] : nothing
     hb !== nothing && (data["heartbeat"] = hb)
     return data

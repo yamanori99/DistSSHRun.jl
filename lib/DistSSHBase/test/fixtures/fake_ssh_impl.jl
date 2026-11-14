@@ -165,6 +165,20 @@ function main()
         exit(0)
     end
 
+    if occursin("manifest.sha256=", script) && occursin("env_sha256", script)
+        v = get(ENV, "DISTSSH_TEST_RUN_IDENTITY_VERSION", string(VERSION))
+        c = get(ENV, "DISTSSH_TEST_RUN_IDENTITY_COMMIT", string(Base.GIT_VERSION_INFO.commit))
+        man_sha = get(ENV, "DISTSSH_TEST_RUN_IDENTITY_MAN_SHA", "")
+        proj_sha = get(ENV, "DISTSSH_TEST_RUN_IDENTITY_PROJ_SHA", "")
+        print("version=", v, '\n')
+        print("commit=", c, '\n')
+        print("manifest=\n")
+        print("manifest.sha256=", man_sha, '\n')
+        print("project=\n")
+        print("project.sha256=", proj_sha, '\n')
+        exit(0)
+    end
+
     if occursin("--version", script)
         ver = strip(get(ENV, "DISTSSH_TEST_JULIA_VERSION", ""))
         println(isempty(ver) ? "julia version $VERSION" : ver)

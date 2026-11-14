@@ -10,6 +10,7 @@ using Test
     env = _child_julia_env()
 
     _with_tempdir() do tmp
+        _write_host_project!(tmp, "DemosWithoutKit")
         demo_dir = joinpath(kit_root, "demos", "without_kit")
         for name in ("pi_echo.jl", "pi_file.jl", "pipeline_pi.jl")
             cp(joinpath(demo_dir, name), joinpath(tmp, name); force = true)

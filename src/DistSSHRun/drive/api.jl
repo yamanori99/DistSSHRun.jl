@@ -62,11 +62,13 @@ function drive!(
         require_all_hosts::Bool = true,
         worker_include::Bool = false,
         sync_script::Union{Nothing, Bool} = nothing,
-        allow_mismatch = Symbol[],
+        unsafe_heterogeneous = false,
         allow_external_symlinks::Bool = false,
+        allow_mismatch = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
         unsafe_master_silence_exit::Union{Nothing, Bool} = nothing,
     )::DriveResult
+    _reject_removed_allow_mismatch!(allow_mismatch)
     _reject_removed_drive_worker_include_kw!(sync_script)
     _reject_run_transfer_kw!("drive!", sync; surface = hint_surface(session))
     allow_external_symlinks &&
@@ -97,7 +99,7 @@ function drive!(
                         julia = julia,
                         require_all_hosts = require_all_hosts,
                         worker_include = worker_include,
-                        allow_mismatch = allow_mismatch,
+                        unsafe_heterogeneous = unsafe_heterogeneous,
                         run_id = run_id,
                         unsafe_master_silence_exit = unsafe_master_silence_exit,
                     )

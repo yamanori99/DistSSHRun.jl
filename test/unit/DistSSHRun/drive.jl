@@ -842,6 +842,7 @@ end
         planned = hosts_of(["h1", "h2", "h1"])
 
         _with_tempdir() do tmp
+            _write_host_project!(tmp, "DriveKitHosts213")
             out = joinpath(tmp, "out")
             log = joinpath(tmp, "log")
             mkpath(out)

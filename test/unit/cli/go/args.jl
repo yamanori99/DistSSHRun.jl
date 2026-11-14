@@ -73,10 +73,20 @@ using Test
         let r = parse_go_args(["--julia", "auto", "job.jl"])
             @test r.julia === nothing
         end
-        let r = parse_go_args(["--allow-mismatch", "julia,distssh", "parent:1", "job.jl"])
-            @test r.allow_mismatch == [:julia, :distssh]
+        let r = parse_go_args(["--unsafe-heterogeneous", "parent:1", "job.jl"])
+            @test r.unsafe_heterogeneous
         end
-        @test_throws ArgumentError parse_go_args(["--allow-mismatch", "cpu", "job.jl"])
+        err = try
+            parse_go_args(["--allow-mismatch", "julia", "job.jl"])
+            nothing
+        catch e
+            e
+        end
+        err isa ArgumentError || error("expected ArgumentError")
+        @test occursin(
+            "removed; use --unsafe-heterogeneous (Julia/DistSSH* can no longer be waived)",
+            err.msg,
+        )
         withenv("JULIA_DISTRIBUTED_EXE" => "/env/julia") do
             let r = parse_go_args(["job.jl"])
                 @test r.julia == "/env/julia"
@@ -230,7 +240,7 @@ using Test
         @test occursin("runs/<ID>/src", txt)
         @test occursin("--hosts", txt)
         @test occursin("--repeat", txt)
-        @test occursin("--allow-mismatch", txt)
+        @test occursin("--unsafe-heterogeneous", txt)
         @test occursin("parent", txt)
         @test occursin("progress DIR", txt)
         @test occursin("slot pull-back uses Tar", txt)

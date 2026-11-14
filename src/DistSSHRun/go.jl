@@ -1000,10 +1000,10 @@ selected project directory. `run_id` also skips the in-tree
 `julia` sets the Julia binary for each slot (`nothing` / `"auto"` → detect;
 same as CLI `--julia`).
 
-`allow_mismatch` (CLI `--allow-mismatch`) waives Julia version / commit,
-DistSSH* Manifest versions, and/or Manifest path when a slot does not match
-the job tree. Default is to error. Same tokens as `drive` / `ride`:
-`julia`, `distssh`, `manifest`.
+`unsafe_heterogeneous` (CLI `--unsafe-heterogeneous`) waives only Manifest and
+Project byte digest checks across slots (recorded as unverified). Julia build
+and DistSSH* Manifest version strings must still match. Digest comparison is
+byte-exact (CRLF differences count).
 
 When `workers` is empty and `hosts_file` is omitted, `DISTSSH_HOSTS_FILE`
 is still read (API `go!("job.jl")`). Non-empty `workers` (CLI
@@ -1034,11 +1034,13 @@ function go!(
         hint_surface::Symbol = :api,
         original_args::Vector{String} = String[],
         repeat::Union{Nothing, Integer} = nothing,
-        allow_mismatch = Symbol[],
+        unsafe_heterogeneous = false,
         run_id::Union{Nothing, AbstractString} = nothing,
         sync::Union{Symbol, Bool, Nothing} = nothing,
         allow_external_symlinks::Bool = false,
+        allow_mismatch = nothing,
     )::GoResult
+    _reject_removed_allow_mismatch!(allow_mismatch)
     _reject_run_transfer_kw!("go!", sync; surface = hint_surface)
     allow_external_symlinks &&
         _reject_run_transfer_cli!(hint_surface === :cli ? "go" : "go", "--allow-external-symlinks")
@@ -1067,7 +1069,7 @@ function go!(
         _clear_active_deploy_record!()
         warn_project_sshflags(proj)
         _ensure_kit_run_dir!(:go, script_path; project = proj)
-        return with_allow_mismatch(allow_mismatch) do
+        return with_unsafe_heterogeneous(unsafe_heterogeneous) do
             return _go_run!(
                 script_path,
                 proj,
@@ -1143,7 +1145,7 @@ function _go_run!(
             )
         )
     end
-    _require_manifest!(proj)
+    assert_controller_manifest_for_environment_verify!(proj)
     batch_dir = if output_dir !== nothing
         _prepare_output_dir!(
             output_dir;
@@ -1243,7 +1245,6 @@ function _go_run!(
             slots;
             remote_root = run_rr,
             julia = julia,
-            allow = _ALLOW_MISMATCH[],
         )
 
         n_slots > 0 && _kit_progress_mark!("run")

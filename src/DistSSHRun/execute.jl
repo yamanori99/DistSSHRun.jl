@@ -22,7 +22,7 @@ const _EXECUTE_DETACHED_KW = Set{Symbol}(
         :job_id,
         :worker_include,
         :spi_check,
-        :allow_mismatch,
+        :unsafe_heterogeneous,
         :allow_external_symlinks,
         :run_id,
     )
@@ -219,8 +219,8 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
         :quiet => session.quiet,
         :verbosity => session.verbosity,
     )
-    am = get(parsed, :allow_mismatch, Symbol[])
-    isempty(am) || (kw[:allow_mismatch] = am)
+    uh = get(parsed, :unsafe_heterogeneous, false)
+    uh && (kw[:unsafe_heterogeneous] = true)
     snap0 = get(parsed, :run_id, nothing)
     snap0 === nothing || (kw[:run_id] = snap0)
     dr0 = get(parsed, :deploy_root, nothing)
@@ -447,7 +447,7 @@ tree has a `Project.toml`. The job must list DistSSHKit or DistSSHRun in
 `[deps]`; otherwise this throws instead of using serve's active project.
 Keywords are then an allow-list (unknown names throw):
 `output_dir`, `args`, `project`, `sync`, `julia`, `quiet`, `verbosity`, `yes`,
-`remote`, `hosts_file`, `job_id`, `source`, `allow_mismatch`, and drive-only `log_dir`,
+`remote`, `hosts_file`, `job_id`, `source`, `unsafe_heterogeneous`, and drive-only `log_dir`,
 `enable_log`, `package`, `require_all_hosts`, `skip_hash_check`,
 `workers`, `worker_include`,
 `allow_external_symlinks`, `dir`, `threads`, `env_allow`, and `env`.
@@ -769,7 +769,8 @@ function _execute_detached!(
         _reject_removed_drive_worker_include_kw!(true)
     worker_include = get(kwargs, :worker_include, false)
     spi_check = get(kwargs, :spi_check, false)
-    allow_mismatch = get(kwargs, :allow_mismatch, Symbol[])
+    unsafe_heterogeneous = get(kwargs, :unsafe_heterogeneous, false)
+    _reject_removed_allow_mismatch!(get(kwargs, :allow_mismatch, nothing))
     allow_external_symlinks = get(kwargs, :allow_external_symlinks, false)
     run_id = get(kwargs, :run_id, nothing)
     if run_id !== nothing
@@ -850,7 +851,7 @@ function _execute_detached!(
         repeat = repeat,
         worker_include = worker_include,
         spi_check = spi_check,
-        allow_mismatch = allow_mismatch,
+        unsafe_heterogeneous = unsafe_heterogeneous,
         allow_external_symlinks = allow_external_symlinks === true,
         run_id = run_id,
         remote = remote,
@@ -1933,14 +1934,14 @@ function _execute_detached_argv(
         repeat = nothing,
         worker_include::Bool = false,
         spi_check::Bool = false,
-        allow_mismatch = Symbol[],
+        unsafe_heterogeneous::Bool = false,
         allow_external_symlinks::Bool = false,
         run_id::Union{Nothing, AbstractString} = nothing,
         remote::Union{Nothing, AbstractString} = nothing,
     )::Vector{String}
     argv = String[String(kind)]
     push!(argv, "-y")
-    append!(argv, allow_mismatch_argv(allow_mismatch))
+    append!(argv, unsafe_heterogeneous_argv(unsafe_heterogeneous))
     if verbosity === nothing
         quiet && push!(argv, "-q")
     elseif verbosity === :quiet

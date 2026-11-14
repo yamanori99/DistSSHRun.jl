@@ -523,16 +523,7 @@ function _ride_add_workers!(
         end
         isempty(added) || _ride_load_self_on_workers!()
         if isempty(child_hosts) && !isempty(added)
-            local_man = _existing_project_manifest(project)
-            verify_workers_match_job!(
-                project;
-                allow = _ALLOW_MISMATCH[],
-                host_manifests = if isempty(local_man)
-                    nothing
-                else
-                    Dict{Int, String}(w => local_man for w in added)
-                end,
-            )
+            verify_workers_match_job!(project)
         end
         capture_worker_provenance!()
         return added, ssh_hosts
@@ -654,8 +645,10 @@ function ride!(
         run_id::Union{Nothing, AbstractString} = nothing,
         require_all_hosts::Bool = true,
         hint_surface::Symbol = :api,
-        allow_mismatch = Symbol[],
+        unsafe_heterogeneous = false,
+        allow_mismatch = nothing,
     )::RideResult
+    _reject_removed_allow_mismatch!(allow_mismatch)
     path = canonical_local_path(script)
     julia_s = string(VERSION)
     validated_run_id = run_id === nothing ? nothing : validate_run_id(run_id)
@@ -673,7 +666,7 @@ function ride!(
     inherited_run = old_run isa AbstractString && !isempty(strip(old_run))
     try
         _ensure_kit_run_dir!(:ride, path; project = project)
-        return with_allow_mismatch(allow_mismatch) do
+        return with_unsafe_heterogeneous(unsafe_heterogeneous) do
             return _ride_run!(
                 path, julia_s, tokens, args, spi_check, output_dir, project, julia,
                 remote, validated_run_id, require_all_hosts, hint_surface, inherited_run,
@@ -703,7 +696,7 @@ function _ride_run!(
     # `ride!` restores `DISTSSH_RUN_DIR` after this returns.
     run_dir = kit_run_dir()
     project_root_abs = canonical_local_path(project)
-    _require_manifest!(project_root_abs)
+    assert_controller_manifest_for_environment_verify!(project_root_abs)
     _reset_run_provenance!(project_root_abs)
     _clear_last_ship!()
     tok = String[String(t) for t in tokens]
