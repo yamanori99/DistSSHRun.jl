@@ -49,31 +49,57 @@ function project_package_name(proj_dir::AbstractString)::Union{Nothing, String}
 end
 
 """
-Walk upward from `start_dir` to find the directory that should be passed to
-`Pkg.activate` on workers.
+    current_project_file(dir) -> Union{Nothing,String}
 
-If the first `Project.toml` found is a vendored DistSSHKit, DistSSHQueue, or
-DistSSHRun stub (`name` is one of those) and the parent directory also has a
-`Project.toml`, skip it and keep walking. Scripts next to that stub then use
-the application project root. The folder name does not matter.
+Absolute path of the project file [`Base.current_project`](@ref) would return
+when searching upward from `dir`, stopping at `homedir()`, or `nothing` when
+the search finds no `JuliaProject.toml` / `Project.toml`.
+
+There is no depth cap and no custom fallback (DistSSHKit stubs are not skipped).
+"""
+function current_project_file(dir::AbstractString)::Union{Nothing, String}
+    found = Base.current_project(abspath(String(dir)))
+    found === nothing && return nothing
+    return canonical_local_path(String(found))
+end
+
+"""
+Walk upward from `start_dir` like [`Base.current_project`](@ref) and return the
+directory containing the resolved project file. When the search finds nothing,
+returns `canonical_local_path(start_dir)` (no parent-directory fallback).
 """
 function resolve_pkg_project_dir(start_dir::AbstractString)::String
-    test_dir = abspath(String(start_dir))
-    fallback = dirname(test_dir)
-    for _ in 1:24
-        pt = joinpath(test_dir, "Project.toml")
-        if isfile(pt)
-            parent = dirname(test_dir)
-            stub = project_package_name(test_dir)
-            skip_stub = stub in ("DistSSHKit", "DistSSHQueue", "DistSSHRun") &&
-                isfile(joinpath(parent, "Project.toml"))
-            skip_stub || return test_dir
-        end
-        parent = dirname(test_dir)
-        parent == test_dir && return fallback
-        test_dir = parent
+    found = current_project_file(start_dir)
+    found isa String && return canonical_local_path(dirname(found))
+    return canonical_local_path(String(start_dir))
+end
+
+"""Absolute path of this Julia process's sysimage (`Base.JLOptions().image_file`)."""
+function julia_sysimage_path()::String
+    return canonical_local_path(unsafe_string(Base.JLOptions().image_file))
+end
+
+"""Default sysimage path for the Julia build running this code."""
+function julia_default_sysimage_path()::String
+    ext = Sys.isapple() ? ".dylib" : Sys.iswindows() ? ".dll" : ".so"
+    return canonical_local_path(joinpath(Sys.BINDIR, "..", "lib", "julia", "sys" * ext))
+end
+
+"""Whether this process uses the default sysimage for its Julia build."""
+function julia_sysimage_is_default()::Bool
+    try
+        return realpath(julia_sysimage_path()) == realpath(julia_default_sysimage_path())
+    catch
+        return false
     end
-    return fallback
+end
+
+function _resolved_sysimage_path()::String
+    try
+        return canonical_local_path(realpath(julia_sysimage_path()))
+    catch
+        return julia_sysimage_path()
+    end
 end
 
 """
@@ -114,6 +140,25 @@ function manifest_path(project::AbstractString)::Union{Nothing, String}
     found = Base.project_file_manifest_path(project_file)
     found isa String || return nothing
     return canonical_local_path(found)
+end
+
+"""
+    local_preferences_path(project) -> Union{Nothing,String}
+
+Absolute path of the `(Julia)LocalPreferences.toml` file Base would read for
+`project` (`JuliaLocalPreferences.toml` before `LocalPreferences.toml`), or
+`nothing` when no project file resolves or no such file exists.
+"""
+function local_preferences_path(project::AbstractString)::Union{Nothing, String}
+    project_file = _located_project_file(project)
+    project_file isa String || (project_file = current_project_file(project))
+    project_file isa String || return nothing
+    dir = canonical_local_path(dirname(project_file))
+    for name in Base.preferences_names
+        candidate = joinpath(dir, name)
+        isfile(candidate) && return canonical_local_path(candidate)
+    end
+    return nothing
 end
 
 """

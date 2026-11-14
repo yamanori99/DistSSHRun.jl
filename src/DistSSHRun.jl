@@ -87,6 +87,11 @@ export resolve_controller_julia
 export canonical_local_path
 export short_path
 export resolve_pkg_project_dir
+export current_project_file
+export local_preferences_path
+export julia_sysimage_path
+export julia_default_sysimage_path
+export julia_sysimage_is_default
 export resolve_pkg_env
 export explain_script_not_found
 # Display helpers stay public and are not exported. DistSSHKit 0.11 drops them.
@@ -124,6 +129,12 @@ include("DistSSHRun/up_module.jl")
 using .DistSSHBase
 import .DistSSHBase: manifest_path
 public manifest_path
+import .DistSSHBase:
+    current_project_file,
+    julia_default_sysimage_path,
+    julia_sysimage_is_default,
+    julia_sysimage_path,
+    local_preferences_path
 using .DistSSHBase: CliCursor, HostFacts, HostResult, OUTPUT_WIDTH, PARENT_HOST_NAME, _HOST_TOOL_NAMES,
     _checked_remote_dest, _ensure_posix_login_shell!, _git_cmd,
     _host_sync_remote_shell_cmd,

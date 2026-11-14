@@ -119,6 +119,7 @@ function run_identity(project::AbstractString)::Dict{String, String}
         "version" => string(VERSION),
         "commit" => string(Base.GIT_VERSION_INFO.commit),
         "julia" => joinpath(Sys.BINDIR, "julia"),
+        "sysimage" => DistSSHBase._resolved_sysimage_path(),
         "manifest" => man,
         "manifest.sha256" => man_sha,
         "project" => pf,
@@ -168,10 +169,19 @@ function _worker_production_identity_expr()
                 end
                 proj_sha = __env_sha256(pf)
             end
+            function __env_sysimage_path()
+                img = unsafe_string(Base.JLOptions().image_file)
+                try
+                    return String(realpath(img))
+                catch
+                    return String(img)
+                end
+            end
             d = Dict{String, String}(
                 "version" => string(VERSION),
                 "commit" => string(Base.GIT_VERSION_INFO.commit),
                 "julia" => joinpath(Sys.BINDIR, "julia"),
+                "sysimage" => __env_sysimage_path(),
                 "manifest" => man,
                 "manifest.sha256" => man_sha,
                 "project" => pf,
@@ -217,6 +227,22 @@ function _worker_identity_expr()
 end
 
 const _WORKER_ENV_SNAPSHOT_OVERRIDE = Ref{Any}(nothing)
+
+function _identity_sysimage_mismatches(parent::AbstractDict, other::AbstractDict)::Vector{String}
+    lines = String[]
+    ps = strip(get(parent, "sysimage", ""))
+    ws = strip(get(other, "sysimage", ""))
+    if isempty(ps)
+        push!(lines, "julia sysimage: cannot determine sysimage on the controller")
+        return lines
+    end
+    if isempty(ws)
+        push!(lines, "julia sysimage: cannot determine sysimage on the worker")
+        return lines
+    end
+    ps == ws || push!(lines, "julia sysimage parent=$(ps) worker=$(ws)")
+    return lines
+end
 
 function _identity_julia_build_mismatches(
         parent::AbstractDict,
@@ -298,9 +324,10 @@ end
 Same lines as [`go!`](@ref), [`ride!`](@ref), and [`drive!`](@ref). An empty
 vector matches. This does not throw, print, or read `DISTSSH_QUIET`.
 
-Julia version and commit (Julia build) and DistSSH* `pkg.*` versions from the
-Manifest are always compared. An empty or missing commit on either side is a
-mismatch. When `unsafe_heterogeneous` is true, only **byte-exact** SHA-256
+Julia version and commit (Julia build), the resolved sysimage path, and
+DistSSH* `pkg.*` versions from the Manifest are always compared. An empty or
+missing commit on either side is a mismatch. When `unsafe_heterogeneous` is
+true, only **byte-exact** SHA-256
 digests of the resolved Manifest and Project files (`manifest.sha256`,
 `project.sha256`) are waived; Julia build and `pkg.*` mismatches are still
 reported. CRLF and other byte differences count for digests.
@@ -316,6 +343,7 @@ function identity_mismatches(
     )::Vector{String}
     lines = String[]
     append!(lines, _identity_julia_build_mismatches(parent, other))
+    append!(lines, _identity_sysimage_mismatches(parent, other))
     append!(lines, _identity_pkg_mismatches(parent, other))
     unsafe_heterogeneous || append!(lines, _identity_env_file_mismatches(parent, other))
     return lines
@@ -402,6 +430,75 @@ function assert_controller_manifest_for_environment_verify!(project::AbstractStr
     throw(ErrorException(_controller_missing_manifest_error(project)))
 end
 public assert_controller_manifest_for_environment_verify!
+
+function _controller_stale_manifest_error(project::AbstractString, current)::String
+    host = string(gethostname())
+    env = resolve_pkg_env(project)
+    proj_disp = _controller_project_display(project)
+    man = env.manifest
+    man_s = man isa String ? String(man) : "(none)"
+    q = _quoted_hint_path(env.project_dir)
+    why_tail = current === false ?
+        "Project.toml and the Manifest disagree (stale lockfile)" :
+        "Manifest is missing, unreadable, or has no project_hash for Pkg to verify"
+    return join(
+        [
+            "what: active project Manifest is not current for environment verification",
+            "where: controller host=$(host); project=$(proj_disp); manifest=$(man_s)",
+            "why: $why_tail; workers would not load the same resolved environment",
+            "fix: run `julia --project=$(q) -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'` and ship the updated Manifest to every worker",
+            "note: --unsafe-heterogeneous does not waive this check",
+        ],
+        "\n",
+    )
+end
+
+"""Fail before worker / remote launch when `Pkg.is_manifest_current` is not `true`."""
+function assert_controller_manifest_current!(project::AbstractString)
+    pf = _located_project_file_for_identity(project)
+    isempty(pf) && return nothing
+    env = resolve_pkg_env(project)
+    current = try
+        Pkg.is_manifest_current(env.project_dir)
+    catch
+        nothing
+    end
+    current === true && return nothing
+    throw(ErrorException(_controller_stale_manifest_error(project, current)))
+end
+public assert_controller_manifest_current!
+
+function _controller_custom_sysimage_error()::String
+    host = string(gethostname())
+    img = DistSSHBase.julia_sysimage_path()
+    def = DistSSHBase.julia_default_sysimage_path()
+    return join(
+        [
+            "what: controller Julia uses a non-default sysimage",
+            "where: controller host=$(host); sysimage=$(img); default=$(def)",
+            "why: a custom sysimage can change package loading on the controller vs workers",
+            "fix: run DistSSH without `--sysimage` or `JULIA_SYSIMAGE`, using the default sysimage for this Julia build",
+            "note: --unsafe-heterogeneous does not waive this check",
+        ],
+        "\n",
+    )
+end
+
+"""Fail before worker / remote launch when this process uses a non-default sysimage."""
+function assert_controller_default_sysimage!()
+    DistSSHBase.julia_sysimage_is_default() && return nothing
+    throw(ErrorException(_controller_custom_sysimage_error()))
+end
+public assert_controller_default_sysimage!
+
+"""Controller gates for drive, ride, and go before worker environment verification."""
+function assert_controller_environment_for_verify!(project::AbstractString)
+    assert_controller_manifest_for_environment_verify!(project)
+    assert_controller_manifest_current!(project)
+    assert_controller_default_sysimage!()
+    return nothing
+end
+public assert_controller_environment_for_verify!
 
 function _environment_mismatch_throw(lines::Vector{String})
     isempty(lines) && return nothing
@@ -540,8 +637,14 @@ if proj !== nothing
     end
     proj_sha = env_sha256(pf)
 end
+img_path = try
+    string(realpath(unsafe_string(Base.JLOptions().image_file)))
+catch
+    unsafe_string(Base.JLOptions().image_file)
+end
 print("version=", string(VERSION), '\n')
 print("commit=", string(Base.GIT_VERSION_INFO.commit), '\n')
+print("sysimage=", img_path, '\n')
 print("manifest=", man, '\n')
 print("manifest.sha256=", man_sha, '\n')
 print("project=", pf, '\n')
@@ -608,6 +711,7 @@ function _go_local_slot_identity(project::AbstractString, julia)::Dict{String, S
         "version" => v,
         "commit" => c,
         "julia" => bin,
+        "sysimage" => get(parent, "sysimage", ""),
         "manifest" => get(parent, "manifest", ""),
         "manifest.sha256" => get(parent, "manifest.sha256", ""),
         "project" => get(parent, "project", ""),
@@ -661,6 +765,7 @@ function _go_remote_run_identity(
         "julia" => pinned,
         "version" => "",
         "commit" => "",
+        "sysimage" => "",
         "manifest" => "",
         "manifest.sha256" => "",
         "project" => "",

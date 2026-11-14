@@ -66,7 +66,7 @@ function add_drive_workers!(
     )::Vector{String}
     empty!(RUNNER_WORKER_PROJECT_DIRS)
     empty!(RUNNER_WORKER_SCRIPT_PATHS)
-    DistSSHRun.assert_controller_manifest_for_environment_verify!(proj_dir)
+    DistSSHRun.assert_controller_environment_for_verify!(proj_dir)
     DistSSHRun._require_drive_host_status_idle!()
     DistSSHRun._clear_drive_host_worker_ids!()
     script_path = abspath(String(script_path))

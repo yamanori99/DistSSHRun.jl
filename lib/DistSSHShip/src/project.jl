@@ -27,22 +27,7 @@ end
 
 """`Base.current_project(dir)`, including the stop at `homedir()`."""
 function _current_project_file(dir::AbstractString)::Union{Nothing, String}
-    cur = abspath(String(dir))
-    home = homedir()
-    climbing = true
-    while climbing
-        for name in Base.project_names
-            file = joinpath(cur, name)
-            isfile(file) && return abspath(file)
-        end
-        parent = dirname(cur)
-        if cur == home || parent == cur
-            climbing = false
-        else
-            cur = parent
-        end
-    end
-    return nothing
+    return DistSSHBase.current_project_file(dir)
 end
 
 function _named_env_dir(dir::AbstractString)::Bool
