@@ -138,3 +138,7 @@ for rel in ARGS[2:end]
     have_reg[] = true
 end
 ' -- "${repo_root}" . test lib/DistSSHBase lib/DistSSHUp
+
+if ! bash "${repo_root}/.github/install-agent-tools.sh"; then
+  echo "warning: install-agent-tools.sh failed; continuing without Runic/JETLS on PATH" >&2
+fi
