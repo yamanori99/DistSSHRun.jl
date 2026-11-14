@@ -181,7 +181,7 @@ function _worker_production_identity_expr()
             function __env_sysimage_is_default()
                 ext = Sys.isapple() ? ".dylib" : Sys.iswindows() ? ".dll" : ".so"
                 def = joinpath(Sys.BINDIR, "..", "lib", "julia", "sys" * ext)
-                img = Base.JLOptions().image_file
+                img = unsafe_string(Base.JLOptions().image_file)
                 try
                     return realpath(img) == realpath(def)
                 catch

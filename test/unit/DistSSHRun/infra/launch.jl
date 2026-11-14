@@ -240,6 +240,43 @@ using TOML
         ),
     )
 
+    custom_sys = DistSSHRun.identity_mismatches(
+        merge(parent, Dict("sysimage" => "/opt/custom/sys.so", "sysimage.default" => "false")),
+        merge(worker, Dict("sysimage" => "/home/worker/sys.so", "sysimage.default" => "true")),
+    )
+    @test any(occursin("julia sysimage", l) for l in custom_sys)
+
+    @testset "distributed worker snapshot sysimage.default" begin
+        _with_tempdir() do proj
+            write(joinpath(proj, "Project.toml"), "name = \"WorkerDefSys\"\n")
+            _sync_test_project_manifest!(proj)
+            flags = DistSSHRun.worker_exeflag_strings(proj)
+            env = Dict(DistSSHRun.worker_env_pairs(proj))
+            addprocs(1; exeflags = Cmd(flags), env = env)
+            w = only(Distributed.workers())
+            try
+                remotecall_fetch(() -> Core.eval(Main, :(using DistSSHRun)), w)
+                snap = remotecall_fetch(Core.eval, w, Main, DistSSHRun._worker_identity_expr())
+                parent_id = DistSSHRun.run_identity(proj)
+                @test snap["sysimage.default"] == "true"
+                parent_alt = merge(
+                    parent_id,
+                    Dict("sysimage" => "/opt/hostedtoolcache/julia/1.13.4/x64/lib/julia/sys.so"),
+                )
+                worker_alt = merge(
+                    snap,
+                    Dict(
+                        "sysimage" =>
+                            "/home/dev/.julia/juliaup/julia-1.13.4+0.x64.linux.gnu/lib/julia/sys.so",
+                    ),
+                )
+                @test isempty(DistSSHRun.identity_mismatches(parent_alt, worker_alt))
+            finally
+                rmprocs(w; waitfor = 5)
+            end
+        end
+    end
+
     sha_miss = DistSSHRun.identity_mismatches(
         parent,
         Dict(
