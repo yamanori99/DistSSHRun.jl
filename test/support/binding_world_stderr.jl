@@ -3,11 +3,10 @@
 
 if !isdefined(Main, :_assert_no_binding_world_stderr!)
     function _binding_world_age_warning_text(text::AbstractString)::Union{Nothing, String}
-        const _BINDING_WORLD_STDERR_MARKERS = (
+        for pat in (
             "Detected access to binding",
             "prior to its definition world",
         )
-        for pat in _BINDING_WORLD_STDERR_MARKERS
             occursin(pat, text) && return pat
         end
         return nothing
