@@ -274,7 +274,7 @@ using Test
                     projects = ["experiments/run1"]
                     """
                 )
-                write(joinpath(lab, "Manifest.toml"), "# lock\n")
+                _sync_test_project_manifest!(lab)
                 write(joinpath(lab, "lab.jl"), "1\n")
                 write(joinpath(member, "Project.toml"), "name = \"Run1\"\n[deps]\n")
                 write(joinpath(member, "job.jl"), "2\n")

@@ -129,7 +129,7 @@ using TOML
         rm(slot; force = true, recursive = true)
     end
     mktempdir() do tmp
-        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        _sync_test_project_manifest!(tmp)
         write(joinpath(tmp, "CondaPkg.toml"), "[deps]\n")
         prov = DistSSHRun._project_provenance(tmp)
         @test haskey(prov, "locks")
@@ -351,14 +351,14 @@ using TOML
 
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"VerifyGate\"\n")
-        write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+        _sync_test_project_manifest!(proj)
         ident = DistSSHRun.run_identity(proj)
         @test !isempty(ident["manifest.sha256"])
     end
 
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"ShaJob\"\n")
-        write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+        _sync_test_project_manifest!(proj)
         ident = DistSSHRun.run_identity(proj)
         @test ident["manifest.sha256"] == DistSSHRun.file_sha256(joinpath(proj, "Manifest.toml"))
         @test ident["project.sha256"] == DistSSHRun.file_sha256(joinpath(proj, "Project.toml"))
@@ -497,7 +497,7 @@ using TOML
     @testset "worker snapshot loads SHA without DistSSHRun on worker" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"ShaSnap\"\n")
-            write(joinpath(proj, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(proj)
             worker_mod = Module()
             old = Base.active_project()
             try

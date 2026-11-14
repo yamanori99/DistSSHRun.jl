@@ -77,7 +77,7 @@ using Test
         go_proj = joinpath(dir, "go-proj")
         mkpath(go_proj)
         write(joinpath(go_proj, "Project.toml"), "name = \"TtyGo\"\nuuid = \"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\"\n")
-        write(joinpath(go_proj, "Manifest.toml"), "# lock\n")
+        _sync_test_project_manifest!(go_proj)
         go_ok = joinpath(go_proj, "ok.jl")
         write(go_ok, "println(\"go-ok-marker\")\n")
         go_fail = joinpath(go_proj, "fail.jl")

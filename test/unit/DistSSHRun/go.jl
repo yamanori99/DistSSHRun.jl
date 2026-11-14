@@ -494,7 +494,7 @@ using Dates
     @testset "quiet suppresses Log file on stdout" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"GoQuietLog\"\n")
-            write(joinpath(proj, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(proj)
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
             with_kit_verbosity(:verbose) do
@@ -539,7 +539,7 @@ using Dates
     @testset "DISTSSH_HOSTS_FILE not reapplied when workers set" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"GoHosts\"\n")
-            write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+            _sync_test_project_manifest!(proj)
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
             hf = joinpath(proj, "hosts")
@@ -559,7 +559,7 @@ using Dates
     @testset "later succeeding slot does not mask earlier failure" begin
         _with_tempdir() do proj::String
             write(joinpath(proj, "Project.toml"), "name = \"GoMask\"\n")
-            write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+            _sync_test_project_manifest!(proj)
             script = joinpath(proj, "job.jl")
             write(
                 script,
@@ -603,7 +603,7 @@ using Dates
     @testset "failed slot names last top-level" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"GoFailSlot\"\n")
-            write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+            _sync_test_project_manifest!(proj)
             script = joinpath(proj, "job.jl")
             write(
                 script,
@@ -636,7 +636,7 @@ using Dates
     @testset "non-empty output directory" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"GoDirty\"\n")
-            write(joinpath(proj, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(proj)
             script = joinpath(proj, "job.jl")
             write(script, "println(\"ran\")\n")
             dirty = joinpath(proj, "batch")
@@ -717,7 +717,7 @@ using Dates
     @testset "early go! exit drains deferred input hashes" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"GoHashDrain\"\n")
-            write(joinpath(proj, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(proj)
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
             out = joinpath(proj, "out")
@@ -800,7 +800,7 @@ using Dates
                 Bar = {path = "../Bar"}
                 """,
             )
-            write(joinpath(app, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(app)
             script = joinpath(app, "job.jl")
             write(script, "println(\"SNAPSHOT_SIBLING_OK\")\n")
             plain = redirect_stdout(devnull) do

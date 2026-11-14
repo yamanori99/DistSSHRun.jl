@@ -1163,7 +1163,7 @@ end
     @testset ":go dispatch" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"ExecuteGo\"\n")
-            write(joinpath(proj, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(proj)
             script = joinpath(proj, "job.jl")
             write(
                 script, """

@@ -23,7 +23,7 @@ end
     Sys.which("git") === nothing && @test_skip "git not in PATH"
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"DriveWarn\"\n")
-        write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+        _sync_test_project_manifest!(proj)
         write(joinpath(proj, "README.md"), "seed\n")
         _git_init_min!(proj)
         write(joinpath(proj, "README.md"), "dirty\n")

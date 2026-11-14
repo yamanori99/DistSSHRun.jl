@@ -4,7 +4,7 @@ using Test
     @testset "no git work tree" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
-            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(tmp)
             write(joinpath(tmp, "a.jl"), "1\n")
             listed = DistSSHRun._ship_gitignore_send_list(tmp)
             @test listed isa Vector
@@ -167,7 +167,7 @@ using Test
                 Foo = {path = "vendor/Foo"}
                 """
             )
-            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(tmp)
             write(joinpath(tmp, ".gitignore"), "vendor/\n")
             write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
             write(joinpath(foo, "src", "Foo.jl"), "module Foo end\n")
@@ -221,7 +221,7 @@ using Test
     @testset "a gitignored selected Project.toml is refused at pack" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
-            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(tmp)
             write(joinpath(tmp, "a.jl"), "1\n")
             write(joinpath(tmp, ".gitignore"), "Project.toml\n")
             @test_throws ArgumentError DistSSHRun._pack_project_tree(tmp)
@@ -239,7 +239,7 @@ using Test
                 projects = ["member"]
                 """
             )
-            write(joinpath(lab, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(lab)
             write(
                 joinpath(member, "Project.toml"), """
                 name = "Run1"
@@ -334,7 +334,7 @@ using Test
                 Foo = {path = "$absfoo"}
                 """
             )
-            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(tmp)
             err = try
                 DistSSHRun._pack_project_tree(tmp)
                 nothing
@@ -361,7 +361,7 @@ using Test
                 Foo = {path = "vendor/link/Foo"}
                 """
             )
-            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(tmp)
             packed = DistSSHRun._pack_project_tree(tmp)
             try
                 dest = mktempdir()
@@ -378,7 +378,7 @@ using Test
         _with_tempdir() do tmp
             write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\n")
             write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
-            write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+            _sync_test_project_manifest!(tmp)
             write(joinpath(tmp, "LocalPreferences.toml"), "[ShipT]\nx = 1\n")
             packed = DistSSHRun._pack_project_tree(tmp)
             try
@@ -396,7 +396,7 @@ using Test
         _with_tempdir() do tmp
             write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\n!LocalPreferences.toml\n")
             write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
-            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(tmp)
             write(joinpath(tmp, "LocalPreferences.toml"), "[ShipT]\nx = 1\n")
             packed = DistSSHRun._pack_project_tree(tmp)
             try
@@ -431,7 +431,7 @@ using Test
     @testset "nested git still applies the parent gitignore" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
-            write(joinpath(tmp, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(tmp)
             write(joinpath(tmp, ".gitignore"), "*.csv\n")
             sub = joinpath(tmp, "sub", "assets")
             mkpath(sub)
@@ -449,7 +449,7 @@ using Test
         _with_tempdir() do tmp
             write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\n")
             write(joinpath(tmp, "JuliaProject.toml"), "name = \"ShipT\"\n")
-            write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+            _sync_test_project_manifest!(tmp)
             write(joinpath(tmp, "LocalPreferences.toml"), "[ShipT]\nx = 1\n")
             packed = DistSSHRun._pack_project_tree(tmp)
             try

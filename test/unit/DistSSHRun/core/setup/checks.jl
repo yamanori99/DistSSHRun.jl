@@ -289,7 +289,7 @@ using Pkg
                 projects = ["experiments/run1"]
                 """
             )
-            write(joinpath(lab, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(lab)
             write(
                 joinpath(member, "Project.toml"), """
                 name = "Run1"
@@ -322,7 +322,7 @@ using Pkg
                 Bar = {path = "../shared/Bar"}
                 """,
             )
-            write(joinpath(side, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(side)
             @test_throws ArgumentError DistSSHRun.ensure_manifest_ships!(side)
             DistSSHRun._set_active_selection!(
                 DistSSHRun.SourceSelection(
@@ -344,7 +344,7 @@ using Pkg
                 ignored_ship = joinpath(root, "ignored_ship")
                 mkpath(ignored_ship)
                 write(joinpath(ignored_ship, "Project.toml"), "name = \"IgnoreShip\"\n")
-                write(joinpath(ignored_ship, "Manifest.toml"), "# lock\n")
+                _sync_test_project_manifest!(ignored_ship)
                 write(joinpath(ignored_ship, ".gitignore"), "Manifest.toml\n")
                 run(pipeline(`git -C $ignored_ship init -q`; stdout = devnull, stderr = devnull))
                 run(
@@ -428,7 +428,7 @@ using Pkg
             foo = joinpath(job, "dev", "Foo")
             mkpath(foo)
             write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
-            write(joinpath(job, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(job)
             write(
                 joinpath(job, "Project.toml"),
                 """
@@ -517,7 +517,7 @@ using Pkg
                 projects = ["experiments/run1"]
                 """,
             )
-            write(joinpath(lab, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(lab)
             write(
                 joinpath(member, "Project.toml"),
                 """
@@ -543,7 +543,7 @@ using Pkg
                 foo_src = joinpath(repo, "dev", "Foo")
                 mkpath(foo_src)
                 write(joinpath(foo_src, "Project.toml"), "name = \"Foo\"\n")
-                write(joinpath(repo, "Manifest.toml"), "# lock\n")
+                _sync_test_project_manifest!(repo)
                 write(joinpath(repo, "Project.toml"), "name = \"Src\"\n")
                 run(pipeline(`git -C $repo init -q`; stdout = devnull, stderr = devnull))
                 nocommit_err = try
@@ -736,7 +736,7 @@ using Pkg
             mkpath(vendor)
             mkpath(dirname(link))
             write(joinpath(vendor, "Project.toml"), "name = \"Foo\"\n")
-            write(joinpath(job, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(job)
             write(
                 joinpath(job, "Project.toml"),
                 """
@@ -770,7 +770,7 @@ using Pkg
                 mkpath(inn)
                 write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
                 write(joinpath(inn, "Project.toml"), "name = \"In\"\n")
-                write(joinpath(phys, "Manifest.toml"), "# lock\n")
+                _sync_test_project_manifest!(phys)
                 write(
                     joinpath(phys, "Project.toml"),
                     """
@@ -875,7 +875,7 @@ using Pkg
         if _test_skip_unless_git()
             _with_tempdir() do tmp
                 write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
-                write(joinpath(tmp, "Manifest.toml"), "# lock\n")
+                _sync_test_project_manifest!(tmp)
                 write(joinpath(tmp, ".gitignore"), "Manifest.toml\n")
                 run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
                 run(pipeline(`git -C $tmp config user.email "test@example.com"`; stdout = devnull, stderr = devnull))

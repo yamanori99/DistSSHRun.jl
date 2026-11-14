@@ -5,7 +5,7 @@ function _remote_delete_fixture(root::String, parts::Vector{String})
     proj = joinpath(repo, parts...)
     mkpath(proj)
     write(joinpath(proj, "Project.toml"), "name = \"P\"\n")
-    write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+    _sync_test_project_manifest!(proj)
     run(pipeline(`git -C $repo init -q`; stdout = devnull, stderr = devnull))
     return proj
 end

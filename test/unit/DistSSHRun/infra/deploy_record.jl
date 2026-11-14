@@ -36,7 +36,7 @@ end
     tmp = mktempdir()
     try
         write(joinpath(tmp, "Project.toml"), "name = \"Dep\"\n")
-        write(joinpath(tmp, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+        _sync_test_project_manifest!(tmp)
         rec = DistSSHRun.build_deploy_record(
             tmp,
             :git_sync;
@@ -142,7 +142,7 @@ end
     _with_tempdir() do log_root
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"WarnDep\"\n")
-            write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+            _sync_test_project_manifest!(proj)
             pack = DistSSHRun._pack_project_tree(proj)
             rm(pack.directory; recursive = true, force = true)
             rec = Dict(
@@ -352,7 +352,7 @@ end
 @testset "deploy record manifest staleness warning newline" begin
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"ManDep\"\n")
-        write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+        _sync_test_project_manifest!(proj)
         local_mh = DistSSHRun._deploy_record_manifest_hash(proj)
         local_mh === nothing && error("expected manifest hash")
         rec = Dict(

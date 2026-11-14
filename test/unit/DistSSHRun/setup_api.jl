@@ -34,7 +34,7 @@ using Test
                 mkpath(tree)
                 touch(joinpath(tree, "keepme.txt"))
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
-                write(joinpath(proj, "Manifest.toml"), "# lock\n")
+                _sync_test_project_manifest!(proj)
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["child:$host"],
@@ -423,7 +423,7 @@ using Test
     @testset "multi-mode ship-tree without a git work tree" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
-            write(joinpath(proj, "Manifest.toml"), "# lock\n")
+            _sync_test_project_manifest!(proj)
             write(joinpath(proj, "a.jl"), "1\n")
             listed = DistSSHRun._ship_gitignore_send_list(proj)
             @test "Project.toml" in listed
@@ -802,7 +802,7 @@ using Test
         _with_fake_remotes() do _
             _with_tempdir() do proj::String
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
-                write(joinpath(proj, "Manifest.toml"), "# lock\n")
+                _sync_test_project_manifest!(proj)
                 hosts = ["h1", "h2", "h3"]
                 inst_res = DistSSHRun.instantiate_remotes(
                     hosts, "/bin/echo", "~/App.jl", proj,

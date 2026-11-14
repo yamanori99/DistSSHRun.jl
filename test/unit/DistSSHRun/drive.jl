@@ -1091,6 +1091,7 @@ end
                 path = joinpath(app, name)
                 write(path, replace(read(path, String), "path = \"$bar\"" => "path = \"../Bar\""))
             end
+            _sync_test_project_manifest!(app)
             @test occursin("path = \"../Bar\"", read(joinpath(app, "Project.toml"), String))
             script = joinpath(app, "job.jl")
             marker = joinpath(root, "RAN")

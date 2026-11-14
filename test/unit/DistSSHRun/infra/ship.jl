@@ -328,7 +328,7 @@ end
             run(`git -C $tmp config user.email t@t.t`)
             run(`git -C $tmp config user.name t`)
             write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
-            write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+            _sync_test_project_manifest!(tmp)
             write(joinpath(tmp, "a.jl"), "1\n")
             mkpath(joinpath(tmp, "sub"))
             write(joinpath(tmp, "sub", "b.txt"), "b\n")
@@ -357,7 +357,7 @@ end
 @testset "ship-tree size warnings" begin
     _with_tempdir() do tmp
         write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
-        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        _sync_test_project_manifest!(tmp)
         mkpath(joinpath(tmp, "data"))
         write(joinpath(tmp, "data", "big.bin"), "abcdef")
         write(joinpath(tmp, "a.jl"), "1\n")
@@ -418,7 +418,7 @@ end
     _with_tempdir() do tmp
         write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\nJuliaLocalPreferences.toml\n")
         write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
-        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        _sync_test_project_manifest!(tmp)
         write(joinpath(tmp, "LocalPreferences.toml"), "[ShipT]\nx = 1\n")
         write(joinpath(tmp, "JuliaLocalPreferences.toml"), "[ShipT]\ny = 2\n")
         packed = DistSSHRun._pack_project_tree(tmp)
@@ -437,7 +437,7 @@ end
 @testset "a project preference symlink ships as a symlink" begin
     _with_tempdir() do tmp
         write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
-        write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        _sync_test_project_manifest!(tmp)
         write(joinpath(tmp, "prefs.toml"), "[ShipT]\nx = 1\n")
         symlink("prefs.toml", joinpath(tmp, "LocalPreferences.toml"))
         packed = DistSSHRun._pack_project_tree(tmp)
@@ -493,7 +493,7 @@ end
             run(`git -C $tmp config user.email t@t.t`)
             run(`git -C $tmp config user.name t`)
             write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
-            write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+            _sync_test_project_manifest!(tmp)
             mkpath(joinpath(tmp, "data"))
             write(joinpath(tmp, "data", "big.bin"), "payload\n")
             mkpath(joinpath(tmp, ".distssh"))
@@ -1110,7 +1110,7 @@ end
             run(`git -C $tmp config user.email t@t.t`)
             run(`git -C $tmp config user.name t`)
             write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
-            write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+            _sync_test_project_manifest!(tmp)
             outside = joinpath(dirname(tmp), "outside-secret")
             write(outside, "secret\n")
             symlink(outside, joinpath(tmp, "link"))
@@ -1301,7 +1301,7 @@ end
             run(`git -C $tmp config user.email t@t.t`)
             run(`git -C $tmp config user.name t`)
             write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
-            write(joinpath(tmp, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+            _sync_test_project_manifest!(tmp)
             write(joinpath(tmp, "tracked.jl"), "1\n")
             run(`git -C $tmp add -A`)
             run(`git -C $tmp commit --quiet -m init`)
@@ -1360,7 +1360,7 @@ end
 @testset "snapshot is sent without packing again" begin
     function _project!(dir::String)
         write(joinpath(dir, "Project.toml"), "name = \"Snap\"\n")
-        write(joinpath(dir, "Manifest.toml"), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        _sync_test_project_manifest!(dir)
         write(joinpath(dir, "a.jl"), "1\n")
         return dir
     end

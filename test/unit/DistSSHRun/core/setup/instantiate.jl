@@ -105,7 +105,7 @@ using Test
             logp = joinpath(state, "ssh.log")
             _with_tempdir() do proj
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
-                write(joinpath(proj, "Manifest.toml"), "# lock\n")
+                _sync_test_project_manifest!(proj)
                 withenv(
                     merge(
                         _fake_setup_remote_env(state),
