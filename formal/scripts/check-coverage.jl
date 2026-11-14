@@ -1,6 +1,6 @@
 # Check that Audit.lean COVER-* lines match the formalization scope.
 # Usage: julia scripts/check-coverage.jl .lake/audit.out
-include(joinpath(@__DIR__, "..", "coverage", "expected.jl"))
+include(joinpath(@__DIR__, "..", "scope", "expected.jl"))
 
 audit_out = only(ARGS)
 lines = readlines(audit_out)
