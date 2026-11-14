@@ -1,6 +1,6 @@
 using Test
 
-# Builds with `Base.CANCEL_TOKEN` only. Looked up by name so 1.13 / beta1 never resolve them.
+# Builds with `Base.CANCEL_TOKEN` only. Looked up by name so builds without it never resolve them.
 const _SIGINT_CANCELS = isdefined(Base, :CANCEL_TOKEN)
 _sigint_base(name::Symbol) = getglobal(Base, Base.inferencebarrier(name))
 

@@ -1,6 +1,7 @@
 # With task cancellation, Ctrl-C may throw `Base.CancellationRequest` via
-# `Base.CANCEL_TOKEN` (1.14 alphas; absent 1.14.0-beta1+ after #64651; 1.15+).
-# Without it, only `InterruptException` (1.13, 1.14.0-beta1+).
+# `Base.CANCEL_TOKEN` when that API exists (e.g. some 1.14 alphas; absent from
+# 1.14.0-beta1 through 1.14.x after #64651). Gates on `isdefined`, not `VERSION`.
+# Without it, only `InterruptException` (e.g. 1.13 and 1.14.x without the API).
 const _CANCELLATION_REQUEST = isdefined(Base, :CancellationRequest) ?
     getglobal(Base, :CancellationRequest) : Union{}
 const _CANCEL_TOKEN = isdefined(Base, :CANCEL_TOKEN) ? getglobal(Base, :CANCEL_TOKEN) : nothing
@@ -31,7 +32,7 @@ end
 
 Run `f` so Ctrl-C reaches the main task, not this background task. Call it
 inside the task. With `Base.CANCEL_TOKEN`, this is `without_cancel`. Otherwise
-`disable_sigint` (1.13, 1.14.0-beta1+).
+`disable_sigint` when `Base.CANCEL_TOKEN` is undefined.
 """
 function shield_sigint(f)
     _CANCEL_TOKEN === nothing && return disable_sigint(f)

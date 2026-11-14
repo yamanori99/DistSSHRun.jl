@@ -7,11 +7,12 @@
 # the cancellation source.
 #
 # Task cancellation (`Base.CANCEL_TOKEN`, `CancellationRequest`) exists only on
-# Julia builds that define it (1.14 alphas; reverted in 1.14.0-beta1, #64651;
-# expected back in 1.15). Without it, shims are `f()` / `false` (1.13, beta1+).
+# Julia builds that define it (e.g. some 1.14 alphas; reverted from 1.14.0-beta1
+# through 1.14.x, #64651). Later releases may add it again; paths follow
+# `isdefined(Base, :CANCEL_TOKEN)`. Without it, shims are `f()` / `false`.
 #
 # A second Ctrl-C during cleanup exits 130 and prints one line. Without
-# cancellation (1.13, 1.14.0-beta1+), that uses `signal` and `_exit(130)`. The
+# cancellation (no `Base.CANCEL_TOKEN`), that uses `signal` and `_exit(130)`. The
 # handler must not call `jl_exit`: not async-signal-safe; on macOS, teardown can
 # SIGSEGV after worker cleanup. With cancellation, Julia owns SIGINT in its
 # listener; `signal` / `exit_on_sigint` can drop the listener or deadlock in
