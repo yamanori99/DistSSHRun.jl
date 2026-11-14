@@ -22,6 +22,9 @@ using Test
 using DistSSHRun
 
 include(joinpath(@__DIR__, "support.jl"))
+if !isdefined(Main, :_binding_world_age_warning_text)
+    include(joinpath(@__DIR__, "support", "binding_world_stderr.jl"))
+end
 
 # In-process default matches TTY CLI (`:progress`), not module-load `:verbose`
 # or a pipe. Child CLI processes still auto-detect their own stdout.
