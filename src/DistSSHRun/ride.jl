@@ -147,8 +147,10 @@ function _ride_owned_pmap(f, xs)
 end
 
 function _ride_apply_named(name::Symbol, x)
-    f = getglobal(Main, name)
-    return Base.invokelatest(f, x)
+    return Base.invokelatest() do
+        f = getglobal(Main, name)
+        return f(x)
+    end
 end
 
 function _ride_callable(f)
@@ -157,8 +159,10 @@ function _ride_callable(f)
 end
 
 function _ride_named_fn(name::Symbol, value)
-    isdefined(Main, name) && getglobal(Main, name) === value && return name
-    return value
+    return Base.invokelatest() do
+        isdefined(Main, name) && getglobal(Main, name) === value && return name
+        return value
+    end
 end
 
 function _can_distribute(f, xs)::Bool
@@ -169,7 +173,11 @@ function _can_distribute(f, xs)::Bool
     isempty(_live_owned_worker_ids()) && return false
     T = eltype(xs)
     fn = try
-        f isa Symbol ? getglobal(Main, f) : f
+        if f isa Symbol
+            Base.invokelatest(() -> getglobal(Main, f))
+        else
+            f
+        end
     catch
         return false
     end
@@ -207,17 +215,19 @@ function _ride_array_aliases_dest(dest, a)::Bool
 end
 
 function _ride_mightalias_main(dest)::Bool
-    for n in names(Main)
-        isdefined(Main, n) || continue
-        v = try
-            getfield(Main, n)
-        catch
-            continue
+    return Base.invokelatest() do
+        for n in names(Main)
+            isdefined(Main, n) || continue
+            v = try
+                getfield(Main, n)
+            catch
+                continue
+            end
+            v isa AbstractArray || continue
+            _ride_array_aliases_dest(dest, v) && return true
         end
-        v isa AbstractArray || continue
-        _ride_array_aliases_dest(dest, v) && return true
+        return false
     end
-    return false
 end
 
 """True when `f` or a `Main` array may share storage with `dest`, or the walk was truncated."""

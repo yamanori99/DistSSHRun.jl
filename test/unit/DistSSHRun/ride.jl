@@ -732,6 +732,51 @@ using Distributed
         end
     end
 
+    @testset "ride named Main function avoids binding world-age warning" begin
+        for w in setdiff(workers(), [1])
+            rmprocs(w; waitfor = 2.0)
+        end
+        DistSSHRun._clear_drive_host_worker_ids!()
+        empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+        addprocs(1; topology = :master_worker)
+        before = Set(workers())
+        addprocs(1; topology = :master_worker)
+        owned = Int[w for w in workers() if w ∉ before]
+        DistSSHRun._register_drive_host_worker_ids!(DistSSHRun.PARENT_HOST_NAME, owned)
+        DistSSHRun._mark_workers_launched!(owned, pwd())
+        try
+            probe_src = """
+            function ride_probe_pid(x)
+                return myid()
+            end
+            """
+            mktemp() do err_path, err_io
+                redirect_stderr(err_io) do
+                    Core.eval(Main, Meta.parseall(probe_src))
+                    DistSSHRun._ride_load_self_on_workers!()
+                    DistSSHRun._ride_push_prelude!(Meta.parseall(probe_src))
+                    spi = DistSSHRun._RIDE_SPI[]
+                    try
+                        DistSSHRun._RIDE_SPI[] = false
+                        DistSSHRun._ride_map(:ride_probe_pid, 1:12)
+                    finally
+                        DistSSHRun._RIDE_SPI[] = spi
+                    end
+                end
+                flush(err_io)
+                captured = read(err_path, String)
+                @test !occursin("prior to its definition", captured)
+                @test !occursin("Detected access to binding", captured)
+            end
+        finally
+            DistSSHRun._clear_drive_host_worker_ids!()
+            empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
+            for w in setdiff(workers(), [1])
+                w in workers() && rmprocs(w; waitfor = 2.0)
+            end
+        end
+    end
+
     @testset "ride map stays on driver when no owned workers" begin
         for w in setdiff(workers(), [1])
             rmprocs(w; waitfor = 2.0)
