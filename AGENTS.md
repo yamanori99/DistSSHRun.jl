@@ -44,3 +44,16 @@ Public API breaking renames ship **without compatibility aliases**. Cross-repo r
 `lib/DistSSHBase/src/` groups shared code by layer: `messages/` (CLI text), `argv/` (parse helpers), `hosts/` (naming and placement tokens), `ssh/` (remote execution and paths); `namespace.jl` stays at the package root.
 
 `src/DistSSHRun/` groups execution code by role: `options/` (session and future option types), `core/` (drive and setup job logic), `messages/` (Run-specific display), `infra/` (launch, ship, layout, and shared helpers); `argv/`, `drive.jl` / `setup.jl` include stubs, and unparsed job entry files stay at their current paths until later redesign PRs.
+
+## Cloud Agent VM
+
+Cursor preinstalls Julia via `.cursor/install.sh`. Before pushing, on Julia **1.13** (default juliaup channel), run the same style checks as CI:
+
+- **Runic** (CI-equivalent): `git ls-files -- '*.jl' | xargs runic --check --diff --verbose`
+- **JETLS** (required gate, hint+): `./.github/jetls-check.sh --progress=none`
+
+Run targeted tests when your change needs them (`CONTRIBUTING.md`, `test/README.md`). Do not run the full `Pkg.test` matrix, Linux SSH E2E, or downstream jobs on the VM unless the user asks; those stay CI-only.
+
+Do not `export HOME` or `JULIA_DEPOT_PATH` in the agent session. Prefix individual commands with `PATH="$HOME/.julia/bin:$PATH"` when app shims are missing from PATH. Set `JULIA_APPS_JULIA_CMD="$HOME/.juliaup/bin/julia"` (launcher path only, no `+channel`) when `jetls` fails to start.
+
+Runic and JETLS are installed by `.github/install-agent-tools.sh` during the environment Build when that step succeeds.
