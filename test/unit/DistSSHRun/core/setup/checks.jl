@@ -322,7 +322,7 @@ using Pkg
                 Bar = {path = "../shared/Bar"}
                 """,
             )
-            _sync_test_project_manifest!(side)
+            write(joinpath(side, "Manifest.toml"), "manifest_format = \"2.0\"\n")
             @test_throws ArgumentError DistSSHRun.ensure_manifest_ships!(side)
             DistSSHRun._set_active_selection!(
                 DistSSHRun.SourceSelection(
@@ -428,7 +428,6 @@ using Pkg
             foo = joinpath(job, "dev", "Foo")
             mkpath(foo)
             write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
-            _sync_test_project_manifest!(job)
             write(
                 joinpath(job, "Project.toml"),
                 """
@@ -438,6 +437,7 @@ using Pkg
                 Bar = {url = "https://example.invalid/Bar.jl.git"}
                 """,
             )
+            write(joinpath(job, "Manifest.toml"), "manifest_format = \"2.0\"\n")
             shipped = DistSSHRun.ensure_manifest_ships!(job)
             @test shipped.env_dir == DistSSHRun.canonical_local_path(job)
 
@@ -543,8 +543,8 @@ using Pkg
                 foo_src = joinpath(repo, "dev", "Foo")
                 mkpath(foo_src)
                 write(joinpath(foo_src, "Project.toml"), "name = \"Foo\"\n")
-                _sync_test_project_manifest!(repo)
                 write(joinpath(repo, "Project.toml"), "name = \"Src\"\n")
+                _sync_test_project_manifest!(repo)
                 run(pipeline(`git -C $repo init -q`; stdout = devnull, stderr = devnull))
                 nocommit_err = try
                     DistSSHRun.ensure_manifest_in_git_worktree!(repo)
@@ -736,7 +736,6 @@ using Pkg
             mkpath(vendor)
             mkpath(dirname(link))
             write(joinpath(vendor, "Project.toml"), "name = \"Foo\"\n")
-            _sync_test_project_manifest!(job)
             write(
                 joinpath(job, "Project.toml"),
                 """
@@ -745,6 +744,7 @@ using Pkg
                 Foo = {path = "dev/Foo"}
                 """,
             )
+            write(joinpath(job, "Manifest.toml"), "manifest_format = \"2.0\"\n")
             symlink(joinpath("..", "vendor", "Foo"), link)
             @test DistSSHRun.ensure_manifest_ships!(job).env_dir ==
                 DistSSHRun.canonical_local_path(job)
@@ -770,7 +770,6 @@ using Pkg
                 mkpath(inn)
                 write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
                 write(joinpath(inn, "Project.toml"), "name = \"In\"\n")
-                _sync_test_project_manifest!(phys)
                 write(
                     joinpath(phys, "Project.toml"),
                     """
@@ -779,6 +778,7 @@ using Pkg
                     Foo = {path = "dev/Foo"}
                     """,
                 )
+                write(joinpath(phys, "Manifest.toml"), "manifest_format = \"2.0\"\n")
                 symlink(joinpath("private", "var"), joinpath(base, "var"))
                 logical = joinpath(base, "var", "repo")
                 run(pipeline(`git -C $phys init -q`; stdout = devnull, stderr = devnull))

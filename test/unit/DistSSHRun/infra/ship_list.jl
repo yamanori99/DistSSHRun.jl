@@ -167,10 +167,10 @@ using Test
                 Foo = {path = "vendor/Foo"}
                 """
             )
-            _sync_test_project_manifest!(tmp)
             write(joinpath(tmp, ".gitignore"), "vendor/\n")
             write(joinpath(foo, "Project.toml"), "name = \"Foo\"\n")
             write(joinpath(foo, "src", "Foo.jl"), "module Foo end\n")
+            write(joinpath(tmp, "Manifest.toml"), "manifest_format = \"2.0\"\n")
             text = mktemp() do _, io
                 packed = redirect_stdout(io) do
                     DistSSHRun._pack_project_tree(tmp)
@@ -334,7 +334,7 @@ using Test
                 Foo = {path = "$absfoo"}
                 """
             )
-            _sync_test_project_manifest!(tmp)
+            write(joinpath(tmp, "Manifest.toml"), "manifest_format = \"2.0\"\n")
             err = try
                 DistSSHRun._pack_project_tree(tmp)
                 nothing
@@ -361,7 +361,7 @@ using Test
                 Foo = {path = "vendor/link/Foo"}
                 """
             )
-            _sync_test_project_manifest!(tmp)
+            write(joinpath(tmp, "Manifest.toml"), "manifest_format = \"2.0\"\n")
             packed = DistSSHRun._pack_project_tree(tmp)
             try
                 dest = mktempdir()

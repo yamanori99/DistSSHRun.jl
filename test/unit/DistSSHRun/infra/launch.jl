@@ -212,12 +212,14 @@ using TOML
     @test DistSSHRun.unsafe_heterogeneous_argv(false) == String[]
     @test DistSSHRun.unsafe_heterogeneous_argv(true) == ["--unsafe-heterogeneous"]
 
+    _test_sysimage = DistSSHRun.julia_sysimage_path()
     parent = Dict(
         "version" => string(VERSION),
         "commit" => string(Base.GIT_VERSION_INFO.commit),
         "manifest.sha256" => "a"^64,
         "project.sha256" => "b"^64,
         "pkg.DistSSHRun" => "0.1.0",
+        "sysimage" => _test_sysimage,
     )
     worker = Dict(
         "version" => string(VERSION),
@@ -225,6 +227,7 @@ using TOML
         "manifest.sha256" => "a"^64,
         "project.sha256" => "b"^64,
         "pkg.DistSSHRun" => "0.1.0",
+        "sysimage" => _test_sysimage,
     )
     @test isempty(DistSSHRun.identity_mismatches(parent, worker))
 

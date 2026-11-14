@@ -3,7 +3,9 @@ if !isdefined(Main, :_write_host_project!)
     # `Pkg.is_manifest_current` must be `true` before drive/ride/go verification.
     function _sync_test_project_manifest!(proj::AbstractString)
         proj = abspath(string(proj))
-        isfile(joinpath(proj, "Project.toml")) || return nothing
+        isfile(joinpath(proj, "Project.toml")) ||
+            isfile(joinpath(proj, "JuliaProject.toml")) ||
+            return nothing
         julia = _julia_exe()
         cmd = setenv(
             `$julia --startup-file=no --project=$proj -e "using Pkg; Pkg.resolve()"`,
@@ -22,6 +24,7 @@ if !isdefined(Main, :_write_host_project!)
             ispath(src) || continue
             cp(src, joinpath(proj, name); force = true)
         end
+        _sync_test_project_manifest!(proj)
         return nothing
     end
 
