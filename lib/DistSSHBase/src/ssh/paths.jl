@@ -51,7 +51,7 @@ end
 """
     current_project_file(dir) -> Union{Nothing,String}
 
-Absolute path of the project file [`Base.current_project`](@ref) would return
+Absolute path of the project file `Base.current_project` would return
 when searching upward from `dir`, stopping at `homedir()`, or `nothing` when
 the search finds no `JuliaProject.toml` / `Project.toml`.
 
@@ -64,7 +64,7 @@ function current_project_file(dir::AbstractString)::Union{Nothing, String}
 end
 
 """
-Walk upward from `start_dir` like [`Base.current_project`](@ref) and return the
+Walk upward from `start_dir` like `Base.current_project` and return the
 directory containing the resolved project file. When the search finds nothing,
 returns `canonical_local_path(start_dir)` (no parent-directory fallback).
 """
