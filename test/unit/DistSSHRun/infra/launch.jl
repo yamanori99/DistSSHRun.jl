@@ -443,6 +443,22 @@ using TOML
         DistSSHRun.verify_go_slots_match_job!(proj, slots)
     end
 
+    @testset "go parent slot probes sysimage from --julia binary" begin
+        _with_tempdir() do proj
+            write(joinpath(proj, "Project.toml"), "name = \"GoSlotSys\"\n")
+            _sync_test_project_manifest!(proj)
+            bin = DistSSHRun.pin_local_julia(joinpath(Sys.BINDIR, "julia"))
+            local_id = DistSSHRun._go_local_slot_identity(proj, bin)
+            img, def = DistSSHRun._local_julia_sysimage_identity(bin)
+            @test !isempty(local_id["sysimage"])
+            @test local_id["sysimage"] == img
+            @test local_id["sysimage.default"] == def
+            @test isempty(
+                DistSSHRun.identity_mismatches(DistSSHRun.run_identity(proj), local_id),
+            )
+        end
+    end
+
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"VerMan\"\n")
         write(

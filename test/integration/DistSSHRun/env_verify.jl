@@ -222,6 +222,48 @@ function _env_verify_guards()
             end
         end
 
+        @testset "manifest current without project file fails closed" begin
+            _with_tempdir() do root
+                bare = joinpath(root, "bare")
+                mkpath(bare)
+                write(joinpath(bare, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+                @test isempty(DistSSHRun._located_project_file_for_identity(bare))
+                err = try
+                    DistSSHRun.assert_controller_manifest_current!(bare)
+                    nothing
+                catch e
+                    e
+                end
+                err isa ErrorException || error("expected ErrorException")
+                msg = sprint(showerror, err)
+                @test occursin("not current", msg)
+                @test occursin("no Project.toml or JuliaProject.toml", msg)
+                @test occursin("unsafe-heterogeneous does not waive", msg)
+                DistSSHRun.with_unsafe_heterogeneous(true) do
+                    @test_throws ErrorException DistSSHRun.assert_controller_manifest_current!(bare)
+                end
+            end
+        end
+
+        @testset "manifest current checks JuliaProject.toml tree" begin
+            _with_tempdir() do root
+                julia_only = joinpath(root, "julia-only")
+                mkpath(julia_only)
+                write(joinpath(julia_only, "JuliaProject.toml"), "name = \"JuliaOnly\"\n")
+                write(
+                    joinpath(julia_only, "JuliaManifest.toml"),
+                    """
+                    manifest_format = "2.0"
+                    julia_version = "$(VERSION)"
+                    project_hash = "0123456789abcdef0123456789abcdef01234567"
+                    """,
+                )
+                @test_throws ErrorException DistSSHRun.assert_controller_manifest_current!(
+                    julia_only,
+                )
+            end
+        end
+
         @testset "run_identity records default sysimage" begin
             _with_tempdir() do proj
                 _env_verify_job!(proj)

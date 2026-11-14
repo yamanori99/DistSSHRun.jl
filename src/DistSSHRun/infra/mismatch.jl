@@ -451,6 +451,22 @@ function assert_controller_manifest_for_environment_verify!(project::AbstractStr
 end
 public assert_controller_manifest_for_environment_verify!
 
+function _controller_manifest_current_no_project_error(project::AbstractString)::String
+    host = string(gethostname())
+    proj_disp = _controller_project_display(project)
+    q = _quoted_hint_path(proj_disp)
+    return join(
+        [
+            "what: active project Manifest is not current for environment verification",
+            "where: controller host=$(host); project=$(proj_disp) (no Project.toml or JuliaProject.toml here)",
+            "why: without a resolved project file, the controller cannot verify `Pkg.is_manifest_current`",
+            "fix: run from a directory (or pass a path) that contains Project.toml or JuliaProject.toml, then `julia --project=$(q) -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'`",
+            "note: --unsafe-heterogeneous does not waive this check",
+        ],
+        "\n",
+    )
+end
+
 function _controller_stale_manifest_error(project::AbstractString, current)::String
     host = string(gethostname())
     env = resolve_pkg_env(project)
@@ -476,10 +492,12 @@ end
 """Fail before worker / remote launch when `Pkg.is_manifest_current` is not `true`."""
 function assert_controller_manifest_current!(project::AbstractString)
     pf = _located_project_file_for_identity(project)
-    isempty(pf) && return nothing
-    env = resolve_pkg_env(project)
+    if isempty(pf)
+        throw(ErrorException(_controller_manifest_current_no_project_error(project)))
+    end
+    ctx_dir = canonical_local_path(dirname(pf))
     current = try
-        Pkg.is_manifest_current(env.project_dir)
+        Pkg.is_manifest_current(ctx_dir)
     catch
         nothing
     end
@@ -662,9 +680,17 @@ img_path = try
 catch
     unsafe_string(Base.JLOptions().image_file)
 end
+ext = Sys.isapple() ? ".dylib" : Sys.iswindows() ? ".dll" : ".so"
+def_img = joinpath(Sys.BINDIR, "..", "lib", "julia", "sys" * ext)
+img_default = try
+    realpath(unsafe_string(Base.JLOptions().image_file)) == realpath(def_img)
+catch
+    false
+end
 print("version=", string(VERSION), '\n')
 print("commit=", string(Base.GIT_VERSION_INFO.commit), '\n')
 print("sysimage=", img_path, '\n')
+print("sysimage.default=", img_default, '\n')
 print("manifest=", man, '\n')
 print("manifest.sha256=", man_sha, '\n')
 print("project=", pf, '\n')
@@ -718,6 +744,37 @@ function _described_identity_lines(
     ]
 end
 
+const _JULIA_SYSIMAGE_IDENTITY_EVAL = raw"""
+let img = try
+    string(realpath(unsafe_string(Base.JLOptions().image_file)))
+catch
+    unsafe_string(Base.JLOptions().image_file)
+end
+ext = Sys.isapple() ? ".dylib" : Sys.iswindows() ? ".dll" : ".so"
+def = joinpath(Sys.BINDIR, "..", "lib", "julia", "sys" * ext)
+isdef = try
+    realpath(unsafe_string(Base.JLOptions().image_file)) == realpath(def)
+catch
+    false
+end
+print(img, '\n', isdef, '\n')
+end
+"""
+
+function _local_julia_sysimage_identity(bin::AbstractString)::Tuple{String, String}
+    out = strip(
+        read(
+            Cmd(String[String(bin), "--startup-file=no", "-e", _JULIA_SYSIMAGE_IDENTITY_EVAL]),
+            String,
+        ),
+    )
+    lines = filter(!isempty, split(out, '\n'))
+    img = isempty(lines) ? "" : String(first(lines))
+    def = length(lines) < 2 ? "" : String(lines[2])
+    def_flag = def == "true" ? "true" : def == "false" ? "false" : ""
+    return img, def_flag
+end
+
 function _go_local_slot_identity(project::AbstractString, julia)::Dict{String, String}
     parent = run_identity(project)
     spec = julia isa AbstractString ? String(julia) : nothing
@@ -727,11 +784,17 @@ function _go_local_slot_identity(project::AbstractString, julia)::Dict{String, S
     catch
         ("", "")
     end
+    img, img_default = try
+        _local_julia_sysimage_identity(bin)
+    catch
+        ("", "")
+    end
     local_id = Dict{String, String}(
         "version" => v,
         "commit" => c,
         "julia" => bin,
-        "sysimage" => get(parent, "sysimage", ""),
+        "sysimage" => img,
+        "sysimage.default" => img_default,
         "manifest" => get(parent, "manifest", ""),
         "manifest.sha256" => get(parent, "manifest.sha256", ""),
         "project" => get(parent, "project", ""),
