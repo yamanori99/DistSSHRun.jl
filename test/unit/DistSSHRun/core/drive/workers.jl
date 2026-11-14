@@ -10,6 +10,7 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
 
 @testset "drive workers lifecycle" begin
     _with_tempdir() do tmp
+        _write_host_project!(tmp, "DriveWorkersLife")
 
         @testset "setup_cli_host_token child token" begin
             host_name = "worker-host"
