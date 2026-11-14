@@ -13,4 +13,6 @@ category: breaking
   mismatches are collected in one report (paths and lock file names are not
   compared). An empty Julia commit on either side is a mismatch. Previously
   skipped checks can surface once a Manifest exists. `--unsafe-heterogeneous`
-  does not waive Julia build or DistSSH* version checks.
+  does not waive Julia build or DistSSH* version checks. Worker snapshots load
+  TOML in the same call that parses the Manifest; that parse uses
+  `invokelatest` so `pkg.*` versions are read instead of being dropped.

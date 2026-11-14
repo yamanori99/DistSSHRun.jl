@@ -366,6 +366,26 @@ end
         end
     end
 
+    @testset "production worker snapshot reads Manifest pkg versions" begin
+        proj = pkgdir(DistSSHRun)
+        parent = DistSSHRun.run_identity(proj)
+        @test get(parent, "pkg.DistSSHRun", "") == "0.2.0-DEV"
+        flags = DistSSHRun.worker_exeflag_strings(proj)
+        env = Dict(DistSSHRun.worker_env_pairs(proj))
+        addprocs(1; exeflags = Cmd(flags), env = env)
+        w = only(workers())
+        try
+            snap = remotecall_fetch(Core.eval, w, Main, DistSSHRun._worker_identity_expr())
+            @test snap isa AbstractDict
+            @test get(snap, "pkg.DistSSHRun", "") == parent["pkg.DistSSHRun"]
+            @test get(snap, "manifest.sha256", "") == parent["manifest.sha256"]
+            lines = DistSSHRun.identity_mismatches(parent, snap)
+            @test isempty(lines)
+        finally
+            w in workers() && rmprocs(w; waitfor = 5.0)
+        end
+    end
+
     @testset "_remote_project_for_go prefers remote work root" begin
         local_proj = "/home/controller/jobs/app"
         remote_src = "/home/remote/runs/run123/src"

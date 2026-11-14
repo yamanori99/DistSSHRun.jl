@@ -134,7 +134,9 @@ function _worker_production_identity_expr()
                 isfile(path) || return ""
                 sha_mod === nothing && return ""
                 try
-                    return lowercase(sha_mod.bytes2hex(sha_mod.sha256(read(path))))
+                    # `require` may load SHA in this world age; call the new methods later.
+                    digest = Base.invokelatest(sha_mod.sha256, read(path))
+                    return lowercase(Base.invokelatest(sha_mod.bytes2hex, digest))
                 catch
                     return ""
                 end
@@ -166,7 +168,8 @@ function _worker_production_identity_expr()
                 raw = try
                     Base.require(Base.PkgId($(_WORKER_PKG_UUID_TOML), "TOML"))
                     toml = Base.loaded_modules[Base.PkgId($(_WORKER_PKG_UUID_TOML), "TOML")]
-                    toml.parsefile(man)
+                    # Same world age as `require`: `parsefile` is not callable yet.
+                    Base.invokelatest(toml.parsefile, man)
                 catch
                     nothing
                 end
