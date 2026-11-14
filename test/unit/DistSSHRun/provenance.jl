@@ -553,6 +553,8 @@ end
         withenv(_PROV_ENV_OFF...) do
             DistSSHRun._set_provenance_source!(nothing)
             _with_tempdir() do proj
+                write(joinpath(proj, "Project.toml"), "name = \"ProvGo\"\n")
+                write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
                 script = joinpath(proj, "job.jl")
                 write(script, "error(\"boom\")\n")
                 result = redirect_stdout(devnull) do
@@ -568,7 +570,8 @@ end
                 @test raw["schema"] == 1
                 @test raw["kind"] == "go"
                 @test haskey(raw, "output_dir")
-                @test raw["provenance"]["project"]["manifest"] == "absent"
+                @test raw["provenance"]["project"]["manifest"] isa String
+                @test raw["provenance"]["project"]["manifest"] != "absent"
                 workers = raw["provenance"]["workers"]
                 @test haskey(workers, "parent")
                 @test workers["parent"][1]["version"] == string(VERSION)
@@ -695,6 +698,19 @@ end
             else
                 DistSSHRun._set_active_selection!(previous)
             end
+        end
+    end
+
+    @testset "unsafe heterogeneous records unverified environment" begin
+        _with_tempdir() do proj
+            DistSSHRun.with_unsafe_heterogeneous(
+                () -> begin
+                    prov = DistSSHRun.assemble_provenance()
+                    env = get(prov, "environment", nothing)
+                    @test env["verification"] == "unverified"
+                    @test env["reason"] == "unsafe-heterogeneous"
+                end, true
+            )
         end
     end
 

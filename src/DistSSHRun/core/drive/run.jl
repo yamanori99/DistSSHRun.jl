@@ -546,7 +546,7 @@ function _run_drive_parsed_locked!(
         run_id = get(parsed, :run_id, nothing),
         remote_argv = remote_argv,
     )
-    DistSSHRun._require_manifest!(proj_dir)
+    DistSSHRun.assert_controller_manifest_for_environment_verify!(proj_dir)
     # git + cleanup + workers + wait + init + run + collect
     progress_steps = 7
     progress_ok = false

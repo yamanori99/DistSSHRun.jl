@@ -13,6 +13,7 @@ function with_unsafe_heterogeneous(f::Function, enabled::Bool)
     _UNSAFE_HETEROGENEOUS[] = true
     try
         _record_unsafe_heterogeneous!()
+        _record_environment_unverified!("unsafe-heterogeneous")
         @warn "unsafe: heterogeneous cluster (Julia, packages, and environment files may differ across workers)"
         return f()
     finally
@@ -320,16 +321,94 @@ function _format_worker_mismatch_line(pid::Integer, detail::AbstractString)::Str
     return "host=$(host) rank=$(rank_s) pid=$(pid): $(String(detail))"
 end
 
+function _controller_project_display(project::AbstractString)::String
+    proj = canonical_local_path(project)
+    pf = _located_project_file_for_identity(project)
+    if isempty(pf)
+        return proj
+    end
+    return pf
+end
+
+function _controller_expected_manifest_line(project::AbstractString)::String
+    mp = DistSSHBase.manifest_path(project)
+    mp === nothing && return ""
+    return String(mp)
+end
+
+function _controller_missing_manifest_issue(project::AbstractString)::String
+    host = string(gethostname())
+    proj_disp = _controller_project_display(project)
+    pf = _located_project_file_for_identity(project)
+    expected = _controller_expected_manifest_line(project)
+    if isempty(pf)
+        return "controller: active project has no Project.toml (host=$(host) project=$(proj_disp))"
+    end
+    exp_s = isempty(expected) ? "(none resolved by Base)" : expected
+    return "controller: active project has no Manifest (host=$(host) project=$(proj_disp) expected=$(exp_s))"
+end
+
+function _controller_missing_manifest_error(project::AbstractString)::String
+    host = string(gethostname())
+    proj_disp = _controller_project_display(project)
+    pf = _located_project_file_for_identity(project)
+    q = _quoted_hint_path(dirname(isempty(pf) ? proj_disp : pf))
+    expected = _controller_expected_manifest_line(project)
+    exp_line = if isempty(pf)
+        "where: controller host=$(host); active project path=$(proj_disp) (no Project.toml or JuliaProject.toml here)"
+    else
+        exp_s = isempty(expected) ? "(none resolved by Base)" : expected
+        "where: controller host=$(host); active project=$(pf); expected manifest=$(exp_s)"
+    end
+    fix_line = if isempty(pf)
+        "fix: (1) pass a directory or file that contains Project.toml (or JuliaProject.toml), (2) add a Manifest with `julia --project=$(q) -e 'using Pkg; Pkg.instantiate()'` and ship the same tree to every worker"
+    else
+        "fix: (1) `julia --project=$(q) -e 'using Pkg; Pkg.instantiate()'`, (2) deploy the same Manifest bytes to every worker with setup"
+    end
+    return join(
+        [
+            "what: active project has no Manifest digest for environment verification",
+            exp_line,
+            "why: workers may load different package versions when the controller Manifest is absent",
+            fix_line,
+            "override: pass --unsafe-heterogeneous to launch without environment verification (recorded as unverified in provenance)",
+        ],
+        "\n",
+    )
+end
+
+"""Fail before worker / remote launch when the controller has no Manifest (unless unsafe)."""
+function assert_controller_manifest_for_environment_verify!(project::AbstractString)
+    unsafe_heterogeneous_active() && return nothing
+    parent = run_identity(project)
+    want_man = get(parent, "manifest.sha256", "")
+    !isempty(want_man) && return nothing
+    throw(ErrorException(_controller_missing_manifest_error(project)))
+end
+public assert_controller_manifest_for_environment_verify!
+
 function _environment_mismatch_throw(lines::Vector{String})
     isempty(lines) && return nothing
     throw(
         ErrorException(
             "environment mismatch between controller (master) and worker(s):\n  " *
                 join(lines, "\n  ") *
-                "\nwhy: every worker must resolve the same Project and Manifest file bytes as the controller (master) before work runs (CRLF and other byte differences count).\n" *
-                "fix: run setup so each host deploys the same tree as the controller (master), or pass --unsafe-heterogeneous to allow a mixed cluster.",
+                "\nwhy: every worker must match the controller (master) Julia build, DistSSH* versions, and Manifest/Project byte digests before work runs.\n" *
+                "fix: run setup so each host deploys the same tree as the controller (master), or pass --unsafe-heterogeneous to allow a mixed cluster (unverified).",
         ),
     )
+end
+
+function _collect_environment_mismatches(
+        project::AbstractString,
+        parent::AbstractDict,
+        worker_lines::Vector{String},
+    )::Vector{String}
+    want_man = get(parent, "manifest.sha256", "")
+    lines = String[]
+    isempty(want_man) && push!(lines, _controller_missing_manifest_issue(project))
+    append!(lines, worker_lines)
+    return lines
 end
 
 """Worker snapshot for environment verification (`Core.eval` on the worker)."""
@@ -343,8 +422,6 @@ function verify_workers_match_job!(
     )
     unsafe_heterogeneous_active() && return nothing
     parent = run_identity(project)
-    want_man = get(parent, "manifest.sha256", "")
-    isempty(want_man) && return nothing
     owned_live = Set(_live_owned_worker_ids())
     worker_ids = if host_manifests isa AbstractDict && !isempty(host_manifests)
         # Per-worker manifest paths from drive (local vs remote); comparison uses SHA digests only.
@@ -352,7 +429,7 @@ function verify_workers_match_job!(
     else
         _live_owned_worker_ids()
     end
-    mismatches = String[]
+    worker_lines = String[]
     mismatch_lock = ReentrantLock()
     @sync for w in worker_ids
         @async begin
@@ -374,11 +451,14 @@ function verify_workers_match_job!(
             end
             isempty(lines) ||
                 lock(mismatch_lock) do
-                append!(mismatches, lines)
+                append!(worker_lines, lines)
             end
         end
     end
-    return _environment_mismatch_throw(mismatches)
+    mismatches = _collect_environment_mismatches(project, parent, worker_lines)
+    _environment_mismatch_throw(mismatches)
+    _record_environment_verified!()
+    return nothing
 end
 
 function _julia_version_commit_from_output(out::AbstractString)::Tuple{String, String}
@@ -556,13 +636,11 @@ function verify_go_slots_match_job!(
     )
     unsafe_heterogeneous_active() && return nothing
     parent = run_identity(project)
-    want_man = get(parent, "manifest.sha256", "")
-    isempty(want_man) && return nothing
-    mismatches = String[]
+    slot_lines = String[]
     if any(s -> s.kind === :parent, slots)
         local_id = _go_local_slot_identity(project, julia)
         for line in identity_mismatches(parent, local_id)
-            push!(mismatches, "parent slot: $(line)")
+            push!(slot_lines, "parent slot: $(line)")
         end
     end
     seen = Set{String}()
@@ -576,8 +654,11 @@ function verify_go_slots_match_job!(
         remote_proj = _remote_project_for_go(hs, remote_root, project)
         worker = _go_remote_run_identity(hs, remote_proj, julia)
         for line in identity_mismatches(parent, worker)
-            push!(mismatches, "host $(hs): $(line)")
+            push!(slot_lines, "host $(hs): $(line)")
         end
     end
-    return _environment_mismatch_throw(mismatches)
+    mismatches = _collect_environment_mismatches(project, parent, slot_lines)
+    _environment_mismatch_throw(mismatches)
+    _record_environment_verified!()
+    return nothing
 end

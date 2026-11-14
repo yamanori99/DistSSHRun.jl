@@ -12,6 +12,7 @@ const _PROVENANCE_SOURCE_SNAP = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 const _PROVENANCE_GIT_TOOL = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 const _PROVENANCE_GO = Pair{String, String}[]
 const _PROVENANCE_UNSAFE = Ref{Vector{String}}(String[])
+const _PROVENANCE_ENVIRONMENT = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 
 const _GO_SLOT_PROVENANCE_NAME = "provenance-slot.toml"
 const _GO_SLOT_LOADER_NAME = "provenance-slot.jl"
@@ -180,6 +181,26 @@ function _process_snapshot_expr()
     end
 end
 
+function _record_environment_verification!(
+        status::AbstractString,
+        reason::Union{Nothing, AbstractString} = nothing,
+    )
+    d = Dict{String, Any}("verification" => String(status))
+    if reason isa AbstractString && !isempty(strip(reason))
+        d["reason"] = String(strip(reason))
+    end
+    _PROVENANCE_ENVIRONMENT[] = d
+    return nothing
+end
+
+function _record_environment_verified!()
+    return _record_environment_verification!("verified")
+end
+
+function _record_environment_unverified!(reason::AbstractString)
+    return _record_environment_verification!("unverified", reason)
+end
+
 function _note_provenance_unsafe!(label::AbstractString)
     s = strip(String(label))
     isempty(s) && return nothing
@@ -220,6 +241,7 @@ function _reset_run_provenance!(project::AbstractString)
     if !unsafe_heterogeneous_active()
         _PROVENANCE_UNSAFE[] = String[]
     end
+    _PROVENANCE_ENVIRONMENT[] = nothing
     _PROVENANCE_AT_START[] = true
     reset_worker_seeds!()
     return nothing
@@ -938,6 +960,8 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     deploy_rec !== nothing && (data["deploy"] = deploy_rec)
     unsafe = _PROVENANCE_UNSAFE[]
     isempty(unsafe) || (data["unsafe"] = copy(unsafe))
+    env_tbl = _PROVENANCE_ENVIRONMENT[]
+    env_tbl isa AbstractDict && !isempty(env_tbl) && (data["environment"] = copy(env_tbl))
     hb = started ? _PROVENANCE_HEARTBEAT[] : nothing
     hb !== nothing && (data["heartbeat"] = hb)
     return data

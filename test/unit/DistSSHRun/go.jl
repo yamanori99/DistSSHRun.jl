@@ -327,10 +327,12 @@ using Dates
             catch e
                 e
             end
-            @test err isa ArgumentError
-            @test occursin("No Manifest for ", err.msg)
-            @test occursin("Pkg.resolve()", err.msg)
-            @test !occursin("--help", err.msg)
+            @test err isa ErrorException
+            shown = sprint(showerror, err)
+            @test occursin("no Manifest digest", shown)
+            @test occursin("Pkg.instantiate", shown)
+            @test occursin("--unsafe-heterogeneous", shown)
+            @test !occursin("--help", shown)
         end
     end
 
@@ -536,6 +538,8 @@ using Dates
 
     @testset "DISTSSH_HOSTS_FILE not reapplied when workers set" begin
         _with_tempdir() do proj
+            write(joinpath(proj, "Project.toml"), "name = \"GoHosts\"\n")
+            write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
             hf = joinpath(proj, "hosts")
@@ -554,6 +558,8 @@ using Dates
 
     @testset "later succeeding slot does not mask earlier failure" begin
         _with_tempdir() do proj::String
+            write(joinpath(proj, "Project.toml"), "name = \"GoMask\"\n")
+            write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
             script = joinpath(proj, "job.jl")
             write(
                 script,
@@ -596,6 +602,8 @@ using Dates
 
     @testset "failed slot names last top-level" begin
         _with_tempdir() do proj
+            write(joinpath(proj, "Project.toml"), "name = \"GoFailSlot\"\n")
+            write(joinpath(proj, "Manifest.toml"), "manifest_format = \"2.0\"\n")
             script = joinpath(proj, "job.jl")
             write(
                 script,

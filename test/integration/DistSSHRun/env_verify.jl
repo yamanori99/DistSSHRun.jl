@@ -2,6 +2,7 @@ using Test
 using Distributed
 using Pkg
 using TOML
+using DistSSHRun
 
 function _env_verify_job!(proj::AbstractString)
     write(joinpath(proj, "Project.toml"), "name = \"EnvVerifyJob\"\n")
@@ -94,27 +95,107 @@ function _go_identity_env(parent::AbstractDict; tweak::Pair{String, String})
 end
 
 @testset "environment verify guards" begin
-    @testset "skip when controller has no manifest digest (lenient)" begin
+    @testset "controller without Manifest fails closed" begin
         _with_tempdir() do proj
             write(joinpath(proj, "Project.toml"), "name = \"NoManifestYet\"\n")
             ident = DistSSHRun.run_identity(proj)
             @test isempty(ident["manifest.sha256"])
+            err = try
+                DistSSHRun.assert_controller_manifest_for_environment_verify!(proj)
+                nothing
+            catch e
+                e
+            end
+            err isa ErrorException || error("expected ErrorException")
+            msg = sprint(showerror, err)
+            @test occursin("what:", msg)
+            @test occursin("no Manifest", msg)
+            @test occursin("--unsafe-heterogeneous", msg)
+            @test occursin("Pkg.instantiate", msg)
+            @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
+            slots = DistSSHRun.GoSlot[DistSSHRun.GoSlot(:parent, nothing, "parent")]
+            @test_throws ErrorException DistSSHRun.verify_go_slots_match_job!(proj, slots)
+            DistSSHRun.with_unsafe_heterogeneous(
+                () -> begin
+                    DistSSHRun.verify_workers_match_job!(proj)
+                    DistSSHRun.verify_go_slots_match_job!(proj, slots)
+                end, true,
+            )
+            prov = DistSSHRun.assemble_provenance()
+            env = get(prov, "environment", nothing)
+            @test env isa AbstractDict
+            @test env["verification"] == "unverified"
+            @test env["reason"] == "unsafe-heterogeneous"
+        end
+    end
+
+    @testset "missing controller Manifest plus worker mismatch together" begin
+        _with_tempdir() do proj
+            write(joinpath(proj, "Project.toml"), "name = \"NoManMix\"\n")
             test_proj = Base.active_project()
             _with_one_local_worker(
                 test_proj,
                 function (w)
                     DistSSHRun._mark_workers_launched!([w], proj)
+                    parent = DistSSHRun.run_identity(proj)
                     _env_verify_worker_toml_override!(
-                        w,
-                        merge(ident, Dict("manifest.sha256" => "f"^64)),
-                        "manifest.sha256" => "f"^64,
+                        w, parent, "version" => "1.0.0",
                     )
-                    DistSSHRun.verify_workers_match_job!(proj)
+                    err = try
+                        DistSSHRun.verify_workers_match_job!(proj)
+                        nothing
+                    catch e
+                        e
+                    end
+                    err isa ErrorException || error("expected ErrorException")
+                    msg = sprint(showerror, err)
+                    @test occursin("no Manifest", msg)
+                    @test occursin("julia version", msg)
                     return nothing
                 end,
             )
-            slots = DistSSHRun.GoSlot[DistSSHRun.GoSlot(:parent, nothing, "parent")]
-            DistSSHRun.verify_go_slots_match_job!(proj, slots)
+        end
+    end
+
+    @testset "manifest_path naming variants" begin
+        _with_tempdir() do root
+            julia_only = joinpath(root, "julia-only")
+            mkpath(julia_only)
+            write(joinpath(julia_only, "JuliaProject.toml"), "name = \"JuliaOnly\"\n")
+            lock = joinpath(julia_only, "JuliaManifest.toml")
+            write(lock, "# lock\n")
+            @test DistSSHRun.manifest_path(julia_only) == lock
+            ident = DistSSHRun.run_identity(julia_only)
+            @test !isempty(ident["manifest.sha256"])
+            @test ident["manifest"] == lock
+
+            ver = joinpath(root, "ver")
+            mkpath(ver)
+            write(joinpath(ver, "Project.toml"), "name = \"Ver\"\n")
+            vman = joinpath(
+                ver, "Manifest-v$(VERSION.major).$(VERSION.minor).toml",
+            )
+            write(vman, "# v\n")
+            @test DistSSHRun._existing_project_manifest(ver) == vman
+            @test !isempty(DistSSHRun.run_identity(ver)["manifest.sha256"])
+
+            ws = joinpath(root, "ws")
+            sub = joinpath(ws, "sub")
+            mkpath(sub)
+            write(
+                joinpath(ws, "Project.toml"),
+                "name = \"WsRoot\"\n[workspace]\nmembers = [\"sub\"]\n",
+            )
+            root_man = joinpath(ws, "Manifest.toml")
+            write(root_man, "# workspace lock\n")
+            write(joinpath(sub, "Project.toml"), "name = \"SubPkg\"\n")
+            sub_mp = DistSSHRun.manifest_path(sub)
+            # Finding: Julia `manifest_path` on a workspace member directory may be
+            # `nothing` while the root `Manifest.toml` exists (verified on 1.13).
+            @test sub_mp === nothing
+            @test DistSSHRun.manifest_path(ws) == root_man
+            @test !isempty(DistSSHRun.run_identity(ws)["manifest.sha256"])
+            DistSSHRun.assert_controller_manifest_for_environment_verify!(ws)
         end
     end
 

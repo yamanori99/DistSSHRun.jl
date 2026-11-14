@@ -1144,7 +1144,7 @@ function _go_run!(
             )
         )
     end
-    _require_manifest!(proj)
+    assert_controller_manifest_for_environment_verify!(proj)
     batch_dir = if output_dir !== nothing
         _prepare_output_dir!(
             output_dir;

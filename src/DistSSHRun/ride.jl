@@ -704,7 +704,7 @@ function _ride_run!(
     # `ride!` restores `DISTSSH_RUN_DIR` after this returns.
     run_dir = kit_run_dir()
     project_root_abs = canonical_local_path(project)
-    _require_manifest!(project_root_abs)
+    assert_controller_manifest_for_environment_verify!(project_root_abs)
     _reset_run_provenance!(project_root_abs)
     unsafe_heterogeneous_active() && _record_unsafe_heterogeneous!()
     _clear_last_ship!()

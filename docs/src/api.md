@@ -234,8 +234,10 @@ DistSSHBase.shell_status
 not exported. [`go!`](@ref), [`ride!`](@ref), and [`drive!`](@ref) compare
 resolved Manifest and Project file SHA-256 digests (byte-exact; CRLF
 differences count) between the controller (master) and every worker or go
-slot before work runs. Use CLI `--unsafe-heterogeneous` to allow a mixed
-cluster. Add [DistSSHKit](https://github.com/yamanori99/DistSSHKit.jl).
+slot before work runs when the controller has an active Manifest. Without a
+controller Manifest digest, launch fails before workers join unless you pass
+CLI `--unsafe-heterogeneous` (the run is recorded as unverified). Add
+[DistSSHKit](https://github.com/yamanori99/DistSSHKit.jl).
 These names are not a command.
 
 ```@docs
