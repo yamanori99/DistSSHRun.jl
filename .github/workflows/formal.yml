@@ -57,15 +57,15 @@ jobs:
       - name: Install PyYAML for bug schema check
         run: python3 -m pip install --user pyyaml
 
+      - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
+        with:
+          version: "1.13"
+
       - name: Audit (build, escapes, registry, coverage, bugs)
         run: bash formal/scripts/audit.sh
 
       - name: Refutation reproducers
         run: bash formal/scripts/run-repros.sh
-
-      - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
-        with:
-          version: "1.13"
 
       - name: Differential test
         run: julia --project=lib/DistSSHBase formal/diff/shell_status.jl
