@@ -1,0 +1,11 @@
+shell-status-signaled-branch	proven	general	2	lib/DistSSHBase/src/ssh/shell_status.jl	When termsignal > 0, status is 128 + termsignal (shell rule).	Any Int exitcode and termsignal; only the termsignal > 0 branch.
+shell-status-plain-exit	proven	general	2	lib/DistSSHBase/src/ssh/shell_status.jl	When termsignal is not positive, status is exitcode unchanged.	¬ (termsignal > 0), including termsignal <= 0.
+shell-status-sigint	proven	general	1	lib/DistSSHBase/src/ssh/shell_status.jl	SIGINT (termsignal 2) yields status 130 for any exitcode.	Docstring example (SIGINT 130).
+shell-status-sigpipe	proven	general	1	lib/DistSSHBase/src/ssh/shell_status.jl	SIGPIPE (termsignal 13) yields status 141.	Docstring example.
+shell-status-sigkill	proven	general	1	lib/DistSSHBase/src/ssh/shell_status.jl	SIGKILL (termsignal 9) yields status 137.	Docstring example.
+shell-status-sigterm	proven	general	1	lib/DistSSHBase/src/ssh/shell_status.jl	SIGTERM (termsignal 15) yields status 143.	Docstring example.
+shell-status-exit-0	proven	general	1	lib/DistSSHBase/src/ssh/shell_status.jl	Plain exit 0 is returned when not signaled.	Docstring example; ¬ (termsignal > 0).
+shell-status-exit-3	proven	general	1	lib/DistSSHBase/src/ssh/shell_status.jl	Plain exit 3 is returned when not signaled.	Docstring example; ¬ (termsignal > 0).
+shell-status-exit-127	proven	general	1	lib/DistSSHBase/src/ssh/shell_status.jl	Plain exit 127 is returned when not signaled.	Docstring example; ¬ (termsignal > 0).
+shell-status-exit-255	proven	general	1	lib/DistSSHBase/src/ssh/shell_status.jl	Plain exit 255 is returned when not signaled.	Docstring example; ¬ (termsignal > 0).
+shell-status-signaled-ge-129	proven	general	2	lib/DistSSHBase/src/ssh/shell_status.jl	Any signaled status is at least 129.	termsignal > 0.

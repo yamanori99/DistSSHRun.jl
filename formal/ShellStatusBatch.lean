@@ -1,11 +1,8 @@
-import DistSSHBaseFormal.ShellStatus
+import DistSSHLean.DistSSHBase.ShellStatus
 
-open DistSSHBaseFormal
+open DistSSHLean.DistSSHBase.ShellStatus
 
-/--
-Batch driver for differential testing: read lines `exitcode termsignal` from stdin,
-print one `shellStatus` result per line.
--/
+/-- Batch driver for `formal/diff/shell_status.jl`: stdin lines `exitcode termsignal`. -/
 def main : IO Unit := do
   let lines ← (← IO.getStdin).readToEnd
   for line in lines.splitOn "\n" do
