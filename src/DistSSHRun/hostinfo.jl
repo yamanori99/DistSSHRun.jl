@@ -1,7 +1,9 @@
 # hostinfo CLI: format DistSSHBase.HostFacts. Collection stays in Base.
 
 function session_inventory_hosts(session::DistSSHSession)::Vector{String}
-    parsed = parse_worker_tokens(session.tokens)
+    parsed = parse_worker_tokens(
+        session.tokens; local_workers = session.cli_session.local_workers,
+    )
     want_parent = session.include_parent_for_size ||
         parsed.parent_autosize || parsed.parent_workers > 0
     all_hosts = String[]

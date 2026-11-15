@@ -221,25 +221,26 @@ using Dates
             ready_shell = replace(ready, "'" => "'\\''")
             write(
                 ssh,
-                "#!/bin/sh\nready='" * ready_shell * "'\n" *
-                raw"""
-                for arg in "$@"; do
-                  case "$arg" in
+                """
+                #!/bin/sh
+                ready='$ready_shell'
+                for arg in "\$@"; do
+                  case "\$arg" in
                     *--version*)
-                      printf '%s\n' 'julia version 1.10.10'
+                      printf '%s\\n' 'julia version 1.10.10'
                       exit 0
                       ;;
                     *__DSR_POSIX_OK_*)
-                      printf '%s\n' "$arg" | sed -n 's/.*\(__DSR_POSIX_OK_[0-9a-fA-F][0-9a-fA-F]*__\).*/\1/p'
+                      printf '%s\\n' "\$arg" | sed -n 's/.*\\(__DSR_POSIX_OK_[0-9a-fA-F][0-9a-fA-F]*__\\).*/\\1/p'
                       exit 0
                       ;;
                   esac
-                  if [ -n "$ready" ] && [ ${#arg} -gt 200 ]; then
-                    printf '%s\n' "$$" > "$ready"
+                  if [ -n "\$ready" ] && [ \${#arg} -gt 200 ]; then
+                    printf '%s\\n' "\$\$" > "\$ready"
                     exec sleep 30
                   fi
                 done
-                printf '%s\n' /usr/bin/julia
+                printf '%s\\n' /usr/bin/julia
                 exit 0
                 """,
             )

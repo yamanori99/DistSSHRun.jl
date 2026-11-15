@@ -14,10 +14,10 @@ end
         p = DistSSHRun.parse_worker_tokens(["4*host-a", "host-b"]; local_workers = 2)
         @test p.parent_workers == 2
         @test !p.parent_autosize
-        @test p.child_workers == Dict("host-a" => 4)
-        @test p.child_auto == ["host-b"]
+        @test p.child_workers == Dict("host-a" => 4, "host-b" => 1)
+        @test p.child_auto == String[]
         @test p.child_hosts == ["host-a", "host-b"]
-        @test DistSSHRun.worker_tokens_fully_specified(p) == false
+        @test DistSSHRun.worker_tokens_fully_specified(p)
 
         fixed = DistSSHRun.parse_worker_tokens(["1*h1"]; local_workers = 2)
         @test DistSSHRun.worker_tokens_fully_specified(fixed)
@@ -25,6 +25,8 @@ end
             @test plan.parent_workers == 2
             @test plan.child_workers == Dict("h1" => 1)
         end
+        @test DistSSHRun.worker_plan_from_tokens(["h1"]; local_workers = 0).child_workers ==
+            Dict("h1" => 1)
         err = try
             DistSSHRun.worker_plan_from_tokens(["h1"])
             nothing
@@ -32,7 +34,6 @@ end
             e
         end
         @test err isa ArgumentError
-        @test occursin(":N", sprint(showerror, err))
 
         @test_throws ArgumentError DistSSHRun.parse_worker_tokens(["parent:1"])
 
@@ -41,7 +42,7 @@ end
         @test auto.parent_workers == 0
         @test auto.child_workers == Dict("h1" => 3)
         @test DistSSHRun.child_hosts_from_tokens(["h1", "4*h2"]) == ["h1", "h2"]
-        @test_throws ArgumentError DistSSHRun.require_counted_placement_tokens(["host"])
+        @test DistSSHRun.require_counted_placement_tokens(["host"]) === nothing
         @test DistSSHRun.require_counted_placement_tokens(["1*host"]) === nothing
 
         let kw = DistSSHRun.ParsedWorkerTokens(;
@@ -205,7 +206,9 @@ end
             all_h, remotes = DistSSHRun.session_size_hosts(session)
             @test all_h == ["parent", "h1"]
             @test remotes == ["h1"]
-            remote_only = DistSSHRun.DistSSHSession(project = tmp, workers = ["1*h1"])
+            remote_only = DistSSHRun.DistSSHSession(
+                project = tmp, workers = ["1*h1"], local_workers = 0,
+            )
             a2, r2 = DistSSHRun.session_size_hosts(remote_only)
             @test a2 == ["h1"]
             @test r2 == ["h1"]
@@ -629,17 +632,21 @@ end
                 "JULIA_DISTRIBUTED_EXE" => "",
             ) do
                 cfg = DistSSHRun.pipeline_config_from_env()
-                @test cfg.tokens == ["2*env-a", "1*host-a", "4*host-b"]
+                @test cfg.tokens == ["host-a", "4*host-b"]
                 @test cfg.hosts_file === nothing
             end
         end
         let hosts_file = _sample_hosts_file()
             withenv("DISTSSH_HOSTS_FILE" => hosts_file) do
                 s = DistSSHRun.DistSSHSession(workers = String[], local_workers = 1)
-                @test s.tokens == String[]
-        @test 1 == 1  # FIXME
+                @test s.cli_session.local_workers == 1
+                @test s.tokens == ["host-a", "4*host-b"]
+                @test DistSSHRun.worker_plan_from_tokens(
+                    s.tokens; local_workers = s.cli_session.local_workers,
+                ).parent_workers == 1
                 empty = DistSSHRun.DistSSHSession(workers = String[])
-                @test empty.tokens == ["1*host-a", "4*host-b"]
+                @test empty.cli_session.local_workers === nothing
+                @test empty.tokens == ["host-a", "4*host-b"]
             end
         end
     end
