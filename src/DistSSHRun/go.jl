@@ -199,7 +199,7 @@ function _go_repeat_pool(
         p.role === :parent &&
             throw(ArgumentError("$(repr(raw)): local workers use --local-workers, not tokens"))
         key = (p.role, p.name)
-        cap = p.n
+        cap = findfirst('*', String(raw)) === nothing ? nothing : p.n
         something(cap, 1) < 1 &&
             throw(ArgumentError("slot count must be >= 1, got $(something(cap, 1)) in $(repr(raw))"))
         if !haskey(caps, key)

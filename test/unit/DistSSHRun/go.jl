@@ -53,7 +53,7 @@ using Dates
         end
         @test DistSSHRun._go_sanitize_label("a/b c") == "a_b_c"
         @test DistSSHRun._go_sanitize_label("***") == "_"
-        @test_throws ArgumentError DistSSHRun.require_counted_placement_tokens(["lacal"])
+        @test_throws ArgumentError DistSSHRun.parse_go_args(["parent:1", "job.jl"])
         let s = DistSSHRun._go_plan_slots(String[]; local_workers = 2)
             @test length(s) == 2
             @test s[1].label == "parent-1"
@@ -217,16 +217,14 @@ using Dates
             ready = joinpath(dir, "ssh.ready")
             ssh = joinpath(bindir, "ssh")
             scp = joinpath(bindir, "scp")
+            # `_ssh_cmd` only exports askpass-related keys; bake the ready path into the double.
+            ready_shell = replace(ready, "'" => "'\\''")
             write(
                 ssh,
-                raw"""#!/bin/sh
-                ready="$GO_SLOT_SSH_READY"
+                "#!/bin/sh\nready='" * ready_shell * "'\n" *
+                raw"""
                 for arg in "$@"; do
                   case "$arg" in
-                    *go.exitcode*)
-                      printf '%s\n' "$$" > "$ready"
-                      exec sleep 30
-                      ;;
                     *--version*)
                       printf '%s\n' 'julia version 1.10.10'
                       exit 0
@@ -236,6 +234,10 @@ using Dates
                       exit 0
                       ;;
                   esac
+                  if [ -n "$ready" ] && [ ${#arg} -gt 200 ]; then
+                    printf '%s\n' "$$" > "$ready"
+                    exec sleep 30
+                  fi
                 done
                 printf '%s\n' /usr/bin/julia
                 exit 0
@@ -249,7 +251,6 @@ using Dates
             result = try
                 withenv(
                     "PATH" => path,
-                    "GO_SLOT_SSH_READY" => ready,
                     "DISTSSH_TEST" => nothing,
                     "DISTSSH_TEST_SSH" => nothing,
                     "DISTSSH_JOB_ID" => nothing,
