@@ -3,38 +3,42 @@
 """Where one field value came from (avoid naming enum members `Env` / `CLI`)."""
 @enum ConfigSource FromCLI FromEnv FromDefault
 
-struct ConfigField
-    value::Any
+struct BoolConfigField
+    value::Bool
+    source::ConfigSource
+end
+
+struct StringConfigField
+    value::String
     source::ConfigSource
 end
 
 """Immutable resolved configuration for go / drive / ride."""
 struct RunJobConfig
-    unsafe_skip_env_digests::ConfigField
-    unsafe_expose_port::ConfigField
-    unsafe_all_to_all::ConfigField
-    unsafe_master_silence_exit::ConfigField
-    print_config::ConfigField
-    dry_run::ConfigField
-    topology::ConfigField
+    unsafe_skip_env_digests::BoolConfigField
+    unsafe_expose_port::BoolConfigField
+    unsafe_all_to_all::BoolConfigField
+    unsafe_master_silence_exit::BoolConfigField
+    print_config::BoolConfigField
+    dry_run::BoolConfigField
+    topology::StringConfigField
     command::Symbol
 end
 
-function _resolve_bool_field(
-        key::Symbol;
+function _resolve_bool_field(;
         cli::Union{Nothing, Bool},
         env::Union{Nothing, String},
         default::Bool,
         env_dict::AbstractDict = ENV,
-    )::ConfigField
+    )::BoolConfigField
     if cli !== nothing
-        return ConfigField(cli, FromCLI)
+        return BoolConfigField(cli, FromCLI)
     end
     if env !== nothing
         ev = _bool_env(env; env = env_dict)
-        ev !== nothing && return ConfigField(ev, FromEnv)
+        ev !== nothing && return BoolConfigField(ev, FromEnv)
     end
-    return ConfigField(default, FromDefault)
+    return BoolConfigField(default, FromDefault)
 end
 
 function _resolve_string_field(
@@ -42,16 +46,16 @@ function _resolve_string_field(
         env::Union{Nothing, String},
         default::AbstractString;
         env_dict::AbstractDict = ENV,
-    )::ConfigField
+    )::StringConfigField
     if cli !== nothing
         s = strip(String(cli))
-        !isempty(s) && return ConfigField(s, FromCLI)
+        !isempty(s) && return StringConfigField(s, FromCLI)
     end
     if env !== nothing && haskey(env_dict, String(env))
         raw = strip(get(env_dict, String(env), ""))
-        !isempty(raw) && return ConfigField(raw, FromEnv)
+        !isempty(raw) && return StringConfigField(raw, FromEnv)
     end
-    return ConfigField(String(default), FromDefault)
+    return StringConfigField(String(default), FromDefault)
 end
 
 """
@@ -84,43 +88,37 @@ function resolve_run_job_config(;
     command in RUN_JOB_COMMANDS ||
         throw(ArgumentError("resolve_run_job_config: unsupported command $(repr(command))"))
     return RunJobConfig(
-        _resolve_bool_field(
-            :unsafe_skip_env_digests;
+        _resolve_bool_field(;
             cli = cli_unsafe_skip_env_digests,
             env = "DISTSSH_UNSAFE_SKIP_ENV_DIGESTS",
             default = false,
             env_dict = env,
         ),
-        _resolve_bool_field(
-            :unsafe_expose_port;
+        _resolve_bool_field(;
             cli = cli_unsafe_expose_port,
             env = "DISTSSH_UNSAFE_EXPOSE_PORT",
             default = false,
             env_dict = env,
         ),
-        _resolve_bool_field(
-            :unsafe_all_to_all;
+        _resolve_bool_field(;
             cli = cli_unsafe_all_to_all,
             env = "DISTSSH_UNSAFE_ALL_TO_ALL",
             default = false,
             env_dict = env,
         ),
-        _resolve_bool_field(
-            :unsafe_master_silence_exit;
+        _resolve_bool_field(;
             cli = command === :drive ? cli_unsafe_master_silence_exit : false,
             env = command === :drive ? "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" : nothing,
             default = false,
             env_dict = env,
         ),
-        _resolve_bool_field(
-            :print_config;
+        _resolve_bool_field(;
             cli = cli_print_config,
             env = nothing,
             default = false,
             env_dict = env,
         ),
-        _resolve_bool_field(
-            :dry_run;
+        _resolve_bool_field(;
             cli = cli_dry_run,
             env = nothing,
             default = false,
@@ -150,16 +148,27 @@ function print_run_job_config!(io::IO, cfg::RunJobConfig)
     for name in fieldnames(RunJobConfig)
         name === :command && continue
         field = getfield(cfg, name)
-        field isa ConfigField || continue
-        println(
-            io,
-            _config_field_name(name),
-            " = ",
-            repr(field.value),
-            " (",
-            _config_source_label(field.source),
-            ")",
-        )
+        if field isa BoolConfigField
+            println(
+                io,
+                _config_field_name(name),
+                " = ",
+                repr(field.value),
+                " (",
+                _config_source_label(field.source),
+                ")",
+            )
+        elseif field isa StringConfigField
+            println(
+                io,
+                _config_field_name(name),
+                " = ",
+                repr(field.value),
+                " (",
+                _config_source_label(field.source),
+                ")",
+            )
+        end
     end
     return nothing
 end
@@ -196,7 +205,7 @@ function print_run_job_dry_plan!(
     for row in options_for_command(cfg.command)
         row.unsafe || continue
         field = getfield(cfg, row.key)
-        field isa ConfigField || continue
+        field isa BoolConfigField || continue
         field.value && println(io, "unsafe ", row.key, " = true")
     end
     println(io, "worker_env_keys (redacted):")
@@ -265,6 +274,7 @@ function finish_run_job_diagnostics!(
     return 0
 end
 
-public RunJobConfig, ConfigField, ConfigSource, resolve_run_job_config
-public print_run_job_config!, print_run_job_dry_plan!, run_job_config_diagnostic_exit
-public resolve_run_job_config_from_parsed, finish_run_job_diagnostics!
+public BoolConfigField, ConfigSource, RunJobConfig, StringConfigField
+public finish_run_job_diagnostics!, print_run_job_config!, print_run_job_dry_plan!
+public resolve_run_job_config, resolve_run_job_config_from_parsed
+public run_job_config_diagnostic_exit

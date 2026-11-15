@@ -36,8 +36,8 @@ const _DSSH_ERROR_SPECS = (
 
 const ERROR_REGISTRY = Dict{Symbol, ErrorSpec}(pairs(_DSSH_ERROR_SPECS))
 
-public ERROR_REGISTRY, ErrorSpec, DistSSHError
-public error_spec, error_code
+public ERROR_REGISTRY, DistSSHError, ErrorSpec
+public cli_exit_code, error_code, error_spec
 
 abstract type DistSSHError <: Exception end
 
@@ -113,4 +113,4 @@ function cli_exit_code(err::DistSSHError)::Int
     return err isa TypedDistSSHError && err.kind === :unknown_cli_option ? 2 : 1
 end
 
-public removed_cli_flag_error, throw_removed_cli_flag!, cli_exit_code
+public removed_cli_flag_error, throw_removed_cli_flag!

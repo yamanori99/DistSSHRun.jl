@@ -73,4 +73,4 @@ function merge_run_option_cli!(nt::NamedTuple, state::RunOptionCliState)
     )
 end
 
-public RunOptionCliState, try_consume_run_option!, reject_legacy_run_cli_flag!, merge_run_option_cli!
+public RunOptionCliState, merge_run_option_cli!, reject_legacy_run_cli_flag!, try_consume_run_option!

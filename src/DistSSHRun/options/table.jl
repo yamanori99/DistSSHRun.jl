@@ -6,7 +6,7 @@ struct OptionRow
     cli::Union{Nothing, String}
     env::Union{Nothing, String}
     kwarg::Union{Nothing, Symbol}
-    default::Any
+    default::Union{Bool, String}
     commands::Tuple{Vararg{Symbol}}
     help::String
     unsafe::Bool
@@ -150,5 +150,4 @@ function generated_run_option_help(command::Symbol)::Vector{String}
     ]
 end
 
-public OptionRow, run_option_table, options_for_command, LEGACY_CLI_FLAGS
-public option_help_line, generated_run_option_help, option_row_by_cli, option_row_by_key
+public LEGACY_CLI_FLAGS, OptionRow, generated_run_option_help, option_help_line, option_row_by_cli, option_row_by_key, options_for_command, run_option_table

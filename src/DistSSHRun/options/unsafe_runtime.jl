@@ -77,6 +77,5 @@ function with_run_unsafe_options!(f::Function, cfg::RunJobConfig)
     end
 end
 
-public unsafe_skip_env_digests_active, unsafe_expose_port_active, unsafe_all_to_all_active
-public with_unsafe_skip_env_digests, with_unsafe_expose_port, with_unsafe_all_to_all
-public unsafe_skip_env_digests_argv, with_run_unsafe_options!
+public unsafe_all_to_all_active, unsafe_expose_port_active, unsafe_skip_env_digests_active, unsafe_skip_env_digests_argv
+public with_run_unsafe_options!, with_unsafe_all_to_all, with_unsafe_expose_port, with_unsafe_skip_env_digests
