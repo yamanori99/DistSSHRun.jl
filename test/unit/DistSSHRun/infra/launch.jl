@@ -404,6 +404,16 @@ using TOML
     )
 
     @testset "loaded DistSSH* runtime identity" begin
+        mktemp() do err_path, err_io
+            redirect_stderr(err_io) do
+                snap = DistSSHRun._runtime_distssh_snapshot()
+                @test !isempty(snap)
+            end
+            flush(err_io)
+            captured = read(err_path, String)
+            @test !occursin("Detected access to binding", captured)
+            @test !occursin("prior to its definition world", captured)
+        end
         snap = DistSSHRun._runtime_distssh_snapshot()
         for name in ("DistSSHBase", "DistSSHRun")
             for field in ("version", "uuid", "tree")

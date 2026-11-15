@@ -51,11 +51,16 @@ function _runtime_module_tree!(mod::Module)::String
     root === nothing && throw(
         ErrorException("cannot compute package tree hash: pkgdir($(Base.PkgId(mod)))"),
     )
+    tar_mod = DistSSHBase.tool_require(
+        Base.PkgId(_WORKER_EVAL_PKG_UUID_TAR, "Tar"),
+    )
+    tar_create = getproperty(tar_mod, :create)
+    tar_tree_hash = getproperty(tar_mod, :tree_hash)
     tar_path = tempname() * ".tar"
     try
-        Base.invokelatest(Tar.create, String(root), tar_path)
+        Base.invokelatest(tar_create, String(root), tar_path)
         h = Base.invokelatest(
-            Tar.tree_hash,
+            tar_tree_hash,
             tar_path;
             algorithm = "git-sha1",
             skip_empty = true,
@@ -169,73 +174,73 @@ end
 
 function _tool_require_eval_preamble()::String
     return raw"""
-function tool_require(pkg)
-    for (loaded, _) in Base.loaded_modules
-        if loaded.name == pkg.name && loaded.uuid != pkg.uuid
-            error("tool_require: package name collision for ", pkg.name)
+    function tool_require(pkg)
+        for (loaded, _) in Base.loaded_modules
+            if loaded.name == pkg.name && loaded.uuid != pkg.uuid
+                error("tool_require: package name collision for ", pkg.name)
+            end
+        end
+        if haskey(Base.loaded_modules, pkg)
+            return Base.loaded_modules[pkg]
+        end
+        return Base.require(pkg)
+    end
+    function __distssh_pkg_tree(mod)
+        root = pkgdir(mod)
+        root === nothing && error("pkgdir unavailable")
+        tar_mod = tool_require(Base.PkgId(Base.UUID("a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"), "Tar"))
+        tar_path = tempname() * ".tar"
+        try
+            Base.invokelatest(tar_mod.create, String(root), tar_path)
+            h = Base.invokelatest(
+                tar_mod.tree_hash,
+                tar_path;
+                algorithm = "git-sha1",
+                skip_empty = true,
+            )
+            s = lowercase(string(h))
+            length(s) == 40 || error("package tree hash is not 40 hex chars")
+            return s
+        finally
+            isfile(tar_path) && rm(tar_path)
         end
     end
-    if haskey(Base.loaded_modules, pkg)
-        return Base.loaded_modules[pkg]
-    end
-    return Base.require(pkg)
-end
-function __distssh_pkg_tree(mod)
-    root = pkgdir(mod)
-    root === nothing && error("pkgdir unavailable")
-    tar_mod = tool_require(Base.PkgId(Base.UUID("a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"), "Tar"))
-    tar_path = tempname() * ".tar"
-    try
-        Base.invokelatest(tar_mod.create, String(root), tar_path)
-        h = Base.invokelatest(
-            tar_mod.tree_hash,
-            tar_path;
-            algorithm = "git-sha1",
-            skip_empty = true,
-        )
-        s = lowercase(string(h))
-        length(s) == 40 || error("package tree hash is not 40 hex chars")
-        return s
-    finally
-        isfile(tar_path) && rm(tar_path)
-    end
-end
-function __merge_loaded_distssh!(d, require_queue)
-    specs = [
-        ("DistSSHBase", Base.UUID("f0a69307-14e5-4272-8c28-20680d05bac8")),
-        ("DistSSHRun", Base.UUID("b568025c-2759-4ef1-8b14-17d00e2cd000")),
-        ("DistSSHKit", Base.UUID("ceec0504-c968-4be5-b215-667cae0e8f81")),
-        ("DistSSHQueue", Base.UUID("24254401-70d8-4a51-8ea4-cfab19f5bc73")),
-    ]
-    required = ["DistSSHBase", "DistSSHRun"]
-    if require_queue
-        push!(required, "DistSSHQueue")
-    end
-    req_set = Set(required)
-    function record!(mod, name)
-        pkg = Base.PkgId(mod)
-        d["loaded." * name * ".version"] = string(pkgversion(mod))
-        d["loaded." * name * ".uuid"] = string(pkg.uuid)
-        d["loaded." * name * ".tree"] = __distssh_pkg_tree(mod)
-    end
-    for (name, uuid) in specs
-        name in req_set && continue
-        pkgid = Base.PkgId(uuid, name)
-        haskey(Base.loaded_modules, pkgid) || continue
-        record!(Base.loaded_modules[pkgid], name)
-    end
-    for name in required
-        uuid = nothing
-        for (n, u) in specs
-            n == name && (uuid = u)
+    function __merge_loaded_distssh!(d, require_queue)
+        specs = [
+            ("DistSSHBase", Base.UUID("f0a69307-14e5-4272-8c28-20680d05bac8")),
+            ("DistSSHRun", Base.UUID("b568025c-2759-4ef1-8b14-17d00e2cd000")),
+            ("DistSSHKit", Base.UUID("ceec0504-c968-4be5-b215-667cae0e8f81")),
+            ("DistSSHQueue", Base.UUID("24254401-70d8-4a51-8ea4-cfab19f5bc73")),
+        ]
+        required = ["DistSSHBase", "DistSSHRun"]
+        if require_queue
+            push!(required, "DistSSHQueue")
         end
-        uuid === nothing && error("unknown required DistSSH name")
-        mod = tool_require(Base.PkgId(uuid, name))
-        record!(mod, name)
+        req_set = Set(required)
+        function record!(mod, name)
+            pkg = Base.PkgId(mod)
+            d["loaded." * name * ".version"] = string(pkgversion(mod))
+            d["loaded." * name * ".uuid"] = string(pkg.uuid)
+            d["loaded." * name * ".tree"] = __distssh_pkg_tree(mod)
+        end
+        for (name, uuid) in specs
+            name in req_set && continue
+            pkgid = Base.PkgId(uuid, name)
+            haskey(Base.loaded_modules, pkgid) || continue
+            record!(Base.loaded_modules[pkgid], name)
+        end
+        for name in required
+            uuid = nothing
+            for (n, u) in specs
+                n == name && (uuid = u)
+            end
+            uuid === nothing && error("unknown required DistSSH name")
+            mod = tool_require(Base.PkgId(uuid, name))
+            record!(mod, name)
+        end
+        return d
     end
-    return d
-end
-"""
+    """
 end
 
 """One-shot Julia identity probes: avoid job-triggered precompile in the subprocess."""
@@ -288,91 +293,91 @@ function _identity_eval_dict_source(require_queue::Bool)::String
     return string(
         _tool_require_eval_preamble(),
         """
-function __env_sha256_bytes(path, sha_mod)
-    isfile(path) || return ""
-    digest = Base.invokelatest(sha_mod.sha256, read(path))
-    return lowercase(Base.invokelatest(sha_mod.bytes2hex, digest))
-end
-d = let require_queue = $(require_queue)
-    sha_mod = tool_require(Base.PkgId(Base.UUID("ea8e919c-243c-51af-8825-aaa63cd721ce"), "SHA"))
-    toml_mod = tool_require(Base.PkgId(Base.UUID("fa267f1f-6049-4f14-aa54-33bafae1ed76"), "TOML"))
-    man = ""
-    man_sha = ""
-    pf = ""
-    proj_sha = ""
-    proj0 = Base.active_project()
-    if proj0 !== nothing
-        pf = String(proj0)
-        man0 = try
-            Base.project_file_manifest_path(pf)
-        catch
-            nothing
+        function __env_sha256_bytes(path, sha_mod)
+            isfile(path) || return ""
+            digest = Base.invokelatest(sha_mod.sha256, read(path))
+            return lowercase(Base.invokelatest(sha_mod.bytes2hex, digest))
         end
-        if man0 isa AbstractString && isfile(man0)
-            man = String(man0)
-            man_sha = __env_sha256_bytes(man, sha_mod)
-        end
-        proj_sha = __env_sha256_bytes(pf, sha_mod)
-    end
-    function __env_sysimage_path()
-        img = unsafe_string(Base.JLOptions().image_file)
-        try
-            return String(realpath(img))
-        catch
-            return String(img)
-        end
-    end
-    function __env_sysimage_is_default()
-        ext = Sys.isapple() ? ".dylib" : Sys.iswindows() ? ".dll" : ".so"
-        def = joinpath(Sys.BINDIR, "..", "lib", "julia", "sys" * ext)
-        img = unsafe_string(Base.JLOptions().image_file)
-        try
-            return realpath(img) == realpath(def)
-        catch
-            return false
-        end
-    end
-    d = Dict{String, String}(
-        "version" => string(VERSION),
-        "commit" => string(Base.GIT_VERSION_INFO.commit),
-        "julia" => joinpath(Sys.BINDIR, "julia"),
-        "sysimage" => __env_sysimage_path(),
-        "sysimage.default" => string(__env_sysimage_is_default()),
-        "manifest" => man,
-        "manifest.sha256" => man_sha,
-        "project" => pf,
-        "project.sha256" => proj_sha,
-    )
-    if !isempty(man) && isfile(man)
-        raw = try
-            Base.invokelatest(toml_mod.parsefile, man)
-        catch
-            nothing
-        end
-        if raw isa AbstractDict
-            deps = get(raw, "deps", nothing)
-            if deps isa AbstractDict
-                for name in ("DistSSHRun", "DistSSHKit", "DistSSHQueue", "DistSSHBase")
-                    entry = get(deps, name, nothing)
-                    tab = if entry isa AbstractDict
-                        entry
-                    elseif entry isa AbstractVector && !isempty(entry) &&
-                            first(entry) isa AbstractDict
-                        first(entry)
-                    else
-                        nothing
-                    end
-                    tab === nothing && continue
-                    v = get(tab, "version", nothing)
-                    v isa AbstractString && (d["pkg." * name] = String(v))
+        d = let require_queue = $(require_queue)
+            sha_mod = tool_require(Base.PkgId(Base.UUID("ea8e919c-243c-51af-8825-aaa63cd721ce"), "SHA"))
+            toml_mod = tool_require(Base.PkgId(Base.UUID("fa267f1f-6049-4f14-aa54-33bafae1ed76"), "TOML"))
+            man = ""
+            man_sha = ""
+            pf = ""
+            proj_sha = ""
+            proj0 = Base.active_project()
+            if proj0 !== nothing
+                pf = String(proj0)
+                man0 = try
+                    Base.project_file_manifest_path(pf)
+                catch
+                    nothing
+                end
+                if man0 isa AbstractString && isfile(man0)
+                    man = String(man0)
+                    man_sha = __env_sha256_bytes(man, sha_mod)
+                end
+                proj_sha = __env_sha256_bytes(pf, sha_mod)
+            end
+            function __env_sysimage_path()
+                img = unsafe_string(Base.JLOptions().image_file)
+                try
+                    return String(realpath(img))
+                catch
+                    return String(img)
                 end
             end
+            function __env_sysimage_is_default()
+                ext = Sys.isapple() ? ".dylib" : Sys.iswindows() ? ".dll" : ".so"
+                def = joinpath(Sys.BINDIR, "..", "lib", "julia", "sys" * ext)
+                img = unsafe_string(Base.JLOptions().image_file)
+                try
+                    return realpath(img) == realpath(def)
+                catch
+                    return false
+                end
+            end
+            d = Dict{String, String}(
+                "version" => string(VERSION),
+                "commit" => string(Base.GIT_VERSION_INFO.commit),
+                "julia" => joinpath(Sys.BINDIR, "julia"),
+                "sysimage" => __env_sysimage_path(),
+                "sysimage.default" => string(__env_sysimage_is_default()),
+                "manifest" => man,
+                "manifest.sha256" => man_sha,
+                "project" => pf,
+                "project.sha256" => proj_sha,
+            )
+            if !isempty(man) && isfile(man)
+                raw = try
+                    Base.invokelatest(toml_mod.parsefile, man)
+                catch
+                    nothing
+                end
+                if raw isa AbstractDict
+                    deps = get(raw, "deps", nothing)
+                    if deps isa AbstractDict
+                        for name in ("DistSSHRun", "DistSSHKit", "DistSSHQueue", "DistSSHBase")
+                            entry = get(deps, name, nothing)
+                            tab = if entry isa AbstractDict
+                                entry
+                            elseif entry isa AbstractVector && !isempty(entry) &&
+                                    first(entry) isa AbstractDict
+                                first(entry)
+                            else
+                                nothing
+                            end
+                            tab === nothing && continue
+                            v = get(tab, "version", nothing)
+                            v isa AbstractString && (d["pkg." * name] = String(v))
+                        end
+                    end
+                end
+            end
+            __merge_loaded_distssh!(d, require_queue)
+            d
         end
-    end
-    __merge_loaded_distssh!(d, require_queue)
-    d
-end
-""",
+        """,
     )
 end
 
@@ -381,10 +386,10 @@ function _identity_eval_print_source(require_queue::Bool)::String
     return string(
         body,
         """
-for (k, v) in pairs(d)
-    print(k, '=', v, '\\n')
-end
-""",
+        for (k, v) in pairs(d)
+            print(k, '=', v, '\\n')
+        end
+        """,
     )
 end
 
