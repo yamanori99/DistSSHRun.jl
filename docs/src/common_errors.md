@@ -38,4 +38,4 @@ unique anchor (for example `removed-cli-flag` for `DSSH-E001`). Typed errors pri
 
 **When:** Julia build, DistSSH* versions, or Manifest/Project digests differ between controller and worker.
 
-See also: [`options.md`](@ref).
+See also: [Options](@ref Options).

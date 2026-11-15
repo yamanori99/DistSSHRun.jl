@@ -1,4 +1,4 @@
-# Run options (generated from the option table)
+# [Run options (generated from the option table)](@id Options)
 
 The authoritative definitions live in `src/DistSSHRun/options/table.jl`.
 Help text for `go`, `drive`, and `ride` is generated from the same rows.
