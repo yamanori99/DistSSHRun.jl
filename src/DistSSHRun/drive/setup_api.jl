@@ -823,6 +823,7 @@ function _setup_bang_host_list(session::DistSSHSession)::Vector{String}
     # Always surface `parent` so non-juliaup modes hit validate_setup_hosts
     # instead of silently dropping it.
     for t in session.tokens
+        reject_setup_worker_count!(t)
         pt = try
             parse_placement_token(t)
         catch

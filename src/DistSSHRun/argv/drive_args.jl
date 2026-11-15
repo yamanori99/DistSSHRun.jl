@@ -46,13 +46,9 @@ function _drive_set_parent_workers!(
         source::String,
     )::Int
     parent_workers > 0 &&
-        throw(
-        ArgumentError(
-            "duplicate parent worker spec ($source); use one of $(PARENT_HOST_NAME):N",
-        )
-    )
-    count < 1 &&
-        throw(ArgumentError("parent worker count must be >= 1, got $count"))
+        throw(ArgumentError("duplicate local worker spec ($source); use --local-workers once"))
+    count < 0 &&
+        throw(ArgumentError("local worker count must be >= 0, got $count"))
     return count
 end
 
@@ -69,7 +65,7 @@ end
 function _throw_removed_workers_flag(flag::AbstractString)
     throw(
         ArgumentError(
-            "$(flag) was removed; use --local-workers for local slots and `N*host` for remotes",
+            "$(flag) was removed; use --local-workers and `N*host` machine tokens",
         ),
     )
 end
@@ -77,6 +73,8 @@ end
 """Parse `drive` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_drive_args(args::Vector{String})
     cli_session, args = peel_shared_cli_flags(args)
+    cli_session.local_slots !== nothing &&
+        throw(ArgumentError("drive uses --local-workers, not --local-slots"))
     parent_workers = 0
     default_workers = nothing
     julia_exe = nothing
@@ -110,7 +108,7 @@ function parse_drive_args(args::Vector{String})
             elseif startswith(arg, "-")
                 throw(
                     ArgumentError(
-                        "unknown or incomplete drive option: $arg (use parent:N / NAME:N, e.g. parent:2 4*host1)",
+                        "unknown or incomplete drive option: $arg (use --local-workers and `N*host`, e.g. 4*host1)",
                     )
                 )
             else
@@ -333,7 +331,7 @@ function parse_drive_args(args::Vector{String})
         elseif startswith(arg, "-")
             throw(
                 ArgumentError(
-                    "unknown or incomplete drive option: $arg (use parent:N / NAME:N, e.g. parent:2 4*host1)",
+                    "unknown or incomplete drive option: $arg (use --local-workers and `N*host`, e.g. 4*host1)",
                 )
             )
         else
@@ -377,6 +375,18 @@ function parse_drive_args(args::Vector{String})
         env_lw = tryparse(Int, strip(get(ENV, "DISTSSH_LOCAL_WORKERS", "")))
         env_lw !== nothing &&
             (parent_workers = _drive_set_parent_workers!(parent_workers, env_lw, "DISTSSH_LOCAL_WORKERS"))
+    end
+
+    if script_path !== nothing
+        placement_tokens = String[
+            DistSSHBase.format_machine_token(Int(something(n, 1)), h) for (h, n) in hosts
+        ]
+        require_counted_placement_tokens(
+            placement_tokens;
+            command = :drive,
+            surface = :cli,
+            local_workers = parent_workers,
+        )
     end
 
     return merge_run_option_cli!(

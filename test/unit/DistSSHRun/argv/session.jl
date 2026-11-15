@@ -195,4 +195,63 @@ end
             DistSSHRun.placement_source_tokens(session)
         end
     end
+
+    @testset "host source precedence" begin
+        withenv("DISTSSH_HOSTS" => "2*env-a,env-b", "DISTSSH_HOSTS_FILE" => nothing) do
+            let session = DistSSHRun.CliSharedFlags(hosts_flag = ["cli-h"])
+                @test DistSSHRun.placement_source_tokens(session; keep_counts = true) == ["cli-h"]
+                @test DistSSHRun.placement_host_source(session) === :hosts
+                @test occursin(
+                    "--hosts",
+                    something(DistSSHRun.kit_distssh_hosts_override_notice(session), ""),
+                )
+            end
+            let session = DistSSHRun.CliSharedFlags()
+                @test DistSSHRun.placement_source_tokens(session; keep_counts = true) ==
+                    ["2*env-a", "env-b"]
+                @test DistSSHRun.placement_host_source(session) === :env_hosts
+                @test DistSSHRun.kit_distssh_hosts_override_notice(session) === nothing
+            end
+        end
+        withenv("DISTSSH_HOSTS" => "env-only", "DISTSSH_HOSTS_FILE" => nothing) do
+            let (session, _) = DistSSHRun.peel_shared_cli_flags(["--hosts", "cli-only", "s.jl"])
+                @test session.hosts_flag == ["cli-only"]
+                @test DistSSHRun.placement_source_tokens(session) == ["cli-only"]
+                @test DistSSHRun.placement_host_source(session) === :hosts
+            end
+        end
+        let hosts_file = _sample_hosts_file()
+            withenv("DISTSSH_HOSTS" => "ignored", "DISTSSH_HOSTS_FILE" => hosts_file) do
+                let session = DistSSHRun.CliSharedFlags(hosts_flag = ["from-flag"])
+                    @test DistSSHRun.placement_source_tokens(session) == ["from-flag"]
+                    @test DistSSHRun.placement_host_source(session) === :hosts
+                end
+            end
+        end
+    end
+
+    @testset "resolved hosts output" begin
+        withenv(clear_verbosity_env..., "DISTSSH_YES" => nothing, "DISTSSH_HOSTS" => "2*h") do
+            let session = DistSSHRun.CliSharedFlags(verbosity = :verbose)
+                DistSSHRun.apply_shared_cli_flags!(session)
+                out, _ = _capture_stdio() do _, stdout_io
+                    DistSSHRun.writeln_kit_resolved_hosts!(session, ["2*h"])
+                    return nothing
+                end
+                @test occursin("hosts (from DISTSSH_HOSTS): 2*h", out)
+            end
+            let session = DistSSHRun.CliSharedFlags(
+                    hosts_flag = ["cli"],
+                    verbosity = :verbose,
+                )
+                DistSSHRun.apply_shared_cli_flags!(session)
+                out, _ = _capture_stdio() do _, stdout_io
+                    DistSSHRun.writeln_kit_resolved_hosts!(session, ["cli"])
+                    return nothing
+                end
+                @test occursin("DISTSSH_HOSTS is set but overridden by --hosts", out)
+                @test occursin("hosts (from --hosts): cli", out)
+            end
+        end
+    end
 end

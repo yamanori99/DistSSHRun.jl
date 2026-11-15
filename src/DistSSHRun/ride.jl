@@ -447,7 +447,8 @@ function _ride_resolve_plan(
     )::WorkerPlan
     lw = local_workers === nothing ? nothing : Int(local_workers)
     if isempty(tokens)
-        n = something(lw, 1)
+        n = lw === nothing ? 0 : Int(lw)
+        n == 0 && throw(ArgumentError(zero_placement_usage_error(:ride; surface = :api)))
         return WorkerPlan(n, Dict{String, Int}())
     end
     return worker_plan_from_tokens(tokens; local_workers = lw)
@@ -526,7 +527,7 @@ function _ride_add_workers!(
                 if plan.parent_workers > 0
                     got = _drive_parent_worker_count()
                     got >= plan.parent_workers || error(
-                        "ride: required parent workers did not join: wanted $(plan.parent_workers), got $got",
+                        "ride: required local workers did not join: wanted $(plan.parent_workers), got $got",
                     )
                 end
             end

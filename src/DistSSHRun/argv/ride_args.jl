@@ -44,16 +44,17 @@ function show_ride_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  $(cli_m_project()) ride SCRIPT.jl",
-        "  ride parent:2 SCRIPT.jl",
-        "  ride parent:1 2*host1 SCRIPT.jl",
-        "  ride --spi-check parent:2 SCRIPT.jl",
+        "  ride --local-workers 2 SCRIPT.jl",
+        "  ride --local-workers 1 2*host1 SCRIPT.jl",
+        "  ride --spi-check --local-workers 2 SCRIPT.jl",
     )
     print_help_blank(io)
     print_help_section("Options"; io = io)
     print_help_lines(
         io,
-        "  parent:N / NAME:N  Distributed workers (default: no tokens → parent:1)",
-        "  omit :N             error (pass parent:N / NAME:N)",
+        "  N*host              machine tokens (quote --hosts)",
+        "  $(KIT_LOCAL_WORKERS_FLAG_HELP)",
+        "  omit host count     error (pass N*host)",
         "  --spi-check         compare to sequential map/filter (default off)",
         "  --no-spi-check      skip that compare",
         "  --output-dir PATH   DISTRIBUTED_OUTPUT_DIR for the script (must be missing or empty)",
@@ -74,7 +75,7 @@ function show_ride_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "See also: go, drive, setup.",
-        "API: ride!(script, \"parent:2\", \"1*host\"; spi_check=false, run_id=\"…\").",
+        "API: ride!(script, \"1*host\"; local_workers=2, spi_check=false, run_id=\"…\").",
     )
     return nothing
 end
@@ -82,6 +83,8 @@ end
 """Parse `ride` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_ride_args(args::AbstractVector{<:AbstractString})
     cli_session, rest = peel_shared_cli_flags(args)
+    cli_session.local_slots !== nothing &&
+        throw(ArgumentError("ride uses --local-workers, not --local-slots"))
     hosts = String[]
     host_tokens = String[]
     script_path = nothing
@@ -195,7 +198,10 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
     apply_shared_cli_flags!(cli_session)
     if script_path !== nothing
         require_counted_placement_tokens(
-            hosts; surface = :cli, local_workers = cli_session.local_workers,
+            hosts;
+            command = :ride,
+            surface = :cli,
+            local_workers = cli_session.local_workers,
         )
     end
     return _ride_parsed(;

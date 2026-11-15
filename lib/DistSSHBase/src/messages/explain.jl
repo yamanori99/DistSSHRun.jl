@@ -127,9 +127,9 @@ function explain_bare_placement_tokens(
     listed = join(bare, ' ')
     head = "each go / drive / ride token needs an explicit worker count; bare $(listed) is not allowed"
     hint = if surface === :api
-        "Hint: write `N*host` or use --local-workers for local slots. go --repeat still treats a bare host as one slot."
+        "Hint: write `N*host`, or `local_workers=` / `local_slots=` on drive, ride, or go respectively."
     else
-        "Hint: write `2*host` (quote `--hosts` so the shell does not glob `*`). Use --local-workers for local slots."
+        "Hint: write `2*host` (quote `--hosts`). drive/ride: --local-workers. go: --local-slots."
     end
     return join_explained_message(head, hint)
 end

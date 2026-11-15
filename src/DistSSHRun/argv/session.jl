@@ -30,7 +30,9 @@ const KIT_TIME_HELP =
 const KIT_HOSTS_FLAG_HELP =
     "--hosts CSV         quote `N*host` machine tokens (bare host = 1 worker)"
 const KIT_LOCAL_WORKERS_FLAG_HELP =
-    "--local-workers N   local (parent) worker count"
+    "--local-workers N   LocalManager workers on this machine (drive, ride; ENV DISTSSH_LOCAL_WORKERS)"
+const KIT_LOCAL_SLOTS_FLAG_HELP =
+    "--local-slots N     local subprocess slots on this machine (go only)"
 const KIT_MACHINE_FILE_FLAG_HELP =
     "--machine-file PATH Julia machine-file subset (one line per `N*host`)"
 const KIT_QUIET_ENV_HELP =
@@ -124,6 +126,7 @@ mutable struct CliSharedFlags
     hosts_file::Union{Nothing, String}
     machine_file::Union{Nothing, String}
     local_workers::Union{Nothing, Int}
+    local_slots::Union{Nothing, Int}
     show_version::Bool
     hint_surface::Symbol
     verbosity_explicit::Bool
@@ -138,6 +141,7 @@ function CliSharedFlags(;
         hosts_file::Union{Nothing, AbstractString} = nothing,
         machine_file::Union{Nothing, AbstractString} = nothing,
         local_workers::Union{Nothing, Integer} = nothing,
+        local_slots::Union{Nothing, Integer} = nothing,
         show_version::Bool = false,
         hint_surface::Symbol = :cli,
         verbosity_explicit::Bool = false,
@@ -150,6 +154,9 @@ function CliSharedFlags(;
     lw = local_workers === nothing ? nothing : Int(local_workers)
     lw !== nothing && lw < 0 &&
         throw(ArgumentError("--local-workers must be >= 0, got $lw"))
+    ls = local_slots === nothing ? nothing : Int(local_slots)
+    ls !== nothing && ls < 0 &&
+        throw(ArgumentError("--local-slots must be >= 0, got $ls"))
     surface = _normalize_hint_surface(hint_surface)
     explicit = verbosity_explicit || quiet || verbosity !== nothing
     return CliSharedFlags(
@@ -159,6 +166,7 @@ function CliSharedFlags(;
         hf,
         mf,
         lw,
+        ls,
         show_version,
         surface,
         explicit,
@@ -205,15 +213,11 @@ function map_host_jobs(f, hosts::Vector{String})
     return nothing
 end
 
-"""Default session; honors `DISTSSH_QUIET`, `DISTSSH_PROGRESS`, `DISTSSH_VERBOSE`, `DISTSSH_YES`, `DISTSSH_HOSTS_FILE`."""
+"""Default session; honors `DISTSSH_QUIET`, `DISTSSH_PROGRESS`, `DISTSSH_VERBOSE`, `DISTSSH_YES`."""
 function default_kit_cli_session()::CliSharedFlags
-    hosts_file = let raw = strip(get(ENV, "DISTSSH_HOSTS_FILE", ""))
-        isempty(raw) ? nothing : String(raw)
-    end
     env_v = _env_verbosity()
     hosts_kw = (;
         yes = _env_flag("DISTSSH_YES"),
-        hosts_file = hosts_file,
         show_version = false,
     )
     env_v === nothing && return CliSharedFlags(; hosts_kw...)
@@ -245,6 +249,7 @@ const _KIT_CLI_FLAGS = (
     hosts_file = ("--hosts-file",),
     machine_file = ("--machine-file",),
     local_workers = ("--local-workers",),
+    local_slots = ("--local-slots",),
     hosts = ("--hosts",),
     version = ("--version", "-v", "-V"),  # -V kept as deprecated alias
 )
@@ -276,6 +281,7 @@ function _shared_valued_cli_flag(arg::AbstractString)::Bool
     return _flag_match(arg, _KIT_CLI_FLAGS.hosts_file) ||
         _flag_match(arg, _KIT_CLI_FLAGS.machine_file) ||
         _flag_match(arg, _KIT_CLI_FLAGS.local_workers) ||
+        _flag_match(arg, _KIT_CLI_FLAGS.local_slots) ||
         _flag_match(arg, _KIT_CLI_FLAGS.hosts)
 end
 
@@ -441,6 +447,14 @@ function consume_kit_cli_flag!(c::CliCursor, session::CliSharedFlags)::Bool
             throw(ArgumentError("$(arg) specified more than once"))
         session.local_workers = parse(Int, strip(raw))
         return true
+    elseif _flag_match(arg, _KIT_CLI_FLAGS.local_slots)
+        raw = cli_take_value!(c, arg)
+        session.local_slots !== nothing &&
+            throw(ArgumentError("$(arg) specified more than once"))
+        session.local_slots = tryparse(Int, strip(String(raw)))
+        session.local_slots === nothing &&
+            throw(ArgumentError("$(arg) must be an integer, got $(repr(raw))"))
+        return true
     elseif _flag_match(arg, _KIT_CLI_FLAGS.hosts)
         append!(session.hosts_flag, split_hosts_csv(cli_take_value!(c, arg)))
         session.hosts_source === nothing && (session.hosts_source = :hosts)
@@ -515,12 +529,20 @@ function placement_source_tokens(
         session::CliSharedFlags;
         keep_counts::Bool = true,
         roles::Bool = false,
+        for_setup::Bool = false,
     )::Vector{String}
+    _setup_reject_counts!(tok) = for_setup ? reject_setup_worker_count!(tok) : nothing
     source = _host_input_coalesce_sources!(session)
     if source === :hosts
+        for t in session.hosts_flag
+            _setup_reject_counts!(t)
+        end
         return String[_kit_host_token(t, keep_counts; roles = roles) for t in session.hosts_flag]
     elseif source === :hosts_file
         lines = read_hosts_file_lines(session.hosts_file::String; surface = session.hint_surface)
+        for line in lines
+            _setup_reject_counts!(line)
+        end
         if keep_counts
             return lines
         elseif roles
@@ -530,6 +552,9 @@ function placement_source_tokens(
         end
     elseif source === :machine_file
         lines = read_machine_file_lines(session.machine_file::String; surface = session.hint_surface)
+        for line in lines
+            _setup_reject_counts!(line)
+        end
         if keep_counts
             return lines
         elseif roles
@@ -539,10 +564,16 @@ function placement_source_tokens(
         end
     elseif source === :env_hosts
         raw = split_hosts_csv(get(ENV, "DISTSSH_HOSTS", ""))
+        for t in raw
+            _setup_reject_counts!(t)
+        end
         return String[_kit_host_token(t, keep_counts; roles = roles) for t in raw]
     elseif source === :env_file
         hf = String(strip(get(ENV, "DISTSSH_HOSTS_FILE", "")))
         lines = read_hosts_file_lines(hf; surface = session.hint_surface)
+        for line in lines
+            _setup_reject_counts!(line)
+        end
         if keep_counts
             return lines
         elseif roles
@@ -555,13 +586,69 @@ function placement_source_tokens(
     end
 end
 
+"""Resolved host-list source for `session` (CLI wins over env; never merges `--hosts` with `DISTSSH_HOSTS`)."""
+placement_host_source(session::CliSharedFlags)::Symbol = _host_input_coalesce_sources!(session)
+
+function _distssh_hosts_env_tokens()::Vector{String}
+    return split_hosts_csv(get(ENV, "DISTSSH_HOSTS", ""))
+end
+
+function placement_host_source_label(source::Symbol)::String
+    source === :hosts && return "--hosts"
+    source === :hosts_file && return "--hosts-file"
+    source === :machine_file && return "--machine-file"
+    source === :env_hosts && return "DISTSSH_HOSTS"
+    source === :env_file && return "DISTSSH_HOSTS_FILE"
+    source === :none && return "argv"
+    return String(source)
+end
+
+"""When CLI names a host list and `DISTSSH_HOSTS` is set, one override line (progress / verbose)."""
+function kit_distssh_hosts_override_notice(session::CliSharedFlags)::Union{Nothing, String}
+    explicit = _host_input_explicit_sources(session)
+    isempty(explicit) && return nothing
+    isempty(_distssh_hosts_env_tokens()) && return nothing
+    cli = first(explicit)
+    cli === :env_hosts && return nothing
+    cli === :env_file && return nothing
+    label = placement_host_source_label(cli)
+    return "DISTSSH_HOSTS is set but overridden by $label"
+end
+
+"""
+Print resolved host tokens and their source (`hosts (from --hosts): …`).
+
+Skipped when `tokens` is empty, `quiet` is set, or no placement source applies (`:none`).
+"""
+function writeln_kit_resolved_hosts!(
+        session::CliSharedFlags,
+        tokens::AbstractVector{<:AbstractString};
+        quiet::Bool = session.quiet,
+    )
+    quiet && return nothing
+    isempty(tokens) && return nothing
+    source = placement_host_source(session)
+    source === :none && return nothing
+    notice = kit_distssh_hosts_override_notice(session)
+    notice !== nothing && writeln_both(notice)
+    label = placement_host_source_label(source)
+    writeln_both("hosts (from $label): $(join(tokens, ", "))")
+    return nothing
+end
+
 function append_kit_host_sources!(
         hosts::Vector{String},
         session::CliSharedFlags;
         keep_counts::Bool = true,
         roles::Bool = false,
+        for_setup::Bool = false,
     )
-    append!(hosts, placement_source_tokens(session; keep_counts = keep_counts, roles = roles))
+    append!(
+        hosts,
+        placement_source_tokens(
+            session; keep_counts = keep_counts, roles = roles, for_setup = for_setup,
+        ),
+    )
     return hosts
 end
 

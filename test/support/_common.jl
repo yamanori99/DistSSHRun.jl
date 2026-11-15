@@ -59,7 +59,18 @@ if !isdefined(Main, :_test_root)
         return path
     end
 
-    const _sample_setup_hosts_file = _sample_hosts_file
+    function _sample_setup_hosts_file()::String
+        path, io = mktemp()
+        try
+            write(io, "# setup hosts (plain names, no N* counts)\nhost-a\nhost-b\n")
+            close(io)
+        catch
+            close(io)
+            rm(path; force = true)
+            rethrow()
+        end
+        return path
+    end
 
     # Last `progress:` in `dir` (`kit.progress` even with `--no-log`) is `done`.
     function _assert_kit_progress_done(dir::AbstractString; kind::Symbol)

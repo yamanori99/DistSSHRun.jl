@@ -21,8 +21,9 @@ end
 Build a session for drive APIs. `workers` is a CLI-style host list.
 `setup!` / `pool!` / `sync!` / `collect!` accept a bare list
 (`user@host`). `go!` / `drive!` / `ride!` / `pipeline!` require `:N`
-on listed tokens (`1*user@host`). Local slots use `local_workers` (or
-`--local-workers` on the CLI), not placement tokens.
+on listed tokens (`1*user@host`). `drive` / `ride` local workers use
+`local_workers` (`--local-workers`). `go` local runs use `local_slots`
+(`--local-slots`), not placement tokens.
 
 `session.hosts` keeps remote SSH names only (for sync / collect).
 `session.tokens` keeps the original tokens (including `parent:N`).
@@ -72,7 +73,7 @@ function DistSSHSession(;
         end
     end
     parsed = parse_worker_tokens(tokens; local_workers = lw)
-    include_parent = include_parent_for_size || parsed.parent_autosize
+    include_parent = include_parent_for_size || parsed.parent_workers > 0
     proj = canonical_local_path(project)
     rr = remote === nothing ? nothing : String(strip(String(remote)))
     rr !== nothing && isempty(rr) && (rr = nothing)

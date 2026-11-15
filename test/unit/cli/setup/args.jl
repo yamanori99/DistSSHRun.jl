@@ -211,7 +211,6 @@ using Test
     @test_throws ArgumentError parse_setup_args(["check", "--older-than", "1", "host1"])
     @test_throws ArgumentError parse_setup_args(["prune", "--older-than", "-1", "host1"])
     @test_throws ArgumentError parse_setup_args(["--julia"])
-    @test_throws ArgumentError parse_setup_args(["check", "host1"])
     let err = try
             parse_setup_args(["check", "--not-a-flag", "host1"])
             error("expected ArgumentError")
@@ -282,20 +281,20 @@ using Test
         @test r.mode == :check
         @test r.hosts == ["update"]
     end
-    @test_throws ArgumentError parse_setup_args(["update", "host1"])
+    let r = parse_setup_args(["update", "host1"])
+        @test r.mode === nothing
+        @test r.hosts == ["update", "host1"]
+    end
 
-    let r = parse_setup_args(["check", "--hosts-file", _sample_hosts_file(), "host-cli"])
+    let r = parse_setup_args(["check", "--hosts-file", _sample_setup_hosts_file(), "host-cli"])
         @test r.hosts == ["host-cli", "host-a", "host-b"]
     end
 
-    let r = parse_setup_args(["check", "--hosts", "9*h1,h2", "host-cli"])
-        @test r.hosts == ["host-cli", "h1", "h2"]
-    end
+    @test_throws ArgumentError parse_setup_args(["check", "--hosts", "9*h1,h2", "host-cli"])
+    @test_throws ArgumentError parse_setup_args(["check", "4*alice@lab-server"])
 
     withenv("DISTSSH_HOSTS" => "3*env-h") do
-        let r = parse_setup_args(["check", "host-cli"])
-            @test r.hosts == ["host-cli", "env-h"]
-        end
+        @test_throws ArgumentError parse_setup_args(["check", "host-cli"])
     end
 
     let r = parse_setup_args(["check", "--", "host1"])

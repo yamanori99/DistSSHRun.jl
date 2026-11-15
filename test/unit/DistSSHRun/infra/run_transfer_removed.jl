@@ -7,7 +7,7 @@ using Test
         )
         err = try
             if api == "go!"
-                DistSSHRun.go!("job.jl", String[]; local_workers = 1, sync = val, yes = true)
+                DistSSHRun.go!("job.jl", String[]; local_slots = 1, sync = val, yes = true)
             else
                 DistSSHRun.drive!("job.jl", String[]; local_workers = 1, sync = val, yes = true)
             end

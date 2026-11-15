@@ -683,7 +683,7 @@ function _run_drive_parsed_locked!(
                 if n < parent_workers
                     print_err("ERROR: "; bold = true)
                     println_fatal(
-                        "required parent workers did not join: wanted $parent_workers, got $n",
+                        "required local workers did not join: wanted $parent_workers, got $n",
                     )
                     println_fatal("Pass --best-effort for a partial run.")
                     DistSSHRun.await_declared_input_hashes!()

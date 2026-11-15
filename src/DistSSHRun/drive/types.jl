@@ -52,7 +52,6 @@ Field name matches [`WorkerPlan`](@ref): a host with an explicit `:N` is
 """
 struct ParsedWorkerTokens
     parent_workers::Int
-    parent_autosize::Bool
     child_workers::Dict{String, Int}
     child_auto::Vector{String}
     child_hosts::Vector{String}
@@ -61,7 +60,6 @@ end
 
 function ParsedWorkerTokens(;
         parent_workers::Integer = 0,
-        parent_autosize::Bool = false,
         child_workers::AbstractDict{<:AbstractString, <:Integer} = Dict{String, Int}(),
         child_auto::AbstractVector{<:AbstractString} = String[],
         child_hosts::AbstractVector{<:AbstractString} = String[],
@@ -69,7 +67,6 @@ function ParsedWorkerTokens(;
     )
     return ParsedWorkerTokens(
         Int(parent_workers),
-        parent_autosize,
         Dict{String, Int}(String(h) => Int(n) for (h, n) in child_workers),
         String[String(h) for h in child_auto],
         String[String(h) for h in child_hosts],
@@ -88,7 +85,6 @@ function parse_worker_tokens(
         local_workers::Union{Nothing, Integer} = nothing,
     )::ParsedWorkerTokens
     parent_workers = local_workers === nothing ? 0 : Int(local_workers)
-    parent_autosize = local_workers === nothing
     child_workers = Dict{String, Int}()
     child_auto = String[]
     child_hosts = String[]
@@ -98,7 +94,7 @@ function parse_worker_tokens(
     for (idx, raw) in enumerate(out_tokens)
         p = parse_placement_token(raw)
         p.role === :parent &&
-            throw(ArgumentError("$(repr(raw)): local workers use --local-workers, not tokens"))
+            throw(ArgumentError("$(repr(raw)): use --local-workers for local workers, not tokens"))
         host = p.name
         n = something(p.n, 1)
         if haskey(seen_remote, host)
@@ -114,7 +110,6 @@ function parse_worker_tokens(
     end
     return ParsedWorkerTokens(
         parent_workers,
-        parent_autosize,
         child_workers,
         child_auto,
         child_hosts,
@@ -124,20 +119,42 @@ end
 
 """True when every token has an explicit worker/slot count (`:N`)."""
 function worker_tokens_fully_specified(parsed::ParsedWorkerTokens)::Bool
-    return !parsed.parent_autosize && isempty(parsed.child_auto)
+    return isempty(parsed.child_auto)
+end
+
+"""Total Distributed worker count from parsed placement."""
+function total_worker_placement(parsed::ParsedWorkerTokens)::Int
+    rem = sum(values(parsed.child_workers); init = 0)
+    return parsed.parent_workers + rem
 end
 
 """Throw unless every token has `:N` (go / drive / ride placement)."""
 function require_counted_placement_tokens(
         tokens::AbstractVector{<:AbstractString};
+        command::Symbol,
         surface::Symbol = :api,
         local_workers::Union{Nothing, Integer} = nothing,
+        local_slots::Union{Nothing, Integer} = nothing,
     )::Nothing
-    isempty(tokens) && local_workers === nothing && return nothing
+    command in (:go, :drive, :ride) ||
+        throw(ArgumentError("require_counted_placement_tokens: unsupported command $(repr(command))"))
+    if command === :go
+        parsed = parse_worker_tokens(tokens; local_workers = 0)
+        worker_tokens_fully_specified(parsed) ||
+            throw(ArgumentError(explain_bare_placement_tokens(tokens; surface = surface)))
+        remote_slots = sum(values(parsed.child_workers); init = 0)
+        ls, _ = resolve_go_local_slots(tokens, local_slots)
+        ls + remote_slots == 0 &&
+            throw(ArgumentError(zero_placement_usage_error(:go; surface = surface)))
+        return nothing
+    end
     lw = local_workers === nothing ? 0 : Int(local_workers)
     parsed = parse_worker_tokens(tokens; local_workers = lw)
-    worker_tokens_fully_specified(parsed) && return nothing
-    throw(ArgumentError(explain_bare_placement_tokens(tokens; surface = surface)))
+    worker_tokens_fully_specified(parsed) ||
+        throw(ArgumentError(explain_bare_placement_tokens(tokens; surface = surface)))
+    total_worker_placement(parsed) == 0 &&
+        throw(ArgumentError(zero_placement_usage_error(command; surface = surface)))
+    return nothing
 end
 
 """SSH host names from tokens (parent tokens omitted)."""

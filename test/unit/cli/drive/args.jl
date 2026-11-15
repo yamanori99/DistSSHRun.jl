@@ -140,6 +140,16 @@ using Test
                 @test r.hosts == [("host1", 2)]
                 @test DistSSHRun.host_tokens(r; kind = :drive) == ["2*host1"]
             end
+            let r = parse_drive_args(["--local-workers", "0", "1*host1", "s.jl"])
+                @test r.parent_workers == 0
+                @test ("host1", 1) in r.hosts
+            end
+            @test_throws ArgumentError parse_drive_args(["--local-workers", "0", "s.jl"])
+            let r = parse_drive_args(["--local-workers", "0", "1*host1", "s.jl"])
+                @test r.parent_workers == 0
+                @test ("host1", 1) in r.hosts
+            end
+            @test_throws ArgumentError parse_drive_args(["--local-workers", "0", "s.jl"])
             let r = parse_drive_args(["--local-workers", "4", "1*host1", "2*host2", "s.jl"])
                 @test DistSSHRun.host_tokens(r; kind = :drive) == ["host1", "2*host2"]
             end

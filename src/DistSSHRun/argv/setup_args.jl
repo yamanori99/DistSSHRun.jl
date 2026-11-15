@@ -314,9 +314,7 @@ function parse_setup_args(args::Vector{String})
     while !cli_at_end(c)
         arg = cli_current(c)::String
         if options_done
-            let p = parse_placement_token(arg)
-                push!(hosts, p.role === :parent ? PARENT_HOST_NAME : p.name)
-            end
+            push!(hosts, parse_setup_host_token(arg))
             cli_consume!(c)
             continue
         end
@@ -392,14 +390,12 @@ function parse_setup_args(args::Vector{String})
         elseif startswith(arg, "-") && length(arg) > 1
             throw(ArgumentError(_unknown_cli_option_message("setup", arg)))
         else
-            let p = parse_placement_token(arg)
-                push!(hosts, p.role === :parent ? PARENT_HOST_NAME : p.name)
-            end
+            push!(hosts, parse_setup_host_token(arg))
             cli_consume!(c)
         end
     end
 
-    append_kit_host_sources!(hosts, cli_session; keep_counts = false, roles = true)
+    append_kit_host_sources!(hosts, cli_session; keep_counts = false, roles = true, for_setup = true)
     apply_shared_cli_flags!(cli_session)
 
     if (older_days !== nothing || prune_id !== nothing) && mode !== :prune

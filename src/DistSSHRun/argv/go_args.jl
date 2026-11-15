@@ -14,20 +14,20 @@ function show_go_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  $(cli_m_project()) go [slots...] SCRIPT.jl",
-        "  go parent:2 SCRIPT.jl",
+        "  go --local-slots 2 SCRIPT.jl",
         "  go --repeat 100 SCRIPT.jl",
-        "  go --repeat 100 host1 host2 SCRIPT.jl",
-        "  go parent:1 2*host1 2*host2 SCRIPT.jl",
+        "  go --repeat 100 1*host1 2*host2 SCRIPT.jl",
+        "  go --local-slots 1 2*host1 SCRIPT.jl",
     )
     print_help_blank(io)
     print_help_section("Slots"; io = io)
     print_help_lines(
         io,
-        "  parent:N / NAME:N  N full-script runs (not drive workers)",
-        "  omit :N             error unless --repeat (then host is uncapped)",
-        "  parent:0                     skip parent when children are listed",
+        "  N*host              quote tokens; bare host = 1 slot (SSH)",
+        "  $(KIT_LOCAL_SLOTS_FLAG_HELP)",
+        "  omit host count     error unless --repeat (then host is uncapped)",
         "  --repeat N          N independent runs; spread across listed hosts",
-        "                       (:N is a per-host cap; omit :N leaves it uncapped)",
+        "                       (`N*host` is a per-host cap; bare host is uncapped)",
         "  $(KIT_HOSTS_FLAG_HELP)",
         "  --hosts-file PATH   one token per line",
     )
@@ -122,6 +122,7 @@ end
 
 """Parse `go` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_go_args(args::AbstractVector{<:AbstractString})
+    assert_go_argv_no_local_workers!(args)
     cli_session, rest = peel_shared_cli_flags(args)
     hosts = String[]
     host_tokens = String[]
@@ -244,7 +245,10 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
     apply_shared_cli_flags!(cli_session)
     if script_path !== nothing && repeat_n === nothing
         require_counted_placement_tokens(
-            hosts; surface = :cli, local_workers = cli_session.local_workers,
+            hosts;
+            command = :go,
+            surface = :cli,
+            local_slots = cli_session.local_slots,
         )
     end
     return _go_parsed(;

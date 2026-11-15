@@ -196,12 +196,32 @@ function print_run_job_dry_plan!(
         hosts::AbstractVector{<:AbstractString},
         worker_tokens::AbstractVector{<:AbstractString},
         project::AbstractString,
+        local_workers::Union{Nothing, Integer} = nothing,
+        local_slots::Union{Nothing, Integer} = nothing,
+        hosts_source::Union{Nothing, Symbol} = nothing,
+        go_implicit_no_hosts::Bool = false,
     )
     println(io, "# dry-run plan ($(cfg.command))")
     println(io, "project = ", repr(canonical_local_path(project)))
     println(io, "topology = ", repr(cfg.topology.value), " (", _config_source_label(cfg.topology.source), ")")
+    if hosts_source !== nothing
+        println(io, "hosts_source = ", repr(placement_host_source_label(hosts_source)))
+    end
     println(io, "hosts = ", repr(collect(String, hosts)))
     println(io, "placement = ", repr(collect(String, worker_tokens)))
+    if cfg.command === :go
+        n = local_slots === nothing ? 0 : Int(local_slots)
+        println(io, "local_slots = $n")
+        if go_implicit_no_hosts
+            println(io, "local = ", repr(format_kit_go_implicit_local_slot()))
+        elseif n > 0
+            println(io, "local = ", repr(format_kit_local_placement(n, "slots")))
+        end
+    else
+        n = local_workers === nothing ? 0 : Int(local_workers)
+        println(io, "local_workers = $n")
+        n > 0 && println(io, "local = ", repr(format_kit_local_placement(n, "workers")))
+    end
     for row in options_for_command(cfg.command)
         row.unsafe || continue
         field = getfield(cfg, row.key)
@@ -259,16 +279,41 @@ function finish_run_job_diagnostics!(
     )::Union{Nothing, Int}
     cfg = resolve_run_job_config_from_parsed(parsed; command)
     run_job_config_diagnostic_exit(cfg) || return nothing
+    cli = getproperty(parsed, :cli_session)
+    hosts_vec = collect(String, hosts)
+    hosts_source = isempty(hosts_vec) ? :none : placement_host_source(cli)
+    if cfg.dry_run.value
+        override = kit_distssh_hosts_override_notice(cli)
+        override !== nothing && println(stdout, override)
+    elseif !cfg.print_config.value
+        writeln_kit_resolved_hosts!(cli, hosts_vec; quiet = cli.quiet)
+    end
     if cfg.print_config.value
         print_run_job_config!(stdout, cfg)
     end
+    go_ls, go_implicit = if command === :go
+        resolve_go_local_slots(hosts_vec, cli.local_slots)
+    else
+        (0, false)
+    end
     if cfg.dry_run.value
+        resolved_workers = if command === :drive && hasproperty(parsed, :parent_workers)
+            Int(getproperty(parsed, :parent_workers))
+        elseif command === :ride || command === :drive
+            something(cli.local_workers, 0)
+        else
+            nothing
+        end
         print_run_job_dry_plan!(
             stdout,
             cfg;
             hosts = hosts,
             worker_tokens = worker_tokens,
             project = project,
+            local_workers = command === :go ? nothing : resolved_workers,
+            local_slots = command === :go ? go_ls : nothing,
+            hosts_source = hosts_source,
+            go_implicit_no_hosts = go_implicit,
         )
     end
     return 0

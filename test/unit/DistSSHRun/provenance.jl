@@ -560,7 +560,7 @@ end
                 result = redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
                         return DistSSHRun.go!(
-                            script, String[]; local_workers = 1,
+                            script, String[]; local_slots = 1,
                             project = proj, quiet = true, yes = true,
                         )
                     end

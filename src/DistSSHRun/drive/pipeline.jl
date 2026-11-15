@@ -31,7 +31,7 @@ Build [`PipelineConfig`](@ref) from environment variables.
 | Variable | Role |
 |----------|------|
 | `DISTSSH_HOSTS` | Comma-separated placement tokens (`parent:N` / `NAME:N`) |
-| `DISTSSH_HOSTS_FILE` | Hosts file (appended after `DISTSSH_HOSTS`, same order as CLI) |
+| `DISTSSH_HOSTS_FILE` | Hosts file when the CLI does not set a host list (same precedence as CLI) |
 | `DISTRIBUTED_REMOTE_PROJECT_ROOT` | Remote repo root |
 | `DISTRIBUTED_PROJECT_ROOT` | Local project root |
 | `DRIVER` | Driver script path |

@@ -17,7 +17,11 @@ julia -m DistSSHKit drive --local-workers 2 --hosts '4*user@lab:2222,2*[::1]' sc
 - `:` after the host is the **SSH port** only (as in Julia's machine file).
 - IPv6 literals must be bracketed (`2*[fe80::1]:2222`).
 
-Local workers are **not** placement tokens. Use `--local-workers N`.
+Local capacity is **not** a placement token. `drive` / `ride`: `--local-workers N`
+(`DISTSSH_LOCAL_WORKERS` only). `go`: `--local-slots N`. With no hosts and no
+`--local-slots`, `go` still runs **one** local slot and prints
+`local: <hostname>, 1 slot (no hosts given)`; `--local-slots 0` with no hosts
+is a usage error.
 
 ## Host list sources
 
@@ -28,4 +32,7 @@ Exactly one source applies:
 - `--machine-file` (one token per line)
 
 `DISTSSH_HOSTS` / `DISTSSH_HOSTS_FILE` apply only when the CLI does not set a
-host list. Two explicit CLI sources are an error.
+host list (they are never merged with `--hosts`). Two explicit CLI sources are
+an error. When a job resolves hosts, it prints `hosts (from …): …`; if
+`DISTSSH_HOSTS` is set but overridden by CLI, it also prints
+`DISTSSH_HOSTS is set but overridden by …`.

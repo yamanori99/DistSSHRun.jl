@@ -11,12 +11,13 @@ using Test
         @test !r.spi_check
         @test !r.help
     end
-    let r = parse_ride_args(["--spi-check", "job.jl"])
+    let r = parse_ride_args(["--spi-check", "--local-workers", "1", "job.jl"])
         @test r.spi_check
     end
-    let r = parse_ride_args(["--no-spi-check", "job.jl"])
+    let r = parse_ride_args(["--no-spi-check", "--local-workers", "1", "job.jl"])
         @test !r.spi_check
     end
+    @test_throws ArgumentError parse_ride_args(["job.jl"])
     let r = parse_ride_args(["--local-workers", "1", "2*host1", "--julia", "julia", "job.jl"])
         @test r.cli_session.local_workers == 1
         @test r.hosts == ["2*host1"]

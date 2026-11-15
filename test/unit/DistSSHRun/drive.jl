@@ -13,7 +13,6 @@ end
     @testset "parse_worker_tokens" begin
         p = DistSSHRun.parse_worker_tokens(["4*host-a", "host-b"]; local_workers = 2)
         @test p.parent_workers == 2
-        @test !p.parent_autosize
         @test p.child_workers == Dict("host-a" => 4, "host-b" => 1)
         @test p.child_auto == String[]
         @test p.child_hosts == ["host-a", "host-b"]
@@ -27,23 +26,23 @@ end
         end
         @test DistSSHRun.worker_plan_from_tokens(["h1"]; local_workers = 0).child_workers ==
             Dict("h1" => 1)
-        err = try
-            DistSSHRun.worker_plan_from_tokens(["h1"])
-            nothing
-        catch e
-            e
+        let plan = DistSSHRun.worker_plan_from_tokens(["h1"])
+            @test plan.parent_workers == 0
+            @test plan.child_workers == Dict("h1" => 1)
         end
-        @test err isa ArgumentError
 
         @test_throws ArgumentError DistSSHRun.parse_worker_tokens(["parent:1"])
 
         auto = DistSSHRun.parse_worker_tokens(["3*h1"])
-        @test auto.parent_autosize
         @test auto.parent_workers == 0
         @test auto.child_workers == Dict("h1" => 3)
         @test DistSSHRun.child_hosts_from_tokens(["h1", "4*h2"]) == ["h1", "h2"]
-        @test DistSSHRun.require_counted_placement_tokens(["host"]) === nothing
-        @test DistSSHRun.require_counted_placement_tokens(["1*host"]) === nothing
+        @test DistSSHRun.require_counted_placement_tokens(
+            ["host"]; command = :drive, local_workers = 0,
+        ) === nothing
+        @test DistSSHRun.require_counted_placement_tokens(
+            ["1*host"]; command = :drive, local_workers = 0,
+        ) === nothing
 
         let kw = DistSSHRun.ParsedWorkerTokens(;
                 parent_workers = 2,
@@ -54,10 +53,8 @@ end
             @test kw.child_workers isa Dict{String, Int}
             @test kw.child_workers == Dict("h1" => 3)
             @test kw.child_auto == String[]
-            @test !kw.parent_autosize
         end
 
-        @test_throws ArgumentError DistSSHRun.worker_plan_from_tokens(["host"])
         plan = DistSSHRun.worker_plan_from_tokens(String[]; local_workers = 2)
         @test plan.parent_workers == 2
         @test isempty(plan.child_workers)
@@ -632,7 +629,7 @@ end
                 "JULIA_DISTRIBUTED_EXE" => "",
             ) do
                 cfg = DistSSHRun.pipeline_config_from_env()
-                @test cfg.tokens == ["host-a", "4*host-b"]
+                @test cfg.tokens == ["2*env-a"]
                 @test cfg.hosts_file === nothing
             end
         end

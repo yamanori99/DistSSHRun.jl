@@ -5,7 +5,7 @@ function session_inventory_hosts(session::DistSSHSession)::Vector{String}
         session.tokens; local_workers = session.cli_session.local_workers,
     )
     want_parent = session.include_parent_for_size ||
-        parsed.parent_autosize || parsed.parent_workers > 0
+        parsed.parent_workers > 0
     all_hosts = String[]
     want_parent && push!(all_hosts, PARENT_HOST_NAME)
     append!(all_hosts, session.hosts)

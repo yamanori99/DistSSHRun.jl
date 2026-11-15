@@ -28,6 +28,7 @@ const _EXECUTE_DETACHED_KW = Set{Symbol}(
         :allow_external_symlinks,
         :run_id,
         :local_workers,
+        :local_slots,
     )
 )
 const _EXECUTE_DETACHED_DRIVE_ONLY = (
@@ -228,8 +229,13 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
     ep && (kw[:unsafe_expose_port] = true)
     ata = get(parsed, :unsafe_all_to_all, false)
     ata && (kw[:unsafe_all_to_all] = true)
-    lw = session.local_workers
-    lw !== nothing && (kw[:local_workers] = lw)
+    if kind === :go
+        ls = session.local_slots
+        ls !== nothing && (kw[:local_slots] = ls)
+    else
+        lw = session.local_workers
+        lw !== nothing && (kw[:local_workers] = lw)
+    end
     snap0 = get(parsed, :run_id, nothing)
     snap0 === nothing || (kw[:run_id] = snap0)
     dr0 = get(parsed, :deploy_root, nothing)
@@ -701,6 +707,11 @@ function _execute_detached!(
         )
     end
     if kind === :go
+        haskey(kwargs, :local_workers) && throw(
+            ArgumentError(
+                "execute!(:go, ...; detached=true) uses local_slots=, not local_workers=",
+            )
+        )
         for k in _EXECUTE_DETACHED_DRIVE_ONLY
             haskey(kwargs, k) && throw(
                 ArgumentError(
@@ -786,6 +797,14 @@ function _execute_detached!(
         run_id = validate_run_id(run_id)
     end
     local_workers = get(kwargs, :local_workers, nothing)
+    local_slots = get(kwargs, :local_slots, nothing)
+    if kind === :go
+        local_workers !== nothing && throw(
+            ArgumentError("execute!(:go, ...; detached=true) uses local_slots=, not local_workers="),
+        )
+    elseif local_slots !== nothing
+        throw(ArgumentError("execute!(:$(kind), ...; detached=true) uses local_workers=, not local_slots="))
+    end
     if local_workers !== nothing
         (local_workers isa Integer && !(local_workers isa Bool)) || throw(
             ArgumentError(
@@ -795,6 +814,16 @@ function _execute_detached!(
         lw = Int(local_workers)
         lw < 0 && throw(ArgumentError("local_workers must be >= 0, got $lw"))
         local_workers = lw
+    end
+    if local_slots !== nothing
+        (local_slots isa Integer && !(local_slots isa Bool)) || throw(
+            ArgumentError(
+                "local_slots must be an integer, got $(repr(local_slots))",
+            )
+        )
+        ls = Int(local_slots)
+        ls < 0 && throw(ArgumentError("local_slots must be >= 0, got $ls"))
+        local_slots = ls
     end
     worker_include isa Bool || throw(
         ArgumentError(
@@ -876,6 +905,7 @@ function _execute_detached!(
         run_id = run_id,
         remote = remote,
         local_workers = local_workers,
+        local_slots = local_slots,
     )
     extra = Dict{String, String}(
         "DISTRIBUTED_PROJECT_ROOT" => proj,
@@ -1960,6 +1990,7 @@ function _execute_detached_argv(
         run_id::Union{Nothing, AbstractString} = nothing,
         remote::Union{Nothing, AbstractString} = nothing,
         local_workers::Union{Nothing, Integer} = nothing,
+        local_slots::Union{Nothing, Integer} = nothing,
     )::Vector{String}
     argv = String[String(kind)]
     push!(argv, "-y")
@@ -1991,7 +2022,9 @@ function _execute_detached_argv(
     if hosts_file !== nothing && !isempty(strip(String(hosts_file)))
         push!(argv, "--hosts-file", canonical_local_path(String(hosts_file)))
     end
-    if local_workers !== nothing
+    if kind === :go
+        local_slots !== nothing && push!(argv, "--local-slots", string(Int(local_slots)))
+    elseif local_workers !== nothing
         push!(argv, "--local-workers", string(Int(local_workers)))
     end
     if kind === :drive

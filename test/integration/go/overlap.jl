@@ -1,6 +1,6 @@
 using Test
 
-# Oracle: `go!(…; local_workers = 2)` and `go!(…; repeat=2)` run two local slots
+# Oracle: `go!(…; local_slots = 2)` and `go!(…; repeat=2)` run two local slots
 # concurrently (slot t0.txt timestamps within 0.45s). Does not cover SSH,
 # CLI `go`, or slot-plan math (those live in unit/DistSSHRun/go.jl).
 
@@ -19,7 +19,7 @@ using Test
         )
         t0 = time()
         result = DistSSHRun.go!(
-            script; local_workers = 2,
+            script; local_slots = 2,
             project = proj,
             quiet = true,
             yes = true,

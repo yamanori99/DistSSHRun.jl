@@ -169,6 +169,7 @@ using .DistSSHUp: julia_version_mismatch_kind, juliaup_add_host!, juliaup_align_
 
 include("DistSSHRun/messages/display.jl")
 include("DistSSHRun/messages/errors.jl")
+include("DistSSHRun/messages/placement.jl")
 include("DistSSHRun/options/table.jl")
 include("DistSSHRun/options/config.jl")
 include("DistSSHRun/options/cli_consume.jl")

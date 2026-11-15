@@ -83,7 +83,8 @@ function add_drive_workers!(
         local_julia = DistSSHRun.pin_local_julia(nothing)
 
         if parent_workers > 0
-            write_both("  $(DistSSHRun.PARENT_HOST_NAME) ($parent_workers workers): ")
+            local_line = DistSSHRun.format_kit_local_placement(parent_workers, "workers")
+            write_both("  $local_line: ")
             DistSSHRun._drive_host_span!(DistSSHRun.PARENT_HOST_NAME, "workers", :running)
             try
                 before = Set(workers())
@@ -105,7 +106,7 @@ function add_drive_workers!(
                 writeln_both("")
             end
         else
-            writeln_both("  $(DistSSHRun.PARENT_HOST_NAME): master only (use $(DistSSHRun.PARENT_HOST_NAME):N for parent workers)")
+            writeln_both("  local: $(DistSSHRun.kit_local_host_label()), 0 workers (use --local-workers N)")
         end
 
         sshflags_cmd = Cmd(ssh_opts())
