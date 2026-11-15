@@ -658,7 +658,7 @@ end
             skip_hash_check = true,
             workers = 4,
         )
-        @test "--workers" in argvw
+        @test "--local-workers" in argvw
         @test "4" in argvw
         @test "--best-effort" in argvw
         argv_rep = DistSSHRun._execute_detached_argv(
@@ -869,20 +869,20 @@ end
         hosts_file = _sample_hosts_file()
         drive = DistSSHRun.parse_drive_args(
             [
-                "--no-log", "--package", "Foo", "--workers", "4",
+                "--no-log", "--package", "Foo", "--local-workers", "4",
                 "--hosts-file", hosts_file, "s.jl",
             ]
         )
         dkw = DistSSHRun.execute_kwargs_from_parsed(drive; kind = :drive)
         @test dkw[:enable_log] === false
         @test dkw[:package] == "Foo"
-        @test dkw[:workers] == 4
+        @test dkw[:local_workers] == 4
         @test !haskey(dkw, :hosts_file)
-        @test drive.parent_workers == 4
+        @test drive.cli_session.local_workers == 4
         @test DistSSHRun.host_tokens(drive; kind = :drive) ==
-            ["1*host-a", "4*host-b"]
+            ["host-a", "4*host-b"]
         bare = DistSSHRun.parse_drive_args(["1*host1", "s.jl"])
-        @test !haskey(DistSSHRun.execute_kwargs_from_parsed(bare; kind = :drive), :workers)
+        @test !haskey(DistSSHRun.execute_kwargs_from_parsed(bare; kind = :drive), :local_workers)
         errk = try
             DistSSHRun.execute_kwargs_from_parsed(go; kind = :pipeline)
             nothing
@@ -1912,7 +1912,7 @@ end
         @test DistSSHRun.execute_detached_accepts(:env_allow; kind = :ride)
         @test DistSSHRun.execute_detached_accepts(:env; kind = :drive)
 
-        session = (quiet = false, verbosity = nothing)
+        session = (quiet = false, verbosity = nothing, local_workers = nothing)
         parsed = (
             cli_session = session,
             script_args = String[],

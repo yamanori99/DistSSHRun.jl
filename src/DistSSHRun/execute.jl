@@ -2013,8 +2013,8 @@ function _execute_detached_argv(
             push!(argv, "--best-effort")
         end
         skip_hash_check === false && push!(argv, "--require-git")
-        if workers !== nothing
-            push!(argv, "--workers", string(Int(workers)))
+        if workers !== nothing && local_workers === nothing
+            push!(argv, "--local-workers", string(Int(workers)))
         end
         worker_include && push!(argv, "--worker-include")
     elseif kind === :ride
