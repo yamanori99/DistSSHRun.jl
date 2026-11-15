@@ -54,8 +54,8 @@ function _runtime_module_tree!(mod::Module)::String
     tar_mod = DistSSHBase.tool_require(
         Base.PkgId(_WORKER_EVAL_PKG_UUID_TAR, "Tar"),
     )
-    tar_create = getproperty(tar_mod, :create)
-    tar_tree_hash = getproperty(tar_mod, :tree_hash)
+    tar_create = Base.invokelatest(getproperty, tar_mod, :create)
+    tar_tree_hash = Base.invokelatest(getproperty, tar_mod, :tree_hash)
     tar_path = tempname() * ".tar"
     try
         Base.invokelatest(tar_create, String(root), tar_path)
@@ -188,16 +188,18 @@ function _tool_require_eval_preamble()::String
     function __distssh_pkg_tree(mod)
         root = pkgdir(mod)
         root === nothing && error("pkgdir unavailable")
-        tar_mod = tool_require(Base.PkgId(Base.UUID("a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"), "Tar"))
-        tar_path = tempname() * ".tar"
-        try
-            Base.invokelatest(tar_mod.create, String(root), tar_path)
-            h = Base.invokelatest(
-                tar_mod.tree_hash,
-                tar_path;
-                algorithm = "git-sha1",
-                skip_empty = true,
-            )
+    tar_mod = tool_require(Base.PkgId(Base.UUID("a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"), "Tar"))
+    tar_create = Base.invokelatest(getproperty, tar_mod, :create)
+    tar_tree_hash = Base.invokelatest(getproperty, tar_mod, :tree_hash)
+    tar_path = tempname() * ".tar"
+    try
+        Base.invokelatest(tar_create, String(root), tar_path)
+        h = Base.invokelatest(
+            tar_tree_hash,
+            tar_path;
+            algorithm = "git-sha1",
+            skip_empty = true,
+        )
             s = lowercase(string(h))
             length(s) == 40 || error("package tree hash is not 40 hex chars")
             return s

@@ -217,13 +217,11 @@ let _BASE = DistSSHBase
                 rm(logp; force = true)
                 withenv(_nonposix_shell_env(double, logp; mode = "fish")...) do
                     cmd = _BASE._host_sync_remote_shell_cmd("summarize-fish.test", "nope")
-                    proc = proc_stderr = nothing
-                    mktemp() do err_path, err_io
-                        redirect_stderr(err_io) do
-                            proc = run(ignorestatus(cmd); wait = true)
+                    proc, proc_stderr = let buf = IOBuffer()
+                        p = redirect_stderr(buf) do
+                            run(ignorestatus(cmd); wait = true)
                         end
-                        flush(err_io)
-                        proc_stderr = read(err_path, String)
+                        p, String(take!(buf))
                     end
                     @test proc.exitcode == 9
                     @test occursin("missing-tool", proc_stderr)
@@ -236,13 +234,11 @@ let _BASE = DistSSHBase
                     @test occursin("help setup", msg)
                     @test !occursin("--help", msg)
                     sshfail = _BASE._host_sync_remote_shell_cmd("summarize-255.test", "sshfail")
-                    denied = denied_stderr = nothing
-                    mktemp() do err_path, err_io
-                        redirect_stderr(err_io) do
-                            denied = run(ignorestatus(sshfail); wait = true)
+                    denied, denied_stderr = let buf = IOBuffer()
+                        p = redirect_stderr(buf) do
+                            run(ignorestatus(sshfail); wait = true)
                         end
-                        flush(err_io)
-                        denied_stderr = read(err_path, String)
+                        p, String(take!(buf))
                     end
                     @test denied.exitcode == 255
                     @test occursin("Permission denied (publickey).", denied_stderr)
