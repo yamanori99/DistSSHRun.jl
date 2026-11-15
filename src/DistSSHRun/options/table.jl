@@ -14,16 +14,16 @@ struct OptionRow
 end
 
 OptionRow(;
-        key,
-        cli = nothing,
-        env = nothing,
-        kwarg = nothing,
-        default,
-        commands,
-        help,
-        unsafe = false,
-        valued = false,
-    ) = OptionRow(key, cli, env, kwarg, default, commands, help, unsafe, valued)
+    key,
+    cli = nothing,
+    env = nothing,
+    kwarg = nothing,
+    default,
+    commands,
+    help,
+    unsafe = false,
+    valued = false,
+) = OptionRow(key, cli, env, kwarg, default, commands, help, unsafe, valued)
 
 const RUN_JOB_COMMANDS = (:go, :drive, :ride)
 

@@ -254,13 +254,13 @@ function _run_drive_parsed_specialized!(
     end
 
     project = something(project_root, get(ENV, "DISTRIBUTED_PROJECT_ROOT", pwd()))
-  let diag = finish_run_job_diagnostics!(
-        parsed;
-        command = :drive,
-        project = project,
-        hosts = String[first(h) for h in parsed.hosts],
-        worker_tokens = host_tokens(parsed; kind = :drive),
-    )
+    let diag = finish_run_job_diagnostics!(
+            parsed;
+            command = :drive,
+            project = project,
+            hosts = String[first(h) for h in parsed.hosts],
+            worker_tokens = host_tokens(parsed; kind = :drive),
+        )
         diag !== nothing && return Cint(diag)
     end
 
