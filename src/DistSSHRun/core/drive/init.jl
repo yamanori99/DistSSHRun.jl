@@ -211,7 +211,6 @@ function init_drive_workers!(
         path_anchor::String,
         heartbeat = nothing,
     )
-    DistSSHRun.assert_loaded_verified_worker_set!()
     write_both("Initializing workers... ")
     flush(stdout)
     # Overlap deferred ship input hashing with activate / precompile.
