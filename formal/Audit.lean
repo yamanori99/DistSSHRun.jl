@@ -4,7 +4,6 @@ import DistSSHLean.Registry.Generality
 /-!
 Registry audit (see [julia-in-lean](https://github.com/MilesCranmer/julia-in-lean)
 `dynamicexpressions/Audit.lean`). Run: `lake env lean Audit.lean`.
-CI Lake cache: workflow key suffix hashes `formal/**/*.lean` only.
 -/
 
 open Lean Meta
