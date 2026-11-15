@@ -14,7 +14,7 @@ category: breaking
   verification compares Julia version and commit, DistSSH* `pkg.*` versions,
   and Manifest and Project byte digests (`identity_mismatches`; paths and lock
   file names are not compared). A controller with no Manifest digest fails
-  before worker or remote launch unless `--unsafe-skip-env-digests` is set (see
+  before worker or remote launch unless `--unsafe-heterogeneous` is set (see
   `worker-env-manifest-fail-closed` fragment). Identity hashing uses whatever
   Manifest Base resolves for `--project=` (including `Manifest-v{major}.{minor}.toml`;
   format 2 `[[deps.Name]]` tables are read). A remote Julia that cannot print

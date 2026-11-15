@@ -13,6 +13,6 @@ category: breaking
   before worker checks: existing Manifest digest gate,
   `Pkg.is_manifest_current` must be `true` (`false` and `nothing` fail closed
   with what/where/why/fix text), and the controller must use the default
-  sysimage for its Julia build. `--unsafe-skip-env-digests` waives only Manifest /
+  sysimage for its Julia build. `--unsafe-heterogeneous` waives only Manifest /
   Project byte digests, not these gates. Worker verification also compares
   resolved sysimage paths.
