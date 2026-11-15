@@ -175,6 +175,10 @@ using Test
         @test occursin("setup --remote-path was removed", err.msg)
         @test occursin("--deploy-root", err.msg)
     end
+    @testset "deploy-root shell quoting for follow-up commands" begin
+        spaced = "/tmp/distssh work"
+        @test DistSSHRun.posix_quote(spaced) == "'/tmp/distssh work'"
+    end
     let r = parse_setup_args(["check", "--deploy-root", " /tmp/App.jl ", "child:host1"])
         @test r.deploy_root == "/tmp/App.jl"
     end
