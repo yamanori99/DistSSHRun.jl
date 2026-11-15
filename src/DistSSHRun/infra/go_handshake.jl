@@ -78,7 +78,7 @@ const _GO_HANDSHAKE_LOADER_SRC = let schema = 1,
         plen = length(bytes)
         digest = SHA.bytes2hex(SHA.sha256(bytes))
         hexpay = SHA.bytes2hex(collect(bytes))
-        print('\\n', "$(_GO_HANDSHAKE_FRAME_PREFIX_S)", ' ', \$(nonce), ' ', \$(plen), ' ', \$(digest), ' ', \$(hexpay), '\\n')
+        print('\\n', "$(_GO_HANDSHAKE_FRAME_PREFIX_S)", ' ', nonce, ' ', plen, ' ', digest, ' ', hexpay, '\\n')
         flush(stdout)
         cmd = readline(stdin)
         if startswith(cmd, "ABORT ")
@@ -87,6 +87,7 @@ const _GO_HANDSHAKE_LOADER_SRC = let schema = 1,
         startswith(cmd, "GO ") || error("go handshake: expected GO or ABORT on stdin")
         go_nonce = strip(cmd[4:end])
         go_nonce == nonce || error("go handshake: GO nonce mismatch")
+        redirect_stderr(stdout)
         return nothing
     end
     __distssh_go_handshake!()
@@ -125,14 +126,58 @@ function _parse_go_handshake_frame(line::AbstractString, nonce::AbstractString)
     return String(bytes)
 end
 
-function _go_handshake_read_frame(io::IO, nonce::AbstractString)::String
+function _go_handshake_log_line!(log_io::Union{Nothing, IO}, line::AbstractString)
+    log_io === nothing && return nothing
+    println(log_io, line)
+    flush(log_io)
+    return nothing
+end
+
+function _go_handshake_frame_line(payload::AbstractString, nonce::AbstractString)::String
+    bytes = codeunits(String(payload))
+    plen = length(bytes)
+    digest = SHA.bytes2hex(SHA.sha256(bytes))
+    hexpay = SHA.bytes2hex(collect(bytes))
+    return string(_GO_HANDSHAKE_FRAME_PREFIX, ' ', nonce, ' ', plen, ' ', digest, ' ', hexpay)
+end
+
+"""Controller-expected DISTSSH-REPORT/1 line (test doubles and remote sh helpers)."""
+function go_handshake_report_frame(nonce::AbstractString)::String
+    slots = _controller_loaded_slots(loaded_launch_mode())
+    return _go_handshake_frame_line(encode_loaded_wire_report(slots), nonce)
+end
+
+function _go_handshake_read_frame(
+        io::IO,
+        nonce::AbstractString,
+        log_io::Union{Nothing, IO} = nothing,
+    )::String
     while !eof(io)
         line = readline(io)
+        _go_handshake_log_line!(log_io, line)
         wire = _parse_go_handshake_frame(line, nonce)
         wire === nothing && continue
         return wire
     end
     throw(LoadedCodeMismatchError(LoadedMismatchKind.probe_failed, "", "go handshake: no report frame before EOF"))
+end
+
+function _go_drain_slot_stdout!(io::IO, log_io::IO)
+    while !eof(io)
+        try
+            data = readavailable(io)
+            if isempty(data)
+                yield()
+                continue
+            end
+            write(log_io, data)
+            flush(log_io)
+        catch e
+            e isa EOFError && break
+            rethrow()
+        end
+    end
+    return nothing
 end
 
 function verify_go_handshake_wire!(wire::AbstractString, site::AbstractString)
@@ -150,11 +195,15 @@ function verify_go_handshake_wire!(wire::AbstractString, site::AbstractString)
     return nothing
 end
 
-function go_slot_controller_handshake!(io::IO, site::AbstractString)
+function go_slot_controller_handshake!(
+        io::IO,
+        site::AbstractString,
+        log_io::Union{Nothing, IO} = nothing,
+    )
     nonce = go_handshake_nonce()
     println(io, "HELLO ", nonce)
     flush(io)
-    wire = _go_handshake_read_frame(io, nonce)
+    wire = _go_handshake_read_frame(io, nonce, log_io)
     verify_go_handshake_wire!(wire, site)
     println(io, "GO ", nonce)
     flush(io)
@@ -164,10 +213,11 @@ end
 function run_go_slot_with_handshake(cmd::Cmd, site::AbstractString, log_path::AbstractString)
     log_io = open(String(log_path), "w")
     proc = nothing
+    drain = nothing
     try
-        proc = open(ignorestatus(cmd); stdout = log_io, stderr = log_io, write = true, read = true)
+        proc = open(ignorestatus(cmd); write = true, read = true)
         try
-            go_slot_controller_handshake!(proc, site)
+            go_slot_controller_handshake!(proc, site, log_io)
         catch e
             try
                 println(proc, "ABORT ", go_handshake_nonce())
@@ -176,7 +226,12 @@ function run_go_slot_with_handshake(cmd::Cmd, site::AbstractString, log_path::Ab
             end
             rethrow(e)
         end
+        drain = @async _go_drain_slot_stdout!(proc, log_io)
         wait(proc)
+        try
+            fetch(drain)
+        catch
+        end
         return proc
     finally
         if proc !== nothing && proc.exitcode === nothing

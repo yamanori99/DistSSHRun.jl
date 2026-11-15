@@ -224,10 +224,24 @@ using Dates
             ready = joinpath(dir, "ssh.ready")
             ssh = joinpath(bindir, "ssh")
             scp = joinpath(bindir, "scp")
+            hs_line = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "go_handshake_ssh_line.jl"))
+            julia_q = joinpath(Sys.BINDIR, Base.julia_exename())
             write(
                 ssh,
                 raw"""#!/bin/sh
                 ready="$GO_SLOT_SSH_READY"
+                hs_line="$GO_SLOT_HS_LINE"
+                julia_bin="$GO_SLOT_JULIA_BIN"
+                if read -r _hsline; then
+                  case "$_hsline" in
+                    HELLO\ *)
+                      nonce="${_hsline#HELLO }"
+                      if [ -n "$hs_line" ] && [ -n "$julia_bin" ]; then
+                        "$julia_bin" "$hs_line" "$nonce"
+                      fi
+                      ;;
+                  esac
+                fi
                 for arg in "$@"; do
                   case "$arg" in
                     *go.exitcode*)
@@ -257,6 +271,8 @@ using Dates
                 withenv(
                     "PATH" => path,
                     "GO_SLOT_SSH_READY" => ready,
+                    "GO_SLOT_HS_LINE" => hs_line,
+                    "GO_SLOT_JULIA_BIN" => julia_q,
                     "DISTSSH_TEST" => nothing,
                     "DISTSSH_TEST_SSH" => nothing,
                     "DISTSSH_JOB_ID" => nothing,
@@ -371,7 +387,9 @@ using Dates
         slot = "demos/output/go_sim/root@192.0.2.10-1"
         @test occursin("cd $(DistSSHRun._remote_shell_path_word("~/proj")) && mkdir -p $(DistSSHRun._remote_shell_path_word(slot))", inner)
         @test occursin("mkdir -p $(DistSSHRun._remote_shell_path_word(slot * "/.distssh"))", inner)
-        @test occursin(">" * DistSSHRun._remote_shell_path_word(slot * "/julia.stdout.log"), inner)
+        log_q = DistSSHRun._remote_shell_path_word(slot * "/julia.stdout.log")
+        @test occursin("tee $log_q", inner) || occursin("tee " * log_q, inner)
+        @test occursin("go-handshake.jl", inner)
         @test occursin("go.exitcode", inner)
         @test occursin("echo \$ec >", inner)
 
@@ -613,23 +631,19 @@ using Dates
                 error("boom")
                 """,
             )
-            err_path, err_io = mktemp()
-            r = try
-                redirect_stderr(err_io) do
-                    redirect_stdout(devnull) do
-                        DistSSHRun.go!(
-                            script, ["parent:1"];
-                            project = proj, quiet = true, yes = true,
-                        )
-                    end
+            r = redirect_stdout(devnull) do
+                redirect_stderr(devnull) do
+                    DistSSHRun.go!(
+                        script, ["parent:1"];
+                        project = proj, quiet = true, yes = true,
+                    )
                 end
-            finally
-                close(err_io)
             end
-            txt = read(err_path, String)
+            slot_dir = joinpath(r.output_dir, "parent")
+            suffix = DistSSHRun._go_trace_suffix(slot_dir)
             @test !r.ok
-            @test occursin("last top-level:", txt)
-            @test occursin("job.jl:", txt)
+            @test occursin("last top-level:", suffix)
+            @test occursin("job.jl:", suffix)
         end
     end
 

@@ -52,4 +52,12 @@ if occursin(".distssh/deploy.toml", script) && occursin("cat", script)
     cmd = run(pipeline(ignorestatus(`sh -c $script`); stdout = stdout, stderr = stderr); wait = true)
     exit(cmd.exitcode)
 end
+if occursin("go.exitcode", script) &&
+        (occursin("go-handshake", script) || occursin("DISTSSH_GO_HS", script))
+    cmd = run(
+        pipeline(ignorestatus(`sh -c $script`); stdin = stdin, stdout = stdout, stderr = stderr);
+        wait = true,
+    )
+    exit(cmd.exitcode)
+end
 exit(0)
