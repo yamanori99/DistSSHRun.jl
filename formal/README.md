@@ -67,7 +67,7 @@ julia --project=lib/DistSSHBase formal/diff/shell_status.jl
 | `scripts/check-proof-escapes.py` | Syntax-aware proof-escape scan (adapted from [julia-in-lean](https://github.com/MilesCranmer/julia-in-lean) `check-proof-escapes.py`, Apache-2.0) |
 | `scripts/check-coverage.jl` | Registry coverage vs in-scope file and functions |
 | `QUESTIONS.md` | Maintainer rulings on ambiguous behaviour |
-| `bugs/` | YAML write-ups for confirmed bugs (PyYAML required only when `bugs/*.yaml` exist; `pip install pyyaml` on macOS if needed) |
+| `bugs/` | YAML write-ups for confirmed bugs (`scripts/audit.sh` always needs PyYAML; `pip install pyyaml` on macOS if needed) |
 | `diff/shell_status.jl` | Differential test |
 | `repro/` | One `repro/<id>.jl` per refuted entry |
 

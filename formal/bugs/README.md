@@ -7,7 +7,9 @@ Schema and workflow match
 [julia-in-lean](https://github.com/MilesCranmer/julia-in-lean) (`julia-base/bugs/`,
 `scripts/check_bugs.py`). Required fields include `priority` (P0–P3), `kind`,
 `files`, `functions`, `output.release` / `output.nightly`, `reproduced.*`,
-`duplicates`, and `lean.property` / `lean.theorem`.
+`duplicates`, and `lean.property` / `lean.theorem` (theorem name must match a
+fully qualified Lean declaration exactly, e.g.
+`DistSSHLean.DistSSHBase.ShellStatus.signaledBranch_holds`).
 
 **Filing upstream is never automated.** A human approves each issue before it is
 posted to JuliaLang/julia, DistSSHRun, or any other tracker.

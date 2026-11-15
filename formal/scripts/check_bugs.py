@@ -2,6 +2,7 @@
 
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -27,23 +28,44 @@ TEXT = [
     "cause",
     "possible_fix",
 ]
+NS_RE = re.compile(r"^\s*namespace\s+(\S+)")
+END_RE = re.compile(r"^\s*end(?:\s+(\S+))?\s*$")
+THM_RE = re.compile(r"^\s*(?:private\s+|protected\s+)?theorem\s+([^\s:({\[]+)")
+
+
+def require_pyyaml():
+    try:
+        import yaml
+    except ImportError:
+        print("FAIL: PyYAML required for audit (pip install pyyaml)")
+        sys.exit(1)
+    return yaml
 
 
 def declared_theorems() -> set[str]:
-    decl = re.compile(r"^\s*(?:private\s+|protected\s+)?theorem\s+([^\s:({\[]+)", re.M)
-    return {
-        name.rsplit(".", 1)[-1]
-        for f in (ROOT / "DistSSHLean").rglob("*.lean")
-        for name in decl.findall(f.read_text(errors="ignore"))
-    }
+    out: set[str] = set()
+    for f in (ROOT / "DistSSHLean").rglob("*.lean"):
+        stack: list[str] = []
+        for line in f.read_text(errors="ignore").splitlines():
+            if m := NS_RE.match(line):
+                stack.append(m.group(1))
+                continue
+            if END_RE.match(line):
+                if stack:
+                    stack.pop()
+                continue
+            if m := THM_RE.match(line):
+                short = m.group(1)
+                fq = f"{stack[-1]}.{short}" if stack else short
+                out.add(fq)
+    return out
 
 
 def theorem_known(theorems: set[str], name: str) -> bool:
-    short = name.rsplit(".", 1)[-1]
-    return name in theorems or short in theorems
+    return name in theorems
 
 
-def check(path: Path, theorems: set[str], yaml_mod) -> list[str]:
+def check(path: Path, theorems: set[str], yaml_mod, root: Path) -> list[str]:
     try:
         bug = yaml_mod.safe_load(path.read_text())
     except yaml_mod.YAMLError as err:
@@ -89,16 +111,13 @@ def check(path: Path, theorems: set[str], yaml_mod) -> list[str]:
     if isinstance(lean, dict) and isinstance(lean.get("theorem"), str):
         thm = lean["theorem"]
         need(theorem_known(theorems, thm), f"lean.theorem {thm!r} not in DistSSHLean")
-    need((ROOT / "repro" / f"{path.stem}.jl").exists(), f"missing repro/{path.stem}.jl")
+    need((root / "repro" / f"{path.stem}.jl").exists(), f"missing repro/{path.stem}.jl")
     return problems
 
 
-def self_test() -> int:
-    import yaml as yaml_mod
-
-    theorems = declared_theorems()
-    body = """
-id: selftest-bad
+def _bug_yaml_body(theorem: str, stem: str = "selftest-bad") -> str:
+    return f"""
+id: {stem}
 priority: P2
 kind: wrong-result
 title: t
@@ -127,25 +146,35 @@ duplicates:
     - q
 lean:
   property: fake
-  theorem: totally_nonexistent_theorem_xyz
+  theorem: {theorem}
 """.lstrip()
-    repro_dir = ROOT / "repro"
-    repro_dir.mkdir(exist_ok=True)
-    repro = repro_dir / "selftest-bad.jl"
-    repro.write_text('println("ok")\n')
-    yaml_path = ROOT / "bugs" / "selftest-bad.yaml"
-    (ROOT / "bugs").mkdir(exist_ok=True)
-    try:
-        yaml_path.write_text(body)
-        problems = check(yaml_path, theorems, yaml_mod)
-    finally:
-        yaml_path.unlink(missing_ok=True)
-        repro.unlink(missing_ok=True)
 
-    if not any("lean.theorem" in p for p in problems):
-        print(f"FAIL self-test: expected lean.theorem error, got {problems}")
-        return 1
-    print("SELFTEST bugs unknown lean.theorem rejected")
+
+def self_test() -> int:
+    yaml_mod = require_pyyaml()
+    theorems = declared_theorems()
+
+    scenarios = [
+        ("totally_nonexistent_theorem_xyz", "SELFTEST bugs unknown lean.theorem rejected"),
+        ("Foo.signaledBranch_holds", "SELFTEST bugs wrong-namespace lean.theorem rejected"),
+    ]
+
+    for theorem, ok_line in scenarios:
+        with tempfile.TemporaryDirectory(prefix="check-bugs-selftest-") as td:
+            root = Path(td)
+            (root / "bugs").mkdir()
+            (root / "repro").mkdir()
+            stem = "selftest-bad"
+            yaml_path = root / "bugs" / f"{stem}.yaml"
+            repro = root / "repro" / f"{stem}.jl"
+            yaml_path.write_text(_bug_yaml_body(theorem, stem))
+            repro.write_text('println("ok")\n')
+            problems = check(yaml_path, theorems, yaml_mod, root)
+            if not any("lean.theorem" in p for p in problems):
+                print(f"FAIL self-test: expected lean.theorem error for {theorem!r}, got {problems}")
+                return 1
+            print(ok_line)
+
     print("BUGS SELFTEST OK")
     return 0
 
@@ -154,19 +183,14 @@ def main() -> int:
     if "--self-test" in sys.argv:
         return self_test()
 
+    yaml_mod = require_pyyaml()
     files = sorted((ROOT / "bugs").glob("*.yaml"))
     if not files:
         print("BUGS 0 PROBLEMS 0")
         return 0
 
-    try:
-        import yaml
-    except ImportError:
-        print("FAIL: PyYAML required for bugs/*.yaml (pip install pyyaml)")
-        return 1
-
     theorems = declared_theorems()
-    problems = [p for f in files for p in check(f, theorems, yaml)]
+    problems = [p for f in files for p in check(f, theorems, yaml_mod, ROOT)]
     for p in problems:
         print(p)
     print(f"BUGS {len(files)} PROBLEMS {len(problems)}")
