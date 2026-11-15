@@ -4,12 +4,6 @@ import re
 import sys
 from pathlib import Path
 
-try:
-    import yaml
-except ImportError:
-    print("FAIL: PyYAML required (pip install pyyaml)")
-    sys.exit(1)
-
 ROOT = Path(__file__).resolve().parent.parent
 PRIORITIES = {"P0", "P1", "P2", "P3"}
 KINDS = {
@@ -44,10 +38,15 @@ def declared_theorems() -> set[str]:
     }
 
 
-def check(path: Path, theorems: set[str]) -> list[str]:
+def theorem_known(theorems: set[str], name: str) -> bool:
+    short = name.rsplit(".", 1)[-1]
+    return name in theorems or short in theorems
+
+
+def check(path: Path, theorems: set[str], yaml_mod) -> list[str]:
     try:
-        bug = yaml.safe_load(path.read_text())
-    except yaml.YAMLError as err:
+        bug = yaml_mod.safe_load(path.read_text())
+    except yaml_mod.YAMLError as err:
         return [f"{path.name}: invalid YAML: {err}"]
     if not isinstance(bug, dict):
         return [f"{path.name}: top level is not a mapping"]
@@ -87,14 +86,87 @@ def check(path: Path, theorems: set[str]) -> list[str]:
         isinstance(lean, dict) and isinstance(lean.get("property"), str) and isinstance(lean.get("theorem"), str),
         "lean.property and lean.theorem required",
     )
+    if isinstance(lean, dict) and isinstance(lean.get("theorem"), str):
+        thm = lean["theorem"]
+        need(theorem_known(theorems, thm), f"lean.theorem {thm!r} not in DistSSHLean")
     need((ROOT / "repro" / f"{path.stem}.jl").exists(), f"missing repro/{path.stem}.jl")
     return problems
 
 
-def main() -> int:
-    files = sorted((ROOT / "bugs").glob("*.yaml"))
+def self_test() -> int:
+    import yaml as yaml_mod
+
     theorems = declared_theorems()
-    problems = [p for f in files for p in check(f, theorems)]
+    body = """
+id: selftest-bad
+priority: P2
+kind: wrong-result
+title: t
+area: a
+summary: s
+likelihood: low
+maybe_intended: "no"
+reproducer: repro/x.jl
+expected: e
+promised_by: p
+cause: c
+possible_fix: f
+files:
+  - lib/DistSSHBase/src/ssh/shell_status.jl
+functions:
+  - shell_status
+output:
+  release: r
+  nightly: n
+reproduced:
+  release: false
+  nightly: false
+duplicates:
+  issues: []
+  queries:
+    - q
+lean:
+  property: fake
+  theorem: totally_nonexistent_theorem_xyz
+""".lstrip()
+    repro_dir = ROOT / "repro"
+    repro_dir.mkdir(exist_ok=True)
+    repro = repro_dir / "selftest-bad.jl"
+    repro.write_text('println("ok")\n')
+    yaml_path = ROOT / "bugs" / "selftest-bad.yaml"
+    (ROOT / "bugs").mkdir(exist_ok=True)
+    try:
+        yaml_path.write_text(body)
+        problems = check(yaml_path, theorems, yaml_mod)
+    finally:
+        yaml_path.unlink(missing_ok=True)
+        repro.unlink(missing_ok=True)
+
+    if not any("lean.theorem" in p for p in problems):
+        print(f"FAIL self-test: expected lean.theorem error, got {problems}")
+        return 1
+    print("SELFTEST bugs unknown lean.theorem rejected")
+    print("BUGS SELFTEST OK")
+    return 0
+
+
+def main() -> int:
+    if "--self-test" in sys.argv:
+        return self_test()
+
+    files = sorted((ROOT / "bugs").glob("*.yaml"))
+    if not files:
+        print("BUGS 0 PROBLEMS 0")
+        return 0
+
+    try:
+        import yaml
+    except ImportError:
+        print("FAIL: PyYAML required for bugs/*.yaml (pip install pyyaml)")
+        return 1
+
+    theorems = declared_theorems()
+    problems = [p for f in files for p in check(f, theorems, yaml)]
     for p in problems:
         print(p)
     print(f"BUGS {len(files)} PROBLEMS {len(problems)}")

@@ -12,6 +12,18 @@ from pathlib import Path
 
 FORBIDDEN = {"sorry", "admit", "native_decide", "bv_decide", "ofReduceBool", "axiom"}
 
+AXIOM_ALLOWED_REL = "DistSSHLean/Runtime/Axioms.lean"
+
+
+def file_violations(rel_posix: str, source: str) -> list[tuple[int, str]]:
+    rel = rel_posix.replace("\\", "/")
+    found = []
+    for line, token in violations(source):
+        if token == "axiom" and rel == AXIOM_ALLOWED_REL:
+            continue
+        found.append((line, token))
+    return found
+
 
 def violations(source: str) -> list[tuple[int, str]]:
     found = []
@@ -171,8 +183,9 @@ def scan(root: Path) -> int:
     files = lean_roots(root)
     problems = 0
     for path in files:
-        for line, token in violations(path.read_text()):
-            print(f"FAIL proof escape {path.relative_to(root)}:{line}: {token}")
+        rel = path.relative_to(root).as_posix()
+        for line, token in file_violations(rel, path.read_text()):
+            print(f"FAIL proof escape {rel}:{line}: {token}")
             problems += 1
     print(f"PROOF ESCAPES files {len(files)} problems {problems}")
     return int(problems != 0)
@@ -182,13 +195,22 @@ def self_test() -> int:
     fixtures = Path(__file__).resolve().parent / "fixtures"
     good = (fixtures / "proof-escapes-pass.lean").read_text()
     bad = (fixtures / "proof-escapes-fail.lean").read_text()
-    if violations(good):
+    if file_violations("_pass.lean", good):
         print("FAIL self-test: pass fixture must have zero violations")
         return 1
-    bad_hits = violations(bad)
+    bad_hits = file_violations("_fail.lean", bad)
     if not bad_hits or not any(t in {"sorry", "native_decide"} for _, t in bad_hits):
         print(f"FAIL self-test: fail fixture should report sorry/native_decide, got {bad_hits}")
         return 1
+    if file_violations(AXIOM_ALLOWED_REL, "axiom selftest_ok : True\n"):
+        print("FAIL self-test: axiom in Runtime/Axioms.lean should be allowed")
+        return 1
+    print("SELFTEST axiom allowed in Runtime/Axioms.lean")
+    other_hits = file_violations("DistSSHLean/Foo.lean", "axiom selftest_bad : True\n")
+    if not other_hits or not any(t == "axiom" for _, t in other_hits):
+        print(f"FAIL self-test: axiom outside Axioms.lean should fail, got {other_hits}")
+        return 1
+    print("SELFTEST axiom rejected outside Runtime/Axioms.lean")
     print("PROOF ESCAPES SELFTEST OK")
     return 0
 

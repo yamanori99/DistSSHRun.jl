@@ -16,14 +16,15 @@ const LEAN_BATCH = joinpath(FORMAL_ROOT, ".lake", "build", "bin", "shell_status_
 
 const EXIT_RANGE = -5:300
 const SIGNAL_RANGE = -2:31
-const INT64_TERMSIGNAL_SIGNATED_MAX = typemax(Int64) - 128
+const INT64_TERMSIGNAL_SIGNALED_MAX = typemax(Int64) - 128
 const EDGE_TERMSIGNALS = (
-    INT64_TERMSIGNAL_SIGNATED_MAX,
-    INT64_TERMSIGNAL_SIGNATED_MAX - 1,
+    INT64_TERMSIGNAL_SIGNALED_MAX,
+    INT64_TERMSIGNAL_SIGNALED_MAX - 1,
     1,
 )
 const NCASES = 10_000
 const PROCASES = 500
+const REAL_PROCS = 3
 const RNG = MersenneTwister(0xD1572355)
 
 Pkg.activate(joinpath(REPO_ROOT, "lib", "DistSSHBase"); io = devnull)
@@ -52,6 +53,16 @@ function julia_proc_line(exited::Bool, ec::Int, ts::Int)::String
     return "OK $(DistSSHBase._shell_status(ec, ts))"
 end
 
+function append_real_shell_status!(lines::Vector{String}, expected::Vector{String}, proc::Base.Process)
+    wait(proc)
+    process_exited(proc) || error("real process did not exit")
+    status = DistSSHBase.shell_status(proc)
+    ec, ts = proc.exitcode, proc.termsignal
+    push!(lines, "p 1 $ec $ts")
+    push!(expected, "OK $status")
+    return status
+end
+
 function main()
     lines = String[]
     julia_expected = String[]
@@ -73,6 +84,17 @@ function main()
         push!(julia_expected, julia_proc_line(exited, ec, ts))
     end
 
+    # Real exited children: exercise DistSSHBase.shell_status on live processes.
+    p_exit3 = run(ignorestatus(`sh -c "exit 3"`))
+    @test append_real_shell_status!(lines, julia_expected, p_exit3) == 3
+
+    p_sigterm = run(ignorestatus(Cmd(["sh", "-c", raw"kill -TERM $$; exec sleep 100"])))
+    @test append_real_shell_status!(lines, julia_expected, p_sigterm) == 143
+
+    p_sigkill = run(ignorestatus(`sleep 100`); wait = false)
+    kill(p_sigkill, Base.SIGKILL)
+    @test append_real_shell_status!(lines, julia_expected, p_sigkill) == 137
+
     lean_out = lean_batch(lines)
     length(lean_out) == length(julia_expected) ||
         error("expected $(length(julia_expected)) Lean lines, got $(length(lean_out))")
@@ -92,7 +114,9 @@ function main()
         wait(proc)
     end
 
-    println("differential ok: $NCASES internal + $PROCASES modeled proc lines + live not-exited")
+    println(
+        "differential ok: $NCASES internal + $PROCASES modeled + $REAL_PROCS real proc lines + live not-exited",
+    )
     return nothing
 end
 

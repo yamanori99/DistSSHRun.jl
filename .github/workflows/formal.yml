@@ -5,14 +5,14 @@ on:
   pull_request:
     paths:
       - "formal/**"
-      - "lib/DistSSHBase/src/ssh/shell_status.jl"
+      - "lib/DistSSHBase/**"
       - ".github/workflows/formal.yml"
   push:
     branches:
       - main
     paths:
       - "formal/**"
-      - "lib/DistSSHBase/src/ssh/shell_status.jl"
+      - "lib/DistSSHBase/**"
       - ".github/workflows/formal.yml"
   workflow_dispatch:
 
