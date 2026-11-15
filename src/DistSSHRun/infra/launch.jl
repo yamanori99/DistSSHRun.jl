@@ -410,6 +410,13 @@ function ensure_run_cluster_cookie!()::Nothing
     return nothing
 end
 
+"""Skip read-only project trees (for example a General registry install path)."""
+function _worker_project_precompile_allowed(project::AbstractString)::Bool
+    p = String(project)
+    isdir(p) || return false
+    return Base.Filesystem.iswritable(p)
+end
+
 function _precompile_worker_project!(wid::Int)
     try
         remotecall_wait(Core.eval, wid, Main, _WORKER_PKG_PRECOMPILE_EXPR)
@@ -471,7 +478,9 @@ function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::A
             _apply_worker_blas_threads!(just)
             i == 1 || continue
             added = sort!(just)
-            isempty(added) || _precompile_worker_project!(first(added))
+            if !isempty(added) && _worker_project_precompile_allowed(project)
+                _precompile_worker_project!(first(added))
+            end
         end
     catch
         _rmprocs_added_since(before)
@@ -512,7 +521,8 @@ function _add_ssh_drive_workers!(
             i == 1 || continue
             added = sort!(just)
             isempty(added) && return nothing
-            _precompile_worker_project!(first(added))
+            _worker_project_precompile_allowed(project) &&
+                _precompile_worker_project!(first(added))
         end
     catch
         _rmprocs_added_since(before)

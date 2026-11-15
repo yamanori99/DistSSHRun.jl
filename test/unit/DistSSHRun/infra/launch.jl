@@ -31,6 +31,10 @@ using TOML
     end
     @test DistSSHRun.worker_addprocs_blas_kwargs() == NamedTuple()
     @test DistSSHRun._requested_worker_blas_count() === nothing
+    _with_tempdir() do proj
+        write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
+        @test DistSSHRun._worker_project_precompile_allowed(proj)
+    end
     DistSSHRun.reset_worker_seeds!()
     a, b = withenv("DISTSSH_JOB_SEED" => "11") do
         aa = Dict(DistSSHRun.worker_env_pairs("/tmp/job"; rank = DistSSHRun.take_worker_rank()))
@@ -667,17 +671,20 @@ end
 
 @testset "worker BLAS threads via addprocs (subprocess)" begin
     julia = joinpath(Sys.BINDIR, Base.julia_exename())
-    pkgproj = if isdefined(Main, :TEST_PROJECT)
+    runproj = if isdefined(Main, :TEST_PROJECT)
         dirname(String(TEST_PROJECT))
     else
         String(something(Base.active_project(), pkgdir(DistSSHRun)) |> dirname)
     end
-    pkgproj = pkgdir(DistSSHRun) !== nothing ? String(pkgdir(DistSSHRun)) : pkgproj
-    cmd = code -> `$julia --startup-file=no --history-file=no --project=$pkgproj -e $code`
+    runproj = pkgdir(DistSSHRun) !== nothing ? String(pkgdir(DistSSHRun)) : runproj
+    cmd = code -> `$julia --startup-file=no --history-file=no --project=$runproj -e $code`
     blas_code = """
     using Distributed, DistSSHRun
     withenv("DISTSSH_BLAS_THREADS" => "2") do
-        proj = $(repr(pkgproj))
+        proj = mktempdir()
+        open(joinpath(proj, "Project.toml"), "w") do io
+            println(io, "name = \\"Tmp\\"")
+        end
         bin = $(repr(julia))
         before = Set(workers())
         DistSSHRun.preserve_task_local_default_rng() do
