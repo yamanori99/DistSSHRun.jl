@@ -58,6 +58,38 @@ function _cli_deploy_root_flag(deploy_root)::String
     return " --deploy-root $(posix_quote(p))"
 end
 
+const _SETUP_CLI_FINISH_LABEL = Dict(
+    :cleanup => "Cleanup",
+    :git_clone => "Clone",
+    :git_pull => "git-pull",
+    :git_sync => "git-sync",
+    :instantiate => "Instantiate",
+    :remote_root => "remote-root",
+    :runtest => "Pkg.test",
+    :ship_tree => "ship-tree",
+)
+
+function _setup_cli_path_guard!(
+        mode::Symbol,
+        deploy_path::AbstractString,
+        deploy_root,
+    )
+    if mode === :ship_tree
+        _checked_remote_dest(deploy_path)
+    elseif mode === :remote_root
+        deploy_root isa AbstractString ||
+            throw(ArgumentError("setup remote-root needs --deploy-root as an absolute path"))
+        explicit_remote_root_path(String(deploy_root))
+    end
+    return nothing
+end
+
+function _host_op_counts(result::SyncResult)
+    succeeded = count(hr -> hr.ok, result.hosts)
+    failed = length(result.hosts) - succeeded
+    return host_op_result(; cancelled = result.cancelled, succeeded = succeeded, failed = failed)
+end
+
 """
     setup_cli_via_bang!(opts, project, deploy_path, remote_path, path_anchor, mode) -> Cint
 
@@ -82,22 +114,24 @@ function setup_cli_via_bang!(
         :runtest => "Pkg.test (job)",
         :cleanup => "Cleanup Workers",
     )[mode]
+    try
+        _setup_cli_path_guard!(mode, deploy_path, opts.deploy_root)
+    catch e
+        e isa ArgumentError || rethrow()
+        print_err("Error: "; bold = true)
+        println_fatal(e.msg)
+        return Cint(1)
+    end
     print_header("$(DistSSHRun.cli_heading("setup")) · $mode_name")
     kit_println()
     remote_for_session = opts.deploy_root !== nothing ? deploy_path : remote_path
     writeln_field("Remote path", remote_for_session)
     kit_println()
     session = setup_session_from_cli(opts, project, remote_for_session)
-    if mode in (:instantiate, :runtest, :check, :ship_tree, :git_clone) &&
-            !isempty(opts.hosts) && !preflight_setup_ssh(opts.hosts)
-        print_err("SSH preflight failed. Fix connectivity, then retry.\n")
-        kit_println()
-        return Cint(1)
-    end
     if mode === :remote_root && opts.deploy_root isa AbstractString
         session = DistSSHSession(
             project = session.project,
-            workers = session.hosts,
+            workers = session.tokens,
             remote = opts.deploy_root,
             quiet = session.quiet,
             verbosity = session.verbosity,
@@ -150,7 +184,12 @@ function setup_cli_via_bang!(
         println_fatal(e.msg)
         return Cint(1)
     end
-    ok = result.ok
+    if mode === :check
+        return Cint(result.ok ? 0 : 1)
+    end
+    label = get(_SETUP_CLI_FINISH_LABEL, mode, nothing)
+    label === nothing && return Cint(result.ok ? 0 : 1)
+    ok = finish_host_op!(label, _host_op_counts(result))
     if ok && mode === :ship_tree
         sel = active_source_selection()
         if sel !== nothing
