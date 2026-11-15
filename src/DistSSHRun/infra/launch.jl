@@ -407,13 +407,8 @@ function _blas_threads_mismatch_message(
 end
 
 function _apply_worker_blas!(wid::Int)::Nothing
-    requested = _parse_requested_blas_threads()
-    expected = something(requested, 1)
-    actual = if requested === nothing
-        remotecall_fetch(Core.eval, wid, Main, _worker_blas_count_expr())
-    else
-        remotecall_fetch(Core.eval, wid, Main, _worker_set_blas_threads_expr(expected))
-    end
+    expected = something(_parse_requested_blas_threads(), 1)
+    actual = remotecall_fetch(Core.eval, wid, Main, _worker_set_blas_threads_expr(expected))
     actual == expected && return nothing
     host, rank = _worker_host_rank(wid)
     throw(ArgumentError(_blas_threads_mismatch_message(host, rank, expected, actual)))
@@ -476,7 +471,6 @@ end
 function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::AbstractString)
     n < 1 && return nothing
     flags = Cmd(worker_exeflag_strings(project; local_cpu = true, job_id = resolved_kit_job_id()))
-    enable_blas = _parse_requested_blas_threads() !== nothing
     before = Set(workers())
     try
         for i in 1:n
@@ -487,7 +481,7 @@ function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::A
                 exeflags = flags,
                 env = env,
                 topology = :master_worker,
-                enable_threaded_blas = enable_blas,
+                enable_threaded_blas = true,
             )
             just = Int[Int(w) for w in joined]
             _mark_workers_launched!(just, project)
@@ -515,7 +509,6 @@ function _add_ssh_drive_workers!(
     n < 1 && return nothing
     flags = Cmd(worker_exeflag_strings(project; local_cpu = false, job_id = resolved_kit_job_id()))
     exename = ssh_worker_exename(julia_bin)
-    enable_blas = _parse_requested_blas_threads() !== nothing
     before = Set(workers())
     try
         for i in 1:n
@@ -530,7 +523,7 @@ function _add_ssh_drive_workers!(
                 exeflags = flags,
                 env = env,
                 topology = :master_worker,
-                enable_threaded_blas = enable_blas,
+                enable_threaded_blas = true,
             )
             just = Int[Int(w) for w in joined]
             _mark_workers_launched!(just, project)
