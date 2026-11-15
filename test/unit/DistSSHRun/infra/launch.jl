@@ -661,6 +661,43 @@ using TOML
     end
 end
 
+@testset "drive worker BLAS threads (#456)" begin
+    function _blas_on_one_worker(blas_env::Union{Nothing, String})
+        withenv("DISTSSH_BLAS_THREADS" => blas_env, "DISTSSH_JOB_SEED" => nothing) do
+            DistSSHRun.reset_worker_seeds!()
+            _with_tempdir() do proj
+                write(joinpath(proj, "Project.toml"), "name = \"BlasWorker\"\n")
+                _sync_test_project_manifest!(proj)
+                julia = DistSSHRun.pin_local_julia(nothing)
+                before = Set(workers())
+                try
+                    DistSSHRun._add_local_drive_workers!(1, proj, julia)
+                    added = setdiff(workers(), before)
+                    @test length(added) == 1
+                    w = first(added)
+                    remotecall_fetch(Core.eval, w, Main, DistSSHRun._worker_blas_count_expr())
+                finally
+                    DistSSHRun._rmprocs_added_since(before)
+                end
+            end
+        end
+    end
+    @test _blas_on_one_worker(nothing) == 1
+    @test _blas_on_one_worker("4") == 4
+end
+
+@testset "worker precompile failure warns (#456)" begin
+    @test_logs (:warn,) DistSSHRun._warn_worker_precompile_failure(
+        "lab",
+        "2",
+        ErrorException("Pkg.precompile failed"),
+    )
+    msg = DistSSHRun._blas_threads_mismatch_message("lab", "2", 4, 1)
+    @test occursin("host lab", msg)
+    @test occursin("rank 2", msg)
+    @test occursin("expected 4, got 1", msg)
+end
+
 @testset "distributed worker snapshot sysimage.default" begin
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"WorkerDefSys\"\n")

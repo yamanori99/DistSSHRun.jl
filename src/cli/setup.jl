@@ -269,7 +269,8 @@ if !isdefined(@__MODULE__, :setup_main)
                     ) :
                     DistSSHRun._apply_confirmed_delete(opts.hosts, plan, deploy_path)
                 ok = finish_host_op!("Delete", result)
-                ok && DistSSHRun.forget_last_ship_default!(project, deploy_path)
+                ok && !result.cancelled &&
+                    DistSSHRun.forget_last_ship_default!(project, deploy_path)
                 return Cint(ok ? 0 : 1)
             end
 
@@ -279,7 +280,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 clone_dest = op_path
                 result = clone_to_remotes(opts.hosts, clone_dest, clone_url)
                 ok = finish_host_op!("Clone", result)
-                if ok
+                if ok && !result.cancelled
                     DistSSHRun.forget_last_ship_default!(project, deploy_path)
                     if result.failed == 0
                         ok_hosts = String[
@@ -319,7 +320,7 @@ if !isdefined(@__MODULE__, :setup_main)
                     rid = sel.run_id
                     src = sel.work_root
                     path_flag = opts.deploy_root isa AbstractString ?
-                        " --deploy-root $(opts.deploy_root)" : ""
+                        " --deploy-root $(_confirm_path_quote(opts.deploy_root))" : ""
                     if rid isa AbstractString && !isempty(rid)
                         kit_println(
                             "  Next: $(DistSSHRun.cli_m()) setup instantiate --run-id $rid$path_flag",
@@ -328,11 +329,12 @@ if !isdefined(@__MODULE__, :setup_main)
                             "        $(DistSSHRun.cli_m()) setup check --run-id $rid$path_flag",
                         )
                     elseif src isa AbstractString
+                        quoted_src = _confirm_path_quote(src)
                         kit_println(
-                            "  Next: $(DistSSHRun.cli_m()) setup instantiate --deploy-root $src",
+                            "  Next: $(DistSSHRun.cli_m()) setup instantiate --deploy-root $quoted_src",
                         )
                         kit_println(
-                            "        $(DistSSHRun.cli_m()) setup check --deploy-root $src",
+                            "        $(DistSSHRun.cli_m()) setup check --deploy-root $quoted_src",
                         )
                     end
                     kit_println()

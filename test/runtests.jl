@@ -135,6 +135,7 @@ end
             _runtest_include("unit/cli/up/args.jl", joinpath(@__DIR__, "unit", "cli", "up", "args.jl"))
             _runtest_include("unit/cli/setup/using_guard.jl", joinpath(@__DIR__, "unit", "cli", "setup", "using_guard.jl"))
             _runtest_include("unit/cli/setup/main.jl", joinpath(@__DIR__, "unit", "cli", "setup", "main.jl"))
+            _runtest_include("unit/cli/setup/issue360.jl", joinpath(@__DIR__, "unit", "cli", "setup", "issue360.jl"))
             _runtest_include("unit/cli/hostinfo/args.jl", joinpath(@__DIR__, "unit", "cli", "hostinfo", "args.jl"))
             _runtest_include("unit/cli/pool/args.jl", joinpath(@__DIR__, "unit", "cli", "pool", "args.jl"))
             _runtest_include("unit/cli/ride/args.jl", joinpath(@__DIR__, "unit", "cli", "ride", "args.jl"))

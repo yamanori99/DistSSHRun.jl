@@ -89,6 +89,11 @@ using Test
             @test DistSSHRun._drive_child_status(2, 0) == 2
             @test DistSSHRun._drive_child_status(nothing, nothing) == 1
             @test DistSSHRun._drive_child_status(0xC0000005, 0) == 1
+            @test DistSSHRun._drive_child_status(0, -9) == 1
+            @test DistSSHRun._drive_child_status(0, BigInt(9)) == 137
+            hi = Int64(typemax(Cint)) + 1
+            @test DistSSHRun._drive_child_status(hi, 0) == 1
+            @test DistSSHRun._drive_child_status(typemax(UInt128), 0) == 1
             sleeper = run(
                 ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "sleep(30)"`);
                 wait = false,

@@ -358,20 +358,86 @@ function ensure_run_cluster_cookie!()::Nothing
     return nothing
 end
 
+function _parse_requested_blas_threads()::Union{Nothing, Int}
+    raw = _explicit_blas_threads()
+    raw === nothing && return nothing
+    n = tryparse(Int, String(raw))
+    n === nothing &&
+        throw(ArgumentError("DISTSSH_BLAS_THREADS must be an integer, got $(repr(raw))"))
+    n < 1 && throw(ArgumentError("DISTSSH_BLAS_THREADS must be at least 1, got $n"))
+    return n
+end
+
+function _worker_host_rank_expr()
+    return :((String(gethostname()), String(strip(get(ENV, "DISTSSH_WORKER_RANK", "")))))
+end
+
+function _worker_host_rank(wid::Int)::Tuple{String, String}
+    h, r = remotecall_fetch(Core.eval, wid, Main, _worker_host_rank_expr())
+    return String(h), String(r)
+end
+
+function _worker_blas_count_expr()
+    return :(begin
+        using LinearAlgebra
+        Int(LinearAlgebra.BLAS.get_num_threads())
+    end)
+end
+
+function _worker_set_blas_threads_expr(n::Int)
+    return :(begin
+        using LinearAlgebra
+        LinearAlgebra.BLAS.set_num_threads($(n))
+        Int(LinearAlgebra.BLAS.get_num_threads())
+    end)
+end
+
+function _blas_threads_mismatch_message(
+        host::AbstractString,
+        rank::AbstractString,
+        expected::Int,
+        actual::Int,
+    )::String
+    rank_s = isempty(rank) ? "?" : rank
+    return "BLAS thread count on host $(host) (worker rank $(rank_s)): expected $(expected), got $(actual)"
+end
+
+function _apply_worker_blas!(wid::Int)::Nothing
+    requested = _parse_requested_blas_threads()
+    expected = something(requested, 1)
+    actual = if requested === nothing
+        remotecall_fetch(Core.eval, wid, Main, _worker_blas_count_expr())
+    else
+        remotecall_fetch(Core.eval, wid, Main, _worker_set_blas_threads_expr(expected))
+    end
+    actual == expected && return nothing
+    host, rank = _worker_host_rank(wid)
+    throw(ArgumentError(_blas_threads_mismatch_message(host, rank, expected, actual)))
+end
+
+function _worker_precompile_expr()
+    return :(
+        let pkg = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
+            Base.require(pkg)
+            mod = Base.loaded_modules[pkg]
+            Base.invokelatest(getfield(mod, :precompile); io = devnull)
+            nothing
+        end
+    )
+end
+
+function _warn_worker_precompile_failure(host::AbstractString, rank::AbstractString, err)
+    rank_s = isempty(rank) ? "?" : rank
+    @warn "worker project precompile failed on host $(host) (worker rank $(rank_s))" exception = err
+    return nothing
+end
+
 function _precompile_worker_project!(wid::Int)
     try
-        remotecall_wait(wid) do
-            Base.require(Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
-            mod = Base.loaded_modules[
-                Base.PkgId(
-                    Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"),
-                    "Pkg",
-                ),
-            ]
-            mod.precompile(; io = devnull)
-            return nothing
-        end
-    catch
+        remotecall_fetch(Core.eval, wid, Main, _worker_precompile_expr())
+    catch err
+        host, rank = _worker_host_rank(wid)
+        _warn_worker_precompile_failure(host, rank, err)
     end
     return nothing
 end
@@ -406,6 +472,7 @@ end
 function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::AbstractString)
     n < 1 && return nothing
     flags = Cmd(worker_exeflag_strings(project; local_cpu = true, job_id = resolved_kit_job_id()))
+    enable_blas = _parse_requested_blas_threads() !== nothing
     before = Set(workers())
     try
         for i in 1:n
@@ -416,9 +483,13 @@ function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::A
                 exeflags = flags,
                 env = env,
                 topology = :master_worker,
+                enable_threaded_blas = enable_blas,
             )
             just = Int[Int(w) for w in joined]
             _mark_workers_launched!(just, project)
+            for wid in just
+                _apply_worker_blas!(wid)
+            end
             i == 1 || continue
             added = sort!(just)
             isempty(added) || _precompile_worker_project!(first(added))
@@ -440,6 +511,7 @@ function _add_ssh_drive_workers!(
     n < 1 && return nothing
     flags = Cmd(worker_exeflag_strings(project; local_cpu = false, job_id = resolved_kit_job_id()))
     exename = ssh_worker_exename(julia_bin)
+    enable_blas = _parse_requested_blas_threads() !== nothing
     before = Set(workers())
     try
         for i in 1:n
@@ -454,9 +526,13 @@ function _add_ssh_drive_workers!(
                 exeflags = flags,
                 env = env,
                 topology = :master_worker,
+                enable_threaded_blas = enable_blas,
             )
             just = Int[Int(w) for w in joined]
             _mark_workers_launched!(just, project)
+            for wid in just
+                _apply_worker_blas!(wid)
+            end
             i == 1 || continue
             added = sort!(just)
             isempty(added) && return nothing

@@ -121,7 +121,7 @@ function _drive_child_status(exitcode, termsignal)::Cint
             # `shell_status` owns `128 + signal`. This path has no `Process`.
             return _as_cint(DistSSHBase._shell_status(zero(Int64), sig))
         elseif sig != 0
-            return _as_cint(128 + sig)
+            return Cint(1)
         end
     end
     if exitcode isa Integer && !(exitcode isa Bool)
