@@ -6,10 +6,12 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 build_log="$(mktemp)"
 trap 'rm -f "$build_log"' EXIT
 lake build 2>&1 | tee "$build_log"
-if grep -E 'linter\.(unusedSimpArgs|unnecessarySimpa)' "$build_log"; then
-  echo "FAIL Lean linter warnings (unusedSimpArgs / unnecessarySimpa)"
+if grep -qE 'linter\.(unusedSimpArgs|unnecessarySimpa)' "$build_log"; then
+  echo "FAIL Lean linter warnings (unusedSimpArgs / unnecessarySimpa):"
+  grep -E 'linter\.(unusedSimpArgs|unnecessarySimpa)' "$build_log"
   exit 1
 fi
+echo "LINT OK"
 lake build DistSSHLean.Runtime
 
 python3 scripts/check-proof-escapes.py --self-test
