@@ -84,44 +84,33 @@ Classify CLI-style tokens. `hostinfo` / `pool` / `setup` may omit `:N` (host lis
 go / drive / ride placement requires `:N` except `go --repeat` (omit = uncapped).
 """
 function parse_worker_tokens(
-        tokens::AbstractVector{<:AbstractString},
+        tokens::AbstractVector{<:AbstractString};
+        local_workers::Union{Nothing, Integer} = nothing,
     )::ParsedWorkerTokens
-    parent_workers = 0
-    local_seen = false
-    parent_autosize = false
+    parent_workers = local_workers === nothing ? 0 : Int(local_workers)
+    parent_autosize = local_workers === nothing
     child_workers = Dict{String, Int}()
     child_auto = String[]
     child_hosts = String[]
-    seen_remote = Set{String}()
+    seen_remote = Dict{String, Int}()
     out_tokens = String[String(t) for t in tokens]
 
-    for raw in out_tokens
+    for (idx, raw) in enumerate(out_tokens)
         p = parse_placement_token(raw)
-        if p.role === :parent
-            local_seen && throw(
+        p.role === :parent &&
+            throw(ArgumentError("$(repr(raw)): local workers use --local-workers, not tokens"))
+        host = p.name
+        n = something(p.n, 1)
+        if haskey(seen_remote, host)
+            throw(
                 ArgumentError(
-                    "duplicate parent token; use one of $(PARENT_HOST_NAME):N",
-                )
+                    "duplicate host $(repr(host)) at tokens[$idx] and [$seen_remote[host]]",
+                ),
             )
-            local_seen = true
-            if p.n === nothing
-                parent_autosize = true
-            else
-                parent_workers = Int(p.n)
-            end
-        else
-            host = p.name
-            n = p.n
-            if !(host in seen_remote)
-                push!(child_hosts, host)
-                push!(seen_remote, host)
-            end
-            if n === nothing
-                push!(child_auto, host)
-            else
-                child_workers[host] = Int(n)
-            end
         end
+        seen_remote[host] = idx
+        push!(child_hosts, host)
+        n === nothing ? push!(child_auto, host) : (child_workers[host] = Int(n))
     end
     return ParsedWorkerTokens(
         parent_workers,
@@ -144,7 +133,7 @@ function require_counted_placement_tokens(
         surface::Symbol = :api,
     )::Nothing
     isempty(tokens) && return nothing
-    parsed = parse_worker_tokens(tokens)
+    parsed = parse_worker_tokens(tokens; local_workers = 0)
     worker_tokens_fully_specified(parsed) && return nothing
     throw(ArgumentError(explain_bare_placement_tokens(tokens; surface = surface)))
 end
@@ -365,7 +354,7 @@ end
 
 Settings for [`pipeline!`](@ref): worker tokens, driver run, and optional collect.
 
-Worker placement uses CLI-style tokens (`parent:2`, `child:user@host:1`).
+Worker placement uses CLI-style tokens (`parent:2`, `1*user@host`).
 Listed tokens need `:N`. Set `collect=false`
 to skip rsync-back. Git parity is off by default; pass `skip_hash_check=false`
 (or CLI `--require-git`) to require matching remote commits.

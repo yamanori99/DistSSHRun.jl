@@ -1,6 +1,6 @@
 # Grammar (CLI contract):
 #
-#   julia -m DistSSHKit setup [shared] SUBCOMMAND [options] [child:HOST...]
+#   julia -m DistSSHKit setup [shared] SUBCOMMAND [options] [HOST...]
 #
 # Top-level `setup` is a preparation/maintenance namespace, not a job runner.
 # Exactly one SUBCOMMAND per invocation. Shared kit flags (`-q`, `--yes`,
@@ -49,7 +49,7 @@ function show_requirements(; io::IO = stdout)
         "  last-ship.toml, or pass --run-id ID). Lexical latest is not used.",
         "  A git checkout at the deploy root remains usable without --run-id;",
         "  delete/git-clone/git-sync/git-pull clear the matching local last-ship record.",
-        "Hosts: child:NAME[:N] (same as go / drive; :N ignored).",
+        "Hosts: NAME[:N] (same as go / drive; :N ignored).",
         "       parent is up, not setup.",
         "Remote path: omit --deploy-root to use DISTRIBUTED_REMOTE_PROJECT_ROOT,",
         "  else ~/Parent/RepoName from the local package env_dir (a workspace",
@@ -100,13 +100,13 @@ function show_requirements(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  $(cli_m_project()) setup SUBCOMMAND child:host1 child:host2",
-        "  setup ship-tree child:host1 child:host2",
-        "  setup instantiate child:host1 child:host2",
-        "  setup check child:host1 child:host2",
-        "  setup runtest child:host1 child:host2",
-        "  setup ship-tree --deploy-root /abs/deploy child:host1",
-        "  setup remote-root --deploy-root /abs/deploy child:host1",
+        "  $(cli_m_project()) setup SUBCOMMAND host1 host2",
+        "  setup ship-tree host1 host2",
+        "  setup instantiate host1 host2",
+        "  setup check host1 host2",
+        "  setup runtest host1 host2",
+        "  setup ship-tree --deploy-root /abs/deploy host1",
+        "  setup remote-root --deploy-root /abs/deploy host1",
     )
     print_help_blank(io)
     print_help_section("Subcommands (one per run)"; io = io)
@@ -145,7 +145,7 @@ function show_requirements(; io::IO = stdout)
         "  $(KIT_VERBOSE_FLAG_HELP)",
         "  -y, --yes           skip confirmations except delete and prune",
         "  --confirm-path PATH  with delete or prune: the computed path (quote ~)",
-        "  --hosts CSV          child:NAME[:N] (:N stripped)",
+        "  --hosts CSV          NAME[:N] (:N stripped)",
         "  --hosts-file PATH    one token per line (:N stripped)",
         "  --version, -v        print version and exit",
         "  --older-than DAYS    with prune: mtime at least DAYS old",

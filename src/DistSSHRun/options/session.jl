@@ -19,8 +19,8 @@ end
 
 Build a session for drive APIs. `workers` is a CLI-style host list.
 `setup!` / `pool!` / `sync!` / `collect!` accept a bare list
-(`child:user@host`). `go!` / `drive!` / `ride!` / `pipeline!` require `:N`
-on listed tokens (`parent:2`, `child:user@host:1`).
+(`user@host`). `go!` / `drive!` / `ride!` / `pipeline!` require `:N`
+on listed tokens (`parent:2`, `1*user@host`).
 
 `session.hosts` keeps remote SSH names only (for sync / collect).
 `session.tokens` keeps the original tokens (including `parent:N`).

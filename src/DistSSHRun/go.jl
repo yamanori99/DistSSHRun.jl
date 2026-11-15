@@ -116,11 +116,11 @@ Build execution slots from host tokens.
 - No tokens → one parent slot (directory label `parent`)
 - `parent:N` → N slots on this job's DistSSHRun parent
 - `parent:0` skips parent when children are listed
-- `parent` / `child:NAME` without `:N` → error (except `--repeat`: uncapped)
-- `child:NAME:N` → N SSH slots (`NAME`, or `NAME-1` … when N>1)
+- `parent` / `NAME` without `:N` → error (except `--repeat`: uncapped)
+- `NAME:N` → N SSH slots (`NAME`, or `NAME-1` … when N>1)
 - `total=N` (`--repeat N`): N independent runs, round-robin across listed
   hosts. No tokens → all N on parent. Omit `:N` → no cap on that host.
-  `parent:N` / `child:NAME:N` are per-host caps.
+  `parent:N` / `NAME:N` are per-host caps.
 """
 function _go_merge_repeat_cap(
         a::Union{Nothing, Int},
@@ -202,7 +202,7 @@ function _go_tokens_for_repeat(
         end
         placed || throw(
             ArgumentError(
-                "repeat $n exceeds per-host caps (`parent:N` / `child:NAME:N`)",
+                "repeat $n exceeds per-host caps (`parent:N` / `NAME:N`)",
             )
         )
     end
@@ -973,7 +973,7 @@ The manifest hash and the git snapshot are taken when `go!` starts.
 go!("job.jl")                          # one parent slot
 go!("job.jl"; repeat=100)              # 100 independent runs on parent
 go!("job.jl", "parent:2"; args=["8"])
-go!("job.jl", "child:user@h1:1", "child:user@h2:1"; remote="/path/to/project")
+go!("job.jl", "1*user@h1", "1*user@h2"; remote="/path/to/project")
 ```
 
 Each slot gets `DISTRIBUTED_OUTPUT_DIR` pointing at
@@ -1009,7 +1009,7 @@ When `workers` is empty and `hosts_file` is omitted, `DISTSSH_HOSTS_FILE`
 is still read (API `go!("job.jl")`). Non-empty `workers` (CLI
 [`host_tokens`](@ref)) does not re-read that ENV.
 
-`parent:N` and `child:NAME:N` mean N independent full-job runs (not Distributed workers),
+`parent:N` and `NAME:N` mean N independent full-job runs (not Distributed workers),
 started together. `repeat=N` (CLI `--repeat N`) is the total number of those
 runs, spread round-robin across listed hosts (no tokens → all on parent).
 `:N` on a token is a per-host cap when `repeat` is set; omit it to leave that

@@ -64,7 +64,7 @@ Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup …`.
 | `:git_sync` | `git-sync` | Requires a clone at `session.remote` (`:git_clone` first on a new target). Push the local branch to origin, then detach each remote at that commit; confirm unless `session.yes`. A dirty tree is refused unless `allow_dirty=true` (CLI `--skip-git-guard`; deploy record `dirty=true`) |
 | `:git_pull` | `git-pull` | Detach each remote at the local commit. Does not push to origin and does not run `git pull`; confirm unless `session.yes`. A dirty tree is refused |
 | `:instantiate` | `instantiate` | `julia=` (default `"auto"`) |
-| `:juliaup` | `up` | Align Julia via juliaup on `child:NAME` and/or `parent` (`\$HOME/.juliaup` or Homebrew); confirm unless `session.yes`. Tip if kit parent patch lags channel latest |
+| `:juliaup` | `up` | Align Julia via juliaup on `NAME` and/or `parent` (`\$HOME/.juliaup` or Homebrew); confirm unless `session.yes`. Tip if kit parent patch lags channel latest |
 | `:juliaup_update` | `up update` | `juliaup update` on those hosts (no `default`); confirm unless `session.yes` |
 | `:check` | `check` | `ignore_julia_version=`, `check_code_sync=` |
 | `:runtest` | `runtest` | job `Pkg.test()` on remotes; `julia=` |
@@ -80,7 +80,7 @@ place. An unknown key is an error. A mismatch throws
 mode rejects `confirm_path`. Multiple modes run in order and stop on the first failure:
 
 ```julia
-session = DistSSHSession(workers=["child:user@h1"], remote="~/proj", yes=true)
+session = DistSSHSession(workers=["user@h1"], remote="~/proj", yes=true)
 setup!(session, :ship_tree, :instantiate)
 setup!(session, :check; ignore_julia_version=true)
 ```

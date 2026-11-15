@@ -47,7 +47,7 @@ using Test
                 DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true, yes = true))
                 sess = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:host1"],
+                    workers = ["host1"],
                     remote = "/fake/remote/PoolHost",
                 )
                 okp = DistSSHRun.pool!(sess)
@@ -63,7 +63,7 @@ using Test
                 DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true, yes = true))
                 sess = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:host1"],
+                    workers = ["host1"],
                     remote = "/fake/remote/PoolHost",
                 )
                 partial = DistSSHRun.pool!(sess)
@@ -78,7 +78,7 @@ using Test
                 DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true, yes = true))
                 sess = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:host1"],
+                    workers = ["host1"],
                     remote = "/fake/remote/PoolHost",
                 )
                 bad = DistSSHRun.pool!(sess)

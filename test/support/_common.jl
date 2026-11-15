@@ -45,7 +45,7 @@ if !isdefined(Main, :_test_root)
         return `$(_julia_cmd_for(julia)) --startup-file=no --project=$proj -m DistSSHRun $argv`
     end
 
-    # Temp go/drive/size/setup hosts file: comment, `child:host-a`, `child:host-b:4`.
+    # Temp go/drive/size/setup hosts file: comment, `host-a`, `4*host-b`.
     function _sample_hosts_file()::String
         path, io = mktemp()
         try

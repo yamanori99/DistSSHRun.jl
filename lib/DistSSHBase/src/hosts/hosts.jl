@@ -3,13 +3,13 @@
 """Reserved token for this job's parent (not an SSH host)."""
 const PARENT_HOST_NAME = "parent"
 
-"""Prefix for an SSH child (`child:NAME` / `child:NAME:N`)."""
+"""Prefix for an SSH child (`NAME` / `NAME:N`)."""
 const CHILD_TOKEN_PREFIX = "child:"
 
 """Whether `host` denotes this job's parent in drive/go/hostinfo.
 
 Only `parent` matches. `parenthost` is rejected by `parse_placement_token`.
-A token `local` / `localhost` / `l` is an ordinary SSH child (`child:local`).
+A token `local` / `localhost` / `l` is an ordinary SSH child (`local`).
 
 # Examples
 ```jldoctest
@@ -37,7 +37,7 @@ function throw_removed_local_flag(arg::AbstractString)
     a = String(arg)
     throw(
         ArgumentError(
-            "$(a) was removed; use $(PARENT_HOST_NAME) / $(PARENT_HOST_NAME):N",
+            "$(a) was removed; use --local-workers N",
         )
     )
 end
@@ -56,21 +56,16 @@ function _placement_count_suffix(spec::AbstractString)::Tuple{String, Union{Noth
     return s, nothing
 end
 
-"""Format a go/drive/hostinfo token (`parent[:N]` or `child:NAME[:N]`)."""
+"""Format a machine placement token (`N*host` or bare host)."""
 function format_placement_token(
         role::Symbol,
         name::String,
         n::Union{Nothing, Integer} = nothing,
     )::String
-    nn = n === nothing ? nothing : Int(n)
-    if role === :parent
-        nn === nothing && return PARENT_HOST_NAME
-        return string(PARENT_HOST_NAME, ":", nn)
-    elseif role === :child
-        nn === nothing && return CHILD_TOKEN_PREFIX * name
-        return string(CHILD_TOKEN_PREFIX, name, ":", nn)
-    end
-    throw(ArgumentError("format_placement_token: role must be :parent or :child, got $(repr(role))"))
+    role === :parent &&
+        throw(ArgumentError("format_placement_token: local workers use --local-workers, not tokens"))
+    nn = something(n === nothing ? 1 : Int(n), 1)
+    return format_machine_token(nn, name)
 end
 
 format_placement_token(
@@ -80,7 +75,7 @@ format_placement_token(
 ) = format_placement_token(role, name isa String ? name : string(name), n)
 
 const _PLACEMENT_HINT =
-    "use `parent[:N]` or `child:NAME[:N]` (setup / hostinfo ignore `:N`)"
+    "use `N*[user@]host[:port]` (quote `--hosts` so the shell does not glob `*`); bare host = 1 worker"
 
 """Hostname inside `user@host`, `host:path`, or `[::1]:path`."""
 function _ssh_host_label(dest::AbstractString)::String
@@ -141,36 +136,7 @@ Returns `(role, name, n)` where `role` is `:parent` or `:child`, `name` is
 function parse_placement_token(
         spec::AbstractString,
     )::NamedTuple{(:role, :name, :n), Tuple{Symbol, String, Union{Nothing, Int}}}
-    s = strip(String(spec))
-    isempty(s) && throw(ArgumentError("empty host token"))
-    throw_legacy_placement_token(s)
-    if s == PARENT_HOST_NAME
-        return (role = :parent, name = PARENT_HOST_NAME, n = nothing)
-    end
-    if startswith(s, PARENT_HOST_NAME * ":")
-        rest = s[(lastindex(PARENT_HOST_NAME) + 2):end]
-        isempty(rest) && throw(ArgumentError("$(repr(s)): missing count after `parent:`"))
-        n = try
-            parse(Int, rest)
-        catch
-            throw(ArgumentError("$(repr(s)): parent count must be an integer"))
-        end
-        return (role = :parent, name = PARENT_HOST_NAME, n)
-    end
-    if startswith(s, CHILD_TOKEN_PREFIX)
-        rest = s[(lastindex(CHILD_TOKEN_PREFIX) + 1):end]
-        isempty(rest) && throw(ArgumentError("$(repr(s)): missing SSH name after `child:`"))
-        name, n = _placement_count_suffix(rest)
-        isempty(name) && throw(ArgumentError("$(repr(s)): missing SSH name after `child:`"))
-        validate_ssh_host(name; shown = s)
-        is_parent_host_name(name) && throw(
-            ArgumentError(
-                "$(repr(s)): Kit side is `parent`, not `child:parent`",
-            )
-        )
-        return (role = :child, name = name, n)
-    end
-    throw(ArgumentError("$(repr(s)): $_PLACEMENT_HINT"))
+    return machine_to_placement_token(spec)
 end
 
 """True when a CLI token looks like a local `.jl` script path, not an SSH host.

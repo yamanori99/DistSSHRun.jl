@@ -75,7 +75,7 @@ function explain_no_hosts(;
     if kind === :pool
         head = "DistSSHSession has no hosts for pool!"
         hint = if surface === :api
-            "Hint: pass workers=[\"parent:2\", …] or workers=[\"child:user@host\", …]"
+            "Hint: pass workers=[\"parent:2\", …] or workers=[\"user@host\", …]"
         else
             "Hint: pass local and/or SSH hosts (see help pool)"
         end
@@ -83,7 +83,7 @@ function explain_no_hosts(;
     elseif kind === :hostinfo
         head = "DistSSHSession has no hosts for hostinfo"
         hint = if surface === :api
-            "Hint: pass workers=[\"parent\", …] or workers=[\"child:user@host\", …]"
+            "Hint: pass workers=[\"parent\", …] or workers=[\"user@host\", …]"
         else
             "Hint: pass local and/or SSH hosts (see help hostinfo)"
         end
@@ -91,7 +91,7 @@ function explain_no_hosts(;
     elseif kind === :collect
         head = "collect! needs hosts in session or hosts= keyword"
         hint = if surface === :api
-            "Hint: DistSSHSession(workers=[\"child:user@host\", …]) or collect!(…; hosts=[…])"
+            "Hint: DistSSHSession(workers=[\"user@host\", …]) or collect!(…; hosts=[…])"
         else
             "Hint: pass HOST after --collect-missing / --collect-overwrite ROOT"
         end
@@ -99,9 +99,9 @@ function explain_no_hosts(;
     end
     head = "DistSSHSession has no SSH hosts"
     hint = if surface === :api
-        "Hint: pass workers= with child:NAME tokens, or hosts_file="
+        "Hint: pass workers= with machine tokens, or hosts_file= / machine_file="
     else
-        "Hint: pass child:NAME tokens, or --hosts-file / DISTSSH_HOSTS_FILE"
+        "Hint: pass machine tokens (`N*host`), or one of --hosts, --hosts-file, --machine-file"
     end
     return join_explained_message(head, hint)
 end
@@ -114,16 +114,22 @@ function explain_bare_placement_tokens(
     surface = _normalize_hint_surface(surface)
     bare = String[]
     for raw in tokens
-        p = parse_placement_token(String(raw))
-        p.n === nothing && push!(bare, String(raw))
+        s = String(raw)
+        try
+            p = parse_placement_token(s)
+            p.n === nothing && push!(bare, s)
+        catch e
+            e isa ArgumentError && push!(bare, s)
+            e isa ArgumentError || rethrow()
+        end
     end
     isempty(bare) && return ""
     listed = join(bare, ' ')
-    head = "each go / drive / ride token needs :N; bare $(listed) is not allowed"
+    head = "each go / drive / ride token needs an explicit worker count; bare $(listed) is not allowed"
     hint = if surface === :api
-        "Hint: write parent:1 / child:NAME:2 (or omit tokens for one parent slot). go --repeat still treats omit :N as an uncapped pool host."
+        "Hint: write `N*host` or use --local-workers for local slots. go --repeat still treats a bare host as one slot."
     else
-        "Hint: write parent:1 or child:NAME:2. No tokens = one parent slot. go --repeat: omit :N is an uncapped cap, not a count."
+        "Hint: write `2*host` (quote `--hosts` so the shell does not glob `*`). Use --local-workers for local slots."
     end
     return join_explained_message(head, hint)
 end

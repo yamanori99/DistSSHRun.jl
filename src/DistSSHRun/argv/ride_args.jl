@@ -45,15 +45,15 @@ function show_ride_usage(; io::IO = stdout)
         io,
         "  $(cli_m_project()) ride SCRIPT.jl",
         "  ride parent:2 SCRIPT.jl",
-        "  ride parent:1 child:host1:2 SCRIPT.jl",
+        "  ride parent:1 2*host1 SCRIPT.jl",
         "  ride --spi-check parent:2 SCRIPT.jl",
     )
     print_help_blank(io)
     print_help_section("Options"; io = io)
     print_help_lines(
         io,
-        "  parent:N / child:NAME:N  Distributed workers (default: no tokens → parent:1)",
-        "  omit :N             error (pass parent:N / child:NAME:N)",
+        "  parent:N / NAME:N  Distributed workers (default: no tokens → parent:1)",
+        "  omit :N             error (pass parent:N / NAME:N)",
         "  --spi-check         compare to sequential map/filter (default off)",
         "  --no-spi-check      skip that compare",
         "  --output-dir PATH   DISTRIBUTED_OUTPUT_DIR for the script (must be missing or empty)",
@@ -74,7 +74,7 @@ function show_ride_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "See also: go, drive, setup.",
-        "API: ride!(script, \"parent:2\", \"child:host:1\"; spi_check=false, run_id=\"…\").",
+        "API: ride!(script, \"parent:2\", \"1*host\"; spi_check=false, run_id=\"…\").",
     )
     return nothing
 end

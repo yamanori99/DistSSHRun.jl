@@ -2,7 +2,7 @@
 """
 `julia -m DistSSHKit pool` — cluster cores / RAM / health (no job).
 
-  julia --project=. -m DistSSHKit pool parent child:host1 child:host2
+  julia --project=. -m DistSSHKit pool parent host1 host2
 
 See `--help`.
 """
@@ -48,7 +48,7 @@ function pool_main()::Cint
     tokens = String[]
     opts.include_parent && push!(tokens, "parent")
     for h in opts.hosts
-        push!(tokens, "child:$h")
+        push!(tokens, "$h")
     end
     if isempty(tokens)
         show_pool_usage()

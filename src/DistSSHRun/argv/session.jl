@@ -28,7 +28,11 @@ const KIT_VERBOSE_FLAG_HELP =
 const KIT_TIME_HELP =
     "A time table prints after the run (-q hides it). Replay: progress DIR"
 const KIT_HOSTS_FLAG_HELP =
-    "--hosts CSV         parent[:N] / child:NAME[:N]"
+    "--hosts CSV         quote `N*host` machine tokens (bare host = 1 worker)"
+const KIT_LOCAL_WORKERS_FLAG_HELP =
+    "--local-workers N   local (parent) worker count"
+const KIT_MACHINE_FILE_FLAG_HELP =
+    "--machine-file PATH Julia machine-file subset (one line per `N*host`)"
 const KIT_QUIET_ENV_HELP =
     "DISTSSH_QUIET                  Same as --quiet"
 const KIT_PROGRESS_ENV_HELP =
@@ -118,10 +122,13 @@ mutable struct CliSharedFlags
     verbosity::Symbol
     yes::Bool
     hosts_file::Union{Nothing, String}
+    machine_file::Union{Nothing, String}
+    local_workers::Union{Nothing, Int}
     show_version::Bool
     hint_surface::Symbol
     verbosity_explicit::Bool
     hosts_flag::Vector{String}
+    hosts_source::Union{Nothing, Symbol}
 end
 
 function CliSharedFlags(;
@@ -129,13 +136,20 @@ function CliSharedFlags(;
         verbosity::Union{Nothing, Symbol} = nothing,
         yes::Bool = false,
         hosts_file::Union{Nothing, AbstractString} = nothing,
+        machine_file::Union{Nothing, AbstractString} = nothing,
+        local_workers::Union{Nothing, Integer} = nothing,
         show_version::Bool = false,
         hint_surface::Symbol = :cli,
         verbosity_explicit::Bool = false,
         hosts_flag::AbstractVector{<:AbstractString} = String[],
+        hosts_source::Union{Nothing, Symbol} = nothing,
     )
     v = _resolve_kit_verbosity(; quiet = quiet, verbosity = verbosity)
     hf = hosts_file === nothing ? nothing : String(hosts_file)
+    mf = machine_file === nothing ? nothing : String(machine_file)
+    lw = local_workers === nothing ? nothing : Int(local_workers)
+    lw !== nothing && lw < 0 &&
+        throw(ArgumentError("--local-workers must be >= 0, got $lw"))
     surface = _normalize_hint_surface(hint_surface)
     explicit = verbosity_explicit || quiet || verbosity !== nothing
     return CliSharedFlags(
@@ -143,10 +157,13 @@ function CliSharedFlags(;
         v,
         yes,
         hf,
+        mf,
+        lw,
         show_version,
         surface,
         explicit,
         String[String(h) for h in hosts_flag],
+        hosts_source,
     )
 end
 
@@ -226,6 +243,8 @@ const _KIT_CLI_FLAGS = (
     verbose = ("--verbose",),
     yes = ("-y", "--yes"),
     hosts_file = ("--hosts-file",),
+    machine_file = ("--machine-file",),
+    local_workers = ("--local-workers",),
     hosts = ("--hosts",),
     version = ("--version", "-v", "-V"),  # -V kept as deprecated alias
 )
@@ -255,6 +274,8 @@ end
 
 function _shared_valued_cli_flag(arg::AbstractString)::Bool
     return _flag_match(arg, _KIT_CLI_FLAGS.hosts_file) ||
+        _flag_match(arg, _KIT_CLI_FLAGS.machine_file) ||
+        _flag_match(arg, _KIT_CLI_FLAGS.local_workers) ||
         _flag_match(arg, _KIT_CLI_FLAGS.hosts)
 end
 
@@ -405,9 +426,24 @@ function consume_kit_cli_flag!(c::CliCursor, session::CliSharedFlags)::Bool
         return true
     elseif _flag_match(arg, _KIT_CLI_FLAGS.hosts_file)
         session.hosts_file = cli_take_value!(c, arg)
+        session.hosts_source === nothing && (session.hosts_source = :hosts_file)
+        return true
+    elseif _flag_match(arg, _KIT_CLI_FLAGS.machine_file)
+        next = cli_take_value!(c, arg)
+        session.machine_file !== nothing &&
+            throw(ArgumentError("$(arg) specified more than once"))
+        session.machine_file = next
+        session.hosts_source === nothing && (session.hosts_source = :machine_file)
+        return true
+    elseif _flag_match(arg, _KIT_CLI_FLAGS.local_workers)
+        raw = cli_take_value!(c, arg)
+        session.local_workers !== nothing &&
+            throw(ArgumentError("$(arg) specified more than once"))
+        session.local_workers = parse(Int, strip(raw))
         return true
     elseif _flag_match(arg, _KIT_CLI_FLAGS.hosts)
         append!(session.hosts_flag, split_hosts_csv(cli_take_value!(c, arg)))
+        session.hosts_source === nothing && (session.hosts_source = :hosts)
         return true
     end
     return false
@@ -441,40 +477,82 @@ function _kit_host_token(
     )::String
     keep_counts && return String(tok)
     if roles
-        p = parse_placement_token(tok)
-        return p.role === :parent ? PARENT_HOST_NAME : p.name
+        return parse_placement_token(tok).name
     end
     return split_worker_token(tok)[1]
 end
 
-"""`--hosts`, `DISTSSH_HOSTS`, then `--hosts-file` / `DISTSSH_HOSTS_FILE`.
+function _host_input_explicit_sources(session::CliSharedFlags)::Vector{Symbol}
+    out = Symbol[]
+  !isempty(session.hosts_flag) && push!(out, :hosts)
+    session.hosts_file !== nothing && push!(out, :hosts_file)
+    session.machine_file !== nothing && push!(out, :machine_file)
+    return out
+end
 
-`keep_counts=true` (go / drive) keeps tokens as written. `false` (setup / size)
-strips `:N`. Size and setup pass `roles=true` so `child:NAME[:N]` becomes
-`NAME` and `parent` stays `parent`.
-"""
+function _host_input_coalesce_sources!(session::CliSharedFlags)::Symbol
+    explicit = _host_input_explicit_sources(session)
+    length(explicit) > 1 && throw(
+        ArgumentError(
+            "host list from more than one source ($(join(explicit, ", "))); "
+                * "use exactly one of --hosts, --hosts-file, or --machine-file",
+        ),
+    )
+    if !isempty(explicit)
+        return first(explicit)
+    end
+    env_hosts = split_hosts_csv(get(ENV, "DISTSSH_HOSTS", ""))
+    env_file = let raw = strip(get(ENV, "DISTSSH_HOSTS_FILE", ""))
+        isempty(raw) ? nothing : String(raw)
+    end
+    !isempty(env_hosts) && return :env_hosts
+    env_file !== nothing && return :env_file
+    return :none
+end
+
+"""Resolved host tokens from exactly one source (CLI wins over env)."""
 function placement_source_tokens(
         session::CliSharedFlags;
         keep_counts::Bool = true,
         roles::Bool = false,
     )::Vector{String}
-    out = String[_kit_host_token(t, keep_counts; roles = roles) for t in session.hosts_flag]
-    for t in split_hosts_csv(get(ENV, "DISTSSH_HOSTS", ""))
-        push!(out, _kit_host_token(t, keep_counts; roles = roles))
-    end
-    hosts_file = session.hosts_file
-    if hosts_file !== nothing
+    source = _host_input_coalesce_sources!(session)
+    if source === :hosts
+        return String[_kit_host_token(t, keep_counts; roles = roles) for t in session.hosts_flag]
+    elseif source === :hosts_file
+        lines = read_hosts_file_lines(session.hosts_file::String; surface = session.hint_surface)
         if keep_counts
-            append!(out, read_hosts_file_lines(hosts_file; surface = session.hint_surface))
+            return lines
         elseif roles
-            for line in read_hosts_file_lines(hosts_file; surface = session.hint_surface)
-                push!(out, _kit_host_token(line, false; roles = true))
-            end
+            return String[_kit_host_token(line, false; roles = true) for line in lines]
         else
-            append!(out, read_hosts_file(hosts_file; surface = session.hint_surface))
+            return read_hosts_file(session.hosts_file::String; surface = session.hint_surface)
         end
+    elseif source === :machine_file
+        lines = read_machine_file_lines(session.machine_file::String; surface = session.hint_surface)
+        if keep_counts
+            return lines
+        elseif roles
+            return String[parse_placement_token(line).name for line in lines]
+        else
+            return String[split_worker_token(line)[1] for line in lines]
+        end
+    elseif source === :env_hosts
+        raw = split_hosts_csv(get(ENV, "DISTSSH_HOSTS", ""))
+        return String[_kit_host_token(t, keep_counts; roles = roles) for t in raw]
+    elseif source === :env_file
+        hf = String(strip(get(ENV, "DISTSSH_HOSTS_FILE", "")))
+        lines = read_hosts_file_lines(hf; surface = session.hint_surface)
+        if keep_counts
+            return lines
+        elseif roles
+            return String[_kit_host_token(line, false; roles = true) for line in lines]
+        else
+            return read_hosts_file(hf; surface = session.hint_surface)
+        end
+    else
+        return String[]
     end
-    return out
 end
 
 function append_kit_host_sources!(

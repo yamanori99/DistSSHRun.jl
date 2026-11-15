@@ -8,7 +8,7 @@ host_op_result(; cancelled::Bool = false, succeeded::Int = 0, failed::Int = 0) =
 Validate normalized setup hosts (SSH names after CLI placement parse).
 
 CLI entry is the same vocabulary as go / drive (`parent[:N]` /
-`child:NAME[:N]`; `:N` ignored). After parse, this checks the stripped
+`NAME[:N]`; `:N` ignored). After parse, this checks the stripped
 names. `up` also accepts [`PARENT_HOST_NAME`](@ref) when `allow_parent=true`.
 """
 function setup_mode_allows_parent(mode::Symbol)::Bool
@@ -27,8 +27,8 @@ function validate_setup_hosts(
             allow_parent || throw(
                 ArgumentError(
                     "setup: $(repr(host)) is only for up (kit parent machine). " *
-                        "SSH targets use `child:NAME` " *
-                        "(or `child:NAME:N`; `:N` ignored).",
+                        "SSH targets use `NAME` " *
+                        "(or `NAME:N`; `:N` ignored).",
                 )
             )
             continue
@@ -36,7 +36,7 @@ function validate_setup_hosts(
         if looks_like_path_host(host)
             throw(
                 ArgumentError(
-                    "refusing path-like host $(repr(host)); setup expects `child:NAME` " *
+                    "refusing path-like host $(repr(host)); setup expects `NAME` " *
                         "(SSH host or config alias), not a local script/path. " *
                         "Put SCRIPT.jl after hosts for drive/go, not for setup.",
                 )

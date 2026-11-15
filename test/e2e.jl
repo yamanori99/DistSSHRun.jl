@@ -76,9 +76,9 @@ if !isfile(g.ssh_config) || !isfile(g.hosts_file)
 end
 
 const hosts = collect(String, _ssh_e2e_hosts())
-const setup_hosts = String["child:$h" for h in hosts]
+const setup_hosts = String["$h" for h in hosts]
 const remote_root = _ssh_e2e_remote_root()
-const remote_tokens = String["child:$(hosts[1]):1", "child:$(hosts[2]):1"]
+const remote_tokens = String["$(hosts[1]):1", "$(hosts[2]):1"]
 # ENV overlay for the suite (`-F` ssh config and the remote project path).
 _e2e_base_env() = _ssh_e2e_env(; remote_project = remote_root)
 
@@ -1332,7 +1332,7 @@ end
                 DistSSHRun.execute!(
                     :drive,
                     sleep_script,
-                    ["child:$(host):1"];
+                    ["1*$(host)"];
                     project = proj,
                     remote = remote_root,
                     detached = true,
@@ -1436,7 +1436,7 @@ end
                 DistSSHRun.execute!(
                     :ride,
                     ride_script,
-                    ["child:$(host):1"];
+                    ["1*$(host)"];
                     project = proj,
                     remote = remote_root,
                     detached = true,
@@ -1897,7 +1897,7 @@ end
                 DistSSHRun.execute!(
                     :go,
                     outside,
-                    ["child:$(hosts[1]):1"];
+                    ["$(hosts[1]):1"];
                     project = proj,
                     remote = outside_root,
                     detached = true,

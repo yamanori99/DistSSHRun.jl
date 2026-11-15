@@ -339,7 +339,7 @@ end
         end
 
         session = DistSSHRun.DistSSHSession(
-            project = pwd(), workers = ["child:h"], yes = true, quiet = true,
+            project = pwd(), workers = ["h"], yes = true, quiet = true,
         )
         @test_throws MethodError DistSSHRun.sync!(session; mode = :git_sync, gitignore = false)
         @test_throws MethodError DistSSHRun.setup!(session, :check; gitignore = false)

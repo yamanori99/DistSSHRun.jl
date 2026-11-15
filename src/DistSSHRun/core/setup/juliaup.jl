@@ -179,7 +179,7 @@ end
 """
 Run `juliaup update` on each target (installed channels; does not `default`).
 
-Same hosts as `up` (`child:NAME` and/or `parent`). Confirm unless
+Same hosts as `up` (`NAME` and/or `parent`). Confirm unless
 `confirm=false`. Does not install juliaup.
 """
 function juliaup_update_remotes(

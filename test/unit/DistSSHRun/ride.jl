@@ -81,7 +81,7 @@ using Distributed
         @test occursin("work", s)
         @test !occursin("map", s)
 
-        plan = DistSSHRun._ride_resolve_plan(["child:h:2", "parent:1"])
+        plan = DistSSHRun._ride_resolve_plan(["2*h", "parent:1"])
         @test plan.parent_workers == 1
         @test plan.child_workers["h"] == 2
 
@@ -451,7 +451,7 @@ using Distributed
                 @test read(oout, String) == "1,1,1"
             end
 
-            child = ride_local(map_path, "child:host1")
+            child = ride_local(map_path, "host1")
             @test !child.ok
             @test occursin(":N", something(child.error, ""))
 
@@ -658,7 +658,7 @@ using Distributed
                     child = redirect_stdout(devnull) do
                         redirect_stderr(devnull) do
                             DistSSHRun.ride!(
-                                script, ["child:$(host):1"];
+                                script, ["1*$(host)"];
                                 project = local_proj,
                                 remote = remote,
                                 run_id = snap_id,

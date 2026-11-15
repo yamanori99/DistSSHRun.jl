@@ -17,7 +17,7 @@ or its minor differs from that Julia. Otherwise the worker runs
 Typical first-time remote prep:
 
 ```julia
-session = DistSSHSession(workers=["child:user@h1"], remote="/path/to/project", yes=true)
+session = DistSSHSession(workers=["user@h1"], remote="/path/to/project", yes=true)
 setup!(session, :ship_tree, :instantiate)  # or sync!(…; mode=:ship_tree) then instantiate!
 ```
 

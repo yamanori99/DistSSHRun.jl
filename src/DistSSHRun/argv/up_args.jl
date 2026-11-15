@@ -3,7 +3,7 @@ function show_up_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "juliaup verbs: add, default, update, status.",
-        "Hosts: child:NAME[:N] and parent[:N] (:N ignored).",
+        "Hosts: NAME[:N] and parent[:N] (:N ignored).",
         "add installs a channel. default switches to it.",
         "update with no channel updates every installed channel.",
         "status prints one line per host (channel, installed patch, available update).",
@@ -14,9 +14,9 @@ function show_up_usage(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  $(cli_m_project()) up add 1.13 child:host1",
+        "  $(cli_m_project()) up add 1.13 host1",
         "  up default 1.13 parent",
-        "  up update child:host1",
+        "  up update host1",
         "  up update 1.13 parent",
         "  up status parent",
     )
@@ -28,7 +28,7 @@ function show_up_usage(; io::IO = stdout)
         "  $(KIT_PROGRESS_FLAG_HELP)",
         "  $(KIT_VERBOSE_FLAG_HELP)",
         "  -y, --yes           skip confirmations",
-        "  --hosts CSV          child:NAME[:N] or parent[:N] (:N stripped)",
+        "  --hosts CSV          NAME[:N] or parent[:N] (:N stripped)",
         "  --hosts-file PATH    one token per line (:N stripped)",
         "  --version, -v        print version and exit",
     )

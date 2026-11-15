@@ -66,7 +66,7 @@ using Test
         @test code == 1
         @test occursin("does not infer go / ride / drive", err)
     end
-    let (code, _, err) = _main_capture(["rysnc", "child:host1"])
+    let (code, _, err) = _main_capture(["rysnc", "host1"])
         @test code == 1
         @test occursin("Unknown subcommand: rysnc", err)
     end
@@ -93,7 +93,7 @@ using Test
         for mode in ("ship-tree", "prune")
             let (code, out, err) = _main_capture(
                     [
-                        "setup", mode, "--deploy-root", "/", "child:host1",
+                        "setup", mode, "--deploy-root", "/", "host1",
                     ]
                 )
                 shown = out * err

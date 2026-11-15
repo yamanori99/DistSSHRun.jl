@@ -16,14 +16,14 @@ function show_go_usage(; io::IO = stdout)
         "  $(cli_m_project()) go [slots...] SCRIPT.jl",
         "  go parent:2 SCRIPT.jl",
         "  go --repeat 100 SCRIPT.jl",
-        "  go --repeat 100 child:host1 child:host2 SCRIPT.jl",
-        "  go parent:1 child:host1:2 child:host2:2 SCRIPT.jl",
+        "  go --repeat 100 host1 host2 SCRIPT.jl",
+        "  go parent:1 2*host1 2*host2 SCRIPT.jl",
     )
     print_help_blank(io)
     print_help_section("Slots"; io = io)
     print_help_lines(
         io,
-        "  parent:N / child:NAME:N  N full-script runs (not drive workers)",
+        "  parent:N / NAME:N  N full-script runs (not drive workers)",
         "  omit :N             error unless --repeat (then host is uncapped)",
         "  parent:0                     skip parent when children are listed",
         "  --repeat N          N independent runs; spread across listed hosts",

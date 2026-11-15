@@ -22,20 +22,20 @@ function show_pool_usage(; io::IO = stdout)
         io,
         "Show cluster cores, RAM, and reachability. Does not start a job.",
         "Fail-closed: unreachable listed hosts make the command fail.",
-        "Does not recommend a worker count. Use explicit parent:N / child:NAME:N.",
+        "Does not recommend a worker count. Use explicit parent:N / NAME:N.",
     )
     print_help_blank(io)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  $(cli_m_project()) pool [parent] [child:NAME...]",
-        "  pool parent child:host1 child:host2",
+        "  $(cli_m_project()) pool [parent] [NAME...]",
+        "  pool parent host1 host2",
     )
     print_help_blank(io)
     print_help_section("Options"; io = io)
     print_help_lines(
         io,
-        "  --hosts CSV         parent / child:NAME[:N] (:N stripped)",
+        "  --hosts CSV         parent / NAME[:N] (:N stripped)",
         "  --hosts-file PATH   same, one token per line",
         "  $(KIT_QUIET_FLAG_HELP)",
         "  $(KIT_PROGRESS_FLAG_HELP)",
@@ -90,7 +90,7 @@ function parse_pool_args(args::Vector{String})
         elseif arg == "--parenthost" || arg == "--masterhost" || arg == "--parent"
             throw(
                 ArgumentError(
-                    "pool: pass the token `parent` (e.g. pool parent child:host1), not `--parenthost`.",
+                    "pool: pass the token `parent` (e.g. pool parent host1), not `--parenthost`.",
                 )
             )
         elseif arg == "--probe" || arg == "--gb-per-worker" || arg == "--mem-headroom" ||

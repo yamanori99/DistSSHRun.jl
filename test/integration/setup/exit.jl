@@ -18,20 +18,20 @@ using Test
         (; setup_args = ["delete", "parent"]),
         (; setup_args = ["delete", "host1"]),
         (;
-            setup_args = ["delete", "--deploy-root", remote, "child:host1"],
+            setup_args = ["delete", "--deploy-root", remote, "host1"],
             extra_env = _fake_setup_remote_env(fresh_state()),
         ),
         (;
             setup_args = [
                 "delete", "--deploy-root", remote, "--confirm-path", "/not/the/path",
-                "child:host1",
+                "host1",
             ],
             extra_env = _fake_setup_remote_env(fresh_state()),
         ),
         (;
             setup_args = [
                 "delete", "--yes", "--deploy-root", remote,
-                "--confirm-path", remote, "child:host1",
+                "--confirm-path", remote, "host1",
             ],
             extra_env = merge(
                 _fake_setup_remote_env(fresh_state()),
@@ -41,12 +41,12 @@ using Test
         (;
             setup_args = [
                 "delete", "--deploy-root", remote, "--confirm-path", remote,
-                "child:host1", "child:host2",
+                "host1", "host2",
             ],
             extra_env = _fake_setup_remote_env(fresh_state()),
         ),
         (;
-            setup_args = ["ship-tree", "child:host1"],
+            setup_args = ["ship-tree", "host1"],
             extra_env = merge(
                 _fake_setup_remote_env(fresh_state()),
                 Dict(
@@ -56,7 +56,7 @@ using Test
             ),
         ),
         (;
-            setup_args = ["ship-tree", "child:host1", "child:host2"],
+            setup_args = ["ship-tree", "host1", "host2"],
             extra_env = merge(
                 _fake_setup_remote_env(fresh_state()),
                 Dict("DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia"),
@@ -64,19 +64,19 @@ using Test
         ),
         # `--julia` skips remote detect; fake ssh still sees `Pkg.test()`.
         (;
-            setup_args = ["runtest", "--julia", "/bin/echo", "child:host1"],
+            setup_args = ["runtest", "--julia", "/bin/echo", "host1"],
             extra_env = merge(
                 _fake_setup_remote_env(fresh_state()),
                 Dict("DISTSSH_TEST_PKG_TEST_FAIL" => "1"),
             ),
         ),
         (;
-            setup_args = ["runtest", "--julia", "/bin/echo", "child:host1", "child:host2"],
+            setup_args = ["runtest", "--julia", "/bin/echo", "host1", "host2"],
             extra_env = _fake_setup_remote_env(fresh_state()),
         ),
-        (; setup_args = ["--juliaup-update", "child:host1"]),
-        (; setup_args = ["--juliaup", "child:host1"]),
-        (; setup_args = ["check", "--remote-dir", "/tmp/App.jl", "child:host1"]),
+        (; setup_args = ["--juliaup-update", "host1"]),
+        (; setup_args = ["--juliaup", "host1"]),
+        (; setup_args = ["check", "--remote-dir", "/tmp/App.jl", "host1"]),
     ]
     try
         got = _run_kit_setups(calls)
@@ -87,7 +87,7 @@ using Test
             @test occursin("only for up", combined)
             proc2, combined2 = got[2]
             @test proc2.exitcode == 1
-            @test occursin("child:NAME", combined2) || occursin("parent[:N]", combined2)
+            @test occursin("NAME", combined2) || occursin("parent[:N]", combined2)
         end
 
         @testset "delete" begin

@@ -177,6 +177,13 @@ function add_drive_workers!(
                     # Machine must be user@host: Distributed prefixes \$USER otherwise and
                     # overrides SSH config User (Host aliases then look like "No free port?").
                     # Bind 127.0.0.1 so the cluster cookie is not reachable on other interfaces.
+                    bind = DistSSHRun.default_bind_address(host_name)
+                    DistSSHRun.validate_host_launch_plan(
+                        host_name,
+                        bind;
+                        tunnel = DistSSHRun.ssh_tunnel_enabled(),
+                        unsafe_expose_port = _env_flag("DISTSSH_UNSAFE_EXPOSE_PORT"),
+                    )
                     machine = DistSSHRun.ssh_addprocs_bind_localhost(host_name)
                     DistSSHRun._add_ssh_drive_workers!(
                         machine,

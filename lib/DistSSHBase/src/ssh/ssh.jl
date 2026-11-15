@@ -14,32 +14,62 @@ function _ssh_whole_seconds(name::Symbol, default::Int)::Int
     return max(1, round(Int, seconds))
 end
 
+const _SSH_FORBIDDEN_OPT_OVERRIDES = Dict{String, String}(
+    "batchmode" => "BatchMode=yes",
+    "requesttty" => "RequestTTY=no",
+)
+
 """Build SSH options. `request_tty=false` (default) adds `RequestTTY=no`."""
 function build_ssh_opts(; request_tty::Bool = false)
-    custom = strip(get(ENV, "DISTRIBUTED_SSH_OPTS", ""))
-    if isempty(custom)
-        opts = String["-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes"]
-        if !request_tty
-            push!(opts, "-o", "RequestTTY=no")
-        end
-        connect = _ssh_whole_seconds(:ssh_connect, _SSH_CONNECT_TIMEOUT_S)
-        # Ten probes. The gap is the silent budget divided across them, so the
-        # default stays Interval=60 and CountMax=10 (about 600s).
-        alive_count = 10
-        silent = _ssh_whole_seconds(:peer_silent, 600)
-        alive_interval = max(1, round(Int, silent / alive_count))
-        append!(
-            opts, (
-                "-o", "ConnectTimeout=$connect",
-                "-o", "StrictHostKeyChecking=accept-new",
-                "-o", "ServerAliveInterval=$alive_interval",
-                "-o", "ServerAliveCountMax=$alive_count",
-                "-o", "TCPKeepAlive=yes",
-            )
-        )
-        return opts
+    opts = String["-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes"]
+    if !request_tty
+        push!(opts, "-o", "RequestTTY=no")
     end
-    return _split_ssh_opts(custom)
+    connect = _ssh_whole_seconds(:ssh_connect, _SSH_CONNECT_TIMEOUT_S)
+    alive_count = 10
+    silent = _ssh_whole_seconds(:peer_silent, 600)
+    alive_interval = max(1, round(Int, silent / alive_count))
+    append!(
+        opts, (
+            "-o", "ConnectTimeout=$connect",
+            "-o", "StrictHostKeyChecking=accept-new",
+            "-o", "ServerAliveInterval=$alive_interval",
+            "-o", "ServerAliveCountMax=$alive_count",
+            "-o", "TCPKeepAlive=yes",
+        )
+    )
+    custom = strip(get(ENV, "DISTRIBUTED_SSH_OPTS", ""))
+    if !isempty(custom)
+        extra = _split_ssh_opts(custom)
+        for i in 1:2:length(extra)
+            tok = extra[i]
+            tok == "-o" || continue
+            i + 1 > length(extra) && break
+            keyval = extra[i + 1]
+            eq = findfirst('=', keyval)
+            eq === nothing && continue
+            key = lowercase(keyval[1:(eq - 1)])
+            if haskey(_SSH_FORBIDDEN_OPT_OVERRIDES, key)
+                want = _SSH_FORBIDDEN_OPT_OVERRIDES[key]
+                keyval != want && throw(
+                    ArgumentError(
+                        "DISTRIBUTED_SSH_OPTS cannot override $(repr(want)); " *
+                            "DistSSH requires non-interactive SSH",
+                    ),
+                )
+            end
+        end
+        append!(opts, extra)
+    end
+    return opts
+end
+
+"""Argv prefix for every `ssh` invocation (BatchMode and askpass lock)."""
+function ssh_noninteractive_env()::Dict{String, String}
+    return Dict{String, String}(
+        "SSH_ASKPASS_REQUIRE" => "never",
+        "SSH_ASKPASS" => "",
+    )
 end
 
 """Split `DISTRIBUTED_SSH_OPTS` with shell quoting. Unmatched quotes throw `ArgumentError`."""
@@ -94,7 +124,13 @@ function _host_tool_cmd(name::AbstractString, args::AbstractVector)::Cmd
 end
 
 _git_cmd(args::AbstractVector)::Cmd = _host_tool_cmd("git", args)
-_ssh_cmd(args::AbstractVector)::Cmd = _host_tool_cmd("ssh", args)
+function _ssh_cmd(args::AbstractVector)::Cmd
+    cmd = _host_tool_cmd("ssh", args)
+    for (k, v) in ssh_noninteractive_env()
+        cmd = setenv(cmd, k => v)
+    end
+    return cmd
+end
 
 """`--` then `host`, then `args`. A name that starts with `-` is rejected."""
 function _ssh_host_args(host::AbstractString, args::AbstractString...)::Vector{String}

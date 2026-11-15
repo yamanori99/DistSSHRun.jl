@@ -6,17 +6,17 @@ using Test
     @test parse_up_args(["--help"]).show_help
     @test parse_up_args(["-h"]).show_help
 
-    let r = parse_up_args(["add", "1.13", "child:host1", "child:host2"])
+    let r = parse_up_args(["add", "1.13", "host1", "host2"])
         @test r.verb == "add"
         @test r.channel == "1.13"
         @test r.hosts == ["host1", "host2"]
     end
-    let r = parse_up_args(["default", "release", "parent", "child:host1"])
+    let r = parse_up_args(["default", "release", "parent", "host1"])
         @test r.verb == "default"
         @test r.channel == "release"
         @test r.hosts == ["parent", "host1"]
     end
-    let r = parse_up_args(["update", "child:host1:4"])
+    let r = parse_up_args(["update", "4*host1"])
         @test r.verb == "update"
         @test r.channel === nothing
         @test r.hosts == ["host1"]
@@ -31,9 +31,9 @@ using Test
         @test r.channel === nothing
         @test r.hosts == ["parent"]
     end
-    @test_throws ArgumentError parse_up_args(["child:host1"])
+    @test_throws ArgumentError parse_up_args(["host1"])
     @test_throws ArgumentError parse_up_args(["add", "parent"])
-    @test_throws ArgumentError parse_up_args(["--juliaup", "child:host1"])
+    @test_throws ArgumentError parse_up_args(["--juliaup", "host1"])
     @test_throws ArgumentError parse_up_args(["--nope"])
 
     txt = DistSSHRun.up_help_text()
@@ -44,7 +44,7 @@ using Test
     @test occursin("up update", txt)
     @test occursin("up status", txt)
     err = try
-        parse_up_args(["child:host1"])
+        parse_up_args(["host1"])
         ""
     catch e
         e isa ArgumentError ? e.msg : ""

@@ -66,7 +66,7 @@ end
     @test !occursin("ok    Darwin", mac_out)
 
     linux = _hostinfo_fixture(;
-        selector = "child:lab",
+        selector = "lab",
         identity = "lab",
         os = "Linux",
         os_version = "24.04",
@@ -86,7 +86,7 @@ end
     @test !occursin("24.04.1 LTS 24.04", linux_out)
 
     wsl = _hostinfo_fixture(;
-        selector = "child:wsl",
+        selector = "wsl",
         identity = "wsl",
         os = "Linux",
         os_version = "24.04",
@@ -156,7 +156,7 @@ end
     @test occursin("Hostinfo:", nontty)
     @test occursin("Memory:", nontty)
 
-    r = DistSSHRun.parse_hostinfo_args(["parent", "child:host1"])
+    r = DistSSHRun.parse_hostinfo_args(["parent", "host1"])
     @test r.include_parent
     @test r.hosts == ["host1"]
     @test_throws ArgumentError DistSSHRun.parse_hostinfo_args(["--gb-per-worker", "1.5", "parent"])

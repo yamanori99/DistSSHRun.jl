@@ -231,11 +231,11 @@ end
 
 @testset "setup --run-id argv" begin
     p = DistSSHRun.parse_setup_args(
-        String["instantiate", "--run-id", _SNAP_ID_OLD, "child:h1"],
+        String["instantiate", "--run-id", _SNAP_ID_OLD, "h1"],
     )
     @test p.run_id == _SNAP_ID_OLD
     ship = DistSSHRun.parse_setup_args(
-        String["ship-tree", "--run-id", _SNAP_ID_OLD, "child:h1"],
+        String["ship-tree", "--run-id", _SNAP_ID_OLD, "h1"],
     )
     @test ship.run_id == _SNAP_ID_OLD
     err_mode = try
@@ -244,7 +244,7 @@ end
     catch e
         e
     end
-    session = DistSSHRun.DistSSHSession(workers = ["child:h1"], project = pwd(), yes = true)
+    session = DistSSHRun.DistSSHSession(workers = ["h1"], project = pwd(), yes = true)
     err_api = try
         DistSSHRun.setup!(session, :ship_tree; run_id = ship.run_id)
         nothing
@@ -255,7 +255,7 @@ end
     @test err_api isa ArgumentError
     @test err_mode.msg == err_api.msg
     bad = DistSSHRun.parse_setup_args(
-        String["instantiate", "--run-id", "../x", "child:h1"],
+        String["instantiate", "--run-id", "../x", "h1"],
     )
     @test bad.run_id == "../x"
     err_id_api = try
@@ -944,7 +944,7 @@ end
                                                 "check",
                                                 "--run-id", _SNAP_ID_OLD,
                                                 "--deploy-root", "/__dsr_logical__",
-                                                "child:child-1",
+                                                "child-1",
                                             ],
                                         )
                                     end

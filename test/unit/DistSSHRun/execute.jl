@@ -584,7 +584,7 @@ end
         @test !("--allow-external-symlinks" in argv)
         err_ship = try
             DistSSHRun._execute_detached_argv(
-                :go, "job.jl", ["child:h1:1"], String[];
+                :go, "job.jl", ["1*h1"], String[];
                 output_dir = nothing,
                 log_dir = nothing,
                 sync = :ship_tree,
@@ -606,7 +606,7 @@ end
         @test occursin("setup", err_ship.msg)
         err_ext = try
             DistSSHRun._execute_detached_argv(
-                :go, "job.jl", ["child:h1:1"], String[];
+                :go, "job.jl", ["1*h1"], String[];
                 output_dir = nothing,
                 log_dir = nothing,
                 sync = nothing,
@@ -644,7 +644,7 @@ end
         @test !("--parent-gb" in argv0)
         @test "--best-effort" in argv0
         argvw = DistSSHRun._execute_detached_argv(
-            :drive, "job.jl", ["child:host1"], String[];
+            :drive, "job.jl", ["host1"], String[];
             output_dir = "/tmp/out",
             log_dir = nothing,
             sync = nothing,
@@ -682,7 +682,7 @@ end
         @test !("--gb-per-worker" in argv_rep)
         @test !("--probe" in argv_rep)
         argv_strict = DistSSHRun._execute_detached_argv(
-            :drive, "job.jl", ["child:host1"], String[];
+            :drive, "job.jl", ["host1"], String[];
             output_dir = "/tmp/out",
             log_dir = nothing,
             sync = nothing,
@@ -698,7 +698,7 @@ end
         @test "--require-all-hosts" in argv_strict
         @test !("--best-effort" in argv_strict)
         @test_throws ArgumentError DistSSHRun._execute_detached_argv(
-            :drive, "job.jl", ["child:host1"], String[];
+            :drive, "job.jl", ["host1"], String[];
             output_dir = "/tmp/out",
             log_dir = nothing,
             sync = nothing,
@@ -712,7 +712,7 @@ end
             skip_hash_check = true,
         )
         @test_throws ArgumentError DistSSHRun._execute_detached_argv(
-            :drive, "job.jl", ["child:host1"], String[];
+            :drive, "job.jl", ["host1"], String[];
             output_dir = "/tmp/out",
             log_dir = nothing,
             sync = nothing,
@@ -804,7 +804,7 @@ end
         go = DistSSHRun.parse_go_args(
             [
                 "--progress", "--julia", "/opt/julia/bin/julia",
-                "--output-dir", "my_runs", "child:h1:1", "job.jl", "8",
+                "--output-dir", "my_runs", "1*h1", "job.jl", "8",
             ],
         )
         gkw = DistSSHRun.execute_kwargs_from_parsed(go; kind = :go)
@@ -831,7 +831,7 @@ end
         @test !haskey(gkw, :hosts_file)
         @test !haskey(gkw, :workers)
         @test !haskey(gkw, :sync)
-        @test DistSSHRun.host_tokens(go; kind = :go) == ["child:h1:1"]
+        @test DistSSHRun.host_tokens(go; kind = :go) == ["1*h1"]
         @test Set(keys(gkw)) == Set(
             [
                 :output_dir, :args, :julia, :quiet, :verbosity,
@@ -839,7 +839,7 @@ end
         )
         err_kw = try
             DistSSHRun.parse_go_args(
-                ["--ship-tree", "--allow-external-symlinks", "child:h1:1", "job.jl"],
+                ["--ship-tree", "--allow-external-symlinks", "1*h1", "job.jl"],
             )
             nothing
         catch e
@@ -847,7 +847,7 @@ end
         end
         @test err_kw isa ArgumentError
         @test occursin("go: --ship-tree was removed", err_kw.msg)
-        go_plain = DistSSHRun.parse_go_args(["child:h1:1", "job.jl"])
+        go_plain = DistSSHRun.parse_go_args(["1*h1", "job.jl"])
         gplain = DistSSHRun.execute_kwargs_from_parsed(go_plain; kind = :go)
         @test !haskey(gplain, :sync)
         @test !haskey(gplain, :allow_external_symlinks)
@@ -878,8 +878,8 @@ end
         @test dkw[:workers] == 4
         @test !haskey(dkw, :hosts_file)
         @test DistSSHRun.host_tokens(drive; kind = :drive) ==
-            ["parent:4", "child:host-a:1", "child:host-b:4"]
-        bare = DistSSHRun.parse_drive_args(["child:host1:1", "s.jl"])
+            ["parent:4", "1*host-a", "4*host-b"]
+        bare = DistSSHRun.parse_drive_args(["1*host1", "s.jl"])
         @test !haskey(DistSSHRun.execute_kwargs_from_parsed(bare; kind = :drive), :workers)
         errk = try
             DistSSHRun.execute_kwargs_from_parsed(go; kind = :pipeline)
@@ -1031,7 +1031,7 @@ end
         argv = DistSSHRun._execute_detached_argv(
             :go,
             "/remote/src/app/_distsshrun_external/job.jl",
-            ["child:h:1"],
+            ["1*h"],
             String[];
             output_dir = nothing,
             log_dir = nothing,
@@ -1083,7 +1083,7 @@ end
                     "DISTSSH_TEST_SSH_FAIL" => "1",
                 ) do
                     DistSSHRun.go!(
-                        script, ["child:h:1"];
+                        script, ["1*h"];
                         project = proj,
                         remote = "/home/dev/app",
                         run_id = "20260101T000000Z-aaaaaa",

@@ -56,7 +56,7 @@ using Test
             @test code == 1
         end
         let (code, out, err) = _cli_capture(
-                () -> DistSSHRun.go(["--ship-tree", "child:h1:1", "job.jl"]),
+                () -> DistSSHRun.go(["--ship-tree", "1*h1", "job.jl"]),
             )
             shown = out * err
             @test code == 1
@@ -73,7 +73,7 @@ using Test
             @test !occursin("SSH preflight", shown)
         end
         let (code, out, err) = _cli_capture(
-                () -> DistSSHRun.main(["go", "--ship-tree", "child:h1:1", "job.jl"]),
+                () -> DistSSHRun.main(["go", "--ship-tree", "1*h1", "job.jl"]),
             )
             shown = out * err
             @test code == 1

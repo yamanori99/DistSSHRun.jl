@@ -9,7 +9,7 @@ using Test
         write(joinpath(proj, "Project.toml"), "name = \"CachePush\"\n")
         session = DistSSHRun.DistSSHSession(project = proj, workers = ["parent:1"])
         @test_throws ArgumentError DistSSHRun.push_cache!(session)
-        empty = DistSSHRun.DistSSHSession(project = proj, workers = ["child:host1"])
+        empty = DistSSHRun.DistSSHSession(project = proj, workers = ["host1"])
         result = DistSSHRun.push_cache!(empty)
         @test result.ok
         @test isempty(result.hosts)
@@ -17,11 +17,11 @@ using Test
         write(src, "cache-bytes")
         h = DistSSHRun.file_sha256(DistSSHRun.cache_file(src; project = proj))
         @test_throws ArgumentError DistSSHRun.push_cache!(
-            DistSSHRun.DistSSHSession(project = proj, workers = ["child:host1"]);
+            DistSSHRun.DistSSHSession(project = proj, workers = ["host1"]);
             hashes = ["not-a-hash"],
         )
         @test_throws ArgumentError DistSSHRun.push_cache!(
-            DistSSHRun.DistSSHSession(project = proj, workers = ["child:host1"]);
+            DistSSHRun.DistSSHSession(project = proj, workers = ["host1"]);
             hashes = ["a"^64],
         )
         _with_tempdir() do state_dir
@@ -36,7 +36,7 @@ using Test
                 DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true, yes = true))
                 sess = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:host1"],
+                    workers = ["host1"],
                     remote = "/fake/remote/CachePush",
                 )
                 ok = DistSSHRun.push_cache!(sess)

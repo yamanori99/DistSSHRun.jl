@@ -16,8 +16,8 @@ using Test
     let r = parse_ride_args(["--no-spi-check", "job.jl"])
         @test !r.spi_check
     end
-    let r = parse_ride_args(["parent:1", "child:host1:2", "--julia", "julia", "job.jl"])
-        @test r.hosts == ["parent:1", "child:host1:2"]
+    let r = parse_ride_args(["parent:1", "2*host1", "--julia", "julia", "job.jl"])
+        @test r.hosts == ["parent:1", "2*host1"]
         @test r.julia == "julia"
         @test r.script_path == "job.jl"
     end

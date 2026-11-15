@@ -2,7 +2,7 @@ using Test
 
 @testset "hostinfo args" begin
     parse_hostinfo_args = DistSSHRun.parse_hostinfo_args
-    let r = parse_hostinfo_args(["parent", "child:host1"])
+    let r = parse_hostinfo_args(["parent", "host1"])
         @test r.include_parent
         @test r.hosts == ["host1"]
         @test r.julia === nothing

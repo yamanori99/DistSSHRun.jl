@@ -43,7 +43,7 @@ detached_launch
 
 ## Placement and host facts
 
-`WorkerPlan` is explicit `parent:N` / `child:NAME:N`. `pool!` inventories cores
+`WorkerPlan` is explicit local workers plus per-host counts (`N*host` tokens). `pool!` inventories cores
 and RAM. `hostinfo` collects via `DistSSHBase.collect_host_facts` and prints
 with `print_hostinfo` (per-host labeled layout; OS product vs kernel kept
 separate; missing fields are `-`).

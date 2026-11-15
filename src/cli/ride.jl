@@ -4,7 +4,7 @@
 
   julia --project=. -m DistSSHKit ride SCRIPT.jl
   julia --project=. -m DistSSHKit ride parent:2 SCRIPT.jl
-  julia --project=. -m DistSSHKit ride parent:1 child:host1:2 SCRIPT.jl
+  julia --project=. -m DistSSHKit ride parent:1 2*host1 SCRIPT.jl
 
 See `--help`.
 """

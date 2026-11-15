@@ -11,18 +11,14 @@ function split_hosts_csv(raw::AbstractString)::Vector{String}
 end
 
 """
-Parse `host` or `host:N` into `(hostname, workers)`.
+Parse a machine token into `(ssh_dest, workers_or_nothing)`.
 
-`N` is a worker/slot count for `drive` / `go`. `setup` / `hostinfo` keep
-the hostname only (`split_worker_token(…)[1]`).
+`setup` / `hostinfo` use the destination only. Legacy `host:N` is rejected.
 """
 function split_worker_token(spec::AbstractString)::Tuple{String, Union{Nothing, Int}}
-    s = strip(String(spec))
-    if contains(s, ':')
-        parts = split(s, ':', limit = 2)
-        return String(parts[1]), parse(Int, parts[2])
-    end
-    return s, nothing
+    p = parse_machine_token(spec)
+    n = p.workers == 1 ? nothing : p.workers
+    return p.dest, n
 end
 
 """
@@ -33,7 +29,7 @@ end
 Rebuild CLI host tokens for `execute!`.
 
 Go tokens are the parser strings. Ride uses the same shape. Drive tuples plus
-`parent_workers` emit `parent:N` then `child:NAME:N`. `kind` must be `:go`,
+`parent_workers` emit `parent:N` then `NAME:N`. `kind` must be `:go`,
 `:drive`, or `:ride`.
 """
 function host_tokens(hosts::AbstractVector{<:AbstractString})::Vector{String}
@@ -43,14 +39,14 @@ end
 function host_tokens(
         hosts::AbstractVector{Tuple{String, Union{Int, Nothing}}};
         parent_workers::Integer = 0,
+        local_workers::Integer = parent_workers,
     )::Vector{String}
     specs = String[]
-    lw = Int(parent_workers)
-    lw > 0 && push!(specs, format_placement_token(:parent, PARENT_HOST_NAME, lw))
+    # Local workers are not encoded as placement tokens (see --local-workers).
     for pair in hosts
         host = pair[1]
-        n = pair[2]
-        push!(specs, format_placement_token(:child, host, n))
+        n = something(pair[2], 1)
+        push!(specs, format_machine_token(n, host))
     end
     return specs
 end
@@ -67,24 +63,7 @@ function host_tokens(parsed; kind::Symbol)::Vector{String}
     throw(ArgumentError("host_tokens: kind must be :go, :drive, or :ride, got $(repr(kind))"))
 end
 
-"""Non-comment host entries from a hosts file (may include `host:N` for drive/go)."""
-function read_hosts_file_lines(
-        path::AbstractString;
-        surface::Symbol = :cli,
-    )::Vector{String}
-    p = canonical_local_path(path)
-    isfile(p) || throw(ArgumentError(explain_hosts_file_not_found(p; surface = surface)))
-    hosts = String[]
-    for line in readlines(p)
-        s = strip(line)
-        (isempty(s) || startswith(s, '#')) && continue
-        push!(hosts, s)
-    end
-    isempty(hosts) && throw(ArgumentError(explain_hosts_file_empty(p; surface = surface)))
-    return hosts
-end
-
-"""SSH host names from a hosts file (`host:N` → `host` only; for setup / DistSSHSession)."""
+"""SSH host names from a hosts file (for setup / DistSSHSession)."""
 function read_hosts_file(
         path::AbstractString;
         surface::Symbol = :cli,

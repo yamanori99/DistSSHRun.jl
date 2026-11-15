@@ -8,6 +8,7 @@ inside the DistSSH family. A 0.x patch does not change them.
 module DistSSHBase
 
 import SHA
+import TOML
 
 export canonical_local_path, resolve_pkg_env, resolve_pkg_project_dir, short_path
 export host_tokens, is_parent_host_name
@@ -26,6 +27,8 @@ include("ssh/state_dir.jl")
 include("messages/explain.jl")
 include("argv/cursor.jl")
 include("hosts/hosts.jl")
+include("hosts/machine.jl")
+include("hosts/host_input.jl")
 include("hosts/host_tokens.jl")
 include("messages/cli_entry.jl")
 include("ssh/sigint.jl")
@@ -52,6 +55,7 @@ public current_project_file,
     local_preferences_path,
     manifest_path,
     parse_julia_version_full
+public parse_machine_token, format_machine_token, MachinePlacement
 public parse_placement_token, posix_quote, remote_env_project_root, resolve_remote_julia
 public resolve_remote_project_root, shell_status, shield_sigint, with_cli_entry, without_cancel
 public CliUsageError, cli_parse, with_cli_exit

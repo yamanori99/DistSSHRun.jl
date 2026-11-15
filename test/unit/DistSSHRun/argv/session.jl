@@ -19,17 +19,17 @@ end
 
     @testset "peel flags" begin
         withenv(clear_verbosity_env..., "DISTSSH_YES" => nothing) do
-            let (session, rest) = DistSSHRun.peel_shared_cli_flags(["--quiet", "--yes", "child:host1", "s.jl"])
+            let (session, rest) = DistSSHRun.peel_shared_cli_flags(["--quiet", "--yes", "host1", "s.jl"])
                 @test session.quiet
                 @test session.verbosity === :quiet
                 @test session.yes
-                @test rest == ["child:host1", "s.jl"]
+                @test rest == ["host1", "s.jl"]
             end
 
-            let (session, rest) = DistSSHRun.peel_shared_cli_flags(["--verbose", "child:host1"])
+            let (session, rest) = DistSSHRun.peel_shared_cli_flags(["--verbose", "host1"])
                 @test session.verbosity === :verbose
                 @test !session.quiet
-                @test rest == ["child:host1"]
+                @test rest == ["host1"]
             end
 
             let (session, rest) = DistSSHRun.peel_shared_cli_flags(["--hosts", "a:1, b", "s.jl"])
@@ -175,10 +175,10 @@ end
             @test count(s -> s.host == "host-b", slots) == 4
         end
 
-        withenv("DISTSSH_HOSTS" => "child:env-a:2, child:env-b", "DISTSSH_HOSTS_FILE" => nothing) do
+        withenv("DISTSSH_HOSTS" => "2*env-a, env-b", "DISTSSH_HOSTS_FILE" => nothing) do
             session = DistSSHRun.CliSharedFlags(hosts_flag = ["parent:3"], hosts_file = hosts_file)
             @test DistSSHRun.placement_source_tokens(session; keep_counts = true) ==
-                ["parent:3", "child:env-a:2", "child:env-b", "child:host-a:1", "child:host-b:4"]
+                ["parent:3", "2*env-a", "env-b", "1*host-a", "4*host-b"]
             @test DistSSHRun.placement_source_tokens(session; keep_counts = false, roles = true) ==
                 ["parent", "env-a", "env-b", "host-a", "host-b"]
         end

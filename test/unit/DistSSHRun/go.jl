@@ -20,24 +20,24 @@ using Dates
             @test s[1].label == "parent"
         end
         @test_throws ArgumentError DistSSHRun.require_counted_placement_tokens(["parent"])
-        let s = DistSSHRun._go_plan_slots(["child:local:2"])
+        let s = DistSSHRun._go_plan_slots(["2*local"])
             @test length(s) == 2
             @test s[1].kind === :child && s[1].label == "local-1"
             @test s[2].kind === :child && s[2].label == "local-2"
         end
-        let s = DistSSHRun._go_plan_slots(["child:user@lab", "child:user@lab2:2"])
+        let s = DistSSHRun._go_plan_slots(["user@lab", "2*user@lab2"])
             @test length(s) == 3
             @test s[1].kind === :child && s[1].label == "user@lab"
             @test s[2].label == "user@lab2-1"
             @test s[3].label == "user@lab2-2"
         end
-        let s = DistSSHRun._go_plan_slots(["parent:0", "child:h1", "child:h2"])
+        let s = DistSSHRun._go_plan_slots(["parent:0", "h1", "h2"])
             @test length(s) == 2
             @test all(x -> x.kind === :child, s)
         end
         @test_throws ArgumentError DistSSHRun._go_plan_slots(["parent:0"])
-        @test_throws ArgumentError DistSSHRun._go_plan_slots(["child:local:0"])
-        @test_throws ArgumentError DistSSHRun._go_plan_slots(["child:local:-1"])
+        @test_throws ArgumentError DistSSHRun._go_plan_slots(["0*local"])
+        @test_throws ArgumentError DistSSHRun._go_plan_slots(["local:-1"])
         @test DistSSHRun._go_sanitize_label("user@lab") == "user@lab"
         _with_tempdir() do proj::String
             in_batch = joinpath(proj, "scripts", ".distssh", "go", "job_1")
@@ -60,7 +60,7 @@ using Dates
             e
         end
         @test err isa ArgumentError
-        @test occursin("child:NAME", sprint(showerror, err))
+        @test occursin("NAME", sprint(showerror, err))
         let s = DistSSHRun._go_plan_slots(["parent:2"])
             @test length(s) == 2
             @test s[1].label == "parent-1"
@@ -76,31 +76,31 @@ using Dates
             @test length(s) == 3
         end
         @test_throws ArgumentError DistSSHRun._go_plan_slots(["parent:2"]; total = 3)
-        let s = DistSSHRun._go_plan_slots(["child:h1"]; total = 2)
+        let s = DistSSHRun._go_plan_slots(["h1"]; total = 2)
             @test length(s) == 2
             @test all(x -> x.kind === :child && x.host == "h1", s)
         end
-        let s = DistSSHRun._go_plan_slots(["child:a", "child:b"]; total = 4)
+        let s = DistSSHRun._go_plan_slots(["a", "b"]; total = 4)
             @test count(x -> x.host == "a", s) == 2
             @test count(x -> x.host == "b", s) == 2
         end
-        let s = DistSSHRun._go_plan_slots(["child:a", "child:b"]; total = 3)
+        let s = DistSSHRun._go_plan_slots(["a", "b"]; total = 3)
             @test count(x -> x.host == "a", s) == 2
             @test count(x -> x.host == "b", s) == 1
         end
-        let s = DistSSHRun._go_plan_slots(["parent:1", "child:h1"]; total = 4)
+        let s = DistSSHRun._go_plan_slots(["parent:1", "h1"]; total = 4)
             @test count(x -> x.kind === :parent, s) == 1
             @test count(x -> x.host == "h1", s) == 3
         end
-        let pool = DistSSHRun._go_repeat_pool(["parent:1", "child:h1"])
+        let pool = DistSSHRun._go_repeat_pool(["parent:1", "h1"])
             @test length(pool) == 2
             @test pool[1].role === :parent && pool[1].name == "parent"
             @test pool[2].role === :child && pool[2].name == "h1"
         end
         @test_throws ArgumentError DistSSHRun._go_plan_slots(
-            ["parent:1", "child:parent:1"]; total = 2,
+            ["parent:1", "1*parent"]; total = 2,
         )
-        @test_throws ArgumentError DistSSHRun._go_plan_slots(["child:h1:1"]; total = 2)
+        @test_throws ArgumentError DistSSHRun._go_plan_slots(["1*h1"]; total = 2)
         @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; total = 0)
         @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; total = true)
         @test occursin("root@", DistSSHRun._go_host_ssh_hint("192.0.2.11"))
@@ -543,7 +543,7 @@ using Dates
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
             hf = joinpath(proj, "hosts")
-            write(hf, "child:no-such-host.invalid:1\n")
+            write(hf, "1*no-such-host.invalid\n")
             withenv("DISTSSH_HOSTS_FILE" => hf) do
                 redirect_stdout(devnull) do
                     r = DistSSHRun.go!(
@@ -732,7 +732,7 @@ using Dates
                         try
                             DistSSHRun.go!(
                                 script,
-                                ["child:user@hash-drain.test:1"];
+                                ["1*user@hash-drain.test"];
                                 project = proj,
                                 output_dir = out,
                                 quiet = true,
@@ -758,7 +758,7 @@ using Dates
                         try
                             DistSSHRun.go!(
                                 script,
-                                ["child:user@hash-drain.test:1"];
+                                ["1*user@hash-drain.test"];
                                 project = proj,
                                 output_dir = out2,
                                 quiet = true,

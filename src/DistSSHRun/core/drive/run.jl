@@ -610,8 +610,8 @@ function _run_drive_parsed_locked!(
                         println_fatal("For ship-tree remotes, omit --require-git (the default).")
                         println_fatal()
                         println_fatal("Or use git-managed remotes:")
-                        println_fatal("  julia --project=. -m DistSSHKit setup git-clone child:HOST ...")
-                        println_fatal("  julia --project=. -m DistSSHKit setup git-sync child:HOST ...")
+                        println_fatal("  julia --project=. -m DistSSHKit setup git-clone HOST ...")
+                        println_fatal("  julia --project=. -m DistSSHKit setup git-sync HOST ...")
                         println_fatal()
                     end
                     println_fatal("Or omit --require-git and run without git parity.")

@@ -48,15 +48,15 @@ function show_hostinfo_usage(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  $(cli_m_project()) hostinfo [parent] [child:NAME...]",
-        "  hostinfo parent child:host1 child:host2",
+        "  $(cli_m_project()) hostinfo [parent] [NAME...]",
+        "  hostinfo parent host1 host2",
     )
     print_help_blank(io)
     print_help_section("Options"; io = io)
     print_help_lines(
         io,
         "  --julia PATH        remote Julia (default: auto-detect)",
-        "  --hosts CSV         parent / child:NAME[:N] (:N stripped)",
+        "  --hosts CSV         parent / NAME[:N] (:N stripped)",
         "  --hosts-file PATH   same, one token per line",
         "  $(KIT_QUIET_FLAG_HELP)",
         "  $(KIT_PROGRESS_FLAG_HELP)",
@@ -113,7 +113,7 @@ function parse_hostinfo_args(args::Vector{String})
         elseif arg == "--parenthost" || arg == "--masterhost" || arg == "--parent"
             throw(
                 ArgumentError(
-                    "hostinfo: pass the token `parent` (e.g. hostinfo parent child:host1), not `--parenthost`.",
+                    "hostinfo: pass the token `parent` (e.g. hostinfo parent host1), not `--parenthost`.",
                 )
             )
         elseif arg == "--probe" || arg == "--gb-per-worker" || arg == "--mem-headroom" ||

@@ -2,7 +2,7 @@
 """
 `julia -m DistSSHKit hostinfo` — per-host identity, Julia, OS, CPU, RAM.
 
-  julia --project=. -m DistSSHKit hostinfo parent child:host1 child:host2
+  julia --project=. -m DistSSHKit hostinfo parent host1 host2
 
 See `--help`.
 """
@@ -48,7 +48,7 @@ function hostinfo_main()::Cint
     tokens = String[]
     opts.include_parent && push!(tokens, "parent")
     for h in opts.hosts
-        push!(tokens, "child:$h")
+        push!(tokens, "$h")
     end
     if isempty(tokens)
         show_hostinfo_usage()

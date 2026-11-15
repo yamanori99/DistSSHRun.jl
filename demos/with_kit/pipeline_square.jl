@@ -38,7 +38,7 @@ result = pipeline!(driver, "parent:2"; args = ARGS, collect = false, enable_log 
 # First-time remotes: setup!, then pipeline! (or drive!).
 #
 #   session = DistSSHSession(
-#       workers=["child:user@host1", "child:user@host2"],
+#       workers=["user@host1", "user@host2"],
 #       remote="/path/to/project",
 #       yes=true,
 #   )
@@ -46,8 +46,8 @@ result = pipeline!(driver, "parent:2"; args = ARGS, collect = false, enable_log 
 #   # or: setup!(session, :git_clone; repo="https://…"); setup!(session, :instantiate)
 #   result = pipeline!(
 #       driver,
-#       "child:user@host1:1",
-#       "child:user@host2:1";
+#       "1*user@host1",
+#       "1*user@host2";
 #       remote="/path/to/project",
 #       args=ARGS,
 #       # julia=nothing,                  # or path / "auto" (same as CLI --julia)
@@ -57,13 +57,13 @@ result = pipeline!(driver, "parent:2"; args = ARGS, collect = false, enable_log 
 #
 #   result = pipeline!(
 #       driver,
-#       "child:user@host1:1",
-#       "child:user@host2:1";   # or pipeline!(driver, ["child:user@host1:1", …]; …)
+#       "1*user@host1",
+#       "1*user@host2";   # or pipeline!(driver, ["1*user@host1", …]; …)
 #       remote="/path/to/project",
 #       args=ARGS,
 #       collect=true,                   # false → skip; path → collect root
 #       # project=pwd(),
-#       # hosts_file="hosts.txt",       # extra parent:N / child:NAME:N lines
+#       # hosts_file="hosts.txt",       # extra parent:N / NAME:N lines
 #       # yes=true,                     # skip confirm prompts (API default)
 #       # quiet=false,
 #       # verbosity=nothing,            # :quiet | :progress | :verbose

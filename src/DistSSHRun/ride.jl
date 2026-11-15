@@ -561,7 +561,7 @@ end
 
 Experimental. Rewrite `map` / `filter` / simple comprehensions / independent
 indexed `for` (`dest[i] = …`) and run the script on Distributed workers
-(parent and optional SSH `child:`). Rejects Distributed vocabulary
+(parent and optional SSH ``). Rejects Distributed vocabulary
 (use [`drive!`](@ref)).
 
 Worker add for SSH children is the same `add_drive_workers!` path as drive.
@@ -571,10 +571,10 @@ the parent (no driver `include` on workers). Named functions used by `map` /
 `filter` are sent to workers as a prelude.
 
 `--spi-check` (default off) compares the distributed result to a sequential
-`map` / `filter`. Unknown syntax stays sequential. Listed `child:` hosts are
+`map` / `filter`. Unknown syntax stays sequential. Listed `` hosts are
 fail-closed (`require_all_hosts=true`).
 Queue: [`execute!`](@ref) `:ride` (`detached=true` writes `kit.result` like go;
-SSH `child:` also writes `kit.hosts` for [`terminate!`](@ref)).
+SSH `` also writes `kit.hosts` for [`terminate!`](@ref)).
 """
 function ride!(
         script::AbstractString,

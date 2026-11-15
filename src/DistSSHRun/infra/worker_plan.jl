@@ -1,4 +1,4 @@
-# Explicit placement counts (`parent:N` / `child:NAME:N`). Not a size estimate.
+# Explicit placement counts (`parent:N` / `NAME:N`). Not a size estimate.
 
 """Explicit worker counts per host (`parent_workers` + `child_workers`)."""
 struct WorkerPlan
@@ -8,13 +8,11 @@ end
 
 WorkerPlan() = WorkerPlan(0, Dict{String, Int}())
 
-"""Resolved `parent:N` / `child:NAME:N` lines from a [`WorkerPlan`](@ref)."""
+"""Resolved machine tokens from a [`WorkerPlan`](@ref) (local workers are not tokens)."""
 function resolved_placement_tokens(plan::WorkerPlan)::Vector{String}
     out = String[]
-    plan.parent_workers > 0 &&
-        push!(out, format_placement_token(:parent, PARENT_HOST_NAME, plan.parent_workers))
     for (host, n) in plan.child_workers
-        n > 0 && push!(out, format_placement_token(:child, host, n))
+        n > 0 && push!(out, DistSSHBase.format_machine_token(n, host))
     end
     return out
 end

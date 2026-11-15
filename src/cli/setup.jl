@@ -8,8 +8,8 @@
 #   Optional git: git-clone → instantiate → check → git-sync / git-pull
 #   Replace a clone dest: delete, then git-clone
 #
-#   julia --project=. -m DistSSHKit setup ship-tree child:host1 child:host2
-#   julia --project=. -m DistSSHKit setup git-sync child:host1 child:host2   # git updates
+#   julia --project=. -m DistSSHKit setup ship-tree host1 host2
+#   julia --project=. -m DistSSHKit setup git-sync host1 host2   # git updates
 #
 # See `--help`.
 
