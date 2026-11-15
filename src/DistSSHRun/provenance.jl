@@ -219,7 +219,7 @@ function _reset_run_provenance!(project::AbstractString)
     _PROVENANCE_HEARTBEAT[] = nothing
     lock(_PROVENANCE_LOCK) do
         empty!(_PROVENANCE_GO)
-        if !unsafe_heterogeneous_active()
+        if !unsafe_skip_env_digests_active()
             empty!(_PROVENANCE_UNSAFE[])
         end
         _PROVENANCE_ENVIRONMENT[] = nothing
