@@ -64,6 +64,7 @@ julia --project=lib/DistSSHBase formal/diff/shell_status.jl
 | `DistSSHLean/` | Models, `Registry`, `Runtime` (`Jl`, `JlError`) |
 | `Audit.lean`, `Report.lean`, `registry.tsv` | Registry audit and export |
 | `scripts/audit.sh`, `check-coverage.jl`, `check-bugs.sh` | julia-in-lean checks |
+| `scripts/check-proof-escapes.py` | Syntax-aware proof-escape scan (adapted from [julia-in-lean](https://github.com/MilesCranmer/julia-in-lean) `check-proof-escapes.py`, Apache-2.0) |
 | `scripts/check-coverage.jl` | Registry coverage vs in-scope file and functions |
 | `QUESTIONS.md` | Maintainer rulings on ambiguous behaviour |
 | `bugs/` | YAML write-ups for confirmed bugs |

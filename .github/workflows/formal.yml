@@ -47,7 +47,6 @@ jobs:
           key: formal-lake-${{ hashFiles('formal/lean-toolchain', 'formal/lake-manifest.json', 'formal/**/*.lean', 'formal/lakefile.toml') }}
           restore-keys: |
             formal-lake-${{ hashFiles('formal/lean-toolchain', 'formal/lake-manifest.json', 'formal/lakefile.toml') }}-
-            formal-lake-
 
       - name: Install elan
         run: |
