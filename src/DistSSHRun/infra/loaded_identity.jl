@@ -140,16 +140,29 @@ end
 function _controller_slot_for_queue()::Union{Nothing, LoadedSlotReport}
     for (pkg, mod) in Base.loaded_modules
         pkg.name == "DistSSHQueue" || continue
-        id = _component_id_from_module(mod)
-        return LoadedSlotReport(
-            :DistSSHQueue,
-            :Loaded,
-            id.version,
-            id.uuid,
-            id.digest,
-            :top_level,
-            "",
-        )
+        try
+            id = _component_id_from_module(mod)
+            return LoadedSlotReport(
+                :DistSSHQueue,
+                :Loaded,
+                id.version,
+                id.uuid,
+                id.digest,
+                :top_level,
+                "",
+            )
+        catch e
+            probe = sprint(showerror, e)
+            return LoadedSlotReport(
+                :DistSSHQueue,
+                :ProbeFailed,
+                "",
+                _QUEUE_PKG_UUID,
+                "",
+                :top_level,
+                probe,
+            )
+        end
     end
     return LoadedSlotReport(:DistSSHQueue, :NotLoaded, "", _QUEUE_PKG_UUID, "", :top_level, "")
 end
@@ -405,16 +418,29 @@ function _worker_loaded_identity_expr()
                         "",
                     )
                 else
-                    qid = __read_component_id(queue_mod)
-                    __push_slot!(
-                        "DistSSHQueue",
-                        "Loaded",
-                        qid.version,
-                        qid.uuid,
-                        qid.digest,
-                        "top_level",
-                        "",
-                    )
+                    try
+                        qid = __read_component_id(queue_mod)
+                        __push_slot!(
+                            "DistSSHQueue",
+                            "Loaded",
+                            qid.version,
+                            qid.uuid,
+                            qid.digest,
+                            "top_level",
+                            "",
+                        )
+                    catch e
+                        probe_err = sprint(showerror, e)
+                        __push_slot!(
+                            "DistSSHQueue",
+                            "ProbeFailed",
+                            "",
+                            queue_uuid,
+                            "",
+                            "top_level",
+                            probe_err,
+                        )
+                    end
                 end
             catch e
                 probe_err = sprint(showerror, e)
@@ -502,20 +528,27 @@ function _record_loaded_verified_workers!(ids::AbstractVector{<:Integer})
     return nothing
 end
 
-"""After loaded verification, worker set must be unchanged when user code starts."""
+"""
+After loaded verification, only newly joined workers are forbidden (they were not
+probed). Workers that left the cluster afterward are allowed: they cannot run
+user code on an unverified layout.
+"""
 function assert_loaded_verified_worker_set!()
     verified = _LOADED_VERIFIED_WORKER_IDS[]
     verified === nothing && return nothing
     live = Set(_live_owned_worker_ids())
-    live == verified && return nothing
     added = setdiff(live, verified)
-    removed = setdiff(verified, live)
-    throw(
-        LoadedCodeMismatchError(
-            LoadedMismatchKind.probe_failed,
-            "ControllerParent",
-            "worker set changed after loaded verification (added=$(collect(added)); removed=$(collect(removed)))",
-        ),
-    )
+    if !isempty(added)
+        removed = setdiff(verified, live)
+        throw(
+            LoadedCodeMismatchError(
+                LoadedMismatchKind.probe_failed,
+                "ControllerParent",
+                "worker set changed after loaded verification (added=$(collect(added)); removed=$(collect(removed)))",
+            ),
+        )
+    end
+    !isempty(setdiff(verified, live)) && (_LOADED_VERIFIED_WORKER_IDS[] = live)
+    return nothing
 end
 public assert_loaded_verified_worker_set!

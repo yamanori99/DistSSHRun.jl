@@ -16,7 +16,13 @@ const _GO_HANDSHAKE_LOADER_SRC = let schema = 1,
     """
     import SHA
     function __distssh_go_handshake!()
-        hello = readline(stdin)
+        hello = try
+            readline(stdin)
+        catch e
+            e isa EOFError && exit($(_GO_HANDSHAKE_ABORT_EXIT))
+            rethrow(e)
+        end
+        hello === nothing && exit($(_GO_HANDSHAKE_ABORT_EXIT))
         startswith(hello, "HELLO ") || error("go handshake: expected HELLO on stdin")
         nonce = strip(hello[7:end])
         lines = String["schema=$schema"]
@@ -67,8 +73,14 @@ const _GO_HANDSHAKE_LOADER_SRC = let schema = 1,
             if queue_mod === nothing
                 __push_slot!("DistSSHQueue", "NotLoaded", "", "$queue_uuid", "", "top_level", "")
             else
-                qid = __read_id(queue_mod)
-                __push_slot!("DistSSHQueue", "Loaded", qid.version, qid.uuid, qid.digest, "top_level", "")
+                try
+                    qid = __read_id(queue_mod)
+                    __push_slot!("DistSSHQueue", "Loaded", qid.version, qid.uuid, qid.digest, "top_level", "")
+                catch e
+                    __push_slot!(
+                        "DistSSHQueue", "ProbeFailed", "", "$queue_uuid", "", "top_level", sprint(showerror, e),
+                    )
+                end
             end
         catch e
             __push_slot!("DistSSHRun", "ProbeFailed", "", "$run_uuid", "", "top_level", sprint(showerror, e))
@@ -80,7 +92,13 @@ const _GO_HANDSHAKE_LOADER_SRC = let schema = 1,
         hexpay = SHA.bytes2hex(collect(bytes))
         print('\\n', "$(_GO_HANDSHAKE_FRAME_PREFIX_S)", ' ', nonce, ' ', plen, ' ', digest, ' ', hexpay, '\\n')
         flush(stdout)
-        cmd = readline(stdin)
+        cmd = try
+            readline(stdin)
+        catch e
+            e isa EOFError && exit($(_GO_HANDSHAKE_ABORT_EXIT))
+            rethrow(e)
+        end
+        cmd === nothing && exit($(_GO_HANDSHAKE_ABORT_EXIT))
         if startswith(cmd, "ABORT ")
             exit($(_GO_HANDSHAKE_ABORT_EXIT))
         end
@@ -153,7 +171,13 @@ function _go_handshake_read_frame(
         log_io::Union{Nothing, IO} = nothing,
     )::String
     while !eof(io)
-        line = readline(io)
+        line = try
+            readline(io)
+        catch e
+            e isa EOFError && break
+            rethrow()
+        end
+        line === nothing && break
         _go_handshake_log_line!(log_io, line)
         wire = _parse_go_handshake_frame(line, nonce)
         wire === nothing && continue

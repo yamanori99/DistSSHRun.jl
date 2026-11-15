@@ -139,4 +139,37 @@ end
             end
         end
     end
+
+    @testset "assert_loaded_verified_worker_set!" begin
+        before_rm = Set(workers())
+        addprocs(1; exeflags = `--startup-file=no --project=$(TEST_PROJECT)`, topology = :master_worker)
+        w_rm = only(setdiff(workers(), before_rm))
+        DistSSHRun._mark_workers_launched!(Int[w_rm], TEST_PROJECT)
+        try
+            DistSSHRun.verify_workers_loaded_identity!()
+            DistSSHRun.assert_loaded_verified_worker_set!()
+            rmprocs(w_rm; waitfor = 30)
+            DistSSHRun.assert_loaded_verified_worker_set!()
+        finally
+            DistSSHRun._LOADED_VERIFIED_WORKER_IDS[] = nothing
+            w_rm in workers() && rmprocs(w_rm; waitfor = 30)
+        end
+        before = Set(workers())
+        addprocs(1; exeflags = `--startup-file=no --project=$(TEST_PROJECT)`, topology = :master_worker)
+        w = only(setdiff(workers(), before))
+        DistSSHRun._mark_workers_launched!(Int[w], TEST_PROJECT)
+        try
+            DistSSHRun.verify_workers_loaded_identity!()
+            DistSSHRun.assert_loaded_verified_worker_set!()
+            extra_before = Set(workers())
+            addprocs(1; exeflags = `--startup-file=no --project=$(TEST_PROJECT)`, topology = :master_worker)
+            extra = only(setdiff(workers(), extra_before))
+            DistSSHRun._mark_workers_launched!(Int[extra], TEST_PROJECT)
+            @test_throws DistSSHRun.LoadedCodeMismatchError DistSSHRun.assert_loaded_verified_worker_set!()
+            rmprocs(extra; waitfor = 30)
+        finally
+            DistSSHRun._LOADED_VERIFIED_WORKER_IDS[] = nothing
+            w in workers() && rmprocs(w; waitfor = 30)
+        end
+    end
 end
