@@ -228,26 +228,36 @@ using Dates
             julia_q = joinpath(Sys.BINDIR, Base.julia_exename())
             write(
                 ssh,
-                raw"""#!/bin/sh
+                raw"""#!/usr/bin/env bash
                 ready="$GO_SLOT_SSH_READY"
                 hs_line="$GO_SLOT_HS_LINE"
                 julia_bin="$GO_SLOT_JULIA_BIN"
-                if read -r _hsline; then
-                  case "$_hsline" in
-                    HELLO\ *)
-                      nonce="${_hsline#HELLO }"
-                      if [ -n "$hs_line" ] && [ -n "$julia_bin" ]; then
-                        "$julia_bin" "$hs_line" "$nonce"
-                      fi
-                      ;;
-                  esac
-                fi
+                go_slot=0
                 for arg in "$@"; do
                   case "$arg" in
                     *go.exitcode*)
-                      printf '%s\n' "$$" > "$ready"
-                      exec sleep 30
+                      go_slot=1
+                      break
                       ;;
+                  esac
+                done
+                if [ "$go_slot" = 1 ]; then
+                  if read -t 120 -r _hsline; then
+                    case "$_hsline" in
+                      HELLO\ *)
+                        nonce="${_hsline#HELLO }"
+                        if [ -n "$hs_line" ] && [ -n "$julia_bin" ]; then
+                          "$julia_bin" --startup-file=no --project="${JULIA_PROJECT:-.}" "$hs_line" "$nonce"
+                        fi
+                        ;;
+                    esac
+                  fi
+                  read -t 120 -r _goline || true
+                  printf '%s\n' "$$" > "$ready"
+                  exec sleep 30
+                fi
+                for arg in "$@"; do
+                  case "$arg" in
                     *--version*)
                       printf '%s\n' 'julia version 1.10.10'
                       exit 0
@@ -273,6 +283,7 @@ using Dates
                     "GO_SLOT_SSH_READY" => ready,
                     "GO_SLOT_HS_LINE" => hs_line,
                     "GO_SLOT_JULIA_BIN" => julia_q,
+                    "JULIA_PROJECT" => abspath(joinpath(@__DIR__, "..", "..", "..")),
                     "DISTSSH_TEST" => nothing,
                     "DISTSSH_TEST_SSH" => nothing,
                     "DISTSSH_JOB_ID" => nothing,
