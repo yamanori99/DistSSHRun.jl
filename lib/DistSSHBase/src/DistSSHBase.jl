@@ -56,7 +56,6 @@ public current_project_file,
 public parse_placement_token, posix_quote, remote_env_project_root, resolve_remote_julia
 public resolve_remote_project_root, shell_status, shield_sigint, with_cli_entry, without_cancel
 public CliUsageError, cli_parse, with_cli_exit
-public tool_require
 public wait_seconds
 
 end # module DistSSHBase

@@ -3,8 +3,9 @@
 """
     tool_require(pkg::Base.PkgId) -> Module
 
-Load `pkg` when it is not already loaded. If another package with the same
-`name` and a different `uuid` is already loaded, throw `ErrorException`.
+Family-internal helper (not public API). Load `pkg` when it is not already
+loaded. If another package with the same `name` and a different `uuid` is already
+loaded, throw `ErrorException`.
 """
 function tool_require(pkg::Base.PkgId)
     for (loaded, _) in Base.loaded_modules
