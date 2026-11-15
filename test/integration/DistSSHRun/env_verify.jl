@@ -506,8 +506,12 @@ function _env_verify_guards()
                 # directory, which does not include `@stdlib`. The go probe
                 # sets the launch path, and that path is what resolves
                 # `using SHA, TOML` on a job project that does not list them.
+                probe = read(
+                    joinpath(@__DIR__, "..", "..", "fixtures", "project_identity_probe.jl"),
+                    String,
+                )
                 cmd = addenv(
-                    `$bin --startup-file=no --project=$proj -e $(DistSSHRun._PROJECT_IDENTITY_EVAL)`,
+                    `$bin --startup-file=no --project=$proj -e $probe`,
                     "JULIA_LOAD_PATH" => DistSSHRun._LAUNCH_LOAD_PATH,
                 )
                 out = read(cmd, String)
