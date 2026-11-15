@@ -210,36 +210,42 @@ function go_slot_controller_handshake!(
     return nothing
 end
 
+function _go_handshake_await_drain!(drain_task::Task)
+    try
+        fetch(drain_task)
+    catch
+    end
+    return nothing
+end
+
 function run_go_slot_with_handshake(cmd::Cmd, site::AbstractString, log_path::AbstractString)
     log_io = open(String(log_path), "w")
-    proc = nothing
-    drain = nothing
-    try
+    return try
         proc = open(ignorestatus(cmd); write = true, read = true)
         try
-            go_slot_controller_handshake!(proc, site, log_io)
-        catch e
             try
-                println(proc, "ABORT ", go_handshake_nonce())
-                flush(proc)
-            catch
+                go_slot_controller_handshake!(proc, site, log_io)
+            catch e
+                try
+                    println(proc, "ABORT ", go_handshake_nonce())
+                    flush(proc)
+                catch
+                end
+                rethrow(e)
             end
-            rethrow(e)
+            drain_task = @async _go_drain_slot_stdout!(proc, log_io)
+            wait(proc)
+            _go_handshake_await_drain!(drain_task)
+            return proc
+        finally
+            if proc.exitcode === nothing
+                try
+                    kill(proc)
+                catch
+                end
+            end
         end
-        drain = @async _go_drain_slot_stdout!(proc, log_io)
-        wait(proc)
-        try
-            fetch(drain)
-        catch
-        end
-        return proc
     finally
-        if proc !== nothing && proc.exitcode === nothing
-            try
-                kill(proc)
-            catch
-            end
-        end
         close(log_io)
     end
 end
