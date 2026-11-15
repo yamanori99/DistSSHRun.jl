@@ -378,18 +378,22 @@ function _worker_host_rank(wid::Int)::Tuple{String, String}
 end
 
 function _worker_blas_count_expr()
-    return :(begin
-        using LinearAlgebra
-        Int(LinearAlgebra.BLAS.get_num_threads())
-    end)
+    return :(
+        begin
+            using LinearAlgebra
+            Int(LinearAlgebra.BLAS.get_num_threads())
+        end
+    )
 end
 
 function _worker_set_blas_threads_expr(n::Int)
-    return :(begin
-        using LinearAlgebra
-        LinearAlgebra.BLAS.set_num_threads($(n))
-        Int(LinearAlgebra.BLAS.get_num_threads())
-    end)
+    return :(
+        begin
+            using LinearAlgebra
+            LinearAlgebra.BLAS.set_num_threads($(n))
+            Int(LinearAlgebra.BLAS.get_num_threads())
+        end
+    )
 end
 
 function _blas_threads_mismatch_message(
