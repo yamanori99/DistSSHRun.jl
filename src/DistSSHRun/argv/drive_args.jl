@@ -82,6 +82,15 @@ end
 
 """Parse `drive` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_drive_args(args::Vector{String})
+    blob_path, args = peel_job_blob_bootstrap(copy(args))
+    if blob_path !== nothing
+        scrub_detached_placement_env!()
+        blob = read_detached_job_blob(blob_path)
+        blob.kind === :drive || throw(
+            ArgumentError("job blob kind is $(blob.kind); expected drive"),
+        )
+        return drive_parsed_from_detached_job_blob(blob; hint_surface = :cli)
+    end
     cli_session, args = peel_shared_cli_flags(args)
     parent_workers = 0
     default_workers = nothing
@@ -100,6 +109,7 @@ function parse_drive_args(args::Vector{String})
     require_all_hosts = true
     require_all_hosts_cli = false
     best_effort_cli = false
+    collect_strict = false
     hosts = Tuple{String, Union{Int, Nothing}}[]
     parent_listed = Ref(false)
     script_path = nothing
@@ -235,6 +245,10 @@ function parse_drive_args(args::Vector{String})
             best_effort_cli = true
             require_all_hosts = false
             i += 1
+        elseif arg == "--collect-strict"
+            collect_strict && throw(ArgumentError("drive: --collect-strict specified more than once"))
+            collect_strict = true
+            i += 1
         elseif arg == "--mem-headroom" || arg == "--parent-gb" || arg == "--master-gb" || startswith(arg, "--master-gb:")
             throw(ArgumentError("drive: worker-count sizing was removed; pass explicit parent:N / child:NAME:N"))
         elseif arg == "--no-log"
@@ -303,6 +317,7 @@ function parse_drive_args(args::Vector{String})
                     collect_root = tree_root,
                     collect_hosts = tree_hosts,
                     collect_overwrite = merge,
+                    collect_strict = collect_strict,
                     worker_include = worker_include,
                     require_all_hosts = require_all_hosts,
                     help = false,
@@ -331,6 +346,7 @@ function parse_drive_args(args::Vector{String})
                     collect_root = nothing,
                     collect_hosts = nothing,
                     collect_overwrite = nothing,
+                    collect_strict = false,
                     worker_include = false,
                     require_all_hosts = false,
                     help = true,
@@ -420,6 +436,7 @@ function parse_drive_args(args::Vector{String})
             collect_root = nothing,
             collect_hosts = nothing,
             collect_overwrite = nothing,
+            collect_strict = collect_strict,
             worker_include = worker_include,
             require_all_hosts = require_all_hosts,
             help = false,
@@ -449,6 +466,7 @@ function show_drive_usage(; io::IO = stdout)
         "  $(cli_m_project()) drive [workers...] DRIVER.jl",
         "  drive parent:4 child:host1:8 jobs.jl",
         "  drive --collect-missing ROOT HOST...",
+        "  drive --collect-strict --collect-missing ROOT HOST...  fail when a host is skipped",
     )
     print_help_blank(io)
     print_help_section("Workers"; io = io)

@@ -305,7 +305,7 @@ function init_drive_workers!(
                 end
 
                 @sync for (_, w) in host_workers
-                    @async _drive_eval_main(w, :(Pkg.precompile(; io = devnull)))
+                    @async DistSSHRun._precompile_worker_project!(w)
                 end
 
                 # Skip processes where the binding already exists (e.g. master

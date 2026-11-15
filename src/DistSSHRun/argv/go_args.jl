@@ -122,6 +122,12 @@ end
 
 """Parse `go` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_go_args(args::AbstractVector{<:AbstractString})
+    args_vec = Vector{String}(String.(args))
+    blob_path, _ = peel_job_blob_bootstrap(copy(args_vec))
+    if blob_path !== nothing
+        scrub_detached_placement_env!()
+        return go_parsed_from_detached_job_blob(read_detached_job_blob(blob_path))
+    end
     cli_session, rest = peel_shared_cli_flags(args)
     hosts = String[]
     host_tokens = String[]

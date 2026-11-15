@@ -191,7 +191,7 @@ function _pipeline_run!(config::PipelineConfig, session::DistSSHSession, driver:
     if do_collect
         ENV["DISTRIBUTED_SKIP_COLLECT"] = "1"
     end
-    drive_result = try
+        drive_result = try
         drive!(
             session,
             driver;
@@ -203,6 +203,7 @@ function _pipeline_run!(config::PipelineConfig, session::DistSSHSession, driver:
             log_dir = config.log_dir,
             package = config.package,
             julia = config.julia,
+            run_id = config.run_id,
         )
     finally
         if do_collect
@@ -231,6 +232,7 @@ function _pipeline_run!(config::PipelineConfig, session::DistSSHSession, driver:
             session,
             pipeline_collect_root(config);
             merge = config.collect_merge,
+            run_id = config.run_id,
         )
         if !collect_result.ok
             return PipelineResult(

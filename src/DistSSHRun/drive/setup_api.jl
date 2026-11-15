@@ -743,10 +743,17 @@ function _setup_one!(
         )
         return _sync_result_from_host_op(raw)
     elseif mode === :check
-        work_path = _project_work_root(
-            hosts, session.project;
-            cli_override = session.remote, run_id = run_id,
-        )
+        selection_err = nothing
+        work_path = try
+            _project_work_root(
+                hosts, session.project;
+                cli_override = session.remote, run_id = run_id,
+            )
+        catch e
+            e isa ArgumentError || rethrow()
+            selection_err = e
+            session_remote_root(session)
+        end
         result = check_prerequisites(
             hosts,
             julia_path,
@@ -757,13 +764,16 @@ function _setup_one!(
             check_code_sync = check_code_sync,
             ignore_julia_version = ignore_julia_version,
         )
-        if result.ok
-            print_ok("All prerequisites met.")
-            kit_println()
-        else
+        if !result.ok
             println_err_after_progress("Prerequisites not met. Fix issues above and retry.")
+            return SyncResult(false, HostResult[]; ok = false, warnings = result.warnings)
         end
-        return SyncResult(false, HostResult[]; ok = result.ok, warnings = result.warnings)
+        if selection_err !== nothing
+            throw(selection_err)
+        end
+        print_ok("All prerequisites met.")
+        kit_println()
+        return SyncResult(false, HostResult[]; ok = true, warnings = result.warnings)
     elseif mode === :cleanup
         raw = cleanup_remote_workers(hosts)
         return _sync_result_from_host_op(raw)

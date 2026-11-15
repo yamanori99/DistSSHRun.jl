@@ -312,6 +312,17 @@ function juliaup_status_summary_line(
 end
 
 """
+Fail-closed `juliaup status` for API callers (default `strict=true`).
+"""
+function juliaup_status_lines(
+        host::AbstractString;
+        channel::Union{Nothing, AbstractString} = nothing,
+        strict::Bool = true,
+    )
+    return DistSSHUp.juliaup_status_lines(host; channel = channel, strict = strict)
+end
+
+"""
 Run one juliaup verb on each target.
 
 `verb` is `add`, `default`, `update`, or `status`. `add` and `default` need

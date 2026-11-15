@@ -392,6 +392,7 @@ mutable struct PipelineConfig
     log_dir::Union{Nothing, String}
     package::Union{Nothing, String}
     julia::Union{Nothing, String}
+    run_id::Union{Nothing, String}
 end
 
 function PipelineConfig(;
@@ -412,6 +413,7 @@ function PipelineConfig(;
         log_dir::Union{Nothing, AbstractString} = nothing,
         package::Union{Nothing, AbstractString} = nothing,
         julia::Union{Nothing, AbstractString} = nothing,
+        run_id::Union{Nothing, AbstractString} = nothing,
     )
     rr = remote === nothing ? nothing : String(strip(String(remote)))
     rr !== nothing && isempty(rr) && (rr = nothing)
@@ -426,6 +428,7 @@ function PipelineConfig(;
     else
         String(julia)
     end
+    snap = run_id === nothing ? nothing : validate_run_id(run_id)
     return PipelineConfig(
         canonical_local_path(project),
         String[String(t) for t in workers],
@@ -444,6 +447,7 @@ function PipelineConfig(;
         ld,
         pkg,
         jl,
+        snap,
     )
 end
 
