@@ -249,3 +249,12 @@ These names are not a command.
 run_identity
 identity_mismatches
 ```
+
+Drive and ride also compare each worker's loaded DistSSH component ids (from
+precompile-time `COMPONENT_ID` constants, not Manifest digests). This check is
+independent of `--unsafe-heterogeneous`, which still waives only Manifest/Project
+digest lines from [`identity_mismatches`](@ref).
+
+```@docs
+LoadedCodeMismatchError
+```

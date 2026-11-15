@@ -534,6 +534,7 @@ function assert_controller_environment_for_verify!(project::AbstractString)
     assert_controller_manifest_for_environment_verify!(project)
     assert_controller_manifest_current!(project)
     assert_controller_default_sysimage!()
+    assert_controller_loaded_identity!()
     return nothing
 end
 public assert_controller_environment_for_verify!
@@ -625,6 +626,7 @@ function verify_workers_match_job!(project::AbstractString)
         project, parent, worker_lines; waive_env_issues = waive_env,
     )
     _environment_mismatch_throw(mismatches)
+    verify_workers_loaded_identity!()
     _record_environment_verify_outcome!(waive_env)
     return nothing
 end
