@@ -67,7 +67,7 @@ function collect_job_options(;
     rr !== nothing && isempty(rr) && (rr = nothing)
     snap = run_id === nothing ? nothing : validate_run_id(run_id)
     jl = julia === nothing ? nothing : let s = strip(String(julia))
-        isempty(s) || lowercase(s) == "auto" ? nothing : s
+            isempty(s) || lowercase(s) == "auto" ? nothing : s
     end
     return CollectJobOptions(merge, strict, rr, snap, jl)
 end

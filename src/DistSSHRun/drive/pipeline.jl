@@ -191,7 +191,7 @@ function _pipeline_run!(config::PipelineConfig, session::DistSSHSession, driver:
     if do_collect
         ENV["DISTRIBUTED_SKIP_COLLECT"] = "1"
     end
-        drive_result = try
+    drive_result = try
         drive!(
             session,
             driver;

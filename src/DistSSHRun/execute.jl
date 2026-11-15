@@ -759,11 +759,11 @@ function _execute_detached!(
     _hosts_file = get(kwargs, :hosts_file, nothing)
     _hosts_file !== nothing && !isempty(strip(String(_hosts_file))) &&
         throw(
-            ArgumentError(
-                "execute!(...; detached=true) does not accept hosts_file=; " *
-                    "pass host tokens in `tokens` or use --hosts via the job blob",
-            ),
-        )
+        ArgumentError(
+            "execute!(...; detached=true) does not accept hosts_file=; " *
+                "pass host tokens in `tokens` or use --hosts via the job blob",
+        ),
+    )
     log_dir = get(kwargs, :log_dir, nothing)
     enable_log = get(kwargs, :enable_log, true)
     package = get(kwargs, :package, nothing)

@@ -114,7 +114,7 @@ function scrub_detached_placement_env!()
 end
 
 function _write_job_blob_pairs(io::IO, pairs::Vector{Pair{String, Any}})
-  for (k, v) in pairs
+    for (k, v) in pairs
         if v isa Bool
             println(io, "$k = ", v ? "true" : "false")
         elseif v isa AbstractString
