@@ -48,9 +48,13 @@ using Test
             @test r.hosts == ["1*host-a", "2*host-b"]
             @test r.script_path == "job.jl"
         end
-        @test_throws ArgumentError parse_go_args(["user@lab", "job.jl"])
+        let r = parse_go_args(["user@lab", "job.jl"])
+            @test r.hosts == ["user@lab"]
+        end
         @test_throws ArgumentError parse_go_args(["parent", "job.jl"])
-        @test_throws ArgumentError parse_go_args(["host1", "job.jl"])
+        let r = parse_go_args(["host1", "job.jl"])
+            @test r.hosts == ["host1"]
+        end
         let r = parse_go_args(["--local-workers", "4", "1*host1", "2*host2", "job.jl"])
             @test r.cli_session.local_workers == 4
             @test DistSSHRun.host_tokens(r; kind = :go) == ["1*host1", "2*host2"]
@@ -332,11 +336,11 @@ using Test
         end
     end
 
-    @testset "--hosts-file keeps host:N" begin
+    @testset "--hosts-file machine tokens" begin
         hosts_file = _sample_hosts_file()
         withenv("DISTSSH_HOSTS" => nothing, "DISTSSH_HOSTS_FILE" => nothing) do
             let r = parse_go_args(["--hosts-file", hosts_file, "job.jl"])
-                @test r.hosts == ["1*host-a", "4*host-b"]
+                @test r.hosts == ["host-a", "4*host-b"]
                 @test r.script_path == "job.jl"
             end
         end
