@@ -31,10 +31,6 @@ using TOML
     end
     @test DistSSHRun.worker_addprocs_blas_kwargs() == NamedTuple()
     @test DistSSHRun._requested_worker_blas_count() === nothing
-    _with_tempdir() do proj
-        write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
-        @test DistSSHRun._worker_project_precompile_allowed(proj)
-    end
     DistSSHRun.reset_worker_seeds!()
     a, b = withenv("DISTSSH_JOB_SEED" => "11") do
         aa = Dict(DistSSHRun.worker_env_pairs("/tmp/job"; rank = DistSSHRun.take_worker_rank()))
@@ -666,6 +662,37 @@ using TOML
         print(got == ref ? "ok" : "fail")
         """
         @test strip(String(read(cmd(nested_preserve_code)))) == "ok"
+    end
+end
+
+@testset "read-only worker project precompile warns and launch continues" begin
+    julia = joinpath(Sys.BINDIR, Base.julia_exename())
+    _with_tempdir() do proj
+        write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
+        chmod(proj, 0o555)
+        added = Int[]
+        try
+            mktemp() do err_path, err_io
+                before = Set(workers())
+                redirect_stderr(err_io) do
+                    DistSSHRun.preserve_task_local_default_rng() do
+                        DistSSHRun.ensure_run_cluster_cookie!()
+                        DistSSHRun._add_local_drive_workers!(1, proj, julia)
+                    end
+                end
+                flush(err_io)
+                err = read(err_path, String)
+                added = Int[w for w in workers() if w ∉ before]
+                @test length(added) == 1
+                @test occursin("not writable", err)
+                @test occursin("precompile", err)
+                @test occursin(proj, err)
+                @test occursin("rank", err)
+            end
+        finally
+            isempty(added) || rmprocs(added; waitfor = 30)
+            chmod(proj, 0o755)
+        end
     end
 end
 
