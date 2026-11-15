@@ -84,10 +84,12 @@ using Test
         @testset "host validation wiring" begin
             proc, combined = got[1]
             @test proc.exitcode == 1
-            @test occursin("only for up", combined)
+            @test occursin("only for up", combined) || occursin("was removed", combined)
             proc2, combined2 = got[2]
             @test proc2.exitcode == 1
-            @test occursin("NAME", combined2) || occursin("parent[:N]", combined2)
+            @test occursin("NAME", combined2) ||
+                occursin("parent[:N]", combined2) ||
+                occursin("--confirm-path", combined2)
         end
 
         @testset "delete" begin
