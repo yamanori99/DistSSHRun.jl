@@ -69,8 +69,7 @@ using Test
 
     @testset "host_tokens" begin
         @test DistSSHBase.host_tokens(["1*h1"]) == ["1*h1"]
-        @test DistSSHBase.host_tokens(Tuple{String, Union{Int, Nothing}}[("h1", 2)]; parent_workers = 3) ==
-            ["2*h1"]
+        @test DistSSHBase.host_tokens(Tuple{String, Union{Int, Nothing}}[("h1", 2)]) == ["2*h1"]
         go = (hosts = ["4*user@h1"],)
         @test DistSSHBase.host_tokens(go; kind = :go) == ["4*user@h1"]
         drive = (

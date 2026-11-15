@@ -47,8 +47,9 @@ function read_toml_hosts_file(path::AbstractString; surface::Symbol = :cli)::Vec
             u === nothing ? nothing : String(strip(u))
         end
         port = _toml_int(get(row, "port", nothing), "port", p)
-        bind = let b = get(row, "bind", nothing)
-            b === nothing ? nothing : String(strip(b))
+        if haskey(row, "bind")
+            b = get(row, "bind", nothing)
+            b !== nothing && (String(strip(b)); nothing)
         end
         dest = name
         user !== nothing && !contains(dest, '@') && (dest = string(user, "@", dest))

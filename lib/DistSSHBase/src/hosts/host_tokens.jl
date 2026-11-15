@@ -23,13 +23,13 @@ end
 
 """
     host_tokens(hosts::AbstractVector{<:AbstractString}) -> Vector{String}
-    host_tokens(hosts::AbstractVector{Tuple{String,Union{Int,Nothing}}}; parent_workers=0)
+    host_tokens(hosts::AbstractVector{Tuple{String,Union{Int,Nothing}}})
     host_tokens(parsed; kind::Symbol) -> Vector{String}
 
 Rebuild CLI host tokens for `execute!`.
 
-Go tokens are the parser strings. Ride uses the same shape. Drive tuples plus
-`parent_workers` emit `parent:N` then `NAME:N`. `kind` must be `:go`,
+Go tokens are the parser strings. Ride uses the same shape. Drive uses remote
+tuple specs only (local workers use `--local-workers`, not tokens). `kind` must be `:go`,
 `:drive`, or `:ride`.
 """
 function host_tokens(hosts::AbstractVector{<:AbstractString})::Vector{String}
@@ -37,9 +37,7 @@ function host_tokens(hosts::AbstractVector{<:AbstractString})::Vector{String}
 end
 
 function host_tokens(
-        hosts::AbstractVector{Tuple{String, Union{Int, Nothing}}};
-        parent_workers::Integer = 0,
-        local_workers::Integer = parent_workers,
+        hosts::AbstractVector{Tuple{String, Union{Int, Nothing}}},
     )::Vector{String}
     specs = String[]
     # Local workers are not encoded as placement tokens (see --local-workers).
@@ -55,10 +53,7 @@ function host_tokens(parsed; kind::Symbol)::Vector{String}
     if kind === :go || kind === :ride
         return host_tokens(parsed.hosts::AbstractVector{<:AbstractString})
     elseif kind === :drive
-        return host_tokens(
-            parsed.hosts::AbstractVector{Tuple{String, Union{Int, Nothing}}};
-            parent_workers = parsed.parent_workers,
-        )
+        return host_tokens(parsed.hosts::AbstractVector{Tuple{String, Union{Int, Nothing}}})
     end
     throw(ArgumentError("host_tokens: kind must be :go, :drive, or :ride, got $(repr(kind))"))
 end
