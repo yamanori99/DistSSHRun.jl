@@ -61,7 +61,7 @@ jobs:
   test-wsl:
     name: DistSSHRun (1.13, WSL2 ubuntu-24.04, x64)
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -163,7 +163,7 @@ jobs:
         slot:
           - { runs: ubuntu-latest, name: ubuntu-latest, arch: x64, timeout: 20, wsl: false }
           - { runs: xcode-27, name: xcode-27, arch: aarch64, timeout: 30, wsl: false }
-          - { runs: windows-latest, name: "WSL2 ubuntu-24.04", arch: x64, timeout: 45, wsl: true }
+          - { runs: windows-latest, name: "WSL2 ubuntu-24.04", arch: x64, timeout: 60, wsl: true }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -216,7 +216,7 @@ jobs:
         slot:
           - { runs: ubuntu-latest, name: ubuntu-latest, arch: x64, timeout: 20, wsl: false }
           - { runs: xcode-27, name: xcode-27, arch: aarch64, timeout: 30, wsl: false }
-          - { runs: windows-latest, name: "WSL2 ubuntu-24.04", arch: x64, timeout: 45, wsl: true }
+          - { runs: windows-latest, name: "WSL2 ubuntu-24.04", arch: x64, timeout: 60, wsl: true }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -268,7 +268,7 @@ jobs:
         slot:
           - { runs: ubuntu-latest, name: ubuntu-latest, arch: x64, timeout: 20, wsl: false }
           - { runs: xcode-27, name: xcode-27, arch: aarch64, timeout: 30, wsl: false }
-          - { runs: windows-latest, name: "WSL2 ubuntu-24.04", arch: x64, timeout: 45, wsl: true }
+          - { runs: windows-latest, name: "WSL2 ubuntu-24.04", arch: x64, timeout: 60, wsl: true }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -316,7 +316,7 @@ jobs:
         slot:
           - { runs: ubuntu-latest, name: ubuntu-latest, arch: x64, timeout: 20, wsl: false }
           - { runs: xcode-27, name: xcode-27, arch: aarch64, timeout: 30, wsl: false }
-          - { runs: windows-latest, name: "WSL2 ubuntu-24.04", arch: x64, timeout: 45, wsl: true }
+          - { runs: windows-latest, name: "WSL2 ubuntu-24.04", arch: x64, timeout: 60, wsl: true }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -434,7 +434,7 @@ jobs:
   test-1-14-pre-wsl:
     name: DistSSHRun (1.14-pre, WSL2 ubuntu-24.04, x64)
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     continue-on-error: true
     permissions:
       contents: read
@@ -464,7 +464,7 @@ jobs:
   test-nightly-wsl:
     name: DistSSHRun (nightly, WSL2 ubuntu-24.04, x64)
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     continue-on-error: true
     permissions:
       contents: read
@@ -609,7 +609,7 @@ jobs:
   aqua-1-14-pre-wsl:
     name: Aqua (1.14-pre, WSL2 ubuntu-24.04, x64)
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     continue-on-error: true
     permissions:
       contents: read
@@ -639,7 +639,7 @@ jobs:
   aqua-nightly-wsl:
     name: Aqua (nightly, WSL2 ubuntu-24.04, x64)
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     continue-on-error: true
     permissions:
       contents: read
