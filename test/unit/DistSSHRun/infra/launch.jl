@@ -231,6 +231,9 @@ using TOML
         "sysimage" => _test_sysimage,
         "sysimage.default" => "true",
     )
+    loaded = DistSSHRun._runtime_distssh_snapshot()
+    parent = merge(parent, loaded)
+    worker = merge(worker, loaded)
     @test isempty(DistSSHRun.identity_mismatches(parent, worker))
 
     @test isempty(
@@ -248,28 +251,37 @@ using TOML
 
     sha_miss = DistSSHRun.identity_mismatches(
         parent,
-        Dict(
-            "version" => string(VERSION),
-            "commit" => string(Base.GIT_VERSION_INFO.commit),
-            "manifest.sha256" => "c"^64,
-            "project.sha256" => "b"^64,
+        merge(
+            loaded,
+            Dict(
+                "version" => string(VERSION),
+                "commit" => string(Base.GIT_VERSION_INFO.commit),
+                "manifest.sha256" => "c"^64,
+                "project.sha256" => "b"^64,
+            ),
         ),
     )
     @test any(occursin("manifest.sha256", l) for l in sha_miss)
 
     same_path_diff = DistSSHRun.identity_mismatches(
-        Dict(
-            "version" => "1",
-            "commit" => "a",
-            "manifest.sha256" => "d"^64,
-            "project.sha256" => "e"^64,
+        merge(
+            loaded,
+            Dict(
+                "version" => "1",
+                "commit" => "a",
+                "manifest.sha256" => "d"^64,
+                "project.sha256" => "e"^64,
+            ),
         ),
-        Dict(
-            "version" => "1",
-            "commit" => "a",
-            "manifest" => "/job/Manifest.toml",
-            "manifest.sha256" => "f"^64,
-            "project.sha256" => "e"^64,
+        merge(
+            loaded,
+            Dict(
+                "version" => "1",
+                "commit" => "a",
+                "manifest" => "/job/Manifest.toml",
+                "manifest.sha256" => "f"^64,
+                "project.sha256" => "e"^64,
+            ),
         ),
     )
     want_d = "d"^64
@@ -277,7 +289,10 @@ using TOML
 
     missing_snap = DistSSHRun.identity_mismatches(
         parent,
-        Dict("version" => "1", "commit" => "a", "manifest.sha256" => "", "project.sha256" => ""),
+        merge(
+            loaded,
+            Dict("version" => "1", "commit" => "a", "manifest.sha256" => "", "project.sha256" => ""),
+        ),
     )
     @test any(occursin("manifest.sha256 missing", l) for l in missing_snap)
 
@@ -285,22 +300,28 @@ using TOML
 
     julia_lines = DistSSHRun.identity_mismatches(
         parent,
-        Dict(
-            "version" => "1.9.0",
-            "commit" => parent["commit"],
-            "manifest.sha256" => parent["manifest.sha256"],
-            "project.sha256" => parent["project.sha256"],
+        merge(
+            loaded,
+            Dict(
+                "version" => "1.9.0",
+                "commit" => parent["commit"],
+                "manifest.sha256" => parent["manifest.sha256"],
+                "project.sha256" => parent["project.sha256"],
+            ),
         ),
     )
     @test any(occursin("julia version", l) for l in julia_lines)
 
     combo_mismatch = DistSSHRun.identity_mismatches(
         parent,
-        Dict(
-            "version" => "1.9.0",
-            "commit" => "0000000000000000000000000000000000000000",
-            "manifest.sha256" => "c"^64,
-            "project.sha256" => parent["project.sha256"],
+        merge(
+            loaded,
+            Dict(
+                "version" => "1.9.0",
+                "commit" => "0000000000000000000000000000000000000000",
+                "manifest.sha256" => "c"^64,
+                "project.sha256" => parent["project.sha256"],
+            ),
         ),
     )
     @test any(occursin("julia version", l) for l in combo_mismatch)
@@ -308,11 +329,14 @@ using TOML
     @test any(occursin("manifest.sha256", l) for l in combo_mismatch)
     unsafe_combo = DistSSHRun.identity_mismatches(
         parent,
-        Dict(
-            "version" => "1.9.0",
-            "commit" => "0000000000000000000000000000000000000000",
-            "manifest.sha256" => "c"^64,
-            "project.sha256" => parent["project.sha256"],
+        merge(
+            loaded,
+            Dict(
+                "version" => "1.9.0",
+                "commit" => "0000000000000000000000000000000000000000",
+                "manifest.sha256" => "c"^64,
+                "project.sha256" => parent["project.sha256"],
+            ),
         ),
         unsafe_heterogeneous = true,
     )
@@ -321,22 +345,28 @@ using TOML
 
     empty_commit = DistSSHRun.identity_mismatches(
         parent,
-        Dict(
-            "version" => parent["version"],
-            "commit" => "",
-            "manifest.sha256" => parent["manifest.sha256"],
-            "project.sha256" => parent["project.sha256"],
+        merge(
+            loaded,
+            Dict(
+                "version" => parent["version"],
+                "commit" => "",
+                "manifest.sha256" => parent["manifest.sha256"],
+                "project.sha256" => parent["project.sha256"],
+            ),
         ),
     )
     @test any(occursin("cannot determine the Julia build", l) for l in empty_commit)
     @test !isempty(
         DistSSHRun.identity_mismatches(
             parent,
-            Dict(
-                "version" => parent["version"],
-                "commit" => "",
-                "manifest.sha256" => parent["manifest.sha256"],
-                "project.sha256" => parent["project.sha256"],
+            merge(
+                loaded,
+                Dict(
+                    "version" => parent["version"],
+                    "commit" => "",
+                    "manifest.sha256" => parent["manifest.sha256"],
+                    "project.sha256" => parent["project.sha256"],
+                ),
             ),
             unsafe_heterogeneous = true,
         ),
@@ -344,18 +374,8 @@ using TOML
 
     pkg_miss = DistSSHRun.identity_mismatches(
         parent,
-        Dict(
-            "version" => parent["version"],
-            "commit" => parent["commit"],
-            "manifest.sha256" => parent["manifest.sha256"],
-            "project.sha256" => parent["project.sha256"],
-            "pkg.DistSSHRun" => "9.9.9",
-        ),
-    )
-    @test any(occursin("pkg.DistSSHRun", l) for l in pkg_miss)
-    @test !isempty(
-        DistSSHRun.identity_mismatches(
-            parent,
+        merge(
+            loaded,
             Dict(
                 "version" => parent["version"],
                 "commit" => parent["commit"],
@@ -363,9 +383,60 @@ using TOML
                 "project.sha256" => parent["project.sha256"],
                 "pkg.DistSSHRun" => "9.9.9",
             ),
+        ),
+    )
+    @test any(occursin("pkg.DistSSHRun", l) for l in pkg_miss)
+    @test !isempty(
+        DistSSHRun.identity_mismatches(
+            parent,
+            merge(
+                loaded,
+                Dict(
+                    "version" => parent["version"],
+                    "commit" => parent["commit"],
+                    "manifest.sha256" => parent["manifest.sha256"],
+                    "project.sha256" => parent["project.sha256"],
+                    "pkg.DistSSHRun" => "9.9.9",
+                ),
+            ),
             unsafe_heterogeneous = true,
         ),
     )
+
+    @testset "loaded DistSSH* runtime identity" begin
+        snap = DistSSHRun._runtime_distssh_snapshot()
+        for name in ("DistSSHBase", "DistSSHRun")
+            for field in ("version", "uuid", "tree")
+                @test !isempty(get(snap, "loaded.$name.$field", ""))
+            end
+        end
+        bad = merge(snap)
+        bad["loaded.DistSSHRun.tree"] = ""
+        lines = DistSSHRun.identity_mismatches(snap, bad)
+        @test any(occursin("loaded.DistSSHRun.tree", l) for l in lines)
+        _with_tempdir() do proj
+            write(joinpath(proj, "Project.toml"), "name = \"NoDistSSHInManifest\"\n")
+            write(
+                joinpath(proj, "Manifest.toml"),
+                """
+                julia_version = "$(VERSION)"
+                manifest_format = "2.0"
+                project_hash = "0123456789abcdef0123456789abcdef01234567"
+                """,
+            )
+            parent = DistSSHRun._environment_verify_parent(proj)
+            @test isempty([k for k in keys(parent) if startswith(k, "pkg.")])
+            worker = merge(copy(parent))
+            worker["pkg.DistSSHRun"] = "99.99.99"
+            worker["loaded.DistSSHRun.version"] = "0.0.0"
+            lines = DistSSHRun.identity_mismatches(parent, worker)
+            @test any(occursin("loaded.DistSSHRun.version", l) for l in lines)
+            @test !isempty(
+                DistSSHRun.identity_mismatches(parent, worker; unsafe_heterogeneous = true),
+            )
+            @test !any(occursin("pkg.DistSSHRun", l) for l in lines)
+        end
+    end
 
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"VerifyGate\"\n")
@@ -380,17 +451,23 @@ using TOML
         ident = DistSSHRun.run_identity(proj)
         @test ident["manifest.sha256"] == DistSSHRun.file_sha256(joinpath(proj, "Manifest.toml"))
         @test ident["project.sha256"] == DistSSHRun.file_sha256(joinpath(proj, "Project.toml"))
+        parent = DistSSHRun._environment_verify_parent(proj)
         alt = joinpath(proj, "Manifest.toml")
         write(alt, "manifest_format = \"2.0\"\n# stale\n")
         worker_sha = DistSSHRun.file_sha256(alt)
         @test worker_sha != ident["manifest.sha256"]
         lines = DistSSHRun.identity_mismatches(
-            ident,
-            Dict(
-                "version" => ident["version"],
-                "commit" => ident["commit"],
-                "manifest.sha256" => worker_sha,
-                "project.sha256" => ident["project.sha256"],
+            parent,
+            merge(
+                DistSSHRun._runtime_distssh_snapshot(),
+                Dict(
+                    "version" => parent["version"],
+                    "commit" => parent["commit"],
+                    "manifest.sha256" => worker_sha,
+                    "project.sha256" => parent["project.sha256"],
+                    "sysimage" => parent["sysimage"],
+                    "sysimage.default" => parent["sysimage.default"],
+                ),
             ),
         )
         @test any(occursin("manifest.sha256", l) for l in lines)
@@ -445,6 +522,7 @@ using TOML
         finally
             old === nothing || Pkg.activate(old; io = devnull)
         end
+        _sync_test_project_manifest!(proj)
         slots = DistSSHRun.GoSlot[DistSSHRun.GoSlot(:parent, nothing, "parent")]
         DistSSHRun.verify_go_slots_match_job!(proj, slots)
     end
@@ -460,7 +538,10 @@ using TOML
             @test local_id["sysimage"] == img
             @test local_id["sysimage.default"] == def
             @test isempty(
-                DistSSHRun.identity_mismatches(DistSSHRun.run_identity(proj), local_id),
+                DistSSHRun.identity_mismatches(
+                    DistSSHRun._environment_verify_parent(proj),
+                    local_id,
+                ),
             )
         end
     end
@@ -673,8 +754,9 @@ end
             remotecall_fetch(() -> Core.eval(Main, :(using DistSSHRun)), w)
             snap_raw = remotecall_fetch(Core.eval, w, Main, DistSSHRun._worker_identity_expr())
             snap = Dict{String, String}(String(k) => String(v) for (k, v) in pairs(snap_raw))
-            parent_id = DistSSHRun.run_identity(proj)
+            parent_id = DistSSHRun._environment_verify_parent(proj)
             @test snap["sysimage.default"] == "true"
+            @test haskey(snap, "loaded.DistSSHRun.version")
             parent_alt = Dict{String, String}(parent_id)
             parent_alt["sysimage"] = "/opt/hostedtoolcache/julia/1.13.4/x64/lib/julia/sys.so"
             worker_alt = Dict{String, String}(snap)

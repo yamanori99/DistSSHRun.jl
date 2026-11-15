@@ -14,7 +14,7 @@ function with_unsafe_heterogeneous(f::Function, enabled::Bool)
     try
         _record_unsafe_heterogeneous!()
         _record_environment_unverified!("unsafe-heterogeneous")
-        @warn "unsafe: heterogeneous package environment (Manifest/Project byte digests may differ; Julia build and DistSSH* versions must still match)"
+        @warn "unsafe: heterogeneous package environment (Manifest/Project byte digests may differ; Julia build, loaded DistSSH*, and Manifest pkg.* must still match)"
         return f()
     finally
         _UNSAFE_HETEROGENEOUS[] = old
@@ -133,112 +133,11 @@ function run_identity(project::AbstractString)::Dict{String, String}
 end
 public run_identity
 
-const _WORKER_PKG_UUID_TOML = Base.UUID("fa267f1f-6049-4f14-aa54-33bafae1ed76")
-const _WORKER_PKG_UUID_SHA = Base.UUID("ea8e919c-243c-51af-8825-aaa63cd721ce")
-
-function _worker_production_identity_expr()
-    return quote
-        let man = "", man_sha = "", pf = "", proj_sha = ""
-            sha_mod = try
-                Base.require(Base.PkgId($(_WORKER_PKG_UUID_SHA), "SHA"))
-                Base.loaded_modules[Base.PkgId($(_WORKER_PKG_UUID_SHA), "SHA")]
-            catch
-                nothing
-            end
-            function __env_sha256(path)
-                isfile(path) || return ""
-                sha_mod === nothing && return ""
-                try
-                    # `require` may load SHA in this world age; call the new methods later.
-                    digest = Base.invokelatest(sha_mod.sha256, read(path))
-                    return lowercase(Base.invokelatest(sha_mod.bytes2hex, digest))
-                catch
-                    return ""
-                end
-            end
-            proj0 = Base.active_project()
-            if proj0 !== nothing
-                pf = String(proj0)
-                man0 = try
-                    Base.project_file_manifest_path(pf)
-                catch
-                    nothing
-                end
-                if man0 isa AbstractString && isfile(man0)
-                    man = String(man0)
-                    man_sha = __env_sha256(man)
-                end
-                proj_sha = __env_sha256(pf)
-            end
-            function __env_sysimage_path()
-                img = unsafe_string(Base.JLOptions().image_file)
-                try
-                    return String(realpath(img))
-                catch
-                    return String(img)
-                end
-            end
-            function __env_sysimage_is_default()
-                ext = Sys.isapple() ? ".dylib" : Sys.iswindows() ? ".dll" : ".so"
-                def = joinpath(Sys.BINDIR, "..", "lib", "julia", "sys" * ext)
-                img = unsafe_string(Base.JLOptions().image_file)
-                try
-                    return realpath(img) == realpath(def)
-                catch
-                    return false
-                end
-            end
-            d = Dict{String, String}(
-                "version" => string(VERSION),
-                "commit" => string(Base.GIT_VERSION_INFO.commit),
-                "julia" => joinpath(Sys.BINDIR, "julia"),
-                "sysimage" => __env_sysimage_path(),
-                "sysimage.default" => string(__env_sysimage_is_default()),
-                "manifest" => man,
-                "manifest.sha256" => man_sha,
-                "project" => pf,
-                "project.sha256" => proj_sha,
-            )
-            if !isempty(man) && isfile(man)
-                raw = try
-                    Base.require(Base.PkgId($(_WORKER_PKG_UUID_TOML), "TOML"))
-                    toml = Base.loaded_modules[Base.PkgId($(_WORKER_PKG_UUID_TOML), "TOML")]
-                    # Same world age as `require`: `parsefile` is not callable yet.
-                    Base.invokelatest(toml.parsefile, man)
-                catch
-                    nothing
-                end
-                if raw isa AbstractDict
-                    deps = get(raw, "deps", nothing)
-                    if deps isa AbstractDict
-                        for name in ("DistSSHRun", "DistSSHKit", "DistSSHQueue", "DistSSHBase")
-                            entry = get(deps, name, nothing)
-                            tab = if entry isa AbstractDict
-                                entry
-                            elseif entry isa AbstractVector && !isempty(entry) &&
-                                    first(entry) isa AbstractDict
-                                first(entry)
-                            else
-                                nothing
-                            end
-                            tab === nothing && continue
-                            v = get(tab, "version", nothing)
-                            v isa AbstractString && (d["pkg." * name] = String(v))
-                        end
-                    end
-                end
-            end
-            d
-        end
-    end
-end
-
-"""Base-only snapshot on a worker (no DistSSHRun module on the worker)."""
-function _worker_identity_expr()
-    return _worker_production_identity_expr()
-end
-
 const _WORKER_ENV_SNAPSHOT_OVERRIDE = Ref{Any}(nothing)
+
+function _environment_verify_parent(project::AbstractString)::Dict{String, String}
+    return merge(run_identity(project), _runtime_distssh_snapshot())
+end
 
 function _identity_sysimage_mismatches(parent::AbstractDict, other::AbstractDict)::Vector{String}
     lines = String[]
@@ -344,13 +243,13 @@ end
 Same lines as [`go!`](@ref), [`ride!`](@ref), and [`drive!`](@ref). An empty
 vector matches. This does not throw, print, or read `DISTSSH_QUIET`.
 
-Julia version and commit (Julia build), the resolved sysimage path, and
-DistSSH* `pkg.*` versions from the Manifest are always compared. An empty or
-missing commit on either side is a mismatch. When `unsafe_heterogeneous` is
-true, only **byte-exact** SHA-256
+Julia version and commit (Julia build), the resolved sysimage path, loaded
+DistSSH* `loaded.*` (version, uuid, tree), and DistSSH* `pkg.*` versions from
+the Manifest are always compared. An empty or missing commit on either side is a
+mismatch. When `unsafe_heterogeneous` is true, only **byte-exact** SHA-256
 digests of the resolved Manifest and Project files (`manifest.sha256`,
-`project.sha256`) are waived; Julia build and `pkg.*` mismatches are still
-reported. CRLF and other byte differences count for digests.
+`project.sha256`) are waived; Julia build, `loaded.*`, and `pkg.*` mismatches
+are still reported. CRLF and other byte differences count for digests.
 
 When the parent has a non-empty `manifest.sha256`, the worker must supply the
 same digest or the check fails (unless `unsafe_heterogeneous`); an empty worker
@@ -364,6 +263,7 @@ function identity_mismatches(
     lines = String[]
     append!(lines, _identity_julia_build_mismatches(parent, other))
     append!(lines, _identity_sysimage_mismatches(parent, other))
+    append!(lines, _identity_loaded_distssh_mismatches(parent, other))
     append!(lines, _identity_pkg_mismatches(parent, other))
     unsafe_heterogeneous || append!(lines, _identity_env_file_mismatches(parent, other))
     return lines
@@ -534,6 +434,7 @@ function assert_controller_environment_for_verify!(project::AbstractString)
     assert_controller_manifest_for_environment_verify!(project)
     assert_controller_manifest_current!(project)
     assert_controller_default_sysimage!()
+    assert_controller_runtime_distssh_loaded!()
     return nothing
 end
 public assert_controller_environment_for_verify!
@@ -544,8 +445,8 @@ function _environment_mismatch_throw(lines::Vector{String})
         ErrorException(
             "environment mismatch between controller (master) and worker(s):\n  " *
                 join(lines, "\n  ") *
-                "\nwhy: every worker must match the controller (master) Julia build and DistSSH* versions; Manifest/Project byte digests must match unless you opt out.\n" *
-                "fix: align Julia and DistSSH* versions on every host, deploy matching Manifest/Project bytes with setup, or pass --unsafe-heterogeneous to waive only Manifest/Project digest checks (unverified; Julia build and DistSSH* versions must still match).",
+                "\nwhy: every worker must match the controller (master) Julia build, loaded DistSSH* version/uuid/tree, and Manifest pkg.*; Manifest/Project byte digests must match unless you opt out.\n" *
+                "fix: align Julia and the same DistSSHRun/DistSSHBase install on every host, deploy matching Manifest/Project bytes with setup, or pass --unsafe-heterogeneous to waive only Manifest/Project digest checks (unverified; loaded DistSSH* checks are never waived).",
         ),
     )
 end
@@ -571,7 +472,8 @@ function _fetch_worker_environment_snapshot(pid::Integer)
     if override isa Function
         return override(Int(pid))
     end
-    return remotecall_fetch(Core.eval, pid, Main, _worker_identity_expr())
+    require_queue = _distssh_queue_runtime_host()
+    return remotecall_fetch(Core.eval, pid, Main, _worker_identity_expr(; require_queue))
 end
 
 function _record_environment_verify_outcome!(waive_env::Bool)
@@ -585,7 +487,7 @@ end
 
 function verify_workers_match_job!(project::AbstractString)
     waive_env = unsafe_heterogeneous_active()
-    parent = run_identity(project)
+    parent = _environment_verify_parent(project)
     worker_ids = _live_owned_worker_ids()
     worker_lines = String[]
     mismatch_lock = ReentrantLock()
@@ -651,73 +553,6 @@ function _parse_identity_kv_lines(out::AbstractString)::Dict{String, String}
     return d
 end
 
-const _PROJECT_IDENTITY_EVAL = raw"""
-using SHA, TOML
-function env_sha256(path)
-    isfile(path) || return ""
-    return lowercase(bytes2hex(sha256(read(path))))
-end
-proj = Base.active_project()
-man = ""
-man_sha = ""
-pf = ""
-proj_sha = ""
-if proj !== nothing
-    pf = String(proj)
-    man0 = try
-        Base.project_file_manifest_path(pf)
-    catch
-        nothing
-    end
-    if man0 isa AbstractString && isfile(man0)
-        man = String(man0)
-        man_sha = env_sha256(man)
-    end
-    proj_sha = env_sha256(pf)
-end
-img_path = try
-    string(realpath(unsafe_string(Base.JLOptions().image_file)))
-catch
-    unsafe_string(Base.JLOptions().image_file)
-end
-ext = Sys.isapple() ? ".dylib" : Sys.iswindows() ? ".dll" : ".so"
-def_img = joinpath(Sys.BINDIR, "..", "lib", "julia", "sys" * ext)
-img_default = try
-    realpath(unsafe_string(Base.JLOptions().image_file)) == realpath(def_img)
-catch
-    false
-end
-print("version=", string(VERSION), '\n')
-print("commit=", string(Base.GIT_VERSION_INFO.commit), '\n')
-print("sysimage=", img_path, '\n')
-print("sysimage.default=", img_default, '\n')
-print("manifest=", man, '\n')
-print("manifest.sha256=", man_sha, '\n')
-print("project=", pf, '\n')
-print("project.sha256=", proj_sha, '\n')
-if !isempty(man) && isfile(man)
-    raw = TOML.parsefile(man)
-    if raw isa AbstractDict
-        deps = get(raw, "deps", nothing)
-        if deps isa AbstractDict
-            for name in ("DistSSHRun", "DistSSHKit", "DistSSHQueue", "DistSSHBase")
-                entry = get(deps, name, nothing)
-                tab = if entry isa AbstractDict
-                    entry
-                elseif entry isa AbstractVector && !isempty(entry) && first(entry) isa AbstractDict
-                    first(entry)
-                else
-                    nothing
-                end
-                tab === nothing && continue
-                v = get(tab, "version", nothing)
-                v isa AbstractString && print("pkg.", name, '=', String(v), '\n')
-            end
-        end
-    end
-end
-"""
-
 function _identity_probe_failure_message(
         host::AbstractString,
         code::Integer,
@@ -776,35 +611,15 @@ function _local_julia_sysimage_identity(bin::AbstractString)::Tuple{String, Stri
 end
 
 function _go_local_slot_identity(project::AbstractString, julia)::Dict{String, String}
-    parent = run_identity(project)
     spec = julia isa AbstractString ? String(julia) : nothing
     bin = pin_local_julia(spec)
-    v, c = try
-        _local_julia_version_commit(bin)
-    catch
-        ("", "")
+    require_queue = _distssh_queue_runtime_host()
+    try
+        return _probe_identity_dict(bin, project; ssh = false, require_queue = require_queue)
+    catch e
+        ident = Dict{String, String}("julia" => bin, "probe_error" => sprint(showerror, e))
+        return ident
     end
-    img, img_default = try
-        _local_julia_sysimage_identity(bin)
-    catch
-        ("", "")
-    end
-    local_id = Dict{String, String}(
-        "version" => v,
-        "commit" => c,
-        "julia" => bin,
-        "sysimage" => img,
-        "sysimage.default" => img_default,
-        "manifest" => get(parent, "manifest", ""),
-        "manifest.sha256" => get(parent, "manifest.sha256", ""),
-        "project" => get(parent, "project", ""),
-        "project.sha256" => get(parent, "project.sha256", ""),
-    )
-    for (k, val) in parent
-        startswith(k, "pkg.") || continue
-        local_id[k] = val
-    end
-    return local_id
 end
 
 function _local_julia_version_commit(bin::AbstractString)::Tuple{String, String}
@@ -832,17 +647,13 @@ function _go_remote_run_identity(
     pinned = pin_remote_julia(h, spec)
     pinned === nothing && throw(ArgumentError("Julia not found on remote host $(h)"))
     pq = _remote_julia_path_sh(pinned)
-    pr = _remote_shell_path_word(rp)
-    inner = string(
-        "JULIA_LOAD_PATH=",
-        posix_quote(_LAUNCH_LOAD_PATH),
-        " ",
-        pq,
-        " --startup-file=no --project=",
-        pr,
-        " -e ",
-        posix_quote(_PROJECT_IDENTITY_EVAL),
-    )
+    require_queue = _distssh_queue_runtime_host()
+    eval_src = _identity_eval_print_source(require_queue)
+    proj_path = String(strip(rp))
+    env_prefix = _identity_probe_shell_env_prefix(proj_path; ssh = true)
+    flags = _identity_probe_exeflag_strings(proj_path; local_cpu = false)
+    flag_words = join(posix_quote.(flags), " ")
+    inner = string(env_prefix, " ", pq, " ", flag_words, " -e ", posix_quote(eval_src))
     code, out, err = _remote_shell_status_parts(h, inner)
     ident = Dict{String, String}(
         "julia" => pinned,
@@ -883,7 +694,7 @@ function verify_go_slots_match_job!(
         julia = nothing,
     )
     waive_env = unsafe_heterogeneous_active()
-    parent = run_identity(project)
+    parent = _environment_verify_parent(project)
     slot_lines = String[]
     if any(s -> s.kind === :parent, slots)
         local_id = _go_local_slot_identity(project, julia)
