@@ -11,7 +11,7 @@ function tool_require(pkg::Base.PkgId)
         loaded.name == pkg.name && loaded.uuid != pkg.uuid && throw(
             ErrorException(
                 "tool_require: package name collision for $(pkg.name): " *
-                "loaded $(loaded.uuid), wanted $(pkg.uuid)",
+                    "loaded $(loaded.uuid), wanted $(pkg.uuid)",
             ),
         )
     end
