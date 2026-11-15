@@ -67,7 +67,7 @@ using Test
                 _kit_cli_cmd(
                     [
                         "ride", "-y", "-q", "--no-spi-check",
-                        "--output-dir", od, "parent:1", script,
+                        "--output-dir", od, "--local-workers", "1", script,
                     ]
                 ),
                 merge(env, Dict("DISTRIBUTED_PROJECT_ROOT" => _kit_root())),

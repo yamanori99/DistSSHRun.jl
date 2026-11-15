@@ -97,8 +97,8 @@ See flags with `julia -m DistSSHRun help go`.
 ```bash
 julia -m DistSSHRun setup check child:host1
 julia -m DistSSHRun go SCRIPT.jl
-julia -m DistSSHRun ride parent:2 SCRIPT.jl
-julia -m DistSSHRun drive parent:2 SCRIPT.jl
+julia -m DistSSHRun ride --local-workers 2 SCRIPT.jl
+julia -m DistSSHRun drive --local-workers 2 SCRIPT.jl
 julia -m DistSSHRun hostinfo
 julia -m DistSSHRun pool
 ```

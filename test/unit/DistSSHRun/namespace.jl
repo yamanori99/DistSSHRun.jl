@@ -7,7 +7,7 @@ using Test
 
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"CachePush\"\n")
-        session = DistSSHRun.DistSSHSession(project = proj, workers = ["parent:1"])
+        session = DistSSHRun.DistSSHSession(project = proj, workers = String[], local_workers = 1)
         @test_throws ArgumentError DistSSHRun.push_cache!(session)
         empty = DistSSHRun.DistSSHSession(project = proj, workers = ["host1"])
         result = DistSSHRun.push_cache!(empty)

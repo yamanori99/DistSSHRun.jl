@@ -157,9 +157,15 @@ using Test
     end
     withenv("DISTRIBUTED_SSH_OPTS" => "-F /tmp/ssh_config") do
         opts = DistSSHBase.ssh_opts()
+        @test opts[1:2] == ["-F", "/tmp/ssh_config"]
         @test "BatchMode=yes" in opts
-        @test "-F" in opts
-        @test "/tmp/ssh_config" in opts
+    end
+    withenv("DISTRIBUTED_SSH_OPTS" => "-o ConnectTimeout=99") do
+        opts = DistSSHBase.build_ssh_opts()
+        @test first(opts) == "-o"
+        @test opts[2] == "ConnectTimeout=99"
+        @test count(kv -> kv == "ConnectTimeout=10", opts) == 0
+        @test "BatchMode=yes" in opts
     end
     withenv("DISTRIBUTED_SSH_OPTS" => "-o BatchMode=no") do
         @test_throws ArgumentError DistSSHBase.build_ssh_opts()

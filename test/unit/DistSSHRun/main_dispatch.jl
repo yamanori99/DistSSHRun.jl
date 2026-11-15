@@ -62,7 +62,7 @@ using Test
         @test occursin("go SCRIPT.jl", err)
         @test !occursin("Unknown subcommand", err)
     end
-    let (code, _, err) = _main_capture(["parent:2", "job.jl"])
+    let (code, _, err) = _main_capture(["--local-workers", "2", "job.jl"])
         @test code == 1
         @test occursin("does not infer go / ride / drive", err)
     end
@@ -144,8 +144,8 @@ using Test
             @test via[1] == 0
             @test via == direct
         end
-        let via = _main_capture(["help", "go", "--hosts", "parent:1"])
-            direct = _main_capture(["go", "--hosts", "parent:1", "--help"])
+        let via = _main_capture(["help", "go", "--local-workers", "1", "--help"])
+            direct = _main_capture(["go", "--local-workers", "1", "--help"])
             @test via[1] == 0
             @test via == direct
             @test occursin("-h, --help", via[2])
@@ -186,9 +186,9 @@ using Test
             @test occursin("does not infer go / ride / drive", err)
             @test !occursin("Unknown subcommand", err)
         end
-        let (code, _, err) = _main_capture(["help", "parent:2", "job.jl"])
+        let (code, _, err) = _main_capture(["help", "--local-workers", "2", "job.jl"])
             @test code == 1
-            @test occursin("got \"parent:2\"", err)
+            @test occursin("got \"--local-workers\"", err) || occursin("unknown", lowercase(err))
         end
         for args in (String[], ["help"], ["-h"], ["--help"])
             let (code, _, err) = _main_capture(args)

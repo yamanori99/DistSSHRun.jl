@@ -1,6 +1,6 @@
 using Test
 
-# Oracle: `go!(…, "parent:2")` and `go!(…; repeat=2)` run two local slots
+# Oracle: `go!(…; local_workers = 2)` and `go!(…; repeat=2)` run two local slots
 # concurrently (slot t0.txt timestamps within 0.45s). Does not cover SSH,
 # CLI `go`, or slot-plan math (those live in unit/DistSSHRun/go.jl).
 
@@ -19,8 +19,7 @@ using Test
         )
         t0 = time()
         result = DistSSHRun.go!(
-            script,
-            "parent:2";
+            script; local_workers = 2,
             project = proj,
             quiet = true,
             yes = true,
@@ -34,7 +33,7 @@ using Test
     end
 end
 
-@testset "repeat=2 matches parent:2 (local overlap)" begin
+@testset "repeat=2 matches --local-workers 2 (local overlap)" begin
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"GoRepeatOverlap\"\n")
         _sync_test_project_manifest!(proj)
@@ -78,8 +77,7 @@ end
         )
         custom = joinpath(proj, "runs", "custom")
         result = DistSSHRun.go!(
-            script,
-            "parent:1";
+            script; local_workers = 1,
             project = proj,
             output_dir = custom,
             quiet = true,
@@ -106,8 +104,7 @@ end
         )
         custom = joinpath(proj, "runs", "skip_collect")
         result = DistSSHRun.go!(
-            script,
-            "parent:1";
+            script; local_workers = 1,
             project = proj,
             output_dir = custom,
             collect_spec = false,

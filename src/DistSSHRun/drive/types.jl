@@ -131,9 +131,11 @@ end
 function require_counted_placement_tokens(
         tokens::AbstractVector{<:AbstractString};
         surface::Symbol = :api,
+        local_workers::Union{Nothing, Integer} = nothing,
     )::Nothing
-    isempty(tokens) && return nothing
-    parsed = parse_worker_tokens(tokens; local_workers = 0)
+    isempty(tokens) && local_workers === nothing && return nothing
+    lw = local_workers === nothing ? 0 : Int(local_workers)
+    parsed = parse_worker_tokens(tokens; local_workers = lw)
     worker_tokens_fully_specified(parsed) && return nothing
     throw(ArgumentError(explain_bare_placement_tokens(tokens; surface = surface)))
 end
@@ -381,11 +383,13 @@ mutable struct PipelineConfig
     log_dir::Union{Nothing, String}
     package::Union{Nothing, String}
     julia::Union{Nothing, String}
+    local_workers::Union{Nothing, Int}
 end
 
 function PipelineConfig(;
         project::AbstractString = pwd(),
         workers::AbstractVector{<:AbstractString} = String[],
+        local_workers::Union{Nothing, Integer} = nothing,
         remote::Union{Nothing, AbstractString} = nothing,
         hosts_file::Union{Nothing, AbstractString} = nothing,
         quiet::Bool = false,
@@ -433,6 +437,7 @@ function PipelineConfig(;
         ld,
         pkg,
         jl,
+        local_workers === nothing ? nothing : Int(local_workers),
     )
 end
 

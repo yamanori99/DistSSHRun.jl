@@ -84,7 +84,10 @@ function drive!(
                 return _with_session_remote_env!(session) do
                     resolved = plan
                     if resolved === nothing && !isempty(session.tokens)
-                        resolved = worker_plan_from_tokens(session.tokens)
+                        resolved = worker_plan_from_tokens(
+                            session.tokens;
+                            local_workers = session.cli_session.local_workers,
+                        )
                     end
                     parsed = drive_parsed_from_session(
                         session,
@@ -143,6 +146,7 @@ function drive!(
         project::AbstractString = pwd(),
         remote::Union{Nothing, AbstractString} = nothing,
         hosts_file::Union{Nothing, AbstractString} = nothing,
+        local_workers::Union{Nothing, Integer} = nothing,
         quiet::Bool = false,
         verbosity::Union{Nothing, Symbol} = nothing,
         yes::Bool = true,
@@ -151,6 +155,7 @@ function drive!(
     session = DistSSHSession(
         project = project,
         workers = workers,
+        local_workers = local_workers,
         remote = remote,
         hosts_file = hosts_file,
         quiet = quiet,

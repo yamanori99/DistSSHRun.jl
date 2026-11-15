@@ -51,8 +51,9 @@ using Test
         @test_throws ArgumentError parse_go_args(["user@lab", "job.jl"])
         @test_throws ArgumentError parse_go_args(["parent", "job.jl"])
         @test_throws ArgumentError parse_go_args(["host1", "job.jl"])
-        let r = parse_go_args(["parent:4", "1*host1", "2*host2", "job.jl"])
-            @test DistSSHRun.host_tokens(r; kind = :go) == ["parent:4", "1*host1", "2*host2"]
+        let r = parse_go_args(["--local-workers", "4", "1*host1", "2*host2", "job.jl"])
+            @test r.cli_session.local_workers == 4
+            @test DistSSHRun.host_tokens(r; kind = :go) == ["1*host1", "2*host2"]
         end
         let r = parse_go_args(["2*local", "1*h1", "job.jl", "4"])
             @test r.hosts == ["2*local", "1*h1"]
@@ -73,7 +74,7 @@ using Test
         let r = parse_go_args(["--julia", "auto", "job.jl"])
             @test r.julia === nothing
         end
-        let r = parse_go_args(["--unsafe-skip-env-digests", "parent:1", "job.jl"])
+        let r = parse_go_args(["--unsafe-skip-env-digests", "--local-workers", "1", "job.jl"])
             @test r.unsafe_skip_env_digests
         end
         err = try
@@ -249,26 +250,26 @@ using Test
     end
 
     @testset "deploy-root" begin
-        let r = parse_go_args(["--deploy-root", "/tmp/my dir", "parent:1", "job.jl"])
+        let r = parse_go_args(["--deploy-root", "/tmp/my dir", "--local-workers", "1", "job.jl"])
             @test r.deploy_root == "/tmp/my dir"
             @test r.script_path == "job.jl"
         end
-        let r = parse_go_args(["--deploy-root", "/tmp/App", "--", "parent:1", "job.jl", "--n", "1"])
+        let r = parse_go_args(["--deploy-root", "/tmp/App", "--", "--local-workers", "1", "job.jl", "--n", "1"])
             @test r.deploy_root == "/tmp/App"
             @test r.script_args == ["--n", "1"]
         end
-        let r = parse_go_args(["parent:1", "job.jl", "--deploy-root", "/tmp/swallowed"])
+        let r = parse_go_args(["--local-workers", "1", "job.jl", "--deploy-root", "/tmp/swallowed"])
             @test r.deploy_root === nothing
             @test r.script_args == ["--deploy-root", "/tmp/swallowed"]
         end
-        let r = parse_go_args(["--", "parent:1", "job.jl", "--ship-tree"])
+        let r = parse_go_args(["--", "--local-workers", "1", "job.jl", "--ship-tree"])
             @test r.script_args == ["--ship-tree"]
         end
-        let r = parse_go_args(["parent:1", "job.jl", "--ship-tree"])
+        let r = parse_go_args(["--local-workers", "1", "job.jl", "--ship-tree"])
             @test r.script_args == ["--ship-tree"]
         end
         err_after = try
-            parse_go_args(["--", "--ship-tree", "parent:1", "job.jl"])
+            parse_go_args(["--", "--ship-tree", "--local-workers", "1", "job.jl"])
             error("expected ArgumentError")
         catch e
             e
@@ -277,7 +278,7 @@ using Test
         @test occursin("unknown go option: --ship-tree", err_after.msg)
         @test !occursin("was removed", err_after.msg)
         err = try
-            parse_go_args(["--remote-path", "/tmp/App", "parent:1", "job.jl"])
+            parse_go_args(["--remote-path", "/tmp/App", "--local-workers", "1", "job.jl"])
             error("expected ArgumentError")
         catch e
             e
@@ -285,7 +286,7 @@ using Test
         @test err isa ArgumentError
         @test occursin("go --remote-path was removed", err.msg)
         @test occursin("--deploy-root", err.msg)
-        @test_throws ArgumentError parse_go_args(["--remote-path=/tmp/App", "parent:1", "job.jl"])
+        @test_throws ArgumentError parse_go_args(["--remote-path=/tmp/App", "--local-workers", "1", "job.jl"])
         @test_throws ArgumentError parse_go_args(["--deploy-root"])
     end
 

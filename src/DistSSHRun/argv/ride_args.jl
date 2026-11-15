@@ -184,7 +184,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
     append!(hosts, host_tokens)
     append_kit_host_sources!(hosts, cli_session; keep_counts = true)
     for h in hosts
-        parse_placement_token(h)
+        DistSSHBase.parse_machine_token(h)
     end
     if julia_exe === nothing
         env_val = get(ENV, "JULIA_DISTRIBUTED_EXE", "auto")
@@ -194,7 +194,9 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
     end
     apply_shared_cli_flags!(cli_session)
     if script_path !== nothing
-        require_counted_placement_tokens(hosts; surface = :cli)
+        require_counted_placement_tokens(
+            hosts; surface = :cli, local_workers = cli_session.local_workers,
+        )
     end
     return _ride_parsed(;
         help = false,

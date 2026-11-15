@@ -441,9 +441,16 @@ function _ride_push_prelude!(ex)
     return nothing
 end
 
-function _ride_resolve_plan(tokens::Vector{String})::WorkerPlan
-    isempty(tokens) && return WorkerPlan(1, Dict{String, Int}())
-    return worker_plan_from_tokens(tokens)
+function _ride_resolve_plan(
+        tokens::Vector{String};
+        local_workers::Union{Nothing, Integer} = nothing,
+    )::WorkerPlan
+    lw = local_workers === nothing ? nothing : Int(local_workers)
+    if isempty(tokens)
+        n = something(lw, 1)
+        return WorkerPlan(n, Dict{String, Int}())
+    end
+    return worker_plan_from_tokens(tokens; local_workers = lw)
 end
 
 function _ride_activate_project!(project::AbstractString)
@@ -654,6 +661,7 @@ function ride!(
         remote::Union{Nothing, AbstractString} = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
         require_all_hosts::Bool = true,
+        local_workers::Union{Nothing, Integer} = nothing,
         hint_surface::Symbol = :api,
         unsafe_skip_env_digests = false,
         unsafe_expose_port::Bool = false,
@@ -687,7 +695,8 @@ function ride!(
         return with_run_unsafe_options!(cfg) do
             return _ride_run!(
                 path, julia_s, tokens, args, spi_check, output_dir, project, julia,
-                remote, validated_run_id, require_all_hosts, hint_surface, inherited_run,
+                remote, validated_run_id, require_all_hosts, local_workers, hint_surface,
+                inherited_run,
             )
         end
     finally
@@ -708,6 +717,7 @@ function _ride_run!(
         remote,
         run_id::Union{Nothing, String},
         require_all_hosts,
+        local_workers::Union{Nothing, Integer},
         hint_surface::Symbol,
         inherited_run::Bool,
     )
@@ -719,7 +729,7 @@ function _ride_run!(
     _clear_last_ship!()
     tok = String[String(t) for t in tokens]
     wp = try
-        _ride_resolve_plan(tok)
+        _ride_resolve_plan(tok; local_workers = local_workers)
     catch e
         e isa ArgumentError && return RideResult(
             false, path, 0, nothing, sprint(showerror, e), julia_s, nothing, run_dir,

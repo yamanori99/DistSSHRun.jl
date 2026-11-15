@@ -560,7 +560,7 @@ end
                 result = redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
                         return DistSSHRun.go!(
-                            script, ["parent:1"];
+                            script, String[]; local_workers = 1,
                             project = proj, quiet = true, yes = true,
                         )
                     end
@@ -750,7 +750,7 @@ end
             try
                 DistSSHRun.set_kit_verbosity!(:quiet)
                 result = DistSSHRun.drive!(
-                    script, ["parent:1"];
+                    script, String[]; local_workers = 1,
                     project = proj,
                     yes = true,
                     enable_log = false,
@@ -774,7 +774,7 @@ end
             try
                 DistSSHRun.set_kit_verbosity!(:quiet)
                 result = DistSSHRun.ride!(
-                    script, ["parent:1"];
+                    script, String[]; local_workers = 1,
                     project = proj,
                     unsafe_skip_env_digests = true,
                 )

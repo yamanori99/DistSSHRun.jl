@@ -1,7 +1,7 @@
 #!/usr/bin/env julia
 # Plain script: map and write CSV (pair with map_echo.jl).
 #
-#   julia --project=. -m DistSSHRun ride parent:2 demos/ride/map_file.jl
+#   julia --project=. -m DistSSHRun ride --local-workers 2 demos/ride/map_file.jl
 
 function work(x)
     return x * x

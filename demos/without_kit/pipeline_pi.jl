@@ -9,7 +9,7 @@
 #
 # Same job via CLI:
 #
-#   julia --project=. -m DistSSHRun go parent:2 distsshkit_demos/without_kit/pi_file.jl --n 5000
+#   julia --project=. -m DistSSHRun go --local-workers 2 distsshkit_demos/without_kit/pi_file.jl --n 5000
 
 import TOML
 
@@ -34,7 +34,7 @@ script = joinpath(@__DIR__, "pi_file.jl")
 project = @__DIR__
 
 # Local-only: two concurrent full-job slots on this machine (not Distributed workers).
-result = go!(script, "parent:2"; args = ARGS, project = project)
+result = go!(script; local_workers = 2, args = ARGS, project = project)
 
 # First-time remotes: setup!, then go!.
 #

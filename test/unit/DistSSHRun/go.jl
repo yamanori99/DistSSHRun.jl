@@ -14,7 +14,7 @@ using Dates
         end
         # `--repeat` pool helper: omit `:N` stays uncapped. go! / parse_go_args
         # reject the same token via `require_counted_placement_tokens`.
-        let s = DistSSHRun._go_plan_slots(["parent"]; total = 1)
+        let s = DistSSHRun._go_plan_slots(String[]; total = 1, local_workers = 1)
             @test length(s) == 1
             @test s[1].kind === :parent
             @test s[1].label == "parent"
@@ -31,11 +31,11 @@ using Dates
             @test s[2].label == "user@lab2-1"
             @test s[3].label == "user@lab2-2"
         end
-        let s = DistSSHRun._go_plan_slots(["parent:0", "h1", "h2"])
+        let s = DistSSHRun._go_plan_slots(["h1", "h2"]; local_workers = 0)
             @test length(s) == 2
             @test all(x -> x.kind === :child, s)
         end
-        @test_throws ArgumentError DistSSHRun._go_plan_slots(["parent:0"])
+        @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; local_workers = 0)
         @test_throws ArgumentError DistSSHRun._go_plan_slots(["0*local"])
         @test_throws ArgumentError DistSSHRun._go_plan_slots(["local:-1"])
         @test DistSSHRun._go_sanitize_label("user@lab") == "user@lab"
@@ -53,15 +53,8 @@ using Dates
         end
         @test DistSSHRun._go_sanitize_label("a/b c") == "a_b_c"
         @test DistSSHRun._go_sanitize_label("***") == "_"
-        err = try
-            DistSSHRun._go_plan_slots(["lacal:0"])
-            nothing
-        catch e
-            e
-        end
-        @test err isa ArgumentError
-        @test occursin("NAME", sprint(showerror, err))
-        let s = DistSSHRun._go_plan_slots(["parent:2"])
+        @test_throws ArgumentError DistSSHRun.require_counted_placement_tokens(["lacal"])
+        let s = DistSSHRun._go_plan_slots(String[]; local_workers = 2)
             @test length(s) == 2
             @test s[1].label == "parent-1"
             @test s[2].label == "parent-2"
@@ -72,10 +65,10 @@ using Dates
             @test s[1].label == "parent-1"
             @test s[4].label == "parent-4"
         end
-        let s = DistSSHRun._go_plan_slots(["parent:10"]; total = 3)
+        let s = DistSSHRun._go_plan_slots(String[]; local_workers = 10, total = 3)
             @test length(s) == 3
         end
-        @test_throws ArgumentError DistSSHRun._go_plan_slots(["parent:2"]; total = 3)
+        @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; local_workers = 2, total = 3)
         let s = DistSSHRun._go_plan_slots(["h1"]; total = 2)
             @test length(s) == 2
             @test all(x -> x.kind === :child && x.host == "h1", s)
@@ -88,17 +81,17 @@ using Dates
             @test count(x -> x.host == "a", s) == 2
             @test count(x -> x.host == "b", s) == 1
         end
-        let s = DistSSHRun._go_plan_slots(["parent:1", "h1"]; total = 4)
+        let s = DistSSHRun._go_plan_slots(["h1"]; local_workers = 1, total = 4)
             @test count(x -> x.kind === :parent, s) == 1
             @test count(x -> x.host == "h1", s) == 3
         end
-        let pool = DistSSHRun._go_repeat_pool(["parent:1", "h1"])
+        let pool = DistSSHRun._go_repeat_pool(["h1"]; local_workers = 1)
             @test length(pool) == 2
             @test pool[1].role === :parent && pool[1].name == "parent"
             @test pool[2].role === :child && pool[2].name == "h1"
         end
         @test_throws ArgumentError DistSSHRun._go_plan_slots(
-            ["parent:1", "1*parent"]; total = 2,
+            ["1*h1", "1*parent"]; local_workers = 1, total = 2,
         )
         @test_throws ArgumentError DistSSHRun._go_plan_slots(["1*h1"]; total = 2)
         @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; total = 0)
@@ -291,8 +284,7 @@ using Dates
             write(script, "nothing\n")
             err = try
                 DistSSHRun.go!(
-                    script,
-                    ["parent:1"];
+                    script, String[]; local_workers = 1,
                     project = proj,
                     output_dir = joinpath(proj, "a"),
                     collect_spec = joinpath(proj, "b"),
@@ -322,7 +314,7 @@ using Dates
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
             err = try
-                DistSSHRun.go!(script, ["parent:1"]; project = proj, quiet = true, yes = true)
+                DistSSHRun.go!(script, String[]; local_workers = 1, project = proj, quiet = true, yes = true)
                 nothing
             catch e
                 e
@@ -500,7 +492,7 @@ using Dates
             with_kit_verbosity(:verbose) do
                 out, _ = _capture_stdio() do _, _
                     DistSSHRun.go!(
-                        script, ["parent:1"];
+                        script, String[]; local_workers = 1,
                         project = proj, quiet = true, yes = true,
                     )
                 end
@@ -508,9 +500,9 @@ using Dates
             end
             r = redirect_stdout(devnull) do
                 DistSSHRun.go!(
-                    script, ["parent:1"];
+                    script, String[]; local_workers = 1,
                     project = proj, quiet = true, yes = true,
-                    original_args = ["parent:1", "job.jl"],
+                    original_args = ["--local-workers", "1", "job.jl"],
                 )
             end
             @test r.ok
@@ -547,7 +539,7 @@ using Dates
             withenv("DISTSSH_HOSTS_FILE" => hf) do
                 redirect_stdout(devnull) do
                     r = DistSSHRun.go!(
-                        script, ["parent:1"];
+                        script, String[]; local_workers = 1,
                         project = proj, quiet = true, yes = true,
                     )
                     @test r.ok
@@ -576,7 +568,7 @@ using Dates
             r = redirect_stdout(devnull) do
                 redirect_stderr(devnull) do
                     DistSSHRun.go!(
-                        script, ["parent:2"];
+                        script, String[]; local_workers = 2,
                         project = proj, quiet = true, yes = true,
                     )
                 end
@@ -618,7 +610,7 @@ using Dates
                 redirect_stderr(err_io) do
                     redirect_stdout(devnull) do
                         DistSSHRun.go!(
-                            script, ["parent:1"];
+                            script, String[]; local_workers = 1,
                             project = proj, quiet = true, yes = true,
                         )
                     end
@@ -805,14 +797,14 @@ using Dates
             write(script, "println(\"SNAPSHOT_SIBLING_OK\")\n")
             plain = redirect_stdout(devnull) do
                 DistSSHRun.go!(
-                    script, ["parent:1"];
+                    script, String[]; local_workers = 1,
                     project = app, yes = true, quiet = true,
                 )
             end
             @test plain.ok
             result = redirect_stdout(devnull) do
                 DistSSHRun.go!(
-                    script, ["parent:1"];
+                    script, String[]; local_workers = 1,
                     project = app,
                     run_id = "20260101T000000Z-aaaaaa",
                     yes = true,

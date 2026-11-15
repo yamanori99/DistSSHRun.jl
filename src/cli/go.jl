@@ -69,6 +69,7 @@ function go_main()::Cint
         go!(
             parsed.script_path,
             host_tokens(parsed; kind = :go);
+            local_workers = parsed.cli_session.local_workers,
             project = project_root,
             quiet = kw[:quiet],
             verbosity = kw[:verbosity],

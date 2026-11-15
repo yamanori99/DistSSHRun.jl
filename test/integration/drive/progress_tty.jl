@@ -278,13 +278,13 @@ using Test
             ride_ok = _kit_cli_cmd(
                 [
                     "ride", "-y", "--no-spi-check",
-                    "--output-dir", od_ok, "parent:1", ok_script,
+                    "--output-dir", od_ok, "--local-workers", "1", ok_script,
                 ]
             )
             ride_fail = _kit_cli_cmd(
                 [
                     "ride", "-y", "--no-spi-check",
-                    "--output-dir", od_fail, "parent:1", fail_script,
+                    "--output-dir", od_fail, "--local-workers", "1", fail_script,
                 ]
             )
 

@@ -82,8 +82,8 @@ using Test
         write(go_ok, "println(\"go-ok-marker\")\n")
         go_fail = joinpath(go_proj, "fail.jl")
         write(go_fail, "println(\"go-fail-marker\")\nexit(3)\n")
-        go_ok_cmd = _kit_cli_cmd(["go", "-y", "parent:1", go_ok])
-        go_fail_cmd = _kit_cli_cmd(["go", "-y", "parent:1", go_fail])
+        go_ok_cmd = _kit_cli_cmd(["go", "-y", "--local-workers", "1", go_ok])
+        go_fail_cmd = _kit_cli_cmd(["go", "-y", "--local-workers", "1", go_fail])
 
         empty_path = mktempdir()
         runner = joinpath(dir, "runner.sh")

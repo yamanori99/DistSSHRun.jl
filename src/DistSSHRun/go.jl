@@ -138,27 +138,70 @@ struct GoRepeatHost
     cap::Union{Nothing, Int}
 end
 
-function _go_repeat_pool(
+function _go_local_slot_count(
         host_tokens::AbstractVector{<:AbstractString},
-    )::Vector{GoRepeatHost}
-    if isempty(host_tokens)
-        return [GoRepeatHost(:parent, PARENT_HOST_NAME, nothing)]
+        local_workers::Union{Nothing, Integer},
+    )::Int
+    if local_workers !== nothing
+        n = Int(local_workers)
+        n < 0 && throw(ArgumentError("--local-workers must be >= 0, got $n"))
+        return n
     end
+    isempty(host_tokens) && return 1
+    return 0
+end
+
+function _go_parent_slot_labels(parent_count::Int)::Vector{String}
+    parent_count == 0 && return String[]
+    base = PARENT_HOST_NAME
+    parent_count == 1 && return [base]
+    return ["$base-$i" for i in 1:parent_count]
+end
+
+function _go_append_child_slots!(slots::Vector{GoSlot}, remote_runs::Vector{String})
+    counts = Dict{String, Int}()
+    totals = Dict{String, Int}()
+    for h in remote_runs
+        totals[h] = get(totals, h, 0) + 1
+    end
+    for h in remote_runs
+        counts[h] = get(counts, h, 0) + 1
+        i = counts[h]
+        nlab = totals[h]
+        base = _go_sanitize_label(h)
+        label = nlab == 1 ? base : "$base-$i"
+        push!(slots, GoSlot(:child, h, label))
+    end
+    return nothing
+end
+
+function _go_repeat_pool(
+        host_tokens::AbstractVector{<:AbstractString};
+        local_workers::Union{Nothing, Integer} = nothing,
+    )::Vector{GoRepeatHost}
     order = Tuple{Symbol, String}[]
     caps = Dict{Tuple{Symbol, String}, Union{Nothing, Int}}()
+    parent_key = (:parent, PARENT_HOST_NAME)
+    if isempty(host_tokens)
+        cap = local_workers === nothing ? nothing : Int(local_workers)
+        return [GoRepeatHost(:parent, PARENT_HOST_NAME, cap)]
+    end
+    if local_workers !== nothing
+        lw = Int(local_workers)
+        lw < 0 && throw(ArgumentError("--local-workers must be >= 0, got $lw"))
+        if lw > 0
+            caps[parent_key] = lw
+            push!(order, parent_key)
+        end
+    end
     for raw in host_tokens
         p = parse_placement_token(String(raw))
+        p.role === :parent &&
+            throw(ArgumentError("$(repr(raw)): local workers use --local-workers, not tokens"))
         key = (p.role, p.name)
         cap = p.n
-        if p.role === :parent
-            cap === nothing || cap >= 0 || throw(
-                ArgumentError(
-                    "parent slot count must be >= 0, got $cap in $(repr(raw))",
-                )
-            )
-        elseif something(cap, 1) < 1
+        something(cap, 1) < 1 &&
             throw(ArgumentError("slot count must be >= 1, got $(something(cap, 1)) in $(repr(raw))"))
-        end
         if !haskey(caps, key)
             push!(order, key)
             caps[key] = cap
@@ -175,115 +218,95 @@ function _go_repeat_pool(
     return pool
 end
 
-function _go_tokens_for_repeat(
-        host_tokens::AbstractVector{<:AbstractString},
-        n::Int,
-    )::Vector{String}
-    pool = _go_repeat_pool(host_tokens)
-    isempty(pool) && throw(
-        ArgumentError(
-            "no execution slots: list children after parent:0, or omit parent to run on the Kit side",
-        )
-    )
-    assigned = zeros(Int, length(pool))
-    start = 1
-    nh = length(pool)
-    for _ in 1:n
-        placed = false
-        for off in 0:(nh - 1)
-            j = mod1(start + off, nh)
-            cap = pool[j].cap
-            if cap === nothing || assigned[j] < cap
-                assigned[j] += 1
-                start = mod1(j + 1, nh)
-                placed = true
-                break
-            end
-        end
-        placed || throw(
-            ArgumentError(
-                "repeat $n exceeds per-host caps (`parent:N` / `NAME:N`)",
-            )
-        )
-    end
-    tokens = String[]
+function _go_slots_from_repeat(
+        pool::Vector{GoRepeatHost},
+        assigned::AbstractVector{<:Integer},
+    )::Vector{GoSlot}
+    slots = GoSlot[]
     for (h, k) in zip(pool, assigned)
         k == 0 && continue
         if h.role === :parent
-            push!(tokens, format_placement_token(:parent, PARENT_HOST_NAME, k))
+            labels = _go_parent_slot_labels(k)
+            for label in labels
+                push!(slots, GoSlot(:parent, nothing, label))
+            end
         else
-            push!(tokens, format_placement_token(:child, h.name, k))
+            remote_runs = fill(h.name, k)
+            _go_append_child_slots!(slots, remote_runs)
         end
     end
-    return tokens
+    return slots
 end
 
 function _go_plan_slots(
         host_tokens::AbstractVector{<:AbstractString};
         total::Union{Nothing, Integer} = nothing,
+        local_workers::Union{Nothing, Integer} = nothing,
     )::Vector{GoSlot}
     if total !== nothing
         n = Int(total)
         (total isa Bool || n < 1) && throw(ArgumentError("go repeat must be >= 1, got $total"))
-        return _go_plan_slots(_go_tokens_for_repeat(host_tokens, n))
+        pool = _go_repeat_pool(host_tokens; local_workers = local_workers)
+        isempty(pool) && throw(
+            ArgumentError(
+                "no execution slots: list remote hosts or set --local-workers, or omit parents with --local-workers 0",
+            )
+        )
+        assigned = zeros(Int, length(pool))
+        start = 1
+        nh = length(pool)
+        for _ in 1:n
+            placed = false
+            for off in 0:(nh - 1)
+                j = mod1(start + off, nh)
+                cap = pool[j].cap
+                if cap === nothing || assigned[j] < cap
+                    assigned[j] += 1
+                    start = mod1(j + 1, nh)
+                    placed = true
+                    break
+                end
+            end
+            placed || throw(
+                ArgumentError(
+                    "repeat $n exceeds per-host caps (`--local-workers` / `N*host`)",
+                )
+            )
+        end
+        return _go_slots_from_repeat(pool, assigned)
     end
-    isempty(host_tokens) && return [GoSlot(:parent, nothing, PARENT_HOST_NAME)]
-
-    parent_count = 0
+    parent_count = _go_local_slot_count(host_tokens, local_workers)
     parent_label_base = PARENT_HOST_NAME
-    remote_runs = Vector{String}() # host repeated per run
+    remote_runs = Vector{String}()
     for raw in host_tokens
         p = parse_placement_token(String(raw))
         n = something(p.n, 1)
-        if p.role === :parent
-            n < 0 &&
-                throw(ArgumentError("parent slot count must be >= 0, got $n in $(repr(raw))"))
-            parent_count += n
-        elseif n < 1
+        if n < 1
             throw(ArgumentError("slot count must be >= 1, got $n in $(repr(raw))"))
-        else
-            for _ in 1:n
-                push!(remote_runs, p.name)
-            end
+        end
+        for _ in 1:n
+            push!(remote_runs, p.name)
         end
     end
-
     parent_count == 0 && isempty(remote_runs) &&
         throw(
         ArgumentError(
-            "no execution slots: list children after parent:0, or omit parent to run on the Kit side",
+            "no execution slots: list remote hosts or set --local-workers, or use --local-workers 0 with remotes",
         )
     )
-
     slots = GoSlot[]
     if parent_count == 1 && isempty(remote_runs)
         push!(slots, GoSlot(:parent, nothing, parent_label_base))
     else
-        for i in 1:parent_count
-            label = parent_count == 1 ? parent_label_base : "$(parent_label_base)-$i"
+        for label in _go_parent_slot_labels(parent_count)
             push!(slots, GoSlot(:parent, nothing, label))
         end
     end
-
-    # Count runs per host for labels
-    counts = Dict{String, Int}()
-    totals = Dict{String, Int}()
-    for h in remote_runs
-        totals[h] = get(totals, h, 0) + 1
-    end
-    for h in remote_runs
-        counts[h] = get(counts, h, 0) + 1
-        i = counts[h]
-        nlab = totals[h]
-        base = _go_sanitize_label(h)
-        label = nlab == 1 ? base : "$base-$i"
-        push!(slots, GoSlot(:child, h, label))
-    end
+    _go_append_child_slots!(slots, remote_runs)
     return slots
 end
 
 function placement_tokens_from_go_slots(slots::Vector{GoSlot})::Vector{String}
-    parent_n = count(s -> s.kind === :parent, slots)
     order = String[]
     counts = Dict{String, Int}()
     for s in slots
@@ -297,8 +320,6 @@ function placement_tokens_from_go_slots(slots::Vector{GoSlot})::Vector{String}
         counts[h] += 1
     end
     out = String[]
-    parent_n > 0 &&
-        push!(out, format_placement_token(:parent, PARENT_HOST_NAME, parent_n))
     for h in order
         push!(out, format_placement_token(:child, h, counts[h]))
     end
@@ -1041,6 +1062,7 @@ function go!(
         sync::Union{Symbol, Bool, Nothing} = nothing,
         allow_external_symlinks::Bool = false,
         allow_mismatch = nothing,
+        local_workers::Union{Nothing, Integer} = nothing,
     )::GoResult
     _reject_removed_allow_mismatch!(allow_mismatch)
     _reject_run_transfer_kw!("go!", sync; surface = hint_surface)
@@ -1097,6 +1119,7 @@ function go!(
                 repeat,
                 inherited_run,
                 snap_arg,
+                local_workers,
             )
         end
     finally
@@ -1124,6 +1147,7 @@ function _go_run!(
         repeat,
         inherited_run::Bool,
         snap_arg::Union{Nothing, String} = nothing,
+        local_workers::Union{Nothing, Integer} = nothing,
     )
     anchor = something(path_anchor, proj)
 
@@ -1132,7 +1156,7 @@ function _go_run!(
     # CLI / [`host_tokens`](@ref) already merged `--hosts-file` / ENV into
     # `workers`. Re-reading `DISTSSH_HOSTS_FILE` would duplicate slots.
     # API `go!("job.jl")` with empty `workers` still honors the ENV file.
-    if hf === nothing && isempty(tokens)
+    if hf === nothing && isempty(tokens) && local_workers === nothing
         env_hf = strip(get(ENV, "DISTSSH_HOSTS_FILE", ""))
         !isempty(env_hf) && (hf = env_hf)
     end
@@ -1142,9 +1166,11 @@ function _go_run!(
         end
     end
     if repeat === nothing
-        require_counted_placement_tokens(tokens; surface = hint_surface)
+        require_counted_placement_tokens(
+            tokens; surface = hint_surface, local_workers = local_workers,
+        )
     end
-    slots = _go_plan_slots(tokens; total = repeat)
+    slots = _go_plan_slots(tokens; total = repeat, local_workers = local_workers)
     place = placement_tokens_from_go_slots(slots)
     if output_dir !== nothing && collect_spec isa AbstractString
         throw(

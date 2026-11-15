@@ -68,6 +68,7 @@ function kit_session_from_config(config::PipelineConfig)::DistSSHSession
     return DistSSHSession(
         project = config.project,
         workers = config.tokens,
+        local_workers = config.local_workers,
         remote = config.remote,
         hosts_file = config.hosts_file,
         quiet = config.quiet,
@@ -183,7 +184,10 @@ function _pipeline_run!(config::PipelineConfig, session::DistSSHSession, driver:
     plan = if isempty(session.tokens)
         WorkerPlan()
     else
-        worker_plan_from_tokens(session.tokens)
+        worker_plan_from_tokens(
+            session.tokens;
+            local_workers = session.cli_session.local_workers,
+        )
     end
 
     do_collect = resolve_pipeline_collect(config, session)

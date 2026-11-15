@@ -27,6 +27,7 @@ const _EXECUTE_DETACHED_KW = Set{Symbol}(
         :unsafe_all_to_all,
         :allow_external_symlinks,
         :run_id,
+        :local_workers,
     )
 )
 const _EXECUTE_DETACHED_DRIVE_ONLY = (
@@ -227,6 +228,8 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
     ep && (kw[:unsafe_expose_port] = true)
     ata = get(parsed, :unsafe_all_to_all, false)
     ata && (kw[:unsafe_all_to_all] = true)
+    lw = session.local_workers
+    lw !== nothing && (kw[:local_workers] = lw)
     snap0 = get(parsed, :run_id, nothing)
     snap0 === nothing || (kw[:run_id] = snap0)
     dr0 = get(parsed, :deploy_root, nothing)
@@ -782,6 +785,17 @@ function _execute_detached!(
     if run_id !== nothing
         run_id = validate_run_id(run_id)
     end
+    local_workers = get(kwargs, :local_workers, nothing)
+    if local_workers !== nothing
+        (local_workers isa Integer && !(local_workers isa Bool)) || throw(
+            ArgumentError(
+                "local_workers must be an integer, got $(repr(local_workers))",
+            )
+        )
+        lw = Int(local_workers)
+        lw < 0 && throw(ArgumentError("local_workers must be >= 0, got $lw"))
+        local_workers = lw
+    end
     worker_include isa Bool || throw(
         ArgumentError(
             "worker_include must be a Bool, got $(repr(worker_include))",
@@ -861,6 +875,7 @@ function _execute_detached!(
         allow_external_symlinks = allow_external_symlinks === true,
         run_id = run_id,
         remote = remote,
+        local_workers = local_workers,
     )
     extra = Dict{String, String}(
         "DISTRIBUTED_PROJECT_ROOT" => proj,
@@ -1944,6 +1959,7 @@ function _execute_detached_argv(
         allow_external_symlinks::Bool = false,
         run_id::Union{Nothing, AbstractString} = nothing,
         remote::Union{Nothing, AbstractString} = nothing,
+        local_workers::Union{Nothing, Integer} = nothing,
     )::Vector{String}
     argv = String[String(kind)]
     push!(argv, "-y")
@@ -1974,6 +1990,9 @@ function _execute_detached_argv(
     end
     if hosts_file !== nothing && !isempty(strip(String(hosts_file)))
         push!(argv, "--hosts-file", canonical_local_path(String(hosts_file)))
+    end
+    if local_workers !== nothing
+        push!(argv, "--local-workers", string(Int(local_workers)))
     end
     if kind === :drive
         enable_log === false && push!(argv, "--no-log")

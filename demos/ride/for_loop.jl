@@ -1,7 +1,7 @@
 #!/usr/bin/env julia
 # Independent indexed `for` (`dest[i] = …`).
 #
-#   julia --project=. -m DistSSHRun ride parent:2 demos/ride/for_loop.jl
+#   julia --project=. -m DistSSHRun ride --local-workers 2 demos/ride/for_loop.jl
 
 xs = 1:4
 ys = similar(collect(xs))

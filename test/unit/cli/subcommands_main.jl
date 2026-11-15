@@ -65,7 +65,7 @@ using Test
             @test !occursin("SSH preflight", shown)
         end
         let (code, out, err) = _cli_capture(
-                () -> DistSSHRun.drive(["--ship-tree", "parent:1", "s.jl"]),
+                () -> DistSSHRun.drive(["--ship-tree", "--local-workers", "1", "s.jl"]),
             )
             shown = out * err
             @test code == 1

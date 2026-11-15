@@ -214,7 +214,10 @@ using Test
                 "DISTSSH_TEST_SSH" => nothing,
                 "DISTRIBUTED_SSH_OPTS" => "-F \"/tmp/cfg dir/config\" -o BatchMode=yes",
             ) do
-                @test DistSSHRun.ssh_opts() == ["-F", "/tmp/cfg dir/config", "-o", "BatchMode=yes"]
+                vec = DistSSHRun.ssh_opts()
+                @test vec[1:2] == ["-F", "/tmp/cfg dir/config"]
+                @test count(==("BatchMode=yes"), vec) == 1
+                @test "ExitOnForwardFailure=yes" in vec
             end
             withenv("DISTRIBUTED_SSH_OPTS" => "-F \"unterminated") do
                 @test_throws ArgumentError DistSSHRun.ssh_opts()

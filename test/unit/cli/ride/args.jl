@@ -3,9 +3,10 @@ using Test
 @testset "ride args" begin
     parse_ride_args = DistSSHRun.parse_ride_args
 
-    let r = parse_ride_args(["parent:2", "job.jl", "--n", "4"])
+    let r = parse_ride_args(["--local-workers", "2", "job.jl", "--n", "4"])
         @test r.script_path == "job.jl"
-        @test r.hosts == ["parent:2"]
+        @test r.hosts == String[]
+        @test r.cli_session.local_workers == 2
         @test r.script_args == ["--n", "4"]
         @test !r.spi_check
         @test !r.help
@@ -16,8 +17,9 @@ using Test
     let r = parse_ride_args(["--no-spi-check", "job.jl"])
         @test !r.spi_check
     end
-    let r = parse_ride_args(["parent:1", "2*host1", "--julia", "julia", "job.jl"])
-        @test r.hosts == ["parent:1", "2*host1"]
+    let r = parse_ride_args(["--local-workers", "1", "2*host1", "--julia", "julia", "job.jl"])
+        @test r.cli_session.local_workers == 1
+        @test r.hosts == ["2*host1"]
         @test r.julia == "julia"
         @test r.script_path == "job.jl"
     end
@@ -47,11 +49,11 @@ using Test
         @test !occursin("--gb-per-worker", help)
         @test_throws ArgumentError parse_ride_args(["--gb-per-worker", "1.5", "job.jl"])
         @test occursin("--deploy-root", help)
-        let r = parse_ride_args(["--deploy-root", "/tmp/App", "parent:1", "job.jl", "--n", "2"])
+        let r = parse_ride_args(["--deploy-root", "/tmp/App", "--local-workers", "1", "job.jl", "--n", "2"])
             @test r.deploy_root == "/tmp/App"
             @test r.script_args == ["--n", "2"]
         end
-        let r = parse_ride_args(["parent:1", "job.jl", "--deploy-root", "/tmp/x"])
+        let r = parse_ride_args(["--local-workers", "1", "job.jl", "--deploy-root", "/tmp/x"])
             @test r.deploy_root === nothing
             @test r.script_args == ["--deploy-root", "/tmp/x"]
         end
