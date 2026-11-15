@@ -11,18 +11,18 @@ const SUMMARY = joinpath(FORMAL, "diff", "posix_quote_summary.txt")
 
 function ensure_lean_exe!()
     isfile(LEAN_EXE) && return
-    run(setenv(`lake build sh_posix_eval`; dir=FORMAL))
-    isfile(LEAN_EXE) || error("missing $LEAN_EXE after lake build")
+    run(setenv(`lake build sh_posix_eval`; dir = FORMAL))
+    return isfile(LEAN_EXE) || error("missing $LEAN_EXE after lake build")
 end
 
 function run_lean(s::String)::String
-    cp(LEAN_EXE, "/tmp/sh_posix_eval"; force=true)
+    cp(LEAN_EXE, "/tmp/sh_posix_eval"; force = true)
     chmod("/tmp/sh_posix_eval", 0o755)
     got = read(`/tmp/sh_posix_eval $s`, String)
-    return chop(got; head=0, tail=endswith(got, "\n") ? 1 : 0)
+    return chop(got; head = 0, tail = endswith(got, "\n") ? 1 : 0)
 end
 
-function shell_roundtrip(s::String, q::String, argv::Vector{String})::Tuple{Bool,String}
+function shell_roundtrip(s::String, q::String, argv::Vector{String})::Tuple{Bool, String}
     script = "printf %s " * q
     cmd = Cmd(vcat(argv, ["-c", script]))
     try
@@ -34,16 +34,18 @@ function shell_roundtrip(s::String, q::String, argv::Vector{String})::Tuple{Bool
 end
 
 function gen_corpus(n::Int)::Vector{String}
-    rng = MersenneTwister(0x505350)
-    charset = ['a':'z'...; 'A':'Z'...; '0':'9'...; '\''; '\\'; '!'; '~'; '\$'; ' '; '\t'; '\n';
-               'あ'; '語'; '😀']
+    rng = MersenneTwister(0x00505350)
+    charset = [
+        'a':'z'...; 'A':'Z'...; '0':'9'...; '\''; '\\'; '!'; '~'; '\$'; ' '; '\t'; '\n';
+        'あ'; '語'; '😀'
+    ]
     out = String["", "'", "\\", "a'b", "\n\t", "あいう", repeat('\'', 30)]
     while length(out) < n
         push!(out, String(rand(rng, charset, rand(rng, 0:min(90, n - length(out))))))
         rand(rng) < 0.12 && push!(out, String(repeat('\'', rand(rng, 1:24))))
     end
     v = unique!(out)
-    v[1:min(n, length(v))]
+    return v[1:min(n, length(v))]
 end
 
 function main()
@@ -51,13 +53,13 @@ function main()
     PATH = joinpath(homedir(), ".elan", "bin") * ":" * get(ENV, "PATH", "")
     ENV["PATH"] = PATH
     ensure_lean_exe!()
-    shells = Tuple{String,Vector{String}}[
+    shells = Tuple{String, Vector{String}}[
         ("dash", ["/bin/dash"]),
         ("bash_posix", ["/bin/bash", "--posix"]),
         ("zsh_f", ["/usr/bin/zsh", "-f"]),
     ]
     corpus = gen_corpus(2100)
-    counts = Dict{String,Int}()
+    counts = Dict{String, Int}()
     mism = 0
     lean_mism = 0
     skipped = 0
@@ -79,7 +81,7 @@ function main()
             catch e
                 lean_mism += 1
                 counts["lean"] = get(counts, "lean", 0) + 1
-                println(io, "shell=lean ok=false in=$(repr(s)) error=$(repr(sprint(showerror,e)))")
+                println(io, "shell=lean ok=false in=$(repr(s)) error=$(repr(sprint(showerror, e)))")
             end
             for (name, argv) in shells
                 ok, got = shell_roundtrip(s, q, argv)
@@ -97,7 +99,7 @@ function main()
             catch e
                 counts["zsh_emulate_sh"] = get(counts, "zsh_emulate_sh", 0) + 1
                 mism += 1
-                println(io, "shell=zsh_emulate_sh ok=false in=$(repr(s)) error=$(repr(sprint(showerror,e)))")
+                println(io, "shell=zsh_emulate_sh ok=false in=$(repr(s)) error=$(repr(sprint(showerror, e)))")
             end
         end
     end
@@ -110,7 +112,7 @@ function main()
         end
     end
     mism + lean_mism > 0 && exit(1)
-    println("differential ok: $(length(corpus)) inputs, lean_mism=$lean_mism shell_mism=$mism skipped=$skipped")
+    return println("differential ok: $(length(corpus)) inputs, lean_mism=$lean_mism shell_mism=$mism skipped=$skipped")
 end
 
 main()
