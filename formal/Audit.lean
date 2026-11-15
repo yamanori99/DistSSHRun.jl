@@ -26,8 +26,14 @@ def axiomAllowed (env : Environment) (ax : Name) : Bool :=
   let mut seenCoverFiles : Std.HashSet String := {}
   let mut seenCoverFns : Std.HashSet String := {}
   let mut counts : Std.HashMap String Nat := {}
+  let statusLabel (s : DistSSHLean.Registry.Status) : String :=
+    match s with
+    | .todo => "todo"
+    | .stuck => "stuck"
+    | .proven => "proven"
+    | .refuted => "refuted"
   for e in entries do
-    let statusName := toString (repr e.status)
+    let statusName := statusLabel e.status
     counts := counts.insert statusName (counts.getD statusName 0 + 1)
     if seen.contains e.id then
       failures := failures.push s!"{e.id}: duplicate id"

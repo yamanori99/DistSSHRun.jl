@@ -39,8 +39,6 @@ jobs:
         with:
           path: ~/.elan
           key: formal-elan-${{ hashFiles('formal/lean-toolchain', 'formal/ci/elan-pin.env') }}
-          restore-keys: |
-            formal-elan-
 
       - name: Cache Lake build (formal/.lake)
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -53,17 +51,7 @@ jobs:
 
       - name: Install elan
         run: |
-          set -euo pipefail
-          # shellcheck source=formal/ci/elan-pin.env
-          source formal/ci/elan-pin.env
-          if [[ -x "${HOME}/.elan/bin/elan" ]]; then
-            echo "elan already installed (cache hit); skipping bootstrap"
-          else
-            curl -sSfL "$ELAN_INIT_URL" -o elan-init.sh
-            echo "${ELAN_INIT_SHA256}  elan-init.sh" | sha256sum -c -
-            sh elan-init.sh -y --default-toolchain none --no-modify-path
-            rm -f elan-init.sh
-          fi
+          bash formal/ci/install-elan.sh
           echo "${HOME}/.elan/bin" >>"$GITHUB_PATH"
 
       - name: Select Lean toolchain
