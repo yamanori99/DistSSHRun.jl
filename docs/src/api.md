@@ -197,7 +197,7 @@ Filter = function (x)
         :active_source_selection,
         :remote_script_path, :check_setup_options!,
         :execute_kwargs_from_parsed, :detached_launch,
-        :wait, :shell_status, :run_identity, :identity_mismatches,
+        :wait, :shell_status, :run_identity, :identity_mismatches, :LoadedCodeMismatchError,
         :ConfirmPathMismatch, :normalize_remote_confirm_path,
         :NO_COMMAND_HINT_LINES, :RUN_SUBCOMMAND_EXPECTATION,
     )

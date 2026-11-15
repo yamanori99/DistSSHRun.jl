@@ -28,7 +28,6 @@ struct LoadedSlotReport
     probe_error::String
 end
 
-"""Kinds for [`LoadedCodeMismatchError`](@ref)."""
 module LoadedMismatchKind
     const schema_skew = :schema_skew
     const component_id = :component_id
@@ -285,12 +284,12 @@ function _compare_slot(expected::LoadedSlotReport, observed::LoadedSlotReport, s
     )
     expected.component == :DistSSHBase && observed.layout != :bundled &&
         throw(
-            LoadedCodeMismatchError(
-                LoadedMismatchKind.dual_layout,
-                site,
-                "component=DistSSHBase must be bundled in DistSSHRun.DistSSHBase on workers (got layout=$(observed.layout))",
-            ),
-        )
+        LoadedCodeMismatchError(
+            LoadedMismatchKind.dual_layout,
+            site,
+            "component=DistSSHBase must be bundled in DistSSHRun.DistSSHBase on workers (got layout=$(observed.layout))",
+        ),
+    )
     if expected.version != observed.version || expected.uuid != observed.uuid ||
             expected.digest != observed.digest
         throw(
@@ -341,7 +340,7 @@ function _worker_loaded_identity_expr()
             end
             function __read_component_id(mod)
                 id = getfield(mod, :COMPONENT_ID)
-                (
+                return (
                     version = string(getproperty(id, :version)),
                     uuid = string(getproperty(id, :uuid)),
                     digest = string(getproperty(id, :digest)),
