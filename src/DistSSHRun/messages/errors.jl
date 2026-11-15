@@ -36,8 +36,12 @@ const _DSSH_ERROR_SPECS = (
 
 const ERROR_REGISTRY = Dict{Symbol, ErrorSpec}(pairs(_DSSH_ERROR_SPECS))
 
-public ERROR_REGISTRY, DistSSHError, ErrorSpec
-public cli_exit_code, error_code, error_spec
+public DistSSHError
+public ERROR_REGISTRY
+public ErrorSpec
+public cli_exit_code
+public error_code
+public error_spec
 
 abstract type DistSSHError <: Exception end
 
