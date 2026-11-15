@@ -72,7 +72,7 @@ using Test, DistSSHRun
                 command = :go,
                 cli_dry_run = true,
             ),
-            buf = IOBuffer()
+                buf = IOBuffer()
             DistSSHRun.print_run_job_dry_plan!(
                 buf,
                 cfg;
@@ -89,7 +89,7 @@ using Test, DistSSHRun
                 command = :go,
                 cli_dry_run = true,
             ),
-            buf = IOBuffer()
+                buf = IOBuffer()
             DistSSHRun.print_run_job_dry_plan!(
                 buf,
                 cfg;
