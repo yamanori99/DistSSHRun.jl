@@ -1,0 +1,4 @@
+- `DISTSSH_BLAS_THREADS` now enables threaded BLAS on drive and ride workers (`enable_threaded_blas`), sets `BLAS.set_num_threads` on each new worker, and errors when the applied count differs. When unset, workers stay at one BLAS thread as before.
+- The first worker's project `Pkg.precompile` failure is reported (host and error) instead of being swallowed; precompile uses `Core.eval` on the worker, not a serialized DistSSHRun closure.
+- Isolated `drive` child exit encoding rejects integer status values outside `Int64` range, out-of-range Unix signal numbers, and negative signal values, instead of wrapping or returning `128 + signal` for negatives.
+- `setup` delete and clone no longer clear the last-ship default when the operation was cancelled. Printed `Next` lines and clone tips shell-quote `--deploy-root` paths that contain spaces.

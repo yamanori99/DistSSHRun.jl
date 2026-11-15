@@ -96,13 +96,24 @@ function _isolated_project_flag()::Union{Nothing, String}
     return "--project=$(dir)"
 end
 
+"""`Int64(x)` when `x` is an integer in `Int64` range; else `nothing` (no silent wrap)."""
+function _status_int64(x)::Union{Int64, Nothing}
+    x isa Bool && return nothing
+    x isa Integer || return nothing
+    if x isa Unsigned && big(x) > typemax(Int64)
+        return nothing
+    end
+    try
+        return Int64(x)
+    catch
+        return nothing
+    end
+end
+
 """Fit `code` in `Cint`. A Windows crash code such as `0xC0000005` does not."""
 function _as_cint(code::Integer)::Cint
-    n = try
-        Int64(code)
-    catch
-        return Cint(1)
-    end
+    n = _status_int64(code)
+    n === nothing && return Cint(1)
     lo = Int64(typemin(Cint))
     hi = Int64(typemax(Cint))
     lo <= n <= hi && return Cint(n)
@@ -112,17 +123,18 @@ end
 """A signalled child is a failure. Unix can report `exitcode == 0` with a nonzero `termsignal`."""
 function _drive_child_status(exitcode, termsignal)::Cint
     if termsignal isa Integer && !(termsignal isa Bool)
-        sig = try
-            Int64(termsignal)
-        catch
-            return Cint(1)
-        end
+        sig = _status_int64(termsignal)
+        sig === nothing && return Cint(1)
         if sig > 0
+            sig > 127 && return Cint(1)
+            sig > typemax(Int64) - 128 && return Cint(1)
             # `shell_status` owns `128 + signal`. This path has no `Process`.
             return _as_cint(DistSSHBase._shell_status(zero(Int64), sig))
         elseif sig != 0
-            return _as_cint(128 + sig)
+            return Cint(1)
         end
+    elseif termsignal !== nothing && termsignal !== 0
+        return Cint(1)
     end
     if exitcode isa Integer && !(exitcode isa Bool)
         return _as_cint(exitcode)

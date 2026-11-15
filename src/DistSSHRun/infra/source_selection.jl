@@ -267,6 +267,24 @@ function forget_last_ship_default!(
 end
 public forget_last_ship_default!
 
+"""
+Forget the last-ship default after a host op that changed deploy state.
+
+Skipped when the op was cancelled or did not succeed on any host. Callers that
+report CLI exit via [`finish_host_op!`](@ref) must use this instead of gating on
+that boolean alone, because cancellation still returns `true` there.
+"""
+function forget_last_ship_after_host_op!(
+        local_project::AbstractString,
+        deploy_root::AbstractString,
+        result,
+    )::Nothing
+    result.cancelled && return nothing
+    result.succeeded == 0 && return nothing
+    forget_last_ship_default!(local_project, deploy_root)
+    return nothing
+end
+
 """POSIX `sh` body for `__DSR_SNAP_COMPLETE__` (fixtures and unit tests)."""
 function _ship_run_complete_probe_script(
         leaf::AbstractString,
