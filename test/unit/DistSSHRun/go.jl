@@ -331,7 +331,7 @@ using Dates
             shown = sprint(showerror, err)
             @test occursin("no Manifest digest", shown)
             @test occursin("Pkg.instantiate", shown)
-            @test occursin("--unsafe-heterogeneous", shown)
+            @test occursin("--unsafe-skip-env-digests", shown)
             @test !occursin("--help", shown)
         end
     end

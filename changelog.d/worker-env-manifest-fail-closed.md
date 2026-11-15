@@ -5,17 +5,17 @@ category: breaking
   workers or remote go slots are verified (no silent skip). The error states
   what failed, the controller host and project path, why unpinned versions are
   unsafe, fix steps (`Pkg.instantiate` when a project file exists, otherwise
-  check the `--project` path), and that `--unsafe-heterogeneous` waives only
+  check the `--project` path), and that `--unsafe-skip-env-digests` waives only
   Manifest/Project digest verification (recorded as unverified). Julia build
   and DistSSH* versions must still match. Provenance carries
   `environment.verification` = `verified` or `unverified` (with reason).
 - When verification runs, Julia build, `pkg.*`, and Manifest/Project byte
   mismatches are collected in one report (paths and lock file names are not
   compared). An empty Julia commit on either side is a mismatch. Previously
-  skipped checks can surface once a Manifest exists. `--unsafe-heterogeneous`
+  skipped checks can surface once a Manifest exists. `--unsafe-skip-env-digests`
   does not waive Julia build or DistSSH* version checks. Worker snapshots load
   TOML in the same call that parses the Manifest; that parse uses
   `invokelatest` so `pkg.*` versions are read instead of being dropped.
 - A Julia whose `Base.GIT_VERSION_INFO.commit` is empty (some source builds and
   distribution builds) cannot run DistSSH multi-host jobs. An unknown commit is
-  a mismatch on purpose, and `--unsafe-heterogeneous` does not waive it.
+  a mismatch on purpose, and `--unsafe-skip-env-digests` does not waive it.

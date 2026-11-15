@@ -1000,7 +1000,7 @@ selected project directory. `run_id` also skips the in-tree
 `julia` sets the Julia binary for each slot (`nothing` / `"auto"` → detect;
 same as CLI `--julia`).
 
-`unsafe_heterogeneous` (CLI `--unsafe-heterogeneous`) waives only Manifest and
+`unsafe_skip_env_digests` (CLI `--unsafe-skip-env-digests`) waives only Manifest and
 Project byte digest checks across slots (recorded as unverified). Julia build
 and DistSSH* Manifest version strings must still match. Digest comparison is
 byte-exact (CRLF differences count).
@@ -1034,7 +1034,9 @@ function go!(
         hint_surface::Symbol = :api,
         original_args::Vector{String} = String[],
         repeat::Union{Nothing, Integer} = nothing,
-        unsafe_heterogeneous = false,
+        unsafe_skip_env_digests = false,
+        unsafe_expose_port::Bool = false,
+        unsafe_all_to_all::Bool = false,
         run_id::Union{Nothing, AbstractString} = nothing,
         sync::Union{Symbol, Bool, Nothing} = nothing,
         allow_external_symlinks::Bool = false,
@@ -1069,7 +1071,13 @@ function go!(
         _clear_active_deploy_record!()
         warn_project_sshflags(proj)
         _ensure_kit_run_dir!(:go, script_path; project = proj)
-        return with_unsafe_heterogeneous(unsafe_heterogeneous) do
+        cfg = resolve_run_job_config(;
+            command = :go,
+            cli_unsafe_skip_env_digests = unsafe_skip_env_digests ? true : nothing,
+            cli_unsafe_expose_port = unsafe_expose_port ? true : nothing,
+            cli_unsafe_all_to_all = unsafe_all_to_all ? true : nothing,
+        )
+        return with_run_unsafe_options!(cfg) do
             return _go_run!(
                 script_path,
                 proj,

@@ -41,7 +41,7 @@ function show_go_usage(; io::IO = stdout)
         "  --run-id ID       use runs/<ID>/src under the deploy root",
         "                      (after setup ship-tree + setup instantiate)",
         "  --julia PATH        remote Julia (ENV or auto)",
-        "  --unsafe-heterogeneous  waive Manifest/Project digest checks only (unverified; Julia build and DistSSH* versions must match)",
+        generated_run_option_help(:go)...,
         "  Remote slots cd to the project root and pin the real julia binary.",
         "  --output-dir PATH   batch root; slots are PATH/<slot>/",
         "  $(KIT_QUIET_FLAG_HELP)",
@@ -75,7 +75,8 @@ function show_go_usage(; io::IO = stdout)
     print_help_blank(io)
     return print_help_lines(
         io,
-        "Details: docs (manual/go). See also: setup, drive.",
+        "Details: docs (options.md, manual/go). Common errors: docs (common_errors.md).",
+        "See also: setup, drive.",
     )
 end
 
@@ -99,11 +100,11 @@ function _go_parsed(;
         output_dir,
         julia,
         repeat,
-        unsafe_heterogeneous = false,
+        run_opts::RunOptionCliState = RunOptionCliState(),
         run_id = nothing,
         deploy_root = nothing,
     )
-    return (
+    base = (
         help = help,
         show_version = show_version,
         cli_session = cli_session,
@@ -113,10 +114,10 @@ function _go_parsed(;
         output_dir = output_dir,
         julia = julia,
         repeat = repeat,
-        unsafe_heterogeneous = unsafe_heterogeneous,
         run_id = run_id,
         deploy_root = deploy_root,
     )
+    return merge_run_option_cli!(base, run_opts)
 end
 
 """Parse `go` CLI arguments (same shape as other kit CLI parsers)."""
@@ -128,7 +129,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
     script_args = String[]
     output_dir = nothing
     julia_exe = nothing
-    unsafe_heterogeneous = false
+    run_opts = RunOptionCliState()
     run_id = nothing
     deploy_root = nothing
     repeat_n::Union{Nothing, Int} = nothing
@@ -170,8 +171,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
         elseif arg == "--"
             options_done = true
             cli_consume!(c)
-        elseif arg == "--unsafe-heterogeneous"
-            unsafe_heterogeneous = true
+        elseif try_consume_run_option!(arg, run_opts, :go)
             cli_consume!(c)
         elseif arg == "--allow-mismatch"
             reject_removed_allow_mismatch_flag!(arg)
@@ -211,7 +211,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
                 output_dir = output_dir,
                 julia = julia_exe,
                 repeat = repeat_n,
-                unsafe_heterogeneous = unsafe_heterogeneous,
+                run_opts = run_opts,
                 run_id = run_id,
                 deploy_root = deploy_root,
             )
@@ -255,7 +255,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
         output_dir = output_dir,
         julia = julia_exe,
         repeat = repeat_n,
-        unsafe_heterogeneous = unsafe_heterogeneous,
+        run_opts = run_opts,
         run_id = run_id,
         deploy_root = deploy_root,
     )

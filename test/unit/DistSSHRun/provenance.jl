@@ -703,12 +703,12 @@ end
 
     @testset "unsafe heterogeneous records unverified environment" begin
         _with_tempdir() do _
-            DistSSHRun.with_unsafe_heterogeneous(
+            DistSSHRun.with_unsafe_skip_env_digests(
                 () -> begin
                     prov = DistSSHRun.assemble_provenance()
                     env = get(prov, "environment", nothing)
                     @test env["verification"] == "unverified"
-                    @test env["reason"] == "unsafe-heterogeneous"
+                    @test env["reason"] == "unsafe-skip-env-digests"
                 end, true
             )
         end
@@ -716,13 +716,13 @@ end
 
     @testset "unsafe heterogeneous survives provenance reset" begin
         _with_tempdir() do proj
-            DistSSHRun.with_unsafe_heterogeneous(
+            DistSSHRun.with_unsafe_skip_env_digests(
                 () -> begin
                     DistSSHRun._reset_run_provenance!(proj)
                     prov = DistSSHRun._assemble_provenance(proj)
                     unsafe = get(prov, "unsafe", String[])
                     @test unsafe isa AbstractVector
-                    @test "heterogeneous" in unsafe
+                    @test "skip_env_digests" in unsafe
                 end, true
             )
         end
@@ -730,11 +730,11 @@ end
 
     @testset "reset keeps heterogeneous label without a second record" begin
         _with_tempdir() do proj
-            DistSSHRun.with_unsafe_heterogeneous(true) do
+            DistSSHRun.with_unsafe_skip_env_digests(true) do
                 DistSSHRun._reset_run_provenance!(proj)
                 prov = DistSSHRun.assemble_provenance()
                 unsafe = get(prov, "unsafe", String[])
-                @test "heterogeneous" in unsafe
+                @test "skip_env_digests" in unsafe
                 env = get(prov, "environment", nothing)
                 @test env === nothing
             end
@@ -754,14 +754,14 @@ end
                     project = proj,
                     yes = true,
                     enable_log = false,
-                    unsafe_heterogeneous = true,
+                    unsafe_skip_env_digests = true,
                 )
                 @test result.ok
                 prov = DistSSHRun.assemble_provenance(proj)
                 env = get(prov, "environment", nothing)
                 @test env isa AbstractDict
                 @test env["verification"] == "unverified"
-                @test env["reason"] == "unsafe-heterogeneous"
+                @test env["reason"] == "unsafe-skip-env-digests"
             finally
                 DistSSHRun.set_kit_verbosity!(prev)
             end
@@ -776,14 +776,14 @@ end
                 result = DistSSHRun.ride!(
                     script, ["parent:1"];
                     project = proj,
-                    unsafe_heterogeneous = true,
+                    unsafe_skip_env_digests = true,
                 )
                 @test result.ok
                 prov = DistSSHRun.assemble_provenance(proj)
                 env = get(prov, "environment", nothing)
                 @test env isa AbstractDict
                 @test env["verification"] == "unverified"
-                @test env["reason"] == "unsafe-heterogeneous"
+                @test env["reason"] == "unsafe-skip-env-digests"
             finally
                 DistSSHRun.set_kit_verbosity!(prev)
             end
@@ -799,7 +799,7 @@ end
         end
         err isa ArgumentError || error("expected ArgumentError")
         @test occursin(
-            "removed; use --unsafe-heterogeneous (Julia/DistSSH* can no longer be waived)",
+            "removed; use --unsafe-skip-env-digests (Julia/DistSSH* can no longer be waived)",
             err.msg,
         )
         err = try

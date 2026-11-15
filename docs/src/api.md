@@ -236,12 +236,12 @@ build (version and commit) and DistSSH* `pkg.*` versions on every worker or go
 slot. They also compare resolved Manifest and Project file SHA-256 digests
 (byte-exact; CRLF differences count) when the controller has an active
 Manifest. Without a controller Manifest digest, launch fails before workers
-join unless you pass CLI `--unsafe-heterogeneous`, which waives only
+join unless you pass CLI `--unsafe-skip-env-digests`, which waives only
 Manifest/Project digest checks (recorded as unverified; Julia build and
 DistSSH* versions must still match). A Julia whose
 `Base.GIT_VERSION_INFO.commit` is empty (some source builds and distribution
 builds) cannot run DistSSH multi-host jobs: an unknown commit is a mismatch
-by design, and `--unsafe-heterogeneous` does not waive it. Add
+by design, and `--unsafe-skip-env-digests` does not waive it. Add
 [DistSSHKit](https://github.com/yamanori99/DistSSHKit.jl).
 These names are not a command.
 
