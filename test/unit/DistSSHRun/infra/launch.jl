@@ -209,8 +209,8 @@ using TOML
     @test unset_at !== nothing && set_at !== nothing && first(unset_at) < first(set_at)
     @test occursin("OMP_NUM_THREADS=", capped)
 
-    @test DistSSHRun.unsafe_heterogeneous_argv(false) == String[]
-    @test DistSSHRun.unsafe_heterogeneous_argv(true) == ["--unsafe-heterogeneous"]
+    @test DistSSHRun.unsafe_skip_env_digests_argv(false) == String[]
+    @test DistSSHRun.unsafe_skip_env_digests_argv(true) == ["--unsafe-skip-env-digests"]
 
     _test_sysimage = DistSSHRun.julia_sysimage_path()
     parent = Dict(
@@ -281,7 +281,7 @@ using TOML
     )
     @test any(occursin("manifest.sha256 missing", l) for l in missing_snap)
 
-    @test isempty(DistSSHRun.identity_mismatches(parent, worker; unsafe_heterogeneous = true))
+    @test isempty(DistSSHRun.identity_mismatches(parent, worker; unsafe_skip_env_digests = true))
 
     julia_lines = DistSSHRun.identity_mismatches(
         parent,
@@ -314,7 +314,7 @@ using TOML
             "manifest.sha256" => "c"^64,
             "project.sha256" => parent["project.sha256"],
         ),
-        unsafe_heterogeneous = true,
+        unsafe_skip_env_digests = true,
     )
     @test any(occursin("julia version", l) for l in unsafe_combo)
     @test !any(occursin("manifest.sha256", l) for l in unsafe_combo)
@@ -338,7 +338,7 @@ using TOML
                 "manifest.sha256" => parent["manifest.sha256"],
                 "project.sha256" => parent["project.sha256"],
             ),
-            unsafe_heterogeneous = true,
+            unsafe_skip_env_digests = true,
         ),
     )
 
@@ -363,7 +363,7 @@ using TOML
                 "project.sha256" => parent["project.sha256"],
                 "pkg.DistSSHRun" => "9.9.9",
             ),
-            unsafe_heterogeneous = true,
+            unsafe_skip_env_digests = true,
         ),
     )
 

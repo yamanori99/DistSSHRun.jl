@@ -84,6 +84,7 @@ end
                 _runtest_announce("unit/DistSSHRun/core/drive/workers.jl")
             end
             _runtest_include("unit/DistSSHRun/options/heartbeat.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "options", "heartbeat.jl"))
+            _runtest_include("unit/DistSSHRun/options/config.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "options", "config.jl"))
             _runtest_include("unit/DistSSHRun/infra/worker_plan.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "worker_plan.jl"))
             _runtest_include("unit/DistSSHRun/hostinfo.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "hostinfo.jl"))
             _runtest_include("unit/DistSSHRun/go.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "go.jl"))

@@ -55,6 +55,14 @@ function go_main()::Cint
         show_go_usage()
         return 0
     end
+    diag = DistSSHRun.finish_run_job_diagnostics!(
+        parsed;
+        command = :go,
+        project = project_root,
+        hosts = parsed.hosts,
+        worker_tokens = host_tokens(parsed; kind = :go),
+    )
+    diag !== nothing && return Cint(diag)
     yes = parsed.cli_session.yes || kit_noninteractive()
     kw = execute_kwargs_from_parsed(parsed; kind = :go)
     result = try
@@ -70,7 +78,7 @@ function go_main()::Cint
             output_dir = kw[:output_dir],
             hosts_file = nothing,
             julia = kw[:julia],
-            unsafe_heterogeneous = get(parsed, :unsafe_heterogeneous, false),
+            unsafe_skip_env_digests = get(parsed, :unsafe_skip_env_digests, false),
             repeat = get(kw, :repeat, nothing),
             run_id = get(parsed, :run_id, nothing),
             remote = get(parsed, :deploy_root, nothing),

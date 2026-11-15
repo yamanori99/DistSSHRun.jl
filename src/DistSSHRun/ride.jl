@@ -655,7 +655,9 @@ function ride!(
         run_id::Union{Nothing, AbstractString} = nothing,
         require_all_hosts::Bool = true,
         hint_surface::Symbol = :api,
-        unsafe_heterogeneous = false,
+        unsafe_skip_env_digests = false,
+        unsafe_expose_port::Bool = false,
+        unsafe_all_to_all::Bool = false,
         allow_mismatch = nothing,
     )::RideResult
     _reject_removed_allow_mismatch!(allow_mismatch)
@@ -676,7 +678,13 @@ function ride!(
     inherited_run = old_run isa AbstractString && !isempty(strip(old_run))
     try
         _ensure_kit_run_dir!(:ride, path; project = project)
-        return with_unsafe_heterogeneous(unsafe_heterogeneous) do
+        cfg = resolve_run_job_config(;
+            command = :ride,
+            cli_unsafe_skip_env_digests = unsafe_skip_env_digests ? true : nothing,
+            cli_unsafe_expose_port = unsafe_expose_port ? true : nothing,
+            cli_unsafe_all_to_all = unsafe_all_to_all ? true : nothing,
+        )
+        return with_run_unsafe_options!(cfg) do
             return _ride_run!(
                 path, julia_s, tokens, args, spi_check, output_dir, project, julia,
                 remote, validated_run_id, require_all_hosts, hint_surface, inherited_run,

@@ -108,12 +108,12 @@ function _env_verify_guards()
                 msg = sprint(showerror, err)
                 @test occursin("what:", msg)
                 @test occursin("no Manifest", msg)
-                @test occursin("--unsafe-heterogeneous", msg)
+                @test occursin("--unsafe-skip-env-digests", msg)
                 @test occursin("Pkg.instantiate", msg)
                 @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
                 slots = DistSSHRun.GoSlot[DistSSHRun.GoSlot(:parent, nothing, "parent")]
                 @test_throws ErrorException DistSSHRun.verify_go_slots_match_job!(proj, slots)
-                DistSSHRun.with_unsafe_heterogeneous(
+                DistSSHRun.with_unsafe_skip_env_digests(
                     () -> begin
                         DistSSHRun.verify_workers_match_job!(proj)
                         DistSSHRun.verify_go_slots_match_job!(proj, slots)
@@ -123,7 +123,7 @@ function _env_verify_guards()
                 env = get(prov, "environment", nothing)
                 @test env isa AbstractDict
                 @test env["verification"] == "unverified"
-                @test env["reason"] == "unsafe-heterogeneous"
+                @test env["reason"] == "unsafe-skip-env-digests"
             end
         end
 
@@ -218,7 +218,7 @@ function _env_verify_guards()
                 err isa ErrorException || error("expected ErrorException")
                 msg = sprint(showerror, err)
                 @test occursin("not current", msg)
-                @test occursin("unsafe-heterogeneous does not waive", msg)
+                @test occursin("unsafe-skip-env-digests does not waive", msg)
             end
         end
 
@@ -238,8 +238,8 @@ function _env_verify_guards()
                 msg = sprint(showerror, err)
                 @test occursin("not current", msg)
                 @test occursin("no Project.toml or JuliaProject.toml", msg)
-                @test occursin("unsafe-heterogeneous does not waive", msg)
-                DistSSHRun.with_unsafe_heterogeneous(true) do
+                @test occursin("unsafe-skip-env-digests does not waive", msg)
+                DistSSHRun.with_unsafe_skip_env_digests(true) do
                     @test_throws ErrorException DistSSHRun.assert_controller_manifest_current!(bare)
                 end
             end
@@ -301,7 +301,7 @@ function _env_verify_guards()
                                     w, parent, "manifest.sha256" => "c"^64,
                                 )
                                 @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
-                                DistSSHRun.with_unsafe_heterogeneous(
+                                DistSSHRun.with_unsafe_skip_env_digests(
                                     () -> DistSSHRun.verify_workers_match_job!(proj), true,
                                 )
                             end
@@ -312,7 +312,7 @@ function _env_verify_guards()
                                     w, parent, "project.sha256" => "d"^64,
                                 )
                                 @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
-                                DistSSHRun.with_unsafe_heterogeneous(
+                                DistSSHRun.with_unsafe_skip_env_digests(
                                     () -> DistSSHRun.verify_workers_match_job!(proj), true,
                                 )
                             end
@@ -325,7 +325,7 @@ function _env_verify_guards()
                                 )
                                 @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
                                 err = try
-                                    DistSSHRun.with_unsafe_heterogeneous(
+                                    DistSSHRun.with_unsafe_skip_env_digests(
                                         () -> DistSSHRun.verify_workers_match_job!(proj), true,
                                     )
                                     nothing
@@ -346,7 +346,7 @@ function _env_verify_guards()
                                 )
                                 @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
                                 err = try
-                                    DistSSHRun.with_unsafe_heterogeneous(
+                                    DistSSHRun.with_unsafe_skip_env_digests(
                                         () -> DistSSHRun.verify_workers_match_job!(proj), true,
                                     )
                                     nothing
@@ -364,7 +364,7 @@ function _env_verify_guards()
                                 _env_verify_worker_toml_override!(w, parent, "commit" => "")
                                 @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
                                 err = try
-                                    DistSSHRun.with_unsafe_heterogeneous(
+                                    DistSSHRun.with_unsafe_skip_env_digests(
                                         () -> DistSSHRun.verify_workers_match_job!(proj), true,
                                     )
                                     nothing
@@ -385,7 +385,7 @@ function _env_verify_guards()
                                 )
                                 @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
                                 err = try
-                                    DistSSHRun.with_unsafe_heterogeneous(
+                                    DistSSHRun.with_unsafe_skip_env_digests(
                                         () -> DistSSHRun.verify_workers_match_job!(proj), true,
                                     )
                                     nothing
@@ -403,14 +403,14 @@ function _env_verify_guards()
                                     w, parent, "manifest.sha256" => "c"^64,
                                 )
                                 @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
-                                DistSSHRun.with_unsafe_heterogeneous(
+                                DistSSHRun.with_unsafe_skip_env_digests(
                                     () -> begin
                                         DistSSHRun.verify_workers_match_job!(proj)
                                         prov = DistSSHRun.assemble_provenance()
                                         env = get(prov, "environment", nothing)
                                         @test env isa AbstractDict
                                         @test env["verification"] == "unverified"
-                                        @test env["reason"] == "unsafe-heterogeneous"
+                                        @test env["reason"] == "unsafe-skip-env-digests"
                                     end,
                                     true,
                                 )
@@ -420,7 +420,7 @@ function _env_verify_guards()
                             @testset "non-dict worker snapshot" begin
                                 _env_verify_set_snapshot!(42)
                                 @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
-                                @test_throws ErrorException DistSSHRun.with_unsafe_heterogeneous(true) do
+                                @test_throws ErrorException DistSSHRun.with_unsafe_skip_env_digests(true) do
                                     DistSSHRun.verify_workers_match_job!(proj)
                                 end
                             end
@@ -530,7 +530,7 @@ function _env_verify_guards()
                 "commit" => "",
             )
             lines = DistSSHRun._described_identity_lines(
-                parent, worker, "host h"; unsafe_heterogeneous = false,
+                parent, worker, "host h"; unsafe_skip_env_digests = false,
             )
             @test length(lines) == 1
             @test occursin("exit 1", only(lines))
@@ -553,11 +553,11 @@ function _env_verify_guards()
             direct = String[
                 "parent slot: $(line)"
                     for line in DistSSHRun.identity_mismatches(
-                        parent, local_id; unsafe_heterogeneous = false,
+                        parent, local_id; unsafe_skip_env_digests = false,
                     )
             ]
             described = DistSSHRun._described_identity_lines(
-                parent, local_id, "parent slot"; unsafe_heterogeneous = false,
+                parent, local_id, "parent slot"; unsafe_skip_env_digests = false,
             )
             @test length(described) == 1
             @test occursin("exit 127", only(described))
@@ -665,14 +665,14 @@ function _env_verify_guards()
                                     proj, slots; remote_root = proj,
                                 )
                                 if unsafe_ok
-                                    DistSSHRun.with_unsafe_heterogeneous(
+                                    DistSSHRun.with_unsafe_skip_env_digests(
                                         () -> DistSSHRun.verify_go_slots_match_job!(
                                             proj, slots; remote_root = proj,
                                         ),
                                         true,
                                     )
                                 else
-                                    @test_throws ErrorException DistSSHRun.with_unsafe_heterogeneous(
+                                    @test_throws ErrorException DistSSHRun.with_unsafe_skip_env_digests(
                                         () -> DistSSHRun.verify_go_slots_match_job!(
                                             proj, slots; remote_root = proj,
                                         ),

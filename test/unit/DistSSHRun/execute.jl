@@ -535,9 +535,9 @@ end
         @test DistSSHRun.execute_detached_accepts(:allow_external_symlinks; kind = :go)
         @test DistSSHRun.execute_detached_accepts(:allow_external_symlinks; kind = :drive)
         @test !DistSSHRun.execute_detached_accepts(:allow_external_symlinks; kind = :ride)
-        @test DistSSHRun.execute_detached_accepts(:unsafe_heterogeneous; kind = :go)
-        @test DistSSHRun.execute_detached_accepts(:unsafe_heterogeneous; kind = :drive)
-        @test DistSSHRun.execute_detached_accepts(:unsafe_heterogeneous; kind = :ride)
+        @test DistSSHRun.execute_detached_accepts(:unsafe_skip_env_digests; kind = :go)
+        @test DistSSHRun.execute_detached_accepts(:unsafe_skip_env_digests; kind = :drive)
+        @test DistSSHRun.execute_detached_accepts(:unsafe_skip_env_digests; kind = :ride)
         @test DistSSHRun.execute_detached_accepts(:run_id; kind = :go)
         @test DistSSHRun.execute_detached_accepts(:run_id; kind = :drive)
         @test DistSSHRun.execute_detached_accepts(:run_id; kind = :ride)
@@ -1924,7 +1924,7 @@ end
             script_args = String[],
             output_dir = nothing,
             julia = nothing,
-            unsafe_heterogeneous = false,
+            unsafe_skip_env_digests = false,
             sync = nothing,
             repeat = nothing,
             allow_external_symlinks = false,

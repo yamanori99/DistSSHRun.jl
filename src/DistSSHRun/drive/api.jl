@@ -62,7 +62,7 @@ function drive!(
         require_all_hosts::Bool = true,
         worker_include::Bool = false,
         sync_script::Union{Nothing, Bool} = nothing,
-        unsafe_heterogeneous = false,
+        unsafe_skip_env_digests = false,
         allow_external_symlinks::Bool = false,
         allow_mismatch = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
@@ -99,7 +99,7 @@ function drive!(
                         julia = julia,
                         require_all_hosts = require_all_hosts,
                         worker_include = worker_include,
-                        unsafe_heterogeneous = unsafe_heterogeneous,
+                        unsafe_skip_env_digests = unsafe_skip_env_digests,
                         run_id = run_id,
                         unsafe_master_silence_exit = unsafe_master_silence_exit,
                     )

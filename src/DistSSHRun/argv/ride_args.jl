@@ -12,9 +12,9 @@ function _ride_parsed(;
         julia = nothing,
         run_id = nothing,
         deploy_root = nothing,
-        unsafe_heterogeneous = false,
+        run_opts::RunOptionCliState = RunOptionCliState(),
     )
-    return (
+    base = (
         help = help,
         show_version = show_version,
         cli_session = cli_session,
@@ -26,8 +26,8 @@ function _ride_parsed(;
         julia = julia,
         run_id = run_id,
         deploy_root = deploy_root,
-        unsafe_heterogeneous = unsafe_heterogeneous,
     )
+    return merge_run_option_cli!(base, run_opts)
 end
 
 function show_ride_usage(; io::IO = stdout)
@@ -62,7 +62,7 @@ function show_ride_usage(; io::IO = stdout)
         "                      Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
         "                      ~/Parent/RepoName layout from the local env_dir.",
         "  --run-id ID       use runs/<ID>/src under the deploy root",
-        "  --unsafe-heterogeneous  waive Manifest/Project digest checks only (unverified; Julia build and DistSSH* versions must match)",
+        generated_run_option_help(:ride)...,
         "  SSH workers: project-root cwd, bind 127.0.0.1; Julia build and DistSSH* version mismatch is always an error.",
         "  $(KIT_HOSTS_FLAG_HELP)",
         "  --hosts-file PATH   one token per line",
@@ -90,7 +90,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
     julia_exe = nothing
     run_id = nothing
     deploy_root = nothing
-    unsafe_heterogeneous = false
+    run_opts = RunOptionCliState()
     spi_check = false
     options_done = false
     c = CliCursor(collect(String, rest))
@@ -132,8 +132,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
         elseif arg == "--"
             options_done = true
             cli_consume!(c)
-        elseif arg == "--unsafe-heterogeneous"
-            unsafe_heterogeneous = true
+        elseif try_consume_run_option!(arg, run_opts, :ride)
             cli_consume!(c)
         elseif arg == "--allow-mismatch"
             reject_removed_allow_mismatch_flag!(arg)
@@ -165,7 +164,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
                 julia = julia_exe,
                 run_id = run_id,
                 deploy_root = deploy_root,
-                unsafe_heterogeneous = unsafe_heterogeneous,
+                run_opts = run_opts,
             )
         elseif endswith(arg, ".jl")
             script_path = arg
@@ -209,6 +208,6 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
         julia = julia_exe,
         run_id = run_id,
         deploy_root = deploy_root,
-        unsafe_heterogeneous = unsafe_heterogeneous,
+        run_opts = run_opts,
     )
 end

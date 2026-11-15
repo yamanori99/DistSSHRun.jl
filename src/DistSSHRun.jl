@@ -168,6 +168,10 @@ using .DistSSHUp: julia_version_mismatch_kind, juliaup_add_host!, juliaup_align_
     juliaup_status_lines, juliaup_update_host!
 
 include("DistSSHRun/messages/display.jl")
+include("DistSSHRun/messages/errors.jl")
+include("DistSSHRun/options/table.jl")
+include("DistSSHRun/options/config.jl")
+include("DistSSHRun/options/cli_consume.jl")
 include("DistSSHRun/argv/session.jl")
 include("DistSSHRun/infra/run_transfer_removed.jl")
 include("DistSSHRun/infra/remote.jl")
@@ -216,6 +220,7 @@ include("DistSSHRun/infra/script_scan.jl")
 include("DistSSHRun/ride.jl")
 include("DistSSHRun/execute.jl")
 include("DistSSHRun/provenance.jl")
+include("DistSSHRun/options/unsafe_runtime.jl")
 
 const _KIT_ROOT = dirname(@__DIR__)
 
