@@ -5,6 +5,10 @@ open DistSSHLean
 
 /-!
 Source-mirrored model of `lib/DistSSHBase/src/ssh/shell_status.jl`.
+
+Julia applies `Int(exitcode)` and `Int(termsignal)`; integers outside `Int64` range throw
+and are outside this model. Signaled `128 + Int(termsignal)` uses bounded `Int` arithmetic;
+see `shellStatusSignaledTermsignalMax`.
 -/
 
 namespace DistSSHLean.DistSSHBase.ShellStatus
@@ -19,6 +23,18 @@ structure Process where
 def shellStatusSourceFile : String := "lib/DistSSHBase/src/ssh/shell_status.jl"
 
 def shellStatusNotExitedMsg : String := "shell_status: process has not exited"
+
+/-- `typemax(Int64)` on 64-bit Julia (`Int` width). -/
+def juliaInt64Max : Int := 9223372036854775807
+
+/--
+Largest `termsignal` with `128 + Int(termsignal)` still representable as Julia `Int64`.
+Julia uses wrapping `Int` addition beyond this; the Lean model uses unbounded `Int`.
+-/
+def shellStatusSignaledTermsignalMax : Int := juliaInt64Max - 128
+
+def signaledTermsignalInBounds (termsignal : Int) : Prop :=
+  termsignal > 0 ∧ termsignal ≤ shellStatusSignaledTermsignalMax
 
 /-- `shell_status.jl:18`: `process_exited(proc)`. -/
 def processExited (p : Process) : Bool := p.exited
@@ -38,12 +54,12 @@ def shellStatus (p : Process) : Jl Int :=
     .error (.argumentError shellStatusNotExitedMsg)
 
 def signaledBranchProp : Prop :=
-  ∀ (exitcode termsignal : Int), termsignal > 0 →
+  ∀ (exitcode termsignal : Int), signaledTermsignalInBounds termsignal →
     _shellStatus exitcode termsignal = 128 + termsignal
 
 theorem signaledBranch_holds : signaledBranchProp := by
-  intro exitcode termsignal h
-  simp [_shellStatus, h]
+  intro exitcode termsignal ⟨hpos, _⟩
+  simp [_shellStatus, hpos]
 
 def plainExitProp : Prop :=
   ∀ (exitcode termsignal : Int), ¬ termsignal > 0 →
@@ -54,14 +70,15 @@ theorem plainExit_holds : plainExitProp := by
   simp [_shellStatus, h]
 
 def signaledGe129Prop : Prop :=
-  ∀ (exitcode termsignal : Int), termsignal > 0 →
+  ∀ (exitcode termsignal : Int), signaledTermsignalInBounds termsignal →
     _shellStatus exitcode termsignal ≥ 129
 
 theorem signaledGe129_holds : signaledGe129Prop := by
-  intro exitcode termsignal h
+  intro exitcode termsignal hb
   have heq : _shellStatus exitcode termsignal = 128 + termsignal :=
-    signaledBranch_holds exitcode termsignal h
+    signaledBranch_holds exitcode termsignal hb
   rw [heq]
+  rcases hb with ⟨_, hbnd⟩
   omega
 
 theorem processExited_eq (p : Process) : processExited p = p.exited := rfl
@@ -87,7 +104,7 @@ def entries : List DistSSHLean.Registry.Entry := [
     juliaFile := shellStatusSourceFile
     juliaFns := ["_shell_status", "shell_status"]
     statement := "When termsignal > 0, status is 128 + termsignal (shell rule)."
-    preconditions := "Integer exitcode and termsignal; termsignal > 0 branch."
+    preconditions := "termsignal > 0 and termsignal ≤ typemax(Int64) − 128 (bounded signaled sum)."
     status := .proven
     prop := ``signaledBranchProp
     thm := some ``signaledBranch_holds },
@@ -103,7 +120,7 @@ def entries : List DistSSHLean.Registry.Entry := [
     juliaFile := shellStatusSourceFile
     juliaFns := ["_shell_status"]
     statement := "Any signaled status is at least 129."
-    preconditions := "termsignal > 0."
+    preconditions := "termsignal > 0 and termsignal ≤ typemax(Int64) − 128."
     status := .proven
     prop := ``signaledGe129Prop
     thm := some ``signaledGe129_holds },

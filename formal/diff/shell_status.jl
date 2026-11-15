@@ -16,6 +16,12 @@ const LEAN_BATCH = joinpath(FORMAL_ROOT, ".lake", "build", "bin", "shell_status_
 
 const EXIT_RANGE = -5:300
 const SIGNAL_RANGE = -2:31
+const INT64_TERMSIGNAL_SIGNATED_MAX = typemax(Int64) - 128
+const EDGE_TERMSIGNALS = (
+    INT64_TERMSIGNAL_SIGNATED_MAX,
+    INT64_TERMSIGNAL_SIGNATED_MAX - 1,
+    1,
+)
 const NCASES = 10_000
 const PROCASES = 500
 const RNG = MersenneTwister(0xD1572355)
@@ -51,6 +57,11 @@ function main()
     julia_expected = String[]
     pairs = [(rand(RNG, EXIT_RANGE), rand(RNG, SIGNAL_RANGE)) for _ in 1:NCASES]
     for (ec, ts) in pairs
+        push!(lines, "i $ec $ts")
+        push!(julia_expected, julia_internal_line(ec, ts))
+    end
+    for ts in EDGE_TERMSIGNALS
+        ec = 0
         push!(lines, "i $ec $ts")
         push!(julia_expected, julia_internal_line(ec, ts))
     end

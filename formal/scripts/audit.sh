@@ -4,6 +4,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 lake build
+lake build DistSSHLean.Runtime
 
 if grep -rnwE 'sorry|admit|native_decide|bv_decide|ofReduceBool' --include='*.lean' DistSSHLean DistSSHLean.lean Audit.lean Report.lean ShellStatusBatch.lean \
         | grep -v '^Audit.lean:'; then
