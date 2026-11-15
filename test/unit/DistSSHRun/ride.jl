@@ -451,9 +451,9 @@ using Distributed
                 @test read(oout, String) == "1,1,1"
             end
 
-            child = ride_local(map_path, "host1")
+            child = ride_local(map_path, "child:host1:2")
             @test !child.ok
-            @test occursin(":N", something(child.error, ""))
+            @test occursin("removed", something(child.error, ""))
 
             drive_path = joinpath(tmp, "driver.jl")
             write(drive_path, "using Distributed\npmap(x -> x, 1:2)\n")
@@ -659,6 +659,7 @@ using Distributed
                         redirect_stderr(devnull) do
                             DistSSHRun.ride!(
                                 script, ["1*$(host)"];
+                                local_workers = 0,
                                 project = local_proj,
                                 remote = remote,
                                 run_id = snap_id,
