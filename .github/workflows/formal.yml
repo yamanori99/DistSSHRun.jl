@@ -71,5 +71,11 @@ jobs:
       - name: Refutation reproducers
         run: bash formal/scripts/run-repros.sh
 
-      - name: Differential test
+      - name: Differential test (shell_status)
         run: julia --project=lib/DistSSHBase formal/diff/shell_status.jl
+
+      - name: Install zsh for posix_quote differential
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends zsh
+
+      - name: Differential test (posix_quote)
+        run: julia --project=lib/DistSSHBase formal/scripts/differential_full.jl

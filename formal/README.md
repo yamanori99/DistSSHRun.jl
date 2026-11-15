@@ -6,6 +6,28 @@
 > proofs certify properties of the Lean model (checked against Julia via differential
 > testing), not DistSSHRun or DistSSHBase as a whole.
 
+## POSIX `posix_quote` (experimental)
+
+**Modeled:** POSIX single-word parsing subset used to read `posix_quote` output:
+single-quoted runs, `\\` escapes outside quotes, and IFS whitespace as a word terminator
+(`DistSSHLean/DistSSHBase/PosixQuote/`). Double quotes, expansions, and line continuation
+are out of scope.
+
+**Proven (Lean model):** `posixQuote_roundtrip_chars`, `posixQuote_roundtrip` (one word, no
+trailing non-IFS via `shParseWordChars`), plus NUL vs non-NUL `posixQuote` branches.
+`decQb_qb` relates `qb` to `decQb` only; there is no formal link from Julia
+`posix_quote` to the model’s `qb`.
+
+**Not proven:** Faithfulness of `posix_quote` / `qb` to Julia — checked by
+`scripts/differential_full.jl` against `/bin/dash`, `bash --posix`, `zsh -f`, and
+`zsh emulate sh`, and the built `sh_posix_eval` exe (same parser as the proofs).
+
+```sh
+cd formal
+lake build sh_posix_eval
+julia --project=../lib/DistSSHBase scripts/differential_full.jl
+```
+
 # Formal verification (Lean 4)
 
 This directory follows
@@ -68,8 +90,10 @@ julia --project=lib/DistSSHBase formal/diff/shell_status.jl
 | `scripts/check-coverage.jl` | Registry coverage vs in-scope file and functions |
 | `QUESTIONS.md` | Maintainer rulings on ambiguous behaviour |
 | `bugs/` | YAML write-ups for confirmed bugs (`scripts/audit.sh` always needs PyYAML; `pip install pyyaml` on macOS if needed) |
-| `diff/shell_status.jl` | Differential test |
+| `diff/shell_status.jl` | Differential test (`shell_status`) |
+| `scripts/differential_full.jl` | `posix_quote` vs shells + Lean eval |
+| `PosixQuoteEval.lean` | `lake build sh_posix_eval` batch driver |
 | `repro/` | One `repro/<id>.jl` per refuted entry |
 
-Changing Julia `shell_status.jl` requires updating the Lean model, registry, coverage
-scope if needed, and the differential harness.
+Changing Julia `shell_status.jl` or `posix_quote` / `ssh.jl` requires updating the Lean
+model, registry, coverage scope if needed, and the matching differential harness.

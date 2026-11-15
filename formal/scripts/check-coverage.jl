@@ -1,8 +1,11 @@
 #!/usr/bin/env julia
 # Check that Audit.lean COVER-* lines match the formalization scope.
 # Usage: julia scripts/check-coverage.jl .lake/audit.out
-const EXPECTED_FILES = ["lib/DistSSHBase/src/ssh/shell_status.jl"]
-const EXPECTED_FNS = ["_shell_status", "shell_status"]
+const EXPECTED_FILES = [
+    "lib/DistSSHBase/src/ssh/shell_status.jl",
+    "lib/DistSSHBase/src/ssh/ssh.jl",
+]
+const EXPECTED_FNS = ["_shell_status", "shell_status", "posix_quote"]
 
 audit_out = only(ARGS)
 lines = readlines(audit_out)

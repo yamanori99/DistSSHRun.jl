@@ -3,3 +3,7 @@ shell-status-plain-exit	proven	general	2	lib/DistSSHBase/src/ssh/shell_status.jl
 shell-status-signaled-ge-129	proven	general	2	lib/DistSSHBase/src/ssh/shell_status.jl	Any signaled status is at least 129.	termsignal > 0 and termsignal ≤ typemax(Int64) − 128.
 shell-status-proc-exited	proven	general	1	lib/DistSSHBase/src/ssh/shell_status.jl	When the child has exited, shell_status returns _shell_status on its codes.	process_exited(proc).
 shell-status-proc-not-exited	proven	general	1	lib/DistSSHBase/src/ssh/shell_status.jl	When the child has not exited, shell_status throws ArgumentError with the docstring message.	¬ process_exited(proc).
+posix-quote-roundtrip-chars	proven	general	1	lib/DistSSHBase/src/ssh/ssh.jl	POSIX sh word parse of `posixQuoteOkChars cs` yields `cs` alone (no trailing junk).	Lean `shParseWordChars`; single-quote/backslash/IFS subset.
+posix-quote-roundtrip	proven	general	1	lib/DistSSHBase/src/ssh/ssh.jl	POSIX sh word parse of `posixQuoteOk s` yields `s` when s has no NUL.	¬ containsNul s; trailing non-IFS forbidden via `shParseWordChars`.
+posix-quote-nul	proven	general	1	lib/DistSSHBase/src/ssh/ssh.jl	Model `posixQuote` returns none when the word contains NUL.	containsNul s.
+posix-quote-no-nul	proven	general	1	lib/DistSSHBase/src/ssh/ssh.jl	Model `posixQuote` returns some quoted string when there is no NUL.	¬ containsNul s.

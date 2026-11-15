@@ -7,3 +7,7 @@ name = "DistSSHLean"
 [[lean_exe]]
 name = "shell_status_batch"
 root = "ShellStatusBatch"
+
+[[lean_exe]]
+name = "sh_posix_eval"
+root = "PosixQuoteEval"
