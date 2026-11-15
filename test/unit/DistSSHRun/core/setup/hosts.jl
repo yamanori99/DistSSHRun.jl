@@ -18,11 +18,11 @@ using Test
         @test !DistSSHRun.setup_token_has_worker_count("alice@lab-server")
         @test_throws ArgumentError DistSSHRun.reject_setup_worker_count!("4*alice@lab-server")
         let e = try
-            DistSSHRun.reject_setup_worker_count!("4*alice@lab-server")
-            nothing
-        catch err
-            err
-        end
+                DistSSHRun.reject_setup_worker_count!("4*alice@lab-server")
+                nothing
+            catch err
+                err
+            end
             @test e isa ArgumentError
             @test occursin("without counts", e.msg)
             @test occursin("alice@lab-server", e.msg)
