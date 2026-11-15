@@ -25,6 +25,16 @@ function _nonposix_shell_env(
     )
 end
 
+function _run_ignorestatus_capture_stderr(cmd::Cmd)
+    return mktemp() do err_path, err_io
+        proc = redirect_stderr(err_io) do
+            run(ignorestatus(cmd); wait = true)
+        end
+        flush(err_io)
+        proc, read(err_path, String)
+    end
+end
+
 let _BASE = DistSSHBase
     @testset "remote shell quotes metacharacters" begin
         @test _BASE._remote_shell_path_word("/srv/x;id") == "'/srv/x;id'"
@@ -217,12 +227,7 @@ let _BASE = DistSSHBase
                 rm(logp; force = true)
                 withenv(_nonposix_shell_env(double, logp; mode = "fish")...) do
                     cmd = _BASE._host_sync_remote_shell_cmd("summarize-fish.test", "nope")
-                    proc, proc_stderr = let buf = IOBuffer()
-                        p = redirect_stderr(buf) do
-                            run(ignorestatus(cmd); wait = true)
-                        end
-                        p, String(take!(buf))
-                    end
+                    proc, proc_stderr = _run_ignorestatus_capture_stderr(cmd)
                     @test proc.exitcode == 9
                     @test occursin("missing-tool", proc_stderr)
                     msg = _BASE.summarize_ssh_error(
@@ -234,12 +239,7 @@ let _BASE = DistSSHBase
                     @test occursin("help setup", msg)
                     @test !occursin("--help", msg)
                     sshfail = _BASE._host_sync_remote_shell_cmd("summarize-255.test", "sshfail")
-                    denied, denied_stderr = let buf = IOBuffer()
-                        p = redirect_stderr(buf) do
-                            run(ignorestatus(sshfail); wait = true)
-                        end
-                        p, String(take!(buf))
-                    end
+                    denied, denied_stderr = _run_ignorestatus_capture_stderr(sshfail)
                     @test denied.exitcode == 255
                     @test occursin("Permission denied (publickey).", denied_stderr)
                     plain = _BASE.summarize_ssh_error(
