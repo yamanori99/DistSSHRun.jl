@@ -68,7 +68,7 @@ function validate_host_launch_plan(
             ),
         ),
     )
-    top = topology_for_launch()
+    top = topology_for_launch(; unsafe_all_to_all = unsafe_all_to_all_active())
     return HostLaunchPlan(h, b, tunnel, top)
 end
 

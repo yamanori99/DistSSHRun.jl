@@ -182,7 +182,7 @@ function add_drive_workers!(
                         host_name,
                         bind;
                         tunnel = DistSSHRun.ssh_tunnel_enabled(),
-                        unsafe_expose_port = _env_flag("DISTSSH_UNSAFE_EXPOSE_PORT"),
+                        unsafe_expose_port = DistSSHRun.unsafe_expose_port_active(),
                     )
                     machine = DistSSHRun.ssh_addprocs_bind_localhost(host_name)
                     DistSSHRun._add_ssh_drive_workers!(
