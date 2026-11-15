@@ -887,9 +887,12 @@ function verify_go_slots_match_job!(
     slot_lines = String[]
     if any(s -> s.kind === :parent, slots)
         local_id = _go_local_slot_identity(project, julia)
-        for line in identity_mismatches(parent, local_id; unsafe_heterogeneous = waive_env)
-            push!(slot_lines, "parent slot: $(line)")
-        end
+        append!(
+            slot_lines,
+            _described_identity_lines(
+                parent, local_id, "parent slot"; unsafe_heterogeneous = waive_env,
+            ),
+        )
     end
     seen = Set{String}()
     for s in slots

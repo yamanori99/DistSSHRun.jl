@@ -538,6 +538,32 @@ function _env_verify_guards()
             @test !occursin("cannot determine the Julia build", only(lines))
         end
 
+        @testset "go parent slot surfaces probe_error like child slots" begin
+            parent = Dict(
+                "version" => string(VERSION),
+                "commit" => string(Base.GIT_VERSION_INFO.commit),
+                "manifest.sha256" => "a"^64,
+                "project.sha256" => "b"^64,
+            )
+            local_id = Dict(
+                "probe_error" => "identity probe failed on host parent (exit 127)\nbad julia",
+                "version" => "",
+                "commit" => "",
+            )
+            direct = String[
+                "parent slot: $(line)"
+                    for line in DistSSHRun.identity_mismatches(
+                        parent, local_id; unsafe_heterogeneous = false,
+                    )
+            ]
+            described = DistSSHRun._described_identity_lines(
+                parent, local_id, "parent slot"; unsafe_heterogeneous = false,
+            )
+            @test length(described) == 1
+            @test occursin("exit 127", only(described))
+            @test any(occursin("cannot determine the Julia build", line) for line in direct)
+        end
+
         @testset "_remote_project_for_go prefers remote work root" begin
             local_proj = "/home/controller/jobs/app"
             remote_src = "/home/remote/runs/run123/src"
