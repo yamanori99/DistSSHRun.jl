@@ -56,7 +56,7 @@ function collect!(
     session = if opts.remote_root !== session.remote
         DistSSHSession(
             project = session.project,
-            workers = session.hosts,
+            workers = session.tokens,
             remote = opts.remote_root,
             quiet = session.quiet,
             verbosity = session.verbosity,
