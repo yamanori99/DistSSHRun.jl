@@ -17,7 +17,7 @@ inductive St where
   | sq : St
 
 private theorem list_drop1_lt (c : Char) (rest : List Char) :
-    rest.length < (c :: rest).length := by simpa using Nat.lt_succ_self rest.length
+    rest.length < (c :: rest).length := by exact Nat.lt_succ_self rest.length
 
 private theorem list_drop2_lt (c₁ c₂ : Char) (rest : List Char) :
     rest.length < (c₁ :: c₂ :: rest).length := by

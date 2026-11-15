@@ -32,19 +32,19 @@ theorem posixQuote_no_nul : posixQuoteNoNulProp := by
 
 private theorem step_sq_close (acc : List Char) :
     step St.sq ('\'' :: []) acc = some (acc.reverse, []) := by
-  simp only [step, St.sq, St.unq]
+  simp only [step]
 
 private theorem step_sq_cons_ne (c : Char) (rest acc : List Char) (h : c ≠ '\'') :
     step St.sq (c :: rest) acc = step St.sq rest (c :: acc) := by
   by_cases hc : c == '\''
   · have : c = '\'' := by simpa [beq_iff_eq] using hc
     exact absurd this h
-  · simp only [step, St.sq, hc, ↓reduceIte]
+  · simp only [step]
 
 private theorem step_sq_quoteEmbed (cs acc : List Char) :
     step St.sq ('\'' :: '\\' :: '\'' :: '\'' :: qb cs ++ '\'' :: []) acc =
       step St.sq (qb cs ++ '\'' :: []) ('\'' :: acc) := by
-  simp only [List.cons_append, step, St.unq]
+  simp only [List.cons_append, step]
 
 theorem step_sq_qb (cs acc : List Char) :
     step St.sq (qb cs ++ '\'' :: []) acc = some (acc.reverse ++ cs, []) := by
@@ -58,9 +58,9 @@ theorem step_sq_qb (cs acc : List Char) :
       have harr :
           '\'' :: '\\' :: '\'' :: '\'' :: (qb cs ++ '\'' :: []) =
             '\'' :: '\\' :: '\'' :: '\'' :: qb cs ++ '\'' :: [] := by
-        simp [List.append_assoc, List.cons_append]
+        simp [List.cons_append]
       rw [harr, step_sq_quoteEmbed, ih]
-      congr 1 <;> simp [List.reverse_cons, List.reverse_singleton, List.cons_append]
+      congr 1 <;> simp [List.reverse_cons, List.cons_append]
     · have hb : (c == '\'') = false := beq_eq_false_iff_ne.2 h
       simp only [qb, escapeChar, hb, Bool.false_eq_true, ↓reduceIte, List.cons_append, List.nil_append]
       rw [step_sq_cons_ne c (qb cs ++ '\'' :: []) acc h, ih (c :: acc)]

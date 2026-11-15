@@ -67,7 +67,7 @@ From the repository root (toolchain in `formal/lean-toolchain`, no Mathlib):
 ```sh
 cd formal
 lake build
-bash scripts/audit.sh          # AUDIT OK; coverage; bugs schema
+bash scripts/audit.sh          # AUDIT OK; AXIOMS report (one line per proven theorem); coverage; bugs
 bash scripts/run-repros.sh     # when REFUTED lines exist
 lake env lean Report.lean > registry.tsv
 julia --project=../lib/DistSSHBase diff/shell_status.jl
@@ -84,7 +84,7 @@ julia --project=lib/DistSSHBase formal/diff/shell_status.jl
 | Path | Role |
 |------|------|
 | `DistSSHLean/` | Models, `Registry`, `Runtime` (`Jl`, `JlError`) |
-| `Audit.lean`, `Report.lean`, `registry.tsv` | Registry audit and export |
+| `Audit.lean`, `AxiomReport.lean`, `Report.lean`, `registry.tsv` | Registry audit; `lake env lean AxiomReport.lean` prints one `AXIOMS …` line per proven theorem |
 | `scripts/audit.sh`, `check-coverage.jl`, `check-bugs.sh` | julia-in-lean checks |
 | `scripts/check-proof-escapes.py` | Syntax-aware proof-escape scan (adapted from [julia-in-lean](https://github.com/MilesCranmer/julia-in-lean) `check-proof-escapes.py`, Apache-2.0) |
 | `scripts/check-coverage.jl` | Registry coverage vs in-scope file and functions |
