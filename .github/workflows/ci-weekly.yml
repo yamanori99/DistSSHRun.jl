@@ -116,8 +116,6 @@ jobs:
           version: "1.13"
       - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
         with:
-          projects: |
-            DistSSHRun.jl/Project.toml
           cache-scratchspaces: false
           delete-old-caches: false
       - name: Public Run names in downstream src
