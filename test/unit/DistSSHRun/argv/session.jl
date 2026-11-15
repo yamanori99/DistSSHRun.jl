@@ -175,12 +175,24 @@ end
             @test count(s -> s.host == "host-b", slots) == 4
         end
 
-        withenv("DISTSSH_HOSTS" => "2*env-a, env-b", "DISTSSH_HOSTS_FILE" => nothing) do
-            session = DistSSHRun.CliSharedFlags(hosts_flag = ["parent:3"], hosts_file = hosts_file)
+        let session = DistSSHRun.CliSharedFlags(hosts_file = hosts_file)
             @test DistSSHRun.placement_source_tokens(session; keep_counts = true) ==
-                ["parent:3", "2*env-a", "env-b", "1*host-a", "4*host-b"]
+                ["host-a", "4*host-b"]
             @test DistSSHRun.placement_source_tokens(session; keep_counts = false, roles = true) ==
-                ["parent", "env-a", "env-b", "host-a", "host-b"]
+                ["host-a", "host-b"]
+        end
+
+        withenv("DISTSSH_HOSTS" => "2*env-a, env-b", "DISTSSH_HOSTS_FILE" => nothing) do
+            session = DistSSHRun.CliSharedFlags()
+            @test DistSSHRun.placement_source_tokens(session; keep_counts = true) ==
+                ["2*env-a", "env-b"]
+            @test DistSSHRun.placement_source_tokens(session; keep_counts = false, roles = true) ==
+                ["env-a", "env-b"]
+        end
+
+        @test_throws ArgumentError begin
+            session = DistSSHRun.CliSharedFlags(hosts_flag = ["host-a"], hosts_file = hosts_file)
+            DistSSHRun.placement_source_tokens(session)
         end
     end
 end

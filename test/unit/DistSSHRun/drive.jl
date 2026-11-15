@@ -11,7 +11,7 @@ end
 
 @testset "drive API" begin
     @testset "parse_worker_tokens" begin
-        p = DistSSHRun.parse_worker_tokens(["parent:2", "4*host-a", "host-b"])
+        p = DistSSHRun.parse_worker_tokens(["4*host-a", "host-b"]; local_workers = 2)
         @test p.parent_workers == 2
         @test !p.parent_autosize
         @test p.child_workers == Dict("host-a" => 4)
@@ -19,9 +19,9 @@ end
         @test p.child_hosts == ["host-a", "host-b"]
         @test DistSSHRun.worker_tokens_fully_specified(p) == false
 
-        fixed = DistSSHRun.parse_worker_tokens(["parent:2", "1*h1"])
+        fixed = DistSSHRun.parse_worker_tokens(["1*h1"]; local_workers = 2)
         @test DistSSHRun.worker_tokens_fully_specified(fixed)
-        let plan = DistSSHRun.worker_plan_from_tokens(["parent:2", "1*h1"])
+        let plan = DistSSHRun.worker_plan_from_tokens(["1*h1"]; local_workers = 2)
             @test plan.parent_workers == 2
             @test plan.child_workers == Dict("h1" => 1)
         end
@@ -34,15 +34,15 @@ end
         @test err isa ArgumentError
         @test occursin(":N", sprint(showerror, err))
 
-        @test_throws ArgumentError DistSSHRun.parse_worker_tokens(["parent:1", "parent:2"])
+        @test_throws ArgumentError DistSSHRun.parse_worker_tokens(["parent:1"])
 
-        auto = DistSSHRun.parse_worker_tokens(["parent", "3*h1"])
+        auto = DistSSHRun.parse_worker_tokens(["3*h1"])
         @test auto.parent_autosize
         @test auto.parent_workers == 0
         @test auto.child_workers == Dict("h1" => 3)
-        @test DistSSHRun.child_hosts_from_tokens(["parent:2", "h1", "4*h2"]) == ["h1", "h2"]
-        @test_throws ArgumentError DistSSHRun.require_counted_placement_tokens(["parent"])
-        @test DistSSHRun.require_counted_placement_tokens(["parent:1"]) === nothing
+        @test DistSSHRun.child_hosts_from_tokens(["h1", "4*h2"]) == ["h1", "h2"]
+        @test_throws ArgumentError DistSSHRun.require_counted_placement_tokens(["host"])
+        @test DistSSHRun.require_counted_placement_tokens(["1*host"]) === nothing
 
         let kw = DistSSHRun.ParsedWorkerTokens(;
                 parent_workers = 2,
@@ -56,8 +56,8 @@ end
             @test !kw.parent_autosize
         end
 
-        @test_throws ArgumentError DistSSHRun.worker_plan_from_tokens(["parent"])
-        plan = DistSSHRun.worker_plan_from_tokens(["parent:2"])
+        @test_throws ArgumentError DistSSHRun.worker_plan_from_tokens(["host"])
+        plan = DistSSHRun.worker_plan_from_tokens(String[]; local_workers = 2)
         @test plan.parent_workers == 2
         @test isempty(plan.child_workers)
     end
@@ -77,7 +77,7 @@ end
 
     @testset "drive_host_specs" begin
         plan = DistSSHRun.WorkerPlan(2, Dict("host-a" => 4, "host-b" => 0))
-        @test DistSSHRun.drive_host_specs(plan) == ["parent:2", "4*host-a"]
+        @test DistSSHRun.drive_host_specs(plan) == ["4*host-a"]
     end
 
     @testset "apply_session_env!" begin

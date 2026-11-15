@@ -211,9 +211,9 @@ using Test
             let r = parse_drive_args(["--hosts-file", hosts_file, "2*host-cli", "s.jl"])
                 @test r.hosts == [("host-cli", 2), ("host-a", 1), ("host-b", 4)]
             end
-            @test_throws ArgumentError parse_drive_args(
-                ["--hosts", "2*h-csv,h-csv-b", "s.jl"],
-            )
+            let r = parse_drive_args(["--hosts", "2*h-csv,h-csv-b", "s.jl"])
+                @test r.hosts == [("h-csv", 2), ("h-csv-b", 1)]
+            end
             let r = parse_drive_args(["--hosts", "2*h-csv,1*h-csv-b", "s.jl"])
                 @test r.hosts == [("h-csv", 2), ("h-csv-b", 1)]
             end
@@ -307,7 +307,7 @@ using Test
         @test occursin("progress DIR", txt)
         @test occursin("--unsafe-heterogeneous", txt)
         @test !occursin(r"--parent(?!-gb)", txt)
-        @test !occursin("--local", txt)
+        @test !occursin(r"(^|\s)--local(?!-)", txt)
         @test !occursin("--mem-headroom", txt)
         @test !occursin("--parent-gb", txt)
         @test occursin("DISTSSH_JOBS", txt)

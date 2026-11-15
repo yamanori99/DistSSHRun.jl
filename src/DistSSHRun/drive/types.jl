@@ -563,14 +563,7 @@ end
 
 """Build `drive` host specs from a [`WorkerPlan`](@ref)."""
 function drive_host_specs(plan::WorkerPlan)::Vector{String}
-    specs = String[]
-    if plan.parent_workers > 0
-        push!(specs, format_placement_token(:parent, PARENT_HOST_NAME, plan.parent_workers))
-    end
-    for (host, n) in plan.child_workers
-        n > 0 && push!(specs, format_placement_token(:child, host, n))
-    end
-    return specs
+    return resolved_placement_tokens(plan)
 end
 
 function SyncResult(

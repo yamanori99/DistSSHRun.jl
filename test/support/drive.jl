@@ -46,7 +46,7 @@ if !isdefined(Main, :_run_kit_drive)
         julia = String(julia)
         log_flags = log_dir === nothing ? ["--no-log"] : ["--log-dir", log_dir]
         worker_tokens = String[]
-        parent_workers > 0 && push!(worker_tokens, "parent:$(parent_workers)")
+        parent_workers > 0 && append!(worker_tokens, ["--local-workers", string(parent_workers)])
         append!(worker_tokens, child_hosts)
         isempty(worker_tokens) && error("_run_kit_drive: need parent_workers > 0 or child_hosts")
         cmd = _kit_cli_cmd(
@@ -129,7 +129,7 @@ if !isdefined(Main, :_run_kit_drive)
         host_project = _drive_host_root(host_project)
         kit_root = String(kit_root)
         log_flags = log_dir === nothing ? String["--no-log"] : String["--log-dir", String(log_dir)]
-        tokens = String["-y", "parent:$(parent_workers)"]
+        tokens = String["-y", "--local-workers", string(parent_workers)]
         append!(tokens, log_flags)
         push!(tokens, script)
         base = _julia_cmd_for(julia)

@@ -456,7 +456,7 @@ function show_drive_usage(; io::IO = stdout)
         "                      (after setup ship-tree + setup instantiate)",
         "  --worker-include    re-include the full driver on workers (default: defs only)",
         "  --require-git       $(REQUIRE_GIT_MEANING)",
-        "  --require-all-hosts listed parent/child tokens must join, stay, and collect (default)",
+        "  --require-all-hosts listed machine tokens must join, stay, and collect (default)",
         "  --best-effort       allow a partial run (missing join is not a failure)",
         "  --output-dir PATH   result root (default: {script}/.distssh/drive/<stem>_<UTC>/; must be missing or empty)",
         "  --isolated          run the driver in a child process (default: this process)",
