@@ -417,16 +417,58 @@ function _worker_project_precompile_allowed(project::AbstractString)::Bool
     return Base.Filesystem.iswritable(p)
 end
 
-function _precompile_worker_project!(wid::Int)
+function _worker_precompile_rank(wid::Int)::String
+    return try
+        string(
+            remotecall_fetch(
+                Core.eval,
+                wid,
+                Main,
+                :(get(ENV, "DISTSSH_WORKER_RANK", string(myid()))),
+            ),
+        )
+    catch
+        string(wid)
+    end
+end
+
+function _worker_precompile_host(wid::Int)::String
+    return try
+        string(remotecall_fetch(Core.eval, wid, Main, :(gethostname())))
+    catch
+        return "worker $wid"
+    end
+end
+
+function _warn_worker_project_precompile!(
+        wid::Int,
+        project::AbstractString,
+        headline::AbstractString;
+        err::Union{Nothing, Exception} = nothing,
+    )::Nothing
+    host = _worker_precompile_host(wid)
+    rank = _worker_precompile_rank(wid)
+    proj = String(project)
+    msg = "Warning: worker project precompile on $(host) (rank $(rank)), project=$(proj): $(headline)"
+    err === nothing || (msg *= "\n$(sprint(showerror, err))")
+    print_warn(msg * "\n"; io = stderr)
+    return nothing
+end
+
+function _precompile_worker_project!(wid::Int, project::AbstractString)
+    p = String(project)
+    if !isdir(p) || !Base.Filesystem.iswritable(p)
+        _warn_worker_project_precompile!(
+            wid,
+            p,
+            "project directory is not writable; precompile not attempted",
+        )
+        return nothing
+    end
     try
         remotecall_wait(Core.eval, wid, Main, _WORKER_PKG_PRECOMPILE_EXPR)
     catch e
-        host = try
-            remotecall_fetch(Core.eval, wid, Main, :(gethostname()))
-        catch
-            "worker $wid"
-        end
-        print_warn("Worker project precompile failed on $(host): $(sprint(showerror, e))\n")
+        _warn_worker_project_precompile!(wid, p, "precompile failed"; err = e)
     end
     return nothing
 end
@@ -479,7 +521,7 @@ function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::A
             i == 1 || continue
             added = sort!(just)
             if !isempty(added) && _worker_project_precompile_allowed(project)
-                _precompile_worker_project!(first(added))
+                _precompile_worker_project!(first(added), project)
             end
         end
     catch
@@ -522,7 +564,7 @@ function _add_ssh_drive_workers!(
             added = sort!(just)
             isempty(added) && return nothing
             _worker_project_precompile_allowed(project) &&
-                _precompile_worker_project!(first(added))
+                _precompile_worker_project!(first(added), project)
         end
     catch
         _rmprocs_added_since(before)

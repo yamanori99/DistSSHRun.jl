@@ -305,7 +305,8 @@ function init_drive_workers!(
                 end
 
                 @sync for (_, w) in host_workers
-                    @async DistSSHRun._precompile_worker_project!(w)
+                    worker_proj = get(RUNNER_WORKER_PROJECT_DIRS, w, proj_dir)
+                    @async DistSSHRun._precompile_worker_project!(w, worker_proj)
                 end
 
                 # Skip processes where the binding already exists (e.g. master
