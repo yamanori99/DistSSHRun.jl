@@ -38,7 +38,6 @@ include("hosts/hostinfo.jl")
 include("hosts/host_result.jl")
 include("ssh/julia_where.jl")
 include("namespace.jl")
-include("tool_require.jl")
 
 # Queue and Kit import these. Underscore names stay private.
 public PARENT_HOST_NAME
