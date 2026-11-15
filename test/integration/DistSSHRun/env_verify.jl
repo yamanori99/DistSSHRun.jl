@@ -626,6 +626,14 @@ function _env_verify_guards()
                     @test !occursin(controller_expanded, script)
                     @test occursin("./runs", script) || occursin("./runs/src", script)
                 end
+                spaced = "~/runs/with spaces/src"
+                withenv(env...) do
+                    isfile(logp) && rm(logp)
+                    DistSSHRun._go_remote_run_identity("host1", spaced, nothing)
+                    script = isfile(logp) ? read(logp, String) : ""
+                    pr = DistSSHRun._remote_shell_path_word(spaced)
+                    @test occursin("--project=$(pr)", script)
+                end
             end
         end
 
