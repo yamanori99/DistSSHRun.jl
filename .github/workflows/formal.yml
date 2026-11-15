@@ -33,26 +33,43 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Cache elan and Lake build
+      - name: Cache elan toolchains
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: elan-toolchain-cache
+        with:
+          path: ~/.elan
+          key: formal-elan-${{ hashFiles('formal/lean-toolchain', 'formal/ci/elan-pin.env') }}
+          restore-keys: |
+            formal-elan-
+
+      - name: Cache Lake build (formal/.lake)
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            ~/.elan
-            formal/.lake
-          key: formal-lean-${{ hashFiles('formal/lean-toolchain', 'formal/**/*.lean', 'formal/lakefile.toml') }}
+          path: formal/.lake
+          key: formal-lake-${{ hashFiles('formal/lean-toolchain', 'formal/lake-manifest.json', 'formal/**/*.lean', 'formal/lakefile.toml') }}
           restore-keys: |
-            formal-lean-
+            formal-lake-${{ hashFiles('formal/lean-toolchain', 'formal/lake-manifest.json', 'formal/lakefile.toml') }}-
+            formal-lake-
 
       - name: Install elan
         run: |
-          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y
-          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+          set -euo pipefail
+          # shellcheck source=formal/ci/elan-pin.env
+          source formal/ci/elan-pin.env
+          if [[ -x "${HOME}/.elan/bin/elan" ]]; then
+            echo "elan already installed (cache hit); skipping bootstrap"
+          else
+            curl -sSfL "$ELAN_INIT_URL" -o elan-init.sh
+            echo "${ELAN_INIT_SHA256}  elan-init.sh" | sha256sum -c -
+            sh elan-init.sh -y --default-toolchain none --no-modify-path
+            rm -f elan-init.sh
+          fi
+          echo "${HOME}/.elan/bin" >>"$GITHUB_PATH"
 
-      - name: Select toolchain
+      - name: Select Lean toolchain
         working-directory: formal
         run: |
           elan toolchain install "$(cat lean-toolchain)"
-          elan default "$(cat lean-toolchain)"
 
       - name: Install PyYAML for bug schema check
         run: python3 -m pip install --user pyyaml

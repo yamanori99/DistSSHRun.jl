@@ -23,6 +23,8 @@ def axiomAllowed (env : Environment) (ax : Name) : Bool :=
   let entries := DistSSHLean.Registry.all
   let mut failures : Array String := #[]
   let mut seen : Std.HashSet String := {}
+  let mut seenCoverFiles : Std.HashSet String := {}
+  let mut seenCoverFns : Std.HashSet String := {}
   let mut counts : Std.HashMap String Nat := {}
   for e in entries do
     let statusName := toString (repr e.status)
@@ -30,9 +32,13 @@ def axiomAllowed (env : Environment) (ax : Name) : Bool :=
     if seen.contains e.id then
       failures := failures.push s!"{e.id}: duplicate id"
     seen := seen.insert e.id
-    IO.println s!"COVER-FILE {e.juliaFile}"
+    unless seenCoverFiles.contains e.juliaFile do
+      seenCoverFiles := seenCoverFiles.insert e.juliaFile
+      IO.println s!"COVER-FILE {e.juliaFile}"
     for fn in e.juliaFns do
-      IO.println s!"COVER-FN {fn}"
+      unless seenCoverFns.contains fn do
+        seenCoverFns := seenCoverFns.insert fn
+        IO.println s!"COVER-FN {fn}"
     match e.status with
     | .todo | .stuck =>
       failures := failures.push s!"{e.id}: status {statusName}"

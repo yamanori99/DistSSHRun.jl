@@ -31,8 +31,28 @@ run_repro_script () {
   return 1
 }
 
+# Like run_repro_script but captures output without printing (for self-tests).
+run_repro_script_silent () {
+  local id="$1"
+  local script="$2"
+  local _out_file="${3:-}"
+  local out rc
+  set +e
+  out="$("$JULIA" --project="$REPO_ROOT/lib/DistSSHBase" "$script" </dev/null 2>&1)"
+  rc=$?
+  set -e
+  [[ -n "$_out_file" ]] && printf '%s' "$out" >"$_out_file"
+  if [[ $rc -ne 0 ]]; then
+    return 1
+  fi
+  if grep -qx "REPRODUCED $id" <<<"$out"; then
+    return 0
+  fi
+  return 2
+}
+
 self_test_repros () {
-  local tmpdir failures=0
+  local tmpdir expected=2 passed=0 failures=0 captured
   tmpdir="$(mktemp -d)"
   trap 'rm -rf "$tmpdir"' RETURN
 
@@ -40,22 +60,35 @@ self_test_repros () {
 println("REPRODUCED selftest-marker-then-throw")
 error("after marker")
 EOF
-  if run_repro_script "selftest-marker-then-throw" "$tmpdir/marker-then-throw.jl"; then
-    echo "FAIL selftest: expected non-zero exit after REPRODUCED marker"
+  if run_repro_script_silent "selftest-marker-then-throw" "$tmpdir/marker-then-throw.jl" "$tmpdir/marker.out"; then
+    echo "SELFTEST marker-then-throw: FAIL (expected non-zero exit after marker)"
+    captured="$(cat "$tmpdir/marker.out")"
+    sed 's/^/    /' <<<"$captured" | tail -20
     failures=$((failures + 1))
   else
-    echo "OK selftest-marker-then-throw"
+    echo "SELFTEST marker-then-throw: rejected as expected"
+    passed=$((passed + 1))
   fi
 
   cat >"$tmpdir/clean.jl" <<'EOF'
 println("REPRODUCED selftest-clean")
 EOF
-  if ! run_repro_script "selftest-clean" "$tmpdir/clean.jl"; then
-    echo "FAIL selftest: clean reproducer should pass"
+  if run_repro_script_silent "selftest-clean" "$tmpdir/clean.jl" "$tmpdir/clean.out"; then
+    echo "SELFTEST clean: accepted as expected"
+    passed=$((passed + 1))
+  else
+    echo "SELFTEST clean: FAIL (expected exit 0 with marker)"
+    captured="$(cat "$tmpdir/clean.out")"
+    sed 's/^/    /' <<<"$captured" | tail -20
     failures=$((failures + 1))
   fi
 
-  [[ $failures -eq 0 ]]
+  if [[ $failures -eq 0 ]]; then
+    echo "SELFTESTS $passed/$expected OK"
+    return 0
+  fi
+  echo "SELFTESTS $passed/$expected FAIL ($failures unexpected)"
+  return 1
 }
 
 failures=0
@@ -75,11 +108,10 @@ while read -r id; do
   fi
 done < <(sed -n 's/^REFUTED //p' "$AUDIT_OUT")
 
-self_failures=0
-if ! self_test_repros; then
-  self_failures=1
-fi
-failures=$((failures + self_failures))
+self_rc=0
+self_test_repros || self_rc=$?
 
 echo "REPROS $count FAILURES $failures"
-[[ $failures -eq 0 ]]
+if [[ $failures -ne 0 ]] || [[ $self_rc -ne 0 ]]; then
+  exit 1
+fi
