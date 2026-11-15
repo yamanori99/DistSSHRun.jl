@@ -229,8 +229,8 @@ function run_drive_parsed!(
     # `parse_drive_args` is inferred as one NamedTuple whose fields are unions.
     # CLI `drive_main` already opened the frame (`cli=true`). A direct call,
     # including `drive!`, opens it here when none is active (`cli=false`).
-    uh = get(parsed, :unsafe_heterogeneous, false)
-    return with_unsafe_heterogeneous(uh) do
+    cfg = resolve_run_job_config_from_parsed(parsed; command = :drive)
+    return with_run_unsafe_options!(cfg) do
         return _drive_frame(; cli = false) do
             return Base.invokelatest(
                 _run_drive_parsed_specialized!,
@@ -263,6 +263,17 @@ function _run_drive_parsed_specialized!(
     if parsed.show_version
         DistSSHRun.println_kit_version()
         return 0
+    end
+
+    project = something(project_root, get(ENV, "DISTRIBUTED_PROJECT_ROOT", pwd()))
+    let diag = finish_run_job_diagnostics!(
+            parsed;
+            command = :drive,
+            project = project,
+            hosts = String[first(h) for h in parsed.hosts],
+            worker_tokens = host_tokens(parsed; kind = :drive),
+        )
+        diag !== nothing && return Cint(diag)
     end
 
     if parsed.collect_root !== nothing && parsed.collect_hosts !== nothing

@@ -68,12 +68,12 @@ using Test
             @test child_args == ["--output-dir", "--quiet", "result.jl", "driver.jl"]
             @test !DistSSHRun.parse_drive_args(child_args).isolated
             uh_isolated = [
-                "--unsafe-heterogeneous", "--isolated", "parent:1", "job.jl",
+                "--unsafe-skip-env-digests", "--isolated", "parent:1", "job.jl",
             ]
             _, uh_peeled = DistSSHRun.peel_shared_cli_flags(uh_isolated)
             @test DistSSHRun._peeled_isolated_option(uh_peeled) !== nothing
             uh_child = DistSSHRun._drive_isolated_child_args(uh_isolated)
-            @test uh_child == ["--unsafe-heterogeneous", "parent:1", "job.jl"]
+            @test uh_child == ["--unsafe-skip-env-digests", "parent:1", "job.jl"]
             @test !DistSSHRun.parse_drive_args(uh_child).isolated
             rooted = DistSSHRun._drive_isolated_cmd(
                 ["--isolated", "s.jl"]; project_root = "/jobs/app",
@@ -184,8 +184,8 @@ using Test
             let r = parse_drive_args(["--julia", "auto", "s.jl"])
                 @test r.julia === nothing
             end
-            let r = parse_drive_args(["--unsafe-heterogeneous", "s.jl"])
-                @test r.unsafe_heterogeneous
+            let r = parse_drive_args(["--unsafe-skip-env-digests", "s.jl"])
+                @test r.unsafe_skip_env_digests
             end
             err = try
                 parse_drive_args(["--allow-mismatch", "s.jl"])
@@ -194,10 +194,9 @@ using Test
                 e
             end
             err isa ArgumentError || error("expected ArgumentError")
-            @test occursin(
-                "removed; use --unsafe-heterogeneous (Julia/DistSSH* can no longer be waived)",
-                err.msg,
-            )
+            @test occursin("DSSH-E001", err.msg)
+            @test occursin("--allow-mismatch was removed", err.msg)
+            @test occursin("--unsafe-skip-env-digests", err.msg)
             let r = parse_drive_args(["--no-log", "s.jl"])
                 @test r.enable_log == false
             end
@@ -312,7 +311,7 @@ using Test
         @test occursin("off by default", lowercase(txt))
         @test occursin("parent:N", txt)
         @test occursin("progress DIR", txt)
-        @test occursin("--unsafe-heterogeneous", txt)
+        @test occursin("--unsafe-skip-env-digests", txt)
         @test !occursin(r"--parent(?!-gb)", txt)
         @test !occursin("--local", txt)
         @test !occursin("--mem-headroom", txt)

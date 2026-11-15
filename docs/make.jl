@@ -22,6 +22,8 @@ makedocs(;
     ),
     pages = [
         "Home" => "index.md",
+        "Options" => "options.md",
+        "Common errors" => "common_errors.md",
         "API" => "api.md",
     ],
     checkdocs = :public,

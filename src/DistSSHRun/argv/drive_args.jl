@@ -86,7 +86,7 @@ function parse_drive_args(args::Vector{String})
     parent_workers = 0
     default_workers = nothing
     julia_exe = nothing
-    unsafe_heterogeneous = false
+    run_opts = RunOptionCliState()
     skip_hash_check = true  # default: no git parity; --require-git turns checks on
     enable_log = true
     log_dir = nothing
@@ -95,8 +95,6 @@ function parse_drive_args(args::Vector{String})
     run_id = nothing
     deploy_root = nothing
     isolated = false
-    unsafe_master_silence_exit = false
-    unsafe_master_silence_exit_cli = false
     worker_include = false
     require_git = false
     require_all_hosts = true
@@ -154,8 +152,7 @@ function parse_drive_args(args::Vector{String})
         elseif arg == "--julia" && i < length(args)
             julia_exe = args[i + 1]
             i += 2
-        elseif arg == "--unsafe-heterogeneous"
-            unsafe_heterogeneous = true
+        elseif try_consume_run_option!(arg, run_opts, :drive)
             i += 1
         elseif arg == "--allow-mismatch"
             reject_removed_allow_mismatch_flag!(arg)
@@ -198,13 +195,6 @@ function parse_drive_args(args::Vector{String})
             i += 2
         elseif arg == "--"
             options_done = true
-            i += 1
-        elseif arg == UNSAFE_MASTER_SILENCE_EXIT_FLAG
-            unsafe_master_silence_exit_cli && throw(
-                ArgumentError("drive: $(UNSAFE_MASTER_SILENCE_EXIT_FLAG) specified more than once"),
-            )
-            unsafe_master_silence_exit = true
-            unsafe_master_silence_exit_cli = true
             i += 1
         elseif arg == "--isolated"
             isolated && throw(ArgumentError("drive: --isolated specified more than once"))
@@ -297,60 +287,60 @@ function parse_drive_args(args::Vector{String})
             elseif julia_exe == "auto"
                 julia_exe = nothing
             end
-            return (
-                parent_workers = parent_workers,
-                default_workers = default_workers,
-                julia = julia_exe,
-                skip_hash_check = skip_hash_check,
-                enable_log = enable_log,
-                log_dir = log_dir,
-                output_dir = output_dir,
-                explicit_package = explicit_package,
-                hosts = Tuple{String, Union{Int, Nothing}}[],
-                script_path = nothing,
-                script_args = String[],
-                collect_root = tree_root,
-                collect_hosts = tree_hosts,
-                collect_overwrite = merge,
-                worker_include = worker_include,
-                require_all_hosts = require_all_hosts,
-                help = false,
-                show_version = cli_session.show_version,
-                cli_session = cli_session,
-                hint_surface = :cli,
-                unsafe_heterogeneous = unsafe_heterogeneous,
-                run_id = run_id,
-                deploy_root = deploy_root,
-                isolated = isolated,
-                unsafe_master_silence_exit = unsafe_master_silence_exit,
+            return merge_run_option_cli!(
+                (
+                    parent_workers = parent_workers,
+                    default_workers = default_workers,
+                    julia = julia_exe,
+                    skip_hash_check = skip_hash_check,
+                    enable_log = enable_log,
+                    log_dir = log_dir,
+                    output_dir = output_dir,
+                    explicit_package = explicit_package,
+                    hosts = Tuple{String, Union{Int, Nothing}}[],
+                    script_path = nothing,
+                    script_args = String[],
+                    collect_root = tree_root,
+                    collect_hosts = tree_hosts,
+                    collect_overwrite = merge,
+                    worker_include = worker_include,
+                    require_all_hosts = require_all_hosts,
+                    help = false,
+                    show_version = cli_session.show_version,
+                    cli_session = cli_session,
+                    hint_surface = :cli,
+                    run_id = run_id,
+                    deploy_root = deploy_root,
+                    isolated = isolated,
+                ), run_opts
             )
         elseif arg == "--help" || arg == "-h"
-            return (
-                parent_workers = 0,
-                default_workers = nothing,
-                julia = nothing,
-                skip_hash_check = true,
-                enable_log = true,
-                log_dir = nothing,
-                output_dir = nothing,
-                explicit_package = nothing,
-                hosts = Tuple{String, Union{Int, Nothing}}[],
-                script_path = nothing,
-                script_args = String[],
-                collect_root = nothing,
-                collect_hosts = nothing,
-                collect_overwrite = nothing,
-                worker_include = false,
-                require_all_hosts = false,
-                help = true,
-                show_version = cli_session.show_version,
-                cli_session = cli_session,
-                hint_surface = :cli,
-                unsafe_heterogeneous = unsafe_heterogeneous,
-                run_id = nothing,
-                deploy_root = nothing,
-                isolated = false,
-                unsafe_master_silence_exit = false,
+            return merge_run_option_cli!(
+                (
+                    parent_workers = 0,
+                    default_workers = nothing,
+                    julia = nothing,
+                    skip_hash_check = true,
+                    enable_log = true,
+                    log_dir = nothing,
+                    output_dir = nothing,
+                    explicit_package = nothing,
+                    hosts = Tuple{String, Union{Int, Nothing}}[],
+                    script_path = nothing,
+                    script_args = String[],
+                    collect_root = nothing,
+                    collect_hosts = nothing,
+                    collect_overwrite = nothing,
+                    worker_include = false,
+                    require_all_hosts = false,
+                    help = true,
+                    show_version = cli_session.show_version,
+                    cli_session = cli_session,
+                    hint_surface = :cli,
+                    run_id = nothing,
+                    deploy_root = nothing,
+                    isolated = false,
+                ), run_opts
             )
         elseif endswith(arg, ".jl")
             script_path = arg
@@ -400,9 +390,9 @@ function parse_drive_args(args::Vector{String})
         )
     end
 
-    if !unsafe_master_silence_exit_cli &&
+    if !run_opts.unsafe_master_silence_exit &&
             _env_flag(UNSAFE_MASTER_SILENCE_EXIT_ENV)
-        unsafe_master_silence_exit = true
+        run_opts.unsafe_master_silence_exit = true
     end
 
     apply_shared_cli_flags!(cli_session)
@@ -414,32 +404,32 @@ function parse_drive_args(args::Vector{String})
         )
     end
 
-    return (
-        parent_workers = parent_workers,
-        default_workers = default_workers,
-        julia = julia_exe,
-        skip_hash_check = skip_hash_check,
-        enable_log = enable_log,
-        log_dir = log_dir,
-        output_dir = output_dir,
-        explicit_package = explicit_package,
-        hosts = hosts,
-        script_path = script_path,
-        script_args = script_args,
-        collect_root = nothing,
-        collect_hosts = nothing,
-        collect_overwrite = nothing,
-        worker_include = worker_include,
-        require_all_hosts = require_all_hosts,
-        help = false,
-        show_version = cli_session.show_version,
-        cli_session = cli_session,
-        hint_surface = :cli,
-        unsafe_heterogeneous = unsafe_heterogeneous,
-        run_id = run_id,
-        deploy_root = deploy_root,
-        isolated = isolated,
-        unsafe_master_silence_exit = unsafe_master_silence_exit,
+    return merge_run_option_cli!(
+        (
+            parent_workers = parent_workers,
+            default_workers = default_workers,
+            julia = julia_exe,
+            skip_hash_check = skip_hash_check,
+            enable_log = enable_log,
+            log_dir = log_dir,
+            output_dir = output_dir,
+            explicit_package = explicit_package,
+            hosts = hosts,
+            script_path = script_path,
+            script_args = script_args,
+            collect_root = nothing,
+            collect_hosts = nothing,
+            collect_overwrite = nothing,
+            worker_include = worker_include,
+            require_all_hosts = require_all_hosts,
+            help = false,
+            show_version = cli_session.show_version,
+            cli_session = cli_session,
+            hint_surface = :cli,
+            run_id = run_id,
+            deploy_root = deploy_root,
+            isolated = isolated,
+        ), run_opts
     )
 end
 
@@ -485,9 +475,8 @@ function show_drive_usage(; io::IO = stdout)
         "  --best-effort       allow a partial run (missing join is not a failure)",
         "  --output-dir PATH   result root (default: {script}/.distssh/drive/<stem>_<UTC>/; must be missing or empty)",
         "  --isolated          run the driver in a child process (default: this process)",
-        "  $(DRIVE_UNSAFE_MASTER_SILENCE_EXIT_FLAG_HELP)",
         "  --julia PATH        remote Julia",
-        "  --unsafe-heterogeneous  waive Manifest/Project digest checks only (unverified; Julia build and DistSSH* versions must match)",
+        generated_run_option_help(:drive)...,
         "  SSH workers: project-root cwd, bind 127.0.0.1, tunnel unless DISTSSH_SSH_TUNNEL=0.",
         "  --no-log            skip drive_*.log",
         "  $(KIT_QUIET_FLAG_HELP)",
