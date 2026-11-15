@@ -1,3 +1,11 @@
+> [!WARNING]
+> **Experimental.** The Lean models and proofs under `formal/` are an experiment.
+> They cover only `DistSSHBase._shell_status` and `DistSSHBase.shell_status` in
+> `lib/DistSSHBase/src/ssh/shell_status.jl`, are not part of the package's public
+> API or release guarantees, and may change or be removed without notice. Passing
+> proofs certify properties of the Lean model (checked against Julia via differential
+> testing), not DistSSHRun or DistSSHBase as a whole.
+
 # Formal verification (Lean 4)
 
 This directory follows
