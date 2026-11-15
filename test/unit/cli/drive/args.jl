@@ -90,6 +90,10 @@ using Test
             @test DistSSHRun._drive_child_status(2, 0) == 2
             @test DistSSHRun._drive_child_status(nothing, nothing) == 1
             @test DistSSHRun._drive_child_status(0xC0000005, 0) == 1
+            @test DistSSHRun._drive_child_status(0, -1) == 1
+            @test DistSSHRun._drive_child_status(0, 0xFFFFFFFF) == 1
+            @test DistSSHRun._drive_child_status(0, typemax(UInt64)) == 1
+            @test DistSSHRun._drive_child_status(0, 128) == 1
             sleeper = run(
                 ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "sleep(30)"`);
                 wait = false,

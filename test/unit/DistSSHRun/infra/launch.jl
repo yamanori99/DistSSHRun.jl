@@ -26,6 +26,14 @@ using TOML
         pinned = Dict(DistSSHRun.worker_env_pairs("/tmp/job"))
         @test pinned["OPENBLAS_NUM_THREADS"] == "1"
         @test pinned["OMP_NUM_THREADS"] == "1"
+        @test DistSSHRun.worker_addprocs_blas_kwargs() == (enable_threaded_blas = true,)
+        @test DistSSHRun._requested_worker_blas_count() == 1
+    end
+    @test DistSSHRun.worker_addprocs_blas_kwargs() == NamedTuple()
+    @test DistSSHRun._requested_worker_blas_count() === nothing
+    _with_tempdir() do proj
+        write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
+        @test DistSSHRun._worker_project_precompile_allowed(proj)
     end
     DistSSHRun.reset_worker_seeds!()
     a, b = withenv("DISTSSH_JOB_SEED" => "11") do
@@ -659,6 +667,41 @@ using TOML
         """
         @test strip(String(read(cmd(nested_preserve_code)))) == "ok"
     end
+end
+
+@testset "worker BLAS threads via addprocs (subprocess)" begin
+    julia = joinpath(Sys.BINDIR, Base.julia_exename())
+    runproj = if isdefined(Main, :TEST_PROJECT)
+        dirname(String(TEST_PROJECT))
+    else
+        String(something(Base.active_project(), pkgdir(DistSSHRun)) |> dirname)
+    end
+    runproj = pkgdir(DistSSHRun) !== nothing ? String(pkgdir(DistSSHRun)) : runproj
+    cmd = code -> `$julia --startup-file=no --history-file=no --project=$runproj -e $code`
+    blas_code = """
+    using Distributed, DistSSHRun
+    withenv("DISTSSH_BLAS_THREADS" => "2") do
+        proj = mktempdir()
+        open(joinpath(proj, "Project.toml"), "w") do io
+            println(io, "name = \\"Tmp\\"")
+        end
+        bin = $(repr(julia))
+        before = Set(workers())
+        DistSSHRun.preserve_task_local_default_rng() do
+            DistSSHRun.ensure_run_cluster_cookie!()
+            DistSSHRun._add_local_drive_workers!(1, proj, bin)
+        end
+        added = Int[w for w in workers() if w ∉ before]
+        length(added) == 1 || error("expected one worker, got \$(length(added))")
+        w = only(added)
+        n = remotecall_fetch(
+            Core.eval, w, Main, :(using LinearAlgebra; LinearAlgebra.BLAS.get_num_threads()),
+        )
+        rmprocs(w; waitfor = 30)
+        print(n == 2 ? "ok" : "fail:\$n")
+    end
+    """
+    @test strip(String(read(cmd(blas_code)))) == "ok"
 end
 
 @testset "distributed worker snapshot sysimage.default" begin

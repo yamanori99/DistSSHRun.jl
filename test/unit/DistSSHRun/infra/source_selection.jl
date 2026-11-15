@@ -381,6 +381,21 @@ end
     end
 end
 
+@testset "forget_last_ship_after_host_op skips cancellation" begin
+    _with_tempdir() do proj
+        _snap_project!(proj)
+        DistSSHRun.write_last_ship_record!(
+            proj, "/deploy/a", ["h1"], _SNAP_ID_OLD,
+        )
+        cancelled = (; cancelled = true, succeeded = 0, failed = 0)
+        DistSSHRun.forget_last_ship_after_host_op!(proj, "/deploy/a", cancelled)
+        @test DistSSHRun.read_last_ship_record(proj) !== nothing
+        success = (; cancelled = false, succeeded = 1, failed = 0)
+        DistSSHRun.forget_last_ship_after_host_op!(proj, "/deploy/a", success)
+        @test DistSSHRun.read_last_ship_record(proj) === nothing
+    end
+end
+
 @testset "forget_last_snapshot_default treats trailing slash as same root" begin
     _with_tempdir() do proj
         _snap_project!(proj)

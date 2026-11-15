@@ -148,6 +148,58 @@ function _explicit_blas_threads()::Union{Nothing, String}
     return raw
 end
 
+"""Positive `DISTSSH_BLAS_THREADS` when set; else `nothing`."""
+function _requested_worker_blas_count()::Union{Nothing, Int}
+    raw = _explicit_blas_threads()
+    raw === nothing && return nothing
+    n = tryparse(Int, raw)
+    (n === nothing || n < 1) &&
+        throw(ArgumentError("DISTSSH_BLAS_THREADS must be a positive integer, got $(repr(raw))"))
+    return n
+end
+
+"""`addprocs` keyword args for BLAS threading on workers."""
+function worker_addprocs_blas_kwargs()::NamedTuple
+    _requested_worker_blas_count() === nothing && return NamedTuple()
+    return (enable_threaded_blas = true,)
+end
+
+const _WORKER_PKG_UUID = Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f")
+const _WORKER_PKG_PRECOMPILE_EXPR = :(
+    let
+        pkg = Base.PkgId($(_WORKER_PKG_UUID), "Pkg")
+        mod = Base.invokelatest(Base.require, pkg)
+        Base.invokelatest(() -> mod.precompile(; io = devnull))
+        nothing
+    end
+)
+
+function _worker_blas_apply_expr(n::Int)
+    return :((using LinearAlgebra; BLAS.set_num_threads($(n)); BLAS.get_num_threads()))
+end
+
+function _apply_worker_blas_threads!(wids::AbstractVector{<:Integer})
+    want = _requested_worker_blas_count()
+    want === nothing && return nothing
+    ex_set = _worker_blas_apply_expr(want)
+    for wid in wids
+        w = Int(wid)
+        actual = remotecall_fetch(Core.eval, w, Main, ex_set)
+        actual == want && continue
+        host = remotecall_fetch(Core.eval, w, Main, :(gethostname()))
+        rank_s = remotecall_fetch(
+            Core.eval,
+            w,
+            Main,
+            :(get(ENV, "DISTSSH_WORKER_RANK", string(myid()))),
+        )
+        error(
+            "BLAS thread count on $(host) (rank $(rank_s)): requested $(want), got $(actual)",
+        )
+    end
+    return nothing
+end
+
 """Flags every worker / go slot gets (`--project=` plus pin flags)."""
 function worker_exeflag_strings(
         project::AbstractString;
@@ -358,20 +410,23 @@ function ensure_run_cluster_cookie!()::Nothing
     return nothing
 end
 
+"""Skip read-only project trees (for example a General registry install path)."""
+function _worker_project_precompile_allowed(project::AbstractString)::Bool
+    p = String(project)
+    isdir(p) || return false
+    return Base.Filesystem.iswritable(p)
+end
+
 function _precompile_worker_project!(wid::Int)
     try
-        remotecall_wait(wid) do
-            Base.require(Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
-            mod = Base.loaded_modules[
-                Base.PkgId(
-                    Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"),
-                    "Pkg",
-                ),
-            ]
-            mod.precompile(; io = devnull)
-            return nothing
+        remotecall_wait(Core.eval, wid, Main, _WORKER_PKG_PRECOMPILE_EXPR)
+    catch e
+        host = try
+            remotecall_fetch(Core.eval, wid, Main, :(gethostname()))
+        catch
+            "worker $wid"
         end
-    catch
+        print_warn("Worker project precompile failed on $(host): $(sprint(showerror, e))\n")
     end
     return nothing
 end
@@ -416,12 +471,16 @@ function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::A
                 exeflags = flags,
                 env = env,
                 topology = :master_worker,
+                worker_addprocs_blas_kwargs()...,
             )
             just = Int[Int(w) for w in joined]
             _mark_workers_launched!(just, project)
+            _apply_worker_blas_threads!(just)
             i == 1 || continue
             added = sort!(just)
-            isempty(added) || _precompile_worker_project!(first(added))
+            if !isempty(added) && _worker_project_precompile_allowed(project)
+                _precompile_worker_project!(first(added))
+            end
         end
     catch
         _rmprocs_added_since(before)
@@ -454,13 +513,16 @@ function _add_ssh_drive_workers!(
                 exeflags = flags,
                 env = env,
                 topology = :master_worker,
+                worker_addprocs_blas_kwargs()...,
             )
             just = Int[Int(w) for w in joined]
             _mark_workers_launched!(just, project)
+            _apply_worker_blas_threads!(just)
             i == 1 || continue
             added = sort!(just)
             isempty(added) && return nothing
-            _precompile_worker_project!(first(added))
+            _worker_project_precompile_allowed(project) &&
+                _precompile_worker_project!(first(added))
         end
     catch
         _rmprocs_added_since(before)

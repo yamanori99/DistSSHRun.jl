@@ -45,6 +45,14 @@ function _confirm_path_quote(path::AbstractString)::String
     return "'" * replace(String(path), "'" => "'\\''") * "'"
 end
 
+"""`--deploy-root PATH` suffix for printed setup follow-up commands (one shell word)."""
+function _setup_next_deploy_root_flag(deploy_root::Union{Nothing, AbstractString})::String
+    deploy_root isa AbstractString || return ""
+    p = strip(String(deploy_root))
+    isempty(p) && return ""
+    return " --deploy-root $(DistSSHRun.posix_quote(p))"
+end
+
 # `-y` / `--yes` / `DISTSSH_YES` do not authorize delete or prune.
 # A matching `--confirm-path` still deletes. With neither, the caller prompts.
 function _setup_reject_yes_delete(
@@ -269,7 +277,7 @@ if !isdefined(@__MODULE__, :setup_main)
                     ) :
                     DistSSHRun._apply_confirmed_delete(opts.hosts, plan, deploy_path)
                 ok = finish_host_op!("Delete", result)
-                ok && DistSSHRun.forget_last_ship_default!(project, deploy_path)
+                ok && DistSSHRun.forget_last_ship_after_host_op!(project, deploy_path, result)
                 return Cint(ok ? 0 : 1)
             end
 
@@ -280,7 +288,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 result = clone_to_remotes(opts.hosts, clone_dest, clone_url)
                 ok = finish_host_op!("Clone", result)
                 if ok
-                    DistSSHRun.forget_last_ship_default!(project, deploy_path)
+                    DistSSHRun.forget_last_ship_after_host_op!(project, deploy_path, result)
                     if result.failed == 0
                         ok_hosts = String[
                             hr.host for hr in result.hosts if hr.ok
@@ -294,7 +302,9 @@ if !isdefined(@__MODULE__, :setup_main)
                             opts.deploy_root !== nothing ||
                                 !isempty(strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", "")))
                         )
-                        kit_println("  Tip: export DISTRIBUTED_REMOTE_PROJECT_ROOT=$deploy_path")
+                        kit_println(
+                            "  Tip: export DISTRIBUTED_REMOTE_PROJECT_ROOT=$(DistSSHRun.posix_quote(deploy_path))",
+                        )
                         kit_println("       so drive.jl uses the same remote root for workers / collect.")
                         kit_println()
                     end
@@ -318,8 +328,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 if ok && sel !== nothing
                     rid = sel.run_id
                     src = sel.work_root
-                    path_flag = opts.deploy_root isa AbstractString ?
-                        " --deploy-root $(opts.deploy_root)" : ""
+                    path_flag = _setup_next_deploy_root_flag(opts.deploy_root)
                     if rid isa AbstractString && !isempty(rid)
                         kit_println(
                             "  Next: $(DistSSHRun.cli_m()) setup instantiate --run-id $rid$path_flag",
@@ -328,11 +337,12 @@ if !isdefined(@__MODULE__, :setup_main)
                             "        $(DistSSHRun.cli_m()) setup check --run-id $rid$path_flag",
                         )
                     elseif src isa AbstractString
+                        flag = _setup_next_deploy_root_flag(src)
                         kit_println(
-                            "  Next: $(DistSSHRun.cli_m()) setup instantiate --deploy-root $src",
+                            "  Next: $(DistSSHRun.cli_m()) setup instantiate$flag",
                         )
                         kit_println(
-                            "        $(DistSSHRun.cli_m()) setup check --deploy-root $src",
+                            "        $(DistSSHRun.cli_m()) setup check$flag",
                         )
                     end
                     kit_println()
