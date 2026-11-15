@@ -31,10 +31,10 @@ if !isdefined(Main, :_with_tempdir)
     end
 
     # Poll until `ready` holds a pid, then signal that process.
-    function _kill_ready_child(ready::AbstractString; signal::Integer = Base.SIGTERM)
+    function _kill_ready_child(ready::AbstractString; signal::Integer = Base.SIGTERM, waitfor::Real = 20)
         t0 = time()
         pid = nothing
-        while time() - t0 < 20
+        while time() - t0 < waitfor
             if isfile(ready)
                 pid = tryparse(Int, strip(read(ready, String)))
                 pid === nothing || break

@@ -217,76 +217,46 @@ using Dates
             proj = joinpath(dir, "proj")
             mkdir(proj)
             script = joinpath(proj, "job.jl")
-            write(script, "true\n")
+            write(script, "sleep(120)\n")
             slot = joinpath(dir, "slot")
             bindir = joinpath(dir, "bin")
             mkdir(bindir)
             ready = joinpath(dir, "ssh.ready")
             ssh = joinpath(bindir, "ssh")
             scp = joinpath(bindir, "scp")
-            hs_line = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "go_handshake_ssh_line.jl"))
-            julia_q = joinpath(Sys.BINDIR, Base.julia_exename())
+            fake_ssh = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
             write(
                 ssh,
-                raw"""#!/usr/bin/env bash
-                ready="$GO_SLOT_SSH_READY"
-                hs_line="$GO_SLOT_HS_LINE"
-                julia_bin="$GO_SLOT_JULIA_BIN"
-                go_slot=0
-                for arg in "$@"; do
-                  case "$arg" in
-                    *go.exitcode*)
-                      go_slot=1
-                      break
-                      ;;
-                  esac
-                done
-                if [ "$go_slot" = 1 ]; then
-                  if read -t 120 -r _hsline; then
-                    case "$_hsline" in
-                      HELLO\ *)
-                        nonce="${_hsline#HELLO }"
-                        if [ -n "$hs_line" ] && [ -n "$julia_bin" ]; then
-                          "$julia_bin" --startup-file=no --project="${JULIA_PROJECT:-.}" "$hs_line" "$nonce"
-                        fi
-                        ;;
-                    esac
-                  fi
-                  read -t 120 -r _goline || true
-                  printf '%s\n' "$$" > "$ready"
-                  exec sleep 30
-                fi
-                for arg in "$@"; do
-                  case "$arg" in
-                    *--version*)
-                      printf '%s\n' 'julia version 1.10.10'
-                      exit 0
-                      ;;
-                    *__DSR_POSIX_OK_*)
-                      printf '%s\n' "$arg" | sed -n 's/.*\(__DSR_POSIX_OK_[0-9a-fA-F][0-9a-fA-F]*__\).*/\1/p'
-                      exit 0
-                      ;;
-                  esac
-                done
-                printf '%s\n' /usr/bin/julia
-                exit 0
-                """,
+                "#!/bin/sh\n" *
+                    "case \"\$*\" in\n" *
+                    "  *--version*) printf '%s\\n' 'julia version 1.10.10'; exit 0;;\n" *
+                    "esac\n" *
+                    "printf '%s\\n' /usr/bin/julia\n" *
+                    "exit 0\n",
             )
             write(scp, "#!/bin/sh\nexit 0\n")
             chmod(ssh, 0o755)
             chmod(scp, 0o755)
             host = "go-slot-sig.test"
+            roots = joinpath(dir, "hosts")
+            remote_fs = joinpath(roots, host)
+            mkpath(remote_fs)
+            cp(script, joinpath(remote_fs, "job.jl"))
+            repo = abspath(joinpath(@__DIR__, "..", "..", ".."))
+            ctl_lp = join(string.(LOAD_PATH), ':')
             path = string(bindir, ":", get(ENV, "PATH", ""))
             result = try
                 withenv(
                     "PATH" => path,
+                    "DISTSSH_TEST" => "1",
+                    "DISTSSH_TEST_SSH" => fake_ssh,
                     "GO_SLOT_SSH_READY" => ready,
-                    "GO_SLOT_HS_LINE" => hs_line,
-                    "GO_SLOT_JULIA_BIN" => julia_q,
-                    "JULIA_PROJECT" => abspath(joinpath(@__DIR__, "..", "..", "..")),
-                    "DISTSSH_TEST" => nothing,
-                    "DISTSSH_TEST_SSH" => nothing,
                     "DISTSSH_JOB_ID" => nothing,
+                    "DISTSSH_TEST_SSH_LOGICAL_ROOT" => "/remote/proj",
+                    "DISTSSH_TEST_SSH_HOST_ROOTS" => roots,
+                    "DISTSSH_TEST_ACTIVE_PROJECT" => repo,
+                    "DISTSSH_TEST_CONTROLLER_LOAD_PATH" => ctl_lp,
+                    "JULIA_DEPOT_PATH" => get(ENV, "JULIA_DEPOT_PATH", ""),
                 ) do
                     task = @async DistSSHRun._go_run_remote_slot!(
                         host,
@@ -299,12 +269,25 @@ using Dates
                         quiet = true,
                         julia = "/usr/bin/julia",
                     )
-                    _kill_ready_child(ready; signal = Base.SIGTERM)
+                    t0 = time()
+                    pid = nothing
+                    while time() - t0 < 60
+                        if isfile(ready)
+                            pid = tryparse(Int, strip(read(ready, String)))
+                            pid === nothing || break
+                        end
+                        sleep(0.02)
+                    end
+                    pid === nothing && error("timed out waiting for $(ready)")
+                    sleep(3)
+                    rc = ccall(:kill, Cint, (Cint, Cint), Cint(pid), Cint(Base.SIGTERM))
+                    rc != 0 &&
+                        Base.Libc.errno() != Base.Libc.ESRCH &&
+                        error("kill $(pid) failed (errno=$(Base.Libc.errno()))")
                     return fetch(task)::DistSSHRun.DriveResult
                 end
             finally
                 DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!(host)
-                delete!(DistSSHRun._PINNED_JULIA, host * "\0/usr/bin/julia")
             end
             @test !result.ok
             @test result.exit_code == 143
@@ -402,7 +385,9 @@ using Dates
         @test occursin("tee $log_q", inner) || occursin("tee " * log_q, inner)
         @test occursin("go-handshake.jl", inner)
         @test occursin("go.exitcode", inner)
-        @test occursin("echo \$ec >", inner)
+        @test occursin("echo \\\$? >", inner) || occursin("echo \$? >", inner)
+        @test occursin("{ ", inner)
+        @test !occursin("PIPESTATUS", inner)
 
         spaced = DistSSHRun._go_remote_slot_shell_inner(
             "~/proj",
@@ -446,6 +431,84 @@ using Dates
             @test occursin("printf '%s\\n' '#distsshkit-job:repro-1'", tagged)
             @test !occursin("--eval=", tagged)
             @test !occursin("include(popfirst!(ARGS))", tagged)
+        end
+    end
+
+    @testset "remote slot shell POSIX exit status" begin
+        _with_tempdir() do d
+            exitf = joinpath(d, "go.exitcode")
+            logf = joinpath(d, "julia.stdout.log")
+            exit_q = DistSSHRun._remote_shell_path_word(exitf)
+            log_q = DistSSHRun._remote_shell_path_word(logf)
+            cd_q = DistSSHRun._remote_shell_path_word(d)
+            function posix_go_exit_cmd(body::AbstractString)
+                return string(
+                    "cd $cd_q && { ", body, " 2>&1; echo \$? > ", exit_q, "; } | tee ", log_q, "; ",
+                    "ec=\$(sed -n '1p' ", exit_q, " 2>/dev/null); ",
+                    "case \"\$ec\" in ''|*[!0-9]*) ec=127;; esac; exit \$ec",
+                )
+            end
+            shells = String["sh"]
+            ispath("/bin/dash") && push!(shells, "dash")
+            ispath("/bin/bash") && push!(shells, "bash")
+            if Sys.which("zsh") !== nothing
+                push!(shells, "zsh")
+            end
+            for shell in shells
+                for (body, want) in (("true", 0), ("false", 1))
+                    rm(exitf; force = true)
+                    rm(logf; force = true)
+                    cmd = ignorestatus(Cmd([shell, "-c", posix_go_exit_cmd(body)]))
+                    @test run(cmd).exitcode == want
+                    @test isfile(exitf)
+                end
+                rm(exitf; force = true)
+                missing = string(
+                    "cd $cd_q && rm -f ", exit_q, "; ",
+                    "ec=\$(sed -n '1p' ", exit_q, " 2>/dev/null); ",
+                    "case \"\$ec\" in ''|*[!0-9]*) ec=127;; esac; exit \$ec",
+                )
+                cmd = ignorestatus(Cmd([shell, "-c", missing]))
+                @test run(cmd).exitcode == 127
+            end
+        end
+    end
+
+    @testset "product exit tail via fake_snapshot_ssh sh -c" begin
+        fake = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+        _with_tempdir() do d
+            exitf = joinpath(d, "go.exitcode")
+            logf = joinpath(d, "julia.stdout.log")
+            exit_q = DistSSHRun._remote_shell_path_word(exitf)
+            log_q = DistSSHRun._remote_shell_path_word(logf)
+            cd_q = DistSSHRun._remote_shell_path_word(d)
+            function product_exit_script(body::AbstractString)
+                return string(
+                    "printf '%s\\n' go.exitcode; ",
+                    "cd $cd_q && { ", body, " 2>&1; echo \$? > ", exit_q, "; } | tee ", log_q, "; ",
+                    "ec=\$(sed -n '1p' ", exit_q, " 2>/dev/null); ",
+                    "case \"\$ec\" in ''|*[!0-9]*) ec=127;; esac; exit \$ec",
+                )
+            end
+            host = "go-posix-exit.test"
+            for (body, want) in (("true", 0), ("false", 1))
+                rm(exitf; force = true)
+                rm(logf; force = true)
+                script = product_exit_script(body)
+                julia = joinpath(Sys.BINDIR, Base.julia_exename())
+                proc = withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_SSH" => fake) do
+                    run(
+                        pipeline(
+                            ignorestatus(`$julia --startup-file=no --compile=min $fake $host $script`);
+                            stdout = devnull,
+                            stderr = devnull,
+                        );
+                        wait = true,
+                    )
+                end
+                @test proc.exitcode == want
+                @test isfile(exitf)
+            end
         end
     end
 

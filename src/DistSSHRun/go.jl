@@ -707,8 +707,9 @@ function _go_remote_slot_shell_inner(
         job_mark,
         write_loader,
         write_hs,
-        "$jb_launch$job_load$prov_load $rel_q$args_s 2>&1 | tee $log_q; ",
-        "ec=\${PIPESTATUS[0]}; echo \$ec > $exit_q; exit \$ec",
+        "{ $jb_launch$job_load$prov_load $rel_q$args_s 2>&1; echo \\\$? > $exit_q; } | tee $log_q; ",
+        "ec=\$(sed -n '1p' $exit_q 2>/dev/null); ",
+        "case \"\$ec\" in ''|*[!0-9]*) ec=127;; esac; exit \$ec",
     )
 end
 
@@ -729,7 +730,7 @@ function _go_run_remote_slot!(
     inner = _go_remote_slot_shell_inner(
         remote_root, slot_rel, rel, script_args, julia_bin,
     )
-    cmd = ignorestatus(_ssh_cmd([ssh_opts()..., _ssh_host_args(String(host), inner)...]))
+    cmd = ignorestatus(_host_sync_remote_shell_cmd(String(host), inner; forward_stdin = true))
     site = "GoRemoteSlot host=$(String(host)) slot=$(basename(slot_dir))"
     log_path = joinpath(slot_dir, "julia.stdout.log")
     proc = run_go_slot_with_handshake(cmd, site, log_path)
