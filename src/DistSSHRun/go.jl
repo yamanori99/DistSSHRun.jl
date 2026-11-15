@@ -707,7 +707,7 @@ function _go_remote_slot_shell_inner(
         job_mark,
         write_loader,
         write_hs,
-        "{ $jb_launch$job_load$prov_load $rel_q$args_s 2>&1; echo \\\$? > $exit_q; } | tee $log_q; ",
+        "{ $jb_launch$job_load$prov_load $rel_q$args_s 2>&1; echo \$? > $exit_q; } | tee $log_q; ",
         "ec=\$(sed -n '1p' $exit_q 2>/dev/null); ",
         "case \"\$ec\" in ''|*[!0-9]*) ec=127;; esac; exit \$ec",
     )

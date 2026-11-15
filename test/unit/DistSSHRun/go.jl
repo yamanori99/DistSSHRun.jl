@@ -385,7 +385,8 @@ using Dates
         @test occursin("tee $log_q", inner) || occursin("tee " * log_q, inner)
         @test occursin("go-handshake.jl", inner)
         @test occursin("go.exitcode", inner)
-        @test occursin("echo \\\$? >", inner) || occursin("echo \$? >", inner)
+        @test occursin("echo \$? >", inner)
+        @test !occursin("echo \\\$? >", inner)
         @test occursin("{ ", inner)
         @test !occursin("PIPESTATUS", inner)
 
