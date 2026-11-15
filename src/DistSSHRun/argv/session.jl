@@ -484,7 +484,7 @@ end
 
 function _host_input_explicit_sources(session::CliSharedFlags)::Vector{Symbol}
     out = Symbol[]
-  !isempty(session.hosts_flag) && push!(out, :hosts)
+    !isempty(session.hosts_flag) && push!(out, :hosts)
     session.hosts_file !== nothing && push!(out, :hosts_file)
     session.machine_file !== nothing && push!(out, :machine_file)
     return out

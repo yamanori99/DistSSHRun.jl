@@ -45,7 +45,11 @@ include("namespace.jl")
 # Queue and Kit import these. Underscore names stay private.
 public PARENT_HOST_NAME
 public cli_entry, cli_heading, cli_m, cli_m_project, cli_qhost, cli_qhost_heading
-public format_placement_token, get_remote_julia_version, get_remote_julia_version_full, is_sigint
+public format_machine_token,
+    format_placement_token,
+    get_remote_julia_version,
+    get_remote_julia_version_full,
+    is_sigint
 public HostFacts, HostResult, collect_host_facts
 public current_project_file,
     julia_default_sysimage_path,
@@ -55,7 +59,7 @@ public current_project_file,
     local_preferences_path,
     manifest_path,
     parse_julia_version_full
-public parse_machine_token, format_machine_token, MachinePlacement
+public MachinePlacement, parse_machine_token
 public parse_placement_token, posix_quote, remote_env_project_root, resolve_remote_julia
 public resolve_remote_project_root, shell_status, shield_sigint, with_cli_entry, without_cancel
 public CliUsageError, cli_parse, with_cli_exit
