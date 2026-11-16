@@ -226,7 +226,7 @@ end
 
 function apply_shared_cli_flags!(session::CliSharedFlags)
     set_kit_verbosity!(session.verbosity)
-    session.yes && set_kit_noninteractive!(true)
+    set_kit_noninteractive!(session.yes)
     return session
 end
 

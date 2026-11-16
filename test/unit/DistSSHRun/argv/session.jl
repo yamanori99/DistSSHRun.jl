@@ -106,6 +106,28 @@ end
                 DistSSHRun.set_kit_noninteractive!(prev_ni)
             end
         end
+        withenv(clear_verbosity_env..., "DISTSSH_YES" => nothing) do
+            prev_ni = DistSSHRun.kit_noninteractive()
+            try
+                DistSSHRun.set_kit_noninteractive!(false)
+                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(yes = true))
+                @test DistSSHRun.kit_noninteractive()
+                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags())
+                @test !DistSSHRun.kit_noninteractive()
+                _with_tempdir() do proj
+                    write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
+                    session = DistSSHRun.DistSSHSession(
+                        project = proj,
+                        workers = String[],
+                        remote = "~/App.jl",
+                    )
+                    DistSSHRun.apply_session_env!(session)
+                    @test !DistSSHRun.kit_noninteractive()
+                end
+            finally
+                DistSSHRun.set_kit_noninteractive!(prev_ni)
+            end
+        end
     end
 
     @testset "kit_confirm stdin" begin
