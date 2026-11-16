@@ -15,6 +15,9 @@ struct Shipment
     project_rel::String
     external_symlinks::Vector{String}
     extra_rels::Vector{String}
+    # Ignored on disk but forced into the pack (Manifest, preferences, …).
+    forced_ignore_ship::Vector{String}
+    content_file_digests::Vector{Pair{String, String}}
 end
 
 function content_tree_hash(snapshot::Shipment)::String
@@ -149,18 +152,41 @@ function _require_manifest(project::ShipProject)
     )
 end
 
-function _throw_ship_omitted_project_files!(hits::Vector{String})
-    isempty(hits) && return nothing
-    sort!(hits)
-    joined = length(hits) == 1 ? hits[1] : join(hits, ", ")
-    word = length(hits) == 1 ? "file is" : "files are"
-    throw(
+const _FORCE_SHIP_PREFERENCE_NAMES = ("LocalPreferences.toml", "JuliaLocalPreferences.toml")
+
+function _readable_ship_file!(path::AbstractString, rel::AbstractString)
+    isfile(path) || throw(
         ArgumentError(
-            "$joined $word excluded by ignore rules and will not be shipped. " *
-                "Workers would instantiate a different resolution. " *
-                "Stop ignoring them, add a negation pattern, or change the ignore rules.",
+            "ship-tree: cannot send $rel (file is missing on disk at $(repr(path)))",
         ),
     )
+    try
+        read(path)
+    catch e
+        throw(
+            ArgumentError(
+                "ship-tree: cannot read $rel ($(repr(path))): $(sprint(showerror, e))",
+            ),
+        )
+    end
+    return nothing
+end
+
+function _append_force_entry!(
+        entries::Vector{Tuple{String, String}},
+        seen::Set{String},
+        rel::AbstractString,
+        src::AbstractString,
+        forced::Vector{String},
+    )
+    rel = replace(String(rel), '\\' => '/')
+    rel in seen && return nothing
+    src_c = canonical_local_path(src)
+    _readable_ship_file!(src_c, rel)
+    push!(seen, rel)
+    push!(entries, (rel, src_c))
+    push!(forced, rel)
+    return nothing
 end
 
 """Manifest outside scanned trees but ignored on disk (e.g. `manifest =` elsewhere)."""
@@ -186,14 +212,16 @@ function _append_external_ignored_manifest_hits!(
     return nothing
 end
 
-function _refuse_omitted_project_files!(
+function _force_ship_env_lock_files!(
         project::ShipProject,
         anchor::String,
         deps::Vector{PathDep},
         entries::Vector{Tuple{String, String}},
         prel::String,
-    )
+    )::Vector{String}
     included = Set{String}(first(entry) for entry in entries)
+    seen = Set{String}(included)
+    forced = String[]
     roots = Tuple{String, String}[(canonical_local_path(project.project_dir), prel)]
     for dep in deps
         push!(
@@ -211,10 +239,17 @@ function _refuse_omitted_project_files!(
             )
         )
     end
-    hits = String[]
-    seen = Set{String}()
     for (root, prefix) in roots
         isdir(root) || continue
+        for name in _FORCE_SHIP_PREFERENCE_NAMES
+            child = joinpath(root, name)
+            isfile(child) || continue
+            child_rel = name
+            full = prefix == "." || prefix == "" ? child_rel : string(prefix, "/", child_rel)
+            full in included && continue
+            path_ignored(root, child_rel, false) || continue
+            _append_force_entry!(entries, seen, full, child, forced)
+        end
         stack = [(root, "")]
         while !isempty(stack)
             dir, rel = pop!(stack)
@@ -223,19 +258,24 @@ function _refuse_omitted_project_files!(
                 child = joinpath(dir, name)
                 child_rel = isempty(rel) ? name : string(rel, "/", name)
                 full = prefix == "." || prefix == "" ? child_rel : string(prefix, "/", child_rel)
-                if name in ("Project.toml", "JuliaProject.toml", "Manifest.toml") ||
-                        startswith(name, "Manifest-v") || startswith(name, "JuliaManifest-v")
-                    if !(full in included) && !(full in seen) && path_ignored(root, child_rel, false)
-                        push!(seen, full)
-                        push!(hits, full)
+                if _projectish_name(name)
+                    if !(full in included) && path_ignored(root, child_rel, false)
+                        isfile(child) && _append_force_entry!(entries, seen, full, child, forced)
                     end
                 end
                 isdir(child) && !islink(child) && push!(stack, (child, child_rel))
             end
         end
     end
-    _append_external_ignored_manifest_hits!(project, anchor, included, hits, seen)
-    _throw_ship_omitted_project_files!(hits)
+    man = project.manifest
+    if man isa String
+        rel = replace(relpath(_fs_path(man), _fs_path(anchor)), '\\' => '/')
+        if !(rel in included) && isfile(man) && path_ignored(dirname(man), basename(man), false)
+            _append_force_entry!(entries, seen, rel, man, forced)
+        end
+    end
+    sort!(unique!(forced))
+    return forced
 end
 
 """Follow one symlink. The remote name is the link's basename. The bytes are the target's."""
@@ -347,7 +387,7 @@ function _prepare_ship_entries(
         script::Union{Nothing, AbstractString} = nothing,
         cwd::AbstractString = pwd(),
         omit_project_rels::Vector{String} = String[],
-    )::Tuple{ShipProject, String, Vector{PathDep}, Vector{Tuple{String, String}}, String}
+    )::Tuple{ShipProject, String, Vector{PathDep}, Vector{Tuple{String, String}}, String, Vector{String}}
     resolved = resolve_ship_project(String(project); script = script, cwd = cwd)
     _require_manifest(resolved)
     if ispath(joinpath(resolved.project_dir, EXTERNAL_DIR_NAME))
@@ -362,16 +402,16 @@ function _prepare_ship_entries(
     entries, prel = _collect_entries(
         resolved, anchor, deps; omit_project_rels = omit_project_rels,
     )
-    _refuse_omitted_project_files!(resolved, anchor, deps, entries, prel)
-    return resolved, anchor, deps, entries, prel
+    forced = _force_ship_env_lock_files!(resolved, anchor, deps, entries, prel)
+    return resolved, anchor, deps, entries, prel, forced
 end
 
 """
     pack_entry_paths(project; omit_project_rels=String[], kwargs...) -> Vector{String}
 
 Relative paths a ship tar would contain for `project`, in the same order
-[`pack_tree`](@ref) uses before extra files. Errors when ignore rules
-would omit a project or Manifest file.
+[`pack_tree`](@ref) uses before extra files. Forces ignored Manifest,
+project, and preference files into the pack when they exist on disk.
 """
 function pack_entry_paths(
         project::AbstractString;
@@ -379,7 +419,7 @@ function pack_entry_paths(
         cwd::AbstractString = pwd(),
         omit_project_rels::Vector{String} = String[],
     )::Vector{String}
-    _, _, _, entries, _ = _prepare_ship_entries(
+    _, _, _, entries, _, _ = _prepare_ship_entries(
         project;
         script = script,
         cwd = cwd,
@@ -397,7 +437,7 @@ function _manifest_pack_anchor_rel(
         cwd::AbstractString = pwd(),
         omit_project_rels::Vector{String} = String[],
     )::String
-    resolved, anchor, _, _, _ = _prepare_ship_entries(
+    resolved, anchor, _, _, _, _ = _prepare_ship_entries(
         project;
         script = script,
         cwd = cwd,
@@ -440,7 +480,7 @@ function pack_tree(
             "more than one extra file is not yet supported",
         )
     )
-    resolved, anchor, _, entries, prel = _prepare_ship_entries(
+    resolved, anchor, _, entries, prel, forced_ignore = _prepare_ship_entries(
         project;
         script = script,
         cwd = cwd,
@@ -494,11 +534,15 @@ function pack_tree(
             write(dest, bytes)
             chmod(dest, mode)
         end
+        file_rels = String[v[1] for v in entries]
+        append!(file_rels, extra_rels)
+        chmod_shipped_files_readonly!(stage, file_rels)
+        digests = content_file_digests(stage, file_rels)
         Tar.create(stage, tar_path)
         hash = String(Tar.tree_hash(tar_path; algorithm = TREE_HASH_ALGORITHM, skip_empty = true))
         return Shipment(
             tmpd, tar_path, hash, total, nfiles, anchor, resolved.project_dir,
-            prel, allowed, extra_rels,
+            prel, allowed, extra_rels, forced_ignore, digests,
         )
     catch
         rm(tmpd; force = true, recursive = true)
