@@ -241,6 +241,11 @@ function run_ssh(cmd; wait::Bool = true)::Base.Process
 end
 
 """Run `_ssh_cmd(argv)` and return captured stdout (stderr to `devnull` by default)."""
+function _read_ssh(argv::AbstractVector)::String
+    typed = String[String(a) for a in argv]
+    return _read_ssh(typed)
+end
+
 function _read_ssh(argv::AbstractVector{<:AbstractString})::String
     out_buf = IOBuffer()
     run_ssh(
