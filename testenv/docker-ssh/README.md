@@ -15,7 +15,7 @@ Real OpenSSH Linux workers. CI remote SSH coverage uses this stack
   `E2E weekly / macos-15-intel → ubuntu-26.04`
 - WSL2 (`windows-latest`), same image: **E2E weekly** —
   `E2E weekly / windows-latest (WSL2) → ubuntu-26.04`
-- Either kit parent, `parent:N`: mixed smoke inside the same suite
+- Either kit parent, `--local-workers N`: mixed smoke inside the same suite
 
 Suite inventory: [`test/README.md`](../../test/README.md#ssh-e2e).
 

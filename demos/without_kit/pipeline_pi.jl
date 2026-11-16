@@ -9,7 +9,7 @@
 #
 # Same job via CLI:
 #
-#   julia --project=. -m DistSSHRun go parent:2 distsshkit_demos/without_kit/pi_file.jl --n 5000
+#   julia --project=. -m DistSSHRun go --local-workers 2 distsshkit_demos/without_kit/pi_file.jl --n 5000
 
 import TOML
 
@@ -34,12 +34,12 @@ script = joinpath(@__DIR__, "pi_file.jl")
 project = @__DIR__
 
 # Local-only: two concurrent full-job slots on this machine (not Distributed workers).
-result = go!(script, "parent:2"; args = ARGS, project = project)
+result = go!(script; head_slots = 2, args = ARGS, project = project)
 
 # First-time remotes: setup!, then go!.
 #
 #   session = DistSSHSession(
-#       workers=["child:user@host1", "child:user@host2"],
+#       workers=["user@host1", "user@host2"],
 #       remote="/path/to/project",
 #       yes=true,
 #   )
@@ -47,8 +47,8 @@ result = go!(script, "parent:2"; args = ARGS, project = project)
 #   # or: setup!(session, :git_clone; repo="https://…"); setup!(session, :instantiate)
 #   result = go!(
 #       script,
-#       "child:user@host1:1",
-#       "child:user@host2:1";
+#       "1*user@host1",
+#       "1*user@host2";
 #       remote="/path/to/project",
 #       args=ARGS,
 #       # julia=nothing,                  # or path / "auto" (same as CLI --julia)
@@ -58,12 +58,12 @@ result = go!(script, "parent:2"; args = ARGS, project = project)
 #
 #   result = go!(
 #       script,
-#       "child:user@host1:1",
-#       "child:user@host2:1";   # or go!(script, ["child:user@host1:1", "child:user@host2:1"]; …)
+#       "1*user@host1",
+#       "1*user@host2";   # or go!(script, ["1*user@host1", "1*user@host2"]; …)
 #       remote="/path/to/project",
 #       args=ARGS,
 #       # project=pwd(),
-#       # hosts_file="hosts.txt",       # extra parent / child:NAME[:N] lines
+#       # hosts_file="hosts.txt",       # extra parent / NAME[:N] lines
 #       # yes=true,                     # skip confirm prompts (API default)
 #       # quiet=false,
 #       # verbosity=nothing,            # :quiet | :progress | :verbose

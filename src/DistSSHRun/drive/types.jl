@@ -51,8 +51,7 @@ Field name matches [`WorkerPlan`](@ref): a host with an explicit `:N` is
 `child_workers[host] = N`, same key as `WorkerPlan.child_workers`.
 """
 struct ParsedWorkerTokens
-    parent_workers::Int
-    parent_autosize::Bool
+    head_workers::Int
     child_workers::Dict{String, Int}
     child_auto::Vector{String}
     child_hosts::Vector{String}
@@ -60,16 +59,14 @@ struct ParsedWorkerTokens
 end
 
 function ParsedWorkerTokens(;
-        parent_workers::Integer = 0,
-        parent_autosize::Bool = false,
+        head_workers::Integer = 0,
         child_workers::AbstractDict{<:AbstractString, <:Integer} = Dict{String, Int}(),
         child_auto::AbstractVector{<:AbstractString} = String[],
         child_hosts::AbstractVector{<:AbstractString} = String[],
         tokens::AbstractVector{<:AbstractString} = String[],
     )
     return ParsedWorkerTokens(
-        Int(parent_workers),
-        parent_autosize,
+        Int(head_workers),
         Dict{String, Int}(String(h) => Int(n) for (h, n) in child_workers),
         String[String(h) for h in child_auto],
         String[String(h) for h in child_hosts],
@@ -84,48 +81,35 @@ Classify CLI-style tokens. `hostinfo` / `pool` / `setup` may omit `:N` (host lis
 go / drive / ride placement requires `:N` except `go --repeat` (omit = uncapped).
 """
 function parse_worker_tokens(
-        tokens::AbstractVector{<:AbstractString},
+        tokens::AbstractVector{<:AbstractString};
+        head_workers::Union{Nothing, Integer} = nothing,
     )::ParsedWorkerTokens
-    parent_workers = 0
-    local_seen = false
-    parent_autosize = false
+    head_workers = head_workers === nothing ? 0 : Int(head_workers)
     child_workers = Dict{String, Int}()
     child_auto = String[]
     child_hosts = String[]
-    seen_remote = Set{String}()
+    seen_remote = Dict{String, Int}()
     out_tokens = String[String(t) for t in tokens]
 
-    for raw in out_tokens
+    for (idx, raw) in enumerate(out_tokens)
         p = parse_placement_token(raw)
-        if p.role === :parent
-            local_seen && throw(
+        p.role === :parent &&
+            throw(ArgumentError("$(repr(raw)): use --head-workers for head-machine workers, not tokens"))
+        host = p.name
+        n = something(p.n, 1)
+        if haskey(seen_remote, host)
+            throw(
                 ArgumentError(
-                    "duplicate parent token; use one of $(PARENT_HOST_NAME):N",
-                )
+                    "duplicate host $(repr(host)) at tokens[$idx] and [$seen_remote[host]]",
+                ),
             )
-            local_seen = true
-            if p.n === nothing
-                parent_autosize = true
-            else
-                parent_workers = Int(p.n)
-            end
-        else
-            host = p.name
-            n = p.n
-            if !(host in seen_remote)
-                push!(child_hosts, host)
-                push!(seen_remote, host)
-            end
-            if n === nothing
-                push!(child_auto, host)
-            else
-                child_workers[host] = Int(n)
-            end
         end
+        seen_remote[host] = idx
+        push!(child_hosts, host)
+        n === nothing ? push!(child_auto, host) : (child_workers[host] = Int(n))
     end
     return ParsedWorkerTokens(
-        parent_workers,
-        parent_autosize,
+        head_workers,
         child_workers,
         child_auto,
         child_hosts,
@@ -135,18 +119,42 @@ end
 
 """True when every token has an explicit worker/slot count (`:N`)."""
 function worker_tokens_fully_specified(parsed::ParsedWorkerTokens)::Bool
-    return !parsed.parent_autosize && isempty(parsed.child_auto)
+    return isempty(parsed.child_auto)
+end
+
+"""Total Distributed worker count from parsed placement."""
+function total_worker_placement(parsed::ParsedWorkerTokens)::Int
+    rem = sum(values(parsed.child_workers); init = 0)
+    return parsed.head_workers + rem
 end
 
 """Throw unless every token has `:N` (go / drive / ride placement)."""
 function require_counted_placement_tokens(
         tokens::AbstractVector{<:AbstractString};
+        command::Symbol,
         surface::Symbol = :api,
+        head_workers::Union{Nothing, Integer} = nothing,
+        head_slots::Union{Nothing, Integer} = nothing,
     )::Nothing
-    isempty(tokens) && return nothing
-    parsed = parse_worker_tokens(tokens)
-    worker_tokens_fully_specified(parsed) && return nothing
-    throw(ArgumentError(explain_bare_placement_tokens(tokens; surface = surface)))
+    command in (:go, :drive, :ride) ||
+        throw(ArgumentError("require_counted_placement_tokens: unsupported command $(repr(command))"))
+    if command === :go
+        parsed = parse_worker_tokens(tokens; head_workers = 0)
+        worker_tokens_fully_specified(parsed) ||
+            throw(ArgumentError(explain_bare_placement_tokens(tokens; surface = surface)))
+        remote_slots = sum(values(parsed.child_workers); init = 0)
+        ls, _ = resolve_go_head_slots(tokens, head_slots)
+        ls + remote_slots == 0 &&
+            throw(ArgumentError(zero_placement_usage_error(:go; surface = surface)))
+        return nothing
+    end
+    lw = head_workers === nothing ? 0 : Int(head_workers)
+    parsed = parse_worker_tokens(tokens; head_workers = lw)
+    worker_tokens_fully_specified(parsed) ||
+        throw(ArgumentError(explain_bare_placement_tokens(tokens; surface = surface)))
+    total_worker_placement(parsed) == 0 &&
+        throw(ArgumentError(zero_placement_usage_error(command; surface = surface)))
+    return nothing
 end
 
 """SSH host names from tokens (parent tokens omitted)."""
@@ -365,7 +373,7 @@ end
 
 Settings for [`pipeline!`](@ref): worker tokens, driver run, and optional collect.
 
-Worker placement uses CLI-style tokens (`parent:2`, `child:user@host:1`).
+Worker placement uses CLI-style tokens (`parent:2`, `1*user@host`).
 Listed tokens need `:N`. Set `collect=false`
 to skip rsync-back. Git parity is off by default; pass `skip_hash_check=false`
 (or CLI `--require-git`) to require matching remote commits.
@@ -392,11 +400,13 @@ mutable struct PipelineConfig
     log_dir::Union{Nothing, String}
     package::Union{Nothing, String}
     julia::Union{Nothing, String}
+    head_workers::Union{Nothing, Int}
 end
 
 function PipelineConfig(;
         project::AbstractString = pwd(),
         workers::AbstractVector{<:AbstractString} = String[],
+        head_workers::Union{Nothing, Integer} = nothing,
         remote::Union{Nothing, AbstractString} = nothing,
         hosts_file::Union{Nothing, AbstractString} = nothing,
         quiet::Bool = false,
@@ -444,6 +454,7 @@ function PipelineConfig(;
         ld,
         pkg,
         jl,
+        head_workers === nothing ? nothing : Int(head_workers),
     )
 end
 
@@ -574,14 +585,7 @@ end
 
 """Build `drive` host specs from a [`WorkerPlan`](@ref)."""
 function drive_host_specs(plan::WorkerPlan)::Vector{String}
-    specs = String[]
-    if plan.parent_workers > 0
-        push!(specs, format_placement_token(:parent, PARENT_HOST_NAME, plan.parent_workers))
-    end
-    for (host, n) in plan.child_workers
-        n > 0 && push!(specs, format_placement_token(:child, host, n))
-    end
-    return specs
+    return resolved_placement_tokens(plan)
 end
 
 function SyncResult(

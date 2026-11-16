@@ -2,7 +2,7 @@
 # Plain script for `go` / `ride` (no Distributed).
 #
 #   julia demos/ride/map_echo.jl
-#   julia --project=. -m DistSSHRun ride parent:2 demos/ride/map_echo.jl
+#   julia --project=. -m DistSSHRun ride --local-workers 2 demos/ride/map_echo.jl
 
 function work(x)
     return x * x

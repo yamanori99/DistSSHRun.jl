@@ -17,7 +17,7 @@ function _sigint_child(proj::AbstractString; marker::AbstractString, restore::Ab
     script = joinpath(proj, "job.jl")
     cp(_fixture("drive_sigint.jl"), script; force = true)
     return _kit_drive_cmd(;
-        script, host_root = proj, parent_workers = 2,
+        script, host_root = proj, head_workers = 2,
         extra_env = Dict(
             "DISTSSH_TEST_SIGINT_MARKER" => marker,
             "DISTSSH_TEST_RESTORE_FILE" => restore,

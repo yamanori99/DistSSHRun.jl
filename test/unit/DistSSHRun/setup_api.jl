@@ -37,7 +37,7 @@ using Test
                 _sync_test_project_manifest!(proj)
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:$host"],
+                    workers = ["$host"],
                     remote = "~/App.jl",
                     yes = true,
                     quiet = true,
@@ -198,7 +198,7 @@ using Test
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:$host"],
+                    workers = ["$host"],
                     remote = "~/App.jl",
                     yes = true,
                     quiet = true,
@@ -212,13 +212,41 @@ using Test
     end
 
     @testset "juliaup align" begin
+        function _fake_head_juliaup_env()
+            d = mktempdir()
+            ju = joinpath(d, "juliaup")
+            jl = joinpath(d, "julia")
+            write(
+                ju,
+                """
+                #!/bin/sh
+                case "\$1" in
+                  --version) echo 'Juliaup 1.22.7'; exit 0 ;;
+                  add|update|default) exit 0 ;;
+                  status) echo ok; exit 0 ;;
+                  *) exit 1 ;;
+                esac
+                """,
+            )
+            write(
+                jl,
+                """
+                #!/bin/sh
+                echo "julia version $(VERSION.major).$(VERSION.minor).$(VERSION.patch)"
+                """,
+            )
+            chmod(ju, 0o755)
+            chmod(jl, 0o755)
+            return Dict{String, String}("DISTSSH_TEST_LOCAL_JULIAUP" => ju)
+        end
+        head_ju = _fake_head_juliaup_env()
         _with_fake_remotes() do _
             _with_tempdir() do proj
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
                 host = "host1"
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:$host"],
+                    workers = ["$host"],
                     remote = "~/App.jl",
                     yes = true,
                     quiet = true,
@@ -228,21 +256,20 @@ using Test
                     "DISTSSH_TEST_JULIA_VERSION" => "julia version $(VERSION)",
                     "DISTSSH_TEST_UNAME" => "Linux",
                 )
-                withenv(ver_env...) do
+                withenv(merge(ver_env, head_ju)...) do
                     up = DistSSHRun.setup!(session, :juliaup)
                     @test up.ok && !up.cancelled
-                    @test length(up.hosts) == 1 && up.hosts[1].ok
+                    @test length(up.hosts) == 2
+                    @test all(h -> h.ok, up.hosts)
+                    @test any(h -> h.host == host, up.hosts)
                 end
-                withenv(
-                    ver_env...,
-                    "DISTSSH_TEST_JULIAUP_ALREADY" => "1",
-                ) do
+                withenv(merge(ver_env, head_ju, Dict("DISTSSH_TEST_JULIAUP_ALREADY" => "1"))...) do
                     empty!(DistSSHRun.DistSSHBase._DETECT_JULIA_PATH_CACHE)
                     # `quiet=true` would re-pin `:quiet` in `apply_session_env!`
                     # and swallow the `:progress` already-on line.
                     progress_session = DistSSHRun.DistSSHSession(
                         project = proj,
-                        workers = ["child:$host"],
+                        workers = ["$host"],
                         remote = "~/App.jl",
                         yes = true,
                     )
@@ -261,12 +288,14 @@ using Test
                     @test !bad.ok
                 end
                 ssh_log = joinpath(proj, "ssh.log")
-                withenv(ver_env..., "DISTSSH_TEST_SSH_LOG" => ssh_log) do
+                withenv(merge(ver_env, head_ju, Dict("DISTSSH_TEST_SSH_LOG" => ssh_log))...) do
                     empty!(DistSSHRun.DistSSHBase._DETECT_JULIA_PATH_CACHE)
                     upd = DistSSHRun.setup!(session, :juliaup_update)
                     @test upd.ok && !upd.cancelled
-                    @test length(upd.hosts) == 1 && upd.hosts[1].ok
-                    @test occursin("update", upd.hosts[1].message)
+                    @test length(upd.hosts) == 2
+                    @test all(h -> h.ok, upd.hosts)
+                    remote_hr = only(h for h in upd.hosts if h.host == host)
+                    @test occursin("update", remote_hr.message)
                     logged = isfile(ssh_log) ? read(ssh_log, String) : ""
                     @test occursin("\"\$JU\" update", logged)
                     @test !occursin("echo already", logged)
@@ -306,7 +335,7 @@ using Test
                 chmod(jl, 0o755)
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["parent"],
+                    workers = String[],
                     remote = "~/App.jl",
                     yes = true,
                     quiet = true,
@@ -314,7 +343,8 @@ using Test
                 withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                     up = DistSSHRun.setup!(session, :juliaup)
                     @test up.ok && !up.cancelled
-                    @test length(up.hosts) == 1 && up.hosts[1].ok
+                    @test length(up.hosts) == 1
+                    @test up.hosts[1].ok
                     @test up.hosts[1].host == "parent"
                 end
             end
@@ -339,7 +369,7 @@ using Test
                 chmod(ju, 0o755)
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["parent"],
+                    workers = String[],
                     remote = "~/App.jl",
                     yes = true,
                     quiet = true,
@@ -357,7 +387,7 @@ using Test
             write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
             session = DistSSHRun.DistSSHSession(
                 project = proj,
-                workers = ["parent", "child:host1"],
+                workers = ["host1"],
                 remote = "~/App.jl",
                 yes = true,
                 quiet = true,
@@ -378,7 +408,7 @@ using Test
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:$host"],
+                    workers = ["$host"],
                     remote = "~/App.jl",
                     yes = true,
                     quiet = true,
@@ -405,7 +435,7 @@ using Test
                 # No quiet=: auto session would resolve to :verbose under a pipe.
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:host1"],
+                    workers = ["host1"],
                     remote = "~/App.jl",
                     yes = true,
                 )
@@ -444,7 +474,7 @@ using Test
             _with_tempdir() do proj
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:host1"],
+                    workers = ["host1"],
                     remote = "~/App.jl",
                     yes = true,
                     quiet = true,
@@ -461,7 +491,7 @@ using Test
         _with_tempdir() do proj
             session = DistSSHRun.DistSSHSession(
                 project = proj,
-                workers = ["child:host1"],
+                workers = ["host1"],
                 remote = "~/App.jl",
                 yes = true,
             )
@@ -481,7 +511,7 @@ using Test
             _with_tempdir() do proj
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:host1"],
+                    workers = ["host1"],
                     remote = "~/App.jl",
                     yes = true,
                     quiet = true,
@@ -501,7 +531,7 @@ using Test
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\nuuid = \"00000000-0000-0000-0000-000000000001\"\n")
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:host1"],
+                    workers = ["host1"],
                     remote = "~/App.jl",
                     yes = true,
                     quiet = true,
@@ -532,7 +562,7 @@ using Test
             _with_tempdir() do proj
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:host1"],
+                    workers = ["host1"],
                     remote = "~/App.jl",
                     yes = true,
                     quiet = true,
@@ -559,7 +589,7 @@ using Test
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:$host"],
+                    workers = ["$host"],
                     remote = "~/App.jl",
                     yes = false,
                     quiet = true,
@@ -582,7 +612,7 @@ using Test
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:$host"],
+                    workers = ["$host"],
                     remote = "~/App.jl",
                     yes = false,
                     quiet = true,
@@ -605,7 +635,7 @@ using Test
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:$host"],
+                    workers = ["$host"],
                     remote = "~/App.jl",
                     yes = true,
                     quiet = true,
@@ -696,7 +726,7 @@ using Test
                 end
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:host1", "child:host2"],
+                    workers = ["host1", "host2"],
                     remote = "~/App.jl",
                     yes = true,
                     quiet = true,
@@ -736,18 +766,13 @@ using Test
                 @test !isdir(joinpath(state_dir, "host1"))
                 @test isfile(joinpath(state_dir, "host2", "tree", "keepme.txt"))
 
-                token_key = try
-                    DistSSHRun.setup!(
-                        session, :delete;
-                        confirm_path = Dict("child:host2" => "~/App.jl"),
-                    )
-                    nothing
-                catch e
-                    e
-                end
-                @test token_key isa ArgumentError
-                @test occursin("unknown host", token_key.msg)
-                @test isfile(joinpath(state_dir, "host2", "tree", "keepme.txt"))
+                partial2 = DistSSHRun.setup!(
+                    session, :delete;
+                    confirm_path = Dict("host2" => "~/App.jl"),
+                )
+                @test partial2.ok && !partial2.cancelled
+                @test [h.host for h in partial2.hosts] == ["host2"]
+                @test !isdir(joinpath(state_dir, "host2"))
             end
         end
 
@@ -760,7 +785,7 @@ using Test
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:$host"],
+                    workers = ["$host"],
                     remote = "~/App.jl",
                     yes = false,
                     quiet = true,
@@ -781,7 +806,7 @@ using Test
             write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
             session = DistSSHRun.DistSSHSession(
                 project = proj,
-                workers = ["child:h1", "child:h2"],
+                workers = ["h1", "h2"],
                 remote = "~/App.jl",
                 yes = true,
                 quiet = true,

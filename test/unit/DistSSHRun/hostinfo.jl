@@ -48,7 +48,7 @@ end
         @test occursin("Hostinfo:", printed)
         @test occursin("Status:", printed)
         @test occursin("ok", printed)
-        @test occursin("parent", printed)
+        @test occursin("(head)", printed)
         @test occursin("Julia:", printed)
         @test occursin("OS:", printed)
         @test occursin("Kernel:", printed)
@@ -66,7 +66,7 @@ end
     @test !occursin("ok    Darwin", mac_out)
 
     linux = _hostinfo_fixture(;
-        selector = "child:lab",
+        selector = "lab",
         identity = "lab",
         os = "Linux",
         os_version = "24.04",
@@ -86,7 +86,7 @@ end
     @test !occursin("24.04.1 LTS 24.04", linux_out)
 
     wsl = _hostinfo_fixture(;
-        selector = "child:wsl",
+        selector = "wsl",
         identity = "wsl",
         os = "Linux",
         os_version = "24.04",
@@ -138,7 +138,7 @@ end
     multi = sprint(io -> DistSSHRun.print_hostinfo([mac, linux, failed]; io = io))
     @test occursin("3 hosts", multi)
     @test occursin("(1 host failed)", multi)
-    @test occursin("parent", multi)
+    @test occursin("(head)", multi)
     @test occursin("lab", multi)
     @test occursin("ghost", multi)
 
@@ -156,9 +156,7 @@ end
     @test occursin("Hostinfo:", nontty)
     @test occursin("Memory:", nontty)
 
-    r = DistSSHRun.parse_hostinfo_args(["parent", "child:host1"])
-    @test r.include_parent
-    @test r.hosts == ["host1"]
+    @test_throws ArgumentError DistSSHRun.parse_hostinfo_args(["parent", "host1"])
     @test_throws ArgumentError DistSSHRun.parse_hostinfo_args(["--gb-per-worker", "1.5", "parent"])
     help = sprint(io -> DistSSHRun.show_hostinfo_usage(; io = io))
     @test occursin("hostinfo", help)
@@ -169,29 +167,33 @@ end
     _with_tempdir() do tmp
         write(joinpath(tmp, "Project.toml"), "name = \"HostinfoHost\"\n")
         mktemp() do out_path, out_io
+            head = DistSSHRun.kit_head_host_label()
             code = redirect_stdout(out_io) do
                 redirect_stderr(devnull) do
-                    DistSSHRun.run_hostinfo(["parent"])
+                    DistSSHRun.run_hostinfo(String[])
                 end
             end
             flush(out_io)
             out = read(out_path, String)
             @test code == 0
-            @test occursin("parent", out)
+            @test occursin(head, out)
+            @test occursin("(head)", out)
             @test occursin("Hostinfo:", out)
             @test occursin("Status:", out)
         end
         mktemp() do out_path, out_io
+            head = DistSSHRun.kit_head_host_label()
             code = redirect_stdout(out_io) do
                 redirect_stderr(devnull) do
-                    DistSSHRun.run_hostinfo(["--quiet", "parent"])
+                    DistSSHRun.run_hostinfo(["--quiet", "host1"])
                 end
             end
             flush(out_io)
             out = read(out_path, String)
-            @test code == 0
+            @test code == 1
             @test occursin("Hostinfo:", out)
-            @test occursin("parent", out)
+            @test occursin(head, out)
+            @test occursin("(head)", out)
             @test occursin("Status:", out)
         end
     end

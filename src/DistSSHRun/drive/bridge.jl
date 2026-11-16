@@ -23,14 +23,16 @@ function drive_parsed_from_session(
     _reject_run_transfer_kw!("drive!", sync; surface = hint_surface(session))
     allow_external_symlinks &&
         _reject_run_transfer_cli!("drive!", "--allow-external-symlinks")
-    parent_workers = 0
+    head_workers = 0
     hosts = Tuple{String, Union{Int, Nothing}}[]
     if workers !== nothing
-        parent_workers = workers.parent_workers
+        head_workers = workers.head_workers
         for (host, n) in workers.child_workers
             n > 0 && push!(hosts, (host, n))
         end
     else
+        lw = session.cli_session.head_workers
+        lw !== nothing && (head_workers = Int(lw))
         for h in session.hosts
             push!(hosts, (h, nothing))
         end
@@ -51,7 +53,7 @@ function drive_parsed_from_session(
         String(julia)
     end
     return (
-        parent_workers = parent_workers,
+        head_workers = head_workers,
         default_workers = nothing,
         julia = julia_exe,
         skip_hash_check = skip_hash_check,

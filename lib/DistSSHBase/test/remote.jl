@@ -150,13 +150,25 @@ using Test
         @test "ServerAliveCountMax=10" in opts
     end
     withenv("DISTRIBUTED_SSH_OPTS" => "-o Foo=bar -o Baz=qux") do
-        @test DistSSHBase.build_ssh_opts() == ["-o", "Foo=bar", "-o", "Baz=qux"]
-        @test DistSSHBase.ssh_opts() == ["-o", "Foo=bar", "-o", "Baz=qux"]
-        @test DistSSHBase.ssh_opts(; request_tty = true) == ["-o", "Foo=bar", "-o", "Baz=qux"]
+        opts = DistSSHBase.build_ssh_opts()
+        @test "BatchMode=yes" in opts
+        @test "Foo=bar" in opts
+        @test "Baz=qux" in opts
     end
     withenv("DISTRIBUTED_SSH_OPTS" => "-F /tmp/ssh_config") do
-        @test DistSSHBase.ssh_opts() == ["-F", "/tmp/ssh_config"]
-        @test DistSSHBase.ssh_opts(; request_tty = true) == ["-F", "/tmp/ssh_config"]
+        opts = DistSSHBase.ssh_opts()
+        @test opts[1:2] == ["-F", "/tmp/ssh_config"]
+        @test "BatchMode=yes" in opts
+    end
+    withenv("DISTRIBUTED_SSH_OPTS" => "-o ConnectTimeout=99") do
+        opts = DistSSHBase.build_ssh_opts()
+        @test first(opts) == "-o"
+        @test opts[2] == "ConnectTimeout=99"
+        @test count(kv -> kv == "ConnectTimeout=10", opts) == 0
+        @test "BatchMode=yes" in opts
+    end
+    withenv("DISTRIBUTED_SSH_OPTS" => "-o BatchMode=no") do
+        @test_throws ArgumentError DistSSHBase.build_ssh_opts()
     end
 
     _with_tempdir() do tmp

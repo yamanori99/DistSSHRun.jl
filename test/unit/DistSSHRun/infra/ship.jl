@@ -266,7 +266,7 @@ end
     @test occursin("group or world writable", sh)
     @test !occursin("runs", sh)
     @test !occursin(".distssh", sh)
-    session = DistSSHRun.DistSSHSession(; workers = ["child:host.test"], yes = true)
+    session = DistSSHRun.DistSSHSession(; workers = ["host.test"], yes = true)
     err = try
         _capture_stdio() do _, _
             DistSSHRun.setup!(session, :remote_root)
@@ -1269,7 +1269,7 @@ end
 
 @testset "--rsync removed" begin
     err = try
-        DistSSHRun.parse_setup_args(["--rsync", "child:h1"])
+        DistSSHRun.parse_setup_args(["--rsync", "h1"])
         error("expected ArgumentError")
     catch e
         e
@@ -1277,7 +1277,7 @@ end
     @test err isa ArgumentError
     @test err.msg == DistSSHRun.RSYNC_REMOVED_MSG
     err2 = try
-        DistSSHRun.parse_go_args(["--rsync", "child:h1:1", "job.jl"])
+        DistSSHRun.parse_go_args(["--rsync", "1*h1", "job.jl"])
         error("expected ArgumentError")
     catch e
         e
@@ -1462,7 +1462,7 @@ end
             _with_saved_project_env() do
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:host1"],
+                    workers = ["host1"],
                     remote = "/home/distsshkit/app",
                     yes = false,
                     quiet = true,
@@ -1545,7 +1545,7 @@ end
                             end
                             session = DistSSHRun.DistSSHSession(
                                 project = proj,
-                                workers = ["child:host1"],
+                                workers = ["host1"],
                                 remote = "/home/distsshkit/app",
                                 yes = true,
                                 quiet = true,

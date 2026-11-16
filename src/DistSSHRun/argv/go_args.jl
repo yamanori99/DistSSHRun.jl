@@ -14,20 +14,20 @@ function show_go_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  $(cli_m_project()) go [slots...] SCRIPT.jl",
-        "  go parent:2 SCRIPT.jl",
+        "  go --head-slots 2 SCRIPT.jl",
         "  go --repeat 100 SCRIPT.jl",
-        "  go --repeat 100 child:host1 child:host2 SCRIPT.jl",
-        "  go parent:1 child:host1:2 child:host2:2 SCRIPT.jl",
+        "  go --repeat 100 1*host1 2*host2 SCRIPT.jl",
+        "  go --head-slots 1 2*host1 SCRIPT.jl",
     )
     print_help_blank(io)
     print_help_section("Slots"; io = io)
     print_help_lines(
         io,
-        "  parent:N / child:NAME:N  N full-script runs (not drive workers)",
-        "  omit :N             error unless --repeat (then host is uncapped)",
-        "  parent:0                     skip parent when children are listed",
+        "  N*host              quote tokens; bare host = 1 slot (SSH)",
+        "  $(KIT_HEAD_SLOTS_FLAG_HELP)",
+        "  omit host count     error unless --repeat (then host is uncapped)",
         "  --repeat N          N independent runs; spread across listed hosts",
-        "                       (:N is a per-host cap; omit :N leaves it uncapped)",
+        "                       (`N*host` is a per-host cap; bare host is uncapped)",
         "  $(KIT_HOSTS_FLAG_HELP)",
         "  --hosts-file PATH   one token per line",
     )
@@ -122,6 +122,8 @@ end
 
 """Parse `go` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_go_args(args::AbstractVector{<:AbstractString})
+    reject_mistaken_short_placement_flags!(args; command = :go)
+    assert_go_argv_no_head_workers!(args)
     cli_session, rest = peel_shared_cli_flags(args)
     hosts = String[]
     host_tokens = String[]
@@ -233,7 +235,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
     append!(hosts, host_tokens)
     append_kit_host_sources!(hosts, cli_session; keep_counts = true)
     for h in hosts
-        parse_placement_token(h)
+        DistSSHBase.parse_machine_token(h)
     end
     if julia_exe === nothing
         env_val = get(ENV, "JULIA_DISTRIBUTED_EXE", "auto")
@@ -243,7 +245,12 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
     end
     apply_shared_cli_flags!(cli_session)
     if script_path !== nothing && repeat_n === nothing
-        require_counted_placement_tokens(hosts; surface = :cli)
+        require_counted_placement_tokens(
+            hosts;
+            command = :go,
+            surface = :cli,
+            head_slots = cli_session.head_slots,
+        )
     end
     return _go_parsed(;
         help = false,

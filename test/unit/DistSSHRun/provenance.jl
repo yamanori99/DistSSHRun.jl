@@ -83,7 +83,7 @@ end
         @test failed[1]["error"] == "gone"
         @test failed[1]["n"] == 1
         @test DistSSHRun._provenance_token("parent") == "parent"
-        @test DistSSHRun._provenance_token("box") == "child:box"
+        @test DistSSHRun._provenance_token("box") == "box"
         plain = _prov_snap()
         opt = _prov_snap()
         opt["install"] = "julia-1.14.0-alpha1+0.aarch64.apple.darwin14.opt"
@@ -346,7 +346,7 @@ end
             side = DistSSHRun.TOML.parsefile(joinpath(out, ".distssh", "provenance.toml"))
             @test side == raw["provenance"]
             grouped = Dict{String, Any}(
-                "child:box" => [
+                "box" => [
                     Dict{String, Any}(
                         "version" => "1.13.2",
                         "commit" => "abc",
@@ -364,7 +364,7 @@ end
             )
             grouped_raw = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
             @test grouped_raw["schema"] == 1
-            @test grouped_raw["provenance"]["workers"]["child:box"][1]["n"] == 2
+            @test grouped_raw["provenance"]["workers"]["box"][1]["n"] == 2
             grouped_side = DistSSHRun.TOML.parsefile(joinpath(out, ".distssh", "provenance.toml"))
             @test grouped_side == grouped_raw["provenance"]
             DistSSHRun.write_kit_run_toml!(tmp; kind = :go, output_dir = out)
@@ -560,7 +560,7 @@ end
                 result = redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
                         return DistSSHRun.go!(
-                            script, ["parent:1"];
+                            script, String[]; head_slots = 1,
                             project = proj, quiet = true, yes = true,
                         )
                     end
@@ -750,7 +750,7 @@ end
             try
                 DistSSHRun.set_kit_verbosity!(:quiet)
                 result = DistSSHRun.drive!(
-                    script, ["parent:1"];
+                    script, String[]; head_workers = 1,
                     project = proj,
                     yes = true,
                     enable_log = false,
@@ -774,7 +774,7 @@ end
             try
                 DistSSHRun.set_kit_verbosity!(:quiet)
                 result = DistSSHRun.ride!(
-                    script, ["parent:1"];
+                    script, String[]; head_workers = 1,
                     project = proj,
                     unsafe_skip_env_digests = true,
                 )

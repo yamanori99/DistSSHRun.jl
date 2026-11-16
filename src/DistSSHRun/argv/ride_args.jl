@@ -44,16 +44,17 @@ function show_ride_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  $(cli_m_project()) ride SCRIPT.jl",
-        "  ride parent:2 SCRIPT.jl",
-        "  ride parent:1 child:host1:2 SCRIPT.jl",
-        "  ride --spi-check parent:2 SCRIPT.jl",
+        "  ride --head-workers 2 SCRIPT.jl",
+        "  ride --head-workers 1 2*host1 SCRIPT.jl",
+        "  ride --spi-check --head-workers 2 SCRIPT.jl",
     )
     print_help_blank(io)
     print_help_section("Options"; io = io)
     print_help_lines(
         io,
-        "  parent:N / child:NAME:N  Distributed workers (default: no tokens → parent:1)",
-        "  omit :N             error (pass parent:N / child:NAME:N)",
+        "  N*host              machine tokens (quote --hosts)",
+        "  $(KIT_HEAD_WORKERS_FLAG_HELP)",
+        "  omit host count     error (pass N*host)",
         "  --spi-check         compare to sequential map/filter (default off)",
         "  --no-spi-check      skip that compare",
         "  --output-dir PATH   DISTRIBUTED_OUTPUT_DIR for the script (must be missing or empty)",
@@ -74,14 +75,17 @@ function show_ride_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "See also: go, drive, setup.",
-        "API: ride!(script, \"parent:2\", \"child:host:1\"; spi_check=false, run_id=\"…\").",
+        "API: ride!(script, \"1*host\"; head_workers=2, spi_check=false, run_id=\"…\").",
     )
     return nothing
 end
 
 """Parse `ride` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_ride_args(args::AbstractVector{<:AbstractString})
+    reject_mistaken_short_placement_flags!(args; command = :ride)
     cli_session, rest = peel_shared_cli_flags(args)
+    cli_session.head_slots !== nothing &&
+        throw(ArgumentError("ride uses --head-workers, not --head-slots"))
     hosts = String[]
     host_tokens = String[]
     script_path = nothing
@@ -184,7 +188,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
     append!(hosts, host_tokens)
     append_kit_host_sources!(hosts, cli_session; keep_counts = true)
     for h in hosts
-        parse_placement_token(h)
+        DistSSHBase.parse_machine_token(h)
     end
     if julia_exe === nothing
         env_val = get(ENV, "JULIA_DISTRIBUTED_EXE", "auto")
@@ -194,7 +198,12 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
     end
     apply_shared_cli_flags!(cli_session)
     if script_path !== nothing
-        require_counted_placement_tokens(hosts; surface = :cli)
+        require_counted_placement_tokens(
+            hosts;
+            command = :ride,
+            surface = :cli,
+            head_workers = cli_session.head_workers,
+        )
     end
     return _ride_parsed(;
         help = false,

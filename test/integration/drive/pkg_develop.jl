@@ -1,6 +1,6 @@
 using Test
 
-# Oracle: Pkg.develop(kit) then kit CLI `drive parent:2` prints SMOKE_OK.
+# Oracle: Pkg.develop(kit) then kit CLI `drive --local-workers 2` prints SMOKE_OK.
 # Does not cover host `drive.jl` without develop (local.jl).
 
 @testset "Pkg.develop" begin
@@ -14,7 +14,7 @@ using Test
 
         _develop_kit!(proj)
 
-        proc, combined = _run_kit_drive(; script = script, host_root = proj, parent_workers = 2)
+        proc, combined = _run_kit_drive(; script = script, host_root = proj, head_workers = 2)
         _assert_proc_ok(proc, combined; label = "Pkg.develop drive")
         @test occursin("DISTSSH_RUNNER_SMOKE_OK nw=2", combined)
     end

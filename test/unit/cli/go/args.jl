@@ -3,6 +3,23 @@ using Test
 @testset "go args" begin
     parse_go_args = DistSSHRun.parse_go_args
 
+    @testset "rejected mistaken short flags" begin
+        @test_throws ArgumentError parse_go_args(["-p", "--head-slots", "1", "job.jl"])
+        @test_throws ArgumentError parse_go_args(["-p4", "--head-slots", "1", "job.jl"])
+        @test_throws ArgumentError parse_go_args(["-l", "job.jl"])
+        @test_throws ArgumentError parse_go_args(["-L", "job.jl"])
+        let err = try
+                parse_go_args(["-p", "2", "job.jl"])
+                error("expected ArgumentError")
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("unknown option -p", err.msg)
+            @test occursin("--head-slots", err.msg)
+        end
+    end
+
     @testset "help flags" begin
         @test parse_go_args(["--help"]).help
         @test parse_go_args(["-h"]).help
@@ -11,7 +28,7 @@ using Test
                 [
                     "--julia", "/opt/julia/bin/julia",
                     "--output-dir", "my_runs",
-                    "--git-sync", "child:h1",
+                    "--git-sync", "h1",
                     "--help",
                 ],
             )
@@ -35,45 +52,66 @@ using Test
     end
 
     @testset "script and hosts" begin
+        let r = parse_go_args(["--head-slots", "1", "demos/foo.jl", "8"])
+            @test r.script_path == "demos/foo.jl"
+            @test r.script_args == ["8"]
+            @test isempty(r.hosts)
+            @test r.cli_session.head_slots == 1
+        end
         let r = parse_go_args(["demos/foo.jl", "8"])
             @test r.script_path == "demos/foo.jl"
             @test r.script_args == ["8"]
             @test isempty(r.hosts)
         end
-        let r = parse_go_args(["child:user@lab:1", "job.jl"])
+        let r = parse_go_args(["1*user@lab", "job.jl"])
             @test r.script_path == "job.jl"
-            @test r.hosts == ["child:user@lab:1"]
+            @test r.hosts == ["1*user@lab"]
         end
-        let r = parse_go_args(["--hosts", "child:host-a:1,child:host-b:2", "job.jl"])
-            @test r.hosts == ["child:host-a:1", "child:host-b:2"]
+        let r = parse_go_args(["job.jl"])
+            @test r.script_path == "job.jl"
+            @test isempty(r.hosts)
+            @test r.cli_session.head_slots === nothing
+        end
+        @test_throws ArgumentError parse_go_args(["--head-slots", "0", "job.jl"])
+        let r = parse_go_args(["--hosts", "1*host-a,2*host-b", "job.jl"])
+            @test r.hosts == ["1*host-a", "2*host-b"]
             @test r.script_path == "job.jl"
         end
-        @test_throws ArgumentError parse_go_args(["user@lab", "job.jl"])
+        let r = parse_go_args(["1*user@lab", "job.jl"])
+            @test r.hosts == ["1*user@lab"]
+        end
         @test_throws ArgumentError parse_go_args(["parent", "job.jl"])
-        @test_throws ArgumentError parse_go_args(["child:host1", "job.jl"])
-        let r = parse_go_args(["parent:4", "child:host1:1", "child:host2:2", "job.jl"])
-            @test DistSSHRun.host_tokens(r; kind = :go) == ["parent:4", "child:host1:1", "child:host2:2"]
+        let r = parse_go_args(["host1", "job.jl"])
+            @test r.hosts == ["host1"]
+            @test r.script_path == "job.jl"
         end
-        let r = parse_go_args(["child:local:2", "child:h1:1", "job.jl", "4"])
-            @test r.hosts == ["child:local:2", "child:h1:1"]
-            @test DistSSHRun.host_tokens(r; kind = :go) == ["child:local:2", "child:h1:1"]
-            @test DistSSHRun.host_tokens(r.hosts) == ["child:local:2", "child:h1:1"]
+        @test_throws ArgumentError parse_go_args(
+            ["--head-workers", "4", "1*host1", "2*host2", "job.jl"],
+        )
+        let r = parse_go_args(["--head-slots", "4", "1*host1", "2*host2", "job.jl"])
+            @test r.cli_session.head_slots == 4
+            @test DistSSHRun.host_tokens(r; kind = :go) == ["1*host1", "2*host2"]
+        end
+        let r = parse_go_args(["2*local", "1*h1", "job.jl", "4"])
+            @test r.hosts == ["2*local", "1*h1"]
+            @test DistSSHRun.host_tokens(r; kind = :go) == ["2*local", "1*h1"]
+            @test DistSSHRun.host_tokens(r.hosts) == ["2*local", "1*h1"]
             @test_throws ArgumentError DistSSHRun.host_tokens(r; kind = :pipeline)
             @test r.script_path == "job.jl"
             @test r.script_args == ["4"]
         end
-        let r = parse_go_args(["--output-dir", "my_runs", "job.jl"])
+        let r = parse_go_args(["--output-dir", "my_runs", "1*h1", "job.jl"])
             @test r.output_dir == "my_runs"
             @test r.script_path == "job.jl"
         end
-        let r = parse_go_args(["--julia", "/opt/julia/bin/julia", "job.jl"])
+        let r = parse_go_args(["--julia", "/opt/julia/bin/julia", "--head-slots", "1", "job.jl"])
             @test r.julia == "/opt/julia/bin/julia"
             @test r.script_path == "job.jl"
         end
-        let r = parse_go_args(["--julia", "auto", "job.jl"])
+        let r = parse_go_args(["--julia", "auto", "--head-slots", "1", "job.jl"])
             @test r.julia === nothing
         end
-        let r = parse_go_args(["--unsafe-skip-env-digests", "parent:1", "job.jl"])
+        let r = parse_go_args(["--unsafe-skip-env-digests", "--head-slots", "1", "job.jl"])
             @test r.unsafe_skip_env_digests
         end
         err = try
@@ -87,7 +125,7 @@ using Test
         @test occursin("--allow-mismatch was removed", err.msg)
         @test occursin("--unsafe-skip-env-digests", err.msg)
         withenv("JULIA_DISTRIBUTED_EXE" => "/env/julia") do
-            let r = parse_go_args(["job.jl"])
+            let r = parse_go_args(["--head-slots", "1", "job.jl"])
                 @test r.julia == "/env/julia"
             end
             let r = parse_go_args(["--julia", "auto", "job.jl"])
@@ -97,11 +135,11 @@ using Test
     end
 
     @testset "sync flags" begin
-        let r = parse_go_args(["child:local:2", "child:h1:1", "job.jl"])
+        let r = parse_go_args(["2*local", "1*h1", "job.jl"])
             @test r.script_path == "job.jl"
         end
         let err_sync = try
-                parse_go_args(["--sync", "child:h1:1", "job.jl"])
+                parse_go_args(["--sync", "1*h1", "job.jl"])
                 error("expected ArgumentError")
             catch e
                 e
@@ -111,7 +149,7 @@ using Test
             @test occursin("setup git-sync", err_sync.msg)
         end
         let err_git = try
-                parse_go_args(["--git-sync", "child:h1:1", "job.jl"])
+                parse_go_args(["--git-sync", "1*h1", "job.jl"])
                 error("expected ArgumentError")
             catch e
                 e
@@ -120,7 +158,7 @@ using Test
             @test occursin("go: --git-sync was removed", err_git.msg)
         end
         err_ship = try
-            parse_go_args(["--ship-tree", "child:h1:1", "job.jl"])
+            parse_go_args(["--ship-tree", "1*h1", "job.jl"])
             error("expected ArgumentError")
         catch e
             e
@@ -131,7 +169,7 @@ using Test
         @test occursin("--run-id", err_ship.msg)
         DistSSHRun.DistSSHBase.with_cli_entry(:DistSSHQueue) do
             qerr = try
-                parse_go_args(["--ship-tree", "child:h1:1", "job.jl"])
+                parse_go_args(["--ship-tree", "1*h1", "job.jl"])
                 error("expected ArgumentError")
             catch e
                 e
@@ -141,7 +179,7 @@ using Test
             @test !occursin("DistSSHQueue setup ship-tree", qerr.msg)
         end
         err_ext = try
-            parse_go_args(["--allow-external-symlinks", "child:h1:1", "job.jl"])
+            parse_go_args(["--allow-external-symlinks", "1*h1", "job.jl"])
             error("expected ArgumentError")
         catch e
             e
@@ -150,7 +188,7 @@ using Test
         @test occursin("go: --allow-external-symlinks was removed", err_ext.msg)
         @test occursin("setup ship-tree", err_ext.msg)
         let err_skip = try
-                parse_go_args(["--skip-sync", "child:local:1", "child:h1:2", "job.jl"])
+                parse_go_args(["--skip-sync", "1*local", "2*h1", "job.jl"])
                 error("expected ArgumentError")
             catch e
                 e
@@ -160,7 +198,7 @@ using Test
             @test occursin("no pre-run sync", err_skip.msg)
         end
         let err_skip = try
-                parse_go_args(["--skip-git-sync", "child:local:1", "child:h1:2", "job.jl"])
+                parse_go_args(["--skip-git-sync", "1*local", "2*h1", "job.jl"])
                 error("expected ArgumentError")
             catch e
                 e
@@ -169,7 +207,7 @@ using Test
             @test occursin("go: --skip-git-sync was removed", err_skip.msg)
         end
         let err_guard = try
-                parse_go_args(["--skip-git-guard", "child:h1:1", "job.jl"])
+                parse_go_args(["--skip-git-guard", "1*h1", "job.jl"])
                 error("expected ArgumentError")
             catch e
                 e
@@ -200,14 +238,14 @@ using Test
         let r = parse_go_args(["--version"])
             @test r.show_version
         end
-        let r = parse_go_args(["-q", "-y", "job.jl"])
+        let r = parse_go_args(["-q", "-y", "--head-slots", "1", "job.jl"])
             @test r.cli_session.quiet
             @test r.cli_session.yes
             DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags())
         end
-        withenv("DISTSSH_HOSTS" => "child:env-a:2,child:env-b:1") do
+        withenv("DISTSSH_HOSTS" => "2*env-a,1*env-b") do
             let r = parse_go_args(["job.jl"])
-                @test r.hosts == ["child:env-a:2", "child:env-b:1"]
+                @test r.hosts == ["2*env-a", "1*env-b"]
             end
         end
         @test_throws ArgumentError parse_go_args(
@@ -240,7 +278,8 @@ using Test
         @test occursin("--hosts", txt)
         @test occursin("--repeat", txt)
         @test occursin("--unsafe-skip-env-digests", txt)
-        @test occursin("parent", txt)
+        @test occursin("--head-slots", txt)
+        @test !occursin("parent:N", txt)
         @test occursin("progress DIR", txt)
         @test occursin("slot pull-back uses Tar", txt)
         @test occursin("--deploy-root", txt)
@@ -249,26 +288,26 @@ using Test
     end
 
     @testset "deploy-root" begin
-        let r = parse_go_args(["--deploy-root", "/tmp/my dir", "parent:1", "job.jl"])
+        let r = parse_go_args(["--deploy-root", "/tmp/my dir", "--head-slots", "1", "job.jl"])
             @test r.deploy_root == "/tmp/my dir"
             @test r.script_path == "job.jl"
         end
-        let r = parse_go_args(["--deploy-root", "/tmp/App", "--", "parent:1", "job.jl", "--n", "1"])
+        let r = parse_go_args(["--deploy-root", "/tmp/App", "--", "--head-slots", "1", "job.jl", "--n", "1"])
             @test r.deploy_root == "/tmp/App"
             @test r.script_args == ["--n", "1"]
         end
-        let r = parse_go_args(["parent:1", "job.jl", "--deploy-root", "/tmp/swallowed"])
+        let r = parse_go_args(["--head-slots", "1", "job.jl", "--deploy-root", "/tmp/swallowed"])
             @test r.deploy_root === nothing
             @test r.script_args == ["--deploy-root", "/tmp/swallowed"]
         end
-        let r = parse_go_args(["--", "parent:1", "job.jl", "--ship-tree"])
+        let r = parse_go_args(["--", "--head-slots", "1", "job.jl", "--ship-tree"])
             @test r.script_args == ["--ship-tree"]
         end
-        let r = parse_go_args(["parent:1", "job.jl", "--ship-tree"])
+        let r = parse_go_args(["--head-slots", "1", "job.jl", "--ship-tree"])
             @test r.script_args == ["--ship-tree"]
         end
         err_after = try
-            parse_go_args(["--", "--ship-tree", "parent:1", "job.jl"])
+            parse_go_args(["--", "--ship-tree", "--head-slots", "1", "job.jl"])
             error("expected ArgumentError")
         catch e
             e
@@ -277,7 +316,7 @@ using Test
         @test occursin("unknown go option: --ship-tree", err_after.msg)
         @test !occursin("was removed", err_after.msg)
         err = try
-            parse_go_args(["--remote-path", "/tmp/App", "parent:1", "job.jl"])
+            parse_go_args(["--remote-path", "/tmp/App", "--head-slots", "1", "job.jl"])
             error("expected ArgumentError")
         catch e
             e
@@ -285,15 +324,15 @@ using Test
         @test err isa ArgumentError
         @test occursin("go --remote-path was removed", err.msg)
         @test occursin("--deploy-root", err.msg)
-        @test_throws ArgumentError parse_go_args(["--remote-path=/tmp/App", "parent:1", "job.jl"])
+        @test_throws ArgumentError parse_go_args(["--remote-path=/tmp/App", "--head-slots", "1", "job.jl"])
         @test_throws ArgumentError parse_go_args(["--deploy-root"])
     end
 
     @testset "unknown option and missing script" begin
         @test_throws ArgumentError parse_go_args(["--nope"])
-        let r = parse_go_args(["child:h1"])
+        let r = parse_go_args(["h1"])
             @test r.script_path === nothing
-            @test r.hosts == ["child:h1"]
+            @test r.hosts == ["h1"]
             @test !r.help
         end
         mktemp() do path, io
@@ -314,7 +353,7 @@ using Test
                     redirect_stdin(devnull) do
                         redirect_stdout(out_io) do
                             redirect_stderr(err_io) do
-                                DistSSHRun.go(["--ship-tree", "child:h1:1", "job.jl"])
+                                DistSSHRun.go(["--ship-tree", "1*h1", "job.jl"])
                             end
                         end
                     end
@@ -331,11 +370,11 @@ using Test
         end
     end
 
-    @testset "--hosts-file keeps host:N" begin
+    @testset "--hosts-file machine tokens" begin
         hosts_file = _sample_hosts_file()
         withenv("DISTSSH_HOSTS" => nothing, "DISTSSH_HOSTS_FILE" => nothing) do
             let r = parse_go_args(["--hosts-file", hosts_file, "job.jl"])
-                @test r.hosts == ["child:host-a:1", "child:host-b:4"]
+                @test r.hosts == ["host-a", "4*host-b"]
                 @test r.script_path == "job.jl"
             end
         end

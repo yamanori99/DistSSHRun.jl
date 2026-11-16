@@ -15,13 +15,14 @@ using Test
 # hostinfo/pool, go success/exit 3, and a `:quiet` summary check.
 
 @testset "TTY progress keeps up status and setup --check lines" begin
-    status_cmd = _kit_cli_cmd(["up", "status", "parent", "child:host1"])
-    update_cmd = _kit_cli_cmd(["up", "update", "parent", "child:host1"])
-    check_cmd = _kit_cli_cmd(["setup", "check", "child:host1"])
-    check2_cmd = _kit_cli_cmd(["setup", "check", "child:host1", "child:host2"])
-    preflight_cmd = _kit_cli_cmd(["up", "status", "child:host1"])
-    size_cmd = _kit_cli_cmd(["hostinfo", "parent"])
-    pool_cmd = _kit_cli_cmd(["pool", "parent"])
+    ctrl = DistSSHRun.kit_head_host_label()
+    status_cmd = _kit_cli_cmd(["up", "status", "parent", "host1"])
+    update_cmd = _kit_cli_cmd(["up", "update", "parent", "host1"])
+    check_cmd = _kit_cli_cmd(["setup", "check", "host1"])
+    check2_cmd = _kit_cli_cmd(["setup", "check", "host1", "host2"])
+    preflight_cmd = _kit_cli_cmd(["up", "status", "host1"])
+    size_cmd = _kit_cli_cmd(["hostinfo"])
+    pool_cmd = _kit_cli_cmd(["pool"])
     mktempdir() do dir
         ju = joinpath(dir, "juliaup")
         write(
@@ -82,8 +83,8 @@ using Test
         write(go_ok, "println(\"go-ok-marker\")\n")
         go_fail = joinpath(go_proj, "fail.jl")
         write(go_fail, "println(\"go-fail-marker\")\nexit(3)\n")
-        go_ok_cmd = _kit_cli_cmd(["go", "-y", "parent:1", go_ok])
-        go_fail_cmd = _kit_cli_cmd(["go", "-y", "parent:1", go_fail])
+        go_ok_cmd = _kit_cli_cmd(["go", "-y", "--head-slots", "1", go_ok])
+        go_fail_cmd = _kit_cli_cmd(["go", "-y", "--head-slots", "1", go_fail])
 
         empty_path = mktempdir()
         runner = joinpath(dir, "runner.sh")
@@ -196,13 +197,13 @@ using Test
         quiet_tty = length(parts) == 10 ? parts[10] : ""
 
         status_lines = _tty_lines(status_tty)
-        parent_rows = filter(l -> occursin("parent:", l) && occursin("installed", l), status_lines)
+        parent_rows = filter(l -> occursin("$ctrl:", l) && occursin("installed", l), status_lines)
         child_rows = filter(l -> occursin("host1:", l) && occursin("installed", l), status_lines)
         @test !isempty(parent_rows)
         @test !isempty(child_rows)
         @test all(l -> !occursin("same as parent", l), parent_rows)
         @test any(l -> occursin("installed 1.13.0", l), child_rows)
-        @test occursin("parent: ✓ juliaup update", _tty_strip_ansi(update_tty))
+        @test occursin("$ctrl: ✓ juliaup update", _tty_strip_ansi(update_tty))
         @test occursin("host1: ✓ juliaup update", _tty_strip_ansi(update_tty))
         check_lines = _tty_lines(check_tty)
         @test !any(l -> _tty_bar_line(l) && (occursin("not found in PATH", l) || occursin("Prerequisites not met", l)), check_lines)
@@ -248,25 +249,25 @@ using Test
         _assert_tty_progress_payload(preflight_tty; hosts = ["host1"])
 
         # hostinfo / pool: tables remain (headings may be hidden at :progress).
-        @test occursin("parent", _tty_strip_ansi(size_tty)) || occursin("GB", _tty_strip_ansi(size_tty)) ||
+        @test occursin(ctrl, _tty_strip_ansi(size_tty)) || occursin("GB", _tty_strip_ansi(size_tty)) ||
             occursin("hostinfo", lowercase(_tty_strip_ansi(size_tty)))
-        @test occursin("parent", _tty_strip_ansi(pool_tty)) || occursin("pool", lowercase(_tty_strip_ansi(pool_tty))) ||
+        @test occursin(ctrl, _tty_strip_ansi(pool_tty)) || occursin("pool", lowercase(_tty_strip_ansi(pool_tty))) ||
             !isempty(strip(_tty_strip_ansi(pool_tty)))
 
-        # go success: item names parent; stdout after the final bar.
+        # go success: item names the local slot; stdout after the final bar.
         go_ok_plain = _tty_strip_ansi(go_ok_tty)
-        @test occursin("parent", go_ok_plain)
+        @test occursin(ctrl, go_ok_plain)
         @test occursin("go-ok-marker", go_ok_plain)
         go_ok_lines = _tty_lines(go_ok_tty)
         @test any(l -> occursin("go-ok-marker", l) && !_tty_bar_line(l), go_ok_lines)
         _assert_tty_progress_payload(go_ok_tty)
 
-        # go exit 3: failure line names parent; no cursor-up redraw after it.
+        # go exit 3: failure line names the local slot; no cursor-up redraw after it.
         go_fail_plain = _tty_strip_ansi(go_fail_tty)
-        @test occursin("parent", go_fail_plain)
+        @test occursin(ctrl, go_fail_plain)
         @test occursin("exit 3", go_fail_plain) || occursin("(exit 3)", go_fail_plain)
         go_fail_lines = _tty_lines(go_fail_tty)
-        @test any(l -> occursin("✗", l) && occursin("parent", l) && occursin("exit", l), go_fail_lines)
+        @test any(l -> occursin("✗", l) && occursin(ctrl, l) && occursin("exit", l), go_fail_lines)
         _assert_tty_progress_payload(go_fail_tty)
 
         # :quiet setup --check: only the summary line on the terminal.
@@ -297,9 +298,9 @@ using Test
         check_pipe = read(ignorestatus(setenv(check_cmd, pipe_env)), String)
         @test occursin("1.13.0", status_pipe)
         @test occursin("aarch64", status_pipe)
-        @test occursin("parent:", status_pipe)
+        @test occursin("$ctrl:", status_pipe)
         @test occursin("host1:", status_pipe)
-        @test any(l -> occursin("parent:", l) && occursin("installed", l) && !occursin("same as parent", l), _tty_lines(status_pipe))
+        @test any(l -> occursin("$ctrl:", l) && occursin("installed", l) && !occursin("same as parent", l), _tty_lines(status_pipe))
         @test any(l -> occursin("host1:", l) && occursin("installed 1.13.0", l), _tty_lines(status_pipe))
         @test occursin("✓ juliaup update", update_pipe)
         @test !occursin("parent: ✓ juliaup", update_pipe)

@@ -25,9 +25,47 @@ using Test
         DistSSHRun.set_kit_verbosity!(:progress)
     end
 
+    @testset "rejected mistaken short flags" begin
+        @test_throws ArgumentError parse_drive_args(["-p", "--head-workers", "1", "s.jl"])
+        @test_throws ArgumentError parse_drive_args(["-p4", "--head-workers", "1", "s.jl"])
+        @test_throws ArgumentError parse_drive_args(["-l", "--head-workers", "1", "s.jl"])
+        @test_throws ArgumentError parse_drive_args(["-L", "--head-workers", "1", "s.jl"])
+        @test_throws ArgumentError parse_drive_args(["-L8080", "--head-workers", "1", "s.jl"])
+        let err = try
+                parse_drive_args(["-p", "auto", "--head-workers", "1", "s.jl"])
+                error("expected ArgumentError")
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("unknown option -p", err.msg)
+            @test occursin("--head-workers", err.msg)
+            @test occursin("host:port", err.msg)
+        end
+        let err = try
+                parse_drive_args(["-l", "user", "--head-workers", "1", "s.jl"])
+                error("expected ArgumentError")
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("user@host", err.msg)
+        end
+        let err = try
+                parse_drive_args(["-L", "8080:localhost:22", "--head-workers", "1", "s.jl"])
+                error("expected ArgumentError")
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("Port forwarding", err.msg)
+        end
+    end
+
     @testset "parse hosts and flags" begin
         @test DistSSHRun.split_worker_token("host-a") == ("host-a", nothing)
-        @test DistSSHRun.split_worker_token("host-a:10") == ("host-a", 10)
+        @test DistSSHRun.split_worker_token("10*host-a") == ("host-a", 10)
+        @test DistSSHRun.split_worker_token("host-a:22") == ("host-a", nothing)
 
         withenv("JULIA_DISTRIBUTED_EXE" => nothing) do
             let r = parse_drive_args(["--help"])
@@ -36,12 +74,12 @@ using Test
             let r = parse_drive_args(["-h"])
                 @test r.help == true
             end
-            let r = parse_drive_args(["s.jl"])
+            let r = parse_drive_args(["--head-workers", "1", "s.jl"])
                 @test r.hint_surface === :cli
                 @test r.worker_include == false
                 @test r.isolated == false
             end
-            let r = parse_drive_args(["--isolated", "s.jl", "--", "1"])
+            let r = parse_drive_args(["--isolated", "--head-workers", "1", "s.jl", "--", "1"])
                 @test r.isolated
                 @test r.script_path == "s.jl"
             end
@@ -60,23 +98,26 @@ using Test
             )
             @test valued == ["--output-dir", "--isolated", "s.jl"]
             quieted = [
-                "--output-dir", "--quiet", "result.jl", "--isolated", "driver.jl",
+                "--output-dir", "--quiet", "result.jl", "--isolated", "--head-workers", "1",
+                "driver.jl",
             ]
             @test DistSSHRun.parse_drive_args(quieted).script_path == "driver.jl"
             @test DistSSHRun.parse_drive_args(quieted).isolated
             child_args = DistSSHRun._drive_isolated_child_args(quieted)
-            @test child_args == ["--output-dir", "--quiet", "result.jl", "driver.jl"]
+            @test child_args == [
+                "--output-dir", "--quiet", "result.jl", "--head-workers", "1", "driver.jl",
+            ]
             @test !DistSSHRun.parse_drive_args(child_args).isolated
             uh_isolated = [
-                "--unsafe-skip-env-digests", "--isolated", "parent:1", "job.jl",
+                "--unsafe-skip-env-digests", "--isolated", "--head-workers", "1", "job.jl",
             ]
             _, uh_peeled = DistSSHRun.peel_shared_cli_flags(uh_isolated)
             @test DistSSHRun._peeled_isolated_option(uh_peeled) !== nothing
             uh_child = DistSSHRun._drive_isolated_child_args(uh_isolated)
-            @test uh_child == ["--unsafe-skip-env-digests", "parent:1", "job.jl"]
+            @test uh_child == ["--unsafe-skip-env-digests", "--head-workers", "1", "job.jl"]
             @test !DistSSHRun.parse_drive_args(uh_child).isolated
             rooted = DistSSHRun._drive_isolated_cmd(
-                ["--isolated", "s.jl"]; project_root = "/jobs/app",
+                ["--isolated", "--head-workers", "1", "s.jl"]; project_root = "/jobs/app",
             )
             env = something(rooted.env, String[])
             @test any(e -> startswith(e, "JULIA_LOAD_PATH="), env)
@@ -121,12 +162,12 @@ using Test
             @test_throws ArgumentError parse_drive_args(
                 ["--sync-script", "--sync-script", "s.jl"],
             )
-            let r = parse_drive_args(["--worker-include", "s.jl"])
+            let r = parse_drive_args(["--worker-include", "--head-workers", "1", "s.jl"])
                 @test r.worker_include == true
             end
             @test_throws ArgumentError parse_drive_args(["--worker-include", "--worker-include", "s.jl"])
-            let r = parse_drive_args(["parent:4", "myscript.jl", "a", "b"])
-                @test r.parent_workers == 4
+            let r = parse_drive_args(["--head-workers", "4", "myscript.jl", "a", "b"])
+                @test r.head_workers == 4
                 @test r.script_path == "myscript.jl"
                 @test r.script_args == ["a", "b"]
             end
@@ -134,35 +175,42 @@ using Test
             @test_throws ArgumentError parse_drive_args(["--parent:5", "s.jl"])
             @test_throws ArgumentError parse_drive_args(["--masterhost", "4", "s.jl"])
             @test_throws ArgumentError parse_drive_args(["--master-gb", "0.2", "s.jl"])
-            let r = parse_drive_args(["parent:3", "child:host1:2", "s.jl"])
-                @test r.parent_workers == 3
+            let r = parse_drive_args(["--head-workers", "3", "2*host1", "s.jl"])
+                @test r.head_workers == 3
                 @test r.hosts == [("host1", 2)]
-                @test DistSSHRun.host_tokens(r; kind = :drive) == ["parent:3", "child:host1:2"]
+                @test DistSSHRun.host_tokens(r; kind = :drive) == ["2*host1"]
             end
-            let r = parse_drive_args(["parent:4", "child:host1:1", "child:host2:2", "s.jl"])
-                @test DistSSHRun.host_tokens(r; kind = :drive) == ["parent:4", "child:host1:1", "child:host2:2"]
+            let r = parse_drive_args(["--head-workers", "0", "1*host1", "s.jl"])
+                @test r.head_workers == 0
+                @test ("host1", 1) in r.hosts
+            end
+            @test_throws ArgumentError parse_drive_args(["--head-workers", "0", "s.jl"])
+            let r = parse_drive_args(["--head-workers", "0", "1*host1", "s.jl"])
+                @test r.head_workers == 0
+                @test ("host1", 1) in r.hosts
+            end
+            @test_throws ArgumentError parse_drive_args(["--head-workers", "0", "s.jl"])
+            let r = parse_drive_args(["--head-workers", "4", "1*host1", "2*host2", "s.jl"])
+                @test DistSSHRun.host_tokens(r; kind = :drive) == ["host1", "2*host2"]
             end
             @test_throws ArgumentError parse_drive_args(["--local", "4", "myscript.jl", "a", "b"])
             @test_throws ArgumentError parse_drive_args(["--local:5", "s.jl"])
             @test_throws ArgumentError parse_drive_args(["-l:2", "s.jl"])
             @test_throws ArgumentError parse_drive_args(["-l", "3", "s.jl"])
-            let r = parse_drive_args(["--workers:7", "child:host1:1", "s.jl"])
-                @test r.default_workers == 7
-                @test r.parent_workers == 7
+            let r = parse_drive_args(["--head-workers", "7", "1*host1", "s.jl"])
+                @test r.head_workers == 7
                 @test r.hosts == [("host1", 1)]
-                @test DistSSHRun.host_tokens(r; kind = :drive) == ["parent:7", "child:host1:1"]
+                @test DistSSHRun.host_tokens(r; kind = :drive) == ["host1"]
             end
-            let r = parse_drive_args(["-w:4", "child:host1:1", "s.jl"])
-                @test r.default_workers == 4
-                @test r.parent_workers == 4
+            @test_throws ArgumentError parse_drive_args(["-w:4", "1*host1", "s.jl"])
+            @test_throws ArgumentError parse_drive_args(["--workers:7", "1*host1", "s.jl"])
+            let r = parse_drive_args(["--head-workers", "3", "2*host1", "s.jl"])
+                @test r.head_workers == 3
+                @test r.hosts == [("host1", 2)]
+                @test DistSSHRun.host_tokens(r; kind = :drive) == ["2*host1"]
             end
-            let r = parse_drive_args(["child:local:3", "child:host1:2", "s.jl"])
-                @test r.parent_workers == 0
-                @test r.hosts == [("local", 3), ("host1", 2)]
-                @test DistSSHRun.host_tokens(r; kind = :drive) == ["child:local:3", "child:host1:2"]
-            end
-            let r = parse_drive_args(["child:localhost:4", "s.jl"])
-                @test r.parent_workers == 0
+            let r = parse_drive_args(["4*localhost", "s.jl"])
+                @test r.head_workers == 0
                 @test r.hosts == [("localhost", 4)]
             end
             @test_throws ArgumentError parse_drive_args(["--local", "2", "s.jl"])
@@ -173,22 +221,21 @@ using Test
             @test_throws ArgumentError parse_drive_args(["--julia"])
             @test_throws ArgumentError parse_drive_args(["--require-git", "--require-git", "s.jl"])
 
-            let r = parse_drive_args(["--workers", "3", "child:host1:1", "child:host2:5", "s.jl"])
-                @test r.default_workers == 3
-                @test r.parent_workers == 3
+            let r = parse_drive_args(["--head-workers", "3", "1*host1", "5*host2", "s.jl"])
+                @test r.head_workers == 3
                 @test r.hosts == [("host1", 1), ("host2", 5)]
             end
-            let r = parse_drive_args(["--julia", "/usr/bin/julia", "s.jl"])
+            let r = parse_drive_args(["--julia", "/usr/bin/julia", "--head-workers", "1", "s.jl"])
                 @test r.julia == "/usr/bin/julia"
             end
-            let r = parse_drive_args(["--julia", "auto", "s.jl"])
+            let r = parse_drive_args(["--julia", "auto", "--head-workers", "1", "s.jl"])
                 @test r.julia === nothing
             end
-            let r = parse_drive_args(["--unsafe-skip-env-digests", "s.jl"])
+            let r = parse_drive_args(["--unsafe-skip-env-digests", "--head-workers", "1", "s.jl"])
                 @test r.unsafe_skip_env_digests
             end
             err = try
-                parse_drive_args(["--allow-mismatch", "s.jl"])
+                parse_drive_args(["--allow-mismatch", "--head-workers", "1", "s.jl"])
                 nothing
             catch e
                 e
@@ -197,40 +244,40 @@ using Test
             @test occursin("DSSH-E001", err.msg)
             @test occursin("--allow-mismatch was removed", err.msg)
             @test occursin("--unsafe-skip-env-digests", err.msg)
-            let r = parse_drive_args(["--no-log", "s.jl"])
+            let r = parse_drive_args(["--no-log", "--head-workers", "1", "s.jl"])
                 @test r.enable_log == false
             end
-            let r = parse_drive_args(["--log-dir", "/tmp/logs", "--output-dir", "/tmp/out", "s.jl"])
+            let r = parse_drive_args(["--log-dir", "/tmp/logs", "--output-dir", "/tmp/out", "--head-workers", "1", "s.jl"])
                 @test r.log_dir == "/tmp/logs"
                 @test r.output_dir == "/tmp/out"
             end
-            let r = parse_drive_args(["--package", "MyPkg", "s.jl"])
+            let r = parse_drive_args(["--package", "MyPkg", "--head-workers", "1", "s.jl"])
                 @test r.explicit_package == "MyPkg"
             end
-            let r = parse_drive_args(["--package", "  ", "s.jl"])
+            let r = parse_drive_args(["--package", "  ", "--head-workers", "1", "s.jl"])
                 @test r.explicit_package === nothing
             end
             let r = parse_drive_args(["--version"])
                 @test r.show_version == true
             end
             hosts_file = _sample_hosts_file()
-            let r = parse_drive_args(["--hosts-file", hosts_file, "child:host-cli:2", "s.jl"])
+            let r = parse_drive_args(["--hosts-file", hosts_file, "2*host-cli", "s.jl"])
                 @test r.hosts == [("host-cli", 2), ("host-a", 1), ("host-b", 4)]
             end
-            @test_throws ArgumentError parse_drive_args(
-                ["--hosts", "child:h-csv:2,child:h-csv-b", "s.jl"],
-            )
-            let r = parse_drive_args(["--hosts", "child:h-csv:2,child:h-csv-b:1", "s.jl"])
+            let r = parse_drive_args(["--hosts", "2*h-csv,h-csv-b", "s.jl"])
                 @test r.hosts == [("h-csv", 2), ("h-csv-b", 1)]
             end
-            let r = parse_drive_args(["-q", "-y", "s.jl"])
+            let r = parse_drive_args(["--hosts", "2*h-csv,1*h-csv-b", "s.jl"])
+                @test r.hosts == [("h-csv", 2), ("h-csv-b", 1)]
+            end
+            let r = parse_drive_args(["-q", "-y", "--head-workers", "1", "s.jl"])
                 @test r.cli_session.quiet == true
                 @test r.cli_session.yes == true
                 DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags())
             end
-            withenv("DISTSSH_HOSTS" => "child:env-host:3, child:env-b:1") do
-                let r = parse_drive_args(["parent:2", "s.jl"])
-                    @test r.parent_workers == 2
+            withenv("DISTSSH_HOSTS" => "3*env-host, 1*env-b") do
+                let r = parse_drive_args(["--head-workers", "2", "s.jl"])
+                    @test r.head_workers == 2
                     @test ("env-host", 3) in r.hosts
                     @test ("env-b", 1) in r.hosts
                 end
@@ -240,19 +287,19 @@ using Test
             end
         end
         withenv("JULIA_DISTRIBUTED_EXE" => "/opt/custom/julia") do
-            let r = parse_drive_args(["s.jl"])
+            let r = parse_drive_args(["--head-workers", "1", "s.jl"])
                 @test r.julia == "/opt/custom/julia"
             end
         end
     end
 
     @testset "transfer flags and git parity" begin
-        let r = parse_drive_args(["s.jl"])
+        let r = parse_drive_args(["--head-workers", "1", "s.jl"])
             @test r.skip_hash_check == true
         end
         for flag in ("--sync", "--git-sync", "--ship-tree", "--skip-git-guard")
             err = try
-                parse_drive_args([flag, "child:host1:1", "s.jl"])
+                parse_drive_args([flag, "1*host1", "s.jl"])
                 error("expected ArgumentError")
             catch e
                 e
@@ -263,14 +310,14 @@ using Test
         @test_throws ArgumentError parse_drive_args(["--mem-headroom", "0.5", "s.jl"])
         @test_throws ArgumentError parse_drive_args(["--parent-gb", "0.2", "s.jl"])
         err_ext = try
-            parse_drive_args(["--allow-external-symlinks", "s.jl"])
+            parse_drive_args(["--allow-external-symlinks", "--head-workers", "1", "s.jl"])
             error("expected ArgumentError")
         catch e
             e
         end
         @test err_ext isa ArgumentError
         @test occursin("drive: --allow-external-symlinks was removed", err_ext.msg)
-        let r = parse_drive_args(["--require-git", "child:host1:1", "s.jl"])
+        let r = parse_drive_args(["--require-git", "1*host1", "s.jl"])
             @test r.skip_hash_check == false
         end
         err = try
@@ -281,14 +328,14 @@ using Test
         end
         @test err isa ArgumentError
         @test err.msg == DistSSHRun.RSYNC_REMOVED_MSG
-        @test_throws ArgumentError parse_drive_args(["child:host1", "--collect-missing", "out", "child:h1"])
+        @test_throws ArgumentError parse_drive_args(["host1", "--collect-missing", "out", "h1"])
         # Shared flags are peeled even after `--collect-missing` (not treated as HOST).
         let r = parse_drive_args(["--collect-missing", "out", "--quiet", "h1"])
             @test r.collect_hosts == ["h1"]
             @test r.cli_session.quiet
             DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags())
         end
-        @test_throws ArgumentError parse_drive_args(["--collect-missing", "out", "--foo", "child:h1"])
+        @test_throws ArgumentError parse_drive_args(["--collect-missing", "out", "--foo", "h1"])
         @test_throws ArgumentError parse_drive_args(["--collect-overwrite"])
     end
 
@@ -309,11 +356,11 @@ using Test
         @test occursin("post-run-new", txt)
         @test occursin("Pull-back uses Tar", txt)
         @test occursin("off by default", lowercase(txt))
-        @test occursin("parent:N", txt)
+        @test occursin("head-workers", txt)
         @test occursin("progress DIR", txt)
         @test occursin("--unsafe-skip-env-digests", txt)
         @test !occursin(r"--parent(?!-gb)", txt)
-        @test !occursin("--local", txt)
+        @test !occursin(r"(^|\s)--local(?!-)", txt)
         @test !occursin("--mem-headroom", txt)
         @test !occursin("--parent-gb", txt)
         @test occursin("DISTSSH_JOBS", txt)
@@ -326,26 +373,26 @@ using Test
     end
 
     @testset "deploy-root" begin
-        let r = parse_drive_args(["--deploy-root", "/tmp/my dir", "parent:1", "s.jl"])
+        let r = parse_drive_args(["--deploy-root", "/tmp/my dir", "--head-workers", "1", "s.jl"])
             @test r.deploy_root == "/tmp/my dir"
             @test r.script_path == "s.jl"
         end
-        let r = parse_drive_args(["--deploy-root", "/tmp/App", "--", "parent:1", "s.jl", "1"])
+        let r = parse_drive_args(["--deploy-root", "/tmp/App", "--", "--head-workers", "1", "s.jl", "1"])
             @test r.deploy_root == "/tmp/App"
             @test r.script_args == ["1"]
         end
-        let r = parse_drive_args(["parent:1", "s.jl", "--deploy-root", "/tmp/x"])
+        let r = parse_drive_args(["--head-workers", "1", "s.jl", "--deploy-root", "/tmp/x"])
             @test r.deploy_root === nothing
             @test r.script_args == ["--deploy-root", "/tmp/x"]
         end
-        let r = parse_drive_args(["--", "parent:1", "s.jl", "--ship-tree"])
+        let r = parse_drive_args(["--", "--head-workers", "1", "s.jl", "--ship-tree"])
             @test r.script_args == ["--ship-tree"]
         end
-        let r = parse_drive_args(["parent:1", "s.jl", "--ship-tree"])
+        let r = parse_drive_args(["--head-workers", "1", "s.jl", "--ship-tree"])
             @test r.script_args == ["--ship-tree"]
         end
         err_after = try
-            parse_drive_args(["--", "--ship-tree", "parent:1", "s.jl"])
+            parse_drive_args(["--", "--ship-tree", "--head-workers", "1", "s.jl"])
             error("expected ArgumentError")
         catch e
             e
@@ -363,17 +410,17 @@ using Test
             "DISTSSH_REQUIRE_ALL_HOSTS" => nothing,
             "DISTSSH_BEST_EFFORT" => nothing,
         ) do
-            @test parse_drive_args(["s.jl"]).require_all_hosts
-            @test parse_drive_args(["--require-all-hosts", "s.jl"]).require_all_hosts
-            @test !parse_drive_args(["--best-effort", "s.jl"]).require_all_hosts
+            @test parse_drive_args(["--head-workers", "1", "s.jl"]).require_all_hosts
+            @test parse_drive_args(["--require-all-hosts", "--head-workers", "1", "s.jl"]).require_all_hosts
+            @test !parse_drive_args(["--best-effort", "--head-workers", "1", "s.jl"]).require_all_hosts
             @test_throws ArgumentError parse_drive_args(
-                ["--require-all-hosts", "--require-all-hosts", "s.jl"],
+                ["--require-all-hosts", "--require-all-hosts", "--head-workers", "1", "s.jl"],
             )
             @test_throws ArgumentError parse_drive_args(
-                ["--best-effort", "--best-effort", "s.jl"],
+                ["--best-effort", "--best-effort", "--head-workers", "1", "s.jl"],
             )
             @test_throws ArgumentError parse_drive_args(
-                ["--require-all-hosts", "--best-effort", "s.jl"],
+                ["--require-all-hosts", "--best-effort", "--head-workers", "1", "s.jl"],
             )
             let r = parse_drive_args(["--require-all-hosts", "--collect-missing", "out", "h1"])
                 @test r.require_all_hosts
@@ -383,20 +430,20 @@ using Test
             "DISTSSH_REQUIRE_ALL_HOSTS" => "1",
             "DISTSSH_BEST_EFFORT" => nothing,
         ) do
-            @test parse_drive_args(["s.jl"]).require_all_hosts
+            @test parse_drive_args(["--head-workers", "1", "s.jl"]).require_all_hosts
         end
         withenv(
             "DISTSSH_REQUIRE_ALL_HOSTS" => nothing,
             "DISTSSH_BEST_EFFORT" => "1",
         ) do
-            @test !parse_drive_args(["s.jl"]).require_all_hosts
-            @test parse_drive_args(["--require-all-hosts", "s.jl"]).require_all_hosts
+            @test !parse_drive_args(["--head-workers", "1", "s.jl"]).require_all_hosts
+            @test parse_drive_args(["--require-all-hosts", "--head-workers", "1", "s.jl"]).require_all_hosts
         end
         withenv(
             "DISTSSH_REQUIRE_ALL_HOSTS" => "1",
             "DISTSSH_BEST_EFFORT" => "1",
         ) do
-            @test_throws ArgumentError parse_drive_args(["s.jl"])
+            @test_throws ArgumentError parse_drive_args(["--head-workers", "1", "s.jl"])
         end
     end
 end

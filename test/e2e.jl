@@ -76,9 +76,9 @@ if !isfile(g.ssh_config) || !isfile(g.hosts_file)
 end
 
 const hosts = collect(String, _ssh_e2e_hosts())
-const setup_hosts = String["child:$h" for h in hosts]
+const setup_hosts = String["$h" for h in hosts]
 const remote_root = _ssh_e2e_remote_root()
-const remote_tokens = String["child:$(hosts[1]):1", "child:$(hosts[2]):1"]
+const remote_tokens = String["$(hosts[1]):1", "$(hosts[2]):1"]
 # ENV overlay for the suite (`-F` ssh config and the remote project path).
 _e2e_base_env() = _ssh_e2e_env(; remote_project = remote_root)
 
@@ -603,7 +603,7 @@ end
             proc, out = _run_kit_drive(;
                 script = echo_script,
                 host_root = proj,
-                parent_workers = 0,
+                head_workers = 0,
                 child_hosts = remote_tokens,
                 script_args = ["--n", "4"],
                 drive_flags = ["-y", "-q"],
@@ -623,7 +623,7 @@ end
             proc, out = _run_kit_drive(;
                 script = square_file,
                 host_root = proj,
-                parent_workers = 0,
+                head_workers = 0,
                 child_hosts = remote_tokens,
                 script_args = ["--n", "4"],
                 drive_flags = ["-y", "-q"],
@@ -646,7 +646,7 @@ end
             proc, out = _run_kit_drive(;
                 script = script,
                 host_root = proj,
-                parent_workers = 0,
+                head_workers = 0,
                 child_hosts = remote_tokens,
                 drive_flags = ["-y", "-q"],
                 extra_env = _e2e_base_env(),
@@ -728,7 +728,7 @@ end
             proc, out = _run_kit_drive(;
                 script = joinpath(proj, "fail.jl"),
                 host_root = proj,
-                parent_workers = 0,
+                head_workers = 0,
                 child_hosts = remote_tokens,
                 drive_flags = ["-y", "-q"],
                 extra_env = merge(_e2e_base_env(), Dict("DISTSSH_QUIET" => "0")),
@@ -746,7 +746,7 @@ end
             proc, out = _run_kit_drive(;
                 script = smoke,
                 host_root = proj,
-                parent_workers = 1,
+                head_workers = 1,
                 child_hosts = remote_tokens,
                 drive_flags = ["-y", "-q"],
                 extra_env = _e2e_base_env(),
@@ -779,7 +779,7 @@ end
             ok_cmd = _kit_drive_cmd(;
                 script = smoke,
                 host_root = proj,
-                parent_workers = 1,
+                head_workers = 1,
                 child_hosts = remote_tokens,
                 drive_flags = ["-y"],
                 extra_env = tty_extra,
@@ -787,7 +787,7 @@ end
             fail_cmd = _kit_drive_cmd(;
                 script = joinpath(proj, "fail.jl"),
                 host_root = proj,
-                parent_workers = 0,
+                head_workers = 0,
                 child_hosts = remote_tokens,
                 drive_flags = ["-y"],
                 extra_env = tty_extra,
@@ -1175,7 +1175,7 @@ end
             proc, out = _run_kit_drive(;
                 script = square_file,
                 host_root = proj,
-                parent_workers = 0,
+                head_workers = 0,
                 child_hosts = remote_tokens,
                 script_args = ["--n", "4"],
                 drive_flags = ["-y", "-q"],
@@ -1332,7 +1332,7 @@ end
                 DistSSHRun.execute!(
                     :drive,
                     sleep_script,
-                    ["child:$(host):1"];
+                    ["1*$(host)"];
                     project = proj,
                     remote = remote_root,
                     detached = true,
@@ -1436,7 +1436,7 @@ end
                 DistSSHRun.execute!(
                     :ride,
                     ride_script,
-                    ["child:$(host):1"];
+                    ["1*$(host)"];
                     project = proj,
                     remote = remote_root,
                     detached = true,
@@ -1608,7 +1608,7 @@ end
             proc, out = _run_kit_drive(;
                 script = joinpath(proj, "smoke.jl"),
                 host_root = proj,
-                parent_workers = 0,
+                head_workers = 0,
                 child_hosts = remote_tokens,
                 drive_flags = ["-y", "-q", "--require-git"],
                 extra_env = merge(git_env, Dict("DISTSSH_QUIET" => "0")),
@@ -1640,7 +1640,7 @@ end
             proc, out = _run_kit_drive(;
                 script = joinpath(proj, "smoke.jl"),
                 host_root = proj,
-                parent_workers = 0,
+                head_workers = 0,
                 child_hosts = remote_tokens,
                 drive_flags = ["-y", "-q", "--require-git"],
                 extra_env = git_env,
@@ -1897,7 +1897,7 @@ end
                 DistSSHRun.execute!(
                     :go,
                     outside,
-                    ["child:$(hosts[1]):1"];
+                    ["$(hosts[1]):1"];
                     project = proj,
                     remote = outside_root,
                     detached = true,

@@ -45,11 +45,11 @@ if !isdefined(Main, :_test_root)
         return `$(_julia_cmd_for(julia)) --startup-file=no --project=$proj -m DistSSHRun $argv`
     end
 
-    # Temp go/drive/size/setup hosts file: comment, `child:host-a`, `child:host-b:4`.
+    # Temp go/drive/size/setup hosts file: comment, bare host, `4*host-b`.
     function _sample_hosts_file()::String
         path, io = mktemp()
         try
-            write(io, "# lab hosts (comments and host:N lines)\nchild:host-a:1\nchild:host-b:4\n")
+            write(io, "# lab hosts (machine tokens)\nhost-a\n4*host-b\n")
             close(io)
         catch
             close(io)
@@ -59,7 +59,18 @@ if !isdefined(Main, :_test_root)
         return path
     end
 
-    const _sample_setup_hosts_file = _sample_hosts_file
+    function _sample_setup_hosts_file()::String
+        path, io = mktemp()
+        try
+            write(io, "# setup hosts (plain names, no N* counts)\nhost-a\nhost-b\n")
+            close(io)
+        catch
+            close(io)
+            rm(path; force = true)
+            rethrow()
+        end
+        return path
+    end
 
     # Last `progress:` in `dir` (`kit.progress` even with `--no-log`) is `done`.
     function _assert_kit_progress_done(dir::AbstractString; kind::Symbol)
@@ -134,6 +145,16 @@ if !isdefined(Main, :_test_root)
     # also keeps the name list, which is not written at Info.
     function _capture_detached_env_log(f; min_level = Test.Logging.Info)
         return Test.collect_test_logs(f; min_level = min_level)
+    end
+
+    function _go_local_slot_label()::String
+        return DistSSHRun._go_local_slot_label_base()
+    end
+
+    function _go_local_slot_dir(i::Integer = 1; multi::Bool = false)::String
+        base = _go_local_slot_label()
+        (multi || i > 1) && return "$base-$i"
+        return base
     end
 
 end

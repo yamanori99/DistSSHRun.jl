@@ -235,7 +235,7 @@ only return numbers. Collect tests use files workers write.
 - `kit.progress`: `kit_progress_latest` last event is `done` after demo
   drive / go
 - worker `error(...)`: non-zero
-- mixed `parent:1` + two remotes: smoke `nw=3`
+- mixed `--local-workers 1` + two remotes: smoke `nw=3`
 - in-process `drive!` twice (reentrant): each call `nw=2`; no worker
   leak (#144)
 - detached drive SIGKILL: wait until heartbeat monitors start, then
@@ -293,7 +293,7 @@ ephemeral project unless `project_root` is set (E2E uses
 Tests follow the same two surfaces as the kit. No extra test harness:
 
 - CLI (`setup` / `go` / `drive` / `hostinfo`), `DistSSHSession(workers=…)`, and
-  hosts files use placement tokens (`parent:2`, `child:host-a:4`).
+  hosts files use placement tokens (`--local-workers 2`, `child:host-a:4`).
   setup / hostinfo ignore `:N`; `up` accepts `parent`
 - Internal SSH names stay bare (`host-a`): `session.hosts`,
   `HostRunResult.host`, collect-only `HOST`, and fake SSH trees

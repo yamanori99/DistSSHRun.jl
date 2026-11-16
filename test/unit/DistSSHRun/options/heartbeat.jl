@@ -6,7 +6,7 @@ const _EMPTY_HEARTBEAT_ENV = Dict{String, String}()
 @testset "drive heartbeat policy" begin
     @testset "parse_drive_args env opt-in requires deadline at runtime" begin
         parsed = DistSSHRun.parse_drive_args(
-            String["--unsafe-master-silence-exit", "parent:1", "script.jl"],
+            String["--unsafe-master-silence-exit", "--head-workers", "1", "script.jl"],
         )
         @test parsed.unsafe_master_silence_exit
         @test_throws ArgumentError begin

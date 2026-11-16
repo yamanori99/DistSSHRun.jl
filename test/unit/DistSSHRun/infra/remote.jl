@@ -426,7 +426,7 @@ end
                 provenance = Dict{String, Any}(
                     "git" => Dict{String, Any}("commit" => "abc", "dirty" => false),
                     "workers" => Dict{String, Any}(
-                        "child:box" => [Dict{String, Any}("n" => 2)],
+                        "box" => [Dict{String, Any}("n" => 2)],
                     ),
                 ),
             )

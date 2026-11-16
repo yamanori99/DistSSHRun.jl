@@ -4,7 +4,7 @@
 
   julia --project=. -m DistSSHKit ride SCRIPT.jl
   julia --project=. -m DistSSHKit ride parent:2 SCRIPT.jl
-  julia --project=. -m DistSSHKit ride parent:1 child:host1:2 SCRIPT.jl
+  julia --project=. -m DistSSHKit ride parent:1 2*host1 SCRIPT.jl
 
 See `--help`.
 """
@@ -30,7 +30,15 @@ include(joinpath(@__DIR__, "ride", "_using.jl"))
 
 function ride_main()::Cint
     project_root = cli_project_root(@__DIR__)
-    parsed = parse_ride_args(ARGS)
+    parsed = try
+        parse_ride_args(ARGS)
+    catch e
+        if e isa ArgumentError
+            DistSSHRun.print_cli_error(e.msg)
+            return Cint(1)
+        end
+        rethrow()
+    end
     if parsed.show_version
         println_kit_version()
         return 0
@@ -63,6 +71,7 @@ function ride_main()::Cint
             output_dir = parsed.output_dir,
             project = project_root,
             julia = parsed.julia,
+            head_workers = parsed.cli_session.head_workers,
             unsafe_skip_env_digests = parsed.unsafe_skip_env_digests,
             remote = remote_cli isa AbstractString ? remote_cli :
                 (isempty(remote_raw) ? nothing : remote_raw),

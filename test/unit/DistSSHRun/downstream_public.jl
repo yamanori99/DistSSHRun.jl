@@ -15,6 +15,10 @@ include(joinpath(@__DIR__, "..", "..", "..", ".github", "downstream_public.jl"))
         mkpath(src)
         write(joinpath(src, "ok.jl"), "DistSSHRun.print_cli_error(\"x\")\n")
         write(
+            joinpath(src, "component_id.jl"),
+            "DistSSHRun.DistSSHBase.src_component_digest(@__DIR__, (:x.jl,))\n",
+        )
+        write(
             joinpath(src, "shipread.jl"),
             """
             DistSSHRun.result_run_dir(kp)

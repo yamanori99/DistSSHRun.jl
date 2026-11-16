@@ -586,7 +586,7 @@ using Test
                     :format_placement_token, :get_remote_julia_version, :get_remote_julia_version_full,
                     :julia_project_rel, :parse_julia_version_full,
                     :parse_placement_token, :remote_env_project_root, :resolve_remote_julia,
-                    :resolve_remote_project_root, :with_cli_entry,
+                    :resolve_remote_project_root, :src_component_digest, :with_cli_entry,
                 ]
             )
             up = DistSSHRun.DistSSHUp

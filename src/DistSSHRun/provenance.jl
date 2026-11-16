@@ -483,9 +483,12 @@ end
 
 function _provenance_token(host::AbstractString)::String
     h = String(host)
-    h == PARENT_HOST_NAME && return h
-    startswith(h, "child:") && return h
-    return "child:" * h
+    for prefix in ("child:", "parent:")
+        if startswith(h, prefix)
+            return String(strip(h[(length(prefix) + 1):end]))
+        end
+    end
+    return h
 end
 
 """Read `DRIVE_HOST_WORKER_IDS` now. Later `rmprocs` does not erase this."""

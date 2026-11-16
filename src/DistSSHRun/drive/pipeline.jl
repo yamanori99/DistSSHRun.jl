@@ -6,7 +6,7 @@ function _reject_obsolete_pipeline_size_env()
         isempty(raw) && continue
         throw(
             ArgumentError(
-                "$name is no longer used by pipeline!; pass explicit parent:N / child:NAME:N",
+                "$name is no longer used by pipeline!; pass explicit parent:N / NAME:N",
             ),
         )
     end
@@ -30,8 +30,8 @@ Build [`PipelineConfig`](@ref) from environment variables.
 
 | Variable | Role |
 |----------|------|
-| `DISTSSH_HOSTS` | Comma-separated placement tokens (`parent:N` / `child:NAME:N`) |
-| `DISTSSH_HOSTS_FILE` | Hosts file (appended after `DISTSSH_HOSTS`, same order as CLI) |
+| `DISTSSH_HOSTS` | Comma-separated placement tokens (`parent:N` / `NAME:N`) |
+| `DISTSSH_HOSTS_FILE` | Hosts file when the CLI does not set a host list (same precedence as CLI) |
 | `DISTRIBUTED_REMOTE_PROJECT_ROOT` | Remote repo root |
 | `DISTRIBUTED_PROJECT_ROOT` | Local project root |
 | `DRIVER` | Driver script path |
@@ -68,6 +68,7 @@ function kit_session_from_config(config::PipelineConfig)::DistSSHSession
     return DistSSHSession(
         project = config.project,
         workers = config.tokens,
+        head_workers = config.head_workers,
         remote = config.remote,
         hosts_file = config.hosts_file,
         quiet = config.quiet,
@@ -140,13 +141,13 @@ end
 Run the usual remote workflow: driver, optional collect.
 Does not call [`setup!`](@ref); prepare remotes first.
 
-Worker tokens match the CLI (`parent:2`, `child:user@host:1`). Listed tokens
+Worker tokens match the CLI (`parent:2`, `1*user@host`). Listed tokens
 need `:N`. Keyword `args` are passed to the driver; `remote` is the remote
 project path. Default `yes=true` skips confirm prompts.
 
 ```julia
 pipeline!(driver, "parent:2"; args=["8"])
-pipeline!(driver, "child:user@h1:1", "child:user@h2:1"; remote="/path/to/project", args=["8"], collect=true)
+pipeline!(driver, "1*user@h1", "1*user@h2"; remote="/path/to/project", args=["8"], collect=true)
 ```
 
 Remote hosts default to **no** run-time transfer; prepare with one of
@@ -180,10 +181,14 @@ end
 
 function _pipeline_run!(config::PipelineConfig, session::DistSSHSession, driver::String)
     sync_result = nothing
-    plan = if isempty(session.tokens)
+    lw = session.cli_session.head_workers
+    plan = if isempty(session.tokens) && lw === nothing
         WorkerPlan()
     else
-        worker_plan_from_tokens(session.tokens)
+        worker_plan_from_tokens(
+            session.tokens;
+            head_workers = lw,
+        )
     end
 
     do_collect = resolve_pipeline_collect(config, session)

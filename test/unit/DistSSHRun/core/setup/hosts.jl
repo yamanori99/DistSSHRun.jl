@@ -12,6 +12,27 @@ using Test
         end
     end
 
+    @testset "reject_setup_worker_count" begin
+        @test DistSSHRun.setup_token_has_worker_count("4*alice@lab-server")
+        @test DistSSHRun.setup_token_has_worker_count("1*h1")
+        @test !DistSSHRun.setup_token_has_worker_count("alice@lab-server")
+        @test_throws ArgumentError DistSSHRun.reject_setup_worker_count!("4*alice@lab-server")
+        let e = try
+                DistSSHRun.reject_setup_worker_count!("4*alice@lab-server")
+                nothing
+            catch err
+                err
+            end
+            @test e isa ArgumentError
+            @test occursin("without counts", e.msg)
+            @test occursin("alice@lab-server", e.msg)
+        end
+        @test DistSSHRun.parse_setup_host_token("desk1") == "desk1"
+        @test_throws ArgumentError DistSSHRun.parse_setup_host_token("2*desk1")
+        session = DistSSHRun.DistSSHSession(workers = ["4*host-a"], project = pwd(), yes = true)
+        @test_throws ArgumentError DistSSHRun.setup!(session, :check)
+    end
+
     @testset "validate_setup_hosts" begin
         # Representative refusals; DistSSHRun/hosts.jl covers the underlying predicates.
         @test_throws ArgumentError DistSSHRun.validate_setup_hosts(String[])
@@ -28,7 +49,7 @@ using Test
         @test_throws ArgumentError DistSSHRun.validate_setup_hosts(["-bad"])
         @test_throws ArgumentError DistSSHRun.validate_setup_hosts(["user@-h"])
         @test_throws ArgumentError DistSSHRun.validate_setup_hosts(["host\nname"])
-        @test DistSSHRun.setup_cli_host_token("host-a") == "child:host-a"
+        @test DistSSHRun.setup_cli_host_token("host-a") == "host-a"
         @test DistSSHRun.setup_cli_host_token("parent") == "parent"
     end
 

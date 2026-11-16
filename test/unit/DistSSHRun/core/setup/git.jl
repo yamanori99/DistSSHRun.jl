@@ -215,7 +215,7 @@ end
                 @test !occursin("Local git tree is dirty", out_allow)
 
                 session = DistSSHRun.DistSSHSession(
-                    project = work, workers = ["child:192.0.2.1"], yes = true, quiet = true,
+                    project = work, workers = ["192.0.2.1"], yes = true, quiet = true,
                 )
                 out_sync, _ = _capture_stdio() do _, _
                     redirect_stderr(devnull) do
@@ -231,7 +231,7 @@ end
             @test_throws ArgumentError DistSSHRun.check_setup_options!(
                 :ship_tree; allow_dirty = true,
             )
-            session = DistSSHRun.DistSSHSession(project = pwd(), workers = ["child:h"], yes = true)
+            session = DistSSHRun.DistSSHSession(project = pwd(), workers = ["h"], yes = true)
             err = try
                 DistSSHRun.sync!(session; mode = :ship_tree, allow_dirty = true)
                 nothing

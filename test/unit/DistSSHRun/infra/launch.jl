@@ -122,7 +122,7 @@ using TOML
         @test slot_row["call"] == 1
         @test slot_row["item"] == 1
         @test slot_row["rank"] == 3
-        @test slot_row["slot"] == "child:lab/" * basename(slot)
+        @test slot_row["slot"] == "lab/" * basename(slot)
         snap = DistSSHRun._read_go_slot_snapshot(joinpath(snap_dir, "provenance-slot.toml"))
         @test snap["version"] == "1.13.0"
         @test !haskey(snap, "pmap_items")

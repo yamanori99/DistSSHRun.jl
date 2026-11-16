@@ -140,12 +140,12 @@ using Test
             drive_ok = _kit_drive_cmd(;
                 script = ok_script,
                 host_root = proj,
-                parent_workers = 2,
+                head_workers = 2,
             )
             drive_fail = _kit_drive_cmd(;
                 script = fail_script,
                 host_root = proj,
-                parent_workers = 2,
+                head_workers = 2,
             )
             @test occursin("--no-log", join(String.(drive_ok.exec), " "))
 
@@ -278,13 +278,13 @@ using Test
             ride_ok = _kit_cli_cmd(
                 [
                     "ride", "-y", "--no-spi-check",
-                    "--output-dir", od_ok, "parent:1", ok_script,
+                    "--output-dir", od_ok, "--head-workers", "1", ok_script,
                 ]
             )
             ride_fail = _kit_cli_cmd(
                 [
                     "ride", "-y", "--no-spi-check",
-                    "--output-dir", od_fail, "parent:1", fail_script,
+                    "--output-dir", od_fail, "--head-workers", "1", fail_script,
                 ]
             )
 
@@ -363,7 +363,7 @@ using Test
             drive_cmd = _kit_drive_cmd(;
                 script = script,
                 host_root = proj,
-                parent_workers = 1,
+                head_workers = 1,
             )
             @test occursin("--no-log", join(String.(drive_cmd.exec), " "))
             runner = joinpath(dir, "stdio_runner.sh")
@@ -420,7 +420,7 @@ using Test
                 drive_cmd = _kit_drive_cmd(;
                     script = script,
                     host_root = proj,
-                    parent_workers = 1,
+                    head_workers = 1,
                 )
                 runner = joinpath(dir, "prompt_runner.sh")
                 write_runner(
