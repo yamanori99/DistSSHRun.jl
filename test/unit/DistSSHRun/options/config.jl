@@ -79,7 +79,7 @@ using Test, DistSSHRun
                 hosts = ["cli-h"],
                 worker_tokens = String[],
                 project = pwd(),
-                local_slots = 0,
+                head_slots = 0,
                 hosts_source = :hosts,
             )
             txt = String(take!(buf))
@@ -96,7 +96,7 @@ using Test, DistSSHRun
                 hosts = String[],
                 worker_tokens = String[],
                 project = pwd(),
-                local_slots = 1,
+                head_slots = 1,
                 go_implicit_no_hosts = true,
             )
             txt = String(take!(buf))

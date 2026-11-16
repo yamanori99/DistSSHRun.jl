@@ -1,6 +1,6 @@
 using Test
 
-# Oracle: `go!(…; local_slots = 2)` and `go!(…; repeat=2)` run two local slots
+# Oracle: `go!(…; head_slots = 2)` and `go!(…; repeat=2)` run two local slots
 # concurrently (slot t0.txt timestamps within 0.45s). Does not cover SSH,
 # CLI `go`, or slot-plan math (those live in unit/DistSSHRun/go.jl).
 
@@ -19,7 +19,7 @@ using Test
         )
         t0 = time()
         result = DistSSHRun.go!(
-            script; local_slots = 2,
+            script; head_slots = 2,
             project = proj,
             quiet = true,
             yes = true,
@@ -50,7 +50,7 @@ end
         result = DistSSHRun.go!(
             script;
             repeat = 2,
-            local_slots = 2,
+            head_slots = 2,
             project = proj,
             quiet = true,
             yes = true,
@@ -78,7 +78,7 @@ end
         )
         custom = joinpath(proj, "runs", "custom")
         result = DistSSHRun.go!(
-            script; local_slots = 1,
+            script; head_slots = 1,
             project = proj,
             output_dir = custom,
             quiet = true,
@@ -105,7 +105,7 @@ end
         )
         custom = joinpath(proj, "runs", "skip_collect")
         result = DistSSHRun.go!(
-            script; local_slots = 1,
+            script; head_slots = 1,
             project = proj,
             output_dir = custom,
             collect_spec = false,

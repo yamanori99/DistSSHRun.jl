@@ -27,8 +27,8 @@ const _EXECUTE_DETACHED_KW = Set{Symbol}(
         :unsafe_all_to_all,
         :allow_external_symlinks,
         :run_id,
-        :local_workers,
-        :local_slots,
+        :head_workers,
+        :head_slots,
     )
 )
 const _EXECUTE_DETACHED_DRIVE_ONLY = (
@@ -230,13 +230,13 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
     ata = get(parsed, :unsafe_all_to_all, false)
     ata && (kw[:unsafe_all_to_all] = true)
     if kind === :go
-        if hasproperty(session, :local_slots)
-            ls = session.local_slots
-            ls !== nothing && (kw[:local_slots] = ls)
+        if hasproperty(session, :head_slots)
+            ls = session.head_slots
+            ls !== nothing && (kw[:head_slots] = ls)
         end
-    elseif hasproperty(session, :local_workers)
-        lw = session.local_workers
-        lw !== nothing && (kw[:local_workers] = lw)
+    elseif hasproperty(session, :head_workers)
+        lw = session.head_workers
+        lw !== nothing && (kw[:head_workers] = lw)
     end
     snap0 = get(parsed, :run_id, nothing)
     snap0 === nothing || (kw[:run_id] = snap0)
@@ -709,9 +709,9 @@ function _execute_detached!(
         )
     end
     if kind === :go
-        haskey(kwargs, :local_workers) && throw(
+        haskey(kwargs, :head_workers) && throw(
             ArgumentError(
-                "execute!(:go, ...; detached=true) uses local_slots=, not local_workers=",
+                "execute!(:go, ...; detached=true) uses head_slots=, not head_workers=",
             )
         )
         for k in _EXECUTE_DETACHED_DRIVE_ONLY
@@ -798,34 +798,34 @@ function _execute_detached!(
     if run_id !== nothing
         run_id = validate_run_id(run_id)
     end
-    local_workers = get(kwargs, :local_workers, nothing)
-    local_slots = get(kwargs, :local_slots, nothing)
+    head_workers = get(kwargs, :head_workers, nothing)
+    head_slots = get(kwargs, :head_slots, nothing)
     if kind === :go
-        local_workers !== nothing && throw(
-            ArgumentError("execute!(:go, ...; detached=true) uses local_slots=, not local_workers="),
+        head_workers !== nothing && throw(
+            ArgumentError("execute!(:go, ...; detached=true) uses head_slots=, not head_workers="),
         )
-    elseif local_slots !== nothing
-        throw(ArgumentError("execute!(:$(kind), ...; detached=true) uses local_workers=, not local_slots="))
+    elseif head_slots !== nothing
+        throw(ArgumentError("execute!(:$(kind), ...; detached=true) uses head_workers=, not head_slots="))
     end
-    if local_workers !== nothing
-        (local_workers isa Integer && !(local_workers isa Bool)) || throw(
+    if head_workers !== nothing
+        (head_workers isa Integer && !(head_workers isa Bool)) || throw(
             ArgumentError(
-                "local_workers must be an integer, got $(repr(local_workers))",
+                "head_workers must be an integer, got $(repr(head_workers))",
             )
         )
-        lw = Int(local_workers)
-        lw < 0 && throw(ArgumentError("local_workers must be >= 0, got $lw"))
-        local_workers = lw
+        lw = Int(head_workers)
+        lw < 0 && throw(ArgumentError("head_workers must be >= 0, got $lw"))
+        head_workers = lw
     end
-    if local_slots !== nothing
-        (local_slots isa Integer && !(local_slots isa Bool)) || throw(
+    if head_slots !== nothing
+        (head_slots isa Integer && !(head_slots isa Bool)) || throw(
             ArgumentError(
-                "local_slots must be an integer, got $(repr(local_slots))",
+                "head_slots must be an integer, got $(repr(head_slots))",
             )
         )
-        ls = Int(local_slots)
-        ls < 0 && throw(ArgumentError("local_slots must be >= 0, got $ls"))
-        local_slots = ls
+        ls = Int(head_slots)
+        ls < 0 && throw(ArgumentError("head_slots must be >= 0, got $ls"))
+        head_slots = ls
     end
     worker_include isa Bool || throw(
         ArgumentError(
@@ -906,8 +906,8 @@ function _execute_detached!(
         allow_external_symlinks = allow_external_symlinks === true,
         run_id = run_id,
         remote = remote,
-        local_workers = local_workers,
-        local_slots = local_slots,
+        head_workers = head_workers,
+        head_slots = head_slots,
     )
     extra = Dict{String, String}(
         "DISTRIBUTED_PROJECT_ROOT" => proj,
@@ -1991,8 +1991,8 @@ function _execute_detached_argv(
         allow_external_symlinks::Bool = false,
         run_id::Union{Nothing, AbstractString} = nothing,
         remote::Union{Nothing, AbstractString} = nothing,
-        local_workers::Union{Nothing, Integer} = nothing,
-        local_slots::Union{Nothing, Integer} = nothing,
+        head_workers::Union{Nothing, Integer} = nothing,
+        head_slots::Union{Nothing, Integer} = nothing,
     )::Vector{String}
     argv = String[String(kind)]
     push!(argv, "-y")
@@ -2025,9 +2025,9 @@ function _execute_detached_argv(
         push!(argv, "--hosts-file", canonical_local_path(String(hosts_file)))
     end
     if kind === :go
-        local_slots !== nothing && push!(argv, "--local-slots", string(Int(local_slots)))
-    elseif local_workers !== nothing
-        push!(argv, "--local-workers", string(Int(local_workers)))
+        head_slots !== nothing && push!(argv, "--head-slots", string(Int(head_slots)))
+    elseif head_workers !== nothing
+        push!(argv, "--head-workers", string(Int(head_workers)))
     end
     if kind === :drive
         enable_log === false && push!(argv, "--no-log")
@@ -2048,8 +2048,8 @@ function _execute_detached_argv(
             push!(argv, "--best-effort")
         end
         skip_hash_check === false && push!(argv, "--require-git")
-        if workers !== nothing && local_workers === nothing
-            push!(argv, "--local-workers", string(Int(workers)))
+        if workers !== nothing && head_workers === nothing
+            push!(argv, "--head-workers", string(Int(workers)))
         end
         worker_include && push!(argv, "--worker-include")
     elseif kind === :ride

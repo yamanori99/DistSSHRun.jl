@@ -11,10 +11,10 @@ using Dates
             @test length(s) == 1
             @test s[1].kind === :parent
         end
-        @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; local_slots = 0)
+        @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; head_slots = 0)
         # `--repeat` pool helper: omit `:N` stays uncapped. go! / parse_go_args
         # reject the same token via `require_counted_placement_tokens`.
-        let s = DistSSHRun._go_plan_slots(String[]; total = 1, local_slots = 1)
+        let s = DistSSHRun._go_plan_slots(String[]; total = 1, head_slots = 1)
             @test length(s) == 1
             @test s[1].kind === :parent
             @test s[1].label == _go_local_slot_label()
@@ -33,11 +33,11 @@ using Dates
             @test s[2].label == "user@lab2-1"
             @test s[3].label == "user@lab2-2"
         end
-        let s = DistSSHRun._go_plan_slots(["h1", "h2"]; local_slots = 0)
+        let s = DistSSHRun._go_plan_slots(["h1", "h2"]; head_slots = 0)
             @test length(s) == 2
             @test all(x -> x.kind === :child, s)
         end
-        @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; local_slots = 0)
+        @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; head_slots = 0)
         @test_throws ArgumentError DistSSHRun._go_plan_slots(["0*local"])
         @test_throws ArgumentError DistSSHRun._go_plan_slots(["local:-1"])
         @test DistSSHRun._go_sanitize_label("user@lab") == "user@lab"
@@ -56,22 +56,22 @@ using Dates
         @test DistSSHRun._go_sanitize_label("a/b c") == "a_b_c"
         @test DistSSHRun._go_sanitize_label("***") == "_"
         @test_throws ArgumentError DistSSHRun.parse_go_args(["parent:1", "job.jl"])
-        let s = DistSSHRun._go_plan_slots(String[]; local_slots = 2)
+        let s = DistSSHRun._go_plan_slots(String[]; head_slots = 2)
             @test length(s) == 2
             @test s[1].label == _go_local_slot_dir(1; multi = true)
             @test s[2].label == _go_local_slot_dir(2; multi = true)
         end
-        let s = DistSSHRun._go_plan_slots(String[]; local_slots = 4, total = 4)
+        let s = DistSSHRun._go_plan_slots(String[]; head_slots = 4, total = 4)
             @test length(s) == 4
             @test all(x -> x.kind === :parent, s)
             @test s[1].label == _go_local_slot_dir(1; multi = true)
             @test s[4].label == _go_local_slot_dir(4; multi = true)
         end
         @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; total = 4)
-        let s = DistSSHRun._go_plan_slots(String[]; local_slots = 10, total = 3)
+        let s = DistSSHRun._go_plan_slots(String[]; head_slots = 10, total = 3)
             @test length(s) == 3
         end
-        @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; local_slots = 2, total = 3)
+        @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; head_slots = 2, total = 3)
         let s = DistSSHRun._go_plan_slots(["h1"]; total = 2)
             @test length(s) == 2
             @test all(x -> x.kind === :child && x.host == "h1", s)
@@ -84,17 +84,17 @@ using Dates
             @test count(x -> x.host == "a", s) == 2
             @test count(x -> x.host == "b", s) == 1
         end
-        let s = DistSSHRun._go_plan_slots(["h1"]; local_slots = 1, total = 4)
+        let s = DistSSHRun._go_plan_slots(["h1"]; head_slots = 1, total = 4)
             @test count(x -> x.kind === :parent, s) == 1
             @test count(x -> x.host == "h1", s) == 3
         end
-        let pool = DistSSHRun._go_repeat_pool(["h1"]; local_slots = 1)
+        let pool = DistSSHRun._go_repeat_pool(["h1"]; head_slots = 1)
             @test length(pool) == 2
             @test pool[1].role === :parent && pool[1].name == _go_local_slot_label()
             @test pool[2].role === :child && pool[2].name == "h1"
         end
         @test_throws ArgumentError DistSSHRun._go_plan_slots(
-            ["1*h1", "1*parent"]; local_slots = 1, total = 2,
+            ["1*h1", "1*parent"]; head_slots = 1, total = 2,
         )
         @test_throws ArgumentError DistSSHRun._go_plan_slots(["1*h1"]; total = 2)
         @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; total = 0)
@@ -314,7 +314,7 @@ using Dates
             write(script, "nothing\n")
             err = try
                 DistSSHRun.go!(
-                    script, String[]; local_slots = 1,
+                    script, String[]; head_slots = 1,
                     project = proj,
                     output_dir = joinpath(proj, "a"),
                     collect_spec = joinpath(proj, "b"),
@@ -344,7 +344,7 @@ using Dates
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
             err = try
-                DistSSHRun.go!(script, String[]; local_slots = 1, project = proj, quiet = true, yes = true)
+                DistSSHRun.go!(script, String[]; head_slots = 1, project = proj, quiet = true, yes = true)
                 nothing
             catch e
                 e
@@ -605,7 +605,7 @@ using Dates
             with_kit_verbosity(:verbose) do
                 out, _ = _capture_stdio() do _, _
                     DistSSHRun.go!(
-                        script, String[]; local_slots = 1,
+                        script, String[]; head_slots = 1,
                         project = proj, quiet = true, yes = true,
                     )
                 end
@@ -613,9 +613,9 @@ using Dates
             end
             r = redirect_stdout(devnull) do
                 DistSSHRun.go!(
-                    script, String[]; local_slots = 1,
+                    script, String[]; head_slots = 1,
                     project = proj, quiet = true, yes = true,
-                    original_args = ["--local-slots", "1", "job.jl"],
+                    original_args = ["--head-slots", "1", "job.jl"],
                 )
             end
             @test r.ok
@@ -635,7 +635,7 @@ using Dates
             collect_mark = findfirst("step kind=go label=collect", prog)
             @test run_mark !== nothing && collect_mark !== nothing
             @test first(run_mark) < first(collect_mark)
-            local_label = DistSSHRun.kit_local_host_label()
+            local_label = DistSSHRun.kit_head_host_label()
             run_span = findlast("label=$(local_label)/run", prog)
             @test run_span !== nothing
             @test first(run_span) < first(collect_mark)
@@ -653,7 +653,7 @@ using Dates
             withenv("DISTSSH_HOSTS_FILE" => hf) do
                 redirect_stdout(devnull) do
                     r = DistSSHRun.go!(
-                        script, String[]; local_slots = 1,
+                        script, String[]; head_slots = 1,
                         project = proj, quiet = true, yes = true,
                     )
                     @test r.ok
@@ -682,7 +682,7 @@ using Dates
             r = redirect_stdout(devnull) do
                 redirect_stderr(devnull) do
                     DistSSHRun.go!(
-                        script, String[]; local_slots = 2,
+                        script, String[]; head_slots = 2,
                         project = proj, quiet = true, yes = true,
                     )
                 end
@@ -722,7 +722,7 @@ using Dates
             r = redirect_stdout(devnull) do
                 redirect_stderr(devnull) do
                     DistSSHRun.go!(
-                        script, String[]; local_slots = 1,
+                        script, String[]; head_slots = 1,
                         project = proj, quiet = true, yes = true,
                     )
                 end
@@ -749,7 +749,7 @@ using Dates
                     script;
                     project = proj,
                     output_dir = dirty,
-                    local_slots = 1,
+                    head_slots = 1,
                     quiet = true,
                     yes = true,
                     hint_surface = :cli,
@@ -771,7 +771,7 @@ using Dates
                     script;
                     project = proj,
                     collect_spec = dirty,
-                    local_slots = 1,
+                    head_slots = 1,
                     quiet = true,
                     yes = true,
                     hint_surface = :api,
@@ -790,7 +790,7 @@ using Dates
                     script;
                     project = proj,
                     output_dir = empty_dir,
-                    local_slots = 1,
+                    head_slots = 1,
                     quiet = true,
                     yes = true,
                 )
@@ -804,7 +804,7 @@ using Dates
                             "DISTRIBUTED_PROJECT_ROOT" => proj,
                             "DISTSSH_CLI_SUBCOMMAND_DONE" => "",
                         ) do
-                            DistSSHRun.main(["go", "-q", "--local-slots", "1", "--output-dir", dirty, script])
+                            DistSSHRun.main(["go", "-q", "--head-slots", "1", "--output-dir", dirty, script])
                         end
                     end
                 end
@@ -910,14 +910,14 @@ using Dates
             write(script, "println(\"SNAPSHOT_SIBLING_OK\")\n")
             plain = redirect_stdout(devnull) do
                 DistSSHRun.go!(
-                    script, String[]; local_slots = 1,
+                    script, String[]; head_slots = 1,
                     project = app, yes = true, quiet = true,
                 )
             end
             @test plain.ok
             result = redirect_stdout(devnull) do
                 DistSSHRun.go!(
-                    script, String[]; local_slots = 1,
+                    script, String[]; head_slots = 1,
                     project = app,
                     run_id = "20260101T000000Z-aaaaaa",
                     yes = true,

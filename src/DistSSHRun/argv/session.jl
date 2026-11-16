@@ -29,10 +29,10 @@ const KIT_TIME_HELP =
     "A time table prints after the run (-q hides it). Replay: progress DIR"
 const KIT_HOSTS_FLAG_HELP =
     "--hosts CSV         quote `N*host` machine tokens (bare host = 1 worker)"
-const KIT_LOCAL_WORKERS_FLAG_HELP =
-    "--local-workers N   LocalManager workers on this machine (drive, ride; ENV DISTSSH_LOCAL_WORKERS)"
-const KIT_LOCAL_SLOTS_FLAG_HELP =
-    "--local-slots N     local subprocess slots on this machine (go only)"
+const KIT_HEAD_WORKERS_FLAG_HELP =
+    "--head-workers N    LocalManager workers on this machine (drive, ride; ENV DISTSSH_HEAD_WORKERS)"
+const KIT_HEAD_SLOTS_FLAG_HELP =
+    "--head-slots N      head subprocess slots on this machine (go only)"
 const KIT_MACHINE_FILE_FLAG_HELP =
     "--machine-file PATH Julia machine-file subset (one line per `N*host`)"
 const KIT_QUIET_ENV_HELP =
@@ -125,8 +125,8 @@ mutable struct CliSharedFlags
     yes::Bool
     hosts_file::Union{Nothing, String}
     machine_file::Union{Nothing, String}
-    local_workers::Union{Nothing, Int}
-    local_slots::Union{Nothing, Int}
+    head_workers::Union{Nothing, Int}
+    head_slots::Union{Nothing, Int}
     show_version::Bool
     hint_surface::Symbol
     verbosity_explicit::Bool
@@ -140,8 +140,8 @@ function CliSharedFlags(;
         yes::Bool = false,
         hosts_file::Union{Nothing, AbstractString} = nothing,
         machine_file::Union{Nothing, AbstractString} = nothing,
-        local_workers::Union{Nothing, Integer} = nothing,
-        local_slots::Union{Nothing, Integer} = nothing,
+        head_workers::Union{Nothing, Integer} = nothing,
+        head_slots::Union{Nothing, Integer} = nothing,
         show_version::Bool = false,
         hint_surface::Symbol = :cli,
         verbosity_explicit::Bool = false,
@@ -151,12 +151,12 @@ function CliSharedFlags(;
     v = _resolve_kit_verbosity(; quiet = quiet, verbosity = verbosity)
     hf = hosts_file === nothing ? nothing : String(hosts_file)
     mf = machine_file === nothing ? nothing : String(machine_file)
-    lw = local_workers === nothing ? nothing : Int(local_workers)
+    lw = head_workers === nothing ? nothing : Int(head_workers)
     lw !== nothing && lw < 0 &&
-        throw(ArgumentError("--local-workers must be >= 0, got $lw"))
-    ls = local_slots === nothing ? nothing : Int(local_slots)
+        throw(ArgumentError("--head-workers must be >= 0, got $lw"))
+    ls = head_slots === nothing ? nothing : Int(head_slots)
     ls !== nothing && ls < 0 &&
-        throw(ArgumentError("--local-slots must be >= 0, got $ls"))
+        throw(ArgumentError("--head-slots must be >= 0, got $ls"))
     surface = _normalize_hint_surface(hint_surface)
     explicit = verbosity_explicit || quiet || verbosity !== nothing
     return CliSharedFlags(
@@ -248,8 +248,8 @@ const _KIT_CLI_FLAGS = (
     yes = ("-y", "--yes"),
     hosts_file = ("--hosts-file",),
     machine_file = ("--machine-file",),
-    local_workers = ("--local-workers",),
-    local_slots = ("--local-slots",),
+    head_workers = ("--head-workers",),
+    head_slots = ("--head-slots",),
     hosts = ("--hosts",),
     version = ("--version", "-v", "-V"),  # -V kept as deprecated alias
 )
@@ -280,8 +280,8 @@ end
 function _shared_valued_cli_flag(arg::AbstractString)::Bool
     return _flag_match(arg, _KIT_CLI_FLAGS.hosts_file) ||
         _flag_match(arg, _KIT_CLI_FLAGS.machine_file) ||
-        _flag_match(arg, _KIT_CLI_FLAGS.local_workers) ||
-        _flag_match(arg, _KIT_CLI_FLAGS.local_slots) ||
+        _flag_match(arg, _KIT_CLI_FLAGS.head_workers) ||
+        _flag_match(arg, _KIT_CLI_FLAGS.head_slots) ||
         _flag_match(arg, _KIT_CLI_FLAGS.hosts)
 end
 
@@ -410,6 +410,7 @@ end
 function consume_kit_cli_flag!(c::CliCursor, session::CliSharedFlags)::Bool
     arg = cli_current(c)
     arg === nothing && return false
+    reject_legacy_local_placement_flag!(String(arg))
     if _flag_match(arg, _KIT_CLI_FLAGS.quiet)
         _set_session_verbosity!(session, :quiet)
         cli_consume!(c)
@@ -441,18 +442,18 @@ function consume_kit_cli_flag!(c::CliCursor, session::CliSharedFlags)::Bool
         session.machine_file = next
         session.hosts_source === nothing && (session.hosts_source = :machine_file)
         return true
-    elseif _flag_match(arg, _KIT_CLI_FLAGS.local_workers)
+    elseif _flag_match(arg, _KIT_CLI_FLAGS.head_workers)
         raw = cli_take_value!(c, arg)
-        session.local_workers !== nothing &&
+        session.head_workers !== nothing &&
             throw(ArgumentError("$(arg) specified more than once"))
-        session.local_workers = parse(Int, strip(raw))
+        session.head_workers = parse(Int, strip(raw))
         return true
-    elseif _flag_match(arg, _KIT_CLI_FLAGS.local_slots)
+    elseif _flag_match(arg, _KIT_CLI_FLAGS.head_slots)
         raw = cli_take_value!(c, arg)
-        session.local_slots !== nothing &&
+        session.head_slots !== nothing &&
             throw(ArgumentError("$(arg) specified more than once"))
-        session.local_slots = tryparse(Int, strip(String(raw)))
-        session.local_slots === nothing &&
+        session.head_slots = tryparse(Int, strip(String(raw)))
+        session.head_slots === nothing &&
             throw(ArgumentError("$(arg) must be an integer, got $(repr(raw))"))
         return true
     elseif _flag_match(arg, _KIT_CLI_FLAGS.hosts)

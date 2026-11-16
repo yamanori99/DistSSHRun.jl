@@ -15,14 +15,14 @@ using Test
 # hostinfo/pool, go success/exit 3, and a `:quiet` summary check.
 
 @testset "TTY progress keeps up status and setup --check lines" begin
-    ctrl = DistSSHRun.kit_local_host_label()
+    ctrl = DistSSHRun.kit_head_host_label()
     status_cmd = _kit_cli_cmd(["up", "status", "parent", "host1"])
     update_cmd = _kit_cli_cmd(["up", "update", "parent", "host1"])
     check_cmd = _kit_cli_cmd(["setup", "check", "host1"])
     check2_cmd = _kit_cli_cmd(["setup", "check", "host1", "host2"])
     preflight_cmd = _kit_cli_cmd(["up", "status", "host1"])
-    size_cmd = _kit_cli_cmd(["hostinfo", "parent"])
-    pool_cmd = _kit_cli_cmd(["pool", "parent"])
+    size_cmd = _kit_cli_cmd(["hostinfo"])
+    pool_cmd = _kit_cli_cmd(["pool"])
     mktempdir() do dir
         ju = joinpath(dir, "juliaup")
         write(
@@ -83,8 +83,8 @@ using Test
         write(go_ok, "println(\"go-ok-marker\")\n")
         go_fail = joinpath(go_proj, "fail.jl")
         write(go_fail, "println(\"go-fail-marker\")\nexit(3)\n")
-        go_ok_cmd = _kit_cli_cmd(["go", "-y", "--local-slots", "1", go_ok])
-        go_fail_cmd = _kit_cli_cmd(["go", "-y", "--local-slots", "1", go_fail])
+        go_ok_cmd = _kit_cli_cmd(["go", "-y", "--head-slots", "1", go_ok])
+        go_fail_cmd = _kit_cli_cmd(["go", "-y", "--head-slots", "1", go_fail])
 
         empty_path = mktempdir()
         runner = joinpath(dir, "runner.sh")

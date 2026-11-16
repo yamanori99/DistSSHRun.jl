@@ -34,7 +34,7 @@ function throw_legacy_machine_token(raw::AbstractString)
         if startswith(s, CHILD_TOKEN_PREFIX) || s == PARENT_HOST_NAME || startswith(s, PARENT_HOST_NAME * ":")
             throw(
                 ArgumentError(
-                    "$(repr(s)) was removed; use --local-workers for local slots and "
+                    "$(repr(s)) was removed; use --head-workers on drive/ride, --head-slots on go; "
                         * _MACHINE_TOKEN_HINT,
                 ),
             )
@@ -165,6 +165,6 @@ function machine_to_placement_token(spec::AbstractString)::NamedTuple{(:role, :n
     validate_ssh_host(p.dest; shown = spec)
     name = p.dest
     is_parent_host_name(machine_ssh_label(p)) &&
-        throw(ArgumentError("$(repr(spec)): `parent` is not an SSH host; use --local-workers"))
+        throw(ArgumentError("$(repr(spec)): `parent` is not an SSH host; use --head-workers"))
     return (role = :child, name = name, n = p.workers)
 end

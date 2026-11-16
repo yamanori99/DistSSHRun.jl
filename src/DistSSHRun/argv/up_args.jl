@@ -16,7 +16,7 @@ function show_up_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  $(cli_m_project()) up add 1.13 host1",
-        "  up default 1.13 $(kit_local_host_label())",
+        "  up default 1.13 $(kit_head_host_label())",
         "  up update host1",
         "  up update 1.13",
         "  up status",

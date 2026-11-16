@@ -14,17 +14,17 @@ function show_go_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  $(cli_m_project()) go [slots...] SCRIPT.jl",
-        "  go --local-slots 2 SCRIPT.jl",
+        "  go --head-slots 2 SCRIPT.jl",
         "  go --repeat 100 SCRIPT.jl",
         "  go --repeat 100 1*host1 2*host2 SCRIPT.jl",
-        "  go --local-slots 1 2*host1 SCRIPT.jl",
+        "  go --head-slots 1 2*host1 SCRIPT.jl",
     )
     print_help_blank(io)
     print_help_section("Slots"; io = io)
     print_help_lines(
         io,
         "  N*host              quote tokens; bare host = 1 slot (SSH)",
-        "  $(KIT_LOCAL_SLOTS_FLAG_HELP)",
+        "  $(KIT_HEAD_SLOTS_FLAG_HELP)",
         "  omit host count     error unless --repeat (then host is uncapped)",
         "  --repeat N          N independent runs; spread across listed hosts",
         "                       (`N*host` is a per-host cap; bare host is uncapped)",
@@ -123,7 +123,7 @@ end
 """Parse `go` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_go_args(args::AbstractVector{<:AbstractString})
     reject_mistaken_short_placement_flags!(args; command = :go)
-    assert_go_argv_no_local_workers!(args)
+    assert_go_argv_no_head_workers!(args)
     cli_session, rest = peel_shared_cli_flags(args)
     hosts = String[]
     host_tokens = String[]
@@ -249,7 +249,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
             hosts;
             command = :go,
             surface = :cli,
-            local_slots = cli_session.local_slots,
+            head_slots = cli_session.head_slots,
         )
     end
     return _go_parsed(;

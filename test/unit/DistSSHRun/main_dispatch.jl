@@ -62,7 +62,7 @@ using Test
         @test occursin("go SCRIPT.jl", err)
         @test !occursin("Unknown subcommand", err)
     end
-    let (code, _, err) = _main_capture(["--local-workers", "2", "job.jl"])
+    let (code, _, err) = _main_capture(["--head-workers", "2", "job.jl"])
         @test code == 1
         @test occursin("does not infer go / ride / drive", err)
     end
@@ -144,8 +144,8 @@ using Test
             @test via[1] == 0
             @test via == direct
         end
-        let via = _main_capture(["help", "go", "--local-slots", "1", "--help"])
-            direct = _main_capture(["go", "--local-slots", "1", "--help"])
+        let via = _main_capture(["help", "go", "--head-slots", "1", "--help"])
+            direct = _main_capture(["go", "--head-slots", "1", "--help"])
             @test via[1] == 0
             @test via == direct
             @test occursin("-h, --help", via[2])
@@ -186,9 +186,10 @@ using Test
             @test occursin("does not infer go / ride / drive", err)
             @test !occursin("Unknown subcommand", err)
         end
-        let (code, _, err) = _main_capture(["help", "--local-workers", "2", "job.jl"])
+        let (code, _, err) = _main_capture(["help", "--head-workers", "2", "job.jl"])
             @test code == 1
-            @test occursin("got \"--local-workers\"", err) || occursin("unknown", lowercase(err))
+            @test occursin("head-workers", err) || occursin("local-workers", err) ||
+                occursin("unknown", lowercase(err))
         end
         for args in (String[], ["help"], ["-h"], ["--help"])
             let (code, _, err) = _main_capture(args)
@@ -276,13 +277,13 @@ using Test
                 write(joinpath(proj_b, "Project.toml"), "name = \"ProjBeta\"\n")
 
                 let (code_a, out_a, err_a) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_a) do
-                        _main_capture(["hostinfo", DistSSHRun.PARENT_HOST_NAME])
+                        _main_capture(["hostinfo"])
                     end
                     @test code_a == 0
                     @test occursin("ProjAlpha", out_a * err_a)
                 end
                 let (code_b, out_b, err_b) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_b) do
-                        _main_capture(["hostinfo", DistSSHRun.PARENT_HOST_NAME])
+                        _main_capture(["hostinfo"])
                     end
                     @test code_b == 0
                     @test occursin("ProjBeta", out_b * err_b)
@@ -326,7 +327,7 @@ using Test
                 missing = joinpath(dir, "missing.jl")
                 code = redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
-                        DistSSHRun.main(["drive", "--local-workers", "1", missing])
+                        DistSSHRun.main(["drive", "--head-workers", "1", missing])
                     end
                 end
                 @test code != 0

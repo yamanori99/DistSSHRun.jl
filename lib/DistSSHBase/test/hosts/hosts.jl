@@ -74,7 +74,7 @@ using Test
         @test DistSSHBase.host_tokens(go; kind = :go) == ["4*user@h1"]
         drive = (
             hosts = Tuple{String, Union{Int, Nothing}}[("h1", 1)],
-            parent_workers = 7,
+            head_workers = 7,
         )
         @test DistSSHBase.host_tokens(drive; kind = :drive) == ["h1"]
         @test_throws ArgumentError DistSSHBase.host_tokens(go; kind = :pipeline)

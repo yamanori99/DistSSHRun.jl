@@ -1,8 +1,8 @@
 # Explicit placement counts (`parent:N` / `NAME:N`). Not a size estimate.
 
-"""Explicit worker counts per host (`parent_workers` + `child_workers`)."""
+"""Explicit worker counts per host (`head_workers` + `child_workers`)."""
 struct WorkerPlan
-    parent_workers::Int
+    head_workers::Int
     child_workers::Dict{String, Int}
 end
 
@@ -18,7 +18,7 @@ function resolved_placement_tokens(plan::WorkerPlan)::Vector{String}
 end
 
 function resolved_placement_tokens(
-        parent_workers::Integer,
+        head_workers::Integer,
         hosts::AbstractVector{<:Tuple{<:AbstractString, <:Any}},
         default_workers,
     )::Vector{String}
@@ -26,7 +26,7 @@ function resolved_placement_tokens(
     for pair in hosts
         remotes[pair[1]] = something(pair[2], default_workers, 1)
     end
-    return resolved_placement_tokens(WorkerPlan(Int(parent_workers), remotes))
+    return resolved_placement_tokens(WorkerPlan(Int(head_workers), remotes))
 end
 
 public resolved_placement_tokens

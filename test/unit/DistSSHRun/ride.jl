@@ -81,8 +81,8 @@ using Distributed
         @test occursin("work", s)
         @test !occursin("map", s)
 
-        plan = DistSSHRun._ride_resolve_plan(["2*h"]; local_workers = 1)
-        @test plan.parent_workers == 1
+        plan = DistSSHRun._ride_resolve_plan(["2*h"]; head_workers = 1)
+        @test plan.head_workers == 1
         @test plan.child_workers["h"] == 2
 
         _with_tempdir() do tmp
@@ -153,7 +153,7 @@ using Distributed
             write($(repr(out)), join(string.(ys), ","))
             """
         )
-        r = ride_local(map_path, String[]; local_workers = 1, spi_check = true)
+        r = ride_local(map_path, String[]; head_workers = 1, spi_check = true)
         @test r.ok
         @test r.workers == 1
         @test r.spi_ok === true
@@ -198,7 +198,7 @@ using Distributed
                 write($(repr(fout)), join(string.(ys), ","))
                 """
             )
-            rf = ride_local(filt, String[]; local_workers = 1, spi_check = true)
+            rf = ride_local(filt, String[]; head_workers = 1, spi_check = true)
             @test rf.ok
             @test read(fout, String) == "2,4,6"
 
@@ -213,7 +213,7 @@ using Distributed
                 write($(repr(nout)), join(string.(ys), ","))
                 """
             )
-            rn = ride_local(named, String[]; local_workers = 1, spi_check = true)
+            rn = ride_local(named, String[]; head_workers = 1, spi_check = true)
             @test rn.ok
             @test read(nout, String) == "1,4,9"
 
@@ -229,7 +229,7 @@ using Distributed
                 write($(repr(lout)), join(string.(ys), ","))
                 """
             )
-            rl = ride_local(loop, String[]; local_workers = 1, spi_check = true)
+            rl = ride_local(loop, String[]; head_workers = 1, spi_check = true)
             @test rl.ok
             @test rl.spi_ok !== false
             @test read(lout, String) == "1,4,9,16"
@@ -245,7 +245,7 @@ using Distributed
                 write($(repr(vout)), string(x === nothing) * ";" * join(string.(ys), ","))
                 """
             )
-            rv = ride_local(val_path, String[]; local_workers = 1, spi_check = true)
+            rv = ride_local(val_path, String[]; head_workers = 1, spi_check = true)
             @test rv.ok
             @test read(vout, String) == "true;1,4,9"
 
@@ -261,7 +261,7 @@ using Distributed
                 write($(repr(stout)), join(string.(ys), ","))
                 """
             )
-            rs = ride_local(st_path, String[]; local_workers = 1, spi_check = false)
+            rs = ride_local(st_path, String[]; head_workers = 1, spi_check = false)
             @test rs.ok
             @test read(stout, String) == "1,4,9,16"
 
@@ -277,7 +277,7 @@ using Distributed
                 write($(repr(aout)), join(string.(dest), ","))
                 """
             )
-            ra = ride_local(alias_path, String[]; local_workers = 1, spi_check = false)
+            ra = ride_local(alias_path, String[]; head_workers = 1, spi_check = false)
             @test ra.ok
             @test read(aout, String) == "1,1,1"
 
@@ -294,7 +294,7 @@ using Distributed
                 write($(repr(oout)), join(string.(seen), ",") * ";" * join(string.(dest), ","))
                 """
             )
-            ro = ride_local(obs_path, String[]; local_workers = 1, spi_check = false)
+            ro = ride_local(obs_path, String[]; head_workers = 1, spi_check = false)
             @test ro.ok
             @test read(oout, String) == "1,0,0;0,0,0"
 
@@ -319,7 +319,7 @@ using Distributed
                 write($(repr(gout)), join(string.(dest), ","))
                 """
             )
-            rg = ride_local(gen_path, String[]; local_workers = 1, spi_check = false)
+            rg = ride_local(gen_path, String[]; head_workers = 1, spi_check = false)
             @test rg.ok
             @test read(gout, String) == "1,2,3"
 
@@ -345,7 +345,7 @@ using Distributed
                 write($(repr(hout)), join(string.(dest), ","))
                 """
             )
-            rh = ride_local(haslen_path, String[]; local_workers = 1, spi_check = false)
+            rh = ride_local(haslen_path, String[]; head_workers = 1, spi_check = false)
             @test rh.ok
             @test read(hout, String) == "1,2,3"
 
@@ -369,7 +369,7 @@ using Distributed
                 write($(repr(pout)), join(out, ";"))
                 """
             )
-            rp = ride_local(pmapnest_path, String[]; local_workers = 2, spi_check = false)
+            rp = ride_local(pmapnest_path, String[]; head_workers = 2, spi_check = false)
             @test rp.ok
             @test read(pout, String) == "1,1,1;1,1,1;1,1,1;1,1,1"
 
@@ -446,7 +446,7 @@ using Distributed
                 opath = joinpath(tmp, stem * ".jl")
                 oout = joinpath(tmp, stem * ".txt")
                 write(opath, replace(body, "ARGS[1]" => repr(oout)))
-                rr = ride_local(opath, String[]; local_workers = 1, spi_check = spi)
+                rr = ride_local(opath, String[]; head_workers = 1, spi_check = spi)
                 @test rr.ok
                 @test read(oout, String) == "1,1,1"
             end
@@ -477,7 +477,7 @@ using Distributed
                     script;
                     output_dir = dirty,
                     project = tmp,
-                    local_workers = 1,
+                    head_workers = 1,
                     hint_surface = :cli,
                 )
                 nothing
@@ -529,7 +529,7 @@ using Distributed
                 seed_earlier_ship!()
                 ok = redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
-                        DistSSHRun.ride!(script; project = tmp, local_workers = 1)
+                        DistSSHRun.ride!(script; project = tmp, head_workers = 1)
                     end
                 end
                 @test ok.ok
@@ -537,7 +537,7 @@ using Distributed
                 seed_earlier_ship!()
                 failed = redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
-                        DistSSHRun.ride!(bad; project = tmp, local_workers = 1)
+                        DistSSHRun.ride!(bad; project = tmp, head_workers = 1)
                     end
                 end
                 @test !failed.ok
@@ -641,7 +641,7 @@ using Distributed
                         redirect_stderr(devnull) do
                             DistSSHRun.ride!(
                                 script, String[];
-                                local_workers = 1,
+                                head_workers = 1,
                                 project = local_proj,
                                 remote = remote,
                                 output_dir = joinpath(tmp, "parent-out"),
@@ -661,7 +661,7 @@ using Distributed
                         redirect_stderr(devnull) do
                             DistSSHRun.ride!(
                                 script, ["1*$(host)"];
-                                local_workers = 0,
+                                head_workers = 0,
                                 project = local_proj,
                                 remote = remote,
                                 run_id = snap_id,
@@ -838,7 +838,7 @@ using Distributed
             r = redirect_stdout(devnull) do
                 redirect_stderr(devnull) do
                     return DistSSHRun.ride!(
-                        script, String[]; local_workers = 1,
+                        script, String[]; head_workers = 1,
                         project = tmp,
                         run_id = rid,
                     )

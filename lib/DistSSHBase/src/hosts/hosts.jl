@@ -32,12 +32,27 @@ function is_parent_host_name(host_name::AbstractString)::Bool
     return String(host_name) == PARENT_HOST_NAME
 end
 
+"""Reject the removed `parent` / `parent:N` token (head row is always implicit)."""
+function throw_removed_parent_placement_token!(context::AbstractString, raw::AbstractString)
+    s = String(strip(raw))
+    base = contains(s, ':') ? strip(split(s, ':'; limit = 2)[1]) : s
+    is_parent_host_name(base) || return nothing
+    throw(
+        ArgumentError(
+            join_explained_message(
+                "$(context): $(repr(raw)) was removed",
+                "The head machine is always listed first; name SSH hosts only.",
+            ),
+        ),
+    )
+end
+
 """`ArgumentError` for removed `--local` / `-l`."""
 function throw_removed_local_flag(arg::AbstractString)
     a = String(arg)
     throw(
         ArgumentError(
-            "$(a) was removed; use --local-workers N",
+            "$(a) was removed; use --head-workers N",
         )
     )
 end
@@ -63,7 +78,7 @@ function format_placement_token(
         n::Union{Nothing, Integer} = nothing,
     )::String
     role === :parent &&
-        throw(ArgumentError("format_placement_token: local workers use --local-workers, not tokens"))
+        throw(ArgumentError("format_placement_token: head workers use --head-workers, not tokens"))
     nn = something(n === nothing ? 1 : Int(n), 1)
     return format_machine_token(nn, name)
 end

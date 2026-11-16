@@ -8,7 +8,7 @@ using PrecompileTools
         dir = mktempdir()
         try
             missing = joinpath(dir, "missing.jl")
-            args = String["--local-workers", "2", missing]
+            args = String["--head-workers", "2", missing]
             parsed = parse_drive_args(args)
             try
                 run_drive_parsed!(

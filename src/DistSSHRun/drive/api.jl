@@ -86,7 +86,7 @@ function drive!(
                     if resolved === nothing && !isempty(session.tokens)
                         resolved = worker_plan_from_tokens(
                             session.tokens;
-                            local_workers = session.cli_session.local_workers,
+                            head_workers = session.cli_session.head_workers,
                         )
                     end
                     parsed = drive_parsed_from_session(
@@ -146,7 +146,7 @@ function drive!(
         project::AbstractString = pwd(),
         remote::Union{Nothing, AbstractString} = nothing,
         hosts_file::Union{Nothing, AbstractString} = nothing,
-        local_workers::Union{Nothing, Integer} = nothing,
+        head_workers::Union{Nothing, Integer} = nothing,
         quiet::Bool = false,
         verbosity::Union{Nothing, Symbol} = nothing,
         yes::Bool = true,
@@ -155,7 +155,7 @@ function drive!(
     session = DistSSHSession(
         project = project,
         workers = workers,
-        local_workers = local_workers,
+        head_workers = head_workers,
         remote = remote,
         hosts_file = hosts_file,
         quiet = quiet,

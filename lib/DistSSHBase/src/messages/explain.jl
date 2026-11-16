@@ -127,9 +127,9 @@ function explain_bare_placement_tokens(
     listed = join(bare, ' ')
     head = "each go / drive / ride token needs an explicit worker count; bare $(listed) is not allowed"
     hint = if surface === :api
-        "Hint: write `N*host`, or `local_workers=` / `local_slots=` on drive, ride, or go respectively."
+        "Hint: write `N*host`, or `head_workers=` / `head_slots=` on drive, ride, or go respectively."
     else
-        "Hint: write `2*host` (quote `--hosts`). drive/ride: --local-workers. go: --local-slots."
+        "Hint: write `2*host` (quote `--hosts`). drive/ride: --head-workers. go: --head-slots."
     end
     return join_explained_message(head, hint)
 end

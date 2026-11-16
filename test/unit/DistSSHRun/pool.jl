@@ -15,7 +15,7 @@ using Test
         empty = DistSSHRun.DistSSHSession(project = proj, workers = String[])
         @test_throws ArgumentError DistSSHRun.pool!(empty)
 
-        parent = DistSSHRun.DistSSHSession(project = proj, workers = String[], local_workers = 1)
+        parent = DistSSHRun.DistSSHSession(project = proj, workers = String[], head_workers = 1)
         pool = DistSSHRun.pool!(parent)
         @test pool.ok
         @test length(pool.hosts) == 1

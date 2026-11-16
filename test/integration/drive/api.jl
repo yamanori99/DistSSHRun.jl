@@ -9,7 +9,7 @@ function _api_project_same(left, right)::Bool
     return realpath(left) == realpath(right)
 end
 
-# Oracle: `drive!(…; local_workers = 2)` runs the smoke driver in this process.
+# Oracle: `drive!(…; head_workers = 2)` runs the smoke driver in this process.
 # CLI child is `local.jl`. Not SSH.
 #
 # First in-process `include` of a driver into `Main`. Later files (e.g.
@@ -41,7 +41,7 @@ end
                     result = redirect_stdout(out_io) do
                         redirect_stderr(err_io) do
                             DistSSHRun.drive!(
-                                script; local_workers = 2,
+                                script; head_workers = 2,
                                 project = proj,
                                 verbosity = :verbose,
                                 yes = true,
@@ -202,7 +202,7 @@ end
             first = redirect_stdout(devnull) do
                 redirect_stderr(devnull) do
                     DistSSHRun.drive!(
-                        with_init; local_workers = 1,
+                        with_init; head_workers = 1,
                         project = proj,
                         verbosity = :quiet,
                         yes = true,
@@ -217,7 +217,7 @@ end
             second = redirect_stdout(devnull) do
                 redirect_stderr(devnull) do
                     DistSSHRun.drive!(
-                        no_init; local_workers = 1,
+                        no_init; head_workers = 1,
                         project = proj,
                         verbosity = :quiet,
                         yes = true,

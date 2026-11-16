@@ -28,14 +28,14 @@ function show_pool_usage(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  $(cli_m_project()) pool [parent] [NAME...]",
-        "  pool parent host1 host2",
+        "  $(cli_m_project()) pool [NAME...]",
+        "  pool host1 host2",
     )
     print_help_blank(io)
     print_help_section("Options"; io = io)
     print_help_lines(
         io,
-        "  --hosts CSV         parent / NAME[:N] (:N stripped)",
+        "  --hosts CSV         SSH host names (`N*host` counts stripped)",
         "  --hosts-file PATH   same, one token per line",
         "  $(KIT_QUIET_FLAG_HELP)",
         "  $(KIT_PROGRESS_FLAG_HELP)",
@@ -90,19 +90,19 @@ function parse_pool_args(args::Vector{String})
         elseif arg == "--parenthost" || arg == "--masterhost" || arg == "--parent"
             throw(
                 ArgumentError(
-                    "pool: pass the token `parent` (e.g. pool parent host1), not `--parenthost`.",
-                )
+                    join_explained_message(
+                        "pool: $(repr(arg)) was removed",
+                        "The head machine is always listed first; name SSH hosts only.",
+                    ),
+                ),
             )
         elseif arg == "--probe" || arg == "--gb-per-worker" || arg == "--mem-headroom" ||
                 arg == "--parent-gb" || arg == "--master-gb"
             throw(ArgumentError("pool: worker-count sizing was removed; pool reports cores and RAM only"))
         elseif !startswith(arg, "-")
-            if is_parent_host_name(String(arg))
-                include_parent = true
-            else
-                let p = parse_placement_token(arg)
-                    push!(hosts, p.name)
-                end
+            DistSSHBase.throw_removed_parent_placement_token!("pool", arg)
+            let p = parse_placement_token(arg)
+                push!(hosts, p.name)
             end
             cli_consume!(c)
         else
@@ -111,14 +111,16 @@ function parse_pool_args(args::Vector{String})
     end
 
     append_kit_host_sources!(hosts, cli_session; keep_counts = false, roles = true)
-    include_parent = _absorb_parent_hosts!(hosts, include_parent)
+    for h in hosts
+        DistSSHBase.throw_removed_parent_placement_token!("pool", h)
+    end
     apply_shared_cli_flags!(cli_session)
 
     return _pool_parsed(;
         show_help = false,
         show_version = cli_session.show_version,
         cli_session = cli_session,
-        include_parent = include_parent,
+        include_parent = true,
         hosts = hosts,
     )
 end

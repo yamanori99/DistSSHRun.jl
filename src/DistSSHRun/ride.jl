@@ -443,15 +443,15 @@ end
 
 function _ride_resolve_plan(
         tokens::Vector{String};
-        local_workers::Union{Nothing, Integer} = nothing,
+        head_workers::Union{Nothing, Integer} = nothing,
     )::WorkerPlan
-    lw = local_workers === nothing ? nothing : Int(local_workers)
+    lw = head_workers === nothing ? nothing : Int(head_workers)
     if isempty(tokens)
         n = lw === nothing ? 0 : Int(lw)
         n == 0 && throw(ArgumentError(zero_placement_usage_error(:ride; surface = :api)))
         return WorkerPlan(n, Dict{String, Int}())
     end
-    return worker_plan_from_tokens(tokens; local_workers = lw)
+    return worker_plan_from_tokens(tokens; head_workers = lw)
 end
 
 function _ride_activate_project!(project::AbstractString)
@@ -494,7 +494,7 @@ function _ride_add_workers!(
             (String(h), Int(n)) for (h, n) in plan.child_workers if n > 0
         ]
         if isempty(child_hosts)
-            n = plan.parent_workers
+            n = plan.head_workers
             if n > 0
                 preserve_task_local_default_rng() do
                     ensure_run_cluster_cookie!()
@@ -510,7 +510,7 @@ function _ride_add_workers!(
             end
             successful = add_drive_workers!(
                 child_hosts,
-                plan.parent_workers,
+                plan.head_workers,
                 1,
                 julia_exe,
                 String(project),
@@ -524,10 +524,10 @@ function _ride_add_workers!(
                 isempty(missing) || error(
                     "ride: required hosts did not join: $(join(missing, ", "))",
                 )
-                if plan.parent_workers > 0
+                if plan.head_workers > 0
                     got = _drive_parent_worker_count()
-                    got >= plan.parent_workers || error(
-                        "ride: required local workers did not join: wanted $(plan.parent_workers), got $got",
+                    got >= plan.head_workers || error(
+                        "ride: required local workers did not join: wanted $(plan.head_workers), got $got",
                     )
                 end
             end
@@ -663,7 +663,7 @@ function ride!(
         remote::Union{Nothing, AbstractString} = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
         require_all_hosts::Bool = true,
-        local_workers::Union{Nothing, Integer} = nothing,
+        head_workers::Union{Nothing, Integer} = nothing,
         hint_surface::Symbol = :api,
         unsafe_skip_env_digests = false,
         unsafe_expose_port::Bool = false,
@@ -697,7 +697,7 @@ function ride!(
         return with_run_unsafe_options!(cfg) do
             return _ride_run!(
                 path, julia_s, tokens, args, spi_check, output_dir, project, julia,
-                remote, validated_run_id, require_all_hosts, local_workers, hint_surface,
+                remote, validated_run_id, require_all_hosts, head_workers, hint_surface,
                 inherited_run,
             )
         end
@@ -719,7 +719,7 @@ function _ride_run!(
         remote,
         run_id::Union{Nothing, String},
         require_all_hosts,
-        local_workers::Union{Nothing, Integer},
+        head_workers::Union{Nothing, Integer},
         hint_surface::Symbol,
         inherited_run::Bool,
     )
@@ -731,7 +731,7 @@ function _ride_run!(
     _clear_last_ship!()
     tok = String[String(t) for t in tokens]
     wp = try
-        _ride_resolve_plan(tok; local_workers = local_workers)
+        _ride_resolve_plan(tok; head_workers = head_workers)
     catch e
         e isa ArgumentError && return RideResult(
             false, path, 0, nothing, sprint(showerror, e), julia_s, nothing, run_dir,

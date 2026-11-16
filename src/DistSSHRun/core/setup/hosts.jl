@@ -47,8 +47,22 @@ end
 """Parse one setup CLI/API host token (no `N*` prefix)."""
 function parse_setup_host_token(spec::AbstractString)::String
     reject_setup_worker_count!(spec)
+    s = String(strip(spec))
+    is_parent_host_name(s) && throw(
+        ArgumentError(
+            "setup: $(repr(s)) is only for up (kit parent machine). " *
+                "SSH targets use a plain host name (no `N*` count).",
+        ),
+    )
+    throw_legacy_placement_token(s)
     p = parse_placement_token(spec)
-    return p.role === :parent ? PARENT_HOST_NAME : p.name
+    p.role === :parent && throw(
+        ArgumentError(
+            "setup: $(repr(spec)) is only for up (kit parent machine). " *
+                "SSH targets use a plain host name (no `N*` count).",
+        ),
+    )
+    return p.name
 end
 
 function validate_setup_hosts(

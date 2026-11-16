@@ -7,10 +7,10 @@ Every token must have `:N`. Omitted counts are not filled in here.
 """
 function worker_plan_from_tokens(
         tokens::AbstractVector{<:AbstractString};
-        local_workers::Union{Nothing, Integer} = nothing,
+        head_workers::Union{Nothing, Integer} = nothing,
     )::WorkerPlan
-    parsed = parse_worker_tokens(tokens; local_workers = local_workers)
-    local_n = parsed.parent_workers
+    parsed = parse_worker_tokens(tokens; head_workers = head_workers)
+    local_n = parsed.head_workers
     remotes = Dict{String, Int}(parsed.child_workers)
 
     worker_tokens_fully_specified(parsed) || throw(

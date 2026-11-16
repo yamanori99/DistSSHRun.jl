@@ -44,16 +44,16 @@ function show_ride_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  $(cli_m_project()) ride SCRIPT.jl",
-        "  ride --local-workers 2 SCRIPT.jl",
-        "  ride --local-workers 1 2*host1 SCRIPT.jl",
-        "  ride --spi-check --local-workers 2 SCRIPT.jl",
+        "  ride --head-workers 2 SCRIPT.jl",
+        "  ride --head-workers 1 2*host1 SCRIPT.jl",
+        "  ride --spi-check --head-workers 2 SCRIPT.jl",
     )
     print_help_blank(io)
     print_help_section("Options"; io = io)
     print_help_lines(
         io,
         "  N*host              machine tokens (quote --hosts)",
-        "  $(KIT_LOCAL_WORKERS_FLAG_HELP)",
+        "  $(KIT_HEAD_WORKERS_FLAG_HELP)",
         "  omit host count     error (pass N*host)",
         "  --spi-check         compare to sequential map/filter (default off)",
         "  --no-spi-check      skip that compare",
@@ -75,7 +75,7 @@ function show_ride_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "See also: go, drive, setup.",
-        "API: ride!(script, \"1*host\"; local_workers=2, spi_check=false, run_id=\"…\").",
+        "API: ride!(script, \"1*host\"; head_workers=2, spi_check=false, run_id=\"…\").",
     )
     return nothing
 end
@@ -84,8 +84,8 @@ end
 function parse_ride_args(args::AbstractVector{<:AbstractString})
     reject_mistaken_short_placement_flags!(args; command = :ride)
     cli_session, rest = peel_shared_cli_flags(args)
-    cli_session.local_slots !== nothing &&
-        throw(ArgumentError("ride uses --local-workers, not --local-slots"))
+    cli_session.head_slots !== nothing &&
+        throw(ArgumentError("ride uses --head-workers, not --head-slots"))
     hosts = String[]
     host_tokens = String[]
     script_path = nothing
@@ -202,7 +202,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
             hosts;
             command = :ride,
             surface = :cli,
-            local_workers = cli_session.local_workers,
+            head_workers = cli_session.head_workers,
         )
     end
     return _ride_parsed(;

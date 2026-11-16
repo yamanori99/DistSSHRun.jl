@@ -565,7 +565,7 @@ end
 
     @testset "detached drive argv require-all-hosts" begin
         argv = DistSSHRun._execute_detached_argv(
-            :drive, "job.jl", String[], String[]; local_workers = 1,
+            :drive, "job.jl", String[], String[]; head_workers = 1,
             output_dir = "/tmp/out",
             log_dir = nothing,
             sync = nothing,
@@ -627,7 +627,7 @@ end
         @test err_ext isa ArgumentError
         @test occursin("--allow-external-symlinks was removed", err_ext.msg)
         argv0 = DistSSHRun._execute_detached_argv(
-            :drive, "job.jl", String[], String[]; local_workers = 1,
+            :drive, "job.jl", String[], String[]; head_workers = 1,
             output_dir = "/tmp/out",
             log_dir = nothing,
             sync = nothing,
@@ -658,7 +658,7 @@ end
             skip_hash_check = true,
             workers = 4,
         )
-        @test "--local-workers" in argvw
+        @test "--head-workers" in argvw
         @test "4" in argvw
         @test "--best-effort" in argvw
         argv_rep = DistSSHRun._execute_detached_argv(
@@ -726,7 +726,7 @@ end
             skip_hash_check = true,
         )
         argv_ride = DistSSHRun._execute_detached_argv(
-            :ride, "job.jl", String[], String[]; local_workers = 2,
+            :ride, "job.jl", String[], String[]; head_workers = 2,
             output_dir = "/tmp/out",
             log_dir = nothing,
             sync = nothing,
@@ -747,7 +747,7 @@ end
         @test "--output-dir" in argv_ride
         @test !("--allow-external-symlinks" in argv_ride)
         argv_ride_spi = DistSSHRun._execute_detached_argv(
-            :ride, "job.jl", String[], String[]; local_workers = 2,
+            :ride, "job.jl", String[], String[]; head_workers = 2,
             output_dir = "/tmp/out",
             log_dir = nothing,
             sync = nothing,
@@ -764,7 +764,7 @@ end
         @test "--spi-check" in argv_ride_spi
         @test !("--no-spi-check" in argv_ride_spi)
         argv_snap = DistSSHRun._execute_detached_argv(
-            :go, "job.jl", String[], String[]; local_slots = 1,
+            :go, "job.jl", String[], String[]; head_slots = 1,
             output_dir = "/tmp/out",
             log_dir = nothing,
             sync = nothing,
@@ -781,7 +781,7 @@ end
         @test "--run-id" in argv_snap
         @test "20260101T000000Z-aaaaaa" in argv_snap
         argv_root = DistSSHRun._execute_detached_argv(
-            :go, "job.jl", String[], String[]; local_slots = 1,
+            :go, "job.jl", String[], String[]; head_slots = 1,
             output_dir = "/tmp/out",
             log_dir = nothing,
             sync = nothing,
@@ -810,18 +810,18 @@ end
         gkw = DistSSHRun.execute_kwargs_from_parsed(go; kind = :go)
         @test !haskey(gkw, :run_id)
         go_snap = DistSSHRun.parse_go_args(
-            ["--run-id", "20260101T000000Z-aaaaaa", "--local-slots", "1", "job.jl"],
+            ["--run-id", "20260101T000000Z-aaaaaa", "--head-slots", "1", "job.jl"],
         )
         gsnap = DistSSHRun.execute_kwargs_from_parsed(go_snap; kind = :go)
         @test gsnap[:run_id] == "20260101T000000Z-aaaaaa"
         drive_snap = DistSSHRun.parse_drive_args(
-            ["--run-id", "20260101T000000Z-aaaaaa", "--local-workers", "1", "s.jl"],
+            ["--run-id", "20260101T000000Z-aaaaaa", "--head-workers", "1", "s.jl"],
         )
         dsnap = DistSSHRun.execute_kwargs_from_parsed(drive_snap; kind = :drive)
         @test dsnap[:run_id] == "20260101T000000Z-aaaaaa"
         @test !haskey(dsnap, :sync)
         go_root = DistSSHRun.parse_go_args(
-            ["--deploy-root", "/tmp/App", "--local-slots", "1", "job.jl"],
+            ["--deploy-root", "/tmp/App", "--head-slots", "1", "job.jl"],
         )
         @test DistSSHRun.execute_kwargs_from_parsed(go_root; kind = :go)[:remote] == "/tmp/App"
         @test gkw[:verbosity] === :progress
@@ -856,33 +856,33 @@ end
 
         ride = DistSSHRun.parse_ride_args(
             [
-                "--no-spi-check", "--local-workers", "2", "job.jl",
+                "--no-spi-check", "--head-workers", "2", "job.jl",
             ]
         )
         rkw = DistSSHRun.execute_kwargs_from_parsed(ride; kind = :ride)
         @test rkw[:spi_check] === false
         @test !haskey(rkw, :gb_per_worker)
-        @test ride.cli_session.local_workers == 2
+        @test ride.cli_session.head_workers == 2
         @test DistSSHRun.host_tokens(ride; kind = :ride) == String[]
         @test !haskey(rkw, :sync)
 
         hosts_file = _sample_hosts_file()
         drive = DistSSHRun.parse_drive_args(
             [
-                "--no-log", "--package", "Foo", "--local-workers", "4",
+                "--no-log", "--package", "Foo", "--head-workers", "4",
                 "--hosts-file", hosts_file, "s.jl",
             ]
         )
         dkw = DistSSHRun.execute_kwargs_from_parsed(drive; kind = :drive)
         @test dkw[:enable_log] === false
         @test dkw[:package] == "Foo"
-        @test dkw[:local_workers] == 4
+        @test dkw[:head_workers] == 4
         @test !haskey(dkw, :hosts_file)
-        @test drive.cli_session.local_workers == 4
+        @test drive.cli_session.head_workers == 4
         @test DistSSHRun.host_tokens(drive; kind = :drive) ==
             ["host-a", "4*host-b"]
         bare = DistSSHRun.parse_drive_args(["1*host1", "s.jl"])
-        @test !haskey(DistSSHRun.execute_kwargs_from_parsed(bare; kind = :drive), :local_workers)
+        @test !haskey(DistSSHRun.execute_kwargs_from_parsed(bare; kind = :drive), :head_workers)
         errk = try
             DistSSHRun.execute_kwargs_from_parsed(go; kind = :pipeline)
             nothing
@@ -902,7 +902,7 @@ end
             throw(ArgumentError("submit: unknown kit command $(repr(kind))"))
         end
         err = try
-            kit_parse_args(:go, String["--ship-tree", "--local-slots", "1", "job.jl"])
+            kit_parse_args(:go, String["--ship-tree", "--head-slots", "1", "job.jl"])
             nothing
         catch e
             e
@@ -914,7 +914,7 @@ end
         @test occursin("setup ship-tree", shown)
         @test occursin("--run-id", shown)
         errd = try
-            kit_parse_args(:drive, String["--ship-tree", "--local-workers", "1", "s.jl"])
+            kit_parse_args(:drive, String["--ship-tree", "--head-workers", "1", "s.jl"])
             nothing
         catch e
             e
@@ -922,13 +922,13 @@ end
         @test errd isa ArgumentError
         @test occursin("drive: --ship-tree was removed", errd.msg)
         parsed = kit_parse_args(
-            :go, String["--run-id", "20260101T000000Z-aaaaaa", "--local-slots", "1", "job.jl"],
+            :go, String["--run-id", "20260101T000000Z-aaaaaa", "--head-slots", "1", "job.jl"],
         )
         bag = DistSSHRun.execute_kwargs_from_parsed(parsed; kind = :go)
         @test bag[:run_id] == "20260101T000000Z-aaaaaa"
         @test !haskey(bag, :sync)
         err_go_sync = try
-            kit_parse_args(:go, String["--sync", "--local-slots", "1", "job.jl"])
+            kit_parse_args(:go, String["--sync", "--head-slots", "1", "job.jl"])
             nothing
         catch e
             e
@@ -936,7 +936,7 @@ end
         @test err_go_sync isa ArgumentError
         @test occursin("go: --sync was removed", err_go_sync.msg)
         err_go_git = try
-            kit_parse_args(:go, String["--git-sync", "--local-slots", "1", "job.jl"])
+            kit_parse_args(:go, String["--git-sync", "--head-slots", "1", "job.jl"])
             nothing
         catch e
             e
@@ -958,7 +958,7 @@ end
 
     @testset "detached rejects unknown / yes=false" begin
         err = try
-            DistSSHRun.execute!(:go, "job.jl", String[]; local_slots = 1, detached = true, plan = nothing)
+            DistSSHRun.execute!(:go, "job.jl", String[]; head_slots = 1, detached = true, plan = nothing)
             nothing
         catch e
             e
@@ -967,7 +967,7 @@ end
         @test occursin("does not accept keyword :plan", sprint(showerror, err))
 
         err2 = try
-            DistSSHRun.execute!(:go, "job.jl", String[]; local_slots = 1, detached = true, yes = false)
+            DistSSHRun.execute!(:go, "job.jl", String[]; head_slots = 1, detached = true, yes = false)
             nothing
         catch e
             e
@@ -976,7 +976,7 @@ end
         @test occursin("yes=true", sprint(showerror, err2))
 
         err3 = try
-            DistSSHRun.execute!(:go, "job.jl", String[]; local_slots = 1, detached = true, log_dir = "x")
+            DistSSHRun.execute!(:go, "job.jl", String[]; head_slots = 1, detached = true, log_dir = "x")
             nothing
         catch e
             e
@@ -985,7 +985,7 @@ end
         @test occursin(":log_dir", sprint(showerror, err3))
 
         err4 = try
-            DistSSHRun.execute!(:go, "job.jl", String[]; local_slots = 1, detached = true, skip_hash_check = true)
+            DistSSHRun.execute!(:go, "job.jl", String[]; head_slots = 1, detached = true, skip_hash_check = true)
             nothing
         catch e
             e
@@ -994,7 +994,7 @@ end
         @test occursin(":skip_hash_check", sprint(showerror, err4))
 
         err5 = try
-            DistSSHRun.execute!(:go, "job.jl", String[]; local_slots = 1, detached = true, workers = 4)
+            DistSSHRun.execute!(:go, "job.jl", String[]; head_slots = 1, detached = true, workers = 4)
             nothing
         catch e
             e
@@ -1003,7 +1003,7 @@ end
         @test occursin(":workers", sprint(showerror, err5))
 
         err6 = try
-            DistSSHRun.execute!(:drive, "job.jl", String[]; local_workers = 1, detached = true, spi_check = false)
+            DistSSHRun.execute!(:drive, "job.jl", String[]; head_workers = 1, detached = true, spi_check = false)
             nothing
         catch e
             e
@@ -1013,7 +1013,7 @@ end
 
         err_ship = try
             DistSSHRun.execute!(
-                :go, "/no/such/job.jl", String[]; local_slots = 1,
+                :go, "/no/such/job.jl", String[]; head_slots = 1,
                 detached = true, sync = :ship_tree, yes = true,
             )
             nothing
@@ -1054,7 +1054,7 @@ end
         @test argv[end] == "/remote/src/app/_distsshrun_external/job.jl"
         err_ext = try
             DistSSHRun.execute!(
-                :go, "/no/such/job.jl", String[]; local_slots = 1,
+                :go, "/no/such/job.jl", String[]; head_slots = 1,
                 detached = true, allow_external_symlinks = true, yes = true,
             )
             nothing
@@ -1142,7 +1142,7 @@ end
                     _, kp = _capture_detached_env_log() do
                         DistSSHRun.execute!(
                             :go,
-                            script, String[]; local_slots = 1,
+                            script, String[]; head_slots = 1,
                             detached = true,
                             project = app,
                             run_id = "20260101T000000Z-aaaaaa",
@@ -1176,7 +1176,7 @@ end
             )
             result = DistSSHRun.execute!(
                 :go,
-                script, String[]; local_slots = 1,
+                script, String[]; head_slots = 1,
                 project = proj,
                 args = ["8"],
                 quiet = true,
@@ -1207,7 +1207,7 @@ end
                     _, kp = _capture_detached_env_log() do
                         DistSSHRun.execute!(
                             :go,
-                            script, String[]; local_slots = 1,
+                            script, String[]; head_slots = 1,
                             detached = true,
                             project = proj,
                             args = ["8"],
@@ -1277,7 +1277,7 @@ end
                     _, kp = _capture_detached_env_log() do
                         DistSSHRun.execute!(
                             :go,
-                            script, String[]; local_slots = 1,
+                            script, String[]; head_slots = 1,
                             detached = true,
                             project = proj,
                             verbosity = :progress,
@@ -1317,7 +1317,7 @@ end
             _, kp = _capture_detached_env_log() do
                 DistSSHRun.execute!(
                     :go,
-                    script, String[]; local_slots = 1,
+                    script, String[]; head_slots = 1,
                     detached = true,
                     project = proj,
                     quiet = true,
@@ -1367,7 +1367,7 @@ end
             _, kp = _capture_detached_env_log() do
                 DistSSHRun.execute!(
                     :go,
-                    script, String[]; local_slots = 1,
+                    script, String[]; head_slots = 1,
                     detached = true,
                     project = proj,
                     quiet = true,
@@ -1400,7 +1400,7 @@ end
                     _, kp = _capture_detached_env_log() do
                         DistSSHRun.execute!(
                             :go,
-                            script, String[]; local_slots = 1,
+                            script, String[]; head_slots = 1,
                             detached = true,
                             project = proj,
                             verbosity = :progress,
@@ -1432,7 +1432,7 @@ end
                     _, kp = _capture_detached_env_log() do
                         DistSSHRun.execute!(
                             :ride,
-                            script, String[]; local_workers = 1,
+                            script, String[]; head_workers = 1,
                             detached = true,
                             project = proj,
                             verbosity = :progress,
@@ -1912,7 +1912,7 @@ end
         @test DistSSHRun.execute_detached_accepts(:env_allow; kind = :ride)
         @test DistSSHRun.execute_detached_accepts(:env; kind = :drive)
 
-        session = (quiet = false, verbosity = nothing, local_workers = nothing)
+        session = (quiet = false, verbosity = nothing, head_workers = nothing)
         parsed = (
             cli_session = session,
             script_args = String[],
@@ -2036,7 +2036,7 @@ end
                 logs, kp = _capture_detached_env_log(; min_level = Test.Logging.Debug) do
                     DistSSHRun.execute!(
                         :go,
-                        script, String[]; local_slots = 1,
+                        script, String[]; head_slots = 1,
                         detached = true,
                         project = proj,
                         quiet = true,
@@ -2091,7 +2091,7 @@ end
                 _, kp = _capture_detached_env_log() do
                     DistSSHRun.execute!(
                         :go,
-                        script, String[]; local_slots = 1,
+                        script, String[]; head_slots = 1,
                         detached = true,
                         project = proj,
                         quiet = true,
@@ -2132,7 +2132,7 @@ end
             _, kp_snap = _capture_detached_env_log() do
                 DistSSHRun.execute!(
                     :go,
-                    script_snap, String[]; local_slots = 1,
+                    script_snap, String[]; head_slots = 1,
                     detached = true,
                     project = proj,
                     quiet = true,

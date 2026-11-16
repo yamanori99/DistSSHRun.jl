@@ -65,7 +65,7 @@ using Test
             @test !occursin("SSH preflight", shown)
         end
         let (code, out, err) = _cli_capture(
-                () -> DistSSHRun.drive(["--ship-tree", "--local-workers", "1", "s.jl"]),
+                () -> DistSSHRun.drive(["--ship-tree", "--head-workers", "1", "s.jl"]),
             )
             shown = out * err
             @test code == 1
@@ -85,11 +85,11 @@ using Test
     @testset "hostinfo, pool, up, progress entrypoints" begin
         let (code, out, err) = _cli_capture(() -> DistSSHRun.run_hostinfo(String[]))
             @test code == 0
-            @test occursin("Usage", out * err)
+            @test occursin("Hostinfo:", out * err)
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.run_pool(String[]))
             @test code == 0
-            @test occursin("Usage", out * err)
+            @test occursin("Pool:", out * err)
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.up(["--version"]))
             @test code == 0
@@ -126,9 +126,7 @@ using Test
                 withenv("DISTRIBUTED_PROJECT_ROOT" => nothing) do
                     let (code_a, out_a, err_a) = cd(proj_a) do
                             _cli_capture(
-                                () -> DistSSHRun.run_hostinfo(
-                                    [DistSSHRun.PARENT_HOST_NAME],
-                                ),
+                                () -> DistSSHRun.run_hostinfo(String[]),
                             )
                         end
                         @test code_a == 0
@@ -137,9 +135,7 @@ using Test
 
                     let (code_b, out_b, err_b) = cd(proj_b) do
                             _cli_capture(
-                                () -> DistSSHRun.run_hostinfo(
-                                    [DistSSHRun.PARENT_HOST_NAME],
-                                ),
+                                () -> DistSSHRun.run_hostinfo(String[]),
                             )
                         end
                         @test code_b == 0

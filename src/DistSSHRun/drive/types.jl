@@ -51,7 +51,7 @@ Field name matches [`WorkerPlan`](@ref): a host with an explicit `:N` is
 `child_workers[host] = N`, same key as `WorkerPlan.child_workers`.
 """
 struct ParsedWorkerTokens
-    parent_workers::Int
+    head_workers::Int
     child_workers::Dict{String, Int}
     child_auto::Vector{String}
     child_hosts::Vector{String}
@@ -59,14 +59,14 @@ struct ParsedWorkerTokens
 end
 
 function ParsedWorkerTokens(;
-        parent_workers::Integer = 0,
+        head_workers::Integer = 0,
         child_workers::AbstractDict{<:AbstractString, <:Integer} = Dict{String, Int}(),
         child_auto::AbstractVector{<:AbstractString} = String[],
         child_hosts::AbstractVector{<:AbstractString} = String[],
         tokens::AbstractVector{<:AbstractString} = String[],
     )
     return ParsedWorkerTokens(
-        Int(parent_workers),
+        Int(head_workers),
         Dict{String, Int}(String(h) => Int(n) for (h, n) in child_workers),
         String[String(h) for h in child_auto],
         String[String(h) for h in child_hosts],
@@ -82,9 +82,9 @@ go / drive / ride placement requires `:N` except `go --repeat` (omit = uncapped)
 """
 function parse_worker_tokens(
         tokens::AbstractVector{<:AbstractString};
-        local_workers::Union{Nothing, Integer} = nothing,
+        head_workers::Union{Nothing, Integer} = nothing,
     )::ParsedWorkerTokens
-    parent_workers = local_workers === nothing ? 0 : Int(local_workers)
+    head_workers = head_workers === nothing ? 0 : Int(head_workers)
     child_workers = Dict{String, Int}()
     child_auto = String[]
     child_hosts = String[]
@@ -94,7 +94,7 @@ function parse_worker_tokens(
     for (idx, raw) in enumerate(out_tokens)
         p = parse_placement_token(raw)
         p.role === :parent &&
-            throw(ArgumentError("$(repr(raw)): use --local-workers for local workers, not tokens"))
+            throw(ArgumentError("$(repr(raw)): use --head-workers for head-machine workers, not tokens"))
         host = p.name
         n = something(p.n, 1)
         if haskey(seen_remote, host)
@@ -109,7 +109,7 @@ function parse_worker_tokens(
         n === nothing ? push!(child_auto, host) : (child_workers[host] = Int(n))
     end
     return ParsedWorkerTokens(
-        parent_workers,
+        head_workers,
         child_workers,
         child_auto,
         child_hosts,
@@ -125,7 +125,7 @@ end
 """Total Distributed worker count from parsed placement."""
 function total_worker_placement(parsed::ParsedWorkerTokens)::Int
     rem = sum(values(parsed.child_workers); init = 0)
-    return parsed.parent_workers + rem
+    return parsed.head_workers + rem
 end
 
 """Throw unless every token has `:N` (go / drive / ride placement)."""
@@ -133,23 +133,23 @@ function require_counted_placement_tokens(
         tokens::AbstractVector{<:AbstractString};
         command::Symbol,
         surface::Symbol = :api,
-        local_workers::Union{Nothing, Integer} = nothing,
-        local_slots::Union{Nothing, Integer} = nothing,
+        head_workers::Union{Nothing, Integer} = nothing,
+        head_slots::Union{Nothing, Integer} = nothing,
     )::Nothing
     command in (:go, :drive, :ride) ||
         throw(ArgumentError("require_counted_placement_tokens: unsupported command $(repr(command))"))
     if command === :go
-        parsed = parse_worker_tokens(tokens; local_workers = 0)
+        parsed = parse_worker_tokens(tokens; head_workers = 0)
         worker_tokens_fully_specified(parsed) ||
             throw(ArgumentError(explain_bare_placement_tokens(tokens; surface = surface)))
         remote_slots = sum(values(parsed.child_workers); init = 0)
-        ls, _ = resolve_go_local_slots(tokens, local_slots)
+        ls, _ = resolve_go_head_slots(tokens, head_slots)
         ls + remote_slots == 0 &&
             throw(ArgumentError(zero_placement_usage_error(:go; surface = surface)))
         return nothing
     end
-    lw = local_workers === nothing ? 0 : Int(local_workers)
-    parsed = parse_worker_tokens(tokens; local_workers = lw)
+    lw = head_workers === nothing ? 0 : Int(head_workers)
+    parsed = parse_worker_tokens(tokens; head_workers = lw)
     worker_tokens_fully_specified(parsed) ||
         throw(ArgumentError(explain_bare_placement_tokens(tokens; surface = surface)))
     total_worker_placement(parsed) == 0 &&
@@ -400,13 +400,13 @@ mutable struct PipelineConfig
     log_dir::Union{Nothing, String}
     package::Union{Nothing, String}
     julia::Union{Nothing, String}
-    local_workers::Union{Nothing, Int}
+    head_workers::Union{Nothing, Int}
 end
 
 function PipelineConfig(;
         project::AbstractString = pwd(),
         workers::AbstractVector{<:AbstractString} = String[],
-        local_workers::Union{Nothing, Integer} = nothing,
+        head_workers::Union{Nothing, Integer} = nothing,
         remote::Union{Nothing, AbstractString} = nothing,
         hosts_file::Union{Nothing, AbstractString} = nothing,
         quiet::Bool = false,
@@ -454,7 +454,7 @@ function PipelineConfig(;
         ld,
         pkg,
         jl,
-        local_workers === nothing ? nothing : Int(local_workers),
+        head_workers === nothing ? nothing : Int(head_workers),
     )
 end
 

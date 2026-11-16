@@ -68,7 +68,7 @@ function kit_session_from_config(config::PipelineConfig)::DistSSHSession
     return DistSSHSession(
         project = config.project,
         workers = config.tokens,
-        local_workers = config.local_workers,
+        head_workers = config.head_workers,
         remote = config.remote,
         hosts_file = config.hosts_file,
         quiet = config.quiet,
@@ -181,13 +181,13 @@ end
 
 function _pipeline_run!(config::PipelineConfig, session::DistSSHSession, driver::String)
     sync_result = nothing
-    lw = session.cli_session.local_workers
+    lw = session.cli_session.head_workers
     plan = if isempty(session.tokens) && lw === nothing
         WorkerPlan()
     else
         worker_plan_from_tokens(
             session.tokens;
-            local_workers = lw,
+            head_workers = lw,
         )
     end
 

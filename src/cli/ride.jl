@@ -71,7 +71,7 @@ function ride_main()::Cint
             output_dir = parsed.output_dir,
             project = project_root,
             julia = parsed.julia,
-            local_workers = parsed.cli_session.local_workers,
+            head_workers = parsed.cli_session.head_workers,
             unsafe_skip_env_digests = parsed.unsafe_skip_env_digests,
             remote = remote_cli isa AbstractString ? remote_cli :
                 (isempty(remote_raw) ? nothing : remote_raw),

@@ -603,7 +603,7 @@ end
             proc, out = _run_kit_drive(;
                 script = echo_script,
                 host_root = proj,
-                parent_workers = 0,
+                head_workers = 0,
                 child_hosts = remote_tokens,
                 script_args = ["--n", "4"],
                 drive_flags = ["-y", "-q"],
@@ -623,7 +623,7 @@ end
             proc, out = _run_kit_drive(;
                 script = square_file,
                 host_root = proj,
-                parent_workers = 0,
+                head_workers = 0,
                 child_hosts = remote_tokens,
                 script_args = ["--n", "4"],
                 drive_flags = ["-y", "-q"],
@@ -646,7 +646,7 @@ end
             proc, out = _run_kit_drive(;
                 script = script,
                 host_root = proj,
-                parent_workers = 0,
+                head_workers = 0,
                 child_hosts = remote_tokens,
                 drive_flags = ["-y", "-q"],
                 extra_env = _e2e_base_env(),
@@ -728,7 +728,7 @@ end
             proc, out = _run_kit_drive(;
                 script = joinpath(proj, "fail.jl"),
                 host_root = proj,
-                parent_workers = 0,
+                head_workers = 0,
                 child_hosts = remote_tokens,
                 drive_flags = ["-y", "-q"],
                 extra_env = merge(_e2e_base_env(), Dict("DISTSSH_QUIET" => "0")),
@@ -746,7 +746,7 @@ end
             proc, out = _run_kit_drive(;
                 script = smoke,
                 host_root = proj,
-                parent_workers = 1,
+                head_workers = 1,
                 child_hosts = remote_tokens,
                 drive_flags = ["-y", "-q"],
                 extra_env = _e2e_base_env(),
@@ -779,7 +779,7 @@ end
             ok_cmd = _kit_drive_cmd(;
                 script = smoke,
                 host_root = proj,
-                parent_workers = 1,
+                head_workers = 1,
                 child_hosts = remote_tokens,
                 drive_flags = ["-y"],
                 extra_env = tty_extra,
@@ -787,7 +787,7 @@ end
             fail_cmd = _kit_drive_cmd(;
                 script = joinpath(proj, "fail.jl"),
                 host_root = proj,
-                parent_workers = 0,
+                head_workers = 0,
                 child_hosts = remote_tokens,
                 drive_flags = ["-y"],
                 extra_env = tty_extra,
@@ -1175,7 +1175,7 @@ end
             proc, out = _run_kit_drive(;
                 script = square_file,
                 host_root = proj,
-                parent_workers = 0,
+                head_workers = 0,
                 child_hosts = remote_tokens,
                 script_args = ["--n", "4"],
                 drive_flags = ["-y", "-q"],
@@ -1608,7 +1608,7 @@ end
             proc, out = _run_kit_drive(;
                 script = joinpath(proj, "smoke.jl"),
                 host_root = proj,
-                parent_workers = 0,
+                head_workers = 0,
                 child_hosts = remote_tokens,
                 drive_flags = ["-y", "-q", "--require-git"],
                 extra_env = merge(git_env, Dict("DISTSSH_QUIET" => "0")),
@@ -1640,7 +1640,7 @@ end
             proc, out = _run_kit_drive(;
                 script = joinpath(proj, "smoke.jl"),
                 host_root = proj,
-                parent_workers = 0,
+                head_workers = 0,
                 child_hosts = remote_tokens,
                 drive_flags = ["-y", "-q", "--require-git"],
                 extra_env = git_env,

@@ -29,7 +29,7 @@ end
 Rebuild CLI host tokens for `execute!`.
 
 Go tokens are the parser strings. Ride uses the same shape. Drive uses remote
-tuple specs only (local workers use `--local-workers`, not tokens). `kind` must be `:go`,
+tuple specs only (head workers use `--head-workers`, not tokens). `kind` must be `:go`,
 `:drive`, or `:ride`.
 """
 function host_tokens(hosts::AbstractVector{<:AbstractString})::Vector{String}
@@ -40,7 +40,7 @@ function host_tokens(
         hosts::AbstractVector{Tuple{String, Union{Int, Nothing}}},
     )::Vector{String}
     specs = String[]
-    # Local workers are not encoded as placement tokens (see --local-workers).
+    # Head workers are not encoded as placement tokens (see --head-workers).
     for pair in hosts
         host = pair[1]
         n = something(pair[2], 1)

@@ -9,21 +9,21 @@ mutable struct DistSSHSession
     quiet::Bool
     verbosity::Symbol
     yes::Bool
-    include_parent_for_size::Bool
+    include_head_for_size::Bool
     cli_session::CliSharedFlags
 end
 
 """
-    DistSSHSession(; project=pwd(), workers=[], local_workers=nothing, remote=nothing,
+    DistSSHSession(; project=pwd(), workers=[], head_workers=nothing, remote=nothing,
                hosts_file=nothing, quiet=false, verbosity=nothing, yes=true,
-               include_parent_for_size=false)
+               include_head_for_size=false)
 
 Build a session for drive APIs. `workers` is a CLI-style host list.
 `setup!` / `pool!` / `sync!` / `collect!` accept a bare list
 (`user@host`). `go!` / `drive!` / `ride!` / `pipeline!` require `:N`
 on listed tokens (`1*user@host`). `drive` / `ride` local workers use
-`local_workers` (`--local-workers`). `go` local runs use `local_slots`
-(`--local-slots`), not placement tokens.
+`head_workers` (`--head-workers`). `go` head runs use `head_slots`
+(`--head-slots`), not placement tokens.
 
 `session.hosts` keeps remote SSH names only (for sync / collect).
 `session.tokens` keeps the original tokens (including `parent:N`).
@@ -40,13 +40,13 @@ API default `yes=true` skips confirm prompts.
 function DistSSHSession(;
         project::AbstractString = pwd(),
         workers::AbstractVector{<:AbstractString} = String[],
-        local_workers::Union{Nothing, Integer} = nothing,
+        head_workers::Union{Nothing, Integer} = nothing,
         remote::Union{Nothing, AbstractString} = nothing,
         hosts_file::Union{Nothing, AbstractString} = nothing,
         quiet::Bool = false,
         verbosity::Union{Nothing, Symbol} = nothing,
         yes::Bool = true,
-        include_parent_for_size::Bool = false,
+        include_head_for_size::Bool = false,
     )
     tokens = String[String(h) for h in workers]
     hf = if hosts_file !== nothing
@@ -57,14 +57,14 @@ function DistSSHSession(;
         ""
     end
     hf_path = isempty(hf) ? nothing : hf
-    lw = local_workers === nothing ? nothing : Int(local_workers)
+    lw = head_workers === nothing ? nothing : Int(head_workers)
     cli = CliSharedFlags(
         quiet = quiet,
         verbosity = verbosity,
         yes = yes,
         hosts_file = hf_path,
         hint_surface = :api,
-        local_workers = lw,
+        head_workers = lw,
     )
     tokens = String[String(h) for h in workers]
     if hf_path !== nothing
@@ -72,8 +72,8 @@ function DistSSHSession(;
             push!(tokens, line)
         end
     end
-    parsed = parse_worker_tokens(tokens; local_workers = lw)
-    include_parent = include_parent_for_size || parsed.parent_workers > 0
+    parsed = parse_worker_tokens(tokens; head_workers = lw)
+    include_parent = include_head_for_size || parsed.head_workers > 0
     proj = canonical_local_path(project)
     rr = remote === nothing ? nothing : String(strip(String(remote)))
     rr !== nothing && isempty(rr) && (rr = nothing)

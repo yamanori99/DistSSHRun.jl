@@ -212,6 +212,34 @@ using Test
     end
 
     @testset "juliaup align" begin
+        function _fake_head_juliaup_env()
+            d = mktempdir()
+            ju = joinpath(d, "juliaup")
+            jl = joinpath(d, "julia")
+            write(
+                ju,
+                """
+                #!/bin/sh
+                case "\$1" in
+                  --version) echo 'Juliaup 1.22.7'; exit 0 ;;
+                  add|update|default) exit 0 ;;
+                  status) echo ok; exit 0 ;;
+                  *) exit 1 ;;
+                esac
+                """,
+            )
+            write(
+                jl,
+                """
+                #!/bin/sh
+                echo "julia version $(VERSION.major).$(VERSION.minor).$(VERSION.patch)"
+                """,
+            )
+            chmod(ju, 0o755)
+            chmod(jl, 0o755)
+            return Dict{String, String}("DISTSSH_TEST_LOCAL_JULIAUP" => ju)
+        end
+        head_ju = _fake_head_juliaup_env()
         _with_fake_remotes() do _
             _with_tempdir() do proj
                 write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
@@ -228,17 +256,14 @@ using Test
                     "DISTSSH_TEST_JULIA_VERSION" => "julia version $(VERSION)",
                     "DISTSSH_TEST_UNAME" => "Linux",
                 )
-                withenv(ver_env...) do
+                withenv(merge(ver_env, head_ju)...) do
                     up = DistSSHRun.setup!(session, :juliaup)
                     @test up.ok && !up.cancelled
                     @test length(up.hosts) == 2
                     @test all(h -> h.ok, up.hosts)
                     @test any(h -> h.host == host, up.hosts)
                 end
-                withenv(
-                    ver_env...,
-                    "DISTSSH_TEST_JULIAUP_ALREADY" => "1",
-                ) do
+                withenv(merge(ver_env, head_ju, Dict("DISTSSH_TEST_JULIAUP_ALREADY" => "1"))...) do
                     empty!(DistSSHRun.DistSSHBase._DETECT_JULIA_PATH_CACHE)
                     # `quiet=true` would re-pin `:quiet` in `apply_session_env!`
                     # and swallow the `:progress` already-on line.
@@ -263,7 +288,7 @@ using Test
                     @test !bad.ok
                 end
                 ssh_log = joinpath(proj, "ssh.log")
-                withenv(ver_env..., "DISTSSH_TEST_SSH_LOG" => ssh_log) do
+                withenv(merge(ver_env, head_ju, Dict("DISTSSH_TEST_SSH_LOG" => ssh_log))...) do
                     empty!(DistSSHRun.DistSSHBase._DETECT_JULIA_PATH_CACHE)
                     upd = DistSSHRun.setup!(session, :juliaup_update)
                     @test upd.ok && !upd.cancelled

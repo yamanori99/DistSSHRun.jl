@@ -196,8 +196,8 @@ function print_run_job_dry_plan!(
         hosts::AbstractVector{<:AbstractString},
         worker_tokens::AbstractVector{<:AbstractString},
         project::AbstractString,
-        local_workers::Union{Nothing, Integer} = nothing,
-        local_slots::Union{Nothing, Integer} = nothing,
+        head_workers::Union{Nothing, Integer} = nothing,
+        head_slots::Union{Nothing, Integer} = nothing,
         hosts_source::Union{Nothing, Symbol} = nothing,
         go_implicit_no_hosts::Bool = false,
     )
@@ -210,17 +210,17 @@ function print_run_job_dry_plan!(
     println(io, "hosts = ", repr(collect(String, hosts)))
     println(io, "placement = ", repr(collect(String, worker_tokens)))
     if cfg.command === :go
-        n = local_slots === nothing ? 0 : Int(local_slots)
-        println(io, "local_slots = $n")
+        n = head_slots === nothing ? 0 : Int(head_slots)
+        println(io, "head_slots = $n")
         if go_implicit_no_hosts
-            println(io, "local = ", repr(format_kit_go_implicit_local_slot()))
+            println(io, "head = ", repr(format_kit_go_implicit_head_slot()))
         elseif n > 0
-            println(io, "local = ", repr(format_kit_local_placement(n, "slots")))
+            println(io, "head = ", repr(format_kit_head_placement(n, "slots")))
         end
     else
-        n = local_workers === nothing ? 0 : Int(local_workers)
-        println(io, "local_workers = $n")
-        n > 0 && println(io, "local = ", repr(format_kit_local_placement(n, "workers")))
+        n = head_workers === nothing ? 0 : Int(head_workers)
+        println(io, "head_workers = $n")
+        n > 0 && println(io, "head = ", repr(format_kit_head_placement(n, "workers")))
     end
     for row in options_for_command(cfg.command)
         row.unsafe || continue
@@ -292,15 +292,15 @@ function finish_run_job_diagnostics!(
         print_run_job_config!(stdout, cfg)
     end
     go_ls, go_implicit = if command === :go
-        resolve_go_local_slots(hosts_vec, cli.local_slots)
+        resolve_go_head_slots(hosts_vec, cli.head_slots)
     else
         (0, false)
     end
     if cfg.dry_run.value
-        resolved_workers = if command === :drive && hasproperty(parsed, :parent_workers)
-            Int(getproperty(parsed, :parent_workers))
+        resolved_workers = if command === :drive && hasproperty(parsed, :head_workers)
+            Int(getproperty(parsed, :head_workers))
         elseif command === :ride || command === :drive
-            something(cli.local_workers, 0)
+            something(cli.head_workers, 0)
         else
             nothing
         end
@@ -310,8 +310,8 @@ function finish_run_job_diagnostics!(
             hosts = hosts,
             worker_tokens = worker_tokens,
             project = project,
-            local_workers = command === :go ? nothing : resolved_workers,
-            local_slots = command === :go ? go_ls : nothing,
+            head_workers = command === :go ? nothing : resolved_workers,
+            head_slots = command === :go ? go_ls : nothing,
             hosts_source = hosts_source,
             go_implicit_no_hosts = go_implicit,
         )

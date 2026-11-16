@@ -113,12 +113,12 @@ end
 """
 Build execution slots from host tokens.
 
-- Default: no slots unless `--local-slots N` and/or `N*host` tokens
-- `--local-slots N` → N local subprocess slots (directory labels `<hostname>`, `<hostname>-2`, …)
+- Default: no slots unless `--head-slots N` and/or `N*host` tokens
+- `--head-slots N` → N local subprocess slots (directory labels `<hostname>`, `<hostname>-2`, …)
 - `N*host` → N SSH slots per token (`NAME-1` … when N>1 on one host)
 - bare host without `N*` → error (except `--repeat`: uncapped)
 - `total=N` (`--repeat N`): N independent runs, round-robin across listed
-  hosts. `--local-slots` / `N*host` set per-host caps when listed.
+  hosts. `--head-slots` / `N*host` set per-host caps when listed.
 """
 function _go_merge_repeat_cap(
         a::Union{Nothing, Int},
@@ -138,15 +138,15 @@ end
 
 function _go_local_slot_count(
         host_tokens::AbstractVector{<:AbstractString},
-        local_slots::Union{Nothing, Integer},
+        head_slots::Union{Nothing, Integer},
     )::Int
-    ls, _ = resolve_go_local_slots(host_tokens, local_slots)
+    ls, _ = resolve_go_head_slots(host_tokens, head_slots)
     return ls
 end
 
 """Sanitized hostname for local go slot directory names."""
 function _go_local_slot_label_base()::String
-    return _go_sanitize_label(kit_local_host_label())
+    return _go_sanitize_label(kit_head_host_label())
 end
 
 function _go_parent_slot_labels(parent_count::Int)::Vector{String}
@@ -175,20 +175,20 @@ end
 
 function _go_repeat_pool(
         host_tokens::AbstractVector{<:AbstractString};
-        local_slots::Union{Nothing, Integer} = nothing,
+        head_slots::Union{Nothing, Integer} = nothing,
     )::Vector{GoRepeatHost}
     order = Tuple{Symbol, String}[]
     caps = Dict{Tuple{Symbol, String}, Union{Nothing, Int}}()
     local_name = _go_local_slot_label_base()
     parent_key = (:parent, local_name)
     if isempty(host_tokens)
-        cap, _ = resolve_go_local_slots(host_tokens, local_slots)
+        cap, _ = resolve_go_head_slots(host_tokens, head_slots)
         cap == 0 && return GoRepeatHost[]
         return [GoRepeatHost(:parent, local_name, cap)]
     end
-    if local_slots !== nothing
-        lw = Int(local_slots)
-        lw < 0 && throw(ArgumentError("--local-slots must be >= 0, got $lw"))
+    if head_slots !== nothing
+        lw = Int(head_slots)
+        lw < 0 && throw(ArgumentError("--head-slots must be >= 0, got $lw"))
         if lw > 0
             caps[parent_key] = lw
             push!(order, parent_key)
@@ -197,7 +197,7 @@ function _go_repeat_pool(
     for raw in host_tokens
         p = parse_placement_token(String(raw))
         p.role === :parent &&
-            throw(ArgumentError("$(repr(raw)): use --local-slots for local runs, not tokens"))
+            throw(ArgumentError("$(repr(raw)): use --head-slots for local runs, not tokens"))
         key = (p.role, p.name)
         cap = findfirst('*', String(raw)) === nothing ? nothing : p.n
         something(cap, 1) < 1 &&
@@ -241,12 +241,12 @@ end
 function _go_plan_slots(
         host_tokens::AbstractVector{<:AbstractString};
         total::Union{Nothing, Integer} = nothing,
-        local_slots::Union{Nothing, Integer} = nothing,
+        head_slots::Union{Nothing, Integer} = nothing,
     )::Vector{GoSlot}
     if total !== nothing
         n = Int(total)
         (total isa Bool || n < 1) && throw(ArgumentError("go repeat must be >= 1, got $total"))
-        pool = _go_repeat_pool(host_tokens; local_slots = local_slots)
+        pool = _go_repeat_pool(host_tokens; head_slots = head_slots)
         isempty(pool) && throw(ArgumentError(zero_placement_usage_error(:go; surface = :api)))
         assigned = zeros(Int, length(pool))
         start = 1
@@ -265,13 +265,13 @@ function _go_plan_slots(
             end
             placed || throw(
                 ArgumentError(
-                    "repeat $n exceeds per-host caps (`--local-slots` / `N*host`)",
+                    "repeat $n exceeds per-host caps (`--head-slots` / `N*host`)",
                 )
             )
         end
         return _go_slots_from_repeat(pool, assigned)
     end
-    parent_count = _go_local_slot_count(host_tokens, local_slots)
+    parent_count = _go_local_slot_count(host_tokens, head_slots)
     parent_label_base = _go_local_slot_label_base()
     remote_runs = Vector{String}()
     for raw in host_tokens
@@ -939,8 +939,8 @@ function _go_print_run_header!(
     writeln_field("Slots", string(length(slots)))
     for s in slots
         where = if s.kind === :parent
-            implicit_no_hosts ? format_kit_go_implicit_local_slot() :
-                format_kit_local_placement(1, "slots")
+            implicit_no_hosts ? format_kit_go_implicit_head_slot() :
+                format_kit_head_placement(1, "slots")
         else
             String(something(s.host, s.label))
         end
@@ -1033,12 +1033,12 @@ When `workers` is empty and `hosts_file` is omitted, `DISTSSH_HOSTS_FILE`
 is still read (API `go!("job.jl")`). Non-empty `workers` (CLI
 [`host_tokens`](@ref)) does not re-read that ENV.
 
-`local_slots` (CLI `--local-slots N`) adds N local subprocess runs on this machine.
+`head_slots` (CLI `--head-slots N`) adds N local subprocess runs on this machine.
 `N*host` tokens add SSH full-script runs. Together they start in one batch.
 `repeat=N` (CLI `--repeat N`) is the total number of those runs, spread
 round-robin across listed hosts and local slots.
 Without `repeat`, every host token needs an explicit `N*` count and at least one
-slot must be configured (`local_slots` and/or remotes).
+slot must be configured (`head_slots` and/or remotes).
 `path_anchor` shortens displayed paths (CLI passes kit project root).
 """
 function go!(
@@ -1065,7 +1065,7 @@ function go!(
         sync::Union{Symbol, Bool, Nothing} = nothing,
         allow_external_symlinks::Bool = false,
         allow_mismatch = nothing,
-        local_slots::Union{Nothing, Integer} = nothing,
+        head_slots::Union{Nothing, Integer} = nothing,
     )::GoResult
     _reject_removed_allow_mismatch!(allow_mismatch)
     _reject_run_transfer_kw!("go!", sync; surface = hint_surface)
@@ -1122,7 +1122,7 @@ function go!(
                 repeat,
                 inherited_run,
                 snap_arg,
-                local_slots,
+                head_slots,
             )
         end
     finally
@@ -1150,7 +1150,7 @@ function _go_run!(
         repeat,
         inherited_run::Bool,
         snap_arg::Union{Nothing, String} = nothing,
-        local_slots::Union{Nothing, Integer} = nothing,
+        head_slots::Union{Nothing, Integer} = nothing,
     )
     anchor = something(path_anchor, proj)
 
@@ -1159,7 +1159,7 @@ function _go_run!(
     # CLI / [`host_tokens`](@ref) already merged `--hosts-file` / ENV into
     # `workers`. Re-reading `DISTSSH_HOSTS_FILE` would duplicate slots.
     # API `go!("job.jl")` with empty `workers` still honors the ENV file.
-    if hf === nothing && isempty(tokens) && local_slots === nothing
+    if hf === nothing && isempty(tokens) && head_slots === nothing
         env_hf = strip(get(ENV, "DISTSSH_HOSTS_FILE", ""))
         !isempty(env_hf) && (hf = env_hf)
     end
@@ -1173,10 +1173,10 @@ function _go_run!(
             tokens;
             command = :go,
             surface = hint_surface,
-            local_slots = local_slots,
+            head_slots = head_slots,
         )
     end
-    slots = _go_plan_slots(tokens; total = repeat, local_slots = local_slots)
+    slots = _go_plan_slots(tokens; total = repeat, head_slots = head_slots)
     place = placement_tokens_from_go_slots(slots)
     if output_dir !== nothing && collect_spec isa AbstractString
         throw(
@@ -1250,7 +1250,7 @@ function _go_run!(
         first_fail_run = Ref{Union{Nothing, DriveResult}}(nothing)
         last_collect = Ref{Union{Nothing, CollectResult}}(nothing)
 
-        _, implicit_no_hosts = resolve_go_local_slots(tokens, local_slots)
+        _, implicit_no_hosts = resolve_go_head_slots(tokens, head_slots)
         _go_print_run_header!(
             original_args, script_path, args, slots, proj, anchor;
             implicit_no_hosts = implicit_no_hosts,

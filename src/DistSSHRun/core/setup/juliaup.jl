@@ -3,7 +3,7 @@
 
 """User-facing host label for juliaup progress and status lines."""
 function _juliaup_progress_label(host::AbstractString)::String
-    return is_parent_host_name(host) ? kit_local_host_label() : String(host)
+    return is_parent_host_name(host) ? kit_head_host_label() : String(host)
 end
 
 """Print Fix lines for missing / mismatched remote Julia (check output)."""

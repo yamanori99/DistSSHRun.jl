@@ -11,41 +11,41 @@ end
 
 @testset "drive API" begin
     @testset "parse_worker_tokens" begin
-        p = DistSSHRun.parse_worker_tokens(["4*host-a", "host-b"]; local_workers = 2)
-        @test p.parent_workers == 2
+        p = DistSSHRun.parse_worker_tokens(["4*host-a", "host-b"]; head_workers = 2)
+        @test p.head_workers == 2
         @test p.child_workers == Dict("host-a" => 4, "host-b" => 1)
         @test p.child_auto == String[]
         @test p.child_hosts == ["host-a", "host-b"]
         @test DistSSHRun.worker_tokens_fully_specified(p)
 
-        fixed = DistSSHRun.parse_worker_tokens(["1*h1"]; local_workers = 2)
+        fixed = DistSSHRun.parse_worker_tokens(["1*h1"]; head_workers = 2)
         @test DistSSHRun.worker_tokens_fully_specified(fixed)
-        let plan = DistSSHRun.worker_plan_from_tokens(["1*h1"]; local_workers = 2)
-            @test plan.parent_workers == 2
+        let plan = DistSSHRun.worker_plan_from_tokens(["1*h1"]; head_workers = 2)
+            @test plan.head_workers == 2
             @test plan.child_workers == Dict("h1" => 1)
         end
-        @test DistSSHRun.worker_plan_from_tokens(["h1"]; local_workers = 0).child_workers ==
+        @test DistSSHRun.worker_plan_from_tokens(["h1"]; head_workers = 0).child_workers ==
             Dict("h1" => 1)
         let plan = DistSSHRun.worker_plan_from_tokens(["h1"])
-            @test plan.parent_workers == 0
+            @test plan.head_workers == 0
             @test plan.child_workers == Dict("h1" => 1)
         end
 
         @test_throws ArgumentError DistSSHRun.parse_worker_tokens(["parent:1"])
 
         auto = DistSSHRun.parse_worker_tokens(["3*h1"])
-        @test auto.parent_workers == 0
+        @test auto.head_workers == 0
         @test auto.child_workers == Dict("h1" => 3)
         @test DistSSHRun.child_hosts_from_tokens(["h1", "4*h2"]) == ["h1", "h2"]
         @test DistSSHRun.require_counted_placement_tokens(
-            ["host"]; command = :drive, local_workers = 0,
+            ["host"]; command = :drive, head_workers = 0,
         ) === nothing
         @test DistSSHRun.require_counted_placement_tokens(
-            ["1*host"]; command = :drive, local_workers = 0,
+            ["1*host"]; command = :drive, head_workers = 0,
         ) === nothing
 
         let kw = DistSSHRun.ParsedWorkerTokens(;
-                parent_workers = 2,
+                head_workers = 2,
                 child_workers = Dict("h1" => 0x03),
                 child_hosts = ["h1"],
                 tokens = ["3*h1"],
@@ -55,8 +55,8 @@ end
             @test kw.child_auto == String[]
         end
 
-        plan = DistSSHRun.worker_plan_from_tokens(String[]; local_workers = 2)
-        @test plan.parent_workers == 2
+        plan = DistSSHRun.worker_plan_from_tokens(String[]; head_workers = 2)
+        @test plan.head_workers == 2
         @test isempty(plan.child_workers)
     end
 
@@ -197,14 +197,14 @@ end
                 project = tmp,
                 workers = ["1*h1"],
                 remote = "/remote/App.jl",
-                include_parent_for_size = true,
+                include_head_for_size = true,
             )
             @test DistSSHRun.session_remote_root(session) == "/remote/App.jl"
             all_h, remotes = DistSSHRun.session_size_hosts(session)
             @test all_h == ["parent", "h1"]
             @test remotes == ["h1"]
             remote_only = DistSSHRun.DistSSHSession(
-                project = tmp, workers = ["1*h1"], local_workers = 0,
+                project = tmp, workers = ["1*h1"], head_workers = 0,
             )
             a2, r2 = DistSSHRun.session_size_hosts(remote_only)
             @test a2 == ["h1"]
@@ -235,7 +235,7 @@ end
 
         local_cfg = DistSSHRun.PipelineConfig(
             driver = "job.jl",
-            workers = String[], local_workers = 2,
+            workers = String[], head_workers = 2,
             collect = false,
         )
         local_session = DistSSHRun.kit_session_from_config(local_cfg)
@@ -363,7 +363,7 @@ end
             @test occursin("sync=:ship_tree was removed", err_ship_sync.msg)
 
             err_drive_ss = try
-                DistSSHRun.drive!(script, String[]; local_workers = 1, sync_script = true, yes = true)
+                DistSSHRun.drive!(script, String[]; head_workers = 1, sync_script = true, yes = true)
                 nothing
             catch e
                 e
@@ -376,7 +376,7 @@ end
     @testset "sync! refusals" begin
         _with_tempdir() do tmp
             local_only = DistSSHRun.DistSSHSession(
-                project = tmp, workers = String[], local_workers = 2, quiet = true,
+                project = tmp, workers = String[], head_workers = 2, quiet = true,
             )
             remote = DistSSHRun.DistSSHSession(project = tmp, workers = ["h1"], quiet = true)
             with_kit_verbosity(:progress) do
@@ -418,7 +418,7 @@ end
     @testset "instantiate! requires SSH hosts" begin
         _with_tempdir() do tmp
             session = DistSSHRun.DistSSHSession(
-                project = tmp, workers = String[], local_workers = 2, quiet = true,
+                project = tmp, workers = String[], head_workers = 2, quiet = true,
             )
             with_kit_verbosity(:progress) do
                 @test_throws ArgumentError DistSSHRun.instantiate!(session)
@@ -429,7 +429,7 @@ end
     @testset "collect! requires hosts" begin
         _with_tempdir() do tmp
             session = DistSSHRun.DistSSHSession(
-                project = tmp, workers = String[], local_workers = 2, quiet = true,
+                project = tmp, workers = String[], head_workers = 2, quiet = true,
             )
             err = try
                 with_kit_verbosity(:progress) do
@@ -635,14 +635,14 @@ end
         end
         let hosts_file = _sample_hosts_file()
             withenv("DISTSSH_HOSTS_FILE" => hosts_file) do
-                s = DistSSHRun.DistSSHSession(workers = String[], local_workers = 1)
-                @test s.cli_session.local_workers == 1
+                s = DistSSHRun.DistSSHSession(workers = String[], head_workers = 1)
+                @test s.cli_session.head_workers == 1
                 @test s.tokens == ["host-a", "4*host-b"]
                 @test DistSSHRun.worker_plan_from_tokens(
-                    s.tokens; local_workers = s.cli_session.local_workers,
-                ).parent_workers == 1
+                    s.tokens; head_workers = s.cli_session.head_workers,
+                ).head_workers == 1
                 empty = DistSSHRun.DistSSHSession(workers = String[])
-                @test empty.cli_session.local_workers === nothing
+                @test empty.cli_session.head_workers === nothing
                 @test empty.tokens == ["host-a", "4*host-b"]
             end
         end
@@ -1105,7 +1105,7 @@ end
                 mktemp() do err_path, err_io
                     inner = redirect_stderr(err_io) do
                         DistSSHRun.drive!(
-                            script, String[]; local_workers = 1,
+                            script, String[]; head_workers = 1,
                             project = app,
                             run_id = "20260101T000000Z-aaaaaa",
                             yes = true,

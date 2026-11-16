@@ -21,7 +21,7 @@ using Test
                         redirect_stderr(err_io) do
                             DistSSHRun.execute!(
                                 :drive,
-                                script, String[]; local_workers = 2,
+                                script, String[]; head_workers = 2,
                                 project = proj,
                                 verbosity = :verbose,
                                 yes = true,
@@ -63,7 +63,7 @@ end
                 _, kp = _capture_detached_env_log() do
                     DistSSHRun.execute!(
                         :drive,
-                        script, String[]; local_workers = 2,
+                        script, String[]; head_workers = 2,
                         detached = true,
                         project = proj,
                         verbosity = :verbose,
@@ -107,7 +107,7 @@ end
                 _, kp = _capture_detached_env_log() do
                     DistSSHRun.execute!(
                         :drive,
-                        script, String[]; local_workers = 1,
+                        script, String[]; head_workers = 1,
                         detached = true,
                         project = proj,
                         args = ["--out", dest],

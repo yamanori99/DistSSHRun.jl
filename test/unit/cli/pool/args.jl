@@ -6,7 +6,6 @@ using Test
     @testset "parse_pool_args" begin
         @test_throws ArgumentError parse_pool_args(["parent", "host1", "host2"])
         let r = parse_pool_args(["local", "host1"])
-            @test !r.include_parent
             @test r.hosts == ["local", "host1"]
         end
         @test_throws ArgumentError parse_pool_args(["--parent", "host1"])

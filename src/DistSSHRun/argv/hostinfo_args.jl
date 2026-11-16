@@ -48,15 +48,15 @@ function show_hostinfo_usage(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  $(cli_m_project()) hostinfo [parent] [NAME...]",
-        "  hostinfo parent host1 host2",
+        "  $(cli_m_project()) hostinfo [NAME...]",
+        "  hostinfo host1 host2",
     )
     print_help_blank(io)
     print_help_section("Options"; io = io)
     print_help_lines(
         io,
         "  --julia PATH        remote Julia (default: auto-detect)",
-        "  --hosts CSV         parent / NAME[:N] (:N stripped)",
+        "  --hosts CSV         SSH host names (`N*host` counts stripped)",
         "  --hosts-file PATH   same, one token per line",
         "  $(KIT_QUIET_FLAG_HELP)",
         "  $(KIT_PROGRESS_FLAG_HELP)",
@@ -113,8 +113,11 @@ function parse_hostinfo_args(args::Vector{String})
         elseif arg == "--parenthost" || arg == "--masterhost" || arg == "--parent"
             throw(
                 ArgumentError(
-                    "hostinfo: pass the token `parent` (e.g. hostinfo parent host1), not `--parenthost`.",
-                )
+                    join_explained_message(
+                        "hostinfo: $(repr(arg)) was removed",
+                        "The head machine is always listed first; name SSH hosts only.",
+                    ),
+                ),
             )
         elseif arg == "--probe" || arg == "--gb-per-worker" || arg == "--mem-headroom" ||
                 arg == "--parent-gb" || arg == "--master-gb"
@@ -122,12 +125,9 @@ function parse_hostinfo_args(args::Vector{String})
         elseif arg == "--julia"
             julia = cli_take_value!(c, arg)
         elseif !startswith(arg, "-")
-            if is_parent_host_name(String(arg))
-                include_parent = true
-            else
-                let p = parse_placement_token(arg)
-                    push!(hosts, p.name)
-                end
+            DistSSHBase.throw_removed_parent_placement_token!("hostinfo", arg)
+            let p = parse_placement_token(arg)
+                push!(hosts, p.name)
             end
             cli_consume!(c)
         else
@@ -136,14 +136,16 @@ function parse_hostinfo_args(args::Vector{String})
     end
 
     append_kit_host_sources!(hosts, cli_session; keep_counts = false, roles = true)
-    include_parent = _absorb_parent_hosts!(hosts, include_parent)
+    for h in hosts
+        DistSSHBase.throw_removed_parent_placement_token!("hostinfo", h)
+    end
     apply_shared_cli_flags!(cli_session)
 
     return _hostinfo_parsed(;
         show_help = false,
         show_version = cli_session.show_version,
         cli_session = cli_session,
-        include_parent = include_parent,
+        include_parent = true,
         hosts = hosts,
         julia = julia,
     )
