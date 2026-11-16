@@ -8,6 +8,7 @@ authors = ["Yamamoto, Takanori <takanori.yamamoto.99@gmail.com>", "Ampuku, Honok
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 DistSSHBase = "f0a69307-14e5-4272-8c28-20680d05bac8"
 GitIgnore = "a0010394-fc0d-43eb-a3e0-33caa976912f"
+SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Tar = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
 
@@ -18,6 +19,7 @@ DistSSHBase = {path = "../DistSSHBase"}
 Dates = "1.11"
 DistSSHBase = "=0.2.0"
 GitIgnore = "0.1.1"
+SHA = "0.2, 1"
 TOML = "1.0.3"
 Tar = "1.10"
 julia = "1.13"

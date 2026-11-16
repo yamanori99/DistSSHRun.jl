@@ -99,6 +99,13 @@ function remote_extract_expr()::String
     Tar.extract(stdin, dest)
     $(_WALK_SOURCE)
     distsshship_assert_tree!(dest, allow)
+    for (dir, _, files) in walkdir(dest)
+        for name in files
+            path = joinpath(dir, name)
+            isfile(path) && !islink(path) || continue
+            chmod(path, 0o444)
+        end
+    end
     # `Tar.tree_hash` reads a tar, not a directory. Rebuild one so the hash
     # matches the tar `snapshot` recorded (`git-sha1` ignores mtime and order).
     buf = IOBuffer()

@@ -66,6 +66,8 @@ function build_deploy_record(
         run_id::Union{Nothing, AbstractString} = nothing,
         content_tree_hash::Union{Nothing, AbstractString} = nothing,
         project_rel::Union{Nothing, AbstractString} = nothing,
+        content_file_digests::Union{Nothing, AbstractVector} = nothing,
+        forced_ignore_ship::Union{Nothing, AbstractVector} = nothing,
     )::Dict{String, Any}
     data = Dict{String, Any}(
         "schema" => _DEPLOY_RECORD_SCHEMA,
@@ -95,7 +97,34 @@ function build_deploy_record(
     rel = something(project_rel, ".")
     rel = _ship_project_rel(String(rel))
     rel == "." || (data["project_rel"] = rel)
+    if content_file_digests isa AbstractVector && !isempty(content_file_digests)
+        data["content_file_digests"] = content_file_digests
+    end
+    if forced_ignore_ship isa AbstractVector && !isempty(forced_ignore_ship)
+        data["forced_ignore_ship"] = String[string(p) for p in forced_ignore_ship]
+    end
+    prefs = _deploy_record_preferences_hashes(project)
+    isempty(prefs) || (data["preferences"] = prefs)
     return data
+end
+
+function _deploy_record_preferences_hashes(project::AbstractString)::Vector{Dict{String, Any}}
+    pf = DistSSHBase._located_project_file(project)
+    pf isa String || return Dict{String, Any}[]
+    dir = dirname(String(pf))
+    rows = Dict{String, Any}[]
+    for name in ("LocalPreferences.toml", "JuliaLocalPreferences.toml")
+        path = joinpath(dir, name)
+        isfile(path) || continue
+        push!(
+            rows,
+            Dict{String, Any}(
+                "path" => name,
+                "sha256" => lowercase(file_sha256(path)),
+            ),
+        )
+    end
+    return rows
 end
 
 function _parse_deploy_record_body(body::AbstractString)::Union{Nothing, Dict{String, Any}}
@@ -334,6 +363,8 @@ function write_deploy_record_to_hosts!(
         run_id::Union{Nothing, AbstractString} = nothing,
         content_tree_hash::Union{Nothing, AbstractString} = nothing,
         project_rel::Union{Nothing, AbstractString} = nothing,
+        content_file_digests::Union{Nothing, AbstractVector} = nothing,
+        forced_ignore_ship::Union{Nothing, AbstractVector} = nothing,
     )
     isempty(hosts) && return nothing
     data = build_deploy_record(
@@ -345,6 +376,8 @@ function write_deploy_record_to_hosts!(
         run_id = run_id,
         content_tree_hash = content_tree_hash,
         project_rel = project_rel,
+        content_file_digests = content_file_digests,
+        forced_ignore_ship = forced_ignore_ship,
     )
     ok_hosts = String[]
     fail_hosts = String[]
@@ -542,6 +575,9 @@ function _deploy_record_for_provenance(rec::Union{Nothing, AbstractDict})::Union
             "run_id",
             "content_tree_hash",
             "project_rel",
+            "content_file_digests",
+            "forced_ignore_ship",
+            "preferences",
         )
         haskey(rec, k) || continue
         out[k] = rec[k]
@@ -598,6 +634,8 @@ function commit_deploy_record_after_ship!(
         run_id::AbstractString,
         content_tree_hash::AbstractString;
         project_rel::AbstractString = ".",
+        content_file_digests::Union{Nothing, AbstractVector} = nothing,
+        forced_ignore_ship::Union{Nothing, AbstractVector} = nothing,
     )
     return write_deploy_record_to_hosts!(
         hosts,
@@ -608,6 +646,8 @@ function commit_deploy_record_after_ship!(
         run_id = run_id,
         content_tree_hash = content_tree_hash,
         project_rel = project_rel,
+        content_file_digests = content_file_digests,
+        forced_ignore_ship = forced_ignore_ship,
     )
 end
 

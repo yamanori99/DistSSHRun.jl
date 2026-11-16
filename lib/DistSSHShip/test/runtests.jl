@@ -60,7 +60,7 @@ function _minimal_snapshot(project_rel::String)::DistSSHShip.Shipment
     files = 2
     return DistSSHShip.Shipment(
         bundle, tar_path, hash, bytes, files, src, src, project_rel,
-        String[], String[],
+        String[], String[], String[], Pair{String, String}[],
     )
 end
 
@@ -146,13 +146,17 @@ end
         end
     end
 
-    @testset "gitignored manifest is refused at pack" begin
+    @testset "gitignored manifest is forced into the pack" begin
         _tmp() do dir
             _project!(dir)
             write(joinpath(dir, ".gitignore"), "Manifest.toml\n")
-            @test_throws ArgumentError DistSSHShip.pack_tree(dir)
-            omit = String[]
-            @test_throws ArgumentError DistSSHShip.pack_entry_paths(dir; omit_project_rels = omit)
+            snap = DistSSHShip.pack_tree(dir)
+            try
+                @test "Manifest.toml" in DistSSHShip.pack_entry_paths(dir)
+                @test "Manifest.toml" in snap.forced_ignore_ship
+            finally
+                rm(snap.directory; force = true, recursive = true)
+            end
         end
     end
 
