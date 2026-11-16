@@ -559,6 +559,7 @@ function _add_local_drive_workers!(
         verify_project::Bool = true,
     )
     n < 1 && return nothing
+    isempty(_PLANNED_RANK_QUEUE) && reset_launch_rank_plan!(collect(1:n))
     flags = Cmd(worker_exeflag_strings(project; local_cpu = true, job_id = resolved_kit_job_id()))
     before = Set(workers())
     try

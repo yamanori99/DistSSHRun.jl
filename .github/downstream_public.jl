@@ -213,18 +213,24 @@ function _symbol_tuples!(ex, line::Base.RefValue{Int}, out::Dict{Symbol, Vector{
     if ex.head === :const && length(ex.args) == 1
         assign = ex.args[1]
         if assign isa Expr && assign.head === :(=) && length(assign.args) >= 2 &&
-                assign.args[1] isa Symbol && assign.args[2] isa Expr &&
-                assign.args[2].head === :tuple
+                assign.args[1] isa Symbol
             syms = Tuple{Symbol, Int}[]
             at = line[]
-            for arg in assign.args[2].args
-                if arg isa LineNumberNode
-                    at = arg.line
-                elseif arg isa QuoteNode && arg.value isa Symbol
-                    push!(syms, (arg.value::Symbol, at))
+            rhs = assign.args[2]
+            if rhs isa QuoteNode && rhs.value isa Symbol
+                push!(syms, (rhs.value::Symbol, at))
+            elseif rhs isa Expr && rhs.head === :tuple
+                for arg in rhs.args
+                    if arg isa LineNumberNode
+                        at = arg.line
+                    elseif arg isa QuoteNode && arg.value isa Symbol
+                        push!(syms, (arg.value::Symbol, at))
+                    end
                 end
+            elseif rhs isa Symbol
+                push!(syms, (rhs, at))
             end
-            out[assign.args[1]::Symbol] = syms
+            isempty(syms) || (out[assign.args[1]::Symbol] = syms)
         end
     end
     for arg in ex.args
