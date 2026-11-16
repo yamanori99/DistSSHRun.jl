@@ -1547,6 +1547,7 @@ end
                                 remote = "/home/distsshkit/app",
                                 quiet = true
                             )
+                            session.cli_session.yes = true
                             synced = DistSSHRun.setup!(session, :ship_tree)
                             @test synced isa DistSSHRun.SyncResult
                             @test synced.ok && !synced.cancelled
