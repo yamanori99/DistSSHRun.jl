@@ -20,17 +20,23 @@ using Test
         end
     end
 
-    let (code, out, err) = _doctor_capture(["--help"])
-        shown = out * err
+    let (code, help_out, help_err) = _doctor_capture(["--help"])
+        help = help_out * help_err
         @test code == 0
-        @test occursin("--deploy", shown)
-        @test occursin("doctor", shown)
+        @test occursin("--deploy", help)
+        @test occursin("doctor", help)
+        let (code2, bare_out, _) = _doctor_capture(String[])
+            @test code2 == 0
+            @test bare_out == help_out
+        end
     end
 
     let (code, out, err) = _doctor_capture(["host1"])
         shown = out * err
         @test code == 2
         @test occursin("doctor needs --deploy", shown)
+        @test occursin("doctor --deploy", shown)
+        @test occursin("--run-id ID", shown)
     end
 
     let (code, out, err) = _doctor_capture(["--not-a-flag", "host1"])

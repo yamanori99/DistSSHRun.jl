@@ -43,11 +43,17 @@ if !isdefined(@__MODULE__, :doctor_main)
             return Cint(0)
         end
 
+        if !opts.deploy && isempty(opts.hosts)
+            DistSSHRun.show_doctor_usage()
+            return Cint(0)
+        end
+
         if !opts.deploy
             DistSSHRun.print_err("Error: "; bold = true)
-            DistSSHRun.println_fatal("doctor needs --deploy in 0.2.0 (other groups ship in 0.2.x).")
+            DistSSHRun.println_fatal(
+                "doctor needs --deploy; use: $(DistSSHRun.cli_m()) doctor --deploy [--run-id ID] HOSTS",
+            )
             DistSSHRun.println_fatal()
-            DistSSHRun.show_doctor_usage()
             return Cint(2)
         end
 

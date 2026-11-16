@@ -11,6 +11,7 @@ function show_doctor_requirements(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
+        "  $(cli_m()) doctor",
         "  $(cli_m_project()) doctor --deploy host1 host2",
         "  $(cli_m_project()) doctor --deploy --run-id ID host1",
     )
