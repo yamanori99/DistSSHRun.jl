@@ -1187,7 +1187,7 @@ end
             @test result.ok
             @test result.exit_code == 0
             @test result.output_dir !== nothing
-            @test read(joinpath(result.output_dir, "parent", "args.txt"), String) == "8"
+            @test read(joinpath(result.output_dir, _go_local_slot_label(), "args.txt"), String) == "8"
         end
     end
 
@@ -1243,7 +1243,7 @@ end
                     @test result.exit_code == 0
                     @test result.output_dir == kp.output_dir
                     @test result.log_dir === nothing
-                    @test read(joinpath(result.output_dir, "parent", "args.txt"), String) == "8"
+                    @test read(joinpath(result.output_dir, _go_local_slot_label(), "args.txt"), String) == "8"
                     @test !isfile(pid_path)
                     @test !isfile(joinpath(result.output_dir, "kit.out"))
                     @test !isfile(joinpath(result.output_dir, "kit.err"))

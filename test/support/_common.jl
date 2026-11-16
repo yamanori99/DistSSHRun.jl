@@ -147,4 +147,13 @@ if !isdefined(Main, :_test_root)
         return Test.collect_test_logs(f; min_level = min_level)
     end
 
+    function _go_local_slot_label()::String
+        return DistSSHRun._go_local_slot_label_base()
+    end
+
+    function _go_local_slot_dir(i::Integer = 1)::String
+        base = _go_local_slot_label()
+        return i == 1 ? base : "$base-$i"
+    end
+
 end

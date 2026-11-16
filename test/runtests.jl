@@ -74,6 +74,7 @@ end
             _runtest_include("unit/DistSSHRun/messages/placement.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "messages", "placement.jl"))
             _runtest_include("unit/DistSSHRun/infra/remote.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "remote.jl"))
             _runtest_include("unit/DistSSHRun/infra/distributed.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "distributed.jl"))
+            _runtest_include("unit/DistSSHRun/infra/loaded_identity.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "loaded_identity.jl"))
             _runtest_include("unit/DistSSHRun/drive.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "drive.jl"))
             _runtest_include("unit/DistSSHRun/core/drive/collect_tree.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "drive", "collect_tree.jl"))
             _runtest_include("unit/DistSSHRun/core/drive/warn_newline.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "drive", "warn_newline.jl"))

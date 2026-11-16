@@ -37,7 +37,7 @@ using Test
         @test occursin("hostinfo", DistSSHBase.explain_no_hosts(; surface = :api, kind = :hostinfo))
         @test occursin("pool!", DistSSHBase.explain_no_hosts(; surface = :api, kind = :pool))
         @test occursin(
-            "local-workers",
+            "local-slots",
             DistSSHBase.explain_bare_placement_tokens(["parent"]; surface = :cli),
         )
     end
@@ -47,7 +47,7 @@ using Test
         @test occursin("--repo", DistSSHBase.explain_clone_repo_required(; surface = :cli))
         @test occursin("--repo", DistSSHBase.explain_clone_origin_missing(; surface = :cli))
         @test occursin("repo=", DistSSHBase.explain_clone_origin_missing(; surface = :api))
-        @test occursin("local-workers", DistSSHBase.explain_bare_placement_tokens(["parent"]; surface = :api))
+        @test occursin("local_slots=", DistSSHBase.explain_bare_placement_tokens(["parent"]; surface = :api))
         @test occursin("driver=", DistSSHBase.explain_pipeline_driver_missing(; surface = :api))
     end
 

@@ -26,8 +26,8 @@ using Test
         )
         wall = time() - t0
         @test result.ok
-        a = parse(Float64, read(joinpath(result.output_dir, "parent-1", "t0.txt"), String))
-        b = parse(Float64, read(joinpath(result.output_dir, "parent-2", "t0.txt"), String))
+        a = parse(Float64, read(joinpath(result.output_dir, _go_local_slot_dir(1), "t0.txt"), String))
+        b = parse(Float64, read(joinpath(result.output_dir, _go_local_slot_dir(2), "t0.txt"), String))
         @test abs(a - b) < 0.45  # sequential would be ~0.6s apart plus julia startup
         @test wall < 8.0
     end
@@ -56,8 +56,8 @@ end
         )
         wall = time() - t0
         @test result.ok
-        a = parse(Float64, read(joinpath(result.output_dir, "parent-1", "t0.txt"), String))
-        b = parse(Float64, read(joinpath(result.output_dir, "parent-2", "t0.txt"), String))
+        a = parse(Float64, read(joinpath(result.output_dir, _go_local_slot_dir(1), "t0.txt"), String))
+        b = parse(Float64, read(joinpath(result.output_dir, _go_local_slot_dir(2), "t0.txt"), String))
         @test abs(a - b) < 0.45
         @test wall < 8.0
     end
@@ -77,7 +77,7 @@ end
         )
         custom = joinpath(proj, "runs", "custom")
         result = DistSSHRun.go!(
-            script; local_workers = 1,
+            script; local_slots = 1,
             project = proj,
             output_dir = custom,
             quiet = true,
@@ -85,7 +85,7 @@ end
         )
         @test result.ok
         @test result.output_dir == DistSSHRun.canonical_local_path(custom)
-        @test isfile(joinpath(result.output_dir, "parent", "marker.txt"))
+        @test isfile(joinpath(result.output_dir, _go_local_slot_label(), "marker.txt"))
     end
 end
 
@@ -104,7 +104,7 @@ end
         )
         custom = joinpath(proj, "runs", "skip_collect")
         result = DistSSHRun.go!(
-            script; local_workers = 1,
+            script; local_slots = 1,
             project = proj,
             output_dir = custom,
             collect_spec = false,
@@ -113,6 +113,6 @@ end
         )
         @test result.ok
         @test result.output_dir == DistSSHRun.canonical_local_path(custom)
-        @test isfile(joinpath(result.output_dir, "parent", "marker.txt"))
+        @test isfile(joinpath(result.output_dir, _go_local_slot_label(), "marker.txt"))
     end
 end

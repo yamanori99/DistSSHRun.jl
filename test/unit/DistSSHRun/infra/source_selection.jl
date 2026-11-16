@@ -277,7 +277,7 @@ end
 
 @testset "go/drive --run-id argv" begin
     g = DistSSHRun.parse_go_args(
-        String["--run-id", _SNAP_ID_OLD, "--local-workers", "1", "job.jl"],
+        String["--run-id", _SNAP_ID_OLD, "--local-slots", "1", "job.jl"],
     )
     @test g.run_id == _SNAP_ID_OLD
     d = DistSSHRun.parse_drive_args(
@@ -286,7 +286,7 @@ end
     @test d.run_id == _SNAP_ID_NEW
     err_combo = try
         DistSSHRun.parse_go_args(
-            String["--ship-tree", "--run-id", _SNAP_ID_OLD, "--local-workers", "1", "job.jl"],
+            String["--ship-tree", "--run-id", _SNAP_ID_OLD, "--local-slots", "1", "job.jl"],
         )
         nothing
     catch e
@@ -296,7 +296,7 @@ end
     @test occursin("go: --ship-tree was removed", err_combo.msg)
     err_go_sync_flag = try
         DistSSHRun.parse_go_args(
-            String["--sync", "--run-id", _SNAP_ID_OLD, "--local-workers", "1", "job.jl"],
+            String["--sync", "--run-id", _SNAP_ID_OLD, "--local-slots", "1", "job.jl"],
         )
         nothing
     catch e
@@ -306,7 +306,7 @@ end
     @test occursin("go: --sync was removed", err_go_sync_flag.msg)
     err_git_combo = try
         DistSSHRun.parse_go_args(
-            String["--git-sync", "--run-id", _SNAP_ID_OLD, "--local-workers", "1", "job.jl"],
+            String["--git-sync", "--run-id", _SNAP_ID_OLD, "--local-slots", "1", "job.jl"],
         )
         nothing
     catch e
@@ -316,7 +316,7 @@ end
     @test occursin("--git-sync was removed", err_git_combo.msg)
     err_go_api = try
         DistSSHRun.go!(
-            "job.jl", String[]; local_workers = 1,
+            "job.jl", String[]; local_slots = 1,
             sync = :git_sync,
             run_id = _SNAP_ID_OLD,
             yes = true,

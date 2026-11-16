@@ -542,6 +542,7 @@ function _ride_add_workers!(
         isempty(added) || _ride_load_self_on_workers!()
         if isempty(child_hosts) && !isempty(added)
             verify_workers_match_job!(project)
+            assert_loaded_verified_worker_set!()
         end
         capture_worker_provenance!()
         return added, ssh_hosts

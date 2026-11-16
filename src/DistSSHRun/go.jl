@@ -114,7 +114,7 @@ end
 Build execution slots from host tokens.
 
 - Default: no slots unless `--local-slots N` and/or `N*host` tokens
-- `--local-slots N` → N local subprocess slots (directory labels `parent`, `parent-2`, …)
+- `--local-slots N` → N local subprocess slots (directory labels `<hostname>`, `<hostname>-2`, …)
 - `N*host` → N SSH slots per token (`NAME-1` … when N>1 on one host)
 - bare host without `N*` → error (except `--repeat`: uncapped)
 - `total=N` (`--repeat N`): N independent runs, round-robin across listed
@@ -144,9 +144,14 @@ function _go_local_slot_count(
     return ls
 end
 
+"""Sanitized hostname for local go slot directory names."""
+function _go_local_slot_label_base()::String
+    return _go_sanitize_label(kit_local_host_label())
+end
+
 function _go_parent_slot_labels(parent_count::Int)::Vector{String}
     parent_count == 0 && return String[]
-    base = PARENT_HOST_NAME
+    base = _go_local_slot_label_base()
     parent_count == 1 && return [base]
     return ["$base-$i" for i in 1:parent_count]
 end
@@ -174,11 +179,12 @@ function _go_repeat_pool(
     )::Vector{GoRepeatHost}
     order = Tuple{Symbol, String}[]
     caps = Dict{Tuple{Symbol, String}, Union{Nothing, Int}}()
-    parent_key = (:parent, PARENT_HOST_NAME)
+    local_name = _go_local_slot_label_base()
+    parent_key = (:parent, local_name)
     if isempty(host_tokens)
         cap, _ = resolve_go_local_slots(host_tokens, local_slots)
         cap == 0 && return GoRepeatHost[]
-        return [GoRepeatHost(:parent, PARENT_HOST_NAME, cap)]
+        return [GoRepeatHost(:parent, local_name, cap)]
     end
     if local_slots !== nothing
         lw = Int(local_slots)
@@ -266,7 +272,7 @@ function _go_plan_slots(
         return _go_slots_from_repeat(pool, assigned)
     end
     parent_count = _go_local_slot_count(host_tokens, local_slots)
-    parent_label_base = PARENT_HOST_NAME
+    parent_label_base = _go_local_slot_label_base()
     remote_runs = Vector{String}()
     for raw in host_tokens
         p = parse_placement_token(String(raw))
@@ -612,6 +618,8 @@ function _go_run_local_slot!(
     end
     loader = write_go_slot_loader(slot_dir)
     loader !== nothing && push!(extra_L, loader)
+    hs_loader = write_go_handshake_loader(slot_dir)
+    hs_loader !== nothing && push!(extra_L, hs_loader)
     argv = go_slot_julia_argv(
         julia_bin, project, script, script_args;
         local_cpu = true, extra_L = extra_L,
@@ -624,9 +632,8 @@ function _go_run_local_slot!(
     notice = launch_override_notice(PARENT_HOST_NAME, launch_override_names(ENV))
     (quiet || isempty(notice)) || writeln_both(notice)
     cmd = addenv(ignorestatus(Cmd(argv)), env_pairs...)
-    proc = open(log_path, "w") do log
-        return run(pipeline(cmd; stdout = log, stderr = log); wait = true)
-    end
+    site = "GoParent slot=$(basename(slot_dir))"
+    proc = run_go_slot_with_handshake(cmd, site, log_path)
     # Mirror script stdout in `:verbose` only (quiet/progress own the TTY).
     if !quiet && kit_output_detail() && isfile(log_path)
         lock(_GO_IO_LOCK) do
@@ -700,9 +707,11 @@ function _go_remote_slot_shell_inner(
     end
     kit_q = _remote_shell_path_word(joinpath(slot_rel, DistSSHBase.LOCAL_STATE_DIR))
     loader_q = _remote_shell_path_word(joinpath(slot_rel, DistSSHBase.LOCAL_STATE_DIR, _GO_SLOT_LOADER_NAME))
+    hs_q = _remote_shell_path_word(joinpath(slot_rel, DistSSHBase.LOCAL_STATE_DIR, _GO_HANDSHAKE_LOADER_NAME))
     # Quoted heredoc: the slot has no DistSSHRun, so the snapshot source travels in the command.
     write_loader = "cat > $loader_q << 'DISTSSH_PROVENANCE_SLOT'\n$(_GO_SLOT_LOADER_SRC)\nDISTSSH_PROVENANCE_SLOT\n"
-    prov_load = " -L $loader_q"
+    write_hs = "cat > $hs_q << 'DISTSSH_GO_HS'\n$(_GO_HANDSHAKE_LOADER_SRC)\nDISTSSH_GO_HS\n"
+    prov_load = " -L $loader_q -L $hs_q"
     return string(
         "cd $rr && mkdir -p $slot_q && mkdir -p $kit_q && ",
         "export DISTRIBUTED_OUTPUT_DIR=$slot_q && ",
@@ -710,8 +719,10 @@ function _go_remote_slot_shell_inner(
         job_export,
         job_mark,
         write_loader,
-        "$jb_launch$job_load$prov_load $rel_q$args_s >$log_q 2>&1; ",
-        "ec=\$?; echo \$ec > $exit_q; cat $log_q; exit \$ec",
+        write_hs,
+        "{ $jb_launch$job_load$prov_load $rel_q$args_s 2>&1; echo \$? > $exit_q; } | tee $log_q; ",
+        "ec=\$(sed -n '1p' $exit_q 2>/dev/null); ",
+        "case \"\$ec\" in ''|*[!0-9]*) ec=127;; esac; exit \$ec",
     )
 end
 
@@ -732,11 +743,11 @@ function _go_run_remote_slot!(
     inner = _go_remote_slot_shell_inner(
         remote_root, slot_rel, rel, script_args, julia_bin,
     )
-    cmd = ignorestatus(_ssh_cmd([ssh_opts()..., _ssh_host_args(String(host), inner)...]))
-    # Capture streams ourselves: piping to the parent's stdout can drop ssh exit codes.
-    buf = IOBuffer()
-    proc = run(pipeline(cmd; stdout = buf, stderr = buf); wait = true)
-    out = String(take!(buf))
+    cmd = ignorestatus(_host_sync_remote_shell_cmd(String(host), inner; forward_stdin = true))
+    site = "GoRemoteSlot host=$(String(host)) slot=$(basename(slot_dir))"
+    log_path = joinpath(slot_dir, "julia.stdout.log")
+    proc = run_go_slot_with_handshake(cmd, site, log_path)
+    out = isfile(log_path) ? read(log_path, String) : ""
     # Collect is skipped when the slot fails, so keep the captured log locally.
     log_path = joinpath(slot_dir, "julia.stdout.log")
     if !isempty(out) && !isfile(log_path)
