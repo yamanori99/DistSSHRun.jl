@@ -904,6 +904,9 @@ using Dates
                 """
             )
             _sync_test_project_manifest!(app)
+            snap_id = "20260101T000000Z-aaaaaa"
+            snap_env = DistSSHRun.resolve_pkg_env(app)
+            DistSSHRun.write_last_ship_record!(snap_env.env_dir, app, ["host1"], snap_id)
             script = joinpath(app, "job.jl")
             write(script, "println(\"SNAPSHOT_SIBLING_OK\")\n")
             plain = redirect_stdout(devnull) do
@@ -917,7 +920,7 @@ using Dates
                 DistSSHRun.go!(
                     script, String[]; head_slots = 1,
                     project = app,
-                    run_id = "20260101T000000Z-aaaaaa",
+                    run_id = snap_id,
                     quiet = true
                 )
             end
