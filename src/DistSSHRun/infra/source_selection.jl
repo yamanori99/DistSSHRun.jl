@@ -128,6 +128,45 @@ end
 
 const _LEGACY_SHIP_RECORD_NAME = "last-snapshot.toml"
 
+function _last_ship_record_legacy_filename_only_message(
+        legacy_path::AbstractString,
+        current_path::AbstractString,
+    )::String
+    return """
+    last-ship record: legacy file $(_LEGACY_SHIP_RECORD_NAME) at $(legacy_path); rename to $(_SHIP_RECORD_NAME):
+      mv $(repr(legacy_path)) $(repr(current_path))
+    Silent conversion is not supported."""
+end
+
+function _last_ship_record_both_filenames_message(
+        legacy_path::AbstractString,
+        current_path::AbstractString,
+    )::String
+    return """
+    last-ship record: both $(_SHIP_RECORD_NAME) and $(_LEGACY_SHIP_RECORD_NAME) exist under $(dirname(current_path)); remove the legacy file:
+      rm $(repr(legacy_path))
+    Use only $(_SHIP_RECORD_NAME); silent fallback is not supported."""
+end
+
+function _read_last_ship_record_in_base(
+        base::AbstractString,
+    )::Union{Nothing, Dict{String, Any}}
+    current = joinpath(String(base), _SHIP_RECORD_NAME)
+    legacy = joinpath(String(base), _LEGACY_SHIP_RECORD_NAME)
+    cur_exists = isfile(current)
+    leg_exists = isfile(legacy)
+    if leg_exists && !cur_exists
+        throw(
+            ArgumentError(_last_ship_record_legacy_filename_only_message(legacy, current)),
+        )
+    end
+    if leg_exists && cur_exists
+        throw(ArgumentError(_last_ship_record_both_filenames_message(legacy, current)))
+    end
+    cur_exists || return nothing
+    return _read_last_ship_record_at(current)
+end
+
 function _last_ship_record_snapshot_id_removed_message(
         val,
         path::AbstractString,
@@ -171,10 +210,8 @@ function read_last_ship_record(
             DistSSHBase.local_state_write_root(env_dir),
             DistSSHBase.resolve_local_state_dir(env_dir),
         )
-        for name in (_SHIP_RECORD_NAME, _LEGACY_SHIP_RECORD_NAME)
-            rec = _read_last_ship_record_at(joinpath(base, name))
-            rec !== nothing && return rec
-        end
+        rec = _read_last_ship_record_in_base(base)
+        rec !== nothing && return rec
     end
     return nothing
 end

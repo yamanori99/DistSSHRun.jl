@@ -130,7 +130,7 @@ end
         env = DistSSHRun.resolve_pkg_env(tmp)
         kit = joinpath(env.env_dir, ".distssh")
         mkpath(kit)
-        legacy_path = joinpath(kit, "last-snapshot.toml")
+        record_path = joinpath(kit, "last-ship.toml")
         legacy_body = Dict(
             "schema" => 1,
             "deploy_root" => "~/App/Legacy",
@@ -138,7 +138,7 @@ end
             "snapshot_id" => _SNAP_ID_OLD,
             "content_tree_hash" => _SNAP_HASH_OLD,
         )
-        write(legacy_path, sprint(TOML.print, legacy_body))
+        write(record_path, sprint(TOML.print, legacy_body))
         err = try
             DistSSHRun.read_last_ship_record(tmp)
             nothing
@@ -149,7 +149,74 @@ end
         msg = sprint(showerror, err)
         @test occursin("snapshot_id was removed", msg)
         @test occursin("last-ship.toml", msg)
-        @test occursin(legacy_path, msg)
+        @test occursin(record_path, msg)
+    end
+end
+
+@testset "last-ship record rejects legacy last-snapshot.toml filename only" begin
+    _with_tempdir() do tmp
+        _snap_project!(tmp)
+        env = DistSSHRun.resolve_pkg_env(tmp)
+        kit = joinpath(env.env_dir, ".distssh")
+        mkpath(kit)
+        legacy_path = joinpath(kit, "last-snapshot.toml")
+        current_path = joinpath(kit, "last-ship.toml")
+        write(
+            legacy_path,
+            sprint(
+                TOML.print,
+                Dict(
+                    "schema" => 1,
+                    "deploy_root" => "/deploy/a",
+                    "hosts" => ["h1"],
+                    "run_id" => _SNAP_ID_OLD,
+                ),
+            ),
+        )
+        err = try
+            DistSSHRun.read_last_ship_record(tmp)
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        msg = sprint(showerror, err)
+        @test occursin("last-snapshot.toml", msg)
+        @test occursin("rename to last-ship.toml", msg)
+        @test occursin("mv ", msg)
+        @test occursin(repr(legacy_path), msg)
+        @test occursin(repr(current_path), msg)
+        @test !isfile(current_path)
+    end
+end
+
+@testset "last-ship record rejects both convenience filenames" begin
+    _with_tempdir() do tmp
+        _snap_project!(tmp)
+        env = DistSSHRun.resolve_pkg_env(tmp)
+        kit = joinpath(env.env_dir, ".distssh")
+        mkpath(kit)
+        legacy_path = joinpath(kit, "last-snapshot.toml")
+        current_path = joinpath(kit, "last-ship.toml")
+        body = Dict(
+            "schema" => 1,
+            "deploy_root" => "/deploy/a",
+            "hosts" => ["h1"],
+            "run_id" => _SNAP_ID_OLD,
+        )
+        write(legacy_path, sprint(TOML.print, body))
+        write(current_path, sprint(TOML.print, merge(body, Dict("run_id" => _SNAP_ID_NEW))))
+        err = try
+            DistSSHRun.read_last_ship_record(tmp)
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        msg = sprint(showerror, err)
+        @test occursin("both last-ship.toml and last-snapshot.toml", msg)
+        @test occursin("rm ", msg)
+        @test occursin(repr(legacy_path), msg)
     end
 end
 
@@ -359,8 +426,9 @@ end
         env = DistSSHRun.resolve_pkg_env(proj)
         kit = joinpath(env.env_dir, ".distssh")
         mkpath(kit)
+        legacy_path = joinpath(kit, "last-snapshot.toml")
         write(
-            joinpath(kit, "last-snapshot.toml"),
+            legacy_path,
             sprint(
                 TOML.print,
                 Dict(
@@ -371,7 +439,14 @@ end
                 ),
             ),
         )
-        @test DistSSHRun.read_last_ship_record(proj) !== nothing
+        err = try
+            DistSSHRun.read_last_ship_record(proj)
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("last-snapshot.toml", sprint(showerror, err))
         DistSSHRun.clear_last_ship_record!(proj; deploy_root = "/deploy/a")
         @test DistSSHRun.read_last_ship_record(proj) === nothing
         DistSSHRun.forget_last_ship_default!(proj, "/deploy/b")
