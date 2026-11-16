@@ -30,7 +30,7 @@ Build [`PipelineConfig`](@ref) from environment variables.
 
 | Variable | Role |
 |----------|------|
-| `DISTSSH_HOSTS` | Comma-separated placement tokens (`parent:N` / `NAME:N`) |
+| `DISTSSH_HOSTS` | Comma-separated placement tokens (`N*host`, …) |
 | `DISTSSH_HOSTS_FILE` | Hosts file when the CLI does not set a host list (same precedence as CLI) |
 | `DISTRIBUTED_REMOTE_PROJECT_ROOT` | Remote repo root |
 | `DISTRIBUTED_PROJECT_ROOT` | Local project root |
@@ -146,7 +146,7 @@ need `:N`. Keyword `args` are passed to the driver; `remote` is the remote
 project path. Default `yes=true` skips confirm prompts.
 
 ```julia
-pipeline!(driver, "parent:2"; args=["8"])
+pipeline!(driver, "2*host1"; head_workers=0, args=["8"])
 pipeline!(driver, "1*user@h1", "1*user@h2"; remote="/path/to/project", args=["8"], collect=true)
 ```
 
@@ -208,6 +208,7 @@ function _pipeline_run!(config::PipelineConfig, session::DistSSHSession, driver:
             log_dir = config.log_dir,
             package = config.package,
             julia = config.julia,
+            run_id = config.run_id,
         )
     finally
         if do_collect
@@ -236,6 +237,8 @@ function _pipeline_run!(config::PipelineConfig, session::DistSSHSession, driver:
             session,
             pipeline_collect_root(config);
             merge = config.collect_merge,
+            run_id = config.run_id,
+            best_effort = config.best_effort,
         )
         if !collect_result.ok
             return PipelineResult(

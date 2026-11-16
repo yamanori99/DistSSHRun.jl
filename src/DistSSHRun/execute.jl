@@ -439,10 +439,10 @@ that pick the kind at runtime (`kind ∈ (:go, :ride, :drive)`), returning the
 shared [`DistSSHJobResult`](@ref) instead of `GoResult` / `RideResult` / `DriveResult`.
 
 ```julia
-execute!(:go, "job.jl", ["parent:2"]; args=["8"])
-execute!(:ride, "job.jl", ["parent:2"])
-execute!(:drive, "job.jl", ["parent:2"]; args=["8"])
-wait(execute!(:go, "job.jl", ["parent:1"]; detached=true, args=["8"]))
+execute!(:go, "job.jl", ["2*host1"]; head_slots=2, args=["8"])
+execute!(:ride, "job.jl", ["2*host1"]; head_workers=2)
+execute!(:drive, "job.jl", ["2*host1"]; head_workers=2, args=["8"])
+wait(execute!(:go, "job.jl", ["1*host1"]; detached=true, head_slots=1, args=["8"]))
 ```
 
 `output_dir`, `args`, `project`, `sync`, `julia` are the keywords [`go!`](@ref)
@@ -772,7 +772,14 @@ function _execute_detached!(
         throw(ArgumentError("verbosity must be a Symbol or nothing, got $(repr(verbosity))"))
     end
     remote = get(kwargs, :remote, nothing)
-    hosts_file = get(kwargs, :hosts_file, nothing)
+    _hosts_file = get(kwargs, :hosts_file, nothing)
+    _hosts_file !== nothing && !isempty(strip(String(_hosts_file))) &&
+        throw(
+        ArgumentError(
+            "execute!(...; detached=true) does not accept hosts_file=; " *
+                "pass host tokens in `tokens` or use --hosts via the job blob",
+        ),
+    )
     log_dir = get(kwargs, :log_dir, nothing)
     enable_log = get(kwargs, :enable_log, true)
     package = get(kwargs, :package, nothing)
@@ -792,8 +799,8 @@ function _execute_detached!(
     worker_include = get(kwargs, :worker_include, false)
     spi_check = get(kwargs, :spi_check, false)
     unsafe_skip_env_digests = get(kwargs, :unsafe_skip_env_digests, false)
+    allow_external_symlinks = get(kwargs, :allow_external_symlinks, false) === true
     _reject_removed_allow_mismatch!(get(kwargs, :allow_mismatch, nothing))
-    allow_external_symlinks = get(kwargs, :allow_external_symlinks, false)
     run_id = get(kwargs, :run_id, nothing)
     if run_id !== nothing
         run_id = validate_run_id(run_id)
@@ -882,36 +889,41 @@ function _execute_detached!(
         enable_log,
         run_dir,
     )
-    argv = _execute_detached_argv(
+    verbosity_sym = verbosity isa Symbol ? verbosity :
+        verbosity === nothing ? nothing : throw(ArgumentError("verbosity must be a Symbol or nothing"))
+    job_blob_path = write_detached_job_blob!(
+        run_dir,
         kind,
         script_path,
         tokens,
-        args;
+        args,
+        proj;
+        remote = remote,
         output_dir = resolved_output,
         log_dir = resolved_log,
-        sync = sync,
         julia = julia,
+        run_id = run_id,
         quiet = quiet,
-        verbosity = verbosity,
-        hosts_file = hosts_file,
-        enable_log = enable_log,
-        package = package,
+        verbosity = verbosity_sym === nothing ? nothing : String(verbosity_sym),
         require_all_hosts = require_all_hosts,
         skip_hash_check = skip_hash_check,
+        enable_log = enable_log,
+        package = package,
         workers = workers,
         repeat = repeat,
         worker_include = worker_include,
         spi_check = spi_check,
         unsafe_skip_env_digests = unsafe_skip_env_digests,
-        allow_external_symlinks = allow_external_symlinks === true,
-        run_id = run_id,
-        remote = remote,
+        job_id = job_id_s,
+        allow_external_symlinks = allow_external_symlinks,
         head_workers = head_workers,
         head_slots = head_slots,
     )
+    argv = _execute_detached_bootstrap_argv(kind; job_blob = job_blob_path)
     extra = Dict{String, String}(
         "DISTRIBUTED_PROJECT_ROOT" => proj,
         DISTSSH_RUN_DIR_ENV => run_dir,
+        DETACHED_JOB_BLOB_ENV => job_blob_path,
     )
     if remote !== nothing && !isempty(strip(String(remote)))
         extra["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = remote_env_project_root(String(remote))
@@ -1965,6 +1977,14 @@ function _execute_detached_dirs(
         canonical_local_path(run_dir)
     end
     return resolved_output, resolved_log
+end
+
+function _execute_detached_bootstrap_argv(
+        kind::Symbol;
+        job_blob::AbstractString,
+    )::Vector{String}
+    argv = String[String(kind), "-y", "--job-blob", canonical_local_path(String(job_blob))]
+    return argv
 end
 
 function _execute_detached_argv(

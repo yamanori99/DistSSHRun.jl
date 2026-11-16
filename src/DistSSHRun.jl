@@ -166,7 +166,7 @@ using .DistSSHBase: CliCursor, HostFacts, HostResult, OUTPUT_WIDTH, PARENT_HOST_
     without_cancel
 using .DistSSHUp: julia_version_mismatch_kind, juliaup_add_host!, juliaup_align_host!,
     juliaup_channel, juliaup_default_host!, juliaup_parent_behind_channel,
-    juliaup_status_lines, juliaup_update_host!
+    juliaup_update_host!
 
 include("DistSSHRun/messages/display.jl")
 include("DistSSHRun/messages/errors.jl")
@@ -174,6 +174,7 @@ include("DistSSHRun/messages/placement.jl")
 include("DistSSHRun/options/table.jl")
 include("DistSSHRun/options/config.jl")
 include("DistSSHRun/options/cli_consume.jl")
+include("DistSSHRun/options/job_options.jl")
 include("DistSSHRun/argv/session.jl")
 include("DistSSHRun/infra/run_transfer_removed.jl")
 include("DistSSHRun/infra/remote.jl")
@@ -188,6 +189,7 @@ include("DistSSHRun/infra/distributed.jl")
 include("DistSSHRun/infra/worker_plan.jl")
 include("DistSSHRun/drive/types.jl")
 include("DistSSHRun/infra/run_manifest.jl")
+include("DistSSHRun/infra/detached_job_blob.jl")
 include("DistSSHRun/setup.jl")
 include("DistSSHRun/infra/run_layout.jl")
 include("DistSSHRun/ship_module.jl")
@@ -223,6 +225,7 @@ include("DistSSHRun/core/drive/script_hint.jl")
 include("DistSSHRun/go.jl")
 include("DistSSHRun/infra/script_scan.jl")
 include("DistSSHRun/ride.jl")
+include("DistSSHRun/execute_envelope.jl")
 include("DistSSHRun/execute.jl")
 include("DistSSHRun/provenance.jl")
 include("DistSSHRun/options/unsafe_runtime.jl")
