@@ -66,7 +66,7 @@ function _setup_reject_yes_delete(
         "-y, --yes, and DISTSSH_YES do not authorize setup delete or setup prune. " *
             "Pass --confirm-path. See help setup.",
     )
-    return Cint(1)
+    return DistSSHRun.DistSSHBase.CLI_EXIT_USAGE
 end
 
 function _setup_confirm_error(err)::Cint
@@ -79,7 +79,7 @@ function _setup_confirm_error(err)::Cint
         println_fatal(err.msg)
     end
     println_fatal()
-    return Cint(1)
+    return DistSSHRun.DistSSHBase.CLI_EXIT_USAGE
 end
 
 function _setup_confirm_plan(
@@ -100,33 +100,30 @@ end
 
 if !isdefined(@__MODULE__, :setup_main)
     function setup_main()::Cint
-        opts = try
-            parse_setup_args(ARGS)
-        catch e
-            e isa ArgumentError || rethrow()
-            print_err("Error: "; bold = true)
-            println_fatal(e.msg)
-            println_fatal()
-            # An unknown option already names `help setup`. Do not print the page.
-            if !startswith(e.msg, "unknown setup option:")
-                show_usage()
-            end
-            return 1
+        return DistSSHRun.DistSSHBase.with_cli_exit() do
+            return _setup_main_body()
         end
+    end
+
+    function _setup_main_body()::Cint
+        opts = DistSSHRun.DistSSHBase.cli_parse(() -> parse_setup_args(ARGS))
 
         if opts.show_version
             DistSSHRun.println_kit_version()
-            return 0
+            return Cint(0)
         end
 
         if opts.show_help
-            show_usage()
-            return 0
+            return DistSSHRun.DistSSHBase.cli_help_stdout(show_usage)
         end
 
-        if opts.mode === nothing || opts.mode === :requirements
+        if opts.mode === :requirements
             show_requirements()
-            return 0
+            return Cint(0)
+        end
+
+        if opts.mode === nothing
+            return DistSSHRun.DistSSHBase.cli_required_else_help(show_usage)
         end
 
         try
@@ -137,11 +134,7 @@ if !isdefined(@__MODULE__, :setup_main)
             )
         catch e
             e isa ArgumentError || rethrow()
-            print_err("Error: "; bold = true)
-            println_fatal(e.msg)
-            println_fatal()
-            show_usage()
-            return 1
+            throw(DistSSHRun.DistSSHBase.CliUsageError(String(e.msg)))
         end
 
         try
@@ -151,12 +144,7 @@ if !isdefined(@__MODULE__, :setup_main)
             )
         catch e
             e isa ArgumentError || rethrow()
-            # Fatal: always on terminal.
-            print_err("Error: "; bold = true)
-            println_fatal(e.msg)
-            println_fatal()
-            show_usage()
-            return 1
+            throw(DistSSHRun.DistSSHBase.CliUsageError(String(e.msg)))
         end
 
         project = String(DistSSHRun.cli_project_root(@__DIR__))

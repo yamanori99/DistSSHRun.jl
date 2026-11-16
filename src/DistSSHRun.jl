@@ -424,7 +424,7 @@ A `.jl` path with no command is not implicit `go`.
 function main(args::Vector{String} = copy(ARGS))::Cint
     try
         return with_cli_entry(:DistSSHRun) do
-            return _main(args)
+            return DistSSHBase.with_cli_exit(() -> _main(args))
         end
     catch e
         # After the drive frame's `finally` blocks. Translation only.
@@ -518,12 +518,12 @@ function _main_dispatch(args::Vector{String})::Cint
     # `help`, `-h`, and `--help`, in any number and order, are the root page.
     # `help go --help` is not: `go` is a command, so the rewrite below still runs.
     if !isempty(args) && all(in(("help", "-h", "--help")), args)
-        print_kit_root_usage()
+        print_kit_root_usage(stdout)
         return 0
     end
     if isempty(args)
-        print_kit_root_usage()
-        return 1
+        print_kit_root_usage(stderr)
+        return Int(DistSSHBase.CLI_EXIT_USAGE)
     end
     # `help <verb> …` is `<verb> --help …`, once. A second word that is not a
     # command stays on the unknown-subcommand path, and that word is the name.
@@ -551,8 +551,8 @@ function _main_dispatch(args::Vector{String})::Cint
         script = any(endswith(String(a), ".jl") for a in args),
     )
     println(stderr)
-    print_kit_root_usage()
-    return 1
+    print_kit_root_usage(stderr)
+    return Int(DistSSHBase.CLI_EXIT_USAGE)
 end
 
 if ccall(:jl_generating_output, Cint, ()) == 1

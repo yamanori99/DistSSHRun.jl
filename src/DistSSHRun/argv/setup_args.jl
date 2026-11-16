@@ -21,7 +21,7 @@
 #                 path-valued option; parent must exist; not mkdir -p)
 #   git-sync      git push + detach
 #   git-pull      git detach (no push)
-#   requirements  print this page (same as `setup` with no subcommand)
+#   requirements  print the setup help page (`setup requirements`)
 #
 # Location:
 #   --deploy-root PATH   deployment root override (not snapshot id). Omit to

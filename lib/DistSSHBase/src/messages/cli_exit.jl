@@ -37,6 +37,31 @@ function cli_report(msg::AbstractString)
     return nothing
 end
 
+"""Exit code when required argv is missing (`clap` `arg_required_else_help`)."""
+const CLI_EXIT_USAGE = Cint(2)
+
+"""
+    cli_help_stdout(help) -> Cint
+
+Explicit `--help` / `-h`: print the same body as the bare-invocation page on
+**stdout** and return `0`. Matches [clap](https://docs.rs/clap) help display.
+"""
+function cli_help_stdout(@nospecialize(help::Function))::Cint
+    help(; io = stdout)
+    return Cint(0)
+end
+
+"""
+    cli_required_else_help(help) -> Cint
+
+Required operands/flags missing (`arg_required_else_help`): print the full help
+page on **stderr** and return [`CLI_EXIT_USAGE`](@ref) (`2`).
+"""
+function cli_required_else_help(@nospecialize(help::Function))::Cint
+    help(; io = stderr)
+    return CLI_EXIT_USAGE
+end
+
 """Ctrl-C exit code for a foreground command."""
 cli_interrupted()::Cint = Cint(130)
 

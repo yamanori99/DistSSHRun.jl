@@ -22,6 +22,7 @@ makedocs(;
     ),
     pages = [
         "Home" => "index.md",
+        "CLI" => "cli.md",
         "Options" => "options.md",
         "Common errors" => "common_errors.md",
         "API" => "api.md",

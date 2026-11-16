@@ -2290,7 +2290,7 @@ function _maybe_print_kit_progress_phases(dir::AbstractString)
     return nothing
 end
 
-function show_progress_usage(io::IO = stdout)
+function show_progress_usage(; io::IO = stdout)
     print_help_chrome(cli_heading("progress"); io = io)
     print_help_section("Usage"; io = io)
     print_help_lines(
@@ -2315,14 +2315,13 @@ end
 CLI: print [`kit_progress_phases`](@ref) for `DIR` / `kit.progress`.
 """
 function progress(args::Vector{String} = copy(ARGS))::Cint
-    if !isempty(args) && args[1] in ("-h", "--help", "help")
-        show_progress_usage()
-        return 0
-    end
-    if length(args) > 1
-        print_cli_error("progress: extra args $(repr(args[2:end]))")
-        return 1
-    end
+    return DistSSHBase.with_cli_exit() do
+        if !isempty(args) && args[1] in ("-h", "--help", "help")
+            return DistSSHBase.cli_help_stdout(show_progress_usage)
+        end
+        if length(args) > 1
+            throw(DistSSHBase.CliUsageError("progress: extra args $(repr(args[2:end]))"))
+        end
     target = isempty(args) ? pwd() : String(args[1])
     recs = _kit_progress_last_run(_kit_progress_records(target))
     if isempty(recs)
@@ -2334,7 +2333,8 @@ function progress(args::Vector{String} = copy(ARGS))::Cint
     text = _format_kit_progress_phases(rows; wall = wall)
     isempty(text) && (print_cli_error("progress: no timed phases in $(target)"); return 1)
     _print_kit_progress_phases(stdout, rows; wall = wall)
-    return 0
+    return Cint(0)
+    end
 end
 
 """

@@ -29,66 +29,58 @@ end
 include(joinpath(@__DIR__, "ride", "_using.jl"))
 
 function ride_main()::Cint
-    project_root = cli_project_root(@__DIR__)
-    parsed = try
-        parse_ride_args(ARGS)
-    catch e
-        if e isa ArgumentError
-            DistSSHRun.print_cli_error(e.msg)
-            return Cint(1)
+    return DistSSHRun.DistSSHBase.with_cli_exit() do
+        project_root = cli_project_root(@__DIR__)
+        parsed = DistSSHRun.DistSSHBase.cli_parse(() -> parse_ride_args(ARGS))
+        if parsed.show_version
+            println_kit_version()
+            return Cint(0)
         end
-        rethrow()
-    end
-    if parsed.show_version
-        println_kit_version()
-        return 0
-    end
-    if parsed.help
-        show_ride_usage()
-        return 0
-    end
-    if parsed.script_path === nothing
-        show_ride_usage()
-        return 0
-    end
-    diag = DistSSHRun.finish_run_job_diagnostics!(
-        parsed;
-        command = :ride,
-        project = project_root,
-        hosts = parsed.hosts,
-        worker_tokens = DistSSHRun.host_tokens(parsed; kind = :ride),
-    )
-    diag !== nothing && return Cint(diag)
-    tok = parsed.hosts
-    remote_cli = get(parsed, :deploy_root, nothing)
-    remote_raw = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
-    result = try
-        ride!(
-            parsed.script_path,
-            tok;
-            args = parsed.script_args,
-            spi_check = parsed.spi_check,
-            output_dir = parsed.output_dir,
+        if parsed.help
+            return DistSSHRun.DistSSHBase.cli_help_stdout(show_ride_usage)
+        end
+        if parsed.script_path === nothing
+            return DistSSHRun.DistSSHBase.cli_required_else_help(show_ride_usage)
+        end
+        diag = DistSSHRun.finish_run_job_diagnostics!(
+            parsed;
+            command = :ride,
             project = project_root,
-            julia = parsed.julia,
-            head_workers = parsed.cli_session.head_workers,
-            unsafe_skip_env_digests = parsed.unsafe_skip_env_digests,
-            remote = remote_cli isa AbstractString ? remote_cli :
-                (isempty(remote_raw) ? nothing : remote_raw),
-            run_id = parsed.run_id,
-            hint_surface = :cli,
+            hosts = parsed.hosts,
+            worker_tokens = DistSSHRun.host_tokens(parsed; kind = :ride),
         )
-    catch e
-        if e isa ArgumentError
-            DistSSHRun.print_cli_error(e.msg)
-            return Cint(1)
+        diag !== nothing && return Cint(diag)
+        tok = parsed.hosts
+        remote_cli = get(parsed, :deploy_root, nothing)
+        remote_raw = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
+        result = try
+            ride!(
+                parsed.script_path,
+                tok;
+                args = parsed.script_args,
+                spi_check = parsed.spi_check,
+                output_dir = parsed.output_dir,
+                project = project_root,
+                julia = parsed.julia,
+                head_workers = parsed.cli_session.head_workers,
+                unsafe_skip_env_digests = parsed.unsafe_skip_env_digests,
+                remote = remote_cli isa AbstractString ? remote_cli :
+                    (isempty(remote_raw) ? nothing : remote_raw),
+                run_id = parsed.run_id,
+                hint_surface = :cli,
+            )
+        catch e
+            if e isa ArgumentError
+                DistSSHRun.print_cli_error(e.msg)
+                return Cint(1)
+            end
+            rethrow()
         end
-        rethrow()
+        if !(kit_output_progress() && result.ok)
+            print_ride(result)
+        end
+        return result.ok ? Cint(0) : Cint(1)
     end
-    if !(kit_output_progress() && result.ok)
-        print_ride(result)
-    end
-    return result.ok ? 0 : 1
 end
 
 if get(ENV, "DIST_SSH_KIT_CLI_INCLUDE", "") != "1" &&

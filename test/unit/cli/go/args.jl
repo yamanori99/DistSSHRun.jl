@@ -335,17 +335,21 @@ using Test
             @test r.hosts == ["h1"]
             @test !r.help
         end
-        mktemp() do path, io
-            code = withenv("DISTSSH_CLI_SUBCOMMAND_DONE" => "") do
-                redirect_stderr(devnull) do
-                    redirect_stdout(io) do
-                        DistSSHRun.go(String[])
+        mktemp() do out_path, out_io
+            mktemp() do err_path, err_io
+                code = withenv("DISTSSH_CLI_SUBCOMMAND_DONE" => "") do
+                    redirect_stdout(out_io) do
+                        redirect_stderr(err_io) do
+                            DistSSHRun.go(String[])
+                        end
                     end
                 end
+                flush(out_io)
+                flush(err_io)
+                @test code == 2
+                @test isempty(read(out_path, String))
+                @test occursin("SCRIPT.jl", read(err_path, String))
             end
-            flush(io)
-            @test code == 0
-            @test occursin("SCRIPT.jl", read(path, String))
         end
         mktemp() do out_path, out_io
             mktemp() do err_path, err_io
@@ -361,7 +365,7 @@ using Test
                 flush(out_io)
                 flush(err_io)
                 shown = read(out_path, String) * read(err_path, String)
-                @test code == 1
+                @test code == 2
                 @test occursin("go: --ship-tree was removed", shown)
                 @test occursin("setup ship-tree", shown)
                 @test !occursin("SSH preflight", shown)

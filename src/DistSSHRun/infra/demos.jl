@@ -296,7 +296,7 @@ function _demo_install_args(
     return (dest = dest, force = force, family = fam)
 end
 
-function show_demo_usage(io::IO = stdout)
+function show_demo_usage(; io::IO = stdout)
     print_help_chrome(cli_heading("demo"); io = io)
     print_help_section("Usage"; io = io)
     print_help_lines(
@@ -358,9 +358,9 @@ Install or list bundled demos. See [`(@main)`](@ref).
     julia --project=. distsshkit_demos/without_kit/pipeline_pi.jl
 """
 function demo(args::Vector{String} = copy(ARGS))::Cint
+    return DistSSHBase.with_cli_exit() do
     if isempty(args) || args[1] in ("-h", "--help", "help")
-        show_demo_usage()
-        return 0
+        return DistSSHBase.cli_help_stdout(show_demo_usage)
     end
     sub, rest = args[1], args[2:end]
     if sub == "list"
@@ -403,8 +403,10 @@ function demo(args::Vector{String} = copy(ARGS))::Cint
             return 1
         end
     else
-        print_cli_error("Unknown demo command: $sub (try: demo install with_kit, demo list, help demo)")
-        return 1
+        throw(DistSSHBase.CliUsageError(
+            "Unknown demo command: $sub (try: demo install with_kit, demo list, help demo)",
+        ))
+    end
     end
 end
 
