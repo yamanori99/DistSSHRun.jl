@@ -1180,6 +1180,7 @@ function _go_run!(
         )
     end
     slots = _go_plan_slots(tokens; total = repeat, head_slots = head_slots)
+    reset_launch_rank_plan!(collect(1:length(slots)))
     place = placement_tokens_from_go_slots(slots)
     if output_dir !== nothing && collect_spec isa AbstractString
         throw(

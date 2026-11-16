@@ -32,6 +32,7 @@ using TOML
     @test DistSSHRun.worker_addprocs_blas_kwargs() == NamedTuple()
     @test DistSSHRun._requested_worker_blas_count() === nothing
     DistSSHRun.reset_worker_seeds!()
+    DistSSHRun.reset_launch_rank_plan!(1:2)
     a, b = withenv("DISTSSH_JOB_SEED" => "11") do
         aa = Dict(DistSSHRun.worker_env_pairs("/tmp/job"; rank = DistSSHRun.take_worker_rank()))
         bb = Dict(DistSSHRun.worker_env_pairs("/tmp/job"; rank = DistSSHRun.take_worker_rank()))
@@ -69,6 +70,7 @@ using TOML
     @test first_item["item"] == 1
     @test first_item["rank"] == 0
     DistSSHRun.reset_worker_seeds!()
+    DistSSHRun.reset_launch_rank_plan!(1:1)
     withenv("DISTSSH_JOB_SEED" => "11") do
         DistSSHRun.job_seed()
         DistSSHRun.take_worker_rank()

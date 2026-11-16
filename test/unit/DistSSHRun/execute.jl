@@ -973,7 +973,7 @@ end
         @test occursin("does not accept keyword :plan", sprint(showerror, err))
 
         err2 = try
-            DistSSHRun.execute!(:go, "job.jl", String[]; head_slots = 1, detached = true)
+            DistSSHRun.execute!(:go, "job.jl", String[]; head_slots = 1, detached = true, yes = false)
             nothing
         catch e
             e
