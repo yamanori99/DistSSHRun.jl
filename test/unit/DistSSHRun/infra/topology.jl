@@ -8,9 +8,9 @@ using DistSSHRun
         @test DistSSHRun.topology_for_launch(; topology_setting = "auto", unsafe_all_to_all = false) ==
             :master_worker
         @test DistSSHRun.topology_for_launch(;
-                topology_setting = "auto",
-                unsafe_all_to_all = true,
-            ) == :all_to_all
+            topology_setting = "auto",
+            unsafe_all_to_all = true,
+        ) == :all_to_all
     end
 
     @testset "happy path plan line" begin
