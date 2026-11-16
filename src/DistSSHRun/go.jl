@@ -1118,7 +1118,11 @@ function _go_run!(
             )
         )
     end
-    assert_controller_environment_for_verify!(proj)
+    if snap_arg !== nothing
+        assert_controller_environment_for_shipped_run!(proj)
+    else
+        assert_controller_environment_for_verify!(proj)
+    end
     batch_dir = if output_dir !== nothing
         _prepare_output_dir!(
             output_dir;

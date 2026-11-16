@@ -576,7 +576,12 @@ function _run_drive_parsed_locked!(
         run_id = get(parsed, :run_id, nothing),
         remote_argv = remote_argv,
     )
-    DistSSHRun.assert_controller_environment_for_verify!(proj_dir)
+    snap_for_verify = get(parsed, :run_id, nothing)
+    if snap_for_verify isa AbstractString && !isempty(strip(snap_for_verify))
+        DistSSHRun.assert_controller_environment_for_shipped_run!(proj_dir)
+    else
+        DistSSHRun.assert_controller_environment_for_verify!(proj_dir)
+    end
     # git + cleanup + workers + wait + init + run + collect
     progress_steps = 7
     progress_ok = false

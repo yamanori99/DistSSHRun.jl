@@ -570,7 +570,7 @@ function _ride_add_workers!(
             if run_id === nothing
                 verify_workers_match_job!(project)
             else
-                _record_environment_unverified!("run-id")
+                verify_workers_match_shipped_run!(project; run_id = run_id)
             end
             assert_loaded_verified_worker_set!()
         end
@@ -768,7 +768,11 @@ function _ride_run!(
     # `ride!` restores `DISTSSH_RUN_DIR` after this returns.
     run_dir = kit_run_dir()
     project_root_abs = canonical_local_path(project)
-    assert_controller_environment_for_verify!(project_root_abs)
+    if run_id !== nothing
+        assert_controller_environment_for_shipped_run!(project_root_abs)
+    else
+        assert_controller_environment_for_verify!(project_root_abs)
+    end
     _reset_run_provenance!(project_root_abs)
     _clear_last_ship!()
     tok = String[String(t) for t in tokens]

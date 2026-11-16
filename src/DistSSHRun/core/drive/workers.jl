@@ -69,7 +69,11 @@ function add_drive_workers!(
     empty!(RUNNER_WORKER_SCRIPT_PATHS)
     snap = run_id === nothing ? nothing : validate_run_id(run_id)
     snapshot_run = snap !== nothing
-    DistSSHRun.assert_controller_environment_for_verify!(proj_dir)
+    if snapshot_run
+        DistSSHRun.assert_controller_environment_for_shipped_run!(proj_dir)
+    else
+        DistSSHRun.assert_controller_environment_for_verify!(proj_dir)
+    end
     DistSSHRun._require_drive_host_status_idle!()
     DistSSHRun._clear_drive_host_worker_ids!()
     script_path = abspath(String(script_path))
@@ -369,7 +373,7 @@ function add_drive_workers!(
     nprocs() <= 1 && error(_NO_WORKERS_JOINED)
     try
         if snapshot_run
-            DistSSHRun._record_environment_unverified!("run-id")
+            DistSSHRun.verify_workers_match_shipped_run!(proj_dir; run_id = snap)
             DistSSHRun.assert_loaded_verified_worker_set!()
         else
             DistSSHRun.verify_workers_match_job!(proj_dir)

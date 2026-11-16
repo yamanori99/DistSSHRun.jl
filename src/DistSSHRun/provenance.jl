@@ -200,6 +200,10 @@ function _record_environment_verified!()
     return _record_environment_verification!("verified")
 end
 
+function _record_environment_verified_against_run_id!()
+    return _record_environment_verification!("verified-against-run-id")
+end
+
 function _record_environment_unverified!(reason::AbstractString)
     return _record_environment_verification!("unverified", reason)
 end

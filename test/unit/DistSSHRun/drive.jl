@@ -235,6 +235,7 @@ end
             collect = false
         )
         local_session = DistSSHRun.kit_session_from_config(local_cfg)
+        @test local_session.cli_session.head_workers == 2
         @test !DistSSHRun.resolve_pipeline_collect(local_cfg, local_session)
 
         _with_tempdir() do tmp
@@ -1120,12 +1121,27 @@ end
         end
     end
 
-    @testset "run_id records shipped-tree env unverified; strict path still verifies" begin
+    @testset "run_id records verified-against-run-id when deploy record matches" begin
         _with_tempdir() do proj
             _write_host_project!(proj, "RunIdProv")
             script = joinpath(proj, "job.jl")
             write(script, "1\n")
             rid = "20260101T000000Z-aaaaaa"
+            parent = DistSSHRun.run_identity(proj)
+            digests = Any[
+                Dict{String, Any}(
+                    "path" => "Project.toml",
+                    "blob" => parent["project.sha256"],
+                )
+            ]
+            rec = DistSSHRun.build_deploy_record(
+                proj,
+                :ship_tree;
+                deploy_id = rid,
+                run_id = rid,
+                content_file_digests = digests,
+            )
+            DistSSHRun._set_active_deploy_record!(rec)
             DistSSHRun.set_kit_verbosity!(:quiet)
             try
                 result = DistSSHRun.drive!(
@@ -1137,9 +1153,9 @@ end
                 @test result.ok
                 prov = DistSSHRun.assemble_provenance(proj)
                 env = get(prov, "environment", nothing)
-                @test env["verification"] == "unverified"
-                @test env["reason"] == "run-id"
+                @test env["verification"] == "verified-against-run-id"
             finally
+                DistSSHRun._clear_active_deploy_record!()
                 DistSSHRun.set_kit_verbosity!(:progress)
             end
         end
