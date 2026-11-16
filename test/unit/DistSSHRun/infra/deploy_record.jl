@@ -10,9 +10,7 @@ using Base.Threads
             "deploy_id" => "20260101T000000Z-aaaaaa",
             "mode" => "ship-tree",
             "snapshot_id" => "20260101T000000Z-aaaaaa",
-            "content_tree_hash" => "a"^40,
-        ),
-    )
+            "content_tree_hash" => "a"^40))
     parsed = DistSSHRun._parse_deploy_record_body(body)
     @test parsed !== nothing
     @test something(parsed)["run_id"] == "20260101T000000Z-aaaaaa"
@@ -24,9 +22,7 @@ using Base.Threads
             "mode" => "ship-tree",
             "run_id" => "20260102T000000Z-bbbbbb",
             "snapshot_id" => "20260101T000000Z-aaaaaa",
-            "content_tree_hash" => "b"^40,
-        ),
-    )
+            "content_tree_hash" => "b"^40))
     parsed2 = DistSSHRun._parse_deploy_record_body(both)
     @test parsed2 !== nothing
     @test something(parsed2)["run_id"] == "20260102T000000Z-bbbbbb"
@@ -42,8 +38,7 @@ end
             :git_sync;
             deploy_id = "a"^40,
             commit_sha = "a"^40,
-            dirty = false,
-        )
+            dirty = false)
         @test rec["schema"] == 1
         @test rec["mode"] == "git-sync"
         @test rec["deploy_id"] == "a"^40
@@ -77,8 +72,7 @@ end
         "schema_version" => 1,
         "mode" => "ship-tree",
         "deploy_id" => "20260101T000000Z-aaaaaa",
-        "run_id" => "20260101T000000Z-aaaaaa",
-    )
+        "run_id" => "20260101T000000Z-aaaaaa")
     slice = DistSSHRun._deploy_record_for_provenance(rec)
     @test slice !== nothing
     @test slice["mode"] == "ship-tree"
@@ -149,8 +143,7 @@ end
                 "schema_version" => 1,
                 "mode" => "ship-tree",
                 "deploy_id" => "rid",
-                "content_tree_hash" => "f"^40,
-            )
+                "content_tree_hash" => "f"^40)
             write(joinpath(proj, "extra.txt"), "change\n")
             with_kit_verbosity(:verbose) do
                 log_path = DistSSHRun.init_log_file(log_root; prefix = "deploy_warn")
@@ -184,8 +177,7 @@ end
                                 pwd(),
                                 :git_sync;
                                 deploy_id = "a"^40,
-                                commit_sha = "a"^40,
-                            )
+                                commit_sha = "a"^40)
                         finally
                             DistSSHRun.close_log_file()
                         end
@@ -212,8 +204,7 @@ end
                 "schema_version" => 1,
                 "deploy_id" => "a"^40,
                 "mode" => "git-sync",
-                "commit_sha" => "a"^40,
-            )
+                "commit_sha" => "a"^40)
         )
         deploy_dir = joinpath(remote, ".distssh")
         mkpath(deploy_dir)
@@ -224,15 +215,13 @@ end
                 withenv(
                     "DISTSSH_TEST" => "1",
                     "DISTSSH_TEST_SSH" => double,
-                    "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit",
-                ) do
+                    "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit") do
                     rec = DistSSHRun.read_deploy_record_on_host("child-1", remote)
                     @test rec !== nothing
                     @test rec["mode"] == "git-sync"
                     @test rec["deploy_id"] == "a"^40
                     active = DistSSHRun.record_deploy_status_for_run!(
-                        ["child-1"], remote, proj,
-                    )
+                        ["child-1"], remote, proj)
                     @test active !== nothing
                     if active !== nothing
                         @test active["mode"] == "git-sync"
@@ -267,10 +256,7 @@ end
                         "schema_version" => 1,
                         "deploy_id" => deploy_id,
                         "mode" => "git-sync",
-                        "commit_sha" => deploy_id,
-                    ),
-                ),
-            )
+                        "commit_sha" => deploy_id)))
         end
         try
             withenv(
@@ -278,12 +264,10 @@ end
                 "DISTSSH_TEST_SSH" => double,
                 "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit",
                 "DISTSSH_TEST_SSH_LOGICAL_ROOT" => logical,
-                "DISTSSH_TEST_SSH_HOST_ROOTS" => roots,
-            ) do
+                "DISTSSH_TEST_SSH_HOST_ROOTS" => roots) do
                 out, (rec, warn_unknown) = _capture_stdio() do _, _
                     DistSSHRun._read_deploy_record_for_run_status(
-                        ["child-1", "child-2"], logical,
-                    )
+                        ["child-1", "child-2"], logical)
                 end
                 @test rec === nothing
                 @test !warn_unknown
@@ -310,10 +294,7 @@ end
                     "schema_version" => 1,
                     "deploy_id" => "a"^40,
                     "mode" => "git-sync",
-                    "commit_sha" => "a"^40,
-                ),
-            ),
-        )
+                    "commit_sha" => "a"^40)))
         mkpath(joinpath(roots, "child-2"))
         try
             withenv(
@@ -321,12 +302,10 @@ end
                 "DISTSSH_TEST_SSH" => double,
                 "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit",
                 "DISTSSH_TEST_SSH_LOGICAL_ROOT" => logical,
-                "DISTSSH_TEST_SSH_HOST_ROOTS" => roots,
-            ) do
+                "DISTSSH_TEST_SSH_HOST_ROOTS" => roots) do
                 out, (rec, _) = _capture_stdio() do _, _
                     DistSSHRun._read_deploy_record_for_run_status(
-                        ["child-1", "child-2"], logical,
-                    )
+                        ["child-1", "child-2"], logical)
                 end
                 @test rec !== nothing
                 @test match(r"Deploy record missing on:[^\n]*\n", out) !== nothing
@@ -359,8 +338,7 @@ end
             "schema_version" => 1,
             "mode" => "ship-tree",
             "deploy_id" => "rid",
-            "manifest_hash" => "f"^length(local_mh),
-        )
+            "manifest_hash" => "f"^length(local_mh))
         with_kit_verbosity(:verbose) do
             out, _ = _capture_stdio() do _, _
                 DistSSHRun._warn_deploy_staleness!(proj, rec)

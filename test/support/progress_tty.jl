@@ -67,8 +67,7 @@ if !isdefined(Main, :_tty_strip_ansi)
         peak = Ref(0)
         function note!()
             rows = _tty_strip_ansi.(
-                isempty(cur[]) ? finished : vcat(finished, String[cur[]]),
-            )
+                isempty(cur[]) ? finished : vcat(finished, String[cur[]]))
             peak[] = max(peak[], count(_tty_spinner_bar_line, rows))
             return nothing
         end
@@ -144,8 +143,7 @@ if !isdefined(Main, :_tty_strip_ansi)
             "DISTSSH_RIDE_REMOTE_OK",
             "DISTSSH_RIDE_REMOTE_BOOM",
             "DISTSSH_E2E_REMOTE_FAIL",
-            "DISTSSH_RUNNER_SMOKE_OK",
-        )
+            "DISTSSH_RUNNER_SMOKE_OK")
         last_payload = nothing
         for key in payload_keys
             at = findlast(key, raw)
@@ -204,8 +202,7 @@ if !isdefined(Main, :_tty_strip_ansi)
             hang_s::Real = 300.0,
             columns::Integer = 120,
             lines::Integer = 40,
-            extra_env::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
-        )::String
+            extra_env::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}())::String
         dest = String(typescript)
         rm(dest; force = true)
         cmd = if Sys.isapple()
@@ -223,8 +220,7 @@ if !isdefined(Main, :_tty_strip_ansi)
             "DISTSSH_PROGRESS",
             "DISTSSH_VERBOSE",
             "COLUMNS",
-            "LINES",
-        )
+            "LINES")
         env = Dict{String, String}(
             String(k) => String(v) for (k, v) in ENV if !(String(k) in skip) && !isempty(v)
         )
@@ -277,8 +273,7 @@ if !isdefined(Main, :_tty_strip_ansi)
             hang_s::Real = 300.0,
             columns::Integer = 120,
             lines::Integer = 40,
-            extra_env::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
-        )::String
+            extra_env::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}())::String
         dest = String(typescript)
         rm(dest; force = true)
         cmd = if Sys.isapple()
@@ -305,8 +300,7 @@ if !isdefined(Main, :_tty_strip_ansi)
             "DISTSSH_PROGRESS",
             "DISTSSH_VERBOSE",
             "COLUMNS",
-            "LINES",
-        )
+            "LINES")
         env = Dict{String, String}(
             String(k) => String(v) for (k, v) in ENV if !(String(k) in skip) && !isempty(v)
         )
@@ -326,8 +320,7 @@ if !isdefined(Main, :_tty_strip_ansi)
             pin,
             Base.DevNull(),
             Base.DevNull();
-            wait = false,
-        )::Base.Process
+            wait = false)::Base.Process
         close(pin.out)
         replied = Ref(false)
         timed_out = false
@@ -355,8 +348,7 @@ if !isdefined(Main, :_tty_strip_ansi)
                             catch
                             end
                             error(
-                                "progress_tty expect: process exited before reply marker $(repr(reply_marker)); typescript=$(_tty_typescript_excerpt(dest))",
-                            )
+                                "progress_tty expect: process exited before reply marker $(repr(reply_marker)); typescript=$(_tty_typescript_excerpt(dest))")
                         end
                         if (time() - t_reply) > Float64(hang_s)
                             timed_out = true
@@ -369,8 +361,7 @@ if !isdefined(Main, :_tty_strip_ansi)
                             process_running(proc) && kill(proc, Base.SIGKILL)
                             timedwait(() -> !process_running(proc), 5.0; pollint = 0.2)
                             error(
-                                "progress_tty expect exceeded $(hang_s)s waiting for reply marker $(repr(reply_marker)); typescript=$(_tty_typescript_excerpt(dest))",
-                            )
+                                "progress_tty expect exceeded $(hang_s)s waiting for reply marker $(repr(reply_marker)); typescript=$(_tty_typescript_excerpt(dest))")
                         end
                         sleep(0.05)
                     end
@@ -379,8 +370,7 @@ if !isdefined(Main, :_tty_strip_ansi)
                 if !process_running(proc)
                     close(pin.in)
                     error(
-                        "progress_tty expect: process exited before $(repr(expect)); typescript=$(_tty_typescript_excerpt(dest))",
-                    )
+                        "progress_tty expect: process exited before $(repr(expect)); typescript=$(_tty_typescript_excerpt(dest))")
                 end
                 if (time() - t0) > Float64(hang_s)
                     timed_out = true
@@ -393,8 +383,7 @@ if !isdefined(Main, :_tty_strip_ansi)
                     process_running(proc) && kill(proc, Base.SIGKILL)
                     timedwait(() -> !process_running(proc), 5.0; pollint = 0.2)
                     error(
-                        "progress_tty expect exceeded $(hang_s)s waiting for $(repr(expect)); typescript=$(_tty_typescript_excerpt(dest))",
-                    )
+                        "progress_tty expect exceeded $(hang_s)s waiting for $(repr(expect)); typescript=$(_tty_typescript_excerpt(dest))")
                 end
                 sleep(0.05)
             end

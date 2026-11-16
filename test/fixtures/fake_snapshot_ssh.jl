@@ -83,8 +83,7 @@ if occursin("go.exitcode", script) &&
     if !isempty(ctl_lp)
         script = replace(
             script,
-            "JULIA_LOAD_PATH='@:@stdlib'" => "JULIA_LOAD_PATH=$(_posix_single_quote(ctl_lp))",
-        )
+            "JULIA_LOAD_PATH='@:@stdlib'" => "JULIA_LOAD_PATH=$(_posix_single_quote(ctl_lp))")
     end
     env = copy(ENV)
     depot = strip(get(ENV, "JULIA_DEPOT_PATH", ""))
@@ -94,10 +93,8 @@ if occursin("go.exitcode", script) &&
             ignorestatus(setenv(`sh -c $script`, env));
             stdin = stdin,
             stdout = stdout,
-            stderr = stderr,
-        );
-        wait = true,
-    )
+            stderr = stderr);
+        wait = true)
     exit(cmd.exitcode)
 end
 # Absolute deploy roots do not need further path resolve.

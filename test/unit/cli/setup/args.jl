@@ -71,8 +71,7 @@ using Test
             "prune" => :prune,
             "delete" => :delete,
             "remote-root" => :remote_root,
-            "requirements" => :requirements,
-        )
+            "requirements" => :requirements)
         let r = parse_setup_args([name, "host1"])
             @test r.mode == mode
             @test r.hosts == ["host1"]
@@ -82,8 +81,7 @@ using Test
     for (name, repl) in (
             "clone" => "git-clone",
             "sync" => "git-sync",
-            "pull" => "git-pull",
-        )
+            "pull" => "git-pull")
         let err = try
                 parse_setup_args([name, "host1"])
                 error("expected ArgumentError")
@@ -99,8 +97,7 @@ using Test
     for (flag, repl) in (
             "--clone" => "git-clone",
             "--sync" => "git-sync",
-            "--pull" => "git-pull",
-        )
+            "--pull" => "git-pull")
         let err = try
                 parse_setup_args([flag, "host1"])
                 error("expected ArgumentError")
@@ -183,8 +180,7 @@ using Test
         @test r.deploy_root == "/tmp/App.jl"
     end
     @test_throws ArgumentError parse_setup_args(
-        ["remote-root", "--deploy-root", "/tmp/app\n", "host1"],
-    )
+        ["remote-root", "--deploy-root", "/tmp/app\n", "host1"])
     @test_throws ArgumentError parse_setup_args(["check", "--deploy-root"])
     let r = parse_setup_args(["check", "--julia", "/opt/julia/bin/julia", "host1"])
         @test r.julia_path == "/opt/julia/bin/julia"
@@ -263,8 +259,7 @@ using Test
             "--check" => "check",
             "--delete" => "delete",
             "--remote-root" => "remote-root",
-            "--requirements" => "requirements",
-        )
+            "--requirements" => "requirements")
         let err = try
                 parse_setup_args([flag, "host1"])
                 error("expected ArgumentError")
@@ -302,8 +297,7 @@ using Test
         @test r.hosts == ["host1"]
     end
     let r = parse_setup_args(
-            ["instantiate", "--deploy-root", "/tmp/App.jl", "--run-id", "20260101T000000Z-aaaaaa", "h1"],
-        )
+            ["instantiate", "--deploy-root", "/tmp/App.jl", "--run-id", "20260101T000000Z-aaaaaa", "h1"])
         @test r.mode == :instantiate
         @test r.deploy_root == "/tmp/App.jl"
         @test r.run_id == "20260101T000000Z-aaaaaa"
@@ -361,7 +355,7 @@ using Test
         catch e
             e
         end
-        session = DistSSHRun.DistSSHSession(workers = ["h1"], project = pwd(), yes = true)
+        session = DistSSHRun.DistSSHSession(workers = ["h1"], project = pwd())
         err_api = try
             DistSSHRun.setup!(session, :ship_tree; extra_files = two.extra_files)
             nothing

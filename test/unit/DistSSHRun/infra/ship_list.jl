@@ -552,8 +552,7 @@ end
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
             write(
                 joinpath(tmp, "Manifest.toml"),
-                "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
-            )
+                "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
             write(joinpath(tmp, "keep.jl"), "k = 1\n")
             mkpath(joinpath(tmp, "nested", "sub"))
             write(joinpath(tmp, "nested", "sub", "a.jl"), "a = 1\n")
@@ -570,8 +569,7 @@ end
                 name = "big"
                 path = "data"
                 hash = false
-                """,
-            )
+                """)
             write(joinpath(tmp, ".distssh", "note.txt"), "kit\n")
             run(`mkfifo $(joinpath(tmp, "pipe"))`)
             listed = DistSSHRun.ship_send_list(tmp)
@@ -601,8 +599,7 @@ end
                 DistSSHRun.Tar.extract(packed.tar_path, dest)
                 @test _extracted_ship_rels(dest) == listed
                 snap = DistSSHRun.DistSSHShip.pack_tree(
-                    tmp; omit_project_rels = omit,
-                )
+                    tmp; omit_project_rels = omit)
                 try
                     @test snap.content_tree_hash == packed.content_tree_hash
                 finally
@@ -622,8 +619,7 @@ end
                 write(joinpath(repo, "Project.toml"), "name = \"App\"\n")
                 write(
                     joinpath(repo, "Manifest.toml"),
-                    "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
-                )
+                    "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
                 write(joinpath(repo, "tracked.jl"), "t = 1\n")
                 write(joinpath(repo, "ignored.jl"), "i = 1\n")
                 run(`git -C $repo init --quiet`)

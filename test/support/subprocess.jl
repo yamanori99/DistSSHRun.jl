@@ -23,8 +23,7 @@ if !isdefined(Main, :_child_julia_env)
                 "JULIA_PROJECT",
                 "DISTSSH_CLI_SUBCOMMAND_DONE",
                 "DIST_SSH_KIT_CLI_INCLUDE",
-                "NO_COLOR",
-            )
+                "NO_COLOR")
         )
         env = Dict{String, String}(
             String(k) => String(v) for (k, v) in ENV if !isempty(v) && !(String(k) in skip)

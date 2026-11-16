@@ -10,8 +10,7 @@ using Test
         child = joinpath(@__DIR__, "project_child.jl")
         cmd = setenv(
             `$(_julia_cmd_for()) --startup-file=no --project=$TEST_PROJECT $child $TEST_PROJECT $throwaway`,
-            _child_julia_env(),
-        )
+            _child_julia_env())
         proc, out = _run_subprocess(cmd)
         if proc.exitcode != 0
             println(stderr, "──── kit cli project (exit=$(proc.exitcode)) ────")

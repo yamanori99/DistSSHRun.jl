@@ -90,16 +90,13 @@ end
         ]
         @test DistSSHRun._remote_git_shell(tilde, ["checkout", "--detach", sha]) ==
             "cd ~/'App.jl' && " * DistSSHRun.DistSSHBase._remote_argv_sh(
-            vcat(hardened, ["checkout", "--detach", sha]),
-        )
+            vcat(hardened, ["checkout", "--detach", sha]))
         @test DistSSHRun._remote_git_shell(abs, ["checkout", "--detach", sha]) ==
             DistSSHRun.DistSSHBase._remote_argv_sh(
-            vcat(hardened, ["-C", abs, "checkout", "--detach", sha]),
-        )
+            vcat(hardened, ["-C", abs, "checkout", "--detach", sha]))
         nasty = "/tmp/a'b \$(echo pwned)"
         shell = DistSSHRun._remote_git_shell(
-            nasty, ["status", "--porcelain", "-z", "--untracked-files=normal"],
-        )
+            nasty, ["status", "--porcelain", "-z", "--untracked-files=normal"])
         @test occursin(DistSSHRun.DistSSHBase._remote_sh_quote(nasty), shell)
         @test occursin("core.hooksPath=/dev/null", shell)
         @test occursin("core.fsmonitor=false", shell)
@@ -188,14 +185,12 @@ end
             withenv("HOME" => home, "PATH" => path) do
                 refused = run(
                     ignorestatus(pipeline(`sh -c $home_script`; stdout = devnull, stderr = devnull));
-                    wait = true,
-                )
+                    wait = true)
                 @test refused.exitcode != 0
                 @test !isfile(log)
                 ran = run(
                     ignorestatus(pipeline(`sh -c $allowed`; stdout = devnull, stderr = devnull));
-                    wait = true,
-                )
+                    wait = true)
                 @test ran.exitcode == 0
                 @test isfile(log)
             end
@@ -218,9 +213,7 @@ end
                 pipeline(
                     ignorestatus(`pkill -9 -f distsshkit-job:no-such-reap-116`);
                     stdout = devnull,
-                    stderr = devnull,
-                ),
-            )
+                    stderr = devnull))
             @test Int(proc.exitcode) == 1
         end
     end
@@ -238,16 +231,14 @@ end
                 code = parse(Int, get(ENV, "REAP_EXIT", "1"))
                 code == 99 && sleep(60)
                 exit(code)
-                """,
-            )
+                """)
             marks = joinpath(dir, "marks")
             mkpath(marks)
             withenv(
                 "DISTSSH_TEST" => "1",
                 "DISTSSH_TEST_SSH" => script,
                 "REAP_DIR" => marks,
-                "REAP_EXIT" => "1",
-            ) do
+                "REAP_EXIT" => "1") do
                 @test_logs DistSSHRun._reap_tagged_workers!("job.1", ["h", "h", "g"])
             end
             @test sort(readdir(marks)) == ["g", "h"]
@@ -257,8 +248,7 @@ end
                 "DISTSSH_TEST" => "1",
                 "DISTSSH_TEST_SSH" => script,
                 "REAP_DIR" => marks,
-                "REAP_EXIT" => "255",
-            ) do
+                "REAP_EXIT" => "255") do
                 @test_logs (:warn, r"Tagged worker pkill did not reach: a, b") begin
                     DistSSHRun._reap_tagged_workers!("job.1", ["a", "a", "b"])
                 end
@@ -267,8 +257,7 @@ end
                 "DISTSSH_TEST" => "1",
                 "DISTSSH_TEST_SSH" => script,
                 "REAP_DIR" => marks,
-                "REAP_EXIT" => "99",
-            ) do
+                "REAP_EXIT" => "99") do
                 t0 = time()
                 @test_logs (:warn, r"Tagged worker pkill did not reach: a, b, c") begin
                     DistSSHRun._reap_tagged_workers!("job.1", ["a", "b", "c"])
@@ -299,76 +288,63 @@ end
             mkpath(joinpath(leaf, "src"))
             write(
                 joinpath(leaf, "run.toml"),
-                "schema = 1\nwriter = \"Other 9.9.9\"\nkind = \"ship\"\n",
-            )
+                "schema = 1\nwriter = \"Other 9.9.9\"\nkind = \"ship\"\n")
             body = DistSSHRun._remote_delete_shell(root)
             err = IOBuffer()
             proc = run(
                 ignorestatus(pipeline(`sh -c $body`; stdout = devnull, stderr = err));
-                wait = true,
-            )
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test isdir(leaf)
             write(
                 joinpath(leaf, "run.toml"),
-                "[metadata]\nschema = 1\nwriter = \"DistSSHRun 1\"\nkind = \"ship\"\n",
-            )
+                "[metadata]\nschema = 1\nwriter = \"DistSSHRun 1\"\nkind = \"ship\"\n")
             err_meta = IOBuffer()
             proc_meta = run(
                 ignorestatus(pipeline(`sh -c $(DistSSHRun._remote_delete_shell(root))`; stdout = devnull, stderr = err_meta));
-                wait = true,
-            )
+                wait = true)
             @test proc_meta.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err_meta)))
             @test isdir(leaf)
             write(
                 joinpath(leaf, "run.toml"),
-                "schema = 1\nwriter = \"DistSSHRun 1.0\nkind = \"ship\"\n",
-            )
+                "schema = 1\nwriter = \"DistSSHRun 1.0\nkind = \"ship\"\n")
             err_open = IOBuffer()
             proc_open = run(
                 ignorestatus(pipeline(`sh -c $(DistSSHRun._remote_delete_shell(root))`; stdout = devnull, stderr = err_open));
-                wait = true,
-            )
+                wait = true)
             @test proc_open.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err_open)))
             @test isdir(leaf)
             write(
                 joinpath(leaf, "run.toml"),
-                "schema = 1\nwriter = \"DistSSHRun 1.0\"\nkind = \"ship\"\n[bad\n",
-            )
+                "schema = 1\nwriter = \"DistSSHRun 1.0\"\nkind = \"ship\"\n[bad\n")
             err_hdr = IOBuffer()
             proc_hdr = run(
                 ignorestatus(pipeline(`sh -c $(DistSSHRun._remote_delete_shell(root))`; stdout = devnull, stderr = err_hdr));
-                wait = true,
-            )
+                wait = true)
             @test proc_hdr.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err_hdr)))
             @test isdir(leaf)
             write(
                 joinpath(leaf, "run.toml"),
-                "schema = 1\nwriter = \"DistSSHRun 1.0\"\nkind = \"ship\"\nkind = \"evil\"\n",
-            )
+                "schema = 1\nwriter = \"DistSSHRun 1.0\"\nkind = \"ship\"\nkind = \"evil\"\n")
             err_dup = IOBuffer()
             proc_dup = run(
                 ignorestatus(
                     pipeline(
                         `sh -c $(DistSSHRun._remote_delete_shell(root))`;
                         stdout = devnull,
-                        stderr = err_dup,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = err_dup));
+                wait = true)
             @test proc_dup.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err_dup)))
             @test isdir(leaf)
             write(joinpath(leaf, "run.toml"), DistSSHRun._ship_run_leaf_stamp_toml())
             proc2 = run(
                 ignorestatus(pipeline(`sh -c $(DistSSHRun._remote_delete_shell(root))`; stdout = devnull, stderr = devnull));
-                wait = true,
-            )
+                wait = true)
             @test proc2.exitcode == 0
             @test !isdir(root)
         end
@@ -382,19 +358,15 @@ end
             mkpath(nested)
             write(
                 joinpath(nested, "run.toml"),
-                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"drive\"\n",
-            )
+                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"drive\"\n")
             err = IOBuffer()
             proc = run(
                 ignorestatus(
                     pipeline(
                         `sh -c $(DistSSHRun._prune_remote_shell(root))`;
                         stdout = devnull,
-                        stderr = err,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test isdir(nested)
@@ -404,11 +376,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._prune_remote_shell(root))`;
                         stdout = devnull,
-                        stderr = devnull,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = devnull));
+                wait = true)
             @test proc2.exitcode == 0
             @test !isdir(drive)
             @test isdir(root)
@@ -426,14 +395,10 @@ end
                 provenance = Dict{String, Any}(
                     "git" => Dict{String, Any}("commit" => "abc", "dirty" => false),
                     "workers" => Dict{String, Any}(
-                        "box" => [Dict{String, Any}("n" => 2)],
-                    ),
-                ),
-            )
+                        "box" => [Dict{String, Any}("n" => 2)])))
             DistSSHRun._store_input_rows!(
                 go,
-                [Dict{String, Any}("name" => "a.b", "host" => "h1", "sha256" => "dead")],
-            )
+                [Dict{String, Any}("name" => "a.b", "host" => "h1", "sha256" => "dead")])
             DistSSHRun._merge_inputs_into_run_toml!(go)
             @test occursin("[[inputs]]", read(joinpath(go, "run.toml"), String))
             proc = run(
@@ -441,11 +406,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._prune_remote_shell(root))`;
                         stdout = devnull,
-                        stderr = devnull,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = devnull));
+                wait = true)
             @test proc.exitcode == 0
             @test !isdir(go)
             @test isdir(root)
@@ -467,11 +429,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._prune_remote_shell(root))`;
                         stdout = devnull,
-                        stderr = err,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test isdir(keep)
@@ -486,19 +445,15 @@ end
             mkpath(go)
             write(
                 joinpath(go, "run.toml"),
-                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"go\"\n",
-            )
+                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"go\"\n")
             err = IOBuffer()
             proc = run(
                 ignorestatus(
                     pipeline(
                         `sh -c $(DistSSHRun._prune_remote_shell(root))`;
                         stdout = devnull,
-                        stderr = err,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test isfile(joinpath(go, "run.toml"))
@@ -509,8 +464,7 @@ end
             mkpath(deep)
             write(
                 joinpath(deep, "run.toml"),
-                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"drive\"\n",
-            )
+                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"drive\"\n")
             mkpath(joinpath(root, "src"))
             write(joinpath(root, "src", "run.toml"), "name = \"job\"\n")
             ship = joinpath(root, "runs", "20260101T000000Z-abcd", "src", "src")
@@ -522,11 +476,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._prune_remote_shell(root))`;
                         stdout = devnull,
-                        stderr = err,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test isfile(joinpath(deep, "run.toml"))
@@ -543,8 +494,7 @@ end
             err = IOBuffer()
             proc = run(
                 ignorestatus(pipeline(`sh -c $(DistSSHRun._remote_delete_shell(root))`; stdout = devnull, stderr = err));
-                wait = true,
-            )
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test isdir(weird)
@@ -558,8 +508,7 @@ end
             mkpath(leaf)
             write(
                 joinpath(leaf, "run.toml"),
-                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"ship\"\n",
-            )
+                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"ship\"\n")
             # Line-splitting this path yields `<root>/runs/*` and `*/run.toml`.
             write(joinpath(root, "runs", "*"), DistSSHRun._ship_run_leaf_stamp_toml())
             cwd = joinpath(d, "cwd")
@@ -572,11 +521,8 @@ end
                     pipeline(
                         Cmd(`sh -c $body`; dir = cwd);
                         stdout = devnull,
-                        stderr = err,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test isfile(joinpath(leaf, "run.toml"))
@@ -594,8 +540,7 @@ end
                     "nums = [1, 2\n",
                     "point = { x = 1\n",
                     "note = 'unterminated\n",
-                    "[a.\"b]\n",
-                )
+                    "[a.\"b]\n")
                 write(joinpath(leaf, "run.toml"), owned * extra)
                 err = IOBuffer()
                 proc = run(
@@ -603,29 +548,22 @@ end
                         pipeline(
                             `sh -c $(DistSSHRun._remote_delete_shell(root))`;
                             stdout = devnull,
-                            stderr = err,
-                        ),
-                    );
-                    wait = true,
-                )
+                            stderr = err));
+                    wait = true)
                 @test proc.exitcode != 0
                 @test occursin("unowned run leaf", String(take!(err)))
                 @test isfile(joinpath(leaf, "run.toml"))
             end
             write(
                 joinpath(leaf, "run.toml"),
-                owned * "note = \"a [b]\"\nnums = [1, 2]\npoint = { x = 1 }\n",
-            )
+                owned * "note = \"a [b]\"\nnums = [1, 2]\npoint = { x = 1 }\n")
             proc_ok = run(
                 ignorestatus(
                     pipeline(
                         `sh -c $(DistSSHRun._remote_delete_shell(root))`;
                         stdout = devnull,
-                        stderr = devnull,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = devnull));
+                wait = true)
             @test proc_ok.exitcode == 0
             @test !isdir(root)
         end
@@ -643,11 +581,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._remote_delete_shell(root))`;
                         stdout = devnull,
-                        stderr = err,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test isdir(joinpath(leaf, "run.toml"))
@@ -663,11 +598,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._remote_delete_shell(root))`;
                         stdout = devnull,
-                        stderr = err,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test ispath(joinpath(leaf, "run.toml"))
@@ -688,11 +620,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._prune_remote_shell(root))`;
                         stdout = devnull,
-                        stderr = err,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test isdir(joinpath(drive, "run.toml"))
@@ -708,11 +637,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._prune_remote_shell(root))`;
                         stdout = devnull,
-                        stderr = err,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test ispath(joinpath(drive, "run.toml"))
@@ -725,8 +651,7 @@ end
             mkpath(weird)
             write(
                 joinpath(weird, "run.toml"),
-                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"drive\"\n",
-            )
+                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"drive\"\n")
             write(joinpath(drive, "*"), DistSSHRun._ship_run_leaf_stamp_toml())
             cwd = joinpath(d, "cwd")
             mkpath(joinpath(cwd, "*"))
@@ -735,10 +660,8 @@ end
             body = DistSSHRun._prune_remote_shell(root)
             proc = run(
                 ignorestatus(
-                    pipeline(Cmd(`sh -c $body`; dir = cwd); stdout = devnull, stderr = err),
-                );
-                wait = true,
-            )
+                    pipeline(Cmd(`sh -c $body`; dir = cwd); stdout = devnull, stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test isfile(joinpath(weird, "run.toml"))
@@ -760,11 +683,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._prune_remote_shell(root))`;
                         stdout = devnull,
-                        stderr = err,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("newline", String(take!(err)))
             @test isfile(joinpath(keep, "note"))
@@ -788,10 +708,8 @@ end
             body = DistSSHRun._prune_remote_shell(root)
             proc = run(
                 ignorestatus(
-                    pipeline(Cmd(`sh -c $body`; dir = cwd); stdout = devnull, stderr = err),
-                );
-                wait = true,
-            )
+                    pipeline(Cmd(`sh -c $body`; dir = cwd); stdout = devnull, stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("newline", String(take!(err)))
             @test isdir(keep)
@@ -813,11 +731,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._remote_delete_shell(gitroot, app))`;
                         stdout = devnull,
-                        stderr = err,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test isdir(leaf)
@@ -829,11 +744,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._remote_delete_shell(gitroot, app))`;
                         stdout = devnull,
-                        stderr = devnull,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = devnull));
+                wait = true)
             @test proc_ok.exitcode == 0
             @test !isdir(gitroot)
         end
@@ -848,11 +760,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._remote_delete_shell(gitroot, app))`;
                         stdout = devnull,
-                        stderr = devnull,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = devnull));
+                wait = true)
             @test proc.exitcode == 0
             @test !isdir(gitroot)
         end
@@ -868,11 +777,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._remote_delete_shell(gitroot, app))`;
                         stdout = devnull,
-                        stderr = devnull,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = devnull));
+                wait = true)
             @test proc.exitcode == 0
             @test !isdir(gitroot)
             @test isdir(leaf)
@@ -898,11 +804,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._remote_delete_shell(root))`;
                         stdout = devnull,
-                        stderr = devnull,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = devnull));
+                wait = true)
             @test proc.exitcode == 0
             @test !isdir(root)
         end
@@ -916,11 +819,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._remote_delete_shell(root))`;
                         stdout = devnull,
-                        stderr = devnull,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = devnull));
+                wait = true)
             @test proc.exitcode == 0
             @test !isdir(root)
         end
@@ -931,19 +831,15 @@ end
             write(joinpath(leaf, "src", "run.toml"), "name = \"job\"\n")
             write(
                 joinpath(leaf, "run.toml"),
-                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"ship\"\n",
-            )
+                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"ship\"\n")
             err = IOBuffer()
             proc = run(
                 ignorestatus(
                     pipeline(
                         `sh -c $(DistSSHRun._remote_delete_shell(root))`;
                         stdout = devnull,
-                        stderr = err,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test isfile(joinpath(leaf, "run.toml"))
@@ -964,11 +860,8 @@ end
                         pipeline(
                             `sh -c $(DistSSHRun._remote_delete_shell(root))`;
                             stdout = devnull,
-                            stderr = devnull,
-                        ),
-                    );
-                    wait = true,
-                )
+                            stderr = devnull));
+                    wait = true)
             end
             @test proc.exitcode == 0
             @test !isdir(root)
@@ -993,11 +886,8 @@ end
                         pipeline(
                             `sh -c $(DistSSHRun._remote_delete_shell(root))`;
                             stdout = devnull,
-                            stderr = err,
-                        ),
-                    );
-                    wait = true,
-                )
+                            stderr = err));
+                    wait = true)
             end
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
@@ -1012,11 +902,8 @@ end
                         pipeline(
                             `sh -c $(DistSSHRun._remote_delete_shell(root))`;
                             stdout = devnull,
-                            stderr = err_mk,
-                        ),
-                    );
-                    wait = true,
-                )
+                            stderr = err_mk));
+                    wait = true)
             end
             @test proc_mk.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err_mk)))
@@ -1031,11 +918,8 @@ end
                         pipeline(
                             `sh -c $(DistSSHRun._remote_delete_shell(root))`;
                             stdout = devnull,
-                            stderr = err_cat,
-                        ),
-                    );
-                    wait = true,
-                )
+                            stderr = err_cat));
+                    wait = true)
             end
             @test proc_cat.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err_cat)))
@@ -1058,11 +942,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._remote_delete_shell(root))`;
                         stdout = devnull,
-                        stderr = err,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test isdir(leaf)
@@ -1079,11 +960,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._remote_delete_shell(root))`;
                         stdout = devnull,
-                        stderr = err,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test islink(joinpath(root, "runs"))
@@ -1102,11 +980,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._remote_delete_shell(root))`;
                         stdout = devnull,
-                        stderr = err,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test isdir(leaf)
@@ -1129,11 +1004,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._remote_delete_shell(root))`;
                         stdout = devnull,
-                        stderr = err,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test islink(joinpath(leaf, "run.toml"))
@@ -1151,11 +1023,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._remote_delete_shell(root))`;
                         stdout = devnull,
-                        stderr = err,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test islink(joinpath(leaf, "run.toml"))
@@ -1173,11 +1042,8 @@ end
                     pipeline(
                         `sh -c $(DistSSHRun._prune_remote_shell(root))`;
                         stdout = devnull,
-                        stderr = err,
-                    ),
-                );
-                wait = true,
-            )
+                        stderr = err));
+                wait = true)
             @test proc.exitcode != 0
             @test occursin("unowned run leaf", String(take!(err)))
             @test islink(joinpath(nested, "run.toml"))
@@ -1220,16 +1086,14 @@ end
             real_rm = String(something(Sys.which("rm"), "/bin/rm"))
             write(
                 joinpath(fake, "rm"),
-                "#!/bin/sh\necho called >> $(repr(log))\nexec $(DistSSHRun.posix_quote(real_rm)) \"\$@\"\n",
-            )
+                "#!/bin/sh\necho called >> $(repr(log))\nexec $(DistSSHRun.posix_quote(real_rm)) \"\$@\"\n")
             chmod(joinpath(fake, "rm"), 0o755)
             path = fake * ":" * get(ENV, "PATH", "")
             function run_script(target_path)
                 body = DistSSHRun._remote_delete_shell(target_path)
                 return run(
                     ignorestatus(pipeline(`sh -c $body`; stdout = devnull, stderr = devnull));
-                    wait = true,
-                )
+                    wait = true)
             end
             withenv("HOME" => home, "PATH" => path) do
                 rm(log; force = true)
@@ -1279,8 +1143,7 @@ end
                 err = IOBuffer()
                 proc = run(
                     ignorestatus(pipeline(`sh -c $body`; stdout = devnull, stderr = err));
-                    wait = true,
-                )
+                    wait = true)
                 return proc, String(take!(err))
             end
             withenv("HOME" => home, "PATH" => path) do

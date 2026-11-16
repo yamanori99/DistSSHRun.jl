@@ -1,7 +1,7 @@
 category: breaking
 
 - Partial worker launch is fail-closed by default. `--best-effort` / `best_effort=true` continues with a [`LaunchReport`](@ref) naming planned and joined counts and each failed host (`WorkerLaunchOutcome`). `--require-all-hosts`, `DISTSSH_REQUIRE_ALL_HOSTS`, and `DISTSSH_BEST_EFFORT` are removed with a usage hint toward the default and `--best-effort`.
-- `DistSSHSession` and drive / go / ride / pipeline APIs no longer accept `yes=`; confirmation stays on the CLI (`-y` / `--yes`).
+- `DistSSHSession`, `PipelineConfig`, and drive / go / ride / pipeline APIs no longer accept `yes=`; confirmation stays on the CLI (`-y` / `--yes`, `DISTSSH_YES` for `pipeline_config_from_env`).
 - Local ship records use required `schema_version` (not `schema`). Legacy `last-snapshot.toml` and records without `schema_version` fail with a manual-fix message.
 - Seed scheme 1: domain-tagged mixing, plan-fixed launch ranks ([`launch_rank`](@ref)), and `SEED_SCHEME` in provenance. Worker / item seed values change. Golden vectors pin the mixers.
 - Worker project precompile failure on a joined worker is treated as not usable (`FailedToLoad`) in the launch report.

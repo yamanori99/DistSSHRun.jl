@@ -53,7 +53,6 @@ function pipeline_config_from_env(;
         workers = placement_source_tokens(cli; keep_counts = true),
         remote = isempty(remote_raw) ? nothing : String(remote_raw),
         hosts_file = nothing,
-        yes = true,
         quiet = env_v === :quiet,
         verbosity = env_v,
         driver = String(driver_path),
@@ -65,7 +64,7 @@ end
 
 """Build [`DistSSHSession`](@ref) from a pipeline config."""
 function kit_session_from_config(config::PipelineConfig)::DistSSHSession
-    return DistSSHSession(
+    session = DistSSHSession(
         project = config.project,
         workers = config.tokens,
         head_workers = config.head_workers,
@@ -73,8 +72,15 @@ function kit_session_from_config(config::PipelineConfig)::DistSSHSession
         hosts_file = config.hosts_file,
         quiet = config.quiet,
         verbosity = config.verbosity,
-        yes = config.yes,
     )
+    cli = default_kit_cli_session()
+    cli.quiet = config.quiet
+    config.verbosity !== nothing && (cli.verbosity = config.verbosity)
+    session.cli_session = cli
+    apply_shared_cli_flags!(session.cli_session)
+    session.quiet = session.cli_session.quiet
+    session.verbosity = session.cli_session.verbosity
+    return session
 end
 
 """Whether [`pipeline!`](@ref) should rsync results back from remotes."""
@@ -143,7 +149,7 @@ Does not call [`setup!`](@ref); prepare remotes first.
 
 Worker tokens match the CLI (`parent:2`, `1*user@host`). Listed tokens
 need `:N`. Keyword `args` are passed to the driver; `remote` is the remote
-project path. Default `yes=true` skips confirm prompts.
+Confirmations follow CLI flags / `DISTSSH_YES` via `kit_session_from_config`.
 
 ```julia
 pipeline!(driver, "parent:2"; args=["8"])

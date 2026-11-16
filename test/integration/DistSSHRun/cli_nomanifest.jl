@@ -69,8 +69,7 @@ function _cli_drive(tree::AbstractString, host::AbstractString; depot::Union{Not
     base = _julia_cmd_for()
     return _cli_child(
         `$base --startup-file=no --project=$host $drive --help`;
-        depot = depot,
-    )
+        depot = depot)
 end
 
 function _cli_host!(parent::AbstractString, name::AbstractString)::String
@@ -95,8 +94,7 @@ function _cli_lock!(tmp::AbstractString)::Tuple{Vector{UInt8}, Union{Nothing, St
     base = _julia_cmd_for()
     cmd = _cli_child(
         `$base --startup-file=no --project=$tree -e "using Pkg; Pkg.instantiate()"`;
-        depot = depot,
-    )
+        depot = depot)
     proc, out = _run_subprocess(cmd)
     _assert_proc_ok(proc, out; label = "instantiate copied checkout")
     manifest = _checkout_manifest_file(tree)
@@ -129,8 +127,7 @@ function _checkout_pkg_hidden!(proj::AbstractString, root::AbstractString)
 
         [sources]
         DistSSHRun = {path = "$(root)"}
-        """,
-    )
+        """)
     return nothing
 end
 
@@ -139,8 +136,7 @@ function _checkout_pkg_hidden_check(tmp::AbstractString)
     _checkout_pkg_hidden!(proj, _kit_root())
     base = _julia_cmd_for()
     inst, inst_out = _run_subprocess(
-        `$base --startup-file=no --project=$proj -e "using Pkg; Pkg.instantiate()"`,
-    )
+        `$base --startup-file=no --project=$proj -e "using Pkg; Pkg.instantiate()"`)
     _assert_proc_ok(inst, inst_out; label = "kitlike instantiate")
     script = joinpath(tmp, "setup_help.jl")
     write(
@@ -149,16 +145,13 @@ function _checkout_pkg_hidden_check(tmp::AbstractString)
         using DistSSHRun
         code = DistSSHRun.main(["setup", "--help"])
         println("CODE=" * string(Int(code)))
-        """,
-    )
+        """)
     proc, out = _run_subprocess(
         addenv(
             `$base --startup-file=no --project=$proj $script`,
             "JULIA_LOAD_PATH" => proj,
             "DISTSSH_CLI_SUBCOMMAND_DONE" => "0",
-            "DIST_SSH_KIT_CLI_INCLUDE" => "0",
-        ),
-    )
+            "DIST_SSH_KIT_CLI_INCLUDE" => "0"))
     _assert_proc_ok(proc, out; label = "setup --help without Pkg on LOAD_PATH")
     @test _cli_line(out, "CODE") == "0"
     @test occursin("Usage", out)
@@ -169,8 +162,8 @@ end
 @testset "CLI checkout without Manifest" begin
     @testset "other import errors stay" begin
         @test _checkout_hint_message(ErrorException("precompile failed")) === nothing
-        @test _checkout_hint_message(MethodError(+, (1,))) === nothing
-        wrapped = LoadError("child.jl", 1, MethodError(+, (1,)))
+        @test _checkout_hint_message(MethodError(+, (1))) === nothing
+        wrapped = LoadError("child.jl", 1, MethodError(+, (1)))
         @test _checkout_hint_message(wrapped) === nothing
         missing = ArgumentError("Package DistSSHRun not found in current path.")
         @test _checkout_hint_message(missing) === nothing
@@ -203,8 +196,7 @@ end
             write(joinpath(locked, name), bytes)
             locked_host = _cli_host!(tmp, "host-$(name)")
             help, help_out = _run_subprocess(
-                _cli_drive(locked, locked_host; depot = lockdepot),
-            )
+                _cli_drive(locked, locked_host; depot = lockdepot))
             _assert_proc_ok(help, help_out; label = "manifest $(name)")
             @test occursin("Usage", help_out)
             @test !occursin("No Manifest in ", help_out)
@@ -215,8 +207,7 @@ end
         _cli_copy_tree!(installed, _kit_root())
         inst_host = _cli_host!(tmp, "inst-host")
         denied, denied_out = _run_subprocess(
-            _cli_drive(installed, inst_host; depot = inst),
-        )
+            _cli_drive(installed, inst_host; depot = inst))
         _cli_assert_exit(denied, denied_out, 1; label = "depot tree")
         @test !occursin("No Manifest in ", denied_out)
         @test !occursin("Pkg.instantiate()", denied_out)
@@ -244,12 +235,10 @@ end
                 msg = shown isa ErrorException ? shown.msg : sprint(showerror, err)
                 println(msg)
             end
-            """,
-        )
+            """)
         base = _julia_cmd_for()
         included, included_out = _run_subprocess(
-            _cli_child(`$base --startup-file=no --project=$wrap_host $wrapper`),
-        )
+            _cli_child(`$base --startup-file=no --project=$wrap_host $wrapper`))
         _assert_proc_ok(included, included_out; label = "include does not exit")
         @test occursin("CAUGHT", included_out)
         @test !occursin("NOT_THROWN", included_out)
@@ -258,9 +247,7 @@ end
         mod, mod_out = _run_subprocess(
             addenv(
                 _kit_cli_cmd(["drive", "--help"]),
-                "DISTSSH_CLI_SUBCOMMAND_DONE" => "0",
-            ),
-        )
+                "DISTSSH_CLI_SUBCOMMAND_DONE" => "0"))
         _assert_proc_ok(mod, mod_out; label = "julia -m DistSSHRun drive --help")
         @test occursin("Usage", mod_out)
 

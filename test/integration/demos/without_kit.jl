@@ -22,8 +22,7 @@ using Test
         solo_echo_proc, solo_echo_out = _run_subprocess(
             setenv(
                 Cmd([julia, "--startup-file=no", "--project=$kit_root", echo, "--n", "4"]),
-                env,
-            )
+                env)
         )
         _assert_proc_ok(solo_echo_proc, solo_echo_out; label = "pi_echo solo")
         echo_line = match(r"π ≈ .+", solo_echo_out)
@@ -33,8 +32,7 @@ using Test
             script = echo_local,
             script_args = ["--n", "4"],
             project_root = tmp,
-            go_flags = ["-y"],
-        )
+            go_flags = ["-y"])
         _assert_proc_ok(go_echo_proc, go_echo_out; label = "pi_echo go")
         @test occursin(echo_line.match, go_echo_out)
         echo_batch = _ssh_e2e_latest_go_batch(tmp)
@@ -47,8 +45,7 @@ using Test
         solo_file_proc, solo_file_out = _run_subprocess(
             setenv(
                 Cmd([julia, "--startup-file=no", "--project=$kit_root", file, "--n", "4"]),
-                _child_julia_env(Dict("DISTRIBUTED_OUTPUT_DIR" => solo_dir)),
-            )
+                _child_julia_env(Dict("DISTRIBUTED_OUTPUT_DIR" => solo_dir)))
         )
         _assert_proc_ok(solo_file_proc, solo_file_out; label = "pi_file solo")
         solo_body = read(joinpath(solo_dir, "pi_results.txt"), String)
@@ -58,23 +55,20 @@ using Test
             script = file_local,
             script_args = ["--n", "4"],
             project_root = tmp,
-            go_flags = ["-y"],
-        )
+            go_flags = ["-y"])
         _assert_proc_ok(go_file_proc, go_file_out; label = "pi_file go")
         file_batch = _ssh_e2e_latest_go_batch(tmp)
         @test file_batch !== nothing
         file_batch === nothing && error("expected go batch for pi_file")
         @test read(
             joinpath(file_batch, _go_local_slot_dir(1; multi = false), "pi_results.txt"),
-            String,
-        ) == solo_body
+            String) == solo_body
         _assert_kit_progress_done(file_batch; kind = :go)
 
         pipe_proc, pipe_out = _run_subprocess(
             setenv(
                 Cmd(Cmd([julia, "--startup-file=no", "--project=$kit_root", pipe_local, "--n", "4"]); dir = tmp),
-                env,
-            )
+                env)
         )
         _assert_proc_ok(pipe_proc, pipe_out; label = "pipeline_pi demo")
         @test occursin("pipeline ok", pipe_out)

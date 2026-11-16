@@ -21,9 +21,7 @@ using Test
         result = DistSSHRun.go!(
             script; head_slots = 2,
             project = proj,
-            quiet = true,
-            yes = true,
-        )
+            quiet = true)
         wall = time() - t0
         @test result.ok
         a = parse(Float64, read(joinpath(result.output_dir, _go_local_slot_dir(1; multi = true), "t0.txt"), String))
@@ -52,9 +50,7 @@ end
             repeat = 2,
             head_slots = 2,
             project = proj,
-            quiet = true,
-            yes = true,
-        )
+            quiet = true)
         wall = time() - t0
         @test result.ok
         a = parse(Float64, read(joinpath(result.output_dir, _go_local_slot_dir(1; multi = true), "t0.txt"), String))
@@ -81,9 +77,7 @@ end
             script; head_slots = 1,
             project = proj,
             output_dir = custom,
-            quiet = true,
-            yes = true,
-        )
+            quiet = true)
         @test result.ok
         @test result.output_dir == DistSSHRun.canonical_local_path(custom)
         @test isfile(joinpath(result.output_dir, _go_local_slot_label(), "marker.txt"))
@@ -109,9 +103,7 @@ end
             project = proj,
             output_dir = custom,
             collect_spec = false,
-            quiet = true,
-            yes = true,
-        )
+            quiet = true)
         @test result.ok
         @test result.output_dir == DistSSHRun.canonical_local_path(custom)
         @test isfile(joinpath(result.output_dir, _go_local_slot_label(), "marker.txt"))

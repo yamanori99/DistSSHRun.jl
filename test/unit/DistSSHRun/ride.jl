@@ -11,8 +11,7 @@ using Distributed
                 name = "RideAct"
                 uuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
                 version = "0.1.0"
-                """,
-            )
+                """)
             try
                 DistSSHRun._ride_activate_project!(tmp)
                 active = Base.active_project()
@@ -119,8 +118,7 @@ using Distributed
             @test _scan("itmap.jl", "Iterators.map(identity, 1:2)\n").drive_line === nothing
             @test _scan(
                 "thspawn.jl",
-                "using Base.Threads: @spawn\n@spawn 1\n",
-            ).drive_line === nothing
+                "using Base.Threads: @spawn\n@spawn 1\n").drive_line === nothing
             @test _scan("map2.jl", "map(f, a, b)\n").drive_line === nothing
             dist_every = _scan("devery.jl", "Distributed.@everywhere x = 1\n")
             @test dist_every.error === nothing
@@ -398,8 +396,7 @@ using Distributed
             nested_src(struct_name) = begin
                 nest_wraps = join(
                     ["w = $(struct_name)(w)" for _ in 1:(nest_n - 1)],
-                    "\n            ",
-                )
+                    "\n            ")
                 nest_get = "w" * repeat(".inner", nest_n)
                 """
                 struct $(struct_name)
@@ -441,8 +438,7 @@ using Distributed
                     (nested_src("_RideNest_nospi"), false, "nested_nospi"),
                     (nested_src("_RideNest_spi"), true, "nested_spi"),
                     (const_nospi_src, false, "const_nospi"),
-                    (const_spi_src, true, "const_spi"),
-                )
+                    (const_spi_src, true, "const_spi"))
                 opath = joinpath(tmp, stem * ".jl")
                 oout = joinpath(tmp, stem * ".txt")
                 write(opath, replace(body, "ARGS[1]" => repr(oout)))
@@ -478,8 +474,7 @@ using Distributed
                     output_dir = dirty,
                     project = tmp,
                     head_workers = 1,
-                    hint_surface = :cli,
-                )
+                    hint_surface = :cli)
                 nothing
             catch e
                 e
@@ -504,9 +499,7 @@ using Distributed
                     "/home/distsshkit/app",
                     "/home/distsshkit/app/runs/20260101T000000Z-abcdef/src",
                     "deadbeef",
-                    ["host.test"],
-                ),
-            )
+                    ["host.test"]))
             return nothing
         end
         function assert_no_shipped(result)
@@ -585,9 +578,7 @@ using Distributed
                 write(
                     joinpath(remote, "runs", snap_id, "run.toml"),
                     DistSSHRun._ship_run_leaf_complete_toml(
-                        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                    ),
-                )
+                        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
                 logp = joinpath(tmp, "ssh.log")
                 bindir = joinpath(tmp, "bin")
                 mkpath(bindir)
@@ -606,16 +597,14 @@ using Distributed
                       esac
                     done
                     exit 255
-                    """,
-                )
+                    """)
                 chmod(ssh_bin, 0o755)
                 fake = Dict(
                     "DISTSSH_TEST" => "1",
                     "DISTSSH_TEST_SSH" => double,
                     "DISTSSH_TEST_SSH_LOG" => logp,
                     "DISTSSH_TEST_POSIX_SHELL" => "1",
-                    "PATH" => bindir * ":" * get(ENV, "PATH", ""),
-                )
+                    "PATH" => bindir * ":" * get(ENV, "PATH", ""))
                 host = "ridework.test"
                 want = DistSSHRun.canonical_local_path(newer)
                 parent_env = joinpath(tmp, "parent-env.txt")
@@ -625,8 +614,7 @@ using Distributed
                     open($(repr(parent_env)), "w") do io
                         println(io, get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
                     end
-                    """,
-                )
+                    """)
 
                 withenv(fake...) do
                     ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = remote * "\nbad"
@@ -645,8 +633,7 @@ using Distributed
                                 project = local_proj,
                                 remote = remote,
                                 output_dir = joinpath(tmp, "parent-out"),
-                                spi_check = false,
-                            )
+                                spi_check = false)
                         end
                     end
                     @test parent.ok
@@ -668,8 +655,7 @@ using Distributed
                                 julia = "/usr/bin/julia",
                                 output_dir = joinpath(tmp, "child-out"),
                                 spi_check = false,
-                                best_effort = true,
-                            )
+                                best_effort = true)
                         end
                     end
                     logged = read(logp, String)
@@ -814,8 +800,7 @@ using Distributed
                     tmp,
                     script,
                     nothing,
-                    false,
-                )
+                    false)
                 @test foreign in workers()
             finally
                 DistSSHRun.DRIVE_HOST_STATUS_STOP[] = true
@@ -840,8 +825,7 @@ using Distributed
                     return DistSSHRun.ride!(
                         script, String[]; head_workers = 1,
                         project = tmp,
-                        run_id = rid,
-                    )
+                        run_id = rid)
                 end
             end
             @test r.ok

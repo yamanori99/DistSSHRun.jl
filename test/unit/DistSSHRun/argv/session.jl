@@ -14,8 +14,7 @@ end
     clear_verbosity_env = (
         "DISTSSH_QUIET" => nothing,
         "DISTSSH_PROGRESS" => nothing,
-        "DISTSSH_VERBOSE" => nothing,
-    )
+        "DISTSSH_VERBOSE" => nothing)
 
     @testset "peel flags" begin
         withenv(clear_verbosity_env..., "DISTSSH_YES" => nothing) do
@@ -202,8 +201,7 @@ end
                 @test DistSSHRun.placement_host_source(session) === :hosts
                 @test occursin(
                     "--hosts",
-                    something(DistSSHRun.kit_distssh_hosts_override_notice(session), ""),
-                )
+                    something(DistSSHRun.kit_distssh_hosts_override_notice(session), ""))
             end
             let session = DistSSHRun.CliSharedFlags()
                 @test DistSSHRun.placement_source_tokens(session; keep_counts = true) ==
@@ -241,8 +239,7 @@ end
             end
             let session = DistSSHRun.CliSharedFlags(
                     hosts_flag = ["cli"],
-                    verbosity = :verbose,
-                )
+                    verbosity = :verbose)
                 DistSSHRun.apply_shared_cli_flags!(session)
                 out, _ = _capture_stdio() do _, stdout_io
                     DistSSHRun.writeln_kit_resolved_hosts!(session, ["cli"])

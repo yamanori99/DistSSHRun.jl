@@ -23,9 +23,7 @@ using Test
                                 :drive,
                                 script, String[]; head_workers = 2,
                                 project = proj,
-                                verbosity = :verbose,
-                                yes = true,
-                            )
+                                verbosity = :verbose)
                         end
                     end
                     flush(out_io)
@@ -68,8 +66,7 @@ end
                         project = proj,
                         verbosity = :verbose,
                         stdout = out_io,
-                        stderr = err_io,
-                    )
+                        stderr = err_io)
                 end
                 @test kp isa DistSSHRun.DetachedProcess
                 @test kp.kind === :drive
@@ -112,10 +109,8 @@ end
                         project = proj,
                         args = ["--out", dest],
                         verbosity = :quiet,
-                        yes = true,
                         stdout = out_io,
-                        stderr = err_io,
-                    )
+                        stderr = err_io)
                 end
                 result = wait(kp)
                 @test result.ok

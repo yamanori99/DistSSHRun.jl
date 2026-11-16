@@ -15,8 +15,7 @@ function main()
                         "DISTRIBUTED_PROJECT_ROOT",
                         "DISTRIBUTED_REMOTE_PROJECT_ROOT",
                         "DISTRIBUTED_OUTPUT_DIR",
-                        "DISTRIBUTED_RUNNER",
-                    )
+                        "DISTRIBUTED_RUNNER")
                     present = haskey(ENV, key)
                     println(io, key, "=", present ? repr(ENV[key]) : "absent")
                 end

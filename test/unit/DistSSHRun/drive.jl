@@ -3,8 +3,7 @@ using Test
 function _sigint_sa_handler()::Ptr{Cvoid}
     buf = zeros(UInt8, 256)
     rc = GC.@preserve buf ccall(
-        :sigaction, Cint, (Cint, Ptr{Cvoid}, Ptr{UInt8}), Cint(2), C_NULL, buf,
-    )
+        :sigaction, Cint, (Cint, Ptr{Cvoid}, Ptr{UInt8}), Cint(2), C_NULL, buf)
     rc == 0 || error("sigaction SIGINT failed: $rc")
     return GC.@preserve buf unsafe_load(Ptr{Ptr{Cvoid}}(pointer(buf)))
 end
@@ -38,18 +37,15 @@ end
         @test auto.child_workers == Dict("h1" => 3)
         @test DistSSHRun.child_hosts_from_tokens(["h1", "4*h2"]) == ["h1", "h2"]
         @test DistSSHRun.require_counted_placement_tokens(
-            ["host"]; command = :drive, head_workers = 0,
-        ) === nothing
+            ["host"]; command = :drive, head_workers = 0) === nothing
         @test DistSSHRun.require_counted_placement_tokens(
-            ["1*host"]; command = :drive, head_workers = 0,
-        ) === nothing
+            ["1*host"]; command = :drive, head_workers = 0) === nothing
 
         let kw = DistSSHRun.ParsedWorkerTokens(;
                 head_workers = 2,
                 child_workers = Dict("h1" => 0x03),
                 child_hosts = ["h1"],
-                tokens = ["3*h1"],
-            )
+                tokens = ["3*h1"])
             @test kw.child_workers isa Dict{String, Int}
             @test kw.child_workers == Dict("h1" => 3)
             @test kw.child_auto == String[]
@@ -85,9 +81,7 @@ end
                 project = tmp,
                 workers = ["host-a"],
                 remote = "/remote/App.jl",
-                quiet = true,
-                yes = true,
-            )
+                quiet = true)
             DistSSHRun.apply_session_env!(session)
             @test ENV["DISTRIBUTED_PROJECT_ROOT"] == abspath(tmp)
             @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
@@ -101,9 +95,7 @@ end
                 project = tmp,
                 workers = ["host-a"],
                 remote = "~/jobs/abc",
-                quiet = true,
-                yes = true,
-            )
+                quiet = true)
             DistSSHRun.apply_session_env!(tilde)
             @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
             @test DistSSHRun.session_remote_root(tilde) == "~/jobs/abc"
@@ -111,9 +103,7 @@ end
         _with_tempdir() do tmp
             ambient = DistSSHRun.DistSSHSession(
                 project = tmp,
-                workers = ["host-a"],
-                yes = true,
-            )
+                workers = ["host-a"])
             with_kit_verbosity(:progress) do
                 DistSSHRun.apply_session_env!(ambient)
                 @test DistSSHRun.kit_verbosity() === :progress
@@ -124,12 +114,10 @@ end
             delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
             a = DistSSHRun.DistSSHSession(
                 project = tmp, workers = ["host-a"],
-                remote = "/remote/A", quiet = true, yes = true,
-            )
+                remote = "/remote/A", quiet = true)
             DistSSHRun.apply_session_env!(a)
             b = DistSSHRun.DistSSHSession(
-                project = tmp, workers = ["host-b"], quiet = true, yes = true,
-            )
+                project = tmp, workers = ["host-b"], quiet = true)
             default = DistSSHRun.remote_deploy_root(tmp)
             @test DistSSHRun.session_remote_root(b) == default
             @test DistSSHRun.session_remote_root(b) != "/remote/A"
@@ -137,17 +125,13 @@ end
             DistSSHRun.apply_session_env!(
                 DistSSHRun.DistSSHSession(
                     project = tmp, workers = ["h"],
-                    remote = "/session/Override", quiet = true, yes = true,
-                ),
-            )
+                    remote = "/session/Override", quiet = true))
             @test ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] == "/caller/Keep"
             err = try
                 DistSSHRun.apply_session_env!(
                     DistSSHRun.DistSSHSession(
                         project = tmp, workers = ["h"],
-                        remote = "/after/Error", quiet = true, yes = true,
-                    ),
-                )
+                        remote = "/after/Error", quiet = true))
                 throw(ErrorException("force-fail"))
             catch e
                 e
@@ -158,9 +142,7 @@ end
             DistSSHRun.apply_session_env!(
                 DistSSHRun.DistSSHSession(
                     project = tmp, workers = ["h"],
-                    remote = "/was/absent", quiet = true, yes = true,
-                ),
-            )
+                    remote = "/was/absent", quiet = true))
             @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
         end
         delete!(ENV, "DISTRIBUTED_PROJECT_ROOT")
@@ -197,15 +179,13 @@ end
                 project = tmp,
                 workers = ["1*h1"],
                 remote = "/remote/App.jl",
-                include_head_for_size = true,
-            )
+                include_head_for_size = true)
             @test DistSSHRun.session_remote_root(session) == "/remote/App.jl"
             all_h, remotes = DistSSHRun.session_size_hosts(session)
             @test all_h == ["parent", "h1"]
             @test remotes == ["h1"]
             remote_only = DistSSHRun.DistSSHSession(
-                project = tmp, workers = ["1*h1"], head_workers = 0,
-            )
+                project = tmp, workers = ["1*h1"], head_workers = 0)
             a2, r2 = DistSSHRun.session_size_hosts(remote_only)
             @test a2 == ["h1"]
             @test r2 == ["h1"]
@@ -216,28 +196,23 @@ end
         @test_throws MethodError DistSSHRun.PipelineConfig(;
             driver = "job.jl",
             workers = ["host-a"],
-            sync = :ship_tree,
-        )
+            sync = :ship_tree)
 
         default_cfg = DistSSHRun.PipelineConfig(driver = "job.jl", workers = ["host-a"])
         default_session = DistSSHRun.kit_session_from_config(default_cfg)
         @test DistSSHRun.resolve_pipeline_collect(default_cfg, default_session)
         @test DistSSHRun.pipeline_skip_hash_check(default_cfg)
-        @test default_cfg.yes == true
-        @test DistSSHRun.kit_session_from_config(default_cfg).yes == true
+        @test !default_session.cli_session.yes || get(ENV, "DISTSSH_YES", "") == "1"
         @test !DistSSHRun.pipeline_skip_hash_check(
             DistSSHRun.PipelineConfig(
                 driver = "job.jl",
                 workers = ["host-a"],
-                skip_hash_check = false,
-            ),
-        )
+                skip_hash_check = false))
 
         local_cfg = DistSSHRun.PipelineConfig(
             driver = "job.jl",
             workers = String[], head_workers = 2,
-            collect = false,
-        )
+            collect = false)
         local_session = DistSSHRun.kit_session_from_config(local_cfg)
         @test !DistSSHRun.resolve_pipeline_collect(local_cfg, local_session)
 
@@ -264,8 +239,7 @@ end
         withenv(
             "DRIVER" => "",
             "DISTSSH_HOSTS" => "",
-            "DISTSSH_HOSTS_FILE" => "",
-        ) do
+            "DISTSSH_HOSTS_FILE" => "") do
             @test_throws ArgumentError DistSSHRun.pipeline_config_from_env()
         end
         withenv(
@@ -274,16 +248,14 @@ end
             "DISTSSH_VERBOSE" => "1",
             "DISTSSH_PROGRESS" => nothing,
             "DISTSSH_HOSTS" => "",
-            "DISTSSH_HOSTS_FILE" => "",
-        ) do
+            "DISTSSH_HOSTS_FILE" => "") do
             @test_throws ArgumentError DistSSHRun.pipeline_config_from_env()
         end
 
         cfg_jl = DistSSHRun.PipelineConfig(
             driver = "job.jl",
             workers = ["host-a"],
-            julia = "/opt/julia/bin/julia",
-        )
+            julia = "/opt/julia/bin/julia")
         @test cfg_jl.julia == "/opt/julia/bin/julia"
         @test DistSSHRun.PipelineConfig(driver = "job.jl", julia = "auto").julia === nothing
         @test DistSSHRun.PipelineConfig(driver = "job.jl", julia = "").julia === nothing
@@ -308,27 +280,23 @@ end
             @test err_ss isa ArgumentError
             @test occursin("sync_script= was removed", err_ss.msg)
             @test DistSSHRun.drive_parsed_from_session(
-                session, script; worker_include = true,
-            ).worker_include == true
+                session, script; worker_include = true).worker_include == true
             @test parsed.skip_hash_check == true
             @test parsed.hint_surface === :api
             @test parsed.julia === nothing
             @test !parsed.best_effort
             @test DistSSHRun.drive_parsed_from_session(
-                session, script; best_effort = true,
-            ).best_effort
+                session, script; best_effort = true).best_effort
 
             parsed_jl = DistSSHRun.drive_parsed_from_session(
                 session,
                 script;
-                julia = "/opt/julia/bin/julia",
-            )
+                julia = "/opt/julia/bin/julia")
             @test parsed_jl.julia == "/opt/julia/bin/julia"
             @test DistSSHRun.drive_parsed_from_session(
                 session,
                 script;
-                julia = "auto",
-            ).julia === nothing
+                julia = "auto").julia === nothing
 
             err_old_sync = try
                 DistSSHRun.drive_parsed_from_session(session, script; sync = :sync)
@@ -353,8 +321,7 @@ end
                     session,
                     script;
                     sync = :ship_tree,
-                    skip_hash_check = false,
-                )
+                    skip_hash_check = false)
                 nothing
             catch e
                 e
@@ -363,7 +330,7 @@ end
             @test occursin("sync=:ship_tree was removed", err_ship_sync.msg)
 
             err_drive_ss = try
-                DistSSHRun.drive!(script, String[]; head_workers = 1, sync_script = true, yes = true)
+                DistSSHRun.drive!(script, String[]; head_workers = 1, sync_script = true)
                 nothing
             catch e
                 e
@@ -376,8 +343,7 @@ end
     @testset "sync! refusals" begin
         _with_tempdir() do tmp
             local_only = DistSSHRun.DistSSHSession(
-                project = tmp, workers = String[], head_workers = 2, quiet = true,
-            )
+                project = tmp, workers = String[], head_workers = 2, quiet = true)
             remote = DistSSHRun.DistSSHSession(project = tmp, workers = ["h1"], quiet = true)
             with_kit_verbosity(:progress) do
                 @test_throws ArgumentError DistSSHRun.sync!(local_only)
@@ -393,8 +359,7 @@ end
         _with_tempdir() do tmp
             with_kit_verbosity(:progress) do
                 DistSSHRun.apply_shared_cli_flags!(
-                    DistSSHRun.CliSharedFlags(quiet = true, yes = true),
-                )
+                    DistSSHRun.CliSharedFlags(quiet = true))
                 redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
                         ok, mm, uv = DistSSHRun.check_git_hashes(String[], tmp)
@@ -418,8 +383,7 @@ end
     @testset "instantiate! requires SSH hosts" begin
         _with_tempdir() do tmp
             session = DistSSHRun.DistSSHSession(
-                project = tmp, workers = String[], head_workers = 2, quiet = true,
-            )
+                project = tmp, workers = String[], head_workers = 2, quiet = true)
             with_kit_verbosity(:progress) do
                 @test_throws ArgumentError DistSSHRun.instantiate!(session)
             end
@@ -429,8 +393,7 @@ end
     @testset "collect! requires hosts" begin
         _with_tempdir() do tmp
             session = DistSSHRun.DistSSHSession(
-                project = tmp, workers = String[], head_workers = 2, quiet = true,
-            )
+                project = tmp, workers = String[], head_workers = 2, quiet = true)
             err = try
                 with_kit_verbosity(:progress) do
                     DistSSHRun.collect!(session, joinpath(tmp, "out"))
@@ -453,21 +416,17 @@ end
                     project = tmp,
                     workers = ["host1"],
                     remote = "/session/Custom",
-                    quiet = true,
-                    yes = true,
-                )
+                    quiet = true)
                 seen = Ref{Union{Nothing, String}}(nothing)
                 fake = merge(
                     _fake_setup_remote_env(state_dir),
-                    Dict("DISTSSH_TEST_SNAP_GIT_YES" => "1"),
-                )
+                    Dict("DISTSSH_TEST_SNAP_GIT_YES" => "1"))
                 withenv(fake...) do
                     DistSSHRun._with_session_remote_env!(session) do
                         seen[] = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
                         @test DistSSHRun.remote_deploy_root(tmp) == "/session/Custom"
                         @test DistSSHRun._remote_work_layout_path(
-                            tmp, tmp, ["host1"],
-                        ) == "/session/Custom"
+                            tmp, tmp, ["host1"]) == "/session/Custom"
                     end
                 end
                 @test seen[] == DistSSHRun.remote_env_project_root("/session/Custom")
@@ -490,8 +449,7 @@ end
 
     @testset "report_pipeline_errors" begin
         ok = DistSSHRun.PipelineResult(
-            true, nothing, nothing, nothing, nothing, "job.jl",
-        )
+            true, nothing, nothing, nothing, nothing, "job.jl")
         @test DistSSHRun.report_pipeline_errors(ok)
         @test DistSSHRun.kit_run_result(ok).exit_code == 0
         dr = DistSSHRun.DriveResult(false, 7; output_dir = "/out", failed_step = "drive")
@@ -505,14 +463,12 @@ end
             DistSSHRun.write_kit_run_toml!(
                 run_dir;
                 kind = :drive,
-                result = DistSSHRun.DistSSHJobResult(false, :drive, "/out", nothing, "drive", 7),
-            )
+                result = DistSSHRun.DistSSHJobResult(false, :drive, "/out", nothing, "drive", 7))
             held = DistSSHRun.DriveResult(
                 false, 7;
                 output_dir = "/out",
                 failed_step = "drive",
-                run_dir = run_dir,
-            )
+                run_dir = run_dir)
             prov = DistSSHRun.result_provenance(held)
             @test prov isa AbstractDict
             @test prov["kind"] == "drive"
@@ -522,8 +478,7 @@ end
             go = DistSSHRun.GoResult(
                 false, nothing, held, nothing, "job.jl", "/out";
                 failed_step = "run",
-                run_dir = run_dir,
-            )
+                run_dir = run_dir)
             go_prov = DistSSHRun.result_provenance(go)
             @test go_prov isa AbstractDict
             @test go_prov["kind"] == "drive"
@@ -547,8 +502,7 @@ end
             DistSSHRun.DriveResult(false, 1),
             DistSSHRun.CollectResult(false, 1),
             "job.jl";
-            failed_step = "drive",
-        )
+            failed_step = "drive")
         buf = IOBuffer()
         @test !DistSSHRun.report_pipeline_errors(bad; io = buf)
         txt = String(take!(buf))
@@ -587,8 +541,7 @@ end
             "SYNC_MODE" => "off",
             "GB_PER_WORKER" => "2.0",
             "DISTSSH_HOSTS_FILE" => "",
-            "JULIA_DISTRIBUTED_EXE" => "/opt/julia/bin/julia",
-        ) do
+            "JULIA_DISTRIBUTED_EXE" => "/opt/julia/bin/julia") do
             err = try
                 DistSSHRun.pipeline_config_from_env()
                 nothing
@@ -604,8 +557,7 @@ end
             "DRIVER" => "demos/job.jl",
             "SYNC_MODE" => "off",
             "DISTSSH_HOSTS_FILE" => "",
-            "JULIA_DISTRIBUTED_EXE" => "/opt/julia/bin/julia",
-        ) do
+            "JULIA_DISTRIBUTED_EXE" => "/opt/julia/bin/julia") do
             cfg = DistSSHRun.pipeline_config_from_env()
             @test cfg.tokens == ["1*host-a", "1*host-b"]
             @test cfg.remote == "/remote/App"
@@ -616,8 +568,7 @@ end
             "DRIVER" => "demos/job.jl",
             "DISTSSH_HOSTS" => "",
             "DISTSSH_HOSTS_FILE" => "",
-            "JULIA_DISTRIBUTED_EXE" => "auto",
-        ) do
+            "JULIA_DISTRIBUTED_EXE" => "auto") do
             @test DistSSHRun.pipeline_config_from_env().julia === nothing
         end
         let hosts_file = _sample_hosts_file()
@@ -626,8 +577,7 @@ end
                 "DISTSSH_HOSTS" => "2*env-a",
                 "DISTSSH_HOSTS_FILE" => hosts_file,
                 "SYNC_MODE" => "off",
-                "JULIA_DISTRIBUTED_EXE" => "",
-            ) do
+                "JULIA_DISTRIBUTED_EXE" => "") do
                 cfg = DistSSHRun.pipeline_config_from_env()
                 @test cfg.tokens == ["2*env-a"]
                 @test cfg.hosts_file === nothing
@@ -639,8 +589,7 @@ end
                 @test s.cli_session.head_workers == 1
                 @test s.tokens == ["host-a", "4*host-b"]
                 @test DistSSHRun.worker_plan_from_tokens(
-                    s.tokens; head_workers = s.cli_session.head_workers,
-                ).head_workers == 1
+                    s.tokens; head_workers = s.cli_session.head_workers).head_workers == 1
                 empty = DistSSHRun.DistSSHSession(workers = String[])
                 @test empty.cli_session.head_workers === nothing
                 @test empty.tokens == ["host-a", "4*host-b"]
@@ -724,8 +673,7 @@ end
             "DISTRIBUTED_PROJECT_ROOT",
             "DISTRIBUTED_REMOTE_PROJECT_ROOT",
             "DISTRIBUTED_OUTPUT_DIR",
-            "DISTRIBUTED_RUNNER",
-        )
+            "DISTRIBUTED_RUNNER")
         snap() = Dict(k => get(ENV, k, nothing) for k in keys)
         _mktemp_host() do proj
             _write_host_project!(proj, "DriveFrame")
@@ -736,8 +684,7 @@ end
                     "DISTRIBUTED_PROJECT_ROOT" => nothing,
                     "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "",
                     "DISTRIBUTED_OUTPUT_DIR" => "keep-me",
-                    "DISTRIBUTED_RUNNER" => nothing,
-                ) do
+                    "DISTRIBUTED_RUNNER" => nothing) do
                     pinned = snap()
                     Base.ACTIVE_PROJECT[] = nothing
                     err = try
@@ -858,8 +805,7 @@ end
                 redirect_stdout(devnull) do
                     DistSSHRun.add_drive_workers!(
                         Tuple{String, Union{Int, Nothing}}[],
-                        0, nothing, nothing, tmp, script, tmp,
-                    )
+                        0, nothing, nothing, tmp, script, tmp)
                 end
                 ""
             catch e
@@ -883,8 +829,7 @@ end
             write(joinpath(out, "kit.hosts"), "stale\n")
             write(joinpath(log, "kit.hosts"), "stale\n")
             none = DistSSHRun._drive_kit_hosts_around_join!(
-                Tuple{String, Union{Int, Nothing}}[], out, log,
-            ) do
+                Tuple{String, Union{Int, Nothing}}[], out, log) do
                 return String[]
             end
             @test isempty(none)
@@ -996,9 +941,7 @@ end
                 project = proj,
                 workers = String[],
                 quiet = true,
-                yes = true,
-                verbosity = :quiet,
-            )
+                verbosity = :quiet)
             parsed = DistSSHRun.drive_parsed_from_session(
                 session,
                 script;
@@ -1007,8 +950,7 @@ end
                 skip_hash_check = true,
                 output_dir = out,
                 julia = joinpath(Sys.BINDIR, Base.julia_exename()),
-                best_effort = true,
-            )
+                best_effort = true)
             err = redirect_stdout(devnull) do
                 redirect_stderr(devnull) do
                     try
@@ -1028,14 +970,12 @@ end
                 "DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes -o ConnectTimeout=1",
                 "DISTSSH_JOB_ID" => nothing,
                 "DISTSSH_SKIP_GLOBAL_WORKER_PKILL" => "1",
-                "DISTSSH_TEST_SNAP_GIT_YES" => "1",
-            )
+                "DISTSSH_TEST_SNAP_GIT_YES" => "1")
             _mktemp_host() do proj
                 _write_host_project!(proj, "HostsKeep")
                 got = withenv(
                     ssh_base...,
-                    "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/tmp/distsshkit-remote\nbad",
-                ) do
+                    "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/tmp/distsshkit-remote\nbad") do
                     _drive_bad_host(proj)
                 end
                 @test got.err isa ArgumentError
@@ -1049,8 +989,7 @@ end
                 _write_host_project!(proj, "HostsDrop")
                 got = withenv(
                     ssh_base...,
-                    "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/tmp/distsshkit-remote",
-                ) do
+                    "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/tmp/distsshkit-remote") do
                     _drive_bad_host(proj)
                 end
                 @test got.err isa ErrorException
@@ -1076,20 +1015,17 @@ end
                 name = "Bar"
                 uuid = "22222222-2222-4222-8222-222222222222"
                 version = "0.1.0"
-                """,
-            )
+                """)
             write(
                 joinpath(app, "Project.toml"),
                 """
                 name = "App"
                 uuid = "11111111-1111-4111-8111-111111111111"
                 version = "0.1.0"
-                """,
-            )
+                """)
             cmd = setenv(
                 `$(_julia_exe()) --project=$app --startup-file=no -e "using Pkg; Pkg.develop(path=$(repr(bar)))"`,
-                _child_julia_env(),
-            )
+                _child_julia_env())
             proc, combined = _run_subprocess(cmd)
             _assert_proc_ok(proc, combined; label = "Pkg.develop Bar")
             for name in ("Project.toml", "Manifest.toml")
@@ -1108,10 +1044,8 @@ end
                             script, String[]; head_workers = 1,
                             project = app,
                             run_id = "20260101T000000Z-aaaaaa",
-                            yes = true,
                             quiet = true,
-                            enable_log = false,
-                        )
+                            enable_log = false)
                     end
                     flush(err_io)
                     err = read(err_path, String)
@@ -1138,8 +1072,7 @@ end
             @test DistSSHRun._reject_script_outside_project_run!(
                 "drive", proj, outside;
                 run_id = "20260101T000000Z-aaaaaa",
-                remote_argv = false,
-            ) === nothing
+                remote_argv = false) === nothing
         finally
             rm(root; force = true, recursive = true)
         end

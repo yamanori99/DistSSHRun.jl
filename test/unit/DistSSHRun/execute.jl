@@ -36,8 +36,7 @@ end
                 """
                 name = "BogusTopLevel"
                 DistSSHRun = "not-a-dep"
-                """,
-            )
+                """)
             @test !DistSSHRun._project_tree_has_distsshkit(proj)
             @test_throws ArgumentError DistSSHRun._detached_julia_project(proj)
             write(
@@ -46,8 +45,7 @@ end
                 name = "HasKitDep"
                 [deps]
                 DistSSHRun = "b568025c-2759-4ef1-8b14-17d00e2cd000"
-                """,
-            )
+                """)
             @test DistSSHRun._project_tree_has_distsshkit(proj)
             @test DistSSHRun._detached_julia_project(proj) == proj
             @test DistSSHRun._detached_m_package(proj) == "DistSSHRun"
@@ -57,8 +55,7 @@ end
                 name = "HasMetaDep"
                 [deps]
                 DistSSHKit = "ceec0504-c968-4be5-b215-667cae0e8f81"
-                """,
-            )
+                """)
             @test DistSSHRun._project_tree_has_distsshkit(proj)
             @test DistSSHRun._detached_julia_project(proj) == proj
             @test DistSSHRun._detached_m_package(proj) == "DistSSHKit"
@@ -79,8 +76,7 @@ end
                 manifest_format = "2.0"
                 [deps.DistSSHRun]
                 uuid = "b568025c-2759-4ef1-8b14-17d00e2cd000"
-                """,
-            )
+                """)
             @test !DistSSHRun._project_tree_has_distsshkit(proj)
             @test_throws ArgumentError DistSSHRun._detached_julia_project(proj)
         end
@@ -113,10 +109,8 @@ end
                 pipeline(
                     ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e nothing`);
                     stdout = devnull,
-                    stderr = devnull,
-                );
-                wait = false,
-            )
+                    stderr = devnull);
+                wait = false)
             wait(proc)
             DistSSHRun._write_detached_kit_pid_file!(proc, d, nothing; run_dir = d)
             @test !isfile(joinpath(d, "kit.pid"))
@@ -148,8 +142,7 @@ end
             @test DistSSHRun.kit_result_from_dir(d) === nothing
             DistSSHRun._write_kit_result_file(
                 DistSSHRun.DistSSHJobResult(
-                    false, :drive, d, nothing, "drive", 42,
-                )
+                    false, :drive, d, nothing, "drive", 42)
             )
             got = DistSSHRun.kit_result_from_dir(d)
             @test got isa DistSSHRun.DistSSHJobResult
@@ -167,8 +160,7 @@ end
                     [
                         DistSSHRun.HostRunResult("h1", true),
                         DistSSHRun.HostRunResult("h2", false, ErrorException("boom")),
-                    ],
-                )
+                    ])
             )
             with_hosts = DistSSHRun.kit_result_from_dir(d)
             @test with_hosts !== nothing
@@ -180,8 +172,7 @@ end
             @test DistSSHRun.HostRunResult("h2", false, "boom").error == "boom"
             DistSSHRun._write_kit_result_file(
                 DistSSHRun.DistSSHJobResult(
-                    true, :ride, d, nothing, nothing, 0,
-                )
+                    true, :ride, d, nothing, nothing, 0)
             )
             ride_got = DistSSHRun.kit_result_from_dir(d)
             @test ride_got !== nothing
@@ -191,13 +182,11 @@ end
             @test DistSSHRun.kit_result_from_dir(d) === nothing
             stopped = DistSSHRun.DistSSHJobResult(
                 false, :go, d, nothing, "go", 1,
-                DistSSHRun.HostRunResult[], String[], :within_grace,
-            )
+                DistSSHRun.HostRunResult[], String[], :within_grace)
             @test stopped.stop === :within_grace
             @test_throws ArgumentError DistSSHRun.DistSSHJobResult(
                 false, :go, d, nothing, "go", 1,
-                DistSSHRun.HostRunResult[], String[], :later,
-            )
+                DistSSHRun.HostRunResult[], String[], :later)
             DistSSHRun._write_kit_result_file(stopped; run_dir = nothing)
             again = DistSSHRun.kit_result_from_dir(d)
             @test again !== nothing
@@ -210,16 +199,14 @@ end
                 kind = "go"
                 exit_code = 1
                 stop = "nope"
-                """,
-            )
+                """)
             unknown = DistSSHRun.kit_result_from_dir(d)
             @test unknown !== nothing
             @test unknown.stop === nothing
             DistSSHRun.write_kit_run_toml!(
                 d;
                 kind = :go,
-                result = DistSSHRun.DistSSHJobResult(true, :go, d, nothing, nothing, 0),
-            )
+                result = DistSSHRun.DistSSHJobResult(true, :go, d, nothing, nothing, 0))
             before = DistSSHRun.read_kit_run_toml(d)
             @test before isa AbstractDict
             if before isa AbstractDict
@@ -249,24 +236,21 @@ end
                 DistSSHRun._persist_stop(
                     DistSSHRun.DistSSHJobResult(false, :go, out, nothing, "go", 1),
                     :sigterm;
-                    run_dir = nothing,
-                )
+                    run_dir = nothing)
                 @test read(joinpath(out, "run.toml"), String) == "name = \"artifact\"\n"
                 run_d = joinpath(other, "run")
                 mkpath(run_d)
                 DistSSHRun.write_kit_run_toml!(
                     run_d;
                     kind = :go,
-                    result = DistSSHRun.DistSSHJobResult(true, :go, out, nothing, nothing, 0),
-                )
+                    result = DistSSHRun.DistSSHJobResult(true, :go, out, nothing, nothing, 0))
                 DistSSHRun._write_kit_pid_file(getpid(), out, nothing; run_dir = run_d)
                 @test DistSSHRun._run_dir_for_stop(out) ==
                     DistSSHRun.canonical_local_path(run_d)
                 DistSSHRun._persist_stop(
                     DistSSHRun.DistSSHJobResult(false, :go, out, nothing, "terminated", 1),
                     :sigterm;
-                    run_dir = DistSSHRun._run_dir_for_stop(out),
-                )
+                    run_dir = DistSSHRun._run_dir_for_stop(out))
                 stamped = DistSSHRun.read_kit_run_toml(run_d)
                 @test stamped isa AbstractDict
                 if stamped isa AbstractDict
@@ -278,8 +262,7 @@ end
                 DistSSHRun.write_kit_run_toml!(
                     stray;
                     kind = :go,
-                    result = DistSSHRun.DistSSHJobResult(true, :go, out, nothing, nothing, 0),
-                )
+                    result = DistSSHRun.DistSSHJobResult(true, :go, out, nothing, nothing, 0))
                 empty_out = joinpath(other, "empty-out")
                 mkpath(empty_out)
                 withenv(DistSSHRun.DISTSSH_RUN_DIR_ENV => stray) do
@@ -294,8 +277,7 @@ end
                     getpid(),
                     blocked,
                     nothing;
-                    run_dir = run_d,
-                )
+                    run_dir = run_d)
                 @test !isfile(joinpath(blocked, "kit.pid"))
             finally
                 rm(other; recursive = true, force = true)
@@ -427,8 +409,7 @@ end
                 d1;
                 kind = :drive,
                 output_dir = joinpath(project, "out"),
-                result = DistSSHRun.DistSSHJobResult(true, :drive, joinpath(project, "out"), nothing, nothing, 0),
-            )
+                result = DistSSHRun.DistSSHJobResult(true, :drive, joinpath(project, "out"), nothing, nothing, 0))
             raw = DistSSHRun.read_kit_run_toml(d1)
             @test raw isa AbstractDict
             @test raw["kind"] == "drive"
@@ -442,8 +423,7 @@ end
                         DistSSHRun.write_kit_run_toml!(
                             d1;
                             kind = :drive,
-                            project_root = project,
-                        )
+                            project_root = project)
                         recorded = DistSSHRun.read_kit_run_toml(d1)
                         @test recorded !== nothing
                         @test recorded["collect_dirs"] == ["rel-out"]
@@ -480,32 +460,27 @@ end
             run_b = DistSSHRun.allocate_run_dir(:drive, script; project)
             withenv("DISTRIBUTED_OUTPUT_DIR" => nothing) do
                 a, la = DistSSHRun._execute_detached_dirs(
-                    :drive, project, script, nothing, nothing, true, run_a,
-                )
+                    :drive, project, script, nothing, nothing, true, run_a)
                 b, lb = DistSSHRun._execute_detached_dirs(
-                    :drive, project, script, nothing, nothing, true, run_b,
-                )
+                    :drive, project, script, nothing, nothing, true, run_b)
                 @test a === nothing
                 @test b === nothing
                 @test la == DistSSHRun.canonical_local_path(run_a)
                 @test lb == DistSSHRun.canonical_local_path(run_b)
                 _, nolog = DistSSHRun._execute_detached_dirs(
-                    :drive, project, script, nothing, nothing, false, run_a,
-                )
+                    :drive, project, script, nothing, nothing, false, run_a)
                 @test nolog === nothing
             end
             custom = joinpath(project, "fixed")
             mkpath(custom)
             c, lc = DistSSHRun._execute_detached_dirs(
-                :drive, project, script, custom, nothing, true, run_a,
-            )
+                :drive, project, script, custom, nothing, true, run_a)
             @test c == DistSSHRun.canonical_local_path(custom)
             @test lc == DistSSHRun.canonical_local_path(run_a)
             inherited = joinpath(project, "from_env")
             withenv("DISTRIBUTED_OUTPUT_DIR" => inherited) do
                 e, le = DistSSHRun._execute_detached_dirs(
-                    :drive, project, script, nothing, nothing, true, run_a,
-                )
+                    :drive, project, script, nothing, nothing, true, run_a)
                 @test e == DistSSHRun.canonical_local_path(inherited)
                 @test le == DistSSHRun.canonical_local_path(run_a)
             end
@@ -576,8 +551,7 @@ end
             enable_log = false,
             package = nothing,
             best_effort = true,
-            skip_hash_check = true,
-        )
+            skip_hash_check = true)
         @test !("--mem-headroom" in argv)
         @test "--best-effort" in argv
         @test !("--require-all-hosts" in argv)
@@ -595,8 +569,7 @@ end
                 enable_log = false,
                 package = nothing,
                 best_effort = false,
-                skip_hash_check = true,
-            )
+                skip_hash_check = true)
             nothing
         catch e
             e
@@ -618,8 +591,7 @@ end
                 package = nothing,
                 best_effort = false,
                 skip_hash_check = true,
-                allow_external_symlinks = true,
-            )
+                allow_external_symlinks = true)
             nothing
         catch e
             e
@@ -638,8 +610,7 @@ end
             enable_log = false,
             package = nothing,
             best_effort = true,
-            skip_hash_check = true,
-        )
+            skip_hash_check = true)
         @test !("--mem-headroom" in argv0)
         @test !("--parent-gb" in argv0)
         @test "--best-effort" in argv0
@@ -656,8 +627,7 @@ end
             package = nothing,
             best_effort = true,
             skip_hash_check = true,
-            workers = 4,
-        )
+            workers = 4)
         @test "--head-workers" in argvw
         @test "4" in argvw
         @test "--best-effort" in argvw
@@ -674,8 +644,7 @@ end
             package = nothing,
             best_effort = nothing,
             skip_hash_check = true,
-            repeat = 100,
-        )
+            repeat = 100)
         @test "--repeat" in argv_rep
         @test "100" in argv_rep
         @test !("--mem-headroom" in argv_rep)
@@ -693,8 +662,7 @@ end
             enable_log = false,
             package = nothing,
             best_effort = false,
-            skip_hash_check = true,
-        )
+            skip_hash_check = true)
         @test !("--require-all-hosts" in argv_strict)
         @test !("--best-effort" in argv_strict)
         @test_throws ArgumentError DistSSHRun._execute_detached_argv(
@@ -709,8 +677,7 @@ end
             enable_log = false,
             package = nothing,
             best_effort = 0,
-            skip_hash_check = true,
-        )
+            skip_hash_check = true)
         @test_throws ArgumentError DistSSHRun._execute_detached_argv(
             :drive, "job.jl", ["host1"], String[];
             output_dir = "/tmp/out",
@@ -723,8 +690,7 @@ end
             enable_log = false,
             package = nothing,
             best_effort = nothing,
-            skip_hash_check = true,
-        )
+            skip_hash_check = true)
         argv_ride = DistSSHRun._execute_detached_argv(
             :ride, "job.jl", String[], String[]; head_workers = 2,
             output_dir = "/tmp/out",
@@ -738,8 +704,7 @@ end
             package = nothing,
             best_effort = false,
             skip_hash_check = true,
-            spi_check = false,
-        )
+            spi_check = false)
         @test argv_ride[1] == "ride"
         @test !("--spi-check" in argv_ride)
         @test "--no-spi-check" in argv_ride
@@ -759,8 +724,7 @@ end
             package = nothing,
             best_effort = false,
             skip_hash_check = true,
-            spi_check = true,
-        )
+            spi_check = true)
         @test "--spi-check" in argv_ride_spi
         @test !("--no-spi-check" in argv_ride_spi)
         argv_snap = DistSSHRun._execute_detached_argv(
@@ -776,8 +740,7 @@ end
             package = nothing,
             best_effort = false,
             skip_hash_check = true,
-            run_id = "20260101T000000Z-aaaaaa",
-        )
+            run_id = "20260101T000000Z-aaaaaa")
         @test "--run-id" in argv_snap
         @test "20260101T000000Z-aaaaaa" in argv_snap
         argv_root = DistSSHRun._execute_detached_argv(
@@ -793,8 +756,7 @@ end
             package = nothing,
             best_effort = false,
             skip_hash_check = true,
-            remote = "/tmp/App",
-        )
+            remote = "/tmp/App")
         @test "--deploy-root" in argv_root
         @test "/tmp/App" in argv_root
         @test !("--remote-path" in argv_root)
@@ -805,24 +767,20 @@ end
             [
                 "--progress", "--julia", "/opt/julia/bin/julia",
                 "--output-dir", "my_runs", "1*h1", "job.jl", "8",
-            ],
-        )
+            ])
         gkw = DistSSHRun.execute_kwargs_from_parsed(go; kind = :go)
         @test !haskey(gkw, :run_id)
         go_snap = DistSSHRun.parse_go_args(
-            ["--run-id", "20260101T000000Z-aaaaaa", "--head-slots", "1", "job.jl"],
-        )
+            ["--run-id", "20260101T000000Z-aaaaaa", "--head-slots", "1", "job.jl"])
         gsnap = DistSSHRun.execute_kwargs_from_parsed(go_snap; kind = :go)
         @test gsnap[:run_id] == "20260101T000000Z-aaaaaa"
         drive_snap = DistSSHRun.parse_drive_args(
-            ["--run-id", "20260101T000000Z-aaaaaa", "--head-workers", "1", "s.jl"],
-        )
+            ["--run-id", "20260101T000000Z-aaaaaa", "--head-workers", "1", "s.jl"])
         dsnap = DistSSHRun.execute_kwargs_from_parsed(drive_snap; kind = :drive)
         @test dsnap[:run_id] == "20260101T000000Z-aaaaaa"
         @test !haskey(dsnap, :sync)
         go_root = DistSSHRun.parse_go_args(
-            ["--deploy-root", "/tmp/App", "--head-slots", "1", "job.jl"],
-        )
+            ["--deploy-root", "/tmp/App", "--head-slots", "1", "job.jl"])
         @test DistSSHRun.execute_kwargs_from_parsed(go_root; kind = :go)[:remote] == "/tmp/App"
         @test gkw[:verbosity] === :progress
         @test gkw[:julia] == "/opt/julia/bin/julia"
@@ -835,12 +793,10 @@ end
         @test Set(keys(gkw)) == Set(
             [
                 :output_dir, :args, :julia, :quiet, :verbosity,
-            ],
-        )
+            ])
         err_kw = try
             DistSSHRun.parse_go_args(
-                ["--ship-tree", "--allow-external-symlinks", "1*h1", "job.jl"],
-            )
+                ["--ship-tree", "--allow-external-symlinks", "1*h1", "job.jl"])
             nothing
         catch e
             e
@@ -922,8 +878,7 @@ end
         @test errd isa ArgumentError
         @test occursin("drive: --ship-tree was removed", errd.msg)
         parsed = kit_parse_args(
-            :go, String["--run-id", "20260101T000000Z-aaaaaa", "--head-slots", "1", "job.jl"],
-        )
+            :go, String["--run-id", "20260101T000000Z-aaaaaa", "--head-slots", "1", "job.jl"])
         bag = DistSSHRun.execute_kwargs_from_parsed(parsed; kind = :go)
         @test bag[:run_id] == "20260101T000000Z-aaaaaa"
         @test !haskey(bag, :sync)
@@ -967,7 +922,7 @@ end
         @test occursin("does not accept keyword :plan", sprint(showerror, err))
 
         err2 = try
-            DistSSHRun.execute!(:go, "job.jl", String[]; head_slots = 1, detached = true, yes = false)
+            DistSSHRun.execute!(:go, "job.jl", String[]; head_slots = 1, detached = true)
             nothing
         catch e
             e
@@ -1014,8 +969,7 @@ end
         err_ship = try
             DistSSHRun.execute!(
                 :go, "/no/such/job.jl", String[]; head_slots = 1,
-                detached = true, sync = :ship_tree, yes = true,
-            )
+                detached = true, sync = :ship_tree)
             nothing
         catch e
             e
@@ -1047,16 +1001,14 @@ end
             best_effort = false,
             skip_hash_check = true,
             run_id = "20260101T000000Z-aaaaaa",
-            remote = "/remote",
-        )
+            remote = "/remote")
         @test !any(==("--ship-tree"), argv)
         @test "--run-id" in argv
         @test argv[end] == "/remote/src/app/_distsshrun_external/job.jl"
         err_ext = try
             DistSSHRun.execute!(
                 :go, "/no/such/job.jl", String[]; head_slots = 1,
-                detached = true, allow_external_symlinks = true, yes = true,
-            )
+                detached = true, allow_external_symlinks = true)
             nothing
         catch e
             e
@@ -1071,8 +1023,7 @@ end
             write(joinpath(proj, "Project.toml"), "name = \"Out\"\n")
             write(
                 joinpath(proj, "Manifest.toml"),
-                "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
-            )
+                "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
             script = joinpath(dir, "job.jl")
             write(script, "println(\"OUTSIDE_SCRIPT_OK\")\n")
             fake = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
@@ -1082,16 +1033,13 @@ end
                     "DISTSSH_TEST_SSH" => fake,
                     "DISTSSH_TEST_POSIX_SHELL" => "1",
                     "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit",
-                    "DISTSSH_TEST_SSH_FAIL" => "1",
-                ) do
+                    "DISTSSH_TEST_SSH_FAIL" => "1") do
                     DistSSHRun.go!(
                         script, ["1*h"];
                         project = proj,
                         remote = "/home/dev/app",
                         run_id = "20260101T000000Z-aaaaaa",
-                        yes = true,
-                        quiet = true,
-                    )
+                        quiet = true)
                 end
                 nothing
             catch e
@@ -1120,12 +1068,10 @@ end
                 name = "Bar"
                 uuid = "22222222-2222-4222-8222-222222222222"
                 version = "0.1.0"
-                """,
-            )
+                """)
             cmd = setenv(
                 `$(_julia_exe()) --project=$app --startup-file=no -e "using Pkg; Pkg.develop(path=$(repr(bar)))"`,
-                _child_julia_env(),
-            )
+                _child_julia_env())
             proc, combined = _run_subprocess(cmd)
             _assert_proc_ok(proc, combined; label = "Pkg.develop Bar")
             for name in ("Project.toml", "Manifest.toml")
@@ -1146,11 +1092,9 @@ end
                             detached = true,
                             project = app,
                             run_id = "20260101T000000Z-aaaaaa",
-                            yes = true,
                             quiet = true,
                             stdout = out_io,
-                            stderr = err_io,
-                        )
+                            stderr = err_io)
                     end
                     result = wait(kp)
                     @test result isa DistSSHRun.DistSSHJobResult
@@ -1179,9 +1123,7 @@ end
                 script, String[]; head_slots = 1,
                 project = proj,
                 args = ["8"],
-                quiet = true,
-                yes = true,
-            )
+                quiet = true)
             @test result isa DistSSHRun.DistSSHJobResult
             @test result.kind === :go
             @test result.ok
@@ -1213,8 +1155,7 @@ end
                             args = ["8"],
                             quiet = true,
                             stdout = out_io,
-                            stderr = err_io,
-                        )
+                            stderr = err_io)
                     end
                     out_dir = kp.output_dir
                     @test out_dir !== nothing
@@ -1283,8 +1224,7 @@ end
                             verbosity = :progress,
                             job_id = "q-1",
                             stdout = out_io,
-                            stderr = err_io,
-                        )
+                            stderr = err_io)
                     end
                     result = wait(kp)
                     @test result.ok
@@ -1320,8 +1260,7 @@ end
                     script, String[]; head_slots = 1,
                     detached = true,
                     project = proj,
-                    quiet = true,
-                )
+                    quiet = true)
             end
             result = wait(kp)
             @test result.ok
@@ -1370,8 +1309,7 @@ end
                     script, String[]; head_slots = 1,
                     detached = true,
                     project = proj,
-                    quiet = true,
-                )
+                    quiet = true)
             end
             hung = wait(kp; timeout = 0.4)
             @test hung.ok === false
@@ -1406,8 +1344,7 @@ end
                             verbosity = :progress,
                             job_id = "t-1",
                             stdout = out_io,
-                            stderr = err_io,
-                        )
+                            stderr = err_io)
                     end
                     result = DistSSHRun.terminate!(kp; grace = 2)
                     @test result isa DistSSHRun.DistSSHJobResult
@@ -1438,8 +1375,7 @@ end
                             verbosity = :progress,
                             job_id = "t-ride",
                             stdout = out_io,
-                            stderr = err_io,
-                        )
+                            stderr = err_io)
                     end
                     result = DistSSHRun.terminate!(kp; grace = 2)
                     @test result isa DistSSHRun.DistSSHJobResult
@@ -1480,12 +1416,10 @@ end
             mkpath(run_d)
             write(
                 joinpath(out, "kit.run_dir"),
-                DistSSHRun.canonical_local_path(run_d) * "\n",
-            )
+                DistSSHRun.canonical_local_path(run_d) * "\n")
             DistSSHRun._write_kit_result_file(
                 DistSSHRun.DistSSHJobResult(false, :go, run_d, nothing, "collect", 7);
-                run_dir = run_d,
-            )
+                run_dir = run_d)
             r = DistSSHRun.terminate_run!(out; grace = 0)
             @test r.failed_step == "collect"
             @test r.exit_code == 7
@@ -1533,8 +1467,7 @@ end
         function sh(script)::Base.Process
             proc = run(
                 pipeline(`sh -c $script`; stdout = devnull, stderr = devnull);
-                wait = false,
-            )
+                wait = false)
             if proc isa Base.Process
                 return proc
             end
@@ -1554,8 +1487,7 @@ end
                 end
                 @assert isfile(ready)
                 return DistSSHRun._signal_ladder!(
-                    p; interrupt_grace = interrupt_grace, grace = grace,
-                )
+                    p; interrupt_grace = interrupt_grace, grace = grace)
             finally
                 process_running(p) && kill(p, Base.SIGKILL)
                 try
@@ -1646,17 +1578,14 @@ end
                         end
                     end
                 end
-                """,
-            )
+                """)
             julia = joinpath(Sys.BINDIR, Base.julia_exename())
             proc = run(
                 pipeline(
                     `$julia --startup-file=no --compile=min $script`;
                     stdout = devnull,
-                    stderr = devnull,
-                );
-                wait = false,
-            )
+                    stderr = devnull);
+                wait = false)
             kp = DistSSHRun.DetachedProcess(proc; kind = :go, output_dir = dir)
             try
                 t0 = time()
@@ -1690,9 +1619,7 @@ end
                     :go, script, String[];
                     detached = true,
                     output_dir = dirty,
-                    project = project,
-                    yes = true,
-                )
+                    project = project)
                 nothing
             catch e
                 e
@@ -1710,8 +1637,7 @@ end
         julia = joinpath(Sys.BINDIR, Base.julia_exename())
         proc = run(
             pipeline(`$julia --startup-file=no -e nothing`; stdout = devnull, stderr = devnull);
-            wait = true,
-        )
+            wait = true)
         bare = DistSSHRun.DetachedProcess(proc; kind = :go)
         @test DistSSHRun.result_run_dir(bare) === nothing
         @test_throws MethodError DistSSHRun.result_content_tree_hash(bare)
@@ -1770,16 +1696,14 @@ end
             "http_proxy" => "http://user:pass@proxy:8080",
             "https_proxy" => "http://proxy:8080",
             "LC_ALL" => "C",
-            "DISTSSH_BLAS_THREADS" => "3",
-        )
+            "DISTSSH_BLAS_THREADS" => "3")
         built = DistSSHRun._detached_child_env(
             parent, Dict{String, String}();
             threads = 1,
             env_allow = nothing,
             env = nothing,
             launch_dir = "/work",
-            source = nothing,
-        )
+            source = nothing)
         @test built.env["PATH"] == "/usr/bin"
         @test built.env["HOME"] == "/home/me"
         @test built.env["JULIA_DEPOT_PATH"] == "/depot"
@@ -1820,8 +1744,7 @@ end
             env_allow = ["AWS_SECRET_ACCESS_KEY", "http_proxy"],
             env = nothing,
             launch_dir = "/work",
-            source = nothing,
-        )
+            source = nothing)
         @test allowed.env["AWS_SECRET_ACCESS_KEY"] == "sek"
         @test allowed.env["http_proxy"] == "http://user:pass@proxy:8080"
         @test "AWS_SECRET_ACCESS_KEY" in allowed.sensitive
@@ -1834,8 +1757,7 @@ end
             env_allow = :all,
             env = nothing,
             launch_dir = "/work",
-            source = nothing,
-        )
+            source = nothing)
         @test wide.env["HOME"] == "/home/me"
         @test wide.env["CUSTOM_JOB_PATH"] == "kept"
         @test !haskey(wide.env, "JULIA_NUM_THREADS")
@@ -1852,8 +1774,7 @@ end
             env_allow = :all,
             env = nothing,
             launch_dir = "/work",
-            source = nothing,
-        )
+            source = nothing)
         @test legacy.threads == "unset"
         @test legacy.env["JULIA_NUM_THREADS"] == "8"
         @test legacy.env["OPENBLAS_NUM_THREADS"] == "8"
@@ -1869,8 +1790,7 @@ end
             env_allow = ["JULIA_NUM_THREADS", "DISTSSH_FOO_TOKEN"],
             env = Dict("TZ" => "UTC", "HOME" => "", "BRAND_NEW" => "1"),
             launch_dir = "/work",
-            source = nothing,
-        )
+            source = nothing)
         @test named.env["JULIA_NUM_THREADS"] == "8"
         @test named.env["DISTSSH_FOO_TOKEN"] == "t"
         @test "DISTSSH_FOO_TOKEN" in named.sensitive
@@ -1885,16 +1805,14 @@ end
             env_allow = ["JULIA_LOAD_PATH"],
             env = nothing,
             launch_dir = "/work",
-            source = nothing,
-        )
+            source = nothing)
         @test_throws ArgumentError DistSSHRun._detached_child_env(
             parent, Dict{String, String}();
             threads = 1,
             env_allow = ["JULIA_NUM_THREADS"],
             env = nothing,
             launch_dir = "/work",
-            source = nothing,
-        )
+            source = nothing)
         @test_throws ArgumentError DistSSHRun._detached_thread_flag(true)
         @test_throws ArgumentError DistSSHRun._detached_thread_flag(0)
         @test_throws ArgumentError DistSSHRun._detached_thread_flag("0,1")
@@ -1925,8 +1843,7 @@ end
             threads = 4,
             dir = "/work",
             env_allow = ["FOO"],
-            env = Dict{String, String}("TZ" => "UTC"),
-        )
+            env = Dict{String, String}("TZ" => "UTC"))
         kw = DistSSHRun.execute_kwargs_from_parsed(parsed; kind = :go)
         @test kw[:threads] == 4
         @test kw[:dir] == "/work"
@@ -1942,18 +1859,15 @@ end
         @test_throws ArgumentError DistSSHRun.execute!(:go, "job.jl"; dir = "/tmp")
         @test_throws ArgumentError DistSSHRun.execute!(:go, "job.jl"; env_allow = String[])
         @test_throws ArgumentError DistSSHRun.execute!(
-            :go, "job.jl"; env = Dict("A" => "B"),
-        )
+            :go, "job.jl"; env = Dict("A" => "B"))
 
         julia = joinpath(Sys.BINDIR, Base.julia_exename())
         proc = run(
             pipeline(
                 `$julia --startup-file=no -e nothing`;
                 stdout = devnull,
-                stderr = devnull,
-            );
-            wait = true,
-        )
+                stderr = devnull);
+            wait = true)
         bare = DistSSHRun.DetachedProcess(proc; kind = :go)
         bare_launch = DistSSHRun.detached_launch(bare)
         @test bare_launch.dir == ""
@@ -1964,8 +1878,7 @@ end
         _with_tempdir() do proj
             here = pwd()
             @test_throws ArgumentError DistSSHRun._detached_launch_dir(
-                joinpath(proj, "missing"), proj,
-            )
+                joinpath(proj, "missing"), proj)
             @test DistSSHRun._detached_launch_dir(nothing, proj) ==
                 DistSSHRun.canonical_local_path(realpath(proj))
             @test pwd() == here
@@ -1976,8 +1889,7 @@ end
             withenv(
                 "DISTSSH_LAUNCH_THREADS" => "1",
                 "DISTSSH_LAUNCH_DIR" => proj,
-                "DISTSSH_LAUNCH_DROPPED" => "SECRET_TOKEN,ZZZ",
-            ) do
+                "DISTSSH_LAUNCH_DROPPED" => "SECRET_TOKEN,ZZZ") do
                 DistSSHRun.write_kit_run_toml!(proj; kind = :go, project_root = proj)
             end
             stamped = _must_run_toml(proj)
@@ -1997,8 +1909,7 @@ end
         @test length(infos) == 1
         @test occursin(
             "dropped 2 environment variables not on the allowlist",
-            infos[1].message,
-        )
+            infos[1].message)
         @test !occursin("SECRET_TOKEN", infos[1].message)
         @test !occursin("ZZZ", infos[1].message)
         debugs = filter(r -> r.level == Test.Logging.Debug, logs)
@@ -2026,13 +1937,11 @@ end
                     println(io, "home=", haskey(ENV, "HOME"))
                     println(io, "custom=", get(ENV, "CUSTOM_JOB_PATH", ""))
                 end
-                """,
-            )
+                """)
             parent_pwd = pwd()
             withenv(
                 "SECRET_TOKEN" => "nope",
-                "CUSTOM_JOB_PATH" => "kept",
-            ) do
+                "CUSTOM_JOB_PATH" => "kept") do
                 logs, kp = _capture_detached_env_log(; min_level = Test.Logging.Debug) do
                     DistSSHRun.execute!(
                         :go,
@@ -2041,8 +1950,7 @@ end
                         project = proj,
                         quiet = true,
                         stdout = devnull,
-                        stderr = devnull,
-                    )
+                        stderr = devnull)
                 end
                 result = wait(kp)
                 @test result.ok
@@ -2061,8 +1969,7 @@ end
                 @test length(infos) == 1
                 @test occursin(
                     "dropped $(length(report.dropped)) environment variables not on the allowlist",
-                    infos[1].message,
-                )
+                    infos[1].message)
                 @test !occursin("SECRET_TOKEN", infos[1].message)
                 @test !occursin("nope", infos[1].message)
                 debugs = filter(r -> r.level == Test.Logging.Debug, logs)
@@ -2075,8 +1982,7 @@ end
             body = read(marker, String)
             @test occursin(
                 "pwd=$(DistSSHRun._detached_launch_dir(nothing, proj))",
-                body,
-            )
+                body)
             @test occursin("n=1", body)
             @test occursin("ni=0", body)
             @test occursin("secret=false", body)
@@ -2086,8 +1992,7 @@ end
 
             withenv(
                 "SECRET_TOKEN" => "nope",
-                "CUSTOM_JOB_PATH" => "kept",
-            ) do
+                "CUSTOM_JOB_PATH" => "kept") do
                 _, kp = _capture_detached_env_log() do
                     DistSSHRun.execute!(
                         :go,
@@ -2099,8 +2004,7 @@ end
                         stderr = devnull,
                         dir = parent_pwd,
                         threads = :unset,
-                        env_allow = :all,
-                    )
+                        env_allow = :all)
                 end
                 result = wait(kp)
                 @test result.ok
@@ -2114,8 +2018,7 @@ end
             restored = read(marker, String)
             @test occursin(
                 "pwd=$(DistSSHRun._detached_launch_dir(parent_pwd, proj))",
-                restored,
-            )
+                restored)
             @test occursin("custom=kept", restored)
             @test occursin("secret=false", restored)
 
@@ -2127,8 +2030,7 @@ end
                 open($(repr(marker_snap)), "w") do io
                     println(io, "ok")
                 end
-                """,
-            )
+                """)
             _, kp_snap = _capture_detached_env_log() do
                 DistSSHRun.execute!(
                     :go,
@@ -2138,8 +2040,7 @@ end
                     quiet = true,
                     run_id = "20260101T000000Z-aaaaaa",
                     stdout = devnull,
-                    stderr = devnull,
-                )
+                    stderr = devnull)
             end
             result_snap = wait(kp_snap)
             @test result_snap.ok

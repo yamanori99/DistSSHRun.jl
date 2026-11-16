@@ -36,8 +36,7 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             added = workers()
             DistSSHRun._register_drive_host_worker_ids!(
                 DistSSHRun.PARENT_HOST_NAME,
-                collect(added),
-            )
+                collect(added))
             seen = Int[]
             prev = DistSSHRun.INTERRUPT_DRIVE_WORKERS[]
             DistSSHRun.INTERRUPT_DRIVE_WORKERS[] = pids -> append!(seen, pids)
@@ -111,8 +110,7 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
                 """
                 uuid = "cccccccc-dddd-eeee-ffff-111111111111"
                 version = "0.0.1"
-                """,
-            )
+                """)
             script = joinpath(tmp, "sync_job.jl")
             write(script, "global _distssh_sync_hit = true\n")
             DistSSHRun._register_drive_host_worker_ids!(DistSSHRun.PARENT_HOST_NAME, owned)
@@ -128,8 +126,7 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
                 @test !remotecall_fetch(() -> isdefined(Main, :_distssh_sync_hit), foreign)
                 @test remotecall_fetch(
                     () -> isdefined(Main, :_distssh_sync_hit) && Main._distssh_sync_hit,
-                    owned[1],
-                )
+                    owned[1])
             finally
                 DistSSHRun._clear_drive_host_worker_ids!()
                 empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
@@ -157,16 +154,13 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
                 DistSSHRun.install_and_start_heartbeat!(
                     DistSSHRun._live_owned_worker_ids();
                     interval = 5.0,
-                    deadline = 120.0,
-                )
+                    deadline = 120.0)
                 @test remotecall_fetch(
                     () -> isdefined(Main, :DistSSHHeartbeat),
-                    foreign,
-                ) == false
+                    foreign) == false
                 @test remotecall_fetch(
                     () -> isdefined(Main, :DistSSHHeartbeat),
-                    owned[1],
-                ) == true
+                    owned[1]) == true
             finally
                 DistSSHRun.stop_heartbeat_on_workers!(DistSSHRun._live_owned_worker_ids())
                 DistSSHRun._clear_drive_host_worker_ids!()
@@ -354,8 +348,7 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             @test length(added) == 2
             DistSSHRun._register_drive_host_worker_ids!(
                 DistSSHRun.PARENT_HOST_NAME,
-                collect(added),
-            )
+                collect(added))
             try
                 cleanup = DistSSHRun.register_worker_cleanup!(String[])
                 cleanup()
@@ -399,8 +392,7 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
                     """
                     uuid = "dddddddd-eeee-ffff-1111-222222222222"
                     version = "0.0.1"
-                    """,
-                )
+                    """)
                 for w in setdiff(workers(), [1])
                     rmprocs(w; waitfor = 2.0)
                 end
@@ -469,8 +461,7 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
                     name = "OwnTear"
                     uuid = "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
                     version = "0.0.1"
-                    """,
-                )
+                    """)
                 addprocs(1; topology = :master_worker)
                 foreign = workers()[end]
                 before = Set(workers())
@@ -520,8 +511,7 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
                 mktemp() do path, io
                     redirect_stdout(io) do
                         DistSSHRun.cleanup_stale_workers!(
-                            Tuple{String, Union{Int, Nothing}}[("example.invalid", 1)],
-                        )
+                            Tuple{String, Union{Int, Nothing}}[("example.invalid", 1)])
                     end
                     flush(io)
                     @test !occursin("Cleaning up stale workers", read(path, String))
@@ -534,8 +524,7 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
                 mktemp() do path, io
                     redirect_stdout(io) do
                         DistSSHRun.cleanup_stale_workers!(
-                            Tuple{String, Union{Int, Nothing}}[("example.invalid", 1)],
-                        )
+                            Tuple{String, Union{Int, Nothing}}[("example.invalid", 1)])
                     end
                     flush(io)
                     @test !occursin("Cleaning up stale workers", read(path, String))
@@ -552,8 +541,7 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             write(script, "")
             @test_throws ErrorException redirect_stdout(devnull) do
                 DistSSHRun.add_drive_workers!(
-                    _EMPTY_DRIVE_HOSTS, 0, nothing, nothing, tmp, script, tmp,
-                )
+                    _EMPTY_DRIVE_HOSTS, 0, nothing, nothing, tmp, script, tmp)
             end
         end
 
@@ -563,8 +551,7 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             before = Set(workers())
             successful_hosts, = redirect_stdout(devnull) do
                 DistSSHRun.add_drive_workers!(
-                    _EMPTY_DRIVE_HOSTS, 2, nothing, nothing, tmp, script, tmp,
-                )
+                    _EMPTY_DRIVE_HOSTS, 2, nothing, nothing, tmp, script, tmp)
             end
             added = setdiff(Set(workers()), before)
             try
@@ -588,34 +575,27 @@ end
         empty_env = Dict{String, String}()
         cfg = DistSSHRun.resolve_drive_heartbeat_policy(
             env = empty_env,
-            self_exit = false,
-        )
+            self_exit = false)
         @test !cfg.self_exit
         @test cfg.interval == 30.0
         @test cfg.deadline === nothing
         cfg = DistSSHRun.resolve_drive_heartbeat_policy(
             env = Dict(
                 "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "2",
-                "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "9",
-            ),
-            self_exit = true,
-        )
+                "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "9"),
+            self_exit = true)
         @test cfg.self_exit
         @test cfg.interval == 2.0
         @test cfg.deadline == 9.0
         @test_throws ArgumentError DistSSHRun.resolve_drive_heartbeat_policy(
             env = empty_env,
-            self_exit = true,
-        )
+            self_exit = true)
         @test_throws ArgumentError DistSSHRun.resolve_drive_heartbeat_policy(
-            env = Dict("DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1"),
-        )
+            env = Dict("DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1"))
         pol = DistSSHRun.resolve_drive_heartbeat_policy(
             env = Dict(
                 "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1",
-                "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "7",
-            ),
-        )
+                "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "7"))
         @test pol.self_exit
         @test pol.deadline == 7.0
     end
@@ -641,8 +621,7 @@ end
         hb = DistSSHRun.DistSSHHeartbeat._run_heartbeat!(
             stop, 0.05, 0.12;
             ping = () -> take!(ch),
-            on_dead = () -> (dead[] = true),
-        )
+            on_dead = () -> (dead[] = true))
         try
             @test _wait_flag(dead)
             @test istaskstarted(hb.prober)
@@ -659,8 +638,7 @@ end
         DistSSHRun.DistSSHHeartbeat._run_heartbeat!(
             stop, 0.05, 1.0;
             ping = () -> true,
-            on_dead = () -> (dead[] = true),
-        )
+            on_dead = () -> (dead[] = true))
         try
             sleep(1.5)
             @test !dead[]
@@ -676,8 +654,7 @@ end
         DistSSHRun.DistSSHHeartbeat._run_heartbeat!(
             stop, 0.04, 0.35;
             ping = () -> (n[] += 1; n[] <= 2 && error("blip"); true),
-            on_dead = () -> (dead[] = true),
-        )
+            on_dead = () -> (dead[] = true))
         try
             sleep(0.45)
             @test !dead[]
@@ -692,8 +669,7 @@ end
         hb = DistSSHRun.DistSSHHeartbeat._run_heartbeat!(
             stop, 0.03, 10.0;
             ping = () -> true,
-            on_dead = () -> error("should not die"),
-        )
+            on_dead = () -> error("should not die"))
         stop[] = true
         wait(hb.prober)
         wait(hb.watchdog)
@@ -707,8 +683,7 @@ end
         DistSSHRun.DistSSHHeartbeat._run_heartbeat!(
             stop, 0.2, 0.8;
             ping = () -> true,
-            on_dead = () -> (dead[] = true),
-        )
+            on_dead = () -> (dead[] = true))
         try
             sleep(0.3)
             t_end = time() + 1.6

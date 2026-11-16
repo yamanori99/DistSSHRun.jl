@@ -137,8 +137,7 @@ using Test
 
     @testset "help <command> is <command> --help" begin
         for cmd in (
-                "drive", "go", "ride", "setup", "hostinfo", "pool", "up", "demo", "progress",
-            )
+                "drive", "go", "ride", "setup", "hostinfo", "pool", "up", "demo", "progress")
             direct = _main_capture([cmd, "--help"])
             via = _main_capture(["help", cmd])
             @test via[1] == 0
@@ -214,15 +213,13 @@ using Test
         @test DistSSHRun.NO_COMMAND_HINT_LINES == (
             "  go SCRIPT.jl      as-is complete job (timing without rewrite)",
             "  ride … SCRIPT.jl  experimental map / filter",
-            "  drive … SCRIPT.jl Distributed",
-        )
+            "  drive … SCRIPT.jl Distributed")
         for name in (
                 :unknown_subcommand_message,
                 :no_command_message,
                 :print_rejected_command,
                 :NO_COMMAND_HINT_LINES,
-                :RUN_SUBCOMMAND_EXPECTATION,
-            )
+                :RUN_SUBCOMMAND_EXPECTATION)
             @test Base.ispublic(DistSSHRun, name)
             @test !Base.isexported(DistSSHRun, name)
         end
@@ -242,8 +239,7 @@ using Test
                 ["help", "help"],
                 ["--help", "help"],
                 ["-h", "--help"],
-                ["--help", "-h", "help"],
-            )
+                ["--help", "-h", "help"])
             let (code, out, err) = _main_capture(args)
                 @test code == 0
                 @test out == ""

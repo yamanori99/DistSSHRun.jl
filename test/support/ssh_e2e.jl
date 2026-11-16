@@ -20,15 +20,13 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         return (
             ssh_config = joinpath(root, ".generated", "ssh_config"),
             hosts_file = joinpath(root, ".generated", "hosts"),
-            controller_key = joinpath(root, ".generated", "controller"),
-        )
+            controller_key = joinpath(root, ".generated", "controller"))
     end
 
     # ENV overlay so DistSSHRun uses the docker-ssh SSH config (`-F`).
     function _ssh_e2e_env(;
             remote_project::AbstractString,
-            extra::Dict{String, String} = Dict{String, String}(),
-        )::Dict{String, String}
+            extra::Dict{String, String} = Dict{String, String}())::Dict{String, String}
         g = _docker_ssh_generated()
         isfile(g.ssh_config) || error("missing $(g.ssh_config); run testenv/docker-ssh/scripts/up.sh")
         base = Dict{String, String}(
@@ -37,8 +35,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
             "DISTRIBUTED_SSH_OPTS" => "-F $(g.ssh_config) -o RequestTTY=no",
             "DISTRIBUTED_REMOTE_PROJECT_ROOT" => String(remote_project),
             # setup git-sync / git push use this; DistSSHRun's git_push_project! has no -F flag.
-            "GIT_SSH_COMMAND" => "ssh -F $(g.ssh_config) -o RequestTTY=no",
-        )
+            "GIT_SSH_COMMAND" => "ssh -F $(g.ssh_config) -o RequestTTY=no")
         return merge(base, extra)
     end
 
@@ -78,8 +75,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         for host in hosts
             proc, out = _ssh_e2e_ssh(
                 host,
-                "mkdir -p -m 755 $(rootq) && chmod go-w $(rootq)",
-            )
+                "mkdir -p -m 755 $(rootq) && chmod go-w $(rootq)")
             _assert_proc_ok(proc, out; label = "ensure remote root $(host)")
         end
         return nothing
@@ -89,8 +85,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
     function _ssh_e2e_work_root(host::AbstractString, remote_root::AbstractString)::String
         proc, out = _ssh_e2e_ssh(
             host,
-            "ls -1d $(remote_root)/runs/*/src 2>/dev/null | sort | tail -n 1",
-        )
+            "ls -1d $(remote_root)/runs/*/src 2>/dev/null | sort | tail -n 1")
         s = strip(out)
         proc.exitcode == 0 && !isempty(s) && return s
         return String(remote_root)
@@ -104,8 +99,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         isempty(alt) && throw(
             ArgumentError(
                 "DISTSSH_E2E_JULIA_ALT_CHANNEL unset; run testenv/docker-ssh/scripts/up.sh --e2e " *
-                    "(or apple-container-ssh) so slots min/max are exported",
-            )
+                    "(or apple-container-ssh) so slots min/max are exported")
         )
         return (; default = String(def), alt = String(alt))
     end
@@ -124,8 +118,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         ch = String(channel)
         proc, out = _ssh_e2e_ssh(
             host,
-            "\$HOME/.juliaup/bin/juliaup default $(Base.shell_escape(ch))",
-        )
+            "\$HOME/.juliaup/bin/juliaup default $(Base.shell_escape(ch))")
         proc.exitcode == 0 || error("juliaup default $ch on $host failed: $out")
         DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!(String(host))
         return nothing
@@ -136,8 +129,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         ju = DistSSHRun.DistSSHBase.find_local_juliaup()
         ju === nothing && error(
             "local juliaup not found; kit parent E2E needs \$HOME/.juliaup/bin/juliaup " *
-                "or Homebrew juliaup",
-        )
+                "or Homebrew juliaup")
         return ju
     end
 
@@ -236,8 +228,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
             suite::SshE2ESuite,
             role::AbstractString,
             path::AbstractString,
-            version::AbstractString,
-        )
+            version::AbstractString)
         open(joinpath(suite.dir, "JULIA_PATHS.txt"), "a") do io
             println(io, "$(role)\t$(path)\t$(version)")
         end
@@ -292,8 +283,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
             out::AbstractString;
             expect_ok::Bool = true,
             project::Union{Nothing, AbstractString} = nothing,
-            kit::Union{Nothing, Symbol} = nothing,
-        )
+            kit::Union{Nothing, Symbol} = nothing)
         suite.step += 1
         nn = lpad(suite.step, 2, '0')
         safe = replace(String(slug), r"[^A-Za-z0-9._-]+" => "_")
@@ -351,8 +341,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
             proc,
             out::AbstractString;
             project::Union{Nothing, AbstractString} = nothing,
-            kit::Union{Nothing, Symbol} = nothing,
-        )
+            kit::Union{Nothing, Symbol} = nothing)
         _ssh_e2e_record!(suite, slug, proc, out; expect_ok = true, project = project, kit = kit)
         return _assert_proc_ok(proc, out; label = slug)
     end
@@ -402,8 +391,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
     function _ssh_e2e_push_job_runtests!(
             hosts,
             remote_root::AbstractString;
-            fail::Bool = false,
-        )
+            fail::Bool = false)
         g = _docker_ssh_generated()
         src = _ssh_e2e_job_runtests_src(; fail = fail)
         mktemp() do path, io
@@ -433,8 +421,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
     function _stage_ssh_e2e_remote_host!(
             proj::AbstractString;
             kit_root::AbstractString = _kit_root(),
-            julia::AbstractString = _julia_exe(),
-        )
+            julia::AbstractString = _julia_exe())
         proj = abspath(proj)
         _vendor_distsshkit!(proj; kit_root = kit_root)
         write(
@@ -456,8 +443,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
 
             [targets]
             test = ["Test"]
-            """,
-        )
+            """)
         mkpath(joinpath(proj, "src"))
         write(joinpath(proj, "src", "SshE2EApp.jl"), "module SshE2EApp\nend\n")
         mkpath(joinpath(proj, "test"))
@@ -465,8 +451,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
 
         for (subdir, names) in (
                 ("with_kit", ("square_echo.jl", "square_file.jl", "pipeline_square.jl")),
-                ("without_kit", ("pi_echo.jl", "pi_file.jl", "pipeline_pi.jl")),
-            )
+                ("without_kit", ("pi_echo.jl", "pi_file.jl", "pipeline_pi.jl")))
             dest = joinpath(proj, "demos", subdir)
             mkpath(dest)
             for name in names
@@ -489,13 +474,11 @@ if !isdefined(Main, :_ssh_e2e_enabled)
             .distsshkit/
             output/
             results/
-            """,
-        )
+            """)
 
         inst = setenv(
             `$julia --startup-file=no --project=$proj -e "using Pkg; Pkg.instantiate()"`,
-            _child_julia_env(),
-        )
+            _child_julia_env())
         proc, out = _run_subprocess(inst)
         _assert_proc_ok(proc, out; label = "ssh-e2e Pkg.instantiate")
 
@@ -540,8 +523,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
             Cmd(
                 vcat(
                     ssh_base,
-                    String[seed_host, "rm -rf $(bare) $(git_remote) && git init --bare $(bare)"],
-                )
+                    String[seed_host, "rm -rf $(bare) $(git_remote) && git init --bare $(bare)"])
             )
         )
         _assert_proc_ok(proc, out; label = "ssh-e2e git init --bare")
@@ -556,8 +538,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
                             String(host),
                             "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 " *
                                 "dev@child-1 'echo ok'",
-                        ],
-                    )
+                        ])
                 )
             )
             _assert_proc_ok(proc, out; label = "ssh-e2e warm child-1 hostkey from $host")
@@ -583,8 +564,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         git_ssh = "ssh -F $(g.ssh_config) -o RequestTTY=no"
         push_cmd = setenv(
             `git -C $proj push -u origin HEAD:$(branch)`,
-            Dict("GIT_SSH_COMMAND" => git_ssh),
-        )
+            Dict("GIT_SSH_COMMAND" => git_ssh))
         proc, out = _run_subprocess(push_cmd)
         _assert_proc_ok(proc, out; label = "ssh-e2e git push origin")
         return (; origin_controller = origin, origin_workers = _ssh_e2e_bare_ssh_from_workers(), branch)
@@ -596,8 +576,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         proj = abspath(proj)
         push_cmd = setenv(
             `git -C $proj push origin HEAD`,
-            Dict("GIT_SSH_COMMAND" => "ssh -F $(g.ssh_config) -o RequestTTY=no"),
-        )
+            Dict("GIT_SSH_COMMAND" => "ssh -F $(g.ssh_config) -o RequestTTY=no"))
         proc, out = _run_subprocess(push_cmd)
         _assert_proc_ok(proc, out; label = "ssh-e2e git push")
         return nothing
@@ -612,8 +591,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         run(pipeline(`git -C $proj -c commit.gpgsign=false commit -m $message`; stdout = devnull, stderr = devnull))
         DistSSHRun.local_git_clean(proj) || error(
             "e2e bump left a dirty tree:\n" *
-                read(pipeline(`git -C $proj status --porcelain`; stderr = devnull), String),
-        )
+                read(pipeline(`git -C $proj status --porcelain`; stderr = devnull), String))
         return DistSSHRun.get_local_git_hash(proj; short = 12)
     end
 

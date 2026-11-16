@@ -30,8 +30,7 @@ using Test
                     "--output-dir", "my_runs",
                     "--git-sync", "h1",
                     "--help",
-                ],
-            )
+                ])
             error("expected ArgumentError")
         catch e
             e
@@ -43,8 +42,7 @@ using Test
                     "--julia", "/opt/julia/bin/julia",
                     "--output-dir", "my_runs",
                     "--help",
-                ],
-            )
+                ])
             @test r.help
             @test r.julia == "/opt/julia/bin/julia"
             @test r.output_dir == "my_runs"
@@ -86,8 +84,7 @@ using Test
             @test r.script_path == "job.jl"
         end
         @test_throws ArgumentError parse_go_args(
-            ["--head-workers", "4", "1*host1", "2*host2", "job.jl"],
-        )
+            ["--head-workers", "4", "1*host1", "2*host2", "job.jl"])
         let r = parse_go_args(["--head-slots", "4", "1*host1", "2*host2", "job.jl"])
             @test r.cli_session.head_slots == 4
             @test DistSSHRun.host_tokens(r; kind = :go) == ["1*host1", "2*host2"]
@@ -249,8 +246,7 @@ using Test
             end
         end
         @test_throws ArgumentError parse_go_args(
-            ["--gb-per-worker", "1.5", "parent", "job.jl"],
-        )
+            ["--gb-per-worker", "1.5", "parent", "job.jl"])
         @test_throws ArgumentError parse_go_args(["--julia"])
     end
 

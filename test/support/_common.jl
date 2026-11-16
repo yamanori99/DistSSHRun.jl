@@ -38,8 +38,7 @@ if !isdefined(Main, :_test_root)
     function _kit_cli_cmd(
             args::AbstractVector{<:AbstractString};
             julia::AbstractString = _julia_exe(),
-            project::AbstractString = _kit_root(),
-        )::Cmd
+            project::AbstractString = _kit_root())::Cmd
         proj = _cli_m_project(String(project))
         argv = String[String(a) for a in args]
         return `$(_julia_cmd_for(julia)) --startup-file=no --project=$proj -m DistSSHRun $argv`
@@ -133,8 +132,7 @@ if !isdefined(Main, :_test_root)
             "integration/drive/log_via_module.jl",
             "integration/drive/pkg_develop.jl",
             "integration/demos/with_kit.jl",
-            "integration/demos/without_kit.jl",
-        )
+            "integration/demos/without_kit.jl")
         String(rel) in skipped || return false
         println("  short: skip $rel")
         flush(stdout)

@@ -6,8 +6,7 @@ if !isdefined(Main, :_stage_with_kit_demos)
         _write_host_project!(
             host_root,
             "DemoHost";
-            uuid = "22222222-2222-4222-8222-222222222222",
-        )
+            uuid = "22222222-2222-4222-8222-222222222222")
         _develop_kit!(host_root; kit_root = kit_root)
         with_kit_dest = joinpath(demos_dir, "with_kit")
         mkpath(with_kit_dest)

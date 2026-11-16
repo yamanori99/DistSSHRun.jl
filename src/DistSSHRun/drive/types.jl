@@ -389,7 +389,6 @@ mutable struct PipelineConfig
     hosts_file::Union{Nothing, String}
     quiet::Bool
     verbosity::Union{Nothing, Symbol}
-    yes::Bool
     driver::String
     args::Vector{String}
     skip_hash_check::Union{Nothing, Bool}
@@ -411,7 +410,7 @@ function PipelineConfig(;
         hosts_file::Union{Nothing, AbstractString} = nothing,
         quiet::Bool = false,
         verbosity::Union{Nothing, Symbol} = nothing,
-        yes::Bool = true,
+        yes::Union{Nothing, Bool} = nothing,
         driver::AbstractString,
         args::AbstractVector{<:AbstractString} = String[],
         skip_hash_check::Union{Nothing, Bool} = nothing,
@@ -422,6 +421,11 @@ function PipelineConfig(;
         log_dir::Union{Nothing, AbstractString} = nothing,
         package::Union{Nothing, AbstractString} = nothing,
         julia::Union{Nothing, AbstractString} = nothing,
+    )
+    yes !== nothing && throw(
+        ArgumentError(
+            "PipelineConfig does not accept yes=; confirmation is CLI-only (DISTSSH_YES / -y)",
+        ),
     )
     rr = remote === nothing ? nothing : String(strip(String(remote)))
     rr !== nothing && isempty(rr) && (rr = nothing)
@@ -443,7 +447,6 @@ function PipelineConfig(;
         hf,
         quiet,
         verbosity,
-        yes,
         String(driver),
         Base.collect(String, args),
         skip_hash_check,

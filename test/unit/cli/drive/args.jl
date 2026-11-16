@@ -94,8 +94,7 @@ using Test
             dash isa Int || error("expected --")
             @test kept.exec[(dash + 1):end] == ["s.jl", "--isolated"]
             valued = DistSSHRun._drive_isolated_child_args(
-                ["--output-dir", "--isolated", "--isolated", "s.jl"],
-            )
+                ["--output-dir", "--isolated", "--isolated", "s.jl"])
             @test valued == ["--output-dir", "--isolated", "s.jl"]
             quieted = [
                 "--output-dir", "--quiet", "result.jl", "--isolated", "--head-workers", "1",
@@ -117,8 +116,7 @@ using Test
             @test uh_child == ["--unsafe-skip-env-digests", "--head-workers", "1", "job.jl"]
             @test !DistSSHRun.parse_drive_args(uh_child).isolated
             rooted = DistSSHRun._drive_isolated_cmd(
-                ["--isolated", "--head-workers", "1", "s.jl"]; project_root = "/jobs/app",
-            )
+                ["--isolated", "--head-workers", "1", "s.jl"]; project_root = "/jobs/app")
             env = something(rooted.env, String[])
             @test any(e -> startswith(e, "JULIA_LOAD_PATH="), env)
             @test "DISTRIBUTED_PROJECT_ROOT=/jobs/app" in env
@@ -136,8 +134,7 @@ using Test
             @test DistSSHRun._drive_child_status(0, 128) == 1
             sleeper = run(
                 ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "sleep(30)"`);
-                wait = false,
-            )
+                wait = false)
             try
                 DistSSHRun._forward_isolated_interrupt!(sleeper)
                 @test process_exited(sleeper)
@@ -160,8 +157,7 @@ using Test
                 @test occursin("--worker-include", err_ss.msg)
             end
             @test_throws ArgumentError parse_drive_args(
-                ["--sync-script", "--sync-script", "s.jl"],
-            )
+                ["--sync-script", "--sync-script", "s.jl"])
             let r = parse_drive_args(["--worker-include", "--head-workers", "1", "s.jl"])
                 @test r.worker_include == true
             end
@@ -272,7 +268,7 @@ using Test
             end
             let r = parse_drive_args(["-q", "-y", "--head-workers", "1", "s.jl"])
                 @test r.cli_session.quiet == true
-                @test r.cli_session.cli_session.yes == true
+                @test r.cli_session.yes == true
                 DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags())
             end
             withenv("DISTSSH_HOSTS" => "3*env-host, 1*env-b") do
@@ -408,16 +404,13 @@ using Test
     @testset "best-effort" begin
         withenv(
             "DISTSSH_REQUIRE_ALL_HOSTS" => nothing,
-            "DISTSSH_BEST_EFFORT" => nothing,
-        ) do
+            "DISTSSH_BEST_EFFORT" => nothing) do
             @test !parse_drive_args(["--head-workers", "1", "s.jl"]).best_effort
             @test parse_drive_args(["--best-effort", "--head-workers", "1", "s.jl"]).best_effort
             @test_throws ArgumentError parse_drive_args(
-                ["--require-all-hosts", "--head-workers", "1", "s.jl"],
-            )
+                ["--require-all-hosts", "--head-workers", "1", "s.jl"])
             @test_throws ArgumentError parse_drive_args(
-                ["--best-effort", "--best-effort", "--head-workers", "1", "s.jl"],
-            )
+                ["--best-effort", "--best-effort", "--head-workers", "1", "s.jl"])
         end
         withenv("DISTSSH_REQUIRE_ALL_HOSTS" => "1") do
             @test_throws ArgumentError parse_drive_args(["--head-workers", "1", "s.jl"])

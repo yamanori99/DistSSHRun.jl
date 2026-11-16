@@ -42,16 +42,13 @@ using Test
                     "DISTRIBUTED_PROJECT_ROOT" => proj,
                     "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/fake/remote/PoolHost",
                     "DISTSSH_TEST_POOL_MEM" => "8589934592",
-                    "DISTSSH_TEST_POOL_NCPU" => "8",
-                ),
-            )
+                    "DISTSSH_TEST_POOL_NCPU" => "8"))
             withenv(env...) do
-                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true, yes = true))
+                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true))
                 sess = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["host1"],
-                    remote = "/fake/remote/PoolHost",
-                )
+                    remote = "/fake/remote/PoolHost")
                 okp = DistSSHRun.pool!(sess)
                 @test okp.ok
                 @test length(okp.hosts) == 2
@@ -63,12 +60,11 @@ using Test
                 @test facts.os == "Linux"
             end
             withenv(merge(env, Dict("DISTSSH_TEST_POOL_MEM" => ""))...) do
-                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true, yes = true))
+                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true))
                 sess = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["host1"],
-                    remote = "/fake/remote/PoolHost",
-                )
+                    remote = "/fake/remote/PoolHost")
                 partial = DistSSHRun.pool!(sess)
                 @test partial.ok
                 @test partial.hosts[2].nproc == 8
@@ -78,12 +74,11 @@ using Test
             end
             fail_env = merge(env, Dict("DISTSSH_TEST_SSH_FAIL" => "1"))
             withenv(fail_env...) do
-                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true, yes = true))
+                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true))
                 sess = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["host1"],
-                    remote = "/fake/remote/PoolHost",
-                )
+                    remote = "/fake/remote/PoolHost")
                 bad = DistSSHRun.pool!(sess)
                 @test !bad.ok
                 @test length(bad.hosts) == 2

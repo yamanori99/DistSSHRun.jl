@@ -19,15 +19,13 @@ using Test
         (; setup_args = ["delete", "host1"]),
         (;
             setup_args = ["delete", "--deploy-root", remote, "host1"],
-            extra_env = _fake_setup_remote_env(fresh_state()),
-        ),
+            extra_env = _fake_setup_remote_env(fresh_state())),
         (;
             setup_args = [
                 "delete", "--deploy-root", remote, "--confirm-path", "/not/the/path",
                 "host1",
             ],
-            extra_env = _fake_setup_remote_env(fresh_state()),
-        ),
+            extra_env = _fake_setup_remote_env(fresh_state())),
         (;
             setup_args = [
                 "delete", "--yes", "--deploy-root", remote,
@@ -35,45 +33,34 @@ using Test
             ],
             extra_env = merge(
                 _fake_setup_remote_env(fresh_state()),
-                Dict("DISTSSH_TEST_SSH_FAIL" => "1"),
-            ),
-        ),
+                Dict("DISTSSH_TEST_SSH_FAIL" => "1"))),
         (;
             setup_args = [
                 "delete", "--deploy-root", remote, "--confirm-path", remote,
                 "host1", "host2",
             ],
-            extra_env = _fake_setup_remote_env(fresh_state()),
-        ),
+            extra_env = _fake_setup_remote_env(fresh_state())),
         (;
             setup_args = ["ship-tree", "host1"],
             extra_env = merge(
                 _fake_setup_remote_env(fresh_state()),
                 Dict(
                     "DISTSSH_TEST_MKDIR_FAIL" => "1",
-                    "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia",
-                ),
-            ),
-        ),
+                    "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia"))),
         (;
             setup_args = ["ship-tree", "host1", "host2"],
             extra_env = merge(
                 _fake_setup_remote_env(fresh_state()),
-                Dict("DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia"),
-            ),
-        ),
+                Dict("DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia"))),
         # `--julia` skips remote detect; fake ssh still sees `Pkg.test()`.
         (;
             setup_args = ["runtest", "--julia", "/bin/echo", "host1"],
             extra_env = merge(
                 _fake_setup_remote_env(fresh_state()),
-                Dict("DISTSSH_TEST_PKG_TEST_FAIL" => "1"),
-            ),
-        ),
+                Dict("DISTSSH_TEST_PKG_TEST_FAIL" => "1"))),
         (;
             setup_args = ["runtest", "--julia", "/bin/echo", "host1", "host2"],
-            extra_env = _fake_setup_remote_env(fresh_state()),
-        ),
+            extra_env = _fake_setup_remote_env(fresh_state())),
         (; setup_args = ["--juliaup-update", "host1"]),
         (; setup_args = ["--juliaup", "host1"]),
         (; setup_args = ["check", "--remote-dir", "/tmp/App.jl", "host1"]),
