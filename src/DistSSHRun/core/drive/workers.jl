@@ -57,7 +57,7 @@ const _NO_WORKERS_JOINED = "No workers available. Check SSH connectivity."
 
 function add_drive_workers!(
         hosts::Vector{Tuple{String, Union{Int, Nothing}}},
-        parent_workers::Int,
+        head_workers::Int,
         default_workers,
         julia_exe,
         proj_dir::String,
@@ -82,13 +82,14 @@ function add_drive_workers!(
         isempty(notice) || writeln_both(notice)
         local_julia = DistSSHRun.pin_local_julia(nothing)
 
-        if parent_workers > 0
-            write_both("  $(DistSSHRun.PARENT_HOST_NAME) ($parent_workers workers): ")
+        if head_workers > 0
+            local_line = DistSSHRun.format_kit_head_placement(head_workers, "workers")
+            write_both("  $local_line: ")
             DistSSHRun._drive_host_span!(DistSSHRun.PARENT_HOST_NAME, "workers", :running)
             try
                 before = Set(workers())
                 DistSSHRun._add_local_drive_workers!(
-                    parent_workers, proj_dir, local_julia,
+                    head_workers, proj_dir, local_julia,
                 )
                 _register_drive_workers!(before, proj_dir, script_path)
                 added = sort!(Int[w for w in workers() if w ∉ before])
@@ -105,7 +106,7 @@ function add_drive_workers!(
                 writeln_both("")
             end
         else
-            writeln_both("  $(DistSSHRun.PARENT_HOST_NAME): master only (use $(DistSSHRun.PARENT_HOST_NAME):N for parent workers)")
+            writeln_both("  $(DistSSHRun.format_kit_head_placement(0, "workers")) (use --head-workers N)")
         end
 
         sshflags_cmd = Cmd(ssh_opts())
@@ -177,6 +178,13 @@ function add_drive_workers!(
                     # Machine must be user@host: Distributed prefixes \$USER otherwise and
                     # overrides SSH config User (Host aliases then look like "No free port?").
                     # Bind 127.0.0.1 so the cluster cookie is not reachable on other interfaces.
+                    bind = DistSSHRun.default_bind_address(host_name)
+                    DistSSHRun.validate_host_launch_plan(
+                        host_name,
+                        bind;
+                        tunnel = DistSSHRun.ssh_tunnel_enabled(),
+                        unsafe_expose_port = DistSSHRun.unsafe_expose_port_active(),
+                    )
                     machine = DistSSHRun.ssh_addprocs_bind_localhost(host_name)
                     DistSSHRun._add_ssh_drive_workers!(
                         machine,
@@ -229,6 +237,7 @@ function add_drive_workers!(
     nprocs() <= 1 && error(_NO_WORKERS_JOINED)
     try
         DistSSHRun.verify_workers_match_job!(proj_dir)
+        DistSSHRun.assert_loaded_verified_worker_set!()
     catch
         DistSSHRun._rmprocs_added_since(before_all)
         rethrow()

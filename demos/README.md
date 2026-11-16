@@ -17,11 +17,11 @@ demos/
   with_kit/
     square_file.jl      # file: square_results.csv
     square_echo.jl      # stdout only
-    pipeline_square.jl  # API: pipeline!(driver, "parent:2")
+    pipeline_square.jl  # API: pipeline!(driver; local_workers = 2)
   without_kit/
     pi_file.jl          # file: pi_results.txt
     pi_echo.jl          # stdout only
-    pipeline_pi.jl      # API: go!(script, "parent:2") → pi_file.jl
+    pipeline_pi.jl      # API: go!(script; local_workers = 2) → pi_file.jl
   ride/
     map_file.jl         # file: map_results.csv
     map_echo.jl         # stdout
@@ -36,9 +36,9 @@ Naming: `{topic}_{file|echo}` — `*_file` writes a file, `*_echo` prints only.
 ```bash
 julia --project=. -m DistSSHRun demo install with_kit
 julia --project=. -m DistSSHRun demo install without_kit
-julia --project=. -m DistSSHRun drive parent:2 \
+julia --project=. -m DistSSHRun drive --local-workers 2 \
   distsshkit_demos/with_kit/square_file.jl --n 4
-julia --project=. -m DistSSHRun drive parent:2 \
+julia --project=. -m DistSSHRun drive --local-workers 2 \
   distsshkit_demos/with_kit/square_echo.jl --n 4
 julia --project=. distsshkit_demos/with_kit/pipeline_square.jl --n 4
 julia distsshkit_demos/without_kit/pi_echo.jl --n 5000
@@ -56,7 +56,7 @@ Drivers use `init_output_dir!` + `main` + `pmap`. Work count is `--n N`
 (default 8), not a positional integer. Optional hooks: `help drive`.
 `pipeline_square.jl` is the thin API entry (drive! → optional collect) over
 `square_file.jl`. Same tokens as the CLI:
-`pipeline!(driver, "parent:2"; args=[…])`. A commented remote example is at
+`pipeline!(driver; local_workers = 2, args=[…])`. A commented remote example is at
 the bottom of that file (`setup!` first, or CLI `setup`).
 
 ## without_kit/
@@ -74,7 +74,7 @@ julia --project=. distsshkit_demos/without_kit/pipeline_pi.jl
 ```
 
 `pipeline_pi.jl` mirrors `pipeline_square.jl` for as-is jobs:
-`go!(script, "parent:2"; args=["--n", "5000"])`. Monte Carlo samples are
+`go!(script; local_workers = 2, args=["--n", "5000"])`. Monte Carlo samples are
 `--n N` (default 1000). A commented remote example is at the bottom of that
 file (`setup!` first).
 
@@ -86,11 +86,11 @@ file (`setup!` first).
 
 ```bash
 julia --project=. -m DistSSHRun demo install ride
-julia --project=. -m DistSSHRun ride parent:2 distsshkit_demos/ride/map_echo.jl
+julia --project=. -m DistSSHRun ride --local-workers 2 distsshkit_demos/ride/map_echo.jl
 ```
 
 Remote: set `DISTRIBUTED_REMOTE_PROJECT_ROOT` when needed. Optional:
-`DISTSSH_HOSTS` (comma-separated `parent:N` / `child:NAME:N` for
+`DISTSSH_HOSTS` (comma-separated `N*host` machine tokens for
 `go` / `drive` / `pipeline!`; `go --repeat` may omit `:N`). Deploy with
 `setup git-sync` / `setup ship-tree` (and `setup instantiate` when needed)
 before `go` / `drive` / `pipeline!`. Do not set legacy `SYNC_MODE` on

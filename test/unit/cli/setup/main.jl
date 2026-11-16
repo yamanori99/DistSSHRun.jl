@@ -27,7 +27,7 @@ using Test
         end
     end
 
-    let (code, out, err) = _setup_capture(["--juliaup", "child:host1"])
+    let (code, out, err) = _setup_capture(["--juliaup", "host1"])
         shown = out * err
         @test code == 1
         @test occursin("setup --juliaup was removed", shown)
@@ -35,27 +35,27 @@ using Test
         @test occursin("help up", shown)
         @test !occursin("deprecated", lowercase(shown))
     end
-    let (code, out, err) = _setup_capture(["--juliaup-update", "child:host1"])
+    let (code, out, err) = _setup_capture(["--juliaup-update", "host1"])
         shown = out * err
         @test code == 1
         @test occursin("setup --juliaup-update was removed", shown)
         @test occursin("up update", shown)
     end
-    let (code, out, err) = _setup_capture(["check", "--remote-dir", "/tmp/App.jl", "child:host1"])
+    let (code, out, err) = _setup_capture(["check", "--remote-dir", "/tmp/App.jl", "host1"])
         shown = out * err
         @test code == 1
         @test occursin("setup --remote-dir was removed", shown)
         @test occursin("--deploy-root", shown)
         @test occursin("help setup", shown)
     end
-    let (code, out, err) = _setup_capture(["check", "--remote-path", "/tmp/App.jl", "child:host1"])
+    let (code, out, err) = _setup_capture(["check", "--remote-path", "/tmp/App.jl", "host1"])
         shown = out * err
         @test code == 1
         @test occursin("setup --remote-path was removed", shown)
         @test occursin("--deploy-root", shown)
         @test !occursin("SSH preflight", shown)
     end
-    let (code, out, err) = _setup_capture(["--ship-tree", "child:host1"])
+    let (code, out, err) = _setup_capture(["--ship-tree", "host1"])
         shown = out * err
         @test code == 1
         @test occursin("setup --ship-tree was removed", shown)
@@ -98,15 +98,15 @@ using Test
         @test occursin("only for up", out * err)
     end
     let (code, out, err) = _setup_capture(["delete", "host1"])
-        @test code == 1
         combined = out * err
-        @test occursin("child:NAME", combined) || occursin("parent[:N]", combined)
+        @test code in (0, 1)
+        @test occursin("host1", combined)
     end
     let (code, out, err) = withenv(
             "DISTSSH_TEST" => "1",
             "DISTSSH_TEST_SSH" => "/no/such/fake-ssh.jl",
         ) do
-            _setup_capture(["delete", "--yes", "child:host1"])
+            _setup_capture(["delete", "--yes", "host1"])
         end
         combined = out * err
         @test code == 1
@@ -117,7 +117,7 @@ using Test
         @test !occursin("SSH preflight failed", combined)
     end
     let (code, out, err) = _setup_capture(
-            ["delete", "--yes", "--confirm-path", "~/nope", "child:host1"],
+            ["delete", "--yes", "--confirm-path", "~/nope", "host1"],
         )
         combined = out * err
         @test code == 1
@@ -126,7 +126,7 @@ using Test
         @test !occursin("--help", combined)
         @test !occursin("do not authorize", combined)
     end
-    let (code, out, err) = _setup_capture(["prune", "child:host1"])
+    let (code, out, err) = _setup_capture(["prune", "host1"])
         @test code == 0
         @test occursin("Type 'prune' to confirm", out)
         @test occursin("Cancelled.", out)

@@ -102,6 +102,16 @@ function read_detached_job_blob(path::AbstractString)
             "unsafe_skip_env_digests",
         ),
         job_id = _blob_optional_string(get(raw, "job_id", nothing)),
+        head_workers = let w = get(raw, "head_workers", nothing)
+            w === nothing ? nothing : Int(w)
+        end,
+        head_slots = let s = get(raw, "head_slots", nothing)
+            s === nothing ? nothing : Int(s)
+        end,
+        allow_external_symlinks = _blob_bool(
+            get(raw, "allow_external_symlinks", false),
+            "allow_external_symlinks",
+        ),
     )
 end
 
@@ -170,6 +180,9 @@ function write_detached_job_blob!(
         spi_check::Bool = false,
         unsafe_skip_env_digests::Bool = false,
         job_id = nothing,
+        allow_external_symlinks::Bool = false,
+        head_workers = nothing,
+        head_slots = nothing,
     )::String
     _require_execute_kind!(kind)
     path = detached_job_blob_path(run_dir)
@@ -197,6 +210,8 @@ function write_detached_job_blob!(
     verbosity !== nothing && push!(pairs, "verbosity" => String(verbosity))
     workers !== nothing && push!(pairs, "workers" => Int(workers))
     repeat !== nothing && push!(pairs, "repeat" => Int(repeat))
+    head_workers !== nothing && push!(pairs, "head_workers" => Int(head_workers))
+    head_slots !== nothing && push!(pairs, "head_slots" => Int(head_slots))
     for (k, v) in (
             (:quiet, quiet),
             (:require_all_hosts, require_all_hosts),
@@ -205,6 +220,7 @@ function write_detached_job_blob!(
             (:worker_include, worker_include),
             (:spi_check, spi_check),
             (:unsafe_skip_env_digests, unsafe_skip_env_digests),
+            (:allow_external_symlinks, allow_external_symlinks),
         )
         push!(pairs, String(k) => v)
     end
@@ -237,6 +253,9 @@ function execute_kwargs_from_job_blob(blob)
     blob.worker_include && (kw[:worker_include] = true)
     blob.spi_check && (kw[:spi_check] = true)
     blob.job_id !== nothing && (kw[:job_id] = blob.job_id)
+    blob.head_workers !== nothing && (kw[:head_workers] = blob.head_workers)
+    blob.head_slots !== nothing && (kw[:head_slots] = blob.head_slots)
+    blob.allow_external_symlinks && (kw[:allow_external_symlinks] = true)
     return kw
 end
 
@@ -258,25 +277,26 @@ function peel_job_blob_bootstrap(args::Vector{String})::Tuple{Union{Nothing, Str
     return blob, out
 end
 
-function _blob_hosts_from_tokens(tokens::AbstractVector{<:AbstractString})
-    parent_workers = 0
+function _blob_machine_hosts(tokens::AbstractVector{<:AbstractString})
     hosts = Tuple{String, Union{Int, Nothing}}[]
     for tok in tokens
         p = parse_placement_token(String(tok))
+        p.role === :parent && throw(
+            ArgumentError(
+                "job blob: legacy parent token $(repr(tok)); use head_workers in the blob",
+            ),
+        )
         p.n === nothing &&
             throw(ArgumentError("job blob token needs a count: $(repr(tok))"))
-        if p.role === :parent
-            parent_workers = p.n
-        else
-            push!(hosts, (p.name, p.n))
-        end
+        push!(hosts, (p.name, p.n))
     end
-    return parent_workers, hosts
+    return hosts
 end
 
 """`parse_drive_args`-shaped NamedTuple from a detached job blob."""
 function drive_parsed_from_detached_job_blob(blob; hint_surface::Symbol = :cli)
-    parent_workers, hosts = _blob_hosts_from_tokens(blob.tokens)
+    head_workers = something(blob.head_workers, 0)
+    hosts = _blob_machine_hosts(blob.tokens)
     cfg_quiet = blob.quiet
     verbosity = blob.verbosity === nothing ? nothing : Symbol(blob.verbosity)
     cli_session = CliSharedFlags(
@@ -288,7 +308,7 @@ function drive_parsed_from_detached_job_blob(blob; hint_surface::Symbol = :cli)
         hint_surface = hint_surface,
     )
     return (
-        parent_workers = parent_workers,
+        head_workers = head_workers,
         default_workers = nothing,
         julia = blob.julia,
         skip_hash_check = blob.skip_hash_check,
@@ -332,6 +352,7 @@ function go_parsed_from_detached_job_blob(blob)
         show_version = false,
         hosts_file = nothing,
         hint_surface = :cli,
+        head_slots = blob.head_slots,
     )
     run_opts = RunOptionCliState()
     run_opts.unsafe_skip_env_digests = blob.unsafe_skip_env_digests
@@ -361,6 +382,7 @@ function ride_parsed_from_detached_job_blob(blob)
         show_version = false,
         hosts_file = nothing,
         hint_surface = :cli,
+        head_workers = blob.head_workers,
     )
     run_opts = RunOptionCliState()
     run_opts.unsafe_skip_env_digests = blob.unsafe_skip_env_digests

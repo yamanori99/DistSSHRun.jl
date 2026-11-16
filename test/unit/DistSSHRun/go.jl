@@ -10,34 +10,36 @@ using Dates
         let s = DistSSHRun._go_plan_slots(String[])
             @test length(s) == 1
             @test s[1].kind === :parent
-            @test s[1].label == "parent"
         end
+        @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; head_slots = 0)
         # `--repeat` pool helper: omit `:N` stays uncapped. go! / parse_go_args
         # reject the same token via `require_counted_placement_tokens`.
-        let s = DistSSHRun._go_plan_slots(["parent"]; total = 1)
+        let s = DistSSHRun._go_plan_slots(String[]; total = 1, head_slots = 1)
             @test length(s) == 1
             @test s[1].kind === :parent
-            @test s[1].label == "parent"
+            @test s[1].label == _go_local_slot_label()
         end
-        @test_throws ArgumentError DistSSHRun.require_counted_placement_tokens(["parent"])
-        let s = DistSSHRun._go_plan_slots(["child:local:2"])
+        @test_throws ArgumentError DistSSHRun.require_counted_placement_tokens(
+            ["parent"]; command = :go,
+        )
+        let s = DistSSHRun._go_plan_slots(["2*local"])
             @test length(s) == 2
             @test s[1].kind === :child && s[1].label == "local-1"
             @test s[2].kind === :child && s[2].label == "local-2"
         end
-        let s = DistSSHRun._go_plan_slots(["child:user@lab", "child:user@lab2:2"])
+        let s = DistSSHRun._go_plan_slots(["user@lab", "2*user@lab2"])
             @test length(s) == 3
             @test s[1].kind === :child && s[1].label == "user@lab"
             @test s[2].label == "user@lab2-1"
             @test s[3].label == "user@lab2-2"
         end
-        let s = DistSSHRun._go_plan_slots(["parent:0", "child:h1", "child:h2"])
+        let s = DistSSHRun._go_plan_slots(["h1", "h2"]; head_slots = 0)
             @test length(s) == 2
             @test all(x -> x.kind === :child, s)
         end
-        @test_throws ArgumentError DistSSHRun._go_plan_slots(["parent:0"])
-        @test_throws ArgumentError DistSSHRun._go_plan_slots(["child:local:0"])
-        @test_throws ArgumentError DistSSHRun._go_plan_slots(["child:local:-1"])
+        @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; head_slots = 0)
+        @test_throws ArgumentError DistSSHRun._go_plan_slots(["0*local"])
+        @test_throws ArgumentError DistSSHRun._go_plan_slots(["local:-1"])
         @test DistSSHRun._go_sanitize_label("user@lab") == "user@lab"
         _with_tempdir() do proj::String
             in_batch = joinpath(proj, "scripts", ".distssh", "go", "job_1")
@@ -53,54 +55,48 @@ using Dates
         end
         @test DistSSHRun._go_sanitize_label("a/b c") == "a_b_c"
         @test DistSSHRun._go_sanitize_label("***") == "_"
-        err = try
-            DistSSHRun._go_plan_slots(["lacal:0"])
-            nothing
-        catch e
-            e
-        end
-        @test err isa ArgumentError
-        @test occursin("child:NAME", sprint(showerror, err))
-        let s = DistSSHRun._go_plan_slots(["parent:2"])
+        @test_throws ArgumentError DistSSHRun.parse_go_args(["parent:1", "job.jl"])
+        let s = DistSSHRun._go_plan_slots(String[]; head_slots = 2)
             @test length(s) == 2
-            @test s[1].label == "parent-1"
-            @test s[2].label == "parent-2"
+            @test s[1].label == _go_local_slot_dir(1; multi = true)
+            @test s[2].label == _go_local_slot_dir(2; multi = true)
         end
-        let s = DistSSHRun._go_plan_slots(String[]; total = 4)
+        let s = DistSSHRun._go_plan_slots(String[]; head_slots = 4, total = 4)
             @test length(s) == 4
             @test all(x -> x.kind === :parent, s)
-            @test s[1].label == "parent-1"
-            @test s[4].label == "parent-4"
+            @test s[1].label == _go_local_slot_dir(1; multi = true)
+            @test s[4].label == _go_local_slot_dir(4; multi = true)
         end
-        let s = DistSSHRun._go_plan_slots(["parent:10"]; total = 3)
+        @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; total = 4)
+        let s = DistSSHRun._go_plan_slots(String[]; head_slots = 10, total = 3)
             @test length(s) == 3
         end
-        @test_throws ArgumentError DistSSHRun._go_plan_slots(["parent:2"]; total = 3)
-        let s = DistSSHRun._go_plan_slots(["child:h1"]; total = 2)
+        @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; head_slots = 2, total = 3)
+        let s = DistSSHRun._go_plan_slots(["h1"]; total = 2)
             @test length(s) == 2
             @test all(x -> x.kind === :child && x.host == "h1", s)
         end
-        let s = DistSSHRun._go_plan_slots(["child:a", "child:b"]; total = 4)
+        let s = DistSSHRun._go_plan_slots(["a", "b"]; total = 4)
             @test count(x -> x.host == "a", s) == 2
             @test count(x -> x.host == "b", s) == 2
         end
-        let s = DistSSHRun._go_plan_slots(["child:a", "child:b"]; total = 3)
+        let s = DistSSHRun._go_plan_slots(["a", "b"]; total = 3)
             @test count(x -> x.host == "a", s) == 2
             @test count(x -> x.host == "b", s) == 1
         end
-        let s = DistSSHRun._go_plan_slots(["parent:1", "child:h1"]; total = 4)
+        let s = DistSSHRun._go_plan_slots(["h1"]; head_slots = 1, total = 4)
             @test count(x -> x.kind === :parent, s) == 1
             @test count(x -> x.host == "h1", s) == 3
         end
-        let pool = DistSSHRun._go_repeat_pool(["parent:1", "child:h1"])
+        let pool = DistSSHRun._go_repeat_pool(["h1"]; head_slots = 1)
             @test length(pool) == 2
-            @test pool[1].role === :parent && pool[1].name == "parent"
+            @test pool[1].role === :parent && pool[1].name == _go_local_slot_label()
             @test pool[2].role === :child && pool[2].name == "h1"
         end
         @test_throws ArgumentError DistSSHRun._go_plan_slots(
-            ["parent:1", "child:parent:1"]; total = 2,
+            ["1*h1", "1*parent"]; head_slots = 1, total = 2,
         )
-        @test_throws ArgumentError DistSSHRun._go_plan_slots(["child:h1:1"]; total = 2)
+        @test_throws ArgumentError DistSSHRun._go_plan_slots(["1*h1"]; total = 2)
         @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; total = 0)
         @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; total = true)
         @test occursin("root@", DistSSHRun._go_host_ssh_hint("192.0.2.11"))
@@ -217,34 +213,37 @@ using Dates
             proj = joinpath(dir, "proj")
             mkdir(proj)
             script = joinpath(proj, "job.jl")
-            write(script, "true\n")
+            write(script, "sleep(120)\n")
             slot = joinpath(dir, "slot")
             bindir = joinpath(dir, "bin")
             mkdir(bindir)
             ready = joinpath(dir, "ssh.ready")
             ssh = joinpath(bindir, "ssh")
             scp = joinpath(bindir, "scp")
+            fake_ssh = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+            ready_shell = replace(ready, "'" => "'\\''")
             write(
                 ssh,
-                raw"""#!/bin/sh
-                ready="$GO_SLOT_SSH_READY"
-                for arg in "$@"; do
-                  case "$arg" in
-                    *go.exitcode*)
-                      printf '%s\n' "$$" > "$ready"
-                      exec sleep 30
-                      ;;
+                """
+                #!/bin/sh
+                ready='$ready_shell'
+                for arg in "\$@"; do
+                  case "\$arg" in
                     *--version*)
-                      printf '%s\n' 'julia version 1.10.10'
+                      printf '%s\\n' 'julia version 1.10.10'
                       exit 0
                       ;;
                     *__DSR_POSIX_OK_*)
-                      printf '%s\n' "$arg" | sed -n 's/.*\(__DSR_POSIX_OK_[0-9a-fA-F][0-9a-fA-F]*__\).*/\1/p'
+                      printf '%s\\n' "\$arg" | sed -n 's/.*\\(__DSR_POSIX_OK_[0-9a-fA-F][0-9a-fA-F]*__\\).*/\\1/p'
                       exit 0
                       ;;
                   esac
+                  if [ -n "\$ready" ] && [ \${#arg} -gt 200 ]; then
+                    printf '%s\\n' "\$\$" > "\$ready"
+                    exec sleep 30
+                  fi
                 done
-                printf '%s\n' /usr/bin/julia
+                printf '%s\\n' /usr/bin/julia
                 exit 0
                 """,
             )
@@ -252,14 +251,25 @@ using Dates
             chmod(ssh, 0o755)
             chmod(scp, 0o755)
             host = "go-slot-sig.test"
+            roots = joinpath(dir, "hosts")
+            remote_fs = joinpath(roots, host)
+            mkpath(remote_fs)
+            cp(script, joinpath(remote_fs, "job.jl"))
+            repo = abspath(joinpath(@__DIR__, "..", "..", ".."))
+            ctl_lp = join(string.(LOAD_PATH), ':')
             path = string(bindir, ":", get(ENV, "PATH", ""))
             result = try
                 withenv(
                     "PATH" => path,
+                    "DISTSSH_TEST" => "1",
+                    "DISTSSH_TEST_SSH" => fake_ssh,
                     "GO_SLOT_SSH_READY" => ready,
-                    "DISTSSH_TEST" => nothing,
-                    "DISTSSH_TEST_SSH" => nothing,
                     "DISTSSH_JOB_ID" => nothing,
+                    "DISTSSH_TEST_SSH_LOGICAL_ROOT" => "/remote/proj",
+                    "DISTSSH_TEST_SSH_HOST_ROOTS" => roots,
+                    "DISTSSH_TEST_ACTIVE_PROJECT" => repo,
+                    "DISTSSH_TEST_CONTROLLER_LOAD_PATH" => ctl_lp,
+                    "JULIA_DEPOT_PATH" => get(ENV, "JULIA_DEPOT_PATH", ""),
                 ) do
                     task = @async DistSSHRun._go_run_remote_slot!(
                         host,
@@ -272,12 +282,25 @@ using Dates
                         quiet = true,
                         julia = "/usr/bin/julia",
                     )
-                    _kill_ready_child(ready; signal = Base.SIGTERM)
+                    t0 = time()
+                    pid = nothing
+                    while time() - t0 < 60
+                        if isfile(ready)
+                            pid = tryparse(Int, strip(read(ready, String)))
+                            pid === nothing || break
+                        end
+                        sleep(0.02)
+                    end
+                    pid === nothing && error("timed out waiting for $(ready)")
+                    sleep(3)
+                    rc = ccall(:kill, Cint, (Cint, Cint), Cint(pid), Cint(Base.SIGTERM))
+                    rc != 0 &&
+                        Base.Libc.errno() != Base.Libc.ESRCH &&
+                        error("kill $(pid) failed (errno=$(Base.Libc.errno()))")
                     return fetch(task)::DistSSHRun.DriveResult
                 end
             finally
                 DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!(host)
-                delete!(DistSSHRun._PINNED_JULIA, host * "\0/usr/bin/julia")
             end
             @test !result.ok
             @test result.exit_code == 143
@@ -291,8 +314,7 @@ using Dates
             write(script, "nothing\n")
             err = try
                 DistSSHRun.go!(
-                    script,
-                    ["parent:1"];
+                    script, String[]; head_slots = 1,
                     project = proj,
                     output_dir = joinpath(proj, "a"),
                     collect_spec = joinpath(proj, "b"),
@@ -322,7 +344,7 @@ using Dates
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
             err = try
-                DistSSHRun.go!(script, ["parent:1"]; project = proj, quiet = true, yes = true)
+                DistSSHRun.go!(script, String[]; head_slots = 1, project = proj, quiet = true, yes = true)
                 nothing
             catch e
                 e
@@ -371,9 +393,14 @@ using Dates
         slot = "demos/output/go_sim/root@192.0.2.10-1"
         @test occursin("cd $(DistSSHRun._remote_shell_path_word("~/proj")) && mkdir -p $(DistSSHRun._remote_shell_path_word(slot))", inner)
         @test occursin("mkdir -p $(DistSSHRun._remote_shell_path_word(slot * "/.distssh"))", inner)
-        @test occursin(">" * DistSSHRun._remote_shell_path_word(slot * "/julia.stdout.log"), inner)
+        log_q = DistSSHRun._remote_shell_path_word(slot * "/julia.stdout.log")
+        @test occursin("tee $log_q", inner) || occursin("tee " * log_q, inner)
+        @test occursin("go-handshake.jl", inner)
         @test occursin("go.exitcode", inner)
-        @test occursin("echo \$ec >", inner)
+        @test occursin("echo \$? >", inner)
+        @test !occursin("echo \\\$? >", inner)
+        @test occursin("{ ", inner)
+        @test !occursin("PIPESTATUS", inner)
 
         spaced = DistSSHRun._go_remote_slot_shell_inner(
             "~/proj",
@@ -417,6 +444,84 @@ using Dates
             @test occursin("printf '%s\\n' '#distsshkit-job:repro-1'", tagged)
             @test !occursin("--eval=", tagged)
             @test !occursin("include(popfirst!(ARGS))", tagged)
+        end
+    end
+
+    @testset "remote slot shell POSIX exit status" begin
+        _with_tempdir() do d
+            exitf = joinpath(d, "go.exitcode")
+            logf = joinpath(d, "julia.stdout.log")
+            exit_q = DistSSHRun._remote_shell_path_word(exitf)
+            log_q = DistSSHRun._remote_shell_path_word(logf)
+            cd_q = DistSSHRun._remote_shell_path_word(d)
+            function posix_go_exit_cmd(body::AbstractString)
+                return string(
+                    "cd $cd_q && { ", body, " 2>&1; echo \$? > ", exit_q, "; } | tee ", log_q, "; ",
+                    "ec=\$(sed -n '1p' ", exit_q, " 2>/dev/null); ",
+                    "case \"\$ec\" in ''|*[!0-9]*) ec=127;; esac; exit \$ec",
+                )
+            end
+            shells = String["sh"]
+            ispath("/bin/dash") && push!(shells, "dash")
+            ispath("/bin/bash") && push!(shells, "bash")
+            if Sys.which("zsh") !== nothing
+                push!(shells, "zsh")
+            end
+            for shell in shells
+                for (body, want) in (("true", 0), ("false", 1))
+                    rm(exitf; force = true)
+                    rm(logf; force = true)
+                    cmd = ignorestatus(Cmd([shell, "-c", posix_go_exit_cmd(body)]))
+                    @test run(cmd).exitcode == want
+                    @test isfile(exitf)
+                end
+                rm(exitf; force = true)
+                missing = string(
+                    "cd $cd_q && rm -f ", exit_q, "; ",
+                    "ec=\$(sed -n '1p' ", exit_q, " 2>/dev/null); ",
+                    "case \"\$ec\" in ''|*[!0-9]*) ec=127;; esac; exit \$ec",
+                )
+                cmd = ignorestatus(Cmd([shell, "-c", missing]))
+                @test run(cmd).exitcode == 127
+            end
+        end
+    end
+
+    @testset "product exit tail via fake_snapshot_ssh sh -c" begin
+        fake = abspath(joinpath(@__DIR__, "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+        _with_tempdir() do d
+            exitf = joinpath(d, "go.exitcode")
+            logf = joinpath(d, "julia.stdout.log")
+            exit_q = DistSSHRun._remote_shell_path_word(exitf)
+            log_q = DistSSHRun._remote_shell_path_word(logf)
+            cd_q = DistSSHRun._remote_shell_path_word(d)
+            function product_exit_script(body::AbstractString)
+                return string(
+                    "printf '%s\\n' go.exitcode; ",
+                    "cd $cd_q && { ", body, " 2>&1; echo \$? > ", exit_q, "; } | tee ", log_q, "; ",
+                    "ec=\$(sed -n '1p' ", exit_q, " 2>/dev/null); ",
+                    "case \"\$ec\" in ''|*[!0-9]*) ec=127;; esac; exit \$ec",
+                )
+            end
+            host = "go-posix-exit.test"
+            for (body, want) in (("true", 0), ("false", 1))
+                rm(exitf; force = true)
+                rm(logf; force = true)
+                script = product_exit_script(body)
+                julia = joinpath(Sys.BINDIR, Base.julia_exename())
+                proc = withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_SSH" => fake) do
+                    run(
+                        pipeline(
+                            ignorestatus(`$julia --startup-file=no --compile=min $fake $host $script`);
+                            stdout = devnull,
+                            stderr = devnull,
+                        );
+                        wait = true,
+                    )
+                end
+                @test proc.exitcode == want
+                @test isfile(exitf)
+            end
         end
     end
 
@@ -500,7 +605,7 @@ using Dates
             with_kit_verbosity(:verbose) do
                 out, _ = _capture_stdio() do _, _
                     DistSSHRun.go!(
-                        script, ["parent:1"];
+                        script, String[]; head_slots = 1,
                         project = proj, quiet = true, yes = true,
                     )
                 end
@@ -508,9 +613,9 @@ using Dates
             end
             r = redirect_stdout(devnull) do
                 DistSSHRun.go!(
-                    script, ["parent:1"];
+                    script, String[]; head_slots = 1,
                     project = proj, quiet = true, yes = true,
-                    original_args = ["parent:1", "job.jl"],
+                    original_args = ["--head-slots", "1", "job.jl"],
                 )
             end
             @test r.ok
@@ -530,7 +635,8 @@ using Dates
             collect_mark = findfirst("step kind=go label=collect", prog)
             @test run_mark !== nothing && collect_mark !== nothing
             @test first(run_mark) < first(collect_mark)
-            run_span = findlast("label=parent/run", prog)
+            local_label = DistSSHRun.kit_head_host_label()
+            run_span = findlast("label=$(local_label)/run", prog)
             @test run_span !== nothing
             @test first(run_span) < first(collect_mark)
         end
@@ -543,11 +649,11 @@ using Dates
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
             hf = joinpath(proj, "hosts")
-            write(hf, "child:no-such-host.invalid:1\n")
+            write(hf, "1*no-such-host.invalid\n")
             withenv("DISTSSH_HOSTS_FILE" => hf) do
                 redirect_stdout(devnull) do
                     r = DistSSHRun.go!(
-                        script, ["parent:1"];
+                        script, String[]; head_slots = 1,
                         project = proj, quiet = true, yes = true,
                     )
                     @test r.ok
@@ -576,7 +682,7 @@ using Dates
             r = redirect_stdout(devnull) do
                 redirect_stderr(devnull) do
                     DistSSHRun.go!(
-                        script, ["parent:2"];
+                        script, String[]; head_slots = 2,
                         project = proj, quiet = true, yes = true,
                     )
                 end
@@ -613,23 +719,19 @@ using Dates
                 error("boom")
                 """,
             )
-            err_path, err_io = mktemp()
-            r = try
-                redirect_stderr(err_io) do
-                    redirect_stdout(devnull) do
-                        DistSSHRun.go!(
-                            script, ["parent:1"];
-                            project = proj, quiet = true, yes = true,
-                        )
-                    end
+            r = redirect_stdout(devnull) do
+                redirect_stderr(devnull) do
+                    DistSSHRun.go!(
+                        script, String[]; head_slots = 1,
+                        project = proj, quiet = true, yes = true,
+                    )
                 end
-            finally
-                close(err_io)
             end
-            txt = read(err_path, String)
+            slot_dir = joinpath(r.output_dir, _go_local_slot_label())
+            suffix = DistSSHRun._go_trace_suffix(slot_dir)
             @test !r.ok
-            @test occursin("last top-level:", txt)
-            @test occursin("job.jl:", txt)
+            @test occursin("last top-level:", suffix)
+            @test occursin("job.jl:", suffix)
         end
     end
 
@@ -647,6 +749,7 @@ using Dates
                     script;
                     project = proj,
                     output_dir = dirty,
+                    head_slots = 1,
                     quiet = true,
                     yes = true,
                     hint_surface = :cli,
@@ -668,6 +771,7 @@ using Dates
                     script;
                     project = proj,
                     collect_spec = dirty,
+                    head_slots = 1,
                     quiet = true,
                     yes = true,
                     hint_surface = :api,
@@ -686,6 +790,7 @@ using Dates
                     script;
                     project = proj,
                     output_dir = empty_dir,
+                    head_slots = 1,
                     quiet = true,
                     yes = true,
                 )
@@ -699,7 +804,7 @@ using Dates
                             "DISTRIBUTED_PROJECT_ROOT" => proj,
                             "DISTSSH_CLI_SUBCOMMAND_DONE" => "",
                         ) do
-                            DistSSHRun.main(["go", "-q", "--output-dir", dirty, script])
+                            DistSSHRun.main(["go", "-q", "--head-slots", "1", "--output-dir", dirty, script])
                         end
                     end
                 end
@@ -732,7 +837,7 @@ using Dates
                         try
                             DistSSHRun.go!(
                                 script,
-                                ["child:user@hash-drain.test:1"];
+                                ["1*user@hash-drain.test"];
                                 project = proj,
                                 output_dir = out,
                                 quiet = true,
@@ -758,7 +863,7 @@ using Dates
                         try
                             DistSSHRun.go!(
                                 script,
-                                ["child:user@hash-drain.test:1"];
+                                ["1*user@hash-drain.test"];
                                 project = proj,
                                 output_dir = out2,
                                 quiet = true,
@@ -805,14 +910,14 @@ using Dates
             write(script, "println(\"SNAPSHOT_SIBLING_OK\")\n")
             plain = redirect_stdout(devnull) do
                 DistSSHRun.go!(
-                    script, ["parent:1"];
+                    script, String[]; head_slots = 1,
                     project = app, yes = true, quiet = true,
                 )
             end
             @test plain.ok
             result = redirect_stdout(devnull) do
                 DistSSHRun.go!(
-                    script, ["parent:1"];
+                    script, String[]; head_slots = 1,
                     project = app,
                     run_id = "20260101T000000Z-aaaaaa",
                     yes = true,
@@ -820,7 +925,10 @@ using Dates
                 )
             end
             @test result.ok
-            @test occursin("SNAPSHOT_SIBLING_OK", read(joinpath(result.output_dir, "parent", "julia.stdout.log"), String))
+            @test occursin(
+                "SNAPSHOT_SIBLING_OK",
+                read(joinpath(result.output_dir, _go_local_slot_label(), "julia.stdout.log"), String),
+            )
         end
     end
 end

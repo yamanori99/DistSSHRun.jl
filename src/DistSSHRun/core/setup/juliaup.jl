@@ -1,6 +1,10 @@
 # Align remote Julia via juliaup (`up` / check Fix hints).
 # Channel math, status, and the juliaup process live in up/.
 
+"""User-facing host label for juliaup progress and status lines."""
+function _juliaup_progress_label(host::AbstractString)::String
+    return is_parent_host_name(host) ? kit_head_host_label() : String(host)
+end
 
 """Print Fix lines for missing / mismatched remote Julia (check output)."""
 function print_juliaup_align_fix!(
@@ -142,7 +146,7 @@ function juliaup_align_remotes(
     host_results = HostResult[]
     for host in hosts
         _setup_host_span!(host, :running)
-        label = is_parent_host_name(host) ? PARENT_HOST_NAME : host
+        label = _juliaup_progress_label(host)
         try
             r = kit_spin!("  $label: ") do
                 juliaup_align_host!(host; channel = ch)
@@ -160,7 +164,7 @@ function juliaup_align_remotes(
                 end
             end
             succeeded += 1
-            push!(host_results, HostResult(label, true, "juliaup $ch"))
+            push!(host_results, HostResult(String(host), true, "juliaup $ch"))
             _setup_host_span!(host, :ok)
         catch e
             detail = e isa ErrorException ? e.msg : sprint(showerror, e)
@@ -169,7 +173,7 @@ function juliaup_align_remotes(
                 kit_payload_println("    Install juliaup on $label first (see Requirements), then retry.")
             end
             failed += 1
-            push!(host_results, HostResult(label, false, detail))
+            push!(host_results, HostResult(String(host), false, detail))
             _setup_host_span!(host, :fail)
         end
     end
@@ -179,7 +183,7 @@ end
 """
 Run `juliaup update` on each target (installed channels; does not `default`).
 
-Same hosts as `up` (`child:NAME` and/or `parent`). Confirm unless
+Same hosts as `up` (`NAME` and/or `parent`). Confirm unless
 `confirm=false`. Does not install juliaup.
 """
 function juliaup_update_remotes(
@@ -210,14 +214,14 @@ function juliaup_update_remotes(
     host_results = HostResult[]
     for host in hosts
         _setup_host_span!(host, :running)
-        label = is_parent_host_name(host) ? PARENT_HOST_NAME : host
+        label = _juliaup_progress_label(host)
         try
             kit_spin!("  $label: ") do
                 juliaup_update_host!(host)
             end
             _juliaup_result_line(label, "✓ juliaup update")
             succeeded += 1
-            push!(host_results, HostResult(label, true, "juliaup update"))
+            push!(host_results, HostResult(String(host), true, "juliaup update"))
             _setup_host_span!(host, :ok)
         catch e
             detail = e isa ErrorException ? e.msg : sprint(showerror, e)
@@ -226,7 +230,7 @@ function juliaup_update_remotes(
                 kit_payload_println("    Install juliaup on $label first (see Requirements), then retry.")
             end
             failed += 1
-            push!(host_results, HostResult(label, false, detail))
+            push!(host_results, HostResult(String(host), false, detail))
             _setup_host_span!(host, :fail)
         end
     end
@@ -302,11 +306,11 @@ function juliaup_status_summary_line(
         rows::AbstractVector{<:AbstractString};
         parent_patch::AbstractString,
     )::String
-    label = is_parent_host_name(host) ? PARENT_HOST_NAME : String(host)
+    label = _juliaup_progress_label(host)
     row = _juliaup_summary_row(rows)
     row === nothing && return "  $label: (none)"
     channel, installed, available = _juliaup_summary_fields(row)
-    rel = _juliaup_patch_relation(label, installed, String(parent_patch))
+    rel = _juliaup_patch_relation(host, installed, String(parent_patch))
     rel_part = isempty(rel) ? "" : ", $rel"
     return "  $label: channel $channel, installed $installed$rel_part, available $available"
 end
@@ -358,7 +362,7 @@ function juliaup_verb_remotes(
     host_results = HostResult[]
     for host in hosts
         _setup_host_span!(host, :running)
-        label = is_parent_host_name(host) ? PARENT_HOST_NAME : host
+        label = _juliaup_progress_label(host)
         try
             if v == "status"
                 lines = juliaup_status_lines(host; channel = ch, strict = true)
@@ -386,7 +390,7 @@ function juliaup_verb_remotes(
                 _juliaup_result_line(label, "✓ juliaup $v$(ch === nothing ? "" : " $ch")")
             end
             succeeded += 1
-            push!(host_results, HostResult(label, true, "juliaup $v"))
+            push!(host_results, HostResult(String(host), true, "juliaup $v"))
             _setup_host_span!(host, :ok)
         catch e
             detail = e isa ErrorException ? e.msg : sprint(showerror, e)
@@ -395,7 +399,7 @@ function juliaup_verb_remotes(
                 kit_payload_println("    Install juliaup on $label first (see Requirements), then retry.")
             end
             failed += 1
-            push!(host_results, HostResult(label, false, detail))
+            push!(host_results, HostResult(String(host), false, detail))
             _setup_host_span!(host, :fail)
         end
     end

@@ -84,17 +84,8 @@ Unreachable hosts stay in the list with `ok=false`. The pool is `ok` only
 when every listed host probed successfully. Does not start workers.
 """
 function pool!(session::DistSSHSession)::ResourcePool
-    parsed = parse_worker_tokens(session.tokens)
-    want_parent = session.include_parent_for_size ||
-        parsed.parent_autosize || parsed.parent_workers > 0
-    all_hosts = String[]
-    want_parent && push!(all_hosts, PARENT_HOST_NAME)
+    all_hosts = String[PARENT_HOST_NAME]
     append!(all_hosts, session.hosts)
-    isempty(all_hosts) && throw(
-        ArgumentError(
-            explain_no_hosts(; surface = hint_surface(session), kind = :pool),
-        )
-    )
     return _with_kit_inproc_run!(:pool) do
         apply_session_env!(session)
         rows = HostInventory[_inventory_from_facts(f) for f in collect_host_facts(all_hosts)]
@@ -121,7 +112,11 @@ function print_pool(pool::ResourcePool; io::IO = stdout)
     extra = failed == 0 ? "" : "  ($failed host$(failed == 1 ? "" : "s") unreachable)"
     println(io, "Pool: $(_fmt_cores(pool.cores))  $(_fmt_gb(pool.gb))$extra")
     for row in pool.hosts
-        shown = is_parent_host_name(row.host) ? PARENT_HOST_NAME : row.host
+        shown = if is_parent_host_name(row.host)
+            "$(kit_head_host_label()) (head)"
+        else
+            row.host
+        end
         if row.ok
             println(
                 io,

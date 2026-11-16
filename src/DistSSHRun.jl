@@ -22,7 +22,7 @@ using Unicode
 
 # Public surface. Prefer `julia -m DistSSHKit …` for day-to-day CLI.
 #   user — go! / ride! / drive! / pool! / setup! / pipeline!
-#   placement — WorkerPlan from explicit parent:N / child:NAME:N
+#   placement — WorkerPlan from explicit parent:N / NAME:N
 #   queue — execute!(; detached=true), parsers, paths, help chrome
 #   argv wrappers `go` / `drive` stay unexported (`main` / tests)
 export worker_pmap
@@ -63,6 +63,7 @@ export pipeline_config_from_env
 export go!
 export GoResult
 export ride!
+export LoadedCodeMismatchError
 export RideResult
 export execute!
 export allocate_output_dir
@@ -154,7 +155,8 @@ using .DistSSHBase: CliCursor, HostFacts, HostResult, OUTPUT_WIDTH, PARENT_HOST_
     get_remote_julia_version_full,
     git_work_tree,
     is_sigint, join_explained_message, looks_like_path_host, normalize_git_clone_url,
-    parse_placement_token, posix_quote, project_package_name, read_hosts_file, read_hosts_file_lines,
+    parse_placement_token, posix_quote, project_package_name,
+    read_hosts_file, read_hosts_file_lines, read_machine_file_lines,
     remote_delete_root, remote_deploy_root, remote_env_project_root, remote_git_clone_dest,
     remote_layout_path, resolve_host_path_abs,
     resolve_remote_julia, resolve_remote_project_root, rule_line, shield_sigint,
@@ -168,6 +170,7 @@ using .DistSSHUp: julia_version_mismatch_kind, juliaup_add_host!, juliaup_align_
 
 include("DistSSHRun/messages/display.jl")
 include("DistSSHRun/messages/errors.jl")
+include("DistSSHRun/messages/placement.jl")
 include("DistSSHRun/options/table.jl")
 include("DistSSHRun/options/config.jl")
 include("DistSSHRun/options/cli_consume.jl")
@@ -176,7 +179,11 @@ include("DistSSHRun/argv/session.jl")
 include("DistSSHRun/infra/run_transfer_removed.jl")
 include("DistSSHRun/infra/remote.jl")
 include("DistSSHRun/infra/launch.jl")
+include("DistSSHRun/infra/topology.jl")
+include("DistSSHRun/infra/component_id.jl")
 include("DistSSHRun/infra/mismatch.jl")
+include("DistSSHRun/infra/loaded_identity.jl")
+include("DistSSHRun/infra/go_handshake.jl")
 include("DistSSHRun/infra/demos.jl")
 include("DistSSHRun/infra/distributed.jl")
 include("DistSSHRun/infra/worker_plan.jl")
@@ -403,12 +410,12 @@ run_ride(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("ride.jl
 
 CLI entry. Prefer Julia 1.13+ and `julia -m DistSSHKit SUBCOMMAND …`:
 
-    julia --project=. -m DistSSHKit setup git-clone child:host1 child:host2
+    julia --project=. -m DistSSHKit setup git-clone host1 host2
     julia --project=. -m DistSSHKit go SCRIPT.jl
     julia --project=. -m DistSSHKit ride parent:2 SCRIPT.jl
     julia --project=. -m DistSSHKit drive parent:2 script.jl
-    julia --project=. -m DistSSHKit hostinfo parent child:host1
-    julia --project=. -m DistSSHKit pool parent child:host1
+    julia --project=. -m DistSSHKit hostinfo parent host1
+    julia --project=. -m DistSSHKit pool parent host1
     julia --project=. -m DistSSHKit progress DIR
 
 `main` remains for wrappers and tests; prefer `-m` day-to-day.

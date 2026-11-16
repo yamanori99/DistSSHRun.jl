@@ -57,8 +57,7 @@ using Test
         _, kp = _capture_detached_env_log() do
             DistSSHRun.execute!(
                 :drive,
-                script,
-                ["parent:1"];
+                script, String[]; head_workers = 1,
                 detached = true,
                 project = proj,
                 quiet = true,
@@ -77,8 +76,7 @@ using Test
         _, kp0 = _capture_detached_env_log() do
             DistSSHRun.execute!(
                 :drive,
-                script,
-                ["parent:1"];
+                script, String[]; head_workers = 1,
                 detached = true,
                 project = proj,
                 quiet = true,
@@ -129,8 +127,7 @@ end
         _, kp = _capture_detached_env_log() do
             DistSSHRun.execute!(
                 :drive,
-                script,
-                ["parent:1"];
+                script, String[]; head_workers = 1,
                 detached = true,
                 project = proj,
                 quiet = true,

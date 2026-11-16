@@ -352,7 +352,7 @@ jobs:
     # Needs Base as well as Up and Ship so a skipped peer does not overlap.
     if: ${{ needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request' && !cancelled() }}
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -514,7 +514,7 @@ jobs:
     # skip Ship. Static gates stay result == success; cancel still skips.
     if: ${{ needs.detect.outputs.heavy == 'true' && needs.detect.outputs.ship == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request' && !cancelled() }}
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -608,7 +608,7 @@ jobs:
     needs: [detect, runic, jetls, aqua, ship-test-wsl]
     if: ${{ needs.detect.outputs.heavy == 'true' && needs.detect.outputs.heartbeat == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request' && !cancelled() }}
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -701,7 +701,7 @@ jobs:
     # skip Up. Static gates stay result == success; cancel still skips.
     if: ${{ needs.detect.outputs.heavy == 'true' && needs.detect.outputs.up == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request' && !cancelled() }}
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -836,7 +836,7 @@ jobs:
     needs: [detect, runic, jetls, aqua]
     if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.base == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request'
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:

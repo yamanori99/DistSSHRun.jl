@@ -136,7 +136,7 @@ const _STATUS_ROW = "*  1.13  1.13.0+0.aarch64.apple.darwin14  1.13.3"
             end
             @test progress.succeeded == 2
             @test progress.failed == 0
-            @test occursin("parent: ✓ juliaup update", progress_out)
+            @test occursin("$(DistSSHRun.kit_head_host_label()): ✓ juliaup update", progress_out)
             @test occursin("host1: ✓ juliaup update", progress_out)
             verbose_out, verbose = with_kit_verbosity(:verbose) do
                 _capture_stdio() do _, _

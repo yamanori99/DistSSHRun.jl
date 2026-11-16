@@ -2,10 +2,10 @@ using Test
 
 @testset "CliCursor" begin
     @testset "positional args" begin
-        c = DistSSHBase.CliCursor(["child:host1", "child:host2"])
-        @test DistSSHBase.cli_current(c) == "child:host1"
+        c = DistSSHBase.CliCursor(["host1", "host2"])
+        @test DistSSHBase.cli_current(c) == "host1"
         DistSSHBase.cli_consume!(c)
-        @test DistSSHBase.cli_current(c) == "child:host2"
+        @test DistSSHBase.cli_current(c) == "host2"
         DistSSHBase.cli_consume!(c)
         @test DistSSHBase.cli_at_end(c)
     end

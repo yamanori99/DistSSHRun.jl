@@ -5,7 +5,7 @@
 Outputs: `{script}/.distssh/go/<stem>_<UTC>/<slot>/` (or `--output-dir`).
 
   julia --project=. -m DistSSHKit go SCRIPT.jl
-  julia --project=. -m DistSSHKit go parent:2 child:user@h1 SCRIPT.jl
+  julia --project=. -m DistSSHKit go parent:2 user@h1 SCRIPT.jl
 
 See `--help`.
 """
@@ -69,6 +69,7 @@ function go_main()::Cint
         go!(
             parsed.script_path,
             host_tokens(parsed; kind = :go);
+            head_slots = parsed.cli_session.head_slots,
             project = project_root,
             quiet = kw[:quiet],
             verbosity = kw[:verbosity],

@@ -14,32 +14,87 @@ function _ssh_whole_seconds(name::Symbol, default::Int)::Int
     return max(1, round(Int, seconds))
 end
 
-"""Build SSH options. `request_tty=false` (default) adds `RequestTTY=no`."""
+const _SSH_FORBIDDEN_OPT_OVERRIDES = Dict{String, String}(
+    "batchmode" => "BatchMode=yes",
+    "requesttty" => "RequestTTY=no",
+)
+
+function _ssh_o_option_keys(argv::AbstractVector{<:AbstractString})::Set{String}
+    keys = Set{String}()
+    for i in eachindex(argv)
+        argv[i] == "-o" || continue
+        i + 1 > length(argv) && break
+        keyval = String(argv[i + 1])
+        eq = findfirst('=', keyval)
+        eq === nothing && continue
+        push!(keys, lowercase(keyval[1:(eq - 1)]))
+    end
+    return keys
+end
+
+function _validate_distributed_ssh_o!(extra::AbstractVector{String})
+    for i in 1:2:length(extra)
+        extra[i] == "-o" || continue
+        i + 1 > length(extra) && break
+        keyval = extra[i + 1]
+        eq = findfirst('=', keyval)
+        eq === nothing && continue
+        key = lowercase(keyval[1:(eq - 1)])
+        haskey(_SSH_FORBIDDEN_OPT_OVERRIDES, key) || continue
+        want = _SSH_FORBIDDEN_OPT_OVERRIDES[key]
+        keyval != want && throw(
+            ArgumentError(
+                "DISTRIBUTED_SSH_OPTS cannot override $(repr(want)); " *
+                    "DistSSH requires non-interactive SSH",
+            ),
+        )
+    end
+    return nothing
+end
+
+function _default_ssh_o_values(; request_tty::Bool)
+    connect = _ssh_whole_seconds(:ssh_connect, _SSH_CONNECT_TIMEOUT_S)
+    alive_count = 10
+    silent = _ssh_whole_seconds(:peer_silent, 600)
+    alive_interval = max(1, round(Int, silent / alive_count))
+    out = String[
+        "BatchMode=yes",
+        "ExitOnForwardFailure=yes",
+        "ConnectTimeout=$connect",
+        "StrictHostKeyChecking=accept-new",
+        "ServerAliveInterval=$alive_interval",
+        "ServerAliveCountMax=$alive_count",
+        "TCPKeepAlive=yes",
+    ]
+    request_tty || push!(out, "RequestTTY=no")
+    return out
+end
+
+"""
+Build SSH options. `DISTRIBUTED_SSH_OPTS` tokens come first; kit defaults for
+each `-o` name follow only when that name is absent (OpenSSH uses the first
+value on the command line). Forbidden overrides in ENV still throw.
+"""
 function build_ssh_opts(; request_tty::Bool = false)
     custom = strip(get(ENV, "DISTRIBUTED_SSH_OPTS", ""))
-    if isempty(custom)
-        opts = String["-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes"]
-        if !request_tty
-            push!(opts, "-o", "RequestTTY=no")
-        end
-        connect = _ssh_whole_seconds(:ssh_connect, _SSH_CONNECT_TIMEOUT_S)
-        # Ten probes. The gap is the silent budget divided across them, so the
-        # default stays Interval=60 and CountMax=10 (about 600s).
-        alive_count = 10
-        silent = _ssh_whole_seconds(:peer_silent, 600)
-        alive_interval = max(1, round(Int, silent / alive_count))
-        append!(
-            opts, (
-                "-o", "ConnectTimeout=$connect",
-                "-o", "StrictHostKeyChecking=accept-new",
-                "-o", "ServerAliveInterval=$alive_interval",
-                "-o", "ServerAliveCountMax=$alive_count",
-                "-o", "TCPKeepAlive=yes",
-            )
-        )
-        return opts
+    extra = isempty(custom) ? String[] : _split_ssh_opts(custom)
+    !isempty(extra) && _validate_distributed_ssh_o!(extra)
+    user_keys = _ssh_o_option_keys(extra)
+    defaults = String[]
+    for kv in _default_ssh_o_values(; request_tty = request_tty)
+        key = lowercase(split(kv, '=', limit = 2)[1])
+        key in user_keys && continue
+        push!(defaults, "-o", kv)
     end
-    return _split_ssh_opts(custom)
+    return vcat(extra, defaults)
+end
+
+"""Argv prefix for every `ssh` invocation (BatchMode and askpass lock)."""
+function ssh_noninteractive_env()::Dict{String, String}
+    return Dict{String, String}(
+        "SSH_ASKPASS_REQUIRE" => "never",
+        "SSH_ASKPASS" => "",
+    )
 end
 
 """Split `DISTRIBUTED_SSH_OPTS` with shell quoting. Unmatched quotes throw `ArgumentError`."""
@@ -60,13 +115,14 @@ SSH argv flags for `ssh` / `scp`.
 Reads `DISTRIBUTED_SSH_OPTS` **live** (not frozen at package precompile). Prefer
 this over a `const` so E2E / ProxyJump overrides apply in the same process.
 
-A non-empty `DISTRIBUTED_SSH_OPTS` **replaces** the default vector (it is not
-merged). It is split with `Base.shell_split`, so a quoted value that contains
-spaces stays one argument. An unmatched quote throws `ArgumentError`.
-`request_tty` only changes the default vector: `false` includes
-`-o RequestTTY=no`; `true` omits it so a caller may put `ssh -t` before or
-after these flags. The ENV replacement is unchanged (if it contains
-`RequestTTY=no`, put `-t` **after** the vector). Use `-o RequestTTY=no`,
+Non-empty `DISTRIBUTED_SSH_OPTS` is split with `Base.shell_split` and placed
+**before** kit defaults. For each `-o` option name, the first token on the
+command line wins, so ENV can override timeouts and extras like `-F`. Kit
+still fills any missing default names (`BatchMode=yes`, and so on). An
+unmatched quote throws `ArgumentError`.
+`request_tty` only changes which default names are filled: `false` includes
+`RequestTTY=no` when ENV did not set it; `true` omits that default. Use
+`-o RequestTTY=no`,
 not `ssh -T`: these flags are also passed to `scp` (`scp -T` is unrelated).
 Does not insert `-t` (that flag is `ssh`-only).
 """
@@ -94,7 +150,13 @@ function _host_tool_cmd(name::AbstractString, args::AbstractVector)::Cmd
 end
 
 _git_cmd(args::AbstractVector)::Cmd = _host_tool_cmd("git", args)
-_ssh_cmd(args::AbstractVector)::Cmd = _host_tool_cmd("ssh", args)
+function _ssh_cmd(args::AbstractVector)::Cmd
+    cmd = _host_tool_cmd("ssh", args)
+    for (k, v) in ssh_noninteractive_env()
+        cmd = setenv(cmd, k => v)
+    end
+    return cmd
+end
 
 """`--` then `host`, then `args`. A name that starts with `-` is rejected."""
 function _ssh_host_args(host::AbstractString, args::AbstractString...)::Vector{String}

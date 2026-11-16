@@ -37,3 +37,6 @@ machine file or hosts file land in phase 4; the resolver keeps a hook for them.
 |----------|-------------|
 | `--unsafe-heterogeneous` | `--unsafe-skip-env-digests` |
 | `--allow-mismatch` | `--unsafe-skip-env-digests` (digests only) |
+| `-p` / `-pN` (drive, ride, go) | No short alias: `--local-workers N` (drive, ride) or `--local-slots N` (go) |
+| `-l`, `--local` | SSH user as `user@host` in a hosts file |
+| `-L` | `host:port` in a hosts file or SSH config (no `-L` forwarding flag) |

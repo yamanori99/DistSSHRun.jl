@@ -64,7 +64,7 @@ Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup …`.
 | `:git_sync` | `git-sync` | Requires a clone at `session.remote` (`:git_clone` first on a new target). Push the local branch to origin, then detach each remote at that commit; confirm unless `session.yes`. A dirty tree is refused unless `allow_dirty=true` (CLI `--skip-git-guard`; deploy record `dirty=true`) |
 | `:git_pull` | `git-pull` | Detach each remote at the local commit. Does not push to origin and does not run `git pull`; confirm unless `session.yes`. A dirty tree is refused |
 | `:instantiate` | `instantiate` | `julia=` (default `"auto"`) |
-| `:juliaup` | `up` | Align Julia via juliaup on `child:NAME` and/or `parent` (`\$HOME/.juliaup` or Homebrew); confirm unless `session.yes`. Tip if kit parent patch lags channel latest |
+| `:juliaup` | `up` | Align Julia via juliaup on `NAME` and/or `parent` (`\$HOME/.juliaup` or Homebrew); confirm unless `session.yes`. Tip if kit parent patch lags channel latest |
 | `:juliaup_update` | `up update` | `juliaup update` on those hosts (no `default`); confirm unless `session.yes` |
 | `:check` | `check` | `ignore_julia_version=`, `check_code_sync=` |
 | `:runtest` | `runtest` | job `Pkg.test()` on remotes; `julia=` |
@@ -80,7 +80,7 @@ place. An unknown key is an error. A mismatch throws
 mode rejects `confirm_path`. Multiple modes run in order and stop on the first failure:
 
 ```julia
-session = DistSSHSession(workers=["child:user@h1"], remote="~/proj", yes=true)
+session = DistSSHSession(workers=["user@h1"], remote="~/proj", yes=true)
 setup!(session, :ship_tree, :instantiate)
 setup!(session, :check; ignore_julia_version=true)
 ```
@@ -108,7 +108,11 @@ function setup!(
     _setup_bang_preflight!(session, mode; repo = repo)
     hosts = _setup_bang_host_list(session)
     if isempty(hosts)
-        throw(ArgumentError(explain_no_hosts(; surface = hint_surface(session), kind = :ssh)))
+        if setup_mode_allows_parent(mode)
+            hosts = String[PARENT_HOST_NAME]
+        else
+            throw(ArgumentError(explain_no_hosts(; surface = hint_surface(session), kind = :ssh)))
+        end
     end
     validate_setup_hosts(hosts; allow_parent = setup_mode_allows_parent(mode))
     bound_plan = _setup_bind_confirm_path!(session, mode, confirm_path, hosts)
@@ -723,13 +727,14 @@ function _setup_one!(
     elseif mode === :instantiate
         return instantiate!(session; julia = julia_path, run_id = run_id)
     elseif mode === :juliaup || mode === :juliaup_update
-        ssh_hosts = setup_juliaup_ssh_hosts(hosts)
+        targets = _setup_juliaup_targets(hosts)
+        ssh_hosts = setup_juliaup_ssh_hosts(targets)
         if !isempty(ssh_hosts)
             preflight_setup_ssh(ssh_hosts) || return SyncResult(false, HostResult[]; ok = false)
         end
         raw = mode === :juliaup ?
-            juliaup_align_remotes(hosts; confirm = !session.yes) :
-            juliaup_update_remotes(hosts; confirm = !session.yes)
+            juliaup_align_remotes(targets; confirm = !session.yes) :
+            juliaup_update_remotes(targets; confirm = !session.yes)
         return _sync_result_from_host_op(raw)
     elseif mode === :runtest
         preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
@@ -828,33 +833,27 @@ end
 
 """SSH aliases plus `parent` when a token names the kit parent. Does not touch `ENV`."""
 function _setup_bang_host_list(session::DistSSHSession)::Vector{String}
-    hosts = copy(session.hosts)
-    # `session.hosts` is SSH children only; parent lives on `tokens`.
-    # Always surface `parent` so non-juliaup modes hit validate_setup_hosts
-    # instead of silently dropping it.
-    for t in session.tokens
-        pt = try
-            parse_placement_token(t)
-        catch
-            nothing
-        end
-        pt === nothing && continue
-        if pt.role === :parent
-            push!(hosts, PARENT_HOST_NAME)
-            break
-        end
-    end
-    return hosts
+    return copy(session.hosts)
+end
+
+"""Juliaup targets: controller (internal) plus SSH hosts from the session."""
+function _setup_juliaup_targets(hosts::AbstractVector{<:AbstractString})::Vector{String}
+    out = String[String(h) for h in hosts if !is_parent_host_name(h)]
+    push!(out, PARENT_HOST_NAME)
+    return out
 end
 
 function _setup_bang_hosts!(session::DistSSHSession; allow_parent::Bool = false)
     apply_session_env!(session)
     hosts = _setup_bang_host_list(session)
-    isempty(hosts) && throw(
-        ArgumentError(
-            explain_no_hosts(; surface = hint_surface(session), kind = :ssh),
+    if isempty(hosts)
+        allow_parent || throw(
+            ArgumentError(
+                explain_no_hosts(; surface = hint_surface(session), kind = :ssh),
+            ),
         )
-    )
+        hosts = String[PARENT_HOST_NAME]
+    end
     validate_setup_hosts(hosts; allow_parent = allow_parent)
     return hosts
 end

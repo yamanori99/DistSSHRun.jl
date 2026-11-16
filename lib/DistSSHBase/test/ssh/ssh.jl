@@ -256,7 +256,7 @@ let _BASE = DistSSHBase
 
                 _BASE._remote_posix_shell_remember!("opts-host.test")
                 @test _BASE._remote_posix_shell_cached("opts-host.test")
-                withenv("DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes") do
+                withenv("DISTRIBUTED_SSH_OPTS" => "-o Foo=cache-bust") do
                     @test !_BASE._remote_posix_shell_cached("opts-host.test")
                 end
                 @test _BASE._remote_posix_shell_cached("opts-host.test")

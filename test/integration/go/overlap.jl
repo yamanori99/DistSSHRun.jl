@@ -1,6 +1,6 @@
 using Test
 
-# Oracle: `go!(…, "parent:2")` and `go!(…; repeat=2)` run two local slots
+# Oracle: `go!(…; head_slots = 2)` and `go!(…; repeat=2)` run two local slots
 # concurrently (slot t0.txt timestamps within 0.45s). Does not cover SSH,
 # CLI `go`, or slot-plan math (those live in unit/DistSSHRun/go.jl).
 
@@ -19,22 +19,21 @@ using Test
         )
         t0 = time()
         result = DistSSHRun.go!(
-            script,
-            "parent:2";
+            script; head_slots = 2,
             project = proj,
             quiet = true,
             yes = true,
         )
         wall = time() - t0
         @test result.ok
-        a = parse(Float64, read(joinpath(result.output_dir, "parent-1", "t0.txt"), String))
-        b = parse(Float64, read(joinpath(result.output_dir, "parent-2", "t0.txt"), String))
+        a = parse(Float64, read(joinpath(result.output_dir, _go_local_slot_dir(1; multi = true), "t0.txt"), String))
+        b = parse(Float64, read(joinpath(result.output_dir, _go_local_slot_dir(2; multi = true), "t0.txt"), String))
         @test abs(a - b) < 0.45  # sequential would be ~0.6s apart plus julia startup
         @test wall < 8.0
     end
 end
 
-@testset "repeat=2 matches parent:2 (local overlap)" begin
+@testset "repeat=2 matches --local-slots 2 (local overlap)" begin
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"GoRepeatOverlap\"\n")
         _sync_test_project_manifest!(proj)
@@ -51,14 +50,15 @@ end
         result = DistSSHRun.go!(
             script;
             repeat = 2,
+            head_slots = 2,
             project = proj,
             quiet = true,
             yes = true,
         )
         wall = time() - t0
         @test result.ok
-        a = parse(Float64, read(joinpath(result.output_dir, "parent-1", "t0.txt"), String))
-        b = parse(Float64, read(joinpath(result.output_dir, "parent-2", "t0.txt"), String))
+        a = parse(Float64, read(joinpath(result.output_dir, _go_local_slot_dir(1; multi = true), "t0.txt"), String))
+        b = parse(Float64, read(joinpath(result.output_dir, _go_local_slot_dir(2; multi = true), "t0.txt"), String))
         @test abs(a - b) < 0.45
         @test wall < 8.0
     end
@@ -78,8 +78,7 @@ end
         )
         custom = joinpath(proj, "runs", "custom")
         result = DistSSHRun.go!(
-            script,
-            "parent:1";
+            script; head_slots = 1,
             project = proj,
             output_dir = custom,
             quiet = true,
@@ -87,7 +86,7 @@ end
         )
         @test result.ok
         @test result.output_dir == DistSSHRun.canonical_local_path(custom)
-        @test isfile(joinpath(result.output_dir, "parent", "marker.txt"))
+        @test isfile(joinpath(result.output_dir, _go_local_slot_label(), "marker.txt"))
     end
 end
 
@@ -106,8 +105,7 @@ end
         )
         custom = joinpath(proj, "runs", "skip_collect")
         result = DistSSHRun.go!(
-            script,
-            "parent:1";
+            script; head_slots = 1,
             project = proj,
             output_dir = custom,
             collect_spec = false,
@@ -116,6 +114,6 @@ end
         )
         @test result.ok
         @test result.output_dir == DistSSHRun.canonical_local_path(custom)
-        @test isfile(joinpath(result.output_dir, "parent", "marker.txt"))
+        @test isfile(joinpath(result.output_dir, _go_local_slot_label(), "marker.txt"))
     end
 end

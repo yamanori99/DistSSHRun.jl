@@ -5,7 +5,7 @@
     drive!(script, workers...; kwargs...)
     drive!(script, workers::AbstractVector; kwargs...)
 
-Run a driver script on workers. Tokens match the CLI (`parent:2`, `child:user@host:1`).
+Run a driver script on workers. Tokens match the CLI (`parent:2`, `1*user@host`).
 Load is the master `include`. Publish sends definitions to workers (not top-level
 work). Run is `main()` when defined. Use [`go!`](@ref) / [`ride!`](@ref)
 when that matches the script.
@@ -23,7 +23,7 @@ then `drive --run-id ID`. Passing `sync=:git_sync` or `sync=:ship_tree` on
 [`drive!`](@ref) is an `ArgumentError` (transfer on run was removed).
 Git parity is off by default (`skip_hash_check=true`).
 `require_all_hosts=true` (the default; CLI `--require-all-hosts`) fails unless
-every explicit `parent:N` / `child:NAME:N` joined, stayed through the run,
+every explicit `parent:N` / `NAME:N` joined, stayed through the run,
 and collect succeeded. Pass `require_all_hosts=false` or CLI `--best-effort`
 for a partial run.
 
@@ -84,7 +84,10 @@ function drive!(
                 return _with_session_remote_env!(session) do
                     resolved = plan
                     if resolved === nothing && !isempty(session.tokens)
-                        resolved = worker_plan_from_tokens(session.tokens)
+                        resolved = worker_plan_from_tokens(
+                            session.tokens;
+                            head_workers = session.cli_session.head_workers,
+                        )
                     end
                     parsed = drive_parsed_from_session(
                         session,
@@ -143,6 +146,7 @@ function drive!(
         project::AbstractString = pwd(),
         remote::Union{Nothing, AbstractString} = nothing,
         hosts_file::Union{Nothing, AbstractString} = nothing,
+        head_workers::Union{Nothing, Integer} = nothing,
         quiet::Bool = false,
         verbosity::Union{Nothing, Symbol} = nothing,
         yes::Bool = true,
@@ -151,6 +155,7 @@ function drive!(
     session = DistSSHSession(
         project = project,
         workers = workers,
+        head_workers = head_workers,
         remote = remote,
         hosts_file = hosts_file,
         quiet = quiet,

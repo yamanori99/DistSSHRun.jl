@@ -27,6 +27,8 @@ const _EXECUTE_DETACHED_KW = Set{Symbol}(
         :unsafe_all_to_all,
         :allow_external_symlinks,
         :run_id,
+        :head_workers,
+        :head_slots,
     )
 )
 const _EXECUTE_DETACHED_DRIVE_ONLY = (
@@ -227,6 +229,15 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
     ep && (kw[:unsafe_expose_port] = true)
     ata = get(parsed, :unsafe_all_to_all, false)
     ata && (kw[:unsafe_all_to_all] = true)
+    if kind === :go
+        if hasproperty(session, :head_slots)
+            ls = session.head_slots
+            ls !== nothing && (kw[:head_slots] = ls)
+        end
+    elseif hasproperty(session, :head_workers)
+        lw = session.head_workers
+        lw !== nothing && (kw[:head_workers] = lw)
+    end
     snap0 = get(parsed, :run_id, nothing)
     snap0 === nothing || (kw[:run_id] = snap0)
     dr0 = get(parsed, :deploy_root, nothing)
@@ -428,10 +439,10 @@ that pick the kind at runtime (`kind ∈ (:go, :ride, :drive)`), returning the
 shared [`DistSSHJobResult`](@ref) instead of `GoResult` / `RideResult` / `DriveResult`.
 
 ```julia
-execute!(:go, "job.jl", ["parent:2"]; args=["8"])
-execute!(:ride, "job.jl", ["parent:2"])
-execute!(:drive, "job.jl", ["parent:2"]; args=["8"])
-wait(execute!(:go, "job.jl", ["parent:1"]; detached=true, args=["8"]))
+execute!(:go, "job.jl", ["2*host1"]; head_slots=2, args=["8"])
+execute!(:ride, "job.jl", ["2*host1"]; head_workers=2)
+execute!(:drive, "job.jl", ["2*host1"]; head_workers=2, args=["8"])
+wait(execute!(:go, "job.jl", ["1*host1"]; detached=true, head_slots=1, args=["8"]))
 ```
 
 `output_dir`, `args`, `project`, `sync`, `julia` are the keywords [`go!`](@ref)
@@ -698,6 +709,11 @@ function _execute_detached!(
         )
     end
     if kind === :go
+        haskey(kwargs, :head_workers) && throw(
+            ArgumentError(
+                "execute!(:go, ...; detached=true) uses head_slots=, not head_workers=",
+            )
+        )
         for k in _EXECUTE_DETACHED_DRIVE_ONLY
             haskey(kwargs, k) && throw(
                 ArgumentError(
@@ -788,6 +804,35 @@ function _execute_detached!(
     if run_id !== nothing
         run_id = validate_run_id(run_id)
     end
+    head_workers = get(kwargs, :head_workers, nothing)
+    head_slots = get(kwargs, :head_slots, nothing)
+    if kind === :go
+        head_workers !== nothing && throw(
+            ArgumentError("execute!(:go, ...; detached=true) uses head_slots=, not head_workers="),
+        )
+    elseif head_slots !== nothing
+        throw(ArgumentError("execute!(:$(kind), ...; detached=true) uses head_workers=, not head_slots="))
+    end
+    if head_workers !== nothing
+        (head_workers isa Integer && !(head_workers isa Bool)) || throw(
+            ArgumentError(
+                "head_workers must be an integer, got $(repr(head_workers))",
+            )
+        )
+        lw = Int(head_workers)
+        lw < 0 && throw(ArgumentError("head_workers must be >= 0, got $lw"))
+        head_workers = lw
+    end
+    if head_slots !== nothing
+        (head_slots isa Integer && !(head_slots isa Bool)) || throw(
+            ArgumentError(
+                "head_slots must be an integer, got $(repr(head_slots))",
+            )
+        )
+        ls = Int(head_slots)
+        ls < 0 && throw(ArgumentError("head_slots must be >= 0, got $ls"))
+        head_slots = ls
+    end
     worker_include isa Bool || throw(
         ArgumentError(
             "worker_include must be a Bool, got $(repr(worker_include))",
@@ -869,6 +914,9 @@ function _execute_detached!(
         spi_check = spi_check,
         unsafe_skip_env_digests = unsafe_skip_env_digests,
         job_id = job_id_s,
+        allow_external_symlinks = allow_external_symlinks === true,
+        head_workers = head_workers,
+        head_slots = head_slots,
     )
     argv = _execute_detached_bootstrap_argv(kind; job_blob = job_blob_path)
     extra = Dict{String, String}(
@@ -1962,6 +2010,8 @@ function _execute_detached_argv(
         allow_external_symlinks::Bool = false,
         run_id::Union{Nothing, AbstractString} = nothing,
         remote::Union{Nothing, AbstractString} = nothing,
+        head_workers::Union{Nothing, Integer} = nothing,
+        head_slots::Union{Nothing, Integer} = nothing,
     )::Vector{String}
     argv = String[String(kind)]
     push!(argv, "-y")
@@ -1993,6 +2043,11 @@ function _execute_detached_argv(
     if hosts_file !== nothing && !isempty(strip(String(hosts_file)))
         push!(argv, "--hosts-file", canonical_local_path(String(hosts_file)))
     end
+    if kind === :go
+        head_slots !== nothing && push!(argv, "--head-slots", string(Int(head_slots)))
+    elseif head_workers !== nothing
+        push!(argv, "--head-workers", string(Int(head_workers)))
+    end
     if kind === :drive
         enable_log === false && push!(argv, "--no-log")
         if log_dir !== nothing
@@ -2012,8 +2067,8 @@ function _execute_detached_argv(
             push!(argv, "--best-effort")
         end
         skip_hash_check === false && push!(argv, "--require-git")
-        if workers !== nothing
-            push!(argv, "--workers", string(Int(workers)))
+        if workers !== nothing && head_workers === nothing
+            push!(argv, "--head-workers", string(Int(workers)))
         end
         worker_include && push!(argv, "--worker-include")
     elseif kind === :ride

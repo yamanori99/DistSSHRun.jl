@@ -231,11 +231,11 @@ end
 
 @testset "setup --run-id argv" begin
     p = DistSSHRun.parse_setup_args(
-        String["instantiate", "--run-id", _SNAP_ID_OLD, "child:h1"],
+        String["instantiate", "--run-id", _SNAP_ID_OLD, "h1"],
     )
     @test p.run_id == _SNAP_ID_OLD
     ship = DistSSHRun.parse_setup_args(
-        String["ship-tree", "--run-id", _SNAP_ID_OLD, "child:h1"],
+        String["ship-tree", "--run-id", _SNAP_ID_OLD, "h1"],
     )
     @test ship.run_id == _SNAP_ID_OLD
     err_mode = try
@@ -244,7 +244,7 @@ end
     catch e
         e
     end
-    session = DistSSHRun.DistSSHSession(workers = ["child:h1"], project = pwd(), yes = true)
+    session = DistSSHRun.DistSSHSession(workers = ["h1"], project = pwd(), yes = true)
     err_api = try
         DistSSHRun.setup!(session, :ship_tree; run_id = ship.run_id)
         nothing
@@ -255,7 +255,7 @@ end
     @test err_api isa ArgumentError
     @test err_mode.msg == err_api.msg
     bad = DistSSHRun.parse_setup_args(
-        String["instantiate", "--run-id", "../x", "child:h1"],
+        String["instantiate", "--run-id", "../x", "h1"],
     )
     @test bad.run_id == "../x"
     err_id_api = try
@@ -277,16 +277,16 @@ end
 
 @testset "go/drive --run-id argv" begin
     g = DistSSHRun.parse_go_args(
-        String["--run-id", _SNAP_ID_OLD, "parent:1", "job.jl"],
+        String["--run-id", _SNAP_ID_OLD, "--head-slots", "1", "job.jl"],
     )
     @test g.run_id == _SNAP_ID_OLD
     d = DistSSHRun.parse_drive_args(
-        String["--run-id", _SNAP_ID_NEW, "parent:1", "job.jl"],
+        String["--run-id", _SNAP_ID_NEW, "--head-workers", "1", "job.jl"],
     )
     @test d.run_id == _SNAP_ID_NEW
     err_combo = try
         DistSSHRun.parse_go_args(
-            String["--ship-tree", "--run-id", _SNAP_ID_OLD, "parent:1", "job.jl"],
+            String["--ship-tree", "--run-id", _SNAP_ID_OLD, "--head-slots", "1", "job.jl"],
         )
         nothing
     catch e
@@ -296,7 +296,7 @@ end
     @test occursin("go: --ship-tree was removed", err_combo.msg)
     err_go_sync_flag = try
         DistSSHRun.parse_go_args(
-            String["--sync", "--run-id", _SNAP_ID_OLD, "parent:1", "job.jl"],
+            String["--sync", "--run-id", _SNAP_ID_OLD, "--head-slots", "1", "job.jl"],
         )
         nothing
     catch e
@@ -306,7 +306,7 @@ end
     @test occursin("go: --sync was removed", err_go_sync_flag.msg)
     err_git_combo = try
         DistSSHRun.parse_go_args(
-            String["--git-sync", "--run-id", _SNAP_ID_OLD, "parent:1", "job.jl"],
+            String["--git-sync", "--run-id", _SNAP_ID_OLD, "--head-slots", "1", "job.jl"],
         )
         nothing
     catch e
@@ -316,7 +316,7 @@ end
     @test occursin("--git-sync was removed", err_git_combo.msg)
     err_go_api = try
         DistSSHRun.go!(
-            "job.jl", ["parent:1"];
+            "job.jl", String[]; head_slots = 1,
             sync = :git_sync,
             run_id = _SNAP_ID_OLD,
             yes = true,
@@ -329,7 +329,7 @@ end
     @test occursin("no longer transfers", err_go_api.msg)
     err_drive = try
         DistSSHRun.drive!(
-            "job.jl", ["parent:1"];
+            "job.jl", String[]; head_workers = 1,
             sync = :git_sync,
             run_id = _SNAP_ID_OLD,
             yes = true,
@@ -959,7 +959,7 @@ end
                                                 "check",
                                                 "--run-id", _SNAP_ID_OLD,
                                                 "--deploy-root", "/__dsr_logical__",
-                                                "child:child-1",
+                                                "child-1",
                                             ],
                                         )
                                     end

@@ -315,7 +315,7 @@ function _run_drive_parsed_specialized!(
     remote_argv = DistSSHRun._remote_script_argv(raw_script)
     script_path = remote_argv ? raw_script : DistSSHRun.canonical_local_path(raw_script)
     script_args = parsed.script_args
-    parent_workers = parsed.parent_workers
+    head_workers = parsed.head_workers
     default_workers = parsed.default_workers
     julia_exe = parsed.julia
     skip_hash_check = parsed.skip_hash_check
@@ -331,7 +331,7 @@ function _run_drive_parsed_specialized!(
     if !isfile(script_path) && !(remote_argv && snap_for_script !== nothing)
         surface = hasproperty(parsed, :hint_surface) ? parsed.hint_surface::Symbol : :cli
         root0 = canonical_local_path(something(project_root, dirname(script_path)))
-        error(drive_script_not_found_message(script_path, root0; surface = surface))
+        throw(ArgumentError(drive_script_not_found_message(script_path, root0; surface = surface)))
     end
 
     root_hint = project_root === nothing ? nothing : canonical_local_path(project_root)
@@ -388,7 +388,7 @@ function _run_drive_parsed_specialized!(
             try
                 code = _run_drive_parsed_locked!(
                     parsed, output_dir, script_path, script_dir, proj_dir, script_args,
-                    enable_log, log_dir, original_args, host_names, hosts, parent_workers,
+                    enable_log, log_dir, original_args, host_names, hosts, head_workers,
                     default_workers, julia_exe, skip_hash_check, explicit_package,
                     require_all_hosts, resolved_output_dir, resolved_log_dir, hosts_acc,
                     project_root_abs, path_anchor,
@@ -408,7 +408,7 @@ function _run_drive_parsed_specialized!(
                     code == 0 ? nothing : "drive",
                     Int(code),
                     hosts_acc[],
-                    DistSSHRun.resolved_placement_tokens(parent_workers, hosts, default_workers);
+                    DistSSHRun.resolved_placement_tokens(head_workers, hosts, default_workers);
                     run_dir = run_dir,
                 )
                 DistSSHRun._write_kit_result_file(result)
@@ -530,11 +530,12 @@ end
 
 function _run_drive_parsed_locked!(
         parsed, _output_dir, script_path, script_dir, proj_dir, script_args,
-        enable_log, log_dir, original_args, host_names, hosts, parent_workers,
+        enable_log, log_dir, original_args, host_names, hosts, head_workers,
         default_workers, julia_exe, skip_hash_check, explicit_package,
         require_all_hosts, resolved_output_dir, resolved_log_dir, resolved_hosts,
         project_root, path_anchor,
     )::Cint
+    DistSSHRun.assert_loaded_verified_worker_set!()
     if enable_log
         init_log_file(resolve_drive_log_dir(log_dir, script_dir); prefix = "drive", path_anchor = path_anchor)
     end
@@ -641,8 +642,8 @@ function _run_drive_parsed_locked!(
                         println_fatal("For ship-tree remotes, omit --require-git (the default).")
                         println_fatal()
                         println_fatal("Or use git-managed remotes:")
-                        println_fatal("  julia --project=. -m DistSSHKit setup git-clone child:HOST ...")
-                        println_fatal("  julia --project=. -m DistSSHKit setup git-sync child:HOST ...")
+                        println_fatal("  julia --project=. -m DistSSHKit setup git-clone HOST ...")
+                        println_fatal("  julia --project=. -m DistSSHKit setup git-sync HOST ...")
                         println_fatal()
                     end
                     println_fatal("Or omit --require-git and run without git parity.")
@@ -663,7 +664,7 @@ function _run_drive_parsed_locked!(
         successful_hosts = try
             _drive_kit_hosts_around_join!(hosts, kit_out, kit_log) do
                 return add_drive_workers!(
-                    hosts, parent_workers, default_workers, julia_exe, proj_dir, script_path,
+                    hosts, head_workers, default_workers, julia_exe, proj_dir, script_path,
                     project_root,
                 )
             end
@@ -686,12 +687,12 @@ function _run_drive_parsed_locked!(
                 DistSSHRun.await_declared_input_hashes!()
                 return 1
             end
-            if parent_workers > 0
+            if head_workers > 0
                 n = DistSSHRun._drive_parent_worker_count()
-                if n < parent_workers
+                if n < head_workers
                     print_err("ERROR: "; bold = true)
                     println_fatal(
-                        "required parent workers did not join: wanted $parent_workers, got $n",
+                        "required local workers did not join: wanted $head_workers, got $n",
                     )
                     println_fatal("Pass --best-effort for a partial run.")
                     DistSSHRun.await_declared_input_hashes!()

@@ -1,6 +1,6 @@
 using Test
 
-# Oracle: host `src/cli/drive.jl` + `parent:2` prints DISTSSH_RUNNER_SMOKE_OK.
+# Oracle: host `src/cli/drive.jl` + `--local-workers 2` prints DISTSSH_RUNNER_SMOKE_OK.
 # Does not cover kit module CLI, --log-dir, or external host deps.
 
 @testset "drive l:N" begin

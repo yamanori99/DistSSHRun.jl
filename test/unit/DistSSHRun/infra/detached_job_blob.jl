@@ -9,16 +9,18 @@ using Test
             run_dir,
             :drive,
             "job.jl",
-            ["parent:2"],
+            ["2*host1"],
             ["8"],
             d;
             quiet = true,
+            head_workers = 2,
         )
         @test isfile(path)
         blob = DistSSHRun.read_detached_job_blob(path)
         @test blob.kind === :drive
         @test blob.script == "job.jl"
-        @test blob.tokens == ["parent:2"]
+        @test blob.tokens == ["2*host1"]
+        @test blob.head_workers == 2
     end
 end
 
@@ -37,14 +39,15 @@ end
             run_dir,
             :drive,
             "job.jl",
-            ["parent:2"],
             String[],
-            d,
+            String[],
+            d;
+            head_workers = 2,
         )
         parsed = DistSSHRun.drive_parsed_from_detached_job_blob(
             DistSSHRun.read_detached_job_blob(path),
         )
         @test parsed.script_path == "job.jl"
-        @test parsed.parent_workers == 2
+        @test parsed.head_workers == 2
     end
 end

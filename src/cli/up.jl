@@ -2,9 +2,9 @@
 """
 `julia -m DistSSHKit up` — align a host's Julia channel with juliaup.
 
-  julia --project=. -m DistSSHKit up add 1.13 child:host1
+  julia --project=. -m DistSSHKit up add 1.13 host1
   julia --project=. -m DistSSHKit up default 1.13 parent
-  julia --project=. -m DistSSHKit up update child:host1
+  julia --project=. -m DistSSHKit up update host1
   julia --project=. -m DistSSHKit up status parent
 
 See `--help`.

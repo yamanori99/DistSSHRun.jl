@@ -2,7 +2,7 @@
 """
 `julia -m DistSSHKit hostinfo` — per-host identity, Julia, OS, CPU, RAM.
 
-  julia --project=. -m DistSSHKit hostinfo parent child:host1 child:host2
+  julia --project=. -m DistSSHKit hostinfo parent host1 host2
 
 See `--help`.
 """
@@ -45,23 +45,14 @@ function hostinfo_main()::Cint
         DistSSHRun.println_kit_version()
         return 0
     end
-    tokens = String[]
-    opts.include_parent && push!(tokens, "parent")
-    for h in opts.hosts
-        push!(tokens, "child:$h")
-    end
-    if isempty(tokens)
-        show_hostinfo_usage()
-        return 0
-    end
-
     print_header(DistSSHRun.cli_heading("hostinfo"))
     DistSSHRun.writeln_field("Project", cli_project_disp(project_root, path_anchor))
     DistSSHRun.kit_println()
 
     session = DistSSHRun.DistSSHSession(
         project = project_root,
-        workers = tokens,
+        workers = opts.hosts,
+        include_head_for_size = true,
         quiet = opts.cli_session.quiet,
         verbosity = opts.cli_session.verbosity,
         yes = opts.cli_session.yes,

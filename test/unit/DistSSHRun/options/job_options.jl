@@ -10,7 +10,7 @@ end
 
 @testset "drive_job_options_from_parsed" begin
     parsed = (
-        parent_workers = 1,
+        head_workers = 1,
         default_workers = nothing,
         julia = nothing,
         skip_hash_check = false,
@@ -18,7 +18,7 @@ end
         log_dir = nothing,
         output_dir = nothing,
         explicit_package = nothing,
-        hosts = Tuple{String, Union{Int, Nothing}}[("child:host", 1)],
+        hosts = Tuple{String, Union{Int, Nothing}}[("host1", 2)],
         script_path = "job.jl",
         script_args = String["1"],
         collect_root = nothing,
