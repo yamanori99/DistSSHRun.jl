@@ -99,11 +99,13 @@ const _CLUSTER_MANAGER_PUBLIC_UNEXPORTED = (
         row.key in (:unsafe_master_silence_exit,) && continue
         push!(unsafe_shared, row.key)
     end
-    @test unsafe_shared == Set([
-        :unsafe_skip_env_digests,
-        :unsafe_expose_port,
-        :unsafe_all_to_all,
-    ])
+    @test unsafe_shared == Set(
+        [
+            :unsafe_skip_env_digests,
+            :unsafe_expose_port,
+            :unsafe_all_to_all,
+        ]
+    )
     drive_rows = DistSSHRun.options_for_command(:drive)
     @test any(r -> r.key === :unsafe_master_silence_exit, drive_rows)
 
