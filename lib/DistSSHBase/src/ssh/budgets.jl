@@ -8,7 +8,7 @@ const _WAIT_RESPOND = (:child_reply, :go_job, :drive_job)
 
 const _WAIT_STOP = (:stop_grace, :sigint_grace, :e2e_stop)
 
-const _WAIT_LIVENESS = (:ssh_connect, :peer_silent)
+const _WAIT_LIVENESS = (:ssh_connect, :ssh_auth, :peer_silent)
 
 function _wait_known(name::Symbol)::Bool
     name === :until_exit && return true

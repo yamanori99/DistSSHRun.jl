@@ -23,7 +23,10 @@ end
 """Return whether a trivial `ssh YourHost true` succeeds."""
 function _remote_ssh_ok(host::String)::Bool
     try
-        run(pipeline(_host_sync_remote_shell_cmd(host, "true"); stdout = devnull, stderr = devnull))
+        run_ssh(
+            pipeline(_host_sync_remote_shell_cmd(host, "true"); stdout = devnull, stderr = devnull);
+            wait = true,
+        )
         return true
     catch e
         _rethrow_missing_host_tool(e)
@@ -49,7 +52,10 @@ function _pkill_remote_julia_workers!(host::String)::Bool
     for pattern in JULIA_WORKER_PKILL_PATTERNS
         inner = "pkill -9 -f $(posix_quote(pattern))"
         try
-            run(pipeline(_host_sync_remote_shell_cmd(host, inner); stdout = devnull, stderr = devnull))
+            run_ssh(
+                pipeline(_host_sync_remote_shell_cmd(host, inner); stdout = devnull, stderr = devnull);
+                wait = true,
+            )
         catch e
             _rethrow_missing_host_tool(e)
         end
@@ -154,7 +160,10 @@ function _pkill_remote_tagged_workers!(host::String, job_id::AbstractString)::Bo
     end
     inner = _remote_tagged_pkill_sh(job_id)
     try
-        run(pipeline(_host_sync_remote_shell_cmd(host, inner); stdout = devnull, stderr = devnull))
+        run_ssh(
+            pipeline(_host_sync_remote_shell_cmd(host, inner); stdout = devnull, stderr = devnull);
+            wait = true,
+        )
     catch e
         _rethrow_missing_host_tool(e)
     end
@@ -165,8 +174,6 @@ end
 # OpenSSH keeps the first value of each option, so these budgets win over
 # `ssh_opts`, including a replacement `DISTRIBUTED_SSH_OPTS`.
 const _SSH_PHASE_CONCURRENCY = 8
-const _SSH_PHASE_ALIVE_INTERVAL = 5
-const _SSH_PHASE_ALIVE_COUNT = 1
 
 mutable struct _CmdRun
     proc::Union{Nothing, Base.Process}
@@ -181,24 +188,13 @@ struct _SSHHostResult
     errkind::Symbol
 end
 
-function _ssh_phase_opts()::Vector{String}
-    connect = DistSSHBase._ssh_whole_seconds(:ssh_connect, DistSSHBase._SSH_CONNECT_TIMEOUT_S)
-    forced = String[
-        "-o", "BatchMode=yes",
-        "-o", "ConnectTimeout=$connect",
-        "-o", "ServerAliveInterval=$(_SSH_PHASE_ALIVE_INTERVAL)",
-        "-o", "ServerAliveCountMax=$(_SSH_PHASE_ALIVE_COUNT)",
-    ]
-    return append!(forced, ssh_opts())
-end
-
 """`ssh` argv for one short remote command, or the `DISTSSH_TEST_SSH` double."""
 function _ssh_phase_cmd(host::AbstractString, remote::AbstractString)::Cmd
     custom = _test_doubles_on() ? strip(get(ENV, "DISTSSH_TEST_SSH", "")) : ""
     if !isempty(custom)
         return Cmd(vcat(_test_double_julia_argv(custom), [String(host), String(remote)]))
     end
-    return _ssh_cmd(String["-n"; _ssh_phase_opts(); _ssh_host_args(String(host), String(remote))])
+    return _ssh_cmd(String["-n"; DistSSHBase.ssh_phase_argv(); _ssh_host_args(String(host), String(remote))])
 end
 
 function _kill_cmd_runs!(runs::AbstractVector{_CmdRun})
@@ -687,13 +683,16 @@ function collect_tree_remote_files_ssh(host::AbstractString, remote_root::Abstra
     rr === nothing && return Tuple{String, String}[]
     rr = rr::String
     pq = _remote_shell_path_word(rr)
-    out = read(
+    out_buf = IOBuffer()
+    run_ssh(
         pipeline(
             _host_sync_remote_shell_cmd(hp, "find $pq -type f -print0");
+            stdout = out_buf,
             stderr = devnull,
-        ),
-        String,
+        );
+        wait = true,
     )
+    out = String(take!(out_buf))
     sep = endswith(rr, "/") ? rr : (rr * "/")
     pairs = Tuple{String, String}[]
     for p in _find_print0_paths(out)

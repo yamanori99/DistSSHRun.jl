@@ -56,7 +56,10 @@ function doctor_launch_assert_host!(host::AbstractString, remote_root::AbstractS
     cmd = _ssh_cmd([ssh_opts()..., _ssh_host_args(String(host), inner)...])
     out = IOBuffer()
     err = IOBuffer()
-    proc = run(pipeline(ignorestatus(cmd), stdout = out, stderr = err), wait = true)
+    proc = run_ssh(
+        pipeline(ignorestatus(cmd); stdout = out, stderr = err);
+        wait = true,
+    )
     code = DistSSHBase.shell_status(proc)
     if code != 0
         err_text = strip(String(take!(err)))

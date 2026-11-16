@@ -157,7 +157,7 @@ using .DistSSHBase: CliCursor, HostFacts, HostResult, OUTPUT_WIDTH, PARENT_HOST_
     _normalize_hint_surface,
     _path_is_under, _path_under_resolved, _print_colored, _remote_julia_path_sh,
     _remote_shell_path_word, _remote_shell_status, _remote_shell_status_parts,
-    _rethrow_missing_host_tool, _scp_cmd, _ssh_cmd, _ssh_exe,
+    _rethrow_missing_host_tool, _scp_cmd, _ssh_cmd, _ssh_exe, run_ssh,
     _ssh_host_args, _test_double_julia_argv, _test_doubles_on, _throw_if_nonposix_shell,
     _truncate_ssh_message,
     cli_at_end, cli_consume!, cli_current, cli_entry, cli_heading, cli_m, cli_m_project,

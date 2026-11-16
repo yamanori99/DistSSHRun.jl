@@ -694,7 +694,7 @@ function _go_run_remote_slot!(
     scp_failed = false
     try
         remote_ec = string(rstrip(remote_root, '/'), "/", slot_rel, "/go.exitcode")
-        run(
+        run_ssh(
             pipeline(
                 _scp_cmd([ssh_opts()..., _ssh_host_args(string(host, ":", remote_ec))..., ec_path]);
                 stdout = devnull,
@@ -759,7 +759,7 @@ function _go_fetch_slot_provenance!(
     mkpath(local_dir)
     local_snap = joinpath(local_dir, _GO_SLOT_PROVENANCE_NAME)
     try
-        run(
+        run_ssh(
             pipeline(
                 _scp_cmd(
                     [

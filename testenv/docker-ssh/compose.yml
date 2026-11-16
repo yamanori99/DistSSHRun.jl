@@ -24,6 +24,23 @@ services:
       - seccomp:unconfined
     restart: "no"
 
+  child-pw:
+    image: local/linux-ssh-worker:latest
+    container_name: child-pw
+    hostname: child-pw
+    environment:
+      DISTSSH_HOSTNAME: child-pw
+      DISTSSH_PASSWORD_ONLY: "1"
+    ports:
+      - "2224:22"
+    volumes:
+      - ./mounted-keys:/mounted-keys:ro
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    restart: "no"
+
   child-2:
     build:
       context: .

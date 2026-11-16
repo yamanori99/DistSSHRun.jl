@@ -49,6 +49,11 @@ function main()
     dir = joinpath(state_root, slot)
     tree = joinpath(dir, "tree")
 
+    if get(ENV, "DISTSSH_TEST_SSH_HANG", "") == "1"
+        sleep(60)
+        exit(0)
+    end
+
     # Force every probe/op to fail (preflight + delete/clone).
     if get(ENV, "DISTSSH_TEST_SSH_FAIL", "") == "1"
         println(stderr, "Permission denied (publickey).")

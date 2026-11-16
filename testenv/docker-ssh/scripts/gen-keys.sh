@@ -36,6 +36,20 @@ Host child-1
   ServerAliveCountMax 10
   TCPKeepAlive yes
 
+Host child-pw
+  HostName 127.0.0.1
+  User dev
+  Port 2224
+  IdentityFile ${CONTROLLER_KEY}
+  IdentitiesOnly yes
+  BatchMode yes
+  ConnectTimeout 10
+  StrictHostKeyChecking accept-new
+  UserKnownHostsFile ${GEN}/known_hosts
+  ServerAliveInterval 60
+  ServerAliveCountMax 10
+  TCPKeepAlive yes
+
 Host child-2
   HostName 127.0.0.1
   User dev

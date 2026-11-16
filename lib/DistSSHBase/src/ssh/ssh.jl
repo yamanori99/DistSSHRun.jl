@@ -158,12 +158,103 @@ function _ssh_cmd(args::AbstractVector)::Cmd
     return cmd
 end
 
+# Seconds added on top of `ConnectTimeout` for pubkey/password auth after TCP connect.
+const _SSH_AUTH_MARGIN_S = 20
+const _SSH_PHASE_ALIVE_INTERVAL = 5
+const _SSH_PHASE_ALIVE_COUNT = 1
+
+"""
+Wall-clock limit for one kit-owned `ssh` / `scp` session (connect plus auth).
+
+`DISTSSH_WAIT_SSH_AUTH` overrides the default (`ConnectTimeout` + margin).
+"""
+function ssh_auth_timeout_seconds()::Float64
+    connect = Float64(_ssh_whole_seconds(:ssh_connect, _SSH_CONNECT_TIMEOUT_S))
+    auth = wait_seconds(:ssh_auth, connect + _SSH_AUTH_MARGIN_S)
+    return max(auth, connect + 1.0)
+end
+
+"""OpenSSH flags for parallel short remote phases (`kill`, tagged `pkill`).
+
+Forced `-o` tokens are placed before [`build_ssh_opts`](@ref) so they win over
+`DISTRIBUTED_SSH_OPTS` (OpenSSH uses the first value per option name).
+"""
+function ssh_phase_argv(; request_tty::Bool = false)::Vector{String}
+    connect = _ssh_whole_seconds(:ssh_connect, _SSH_CONNECT_TIMEOUT_S)
+    forced = String[
+        "-o", "BatchMode=yes",
+        "-o", "ConnectTimeout=$connect",
+        "-o", "ServerAliveInterval=$(_SSH_PHASE_ALIVE_INTERVAL)",
+        "-o", "ServerAliveCountMax=$(_SSH_PHASE_ALIVE_COUNT)",
+    ]
+    return vcat(forced, build_ssh_opts(; request_tty = request_tty))
+end
+
+function _scp_cmd(args::AbstractVector)::Cmd
+    cmd = _host_tool_cmd("scp", args)
+    for (k, v) in ssh_noninteractive_env()
+        cmd = setenv(cmd, k => v)
+    end
+    return cmd
+end
+
+function _ssh_kill_local!(proc::Base.Process)
+    try
+        process_running(proc) && kill(proc, Base.SIGKILL)
+    catch
+    end
+    timedwait(() -> process_exited(proc), 2.0; pollint = 0.05)
+    process_running(proc) && try
+        kill(proc, Base.SIGKILL)
+    catch
+    end
+    return nothing
+end
+
+function _ssh_auth_timeout_error(seconds::Real)
+    return ArgumentError(
+        "SSH timed out after $(round(Float64(seconds); digits = 1))s. " *
+            "Check: ssh -o BatchMode=yes -o ConnectTimeout=5 HOST echo ok",
+    )
+end
+
+"""Wait on a kit-started `ssh` child, or kill it when auth exceeds the budget."""
+function ssh_wait_process!(proc::Base.Process)::Base.Process
+    seconds = ssh_auth_timeout_seconds()
+    if timedwait(() -> process_exited(proc), Float64(seconds); pollint = 0.05) !== :ok
+        _ssh_kill_local!(proc)
+        throw(_ssh_auth_timeout_error(seconds))
+    end
+    return proc
+end
+
+"""
+Run one kit-owned `ssh` or `scp` pipeline with a Julia-side auth-phase timeout.
+
+When `wait` is true and the child does not exit before [`ssh_auth_timeout_seconds`](@ref),
+the local process is killed and an `ArgumentError` names the budget.
+"""
+function run_ssh(cmd; wait::Bool = true)::Base.Process
+    proc = run(pipeline(cmd); wait = false)
+    wait || return proc
+    return ssh_wait_process!(proc)
+end
+
+"""Run `_ssh_cmd(argv)` and return captured stdout (stderr to `devnull` by default)."""
+function _read_ssh(argv::AbstractVector{<:AbstractString})::String
+    out_buf = IOBuffer()
+    run_ssh(
+        pipeline(_ssh_cmd(argv); stdout = out_buf, stderr = devnull);
+        wait = true,
+    )
+    return String(take!(out_buf))
+end
+
 """`--` then `host`, then `args`. A name that starts with `-` is rejected."""
 function _ssh_host_args(host::AbstractString, args::AbstractString...)::Vector{String}
     dest = validate_ssh_host(host)
     return String["--", dest, String.(args)...]
 end
-_scp_cmd(args::AbstractVector)::Cmd = _host_tool_cmd("scp", args)
 
 """
 Effective SSH `User` for `host` from `ssh -G` (config / defaults).
@@ -177,7 +268,7 @@ function ssh_config_user(host::AbstractString)::Union{Nothing, String}
     isempty(h) && return nothing
     try
         # -n: no stdin; -G dumps effective config (User, HostName, …).
-        out = read(_ssh_cmd(["-n", ssh_opts()..., "-G", _ssh_host_args(h)...]), String)
+        out = _read_ssh(["-n", ssh_opts()..., "-G", _ssh_host_args(h)...])
         for line in eachsplit(out, '\n'; keepempty = false)
             if startswith(line, "user ")
                 u = strip(SubString(line, 6))
@@ -251,13 +342,7 @@ end
 """Stdout of `julia_path --version` on `host`."""
 function _remote_julia_version_output(host::String, julia_path::AbstractString)::String
     remote = _remote_julia_version_remote_command(julia_path)
-    return read(
-        pipeline(
-            _ssh_cmd([ssh_opts()..., _ssh_host_args(host, remote)...]);
-            stderr = devnull,
-        ),
-        String,
-    )
+    return _read_ssh([ssh_opts()..., _ssh_host_args(host, remote)...])
 end
 
 """Get the Julia version on a remote host by running `julia_path --version` over SSH.
@@ -518,7 +603,8 @@ function run_on_host(
     args = String[ssh_opts(; request_tty = tty)...]
     tty && push!(args, "-t")
     append!(args, _ssh_host_args(h, inner))
-    return run(ignorestatus(_ssh_cmd(args)); wait = wait)
+    cmd = ignorestatus(_ssh_cmd(args))
+    return wait ? run_ssh(cmd) : run(cmd; wait = false)
 end
 
 # Process-local cache of found Julia paths only. A miss is not stored.
@@ -554,7 +640,7 @@ function _remote_shell_status_parts(
     out_buf = IOBuffer()
     cmd = _host_sync_remote_shell_cmd(host, script)
     proc = try
-        run(pipeline(ignorestatus(cmd); stdout = out_buf, stderr = err_buf); wait = true)
+        run_ssh(pipeline(ignorestatus(cmd); stdout = out_buf, stderr = err_buf); wait = true)
     catch e
         _rethrow_missing_host_tool(e)
         rethrow()
@@ -622,10 +708,13 @@ end
 function _remote_julia_reports_version(host::String, path::AbstractString)::Bool
     pq = _remote_shell_path_word(String(path))
     try
-        out = read(
-            pipeline(_host_sync_remote_shell_cmd(host, "$pq --version"); stderr = devnull),
-            String,
-        )
+        out = let buf = IOBuffer()
+            run_ssh(
+                pipeline(_host_sync_remote_shell_cmd(host, "$pq --version"); stdout = buf, stderr = devnull);
+                wait = true,
+            )
+            String(take!(buf))
+        end
         return parse_julia_version(out) !== nothing
     catch e
         _throw_if_nonposix_shell(host, e)
@@ -640,12 +729,17 @@ function _detect_julia_path_uncached(host::String)::Union{Nothing, String}
     if !isempty(uname_s)
         for path in remote_julia_candidates(uname_s)
             try
-                result = read(
-                    pipeline(
-                        _host_sync_remote_shell_cmd(host, "test -x $path && echo $path");
-                        stderr = devnull,
-                    ), String
-                )
+                result = let buf = IOBuffer()
+                    run_ssh(
+                        pipeline(
+                            _host_sync_remote_shell_cmd(host, "test -x $path && echo $path");
+                            stdout = buf,
+                            stderr = devnull,
+                        );
+                        wait = true,
+                    )
+                    String(take!(buf))
+                end
                 found = strip(result)
                 isempty(found) && continue
                 _remote_julia_reports_version(host, found) || continue
@@ -754,7 +848,7 @@ function resolve_remote_abs_path_on_host(host::String, remote_path::AbstractStri
     startswith(path, "/") && return path
     try
         inner = _remote_abs_path_resolve_shell(path)
-        s = strip(read(pipeline(_ssh_cmd([ssh_opts()..., _ssh_host_args(host, inner)...]); stderr = devnull), String))
+        s = strip(_read_ssh([ssh_opts()..., _ssh_host_args(host, inner)...]))
         isempty(s) && return nothing
         return String(s)
     catch e
@@ -788,7 +882,7 @@ A non-POSIX login shell throws `ArgumentError` (see `help setup`).
 function get_remote_git_hash(host::String, remote_repo_dir::AbstractString; short::Union{Nothing, Int} = nothing)::Union{Nothing, String}
     try
         inner = _remote_git_hash_inner(remote_repo_dir; short = short)
-        s = strip(read(pipeline(_ssh_cmd([ssh_opts()..., _ssh_host_args(host, inner)...]); stderr = devnull), String))
+        s = strip(_read_ssh([ssh_opts()..., _ssh_host_args(host, inner)...]))
         return isempty(s) ? nothing : s
     catch e
         _throw_if_nonposix_shell(host, e)
@@ -1283,7 +1377,7 @@ function _remote_shell_capture(
     out_buf = IOBuffer()
     err_buf = IOBuffer()
     proc = try
-        run(
+        run_ssh(
             pipeline(
                 ignorestatus(_host_sync_remote_shell_cmd(host, script));
                 stdout = out_buf,

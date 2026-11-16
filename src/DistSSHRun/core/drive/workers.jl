@@ -55,6 +55,12 @@ end
 # `drive` deletes `kit.hosts` only for this error, not for an interrupt.
 const _NO_WORKERS_JOINED = "No workers available. Check SSH connectivity."
 
+"""Fail closed when no Distributed workers joined (master alone)."""
+function assert_workers_joined!()
+    nprocs() <= 1 && error(_NO_WORKERS_JOINED)
+    return nothing
+end
+
 function add_drive_workers!(
         hosts::Vector{Tuple{String, Union{Int, Nothing}}},
         head_workers::Int,
@@ -359,8 +365,7 @@ function add_drive_workers!(
     report = LaunchReport(length(plan_ranks), joined, launch_failures)
     DistSSHRun.note_launch_provenance!(report)
 
-    # Alone, Julia reports nworkers()==1 (the master). Fail when nothing joined.
-    nprocs() <= 1 && error(_NO_WORKERS_JOINED)
+    assert_workers_joined!()
     try
         DistSSHRun.verify_workers_match_job!(proj_dir)
         DistSSHRun.assert_loaded_verified_worker_set!()

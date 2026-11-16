@@ -1187,6 +1187,8 @@ jobs:
           delete-old-caches: false
       - name: Aqua.test_all (latest Aqua)
         run: ./.github/aqua-check.sh
+      - name: SSH call sites
+        run: julia --startup-file=no --project=. .github/ssh-call-sites-check.jl
 
   aqua-1-14-pre:
     name: Aqua (1.14-pre, ubuntu-latest, x64)
