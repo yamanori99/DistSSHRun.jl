@@ -63,6 +63,7 @@ export pipeline_config_from_env
 export go!
 export GoResult
 export ride!
+export LoadedCodeMismatchError
 export RideResult
 export execute!
 export allocate_output_dir
@@ -175,7 +176,10 @@ include("DistSSHRun/argv/session.jl")
 include("DistSSHRun/infra/run_transfer_removed.jl")
 include("DistSSHRun/infra/remote.jl")
 include("DistSSHRun/infra/launch.jl")
+include("DistSSHRun/infra/component_id.jl")
 include("DistSSHRun/infra/mismatch.jl")
+include("DistSSHRun/infra/loaded_identity.jl")
+include("DistSSHRun/infra/go_handshake.jl")
 include("DistSSHRun/infra/demos.jl")
 include("DistSSHRun/infra/distributed.jl")
 include("DistSSHRun/infra/worker_plan.jl")

@@ -229,6 +229,7 @@ function add_drive_workers!(
     nprocs() <= 1 && error(_NO_WORKERS_JOINED)
     try
         DistSSHRun.verify_workers_match_job!(proj_dir)
+        DistSSHRun.assert_loaded_verified_worker_set!()
     catch
         DistSSHRun._rmprocs_added_since(before_all)
         rethrow()

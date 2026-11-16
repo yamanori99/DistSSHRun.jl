@@ -38,6 +38,9 @@ include("hosts/hostinfo.jl")
 include("hosts/host_result.jl")
 include("ssh/julia_where.jl")
 include("namespace.jl")
+include("component_src.jl")
+include("component_id.jl")
+include("tool_require.jl")
 
 # Queue and Kit import these. Underscore names stay private.
 public PARENT_HOST_NAME
@@ -56,5 +59,6 @@ public parse_placement_token, posix_quote, remote_env_project_root, resolve_remo
 public resolve_remote_project_root, shell_status, shield_sigint, with_cli_entry, without_cancel
 public CliUsageError, cli_parse, with_cli_exit
 public wait_seconds
+public tool_require
 
 end # module DistSSHBase

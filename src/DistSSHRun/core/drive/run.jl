@@ -527,6 +527,7 @@ function _run_drive_parsed_locked!(
         require_all_hosts, resolved_output_dir, resolved_log_dir, resolved_hosts,
         project_root, path_anchor,
     )::Cint
+    DistSSHRun.assert_loaded_verified_worker_set!()
     if enable_log
         init_log_file(resolve_drive_log_dir(log_dir, script_dir); prefix = "drive", path_anchor = path_anchor)
     end
