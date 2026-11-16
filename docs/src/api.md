@@ -112,12 +112,23 @@ Filter = function (x)
 end
 ```
 
+`pack_ship_tree`, `pack_shipment`, and `ship_project_to_dest` ship a project
+to a caller-chosen remote directory (for example a Queue qhost stage root)
+without allocating `runs/<id>/` or writing Run leaf provenance. They use the
+same pack rules as `ship_tree!`. Optional `transfer_id` is stored in
+`<dest>/.distssh/shipment.toml` when `write_record=true` (default). The
+returned `ShipmentReceipt.content_tree_hash` is the snapshot identity; callers
+must not infer the latest stage from lexical paths.
+
 `ship_tree!`, `ship_send_list`, `validate_run_id`,
 `resolve_source_selection`, `read_last_ship_record`,
 `write_last_ship_record!`, `forget_last_ship_default!`, and
 `active_source_selection` are public and are not exported.
 
 ```@docs
+pack_ship_tree
+pack_shipment
+ship_project_to_dest
 ship_send_list
 ship_tree!
 ShipTreeResult

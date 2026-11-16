@@ -26,6 +26,7 @@ if !isdefined(Main, :TEST_PROJECT)
     end
 end
 
+using Random
 using Test
 using Distributed
 using Logging
@@ -284,6 +285,70 @@ function _e2e_wait_hb_monitors(kp, log_dir::AbstractString; timeout::Real = 240)
         sleep(0.5)
     end
     return false
+end
+
+const _E2E_QUEUE_STAGE_PARENT = "/home/dev/.distsshqueue/stage"
+
+"""Reserve `~/.distsshqueue/stage/e2e-<nonce>` (Queue-style stage root)."""
+function _e2e_reserve_queue_stage_dest!(host::AbstractString)::String
+    h = String(host)
+    pq = DistSSHRun.DistSSHBase._remote_shell_path_word(_E2E_QUEUE_STAGE_PARENT)
+    code, _ = _ssh_e2e_ssh(h, "mkdir -p $pq")
+    code == 0 || error("could not create Queue stage parent on $h")
+    for _ in 1:8
+        dest = string(_E2E_QUEUE_STAGE_PARENT, "/e2e-", bytes2hex(rand(UInt8, 8)))
+        dq = DistSSHRun.DistSSHBase._remote_shell_path_word(dest)
+        code, _ = _ssh_e2e_ssh(h, "mkdir $dq")
+        code == 0 && return dest
+    end
+    error("could not reserve unique Queue stage dest on $h")
+end
+
+function _e2e_minimal_stage_project!()::String
+    dir = mktempdir()
+    write(joinpath(dir, "Project.toml"), "name = \"QueueStageE2E\"\n")
+    write(
+        joinpath(dir, "Manifest.toml"),
+        "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
+    )
+    write(joinpath(dir, "stage_marker.jl"), "1\n")
+    return dir
+end
+
+function _e2e_ship_queue_stage!(suite, host::AbstractString, proj::AbstractString)
+    dest = _e2e_reserve_queue_stage_dest!(host)
+    stage_job_id = basename(String(dest))
+    try
+        withenv(_e2e_base_env()...) do
+            receipt = DistSSHRun.ship_project_to_dest(
+                proj, [host], dest;
+                transfer_id = stage_job_id,
+                write_record = true,
+            )
+            _assert_ssh_e2e_api_ok(
+                suite,
+                "ship_project_to_dest",
+                receipt.ok,
+                "ok=$(receipt.ok) hosts=$(length(receipt.hosts))",
+            )
+            @test receipt.dest == dest
+            @test receipt.project_rel == "."
+            marker = DistSSHRun.DistSSHBase._remote_shell_path_word(
+                joinpath(dest, "stage_marker.jl"),
+            )
+            proc, ssh_out = _ssh_e2e_ssh(host, "test -f $marker")
+            _assert_proc_ok(proc, ssh_out; label = "stage_marker.jl on qhost")
+            _, rec = DistSSHRun.DistSSHShip.verify_shipment_record(
+                host, dest; expect_hash = receipt.content_tree_hash,
+            )
+            @test rec["transfer_id"] == stage_job_id
+            @test rec["complete"] === true
+        end
+    finally
+        dq = DistSSHRun.DistSSHBase._remote_shell_path_word(dest)
+        _ssh_e2e_ssh(host, "rm -rf $dq")
+    end
+    return nothing
 end
 
 function _e2e_wait_worker_reap(
@@ -1919,6 +1984,16 @@ end
                 "test -f $(outside_root)/runs/$(snap_id)/src/_distsshrun_external/outside_marker.jl"
             )
             _assert_proc_ok(p, ssh_out; label = "outside script in snapshot")
+        end
+
+        @testset "ship_project_to_dest (Queue stage path)" begin
+            _e2e_announce("ship_project_to_dest (Queue stage path)")
+            stage_proj = _e2e_minimal_stage_project!()
+            try
+                _e2e_ship_queue_stage!(suite, hosts[1], stage_proj)
+            finally
+                rm(stage_proj; force = true, recursive = true)
+            end
         end
     end
 end
