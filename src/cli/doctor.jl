@@ -28,10 +28,10 @@ if !isdefined(@__MODULE__, :doctor_main)
             parse_doctor_args(ARGS)
         catch e
             e isa ArgumentError || rethrow()
-            DistSSHRun.print_err("Error: "; bold = true)
-            DistSSHRun.println_fatal(e.msg)
-            DistSSHRun.println_fatal()
-            return Cint(1)
+            DistSSHRun.print_err("Error: "; bold = true, io = stderr)
+            DistSSHRun.println_fatal(e.msg; io = stderr)
+            DistSSHRun.println_fatal("", io = stderr)
+            return Cint(2)
         end
 
         if opts.show_version
@@ -44,16 +44,17 @@ if !isdefined(@__MODULE__, :doctor_main)
         end
 
         if !opts.deploy && isempty(opts.hosts)
-            DistSSHRun.show_doctor_usage()
-            return Cint(0)
+            DistSSHRun.show_doctor_usage(io = stderr)
+            return Cint(2)
         end
 
         if !opts.deploy
-            DistSSHRun.print_err("Error: "; bold = true)
+            DistSSHRun.print_err("Error: "; bold = true, io = stderr)
             DistSSHRun.println_fatal(
-                "doctor needs --deploy; use: $(DistSSHRun.cli_m()) doctor --deploy [--run-id ID] HOSTS",
+                "doctor needs --deploy; use: $(DistSSHRun.cli_m()) doctor --deploy [--run-id ID] HOSTS";
+                io = stderr,
             )
-            DistSSHRun.println_fatal()
+            DistSSHRun.println_fatal("", io = stderr)
             return Cint(2)
         end
 

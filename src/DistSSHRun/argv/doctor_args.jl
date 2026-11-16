@@ -6,6 +6,8 @@ function show_doctor_requirements(; io::IO = stdout)
         io,
         "Verify hosts before go / drive / ride (replaces setup check).",
         "0.2.0 supports --deploy only; more groups ship in 0.2.x.",
+        "Bare `doctor` prints this page on stderr and exits 2 (clap arg_required_else_help).",
+        "Use `doctor --help` for the same text on stdout with exit 0.",
     )
     print_help_blank(io)
     print_help_section("Usage"; io = io)

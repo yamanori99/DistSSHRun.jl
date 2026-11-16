@@ -20,15 +20,18 @@ using Test
         end
     end
 
+    help_text = DistSSHRun.doctor_help_text()
+
     let (code, help_out, help_err) = _doctor_capture(["--help"])
-        help = help_out * help_err
         @test code == 0
-        @test occursin("--deploy", help)
-        @test occursin("doctor", help)
-        let (code2, bare_out, _) = _doctor_capture(String[])
-            @test code2 == 0
-            @test bare_out == help_out
-        end
+        @test help_out == help_text
+        @test !occursin("DistSSHKit doctor", help_err)
+    end
+
+    let (code, bare_out, bare_err) = _doctor_capture(String[])
+        @test code == 2
+        @test bare_err == help_text
+        @test isempty(strip(bare_out))
     end
 
     let (code, out, err) = _doctor_capture(["host1"])
@@ -40,7 +43,8 @@ using Test
     end
 
     let (code, out, err) = _doctor_capture(["--not-a-flag", "host1"])
-        @test code == 1
-        @test occursin("unknown doctor option", out * err)
+        shown = out * err
+        @test code == 2
+        @test occursin("unknown doctor option", shown)
     end
 end
