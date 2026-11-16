@@ -8,14 +8,13 @@ mutable struct DistSSHSession
     remote::Union{Nothing, String}
     quiet::Bool
     verbosity::Symbol
-    yes::Bool
     include_head_for_size::Bool
     cli_session::CliSharedFlags
 end
 
 """
     DistSSHSession(; project=pwd(), workers=[], head_workers=nothing, remote=nothing,
-               hosts_file=nothing, quiet=false, verbosity=nothing, yes=true,
+               hosts_file=nothing, quiet=false, verbosity=nothing,
                include_head_for_size=false)
 
 Build a session for drive APIs. `workers` is a CLI-style host list.
@@ -35,7 +34,7 @@ on the kit parent).
 only when `hosts_file` is omitted **and** `workers` is empty (same as
 [`go!`](@ref)). Non-empty `workers` do not re-read that ENV.
 `verbosity` is `:verbose` | `:progress` | `:quiet` (`quiet=true` implies `:quiet`).
-API default `yes=true` skips confirm prompts.
+Confirmations are CLI-only (`-y` / `--yes`); do not pass `yes=` here.
 """
 function DistSSHSession(;
         project::AbstractString = pwd(),
@@ -45,9 +44,17 @@ function DistSSHSession(;
         hosts_file::Union{Nothing, AbstractString} = nothing,
         quiet::Bool = false,
         verbosity::Union{Nothing, Symbol} = nothing,
-        yes::Bool = true,
         include_head_for_size::Bool = false,
+        kwargs...,
     )
+    if haskey(kwargs, :yes)
+        throw(
+            ArgumentError(
+                "DistSSHSession does not accept yes=; confirmation is CLI-only (pass -y/--yes to julia -m DistSSHKit)",
+            ),
+        )
+    end
+    isempty(kwargs) || throw(ArgumentError("DistSSHSession: unknown keyword $(first(keys(kwargs)))"))
     tokens = String[String(h) for h in workers]
     hf = if hosts_file !== nothing
         String(strip(hosts_file))
@@ -61,7 +68,7 @@ function DistSSHSession(;
     cli = CliSharedFlags(
         quiet = quiet,
         verbosity = verbosity,
-        yes = yes,
+        yes = false,
         hosts_file = hf_path,
         hint_surface = :api,
         head_workers = lw,
@@ -84,7 +91,6 @@ function DistSSHSession(;
         rr,
         cli.quiet,
         cli.verbosity,
-        yes,
         include_parent,
         cli,
     )
@@ -103,7 +109,6 @@ one owner task.
 function apply_session_env!(session::DistSSHSession)
     ENV["DISTRIBUTED_PROJECT_ROOT"] = session.project
     session.cli_session.quiet = session.quiet
-    session.cli_session.yes = session.yes
     # Non-explicit sessions auto-resolve to `:verbose` when stdout is a pipe
     # (Pkg.test). Do not wipe an ambient `:progress` / `:quiet` pin — that
     # flipped `writeln_field("Log file", …)` back on under `setup!` (#238).

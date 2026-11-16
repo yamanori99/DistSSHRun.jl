@@ -68,7 +68,7 @@ end
                 @test session.hosts == ["host-a", "host-b"]
                 @test session.tokens == ["host-a", "4*host-b"]
                 @test session.remote === nothing
-                @test session.yes == true
+                @test !session.cli_session.yes
             end
         end
     end
@@ -313,10 +313,10 @@ end
             @test parsed.skip_hash_check == true
             @test parsed.hint_surface === :api
             @test parsed.julia === nothing
-            @test parsed.require_all_hosts
+            @test !parsed.best_effort
             @test DistSSHRun.drive_parsed_from_session(
-                session, script; require_all_hosts = false,
-            ).require_all_hosts == false
+                session, script; best_effort = true,
+            ).best_effort
 
             parsed_jl = DistSSHRun.drive_parsed_from_session(
                 session,
@@ -1007,7 +1007,7 @@ end
                 skip_hash_check = true,
                 output_dir = out,
                 julia = joinpath(Sys.BINDIR, Base.julia_exename()),
-                require_all_hosts = false,
+                best_effort = true,
             )
             err = redirect_stdout(devnull) do
                 redirect_stderr(devnull) do

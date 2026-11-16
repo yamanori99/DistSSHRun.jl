@@ -22,7 +22,7 @@ end
             let (session, rest) = DistSSHRun.peel_shared_cli_flags(["--quiet", "--yes", "host1", "s.jl"])
                 @test session.quiet
                 @test session.verbosity === :quiet
-                @test session.yes
+                @test session.cli_session.yes
                 @test rest == ["host1", "s.jl"]
             end
 
@@ -67,13 +67,13 @@ end
             session = DistSSHRun.default_kit_cli_session()
             @test session.quiet
             @test session.verbosity === :quiet
-            @test session.yes
+            @test session.cli_session.yes
         end
         withenv("DISTSSH_QUIET" => nothing, "DISTSSH_PROGRESS" => "1", "DISTSSH_VERBOSE" => nothing, "DISTSSH_YES" => nothing) do
             session = DistSSHRun.default_kit_cli_session()
             @test session.verbosity === :progress
             @test !session.quiet
-            @test !session.yes
+            @test !session.cli_session.yes
         end
         withenv("DISTSSH_QUIET" => nothing, "DISTSSH_PROGRESS" => nothing, "DISTSSH_VERBOSE" => "1", "DISTSSH_YES" => nothing) do
             session = DistSSHRun.default_kit_cli_session()
@@ -143,7 +143,6 @@ end
         @test occursin("DISTSSH_HOSTS", DistSSHRun.KIT_HOSTS_ENV_HELP)
         @test occursin("DISTSSH_SKIP_GLOBAL_WORKER_PKILL", DistSSHRun.KIT_SKIP_PKILL_ENV_HELP)
         @test occursin("DISTSSH_JOBS", DistSSHRun.KIT_JOBS_ENV_HELP)
-        @test occursin("DISTSSH_REQUIRE_ALL_HOSTS", DistSSHRun.KIT_REQUIRE_ALL_HOSTS_ENV_HELP)
     end
 
     @testset "kit_host_jobs" begin

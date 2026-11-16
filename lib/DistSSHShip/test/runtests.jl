@@ -526,7 +526,7 @@ end
             end
         end
         bad = Dict(
-            "schema" => 1,
+            "schema_version" => 1,
             "writer" => "Other",
             "complete" => true,
             "algorithm" => "git-sha1",

@@ -80,7 +80,7 @@ place. An unknown key is an error. A mismatch throws
 mode rejects `confirm_path`. Multiple modes run in order and stop on the first failure:
 
 ```julia
-session = DistSSHSession(workers=["user@h1"], remote="~/proj", yes=true)
+session = DistSSHSession(workers=["user@h1"], remote="~/proj")
 setup!(session, :ship_tree, :instantiate)
 setup!(session, :check; ignore_julia_version=true)
 ```
@@ -689,7 +689,7 @@ function _setup_one!(
         preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
         clone_dest = remote_git_clone_dest(session.project; cli_override = session.remote)
         deploy = remote_deploy_root(session.project; cli_override = session.remote)
-        raw = clone_to_remotes(hosts, clone_dest, url; confirm = !session.yes)
+        raw = clone_to_remotes(hosts, clone_dest, url; confirm = !session.cli_session.yes)
         result = _sync_result_from_host_op(raw)
         if result.ok
             forget_last_ship_default!(session.project, deploy)
@@ -710,7 +710,7 @@ function _setup_one!(
             remote_path;
             do_push = false,
             do_pull = true,
-            confirm = !session.yes,
+            confirm = !session.cli_session.yes,
         )
         if raw.cancelled
             return SyncResult(true, HostResult[]; ok = false)
@@ -733,8 +733,8 @@ function _setup_one!(
             preflight_setup_ssh(ssh_hosts) || return SyncResult(false, HostResult[]; ok = false)
         end
         raw = mode === :juliaup ?
-            juliaup_align_remotes(targets; confirm = !session.yes) :
-            juliaup_update_remotes(targets; confirm = !session.yes)
+            juliaup_align_remotes(targets; confirm = !session.cli_session.yes) :
+            juliaup_update_remotes(targets; confirm = !session.cli_session.yes)
         return _sync_result_from_host_op(raw)
     elseif mode === :runtest
         preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
@@ -779,7 +779,7 @@ function _setup_one!(
         end
         root = explicit_remote_root_path(remote)
         preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
-        raw = create_remote_roots!(hosts, root; confirm = !session.yes)
+        raw = create_remote_roots!(hosts, root; confirm = !session.cli_session.yes)
         return _sync_result_from_host_op(raw)
     elseif mode === :prune
         plan = _setup_require_plan(bound_plan)

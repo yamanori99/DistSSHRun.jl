@@ -287,7 +287,7 @@ function _run_drive_parsed_specialized!(
                 parsed.collect_root::String,
                 parsed.collect_hosts::Vector{String};
                 merge = something(parsed.collect_overwrite, false),
-                strict = parsed.require_all_hosts,
+                strict = !parsed.best_effort,
                 project_root = root,
                 path_anchor = anchor,
                 julia = parsed.julia,
@@ -315,7 +315,7 @@ function _run_drive_parsed_specialized!(
     log_dir = parsed.log_dir
     output_dir = parsed.output_dir
     explicit_package = parsed.explicit_package
-    require_all_hosts = parsed.require_all_hosts
+    best_effort = parsed.best_effort::Bool
 
     host_names = [h[1] for h in hosts]
 
@@ -382,7 +382,7 @@ function _run_drive_parsed_specialized!(
                     parsed, output_dir, script_path, script_dir, proj_dir, script_args,
                     enable_log, log_dir, original_args, host_names, hosts, head_workers,
                     default_workers, julia_exe, skip_hash_check, explicit_package,
-                    require_all_hosts, resolved_output_dir, resolved_log_dir, hosts_acc,
+                    best_effort, resolved_output_dir, resolved_log_dir, hosts_acc,
                     project_root_abs, path_anchor,
                 )
                 return code
@@ -524,7 +524,7 @@ function _run_drive_parsed_locked!(
         parsed, _output_dir, script_path, script_dir, proj_dir, script_args,
         enable_log, log_dir, original_args, host_names, hosts, head_workers,
         default_workers, julia_exe, skip_hash_check, explicit_package,
-        require_all_hosts, resolved_output_dir, resolved_log_dir, resolved_hosts,
+        best_effort, resolved_output_dir, resolved_log_dir, resolved_hosts,
         project_root, path_anchor,
     )::Cint
     DistSSHRun.assert_loaded_verified_worker_set!()
@@ -653,43 +653,35 @@ function _run_drive_parsed_locked!(
         # Planned SSH names land in `kit.hosts` before `add_drive_workers!`.
         # A kill during join can still find those hosts. The list is replaced
         # with hosts that joined, or removed when none did.
+        launch_report = Ref{Union{Nothing, LaunchReport}}(nothing)
         successful_hosts = try
             _drive_kit_hosts_around_join!(hosts, kit_out, kit_log) do
-                return add_drive_workers!(
+                hosts_joined, report = add_drive_workers!(
                     hosts, head_workers, default_workers, julia_exe, proj_dir, script_path,
                     project_root,
                 )
+                launch_report[] = report
+                return hosts_joined
             end
         catch
             DistSSHRun.await_declared_input_hashes!()
             rethrow()
         end
         DistSSHRun.capture_worker_provenance!()
-        # Register before the `require_all_hosts` check below: that branch can
+        # Register before the launch contract check below: that branch can
         # `return 1` with workers already joined, and `finally` must still
         # reach a non-`nothing` `drive_atexit_cleanup` to tear them down.
         drive_atexit_cleanup = register_worker_cleanup!(successful_hosts)
         DistSSHRun._write_joined_drive_host_status!(successful_hosts, kit_out, kit_log)
-        if require_all_hosts
-            missing = unique(String[h[1] for h in hosts if !(h[1] in successful_hosts)])
-            if !isempty(missing)
+        if (rep = launch_report[]) !== nothing
+            try
+                enforce_launch_contract!(rep; best_effort)
+            catch e
+                e isa LaunchIncompleteError || rethrow()
                 print_err("ERROR: "; bold = true)
-                println_fatal("required hosts did not join: $(join(missing, ", "))")
-                println_fatal("Pass --best-effort for a partial run.")
+                println_fatal(sprint(showerror, e))
                 DistSSHRun.await_declared_input_hashes!()
                 return 1
-            end
-            if head_workers > 0
-                n = DistSSHRun._drive_parent_worker_count()
-                if n < head_workers
-                    print_err("ERROR: "; bold = true)
-                    println_fatal(
-                        "required local workers did not join: wanted $head_workers, got $n",
-                    )
-                    println_fatal("Pass --best-effort for a partial run.")
-                    DistSSHRun.await_declared_input_hashes!()
-                    return 1
-                end
             end
         end
         kit_progress_step!("wait")
@@ -720,7 +712,7 @@ function _run_drive_parsed_locked!(
         _drive_cancellable() do
             run_driver_script!(enable_log)
         end
-        if require_all_hosts
+        if !best_effort
             DistSSHRun._refresh_drive_host_status_file!(kit_out, kit_log)
             left = DistSSHRun._drive_hosts_that_left()
             if !isempty(left)
@@ -740,7 +732,7 @@ function _run_drive_parsed_locked!(
             julia = julia_exe,
         )
         resolved_hosts !== nothing && (resolved_hosts[] = collect_hosts)
-        if require_all_hosts && !collect_ok
+        if !best_effort && !collect_ok
             progress_ok = false
             return 1
         end

@@ -22,10 +22,10 @@ The `drive` CLI does not take `--ship-tree` or `--git-sync`; prepare with
 then `drive --run-id ID`. Passing `sync=:git_sync` or `sync=:ship_tree` on
 [`drive!`](@ref) is an `ArgumentError` (transfer on run was removed).
 Git parity is off by default (`skip_hash_check=true`).
-`require_all_hosts=true` (the default; CLI `--require-all-hosts`) fails unless
-every explicit `parent:N` / `NAME:N` joined, stayed through the run,
-and collect succeeded. Pass `require_all_hosts=false` or CLI `--best-effort`
-for a partial run.
+By default (`best_effort=false`) every listed host must join and load workers,
+stay through the run, and collect must succeed; otherwise the run fails with a
+[`LaunchReport`](@ref). Pass `best_effort=true` or CLI `--best-effort` for a
+partial run.
 
 A collect root that is the project or a parent of it stops the run before
 `main` and before collect, with exit code 1. That includes
@@ -59,7 +59,7 @@ function drive!(
         package::Union{Nothing, AbstractString} = nothing,
         sync::Union{Nothing, Symbol, Bool} = nothing,
         julia::Union{Nothing, AbstractString} = nothing,
-        require_all_hosts::Bool = true,
+        best_effort::Bool = false,
         worker_include::Bool = false,
         sync_script::Union{Nothing, Bool} = nothing,
         unsafe_skip_env_digests = false,
@@ -67,7 +67,19 @@ function drive!(
         allow_mismatch = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
         unsafe_master_silence_exit::Union{Nothing, Bool} = nothing,
+        yes::Union{Nothing, Bool} = nothing,
+        require_all_hosts::Union{Nothing, Bool} = nothing,
     )::DriveResult
+    yes !== nothing && throw(
+        ArgumentError(
+            "drive! does not accept yes=; confirmation is CLI-only (pass -y/--yes to julia -m DistSSHKit)",
+        ),
+    )
+    require_all_hosts !== nothing && throw(
+        ArgumentError(
+            "drive! does not accept require_all_hosts=; use best_effort=true for a partial run (default is fail-closed)",
+        ),
+    )
     _reject_removed_allow_mismatch!(allow_mismatch)
     _reject_removed_drive_worker_include_kw!(sync_script)
     _reject_run_transfer_kw!("drive!", sync; surface = hint_surface(session))
@@ -100,7 +112,7 @@ function drive!(
                         log_dir = log_dir,
                         package = package,
                         julia = julia,
-                        require_all_hosts = require_all_hosts,
+                        best_effort = best_effort,
                         worker_include = worker_include,
                         unsafe_skip_env_digests = unsafe_skip_env_digests,
                         run_id = run_id,
@@ -149,9 +161,14 @@ function drive!(
         head_workers::Union{Nothing, Integer} = nothing,
         quiet::Bool = false,
         verbosity::Union{Nothing, Symbol} = nothing,
-        yes::Bool = true,
+        yes::Union{Nothing, Bool} = nothing,
         kwargs...,
     )::DriveResult
+    yes !== nothing && throw(
+        ArgumentError(
+            "drive! does not accept yes=; confirmation is CLI-only (pass -y/--yes to julia -m DistSSHKit)",
+        ),
+    )
     session = DistSSHSession(
         project = project,
         workers = workers,
@@ -160,7 +177,6 @@ function drive!(
         hosts_file = hosts_file,
         quiet = quiet,
         verbosity = verbosity,
-        yes = yes,
     )
     return drive!(session, script; kwargs...)
 end

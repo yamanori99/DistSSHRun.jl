@@ -550,7 +550,7 @@ end
         @test DistSSHRun.execute_detached_accepts(:worker_include; kind = :drive)
         @test !DistSSHRun.execute_detached_accepts(:worker_include; kind = :go)
         @test !DistSSHRun.execute_detached_accepts(:log_dir; kind = :ride)
-        @test !DistSSHRun.execute_detached_accepts(:require_all_hosts; kind = :ride)
+        @test DistSSHRun.execute_detached_accepts(:best_effort; kind = :ride)
         @test !DistSSHRun.execute_detached_accepts(:spi_check; kind = :go)
         @test !DistSSHRun.execute_detached_accepts(:spi_check; kind = :drive)
         err = try
@@ -563,7 +563,7 @@ end
         @test occursin(":go, :drive, or :ride", sprint(showerror, err))
     end
 
-    @testset "detached drive argv require-all-hosts" begin
+    @testset "detached drive argv best-effort" begin
         argv = DistSSHRun._execute_detached_argv(
             :drive, "job.jl", String[], String[]; head_workers = 1,
             output_dir = "/tmp/out",
@@ -575,7 +575,7 @@ end
             hosts_file = nothing,
             enable_log = false,
             package = nothing,
-            require_all_hosts = false,
+            best_effort = true,
             skip_hash_check = true,
         )
         @test !("--mem-headroom" in argv)
@@ -594,7 +594,7 @@ end
                 hosts_file = nothing,
                 enable_log = false,
                 package = nothing,
-                require_all_hosts = true,
+                best_effort = false,
                 skip_hash_check = true,
             )
             nothing
@@ -616,7 +616,7 @@ end
                 hosts_file = nothing,
                 enable_log = false,
                 package = nothing,
-                require_all_hosts = true,
+                best_effort = false,
                 skip_hash_check = true,
                 allow_external_symlinks = true,
             )
@@ -637,7 +637,7 @@ end
             hosts_file = nothing,
             enable_log = false,
             package = nothing,
-            require_all_hosts = false,
+            best_effort = true,
             skip_hash_check = true,
         )
         @test !("--mem-headroom" in argv0)
@@ -654,7 +654,7 @@ end
             hosts_file = nothing,
             enable_log = false,
             package = nothing,
-            require_all_hosts = false,
+            best_effort = true,
             skip_hash_check = true,
             workers = 4,
         )
@@ -672,7 +672,7 @@ end
             hosts_file = nothing,
             enable_log = false,
             package = nothing,
-            require_all_hosts = nothing,
+            best_effort = nothing,
             skip_hash_check = true,
             repeat = 100,
         )
@@ -692,10 +692,10 @@ end
             hosts_file = nothing,
             enable_log = false,
             package = nothing,
-            require_all_hosts = true,
+            best_effort = false,
             skip_hash_check = true,
         )
-        @test "--require-all-hosts" in argv_strict
+        @test !("--require-all-hosts" in argv_strict)
         @test !("--best-effort" in argv_strict)
         @test_throws ArgumentError DistSSHRun._execute_detached_argv(
             :drive, "job.jl", ["host1"], String[];
@@ -708,7 +708,7 @@ end
             hosts_file = nothing,
             enable_log = false,
             package = nothing,
-            require_all_hosts = 0,
+            best_effort = 0,
             skip_hash_check = true,
         )
         @test_throws ArgumentError DistSSHRun._execute_detached_argv(
@@ -722,7 +722,7 @@ end
             hosts_file = nothing,
             enable_log = false,
             package = nothing,
-            require_all_hosts = nothing,
+            best_effort = nothing,
             skip_hash_check = true,
         )
         argv_ride = DistSSHRun._execute_detached_argv(
@@ -736,7 +736,7 @@ end
             hosts_file = nothing,
             enable_log = true,
             package = nothing,
-            require_all_hosts = true,
+            best_effort = false,
             skip_hash_check = true,
             spi_check = false,
         )
@@ -757,7 +757,7 @@ end
             hosts_file = nothing,
             enable_log = true,
             package = nothing,
-            require_all_hosts = true,
+            best_effort = false,
             skip_hash_check = true,
             spi_check = true,
         )
@@ -774,7 +774,7 @@ end
             hosts_file = nothing,
             enable_log = false,
             package = nothing,
-            require_all_hosts = true,
+            best_effort = false,
             skip_hash_check = true,
             run_id = "20260101T000000Z-aaaaaa",
         )
@@ -791,7 +791,7 @@ end
             hosts_file = nothing,
             enable_log = false,
             package = nothing,
-            require_all_hosts = true,
+            best_effort = false,
             skip_hash_check = true,
             remote = "/tmp/App",
         )
@@ -956,7 +956,7 @@ end
         @test occursin(":go, :drive, or :ride", sprint(showerror, err))
     end
 
-    @testset "detached rejects unknown / yes=false" begin
+    @testset "detached rejects unknown / yes kwarg" begin
         err = try
             DistSSHRun.execute!(:go, "job.jl", String[]; head_slots = 1, detached = true, plan = nothing)
             nothing
@@ -973,7 +973,7 @@ end
             e
         end
         @test err2 isa ArgumentError
-        @test occursin("yes=true", sprint(showerror, err2))
+        @test occursin("does not accept yes=", sprint(showerror, err2))
 
         err3 = try
             DistSSHRun.execute!(:go, "job.jl", String[]; head_slots = 1, detached = true, log_dir = "x")
@@ -1044,7 +1044,7 @@ end
             hosts_file = nothing,
             enable_log = true,
             package = nothing,
-            require_all_hosts = true,
+            best_effort = false,
             skip_hash_check = true,
             run_id = "20260101T000000Z-aaaaaa",
             remote = "/remote",

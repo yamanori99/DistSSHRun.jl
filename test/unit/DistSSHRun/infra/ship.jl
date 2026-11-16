@@ -51,10 +51,10 @@ end
     )
     @test DistSSHRun._kit_run_toml_owned(TOML.parse(complete))
     @test !DistSSHRun._kit_run_toml_owned(
-        Dict("schema" => 1, "writer" => "Other 1.0", "kind" => "ship"),
+        Dict("schema_version" => 1, "writer" => "Other 1.0", "kind" => "ship"),
     )
     @test !DistSSHRun._kit_run_toml_owned(
-        Dict("schema" => 1, "writer" => "DistSSHRun 1.0", "kind" => "other"),
+        Dict("schema_version" => 1, "writer" => "DistSSHRun 1.0", "kind" => "other"),
     )
     sh = DistSSHRun._remote_run_leaf_stamp_sh("/work/app/runs/20260101T000000Z-abcd")
     @test occursin("/work/app/runs/20260101T000000Z-abcd/run.toml", sh)

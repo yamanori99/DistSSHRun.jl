@@ -82,7 +82,7 @@ end
             sprint(
                 TOML.print,
                 Dict(
-                    "schema" => 1,
+                    "schema_version" => 1,
                     "deploy_id" => _SNAP_ID_OLD,
                     "mode" => "ship-tree",
                     "snapshot_id" => _SNAP_ID_OLD,
@@ -116,29 +116,15 @@ end
     end
 end
 
-@testset "legacy last-snapshot.toml and snapshot_id field" begin
+@testset "legacy last-snapshot.toml rejected" begin
     _with_tempdir() do tmp
         _snap_project!(tmp)
         env = DistSSHRun.resolve_pkg_env(tmp)
         kit = joinpath(env.env_dir, ".distssh")
         mkpath(kit)
-        legacy_body = Dict(
-            "schema" => 1,
-            "deploy_root" => "~/App/Legacy",
-            "hosts" => ["h1"],
-            "snapshot_id" => _SNAP_ID_OLD,
-            "content_tree_hash" => _SNAP_HASH_OLD,
-        )
-        write(joinpath(kit, "last-snapshot.toml"), sprint(TOML.print, legacy_body))
-        rec = something(DistSSHRun.read_last_ship_record(tmp))
-        @test rec["run_id"] == _SNAP_ID_OLD
-        @test !haskey(rec, "snapshot_id") || rec["snapshot_id"] == _SNAP_ID_OLD
-        DistSSHRun.write_last_ship_record!(
-            tmp, "~/App/Legacy", ["h1"], _SNAP_ID_NEW;
-            content_tree_hash = _SNAP_HASH_NEW,
-        )
-        rec2 = something(DistSSHRun.read_last_ship_record(tmp))
-        @test rec2["run_id"] == _SNAP_ID_NEW
+        write(joinpath(kit, "last-snapshot.toml"), "schema_version = 1\nrun_id = \"x\"\n")
+        err = @test_throws ArgumentError DistSSHRun.read_last_ship_record(tmp)
+        @test occursin("schema_version", err.msg)
     end
 end
 
@@ -353,7 +339,7 @@ end
             sprint(
                 TOML.print,
                 Dict(
-                    "schema" => 1,
+                    "schema_version" => 1,
                     "deploy_root" => "/deploy/a",
                     "hosts" => ["h1"],
                     "snapshot_id" => _SNAP_ID_OLD,
@@ -839,7 +825,7 @@ end
                 kind = :drive,
                 project_root = proj,
                 provenance = Dict{String, Any}(
-                    "schema" => 1,
+                    "schema_version" => 1,
                     "writer" => "DistSSHRun test",
                     "shipped" => Dict{String, Any}(
                         "source_kind" => "ship",
@@ -887,7 +873,7 @@ end
                     kind = :drive,
                     project_root = proj,
                     provenance = Dict{String, Any}(
-                        "schema" => 1,
+                        "schema_version" => 1,
                         "writer" => "DistSSHRun test",
                         "shipped" => Dict{String, Any}(
                             "source_kind" => "ship",

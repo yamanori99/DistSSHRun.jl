@@ -40,7 +40,7 @@ using TOML
     @test a["DISTSSH_WORKER_RANK"] == "1"
     @test b["DISTSSH_WORKER_RANK"] == "2"
     @test a["DISTSSH_WORKER_SEED"] != b["DISTSSH_WORKER_SEED"]
-    @test DistSSHRun.worker_seed(11, 1) == parse(UInt64, a["DISTSSH_WORKER_SEED"])
+    @test parse(UInt64, a["DISTSSH_WORKER_SEED"]) == DistSSHRun.worker_seed(11, 1)
     @test DistSSHRun.worker_seed(11, 1) == DistSSHRun.worker_seed(11, 1)
     built = DistSSHRun._source_from_user(Dict{String, Any}("commit" => "abc", "nope" => "x"))
     @test built["commit"] == "abc"

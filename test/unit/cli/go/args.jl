@@ -240,7 +240,7 @@ using Test
         end
         let r = parse_go_args(["-q", "-y", "--head-slots", "1", "job.jl"])
             @test r.cli_session.quiet
-            @test r.cli_session.yes
+            @test r.cli_session.cli_session.yes
             DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags())
         end
         withenv("DISTSSH_HOSTS" => "2*env-a,1*env-b") do

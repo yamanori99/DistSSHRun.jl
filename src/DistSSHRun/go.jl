@@ -1049,7 +1049,7 @@ function go!(
         hosts_file::Union{Nothing, AbstractString} = nothing,
         quiet::Bool = false,
         verbosity::Union{Nothing, Symbol} = nothing,
-        yes::Bool = true,
+        yes::Union{Nothing, Bool} = nothing,
         output_dir::Union{Nothing, AbstractString} = nothing,
         collect_spec::Union{Bool, AbstractString, Nothing} = nothing,
         args::AbstractVector{<:AbstractString} = String[],
@@ -1067,6 +1067,11 @@ function go!(
         allow_mismatch = nothing,
         head_slots::Union{Nothing, Integer} = nothing,
     )::GoResult
+    yes !== nothing && throw(
+        ArgumentError(
+            "go! does not accept yes=; confirmation is CLI-only (pass -y/--yes to julia -m DistSSHKit)",
+        ),
+    )
     _reject_removed_allow_mismatch!(allow_mismatch)
     _reject_run_transfer_kw!("go!", sync; surface = hint_surface)
     allow_external_symlinks &&
@@ -1111,7 +1116,6 @@ function go!(
                 hosts_file,
                 quiet,
                 verbosity,
-                yes,
                 output_dir,
                 collect_spec,
                 args,
@@ -1139,7 +1143,6 @@ function _go_run!(
         hosts_file,
         quiet,
         verbosity,
-        yes,
         output_dir,
         collect_spec,
         args,
@@ -1214,7 +1217,6 @@ function _go_run!(
             remote = remote,
             quiet = quiet,
             verbosity = verbosity,
-            yes = yes,
         ),
     )
     init_log_file(batch_dir; prefix = "go", path_anchor = anchor)
@@ -1228,7 +1230,6 @@ function _go_run!(
             remote = remote,
             quiet = quiet,
             verbosity = verbosity,
-            yes = yes,
         )
         sess_rr = session_remote_root(go_session)
 

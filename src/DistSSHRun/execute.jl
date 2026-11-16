@@ -13,7 +13,7 @@ const _EXECUTE_DETACHED_KW = Set{Symbol}(
         :log_dir,
         :enable_log,
         :package,
-        :require_all_hosts,
+        :best_effort,
         :skip_hash_check,
         :workers,
         :repeat,
@@ -35,7 +35,7 @@ const _EXECUTE_DETACHED_DRIVE_ONLY = (
     :log_dir,
     :enable_log,
     :package,
-    :require_all_hosts,
+    :best_effort,
     :skip_hash_check,
     :workers,
     :worker_include,
@@ -181,7 +181,7 @@ function execute_detached_accepts(kw::Symbol; kind::Symbol)::Bool
     kind === :ride && return !(
         kw in (
             :repeat, :worker_include, :package, :log_dir, :enable_log, :skip_hash_check,
-            :workers, :require_all_hosts,
+            :workers, :best_effort,
             :allow_external_symlinks,
         )
     )
@@ -253,7 +253,7 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
     kw[:log_dir] = parsed.log_dir
     kw[:enable_log] = parsed.enable_log
     kw[:package] = parsed.explicit_package
-    kw[:require_all_hosts] = parsed.require_all_hosts
+    kw[:best_effort] = parsed.best_effort
     kw[:skip_hash_check] = parsed.skip_hash_check
     get(parsed, :worker_include, false) && (kw[:worker_include] = true)
     dw = parsed.default_workers
@@ -465,7 +465,7 @@ tree has a `Project.toml`. The job must list DistSSHKit or DistSSHRun in
 Keywords are then an allow-list (unknown names throw):
 `output_dir`, `args`, `project`, `sync`, `julia`, `quiet`, `verbosity`, `yes`,
 `remote`, `hosts_file`, `job_id`, `source`, `unsafe_skip_env_digests`, and drive-only `log_dir`,
-`enable_log`, `package`, `require_all_hosts`, `skip_hash_check`,
+`enable_log`, `package`, `best_effort`, `skip_hash_check`,
 `workers`, `worker_include`,
 `allow_external_symlinks`, `dir`, `threads`, `env_allow`, and `env`.
 `source` is a provenance
@@ -734,7 +734,7 @@ function _execute_detached!(
         )
         for k in (
                 :worker_include, :package, :log_dir, :enable_log, :skip_hash_check,
-                :workers, :require_all_hosts,
+                :workers, :best_effort,
                 :allow_external_symlinks,
             )
             haskey(kwargs, k) && throw(
@@ -763,8 +763,11 @@ function _execute_detached!(
     _reject_run_transfer_kw!("execute!", sync; surface = :api)
     get(kwargs, :allow_external_symlinks, false) === true &&
         _reject_run_transfer_cli!("execute!", "--allow-external-symlinks")
-    yes = get(kwargs, :yes, true)
-    yes === true || throw(ArgumentError("execute!(...; detached=true) requires yes=true"))
+    get(kwargs, :yes, nothing) !== nothing && throw(
+        ArgumentError(
+            "execute!(...; detached=true) does not accept yes=; the child uses CLI -y",
+        ),
+    )
     quiet = get(kwargs, :quiet, false)
     quiet isa Bool || throw(ArgumentError("quiet must be a Bool, got $(repr(quiet))"))
     verbosity = get(kwargs, :verbosity, nothing)
@@ -776,12 +779,15 @@ function _execute_detached!(
     log_dir = get(kwargs, :log_dir, nothing)
     enable_log = get(kwargs, :enable_log, true)
     package = get(kwargs, :package, nothing)
-    require_all_hosts = get(kwargs, :require_all_hosts, true)
+    get(kwargs, :require_all_hosts, nothing) !== nothing && throw(
+        ArgumentError(
+            "execute!(...; detached=true) does not accept require_all_hosts=; use best_effort=true",
+        ),
+    )
+    best_effort = get(kwargs, :best_effort, false)
     if kind === :drive
-        require_all_hosts isa Bool || throw(
-            ArgumentError(
-                "require_all_hosts must be a Bool, got $(repr(require_all_hosts))",
-            )
+        best_effort isa Bool || throw(
+            ArgumentError("best_effort must be a Bool, got $(repr(best_effort))"),
         )
     end
     skip_hash_check = get(kwargs, :skip_hash_check, true)
@@ -896,7 +902,7 @@ function _execute_detached!(
         hosts_file = hosts_file,
         enable_log = enable_log,
         package = package,
-        require_all_hosts = require_all_hosts,
+        best_effort = best_effort,
         skip_hash_check = skip_hash_check,
         workers = workers,
         repeat = repeat,
@@ -1981,7 +1987,7 @@ function _execute_detached_argv(
         hosts_file,
         enable_log,
         package,
-        require_all_hosts,
+        best_effort,
         skip_hash_check,
         workers = nothing,
         repeat = nothing,
@@ -2037,16 +2043,10 @@ function _execute_detached_argv(
         if package !== nothing && !isempty(strip(String(package)))
             push!(argv, "--package", String(package))
         end
-        require_all_hosts isa Bool || throw(
-            ArgumentError(
-                "require_all_hosts must be a Bool, got $(repr(require_all_hosts))",
-            )
+        best_effort isa Bool || throw(
+            ArgumentError("best_effort must be a Bool, got $(repr(best_effort))"),
         )
-        if require_all_hosts
-            push!(argv, "--require-all-hosts")
-        else
-            push!(argv, "--best-effort")
-        end
+        best_effort && push!(argv, "--best-effort")
         skip_hash_check === false && push!(argv, "--require-git")
         if workers !== nothing && head_workers === nothing
             push!(argv, "--head-workers", string(Int(workers)))

@@ -272,7 +272,7 @@ using Test
             end
             let r = parse_drive_args(["-q", "-y", "--head-workers", "1", "s.jl"])
                 @test r.cli_session.quiet == true
-                @test r.cli_session.yes == true
+                @test r.cli_session.cli_session.yes == true
                 DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags())
             end
             withenv("DISTSSH_HOSTS" => "3*env-host, 1*env-b") do
@@ -364,8 +364,8 @@ using Test
         @test !occursin("--mem-headroom", txt)
         @test !occursin("--parent-gb", txt)
         @test occursin("DISTSSH_JOBS", txt)
-        @test occursin("DISTSSH_REQUIRE_ALL_HOSTS", txt)
-        @test occursin("DISTSSH_BEST_EFFORT", txt)
+        @test !occursin("DISTSSH_REQUIRE_ALL_HOSTS", txt)
+        @test !occursin("DISTSSH_BEST_EFFORT", txt)
         @test occursin("--best-effort", txt)
         @test !occursin("required after `setup --rsync`", txt)
         @test occursin("--deploy-root", txt)
@@ -405,44 +405,24 @@ using Test
         @test_throws ArgumentError parse_drive_args(["--deploy-root"])
     end
 
-    @testset "require-all-hosts" begin
+    @testset "best-effort" begin
         withenv(
             "DISTSSH_REQUIRE_ALL_HOSTS" => nothing,
             "DISTSSH_BEST_EFFORT" => nothing,
         ) do
-            @test parse_drive_args(["--head-workers", "1", "s.jl"]).require_all_hosts
-            @test parse_drive_args(["--require-all-hosts", "--head-workers", "1", "s.jl"]).require_all_hosts
-            @test !parse_drive_args(["--best-effort", "--head-workers", "1", "s.jl"]).require_all_hosts
+            @test !parse_drive_args(["--head-workers", "1", "s.jl"]).best_effort
+            @test parse_drive_args(["--best-effort", "--head-workers", "1", "s.jl"]).best_effort
             @test_throws ArgumentError parse_drive_args(
-                ["--require-all-hosts", "--require-all-hosts", "--head-workers", "1", "s.jl"],
+                ["--require-all-hosts", "--head-workers", "1", "s.jl"],
             )
             @test_throws ArgumentError parse_drive_args(
                 ["--best-effort", "--best-effort", "--head-workers", "1", "s.jl"],
             )
-            @test_throws ArgumentError parse_drive_args(
-                ["--require-all-hosts", "--best-effort", "--head-workers", "1", "s.jl"],
-            )
-            let r = parse_drive_args(["--require-all-hosts", "--collect-missing", "out", "h1"])
-                @test r.require_all_hosts
-            end
         end
-        withenv(
-            "DISTSSH_REQUIRE_ALL_HOSTS" => "1",
-            "DISTSSH_BEST_EFFORT" => nothing,
-        ) do
-            @test parse_drive_args(["--head-workers", "1", "s.jl"]).require_all_hosts
+        withenv("DISTSSH_REQUIRE_ALL_HOSTS" => "1") do
+            @test_throws ArgumentError parse_drive_args(["--head-workers", "1", "s.jl"])
         end
-        withenv(
-            "DISTSSH_REQUIRE_ALL_HOSTS" => nothing,
-            "DISTSSH_BEST_EFFORT" => "1",
-        ) do
-            @test !parse_drive_args(["--head-workers", "1", "s.jl"]).require_all_hosts
-            @test parse_drive_args(["--require-all-hosts", "--head-workers", "1", "s.jl"]).require_all_hosts
-        end
-        withenv(
-            "DISTSSH_REQUIRE_ALL_HOSTS" => "1",
-            "DISTSSH_BEST_EFFORT" => "1",
-        ) do
+        withenv("DISTSSH_BEST_EFFORT" => "1") do
             @test_throws ArgumentError parse_drive_args(["--head-workers", "1", "s.jl"])
         end
     end

@@ -681,7 +681,7 @@ end
                     tmp;
                     kind = :go,
                     provenance = Dict{String, Any}(
-                        "schema" => 1,
+                        "schema_version" => 1,
                         "shipped" => Dict{String, Any}(
                             "content_tree_hash" => "",
                             "run_id" => "",

@@ -561,7 +561,7 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             script = joinpath(tmp, "job.jl")
             write(script, "")
             before = Set(workers())
-            successful_hosts = redirect_stdout(devnull) do
+            successful_hosts, = redirect_stdout(devnull) do
                 DistSSHRun.add_drive_workers!(
                     _EMPTY_DRIVE_HOSTS, 2, nothing, nothing, tmp, script, tmp,
                 )

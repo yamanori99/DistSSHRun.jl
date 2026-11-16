@@ -1,7 +1,12 @@
 # Explicit source selection, local ship record, and host validation.
 # Run IDs are remote `runs/<run_id>/` leaves under the resolved deploy root.
 
-const _SHIP_RECORD_SCHEMA = 1
+const _SHIP_RECORD_SCHEMA_VERSION = 1
+const _SHIP_RECORD_SCHEMA_ERROR = """
+last-ship record is missing schema_version or uses an old format.
+Rewrite or delete the file under `.distssh/` (legacy `last-snapshot.toml` is not read).
+Ship again, or pass an explicit run id instead of the convenience record.
+"""
 const _SHIP_RECORD_NAME = "last-ship.toml"
 const _SHIP_RECORD_LOCK = ReentrantLock()
 
@@ -133,17 +138,19 @@ function _read_last_ship_record_at(path::AbstractString)::Union{Nothing, Dict{St
     raw = try
         TOML.parsefile(path)
     catch
-        return nothing
+        throw(ArgumentError("last-ship record at $(path) is not valid TOML"))
     end
-    raw isa AbstractDict || return nothing
-    schema = get(raw, "schema", nothing)
-    schema isa Integer || return nothing
-    Int(schema) == _SHIP_RECORD_SCHEMA || return nothing
+    raw isa AbstractDict || throw(ArgumentError(_SHIP_RECORD_SCHEMA_ERROR))
+    if haskey(raw, "schema") && !haskey(raw, "schema_version")
+        throw(ArgumentError(_SHIP_RECORD_SCHEMA_ERROR))
+    end
+    ver = get(raw, "schema_version", nothing)
+    ver isa Integer || throw(ArgumentError(_SHIP_RECORD_SCHEMA_ERROR))
+    Int(ver) == _SHIP_RECORD_SCHEMA_VERSION ||
+        throw(ArgumentError("last-ship record schema_version=$(ver) is not supported (expected $(_SHIP_RECORD_SCHEMA_VERSION))"))
     out = Dict{String, Any}(String(k) => v for (k, v) in raw)
-    if !haskey(out, "run_id")
-        legacy = get(out, "snapshot_id", nothing)
-        legacy isa AbstractString && (out["run_id"] = String(legacy))
-    end
+    rid = get(out, "run_id", nothing)
+    rid isa AbstractString || throw(ArgumentError("last-ship record is missing run_id"))
     return out
 end
 
@@ -155,10 +162,12 @@ function read_last_ship_record(
             DistSSHBase.local_state_write_root(env_dir),
             DistSSHBase.resolve_local_state_dir(env_dir),
         )
-        for name in (_SHIP_RECORD_NAME, _LEGACY_SHIP_RECORD_NAME)
-            rec = _read_last_ship_record_at(joinpath(base, name))
-            rec !== nothing && return rec
+        legacy = joinpath(base, _LEGACY_SHIP_RECORD_NAME)
+        if isfile(legacy)
+            throw(ArgumentError(_SHIP_RECORD_SCHEMA_ERROR))
         end
+        rec = _read_last_ship_record_at(joinpath(base, _SHIP_RECORD_NAME))
+        rec !== nothing && return rec
     end
     return nothing
 end
@@ -197,7 +206,7 @@ function write_last_ship_record!(
     aliases = _sorted_host_aliases(hosts)
     isempty(aliases) && throw(ArgumentError("last-ship record needs at least one host"))
     data = Dict{String, Any}(
-        "schema" => _SHIP_RECORD_SCHEMA,
+        "schema_version" => _SHIP_RECORD_SCHEMA_VERSION,
         "deploy_root" => _normalize_deploy_root(deploy_root),
         "hosts" => aliases,
         "run_id" => rid,

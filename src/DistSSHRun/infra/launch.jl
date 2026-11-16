@@ -81,12 +81,26 @@ function _launch_cpu_target()::Union{Nothing, String}
     return s
 end
 
+const SEED_SCHEME = 1
+const DOMAIN_JOB = 0x44535348_4a4f4201
+const DOMAIN_WORKER = 0x44535348_574f524b
+const DOMAIN_ITEM = 0x44535348_4954454d
+
 const _JOB_SEED = Ref{Union{Nothing, UInt64}}(nothing)
-const _NEXT_WORKER_RANK = Ref(1)
+const _PLANNED_RANK_QUEUE = Int[]
 const _ASSIGNED_RANKS = Int[]
+const _PID_TO_RANK = Dict{Int, Int}()
 const _NEXT_PMAP_CALL = Ref(1)
 const _ITEM_MAP = Dict{Tuple{Int, Int}, Int}()
 const _ITEM_LOCK = ReentrantLock()
+
+"""Splitmix-style mix for reproducible seeds (never `Base.hash`)."""
+function seed_mix(domain::UInt64, a::UInt64, b::UInt64)::UInt64
+    x = xor(domain, xor(a, b * 0x9E3779B97F4A7C15))
+    x = xor(x, x >> 30) * 0xBF58476D1CE4E5B9
+    x = xor(x, x >> 27) * 0x94D049BB133111EB
+    return xor(x, x >> 31)
+end
 
 """One seed for this run. `DISTSSH_JOB_SEED` wins when it is a `UInt64`."""
 function job_seed()::UInt64
@@ -98,31 +112,74 @@ function job_seed()::UInt64
     return seed
 end
 
-"""Stable worker seed from the job seed and a launch rank. Does not read `myid()`."""
+"""Job-wide stream seed (`SEED_SCHEME` 1)."""
+function job_domain_seed(job::Integer)::UInt64
+    return seed_mix(DOMAIN_JOB, UInt64(job), UInt64(SEED_SCHEME))
+end
+
+"""Stable worker seed from the job seed and a plan rank. Does not read `myid()`."""
 function worker_seed(job::Integer, rank::Integer)::UInt64
     rank >= 1 || throw(ArgumentError("worker rank must be ≥ 1, got $rank"))
-    x = xor(UInt64(job), UInt64(rank) * 0x9E3779B97F4A7C15)
-    x = xor(x, x >> 30) * 0xBF58476D1CE4E5B9
-    x = xor(x, x >> 27) * 0x94D049BB133111EB
-    return xor(x, x >> 31)
+    return seed_mix(DOMAIN_WORKER, UInt64(job), UInt64(rank))
 end
 
-function take_worker_rank()::Int
-    rank = _NEXT_WORKER_RANK[]
-    _NEXT_WORKER_RANK[] = rank + 1
-    push!(_ASSIGNED_RANKS, rank)
-    return rank
+"""Per `worker_pmap` item stream seed (`SEED_SCHEME` 1)."""
+function job_item_seed(job::Integer, call::Integer, item::Integer)::UInt64
+    tag = xor(UInt64(call), UInt64(item) * 0x9E3779B97F4A7C15)
+    return seed_mix(DOMAIN_ITEM, UInt64(job), tag)
 end
 
-function reset_worker_seeds!()
+"""Plan-fixed ranks before launch (local head slots, then each host in order)."""
+function build_launch_rank_plan(
+        head_workers::Integer,
+        hosts::AbstractVector{<:Tuple{<:AbstractString, Union{Integer, Nothing}}},
+        default_workers::Integer,
+    )::Vector{Int}
+    out = Int[]
+    hw = Int(head_workers)
+    hw > 0 && append!(out, 1:hw)
+    def = Int(default_workers)
+    for (_, spec) in hosts
+        n = spec === nothing ? def : Int(spec)
+        n > 0 && append!(out, (length(out) + 1):(length(out) + n))
+    end
+    return out
+end
+
+function reset_launch_rank_plan!(ranks::AbstractVector{<:Integer})
     _JOB_SEED[] = nothing
-    _NEXT_WORKER_RANK[] = 1
+    empty!(_PLANNED_RANK_QUEUE)
+    append!(_PLANNED_RANK_QUEUE, Int.(collect(ranks)))
     empty!(_ASSIGNED_RANKS)
+    empty!(_PID_TO_RANK)
     lock(_ITEM_LOCK) do
         _NEXT_PMAP_CALL[] = 1
         empty!(_ITEM_MAP)
     end
     return nothing
+end
+
+function reset_worker_seeds!()
+    return reset_launch_rank_plan!(Int[])
+end
+
+function take_worker_rank()::Int
+    isempty(_PLANNED_RANK_QUEUE) && throw(
+        ArgumentError("launch rank plan exhausted (internal); call reset_launch_rank_plan! first"),
+    )
+    rank = popfirst!(_PLANNED_RANK_QUEUE)
+    push!(_ASSIGNED_RANKS, rank)
+    return rank
+end
+
+function register_launch_rank!(pid::Integer, rank::Integer)
+    _PID_TO_RANK[Int(pid)] = Int(rank)
+    return nothing
+end
+
+"""Launch plan rank for a worker pid, or `nothing` when unknown."""
+function launch_rank(pid::Integer)::Union{Nothing, Int}
+    return get(_PID_TO_RANK, Int(pid), nothing)
 end
 
 """One id per `worker_pmap` call, taken on process 1 before `pmap` starts."""
@@ -448,7 +505,7 @@ function _warn_worker_project_precompile!(
     return nothing
 end
 
-function _precompile_worker_project!(wid::Int, project::AbstractString)
+function _precompile_worker_project!(wid::Int, project::AbstractString)::Bool
     p = String(project)
     if !isdir(p) || !Base.Filesystem.iswritable(p)
         _warn_worker_project_precompile!(
@@ -456,14 +513,15 @@ function _precompile_worker_project!(wid::Int, project::AbstractString)
             p,
             "project directory is not writable; precompile not attempted",
         )
-        return nothing
+        return false
     end
     try
         remotecall_wait(Core.eval, wid, Main, _WORKER_PKG_PRECOMPILE_EXPR)
+        return true
     catch e
         _warn_worker_project_precompile!(wid, p, "precompile failed"; err = e)
+        return false
     end
-    return nothing
 end
 
 function go_slot_julia_argv(
@@ -499,7 +557,8 @@ function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::A
     before = Set(workers())
     try
         for i in 1:n
-            env = worker_env_pairs(project; rank = take_worker_rank())
+            rank = take_worker_rank()
+            env = worker_env_pairs(project; rank = rank)
             joined = addprocs(
                 1;
                 exename = julia_bin,
@@ -509,6 +568,9 @@ function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::A
                 worker_addprocs_blas_kwargs()...,
             )
             just = Int[Int(w) for w in joined]
+            for w in just
+                register_launch_rank!(w, rank)
+            end
             _mark_workers_launched!(just, project)
             _apply_worker_blas_threads!(just)
             i == 1 || continue
@@ -535,7 +597,8 @@ function _add_ssh_drive_workers!(
     before = Set(workers())
     try
         for i in 1:n
-            env = worker_env_pairs(project; ssh = true, rank = take_worker_rank())
+            rank = take_worker_rank()
+            env = worker_env_pairs(project; ssh = true, rank = rank)
             joined = addprocs(
                 [(machine, 1)];
                 exename = exename,
@@ -549,6 +612,9 @@ function _add_ssh_drive_workers!(
                 worker_addprocs_blas_kwargs()...,
             )
             just = Int[Int(w) for w in joined]
+            for w in just
+                register_launch_rank!(w, rank)
+            end
             _mark_workers_launched!(just, project)
             _apply_worker_blas_threads!(just)
             i == 1 || continue

@@ -668,7 +668,7 @@ using Distributed
                                 julia = "/usr/bin/julia",
                                 output_dir = joinpath(tmp, "child-out"),
                                 spi_check = false,
-                                require_all_hosts = false,
+                                best_effort = true,
                             )
                         end
                     end
