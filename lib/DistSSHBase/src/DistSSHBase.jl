@@ -68,5 +68,6 @@ public resolve_remote_project_root, shell_status, shield_sigint, with_cli_entry,
 public CliUsageError, cli_parse, with_cli_exit
 public wait_seconds
 public tool_require
+public src_component_digest
 
 end # module DistSSHBase

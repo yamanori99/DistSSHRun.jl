@@ -38,6 +38,8 @@ end
     root = _loaded_identity_repo_root()
 
     @testset "COMPONENT_ID literals match Project.toml" begin
+        @test Base.ispublic(DistSSHRun.DistSSHBase, :src_component_digest)
+        @test !Base.isexported(DistSSHRun.DistSSHBase, :src_component_digest)
         _component_id_matches_project!(DistSSHRun, joinpath(root, "Project.toml"))
         _component_id_matches_project!(DistSSHRun.DistSSHBase, joinpath(root, "lib", "DistSSHBase", "Project.toml"))
         run_root = joinpath(root, "src")
