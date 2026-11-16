@@ -425,6 +425,12 @@ using Test
             let r = parse_drive_args(["--require-all-hosts", "--collect-missing", "out", "h1"])
                 @test r.require_all_hosts
             end
+            let r = parse_drive_args(["--best-effort", "--collect-missing", "out", "h1"])
+                @test r.collect_best_effort
+            end
+            @test_throws ArgumentError parse_drive_args(
+                ["--collect-strict", "--collect-missing", "out", "h1"],
+            )
         end
         withenv(
             "DISTSSH_REQUIRE_ALL_HOSTS" => "1",
