@@ -58,21 +58,21 @@ Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup …`.
 
 | `mode` | CLI | Notes |
 | --- | --- | --- |
-| `:delete` | `delete` | Destructive. Requires `confirm_path`. `session.yes` does not delete. Refuses a present unowned Ship `run.toml` |
+| `:delete` | `delete` | Destructive. Requires `confirm_path`. `session.cli_session.yes` does not delete. Refuses a present unowned Ship `run.toml` |
 | `:ship_tree` | `ship-tree` | Walk the project and each directory's `.gitignore` (case-sensitive). No git binary. Relative path dependencies outside the project ship under a common ancestor. A gitignored project or Manifest file is omitted with one warning. `!LocalPreferences.toml` ships that file. Declared inputs do not. `extra_files` is one external file at `_distsshrun_external/<basename>` (a second file errors). Creates a missing remote root when safe (`~/…` under home, or absolute with an existing parent). Tar into `runs/<run_id>/src/`, empty `out/`, DistSSHRun stamp. Does not instantiate |
 | `:git_clone` | `git-clone` | Requires `repo=`; clone runs **on the remote** |
-| `:git_sync` | `git-sync` | Requires a clone at `session.remote` (`:git_clone` first on a new target). Push the local branch to origin, then detach each remote at that commit; confirm unless `session.yes`. A dirty tree is refused unless `allow_dirty=true` (CLI `--skip-git-guard`; deploy record `dirty=true`) |
-| `:git_pull` | `git-pull` | Detach each remote at the local commit. Does not push to origin and does not run `git pull`; confirm unless `session.yes`. A dirty tree is refused |
+| `:git_sync` | `git-sync` | Requires a clone at `session.remote` (`:git_clone` first on a new target). Push the local branch to origin, then detach each remote at that commit; confirm unless `session.cli_session.yes`. A dirty tree is refused unless `allow_dirty=true` (CLI `--skip-git-guard`; deploy record `dirty=true`) |
+| `:git_pull` | `git-pull` | Detach each remote at the local commit. Does not push to origin and does not run `git pull`; confirm unless `session.cli_session.yes`. A dirty tree is refused |
 | `:instantiate` | `instantiate` | `julia=` (default `"auto"`) |
-| `:juliaup` | `up` | Align Julia via juliaup on `NAME` and/or `parent` (`\$HOME/.juliaup` or Homebrew); confirm unless `session.yes`. Tip if kit parent patch lags channel latest |
-| `:juliaup_update` | `up update` | `juliaup update` on those hosts (no `default`); confirm unless `session.yes` |
+| `:juliaup` | `up` | Align Julia via juliaup on `NAME` and/or `parent` (`\$HOME/.juliaup` or Homebrew); confirm unless `session.cli_session.yes`. Tip if kit parent patch lags channel latest |
+| `:juliaup_update` | `up update` | `juliaup update` on those hosts (no `default`); confirm unless `session.cli_session.yes` |
 | `:check` | `check` | `ignore_julia_version=`, `check_code_sync=` |
 | `:runtest` | `runtest` | job `Pkg.test()` on remotes; `julia=` |
 | `:cleanup` | `cleanup` | Kill stale workers (no confirm) |
-| `:prune` | `prune` | `.distssh` (and legacy `.distsshkit`) go/drive/setup/runs leaves. Requires `confirm_path`. `session.yes` does not delete. `older_days=`, `id=` |
-| `:remote_root` | `remote-root` | `remote=` must be absolute (`--deploy-root` on the CLI). Creates that directory only when the parent exists. Confirm unless `session.yes` |
+| `:prune` | `prune` | `.distssh` (and legacy `.distsshkit`) go/drive/setup/runs leaves. Requires `confirm_path`. `session.cli_session.yes` does not delete. `older_days=`, `id=` |
+| `:remote_root` | `remote-root` | `remote=` must be absolute (`--deploy-root` on the CLI). Creates that directory only when the parent exists. Confirm unless `session.cli_session.yes` |
 
-Confirmations for other modes follow `session.yes` (CLI `-y`). `:delete` and
+Confirmations for other modes follow `session.cli_session.yes` (CLI `-y` / `DISTSSH_YES`). `:delete` and
 `:prune` authorize only `confirm_path`: a `String` when the session has one
 SSH host, or a `Dict` of host alias => path. A host with no key is left in
 place. An unknown key is an error. A mismatch throws
@@ -493,7 +493,7 @@ function _setup_bind_confirm_path!(
             ArgumentError(
                 "setup!(session, :$(mode)) requires confirm_path equal to the target $(repr(expected)). " *
                     "A String is only for one host; pass a Dict of host alias => path for more than one. " *
-                    "session.yes does not authorize this. See help setup.",
+                    "session.cli_session.yes does not authorize this. See help setup.",
             )
         )
     end
