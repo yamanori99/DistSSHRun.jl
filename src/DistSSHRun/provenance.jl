@@ -557,7 +557,7 @@ function _project_provenance(project::AbstractString)::Dict{String, Any}
             out["julia_version"] = string(parsed["julia_version"])
         end
     else
-        out["manifest"] = Dict{String, Any}("reason" => "missing_file")
+        out["manifest"] = "absent"
     end
     locks = Dict{String, String}()
     for name in ("CondaPkg.toml", "conda-lock.yml", "pixi.lock")

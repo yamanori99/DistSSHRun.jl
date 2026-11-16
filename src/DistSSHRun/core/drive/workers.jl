@@ -62,10 +62,13 @@ function add_drive_workers!(
         julia_exe,
         proj_dir::String,
         script_path::String,
-        project_root::String,
+        project_root::String;
+        run_id::Union{Nothing, AbstractString} = nothing,
     )::Tuple{Vector{String}, LaunchReport}
     empty!(RUNNER_WORKER_PROJECT_DIRS)
     empty!(RUNNER_WORKER_SCRIPT_PATHS)
+    snap = run_id === nothing ? nothing : validate_run_id(run_id)
+    snapshot_run = snap !== nothing
     DistSSHRun.assert_controller_environment_for_verify!(proj_dir)
     DistSSHRun._require_drive_host_status_idle!()
     DistSSHRun._clear_drive_host_worker_ids!()
@@ -93,7 +96,8 @@ function add_drive_workers!(
             try
                 before = Set(workers())
                 DistSSHRun._add_local_drive_workers!(
-                    head_workers, proj_dir, local_julia,
+                    head_workers, proj_dir, local_julia;
+                    verify_project = !snapshot_run,
                 )
                 _register_drive_workers!(before, proj_dir, script_path)
                 added = sort!(Int[w for w in workers() if w ∉ before])
@@ -115,7 +119,8 @@ function add_drive_workers!(
                     print_progress_err("✗ (wanted $head_workers local workers, got $(length(added)))")
                     writeln_both("")
                     DistSSHRun._drive_host_span!(DistSSHRun.PARENT_HOST_NAME, "workers", :fail)
-                elseif !isempty(added) && !DistSSHRun._precompile_worker_project!(first(added), proj_dir)
+                elseif !snapshot_run && !isempty(added) &&
+                        !DistSSHRun._precompile_worker_project!(first(added), proj_dir)
                     rmprocs(added; waitfor = 2.0)
                     push!(
                         launch_failures,
@@ -297,7 +302,8 @@ function add_drive_workers!(
                         )
                         continue
                     end
-                    if !DistSSHRun._precompile_worker_project!(first(added), remote_proj)
+                    if !snapshot_run &&
+                            !DistSSHRun._precompile_worker_project!(first(added), remote_proj)
                         rmprocs(added; waitfor = 2.0)
                         print_progress_err("✗ (worker project precompile failed)")
                         writeln_both("")
@@ -355,15 +361,20 @@ function add_drive_workers!(
     writeln_field("Workers", string(nworkers()))
     writeln_both("")
 
-    joined = max(0, nworkers() - 1)
+    joined = length(Int[w for w in workers() if w ∉ before_all])
     report = LaunchReport(length(plan_ranks), joined, launch_failures)
     DistSSHRun.note_launch_provenance!(report)
 
     # Alone, Julia reports nworkers()==1 (the master). Fail when nothing joined.
     nprocs() <= 1 && error(_NO_WORKERS_JOINED)
     try
-        DistSSHRun.verify_workers_match_job!(proj_dir)
-        DistSSHRun.assert_loaded_verified_worker_set!()
+        if snapshot_run
+            DistSSHRun._record_environment_unverified!("run-id")
+            DistSSHRun.assert_loaded_verified_worker_set!()
+        else
+            DistSSHRun.verify_workers_match_job!(proj_dir)
+            DistSSHRun.assert_loaded_verified_worker_set!()
+        end
     catch
         DistSSHRun._rmprocs_added_since(before_all)
         rethrow()

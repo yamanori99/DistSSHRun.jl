@@ -552,7 +552,12 @@ function _rmprocs_added_since(before::AbstractSet{<:Integer})
     return nothing
 end
 
-function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::AbstractString)
+function _add_local_drive_workers!(
+        n::Int,
+        project::AbstractString,
+        julia_bin::AbstractString;
+        verify_project::Bool = true,
+    )
     n < 1 && return nothing
     flags = Cmd(worker_exeflag_strings(project; local_cpu = true, job_id = resolved_kit_job_id()))
     before = Set(workers())
@@ -576,6 +581,8 @@ function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::A
             _apply_worker_blas_threads!(just)
             i == 1 || continue
             added = sort!(just)
+            verify_project ||
+                continue
             isempty(added) || _precompile_worker_project!(first(added), project)
         end
     catch

@@ -666,7 +666,7 @@ function _run_drive_parsed_locked!(
             _drive_kit_hosts_around_join!(hosts, kit_out, kit_log) do
                 hosts_joined, report = add_drive_workers!(
                     hosts, head_workers, default_workers, julia_exe, proj_dir, script_path,
-                    project_root,
+                    project_root; run_id = get(parsed, :run_id, nothing),
                 )
                 launch_report[] = report
                 return hosts_joined

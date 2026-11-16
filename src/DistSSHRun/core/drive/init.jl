@@ -292,7 +292,7 @@ function init_drive_workers!(
             _drive_invokelatest_main(w, :_drive_worker_activate!, worker_proj)
         end
 
-        pkg_name = explicit_package !== nothing ? explicit_package : project_package_name(proj_dir)
+        pkg_name = explicit_package !== nothing ? explicit_package : project_driver_package_name(proj_dir)
         if pkg_name !== nothing
             pkg_sym = Symbol(pkg_name)
             try

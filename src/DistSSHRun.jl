@@ -169,7 +169,7 @@ using .DistSSHBase: CliCursor, HostFacts, HostResult, OUTPUT_WIDTH, PARENT_HOST_
     get_remote_julia_version_full,
     git_work_tree,
     is_sigint, join_explained_message, looks_like_path_host, normalize_git_clone_url,
-    parse_placement_token, posix_quote, project_package_name,
+    parse_placement_token, posix_quote, project_driver_package_name, project_package_name,
     read_hosts_file, read_hosts_file_lines, read_machine_file_lines,
     remote_delete_root, remote_deploy_root, remote_env_project_root, remote_git_clone_dest,
     remote_layout_path, resolve_host_path_abs,
