@@ -1120,6 +1120,31 @@ end
         end
     end
 
+    @testset "run_id records shipped-tree env unverified; strict path still verifies" begin
+        _with_tempdir() do proj
+            _write_host_project!(proj, "RunIdProv")
+            script = joinpath(proj, "job.jl")
+            write(script, "1\n")
+            rid = "20260101T000000Z-aaaaaa"
+            DistSSHRun.set_kit_verbosity!(:quiet)
+            try
+                result = DistSSHRun.drive!(
+                    script, String[]; head_workers = 1,
+                    project = proj,
+                    enable_log = false,
+                    run_id = rid,
+                )
+                @test result.ok
+                prov = DistSSHRun.assemble_provenance(proj)
+                env = get(prov, "environment", nothing)
+                @test env["verification"] == "unverified"
+                @test env["reason"] == "run-id"
+            finally
+                DistSSHRun.set_kit_verbosity!(:progress)
+            end
+        end
+    end
+
     @testset "run_id keyword on drive collect and outside-script guard" begin
         root = mktempdir()
         try
