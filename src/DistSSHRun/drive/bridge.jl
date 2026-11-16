@@ -31,6 +31,8 @@ function drive_parsed_from_session(
             n > 0 && push!(hosts, (host, n))
         end
     else
+        lw = session.cli_session.local_workers
+        lw !== nothing && (parent_workers = Int(lw))
         for h in session.hosts
             push!(hosts, (h, nothing))
         end
