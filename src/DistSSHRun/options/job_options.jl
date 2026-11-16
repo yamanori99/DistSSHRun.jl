@@ -18,7 +18,7 @@ end
 """Collect-only job options (`collect!`, `drive --collect-*`)."""
 struct CollectJobOptions
     merge::Bool
-    strict::Bool
+    best_effort::Bool
     remote_root::Union{Nothing, String}
     run_id::Union{Nothing, String}
     julia::Union{Nothing, String}
@@ -58,7 +58,7 @@ end
 """Build [`CollectJobOptions`](@ref) from drive collect argv shape or `collect!` kwargs."""
 function collect_job_options(;
         merge::Bool = false,
-        strict::Bool = false,
+        best_effort::Bool = false,
         remote_root::Union{Nothing, AbstractString} = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
         julia::Union{Nothing, AbstractString} = nothing,
@@ -69,16 +69,16 @@ function collect_job_options(;
     jl = julia === nothing ? nothing : let s = strip(String(julia))
             isempty(s) || lowercase(s) == "auto" ? nothing : s
     end
-    return CollectJobOptions(merge, strict, rr, snap, jl)
+    return CollectJobOptions(merge, best_effort, rr, snap, jl)
 end
 
 """Build collect options from drive `parse_drive_args` collect branch."""
 function collect_job_options_from_parsed(parsed)::CollectJobOptions
     merge = something(get(parsed, :collect_overwrite, nothing), false)
-    strict = get(parsed, :collect_strict, false)
+    be = get(parsed, :collect_best_effort, false)
     return collect_job_options(;
         merge = merge,
-        strict = strict,
+        best_effort = be,
         remote_root = get(parsed, :deploy_root, nothing),
         run_id = get(parsed, :run_id, nothing),
         julia = get(parsed, :julia, nothing),

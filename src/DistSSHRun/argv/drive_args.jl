@@ -102,7 +102,6 @@ function parse_drive_args(args::Vector{String})
     require_all_hosts = true
     require_all_hosts_cli = false
     best_effort_cli = false
-    collect_strict = false
     hosts = Tuple{String, Union{Int, Nothing}}[]
     script_path = nothing
     script_args = String[]
@@ -228,9 +227,12 @@ function parse_drive_args(args::Vector{String})
             require_all_hosts = false
             i += 1
         elseif arg == "--collect-strict"
-            collect_strict && throw(ArgumentError("drive: --collect-strict specified more than once"))
-            collect_strict = true
-            i += 1
+            throw(
+                ArgumentError(
+                    "drive: --collect-strict was removed; collect fails when any host is skipped (default). " *
+                        "Pass --best-effort only when you intentionally continue past skipped hosts.",
+                ),
+            )
         elseif arg == "--mem-headroom" || arg == "--parent-gb" || arg == "--master-gb" || startswith(arg, "--master-gb:")
             throw(ArgumentError("drive: worker-count sizing was removed; pass explicit parent:N / NAME:N"))
         elseif arg == "--no-log"
@@ -299,7 +301,7 @@ function parse_drive_args(args::Vector{String})
                     collect_root = tree_root,
                     collect_hosts = tree_hosts,
                     collect_overwrite = merge,
-                    collect_strict = collect_strict,
+                    collect_best_effort = best_effort_cli,
                     worker_include = worker_include,
                     require_all_hosts = require_all_hosts,
                     help = false,
@@ -328,7 +330,7 @@ function parse_drive_args(args::Vector{String})
                     collect_root = nothing,
                     collect_hosts = nothing,
                     collect_overwrite = nothing,
-                    collect_strict = false,
+                    collect_best_effort = false,
                     worker_include = false,
                     require_all_hosts = false,
                     help = true,
@@ -421,7 +423,7 @@ function parse_drive_args(args::Vector{String})
             collect_root = nothing,
             collect_hosts = nothing,
             collect_overwrite = nothing,
-            collect_strict = collect_strict,
+            collect_best_effort = false,
             worker_include = worker_include,
             require_all_hosts = require_all_hosts,
             help = false,
@@ -451,7 +453,7 @@ function show_drive_usage(; io::IO = stdout)
         "  $(cli_m_project()) drive [N*host...] DRIVER.jl",
         "  drive --head-workers 4 '8*host1' jobs.jl",
         "  drive --collect-missing ROOT HOST...",
-        "  drive --collect-strict --collect-missing ROOT HOST...  fail when a host is skipped",
+        "  drive --best-effort --collect-missing ROOT HOST...  continue past skipped hosts",
     )
     print_help_blank(io)
     print_help_section("Workers"; io = io)
@@ -475,7 +477,7 @@ function show_drive_usage(; io::IO = stdout)
         "  --worker-include    re-include the full driver on workers (default: defs only)",
         "  --require-git       $(REQUIRE_GIT_MEANING)",
         "  --require-all-hosts listed machine tokens must join, stay, and collect (default)",
-        "  --best-effort       allow a partial run (missing join is not a failure)",
+        "  --best-effort       partial worker join and/or collect past skipped hosts",
         "  --output-dir PATH   result root (default: {script}/.distssh/drive/<stem>_<UTC>/; must be missing or empty)",
         "  --isolated          run the driver in a child process (default: this process)",
         "  --julia PATH        remote Julia",
@@ -496,7 +498,7 @@ function show_drive_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  After main(): post-run-new (files newer than run start).",
-        "  Later: --collect-missing / --collect-overwrite ROOT HOST...",
+        "  Later: --collect-missing / --collect-overwrite ROOT HOST... (fails on skipped hosts unless --best-effort)",
         "  Pass --run-id ID so collect maps onto that ship, not a newer one.",
         "  With DISTSSH_RUN_DIR, omitted recovery uses that run's provenance.selection.",
         "  Pull-back uses Tar. Remote mtimes and file modes are not kept.",

@@ -2,9 +2,9 @@ using DistSSHRun
 using Test
 
 @testset "CollectJobOptions" begin
-    opts = DistSSHRun.collect_job_options(merge = true, strict = true, remote_root = "/remote")
+    opts = DistSSHRun.collect_job_options(merge = true, best_effort = true, remote_root = "/remote")
     @test opts.merge
-    @test opts.strict
+    @test opts.best_effort
     @test opts.remote_root == "/remote"
 end
 
@@ -24,7 +24,7 @@ end
         collect_root = nothing,
         collect_hosts = nothing,
         collect_overwrite = nothing,
-        collect_strict = false,
+        collect_best_effort = false,
         worker_include = false,
         require_all_hosts = true,
         help = false,

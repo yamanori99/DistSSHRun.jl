@@ -10,13 +10,14 @@ function _collect!(
         out_dir::AbstractString,
         hosts::Vector{String};
         merge::Bool = false,
+        best_effort::Bool = false,
     )
     session = DistSSHRun.DistSSHSession(
         project = proj,
         workers = hosts,
         remote = "/fake/remote/CollectHost",
     )
-    return DistSSHRun.collect!(session, out_dir; merge = merge)
+    return DistSSHRun.collect!(session, out_dir; merge = merge, best_effort = best_effort)
 end
 
 @testset "drive collect_tree" begin
@@ -96,8 +97,23 @@ end
                 captured, result = _capture_stdio() do _, _
                     _collect!(proj, out_dir, ["host1"])
                 end
-                @test result.ok
+                @test !result.ok
                 @test occursin("no directory on host", captured)
+                @test occursin("Collect skipped hosts", captured)
+                @test occursin("--best-effort", captured)
+                @test length(result.skipped) == 1
+                @test result.skipped[1].first == "host1"
+            end
+        end
+        _with_collect() do _, proj
+            out_dir = joinpath(proj, "out")
+            mkpath(out_dir)
+            with_kit_verbosity(:verbose) do
+                captured, result = _capture_stdio() do _, _
+                    _collect!(proj, out_dir, ["host1"]; best_effort = true)
+                end
+                @test !result.ok
+                @test occursin("every host was skipped", captured)
             end
         end
     end
@@ -113,6 +129,23 @@ end
                 end
                 @test result.ok
                 @test occursin("no files found", captured)
+            end
+        end
+    end
+
+    @testset "best-effort continues when one host collects" begin
+        _with_collect() do state_dir, proj
+            _seed_tree!(state_dir, "host2", "a.txt")
+            out_dir = joinpath(proj, "out")
+            mkpath(out_dir)
+            with_kit_verbosity(:verbose) do
+                captured, result = _capture_stdio() do _, _
+                    _collect!(proj, out_dir, ["host1", "host2"]; best_effort = true)
+                end
+                @test result.ok
+                @test occursin("Collect skipped hosts", captured)
+                @test any(p -> p.first == "host1", result.skipped)
+                @test occursin("1 file", captured)
             end
         end
     end
@@ -178,7 +211,8 @@ end
                 end
                 @test !result.ok
                 @test result.exit_code == 1
-                @test occursin("some hosts failed", captured)
+                @test occursin("Collect failed", captured)
+                @test !isempty(result.skipped)
             end
         end
     end
@@ -195,7 +229,8 @@ end
                 end
                 @test !result.ok
                 @test !occursin("no files found", captured)
-                @test occursin("some hosts failed", captured)
+                @test occursin("Collect failed", captured)
+                @test !isempty(result.skipped)
             end
         end
     end

@@ -5,7 +5,7 @@
         session::DistSSHSession,
         local_root::AbstractString;
         merge=false,
-        strict=false,
+        best_effort=false,
         hosts=nothing,
         julia=nothing,
         remote_root=nothing,
@@ -21,7 +21,9 @@ Collect modes:
 - `merge=true` → **collect-overwrite** (CLI `drive --collect-overwrite`)
 
 Distinct from drive's automatic **post-run-new** (sentinel / newer-than-run) and go's
-**slot-overwrite**. Returns [`CollectResult`](@ref).
+**slot-overwrite**. Returns [`CollectResult`](@ref) (`skipped` lists hosts that were not
+collected). By default any skipped host fails the run; pass `best_effort=true` or
+`drive --best-effort` on collect-only CLI to continue (skipped hosts are still listed).
 
 A root that is the session project or a parent of it is refused (`ok=false`,
 exit code 1). Point it at a result directory inside the project.
@@ -33,7 +35,7 @@ function collect!(
         session::DistSSHSession,
         local_root::AbstractString;
         merge::Bool = false,
-        strict::Bool = false,
+        best_effort::Bool = false,
         hosts::Union{Nothing, AbstractVector{<:AbstractString}} = nothing,
         julia::Union{Nothing, AbstractString} = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
@@ -47,7 +49,7 @@ function collect!(
     )
     opts = collect_job_options(;
         merge = merge,
-        strict = strict,
+        best_effort = best_effort,
         remote_root = remote_root !== nothing ? remote_root : session.remote,
         run_id = run_id,
         julia = julia,
@@ -68,17 +70,17 @@ function collect!(
     return _with_kit_inproc_run!(:collect) do
         apply_session_env!(session)
         return _with_session_remote_env!(session) do
-            ok = drive_collect_tree(
+            ok, skipped = drive_collect_tree(
                 String(local_root),
                 host_list;
                 merge = opts.merge,
-                strict = opts.strict,
+                best_effort = opts.best_effort,
                 project_root = session.project,
                 path_anchor = canonical_local_path(session.project),
                 julia = opts.julia,
                 run_id = snap,
             )
-            return CollectResult(ok, ok ? 0 : 1)
+            return CollectResult(ok, ok ? 0 : 1, skipped)
         end
     end
 end

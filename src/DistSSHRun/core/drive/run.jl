@@ -295,7 +295,7 @@ function _run_drive_parsed_specialized!(
                 session,
                 parsed.collect_root::String;
                 merge = collect_opts.merge,
-                strict = collect_opts.strict,
+                best_effort = collect_opts.best_effort,
                 hosts = parsed.collect_hosts::Vector{String},
                 julia = collect_opts.julia,
                 run_id = collect_opts.run_id,
