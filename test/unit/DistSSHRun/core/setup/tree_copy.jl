@@ -345,7 +345,7 @@ end
             project = pwd(), workers = ["h"], quiet = true
         )
         @test_throws MethodError DistSSHRun.sync!(session; mode = :git_sync, gitignore = false)
-        @test_throws MethodError DistSSHRun.setup!(session, :check; gitignore = false)
+        @test_throws ArgumentError DistSSHRun.setup!(session, :check)
 
     end # _test_skip_unless_git()
 end

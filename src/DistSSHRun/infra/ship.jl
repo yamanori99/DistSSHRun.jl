@@ -1890,6 +1890,7 @@ function ship_tree!(
         ship_max_bytes = ship_max_bytes,
         extra_files = extra_files,
     )
+    announce_forced_ignore_ship!(pack.forced_ignore_ship)
     try
         return _ship_tree_to_hosts!(
             pack, hosts, deploy_root;
@@ -2017,6 +2018,9 @@ function _ship_tree_to_hosts!(
                 ok_hosts,
             ),
         )
+        digest_rows = Any[
+            Dict{String, Any}("path" => p, "blob" => h) for (p, h) in pack.content_file_digests
+        ]
         commit_deploy_record_after_ship!(
             ok_hosts,
             String(deploy_root),
@@ -2024,6 +2028,20 @@ function _ship_tree_to_hosts!(
             rid,
             pack.content_tree_hash;
             project_rel = pack.project_rel,
+            content_file_digests = digest_rows,
+            forced_ignore_ship = pack.forced_ignore_ship,
+        )
+        _set_active_deploy_record!(
+            build_deploy_record(
+                pack.project_dir,
+                :ship_tree;
+                deploy_id = rid,
+                run_id = rid,
+                content_tree_hash = pack.content_tree_hash,
+                project_rel = pack.project_rel,
+                content_file_digests = digest_rows,
+                forced_ignore_ship = pack.forced_ignore_ship,
+            ),
         )
     end
     return ShipTreeResult(

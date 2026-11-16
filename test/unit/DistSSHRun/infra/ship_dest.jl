@@ -69,11 +69,17 @@ end
         end
     end
 
-    @testset "gitignored Manifest is refused at pack" begin
+    @testset "gitignored Manifest is shipped at pack" begin
         mktempdir() do tmp
             _minimal_project!(tmp)
             write(joinpath(tmp, ".gitignore"), "Manifest.toml\n")
-            @test_throws ArgumentError DistSSHRun.pack_ship_tree(tmp)
+            pack = DistSSHRun.pack_ship_tree(tmp)
+            try
+                @test "Manifest.toml" in DistSSHRun.DistSSHShip.pack_entry_paths(tmp)
+                @test "Manifest.toml" in pack.forced_ignore_ship
+            finally
+                rm(pack.directory; force = true, recursive = true)
+            end
         end
     end
 
@@ -88,7 +94,9 @@ end
             mktempdir(),
             ".",
             String[],
-            String[]
+            String[],
+            String[],
+            Pair{String, String}[],
         )
         rec = DistSSHRun.DistSSHShip.build_shipment_record(pack; complete = true, transfer_id = "stage-uuid")
         @test rec["transfer_id"] == "stage-uuid"

@@ -414,7 +414,7 @@ end
     end
 end
 
-@testset "gitignored project preferences stay out of the ship" begin
+@testset "gitignored project preferences are forced into the ship" begin
     _with_tempdir() do tmp
         write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\nJuliaLocalPreferences.toml\n")
         write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
@@ -425,9 +425,8 @@ end
         try
             dest = mktempdir()
             DistSSHRun.Tar.extract(packed.tar_path, dest)
-            @test !isfile(joinpath(dest, "LocalPreferences.toml"))
-            @test !islink(joinpath(dest, "LocalPreferences.toml"))
-            @test !isfile(joinpath(dest, "JuliaLocalPreferences.toml"))
+            @test isfile(joinpath(dest, "LocalPreferences.toml"))
+            @test isfile(joinpath(dest, "JuliaLocalPreferences.toml"))
         finally
             rm(packed.directory; force = true, recursive = true)
         end

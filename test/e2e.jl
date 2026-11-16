@@ -367,18 +367,19 @@ end
             _assert_ssh_e2e_ok(suite, "setup_instantiate", proc, out; project = proj, kit = :setup)
         end
 
-        @testset "setup check (major.minor; no --ignore-julia-version)" begin
-            _e2e_announce("setup check (major.minor; no --ignore-julia-version)")
-            # Ship does not send .git/; --check warns on a missing remote hash but
+        @testset "doctor --deploy (major.minor; no --ignore-julia-version)" begin
+            _e2e_announce("doctor --deploy (major.minor; no --ignore-julia-version)")
+            # Ship does not send .git/; deploy check warns on a missing remote hash but
             # must still pass the Julia version string (patch and prerelease)
             # plus project/deps. A build suffix may differ. Git parity is not
             # claimed for the ship path (see docker-ssh README).
             proc, out = _run_kit_setup(;
-                setup_args = ["check", "--deploy-root", remote_root, setup_hosts...],
+                command = "doctor",
+                setup_args = ["--deploy", "--deploy-root", remote_root, setup_hosts...],
                 project_root = proj,
                 extra_env = merge(_e2e_base_env(), Dict("DISTSSH_QUIET" => "0"))
             )
-            _assert_ssh_e2e_ok(suite, "setup_check", proc, out; project = proj, kit = :setup)
+            _assert_ssh_e2e_ok(suite, "doctor_deploy", proc, out; project = proj, kit = :setup)
             @test occursin("Julia", out)
         end
 
@@ -390,7 +391,8 @@ end
             try
                 _ssh_e2e_juliaup_default!(host, ch.alt)
                 proc_bad, out_bad = _run_kit_setup(;
-                    setup_args = ["check", "--deploy-root", remote_root, setup_hosts...],
+                    command = "doctor",
+                    setup_args = ["--deploy", "--deploy-root", remote_root, setup_hosts...],
                     project_root = proj,
                     extra_env = merge(_e2e_base_env(), Dict("DISTSSH_QUIET" => "0"))
                 )
@@ -429,7 +431,8 @@ end
                 end
 
                 proc_ok, out_ok = _run_kit_setup(;
-                    setup_args = ["check", "--deploy-root", remote_root, setup_hosts...],
+                    command = "doctor",
+                    setup_args = ["--deploy", "--deploy-root", remote_root, setup_hosts...],
                     project_root = proj,
                     extra_env = merge(_e2e_base_env(), Dict("DISTSSH_QUIET" => "0"))
                 )
@@ -507,7 +510,8 @@ end
 
                 # Second remote was not a target; leave it alone. Re-check listed hosts.
                 proc_ok, out_ok = _run_kit_setup(;
-                    setup_args = ["check", "--deploy-root", remote_root, DistSSHRun.setup_cli_host_token(host)],
+                    command = "doctor",
+                    setup_args = ["--deploy", "--deploy-root", remote_root, DistSSHRun.setup_cli_host_token(host)],
                     project_root = proj,
                     extra_env = merge(_e2e_base_env(), Dict("DISTSSH_QUIET" => "0"))
                 )
@@ -1583,7 +1587,8 @@ end
             _assert_ssh_e2e_ok(suite, "git_instantiate", proc, out; project = proj, kit = :setup)
 
             proc, out = _run_kit_setup(;
-                setup_args = ["check", "--deploy-root", git_root, setup_hosts...],
+                command = "doctor",
+                setup_args = ["--deploy", "--deploy-root", git_root, setup_hosts...],
                 project_root = proj,
                 extra_env = merge(git_env, Dict("DISTSSH_QUIET" => "0"))
             )
@@ -1622,7 +1627,8 @@ end
             _assert_ssh_e2e_ok(suite, "git_sync", proc, out; project = proj, kit = :setup)
 
             proc, out = _run_kit_setup(;
-                setup_args = ["check", "--deploy-root", git_root, setup_hosts...],
+                command = "doctor",
+                setup_args = ["--deploy", "--deploy-root", git_root, setup_hosts...],
                 project_root = proj,
                 extra_env = merge(git_env, Dict("DISTSSH_QUIET" => "0"))
             )

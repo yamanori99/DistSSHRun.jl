@@ -29,6 +29,16 @@ constants as values at definition time (for example with `repr`).
 
 Do not write the Registrator register command in an issue, a pull request body, or a pull request comment. That text registers the package. The only place for it is a comment on the merge commit, and only when the user asked to register.
 
+## Design principles
+
+- **Fail closed by default**; loosen only via an explicit flag or keyword (`--best-effort`, `best_effort=true`), never via environment variables.
+- **No silent fallbacks or legacy remaps**: old keys and flags error with a rewrite hint showing the corrected form; no auto-migration.
+- **One concept, one name**: no aliases or dual syntaxes (public API renames ship without compatibility aliases; see Job entry principles); tests assert only the current form, never both old and new.
+- **Explicit shapes**: missing values are recorded as typed reasons, not filled with defaults; versioned formats require `schema_version`.
+- **CLI behavior** follows [clap `arg_required_else_help`](https://docs.rs/clap/latest/clap/struct.Command.html#method.arg_required_else_help) conventions: a subcommand needing operands, run bare, prints help to stderr and exits 2; explicit `--help` prints to stdout and exits 0; usage errors exit 2.
+- **Semver for breaking changes**: a release takes changes that would be breaking later; purely additive features land in patch or minor follow-ups.
+- **Actionable errors**: state what failed, where, why, and how to fix it.
+
 ## Job entry principles
 
 Read process environment for **job defaults in exactly one place** per invocation; pass the result downstream. Explicit argv and session fields override those defaults. Argv parsing and normalization must not call job execution; job execution must not read `ENV` for job defaults.

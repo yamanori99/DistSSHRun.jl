@@ -256,8 +256,7 @@ function _run_drive_parsed_specialized!(
         project_root,
     )::Cint
     if parsed.help
-        show_drive_usage()
-        return 0
+        return DistSSHRun.DistSSHBase.cli_help_stdout(show_drive_usage)
     end
 
     if parsed.show_version
@@ -307,8 +306,7 @@ function _run_drive_parsed_specialized!(
     end
 
     if parsed.script_path === nothing
-        show_drive_usage()
-        return 0
+        return DistSSHRun.DistSSHBase.cli_required_else_help(show_drive_usage)
     end
 
     hosts = parsed.hosts
@@ -413,6 +411,7 @@ function _run_drive_parsed_specialized!(
                     run_dir = run_dir,
                 )
                 DistSSHRun._write_kit_result_file(result)
+                DistSSHRun.note_controller_shipped_tree_drift!(project_root_abs)
                 DistSSHRun.write_kit_run_toml!(
                     run_dir;
                     kind = :drive,

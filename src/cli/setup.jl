@@ -66,7 +66,7 @@ function _setup_reject_yes_delete(
         "-y, --yes, and DISTSSH_YES do not authorize setup delete or setup prune. " *
             "Pass --confirm-path. See help setup.",
     )
-    return Cint(1)
+    return DistSSHRun.DistSSHBase.CLI_EXIT_USAGE
 end
 
 function _setup_confirm_error(err)::Cint
@@ -79,7 +79,7 @@ function _setup_confirm_error(err)::Cint
         println_fatal(err.msg)
     end
     println_fatal()
-    return Cint(1)
+    return DistSSHRun.DistSSHBase.CLI_EXIT_USAGE
 end
 
 function _setup_confirm_plan(
@@ -100,33 +100,30 @@ end
 
 if !isdefined(@__MODULE__, :setup_main)
     function setup_main()::Cint
-        opts = try
-            parse_setup_args(ARGS)
-        catch e
-            e isa ArgumentError || rethrow()
-            print_err("Error: "; bold = true)
-            println_fatal(e.msg)
-            println_fatal()
-            # An unknown option already names `help setup`. Do not print the page.
-            if !startswith(e.msg, "unknown setup option:")
-                show_usage()
-            end
-            return 1
+        return DistSSHRun.DistSSHBase.with_cli_exit() do
+            return _setup_main_body()
         end
+    end
+
+    function _setup_main_body()::Cint
+        opts = DistSSHRun.DistSSHBase.cli_parse(() -> parse_setup_args(ARGS))
 
         if opts.show_version
             DistSSHRun.println_kit_version()
-            return 0
+            return Cint(0)
         end
 
         if opts.show_help
-            show_usage()
-            return 0
+            return DistSSHRun.DistSSHBase.cli_help_stdout(show_usage)
         end
 
-        if opts.mode === nothing || opts.mode === :requirements
+        if opts.mode === :requirements
             show_requirements()
-            return 0
+            return Cint(0)
+        end
+
+        if opts.mode === nothing
+            return DistSSHRun.DistSSHBase.cli_required_else_help(show_usage)
         end
 
         try
@@ -137,11 +134,7 @@ if !isdefined(@__MODULE__, :setup_main)
             )
         catch e
             e isa ArgumentError || rethrow()
-            print_err("Error: "; bold = true)
-            println_fatal(e.msg)
-            println_fatal()
-            show_usage()
-            return 1
+            throw(DistSSHRun.DistSSHBase.CliUsageError(String(e.msg)))
         end
 
         try
@@ -151,12 +144,7 @@ if !isdefined(@__MODULE__, :setup_main)
             )
         catch e
             e isa ArgumentError || rethrow()
-            # Fatal: always on terminal.
-            print_err("Error: "; bold = true)
-            println_fatal(e.msg)
-            println_fatal()
-            show_usage()
-            return 1
+            throw(DistSSHRun.DistSSHBase.CliUsageError(String(e.msg)))
         end
 
         project = String(DistSSHRun.cli_project_root(@__DIR__))
@@ -171,8 +159,13 @@ if !isdefined(@__MODULE__, :setup_main)
         )
 
         function setup_job!(mode::Symbol)::Cint
+            if mode === :check
+                print_err(DistSSHRun.setup_check_removed_message(); bold = true)
+                println_fatal()
+                return Cint(2)
+            end
             if mode in (
-                    :check, :instantiate, :runtest, :ship_tree, :remote_root,
+                    :instantiate, :runtest, :ship_tree, :remote_root,
                     :cleanup, :git_pull, :git_sync, :git_clone,
                 )
                 return DistSSHRun.setup_cli_via_bang!(
@@ -182,7 +175,6 @@ if !isdefined(@__MODULE__, :setup_main)
             mode_name = Dict(
                 :git_clone => "git-clone",
                 :delete => "Delete",
-                :check => "Check Prerequisites",
                 :git_pull => "git-pull",
                 :git_sync => "git-sync",
                 :ship_tree => "ship-tree",
@@ -227,7 +219,7 @@ if !isdefined(@__MODULE__, :setup_main)
                 println_fatal(e.msg)
                 return Cint(1)
             end
-            if (mode === :instantiate || mode === :runtest || mode === :check) &&
+            if (mode === :instantiate || mode === :runtest) &&
                     !isempty(opts.hosts)
                 try
                     op_path = DistSSHRun._project_work_root(
@@ -242,13 +234,9 @@ if !isdefined(@__MODULE__, :setup_main)
                     # prerequisites succeed, this error still fails the
                     # command so an incomplete snapshot is not reported as
                     # met.
-                    if mode === :check
-                        selection_err = e
-                    else
-                        print_err("Error: "; bold = true)
-                        println_fatal(e.msg)
-                        return Cint(1)
-                    end
+                    print_err("Error: "; bold = true)
+                    println_fatal(e.msg)
+                    return Cint(1)
                 end
             end
             print_header("$(DistSSHRun.cli_heading("setup")) · $mode_name")
@@ -342,7 +330,7 @@ if !isdefined(@__MODULE__, :setup_main)
                             "  Next: $(DistSSHRun.cli_m()) setup instantiate --run-id $rid$path_flag",
                         )
                         kit_println(
-                            "        $(DistSSHRun.cli_m()) setup check --run-id $rid$path_flag",
+                            "        $(DistSSHRun.cli_m()) doctor --deploy --run-id $rid$path_flag",
                         )
                     elseif src isa AbstractString
                         flag = _setup_next_deploy_root_flag(src)
@@ -350,7 +338,7 @@ if !isdefined(@__MODULE__, :setup_main)
                             "  Next: $(DistSSHRun.cli_m()) setup instantiate$flag",
                         )
                         kit_println(
-                            "        $(DistSSHRun.cli_m()) setup check$flag",
+                            "        $(DistSSHRun.cli_m()) doctor --deploy$flag",
                         )
                     end
                     kit_println()
@@ -393,7 +381,19 @@ if !isdefined(@__MODULE__, :setup_main)
             end
 
             if mode === :cleanup
-                return Cint(finish_host_op!("Cleanup", cleanup_remote_workers(opts.hosts)) ? 0 : 1)
+                job_id = opts.job_id
+                if job_id === nothing || isempty(strip(String(job_id)))
+                    print_err("Error: "; bold = true)
+                    println_fatal("setup cleanup requires --job-id JOB_ID (job-scoped since 0.2.0).")
+                    println_fatal()
+                    return Cint(2)
+                end
+                return Cint(
+                    finish_host_op!(
+                            "Cleanup",
+                            cleanup_remote_workers(opts.hosts, String(job_id)),
+                        ) ? 0 : 1
+                )
             end
 
             if mode === :prune
@@ -428,35 +428,20 @@ if !isdefined(@__MODULE__, :setup_main)
             end
 
             # --git-pull/--git-sync: a commit mismatch is fixed by checkout --detach.
-            # --check: require the commits to match already.
             # Both git modes refuse a dirty local tree (a patch is not shipped).
             require_clean = mode === :git_pull ||
                 (mode === :git_sync && !opts.skip_git_guard)
-            check_code_sync = (mode === :check)
             result = check_prerequisites(
                 opts.hosts, opts.julia_path, op_path, project;
                 path_anchor = path_anchor,
                 require_clean_git = require_clean,
-                check_code_sync = check_code_sync,
+                check_code_sync = false,
                 ignore_julia_version = opts.ignore_julia_version,
             )
 
             if !result.ok
                 println_err_after_progress("Prerequisites not met. Fix issues above and retry.")
                 return Cint(1)
-            end
-
-            if mode === :check
-                if selection_err !== nothing
-                    print_err("Error: "; bold = true)
-                    println_fatal(selection_err.msg)
-                    kit_println()
-                    return Cint(1)
-                end
-                DistSSHRun._warn_git_worktree_ship!(project)
-                print_ok("All prerequisites met.")
-                kit_println()
-                return Cint(0)
             end
 
             # Hashes already matching still run: the remote must be detached at

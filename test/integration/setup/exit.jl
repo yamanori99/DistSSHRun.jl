@@ -76,7 +76,7 @@ using Test
         ),
         (; setup_args = ["--juliaup-update", "host1"]),
         (; setup_args = ["--juliaup", "host1"]),
-        (; setup_args = ["check", "--remote-dir", "/tmp/App.jl", "host1"]),
+        (; setup_args = ["check", "host1"]),
     ]
     try
         got = _run_kit_setups(calls)
@@ -152,9 +152,9 @@ using Test
             @test occursin("up add CHANNEL", combined)
 
             proc, combined = got[13]
-            @test proc.exitcode == 1
-            @test occursin("setup --remote-dir was removed", combined)
-            @test occursin("--deploy-root", combined)
+            @test proc.exitcode == 2
+            @test occursin("setup check was removed in 0.2.0", combined)
+            @test occursin("doctor --deploy", combined)
         end
     finally
         for d in state_dirs

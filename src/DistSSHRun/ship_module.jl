@@ -9,6 +9,7 @@ module DistSSHShip
 using Dates
 using ..DistSSHBase
 using ..DistSSHBase: HostResult
+using SHA
 using TOML
 using Tar
 
@@ -27,6 +28,7 @@ include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "project.jl"
 include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "select.jl"))
 include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "deps.jl"))
 include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "contain.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "tree_manifest.jl"))
 include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "pack.jl"))
 include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "record.jl"))
 include(joinpath(@__DIR__, "..", "..", "lib", "DistSSHShip", "src", "ship.jl"))
@@ -43,6 +45,11 @@ public ShipProject
 public Shipment
 public ShipmentReceipt
 public content_tree_hash
+public content_file_digests
+public chmod_shipped_files_readonly!
+public shipped_file_digest_mismatches
+public shipped_file_mode_violations
+public shipped_tree_verify_error
 public assert_extracted_tree_contained!
 public shipment_record_logical_path
 public build_shipment_record

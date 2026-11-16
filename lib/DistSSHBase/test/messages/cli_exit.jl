@@ -25,6 +25,12 @@ function _cli_exit_stderr(f)
 end
 
 @testset "cli exit" begin
+    @testset "cli help streams" begin
+        help(; io = stdout) = (println(io, "HELP_PAGE"); nothing)
+        @test DistSSHBase.cli_help_stdout(help) == Cint(0)
+        @test DistSSHBase.cli_required_else_help(help) == DistSSHBase.CLI_EXIT_USAGE
+    end
+
     @testset "cli_parse" begin
         @test DistSSHBase.cli_parse(() -> 3) == 3
         err = try

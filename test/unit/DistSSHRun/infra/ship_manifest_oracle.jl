@@ -71,7 +71,7 @@ end
         end
     end
 
-    @testset "git repository, gitignored Manifest" begin
+    @testset "git repository, gitignored Manifest is forced into pack" begin
         if Sys.which("git") !== nothing
             _with_tempdir() do tmp
                 write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
@@ -89,24 +89,19 @@ end
                     )
                 )
                 _git_commit_q!(tmp, "init")
-                omit = _omit_for(tmp)
-                @test_throws ArgumentError DistSSHRun.DistSSHShip.pack_entry_paths(
-                    tmp; omit_project_rels = omit
-                )
-                @test_throws ArgumentError DistSSHRun.pack_ship_tree(tmp)
+                listed = _oracle_matches_tar!(tmp)
+                @test "Manifest.toml" in listed
             end
         end
     end
 
-    @testset "no git, gitignored Manifest" begin
+    @testset "no git, gitignored Manifest is forced into pack" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
             _sync_test_project_manifest!(tmp)
             write(joinpath(tmp, ".gitignore"), "Manifest.toml\n")
-            omit = _omit_for(tmp)
-            @test_throws ArgumentError DistSSHRun.DistSSHShip.pack_entry_paths(
-                tmp; omit_project_rels = omit
-            )
+            listed = _oracle_matches_tar!(tmp)
+            @test "Manifest.toml" in listed
         end
     end
 
@@ -120,7 +115,7 @@ end
         end
     end
 
-    @testset "external Manifest path gitignored is refused at pack" begin
+    @testset "external Manifest path gitignored is forced into pack" begin
         _with_tempdir() do root
             ext = joinpath(root, "extapp")
             locks = joinpath(root, "locks")
@@ -133,8 +128,8 @@ end
                 "name = \"Ext\"\nmanifest = \"../locks/Manifest.toml\"\n"
             )
             write(joinpath(locks, ".gitignore"), "Manifest.toml\n")
-            @test_throws ArgumentError DistSSHRun.DistSSHShip.pack_entry_paths(ext)
-            @test_throws ArgumentError DistSSHRun.pack_ship_tree(ext)
+            listed = _oracle_matches_tar!(ext)
+            @test any(occursin("Manifest.toml", p) for p in listed)
         end
     end
 

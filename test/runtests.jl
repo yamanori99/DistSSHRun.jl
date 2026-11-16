@@ -143,9 +143,12 @@ end
             _runtest_include("unit/cli/up/args.jl", joinpath(@__DIR__, "unit", "cli", "up", "args.jl"))
             _runtest_include("unit/cli/setup/using_guard.jl", joinpath(@__DIR__, "unit", "cli", "setup", "using_guard.jl"))
             _runtest_include("unit/cli/setup/main.jl", joinpath(@__DIR__, "unit", "cli", "setup", "main.jl"))
+            _runtest_include("unit/cli/setup/check_removed.jl", joinpath(@__DIR__, "unit", "cli", "setup", "check_removed.jl"))
+            _runtest_include("unit/cli/doctor/main.jl", joinpath(@__DIR__, "unit", "cli", "doctor", "main.jl"))
             _runtest_include("unit/cli/hostinfo/args.jl", joinpath(@__DIR__, "unit", "cli", "hostinfo", "args.jl"))
             _runtest_include("unit/cli/pool/args.jl", joinpath(@__DIR__, "unit", "cli", "pool", "args.jl"))
             _runtest_include("unit/cli/ride/args.jl", joinpath(@__DIR__, "unit", "cli", "ride", "args.jl"))
+            _runtest_include("unit/cli/exit_conventions.jl", joinpath(@__DIR__, "unit", "cli", "exit_conventions.jl"))
             _runtest_include("unit/cli/subcommands_main.jl", joinpath(@__DIR__, "unit", "cli", "subcommands_main.jl"))
         end
     end # unit group

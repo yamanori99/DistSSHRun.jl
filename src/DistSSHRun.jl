@@ -56,6 +56,8 @@ export PipelineResult
 export sync!
 export instantiate!
 export setup!
+export doctor!
+export DoctorReport
 export pool!
 export ResourcePool
 export HostInventory
@@ -93,6 +95,7 @@ export drive_host_status
 export parse_go_args
 export parse_drive_args
 export parse_ride_args
+export parse_doctor_args
 export ssh_opts
 export run_on_host
 export resolve_controller_julia
@@ -214,6 +217,7 @@ include("DistSSHRun/infra/ship.jl")
 include("DistSSHRun/infra/ship_dest.jl")
 include("DistSSHRun/infra/source_selection.jl")
 include("DistSSHRun/infra/deploy_record.jl")
+include("DistSSHRun/infra/shipped_tree.jl")
 include("DistSSHRun/argv/drive_args.jl")
 include("DistSSHRun/argv/go_args.jl")
 include("DistSSHRun/argv/setup_args.jl")
@@ -221,7 +225,9 @@ include("DistSSHRun/argv/up_args.jl")
 include("DistSSHRun/argv/hostinfo_args.jl")
 include("DistSSHRun/argv/pool_args.jl")
 include("DistSSHRun/argv/ride_args.jl")
+include("DistSSHRun/argv/doctor_args.jl")
 include("DistSSHRun/drive.jl")
+include("DistSSHRun/core/doctor.jl")
 include("DistSSHRun/infra/namespace_sync.jl")
 include("DistSSHRun/pool.jl")
 include("DistSSHRun/hostinfo.jl")
@@ -274,9 +280,10 @@ dist_ssh_kit_version()::VersionNumber = DIST_SSH_KIT_VERSION
 #   julia --project=. -m DistSSHKit drive parent:2 script.jl
 
 const _KIT_CLI_LOADED = Set{String}()
-const _KIT_CLI_SCRIPTS = ("drive.jl", "go.jl", "hostinfo.jl", "pool.jl", "ride.jl", "setup.jl", "up.jl")
+const _KIT_CLI_SCRIPTS = ("doctor.jl", "drive.jl", "go.jl", "hostinfo.jl", "pool.jl", "ride.jl", "setup.jl", "up.jl")
 
 const _KIT_CLI_MAIN = Dict(
+    "doctor.jl" => :doctor_main,
     "drive.jl" => :drive_main,
     "go.jl" => :go_main,
     "hostinfo.jl" => :hostinfo_main,
@@ -390,6 +397,13 @@ Run `setup.jl` (clone / sync / cleanup) with `args` (same as `julia -m DistSSHKi
 setup(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("setup.jl", args)
 
 """
+    run_doctor(args::Vector{String}=copy(ARGS))
+
+Run `doctor.jl` (`julia -m DistSSHKit doctor --deploy …`).
+"""
+run_doctor(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("doctor.jl", args)
+
+"""
     up(args::Vector{String}=copy(ARGS))
 
 Run `up.jl` (juliaup align / update) with `args` (same as `julia -m DistSSHKit up …`).
@@ -436,7 +450,7 @@ A `.jl` path with no command is not implicit `go`.
 function main(args::Vector{String} = copy(ARGS))::Cint
     try
         return with_cli_entry(:DistSSHRun) do
-            return _main(args)
+            return DistSSHBase.with_cli_exit(() -> _main(args))
         end
     catch e
         # After the drive frame's `finally` blocks. Translation only.
@@ -451,6 +465,7 @@ public main
 # `demo` and `progress` are ordinary functions. The script commands stop in
 # `include`, but a static call from `_main` still pulls `demo` and `progress` in.
 const _RUN_CALLS = Dict{String, Function}(
+    "doctor" => (rest -> run_doctor(rest)::Cint),
     "drive" => (rest -> drive(_merge_script_arg_prelude(rest))::Cint),
     "go" => (rest -> go(_merge_script_arg_prelude(rest))::Cint),
     "demo" => (rest -> demo(rest)::Cint),
@@ -481,7 +496,7 @@ const NO_COMMAND_HINT_LINES = (
 
 """Expected-command sentence `print_rejected_command` prints under `unknown_subcommand_message`."""
 const RUN_SUBCOMMAND_EXPECTATION =
-    "Expected: setup | up | go | ride | drive | hostinfo | pool | demo | progress"
+    "Expected: setup | doctor | up | go | ride | drive | hostinfo | pool | demo | progress"
 
 """Print the shared rejection lines. The caller prints the usage page.
 
@@ -530,12 +545,12 @@ function _main_dispatch(args::Vector{String})::Cint
     # `help`, `-h`, and `--help`, in any number and order, are the root page.
     # `help go --help` is not: `go` is a command, so the rewrite below still runs.
     if !isempty(args) && all(in(("help", "-h", "--help")), args)
-        print_kit_root_usage()
+        print_kit_root_usage(stdout)
         return 0
     end
     if isempty(args)
-        print_kit_root_usage()
-        return 1
+        print_kit_root_usage(stderr)
+        return Int(DistSSHBase.CLI_EXIT_USAGE)
     end
     # `help <verb> …` is `<verb> --help …`, once. A second word that is not a
     # command stays on the unknown-subcommand path, and that word is the name.
@@ -563,8 +578,8 @@ function _main_dispatch(args::Vector{String})::Cint
         script = any(endswith(String(a), ".jl") for a in args),
     )
     println(stderr)
-    print_kit_root_usage()
-    return 1
+    print_kit_root_usage(stderr)
+    return Int(DistSSHBase.CLI_EXIT_USAGE)
 end
 
 if ccall(:jl_generating_output, Cint, ()) == 1

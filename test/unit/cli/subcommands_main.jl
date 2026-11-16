@@ -25,20 +25,23 @@ using Test
 
     @testset "go, ride, drive empty args and error paths" begin
         let (code, out, err) = _cli_capture(() -> DistSSHRun.go(String[]))
-            @test code == 0
-            @test occursin("Usage", out * err)
+            @test code == 2
+            @test isempty(out)
+            @test occursin("Usage", err)
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.run_ride(String[]))
-            @test code == 0
-            @test occursin("Usage", out * err)
+            @test code == 2
+            @test isempty(out)
+            @test occursin("Usage", err)
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.drive(String[]))
-            @test code == 0
-            @test occursin("Usage", out * err)
+            @test code == 2
+            @test isempty(out)
+            @test occursin("Usage", err)
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.run_hostinfo(["--nope", "-h"]))
             shown = out * err
-            @test code == 1
+            @test code == 2
             @test occursin("unknown hostinfo option: --nope", shown)
             @test occursin("help hostinfo", shown)
             @test !occursin("--help", shown)
@@ -46,20 +49,20 @@ using Test
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.run_pool(["-h", "--nope"]))
             shown = out * err
-            @test code == 1
+            @test code == 2
             @test occursin("unknown pool option: --nope", shown)
             @test occursin("help pool", shown)
             @test !occursin("--help", shown)
             @test !occursin("Usage", shown)
         end
         let (code, _, _) = _cli_capture(() -> DistSSHRun.run_ride(["/no/such/script.jl"]))
-            @test code == 1
+            @test code == 2
         end
         let (code, out, err) = _cli_capture(
                 () -> DistSSHRun.go(["--ship-tree", "1*h1", "job.jl"])
             )
             shown = out * err
-            @test code == 1
+            @test code == 2
             @test occursin("go: --ship-tree was removed", shown)
             @test occursin("setup ship-tree", shown)
             @test !occursin("SSH preflight", shown)
@@ -68,7 +71,7 @@ using Test
                 () -> DistSSHRun.drive(["--ship-tree", "--head-workers", "1", "s.jl"])
             )
             shown = out * err
-            @test code == 1
+            @test code == 2
             @test occursin("drive: --ship-tree was removed", shown)
             @test !occursin("SSH preflight", shown)
         end
@@ -76,7 +79,7 @@ using Test
                 () -> DistSSHRun.main(["go", "--ship-tree", "1*h1", "job.jl"])
             )
             shown = out * err
-            @test code == 1
+            @test code == 2
             @test occursin("go: --ship-tree was removed", shown)
             @test !occursin("SSH preflight", shown)
         end
@@ -96,8 +99,12 @@ using Test
             @test occursin(string(DistSSHRun.dist_ssh_kit_version()), out * err)
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.up(["--bogus"]))
-            @test code == 1
+            @test code == 2
             @test occursin("Error:", out * err)
+        end
+        let (code, out, err) = _cli_capture(() -> DistSSHRun.up(String[]))
+            @test code == 2
+            @test occursin("Usage", err)
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.up(["add", "1.13", "badhost"]))
             shown = out * err
@@ -106,7 +113,7 @@ using Test
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.progress(["--help"]))
             @test code == 0
-            @test occursin("progress", out * err)
+            @test occursin("progress", out)
         end
         let (code, _, _) = _cli_capture(() -> DistSSHRun.progress(["/no/such/dir"]))
             @test code == 1

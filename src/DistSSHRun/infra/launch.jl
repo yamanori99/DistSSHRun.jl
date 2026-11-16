@@ -14,6 +14,7 @@ const _LAUNCH_UNSET_ENV = (
 const _LAUNCH_LOAD_PATH = "@:@stdlib"
 
 function worker_load_path(; ssh::Bool = false)::String
+    # Remote workers: job packages load via `--project=` only.
     ssh && return _LAUNCH_LOAD_PATH
     extras = String[]
     ap = Base.active_project()
@@ -558,7 +559,7 @@ function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::A
     try
         for i in 1:n
             rank = take_worker_rank()
-            env = worker_env_pairs(project; rank = rank)
+            env = worker_env_pairs(project; ssh = false, rank = rank)
             joined = addprocs(
                 1;
                 exename = julia_bin,
