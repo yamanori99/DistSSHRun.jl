@@ -1127,21 +1127,8 @@ end
             script = joinpath(proj, "job.jl")
             write(script, "1\n")
             rid = "20260101T000000Z-aaaaaa"
-            parent = DistSSHRun.run_identity(proj)
-            digests = Any[
-                Dict{String, Any}(
-                    "path" => "Project.toml",
-                    "blob" => parent["project.sha256"],
-                )
-            ]
-            rec = DistSSHRun.build_deploy_record(
-                proj,
-                :ship_tree;
-                deploy_id = rid,
-                run_id = rid,
-                content_file_digests = digests,
-            )
-            DistSSHRun._set_active_deploy_record!(rec)
+            env = DistSSHRun.resolve_pkg_env(proj)
+            DistSSHRun.write_last_ship_record!(env.env_dir, proj, ["host1"], rid)
             DistSSHRun.set_kit_verbosity!(:quiet)
             try
                 result = DistSSHRun.drive!(
@@ -1155,7 +1142,6 @@ end
                 env = get(prov, "environment", nothing)
                 @test env["verification"] == "verified-against-run-id"
             finally
-                DistSSHRun._clear_active_deploy_record!()
                 DistSSHRun.set_kit_verbosity!(:progress)
             end
         end
