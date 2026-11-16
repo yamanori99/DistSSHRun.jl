@@ -392,7 +392,8 @@ using Test
                 yes = true,
                 quiet = true,
             )
-            @test_throws ArgumentError DistSSHRun.setup!(session, :check)
+            chk = DistSSHRun.setup!(session, :check)
+            @test !chk.ok
             @test_throws ArgumentError DistSSHRun.setup!(session, :delete)
         end
     end

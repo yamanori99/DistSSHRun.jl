@@ -833,6 +833,9 @@ end
 
 """SSH aliases plus `parent` when a token names the kit parent. Does not touch `ENV`."""
 function _setup_bang_host_list(session::DistSSHSession)::Vector{String}
+    for tok in session.tokens
+        reject_setup_worker_count!(tok)
+    end
     return copy(session.hosts)
 end
 

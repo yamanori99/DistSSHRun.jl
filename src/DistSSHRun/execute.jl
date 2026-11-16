@@ -799,6 +799,7 @@ function _execute_detached!(
     worker_include = get(kwargs, :worker_include, false)
     spi_check = get(kwargs, :spi_check, false)
     unsafe_skip_env_digests = get(kwargs, :unsafe_skip_env_digests, false)
+    allow_external_symlinks = get(kwargs, :allow_external_symlinks, false) === true
     _reject_removed_allow_mismatch!(get(kwargs, :allow_mismatch, nothing))
     run_id = get(kwargs, :run_id, nothing)
     if run_id !== nothing
@@ -914,7 +915,7 @@ function _execute_detached!(
         spi_check = spi_check,
         unsafe_skip_env_digests = unsafe_skip_env_digests,
         job_id = job_id_s,
-        allow_external_symlinks = allow_external_symlinks === true,
+        allow_external_symlinks = allow_external_symlinks,
         head_workers = head_workers,
         head_slots = head_slots,
     )
