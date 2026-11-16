@@ -925,7 +925,7 @@ end
     @test hasmethod(
         DistSSHRun.ship_tree!,
         Tuple{String, Vector{String}, String},
-        (:await_inputs)
+        (:await_inputs,),
     )
 end
 
