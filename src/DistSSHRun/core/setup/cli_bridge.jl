@@ -103,9 +103,17 @@ function setup_cli_via_bang!(
         _path_anchor::AbstractString,
         mode::Symbol,
     )::Cint
+    if mode === :cleanup
+        job_id = opts.job_id
+        if job_id === nothing || isempty(strip(String(job_id)))
+            print_err("Error: "; bold = true)
+            println_fatal("setup cleanup requires --job-id JOB_ID (job-scoped since 0.2.0).")
+            println_fatal()
+            return Cint(2)
+        end
+    end
     mode_name = Dict(
         :git_clone => "git-clone",
-        :check => "Check Prerequisites",
         :git_pull => "git-pull",
         :git_sync => "git-sync",
         :ship_tree => "ship-tree",
@@ -146,14 +154,11 @@ function setup_cli_via_bang!(
                 repo = opts.repo_url,
                 julia = opts.julia_path,
             )
-        elseif mode === :check
+        elseif mode === :cleanup
             run_setup_bang_mode!(
                 session,
                 mode;
-                julia = opts.julia_path,
-                run_id = opts.run_id,
-                ignore_julia_version = opts.ignore_julia_version,
-                check_code_sync = true,
+                job_id = String(opts.job_id),
             )
         elseif mode === :git_sync
             run_setup_bang_mode!(
@@ -184,9 +189,6 @@ function setup_cli_via_bang!(
         println_fatal(e.msg)
         return Cint(1)
     end
-    if mode === :check
-        return Cint(result.ok ? 0 : 1)
-    end
     label = get(_SETUP_CLI_FINISH_LABEL, mode, nothing)
     label === nothing && return Cint(result.ok ? 0 : 1)
     ok = finish_host_op!(label, _host_op_counts(result))
@@ -200,7 +202,7 @@ function setup_cli_via_bang!(
                     "  Next: $(cli_m()) setup instantiate --run-id $rid$path_flag",
                 )
                 kit_println(
-                    "        $(cli_m()) setup check --run-id $rid$path_flag",
+                    "        $(cli_m()) doctor --deploy --run-id $rid$path_flag",
                 )
             elseif sel.work_root isa AbstractString
                 flag = _cli_deploy_root_flag(sel.work_root)
@@ -208,7 +210,7 @@ function setup_cli_via_bang!(
                     "  Next: $(cli_m()) setup instantiate$flag",
                 )
                 kit_println(
-                    "        $(cli_m()) setup check$flag",
+                    "        $(cli_m()) doctor --deploy$flag",
                 )
             end
             kit_println()

@@ -210,7 +210,7 @@ using Test
         @test DistSSHRun.no_command_message("map_echo.jl") ==
             "No command (got \"map_echo.jl\"). Kit does not infer go / ride / drive."
         @test DistSSHRun.RUN_SUBCOMMAND_EXPECTATION ==
-            "Expected: setup | up | go | ride | drive | hostinfo | pool | demo | progress"
+            "Expected: setup | doctor | up | go | ride | drive | hostinfo | pool | demo | progress"
         @test DistSSHRun.NO_COMMAND_HINT_LINES == (
             "  go SCRIPT.jl      as-is complete job (timing without rewrite)",
             "  ride … SCRIPT.jl  experimental map / filter",

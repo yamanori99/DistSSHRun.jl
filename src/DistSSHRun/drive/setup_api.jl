@@ -21,13 +21,14 @@ const _SETUP_BANG_MODES = (
 
 Reject setup options the mode does not accept. `extra_files` is only valid
 for `:ship_tree`. This version accepts one path. `run_id` is only valid
-for `:instantiate`, `:check`, and `:runtest`. The `setup` CLI collects flags
+for `:instantiate` and `:runtest`. The `setup` CLI collects flags
 and calls this; it does not apply those rules itself.
 """
 function check_setup_options!(
         mode::Symbol;
         extra_files::Vector{String} = String[],
         run_id::Union{Nothing, AbstractString} = nothing,
+        job_id::Union{Nothing, AbstractString} = nothing,
         allow_dirty::Bool = false,
     )
     allow_dirty && mode !== :git_sync && throw(
@@ -39,13 +40,16 @@ function check_setup_options!(
     length(extra_files) > 1 &&
         throw(ArgumentError("more than one extra file is not yet supported"))
     if run_id !== nothing &&
-            mode !== :instantiate && mode !== :check && mode !== :runtest
+            mode !== :instantiate && mode !== :runtest
         throw(
             ArgumentError(
-                "setup! run_id= only applies to :instantiate, :check, or :runtest",
+                "setup! run_id= only applies to :instantiate or :runtest",
             ),
         )
     end
+    job_id !== nothing && mode !== :cleanup && throw(
+        ArgumentError("setup! job_id= only applies to :cleanup"),
+    )
     return nothing
 end
 public check_setup_options!
@@ -66,9 +70,8 @@ Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup …`.
 | `:instantiate` | `instantiate` | `julia=` (default `"auto"`) |
 | `:juliaup` | `up` | Align Julia via juliaup on `NAME` and/or `parent` (`\$HOME/.juliaup` or Homebrew); confirm unless `session.yes`. Tip if kit parent patch lags channel latest |
 | `:juliaup_update` | `up update` | `juliaup update` on those hosts (no `default`); confirm unless `session.yes` |
-| `:check` | `check` | `ignore_julia_version=`, `check_code_sync=` |
 | `:runtest` | `runtest` | job `Pkg.test()` on remotes; `julia=` |
-| `:cleanup` | `cleanup` | Kill stale workers (no confirm) |
+| `:cleanup` | `cleanup` | Kill tagged workers for `job_id=` (required) |
 | `:prune` | `prune` | `.distssh` (and legacy `.distsshkit`) go/drive/setup/runs leaves. Requires `confirm_path`. `session.yes` does not delete. `older_days=`, `id=` |
 | `:remote_root` | `remote-root` | `remote=` must be absolute (`--deploy-root` on the CLI). Creates that directory only when the parent exists. Confirm unless `session.yes` |
 
@@ -82,7 +85,7 @@ mode rejects `confirm_path`. Multiple modes run in order and stop on the first f
 ```julia
 session = DistSSHSession(workers=["user@h1"], remote="~/proj", yes=true)
 setup!(session, :ship_tree, :instantiate)
-setup!(session, :check; ignore_julia_version=true)
+doctor!(session; deploy=true, ignore_julia_version=true)
 ```
 
 [`sync!`](@ref) / [`instantiate!`](@ref) remain as thin aliases for the common
@@ -93,17 +96,22 @@ function setup!(
         mode::Symbol;
         repo::Union{Nothing, AbstractString} = nothing,
         julia::AbstractString = "auto",
-        ignore_julia_version::Bool = false,
-        check_code_sync::Bool = true,
         older_days::Union{Nothing, Integer} = nothing,
         id::Union{Nothing, AbstractString} = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
+        job_id::Union{Nothing, AbstractString} = nothing,
         confirm_path = nothing,
         allow_external_symlinks::Bool = false,
         extra_files::Vector{String} = String[],
         allow_dirty::Bool = false,
     )::SyncResult
-    check_setup_options!(mode; extra_files = extra_files, run_id = run_id, allow_dirty = allow_dirty)
+    check_setup_options!(
+        mode;
+        extra_files = extra_files,
+        run_id = run_id,
+        job_id = job_id,
+        allow_dirty = allow_dirty,
+    )
     snap = run_id === nothing ? nothing : validate_run_id(run_id)
     _setup_bang_preflight!(session, mode; repo = repo)
     hosts = _setup_bang_host_list(session)
@@ -130,11 +138,10 @@ function setup!(
                 mode;
                 repo = repo,
                 julia = julia,
-                ignore_julia_version = ignore_julia_version,
-                check_code_sync = check_code_sync,
                 older_days = older_days,
                 id = id,
                 run_id = snap,
+                job_id = job_id,
                 bound_plan = bound_plan,
                 allow_external_symlinks = allow_external_symlinks,
                 extra_files = extra_files,
@@ -650,11 +657,10 @@ function _setup_one!(
         mode::Symbol;
         repo::Union{Nothing, AbstractString} = nothing,
         julia::AbstractString = "auto",
-        ignore_julia_version::Bool = false,
-        check_code_sync::Bool = true,
         older_days::Union{Nothing, Integer} = nothing,
         id::Union{Nothing, AbstractString} = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
+        job_id::Union{Nothing, AbstractString} = nothing,
         bound_plan::Union{Nothing, Dict{String, String}} = nothing,
         allow_external_symlinks::Bool = false,
         extra_files::Vector{String} = String[],
@@ -748,39 +754,11 @@ function _setup_one!(
         )
         return _sync_result_from_host_op(raw)
     elseif mode === :check
-        selection_err = nothing
-        work_path = try
-            _project_work_root(
-                hosts, session.project;
-                cli_override = session.remote, run_id = run_id,
-            )
-        catch e
-            e isa ArgumentError || rethrow()
-            selection_err = e
-            session_remote_root(session)
-        end
-        result = check_prerequisites(
-            hosts,
-            julia_path,
-            work_path,
-            session.project;
-            path_anchor = session.project,
-            require_clean_git = false,
-            check_code_sync = check_code_sync,
-            ignore_julia_version = ignore_julia_version,
-        )
-        if !result.ok
-            println_err_after_progress("Prerequisites not met. Fix issues above and retry.")
-            return SyncResult(false, HostResult[]; ok = false, warnings = result.warnings)
-        end
-        if selection_err !== nothing
-            throw(selection_err)
-        end
-        print_ok("All prerequisites met.")
-        kit_println()
-        return SyncResult(false, HostResult[]; ok = true, warnings = result.warnings)
+        throw(ArgumentError(setup_check_removed_message()))
     elseif mode === :cleanup
-        raw = cleanup_remote_workers(hosts)
+        job_id === nothing &&
+            throw(ArgumentError("setup! cleanup requires job_id= (job-scoped since 0.2.0)"))
+        raw = cleanup_remote_workers(hosts, String(job_id))
         return _sync_result_from_host_op(raw)
     elseif mode === :remote_root
         remote = session.remote

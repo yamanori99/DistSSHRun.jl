@@ -404,78 +404,6 @@ function _go_batch_output_dir(
     return _mkdir_unique!(dir)
 end
 
-function _go_host_ssh_hint(host::AbstractString)::String
-    h = String(strip(host))
-    if !contains(h, '@') && occursin(r"^(?:\d{1,3}\.){3}\d{1,3}$", h)
-        return "hint: use user@$h (e.g. root@$h) if SSH defaults to your local username"
-    end
-    return ""
-end
-
-function _go_assert_remote_ready!(host::AbstractString, remote_root::AbstractString)
-    rr = _remote_shell_path_word(remote_root)
-    inner = "test -d $rr && test -f $rr/Project.toml"
-    cmd = _ssh_cmd([ssh_opts()..., _ssh_host_args(String(host), inner)...])
-    out = IOBuffer()
-    err = IOBuffer()
-    proc = run(pipeline(ignorestatus(cmd), stdout = out, stderr = err), wait = true)
-    code = DistSSHBase.shell_status(proc)
-    if code != 0
-        err_text = strip(String(take!(err)))
-        ssh_hint = _go_host_ssh_hint(host)
-        auth_or_conn = code == 255 ||
-            occursin("Permission denied", err_text) ||
-            occursin("Connection refused", err_text) ||
-            occursin("Could not resolve hostname", err_text) ||
-            occursin("No route to host", err_text)
-
-        if auth_or_conn
-            msg = "cannot SSH to $host"
-            !isempty(err_text) && (msg *= ": $(first(split(err_text, '\n')))")
-            !isempty(ssh_hint) && (msg *= "\n  $ssh_hint")
-            throw(ArgumentError(DistSSHBase._append_remote_shell_hint(String(host), code, msg)))
-        end
-
-        msg = "remote project not ready on $host ($remote_root).\n" *
-            "Run setup first (pick one deploy path), then instantiate:\n" *
-            "  ship:   julia --project=. -m DistSSHKit setup ship-tree $(setup_cli_host_token(host))\n" *
-            "  git:    julia --project=. -m DistSSHKit setup git-clone $(setup_cli_host_token(host))\n" *
-            "          (later updates: setup git-sync $(setup_cli_host_token(host)))\n" *
-            "  then:   julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host))\n" *
-            "  then:   julia --project=. -m DistSSHKit go --run-id ID …\n" *
-            "Or from Julia: setup!(session, :ship_tree, :instantiate)\n" *
-            "  (or :git_clone, :instantiate; repo=\"…\" for clone; later :git_sync)\n" *
-            "Set DISTRIBUTED_REMOTE_PROJECT_ROOT if the remote path is not the default."
-        !isempty(ssh_hint) && (msg *= "\n  $ssh_hint")
-        throw(ArgumentError(DistSSHBase._append_remote_shell_hint(String(host), code, msg)))
-    end
-
-    deps_err = probe_remote_project_deps(host, remote_root)
-    if deps_err !== nothing
-        throw(
-            ArgumentError(
-                "remote project deps not ready on $host ($remote_root): $deps_err\n" *
-                    "Fix: julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host))\n" *
-                    "  (or setup!(session, :instantiate) after :ship_tree / :git_clone)",
-            )
-        )
-    end
-    return nothing
-end
-
-function _go_assert_remotes_ready!(hosts::AbstractVector{<:AbstractString}, remote_root::AbstractString)
-    errs = String[]
-    for h in hosts
-        try
-            _go_assert_remote_ready!(h, remote_root)
-        catch e
-            push!(errs, sprint(showerror, e))
-        end
-    end
-    isempty(errs) && return nothing
-    throw(ArgumentError(join(errs, "\n\n")))
-end
-
 function _go_julia_exe()::String
     return resolve_controller_julia("auto")
 end
@@ -1273,7 +1201,7 @@ function _go_run!(
             rr = _project_work_root(
                 child_hosts, proj; cli_override = remote, run_id = snap_arg,
             )
-            _go_assert_remotes_ready!(child_hosts, rr)
+            doctor_launch_assert_hosts!(child_hosts, rr)
             rr
         end
 
