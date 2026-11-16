@@ -1,13 +1,24 @@
-# Typed launch outcomes (public surface frozen for 0.2.0).
+# Typed launch outcomes (public surface frozen for 0.2.0 cluster manager).
 
-"""Why a planned worker did not become usable (join or load)."""
+"""
+Why a planned worker did not become usable (join or load).
+
+[`launch_report_failures`](@ref) and provenance serialize these values as
+strings (`Joined`, `FailedToConnect`, `FailedToLoad`).
+"""
 @enum WorkerLaunchOutcome begin
     Joined
     FailedToConnect
     FailedToLoad
 end
 
-"""One host (or local head) where planned workers did not all become usable."""
+"""
+One host (or local head) where planned workers did not all become usable.
+
+Returned by [`launch_report_failures`](@ref). Field names are stable for 0.2.0:
+`host`, `requested`, `joined`, `outcome`, `reason`. The same shape is written
+under `provenance.launch.failures` in controller `run.toml`.
+"""
 struct HostLaunchFailure
     host::String
     requested::Int
@@ -19,8 +30,13 @@ end
 """
 Summary of a worker launch: planned total, joined total, and per-host failures.
 
-Field access uses [`launch_report_planned`](@ref) and friends. Do not rely on
-struct positional construction; it is not public API.
+Read counts with [`launch_report_planned`](@ref), [`launch_report_joined`](@ref),
+and [`launch_report_usable`](@ref); list rows with [`launch_report_failures`](@ref).
+Do not rely on positional `LaunchReport(...)` construction.
+
+The 0.2.0 cluster manager and controller provenance use the same field names as
+[`launch_report_*`](@ref) accessors: `planned_workers`, `joined_workers`, and
+`failures` (internal storage only — prefer the accessors).
 """
 struct LaunchReport
     planned_workers::Int
@@ -101,3 +117,5 @@ function enforce_launch_contract!(report::LaunchReport; best_effort::Bool)::Laun
     launch_report_usable(report) || throw(LaunchIncompleteError(report))
     return report
 end
+
+public HostLaunchFailure
