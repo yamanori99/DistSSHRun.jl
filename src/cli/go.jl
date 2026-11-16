@@ -30,71 +30,62 @@ end
 include(joinpath(@__DIR__, "go", "_using.jl"))
 
 function go_main()::Cint
-    project_root = cli_project_root(@__DIR__)
-    path_anchor = DistSSHRun.canonical_local_path(project_root)
-    original_args = copy(ARGS)
-    parsed = try
-        parse_go_args(ARGS)
-    catch e
-        if e isa ArgumentError
-            DistSSHRun.print_cli_error(e.msg)
-            return Cint(1)
+    return DistSSHRun.DistSSHBase.with_cli_exit() do
+        project_root = cli_project_root(@__DIR__)
+        path_anchor = DistSSHRun.canonical_local_path(project_root)
+        original_args = copy(ARGS)
+        parsed = DistSSHRun.DistSSHBase.cli_parse(() -> parse_go_args(ARGS))
+        if parsed.show_version
+            println_kit_version()
+            return Cint(0)
         end
-        rethrow()
-    end
-    if parsed.show_version
-        println_kit_version()
-        return 0
-    end
-    if parsed.help
-        show_go_usage()
-        return 0
-    end
-    # No script → same as drive with no args: show the command overview.
-    if parsed.script_path === nothing
-        show_go_usage()
-        return 0
-    end
-    diag = DistSSHRun.finish_run_job_diagnostics!(
-        parsed;
-        command = :go,
-        project = project_root,
-        hosts = parsed.hosts,
-        worker_tokens = host_tokens(parsed; kind = :go),
-    )
-    diag !== nothing && return Cint(diag)
-    yes = parsed.cli_session.yes || kit_noninteractive()
-    kw = execute_kwargs_from_parsed(parsed; kind = :go)
-    result = try
-        go!(
-            parsed.script_path,
-            host_tokens(parsed; kind = :go);
-            head_slots = parsed.cli_session.head_slots,
+        if parsed.help
+            return DistSSHRun.DistSSHBase.cli_help_stdout(show_go_usage)
+        end
+        if parsed.script_path === nothing
+            return DistSSHRun.DistSSHBase.cli_required_else_help(show_go_usage)
+        end
+        diag = DistSSHRun.finish_run_job_diagnostics!(
+            parsed;
+            command = :go,
             project = project_root,
-            quiet = kw[:quiet],
-            verbosity = kw[:verbosity],
-            yes = yes,
-            args = kw[:args],
-            path_anchor = path_anchor,
-            output_dir = kw[:output_dir],
-            hosts_file = nothing,
-            julia = kw[:julia],
-            unsafe_skip_env_digests = get(parsed, :unsafe_skip_env_digests, false),
-            repeat = get(kw, :repeat, nothing),
-            run_id = get(parsed, :run_id, nothing),
-            remote = get(parsed, :deploy_root, nothing),
-            hint_surface = :cli,
-            original_args = original_args,
+            hosts = parsed.hosts,
+            worker_tokens = host_tokens(parsed; kind = :go),
         )
-    catch e
-        if e isa ArgumentError
-            DistSSHRun._report_manifest_refusal(e) || DistSSHRun.print_cli_error(e.msg)
-            return Cint(1)
+        diag !== nothing && return Cint(diag)
+        yes = parsed.cli_session.yes || kit_noninteractive()
+        kw = execute_kwargs_from_parsed(parsed; kind = :go)
+        result = try
+            go!(
+                parsed.script_path,
+                host_tokens(parsed; kind = :go);
+                head_slots = parsed.cli_session.head_slots,
+                project = project_root,
+                quiet = kw[:quiet],
+                verbosity = kw[:verbosity],
+                yes = yes,
+                args = kw[:args],
+                path_anchor = path_anchor,
+                output_dir = kw[:output_dir],
+                hosts_file = nothing,
+                julia = kw[:julia],
+                unsafe_skip_env_digests = get(parsed, :unsafe_skip_env_digests, false),
+                repeat = get(kw, :repeat, nothing),
+                run_id = get(parsed, :run_id, nothing),
+                remote = get(parsed, :deploy_root, nothing),
+                hint_surface = :cli,
+                original_args = original_args,
+            )
+        catch e
+            if e isa ArgumentError
+                DistSSHRun._report_manifest_refusal(e) || DistSSHRun.print_cli_error(e.msg)
+                return Cint(1)
+            end
+            rethrow()
         end
-        rethrow()
+        report_go_errors(result)
+        return result.ok ? Cint(0) : Cint(1)
     end
-    report_go_errors(result)
-    return result.ok ? 0 : 1
 end
 
 if get(ENV, "DIST_SSH_KIT_CLI_INCLUDE", "") != "1" &&

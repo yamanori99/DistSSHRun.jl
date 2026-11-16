@@ -108,9 +108,24 @@ using DistSSHRun
 go!("job.jl")
 ```
 
+## CLI conventions and exit codes
+
+Commands follow Rust [clap](https://docs.rs/clap)
+[`Command::arg_required_else_help`](https://docs.rs/clap/latest/clap/struct.Command.html#method.arg_required_else_help):
+
+- No arguments on a command that needs operands or flags → full help on **stderr**, exit **2**
+- `--help` / `-h` → same help on **stdout**, exit **0**
+- Usage errors → **stderr**, exit **2**
+- Runtime failures → non-zero exit (typically **1**; Ctrl-C **130**, EPIPE **141**, optional worker heartbeat **75**)
+
+`hostinfo`, `pool`, and `setup requirements` keep a meaningful bare invocation.
+
+Details: [CLI](https://yamanori99.github.io/DistSSHRun.jl/stable/cli/).
+
 ## Documentation
 
 - [Home](https://yamanori99.github.io/DistSSHRun.jl/stable/)
+- [CLI](https://yamanori99.github.io/DistSSHRun.jl/stable/cli/)
 - [API](https://yamanori99.github.io/DistSSHRun.jl/stable/api/)
 - [DistSSHKit](https://yamanori99.github.io/DistSSHKit.jl/stable/)
 - Versioning and releases: [DistSSHKit manual, Releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md)

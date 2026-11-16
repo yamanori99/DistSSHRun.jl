@@ -65,7 +65,7 @@ public current_project_file,
 public MachinePlacement, parse_machine_token
 public parse_placement_token, posix_quote, remote_env_project_root, resolve_remote_julia
 public resolve_remote_project_root, shell_status, shield_sigint, with_cli_entry, without_cancel
-public CliUsageError, cli_parse, with_cli_exit
+public CLI_EXIT_USAGE, CliUsageError, cli_help_stdout, cli_parse, cli_required_else_help, with_cli_exit
 public wait_seconds
 public tool_require
 public src_component_digest

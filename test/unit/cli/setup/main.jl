@@ -29,7 +29,7 @@ using Test
 
     let (code, out, err) = _setup_capture(["--juliaup", "host1"])
         shown = out * err
-        @test code == 1
+        @test code == 2
         @test occursin("setup --juliaup was removed", shown)
         @test occursin("up add CHANNEL", shown)
         @test occursin("help up", shown)
@@ -37,34 +37,34 @@ using Test
     end
     let (code, out, err) = _setup_capture(["--juliaup-update", "host1"])
         shown = out * err
-        @test code == 1
+        @test code == 2
         @test occursin("setup --juliaup-update was removed", shown)
         @test occursin("up update", shown)
     end
     let (code, out, err) = _setup_capture(["check", "--remote-dir", "/tmp/App.jl", "host1"])
         shown = out * err
-        @test code == 1
+        @test code == 2
         @test occursin("setup --remote-dir was removed", shown)
         @test occursin("--deploy-root", shown)
         @test occursin("help setup", shown)
     end
     let (code, out, err) = _setup_capture(["check", "--remote-path", "/tmp/App.jl", "host1"])
         shown = out * err
-        @test code == 1
+        @test code == 2
         @test occursin("setup --remote-path was removed", shown)
         @test occursin("--deploy-root", shown)
         @test !occursin("SSH preflight", shown)
     end
     let (code, out, err) = _setup_capture(["--ship-tree", "host1"])
         shown = out * err
-        @test code == 1
+        @test code == 2
         @test occursin("setup --ship-tree was removed", shown)
         @test occursin("setup ship-tree", shown)
         @test !occursin("SSH preflight", shown)
     end
     let (code, out, err) = _setup_capture(["--not-a-flag"])
         shown = out * err
-        @test code == 1
+        @test code == 2
         @test occursin("unknown setup option: --not-a-flag", shown)
         @test occursin("help setup", shown)
         @test !occursin("--help", shown)
@@ -72,16 +72,16 @@ using Test
     end
     let (code, out, err) = _setup_capture(["--help", "check", "sync"])
         shown = out * err
-        @test code == 1
+        @test code == 2
         @test occursin("setup sync was removed", shown)
         @test occursin("setup git-sync", shown)
         @test occursin("help setup", shown)
         @test !occursin("--help", shown)
     end
-    let (code, out, _) = _setup_capture(String[])
-        @test code == 0
-        @test occursin("Recommended", out)
-        @test occursin("ship-tree", out)
+    let (code, out, err) = _setup_capture(String[])
+        @test code == 2
+        @test occursin("ship-tree", err)
+        @test isempty(out)
     end
     let (code, out, _) = _setup_capture(["requirements"])
         @test code == 0
@@ -89,12 +89,12 @@ using Test
     end
     let (code, out, err) = _setup_capture(["--requirements"])
         shown = out * err
-        @test code == 1
+        @test code == 2
         @test occursin("setup --requirements was removed", shown)
         @test occursin("setup requirements", shown)
     end
     let (code, out, err) = _setup_capture(["delete", "parent"])
-        @test code == 1
+        @test code == 2
         @test occursin("only for up", out * err)
     end
     let (code, out, err) = _setup_capture(["delete", "host1"])
@@ -109,7 +109,7 @@ using Test
             _setup_capture(["delete", "--yes", "host1"])
         end
         combined = out * err
-        @test code == 1
+        @test code == 2
         @test occursin("do not authorize", combined)
         @test occursin("--confirm-path", combined)
         @test occursin("help setup", combined)
@@ -120,7 +120,7 @@ using Test
             ["delete", "--yes", "--confirm-path", "~/nope", "host1"],
         )
         combined = out * err
-        @test code == 1
+        @test code == 2
         @test occursin("does not match", combined)
         @test occursin("help setup", combined)
         @test !occursin("--help", combined)

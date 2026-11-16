@@ -296,7 +296,7 @@ function _demo_install_args(
     return (dest = dest, force = force, family = fam)
 end
 
-function show_demo_usage(io::IO = stdout)
+function show_demo_usage(; io::IO = stdout)
     print_help_chrome(cli_heading("demo"); io = io)
     print_help_section("Usage"; io = io)
     print_help_lines(
@@ -358,53 +358,57 @@ Install or list bundled demos. See [`(@main)`](@ref).
     julia --project=. distsshkit_demos/without_kit/pipeline_pi.jl
 """
 function demo(args::Vector{String} = copy(ARGS))::Cint
-    if isempty(args) || args[1] in ("-h", "--help", "help")
-        show_demo_usage()
-        return 0
-    end
-    sub, rest = args[1], args[2:end]
-    if sub == "list"
-        for name in list_demos()
-            path = demo_script(name)
-            path === nothing && continue
-            println(name, "\t", path)
+    return DistSSHBase.with_cli_exit() do
+        if isempty(args) || args[1] in ("-h", "--help", "help")
+            return DistSSHBase.cli_help_stdout(show_demo_usage)
         end
-        return 0
-    elseif sub == "install"
-        try
-            dest, force, family = _demo_install_args(rest)
-            if isempty(list_demos())
-                print_cli_error("No demo scripts found in package ($(demos_dir()))")
-                return 1
-            end
-            result = install_demos(dest; family = family, force = force, surface = :cli)
-            for path in result.installed
-                println("wrote ", path)
-            end
-            for path in result.skipped
-                println("skipped (already exists, use --force to overwrite): ", path)
-            end
-            dest_demos = joinpath(dest, DEMO_INSTALL_DIR)
-            rel_demos = relpath(dest_demos, dest)
-            println()
-            println("Demos are in ", dest_demos, "; open and edit them, then run for example:")
-            if family == "with_kit"
-                println("  $(cli_m_project()) drive parent:2 $rel_demos/with_kit/square_file.jl")
-                println("  julia --project=. $rel_demos/with_kit/pipeline_square.jl")
-            elseif family == "ride"
-                println("  $(cli_m_project()) ride parent:2 $rel_demos/ride/map_echo.jl")
-            else
-                println("  julia --project=. $rel_demos/without_kit/pipeline_pi.jl")
-                println("  $(cli_m_project()) go $rel_demos/without_kit/pi_file.jl")
+        sub, rest = args[1], args[2:end]
+        if sub == "list"
+            for name in list_demos()
+                path = demo_script(name)
+                path === nothing && continue
+                println(name, "\t", path)
             end
             return 0
-        catch err
-            print_cli_error(sprint(showerror, err))
-            return 1
+        elseif sub == "install"
+            try
+                dest, force, family = _demo_install_args(rest)
+                if isempty(list_demos())
+                    print_cli_error("No demo scripts found in package ($(demos_dir()))")
+                    return 1
+                end
+                result = install_demos(dest; family = family, force = force, surface = :cli)
+                for path in result.installed
+                    println("wrote ", path)
+                end
+                for path in result.skipped
+                    println("skipped (already exists, use --force to overwrite): ", path)
+                end
+                dest_demos = joinpath(dest, DEMO_INSTALL_DIR)
+                rel_demos = relpath(dest_demos, dest)
+                println()
+                println("Demos are in ", dest_demos, "; open and edit them, then run for example:")
+                if family == "with_kit"
+                    println("  $(cli_m_project()) drive parent:2 $rel_demos/with_kit/square_file.jl")
+                    println("  julia --project=. $rel_demos/with_kit/pipeline_square.jl")
+                elseif family == "ride"
+                    println("  $(cli_m_project()) ride parent:2 $rel_demos/ride/map_echo.jl")
+                else
+                    println("  julia --project=. $rel_demos/without_kit/pipeline_pi.jl")
+                    println("  $(cli_m_project()) go $rel_demos/without_kit/pi_file.jl")
+                end
+                return 0
+            catch err
+                print_cli_error(sprint(showerror, err))
+                return 1
+            end
+        else
+            throw(
+                DistSSHBase.CliUsageError(
+                    "Unknown demo command: $sub (try: demo install with_kit, demo list, help demo)",
+                )
+            )
         end
-    else
-        print_cli_error("Unknown demo command: $sub (try: demo install with_kit, demo list, help demo)")
-        return 1
     end
 end
 
