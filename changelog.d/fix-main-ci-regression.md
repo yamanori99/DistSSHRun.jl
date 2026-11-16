@@ -4,3 +4,5 @@ category: fixed
 - Split `DistSSHShip` tests for JETLS include resolution.
 - `apply_shared_cli_flags!` mirrors `session.yes` into `kit_noninteractive` so a prior `-y` cannot skip later setup confirmations.
 - Local-only `ride!` resets the launch rank plan and runs worker init like drive (fixes `take_worker_rank` exhaustion and empty worker maps).
+- Remote instantiate `-e` script wraps deploy-record lookup in a `begin` block for Julia 1.13 soft scope; ship-tree instantiate still enforces Manifest send rules.
+- `go` remote slot shells seed a rank when the launch plan is empty.
