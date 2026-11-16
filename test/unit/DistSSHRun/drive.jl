@@ -571,7 +571,7 @@ end
             end
             @test err isa ArgumentError
             @test occursin("driver not found", sprint(showerror, err))
-            @test occursin("-m DistSSHKit demo install", sprint(showerror, err))
+            @test occursin("install_demos", sprint(showerror, err))
         end
     end
 
@@ -1093,6 +1093,9 @@ end
             end
             _sync_test_project_manifest!(app)
             @test occursin("path = \"../Bar\"", read(joinpath(app, "Project.toml"), String))
+            snap_id = "20260101T000000Z-aaaaaa"
+            snap_env = DistSSHRun.resolve_pkg_env(app)
+            DistSSHRun.write_last_ship_record!(snap_env.env_dir, app, ["host1"], snap_id)
             script = joinpath(app, "job.jl")
             marker = joinpath(root, "RAN")
             write(script, "write($(repr(marker)), \"yes\")\n")
@@ -1102,7 +1105,7 @@ end
                         DistSSHRun.drive!(
                             script, String[]; head_workers = 1,
                             project = app,
-                            run_id = "20260101T000000Z-aaaaaa",
+                            run_id = snap_id,
                             quiet = true,
                             enable_log = false
                         )
