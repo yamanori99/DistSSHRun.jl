@@ -92,7 +92,7 @@ end
             @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
             @test DistSSHRun.session_remote_root(session) == "/remote/App.jl"
             @test DistSSHRun.kit_output_quiet()
-            @test DistSSHRun.kit_noninteractive()
+            @test !DistSSHRun.kit_noninteractive()
         end
         _with_tempdir() do tmp
             delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
@@ -570,7 +570,7 @@ end
             end
             @test err isa ArgumentError
             @test occursin("driver not found", sprint(showerror, err))
-            @test occursin("DistSSHRun.install_demos(; family=", sprint(showerror, err))
+            @test occursin("-m DistSSHKit demo install", sprint(showerror, err))
         end
     end
 
