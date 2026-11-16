@@ -73,11 +73,10 @@ function kit_session_from_config(config::PipelineConfig)::DistSSHSession
         quiet = config.quiet,
         verbosity = config.verbosity,
     )
-    cli = default_kit_cli_session()
+    cli = session.cli_session
     cli.quiet = config.quiet
     config.verbosity !== nothing && (cli.verbosity = config.verbosity)
-    session.cli_session = cli
-    apply_shared_cli_flags!(session.cli_session)
+    apply_shared_cli_flags!(cli)
     session.quiet = session.cli_session.quiet
     session.verbosity = session.cli_session.verbosity
     return session

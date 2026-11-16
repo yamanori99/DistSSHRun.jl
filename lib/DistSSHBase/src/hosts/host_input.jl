@@ -121,6 +121,14 @@ function read_machine_file_lines(path::AbstractString; surface::Symbol = :cli)::
     for (lineno, line) in enumerate(readlines(p))
         s = strip(line)
         (isempty(s) || startswith(s, '#')) && continue
+        if occursin(r"\bbind\s*=", s)
+            throw(
+                ArgumentError(
+                    "$(p):$(lineno): per-host bind is not supported in a machine file; "
+                        * "use a TOML hosts file with `bind` on `[[hosts]]`",
+                ),
+            )
+        end
         try
             parse_machine_token(s)
         catch e
@@ -147,9 +155,17 @@ function read_legacy_hosts_file_lines(path::AbstractString; surface::Symbol = :c
     p = canonical_local_path(path)
     isfile(p) || throw(ArgumentError(explain_hosts_file_not_found(p; surface = surface)))
     out = String[]
-    for line in readlines(p)
+    for (lineno, line) in enumerate(readlines(p))
         s = strip(line)
         (isempty(s) || startswith(s, '#')) && continue
+        if occursin(r"\bbind\s*=", s)
+            throw(
+                ArgumentError(
+                    "$(p):$(lineno): per-host bind is not supported in a legacy hosts file; "
+                        * "use a TOML hosts file with `bind` on `[[hosts]]`",
+                ),
+            )
+        end
         parse_machine_token(s)
         push!(out, s)
     end

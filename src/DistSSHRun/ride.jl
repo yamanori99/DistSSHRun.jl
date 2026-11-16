@@ -672,6 +672,7 @@ function ride!(
         unsafe_skip_env_digests = false,
         unsafe_expose_port::Bool = false,
         unsafe_all_to_all::Bool = false,
+        hosts_file::Union{Nothing, AbstractString} = nothing,
         bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
         allow_mismatch = nothing,
     )::RideResult
@@ -709,11 +710,16 @@ function ride!(
             cli_unsafe_expose_port = unsafe_expose_port ? true : nothing,
             cli_unsafe_all_to_all = unsafe_all_to_all ? true : nothing,
         )
+        resolved_bind = resolve_launch_bind_overrides(;
+            hosts_file = hosts_file,
+            bind_overrides = bind_overrides,
+            surface = hint_surface,
+        )
         return with_run_unsafe_options!(cfg) do
             return _ride_run!(
                 path, julia_s, tokens, args, spi_check, output_dir, project, julia,
                 remote, validated_run_id, best_effort, head_workers, hint_surface,
-                inherited_run, bind_overrides,
+                inherited_run, resolved_bind,
             )
         end
     finally
