@@ -214,14 +214,12 @@ using Test
         @test !_tty_bar_line(finals[1])
         @test !occursin("[K", finals[1])
         # Flattened log may list many `check` frames; the live screen never stacks them.
-        @test count(_tty_spinner_bar_line, check_lines) >= 0
+        @test count(_tty_spinner_bar_line, check_lines) >= 1
         @test _tty_live_spinner_bar_peak(check_tty) <= 1
         ssh_at = findfirst("ssh not found in PATH", check_tty)
         pre_at = findfirst("Prerequisites not met", check_tty)
         @test ssh_at !== nothing && pre_at !== nothing && first(ssh_at) < first(pre_at)
-        @test occursin("Checking prerequisites", check_tty) ||
-            occursin("doctor", lowercase(check_tty)) ||
-            occursin("deploy", lowercase(check_tty))
+        @test occursin("Checking prerequisites", check_tty)
         _assert_tty_progress_payload(check_tty)
 
         # Two-host SSH fail: each fail line names its host; reason stays on TTY.
