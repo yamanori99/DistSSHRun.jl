@@ -72,17 +72,8 @@ function DistSSHSession(;
             push!(tokens, line)
         end
     end
-    placement = String[]
-    include_parent = include_parent_for_size
-    for raw in tokens
-        if is_parent_host_name(raw)
-            include_parent = true
-        else
-            push!(placement, raw)
-        end
-    end
-    parsed = parse_worker_tokens(placement; local_workers = lw)
-    include_parent = include_parent || parsed.parent_workers > 0
+    parsed = parse_worker_tokens(tokens; local_workers = lw)
+    include_parent = include_parent_for_size || parsed.parent_workers > 0
     proj = canonical_local_path(project)
     rr = remote === nothing ? nothing : String(strip(String(remote)))
     rr !== nothing && isempty(rr) && (rr = nothing)
