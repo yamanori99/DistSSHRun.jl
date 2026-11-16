@@ -18,7 +18,7 @@ using Test
     ctrl = DistSSHRun.kit_head_host_label()
     status_cmd = _kit_cli_cmd(["up", "status", "parent", "host1"])
     update_cmd = _kit_cli_cmd(["up", "update", "parent", "host1"])
-    check_cmd = _kit_cli_cmd(["doctor", "--deploy", "parent"])
+    check_cmd = _kit_cli_cmd(["doctor", "--deploy", "host1"])
     check2_cmd = _kit_cli_cmd(["doctor", "--deploy", "host1", "host2"])
     preflight_cmd = _kit_cli_cmd(["up", "status", "host1"])
     size_cmd = _kit_cli_cmd(["hostinfo"])
