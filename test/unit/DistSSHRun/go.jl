@@ -99,8 +99,8 @@ using Dates
         @test_throws ArgumentError DistSSHRun._go_plan_slots(["1*h1"]; total = 2)
         @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; total = 0)
         @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; total = true)
-        @test occursin("root@", DistSSHRun._go_host_ssh_hint("192.0.2.11"))
-        @test isempty(DistSSHRun._go_host_ssh_hint("root@192.0.2.11"))
+        @test occursin("root@", DistSSHRun._doctor_launch_host_ssh_hint("192.0.2.11"))
+        @test isempty(DistSSHRun._doctor_launch_host_ssh_hint("root@192.0.2.11"))
     end
 
     @testset "_go_script_relpath" begin
@@ -209,6 +209,7 @@ using Dates
     # The slot `ssh` is SIGTERM'd and never writes `go.exitcode`. `scp` exits 0
     # and leaves that file absent, so the slot keeps `128 + signal`.
     @testset "_go_run_remote_slot! signal without go.exitcode" begin
+        DistSSHRun.reset_launch_rank_plan!([1])
         _with_tempdir() do dir
             proj = joinpath(dir, "proj")
             mkdir(proj)
@@ -382,6 +383,7 @@ using Dates
     end
 
     @testset "_go_remote_slot_shell_inner" begin
+        DistSSHRun.reset_launch_rank_plan!(collect(1:8))
         inner = DistSSHRun._go_remote_slot_shell_inner(
             "~/proj",
             "demos/output/go_sim/root@192.0.2.10-1",
@@ -526,6 +528,7 @@ using Dates
     end
 
     @testset "job_id slot programfile + ARGS" begin
+        DistSSHRun.reset_launch_rank_plan!([1])
         _with_tempdir() do d
             write(joinpath(d, "Project.toml"), "[deps]\n")
             mark = joinpath(d, "RAN")
