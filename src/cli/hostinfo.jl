@@ -45,12 +45,7 @@ function hostinfo_main()::Cint
         DistSSHRun.println_kit_version()
         return 0
     end
-    tokens = String[]
-    opts.include_parent && push!(tokens, "parent")
-    for h in opts.hosts
-        push!(tokens, "$h")
-    end
-    if isempty(tokens)
+    if !opts.include_parent && isempty(opts.hosts)
         show_hostinfo_usage()
         return 0
     end
@@ -61,7 +56,8 @@ function hostinfo_main()::Cint
 
     session = DistSSHRun.DistSSHSession(
         project = project_root,
-        workers = tokens,
+        workers = opts.hosts,
+        include_parent_for_size = opts.include_parent,
         quiet = opts.cli_session.quiet,
         verbosity = opts.cli_session.verbosity,
         yes = opts.cli_session.yes,

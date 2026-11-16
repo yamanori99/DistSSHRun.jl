@@ -97,8 +97,12 @@ function parse_pool_args(args::Vector{String})
                 arg == "--parent-gb" || arg == "--master-gb"
             throw(ArgumentError("pool: worker-count sizing was removed; pool reports cores and RAM only"))
         elseif !startswith(arg, "-")
-            let p = parse_placement_token(arg)
-                push!(hosts, p.name)
+            if is_parent_host_name(String(arg))
+                include_parent = true
+            else
+                let p = parse_placement_token(arg)
+                    push!(hosts, p.name)
+                end
             end
             cli_consume!(c)
         else

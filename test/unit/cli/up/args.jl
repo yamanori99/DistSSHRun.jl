@@ -43,6 +43,9 @@ using Test
     @test occursin("up default 1.13", txt)
     @test occursin("up update", txt)
     @test occursin("up status", txt)
+    @test !occursin("parent[:N]", txt)
+    @test !occursin("NAME[:N]", txt)
+    @test_throws ArgumentError parse_up_args(["status", "parent:2"])
     err = try
         parse_up_args(["host1"])
         ""

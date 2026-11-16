@@ -34,7 +34,7 @@ script = joinpath(@__DIR__, "pi_file.jl")
 project = @__DIR__
 
 # Local-only: two concurrent full-job slots on this machine (not Distributed workers).
-result = go!(script; local_workers = 2, args = ARGS, project = project)
+result = go!(script; local_slots = 2, args = ARGS, project = project)
 
 # First-time remotes: setup!, then go!.
 #

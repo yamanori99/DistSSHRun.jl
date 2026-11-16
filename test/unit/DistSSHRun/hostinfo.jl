@@ -156,7 +156,10 @@ end
     @test occursin("Hostinfo:", nontty)
     @test occursin("Memory:", nontty)
 
-    @test_throws ArgumentError DistSSHRun.parse_hostinfo_args(["parent", "host1"])
+    let r = DistSSHRun.parse_hostinfo_args(["parent", "host1"])
+        @test r.include_parent
+        @test r.hosts == ["host1"]
+    end
     @test_throws ArgumentError DistSSHRun.parse_hostinfo_args(["--gb-per-worker", "1.5", "parent"])
     help = sprint(io -> DistSSHRun.show_hostinfo_usage(; io = io))
     @test occursin("hostinfo", help)
@@ -167,29 +170,31 @@ end
     _with_tempdir() do tmp
         write(joinpath(tmp, "Project.toml"), "name = \"HostinfoHost\"\n")
         mktemp() do out_path, out_io
+            parent = DistSSHRun.PARENT_HOST_NAME
             code = redirect_stdout(out_io) do
                 redirect_stderr(devnull) do
-                    DistSSHRun.run_hostinfo(["localhost"])
+                    DistSSHRun.run_hostinfo([parent])
                 end
             end
             flush(out_io)
             out = read(out_path, String)
             @test code == 0
-            @test occursin("localhost", out)
+            @test occursin(parent, out)
             @test occursin("Hostinfo:", out)
             @test occursin("Status:", out)
         end
         mktemp() do out_path, out_io
+            parent = DistSSHRun.PARENT_HOST_NAME
             code = redirect_stdout(out_io) do
                 redirect_stderr(devnull) do
-                    DistSSHRun.run_hostinfo(["--quiet", "localhost"])
+                    DistSSHRun.run_hostinfo(["--quiet", parent])
                 end
             end
             flush(out_io)
             out = read(out_path, String)
             @test code == 0
             @test occursin("Hostinfo:", out)
-            @test occursin("localhost", out)
+            @test occursin(parent, out)
             @test occursin("Status:", out)
         end
     end

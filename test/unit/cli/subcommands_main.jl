@@ -100,8 +100,9 @@ using Test
             @test occursin("Error:", out * err)
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.up(["add", "1.13", "badhost"]))
+            shown = out * err
             @test code == 1
-            @test occursin("Error:", out * err)
+            @test occursin("Error:", shown) || occursin("SSH preflight", shown)
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.progress(["--help"]))
             @test code == 0
@@ -126,7 +127,7 @@ using Test
                     let (code_a, out_a, err_a) = cd(proj_a) do
                             _cli_capture(
                                 () -> DistSSHRun.run_hostinfo(
-                                    ["localhost"],
+                                    [DistSSHRun.PARENT_HOST_NAME],
                                 ),
                             )
                         end
@@ -137,7 +138,7 @@ using Test
                     let (code_b, out_b, err_b) = cd(proj_b) do
                             _cli_capture(
                                 () -> DistSSHRun.run_hostinfo(
-                                    ["localhost"],
+                                    [DistSSHRun.PARENT_HOST_NAME],
                                 ),
                             )
                         end

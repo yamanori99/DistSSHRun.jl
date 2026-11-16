@@ -144,8 +144,8 @@ using Test
             @test via[1] == 0
             @test via == direct
         end
-        let via = _main_capture(["help", "go", "--local-workers", "1", "--help"])
-            direct = _main_capture(["go", "--local-workers", "1", "--help"])
+        let via = _main_capture(["help", "go", "--local-slots", "1", "--help"])
+            direct = _main_capture(["go", "--local-slots", "1", "--help"])
             @test via[1] == 0
             @test via == direct
             @test occursin("-h, --help", via[2])
@@ -276,13 +276,13 @@ using Test
                 write(joinpath(proj_b, "Project.toml"), "name = \"ProjBeta\"\n")
 
                 let (code_a, out_a, err_a) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_a) do
-                        _main_capture(["hostinfo", "localhost"])
+                        _main_capture(["hostinfo", DistSSHRun.PARENT_HOST_NAME])
                     end
                     @test code_a == 0
                     @test occursin("ProjAlpha", out_a * err_a)
                 end
                 let (code_b, out_b, err_b) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_b) do
-                        _main_capture(["hostinfo", "localhost"])
+                        _main_capture(["hostinfo", DistSSHRun.PARENT_HOST_NAME])
                     end
                     @test code_b == 0
                     @test occursin("ProjBeta", out_b * err_b)
@@ -324,11 +324,12 @@ using Test
             end
             mktempdir() do dir
                 missing = joinpath(dir, "missing.jl")
-                @test_throws ErrorException redirect_stdout(devnull) do
+                code = redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
-                        DistSSHRun.main(["drive", missing])
+                        DistSSHRun.main(["drive", "--local-workers", "1", missing])
                     end
                 end
+                @test code != 0
                 @test !haskey(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
             end
             let (code, out, _) = _capture_main(["--version"])

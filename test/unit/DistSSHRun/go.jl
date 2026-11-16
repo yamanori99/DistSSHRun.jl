@@ -635,7 +635,8 @@ using Dates
             collect_mark = findfirst("step kind=go label=collect", prog)
             @test run_mark !== nothing && collect_mark !== nothing
             @test first(run_mark) < first(collect_mark)
-            run_span = findlast("label=parent/run", prog)
+            local_label = DistSSHRun.kit_local_host_label()
+            run_span = findlast("label=$(local_label)/run", prog)
             @test run_span !== nothing
             @test first(run_span) < first(collect_mark)
         end

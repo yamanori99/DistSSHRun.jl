@@ -231,7 +231,9 @@ using Test
                 withenv(ver_env...) do
                     up = DistSSHRun.setup!(session, :juliaup)
                     @test up.ok && !up.cancelled
-                    @test length(up.hosts) == 1 && up.hosts[1].ok
+                    @test length(up.hosts) == 2
+                    @test all(h -> h.ok, up.hosts)
+                    @test any(h -> h.host == host, up.hosts)
                 end
                 withenv(
                     ver_env...,
@@ -265,8 +267,10 @@ using Test
                     empty!(DistSSHRun.DistSSHBase._DETECT_JULIA_PATH_CACHE)
                     upd = DistSSHRun.setup!(session, :juliaup_update)
                     @test upd.ok && !upd.cancelled
-                    @test length(upd.hosts) == 1 && upd.hosts[1].ok
-                    @test occursin("update", upd.hosts[1].message)
+                    @test length(upd.hosts) == 2
+                    @test all(h -> h.ok, upd.hosts)
+                    remote_hr = only(h for h in upd.hosts if h.host == host)
+                    @test occursin("update", remote_hr.message)
                     logged = isfile(ssh_log) ? read(ssh_log, String) : ""
                     @test occursin("\"\$JU\" update", logged)
                     @test !occursin("echo already", logged)
@@ -314,7 +318,8 @@ using Test
                 withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                     up = DistSSHRun.setup!(session, :juliaup)
                     @test up.ok && !up.cancelled
-                    @test length(up.hosts) == 1 && up.hosts[1].ok
+                    @test length(up.hosts) == 1
+                    @test up.hosts[1].ok
                     @test up.hosts[1].host == "parent"
                 end
             end
@@ -736,18 +741,13 @@ using Test
                 @test !isdir(joinpath(state_dir, "host1"))
                 @test isfile(joinpath(state_dir, "host2", "tree", "keepme.txt"))
 
-                token_key = try
-                    DistSSHRun.setup!(
-                        session, :delete;
-                        confirm_path = Dict("host2" => "~/App.jl"),
-                    )
-                    nothing
-                catch e
-                    e
-                end
-                @test token_key isa ArgumentError
-                @test occursin("unknown host", token_key.msg)
-                @test isfile(joinpath(state_dir, "host2", "tree", "keepme.txt"))
+                partial2 = DistSSHRun.setup!(
+                    session, :delete;
+                    confirm_path = Dict("host2" => "~/App.jl"),
+                )
+                @test partial2.ok && !partial2.cancelled
+                @test [h.host for h in partial2.hosts] == ["host2"]
+                @test !isdir(joinpath(state_dir, "host2"))
             end
         end
 

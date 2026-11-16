@@ -64,7 +64,10 @@ using Test
         file_batch = _ssh_e2e_latest_go_batch(tmp)
         @test file_batch !== nothing
         file_batch === nothing && error("expected go batch for pi_file")
-        @test read(joinpath(file_batch, _go_local_slot_label(), "pi_results.txt"), String) == solo_body
+        @test read(
+            joinpath(file_batch, _go_local_slot_dir(1; multi = false), "pi_results.txt"),
+            String,
+        ) == solo_body
         _assert_kit_progress_done(file_batch; kind = :go)
 
         pipe_proc, pipe_out = _run_subprocess(

@@ -477,6 +477,7 @@ using Distributed
                     script;
                     output_dir = dirty,
                     project = tmp,
+                    local_workers = 1,
                     hint_surface = :cli,
                 )
                 nothing
@@ -528,7 +529,7 @@ using Distributed
                 seed_earlier_ship!()
                 ok = redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
-                        DistSSHRun.ride!(script; project = tmp)
+                        DistSSHRun.ride!(script; project = tmp, local_workers = 1)
                     end
                 end
                 @test ok.ok
@@ -536,7 +537,7 @@ using Distributed
                 seed_earlier_ship!()
                 failed = redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
-                        DistSSHRun.ride!(bad; project = tmp)
+                        DistSSHRun.ride!(bad; project = tmp, local_workers = 1)
                     end
                 end
                 @test !failed.ok
@@ -639,7 +640,8 @@ using Distributed
                     parent = redirect_stdout(devnull) do
                         redirect_stderr(devnull) do
                             DistSSHRun.ride!(
-                                script, String[]; local_workers = 0,
+                                script, String[];
+                                local_workers = 1,
                                 project = local_proj,
                                 remote = remote,
                                 output_dir = joinpath(tmp, "parent-out"),

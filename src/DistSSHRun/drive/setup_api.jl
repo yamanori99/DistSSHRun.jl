@@ -108,7 +108,11 @@ function setup!(
     _setup_bang_preflight!(session, mode; repo = repo)
     hosts = _setup_bang_host_list(session)
     if isempty(hosts)
-        throw(ArgumentError(explain_no_hosts(; surface = hint_surface(session), kind = :ssh)))
+        if setup_mode_allows_parent(mode)
+            hosts = String[PARENT_HOST_NAME]
+        else
+            throw(ArgumentError(explain_no_hosts(; surface = hint_surface(session), kind = :ssh)))
+        end
     end
     validate_setup_hosts(hosts; allow_parent = setup_mode_allows_parent(mode))
     bound_plan = _setup_bind_confirm_path!(session, mode, confirm_path, hosts)

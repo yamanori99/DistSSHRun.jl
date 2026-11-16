@@ -30,7 +30,15 @@ include(joinpath(@__DIR__, "ride", "_using.jl"))
 
 function ride_main()::Cint
     project_root = cli_project_root(@__DIR__)
-    parsed = parse_ride_args(ARGS)
+    parsed = try
+        parse_ride_args(ARGS)
+    catch e
+        if e isa ArgumentError
+            DistSSHRun.print_cli_error(e.msg)
+            return Cint(1)
+        end
+        rethrow()
+    end
     if parsed.show_version
         println_kit_version()
         return 0

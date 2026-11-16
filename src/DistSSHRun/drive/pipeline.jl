@@ -181,12 +181,13 @@ end
 
 function _pipeline_run!(config::PipelineConfig, session::DistSSHSession, driver::String)
     sync_result = nothing
-    plan = if isempty(session.tokens)
+    lw = session.cli_session.local_workers
+    plan = if isempty(session.tokens) && lw === nothing
         WorkerPlan()
     else
         worker_plan_from_tokens(
             session.tokens;
-            local_workers = session.cli_session.local_workers,
+            local_workers = lw,
         )
     end
 

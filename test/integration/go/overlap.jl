@@ -33,7 +33,7 @@ using Test
     end
 end
 
-@testset "repeat=2 matches --local-workers 2 (local overlap)" begin
+@testset "repeat=2 matches --local-slots 2 (local overlap)" begin
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"GoRepeatOverlap\"\n")
         _sync_test_project_manifest!(proj)
@@ -50,6 +50,7 @@ end
         result = DistSSHRun.go!(
             script;
             repeat = 2,
+            local_slots = 2,
             project = proj,
             quiet = true,
             yes = true,

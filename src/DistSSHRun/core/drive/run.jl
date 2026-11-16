@@ -323,7 +323,7 @@ function _run_drive_parsed_specialized!(
     if !isfile(script_path) && !(remote_argv && snap_for_script !== nothing)
         surface = hasproperty(parsed, :hint_surface) ? parsed.hint_surface::Symbol : :cli
         root0 = canonical_local_path(something(project_root, dirname(script_path)))
-        error(drive_script_not_found_message(script_path, root0; surface = surface))
+        throw(ArgumentError(drive_script_not_found_message(script_path, root0; surface = surface)))
     end
 
     root_hint = project_root === nothing ? nothing : canonical_local_path(project_root)

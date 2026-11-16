@@ -230,9 +230,11 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
     ata = get(parsed, :unsafe_all_to_all, false)
     ata && (kw[:unsafe_all_to_all] = true)
     if kind === :go
-        ls = session.local_slots
-        ls !== nothing && (kw[:local_slots] = ls)
-    else
+        if hasproperty(session, :local_slots)
+            ls = session.local_slots
+            ls !== nothing && (kw[:local_slots] = ls)
+        end
+    elseif hasproperty(session, :local_workers)
         lw = session.local_workers
         lw !== nothing && (kw[:local_workers] = lw)
     end
