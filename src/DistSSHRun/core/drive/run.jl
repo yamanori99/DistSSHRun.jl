@@ -281,19 +281,28 @@ function _run_drive_parsed_specialized!(
         root = canonical_local_path(
             something(project_root, get(ENV, "DISTRIBUTED_PROJECT_ROOT", pwd())),
         )
-        anchor = canonical_local_path(root)
+        collect_opts = collect_job_options_from_parsed(parsed)
+        session = DistSSHSession(
+            project = root,
+            workers = String[],
+            remote = collect_opts.remote_root,
+            quiet = parsed.cli_session.quiet,
+            verbosity = parsed.cli_session.verbosity,
+        )
+        session.cli_session = parsed.cli_session
+        apply_shared_cli_flags!(session.cli_session)
         return _with_kit_inproc_run!(:collect) do
-            ok = drive_collect_tree(
-                parsed.collect_root::String,
-                parsed.collect_hosts::Vector{String};
-                merge = something(parsed.collect_overwrite, false),
-                strict = !parsed.best_effort,
-                project_root = root,
-                path_anchor = anchor,
-                julia = parsed.julia,
-                run_id = get(parsed, :run_id, nothing),
+            result = collect!(
+                session,
+                parsed.collect_root::String;
+                merge = collect_opts.merge,
+                best_effort = collect_opts.best_effort,
+                hosts = parsed.collect_hosts::Vector{String},
+                julia = collect_opts.julia,
+                run_id = collect_opts.run_id,
+                remote_root = collect_opts.remote_root,
             )
-            return ok ? 0 : 1
+            return result.ok ? 0 : 1
         end
     end
 

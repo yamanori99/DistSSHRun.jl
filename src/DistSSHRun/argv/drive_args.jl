@@ -72,6 +72,15 @@ end
 
 """Parse `drive` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_drive_args(args::Vector{String})
+    blob_path, args = peel_job_blob_bootstrap(copy(args))
+    if blob_path !== nothing
+        scrub_detached_placement_env!()
+        blob = read_detached_job_blob(blob_path)
+        blob.kind === :drive || throw(
+            ArgumentError("job blob kind is $(blob.kind); expected drive"),
+        )
+        return drive_parsed_from_detached_job_blob(blob; hint_surface = :cli)
+    end
     reject_mistaken_short_placement_flags!(args; command = :drive)
     cli_session, args = peel_shared_cli_flags(args)
     cli_session.head_slots !== nothing &&
@@ -217,6 +226,13 @@ function parse_drive_args(args::Vector{String})
             best_effort_cli = true
             best_effort = true
             i += 1
+        elseif arg == "--collect-strict"
+            throw(
+                ArgumentError(
+                    "drive: --collect-strict was removed; collect fails when any host is skipped (default). " *
+                        "Pass --best-effort only when you intentionally continue past skipped hosts.",
+                ),
+            )
         elseif arg == "--mem-headroom" || arg == "--parent-gb" || arg == "--master-gb" || startswith(arg, "--master-gb:")
             throw(ArgumentError("drive: worker-count sizing was removed; pass explicit parent:N / NAME:N"))
         elseif arg == "--no-log"
@@ -423,6 +439,7 @@ function show_drive_usage(; io::IO = stdout)
         "  $(cli_m_project()) drive [N*host...] DRIVER.jl",
         "  drive --head-workers 4 '8*host1' jobs.jl",
         "  drive --collect-missing ROOT HOST...",
+        "  drive --best-effort --collect-missing ROOT HOST...  continue past skipped hosts",
     )
     print_help_blank(io)
     print_help_section("Workers"; io = io)
@@ -445,7 +462,7 @@ function show_drive_usage(; io::IO = stdout)
         "                      (after setup ship-tree + setup instantiate)",
         "  --worker-include    re-include the full driver on workers (default: defs only)",
         "  --require-git       $(REQUIRE_GIT_MEANING)",
-        "  --best-effort       allow a partial run when a listed host does not join or load",
+        "  --best-effort       partial worker join and/or collect past skipped hosts",
         "  --output-dir PATH   result root (default: {script}/.distssh/drive/<stem>_<UTC>/; must be missing or empty)",
         "  --isolated          run the driver in a child process (default: this process)",
         "  --julia PATH        remote Julia",
@@ -466,7 +483,7 @@ function show_drive_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  After main(): post-run-new (files newer than run start).",
-        "  Later: --collect-missing / --collect-overwrite ROOT HOST...",
+        "  Later: --collect-missing / --collect-overwrite ROOT HOST... (fails on skipped hosts unless --best-effort)",
         "  Pass --run-id ID so collect maps onto that ship, not a newer one.",
         "  With DISTSSH_RUN_DIR, omitted recovery uses that run's provenance.selection.",
         "  Pull-back uses Tar. Remote mtimes and file modes are not kept.",

@@ -418,6 +418,15 @@ using Test
             @test_throws ArgumentError parse_drive_args(
                 ["--best-effort", "--best-effort", "--head-workers", "1", "s.jl"]
             )
+            let r = parse_drive_args(["--collect-missing", "out", "h1"])
+                @test !r.best_effort
+            end
+            let r = parse_drive_args(["--best-effort", "--collect-missing", "out", "h1"])
+                @test r.best_effort
+            end
+            @test_throws ArgumentError parse_drive_args(
+                ["--collect-strict", "--collect-missing", "out", "h1"],
+            )
         end
         withenv("DISTSSH_REQUIRE_ALL_HOSTS" => "1") do
             @test_throws ArgumentError parse_drive_args(["--head-workers", "1", "s.jl"])

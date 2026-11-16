@@ -563,6 +563,12 @@ end
         @test occursin(":go, :drive, or :ride", sprint(showerror, err))
     end
 
+    @testset "detached bootstrap argv" begin
+        blob = joinpath(tempdir(), "job-$(tempname()).toml")
+        argv = DistSSHRun._execute_detached_bootstrap_argv(:drive; job_blob = blob)
+        @test argv == ["drive", "-y", "--job-blob", DistSSHRun.canonical_local_path(blob)]
+    end
+
     @testset "detached drive argv best-effort" begin
         argv = DistSSHRun._execute_detached_argv(
             :drive, "job.jl", String[], String[]; head_workers = 1,

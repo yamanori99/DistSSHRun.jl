@@ -362,18 +362,21 @@ function DriveResult(
     )
 end
 
-"""Outcome of `collect!`."""
+"""Outcome of `collect!`. `skipped` lists `host => reason` when a host was not collected."""
 struct CollectResult
     ok::Bool
     exit_code::Int
+    skipped::Vector{Pair{String, String}}
 end
+
+CollectResult(ok::Bool, exit_code::Int) = CollectResult(ok, exit_code, Pair{String, String}[])
 
 """
     PipelineConfig
 
 Settings for [`pipeline!`](@ref): worker tokens, driver run, and optional collect.
 
-Worker placement uses CLI-style tokens (`parent:2`, `1*user@host`).
+Worker placement uses CLI-style tokens (`--head-workers N`, `N*user@host`).
 Listed tokens need `:N`. Set `collect=false`
 to skip rsync-back. Git parity is off by default; pass `skip_hash_check=false`
 (or CLI `--require-git`) to require matching remote commits.
@@ -400,6 +403,8 @@ mutable struct PipelineConfig
     package::Union{Nothing, String}
     julia::Union{Nothing, String}
     head_workers::Union{Nothing, Int}
+    run_id::Union{Nothing, String}
+    best_effort::Bool
 end
 
 function PipelineConfig(;
@@ -421,6 +426,8 @@ function PipelineConfig(;
         log_dir::Union{Nothing, AbstractString} = nothing,
         package::Union{Nothing, AbstractString} = nothing,
         julia::Union{Nothing, AbstractString} = nothing,
+        run_id::Union{Nothing, AbstractString} = nothing,
+        best_effort::Bool = false,
     )
     yes !== nothing && throw(
         ArgumentError(
@@ -440,6 +447,7 @@ function PipelineConfig(;
     else
         String(julia)
     end
+    snap = run_id === nothing ? nothing : validate_run_id(run_id)
     return PipelineConfig(
         canonical_local_path(project),
         String[String(t) for t in workers],
@@ -458,6 +466,8 @@ function PipelineConfig(;
         pkg,
         jl,
         head_workers === nothing ? nothing : Int(head_workers),
+        snap,
+        best_effort,
     )
 end
 
