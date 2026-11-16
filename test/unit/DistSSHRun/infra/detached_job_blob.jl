@@ -47,10 +47,10 @@ end
     mktempdir() do d
         p = joinpath(d, "job.toml")
         for (extra, needle) in (
-            ("require_all_hosts = true\n", "require_all_hosts"),
-            ("require_all_hosts = false\n", "best_effort = true"),
-            ("collect_best_effort = true\n", "collect_best_effort"),
-        )
+                ("require_all_hosts = true\n", "require_all_hosts"),
+                ("require_all_hosts = false\n", "best_effort = true"),
+                ("collect_best_effort = true\n", "collect_best_effort"),
+            )
             write(p, _JOB_BLOB_MINIMAL * extra)
             err = try
                 DistSSHRun.read_detached_job_blob(p)
