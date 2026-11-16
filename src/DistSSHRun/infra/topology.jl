@@ -60,7 +60,6 @@ function _toml_bind_map_from_hosts_file(
     )::Dict{String, String}
     hosts_file === nothing && return Dict{String, String}()
     path = canonical_local_path(String(strip(hosts_file)))
-    isfile(path) || throw(ArgumentError(explain_hosts_file_not_found(path; surface = surface)))
     hosts_file_is_toml(path) || return Dict{String, String}()
     return read_toml_host_bind_overrides(path; surface = surface)
 end
