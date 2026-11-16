@@ -68,6 +68,7 @@ function ride_main()::Cint
                     (isempty(remote_raw) ? nothing : remote_raw),
                 run_id = parsed.run_id,
                 hint_surface = :cli,
+                bind_overrides = DistSSHRun.hosts_file_bind_overrides(parsed.cli_session),
             )
         catch e
             if e isa ArgumentError

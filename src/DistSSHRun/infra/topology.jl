@@ -22,8 +22,15 @@ function resolved_topology(env_val::AbstractString = get(ENV, "DISTSSH_TOPOLOGY"
     throw(ArgumentError("DISTSSH_TOPOLOGY must be auto or master_worker, got $(repr(env_val))"))
 end
 
-function topology_for_launch(; unsafe_all_to_all::Bool = false)::Symbol
-    t = resolved_topology()
+function topology_for_launch(;
+        unsafe_all_to_all::Bool = unsafe_all_to_all_active(),
+        topology_setting::Union{Nothing, AbstractString} = nothing,
+    )::Symbol
+    t = if topology_setting === nothing
+        resolved_topology()
+    else
+        resolved_topology(String(topology_setting))
+    end
     t === :auto && return unsafe_all_to_all ? :all_to_all : :master_worker
     unsafe_all_to_all && throw(
         ArgumentError(
@@ -38,6 +45,15 @@ function default_bind_address(host::AbstractString)::String
     return "127.0.0.1"
 end
 
+"""Loopback default, or a TOML hosts-file `bind` when `overrides` names the host."""
+function resolved_bind_address(
+        host::AbstractString,
+        overrides::AbstractDict{<:AbstractString, <:AbstractString},
+    )::String
+    h = String(host)
+    return haskey(overrides, h) ? String(strip(overrides[h])) : default_bind_address(h)
+end
+
 """
 Reject remote `tunnel=false` with loopback bind before launch.
 
@@ -47,7 +63,9 @@ function validate_host_launch_plan(
         host::AbstractString,
         bind::AbstractString;
         tunnel::Bool = ssh_tunnel_enabled(),
-        unsafe_expose_port::Bool = false,
+        unsafe_expose_port::Bool = unsafe_expose_port_active(),
+        unsafe_all_to_all::Bool = unsafe_all_to_all_active(),
+        topology_setting::Union{Nothing, AbstractString} = nothing,
     )::HostLaunchPlan
     h = String(host)
     b = String(strip(bind))
@@ -68,7 +86,10 @@ function validate_host_launch_plan(
             ),
         ),
     )
-    top = topology_for_launch(; unsafe_all_to_all = unsafe_all_to_all_active())
+    top = topology_for_launch(;
+        unsafe_all_to_all = unsafe_all_to_all,
+        topology_setting = topology_setting,
+    )
     return HostLaunchPlan(h, b, tunnel, top)
 end
 

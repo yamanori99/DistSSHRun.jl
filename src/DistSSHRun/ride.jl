@@ -484,7 +484,8 @@ function _ride_add_workers!(
         project::AbstractString,
         script_path::AbstractString,
         julia,
-        best_effort::Bool,
+        best_effort::Bool;
+        bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
     )::Tuple{Vector{Int}, Vector{String}}
     before = Set(workers())
     ssh_hosts = String[]
@@ -515,7 +516,8 @@ function _ride_add_workers!(
                 julia_exe,
                 String(project),
                 String(script_path),
-                String(project),
+                String(project);
+                bind_overrides = bind_overrides,
             )
             ssh_hosts = String[String(h) for h in successful]
             if !best_effort
@@ -670,6 +672,7 @@ function ride!(
         unsafe_skip_env_digests = false,
         unsafe_expose_port::Bool = false,
         unsafe_all_to_all::Bool = false,
+        bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
         allow_mismatch = nothing,
     )::RideResult
     yes !== nothing && throw(
@@ -710,7 +713,7 @@ function ride!(
             return _ride_run!(
                 path, julia_s, tokens, args, spi_check, output_dir, project, julia,
                 remote, validated_run_id, best_effort, head_workers, hint_surface,
-                inherited_run,
+                inherited_run, bind_overrides,
             )
         end
     finally
@@ -734,6 +737,7 @@ function _ride_run!(
         head_workers::Union{Nothing, Integer},
         hint_surface::Symbol,
         inherited_run::Bool,
+        bind_overrides::AbstractDict{<:AbstractString, <:AbstractString},
     )
     # `ride!` restores `DISTSSH_RUN_DIR` after this returns.
     run_dir = kit_run_dir()
@@ -814,7 +818,9 @@ function _ride_run!(
         progress_started = true
         kit_progress_step!("workers")
         _ride_activate_project!(project)
-        added, ssh_hosts = _ride_add_workers!(wp, project, path, julia, best_effort)
+        added, ssh_hosts = _ride_add_workers!(
+            wp, project, path, julia, best_effort; bind_overrides = bind_overrides,
+        )
         _write_kit_hosts_file(ssh_hosts, batch_dir, nothing)
         _write_joined_drive_host_status!(
             sort!(collect(keys(DRIVE_HOST_WORKER_IDS))),

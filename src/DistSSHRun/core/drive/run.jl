@@ -664,9 +664,11 @@ function _run_drive_parsed_locked!(
         launch_report = Ref{Union{Nothing, LaunchReport}}(nothing)
         successful_hosts = try
             _drive_kit_hosts_around_join!(hosts, kit_out, kit_log) do
+                bind_map = hosts_file_bind_overrides(parsed.cli_session)
                 hosts_joined, report = add_drive_workers!(
                     hosts, head_workers, default_workers, julia_exe, proj_dir, script_path,
-                    project_root,
+                    project_root;
+                    bind_overrides = bind_map,
                 )
                 launch_report[] = report
                 return hosts_joined

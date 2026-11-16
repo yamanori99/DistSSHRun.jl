@@ -67,6 +67,46 @@ using Test, DistSSHRun
         end
     end
 
+    @testset "dry-run per-host launch" begin
+        let cfg = DistSSHRun.resolve_run_job_config(;
+                command = :go,
+                cli_dry_run = true,
+                cli_unsafe_expose_port = true,
+            ),
+                buf = IOBuffer()
+            DistSSHRun.print_run_job_dry_plan!(
+                buf,
+                cfg;
+                hosts = ["lab-a", "lab-b"],
+                worker_tokens = String[],
+                project = pwd(),
+                head_slots = 0,
+                bind_overrides = Dict("lab-b" => "10.0.0.2"),
+            )
+            txt = String(take!(buf))
+            @test occursin("launch (per host):", txt)
+            @test occursin("lab-a:", txt)
+            @test occursin("bind=127.0.0.1", txt)
+            @test occursin("lab-b:", txt)
+            @test occursin("bind=10.0.0.2", txt)
+            @test !occursin("phase 4", txt)
+        end
+        let cfg = DistSSHRun.resolve_run_job_config(;
+                command = :go,
+                cli_dry_run = true,
+            )
+            @test_throws ArgumentError DistSSHRun.print_run_job_dry_plan!(
+                IOBuffer(),
+                cfg;
+                hosts = ["lab"],
+                worker_tokens = String[],
+                project = pwd(),
+                head_slots = 0,
+                bind_overrides = Dict("lab" => "10.0.0.2"),
+            )
+        end
+    end
+
     @testset "dry-run hosts_source" begin
         let cfg = DistSSHRun.resolve_run_job_config(;
                 command = :go,

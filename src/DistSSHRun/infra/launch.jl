@@ -390,8 +390,12 @@ function ssh_worker_exename(julia_path::AbstractString)::Cmd
     return Cmd(argv)
 end
 
+function ssh_addprocs_machine_bind(host::AbstractString, bind::AbstractString)::String
+    return string(ssh_addprocs_machine(host), " ", String(strip(bind)))
+end
+
 function ssh_addprocs_bind_localhost(host::AbstractString)::String
-    return string(ssh_addprocs_machine(host), " 127.0.0.1")
+    return ssh_addprocs_machine_bind(host, "127.0.0.1")
 end
 
 function ssh_tunnel_enabled()::Bool

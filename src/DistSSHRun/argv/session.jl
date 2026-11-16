@@ -648,6 +648,23 @@ function append_kit_host_sources!(
     return hosts
 end
 
+"""Per-host bind overrides from a TOML `--hosts-file` or `DISTSSH_HOSTS_FILE` (empty when not TOML)."""
+function hosts_file_bind_overrides(session::CliSharedFlags)::Dict{String, String}
+    source = placement_host_source(session)
+    path = if source === :hosts_file
+        session.hosts_file
+    elseif source === :env_file
+        String(strip(get(ENV, "DISTSSH_HOSTS_FILE", "")))
+    else
+        nothing
+    end
+    path === nothing && return Dict{String, String}()
+    path = String(path)
+    isempty(path) && return Dict{String, String}()
+    hosts_file_is_toml(path) || return Dict{String, String}()
+    return read_toml_host_bind_overrides(path; surface = session.hint_surface)
+end
+
 function append_hosts_file!(hosts::Vector{String}, session::CliSharedFlags)
     hosts_file = session.hosts_file
     hosts_file === nothing && return hosts

@@ -21,8 +21,26 @@ function _toml_int(v, field::String, path::AbstractString)
     end
 end
 
-"""Parse TOML hosts file; returns machine-token strings in file order."""
-function read_toml_hosts_file(path::AbstractString; surface::Symbol = :cli)::Vector{String}
+function _toml_bind_field(row::Dict{String, Any}, path::AbstractString, index::Int)::Union{Nothing, String}
+    haskey(row, "bind") || return nothing
+    b = get(row, "bind", nothing)
+    b === nothing && return nothing
+    s = String(strip(b))
+    isempty(s) && throw(ArgumentError("$path: hosts[$index] `bind` is empty"))
+    return s
+end
+
+"""SSH destination for one TOML hosts row (`user@host` with optional port in tokens)."""
+function toml_host_ssh_dest(entry::TomlHostEntry)::String
+    dest = entry.name
+    user = entry.user
+    user !== nothing && !contains(dest, '@') && (dest = string(user, "@", dest))
+    tok = format_machine_token(entry.workers, dest; port = entry.port)
+    return split_worker_token(tok)[1]
+end
+
+"""Parse TOML hosts file into structured rows (file order)."""
+function read_toml_host_entries(path::AbstractString; surface::Symbol = :cli)::Vector{TomlHostEntry}
     p = canonical_local_path(path)
     isfile(p) || throw(ArgumentError(explain_hosts_file_not_found(p; surface = surface)))
     data = try
@@ -34,7 +52,7 @@ function read_toml_hosts_file(path::AbstractString; surface::Symbol = :cli)::Vec
     table === nothing && throw(ArgumentError("$(p): missing [[hosts]] table"))
     table isa Vector{Any} || throw(ArgumentError("$(p): `hosts` must be a table array"))
     isempty(table) && throw(ArgumentError(explain_hosts_file_empty(p; surface = surface)))
-    out = String[]
+    out = TomlHostEntry[]
     seen = Dict{String, Int}()
     for (i, row) in enumerate(table)
         row isa Dict{String, Any} || throw(ArgumentError("$(p): hosts[$i] must be a table"))
@@ -47,14 +65,12 @@ function read_toml_hosts_file(path::AbstractString; surface::Symbol = :cli)::Vec
             u === nothing ? nothing : String(strip(u))
         end
         port = _toml_int(get(row, "port", nothing), "port", p)
-        if haskey(row, "bind")
-            b = get(row, "bind", nothing)
-            b !== nothing && (String(strip(b)); nothing)
-        end
+        bind = _toml_bind_field(row, p, i)
         dest = name
         user !== nothing && !contains(dest, '@') && (dest = string(user, "@", dest))
         tok = format_machine_token(workers, dest; port = port)
         parse_machine_token(tok) # validate
+        entry = TomlHostEntry(name, workers, user, port, bind)
         label = machine_ssh_label(parse_machine_token(tok))
         if haskey(seen, label)
             throw(
@@ -64,6 +80,33 @@ function read_toml_hosts_file(path::AbstractString; surface::Symbol = :cli)::Vec
             )
         end
         seen[label] = i
+        push!(out, entry)
+    end
+    return out
+end
+
+"""Per-host Distributed bind overrides from a TOML hosts file (`dest` => `bind`)."""
+function read_toml_host_bind_overrides(
+        path::AbstractString;
+        surface::Symbol = :cli,
+    )::Dict{String, String}
+    out = Dict{String, String}()
+    for entry in read_toml_host_entries(path; surface = surface)
+        entry.bind === nothing && continue
+        dest = toml_host_ssh_dest(entry)
+        out[dest] = entry.bind
+    end
+    return out
+end
+
+"""Parse TOML hosts file; returns machine-token strings in file order."""
+function read_toml_hosts_file(path::AbstractString; surface::Symbol = :cli)::Vector{String}
+    out = String[]
+    for entry in read_toml_host_entries(path; surface = surface)
+        dest = entry.name
+        entry.user !== nothing && !contains(dest, '@') && (dest = string(entry.user, "@", dest))
+        tok = format_machine_token(entry.workers, dest; port = entry.port)
+        parse_machine_token(tok) # validate
         push!(out, tok)
     end
     return out
