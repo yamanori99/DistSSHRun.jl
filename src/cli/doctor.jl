@@ -93,9 +93,9 @@ if !isdefined(@__MODULE__, :doctor_main)
             workers = opts.hosts,
             remote = opts.deploy_root,
             quiet = opts.cli_session.quiet,
-            verbose = opts.cli_session.verbose,
-            progress = opts.cli_session.progress,
+            verbosity = opts.cli_session.verbosity,
         )
+        session.cli_session.yes = opts.cli_session.yes
 
         log_dir = DistSSHRun.setup_log_dir(project)
         init_log_file(log_dir; prefix = "doctor", path_anchor = path_anchor)
