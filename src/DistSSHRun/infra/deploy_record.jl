@@ -12,8 +12,8 @@ function _deploy_record_snapshot_id_removed_message(
         record_path::Union{Nothing, AbstractString} = nothing,
     )::String
     path_bit = record_path isa AbstractString && !isempty(strip(String(record_path))) ?
-               " at $(String(record_path))" :
-               ""
+        " at $(String(record_path))" :
+        ""
     v = repr(val)
     return """
     deploy record$(path_bit): snapshot_id was removed; use run_id instead.
