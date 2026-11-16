@@ -5,7 +5,7 @@ DistSSHRun is one run on shared machines over SSH: `setup`, `go`,
 Supported on **macOS, Linux, and WSL2 Ubuntu** (not native Windows).
 
 The command is `julia -m DistSSHRun`. Exit streams and codes follow Rust
-[clap](https://docs.rs/clap) [`arg_required_else_help`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.required);
+[clap](https://docs.rs/clap) [`Command::arg_required_else_help`](https://docs.rs/clap/latest/clap/struct.Command.html#method.arg_required_else_help);
 see [CLI conventions](cli.md).
 
 `pkg> app add DistSSHRun` still installs `distsshrun`. That command is

@@ -2322,18 +2322,18 @@ function progress(args::Vector{String} = copy(ARGS))::Cint
         if length(args) > 1
             throw(DistSSHBase.CliUsageError("progress: extra args $(repr(args[2:end]))"))
         end
-    target = isempty(args) ? pwd() : String(args[1])
-    recs = _kit_progress_last_run(_kit_progress_records(target))
-    if isempty(recs)
-        print_cli_error("progress: no progress: lines in $(target)")
-        return 1
-    end
-    rows = _kit_progress_phase_rows(recs)
-    wall = _kit_progress_wall(recs)
-    text = _format_kit_progress_phases(rows; wall = wall)
-    isempty(text) && (print_cli_error("progress: no timed phases in $(target)"); return 1)
-    _print_kit_progress_phases(stdout, rows; wall = wall)
-    return Cint(0)
+        target = isempty(args) ? pwd() : String(args[1])
+        recs = _kit_progress_last_run(_kit_progress_records(target))
+        if isempty(recs)
+            print_cli_error("progress: no progress: lines in $(target)")
+            return 1
+        end
+        rows = _kit_progress_phase_rows(recs)
+        wall = _kit_progress_wall(recs)
+        text = _format_kit_progress_phases(rows; wall = wall)
+        isempty(text) && (print_cli_error("progress: no timed phases in $(target)"); return 1)
+        _print_kit_progress_phases(stdout, rows; wall = wall)
+        return Cint(0)
     end
 end
 

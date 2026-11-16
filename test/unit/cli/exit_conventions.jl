@@ -41,11 +41,13 @@ using Test
             end
         end
         @testset "$cmd --help" begin
-            let (code, out, err) = _capture(() -> cmd == :go ? DistSSHRun.go(help_argv) :
-                    cmd == :ride ? DistSSHRun.run_ride(help_argv) :
-                    cmd == :drive ? DistSSHRun.drive(help_argv) :
-                    cmd == :up ? DistSSHRun.up(help_argv) :
-                    DistSSHRun.setup(help_argv))
+            let (code, out, err) = _capture(
+                    () -> cmd == :go ? DistSSHRun.go(help_argv) :
+                        cmd == :ride ? DistSSHRun.run_ride(help_argv) :
+                        cmd == :drive ? DistSSHRun.drive(help_argv) :
+                        cmd == :up ? DistSSHRun.up(help_argv) :
+                        DistSSHRun.setup(help_argv)
+                )
                 @test code == 0
                 @test occursin("Usage", out) || occursin(help_needle, out)
                 @test !occursin("Usage", err)

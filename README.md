@@ -111,7 +111,7 @@ go!("job.jl")
 ## CLI conventions and exit codes
 
 Commands follow Rust [clap](https://docs.rs/clap)
-[`arg_required_else_help`](https://docs.rs/clap/latest/clap/struct.Arg.html#method.required):
+[`Command::arg_required_else_help`](https://docs.rs/clap/latest/clap/struct.Command.html#method.arg_required_else_help):
 
 - No arguments on a command that needs operands or flags → full help on **stderr**, exit **2**
 - `--help` / `-h` → same help on **stdout**, exit **0**

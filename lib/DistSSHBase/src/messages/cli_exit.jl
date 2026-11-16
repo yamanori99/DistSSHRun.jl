@@ -37,7 +37,7 @@ function cli_report(msg::AbstractString)
     return nothing
 end
 
-"""Exit code when required argv is missing (`clap` `arg_required_else_help`)."""
+"""Exit code when required argv is missing (clap [`Command::arg_required_else_help`](https://docs.rs/clap/latest/clap/struct.Command.html#method.arg_required_else_help))."""
 const CLI_EXIT_USAGE = Cint(2)
 
 """
@@ -54,8 +54,8 @@ end
 """
     cli_required_else_help(help) -> Cint
 
-Required operands/flags missing (`arg_required_else_help`): print the full help
-page on **stderr** and return [`CLI_EXIT_USAGE`](@ref) (`2`).
+Required operands/flags missing (clap [`Command::arg_required_else_help`](https://docs.rs/clap/latest/clap/struct.Command.html#method.arg_required_else_help)):
+print the full help page on **stderr** and return [`CLI_EXIT_USAGE`](@ref) (`2`).
 """
 function cli_required_else_help(@nospecialize(help::Function))::Cint
     help(; io = stderr)
