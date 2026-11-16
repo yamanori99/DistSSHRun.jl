@@ -739,9 +739,10 @@ function _setup_one!(
         if !isempty(ssh_hosts)
             preflight_setup_ssh(ssh_hosts) || return SyncResult(false, HostResult[]; ok = false)
         end
+        confirm = !(session.cli_session.yes || kit_noninteractive())
         raw = mode === :juliaup ?
-            juliaup_align_remotes(targets; confirm = !session.cli_session.yes) :
-            juliaup_update_remotes(targets; confirm = !session.cli_session.yes)
+            juliaup_align_remotes(targets; confirm = confirm) :
+            juliaup_update_remotes(targets; confirm = confirm)
         return _sync_result_from_host_op(raw)
     elseif mode === :runtest
         preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)

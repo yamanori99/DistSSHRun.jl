@@ -22,7 +22,7 @@ using TOML
         pinned = Dict(DistSSHRun.worker_env_pairs("/tmp/job"))
         @test pinned["OPENBLAS_NUM_THREADS"] == "1"
         @test pinned["OMP_NUM_THREADS"] == "1"
-        @test DistSSHRun.worker_addprocs_blas_kwargs() == (enable_threaded_blas = true)
+        @test DistSSHRun.worker_addprocs_blas_kwargs() == (; enable_threaded_blas = true)
         @test DistSSHRun._requested_worker_blas_count() == 1
     end
     @test DistSSHRun.worker_addprocs_blas_kwargs() == NamedTuple()

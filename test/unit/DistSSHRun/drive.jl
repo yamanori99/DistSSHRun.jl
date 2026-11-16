@@ -786,7 +786,7 @@ end
             catch e
                 e
             end
-            @test left isa DistSSHRun._DriveProcessInterrupt
+            @test left isa DistSSHRun.DistSSHBase.CliForegroundInterrupt
             @test DistSSHRun._drive_was_interrupted()
             seen = Ref(true)
             ordinary = try

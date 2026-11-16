@@ -83,10 +83,10 @@ using Test
 
         @testset "host validation wiring" begin
             proc, combined = got[1]
-            @test proc.exitcode == 1
+            @test proc.exitcode == 2
             @test occursin("only for up", combined) || occursin("was removed", combined)
             proc2, combined2 = got[2]
-            @test proc2.exitcode == 1
+            @test proc2.exitcode == 2
             @test occursin("NAME", combined2) ||
                 occursin("parent[:N]", combined2) ||
                 occursin("--confirm-path", combined2)
@@ -94,7 +94,7 @@ using Test
 
         @testset "delete" begin
             proc, combined = got[3]
-            @test proc.exitcode == 1
+            @test proc.exitcode == 2
             @test occursin("do not authorize", combined)
             @test occursin("--confirm-path", combined)
             @test occursin("help setup", combined)
@@ -103,7 +103,7 @@ using Test
             @test !occursin("Would remove", combined)
 
             proc, combined = got[4]
-            @test proc.exitcode == 1
+            @test proc.exitcode == 2
             @test occursin("does not match", combined)
             @test occursin("help setup", combined)
             @test !occursin("--help", combined)
@@ -141,13 +141,13 @@ using Test
 
         @testset "removed setup flags" begin
             proc, combined = got[11]
-            @test proc.exitcode == 1
+            @test proc.exitcode == 2
             @test occursin("setup --juliaup-update was removed", combined)
             @test occursin("up update", combined)
             @test !occursin("deprecated", lowercase(combined))
 
             proc, combined = got[12]
-            @test proc.exitcode == 1
+            @test proc.exitcode == 2
             @test occursin("setup --juliaup was removed", combined)
             @test occursin("up add CHANNEL", combined)
 
