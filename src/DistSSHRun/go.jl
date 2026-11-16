@@ -612,6 +612,7 @@ function _go_remote_slot_shell_inner(
             print(io, ' ', _remote_shell_path_word(a))
         end
     end
+    isempty(_PLANNED_RANK_QUEUE) && reset_launch_rank_plan!([1])
     rank = take_worker_rank()
     seed = job_seed()
     wseed = worker_seed(seed, rank)
