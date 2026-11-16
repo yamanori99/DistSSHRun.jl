@@ -82,6 +82,12 @@ end
 
 """Parse `ride` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_ride_args(args::AbstractVector{<:AbstractString})
+    args_vec = Vector{String}(String.(args))
+    blob_path, _ = peel_job_blob_bootstrap(copy(args_vec))
+    if blob_path !== nothing
+        scrub_detached_placement_env!()
+        return ride_parsed_from_detached_job_blob(read_detached_job_blob(blob_path))
+    end
     reject_mistaken_short_placement_flags!(args; command = :ride)
     cli_session, rest = peel_shared_cli_flags(args)
     cli_session.head_slots !== nothing &&

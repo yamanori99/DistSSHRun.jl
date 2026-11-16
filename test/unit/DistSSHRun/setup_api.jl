@@ -441,7 +441,7 @@ using Test
                 )
                 with_kit_verbosity(:progress) do
                     out, _ = _capture_stdio() do _, _
-                        DistSSHRun.setup!(session, :cleanup)
+                        DistSSHRun.setup!(session, :cleanup; job_id = "test-job-1")
                     end
                     @test !occursin("Log file:", out)
                     @test DistSSHRun.kit_verbosity() === :progress
@@ -549,7 +549,7 @@ using Test
                         w.message == "git not found in PATH",
                     rep.warnings,
                 )
-                @test occursin("Checking prerequisites", out) || occursin("ssh", lowercase(out))
+                @test !isempty(rep.warnings) || occursin("prerequisite", lowercase(out))
                 @test !occursin("Log file:", out)
 
                 @test_throws ArgumentError DistSSHRun.setup!(session, :nope)

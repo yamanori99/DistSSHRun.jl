@@ -7,4 +7,4 @@ DistSSHBase = {path = ".."}
 
 [compat]
 DistSSHBase = "=0.2.0"
-Test = "1"
+Test = "1.11"

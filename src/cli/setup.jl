@@ -176,6 +176,14 @@ if !isdefined(@__MODULE__, :setup_main)
                 println_fatal()
                 return Cint(2)
             end
+            if mode in (
+                    :instantiate, :runtest, :ship_tree, :remote_root,
+                    :cleanup, :git_pull, :git_sync, :git_clone,
+                )
+                return DistSSHRun.setup_cli_via_bang!(
+                    opts, project, deploy_path, remote_path, path_anchor, mode,
+                )
+            end
             mode_name = Dict(
                 :git_clone => "git-clone",
                 :delete => "Delete",
