@@ -26,8 +26,8 @@ using Test
         )
         wall = time() - t0
         @test result.ok
-        a = parse(Float64, read(joinpath(result.output_dir, _go_local_slot_dir(1), "t0.txt"), String))
-        b = parse(Float64, read(joinpath(result.output_dir, _go_local_slot_dir(2), "t0.txt"), String))
+        a = parse(Float64, read(joinpath(result.output_dir, _go_local_slot_dir(1; multi = true), "t0.txt"), String))
+        b = parse(Float64, read(joinpath(result.output_dir, _go_local_slot_dir(2; multi = true), "t0.txt"), String))
         @test abs(a - b) < 0.45  # sequential would be ~0.6s apart plus julia startup
         @test wall < 8.0
     end
@@ -56,8 +56,8 @@ end
         )
         wall = time() - t0
         @test result.ok
-        a = parse(Float64, read(joinpath(result.output_dir, _go_local_slot_dir(1), "t0.txt"), String))
-        b = parse(Float64, read(joinpath(result.output_dir, _go_local_slot_dir(2), "t0.txt"), String))
+        a = parse(Float64, read(joinpath(result.output_dir, _go_local_slot_dir(1; multi = true), "t0.txt"), String))
+        b = parse(Float64, read(joinpath(result.output_dir, _go_local_slot_dir(2; multi = true), "t0.txt"), String))
         @test abs(a - b) < 0.45
         @test wall < 8.0
     end

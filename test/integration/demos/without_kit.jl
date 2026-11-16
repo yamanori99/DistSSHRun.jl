@@ -78,8 +78,8 @@ using Test
         pipe_batch = _ssh_e2e_latest_go_batch(tmp)
         @test pipe_batch !== nothing
         pipe_batch === nothing && error("expected go batch for pipeline_pi")
-        a = read(joinpath(pipe_batch, _go_local_slot_dir(1), "pi_results.txt"), String)
-        b = read(joinpath(pipe_batch, _go_local_slot_dir(2), "pi_results.txt"), String)
+        a = read(joinpath(pipe_batch, _go_local_slot_dir(1; multi = true), "pi_results.txt"), String)
+        b = read(joinpath(pipe_batch, _go_local_slot_dir(2; multi = true), "pi_results.txt"), String)
         @test occursin("pi=", a)
         @test a == b
         _assert_kit_progress_done(pipe_batch; kind = :go)

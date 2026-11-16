@@ -151,9 +151,10 @@ if !isdefined(Main, :_test_root)
         return DistSSHRun._go_local_slot_label_base()
     end
 
-    function _go_local_slot_dir(i::Integer = 1)::String
+    function _go_local_slot_dir(i::Integer = 1; multi::Bool = false)::String
         base = _go_local_slot_label()
-        return i == 1 ? base : "$base-$i"
+        (multi || i > 1) && return "$base-$i"
+        return base
     end
 
 end

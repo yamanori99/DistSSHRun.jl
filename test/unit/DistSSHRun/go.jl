@@ -58,14 +58,14 @@ using Dates
         @test_throws ArgumentError DistSSHRun.parse_go_args(["parent:1", "job.jl"])
         let s = DistSSHRun._go_plan_slots(String[]; local_slots = 2)
             @test length(s) == 2
-            @test s[1].label == _go_local_slot_dir(1)
-            @test s[2].label == _go_local_slot_dir(2)
+            @test s[1].label == _go_local_slot_dir(1; multi = true)
+            @test s[2].label == _go_local_slot_dir(2; multi = true)
         end
         let s = DistSSHRun._go_plan_slots(String[]; local_slots = 4, total = 4)
             @test length(s) == 4
             @test all(x -> x.kind === :parent, s)
-            @test s[1].label == _go_local_slot_dir(1)
-            @test s[4].label == _go_local_slot_dir(4)
+            @test s[1].label == _go_local_slot_dir(1; multi = true)
+            @test s[4].label == _go_local_slot_dir(4; multi = true)
         end
         @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; total = 4)
         let s = DistSSHRun._go_plan_slots(String[]; local_slots = 10, total = 3)
