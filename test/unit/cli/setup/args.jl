@@ -260,7 +260,6 @@ using Test
     for (flag, name) in (
             "--ship-tree" => "ship-tree",
             "--instantiate" => "instantiate",
-            "--check" => "check",
             "--delete" => "delete",
             "--remote-root" => "remote-root",
             "--requirements" => "requirements",
@@ -275,6 +274,10 @@ using Test
             @test occursin("setup $(flag) was removed", err.msg)
             @test occursin("setup $(name)", err.msg)
         end
+    end
+
+    let r = parse_setup_args(["--check", "host1"])
+        @test r.mode == :check
     end
 
     let r = parse_setup_args(["check", "update"])

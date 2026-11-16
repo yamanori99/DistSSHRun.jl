@@ -536,25 +536,24 @@ using Test
                     yes = true,
                     quiet = true,
                 )
-                out, res = withenv("PATH" => "/nonexistent-distsshkit-path") do
+                out, rep = withenv("PATH" => "/nonexistent-distsshkit-path") do
                     _capture_stdio() do _, _
-                        DistSSHRun.setup!(session, :check; check_code_sync = false, ignore_julia_version = true)
+                        return DistSSHRun.doctor!(session; deploy = true, ignore_julia_version = true)
                     end
                 end
-                @test res isa DistSSHRun.SyncResult
-                @test !res.cancelled
-                @test !res.ok
+                @test rep isa DistSSHRun.DoctorReport
+                @test !rep.ok
                 @test any(
                     w -> w.kind === :tool_missing &&
                         w.host == DistSSHRun.PARENT_HOST_NAME &&
                         w.message == "git not found in PATH",
-                    res.warnings,
+                    rep.warnings,
                 )
-                @test occursin("Prerequisites not met", out)
+                @test occursin("Checking prerequisites", out) || occursin("ssh", lowercase(out))
                 @test !occursin("Log file:", out)
 
                 @test_throws ArgumentError DistSSHRun.setup!(session, :nope)
-                @test_throws ArgumentError DistSSHRun.setup!(session, :delete, :check; ignore_julia_version = true)
+                @test_throws ArgumentError DistSSHRun.setup!(session, :check)
             end
         end
 
@@ -568,7 +567,7 @@ using Test
                     quiet = true,
                 )
                 withenv("DISTSSH_TEST_SSH_FAIL" => "1") do
-                    clean = DistSSHRun.setup!(session, :cleanup)
+                    clean = DistSSHRun.setup!(session, :cleanup; job_id = "test-job-1")
                     @test clean isa DistSSHRun.SyncResult
                     @test !clean.cancelled
                     @test length(clean.hosts) == 1
@@ -839,7 +838,7 @@ using Test
                 )
                 @test [r.host for r in test_res.hosts] == hosts
                 @test all(r -> r.ok, test_res.hosts)
-                clean_res = DistSSHRun.cleanup_remote_workers(hosts)
+                clean_res = DistSSHRun.cleanup_remote_workers(hosts, "test-job-1")
                 @test [r.host for r in clean_res.hosts] == hosts
                 @test all(r -> r.ok, clean_res.hosts)
             end

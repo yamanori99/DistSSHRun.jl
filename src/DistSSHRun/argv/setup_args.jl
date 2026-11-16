@@ -10,8 +10,7 @@
 # SUBCOMMAND (canonical names; one per run):
 #   ship-tree     transfer/verify only (does not instantiate)
 #   instantiate   Pkg.instantiate on the selected snapshot or git work root
-#   check         verify selected snapshot / git checkout (not a marker later
-#                 executions require)
+#   check         removed in 0.2.0 (exit 2; use doctor --deploy)
 #   runtest       Pkg.test of the job project
 #   cleanup       stale workers
 #   git-clone     git clone onto an empty dest
@@ -44,8 +43,8 @@ function show_requirements(; io::IO = stdout)
     print_help_lines(
         io,
         "Deploy and check the project on SSH hosts before go / drive.",
-        "Recommended: ship-tree, instantiate, check, then optional runtest.",
-        "  After ship-tree, instantiate/check/go use that run id (local",
+        "Recommended: ship-tree, instantiate, doctor --deploy, then optional runtest.",
+        "  After ship-tree, instantiate/doctor/go use that run id (local",
         "  last-ship.toml, or pass --run-id ID). Lexical latest is not used.",
         "  A git checkout at the deploy root remains usable without --run-id;",
         "  delete/git-clone/git-sync/git-pull clear the matching local last-ship record.",
@@ -92,7 +91,7 @@ function show_requirements(; io::IO = stdout)
         "An SSH name must not start with '-' (including user@-host).",
         "A host or remote path must not contain NUL, a newline, or another control character.",
         "Git parity is drive --require-git (off by default).",
-        "setup check fails when Julia patch or prerelease differs from this process.",
+        "doctor --deploy fails when Julia patch or prerelease differs from this process.",
         "A build suffix alone still passes. --ignore-julia-version turns skew into a warning.",
         "go and drive compare the full VERSION string and the Julia commit.",
     )
@@ -103,7 +102,7 @@ function show_requirements(; io::IO = stdout)
         "  $(cli_m_project()) setup SUBCOMMAND host1 host2",
         "  setup ship-tree host1 host2",
         "  setup instantiate host1 host2",
-        "  setup check host1 host2",
+        "  doctor --deploy host1 host2",
         "  setup runtest host1 host2",
         "  setup ship-tree --deploy-root /abs/deploy host1",
         "  setup remote-root --deploy-root /abs/deploy host1",
@@ -120,9 +119,8 @@ function show_requirements(; io::IO = stdout)
         "  git-sync / git-pull git update (confirm unless -y)",
         "  git-sync --skip-git-guard  allow dirty local tree; deploy record marks dirty",
         "  instantiate        Pkg.instantiate on remotes",
-        "  check              SSH, Julia, project, deps (patch and prerelease must match)",
         "  runtest            Pkg.test of the job project on remotes",
-        "  cleanup            stale workers",
+        "  cleanup            job-scoped workers (--job-id required)",
         "  delete             remote project tree (needs --confirm-path;",
         "                     refuses an unowned Ship run.toml)",
         "  prune              .distssh (and legacy .distsshkit) go/drive/setup/runs",
@@ -136,7 +134,9 @@ function show_requirements(; io::IO = stdout)
         "  --deploy-root PATH   remote deployment root (location, not snapshot id).",
         "                       Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
         "                       ~/Parent/RepoName layout from the local env_dir.",
-        "  --run-id ID        runs/<ID>/ under that root (instantiate/check/runtest)",
+        "  --run-id ID        runs/<ID>/ under that root (instantiate/runtest)",
+        "  --job-id ID        with cleanup: kill only workers for this job",
+        "  --job-id ID        with cleanup: kill only workers for this job",
         "  --allow-external-symlinks  with ship-tree: keep escaping symlinks",
         "  --julia PATH         remote Julia",
         "  --ignore-julia-version  warn on Julia version skew instead of failing",
@@ -164,7 +164,7 @@ function show_requirements(; io::IO = stdout)
     print_help_blank(io)
     return print_help_lines(
         io,
-        "Details: docs (manual/setup). See also: go, drive, hostinfo.",
+        "Details: docs (manual/setup). See also: doctor, go, drive, hostinfo.",
     )
 end
 
@@ -217,7 +217,7 @@ function _setup_legacy_git_subcommand(flag::AbstractString)::Union{Nothing, Stri
 end
 
 function _setup_legacy_mode_name(flag::AbstractString)::Union{Nothing, String}
-    flag == "--check" && return "check"
+    flag == "--check" && return nothing
     flag == "--instantiate" && return "instantiate"
     flag == "--runtest" && return "runtest"
     flag == "--cleanup" && return "cleanup"
@@ -278,7 +278,7 @@ function parse_setup_args(args::Vector{String})
         "setup";
         valued = (
             "--confirm-path", "--older-than", "--id", "--julia", "--repo",
-            "--remote-path", DEPLOY_ROOT_FLAG, "--run-id", "--extra-file",
+            "--remote-path", DEPLOY_ROOT_FLAG, "--run-id", "--job-id", "--extra-file",
         ),
         prefixes = ("--remote-path=",),
         known = (
@@ -299,6 +299,7 @@ function parse_setup_args(args::Vector{String})
     repo_url = nothing
     deploy_root = nothing
     run_id = nothing
+    job_id = nothing
     hosts = String[]
     show_help = false
     ignore_julia_version = false
@@ -324,6 +325,11 @@ function parse_setup_args(args::Vector{String})
             continue
         end
         _throw_setup_removed_git_subcommand!(arg)
+        if arg == "--check"
+            mode, mode_flag = _setup_set_mode!(mode_flag, :check, arg)
+            cli_consume!(c)
+            continue
+        end
         sub = _setup_subcommand(arg)
         if sub !== nothing
             mode, mode_flag = _setup_set_mode!(mode_flag, sub, arg)
@@ -371,6 +377,10 @@ function parse_setup_args(args::Vector{String})
             raw = String(strip(cli_take_value!(c, arg)))
             isempty(raw) && throw(ArgumentError("--run-id needs a non-empty id"))
             run_id = raw
+        elseif arg == "--job-id"
+            raw = String(strip(cli_take_value!(c, arg)))
+            isempty(raw) && throw(ArgumentError("--job-id needs a non-empty id"))
+            job_id = raw
         elseif arg == "--extra-file"
             raw = String(strip(cli_take_value!(c, arg)))
             isempty(raw) && throw(ArgumentError("setup --extra-file needs a path"))
@@ -407,12 +417,16 @@ function parse_setup_args(args::Vector{String})
     skip_git_guard && mode !== :git_sync && throw(
         ArgumentError("setup: --skip-git-guard only applies to setup git-sync"),
     )
+    job_id !== nothing && mode !== :cleanup && throw(
+        ArgumentError("setup: --job-id only applies to setup cleanup"),
+    )
     return (
         mode = mode,
         julia_path = julia_path,
         repo_url = repo_url,
         deploy_root = deploy_root,
         run_id = run_id,
+        job_id = job_id,
         hosts = hosts,
         show_help = show_help,
         ignore_julia_version = ignore_julia_version,

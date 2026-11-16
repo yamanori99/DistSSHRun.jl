@@ -2529,7 +2529,8 @@ function print_kit_root_usage(io::IO = stderr)
     print_help_section("Commands"; io = io)
     print_help_lines(
         io,
-        "  setup              Clone / sync / check remotes",
+        "  setup              Clone / sync / maintain remotes",
+        "  doctor             Deploy prerequisite checks (--deploy)",
         "  up                 Align a Julia channel with juliaup",
         "  go                 Run an as-is complete job",
         "  ride               Experimental auto-split of map / filter",
@@ -2543,7 +2544,7 @@ function print_kit_root_usage(io::IO = stderr)
     print_help_section("Examples"; io = io)
     print_help_lines(
         io,
-        "  $(cli_m_project()) setup check host1",
+        "  $(cli_m_project()) doctor --deploy host1",
         "  $(cli_m_project()) up host1",
         "  $(cli_m_project()) go SCRIPT.jl",
         "  $(cli_m_project()) ride parent:2 SCRIPT.jl",

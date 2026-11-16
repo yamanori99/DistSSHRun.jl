@@ -532,14 +532,15 @@ function _remote_clone_parent(remote_path::AbstractString)::Union{Nothing, Strin
 end
 
 """
-Kill stale Julia worker processes on localhost and remote hosts.
+Kill DistSSH-tagged workers for `job_id` on localhost and remote hosts.
 
 Returns `(cancelled=false, succeeded, failed, hosts)` for the SSH hosts only
 (localhost cleanup is always attempted and not counted as a remote failure).
 """
-function cleanup_remote_workers(hosts::Vector{String})::NamedTuple
+function cleanup_remote_workers(hosts::Vector{String}, job_id::AbstractString)::NamedTuple
+    jid = _parse_kit_job_id(job_id)
     kit_spin!("  localhost: ") do
-        _pkill_local_julia_workers!()
+        _pkill_local_tagged_workers!(jid)
         return nothing
     end
     print_ok("✓")
@@ -550,7 +551,7 @@ function cleanup_remote_workers(hosts::Vector{String})::NamedTuple
     kit_spin!("  Cleaning remotes ($(length(hosts))) ") do
         map_host_jobs(hosts) do i, host
             _setup_host_span!(host, :running)
-            okh = _pkill_remote_julia_workers!(host)
+            okh = _pkill_remote_tagged_workers!(host, jid)
             oks[i] = okh
             _setup_host_span!(host, okh ? :ok : :fail)
         end
