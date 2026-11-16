@@ -656,7 +656,7 @@ function _require_manifest_in_pack_paths!(project::AbstractString)
         ArgumentError(
             "Manifest $man_rel is not in the shipped tree. " *
                 "Workers would instantiate a different resolution. " *
-                "Stop ignoring it, add a negation pattern, or change the ignore rules.",
+                "The file may be missing on disk or unreadable before SSH.",
         ),
     )
 end

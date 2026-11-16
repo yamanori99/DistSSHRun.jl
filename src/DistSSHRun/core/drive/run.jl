@@ -404,6 +404,7 @@ function _run_drive_parsed_specialized!(
                     run_dir = run_dir,
                 )
                 DistSSHRun._write_kit_result_file(result)
+                DistSSHRun.note_controller_shipped_tree_drift!(project_root_abs)
                 DistSSHRun.write_kit_run_toml!(
                     run_dir;
                     kind = :drive,

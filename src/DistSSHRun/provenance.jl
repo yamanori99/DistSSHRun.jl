@@ -970,6 +970,11 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     env_tbl isa AbstractDict && !isempty(env_tbl) && (data["environment"] = copy(env_tbl))
     hb = started ? _PROVENANCE_HEARTBEAT[] : nothing
     hb !== nothing && (data["heartbeat"] = hb)
+    drift = _shipped_tree_drift_provenance()
+    drift !== nothing && (data["shipped_tree_drift"] = drift)
+    forced = _forced_ignore_ship_provenance()
+    forced isa AbstractVector && !isempty(forced) &&
+        (data["ship_forced_ignore"] = copy(forced))
     return data
 end
 
