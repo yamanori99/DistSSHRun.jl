@@ -34,9 +34,9 @@ Read counts with [`launch_report_planned`](@ref), [`launch_report_joined`](@ref)
 and [`launch_report_usable`](@ref); list rows with [`launch_report_failures`](@ref).
 Do not rely on positional `LaunchReport(...)` construction.
 
-The 0.2.0 cluster manager and controller provenance use the same field names as
-[`launch_report_*`](@ref) accessors: `planned_workers`, `joined_workers`, and
-`failures` (internal storage only — prefer the accessors).
+The 0.2.0 cluster manager and controller provenance use the same counts as
+[`launch_report_planned`](@ref) / [`launch_report_joined`](@ref) and the rows from
+[`launch_report_failures`](@ref). Prefer those accessors over field access.
 """
 struct LaunchReport
     planned_workers::Int

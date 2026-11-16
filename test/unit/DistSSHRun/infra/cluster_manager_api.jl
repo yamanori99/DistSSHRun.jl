@@ -17,7 +17,6 @@ const _CLUSTER_MANAGER_EXPORTS = (
     :job_item_seed,
     :worker_pmap,
     :WorkerPlan,
-    :resolved_placement_tokens,
 )
 
 const _CLUSTER_MANAGER_PUBLIC_UNEXPORTED = (
@@ -39,6 +38,7 @@ const _CLUSTER_MANAGER_PUBLIC_UNEXPORTED = (
     :with_unsafe_expose_port,
     :with_unsafe_all_to_all,
     :DriveJobOptions,
+    :resolved_placement_tokens,
 )
 
 @testset "cluster manager API freeze" begin
@@ -85,10 +85,10 @@ const _CLUSTER_MANAGER_PUBLIC_UNEXPORTED = (
         :julia,
     )
 
-    @test Tuple(instance(DistSSHRun.WorkerLaunchOutcome)) == (
-        :Joined,
-        :FailedToConnect,
-        :FailedToLoad,
+    @test Tuple(instances(DistSSHRun.WorkerLaunchOutcome)) == (
+        DistSSHRun.Joined,
+        DistSSHRun.FailedToConnect,
+        DistSSHRun.FailedToLoad,
     )
     @test DistSSHRun.SEED_SCHEME === 1
 

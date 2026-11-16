@@ -274,6 +274,7 @@ Filter = function (x)
         # A tuple or a `String` has no `nameof`. The blocks below document these.
         x === DistSSHRun.NO_COMMAND_HINT_LINES && return false
         x === DistSSHRun.RUN_SUBCOMMAND_EXPECTATION && return false
+        x === DistSSHRun.SEED_SCHEME && return false
         return true
     end
     return !(n in grouped)
