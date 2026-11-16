@@ -1027,7 +1027,7 @@ function go!(
     try
         _reset_run_provenance!(proj)
         _clear_active_selection!()
-        _clear_active_deploy_record!()
+        _clear_active_deploy_record_unless_run_id!(snap_arg)
         warn_project_sshflags(proj)
         _ensure_kit_run_dir!(:go, script_path; project = proj)
         cfg = resolve_run_job_config(;

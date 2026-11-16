@@ -803,6 +803,32 @@ function _env_run_id_shipped_run_verify_tests()
                 end
             end
         end
+        @testset "last-ship.toml does not substitute deploy record" begin
+            _with_tempdir() do proj
+                _env_verify_job!(proj)
+                env = DistSSHRun.resolve_pkg_env(proj)
+                DistSSHRun.write_last_ship_record!(
+                    env.env_dir,
+                    proj,
+                    ["host1"],
+                    "20260102T000000Z-bbbbbb",
+                )
+                DistSSHRun._clear_active_deploy_record!()
+                @test_throws ErrorException DistSSHRun.verify_workers_match_shipped_run!(
+                    proj; run_id = rid
+                )
+            end
+        end
+        @testset "explicit run_id must match active deploy record run_id" begin
+            _with_tempdir() do proj
+                _env_verify_job!(proj)
+                _env_run_id_deploy_record!(proj, rid)
+                @test_throws ErrorException DistSSHRun.verify_workers_match_shipped_run!(
+                    proj; run_id = "20260102T000000Z-bbbbbb"
+                )
+                DistSSHRun._clear_active_deploy_record!()
+            end
+        end
         @testset "missing manifest_hash on deploy record" begin
             _with_tempdir() do proj
                 _env_verify_job!(proj)

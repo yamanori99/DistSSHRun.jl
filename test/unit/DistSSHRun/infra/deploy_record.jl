@@ -369,3 +369,21 @@ end
         end
     end
 end
+
+@testset "active deploy record preserved for explicit run_id" begin
+    rid = "20260101T000000Z-aaaaaa"
+    other = "20260102T000000Z-bbbbbb"
+    rec = Dict{String, Any}("run_id" => rid, "mode" => "ship-tree", "manifest_hash" => "a"^64)
+    try
+        DistSSHRun._set_active_deploy_record!(rec)
+        DistSSHRun._clear_active_deploy_record_unless_run_id!(rid)
+        @test DistSSHRun.active_deploy_record() !== nothing
+        DistSSHRun._clear_active_deploy_record_unless_run_id!(other)
+        @test DistSSHRun.active_deploy_record() === nothing
+        DistSSHRun._set_active_deploy_record!(rec)
+        DistSSHRun._clear_active_deploy_record_unless_run_id!(nothing)
+        @test DistSSHRun.active_deploy_record() === nothing
+    finally
+        DistSSHRun._clear_active_deploy_record!()
+    end
+end

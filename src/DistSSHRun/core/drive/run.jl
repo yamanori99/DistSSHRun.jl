@@ -354,7 +354,7 @@ function _run_drive_parsed_specialized!(
     return try
         DistSSHRun._reset_run_provenance!(project_root_abs)
         DistSSHRun._clear_active_selection!()
-        DistSSHRun._clear_active_deploy_record!()
+        DistSSHRun._clear_active_deploy_record_unless_run_id!(snap_for_script)
         # Inside `_drive_frame`: this `finally` restores after `rmprocs`.
         return _with_drive_process!(proj_dir) do
             local release_output_dir_lock

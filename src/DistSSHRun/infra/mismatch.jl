@@ -534,7 +534,7 @@ function _missing_deploy_record_for_run_error(
     lines = String[
         "what: deploy record for run_id=$(rid) is not available",
         "why: --run-id verifies worker Manifest/Project digests against the ship deploy record",
-        "fix: run setup ship-tree and instantiate on workers, then drive --run-id $(rid) (or pass remote hosts so the deploy record is read before launch)",
+            "fix: run setup ship-tree and instantiate on workers, then drive --run-id $(rid); remote hosts must be listed so deploy.toml is read (local last-ship.toml is not used for verification)",
     ]
     proj = isempty(strip(project)) ? "" : canonical_local_path(project)
     !isempty(proj) && push!(lines, "where: controller project=$(proj)")
@@ -565,33 +565,6 @@ function _missing_ship_project_digest_error(run_id::AbstractString)::String
     )
 end
 
-function _local_ship_record_deploy_record(
-        project::AbstractString,
-        rid::AbstractString,
-    )::Union{Nothing, Dict{String, Any}}
-    env = resolve_pkg_env(project)
-    ls = read_last_ship_record(env.env_dir)
-    ls === nothing && return nothing
-    got = get(ls, "run_id", nothing)
-    got isa AbstractString && validate_run_id(got) == rid || return nothing
-    parent = run_identity(project)
-    man = strip(get(parent, "manifest.sha256", ""))
-    proj_sha = strip(get(parent, "project.sha256", ""))
-    (isempty(man) || isempty(proj_sha)) && return nothing
-    digests = Any[
-        Dict{String, Any}("path" => "Project.toml", "blob" => proj_sha)
-    ]
-    cth = get(ls, "content_tree_hash", nothing)
-    return build_deploy_record(
-        project,
-        :ship_tree;
-        deploy_id = rid,
-        run_id = rid,
-        content_tree_hash = cth isa AbstractString ? cth : nothing,
-        content_file_digests = digests,
-    )
-end
-
 function _deploy_record_for_run_verify(
         run_id::AbstractString,
         project::AbstractString,
@@ -604,8 +577,6 @@ function _deploy_record_for_run_verify(
             return Dict{String, Any}(rec)
         end
     end
-    local_rec = _local_ship_record_deploy_record(project, rid)
-    local_rec !== nothing && return local_rec
     throw(ErrorException(_missing_deploy_record_for_run_error(rid, project)))
 end
 

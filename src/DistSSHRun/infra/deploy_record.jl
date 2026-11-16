@@ -12,6 +12,21 @@ function _clear_active_deploy_record!()
     return nothing
 end
 
+"""Clear in-memory deploy record unless it already matches explicit `run_id` (no last-ship lookup)."""
+function _clear_active_deploy_record_unless_run_id!(run_id::Union{Nothing, AbstractString})
+    if run_id isa AbstractString && !isempty(strip(run_id))
+        rid = validate_run_id(run_id)
+        rec = active_deploy_record()
+        if rec isa AbstractDict
+            got = get(rec, "run_id", nothing)
+            if got isa AbstractString && validate_run_id(String(got)) == rid
+                return nothing
+            end
+        end
+    end
+    return _clear_active_deploy_record!()
+end
+
 function active_deploy_record()::Union{Nothing, Dict{String, Any}}
     return _ACTIVE_DEPLOY_RECORD[]
 end

@@ -905,8 +905,19 @@ using Dates
             )
             _sync_test_project_manifest!(app)
             snap_id = "20260101T000000Z-aaaaaa"
-            snap_env = DistSSHRun.resolve_pkg_env(app)
-            DistSSHRun.write_last_ship_record!(snap_env.env_dir, app, ["host1"], snap_id)
+            parent = DistSSHRun.run_identity(app)
+            digests = Any[
+                Dict{String, Any}("path" => "Project.toml", "blob" => parent["project.sha256"])
+            ]
+            DistSSHRun._set_active_deploy_record!(
+                DistSSHRun.build_deploy_record(
+                    app,
+                    :ship_tree;
+                    deploy_id = snap_id,
+                    run_id = snap_id,
+                    content_file_digests = digests,
+                )
+            )
             script = joinpath(app, "job.jl")
             write(script, "println(\"SNAPSHOT_SIBLING_OK\")\n")
             plain = redirect_stdout(devnull) do

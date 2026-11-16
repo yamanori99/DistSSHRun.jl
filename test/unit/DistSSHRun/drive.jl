@@ -1094,8 +1094,19 @@ end
             _sync_test_project_manifest!(app)
             @test occursin("path = \"../Bar\"", read(joinpath(app, "Project.toml"), String))
             snap_id = "20260101T000000Z-aaaaaa"
-            snap_env = DistSSHRun.resolve_pkg_env(app)
-            DistSSHRun.write_last_ship_record!(snap_env.env_dir, app, ["host1"], snap_id)
+            parent = DistSSHRun.run_identity(app)
+            digests = Any[
+                Dict{String, Any}("path" => "Project.toml", "blob" => parent["project.sha256"])
+            ]
+            DistSSHRun._set_active_deploy_record!(
+                DistSSHRun.build_deploy_record(
+                    app,
+                    :ship_tree;
+                    deploy_id = snap_id,
+                    run_id = snap_id,
+                    content_file_digests = digests,
+                )
+            )
             script = joinpath(app, "job.jl")
             marker = joinpath(root, "RAN")
             write(script, "write($(repr(marker)), \"yes\")\n")
@@ -1130,8 +1141,19 @@ end
             script = joinpath(proj, "job.jl")
             write(script, "1\n")
             rid = "20260101T000000Z-aaaaaa"
-            env = DistSSHRun.resolve_pkg_env(proj)
-            DistSSHRun.write_last_ship_record!(env.env_dir, proj, ["host1"], rid)
+            parent = DistSSHRun.run_identity(proj)
+            digests = Any[
+                Dict{String, Any}("path" => "Project.toml", "blob" => parent["project.sha256"])
+            ]
+            DistSSHRun._set_active_deploy_record!(
+                DistSSHRun.build_deploy_record(
+                    proj,
+                    :ship_tree;
+                    deploy_id = rid,
+                    run_id = rid,
+                    content_file_digests = digests,
+                )
+            )
             DistSSHRun.set_kit_verbosity!(:quiet)
             try
                 result = DistSSHRun.drive!(
