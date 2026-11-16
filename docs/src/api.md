@@ -164,6 +164,10 @@ DistSSHShip.read_shipment_record
 DistSSHShip.read_shipment_record_status
 DistSSHShip.shipment_record_status
 DistSSHShip.verify_shipment_record
+DistSSHShip.content_file_digests
+DistSSHShip.chmod_shipped_files_readonly!
+DistSSHShip.shipped_file_digest_mismatches
+DistSSHShip.shipped_file_mode_violations
 ```
 
 ## Hosts, cache, and run directories
