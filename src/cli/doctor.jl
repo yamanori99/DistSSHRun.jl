@@ -100,7 +100,7 @@ if !isdefined(@__MODULE__, :doctor_main)
         log_dir = DistSSHRun.setup_log_dir(project)
         init_log_file(log_dir; prefix = "doctor", path_anchor = path_anchor)
         try
-            report = DistSSHRun.with_kit_inproc_run!(:doctor) do
+            report = DistSSHRun._with_kit_inproc_run!(:doctor) do
                 DistSSHRun.apply_session_env!(session)
                 return DistSSHRun.doctor_deploy_check(
                     opts.hosts,
