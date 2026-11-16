@@ -28,16 +28,27 @@ struct LaunchReport
     failures::Vector{HostLaunchFailure}
 end
 
+"""Planned worker count from a [`LaunchReport`](@ref) (sum of ranks in the launch plan)."""
 launch_report_planned(r::LaunchReport)::Int = r.planned_workers
+
+"""Workers that joined and passed load verification in this launch."""
 launch_report_joined(r::LaunchReport)::Int = r.joined_workers
+
+"""Per-host rows where joined count fell short or load failed (defensive copy)."""
 launch_report_failures(r::LaunchReport)::Vector{HostLaunchFailure} = copy(r.failures)
 
 function _host_launch_failure(f::HostLaunchFailure)
     return (f.host, f.requested, f.joined, f.outcome, f.reason)
 end
 
+"""
+`true` when every planned worker joined and no host failure rows were recorded.
+
+Strict drive/ride treat a false result as [`LaunchIncompleteError`](@ref) when
+`best_effort` is false.
+"""
 function launch_report_usable(r::LaunchReport)::Bool
-    isempty(r.failures) && r.joined_workers == r.planned_workers
+    return isempty(r.failures) && r.joined_workers == r.planned_workers
 end
 
 """Thrown when launch did not place all planned workers and `best_effort` is false."""

@@ -13,7 +13,8 @@ const _FAKE_ARBITRARY_DEST_SHIP_SSH = joinpath(
     "DistSSHBase",
     "test",
     "fixtures",
-    "fake_arbitrary_dest_ship_ssh.jl")
+    "fake_arbitrary_dest_ship_ssh.jl"
+)
 
 @testset "fake ssh child env under Pkg.test-like parent" begin
     @testset "grandchild loads Tar with sandbox load path only" begin
@@ -21,20 +22,24 @@ const _FAKE_ARBITRARY_DEST_SHIP_SSH = joinpath(
             active = TEST_PROJECT
             withenv(
                 "JULIA_LOAD_PATH" => "@:$narrow",
-                "JULIA_PROJECT" => active) do
+                "JULIA_PROJECT" => active
+            ) do
                 _with_tempdir() do state
                     env = merge(
                         _fake_setup_remote_env(state),
                         Dict(
                             "DISTSSH_TEST_SSH" => abspath(_FAKE_ARBITRARY_DEST_SHIP_SSH),
-                            "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia"))
+                            "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia"
+                        )
+                    )
                     withenv(env...) do
                         cmd = DistSSHRun.DistSSHBase._host_sync_remote_shell_cmd("host1", "true")
                         out = IOBuffer()
                         err = IOBuffer()
                         proc = run(
                             pipeline(ignorestatus(cmd); stdout = out, stderr = err);
-                            wait = true)
+                            wait = true
+                        )
                         @test something(proc.exitcode, 1) == 0
                         @test occursin("ok", String(take!(out)))
                     end
@@ -50,7 +55,9 @@ const _FAKE_ARBITRARY_DEST_SHIP_SSH = joinpath(
                 Dict(
                     "DISTSSH_TEST_SSH" => abspath(_FAKE_ARBITRARY_DEST_SHIP_SSH),
                     "DISTSSH_TEST_STATE_ROOT" => "",
-                    "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia"))
+                    "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia"
+                )
+            )
             withenv(env...) do
                 code, out, err = DistSSHRun.DistSSHBase._remote_shell_status_parts("host1", "true")
                 @test code == 1
@@ -61,7 +68,8 @@ const _FAKE_ARBITRARY_DEST_SHIP_SSH = joinpath(
                     write(joinpath(proj, "Project.toml"), "name = \"Pkg\"\n")
                     write(
                         joinpath(proj, "Manifest.toml"),
-                        "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+                        "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n"
+                    )
                     write(joinpath(proj, "keep.jl"), "1\n")
                     host = "host1"
                     dest = "/home/distsshkit/.distsshqueue/stage/empty-root"
@@ -70,7 +78,8 @@ const _FAKE_ARBITRARY_DEST_SHIP_SSH = joinpath(
                     pack = DistSSHRun.pack_ship_tree(proj)
                     try
                         result = DistSSHRun.pack_shipment(
-                            pack, [host], dest; write_record = false)
+                            pack, [host], dest; write_record = false
+                        )
                         @test !result.ok
                         @test length(result.hosts) == 1
                         msg = result.hosts[1].message

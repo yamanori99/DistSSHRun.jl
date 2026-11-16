@@ -14,7 +14,8 @@ function _hostinfo_fixture(;
         arch = "arm64",
         cpu_model = "Apple M4",
         julia_exe = "/Users/example/.julia/juliaup/julia-1.13.3+0.aarch64.apple.darwin14/bin/julia",
-        julia_version = "julia version 1.13.3")
+        julia_version = "julia version 1.13.3"
+    )
     return DistSSHRun.DistSSHBase.HostFacts(
         selector,
         identity,
@@ -29,7 +30,8 @@ function _hostinfo_fixture(;
         arch,
         cpu_model,
         julia_exe,
-        julia_version)
+        julia_version
+    )
 end
 
 @testset "hostinfo" begin
@@ -75,7 +77,8 @@ end
         julia_exe = "/usr/bin/julia",
         julia_version = "julia version 1.13.1",
         ncpu = 8,
-        total_memory_bytes = UInt64(17179869184))
+        total_memory_bytes = UInt64(17179869184)
+    )
     linux_out = sprint(io -> DistSSHRun.print_hostinfo([linux]; io = io))
     @test occursin("Ubuntu 24.04.1 LTS", linux_out)
     @test occursin("Linux 6.8.0-40-generic", linux_out)
@@ -92,7 +95,8 @@ end
         arch = "x86_64",
         cpu_model = nothing,
         julia_exe = nothing,
-        julia_version = nothing)
+        julia_version = nothing
+    )
     wsl_out = sprint(io -> DistSSHRun.print_hostinfo([wsl]; io = io))
     @test occursin("(WSL)", wsl_out)
     @test occursin(r"Julia\s*:\s+-", wsl_out)
@@ -108,7 +112,8 @@ end
         ncpu = nothing,
         total_memory_bytes = nothing,
         julia_exe = nothing,
-        julia_version = nothing)
+        julia_version = nothing
+    )
     miss_out = sprint(io -> DistSSHRun.print_hostinfo([missing_bits]; io = io))
     @test occursin("Status:", miss_out)
     @test occursin("ok", miss_out)
@@ -121,7 +126,8 @@ end
     failed = DistSSHRun.DistSSHBase.HostFacts(
         "ghost", "ghost", false, "connection refused",
         nothing, nothing, nothing, nothing, nothing,
-        nothing, nothing, nothing, nothing, nothing)
+        nothing, nothing, nothing, nothing, nothing
+    )
     failout = sprint(io -> DistSSHRun.print_hostinfo([failed]; io = io))
     @test occursin("fail", failout)
     @test occursin("connection refused", failout)
@@ -137,7 +143,8 @@ end
     @test occursin("ghost", multi)
 
     long_exe = _hostinfo_fixture(;
-        julia_exe = "/" * join(fill("very-long-julia-path-segment", 12), "/") * "/bin/julia")
+        julia_exe = "/" * join(fill("very-long-julia-path-segment", 12), "/") * "/bin/julia"
+    )
     narrow = IOContext(IOBuffer(), :displaysize => (24, 40))
     DistSSHRun.print_hostinfo([long_exe]; io = narrow)
     long_out = String(take!(narrow.io))

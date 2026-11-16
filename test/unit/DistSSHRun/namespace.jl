@@ -2,7 +2,8 @@ using Test
 
 @testset "namespace" begin
     @test DistSSHRun.cache_remote_dir("/remote/App") == joinpath(
-        "/remote/App", ".distssh", "cache", "sha256")
+        "/remote/App", ".distssh", "cache", "sha256"
+    )
 
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"CachePush\"\n")
@@ -17,22 +18,27 @@ using Test
         h = DistSSHRun.file_sha256(DistSSHRun.cache_file(src; project = proj))
         @test_throws ArgumentError DistSSHRun.push_cache!(
             DistSSHRun.DistSSHSession(project = proj, workers = ["host1"]);
-            hashes = ["not-a-hash"])
+            hashes = ["not-a-hash"]
+        )
         @test_throws ArgumentError DistSSHRun.push_cache!(
             DistSSHRun.DistSSHSession(project = proj, workers = ["host1"]);
-            hashes = ["a"^64])
+            hashes = ["a"^64]
+        )
         _with_tempdir() do state_dir
             env = merge(
                 _fake_setup_remote_env(state_dir),
                 Dict(
                     "DISTRIBUTED_PROJECT_ROOT" => proj,
-                    "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/fake/remote/CachePush"))
+                    "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/fake/remote/CachePush"
+                )
+            )
             withenv(env...) do
                 DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true))
                 sess = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["host1"],
-                    remote = "/fake/remote/CachePush")
+                    remote = "/fake/remote/CachePush"
+                )
                 ok = DistSSHRun.push_cache!(sess)
                 @test ok.ok
                 @test length(ok.hosts) == 1
@@ -69,7 +75,8 @@ function _run_cache_extract(cache::AbstractString, tar::Vector{UInt8})
     proc = withenv(
         "JULIA_PROJECT" => nothing,
         "JULIA_LOAD_PATH" => "@stdlib",
-        "JULIA_DEPOT_PATH" => "") do
+        "JULIA_DEPOT_PATH" => ""
+    ) do
         return open(pipeline(ignorestatus(cmd); stdout = out, stderr = err); write = true)
     end
     write(proc, tar)

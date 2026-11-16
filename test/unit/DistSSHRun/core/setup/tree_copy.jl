@@ -40,7 +40,8 @@ using Test
         filled = mktempdir()
         write(joinpath(filled, "x"), "x")
         @test_throws ArgumentError DistSSHRun._extract_remote_tar!(
-            "host.test", "/remote/out", filled; julia_bin = "julia")
+            "host.test", "/remote/out", filled; julia_bin = "julia"
+        )
         rm(filled; force = true, recursive = true)
         sh = DistSSHRun._remote_tar_create_sh("julia", "/remote/out")
         @test occursin("Tar.create", sh)
@@ -70,7 +71,8 @@ using Test
         extract = DistSSHRun._remote_stdlib_julia_e(
             julia,
             "using Tar; isdir(ARGS[1]) || mkdir(ARGS[1]); Tar.extract(stdin, ARGS[1])";
-            args = String["/src"])
+            args = String["/src"]
+        )
         @test occursin("Tar.extract", extract)
         @test occursin("--compiled-modules=existing", extract)
         @test occursin("JULIA_DEPOT_PATH=", extract)
@@ -84,7 +86,8 @@ using Test
             out = withenv(
                 "JULIA_DEPOT_PATH" => depot,
                 "JULIA_PROJECT" => dummy,
-                "JULIA_LOAD_PATH" => dummy) do
+                "JULIA_LOAD_PATH" => dummy
+            ) do
                 return read(`sh -c $script`, String)
             end
             @test occursin("Tar", out)
@@ -193,13 +196,15 @@ using Test
                 @test cmd.exec[1] == DistSSHRun._ssh_exe()
                 @test "-n" in cmd.exec
                 fed = DistSSHRun._host_sync_remote_shell_cmd(
-                    "host.test", "true"; forward_stdin = true)
+                    "host.test", "true"; forward_stdin = true
+                )
                 @test !("-n" in fed.exec)
             end
             withenv(
                 "DISTSSH_TEST" => nothing,
                 "DISTSSH_TEST_SSH" => "/tmp/distsshkit-not-a-test.jl",
-                "DISTSSH_TEST_LOCAL_JULIAUP" => "/tmp/distsshkit-not-a-juliaup") do
+                "DISTSSH_TEST_LOCAL_JULIAUP" => "/tmp/distsshkit-not-a-juliaup"
+            ) do
                 cmd = DistSSHRun._host_sync_remote_shell_cmd("host.test", "true")
                 @test cmd.exec[1] == DistSSHRun._ssh_exe()
                 @test !in("/tmp/distsshkit-not-a-juliaup", DistSSHRun.DistSSHBase.local_juliaup_candidates())
@@ -207,7 +212,8 @@ using Test
             withenv(
                 "DISTSSH_TEST" => nothing,
                 "DISTSSH_TEST_SSH" => nothing,
-                "DISTRIBUTED_SSH_OPTS" => "-F \"/tmp/cfg dir/config\" -o BatchMode=yes") do
+                "DISTRIBUTED_SSH_OPTS" => "-F \"/tmp/cfg dir/config\" -o BatchMode=yes"
+            ) do
                 vec = DistSSHRun.ssh_opts()
                 @test vec[1:2] == ["-F", "/tmp/cfg dir/config"]
                 @test count(==("BatchMode=yes"), vec) == 1
@@ -260,7 +266,8 @@ using Test
                                 flush(stdin_io)
                                 seekstart(stdin_io)
                                 DistSSHRun.ship_tree!(
-                                    smoke_project, ["host1"], remote_path; confirm = true)
+                                    smoke_project, ["host1"], remote_path; confirm = true
+                                )
                             end
                             @test result.cancelled
                             @test occursin("Cancelled.", out)
@@ -293,7 +300,8 @@ function _gitignore_tree!(dir::String)
     write(joinpath(dir, "Project.toml"), "name = \"App\"\n")
     write(
         joinpath(dir, ".gitignore"),
-        "*.csv\n!data/input.csv\nManifest*.toml\n!Manifest.toml\n")
+        "*.csv\n!data/input.csv\nManifest*.toml\n!Manifest.toml\n"
+    )
     mkpath(joinpath(dir, "data"))
     mkpath(joinpath(dir, "src"))
     mkpath(joinpath(dir, ".distssh"))
@@ -334,7 +342,8 @@ end
         end
 
         session = DistSSHRun.DistSSHSession(
-            project = pwd(), workers = ["h"], quiet = true)
+            project = pwd(), workers = ["h"], quiet = true
+        )
         @test_throws MethodError DistSSHRun.sync!(session; mode = :git_sync, gitignore = false)
         @test_throws MethodError DistSSHRun.setup!(session, :check; gitignore = false)
 
@@ -354,7 +363,8 @@ end
             touch(joinpath(tree, "keepme.txt"))
             out, result = _capture_stdio() do _, _
                 DistSSHRun.clone_to_remotes(
-                    [host], remote_path, "git@example.com:org/App.jl.git")
+                    [host], remote_path, "git@example.com:org/App.jl.git"
+                )
             end
             @test !result.cancelled && result.succeeded == 0 && result.failed == 1
             @test length(result.hosts) == 1 && !result.hosts[1].ok
@@ -365,7 +375,8 @@ end
 
     @testset "forbidden remote dest and clone parent" begin
         @test_throws ArgumentError DistSSHRun.prune_kit_leaves(
-            ["host1"], "/", pwd(); confirm = false)
+            ["host1"], "/", pwd(); confirm = false
+        )
         @test occursin("pwd -P", DistSSHRun._prune_remote_shell("~/App.jl"))
         @test occursin("refusing to prune", DistSSHRun._prune_remote_shell("~/App.jl"))
         @test DistSSHRun._remote_clone_parent("~/jobs/App") == "~/jobs"

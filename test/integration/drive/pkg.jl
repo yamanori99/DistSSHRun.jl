@@ -19,7 +19,8 @@ using Test
 
             [deps]
             JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
-            """)
+            """
+        )
         script = joinpath(proj, "job.jl")
         cp(fixture, script; force = true)
 

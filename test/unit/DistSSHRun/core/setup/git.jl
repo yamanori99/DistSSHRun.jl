@@ -5,11 +5,13 @@ function _git_sync_via_ssh_shim!(bindir, work, remote; hosts = ["dest"])
     return withenv(
         "PATH" => bindir * ":" * path0,
         "DISTSSH_TEST" => nothing,
-        "DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes") do
+        "DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes"
+    ) do
         return _capture_stdio() do _, _
             DistSSHRun.git_sync_project_to_hosts!(
                 hosts, work, remote;
-                do_push = false, do_pull = true, confirm = false)
+                do_push = false, do_pull = true, confirm = false
+            )
         end
     end
 end
@@ -46,7 +48,8 @@ end
             "GIT_CONFIG_GLOBAL" => blank_global,
             "GIT_CONFIG_SYSTEM" => blank_system,
             "GIT_CONFIG_COUNT" => nothing,
-            "GIT_CONFIG_PARAMETERS" => nothing)
+            "GIT_CONFIG_PARAMETERS" => nothing
+        )
         for k in keys(ENV)
             if startswith(k, "GIT_CONFIG_KEY_") || startswith(k, "GIT_CONFIG_VALUE_")
                 env[k] = nothing
@@ -69,7 +72,8 @@ end
     @testset "resolve_clone_url" begin
         @test DistSSHRun.resolve_clone_url(
             "https://github.com/org/App.jl.git",
-            "/unused") == "git@github.com:org/App.jl.git"
+            "/unused"
+        ) == "git@github.com:org/App.jl.git"
         _with_tempdir() do tmp
             @test_throws ErrorException DistSSHRun.resolve_clone_url(nothing, tmp; surface = :cli)
             @test_throws ErrorException DistSSHRun.resolve_clone_url("", tmp; surface = :api)
@@ -119,7 +123,8 @@ end
             @test DistSSHRun._is_deploy_metadata_status_entry("??", ".distssh")
             @test DistSSHRun._is_deploy_metadata_status_entry("??", ".distssh/deploy.toml")
             @test DistSSHRun._is_deploy_metadata_status_entry(
-                "??", ".distssh/deploy.toml.20260101T000000Z-aaaaaa.tmp")
+                "??", ".distssh/deploy.toml.20260101T000000Z-aaaaaa.tmp"
+            )
             @test DistSSHRun._is_deploy_metadata_status_entry("??", ".distssh/shipment.toml")
             @test DistSSHRun._is_deploy_metadata_status_entry("??", ".distssh/ship.toml")
             @test !DistSSHRun._is_deploy_metadata_status_entry("??", "extra.txt")
@@ -132,15 +137,19 @@ end
             @test !DistSSHRun._is_deploy_metadata_status_entry("C ", ".distssh/deploy.toml")
             @test DistSSHRun._remote_git_has_blocking_dirty("?? .distssh-foo/\0")
             @test DistSSHRun._remote_git_has_blocking_dirty(
-                "R  .distssh/deploy.toml\0.distssh/deploy.toml.old\0")
+                "R  .distssh/deploy.toml\0.distssh/deploy.toml.old\0"
+            )
             @test DistSSHRun._remote_git_has_blocking_dirty(
-                "C  .distssh/shipment.toml\0.distssh/deploy.toml\0")
+                "C  .distssh/shipment.toml\0.distssh/deploy.toml\0"
+            )
             @test !DistSSHRun._remote_git_has_blocking_dirty("?? .distssh/\0")
             @test !DistSSHRun._remote_git_has_blocking_dirty(
-                "?? .distssh/deploy.toml\0?? .distssh/deploy.toml.x.tmp\0")
+                "?? .distssh/deploy.toml\0?? .distssh/deploy.toml.x.tmp\0"
+            )
             @test DistSSHRun._remote_git_has_blocking_dirty("?? extra.txt\0")
             @test DistSSHRun._remote_git_has_blocking_dirty(
-                "?? .distssh/\0?? extra.txt\0")
+                "?? .distssh/\0?? extra.txt\0"
+            )
             @test DistSSHRun._remote_git_has_blocking_dirty(" M .distssh/deploy.toml\0")
             probe = DistSSHRun._commit_tracks_deploy_metadata_dir("/nonexistent-distsshkit-repo", "a"^40)
             @test !probe.ok
@@ -150,7 +159,8 @@ end
                 "dest",
                 "/nonexistent-distsshkit-repo",
                 "a"^40,
-                "?? .distssh/deploy.toml\0")
+                "?? .distssh/deploy.toml\0"
+            )
             @test collision isa String
             @test occursin("could not read whether commit", collision)
             @test occursin("Refusing checkout", collision)
@@ -166,7 +176,8 @@ end
                     redirect_stderr(devnull) do
                         DistSSHRun.git_sync_project_to_hosts!(
                             ["192.0.2.1"], work, "~/App.jl";
-                            do_push = true, do_pull = true)
+                            do_push = true, do_pull = true
+                        )
                     end
                 end
                 @test !raw.ok
@@ -179,7 +190,8 @@ end
                     redirect_stderr(devnull) do
                         DistSSHRun.git_sync_project_to_hosts!(
                             ["192.0.2.1"], work, "~/App.jl";
-                            do_push = false, do_pull = true)
+                            do_push = false, do_pull = true
+                        )
                     end
                 end
                 @test !raw_dirty.ok
@@ -194,7 +206,8 @@ end
                         DistSSHRun.git_sync_project_to_hosts!(
                             ["192.0.2.1"], work, "~/App.jl";
                             do_push = false, do_pull = true, allow_dirty = true,
-                            confirm = false)
+                            confirm = false
+                        )
                     end
                 end
                 @test !raw_allow.ok
@@ -202,7 +215,8 @@ end
                 @test !occursin("Local git tree is dirty", out_allow)
 
                 session = DistSSHRun.DistSSHSession(
-                    project = work, workers = ["192.0.2.1"], quiet = true)
+                    project = work, workers = ["192.0.2.1"], quiet = true
+                )
                 out_sync, _ = _capture_stdio() do _, _
                     redirect_stderr(devnull) do
                         DistSSHRun.sync!(session; mode = :git_sync, allow_dirty = true)
@@ -215,7 +229,8 @@ end
 
         @testset "allow_dirty option wiring" begin
             @test_throws ArgumentError DistSSHRun.check_setup_options!(
-                :ship_tree; allow_dirty = true)
+                :ship_tree; allow_dirty = true
+            )
             session = DistSSHRun.DistSSHSession(project = pwd(), workers = ["h"])
             err = try
                 DistSSHRun.sync!(session; mode = :ship_tree, allow_dirty = true)
@@ -231,7 +246,8 @@ end
             @test DistSSHRun._setup_host_outcome_ok((; ok = true, detail = ""))
             @test !DistSSHRun._setup_host_outcome_ok((; ok = false, detail = "fatal:"))
             @test !DistSSHRun._setup_host_outcome_ok(
-                DistSSHRun._git_run_detail(["-C", "/nonexistent-distsshkit-repo", "status"]))
+                DistSSHRun._git_run_detail(["-C", "/nonexistent-distsshkit-repo", "status"])
+            )
         end
 
         @testset "git_sync confirm abort" begin
@@ -252,7 +268,8 @@ end
                                         seekstart(stdin_io)
                                         DistSSHRun.git_sync_project_to_hosts!(
                                             ["host1"], work, "~/App.jl";
-                                            do_push = true, do_pull = true)
+                                            do_push = true, do_pull = true
+                                        )
                                     end
                                     @test !raw.ok
                                     @test raw.cancelled
@@ -271,7 +288,8 @@ end
                             redirect_stderr(devnull) do
                                 DistSSHRun.git_sync_project_to_hosts!(
                                     ["192.0.2.1"], work, "~/App.jl";
-                                    do_push = true, do_pull = false, confirm = false)
+                                    do_push = true, do_pull = false, confirm = false
+                                )
                             end
                         end
                         @test !raw_skip.ok
@@ -294,7 +312,8 @@ end
                         _, raw = _capture_stdio() do _, _
                             DistSSHRun.git_sync_project_to_hosts!(
                                 ["192.0.2.1", "192.0.2.2"], work, "~/App.jl";
-                                do_push = false, do_pull = true, confirm = false)
+                                do_push = false, do_pull = true, confirm = false
+                            )
                         end
                         @test !raw.ok
                         @test length(raw.host_results) == 1
@@ -351,7 +370,8 @@ end
                     exec sh -c "$cmd"
                     ;;
                 esac
-                """)
+                """
+            )
             chmod(path, 0o755)
             return path
         end
@@ -377,11 +397,13 @@ end
                 withenv(
                     "PATH" => bindir * ":" * path0,
                     "DISTSSH_TEST" => nothing,
-                    "DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes") do
+                    "DISTRIBUTED_SSH_OPTS" => "-o BatchMode=yes"
+                ) do
                     out, raw = _capture_stdio() do _, _
                         DistSSHRun.git_sync_project_to_hosts!(
                             ["dest"], work, remote;
-                            do_push = false, do_pull = true, confirm = false)
+                            do_push = false, do_pull = true, confirm = false
+                        )
                     end
                     @test raw.ok
                     @test raw.host_results[1].ok
@@ -392,7 +414,8 @@ end
                     sym = run(
                         pipeline(
                             ignorestatus(`git -C $remote symbolic-ref -q HEAD`);
-                            stdout = devnull, stderr = devnull)
+                            stdout = devnull, stderr = devnull
+                        )
                     )
                     @test sym.exitcode != 0
                     @test !isfile(joinpath(remote, "hook-ran"))
@@ -404,13 +427,15 @@ end
                     run(
                         pipeline(
                             `git -C $work -c commit.gpgsign=false commit -q -m next`;
-                            stdout = devnull, stderr = devnull)
+                            stdout = devnull, stderr = devnull
+                        )
                     )
                     sha2 = strip(read(`git -C $work rev-parse HEAD`, String))
                     out2, raw2 = _capture_stdio() do _, _
                         DistSSHRun.git_sync_project_to_hosts!(
                             ["dest"], work, remote;
-                            do_push = false, do_pull = true, confirm = false)
+                            do_push = false, do_pull = true, confirm = false
+                        )
                     end
                     @test !raw2.ok
                     @test occursin("untracked or uncommitted", out2)
@@ -443,7 +468,8 @@ end
                 run(
                     pipeline(
                         `git -C $work -c commit.gpgsign=false commit -q -m sync-with-record`;
-                        stdout = devnull, stderr = devnull)
+                        stdout = devnull, stderr = devnull
+                    )
                 )
                 _, raw1 = _git_sync_via_ssh_shim!(bindir, work, remote)
                 @test raw1.ok
@@ -459,7 +485,8 @@ end
                 run(
                     pipeline(
                         `git -C $work -c commit.gpgsign=false commit -q -m blocked`;
-                        stdout = devnull, stderr = devnull)
+                        stdout = devnull, stderr = devnull
+                    )
                 )
                 _, raw2 = _git_sync_via_ssh_shim!(bindir, work, remote)
                 @test !raw2.ok
@@ -474,7 +501,8 @@ end
                 run(
                     pipeline(
                         `git -C $work -c commit.gpgsign=false commit -q -m track-distssh`;
-                        stdout = devnull, stderr = devnull)
+                        stdout = devnull, stderr = devnull
+                    )
                 )
                 _, raw3a = _git_sync_via_ssh_shim!(bindir, work, remote)
                 @test raw3a.ok
@@ -487,7 +515,8 @@ end
                 run(
                     pipeline(
                         `git -C $work -c commit.gpgsign=false commit -q -m tracked-mod`;
-                        stdout = devnull, stderr = devnull)
+                        stdout = devnull, stderr = devnull
+                    )
                 )
                 _, raw3 = _git_sync_via_ssh_shim!(bindir, work, remote)
                 @test !raw3.ok
@@ -508,7 +537,8 @@ end
                     run(
                         pipeline(
                             `git -C $work2 -c commit.gpgsign=false commit -q -m distssh-in-repo`;
-                            stdout = devnull, stderr = devnull)
+                            stdout = devnull, stderr = devnull
+                        )
                     )
                     run(pipeline(`git init -q $remote2`; stdout = devnull, stderr = devnull))
                     _, raw_base = _git_sync_via_ssh_shim!(bindir, work2, remote2)
@@ -521,7 +551,8 @@ end
                     run(
                         pipeline(
                             `git -C $work2 -c commit.gpgsign=false commit -q -m collide`;
-                            stdout = devnull, stderr = devnull)
+                            stdout = devnull, stderr = devnull
+                        )
                     )
                     sha_collide = strip(read(`git -C $work2 rev-parse HEAD`, String))
                     _, raw4 = _git_sync_via_ssh_shim!(bindir, work2, remote2)
@@ -554,7 +585,8 @@ end
             "DISTSSH_TEST" => "1",
             "DISTSSH_TEST_SSH" => double,
             "SHELL_DOUBLE_LOG" => logp,
-            "DISTSSH_TEST_POSIX_SHELL" => "1")
+            "DISTSSH_TEST_POSIX_SHELL" => "1"
+        )
         try
             withenv(merge(base, Dict("SHELL_DOUBLE_MODE" => "exit0"))...) do
                 none = DistSSHRun._remote_lfs_required("lfs-none.test", "/repo")
@@ -570,7 +602,8 @@ end
                 merge(
                     base, Dict(
                         "SHELL_DOUBLE_MODE" => "sleep",
-                        "SHELL_DOUBLE_READY" => ready)
+                        "SHELL_DOUBLE_READY" => ready
+                    )
                 )...
             ) do
                 task = @async DistSSHRun._remote_lfs_required("lfs-sig.test", "/repo")

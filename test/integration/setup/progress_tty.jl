@@ -38,7 +38,8 @@ using Test
               update) exit 0 ;;
               *) exit 1 ;;
             esac
-            """)
+            """
+        )
         chmod(ju, 0o755)
         ssh = joinpath(dir, "ssh.jl")
         write(
@@ -57,14 +58,16 @@ using Test
             else
                 println("     *  1.13     1.13.0+0.aarch64.apple.darwin14  1.13.3")
             end
-            """)
+            """
+        )
         fail_ssh = joinpath(dir, "fail_ssh.jl")
         write(
             fail_ssh,
             """
             println(stderr, "Permission denied (publickey).")
             exit(255)
-            """)
+            """
+        )
         stub_bin = joinpath(dir, "stub-bin")
         mkpath(stub_bin)
         write(joinpath(stub_bin, "ssh"), "#!/bin/sh\nexit 1\n")
@@ -136,7 +139,8 @@ using Test
             export PATH=$(sh_quote(empty_path))
             export DISTSSH_TEST_SSH=$(sh_quote(ssh))
             $(argv_line(check_cmd))
-            """)
+            """
+        )
         chmod(runner, 0o755)
 
         # Hang bound only (not a performance gate). Slow CI runners can exceed
@@ -156,7 +160,8 @@ using Test
                 "JULIA_LOAD_PATH",
                 "JULIA_PROJECT",
                 "DISTSSH_CLI_SUBCOMMAND_DONE",
-                "DIST_SSH_KIT_CLI_INCLUDE")
+                "DIST_SSH_KIT_CLI_INCLUDE",
+            )
             env = Dict{String, String}(
                 String(k) => String(v) for (k, v) in ENV if !(String(k) in skip) && !isempty(v)
             )
@@ -224,7 +229,8 @@ using Test
         @test any(
             l -> occursin("SSH auth/host-key failed", l) || occursin("Permission denied", l) ||
                 occursin("publickey", l),
-            check2_lines)
+            check2_lines
+        )
         @test any(l -> occursin("Prerequisites not met", l), check2_lines)
         _assert_tty_progress_payload(check2_tty; hosts = ["host1", "host2"])
 
@@ -269,7 +275,8 @@ using Test
         # script(1) may emit a status line; ignore blank / typescript chrome.
         payload = filter(
             l -> occursin("Prerequisites", l) || occursin("✗", l) || occursin("Checking", l),
-            quiet_lines)
+            quiet_lines
+        )
         @test length(payload) == 1
         @test occursin("Prerequisites not met", payload[1])
         @test startswith(payload[1], "  ")
@@ -279,7 +286,9 @@ using Test
                 "DISTSSH_TEST" => "1",
                 "DISTSSH_TEST_LOCAL_JULIAUP" => ju,
                 "DISTSSH_TEST_SSH" => ssh,
-                "PATH" => empty_path))
+                "PATH" => empty_path
+            )
+        )
         @test !haskey(pipe_env, "NO_COLOR")
         delete!(pipe_env, "DISTSSH_QUIET")
         delete!(pipe_env, "DISTSSH_PROGRESS")

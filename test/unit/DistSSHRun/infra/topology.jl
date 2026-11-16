@@ -12,9 +12,11 @@ using DistSSHRun
     @test_throws ArgumentError DistSSHRun.validate_host_launch_plan(
         "h1",
         "127.0.0.1";
-        tunnel = false)
+        tunnel = false
+    )
     @test_throws ArgumentError DistSSHRun.validate_host_launch_plan(
         "h1",
         "0.0.0.0";
-        unsafe_expose_port = false)
+        unsafe_expose_port = false
+    )
 end

@@ -60,7 +60,8 @@ using Test
                 script, String[]; head_workers = 1,
                 detached = true,
                 project = proj,
-                quiet = true)
+                quiet = true
+            )
         end
         try
             @test wait_file(ready, 90)
@@ -78,7 +79,8 @@ using Test
                 script, String[]; head_workers = 1,
                 detached = true,
                 project = proj,
-                quiet = true)
+                quiet = true
+            )
         end
         try
             @test wait_file(ready, 90)
@@ -120,14 +122,16 @@ end
                 end
                 return nothing
             end
-            """)
+            """
+        )
         _, kp = _capture_detached_env_log() do
             DistSSHRun.execute!(
                 :drive,
                 script, String[]; head_workers = 1,
                 detached = true,
                 project = proj,
-                quiet = true)
+                quiet = true
+            )
         end
         try
             t0 = time()

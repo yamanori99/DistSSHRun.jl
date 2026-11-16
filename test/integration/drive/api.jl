@@ -32,7 +32,8 @@ end
             "DISTRIBUTED_PROJECT_ROOT",
             "DISTRIBUTED_REMOTE_PROJECT_ROOT",
             "DISTRIBUTED_OUTPUT_DIR",
-            "DISTRIBUTED_RUNNER")
+            "DISTRIBUTED_RUNNER",
+        )
         saved_env = Dict(k => get(ENV, k, nothing) for k in env_keys)
         try
             mktemp() do out_path, out_io
@@ -42,7 +43,8 @@ end
                             DistSSHRun.drive!(
                                 script; head_workers = 2,
                                 project = proj,
-                                verbosity = :verbose)
+                                verbosity = :verbose
+                            )
                         end
                     end
                     flush(out_io)
@@ -94,7 +96,8 @@ end
                 "DISTRIBUTED_PROJECT_ROOT" => "prior-root",
                 "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "",
                 "DISTRIBUTED_OUTPUT_DIR" => nothing,
-                "DISTRIBUTED_RUNNER" => nothing) do
+                "DISTRIBUTED_RUNNER" => nothing
+            ) do
                 Base.ACTIVE_PROJECT[] = nothing
                 bad = joinpath(proj, "bad.jl")
                 write(bad, "error(\"drive-boom\")\n")
@@ -105,7 +108,8 @@ end
                                 bad;
                                 project = proj,
                                 verbosity = :quiet,
-                                enable_log = false)
+                                enable_log = false
+                            )
                             nothing
                         catch e
                             e
@@ -125,13 +129,15 @@ end
                     project = proj,
                     workers = String[],
                     quiet = true,
-                    verbosity = :quiet)
+                    verbosity = :quiet
+                )
                 parsed = DistSSHRun.drive_parsed_from_session(
                     session,
                     script;
                     workers = DistSSHRun.WorkerPlan(1, Dict{String, Int}()),
                     enable_log = false,
-                    skip_hash_check = true)
+                    skip_hash_check = true
+                )
                 got = redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
                         try
@@ -196,7 +202,8 @@ end
                         with_init; head_workers = 1,
                         project = proj,
                         verbosity = :quiet,
-                        enable_log = false)
+                        enable_log = false
+                    )
                 end
             end
             @test first.ok
@@ -209,7 +216,8 @@ end
                         no_init; head_workers = 1,
                         project = proj,
                         verbosity = :quiet,
-                        enable_log = false)
+                        enable_log = false
+                    )
                 end
             end
             @test second.ok

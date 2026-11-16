@@ -10,7 +10,8 @@ function _snap_project!(dir::AbstractString)
     write(joinpath(dir, "Project.toml"), "name = \"SnapSel\"\n")
     write(
         joinpath(dir, "Manifest.toml"),
-        "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n"
+    )
     write(joinpath(dir, "a.jl"), "1\n")
     return dir
 end
@@ -19,11 +20,13 @@ function _workspace_member_layout!(root::AbstractString)
     write(joinpath(root, "Project.toml"), "[workspace]\nprojects = [\"pkg\"]\n")
     write(
         joinpath(root, "Manifest.toml"),
-        "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+        "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n"
+    )
     mkpath(joinpath(root, "pkg"))
     write(
         joinpath(root, "pkg", "Project.toml"),
-        "name = \"Pkg\"\nuuid = \"11111111-1111-1111-1111-111111111111\"\n")
+        "name = \"Pkg\"\nuuid = \"11111111-1111-1111-1111-111111111111\"\n"
+    )
     return joinpath(root, "pkg")
 end
 
@@ -44,7 +47,8 @@ end
         "/remote",
         "/remote/runs/20260101T000000Z-aaaaaa/src",
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        String["child-1"])
+        String["child-1"]
+    )
     err = try
         DistSSHRun.SourceSelection(
             :snapshot,
@@ -52,7 +56,8 @@ end
             "/remote",
             "/remote/runs/20260101T000000Z-aaaaaa/src",
             nothing,
-            String[])
+            String[]
+        )
     catch e
         e
     end
@@ -62,7 +67,8 @@ end
 
 @testset "legacy deploy record snapshot_id selection" begin
     double = abspath(
-        joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+        joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl")
+    )
     _with_tempdir() do state
         remote = joinpath(state, "remote")
         leaf = joinpath(remote, "runs", _SNAP_ID_OLD)
@@ -80,7 +86,10 @@ end
                     "deploy_id" => _SNAP_ID_OLD,
                     "mode" => "ship-tree",
                     "snapshot_id" => _SNAP_ID_OLD,
-                    "content_tree_hash" => _SNAP_HASH_OLD)))
+                    "content_tree_hash" => _SNAP_HASH_OLD
+                )
+            )
+        )
         _with_tempdir() do proj
             _snap_project!(proj)
             DistSSHRun.clear_last_ship_record!(proj)
@@ -89,12 +98,14 @@ end
                 "DISTSSH_TEST" => "1",
                 "DISTSSH_TEST_SSH" => double,
                 "DISTSSH_TEST_POSIX_SHELL" => "1",
-                "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit")
+                "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit"
+            )
             try
                 withenv(env...) do
                     sel = DistSSHRun.resolve_source_selection(
                         ["child-1"], remote, proj;
-                        skip_local_record = true)
+                        skip_local_record = true
+                    )
                     @test sel.run_id == _SNAP_ID_OLD
                 end
             finally
@@ -124,7 +135,8 @@ end
         @test DistSSHRun.read_last_ship_record(tmp) === nothing
         DistSSHRun.write_last_ship_record!(
             tmp, "~/App/SnapSel", ["h2", "h1", "h1"], _SNAP_ID_OLD;
-            content_tree_hash = "abc")
+            content_tree_hash = "abc"
+        )
         rec = something(DistSSHRun.read_last_ship_record(tmp))
         @test rec["run_id"] == _SNAP_ID_OLD
         @test rec["deploy_root"] == "~/App/SnapSel"
@@ -132,7 +144,8 @@ end
         @test rec["content_tree_hash"] == "abc"
         # Overwrite limitation: a later write replaces the convenience default.
         DistSSHRun.write_last_ship_record!(
-            tmp, "~/App/SnapSel", ["h1"], _SNAP_ID_NEW)
+            tmp, "~/App/SnapSel", ["h1"], _SNAP_ID_NEW
+        )
         rec2 = something(DistSSHRun.read_last_ship_record(tmp))
         @test rec2["run_id"] == _SNAP_ID_NEW
         @test rec2["hosts"] == ["h1"]
@@ -153,7 +166,8 @@ function _snap_run_leaf_probe_out(
         run_id::AbstractString,
         stamp_body::AbstractString,
         src_project::AbstractString,
-        project_rel::AbstractString)::String
+        project_rel::AbstractString
+    )::String
     leaf = joinpath(deploy, "runs", run_id)
     src = joinpath(leaf, "src")
     dest = project_rel == "." ? src : joinpath(src, project_rel)
@@ -172,7 +186,8 @@ end
             _SNAP_ID_OLD,
             DistSSHRun._ship_run_leaf_complete_toml(_SNAP_HASH_OLD),
             "name = \"Spaced\"\n",
-            ".")
+            "."
+        )
         lines = split(strip(out), '\n'; keepempty = false)
         @test lines[1] == "ok"
         @test lines[2] == _SNAP_HASH_OLD
@@ -186,7 +201,8 @@ end
             _SNAP_ID_OLD,
             DistSSHRun._ship_run_leaf_complete_toml(_SNAP_HASH_OLD; project_rel = rel),
             "name = \"Glob\"\n",
-            rel)
+            rel
+        )
         lines = split(strip(out), '\n'; keepempty = false)
         @test lines[1] == "ok"
         @test lines[2] == _SNAP_HASH_OLD
@@ -201,10 +217,12 @@ end
 
 @testset "setup --run-id argv" begin
     p = DistSSHRun.parse_setup_args(
-        String["instantiate", "--run-id", _SNAP_ID_OLD, "h1"])
+        String["instantiate", "--run-id", _SNAP_ID_OLD, "h1"]
+    )
     @test p.run_id == _SNAP_ID_OLD
     ship = DistSSHRun.parse_setup_args(
-        String["ship-tree", "--run-id", _SNAP_ID_OLD, "h1"])
+        String["ship-tree", "--run-id", _SNAP_ID_OLD, "h1"]
+    )
     @test ship.run_id == _SNAP_ID_OLD
     err_mode = try
         DistSSHRun.check_setup_options!(:ship_tree; run_id = ship.run_id)
@@ -223,7 +241,8 @@ end
     @test err_api isa ArgumentError
     @test err_mode.msg == err_api.msg
     bad = DistSSHRun.parse_setup_args(
-        String["instantiate", "--run-id", "../x", "h1"])
+        String["instantiate", "--run-id", "../x", "h1"]
+    )
     @test bad.run_id == "../x"
     err_id_api = try
         DistSSHRun.validate_run_id(bad.run_id)
@@ -244,14 +263,17 @@ end
 
 @testset "go/drive --run-id argv" begin
     g = DistSSHRun.parse_go_args(
-        String["--run-id", _SNAP_ID_OLD, "--head-slots", "1", "job.jl"])
+        String["--run-id", _SNAP_ID_OLD, "--head-slots", "1", "job.jl"]
+    )
     @test g.run_id == _SNAP_ID_OLD
     d = DistSSHRun.parse_drive_args(
-        String["--run-id", _SNAP_ID_NEW, "--head-workers", "1", "job.jl"])
+        String["--run-id", _SNAP_ID_NEW, "--head-workers", "1", "job.jl"]
+    )
     @test d.run_id == _SNAP_ID_NEW
     err_combo = try
         DistSSHRun.parse_go_args(
-            String["--ship-tree", "--run-id", _SNAP_ID_OLD, "--head-slots", "1", "job.jl"])
+            String["--ship-tree", "--run-id", _SNAP_ID_OLD, "--head-slots", "1", "job.jl"]
+        )
         nothing
     catch e
         e
@@ -260,7 +282,8 @@ end
     @test occursin("go: --ship-tree was removed", err_combo.msg)
     err_go_sync_flag = try
         DistSSHRun.parse_go_args(
-            String["--sync", "--run-id", _SNAP_ID_OLD, "--head-slots", "1", "job.jl"])
+            String["--sync", "--run-id", _SNAP_ID_OLD, "--head-slots", "1", "job.jl"]
+        )
         nothing
     catch e
         e
@@ -269,7 +292,8 @@ end
     @test occursin("go: --sync was removed", err_go_sync_flag.msg)
     err_git_combo = try
         DistSSHRun.parse_go_args(
-            String["--git-sync", "--run-id", _SNAP_ID_OLD, "--head-slots", "1", "job.jl"])
+            String["--git-sync", "--run-id", _SNAP_ID_OLD, "--head-slots", "1", "job.jl"]
+        )
         nothing
     catch e
         e
@@ -280,7 +304,8 @@ end
         DistSSHRun.go!(
             "job.jl", String[]; head_slots = 1,
             sync = :git_sync,
-            run_id = _SNAP_ID_OLD)
+            run_id = _SNAP_ID_OLD
+        )
         nothing
     catch e
         e
@@ -291,7 +316,8 @@ end
         DistSSHRun.drive!(
             "job.jl", String[]; head_workers = 1,
             sync = :git_sync,
-            run_id = _SNAP_ID_OLD)
+            run_id = _SNAP_ID_OLD
+        )
         nothing
     catch e
         e
@@ -314,7 +340,10 @@ end
                     "schema_version" => 1,
                     "deploy_root" => "/deploy/a",
                     "hosts" => ["h1"],
-                    "snapshot_id" => _SNAP_ID_OLD)))
+                    "snapshot_id" => _SNAP_ID_OLD
+                )
+            )
+        )
         @test DistSSHRun.read_last_ship_record(proj) !== nothing
         DistSSHRun.clear_last_ship_record!(proj; deploy_root = "/deploy/a")
         @test DistSSHRun.read_last_ship_record(proj) === nothing
@@ -327,7 +356,8 @@ end
     _with_tempdir() do proj
         _snap_project!(proj)
         DistSSHRun.write_last_ship_record!(
-            proj, "/deploy/a", ["h1"], _SNAP_ID_OLD)
+            proj, "/deploy/a", ["h1"], _SNAP_ID_OLD
+        )
         DistSSHRun.forget_last_ship_default!(proj, "/deploy/b")
         @test DistSSHRun.read_last_ship_record(proj) !== nothing
         DistSSHRun.forget_last_ship_default!(proj, "/deploy/a")
@@ -339,7 +369,8 @@ end
     _with_tempdir() do proj
         _snap_project!(proj)
         DistSSHRun.write_last_ship_record!(
-            proj, "/deploy/a", ["h1"], _SNAP_ID_OLD)
+            proj, "/deploy/a", ["h1"], _SNAP_ID_OLD
+        )
         cancelled = (; cancelled = true, succeeded = 0, failed = 0)
         DistSSHRun.forget_last_ship_after_host_op!(proj, "/deploy/a", cancelled)
         @test DistSSHRun.read_last_ship_record(proj) !== nothing
@@ -353,13 +384,15 @@ end
     _with_tempdir() do proj
         _snap_project!(proj)
         DistSSHRun.write_last_ship_record!(
-            proj, "/deploy/a/", ["h1"], _SNAP_ID_OLD)
+            proj, "/deploy/a/", ["h1"], _SNAP_ID_OLD
+        )
         rec = something(DistSSHRun.read_last_ship_record(proj))
         @test rec["deploy_root"] == "/deploy/a"
         DistSSHRun.forget_last_ship_default!(proj, "/deploy/a")
         @test DistSSHRun.read_last_ship_record(proj) === nothing
         DistSSHRun.write_last_ship_record!(
-            proj, "/deploy/a", ["h1"], _SNAP_ID_OLD)
+            proj, "/deploy/a", ["h1"], _SNAP_ID_OLD
+        )
         DistSSHRun.forget_last_ship_default!(proj, "/deploy/a/")
         @test DistSSHRun.read_last_ship_record(proj) === nothing
     end
@@ -367,7 +400,8 @@ end
 
 @testset "record for another deploy root does not block git" begin
     double = abspath(
-        joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+        joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl")
+    )
     _with_tempdir() do state
         remote_a = joinpath(state, "remote_a")
         remote_b = joinpath(state, "remote_b")
@@ -376,17 +410,20 @@ end
         _with_tempdir() do proj
             _snap_project!(proj)
             DistSSHRun.write_last_ship_record!(
-                proj, remote_a, ["child-1"], _SNAP_ID_OLD)
+                proj, remote_a, ["child-1"], _SNAP_ID_OLD
+            )
             DistSSHRun._clear_last_ship!()
             env = Dict{String, String}(
                 "DISTSSH_TEST" => "1",
                 "DISTSSH_TEST_SSH" => double,
                 "DISTSSH_TEST_POSIX_SHELL" => "1",
-                "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit")
+                "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit"
+            )
             try
                 withenv(env...) do
                     sel = DistSSHRun.resolve_source_selection(
-                        ["child-1"], remote_b, proj)
+                        ["child-1"], remote_b, proj
+                    )
                     @test sel.source_kind === :git
                     @test sel.work_root == remote_b
                 end
@@ -416,7 +453,8 @@ end
         deploy = "/home/dev/app"
         wr = "/home/dev/app/runs/$_SNAP_ID_OLD/src"
         mapped = DistSSHRun.resolve_remote_project_root(
-            member; cli_override = deploy)
+            member; cli_override = deploy
+        )
         @test mapped == "/home/dev/app/pkg"
         rehomed = DistSSHRun._rehome_under_work_root(mapped, deploy, wr)
         @test rehomed == "/home/dev/app/runs/$_SNAP_ID_OLD/src/pkg"
@@ -429,7 +467,8 @@ end
 
 @testset "fake-ssh complete snapshot selection" begin
     double = abspath(
-        joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+        joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl")
+    )
     @test isfile(double)
     _with_tempdir() do state
         remote = joinpath(state, "remote")
@@ -452,7 +491,8 @@ end
                 "DISTSSH_TEST" => "1",
                 "DISTSSH_TEST_SSH" => double,
                 "DISTSSH_TEST_POSIX_SHELL" => "1",
-                "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit")
+                "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit"
+            )
             try
                 withenv(env...) do
                     DistSSHRun.clear_last_ship_record!(proj)
@@ -460,7 +500,8 @@ end
                     # Explicit old id after a newer leaf exists.
                     sel = DistSSHRun.resolve_source_selection(
                         ["child-1", "child-2"], remote, proj;
-                        run_id = _SNAP_ID_OLD)
+                        run_id = _SNAP_ID_OLD
+                    )
                     @test sel.source_kind === :ship
                     @test sel.run_id == _SNAP_ID_OLD
                     @test endswith(sel.work_root, "/runs/$_SNAP_ID_OLD/src")
@@ -469,39 +510,48 @@ end
                     # Host order does not change the selected id.
                     sel2 = DistSSHRun.resolve_source_selection(
                         ["child-2", "child-1"], remote, proj;
-                        run_id = _SNAP_ID_OLD)
+                        run_id = _SNAP_ID_OLD
+                    )
                     @test sel2.run_id == _SNAP_ID_OLD
 
                     # Local record default.
                     DistSSHRun.write_last_ship_record!(
                         proj, remote, ["child-1", "child-2"], _SNAP_ID_OLD;
-                        content_tree_hash = _SNAP_HASH_OLD)
+                        content_tree_hash = _SNAP_HASH_OLD
+                    )
                     sel3 = DistSSHRun.resolve_source_selection(
-                        ["child-1", "child-2"], remote, proj)
+                        ["child-1", "child-2"], remote, proj
+                    )
                     @test sel3.run_id == _SNAP_ID_OLD
 
                     # Explicit overrides record pointing at newer.
                     DistSSHRun.write_last_ship_record!(
-                        proj, remote, ["child-1", "child-2"], _SNAP_ID_NEW)
+                        proj, remote, ["child-1", "child-2"], _SNAP_ID_NEW
+                    )
                     sel4 = DistSSHRun.resolve_source_selection(
-                        ["child-1"], remote, proj; run_id = _SNAP_ID_OLD)
+                        ["child-1"], remote, proj; run_id = _SNAP_ID_OLD
+                    )
                     @test sel4.run_id == _SNAP_ID_OLD
 
                     # Incomplete / legacy is not selectable.
                     @test_throws ArgumentError DistSSHRun.resolve_source_selection(
                         ["child-1"], remote, proj;
-                        run_id = "20260103T000000Z-cccccc")
+                        run_id = "20260103T000000Z-cccccc"
+                    )
 
                     # Host set not covered by record fails (no latest fallback).
                     DistSSHRun.write_last_ship_record!(
-                        proj, remote, ["child-1"], _SNAP_ID_OLD)
+                        proj, remote, ["child-1"], _SNAP_ID_OLD
+                    )
                     @test_throws ArgumentError DistSSHRun.resolve_source_selection(
-                        ["child-1", "child-2"], remote, proj)
+                        ["child-1", "child-2"], remote, proj
+                    )
 
                     # Missing snapshot on one host.
                     rm(joinpath(old_leaf, "src", "Project.toml"); force = true)
                     @test_throws ArgumentError DistSSHRun.resolve_source_selection(
-                        ["child-1"], remote, proj; run_id = _SNAP_ID_OLD)
+                        ["child-1"], remote, proj; run_id = _SNAP_ID_OLD
+                    )
                 end
             finally
                 DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
@@ -513,7 +563,8 @@ end
 
 @testset "git checkout remains selectable without snapshot" begin
     double = abspath(
-        joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
+        joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl")
+    )
     _with_tempdir() do state
         remote = joinpath(state, "remote")
         mkpath(remote)
@@ -526,11 +577,13 @@ end
                 "DISTSSH_TEST" => "1",
                 "DISTSSH_TEST_SSH" => double,
                 "DISTSSH_TEST_POSIX_SHELL" => "1",
-                "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit")
+                "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit"
+            )
             try
                 withenv(env...) do
                     sel = DistSSHRun.resolve_source_selection(
-                        ["child-1"], remote, proj)
+                        ["child-1"], remote, proj
+                    )
                     @test sel.source_kind === :git
                     @test sel.run_id === nothing
                     @test sel.work_root == remote
@@ -547,7 +600,8 @@ function _snap_ssh_env(double::AbstractString)
         "DISTSSH_TEST" => "1",
         "DISTSSH_TEST_SSH" => double,
         "DISTSSH_TEST_POSIX_SHELL" => "1",
-        "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit")
+        "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit"
+    )
 end
 
 function _write_complete_leaf!(root, id, hash)
@@ -567,7 +621,8 @@ end
         write(joinpath(leaf, "src", "Project.toml"), "name = \"SnapSel\"\n")
         write(
             joinpath(leaf, "run.toml"),
-            DistSSHRun._ship_run_leaf_stamp_toml() * "complete = true\n")
+            DistSSHRun._ship_run_leaf_stamp_toml() * "complete = true\n"
+        )
         _with_tempdir() do proj
             _snap_project!(proj)
             DistSSHRun.clear_last_ship_record!(proj)
@@ -576,7 +631,8 @@ end
                 withenv(_snap_ssh_env(double)...) do
                     err = try
                         DistSSHRun.resolve_source_selection(
-                            ["child-1"], remote, proj; run_id = _SNAP_ID_OLD)
+                            ["child-1"], remote, proj; run_id = _SNAP_ID_OLD
+                        )
                         nothing
                     catch e
                         e
@@ -608,13 +664,16 @@ end
                 _snap_ssh_env(double),
                 Dict(
                     "DISTSSH_TEST_SSH_LOGICAL_ROOT" => logical,
-                    "DISTSSH_TEST_SSH_HOST_ROOTS" => roots))
+                    "DISTSSH_TEST_SSH_HOST_ROOTS" => roots
+                )
+            )
             try
                 withenv(env...) do
                     err = try
                         DistSSHRun.resolve_source_selection(
                             ["child-1", "child-2"], logical, proj;
-                            run_id = _SNAP_ID_OLD)
+                            run_id = _SNAP_ID_OLD
+                        )
                         nothing
                     catch e
                         e
@@ -624,11 +683,13 @@ end
                     leaf2 = joinpath(h2, "runs", _SNAP_ID_OLD)
                     write(
                         joinpath(leaf2, "run.toml"),
-                        DistSSHRun._ship_run_leaf_stamp_toml() * "complete = true\n")
+                        DistSSHRun._ship_run_leaf_stamp_toml() * "complete = true\n"
+                    )
                     err2 = try
                         DistSSHRun.resolve_source_selection(
                             ["child-1", "child-2"], logical, proj;
-                            run_id = _SNAP_ID_OLD)
+                            run_id = _SNAP_ID_OLD
+                        )
                         nothing
                     catch e
                         e
@@ -650,13 +711,15 @@ end
         _with_tempdir() do proj
             _snap_project!(proj)
             DistSSHRun.write_last_ship_record!(
-                proj, remote, ["child-1"], _SNAP_ID_OLD)
+                proj, remote, ["child-1"], _SNAP_ID_OLD
+            )
             DistSSHRun._clear_last_ship!()
             try
                 withenv(_snap_ssh_env(double)...) do
                     err = try
                         DistSSHRun.resolve_source_selection(
-                            ["child-1"], remote, proj)
+                            ["child-1"], remote, proj
+                        )
                         nothing
                     catch e
                         e
@@ -681,13 +744,15 @@ end
             _snap_project!(proj)
             DistSSHRun.write_last_ship_record!(
                 proj, remote, ["child-1"], _SNAP_ID_OLD;
-                content_tree_hash = _SNAP_HASH_NEW)
+                content_tree_hash = _SNAP_HASH_NEW
+            )
             DistSSHRun._clear_last_ship!()
             try
                 withenv(_snap_ssh_env(double)...) do
                     err = try
                         DistSSHRun.resolve_source_selection(
-                            ["child-1"], remote, proj)
+                            ["child-1"], remote, proj
+                        )
                         nothing
                     catch e
                         e
@@ -718,12 +783,14 @@ end
                 withenv(_snap_ssh_env(double)...) do
                     wr1 = DistSSHRun._project_work_root(
                         ["child-1"], proj;
-                        cli_override = remote, run_id = _SNAP_ID_OLD)
+                        cli_override = remote, run_id = _SNAP_ID_OLD
+                    )
                     @test wr1 == work
                     withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => wr1) do
                         wr2 = DistSSHRun._project_work_root(
                             ["child-1"], proj;
-                            cli_override = nothing, run_id = _SNAP_ID_OLD)
+                            cli_override = nothing, run_id = _SNAP_ID_OLD
+                        )
                         @test wr2 == work
                         @test wr2 != nested
                     end
@@ -746,7 +813,8 @@ end
             _snap_project!(proj)
             DistSSHRun.write_last_ship_record!(
                 proj, remote, ["child-1"], _SNAP_ID_NEW;
-                content_tree_hash = _SNAP_HASH_NEW)
+                content_tree_hash = _SNAP_HASH_NEW
+            )
             DistSSHRun._clear_last_ship!()
             run_dir = joinpath(state, "runA")
             mkpath(run_dir)
@@ -763,15 +831,20 @@ end
                         "deploy_root" => remote,
                         "work_root" => joinpath(remote, "runs", _SNAP_ID_OLD, "src"),
                         "content_tree_hash" => _SNAP_HASH_OLD,
-                        "algorithm" => "git-sha1")))
+                        "algorithm" => "git-sha1"
+                    )
+                )
+            )
             out = joinpath(proj, "out")
             mkpath(out)
             try
                 withenv(
                     _snap_ssh_env(double)...,
-                    DistSSHRun.DISTSSH_RUN_DIR_ENV => run_dir) do
+                    DistSSHRun.DISTSSH_RUN_DIR_ENV => run_dir
+                ) do
                     got = DistSSHRun._remote_work_layout_path(
-                        out, proj, ["child-1"])
+                        out, proj, ["child-1"]
+                    )
                     @test got == joinpath(remote, "runs", _SNAP_ID_OLD, "src", "out")
                     @test !occursin(_SNAP_ID_NEW, got)
                 end
@@ -780,7 +853,8 @@ end
                 DistSSHRun.write_kit_run_toml!(legacy; kind = :drive, project_root = proj)
                 withenv(
                     _snap_ssh_env(double)...,
-                    DistSSHRun.DISTSSH_RUN_DIR_ENV => legacy) do
+                    DistSSHRun.DISTSSH_RUN_DIR_ENV => legacy
+                ) do
                     err = try
                         DistSSHRun._remote_work_layout_path(out, proj, ["child-1"])
                         nothing
@@ -805,10 +879,14 @@ end
                             "deploy_root" => remote,
                             "work_root" => joinpath(remote, "runs", _SNAP_ID_OLD, "src"),
                             "content_tree_hash" => _SNAP_HASH_NEW,
-                            "algorithm" => "git-sha1")))
+                            "algorithm" => "git-sha1"
+                        )
+                    )
+                )
                 withenv(
                     _snap_ssh_env(double)...,
-                    DistSSHRun.DISTSSH_RUN_DIR_ENV => mismatch) do
+                    DistSSHRun.DISTSSH_RUN_DIR_ENV => mismatch
+                ) do
                     errh = try
                         DistSSHRun._remote_work_layout_path(out, proj, ["child-1"])
                         nothing
@@ -838,7 +916,8 @@ end
         write(joinpath(leaf, "src", "Project.toml"), "name = \"SnapSel\"\n")
         write(
             joinpath(leaf, "run.toml"),
-            DistSSHRun._ship_run_leaf_stamp_toml() * "complete = true\n")
+            DistSSHRun._ship_run_leaf_stamp_toml() * "complete = true\n"
+        )
         _with_tempdir() do proj
             _snap_project!(proj)
             DistSSHRun.clear_last_ship_record!(proj)
@@ -849,7 +928,9 @@ end
                     "DISTSSH_TEST_SSH_LOGICAL_ROOT" => "/__dsr_logical__",
                     "DISTSSH_TEST_SSH_HOST_ROOTS" => roots,
                     "DISTSSH_CLI_SUBCOMMAND_DONE" => "",
-                    "DISTSSH_YES" => nothing))
+                    "DISTSSH_YES" => nothing
+                )
+            )
             try
                 withenv(env...) do
                     mktemp() do out_path, out_io
@@ -863,7 +944,8 @@ end
                                                 "--run-id", _SNAP_ID_OLD,
                                                 "--deploy-root", "/__dsr_logical__",
                                                 "child-1",
-                                            ])
+                                            ]
+                                        )
                                     end
                                 end
                             end
@@ -892,21 +974,25 @@ end
         write(joinpath(leaf, "src", "app", "Project.toml"), "name = \"Nested\"\n")
         write(
             joinpath(leaf, "run.toml"),
-            DistSSHRun._ship_run_leaf_complete_toml(_SNAP_HASH_OLD; project_rel = "app"))
+            DistSSHRun._ship_run_leaf_complete_toml(_SNAP_HASH_OLD; project_rel = "app")
+        )
         _with_tempdir() do proj
             _snap_project!(proj)
             withenv(
                 "DISTSSH_TEST" => "1",
                 "DISTSSH_TEST_SSH" => double,
                 "DISTSSH_TEST_POSIX_SHELL" => "1",
-                "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit") do
+                "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit"
+            ) do
                 DistSSHRun.clear_last_ship_record!(proj)
                 sel = DistSSHRun.resolve_source_selection(
-                    ["child-1"], remote, proj; run_id = _SNAP_ID_OLD)
+                    ["child-1"], remote, proj; run_id = _SNAP_ID_OLD
+                )
                 @test endswith(sel.work_root, "/runs/$_SNAP_ID_OLD/src/app")
                 DistSSHRun.write_last_ship_record!(
                     proj, remote, ["child-1"], _SNAP_ID_OLD;
-                    content_tree_hash = _SNAP_HASH_OLD, project_rel = "app")
+                    content_tree_hash = _SNAP_HASH_OLD, project_rel = "app"
+                )
                 sel2 = DistSSHRun.resolve_source_selection(["child-1"], remote, proj)
                 @test sel2.work_root == sel.work_root
             end

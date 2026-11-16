@@ -6,7 +6,8 @@ const _STATUS_ROW = "*  1.13  1.13.0+0.aarch64.apple.darwin14  1.13.3"
     line = DistSSHRun.juliaup_status_summary_line(
         "worker",
         [_STATUS_ROW];
-        parent_patch = "1.13.3")
+        parent_patch = "1.13.3"
+    )
     @test occursin("worker", line)
     @test occursin("channel 1.13", line)
     @test occursin("installed 1.13.0", line)
@@ -18,13 +19,15 @@ const _STATUS_ROW = "*  1.13  1.13.0+0.aarch64.apple.darwin14  1.13.3"
     same = DistSSHRun.juliaup_status_summary_line(
         "worker",
         [_STATUS_ROW];
-        parent_patch = "1.13.0")
+        parent_patch = "1.13.0"
+    )
     @test occursin("same as parent", same)
     @test !occursin("behind", same)
     parent_line = DistSSHRun.juliaup_status_summary_line(
         "parent",
         [_STATUS_ROW];
-        parent_patch = "1.13.0")
+        parent_patch = "1.13.0"
+    )
     @test occursin("channel 1.13", parent_line)
     @test occursin("installed 1.13.0", parent_line)
     @test occursin("available 1.13.3", parent_line)
@@ -35,7 +38,8 @@ const _STATUS_ROW = "*  1.13  1.13.0+0.aarch64.apple.darwin14  1.13.3"
     ahead = DistSSHRun.juliaup_status_summary_line(
         "worker",
         ["* release 1.13.4+0.x 1.13.4"];
-        parent_patch = "1.13.3")
+        parent_patch = "1.13.3"
+    )
     @test occursin("ahead of parent 1.13.3", ahead)
     @test occursin("channel release", ahead)
     @test !occursin("+0", ahead)
@@ -43,7 +47,8 @@ const _STATUS_ROW = "*  1.13  1.13.0+0.aarch64.apple.darwin14  1.13.3"
     unknown = DistSSHRun.juliaup_status_summary_line(
         "worker",
         ["* 1.13"];
-        parent_patch = "-")
+        parent_patch = "-"
+    )
     @test occursin("installed -", unknown)
     @test occursin("parent unknown", unknown)
     @test occursin("available none", unknown)
@@ -61,7 +66,8 @@ const _STATUS_ROW = "*  1.13  1.13.0+0.aarch64.apple.darwin14  1.13.3"
               status) printf '%s\\n' '$_STATUS_ROW' ;;
               *) exit 1 ;;
             esac
-            """)
+            """
+        )
         chmod(ju, 0o755)
         withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
             progress_out, progress = with_kit_verbosity(:progress) do
@@ -109,20 +115,23 @@ const _STATUS_ROW = "*  1.13  1.13.0+0.aarch64.apple.darwin14  1.13.3"
               update) exit 0 ;;
               *) exit 1 ;;
             esac
-            """)
+            """
+        )
         chmod(ju, 0o755)
         ssh = joinpath(d, "ssh.jl")
         write(ssh, "println(\"ok\")\n")
         withenv(
             "DISTSSH_TEST" => "1",
             "DISTSSH_TEST_LOCAL_JULIAUP" => ju,
-            "DISTSSH_TEST_SSH" => ssh) do
+            "DISTSSH_TEST_SSH" => ssh
+        ) do
             progress_out, progress = with_kit_verbosity(:progress) do
                 _capture_stdio() do _, _
                     return DistSSHRun.juliaup_verb_remotes(
                         ["parent", "host1"];
                         verb = "update",
-                        confirm = false)
+                        confirm = false
+                    )
                 end
             end
             @test progress.succeeded == 2
@@ -134,7 +143,8 @@ const _STATUS_ROW = "*  1.13  1.13.0+0.aarch64.apple.darwin14  1.13.3"
                     return DistSSHRun.juliaup_verb_remotes(
                         ["parent", "host1"];
                         verb = "update",
-                        confirm = false)
+                        confirm = false
+                    )
                 end
             end
             @test verbose.succeeded == 2
@@ -146,13 +156,15 @@ const _STATUS_ROW = "*  1.13  1.13.0+0.aarch64.apple.darwin14  1.13.3"
         withenv(
             "DISTSSH_TEST" => "1",
             "DISTSSH_TEST_LOCAL_JULIAUP" => ju,
-            "DISTSSH_TEST_SSH" => ssh) do
+            "DISTSSH_TEST_SSH" => ssh
+        ) do
             progress_out, progress = with_kit_verbosity(:progress) do
                 _capture_stdio() do _, _
                     return DistSSHRun.juliaup_verb_remotes(
                         ["host1"];
                         verb = "update",
-                        confirm = false)
+                        confirm = false
+                    )
                 end
             end
             @test progress.failed == 1
@@ -162,7 +174,8 @@ const _STATUS_ROW = "*  1.13  1.13.0+0.aarch64.apple.darwin14  1.13.3"
                     return DistSSHRun.juliaup_verb_remotes(
                         ["host1"];
                         verb = "update",
-                        confirm = false)
+                        confirm = false
+                    )
                 end
             end
             @test occursin("✗", verbose_out)
@@ -177,11 +190,13 @@ const _STATUS_ROW = "*  1.13  1.13.0+0.aarch64.apple.darwin14  1.13.3"
         ssh = joinpath(d, "ssh.jl")
         write(
             ssh,
-            "println(\"     *  1.13     1.13.0+0.aarch64.apple.darwin14  1.13.3\")\n")
+            "println(\"     *  1.13     1.13.0+0.aarch64.apple.darwin14  1.13.3\")\n"
+        )
         withenv(
             "DISTSSH_TEST" => "1",
             "DISTSSH_TEST_LOCAL_JULIAUP" => ju,
-            "DISTSSH_TEST_SSH" => ssh) do
+            "DISTSSH_TEST_SSH" => ssh
+        ) do
             out, result = with_kit_verbosity(:progress) do
                 _capture_stdio() do _, _
                     return DistSSHRun.juliaup_verb_remotes(["host1"]; verb = "status")

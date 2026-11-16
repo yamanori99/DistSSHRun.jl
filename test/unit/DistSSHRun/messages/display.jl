@@ -266,7 +266,8 @@ using Test
                             "go";
                             steps = 2,
                             items = ["local-1", "local-2"],
-                            kind = :go)
+                            kind = :go
+                        )
                         DistSSHRun.kit_progress_item!("local-1"; status = :ok)
                         DistSSHRun.kit_progress_item!("local-2"; status = :ok)
                         DistSSHRun.kit_progress_done!(; ok = true, footer = "out/batch")
@@ -276,10 +277,12 @@ using Test
                     @test occursin("progress: begin kind=go label=go total=2", body)
                     @test occursin(
                         "progress: item kind=go label=local-1 status=ok done=1 total=2",
-                        body)
+                        body
+                    )
                     @test occursin(
                         "progress: item kind=go label=local-2 status=ok done=2 total=2",
-                        body)
+                        body
+                    )
                     st = DistSSHRun.KitProgressState("go", 2, 0, "go")
                     push!(st.items, DistSSHRun.KitProgressItem("local-1", :running, 0))
                     push!(st.items, DistSSHRun.KitProgressItem("local-2", :running, 0))
@@ -296,7 +299,8 @@ using Test
                         redirect_stdout(devnull) do
                             withenv("DISTSSH_JOB_ID" => nothing) do
                                 DistSSHRun.kit_progress_begin!(
-                                    "drive"; steps = 1, kind = :drive, job_id = "q-42")
+                                    "drive"; steps = 1, kind = :drive, job_id = "q-42"
+                                )
                                 DistSSHRun.kit_progress_done!(; ok = true)
                             end
                         end
@@ -304,10 +308,12 @@ using Test
                         body = read(log_path, String)
                         @test occursin(
                             "progress: begin kind=drive job=q-42 label=drive total=1",
-                            body)
+                            body
+                        )
                         @test occursin(
                             "progress: done kind=drive job=q-42 ok=true done=1 total=1",
-                            body)
+                            body
+                        )
                     end
                 end
 
@@ -360,7 +366,8 @@ using Test
                         @test !occursin("progress: step", body)
                         @test occursin(
                             "progress: done kind=drive ok=false done=2 total=2",
-                            body)
+                            body
+                        )
                     end
                 end
             end
@@ -369,7 +376,8 @@ using Test
         @testset "parse_progress_line / kit_progress_latest" begin
             @test DistSSHRun.parse_progress_line("not progress") === nothing
             rec = DistSSHRun.parse_progress_line(
-                "progress: step kind=drive job=q-1 label=sync done=0 total=2 cur=1")
+                "progress: step kind=drive job=q-1 label=sync done=0 total=2 cur=1"
+            )
             @test rec !== nothing
             @test rec isa NamedTuple
             if rec isa NamedTuple
@@ -385,7 +393,8 @@ using Test
                 @test rec.t === nothing
             end
             timed = DistSSHRun.parse_progress_line(
-                "progress: done kind=drive ok=true done=1 total=1 t=1710000000.5")
+                "progress: done kind=drive ok=true done=1 total=1 t=1710000000.5"
+            )
             @test timed isa NamedTuple
             if timed isa NamedTuple
                 @test timed.t == 1710000000.5
@@ -396,7 +405,8 @@ using Test
                     p,
                     "progress: begin kind=drive label=drive total=2 t=1.0\n" *
                         "progress: step kind=drive label=workers done=0 total=2 cur=1 t=2.5\n" *
-                        "progress: done kind=drive ok=true done=2 total=2 t=3.0\n")
+                        "progress: done kind=drive ok=true done=2 total=2 t=3.0\n"
+                )
                 rows = DistSSHRun.kit_progress_phases(tmp)
                 @test length(rows) == 2
                 @test rows[1].label == "start"
@@ -408,7 +418,8 @@ using Test
                         io,
                         "progress: begin kind=drive label=drive total=2 t=100.0\n" *
                             "progress: step kind=drive label=workers done=0 total=2 cur=1 t=101.0\n" *
-                            "progress: done kind=drive ok=true done=2 total=2 t=104.0\n")
+                            "progress: done kind=drive ok=true done=2 total=2 t=104.0\n"
+                    )
                 end
                 rows2 = DistSSHRun.kit_progress_phases(tmp)
                 @test length(rows2) == 2
@@ -483,7 +494,8 @@ using Test
                         "progress: item kind=go label=local-1 status=ok done=1 total=2 t=5.0\n" *
                         "progress: item kind=go label=local-2/run status=ok done=1 total=2 t=8.0\n" *
                         "progress: item kind=go label=local-2 status=ok done=2 total=2 t=8.0\n" *
-                        "progress: done kind=go ok=true done=2 total=2 t=8.1\n")
+                        "progress: done kind=go ok=true done=2 total=2 t=8.1\n"
+                )
                 grows = DistSSHRun.kit_progress_phases(tmp)
                 labs = [r.label for r in grows]
                 @test "sync" in labs
@@ -512,7 +524,8 @@ using Test
                         "progress: item kind=go label=parent/run status=ok done=0 total=1 t=5.0\n" *
                         "progress: item kind=go label=parent status=ok done=1 total=1 t=5.0\n" *
                         "progress: step kind=go label=collect done=1 total=1 cur=1 t=5.1\n" *
-                        "progress: done kind=go ok=true done=1 total=1 t=5.2\n")
+                        "progress: done kind=go ok=true done=1 total=1 t=5.2\n"
+                )
                 prows = DistSSHRun.kit_progress_phases(tmp)
                 plabs = [r.label for r in prows]
                 @test "ready" in plabs
@@ -532,7 +545,8 @@ using Test
                         "progress: item kind=drive label=parent/workers status=ok done=3 total=7 t=10.5\n" *
                         "progress: item kind=drive label=parent/init status=running done=5 total=7 t=15.5\n" *
                         "progress: item kind=drive label=parent/init status=ok done=5 total=7 t=16.0\n" *
-                        "progress: done kind=drive ok=true done=7 total=7 t=16.0\n")
+                        "progress: done kind=drive ok=true done=7 total=7 t=16.0\n"
+                )
                 drows = DistSSHRun.kit_progress_phases(tmp)
                 dtext = DistSSHRun._format_kit_progress_phases(drows)
                 @test occursin("parent", dtext)
@@ -547,7 +561,8 @@ using Test
                         "progress: item kind=setup label=rsync/h2 status=running done=0 total=1 t=1.1\n" *
                         "progress: item kind=setup label=rsync/h1 status=ok done=0 total=1 t=3.1\n" *
                         "progress: item kind=setup label=rsync/h2 status=ok done=0 total=1 t=4.1\n" *
-                        "progress: done kind=setup ok=true done=1 total=1 t=4.2\n")
+                        "progress: done kind=setup ok=true done=1 total=1 t=4.2\n"
+                )
                 srows = DistSSHRun.kit_progress_phases(tmp)
                 stext = DistSSHRun._format_kit_progress_phases(srows)
                 @test occursin("rsync", stext)
@@ -556,7 +571,8 @@ using Test
                 @test occursin("host", stext)
             end
             done = DistSSHRun.parse_progress_line(
-                "progress: done kind=go ok=true done=2 total=2")
+                "progress: done kind=go ok=true done=2 total=2"
+            )
             @test done isa NamedTuple
             if done isa NamedTuple
                 @test done.event === :done
@@ -813,10 +829,12 @@ using Test
     @testset "manifest refusal CLI classification" begin
         ship_pack_err = ArgumentError(
             "Manifest.toml file is excluded by ignore rules and will not be shipped. " *
-                "Workers would instantiate a different resolution.")
+                "Workers would instantiate a different resolution."
+        )
         project_pack_err = ArgumentError(
             "Project.toml file is excluded by ignore rules and will not be shipped. " *
-                "Workers would instantiate a different resolution.")
+                "Workers would instantiate a different resolution."
+        )
         buf = IOBuffer()
         @test DistSSHRun._report_manifest_refusal(ship_pack_err; io = buf)
         shown = String(take!(buf))

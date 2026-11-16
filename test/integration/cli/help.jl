@@ -23,7 +23,9 @@ using Test
             (["hostinfo", "--help"], :hostinfo_flags),
             (
                 ["go", "--julia", "/opt/julia/bin/julia", "--output-dir", "my_runs", "--help"],
-                :go_flags))
+                :go_flags,
+            ),
+        )
         push!(cmds, setenv(_kit_cli_cmd(argv), env))
         push!(kinds, kind)
         push!(labels, "")
@@ -68,7 +70,9 @@ using Test
                         "--output-dir", od, "--head-workers", "1", script,
                     ]
                 ),
-                merge(env, Dict("DISTRIBUTED_PROJECT_ROOT" => _kit_root()))))
+                merge(env, Dict("DISTRIBUTED_PROJECT_ROOT" => _kit_root()))
+            )
+        )
         @test !occursin("UndefVarError", ride_out)
         @test ride_proc.exitcode == 0
     end

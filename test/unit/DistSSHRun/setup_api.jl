@@ -39,7 +39,8 @@ using Test
                     project = proj,
                     workers = ["$host"],
                     remote = "~/App.jl",
-                    quiet = true)
+                    quiet = true
+                )
                 delete_path = DistSSHRun.remote_delete_root(proj; cli_override = "~/App.jl")
                 del = DistSSHRun.setup!(session, :delete; confirm_path = delete_path)
                 @test del.ok && !del.cancelled
@@ -84,7 +85,8 @@ using Test
             mkpath(fake)
             write(
                 joinpath(fake, "run.toml"),
-                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"go\"\n")
+                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"go\"\n"
+            )
             err = try
                 DistSSHRun.prune_kit_leaf_dirs!(proj)
                 nothing
@@ -99,7 +101,8 @@ using Test
             mkpath(nested)
             write(
                 joinpath(nested, "run.toml"),
-                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"drive\"\n")
+                "schema = 1\nwriter = \"Other 1.0\"\nkind = \"drive\"\n"
+            )
             err_nested = try
                 DistSSHRun.prune_kit_leaf_dirs!(proj)
                 nothing
@@ -196,7 +199,8 @@ using Test
                     project = proj,
                     workers = ["$host"],
                     remote = "~/App.jl",
-                    quiet = true)
+                    quiet = true
+                )
                 pr = DistSSHRun.setup!(session, :prune; confirm_path = "~/App.jl")
                 @test pr.ok && !pr.cancelled
                 @test isfile(joinpath(tree, "keep", "Project.toml"))
@@ -220,13 +224,15 @@ using Test
                   status) echo ok; exit 0 ;;
                   *) exit 1 ;;
                 esac
-                """)
+                """
+            )
             write(
                 jl,
                 """
                 #!/bin/sh
                 echo "julia version $(VERSION.major).$(VERSION.minor).$(VERSION.patch)"
-                """)
+                """
+            )
             chmod(ju, 0o755)
             chmod(jl, 0o755)
             return Dict{String, String}("DISTSSH_TEST_LOCAL_JULIAUP" => ju)
@@ -240,11 +246,13 @@ using Test
                     project = proj,
                     workers = ["$host"],
                     remote = "~/App.jl",
-                    quiet = true)
+                    quiet = true
+                )
                 empty!(DistSSHRun.DistSSHBase._DETECT_JULIA_PATH_CACHE)
                 ver_env = Dict(
                     "DISTSSH_TEST_JULIA_VERSION" => "julia version $(VERSION)",
-                    "DISTSSH_TEST_UNAME" => "Linux")
+                    "DISTSSH_TEST_UNAME" => "Linux"
+                )
                 withenv(merge(ver_env, head_ju)...) do
                     up = DistSSHRun.setup!(session, :juliaup)
                     @test up.ok && !up.cancelled
@@ -259,7 +267,8 @@ using Test
                     progress_session = DistSSHRun.DistSSHSession(
                         project = proj,
                         workers = ["$host"],
-                        remote = "~/App.jl")
+                        remote = "~/App.jl"
+                    )
                     out, up = with_kit_verbosity(:progress) do
                         _capture_stdio() do _, _
                             DistSSHRun.setup!(progress_session, :juliaup)
@@ -324,7 +333,8 @@ using Test
                     project = proj,
                     workers = String[],
                     remote = "~/App.jl",
-                    quiet = true)
+                    quiet = true
+                )
                 withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                     up = DistSSHRun.setup!(session, :juliaup)
                     @test up.ok && !up.cancelled
@@ -356,7 +366,8 @@ using Test
                     project = proj,
                     workers = String[],
                     remote = "~/App.jl",
-                    quiet = true)
+                    quiet = true
+                )
                 withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
                     upd = DistSSHRun.setup!(session, :juliaup_update)
                     @test upd.ok && !upd.cancelled
@@ -372,7 +383,8 @@ using Test
                 project = proj,
                 workers = ["host1"],
                 remote = "~/App.jl",
-                quiet = true)
+                quiet = true
+            )
             @test_throws ArgumentError DistSSHRun.setup!(session, :check)
             @test_throws ArgumentError DistSSHRun.setup!(session, :delete)
         end
@@ -391,12 +403,14 @@ using Test
                     project = proj,
                     workers = ["$host"],
                     remote = "~/App.jl",
-                    quiet = true)
+                    quiet = true
+                )
                 with_kit_verbosity(:verbose) do
                     out, del = _capture_stdio() do _, _
                         DistSSHRun.setup!(
                             session, :delete;
-                            confirm_path = DistSSHRun.remote_delete_root(proj; cli_override = "~/App.jl"))
+                            confirm_path = DistSSHRun.remote_delete_root(proj; cli_override = "~/App.jl")
+                        )
                     end
                     @test del.ok && !del.cancelled
                     @test !occursin("Log file:", out)
@@ -414,7 +428,8 @@ using Test
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["host1"],
-                    remote = "~/App.jl")
+                    remote = "~/App.jl"
+                )
                 with_kit_verbosity(:progress) do
                     out, _ = _capture_stdio() do _, _
                         DistSSHRun.setup!(session, :cleanup)
@@ -452,7 +467,8 @@ using Test
                     project = proj,
                     workers = ["host1"],
                     remote = "~/App.jl",
-                    quiet = true)
+                    quiet = true
+                )
                 withenv("DISTSSH_TEST_SSH_FAIL" => "1") do
                     res = DistSSHRun.setup!(session, :instantiate; julia = "/bin/echo")
                     @test !res.ok
@@ -466,7 +482,8 @@ using Test
             session = DistSSHRun.DistSSHSession(
                 project = proj,
                 workers = ["host1"],
-                remote = "~/App.jl")
+                remote = "~/App.jl"
+            )
             out, _ = _capture_stdio() do _, _
                 @test_throws ArgumentError DistSSHRun.setup!(session, :clone)
                 @test_throws ArgumentError DistSSHRun.setup!(session, :clone; repo = "")
@@ -485,9 +502,11 @@ using Test
                     project = proj,
                     workers = ["host1"],
                     remote = "~/App.jl",
-                    quiet = true)
+                    quiet = true
+                )
                 res = DistSSHRun.setup!(
-                    session, :git_clone; repo = "https://github.com/example/App.jl.git")
+                    session, :git_clone; repo = "https://github.com/example/App.jl.git"
+                )
                 @test res.ok && !res.cancelled
                 @test length(res.hosts) == 1 && res.hosts[1].ok
             end
@@ -502,7 +521,8 @@ using Test
                     project = proj,
                     workers = ["host1"],
                     remote = "~/App.jl",
-                    quiet = true)
+                    quiet = true
+                )
                 out, res = withenv("PATH" => "/nonexistent-distsshkit-path") do
                     _capture_stdio() do _, _
                         DistSSHRun.setup!(session, :check; check_code_sync = false, ignore_julia_version = true)
@@ -515,7 +535,8 @@ using Test
                     w -> w.kind === :tool_missing &&
                         w.host == DistSSHRun.PARENT_HOST_NAME &&
                         w.message == "git not found in PATH",
-                    res.warnings)
+                    res.warnings
+                )
                 @test occursin("Prerequisites not met", out)
                 @test !occursin("Log file:", out)
 
@@ -530,7 +551,8 @@ using Test
                     project = proj,
                     workers = ["host1"],
                     remote = "~/App.jl",
-                    quiet = true)
+                    quiet = true
+                )
                 withenv("DISTSSH_TEST_SSH_FAIL" => "1") do
                     clean = DistSSHRun.setup!(session, :cleanup)
                     @test clean isa DistSSHRun.SyncResult
@@ -555,7 +577,8 @@ using Test
                     project = proj,
                     workers = ["$host"],
                     remote = "~/App.jl",
-                    quiet = true)
+                    quiet = true
+                )
                 delete_path = DistSSHRun.remote_delete_root(proj; cli_override = "~/App.jl")
                 del = DistSSHRun.setup!(session, :delete; confirm_path = delete_path)
                 @test del.ok && !del.cancelled
@@ -576,7 +599,8 @@ using Test
                     project = proj,
                     workers = ["$host"],
                     remote = "~/App.jl",
-                    quiet = true)
+                    quiet = true
+                )
                 prune_path = DistSSHRun.session_remote_root(session)
                 pr = DistSSHRun.setup!(session, :prune; confirm_path = prune_path)
                 @test pr.ok && !pr.cancelled
@@ -597,7 +621,8 @@ using Test
                     project = proj,
                     workers = ["$host"],
                     remote = "~/App.jl",
-                    quiet = true)
+                    quiet = true
+                )
                 log_dir = DistSSHRun.setup_log_dir(session.project)
                 @test !isdir(log_dir)
                 err = try
@@ -686,7 +711,8 @@ using Test
                     project = proj,
                     workers = ["host1", "host2"],
                     remote = "~/App.jl",
-                    quiet = true)
+                    quiet = true
+                )
                 string_err = try
                     DistSSHRun.setup!(session, :delete; confirm_path = "~/App.jl")
                     nothing
@@ -703,7 +729,8 @@ using Test
                 unknown = try
                     DistSSHRun.setup!(
                         session, :delete;
-                        confirm_path = Dict("host1" => "~/App.jl", "other" => "~/App.jl"))
+                        confirm_path = Dict("host1" => "~/App.jl", "other" => "~/App.jl")
+                    )
                     nothing
                 catch e
                     e
@@ -714,7 +741,8 @@ using Test
 
                 partial = DistSSHRun.setup!(
                     session, :delete;
-                    confirm_path = Dict("host1" => "App.jl"))
+                    confirm_path = Dict("host1" => "App.jl")
+                )
                 @test partial.ok && !partial.cancelled
                 @test [h.host for h in partial.hosts] == ["host1"]
                 @test !isdir(joinpath(state_dir, "host1"))
@@ -722,7 +750,8 @@ using Test
 
                 partial2 = DistSSHRun.setup!(
                     session, :delete;
-                    confirm_path = Dict("host2" => "~/App.jl"))
+                    confirm_path = Dict("host2" => "~/App.jl")
+                )
                 @test partial2.ok && !partial2.cancelled
                 @test [h.host for h in partial2.hosts] == ["host2"]
                 @test !isdir(joinpath(state_dir, "host2"))
@@ -740,7 +769,8 @@ using Test
                     project = proj,
                     workers = ["$host"],
                     remote = "~/App.jl",
-                    quiet = true)
+                    quiet = true
+                )
                 home = "/home/distsshkit"
                 expanded = home * "/App.jl"
                 withenv("DISTSSH_TEST_REMOTE_HOME" => home) do
@@ -759,10 +789,12 @@ using Test
                 project = proj,
                 workers = ["h1", "h2"],
                 remote = "~/App.jl",
-                quiet = true)
+                quiet = true
+            )
             withenv(
                 "DISTSSH_TEST" => "1",
-                "DISTSSH_TEST_SSH" => "/no/such/fake-ssh.jl") do
+                "DISTSSH_TEST_SSH" => "/no/such/fake-ssh.jl"
+            ) do
                 res_setup = DistSSHRun.setup!(session, :runtest; julia = "/bin/echo")
                 @test !res_setup.ok
                 @test !res_setup.cancelled
@@ -778,11 +810,13 @@ using Test
                 _sync_test_project_manifest!(proj)
                 hosts = ["h1", "h2", "h3"]
                 inst_res = DistSSHRun.instantiate_remotes(
-                    hosts, "/bin/echo", "~/App.jl", proj)
+                    hosts, "/bin/echo", "~/App.jl", proj
+                )
                 @test [r.host for r in inst_res.hosts] == hosts
                 @test all(r -> r.ok, inst_res.hosts)
                 test_res = DistSSHRun.runtest_remotes(
-                    hosts, "/bin/echo", "~/App.jl", proj)
+                    hosts, "/bin/echo", "~/App.jl", proj
+                )
                 @test [r.host for r in test_res.hosts] == hosts
                 @test all(r -> r.ok, test_res.hosts)
                 clean_res = DistSSHRun.cleanup_remote_workers(hosts)

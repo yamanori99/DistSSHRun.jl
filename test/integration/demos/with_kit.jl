@@ -31,13 +31,15 @@ using Test
                 kit_root = kit_root,
                 script = joinpath(host, "demos", "with_kit", script_name),
                 script_args = ["--n", "3"],
-                host_root = host)
+                host_root = host
+            )
         end
 
         pipe_script = joinpath(pipe_host, "demos", "with_kit", "pipeline_square.jl")
         pipe_cmd = setenv(
             Cmd([julia, "--startup-file=no", "--project=$pipe_host", pipe_script, "--n", "3"]),
-            _drive_host_env(pipe_host))
+            _drive_host_env(pipe_host)
+        )
         (file_proc, file_out), (echo_proc, echo_out), (pipe_proc, pipe_out) = _run_subprocesses(
             [
                 drive_cmd(file_host, "square_file.jl"),

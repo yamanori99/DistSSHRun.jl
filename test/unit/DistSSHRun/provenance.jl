@@ -6,12 +6,14 @@ const _PROV_ENV_OFF = (
     "DISTSSH_SOURCE_DIRTY" => nothing,
     "DISTSSH_SOURCE_DIFF_SHA256" => nothing,
     "DISTSSH_SOURCE_CAPTURED" => nothing,
-    "DISTSSH_SOURCE_UNTRACKED" => nothing)
+    "DISTSSH_SOURCE_UNTRACKED" => nothing,
+)
 
 function _prov_snap(;
         version::String = "1.13.2",
         commit::String = "abc",
-        blas::String = "not loaded")::Dict{String, String}
+        blas::String = "not loaded"
+    )::Dict{String, String}
     return Dict{String, String}(
         "version" => version,
         "commit" => commit,
@@ -21,7 +23,8 @@ function _prov_snap(;
         "nthreads" => "2",
         "blas" => blas,
         "blas_threads" => blas == "not loaded" ? "not loaded" : "4",
-        "hostname" => "box")
+        "hostname" => "box"
+    )
 end
 
 function _prov_git!(dir::String)
@@ -108,7 +111,8 @@ end
                 src,
                 "try\n    let" =>
                     "try\n    error(\"loader-fail-test\")\n    let",
-                count = 1)
+                count = 1
+            )
             write(loader, src)
             main = joinpath(tmp, "slot.jl")
             write(main, "exit(0)\n")
@@ -116,10 +120,12 @@ end
             out_io = IOBuffer()
             cmd = setenv(
                 `$(Base.julia_cmd()) --startup-file=no -L $loader $main`,
-                "DISTRIBUTED_OUTPUT_DIR" => tmp)
+                "DISTRIBUTED_OUTPUT_DIR" => tmp
+            )
             proc = run(
                 pipeline(cmd; stdout = out_io, stderr = err_io);
-                wait = true)
+                wait = true
+            )
             @test proc.exitcode == 0
             err = String(take!(err_io))
             @test occursin("loader-fail-test", err)
@@ -147,7 +153,9 @@ end
                         "nthreads" => "1",
                         "blas" => "not loaded",
                         "blas_threads" => "not loaded",
-                        "hostname" => "slot"))
+                        "hostname" => "slot"
+                    )
+                )
             end
             DistSSHRun.reset_worker_seeds!()
             withenv("DISTRIBUTED_OUTPUT_DIR" => tmp, "DISTSSH_WORKER_RANK" => "2") do
@@ -181,11 +189,13 @@ end
         mac_plain = joinpath(
             "/Users/x/.julia/juliaup",
             "julia-1.14.0-alpha1+0.aarch64.apple.darwin14",
-            "Julia-1.14.app", "Contents", "Resources", "julia", "bin")
+            "Julia-1.14.app", "Contents", "Resources", "julia", "bin"
+        )
         mac_opt = joinpath(
             "/Users/x/.julia/juliaup",
             "julia-1.14.0-alpha1+0.aarch64.apple.darwin14.opt",
-            "Julia-1.14-opt.app", "Contents", "Resources", "julia", "bin")
+            "Julia-1.14-opt.app", "Contents", "Resources", "julia", "bin"
+        )
         @test basename(dirname(mac_plain)) == "julia"
         @test basename(dirname(mac_opt)) == "julia"
         @test DistSSHRun._julia_install_name(mac_plain) ==
@@ -219,7 +229,8 @@ end
         @test julia_named["install"] == "julia-nightly+nogpl"
         @test julia_named["version"] == "1.13.2"
         err_julia, err_machine = DistSSHRun._parent_sections(
-            Dict{String, String}("error" => "gone"))
+            Dict{String, String}("error" => "gone")
+        )
         @test err_julia == Dict("error" => "gone")
         @test isempty(err_machine)
         live = DistSSHRun._local_process_snapshot()
@@ -246,10 +257,12 @@ end
             run(
                 addenv(
                     `$(Base.julia_cmd()) --startup-file=no $script`,
-                    "DISTRIBUTED_OUTPUT_DIR" => tmp)
+                    "DISTRIBUTED_OUTPUT_DIR" => tmp
+                )
             )
             slot = DistSSHRun._read_go_slot_snapshot(
-                joinpath(tmp, ".distssh", "provenance-slot.toml"))
+                joinpath(tmp, ".distssh", "provenance-slot.toml")
+            )
             @test slot["version"] == string(VERSION)
             @test haskey(slot, "commit")
             @test !haskey(slot, "error")
@@ -299,9 +312,12 @@ end
                 "julia" => Dict{String, Any}(
                     "parent" => Dict{String, Any}(
                         "version" => "1.13.2",
-                        "commit" => "abc")),
+                        "commit" => "abc"
+                    )
+                ),
                 "machine" => Dict{String, Any}(
-                    "parent" => Dict{String, Any}("hostname" => "box", "blas" => "not loaded")),
+                    "parent" => Dict{String, Any}("hostname" => "box", "blas" => "not loaded")
+                ),
                 "workers" => Any[],
                 "project" => Dict{String, Any}("manifest" => "absent"),
                 "source" => Dict{String, Any}(
@@ -309,13 +325,16 @@ end
                     "dirty" => false,
                     "diff_sha256" => "e3b0",
                     "captured" => "run",
-                    "untracked" => 0))
+                    "untracked" => 0
+                )
+            )
             DistSSHRun.write_kit_run_toml!(
                 tmp;
                 kind = :go,
                 output_dir = out,
                 result = nothing,
-                provenance = prov)
+                provenance = prov
+            )
             raw = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
             @test raw["schema"] == 1
             @test startswith(String(raw["writer"]), "DistSSHRun ")
@@ -332,14 +351,17 @@ end
                         "version" => "1.13.2",
                         "commit" => "abc",
                         "n" => 2,
-                        "blas" => "not loaded"),
-                ])
+                        "blas" => "not loaded"
+                    ),
+                ]
+            )
             prov["workers"] = grouped
             DistSSHRun.write_kit_run_toml!(
                 tmp;
                 kind = :go,
                 output_dir = out,
-                provenance = prov)
+                provenance = prov
+            )
             grouped_raw = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
             @test grouped_raw["schema"] == 1
             @test grouped_raw["provenance"]["workers"]["box"][1]["n"] == 2
@@ -367,10 +389,12 @@ end
                 write(joinpath(tmp, "Project.toml"), "name = \"T\"\n")
                 write(
                     joinpath(tmp, "Manifest.toml"),
-                    "julia_version = \"1.13.2\"\nmanifest_format = \"2.0\"\n")
+                    "julia_version = \"1.13.2\"\nmanifest_format = \"2.0\"\n"
+                )
                 with_manifest = DistSSHRun.assemble_provenance(tmp)
                 @test with_manifest["project"]["manifest"] == DistSSHRun._sha256_hex(
-                    read(joinpath(tmp, "Manifest.toml")))
+                    read(joinpath(tmp, "Manifest.toml"))
+                )
                 @test with_manifest["project"]["julia_version"] == "1.13.2"
                 versioned = joinpath(tmp, "Manifest-v$(VERSION.major).$(VERSION.minor).toml")
                 write(versioned, "julia_version = \"9.9.9\"\n")
@@ -432,7 +456,8 @@ end
                         "dirty" => true,
                         "diff_sha256" => "abc",
                         "captured" => "submit:client",
-                        "untracked" => 3)
+                        "untracked" => 3
+                    )
                     DistSSHRun._set_provenance_source!(passed)
                     try
                         chosen = DistSSHRun.assemble_provenance(repo)
@@ -453,7 +478,9 @@ end
                 "commit" => "abc",
                 "dirty" => false,
                 "captured" => "submit:client",
-                "untracked" => 0))
+                "untracked" => 0
+            )
+        )
         @test env["DISTSSH_SOURCE_COMMIT"] == "abc"
         @test env["DISTSSH_SOURCE_DIRTY"] == "false"
         @test !haskey(env, "DISTSSH_SOURCE_DIFF_SHA256")
@@ -462,11 +489,13 @@ end
         inherited = Dict{String, String}(
             "DISTSSH_SOURCE_COMMIT" => "new",
             "DISTSSH_SOURCE_DIRTY" => "true",
-            "OTHER" => "keep")
+            "OTHER" => "keep"
+        )
         DistSSHRun._drop_unspecified_source_env!(
             inherited,
             Dict("commit" => "new"),
-            Dict{String, String}("DISTSSH_SOURCE_COMMIT" => "new"))
+            Dict{String, String}("DISTSSH_SOURCE_COMMIT" => "new")
+        )
         @test inherited["DISTSSH_SOURCE_COMMIT"] == "new"
         @test !haskey(inherited, "DISTSSH_SOURCE_DIRTY")
         @test inherited["OTHER"] == "keep"
@@ -482,7 +511,8 @@ end
             "DISTSSH_SOURCE_DIRTY" => "true",
             "DISTSSH_SOURCE_DIFF_SHA256" => "abc",
             "DISTSSH_SOURCE_CAPTURED" => "submit:client",
-            "DISTSSH_SOURCE_UNTRACKED" => "2") do
+            "DISTSSH_SOURCE_UNTRACKED" => "2"
+        ) do
             DistSSHRun._set_provenance_source!(nothing)
             _with_tempdir() do tmp
                 got = DistSSHRun.assemble_provenance(tmp)
@@ -531,7 +561,8 @@ end
                     redirect_stderr(devnull) do
                         return DistSSHRun.go!(
                             script, String[]; head_slots = 1,
-                            project = proj, quiet = true)
+                            project = proj, quiet = true
+                        )
                     end
                 end
                 @test !result.ok
@@ -549,7 +580,8 @@ end
                 od = String(raw["output_dir"])
                 side_root = isabspath(od) ? od : joinpath(proj, od)
                 side = DistSSHRun.TOML.parsefile(
-                    joinpath(side_root, ".distssh", "provenance.toml"))
+                    joinpath(side_root, ".distssh", "provenance.toml")
+                )
                 @test side == raw["provenance"]
             end
         end
@@ -590,7 +622,8 @@ end
                 @test DistSSHRun.result_content_tree_hash(held) === nothing
                 @test DistSSHRun.result_remote_run_id(held) === nothing
                 go = DistSSHRun.GoResult(
-                    true, nothing, held, nothing, "job.jl", tmp; run_dir = tmp)
+                    true, nothing, held, nothing, "job.jl", tmp; run_dir = tmp
+                )
                 @test DistSSHRun.result_content_tree_hash(go) === nothing
                 @test DistSSHRun.result_remote_run_id(go) === nothing
             end
@@ -601,7 +634,9 @@ end
                     "/home/lab",
                     "/home/lab/runs/20260101T000000Z-abcdef/src",
                     "abc123",
-                    ["lab"]))
+                    ["lab"]
+                )
+            )
             _with_tempdir() do tmp
                 prov = DistSSHRun.assemble_provenance(tmp)
                 @test prov["schema"] == 1
@@ -614,7 +649,8 @@ end
                 @test raw["provenance"]["selection"]["content_tree_hash"] == "abc123"
                 @test raw["provenance"]["selection"]["run_id"] == "20260101T000000Z-abcdef"
                 held = DistSSHRun.DistSSHJobResult(
-                    true, :drive, nothing, nothing, nothing, 0; run_dir = tmp)
+                    true, :drive, nothing, nothing, nothing, 0; run_dir = tmp
+                )
                 @test DistSSHRun.result_content_tree_hash(held) == "abc123"
                 @test DistSSHRun.result_remote_run_id(held) == "20260101T000000Z-abcdef"
                 drive = DistSSHRun.DriveResult(true, 0; run_dir = tmp)
@@ -628,7 +664,9 @@ end
                     "/home/lab",
                     "/home/lab/runs/x/src",
                     "abc123",
-                    String[]))
+                    String[]
+                )
+            )
             _with_tempdir() do tmp
                 prov = DistSSHRun.assemble_provenance(tmp)
                 @test prov["selection"]["content_tree_hash"] == "abc123"
@@ -646,7 +684,10 @@ end
                         "schema_version" => 1,
                         "shipped" => Dict{String, Any}(
                             "content_tree_hash" => "",
-                            "run_id" => "")))
+                            "run_id" => ""
+                        )
+                    )
+                )
                 held = DistSSHRun.DriveResult(true, 0; run_dir = tmp)
                 @test DistSSHRun.result_content_tree_hash(held) === nothing
                 @test DistSSHRun.result_remote_run_id(held) === nothing
@@ -712,7 +753,8 @@ end
                     script, String[]; head_workers = 1,
                     project = proj,
                     enable_log = false,
-                    unsafe_skip_env_digests = true)
+                    unsafe_skip_env_digests = true
+                )
                 @test result.ok
                 prov = DistSSHRun.assemble_provenance(proj)
                 env = get(prov, "environment", nothing)
@@ -733,7 +775,8 @@ end
                 result = DistSSHRun.ride!(
                     script, String[]; head_workers = 1,
                     project = proj,
-                    unsafe_skip_env_digests = true)
+                    unsafe_skip_env_digests = true
+                )
                 @test result.ok
                 prov = DistSSHRun.assemble_provenance(proj)
                 env = get(prov, "environment", nothing)
@@ -756,7 +799,8 @@ end
         err isa ArgumentError || error("expected ArgumentError")
         @test occursin(
             "removed; use --unsafe-skip-env-digests (Julia/DistSSH* can no longer be waived)",
-            err.msg)
+            err.msg
+        )
         err = try
             DistSSHRun.ride!("missing.jl"; allow_mismatch = true)
             nothing

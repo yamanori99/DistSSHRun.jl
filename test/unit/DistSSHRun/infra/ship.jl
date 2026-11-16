@@ -33,29 +33,36 @@ end
     raw = TOML.parse(stamp)
     @test DistSSHRun._kit_run_toml_owned(raw)
     complete = DistSSHRun._ship_run_leaf_complete_toml(
-        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    )
     @test occursin("complete = true", complete)
     @test !occursin("project_rel", complete)
     nested = DistSSHRun._ship_run_leaf_complete_toml(
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        project_rel = "app")
+        project_rel = "app"
+    )
     @test occursin("project_rel = \"app\"", nested)
     @test DistSSHRun._ship_run_project_logical(
-        "/srv/app", "20260101T000000Z-abcdef", "app") == "/srv/app/runs/20260101T000000Z-abcdef/src/app"
+        "/srv/app", "20260101T000000Z-abcdef", "app"
+    ) == "/srv/app/runs/20260101T000000Z-abcdef/src/app"
     @test_throws ArgumentError DistSSHRun._ship_run_leaf_complete_toml(
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        project_rel = "/app")
+        project_rel = "/app"
+    )
     @test DistSSHRun._kit_run_toml_owned(TOML.parse(complete))
     @test !DistSSHRun._kit_run_toml_owned(
-        Dict("schema_version" => 1, "writer" => "Other 1.0", "kind" => "ship"))
+        Dict("schema_version" => 1, "writer" => "Other 1.0", "kind" => "ship")
+    )
     @test !DistSSHRun._kit_run_toml_owned(
-        Dict("schema_version" => 1, "writer" => "DistSSHRun 1.0", "kind" => "other"))
+        Dict("schema_version" => 1, "writer" => "DistSSHRun 1.0", "kind" => "other")
+    )
     sh = DistSSHRun._remote_run_leaf_stamp_sh("/work/app/runs/20260101T000000Z-abcd")
     @test occursin("/work/app/runs/20260101T000000Z-abcd/run.toml", sh)
     @test occursin("kind = \"ship\"", sh)
     csh = DistSSHRun._remote_run_leaf_complete_sh(
         "/work/app/runs/20260101T000000Z-abcd",
-        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    )
     @test occursin("complete = true", csh)
 end
 
@@ -149,7 +156,8 @@ end
             wait(link_bad)
             @test link_bad.exitcode == 2
             trav = DistSSHRun._remote_root_ensure_under_home_script(
-                home * "/a/../b", home)
+                home * "/a/../b", home
+            )
             trav_bad = run(pipeline(`sh -c $trav`; stdout = devnull, stderr = devnull); wait = false)
             wait(trav_bad)
             @test trav_bad.exitcode != 0
@@ -157,7 +165,8 @@ end
         @test_throws ArgumentError DistSSHRun._remote_root_ensure_under_home_script("/", home)
         @test_throws ArgumentError DistSSHRun._remote_root_ensure_under_home_script(home, home)
         @test_throws ArgumentError DistSSHRun._remote_root_ensure_under_home_script(
-            joinpath("/other", "x"), home)
+            joinpath("/other", "x"), home
+        )
         # Concurrent ensure of the same absolute leaf.
         race_parent = joinpath(home, "race")
         mkpath(race_parent)
@@ -183,15 +192,20 @@ end
     logical = "/Users/dev"
     physical = "/var/home/dev"
     @test DistSSHRun._rehome_logical_under_physical_home(
-        "/Users/dev/Parent/Repo", logical, physical) == "/var/home/dev/Parent/Repo"
+        "/Users/dev/Parent/Repo", logical, physical
+    ) == "/var/home/dev/Parent/Repo"
     @test DistSSHRun._rehome_logical_under_physical_home(
-        "/var/home/dev/Parent/Repo", logical, physical) == "/var/home/dev/Parent/Repo"
+        "/var/home/dev/Parent/Repo", logical, physical
+    ) == "/var/home/dev/Parent/Repo"
     @test DistSSHRun._rehome_logical_under_physical_home(
-        "/Users/dev/Parent/Repo", logical, logical) == "/Users/dev/Parent/Repo"
+        "/Users/dev/Parent/Repo", logical, logical
+    ) == "/Users/dev/Parent/Repo"
     @test_throws ArgumentError DistSSHRun._rehome_logical_under_physical_home(
-        "/Users/dev", logical, physical)
+        "/Users/dev", logical, physical
+    )
     @test_throws ArgumentError DistSSHRun._rehome_logical_under_physical_home(
-        "/tmp/other", logical, physical)
+        "/tmp/other", logical, physical
+    )
     if !Sys.iswindows()
         _with_tempdir() do base
             physical_home = joinpath(base, "physical")
@@ -200,16 +214,19 @@ end
             symlink(physical_home, logical_home)
             logical_root = joinpath(logical_home, "Parent", "Repo")
             physical_root = DistSSHRun._rehome_logical_under_physical_home(
-                logical_root, logical_home, physical_home)
+                logical_root, logical_home, physical_home
+            )
             @test physical_root == joinpath(physical_home, "Parent", "Repo")
             under = DistSSHRun._remote_root_ensure_under_home_script(
-                physical_root, physical_home)
+                physical_root, physical_home
+            )
             @test occursin("CREATED", read(`sh -c $under`, String))
             @test isdir(physical_root)
             @test (filemode(physical_root) & 0o022) == 0
             # Without remapping, a logical expansion fails the under-home check.
             @test_throws ArgumentError DistSSHRun._remote_root_ensure_under_home_script(
-                logical_root, physical_home)
+                logical_root, physical_home
+            )
         end
         _with_tempdir() do state_dir
             withenv(
@@ -218,9 +235,13 @@ end
                     Dict(
                         "DISTSSH_TEST_REMOTE_HOME" => "/var/home/dev",
                         "DISTSSH_TEST_REMOTE_HOME_LOGICAL" => "/Users/dev",
-                        "DISTSSH_TEST_REMOTE_EXPAND" => "/Users/dev/Parent/Repo"))...) do
+                        "DISTSSH_TEST_REMOTE_EXPAND" => "/Users/dev/Parent/Repo"
+                    )
+                )...
+            ) do
                 ensured = DistSSHRun._ensure_ship_remote_root!(
-                    "host1", "~/Parent/Repo")
+                    "host1", "~/Parent/Repo"
+                )
                 @test ensured.abs_root == "/var/home/dev/Parent/Repo"
                 @test ensured.created
                 @test isdir(joinpath(state_dir, "host1", "tree"))
@@ -343,7 +364,8 @@ end
         text = mktemp() do _, io
             packed = withenv(
                 "DISTSSH_SHIP_WARN_FILE_BYTES" => "1",
-                "DISTSSH_SHIP_WARN_TOTAL_BYTES" => "1") do
+                "DISTSSH_SHIP_WARN_TOTAL_BYTES" => "1"
+            ) do
                 redirect_stdout(io) do
                     redirect_stderr(() -> DistSSHRun._pack_project_tree(tmp), io)
                 end
@@ -456,7 +478,8 @@ end
             name = "x"
             path = "."
             hash = false
-            """)
+            """
+        )
         rows = DistSSHRun._load_ship_inputs(tmp)
         @test length(rows) == 1
         @test rows[1].name == "x"
@@ -481,7 +504,8 @@ end
                 name = "big"
                 path = "data"
                 hash = false
-                """)
+                """
+            )
             run(`git -C $tmp add -A`)
             run(`git -C $tmp commit --quiet -m init`)
             packed = DistSSHRun._pack_project_tree(tmp)
@@ -512,15 +536,18 @@ end
                         "name" => "big",
                         "path" => "data",
                         "host" => "h",
-                        "verification" => "stat"),
-                ])
+                        "verification" => "stat"
+                    ),
+                ]
+            )
             @test isfile(joinpath(run_dir, "inputs", "records.toml"))
             @test !isfile(joinpath(tmp, "inputs.toml"))
             @test !isfile(joinpath(tmp, "inputs", "records.toml"))
             withenv("DISTSSH_RUN_DIR" => nothing) do
                 err = try
                     DistSSHRun.ship_tree!(
-                        tmp, ["host.test"], "/remote/app"; confirm = false, report = false)
+                        tmp, ["host.test"], "/remote/app"; confirm = false, report = false
+                    )
                     nothing
                 catch e
                     e
@@ -541,7 +568,8 @@ end
             [[inputs]]
             name = "big"
             path = "data/"
-            """)
+            """
+        )
         inputs = DistSSHRun._load_ship_inputs(tmp)
         @test length(inputs) == 1
         @test inputs[1].path == "data"
@@ -554,7 +582,8 @@ end
             [[inputs]]
             name = "bad"
             path = "data/../secret"
-            """)
+            """
+        )
         @test_throws ArgumentError DistSSHRun._load_ship_inputs(tmp)
         write(
             joinpath(tmp, ".distssh", "inputs.toml"),
@@ -562,7 +591,8 @@ end
             [[inputs]]
             name = "bad"
             path = "data/a\\nb"
-            """)
+            """
+        )
         @test_throws ArgumentError DistSSHRun._load_ship_inputs(tmp)
     end
     root = mktempdir()
@@ -688,7 +718,8 @@ end
     try
         hashed_out = read(
             pipeline(`sh -c $(DistSSHRun._remote_input_probe_sh(file, true))`; stderr = devnull),
-            String)
+            String
+        )
         hashed = DistSSHRun._input_row_from_probe("n", "dir/one.bin", "h", true, hashed_out, rec)
         body = String(read(joinpath(rec, hashed["manifest"])))
         @test occursin(" *one.bin", body)
@@ -696,7 +727,8 @@ end
         DistSSHRun.check_input_manifest(joinpath(rec, hashed["manifest"]), parent)
         stat_out = read(
             pipeline(`sh -c $(DistSSHRun._remote_input_probe_sh(file, false))`; stderr = devnull),
-            String)
+            String
+        )
         stat_row = DistSSHRun._input_row_from_probe("n", "dir/one.bin", "h", false, stat_out, rec)
         @test stat_row["verification"] == "stat"
         @test stat_row["files"] == 1
@@ -718,7 +750,8 @@ end
     try
         out = read(
             pipeline(`sh -c $(DistSSHRun._remote_input_probe_sh(link, true))`; stderr = devnull),
-            String)
+            String
+        )
         @test startswith(out, "link\t")
         row = DistSSHRun._input_row_from_probe("n", "dir/alias.bin", "h", true, out, rec)
         body = String(read(joinpath(rec, row["manifest"])))
@@ -893,7 +926,8 @@ end
     @test hasmethod(
         DistSSHRun.ship_tree!,
         Tuple{String, Vector{String}, String},
-        (:await_inputs))
+        (:await_inputs)
+    )
 end
 
 @testset "init joins overlapped hash after an interrupted fetch" begin
@@ -993,7 +1027,8 @@ end
         end
         after_init = @async DistSSHRun.await_declared_input_hashes!()
         @test_logs (:warn, r"Declared-input hashing failed") DistSSHRun._join_overlapped_input_hash_keep_prior!(
-            after_init)
+            after_init
+        )
         @test istaskfailed(after_init)
         @test isempty(DistSSHRun._PENDING_INPUT_HASH_TASKS)
 
@@ -1046,13 +1081,16 @@ end
         DistSSHRun.write_kit_run_toml!(run_dir; kind = :go)
         DistSSHRun._commit_declared_input_rows!(
             run_dir,
-            [Dict{String, Any}("name" => "a", "host" => "h", "verification" => "stat")])
+            [Dict{String, Any}("name" => "a", "host" => "h", "verification" => "stat")]
+        )
         DistSSHRun._commit_declared_input_rows!(
             run_dir,
-            [Dict{String, Any}("name" => "b", "host" => "h", "verification" => "stat")])
+            [Dict{String, Any}("name" => "b", "host" => "h", "verification" => "stat")]
+        )
         DistSSHRun._commit_declared_input_rows!(
             run_dir,
-            [Dict{String, Any}("name" => "a", "host" => "h", "verification" => "sha256", "content_hash" => "x")])
+            [Dict{String, Any}("name" => "a", "host" => "h", "verification" => "sha256", "content_hash" => "x")]
+        )
         stored = DistSSHRun._read_declared_input_rows(run_dir)
         @test length(stored) == 2
         recorded = something(DistSSHRun.read_kit_run_toml(run_dir))
@@ -1093,14 +1131,16 @@ end
         "/home/dev/app",
         "/home/dev/app/runs/20260101T000000Z-abcdef/src",
         "deadbeef",
-        ["child-1"])
+        ["child-1"]
+    )
     DistSSHRun._clear_last_ship!()
     DistSSHRun._set_active_selection!(sel)
     try
         got = something(DistSSHRun.active_source_selection())
         @test got.work_root == "/home/dev/app/runs/20260101T000000Z-abcdef/src"
         @test DistSSHRun._rehome_under_work_root(
-            "/home/dev/app/pkg", "/home/dev/app", got.work_root) == "/home/dev/app/runs/20260101T000000Z-abcdef/src/pkg"
+            "/home/dev/app/pkg", "/home/dev/app", got.work_root
+        ) == "/home/dev/app/runs/20260101T000000Z-abcdef/src/pkg"
         @test got.hosts == ["child-1"]
         @test got.deploy_root == "/home/dev/app"
     finally
@@ -1112,30 +1152,36 @@ end
     # Pure rehome mapping (selection itself is covered in source_selection.jl).
     wr = "/home/dev/app/runs/20260101T000000Z-abcdef/src"
     @test DistSSHRun._rehome_under_work_root(
-        "/home/dev/app/pkg", "/home/dev/app", wr) == "/home/dev/app/runs/20260101T000000Z-abcdef/src/pkg"
+        "/home/dev/app/pkg", "/home/dev/app", wr
+    ) == "/home/dev/app/runs/20260101T000000Z-abcdef/src/pkg"
 end
 
 @testset "rehome collect path onto work root" begin
     @test DistSSHRun._rehome_under_work_root(
         "/home/dev/app/output",
         "/home/dev/app",
-        "/home/dev/app/runs/x/src") == "/home/dev/app/runs/x/src/output"
+        "/home/dev/app/runs/x/src"
+    ) == "/home/dev/app/runs/x/src/output"
     @test DistSSHRun._rehome_under_work_root(
         "/home/dev/app",
         "/home/dev/app",
-        "/home/dev/app/runs/x/src") == "/home/dev/app/runs/x/src"
+        "/home/dev/app/runs/x/src"
+    ) == "/home/dev/app/runs/x/src"
     @test DistSSHRun._rehome_under_work_root(
         "/tmp/other",
         "/home/dev/app",
-        "/home/dev/app/runs/x/src") == "/tmp/other"
+        "/home/dev/app/runs/x/src"
+    ) == "/tmp/other"
     @test DistSSHRun._rehome_under_work_root(
         "~/app/output",
         "~/app",
-        "~/app/runs/x/src") == "~/app/runs/x/src/output"
+        "~/app/runs/x/src"
+    ) == "~/app/runs/x/src/output"
     @test DistSSHRun._rehome_under_work_root(
         "/home/dev/app/output",
         "/home/dev/app",
-        "/home/dev/app") == "/home/dev/app/output"
+        "/home/dev/app"
+    ) == "/home/dev/app/output"
 end
 
 @testset "work layout ignores poisoned DISTRIBUTED_REMOTE_PROJECT_ROOT" begin
@@ -1143,7 +1189,8 @@ end
         write(joinpath(proj, "Project.toml"), "name = \"LayoutPoison\"\n")
         write(
             joinpath(proj, "Manifest.toml"),
-            "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+            "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n"
+        )
         mkpath(joinpath(proj, "output"))
         deploy = "/home/dev/app"
         work = "/home/dev/app/runs/20260101T000000Z-abcdef/src"
@@ -1154,11 +1201,14 @@ end
                 deploy,
                 work,
                 "deadbeef",
-                ["child-1"]))
+                ["child-1"]
+            )
+        )
         try
             withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => work) do
                 got = DistSSHRun._remote_work_layout_path(
-                    joinpath(proj, "output"), proj, ["child-1"])
+                    joinpath(proj, "output"), proj, ["child-1"]
+                )
                 @test got == "$work/output"
                 @test !occursin("/runs/20260101T000000Z-abcdef/src/runs/", got)
             end
@@ -1173,7 +1223,8 @@ end
         write(joinpath(proj, "Project.toml"), "name = \"LayoutOther\"\n")
         write(
             joinpath(proj, "Manifest.toml"),
-            "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+            "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n"
+        )
         mkpath(joinpath(proj, "output"))
         other = "/home/dev/other"
         other_work = "/home/dev/other/runs/20260101T000000Z-abcdef/src"
@@ -1184,12 +1235,15 @@ end
                 other,
                 other_work,
                 "deadbeef",
-                ["child-1"]))
+                ["child-1"]
+            )
+        )
         try
             # Session/ENV points at a different deploy root than the stale selection.
             withenv("DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/home/dev/app") do
                 deploy = DistSSHRun._layout_intended_deploy_root(
-                    proj, DistSSHRun.active_source_selection())
+                    proj, DistSSHRun.active_source_selection()
+                )
                 @test deploy == "/home/dev/app"
                 @test !DistSSHRun._deploy_roots_equivalent(deploy, other)
             end
@@ -1272,7 +1326,8 @@ end
             "SHELL_DOUBLE_LOG" => logp,
             "SHELL_DOUBLE_MODE" => "sleep",
             "SHELL_DOUBLE_READY" => ready,
-            "DISTSSH_TEST_POSIX_SHELL" => "1")
+            "DISTSSH_TEST_POSIX_SHELL" => "1"
+        )
         try
             withenv(env...) do
                 task = @async DistSSHRun._remote_script_output((_ -> nothing), "ship-sig.test", "sleep")
@@ -1352,7 +1407,8 @@ end
                 cp(other.tar_path, tar; force = true)
                 err = try
                     DistSSHRun.ship_tree!(
-                        pack, ["host1"], "/home/distsshkit/app"; confirm = false)
+                        pack, ["host1"], "/home/distsshkit/app"; confirm = false
+                    )
                     nothing
                 catch e
                     e
@@ -1408,7 +1464,8 @@ end
                     project = proj,
                     workers = ["host1"],
                     remote = "/home/distsshkit/app",
-                    quiet = true)
+                    quiet = true
+                )
                 out, res = _capture_stdio() do stdin_io, _
                     println(stdin_io, "")
                     flush(stdin_io)
@@ -1435,7 +1492,9 @@ end
                 withenv(
                     merge(
                         _fake_setup_remote_env(state_dir),
-                        Dict("DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia"))...) do
+                        Dict("DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia")
+                    )...
+                ) do
                     _apply_quiet_setup_session!()
                     _with_tempdir() do proj
                         _project!(proj)
@@ -1448,11 +1507,13 @@ end
                                 "/other",
                                 "/other/runs/sentinel-run/src",
                                 "sentinel-hash",
-                                ["host9"])
+                                ["host9"]
+                            )
                             DistSSHRun._set_active_selection!(sentinel)
                             quiet = DistSSHRun.ship_tree!(
                                 pack, ["host1"], "/home/distsshkit/app";
-                                confirm = false, provenance = false)
+                                confirm = false, provenance = false
+                            )
                             @test quiet isa DistSSHRun.ShipTreeResult
                             @test !quiet.cancelled
                             @test all(hr -> hr.ok, quiet.host_results)
@@ -1461,10 +1522,12 @@ end
                             @test DistSSHRun.result_content_tree_hash(quiet) == pack.content_tree_hash
                             @test occursin(
                                 DistSSHRun._RUN_ID_PATTERN,
-                                something(DistSSHRun.result_remote_run_id(quiet)))
+                                something(DistSSHRun.result_remote_run_id(quiet))
+                            )
                             recorded = DistSSHRun.ship_tree!(
                                 pack, ["host1"], "/home/distsshkit/app";
-                                confirm = false, provenance = true)
+                                confirm = false, provenance = true
+                            )
                             kept = something(DistSSHRun.active_source_selection())
                             @test kept.content_tree_hash == pack.content_tree_hash
                             @test kept.run_id ==
@@ -1473,7 +1536,8 @@ end
 
                             before = Set(readdir(tempdir()))
                             wrapped = DistSSHRun.ship_tree!(
-                                proj, ["host1"], "/home/distsshkit/app"; confirm = false)
+                                proj, ["host1"], "/home/distsshkit/app"; confirm = false
+                            )
                             @test all(hr -> hr.ok, wrapped.host_results)
                             for name in setdiff(Set(readdir(tempdir())), before)
                                 @test !isfile(joinpath(tempdir(), name, "ship.tar"))
@@ -1482,7 +1546,8 @@ end
                                 project = proj,
                                 workers = ["host1"],
                                 remote = "/home/distsshkit/app",
-                                quiet = true)
+                                quiet = true
+                            )
                             synced = DistSSHRun.setup!(session, :ship_tree)
                             @test synced isa DistSSHRun.SyncResult
                             @test synced.ok && !synced.cancelled
@@ -1517,7 +1582,10 @@ end
                         _fake_setup_remote_env(state_dir),
                         Dict(
                             "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia",
-                            "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit"))...) do
+                            "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit"
+                        )
+                    )...
+                ) do
                     _apply_quiet_setup_session!()
                     _with_tempdir() do proj
                         _project!(proj)
@@ -1526,11 +1594,13 @@ end
                         previous = DistSSHRun.active_source_selection()
                         try
                             created = DistSSHRun.ship_tree!(
-                                proj, ["host1"], "/home/distsshkit/app"; confirm = false)
+                                proj, ["host1"], "/home/distsshkit/app"; confirm = false
+                            )
                             @test all(hr -> hr.ok, created.host_results)
                             @test any(
                                 hr -> occursin("created remote_root", hr.message),
-                                created.host_results)
+                                created.host_results
+                            )
                             @test isdir(tree)
                         finally
                             _restore_selection!(previous)
@@ -1543,7 +1613,10 @@ end
                         _fake_setup_remote_env(state_dir),
                         Dict(
                             "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia",
-                            "DISTSSH_TEST_TAR_EXTRACT_FAIL" => "1"))...) do
+                            "DISTSSH_TEST_TAR_EXTRACT_FAIL" => "1"
+                        )
+                    )...
+                ) do
                     _apply_quiet_setup_session!()
                     _with_tempdir() do proj
                         _project!(proj)
@@ -1552,7 +1625,8 @@ end
                         previous = DistSSHRun.active_source_selection()
                         try
                             failed = DistSSHRun.ship_tree!(
-                                proj, ["host1"], "/home/distsshkit/app"; confirm = false)
+                                proj, ["host1"], "/home/distsshkit/app"; confirm = false
+                            )
                             @test any(hr -> !hr.ok, failed.host_results)
                             @test isdir(tree)
                         finally

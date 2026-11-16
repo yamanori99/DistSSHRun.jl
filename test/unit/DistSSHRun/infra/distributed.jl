@@ -8,19 +8,22 @@ using Test
         out2 = joinpath(repo, "nested", "out2")
         withenv(
             "DISTRIBUTED_COLLECT_DIRS" => "out1:$(out2)",
-            "DISTRIBUTED_OUTPUT_DIR" => joinpath(repo, "ignored")) do
+            "DISTRIBUTED_OUTPUT_DIR" => joinpath(repo, "ignored")
+        ) do
             roots = DistSSHRun.distributed_collect_root_dirs(sd, repo)
             @test roots == String[abspath(joinpath(repo, "out1")), abspath(out2)]
         end
         withenv(
             "DISTRIBUTED_COLLECT_DIRS" => "out1:out1",
-            "DISTRIBUTED_OUTPUT_DIR" => joinpath(repo, "ignored")) do
+            "DISTRIBUTED_OUTPUT_DIR" => joinpath(repo, "ignored")
+        ) do
             roots = DistSSHRun.distributed_collect_root_dirs(sd, repo)
             @test roots == String[abspath(joinpath(repo, "out1"))]
         end
         withenv(
             "DISTRIBUTED_COLLECT_DIRS" => "",
-            "DISTRIBUTED_OUTPUT_DIR" => joinpath(repo, "solo")) do
+            "DISTRIBUTED_OUTPUT_DIR" => joinpath(repo, "solo")
+        ) do
             @test DistSSHRun.distributed_collect_root_dirs(sd, repo) ==
                 String[abspath(joinpath(repo, "solo"))]
         end
@@ -42,7 +45,8 @@ using Test
         withenv("DISTRIBUTED_OUTPUT_DIR" => "") do
             got = DistSSHRun.resolve_distributed_output_dir!(
                 String["--output-dir", from_args],
-                default)
+                default
+            )
             @test got == abspath(from_args)
         end
     end
@@ -69,7 +73,8 @@ using Test
             mkpath(script_dir)
             withenv(
                 "DISTRIBUTED_OUTPUT_DIR" => nothing,
-                DistSSHRun.DISTSSH_RUN_DIR_ENV => nothing) do
+                DistSSHRun.DISTSSH_RUN_DIR_ENV => nothing
+            ) do
                 @test DistSSHRun.resolve_drive_log_dir(nothing, script_dir) ==
                     DistSSHRun.kit_dir_beside_script(script_dir, :drive)
             end
@@ -77,14 +82,16 @@ using Test
             mkpath(run_dir)
             withenv(
                 "DISTRIBUTED_OUTPUT_DIR" => joinpath(tmp, "env-out"),
-                DistSSHRun.DISTSSH_RUN_DIR_ENV => run_dir) do
+                DistSSHRun.DISTSSH_RUN_DIR_ENV => run_dir
+            ) do
                 @test DistSSHRun.resolve_drive_log_dir(nothing, script_dir) ==
                     DistSSHRun.canonical_local_path(run_dir)
             end
             env_dir = joinpath(tmp, "env-out")
             withenv(
                 "DISTRIBUTED_OUTPUT_DIR" => env_dir,
-                DistSSHRun.DISTSSH_RUN_DIR_ENV => nothing) do
+                DistSSHRun.DISTSSH_RUN_DIR_ENV => nothing
+            ) do
                 @test DistSSHRun.resolve_drive_log_dir(nothing, script_dir) == env_dir
                 explicit = joinpath(tmp, "explicit-logs")
                 @test DistSSHRun.resolve_drive_log_dir(explicit, script_dir) == explicit
@@ -133,7 +140,8 @@ using Test
             write(joinpath(sidecars, "kit.pid"), "1\n")
             write(joinpath(sidecars, "kit.job"), "q-1\n")
             @test DistSSHRun._prepare_output_dir!(
-                sidecars; command = :go, allow_parent_sidecars = true) == DistSSHRun.canonical_local_path(sidecars)
+                sidecars; command = :go, allow_parent_sidecars = true
+            ) == DistSSHRun.canonical_local_path(sidecars)
             bare = try
                 DistSSHRun._prepare_output_dir!(sidecars; command = :go)
                 nothing
@@ -144,7 +152,8 @@ using Test
             write(joinpath(sidecars, "stale.txt"), "old\n")
             mixed = try
                 DistSSHRun._prepare_output_dir!(
-                    sidecars; command = :go, allow_parent_sidecars = true)
+                    sidecars; command = :go, allow_parent_sidecars = true
+                )
                 nothing
             catch e
                 e

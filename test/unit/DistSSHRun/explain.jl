@@ -14,13 +14,15 @@ using Test
             @test occursin("install_demos", demo_msg)
 
             headed = DistSSHRun.explain_script_not_found(
-                demo, tmp; surface = :api, headline = "script not found: x")
+                demo, tmp; surface = :api, headline = "script not found: x"
+            )
             @test startswith(headed, "script not found: x")
             @test occursin("DistSSHRun.install_demos(; family=", headed)
 
             kit_wrong = DistSSHRun.explain_script_not_found(
                 joinpath(_kit_root(), "demos", "square_file.jl"),
-                _kit_root())
+                _kit_root()
+            )
             @test occursin("demos/with_kit/square_file.jl", kit_wrong)
 
             missing_kit = joinpath(tmp, "demos", "with_kit", "square_file.jl")

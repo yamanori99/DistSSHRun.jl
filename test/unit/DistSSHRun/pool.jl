@@ -42,13 +42,16 @@ using Test
                     "DISTRIBUTED_PROJECT_ROOT" => proj,
                     "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/fake/remote/PoolHost",
                     "DISTSSH_TEST_POOL_MEM" => "8589934592",
-                    "DISTSSH_TEST_POOL_NCPU" => "8"))
+                    "DISTSSH_TEST_POOL_NCPU" => "8"
+                )
+            )
             withenv(env...) do
                 DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true))
                 sess = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["host1"],
-                    remote = "/fake/remote/PoolHost")
+                    remote = "/fake/remote/PoolHost"
+                )
                 okp = DistSSHRun.pool!(sess)
                 @test okp.ok
                 @test length(okp.hosts) == 2
@@ -64,7 +67,8 @@ using Test
                 sess = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["host1"],
-                    remote = "/fake/remote/PoolHost")
+                    remote = "/fake/remote/PoolHost"
+                )
                 partial = DistSSHRun.pool!(sess)
                 @test partial.ok
                 @test partial.hosts[2].nproc == 8
@@ -78,7 +82,8 @@ using Test
                 sess = DistSSHRun.DistSSHSession(
                     project = proj,
                     workers = ["host1"],
-                    remote = "/fake/remote/PoolHost")
+                    remote = "/fake/remote/PoolHost"
+                )
                 bad = DistSSHRun.pool!(sess)
                 @test !bad.ok
                 @test length(bad.hosts) == 2
