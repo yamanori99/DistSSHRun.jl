@@ -907,7 +907,7 @@ using Dates
             snap_id = "20260101T000000Z-aaaaaa"
             parent = DistSSHRun.run_identity(app)
             digests = Any[
-                Dict{String, Any}("path" => "Project.toml", "blob" => parent["project.sha256"])
+                Dict{String, Any}("path" => "Project.toml", "blob" => parent["project.sha256"]),
             ]
             DistSSHRun._set_active_deploy_record!(
                 DistSSHRun.build_deploy_record(

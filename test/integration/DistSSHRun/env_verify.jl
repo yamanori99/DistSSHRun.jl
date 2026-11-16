@@ -45,7 +45,34 @@ function _env_verify_clear_worker_test_env!(::Integer)
     return nothing
 end
 
+function _env_verify_solo_workers!()
+    leftover = setdiff(collect(workers()), [1])
+    isempty(leftover) || rmprocs(leftover; waitfor = 5.0)
+    return nothing
+end
+
+function _env_verify_add_local_workers(
+        n::Integer,
+        worker_project::Union{Nothing, AbstractString} = Base.active_project(),
+    )
+    _env_verify_solo_workers!()
+    project_flag = if worker_project === nothing
+        `--startup-file=no`
+    else
+        `--startup-file=no --project=$(String(worker_project))`
+    end
+    addprocs(n; exeflags = project_flag, topology = :master_worker)
+    ws = sort!(collect(workers()))
+    for w in ws
+        remotecall_fetch(w) do
+            return Core.eval(Main, :(using DistSSHRun))
+        end
+    end
+    return ws
+end
+
 function _with_one_local_worker(worker_project::Union{Nothing, AbstractString}, f::Function)
+    _env_verify_solo_workers!()
     @test nprocs() == 1
     project_flag = if worker_project === nothing
         `--startup-file=no`
@@ -93,6 +120,8 @@ end
 
 function _env_verify_guards()
     @testset "environment verify guards" begin
+        _env_run_id_shipped_run_verify_tests()
+
         @testset "controller without Manifest fails closed" begin
             _with_tempdir() do proj
                 write(joinpath(proj, "Project.toml"), "name = \"NoManifestYet\"\n")
@@ -695,7 +724,7 @@ function _env_run_id_deploy_record!(proj::AbstractString, rid::AbstractString)
         Dict{String, Any}(
             "path" => "Project.toml",
             "blob" => parent["project.sha256"],
-        )
+        ),
     ]
     rec = DistSSHRun.build_deploy_record(
         proj,
@@ -714,15 +743,21 @@ function _env_run_id_shipped_run_verify_tests()
         @testset "matching deploy record" begin
             _with_tempdir() do proj
                 _env_verify_job!(proj)
-                old = Base.active_project()
+                test_proj = Base.active_project()
+                old = test_proj
                 Pkg.activate(proj; io = devnull)
                 try
                     _with_one_local_worker(
-                        proj,
+                        test_proj,
                         function (w)
+                            parent = _env_run_id_deploy_record!(proj, rid)
                             DistSSHRun._mark_workers_launched!([w], proj)
-                            _env_run_id_deploy_record!(proj, rid)
-                            DistSSHRun.verify_workers_match_shipped_run!(proj; run_id = rid)
+                            DistSSHRun._WORKER_ENV_SNAPSHOT_OVERRIDE[] = _ -> parent
+                            try
+                                DistSSHRun.verify_workers_match_shipped_run!(proj; run_id = rid)
+                            finally
+                                DistSSHRun._WORKER_ENV_SNAPSHOT_OVERRIDE[] = nothing
+                            end
                             return nothing
                         end
                     )
@@ -735,12 +770,11 @@ function _env_run_id_shipped_run_verify_tests()
         @testset "heterogeneous worker digests" begin
             _with_tempdir() do proj
                 _env_verify_job!(proj)
-                old = Base.active_project()
+                test_proj = Base.active_project()
+                old = test_proj
                 Pkg.activate(proj; io = devnull)
                 try
-                    @test nprocs() == 1
-                    addprocs(2; exeflags = `--startup-file=no --project=$(proj)`, topology = :master_worker)
-                    ws = sort!(collect(workers()))
+                    ws = _env_verify_add_local_workers(2, test_proj)
                     parent = _env_run_id_deploy_record!(proj, rid)
                     DistSSHRun._mark_workers_launched!(ws, proj)
                     other = copy(parent)
@@ -753,9 +787,9 @@ function _env_run_id_shipped_run_verify_tests()
                         )
                     finally
                         DistSSHRun._WORKER_ENV_SNAPSHOT_OVERRIDE[] = nothing
-                        rmprocs(ws; waitfor = 5.0)
                     end
                 finally
+                    _env_verify_solo_workers!()
                     old === nothing || Pkg.activate(old; io = devnull)
                     DistSSHRun._clear_active_deploy_record!()
                 end
@@ -764,18 +798,19 @@ function _env_run_id_shipped_run_verify_tests()
         @testset "digest mismatch vs deploy record" begin
             _with_tempdir() do proj
                 _env_verify_job!(proj)
-                old = Base.active_project()
+                test_proj = Base.active_project()
+                old = test_proj
                 Pkg.activate(proj; io = devnull)
                 try
                     _with_one_local_worker(
-                        proj,
+                        test_proj,
                         function (w)
                             parent = DistSSHRun.run_identity(proj)
                             digests = Any[
                                 Dict{String, Any}(
                                     "path" => "Project.toml",
                                     "blob" => repeat("b", 64),
-                                )
+                                ),
                             ]
                             rec = DistSSHRun.build_deploy_record(
                                 proj,
@@ -837,7 +872,7 @@ function _env_run_id_shipped_run_verify_tests()
                     "mode" => "ship-tree",
                     "run_id" => rid,
                     "content_file_digests" => Any[
-                        Dict{String, Any}("path" => "Project.toml", "blob" => "a"^64)
+                        Dict{String, Any}("path" => "Project.toml", "blob" => "a"^64),
                     ],
                 )
                 DistSSHRun._set_active_deploy_record!(rec)
@@ -854,5 +889,4 @@ function _env_run_id_shipped_run_verify_tests()
     return nothing
 end
 
-_env_run_id_shipped_run_verify_tests()
 _env_verify_guards()

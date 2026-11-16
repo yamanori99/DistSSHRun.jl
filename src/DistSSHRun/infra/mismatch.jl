@@ -534,7 +534,7 @@ function _missing_deploy_record_for_run_error(
     lines = String[
         "what: deploy record for run_id=$(rid) is not available",
         "why: --run-id verifies worker Manifest/Project digests against the ship deploy record",
-            "fix: run setup ship-tree and instantiate on workers, then drive --run-id $(rid); remote hosts must be listed so deploy.toml is read (local last-ship.toml is not used for verification)",
+        "fix: run setup ship-tree and instantiate on workers, then drive --run-id $(rid); remote hosts must be listed so deploy.toml is read (local last-ship.toml is not used for verification)",
     ]
     proj = isempty(strip(project)) ? "" : canonical_local_path(project)
     !isempty(proj) && push!(lines, "where: controller project=$(proj)")
@@ -709,7 +709,7 @@ function verify_workers_match_shipped_run!(
             isempty(lines) ||
                 lock(mismatch_lock) do
                 append!(worker_lines, lines)
-                end
+            end
         end
     end
     sort!(snaps; by = first)
