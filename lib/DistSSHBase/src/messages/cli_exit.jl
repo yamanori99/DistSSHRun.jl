@@ -5,7 +5,7 @@ struct CliUsageError <: Exception
     msg::String
 end
 
-"""Foreground interrupt after cleanup. `with_cli_exit` returns [`cli_interrupted()`](@ref)."""
+"""Foreground interrupt after cleanup. `with_cli_exit` returns `cli_interrupted()` (`130`)."""
 struct CliForegroundInterrupt <: Exception end
 
 function Base.showerror(io::IO, e::CliUsageError)
