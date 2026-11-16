@@ -1,12 +1,13 @@
 # hostinfo CLI: format DistSSHBase.HostFacts. Collection stays in Base.
 
 function session_inventory_hosts(session::DistSSHSession)::Vector{String}
-    out = String[PARENT_HOST_NAME]
+    out = String[]
+    session.include_head_for_size && push!(out, PARENT_HOST_NAME)
     append!(out, session.hosts)
     return out
 end
 
-"""SSH host names used for pool / hostinfo (`parent` first when included)."""
+"""SSH host names used for pool / hostinfo (head first when `session.include_head_for_size`)."""
 function session_size_hosts(session::DistSSHSession)::Tuple{Vector{String}, Vector{String}}
     child_hosts = copy(session.hosts)
     all_hosts = session_inventory_hosts(session)
