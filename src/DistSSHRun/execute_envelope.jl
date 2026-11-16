@@ -96,7 +96,9 @@ function _execute_envelope_from_kwargs(
     )
     require_all_hosts !== nothing && throw(
         ArgumentError(
-            "execute envelope does not accept require_all_hosts=; use best_effort=true",
+            "execute envelope does not accept require_all_hosts=; " *
+                "use best_effort= (require_all_hosts=true → best_effort=false, " *
+                "require_all_hosts=false → best_effort=true)",
         ),
     )
     for k in keys(kwargs)

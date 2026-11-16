@@ -19,12 +19,25 @@ function _blob_string_vec(v)::Vector{String}
     return String[String(x) for x in v]
 end
 
+const _JOB_BLOB_REQUIRE_ALL_HOSTS_REMOVED = """
+job blob: require_all_hosts was removed; use best_effort instead (invert the value).
+  require_all_hosts = true  →  best_effort = false  (default, fail-closed join/collect)
+  require_all_hosts = false →  best_effort = true
+Rewrite job.toml; silent conversion is not supported."""
+
+const _JOB_BLOB_COLLECT_BEST_EFFORT_REMOVED = """
+job blob: collect_best_effort was removed; use best_effort instead (same meaning).
+Rewrite job.toml; silent conversion is not supported."""
+
+function _reject_removed_job_blob_join_keys!(raw::AbstractDict)
+    haskey(raw, "require_all_hosts") && throw(ArgumentError(_JOB_BLOB_REQUIRE_ALL_HOSTS_REMOVED))
+    haskey(raw, "collect_best_effort") && throw(ArgumentError(_JOB_BLOB_COLLECT_BEST_EFFORT_REMOVED))
+    return nothing
+end
+
 function _blob_best_effort(raw::AbstractDict)::Bool
     if haskey(raw, "best_effort")
         return _blob_bool(raw["best_effort"], "best_effort")
-    end
-    if haskey(raw, "require_all_hosts")
-        return !_blob_bool(raw["require_all_hosts"], "require_all_hosts")
     end
     return false
 end
@@ -62,6 +75,7 @@ function _validate_detached_job_blob_dict(raw::AbstractDict)
     _blob_string_vec(args)
     get(raw, "project", nothing) isa AbstractString ||
         throw(ArgumentError("job blob: missing project"))
+    _reject_removed_job_blob_join_keys!(raw)
     return nothing
 end
 

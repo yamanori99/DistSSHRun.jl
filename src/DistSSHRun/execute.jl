@@ -789,7 +789,9 @@ function _execute_detached!(
     package = get(kwargs, :package, nothing)
     get(kwargs, :require_all_hosts, nothing) !== nothing && throw(
         ArgumentError(
-            "execute!(...; detached=true) does not accept require_all_hosts=; use best_effort=true",
+            "execute!(...; detached=true) does not accept require_all_hosts=; " *
+                "use best_effort= (require_all_hosts=true → best_effort=false, " *
+                "require_all_hosts=false → best_effort=true)",
         ),
     )
     best_effort = get(kwargs, :best_effort, false)
