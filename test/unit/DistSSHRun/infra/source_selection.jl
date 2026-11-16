@@ -65,7 +65,7 @@ end
     @test occursin("use :ship", sprint(showerror, err))
 end
 
-@testset "legacy deploy record snapshot_id selection" begin
+@testset "deploy record snapshot_id selection fails closed" begin
     double = abspath(
         joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"),
     )
@@ -102,11 +102,19 @@ end
             )
             try
                 withenv(env...) do
-                    sel = DistSSHRun.resolve_source_selection(
-                        ["child-1"], remote, proj;
-                        skip_local_record = true,
-                    )
-                    @test sel.run_id == _SNAP_ID_OLD
+                    err = try
+                        DistSSHRun.resolve_source_selection(
+                            ["child-1"], remote, proj;
+                            skip_local_record = true,
+                        )
+                        nothing
+                    catch e
+                        e
+                    end
+                    @test err isa ArgumentError
+                    msg = sprint(showerror, err)
+                    @test occursin("snapshot_id was removed", msg)
+                    @test occursin("deploy.toml", msg)
                 end
             finally
                 DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
@@ -116,12 +124,13 @@ end
     end
 end
 
-@testset "legacy last-snapshot.toml and snapshot_id field" begin
+@testset "last-ship record rejects legacy snapshot_id field" begin
     _with_tempdir() do tmp
         _snap_project!(tmp)
         env = DistSSHRun.resolve_pkg_env(tmp)
         kit = joinpath(env.env_dir, ".distssh")
         mkpath(kit)
+        legacy_path = joinpath(kit, "last-snapshot.toml")
         legacy_body = Dict(
             "schema" => 1,
             "deploy_root" => "~/App/Legacy",
@@ -129,16 +138,18 @@ end
             "snapshot_id" => _SNAP_ID_OLD,
             "content_tree_hash" => _SNAP_HASH_OLD,
         )
-        write(joinpath(kit, "last-snapshot.toml"), sprint(TOML.print, legacy_body))
-        rec = something(DistSSHRun.read_last_ship_record(tmp))
-        @test rec["run_id"] == _SNAP_ID_OLD
-        @test !haskey(rec, "snapshot_id") || rec["snapshot_id"] == _SNAP_ID_OLD
-        DistSSHRun.write_last_ship_record!(
-            tmp, "~/App/Legacy", ["h1"], _SNAP_ID_NEW;
-            content_tree_hash = _SNAP_HASH_NEW,
-        )
-        rec2 = something(DistSSHRun.read_last_ship_record(tmp))
-        @test rec2["run_id"] == _SNAP_ID_NEW
+        write(legacy_path, sprint(TOML.print, legacy_body))
+        err = try
+            DistSSHRun.read_last_ship_record(tmp)
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        msg = sprint(showerror, err)
+        @test occursin("snapshot_id was removed", msg)
+        @test occursin("last-ship.toml", msg)
+        @test occursin(legacy_path, msg)
     end
 end
 
@@ -356,7 +367,7 @@ end
                     "schema" => 1,
                     "deploy_root" => "/deploy/a",
                     "hosts" => ["h1"],
-                    "snapshot_id" => _SNAP_ID_OLD,
+                    "run_id" => _SNAP_ID_OLD,
                 ),
             ),
         )

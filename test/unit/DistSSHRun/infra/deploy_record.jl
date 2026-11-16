@@ -2,8 +2,8 @@ using Test
 using TOML
 using Base.Threads
 
-@testset "deploy record parse maps legacy snapshot_id" begin
-    body = sprint(
+@testset "deploy record parse rejects legacy snapshot_id" begin
+    legacy_only = sprint(
         TOML.print,
         Dict(
             "schema" => 1,
@@ -13,9 +13,20 @@ using Base.Threads
             "content_tree_hash" => "a"^40,
         ),
     )
-    parsed = DistSSHRun._parse_deploy_record_body(body)
-    @test parsed !== nothing
-    @test something(parsed)["run_id"] == "20260101T000000Z-aaaaaa"
+    err = try
+        DistSSHRun._parse_deploy_record_body(
+            legacy_only;
+            record_path = "/remote/proj/.distssh/deploy.toml",
+        )
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    msg = sprint(showerror, err)
+    @test occursin("snapshot_id was removed", msg)
+    @test occursin("run_id", msg)
+    @test occursin("/remote/proj/.distssh/deploy.toml", msg)
     both = sprint(
         TOML.print,
         Dict(
@@ -27,9 +38,14 @@ using Base.Threads
             "content_tree_hash" => "b"^40,
         ),
     )
-    parsed2 = DistSSHRun._parse_deploy_record_body(both)
-    @test parsed2 !== nothing
-    @test something(parsed2)["run_id"] == "20260102T000000Z-bbbbbb"
+    err2 = try
+        DistSSHRun._parse_deploy_record_body(both)
+        nothing
+    catch e
+        e
+    end
+    @test err2 isa ArgumentError
+    @test occursin("snapshot_id was removed", sprint(showerror, err2))
 end
 
 @testset "deploy record build and parse" begin

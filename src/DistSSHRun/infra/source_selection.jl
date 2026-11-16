@@ -128,6 +128,25 @@ end
 
 const _LEGACY_SHIP_RECORD_NAME = "last-snapshot.toml"
 
+function _last_ship_record_snapshot_id_removed_message(
+        val,
+        path::AbstractString,
+    )::String
+    v = repr(val)
+    return """
+    last-ship record at $(path): snapshot_id was removed; use run_id instead.
+      snapshot_id = $v  →  run_id = $v
+    Rewrite last-ship.toml; silent conversion is not supported."""
+end
+
+function _reject_last_ship_record_legacy_snapshot_id!(
+        rec::AbstractDict,
+        path::AbstractString,
+    )
+    haskey(rec, "snapshot_id") || return nothing
+    throw(ArgumentError(_last_ship_record_snapshot_id_removed_message(rec["snapshot_id"], path)))
+end
+
 function _read_last_ship_record_at(path::AbstractString)::Union{Nothing, Dict{String, Any}}
     isfile(path) || return nothing
     raw = try
@@ -140,10 +159,7 @@ function _read_last_ship_record_at(path::AbstractString)::Union{Nothing, Dict{St
     schema isa Integer || return nothing
     Int(schema) == _SHIP_RECORD_SCHEMA || return nothing
     out = Dict{String, Any}(String(k) => v for (k, v) in raw)
-    if !haskey(out, "run_id")
-        legacy = get(out, "snapshot_id", nothing)
-        legacy isa AbstractString && (out["run_id"] = String(legacy))
-    end
+    _reject_last_ship_record_legacy_snapshot_id!(out, path)
     return out
 end
 

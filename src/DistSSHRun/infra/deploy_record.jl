@@ -7,6 +7,30 @@ const _DEPLOY_RECORD_TMP_TAIL = ".tmp"
 
 const _ACTIVE_DEPLOY_RECORD = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 
+function _deploy_record_snapshot_id_removed_message(
+        val,
+        record_path::Union{Nothing, AbstractString} = nothing,
+    )::String
+    path_bit = record_path isa AbstractString && !isempty(strip(String(record_path))) ?
+               " at $(String(record_path))" :
+               ""
+    v = repr(val)
+    return """
+    deploy record$(path_bit): snapshot_id was removed; use run_id instead.
+      snapshot_id = $v  →  run_id = $v
+    Rewrite deploy.toml; silent conversion is not supported."""
+end
+
+function _reject_deploy_record_legacy_snapshot_id!(
+        rec::AbstractDict,
+        record_path::Union{Nothing, AbstractString} = nothing,
+    )
+    haskey(rec, "snapshot_id") || return nothing
+    throw(
+        ArgumentError(_deploy_record_snapshot_id_removed_message(rec["snapshot_id"], record_path)),
+    )
+end
+
 function _clear_active_deploy_record!()
     _ACTIVE_DEPLOY_RECORD[] = nothing
     return nothing
@@ -98,30 +122,27 @@ function build_deploy_record(
     return data
 end
 
-function _parse_deploy_record_body(body::AbstractString)::Union{Nothing, Dict{String, Any}}
+function _parse_deploy_record_body(
+        body::AbstractString;
+        record_path::Union{Nothing, AbstractString} = nothing,
+    )::Union{Nothing, Dict{String, Any}}
     s = strip(String(body))
     isempty(s) && return nothing
-    try
-        raw = TOML.parse(s)
-        raw isa AbstractDict || return nothing
-        schema = get(raw, "schema", nothing)
-        schema isa Integer && schema == _DEPLOY_RECORD_SCHEMA || return nothing
-        mode = get(raw, "mode", nothing)
-        mode isa AbstractString && !isempty(strip(String(mode))) || return nothing
-        deploy_id = get(raw, "deploy_id", nothing)
-        deploy_id isa AbstractString && !isempty(strip(String(deploy_id))) || return nothing
-        out = Dict{String, Any}(raw)
-        rid = get(out, "run_id", nothing)
-        if !(rid isa AbstractString && !isempty(strip(String(rid))))
-            legacy = get(out, "snapshot_id", nothing)
-            if legacy isa AbstractString && !isempty(strip(String(legacy)))
-                out["run_id"] = String(strip(legacy))
-            end
-        end
-        return out
+    raw = try
+        TOML.parse(s)
     catch
         return nothing
     end
+    raw isa AbstractDict || return nothing
+    schema = get(raw, "schema", nothing)
+    schema isa Integer && schema == _DEPLOY_RECORD_SCHEMA || return nothing
+    mode = get(raw, "mode", nothing)
+    mode isa AbstractString && !isempty(strip(String(mode))) || return nothing
+    deploy_id = get(raw, "deploy_id", nothing)
+    deploy_id isa AbstractString && !isempty(strip(String(deploy_id))) || return nothing
+    out = Dict{String, Any}(raw)
+    _reject_deploy_record_legacy_snapshot_id!(out, record_path)
+    return out
 end
 
 function _remote_deploy_record_path_word(host::AbstractString, deploy_root::AbstractString)::String
@@ -147,7 +168,8 @@ function read_deploy_record_on_host(
         wait = true,
     )
     DistSSHBase.shell_status(proc) == 0 || return nothing
-    return _parse_deploy_record_body(String(take!(out)))
+    logical = deploy_record_logical_path(deploy_root)
+    return _parse_deploy_record_body(String(take!(out)); record_path = logical)
 end
 
 function _deploy_records_equivalent(a::AbstractDict, b::AbstractDict)::Bool
@@ -436,10 +458,8 @@ function _selection_from_deploy_record(
     )::SourceSelection
     mode_s = String(get(rec, "mode", ""))
     if mode_s == "ship-tree"
+        _reject_deploy_record_legacy_snapshot_id!(rec)
         rid_raw = get(rec, "run_id", nothing)
-        if !(rid_raw isa AbstractString)
-            rid_raw = get(rec, "snapshot_id", nothing)
-        end
         rid_raw isa AbstractString || throw(
             _selection_error("deploy record is missing run_id; pass --run-id ID"),
         )
