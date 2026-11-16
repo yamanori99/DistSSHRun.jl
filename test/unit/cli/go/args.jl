@@ -3,6 +3,23 @@ using Test
 @testset "go args" begin
     parse_go_args = DistSSHRun.parse_go_args
 
+    @testset "rejected mistaken short flags" begin
+        @test_throws ArgumentError parse_go_args(["-p", "--local-slots", "1", "job.jl"])
+        @test_throws ArgumentError parse_go_args(["-p4", "--local-slots", "1", "job.jl"])
+        @test_throws ArgumentError parse_go_args(["-l", "job.jl"])
+        @test_throws ArgumentError parse_go_args(["-L", "job.jl"])
+        let err = try
+                parse_go_args(["-p", "2", "job.jl"])
+                error("expected ArgumentError")
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("unknown option -p", err.msg)
+            @test occursin("--local-slots", err.msg)
+        end
+    end
+
     @testset "help flags" begin
         @test parse_go_args(["--help"]).help
         @test parse_go_args(["-h"]).help

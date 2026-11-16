@@ -122,6 +122,7 @@ end
 
 """Parse `go` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_go_args(args::AbstractVector{<:AbstractString})
+    reject_mistaken_short_placement_flags!(args; command = :go)
     assert_go_argv_no_local_workers!(args)
     cli_session, rest = peel_shared_cli_flags(args)
     hosts = String[]

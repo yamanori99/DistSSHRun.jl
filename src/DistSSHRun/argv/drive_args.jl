@@ -72,6 +72,7 @@ end
 
 """Parse `drive` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_drive_args(args::Vector{String})
+    reject_mistaken_short_placement_flags!(args; command = :drive)
     cli_session, args = peel_shared_cli_flags(args)
     cli_session.local_slots !== nothing &&
         throw(ArgumentError("drive uses --local-workers, not --local-slots"))
@@ -126,9 +127,8 @@ function parse_drive_args(args::Vector{String})
                     "drive: use `parent:N` (e.g. drive parent:4 script.jl), not a `--parent` flag",
                 )
             )
-        elseif arg == "--local" || arg == "-l" ||
-                startswith(arg, "--local:") || startswith(arg, "-l:")
-            throw_removed_local_flag(arg)
+        elseif _mistaken_short_l_flag(arg)
+            throw(ArgumentError(_mistaken_short_flag_message(arg; command = :drive, kind = :l)))
         elseif arg == "--workers" || arg == "-w" || startswith(arg, "--workers:") || startswith(arg, "-w:")
             _throw_removed_workers_flag(arg)
         elseif arg == "--julia" && i < length(args)

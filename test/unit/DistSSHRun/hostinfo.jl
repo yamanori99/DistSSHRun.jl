@@ -182,7 +182,7 @@ end
         mktemp() do out_path, out_io
             code = redirect_stdout(out_io) do
                 redirect_stderr(devnull) do
-                    DistSSHRun.run_hostinfo(["--quiet", "parent"])
+                    DistSSHRun.run_hostinfo(["--quiet", "localhost"])
                 end
             end
             flush(out_io)

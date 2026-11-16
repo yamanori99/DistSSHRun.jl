@@ -82,6 +82,7 @@ end
 
 """Parse `ride` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_ride_args(args::AbstractVector{<:AbstractString})
+    reject_mistaken_short_placement_flags!(args; command = :ride)
     cli_session, rest = peel_shared_cli_flags(args)
     cli_session.local_slots !== nothing &&
         throw(ArgumentError("ride uses --local-workers, not --local-slots"))

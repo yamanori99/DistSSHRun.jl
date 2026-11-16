@@ -3,6 +3,23 @@ using Test
 @testset "ride args" begin
     parse_ride_args = DistSSHRun.parse_ride_args
 
+    @testset "rejected mistaken short flags" begin
+        @test_throws ArgumentError parse_ride_args(["-p", "--local-workers", "1", "job.jl"])
+        @test_throws ArgumentError parse_ride_args(["-p4", "--local-workers", "1", "job.jl"])
+        @test_throws ArgumentError parse_ride_args(["-l", "--local-workers", "1", "job.jl"])
+        @test_throws ArgumentError parse_ride_args(["-L", "--local-workers", "1", "job.jl"])
+        let err = try
+                parse_ride_args(["-p", "auto", "--local-workers", "1", "job.jl"])
+                error("expected ArgumentError")
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("unknown option -p", err.msg)
+            @test occursin("--local-workers", err.msg)
+        end
+    end
+
     let r = parse_ride_args(["--local-workers", "2", "job.jl", "--n", "4"])
         @test r.script_path == "job.jl"
         @test r.hosts == String[]

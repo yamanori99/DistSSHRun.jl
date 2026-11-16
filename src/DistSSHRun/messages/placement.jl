@@ -85,6 +85,82 @@ function assert_go_argv_no_local_workers!(args::AbstractVector{<:AbstractString}
     return nothing
 end
 
+function _mistaken_short_p_flag(arg::AbstractString)::Bool
+    s = String(arg)
+    s == "-p" && return true
+    return length(s) > 2 && s[1:2] == "-p" && s[3] != '-'
+end
+
+function _mistaken_short_l_flag(arg::AbstractString)::Bool
+    s = String(arg)
+    s == "-l" && return true
+    s == "--local" && return true
+    startswith(s, "-l:") && return true
+    startswith(s, "--local:") && return true
+    return length(s) > 2 && s[1:2] == "-l" && s[3] != '-' && s[3] != 'o'
+end
+
+function _mistaken_short_L_flag(arg::AbstractString)::Bool
+    s = String(arg)
+    s == "-L" && return true
+    return length(s) > 2 && s[1:2] == "-L"
+end
+
+function _mistaken_short_flag_message(
+        flag::AbstractString;
+        command::Symbol,
+        kind::Symbol,
+    )::String
+    cmd = string(command)
+    if kind === :p
+        if command === :go
+            return join_explained_message(
+                "unknown option $(flag)",
+                "go has no `-p` short flag; use --local-slots N for local subprocess slots. " *
+                    "Put `host:port` and `user@host` in --hosts or a hosts file.",
+            )
+        end
+        return join_explained_message(
+            "unknown option $(flag); did you mean --local-workers N?",
+            "Ports go in the hosts file as host:port.",
+        )
+    elseif kind === :l
+        return join_explained_message(
+            "unknown option $(flag)",
+            "Put the SSH user in the hosts file as user@host (not a `-l` flag).",
+        )
+    elseif kind === :L
+        return join_explained_message(
+            "unknown option $(flag)",
+            "Port forwarding is not supported here; use ssh config or a hosts file entry host:port.",
+        )
+    end
+    return join_explained_message("unknown $(cmd) option: $(flag)", "Run `$(cli_m()) help $(cmd)` for flags.")
+end
+
+"""
+Reject mistaken short flags `-p`, `-l`, `-L` (and glued forms like `-p4`) before
+placement parsing. Does not treat them as worker counts.
+"""
+function reject_mistaken_short_placement_flags!(
+        args::AbstractVector{<:AbstractString};
+        command::Symbol,
+    )::Nothing
+    command in (:go, :drive, :ride) ||
+        throw(ArgumentError("reject_mistaken_short_placement_flags!: unsupported command $(repr(command))"))
+    for arg in args
+        a = String(arg)
+        if _mistaken_short_p_flag(a)
+            throw(ArgumentError(_mistaken_short_flag_message(a; command = command, kind = :p)))
+        elseif _mistaken_short_l_flag(a)
+            throw(ArgumentError(_mistaken_short_flag_message(a; command = command, kind = :l)))
+        elseif _mistaken_short_L_flag(a)
+            throw(ArgumentError(_mistaken_short_flag_message(a; command = command, kind = :L)))
+        end
+    end
+    return nothing
+end
+
 public assert_go_argv_no_local_workers!, format_kit_go_implicit_local_slot,
     format_kit_local_placement, kit_local_host_label, reject_go_local_workers_flag!,
-    resolve_go_local_slots, zero_placement_usage_error
+    reject_mistaken_short_placement_flags!, resolve_go_local_slots, zero_placement_usage_error
