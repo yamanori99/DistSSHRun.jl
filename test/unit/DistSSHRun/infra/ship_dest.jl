@@ -97,6 +97,7 @@ end
             String[],
             String[],
             Pair{String, String}[],
+            String[],
         )
         rec = DistSSHRun.DistSSHShip.build_shipment_record(pack; complete = true, transfer_id = "stage-uuid")
         @test rec["transfer_id"] == "stage-uuid"

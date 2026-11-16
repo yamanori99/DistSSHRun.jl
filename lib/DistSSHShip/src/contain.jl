@@ -103,7 +103,8 @@ function remote_extract_expr()::String
         for name in files
             path = joinpath(dir, name)
             isfile(path) && !islink(path) || continue
-            chmod(path, 0o444)
+            mode = filemode(path) & 0o777
+            chmod(path, (mode & 0o111) != 0 ? 0o555 : 0o444)
         end
     end
     # `Tar.tree_hash` reads a tar, not a directory. Rebuild one so the hash

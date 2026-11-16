@@ -2,6 +2,13 @@
 
 using Tar
 
+function _deploy_executable_ship_rels(rec::Union{Nothing, AbstractDict})::Union{Nothing, Vector{String}}
+    rec === nothing && return nothing
+    raw = get(rec, "executable_ship_rels", nothing)
+    raw isa AbstractVector || return nothing
+    return String[string(r) for r in raw]
+end
+
 function _deploy_content_file_digests(rec::Union{Nothing, AbstractDict})::Vector{Pair{String, String}}
     rec === nothing && return Pair{String, String}[]
     raw = get(rec, "content_file_digests", nothing)
@@ -48,7 +55,10 @@ function assert_shipped_tree_matches_record!(
     digests = _deploy_content_file_digests(rec)
     isempty(digests) && return nothing
     rels = String[first(p) for p in digests]
-    mode_hits = DistSSHShip.shipped_file_mode_violations(root, rels)
+    exec_rels = _deploy_executable_ship_rels(rec)
+    mode_hits = DistSSHShip.shipped_file_mode_violations(
+        root, rels; executable_rels = exec_rels,
+    )
     isempty(mode_hits) || throw(
         ErrorException(DistSSHShip.shipped_tree_verify_error(site, "read-only violation", mode_hits)),
     )

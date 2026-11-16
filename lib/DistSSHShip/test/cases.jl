@@ -567,6 +567,56 @@
         end
     end
 
+    @testset "shipped file modes at pack and extract" begin
+        _tmp() do dir
+            _project!(dir)
+            write(joinpath(dir, "script.jl"), "1\n")
+            write(joinpath(dir, "run.sh"), "#!/bin/sh\necho ok\n")
+            chmod(joinpath(dir, "run.sh"), 0o755)
+            chmod(joinpath(dir, "script.jl"), 0o644)
+            snap = DistSSHShip.pack_tree(dir)
+            try
+                @test snap.executable_ship_rels == ["run.sh"]
+                stage = joinpath(snap.directory, "stage")
+                @test (filemode(joinpath(stage, "run.sh")) & 0o777) == 0o555
+                @test (filemode(joinpath(stage, "script.jl")) & 0o777) == 0o444
+                dest = _extract(snap)
+                try
+                    DistSSHShip.apply_shipped_tree_file_modes!(dest)
+                    @test (filemode(joinpath(dest, "run.sh")) & 0o777) == 0o555
+                    @test (filemode(joinpath(dest, "script.jl")) & 0o777) == 0o444
+                    paths = DistSSHShip.pack_paths(dir)
+                    @test isempty(
+                        DistSSHShip.shipped_file_mode_violations(
+                            dest, paths; executable_rels = snap.executable_ship_rels,
+                        ),
+                    )
+                    chmod(joinpath(dest, "run.sh"), 0o444)
+                    @test "run.sh" in DistSSHShip.shipped_file_mode_violations(
+                        dest, paths; executable_rels = snap.executable_ship_rels,
+                    )
+                finally
+                    rm(dest; force = true, recursive = true)
+                end
+                chmod(joinpath(dir, "run.sh"), 0o644)
+                snap_plain = DistSSHShip.pack_tree(dir)
+                try
+                    @test snap_plain.executable_ship_rels == String[]
+                    @test snap.content_tree_hash != snap_plain.content_tree_hash
+                finally
+                    rm(snap_plain.directory; force = true, recursive = true)
+                end
+            finally
+                rm(snap.directory; force = true, recursive = true)
+            end
+        end
+        @test DistSSHShip.shipped_regular_file_mode(0o644) == 0o444
+        @test DistSSHShip.shipped_regular_file_mode(0o755) == 0o555
+        @test DistSSHShip.shipped_regular_file_mode(0o111) == 0o555
+        @test !DistSSHShip.source_had_execute_bit(0o644)
+        @test DistSSHShip.source_had_execute_bit(0o100)
+    end
+
     @testset "project_rel in ship record" begin
         tricky = "my app/x\"'\$`part"
         snap = _minimal_snapshot(tricky)

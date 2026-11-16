@@ -67,6 +67,7 @@ function build_deploy_record(
         content_tree_hash::Union{Nothing, AbstractString} = nothing,
         project_rel::Union{Nothing, AbstractString} = nothing,
         content_file_digests::Union{Nothing, AbstractVector} = nothing,
+        executable_ship_rels::Union{Nothing, AbstractVector} = nothing,
         forced_ignore_ship::Union{Nothing, AbstractVector} = nothing,
     )::Dict{String, Any}
     data = Dict{String, Any}(
@@ -99,6 +100,9 @@ function build_deploy_record(
     rel == "." || (data["project_rel"] = rel)
     if content_file_digests isa AbstractVector && !isempty(content_file_digests)
         data["content_file_digests"] = content_file_digests
+    end
+    if executable_ship_rels isa AbstractVector && !isempty(executable_ship_rels)
+        data["executable_ship_rels"] = String[string(r) for r in executable_ship_rels]
     end
     if forced_ignore_ship isa AbstractVector && !isempty(forced_ignore_ship)
         data["forced_ignore_ship"] = String[string(p) for p in forced_ignore_ship]
@@ -364,6 +368,7 @@ function write_deploy_record_to_hosts!(
         content_tree_hash::Union{Nothing, AbstractString} = nothing,
         project_rel::Union{Nothing, AbstractString} = nothing,
         content_file_digests::Union{Nothing, AbstractVector} = nothing,
+        executable_ship_rels::Union{Nothing, AbstractVector} = nothing,
         forced_ignore_ship::Union{Nothing, AbstractVector} = nothing,
     )
     isempty(hosts) && return nothing
@@ -377,6 +382,7 @@ function write_deploy_record_to_hosts!(
         content_tree_hash = content_tree_hash,
         project_rel = project_rel,
         content_file_digests = content_file_digests,
+        executable_ship_rels = executable_ship_rels,
         forced_ignore_ship = forced_ignore_ship,
     )
     ok_hosts = String[]
@@ -635,6 +641,7 @@ function commit_deploy_record_after_ship!(
         content_tree_hash::AbstractString;
         project_rel::AbstractString = ".",
         content_file_digests::Union{Nothing, AbstractVector} = nothing,
+        executable_ship_rels::Union{Nothing, AbstractVector} = nothing,
         forced_ignore_ship::Union{Nothing, AbstractVector} = nothing,
     )
     return write_deploy_record_to_hosts!(
@@ -647,6 +654,7 @@ function commit_deploy_record_after_ship!(
         content_tree_hash = content_tree_hash,
         project_rel = project_rel,
         content_file_digests = content_file_digests,
+        executable_ship_rels = executable_ship_rels,
         forced_ignore_ship = forced_ignore_ship,
     )
 end

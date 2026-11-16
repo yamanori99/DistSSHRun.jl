@@ -47,6 +47,9 @@ public ShipmentReceipt
 public content_tree_hash
 public content_file_digests
 public chmod_shipped_files_readonly!
+public source_had_execute_bit
+public shipped_regular_file_mode
+public apply_shipped_tree_file_modes!
 public shipped_file_digest_mismatches
 public shipped_file_mode_violations
 public shipped_tree_verify_error

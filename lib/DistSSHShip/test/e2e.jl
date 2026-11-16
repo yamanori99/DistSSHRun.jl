@@ -158,7 +158,13 @@ end
                 @test _remote_file_exists(_host, joinpath(receipt.dest, "my file.jl"))
                 @test _remote_file_exists(_host, joinpath(receipt.dest, "日本語.txt"))
                 @test _remote_file_exists(_host, joinpath(receipt.dest, "bulk.bin"))
-                @test _remote_regular_file_mode(_host, joinpath(receipt.dest, "run.sh")) == 0o444
+                run_sh = joinpath(receipt.dest, "run.sh")
+                marker = joinpath(receipt.dest, "marker.jl")
+                @test _remote_regular_file_mode(_host, run_sh) == 0o555
+                pq_x = DistSSHBase._remote_shell_path_word(run_sh)
+                code_x, _ = DistSSHBase._remote_shell_status(_host, "test -x $pq_x")
+                @test code_x == 0
+                @test _remote_regular_file_mode(_host, marker) == 0o444
                 @test _remote_file_exists(_host, joinpath(receipt.dest, "alias.jl"))
                 pq = DistSSHBase._remote_shell_path_word(joinpath(receipt.dest, "tree_parent"))
                 code_dir, _ = DistSSHBase._remote_shell_status(_host, "test -d $pq")

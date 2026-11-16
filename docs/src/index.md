@@ -68,7 +68,10 @@ pull-back use stdlib Tar over SSH. The remote Julia executable is `--julia`,
 or auto-detect. Original mtimes are not kept. Pull-back `touch`es extracted
 files. Ship does not `touch`; files keep the extract-time mtime. A
 non-executable file arrives as mode `0644`, and an executable file as
-`0755`. A symlink that points outside the copied tree is refused.
+`0755`. `setup ship-tree` ships regular files read-only: `0444` by
+default and `0555` when the source had execute permission; the deploy
+record’s `content_tree_hash` still detects content or mode drift. A
+symlink that points outside the copied tree is refused.
 `push_cache!` uses stdlib Tar over SSH and needs a remote Julia executable
 (`--julia`, or auto-detect) that can load stdlib `Tar` and `SHA`. Ship uses
 stdlib Tar over SSH. Git `setup git-clone`, `setup git-sync`, and

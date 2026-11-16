@@ -2029,6 +2029,7 @@ function _ship_tree_to_hosts!(
             pack.content_tree_hash;
             project_rel = pack.project_rel,
             content_file_digests = digest_rows,
+            executable_ship_rels = pack.executable_ship_rels,
             forced_ignore_ship = pack.forced_ignore_ship,
         )
         _set_active_deploy_record!(
@@ -2040,6 +2041,7 @@ function _ship_tree_to_hosts!(
                 content_tree_hash = pack.content_tree_hash,
                 project_rel = pack.project_rel,
                 content_file_digests = digest_rows,
+                executable_ship_rels = pack.executable_ship_rels,
                 forced_ignore_ship = pack.forced_ignore_ship,
             ),
         )

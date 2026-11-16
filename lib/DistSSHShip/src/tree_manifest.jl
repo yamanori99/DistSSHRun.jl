@@ -2,7 +2,20 @@
 
 using SHA
 
-const _SHIPPED_FILE_MODE = 0o444
+const _SHIPPED_FILE_MODE_NONEXEC = 0o444
+const _SHIPPED_FILE_MODE_EXEC = 0o555
+
+"""True when the source mode has any execute bit set (`x`)."""
+function source_had_execute_bit(mode::Integer)::Bool
+    return (Int(mode) & 0o111) != 0
+end
+
+"""Pack/extract target mode for a regular file from its source mode before ship chmod."""
+function shipped_regular_file_mode(source_mode::Integer)::UInt
+    return source_had_execute_bit(source_mode) ?
+        _SHIPPED_FILE_MODE_EXEC :
+        _SHIPPED_FILE_MODE_NONEXEC
+end
 
 """Git SHA-1 blob digest of a regular file's contents (same as `Tar` tree hashing)."""
 function git_blob_digest(path::AbstractString)::String
@@ -56,15 +69,36 @@ function content_file_digests(
     return rows
 end
 
-"""Set mode `0444` on every regular file under `stage` listed in `rels` (not symlinks or dirs)."""
+"""
+Set shipped modes on regular files: `0555` when the source had execute bits, else `0444`.
+Returns paths shipped as executable.
+"""
 function chmod_shipped_files_readonly!(
         stage::AbstractString,
         rels::AbstractVector{<:AbstractString},
-    )
+    )::Vector{String}
+    executable = String[]
     for rel in rels
         dest = joinpath(stage, split(rel, '/'; keepempty = false)...)
         isfile(dest) && !islink(dest) || continue
-        chmod(dest, _SHIPPED_FILE_MODE)
+        src_mode = filemode(dest) & 0o777
+        target = shipped_regular_file_mode(src_mode)
+        chmod(dest, target)
+        target == _SHIPPED_FILE_MODE_EXEC && push!(executable, String(rel))
+    end
+    sort!(executable)
+    return executable
+end
+
+"""After extract, normalize every regular file to shipped `0444` / `0555` modes."""
+function apply_shipped_tree_file_modes!(root::AbstractString)
+    for (dir, _, files) in walkdir(root)
+        for name in files
+            path = joinpath(dir, name)
+            isfile(path) && !islink(path) || continue
+            mode = filemode(path) & 0o777
+            chmod(path, shipped_regular_file_mode(mode))
+        end
     end
     return nothing
 end
@@ -99,17 +133,33 @@ function shipped_file_digest_mismatches(
     return hits
 end
 
-"""Fail when any shipped file is not mode `0444` (regular files only)."""
+"""
+Fail when any shipped regular file is not the expected read-only mode (`0444` or `0555`).
+When `executable_rels` is provided, each path must match exactly; otherwise only
+non-writable `0444`/`0555` modes are accepted.
+"""
 function shipped_file_mode_violations(
         root::AbstractString,
-        rels::AbstractVector{<:AbstractString},
+        rels::AbstractVector{<:AbstractString};
+        executable_rels::Union{Nothing, AbstractVector{<:AbstractString}} = nothing,
     )::Vector{String}
+    exec = executable_rels === nothing ?
+        nothing :
+        Set(String[string(r) for r in executable_rels])
     hits = String[]
     for rel in rels
         dest = joinpath(root, split(String(rel), '/'; keepempty = false)...)
         isfile(dest) && !islink(dest) || continue
         mode = filemode(dest) & 0o777
-        mode == _SHIPPED_FILE_MODE || push!(hits, String(rel))
+        if exec !== nothing
+            want = String(rel) in exec ? _SHIPPED_FILE_MODE_EXEC : _SHIPPED_FILE_MODE_NONEXEC
+            mode == want || push!(hits, String(rel))
+        else
+            (mode & 0o222) != 0 && push!(hits, String(rel))
+            mode != _SHIPPED_FILE_MODE_NONEXEC &&
+                mode != _SHIPPED_FILE_MODE_EXEC &&
+                push!(hits, String(rel))
+        end
     end
     return hits
 end

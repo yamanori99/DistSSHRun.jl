@@ -35,6 +35,7 @@ function _local_extract_verified!(
     DistSSHShip.assert_extracted_tree_contained!(
         dest; allow_external_symlinks = allow_external_symlinks,
     )
+    DistSSHShip.apply_shipped_tree_file_modes!(dest)
     buf = IOBuffer()
     DistSSHShip.Tar.create(dest, buf)
     seekstart(buf)
@@ -60,6 +61,6 @@ function _minimal_snapshot(project_rel::String)::DistSSHShip.Shipment
     files = 2
     return DistSSHShip.Shipment(
         bundle, tar_path, hash, bytes, files, src, src, project_rel,
-        String[], String[], String[], Pair{String, String}[],
+        String[], String[], String[], Pair{String, String}[], String[],
     )
 end
