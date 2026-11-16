@@ -24,9 +24,8 @@ end
         collect_root = nothing,
         collect_hosts = nothing,
         collect_overwrite = nothing,
-        collect_best_effort = false,
         worker_include = false,
-        require_all_hosts = true,
+        best_effort = false,
         help = false,
         show_version = false,
         cli_session = DistSSHRun.default_kit_cli_session(),
@@ -43,5 +42,6 @@ end
     )
     dopts = DistSSHRun.drive_job_options_from_parsed(parsed)
     @test !dopts.skip_hash_check
+    @test !dopts.best_effort
     @test dopts.config.command === :drive
 end

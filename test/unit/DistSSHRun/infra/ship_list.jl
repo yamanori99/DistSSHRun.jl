@@ -558,7 +558,7 @@ end
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
             write(
                 joinpath(tmp, "Manifest.toml"),
-                "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
+                "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n"
             )
             write(joinpath(tmp, "keep.jl"), "k = 1\n")
             mkpath(joinpath(tmp, "nested", "sub"))
@@ -576,7 +576,7 @@ end
                 name = "big"
                 path = "data"
                 hash = false
-                """,
+                """
             )
             write(joinpath(tmp, ".distssh", "note.txt"), "kit\n")
             run(`mkfifo $(joinpath(tmp, "pipe"))`)
@@ -607,7 +607,7 @@ end
                 DistSSHRun.Tar.extract(packed.tar_path, dest)
                 @test _extracted_ship_rels(dest) == listed
                 snap = DistSSHRun.DistSSHShip.pack_tree(
-                    tmp; omit_project_rels = omit,
+                    tmp; omit_project_rels = omit
                 )
                 try
                     @test snap.content_tree_hash == packed.content_tree_hash
@@ -628,7 +628,7 @@ end
                 write(joinpath(repo, "Project.toml"), "name = \"App\"\n")
                 write(
                     joinpath(repo, "Manifest.toml"),
-                    "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
+                    "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n"
                 )
                 write(joinpath(repo, "tracked.jl"), "t = 1\n")
                 write(joinpath(repo, "ignored.jl"), "i = 1\n")

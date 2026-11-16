@@ -56,14 +56,16 @@ function collect!(
     )
     snap = opts.run_id
     session = if opts.remote_root !== session.remote
-        DistSSHSession(
-            project = session.project,
-            workers = session.tokens,
-            remote = opts.remote_root,
-            quiet = session.quiet,
-            verbosity = session.verbosity,
-            yes = session.yes,
-        )
+        let s = DistSSHSession(
+                project = session.project,
+                workers = session.tokens,
+                remote = opts.remote_root,
+                quiet = session.quiet,
+                verbosity = session.verbosity,
+            )
+            s.cli_session = session.cli_session
+            s
+        end
     else
         session
     end

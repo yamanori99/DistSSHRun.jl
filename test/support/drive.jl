@@ -14,16 +14,16 @@ if !isdefined(Main, :_run_kit_drive)
     # Child env for a host project: no init delay, project root set.
     function _drive_host_env(
             host_root;
-            extra_env::Dict{String, String} = Dict{String, String}(),
+            extra_env::Dict{String, String} = Dict{String, String}()
         )
         return _child_julia_env(
             merge(
                 Dict(
                     "DISTRIBUTED_INIT_DELAY_SEC" => "0",
-                    "DISTRIBUTED_PROJECT_ROOT" => _drive_host_root(host_root),
+                    "DISTRIBUTED_PROJECT_ROOT" => _drive_host_root(host_root)
                 ),
-                extra_env,
-            ),
+                extra_env
+            )
         )
     end
 
@@ -38,7 +38,7 @@ if !isdefined(Main, :_run_kit_drive)
             kit_root::AbstractString = _kit_root(),
             julia::AbstractString = _julia_exe(),
             drive_flags::Vector{String} = String[],
-            extra_env::Dict{String, String} = Dict{String, String}(),
+            extra_env::Dict{String, String} = Dict{String, String}()
         )::Cmd
         script = String(script)
         host_root = _drive_host_root(host_root)
@@ -52,7 +52,7 @@ if !isdefined(Main, :_run_kit_drive)
         cmd = _kit_cli_cmd(
             vcat(["drive"], _drive_yes_flags(drive_flags), worker_tokens, log_flags, [script], script_args);
             julia = julia,
-            project = kit_root,
+            project = kit_root
         )
         return setenv(cmd, _drive_host_env(host_root; extra_env))
     end
@@ -69,7 +69,7 @@ if !isdefined(Main, :_run_kit_drive)
             kit_root::AbstractString = _kit_root(),
             julia::AbstractString = _julia_exe(),
             drive_flags::Vector{String} = String[],
-            extra_env::Dict{String, String} = Dict{String, String}(),
+            extra_env::Dict{String, String} = Dict{String, String}()
         )
         return _run_subprocess(
             _kit_drive_cmd(;
@@ -82,7 +82,7 @@ if !isdefined(Main, :_run_kit_drive)
                 kit_root,
                 julia,
                 drive_flags,
-                extra_env,
+                extra_env
             )
         )
     end
@@ -95,19 +95,19 @@ if !isdefined(Main, :_run_kit_drive)
             host_root,
             kit_root::AbstractString = _kit_root(),
             julia::AbstractString = _julia_exe(),
-            extra_env::Dict{String, String} = Dict{String, String}(),
+            extra_env::Dict{String, String} = Dict{String, String}()
         )
         isempty(hosts) && error("_run_kit_drive_collect: need hosts")
         flag = overwrite ? "--collect-overwrite" : "--collect-missing"
         cmd = _kit_cli_cmd(
             vcat(["drive", "-y", "-q", flag, String(collect_root)], hosts);
             julia = String(julia),
-            project = String(kit_root),
+            project = String(kit_root)
         )
         env = _child_julia_env(
             merge(
                 Dict(
-                    "DISTRIBUTED_PROJECT_ROOT" => _drive_host_root(host_root),
+                    "DISTRIBUTED_PROJECT_ROOT" => _drive_host_root(host_root)
                 ), extra_env
             )
         )
@@ -123,7 +123,7 @@ if !isdefined(Main, :_run_kit_drive)
             head_workers::Int = 2,
             log_dir::Union{Nothing, String} = nothing,
             kit_root::AbstractString = _kit_root(),
-            julia::AbstractString = _julia_exe(),
+            julia::AbstractString = _julia_exe()
         )::Cmd
         script = String(script)
         host_project = _drive_host_root(host_project)

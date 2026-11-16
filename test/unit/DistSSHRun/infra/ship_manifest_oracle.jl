@@ -25,8 +25,8 @@ function _git_commit_q!(repo::AbstractString, msg::AbstractString)
         pipeline(
             `git -C $repo -c user.email=test@example.com -c user.name=Test -c commit.gpgsign=false commit -q -m $msg`;
             stdout = devnull,
-            stderr = devnull,
-        ),
+            stderr = devnull
+        )
     )
     return nothing
 end
@@ -60,7 +60,7 @@ end
                 write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
                 write(
                     joinpath(tmp, "Manifest.toml"),
-                    "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
+                    "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n"
                 )
                 run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
                 run(pipeline(`git -C $tmp add -A`; stdout = devnull, stderr = devnull))
@@ -77,7 +77,7 @@ end
                 write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
                 write(
                     joinpath(tmp, "Manifest.toml"),
-                    "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
+                    "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n"
                 )
                 write(joinpath(tmp, ".gitignore"), "Manifest.toml\n")
                 run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
@@ -85,8 +85,8 @@ end
                     pipeline(
                         `git -C $tmp add Project.toml .gitignore`;
                         stdout = devnull,
-                        stderr = devnull,
-                    ),
+                        stderr = devnull
+                    )
                 )
                 _git_commit_q!(tmp, "init")
                 listed = _oracle_matches_tar!(tmp)
@@ -125,7 +125,7 @@ end
             write(outside_manifest, "# lock\n")
             write(
                 joinpath(ext, "Project.toml"),
-                "name = \"Ext\"\nmanifest = \"../locks/Manifest.toml\"\n",
+                "name = \"Ext\"\nmanifest = \"../locks/Manifest.toml\"\n"
             )
             write(joinpath(locks, ".gitignore"), "Manifest.toml\n")
             listed = _oracle_matches_tar!(ext)
@@ -144,7 +144,7 @@ end
                 name = "Lab"
                 [workspace]
                 projects = ["experiments/run1"]
-                """,
+                """
             )
             _sync_test_project_manifest!(lab)
             write(joinpath(member, "Project.toml"), "name = \"Run1\"\n[deps]\n")

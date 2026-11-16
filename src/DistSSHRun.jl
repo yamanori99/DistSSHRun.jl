@@ -27,6 +27,17 @@ using Unicode
 #   argv wrappers `go` / `drive` stay unexported (`main` / tests)
 export worker_pmap
 export worker_seed
+export job_item_seed
+export seed_mix
+export LaunchReport
+export WorkerLaunchOutcome
+export LaunchIncompleteError
+export launch_report_planned
+export launch_report_joined
+export launch_report_failures
+export launch_report_usable
+export launch_rank
+export SEED_SCHEME
 export DistSSHSession
 export HostResult
 export SyncResult
@@ -181,6 +192,7 @@ include("DistSSHRun/options/job_options.jl")
 include("DistSSHRun/argv/session.jl")
 include("DistSSHRun/infra/run_transfer_removed.jl")
 include("DistSSHRun/infra/remote.jl")
+include("DistSSHRun/infra/launch_report.jl")
 include("DistSSHRun/infra/launch.jl")
 include("DistSSHRun/infra/topology.jl")
 include("DistSSHRun/infra/component_id.jl")

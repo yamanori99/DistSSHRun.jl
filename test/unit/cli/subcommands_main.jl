@@ -6,7 +6,7 @@ using Test
             mktemp() do err_path, err_io
                 code = withenv(
                     "DISTSSH_CLI_SUBCOMMAND_DONE" => "",
-                    "DISTSSH_YES" => nothing,
+                    "DISTSSH_YES" => nothing
                 ) do
                     redirect_stdin(devnull) do
                         redirect_stdout(out_io) do
@@ -59,7 +59,7 @@ using Test
             @test code == 2
         end
         let (code, out, err) = _cli_capture(
-                () -> DistSSHRun.go(["--ship-tree", "1*h1", "job.jl"]),
+                () -> DistSSHRun.go(["--ship-tree", "1*h1", "job.jl"])
             )
             shown = out * err
             @test code == 2
@@ -68,7 +68,7 @@ using Test
             @test !occursin("SSH preflight", shown)
         end
         let (code, out, err) = _cli_capture(
-                () -> DistSSHRun.drive(["--ship-tree", "--head-workers", "1", "s.jl"]),
+                () -> DistSSHRun.drive(["--ship-tree", "--head-workers", "1", "s.jl"])
             )
             shown = out * err
             @test code == 2
@@ -76,7 +76,7 @@ using Test
             @test !occursin("SSH preflight", shown)
         end
         let (code, out, err) = _cli_capture(
-                () -> DistSSHRun.main(["go", "--ship-tree", "1*h1", "job.jl"]),
+                () -> DistSSHRun.main(["go", "--ship-tree", "1*h1", "job.jl"])
             )
             shown = out * err
             @test code == 2
@@ -133,7 +133,7 @@ using Test
                 withenv("DISTRIBUTED_PROJECT_ROOT" => nothing) do
                     let (code_a, out_a, err_a) = cd(proj_a) do
                             _cli_capture(
-                                () -> DistSSHRun.run_hostinfo(String[]),
+                                () -> DistSSHRun.run_hostinfo(String[])
                             )
                         end
                         @test code_a == 0
@@ -142,7 +142,7 @@ using Test
 
                     let (code_b, out_b, err_b) = cd(proj_b) do
                             _cli_capture(
-                                () -> DistSSHRun.run_hostinfo(String[]),
+                                () -> DistSSHRun.run_hostinfo(String[])
                             )
                         end
                         @test code_b == 0

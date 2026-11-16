@@ -111,7 +111,7 @@ using Test
         mktemp() do args_file, _
             withenv(
                 "DISTRIBUTED_PROJECT_ROOT" => "/override",
-                "_DISTSSH_TEST_ARGS_FILE" => args_file,
+                "_DISTSSH_TEST_ARGS_FILE" => args_file
             ) do
                 empty!(ARGS)
                 append!(ARGS, ["--local", "2", "job.jl"])
@@ -126,7 +126,7 @@ using Test
                     withenv(
                         "DISTRIBUTED_PROJECT_ROOT" => nothing,
                         "_DISTSSH_TEST_ARGS_FILE" => args_file,
-                        "_DISTSSH_TEST_PROJ_FILE" => proj_file,
+                        "_DISTSSH_TEST_PROJ_FILE" => proj_file
                     ) do
                         cd(tmp) do
                             empty!(ARGS)

@@ -94,7 +94,7 @@ using Test
             dash isa Int || error("expected --")
             @test kept.exec[(dash + 1):end] == ["s.jl", "--isolated"]
             valued = DistSSHRun._drive_isolated_child_args(
-                ["--output-dir", "--isolated", "--isolated", "s.jl"],
+                ["--output-dir", "--isolated", "--isolated", "s.jl"]
             )
             @test valued == ["--output-dir", "--isolated", "s.jl"]
             quieted = [
@@ -117,7 +117,7 @@ using Test
             @test uh_child == ["--unsafe-skip-env-digests", "--head-workers", "1", "job.jl"]
             @test !DistSSHRun.parse_drive_args(uh_child).isolated
             rooted = DistSSHRun._drive_isolated_cmd(
-                ["--isolated", "--head-workers", "1", "s.jl"]; project_root = "/jobs/app",
+                ["--isolated", "--head-workers", "1", "s.jl"]; project_root = "/jobs/app"
             )
             env = something(rooted.env, String[])
             @test any(e -> startswith(e, "JULIA_LOAD_PATH="), env)
@@ -136,7 +136,7 @@ using Test
             @test DistSSHRun._drive_child_status(0, 128) == 1
             sleeper = run(
                 ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "sleep(30)"`);
-                wait = false,
+                wait = false
             )
             try
                 DistSSHRun._forward_isolated_interrupt!(sleeper)
@@ -160,7 +160,7 @@ using Test
                 @test occursin("--worker-include", err_ss.msg)
             end
             @test_throws ArgumentError parse_drive_args(
-                ["--sync-script", "--sync-script", "s.jl"],
+                ["--sync-script", "--sync-script", "s.jl"]
             )
             let r = parse_drive_args(["--worker-include", "--head-workers", "1", "s.jl"])
                 @test r.worker_include == true
@@ -364,8 +364,8 @@ using Test
         @test !occursin("--mem-headroom", txt)
         @test !occursin("--parent-gb", txt)
         @test occursin("DISTSSH_JOBS", txt)
-        @test occursin("DISTSSH_REQUIRE_ALL_HOSTS", txt)
-        @test occursin("DISTSSH_BEST_EFFORT", txt)
+        @test !occursin("DISTSSH_REQUIRE_ALL_HOSTS", txt)
+        @test !occursin("DISTSSH_BEST_EFFORT", txt)
         @test occursin("--best-effort", txt)
         @test !occursin("required after `setup --rsync`", txt)
         @test occursin("--deploy-root", txt)
@@ -405,50 +405,33 @@ using Test
         @test_throws ArgumentError parse_drive_args(["--deploy-root"])
     end
 
-    @testset "require-all-hosts" begin
+    @testset "best-effort" begin
         withenv(
             "DISTSSH_REQUIRE_ALL_HOSTS" => nothing,
-            "DISTSSH_BEST_EFFORT" => nothing,
+            "DISTSSH_BEST_EFFORT" => nothing
         ) do
-            @test parse_drive_args(["--head-workers", "1", "s.jl"]).require_all_hosts
-            @test parse_drive_args(["--require-all-hosts", "--head-workers", "1", "s.jl"]).require_all_hosts
-            @test !parse_drive_args(["--best-effort", "--head-workers", "1", "s.jl"]).require_all_hosts
+            @test !parse_drive_args(["--head-workers", "1", "s.jl"]).best_effort
+            @test parse_drive_args(["--best-effort", "--head-workers", "1", "s.jl"]).best_effort
             @test_throws ArgumentError parse_drive_args(
-                ["--require-all-hosts", "--require-all-hosts", "--head-workers", "1", "s.jl"],
+                ["--require-all-hosts", "--head-workers", "1", "s.jl"]
             )
             @test_throws ArgumentError parse_drive_args(
-                ["--best-effort", "--best-effort", "--head-workers", "1", "s.jl"],
+                ["--best-effort", "--best-effort", "--head-workers", "1", "s.jl"]
             )
-            @test_throws ArgumentError parse_drive_args(
-                ["--require-all-hosts", "--best-effort", "--head-workers", "1", "s.jl"],
-            )
-            let r = parse_drive_args(["--require-all-hosts", "--collect-missing", "out", "h1"])
-                @test r.require_all_hosts
+            let r = parse_drive_args(["--collect-missing", "out", "h1"])
+                @test !r.best_effort
             end
             let r = parse_drive_args(["--best-effort", "--collect-missing", "out", "h1"])
-                @test r.collect_best_effort
+                @test r.best_effort
             end
             @test_throws ArgumentError parse_drive_args(
                 ["--collect-strict", "--collect-missing", "out", "h1"],
             )
         end
-        withenv(
-            "DISTSSH_REQUIRE_ALL_HOSTS" => "1",
-            "DISTSSH_BEST_EFFORT" => nothing,
-        ) do
-            @test parse_drive_args(["--head-workers", "1", "s.jl"]).require_all_hosts
+        withenv("DISTSSH_REQUIRE_ALL_HOSTS" => "1") do
+            @test_throws ArgumentError parse_drive_args(["--head-workers", "1", "s.jl"])
         end
-        withenv(
-            "DISTSSH_REQUIRE_ALL_HOSTS" => nothing,
-            "DISTSSH_BEST_EFFORT" => "1",
-        ) do
-            @test !parse_drive_args(["--head-workers", "1", "s.jl"]).require_all_hosts
-            @test parse_drive_args(["--require-all-hosts", "--head-workers", "1", "s.jl"]).require_all_hosts
-        end
-        withenv(
-            "DISTSSH_REQUIRE_ALL_HOSTS" => "1",
-            "DISTSSH_BEST_EFFORT" => "1",
-        ) do
+        withenv("DISTSSH_BEST_EFFORT" => "1") do
             @test_throws ArgumentError parse_drive_args(["--head-workers", "1", "s.jl"])
         end
     end

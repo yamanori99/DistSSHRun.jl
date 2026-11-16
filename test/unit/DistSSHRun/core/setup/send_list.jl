@@ -127,7 +127,7 @@ using Test
             _with_tempdir() do tmp
                 write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
                 @test_throws ErrorException DistSSHRun._git_ls_files_z(
-                    tmp, ["--cached", "--others", "--exclude-per-directory=.gitignore"],
+                    tmp, ["--cached", "--others", "--exclude-per-directory=.gitignore"]
                 )
             end
         end
@@ -407,7 +407,7 @@ using Test
                     pipeline(
                         `git -C $tmp add -f .gitignore sub/.gitignore sub/Project.toml sub/tracked.txt`;
                         stdout = devnull,
-                        stderr = devnull,
+                        stderr = devnull
                     )
                 )
                 run(pipeline(`git -C $tmp -c commit.gpgsign=false commit -q -m init`; stdout = devnull, stderr = devnull))

@@ -38,7 +38,7 @@ if !isdefined(Main, :_test_root)
     function _kit_cli_cmd(
             args::AbstractVector{<:AbstractString};
             julia::AbstractString = _julia_exe(),
-            project::AbstractString = _kit_root(),
+            project::AbstractString = _kit_root()
         )::Cmd
         proj = _cli_m_project(String(project))
         argv = String[String(a) for a in args]

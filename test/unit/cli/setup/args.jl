@@ -183,7 +183,7 @@ using Test
         @test r.deploy_root == "/tmp/App.jl"
     end
     @test_throws ArgumentError parse_setup_args(
-        ["remote-root", "--deploy-root", "/tmp/app\n", "host1"],
+        ["remote-root", "--deploy-root", "/tmp/app\n", "host1"]
     )
     @test_throws ArgumentError parse_setup_args(["check", "--deploy-root"])
     let r = parse_setup_args(["check", "--julia", "/opt/julia/bin/julia", "host1"])
@@ -305,7 +305,7 @@ using Test
         @test r.hosts == ["host1"]
     end
     let r = parse_setup_args(
-            ["instantiate", "--deploy-root", "/tmp/App.jl", "--run-id", "20260101T000000Z-aaaaaa", "h1"],
+            ["instantiate", "--deploy-root", "/tmp/App.jl", "--run-id", "20260101T000000Z-aaaaaa", "h1"]
         )
         @test r.mode == :instantiate
         @test r.deploy_root == "/tmp/App.jl"
@@ -364,7 +364,7 @@ using Test
         catch e
             e
         end
-        session = DistSSHRun.DistSSHSession(workers = ["h1"], project = pwd(), yes = true)
+        session = DistSSHRun.DistSSHSession(workers = ["h1"], project = pwd())
         err_api = try
             DistSSHRun.setup!(session, :ship_tree; extra_files = two.extra_files)
             nothing

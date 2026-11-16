@@ -99,9 +99,22 @@ function parse_drive_args(args::Vector{String})
     isolated = false
     worker_include = false
     require_git = false
-    require_all_hosts = true
-    require_all_hosts_cli = false
+    best_effort = false
     best_effort_cli = false
+    if haskey(ENV, "DISTSSH_REQUIRE_ALL_HOSTS")
+        throw(
+            ArgumentError(
+                "drive: DISTSSH_REQUIRE_ALL_HOSTS was removed in 0.2.0; listed hosts must join by default, or pass --best-effort",
+            ),
+        )
+    end
+    if haskey(ENV, "DISTSSH_BEST_EFFORT")
+        throw(
+            ArgumentError(
+                "drive: DISTSSH_BEST_EFFORT was removed in 0.2.0; pass --best-effort on the CLI instead",
+            ),
+        )
+    end
     hosts = Tuple{String, Union{Int, Nothing}}[]
     script_path = nothing
     script_args = String[]
@@ -199,32 +212,19 @@ function parse_drive_args(args::Vector{String})
             skip_hash_check = false
             i += 1
         elseif arg == "--require-all-hosts"
-            require_all_hosts_cli && throw(
+            throw(
                 ArgumentError(
-                    "drive: --require-all-hosts specified more than once",
-                )
+                    "drive: --require-all-hosts was removed in 0.2.0; listed hosts must join by default, or pass --best-effort",
+                ),
             )
-            best_effort_cli && throw(
-                ArgumentError(
-                    "drive: cannot combine --require-all-hosts and --best-effort",
-                )
-            )
-            require_all_hosts_cli = true
-            require_all_hosts = true
-            i += 1
         elseif arg == "--best-effort"
             best_effort_cli && throw(
                 ArgumentError(
                     "drive: --best-effort specified more than once",
                 )
             )
-            require_all_hosts_cli && throw(
-                ArgumentError(
-                    "drive: cannot combine --require-all-hosts and --best-effort",
-                )
-            )
             best_effort_cli = true
-            require_all_hosts = false
+            best_effort = true
             i += 1
         elseif arg == "--collect-strict"
             throw(
@@ -301,9 +301,8 @@ function parse_drive_args(args::Vector{String})
                     collect_root = tree_root,
                     collect_hosts = tree_hosts,
                     collect_overwrite = merge,
-                    collect_best_effort = best_effort_cli,
                     worker_include = worker_include,
-                    require_all_hosts = require_all_hosts,
+                    best_effort = best_effort,
                     help = false,
                     show_version = cli_session.show_version,
                     cli_session = cli_session,
@@ -330,9 +329,8 @@ function parse_drive_args(args::Vector{String})
                     collect_root = nothing,
                     collect_hosts = nothing,
                     collect_overwrite = nothing,
-                    collect_best_effort = false,
                     worker_include = false,
-                    require_all_hosts = false,
+                    best_effort = true,
                     help = true,
                     show_version = cli_session.show_version,
                     cli_session = cli_session,
@@ -356,17 +354,6 @@ function parse_drive_args(args::Vector{String})
             _drive_push_host_token!(hosts, arg)
             i += 1
         end
-    end
-
-    if !require_all_hosts_cli && !best_effort_cli
-        want_all = _env_flag("DISTSSH_REQUIRE_ALL_HOSTS")
-        want_best = _env_flag("DISTSSH_BEST_EFFORT")
-        want_all && want_best && throw(
-            ArgumentError(
-                "drive: cannot combine DISTSSH_REQUIRE_ALL_HOSTS and DISTSSH_BEST_EFFORT",
-            )
-        )
-        want_best && (require_all_hosts = false)
     end
 
     if julia_exe === nothing
@@ -423,9 +410,8 @@ function parse_drive_args(args::Vector{String})
             collect_root = nothing,
             collect_hosts = nothing,
             collect_overwrite = nothing,
-            collect_best_effort = false,
             worker_include = worker_include,
-            require_all_hosts = require_all_hosts,
+            best_effort = best_effort,
             help = false,
             show_version = cli_session.show_version,
             cli_session = cli_session,
@@ -476,7 +462,6 @@ function show_drive_usage(; io::IO = stdout)
         "                      (after setup ship-tree + setup instantiate)",
         "  --worker-include    re-include the full driver on workers (default: defs only)",
         "  --require-git       $(REQUIRE_GIT_MEANING)",
-        "  --require-all-hosts listed machine tokens must join, stay, and collect (default)",
         "  --best-effort       partial worker join and/or collect past skipped hosts",
         "  --output-dir PATH   result root (default: {script}/.distssh/drive/<stem>_<UTC>/; must be missing or empty)",
         "  --isolated          run the driver in a child process (default: this process)",
@@ -515,8 +500,6 @@ function show_drive_usage(; io::IO = stdout)
         "  DISTSSH_QUIET / PROGRESS / VERBOSE / YES",
         "  $(KIT_SKIP_PKILL_ENV_HELP)",
         "  $(KIT_JOBS_ENV_HELP)",
-        "  $(KIT_REQUIRE_ALL_HOSTS_ENV_HELP)",
-        "  $(KIT_BEST_EFFORT_ENV_HELP)",
         "  $(DRIVE_UNSAFE_MASTER_SILENCE_EXIT_ENV_HELP)",
         "  $(DRIVE_HEARTBEAT_DEADLINE_ENV_HELP)",
         "  $(DRIVE_HEARTBEAT_INTERVAL_ENV_HELP)",

@@ -47,11 +47,6 @@ const KIT_SKIP_PKILL_ENV_HELP =
     "DISTSSH_SKIP_GLOBAL_WORKER_PKILL  skip drive leftover tagged remote pkill"
 const KIT_JOBS_ENV_HELP =
     "DISTSSH_JOBS                   max concurrent host jobs (default 1)"
-const KIT_REQUIRE_ALL_HOSTS_ENV_HELP =
-    "DISTSSH_REQUIRE_ALL_HOSTS      Same as --require-all-hosts"
-const KIT_BEST_EFFORT_ENV_HELP =
-    "DISTSSH_BEST_EFFORT            Same as --best-effort"
-
 """Drive opt-in: workers exit when the controller (master) stops answering heartbeats."""
 const DRIVE_UNSAFE_MASTER_SILENCE_EXIT_FLAG_HELP =
     "--unsafe-master-silence-exit  opt-in worker self-exit when the controller (master) is silent"

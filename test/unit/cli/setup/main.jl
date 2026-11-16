@@ -10,7 +10,7 @@ using Test
             mktemp() do err_path, err_io
                 code = withenv(
                     "DISTSSH_CLI_SUBCOMMAND_DONE" => "",
-                    "DISTSSH_YES" => nothing,
+                    "DISTSSH_YES" => nothing
                 ) do
                     redirect_stdin(devnull) do
                         redirect_stdout(out_io) do
@@ -104,7 +104,7 @@ using Test
     end
     let (code, out, err) = withenv(
             "DISTSSH_TEST" => "1",
-            "DISTSSH_TEST_SSH" => "/no/such/fake-ssh.jl",
+            "DISTSSH_TEST_SSH" => "/no/such/fake-ssh.jl"
         ) do
             _setup_capture(["delete", "--yes", "host1"])
         end
@@ -117,7 +117,7 @@ using Test
         @test !occursin("SSH preflight failed", combined)
     end
     let (code, out, err) = _setup_capture(
-            ["delete", "--yes", "--confirm-path", "~/nope", "host1"],
+            ["delete", "--yes", "--confirm-path", "~/nope", "host1"]
         )
         combined = out * err
         @test code == 2

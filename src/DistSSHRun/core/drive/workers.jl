@@ -63,7 +63,7 @@ function add_drive_workers!(
         proj_dir::String,
         script_path::String,
         project_root::String,
-    )::Vector{String}
+    )::Tuple{Vector{String}, LaunchReport}
     empty!(RUNNER_WORKER_PROJECT_DIRS)
     empty!(RUNNER_WORKER_SCRIPT_PATHS)
     DistSSHRun.assert_controller_environment_for_verify!(proj_dir)
@@ -73,6 +73,10 @@ function add_drive_workers!(
     writeln_both("Adding workers..."; color = :light_black)
 
     successful_hosts = String[]
+    default_n = something(default_workers, 1)
+    plan_ranks = DistSSHRun.build_launch_rank_plan(head_workers, hosts, default_n)
+    DistSSHRun.reset_launch_rank_plan!(plan_ranks)
+    launch_failures = HostLaunchFailure[]
 
     before_all = Set(workers())
     DistSSHRun.preserve_task_local_default_rng() do
@@ -97,13 +101,54 @@ function add_drive_workers!(
                     DistSSHRun.PARENT_HOST_NAME,
                     added,
                 )
-                print_ok("✓")
-                writeln_both("")
-                DistSSHRun._drive_host_span!(DistSSHRun.PARENT_HOST_NAME, "workers", :ok)
+                if length(added) < head_workers
+                    push!(
+                        launch_failures,
+                        HostLaunchFailure(
+                            DistSSHRun.PARENT_HOST_NAME,
+                            head_workers,
+                            length(added),
+                            FailedToConnect,
+                            "wanted $head_workers local workers, got $(length(added))",
+                        ),
+                    )
+                    print_progress_err("✗ (wanted $head_workers local workers, got $(length(added)))")
+                    writeln_both("")
+                    DistSSHRun._drive_host_span!(DistSSHRun.PARENT_HOST_NAME, "workers", :fail)
+                elseif !isempty(added) && !DistSSHRun._precompile_worker_project!(first(added), proj_dir)
+                    rmprocs(added; waitfor = 2.0)
+                    push!(
+                        launch_failures,
+                        HostLaunchFailure(
+                            DistSSHRun.PARENT_HOST_NAME,
+                            head_workers,
+                            0,
+                            FailedToLoad,
+                            "worker project precompile failed",
+                        ),
+                    )
+                    print_progress_err("✗ (worker project precompile failed)")
+                    writeln_both("")
+                    DistSSHRun._drive_host_span!(DistSSHRun.PARENT_HOST_NAME, "workers", :fail)
+                else
+                    print_ok("✓")
+                    writeln_both("")
+                    DistSSHRun._drive_host_span!(DistSSHRun.PARENT_HOST_NAME, "workers", :ok)
+                end
             catch e
                 DistSSHRun._drive_host_span!(DistSSHRun.PARENT_HOST_NAME, "workers", :fail)
                 print_progress_err("✗ ($e)")
                 writeln_both("")
+                push!(
+                    launch_failures,
+                    HostLaunchFailure(
+                        DistSSHRun.PARENT_HOST_NAME,
+                        head_workers,
+                        0,
+                        FailedToConnect,
+                        sprint(showerror, e),
+                    ),
+                )
             end
         else
             writeln_both("  $(DistSSHRun.format_kit_head_placement(0, "workers")) (use --head-workers N)")
@@ -136,6 +181,16 @@ function add_drive_workers!(
                     writeln_both("          julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host_name))")
                     writeln_both("          then drive --run-id ID")
                     writeln_both("           or export DISTRIBUTED_REMOTE_PROJECT_ROOT=<abs path on host>")
+                    push!(
+                        launch_failures,
+                        HostLaunchFailure(
+                            host_name,
+                            host_workers,
+                            0,
+                            FailedToConnect,
+                            "remote path not found: $missing",
+                        ),
+                    )
                     continue
                 end
 
@@ -146,12 +201,32 @@ function add_drive_workers!(
                     write_both("  $host_name: ")
                     print_progress_err("✗ ($(e.msg))")
                     writeln_both("")
+                    push!(
+                        launch_failures,
+                        HostLaunchFailure(
+                            host_name,
+                            host_workers,
+                            0,
+                            FailedToConnect,
+                            e.msg,
+                        ),
+                    )
                     continue
                 end
                 if host_julia === nothing
                     write_both("  $host_name: ")
                     print_progress_err("✗ (Julia not found)")
                     writeln_both("")
+                    push!(
+                        launch_failures,
+                        HostLaunchFailure(
+                            host_name,
+                            host_workers,
+                            0,
+                            FailedToConnect,
+                            "Julia not found",
+                        ),
+                    )
                     continue
                 end
                 write_both("  $host_name: pinned $(host_julia)")
@@ -168,6 +243,16 @@ function add_drive_workers!(
                     print_progress_err("✗ ($deps_err)")
                     writeln_both("")
                     writeln_both("    hint: julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host_name))")
+                    push!(
+                        launch_failures,
+                        HostLaunchFailure(
+                            host_name,
+                            host_workers,
+                            0,
+                            FailedToConnect,
+                            deps_err,
+                        ),
+                    )
                     continue
                 end
 
@@ -200,6 +285,32 @@ function add_drive_workers!(
                         isempty(added) || rmprocs(added; waitfor = 2.0)
                         print_progress_err("✗ (wanted $host_workers workers, got $(length(added)))")
                         writeln_both("")
+                        push!(
+                            launch_failures,
+                            HostLaunchFailure(
+                                host_name,
+                                host_workers,
+                                length(added),
+                                FailedToConnect,
+                                "wanted $host_workers workers, got $(length(added))",
+                            ),
+                        )
+                        continue
+                    end
+                    if !DistSSHRun._precompile_worker_project!(first(added), remote_proj)
+                        rmprocs(added; waitfor = 2.0)
+                        print_progress_err("✗ (worker project precompile failed)")
+                        writeln_both("")
+                        push!(
+                            launch_failures,
+                            HostLaunchFailure(
+                                host_name,
+                                host_workers,
+                                0,
+                                FailedToLoad,
+                                "worker project precompile failed",
+                            ),
+                        )
                         continue
                     end
                     _register_drive_workers!(before, remote_proj, remote_script)
@@ -222,6 +333,17 @@ function add_drive_workers!(
                     else
                         writeln_both("    $(sprint(showerror, e))")
                     end
+                    reason = sprint(showerror, e)
+                    push!(
+                        launch_failures,
+                        HostLaunchFailure(
+                            host_name,
+                            host_workers,
+                            0,
+                            FailedToConnect,
+                            reason,
+                        ),
+                    )
                 end
             finally
                 DistSSHRun._drive_host_span!(host_name, "workers", host_ok ? :ok : :fail)
@@ -233,6 +355,10 @@ function add_drive_workers!(
     writeln_field("Workers", string(nworkers()))
     writeln_both("")
 
+    joined = max(0, nworkers() - 1)
+    report = LaunchReport(length(plan_ranks), joined, launch_failures)
+    DistSSHRun.note_launch_provenance!(report)
+
     # Alone, Julia reports nworkers()==1 (the master). Fail when nothing joined.
     nprocs() <= 1 && error(_NO_WORKERS_JOINED)
     try
@@ -243,7 +369,7 @@ function add_drive_workers!(
         rethrow()
     end
 
-    return successful_hosts
+    return successful_hosts, report
 end
 
 function wait_for_worker_connections!(; ssh::Bool = true)

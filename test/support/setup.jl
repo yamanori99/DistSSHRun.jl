@@ -13,7 +13,7 @@ if !isdefined(Main, :_run_kit_setup)
             kit_root::String = _kit_root(),
             julia::String = _julia_exe(),
             project_root = nothing,
-            extra_env::Dict{String, String} = Dict{String, String}(),
+            extra_env::Dict{String, String} = Dict{String, String}()
         )
         args = String[String(a) for a in setup_args]
         owned = project_root === nothing
@@ -24,7 +24,7 @@ if !isdefined(Main, :_run_kit_setup)
             cmd = _kit_cli_cmd(vcat([String(command)], args); julia = julia, project = kit_root)
             base = Dict{String, String}(
                 "DISTSSH_YES" => "1",
-                "DISTRIBUTED_PROJECT_ROOT" => proj,
+                "DISTRIBUTED_PROJECT_ROOT" => proj
             )
             env = _child_julia_env(merge(base, extra_env))
             return setenv(cmd, env), owned ? proj : nothing
@@ -40,7 +40,7 @@ if !isdefined(Main, :_run_kit_setup)
             kit_root::String = _kit_root(),
             julia::String = _julia_exe(),
             project_root = nothing,
-            extra_env::Dict{String, String} = Dict{String, String}(),
+            extra_env::Dict{String, String} = Dict{String, String}()
         )
         cmd, tmp = _kit_setup_cmd(;
             setup_args,
@@ -48,7 +48,7 @@ if !isdefined(Main, :_run_kit_setup)
             kit_root,
             julia,
             project_root,
-            extra_env,
+            extra_env
         )
         try
             return _run_subprocess(cmd)
@@ -80,27 +80,27 @@ if !isdefined(Main, :_run_kit_setup)
     function _run_kit_up_align(
             tail::AbstractVector;
             project_root,
-            extra_env::Dict{String, String},
+            extra_env::Dict{String, String}
         )
         proc_add, out_add = _run_kit_setup(;
             command = "up",
             setup_args = ["add", tail...],
             project_root = project_root,
-            extra_env = extra_env,
+            extra_env = extra_env
         )
         proc_add.exitcode == 0 || return proc_add, out_add
         proc_def, out_def = _run_kit_setup(;
             command = "up",
             setup_args = ["default", tail...],
             project_root = project_root,
-            extra_env = extra_env,
+            extra_env = extra_env
         )
         return proc_def, out_add * out_def
     end
 
     # Apply a quiet+yes kit CLI session.
     function _apply_quiet_setup_session!()
-        DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true, yes = true))
+        DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true))
         return nothing
     end
 
@@ -202,17 +202,17 @@ if !isdefined(Main, :_run_kit_setup)
             julia::String = _julia_exe(),
             project_root = nothing,
             go_flags::Vector{String} = String[],
-            extra_env::Dict{String, String} = Dict{String, String}(),
+            extra_env::Dict{String, String} = Dict{String, String}()
         )
         function _run(proj)
             cmd = _kit_cli_cmd(
                 vcat(["go"], go_flags, hosts, [String(script)], script_args);
                 julia = julia,
-                project = kit_root,
+                project = kit_root
             )
             base = Dict{String, String}(
                 "DISTSSH_YES" => "1",
-                "DISTRIBUTED_PROJECT_ROOT" => proj,
+                "DISTRIBUTED_PROJECT_ROOT" => proj
             )
             env = _child_julia_env(merge(base, extra_env))
             return _run_subprocess(setenv(cmd, env))
@@ -234,13 +234,13 @@ if !isdefined(Main, :_run_kit_setup)
             kit_root::String = _kit_root(),
             julia::String = _julia_exe(),
             project_root = nothing,
-            extra_env::Dict{String, String} = Dict{String, String}(),
+            extra_env::Dict{String, String} = Dict{String, String}()
         )
         function _run(proj)
             cmd = _kit_cli_cmd(vcat(["hostinfo"], hostinfo_args); julia = julia, project = kit_root)
             base = Dict{String, String}(
                 "DISTSSH_YES" => "1",
-                "DISTRIBUTED_PROJECT_ROOT" => proj,
+                "DISTRIBUTED_PROJECT_ROOT" => proj
             )
             env = _child_julia_env(merge(base, extra_env))
             return _run_subprocess(setenv(cmd, env))

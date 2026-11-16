@@ -4,7 +4,7 @@
 struct DriveJobOptions
     config::RunJobConfig
     skip_hash_check::Bool
-    require_all_hosts::Bool
+    best_effort::Bool
     worker_include::Bool
     enable_log::Bool
     isolated::Bool
@@ -43,7 +43,7 @@ function drive_job_options_from_parsed(parsed)::DriveJobOptions
     return DriveJobOptions(
         cfg,
         get(parsed, :skip_hash_check, true),
-        get(parsed, :require_all_hosts, true),
+        get(parsed, :best_effort, false),
         get(parsed, :worker_include, false),
         get(parsed, :enable_log, true),
         get(parsed, :isolated, false) === true,
@@ -75,7 +75,7 @@ end
 """Build collect options from drive `parse_drive_args` collect branch."""
 function collect_job_options_from_parsed(parsed)::CollectJobOptions
     merge = something(get(parsed, :collect_overwrite, nothing), false)
-    be = get(parsed, :collect_best_effort, false)
+    be = get(parsed, :best_effort, false)
     return collect_job_options(;
         merge = merge,
         best_effort = be,

@@ -22,7 +22,7 @@ function _vendor_write_app!(proj::AbstractString)
 
         [sources]
         DistSSHRun = {path = "deps/DistSSHRun"}
-        """,
+        """
     )
     return nothing
 end
@@ -36,7 +36,7 @@ function _vendor_load(
         proj::AbstractString,
         depot::AbstractString,
         julia::AbstractString;
-        drop_lib::Bool,
+        drop_lib::Bool
     )
     mkpath(proj)
     dest = _vendor_distsshkit!(proj)
@@ -44,7 +44,7 @@ function _vendor_load(
     _vendor_write_app!(proj)
     inst, inst_out = _vendor_run(
         depot,
-        `$julia --startup-file=no --project=$proj -e "using Pkg; Pkg.instantiate()"`,
+        `$julia --startup-file=no --project=$proj -e "using Pkg; Pkg.instantiate()"`
     )
     script = joinpath(proj, "load.jl")
     write(
@@ -54,11 +54,11 @@ function _vendor_load(
         println(parentmodule(DistSSHRun.ssh_opts))
         println("PKGDIR=" * something(pkgdir(DistSSHRun), ""))
         println("PATHOF=" * something(pathof(DistSSHRun), ""))
-        """,
+        """
     )
     proc, out = _vendor_run(
         depot,
-        `$julia --startup-file=no --project=$proj $script`,
+        `$julia --startup-file=no --project=$proj $script`
     )
     return dest, inst, inst_out, proc, out
 end
@@ -96,10 +96,10 @@ end
         mkpath(depot)
         julia = _julia_exe()
         _vendor_check_loaded(
-            _vendor_load(joinpath(tmp, "with"), depot, julia; drop_lib = false)...,
+            _vendor_load(joinpath(tmp, "with"), depot, julia; drop_lib = false)...
         )
         _vendor_check_missing(
-            _vendor_load(joinpath(tmp, "without"), depot, julia; drop_lib = true)[2:end]...,
+            _vendor_load(joinpath(tmp, "without"), depot, julia; drop_lib = true)[2:end]...
         )
     end
 end

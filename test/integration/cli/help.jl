@@ -70,8 +70,8 @@ using Test
                         "--output-dir", od, "--head-workers", "1", script,
                     ]
                 ),
-                merge(env, Dict("DISTRIBUTED_PROJECT_ROOT" => _kit_root())),
-            ),
+                merge(env, Dict("DISTRIBUTED_PROJECT_ROOT" => _kit_root()))
+            )
         )
         @test !occursin("UndefVarError", ride_out)
         @test ride_proc.exitcode == 0

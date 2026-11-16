@@ -22,8 +22,8 @@ function _sigint_child(proj::AbstractString; marker::AbstractString, restore::Ab
             "DISTSSH_TEST_SIGINT_MARKER" => marker,
             "DISTSSH_TEST_RESTORE_FILE" => restore,
             "DISTRIBUTED_OUTPUT_DIR" => joinpath(proj, "keep-output"),
-            "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "keep-remote",
-        ),
+            "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "keep-remote"
+        )
     )
 end
 
@@ -96,7 +96,7 @@ end
         if proc.exitcode != 130 || !occursin("Cleanup skipped", combined)
             println(
                 stderr,
-                "──── drive second SIGINT (exit=$(proc.exitcode) signal=$(proc.termsignal) seen=$(seen)) ────",
+                "──── drive second SIGINT (exit=$(proc.exitcode) signal=$(proc.termsignal) seen=$(seen)) ────"
             )
             println(stderr, combined)
             println(stderr, "──── end drive second SIGINT output ────")

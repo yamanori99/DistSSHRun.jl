@@ -291,7 +291,7 @@ Outcome of [`drive!`](@ref) (and similar CLI steps that return an exit code).
 
 `ok` is `true` only when the run finished with exit 0. By default that
 includes the placement contract: listed `parent` / `child` hosts joined,
-stayed, and collect succeeded (`require_all_hosts=true`). `require_all_hosts=false`
+stayed, and collect succeeded (`best_effort=false`, the default). `best_effort=true`
 keeps a partial run as `ok=true`.
 
 `output_dir` / `log_dir` are the directories actually used for this run —
@@ -392,7 +392,6 @@ mutable struct PipelineConfig
     hosts_file::Union{Nothing, String}
     quiet::Bool
     verbosity::Union{Nothing, Symbol}
-    yes::Bool
     driver::String
     args::Vector{String}
     skip_hash_check::Union{Nothing, Bool}
@@ -416,7 +415,7 @@ function PipelineConfig(;
         hosts_file::Union{Nothing, AbstractString} = nothing,
         quiet::Bool = false,
         verbosity::Union{Nothing, Symbol} = nothing,
-        yes::Bool = true,
+        yes::Union{Nothing, Bool} = nothing,
         driver::AbstractString,
         args::AbstractVector{<:AbstractString} = String[],
         skip_hash_check::Union{Nothing, Bool} = nothing,
@@ -429,6 +428,11 @@ function PipelineConfig(;
         julia::Union{Nothing, AbstractString} = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
         best_effort::Bool = false,
+    )
+    yes !== nothing && throw(
+        ArgumentError(
+            "PipelineConfig does not accept yes=; confirmation is CLI-only (DISTSSH_YES / -y)",
+        ),
     )
     rr = remote === nothing ? nothing : String(strip(String(remote)))
     rr !== nothing && isempty(rr) && (rr = nothing)
@@ -451,7 +455,6 @@ function PipelineConfig(;
         hf,
         quiet,
         verbosity,
-        yes,
         String(driver),
         Base.collect(String, args),
         skip_hash_check,

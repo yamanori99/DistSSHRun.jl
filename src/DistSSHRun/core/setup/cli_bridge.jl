@@ -137,14 +137,15 @@ function setup_cli_via_bang!(
     kit_println()
     session = setup_session_from_cli(opts, project, remote_for_session)
     if mode === :remote_root && opts.deploy_root isa AbstractString
+        prev = session
         session = DistSSHSession(
-            project = session.project,
-            workers = session.tokens,
+            project = prev.project,
+            workers = prev.tokens,
             remote = opts.deploy_root,
-            quiet = session.quiet,
-            verbosity = session.verbosity,
-            yes = session.yes,
+            quiet = prev.quiet,
+            verbosity = prev.verbosity,
         )
+        session.cli_session = prev.cli_session
     end
     result = try
         if mode === :git_clone

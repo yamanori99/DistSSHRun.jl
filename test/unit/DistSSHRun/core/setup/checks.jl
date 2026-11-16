@@ -5,30 +5,30 @@ using Pkg
     DistSSHRun.print_juliaup_align_fix!("user@host"; kind = :missing, channel = "1.12")
     DistSSHRun.print_juliaup_align_fix!("user@host"; kind = :mismatch, channel = "1.12")
     @test DistSSHRun.print_juliaup_parent_patch_note!(
-        v"1.12.9"; local_version = v"1.12.6", channel = "1.12",
+        v"1.12.9"; local_version = v"1.12.6", channel = "1.12"
     )
     @test !DistSSHRun.print_juliaup_parent_patch_note!(
-        v"1.12.6"; local_version = v"1.12.6", channel = "1.12",
+        v"1.12.6"; local_version = v"1.12.6", channel = "1.12"
     )
     tip_out, _ = with_kit_verbosity(:verbose) do
         _capture_stdio() do _, _
             DistSSHRun.print_juliaup_parent_patch_note!(
-                v"1.12.9"; local_version = v"1.12.6", channel = "1.12",
+                v"1.12.9"; local_version = v"1.12.6", channel = "1.12"
             )
         end
     end
     @test occursin("up update 1.12 parent", tip_out)
     @test occursin("up default 1.12 parent", tip_out)
     @test !DistSSHRun.print_juliaup_parent_patch_note!(
-        v"1.14.0-alpha1"; local_version = v"1.14.0-alpha1", channel = "1.14.0-alpha1",
+        v"1.14.0-alpha1"; local_version = v"1.14.0-alpha1", channel = "1.14.0-alpha1"
     )
     @test !DistSSHRun.print_juliaup_parent_patch_note!(
-        v"1.13.2"; local_version = v"1.13.2+0.aarch64", channel = "1.13",
+        v"1.13.2"; local_version = v"1.13.2+0.aarch64", channel = "1.13"
     )
     pinned_out, _ = with_kit_verbosity(:verbose) do
         _capture_stdio() do _, _
             @test DistSSHRun.print_juliaup_parent_patch_note!(
-                v"1.14.0"; local_version = v"1.14.0-alpha1", channel = "1.14.0-alpha1",
+                v"1.14.0"; local_version = v"1.14.0-alpha1", channel = "1.14.0-alpha1"
             )
         end
     end
@@ -39,7 +39,7 @@ using Pkg
     nightly_out, _ = with_kit_verbosity(:verbose) do
         _capture_stdio() do _, _
             @test DistSSHRun.print_juliaup_parent_patch_note!(
-                v"1.14.0-DEV.2000"; local_version = v"1.14.0-DEV.1000", channel = "1.14-nightly",
+                v"1.14.0-DEV.2000"; local_version = v"1.14.0-DEV.1000", channel = "1.14-nightly"
             )
         end
     end
@@ -53,7 +53,7 @@ using Pkg
                 "/usr/bin/julia",
                 (found = true, version = v"1.14.0-alpha1", mismatch_kind = :prerelease),
                 false,
-                pre_warnings,
+                pre_warnings
             )
         end
     end
@@ -69,7 +69,7 @@ using Pkg
                 "/usr/bin/julia",
                 (found = true, version = v"1.14.0-alpha1", mismatch_kind = :prerelease),
                 true,
-                pre_ignored,
+                pre_ignored
             )
         end
     end
@@ -88,7 +88,7 @@ using Pkg
                 "/usr/bin/julia",
                 (found = true, version = v"1.13.2", mismatch_kind = :patch),
                 false,
-                patch_warnings,
+                patch_warnings
             )
         end
     end
@@ -104,7 +104,7 @@ using Pkg
                 "/usr/bin/julia",
                 (found = true, version = v"1.13.2", mismatch_kind = :patch),
                 true,
-                patch_ignored,
+                patch_ignored
             )
         end
     end
@@ -122,7 +122,7 @@ using Pkg
                 "/usr/bin/julia",
                 (found = true, version = v"1.13.0", mismatch_kind = :patch),
                 false;
-                local_version = v"1.13.3",
+                local_version = v"1.13.3"
             )
         end
     end
@@ -131,7 +131,7 @@ using Pkg
     @test occursin("1.13.0", pair_out)
     id_lines = DistSSHRun.identity_mismatches(
         Dict("version" => "1.13.3", "commit" => "parent-commit"),
-        Dict("version" => "1.13.0", "commit" => "worker-commit"),
+        Dict("version" => "1.13.0", "commit" => "worker-commit")
     )
     @test any(line -> occursin("parent=1.13.3", line) && occursin("worker=1.13.0", line), id_lines)
     @test any(line -> occursin("commit", line) && occursin("parent-commit", line), id_lines)
@@ -141,7 +141,7 @@ using Pkg
                 "worker",
                 "/usr/bin/julia",
                 (found = true, version = v"1.13.3+0.aarch64.apple.darwin14", mismatch_kind = :none),
-                false,
+                false
             )
         end
     end
@@ -153,7 +153,7 @@ using Pkg
                 "worker",
                 "/usr/bin/julia",
                 (found = true, version = v"1.12.0", mismatch_kind = :minor),
-                false,
+                false
             )
         end
     end
@@ -213,7 +213,7 @@ using Pkg
                 _capture_stdio() do _, _
                     DistSSHRun.check_prerequisites(
                         String[], "auto", "~/App.jl", dir;
-                        require_clean_git = false,
+                        require_clean_git = false
                     )
                 end
             end
@@ -238,7 +238,7 @@ using Pkg
                         _capture_stdio() do _, _
                             DistSSHRun.check_prerequisites(
                                 String[], "auto", "~/App.jl", dir;
-                                require_clean_git = false,
+                                require_clean_git = false
                             )
                         end
                     end
@@ -250,7 +250,7 @@ using Pkg
                     _capture_stdio() do _, _
                         DistSSHRun.check_prerequisites(
                             String[], "auto", "~/App.jl", dir;
-                            require_clean_git = false,
+                            require_clean_git = false
                         )
                     end
                 end
@@ -266,7 +266,7 @@ using Pkg
                     _capture_stdio() do _, _
                         DistSSHRun.check_prerequisites(
                             String[], "auto", "~/App.jl", dir;
-                            require_clean_git = true,
+                            require_clean_git = true
                         )
                     end
                 end
@@ -306,7 +306,7 @@ using Pkg
             write(outside_manifest, "# x\n")
             write(
                 joinpath(elsewhere, "Project.toml"),
-                "name = \"Out\"\nmanifest = \"$(outside_manifest)\"\n",
+                "name = \"Out\"\nmanifest = \"$(outside_manifest)\"\n"
             )
             @test_throws ArgumentError DistSSHRun.ensure_manifest_ships!(elsewhere)
             side = joinpath(root, "sideapp")
@@ -320,7 +320,7 @@ using Pkg
                 name = "Side"
                 [sources]
                 Bar = {path = "../shared/Bar"}
-                """,
+                """
             )
             write(joinpath(side, "Manifest.toml"), "manifest_format = \"2.0\"\n")
             @test_throws ArgumentError DistSSHRun.ensure_manifest_ships!(side)
@@ -331,8 +331,8 @@ using Pkg
                     "/remote",
                     "/remote/runs/20260101T000000Z-abcdef/src/sideapp",
                     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                    String["child"],
-                ),
+                    String["child"]
+                )
             )
             try
                 @test DistSSHRun._require_manifest_for_instantiate!(side) === nothing
@@ -351,14 +351,14 @@ using Pkg
                     pipeline(
                         `git -C $ignored_ship add Project.toml .gitignore`;
                         stdout = devnull,
-                        stderr = devnull,
+                        stderr = devnull
                     )
                 )
                 run(
                     pipeline(
                         `git -C $ignored_ship -c user.email=t@example.com -c user.name=Test -c commit.gpgsign=false commit -q -m init`;
                         stdout = devnull,
-                        stderr = devnull,
+                        stderr = devnull
                     )
                 )
                 DistSSHRun._set_active_selection!(
@@ -368,8 +368,8 @@ using Pkg
                         "/remote",
                         "/remote/runs/20260101T000001Z-abcdef/src/ignored_ship",
                         "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-                        String["child"],
-                    ),
+                        String["child"]
+                    )
                 )
                 try
                     @test_throws ArgumentError DistSSHRun._require_manifest_for_instantiate!(ignored_ship)
@@ -399,7 +399,7 @@ using Pkg
                     pipeline(
                         `git -C $repo -c user.email=t@example.com -c user.name=t -c commit.gpgsign=false commit -q -m init`;
                         stdout = devnull,
-                        stderr = devnull,
+                        stderr = devnull
                     )
                 )
                 @test_throws ArgumentError DistSSHRun.ensure_manifest_in_git_worktree!(repo)
@@ -414,7 +414,7 @@ using Pkg
                 symlink(inside_lock, ext_manifest)
                 write(
                     joinpath(held, "Project.toml"),
-                    "name = \"Held\"\nmanifest = \"$(ext_manifest)\"\n",
+                    "name = \"Held\"\nmanifest = \"$(ext_manifest)\"\n"
                 )
                 run(pipeline(`git -C $held init -q`; stdout = devnull, stderr = devnull))
                 @test_throws ArgumentError DistSSHRun.ensure_manifest_in_git_worktree!(held)
@@ -435,7 +435,7 @@ using Pkg
                 [sources]
                 Foo = {path = "dev/Foo"}
                 Bar = {url = "https://example.invalid/Bar.jl.git"}
-                """,
+                """
             )
             write(joinpath(job, "Manifest.toml"), "manifest_format = \"2.0\"\n")
             shipped = DistSSHRun.ensure_manifest_ships!(job)
@@ -448,10 +448,10 @@ using Pkg
                 name = "Job"
                 [sources]
                 Foo = {path = "$(abs_foo)"}
-                """,
+                """
             )
             @test_throws ArgumentError(
-                "Source path $abs_foo for Foo is absolute. Workers resolve it on their own filesystem, so it would not be the staged tree.",
+                "Source path $abs_foo for Foo is absolute. Workers resolve it on their own filesystem, so it would not be the staged tree."
             ) DistSSHRun.ensure_manifest_ships!(job)
             write(
                 joinpath(job, "Project.toml"),
@@ -459,10 +459,10 @@ using Pkg
                 name = "Job"
                 [sources]
                 Foo = {path = "~/nope"}
-                """,
+                """
             )
             @test_throws ArgumentError(
-                "Source path ~/nope for Foo is absolute. Workers resolve it on their own filesystem, so it would not be the staged tree.",
+                "Source path ~/nope for Foo is absolute. Workers resolve it on their own filesystem, so it would not be the staged tree."
             ) DistSSHRun.ensure_manifest_ships!(job)
 
             write(
@@ -471,7 +471,7 @@ using Pkg
                 name = "Job"
                 [sources]
                 Foo = {path = "dev/Missing"}
-                """,
+                """
             )
             @test_throws ArgumentError("Source path $(DistSSHRun.canonical_local_path(joinpath(job, "dev", "Missing"))) for Foo does not exist. Workers would not see this path.") DistSSHRun.ensure_manifest_ships!(job)
             write(joinpath(job, "dev", "Missing"), "not a directory\n")
@@ -487,7 +487,7 @@ using Pkg
                 name = "Job"
                 [sources]
                 Baz = {path = "../ext/Baz"}
-                """,
+                """
             )
             @test_throws ArgumentError DistSSHRun.ensure_manifest_ships!(job)
 
@@ -498,7 +498,7 @@ using Pkg
                 name = "Job"
                 [sources]
                 Baz = {path = "dev/Baz"}
-                """,
+                """
             )
             symlink(outside, joinpath(job, "dev", "Baz"))
             @test_throws ArgumentError DistSSHRun.ensure_manifest_ships!(job)
@@ -515,7 +515,7 @@ using Pkg
                 name = "Lab"
                 [workspace]
                 projects = ["experiments/run1"]
-                """,
+                """
             )
             _sync_test_project_manifest!(lab)
             write(
@@ -524,7 +524,7 @@ using Pkg
                 name = "Run1"
                 [sources]
                 Foo = {path = "../../dev/Foo"}
-                """,
+                """
             )
             @test DistSSHRun.ensure_manifest_ships!(member).env_dir ==
                 DistSSHRun.canonical_local_path(lab)
@@ -534,7 +534,7 @@ using Pkg
                 name = "Run1"
                 [sources]
                 Baz = {path = "../../../ext/Baz"}
-                """,
+                """
             )
             @test_throws ArgumentError DistSSHRun.ensure_manifest_ships!(member)
 
@@ -560,15 +560,15 @@ using Pkg
                     name = "Src"
                     [sources]
                     Foo = {path = "dev/Foo"}
-                    """,
+                    """
                 )
                 run(pipeline(`git -C $repo add -A`; stdout = devnull, stderr = devnull))
                 run(
                     pipeline(
                         `git -C $repo -c user.email=kit@example.com -c user.name=kit -c commit.gpgsign=false commit -q -m init`;
                         stdout = devnull,
-                        stderr = devnull,
-                    ),
+                        stderr = devnull
+                    )
                 )
                 @test DistSSHRun.ensure_manifest_in_git_worktree!(repo) === nothing
                 alias = joinpath(root, "srcjob-alias")
@@ -581,8 +581,8 @@ using Pkg
                     pipeline(
                         `git -C $repo -c user.email=kit@example.com -c user.name=kit -c commit.gpgsign=false commit -q -m ignore`;
                         stdout = devnull,
-                        stderr = devnull,
-                    ),
+                        stderr = devnull
+                    )
                 )
                 @test DistSSHRun.ensure_manifest_in_git_worktree!(repo) === nothing
 
@@ -595,11 +595,11 @@ using Pkg
                     name = "Src"
                     [sources]
                     Bar = {path = "dev/Bar"}
-                    """,
+                    """
                 )
                 bar_loc = DistSSHRun.canonical_local_path(bar_src)
                 @test_throws ArgumentError(
-                    "Source path $bar_loc for Bar is not in the git commit a clone or git sync would send.",
+                    "Source path $bar_loc for Bar is not in the git commit a clone or git sync would send."
                 ) DistSSHRun.ensure_manifest_in_git_worktree!(repo)
 
                 write(joinpath(repo, ".gitignore"), "dev/Foo/\ndev/Skip/\n")
@@ -612,11 +612,11 @@ using Pkg
                     name = "Src"
                     [sources]
                     Skip = {path = "dev/Skip"}
-                    """,
+                    """
                 )
                 skip_loc = DistSSHRun.canonical_local_path(skip_src)
                 @test_throws ArgumentError(
-                    "Source path $skip_loc for Skip is not in the git commit a clone or git sync would send.",
+                    "Source path $skip_loc for Skip is not in the git commit a clone or git sync would send."
                 ) DistSSHRun.ensure_manifest_in_git_worktree!(repo)
 
                 loose = joinpath(repo, "vendor", "Loose")
@@ -628,8 +628,8 @@ using Pkg
                     pipeline(
                         `git -C $repo -c user.email=kit@example.com -c user.name=kit -c commit.gpgsign=false commit -q -m link`;
                         stdout = devnull,
-                        stderr = devnull,
-                    ),
+                        stderr = devnull
+                    )
                 )
                 write(
                     joinpath(repo, "Project.toml"),
@@ -637,11 +637,11 @@ using Pkg
                     name = "Src"
                     [sources]
                     Loose = {path = "dev/Loose"}
-                    """,
+                    """
                 )
                 link_loc = DistSSHRun.canonical_local_path(joinpath(repo, "dev", "Loose"))
                 @test_throws ArgumentError(
-                    "Source path $link_loc for Loose is a symlink to ../vendor/Loose in the git commit, which a clone or git sync would omit.",
+                    "Source path $link_loc for Loose is a symlink to ../vendor/Loose in the git commit, which a clone or git sync would omit."
                 ) DistSSHRun.ensure_manifest_in_git_worktree!(repo)
 
                 inn = joinpath(repo, "vendor", "In")
@@ -653,8 +653,8 @@ using Pkg
                     pipeline(
                         `git -C $repo -c user.email=kit@example.com -c user.name=kit -c commit.gpgsign=false commit -q -m rel`;
                         stdout = devnull,
-                        stderr = devnull,
-                    ),
+                        stderr = devnull
+                    )
                 )
                 write(
                     joinpath(repo, "Project.toml"),
@@ -662,7 +662,7 @@ using Pkg
                     name = "Src"
                     [sources]
                     Rel = {path = "dev/Rel"}
-                    """,
+                    """
                 )
                 @test DistSSHRun.ensure_manifest_in_git_worktree!(repo) === nothing
 
@@ -673,8 +673,8 @@ using Pkg
                     pipeline(
                         `git -C $repo -c user.email=kit@example.com -c user.name=kit -c commit.gpgsign=false commit -q -m abs`;
                         stdout = devnull,
-                        stderr = devnull,
-                    ),
+                        stderr = devnull
+                    )
                 )
                 write(
                     joinpath(repo, "Project.toml"),
@@ -682,11 +682,11 @@ using Pkg
                     name = "Src"
                     [sources]
                     Abs = {path = "dev/Abs"}
-                    """,
+                    """
                 )
                 abs_loc = DistSSHRun.canonical_local_path(joinpath(repo, "dev", "Abs"))
                 @test_throws ArgumentError(
-                    "Source path $abs_loc for Abs is a symlink to $abs_in in the git commit. A clone keeps that absolute target.",
+                    "Source path $abs_loc for Abs is a symlink to $abs_in in the git commit. A clone keeps that absolute target."
                 ) DistSSHRun.ensure_manifest_in_git_worktree!(repo)
 
                 esc = joinpath(repo, "dev", "Esc")
@@ -696,8 +696,8 @@ using Pkg
                     pipeline(
                         `git -C $repo -c user.email=kit@example.com -c user.name=kit -c commit.gpgsign=false commit -q -m esc`;
                         stdout = devnull,
-                        stderr = devnull,
-                    ),
+                        stderr = devnull
+                    )
                 )
                 rm(esc)
                 symlink("Foo", esc)
@@ -707,12 +707,12 @@ using Pkg
                     name = "Src"
                     [sources]
                     Esc = {path = "dev/Esc"}
-                    """,
+                    """
                 )
                 esc_loc = DistSSHRun.canonical_local_path(esc)
                 top = DistSSHRun.git_work_tree(repo)
                 @test_throws ArgumentError(
-                    "Source path $esc_loc for Esc is a symlink to ../../ext/Baz in the git commit, outside the git work tree ($top). The path would not reach a clone or git sync.",
+                    "Source path $esc_loc for Esc is a symlink to ../../ext/Baz in the git commit, outside the git work tree ($top). The path would not reach a clone or git sync."
                 ) DistSSHRun.ensure_manifest_in_git_worktree!(repo)
 
                 write(
@@ -721,7 +721,7 @@ using Pkg
                     name = "Src"
                     [sources]
                     Baz = {path = "../ext/Baz"}
-                    """,
+                    """
                 )
                 @test_throws ArgumentError DistSSHRun.ensure_manifest_in_git_worktree!(repo)
             end
@@ -742,7 +742,7 @@ using Pkg
                 name = "Job"
                 [sources]
                 Foo = {path = "dev/Foo"}
-                """,
+                """
             )
             write(joinpath(job, "Manifest.toml"), "manifest_format = \"2.0\"\n")
             symlink(joinpath("..", "vendor", "Foo"), link)
@@ -753,12 +753,12 @@ using Pkg
             symlink(abs_vendor, link)
             link_loc = DistSSHRun.canonical_local_path(link)
             @test_throws ArgumentError(
-                "Source path $link_loc for Foo is a symlink to $abs_vendor. Ship keeps that absolute target, so workers would not see the staged tree.",
+                "Source path $link_loc for Foo is a symlink to $abs_vendor. Ship keeps that absolute target, so workers would not see the staged tree."
             ) DistSSHRun.ensure_manifest_ships!(job)
             rm(link)
             symlink("~/nope", link)
             @test_throws ArgumentError(
-                "Source path $link_loc for Foo is a symlink to ~/nope. Ship keeps that absolute target, so workers would not see the staged tree.",
+                "Source path $link_loc for Foo is a symlink to ~/nope. Ship keeps that absolute target, so workers would not see the staged tree."
             ) DistSSHRun.ensure_manifest_ships!(job)
 
             if Sys.which("git") !== nothing
@@ -776,7 +776,7 @@ using Pkg
                     name = "Src"
                     [sources]
                     Foo = {path = "dev/Foo"}
-                    """,
+                    """
                 )
                 write(joinpath(phys, "Manifest.toml"), "manifest_format = \"2.0\"\n")
                 symlink(joinpath("private", "var"), joinpath(base, "var"))
@@ -787,8 +787,8 @@ using Pkg
                     pipeline(
                         `git -C $phys -c user.email=kit@example.com -c user.name=kit -c commit.gpgsign=false commit -q -m init`;
                         stdout = devnull,
-                        stderr = devnull,
-                    ),
+                        stderr = devnull
+                    )
                 )
                 top = DistSSHRun.git_work_tree(logical)
                 @test top !== nothing
@@ -804,10 +804,10 @@ using Pkg
                     name = "Src"
                     [sources]
                     Foo = {path = "$(abs_foo)"}
-                    """,
+                    """
                 )
                 @test_throws ArgumentError(
-                    "Source path $abs_foo for Foo is absolute. Workers resolve it on their own filesystem, so it would not be the staged tree.",
+                    "Source path $abs_foo for Foo is absolute. Workers resolve it on their own filesystem, so it would not be the staged tree."
                 ) DistSSHRun.ensure_manifest_in_git_worktree!(logical)
 
                 write(
@@ -816,7 +816,7 @@ using Pkg
                     name = "Src"
                     [sources]
                     In = {path = "dev/In"}
-                    """,
+                    """
                 )
                 symlink(joinpath("..", "vendor", "In"), joinpath(phys, "dev", "In"))
                 run(pipeline(`git -C $phys add -- vendor/In dev/In Project.toml`; stdout = devnull, stderr = devnull))
@@ -824,8 +824,8 @@ using Pkg
                     pipeline(
                         `git -C $phys -c user.email=kit@example.com -c user.name=kit -c commit.gpgsign=false commit -q -m rel`;
                         stdout = devnull,
-                        stderr = devnull,
-                    ),
+                        stderr = devnull
+                    )
                 )
                 in_logical = joinpath(logical, "dev", "In")
                 @test DistSSHRun._git_worktree_relpath(top, in_logical) == "dev/In"
@@ -838,8 +838,8 @@ using Pkg
                     pipeline(
                         `git -C $phys -c user.email=kit@example.com -c user.name=kit -c commit.gpgsign=false commit -q -m abs`;
                         stdout = devnull,
-                        stderr = devnull,
-                    ),
+                        stderr = devnull
+                    )
                 )
                 write(
                     joinpath(phys, "Project.toml"),
@@ -847,11 +847,11 @@ using Pkg
                     name = "Src"
                     [sources]
                     Abs = {path = "dev/Abs"}
-                    """,
+                    """
                 )
                 abs_loc = DistSSHRun.canonical_local_path(joinpath(logical, "dev", "Abs"))
                 @test_throws ArgumentError(
-                    "Source path $abs_loc for Abs is a symlink to $abs_inn in the git commit. A clone keeps that absolute target.",
+                    "Source path $abs_loc for Abs is a symlink to $abs_inn in the git commit. A clone keeps that absolute target."
                 ) DistSSHRun.ensure_manifest_in_git_worktree!(logical)
             end
         end
@@ -864,7 +864,7 @@ using Pkg
             "slot",
             "job.jl",
             String[],
-            "julia",
+            "julia"
         )
         @test occursin("experiments/run1", inner)
         @test occursin("--project=.", inner)
@@ -1066,7 +1066,7 @@ using Pkg
             false, DistSSHRun.HostResult[];
             ok = true,
             content_tree_hash = "abc",
-            run_id = "20260101T000000Z-abcdef",
+            run_id = "20260101T000000Z-abcdef"
         )
         @test DistSSHRun.result_content_tree_hash(shipped) == "abc"
         @test DistSSHRun.result_remote_run_id(shipped) == "20260101T000000Z-abcdef"
@@ -1074,7 +1074,7 @@ using Pkg
             false, DistSSHRun.HostResult[];
             ok = true,
             content_tree_hash = "",
-            run_id = "",
+            run_id = ""
         )
         @test DistSSHRun.result_content_tree_hash(blank) === nothing
         @test DistSSHRun.result_remote_run_id(blank) === nothing

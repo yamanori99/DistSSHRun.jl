@@ -11,7 +11,7 @@ using Distributed
                 name = "RideAct"
                 uuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
                 version = "0.1.0"
-                """,
+                """
             )
             try
                 DistSSHRun._ride_activate_project!(tmp)
@@ -119,7 +119,7 @@ using Distributed
             @test _scan("itmap.jl", "Iterators.map(identity, 1:2)\n").drive_line === nothing
             @test _scan(
                 "thspawn.jl",
-                "using Base.Threads: @spawn\n@spawn 1\n",
+                "using Base.Threads: @spawn\n@spawn 1\n"
             ).drive_line === nothing
             @test _scan("map2.jl", "map(f, a, b)\n").drive_line === nothing
             dist_every = _scan("devery.jl", "Distributed.@everywhere x = 1\n")
@@ -398,7 +398,7 @@ using Distributed
             nested_src(struct_name) = begin
                 nest_wraps = join(
                     ["w = $(struct_name)(w)" for _ in 1:(nest_n - 1)],
-                    "\n            ",
+                    "\n            "
                 )
                 nest_get = "w" * repeat(".inner", nest_n)
                 """
@@ -478,7 +478,7 @@ using Distributed
                     output_dir = dirty,
                     project = tmp,
                     head_workers = 1,
-                    hint_surface = :cli,
+                    hint_surface = :cli
                 )
                 nothing
             catch e
@@ -504,8 +504,8 @@ using Distributed
                     "/home/distsshkit/app",
                     "/home/distsshkit/app/runs/20260101T000000Z-abcdef/src",
                     "deadbeef",
-                    ["host.test"],
-                ),
+                    ["host.test"]
+                )
             )
             return nothing
         end
@@ -585,8 +585,8 @@ using Distributed
                 write(
                     joinpath(remote, "runs", snap_id, "run.toml"),
                     DistSSHRun._ship_run_leaf_complete_toml(
-                        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                    ),
+                        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    )
                 )
                 logp = joinpath(tmp, "ssh.log")
                 bindir = joinpath(tmp, "bin")
@@ -606,7 +606,7 @@ using Distributed
                       esac
                     done
                     exit 255
-                    """,
+                    """
                 )
                 chmod(ssh_bin, 0o755)
                 fake = Dict(
@@ -614,7 +614,7 @@ using Distributed
                     "DISTSSH_TEST_SSH" => double,
                     "DISTSSH_TEST_SSH_LOG" => logp,
                     "DISTSSH_TEST_POSIX_SHELL" => "1",
-                    "PATH" => bindir * ":" * get(ENV, "PATH", ""),
+                    "PATH" => bindir * ":" * get(ENV, "PATH", "")
                 )
                 host = "ridework.test"
                 want = DistSSHRun.canonical_local_path(newer)
@@ -625,7 +625,7 @@ using Distributed
                     open($(repr(parent_env)), "w") do io
                         println(io, get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
                     end
-                    """,
+                    """
                 )
 
                 withenv(fake...) do
@@ -645,7 +645,7 @@ using Distributed
                                 project = local_proj,
                                 remote = remote,
                                 output_dir = joinpath(tmp, "parent-out"),
-                                spi_check = false,
+                                spi_check = false
                             )
                         end
                     end
@@ -668,7 +668,7 @@ using Distributed
                                 julia = "/usr/bin/julia",
                                 output_dir = joinpath(tmp, "child-out"),
                                 spi_check = false,
-                                require_all_hosts = false,
+                                best_effort = true
                             )
                         end
                     end
@@ -814,7 +814,7 @@ using Distributed
                     tmp,
                     script,
                     nothing,
-                    false,
+                    false
                 )
                 @test foreign in workers()
             finally
@@ -840,7 +840,7 @@ using Distributed
                     return DistSSHRun.ride!(
                         script, String[]; head_workers = 1,
                         project = tmp,
-                        run_id = rid,
+                        run_id = rid
                     )
                 end
             end

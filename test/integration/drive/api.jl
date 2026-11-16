@@ -43,8 +43,7 @@ end
                             DistSSHRun.drive!(
                                 script; head_workers = 2,
                                 project = proj,
-                                verbosity = :verbose,
-                                yes = true,
+                                verbosity = :verbose
                             )
                         end
                     end
@@ -97,7 +96,7 @@ end
                 "DISTRIBUTED_PROJECT_ROOT" => "prior-root",
                 "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "",
                 "DISTRIBUTED_OUTPUT_DIR" => nothing,
-                "DISTRIBUTED_RUNNER" => nothing,
+                "DISTRIBUTED_RUNNER" => nothing
             ) do
                 Base.ACTIVE_PROJECT[] = nothing
                 bad = joinpath(proj, "bad.jl")
@@ -109,8 +108,7 @@ end
                                 bad;
                                 project = proj,
                                 verbosity = :quiet,
-                                yes = true,
-                                enable_log = false,
+                                enable_log = false
                             )
                             nothing
                         catch e
@@ -131,15 +129,14 @@ end
                     project = proj,
                     workers = String[],
                     quiet = true,
-                    yes = true,
-                    verbosity = :quiet,
+                    verbosity = :quiet
                 )
                 parsed = DistSSHRun.drive_parsed_from_session(
                     session,
                     script;
                     workers = DistSSHRun.WorkerPlan(1, Dict{String, Int}()),
                     enable_log = false,
-                    skip_hash_check = true,
+                    skip_hash_check = true
                 )
                 got = redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
@@ -205,8 +202,7 @@ end
                         with_init; head_workers = 1,
                         project = proj,
                         verbosity = :quiet,
-                        yes = true,
-                        enable_log = false,
+                        enable_log = false
                     )
                 end
             end
@@ -220,8 +216,7 @@ end
                         no_init; head_workers = 1,
                         project = proj,
                         verbosity = :quiet,
-                        yes = true,
-                        enable_log = false,
+                        enable_log = false
                     )
                 end
             end

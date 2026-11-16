@@ -20,7 +20,7 @@ using Dates
             @test s[1].label == _go_local_slot_label()
         end
         @test_throws ArgumentError DistSSHRun.require_counted_placement_tokens(
-            ["parent"]; command = :go,
+            ["parent"]; command = :go
         )
         let s = DistSSHRun._go_plan_slots(["2*local"])
             @test length(s) == 2
@@ -94,7 +94,7 @@ using Dates
             @test pool[2].role === :child && pool[2].name == "h1"
         end
         @test_throws ArgumentError DistSSHRun._go_plan_slots(
-            ["1*h1", "1*parent"]; head_slots = 1, total = 2,
+            ["1*h1", "1*parent"]; head_slots = 1, total = 2
         )
         @test_throws ArgumentError DistSSHRun._go_plan_slots(["1*h1"]; total = 2)
         @test_throws ArgumentError DistSSHRun._go_plan_slots(String[]; total = 0)
@@ -245,7 +245,7 @@ using Dates
                 done
                 printf '%s\\n' /usr/bin/julia
                 exit 0
-                """,
+                """
             )
             write(scp, "#!/bin/sh\nexit 0\n")
             chmod(ssh, 0o755)
@@ -269,7 +269,7 @@ using Dates
                     "DISTSSH_TEST_SSH_HOST_ROOTS" => roots,
                     "DISTSSH_TEST_ACTIVE_PROJECT" => repo,
                     "DISTSSH_TEST_CONTROLLER_LOAD_PATH" => ctl_lp,
-                    "JULIA_DEPOT_PATH" => get(ENV, "JULIA_DEPOT_PATH", ""),
+                    "JULIA_DEPOT_PATH" => get(ENV, "JULIA_DEPOT_PATH", "")
                 ) do
                     task = @async DistSSHRun._go_run_remote_slot!(
                         host,
@@ -280,7 +280,7 @@ using Dates
                         "slot",
                         slot;
                         quiet = true,
-                        julia = "/usr/bin/julia",
+                        julia = "/usr/bin/julia"
                     )
                     t0 = time()
                     pid = nothing
@@ -318,7 +318,7 @@ using Dates
                     project = proj,
                     output_dir = joinpath(proj, "a"),
                     collect_spec = joinpath(proj, "b"),
-                    quiet = true,
+                    quiet = true
                 )
                 nothing
             catch e
@@ -344,7 +344,7 @@ using Dates
             script = joinpath(proj, "job.jl")
             write(script, "true\n")
             err = try
-                DistSSHRun.go!(script, String[]; head_slots = 1, project = proj, quiet = true, yes = true)
+                DistSSHRun.go!(script, String[]; head_slots = 1, project = proj, quiet = true)
                 nothing
             catch e
                 e
@@ -387,7 +387,7 @@ using Dates
             "demos/output/go_sim/root@192.0.2.10-1",
             "demos/pi_file.jl",
             String[],
-            "julia",
+            "julia"
         )
         @test startswith(inner, "cd ")
         slot = "demos/output/go_sim/root@192.0.2.10-1"
@@ -407,7 +407,7 @@ using Dates
             "slot",
             "job.jl",
             String[],
-            "/opt/Julia 1.12/bin/julia",
+            "/opt/Julia 1.12/bin/julia"
         )
         @test occursin(DistSSHRun._remote_shell_path_word("/opt/Julia 1.12/bin/julia"), spaced)
 
@@ -416,7 +416,7 @@ using Dates
             "slot",
             "job.jl",
             ["8", "a b"],
-            "julia",
+            "julia"
         )
         @test occursin("env -u JULIA_PROJECT", with_args)
         @test occursin("JULIA_LOAD_PATH=", with_args)
@@ -427,7 +427,7 @@ using Dates
         @test occursin(DistSSHRun._remote_shell_path_word("a b"), with_args)
         @test occursin(
             DistSSHRun._remote_shell_path_word("slot/.distssh/provenance-slot.jl"),
-            with_args,
+            with_args
         )
         @test occursin("DISTSSH_PROVENANCE_SLOT", with_args)
 
@@ -437,7 +437,7 @@ using Dates
                 "slot",
                 "job.jl",
                 String[],
-                "julia",
+                "julia"
             )
             @test occursin(" -L ", tagged)
             @test occursin("distsshkit-job:repro-1", tagged)
@@ -458,7 +458,7 @@ using Dates
                 return string(
                     "cd $cd_q && { ", body, " 2>&1; echo \$? > ", exit_q, "; } | tee ", log_q, "; ",
                     "ec=\$(sed -n '1p' ", exit_q, " 2>/dev/null); ",
-                    "case \"\$ec\" in ''|*[!0-9]*) ec=127;; esac; exit \$ec",
+                    "case \"\$ec\" in ''|*[!0-9]*) ec=127;; esac; exit \$ec"
                 )
             end
             shells = String["sh"]
@@ -479,7 +479,7 @@ using Dates
                 missing = string(
                     "cd $cd_q && rm -f ", exit_q, "; ",
                     "ec=\$(sed -n '1p' ", exit_q, " 2>/dev/null); ",
-                    "case \"\$ec\" in ''|*[!0-9]*) ec=127;; esac; exit \$ec",
+                    "case \"\$ec\" in ''|*[!0-9]*) ec=127;; esac; exit \$ec"
                 )
                 cmd = ignorestatus(Cmd([shell, "-c", missing]))
                 @test run(cmd).exitcode == 127
@@ -500,7 +500,7 @@ using Dates
                     "printf '%s\\n' go.exitcode; ",
                     "cd $cd_q && { ", body, " 2>&1; echo \$? > ", exit_q, "; } | tee ", log_q, "; ",
                     "ec=\$(sed -n '1p' ", exit_q, " 2>/dev/null); ",
-                    "case \"\$ec\" in ''|*[!0-9]*) ec=127;; esac; exit \$ec",
+                    "case \"\$ec\" in ''|*[!0-9]*) ec=127;; esac; exit \$ec"
                 )
             end
             host = "go-posix-exit.test"
@@ -514,9 +514,9 @@ using Dates
                         pipeline(
                             ignorestatus(`$julia --startup-file=no --compile=min $fake $host $script`);
                             stdout = devnull,
-                            stderr = devnull,
+                            stderr = devnull
                         );
-                        wait = true,
+                        wait = true
                     )
                 end
                 @test proc.exitcode == want
@@ -544,7 +544,7 @@ using Dates
             slot = joinpath(d, "slot")
             withenv("DISTSSH_JOB_ID" => "repro-1") do
                 r = DistSSHRun._go_run_local_slot!(
-                    d, script, ["a", "b c"], slot; quiet = true,
+                    d, script, ["a", "b c"], slot; quiet = true
                 )
                 @test r.ok
             end
@@ -554,7 +554,7 @@ using Dates
             @test abspath(strip(read(progf, String))) == abspath(script)
             @test isfile(joinpath(slot, DistSSHRun.kit_job_pkill_pattern("repro-1")))
             snap = DistSSHRun.TOML.parsefile(
-                joinpath(slot, ".distssh", "provenance-slot.toml"),
+                joinpath(slot, ".distssh", "provenance-slot.toml")
             )
             @test snap["version"] == string(VERSION)
         end
@@ -570,7 +570,7 @@ using Dates
             DistSSHRun.CollectResult(false, 1),
             "job.jl",
             "/tmp/go-out";
-            failed_step = "run",
+            failed_step = "run"
         )
         buf = IOBuffer()
         @test !DistSSHRun.report_go_errors(bad; io = buf)
@@ -585,7 +585,7 @@ using Dates
         mktempdir() do rd
             withenv(DistSSHRun.DISTSSH_RUN_DIR_ENV => rd) do
                 positional = DistSSHRun.GoResult(
-                    false, nothing, nothing, nothing, "job.jl", "/out", "sync",
+                    false, nothing, nothing, nothing, "job.jl", "/out", "sync"
                 )
                 @test positional.failed_step == "sync"
                 @test positional.run_dir == DistSSHRun.kit_run_dir()
@@ -606,7 +606,7 @@ using Dates
                 out, _ = _capture_stdio() do _, _
                     DistSSHRun.go!(
                         script, String[]; head_slots = 1,
-                        project = proj, quiet = true, yes = true,
+                        project = proj, quiet = true
                     )
                 end
                 @test !occursin("Log file:", out)
@@ -614,8 +614,8 @@ using Dates
             r = redirect_stdout(devnull) do
                 DistSSHRun.go!(
                     script, String[]; head_slots = 1,
-                    project = proj, quiet = true, yes = true,
-                    original_args = ["--head-slots", "1", "job.jl"],
+                    project = proj, quiet = true,
+                    original_args = ["--head-slots", "1", "job.jl"]
                 )
             end
             @test r.ok
@@ -654,7 +654,7 @@ using Dates
                 redirect_stdout(devnull) do
                     r = DistSSHRun.go!(
                         script, String[]; head_slots = 1,
-                        project = proj, quiet = true, yes = true,
+                        project = proj, quiet = true
                     )
                     @test r.ok
                 end
@@ -677,13 +677,13 @@ using Dates
                     sleep(0.15)
                     exit(0)
                 end
-                """,
+                """
             )
             r = redirect_stdout(devnull) do
                 redirect_stderr(devnull) do
                     DistSSHRun.go!(
                         script, String[]; head_slots = 2,
-                        project = proj, quiet = true, yes = true,
+                        project = proj, quiet = true
                     )
                 end
             end
@@ -717,13 +717,13 @@ using Dates
                 Base.TRACE_EVAL = :loc
                 println("hello")
                 error("boom")
-                """,
+                """
             )
             r = redirect_stdout(devnull) do
                 redirect_stderr(devnull) do
                     DistSSHRun.go!(
                         script, String[]; head_slots = 1,
-                        project = proj, quiet = true, yes = true,
+                        project = proj, quiet = true
                     )
                 end
             end
@@ -751,8 +751,7 @@ using Dates
                     output_dir = dirty,
                     head_slots = 1,
                     quiet = true,
-                    yes = true,
-                    hint_surface = :cli,
+                    hint_surface = :cli
                 )
                 nothing
             catch e
@@ -773,8 +772,7 @@ using Dates
                     collect_spec = dirty,
                     head_slots = 1,
                     quiet = true,
-                    yes = true,
-                    hint_surface = :api,
+                    hint_surface = :api
                 )
                 nothing
             catch e
@@ -791,8 +789,7 @@ using Dates
                     project = proj,
                     output_dir = empty_dir,
                     head_slots = 1,
-                    quiet = true,
-                    yes = true,
+                    quiet = true
                 )
             end
             @test r.ok
@@ -802,7 +799,7 @@ using Dates
                     redirect_stderr(err_io) do
                         withenv(
                             "DISTRIBUTED_PROJECT_ROOT" => proj,
-                            "DISTSSH_CLI_SUBCOMMAND_DONE" => "",
+                            "DISTSSH_CLI_SUBCOMMAND_DONE" => ""
                         ) do
                             DistSSHRun.main(["go", "-q", "--head-slots", "1", "--output-dir", dirty, script])
                         end
@@ -840,8 +837,7 @@ using Dates
                                 ["1*user@hash-drain.test"];
                                 project = proj,
                                 output_dir = out,
-                                quiet = true,
-                                yes = true,
+                                quiet = true
                             )
                             nothing
                         catch e
@@ -866,8 +862,7 @@ using Dates
                                 ["1*user@hash-drain.test"];
                                 project = proj,
                                 output_dir = out2,
-                                quiet = true,
-                                yes = true,
+                                quiet = true
                             )
                             nothing
                         catch e
@@ -903,7 +898,7 @@ using Dates
                 Bar = "22222222-2222-4222-8222-222222222222"
                 [sources]
                 Bar = {path = "../Bar"}
-                """,
+                """
             )
             _sync_test_project_manifest!(app)
             script = joinpath(app, "job.jl")
@@ -911,7 +906,7 @@ using Dates
             plain = redirect_stdout(devnull) do
                 DistSSHRun.go!(
                     script, String[]; head_slots = 1,
-                    project = app, yes = true, quiet = true,
+                    project = app, quiet = true
                 )
             end
             @test plain.ok
@@ -920,14 +915,13 @@ using Dates
                     script, String[]; head_slots = 1,
                     project = app,
                     run_id = "20260101T000000Z-aaaaaa",
-                    yes = true,
-                    quiet = true,
+                    quiet = true
                 )
             end
             @test result.ok
             @test occursin(
                 "SNAPSHOT_SIBLING_OK",
-                read(joinpath(result.output_dir, _go_local_slot_label(), "julia.stdout.log"), String),
+                read(joinpath(result.output_dir, _go_local_slot_label(), "julia.stdout.log"), String)
             )
         end
     end

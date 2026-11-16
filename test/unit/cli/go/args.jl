@@ -30,7 +30,7 @@ using Test
                     "--output-dir", "my_runs",
                     "--git-sync", "h1",
                     "--help",
-                ],
+                ]
             )
             error("expected ArgumentError")
         catch e
@@ -43,7 +43,7 @@ using Test
                     "--julia", "/opt/julia/bin/julia",
                     "--output-dir", "my_runs",
                     "--help",
-                ],
+                ]
             )
             @test r.help
             @test r.julia == "/opt/julia/bin/julia"
@@ -86,7 +86,7 @@ using Test
             @test r.script_path == "job.jl"
         end
         @test_throws ArgumentError parse_go_args(
-            ["--head-workers", "4", "1*host1", "2*host2", "job.jl"],
+            ["--head-workers", "4", "1*host1", "2*host2", "job.jl"]
         )
         let r = parse_go_args(["--head-slots", "4", "1*host1", "2*host2", "job.jl"])
             @test r.cli_session.head_slots == 4
@@ -240,7 +240,7 @@ using Test
         end
         let r = parse_go_args(["-q", "-y", "--head-slots", "1", "job.jl"])
             @test r.cli_session.quiet
-            @test r.cli_session.yes
+            @test r.cli_session.cli_session.yes
             DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags())
         end
         withenv("DISTSSH_HOSTS" => "2*env-a,1*env-b") do
@@ -249,7 +249,7 @@ using Test
             end
         end
         @test_throws ArgumentError parse_go_args(
-            ["--gb-per-worker", "1.5", "parent", "job.jl"],
+            ["--gb-per-worker", "1.5", "parent", "job.jl"]
         )
         @test_throws ArgumentError parse_go_args(["--julia"])
     end

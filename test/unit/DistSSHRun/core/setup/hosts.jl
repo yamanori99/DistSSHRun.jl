@@ -29,7 +29,7 @@ using Test
         end
         @test DistSSHRun.parse_setup_host_token("desk1") == "desk1"
         @test_throws ArgumentError DistSSHRun.parse_setup_host_token("2*desk1")
-        session = DistSSHRun.DistSSHSession(workers = ["4*host-a"], project = pwd(), yes = true)
+        session = DistSSHRun.DistSSHSession(workers = ["4*host-a"], project = pwd())
         @test_throws ArgumentError DistSSHRun.setup!(session, :check)
     end
 
@@ -57,12 +57,12 @@ using Test
         _apply_quiet_setup_session!()
         @test DistSSHRun.finish_host_op!(
             "X",
-            (; cancelled = true, succeeded = 0, failed = 0),
+            (; cancelled = true, succeeded = 0, failed = 0)
         )
         out, ok = _capture_stdio() do _, _
             DistSSHRun.finish_host_op!(
                 "Pkg.test",
-                (; cancelled = false, succeeded = 0, failed = 2),
+                (; cancelled = false, succeeded = 0, failed = 2)
             )
         end
         @test !ok
@@ -70,7 +70,7 @@ using Test
         out2, ok2 = _capture_stdio() do _, _
             DistSSHRun.finish_host_op!(
                 "Pkg.test",
-                (; cancelled = false, succeeded = 1, failed = 1),
+                (; cancelled = false, succeeded = 1, failed = 1)
             )
         end
         @test !ok2
@@ -78,7 +78,7 @@ using Test
         _, ok3 = _capture_stdio() do _, _
             DistSSHRun.finish_host_op!(
                 "Pkg.test",
-                (; cancelled = false, succeeded = 2, failed = 0),
+                (; cancelled = false, succeeded = 2, failed = 0)
             )
         end
         @test ok3
@@ -110,7 +110,7 @@ using Test
         function _result_lines(body::AbstractString)
             return filter(
                 l -> startswith(l, "  ") && occursin(r": [✓✗]", l),
-                split(body, '\n'; keepempty = false),
+                split(body, '\n'; keepempty = false)
             )
         end
         function _count_host_prefix(body::AbstractString, host::AbstractString)
@@ -152,11 +152,11 @@ using Test
                         exit(0)
                     end
                     println("ok")
-                    """,
+                    """
                 )
                 env = merge(
                     _fake_setup_remote_env(state_dir),
-                    Dict("DISTSSH_TEST_SSH" => ssh),
+                    Dict("DISTSSH_TEST_SSH" => ssh)
                 )
                 withenv(env...) do
                     return f(tmp)
@@ -367,7 +367,7 @@ using Test
                             flush(stdin_io)
                             seekstart(stdin_io)
                             DistSSHRun.clone_to_remotes(
-                                ["host1"], "~/App.jl", "git@example.com:org/App.jl.git",
+                                ["host1"], "~/App.jl", "git@example.com:org/App.jl.git"
                             )
                         end
                         @test result.cancelled && result.succeeded == 0 && result.failed == 0
@@ -384,7 +384,7 @@ using Test
         _with_fake_remotes() do _
             result = DistSSHRun.clone_to_remotes(
                 ["host1"], "~/App.jl", "git@example.com:org/App.jl.git";
-                confirm = false,
+                confirm = false
             )
             @test !result.cancelled && result.succeeded == 1 && result.failed == 0
             @test length(result.hosts) == 1 && result.hosts[1].ok
@@ -400,7 +400,7 @@ using Test
             _, result = _capture_stdio() do _, _
                 DistSSHRun.clone_to_remotes(
                     [host], "~/App.jl", "git@example.com:org/App.jl.git";
-                    confirm = false,
+                    confirm = false
                 )
             end
             @test !result.cancelled && result.succeeded == 0 && result.failed == 1
@@ -415,7 +415,7 @@ using Test
             _, result = _capture_stdio() do _, _
                 DistSSHRun.clone_to_remotes(
                     [host], "~/App.jl", "git@example.com:org/App.jl.git";
-                    confirm = false,
+                    confirm = false
                 )
             end
             @test !result.cancelled && result.succeeded == 0 && result.failed == 1
@@ -429,7 +429,7 @@ using Test
             _, result = _capture_stdio() do _, _
                 DistSSHRun.clone_to_remotes(
                     [host], "~/App.jl", "git@example.com:org/App.jl.git";
-                    confirm = false,
+                    confirm = false
                 )
             end
             @test result.failed == 1
@@ -440,7 +440,7 @@ using Test
         _with_fake_remotes(; extra_env = Dict("DISTSSH_TEST_GIT_CLONE_FAIL" => "1")) do _
             result = DistSSHRun.clone_to_remotes(
                 ["host1"], "~/App.jl", "git@example.com:org/App.jl.git";
-                confirm = false,
+                confirm = false
             )
             @test result.failed == 1
             @test occursin("repository not found", result.hosts[1].message)

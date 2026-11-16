@@ -43,7 +43,7 @@ using Test, DistSSHRun
                 ENV["DISTSSH_UNSAFE_SKIP_ENV_DIGESTS"] = "1"
                 cfg = DistSSHRun.resolve_run_job_config(;
                     command = :go,
-                    cli_unsafe_skip_env_digests = false,
+                    cli_unsafe_skip_env_digests = false
                 )
                 @test cfg.unsafe_skip_env_digests.value == false
                 @test cfg.unsafe_skip_env_digests.source == DistSSHRun.FromCLI
@@ -70,7 +70,7 @@ using Test, DistSSHRun
     @testset "dry-run hosts_source" begin
         let cfg = DistSSHRun.resolve_run_job_config(;
                 command = :go,
-                cli_dry_run = true,
+                cli_dry_run = true
             ),
                 buf = IOBuffer()
             DistSSHRun.print_run_job_dry_plan!(
@@ -80,14 +80,14 @@ using Test, DistSSHRun
                 worker_tokens = String[],
                 project = pwd(),
                 head_slots = 0,
-                hosts_source = :hosts,
+                hosts_source = :hosts
             )
             txt = String(take!(buf))
             @test occursin("hosts_source = \"--hosts\"", txt)
         end
         let cfg = DistSSHRun.resolve_run_job_config(;
                 command = :go,
-                cli_dry_run = true,
+                cli_dry_run = true
             ),
                 buf = IOBuffer()
             DistSSHRun.print_run_job_dry_plan!(
@@ -97,7 +97,7 @@ using Test, DistSSHRun
                 worker_tokens = String[],
                 project = pwd(),
                 head_slots = 1,
-                go_implicit_no_hosts = true,
+                go_implicit_no_hosts = true
             )
             txt = String(take!(buf))
             @test occursin("1 slot (no hosts given)", txt)
@@ -108,7 +108,7 @@ using Test, DistSSHRun
         err = DistSSHRun.removed_cli_flag_error(;
             flag = "--unsafe-heterogeneous",
             replacement = "--unsafe-skip-env-digests",
-            surface = "go",
+            surface = "go"
         )
         shown = sprint(showerror, err)
         @test occursin("DSSH-E001", shown)

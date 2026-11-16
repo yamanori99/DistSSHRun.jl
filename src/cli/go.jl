@@ -53,7 +53,6 @@ function go_main()::Cint
             worker_tokens = host_tokens(parsed; kind = :go),
         )
         diag !== nothing && return Cint(diag)
-        yes = parsed.cli_session.yes || kit_noninteractive()
         kw = execute_kwargs_from_parsed(parsed; kind = :go)
         result = try
             go!(
@@ -63,7 +62,6 @@ function go_main()::Cint
                 project = project_root,
                 quiet = kw[:quiet],
                 verbosity = kw[:verbosity],
-                yes = yes,
                 args = kw[:args],
                 path_anchor = path_anchor,
                 output_dir = kw[:output_dir],

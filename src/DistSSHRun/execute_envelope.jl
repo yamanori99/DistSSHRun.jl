@@ -24,7 +24,7 @@ struct ExecuteEnvelope
     log_dir::Union{Nothing, String}
     enable_log::Bool
     package::Union{Nothing, String}
-    require_all_hosts::Bool
+    best_effort::Bool
     skip_hash_check::Bool
     workers::Union{Nothing, Int}
     repeat::Union{Nothing, Int}
@@ -72,7 +72,7 @@ function _execute_envelope_from_kwargs(
         log_dir = nothing,
         enable_log::Bool = true,
         package = nothing,
-        require_all_hosts::Bool = true,
+        best_effort::Bool = false,
         skip_hash_check::Bool = true,
         workers = nothing,
         repeat = nothing,
@@ -91,7 +91,15 @@ function _execute_envelope_from_kwargs(
         env_allow = nothing,
         env = nothing,
         detached = false,
+        require_all_hosts = nothing,
         kwargs...,
+    )
+    require_all_hosts !== nothing && throw(
+        ArgumentError(
+            "execute envelope does not accept require_all_hosts=; " *
+                "use best_effort= (require_all_hosts=true → best_effort=false, " *
+                "require_all_hosts=false → best_effort=true)",
+        ),
     )
     for k in keys(kwargs)
         execute_detached_accepts(k; kind) ||
@@ -117,7 +125,7 @@ function _execute_envelope_from_kwargs(
         log_dir === nothing ? nothing : String(log_dir),
         enable_log,
         package === nothing ? nothing : String(package),
-        require_all_hosts,
+        best_effort,
         skip_hash_check,
         workers === nothing ? nothing : Int(workers),
         repeat === nothing ? nothing : Int(repeat),
@@ -166,7 +174,7 @@ function execute_kwargs_from_envelope(env::ExecuteEnvelope)::Dict{Symbol, Any}
     kw[:log_dir] = env.log_dir
     kw[:enable_log] = env.enable_log
     kw[:package] = env.package
-    kw[:require_all_hosts] = env.require_all_hosts
+    env.best_effort && (kw[:best_effort] = true)
     kw[:skip_hash_check] = env.skip_hash_check
     env.worker_include && (kw[:worker_include] = true)
     env.workers !== nothing && (kw[:workers] = env.workers)

@@ -19,6 +19,29 @@ function _blob_string_vec(v)::Vector{String}
     return String[String(x) for x in v]
 end
 
+const _JOB_BLOB_REQUIRE_ALL_HOSTS_REMOVED = """
+job blob: require_all_hosts was removed; use best_effort instead (invert the value).
+  require_all_hosts = true  →  best_effort = false  (default, fail-closed join/collect)
+  require_all_hosts = false →  best_effort = true
+Rewrite job.toml; silent conversion is not supported."""
+
+const _JOB_BLOB_COLLECT_BEST_EFFORT_REMOVED = """
+job blob: collect_best_effort was removed; use best_effort instead (same meaning).
+Rewrite job.toml; silent conversion is not supported."""
+
+function _reject_removed_job_blob_join_keys!(raw::AbstractDict)
+    haskey(raw, "require_all_hosts") && throw(ArgumentError(_JOB_BLOB_REQUIRE_ALL_HOSTS_REMOVED))
+    haskey(raw, "collect_best_effort") && throw(ArgumentError(_JOB_BLOB_COLLECT_BEST_EFFORT_REMOVED))
+    return nothing
+end
+
+function _blob_best_effort(raw::AbstractDict)::Bool
+    if haskey(raw, "best_effort")
+        return _blob_bool(raw["best_effort"], "best_effort")
+    end
+    return false
+end
+
 function _blob_bool(raw, name::AbstractString)::Bool
     raw isa Bool && return raw
     raw isa Integer && return raw != 0
@@ -52,6 +75,7 @@ function _validate_detached_job_blob_dict(raw::AbstractDict)
     _blob_string_vec(args)
     get(raw, "project", nothing) isa AbstractString ||
         throw(ArgumentError("job blob: missing project"))
+    _reject_removed_job_blob_join_keys!(raw)
     return nothing
 end
 
@@ -85,7 +109,7 @@ function read_detached_job_blob(path::AbstractString)
         end,
         quiet = _blob_bool(get(raw, "quiet", false), "quiet"),
         verbosity = _blob_optional_string(get(raw, "verbosity", nothing)),
-        require_all_hosts = _blob_bool(get(raw, "require_all_hosts", true), "require_all_hosts"),
+        best_effort = _blob_best_effort(raw),
         skip_hash_check = _blob_bool(get(raw, "skip_hash_check", true), "skip_hash_check"),
         enable_log = _blob_bool(get(raw, "enable_log", true), "enable_log"),
         package = _blob_optional_string(get(raw, "package", nothing)),
@@ -170,7 +194,7 @@ function write_detached_job_blob!(
         run_id = nothing,
         quiet::Bool = false,
         verbosity = nothing,
-        require_all_hosts::Bool = true,
+        best_effort::Bool = false,
         skip_hash_check::Bool = true,
         enable_log::Bool = true,
         package = nothing,
@@ -214,7 +238,7 @@ function write_detached_job_blob!(
     head_slots !== nothing && push!(pairs, "head_slots" => Int(head_slots))
     for (k, v) in (
             (:quiet, quiet),
-            (:require_all_hosts, require_all_hosts),
+            (:best_effort, best_effort),
             (:skip_hash_check, skip_hash_check),
             (:enable_log, enable_log),
             (:worker_include, worker_include),
@@ -239,7 +263,7 @@ function execute_kwargs_from_job_blob(blob)
         :julia => blob.julia,
         :quiet => blob.quiet,
         :remote => blob.remote,
-        :require_all_hosts => blob.require_all_hosts,
+        :best_effort => blob.best_effort,
         :skip_hash_check => blob.skip_hash_check,
         :unsafe_skip_env_digests => blob.unsafe_skip_env_digests,
     )
@@ -322,9 +346,8 @@ function drive_parsed_from_detached_job_blob(blob; hint_surface::Symbol = :cli)
         collect_root = nothing,
         collect_hosts = nothing,
         collect_overwrite = nothing,
-        collect_best_effort = false,
         worker_include = blob.worker_include,
-        require_all_hosts = blob.require_all_hosts,
+        best_effort = blob.best_effort,
         help = false,
         show_version = false,
         cli_session = cli_session,

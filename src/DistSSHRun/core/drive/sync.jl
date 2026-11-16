@@ -49,7 +49,7 @@ function sync!(
                 session.project,
                 session.hosts,
                 remote_path;
-                confirm = !session.yes,
+                confirm = !session.cli_session.yes,
                 path_anchor = session.project,
                 allow_external_symlinks = allow_external_symlinks,
                 await_inputs = await_inputs,
@@ -67,7 +67,7 @@ function sync!(
                 remote_path;
                 do_push = true,
                 do_pull = true,
-                confirm = !session.yes,
+                confirm = !session.cli_session.yes,
                 allow_dirty = allow_dirty,
             )
             if raw.cancelled

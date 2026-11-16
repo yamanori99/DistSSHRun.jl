@@ -484,7 +484,7 @@ function _ride_add_workers!(
         project::AbstractString,
         script_path::AbstractString,
         julia,
-        require_all_hosts::Bool,
+        best_effort::Bool,
     )::Tuple{Vector{Int}, Vector{String}}
     before = Set(workers())
     ssh_hosts = String[]
@@ -508,7 +508,7 @@ function _ride_add_workers!(
             else
                 String(julia)
             end
-            successful = add_drive_workers!(
+            successful, _launch_rep = add_drive_workers!(
                 child_hosts,
                 plan.head_workers,
                 1,
@@ -518,7 +518,7 @@ function _ride_add_workers!(
                 String(project),
             )
             ssh_hosts = String[String(h) for h in successful]
-            if require_all_hosts
+            if !best_effort
                 wanted = String[h for (h, _) in child_hosts]
                 missing = String[h for h in wanted if !(h in successful)]
                 isempty(missing) || error(
@@ -581,7 +581,7 @@ the parent (no driver `include` on workers). Named functions used by `map` /
 
 `--spi-check` (default off) compares the distributed result to a sequential
 `map` / `filter`. Unknown syntax stays sequential. Listed `` hosts are
-fail-closed (`require_all_hosts=true`).
+fail-closed by default (`best_effort=false`).
 Queue: [`execute!`](@ref) `:ride` (`detached=true` writes `kit.result` like go;
 SSH `` also writes `kit.hosts` for [`terminate!`](@ref)).
 """
@@ -662,7 +662,9 @@ function ride!(
         julia::Union{Nothing, AbstractString} = nothing,
         remote::Union{Nothing, AbstractString} = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
-        require_all_hosts::Bool = true,
+        best_effort::Bool = false,
+        yes::Union{Nothing, Bool} = nothing,
+        require_all_hosts::Union{Nothing, Bool} = nothing,
         head_workers::Union{Nothing, Integer} = nothing,
         hint_surface::Symbol = :api,
         unsafe_skip_env_digests = false,
@@ -670,6 +672,16 @@ function ride!(
         unsafe_all_to_all::Bool = false,
         allow_mismatch = nothing,
     )::RideResult
+    yes !== nothing && throw(
+        ArgumentError(
+            "ride! does not accept yes=; confirmation is CLI-only (pass -y/--yes to julia -m DistSSHKit)",
+        ),
+    )
+    require_all_hosts !== nothing && throw(
+        ArgumentError(
+            "ride! does not accept require_all_hosts=; use best_effort=true for a partial run",
+        ),
+    )
     _reject_removed_allow_mismatch!(allow_mismatch)
     path = canonical_local_path(script)
     julia_s = string(VERSION)
@@ -697,7 +709,7 @@ function ride!(
         return with_run_unsafe_options!(cfg) do
             return _ride_run!(
                 path, julia_s, tokens, args, spi_check, output_dir, project, julia,
-                remote, validated_run_id, require_all_hosts, head_workers, hint_surface,
+                remote, validated_run_id, best_effort, head_workers, hint_surface,
                 inherited_run,
             )
         end
@@ -718,7 +730,7 @@ function _ride_run!(
         julia,
         remote,
         run_id::Union{Nothing, String},
-        require_all_hosts,
+        best_effort::Bool,
         head_workers::Union{Nothing, Integer},
         hint_surface::Symbol,
         inherited_run::Bool,
@@ -802,7 +814,7 @@ function _ride_run!(
         progress_started = true
         kit_progress_step!("workers")
         _ride_activate_project!(project)
-        added, ssh_hosts = _ride_add_workers!(wp, project, path, julia, require_all_hosts)
+        added, ssh_hosts = _ride_add_workers!(wp, project, path, julia, best_effort)
         _write_kit_hosts_file(ssh_hosts, batch_dir, nothing)
         _write_joined_drive_host_status!(
             sort!(collect(keys(DRIVE_HOST_WORKER_IDS))),

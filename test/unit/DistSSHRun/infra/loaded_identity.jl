@@ -59,7 +59,7 @@ end
                 Base.UUID("b568025c-2759-4ef1-8b14-17d00e2cd000"),
                 "",
                 :top_level,
-                "",
+                ""
             ),
             DistSSHRun.LoadedSlotReport(
                 :DistSSHBase,
@@ -68,7 +68,7 @@ end
                 Base.UUID("f0a69307-14e5-4272-8c28-20680d05bac8"),
                 "",
                 :bundled,
-                "",
+                ""
             ),
         ]
         wire = DistSSHRun.encode_loaded_wire_report(slots)
@@ -86,7 +86,7 @@ end
             Base.UUID("b568025c-2759-4ef1-8b14-17d00e2cd000"),
             "",
             :top_level,
-            "",
+            ""
         )
         bad = DistSSHRun.LoadedSlotReport(
             :DistSSHRun,
@@ -95,12 +95,12 @@ end
             Base.UUID("b568025c-2759-4ef1-8b14-17d00e2cd000"),
             "",
             :top_level,
-            "",
+            ""
         )
         @test_throws DistSSHRun.LoadedCodeMismatchError DistSSHRun.verify_loaded_slots_match!(
             DistSSHRun.LoadedSlotReport[good],
             DistSSHRun.LoadedSlotReport[bad],
-            "DistributedWorker rank=1 pid=2",
+            "DistributedWorker rank=1 pid=2"
         )
     end
 

@@ -13,7 +13,7 @@ const _FAKE_ARBITRARY_DEST_SHIP_SSH = joinpath(
     "DistSSHBase",
     "test",
     "fixtures",
-    "fake_arbitrary_dest_ship_ssh.jl",
+    "fake_arbitrary_dest_ship_ssh.jl"
 )
 
 function _fake_arbitrary_dest_ship_env(state_dir::AbstractString)
@@ -21,8 +21,8 @@ function _fake_arbitrary_dest_ship_env(state_dir::AbstractString)
         _fake_setup_remote_env(state_dir),
         Dict(
             "DISTSSH_TEST_SSH" => abspath(_FAKE_ARBITRARY_DEST_SHIP_SSH),
-            "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia",
-        ),
+            "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia"
+        )
     )
 end
 
@@ -30,7 +30,7 @@ function _minimal_project!(dir::AbstractString)
     write(joinpath(dir, "Project.toml"), "name = \"StageShip\"\n")
     write(
         joinpath(dir, "Manifest.toml"),
-        "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
+        "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n"
     )
     write(joinpath(dir, "keep.jl"), "1\n")
     return dir
@@ -118,10 +118,10 @@ end
                         result = DistSSHRun.ship_project_to_dest(
                             proj, [host], dest;
                             write_record = false,
-                            transfer_id = "job-1",
+                            transfer_id = "job-1"
                         )
                         @test _test_shipment_receipt_ok(
-                            result; label = "ship_project_to_dest",
+                            result; label = "ship_project_to_dest"
                         )
                         @test !isdir(bundle)
                     end
@@ -144,11 +144,11 @@ end
                     withenv(
                         merge(
                             _fake_arbitrary_dest_ship_env(state),
-                            Dict("DISTSSH_TEST_EXPECT_TREE_HASH" => pack.content_tree_hash),
-                        )...,
+                            Dict("DISTSSH_TEST_EXPECT_TREE_HASH" => pack.content_tree_hash)
+                        )...
                     ) do
                         result = DistSSHRun.pack_shipment(
-                            pack, [host], dest; write_record = false,
+                            pack, [host], dest; write_record = false
                         )
                         @test result isa DistSSHRun.DistSSHShip.ShipmentReceipt
                         @test _test_shipment_receipt_ok(result; label = "pack_shipment")
