@@ -496,6 +496,8 @@ function _ride_add_workers!(
         if isempty(child_hosts)
             n = plan.head_workers
             if n > 0
+                plan_ranks = build_launch_rank_plan(n, child_hosts, 1)
+                reset_launch_rank_plan!(plan_ranks)
                 preserve_task_local_default_rng() do
                     ensure_run_cluster_cookie!()
                     _add_local_drive_workers!(n, project, pin_local_julia(nothing))
@@ -531,10 +533,12 @@ function _ride_add_workers!(
                     )
                 end
             end
+        end
+        added = Int[w for w in workers() if w ∉ before]
+        if !isempty(added)
             wait_for_worker_connections!(; ssh = !isempty(child_hosts))
             _ride_init_drive_workers!(project)
         end
-        added = Int[w for w in workers() if w ∉ before]
         if isempty(child_hosts) && !isempty(added)
             _mark_workers_launched!(added, project)
             _register_drive_host_worker_ids!(PARENT_HOST_NAME, added)
