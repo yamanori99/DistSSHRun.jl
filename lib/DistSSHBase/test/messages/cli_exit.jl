@@ -26,7 +26,7 @@ end
 
 @testset "cli exit" begin
     @testset "cli help streams" begin
-        help(io = stdout) = (println(io, "HELP_PAGE"); nothing)
+        help(; io = stdout) = (println(io, "HELP_PAGE"); nothing)
         @test DistSSHBase.cli_help_stdout(help) == Cint(0)
         @test DistSSHBase.cli_required_else_help(help) == DistSSHBase.CLI_EXIT_USAGE
     end

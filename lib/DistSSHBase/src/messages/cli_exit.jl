@@ -45,6 +45,9 @@ const CLI_EXIT_USAGE = Cint(2)
 
 Explicit `--help` / `-h`: print the same body as the bare-invocation page on
 **stdout** and return `0`. Matches [clap](https://docs.rs/clap) help display.
+
+`help` is called as `help(; io = stdout)`; it must accept the `io` keyword
+(like Kit `show_*_usage` helpers).
 """
 function cli_help_stdout(@nospecialize(help::Function))::Cint
     help(; io = stdout)
@@ -56,6 +59,8 @@ end
 
 Required operands/flags missing (clap [`Command::arg_required_else_help`](https://docs.rs/clap/latest/clap/struct.Command.html#method.arg_required_else_help)):
 print the full help page on **stderr** and return [`CLI_EXIT_USAGE`](@ref) (`2`).
+
+`help` is called as `help(; io = stderr)`; it must accept the `io` keyword.
 """
 function cli_required_else_help(@nospecialize(help::Function))::Cint
     help(; io = stderr)
