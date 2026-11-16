@@ -8,15 +8,14 @@ function setup_session_from_cli(
     )::DistSSHSession
     cs = opts.cli_session
     workers = String[setup_cli_host_token(h) for h in opts.hosts]
-    session = DistSSHSession(
+    return DistSSHSession(
         project = canonical_local_path(project),
         workers = workers,
         remote = remote_path,
         quiet = cs.quiet,
         verbosity = cs.verbosity,
+        yes = cs.yes,
     )
-    session.cli_session.yes = cs.yes
-    return session
 end
 
 """

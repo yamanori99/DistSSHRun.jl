@@ -92,7 +92,7 @@ end
             @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
             @test DistSSHRun.session_remote_root(session) == "/remote/App.jl"
             @test DistSSHRun.kit_output_quiet()
-            @test !DistSSHRun.kit_noninteractive()
+            @test DistSSHRun.kit_noninteractive()
         end
         _with_tempdir() do tmp
             delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")

@@ -98,10 +98,6 @@ function _go_sanitize_label(raw::AbstractString)::String
     return isempty(s) ? "host" : s
 end
 
-function _go_host_ssh_hint(host::AbstractString)::String
-    return _doctor_launch_host_ssh_hint(host)
-end
-
 """True when a go token looks like a misspelling of `parent`."""
 function _go_local_host_typo_hint(host_name::AbstractString)::Union{Nothing, String}
     h = lowercase(String(host_name))
