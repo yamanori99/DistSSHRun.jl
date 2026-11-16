@@ -723,13 +723,14 @@ function _setup_one!(
     elseif mode === :instantiate
         return instantiate!(session; julia = julia_path, run_id = run_id)
     elseif mode === :juliaup || mode === :juliaup_update
-        ssh_hosts = setup_juliaup_ssh_hosts(hosts)
+        targets = _setup_juliaup_targets(hosts)
+        ssh_hosts = setup_juliaup_ssh_hosts(targets)
         if !isempty(ssh_hosts)
             preflight_setup_ssh(ssh_hosts) || return SyncResult(false, HostResult[]; ok = false)
         end
         raw = mode === :juliaup ?
-            juliaup_align_remotes(hosts; confirm = !session.yes) :
-            juliaup_update_remotes(hosts; confirm = !session.yes)
+            juliaup_align_remotes(targets; confirm = !session.yes) :
+            juliaup_update_remotes(targets; confirm = !session.yes)
         return _sync_result_from_host_op(raw)
     elseif mode === :runtest
         preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
@@ -818,34 +819,27 @@ end
 
 """SSH aliases plus `parent` when a token names the kit parent. Does not touch `ENV`."""
 function _setup_bang_host_list(session::DistSSHSession)::Vector{String}
-    hosts = copy(session.hosts)
-    # `session.hosts` is SSH children only; parent lives on `tokens`.
-    # Always surface `parent` so non-juliaup modes hit validate_setup_hosts
-    # instead of silently dropping it.
-    for t in session.tokens
-        reject_setup_worker_count!(t)
-        pt = try
-            parse_placement_token(t)
-        catch
-            nothing
-        end
-        pt === nothing && continue
-        if pt.role === :parent
-            push!(hosts, PARENT_HOST_NAME)
-            break
-        end
-    end
-    return hosts
+    return copy(session.hosts)
+end
+
+"""Juliaup targets: controller (internal) plus SSH hosts from the session."""
+function _setup_juliaup_targets(hosts::AbstractVector{<:AbstractString})::Vector{String}
+    out = String[String(h) for h in hosts if !is_parent_host_name(h)]
+    push!(out, PARENT_HOST_NAME)
+    return out
 end
 
 function _setup_bang_hosts!(session::DistSSHSession; allow_parent::Bool = false)
     apply_session_env!(session)
     hosts = _setup_bang_host_list(session)
-    isempty(hosts) && throw(
-        ArgumentError(
-            explain_no_hosts(; surface = hint_surface(session), kind = :ssh),
+    if isempty(hosts)
+        allow_parent || throw(
+            ArgumentError(
+                explain_no_hosts(; surface = hint_surface(session), kind = :ssh),
+            ),
         )
-    )
+        hosts = String[PARENT_HOST_NAME]
+    end
     validate_setup_hosts(hosts; allow_parent = allow_parent)
     return hosts
 end

@@ -276,13 +276,13 @@ using Test
                 write(joinpath(proj_b, "Project.toml"), "name = \"ProjBeta\"\n")
 
                 let (code_a, out_a, err_a) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_a) do
-                        _main_capture(["hostinfo", "parent"])
+                        _main_capture(["hostinfo", "localhost"])
                     end
                     @test code_a == 0
                     @test occursin("ProjAlpha", out_a * err_a)
                 end
                 let (code_b, out_b, err_b) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_b) do
-                        _main_capture(["hostinfo", "parent"])
+                        _main_capture(["hostinfo", "localhost"])
                     end
                     @test code_b == 0
                     @test occursin("ProjBeta", out_b * err_b)

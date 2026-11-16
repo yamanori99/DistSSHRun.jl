@@ -156,9 +156,7 @@ end
     @test occursin("Hostinfo:", nontty)
     @test occursin("Memory:", nontty)
 
-    r = DistSSHRun.parse_hostinfo_args(["parent", "host1"])
-    @test r.include_parent
-    @test r.hosts == ["host1"]
+    @test_throws ArgumentError DistSSHRun.parse_hostinfo_args(["parent", "host1"])
     @test_throws ArgumentError DistSSHRun.parse_hostinfo_args(["--gb-per-worker", "1.5", "parent"])
     help = sprint(io -> DistSSHRun.show_hostinfo_usage(; io = io))
     @test occursin("hostinfo", help)
@@ -171,13 +169,13 @@ end
         mktemp() do out_path, out_io
             code = redirect_stdout(out_io) do
                 redirect_stderr(devnull) do
-                    DistSSHRun.run_hostinfo(["parent"])
+                    DistSSHRun.run_hostinfo(["localhost"])
                 end
             end
             flush(out_io)
             out = read(out_path, String)
             @test code == 0
-            @test occursin("parent", out)
+            @test occursin("localhost", out)
             @test occursin("Hostinfo:", out)
             @test occursin("Status:", out)
         end
@@ -191,7 +189,7 @@ end
             out = read(out_path, String)
             @test code == 0
             @test occursin("Hostinfo:", out)
-            @test occursin("parent", out)
+            @test occursin("localhost", out)
             @test occursin("Status:", out)
         end
     end

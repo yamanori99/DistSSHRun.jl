@@ -122,12 +122,8 @@ function parse_hostinfo_args(args::Vector{String})
         elseif arg == "--julia"
             julia = cli_take_value!(c, arg)
         elseif !startswith(arg, "-")
-            if is_parent_host_name(arg)
-                include_parent = true
-            else
-                let p = parse_placement_token(arg)
-                    push!(hosts, p.name)
-                end
+            let p = parse_placement_token(arg)
+                push!(hosts, p.name)
             end
             cli_consume!(c)
         else

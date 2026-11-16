@@ -126,7 +126,7 @@ using Test
                     let (code_a, out_a, err_a) = cd(proj_a) do
                             _cli_capture(
                                 () -> DistSSHRun.run_hostinfo(
-                                    ["parent"],
+                                    ["localhost"],
                                 ),
                             )
                         end
@@ -137,7 +137,7 @@ using Test
                     let (code_b, out_b, err_b) = cd(proj_b) do
                             _cli_capture(
                                 () -> DistSSHRun.run_hostinfo(
-                                    ["parent"],
+                                    ["localhost"],
                                 ),
                             )
                         end

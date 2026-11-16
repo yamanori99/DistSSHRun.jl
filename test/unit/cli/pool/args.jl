@@ -4,11 +4,7 @@ using Test
     parse_pool_args = DistSSHRun.parse_pool_args
 
     @testset "parse_pool_args" begin
-        let r = parse_pool_args(["parent", "host1", "host2"])
-            @test !r.show_help
-            @test r.include_parent
-            @test r.hosts == ["host1", "host2"]
-        end
+        @test_throws ArgumentError parse_pool_args(["parent", "host1", "host2"])
         let r = parse_pool_args(["local", "host1"])
             @test !r.include_parent
             @test r.hosts == ["local", "host1"]

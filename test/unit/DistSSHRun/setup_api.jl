@@ -306,7 +306,7 @@ using Test
                 chmod(jl, 0o755)
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["parent"],
+                    workers = String[],
                     remote = "~/App.jl",
                     yes = true,
                     quiet = true,
@@ -339,7 +339,7 @@ using Test
                 chmod(ju, 0o755)
                 session = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["parent"],
+                    workers = String[],
                     remote = "~/App.jl",
                     yes = true,
                     quiet = true,
@@ -357,7 +357,7 @@ using Test
             write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
             session = DistSSHRun.DistSSHSession(
                 project = proj,
-                workers = ["parent", "host1"],
+                workers = ["host1"],
                 remote = "~/App.jl",
                 yes = true,
                 quiet = true,
