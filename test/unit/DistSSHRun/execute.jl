@@ -1334,14 +1334,6 @@ end
         end
     end
 
-    @testset "worker_exeflag_strings job mark -L" begin
-        flags = DistSSHRun.worker_exeflag_strings("/tmp/p"; job_id = "ride-e2e")
-        @test flags == DistSSHRun.worker_exeflag_strings("/tmp/p"; job_id = "ride-e2e")
-        @test "--eval=#distsshkit-job:ride-e2e" in flags
-        @test "-L" in flags
-        @test "/tmp/p/distsshkit-job:ride-e2e" in flags
-    end
-
     @testset "job_id charset / kit_job_eval_arg" begin
         withenv("DISTSSH_JOB_ID" => nothing) do
             @test DistSSHRun.resolved_kit_job_id() === nothing

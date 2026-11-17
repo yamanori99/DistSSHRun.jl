@@ -1700,8 +1700,8 @@ end
             name = "W"
 
             [deps]
-            SHA = "ea85aae56d54e67b80f62cf9c6b7613b0032a9b"
-            Tar = "c5ee9c8994fa588a731c15903974ffab316b6fa"
+            SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+            Tar = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
             """,
         )
         write(joinpath(proj, "a.jl"), "1\n")

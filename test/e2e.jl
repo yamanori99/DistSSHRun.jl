@@ -31,35 +31,6 @@ using Distributed
 using Logging
 using DistSSHRun
 
-# The product warning stays. This suite drops only that line while `terminate!`
-# reaps the detached ride, so a missed `pkill` ssh does not print.
-struct _DropTaggedPkillWarn <: AbstractLogger
-    logger::AbstractLogger
-end
-
-function Logging.handle_message(
-        l::_DropTaggedPkillWarn,
-        level,
-        message,
-        _module,
-        group,
-        id,
-        filepath,
-        line;
-        kwargs...
-    )
-    if level == Logging.Warn && occursin("Tagged worker pkill did not reach", string(message))
-        return nothing
-    end
-    return Logging.handle_message(
-        l.logger, level, message, _module, group, id, filepath, line; kwargs...
-    )
-end
-
-Logging.shouldlog(l::_DropTaggedPkillWarn, args...) = Logging.shouldlog(l.logger, args...)
-Logging.min_enabled_level(l::_DropTaggedPkillWarn) = Logging.min_enabled_level(l.logger)
-Logging.catch_exceptions(l::_DropTaggedPkillWarn) = Logging.catch_exceptions(l.logger)
-
 # Same include shape as `test/runtests.jl` so JETLS follows it. Do not route
 # through a non-`const` `kit_root` (JETLS then skips the include).
 include(joinpath(@__DIR__, "support.jl"))
@@ -1533,9 +1504,13 @@ end
             @test workers_ready
             @test !isempty(pids)
 
-            result = with_logger(_DropTaggedPkillWarn(current_logger())) do
-                DistSSHRun.terminate!(kp; grace = 15)
+            logger = Test.TestLogger()
+            result = with_logger(logger) do
+                withenv(_e2e_base_env()...) do
+                    DistSSHRun.terminate!(kp; grace = 15)
+                end
             end
+            @test !any(r -> occursin("did not reach", string(r.message)), logger.logs)
             @test result isa DistSSHRun.DistSSHJobResult
             @test result.kind === :ride
             @test !process_running(kp.process)
@@ -1611,6 +1586,18 @@ end
                 extra_env = git_env
             )
             _assert_ssh_e2e_ok(suite, "git_clone", proc, out; project = proj, kit = :setup)
+
+            for host in setup_hosts
+                probe, _ = _ssh_e2e_ssh(host, "test -f $(git_root)/Project.toml")
+                code = probe.exitcode
+                _assert_ssh_e2e_api_ok(
+                    suite,
+                    "git_clone_project_toml",
+                    code == 0,
+                    "host=$(host) code=$(code)",
+                )
+                @test code == 0
+            end
 
             proc, out = _run_kit_setup(;
                 setup_args = [

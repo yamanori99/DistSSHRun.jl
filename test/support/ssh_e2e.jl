@@ -602,6 +602,17 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         )
         proc, out = _run_subprocess(push_cmd)
         _assert_proc_ok(proc, out; label = "ssh-e2e git push origin")
+        # Bare `HEAD` defaults to `master`; push may update `refs/heads/main` only.
+        ref_q = DistSSHRun.DistSSHBase._remote_sh_quote("refs/heads/$(branch)")
+        proc, out = _run_subprocess(
+            Cmd(
+                vcat(
+                    ssh_base,
+                    String[seed_host, "git --git-dir=$(bare) symbolic-ref HEAD $(ref_q)"]
+                )
+            )
+        )
+        _assert_proc_ok(proc, out; label = "ssh-e2e bare HEAD")
         return (; origin_controller = origin, origin_workers = _ssh_e2e_bare_ssh_from_workers(), branch)
     end
 

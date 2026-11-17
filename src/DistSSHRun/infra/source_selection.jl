@@ -454,26 +454,16 @@ function _probe_ship_run_complete(
     )
 end
 
-function _git_probe_deploy_abs(host::AbstractString, deploy_root::AbstractString)::String
-    given = rstrip(strip(String(deploy_root)), '/')
-    if startswith(given, "/")
-        return given
-    end
-    abs_root = try
-        _probe_expanded_remote_root(host, deploy_root)
-    catch e
-        e isa InterruptException && rethrow()
-        return ""
-    end
-    return String(abs_root)
-end
-
 function _probe_git_project_at_root(
         host::AbstractString,
         deploy_root::AbstractString,
     )::Bool
-    abs_root = _git_probe_deploy_abs(host, deploy_root)
-    isempty(abs_root) && return false
+    abs_root = try
+        _probe_expanded_remote_root(host, deploy_root)
+    catch e
+        e isa InterruptException && rethrow()
+        return false
+    end
     rq = _remote_shell_path_word(abs_root)
     script = """
     # __DSR_SNAP_GIT__
@@ -552,38 +542,14 @@ function _validate_ship_run_on_hosts!(
     return (hash = String(hash), project_rel = String(project_rel))
 end
 
-"""Remote tree root where `git clone` places the checkout (may differ from deploy_root)."""
-function _git_remote_work_root(
-        local_project::AbstractString,
-        deploy_root::AbstractString,
-    )::String
-    return remote_git_clone_dest(local_project; cli_override = deploy_root)
-end
-
-function _git_project_probe_roots(
-        deploy_root::AbstractString,
-        local_project::Union{Nothing, AbstractString},
-    )::Vector{String}
-    deploy = String(deploy_root)
-    lp = local_project === nothing ? nothing : String(local_project)
-    if lp === nothing
-        return String[deploy]
-    end
-    work = _git_remote_work_root(lp, deploy)
-    work == deploy && return String[deploy]
-    return String[deploy, work]
-end
-
 function _validate_git_on_hosts!(
         hosts::AbstractVector{<:AbstractString},
-        deploy_root::AbstractString;
-        local_project::Union{Nothing, AbstractString} = nothing,
+        deploy_root::AbstractString,
     )::Nothing
     isempty(hosts) && throw(_selection_error("git source selection needs at least one host"))
-    roots = _git_project_probe_roots(deploy_root, local_project)
     missing = String[]
     for host in hosts
-        any(r -> _probe_git_project_at_root(host, r), roots) || push!(missing, String(host))
+        _probe_git_project_at_root(host, deploy_root) || push!(missing, String(host))
     end
     isempty(missing) || throw(
         _selection_error(
@@ -638,7 +604,7 @@ function resolve_source_selection(
         dep = read_deploy_record_consensus(host_list, deploy)
         if dep !== nothing
             _set_active_deploy_record!(dep)
-            return _selection_from_deploy_record(dep, deploy, host_list, local_project)
+            return _selection_from_deploy_record(dep, deploy, host_list)
         end
         _set_active_deploy_record!(nothing)
     end
@@ -717,16 +683,8 @@ function resolve_source_selection(
             end
         end
     end
-    _validate_git_on_hosts!(host_list, deploy; local_project = local_project)
-    git_work = _git_remote_work_root(local_project, deploy)
-    return SourceSelection(
-        :git,
-        nothing,
-        deploy,
-        git_work,
-        nothing,
-        host_list,
-    )
+    _validate_git_on_hosts!(host_list, deploy)
+    return SourceSelection(:git, nothing, deploy, deploy, nothing, host_list)
 end
 public resolve_source_selection
 
