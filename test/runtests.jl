@@ -101,6 +101,7 @@ end
             _runtest_include("unit/DistSSHRun/infra/cluster_manager_api.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "cluster_manager_api.jl"))
             _runtest_include("unit/DistSSHRun/infra/seed_golden.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "seed_golden.jl"))
             _runtest_include("unit/DistSSHRun/infra/topology.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "topology.jl"))
+            _runtest_include("unit/DistSSHRun/infra/bind_overrides.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "bind_overrides.jl"))
             if !_distsshrun_short_skip("unit/DistSSHRun/execute.jl")
                 _runtest_include("unit/DistSSHRun/execute.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "execute.jl"))
             else
@@ -133,6 +134,7 @@ end
             _runtest_include("unit/DistSSHRun/infra/ship_fake_ssh_child_env.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "ship_fake_ssh_child_env.jl"))
             _runtest_include("unit/DistSSHRun/infra/ship_dest.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "ship_dest.jl"))
             _runtest_include("unit/DistSSHRun/infra/ship_engine_contract.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "ship_engine_contract.jl"))
+            _runtest_include("unit/DistSSHRun/ssh_e2e_ship_contract.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "ssh_e2e_ship_contract.jl"))
             if !_distsshrun_short_skip("unit/DistSSHRun/core/setup/send_list.jl")
                 _runtest_include("unit/DistSSHRun/core/setup/send_list.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "setup", "send_list.jl"))
             else

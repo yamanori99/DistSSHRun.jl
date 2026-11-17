@@ -398,33 +398,46 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         """
     end
 
-    # Overwrite `test/runtests.jl` on each remote work root (after ship-tree).
-    function _ssh_e2e_push_job_runtests!(
-            hosts,
-            remote_root::AbstractString;
-            fail::Bool = false
+    # Write job test/runtests.jl on the controller (never on a shipped remote tree).
+    function _ssh_e2e_write_job_runtests!(proj::AbstractString; fail::Bool = false)
+        proj = abspath(proj)
+        mkpath(joinpath(proj, "test"))
+        write(joinpath(proj, "test", "runtests.jl"), _ssh_e2e_job_runtests_src(; fail = fail))
+        return nothing
+    end
+
+    # Commit job runtests edits so ship-tree and git-sync see a clean, shippable tree.
+    function _ssh_e2e_commit_job_runtests!(proj::AbstractString; fail::Bool = false, message::AbstractString)
+        _ssh_e2e_write_job_runtests!(proj; fail = fail)
+        run(pipeline(`git -C $proj add test/runtests.jl`; stdout = devnull, stderr = devnull))
+        run(
+            pipeline(
+                `git -C $proj -c commit.gpgsign=false commit -m $message`;
+                stdout = devnull,
+                stderr = devnull,
+            ),
         )
-        g = _docker_ssh_generated()
-        src = _ssh_e2e_job_runtests_src(; fail = fail)
-        mktemp() do path, io
-            write(io, src)
-            flush(io)
-            for host in hosts
-                work = _ssh_e2e_work_root(host, remote_root)
-                mkdir_proc, mkdir_out = _ssh_e2e_ssh(host, "mkdir -p $(work)/test")
-                _assert_proc_ok(mkdir_proc, mkdir_out; label = "mkdir job test $(host)")
-                dest = "$(work)/test/runtests.jl"
-                proc, out = _run_subprocess(
-                    Cmd(
-                        [
-                            "scp", "-F", g.ssh_config, path,
-                            "$(host):$(dest)",
-                        ]
-                    )
-                )
-                _assert_proc_ok(proc, out; label = "scp job runtests $(host)")
-            end
-        end
+        return nothing
+    end
+
+    # Ship the controller tree after a local edit so deploy record and hash stay aligned.
+    function _ssh_e2e_ship_tree_after_local_change!(
+            suite::SshE2ESuite,
+            slug::AbstractString,
+            proj::AbstractString,
+            remote_root::AbstractString,
+            setup_hosts::AbstractVector{<:AbstractString};
+            extra_env::AbstractDict{<:AbstractString, <:AbstractString},
+        )
+        proc, out = _run_kit_setup(;
+            setup_args = vcat(
+                ["ship-tree", "--deploy-root", remote_root],
+                String[string(h) for h in setup_hosts],
+            ),
+            project_root = proj,
+            extra_env = extra_env,
+        )
+        _assert_ssh_e2e_ok(suite, slug, proc, out; project = proj, kit = :setup)
         return nothing
     end
 
@@ -489,6 +502,8 @@ if !isdefined(Main, :_ssh_e2e_enabled)
             .distsshkit/
             output/
             results/
+            go_cli_output/
+            go_api_output/
             """
         )
 
@@ -587,6 +602,17 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         )
         proc, out = _run_subprocess(push_cmd)
         _assert_proc_ok(proc, out; label = "ssh-e2e git push origin")
+        # Bare `HEAD` defaults to `master`; push may update `refs/heads/main` only.
+        ref_q = DistSSHRun.DistSSHBase._remote_sh_quote("refs/heads/$(branch)")
+        proc, out = _run_subprocess(
+            Cmd(
+                vcat(
+                    ssh_base,
+                    String[seed_host, "git --git-dir=$(bare) symbolic-ref HEAD $(ref_q)"]
+                )
+            )
+        )
+        _assert_proc_ok(proc, out; label = "ssh-e2e bare HEAD")
         return (; origin_controller = origin, origin_workers = _ssh_e2e_bare_ssh_from_workers(), branch)
     end
 

@@ -1531,6 +1531,31 @@ function _read_kit_hosts(output_dir::AbstractString)::Vector{String}
     return String[strip(line) for line in split(raw, '\n') if !isempty(strip(line))]
 end
 
+"""`kit.job` from `run_dir`, `output_dir`, or `log_dir` (detached ride/go split them)."""
+function _read_kit_job_id_for_reap(kp::DetachedProcess)::Union{Nothing, String}
+    for d in _kit_sidecar_dirs(kp.output_dir, kp.log_dir; run_dir = kp.run_dir)
+        raw = _read_kit_text_file(d, "kit.job")
+        if raw !== nothing && !isempty(strip(raw))
+            return strip(String(raw))
+        end
+    end
+    return nothing
+end
+
+"""Union of `kit.hosts` from every kit sidecar directory."""
+function _read_kit_hosts_for_reap(kp::DetachedProcess)::Vector{String}
+    seen = Set{String}()
+    out = String[]
+    for d in _kit_sidecar_dirs(kp.output_dir, kp.log_dir; run_dir = kp.run_dir)
+        for h in _read_kit_hosts(d)
+            h in seen && continue
+            push!(seen, h)
+            push!(out, h)
+        end
+    end
+    return out
+end
+
 # Wall clock for tagged `pkill` ssh. Connect timeout plus margin.
 # Not computed, and not taken from `interrupt_grace`.
 const _REAP_SSH_PHASE_S = 15.0
@@ -2494,9 +2519,8 @@ function terminate!(
     _require_nonnegative("grace", grace)
     seconds = _resolve_interrupt_grace(interrupt_grace)
     stop = _signal_ladder!(kp.process; interrupt_grace = seconds, grace = grace)
-    sidecar = something(kp.run_dir, kp.output_dir)
-    job_id = sidecar === nothing ? nothing : _read_kit_text_file(sidecar, "kit.job")
-    hosts = sidecar === nothing ? String[] : _read_kit_hosts(sidecar)
+    job_id = _read_kit_job_id_for_reap(kp)
+    hosts = _read_kit_hosts_for_reap(kp)
     _reap_tagged_workers!(job_id, hosts)
     return _persist_stop(wait(kp), stop; run_dir = kp.run_dir)
 end

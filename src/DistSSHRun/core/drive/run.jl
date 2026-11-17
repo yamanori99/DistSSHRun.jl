@@ -354,7 +354,7 @@ function _run_drive_parsed_specialized!(
     return try
         DistSSHRun._reset_run_provenance!(project_root_abs)
         DistSSHRun._clear_active_selection!()
-        DistSSHRun._clear_active_deploy_record!()
+        DistSSHRun._clear_active_deploy_record_unless_run_id!(snap_for_script)
         # Inside `_drive_frame`: this `finally` restores after `rmprocs`.
         return _with_drive_process!(proj_dir) do
             local release_output_dir_lock
@@ -576,7 +576,12 @@ function _run_drive_parsed_locked!(
         run_id = get(parsed, :run_id, nothing),
         remote_argv = remote_argv,
     )
-    DistSSHRun.assert_controller_environment_for_verify!(proj_dir)
+    snap_for_verify = get(parsed, :run_id, nothing)
+    if snap_for_verify isa AbstractString && !isempty(strip(snap_for_verify))
+        DistSSHRun.assert_controller_environment_for_shipped_run!(proj_dir)
+    else
+        DistSSHRun.assert_controller_environment_for_verify!(proj_dir)
+    end
     # git + cleanup + workers + wait + init + run + collect
     progress_steps = 7
     progress_ok = false
@@ -664,9 +669,15 @@ function _run_drive_parsed_locked!(
         launch_report = Ref{Union{Nothing, LaunchReport}}(nothing)
         successful_hosts = try
             _drive_kit_hosts_around_join!(hosts, kit_out, kit_log) do
+                bind_map = hosts_file_bind_overrides(
+                    parsed.cli_session;
+                    bind_overrides = get(parsed, :bind_overrides, Dict{String, String}()),
+                )
                 hosts_joined, report = add_drive_workers!(
                     hosts, head_workers, default_workers, julia_exe, proj_dir, script_path,
-                    project_root,
+                    project_root;
+                    bind_overrides = bind_map,
+                    run_id = get(parsed, :run_id, nothing),
                 )
                 launch_report[] = report
                 return hosts_joined

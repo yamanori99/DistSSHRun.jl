@@ -85,8 +85,9 @@ end
         env = ENV,
     ) -> RunJobConfig
 
-Precedence: CLI, then environment, then default. Per-host scope is reserved
-for placement file / machine-file ingest (phase 4).
+Precedence: CLI, then environment, then default. Per-host `bind` comes from
+TOML `[[hosts]]` rows when the host list uses `--hosts-file` or
+`DISTSSH_HOSTS_FILE`.
 """
 function resolve_run_job_config(;
         command::Symbol,
@@ -214,6 +215,7 @@ function print_run_job_dry_plan!(
         head_slots::Union{Nothing, Integer} = nothing,
         hosts_source::Union{Nothing, Symbol} = nothing,
         go_implicit_no_hosts::Bool = false,
+        bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
     )
     println(io, "# dry-run plan ($(cfg.command))")
     println(io, "project = ", repr(canonical_local_path(project)))
@@ -248,7 +250,21 @@ function print_run_job_dry_plan!(
         startswith(sk, "DIST") || startswith(sk, "JULIA") || continue
         println(io, "  ", _redact_env_key(sk))
     end
-    println(io, "# bind / per-host overrides: (machine file hook — phase 4)")
+    tunnel = ssh_tunnel_enabled()
+    println(io, "launch (per host):")
+    for host in hosts
+        h = String(host)
+        bind = resolved_bind_address(h, bind_overrides)
+        plan = validate_host_launch_plan(
+            h,
+            bind;
+            tunnel = tunnel,
+            unsafe_expose_port = cfg.unsafe_expose_port.value,
+            unsafe_all_to_all = cfg.unsafe_all_to_all.value,
+            topology_setting = cfg.topology.value,
+        )
+        println(io, "  ", format_host_launch_plan_line(plan))
+    end
     return nothing
 end
 
@@ -310,6 +326,7 @@ function finish_run_job_diagnostics!(
     else
         (0, false)
     end
+    bind_overrides = hosts_file_bind_overrides(cli)
     if cfg.dry_run.value
         resolved_workers = if command === :drive && hasproperty(parsed, :head_workers)
             Int(getproperty(parsed, :head_workers))
@@ -328,6 +345,7 @@ function finish_run_job_diagnostics!(
             head_slots = command === :go ? go_ls : nothing,
             hosts_source = hosts_source,
             go_implicit_no_hosts = go_implicit,
+            bind_overrides = bind_overrides,
         )
     end
     return 0

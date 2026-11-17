@@ -91,4 +91,35 @@ using Test
             @test DistSSHBase.split_hosts_csv(" 1*a, ,b ") == ["1*a", "b"]
         end
     end
+
+    @testset "toml hosts bind" begin
+        _with_tempdir() do tmp
+            path = joinpath(tmp, "hosts.toml")
+            write(
+                path,
+                """
+                [[hosts]]
+                name = "lab-a"
+
+                [[hosts]]
+                name = "lab-b"
+                bind = "10.0.0.5"
+                user = "alice"
+                """,
+            )
+            overrides = DistSSHBase.read_toml_host_bind_overrides(path)
+            @test overrides == Dict("alice@lab-b" => "10.0.0.5")
+            @test !isempty(overrides)
+            bad = joinpath(tmp, "bad.toml")
+            write(
+                bad,
+                """
+                [[hosts]]
+                name = "x"
+                bind = ""
+                """,
+            )
+            @test_throws ArgumentError DistSSHBase.read_toml_host_bind_overrides(bad)
+        end
+    end
 end

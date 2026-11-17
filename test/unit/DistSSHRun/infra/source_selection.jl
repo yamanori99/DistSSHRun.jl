@@ -30,6 +30,23 @@ function _workspace_member_layout!(root::AbstractString)
     return joinpath(root, "pkg")
 end
 
+function _snap_ssh_env(double::AbstractString)
+    return Dict{String, String}(
+        "DISTSSH_TEST" => "1",
+        "DISTSSH_TEST_SSH" => double,
+        "DISTSSH_TEST_POSIX_SHELL" => "1",
+        "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit"
+    )
+end
+
+function _write_complete_leaf!(root, id, hash)
+    leaf = joinpath(root, "runs", String(id))
+    mkpath(joinpath(leaf, "src"))
+    write(joinpath(leaf, "src", "Project.toml"), "name = \"SnapSel\"\n")
+    write(joinpath(leaf, "run.toml"), DistSSHRun._ship_run_leaf_complete_toml(hash))
+    return leaf
+end
+
 @testset "snapshot id validation" begin
     @test DistSSHRun.validate_run_id(_SNAP_ID_OLD) == _SNAP_ID_OLD
     @test_throws ArgumentError DistSSHRun.validate_run_id("../x")
@@ -69,21 +86,20 @@ end
     double = abspath(
         joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl")
     )
+    logical = "/__dsr_logical__"
     _with_tempdir() do state
-        remote = joinpath(state, "remote")
-        leaf = joinpath(remote, "runs", _SNAP_ID_OLD)
-        mkpath(joinpath(leaf, "src"))
-        write(joinpath(leaf, "src", "Project.toml"), "name = \"SnapSel\"\n")
-        write(joinpath(leaf, "run.toml"), DistSSHRun._ship_run_leaf_complete_toml(_SNAP_HASH_OLD))
-        deploy_dir = joinpath(remote, ".distssh")
+        roots = joinpath(state, "hosts")
+        host_fs = joinpath(roots, "child-1")
+        _write_complete_leaf!(host_fs, _SNAP_ID_OLD, _SNAP_HASH_OLD)
+        deploy_dir = joinpath(host_fs, ".distssh")
         mkpath(deploy_dir)
         write(
             joinpath(deploy_dir, "deploy.toml"),
             sprint(
                 TOML.print,
                 Dict(
-                    "schema_version" => 1,
-                    "deploy_id" => _SNAP_ID_OLD,
+                    "schema" => 1,
+                    "deploy_id" => _SNAP_HASH_OLD,
                     "mode" => "ship-tree",
                     "snapshot_id" => _SNAP_ID_OLD,
                     "content_tree_hash" => _SNAP_HASH_OLD
@@ -94,16 +110,17 @@ end
             _snap_project!(proj)
             DistSSHRun.clear_last_ship_record!(proj)
             DistSSHRun._clear_last_ship!()
-            env = Dict{String, String}(
-                "DISTSSH_TEST" => "1",
-                "DISTSSH_TEST_SSH" => double,
-                "DISTSSH_TEST_POSIX_SHELL" => "1",
-                "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit"
+            env = merge(
+                _snap_ssh_env(double),
+                Dict(
+                    "DISTSSH_TEST_SSH_LOGICAL_ROOT" => logical,
+                    "DISTSSH_TEST_SSH_HOST_ROOTS" => roots
+                )
             )
             try
                 withenv(env...) do
                     sel = DistSSHRun.resolve_source_selection(
-                        ["child-1"], remote, proj;
+                        ["child-1"], logical, proj;
                         skip_local_record = true
                     )
                     @test sel.run_id == _SNAP_ID_OLD
@@ -123,8 +140,14 @@ end
         kit = joinpath(env.env_dir, ".distssh")
         mkpath(kit)
         write(joinpath(kit, "last-snapshot.toml"), "schema_version = 1\nrun_id = \"x\"\n")
-        err = @test_throws ArgumentError DistSSHRun.read_last_ship_record(tmp)
-        @test occursin("schema_version", err.msg)
+        err = try
+            DistSSHRun.read_last_ship_record(tmp)
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("last-ship", sprint(showerror, err))
     end
 end
 
@@ -344,8 +367,9 @@ end
                 )
             )
         )
-        @test DistSSHRun.read_last_ship_record(proj) !== nothing
+        @test_throws ArgumentError DistSSHRun.read_last_ship_record(proj)
         DistSSHRun.clear_last_ship_record!(proj; deploy_root = "/deploy/a")
+        @test !isfile(joinpath(kit, "last-snapshot.toml"))
         @test DistSSHRun.read_last_ship_record(proj) === nothing
         DistSSHRun.forget_last_ship_default!(proj, "/deploy/b")
         @test DistSSHRun.read_last_ship_record(proj) === nothing
@@ -593,23 +617,6 @@ end
             end
         end
     end
-end
-
-function _snap_ssh_env(double::AbstractString)
-    return Dict{String, String}(
-        "DISTSSH_TEST" => "1",
-        "DISTSSH_TEST_SSH" => double,
-        "DISTSSH_TEST_POSIX_SHELL" => "1",
-        "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit"
-    )
-end
-
-function _write_complete_leaf!(root, id, hash)
-    leaf = joinpath(root, "runs", String(id))
-    mkpath(joinpath(leaf, "src"))
-    write(joinpath(leaf, "src", "Project.toml"), "name = \"SnapSel\"\n")
-    write(joinpath(leaf, "run.toml"), DistSSHRun._ship_run_leaf_complete_toml(hash))
-    return leaf
 end
 
 @testset "complete=true without required stamp fields is not selectable" begin
@@ -904,7 +911,7 @@ end
     end
 end
 
-@testset "setup --check does not claim success on incomplete snapshot" begin
+@testset "setup check removed; doctor does not claim success on incomplete snapshot" begin
     double = abspath(joinpath(@__DIR__, "..", "..", "..", "fixtures", "fake_snapshot_ssh.jl"))
     _with_tempdir() do state
         roots = joinpath(state, "hosts")
@@ -941,8 +948,6 @@ end
                                         DistSSHRun.setup(
                                             [
                                                 "check",
-                                                "--run-id", _SNAP_ID_OLD,
-                                                "--deploy-root", "/__dsr_logical__",
                                                 "child-1",
                                             ]
                                         )
@@ -952,7 +957,9 @@ end
                             flush(out_io)
                             flush(err_io)
                             shown = read(out_path, String) * read(err_path, String)
-                            @test code == 1
+                            @test code == 2
+                            @test occursin("setup check was removed in 0.2.0", shown)
+                            @test occursin("doctor --deploy", shown)
                             @test !occursin("All prerequisites met", shown)
                         end
                     end

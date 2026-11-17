@@ -48,6 +48,14 @@ function project_package_name(proj_dir::AbstractString)::Union{Nothing, String}
     end
 end
 
+"""`project_package_name` when `src/<name>.jl` exists (a loadable project module)."""
+function project_driver_package_name(proj_dir::AbstractString)::Union{Nothing, String}
+    name = project_package_name(proj_dir)
+    name === nothing && return nothing
+    src = joinpath(proj_dir, "src", string(name) * ".jl")
+    return isfile(src) ? name : nothing
+end
+
 """
     current_project_file(dir) -> Union{Nothing,String}
 

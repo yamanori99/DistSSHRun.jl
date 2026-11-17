@@ -22,8 +22,15 @@ function resolved_topology(env_val::AbstractString = get(ENV, "DISTSSH_TOPOLOGY"
     throw(ArgumentError("DISTSSH_TOPOLOGY must be auto or master_worker, got $(repr(env_val))"))
 end
 
-function topology_for_launch(; unsafe_all_to_all::Bool = false)::Symbol
-    t = resolved_topology()
+function topology_for_launch(;
+        unsafe_all_to_all::Bool = unsafe_all_to_all_active(),
+        topology_setting::Union{Nothing, AbstractString} = nothing,
+    )::Symbol
+    t = if topology_setting === nothing
+        resolved_topology()
+    else
+        resolved_topology(String(topology_setting))
+    end
     t === :auto && return unsafe_all_to_all ? :all_to_all : :master_worker
     unsafe_all_to_all && throw(
         ArgumentError(
@@ -38,6 +45,60 @@ function default_bind_address(host::AbstractString)::String
     return "127.0.0.1"
 end
 
+"""Loopback default, or a TOML hosts-file `bind` when `overrides` names the host."""
+function resolved_bind_address(
+        host::AbstractString,
+        overrides::AbstractDict{<:AbstractString, <:AbstractString},
+    )::String
+    h = String(host)
+    return haskey(overrides, h) ? String(strip(overrides[h])) : default_bind_address(h)
+end
+
+function _toml_bind_map_from_hosts_file(
+        hosts_file::Union{Nothing, AbstractString};
+        surface::Symbol = :cli,
+    )::Dict{String, String}
+    hosts_file === nothing && return Dict{String, String}()
+    path = canonical_local_path(String(strip(hosts_file)))
+    hosts_file_is_toml(path) || return Dict{String, String}()
+    return read_toml_host_bind_overrides(path; surface = surface)
+end
+
+"""
+Merge TOML `[[hosts]]` `bind` values with an optional `bind_overrides=` map.
+
+Conflicting values for the same SSH destination are rejected (no precedence
+guessing). Keys only in `bind_overrides=` are kept when absent from the file.
+"""
+function resolve_launch_bind_overrides(;
+        hosts_file::Union{Nothing, AbstractString} = nothing,
+        bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
+        surface::Symbol = :cli,
+    )::Dict{String, String}
+    from_file = if hosts_file === nothing
+        Dict{String, String}()
+    else
+        _toml_bind_map_from_hosts_file(hosts_file; surface = surface)
+    end
+    merged = copy(from_file)
+    for (host, bind) in bind_overrides
+        h = String(host)
+        b = String(strip(bind))
+        if haskey(from_file, h) && from_file[h] != b
+            throw(
+                ArgumentError(
+                    join_explained_message(
+                        "$(repr(h)): bind_overrides= $(repr(b)) conflicts with hosts file $(repr(from_file[h]))",
+                        "Hint: set per-host bind only in the TOML hosts file or only in bind_overrides=, not both",
+                    ),
+                ),
+            )
+        end
+        merged[h] = b
+    end
+    return merged
+end
+
 """
 Reject remote `tunnel=false` with loopback bind before launch.
 
@@ -47,7 +108,9 @@ function validate_host_launch_plan(
         host::AbstractString,
         bind::AbstractString;
         tunnel::Bool = ssh_tunnel_enabled(),
-        unsafe_expose_port::Bool = false,
+        unsafe_expose_port::Bool = unsafe_expose_port_active(),
+        unsafe_all_to_all::Bool = unsafe_all_to_all_active(),
+        topology_setting::Union{Nothing, AbstractString} = nothing,
     )::HostLaunchPlan
     h = String(host)
     b = String(strip(bind))
@@ -68,7 +131,10 @@ function validate_host_launch_plan(
             ),
         ),
     )
-    top = topology_for_launch(; unsafe_all_to_all = unsafe_all_to_all_active())
+    top = topology_for_launch(;
+        unsafe_all_to_all = unsafe_all_to_all,
+        topology_setting = topology_setting,
+    )
     return HostLaunchPlan(h, b, tunnel, top)
 end
 

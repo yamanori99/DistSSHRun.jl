@@ -28,7 +28,7 @@ is a usage error.
 Exactly one source applies:
 
 - `--hosts` CSV
-- `--hosts-file` (plain lines or TOML with `[[hosts]]` and required `name`)
+- `--hosts-file` (plain lines or TOML with `[[hosts]]`, required `name`, optional `bind`)
 - `--machine-file` (one token per line)
 
 `DISTSSH_HOSTS` / `DISTSSH_HOSTS_FILE` apply only when the CLI does not set a

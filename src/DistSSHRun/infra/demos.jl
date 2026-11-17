@@ -179,7 +179,7 @@ function _require_demo_family(family::Union{Nothing, AbstractString}; surface::S
         )
     end
     throw(
-        ArgumentError(
+        DistSSHBase.CliUsageError(
             "demo install requires $names (got $(family === nothing ? "none" : repr(fam)))",
         )
     )
@@ -281,14 +281,14 @@ function _demo_install_args(
             force = true
             cli_consume!(c)
         elseif startswith(arg, "-")
-            throw(ArgumentError("unknown option: $arg (supported: --dest DIR, --force)"))
+            throw(DistSSHBase.CliUsageError("unknown option: $arg (supported: --dest DIR, --force)"))
         else
             push!(families, arg)
             cli_consume!(c)
         end
     end
     length(families) > 1 && throw(
-        ArgumentError(
+        DistSSHBase.CliUsageError(
             "demo install takes one family (with_kit, without_kit, or ride); got extra $(repr(families[2]))",
         )
     )
@@ -369,13 +369,13 @@ function demo(args::Vector{String} = copy(ARGS))::Cint
                 path === nothing && continue
                 println(name, "\t", path)
             end
-            return 0
+            return Cint(0)
         elseif sub == "install"
             try
                 dest, force, family = _demo_install_args(rest)
                 if isempty(list_demos())
                     print_cli_error("No demo scripts found in package ($(demos_dir()))")
-                    return 1
+                    return Cint(1)
                 end
                 result = install_demos(dest; family = family, force = force, surface = :cli)
                 for path in result.installed
@@ -397,10 +397,11 @@ function demo(args::Vector{String} = copy(ARGS))::Cint
                     println("  julia --project=. $rel_demos/without_kit/pipeline_pi.jl")
                     println("  $(cli_m_project()) go $rel_demos/without_kit/pi_file.jl")
                 end
-                return 0
+                return Cint(0)
             catch err
+                err isa DistSSHBase.CliUsageError && rethrow()
                 print_cli_error(sprint(showerror, err))
-                return 1
+                return Cint(1)
             end
         else
             throw(

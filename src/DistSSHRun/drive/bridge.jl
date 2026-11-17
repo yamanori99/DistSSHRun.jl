@@ -18,6 +18,7 @@ function drive_parsed_from_session(
         allow_external_symlinks::Bool = false,
         run_id::Union{Nothing, AbstractString} = nothing,
         unsafe_master_silence_exit::Union{Nothing, Bool} = nothing,
+        bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
     )
     _reject_removed_drive_worker_include_kw!(sync_script)
     _reject_run_transfer_kw!("drive!", sync; surface = hint_surface(session))
@@ -84,5 +85,6 @@ function drive_parsed_from_session(
         unsafe_master_silence_exit = unsafe_master_silence_exit === nothing ?
             missing :
             unsafe_master_silence_exit,
+        bind_overrides = Dict{String, String}(String(k) => String(v) for (k, v) in bind_overrides),
     )
 end
