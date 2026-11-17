@@ -29,6 +29,7 @@ const _CLUSTER_MANAGER_PUBLIC_UNEXPORTED = (
     :resolve_run_job_config_from_parsed,
     :run_option_table,
     :options_for_command,
+    :OptionRow,
     :unsafe_skip_env_digests_active,
     :unsafe_expose_port_active,
     :unsafe_all_to_all_active,
@@ -39,7 +40,26 @@ const _CLUSTER_MANAGER_PUBLIC_UNEXPORTED = (
     :with_unsafe_all_to_all,
     :DriveJobOptions,
     :resolved_placement_tokens,
+    :HostLaunchPlan,
+    :resolve_launch_bind_overrides,
+    :hosts_file_bind_overrides,
+    :resolved_bind_address,
+    :validate_host_launch_plan,
+    :format_host_launch_plan_line,
+    :topology_for_launch,
+    :resolved_topology,
+    :default_bind_address,
 )
+
+const _RUN_OPTION_TABLE_KEYS = Set{Symbol}([
+    :unsafe_skip_env_digests,
+    :unsafe_expose_port,
+    :unsafe_all_to_all,
+    :unsafe_master_silence_exit,
+    :print_config,
+    :dry_run,
+    :topology,
+])
 
 @testset "cluster manager API freeze" begin
     for sym in _CLUSTER_MANAGER_EXPORTS
@@ -91,6 +111,33 @@ const _CLUSTER_MANAGER_PUBLIC_UNEXPORTED = (
         DistSSHRun.FailedToLoad,
     )
     @test DistSSHRun.SEED_SCHEME === 1
+
+    @test fieldnames(DistSSHRun.OptionRow) ===
+        (:key, :cli, :env, :kwarg, :default, :commands, :help, :unsafe, :valued)
+    @test fieldnames(DistSSHRun.HostLaunchPlan) === (:host, :bind, :tunnel, :topology)
+    @test Set(r.key for r in DistSSHRun.run_option_table()) == _RUN_OPTION_TABLE_KEYS
+    top_row = DistSSHRun.option_row_by_key(:topology)
+    @test top_row !== nothing
+    @test top_row.env == "DISTSSH_TOPOLOGY"
+    @test top_row.cli === nothing
+    @test top_row.kwarg === :topology
+    @test DistSSHRun.resolved_topology("auto") === :auto
+    @test DistSSHRun.resolved_topology("master_worker") === :master_worker
+    @test DistSSHRun.resolved_topology("master-worker") === :master_worker
+    plan = DistSSHRun.validate_host_launch_plan(
+        "lab",
+        "127.0.0.1";
+        tunnel = true,
+        unsafe_expose_port = false,
+        unsafe_all_to_all = false,
+        topology_setting = "auto",
+    )
+    @test plan.host == "lab"
+    @test plan.bind == "127.0.0.1"
+    @test plan.tunnel === true
+    @test plan.topology === :master_worker
+    @test DistSSHRun.format_host_launch_plan_line(plan) ==
+        "lab: topology=master_worker bind=127.0.0.1 tunnel=true"
 
     rows = DistSSHRun.run_option_table()
     unsafe_shared = Set{Symbol}()
@@ -148,5 +195,33 @@ const _CLUSTER_MANAGER_PUBLIC_UNEXPORTED = (
         @test fr["outcome"] == "FailedToConnect"
     finally
         DistSSHRun._PROVENANCE_LAUNCH[] = nothing
+    end
+
+    DistSSHRun.reset_worker_seeds!()
+    DistSSHRun.reset_launch_rank_plan!([1, 2])
+    try
+        withenv("DISTSSH_JOB_SEED" => "42") do
+            DistSSHRun.job_seed()
+            r1 = DistSSHRun.take_worker_rank()
+            r2 = DistSSHRun.take_worker_rank()
+            DistSSHRun.register_launch_rank!(100, r1)
+            DistSSHRun.register_launch_rank!(200, r2)
+        end
+        prov = DistSSHRun.assemble_provenance()
+        seeds = get(prov, "seeds", nothing)
+        @test seeds isa AbstractDict
+        @test seeds["scheme"] == DistSSHRun.SEED_SCHEME
+        @test haskey(seeds, "job")
+        @test seeds["job"] == "42"
+        @test haskey(seeds, "job_domain")
+        workers = seeds["workers"]
+        @test workers isa AbstractVector
+        @test length(workers) == 2
+        @test Set(keys(workers[1])) == Set(["rank", "seed"])
+        @test workers[1]["rank"] == 1
+        @test workers[2]["rank"] == 2
+        @test all(isa(w["seed"], AbstractString) for w in workers)
+    finally
+        DistSSHRun.reset_worker_seeds!()
     end
 end

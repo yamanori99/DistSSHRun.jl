@@ -27,6 +27,17 @@ using Unicode
 #   argv wrappers `go` / `drive` stay unexported (`main` / tests)
 export worker_pmap
 export worker_seed
+export LaunchReport
+export WorkerLaunchOutcome
+export LaunchIncompleteError
+export launch_report_planned
+export launch_report_joined
+export launch_report_failures
+export launch_report_usable
+export launch_rank
+export SEED_SCHEME
+export seed_mix
+export job_item_seed
 export DistSSHSession
 export HostResult
 export SyncResult
@@ -95,10 +106,7 @@ export julia_default_sysimage_path
 export julia_sysimage_is_default
 export resolve_pkg_env
 export explain_script_not_found
-# Public-only until DistSSHKit `_KNOWN_KIT_EXPORTS` catches up.
-public DoctorReport, LaunchIncompleteError, LaunchReport, SEED_SCHEME, WorkerLaunchOutcome
-public doctor!, job_item_seed, launch_rank, launch_report_failures, launch_report_joined
-public launch_report_planned, launch_report_usable, parse_doctor_args, seed_mix
+public DoctorReport, doctor!, parse_doctor_args
 # Display helpers stay public and are not exported. DistSSHKit 0.11 drops them.
 public print_pool
 public print_hostinfo

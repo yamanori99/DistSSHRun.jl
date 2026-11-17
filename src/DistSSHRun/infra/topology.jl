@@ -7,7 +7,12 @@ function _is_loopback_bind(addr::AbstractString)::Bool
     return a in _LOOPBACK_BINDS || startswith(a, "127.")
 end
 
-"""Per-host SSH launch view (bind + tunnel + topology)."""
+"""
+Per-host SSH launch view (bind address, tunnel flag, resolved topology).
+
+Built by [`validate_host_launch_plan`](@ref). Field names are API for 0.2.0:
+`host`, `bind`, `tunnel`, `topology` (`:master_worker` or `:all_to_all`).
+"""
 struct HostLaunchPlan
     host::String
     bind::String
@@ -15,6 +20,11 @@ struct HostLaunchPlan
     topology::Symbol
 end
 
+"""
+Resolve `DISTSSH_TOPOLOGY` (`auto` or `master_worker`; env may spell `master-worker`).
+
+Throws `ArgumentError` on any other value.
+"""
 function resolved_topology(env_val::AbstractString = get(ENV, "DISTSSH_TOPOLOGY", "auto"))::Symbol
     v = lowercase(String(strip(env_val)))
     v == "auto" && return :auto
@@ -22,6 +32,10 @@ function resolved_topology(env_val::AbstractString = get(ENV, "DISTSSH_TOPOLOGY"
     throw(ArgumentError("DISTSSH_TOPOLOGY must be auto or master_worker, got $(repr(env_val))"))
 end
 
+"""
+Effective Distributed topology for launch: `auto` → `master_worker` or `all_to_all`
+when [`unsafe_all_to_all_active`](@ref); fixed `master_worker` rejects `unsafe_all_to_all`.
+"""
 function topology_for_launch(;
         unsafe_all_to_all::Bool = unsafe_all_to_all_active(),
         topology_setting::Union{Nothing, AbstractString} = nothing,
@@ -142,3 +156,6 @@ end
 function format_host_launch_plan_line(plan::HostLaunchPlan)::String
     return "$(plan.host): topology=$(plan.topology) bind=$(plan.bind) tunnel=$(plan.tunnel)"
 end
+
+public HostLaunchPlan, default_bind_address, format_host_launch_plan_line, resolve_launch_bind_overrides
+public resolved_bind_address, resolved_topology, topology_for_launch, validate_host_launch_plan

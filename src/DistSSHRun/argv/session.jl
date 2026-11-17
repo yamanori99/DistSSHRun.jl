@@ -683,6 +683,8 @@ function hosts_file_bind_overrides(
     )
 end
 
+public hosts_file_bind_overrides
+
 function append_hosts_file!(hosts::Vector{String}, session::CliSharedFlags)
     hosts_file = session.hosts_file
     hosts_file === nothing && return hosts
