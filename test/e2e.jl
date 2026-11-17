@@ -619,6 +619,15 @@ end
             @test !occursin("Total:", out)
         end
 
+        _ssh_e2e_ship_tree_after_local_change!(
+            suite,
+            "setup_ship_tree_before_drive",
+            proj,
+            remote_root,
+            setup_hosts;
+            extra_env = _e2e_base_env(),
+        )
+
         @testset "drive square_echo two remotes" begin
             _e2e_announce("drive square_echo two remotes")
             proc, out = _run_kit_drive(;
@@ -867,6 +876,15 @@ end
                 )
             end
         end
+
+        _ssh_e2e_ship_tree_after_local_change!(
+            suite,
+            "setup_ship_tree_before_ride",
+            proj,
+            remote_root,
+            setup_hosts;
+            extra_env = _e2e_base_env(),
+        )
 
         # Ride progress stdout is buffered then replayed after
         # `kit_progress_done!` (unlike drive `--no-log` live). Success must

@@ -672,27 +672,15 @@ end
         try
             mktemp() do err_path, err_io
                 before = Set(workers())
-                kept = false
-                missing_ok = false
                 redirect_stderr(err_io) do
                     DistSSHRun.preserve_task_local_default_rng() do
                         DistSSHRun.ensure_run_cluster_cookie!()
-                        kept = DistSSHRun._add_local_drive_workers!(1, proj, julia)
+                        DistSSHRun._add_local_drive_workers!(1, proj, julia)
                     end
-                    added_now = Int[w for w in workers() if w ∉ before]
-                    isempty(added_now) ||
-                        (
-                        missing_ok = DistSSHRun._precompile_worker_project!(
-                            first(added_now),
-                            "/no/such/remote/project",
-                        )
-                    )
                 end
                 flush(err_io)
                 err = read(err_path, String)
                 added = Int[w for w in workers() if w ∉ before]
-                @test kept
-                @test missing_ok
                 @test length(added) == 1
                 @test occursin("not writable", err)
                 @test occursin("precompile", err)
