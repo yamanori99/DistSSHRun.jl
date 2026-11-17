@@ -602,6 +602,21 @@ end
             @test !occursin("Total:", out)
         end
 
+        # Setup steps may touch the controller tree (logs, vendor, Pkg). Re-ship so
+        # `assert_controller_shipped_tree_current!` matches the active deploy record.
+        @testset "setup ship-tree resync before drive" begin
+            _e2e_announce("setup ship-tree resync before drive")
+            proc, out = _run_kit_setup(;
+                setup_args = ["ship-tree", "--deploy-root", remote_root, setup_hosts...],
+                project_root = proj,
+                extra_env = _e2e_base_env()
+            )
+            _assert_ssh_e2e_ok(
+                suite, "setup_ship_tree_before_drive", proc, out;
+                project = proj, kit = :setup
+            )
+        end
+
         @testset "drive square_echo two remotes" begin
             _e2e_announce("drive square_echo two remotes")
             proc, out = _run_kit_drive(;
@@ -1585,6 +1600,15 @@ end
                 extra_env = git_env
             )
             _assert_ssh_e2e_ok(suite, "git_instantiate", proc, out; project = proj, kit = :setup)
+
+            # Long ship-path suite may advance the controller git commit after the bare
+            # push; sync workers to the current local HEAD before the first deploy check.
+            proc, out = _run_kit_setup(;
+                setup_args = ["git-sync", "--deploy-root", git_root, setup_hosts...],
+                project_root = proj,
+                extra_env = merge(git_env, Dict("DISTSSH_QUIET" => "0"))
+            )
+            _assert_ssh_e2e_ok(suite, "git_sync_before_check", proc, out; project = proj, kit = :setup)
 
             proc, out = _run_kit_setup(;
                 command = "doctor",
