@@ -1,4 +1,4 @@
-# Placement and host lists
+# [Placement and host lists](@id Placement)
 
 Worker placement uses **machine tokens** shared by `--hosts`, hosts files, and
 `--machine-file`:

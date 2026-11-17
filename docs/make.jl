@@ -24,6 +24,7 @@ makedocs(;
         "Home" => "index.md",
         "CLI" => "cli.md",
         "Options" => "options.md",
+        "Placement" => "placement.md",
         "Common errors" => "common_errors.md",
         "API" => "api.md",
     ],
