@@ -23,11 +23,15 @@ end
 """Return whether a trivial `ssh YourHost true` succeeds."""
 function _remote_ssh_ok(host::String)::Bool
     try
-        run_ssh(
-            pipeline(_host_sync_remote_shell_cmd(host, "true"); stdout = devnull, stderr = devnull);
+        proc = run_ssh(
+            pipeline(
+                ignorestatus(_host_sync_remote_shell_cmd(host, "true"));
+                stdout = devnull,
+                stderr = devnull,
+            );
             wait = true,
         )
-        return true
+        return DistSSHBase.shell_status(proc) == 0
     catch e
         _rethrow_missing_host_tool(e)
         return false
