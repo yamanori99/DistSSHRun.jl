@@ -186,7 +186,9 @@ end
 
 function _pipeline_run!(config::PipelineConfig, session::DistSSHSession, driver::String)
     sync_result = nothing
-    lw = something(session.cli_session.head_workers, config.head_workers)
+    # Julia 1.13 `something` throws when every argument is `nothing`.
+    # `Some(nothing)` is the documented fallback for "unset".
+    lw = something(session.cli_session.head_workers, config.head_workers, Some(nothing))
     plan = if isempty(session.tokens) && lw === nothing
         WorkerPlan()
     else

@@ -502,6 +502,8 @@ if !isdefined(Main, :_ssh_e2e_enabled)
             .distsshkit/
             output/
             results/
+            go_cli_output/
+            go_api_output/
             """
         )
 

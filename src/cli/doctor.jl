@@ -58,8 +58,10 @@ if !isdefined(@__MODULE__, :doctor_main)
             return Cint(2)
         end
 
-        project = pwd()
-        path_anchor = project
+        # Same root as setup / drive. `pwd()` ignored DISTRIBUTED_PROJECT_ROOT,
+        # so doctor checked the kit checkout while git-sync checked the app.
+        project = String(DistSSHRun.cli_project_root(@__DIR__))
+        path_anchor = DistSSHRun.canonical_local_path(project)
         remote_path = DistSSHRun.resolve_remote_project_root(
             project;
             cli_override = opts.deploy_root,
