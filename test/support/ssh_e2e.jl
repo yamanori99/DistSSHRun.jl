@@ -398,36 +398,32 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         """
     end
 
-    # Overwrite `test/runtests.jl` on each remote work root (after ship-tree).
-    function _ssh_e2e_push_job_runtests!(
-            hosts,
-            remote_root::AbstractString;
-            fail::Bool = false
+    """Write job `test/runtests.jl` on the controller project (never on a shipped remote tree)."""
+    function _ssh_e2e_write_job_runtests!(proj::AbstractString; fail::Bool = false)
+        proj = abspath(proj)
+        mkpath(joinpath(proj, "test"))
+        write(joinpath(proj, "test", "runtests.jl"), _ssh_e2e_job_runtests_src(; fail = fail))
+        return nothing
+    end
+
+    """Ship the controller tree after a local change so deploy record and hash stay aligned."""
+    function _ssh_e2e_ship_tree_after_local_change!(
+            suite::SshE2ESuite,
+            slug::AbstractString,
+            proj::AbstractString,
+            remote_root::AbstractString,
+            setup_hosts::AbstractVector{<:AbstractString};
+            extra_env::AbstractDict{<:AbstractString, <:AbstractString},
         )
-        g = _docker_ssh_generated()
-        src = _ssh_e2e_job_runtests_src(; fail = fail)
-        mktemp() do path, io
-            write(io, src)
-            flush(io)
-            for host in hosts
-                work = _ssh_e2e_work_root(host, remote_root)
-                mkdir_proc, mkdir_out = _ssh_e2e_ssh(host, "mkdir -p $(work)/test")
-                _assert_proc_ok(mkdir_proc, mkdir_out; label = "mkdir job test $(host)")
-                dest = "$(work)/test/runtests.jl"
-                # Shipped trees mark regular files `0444`; drop the file before scp overwrite.
-                rm_proc, rm_out = _ssh_e2e_ssh(host, "rm -f $(dest)")
-                _assert_proc_ok(rm_proc, rm_out; label = "rm job runtests $(host)")
-                proc, out = _run_subprocess(
-                    Cmd(
-                        [
-                            "scp", "-F", g.ssh_config, path,
-                            "$(host):$(dest)",
-                        ]
-                    )
-                )
-                _assert_proc_ok(proc, out; label = "scp job runtests $(host)")
-            end
-        end
+        proc, out = _run_kit_setup(;
+            setup_args = vcat(
+                ["ship-tree", "--deploy-root", remote_root],
+                String[string(h) for h in setup_hosts],
+            ),
+            project_root = proj,
+            extra_env = extra_env,
+        )
+        _assert_ssh_e2e_ok(suite, slug, proc, out; project = proj, kit = :setup)
         return nothing
     end
 

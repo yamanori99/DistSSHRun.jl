@@ -1,4 +1,4 @@
 category: fixed
 
-- SSH E2E: remove remote `test/runtests.jl` before scp so `0444` shipped files can be replaced.
-- SSH E2E: re-ship after setup phase so controller `content_tree_hash` matches deploy record before drive jobs (0.2.0 shipped-tree verify).
+- SSH E2E: change job `test/runtests.jl` on the controller and redeploy with `setup ship-tree` instead of scp/rm on shipped remote trees.
+- SSH E2E: add a unit guard that harness helpers do not scp or rm into `runs/*/src` ship paths.

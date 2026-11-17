@@ -132,6 +132,7 @@ end
             _runtest_include("unit/DistSSHRun/infra/ship_fake_ssh_child_env.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "ship_fake_ssh_child_env.jl"))
             _runtest_include("unit/DistSSHRun/infra/ship_dest.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "ship_dest.jl"))
             _runtest_include("unit/DistSSHRun/infra/ship_engine_contract.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "ship_engine_contract.jl"))
+            _runtest_include("unit/DistSSHRun/ssh_e2e_ship_contract.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "ssh_e2e_ship_contract.jl"))
             if !_distsshrun_short_skip("unit/DistSSHRun/core/setup/send_list.jl")
                 _runtest_include("unit/DistSSHRun/core/setup/send_list.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "setup", "send_list.jl"))
             else
