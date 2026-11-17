@@ -774,7 +774,8 @@ function _ride_run!(
         assert_controller_environment_for_verify!(project_root_abs)
     end
     _reset_run_provenance!(project_root_abs)
-    _clear_last_ship!()
+    _clear_active_selection!()
+    _clear_active_deploy_record_unless_run_id!(run_id)
     tok = String[String(t) for t in tokens]
     wp = try
         _ride_resolve_plan(tok; head_workers = head_workers)
