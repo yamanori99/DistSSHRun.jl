@@ -514,7 +514,7 @@ function _precompile_worker_project!(wid::Int, project::AbstractString)::Bool
             p,
             "project directory is not writable; precompile not attempted",
         )
-        return false
+        return true
     end
     try
         remotecall_wait(Core.eval, wid, Main, _WORKER_PKG_PRECOMPILE_EXPR)

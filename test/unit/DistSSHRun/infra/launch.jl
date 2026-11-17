@@ -682,6 +682,7 @@ end
                 err = read(err_path, String)
                 added = Int[w for w in workers() if w ∉ before]
                 @test length(added) == 1
+                @test DistSSHRun._precompile_worker_project!(first(added), proj)
                 @test occursin("not writable", err)
                 @test occursin("precompile", err)
                 @test occursin(proj, err)
