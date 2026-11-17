@@ -92,6 +92,20 @@ function _ride_reset_runtime!(; spi_check::Bool)
     _RIDE_DEPTH[] = 0
     _RIDE_SPI[] = spi_check
     _RIDE_SPI_OK[] = nothing
+    _LOADED_VERIFIED_WORKER_IDS[] = nothing
+    return nothing
+end
+
+"""Drop workers from other jobs/tests so a fresh ride launch can ping only its own."""
+function _ride_evict_foreign_workers!()
+    owned = Set(_drive_owned_worker_ids())
+    for w in Int[Int(x) for x in workers() if x != 1]
+        w ∈ owned && continue
+        try
+            w in workers() && rmprocs(w; waitfor = 2.0)
+        catch
+        end
+    end
     return nothing
 end
 
@@ -484,12 +498,16 @@ function _ride_add_workers!(
         project::AbstractString,
         script_path::AbstractString,
         julia,
-        best_effort::Bool;
+        best_effort::Bool,
+        run_id::Union{Nothing, AbstractString} = nothing;
         bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
     )::Tuple{Vector{Int}, Vector{String}}
     before = Set(workers())
     ssh_hosts = String[]
     try
+        _clear_drive_host_worker_ids!()
+        empty!(RUNNER_WORKER_PROJECT_DIRS)
+        empty!(RUNNER_WORKER_SCRIPT_PATHS)
         _require_drive_host_status_idle!()
         child_hosts = Tuple{String, Union{Int, Nothing}}[
             (String(h), Int(n)) for (h, n) in plan.child_workers if n > 0
@@ -497,9 +515,14 @@ function _ride_add_workers!(
         if isempty(child_hosts)
             n = plan.head_workers
             if n > 0
+                plan_ranks = build_launch_rank_plan(n, child_hosts, 1)
+                reset_launch_rank_plan!(plan_ranks)
                 preserve_task_local_default_rng() do
                     ensure_run_cluster_cookie!()
-                    _add_local_drive_workers!(n, project, pin_local_julia(nothing))
+                    _add_local_drive_workers!(
+                        n, project, pin_local_julia(nothing);
+                        verify_project = run_id === nothing,
+                    )
                 end
             end
         else
@@ -518,6 +541,7 @@ function _ride_add_workers!(
                 String(script_path),
                 String(project);
                 bind_overrides = bind_overrides,
+                run_id = run_id,
             )
             ssh_hosts = String[String(h) for h in successful]
             if !best_effort
@@ -533,17 +557,23 @@ function _ride_add_workers!(
                     )
                 end
             end
+        end
+        added = Int[w for w in workers() if w ∉ before]
+        if !isempty(added)
             wait_for_worker_connections!(; ssh = !isempty(child_hosts))
             _ride_init_drive_workers!(project)
         end
-        added = Int[w for w in workers() if w ∉ before]
         if isempty(child_hosts) && !isempty(added)
             _mark_workers_launched!(added, project)
             _register_drive_host_worker_ids!(PARENT_HOST_NAME, added)
         end
         isempty(added) || _ride_load_self_on_workers!()
         if isempty(child_hosts) && !isempty(added)
-            verify_workers_match_job!(project)
+            if run_id === nothing
+                verify_workers_match_job!(project)
+            else
+                verify_workers_match_shipped_run!(project; run_id = run_id)
+            end
             assert_loaded_verified_worker_set!()
         end
         capture_worker_provenance!()
@@ -748,9 +778,14 @@ function _ride_run!(
     # `ride!` restores `DISTSSH_RUN_DIR` after this returns.
     run_dir = kit_run_dir()
     project_root_abs = canonical_local_path(project)
-    assert_controller_environment_for_verify!(project_root_abs)
+    if run_id !== nothing
+        assert_controller_environment_for_shipped_run!(project_root_abs)
+    else
+        assert_controller_environment_for_verify!(project_root_abs)
+    end
     _reset_run_provenance!(project_root_abs)
-    _clear_last_ship!()
+    _clear_active_selection!()
+    _clear_active_deploy_record_unless_run_id!(run_id)
     tok = String[String(t) for t in tokens]
     wp = try
         _ride_resolve_plan(tok; head_workers = head_workers)
@@ -824,8 +859,9 @@ function _ride_run!(
         progress_started = true
         kit_progress_step!("workers")
         _ride_activate_project!(project)
+        _ride_evict_foreign_workers!()
         added, ssh_hosts = _ride_add_workers!(
-            wp, project, path, julia, best_effort; bind_overrides = bind_overrides,
+            wp, project, path, julia, best_effort, run_id; bind_overrides = bind_overrides,
         )
         _write_kit_hosts_file(ssh_hosts, batch_dir, nothing)
         _write_joined_drive_host_status!(

@@ -31,35 +31,6 @@ using Distributed
 using Logging
 using DistSSHRun
 
-# The product warning stays. This suite drops only that line while `terminate!`
-# reaps the detached ride, so a missed `pkill` ssh does not print.
-struct _DropTaggedPkillWarn <: AbstractLogger
-    logger::AbstractLogger
-end
-
-function Logging.handle_message(
-        l::_DropTaggedPkillWarn,
-        level,
-        message,
-        _module,
-        group,
-        id,
-        filepath,
-        line;
-        kwargs...
-    )
-    if level == Logging.Warn && occursin("Tagged worker pkill did not reach", string(message))
-        return nothing
-    end
-    return Logging.handle_message(
-        l.logger, level, message, _module, group, id, filepath, line; kwargs...
-    )
-end
-
-Logging.shouldlog(l::_DropTaggedPkillWarn, args...) = Logging.shouldlog(l.logger, args...)
-Logging.min_enabled_level(l::_DropTaggedPkillWarn) = Logging.min_enabled_level(l.logger)
-Logging.catch_exceptions(l::_DropTaggedPkillWarn) = Logging.catch_exceptions(l.logger)
-
 # Same include shape as `test/runtests.jl` so JETLS follows it. Do not route
 # through a non-`const` `kit_root` (JETLS then skips the include).
 include(joinpath(@__DIR__, "support.jl"))
@@ -570,12 +541,21 @@ end
 
         @testset "setup runtest fails when job tests fail" begin
             _e2e_announce("setup runtest fails when job tests fail")
+            runtest_env = merge(_e2e_base_env(), Dict("DISTSSH_QUIET" => "0"))
             try
-                _ssh_e2e_push_job_runtests!(hosts, remote_root; fail = true)
+                _ssh_e2e_commit_job_runtests!(proj; fail = true, message = "e2e job runtests fail")
+                _ssh_e2e_ship_tree_after_local_change!(
+                    suite,
+                    "setup_ship_tree_job_runtests_fail",
+                    proj,
+                    remote_root,
+                    setup_hosts;
+                    extra_env = _e2e_base_env(),
+                )
                 proc, out = _run_kit_setup(;
                     setup_args = ["runtest", "--deploy-root", remote_root, setup_hosts...],
                     project_root = proj,
-                    extra_env = merge(_e2e_base_env(), Dict("DISTSSH_QUIET" => "0"))
+                    extra_env = runtest_env,
                 )
                 _ssh_e2e_record!(
                     suite, "setup_runtest_fail", proc, out;
@@ -583,7 +563,15 @@ end
                 )
                 @test proc.exitcode != 0
             finally
-                _ssh_e2e_push_job_runtests!(hosts, remote_root; fail = false)
+                _ssh_e2e_commit_job_runtests!(proj; fail = false, message = "e2e job runtests pass")
+                _ssh_e2e_ship_tree_after_local_change!(
+                    suite,
+                    "setup_ship_tree_job_runtests_pass",
+                    proj,
+                    remote_root,
+                    setup_hosts;
+                    extra_env = _e2e_base_env(),
+                )
             end
         end
 
@@ -601,6 +589,15 @@ end
             @test occursin("Hostinfo:", out)
             @test !occursin("Total:", out)
         end
+
+        _ssh_e2e_ship_tree_after_local_change!(
+            suite,
+            "setup_ship_tree_before_drive",
+            proj,
+            remote_root,
+            setup_hosts;
+            extra_env = _e2e_base_env(),
+        )
 
         @testset "drive square_echo two remotes" begin
             _e2e_announce("drive square_echo two remotes")
@@ -850,6 +847,15 @@ end
                 )
             end
         end
+
+        _ssh_e2e_ship_tree_after_local_change!(
+            suite,
+            "setup_ship_tree_before_ride",
+            proj,
+            remote_root,
+            setup_hosts;
+            extra_env = _e2e_base_env(),
+        )
 
         # Ride progress stdout is buffered then replayed after
         # `kit_progress_done!` (unlike drive `--no-log` live). Success must
@@ -1498,9 +1504,13 @@ end
             @test workers_ready
             @test !isempty(pids)
 
-            result = with_logger(_DropTaggedPkillWarn(current_logger())) do
-                DistSSHRun.terminate!(kp; grace = 15)
+            logger = Test.TestLogger()
+            result = with_logger(logger) do
+                withenv(_e2e_base_env()...) do
+                    DistSSHRun.terminate!(kp; grace = 15)
+                end
             end
+            @test !any(r -> occursin("did not reach", string(r.message)), logger.logs)
             @test result isa DistSSHRun.DistSSHJobResult
             @test result.kind === :ride
             @test !process_running(kp.process)
@@ -1577,6 +1587,18 @@ end
             )
             _assert_ssh_e2e_ok(suite, "git_clone", proc, out; project = proj, kit = :setup)
 
+            for host in setup_hosts
+                probe, _ = _ssh_e2e_ssh(host, "test -f $(git_root)/Project.toml")
+                code = probe.exitcode
+                _assert_ssh_e2e_api_ok(
+                    suite,
+                    "git_clone_project_toml",
+                    code == 0,
+                    "host=$(host) code=$(code)",
+                )
+                @test code == 0
+            end
+
             proc, out = _run_kit_setup(;
                 setup_args = [
                     "instantiate", "--deploy-root", git_root, setup_hosts...,
@@ -1585,6 +1607,14 @@ end
                 extra_env = git_env
             )
             _assert_ssh_e2e_ok(suite, "git_instantiate", proc, out; project = proj, kit = :setup)
+
+            # Long ship-path setup may advance the controller commit after the bare push.
+            proc, out = _run_kit_setup(;
+                setup_args = ["git-sync", "--deploy-root", git_root, setup_hosts...],
+                project_root = proj,
+                extra_env = merge(git_env, Dict("DISTSSH_QUIET" => "0"))
+            )
+            _assert_ssh_e2e_ok(suite, "git_sync_before_check", proc, out; project = proj, kit = :setup)
 
             proc, out = _run_kit_setup(;
                 command = "doctor",

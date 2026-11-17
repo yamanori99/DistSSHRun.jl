@@ -1739,11 +1739,13 @@ function _remote_extract_tar!(
         julia_bin::AbstractString;
         allow_external_symlinks::Bool = false,
         expect_hash::AbstractString = "",
+        executable_ship_rels::Union{Nothing, AbstractVector{<:AbstractString}} = nothing,
     )
     DistSSHShip.extract_verified!(
         host, src, tar_path, julia_bin;
         allow_external_symlinks = allow_external_symlinks,
         expect_hash = expect_hash,
+        executable_ship_rels = executable_ship_rels,
     )
     sq = _remote_shell_path_word(src)
     filled, _ = _remote_shell_status(
@@ -1784,6 +1786,7 @@ function _ship_run_tree_one_host!(
             h, checked, snap.tar_path, julia_bin;
             allow_external_symlinks = allow_external_symlinks,
             expect_hash = expect_hash,
+            executable_ship_rels = snap.executable_ship_rels,
         )
     end
 
@@ -2029,6 +2032,7 @@ function _ship_tree_to_hosts!(
             pack.content_tree_hash;
             project_rel = pack.project_rel,
             content_file_digests = digest_rows,
+            executable_ship_rels = pack.executable_ship_rels,
             forced_ignore_ship = pack.forced_ignore_ship,
         )
         _set_active_deploy_record!(
@@ -2040,6 +2044,7 @@ function _ship_tree_to_hosts!(
                 content_tree_hash = pack.content_tree_hash,
                 project_rel = pack.project_rel,
                 content_file_digests = digest_rows,
+                executable_ship_rels = pack.executable_ship_rels,
                 forced_ignore_ship = pack.forced_ignore_ship,
             ),
         )

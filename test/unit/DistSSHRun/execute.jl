@@ -1421,6 +1421,40 @@ end
         end
     end
 
+    @testset "terminate! kit sidecars split across run_dir and output_dir" begin
+        mktempdir() do run_d
+            mktempdir() do out_d
+                write(joinpath(run_d, "kit.job"), "j-sidecar\n")
+                DistSSHRun._write_kit_hosts_file(["worker-1"], out_d, nothing)
+                proc = run(ignorestatus(`sleep 30`); wait = false)
+                try
+                    kp = DistSSHRun.DetachedProcess(
+                        proc;
+                        kind = :ride,
+                        output_dir = out_d,
+                        run_dir = run_d,
+                    )
+                    @test DistSSHRun._read_kit_job_id_for_reap(kp) == "j-sidecar"
+                    @test DistSSHRun._read_kit_hosts_for_reap(kp) == ["worker-1"]
+                finally
+                    process_running(proc) && kill(proc)
+                    wait(proc)
+                end
+            end
+        end
+        mktempdir() do log_d
+            write(joinpath(log_d, "kit.job"), "j-log\n")
+            proc = run(ignorestatus(`sleep 30`); wait = false)
+            try
+                kp = DistSSHRun.DetachedProcess(proc; kind = :drive, log_dir = log_d)
+                @test DistSSHRun._read_kit_job_id_for_reap(kp) == "j-log"
+            finally
+                process_running(proc) && kill(proc)
+                wait(proc)
+            end
+        end
+    end
+
     @testset "terminate! detached ride" begin
         _with_tempdir() do proj
             _write_job_with_distsshrun!(proj)
