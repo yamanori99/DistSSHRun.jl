@@ -1669,10 +1669,7 @@ end
         mkpath(joinpath(proj, ".distssh"))
         write(joinpath(proj, ".distssh", "note"), "local\n")
         DistSSHRun.assert_controller_shipped_tree_current!(proj)
-        buf = IOBuffer()
-        DistSSHRun.Tar.create(proj, buf)
-        seekstart(buf)
-        worker_hash = String(DistSSHRun.Tar.tree_hash(buf; algorithm = "git-sha1", skip_empty = true))
+        worker_hash = DistSSHRun._payload_tree_hash(proj, ["a.jl"])
         worker_rec = Dict{String, Any}(
             "mode" => "ship-tree",
             "content_tree_hash" => worker_hash,
@@ -1688,6 +1685,44 @@ end
         @test occursin("read-only violation", sprint(showerror, err))
     finally
         DistSSHRun._clear_active_deploy_record!()
+        rm(proj; recursive = true, force = true)
+    end
+end
+
+@testset "worker shipped-tree verify ignores files added after extract" begin
+    proj = mktempdir()
+    pack = nothing
+    wids = Int[]
+    try
+        write(joinpath(proj, "Project.toml"), "name = \"W\"\n")
+        write(joinpath(proj, "a.jl"), "1\n")
+        _sync_test_project_manifest!(proj)
+        pack = DistSSHRun._pack_project_tree(proj)
+        stage = joinpath(pack.directory, "stage")
+        mkpath(joinpath(stage, ".distssh"))
+        write(joinpath(stage, ".distssh", "shipment.toml"), "complete = true\n")
+        mkpath(joinpath(stage, "output"))
+        write(joinpath(stage, "output", "extra.txt"), "later\n")
+        rels = String[first(p) for p in pack.content_file_digests]
+        @test DistSSHRun._payload_tree_hash(stage, rels) == pack.content_tree_hash
+        rows = Any[
+            Dict{String, Any}("path" => p, "blob" => h) for (p, h) in pack.content_file_digests
+        ]
+        rec = Dict{String, Any}(
+            "mode" => "ship-tree",
+            "content_tree_hash" => pack.content_tree_hash,
+            "content_file_digests" => rows,
+            "executable_ship_rels" => pack.executable_ship_rels,
+        )
+        expr = DistSSHRun._worker_shipped_tree_verify_expr(rec)
+        wids = Distributed.addprocs(1; exeflags = `--project=$stage --startup-file=no`)
+        @test DistSSHRun._worker_runs_extracted_tree(wids[1]) == false
+        @test Distributed.remotecall_fetch(Core.eval, wids[1], Main, expr) === nothing
+        loaded = Distributed.remotecall_fetch(Core.eval, wids[1], Main, :(isdefined(Main, :DistSSHRun)))
+        @test loaded == false
+    finally
+        isempty(wids) || Distributed.rmprocs(wids)
+        pack === nothing || rm(pack.directory; recursive = true, force = true)
         rm(proj; recursive = true, force = true)
     end
 end
