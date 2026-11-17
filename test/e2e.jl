@@ -287,7 +287,7 @@ function _e2e_wait_hb_monitors(kp, log_dir::AbstractString; timeout::Real = 240)
     return false
 end
 
-const _E2E_QUEUE_STAGE_PARENT = "/home/dev/.distsshqueue/stage"
+const _E2E_QUEUE_STAGE_PARENT = "~/.distsshqueue/stage"
 
 """Reserve `~/.distsshqueue/stage/e2e-<nonce>` (Queue-style stage root)."""
 function _e2e_reserve_queue_stage_dest!(host::AbstractString)::String
