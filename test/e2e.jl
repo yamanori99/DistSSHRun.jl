@@ -1534,7 +1534,7 @@ end
         @testset "password-only sshd fails fast (BatchMode)" begin
             _e2e_announce("password-only sshd")
             pw = "child-pw"
-            budget = DistSSHBase.ssh_auth_timeout_seconds() + 5.0
+            budget = DistSSHRun.DistSSHBase.ssh_auth_timeout_seconds() + 5.0
             env = _ssh_e2e_env(; remote_project = remote_root)
             t0 = time()
             ok = withenv(env...) do
