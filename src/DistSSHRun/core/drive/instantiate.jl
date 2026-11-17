@@ -37,29 +37,31 @@ function instantiate!(
     snap = run_id === nothing ? nothing : validate_run_id(run_id)
     return _with_kit_inproc_run!(:instantiate) do
         apply_session_env!(session)
-        preflight_setup_ssh(session.hosts) || return SyncResult(
-            false,
-            HostResult[];
-            ok = false,
-        )
-        remote_path = _project_work_root(
-            session.hosts, session.project;
-            cli_override = session.remote, run_id = snap,
-        )
-        julia_path = isempty(strip(String(julia))) ? "auto" : String(julia)
-        raw = instantiate_remotes(
-            session.hosts,
-            julia_path,
-            remote_path,
-            session.project;
-            path_anchor = session.project,
-        )
-        hrs = hasproperty(raw, :hosts) ? collect(HostResult, raw.hosts) : HostResult[]
-        return SyncResult(
-            raw.cancelled,
-            hrs;
-            ok = !raw.cancelled && raw.failed == 0,
-        )
+        return _with_session_remote_env!(session) do
+            preflight_setup_ssh(session.hosts) || return SyncResult(
+                false,
+                HostResult[];
+                ok = false,
+            )
+            remote_path = _project_work_root(
+                session.hosts, session.project;
+                cli_override = session.remote, run_id = snap,
+            )
+            julia_path = isempty(strip(String(julia))) ? "auto" : String(julia)
+            raw = instantiate_remotes(
+                session.hosts,
+                julia_path,
+                remote_path,
+                session.project;
+                path_anchor = session.project,
+            )
+            hrs = hasproperty(raw, :hosts) ? collect(HostResult, raw.hosts) : HostResult[]
+            return SyncResult(
+                raw.cancelled,
+                hrs;
+                ok = !raw.cancelled && raw.failed == 0,
+            )
+        end
     end
 end
 

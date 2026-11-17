@@ -18,6 +18,8 @@ struct Shipment
     # Ignored on disk but forced into the pack (Manifest, preferences, …).
     forced_ignore_ship::Vector{String}
     content_file_digests::Vector{Pair{String, String}}
+    # Regular files shipped with mode `0555` (execute preserved read-only).
+    executable_ship_rels::Vector{String}
 end
 
 function content_tree_hash(snapshot::Shipment)::String
@@ -536,13 +538,13 @@ function pack_tree(
         end
         file_rels = String[v[1] for v in entries]
         append!(file_rels, extra_rels)
-        chmod_shipped_files_readonly!(stage, file_rels)
+        exec_rels = chmod_shipped_files_readonly!(stage, file_rels)
         digests = content_file_digests(stage, file_rels)
         Tar.create(stage, tar_path)
         hash = String(Tar.tree_hash(tar_path; algorithm = TREE_HASH_ALGORITHM, skip_empty = true))
         return Shipment(
             tmpd, tar_path, hash, total, nfiles, anchor, resolved.project_dir,
-            prel, allowed, extra_rels, forced_ignore, digests,
+            prel, allowed, extra_rels, forced_ignore, digests, exec_rels,
         )
     catch
         rm(tmpd; force = true, recursive = true)

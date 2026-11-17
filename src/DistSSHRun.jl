@@ -27,17 +27,6 @@ using Unicode
 #   argv wrappers `go` / `drive` stay unexported (`main` / tests)
 export worker_pmap
 export worker_seed
-export job_item_seed
-export seed_mix
-export LaunchReport
-export WorkerLaunchOutcome
-export LaunchIncompleteError
-export launch_report_planned
-export launch_report_joined
-export launch_report_failures
-export launch_report_usable
-export launch_rank
-export SEED_SCHEME
 export DistSSHSession
 export HostResult
 export SyncResult
@@ -56,8 +45,6 @@ export PipelineResult
 export sync!
 export instantiate!
 export setup!
-export doctor!
-export DoctorReport
 export pool!
 export ResourcePool
 export HostInventory
@@ -95,7 +82,6 @@ export drive_host_status
 export parse_go_args
 export parse_drive_args
 export parse_ride_args
-export parse_doctor_args
 export ssh_opts
 export run_on_host
 export resolve_controller_julia
@@ -109,6 +95,10 @@ export julia_default_sysimage_path
 export julia_sysimage_is_default
 export resolve_pkg_env
 export explain_script_not_found
+# Public-only until DistSSHKit `_KNOWN_KIT_EXPORTS` catches up.
+public DoctorReport, LaunchIncompleteError, LaunchReport, SEED_SCHEME, WorkerLaunchOutcome
+public doctor!, job_item_seed, launch_rank, launch_report_failures, launch_report_joined
+public launch_report_planned, launch_report_usable, parse_doctor_args, seed_mix
 # Display helpers stay public and are not exported. DistSSHKit 0.11 drops them.
 public print_pool
 public print_hostinfo
@@ -142,8 +132,8 @@ end
 include(joinpath(@__DIR__, "..", "lib", "DistSSHBase", "src", "DistSSHBase.jl"))
 include("DistSSHRun/up_module.jl")
 using .DistSSHBase
-import .DistSSHBase: manifest_path
-public manifest_path
+import .DistSSHBase: join_explained_message, manifest_path
+public join_explained_message, manifest_path
 import .DistSSHBase:
     current_project_file,
     julia_default_sysimage_path,
@@ -169,7 +159,7 @@ using .DistSSHBase: CliCursor, HostFacts, HostResult, OUTPUT_WIDTH, PARENT_HOST_
     get_remote_julia_version_full,
     git_work_tree,
     is_sigint, join_explained_message, looks_like_path_host, normalize_git_clone_url,
-    parse_placement_token, posix_quote, project_package_name,
+    parse_placement_token, posix_quote, project_driver_package_name, project_package_name,
     read_hosts_file, read_hosts_file_lines, read_machine_file_lines,
     remote_delete_root, remote_deploy_root, remote_env_project_root, remote_git_clone_dest,
     remote_layout_path, resolve_host_path_abs,

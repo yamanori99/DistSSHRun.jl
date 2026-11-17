@@ -361,9 +361,11 @@ end
             tree = joinpath(state_dir, slot, "tree")
             mkpath(tree)
             touch(joinpath(tree, "keepme.txt"))
+            _apply_quiet_setup_session!()
             out, result = _capture_stdio() do _, _
                 DistSSHRun.clone_to_remotes(
-                    [host], remote_path, "git@example.com:org/App.jl.git"
+                    [host], remote_path, "git@example.com:org/App.jl.git";
+                    confirm = false,
                 )
             end
             @test !result.cancelled && result.succeeded == 0 && result.failed == 1
