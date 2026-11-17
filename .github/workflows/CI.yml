@@ -1164,9 +1164,20 @@ jobs:
       - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
         with:
           version: "1.13"
+      - name: Runic pin
+        id: runic-pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          v="$(sed -n -E 's/^Runic = "=([^"]+)".*/\1/p' .github/runic/Project.toml | head -1)"
+          if [[ ! "${v}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo ".github/runic/Project.toml: Runic compat pin missing or invalid" >&2
+            exit 1
+          fi
+          echo "version=${v}" >> "${GITHUB_OUTPUT}"
       - uses: fredrikekre/runic-action@b4dbd650db5cc684baae27fea45d22daf41693c2 # v1.5.0
         with:
-          version: '1'
+          version: ${{ steps.runic-pin.outputs.version }}
 
   aqua:
     name: Aqua (1.13, ubuntu-latest, x64)
@@ -1451,4 +1462,3 @@ jobs:
           if [[ -d "$DISTSSHQUEUE_CHECKOUT" ]]; then
             (cd "$DISTSSHQUEUE_CHECKOUT" && ./testenv/docker-ssh/scripts/down.sh) || true
           fi
-
