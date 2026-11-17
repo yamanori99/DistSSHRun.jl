@@ -28,6 +28,7 @@ function _local_extract_verified!(
         tar_path::AbstractString,
         expect_hash::AbstractString;
         allow_external_symlinks::Bool = false,
+        executable_ship_rels::Union{Nothing, AbstractVector{<:AbstractString}} = nothing,
     )
     open(tar_path) do io
         DistSSHShip.Tar.extract(io, dest)
@@ -35,7 +36,7 @@ function _local_extract_verified!(
     DistSSHShip.assert_extracted_tree_contained!(
         dest; allow_external_symlinks = allow_external_symlinks,
     )
-    DistSSHShip.apply_shipped_tree_file_modes!(dest)
+    DistSSHShip.apply_shipped_tree_file_modes!(dest; executable_rels = executable_ship_rels)
     buf = IOBuffer()
     DistSSHShip.Tar.create(dest, buf)
     seekstart(buf)

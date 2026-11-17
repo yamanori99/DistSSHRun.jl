@@ -537,7 +537,8 @@
                     dest2 = mktempdir()
                     try
                         _local_extract_verified!(
-                            dest2, snap.tar_path, snap.content_tree_hash,
+                            dest2, snap.tar_path, snap.content_tree_hash;
+                            executable_ship_rels = snap.executable_ship_rels,
                         )
                         rec = DistSSHShip.build_shipment_record(snap; complete = true)
                         @test rec["complete"] === true
@@ -582,7 +583,10 @@
                 @test (filemode(joinpath(stage, "script.jl")) & 0o777) == 0o444
                 dest = _extract(snap)
                 try
-                    DistSSHShip.apply_shipped_tree_file_modes!(dest)
+                    chmod(joinpath(dest, "run.sh"), 0o444)
+                    DistSSHShip.apply_shipped_tree_file_modes!(
+                        dest; executable_rels = snap.executable_ship_rels,
+                    )
                     @test (filemode(joinpath(dest, "run.sh")) & 0o777) == 0o555
                     @test (filemode(joinpath(dest, "script.jl")) & 0o777) == 0o444
                     paths = DistSSHShip.pack_paths(dir)

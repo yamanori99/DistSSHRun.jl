@@ -99,12 +99,20 @@ function remote_extract_expr()::String
     Tar.extract(stdin, dest)
     $(_WALK_SOURCE)
     distsshship_assert_tree!(dest, allow)
-    for (dir, _, files) in walkdir(dest)
+    exec_list = isempty(ARGS[4]) ? String[] : split(ARGS[4], '\\n'; keepempty=false)
+    exec_set = Set(exec_list)
+    dest_abs = abspath(dest)
+    for (dir, _, files) in walkdir(dest_abs)
         for name in files
             path = joinpath(dir, name)
             isfile(path) && !islink(path) || continue
-            mode = filemode(path) & 0o777
-            chmod(path, (mode & 0o111) != 0 ? 0o555 : 0o444)
+            if !isempty(exec_set)
+                rel = replace(relpath(path, dest_abs), '\\\\' => '/')
+                chmod(path, rel in exec_set ? 0o555 : 0o444)
+            else
+                mode = filemode(path) & 0o777
+                chmod(path, (mode & 0o111) != 0 ? 0o555 : 0o444)
+            end
         end
     end
     # `Tar.tree_hash` reads a tar, not a directory. Rebuild one so the hash

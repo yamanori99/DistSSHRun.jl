@@ -91,13 +91,26 @@ function chmod_shipped_files_readonly!(
 end
 
 """After extract, normalize every regular file to shipped `0444` / `0555` modes."""
-function apply_shipped_tree_file_modes!(root::AbstractString)
-    for (dir, _, files) in walkdir(root)
+function apply_shipped_tree_file_modes!(
+        root::AbstractString;
+        executable_rels::Union{Nothing, AbstractVector{<:AbstractString}} = nothing,
+    )
+    exec = executable_rels === nothing ?
+        nothing :
+        Set(String[string(r) for r in executable_rels])
+    root_abs = abspath(String(root))
+    for (dir, _, files) in walkdir(root_abs)
         for name in files
             path = joinpath(dir, name)
             isfile(path) && !islink(path) || continue
-            mode = filemode(path) & 0o777
-            chmod(path, shipped_regular_file_mode(mode))
+            if exec !== nothing
+                rel = replace(relpath(path, root_abs), '\\' => '/')
+                target = rel in exec ? _SHIPPED_FILE_MODE_EXEC : _SHIPPED_FILE_MODE_NONEXEC
+                chmod(path, target)
+            else
+                mode = filemode(path) & 0o777
+                chmod(path, shipped_regular_file_mode(mode))
+            end
         end
     end
     return nothing
