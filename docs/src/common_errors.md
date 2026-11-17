@@ -32,7 +32,7 @@ unique anchor (for example `removed-cli-flag` for `DSSH-E001`). Typed errors pri
 
 ## DSSH-E030 — Topology or bind rejected
 
-**When:** Resolved topology, tunnel, or bind settings are incompatible (see upcoming topology rules).
+**When:** Resolved topology, tunnel, or bind settings are incompatible before SSH worker launch (for example `DISTSSH_SSH_TUNNEL=0` with a loopback bind on a remote host, or a non-loopback bind without `--unsafe-expose-port`).
 
 ## DSSH-E040 — Worker environment mismatch
 

@@ -100,6 +100,7 @@ end
             _runtest_include("unit/DistSSHRun/infra/launch.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "launch.jl"))
             _runtest_include("unit/DistSSHRun/infra/seed_golden.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "seed_golden.jl"))
             _runtest_include("unit/DistSSHRun/infra/topology.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "topology.jl"))
+            _runtest_include("unit/DistSSHRun/infra/bind_overrides.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "bind_overrides.jl"))
             if !_distsshrun_short_skip("unit/DistSSHRun/execute.jl")
                 _runtest_include("unit/DistSSHRun/execute.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "execute.jl"))
             else

@@ -498,7 +498,8 @@ function _ride_add_workers!(
         project::AbstractString,
         script_path::AbstractString,
         julia,
-        best_effort::Bool,
+        best_effort::Bool;
+        bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
         run_id::Union{Nothing, AbstractString} = nothing,
     )::Tuple{Vector{Int}, Vector{String}}
     before = Set(workers())
@@ -539,6 +540,7 @@ function _ride_add_workers!(
                 String(project),
                 String(script_path),
                 String(project);
+                bind_overrides = bind_overrides,
                 run_id = run_id,
             )
             ssh_hosts = String[String(h) for h in successful]
@@ -700,6 +702,8 @@ function ride!(
         unsafe_skip_env_digests = false,
         unsafe_expose_port::Bool = false,
         unsafe_all_to_all::Bool = false,
+        hosts_file::Union{Nothing, AbstractString} = nothing,
+        bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
         allow_mismatch = nothing,
     )::RideResult
     yes !== nothing && throw(
@@ -736,11 +740,16 @@ function ride!(
             cli_unsafe_expose_port = unsafe_expose_port ? true : nothing,
             cli_unsafe_all_to_all = unsafe_all_to_all ? true : nothing,
         )
+        resolved_bind = resolve_launch_bind_overrides(;
+            hosts_file = hosts_file,
+            bind_overrides = bind_overrides,
+            surface = hint_surface,
+        )
         return with_run_unsafe_options!(cfg) do
             return _ride_run!(
                 path, julia_s, tokens, args, spi_check, output_dir, project, julia,
                 remote, validated_run_id, best_effort, head_workers, hint_surface,
-                inherited_run,
+                inherited_run, resolved_bind,
             )
         end
     finally
@@ -764,6 +773,7 @@ function _ride_run!(
         head_workers::Union{Nothing, Integer},
         hint_surface::Symbol,
         inherited_run::Bool,
+        bind_overrides::AbstractDict{<:AbstractString, <:AbstractString},
     )
     # `ride!` restores `DISTSSH_RUN_DIR` after this returns.
     run_dir = kit_run_dir()
@@ -850,7 +860,11 @@ function _ride_run!(
         kit_progress_step!("workers")
         _ride_activate_project!(project)
         _ride_evict_foreign_workers!()
-        added, ssh_hosts = _ride_add_workers!(wp, project, path, julia, best_effort, run_id)
+        added, ssh_hosts = _ride_add_workers!(
+            wp, project, path, julia, best_effort;
+            bind_overrides = bind_overrides,
+            run_id = run_id,
+        )
         _write_kit_hosts_file(ssh_hosts, batch_dir, nothing)
         _write_joined_drive_host_status!(
             sort!(collect(keys(DRIVE_HOST_WORKER_IDS))),

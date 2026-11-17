@@ -69,6 +69,7 @@ function drive!(
         unsafe_master_silence_exit::Union{Nothing, Bool} = nothing,
         yes::Union{Nothing, Bool} = nothing,
         require_all_hosts::Union{Nothing, Bool} = nothing,
+        bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
     )::DriveResult
     yes !== nothing && throw(
         ArgumentError(
@@ -117,6 +118,7 @@ function drive!(
                         unsafe_skip_env_digests = unsafe_skip_env_digests,
                         run_id = run_id,
                         unsafe_master_silence_exit = unsafe_master_silence_exit,
+                        bind_overrides = bind_overrides,
                     )
                     apply_shared_cli_flags!(parsed.cli_session)
                     original_args = copy(ARGS)
@@ -162,6 +164,7 @@ function drive!(
         quiet::Bool = false,
         verbosity::Union{Nothing, Symbol} = nothing,
         yes::Union{Nothing, Bool} = nothing,
+        bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
         kwargs...,
     )::DriveResult
     yes !== nothing && throw(
@@ -178,7 +181,7 @@ function drive!(
         quiet = quiet,
         verbosity = verbosity,
     )
-    return drive!(session, script; kwargs...)
+    return drive!(session, script; bind_overrides = bind_overrides, kwargs...)
 end
 
 function drive!(script::AbstractString; kwargs...)::DriveResult
