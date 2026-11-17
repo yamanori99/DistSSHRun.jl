@@ -398,7 +398,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         """
     end
 
-    """Write job `test/runtests.jl` on the controller project (never on a shipped remote tree)."""
+    # Write job test/runtests.jl on the controller (never on a shipped remote tree).
     function _ssh_e2e_write_job_runtests!(proj::AbstractString; fail::Bool = false)
         proj = abspath(proj)
         mkpath(joinpath(proj, "test"))
@@ -406,7 +406,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         return nothing
     end
 
-    """Ship the controller tree after a local change so deploy record and hash stay aligned."""
+    # Ship the controller tree after a local edit so deploy record and hash stay aligned.
     function _ssh_e2e_ship_tree_after_local_change!(
             suite::SshE2ESuite,
             slug::AbstractString,
