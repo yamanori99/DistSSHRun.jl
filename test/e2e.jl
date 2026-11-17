@@ -572,7 +572,7 @@ end
             _e2e_announce("setup runtest fails when job tests fail")
             runtest_env = merge(_e2e_base_env(), Dict("DISTSSH_QUIET" => "0"))
             try
-                _ssh_e2e_write_job_runtests!(proj; fail = true)
+                _ssh_e2e_commit_job_runtests!(proj; fail = true, message = "e2e job runtests fail")
                 _ssh_e2e_ship_tree_after_local_change!(
                     suite,
                     "setup_ship_tree_job_runtests_fail",
@@ -592,7 +592,7 @@ end
                 )
                 @test proc.exitcode != 0
             finally
-                _ssh_e2e_write_job_runtests!(proj; fail = false)
+                _ssh_e2e_commit_job_runtests!(proj; fail = false, message = "e2e job runtests pass")
                 _ssh_e2e_ship_tree_after_local_change!(
                     suite,
                     "setup_ship_tree_job_runtests_pass",
@@ -1602,6 +1602,14 @@ end
                 extra_env = git_env
             )
             _assert_ssh_e2e_ok(suite, "git_instantiate", proc, out; project = proj, kit = :setup)
+
+            # Long ship-path setup may advance the controller commit after the bare push.
+            proc, out = _run_kit_setup(;
+                setup_args = ["git-sync", "--deploy-root", git_root, setup_hosts...],
+                project_root = proj,
+                extra_env = merge(git_env, Dict("DISTSSH_QUIET" => "0"))
+            )
+            _assert_ssh_e2e_ok(suite, "git_sync_before_check", proc, out; project = proj, kit = :setup)
 
             proc, out = _run_kit_setup(;
                 command = "doctor",

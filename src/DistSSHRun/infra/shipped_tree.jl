@@ -31,6 +31,18 @@ function _digest_rows_from_pack(pack::DistSSHShip.Shipment)::Vector{Any}
     ]
 end
 
+"""Ship-equivalent `content_tree_hash` for verify on `root` (controller send list vs worker tree)."""
+function _verify_content_tree_hash(root::AbstractString, site::AbstractString)::String
+    if site == "controller"
+        pack = _pack_project_tree(root)
+        return String(pack.content_tree_hash)
+    end
+    buf = IOBuffer()
+    Tar.create(root, buf)
+    seekstart(buf)
+    return String(Tar.tree_hash(buf; algorithm = "git-sha1", skip_empty = true))
+end
+
 """
 Fail when the on-disk tree at `root` does not match the ship record in `rec`.
 """
@@ -42,10 +54,7 @@ function assert_shipped_tree_matches_record!(
     expect_hash = get(rec, "content_tree_hash", nothing)
     if expect_hash isa AbstractString && !isempty(strip(String(expect_hash)))
         want = strip(String(expect_hash))
-        buf = IOBuffer()
-        Tar.create(root, buf)
-        seekstart(buf)
-        got = String(Tar.tree_hash(buf; algorithm = "git-sha1", skip_empty = true))
+        got = _verify_content_tree_hash(root, String(site))
         got == want || throw(
             ErrorException(
                 "shipped tree content_tree_hash mismatch on $(site): $(got) != $(want)",
@@ -117,10 +126,7 @@ function note_controller_shipped_tree_drift!(project::AbstractString)
     expect_hash = get(rec, "content_tree_hash", nothing)
     expect_hash isa AbstractString || return nothing
     root = canonical_local_path(project)
-    buf = IOBuffer()
-    Tar.create(root, buf)
-    seekstart(buf)
-    got = String(Tar.tree_hash(buf; algorithm = "git-sha1", skip_empty = true))
+    got = _verify_content_tree_hash(root, "controller")
     want = strip(String(expect_hash))
     got == want && return nothing
     msg = "controller source tree changed after ship (content_tree_hash $(got) != deployed $(want))"
