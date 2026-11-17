@@ -61,6 +61,8 @@ function assert_shipped_tree_matches_record!(
             ),
         )
     end
+    # Controller tree stays writable; read-only modes and per-file digests apply on workers only.
+    site == "controller" && return nothing
     digests = _deploy_content_file_digests(rec)
     isempty(digests) && return nothing
     rels = String[first(p) for p in digests]
