@@ -406,7 +406,7 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         return nothing
     end
 
-    """Commit job runtests edits so ship-tree and git-sync see a clean, shippable tree."""
+    # Commit job runtests edits so ship-tree and git-sync see a clean, shippable tree.
     function _ssh_e2e_commit_job_runtests!(proj::AbstractString; fail::Bool = false, message::AbstractString)
         _ssh_e2e_write_job_runtests!(proj; fail = fail)
         run(pipeline(`git -C $proj add test/runtests.jl`; stdout = devnull, stderr = devnull))
