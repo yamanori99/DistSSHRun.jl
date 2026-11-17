@@ -35,7 +35,11 @@ end
 function _verify_content_tree_hash(root::AbstractString, site::AbstractString)::String
     if site == "controller"
         pack = _pack_project_tree(root)
-        return String(pack.content_tree_hash)
+        try
+            return String(pack.content_tree_hash)
+        finally
+            rm(pack.directory; recursive = true, force = true)
+        end
     end
     buf = IOBuffer()
     Tar.create(root, buf)
@@ -64,13 +68,17 @@ function assert_shipped_tree_matches_record!(
     digests = _deploy_content_file_digests(rec)
     isempty(digests) && return nothing
     rels = String[first(p) for p in digests]
-    exec_rels = _deploy_executable_ship_rels(rec)
-    mode_hits = DistSSHShip.shipped_file_mode_violations(
-        root, rels; executable_rels = exec_rels,
-    )
-    isempty(mode_hits) || throw(
-        ErrorException(DistSSHShip.shipped_tree_verify_error(site, "read-only violation", mode_hits)),
-    )
+    # `0444` / `0555` is the extracted tree. The controller source stays writable;
+    # execute-bit drift is already in the pack `content_tree_hash`.
+    if site != "controller"
+        exec_rels = _deploy_executable_ship_rels(rec)
+        mode_hits = DistSSHShip.shipped_file_mode_violations(
+            root, rels; executable_rels = exec_rels,
+        )
+        isempty(mode_hits) || throw(
+            ErrorException(DistSSHShip.shipped_tree_verify_error(site, "read-only violation", mode_hits)),
+        )
+    end
     digest_hits = DistSSHShip.shipped_file_digest_mismatches(root, digests)
     isempty(digest_hits) || throw(
         ErrorException(DistSSHShip.shipped_tree_verify_error(site, "content digest mismatch", digest_hits)),

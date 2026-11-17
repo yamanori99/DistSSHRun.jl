@@ -221,6 +221,12 @@ end
         @test DistSSHRun.resolve_pipeline_collect(default_cfg, default_session)
         @test DistSSHRun.pipeline_skip_hash_check(default_cfg)
         @test !default_session.cli_session.yes || get(ENV, "DISTSSH_YES", "") == "1"
+        @test !DistSSHRun.session_confirms(default_session)
+        cli_confirm = DistSSHRun.DistSSHSession(workers = ["host-a"])
+        cli_confirm.cli_session.hint_surface = :cli
+        @test DistSSHRun.session_confirms(cli_confirm)
+        cli_confirm.cli_session.yes = true
+        @test !DistSSHRun.session_confirms(cli_confirm)
         @test !DistSSHRun.pipeline_skip_hash_check(
             DistSSHRun.PipelineConfig(
                 driver = "job.jl",

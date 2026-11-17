@@ -16,6 +16,7 @@ function setup_session_from_cli(
         verbosity = cs.verbosity,
     )
     session.cli_session.yes = cs.yes
+    session.cli_session.hint_surface = cs.hint_surface
     return session
 end
 

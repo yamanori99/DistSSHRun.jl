@@ -454,8 +454,7 @@ using Test
                             _, up = _capture_stdio() do _, _
                                 DistSSHRun.setup!(session, :juliaup)
                             end
-                            @test up.cancelled
-                            @test !up.ok
+                            @test up.ok && !up.cancelled
                         end
                     end
                 finally

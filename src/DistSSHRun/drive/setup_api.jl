@@ -65,18 +65,18 @@ Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup …`.
 | `:delete` | `delete` | Destructive. Requires `confirm_path`. `session.cli_session.yes` does not delete. Refuses a present unowned Ship `run.toml` |
 | `:ship_tree` | `ship-tree` | Walk the project and each directory's `.gitignore` (case-sensitive). No git binary. Relative path dependencies outside the project ship under a common ancestor. A gitignored project or Manifest file is omitted with one warning. `!LocalPreferences.toml` ships that file. Declared inputs do not. `extra_files` is one external file at `_distsshrun_external/<basename>` (a second file errors). Creates a missing remote root when safe (`~/…` under home, or absolute with an existing parent). Tar into `runs/<run_id>/src/`, empty `out/`, DistSSHRun stamp. Does not instantiate |
 | `:git_clone` | `git-clone` | Requires `repo=`; clone runs **on the remote** |
-| `:git_sync` | `git-sync` | Requires a clone at `session.remote` (`:git_clone` first on a new target). Push the local branch to origin, then detach each remote at that commit; confirm unless `session.cli_session.yes`. A dirty tree is refused unless `allow_dirty=true` (CLI `--skip-git-guard`; deploy record `dirty=true`) |
-| `:git_pull` | `git-pull` | Detach each remote at the local commit. Does not push to origin and does not run `git pull`; confirm unless `session.cli_session.yes`. A dirty tree is refused |
+| `:git_sync` | `git-sync` | Requires a clone at `session.remote` (`:git_clone` first on a new target). Push the local branch to origin, then detach each remote at that commit. A dirty tree is refused unless `allow_dirty=true` (CLI `--skip-git-guard`; deploy record `dirty=true`) |
+| `:git_pull` | `git-pull` | Detach each remote at the local commit. Does not push to origin and does not run `git pull`. A dirty tree is refused |
 | `:instantiate` | `instantiate` | `julia=` (default `"auto"`) |
-| `:juliaup` | `up` | Align Julia via juliaup on `NAME` and/or `parent` (`\$HOME/.juliaup` or Homebrew); confirm unless `session.cli_session.yes`. Tip if kit parent patch lags channel latest |
-| `:juliaup_update` | `up update` | `juliaup update` on those hosts (no `default`); confirm unless `session.cli_session.yes` |
+| `:juliaup` | `up` | Align Julia via juliaup on `NAME` and/or `parent` (`\$HOME/.juliaup` or Homebrew). Tip if kit parent patch lags channel latest |
+| `:juliaup_update` | `up update` | `juliaup update` on those hosts (no `default`) |
 | `:check` | `check` | `ignore_julia_version=`, `check_code_sync=` |
 | `:runtest` | `runtest` | job `Pkg.test()` on remotes; `julia=` |
 | `:cleanup` | `cleanup` | Kill tagged workers for `job_id=` (required) |
 | `:prune` | `prune` | `.distssh` (and legacy `.distsshkit`) go/drive/setup/runs leaves. Requires `confirm_path`. `session.cli_session.yes` does not delete. `older_days=`, `id=` |
-| `:remote_root` | `remote-root` | `remote=` must be absolute (`--deploy-root` on the CLI). Creates that directory only when the parent exists. Confirm unless `session.cli_session.yes` |
+| `:remote_root` | `remote-root` | `remote=` must be absolute (`--deploy-root` on the CLI). Creates that directory only when the parent exists |
 
-Confirmations for other modes follow `session.cli_session.yes` (CLI `-y` / `DISTSSH_YES`). `:delete` and
+API calls do not prompt. The setup CLI prompts unless `--yes` / `DISTSSH_YES`. `:delete` and
 `:prune` authorize only `confirm_path`: a `String` when the session has one
 SSH host, or a `Dict` of host alias => path. A host with no key is left in
 place. An unknown key is an error. A mismatch throws
@@ -696,7 +696,7 @@ function _setup_one!(
         preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
         clone_dest = remote_git_clone_dest(session.project; cli_override = session.remote)
         deploy = remote_deploy_root(session.project; cli_override = session.remote)
-        raw = clone_to_remotes(hosts, clone_dest, url; confirm = !session.cli_session.yes)
+        raw = clone_to_remotes(hosts, clone_dest, url; confirm = session_confirms(session))
         result = _sync_result_from_host_op(raw)
         if result.ok
             forget_last_ship_default!(session.project, deploy)
@@ -717,7 +717,7 @@ function _setup_one!(
             remote_path;
             do_push = false,
             do_pull = true,
-            confirm = !session.cli_session.yes,
+            confirm = session_confirms(session),
         )
         if raw.cancelled
             return SyncResult(true, HostResult[]; ok = false)
@@ -739,7 +739,7 @@ function _setup_one!(
         if !isempty(ssh_hosts)
             preflight_setup_ssh(ssh_hosts) || return SyncResult(false, HostResult[]; ok = false)
         end
-        confirm = !session.cli_session.yes
+        confirm = session_confirms(session)
         raw = mode === :juliaup ?
             juliaup_align_remotes(targets; confirm = confirm) :
             juliaup_update_remotes(targets; confirm = confirm)
@@ -769,7 +769,7 @@ function _setup_one!(
         end
         root = explicit_remote_root_path(remote)
         preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
-        raw = create_remote_roots!(hosts, root; confirm = !session.cli_session.yes)
+        raw = create_remote_roots!(hosts, root; confirm = session_confirms(session))
         return _sync_result_from_host_op(raw)
     elseif mode === :prune
         plan = _setup_require_plan(bound_plan)

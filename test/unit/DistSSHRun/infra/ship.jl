@@ -1465,6 +1465,8 @@ end
                     remote = "/home/distsshkit/app",
                     quiet = true
                 )
+                session.cli_session.hint_surface = :cli
+                session.cli_session.yes = false
                 out, res = _capture_stdio() do stdin_io, _
                     println(stdin_io, "")
                     flush(stdin_io)
@@ -1639,5 +1641,53 @@ end
             DistSSHRun.set_kit_noninteractive!(prev_ni)
             DistSSHRun.set_kit_verbosity!(prev_verb)
         end
+    end
+end
+
+@testset "controller verify uses the ship send list" begin
+    proj = mktempdir()
+    try
+        write(joinpath(proj, "Project.toml"), "name = \"Ctl\"\n")
+        _sync_test_project_manifest!(proj)
+        write(joinpath(proj, "a.jl"), "1\n")
+        chmod(joinpath(proj, "a.jl"), 0o644)
+        pack = DistSSHRun._pack_project_tree(proj)
+        want = pack.content_tree_hash
+        rm(pack.directory; recursive = true, force = true)
+        rows = Any[
+            Dict{String, Any}(
+                "path" => "a.jl",
+                "blob" => DistSSHRun.DistSSHShip.git_blob_digest(joinpath(proj, "a.jl")),
+            ),
+        ]
+        rec = Dict{String, Any}(
+            "mode" => "ship-tree",
+            "content_tree_hash" => want,
+            "content_file_digests" => rows,
+        )
+        DistSSHRun._set_active_deploy_record!(rec)
+        mkpath(joinpath(proj, ".distssh"))
+        write(joinpath(proj, ".distssh", "note"), "local\n")
+        DistSSHRun.assert_controller_shipped_tree_current!(proj)
+        buf = IOBuffer()
+        DistSSHRun.Tar.create(proj, buf)
+        seekstart(buf)
+        worker_hash = String(DistSSHRun.Tar.tree_hash(buf; algorithm = "git-sha1", skip_empty = true))
+        worker_rec = Dict{String, Any}(
+            "mode" => "ship-tree",
+            "content_tree_hash" => worker_hash,
+            "content_file_digests" => rows,
+        )
+        err = try
+            DistSSHRun.assert_shipped_tree_matches_record!(proj, worker_rec; site = "worker")
+            nothing
+        catch e
+            e
+        end
+        @test err isa ErrorException
+        @test occursin("read-only violation", sprint(showerror, err))
+    finally
+        DistSSHRun._clear_active_deploy_record!()
+        rm(proj; recursive = true, force = true)
     end
 end

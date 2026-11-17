@@ -154,3 +154,9 @@ end
 
 """Explain surface for this session (`:cli` or `:api`)."""
 hint_surface(session::DistSSHSession)::Symbol = session.cli_session.hint_surface
+
+"""API sessions do not prompt. CLI sessions prompt unless `--yes` / `DISTSSH_YES`."""
+function session_confirms(session::DistSSHSession)::Bool
+    hint_surface(session) === :api && return false
+    return !session.cli_session.yes
+end
