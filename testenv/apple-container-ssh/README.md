@@ -93,6 +93,34 @@ container image rm local/linux-ssh-worker:latest
 Switch back to Docker: `docker-ssh/scripts/up.sh` rewrites `ssh_config` to
 `127.0.0.1:2222` / `2223`.
 
+## macOS local network permission (ssh to container IPs)
+
+On macOS 26+, processes without **Local Network** permission often cannot
+reach Apple container IPs (`192.168.64.0/24` on `bridge100`). Non-exempt
+`ssh` binaries (for example Homebrew `/opt/homebrew/bin/ssh`) then fail with
+**No route to host** (errno 65 / `EHOSTUNREACH`). Apple **`/usr/bin/ssh`** is
+exempt and still works. Whether your shell has permission depends on the
+parent app (a local Terminal vs a remote-SSH IDE terminal).
+
+After worker IPs are known, `up.sh` runs a short preflight with the same
+`ssh` on `PATH` the kit uses (`command -v ssh`, like `Sys.which("ssh")`).
+If stderr shows **no route to host**, it stops immediately, for example:
+
+```text
+error: /opt/homebrew/bin/ssh cannot reach container ip 192.168.64.2 (no route to host);
+this process likely lacks macOS local network permission for ssh.
+remedies: run from a terminal that has local network permission, or rerun with --system-ssh.
+```
+
+**`--system-ssh`** (opt-in, macOS only) prepends a temporary directory
+containing only symlinks to `/usr/bin/ssh` and `/usr/bin/scp` for this
+script and any `julia` it launches (`./scripts/up.sh --system-ssh --e2e`).
+It does not change `python3`, `git`, or other tools. Unsupported on
+Linux/non-Darwin.
+
+[`../docker-ssh`](../docker-ssh) uses `127.0.0.1` port forwarding and is
+not affected.
+
 ## Troubleshooting
 
 - `container CLI not found`: install Apple `container`, then retry
