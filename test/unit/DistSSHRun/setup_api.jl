@@ -1,6 +1,15 @@
 using Test
 
 @testset "setup!" begin
+    _fake_setup_auto_yes = Ref(false)
+
+    function _setup!(session, args...; kwargs...)
+        if _fake_setup_auto_yes[]
+            session.cli_session.yes = true
+        end
+        return DistSSHRun.setup!(session, args...; kwargs...)
+    end
+
     function _with_fake_remotes(f::Function)
         _with_tempdir() do state_dir
             old_proj = get(ENV, "DISTRIBUTED_PROJECT_ROOT", nothing)
@@ -8,7 +17,13 @@ using Test
             try
                 withenv(_fake_setup_remote_env(state_dir)...) do
                     _apply_quiet_setup_session!()
-                    return f(state_dir)
+                    _fake_setup_auto_yes[] = true
+                    try
+                        return f(state_dir)
+                    finally
+                        _fake_setup_auto_yes[] = false
+                        DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags())
+                    end
                 end
             finally
                 if old_proj === nothing
@@ -42,7 +57,7 @@ using Test
                     quiet = true
                 )
                 delete_path = DistSSHRun.remote_delete_root(proj; cli_override = "~/App.jl")
-                del = DistSSHRun.setup!(session, :delete; confirm_path = delete_path)
+                del = _setup!(session, :delete; confirm_path = delete_path)
                 @test del.ok && !del.cancelled
                 @test length(del.hosts) == 1 && del.hosts[1].ok
                 @test !isdir(joinpath(state_dir, slot))
@@ -52,10 +67,10 @@ using Test
                 @test occursin("kind=setup", body)
                 @test occursin("label=delete/$host", body)
 
-                tested = DistSSHRun.setup!(session, :runtest; julia = "/bin/echo")
+                tested = _setup!(session, :runtest; julia = "/bin/echo")
                 @test tested.ok && !tested.cancelled
 
-                inst = DistSSHRun.setup!(session, :instantiate; julia = "/bin/echo")
+                inst = _setup!(session, :instantiate; julia = "/bin/echo")
                 @test inst.ok && !inst.cancelled
             end
         end
@@ -201,7 +216,7 @@ using Test
                     remote = "~/App.jl",
                     quiet = true
                 )
-                pr = DistSSHRun.setup!(session, :prune; confirm_path = "~/App.jl")
+                pr = _setup!(session, :prune; confirm_path = "~/App.jl")
                 @test pr.ok && !pr.cancelled
                 @test isfile(joinpath(tree, "keep", "Project.toml"))
                 @test !isdir(joinpath(tree, ".distssh", "go", "batch_a"))
@@ -254,7 +269,7 @@ using Test
                     "DISTSSH_TEST_UNAME" => "Linux"
                 )
                 withenv(merge(ver_env, head_ju)...) do
-                    up = DistSSHRun.setup!(session, :juliaup)
+                    up = _setup!(session, :juliaup)
                     @test up.ok && !up.cancelled
                     @test length(up.hosts) == 2
                     @test all(h -> h.ok, up.hosts)
@@ -271,7 +286,7 @@ using Test
                     )
                     out, up = with_kit_verbosity(:progress) do
                         _capture_stdio() do _, _
-                            DistSSHRun.setup!(progress_session, :juliaup)
+                            _setup!(progress_session, :juliaup)
                         end
                     end
                     @test up.ok && !up.cancelled
@@ -280,13 +295,13 @@ using Test
                 end
                 withenv("DISTSSH_TEST_NO_JULIAUP" => "1") do
                     empty!(DistSSHRun.DistSSHBase._DETECT_JULIA_PATH_CACHE)
-                    bad = DistSSHRun.setup!(session, :juliaup)
+                    bad = _setup!(session, :juliaup)
                     @test !bad.ok
                 end
                 ssh_log = joinpath(proj, "ssh.log")
                 withenv(merge(ver_env, head_ju, Dict("DISTSSH_TEST_SSH_LOG" => ssh_log))...) do
                     empty!(DistSSHRun.DistSSHBase._DETECT_JULIA_PATH_CACHE)
-                    upd = DistSSHRun.setup!(session, :juliaup_update)
+                    upd = _setup!(session, :juliaup_update)
                     @test upd.ok && !upd.cancelled
                     @test length(upd.hosts) == 2
                     @test all(h -> h.ok, upd.hosts)
@@ -300,7 +315,7 @@ using Test
                 end
                 withenv("DISTSSH_TEST_NO_JULIAUP" => "1") do
                     empty!(DistSSHRun.DistSSHBase._DETECT_JULIA_PATH_CACHE)
-                    bad_up = DistSSHRun.setup!(session, :juliaup_update)
+                    bad_up = _setup!(session, :juliaup_update)
                     @test !bad_up.ok
                 end
             end
@@ -336,7 +351,8 @@ using Test
                     quiet = true
                 )
                 withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
-                    up = DistSSHRun.setup!(session, :juliaup)
+                    session.cli_session.yes = true
+                    up = _setup!(session, :juliaup)
                     @test up.ok && !up.cancelled
                     @test length(up.hosts) == 1
                     @test up.hosts[1].ok
@@ -369,7 +385,8 @@ using Test
                     quiet = true
                 )
                 withenv("DISTSSH_TEST" => "1", "DISTSSH_TEST_LOCAL_JULIAUP" => ju) do
-                    upd = DistSSHRun.setup!(session, :juliaup_update)
+                    session.cli_session.yes = true
+                    upd = _setup!(session, :juliaup_update)
                     @test upd.ok && !upd.cancelled
                     @test length(upd.hosts) == 1 && upd.hosts[1].ok
                     @test upd.hosts[1].host == "parent"
@@ -385,8 +402,65 @@ using Test
                 remote = "~/App.jl",
                 quiet = true
             )
-            @test_throws ArgumentError DistSSHRun.setup!(session, :check)
-            @test_throws ArgumentError DistSSHRun.setup!(session, :delete)
+            @test_throws ArgumentError _setup!(session, :check)
+            @test_throws ArgumentError _setup!(session, :delete)
+        end
+        _with_tempdir() do state_dir
+            withenv(_fake_setup_remote_env(state_dir)...) do
+                prev_ni = DistSSHRun.kit_noninteractive()
+                try
+                    DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(yes = true))
+                    _with_tempdir() do proj
+                        write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
+                        d = mktempdir()
+                        ju = joinpath(d, "juliaup")
+                        jl = joinpath(d, "julia")
+                        write(
+                            ju,
+                            """
+                            #!/bin/sh
+                            case "\$1" in
+                              --version) echo 'Juliaup 1.22.7'; exit 0 ;;
+                              add|update|default) exit 0 ;;
+                              status) echo ok; exit 0 ;;
+                              *) exit 1 ;;
+                            esac
+                            """
+                        )
+                        write(
+                            jl,
+                            """
+                            #!/bin/sh
+                            echo "julia version $(VERSION.major).$(VERSION.minor).$(VERSION.patch)"
+                            """
+                        )
+                        chmod(ju, 0o755)
+                        chmod(jl, 0o755)
+                        host = "host1"
+                        session = DistSSHRun.DistSSHSession(
+                            project = proj,
+                            workers = ["$host"],
+                            remote = "~/App.jl",
+                            quiet = true,
+                        )
+                        ver_env = Dict(
+                            "DISTSSH_TEST" => "1",
+                            "DISTSSH_TEST_LOCAL_JULIAUP" => ju,
+                            "DISTSSH_TEST_JULIA_VERSION" => "julia version $(VERSION)",
+                            "DISTSSH_TEST_UNAME" => "Linux",
+                        )
+                        withenv(ver_env...) do
+                            empty!(DistSSHRun.DistSSHBase._DETECT_JULIA_PATH_CACHE)
+                            _, up = _capture_stdio() do _, _
+                                DistSSHRun.setup!(session, :juliaup)
+                            end
+                            @test up.ok && !up.cancelled
+                        end
+                    end
+                finally
+                    DistSSHRun.set_kit_noninteractive!(prev_ni)
+                end
+            end
         end
     end
 
@@ -407,7 +481,7 @@ using Test
                 )
                 with_kit_verbosity(:verbose) do
                     out, del = _capture_stdio() do _, _
-                        DistSSHRun.setup!(
+                        _setup!(
                             session, :delete;
                             confirm_path = DistSSHRun.remote_delete_root(proj; cli_override = "~/App.jl")
                         )
@@ -432,7 +506,7 @@ using Test
                 )
                 with_kit_verbosity(:progress) do
                     out, _ = _capture_stdio() do _, _
-                        DistSSHRun.setup!(session, :cleanup; job_id = "test-job-1")
+                        _setup!(session, :cleanup; job_id = "test-job-1")
                     end
                     @test !occursin("Log file:", out)
                     @test DistSSHRun.kit_verbosity() === :progress
@@ -470,7 +544,7 @@ using Test
                     quiet = true
                 )
                 withenv("DISTSSH_TEST_SSH_FAIL" => "1") do
-                    res = DistSSHRun.setup!(session, :instantiate; julia = "/bin/echo")
+                    res = _setup!(session, :instantiate; julia = "/bin/echo")
                     @test !res.ok
                 end
             end
@@ -485,12 +559,12 @@ using Test
                 remote = "~/App.jl"
             )
             out, _ = _capture_stdio() do _, _
-                @test_throws ArgumentError DistSSHRun.setup!(session, :clone)
-                @test_throws ArgumentError DistSSHRun.setup!(session, :clone; repo = "")
-                @test_throws ArgumentError DistSSHRun.setup!(session, :sync)
-                @test_throws ArgumentError DistSSHRun.setup!(session, :pull)
-                @test_throws ArgumentError DistSSHRun.setup!(session, :git_clone)
-                @test_throws ArgumentError DistSSHRun.setup!(session, :git_clone; repo = "")
+                @test_throws ArgumentError _setup!(session, :clone)
+                @test_throws ArgumentError _setup!(session, :clone; repo = "")
+                @test_throws ArgumentError _setup!(session, :sync)
+                @test_throws ArgumentError _setup!(session, :pull)
+                @test_throws ArgumentError _setup!(session, :git_clone)
+                @test_throws ArgumentError _setup!(session, :git_clone; repo = "")
             end
             @test !occursin("Log file:", out)
             @test !isdir(joinpath(proj, ".distssh", "setup"))
@@ -504,7 +578,7 @@ using Test
                     remote = "~/App.jl",
                     quiet = true
                 )
-                res = DistSSHRun.setup!(
+                res = _setup!(
                     session, :git_clone; repo = "https://github.com/example/App.jl.git"
                 )
                 @test res.ok && !res.cancelled
@@ -539,8 +613,8 @@ using Test
                 @test !isempty(rep.warnings) || occursin("prerequisite", lowercase(out))
                 @test !occursin("Log file:", out)
 
-                @test_throws ArgumentError DistSSHRun.setup!(session, :nope)
-                @test_throws ArgumentError DistSSHRun.setup!(session, :check)
+                @test_throws ArgumentError _setup!(session, :nope)
+                @test_throws ArgumentError _setup!(session, :check)
             end
         end
 
@@ -553,7 +627,7 @@ using Test
                     quiet = true
                 )
                 withenv("DISTSSH_TEST_SSH_FAIL" => "1") do
-                    clean = DistSSHRun.setup!(session, :cleanup; job_id = "test-job-1")
+                    clean = _setup!(session, :cleanup; job_id = "test-job-1")
                     @test clean isa DistSSHRun.SyncResult
                     @test !clean.cancelled
                     @test length(clean.hosts) == 1
@@ -579,7 +653,7 @@ using Test
                     quiet = true
                 )
                 delete_path = DistSSHRun.remote_delete_root(proj; cli_override = "~/App.jl")
-                del = DistSSHRun.setup!(session, :delete; confirm_path = delete_path)
+                del = _setup!(session, :delete; confirm_path = delete_path)
                 @test del.ok && !del.cancelled
                 @test !isdir(joinpath(state_dir, slot))
             end
@@ -601,7 +675,7 @@ using Test
                     quiet = true
                 )
                 prune_path = DistSSHRun.session_remote_root(session)
-                pr = DistSSHRun.setup!(session, :prune; confirm_path = prune_path)
+                pr = _setup!(session, :prune; confirm_path = prune_path)
                 @test pr.ok && !pr.cancelled
                 @test isfile(joinpath(tree, "keepme.txt"))
                 @test !isdir(joinpath(tree, ".distssh", "go", "batch_a"))
@@ -625,7 +699,7 @@ using Test
                 log_dir = DistSSHRun.setup_log_dir(session.project)
                 @test !isdir(log_dir)
                 err = try
-                    DistSSHRun.setup!(session, :delete; confirm_path = "/not/the/path")
+                    _setup!(session, :delete; confirm_path = "/not/the/path")
                     nothing
                 catch e
                     e
@@ -641,7 +715,7 @@ using Test
                 @test isfile(joinpath(tree, "keepme.txt"))
 
                 missing = try
-                    DistSSHRun.setup!(session, :delete)
+                    _setup!(session, :delete)
                     nothing
                 catch e
                     e
@@ -652,7 +726,7 @@ using Test
                 @test isfile(joinpath(tree, "keepme.txt"))
 
                 blank = try
-                    DistSSHRun.setup!(session, :delete; confirm_path = "  ")
+                    _setup!(session, :delete; confirm_path = "  ")
                     nothing
                 catch e
                     e
@@ -663,7 +737,7 @@ using Test
                 @test isfile(joinpath(tree, "keepme.txt"))
 
                 rsync_err = try
-                    DistSSHRun.setup!(session, :ship_tree; confirm_path = "~/App.jl")
+                    _setup!(session, :ship_tree; confirm_path = "~/App.jl")
                     nothing
                 catch e
                     e
@@ -674,7 +748,7 @@ using Test
 
                 for modes in ((:delete, :prune), (:delete, :ship_tree))
                     chain_err = try
-                        DistSSHRun.setup!(session, modes...; confirm_path = "~/App.jl")
+                        _setup!(session, modes...; confirm_path = "~/App.jl")
                         nothing
                     catch e
                         e
@@ -713,7 +787,7 @@ using Test
                     quiet = true
                 )
                 string_err = try
-                    DistSSHRun.setup!(session, :delete; confirm_path = "~/App.jl")
+                    _setup!(session, :delete; confirm_path = "~/App.jl")
                     nothing
                 catch e
                     e
@@ -726,7 +800,7 @@ using Test
                 @test isfile(joinpath(state_dir, "host2", "tree", "keepme.txt"))
 
                 unknown = try
-                    DistSSHRun.setup!(
+                    _setup!(
                         session, :delete;
                         confirm_path = Dict("host1" => "~/App.jl", "other" => "~/App.jl")
                     )
@@ -738,7 +812,7 @@ using Test
                 @test occursin("unknown host", unknown.msg)
                 @test isfile(joinpath(state_dir, "host1", "tree", "keepme.txt"))
 
-                partial = DistSSHRun.setup!(
+                partial = _setup!(
                     session, :delete;
                     confirm_path = Dict("host1" => "App.jl")
                 )
@@ -747,7 +821,7 @@ using Test
                 @test !isdir(joinpath(state_dir, "host1"))
                 @test isfile(joinpath(state_dir, "host2", "tree", "keepme.txt"))
 
-                partial2 = DistSSHRun.setup!(
+                partial2 = _setup!(
                     session, :delete;
                     confirm_path = Dict("host2" => "~/App.jl")
                 )
@@ -773,7 +847,7 @@ using Test
                 home = "/home/distsshkit"
                 expanded = home * "/App.jl"
                 withenv("DISTSSH_TEST_REMOTE_HOME" => home) do
-                    del = DistSSHRun.setup!(session, :delete; confirm_path = expanded)
+                    del = _setup!(session, :delete; confirm_path = expanded)
                     @test del.ok && !del.cancelled
                 end
                 @test !isdir(joinpath(state_dir, host))
@@ -794,7 +868,7 @@ using Test
                 "DISTSSH_TEST" => "1",
                 "DISTSSH_TEST_SSH" => "/no/such/fake-ssh.jl"
             ) do
-                res_setup = DistSSHRun.setup!(session, :runtest; julia = "/bin/echo")
+                res_setup = _setup!(session, :runtest; julia = "/bin/echo")
                 @test !res_setup.ok
                 @test !res_setup.cancelled
                 res_inst = DistSSHRun.instantiate!(session)

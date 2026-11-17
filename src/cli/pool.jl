@@ -48,8 +48,9 @@ function pool_main()::Cint
             include_head_for_size = true,
             quiet = opts.cli_session.quiet,
             verbosity = opts.cli_session.verbosity,
-            yes = opts.cli_session.yes,
         )
+        session.cli_session.yes = opts.cli_session.yes
+        DistSSHRun.apply_session_env!(session)
         result = pool!(session)
         print_pool(result)
         return result.ok ? Cint(0) : Cint(1)

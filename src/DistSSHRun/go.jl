@@ -612,6 +612,7 @@ function _go_remote_slot_shell_inner(
             print(io, ' ', _remote_shell_path_word(a))
         end
     end
+    isempty(_PLANNED_RANK_QUEUE) && reset_launch_rank_plan!([1])
     rank = take_worker_rank()
     seed = job_seed()
     wseed = worker_seed(seed, rank)
@@ -1026,7 +1027,7 @@ function go!(
     try
         _reset_run_provenance!(proj)
         _clear_active_selection!()
-        _clear_active_deploy_record!()
+        _clear_active_deploy_record_unless_run_id!(snap_arg)
         warn_project_sshflags(proj)
         _ensure_kit_run_dir!(:go, script_path; project = proj)
         cfg = resolve_run_job_config(;
@@ -1117,7 +1118,11 @@ function _go_run!(
             )
         )
     end
-    assert_controller_environment_for_verify!(proj)
+    if snap_arg !== nothing
+        assert_controller_environment_for_shipped_run!(proj)
+    else
+        assert_controller_environment_for_verify!(proj)
+    end
     batch_dir = if output_dir !== nothing
         _prepare_output_dir!(
             output_dir;

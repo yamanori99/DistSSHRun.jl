@@ -5,6 +5,9 @@ struct CliUsageError <: Exception
     msg::String
 end
 
+"""Foreground interrupt after cleanup. `with_cli_exit` returns `cli_interrupted()` (`130`)."""
+struct CliForegroundInterrupt <: Exception end
+
 function Base.showerror(io::IO, e::CliUsageError)
     print(io, "CliUsageError: ", e.msg)
     return nothing
@@ -95,7 +98,7 @@ function with_cli_exit(
         if e isa CliUsageError
             without_cancel(() -> report(e.msg))
             return Cint(2)
-        elseif is_sigint(e)
+        elseif e isa CliForegroundInterrupt || is_sigint(e)
             return without_cancel(interrupted)::Cint
         elseif _is_epipe(e)
             return Cint(141)

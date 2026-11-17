@@ -200,6 +200,10 @@ function _record_environment_verified!()
     return _record_environment_verification!("verified")
 end
 
+function _record_environment_verified_against_run_id!()
+    return _record_environment_verification!("verified-against-run-id")
+end
+
 function _record_environment_unverified!(reason::AbstractString)
     return _record_environment_verification!("unverified", reason)
 end
@@ -557,7 +561,7 @@ function _project_provenance(project::AbstractString)::Dict{String, Any}
             out["julia_version"] = string(parsed["julia_version"])
         end
     else
-        out["manifest"] = Dict{String, Any}("reason" => "missing_file")
+        out["manifest"] = "absent"
     end
     locks = Dict{String, String}()
     for name in ("CondaPkg.toml", "conda-lock.yml", "pixi.lock")

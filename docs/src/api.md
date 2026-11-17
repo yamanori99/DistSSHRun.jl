@@ -166,6 +166,9 @@ DistSSHShip.shipment_record_status
 DistSSHShip.verify_shipment_record
 DistSSHShip.content_file_digests
 DistSSHShip.chmod_shipped_files_readonly!
+DistSSHShip.source_had_execute_bit
+DistSSHShip.shipped_regular_file_mode
+DistSSHShip.apply_shipped_tree_file_modes!
 DistSSHShip.shipped_file_digest_mismatches
 DistSSHShip.shipped_file_mode_violations
 ```

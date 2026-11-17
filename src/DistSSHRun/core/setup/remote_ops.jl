@@ -731,28 +731,30 @@ function _instantiate_remote_e()::String
             "        \". See help setup.\",",
             "    )",
             "end",
-            "deploy_path = \"\"",
-            "walk = project_dir",
-            "while !isempty(walk)",
-            "    cand = joinpath(walk, \".distssh\", \"deploy.toml\")",
-            "    if isfile(cand)",
-            "        deploy_path = cand",
-            "        break",
+            "begin",
+            "    local deploy_path = \"\"",
+            "    local walk = project_dir",
+            "    while !isempty(walk)",
+            "        cand = joinpath(walk, \".distssh\", \"deploy.toml\")",
+            "        if isfile(cand)",
+            "            deploy_path = cand",
+            "            break",
+            "        end",
+            "        parent = dirname(walk)",
+            "        parent == walk && break",
+            "        walk = parent",
             "    end",
-            "    parent = dirname(walk)",
-            "    parent == walk && break",
-            "    walk = parent",
-            "end",
-            "if !isempty(deploy_path)",
-            "    rec = TOML.parsefile(deploy_path)",
-            "    want = get(rec, \"manifest_hash\", nothing)",
-            "    if want isa String && !isempty(want) && manifest isa String && isfile(manifest)",
-            "        using SHA",
-            "        got = lowercase(bytes2hex(sha256(read(manifest))))",
-            "        got == want || error(",
-            "            \"Manifest bytes do not match deploy record before instantiate (got \" *",
-            "            got[1:min(end, 12)] * \"… != \" * want[1:min(end, 12)] * \"…). See help setup.\",",
-            "        )",
+            "    if !isempty(deploy_path)",
+            "        rec = TOML.parsefile(deploy_path)",
+            "        want = get(rec, \"manifest_hash\", nothing)",
+            "        if want isa String && !isempty(want) && manifest isa String && isfile(manifest)",
+            "            using SHA",
+            "            got = lowercase(bytes2hex(sha256(read(manifest))))",
+            "            got == want || error(",
+            "                \"Manifest bytes do not match deploy record before instantiate (got \" *",
+            "                got[1:min(end, 12)] * \"… != \" * want[1:min(end, 12)] * \"…). See help setup.\",",
+            "            )",
+            "        end",
             "    end",
             "end",
             "Pkg.instantiate(; manifest=true, update_registry=false, julia_version_strict=true)",
@@ -767,6 +769,12 @@ function _require_manifest_for_instantiate!(project::AbstractString)
     if sel !== nothing && sel.source_kind === :ship
         _require_manifest!(project)
         _require_manifest_in_pack_paths!(project)
+        env = resolve_pkg_env(project)
+        listed = _git_send_list(env.env_dir, env)
+        if listed isa Vector
+            problems = _manifest_ship_problems(env, listed)
+            isempty(problems) || throw(ArgumentError(problems[1]))
+        end
         return nothing
     end
     return ensure_manifest_ships!(project)
