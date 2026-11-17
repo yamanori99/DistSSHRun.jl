@@ -79,3 +79,4 @@ Run it with `./.github/agent-check.sh` and paste its last line into the report.
 - **GitHub actions.** Agents do not label, comment, review, approve, merge, or rerun workflows. When a pull request needs the `breaking` label, say so in the report.
 - **Git.** Merge `origin/main` into your branch. Never rebase, amend pushed commits, or force-push.
 - **Environment.** Never `export HOME` or `JULIA_DEPOT_PATH`; prefix single commands. Runic is `runic` or `julia --project=@runic -m Runic`, both at `.github/runic-version`. Do not install tools yourself; if one is missing, stop and report.
+
