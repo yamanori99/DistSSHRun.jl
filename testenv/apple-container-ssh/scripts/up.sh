@@ -230,8 +230,11 @@ MOUNT="type=bind,source=${DOCKER_ROOT}/mounted-keys,target=/mounted-keys,readonl
 WORKER_CPUS="${DISTSSH_APPLE_WORKER_CPUS:-1}"
 WORKER_MEMORY="${DISTSSH_APPLE_WORKER_MEMORY:-3584M}"
 for name in "${NAMES[@]}"; do
+  # Match docker-ssh compose cap_add: SYS_PTRACE so e2e strace can attach to
+  # remote --worker PIDs (detached drive kill reaps remote workers).
   container create -d --name "${name}" --network default \
     -c "${WORKER_CPUS}" -m "${WORKER_MEMORY}" \
+    --cap-add CAP_SYS_PTRACE \
     -e "DISTSSH_HOSTNAME=${name}" \
     -u root --mount "${MOUNT}" "${LOCAL_IMAGE}"
   container start "${name}"
