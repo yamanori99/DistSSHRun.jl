@@ -37,7 +37,7 @@ Do not write the Registrator register command in an issue, a pull request body, 
 - **Explicit shapes**: missing values are recorded as typed reasons, not filled with defaults; versioned formats require `schema_version`.
 - **CLI behavior** follows [clap `arg_required_else_help`](https://docs.rs/clap/latest/clap/struct.Command.html#method.arg_required_else_help) conventions: a subcommand needing operands, run bare, prints help to stderr and exits 2; explicit `--help` prints to stdout and exits 0; usage errors exit 2.
 - **Semver for breaking changes**: a release takes changes that would be breaking later; purely additive features land in patch or minor follow-ups.
-- **Actionable errors**: state what failed, where, why, and how to fix it.
+- **Actionable errors**: state what failed, where, why, and how to fix it, with real values in the fix. When the cause is uncertain, list likely causes with a one-line check each instead of guessing, and stop rather than fall back.
 
 ## Job entry principles
 
