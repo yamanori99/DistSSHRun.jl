@@ -39,7 +39,10 @@ Keys come from `docker-ssh/scripts/gen-keys.sh` (mounted from
 
 Each worker gets 1 CPU / 3.5GB (`DISTSSH_APPLE_WORKER_CPUS` /
 `DISTSSH_APPLE_WORKER_MEMORY` override), so the pair together matches one
-`ubuntu-latest` CI runner (2 CPU / 7GB).
+`ubuntu-latest` CI runner (2 CPU / 7GB). Workers are created with
+`CAP_SYS_PTRACE` (same intent as `cap_add: SYS_PTRACE` in
+`docker-ssh/compose.yml`) so `test/e2e.jl` can `strace` remote Julia
+`--worker` processes.
 
 SSH aliases after `up.sh`:
 
