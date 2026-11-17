@@ -694,6 +694,7 @@ end
                 @test kept
                 @test missing_ok
                 @test length(added) == 1
+                @test DistSSHRun._precompile_worker_project!(first(added), proj)
                 @test occursin("not writable", err)
                 @test occursin("precompile", err)
                 @test occursin(proj, err)
