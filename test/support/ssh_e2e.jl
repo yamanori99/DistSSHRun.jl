@@ -414,6 +414,9 @@ if !isdefined(Main, :_ssh_e2e_enabled)
                 mkdir_proc, mkdir_out = _ssh_e2e_ssh(host, "mkdir -p $(work)/test")
                 _assert_proc_ok(mkdir_proc, mkdir_out; label = "mkdir job test $(host)")
                 dest = "$(work)/test/runtests.jl"
+                # Shipped trees mark regular files `0444`; drop the file before scp overwrite.
+                rm_proc, rm_out = _ssh_e2e_ssh(host, "rm -f $(dest)")
+                _assert_proc_ok(rm_proc, rm_out; label = "rm job runtests $(host)")
                 proc, out = _run_subprocess(
                     Cmd(
                         [
