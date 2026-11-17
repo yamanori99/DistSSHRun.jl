@@ -57,13 +57,15 @@ Public API breaking renames ship **without compatibility aliases**. Cross-repo r
 
 ## Cloud Agent VM
 
-Cursor preinstalls Julia via `.cursor/install.sh`. Before pushing, on Julia **1.13** (default juliaup channel), run the same style checks as CI:
+Cursor preinstalls Julia via `.cursor/install.sh` (Runic/JETLS from `.github/install-agent-tools.sh`; Runic pin is `[compat] Runic` in `.github/runic/Project.toml`, JETLS date pin in `.github/actions/jetls-check/action.yml`). On Julia **1.13**, before push:
 
-- **Runic** (CI-equivalent): `git ls-files -- '*.jl' | xargs runic --check --diff --verbose`
-- **JETLS** (required gate, hint+): `./.github/jetls-check.sh --progress=none`
+**Push gate** — commit first (clean tree). After the last edit, on the exact commit you will push, run all four; on any failure fix, commit, and rerun all four from the start until one clean pass with no edits in between; push only that tree. In the report, state the commit SHA and that all four passed on it.
 
-Run targeted tests when your change needs them (`CONTRIBUTING.md`, `test/README.md`). Do not run the full `Pkg.test` matrix, Linux SSH E2E, or downstream jobs on the VM unless the user asks; those stay CI-only.
+1. `runic --check --diff .` (whole repo, same as CI)
+2. Trailing-newline audit on every file changed vs `origin/main` (exactly one final newline)
+3. `git diff --check origin/main...HEAD`
+4. `./.github/jetls-check.sh --progress=none`
 
-Do not `export HOME` or `JULIA_DEPOT_PATH` in the agent session. Prefix individual commands with `PATH="$HOME/.julia/bin:$PATH"` when app shims are missing from PATH. Set `JULIA_APPS_JULIA_CMD="$HOME/.juliaup/bin/julia"` (launcher path only, no `+channel`) when `jetls` fails to start.
+Run targeted tests when needed (`CONTRIBUTING.md`, `test/README.md`). Do not run the full `Pkg.test` matrix, Linux SSH E2E, or downstream jobs on the VM unless the user asks.
 
-Runic and JETLS are installed by `.github/install-agent-tools.sh` during the environment Build when that step succeeds.
+Do not `export HOME` or `JULIA_DEPOT_PATH`. Prefix commands with `PATH="$HOME/.julia/bin:$PATH"` when app shims are missing. Set `JULIA_APPS_JULIA_CMD="$HOME/.juliaup/bin/julia"` when `jetls` fails to start. If install tools are missing, stop and report; do not install ad hoc.
