@@ -1334,6 +1334,14 @@ end
         end
     end
 
+    @testset "worker_exeflag_strings job mark -L" begin
+        flags = DistSSHRun.worker_exeflag_strings("/tmp/p"; job_id = "ride-e2e")
+        @test flags == DistSSHRun.worker_exeflag_strings("/tmp/p"; job_id = "ride-e2e")
+        @test "--eval=#distsshkit-job:ride-e2e" in flags
+        @test "-L" in flags
+        @test "/tmp/p/distsshkit-job:ride-e2e" in flags
+    end
+
     @testset "job_id charset / kit_job_eval_arg" begin
         withenv("DISTSSH_JOB_ID" => nothing) do
             @test DistSSHRun.resolved_kit_job_id() === nothing
@@ -1416,6 +1424,28 @@ end
                     @test result isa DistSSHRun.DistSSHJobResult
                     @test !process_running(kp.process)
                     @test result.kind === :go
+                end
+            end
+        end
+    end
+
+    @testset "terminate! kit sidecars split across run_dir and output_dir" begin
+        mktempdir() do run_d
+            mktempdir() do out_d
+                write(joinpath(run_d, "kit.job"), "j-sidecar\n")
+                DistSSHRun._write_kit_hosts_file(["worker-1"], out_d, nothing)
+                proc = @async sleep(60)
+                kp = DistSSHRun.DetachedProcess(
+                    proc;
+                    kind = :ride,
+                    output_dir = out_d,
+                    run_dir = run_d,
+                )
+                @test DistSSHRun._read_kit_job_id_for_reap(kp) == "j-sidecar"
+                @test DistSSHRun._read_kit_hosts_for_reap(kp) == ["worker-1"]
+                try
+                    kill(proc)
+                catch
                 end
             end
         end

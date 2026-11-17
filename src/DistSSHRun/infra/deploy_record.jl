@@ -487,6 +487,7 @@ function _selection_from_deploy_record(
         rec::AbstractDict,
         deploy::AbstractString,
         host_list::Vector{String},
+        local_project::AbstractString,
     )::SourceSelection
     mode_s = String(get(rec, "mode", ""))
     if mode_s == "ship-tree"
@@ -518,8 +519,9 @@ function _selection_from_deploy_record(
         )
     end
     if mode_s in ("git-clone", "git-sync", "git-pull")
-        _validate_git_on_hosts!(host_list, deploy)
-        return SourceSelection(:git, nothing, deploy, deploy, nothing, host_list)
+        _validate_git_on_hosts!(host_list, deploy; local_project = local_project)
+        git_work = _git_remote_work_root(local_project, deploy)
+        return SourceSelection(:git, nothing, deploy, git_work, nothing, host_list)
     end
     throw(_selection_error("deploy record mode $(repr(mode_s)) is not recognized; pass --run-id ID"))
 end

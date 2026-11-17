@@ -279,7 +279,11 @@ function worker_exeflag_strings(
         cpu === nothing || push!(flags, "-C$(cpu)")
     end
     if job_id !== nothing
-        push!(flags, kit_job_eval_arg(String(job_id)))
+        jid = String(job_id)
+        push!(flags, kit_job_eval_arg(jid))
+        # `-L` loads a comment file named `distsshkit-job:…` so `pkill -f` matches
+        # argv on Linux when `--eval=#…` is omitted from `/proc/*/cmdline`.
+        push!(flags, "-L", joinpath(project, kit_job_pkill_pattern(jid)))
     end
     return flags
 end
@@ -560,7 +564,9 @@ function _add_local_drive_workers!(
     )
     n < 1 && return nothing
     isempty(_PLANNED_RANK_QUEUE) && reset_launch_rank_plan!(collect(1:n))
-    flags = Cmd(worker_exeflag_strings(project; local_cpu = true, job_id = resolved_kit_job_id()))
+    job_id = resolved_kit_job_id()
+    job_id !== nothing && kit_write_job_mark_file(project, String(job_id))
+    flags = Cmd(worker_exeflag_strings(project; local_cpu = true, job_id = job_id))
     before = Set(workers())
     try
         for i in 1:n

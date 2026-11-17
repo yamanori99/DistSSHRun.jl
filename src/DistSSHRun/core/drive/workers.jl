@@ -280,6 +280,12 @@ function add_drive_workers!(
                         unsafe_expose_port = DistSSHRun.unsafe_expose_port_active(),
                     )
                     machine = DistSSHRun.ssh_addprocs_bind_localhost(host_name)
+                    job_id = DistSSHRun.resolved_kit_job_id()
+                    if job_id !== nothing
+                        DistSSHRun._remote_write_job_mark_file!(
+                            host_name, remote_proj, String(job_id),
+                        )
+                    end
                     DistSSHRun._add_ssh_drive_workers!(
                         machine,
                         host_workers,

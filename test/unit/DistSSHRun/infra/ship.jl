@@ -1694,7 +1694,16 @@ end
     pack = nothing
     wids = Int[]
     try
-        write(joinpath(proj, "Project.toml"), "name = \"W\"\n")
+        write(
+            joinpath(proj, "Project.toml"),
+            """
+            name = "W"
+
+            [deps]
+            SHA = "ea85aae56d54e67b80f62cf9c6b7613b0032a9b"
+            Tar = "c5ee9c8994fa588a731c15903974ffab316b6fa"
+            """,
+        )
         write(joinpath(proj, "a.jl"), "1\n")
         _sync_test_project_manifest!(proj)
         pack = DistSSHRun._pack_project_tree(proj)

@@ -106,6 +106,32 @@ function kit_write_job_mark_file(dir::AbstractString, job_id::AbstractString)::S
     return path
 end
 
+"""Remote comment file for drive/ride workers (`pkill -f` tag via `-L`)."""
+function _remote_write_job_mark_file!(
+        host::AbstractString,
+        remote_project::AbstractString,
+        job_id::AbstractString,
+    )::Nothing
+    body = kit_job_mark_comment(job_id)
+    pq = _remote_shell_path_word(remote_project)
+    mark = kit_job_pkill_pattern(job_id)
+    mq = _remote_shell_path_word(joinpath(String(remote_project), mark))
+    line = DistSSHBase.posix_quote(body)
+    script = "mkdir -p $pq && printf '%s\\n' $line > $mq"
+    try
+        run(
+            pipeline(
+                _host_sync_remote_shell_cmd(String(host), script);
+                stdout = devnull,
+                stderr = devnull,
+            ),
+        )
+    catch e
+        _rethrow_missing_host_tool(e)
+    end
+    return nothing
+end
+
 function kit_job_pkill_pattern(job_id::AbstractString)::String
     return string(KIT_JOB_CMDLINE_MARK, String(job_id))
 end
