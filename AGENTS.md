@@ -57,7 +57,7 @@ Public API breaking renames ship **without compatibility aliases**. Cross-repo r
 
 ## Cloud Agent VM
 
-Cursor preinstalls Julia via `.cursor/install.sh` (Runic/JETLS from `.github/install-agent-tools.sh`; pin is `RUNIC_PIN` in that script, same as CI Test `Runic`). On Julia **1.13**, before push:
+Cursor preinstalls Julia via `.cursor/install.sh` (Runic/JETLS from `.github/install-agent-tools.sh`; Runic pin is `[compat] Runic` in `.github/runic/Project.toml`, JETLS date pin in `.github/actions/jetls-check/action.yml`). On Julia **1.13**, before push:
 
 **Push gate** — commit first (clean tree). After the last edit, on the exact commit you will push, run all four; on any failure fix, commit, and rerun all four from the start until one clean pass with no edits in between; push only that tree. In the report, state the commit SHA and that all four passed on it.
 

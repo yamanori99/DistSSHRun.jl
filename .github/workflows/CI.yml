@@ -1169,9 +1169,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          v="$(grep -E '^RUNIC_PIN="' .github/install-agent-tools.sh | head -1 | sed -E 's/^RUNIC_PIN="([^"]+)".*/\1/')"
+          v="$(sed -n -E 's/^Runic = "=([^"]+)".*/\1/p' .github/runic/Project.toml | head -1)"
           if [[ ! "${v}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "install-agent-tools.sh: RUNIC_PIN missing or invalid" >&2
+            echo ".github/runic/Project.toml: Runic compat pin missing or invalid" >&2
             exit 1
           fi
           echo "version=${v}" >> "${GITHUB_OUTPUT}"

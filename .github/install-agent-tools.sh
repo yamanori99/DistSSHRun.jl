@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Idempotent Runic + JETLS + shellcheck install for Cursor Cloud Agent Builds.
-# Runic pin: RUNIC_PIN below (CI Test job reads the same line). JETLS: jetls-check/action.yml.
+# Runic pin: .github/runic/Project.toml [compat] (CI reads the same file). JETLS: jetls-check/action.yml.
 #
 # Optional INSTALL_AGENT_TOOLS_DEPOT: depot root for this script only (testing; no symlinks).
 # Do not export HOME or JULIA_DEPOT_PATH; prefix Julia/Pkg calls when needed.
@@ -8,11 +8,14 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ACTION="${ROOT}/.github/actions/jetls-check/action.yml"
+RUNIC_COMPAT="${ROOT}/.github/runic/Project.toml"
 JULIAUP_JULIA="${HOME}/.juliaup/bin/julia"
 STABLE_CHANNEL="1.13"
 RUNIC_UUID="62bfec6d-59d7-401d-8490-b29ee721c001"
-# CI reads this exact assignment in .github/workflows/CI.yml (Runic job).
-RUNIC_PIN="1.13.0"
+
+runic_pin_from_compat() {
+  sed -n -E 's/^Runic = "=([^"]+)".*/\1/p' "${RUNIC_COMPAT}" | head -1
+}
 
 die() {
   echo "install-agent-tools: error: $*" >&2
@@ -33,8 +36,12 @@ if [[ ! -x "${JULIAUP_JULIA}" ]]; then
   die "missing ${JULIAUP_JULIA}"
 fi
 
+if [[ ! -f "${RUNIC_COMPAT}" ]]; then
+  die "missing ${RUNIC_COMPAT}"
+fi
+RUNIC_PIN="$(runic_pin_from_compat)"
 if [[ ! "${RUNIC_PIN}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  die "invalid RUNIC_PIN: ${RUNIC_PIN}"
+  die "invalid Runic compat pin in ${RUNIC_COMPAT}: ${RUNIC_PIN:-<empty>}"
 fi
 
 jetls_rev="$(grep -E -m 1 -o 'rev="[0-9]{4}-[0-9]{2}-[0-9]{2}"' "${ACTION}" || true)"

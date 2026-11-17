@@ -1,13 +1,13 @@
 name: JETLS pin
 
-# Open ci/jetls-pin when the JETLS release date tag is newer than the pin.
-# Not on pull_request. A red pull request stays off main, so CI weekly
-# keeps the previous date. Misses CI weekly (daily UTC 21:00).
+# Open ci/jetls-pin when the JETLS release date tag is newer than the pin
+# in .github/actions/jetls-check/action.yml (single pin for CI and VM install).
+# Not on pull_request. JETLS is not in General; no Dependabot entry for it.
 on:
   workflow_dispatch:
-  # Daily 22:00 JST (UTC 13:00).
+  # 1st and 15th, 22:00 JST (UTC 13:00) — about every two weeks.
   schedule:
-    - cron: "0 13 * * *"
+    - cron: "0 13 1,15 * *"
 
 concurrency:
   group: jetls-pin
