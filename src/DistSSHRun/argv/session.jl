@@ -670,16 +670,22 @@ end
 function hosts_file_bind_overrides(
         session::CliSharedFlags;
         bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
+        planned_hosts::Union{Nothing, AbstractVector{<:AbstractString}} = nothing,
+        command::Union{Nothing, Symbol} = nothing,
     )::Dict{String, String}
     path = hosts_file_path_for_bind(session)
     path === nothing && return resolve_launch_bind_overrides(;
         bind_overrides = bind_overrides,
         surface = session.hint_surface,
+        planned_hosts = planned_hosts,
+        command = command,
     )
     return resolve_launch_bind_overrides(;
         hosts_file = path,
         bind_overrides = bind_overrides,
         surface = session.hint_surface,
+        planned_hosts = planned_hosts,
+        command = command,
     )
 end
 

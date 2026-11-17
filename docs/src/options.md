@@ -25,7 +25,9 @@ CI fails when `--help` and this page drift from that table.
 
 Within one scope: **CLI → environment → default**. Per-host Distributed
 `bind` overrides come from optional `bind` on each `[[hosts]]` row in a TOML
-hosts file.
+hosts file (IPv4 literal only; see [Placement](@ref placement)). `drive`,
+`ride`, and `--dry-run` validate every listed host before SSH; invalid `bind`
+values fail closed (exit 2 on the CLI, not softened by `--best-effort`).
 
 ## Diagnostics
 

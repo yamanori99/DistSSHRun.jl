@@ -80,6 +80,9 @@ function add_drive_workers!(
     script_path = abspath(String(script_path))
     writeln_both("Adding workers..."; color = :light_black)
 
+    remote_ssh = String[h for (h, _) in hosts]
+    validate_all_host_launch_plans!(remote_ssh, bind_overrides)
+
     successful_hosts = String[]
     default_n = something(default_workers, 1)
     plan_ranks = DistSSHRun.build_launch_rank_plan(head_workers, hosts, default_n)
@@ -274,8 +277,8 @@ function add_drive_workers!(
                     # overrides SSH config User (Host aliases then look like "No free port?").
                     # Bind 127.0.0.1 so the cluster cookie is not reachable on other interfaces.
                     bind = DistSSHRun.resolved_bind_address(host_name, bind_overrides)
-                    DistSSHRun.validate_host_launch_plan(host_name, bind)
-                    machine = DistSSHRun.ssh_addprocs_machine_bind(host_name, bind)
+                    lit = DistSSHRun.parse_bind_ipv4_literal(bind)
+                    machine = DistSSHRun.ssh_addprocs_machine_bind(host_name, lit.canonical)
                     DistSSHRun._add_ssh_drive_workers!(
                         machine,
                         host_workers,

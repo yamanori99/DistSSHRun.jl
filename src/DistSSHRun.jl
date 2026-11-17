@@ -162,7 +162,7 @@ using .DistSSHBase: CliCursor, HostFacts, HostResult, OUTPUT_WIDTH, PARENT_HOST_
     is_sigint, join_explained_message, looks_like_path_host, normalize_git_clone_url,
     parse_placement_token, posix_quote, project_driver_package_name, project_package_name,
     read_hosts_file, read_hosts_file_lines, read_machine_file_lines,
-    read_toml_host_bind_overrides,
+    read_toml_host_bind_overrides, read_toml_host_entries, toml_host_ssh_dest,
     remote_delete_root, remote_deploy_root, remote_env_project_root, remote_git_clone_dest,
     remote_layout_path, resolve_host_path_abs,
     resolve_remote_julia, resolve_remote_project_root, rule_line, shield_sigint,
@@ -186,6 +186,7 @@ include("DistSSHRun/infra/run_transfer_removed.jl")
 include("DistSSHRun/infra/remote.jl")
 include("DistSSHRun/infra/launch_report.jl")
 include("DistSSHRun/infra/launch.jl")
+include("DistSSHRun/infra/bind_contract.jl")
 include("DistSSHRun/infra/topology.jl")
 include("DistSSHRun/infra/component_id.jl")
 include("DistSSHRun/infra/mismatch.jl")

@@ -1099,6 +1099,12 @@ function _go_run!(
         for line in read_hosts_file_lines(hf; surface = hint_surface)
             push!(tokens, line)
         end
+        resolve_launch_bind_overrides(;
+            hosts_file = hf,
+            surface = hint_surface,
+            planned_hosts = String[split_worker_token(t)[1] for t in tokens],
+            command = :go,
+        )
     end
     if repeat === nothing
         require_counted_placement_tokens(

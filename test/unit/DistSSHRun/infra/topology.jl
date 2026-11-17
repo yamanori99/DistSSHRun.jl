@@ -65,7 +65,7 @@ using DistSSHRun
             end
             @test err isa ArgumentError
             msg = sprint(showerror, err)
-            @test occursin("non-loopback", msg)
+            @test occursin("0.0.0.0", msg)
             @test occursin("--unsafe-expose-port", msg)
         end
         let err = try
@@ -80,7 +80,7 @@ using DistSSHRun
             end
             @test err isa ArgumentError
             msg = sprint(showerror, err)
-            @test occursin("empty bind", msg)
+            @test occursin("bind is empty", msg)
         end
         let err = try
                 DistSSHRun.topology_for_launch(;

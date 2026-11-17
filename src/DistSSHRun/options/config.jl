@@ -237,18 +237,17 @@ function print_run_job_dry_plan!(
         println(io, "  ", _redact_env_key(sk))
     end
     tunnel = ssh_tunnel_enabled()
+    ssh_hosts = String[launch_bind_host_key(h) for h in hosts]
+    plans = validate_all_host_launch_plans!(
+        ssh_hosts,
+        bind_overrides;
+        tunnel = tunnel,
+        unsafe_expose_port = cfg.unsafe_expose_port.value,
+        unsafe_all_to_all = cfg.unsafe_all_to_all.value,
+        topology_setting = cfg.topology.value,
+    )
     println(io, "launch (per host):")
-    for host in hosts
-        h = String(host)
-        bind = resolved_bind_address(h, bind_overrides)
-        plan = validate_host_launch_plan(
-            h,
-            bind;
-            tunnel = tunnel,
-            unsafe_expose_port = cfg.unsafe_expose_port.value,
-            unsafe_all_to_all = cfg.unsafe_all_to_all.value,
-            topology_setting = cfg.topology.value,
-        )
+    for plan in plans
         println(io, "  ", format_host_launch_plan_line(plan))
     end
     return nothing
@@ -265,7 +264,7 @@ function _cli_bool(parsed, key::Symbol)::Union{Nothing, Bool}
     v === missing && return nothing
     v === nothing && return nothing
     v isa Bool || return nothing
-    return v
+    return v ? true : nothing
 end
 
 """Build [`RunJobConfig`](@ref) from a go / drive / ride parse result."""
@@ -312,7 +311,13 @@ function finish_run_job_diagnostics!(
     else
         (0, false)
     end
-    bind_overrides = hosts_file_bind_overrides(cli)
+    planned_ssh = String[launch_bind_host_key(h) for h in hosts]
+    bind_overrides = hosts_file_bind_overrides(
+        cli;
+        bind_overrides = get(parsed, :bind_overrides, Dict{String, String}()),
+        planned_hosts = planned_ssh,
+        command = command,
+    )
     if cfg.dry_run.value
         resolved_workers = if command === :drive && hasproperty(parsed, :head_workers)
             Int(getproperty(parsed, :head_workers))

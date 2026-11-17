@@ -740,10 +740,13 @@ function ride!(
             cli_unsafe_expose_port = unsafe_expose_port ? true : nothing,
             cli_unsafe_all_to_all = unsafe_all_to_all ? true : nothing,
         )
+        planned = String[launch_bind_host_key(t) for t in tokens]
         resolved_bind = resolve_launch_bind_overrides(;
             hosts_file = hosts_file,
             bind_overrides = bind_overrides,
             surface = hint_surface,
+            planned_hosts = planned,
+            command = :ride,
         )
         return with_run_unsafe_options!(cfg) do
             return _ride_run!(
@@ -794,6 +797,20 @@ function _ride_run!(
             false, path, 0, nothing, sprint(showerror, e), julia_s, nothing, run_dir,
         )
         rethrow()
+    end
+    child_ssh = String[h for (h, n) in wp.child_workers if n > 0]
+    if !isempty(child_ssh)
+        try
+            validate_all_host_launch_plans!(child_ssh, bind_overrides)
+        catch e
+            e isa ArgumentError || rethrow()
+            if hint_surface === :cli
+                throw(DistSSHBase.CliUsageError(_bind_config_cli_message(e.msg)))
+            end
+            return RideResult(
+                false, path, 0, nothing, sprint(showerror, e), julia_s, nothing, run_dir,
+            )
+        end
     end
     src = read(path, String)
     expr = try

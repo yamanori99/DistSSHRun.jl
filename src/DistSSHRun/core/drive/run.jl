@@ -595,7 +595,25 @@ function _run_drive_parsed_locked!(
     kit_log = enable_log ? DistSSHRun.resolve_drive_log_dir(log_dir, script_dir) : nothing
     DistSSHRun._set_kit_progress_sidecar!(kit_out)
     kit_progress_begin!("drive"; steps = progress_steps, kind = :drive)
+    surface = parsed.cli_session.hint_surface
     try
+        if !isempty(hosts)
+            planned_ssh = String[h[1] for h in hosts]
+            try
+                bind_map_pre = hosts_file_bind_overrides(
+                    parsed.cli_session;
+                    bind_overrides = get(parsed, :bind_overrides, Dict{String, String}()),
+                    planned_hosts = planned_ssh,
+                    command = :drive,
+                )
+                validate_all_host_launch_plans!(planned_ssh, bind_map_pre)
+            catch e
+                e isa ArgumentError || rethrow()
+                surface === :cli &&
+                    throw(DistSSHBase.CliUsageError(_bind_config_cli_message(e.msg)))
+                rethrow()
+            end
+        end
         if !isempty(host_names)
             # Selection uses --run-id / deploy record / git (setup deploys first).
             DistSSHRun._assign_remote_work_root_env!(
@@ -672,6 +690,8 @@ function _run_drive_parsed_locked!(
                 bind_map = hosts_file_bind_overrides(
                     parsed.cli_session;
                     bind_overrides = get(parsed, :bind_overrides, Dict{String, String}()),
+                    planned_hosts = String[h[1] for h in hosts],
+                    command = :drive,
                 )
                 hosts_joined, report = add_drive_workers!(
                     hosts, head_workers, default_workers, julia_exe, proj_dir, script_path,
