@@ -41,6 +41,9 @@ const _CLUSTER_MANAGER_PUBLIC_UNEXPORTED = (
     :DriveJobOptions,
     :resolved_placement_tokens,
     :HostLaunchPlan,
+)
+
+const _TOPOLOGY_BIND_INTERNAL = (
     :resolve_launch_bind_overrides,
     :hosts_file_bind_overrides,
     :resolved_bind_address,
@@ -117,29 +120,18 @@ const _RUN_OPTION_TABLE_KEYS = Set{Symbol}(
     @test fieldnames(DistSSHRun.OptionRow) ===
         (:key, :cli, :env, :kwarg, :default, :commands, :help, :unsafe, :valued)
     @test fieldnames(DistSSHRun.HostLaunchPlan) === (:host, :bind, :tunnel, :topology)
+    @test Base.ispublic(DistSSHRun, :HostLaunchPlan)
+    @test !Base.isexported(DistSSHRun, :HostLaunchPlan)
+    for sym in _TOPOLOGY_BIND_INTERNAL
+        sym in names(DistSSHRun) || continue
+        @test !Base.ispublic(DistSSHRun, sym)
+    end
     @test Set(r.key for r in DistSSHRun.run_option_table()) == _RUN_OPTION_TABLE_KEYS
     top_row = DistSSHRun.option_row_by_key(:topology)
     @test top_row !== nothing
     @test top_row.env == "DISTSSH_TOPOLOGY"
     @test top_row.cli === nothing
     @test top_row.kwarg === :topology
-    @test DistSSHRun.resolved_topology("auto") === :auto
-    @test DistSSHRun.resolved_topology("master_worker") === :master_worker
-    @test DistSSHRun.resolved_topology("master-worker") === :master_worker
-    plan = DistSSHRun.validate_host_launch_plan(
-        "lab",
-        "127.0.0.1";
-        tunnel = true,
-        unsafe_expose_port = false,
-        unsafe_all_to_all = false,
-        topology_setting = "auto",
-    )
-    @test plan.host == "lab"
-    @test plan.bind == "127.0.0.1"
-    @test plan.tunnel === true
-    @test plan.topology === :master_worker
-    @test DistSSHRun.format_host_launch_plan_line(plan) ==
-        "lab: topology=master_worker bind=127.0.0.1 tunnel=true"
 
     rows = DistSSHRun.run_option_table()
     unsafe_shared = Set{Symbol}()

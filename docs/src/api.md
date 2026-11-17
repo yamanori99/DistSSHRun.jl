@@ -113,18 +113,10 @@ with_unsafe_expose_port
 with_unsafe_all_to_all
 DriveJobOptions
 HostLaunchPlan
-resolve_launch_bind_overrides
-hosts_file_bind_overrides
-resolved_bind_address
-validate_host_launch_plan
-format_host_launch_plan_line
-topology_for_launch
-resolved_topology
 ```
 
-Per-host bind comes from TOML `[[hosts]]` `bind=` and/or API `bind_overrides=`
-(see [`resolve_launch_bind_overrides`](@ref)). `--dry-run` prints
-[`HostLaunchPlan`](@ref) rows via [`format_host_launch_plan_line`](@ref).
+[`HostLaunchPlan`](@ref) records per-host `host`, `bind`, `tunnel`, and `topology`
+for dry-run and launch; bind resolution helpers are internal.
 
 Controller [`result_provenance`](@ref) / `run.toml` records launch under
 `provenance.launch` (`planned`, `joined`, `failures` with the same keys as
@@ -267,9 +259,7 @@ Filter = function (x)
         :unsafe_skip_env_digests_active, :unsafe_expose_port_active, :unsafe_all_to_all_active,
         :unsafe_skip_env_digests_argv, :with_run_unsafe_options!, :with_unsafe_skip_env_digests,
         :with_unsafe_expose_port, :with_unsafe_all_to_all, :DriveJobOptions,
-        :HostLaunchPlan, :resolve_launch_bind_overrides, :hosts_file_bind_overrides,
-        :resolved_bind_address, :validate_host_launch_plan, :format_host_launch_plan_line,
-        :topology_for_launch, :resolved_topology,
+        :HostLaunchPlan,
         :pipeline!, :PipelineConfig, :PipelineResult, :pipeline_config_from_env,
         :report_pipeline_errors,
         :collect!, :CollectResult,

@@ -4,7 +4,15 @@ using DistSSHRun
 @testset "topology and bind rules" begin
     @testset "resolved topology" begin
         @test DistSSHRun.resolved_topology("master_worker") == :master_worker
-        @test DistSSHRun.resolved_topology("master-worker") == :master_worker
+        err = try
+            DistSSHRun.resolved_topology("master-worker")
+        catch ex
+            ex
+        end
+        @test err isa ArgumentError
+        msg = sprint(showerror, err)
+        @test occursin("master-worker", msg)
+        @test occursin("DISTSSH_TOPOLOGY=master_worker", msg)
         @test DistSSHRun.topology_for_launch(; topology_setting = "auto", unsafe_all_to_all = false) ==
             :master_worker
         @test DistSSHRun.topology_for_launch(;
