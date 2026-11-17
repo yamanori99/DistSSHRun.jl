@@ -41,7 +41,8 @@ end
         lit = DistSSHRun.parse_bind_ipv4_literal("0.0.0.0")
         @test lit.all_interfaces
         @test DistSSHRun.bind_dry_run_display(lit) == "0.0.0.0 (all interfaces)"
-        msg = _bind_err(() ->
+        msg = _bind_err(
+            () ->
             DistSSHRun.validate_host_launch_plan("h", "0.0.0.0"; tunnel = false, unsafe_expose_port = true)
         )
         @test occursin("0.0.0.0 requires --unsafe-expose-port and SSH tunnel enabled", msg)
@@ -75,7 +76,8 @@ end
                 bind = "localhost"
                 """,
             )
-            msg = _bind_err(() ->
+            msg = _bind_err(
+                () ->
                 DistSSHRun.resolve_launch_bind_overrides(;
                     hosts_file = path,
                     planned_hosts = ["alice@mac-b"],
