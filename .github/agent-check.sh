@@ -118,12 +118,14 @@ check_trailing_newlines() {
     if [[ ! -s "${f}" ]]; then
       continue
     fi
-    if [[ "$(tail -c 1 "${f}")" != $'\n' ]]; then
+    lastbyte="$(tail -c 1 "${f}" | od -An -tx1 | tr -d ' \n')"
+    if [[ -z "${lastbyte}" || "${lastbyte}" != "0a" ]]; then
       echo "agent-check: ${rel}: file must end with exactly one newline" >&2
       ok=1
       continue
     fi
-    if [[ "$(tail -c 2 "${f}" | head -c 1)" == $'\n' ]]; then
+    penult="$(tail -c 2 "${f}" | head -c 1 | od -An -tx1 | tr -d ' \n')"
+    if [[ "${penult}" == "0a" ]]; then
       echo "agent-check: ${rel}: file must end with exactly one newline (not two)" >&2
       ok=1
     fi
