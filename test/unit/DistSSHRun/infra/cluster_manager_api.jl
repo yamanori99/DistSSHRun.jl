@@ -51,15 +51,17 @@ const _CLUSTER_MANAGER_PUBLIC_UNEXPORTED = (
     :default_bind_address,
 )
 
-const _RUN_OPTION_TABLE_KEYS = Set{Symbol}([
-    :unsafe_skip_env_digests,
-    :unsafe_expose_port,
-    :unsafe_all_to_all,
-    :unsafe_master_silence_exit,
-    :print_config,
-    :dry_run,
-    :topology,
-])
+const _RUN_OPTION_TABLE_KEYS = Set{Symbol}(
+    [
+        :unsafe_skip_env_digests,
+        :unsafe_expose_port,
+        :unsafe_all_to_all,
+        :unsafe_master_silence_exit,
+        :print_config,
+        :dry_run,
+        :topology,
+    ]
+)
 
 @testset "cluster manager API freeze" begin
     for sym in _CLUSTER_MANAGER_EXPORTS
