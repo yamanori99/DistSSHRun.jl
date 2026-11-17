@@ -149,4 +149,3 @@ if [[ -f "${repo_root}/docs/Project.toml" ]]; then
     Pkg.precompile(; workspace=false)
   ' -- "${repo_root}"
 fi
-
