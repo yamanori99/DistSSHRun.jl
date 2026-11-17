@@ -78,7 +78,7 @@ function main()
     for f in failures
         println(f)
     end
-    exit(1)
+    return exit(1)
 end
 
 main()
