@@ -1426,19 +1426,31 @@ end
             mktempdir() do out_d
                 write(joinpath(run_d, "kit.job"), "j-sidecar\n")
                 DistSSHRun._write_kit_hosts_file(["worker-1"], out_d, nothing)
-                proc = @async sleep(60)
-                kp = DistSSHRun.DetachedProcess(
-                    proc;
-                    kind = :ride,
-                    output_dir = out_d,
-                    run_dir = run_d,
-                )
-                @test DistSSHRun._read_kit_job_id_for_reap(kp) == "j-sidecar"
-                @test DistSSHRun._read_kit_hosts_for_reap(kp) == ["worker-1"]
+                proc = run(ignorestatus(`sleep 30`); wait = false)
                 try
-                    kill(proc)
-                catch
+                    kp = DistSSHRun.DetachedProcess(
+                        proc;
+                        kind = :ride,
+                        output_dir = out_d,
+                        run_dir = run_d,
+                    )
+                    @test DistSSHRun._read_kit_job_id_for_reap(kp) == "j-sidecar"
+                    @test DistSSHRun._read_kit_hosts_for_reap(kp) == ["worker-1"]
+                finally
+                    process_running(proc) && kill(proc)
+                    wait(proc)
                 end
+            end
+        end
+        mktempdir() do log_d
+            write(joinpath(log_d, "kit.job"), "j-log\n")
+            proc = run(ignorestatus(`sleep 30`); wait = false)
+            try
+                kp = DistSSHRun.DetachedProcess(proc; kind = :drive, log_dir = log_d)
+                @test DistSSHRun._read_kit_job_id_for_reap(kp) == "j-log"
+            finally
+                process_running(proc) && kill(proc)
+                wait(proc)
             end
         end
     end
