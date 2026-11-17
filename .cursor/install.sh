@@ -139,6 +139,13 @@ for rel in ARGS[2:end]
 end
 ' -- "${repo_root}" . test lib/DistSSHBase lib/DistSSHUp
 
-if ! bash "${repo_root}/.github/install-agent-tools.sh"; then
-  echo "warning: install-agent-tools.sh failed; continuing without Runic/JETLS on PATH" >&2
+bash "${repo_root}/.github/install-agent-tools.sh"
+
+if [[ -f "${repo_root}/docs/Project.toml" ]]; then
+  julia +"${STABLE_CHANNEL}" --startup-file=no -e '
+    using Pkg
+    Pkg.activate(joinpath(ARGS[1], "docs"))
+    Pkg.instantiate(; workspace=false)
+    Pkg.precompile(; workspace=false)
+  ' -- "${repo_root}"
 fi

@@ -18,8 +18,9 @@
 
 ## Checklist
 
-- [ ] Breaking status is correct — a change PR has the `breaking` label
-      when needed, and a `changelog.d/` fragment with `category: breaking`.
+- [ ] Breaking status is correct — a change PR needs the `breaking` label
+      when applicable (the owner applies it; agents report the need), and a
+      `changelog.d/` fragment with `category: breaking`.
       A cut PR runs `./.github/news-collect.sh` and keeps the NEWS section
       required by its version bump. Breaking includes CLI behavior: flags,
       confirmation, exit codes, what is deleted. See
