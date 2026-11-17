@@ -54,8 +54,7 @@ Checkout `Pkg.test()` is not a registry install. General puts the committed tree
 
 ```bash
 julia -e 'using Pkg; Pkg.Apps.add("Runic")'   # once
-runic --check --diff .      # before push; CI pins .github/runic-version
-runic --inplace .           # when --check reports drift
+runic --inplace src lib test docs testenv   # before push; not `.` (markdown out of scope)
 ./.github/jetls-check.sh    # hint+; same files as CI
 ./.github/aqua-check.sh     # latest registry Aqua; not part of Pkg.test()
 ./testenv/docker-ssh/scripts/up.sh --e2e
@@ -67,7 +66,8 @@ gitleaks detect --source .
 [Runic](https://github.com/fredrikekre/Runic.jl) CI
 (`fredrikekre/runic-action@v1`, `version: '1'`) runs `--check` on every
 tracked `.jl`. Format `docs/*.jl` and `testenv/**/*.jl` too if you change
-them. A Runic minor may make `--check` red: re-run `runic --inplace .` and push.
+them. A Runic minor may make `--check` red: re-run
+`runic --inplace src lib test docs testenv` and push.
 Optional: after a bulk format squash, add the landed SHA to
 [`.git-blame-ignore-revs`](.git-blame-ignore-revs) if blame is noisy.
 Local blame:
@@ -271,8 +271,7 @@ and
 [Packages](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/packages.md).
 
 In short: a breaking change raises `x` in `0.x.y`, anything else raises
-`y`. A breaking pull request needs the `breaking` label (the owner applies it).
-Register on the merge
+`y`. Label a breaking pull request `breaking`. Register on the merge
 commit. Release notes are often shorter than the NEWS section. Do not lower
 `version`. A version held by `cut-hold` is registered after the hold
 lifts. Do not publish a later number in its place. If `Downstream SSH E2E

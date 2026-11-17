@@ -14,7 +14,7 @@ Fill [.github/pull_request_template.md](.github/pull_request_template.md). Write
 
 When reviewing a diff, follow [REVIEW.md](REVIEW.md).
 
-A pull request needs the `breaking` label when it changes public behavior, including the CLI (flags, confirmation, exit codes, what is deleted). Agents report that need; the owner applies the label. Do not mix a breaking change with other changes.
+Label a pull request `breaking` when it changes public behavior, including the CLI (flags, confirmation, exit codes, what is deleted). Do not mix a breaking change with other changes.
 
 `WorkerPlan` is not experimental. A patch that changes it still takes the `breaking` label. Removing `size` / `size!` is breaking.
 
@@ -55,27 +55,17 @@ Public API breaking renames ship **without compatibility aliases**. Cross-repo r
 
 `src/DistSSHRun/` groups execution code by role: `options/` (session and future option types), `core/` (drive and setup job logic), `messages/` (Run-specific display), `infra/` (launch, ship, layout, and shared helpers); `argv/`, `drive.jl` / `setup.jl` include stubs, and unparsed job entry files stay at their current paths until later redesign PRs.
 
-## Agent workflow
+## Cloud Agent VM
 
-Procedures live in `.cursor/skills/`: push-gate, news-and-breaking, ci-triage, test-policy, release-cut, vm-environment. Read the matching skill before acting.
+Cursor preinstalls Julia via `.cursor/install.sh` (Runic/JETLS from `.github/install-agent-tools.sh`; pin is `RUNIC_PIN` in that script, same as CI Test `Runic`). On Julia **1.13**, before push:
 
-Push gate (mandatory, verbatim):
+**Push gate** — commit first (clean tree). After the last edit, on the exact commit you will push, run all four; on any failure fix, commit, and rerun all four from the start until one clean pass with no edits in between; push only that tree. In the report, state the commit SHA and that all four passed on it.
 
-> Mandatory push gate (Takanori, 2026-11-17), applies to every push from now on:
-> 1. Commit everything first (the gate needs a clean tree: no staged, unstaged or untracked files). After your LAST edit, run all of these on the exact committed tree you will push:
->    - `runic --check --diff .` (Runic pinned in .github/runic-version, currently v1.13.0; whole repo, same as CI incl. .github, bench, demos)
->    - trailing-newline audit on every changed file (exactly one final newline; your editor may strip it)
->    - `git diff --check origin/main...HEAD`
->    - `./.github/jetls-check.sh` (both settings CI uses)
->    Where `.github/agent-check.sh` exists, it runs all four in one command; use it.
-> 2. If anything fails, fix it, commit, and rerun ALL four from the start. Repeat until one full pass is clean with no edits in between.
-> 3. Push only that verified tree. Any edit after the clean pass (even a newline or a PR-body-driven tweak) means rerun all four before pushing.
-> 4. In your report, state the commit SHA and that all four passed on it.
+1. `runic --check --diff .` (whole repo, same as CI)
+2. Trailing-newline audit on every file changed vs `origin/main` (exactly one final newline)
+3. `git diff --check origin/main...HEAD`
+4. `./.github/jetls-check.sh --progress=none`
 
-Run it with `./.github/agent-check.sh` and paste its last line into the report.
+Run targeted tests when needed (`CONTRIBUTING.md`, `test/README.md`). Do not run the full `Pkg.test` matrix, Linux SSH E2E, or downstream jobs on the VM unless the user asks.
 
-- **Scope.** One pull request does one task. Failures caused by `main` or another pull request are reported (job, URL, first error line), not fixed here.
-- **Tests.** Never loosen an assertion, skip, retry, or extend a timeout to get green. Fix the product, or show the expectation is stale and say so.
-- **GitHub actions.** Agents do not label, comment, review, approve, merge, or rerun workflows. When a pull request needs the `breaking` label, say so in the report.
-- **Git.** Merge `origin/main` into your branch. Never rebase, amend pushed commits, or force-push.
-- **Environment.** Never `export HOME` or `JULIA_DEPOT_PATH`; prefix single commands. Runic is `runic` or `julia --project=@runic -m Runic`, both at `.github/runic-version`. Do not install tools yourself; if one is missing, stop and report.
+Do not `export HOME` or `JULIA_DEPOT_PATH`. Prefix commands with `PATH="$HOME/.julia/bin:$PATH"` when app shims are missing. Set `JULIA_APPS_JULIA_CMD="$HOME/.juliaup/bin/julia"` when `jetls` fails to start. If install tools are missing, stop and report; do not install ad hoc.
