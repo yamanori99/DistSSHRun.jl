@@ -472,7 +472,6 @@ function _interrupt_endpoint(pid::Integer)
         if w.manager isa Distributed.SSHManager
             host = w.config.host
             ospid = w.config.ospid
-            flags = getproperty(w.config, :sshflags)
             if host isa AbstractString && !isempty(host) && ospid isa Integer && ospid > 0
                 placement = get(DistSSHRun.WORKER_PLACEMENT_SSH_ENDPOINT, Int(pid), nothing)
                 ssh_endpoint = placement !== nothing ? String(placement) :
