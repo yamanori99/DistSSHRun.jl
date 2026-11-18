@@ -596,18 +596,18 @@ function _run_drive_parsed_locked!(
     DistSSHRun._set_kit_progress_sidecar!(kit_out)
     kit_progress_begin!("drive"; steps = progress_steps, kind = :drive)
     surface = parsed.cli_session.hint_surface
-    bind_map = Dict{String, String}()
-    ssh_launch_plans = nothing
+    bind_map_ref = Ref(Dict{String, String}())
+    ssh_launch_plans_ref = Ref{Union{Nothing, Vector{HostLaunchPlan}}}(nothing)
     if !isempty(hosts)
         planned_ssh = String[h[1] for h in hosts]
         try
-            bind_map = hosts_file_bind_overrides(
+            bind_map_ref[] = hosts_file_bind_overrides(
                 parsed.cli_session;
                 bind_overrides = get(parsed, :bind_overrides, Dict{String, String}()),
                 planned_hosts = planned_ssh,
                 command = :drive,
             )
-            ssh_launch_plans = validate_all_host_launch_plans!(planned_ssh, bind_map)
+            ssh_launch_plans_ref[] = validate_all_host_launch_plans!(planned_ssh, bind_map_ref[])
         catch e
             e isa ArgumentError || rethrow()
             surface === :cli &&
@@ -692,8 +692,8 @@ function _run_drive_parsed_locked!(
                 hosts_joined, report = add_drive_workers!(
                     hosts, head_workers, default_workers, julia_exe, proj_dir, script_path,
                     project_root;
-                    bind_overrides = bind_map,
-                    launch_plans = ssh_launch_plans,
+                    bind_overrides = bind_map_ref[],
+                    launch_plans = ssh_launch_plans_ref[],
                     run_id = get(parsed, :run_id, nothing),
                 )
                 launch_report[] = report
