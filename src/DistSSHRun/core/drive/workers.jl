@@ -296,6 +296,7 @@ function add_drive_workers!(
                         host_julia,
                         remote_proj,
                         sshflags_cmd,
+                        host_name,
                     )
                     added = sort!(Int[w for w in workers() if w ∉ before])
                     # `SSHManager.launch` can swallow a failed machine; `addprocs` then
@@ -434,21 +435,21 @@ const _INTERRUPT_SSH_PHASE_S = Float64(DistSSHBase._SSH_CONNECT_TIMEOUT_S)
     _group_interrupt_targets(rows) -> (local_pids, ssh, fallback)
 
 `rows` is `(pid, endpoint)`. `endpoint` is `:local`, `nothing` (use
-`Distributed.interrupt` for that pid), or `((host, port), ospid)` for one SSH worker.
-SSH workers on the same host and explicit port share one OS signal.
+`Distributed.interrupt` for that pid), or `(placement_ssh_endpoint, ospid)` for one SSH worker.
+SSH workers on the same placement endpoint share one OS signal.
 """
 function _group_interrupt_targets(rows)
     local_pids = Int[]
     fallback = Int[]
-    ssh = Dict{Tuple{String, Union{Nothing, Int}}, Vector{Int}}()
+    ssh = Dict{String, Vector{Int}}()
     for (pid, endpoint) in rows
         if endpoint === :local
             push!(local_pids, Int(pid))
         elseif endpoint === nothing
             push!(fallback, Int(pid))
         else
-            (host, port), ospid = endpoint
-            key = (String(host), port)
+            ssh_endpoint, ospid = endpoint
+            key = String(ssh_endpoint)
             push!(get!(ssh, key, Int[]), Int(ospid))
         end
     end
@@ -473,9 +474,10 @@ function _interrupt_endpoint(pid::Integer)
             ospid = w.config.ospid
             flags = getproperty(w.config, :sshflags)
             if host isa AbstractString && !isempty(host) && ospid isa Integer && ospid > 0
-                port = flags isa Cmd ? DistSSHBase.explicit_port_from_sshflags(flags) : nothing
-                open_host = DistSSHBase.ssh_openssh_dest(String(host))
-                return ((open_host, port), Int(ospid))
+                placement = get(DistSSHRun.WORKER_PLACEMENT_SSH_ENDPOINT, Int(pid), nothing)
+                ssh_endpoint = placement !== nothing ? String(placement) :
+                    DistSSHBase.ssh_openssh_dest(String(host))
+                return (ssh_endpoint, Int(ospid))
             end
         end
     catch
@@ -494,19 +496,13 @@ function _interrupt_kill_shell(ospids::Vector{Int})::String
 end
 
 """One bounded `kill -INT` ssh per host. A failure is logged, not thrown."""
-function _interrupt_ssh_endpoint((host, port)::Tuple{String, Union{Nothing, Int}})::String
-    port === nothing && return host
-    return string(host, ":", port)
-end
-
 function _interrupt_ssh_phase!(
-        ssh::AbstractDict{<:Tuple{String, Union{Nothing, Int}}, <:AbstractVector{Int}},
+        ssh::AbstractDict{<:AbstractString, <:AbstractVector{Int}},
     )
     pairs = Pair{String, String}[]
-    for (hostport, ospids) in ssh
+    for (ssh_endpoint, ospids) in ssh
         isempty(ospids) && continue
-        endpoint = _interrupt_ssh_endpoint(hostport)
-        push!(pairs, endpoint => _interrupt_kill_shell(Int[Int(pid) for pid in ospids]))
+        push!(pairs, String(ssh_endpoint) => _interrupt_kill_shell(Int[Int(pid) for pid in ospids]))
     end
     isempty(pairs) && return nothing
     results = _run_ssh_hosts!(pairs, _INTERRUPT_SSH_PHASE_S)

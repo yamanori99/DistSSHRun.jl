@@ -170,22 +170,75 @@ function _ssh_o_keyvalue_is_port(keyval::AbstractString)::Bool
     return lowercase(String(keyval[1:(eq - 1)])) == "port"
 end
 
-"""Drop `-p`, `-P`, and `-o Port=` tokens so an explicit placement port can win."""
-function _ssh_argv_without_port_flags(argv::AbstractVector{<:AbstractString})::Vector{String}
+function _ssh_o_token_is_port(keyval::AbstractString)::Bool
+    _ssh_o_keyvalue_is_port(keyval) && return true
+    parts = split(String(keyval); limit = 2)
+    return length(parts) == 2 && lowercase(parts[1]) == "port" && !isempty(strip(parts[2]))
+end
+
+function _attached_ssh_port_flag(flag::AbstractString)::Bool
+    return occursin(r"^-p\d+$", String(flag))
+end
+
+function _attached_scp_port_flag(flag::AbstractString)::Bool
+    return occursin(r"^-P\d+$", String(flag))
+end
+
+"""Drop ssh port spellings (`-p`, `-o Port…`) but keep ssh `-P` config tags."""
+function _ssh_ssh_argv_without_port_flags(argv::AbstractVector{<:AbstractString})::Vector{String}
     out = String[]
     i = 1
     n = length(argv)
     while i <= n
         a = String(argv[i])
-        if a == "-p" || a == "-P"
+        if a == "-p"
             i += 2
             continue
+        elseif _attached_ssh_port_flag(a)
+            i += 1
+            continue
         elseif a == "-o" && i + 1 <= n
-            if _ssh_o_keyvalue_is_port(argv[i + 1])
+            nxt = String(argv[i + 1])
+            if _ssh_o_token_is_port(nxt)
                 i += 2
                 continue
+            elseif lowercase(nxt) == "port" && i + 2 <= n
+                i += 3
+                continue
             end
-        elseif startswith(a, "-o") && length(a) > 2 && _ssh_o_keyvalue_is_port(SubString(a, 3))
+        elseif startswith(a, "-o") && length(a) > 2 && _ssh_o_token_is_port(SubString(a, 3))
+            i += 1
+            continue
+        end
+        push!(out, a)
+        i += 1
+    end
+    return out
+end
+
+"""Drop scp port spellings (`-P`, `-o Port…`) but keep scp `-p` (preserve times)."""
+function _scp_argv_without_port_flags(argv::AbstractVector{<:AbstractString})::Vector{String}
+    out = String[]
+    i = 1
+    n = length(argv)
+    while i <= n
+        a = String(argv[i])
+        if a == "-P"
+            i += 2
+            continue
+        elseif _attached_scp_port_flag(a)
+            i += 1
+            continue
+        elseif a == "-o" && i + 1 <= n
+            nxt = String(argv[i + 1])
+            if _ssh_o_token_is_port(nxt)
+                i += 2
+                continue
+            elseif lowercase(nxt) == "port" && i + 2 <= n
+                i += 3
+                continue
+            end
+        elseif startswith(a, "-o") && length(a) > 2 && _ssh_o_token_is_port(SubString(a, 3))
             i += 1
             continue
         end
@@ -207,7 +260,11 @@ function ssh_openssh_dest(dest::AbstractString)::String
         hostpart = d[(at + 1):end]
     end
     if startswith(hostpart, "[") && endswith(hostpart, "]")
-        hostpart = hostpart[2:(end - 1)]
+        validate_ssh_host(hostpart; shown = dest)
+        inner = hostpart[2:(end - 1)]
+        startswith(inner, "-") &&
+            throw(ArgumentError("$(repr(dest)): SSH name must not start with '-'. See help setup."))
+        hostpart = inner
     end
     return string(user, hostpart)
 end
@@ -221,7 +278,19 @@ function ssh_forwarded_opts(;
     )::Vector{String}
     base = String.(ssh_opts(; request_tty = request_tty))
     explicit_port === nothing && return base
-    return _ssh_argv_without_port_flags(base)
+    return _ssh_ssh_argv_without_port_flags(base)
+end
+
+"""
+`ssh_opts()` with scp port flags removed when `explicit_port` is set.
+"""
+function scp_forwarded_opts(;
+        explicit_port::Union{Nothing, Int} = nothing,
+        request_tty::Bool = false,
+    )::Vector{String}
+    base = String.(ssh_opts(; request_tty = request_tty))
+    explicit_port === nothing && return base
+    return _scp_argv_without_port_flags(base)
 end
 
 """OpenSSH `-p` when the placement token carried an explicit port."""
@@ -295,7 +364,7 @@ end
 """`scp` argv prefix: forwarded opts plus explicit `-P` when the endpoint names a port."""
 function scp_connection_argv(host::AbstractString)::Vector{String}
     _, port = parse_ssh_endpoint(host)
-    return vcat(ssh_forwarded_opts(explicit_port = port), _scp_explicit_port_args(port))
+    return vcat(scp_forwarded_opts(explicit_port = port), _scp_explicit_port_args(port))
 end
 
 _scp_cmd(args::AbstractVector)::Cmd = _host_tool_cmd("scp", args)
@@ -362,11 +431,32 @@ function ssh_scp_machine(host::AbstractString)::String
     return u === nothing ? h : string(u, '@', h)
 end
 
+function _distributed_ipv6_machine_error(token::AbstractString)::ArgumentError
+    return ArgumentError(
+        "$(repr(String(strip(token)))): IPv6 SSH destinations cannot be used as a " *
+            "Distributed worker machine string; use an SSH config Host alias with an " *
+            "IPv4 HostName, or an IPv4 address",
+    )
+end
+
+function _distributed_rejects_ipv6_worker_machine(dest::AbstractString, shown::AbstractString)::Nothing
+    d = String(dest)
+    at = findlast('@', d)
+    hostpart = at === nothing ? d : d[(at + 1):end]
+    if startswith(hostpart, "[") && endswith(hostpart, "]")
+        throw(_distributed_ipv6_machine_error(shown))
+    end
+    occursin(':', hostpart) && !occursin('.', hostpart) && throw(_distributed_ipv6_machine_error(shown))
+    return nothing
+end
+
 function ssh_addprocs_machine(host::AbstractString)::String
     endpoint = String(strip(host))
     isempty(endpoint) && return endpoint
     dest, _ = parse_ssh_endpoint(endpoint)
-    h = ssh_openssh_dest(validate_ssh_host(dest))
+    validate_ssh_host(dest; shown = endpoint)
+    _distributed_rejects_ipv6_worker_machine(dest, endpoint)
+    h = ssh_openssh_dest(dest)
     occursin('@', h) && return h
     u = ssh_config_user(endpoint)
     return u === nothing ? h : string(u, '@', h)

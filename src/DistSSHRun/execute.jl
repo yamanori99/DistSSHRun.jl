@@ -1176,10 +1176,32 @@ const DRIVE_HOST_WORKER_IDS = Dict{String, Vector{Int}}()
 const DRIVE_HOST_LAST_SEEN = Dict{String, Float64}()
 const DRIVE_HOST_STATUS_STOP = Ref(true)
 const DRIVE_HOST_STATUS_TASK = Ref{Union{Nothing, Task}}(nothing)
+"""Canonical placement SSH endpoint per worker pid (interrupt and leftover keys)."""
+const WORKER_PLACEMENT_SSH_ENDPOINT = Dict{Int, String}()
+
+function _register_worker_placement_ssh_endpoints!(
+        pids::AbstractVector{<:Integer},
+        endpoint::AbstractString,
+    )::Nothing
+    ep = String(endpoint)
+    for pid in pids
+        WORKER_PLACEMENT_SSH_ENDPOINT[Int(pid)] = ep
+    end
+    return nothing
+end
+
+function _leftover_host_key_from_ssh_endpoint(ep::AbstractString)::String
+    dest, port = DistSSHBase.parse_ssh_endpoint(ep)
+    at = findlast('@', dest)
+    hostpart = at === nothing ? dest : dest[(at + 1):end]
+    port === nothing && return hostpart
+    return string(hostpart, ":", port)
+end
 
 function _clear_drive_host_worker_ids!()
     empty!(DRIVE_HOST_WORKER_IDS)
     empty!(DRIVE_HOST_LAST_SEEN)
+    empty!(WORKER_PLACEMENT_SSH_ENDPOINT)
     return nothing
 end
 
@@ -1276,13 +1298,13 @@ Local workers stay on the parent. An SSH worker uses the host in its
 `WorkerConfig`, without a `user@` prefix. Anything else is `unknown`, not the parent.
 """
 function _leftover_worker_host(pid::Integer)::String
+    placement = get(WORKER_PLACEMENT_SSH_ENDPOINT, Int(pid), nothing)
+    placement !== nothing && return _leftover_host_key_from_ssh_endpoint(placement)
     ep = _interrupt_endpoint(pid)
     ep === :local && return PARENT_HOST_NAME
     if ep isa Tuple
-        lead = ep[1]
-        host = lead isa Tuple ? String(lead[1]) : String(lead)
-        at = findlast('@', host)
-        return at === nothing ? host : String(host[nextind(host, at):end])
+        endpoint = String(ep[1])
+        return _leftover_host_key_from_ssh_endpoint(endpoint)
     end
     return "unknown"
 end

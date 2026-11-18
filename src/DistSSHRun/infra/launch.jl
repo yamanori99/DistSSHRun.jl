@@ -603,6 +603,7 @@ function _add_ssh_drive_workers!(
         julia_bin::AbstractString,
         project::AbstractString,
         sshflags::Cmd,
+        placement_ssh_endpoint::AbstractString,
     )
     n < 1 && return nothing
     flags = Cmd(worker_exeflag_strings(project; local_cpu = false, job_id = resolved_kit_job_id()))
@@ -628,6 +629,7 @@ function _add_ssh_drive_workers!(
             for w in just
                 register_launch_rank!(w, rank)
             end
+            _register_worker_placement_ssh_endpoints!(just, placement_ssh_endpoint)
             _mark_workers_launched!(just, project)
             _apply_worker_blas_threads!(just)
             i == 1 || continue

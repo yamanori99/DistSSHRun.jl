@@ -44,31 +44,43 @@ function throw_legacy_machine_token(raw::AbstractString)
     return nothing
 end
 
+function _split_bracketed_ipv6_port(
+        prefix::AbstractString,
+        hostpart::AbstractString,
+        shown::AbstractString,
+    )::Tuple{String, Union{Nothing, Int}}
+    close = findfirst(']', String(hostpart))
+    close === nothing &&
+        throw(ArgumentError("$(repr(shown)): unclosed IPv6 bracket; use `[::1]` or `[fe80::1]:port`"))
+    body = string(prefix, hostpart[1:close])
+    rest = hostpart[(close + 1):end]
+    if isempty(rest)
+        return body, nothing
+    end
+    rest[1] != ':' &&
+        throw(ArgumentError("$(repr(shown)): expected `:port` after `]`"))
+    port = try
+        parse(Int, rest[2:end])
+    catch
+        throw(ArgumentError("$(repr(shown)): SSH port must be an integer"))
+    end
+    port < 1 && throw(ArgumentError("$(repr(shown)): SSH port must be >= 1"))
+    return body, port
+end
+
 """Split `dest` into host body and optional SSH port (`:` after `]` or bare host)."""
 function _split_ssh_port(dest::AbstractString)::Tuple{String, Union{Nothing, Int}}
     d = String(strip(dest))
     isempty(d) && throw(ArgumentError("empty SSH host in placement token"))
     if startswith(d, "[")
-        close = findfirst(']', d)
-        close === nothing &&
-            throw(ArgumentError("$(repr(dest)): unclosed IPv6 bracket; use `[::1]` or `[fe80::1]:port`"))
-        body = d[1:close]
-        rest = d[(close + 1):end]
-        if isempty(rest)
-            return body, nothing
-        end
-        rest[1] != ':' &&
-            throw(ArgumentError("$(repr(dest)): expected `:port` after `]`"))
-        port = try
-            parse(Int, rest[2:end])
-        catch
-            throw(ArgumentError("$(repr(dest)): SSH port must be an integer"))
-        end
-        port < 1 && throw(ArgumentError("$(repr(dest)): SSH port must be >= 1"))
-        return body, port
+        return _split_bracketed_ipv6_port("", d, dest)
     end
     at = findlast('@', d)
+    prefix = at === nothing ? "" : d[1:at]
     hostpart = at === nothing ? d : d[(at + 1):end]
+    if startswith(hostpart, "[")
+        return _split_bracketed_ipv6_port(prefix, hostpart, dest)
+    end
     colon = findlast(':', hostpart)
     if colon === nothing
         validate_ssh_host(d; shown = dest)

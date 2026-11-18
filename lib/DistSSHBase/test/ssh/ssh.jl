@@ -319,6 +319,18 @@ let _BASE = DistSSHBase
             @test opts[(end - 1):end] == ["-p", "2222"]
             @test count(==("-p"), opts) == 1
         end
+        withenv("DISTRIBUTED_SSH_OPTS" => "-P tag -p -p2201 -oPort=2202 -o Port 2203") do
+            ssh_opts = _BASE.ssh_forwarded_opts(explicit_port = 2222)
+            @test "-P" in ssh_opts
+            @test "tag" in ssh_opts
+            @test count(==("-p"), ssh_opts) == 0
+            scp_opts = _BASE.scp_forwarded_opts(explicit_port = 2222)
+            @test "-p" in scp_opts
+            @test count(==("-P"), scp_opts) == 0
+        end
+        @test_throws ArgumentError _BASE.ssh_openssh_dest("[-host]")
+        @test_throws ArgumentError _BASE.ssh_addprocs_machine("[::1]:2222")
+        @test_throws ArgumentError _BASE.ssh_addprocs_machine("user@[::1]:2222")
         if Sys.which("ssh") === nothing
             @test_skip "ssh not in PATH"
         else

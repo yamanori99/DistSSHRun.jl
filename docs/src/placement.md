@@ -17,7 +17,8 @@ julia -m DistSSHKit drive --local-workers 2 --hosts '4*user@lab:2222,2*[::1]' sc
 - `:` after the host is the **SSH port** only (as in Julia's machine file).
 - When you set a port, OpenSSH gets **`-p`** (and **`scp -P`**); with no port, DistSSH does not pass `-p` (your `~/.ssh/config` may still choose a port).
 - The same port is part of the host key for duplicates, `bind_overrides=`, and dry-run lines (`alice@lab:2222` is distinct from `alice@lab`).
-- IPv6 literals must be bracketed (`2*[fe80::1]:2222`); tokens and `scp` keep the brackets, while `ssh` and worker launch pass the address without brackets plus `-p` when you set a port.
+- IPv6 literals must be bracketed (`2*[fe80::1]:2222`); tokens and `scp` keep the brackets, while `ssh` uses the address without brackets plus `-p` when you set a port.
+- Bracketed IPv6 placement tokens cannot start `Distributed.addprocs` workers (Julia’s machine string does not accept colon addresses). Use an SSH `Host` alias with an IPv4 `HostName`, or an IPv4 address.
 
 Local capacity is **not** a placement token. `drive` / `ride`: `--local-workers N`
 (`DISTSSH_LOCAL_WORKERS` only). `go`: `--local-slots N`. With no hosts and no
