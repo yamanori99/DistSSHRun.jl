@@ -118,7 +118,7 @@ Per-host SSH launch view (bind address, tunnel flag, resolved topology).
 
 Field names are API for 0.2.0: `host`, `bind`, `tunnel`, `topology`
 (`:master_worker` or `:all_to_all`). `bind` is the canonical IPv4 literal passed to
-Distributed; dry-run decorates `0.0.0.0` via [`bind_dry_run_display`](@ref).
+Distributed; dry-run decorates `0.0.0.0` via `bind_dry_run_display`.
 """
 struct HostLaunchPlan
     host::String
