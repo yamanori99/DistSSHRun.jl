@@ -150,11 +150,11 @@ end
                 "DISTSSH_QUIET" => "1",
             )
             for cmd_args in (
-                String[
-                    "ride", "-y", "--no-spi-check", "--hosts-file", hosts_path, script,
-                ],
-                String["go", "-y", "--hosts-file", hosts_path, script],
-            )
+                    String[
+                        "ride", "-y", "--no-spi-check", "--hosts-file", hosts_path, script,
+                    ],
+                    String["go", "-y", "--hosts-file", hosts_path, script],
+                )
                 proc, _ = _run_subprocess(setenv(_kit_cli_cmd(cmd_args; project = _kit_root()), env))
                 @test proc.exitcode == Int(CLI_EXIT_USAGE)
             end

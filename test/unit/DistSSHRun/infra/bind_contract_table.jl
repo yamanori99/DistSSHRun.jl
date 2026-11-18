@@ -24,7 +24,7 @@ end
 const _FIX = "bind = \"127.0.0.1\""
 
 @testset "bind contract table (#503 exact messages)" begin
-  cases = [
+    cases = [
         ("127.0.0.1", :accept, "127.0.0.1"),
         ("127.0.0.2", :gate_tunnel, ""),
         ("10.0.0.5", :gate_unsafe, ""),
