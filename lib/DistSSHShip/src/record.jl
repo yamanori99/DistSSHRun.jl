@@ -175,8 +175,8 @@ function _shipment_record_scp_argv(
         remote_tmp::AbstractString,
         local_path::AbstractString,
     )::Vector{String}
-    port_args, dest = DistSSHBase._scp_remote_file_spec(host, remote_tmp)
-    return vcat(String.(DistSSHBase.ssh_opts()), port_args, String[local_path, dest])
+    _, dest = DistSSHBase._scp_remote_file_spec(host, remote_tmp)
+    return vcat(DistSSHBase.scp_connection_argv(host), String[local_path, dest])
 end
 
 function _shipment_record_atomic_install_script(record_path::AbstractString, tmp_path::AbstractString)::String

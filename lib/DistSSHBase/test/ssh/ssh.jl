@@ -301,13 +301,32 @@ let _BASE = DistSSHBase
         @test _BASE._ssh_host_connection_args("alice@h:2222", "true") ==
             ["-p", "2222", "--", "alice@h", "true"]
         @test _BASE._ssh_host_connection_args("alice@h", "true") == ["--", "alice@h", "true"]
+        @test _BASE._ssh_host_connection_args("[::1]:2222", "true") ==
+            ["-p", "2222", "--", "::1", "true"]
         port_args, spec = _BASE._scp_remote_file_spec("alice@h:2222", "/tmp/x")
         @test port_args == ["-P", "2222"]
         @test spec == "alice@h:/tmp/x"
+        _, spec6 = _BASE._scp_remote_file_spec("user@[::1]:2222", "/tmp/x")
+        @test spec6 == "user@[::1]:/tmp/x"
+        withenv("DISTRIBUTED_SSH_OPTS" => "-o Port=2200 -p 2200") do
+            argv = _BASE._ssh_remote_session_argv("alice@h:2222", "true")
+            pidx = findfirst(==("-p"), argv)
+            @test pidx !== nothing
+            @test argv[pidx + 1] == "2222"
+            @test count(x -> startswith(String(x), "Port="), argv) == 0
+            @test count(==("-p"), argv) == 1
+            opts = _BASE.ssh_connection_ssh_opts("alice@h:2222")
+            @test opts[(end - 1):end] == ["-p", "2222"]
+            @test count(==("-p"), opts) == 1
+        end
         if Sys.which("ssh") === nothing
             @test_skip "ssh not in PATH"
         else
-            withenv("DISTSSH_TEST" => nothing, "DISTSSH_TEST_SSH" => nothing) do
+            withenv(
+                "DISTRIBUTED_SSH_OPTS" => nothing,
+                "DISTSSH_TEST" => nothing,
+                "DISTSSH_TEST_SSH" => nothing,
+            ) do
                 cmd = _BASE._host_sync_remote_shell_cmd("alice@h:2222", "true")
                 @test "-p" in cmd.exec
                 @test "2222" in cmd.exec
@@ -316,6 +335,9 @@ let _BASE = DistSSHBase
                 @test !("-p" in plain.exec)
             end
         end
+        flags = Cmd(["-p", "2222", "-o", "BatchMode=yes"])
+        @test _BASE.explicit_port_from_sshflags(flags) == 2222
+        @test _BASE.explicit_port_from_sshflags(Cmd(["-o", "BatchMode=yes"])) === nothing
     end
 
     @testset "ssh -n vs stdin forward" begin

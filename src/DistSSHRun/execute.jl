@@ -1279,7 +1279,8 @@ function _leftover_worker_host(pid::Integer)::String
     ep = _interrupt_endpoint(pid)
     ep === :local && return PARENT_HOST_NAME
     if ep isa Tuple
-        host = String(ep[1])
+        lead = ep[1]
+        host = lead isa Tuple ? String(lead[1]) : String(lead)
         at = findlast('@', host)
         return at === nothing ? host : String(host[nextind(host, at):end])
     end

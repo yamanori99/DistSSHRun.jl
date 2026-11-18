@@ -269,8 +269,8 @@ function _deploy_record_scp_upload_argv(
         local_path::AbstractString,
     )::Vector{String}
     remote = String(record_abs)
-    port_args, dest = DistSSHBase._scp_remote_file_spec(host, remote)
-    return vcat(String.(ssh_opts()), port_args, String[local_path, dest])
+    _, dest = DistSSHBase._scp_remote_file_spec(host, remote)
+    return vcat(DistSSHBase.scp_connection_argv(host), String[local_path, dest])
 end
 
 function _deploy_record_atomic_install_script(

@@ -164,22 +164,110 @@ function _ssh_host_args(host::AbstractString, args::AbstractString...)::Vector{S
     return String["--", dest, String.(args)...]
 end
 
+function _ssh_o_keyvalue_is_port(keyval::AbstractString)::Bool
+    eq = findfirst('=', keyval)
+    eq === nothing && return false
+    return lowercase(String(keyval[1:(eq - 1)])) == "port"
+end
+
+"""Drop `-p`, `-P`, and `-o Port=` tokens so an explicit placement port can win."""
+function _ssh_argv_without_port_flags(argv::AbstractVector{<:AbstractString})::Vector{String}
+    out = String[]
+    i = 1
+    n = length(argv)
+    while i <= n
+        a = String(argv[i])
+        if a == "-p" || a == "-P"
+            i += 2
+            continue
+        elseif a == "-o" && i + 1 <= n
+            if _ssh_o_keyvalue_is_port(argv[i + 1])
+                i += 2
+                continue
+            end
+        elseif startswith(a, "-o") && length(a) > 2 && _ssh_o_keyvalue_is_port(SubString(a, 3))
+            i += 1
+            continue
+        end
+        push!(out, a)
+        i += 1
+    end
+    return out
+end
+
+"""OpenSSH `ssh` destination: bracketed IPv6 literals lose `[` `]`; scp keys keep brackets."""
+function ssh_openssh_dest(dest::AbstractString)::String
+    d = String(dest)
+    at = findlast('@', d)
+    if at === nothing
+        user = ""
+        hostpart = d
+    else
+        user = d[1:at]
+        hostpart = d[(at + 1):end]
+    end
+    if startswith(hostpart, "[") && endswith(hostpart, "]")
+        hostpart = hostpart[2:(end - 1)]
+    end
+    return string(user, hostpart)
+end
+
+"""
+`ssh_opts()` with conflicting port flags removed when `explicit_port` is set.
+"""
+function ssh_forwarded_opts(;
+        explicit_port::Union{Nothing, Int} = nothing,
+        request_tty::Bool = false,
+    )::Vector{String}
+    base = String.(ssh_opts(; request_tty = request_tty))
+    explicit_port === nothing && return base
+    return _ssh_argv_without_port_flags(base)
+end
+
 """OpenSSH `-p` when the placement token carried an explicit port."""
 function _ssh_explicit_port_args(port::Union{Nothing, Int})::Vector{String}
     port === nothing && return String[]
     return String["-p", string(port)]
 end
 
-"""`ssh_opts()` plus `-p` when `host` names an explicit SSH port."""
+"""`ssh` / `Distributed.addprocs` flags: forwarded opts plus explicit `-p` when set."""
 function ssh_connection_ssh_opts(host::AbstractString)::Vector{String}
     _, port = parse_ssh_endpoint(host)
-    return vcat(String.(ssh_opts()), _ssh_explicit_port_args(port))
+    return vcat(ssh_forwarded_opts(explicit_port = port), _ssh_explicit_port_args(port))
+end
+
+"""Forwarded `ssh_opts` plus `-p` and `-- dest …` for one connection."""
+function _ssh_remote_session_argv(host::AbstractString, args::AbstractString...)::Vector{String}
+    _, port = parse_ssh_endpoint(host)
+    return vcat(
+        ssh_forwarded_opts(explicit_port = port),
+        _ssh_host_connection_args(host, args...),
+    )
+end
+
+"""`--` then an already-validated OpenSSH destination (IPv6 without brackets)."""
+function _ssh_host_openssh_args(dest::AbstractString, args::AbstractString...)::Vector{String}
+    h = String(strip(dest))
+    return String["--", h, String.(args)...]
 end
 
 """Split a canonical SSH endpoint into OpenSSH argv tail (`-p` then `-- dest …`)."""
 function _ssh_host_connection_args(host::AbstractString, args::AbstractString...)::Vector{String}
     dest, port = parse_ssh_endpoint(host)
-    return vcat(_ssh_explicit_port_args(port), _ssh_host_args(dest, args...))
+    validate_ssh_host(dest; shown = host)
+    open_dest = ssh_openssh_dest(dest)
+    return vcat(_ssh_explicit_port_args(port), _ssh_host_openssh_args(open_dest, args...))
+end
+
+"""Explicit `-p` from a worker `sshflags` `Cmd` (Distributed `addprocs`)."""
+function explicit_port_from_sshflags(flags::Cmd)::Union{Nothing, Int}
+    exec = flags.exec
+    for i in 1:(length(exec) - 1)
+        String(exec[i]) == "-p" || continue
+        parsed = tryparse(Int, String(exec[i + 1]))
+        return parsed
+    end
+    return nothing
 end
 
 """OpenSSH `scp -P` when the placement token carried an explicit port."""
@@ -195,13 +283,19 @@ function _scp_remote_file_spec(
         host::AbstractString,
         remote_path::AbstractString,
     )::Tuple{Vector{String}, String}
-    dest, port = parse_ssh_endpoint(host)
-    machine = ssh_addprocs_machine(dest)
+    _, port = parse_ssh_endpoint(host)
+    machine = ssh_scp_machine(host)
     remote = String(remote_path)
     any(iscntrl, remote) &&
         throw(ArgumentError("scp remote path contains a control character"))
     spec = string(machine, ":", remote)
     return (_scp_explicit_port_args(port), spec)
+end
+
+"""`scp` argv prefix: forwarded opts plus explicit `-P` when the endpoint names a port."""
+function scp_connection_argv(host::AbstractString)::Vector{String}
+    _, port = parse_ssh_endpoint(host)
+    return vcat(ssh_forwarded_opts(explicit_port = port), _scp_explicit_port_args(port))
 end
 
 _scp_cmd(args::AbstractVector)::Cmd = _host_tool_cmd("scp", args)
@@ -218,10 +312,17 @@ function ssh_config_user(host::AbstractString)::Union{Nothing, String}
     isempty(h) && return nothing
     try
         dest, port = parse_ssh_endpoint(h)
+        open_dest = ssh_openssh_dest(dest)
         # -n: no stdin; -G dumps effective config (User, HostName, …).
         out = read(
             _ssh_cmd(
-                ["-n", ssh_opts()..., _ssh_explicit_port_args(port)..., "-G", _ssh_host_args(dest)...],
+                [
+                    "-n",
+                    ssh_forwarded_opts(explicit_port = port)...,
+                    _ssh_explicit_port_args(port)...,
+                    "-G",
+                    _ssh_host_openssh_args(open_dest)...,
+                ],
             ),
             String,
         )
@@ -251,13 +352,23 @@ julia> DistSSHRun.ssh_addprocs_machine("dev@host1")
 "dev@host1"
 ```
 """
-function ssh_addprocs_machine(host::AbstractString)::String
-    h = String(strip(host))
-    isempty(h) && return h
-    dest, _ = parse_ssh_endpoint(h)
+function ssh_scp_machine(host::AbstractString)::String
+    endpoint = String(strip(host))
+    isempty(endpoint) && return endpoint
+    dest, _ = parse_ssh_endpoint(endpoint)
     h = validate_ssh_host(dest)
     occursin('@', h) && return h
-    u = ssh_config_user(h)
+    u = ssh_config_user(endpoint)
+    return u === nothing ? h : string(u, '@', h)
+end
+
+function ssh_addprocs_machine(host::AbstractString)::String
+    endpoint = String(strip(host))
+    isempty(endpoint) && return endpoint
+    dest, _ = parse_ssh_endpoint(endpoint)
+    h = ssh_openssh_dest(validate_ssh_host(dest))
+    occursin('@', h) && return h
+    u = ssh_config_user(endpoint)
     return u === nothing ? h : string(u, '@', h)
 end
 
@@ -301,7 +412,7 @@ function _remote_julia_version_output(host::String, julia_path::AbstractString):
     remote = _remote_julia_version_remote_command(julia_path)
     return read(
         pipeline(
-            _ssh_cmd([ssh_opts()..., _ssh_host_connection_args(host, remote)...]);
+            _ssh_cmd(_ssh_remote_session_argv(host, remote));
             stderr = devnull,
         ),
         String,
@@ -563,7 +674,8 @@ function run_on_host(
     h = String(strip(host))
     isempty(h) && throw(ArgumentError("run_on_host: host must be non-empty"))
     inner = _run_on_host_remote_sh(argv; julia = julia, detect = detect)
-    args = String[ssh_opts(; request_tty = tty)...]
+    _, port = parse_ssh_endpoint(h)
+    args = ssh_forwarded_opts(explicit_port = port, request_tty = tty)
     tty && push!(args, "-t")
     append!(args, _ssh_host_connection_args(h, inner))
     return run(ignorestatus(_ssh_cmd(args)); wait = wait)
@@ -805,7 +917,7 @@ function resolve_remote_abs_path_on_host(host::String, remote_path::AbstractStri
         s = strip(
             read(
                 pipeline(
-                    _ssh_cmd([ssh_opts()..., _ssh_host_connection_args(host, inner)...]);
+                    _ssh_cmd(_ssh_remote_session_argv(host, inner));
                     stderr = devnull,
                 ),
                 String,
@@ -847,7 +959,7 @@ function get_remote_git_hash(host::String, remote_repo_dir::AbstractString; shor
         s = strip(
             read(
                 pipeline(
-                    _ssh_cmd([ssh_opts()..., _ssh_host_connection_args(host, inner)...]);
+                    _ssh_cmd(_ssh_remote_session_argv(host, inner));
                     stderr = devnull,
                 ),
                 String,
@@ -1282,7 +1394,7 @@ function _host_sync_remote_shell_cmd(
     # Default `-n`: do not forward kit stdin (juliaup/git must not wait on a TTY).
     # Tar ship needs stdin (`forward_stdin=true`).
     flags = forward_stdin ? String[] : String["-n"]
-    return _ssh_cmd([flags..., ssh_opts()..., _ssh_host_connection_args(host, remote_script)...])
+    return _ssh_cmd(vcat(flags, _ssh_remote_session_argv(host, remote_script)))
 end
 
 # Login-shell POSIX passes. Key is host plus live `ssh_opts()` (not host alone:

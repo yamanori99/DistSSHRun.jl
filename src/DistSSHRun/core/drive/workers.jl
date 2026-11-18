@@ -434,21 +434,22 @@ const _INTERRUPT_SSH_PHASE_S = Float64(DistSSHBase._SSH_CONNECT_TIMEOUT_S)
     _group_interrupt_targets(rows) -> (local_pids, ssh, fallback)
 
 `rows` is `(pid, endpoint)`. `endpoint` is `:local`, `nothing` (use
-`Distributed.interrupt` for that pid), or `(host, ospid)` for one SSH worker.
-SSH workers on the same host share one OS signal.
+`Distributed.interrupt` for that pid), or `((host, port), ospid)` for one SSH worker.
+SSH workers on the same host and explicit port share one OS signal.
 """
 function _group_interrupt_targets(rows)
     local_pids = Int[]
     fallback = Int[]
-    ssh = Dict{String, Vector{Int}}()
+    ssh = Dict{Tuple{String, Union{Nothing, Int}}, Vector{Int}}()
     for (pid, endpoint) in rows
         if endpoint === :local
             push!(local_pids, Int(pid))
         elseif endpoint === nothing
             push!(fallback, Int(pid))
         else
-            host, ospid = endpoint
-            push!(get!(ssh, String(host), Int[]), Int(ospid))
+            (host, port), ospid = endpoint
+            key = (String(host), port)
+            push!(get!(ssh, key, Int[]), Int(ospid))
         end
     end
     return (local_pids = local_pids, ssh = ssh, fallback = fallback)
@@ -470,8 +471,11 @@ function _interrupt_endpoint(pid::Integer)
         if w.manager isa Distributed.SSHManager
             host = w.config.host
             ospid = w.config.ospid
+            flags = getproperty(w.config, :sshflags)
             if host isa AbstractString && !isempty(host) && ospid isa Integer && ospid > 0
-                return (String(host), Int(ospid))
+                port = flags isa Cmd ? DistSSHBase.explicit_port_from_sshflags(flags) : nothing
+                open_host = DistSSHBase.ssh_openssh_dest(String(host))
+                return ((open_host, port), Int(ospid))
             end
         end
     catch
@@ -490,11 +494,19 @@ function _interrupt_kill_shell(ospids::Vector{Int})::String
 end
 
 """One bounded `kill -INT` ssh per host. A failure is logged, not thrown."""
-function _interrupt_ssh_phase!(ssh::AbstractDict{<:AbstractString, <:AbstractVector{Int}})
+function _interrupt_ssh_endpoint((host, port)::Tuple{String, Union{Nothing, Int}})::String
+    port === nothing && return host
+    return string(host, ":", port)
+end
+
+function _interrupt_ssh_phase!(
+        ssh::AbstractDict{<:Tuple{String, Union{Nothing, Int}}, <:AbstractVector{Int}},
+    )
     pairs = Pair{String, String}[]
-    for (host, ospids) in ssh
+    for (hostport, ospids) in ssh
         isempty(ospids) && continue
-        push!(pairs, String(host) => _interrupt_kill_shell(Int[Int(pid) for pid in ospids]))
+        endpoint = _interrupt_ssh_endpoint(hostport)
+        push!(pairs, endpoint => _interrupt_kill_shell(Int[Int(pid) for pid in ospids]))
     end
     isempty(pairs) && return nothing
     results = _run_ssh_hosts!(pairs, _INTERRUPT_SSH_PHASE_S)

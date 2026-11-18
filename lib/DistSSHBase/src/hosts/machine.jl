@@ -184,12 +184,22 @@ function format_machine_token(workers::Integer, dest::AbstractString; port::Unio
     return format_machine_token(MachinePlacement(Int(workers), body, use_port))
 end
 
+function _machine_placement_hostpart(dest::AbstractString)::String
+    d = String(dest)
+    at = findlast('@', d)
+    hostpart = at === nothing ? d : d[(at + 1):end]
+    if startswith(hostpart, "[") && endswith(hostpart, "]")
+        return hostpart[2:(end - 1)]
+    end
+    return hostpart
+end
+
 """Map a machine token to the legacy placement tuple used by drive/go pipelines."""
 function machine_to_placement_token(spec::AbstractString)::NamedTuple{(:role, :name, :n), Tuple{Symbol, String, Union{Nothing, Int}}}
     p = parse_machine_token(spec)
     validate_ssh_host(p.dest; shown = spec)
-    name = machine_ssh_endpoint(p)
-    is_parent_host_name(machine_ssh_label(p)) &&
+    is_parent_host_name(_machine_placement_hostpart(p.dest)) &&
         throw(ArgumentError("$(repr(spec)): `parent` is not an SSH host; use --head-workers"))
+    name = machine_ssh_endpoint(p)
     return (role = :child, name = name, n = p.workers)
 end

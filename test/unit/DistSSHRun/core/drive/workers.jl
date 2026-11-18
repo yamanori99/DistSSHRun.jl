@@ -240,16 +240,16 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             rows = [
                 (1, :local),
                 (2, :local),
-                (3, ("dev@child-1", 40)),
-                (4, ("dev@child-1", 41)),
-                (5, ("child-2", 7)),
+                (3, (("dev@child-1", nothing), 40)),
+                (4, (("dev@child-1", nothing), 41)),
+                (5, (("child-2", nothing), 7)),
                 (6, nothing),
             ]
             g = DistSSHRun._group_interrupt_targets(rows)
             @test g.local_pids == [1, 2]
             @test g.fallback == [6]
-            @test g.ssh["dev@child-1"] == [40, 41]
-            @test g.ssh["child-2"] == [7]
+            @test g.ssh[("dev@child-1", nothing)] == [40, 41]
+            @test g.ssh[("child-2", nothing)] == [7]
             @test DistSSHRun._group_interrupt_targets(Tuple{Int, Any}[]).local_pids == Int[]
         end
 

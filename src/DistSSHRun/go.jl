@@ -156,6 +156,31 @@ function _go_parent_slot_labels(parent_count::Int)::Vector{String}
     return ["$base-$i" for i in 1:parent_count]
 end
 
+"""Source name for a go slot label collision error."""
+function _go_slot_label_source(slot::GoSlot)::String
+    slot.kind === :parent && return "local ($(slot.label))"
+    h = slot.host
+    return h isa String ? h : slot.label
+end
+
+function _go_assert_unique_slot_labels!(slots::Vector{GoSlot})
+    by_label = Dict{String, Vector{GoSlot}}()
+    for s in slots
+        push!(get!(by_label, s.label, GoSlot[]), s)
+    end
+    for (label, group) in by_label
+        length(group) <= 1 && continue
+        sources = unique(_go_slot_label_source(s) for s in group)
+        throw(
+            ArgumentError(
+                "go slot directory label $(repr(label)) collides after sanitization " *
+                    "(from $(join(sources, ", "))); rename one host token so the sanitized names differ",
+            ),
+        )
+    end
+    return nothing
+end
+
 function _go_append_child_slots!(slots::Vector{GoSlot}, remote_runs::Vector{String})
     counts = Dict{String, Int}()
     totals = Dict{String, Int}()
@@ -269,7 +294,9 @@ function _go_plan_slots(
                 )
             )
         end
-        return _go_slots_from_repeat(pool, assigned)
+        slots = _go_slots_from_repeat(pool, assigned)
+        _go_assert_unique_slot_labels!(slots)
+        return slots
     end
     parent_count = _go_local_slot_count(host_tokens, head_slots)
     parent_label_base = _go_local_slot_label_base()
@@ -295,6 +322,7 @@ function _go_plan_slots(
         end
     end
     _go_append_child_slots!(slots, remote_runs)
+    _go_assert_unique_slot_labels!(slots)
     return slots
 end
 
@@ -695,10 +723,10 @@ function _go_run_remote_slot!(
     scp_failed = false
     try
         remote_ec = string(rstrip(remote_root, '/'), "/", slot_rel, "/go.exitcode")
-        port_args, remote_spec = DistSSHBase._scp_remote_file_spec(host, remote_ec)
+        _, remote_spec = DistSSHBase._scp_remote_file_spec(host, remote_ec)
         run(
             pipeline(
-                _scp_cmd(vcat(String.(ssh_opts()), port_args, [remote_spec, ec_path]));
+                _scp_cmd(vcat(DistSSHBase.scp_connection_argv(host), [remote_spec, ec_path]));
                 stdout = devnull,
                 stderr = devnull,
             );
@@ -761,10 +789,10 @@ function _go_fetch_slot_provenance!(
     mkpath(local_dir)
     local_snap = joinpath(local_dir, _GO_SLOT_PROVENANCE_NAME)
     try
-        port_args, remote_spec = DistSSHBase._scp_remote_file_spec(host, remote_snap)
+        _, remote_spec = DistSSHBase._scp_remote_file_spec(host, remote_snap)
         run(
             pipeline(
-                _scp_cmd(vcat(String.(ssh_opts()), port_args, [remote_spec, local_snap]));
+                _scp_cmd(vcat(DistSSHBase.scp_connection_argv(host), [remote_spec, local_snap]));
                 stdout = devnull,
                 stderr = devnull,
             );

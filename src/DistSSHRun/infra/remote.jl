@@ -181,7 +181,7 @@ struct _SSHHostResult
     errkind::Symbol
 end
 
-function _ssh_phase_opts()::Vector{String}
+function _ssh_phase_opts(host::AbstractString)::Vector{String}
     connect = DistSSHBase._ssh_whole_seconds(:ssh_connect, DistSSHBase._SSH_CONNECT_TIMEOUT_S)
     forced = String[
         "-o", "BatchMode=yes",
@@ -189,7 +189,8 @@ function _ssh_phase_opts()::Vector{String}
         "-o", "ServerAliveInterval=$(_SSH_PHASE_ALIVE_INTERVAL)",
         "-o", "ServerAliveCountMax=$(_SSH_PHASE_ALIVE_COUNT)",
     ]
-    return append!(forced, ssh_opts())
+    _, port = DistSSHBase.parse_ssh_endpoint(host)
+    return append!(forced, DistSSHBase.ssh_forwarded_opts(explicit_port = port))
 end
 
 """`ssh` argv for one short remote command, or the `DISTSSH_TEST_SSH` double."""
@@ -198,8 +199,13 @@ function _ssh_phase_cmd(host::AbstractString, remote::AbstractString)::Cmd
     if !isempty(custom)
         return Cmd(vcat(_test_double_julia_argv(custom), [String(host), String(remote)]))
     end
+    h = String(host)
     return _ssh_cmd(
-        vcat(String["-n"], _ssh_phase_opts(), _ssh_host_connection_args(String(host), String(remote))),
+        vcat(
+            String["-n"],
+            _ssh_phase_opts(h),
+            _ssh_host_connection_args(h, String(remote)),
+        ),
     )
 end
 

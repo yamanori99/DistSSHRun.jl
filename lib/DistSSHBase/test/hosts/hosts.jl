@@ -16,6 +16,7 @@ using Test
         @test_throws ArgumentError DistSSHBase.parse_placement_token("parent:2")
         @test_throws ArgumentError DistSSHBase.parse_placement_token("parenthost:2")
         @test_throws ArgumentError DistSSHBase.parse_placement_token("4*parent")
+        @test_throws ArgumentError DistSSHBase.parse_placement_token("4*parent:22")
         @test_throws ArgumentError DistSSHBase.parse_placement_token("-oBatchMode=yes")
         @test_throws ArgumentError DistSSHBase.parse_placement_token("user@-h")
         @test_throws ArgumentError DistSSHBase.parse_placement_token("h\nname")
