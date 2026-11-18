@@ -1007,7 +1007,7 @@ end
             parsed = DistSSHRun.drive_parsed_from_session(
                 session,
                 script;
-                workers = DistSSHRun.WorkerPlan(0, Dict("-orphan" => 1)),
+                workers = DistSSHRun.WorkerPlan(0, Dict("orphan" => 1)),
                 enable_log = false,
                 skip_hash_check = true,
                 output_dir = out,

@@ -223,12 +223,12 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
         :quiet => session.quiet,
         :verbosity => session.verbosity,
     )
-    uh = get(parsed, :unsafe_skip_env_digests, false)
-    uh && (kw[:unsafe_skip_env_digests] = true)
-    ep = get(parsed, :unsafe_expose_port, false)
-    ep && (kw[:unsafe_expose_port] = true)
-    ata = get(parsed, :unsafe_all_to_all, false)
-    ata && (kw[:unsafe_all_to_all] = true)
+    uh = get(parsed, :unsafe_skip_env_digests, missing)
+    uh === true && (kw[:unsafe_skip_env_digests] = true)
+    ep = get(parsed, :unsafe_expose_port, missing)
+    ep === true && (kw[:unsafe_expose_port] = true)
+    ata = get(parsed, :unsafe_all_to_all, missing)
+    ata === true && (kw[:unsafe_all_to_all] = true)
     if kind === :go
         if hasproperty(session, :head_slots)
             ls = session.head_slots

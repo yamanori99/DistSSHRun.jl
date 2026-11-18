@@ -25,9 +25,16 @@ function _toml_bind_field(row::Dict{String, Any}, path::AbstractString, index::I
     haskey(row, "bind") || return nothing
     b = get(row, "bind", nothing)
     b === nothing && return nothing
-    s = String(strip(b))
-    isempty(s) && throw(ArgumentError("$path: hosts[$index] `bind` is empty"))
-    return s
+    b isa AbstractString || throw(
+        ArgumentError(
+            "$path: hosts[$index]: bind must be a string, got $(typeof(b)); checked: TOML bind field; fix: bind = \"127.0.0.1\"",
+        ),
+    )
+    raw = String(b)
+    isempty(strip(raw)) && throw(
+        ArgumentError("$path: hosts[$index]: bind is empty; checked: dotted-quad IPv4 literal; fix: bind = \"127.0.0.1\""),
+    )
+    return raw
 end
 
 """SSH destination for one TOML hosts row (`user@host` with optional port in tokens)."""
