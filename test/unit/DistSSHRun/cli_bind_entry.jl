@@ -2,10 +2,10 @@ using Test
 using DistSSHRun
 using DistSSHRun.DistSSHBase: CliUsageError, CLI_EXIT_USAGE, with_cli_exit
 
-if !isdefined(Main, :TEST_PROJECT)
-    Core.eval(Main, :(const TEST_PROJECT = $(abspath(joinpath(@__DIR__, "..", "..", "..")))))
-end
-const _CLI_BIND_FAKE_SSH = abspath(joinpath(TEST_PROJECT, "test", "fixtures", "fake_snapshot_ssh.jl"))
+# Fixture path must not use Main.TEST_PROJECT: runtests.jl sets that to
+# Base.active_project() (the Project.toml path), not the repo root.
+const _CLI_BIND_FAKE_SSH =
+    abspath(joinpath(@__DIR__, "..", "..", "..", "test", "fixtures", "fake_snapshot_ssh.jl"))
 
 @testset "ride and go CLI bind paths" begin
 
