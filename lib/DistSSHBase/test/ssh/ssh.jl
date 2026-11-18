@@ -328,6 +328,18 @@ let _BASE = DistSSHBase
             @test "-p" in scp_opts
             @test count(==("-P"), scp_opts) == 0
         end
+        withenv("DISTRIBUTED_SSH_OPTS" => "-o  Port=2200 -p 2200") do
+            ssh_opts = _BASE.ssh_forwarded_opts(explicit_port = 2222)
+            @test count(x -> occursin("Port=", String(x)), ssh_opts) == 0
+            scp_opts = _BASE.scp_forwarded_opts(explicit_port = 2222)
+            pidx = findfirst(==("-p"), scp_opts)
+            @test pidx === nothing || scp_opts[pidx + 1] != "2200"
+        end
+        withenv("DISTRIBUTED_SSH_OPTS" => "-p 2200") do
+            scp_opts = _BASE.scp_forwarded_opts(explicit_port = 2222)
+            @test !("-p" in scp_opts)
+            @test !any(x -> x == "2200", scp_opts)
+        end
         @test_throws ArgumentError _BASE.ssh_openssh_dest("[-host]")
         @test_throws ArgumentError _BASE.ssh_addprocs_machine("[::1]:2222")
         @test_throws ArgumentError _BASE.ssh_addprocs_machine("user@[::1]:2222")

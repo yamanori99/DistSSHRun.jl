@@ -93,7 +93,10 @@ function _split_ssh_port(dest::AbstractString)::Tuple{String, Union{Nothing, Int
         throw(ArgumentError("$(repr(dest)): SSH port must be an integer"))
     end
     port < 1 && throw(ArgumentError("$(repr(dest)): SSH port must be >= 1"))
-    host_with_port = d[1:(length(d) - length(port_str) - 1)]
+    port_sep = findlast(':', d)
+    port_sep === nothing &&
+        throw(ArgumentError("$(repr(dest)): SSH port separator missing"))
+    host_with_port = d[1:(port_sep - 1)]
     validate_ssh_host(host_with_port; shown = dest)
     return host_with_port, port
 end
@@ -163,20 +166,9 @@ function parse_ssh_endpoint(endpoint::AbstractString)::Tuple{String, Union{Nothi
     return dest, port
 end
 
-"""SSH host label for duplicate detection (includes explicit `:port` when set)."""
+"""SSH host label for duplicate detection (same string as [`machine_ssh_endpoint`](@ref))."""
 function machine_ssh_label(p::MachinePlacement)::String
-    d = p.dest
-    at = findlast('@', d)
-    hostpart = at === nothing ? d : d[(at + 1):end]
-    if startswith(hostpart, "[")
-        label = hostpart
-        p.port === nothing && return label
-        return string(label, ":", p.port)
-    end
-    colon = findfirst(':', hostpart)
-    label = colon === nothing ? hostpart : hostpart[1:(colon - 1)]
-    p.port === nothing && return label
-    return string(label, ":", p.port)
+    return machine_ssh_endpoint(p)
 end
 
 """Format a placement token; `format → parse` is identity for accepted tokens."""

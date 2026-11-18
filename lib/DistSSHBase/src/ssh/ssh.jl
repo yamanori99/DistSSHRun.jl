@@ -167,13 +167,18 @@ end
 function _ssh_o_keyvalue_is_port(keyval::AbstractString)::Bool
     eq = findfirst('=', keyval)
     eq === nothing && return false
-    return lowercase(String(keyval[1:(eq - 1)])) == "port"
+    key = strip(String(keyval[1:(eq - 1)]))
+    return lowercase(key) == "port"
 end
 
 function _ssh_o_token_is_port(keyval::AbstractString)::Bool
     _ssh_o_keyvalue_is_port(keyval) && return true
     parts = split(String(keyval); limit = 2)
-    return length(parts) == 2 && lowercase(parts[1]) == "port" && !isempty(strip(parts[2]))
+    return length(parts) == 2 && lowercase(strip(parts[1])) == "port" && !isempty(strip(parts[2]))
+end
+
+function _ssh_argv_port_value(token::AbstractString)::Union{Nothing, Int}
+    return tryparse(Int, String(strip(token)))
 end
 
 function _attached_ssh_port_flag(flag::AbstractString)::Bool
@@ -202,7 +207,7 @@ function _ssh_ssh_argv_without_port_flags(argv::AbstractVector{<:AbstractString}
             if _ssh_o_token_is_port(nxt)
                 i += 2
                 continue
-            elseif lowercase(nxt) == "port" && i + 2 <= n
+            elseif lowercase(strip(nxt)) == "port" && i + 2 <= n
                 i += 3
                 continue
             end
@@ -226,7 +231,15 @@ function _scp_argv_without_port_flags(argv::AbstractVector{<:AbstractString})::V
         if a == "-P"
             i += 2
             continue
+        elseif a == "-p" && i + 1 <= n
+            if _ssh_argv_port_value(argv[i + 1]) !== nothing
+                i += 2
+                continue
+            end
         elseif _attached_scp_port_flag(a)
+            i += 1
+            continue
+        elseif _attached_ssh_port_flag(a)
             i += 1
             continue
         elseif a == "-o" && i + 1 <= n
@@ -234,7 +247,7 @@ function _scp_argv_without_port_flags(argv::AbstractVector{<:AbstractString})::V
             if _ssh_o_token_is_port(nxt)
                 i += 2
                 continue
-            elseif lowercase(nxt) == "port" && i + 2 <= n
+            elseif lowercase(strip(nxt)) == "port" && i + 2 <= n
                 i += 3
                 continue
             end

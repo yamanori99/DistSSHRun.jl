@@ -1190,6 +1190,13 @@ function _register_worker_placement_ssh_endpoints!(
     return nothing
 end
 
+function _forget_worker_placement_ssh_endpoints!(pids::AbstractVector{<:Integer})::Nothing
+    for pid in pids
+        delete!(WORKER_PLACEMENT_SSH_ENDPOINT, Int(pid))
+    end
+    return nothing
+end
+
 function _leftover_host_key_from_ssh_endpoint(ep::AbstractString)::String
     dest, port = DistSSHBase.parse_ssh_endpoint(ep)
     at = findlast('@', dest)
@@ -1199,9 +1206,13 @@ function _leftover_host_key_from_ssh_endpoint(ep::AbstractString)::String
 end
 
 function _clear_drive_host_worker_ids!()
+    registry_pids = Int[]
+    for ids in values(DRIVE_HOST_WORKER_IDS)
+        append!(registry_pids, ids)
+    end
+    _forget_worker_placement_ssh_endpoints!(registry_pids)
     empty!(DRIVE_HOST_WORKER_IDS)
     empty!(DRIVE_HOST_LAST_SEEN)
-    empty!(WORKER_PLACEMENT_SSH_ENDPOINT)
     return nothing
 end
 
@@ -1289,6 +1300,7 @@ function _rmprocs_drive_owned_workers!(; waitfor::Real)
         rmprocs(ids; waitfor = waitfor)
     catch
     end
+    _forget_worker_placement_ssh_endpoints!(ids)
     return nothing
 end
 
@@ -1299,7 +1311,7 @@ Local workers stay on the parent. An SSH worker uses the host in its
 """
 function _leftover_worker_host(pid::Integer)::String
     placement = get(WORKER_PLACEMENT_SSH_ENDPOINT, Int(pid), nothing)
-    placement !== nothing && return _leftover_host_key_from_ssh_endpoint(placement)
+    placement !== nothing && return String(placement)
     ep = _interrupt_endpoint(pid)
     ep === :local && return PARENT_HOST_NAME
     if ep isa Tuple

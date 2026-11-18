@@ -78,7 +78,40 @@ using Test
         a = DistSSHBase.parse_machine_token("host-a:22")
         b = DistSSHBase.parse_machine_token("host-a:2222")
         @test DistSSHBase.machine_ssh_label(a) != DistSSHBase.machine_ssh_label(b)
+        @test DistSSHBase.machine_ssh_label(a) == DistSSHBase.machine_ssh_endpoint(a)
+        alice = DistSSHBase.parse_machine_token("alice@lab:2222")
+        bob = DistSSHBase.parse_machine_token("bob@lab:2222")
+        @test DistSSHBase.machine_ssh_label(alice) != DistSSHBase.machine_ssh_label(bob)
         @test DistSSHBase.parse_placement_token("host-a:22").name == "host-a:22"
+        josé_ep = "josé@lab:2222"
+        @test DistSSHBase.parse_ssh_endpoint(josé_ep) == ("josé@lab", 2222)
+        @test DistSSHBase.parse_machine_token(josé_ep).dest == "josé@lab"
+    end
+
+    @testset "toml distinct users same host port" begin
+        _with_tempdir() do tmp
+            path = joinpath(tmp, "hosts.toml")
+            write(
+                path,
+                """
+                [[hosts]]
+                name = "lab"
+                user = "alice"
+                port = 2222
+                workers = 1
+
+                [[hosts]]
+                name = "lab"
+                user = "bob"
+                port = 2222
+                workers = 1
+                """,
+            )
+            entries = DistSSHBase.read_toml_host_entries(path)
+            @test length(entries) == 2
+            @test DistSSHBase.toml_host_ssh_dest(entries[1]) == "alice@lab:2222"
+            @test DistSSHBase.toml_host_ssh_dest(entries[2]) == "bob@lab:2222"
+        end
     end
 
     @testset "host_tokens" begin
