@@ -88,11 +88,12 @@ end
 @testset "deploy record scp upload argv is local then remote" begin
     local_tmp = "/tmp/deploy-record-body.toml"
     remote_abs = "/home/user/proj/.distssh/deploy.toml.tmp"
-    argv = DistSSHRun._deploy_record_scp_upload_argv("child-1", remote_abs, local_tmp)
-    @test argv[1:(end - 2)] == DistSSHRun.ssh_opts()
+    host = "user@child-1"
+    argv = DistSSHRun._deploy_record_scp_upload_argv(host, remote_abs, local_tmp)
+    @test argv[1:(end - 2)] == DistSSHRun.DistSSHBase.scp_connection_argv(host)
     @test argv[end - 1] == local_tmp
-    @test argv[end] == "child-1:$remote_abs"
-    @test length(argv) == length(DistSSHRun.ssh_opts()) + 2
+    @test argv[end] == "user@child-1:$remote_abs"
+    @test length(argv) == length(DistSSHRun.DistSSHBase.scp_connection_argv(host)) + 2
 end
 
 @testset "deploy record tmp path and atomic install script" begin
@@ -134,8 +135,8 @@ end
 
 @testset "deploy record scp host vs path validation" begin
     remote = "/home/a@-b/project/.distssh/deploy.toml.x.tmp"
-    argv = DistSSHRun._deploy_record_scp_upload_argv("child-1", remote, "/tmp/body.toml")
-    @test argv[end] == "child-1:$remote"
+    argv = DistSSHRun._deploy_record_scp_upload_argv("user@child-1", remote, "/tmp/body.toml")
+    @test argv[end] == "user@child-1:$remote"
 end
 
 @testset "deploy record staleness warns on ship-tree hash mismatch" begin
