@@ -24,6 +24,36 @@ using Test
         @test DistSSHBase.validate_ssh_host("alice@h") == "alice@h"
     end
 
+    @testset "IPv6 message quoting and host:path" begin
+        function _catch_ipv6(f)
+            try
+                f()
+                return nothing
+            catch e
+                e
+            end
+        end
+        v_err = _catch_ipv6(() -> DistSSHBase.validate_ssh_host("::1"))
+        e_err = _catch_ipv6(() -> DistSSHBase.parse_ssh_endpoint("::1"))
+        @test v_err isa ArgumentError && e_err isa ArgumentError
+        v_msg = sprint(showerror, v_err)
+        e_msg = sprint(showerror, e_err)
+        @test v_msg == e_msg
+        @test startswith(v_msg, "ArgumentError: \"::1\": IPv6 literals are not supported")
+        @test !occursin("\"\\\"::1\\\"\"", v_msg)
+
+        @test DistSSHBase.validate_ssh_host("host:/a:b") == "host:/a:b"
+        @test DistSSHBase.validate_ssh_host("user@host:/tmp/x:y") == "user@host:/tmp/x:y"
+
+        for bad in ("::1", "[::1]", "user@[::1]:22", "fe80::1%eth0")
+            @test _catch_ipv6(() -> DistSSHBase.validate_ssh_host(bad)) isa ArgumentError
+            @test occursin(
+                "IPv6 literals are not supported",
+                sprint(showerror, _catch_ipv6(() -> DistSSHBase.validate_ssh_host(bad))),
+            )
+        end
+    end
+
     @testset "looks_like_path_host / script" begin
         @test DistSSHBase.looks_like_script_host("script.jl")
         @test DistSSHBase.looks_like_script_host("demos/foo.JL")

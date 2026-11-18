@@ -95,11 +95,45 @@ const _PLACEMENT_HINT =
 const IPV6_SSH_PLACEMENT_HINT =
     "use an SSH config Host alias instead of an IPv6 literal (in ~/.ssh/config: Host lab6, HostName ::1); then use lab6 or lab6:2222 in --hosts"
 
+"""Strip a remote path (`host:/path`) from the host side; return `host` only."""
+function _ssh_hostpart_strip_remote_path(rest::AbstractString)::String
+    r = String(rest)
+    colon = findfirst(':', r)
+    if colon !== nothing && colon < length(r) && r[colon + 1] == '/'
+        return r[1:(colon - 1)]
+    end
+    return r
+end
+
+"""
+Host side used for IPv6 rejection (`user@host`, optional `:port`, no remote path).
+
+Remote paths (`host:/tmp/x:y`) keep only the host name before `:/` so colons in
+the path are not treated as IPv6.
+"""
+function _ssh_hostpart_for_ipv6_check(dest::AbstractString)::String
+    d = String(strip(dest))
+    at = findlast('@', d)
+    rest = at === nothing ? d : d[(at + 1):end]
+    rest = _ssh_hostpart_strip_remote_path(rest)
+    startswith(rest, "[") && return rest
+    _hostpart_looks_like_ipv6_literal(rest) && return rest
+    colon = findlast(':', rest)
+    if colon !== nothing
+        port_str = rest[(colon + 1):end]
+        if tryparse(Int, port_str) !== nothing && findnext(':', rest, colon + 1) === nothing
+            return rest[1:(colon - 1)]
+        end
+    end
+    return rest
+end
+
 """Host part of a placement endpoint (`user@host` or `host`, without `:port`)."""
 function _ssh_hostpart_for_placement(dest::AbstractString)::String
     d = String(strip(dest))
     at = findlast('@', d)
     hostpart = at === nothing ? d : d[(at + 1):end]
+    hostpart = _ssh_hostpart_strip_remote_path(hostpart)
     startswith(hostpart, "[") && return hostpart
     _hostpart_looks_like_ipv6_literal(hostpart) && return hostpart
     colon = findlast(':', hostpart)
@@ -120,7 +154,10 @@ function _hostpart_looks_like_ipv6_literal(hostpart::AbstractString)::Bool
     return findnext(':', h, colon + 1) !== nothing
 end
 
-"""Reject bracketed or bare IPv6 literals in placement tokens and SSH endpoints."""
+"""Reject bracketed or bare IPv6 literals in placement tokens and SSH endpoints.
+
+`shown` is the user-facing token or host string; it is quoted once in the message.
+"""
 function reject_ipv6_ssh_host!(
         shown::AbstractString,
         hostpart::AbstractString,
@@ -155,8 +192,9 @@ stripped. `parent` is not an SSH destination.
 function validate_ssh_host(host::AbstractString; shown::Union{Nothing, AbstractString} = nothing)::String
     h = String(strip(host))
     label = _ssh_host_label(h)
-    text = repr(shown === nothing ? h : String(shown))
-    reject_ipv6_ssh_host!(text, _ssh_hostpart_for_placement(h))
+    shown_text = shown === nothing ? h : String(shown)
+    text = repr(shown_text)
+    reject_ipv6_ssh_host!(shown_text, _ssh_hostpart_for_ipv6_check(h))
     if isempty(h) || isempty(label)
         throw(ArgumentError("$text: empty host name. See help setup."))
     end

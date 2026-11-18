@@ -48,7 +48,7 @@ end
 function _split_ssh_port(dest::AbstractString)::Tuple{String, Union{Nothing, Int}}
     d = String(strip(dest))
     isempty(d) && throw(ArgumentError("empty SSH host in placement token"))
-    reject_ipv6_ssh_host!(dest, _ssh_hostpart_for_placement(d))
+    reject_ipv6_ssh_host!(String(dest), _ssh_hostpart_for_ipv6_check(d))
     at = findlast('@', d)
     hostpart = at === nothing ? d : d[(at + 1):end]
     colon = findlast(':', hostpart)

@@ -1197,14 +1197,6 @@ function _forget_worker_placement_ssh_endpoints!(pids::AbstractVector{<:Integer}
     return nothing
 end
 
-function _leftover_host_key_from_ssh_endpoint(ep::AbstractString)::String
-    dest, port = DistSSHBase.parse_ssh_endpoint(ep)
-    at = findlast('@', dest)
-    hostpart = at === nothing ? dest : dest[(at + 1):end]
-    port === nothing && return hostpart
-    return string(hostpart, ":", port)
-end
-
 function _clear_drive_host_worker_ids!()
     registry_pids = Int[]
     for ids in values(DRIVE_HOST_WORKER_IDS)
@@ -1304,10 +1296,11 @@ function _rmprocs_drive_owned_workers!(; waitfor::Real)
     return nothing
 end
 
-"""Host name for a worker that `addprocs` created but did not register.
+"""Placement SSH endpoint for a worker that `addprocs` created but did not register.
 
-Local workers stay on the parent. An SSH worker uses the host in its
-`WorkerConfig`, without a `user@` prefix. Anything else is `unknown`, not the parent.
+Local workers stay on the parent. SSH workers use the recorded placement endpoint
+when present (`user@host` and `:port` kept), otherwise the interrupt recovery
+endpoint from `WorkerConfig`. Anything else is `unknown`, not the parent.
 """
 function _leftover_worker_host(pid::Integer)::String
     placement = get(WORKER_PLACEMENT_SSH_ENDPOINT, Int(pid), nothing)
