@@ -1,4 +1,4 @@
-# Placement and host lists
+# [Placement and host lists](@id Placement)
 
 Worker placement uses **machine tokens** shared by `--hosts`, hosts files, and
 `--machine-file`:
@@ -29,6 +29,10 @@ Exactly one source applies:
 
 - `--hosts` CSV
 - `--hosts-file` (plain lines or TOML with `[[hosts]]`, required `name`, optional `bind`)
+  - TOML `bind` must be a canonical dotted-quad IPv4 literal (decimal octets
+    0–255, no leading zeros, no host names or IPv6). Loopback defaults to
+    `127.0.0.1`; other addresses need `--unsafe-expose-port`. `0.0.0.0` needs
+    that flag and SSH tunnel enabled. `go` does not support per-host `bind`.
 - `--machine-file` (one token per line)
 
 `DISTSSH_HOSTS` / `DISTSSH_HOSTS_FILE` apply only when the CLI does not set a

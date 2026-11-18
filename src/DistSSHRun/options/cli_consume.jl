@@ -63,12 +63,12 @@ function merge_run_option_cli!(nt::NamedTuple, state::RunOptionCliState)
     return merge(
         nt,
         (
-            unsafe_skip_env_digests = state.unsafe_skip_env_digests,
-            unsafe_expose_port = state.unsafe_expose_port,
-            unsafe_all_to_all = state.unsafe_all_to_all,
-            unsafe_master_silence_exit = state.unsafe_master_silence_exit,
-            print_config = state.print_config,
-            dry_run = state.dry_run,
+            unsafe_skip_env_digests = state.unsafe_skip_env_digests ? true : missing,
+            unsafe_expose_port = state.unsafe_expose_port ? true : missing,
+            unsafe_all_to_all = state.unsafe_all_to_all ? true : missing,
+            unsafe_master_silence_exit = state.unsafe_master_silence_exit ? true : missing,
+            print_config = state.print_config ? true : missing,
+            dry_run = state.dry_run ? true : missing,
         ),
     )
 end

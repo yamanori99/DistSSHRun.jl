@@ -999,6 +999,80 @@ end
             end
         end
 
+        @testset "strict bind contract on ssh workers" begin
+            _e2e_announce("strict bind contract on ssh workers")
+            # Keep hosts files and ride script off `proj` so ship-tree hash and git stay aligned.
+            mktempdir() do bind_dir
+                hosts_toml = joinpath(bind_dir, "e2e_bind_ride_hosts.toml")
+                write(
+                    hosts_toml,
+                    """
+                    [[hosts]]
+                    name = "$(hosts[1])"
+                    workers = 2
+                    bind = "127.0.0.1"
+                    """,
+                )
+                bind_script = joinpath(bind_dir, "ride_bind_workers.jl")
+                write(
+                    bind_script,
+                    """
+                    touch(joinpath(ENV["DISTRIBUTED_OUTPUT_DIR"], "bind_ok.txt"))
+                    """,
+                )
+                bind_out = joinpath(bind_dir, "e2e-bind-ride-out")
+                mkpath(bind_out)
+                bind_env = _drive_host_env(
+                    proj;
+                    extra_env = merge(_e2e_base_env(), Dict("DISTSSH_QUIET" => "0")),
+                )
+                bind_cmd = _kit_cli_cmd(
+                    [
+                        "ride", "-y", "--no-spi-check", "--unsafe-expose-port",
+                        "--hosts-file", hosts_toml, "--output-dir", bind_out, bind_script,
+                    ],
+                )
+                proc_ok, out_ok = _run_subprocess(setenv(bind_cmd, bind_env))
+                _assert_ssh_e2e_ok(suite, "ride_bind_unsafe_expose", proc_ok, out_ok; project = proj)
+                @test isfile(joinpath(bind_out, "bind_ok.txt"))
+
+                bind_reject_toml = joinpath(bind_dir, "e2e_bind_reject_hosts.toml")
+                write(
+                    bind_reject_toml,
+                    """
+                    [[hosts]]
+                    name = "$(hosts[1])"
+                    bind = "0.0.0.0"
+                    """,
+                )
+                before_pids = _e2e_hb_worker_pids(hosts[1])
+                reject_cmd = _kit_cli_cmd(
+                    [
+                        "ride", "-y", "--no-spi-check", "--unsafe-expose-port",
+                        "--hosts-file", bind_reject_toml, bind_script,
+                    ],
+                )
+                reject_env = merge(
+                    bind_env,
+                    Dict("DISTSSH_SSH_TUNNEL" => "0"),
+                )
+                proc_bad, out_bad = _run_subprocess(setenv(reject_cmd, reject_env))
+                @test proc_bad.exitcode == 2
+                @test occursin("bind 0.0.0.0 requires --unsafe-expose-port and SSH tunnel enabled", out_bad)
+                after_pids = _e2e_hb_worker_pids(hosts[1])
+                @test length(setdiff(after_pids, before_pids)) == 0
+                _ssh_e2e_record!(
+                    suite,
+                    "ride_bind_all_interfaces_tunnel_off",
+                    proc_bad,
+                    out_bad;
+                    expect_ok = false,
+                    project = proj,
+                    kit = :ride,
+                )
+            end
+        end
+
         @testset "go pi_echo both remotes" begin
             _e2e_announce("go pi_echo both remotes")
             proc, out = _run_kit_go(;

@@ -64,6 +64,8 @@ function ride_main()::Cint
                 julia = parsed.julia,
                 head_workers = parsed.cli_session.head_workers,
                 unsafe_skip_env_digests = parsed.unsafe_skip_env_digests,
+                unsafe_expose_port = parsed.unsafe_expose_port,
+                unsafe_all_to_all = parsed.unsafe_all_to_all,
                 remote = remote_cli isa AbstractString ? remote_cli :
                     (isempty(remote_raw) ? nothing : remote_raw),
                 run_id = parsed.run_id,
@@ -71,9 +73,13 @@ function ride_main()::Cint
                 bind_overrides = DistSSHRun.hosts_file_bind_overrides(parsed.cli_session),
             )
         catch e
-            if e isa ArgumentError
-                DistSSHRun.print_cli_error(e.msg)
-                return Cint(1)
+            if e isa DistSSHRun.DistSSHBase.CliUsageError
+                rethrow()
+            elseif e isa ArgumentError
+                if DistSSHRun._report_output_dir_refusal(e)
+                    return Cint(1)
+                end
+                throw(DistSSHRun.DistSSHBase.CliUsageError(DistSSHRun._bind_config_cli_message(e.msg)))
             end
             rethrow()
         end

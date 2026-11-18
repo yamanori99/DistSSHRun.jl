@@ -101,6 +101,11 @@ end
             _runtest_include("unit/DistSSHRun/infra/seed_golden.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "seed_golden.jl"))
             _runtest_include("unit/DistSSHRun/infra/topology.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "topology.jl"))
             _runtest_include("unit/DistSSHRun/infra/bind_overrides.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "bind_overrides.jl"))
+            _runtest_include("unit/DistSSHRun/infra/bind_pre_ssh.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "bind_pre_ssh.jl"))
+            _runtest_include("unit/DistSSHRun/infra/bind_contract.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "bind_contract.jl"))
+            _runtest_include("unit/DistSSHRun/infra/bind_contract_table.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "bind_contract_table.jl"))
+            _runtest_include("unit/DistSSHRun/infra/bind_gaps.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "bind_gaps.jl"))
+            _runtest_include("unit/DistSSHRun/cli_bind_entry.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "cli_bind_entry.jl"))
             if !_distsshrun_short_skip("unit/DistSSHRun/execute.jl")
                 _runtest_include("unit/DistSSHRun/execute.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "execute.jl"))
             else

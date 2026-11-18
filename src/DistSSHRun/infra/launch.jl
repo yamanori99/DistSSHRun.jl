@@ -575,7 +575,7 @@ function _add_local_drive_workers!(
                 exename = julia_bin,
                 exeflags = flags,
                 env = env,
-                topology = :master_worker,
+                topology = topology_for_launch(),
                 worker_addprocs_blas_kwargs()...,
             )
             just = Int[Int(w) for w in joined]
@@ -621,7 +621,7 @@ function _add_ssh_drive_workers!(
                 cmdline_cookie = false,
                 exeflags = flags,
                 env = env,
-                topology = :master_worker,
+                topology = topology_for_launch(),
                 worker_addprocs_blas_kwargs()...,
             )
             just = Int[Int(w) for w in joined]
