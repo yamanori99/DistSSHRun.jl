@@ -34,7 +34,7 @@ using DistSSHRun
                 cli_dry_run = true,
                 cli_unsafe_all_to_all = true,
             ),
-            buf = IOBuffer()
+                buf = IOBuffer()
             DistSSHRun.print_run_job_dry_plan!(
                 buf,
                 cfg;
