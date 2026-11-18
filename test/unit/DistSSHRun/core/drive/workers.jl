@@ -335,6 +335,34 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             end
         end
 
+        @testset "interrupt SSH phase batch and worker endpoint fallback" begin
+            @test DistSSHRun.DistSSHBase.placement_ssh_endpoint_from_worker_host("::1") === nothing
+            @test DistSSHRun.DistSSHBase.placement_ssh_endpoint_from_worker_host(
+                "user@::1",
+            ) === nothing
+            withenv("DISTRIBUTED_SSH_OPTS" => nothing) do
+                cmd = DistSSHRun._ssh_phase_cmd("alice@lab:2222", "kill -INT 1 || true")
+                @test "-p" in cmd.exec
+                @test "2222" in cmd.exec
+            end
+            withenv(
+                "DISTSSH_TEST" => nothing,
+                "DISTSSH_TEST_SSH" => nothing,
+            ) do
+                results = DistSSHRun._run_ssh_hosts!(
+                    Pair{String, String}[
+                        "::1" => "true",
+                        "alice@lab" => "true",
+                    ],
+                    0.1,
+                )
+                @test length(results) == 2
+                @test results[1].errkind == :tool
+                @test results[1].proc === nothing
+                @test results[2].proc !== nothing
+            end
+        end
+
         @testset "_interrupt_endpoint local worker" begin
             addprocs(1; topology = :master_worker)
             added = workers()

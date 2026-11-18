@@ -44,43 +44,13 @@ function throw_legacy_machine_token(raw::AbstractString)
     return nothing
 end
 
-function _split_bracketed_ipv6_port(
-        prefix::AbstractString,
-        hostpart::AbstractString,
-        shown::AbstractString,
-    )::Tuple{String, Union{Nothing, Int}}
-    close = findfirst(']', String(hostpart))
-    close === nothing &&
-        throw(ArgumentError("$(repr(shown)): unclosed IPv6 bracket; use `[::1]` or `[fe80::1]:port`"))
-    body = string(prefix, hostpart[1:close])
-    rest = hostpart[(close + 1):end]
-    if isempty(rest)
-        return body, nothing
-    end
-    rest[1] != ':' &&
-        throw(ArgumentError("$(repr(shown)): expected `:port` after `]`"))
-    port = try
-        parse(Int, rest[2:end])
-    catch
-        throw(ArgumentError("$(repr(shown)): SSH port must be an integer"))
-    end
-    port < 1 && throw(ArgumentError("$(repr(shown)): SSH port must be >= 1"))
-    return body, port
-end
-
-"""Split `dest` into host body and optional SSH port (`:` after `]` or bare host)."""
+"""Split `dest` into host body and optional SSH port (`host:port` only)."""
 function _split_ssh_port(dest::AbstractString)::Tuple{String, Union{Nothing, Int}}
     d = String(strip(dest))
     isempty(d) && throw(ArgumentError("empty SSH host in placement token"))
-    if startswith(d, "[")
-        return _split_bracketed_ipv6_port("", d, dest)
-    end
+    reject_ipv6_ssh_host!(dest, _ssh_hostpart_for_placement(d))
     at = findlast('@', d)
-    prefix = at === nothing ? "" : d[1:at]
     hostpart = at === nothing ? d : d[(at + 1):end]
-    if startswith(hostpart, "[")
-        return _split_bracketed_ipv6_port(prefix, hostpart, dest)
-    end
     colon = findlast(':', hostpart)
     if colon === nothing
         validate_ssh_host(d; shown = dest)
@@ -132,7 +102,7 @@ function parse_machine_token(spec::AbstractString)::MachinePlacement
             throw(ArgumentError("$(repr(spec)): missing host after `*`"))
     end
     dest, port = _split_ssh_port(rest)
-    if workers == 1 && star === nothing && isfile(s) && !contains(s, '@') && !startswith(s, "[")
+    if workers == 1 && star === nothing && isfile(s) && !contains(s, '@')
         throw(
             ArgumentError(
                 "$(repr(spec)): looks like a local path, not an SSH host; quote the token "
@@ -191,11 +161,7 @@ end
 function _machine_placement_hostpart(dest::AbstractString)::String
     d = String(dest)
     at = findlast('@', d)
-    hostpart = at === nothing ? d : d[(at + 1):end]
-    if startswith(hostpart, "[") && endswith(hostpart, "]")
-        return hostpart[2:(end - 1)]
-    end
-    return hostpart
+    return at === nothing ? d : d[(at + 1):end]
 end
 
 """Map a machine token to the legacy placement tuple used by drive/go pipelines."""

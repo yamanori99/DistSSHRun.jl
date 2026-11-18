@@ -73,19 +73,6 @@ withenv(
                 dest = _B.toml_host_ssh_dest(entry)
                 @test dest == "alice@lab:2222"
                 @test _placement_ssh_p_flag(dest) == ["-p", "2222"]
-                write(
-                    path,
-                    """
-                    [[hosts]]
-                    name = "[::1]"
-                    user = "alice"
-                    port = 2222
-                    """,
-                )
-                entry6 = _B.read_toml_host_entries(path)[1]
-                dest6 = _B.toml_host_ssh_dest(entry6)
-                @test dest6 == "alice@[::1]:2222"
-                @test _B.scp_connection_argv(dest6)[(end - 1):end] == ["-P", "2222"]
             end
         end
     end

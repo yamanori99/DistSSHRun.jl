@@ -1315,8 +1315,7 @@ function _leftover_worker_host(pid::Integer)::String
     ep = _interrupt_endpoint(pid)
     ep === :local && return PARENT_HOST_NAME
     if ep isa Tuple
-        endpoint = String(ep[1])
-        return _leftover_host_key_from_ssh_endpoint(endpoint)
+        return String(ep[1])
     end
     return "unknown"
 end

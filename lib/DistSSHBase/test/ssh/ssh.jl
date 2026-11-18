@@ -301,13 +301,9 @@ let _BASE = DistSSHBase
         @test _BASE._ssh_host_connection_args("alice@h:2222", "true") ==
             ["-p", "2222", "--", "alice@h", "true"]
         @test _BASE._ssh_host_connection_args("alice@h", "true") == ["--", "alice@h", "true"]
-        @test _BASE._ssh_host_connection_args("[::1]:2222", "true") ==
-            ["-p", "2222", "--", "::1", "true"]
         port_args, spec = _BASE._scp_remote_file_spec("alice@h:2222", "/tmp/x")
         @test port_args == ["-P", "2222"]
         @test spec == "alice@h:/tmp/x"
-        _, spec6 = _BASE._scp_remote_file_spec("user@[::1]:2222", "/tmp/x")
-        @test spec6 == "user@[::1]:/tmp/x"
         withenv("DISTRIBUTED_SSH_OPTS" => "-o Port=2200 -p 2200") do
             argv = _BASE._ssh_remote_session_argv("alice@h:2222", "true")
             pidx = findfirst(==("-p"), argv)
@@ -341,8 +337,17 @@ let _BASE = DistSSHBase
             @test !any(x -> x == "2200", scp_opts)
         end
         @test_throws ArgumentError _BASE.ssh_openssh_dest("[-host]")
-        @test_throws ArgumentError _BASE.ssh_addprocs_machine("[::1]:2222")
-        @test_throws ArgumentError _BASE.ssh_addprocs_machine("user@[::1]:2222")
+        for bad in ("::1", "[::1]", "2*[::1]", "user@[::1]", "[::1]:2222", "user@[::1]:2222")
+            err = try
+                _BASE.parse_machine_token(bad)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("IPv6 literals are not supported", sprint(showerror, err))
+            @test occursin("Host lab6", sprint(showerror, err))
+        end
         if Sys.which("ssh") === nothing
             @test_skip "ssh not in PATH"
         else
@@ -362,6 +367,18 @@ let _BASE = DistSSHBase
         flags = Cmd(["-p", "2222", "-o", "BatchMode=yes"])
         @test _BASE.explicit_port_from_sshflags(flags) == 2222
         @test _BASE.explicit_port_from_sshflags(Cmd(["-o", "BatchMode=yes"])) === nothing
+    end
+
+    @testset "placement endpoint from WorkerConfig host" begin
+        @test _BASE.placement_ssh_endpoint_from_worker_host("::1") === nothing
+        @test _BASE.placement_ssh_endpoint_from_worker_host("user@::1") === nothing
+        @test _BASE.placement_ssh_endpoint_from_worker_host("[::1]") === nothing
+        @test _BASE.placement_ssh_endpoint_from_worker_host(
+            "lab-a",
+            Cmd(["-p", "2222"]),
+        ) == "lab-a:2222"
+        @test _BASE.placement_ssh_endpoint_from_worker_host("user@lab-a") == "user@lab-a"
+        @test _BASE.placement_ssh_endpoint_from_worker_host("-evil") === nothing
     end
 
     @testset "ssh -n vs stdin forward" begin

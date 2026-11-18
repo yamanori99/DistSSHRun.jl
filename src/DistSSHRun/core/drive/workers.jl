@@ -474,9 +474,15 @@ function _interrupt_endpoint(pid::Integer)
             ospid = w.config.ospid
             if host isa AbstractString && !isempty(host) && ospid isa Integer && ospid > 0
                 placement = get(DistSSHRun.WORKER_PLACEMENT_SSH_ENDPOINT, Int(pid), nothing)
-                ssh_endpoint = placement !== nothing ? String(placement) :
-                    DistSSHBase.ssh_openssh_dest(String(host))
-                return (ssh_endpoint, Int(ospid))
+                if placement !== nothing
+                    return (String(placement), Int(ospid))
+                end
+                endpoint = DistSSHBase.placement_ssh_endpoint_from_worker_host(
+                    host,
+                    w.config.sshflags,
+                )
+                endpoint === nothing && return nothing
+                return (endpoint, Int(ospid))
             end
         end
     catch

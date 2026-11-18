@@ -261,25 +261,11 @@ function _scp_argv_without_port_flags(argv::AbstractVector{<:AbstractString})::V
     return out
 end
 
-"""OpenSSH `ssh` destination: bracketed IPv6 literals lose `[` `]`; scp keys keep brackets."""
+"""OpenSSH `ssh` destination string (same as the placement host body; port is passed via `-p`)."""
 function ssh_openssh_dest(dest::AbstractString)::String
-    d = String(dest)
-    at = findlast('@', d)
-    if at === nothing
-        user = ""
-        hostpart = d
-    else
-        user = d[1:at]
-        hostpart = d[(at + 1):end]
-    end
-    if startswith(hostpart, "[") && endswith(hostpart, "]")
-        validate_ssh_host(hostpart; shown = dest)
-        inner = hostpart[2:(end - 1)]
-        startswith(inner, "-") &&
-            throw(ArgumentError("$(repr(dest)): SSH name must not start with '-'. See help setup."))
-        hostpart = inner
-    end
-    return string(user, hostpart)
+    d = String(strip(dest))
+    validate_ssh_host(d; shown = dest)
+    return d
 end
 
 """
@@ -327,7 +313,7 @@ function _ssh_remote_session_argv(host::AbstractString, args::AbstractString...)
     )
 end
 
-"""`--` then an already-validated OpenSSH destination (IPv6 without brackets)."""
+"""`--` then an already-validated OpenSSH destination."""
 function _ssh_host_openssh_args(dest::AbstractString, args::AbstractString...)::Vector{String}
     h = String(strip(dest))
     return String["--", h, String.(args)...]
@@ -444,31 +430,11 @@ function ssh_scp_machine(host::AbstractString)::String
     return u === nothing ? h : string(u, '@', h)
 end
 
-function _distributed_ipv6_machine_error(token::AbstractString)::ArgumentError
-    return ArgumentError(
-        "$(repr(String(strip(token)))): IPv6 SSH destinations cannot be used as a " *
-            "Distributed worker machine string; use an SSH config Host alias with an " *
-            "IPv4 HostName, or an IPv4 address",
-    )
-end
-
-function _distributed_rejects_ipv6_worker_machine(dest::AbstractString, shown::AbstractString)::Nothing
-    d = String(dest)
-    at = findlast('@', d)
-    hostpart = at === nothing ? d : d[(at + 1):end]
-    if startswith(hostpart, "[") && endswith(hostpart, "]")
-        throw(_distributed_ipv6_machine_error(shown))
-    end
-    occursin(':', hostpart) && !occursin('.', hostpart) && throw(_distributed_ipv6_machine_error(shown))
-    return nothing
-end
-
 function ssh_addprocs_machine(host::AbstractString)::String
     endpoint = String(strip(host))
     isempty(endpoint) && return endpoint
     dest, _ = parse_ssh_endpoint(endpoint)
     validate_ssh_host(dest; shown = endpoint)
-    _distributed_rejects_ipv6_worker_machine(dest, endpoint)
     h = ssh_openssh_dest(dest)
     occursin('@', h) && return h
     u = ssh_config_user(endpoint)

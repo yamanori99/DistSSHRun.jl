@@ -92,14 +92,53 @@ format_placement_token(
 const _PLACEMENT_HINT =
     "use `N*[user@]host[:port]` (quote `--hosts` so the shell does not glob `*`); bare host = 1 worker"
 
-"""Hostname inside `user@host`, `host:path`, or `[::1]:path`."""
+const IPV6_SSH_PLACEMENT_HINT =
+    "use an SSH config Host alias instead of an IPv6 literal (in ~/.ssh/config: Host lab6, HostName ::1); then use lab6 or lab6:2222 in --hosts"
+
+"""Host part of a placement endpoint (`user@host` or `host`, without `:port`)."""
+function _ssh_hostpart_for_placement(dest::AbstractString)::String
+    d = String(strip(dest))
+    at = findlast('@', d)
+    hostpart = at === nothing ? d : d[(at + 1):end]
+    startswith(hostpart, "[") && return hostpart
+    _hostpart_looks_like_ipv6_literal(hostpart) && return hostpart
+    colon = findlast(':', hostpart)
+    colon === nothing && return hostpart
+    findnext(':', hostpart, colon + 1) !== nothing && return hostpart
+    port_str = hostpart[(colon + 1):end]
+    tryparse(Int, port_str) === nothing && return hostpart
+    return hostpart[1:(colon - 1)]
+end
+
+function _hostpart_looks_like_ipv6_literal(hostpart::AbstractString)::Bool
+    h = String(strip(hostpart))
+    isempty(h) && return false
+    startswith(h, "[") && return true
+    occursin('%', h) && return true
+    colon = findfirst(':', h)
+    colon === nothing && return false
+    return findnext(':', h, colon + 1) !== nothing
+end
+
+"""Reject bracketed or bare IPv6 literals in placement tokens and SSH endpoints."""
+function reject_ipv6_ssh_host!(
+        shown::AbstractString,
+        hostpart::AbstractString,
+    )::Nothing
+    _hostpart_looks_like_ipv6_literal(hostpart) || return nothing
+    throw(
+        ArgumentError(
+            join_explained_message(
+                "$(repr(String(shown))): IPv6 literals are not supported in host tokens or SSH endpoints",
+                "Hint: $IPV6_SSH_PLACEMENT_HINT",
+            ),
+        ),
+    )
+end
+
+"""Hostname inside `user@host` or `host:path`."""
 function _ssh_host_label(dest::AbstractString)::String
     d = String(dest)
-    if startswith(d, "[")
-        close = findfirst(']', d)
-        close === nothing && return d
-        return d[1:close]
-    end
     at = findlast('@', d)
     rest = at === nothing ? d : d[(at + 1):end]
     colon = findfirst(':', rest)
@@ -117,6 +156,7 @@ function validate_ssh_host(host::AbstractString; shown::Union{Nothing, AbstractS
     h = String(strip(host))
     label = _ssh_host_label(h)
     text = repr(shown === nothing ? h : String(shown))
+    reject_ipv6_ssh_host!(text, _ssh_hostpart_for_placement(h))
     if isempty(h) || isempty(label)
         throw(ArgumentError("$text: empty host name. See help setup."))
     end
