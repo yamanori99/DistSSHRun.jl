@@ -742,14 +742,24 @@ function ride!(
             cli_unsafe_expose_port = cli_optional_bool(unsafe_expose_port),
             cli_unsafe_all_to_all = cli_optional_bool(unsafe_all_to_all),
         )
-        planned = String[launch_bind_host_key(t) for t in tokens]
-        resolved_bind = resolve_launch_bind_overrides(;
-            hosts_file = hosts_file,
-            bind_overrides = bind_overrides,
-            surface = hint_surface,
-            planned_hosts = planned,
-            command = :ride,
-        )
+        resolved_bind = try
+            planned = String[launch_bind_host_key(t) for t in tokens]
+            resolve_launch_bind_overrides(;
+                hosts_file = hosts_file,
+                bind_overrides = bind_overrides,
+                surface = hint_surface,
+                planned_hosts = planned,
+                command = :ride,
+            )
+        catch e
+            e isa ArgumentError || rethrow()
+            if hint_surface === :cli
+                throw(DistSSHBase.CliUsageError(_bind_config_cli_message(e.msg)))
+            end
+            return RideResult(
+                false, path, 0, nothing, sprint(showerror, e), julia_s, nothing, kit_run_dir(),
+            )
+        end
         return with_run_unsafe_options!(cfg) do
             return _ride_run!(
                 path, julia_s, tokens, args, spi_check, output_dir, project, julia,

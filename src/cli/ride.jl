@@ -76,6 +76,9 @@ function ride_main()::Cint
             if e isa DistSSHRun.DistSSHBase.CliUsageError
                 rethrow()
             elseif e isa ArgumentError
+                if DistSSHRun._report_output_dir_refusal(e)
+                    return Cint(1)
+                end
                 throw(DistSSHRun.DistSSHBase.CliUsageError(DistSSHRun._bind_config_cli_message(e.msg)))
             end
             rethrow()

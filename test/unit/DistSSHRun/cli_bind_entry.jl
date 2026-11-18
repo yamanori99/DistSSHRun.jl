@@ -5,23 +5,25 @@ using DistSSHRun.DistSSHBase: CliUsageError, CLI_EXIT_USAGE, with_cli_exit
 if !isdefined(Main, :TEST_PROJECT)
     Core.eval(Main, :(const TEST_PROJECT = $(abspath(joinpath(@__DIR__, "..", "..", "..")))))
 end
+const _CLI_BIND_FAKE_SSH = abspath(joinpath(TEST_PROJECT, "test", "fixtures", "fake_snapshot_ssh.jl"))
 
 @testset "ride and go CLI bind paths" begin
+
     function _recording_ssh_bin(tmp::AbstractString)
         bindir = joinpath(tmp, "bin")
         logp = joinpath(tmp, "ssh.log")
         mkpath(bindir)
         logq = replace(logp, "'" => "'\\''")
-        ssh_bin = joinpath(bindir, "ssh")
-        write(
-            ssh_bin,
-            """
-            #!/bin/sh
-            echo "\$0 \$@" >> '$logq'
-            exit 99
-            """,
-        )
-        chmod(ssh_bin, 0o755)
+        stub = """
+        #!/bin/sh
+        echo "\$0 \$@" >> '$logq'
+        exit 99
+        """
+        for name in ("ssh", "scp")
+            tool = joinpath(bindir, name)
+            write(tool, stub)
+            chmod(tool, 0o755)
+        end
         return bindir, logp
     end
 
@@ -32,70 +34,108 @@ end
         _sync_test_project_manifest!(proj)
         script = joinpath(proj, "job.jl")
         write(script, "map(identity, 1:2)\n")
-        return proj, script
+        hosts_path = joinpath(tmp, "hosts.toml")
+        write(
+            hosts_path,
+            """
+            [[hosts]]
+            name = "mac-b"
+            workers = 1
+            user = "alice"
+            bind = "127.0.0.1"
+            """,
+        )
+        return proj, script, hosts_path
+    end
+
+    function _cli_bind_test_env(
+            path::AbstractString,
+            logp::AbstractString,
+            proj::AbstractString,
+        )::Dict{String, String}
+        return Dict{String, String}(
+            "PATH" => path,
+            "DISTSSH_SKIP_GLOBAL_WORKER_PKILL" => "1",
+            "DIST_SSH_KIT_CLI_INCLUDE" => "1",
+            "DISTSSH_TEST" => "1",
+            "DISTSSH_TEST_SSH" => _CLI_BIND_FAKE_SSH,
+            "DISTSSH_TEST_SSH_LOG" => logp,
+            "DISTSSH_TEST_POSIX_SHELL" => "1",
+            "DISTRIBUTED_PROJECT_ROOT" => DistSSHRun.canonical_local_path(proj),
+        )
+    end
+
+    function _with_cli_bind_env(env::Dict{String, String}, f::Function)
+        return withenv(env...) do
+            delete!(ENV, DistSSHRun.DISTSSH_RUN_DIR_ENV)
+            DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
+            return f()
+        end
     end
 
     @testset "ride_main default launch reaches ssh" begin
         _with_tempdir() do tmp
-            proj, script = _minimal_proj(tmp)
+            proj, script, hosts_path = _minimal_proj(tmp)
             bindir, logp = _recording_ssh_bin(tmp)
             path = bindir * ":" * get(ENV, "PATH", "")
             include(joinpath(@__DIR__, "..", "..", "..", "src", "cli", "ride.jl"))
-            code = withenv(
-                "PATH" => path,
-                "DISTSSH_SKIP_GLOBAL_WORKER_PKILL" => "1",
-                "DIST_SSH_KIT_CLI_INCLUDE" => "1",
-            ) do
+            env = _cli_bind_test_env(path, logp, proj)
+            code = _with_cli_bind_env(
+                env, () ->
                 cd(proj) do
                     empty!(ARGS)
-                    append!(ARGS, ["-y", "--no-spi-check", "1*alice@mac-b", basename(script)])
+                    append!(
+                        ARGS,
+                        String["-y", "--no-spi-check", "--hosts-file", hosts_path, basename(script)],
+                    )
                     return redirect_stdout(devnull) do
                         redirect_stderr(devnull) do
                             with_cli_exit() do
-                                return ride_main()
+                                return Base.invokelatest(ride_main)
                             end
                         end
                     end
                 end
-            end
-            @test code != CLI_EXIT_USAGE
+            )
             @test isfile(logp)
-            @test !isempty(strip(read(logp, String)))
+            @test occursin("HOST ", read(logp, String))
         end
     end
 
     @testset "go_main default launch (no Missing TypeError)" begin
         _with_tempdir() do tmp
-            proj, script = _minimal_proj(tmp)
+            proj = joinpath(tmp, "proj")
+            mkpath(proj)
+            write(joinpath(proj, "Project.toml"), "name = \"CliBindEntry\"\n")
+            _sync_test_project_manifest!(proj)
+            script = joinpath(proj, "job.jl")
+            write(script, "map(identity, 1:2)\n")
             bindir, logp = _recording_ssh_bin(tmp)
             path = bindir * ":" * get(ENV, "PATH", "")
             include(joinpath(@__DIR__, "..", "..", "..", "src", "cli", "go.jl"))
-            code = withenv(
-                "PATH" => path,
-                "DISTSSH_SKIP_GLOBAL_WORKER_PKILL" => "1",
-                "DIST_SSH_KIT_CLI_INCLUDE" => "1",
-            ) do
+            env = _cli_bind_test_env(path, logp, proj)
+            _with_cli_bind_env(
+                env, () ->
                 cd(proj) do
                     empty!(ARGS)
-                    append!(ARGS, ["-y", "1*alice@mac-b", basename(script)])
+                    append!(ARGS, String["-y", "1*alice@mac-b", basename(script)])
                     return redirect_stdout(devnull) do
                         redirect_stderr(devnull) do
                             with_cli_exit() do
-                                return go_main()
+                                return Base.invokelatest(go_main)
                             end
                         end
                     end
                 end
-            end
-            @test code != CLI_EXIT_USAGE
+            )
             @test isfile(logp)
-            @test !isempty(strip(read(logp, String)))
+            @test occursin("HOST ", read(logp, String))
         end
     end
 
     @testset "ride --unsafe-expose-port respects launch plan" begin
         _with_tempdir() do tmp
-            hosts_path = joinpath(tmp, "hosts.toml")
+            _, _, hosts_path = _minimal_proj(tmp)
             write(
                 hosts_path,
                 """
@@ -104,7 +144,6 @@ end
                 bind = "10.0.0.2"
                 """,
             )
-            _minimal_proj(tmp)
             parsed = DistSSHRun.parse_ride_args(
                 String[
                     "--unsafe-expose-port",
