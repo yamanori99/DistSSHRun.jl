@@ -70,10 +70,10 @@ function _bind_octet_invalid_reason(part::AbstractString)::Union{Nothing, String
     isempty(part) && return nothing
     part[1] == '-' && return "must not contain a sign"
     part[1] == '+' && return "must not contain a sign"
+    length(part) > 1 && part[1] == '0' && all(c -> '0' <= c <= '9', part) && return "must not use leading zeros"
     if length(part) > 3
         all(c -> '0' <= c <= '9', part) && return "exceeds 255"
     end
-    length(part) > 1 && part[1] == '0' && all(c -> '0' <= c <= '9', part) && return "must not use leading zeros"
     for c in part
         if '0' <= c <= '9'
             continue

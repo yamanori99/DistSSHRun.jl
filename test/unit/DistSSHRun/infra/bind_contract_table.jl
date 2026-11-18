@@ -36,6 +36,7 @@ const _FIX = "bind = \"127.0.0.1\""
         ("255.255.255.255", :reject, "bind \"255.255.255.255\" is a broadcast address; checked: dotted-quad IPv4 unicast literal; fix: $_FIX"),
         ("127.1", :reject, "bind \"127.1\" is not an IPv4 address; checked: dotted-quad IPv4 literal (need four decimal parts); fix: $_FIX"),
         ("127.01.0.1", :reject, "bind \"127.01.0.1\" is not an IPv4 address; checked: dotted-quad IPv4 literal (must not use leading zeros); fix: $_FIX"),
+        ("0127.0.0.1", :reject, "bind \"0127.0.0.1\" is not an IPv4 address; checked: dotted-quad IPv4 literal (must not use leading zeros); fix: $_FIX"),
         ("-1.0.0.1", :reject, "bind \"-1.0.0.1\" is not an IPv4 address; checked: dotted-quad IPv4 literal (must not contain a sign); fix: $_FIX"),
         ("300.0.0.1", :reject, "bind \"300.0.0.1\" is not an IPv4 address; checked: dotted-quad IPv4 literal (exceeds 255); fix: $_FIX"),
         ("99999999999999999999.0.0.1", :reject, "bind \"99999999999999999999.0.0.1\" is not an IPv4 address; checked: dotted-quad IPv4 literal (exceeds 255); fix: $_FIX"),
@@ -94,7 +95,13 @@ const _FIX = "bind = \"127.0.0.1\""
         msg_unsafe = _gate_err(
             () -> DistSSHRun.validate_host_launch_plan("h", "0.0.0.0"; tunnel = true, unsafe_expose_port = false),
         )
-        @test occursin("0.0.0.0", msg_unsafe)
+        @test msg_unsafe == join(
+            [
+                "\"h\": bind 0.0.0.0 requires --unsafe-expose-port and SSH tunnel enabled",
+                "Hint: pass --unsafe-expose-port and keep tunnel enabled (default)",
+            ],
+            "\n",
+        )
     end
     @testset "non-string TOML bind" begin
         _with_tempdir() do tmp

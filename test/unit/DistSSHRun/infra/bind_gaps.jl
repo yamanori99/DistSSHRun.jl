@@ -1,6 +1,6 @@
 using Test
 using DistSSHRun
-using DistSSHRun.DistSSHBase: read_toml_host_entries
+using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
 
 @testset "bind contract regressions (#503 gaps)" begin
     @testset "gap 1 ride dry-run uses ssh dest for bind lookup" begin
@@ -217,6 +217,120 @@ using DistSSHRun.DistSSHBase: read_toml_host_entries
             finally
                 old === nothing ? delete!(ENV, "DISTSSH_UNSAFE_EXPOSE_PORT") :
                     (ENV["DISTSSH_UNSAFE_EXPOSE_PORT"] = old)
+            end
+        end
+    end
+
+    @testset "drive! and ride! unsafe_expose_port non-loopback gate" begin
+        non_loopback_reject = join(
+            [
+                "\"lab\": non-loopback bind \"10.0.0.5\"",
+                "Hint: pass --unsafe-expose-port to expose the worker port beyond loopback",
+            ],
+            "\n",
+        )
+        bind = Dict("lab" => "10.0.0.5")
+        _with_tempdir() do tmp
+            proj = joinpath(tmp, "proj")
+            mkpath(proj)
+            write(joinpath(proj, "Project.toml"), "name = \"BindGateApi\"\n")
+            _sync_test_project_manifest!(proj)
+            script = joinpath(proj, "job.jl")
+            write(script, "map(identity, 1:2)\n")
+            bindir = joinpath(tmp, "bin")
+            mkpath(bindir)
+            logp = joinpath(tmp, "ssh.log")
+            logq = replace(logp, "'" => "'\\''")
+            write(
+                joinpath(bindir, "ssh"),
+                """
+                #!/bin/sh
+                echo "\$0 \$@" >> '$logq'
+                exit 99
+                """,
+            )
+            chmod(joinpath(bindir, "ssh"), 0o755)
+            withenv(
+                "PATH" => bindir * ":" * get(ENV, "PATH", ""),
+                "DISTSSH_SKIP_GLOBAL_WORKER_PKILL" => "1",
+            ) do
+                session = DistSSHRun.DistSSHSession(
+                    project = proj,
+                    workers = String[],
+                    quiet = true,
+                    verbosity = :quiet,
+                )
+                session.cli_session.hint_surface = :cli
+                let err = try
+                        DistSSHRun.drive!(
+                            session,
+                            script;
+                            plan = DistSSHRun.WorkerPlan(0, Dict("lab" => 1)),
+                            bind_overrides = bind,
+                            unsafe_expose_port = nothing,
+                            skip_hash_check = true,
+                            enable_log = false,
+                        )
+                    catch e
+                        e isa CliUsageError ? e : rethrow()
+                    end
+                    @test err isa CliUsageError
+                    @test err.msg == non_loopback_reject
+                end
+                let err = try
+                        DistSSHRun.ride!(
+                            script,
+                            ["1*lab"];
+                            project = proj,
+                            bind_overrides = bind,
+                            unsafe_expose_port = missing,
+                            hint_surface = :cli,
+                            spi_check = false,
+                            output_dir = joinpath(tmp, "ride-out"),
+                        )
+                    catch e
+                        e isa CliUsageError ? e : rethrow()
+                    end
+                    @test err isa CliUsageError
+                    @test err.msg == non_loopback_reject
+                end
+                @test !isfile(logp) || read(logp, String) == ""
+                past_gate(f) = try
+                    f()
+                    true
+                catch e
+                    (e isa CliUsageError && e.msg == non_loopback_reject) && rethrow()
+                    true
+                end
+                julia_exe = joinpath(Sys.BINDIR, Base.julia_exename())
+                @test past_gate() do
+                    redirect_stderr(devnull) do
+                        DistSSHRun.drive!(
+                            session,
+                            script;
+                            plan = DistSSHRun.WorkerPlan(0, Dict("lab" => 1)),
+                            bind_overrides = bind,
+                            unsafe_expose_port = true,
+                            skip_hash_check = true,
+                            enable_log = false,
+                            julia = julia_exe,
+                        )
+                    end
+                end
+                @test past_gate() do
+                    redirect_stderr(devnull) do
+                        DistSSHRun.ride!(
+                            script,
+                            ["1*lab"];
+                            project = proj,
+                            bind_overrides = bind,
+                            unsafe_expose_port = true,
+                            hint_surface = :cli,
+                            spi_check = false,
+                            output_dir = joinpath(tmp, "ride-out2"),
+                        )
+                    end
+                end
             end
         end
     end
