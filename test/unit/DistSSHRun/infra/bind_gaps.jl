@@ -56,11 +56,12 @@ using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
                 """
                 [[hosts]]
                 name = "lab"
+                workers = 1
                 bind = "10.0.0.5"
                 """,
             )
             parsed = DistSSHRun.parse_ride_args(
-                String["--dry-run", "--hosts-file", hf, "1*lab", basename(script)],
+                String["--dry-run", "--hosts-file", hf, basename(script)],
             )
             err = try
                 DistSSHRun.finish_run_job_diagnostics!(
