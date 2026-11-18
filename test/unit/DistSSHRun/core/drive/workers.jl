@@ -634,6 +634,14 @@ end
         return flag[]
     end
 
+    function _wait_ref_gt(ref::Ref{Int}, threshold::Int; timeout::Float64 = 5.0)
+        t0 = time()
+        while ref[] <= threshold && (time() - t0) < timeout
+            sleep(0.02)
+        end
+        return ref[] > threshold
+    end
+
     @testset "_run_heartbeat! silent stall trips on_dead" begin
         stop = Ref(false)
         dead = Ref(false)
@@ -679,9 +687,8 @@ end
             on_dead = () -> (dead[] = true)
         )
         try
-            sleep(0.45)
+            @test _wait_ref_gt(n, 2)
             @test !dead[]
-            @test n[] > 2
         finally
             stop[] = true
         end

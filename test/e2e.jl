@@ -1276,7 +1276,7 @@ end
             withenv(_e2e_base_env()...) do
                 session = DistSSHSession(
                     project = proj,
-                    workers = remote_tokens,
+                    workers = setup_hosts,
                     remote = remote_root,
                     quiet = true
                 )
