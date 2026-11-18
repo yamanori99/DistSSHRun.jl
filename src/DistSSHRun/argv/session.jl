@@ -696,6 +696,41 @@ function append_hosts_file!(hosts::Vector{String}, session::CliSharedFlags)
     return hosts
 end
 
+"""True when CLI host token collection already includes the active hosts file."""
+function hosts_file_worker_tokens_merged(source::Union{Nothing, Symbol})::Bool
+    return source === :hosts_file || source === :env_file
+end
+
+"""
+Append hosts-file machine tokens into `tokens` when they are not already merged.
+
+Returns the resolved hosts-file path for bind validation (`nothing` when absent).
+"""
+function merge_go_hosts_file_worker_tokens!(
+        tokens::Vector{String},
+        hosts_file::Union{Nothing, AbstractString};
+        hosts_file_tokens_merged::Bool,
+        surface::Symbol,
+        honor_distssh_hosts_file_env::Bool = true,
+    )::Union{Nothing, String}
+    hf = hosts_file === nothing ? nothing : String(strip(hosts_file))
+    if hf === nothing || isempty(hf)
+        if isempty(tokens) && honor_distssh_hosts_file_env
+            env_hf = strip(get(ENV, "DISTSSH_HOSTS_FILE", ""))
+            !isempty(env_hf) && (hf = env_hf)
+        else
+            return nothing
+        end
+    end
+    hf === nothing && return nothing
+    if !hosts_file_tokens_merged
+        for line in read_hosts_file_lines(hf; surface = surface)
+            push!(tokens, line)
+        end
+    end
+    return hf
+end
+
 """`println` with the same terminal gate as `writeln_both` (setup / size)."""
 function kit_println(args...; io::IO = stdout)
     if kit_output_detail()

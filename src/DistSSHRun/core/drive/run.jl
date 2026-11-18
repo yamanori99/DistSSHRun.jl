@@ -598,22 +598,22 @@ function _run_drive_parsed_locked!(
     surface = parsed.cli_session.hint_surface
     bind_map_ref = Ref(Dict{String, String}())
     ssh_launch_plans_ref = Ref{Union{Nothing, Vector{HostLaunchPlan}}}(nothing)
-    if !isempty(hosts)
-        planned_ssh = String[h[1] for h in hosts]
-        try
-            bind_map_ref[] = hosts_file_bind_overrides(
-                parsed.cli_session;
-                bind_overrides = get(parsed, :bind_overrides, Dict{String, String}()),
-                planned_hosts = planned_ssh,
-                command = :drive,
-            )
+    planned_ssh = String[h[1] for h in hosts]
+    try
+        bind_map_ref[] = hosts_file_bind_overrides(
+            parsed.cli_session;
+            bind_overrides = get(parsed, :bind_overrides, Dict{String, String}()),
+            planned_hosts = planned_ssh,
+            command = :drive,
+        )
+        if !isempty(planned_ssh)
             ssh_launch_plans_ref[] = validate_all_host_launch_plans!(planned_ssh, bind_map_ref[])
-        catch e
-            e isa ArgumentError || rethrow()
-            surface === :cli &&
-                throw(DistSSHBase.CliUsageError(_bind_config_cli_message(e.msg)))
-            rethrow()
         end
+    catch e
+        e isa ArgumentError || rethrow()
+        surface === :cli &&
+            throw(DistSSHBase.CliUsageError(_bind_config_cli_message(e.msg)))
+        rethrow()
     end
     try
         if !isempty(host_names)

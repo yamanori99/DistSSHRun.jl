@@ -340,18 +340,25 @@ function finish_run_job_diagnostics!(
         else
             nothing
         end
-        print_run_job_dry_plan!(
-            stdout,
-            cfg;
-            hosts = hosts,
-            worker_tokens = worker_tokens,
-            project = project,
-            head_workers = command === :go ? nothing : resolved_workers,
-            head_slots = command === :go ? go_ls : nothing,
-            hosts_source = hosts_source,
-            go_implicit_no_hosts = go_implicit,
-            bind_overrides = bind_overrides,
-        )
+        try
+            print_run_job_dry_plan!(
+                stdout,
+                cfg;
+                hosts = hosts,
+                worker_tokens = worker_tokens,
+                project = project,
+                head_workers = command === :go ? nothing : resolved_workers,
+                head_slots = command === :go ? go_ls : nothing,
+                hosts_source = hosts_source,
+                go_implicit_no_hosts = go_implicit,
+                bind_overrides = bind_overrides,
+            )
+        catch e
+            e isa ArgumentError || rethrow()
+            cli.hint_surface === :cli &&
+                throw(DistSSHBase.CliUsageError(_bind_config_cli_message(e.msg)))
+            rethrow()
+        end
     end
     return 0
 end

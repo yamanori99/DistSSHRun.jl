@@ -66,6 +66,9 @@ function go_main()::Cint
                 path_anchor = path_anchor,
                 output_dir = kw[:output_dir],
                 hosts_file = parsed.cli_session.hosts_file,
+                hosts_file_tokens_merged = DistSSHRun.hosts_file_worker_tokens_merged(
+                    DistSSHRun.placement_host_source(parsed.cli_session),
+                ),
                 julia = kw[:julia],
                 unsafe_skip_env_digests = get(parsed, :unsafe_skip_env_digests, missing),
                 unsafe_expose_port = get(parsed, :unsafe_expose_port, missing),

@@ -42,6 +42,42 @@ using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
         end
     end
 
+    @testset "gap 1b ride dry-run non-loopback bind exits usage" begin
+        _with_tempdir() do tmp
+            proj = joinpath(tmp, "proj")
+            mkpath(proj)
+            write(joinpath(proj, "Project.toml"), "name = \"DryBind\"\n")
+            _sync_test_project_manifest!(proj)
+            script = joinpath(proj, "job.jl")
+            write(script, "1\n")
+            hf = joinpath(tmp, "hosts.toml")
+            write(
+                hf,
+                """
+                [[hosts]]
+                name = "lab"
+                bind = "10.0.0.5"
+                """,
+            )
+            parsed = DistSSHRun.parse_ride_args(
+                String["--dry-run", "--hosts-file", hf, "1*lab", basename(script)],
+            )
+            err = try
+                DistSSHRun.finish_run_job_diagnostics!(
+                    parsed;
+                    command = :ride,
+                    project = proj,
+                    hosts = parsed.hosts,
+                    worker_tokens = parsed.hosts,
+                )
+            catch e
+                e
+            end
+            @test err isa CliUsageError
+            @test occursin("non-loopback", err.msg)
+        end
+    end
+
     @testset "gap 3 string loopback bypass rejected" begin
         msg = try
             DistSSHRun.parse_bind_ipv4_literal("127.evil.example")
@@ -101,6 +137,10 @@ using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
     end
 
     @testset "gap 6 bind_overrides unknown host and drive env unsafe" begin
+        @test_throws ArgumentError DistSSHRun.resolve_launch_bind_overrides(;
+            bind_overrides = Dict("ghost" => "10.0.0.1"),
+            planned_hosts = String[],
+        )
         @test_throws ArgumentError DistSSHRun.resolve_launch_bind_overrides(;
             bind_overrides = Dict("ghost" => "10.0.0.1"),
             planned_hosts = ["alice@lab"],

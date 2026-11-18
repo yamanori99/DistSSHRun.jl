@@ -59,9 +59,8 @@ end
                 end
             end
             @test code != CLI_EXIT_USAGE
-            if isfile(logp)
-                @test !isempty(strip(read(logp, String)))
-            end
+            @test isfile(logp)
+            @test !isempty(strip(read(logp, String)))
         end
     end
 
@@ -89,6 +88,8 @@ end
                 end
             end
             @test code != CLI_EXIT_USAGE
+            @test isfile(logp)
+            @test !isempty(strip(read(logp, String)))
         end
     end
 

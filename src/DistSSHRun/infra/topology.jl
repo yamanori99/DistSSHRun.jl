@@ -81,8 +81,7 @@ function resolve_launch_bind_overrides(;
                 ),
             )
         end
-        b = String(strip(bind))
-        lit = _validated_bind_literal(b, repr(h))
+        lit = _validated_bind_literal(String(bind), repr(h))
         if haskey(from_file, h)
             file_lit = parse_bind_ipv4_literal(from_file[h])
             file_lit.canonical != lit.canonical && throw(

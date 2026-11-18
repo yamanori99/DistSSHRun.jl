@@ -976,6 +976,7 @@ function go!(
         project::AbstractString = pwd(),
         remote::Union{Nothing, AbstractString} = nothing,
         hosts_file::Union{Nothing, AbstractString} = nothing,
+        hosts_file_tokens_merged::Bool = false,
         quiet::Bool = false,
         verbosity::Union{Nothing, Symbol} = nothing,
         yes::Union{Nothing, Bool} = nothing,
@@ -1043,6 +1044,7 @@ function go!(
                 workers,
                 remote,
                 hosts_file,
+                hosts_file_tokens_merged,
                 quiet,
                 verbosity,
                 output_dir,
@@ -1070,6 +1072,7 @@ function _go_run!(
         workers,
         remote,
         hosts_file,
+        hosts_file_tokens_merged::Bool,
         quiet,
         verbosity,
         output_dir,
@@ -1087,20 +1090,13 @@ function _go_run!(
     anchor = something(path_anchor, proj)
 
     tokens = String[String(h) for h in workers]
-    hf = hosts_file
-    # CLI / [`host_tokens`](@ref) already merged `--hosts-file` / ENV into
-    # `workers`. Re-reading `DISTSSH_HOSTS_FILE` would duplicate slots.
-    # API `go!("job.jl")` with empty `workers` still honors the ENV file.
-    if hf === nothing && isempty(tokens) && head_slots === nothing
-        env_hf = strip(get(ENV, "DISTSSH_HOSTS_FILE", ""))
-        !isempty(env_hf) && (hf = env_hf)
-    end
+    hf = merge_go_hosts_file_worker_tokens!(
+        tokens, hosts_file;
+        hosts_file_tokens_merged = hosts_file_tokens_merged,
+        surface = hint_surface,
+        honor_distssh_hosts_file_env = head_slots === nothing,
+    )
     if hf !== nothing && !isempty(strip(String(hf)))
-        if isempty(tokens)
-            for line in read_hosts_file_lines(hf; surface = hint_surface)
-                push!(tokens, line)
-            end
-        end
         try
             resolve_launch_bind_overrides(;
                 hosts_file = hf,
