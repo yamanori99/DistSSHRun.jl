@@ -2,6 +2,10 @@ using Test
 using DistSSHRun
 using DistSSHRun.DistSSHBase: CliUsageError, CLI_EXIT_USAGE, with_cli_exit
 
+if !isdefined(Main, :TEST_PROJECT)
+    Core.eval(Main, :(const TEST_PROJECT = $(abspath(joinpath(@__DIR__, "..", "..", "..")))))
+end
+
 @testset "bind config is enforced before PATH ssh" begin
     function _recording_ssh_bin(tmp::AbstractString)
         bindir = joinpath(tmp, "bin")
@@ -116,6 +120,44 @@ using DistSSHRun.DistSSHBase: CliUsageError, CLI_EXIT_USAGE, with_cli_exit
                 end
             end
             @test code == CLI_EXIT_USAGE
+            @test !isfile(logp) || read(logp, String) == ""
+        end
+    end
+
+    @testset "ride and go kit CLI exit 2 on bad bind" begin
+        _with_tempdir() do tmp
+            hosts_path = joinpath(tmp, "hosts.toml")
+            write(
+                hosts_path,
+                """
+                [[hosts]]
+                name = "reject-ssh.test"
+                workers = 1
+                bind = "localhost"
+                """,
+            )
+            proj = joinpath(tmp, "proj")
+            mkpath(proj)
+            write(joinpath(proj, "Project.toml"), "name = \"BindCli\"\n")
+            _sync_test_project_manifest!(proj)
+            script = joinpath(proj, "job.jl")
+            write(script, "map(identity, 1:2)\n")
+            bindir, logp = _recording_ssh_bin(tmp)
+            path = bindir * ":" * get(ENV, "PATH", "")
+            env = Dict(
+                "PATH" => path,
+                "DISTSSH_SKIP_GLOBAL_WORKER_PKILL" => "1",
+                "DISTSSH_QUIET" => "1",
+            )
+            for cmd_args in (
+                String[
+                    "ride", "-y", "--no-spi-check", "--hosts-file", hosts_path, script,
+                ],
+                String["go", "-y", "--hosts-file", hosts_path, script],
+            )
+                proc, _ = _run_subprocess(setenv(_kit_cli_cmd(cmd_args; project = _kit_root()), env))
+                @test proc.exitcode == Int(CLI_EXIT_USAGE)
+            end
             @test !isfile(logp) || read(logp, String) == ""
         end
     end

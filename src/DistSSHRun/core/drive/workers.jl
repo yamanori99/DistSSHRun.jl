@@ -64,6 +64,7 @@ function add_drive_workers!(
         script_path::String,
         project_root::String;
         bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
+        launch_plans::Union{Nothing, AbstractVector{HostLaunchPlan}} = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
     )::Tuple{Vector{String}, LaunchReport}
     empty!(RUNNER_WORKER_PROJECT_DIRS)
@@ -81,7 +82,11 @@ function add_drive_workers!(
     writeln_both("Adding workers..."; color = :light_black)
 
     remote_ssh = String[h for (h, _) in hosts]
-    validate_all_host_launch_plans!(remote_ssh, bind_overrides)
+    if launch_plans === nothing
+        validate_all_host_launch_plans!(remote_ssh, bind_overrides)
+    elseif length(launch_plans) != length(remote_ssh)
+        throw(ArgumentError("launch_plans length ($(length(launch_plans))) != SSH hosts ($(length(remote_ssh)))"))
+    end
 
     successful_hosts = String[]
     default_n = something(default_workers, 1)
@@ -276,9 +281,16 @@ function add_drive_workers!(
                     # Machine must be user@host: Distributed prefixes \$USER otherwise and
                     # overrides SSH config User (Host aliases then look like "No free port?").
                     # Bind 127.0.0.1 so the cluster cookie is not reachable on other interfaces.
-                    bind = DistSSHRun.resolved_bind_address(host_name, bind_overrides)
-                    lit = DistSSHRun.parse_bind_ipv4_literal(bind)
-                    machine = DistSSHRun.ssh_addprocs_machine_bind(host_name, lit.canonical)
+                    bind = if launch_plans === nothing
+                        DistSSHRun.resolved_bind_address(host_name, bind_overrides)
+                    else
+                        key = DistSSHRun.launch_bind_host_key(host_name)
+                        plan = findfirst(p -> p.host == key, launch_plans)
+                        plan === nothing &&
+                            throw(ArgumentError("no launch plan for host $(repr(host_name))"))
+                        launch_plans[plan].bind
+                    end
+                    machine = DistSSHRun.ssh_addprocs_machine_bind(host_name, bind)
                     DistSSHRun._add_ssh_drive_workers!(
                         machine,
                         host_workers,

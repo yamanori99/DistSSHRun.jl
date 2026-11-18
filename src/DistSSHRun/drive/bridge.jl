@@ -76,11 +76,9 @@ function drive_parsed_from_session(
         show_version = false,
         cli_session = cli_session,
         hint_surface = hint_surface(session),
-        unsafe_skip_env_digests = unsafe_skip_env_digests ? true : missing,
-        unsafe_expose_port = unsafe_expose_port === nothing ? missing :
-            (unsafe_expose_port ? true : missing),
-        unsafe_all_to_all = unsafe_all_to_all === nothing ? missing :
-            (unsafe_all_to_all ? true : missing),
+        unsafe_skip_env_digests = cli_optional_bool(unsafe_skip_env_digests),
+        unsafe_expose_port = unsafe_expose_port === nothing ? missing : cli_optional_bool(unsafe_expose_port),
+        unsafe_all_to_all = unsafe_all_to_all === nothing ? missing : cli_optional_bool(unsafe_all_to_all),
         print_config = missing,
         dry_run = missing,
         run_id = snap,

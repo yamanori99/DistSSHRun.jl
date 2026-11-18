@@ -500,6 +500,7 @@ function _ride_add_workers!(
         julia,
         best_effort::Bool;
         bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
+        launch_plans::Union{Nothing, AbstractVector{HostLaunchPlan}} = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
     )::Tuple{Vector{Int}, Vector{String}}
     before = Set(workers())
@@ -541,6 +542,7 @@ function _ride_add_workers!(
                 String(script_path),
                 String(project);
                 bind_overrides = bind_overrides,
+                launch_plans = launch_plans,
                 run_id = run_id,
             )
             ssh_hosts = String[String(h) for h in successful]
@@ -699,9 +701,9 @@ function ride!(
         require_all_hosts::Union{Nothing, Bool} = nothing,
         head_workers::Union{Nothing, Integer} = nothing,
         hint_surface::Symbol = :api,
-        unsafe_skip_env_digests = false,
-        unsafe_expose_port::Bool = false,
-        unsafe_all_to_all::Bool = false,
+        unsafe_skip_env_digests = missing,
+        unsafe_expose_port = missing,
+        unsafe_all_to_all = missing,
         hosts_file::Union{Nothing, AbstractString} = nothing,
         bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
         allow_mismatch = nothing,
@@ -736,9 +738,9 @@ function ride!(
         _ensure_kit_run_dir!(:ride, path; project = project)
         cfg = resolve_run_job_config(;
             command = :ride,
-            cli_unsafe_skip_env_digests = unsafe_skip_env_digests ? true : nothing,
-            cli_unsafe_expose_port = unsafe_expose_port ? true : nothing,
-            cli_unsafe_all_to_all = unsafe_all_to_all ? true : nothing,
+            cli_unsafe_skip_env_digests = cli_optional_bool(unsafe_skip_env_digests),
+            cli_unsafe_expose_port = cli_optional_bool(unsafe_expose_port),
+            cli_unsafe_all_to_all = cli_optional_bool(unsafe_all_to_all),
         )
         planned = String[launch_bind_host_key(t) for t in tokens]
         resolved_bind = resolve_launch_bind_overrides(;
@@ -799,9 +801,10 @@ function _ride_run!(
         rethrow()
     end
     child_ssh = String[h for (h, n) in wp.child_workers if n > 0]
+    child_ssh_launch_plans = nothing
     if !isempty(child_ssh)
         try
-            validate_all_host_launch_plans!(child_ssh, bind_overrides)
+            child_ssh_launch_plans = validate_all_host_launch_plans!(child_ssh, bind_overrides)
         catch e
             e isa ArgumentError || rethrow()
             if hint_surface === :cli
@@ -880,6 +883,7 @@ function _ride_run!(
         added, ssh_hosts = _ride_add_workers!(
             wp, project, path, julia, best_effort;
             bind_overrides = bind_overrides,
+            launch_plans = child_ssh_launch_plans,
             run_id = run_id,
         )
         _write_kit_hosts_file(ssh_hosts, batch_dir, nothing)

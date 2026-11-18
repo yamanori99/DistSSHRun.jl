@@ -42,6 +42,26 @@ using DistSSHRun.DistSSHBase: read_toml_host_entries
         end
     end
 
+    @testset "gap 3 string loopback bypass rejected" begin
+        msg = try
+            DistSSHRun.parse_bind_ipv4_literal("127.evil.example")
+        catch e
+            e isa ArgumentError ? e.msg : rethrow()
+        end
+        @test msg ==
+            "bind \"127.evil.example\" is not an IPv4 address; checked: dotted-quad IPv4 literal (names are not resolved); fix: bind = \"127.0.0.1\""
+        @test_throws ArgumentError DistSSHRun.parse_bind_ipv4_literal("localhost")
+    end
+
+    @testset "gap 4 bind config not demoted by best_effort (exit 2)" begin
+        msg = try
+            DistSSHRun.validate_all_host_launch_plans!(["h1"], Dict("h1" => "192.0.2.2"))
+        catch e
+            e isa ArgumentError ? e.msg : rethrow()
+        end
+        @test occursin("non-loopback bind", msg)
+    end
+
     @testset "gap 2 ride unsafe_expose_port env when CLI omits flag" begin
         let old = get(ENV, "DISTSSH_UNSAFE_EXPOSE_PORT", nothing)
             try
@@ -113,7 +133,36 @@ using DistSSHRun.DistSSHBase: read_toml_host_entries
         end
     end
 
-    @testset "gap 7 go rejects bind settings" begin
+    @testset "gap 7 0.0.0.0 with tunnel off" begin
+        _with_tempdir() do tmp
+            path = joinpath(tmp, "hosts.toml")
+            write(
+                path,
+                """
+                [[hosts]]
+                name = "h1"
+                bind = "0.0.0.0"
+                """,
+            )
+            let msg = try
+                    DistSSHRun.validate_host_launch_plan(
+                        "h1",
+                        "0.0.0.0";
+                        tunnel = false,
+                        unsafe_expose_port = true,
+                    )
+                catch e
+                    e isa ArgumentError ? e.msg : rethrow()
+                end
+                @test msg == join(
+                    [
+                        "\"h1\": bind 0.0.0.0 requires --unsafe-expose-port and SSH tunnel enabled",
+                        "Hint: pass --unsafe-expose-port and keep tunnel enabled (default)",
+                    ],
+                    "\n",
+                )
+            end
+        end
         _with_tempdir() do tmp
             path = joinpath(tmp, "hosts.toml")
             write(
@@ -124,11 +173,51 @@ using DistSSHRun.DistSSHBase: read_toml_host_entries
                 bind = "127.0.0.1"
                 """,
             )
-            @test_throws ArgumentError DistSSHRun.resolve_launch_bind_overrides(;
-                hosts_file = path,
-                planned_hosts = ["h1"],
-                command = :go,
-            )
+            let msg = try
+                    DistSSHRun.resolve_launch_bind_overrides(;
+                        hosts_file = path,
+                        planned_hosts = ["h1"],
+                        command = :go,
+                    )
+                catch e
+                    e isa ArgumentError ? e.msg : rethrow()
+                end
+                @test occursin("go", msg)
+                @test occursin("bind is not supported for go", msg)
+            end
+        end
+    end
+
+    @testset "parity cli explicit false vs env for unsafe_expose_port" begin
+        let old = get(ENV, "DISTSSH_UNSAFE_EXPOSE_PORT", nothing)
+            try
+                ENV["DISTSSH_UNSAFE_EXPOSE_PORT"] = "1"
+                parsed_cli = DistSSHRun.parse_ride_args(
+                    String["--unsafe-expose-port", "1*host", "script.jl"],
+                )
+                cfg_cli = DistSSHRun.resolve_run_job_config_from_parsed(parsed_cli; command = :ride)
+                @test cfg_cli.unsafe_expose_port.value
+                @test cfg_cli.unsafe_expose_port.source == DistSSHRun.FromCLI
+                parsed = DistSSHRun.parse_ride_args(String["1*host", "script.jl"])
+                cfg = DistSSHRun.resolve_run_job_config_from_parsed(parsed; command = :ride)
+                @test cfg.unsafe_expose_port.value
+                @test cfg.unsafe_expose_port.source == DistSSHRun.FromEnv
+                _with_tempdir() do tmp
+                    session = DistSSHRun.DistSSHSession(project = tmp, workers = String[])
+                    write(joinpath(tmp, "j.jl"), "1\n")
+                    parsed_api = DistSSHRun.drive_parsed_from_session(
+                        session,
+                        joinpath(tmp, "j.jl");
+                        unsafe_expose_port = false,
+                    )
+                    cfg_api = DistSSHRun.resolve_run_job_config_from_parsed(parsed_api; command = :drive)
+                    @test !cfg_api.unsafe_expose_port.value
+                    @test cfg_api.unsafe_expose_port.source == DistSSHRun.FromCLI
+                end
+            finally
+                old === nothing ? delete!(ENV, "DISTSSH_UNSAFE_EXPOSE_PORT") :
+                    (ENV["DISTSSH_UNSAFE_EXPOSE_PORT"] = old)
+            end
         end
     end
 end

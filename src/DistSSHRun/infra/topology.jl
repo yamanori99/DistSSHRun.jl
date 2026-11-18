@@ -118,7 +118,7 @@ Per-host SSH launch view (bind address, tunnel flag, resolved topology).
 
 Field names are API for 0.2.0: `host`, `bind`, `tunnel`, `topology`
 (`:master_worker` or `:all_to_all`). `bind` is the canonical IPv4 literal passed to
-Distributed (or the dry-run display string for `0.0.0.0`).
+Distributed; dry-run decorates `0.0.0.0` via [`bind_dry_run_display`](@ref).
 """
 struct HostLaunchPlan
     host::String
@@ -131,6 +131,7 @@ function resolved_topology(env_val::AbstractString = get(ENV, "DISTSSH_TOPOLOGY"
     v = lowercase(String(strip(env_val)))
     v == "auto" && return :auto
     v == "master_worker" && return :master_worker
+    v == "master-worker" && return :master_worker
     throw(
         ArgumentError(
             join_explained_message(
@@ -201,8 +202,7 @@ function validate_host_launch_plan(
         unsafe_all_to_all = unsafe_all_to_all,
         topology_setting = topology_setting,
     )
-    disp = bind_dry_run_display(lit)
-    return HostLaunchPlan(h, disp, tunnel, top)
+    return HostLaunchPlan(h, lit.canonical, tunnel, top)
 end
 
 """
@@ -239,16 +239,19 @@ end
 
 """One-line dry-run summary for a host."""
 function format_host_launch_plan_line(plan::HostLaunchPlan)::String
-    return "$(plan.host): topology=$(plan.topology) bind=$(plan.bind) tunnel=$(plan.tunnel)"
+    lit = parse_bind_ipv4_literal(plan.bind)
+    disp = bind_dry_run_display(lit)
+    return "$(plan.host): topology=$(plan.topology) bind=$disp tunnel=$(plan.tunnel)"
 end
 
-"""CLI usage text for a bind config `ArgumentError` (lowercase lead-in)."""
+"""CLI usage text for a bind config `ArgumentError` (preserve paths and literals)."""
 function _bind_config_cli_message(msg::AbstractString)::String
-    line = first(split(String(msg), '\n'; limit = 2))
-    lower = lowercase(line)
-    occursin("hint:", lowercase(msg)) && return lower
-    return string(lower, "\nHint: pass --help for usage")
+    body = String(msg)
+    if occursin("hint:", lowercase(body))
+        return body
+    end
+    return string(body, "\nHint: pass --help for usage")
 end
 
 public HostLaunchPlan
-public launch_bind_host_key, validate_all_host_launch_plans!
+public _bind_config_cli_message, launch_bind_host_key, validate_all_host_launch_plans!

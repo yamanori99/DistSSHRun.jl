@@ -73,10 +73,10 @@ function ride_main()::Cint
                 bind_overrides = DistSSHRun.hosts_file_bind_overrides(parsed.cli_session),
             )
         catch e
-            e isa DistSSHRun.DistSSHBase.CliUsageError && rethrow()
-            if e isa ArgumentError
-                DistSSHRun.print_cli_error(e.msg)
-                return Cint(1)
+            if e isa DistSSHRun.DistSSHBase.CliUsageError
+                rethrow()
+            elseif e isa ArgumentError
+                throw(DistSSHRun.DistSSHBase.CliUsageError(DistSSHRun._bind_config_cli_message(e.msg)))
             end
             rethrow()
         end

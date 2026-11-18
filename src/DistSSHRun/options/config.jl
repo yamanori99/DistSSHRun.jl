@@ -258,13 +258,20 @@ function run_job_config_diagnostic_exit(cfg::RunJobConfig)::Bool
     return cfg.print_config.value || cfg.dry_run.value
 end
 
+"""Map a parsed CLI/API keyword (`missing` = omit) into `resolve_run_job_config` CLI input."""
+function cli_optional_bool(v)::Union{Nothing, Bool}
+    v === missing && return nothing
+    v isa Bool || throw(ArgumentError("cli_optional_bool: expected Bool or missing, got $(typeof(v))"))
+    return v
+end
+
 function _cli_bool(parsed, key::Symbol)::Union{Nothing, Bool}
     hasproperty(parsed, key) || return nothing
     v = getproperty(parsed, key)
     v === missing && return nothing
     v === nothing && return nothing
     v isa Bool || return nothing
-    return v ? true : nothing
+    return v
 end
 
 """Build [`RunJobConfig`](@ref) from a go / drive / ride parse result."""
@@ -312,12 +319,19 @@ function finish_run_job_diagnostics!(
         (0, false)
     end
     planned_ssh = String[launch_bind_host_key(h) for h in hosts]
-    bind_overrides = hosts_file_bind_overrides(
-        cli;
-        bind_overrides = get(parsed, :bind_overrides, Dict{String, String}()),
-        planned_hosts = planned_ssh,
-        command = command,
-    )
+    bind_overrides = try
+        hosts_file_bind_overrides(
+            cli;
+            bind_overrides = get(parsed, :bind_overrides, Dict{String, String}()),
+            planned_hosts = planned_ssh,
+            command = command,
+        )
+    catch e
+        e isa ArgumentError || rethrow()
+        cli.hint_surface === :cli &&
+            throw(DistSSHBase.CliUsageError(_bind_config_cli_message(e.msg)))
+        rethrow()
+    end
     if cfg.dry_run.value
         resolved_workers = if command === :drive && hasproperty(parsed, :head_workers)
             Int(getproperty(parsed, :head_workers))
@@ -344,5 +358,5 @@ end
 
 public BoolConfigField, ConfigSource, RunJobConfig, StringConfigField
 public finish_run_job_diagnostics!, print_run_job_config!, print_run_job_dry_plan!
-public resolve_run_job_config, resolve_run_job_config_from_parsed
+public cli_optional_bool, resolve_run_job_config, resolve_run_job_config_from_parsed
 public run_job_config_diagnostic_exit

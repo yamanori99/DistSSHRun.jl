@@ -1063,7 +1063,7 @@ end
             )
             proc_bad, out_bad = _run_subprocess(setenv(reject_cmd, reject_env))
             @test proc_bad.exitcode == 2
-            @test occursin("0.0.0.0", out_bad)
+            @test occursin("bind 0.0.0.0 requires --unsafe-expose-port and SSH tunnel enabled", out_bad)
             after_pids = _e2e_hb_worker_pids(hosts[1])
             @test length(setdiff(after_pids, before_pids)) == 0
             _ssh_e2e_record!(

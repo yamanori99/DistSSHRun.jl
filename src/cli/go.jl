@@ -65,9 +65,11 @@ function go_main()::Cint
                 args = kw[:args],
                 path_anchor = path_anchor,
                 output_dir = kw[:output_dir],
-                hosts_file = nothing,
+                hosts_file = parsed.cli_session.hosts_file,
                 julia = kw[:julia],
-                unsafe_skip_env_digests = get(parsed, :unsafe_skip_env_digests, false),
+                unsafe_skip_env_digests = get(parsed, :unsafe_skip_env_digests, missing),
+                unsafe_expose_port = get(parsed, :unsafe_expose_port, missing),
+                unsafe_all_to_all = get(parsed, :unsafe_all_to_all, missing),
                 repeat = get(kw, :repeat, nothing),
                 run_id = get(parsed, :run_id, nothing),
                 remote = get(parsed, :deploy_root, nothing),
@@ -75,9 +77,13 @@ function go_main()::Cint
                 original_args = original_args,
             )
         catch e
-            if e isa ArgumentError
-                DistSSHRun._report_manifest_refusal(e) || DistSSHRun.print_cli_error(e.msg)
-                return Cint(1)
+            if e isa DistSSHRun.DistSSHBase.CliUsageError
+                rethrow()
+            elseif e isa ArgumentError
+                if DistSSHRun._report_manifest_refusal(e)
+                    return Cint(1)
+                end
+                throw(DistSSHRun.DistSSHBase.CliUsageError(DistSSHRun._bind_config_cli_message(e.msg)))
             end
             rethrow()
         end

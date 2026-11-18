@@ -987,9 +987,9 @@ function go!(
         hint_surface::Symbol = :api,
         original_args::Vector{String} = String[],
         repeat::Union{Nothing, Integer} = nothing,
-        unsafe_skip_env_digests = false,
-        unsafe_expose_port::Bool = false,
-        unsafe_all_to_all::Bool = false,
+        unsafe_skip_env_digests = missing,
+        unsafe_expose_port = missing,
+        unsafe_all_to_all = missing,
         run_id::Union{Nothing, AbstractString} = nothing,
         sync::Union{Symbol, Bool, Nothing} = nothing,
         allow_external_symlinks::Bool = false,
@@ -1032,9 +1032,9 @@ function go!(
         _ensure_kit_run_dir!(:go, script_path; project = proj)
         cfg = resolve_run_job_config(;
             command = :go,
-            cli_unsafe_skip_env_digests = unsafe_skip_env_digests ? true : nothing,
-            cli_unsafe_expose_port = unsafe_expose_port ? true : nothing,
-            cli_unsafe_all_to_all = unsafe_all_to_all ? true : nothing,
+            cli_unsafe_skip_env_digests = cli_optional_bool(unsafe_skip_env_digests),
+            cli_unsafe_expose_port = cli_optional_bool(unsafe_expose_port),
+            cli_unsafe_all_to_all = cli_optional_bool(unsafe_all_to_all),
         )
         return with_run_unsafe_options!(cfg) do
             return _go_run!(
@@ -1096,15 +1096,24 @@ function _go_run!(
         !isempty(env_hf) && (hf = env_hf)
     end
     if hf !== nothing && !isempty(strip(String(hf)))
-        for line in read_hosts_file_lines(hf; surface = hint_surface)
-            push!(tokens, line)
+        if isempty(tokens)
+            for line in read_hosts_file_lines(hf; surface = hint_surface)
+                push!(tokens, line)
+            end
         end
-        resolve_launch_bind_overrides(;
-            hosts_file = hf,
-            surface = hint_surface,
-            planned_hosts = String[split_worker_token(t)[1] for t in tokens],
-            command = :go,
-        )
+        try
+            resolve_launch_bind_overrides(;
+                hosts_file = hf,
+                surface = hint_surface,
+                planned_hosts = String[split_worker_token(t)[1] for t in tokens],
+                command = :go,
+            )
+        catch e
+            e isa ArgumentError || rethrow()
+            hint_surface === :cli &&
+                throw(DistSSHBase.CliUsageError(_bind_config_cli_message(e.msg)))
+            rethrow()
+        end
     end
     if repeat === nothing
         require_counted_placement_tokens(
