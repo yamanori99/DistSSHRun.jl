@@ -695,9 +695,10 @@ function _go_run_remote_slot!(
     scp_failed = false
     try
         remote_ec = string(rstrip(remote_root, '/'), "/", slot_rel, "/go.exitcode")
+        port_args, remote_spec = DistSSHBase._scp_remote_file_spec(host, remote_ec)
         run(
             pipeline(
-                _scp_cmd([ssh_opts()..., _ssh_host_args(string(host, ":", remote_ec))..., ec_path]);
+                _scp_cmd(vcat(String.(ssh_opts()), port_args, [remote_spec, ec_path]));
                 stdout = devnull,
                 stderr = devnull,
             );
@@ -760,15 +761,10 @@ function _go_fetch_slot_provenance!(
     mkpath(local_dir)
     local_snap = joinpath(local_dir, _GO_SLOT_PROVENANCE_NAME)
     try
+        port_args, remote_spec = DistSSHBase._scp_remote_file_spec(host, remote_snap)
         run(
             pipeline(
-                _scp_cmd(
-                    [
-                        ssh_opts()...,
-                        _ssh_host_args(string(host, ":", remote_snap))...,
-                        local_snap,
-                    ]
-                );
+                _scp_cmd(vcat(String.(ssh_opts()), port_args, [remote_spec, local_snap]));
                 stdout = devnull,
                 stderr = devnull,
             );

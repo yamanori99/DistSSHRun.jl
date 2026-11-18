@@ -297,6 +297,27 @@ let _BASE = DistSSHBase
         end
     end
 
+    @testset "ssh explicit port" begin
+        @test _BASE._ssh_host_connection_args("alice@h:2222", "true") ==
+            ["-p", "2222", "--", "alice@h", "true"]
+        @test _BASE._ssh_host_connection_args("alice@h", "true") == ["--", "alice@h", "true"]
+        port_args, spec = _BASE._scp_remote_file_spec("alice@h:2222", "/tmp/x")
+        @test port_args == ["-P", "2222"]
+        @test spec == "alice@h:/tmp/x"
+        if Sys.which("ssh") === nothing
+            @test_skip "ssh not in PATH"
+        else
+            withenv("DISTSSH_TEST" => nothing, "DISTSSH_TEST_SSH" => nothing) do
+                cmd = _BASE._host_sync_remote_shell_cmd("alice@h:2222", "true")
+                @test "-p" in cmd.exec
+                @test "2222" in cmd.exec
+                @test "--" in cmd.exec
+                plain = _BASE._host_sync_remote_shell_cmd("alice@h", "true")
+                @test !("-p" in plain.exec)
+            end
+        end
+    end
+
     @testset "ssh -n vs stdin forward" begin
         if Sys.which("ssh") === nothing
             @test_skip "ssh not in PATH"

@@ -53,7 +53,7 @@ SSH reachability, remote `Project.toml`, and instantiate/deps probe (go / ride l
 function doctor_launch_assert_host!(host::AbstractString, remote_root::AbstractString)
     rr = _remote_shell_path_word(remote_root)
     inner = "test -d $rr && test -f $rr/Project.toml"
-    cmd = _ssh_cmd([ssh_opts()..., _ssh_host_args(String(host), inner)...])
+    cmd = _ssh_cmd(vcat(String[ssh_opts()...], _ssh_host_connection_args(String(host), inner)))
     out = IOBuffer()
     err = IOBuffer()
     proc = run(pipeline(ignorestatus(cmd), stdout = out, stderr = err), wait = true)

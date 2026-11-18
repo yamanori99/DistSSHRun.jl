@@ -15,6 +15,8 @@ julia -m DistSSHKit drive --local-workers 2 --hosts '4*user@lab:2222,2*[::1]' sc
 
 - A bare host means **one worker** (`host` ≡ `1*host`).
 - `:` after the host is the **SSH port** only (as in Julia's machine file).
+- When you set a port, OpenSSH gets **`-p`** (and **`scp -P`**); with no port, DistSSH does not pass `-p` (your `~/.ssh/config` may still choose a port).
+- The same port is part of the host key for duplicates, `bind_overrides=`, and dry-run lines (`alice@lab:2222` is distinct from `alice@lab`).
 - IPv6 literals must be bracketed (`2*[fe80::1]:2222`).
 
 Local capacity is **not** a placement token. `drive` / `ride`: `--local-workers N`

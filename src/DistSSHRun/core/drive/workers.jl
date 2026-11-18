@@ -164,8 +164,6 @@ function add_drive_workers!(
             writeln_both("  $(DistSSHRun.format_kit_head_placement(0, "workers")) (use --head-workers N)")
         end
 
-        sshflags_cmd = Cmd(ssh_opts())
-
         for (host_name, host_workers_spec) in hosts
             DistSSHRun._drive_host_span!(host_name, "workers", :running)
             host_ok = false
@@ -276,6 +274,7 @@ function add_drive_workers!(
                     bind = DistSSHRun.resolved_bind_address(host_name, bind_overrides)
                     DistSSHRun.validate_host_launch_plan(host_name, bind)
                     machine = DistSSHRun.ssh_addprocs_machine_bind(host_name, bind)
+                    sshflags_cmd = Cmd(DistSSHBase.ssh_connection_ssh_opts(host_name))
                     DistSSHRun._add_ssh_drive_workers!(
                         machine,
                         host_workers,

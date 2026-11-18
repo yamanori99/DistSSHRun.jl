@@ -198,7 +198,9 @@ function _ssh_phase_cmd(host::AbstractString, remote::AbstractString)::Cmd
     if !isempty(custom)
         return Cmd(vcat(_test_double_julia_argv(custom), [String(host), String(remote)]))
     end
-    return _ssh_cmd(String["-n"; _ssh_phase_opts(); _ssh_host_args(String(host), String(remote))])
+    return _ssh_cmd(
+        vcat(String["-n"], _ssh_phase_opts(), _ssh_host_connection_args(String(host), String(remote))),
+    )
 end
 
 function _kill_cmd_runs!(runs::AbstractVector{_CmdRun})

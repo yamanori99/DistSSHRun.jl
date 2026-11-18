@@ -67,6 +67,19 @@ using Test
         @test short == "only stderr line"
     end
 
+    @testset "machine SSH port" begin
+        ep = DistSSHBase.parse_machine_token("2*alice@lab:2222")
+        @test DistSSHBase.machine_ssh_endpoint(ep) == "alice@lab:2222"
+        @test DistSSHBase.split_worker_token("alice@lab:2222") == ("alice@lab:2222", nothing)
+        @test DistSSHBase.parse_placement_token("alice@lab:2222").name == "alice@lab:2222"
+        @test DistSSHBase.parse_ssh_endpoint("alice@lab:2222") == ("alice@lab", 2222)
+        @test DistSSHBase.parse_ssh_endpoint("lab") == ("lab", nothing)
+        a = DistSSHBase.parse_machine_token("host-a:22")
+        b = DistSSHBase.parse_machine_token("host-a:2222")
+        @test DistSSHBase.machine_ssh_label(a) != DistSSHBase.machine_ssh_label(b)
+        @test DistSSHBase.parse_placement_token("host-a:22").name == "host-a:22"
+    end
+
     @testset "host_tokens" begin
         @test DistSSHBase.host_tokens(["1*h1"]) == ["1*h1"]
         @test DistSSHBase.host_tokens(Tuple{String, Union{Int, Nothing}}[("h1", 2)]) == ["2*h1"]

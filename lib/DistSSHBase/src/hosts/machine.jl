@@ -128,16 +128,43 @@ function parse_machine_token(spec::AbstractString)::MachinePlacement
     return MachinePlacement(workers, dest, port)
 end
 
-"""SSH `HostName` label used for duplicate detection (no user, no port)."""
+"""Canonical SSH destination for launch, SSH, placement `name`, and duplicate keys."""
+function machine_ssh_endpoint(p::MachinePlacement)::String
+    if p.port === nothing
+        return p.dest
+    end
+    return string(p.dest, ":", p.port)
+end
+
+"""
+Parse a bare SSH endpoint (`[user@]host[:port]`) into OpenSSH `dest` and optional port.
+
+Worker-count prefixes (`N*…`) are rejected; use machine tokens for those.
+"""
+function parse_ssh_endpoint(endpoint::AbstractString)::Tuple{String, Union{Nothing, Int}}
+    ep = String(strip(endpoint))
+    isempty(ep) && throw(ArgumentError("empty SSH endpoint"))
+    occursin('*', ep) &&
+        throw(ArgumentError("$(repr(endpoint)): worker count prefix is not allowed in an SSH endpoint"))
+    dest, port = _split_ssh_port(ep)
+    validate_ssh_host(dest; shown = endpoint)
+    return dest, port
+end
+
+"""SSH host label for duplicate detection (includes explicit `:port` when set)."""
 function machine_ssh_label(p::MachinePlacement)::String
     d = p.dest
     at = findlast('@', d)
     hostpart = at === nothing ? d : d[(at + 1):end]
     if startswith(hostpart, "[")
-        return hostpart
+        label = hostpart
+        p.port === nothing && return label
+        return string(label, ":", p.port)
     end
     colon = findfirst(':', hostpart)
-    return colon === nothing ? hostpart : hostpart[1:(colon - 1)]
+    label = colon === nothing ? hostpart : hostpart[1:(colon - 1)]
+    p.port === nothing && return label
+    return string(label, ":", p.port)
 end
 
 """Format a placement token; `format → parse` is identity for accepted tokens."""
@@ -152,18 +179,16 @@ end
 
 function format_machine_token(workers::Integer, dest::AbstractString; port::Union{Nothing, Integer} = nothing)::String
     d = String(dest)
-    if port !== nothing
-        p = Int(port)
-        d = endswith(d, "]") ? string(d, ":", p) : string(d, ":", p)
-    end
-    return format_machine_token(MachinePlacement(workers, d))
+    body, parsed_port = _split_ssh_port(d)
+    use_port = port !== nothing ? Int(port) : parsed_port
+    return format_machine_token(MachinePlacement(Int(workers), body, use_port))
 end
 
 """Map a machine token to the legacy placement tuple used by drive/go pipelines."""
 function machine_to_placement_token(spec::AbstractString)::NamedTuple{(:role, :name, :n), Tuple{Symbol, String, Union{Nothing, Int}}}
     p = parse_machine_token(spec)
     validate_ssh_host(p.dest; shown = spec)
-    name = p.dest
+    name = machine_ssh_endpoint(p)
     is_parent_host_name(machine_ssh_label(p)) &&
         throw(ArgumentError("$(repr(spec)): `parent` is not an SSH host; use --head-workers"))
     return (role = :child, name = name, n = p.workers)
