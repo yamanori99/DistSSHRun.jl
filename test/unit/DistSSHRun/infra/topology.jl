@@ -10,7 +10,63 @@ using DistSSHRun
         @test DistSSHRun.topology_for_launch(;
             topology_setting = "auto",
             unsafe_all_to_all = true,
-        ) == :all_to_all
+        ) == :master_worker
+    end
+
+    @testset "dry-run launch topology matches addprocs" begin
+        port_msg =
+            "bind \"127.0.0.1:9000\" is not an IPv4 address; checked: dotted-quad IPv4 literal (ports are not allowed); fix: bind = \"127.0.0.1\""
+        for unsafe in (false, true)
+            top = DistSSHRun.topology_for_launch(;
+                topology_setting = "auto",
+                unsafe_all_to_all = unsafe,
+            )
+            plan = DistSSHRun.validate_host_launch_plan(
+                "h1",
+                "127.0.0.1";
+                unsafe_all_to_all = unsafe,
+                topology_setting = "auto",
+            )
+            @test top == plan.topology == :master_worker
+        end
+        let cfg = DistSSHRun.resolve_run_job_config(;
+                command = :ride,
+                cli_dry_run = true,
+                cli_unsafe_all_to_all = true,
+            ),
+            buf = IOBuffer()
+            DistSSHRun.print_run_job_dry_plan!(
+                buf,
+                cfg;
+                hosts = ["2*lab-a", "lab-b"],
+                worker_tokens = ["2*lab-a", "lab-b"],
+                project = pwd(),
+            )
+            txt = String(take!(buf))
+            @test count("topology=master_worker", txt) == 2
+            @test !occursin("topology=all_to_all", txt)
+        end
+        @test DistSSHRun.launch_bind_host_key("2*lab") == "lab"
+        for host in ("lab", "lab-a", "alice@mac")
+            let msg = try
+                    DistSSHRun.validate_host_launch_plan(host, "127.0.0.1:9000")
+                catch e
+                    e isa ArgumentError ? e.msg : rethrow()
+                end
+                @test msg == port_msg
+            end
+        end
+        bad = "127.0.0.1:9000"
+        let msg = try
+                DistSSHRun.validate_all_host_launch_plans!(
+                    ["lab-a", "lab-b"],
+                    Dict("lab-a" => bad, "lab-b" => bad),
+                )
+            catch e
+                e isa ArgumentError ? e.msg : rethrow()
+            end
+            @test msg == port_msg
+        end
     end
 
     @testset "happy path plan line" begin

@@ -117,8 +117,8 @@ end
 Per-host SSH launch view (bind address, tunnel flag, resolved topology).
 
 Field names are API for 0.2.0: `host`, `bind`, `tunnel`, `topology`
-(`:master_worker` or `:all_to_all`). `bind` is the canonical IPv4 literal passed to
-Distributed; dry-run decorates `0.0.0.0` via `bind_dry_run_display`.
+(the symbol passed to `Distributed.addprocs`). `bind` is the canonical IPv4 literal
+passed to Distributed; dry-run decorates `0.0.0.0` via `bind_dry_run_display`.
 """
 struct HostLaunchPlan
     host::String
@@ -151,13 +151,13 @@ function topology_for_launch(;
     else
         resolved_topology(String(topology_setting))
     end
-    t === :auto && return unsafe_all_to_all ? :all_to_all : :master_worker
-    unsafe_all_to_all && throw(
+    unsafe_all_to_all && t !== :auto && throw(
         ArgumentError(
             "unsafe_all_to_all requires DISTSSH_TOPOLOGY=auto; worker-to-worker links need the opt-in flag",
         ),
     )
-    return t
+    # Worker launch always uses master_worker (see `topology_for_launch` in launch.jl).
+    return :master_worker
 end
 
 function validate_host_launch_plan(
