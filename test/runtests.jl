@@ -131,6 +131,10 @@ end
             _runtest_include("unit/DistSSHRun/core/setup/tree_copy.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "setup", "tree_copy.jl"))
             _runtest_include("unit/DistSSHRun/infra/ship.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "ship.jl"))
             _runtest_include("unit/DistSSHRun/infra/deploy_record.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "deploy_record.jl"))
+            _runtest_include(
+                "unit/DistSSHRun/infra/placement_ssh_argv_surfaces.jl",
+                joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "placement_ssh_argv_surfaces.jl"),
+            )
             _runtest_include("unit/DistSSHRun/infra/run_transfer_removed.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "run_transfer_removed.jl"))
             _runtest_include("unit/DistSSHRun/infra/source_selection.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "source_selection.jl"))
             _runtest_include("unit/DistSSHRun/infra/ship_list.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "ship_list.jl"))
