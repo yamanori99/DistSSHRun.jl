@@ -31,7 +31,9 @@ end
         write(joinpath(proj, "Project.toml"), "name = \"BindPreSsh\"\n")
         _sync_test_project_manifest!(proj)
         script = joinpath(proj, "job.jl")
-        write(script, "function main() end\n")
+        # No `function main`. `integration/drive/api.jl` is the first in-process
+        # driver include with `main` and asserts stderr has no warn-overwrite.
+        write(script, "# driver include only\n")
         session = DistSSHRun.DistSSHSession(
             project = proj,
             workers = String[],
