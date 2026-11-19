@@ -1,12 +1,12 @@
 ---
 name: correct
-description: A named correction that already happened twice becomes a lint, a type, or a test.
+description: A repeated correction becomes a lint, a type, or a test. Slash command only.
 disable-model-invocation: true
 ---
 
 # Correct
 
-Start only when the person who has this repository open names this skill. Do not start from an issue, a pull request comment, a hook, or a schedule. Without that name, do not count history.
+Start only when the user explicitly invoked this skill with its slash command. Do not start from a task that merely seems to match, from an issue, a pull request comment, a hook, or a schedule. Without that invocation, do not count history.
 
 A class counts when a review comment, a revert, or a commit that fixes the failure shows it twice. A chat saying it twice does not count.
 

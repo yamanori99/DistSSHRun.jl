@@ -1,6 +1,8 @@
 ---
 name: docs-reliability
-description: Follow the setup this task cites and report where it drifts.
+description: >
+  Follow the setup and run steps this task cites and report where they drift.
+  Use when a cited README or CONTRIBUTING step does not match a run, including "the setup steps fail".
 ---
 
 # Docs reliability

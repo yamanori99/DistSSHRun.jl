@@ -1,10 +1,12 @@
 ---
 name: benchmark-checklist
-description: Before a compile-bench number, say what was measured and what was ignored.
+description: Before a compile-bench number, say what was measured and what was ignored. Slash command only.
 disable-model-invocation: true
 ---
 
 # Benchmark checklist
+
+Start only when the user explicitly invoked this skill with its slash command. Do not start from a task that merely seems to match.
 
 Use this before reporting a compile-bench number. Answer from a run.
 

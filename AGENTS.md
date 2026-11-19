@@ -14,19 +14,13 @@ A pull request title names the change. The body is the four sections in `.github
 
 ## Skills
 
-Read a skill before the task it names. Do not paste a skill back into this file.
+Read one of these before the task it names. Do not paste a skill back into this file. Skills that are not listed here start only from their slash command.
 
-- `.agents/skills/no-comments` — judge comments when a review asks. Not part of the gate.
-- `.agents/skills/deslop` — extra comments and defensive code in a diff.
-- `.agents/skills/verify-this` — one claim, then VERIFIED, NOT VERIFIED, or INCONCLUSIVE from a run.
-- `.agents/skills/correct` — a repeated correction becomes a lint, a type, or a test.
-- `.agents/skills/benchmark-checklist` — before reporting a compile-bench number.
-- `.agents/skills/docs-reliability` — follow the README and CONTRIBUTING setup and report where it drifts.
-- `.agents/skills/tdd` — a failing test first, when that test is cheap.
-- `.agents/skills/advisor` — only when the user asks for a second opinion.
-- `.agents/skills/fix-gate` — rerun `scripts/check.sh`.
-- `.agents/skills/continual-learning` — a repeated correction becomes a skill item or a lint. It does not add lines to this file.
-- `.agents/skills/safety` — releases, registration, child-process source strings, and design rules that are not a lint yet.
+- `.agents/skills/deslop` — comments, defensive checks, deep nesting, and other slop a diff added.
+- `.agents/skills/docs-reliability` — a cited README or CONTRIBUTING step drifted from a run.
+- `.agents/skills/fix-gate` — after `scripts/check.sh` or the pre-push hook fails, rerun `scripts/check.sh`.
+- `.agents/skills/safety` — design rules for a behavior change, plus releases, registration, and child-process source strings.
+- `.agents/skills/verify-this` — one claim that has to be run to be believed, then VERIFIED, NOT VERIFIED, or INCONCLUSIVE.
 
 ## Destructive setup
 

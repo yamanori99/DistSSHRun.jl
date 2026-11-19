@@ -1,12 +1,12 @@
 ---
 name: tdd
-description: Write the failing test first when that test is cheap.
+description: Write the failing test first when that test is cheap. Slash command only.
 disable-model-invocation: true
 ---
 
 # TDD
 
-Use this when the user asks for a failing test, or when the bug has an obvious cheap local test. Skip it when the only check is SSH end-to-end or the full `Pkg.test` matrix.
+Start only when the user explicitly invoked this skill with its slash command. Do not start from a task that merely seems to match. Skip it when the only check is SSH end-to-end or the full `Pkg.test` matrix.
 
 1. Name the intended behavior and the smallest reproduction.
 2. Write the smallest test that would have caught the bug.

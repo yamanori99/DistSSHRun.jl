@@ -1,6 +1,9 @@
 ---
 name: safety
-description: Releases, registration, child-process source strings, and design rules that are not a lint yet.
+description: >
+  Design rules that are not a lint yet, plus releases, registration, and child-process source strings.
+  Use when adding or changing behavior, a data format, a name, CLI, an exit code, a message, where
+  environment variables are read, or the version, and when releasing or registering.
 ---
 
 # Safety

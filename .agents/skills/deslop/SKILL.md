@@ -1,6 +1,8 @@
 ---
 name: deslop
-description: Remove extra comments and defensive checks that the diff added on a trusted path. Keep behavior.
+description: >
+  Remove comments, trusted-path defensive checks, deep nesting, and other slop the diff added. Keep behavior.
+  Use when a diff should match the surrounding code, including "clean up this diff" and "remove slop".
 ---
 
 # Remove AI code slop

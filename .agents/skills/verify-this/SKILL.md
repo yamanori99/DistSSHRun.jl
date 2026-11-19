@@ -1,6 +1,8 @@
 ---
 name: verify-this
-description: Restate one claim, run it, and return VERIFIED, NOT VERIFIED, or INCONCLUSIVE.
+description: >
+  Restate one claim, run it, and return VERIFIED, NOT VERIFIED, or INCONCLUSIVE.
+  Use when an effect has to be run to be believed, including "did this actually get faster".
 ---
 
 # Verify this

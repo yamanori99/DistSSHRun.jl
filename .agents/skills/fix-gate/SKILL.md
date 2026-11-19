@@ -1,6 +1,8 @@
 ---
 name: fix-gate
-description: After a failure, rerun scripts/check.sh on the commit to push.
+description: >
+  After scripts/check.sh or the pre-push hook fails, rerun scripts/check.sh on the commit to push.
+  Use when push is blocked, including "pre-push hook failed" and "push is blocked".
 ---
 
 # Fix gate

@@ -1,10 +1,12 @@
 ---
 name: no-comments
-description: Judge comments in a diff. Do not spawn a subagent.
+description: Judge comments in a diff. Do not spawn a subagent. Slash command only.
 disable-model-invocation: true
 ---
 
 # No comments
+
+Start only when the user explicitly invoked this skill with its slash command. Do not start from a task that merely seems to match. Do not spawn a subagent.
 
 Use the caller's files or diff. Otherwise use the current diff against `main`, including the working tree.
 
