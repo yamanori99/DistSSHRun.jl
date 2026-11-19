@@ -2,9 +2,11 @@
 # Do not Pkg.add, and do not load a copy from the running process.
 #
 #   julia --project=.github/runic --startup-file=no scripts/lint/diff_lint.jl <mode>
-#   modes: banned-words, agents-md, skip-reasons, new-comments, self-test, pr-body
+#   modes: banned-words, agents-md, skip-reasons, new-comments, stdlib-compat, self-test, pr-body
 
 using JuliaSyntax
+using TOML
+import Pkg
 import JuliaSyntax: byte_range, numchildren, sourcetext, untokenize
 
 const SYNTAX_VERSION = v"1.13.0"
@@ -576,6 +578,17 @@ function self_test()
     any(==("file list"), pr_body_errors(star, listed)) || die("self-test: pr body star list")
     fence_ok = "## Summary\n\n## Testing\n\n```sh\n# Confirmed locally\n```\n\n## Risk\n\n## Revert\n"
     isempty(pr_template_errors(fence_ok)) || die("self-test: pr fence heading $(pr_template_errors(fence_ok))")
+    patch_pin = stdlib_compat_errors(
+        Dict("compat" => Dict("julia" => "1.13", "OpenSSL_jll" => "3.5.8"), "deps" => Dict("OpenSSL_jll" => "458c3c95-2e84-50aa-8efc-19380b2a3a95")),
+        Dict("OpenSSL_jll" => v"3.5.8"),
+    )
+    any(occursin("OpenSSL_jll", e) && occursin("patch", e) for e in patch_pin) || die("self-test: stdlib patch pin $(patch_pin)")
+    isempty(
+        stdlib_compat_errors(
+            Dict("compat" => Dict("julia" => "1.13", "OpenSSL_jll" => "3.5"), "deps" => Dict("OpenSSL_jll" => "458c3c95-2e84-50aa-8efc-19380b2a3a95")),
+            Dict("OpenSSL_jll" => v"3.5.8"),
+        ),
+    ) || die("self-test: stdlib two-component")
     percent_decode("a%20b") == "a b" || die("self-test: percent decode")
     for (_, _, text) in comment_tokens("# Use café\n")
     end
@@ -691,6 +704,61 @@ function local_link_miss(root::AbstractString, file::AbstractString, target::Abs
     startswith(t, "mailto:") && return nothing
     full = startswith(t, "/") ? joinpath(root, t[2:end]) : normpath(joinpath(root, dirname(file), t))
     return (isfile(full) || isdir(full)) ? nothing : t
+end
+
+function spec_lower(spec::Pkg.Types.VersionSpec)
+    isempty(spec.ranges) && die("empty version spec")
+    return minimum(r.lower for r in spec.ranges)
+end
+
+function stdlib_compat_errors(proj::AbstractDict, stdlib_versions::Dict{String, VersionNumber})
+    errs = String[]
+    deps = get(proj, "deps", Dict{String, Any}())
+    compat = get(proj, "compat", Dict{String, Any}())
+    haskey(compat, "julia") || return ["compat.julia missing"]
+    julia_spec = Pkg.Types.semver_spec(String(compat["julia"]))
+    julia_lower = spec_lower(julia_spec)
+    julia_patch_free = julia_lower.n < 3 || julia_lower.t[3] == 0
+    for name in sort!(collect(keys(deps)))
+        haskey(stdlib_versions, name) || continue
+        haskey(compat, name) || (push!(errs, "$name: stdlib dep has no [compat]"); continue)
+        spec = Pkg.Types.semver_spec(String(compat[name]))
+        ver = stdlib_versions[name]
+        if !(ver in spec)
+            push!(errs, "$name: this Julia's stdlib is $ver, outside [compat] $(compat[name])")
+        end
+        if julia_patch_free && endswith(name, "_jll")
+            lower = spec_lower(spec)
+            if lower.n >= 3 && lower.t[3] != 0
+                push!(
+                    errs,
+                    "$name: [compat] $(compat[name]) starts at patch $(Int(lower.t[3])). julia $(compat["julia"]) includes $(Int(julia_lower.t[1])).$(Int(julia_lower.t[2])).0, whose stdlib may be older. Use a two-component bound, or raise julia to a patch.",
+                )
+            end
+        end
+    end
+    return errs
+end
+
+function stdlib_compat_errors(root::AbstractString)
+    proj = TOML.parsefile(joinpath(root, "Project.toml"))
+    versions = Dict{String, VersionNumber}()
+    deps = get(proj, "deps", Dict{String, Any}())
+    for name in keys(deps)
+        p = joinpath(Sys.STDLIB, name, "Project.toml")
+        isfile(p) || continue
+        versions[name] = VersionNumber(TOML.parsefile(p)["version"])
+    end
+    return stdlib_compat_errors(proj, versions)
+end
+
+function lint_stdlib_compat(root::AbstractString)
+    n = 0
+    for err in stdlib_compat_errors(root)
+        println(stderr, "lint: Project.toml: ", err)
+        n += 1
+    end
+    return n
 end
 
 function pr_template_errors(src::AbstractString)
@@ -876,7 +944,7 @@ function main(args)
         return pr_body_main(args[2], args[3])
     end
     if length(args) != 1
-        die("usage: diff_lint.jl <banned-words|agents-md|skip-reasons|new-comments|doc-touch|docs-static|self-test|pr-body>")
+        die("usage: diff_lint.jl <banned-words|agents-md|skip-reasons|new-comments|stdlib-compat|doc-touch|docs-static|self-test|pr-body>")
     end
     mode = args[1]
     mode == "self-test" && return self_test()
@@ -886,6 +954,9 @@ function main(args)
         return 0
     elseif mode == "docs-static"
         docs_static(root) == 0 || exit(1)
+        return 0
+    elseif mode == "stdlib-compat"
+        lint_stdlib_compat(root) == 0 || exit(1)
         return 0
     end
     files = parse_diff(git_diff(root))
