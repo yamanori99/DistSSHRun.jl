@@ -255,9 +255,10 @@ until someone comments `@coderabbitai review` (changes since the last
 review) or `@coderabbitai full review` (the whole pull request). It does
 not reply in a thread until it is mentioned, and a later push does not
 start another review. Config is [`.coderabbit.yaml`](.coderabbit.yaml)
-on the **PR head** (not a merge gate). JETLS / tests / e2e stay the gate.
-Treat inline comments as hints; do not apply Autofix or generated tests
-unless you want that change.
+on the **PR head** (not a merge gate). `scripts/check.sh` is the push gate.
+It comments on a bug this diff introduced that `REVIEW.md` does not already
+name. Treat inline comments as hints; do not apply Autofix or generated
+tests unless you want that change.
 
 ## Release
 

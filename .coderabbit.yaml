@@ -3,10 +3,10 @@
 language: en-US
 # tone_instructions is at most 250 characters after the folded lines are joined.
 tone_instructions: >
-  Brief. Follow REVIEW.md. Inline comments only for bugs or regressions
-  in this diff. DistSSHRun is one DistSSHKit run. Users add DistSSHKit.
-  Stay inside the PR's stated scope. Start with the count of findings.
-  Say when there is nothing to fix.
+  Brief. Name a bug this diff introduced that REVIEW.md does not list.
+  Cite the file and line. Outside this diff, name it and do not ask for
+  a fix. One DistSSHKit run; users add DistSSHKit. Start with the finding
+  count. Say when nothing needs a fix.
 # Reviews and chat run only after a mention. `@coderabbitai review` is
 # incremental. `@coderabbitai full review` starts over. A later push does
 # not review again. This file is read from the pull request head.
@@ -33,13 +33,6 @@ reviews:
         a changelog fragment bullet, not a label. Do not request a
         checklist or a body heading that titles the pull request. The
         GitHub title is the title. Do not add lines to AGENTS.md.
-    - path: "**/*.jl"
-      instructions: >
-        Apply REVIEW.md. Flag a remote shell string that interpolates a
-        value without _remote_sh_quote or _remote_shell_path_word. Flag
-        delete and prune path calculations in this diff. Cite a file and
-        line. Stay inside the PR's stated scope. Do not request a
-        breaking label.
     - path: "AGENTS.md"
       instructions: >
         This file is a short entry. Do not ask to paste a skill back
