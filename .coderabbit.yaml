@@ -44,6 +44,12 @@ reviews:
         subagent, or add a line to AGENTS.md. The MIT notice is
         `.agents/LICENSE`. Do not paste it into a skill.
         continual-learning and correct run only when the user names them.
+    - path: "docs/src/devdocs/agents/**"
+      instructions: >
+        A skill is not a CI job. Do not ask to install a hook, spawn a
+        subagent, or add a line to AGENTS.md. The MIT notice is
+        `.agents/LICENSE`. Do not paste it into a skill.
+        continual-learning and correct run only when the user names them.
     - path: "scripts/**"
       instructions: >
         The push gate is scripts/check.sh. It is the same on macOS and

@@ -59,6 +59,7 @@ trap 'rm -f "$tmp"' EXIT
       - any-glob-to-any-file:
           - ".agents/**"
           - ".claude/skills"
+          - "docs/src/devdocs/agents/**"
           - "AGENTS.md"
           - "scripts/**"
 

@@ -10,6 +10,6 @@ Start only when the user explicitly invoked this skill with its slash command. D
 
 A past chat is only a hint for where to look. It does not count as the second time. Count a review comment, a revert, or a commit that fixes the failure.
 
-You may edit `.agents/skills/` and `scripts/lint/` only. Do not add a line to `AGENTS.md`. Do not store the chat in the repository. The result is a change another person can review.
+You may edit `docs/src/devdocs/agents/skills/` and `scripts/lint/` only. Do not add a line to `AGENTS.md`. Do not store the chat in the repository. The result is a change another person can review.
 
 Copyright (c) 2026 Cursor. SPDX-License-Identifier: MIT

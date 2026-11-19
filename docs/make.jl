@@ -20,6 +20,7 @@ makedocs(;
         edit_link = "main",
         assets = ["assets/custom.css"],
     ),
+    pagesonly = true,
     pages = [
         "Home" => "index.md",
         "CLI" => "cli.md",
