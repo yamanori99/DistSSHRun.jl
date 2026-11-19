@@ -20,6 +20,7 @@ makedocs(;
         edit_link = "main",
         assets = ["assets/custom.css"],
     ),
+    pagesonly = true,
     pages = [
         "Home" => "index.md",
         "CLI" => "cli.md",
@@ -29,6 +30,10 @@ makedocs(;
         "API" => "api.md",
     ],
     checkdocs = :public,
+    linkcheck = get(ENV, "DOCUMENTER_LINKCHECK", "") == "1",
+    linkcheck_ignore = [
+        r"https?://github\.com/yamanori99/DistSSHRun\.jl/(?:blob|tree)/main/",
+    ],
 )
 
 # A pull request from this repository deploys previews/PR<n>.
