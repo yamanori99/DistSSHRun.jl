@@ -10,7 +10,7 @@ Do this work in the current agent. Do not require a subagent.
 Targeted tests are the heading for that area in `CONTRIBUTING.md` or `test/README.md`. Do not read either file end to end.
 The gate is the same on macOS and Linux. WSL2 Ubuntu uses the Linux conditions. Native Windows is not a supported environment.
 `./scripts/check.sh` installs `.git/hooks/pre-push`. A push runs that gate. Do not pass `--no-verify`.
-A pull request title names the change. The body is the four sections in `.github/pull_request_template.md`. Do not add a title heading or a checklist.
+A pull request title names the change. The body is the four sections in `.github/pull_request_template.md`. It names every path in `origin/main...HEAD` and the `HEAD <sha>: passed` line from `./scripts/check.sh` on that commit. Do not add a title heading or a checklist.
 
 ## Skills
 

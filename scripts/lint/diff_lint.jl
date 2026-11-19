@@ -2,7 +2,7 @@
 # Do not Pkg.add, and do not load a copy from the running process.
 #
 #   julia --project=.github/runic --startup-file=no scripts/lint/diff_lint.jl <mode>
-#   modes: banned-words, agents-md, skip-reasons, new-comments, self-test
+#   modes: banned-words, agents-md, skip-reasons, new-comments, self-test, pr-body
 
 using JuliaSyntax
 import JuliaSyntax: byte_range, numchildren, sourcetext, untokenize
@@ -548,6 +548,14 @@ function self_test()
     isempty(coderabbit_tone_errors(short)) || die("self-test: tone $(coderabbit_tone_errors(short))")
     long = "tone_instructions: >\n  " * repeat("a", 251) * "\n"
     any(occursin("250", e) for e in coderabbit_tone_errors(long)) || die("self-test: tone limit")
+    kept = "## Summary\n\n## Testing\n\nHEAD abc: passed\n\n## Risk\n\n## Revert\n"
+    kept_paths = ["scripts/check.sh", "CONTRIBUTING.md"]
+    kept_errs = pr_body_errors(kept, kept_paths, "abc")
+    any(endswith(e, "scripts/check.sh") for e in kept_errs) || die("self-test: pr body path")
+    any(endswith(e, "CONTRIBUTING.md") for e in kept_errs) || die("self-test: pr body kept path")
+    any(occursin("HEAD def: passed", e) for e in pr_body_errors(kept, kept_paths, "def")) || die("self-test: pr body sha")
+    covered = kept * "\nscripts/check.sh\nCONTRIBUTING.md\n"
+    isempty(pr_body_errors(covered, kept_paths, "abc")) || die("self-test: pr body $(pr_body_errors(covered, kept_paths, "abc"))")
     println("self-test: passed")
     return 0
 end
@@ -666,6 +674,27 @@ function pr_template_errors(src::AbstractString)
     return errs
 end
 
+function pr_body_errors(body::AbstractString, paths, head::AbstractString)
+    errs = pr_template_errors(body)
+    for path in paths
+        isempty(path) && continue
+        occursin(path, body) || push!(errs, "missing path $(path)")
+    end
+    needle = "HEAD $(head): passed"
+    occursin(needle, body) || push!(errs, "missing $(needle)")
+    return errs
+end
+
+function pr_body_main(head::AbstractString, paths_file::AbstractString, body_file::AbstractString)
+    paths = filter(!isempty, readlines(paths_file))
+    errs = pr_body_errors(read(body_file, String), paths, head)
+    for err in errs
+        println(stderr, "pr body: ", err)
+    end
+    isempty(errs) || exit(1)
+    return 0
+end
+
 function coderabbit_tone_errors(src::AbstractString)
     lines = collect(eachsplit(src, '\n'; keepempty = true))
     idx = findfirst(line -> startswith(line, "tone_instructions:"), lines)
@@ -746,8 +775,11 @@ function docs_static(root::AbstractString)
 end
 
 function main(args)
+    if length(args) == 4 && args[1] == "pr-body"
+        return pr_body_main(args[2], args[3], args[4])
+    end
     if length(args) != 1
-        die("usage: diff_lint.jl <banned-words|agents-md|skip-reasons|new-comments|doc-touch|docs-static|self-test>")
+        die("usage: diff_lint.jl <banned-words|agents-md|skip-reasons|new-comments|doc-touch|docs-static|self-test|pr-body>")
     end
     mode = args[1]
     mode == "self-test" && return self_test()

@@ -138,6 +138,27 @@ if command -v jetls >/dev/null 2>&1; then
 fi
 section "check: pins ok (Runic ${runic_pin}, JETLS ${jetls_pin})"
 
+section "check: pr body"
+sha="$(git rev-parse HEAD)"
+pr_paths="$(mktemp)"
+pr_body="$(mktemp)"
+pr_err="$(mktemp)"
+cleanup_pr() {
+  rm -f "${pr_paths}" "${pr_body}" "${pr_err}"
+}
+trap cleanup_pr EXIT
+git diff --name-only origin/main...HEAD > "${pr_paths}"
+if gh pr view --json body --jq .body > "${pr_body}" 2>"${pr_err}"; then
+  "${JULIA[@]}" --project="${ROOT}/.github/runic" --startup-file=no \
+    "${ROOT}/scripts/lint/diff_lint.jl" pr-body "${sha}" "${pr_paths}" "${pr_body}"
+elif grep -q 'no pull requests found' "${pr_err}"; then
+  echo "check: pr body: no pull request"
+else
+  cat "${pr_err}" >&2
+  die "pr body: could not read the pull request"
+fi
+section "check: pr body ok"
+
 section "check: runic ${runic_pin}"
 JULIA_APPS_JULIA_CMD="${JULIA_BIN}" "${runic_bin}" --check --diff .
 section "check: runic ok"
