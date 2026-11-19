@@ -14,6 +14,8 @@ tone_instructions: >
   a native Windows port. Do not add lines to AGENTS.md.
   Do not request a checklist. Do not request a body heading that
   titles the pull request. The GitHub title is the title.
+  Testing names the OS, the architecture, and the Julia version.
+  Do not ask for a username, a hostname, a home path, or which machine.
 # Reviews and chat run only after a mention. `@coderabbitai review` is
 # incremental. `@coderabbitai full review` starts over. A later push does
 # not review again. This file is read from the pull request head.

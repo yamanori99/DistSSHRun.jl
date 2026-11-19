@@ -10,6 +10,7 @@ Do this work in the current agent. Do not require a subagent.
 Targeted tests are the heading for that area in `CONTRIBUTING.md` or `test/README.md`. Do not read either file end to end.
 The gate is the same on macOS and Linux. WSL2 Ubuntu uses the Linux conditions. Native Windows is not a supported environment.
 A pull request title names the change. The body is the four sections in `.github/pull_request_template.md`. Do not add a title heading or a checklist.
+In Testing, name the OS, the architecture, and the Julia version. Do not name the user, the host, a home path, or which machine.
 
 ## Skills
 

@@ -542,7 +542,21 @@ function self_test()
     terr = pr_template_errors(bad)
     any(endswith(e, "title heading") for e in terr) || die("self-test: title heading")
     any(endswith(e, "checklist") for e in terr) || die("self-test: checklist")
-    good = "## Summary\n\n## Testing\n\n## Risk\n\n## Revert\n"
+    good = join(
+        [
+            "## Summary",
+            "",
+            "## Testing",
+            "",
+            "<!-- Name the OS, the architecture, and the Julia version.",
+            "     Do not name the user, the host, a home path, or which machine. -->",
+            "",
+            "## Risk",
+            "",
+            "## Revert",
+            "",
+        ], "\n"
+    )
     isempty(pr_template_errors(good)) || die("self-test: template $(pr_template_errors(good))")
     println("self-test: passed")
     return 0
@@ -658,6 +672,12 @@ function pr_template_errors(src::AbstractString)
     end
     for name in sort!(collect(setdiff(need, seen)))
         push!(errs, "missing ## $name")
+    end
+    if !occursin("Name the OS, the architecture, and the Julia version.", src)
+        push!(errs, "missing environment")
+    end
+    if !occursin("Do not name the user, the host, a home path, or which machine.", src)
+        push!(errs, "missing privacy limit")
     end
     return errs
 end
