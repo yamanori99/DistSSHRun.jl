@@ -237,6 +237,7 @@ Required to merge (ruleset `main` uses these names). **nightly** jobs, and **1.1
 - The body is
   [`.github/pull_request_template.md`](.github/pull_request_template.md):
   what changed, what ran, what it can break, and how to undo it.
+  The GitHub title is the title. The body has no title heading and no checklist.
   [AGENTS.md](AGENTS.md) tells an agent how to fill that.
   [REVIEW.md](REVIEW.md) tells a reviewer what failure looks like here.
   The type label stays out of the body. CI applies it. See

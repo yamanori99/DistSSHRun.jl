@@ -538,6 +538,12 @@ function self_test()
     docsrc = "\"\"\"\ndoc\n\"\"\"\nf() = 1\n"
     ranges = doc_line_ranges(docsrc)
     length(ranges) == 1 && 1 in ranges[1] && 3 in ranges[1] && !(4 in ranges[1]) || die("self-test: doc lines $(ranges)")
+    bad = "# Pull request\n## Summary\n## Testing\n## Risk\n## Revert\n## Checklist\n- [ ] x\n"
+    terr = pr_template_errors(bad)
+    any(endswith(e, "title heading") for e in terr) || die("self-test: title heading")
+    any(endswith(e, "checklist") for e in terr) || die("self-test: checklist")
+    good = "## Summary\n\n## Testing\n\n## Risk\n\n## Revert\n"
+    isempty(pr_template_errors(good)) || die("self-test: template $(pr_template_errors(good))")
     println("self-test: passed")
     return 0
 end
@@ -635,8 +641,39 @@ function local_link_miss(root::AbstractString, file::AbstractString, target::Abs
     return (isfile(full) || isdir(full)) ? nothing : t
 end
 
+function pr_template_errors(src::AbstractString)
+    need = Set(["Summary", "Testing", "Risk", "Revert"])
+    seen = Set{String}()
+    errs = String[]
+    for (i, line) in enumerate(eachsplit(src, '\n'; keepempty = true))
+        if startswith(line, "# ")
+            push!(errs, "$i: title heading")
+        end
+        if startswith(line, "## Checklist") || occursin(r"^- \[[ xX]\]", line)
+            push!(errs, "$i: checklist")
+        end
+        m = match(r"^## ([A-Za-z]+)\s*$", line)
+        m === nothing && continue
+        push!(seen, m.captures[1])
+    end
+    for name in sort!(collect(setdiff(need, seen)))
+        push!(errs, "missing ## $name")
+    end
+    return errs
+end
+
 function docs_static(root::AbstractString)
     n = 0
+    template_path = joinpath(root, ".github", "pull_request_template.md")
+    if isfile(template_path)
+        for err in pr_template_errors(read(template_path, String))
+            println(stderr, "docs: .github/pull_request_template.md: $(err)")
+            n += 1
+        end
+    else
+        println(stderr, "docs: .github/pull_request_template.md: missing")
+        n += 1
+    end
     for file in readlines(`git -C $root ls-files '*.md'`)
         src = read(joinpath(root, file), String)
         if file != "docs/src/api.md" && startswith(file, "docs/")
