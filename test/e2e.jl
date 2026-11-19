@@ -389,8 +389,7 @@ end
                     extra_env = quiet
                 )
                 _assert_ssh_e2e_ok(suite, "run_id_env_drive", proc, out)
-                ride_script = joinpath(proj, "ride_run_id_smoke.jl")
-                cp(_fixture("ride_remote_ok.jl"), ride_script; force = true)
+                ride_script = _fixture("ride_remote_ok.jl")
                 ride_cmd = _kit_cli_cmd(
                     vcat(["ride", "--no-spi-check"], runid_flags, remote_tokens, [ride_script])
                 )
@@ -398,6 +397,16 @@ end
                     setenv(ride_cmd, _drive_host_env(proj; extra_env = quiet))
                 )
                 _assert_ssh_e2e_ok(suite, "run_id_env_ride", proc, out)
+
+                proc_skip, out_skip = _run_kit_drive(;
+                    script = smoke,
+                    host_root = proj,
+                    head_workers = 0,
+                    child_hosts = remote_tokens,
+                    drive_flags = vcat(runid_flags, "--unsafe-skip-env-digests"),
+                    extra_env = quiet
+                )
+                _assert_ssh_e2e_ok(suite, "run_id_env_drive_unsafe_skip", proc_skip, out_skip)
 
                 proj_remote = "$(run_id_root)/runs/$(snap_id)/src/Project.toml"
                 tamper_jl = """
@@ -430,16 +439,6 @@ end
                 @test deploy !== nothing
                 @test worker !== nothing
                 @test length(deploy.captures[1]) == length(worker.captures[1])
-
-                proc_skip, out_skip = _run_kit_drive(;
-                    script = smoke,
-                    host_root = proj,
-                    head_workers = 0,
-                    child_hosts = remote_tokens,
-                    drive_flags = vcat(runid_flags, "--unsafe-skip-env-digests"),
-                    extra_env = quiet
-                )
-                _assert_ssh_e2e_ok(suite, "run_id_env_drive_unsafe_skip", proc_skip, out_skip)
             finally
                 proc, out = _run_kit_setup(;
                     setup_args = [
