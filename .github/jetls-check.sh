@@ -161,5 +161,43 @@ fi
 
 # Match .github/actions/jetls-check and aviatesk/JETLS.jl check@release: no
 # `--threads=auto` (segfaults on Julia 1.13 in signature_analysis_worker).
+# A failed instantiate still exits 0 after script analysis. That is not this check.
 section "jetls-check"
-exec "${_path_jetls}" check --root=. --exit-severity=hint --show-severity=hint "${jetls_args[@]}" "${files[@]}"
+_log="$(mktemp)"
+cleanup_log() { rm -f "${_log}"; }
+trap cleanup_log EXIT
+set +e
+"${_path_jetls}" check --root=. --exit-severity=hint --show-severity=hint "${jetls_args[@]}" "${files[@]}" >"${_log}" 2>&1
+_status=$?
+set -e
+cat "${_log}"
+if grep -q 'Failed to instantiate package environment' "${_log}"; then
+    _manifest_julia=""
+    if [[ -f Manifest.toml ]]; then
+        _manifest_julia="$(awk 'BEGIN{FS="\""} /^julia_version = /{print $2; exit}' Manifest.toml)"
+    fi
+    # The Julia that is running this check. No channel literal: a later 1.14
+    # gate must re-pin with 1.14, not with a 1.13 command frozen in this file.
+    _julia_bin="${JULIA_APPS_JULIA_CMD:-}"
+    if [[ -z "${_julia_bin}" ]] && command -v julia >/dev/null 2>&1; then
+        _julia_bin="$(command -v julia)"
+    fi
+    _this_julia=""
+    if [[ -n "${_julia_bin}" && -x "${_julia_bin}" ]]; then
+        _this_julia="$("${_julia_bin}" --startup-file=no -e 'print(VERSION)' 2>/dev/null || true)"
+    fi
+    {
+        echo "jetls-check: the package environment did not instantiate. JETLS then analyzed it as a script and exited 0."
+        if [[ -n "${_manifest_julia}" && -n "${_this_julia}" ]]; then
+            echo "jetls-check: Manifest.toml was resolved with Julia ${_manifest_julia}. This Julia is ${_this_julia}."
+        fi
+        if [[ -n "${_julia_bin}" ]]; then
+            echo "jetls-check: re-pin the manifest with this Julia. Pkg.resolve keeps the old stdlib pin, so move the gitignored Manifest.toml aside first:"
+            echo "  mv Manifest.toml Manifest.toml.prev"
+            printf '  %q --project=. --startup-file=no -e %q\n' "${_julia_bin}" 'using Pkg; Pkg.instantiate()'
+        fi
+        echo "jetls-check: Do not run that unless the person asked."
+    } >&2
+    exit 1
+fi
+exit "${_status}"
