@@ -14,10 +14,17 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
 # shellcheck source=section.sh
 source "${ROOT}/scripts/section.sh"
+# shellcheck source=julia.sh
+source "${ROOT}/scripts/julia.sh"
 
 die() {
   echo "docs: $*" >&2
   exit 1
+}
+
+usage() {
+  echo "usage: docs.sh static|maybe|build [--linkcheck]" >&2
+  exit 2
 }
 
 # Same environments as scripts/check.sh. Native Windows stops here.
@@ -31,13 +38,7 @@ case "$(uname -s)" in
     ;;
 esac
 
-if command -v julia >/dev/null 2>&1 && julia +1.13 --startup-file=no -e 'exit(0)' >/dev/null 2>&1; then
-  JULIA=(julia +1.13)
-elif command -v julia >/dev/null 2>&1; then
-  JULIA=(julia)
-else
-  die "Julia is not on PATH"
-fi
+use_julia_1_13 || die "Julia 1.13 is not on PATH"
 
 static() {
   section "docs: static"
@@ -57,7 +58,8 @@ build() {
   if [[ "${1:-}" == "--linkcheck" ]]; then
     linkcheck=1
   elif [[ -n "${1:-}" ]]; then
-    die "unknown build argument ${1}"
+    echo "usage: docs.sh build [--linkcheck]" >&2
+    exit 2
   fi
   "${JULIA[@]}" --project=docs --startup-file=no -e 'using Pkg; Pkg.Registry.add("General"); Pkg.instantiate()'
   if [[ "${linkcheck}" == 1 ]]; then
@@ -84,5 +86,5 @@ case "${1:-}" in
   static) static ;;
   maybe) maybe ;;
   build) build "${2:-}" ;;
-  *) die "usage: docs.sh static|maybe|build [--linkcheck]" ;;
+  *) usage ;;
 esac

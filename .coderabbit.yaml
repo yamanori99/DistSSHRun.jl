@@ -30,9 +30,10 @@ reviews:
       instructions: >
         Do not request the labels bug, enhancement, chore, breaking,
         cut, cut-hold, when:*, or julia-next. A removed public name is
-        a changelog fragment bullet, not a label. Do not request a
+        a changelog fragment bullet, not a label.         Do not request a
         checklist or a body heading that titles the pull request. The
-        GitHub title is the title. Do not add lines to AGENTS.md.
+        GitHub title is the title. Do not ask to add Testing, Risk, or
+        Revert when they are absent. Do not add lines to AGENTS.md.
     - path: "AGENTS.md"
       instructions: >
         This file is a short entry. Do not ask to paste a skill back
