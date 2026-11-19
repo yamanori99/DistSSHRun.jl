@@ -1,5 +1,6 @@
-Adapted skills under `.agents/skills/` keep this notice here so a skill
-body does not repeat it.
+Adapted skills under `docs/src/devdocs/agents/skills/` keep this notice
+here so a skill body does not repeat it. `.agents/skills` is a symlink
+to that directory.
 
 Sources, cursor/plugins e58dd043600587dbaf58ba315e7f2b38373eeb43:
 

@@ -128,7 +128,9 @@ function git_diff(root::AbstractString)
 end
 
 function skipped_path(path::AbstractString)
-    return startswith(path, "scripts/lint/") || startswith(path, ".agents/skills/")
+    return startswith(path, "scripts/lint/") ||
+        startswith(path, ".agents/skills/") ||
+        startswith(path, "docs/src/devdocs/agents/skills/")
 end
 
 const BANNED = (
