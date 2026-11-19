@@ -11,7 +11,7 @@ const SYNTAX_VERSION = v"1.13.0"
 
 function die(msg)
     println(stderr, "lint: ", msg)
-    exit(1)
+    return exit(1)
 end
 
 function repo_root()
@@ -30,7 +30,7 @@ function line_of(src::AbstractString, byte::Int)
 end
 
 function parse_tree(src::AbstractString)
-    return parseall(SyntaxNode, src; version=SYNTAX_VERSION, ignore_warnings=true)
+    return parseall(SyntaxNode, src; version = SYNTAX_VERSION, ignore_warnings = true)
 end
 
 function doc_covers(src::AbstractString)
@@ -44,6 +44,7 @@ function doc_covers(src::AbstractString)
         for i in 1:numchildren(node)
             walk(node[i])
         end
+        return
     end
     walk(tree)
     return ranges
@@ -55,7 +56,7 @@ end
 
 function comment_tokens(src::AbstractString)
     docs = doc_covers(src)
-    out = Tuple{Int,Int,String}[]
+    out = Tuple{Int, Int, String}[]
     for tok in tokenize(src)
         kind(tok) == K"Comment" || continue
         r = Int(first(tok.range)):Int(last(tok.range))
@@ -69,9 +70,9 @@ end
 function comment_body(text::AbstractString)
     s = strip(text)
     if startswith(s, "#=")
-        s = chop(s; head=2, tail=endswith(s, "=#") ? 2 : 0)
+        s = chop(s; head = 2, tail = endswith(s, "=#") ? 2 : 0)
     elseif startswith(s, "#")
-        s = chop(s; head=1, tail=0)
+        s = chop(s; head = 1, tail = 0)
     end
     return strip(s)
 end
@@ -87,7 +88,7 @@ end
 added_lines(h::Hunk) = h.newlen == 0 ? Set{Int}() : Set(h.newstart:(h.newstart + h.newlen - 1))
 
 function parse_diff(diff::AbstractString)
-    files = Dict{String,Vector{Hunk}}()
+    files = Dict{String, Vector{Hunk}}()
     path = ""
     cur = nothing
     for line in eachsplit(diff, '\n')
@@ -169,7 +170,7 @@ function lint_banned(root, files)
                 n += 1
             end
         else
-            lines = split(src, '\n'; keepempty=true)
+            lines = split(src, '\n'; keepempty = true)
             for i in sort!(collect(added))
                 1 <= i <= length(lines) || continue
                 hit = banned_hit(lines[i])
@@ -225,7 +226,7 @@ function public_names(root::AbstractString)
 end
 
 function destructive_lines(src::AbstractString)
-    lines = split(src, '\n'; keepempty=true)
+    lines = split(src, '\n'; keepempty = true)
     on = false
     out = Set{Int}()
     for (i, line) in enumerate(lines)
@@ -254,6 +255,7 @@ function bare_name(line::AbstractString, name::AbstractString)
         end
         i = nextind(line, last(r))
     end
+    return
 end
 
 function lint_agents(root, files)
@@ -262,7 +264,7 @@ function lint_agents(root, files)
     added = union((added_lines(h) for h in hunks)...)
     isempty(added) && return 0
     src = read(joinpath(root, "AGENTS.md"), String)
-    lines = split(src, '\n'; keepempty=true)
+    lines = split(src, '\n'; keepempty = true)
     allow = destructive_lines(src)
     names = public_names(root)
     n = 0
@@ -421,6 +423,7 @@ function lint_skips(root, files, src_for_path)
             for i in 1:numchildren(node)
                 walk(node[i], next)
             end
+            return
         end
         walk(tree, false)
     end
@@ -499,6 +502,7 @@ function self_test()
         for i in 1:numchildren(node)
             walk(node[i], next)
         end
+        return
     end
     walk(tree, false)
     "test_broken" in found || die("self-test: broken not seen")
@@ -527,6 +531,7 @@ function self_test()
         for i in 1:numchildren(node)
             walk2(node[i], next)
         end
+        return
     end
     walk2(tree2, false)
     errs[] == 3 || die("self-test: skip errors $(errs[])")
@@ -557,6 +562,7 @@ function doc_line_ranges(src::AbstractString)
         for i in 1:numchildren(node)
             walk(node[i])
         end
+        return
     end
     walk(tree)
     return ranges
@@ -598,16 +604,16 @@ function doc_touch(root::AbstractString)
 end
 
 function percent_decode(s::AbstractString)
-    return replace(s, r"%([0-9A-Fa-f]{2})" => m -> string(Char(Base.parse(UInt8, m.captures[1]; base=16))))
+    return replace(s, r"%([0-9A-Fa-f]{2})" => m -> string(Char(Base.parse(UInt8, m.captures[1]; base = 16))))
 end
 
 function link_target(raw::AbstractString)
     t = strip(raw)
     if startswith(t, "<") && endswith(t, ">")
-        t = t[2:end-1]
+        t = t[2:(end - 1)]
     end
-    t = first(split(t, '#'; limit=2))
-    t = first(split(t, '?'; limit=2))
+    t = first(split(t, '#'; limit = 2))
+    t = first(split(t, '?'; limit = 2))
     return strip(t)
 end
 
@@ -647,7 +653,7 @@ function docs_static(root::AbstractString)
             println(stderr, "docs: $(file): missing workflow $(name)")
             n += 1
         end
-        lines = split(src, '\n'; keepempty=true)
+        lines = split(src, '\n'; keepempty = true)
         for (i, line) in enumerate(lines)
             for m in eachmatch(r"\]\(([^)]*)\)", line)
                 miss = local_link_miss(root, file, m.captures[1])
