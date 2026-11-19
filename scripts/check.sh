@@ -11,6 +11,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
 # shellcheck source=section.sh
 source "${ROOT}/scripts/section.sh"
+# shellcheck source=julia.sh
+source "${ROOT}/scripts/julia.sh"
 
 # A linked worktree's .git is a file. hooksPath may point outside the repo.
 git_path() {
@@ -78,19 +80,7 @@ esac
 
 section "check: pins"
 
-# Julia 1.13 from PATH. juliaup's `julia +1.13` is accepted. No fixed install path.
-JULIA=()
-if command -v julia >/dev/null 2>&1 && julia +1.13 --startup-file=no -e 'exit(0)' >/dev/null 2>&1; then
-  JULIA=(julia +1.13)
-elif command -v julia >/dev/null 2>&1 && julia --startup-file=no -e 'exit(VERSION>=v"1.13" && VERSION<v"1.14" ? 0 : 1)' >/dev/null 2>&1; then
-  JULIA=(julia)
-else
-  pin_help "Julia 1.13 is not on PATH"
-fi
-JULIA_BIN="$("${JULIA[@]}" --startup-file=no -e 'print(joinpath(Sys.BINDIR, "julia"))')"
-if [[ ! -x "${JULIA_BIN}" ]]; then
-  pin_help "Julia 1.13 binary is missing"
-fi
+use_julia_1_13 || pin_help "Julia 1.13 is not on PATH"
 depot="$("${JULIA[@]}" --startup-file=no -e 'print(DEPOT_PATH[1])')"
 
 runic_pin="$(sed -n -E 's/^Runic = "=([^"]+)".*/\1/p' "${RUNIC_COMPAT}" | head -1)"
