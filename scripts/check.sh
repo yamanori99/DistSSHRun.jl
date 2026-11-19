@@ -131,13 +131,14 @@ while IFS= read -r -d '' f; do
   if [[ ! -s "${f}" ]]; then
     continue
   fi
-  last="$(tail -c 1 "${f}" || true)"
-  if [[ "${last}" != $'\n' ]]; then
+  # Command substitution drops a trailing newline, so compare the byte.
+  last="$(tail -c 1 "${f}" | od -An -tu1 | tr -d '[:space:]')"
+  if [[ "${last}" != "10" ]]; then
     die "${f} does not end with exactly one newline"
   fi
-  if [[ "$(tail -c 2 "${f}" | wc -c | tr -d ' ')" -eq 2 ]]; then
-    prev="$(tail -c 2 "${f}" | head -c 1 || true)"
-    if [[ "${prev}" == $'\n' ]]; then
+  if [[ "$(tail -c 2 "${f}" | wc -c | tr -d '[:space:]')" -eq 2 ]]; then
+    prev="$(tail -c 2 "${f}" | od -An -tu1 | tr -d '[:space:]')"
+    if [[ "${prev}" == "1010" ]]; then
       die "${f} ends with more than one newline"
     fi
   fi
