@@ -361,9 +361,10 @@ end
                     extra_env = run_env
                 )
                 _assert_ssh_e2e_ok(suite, "run_id_env_ship", proc, out; project = proj, kit = :setup)
+                rootq = DistSSHRun._remote_shell_path_word(run_id_root)
                 p_src, src_out = _ssh_e2e_ssh(
                     hosts[1],
-                    "ls -1d $(run_id_root)/runs/*/src 2>/dev/null | tail -n 1",
+                    "ls -1d $(rootq)/runs/*/src 2>/dev/null | tail -n 1",
                 )
                 _assert_proc_ok(p_src, src_out; label = "run-id env ship src")
                 snap_id = basename(dirname(strip(src_out)))
