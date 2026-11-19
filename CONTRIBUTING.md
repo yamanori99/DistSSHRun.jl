@@ -91,8 +91,9 @@ JETLS is the type gate. Do not commit `.vscode/settings.json` to silence the Lan
 - One reviewable change per PR. Split unless `main` would be broken in between.
 - Large plans: discuss in an issue first, then small PRs.
 - The body is
-  [`.github/pull_request_template.md`](.github/pull_request_template.md):
-  what changed, what ran, what it can break, and how to undo it.
+  [`.github/pull_request_template.md`](.github/pull_request_template.md).
+  Summary is required. Testing, Risk, and Revert may be omitted.
+  When Testing is present, it is the command and the line it printed.
   The GitHub title is the title. The body has no title heading and no checklist.
   It does not list every changed path. `./scripts/check.sh` reads the open
   pull request and fails when a bullet list or a fenced block repeats

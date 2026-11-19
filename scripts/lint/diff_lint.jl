@@ -558,6 +558,8 @@ function self_test()
     any(endswith(e, "checklist") for e in terr) || die("self-test: checklist")
     good = "## Summary\n\n## Testing\n\n## Risk\n\n## Revert\n"
     isempty(pr_template_errors(good)) || die("self-test: template $(pr_template_errors(good))")
+    summary_only = "## Summary\n\nThe hook stays.\n"
+    isempty(pr_template_errors(summary_only)) || die("self-test: summary only $(pr_template_errors(summary_only))")
     short = "tone_instructions: >\n  Brief.\n"
     isempty(coderabbit_tone_errors(short)) || die("self-test: tone $(coderabbit_tone_errors(short))")
     long = "tone_instructions: >\n  " * repeat("a", 251) * "\n"
@@ -692,7 +694,7 @@ function local_link_miss(root::AbstractString, file::AbstractString, target::Abs
 end
 
 function pr_template_errors(src::AbstractString)
-    need = Set(["Summary", "Testing", "Risk", "Revert"])
+    need = Set(["Summary"])
     seen = Set{String}()
     errs = String[]
     in_fence = false
