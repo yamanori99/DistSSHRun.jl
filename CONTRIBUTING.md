@@ -247,6 +247,7 @@ Required to merge (ruleset `main` uses these names). **nightly** jobs, and **1.1
   [DistSSHKit releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md).
 - That split follows
   [How the Claude Code team does code review](https://claude.dev/blog/solving-code-review-at-anthropic/).
+- When a generative tool wrote a substantive part of a pull request, an issue, or a comment, add one line after the body naming the tool. Review the change before opening. Do not put that line in Summary, Testing, or Risk.
 
 ### CodeRabbit (experimental)
 

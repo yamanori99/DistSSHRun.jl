@@ -12,4 +12,4 @@
 
 ## Revert
 
-<!-- How to undo this after it merges. -->
+<!-- How to undo this after it merges. If a generative tool wrote a substantive part, add one line after this section naming the tool. -->
