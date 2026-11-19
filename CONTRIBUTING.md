@@ -139,7 +139,7 @@ and
 A new DistSSHRun version in General needs:
 
 - `version` only goes up. A breaking change raises `x` in `0.x.y`. Anything else raises `y`. Label a breaking pull request `breaking`.
-- Every root `[deps]` entry has a `[compat]` with an upper bound. Do not use `0` or `>=` alone. `< 0.0.1` is rejected by [`.github/pkg-compat-check.sh`](.github/pkg-compat-check.sh). `test/` and `docs/` `Project.toml` files are not registered. Stdlib lower bounds stay on the Julia stdlib numbers.
+- Every root `[deps]` entry has a `[compat]` with an upper bound. Do not use `0` or `>=` alone. `< 0.0.1` is rejected by [`.github/pkg-compat-check.sh`](.github/pkg-compat-check.sh). `test/` and `docs/` `Project.toml` files are not registered. Stdlib lower bounds stay on the Julia stdlib numbers. A stdlib JLL `[compat]` that starts at a patch, while `julia` starts at `x.y.0`, is rejected by `scripts/lint/stdlib-compat.sh`.
 - `DistSSHBase`, `DistSSHUp`, `DistSSHShip`, and `DistSSHHeartbeat` are not registered in General. Their versions stay lockstep with Run.
 - User-visible behavior: one fragment in `changelog.d/`. The version-cut pull request copies fragments into `NEWS.md`.
 - Breaking registration notes include the word `breaking` or `changelog`, and point at `NEWS.md`.
