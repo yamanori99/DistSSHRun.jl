@@ -28,7 +28,6 @@ install_pre_push
 
 RUNIC_COMPAT="${ROOT}/.github/runic/Project.toml"
 JETLS_ACTION="${ROOT}/.github/actions/jetls-check/action.yml"
-INSTALL="${ROOT}/.github/install-agent-tools.sh"
 
 die() {
   echo "check: $*" >&2
@@ -37,8 +36,7 @@ die() {
 
 pin_help() {
   echo "check: pin: $1" >&2
-  echo "check: on a VM, install with ${INSTALL#"${ROOT}/"}" >&2
-  echo "check: on a host machine, do not install unless the person asked" >&2
+  echo "check: do not install unless the person asked" >&2
   exit 1
 }
 

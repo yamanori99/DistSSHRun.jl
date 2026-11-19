@@ -132,7 +132,7 @@ if [[ -z "${_path_jetls}" ]]; then
         echo "error: jetls is not installed (looked on PATH and ${_depot_jetls})"
         echo "install the pinned release (${_pin}, from .github/actions/jetls-check/action.yml):"
         echo "  ./.github/install-agent-tools.sh"
-        echo "On a host machine, do not run that unless the person asked. A VM may."
+        echo "Do not run that unless the person asked."
         echo "then rerun ./.github/jetls-check.sh"
     } >&2
     exit 1
@@ -153,7 +153,7 @@ if [[ "${_installed}" != "${_pin}" ]]; then
         echo "error: jetls ${_installed} is installed, but this repo pins ${_pin} (CI uses the pin)"
         echo "installed rev read from ${_manifest}; update with:"
         echo "  ./.github/install-agent-tools.sh"
-        echo "On a host machine, do not run that unless the person asked. A VM may."
+        echo "Do not run that unless the person asked."
         echo "then rerun ./.github/jetls-check.sh"
     } >&2
     exit 1
