@@ -389,13 +389,16 @@ end
                     extra_env = quiet
                 )
                 _assert_ssh_e2e_ok(suite, "run_id_env_drive", proc, out)
-                ride_cmd = _kit_cli_cmd(vcat(["ride"], runid_flags, remote_tokens, [smoke]))
+                ride_script = joinpath(proj, "ride_run_id_smoke.jl")
+                cp(_fixture("ride_remote_ok.jl"), ride_script; force = true)
+                ride_cmd = _kit_cli_cmd(
+                    vcat(["ride", "--no-spi-check"], runid_flags, remote_tokens, [ride_script])
+                )
                 proc, out = _run_subprocess(
                     setenv(ride_cmd, _drive_host_env(proj; extra_env = quiet))
                 )
                 _assert_ssh_e2e_ok(suite, "run_id_env_ride", proc, out)
 
-                tamper_host = hosts[1]
                 proj_remote = "$(run_id_root)/runs/$(snap_id)/src/Project.toml"
                 tamper_jl = """
                 p = $(repr(proj_remote))
@@ -404,8 +407,14 @@ end
                     write(io, 0x20)
                 end
                 """
-                p_tamper, tamper_out = _e2e_run_on_host(tamper_host, ["-e", tamper_jl])
-                _assert_proc_ok(p_tamper, tamper_out; label = "tamper remote Project.toml")
+                for tamper_host in hosts
+                    p_tamper, tamper_out = withenv(run_env...) do
+                        _e2e_run_on_host(tamper_host, ["-e", tamper_jl])
+                    end
+                    _assert_proc_ok(
+                        p_tamper, tamper_out; label = "tamper remote Project.toml $(tamper_host)"
+                    )
+                end
                 proc_bad, out_bad = _run_kit_drive(;
                     script = smoke,
                     host_root = proj,
