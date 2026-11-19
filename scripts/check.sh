@@ -15,7 +15,7 @@ source "${ROOT}/scripts/section.sh"
 # A linked worktree's .git is a file. hooksPath may point outside the repo.
 git_path() {
   local p hooks
-  hooks="$(git config --get core.hooksPath || true)"
+  hooks="$(git config --path --get core.hooksPath 2>/dev/null || true)"
   if [[ "$1" == hooks/* && -n "${hooks}" ]]; then
     p="${hooks}/${1#hooks/}"
   else
@@ -59,6 +59,10 @@ pin_help() {
 if [[ -n "$(git status --porcelain)" ]]; then
   die "git status is not empty. Commit first, then rerun ./scripts/check.sh on that commit."
 fi
+
+gate_sha="$(git rev-parse HEAD)"
+stamp_path="$(git_path check-gate-ok)"
+rm -f "${stamp_path}"
 
 # macOS and Linux, including WSL2, use this same gate.
 # Native Windows is not a supported environment.
@@ -225,6 +229,12 @@ section "check: docs maybe"
 "${ROOT}/scripts/docs.sh" maybe
 section "check: docs maybe ok"
 
-sha="$(git rev-parse HEAD)"
-printf '%s\n' "${sha}" > "$(git_path check-gate-ok)"
-echo "HEAD ${sha}: passed"
+if [[ -n "$(git status --porcelain)" ]]; then
+  die "git status is not empty. Commit first, then rerun ./scripts/check.sh on that commit."
+fi
+head_now="$(git rev-parse HEAD)"
+if [[ "${head_now}" != "${gate_sha}" ]]; then
+  die "HEAD moved during the gate (${gate_sha} -> ${head_now}). Rerun ./scripts/check.sh on ${head_now}."
+fi
+printf '%s\n' "${gate_sha}" > "${stamp_path}"
+echo "HEAD ${gate_sha}: passed"

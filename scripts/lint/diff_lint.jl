@@ -38,8 +38,12 @@ function doc_covers(src::AbstractString)
     tree = parse_tree(src)
     function walk(node)
         if kind(node) == K"doc"
-            r = byte_range(node)
-            push!(ranges, Int(first(r)):Int(last(r)))
+            for i in 1:numchildren(node)
+                child = node[i]
+                kind(child) == K"string" || continue
+                r = byte_range(child)
+                push!(ranges, Int(first(r)):Int(last(r)))
+            end
         end
         for i in 1:numchildren(node)
             walk(node[i])
@@ -62,7 +66,7 @@ function comment_tokens(src::AbstractString)
         r = Int(first(tok.range)):Int(last(tok.range))
         isempty(r) && continue
         in_doc(docs, first(r)) && continue
-        push!(out, (line_of(src, first(r)), line_of(src, last(r)), src[first(r):last(r)]))
+        push!(out, (line_of(src, first(r)), line_of(src, last(r)), untokenize(tok, src)))
     end
     return out
 end
@@ -190,11 +194,17 @@ function public_names_in(src::AbstractString)
     while i <= length(toks)
         if kind(toks[i]) == K"public"
             i += 1
+            after_comma = false
             while i <= length(toks)
                 k = kind(toks[i])
                 if k == K"Identifier"
                     push!(names, untokenize(toks[i], src))
-                elseif k in (K",", K"Whitespace", K"NewlineWs", K"Comment")
+                    after_comma = false
+                elseif k == K","
+                    after_comma = true
+                elseif k == K"NewlineWs"
+                    after_comma || break
+                elseif k in (K"Whitespace", K"Comment")
                 else
                     break
                 end
@@ -511,6 +521,8 @@ function self_test()
     bare_name("src/run_identity.jl", "run_identity") && die("self-test: path was an identifier")
     names = public_names_in("public a, b # note\npublic c\n")
     names == Set(["a", "b", "c"]) || die("self-test: public names $(names)")
+    public_names_in("public api\ninternal = 1\n") == Set(["api"]) ||
+        die("self-test: public statement boundary")
     skip_src = """
     @test_skip \"git not in PATH\"
     @test_broken \"needs a number\"
@@ -556,6 +568,14 @@ function self_test()
     short = "## Summary\n\nscripts/check.sh is the gate.\n\n## Testing\n\nRan it.\n\n## Risk\n\nThe hook remains.\n\n## Revert\n\nRevert the merge.\n"
     isempty(pr_body_errors(short, listed)) || die("self-test: pr body $(pr_body_errors(short, listed))")
     isempty(pr_body_errors(dump, ["scripts/check.sh"])) || die("self-test: pr body one path")
+    star = "## Summary\n\n## Testing\n\n## Risk\n\n## Revert\n\n* `scripts/check.sh`\n* `CONTRIBUTING.md`\n"
+    any(==("file list"), pr_body_errors(star, listed)) || die("self-test: pr body star list")
+    fence_ok = "## Summary\n\n## Testing\n\n```sh\n# Confirmed locally\n```\n\n## Risk\n\n## Revert\n"
+    isempty(pr_template_errors(fence_ok)) || die("self-test: pr fence heading $(pr_template_errors(fence_ok))")
+    percent_decode("a%20b") == "a b" || die("self-test: percent decode")
+    for (_, _, text) in comment_tokens("# Use café\n")
+    end
+    link_target("guide.md \"Read the guide\"") == "guide.md" || die("self-test: link title")
     println("self-test: passed")
     return 0
 end
@@ -622,7 +642,21 @@ function doc_touch(root::AbstractString)
 end
 
 function percent_decode(s::AbstractString)
-    return replace(s, r"%([0-9A-Fa-f]{2})" => m -> string(Char(Base.parse(UInt8, m.captures[1]; base = 16))))
+    bytes = UInt8[]
+    i = 1
+    while i <= ncodeunits(s)
+        if codeunit(s, i) == UInt8('%') && i + 2 <= ncodeunits(s)
+            h1, h2 = s[i + 1], s[i + 2]
+            if isxdigit(h1) && isxdigit(h2)
+                push!(bytes, Base.parse(UInt8, string(h1, h2), base = 16))
+                i += 3
+                continue
+            end
+        end
+        push!(bytes, codeunit(s, i))
+        i += 1
+    end
+    return String(bytes)
 end
 
 function link_target(raw::AbstractString)
@@ -630,6 +664,8 @@ function link_target(raw::AbstractString)
     if startswith(t, "<") && endswith(t, ">")
         t = t[2:(end - 1)]
     end
+    m = match(r"^(\S+)(?:\s+[\"'].+[\"'])?\s*$", t)
+    t = m === nothing ? t : m.captures[1]
     t = first(split(t, '#'; limit = 2))
     t = first(split(t, '?'; limit = 2))
     return strip(t)
@@ -657,7 +693,13 @@ function pr_template_errors(src::AbstractString)
     need = Set(["Summary", "Testing", "Risk", "Revert"])
     seen = Set{String}()
     errs = String[]
+    in_fence = false
     for (i, line) in enumerate(eachsplit(src, '\n'; keepempty = true))
+        if startswith(line, "```")
+            in_fence = !in_fence
+            continue
+        end
+        in_fence && continue
         if startswith(line, "# ")
             push!(errs, "$i: title heading")
         end
@@ -675,7 +717,7 @@ function pr_template_errors(src::AbstractString)
 end
 
 function bullet_item(line::AbstractString)
-    m = match(r"^- (.*)$", line)
+    m = match(r"^[-*+] (.*)$", line)
     m === nothing && return nothing
     item = strip(m.captures[1])
     if startswith(item, "`") && endswith(item, "`") && length(item) >= 2
