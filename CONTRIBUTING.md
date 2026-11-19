@@ -100,6 +100,7 @@ JETLS is the type gate. Do not commit `.vscode/settings.json` to silence the Lan
   [REVIEW.md](REVIEW.md) tells a reviewer what failure looks like here.
   The type label stays out of the body. CI applies it.
 - Every pull request needs one type label (`bug` / `enhancement` / `breaking` / `chore`) when labels exist.
+- When this pull request finishes the remaining work of an issue, write `Closes #N`. When work remains, write `Part of #N` and name the leftover as another `#M`. Do not write `Part of` alone.
 - When a generative tool wrote a substantive part of a pull request or an issue, add one line after the body naming the tool. Review the change before opening. Do not put that line in Summary, Testing, or Risk.
 
 ### CodeRabbit (experimental)
