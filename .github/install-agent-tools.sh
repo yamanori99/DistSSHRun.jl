@@ -8,6 +8,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=../scripts/section.sh
+source "${ROOT}/scripts/section.sh"
 ACTION="${ROOT}/.github/actions/jetls-check/action.yml"
 RUNIC_COMPAT="${ROOT}/.github/runic/Project.toml"
 RUNIC_UUID="62bfec6d-59d7-401d-8490-b29ee721c001"
@@ -182,6 +184,7 @@ install_runic_shared() {
   "
 }
 
+section "install-agent-tools: runic ${RUNIC_PIN}"
 if runic_app_at_pin; then
   echo "install-agent-tools: runic app already at ${RUNIC_PIN}"
 else
@@ -195,7 +198,9 @@ else
   echo "install-agent-tools: installing Runic in @runic ${RUNIC_PIN}"
   install_runic_shared
 fi
+section "install-agent-tools: runic ok"
 
+section "install-agent-tools: jetls ${jetls_rev}"
 if jetls_app_ok && jetls_manifest_ok; then
   echo "install-agent-tools: jetls already installed (rev=${jetls_rev})"
 else
@@ -206,6 +211,7 @@ fi
 if ! jetls_app_ok; then
   die "jetls failed to start"
 fi
+section "install-agent-tools: jetls ok"
 
 if [[ "${LINK_TOOLS}" == true && "$(uname -s)" == Linux ]]; then
   link_into_path runic
@@ -243,4 +249,5 @@ if ! jetls_app_ok; then
   die "jetls failed final health check"
 fi
 
+section "install-agent-tools: ok"
 echo "install-agent-tools: ok (depot=${DEPOT}, runic=${RUNIC_PIN}, jetls_rev=${jetls_rev})"

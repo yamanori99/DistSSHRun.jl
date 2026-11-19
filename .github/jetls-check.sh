@@ -10,6 +10,8 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
+# shellcheck source=../../scripts/section.sh
+source "${root}/scripts/section.sh"
 shopt -s nullglob
 
 files=(
@@ -157,4 +159,5 @@ fi
 
 # Match .github/actions/jetls-check and aviatesk/JETLS.jl check@release: no
 # `--threads=auto` (segfaults on Julia 1.13 in signature_analysis_worker).
+section "jetls-check"
 exec "${_path_jetls}" check --root=. --exit-severity=hint --show-severity=hint "${jetls_args[@]}" "${files[@]}"

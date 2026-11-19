@@ -4,10 +4,13 @@
 #   ./scripts/check.sh
 #
 # On success prints `HEAD <sha>: passed`.
+# Each step is wrapped in `---- check: <step> ----` lines.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
+# shellcheck source=section.sh
+source "${ROOT}/scripts/section.sh"
 
 install_pre_push() {
   local src="${ROOT}/scripts/pre-push.sh"
@@ -53,6 +56,8 @@ case "$(uname -s)" in
     die "unsupported OS $(uname -s). Supported environments are macOS and Linux, including WSL2 Ubuntu."
     ;;
 esac
+
+section "check: pins"
 
 # Julia 1.13 from PATH. juliaup's `julia +1.13` is accepted. No fixed install path.
 JULIA=()
@@ -132,10 +137,13 @@ if command -v jetls >/dev/null 2>&1; then
     pin_help "PATH jetls is ${path_jetls}, not the pin ${jetls_pin}"
   fi
 fi
+section "check: pins ok (Runic ${runic_pin}, JETLS ${jetls_pin})"
 
+section "check: runic ${runic_pin}"
 JULIA_APPS_JULIA_CMD="${JULIA_BIN}" "${runic_bin}" --check --diff .
+section "check: runic ok"
 
-# Exactly one final newline on text files changed vs origin/main.
+section "check: whitespace"
 while IFS= read -r -d '' f; do
   [[ -f "${f}" ]] || continue
   numstat="$(git diff --numstat origin/main...HEAD -- "${f}")"
@@ -159,19 +167,29 @@ while IFS= read -r -d '' f; do
 done < <(git diff --name-only -z origin/main...HEAD)
 
 git diff --check origin/main...HEAD
+section "check: whitespace ok"
 
+section "check: jetls ${jetls_pin}"
 JULIA_APPS_JULIA_CMD="${JULIA_BIN}" "${ROOT}/.github/jetls-check.sh" --progress=none
+section "check: jetls ok"
 
-for lint in banned-words.sh agents-md.sh skip-reasons.sh new-comments.sh; do
-  script="${ROOT}/scripts/lint/${lint}"
+for lint in banned-words agents-md skip-reasons new-comments; do
+  script="${ROOT}/scripts/lint/${lint}.sh"
   if [[ ! -x "${script}" ]]; then
     die "missing ${script#"${ROOT}/"}"
   fi
+  section "check: lint ${lint}"
   "${script}"
+  section "check: lint ${lint} ok"
 done
 
+section "check: docs static"
 "${ROOT}/scripts/docs.sh" static
+section "check: docs static ok"
+
+section "check: docs maybe"
 "${ROOT}/scripts/docs.sh" maybe
+section "check: docs maybe ok"
 
 sha="$(git rev-parse HEAD)"
 printf '%s\n' "${sha}" > "${ROOT}/.git/check-gate-ok"

@@ -12,6 +12,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
+# shellcheck source=section.sh
+source "${ROOT}/scripts/section.sh"
 
 die() {
   echo "docs: $*" >&2
@@ -38,6 +40,7 @@ else
 fi
 
 static() {
+  section "docs: static"
   files="$(git diff --name-only origin/main...HEAD)"
   if printf '%s\n' "${files}" | grep -q 'social-preview-static\.svg$'; then
     if ! printf '%s\n' "${files}" | grep -q 'social-preview-static\.png$'; then
@@ -45,9 +48,11 @@ static() {
     fi
   fi
   "${ROOT}/scripts/lint/run.sh" docs-static
+  section "docs: static ok"
 }
 
 build() {
+  section "docs: build"
   local linkcheck=0
   if [[ "${1:-}" == "--linkcheck" ]]; then
     linkcheck=1
@@ -60,9 +65,11 @@ build() {
   else
     "${JULIA[@]}" --project=docs --startup-file=no docs/make.jl
   fi
+  section "docs: build ok"
 }
 
 maybe() {
+  section "docs: maybe"
   local answer
   answer="$("${ROOT}/scripts/lint/run.sh" doc-touch)"
   if [[ "${answer}" == "yes" ]]; then
@@ -70,6 +77,7 @@ maybe() {
   else
     echo "docs: make.jl skipped"
   fi
+  section "docs: maybe ok"
 }
 
 case "${1:-}" in
