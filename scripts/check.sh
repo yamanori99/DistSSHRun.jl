@@ -37,7 +37,8 @@ die() {
 
 pin_help() {
   echo "check: pin: $1" >&2
-  echo "check: install with ${INSTALL#"${ROOT}/"}" >&2
+  echo "check: on a VM, install with ${INSTALL#"${ROOT}/"}" >&2
+  echo "check: on a host machine, do not install unless the person asked" >&2
   exit 1
 }
 

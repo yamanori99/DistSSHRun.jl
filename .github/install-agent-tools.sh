@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Idempotent Runic + JETLS install. shellcheck is apt on Linux only.
+# Idempotent Runic + JETLS install for a VM, or for a person who chose to run it.
+# An agent on a host machine does not run this unless the person asked.
+# shellcheck is apt on Linux only.
 # Runic pin: .github/runic/Project.toml [compat] (CI reads the same file). JETLS: jetls-check/action.yml.
 # Julia 1.13 is `julia +1.13` on PATH, or a 1.13 julia already on PATH. No fixed install path.
 #
