@@ -10,7 +10,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
-# shellcheck source=../../scripts/section.sh
+# shellcheck source=../scripts/section.sh
 source "${root}/scripts/section.sh"
 shopt -s nullglob
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Idempotent Runic + JETLS install. A person runs it, or `.cursor/install.sh` runs it at cloud VM startup.
 # An agent does not start it unless the person asked. OS and CURSOR_AGENT do not grant that.
-# shellcheck is apt on Linux only.
+# On Linux, the shellcheck package comes from apt.
 # Runic pin: .github/runic/Project.toml [compat] (CI reads the same file). JETLS: jetls-check/action.yml.
 # Julia 1.13 is `julia +1.13` on PATH, or a 1.13 julia already on PATH. No fixed install path.
 #
@@ -47,7 +47,9 @@ else
   LINK_TOOLS=true
 fi
 APPS_BIN="${DEPOT}/bin"
-_TOOL_PATH="${APPS_BIN}:$(dirname "${JULIA_BIN}"):/usr/local/bin:/usr/bin:/bin"
+# Do not put Sys.BINDIR on PATH. `julia +1.13` would then hit the real binary,
+# which opens `+1.13` as a file. Pkg calls use JULIA_BIN itself.
+_TOOL_PATH="${APPS_BIN}:/usr/local/bin:/usr/bin:/bin"
 
 if [[ ! -f "${RUNIC_COMPAT}" ]]; then
   die "missing ${RUNIC_COMPAT}"
@@ -104,7 +106,7 @@ julia_tool() {
   JULIA_APPS_JULIA_CMD="${JULIA_BIN}" \
     PATH="${_TOOL_PATH}" \
     JULIA_DEPOT_PATH="${DEPOT}" \
-    "${JULIA[@]}" --startup-file=no -e "$1"
+    "${JULIA_BIN}" --startup-file=no -e "$1"
 }
 
 runic_app_version() {

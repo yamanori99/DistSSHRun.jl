@@ -12,11 +12,27 @@ cd "${ROOT}"
 # shellcheck source=section.sh
 source "${ROOT}/scripts/section.sh"
 
+# A linked worktree's .git is a file. hooksPath may point outside the repo.
+git_path() {
+  local p hooks
+  hooks="$(git config --get core.hooksPath || true)"
+  if [[ "$1" == hooks/* && -n "${hooks}" ]]; then
+    p="${hooks}/${1#hooks/}"
+  else
+    p="$(git rev-parse --git-path "$1")"
+  fi
+  if [[ "${p}" != /* ]]; then
+    p="${ROOT}/${p}"
+  fi
+  printf '%s\n' "${p}"
+}
+
 install_pre_push() {
   local src="${ROOT}/scripts/pre-push.sh"
-  local dest="${ROOT}/.git/hooks/pre-push"
+  local dest
   [[ -f "${src}" ]] || return 0
-  [[ -d "${ROOT}/.git/hooks" ]] || return 0
+  dest="$(git_path hooks/pre-push)"
+  mkdir -p "$(dirname "${dest}")"
   if [[ -e "${dest}" ]] && ! grep -q 'distsshrun-check-gate' "${dest}"; then
     echo "check: pre-push hook exists and is not the gate. Left it in place." >&2
     return 0
@@ -92,7 +108,7 @@ jetls_manifest="${depot}/environments/apps/JETLS/Manifest.toml"
 if [[ ! -x "${runic_bin}" ]]; then
   pin_help "Runic ${runic_pin} app is missing (${runic_bin})"
 fi
-runic_ver="$("${runic_bin}" --version 2>/dev/null | sed -n 's/^runic version \([^,]*\).*/\1/p' || true)"
+runic_ver="$(JULIA_APPS_JULIA_CMD="${JULIA_BIN}" "${runic_bin}" --version 2>/dev/null | sed -n 's/^runic version \([^,]*\).*/\1/p' || true)"
 if [[ "${runic_ver}" != "${runic_pin}" ]]; then
   pin_help "Runic app is ${runic_ver:-unknown}, pin is ${runic_pin}"
 fi
@@ -148,8 +164,7 @@ cleanup_pr() {
 trap cleanup_pr EXIT
 git diff --name-only origin/main...HEAD > "${pr_paths}"
 if gh pr view --json body --jq .body > "${pr_body}" 2>"${pr_err}"; then
-  "${JULIA[@]}" --project="${ROOT}/.github/runic" --startup-file=no \
-    "${ROOT}/scripts/lint/diff_lint.jl" pr-body "${pr_paths}" "${pr_body}"
+  "${ROOT}/scripts/lint/run.sh" pr-body "${pr_paths}" "${pr_body}"
 elif grep -q 'no pull requests found' "${pr_err}"; then
   echo "check: pr body: no pull request"
 else
@@ -211,5 +226,5 @@ section "check: docs maybe"
 section "check: docs maybe ok"
 
 sha="$(git rev-parse HEAD)"
-printf '%s\n' "${sha}" > "${ROOT}/.git/check-gate-ok"
+printf '%s\n' "${sha}" > "$(git_path check-gate-ok)"
 echo "HEAD ${sha}: passed"
