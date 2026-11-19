@@ -11,7 +11,7 @@ description: >
 When a rule becomes a lint or a test, delete that line here.
 
 - Read the DistSSHKit releasing document before a pull request that raises the version or changes public behavior.
-- Do not lower `version`. Root `[deps]` each have a `[compat]` with an upper bound. Do not use `0` or `>=` alone.
+- Do not lower `version`. Root `[deps]` each have a `[compat]` with an upper bound. Do not use `0` or `>=` alone. A stdlib JLL `[compat]` must not start at a patch while `julia` starts at `x.y.0`.
 - `DistSSHBase`, `DistSSHUp`, `DistSSHShip`, and `DistSSHHeartbeat` are not registered in General.
 - Breaking registration notes include `breaking` or `changelog`, and point at `NEWS.md`.
 - Do not write the Registrator register command in an issue, a pull request body, or a pull request comment. The only place for it is a comment on the merge commit, and only when the user asked to register.
