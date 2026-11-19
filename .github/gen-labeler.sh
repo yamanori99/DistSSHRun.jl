@@ -60,9 +60,7 @@ trap 'rm -f "$tmp"' EXIT
           - ".agents/**"
           - ".claude/skills"
           - "AGENTS.md"
-          - "scripts/check.sh"
-          - "scripts/docs.sh"
-          - "scripts/lint/**"
+          - "scripts/**"
 
 "area:ci":
   - changed-files:
