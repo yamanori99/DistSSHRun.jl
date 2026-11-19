@@ -54,6 +54,14 @@ trap 'rm -f "$tmp"' EXIT
           - "REVIEW.md"
           - "CODEOWNERS"
 
+"area:agents":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".agents/**"
+          - ".claude/skills"
+          - "AGENTS.md"
+          - "scripts/**"
+
 "area:ci":
   - changed-files:
       - any-glob-to-any-file:
@@ -189,4 +197,4 @@ if [[ "$coverage_ok" -ne 1 ]]; then
 fi
 
 cp "$tmp" "$OUT"
-echo "wrote $OUT (run / docs / project-docs / ci / test)"
+echo "wrote $OUT (run / docs / project-docs / agents / ci / test)"

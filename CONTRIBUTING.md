@@ -11,7 +11,7 @@ CI names Julia versions in the job (`1.13`, `1.14-pre`, `nightly`). `1.14-pre` i
 
 ## Requirements
 
-macOS, Linux, or WSL2 Ubuntu. Not native Windows (the kit shells out to `ssh`). Git clone, sync, and pull also need `git`.
+macOS, Linux, or WSL2 Ubuntu. Not native Windows (the kit shells out to `ssh`). Git clone, sync, and pull also need `git`. Before pushing, run `scripts/check.sh` on that commit. That gate is the same on macOS and Linux. WSL2 Ubuntu uses the Linux conditions.
 
 | What | Need |
 | --- | --- |
@@ -53,21 +53,15 @@ Run this on Julia **1.13** (and a **1.14** prerelease or **nightly** if you have
 Checkout `Pkg.test()` is not a registry install. General puts the committed tree in `~/.julia/packages/DistSSHRun/<slug>` with read-only files and no gitignored `Manifest.toml`. `lib/` is part of that tree. CI runs that install on the heavy gate (`Registry install (1.13, ubuntu-latest, x64)`), including ordinary pull requests and **main**. A pull request installs its head commit, not the merge commit. Dependencies come from General. The job sets `JULIA_PKGEVAL=true`, which selects the short file list. `PkgEval (nightly, ubuntu-latest, x64)` is the sandbox in [test/README.md](test/README.md#pkgeval). CI runs that job on **main** push and `workflow_dispatch` (heavy gate), not ordinary pull requests (host Julia 1.13; test Julia is the julia-latest tarball; `continue-on-error`; not a required check). Run that recipe before a General cut.
 
 ```bash
-julia -e 'using Pkg; Pkg.Apps.add("Runic")'   # once
-runic --inplace src lib test docs testenv   # before push; not `.` (markdown out of scope)
-./.github/jetls-check.sh    # hint+; same files as CI
+./scripts/check.sh
 ./.github/aqua-check.sh     # latest registry Aqua; not part of Pkg.test()
 ./testenv/docker-ssh/scripts/up.sh --e2e
-julia --project=docs -e 'using Pkg; Pkg.instantiate()'
-julia --project=docs --color=yes docs/make.jl
 gitleaks detect --source .
 ```
 
-[Runic](https://github.com/fredrikekre/Runic.jl) CI
-(`fredrikekre/runic-action@v1`, `version: '1'`) runs `--check` on every
-tracked `.jl`. Format `docs/*.jl` and `testenv/**/*.jl` too if you change
-them. A Runic minor may make `--check` red: re-run
-`runic --inplace src lib test docs testenv` and push.
+`scripts/check.sh` is the push gate. It runs the pinned Runic `--check` and the pinned JETLS. It does not install them. It does instantiate `.github/runic` so the diff lints can load JuliaSyntax. When a pull request is open, that gate reads the body with `gh`. Run `.github/install-agent-tools.sh` yourself when you want those pins (`julia +1.13` on PATH; it does not look up a fixed juliaup path). An agent does not run it unless asked. The cloud VM runs `.cursor/install.sh` from its own startup. The gate installs `.git/hooks/pre-push`, and that hook runs `./scripts/check.sh` unless this commit already passed. Do not pass `--no-verify`. Formatting, when a file needs it, is `runic --inplace src lib test docs testenv scripts` with that pin. Do not `Pkg.Apps.add("Runic")` at a floating version. `docs/make.jl` runs from the gate only when `docs/` or a docstring line changed.
+
+[Runic](https://github.com/fredrikekre/Runic.jl) on a pull request reads the pin in `.github/runic/Project.toml` and passes that version to `fredrikekre/runic-action`. It runs `--check` on every tracked `.jl`. The monthly workflow `.github/workflows/runic.yml` is the one that uses floating `version: '1'`. Format `docs/*.jl` and `testenv/**/*.jl` too if you change them. A Runic minor may make `--check` red: re-run `runic --inplace src lib test docs testenv scripts` with the pinned app and push.
 Optional: after a bulk format squash, add the landed SHA to
 [`.git-blame-ignore-revs`](.git-blame-ignore-revs) if blame is noisy.
 Local blame:
@@ -101,7 +95,7 @@ Workflows pass the version to `julia-actions/setup-julia`. The stable line and `
 
 | Version | Role | Required |
 | --- | --- | --- |
-| **1.13** | `Project.toml` julia floor. Pkg.test, Aqua, JETLS, Documenter, draw, E2E, Runic. Codecov `pkgtest` on **main push** only | yes |
+| **1.13** | `Project.toml` julia floor. Pkg.test, Aqua, JETLS, Documenter, E2E, Runic. Codecov `pkgtest` on **main push** only | yes |
 | **1.14-pre** | setup-julia `~1.14.0-0` (1.14.0 alpha, then beta, then rc, then 1.14.0; not 1.15). Ubuntu and macOS `Pkg.test` are required. Aqua, JETLS, and Linux SSH E2E stay `continue-on-error` | Ubuntu and macOS `Pkg.test` |
 | **nightly** | Published `julia-latest` tarball. It follows master and can lag a `VERSION` bump. Pkg.test and Aqua. No JETLS. `continue-on-error` | no |
 
@@ -148,8 +142,7 @@ A pull request that runs it also pushes a preview to `gh-pages` at
 `previews/PR<n>`. The commit status `documenter/deploy` links to
 `https://yamanori99.github.io/DistSSHRun.jl/previews/PR<n>/`.
 That directory stays after the pull request closes.
-`Assets` (`draw SVG`) runs if `docs/src/assets/` or that workflow
-changed. Linux E2E (1.13 required, 1.14-pre continue-on-error) uses the same **path filter** as **main** push
+Linux E2E (1.13 required, 1.14-pre continue-on-error) uses the same **path filter** as **main** push
 (`src/**`, `lib/**`, `test/**`, `testenv/**` minus markdown under those trees,
 `Project.toml`, `test/Project.toml`, `.github/workflows/CI.yml`). It also
 runs on a **version increase**, **E2E weekly** (`ssh-e2e-weekly.yml`; `CI.yml` has no
@@ -244,12 +237,17 @@ Required to merge (ruleset `main` uses these names). **nightly** jobs, and **1.1
 - The body is
   [`.github/pull_request_template.md`](.github/pull_request_template.md):
   what changed, what ran, what it can break, and how to undo it.
+  The GitHub title is the title. The body has no title heading and no checklist.
+  It does not list every changed path. `./scripts/check.sh` reads the open
+  pull request and fails when a bullet list or a fenced block repeats
+  `git diff --name-only origin/main...HEAD`.
   [AGENTS.md](AGENTS.md) tells an agent how to fill that.
   [REVIEW.md](REVIEW.md) tells a reviewer what failure looks like here.
   The type label stays out of the body. CI applies it. See
   [DistSSHKit releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md).
 - That split follows
   [How the Claude Code team does code review](https://claude.dev/blog/solving-code-review-at-anthropic/).
+- When a generative tool wrote a substantive part of a pull request, an issue, or a comment, add one line after the body naming the tool. Review the change before opening. Do not put that line in Summary, Testing, or Risk.
 
 ### CodeRabbit (experimental)
 
@@ -258,9 +256,10 @@ until someone comments `@coderabbitai review` (changes since the last
 review) or `@coderabbitai full review` (the whole pull request). It does
 not reply in a thread until it is mentioned, and a later push does not
 start another review. Config is [`.coderabbit.yaml`](.coderabbit.yaml)
-on the **PR head** (not a merge gate). JETLS / tests / e2e stay the gate.
-Treat inline comments as hints; do not apply Autofix or generated tests
-unless you want that change.
+on the **PR head** (not a merge gate). `scripts/check.sh` is the push gate.
+It comments on a bug this diff introduced that `REVIEW.md` does not already
+name. Treat inline comments as hints; do not apply Autofix or generated
+tests unless you want that change.
 
 ## Release
 
@@ -373,7 +372,7 @@ Colors match DistSSHKit: type is "what", area is "where". Do not give each `area
 | Kind | Color | Labels |
 | --- | --- | --- |
 | Type | red / green / yellow / dark red / purple / mint | `bug` `enhancement` `chore` `breaking` `dependencies` |
-| Path area | teal `#bfdadc` | `area:run` `area:project-docs` |
+| Path area | teal `#bfdadc` | `area:run` `area:project-docs` `area:agents` |
 | Documenter | blue `#0075ca` | `area:docs` (and leftover `docs`) |
 | CI | black `#000000` | `area:ci` |
 | Scheduled failure | orange `#ff4d00` | `alert` on bot Issues (`E2E weekly failed`, `CI weekly failed`, `Runic monthly failed`) |

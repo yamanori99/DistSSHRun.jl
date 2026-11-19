@@ -1,11 +1,12 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 # Used from the PR head branch. https://docs.coderabbit.ai/getting-started/yaml-configuration
 language: en-US
+# tone_instructions is at most 250 characters after the folded lines are joined.
 tone_instructions: >
-  Brief. Follow REVIEW.md. Inline comments only for bugs or regressions
-  in this diff. DistSSHRun is one DistSSHKit run. Users add DistSSHKit.
-  Stay inside the PR's stated scope. Start with the count of findings.
-  Say when there is nothing to fix.
+  Brief. Name a bug this diff introduced that REVIEW.md does not list.
+  Cite the file and line. Outside this diff, name it and do not ask for
+  a fix. One DistSSHKit run; users add DistSSHKit. Start with the finding
+  count. Say when nothing needs a fix.
 # Reviews and chat run only after a mention. `@coderabbitai review` is
 # incremental. `@coderabbitai full review` starts over. A later push does
 # not review again. This file is read from the pull request head.
@@ -25,12 +26,41 @@ reviews:
   suggested_reviewers: false
   enable_prompt_for_ai_agents: false
   path_instructions:
-    - path: "**/*.jl"
+    - path: "**"
       instructions: >
-        Apply REVIEW.md. Flag a remote shell string that interpolates a
-        value without _remote_sh_quote or _remote_shell_path_word. Flag
-        delete and prune path calculations in this diff. Cite a file and
-        line. Stay inside the PR's stated scope.
+        Do not request the labels bug, enhancement, chore, breaking,
+        cut, cut-hold, when:*, or julia-next. A removed public name is
+        a changelog fragment bullet, not a label. Do not request a
+        checklist or a body heading that titles the pull request. The
+        GitHub title is the title. Do not add lines to AGENTS.md.
+    - path: "AGENTS.md"
+      instructions: >
+        This file is a short entry. Do not ask to paste a skill back
+        into it, and do not ask for a new section. Destructive setup
+        stays here.
+    - path: ".agents/**"
+      instructions: >
+        A skill is not a CI job. Do not ask to install a hook, spawn a
+        subagent, or add a line to AGENTS.md. The MIT notice is
+        `.agents/LICENSE`. Do not paste it into a skill.
+        continual-learning and correct run only when the user names them.
+    - path: "scripts/**"
+      instructions: >
+        The push gate is scripts/check.sh. It is the same on macOS and
+        Linux. WSL2 Ubuntu uses the Linux conditions. Native Windows
+        stops. Do not ask for a hardcoded depot path or for Pkg.Apps.add.
+        docs/make.jl runs only when docs/ or a docstring line changes,
+        and the local run does not pass linkcheck.
+    - path: ".github/workflows/**"
+      instructions: >
+        Do not rename a required check. Do not add a native Windows job.
+        A WSL2 job is the Linux conditions on windows-latest. linkcheck
+        belongs only on the Documentation pull-request build. Do not ask
+        a lint job to run make.jl.
+    - path: "docs/**"
+      instructions: >
+        Do not ask to convert a plain julia fence to jldoctest.
+        @docs and @autodocs belong only in docs/src/api.md.
   auto_review:
     enabled: false
     drafts: false
