@@ -557,8 +557,8 @@ function _missing_ship_project_digest_error(run_id::AbstractString)::String
     rid = validate_run_id(run_id)
     return join(
         [
-            "what: deploy record for run_id=$(rid) has no Project.toml digest in content_file_digests",
-            "why: --run-id verifies Project.toml bytes against the ship record",
+            "what: deploy record for run_id=$(rid) has no project_hash",
+            "why: --run-id verifies Project.toml bytes against the ship deploy record",
             "fix: re-run setup ship-tree for this project and use the new run id",
         ],
         "\n",
@@ -583,13 +583,8 @@ end
 function _deploy_record_env_digests(rec::AbstractDict)::Tuple{String, String}
     mh = get(rec, "manifest_hash", nothing)
     manifest = mh isa AbstractString ? lowercase(strip(String(mh))) : ""
-    project = ""
-    for (rel, blob) in _deploy_content_file_digests(rec)
-        base = basename(rel)
-        base in ("Project.toml", "JuliaProject.toml") || continue
-        project = blob
-        break
-    end
+    ph = get(rec, "project_hash", nothing)
+    project = ph isa AbstractString ? lowercase(strip(String(ph))) : ""
     return manifest, project
 end
 
@@ -657,6 +652,7 @@ function verify_workers_match_shipped_run!(
         project::AbstractString;
         run_id::Union{Nothing, AbstractString} = nothing,
     )
+    waive_env = unsafe_skip_env_digests_active()
     proj = canonical_local_path(project)
     rid = if run_id isa AbstractString && !isempty(strip(run_id))
         validate_run_id(run_id)
@@ -694,10 +690,12 @@ function verify_workers_match_shipped_run!(
                     lock(mismatch_lock) do
                         push!(snaps, (Int(w), worker))
                     end
-                    append!(
-                        lines,
-                        _worker_env_digest_mismatch_lines(w, worker, want_man, want_proj),
-                    )
+                    if !waive_env
+                        append!(
+                            lines,
+                            _worker_env_digest_mismatch_lines(w, worker, want_man, want_proj),
+                        )
+                    end
                 end
             catch e
                 detail = first(split(sprint(showerror, e), '\n'))
@@ -713,11 +711,11 @@ function verify_workers_match_shipped_run!(
         end
     end
     sort!(snaps; by = first)
-    append!(worker_lines, _worker_digest_heterogeneity_lines(snaps))
+    waive_env || append!(worker_lines, _worker_digest_heterogeneity_lines(snaps))
     if length(snaps) >= 2
         ref = snaps[1][2]
         for (pid, snap) in snaps[2:end]
-            for line in identity_mismatches(ref, snap; unsafe_skip_env_digests = true)
+            for line in identity_mismatches(ref, snap; unsafe_skip_env_digests = waive_env)
                 push!(worker_lines, _format_worker_mismatch_line(pid, line))
             end
         end
@@ -725,7 +723,11 @@ function verify_workers_match_shipped_run!(
     _environment_mismatch_throw(worker_lines)
     verify_workers_shipped_trees!()
     verify_workers_loaded_identity!()
-    _record_environment_verified_against_run_id!()
+    if waive_env
+        _record_environment_unverified!("unsafe-skip-env-digests")
+    else
+        _record_environment_verified_against_run_id!()
+    end
     return nothing
 end
 public verify_workers_match_shipped_run!

@@ -338,6 +338,112 @@ end
             _assert_ssh_e2e_ok(suite, "setup_instantiate", proc, out; project = proj, kit = :setup)
         end
 
+        @testset "drive and ride --run-id env digests" begin
+            _e2e_announce("drive and ride --run-id env digests")
+            run_id_root = "/home/dev/distsshkit-e2e-run-id-verify"
+            run_env = _ssh_e2e_env(; remote_project = run_id_root)
+            quiet = merge(run_env, Dict("DISTSSH_QUIET" => "0"))
+            try
+                proc, out = _run_kit_setup(;
+                    setup_args = [
+                        "delete", "--deploy-root", run_id_root,
+                        "--confirm-path", run_id_root, setup_hosts...,
+                    ],
+                    project_root = proj,
+                    extra_env = run_env
+                )
+                _assert_ssh_e2e_ok(suite, "run_id_env_delete", proc, out; project = proj, kit = :setup)
+                _ssh_e2e_ensure_remote_root!(hosts, run_id_root)
+
+                proc, out = _run_kit_setup(;
+                    setup_args = ["ship-tree", "--deploy-root", run_id_root, setup_hosts...],
+                    project_root = proj,
+                    extra_env = run_env
+                )
+                _assert_ssh_e2e_ok(suite, "run_id_env_ship", proc, out; project = proj, kit = :setup)
+                p_src, src_out = _ssh_e2e_ssh(
+                    hosts[1],
+                    "ls -1d $(run_id_root)/runs/*/src 2>/dev/null | tail -n 1",
+                )
+                _assert_proc_ok(p_src, src_out; label = "run-id env ship src")
+                snap_id = basename(dirname(strip(src_out)))
+                @test !isempty(snap_id)
+                proc, out = _run_kit_setup(;
+                    setup_args = [
+                        "instantiate", "--deploy-root", run_id_root, "--run-id", snap_id,
+                        setup_hosts...,
+                    ],
+                    project_root = proj,
+                    extra_env = run_env
+                )
+                _assert_ssh_e2e_ok(
+                    suite, "run_id_env_instantiate", proc, out; project = proj, kit = :setup
+                )
+                runid_flags = ["-y", "-q", "--deploy-root", run_id_root, "--run-id", snap_id]
+                proc, out = _run_kit_drive(;
+                    script = smoke,
+                    host_root = proj,
+                    head_workers = 0,
+                    child_hosts = remote_tokens,
+                    drive_flags = runid_flags,
+                    extra_env = quiet
+                )
+                _assert_ssh_e2e_ok(suite, "run_id_env_drive", proc, out)
+                ride_cmd = _kit_cli_cmd(vcat(["ride"], runid_flags, remote_tokens, [smoke]))
+                proc, out = _run_subprocess(
+                    setenv(ride_cmd, _drive_host_env(proj; extra_env = quiet))
+                )
+                _assert_ssh_e2e_ok(suite, "run_id_env_ride", proc, out)
+
+                tamper_host = hosts[1]
+                proj_remote = "$(run_id_root)/runs/$(snap_id)/src/Project.toml"
+                tamper_jl = """
+                p = $(repr(proj_remote))
+                chmod(p, 0o644)
+                open(p, "a") do io
+                    write(io, 0x20)
+                end
+                """
+                p_tamper, tamper_out = _e2e_run_on_host(tamper_host, ["-e", tamper_jl])
+                _assert_proc_ok(p_tamper, tamper_out; label = "tamper remote Project.toml")
+                proc_bad, out_bad = _run_kit_drive(;
+                    script = smoke,
+                    host_root = proj,
+                    head_workers = 0,
+                    child_hosts = remote_tokens,
+                    drive_flags = runid_flags,
+                    extra_env = quiet
+                )
+                @test proc_bad.exitcode != 0
+                @test occursin("project.sha256", out_bad)
+                deploy = match(r"deploy=([0-9a-f]+)", out_bad)
+                worker = match(r"worker=([0-9a-f]+)", out_bad)
+                @test deploy !== nothing
+                @test worker !== nothing
+                @test length(deploy.captures[1]) == length(worker.captures[1])
+
+                proc_skip, out_skip = _run_kit_drive(;
+                    script = smoke,
+                    host_root = proj,
+                    head_workers = 0,
+                    child_hosts = remote_tokens,
+                    drive_flags = vcat(runid_flags, "--unsafe-skip-env-digests"),
+                    extra_env = quiet
+                )
+                _assert_ssh_e2e_ok(suite, "run_id_env_drive_unsafe_skip", proc_skip, out_skip)
+            finally
+                proc, out = _run_kit_setup(;
+                    setup_args = [
+                        "delete", "--deploy-root", run_id_root,
+                        "--confirm-path", run_id_root, setup_hosts...,
+                    ],
+                    project_root = proj,
+                    extra_env = run_env
+                )
+                _assert_ssh_e2e_ok(suite, "run_id_env_cleanup", proc, out; project = proj, kit = :setup)
+            end
+        end
+
         @testset "doctor --deploy (major.minor; no --ignore-julia-version)" begin
             _e2e_announce("doctor --deploy (major.minor; no --ignore-julia-version)")
             # Ship does not send .git/; deploy check warns on a missing remote hash but
