@@ -4,9 +4,7 @@
 
 ## Testing
 
-<!-- The command that ran, and what it returned. If nothing ran, say why.
-     Name the OS, the architecture, and the Julia version.
-     Do not name the user, the host, a home path, or which machine. -->
+<!-- The command that ran, and what it returned. If nothing ran, say why. -->
 
 ## Risk
 
