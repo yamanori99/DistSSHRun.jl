@@ -1,6 +1,7 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 # Used from the PR head branch. https://docs.coderabbit.ai/getting-started/yaml-configuration
 language: en-US
+# tone_instructions is at most 250 characters after the folded lines are joined.
 tone_instructions: >
   Brief. Follow REVIEW.md. Inline comments only for bugs or regressions
   in this diff. DistSSHRun is one DistSSHKit run. Users add DistSSHKit.

@@ -9,6 +9,20 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
 
+install_pre_push() {
+  local src="${ROOT}/scripts/pre-push.sh"
+  local dest="${ROOT}/.git/hooks/pre-push"
+  [[ -f "${src}" ]] || return 0
+  [[ -d "${ROOT}/.git/hooks" ]] || return 0
+  if [[ -e "${dest}" ]] && ! grep -q 'distsshrun-check-gate' "${dest}"; then
+    echo "check: pre-push hook exists and is not the gate. Left it in place." >&2
+    return 0
+  fi
+  cp "${src}" "${dest}"
+  chmod +x "${dest}"
+}
+install_pre_push
+
 RUNIC_COMPAT="${ROOT}/.github/runic/Project.toml"
 JETLS_ACTION="${ROOT}/.github/actions/jetls-check/action.yml"
 INSTALL="${ROOT}/.github/install-agent-tools.sh"
@@ -160,4 +174,5 @@ done
 "${ROOT}/scripts/docs.sh" maybe
 
 sha="$(git rev-parse HEAD)"
+printf '%s\n' "${sha}" > "${ROOT}/.git/check-gate-ok"
 echo "HEAD ${sha}: passed"

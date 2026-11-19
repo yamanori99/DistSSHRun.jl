@@ -44,20 +44,23 @@ if [[ "$print_files" == true ]]; then
     exit 0
 fi
 
-_shell_rc() {
-    case "${SHELL:-}" in
-    */zsh) echo "${HOME}/.zshrc" ;;
-    */bash) echo "${HOME}/.bashrc" ;;
-    *) echo "${HOME}/.profile" ;;
-    esac
-}
-
 _jetls_depot() {
     local raw="${JULIA_DEPOT_PATH:-}"
     if [[ -n "${raw}" ]]; then
         local first="${raw%%:*}"
         if [[ -n "${first}" ]]; then
             echo "${first}"
+            return 0
+        fi
+    fi
+    if command -v julia >/dev/null 2>&1; then
+        local depot=""
+        if depot="$(julia +1.13 --startup-file=no -e 'print(DEPOT_PATH[1])' 2>/dev/null)" && [[ -n "${depot}" ]]; then
+            echo "${depot}"
+            return 0
+        fi
+        if depot="$(julia --startup-file=no -e 'print(DEPOT_PATH[1])' 2>/dev/null)" && [[ -n "${depot}" ]]; then
+            echo "${depot}"
             return 0
         fi
     fi
@@ -102,7 +105,6 @@ _depot="$(_jetls_depot)"
 _apps_bin="${_depot}/bin"
 _depot_jetls="${_apps_bin}/jetls"
 _manifest="${_depot}/environments/apps/JETLS/Manifest.toml"
-_rc="$(_shell_rc)"
 
 if [[ -n "${JULIA_APPS_JULIA_CMD:-}" ]]; then
     export JULIA_APPS_JULIA_CMD
@@ -119,22 +121,15 @@ fi
 _path_jetls=""
 if command -v jetls >/dev/null 2>&1; then
     _path_jetls="$(command -v jetls)"
+elif [[ -x "${_depot_jetls}" ]]; then
+    _path_jetls="${_depot_jetls}"
 fi
 
 if [[ -z "${_path_jetls}" ]]; then
-    if [[ ! -x "${_depot_jetls}" ]]; then
-        {
-            echo "error: jetls is not installed (looked on PATH and ${_depot_jetls})"
-            echo "install the pinned release (${_pin}, from .github/actions/jetls-check/action.yml):"
-            echo "  julia -e 'using Pkg; Pkg.Apps.add(; url=\"https://github.com/aviatesk/JETLS.jl\", rev=\"${_pin}\")'"
-            echo "then rerun ./.github/jetls-check.sh"
-        } >&2
-        exit 1
-    fi
     {
-        echo "error: jetls is installed at ${_depot_jetls} but that directory is not on PATH"
-        echo "add it for this shell (keep \$PATH as is), or append the same line to ${_rc}:"
-        echo "  export PATH=\"${_apps_bin}:\$PATH\""
+        echo "error: jetls is not installed (looked on PATH and ${_depot_jetls})"
+        echo "install the pinned release (${_pin}, from .github/actions/jetls-check/action.yml):"
+        echo "  ./.github/install-agent-tools.sh"
         echo "then rerun ./.github/jetls-check.sh"
     } >&2
     exit 1
@@ -154,7 +149,7 @@ if [[ "${_installed}" != "${_pin}" ]]; then
     {
         echo "error: jetls ${_installed} is installed, but this repo pins ${_pin} (CI uses the pin)"
         echo "installed rev read from ${_manifest}; update with:"
-        echo "  julia -e 'using Pkg; Pkg.Apps.add(; url=\"https://github.com/aviatesk/JETLS.jl\", rev=\"${_pin}\")'"
+        echo "  ./.github/install-agent-tools.sh"
         echo "then rerun ./.github/jetls-check.sh"
     } >&2
     exit 1

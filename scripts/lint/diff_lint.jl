@@ -544,6 +544,10 @@ function self_test()
     any(endswith(e, "checklist") for e in terr) || die("self-test: checklist")
     good = "## Summary\n\n## Testing\n\n## Risk\n\n## Revert\n"
     isempty(pr_template_errors(good)) || die("self-test: template $(pr_template_errors(good))")
+    short = "tone_instructions: >\n  Brief.\n"
+    isempty(coderabbit_tone_errors(short)) || die("self-test: tone $(coderabbit_tone_errors(short))")
+    long = "tone_instructions: >\n  " * repeat("a", 251) * "\n"
+    any(occursin("250", e) for e in coderabbit_tone_errors(long)) || die("self-test: tone limit")
     println("self-test: passed")
     return 0
 end
@@ -662,6 +666,31 @@ function pr_template_errors(src::AbstractString)
     return errs
 end
 
+function coderabbit_tone_errors(src::AbstractString)
+    lines = collect(eachsplit(src, '\n'; keepempty = true))
+    idx = findfirst(line -> startswith(line, "tone_instructions:"), lines)
+    idx === nothing && return ["tone_instructions missing"]
+    line = lines[idx]
+    text = ""
+    if occursin(r":\s*[>|]\s*$", line)
+        parts = String[]
+        i = idx + 1
+        while i <= length(lines)
+            nxt = lines[i]
+            (startswith(nxt, " ") || startswith(nxt, "\t")) || break
+            push!(parts, strip(nxt))
+            i += 1
+        end
+        text = join(filter(!isempty, parts), " ")
+    else
+        m = match(r"^tone_instructions:\s*(?:\"(.*)\"|'(.*)'|(\S.*?))\s*$", line)
+        m === nothing && return ["tone_instructions is not a string"]
+        text = something(m.captures[1], m.captures[2], m.captures[3], "")
+    end
+    length(text) <= 250 && return String[]
+    return ["tone_instructions is $(length(text)) characters. The limit is 250"]
+end
+
 function docs_static(root::AbstractString)
     n = 0
     template_path = joinpath(root, ".github", "pull_request_template.md")
@@ -673,6 +702,13 @@ function docs_static(root::AbstractString)
     else
         println(stderr, "docs: .github/pull_request_template.md: missing")
         n += 1
+    end
+    coderabbit = joinpath(root, ".coderabbit.yaml")
+    if isfile(coderabbit)
+        for err in coderabbit_tone_errors(read(coderabbit, String))
+            println(stderr, "docs: .coderabbit.yaml: $(err)")
+            n += 1
+        end
     end
     for file in readlines(`git -C $root ls-files '*.md'`)
         src = read(joinpath(root, file), String)

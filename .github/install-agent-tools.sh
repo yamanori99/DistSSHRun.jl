@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Idempotent Runic + JETLS + shellcheck install for Cursor Cloud Agent Builds.
+# Idempotent Runic + JETLS install. shellcheck is apt on Linux only.
 # Runic pin: .github/runic/Project.toml [compat] (CI reads the same file). JETLS: jetls-check/action.yml.
+# Julia 1.13 is `julia +1.13` on PATH, or a 1.13 julia already on PATH. No fixed install path.
 #
 # Optional INSTALL_AGENT_TOOLS_DEPOT: depot root for this script only (testing; no symlinks).
 # Do not export HOME or JULIA_DEPOT_PATH; prefix Julia/Pkg calls when needed.
@@ -9,8 +10,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ACTION="${ROOT}/.github/actions/jetls-check/action.yml"
 RUNIC_COMPAT="${ROOT}/.github/runic/Project.toml"
-JULIAUP_JULIA="${HOME}/.juliaup/bin/julia"
-STABLE_CHANNEL="1.13"
 RUNIC_UUID="62bfec6d-59d7-401d-8490-b29ee721c001"
 
 runic_pin_from_compat() {
@@ -22,19 +21,29 @@ die() {
   exit 1
 }
 
+# Same discovery as scripts/check.sh.
+JULIA=()
+if command -v julia >/dev/null 2>&1 && julia +1.13 --startup-file=no -e 'exit(0)' >/dev/null 2>&1; then
+  JULIA=(julia +1.13)
+elif command -v julia >/dev/null 2>&1 && julia --startup-file=no -e 'exit(VERSION>=v"1.13" && VERSION<v"1.14" ? 0 : 1)' >/dev/null 2>&1; then
+  JULIA=(julia)
+else
+  die "Julia 1.13 is not on PATH"
+fi
+JULIA_BIN="$("${JULIA[@]}" --startup-file=no -e 'print(joinpath(Sys.BINDIR, "julia"))')"
+if [[ ! -x "${JULIA_BIN}" ]]; then
+  die "Julia 1.13 binary is missing"
+fi
+
 if [[ -n "${INSTALL_AGENT_TOOLS_DEPOT:-}" ]]; then
   DEPOT="${INSTALL_AGENT_TOOLS_DEPOT}"
   LINK_TOOLS=false
 else
-  DEPOT="${HOME}/.julia"
+  DEPOT="$("${JULIA[@]}" --startup-file=no -e 'print(DEPOT_PATH[1])')"
   LINK_TOOLS=true
 fi
 APPS_BIN="${DEPOT}/bin"
-_TOOL_PATH="${APPS_BIN}:${HOME}/.juliaup/bin:/usr/local/bin:/usr/bin:/bin"
-
-if [[ ! -x "${JULIAUP_JULIA}" ]]; then
-  die "missing ${JULIAUP_JULIA}"
-fi
+_TOOL_PATH="${APPS_BIN}:$(dirname "${JULIA_BIN}"):/usr/local/bin:/usr/bin:/bin"
 
 if [[ ! -f "${RUNIC_COMPAT}" ]]; then
   die "missing ${RUNIC_COMPAT}"
@@ -53,16 +62,16 @@ fi
 
 mkdir -p "${APPS_BIN}"
 
-if ! command -v shellcheck >/dev/null 2>&1; then
+if ! command -v shellcheck >/dev/null 2>&1 && [[ "$(uname -s)" == Linux ]]; then
   if ! sudo -n apt-get update; then
     die "apt-get update failed"
   fi
   if ! sudo -n apt-get install -y shellcheck; then
     die "apt-get install shellcheck failed"
   fi
-fi
-if ! command -v shellcheck >/dev/null 2>&1; then
-  die "shellcheck not on PATH after install"
+  if ! command -v shellcheck >/dev/null 2>&1; then
+    die "shellcheck not on PATH after install"
+  fi
 fi
 
 link_into_path() {
@@ -88,23 +97,23 @@ link_into_path() {
 }
 
 julia_tool() {
-  JULIA_APPS_JULIA_CMD="${JULIAUP_JULIA}" \
+  JULIA_APPS_JULIA_CMD="${JULIA_BIN}" \
     PATH="${_TOOL_PATH}" \
     JULIA_DEPOT_PATH="${DEPOT}" \
-    "${JULIAUP_JULIA}" +"${STABLE_CHANNEL}" --startup-file=no -e "$1"
+    "${JULIA[@]}" --startup-file=no -e "$1"
 }
 
 runic_app_version() {
   local bin="${APPS_BIN}/runic"
   [[ -x "${bin}" ]] || return 1
-  JULIA_APPS_JULIA_CMD="${JULIAUP_JULIA}" PATH="${_TOOL_PATH}" \
+  JULIA_APPS_JULIA_CMD="${JULIA_BIN}" PATH="${_TOOL_PATH}" \
     "${bin}" --version 2>/dev/null | sed -n 's/^runic version \([^,]*\).*/\1/p'
 }
 
 jetls_app_ok() {
   local bin="${APPS_BIN}/jetls"
   [[ -x "${bin}" ]] || return 1
-  JULIA_APPS_JULIA_CMD="${JULIAUP_JULIA}" PATH="${_TOOL_PATH}" \
+  JULIA_APPS_JULIA_CMD="${JULIA_BIN}" PATH="${_TOOL_PATH}" \
     "${bin}" version >/dev/null 2>&1
 }
 
@@ -198,7 +207,7 @@ if ! jetls_app_ok; then
   die "jetls failed to start"
 fi
 
-if [[ "${LINK_TOOLS}" == true ]]; then
+if [[ "${LINK_TOOLS}" == true && "$(uname -s)" == Linux ]]; then
   link_into_path runic
   link_into_path jetls
 fi
