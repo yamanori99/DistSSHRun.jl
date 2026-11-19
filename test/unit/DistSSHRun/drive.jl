@@ -18,6 +18,10 @@ end
         @test p.child_hosts == ["host-a", "host-b"]
         @test DistSSHRun.worker_tokens_fully_specified(p)
 
+        ports = DistSSHRun.parse_worker_tokens(["host-a:22", "host-a:2222"])
+        @test ports.child_hosts == ["host-a:22", "host-a:2222"]
+        @test_throws ArgumentError DistSSHRun.parse_worker_tokens(["host-a:22", "host-a:22"])
+
         fixed = DistSSHRun.parse_worker_tokens(["1*h1"]; head_workers = 2)
         @test DistSSHRun.worker_tokens_fully_specified(fixed)
         let plan = DistSSHRun.worker_plan_from_tokens(["1*h1"]; head_workers = 2)

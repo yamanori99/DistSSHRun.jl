@@ -45,6 +45,30 @@ using DistSSHRun
         end
     end
 
+    @testset "TOML port in bind key" begin
+        _with_tempdir() do tmp
+            path = joinpath(tmp, "hosts.toml")
+            write(
+                path,
+                """
+                [[hosts]]
+                name = "lab"
+                port = 2222
+                bind = "10.0.0.3"
+                user = "alice"
+                """,
+            )
+            merged = DistSSHRun.resolve_launch_bind_overrides(; hosts_file = path)
+            @test merged == Dict("alice@lab:2222" => "10.0.0.3")
+            @test DistSSHRun.resolved_bind_address(
+                "alice@lab:2222",
+                DistSSHRun.resolve_launch_bind_overrides(;
+                    bind_overrides = Dict("alice@lab:2222" => "10.0.0.9"),
+                ),
+            ) == "10.0.0.9"
+        end
+    end
+
     @testset "bind_overrides= conflicts with hosts file" begin
         _with_tempdir() do tmp
             path = joinpath(tmp, "hosts.toml")

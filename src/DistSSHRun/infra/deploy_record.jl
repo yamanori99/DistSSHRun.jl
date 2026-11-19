@@ -268,13 +268,9 @@ function _deploy_record_scp_upload_argv(
         record_abs::AbstractString,
         local_path::AbstractString,
     )::Vector{String}
-    h = validate_ssh_host(String(host))
     remote = String(record_abs)
-    any(iscntrl, remote) && throw(
-        ArgumentError("deploy record remote path contains a control character"),
-    )
-    dest = string(h, ":", remote)
-    return String[ssh_opts()..., String(local_path), dest]
+    _, dest = DistSSHBase._scp_remote_file_spec(host, remote)
+    return vcat(DistSSHBase.scp_connection_argv(host), String[local_path, dest])
 end
 
 function _deploy_record_atomic_install_script(

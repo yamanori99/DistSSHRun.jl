@@ -1176,8 +1176,33 @@ const DRIVE_HOST_WORKER_IDS = Dict{String, Vector{Int}}()
 const DRIVE_HOST_LAST_SEEN = Dict{String, Float64}()
 const DRIVE_HOST_STATUS_STOP = Ref(true)
 const DRIVE_HOST_STATUS_TASK = Ref{Union{Nothing, Task}}(nothing)
+"""Canonical placement SSH endpoint per worker pid (interrupt and leftover keys)."""
+const WORKER_PLACEMENT_SSH_ENDPOINT = Dict{Int, String}()
+
+function _register_worker_placement_ssh_endpoints!(
+        pids::AbstractVector{<:Integer},
+        endpoint::AbstractString,
+    )::Nothing
+    ep = String(endpoint)
+    for pid in pids
+        WORKER_PLACEMENT_SSH_ENDPOINT[Int(pid)] = ep
+    end
+    return nothing
+end
+
+function _forget_worker_placement_ssh_endpoints!(pids::AbstractVector{<:Integer})::Nothing
+    for pid in pids
+        delete!(WORKER_PLACEMENT_SSH_ENDPOINT, Int(pid))
+    end
+    return nothing
+end
 
 function _clear_drive_host_worker_ids!()
+    registry_pids = Int[]
+    for ids in values(DRIVE_HOST_WORKER_IDS)
+        append!(registry_pids, ids)
+    end
+    _forget_worker_placement_ssh_endpoints!(registry_pids)
     empty!(DRIVE_HOST_WORKER_IDS)
     empty!(DRIVE_HOST_LAST_SEEN)
     return nothing
@@ -1267,21 +1292,23 @@ function _rmprocs_drive_owned_workers!(; waitfor::Real)
         rmprocs(ids; waitfor = waitfor)
     catch
     end
+    _forget_worker_placement_ssh_endpoints!(ids)
     return nothing
 end
 
-"""Host name for a worker that `addprocs` created but did not register.
+"""Placement SSH endpoint for a worker that `addprocs` created but did not register.
 
-Local workers stay on the parent. An SSH worker uses the host in its
-`WorkerConfig`, without a `user@` prefix. Anything else is `unknown`, not the parent.
+Local workers stay on the parent. SSH workers use the recorded placement endpoint
+when present (`user@host` and `:port` kept), otherwise the interrupt recovery
+endpoint from `WorkerConfig`. Anything else is `unknown`, not the parent.
 """
 function _leftover_worker_host(pid::Integer)::String
+    placement = get(WORKER_PLACEMENT_SSH_ENDPOINT, Int(pid), nothing)
+    placement !== nothing && return String(placement)
     ep = _interrupt_endpoint(pid)
     ep === :local && return PARENT_HOST_NAME
     if ep isa Tuple
-        host = String(ep[1])
-        at = findlast('@', host)
-        return at === nothing ? host : String(host[nextind(host, at):end])
+        return String(ep[1])
     end
     return "unknown"
 end

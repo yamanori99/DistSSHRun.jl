@@ -297,6 +297,90 @@ let _BASE = DistSSHBase
         end
     end
 
+    @testset "ssh explicit port" begin
+        @test _BASE._ssh_host_connection_args("alice@h:2222", "true") ==
+            ["-p", "2222", "--", "alice@h", "true"]
+        @test _BASE._ssh_host_connection_args("alice@h", "true") == ["--", "alice@h", "true"]
+        port_args, spec = _BASE._scp_remote_file_spec("alice@h:2222", "/tmp/x")
+        @test port_args == ["-P", "2222"]
+        @test spec == "alice@h:/tmp/x"
+        withenv("DISTRIBUTED_SSH_OPTS" => "-o Port=2200 -p 2200") do
+            argv = _BASE._ssh_remote_session_argv("alice@h:2222", "true")
+            pidx = findfirst(==("-p"), argv)
+            @test pidx !== nothing
+            @test argv[pidx + 1] == "2222"
+            @test count(x -> startswith(String(x), "Port="), argv) == 0
+            @test count(==("-p"), argv) == 1
+            opts = _BASE.ssh_connection_ssh_opts("alice@h:2222")
+            @test opts[(end - 1):end] == ["-p", "2222"]
+            @test count(==("-p"), opts) == 1
+        end
+        withenv("DISTRIBUTED_SSH_OPTS" => "-P tag -p -p2201 -oPort=2202 -o Port 2203") do
+            ssh_opts = _BASE.ssh_forwarded_opts(explicit_port = 2222)
+            @test "-P" in ssh_opts
+            @test "tag" in ssh_opts
+            @test count(==("-p"), ssh_opts) == 0
+            scp_opts = _BASE.scp_forwarded_opts(explicit_port = 2222)
+            @test "-p" in scp_opts
+            @test count(==("-P"), scp_opts) == 0
+        end
+        withenv("DISTRIBUTED_SSH_OPTS" => "-o  Port=2200 -p 2200") do
+            ssh_opts = _BASE.ssh_forwarded_opts(explicit_port = 2222)
+            @test count(x -> occursin("Port=", String(x)), ssh_opts) == 0
+            scp_opts = _BASE.scp_forwarded_opts(explicit_port = 2222)
+            pidx = findfirst(==("-p"), scp_opts)
+            @test pidx === nothing || scp_opts[pidx + 1] != "2200"
+        end
+        withenv("DISTRIBUTED_SSH_OPTS" => "-p 2200") do
+            scp_opts = _BASE.scp_forwarded_opts(explicit_port = 2222)
+            @test !("-p" in scp_opts)
+            @test !any(x -> x == "2200", scp_opts)
+        end
+        @test_throws ArgumentError _BASE.ssh_openssh_dest("[-host]")
+        for bad in ("::1", "[::1]", "2*[::1]", "user@[::1]", "[::1]:2222", "user@[::1]:2222")
+            err = try
+                _BASE.parse_machine_token(bad)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("IPv6 literals are not supported", sprint(showerror, err))
+            @test occursin("Host lab6", sprint(showerror, err))
+        end
+        if Sys.which("ssh") === nothing
+            @test_skip "ssh not in PATH"
+        else
+            withenv(
+                "DISTRIBUTED_SSH_OPTS" => nothing,
+                "DISTSSH_TEST" => nothing,
+                "DISTSSH_TEST_SSH" => nothing,
+            ) do
+                cmd = _BASE._host_sync_remote_shell_cmd("alice@h:2222", "true")
+                @test "-p" in cmd.exec
+                @test "2222" in cmd.exec
+                @test "--" in cmd.exec
+                plain = _BASE._host_sync_remote_shell_cmd("alice@h", "true")
+                @test !("-p" in plain.exec)
+            end
+        end
+        flags = Cmd(["-p", "2222", "-o", "BatchMode=yes"])
+        @test _BASE.explicit_port_from_sshflags(flags) == 2222
+        @test _BASE.explicit_port_from_sshflags(Cmd(["-o", "BatchMode=yes"])) === nothing
+    end
+
+    @testset "placement endpoint from WorkerConfig host" begin
+        @test _BASE.placement_ssh_endpoint_from_worker_host("::1") === nothing
+        @test _BASE.placement_ssh_endpoint_from_worker_host("user@::1") === nothing
+        @test _BASE.placement_ssh_endpoint_from_worker_host("[::1]") === nothing
+        @test _BASE.placement_ssh_endpoint_from_worker_host(
+            "lab-a",
+            Cmd(["-p", "2222"]),
+        ) == "lab-a:2222"
+        @test _BASE.placement_ssh_endpoint_from_worker_host("user@lab-a") == "user@lab-a"
+        @test _BASE.placement_ssh_endpoint_from_worker_host("-evil") === nothing
+    end
+
     @testset "ssh -n vs stdin forward" begin
         if Sys.which("ssh") === nothing
             @test_skip "ssh not in PATH"
