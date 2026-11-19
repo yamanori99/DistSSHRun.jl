@@ -1,10 +1,10 @@
 ## Summary
 
-<!-- What / why. The GitHub title is the title. Do not add a heading above this section. Name every path changed from the base branch. -->
+<!-- What / why. The GitHub title is the title. Do not add a heading above this section. Do not list every changed path. -->
 
 ## Testing
 
-<!-- The command that ran, and what it returned. Paste the `HEAD <sha>: passed` line from ./scripts/check.sh on this commit. If nothing ran, say why. -->
+<!-- The command that ran, and what it returned. If nothing ran, say why. -->
 
 ## Risk
 

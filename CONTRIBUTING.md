@@ -238,9 +238,9 @@ Required to merge (ruleset `main` uses these names). **nightly** jobs, and **1.1
   [`.github/pull_request_template.md`](.github/pull_request_template.md):
   what changed, what ran, what it can break, and how to undo it.
   The GitHub title is the title. The body has no title heading and no checklist.
-  It names every path in `origin/main...HEAD` and the `HEAD <sha>: passed`
-  line from `./scripts/check.sh` on that commit. `./scripts/check.sh` reads
-  the open pull request and fails when either is missing.
+  It does not list every changed path. `./scripts/check.sh` reads the open
+  pull request and fails when a bullet list or a fenced block repeats
+  `git diff --name-only origin/main...HEAD`.
   [AGENTS.md](AGENTS.md) tells an agent how to fill that.
   [REVIEW.md](REVIEW.md) tells a reviewer what failure looks like here.
   The type label stays out of the body. CI applies it. See

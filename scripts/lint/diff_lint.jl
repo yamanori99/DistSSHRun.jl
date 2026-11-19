@@ -548,14 +548,14 @@ function self_test()
     isempty(coderabbit_tone_errors(short)) || die("self-test: tone $(coderabbit_tone_errors(short))")
     long = "tone_instructions: >\n  " * repeat("a", 251) * "\n"
     any(occursin("250", e) for e in coderabbit_tone_errors(long)) || die("self-test: tone limit")
-    kept = "## Summary\n\n## Testing\n\nHEAD abc: passed\n\n## Risk\n\n## Revert\n"
-    kept_paths = ["scripts/check.sh", "CONTRIBUTING.md"]
-    kept_errs = pr_body_errors(kept, kept_paths, "abc")
-    any(endswith(e, "scripts/check.sh") for e in kept_errs) || die("self-test: pr body path")
-    any(endswith(e, "CONTRIBUTING.md") for e in kept_errs) || die("self-test: pr body kept path")
-    any(occursin("HEAD def: passed", e) for e in pr_body_errors(kept, kept_paths, "def")) || die("self-test: pr body sha")
-    covered = kept * "\nscripts/check.sh\nCONTRIBUTING.md\n"
-    isempty(pr_body_errors(covered, kept_paths, "abc")) || die("self-test: pr body $(pr_body_errors(covered, kept_paths, "abc"))")
+    listed = ["scripts/check.sh", "CONTRIBUTING.md"]
+    dump = "## Summary\n\n## Testing\n\n## Risk\n\n## Revert\n\n- `scripts/check.sh`\n- `CONTRIBUTING.md`\n"
+    any(==("file list"), pr_body_errors(dump, listed)) || die("self-test: pr body file list")
+    fenced = "## Summary\n\n## Testing\n\n## Risk\n\n## Revert\n\n```\nscripts/check.sh\nCONTRIBUTING.md\n```\n"
+    any(==("file list"), pr_body_errors(fenced, listed)) || die("self-test: pr body fence")
+    short = "## Summary\n\nscripts/check.sh is the gate.\n\n## Testing\n\nRan it.\n\n## Risk\n\nThe hook remains.\n\n## Revert\n\nRevert the merge.\n"
+    isempty(pr_body_errors(short, listed)) || die("self-test: pr body $(pr_body_errors(short, listed))")
+    isempty(pr_body_errors(dump, ["scripts/check.sh"])) || die("self-test: pr body one path")
     println("self-test: passed")
     return 0
 end
@@ -674,20 +674,71 @@ function pr_template_errors(src::AbstractString)
     return errs
 end
 
-function pr_body_errors(body::AbstractString, paths, head::AbstractString)
-    errs = pr_template_errors(body)
-    for path in paths
-        isempty(path) && continue
-        occursin(path, body) || push!(errs, "missing path $(path)")
+function bullet_item(line::AbstractString)
+    m = match(r"^- (.*)$", line)
+    m === nothing && return nothing
+    item = strip(m.captures[1])
+    if startswith(item, "`") && endswith(item, "`") && length(item) >= 2
+        item = item[2:(end - 1)]
     end
-    needle = "HEAD $(head): passed"
-    occursin(needle, body) || push!(errs, "missing $(needle)")
+    return item
+end
+
+function file_list_errors(body::AbstractString, paths)
+    pathset = Set(filter(!isempty, paths))
+    length(pathset) < 2 && return String[]
+    errs = String[]
+    run = String[]
+    fence = String[]
+    in_fence = false
+    function note(items)
+        filtered = filter(!isempty, items)
+        if Set(filtered) == pathset
+            push!(errs, "file list")
+        end
+        return
+    end
+    function flush_run()
+        note(run)
+        empty!(run)
+        return
+    end
+    for line in eachsplit(body, '\n'; keepempty = true)
+        if startswith(line, "```")
+            if in_fence
+                note(fence)
+                empty!(fence)
+                in_fence = false
+            else
+                flush_run()
+                in_fence = true
+            end
+            continue
+        end
+        if in_fence
+            push!(fence, strip(line))
+            continue
+        end
+        item = bullet_item(line)
+        if item !== nothing
+            push!(run, item)
+        elseif !isempty(strip(line))
+            flush_run()
+        end
+    end
+    in_fence ? note(fence) : flush_run()
+    return unique(errs)
+end
+
+function pr_body_errors(body::AbstractString, paths)
+    errs = pr_template_errors(body)
+    append!(errs, file_list_errors(body, paths))
     return errs
 end
 
-function pr_body_main(head::AbstractString, paths_file::AbstractString, body_file::AbstractString)
+function pr_body_main(paths_file::AbstractString, body_file::AbstractString)
     paths = filter(!isempty, readlines(paths_file))
-    errs = pr_body_errors(read(body_file, String), paths, head)
+    errs = pr_body_errors(read(body_file, String), paths)
     for err in errs
         println(stderr, "pr body: ", err)
     end
@@ -775,8 +826,8 @@ function docs_static(root::AbstractString)
 end
 
 function main(args)
-    if length(args) == 4 && args[1] == "pr-body"
-        return pr_body_main(args[2], args[3], args[4])
+    if length(args) == 3 && args[1] == "pr-body"
+        return pr_body_main(args[2], args[3])
     end
     if length(args) != 1
         die("usage: diff_lint.jl <banned-words|agents-md|skip-reasons|new-comments|doc-touch|docs-static|self-test|pr-body>")
