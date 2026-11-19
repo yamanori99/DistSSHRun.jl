@@ -18,11 +18,10 @@
 
 ## Checklist
 
-- [ ] Breaking status is correct — a change PR has the `breaking` label
-      when needed, and a `changelog.d/` fragment with `category: breaking`.
+- [ ] A removed public name appears as an identifier in a changelog fragment
+      bullet in this pull request. Do not add a `breaking` label.
       A cut PR runs `./.github/news-collect.sh` and keeps the NEWS section
-      required by its version bump. Breaking includes CLI behavior: flags,
-      confirmation, exit codes, what is deleted. See
+      required by its version bump. See
       [DistSSHKit releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md).
 - [ ] News fragment — this PR adds one `changelog.d/*.md` file when it
       changes `src/`, `lib/**/src/`, or `ext/`. Docs, tests, and CI do not

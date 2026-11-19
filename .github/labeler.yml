@@ -19,6 +19,16 @@
           - "REVIEW.md"
           - "CODEOWNERS"
 
+"area:agents":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".agents/**"
+          - ".claude/skills"
+          - "AGENTS.md"
+          - "scripts/check.sh"
+          - "scripts/docs.sh"
+          - "scripts/lint/**"
+
 "area:ci":
   - changed-files:
       - any-glob-to-any-file:
