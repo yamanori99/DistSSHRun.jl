@@ -78,6 +78,7 @@ end
             _runtest_include("unit/DistSSHRun/drive.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "drive.jl"))
             _runtest_include("unit/DistSSHRun/core/drive/collect_tree.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "drive", "collect_tree.jl"))
             _runtest_include("unit/DistSSHRun/core/drive/warn_newline.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "drive", "warn_newline.jl"))
+            _runtest_include("unit/DistSSHRun/core/drive/preflight_best_effort.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "drive", "preflight_best_effort.jl"))
             _runtest_include("unit/DistSSHRun/core/drive/progress_nolog_stdio.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "drive", "progress_nolog_stdio.jl"))
             _runtest_include("unit/DistSSHRun/core/drive/progress_tty_payload.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "drive", "progress_tty_payload.jl"))
             if !_distsshrun_short_skip("unit/DistSSHRun/core/drive/workers.jl")

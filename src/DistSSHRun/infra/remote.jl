@@ -203,8 +203,7 @@ function _ssh_phase_cmd(host::AbstractString, remote::AbstractString)::Cmd
     return _ssh_cmd(
         vcat(
             String["-n"],
-            DistSSHBase.ssh_phase_argv(),
-            DistSSHBase.ssh_forwarded_opts(explicit_port = port),
+            DistSSHBase.ssh_phase_argv(; explicit_port = port),
             _ssh_host_connection_args(h, String(remote)),
         ),
     )

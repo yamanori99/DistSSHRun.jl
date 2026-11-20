@@ -152,10 +152,7 @@ end
 _git_cmd(args::AbstractVector)::Cmd = _host_tool_cmd("git", args)
 function _ssh_cmd(args::AbstractVector)::Cmd
     cmd = _host_tool_cmd("ssh", args)
-    for (k, v) in ssh_noninteractive_env()
-        cmd = setenv(cmd, k => v)
-    end
-    return cmd
+    return addenv(cmd, ssh_noninteractive_env())
 end
 
 # Seconds added on top of `ConnectTimeout` for pubkey/password auth after TCP connect.
@@ -179,7 +176,10 @@ end
 Forced `-o` tokens are placed before [`build_ssh_opts`](@ref) so they win over
 `DISTRIBUTED_SSH_OPTS` (OpenSSH uses the first value per option name).
 """
-function ssh_phase_argv(; request_tty::Bool = false)::Vector{String}
+function ssh_phase_argv(;
+        request_tty::Bool = false,
+        explicit_port::Union{Nothing, Int} = nothing,
+    )::Vector{String}
     connect = _ssh_whole_seconds(:ssh_connect, _SSH_CONNECT_TIMEOUT_S)
     forced = String[
         "-o", "BatchMode=yes",
@@ -187,15 +187,15 @@ function ssh_phase_argv(; request_tty::Bool = false)::Vector{String}
         "-o", "ServerAliveInterval=$(_SSH_PHASE_ALIVE_INTERVAL)",
         "-o", "ServerAliveCountMax=$(_SSH_PHASE_ALIVE_COUNT)",
     ]
-    return vcat(forced, build_ssh_opts(; request_tty = request_tty))
+    return vcat(
+        forced,
+        ssh_forwarded_opts(; explicit_port = explicit_port, request_tty = request_tty),
+    )
 end
 
 function _scp_cmd(args::AbstractVector)::Cmd
     cmd = _host_tool_cmd("scp", args)
-    for (k, v) in ssh_noninteractive_env()
-        cmd = setenv(cmd, k => v)
-    end
-    return cmd
+    return addenv(cmd, ssh_noninteractive_env())
 end
 
 function _ssh_kill_local!(proc::Base.Process)
@@ -245,7 +245,7 @@ throws `ProcessFailedException` unless the root `Cmd` was built with
 POSIX login-shell probe per host (cached for the process), not to every session.
 """
 function run_ssh(cmd; wait::Bool = true)::Base.Process
-    proc = run(cmd; wait = false)
+    proc = wait ? run(cmd, stdin, stdout, stderr; wait = false) : run(cmd; wait = false)
     wait || return proc
     Base.wait(proc)
     if _ssh_run_throws_on_failure(cmd) && !Base.success(proc)

@@ -878,7 +878,7 @@ function _ride_run!(
                 project; cli_override = remote,
             )
             record_deploy_status_for_run!(child_hosts, deploy_root, project)
-            if !preflight_setup_ssh(child_hosts)
+            if !preflight_setup_ssh(child_hosts) && !best_effort
                 throw(
                     ArgumentError("SSH preflight failed. Fix connectivity, then retry."),
                 )

@@ -42,7 +42,6 @@ Host child-pw
   Port 2224
   IdentityFile ${CONTROLLER_KEY}
   IdentitiesOnly yes
-  BatchMode yes
   ConnectTimeout 10
   StrictHostKeyChecking accept-new
   UserKnownHostsFile ${GEN}/known_hosts

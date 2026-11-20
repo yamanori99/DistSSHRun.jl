@@ -530,8 +530,11 @@ end
 function deleted_bodies(h::Hunk)
     bodies = Set{String}()
     for line in h.deleted
-        for (_, _, text) in comment_tokens(line * "\n")
-            push!(bodies, comment_body(text))
+        try
+            for (_, _, text) in comment_tokens(line * "\n")
+                push!(bodies, comment_body(text))
+            end
+        catch
         end
     end
     return bodies

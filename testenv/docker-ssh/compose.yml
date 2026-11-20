@@ -32,7 +32,7 @@ services:
       DISTSSH_HOSTNAME: child-pw
       DISTSSH_PASSWORD_ONLY: "1"
     ports:
-      - "2224:22"
+      - "127.0.0.1:2224:22"
     volumes:
       - ./mounted-keys:/mounted-keys:ro
     cap_add:
