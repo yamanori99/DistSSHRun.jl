@@ -463,8 +463,6 @@ function scp_connection_argv(host::AbstractString)::Vector{String}
     return vcat(scp_forwarded_opts(explicit_port = port), _scp_explicit_port_args(port))
 end
 
-_scp_cmd(args::AbstractVector)::Cmd = _host_tool_cmd("scp", args)
-
 """
 Effective SSH `User` for `host` from `ssh -G` (config / defaults).
 

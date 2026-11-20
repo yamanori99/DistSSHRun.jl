@@ -178,6 +178,8 @@ end
 # OpenSSH keeps the first value of each option, so these budgets win over
 # `ssh_opts`, including a replacement `DISTRIBUTED_SSH_OPTS`.
 const _SSH_PHASE_CONCURRENCY = 8
+const _SSH_PHASE_ALIVE_INTERVAL = 5
+const _SSH_PHASE_ALIVE_COUNT = 1
 
 mutable struct _CmdRun
     proc::Union{Nothing, Base.Process}
