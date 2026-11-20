@@ -316,7 +316,7 @@ end
 """
     identity_mismatches(parent, other; unsafe_skip_env_digests=false) -> Vector{String}
 
-Same lines as [`go!`](@ref), [(@ref), and [`drive!`](@ref). An empty
+Same lines as [`go!`](@ref) and [`drive!`](@ref). An empty
 vector matches. This does not throw, print, or read `DISTSSH_QUIET`.
 
 Julia version and commit (Julia build), the resolved sysimage path, and
