@@ -82,6 +82,7 @@ function _launch_cpu_target()::Union{Nothing, String}
     return s
 end
 
+"""Provenance and mixer schema id for launch ranks and worker streams (frozen at `1` for 0.2.0)."""
 const SEED_SCHEME = 1
 const DOMAIN_JOB = 0x44535348_4a4f4201
 const DOMAIN_WORKER = 0x44535348_574f524b
@@ -178,7 +179,13 @@ function register_launch_rank!(pid::Integer, rank::Integer)
     return nothing
 end
 
-"""Launch plan rank for a worker pid, or `nothing` when unknown."""
+"""
+Launch plan rank for a worker `pid`, or `nothing` when unknown.
+
+Ranks are fixed before `addprocs` via the launch plan. Provenance lists each
+assigned rank under `provenance.seeds.workers`; the 0.2.0 cluster manager reads
+the same map.
+"""
 function launch_rank(pid::Integer)::Union{Nothing, Int}
     return get(_PID_TO_RANK, Int(pid), nothing)
 end

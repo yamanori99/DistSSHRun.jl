@@ -115,9 +115,10 @@ end
 """
 Per-host SSH launch view (bind address, tunnel flag, resolved topology).
 
-Field names are API for 0.2.0: `host`, `bind`, `tunnel`, `topology`
-(the symbol passed to `Distributed.addprocs`). `bind` is the canonical IPv4 literal
-passed to Distributed; dry-run decorates `0.0.0.0` via `bind_dry_run_display`.
+Field names are API for 0.2.0: `host`, `bind`, `tunnel`, `topology`.
+`topology` is always `:master_worker` from `topology_for_launch` today.
+`bind` is the canonical IPv4 literal passed to Distributed; dry-run decorates
+`0.0.0.0` via `bind_dry_run_display`.
 """
 struct HostLaunchPlan
     host::String
@@ -130,7 +131,6 @@ function resolved_topology(env_val::AbstractString = get(ENV, "DISTSSH_TOPOLOGY"
     v = lowercase(String(strip(env_val)))
     v == "auto" && return :auto
     v == "master_worker" && return :master_worker
-    v == "master-worker" && return :master_worker
     throw(
         ArgumentError(
             join_explained_message(

@@ -65,6 +65,68 @@ Filter = function (x)
 end
 ```
 
+## Cluster manager surface (0.2.0)
+
+0.2.0 freezes the user-visible API the own OpenSSH cluster manager will build on
+in 0.2.x (ControlMaster wiring and sidecar land behind the same names). Today
+[`drive!`](@ref) and [`ride!`](@ref) implement launch over the stock launcher;
+[`LaunchReport`](@ref), ranks, seeds, and config below are the contract.
+
+Partial worker launch is fail-closed unless you pass `best_effort=true` or CLI
+`--best-effort` ([`DriveJobOptions`](@ref) `best_effort`). That replaces legacy
+`--require-all-hosts` spellings.
+
+Scoped `cluster(cfg) do … end` (deterministic worker cleanup on every exit path)
+is tracked for 0.2.x ([#464](https://github.com/yamanori99/DistSSHRun.jl/issues/464)).
+It is not exported in 0.2.0; adding it later is non-breaking.
+
+```@docs
+LaunchReport
+launch_report_planned
+launch_report_joined
+launch_report_failures
+launch_report_usable
+LaunchIncompleteError
+WorkerLaunchOutcome
+HostLaunchFailure
+launch_rank
+SEED_SCHEME
+seed_mix
+worker_seed
+job_item_seed
+worker_pmap
+RunJobConfig
+BoolConfigField
+StringConfigField
+ConfigSource
+resolve_run_job_config
+resolve_run_job_config_from_parsed
+run_option_table
+options_for_command
+unsafe_skip_env_digests_active
+unsafe_expose_port_active
+unsafe_all_to_all_active
+unsafe_skip_env_digests_argv
+with_run_unsafe_options!
+with_unsafe_skip_env_digests
+with_unsafe_expose_port
+with_unsafe_all_to_all
+DriveJobOptions
+HostLaunchPlan
+launch_bind_host_key
+validate_all_host_launch_plans!
+```
+
+[`HostLaunchPlan`](@ref) records per-host `host`, `bind`, `tunnel`, and `topology`
+for dry-run and launch. [`launch_bind_host_key`](@ref) and
+[`validate_all_host_launch_plans!`](@ref) are public (not exported) entry points
+for the same contract; other bind merge and override helpers stay internal.
+
+Controller [`result_provenance`](@ref) / `run.toml` records launch under
+`provenance.launch` (`planned`, `joined`, `failures` with the same keys as
+[`HostLaunchFailure`](@ref)) and ranks under `provenance.seeds` (`scheme`,
+`job`, `workers`, `items`).
+
 ## Pipeline
 
 `pipeline!` chains runs. `collect!` brings the outputs back.
@@ -192,6 +254,16 @@ Filter = function (x)
         :result_content_tree_hash, :result_remote_run_id,
         :ride!, :RideResult, :print_ride,
         :WorkerPlan, :pool!, :ResourcePool, :HostInventory, :print_pool, :print_hostinfo,
+        :LaunchReport, :launch_report_planned, :launch_report_joined, :launch_report_failures,
+        :launch_report_usable, :LaunchIncompleteError, :WorkerLaunchOutcome, :HostLaunchFailure,
+        :launch_rank, :SEED_SCHEME, :seed_mix, :job_item_seed,
+        :RunJobConfig, :BoolConfigField, :StringConfigField, :ConfigSource,
+        :resolve_run_job_config, :resolve_run_job_config_from_parsed,
+        :run_option_table, :options_for_command,
+        :unsafe_skip_env_digests_active, :unsafe_expose_port_active, :unsafe_all_to_all_active,
+        :unsafe_skip_env_digests_argv, :with_run_unsafe_options!, :with_unsafe_skip_env_digests,
+        :with_unsafe_expose_port, :with_unsafe_all_to_all, :DriveJobOptions,
+        :HostLaunchPlan, :launch_bind_host_key, :validate_all_host_launch_plans!,
         :pipeline!, :PipelineConfig, :PipelineResult, :pipeline_config_from_env,
         :report_pipeline_errors,
         :collect!, :CollectResult,
@@ -214,6 +286,7 @@ Filter = function (x)
         # A tuple or a `String` has no `nameof`. The blocks below document these.
         x === DistSSHRun.NO_COMMAND_HINT_LINES && return false
         x === DistSSHRun.RUN_SUBCOMMAND_EXPECTATION && return false
+        x === DistSSHRun.SEED_SCHEME && return false
         return true
     end
     return !(n in grouped)

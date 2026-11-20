@@ -3,17 +3,31 @@
 """Where one field value came from (avoid naming enum members `Env` / `CLI`)."""
 @enum ConfigSource FromCLI FromEnv FromDefault
 
+"""Resolved boolean option value and whether it came from argv, env, or default."""
 struct BoolConfigField
     value::Bool
     source::ConfigSource
 end
 
+"""Resolved string option value and whether it came from argv, env, or default."""
 struct StringConfigField
     value::String
     source::ConfigSource
 end
 
-"""Immutable resolved configuration for go / drive / ride."""
+"""
+Immutable resolved configuration for go / drive / ride.
+
+The 0.2.0 cluster manager reads the `unsafe_*` fields (and their CLI / env
+names from [`run_option_table`](@ref)) plus `topology`. Use
+[`resolve_run_job_config`](@ref) or [`resolve_run_job_config_from_parsed`](@ref)
+to build it; [`print_run_job_config!`](@ref) prints sources.
+
+Field names are API: `unsafe_skip_env_digests`, `unsafe_expose_port`,
+`unsafe_all_to_all`, `unsafe_master_silence_exit`, `print_config`, `dry_run`,
+`topology`, `command`. Each boolean option is a [`BoolConfigField`](@ref)
+(`value` + `source`).
+"""
 struct RunJobConfig
     unsafe_skip_env_digests::BoolConfigField
     unsafe_expose_port::BoolConfigField
