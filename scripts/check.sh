@@ -170,7 +170,7 @@ fi
 gate_ok "pins" "(Runic ${runic_pin}, JETLS ${jetls_pin})" "$((SECONDS - _pins_start))"
 
 gate_env_example() {
-  local os_name arch jver
+  local os_name arch jver want_julia=0
   case "$(uname -s)" in
     Darwin) os_name="macOS $(sw_vers -productVersion 2>/dev/null || echo unknown)" ;;
     Linux)
@@ -183,8 +183,11 @@ gate_env_example() {
     *) os_name="$(uname -s)" ;;
   esac
   arch="$(uname -m)"
+  if [[ -f "${pr_paths:-}" ]] && grep -q '\.jl$' "${pr_paths}"; then
+    want_julia=1
+  fi
   jver=""
-  if [[ -n "${JULIA_BIN:-}" ]] && [[ -x "${JULIA_BIN}" ]]; then
+  if [[ "${want_julia}" == 1 && -n "${JULIA_BIN:-}" && -x "${JULIA_BIN}" ]]; then
     jver="$("${JULIA_BIN}" --startup-file=no -e 'print(VERSION)' 2>/dev/null || true)"
   fi
   if [[ -n "${jver}" ]]; then

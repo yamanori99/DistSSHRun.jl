@@ -831,7 +831,7 @@ function self_test()
     env_hints = pr_body_hints(noenv, "Linux x86_64, Julia 1.13.4")
     any(x -> x == "add env to ## Testing (Linux x86_64, Julia 1.13.4)", env_hints) ||
         die("self-test: pr body testing env hint $(env_hints)")
-    any(x -> startswith(x, "add the OS and Julia version"), pr_body_hints(noenv, "")) ||
+    any(x -> startswith(x, "add the OS to ## Testing"), pr_body_hints(noenv, "")) ||
         die("self-test: pr body testing env hint no example")
     with_env = "## Summary\n\n## Testing\n\nEnvironment: Darwin arm64, Julia 1.13.4.\n\nRan check.\n"
     isempty(pr_body_hints(with_env, "")) || die("self-test: pr body testing env ok")
@@ -1274,7 +1274,7 @@ function pr_body_hints(body::AbstractString, env_example::AbstractString)
         if !testing_has_env_markers(txt)
             ex = strip(env_example)
             if isempty(ex)
-                push!(hints, "add the OS and Julia version to ## Testing")
+                push!(hints, "add the OS to ## Testing")
             else
                 push!(hints, "add env to ## Testing ($ex)")
             end
