@@ -58,11 +58,11 @@ On macOS without Local Network permission for Homebrew `ssh`, use apple-containe
 
 ```bash
 cd /path/to/DistSSHRun.jl
-export ROOT='~/distssh-realhost'          # remote deploy root (same on all workers)
-export HOSTS='2*child-1'                  # example: two workers on child-1; use your lab tokens
-# Container dry run:
-# export HOSTS='child-1 child-2'
+export ROOT='~/distssh-realhost'   # remote deploy root (same on all workers)
+export HOSTS='child-1,child-2'     # CSV of bare host names (one op / one worker each)
 ```
+
+`setup` and `hostinfo` reject `N*host`. `go` and `drive` accept a bare name as one slot or one worker. Quote `--hosts` so the shell does not glob.
 
 From the repo root, every command below uses:
 
@@ -97,12 +97,15 @@ Ship the **current repo** (`.`) into `runs/<run_id>/src/` under `ROOT`.
 
 ```bash
 julia --project=. --startup-file=no -m DistSSHRun setup ship-tree \
-  --deploy-root "$ROOT" --verbose --hosts "$HOSTS"
+  --deploy-root "$ROOT" --verbose --yes --hosts "$HOSTS"
 ```
 
-**Success:** exit 0; log mentions a new run id under `runs/…`. The kit writes
-`last-ship.toml` beside this checkout for the same deploy root, so later steps
-can omit `--run-id` if you keep this tree and `ROOT` unchanged.
+`--yes` skips the `Type 'ship-tree' to confirm` prompt. Without it, a terminal
+must type `ship-tree`. A non-interactive run that does not answer prints
+`Cancelled.` and does not transfer (the process can still exit 0). `--yes`
+does not authorize `setup delete` or `setup prune`.
+
+**Success:** exit 0 and a line `ship-tree complete`. The following `Next:` lines name the run id (`runs/<id>/src`). The kit writes `last-ship.toml` beside this checkout for the same deploy root, so later steps can omit `--run-id` if you keep this tree and `ROOT` unchanged. `content_tree_hash` is the `hash=` value printed before the transfer when the confirm text is shown; with `--yes` that line is omitted and the hash is in the setup log under `.distssh/setup/`.
 
 Copy the **run id** from the log if you need it explicitly (timestamp-style
 directory name under `runs/`).
@@ -118,6 +121,8 @@ If you shipped from a different deploy root or cleared `last-ship.toml`, add
 `--run-id ID` matching the ship step.
 
 **Success:** exit 0; remote project deps resolve on each host.
+
+**This repository:** with `julia --project=.` the root `Manifest.toml` is gitignored, so this step exits 1 and prints `Manifest Manifest.toml is not in the send list`. That is the checkout, not a failed ship. `doctor`, `go`, and `drive` below still select the tree that `ship-tree` wrote. A job whose Manifest is part of the send list should exit 0 here.
 
 ## 5. `doctor --deploy`
 
