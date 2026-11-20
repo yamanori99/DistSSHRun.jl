@@ -215,22 +215,87 @@ function ssh_argv_hit(line::AbstractString)
     return "raw ssh argv"
 end
 
-function lint_ssh_argv(root, files)
+const SSH_BUILDER_CALLEES = ("_ssh_cmd", "_host_tool_cmd", "_host_tool_exe")
+
+function callee_leaf_name(head)
+    if kind(head) == K"."
+        numchildren(head) >= 2 || return nothing
+        right = head[2]
+        kind(right) == K"." && return callee_leaf_name(right)
+        return sourcetext(right)
+    end
+    return sourcetext(head)
+end
+
+function ssh_builder_call(node)
+    kind(node) == K"call" || return false
+    name = callee_leaf_name(node[1])
+    name === nothing && return false
+    return name in SSH_BUILDER_CALLEES
+end
+
+function raw_ssh_argv_node(node)
+    k = kind(node)
+    if k == K"vect"
+        numchildren(node) >= 1 || return false
+        return sourcetext(node[1]) == "\"ssh\""
+    elseif k == K"ref"
+        numchildren(node) >= 2 || return false
+        return sourcetext(node[2]) == "\"ssh\""
+    end
+    return false
+end
+
+function node_touches_added(src, node, added)
+    isempty(added) && return false
+    r = byte_range(node)
+    a = line_of(src, Int(first(r)))
+    b = line_of(src, Int(last(r)))
+    for line in a:b
+        line in added && return true
+    end
+    return false
+end
+
+function lint_ssh_argv(root, files, src_for_path)
     n = 0
     for (path, hunks) in files
         ssh_scan_path(path) || continue
         added = union((added_lines(h) for h in hunks)...)
         isempty(added) && continue
-        full = joinpath(root, path)
-        isfile(full) || continue
-        lines = split(read(full, String), '\n'; keepempty = true)
+        src = src_for_path(path)
+        lines = split(src, '\n'; keepempty = true)
         for i in sort!(collect(added))
             1 <= i <= length(lines) || continue
-            hit = ssh_argv_hit(lines[i])
-            hit === nothing && continue
-            println(stderr, "lint: $(path):$(i): $(hit)")
+            ssh_argv_hit(lines[i]) == "BatchMode" || continue
+            println(stderr, "lint: $(path):$(i): BatchMode")
             n += 1
         end
+        tree = parse_tree(src)
+        function walk(node, in_builder)
+            if in_builder
+                for i in 1:numchildren(node)
+                    walk(node[i], true)
+                end
+                return
+            end
+            if kind(node) == K"call" && ssh_builder_call(node)
+                for i in 1:numchildren(node)
+                    walk(node[i], true)
+                end
+                return
+            end
+            if raw_ssh_argv_node(node) && node_touches_added(src, node, added)
+                a = line_of(src, Int(first(byte_range(node))))
+                println(stderr, "lint: $(path):$(a): raw ssh argv")
+                n += 1
+            end
+            for i in 1:numchildren(node)
+                walk(node[i], false)
+            end
+            return
+        end
+        walk(tree, false)
     end
     return n
 end
@@ -694,6 +759,36 @@ function self_test()
     ssh_argv_hit("-o BatchMode=yes") == "BatchMode" || die("self-test: ssh BatchMode")
     ssh_argv_hit("Cmd([\"ssh\", host])") == "raw ssh argv" || die("self-test: ssh raw argv")
     ssh_argv_hit("_ssh_cmd([\"ssh\", dest])") === nothing || die("self-test: ssh builder argv")
+    scan = "src/DistSSHRun/infra/remote.jl"
+    raw_ml = """
+    Cmd([
+        \"ssh\", host,
+    ])
+    """
+    for (h, msg) in (
+            (Hunk(1, 0, 1, 1, String[]), "multiline cmd first added line"),
+            (Hunk(1, 0, 2, 1, String[]), "multiline cmd ssh added line"),
+        )
+        lint_ssh_argv("", Dict(scan => [h]), _ -> raw_ml) == 1 ||
+            die("self-test: ssh argv $(msg)")
+    end
+    str_ml = """
+    String[
+        \"ssh\", host,
+    ]
+    """
+    lint_ssh_argv("", Dict(scan => [Hunk(1, 0, 1, 1, String[])]), _ -> str_ml) == 1 ||
+        die("self-test: ssh argv multiline String")
+    builder_ml = """
+    _ssh_cmd([
+        \"ssh\", dest,
+    ])
+    """
+    lint_ssh_argv("", Dict(scan => [Hunk(1, 0, 2, 1, String[])]), _ -> builder_ml) == 0 ||
+        die("self-test: ssh argv multiline builder exempt")
+    untouched = "x = 1\nCmd([\"ssh\", host])\n"
+    lint_ssh_argv("", Dict(scan => [Hunk(1, 0, 1, 1, String[])]), _ -> untouched) == 0 ||
+        die("self-test: ssh argv outside added lines")
     ssh_scan_path("lib/DistSSHBase/src/ssh/ssh.jl") && die("self-test: ssh builder scanned")
     ssh_scan_path("src/DistSSHRun/infra/remote.jl") || die("self-test: ssh product scanned")
     aqua_lines = [
@@ -1091,7 +1186,7 @@ function main(args)
     elseif mode == "new-comments"
         lint_new_comments(root, files)
     elseif mode == "ssh-argv"
-        lint_ssh_argv(root, files)
+        lint_ssh_argv(root, files, path -> read(joinpath(root, path), String))
     elseif mode == "aqua-run"
         lint_aqua_run(root, files)
     else
