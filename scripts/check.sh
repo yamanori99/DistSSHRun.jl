@@ -169,6 +169,35 @@ if command -v jetls >/dev/null 2>&1; then
 fi
 gate_ok "pins" "(Runic ${runic_pin}, JETLS ${jetls_pin})" "$((SECONDS - _pins_start))"
 
+gate_env_example() {
+  local os_name arch jver
+  case "$(uname -s)" in
+    Darwin) os_name="macOS $(sw_vers -productVersion 2>/dev/null || echo unknown)" ;;
+    Linux) os_name="Linux" ;;
+    *) os_name="$(uname -s)" ;;
+  esac
+  arch="$(uname -m)"
+  jver=""
+  if [[ -n "${JULIA_BIN:-}" ]] && [[ -x "${JULIA_BIN}" ]]; then
+    jver="$("${JULIA_BIN}" --startup-file=no -e 'print(VERSION)' 2>/dev/null || true)"
+  fi
+  if [[ -n "${jver}" ]]; then
+    printf '%s %s, Julia %s' "${os_name}" "${arch}" "${jver}"
+  else
+    printf '%s %s' "${os_name}" "${arch}"
+  fi
+}
+
+pr_body_print_hints() {
+  local body_file="$1"
+  local env_ex
+  env_ex="$(gate_env_example)"
+  while IFS= read -r hint; do
+    [[ -z "${hint}" ]] && continue
+    gate_note "pr body: ${hint}"
+  done < <("${ROOT}/scripts/lint/run.sh" pr-body-hints "${body_file}" "${env_ex}")
+}
+
 _pr_start=$SECONDS
 pr_paths="$(mktemp)"
 pr_body="$(mktemp)"
@@ -184,6 +213,7 @@ if gh pr view --json body --jq .body >"${pr_body}" 2>"${pr_err}"; then
     section "check: pr body"
     "${ROOT}/scripts/lint/run.sh" pr-body "${pr_paths}" "${pr_body}"
     section "check: pr body ok"
+    pr_body_print_hints "${pr_body}"
   else
     set +e
     "${ROOT}/scripts/lint/run.sh" pr-body "${pr_paths}" "${pr_body}" >"${pr_log}" 2>&1
@@ -193,6 +223,7 @@ if gh pr view --json body --jq .body >"${pr_body}" 2>"${pr_err}"; then
       gate_fail_show "pr body" "${pr_log}" "${pr_rc}"
     fi
     gate_ok "pr body" "" "$((SECONDS - _pr_start))"
+    pr_body_print_hints "${pr_body}"
   fi
 elif grep -q 'no pull requests found' "${pr_err}"; then
   if [[ "${CHECK_VERBOSE}" == 1 ]]; then
@@ -268,6 +299,10 @@ if [[ "${CHECK_VERBOSE}" != 1 ]]; then
   fi
   rm -f "${_lint_log}"
   gate_ok "lint" "(${#lint_names[@]} modes)" "$((SECONDS - _lint_start))"
+fi
+
+if git diff --name-only origin/main...HEAD | grep -q '^scripts/lint/'; then
+  gate_capture "lint self-test" "${ROOT}/scripts/lint/run.sh" self-test
 fi
 
 gate_capture "docs static" "${ROOT}/scripts/docs.sh" static

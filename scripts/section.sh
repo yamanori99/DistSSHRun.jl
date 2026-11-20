@@ -23,6 +23,10 @@ _gate_pending() {
   printf '..    %s\n' "$1"
 }
 
+gate_note() {
+  printf 'note  %s\n' "$1"
+}
+
 gate_ok() {
   local label="$1"
   local detail="${2:-}"
