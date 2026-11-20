@@ -644,9 +644,9 @@ function self_test()
     workflow_job_title(aqua_lines, 7) == "Aqua (1.13, ubuntu-latest, x64)" ||
         die("self-test: aqua job title")
     aqua_run_hit("Aqua (1.13, ubuntu-latest, x64)", "        run: ./.github/aqua-check.sh") ===
-    nothing || die("self-test: aqua-check allowed")
+        nothing || die("self-test: aqua-check allowed")
     aqua_run_hit("Aqua (1.13, ubuntu-latest, x64)", "        run: julia extra.jl") ==
-    "Aqua job run is not aqua-check.sh" || die("self-test: aqua extra run")
+        "Aqua job run is not aqua-check.sh" || die("self-test: aqua extra run")
     println("self-test: passed")
     return 0
 end
