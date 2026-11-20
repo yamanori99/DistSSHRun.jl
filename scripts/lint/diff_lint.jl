@@ -101,7 +101,7 @@ function added_lines(hunks::Vector{Hunk})
     return out
 end
 
-function register_diff_header!(files::Dict{String, Vector{Hunk}}, line::AbstractString, path::String)
+function register_diff_header!(files::Dict{String, Vector{Hunk}}, line::AbstractString, path::AbstractString)
     m = match(r"^diff --git a/(.+) b/\1$", line)
     if m !== nothing
         c1 = m.captures[1]

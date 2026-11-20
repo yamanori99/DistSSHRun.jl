@@ -12,6 +12,9 @@ outputs:
   version_cut:
     description: true when this PR raises Project.toml version
     value: ${{ steps.version.outputs.cut }}
+  scripts:
+    description: true when scripts/** changed on a pull request (light CI only)
+    value: ${{ steps.out.outputs.scripts }}
 
 runs:
   using: composite
@@ -43,6 +46,14 @@ runs:
             - "!docs/**"
             - "!test/**/*.md"
             - "!testenv/**/*.md"
+            - "!.agents/**"
+            - "!.claude/**"
+            - "!.cursor/**"
+            - "!scripts/lint/**"
+            - "!scripts/check.sh"
+            - "!scripts/julia.sh"
+            - "!scripts/pre-push.sh"
+            - "!scripts/docs.sh"
           docs:
             - "docs/**"
             - "README.md"
@@ -51,6 +62,9 @@ runs:
             - "src/**"
             - "lib/**"
             - "Project.toml"
+            - "scripts/docs.sh"
+          scripts:
+            - "scripts/**"
     - id: version
       shell: bash
       env:
@@ -99,6 +113,7 @@ runs:
       env:
         HEAVY: ${{ steps.filter.outputs.heavy }}
         DOCS: ${{ steps.filter.outputs.docs }}
+        SCRIPTS: ${{ steps.filter.outputs.scripts }}
         # Project.toml version went up. Path skips do not apply.
         CUT: ${{ steps.version.outputs.cut }}
         RELEASE_ONLY: ${{ steps.release.outputs.only }}
@@ -107,18 +122,22 @@ runs:
           if [ "${RELEASE_ONLY}" = "true" ]; then
             echo "heavy=false" >> "$GITHUB_OUTPUT"
             echo "docs=true" >> "$GITHUB_OUTPUT"
+            echo "scripts=false" >> "$GITHUB_OUTPUT"
             echo "release-only push: heavy=false docs=true"
           else
             echo "heavy=true" >> "$GITHUB_OUTPUT"
             echo "docs=true" >> "$GITHUB_OUTPUT"
+            echo "scripts=false" >> "$GITHUB_OUTPUT"
             echo "non-PR: heavy=true docs=true"
           fi
         elif [ "${CUT}" = "true" ]; then
           echo "heavy=true" >> "$GITHUB_OUTPUT"
           echo "docs=true" >> "$GITHUB_OUTPUT"
+          echo "scripts=false" >> "$GITHUB_OUTPUT"
           echo "PR version cut: heavy=true docs=true"
         else
           echo "heavy=${HEAVY}" >> "$GITHUB_OUTPUT"
           echo "docs=${DOCS}" >> "$GITHUB_OUTPUT"
-          echo "PR: heavy=${HEAVY} docs=${DOCS}"
+          echo "scripts=${SCRIPTS:-false}" >> "$GITHUB_OUTPUT"
+          echo "PR: heavy=${HEAVY} docs=${DOCS} scripts=${SCRIPTS:-false}"
         fi
