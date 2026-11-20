@@ -12,7 +12,8 @@ end
 
 using DistSSHRun
 
-# #57 exported `parse_ride_args`. Remaining entries wait for #201.
+# #57 exported `parse_ride_args`. #509 removes ride; followers drop src refs (#509).
+# Remaining entries wait for #201.
 # #201 is the public-surface freeze. `main` is public, so it is not listed.
 const DOWNSTREAM_PUBLIC_ALLOW = Dict{Tuple{Symbol, Symbol}, Int}(
     (:DistSSHBase, :_ssh_host_args) => 201,
@@ -34,6 +35,7 @@ const DOWNSTREAM_PUBLIC_ALLOW = Dict{Tuple{Symbol, Symbol}, Int}(
     (:DistSSHRun, :kit_progress_latest) => 201,
     (:DistSSHRun, :kit_verbosity) => 201,
     (:DistSSHRun, :parse_pool_args) => 201,
+    (:DistSSHRun, :parse_ride_args) => 509,
     (:DistSSHRun, :print_header) => 201,
     (:DistSSHRun, :print_warn) => 201,
     (:DistSSHRun, :resolve_distributed_output_dir!) => 201,

@@ -9,8 +9,8 @@ is the [DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/stable/).
 
 ## Run
 
-`go!` runs a script as-is on one or more slots. `drive!` runs a driver
-script on workers.
+`go!` runs a script as-is on one or more slots. `drive!` loads a driver
+script on the controller and runs it across workers.
 
 ```@autodocs
 Modules = [DistSSHRun]

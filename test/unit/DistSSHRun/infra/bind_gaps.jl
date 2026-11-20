@@ -74,8 +74,8 @@ using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
                     parsed;
                     command = :drive,
                     project = proj,
-                    hosts = parsed.hosts,
-                    worker_tokens = parsed.hosts,
+                    hosts = String[first(h) for h in parsed.hosts],
+                    worker_tokens = DistSSHRun.host_tokens(parsed; kind = :drive),
                 )
             catch e
                 e

@@ -40,6 +40,6 @@ values fail closed (exit 2 on the CLI, not softened by `--best-effort`).
 |----------|-------------|
 | `--unsafe-heterogeneous` | `--unsafe-skip-env-digests` |
 | `--allow-mismatch` | `--unsafe-skip-env-digests` (digests only) |
-| `-p` / `-pN` (drive, go) | No short alias: `--local-workers N` (drive) or `--local-slots N` (go) |
+| `-p` / `-pN` (drive, go) | No short alias: `--head-workers N` (drive) or `--head-slots N` (go) |
 | `-l`, `--local` | SSH user as `user@host` in a hosts file |
 | `-L` | `host:port` in a hosts file or SSH config (no `-L` forwarding flag) |

@@ -246,8 +246,8 @@ runs `juliaup update` even when the channel name already matches.
 julia -m DistSSHRun setup check host1
 julia -m DistSSHRun go SCRIPT.jl
 julia -m DistSSHRun drive --head-workers 2 parent:2 SCRIPT.jl
-julia -m DistSSHRun drive --local-workers 2 SCRIPT.jl
-julia -m DistSSHRun go --local-slots 2 SCRIPT.jl
+julia -m DistSSHRun drive --head-workers 2 SCRIPT.jl
+julia -m DistSSHRun go --head-slots 2 SCRIPT.jl
 julia -m DistSSHRun hostinfo parent
 julia -m DistSSHRun pool
 ```

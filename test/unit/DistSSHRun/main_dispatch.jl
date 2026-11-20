@@ -64,7 +64,7 @@ using Test
     end
     let (code, _, err) = _main_capture(["--head-workers", "2", "job.jl"])
         @test code == 2
-        @test occursin("does not infer go or drive", err)
+        @test occursin("Unknown subcommand: --head-workers", err)
     end
     let (code, _, err) = _main_capture(["rysnc", "host1"])
         @test code == 2

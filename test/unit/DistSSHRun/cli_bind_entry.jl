@@ -92,10 +92,7 @@ const _CLI_BIND_FAKE_SSH =
                     empty!(ARGS)
                     append!(
                         ARGS,
-                        String[
-                            "-y", "--hosts-file", hosts_path, "--head-workers", "0",
-                            "1*alice@mac-b", basename(script),
-                        ],
+                        String["-y", "--hosts-file", hosts_path, basename(script)],
                     )
                     return redirect_stdout(devnull) do
                         redirect_stderr(devnull) do
