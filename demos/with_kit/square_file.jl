@@ -1,8 +1,8 @@
 #!/usr/bin/env julia
 # DistSSHRun driver: pmap p→p² and write CSV (pair with square_echo.jl).
 #
-#   julia --project=. -m DistSSHRun drive parent:2 distsshkit_demos/with_kit/square_file.jl
-#   julia --project=. -m DistSSHRun drive parent:2 distsshkit_demos/with_kit/square_file.jl --n 4
+#   julia --project=. -m DistSSHRun drive --local-workers 2 distsshkit_demos/with_kit/square_file.jl
+#   julia --project=. -m DistSSHRun drive --local-workers 2 distsshkit_demos/with_kit/square_file.jl --n 4
 
 using Distributed
 import TOML

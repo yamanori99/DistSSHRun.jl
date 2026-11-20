@@ -16,7 +16,7 @@ if !isdefined(Main, :_assert_no_binding_world_stderr!)
         hit = _binding_world_age_warning_text(text)
         hit === nothing && return nothing
         error(
-            "Julia binding world-age warning in test file $(rel): stderr contains $(repr(hit))",
+            "Julia binding world-age warning in test file $(rel): stderr contains $(repr(hit))"
         )
     end
 end

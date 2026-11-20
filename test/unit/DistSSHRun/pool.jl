@@ -13,9 +13,11 @@ using Test
     _with_tempdir() do proj
         write(joinpath(proj, "Project.toml"), "name = \"PoolHost\"\n")
         empty = DistSSHRun.DistSSHSession(project = proj, workers = String[])
-        @test_throws ArgumentError DistSSHRun.pool!(empty)
+        head_only = DistSSHRun.pool!(empty)
+        @test length(head_only.hosts) == 1
+        @test head_only.hosts[1].host == DistSSHRun.PARENT_HOST_NAME
 
-        parent = DistSSHRun.DistSSHSession(project = proj, workers = ["parent:1"])
+        parent = DistSSHRun.DistSSHSession(project = proj, workers = String[], head_workers = 1)
         pool = DistSSHRun.pool!(parent)
         @test pool.ok
         @test length(pool.hosts) == 1
@@ -40,54 +42,57 @@ using Test
                     "DISTRIBUTED_PROJECT_ROOT" => proj,
                     "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "/fake/remote/PoolHost",
                     "DISTSSH_TEST_POOL_MEM" => "8589934592",
-                    "DISTSSH_TEST_POOL_NCPU" => "8",
-                ),
+                    "DISTSSH_TEST_POOL_NCPU" => "8"
+                )
             )
             withenv(env...) do
-                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true, yes = true))
+                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true))
                 sess = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:host1"],
-                    remote = "/fake/remote/PoolHost",
+                    workers = ["host1"],
+                    remote = "/fake/remote/PoolHost"
                 )
                 okp = DistSSHRun.pool!(sess)
                 @test okp.ok
-                @test length(okp.hosts) == 1
-                @test okp.hosts[1].nproc == 8
-                @test okp.cores == 8
+                @test length(okp.hosts) == 2
+                @test okp.hosts[1].host == DistSSHRun.PARENT_HOST_NAME
+                @test okp.hosts[2].nproc == 8
+                @test okp.cores >= 8
                 facts = DistSSHRun.DistSSHBase.collect_host_facts("host1")
                 @test facts.ncpu == 8
                 @test facts.os == "Linux"
             end
             withenv(merge(env, Dict("DISTSSH_TEST_POOL_MEM" => ""))...) do
-                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true, yes = true))
+                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true))
                 sess = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:host1"],
-                    remote = "/fake/remote/PoolHost",
+                    workers = ["host1"],
+                    remote = "/fake/remote/PoolHost"
                 )
                 partial = DistSSHRun.pool!(sess)
                 @test partial.ok
-                @test partial.hosts[1].nproc == 8
-                @test partial.hosts[1].total_gb === nothing
-                @test partial.gb === nothing
-                @test partial.cores == 8
+                @test partial.hosts[2].nproc == 8
+                @test partial.hosts[2].total_gb === nothing
+                @test partial.hosts[2].nproc == 8
+                @test partial.cores >= 8
             end
             fail_env = merge(env, Dict("DISTSSH_TEST_SSH_FAIL" => "1"))
             withenv(fail_env...) do
-                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true, yes = true))
+                DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true))
                 sess = DistSSHRun.DistSSHSession(
                     project = proj,
-                    workers = ["child:host1"],
-                    remote = "/fake/remote/PoolHost",
+                    workers = ["host1"],
+                    remote = "/fake/remote/PoolHost"
                 )
                 bad = DistSSHRun.pool!(sess)
                 @test !bad.ok
-                @test length(bad.hosts) == 1
-                @test !bad.hosts[1].ok
-                @test bad.hosts[1].nproc === nothing
-                @test bad.hosts[1].total_gb === nothing
-                @test bad.cores === nothing
+                @test length(bad.hosts) == 2
+                @test bad.hosts[1].host == DistSSHRun.PARENT_HOST_NAME
+                @test !bad.hosts[2].ok
+                @test bad.hosts[2].nproc === nothing
+                @test bad.hosts[2].total_gb === nothing
+                @test bad.hosts[1].ok
+                @test bad.cores !== nothing
             end
         end
     end

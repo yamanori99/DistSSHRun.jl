@@ -127,10 +127,8 @@ ecosystem daily uses. The sandbox is Debian bookworm without `tzdata`, with
 `LANG=C.UTF-8`, a pipe for stdout, and a 45 minute test limit. Daily uses
 the General tarball. This recipe mounts this checkout read-only, and
 dependencies resolve from General, so an unreleased DistSSHQueue change is
-not in the sandbox. This package:
-<https://juliaci.github.io/NanosoldierReports/pkgeval_badges/D/DistSSHRun.html>
-Latest ecosystem report:
-<https://juliaci.github.io/NanosoldierReports/pkgeval_badges/report.html>
+not in the sandbox. This package's public daily is <https://pkgeval-reports.julialang.org/>.
+That daily tests the registered release on Julia master, not this repository's main.
 Run it on Linux with cgroup v2 and unprivileged user namespaces, before a
 General cut. The host Julia is 1.13 or newer. PkgEval is not in General,
 so this adds it from its repository. The tested Julia is the published
@@ -163,6 +161,14 @@ julia -e '
   exit(result.status == :test ? 0 : 1)
 '
 ```
+
+## Real host
+
+Manual developer smoke on **your** SSH machines (lab Mac minis, or the
+docker-ssh / apple-container workers as a dry run). Not CI and not
+`test/e2e.jl`.
+
+[`testenv/real-host/README.md`](../testenv/real-host/README.md)
 
 ## SSH E2E
 
@@ -235,7 +241,7 @@ only return numbers. Collect tests use files workers write.
 - `kit.progress`: `kit_progress_latest` last event is `done` after demo
   drive / go
 - worker `error(...)`: non-zero
-- mixed `parent:1` + two remotes: smoke `nw=3`
+- mixed `--local-workers 1` + two remotes: smoke `nw=3`
 - in-process `drive!` twice (reentrant): each call `nw=2`; no worker
   leak (#144)
 - detached drive SIGKILL: wait until heartbeat monitors start, then
@@ -293,7 +299,7 @@ ephemeral project unless `project_root` is set (E2E uses
 Tests follow the same two surfaces as the kit. No extra test harness:
 
 - CLI (`setup` / `go` / `drive` / `hostinfo`), `DistSSHSession(workers=…)`, and
-  hosts files use placement tokens (`parent:2`, `child:host-a:4`).
+  hosts files use placement tokens (`--local-workers 2`, `child:host-a:4`).
   setup / hostinfo ignore `:N`; `up` accepts `parent`
 - Internal SSH names stay bare (`host-a`): `session.hosts`,
   `HostRunResult.host`, collect-only `HOST`, and fake SSH trees

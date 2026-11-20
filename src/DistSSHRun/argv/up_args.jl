@@ -3,22 +3,23 @@ function show_up_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "juliaup verbs: add, default, update, status.",
-        "Hosts: child:NAME[:N] and parent[:N] (:N ignored).",
+        "Hosts: plain SSH names (optional :N suffix is stripped; counts belong on drive/go/ride).",
+        "Omit hosts to touch only this machine (kit parent / local juliaup).",
         "add installs a channel. default switches to it.",
         "update with no channel updates every installed channel.",
         "status prints one line per host (channel, installed patch, available update).",
-        "A worker line also says how that patch sits against the parent. The parent line does not.",
+        "A worker line also says how that patch sits against the local controller. The controller line does not.",
         "--verbose also prints the juliaup rows. Skew in that line is not an error.",
     )
     print_help_blank(io)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  $(cli_m_project()) up add 1.13 child:host1",
-        "  up default 1.13 parent",
-        "  up update child:host1",
-        "  up update 1.13 parent",
-        "  up status parent",
+        "  $(cli_m_project()) up add 1.13 host1",
+        "  up default 1.13 $(kit_head_host_label())",
+        "  up update host1",
+        "  up update 1.13",
+        "  up status",
     )
     print_help_blank(io)
     print_help_section("Options"; io = io)
@@ -28,7 +29,7 @@ function show_up_usage(; io::IO = stdout)
         "  $(KIT_PROGRESS_FLAG_HELP)",
         "  $(KIT_VERBOSE_FLAG_HELP)",
         "  -y, --yes           skip confirmations",
-        "  --hosts CSV          child:NAME[:N] or parent[:N] (:N stripped)",
+        "  --hosts CSV          plain host names (:N suffix stripped)",
         "  --hosts-file PATH    one token per line (:N stripped)",
         "  --version, -v        print version and exit",
     )
@@ -39,9 +40,58 @@ function show_up_usage(; io::IO = stdout)
     )
 end
 
-function _up_host_token(arg::AbstractString)::Bool
-    a = String(arg)
-    return a == "parent" || startswith(a, "parent:") || startswith(a, "child:")
+function _looks_like_up_channel(arg::AbstractString)::Bool
+    s = String(strip(arg))
+    occursin(r"^\d+\.\d+", s) && return true
+    s in ("release", "lts", "nightly", "alpha", "beta", "rc") && return true
+    return false
+end
+
+function _looks_like_up_host(arg::AbstractString)::Bool
+    s = String(strip(arg))
+    is_parent_host_name(s) && return true
+    findfirst('*', s) !== nothing && return true
+    colon = findfirst(':', s)
+    if colon !== nothing
+        base = strip(s[1:(colon - 1)])
+        is_parent_host_name(base) && return true
+    end
+    try
+        DistSSHBase.parse_machine_token(s)
+        return true
+    catch
+        return false
+    end
+end
+
+function _up_absorb_host!(hosts::Vector{String}, arg::AbstractString)
+    s = String(strip(arg))
+    star = findfirst('*', s)
+    star !== nothing && (s = String(strip(s[(star + 1):end])))
+    throw_legacy_placement_token(s)
+    if is_parent_host_name(s)
+        push!(hosts, PARENT_HOST_NAME)
+        return nothing
+    end
+    colon = findfirst(':', s)
+    if colon !== nothing
+        base = strip(s[1:(colon - 1)])
+        is_parent_host_name(base) && throw(
+            ArgumentError(
+                join_explained_message(
+                    "up: $(repr(arg)) was removed",
+                    "Use plain host names; optional :N is ignored. " *
+                        "For this machine omit the host or pass --hosts $(PARENT_HOST_NAME).",
+                ),
+            ),
+        )
+        s = String(strip(s[(colon + 1):end]))
+        isempty(s) && throw(ArgumentError("up: empty host after ':' in $(repr(arg))"))
+    end
+    p = DistSSHBase.parse_machine_token(s)
+    dest = String(p.dest)
+    push!(hosts, is_parent_host_name(dest) ? PARENT_HOST_NAME : dest)
+    return nothing
 end
 
 function parse_up_args(args::Vector{String})
@@ -67,18 +117,23 @@ function parse_up_args(args::Vector{String})
             throw(ArgumentError("unknown up option: $(arg)"))
         elseif isempty(verb)
             throw(ArgumentError("up needs add, default, update, or status: $(cli_m()) up add 1.13 …"))
-        elseif channel === nothing && !_up_host_token(arg)
+        elseif channel === nothing && verb in ("add", "default")
+            channel = arg
+            cli_consume!(c)
+        elseif channel === nothing && verb == "update" &&
+                (_looks_like_up_channel(arg) || !_looks_like_up_host(arg))
             channel = arg
             cli_consume!(c)
         else
-            let p = parse_placement_token(arg)
-                push!(hosts, p.role === :parent ? PARENT_HOST_NAME : p.name)
-            end
+            _up_absorb_host!(hosts, arg)
             cli_consume!(c)
         end
     end
-    if !isempty(verb) && verb in ("add", "default") && channel === nothing && !show_help
-        throw(ArgumentError("$verb needs a channel: $(cli_m()) up $verb 1.13 …"))
+    if !isempty(verb) && verb in ("add", "default") && !show_help
+        channel === nothing &&
+            throw(ArgumentError("$verb needs a channel: $(cli_m()) up $verb 1.13 …"))
+        is_parent_host_name(something(channel, "")) &&
+            throw(ArgumentError("$verb needs a channel: $(cli_m()) up $verb 1.13 …"))
     end
 
     append_kit_host_sources!(hosts, cli_session; keep_counts = false, roles = true)

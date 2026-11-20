@@ -1,0 +1,3 @@
+category: fixed
+
+- `OpenSSL_jll` compat is `3.5`, so Julia 1.13.0 and 1.13.1 can instantiate. The previous `3.5.8` pin only matched the stdlib from 1.13.2.

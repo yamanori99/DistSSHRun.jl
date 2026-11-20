@@ -14,6 +14,7 @@ const _LAUNCH_UNSET_ENV = (
 const _LAUNCH_LOAD_PATH = "@:@stdlib"
 
 function worker_load_path(; ssh::Bool = false)::String
+    # Remote workers: job packages load via `--project=` only.
     ssh && return _LAUNCH_LOAD_PATH
     extras = String[]
     ap = Base.active_project()
@@ -81,12 +82,27 @@ function _launch_cpu_target()::Union{Nothing, String}
     return s
 end
 
+"""Provenance and mixer schema id for launch ranks and worker streams (frozen at `1` for 0.2.0)."""
+const SEED_SCHEME = 1
+const DOMAIN_JOB = 0x44535348_4a4f4201
+const DOMAIN_WORKER = 0x44535348_574f524b
+const DOMAIN_ITEM = 0x44535348_4954454d
+
 const _JOB_SEED = Ref{Union{Nothing, UInt64}}(nothing)
-const _NEXT_WORKER_RANK = Ref(1)
+const _PLANNED_RANK_QUEUE = Int[]
 const _ASSIGNED_RANKS = Int[]
+const _PID_TO_RANK = Dict{Int, Int}()
 const _NEXT_PMAP_CALL = Ref(1)
 const _ITEM_MAP = Dict{Tuple{Int, Int}, Int}()
 const _ITEM_LOCK = ReentrantLock()
+
+"""Splitmix-style mix for reproducible seeds (never `Base.hash`)."""
+function seed_mix(domain::UInt64, a::UInt64, b::UInt64)::UInt64
+    x = xor(domain, xor(a, b * 0x9E3779B97F4A7C15))
+    x = xor(x, x >> 30) * 0xBF58476D1CE4E5B9
+    x = xor(x, x >> 27) * 0x94D049BB133111EB
+    return xor(x, x >> 31)
+end
 
 """One seed for this run. `DISTSSH_JOB_SEED` wins when it is a `UInt64`."""
 function job_seed()::UInt64
@@ -98,31 +114,80 @@ function job_seed()::UInt64
     return seed
 end
 
-"""Stable worker seed from the job seed and a launch rank. Does not read `myid()`."""
+"""Job-wide stream seed (`SEED_SCHEME` 1)."""
+function job_domain_seed(job::Integer)::UInt64
+    return seed_mix(DOMAIN_JOB, UInt64(job), UInt64(SEED_SCHEME))
+end
+
+"""Stable worker seed from the job seed and a plan rank. Does not read `myid()`."""
 function worker_seed(job::Integer, rank::Integer)::UInt64
     rank >= 1 || throw(ArgumentError("worker rank must be ≥ 1, got $rank"))
-    x = xor(UInt64(job), UInt64(rank) * 0x9E3779B97F4A7C15)
-    x = xor(x, x >> 30) * 0xBF58476D1CE4E5B9
-    x = xor(x, x >> 27) * 0x94D049BB133111EB
-    return xor(x, x >> 31)
+    return seed_mix(DOMAIN_WORKER, UInt64(job), UInt64(rank))
 end
 
-function take_worker_rank()::Int
-    rank = _NEXT_WORKER_RANK[]
-    _NEXT_WORKER_RANK[] = rank + 1
-    push!(_ASSIGNED_RANKS, rank)
-    return rank
+"""Per `worker_pmap` item stream seed (`SEED_SCHEME` 1)."""
+function job_item_seed(job::Integer, call::Integer, item::Integer)::UInt64
+    tag = xor(UInt64(call), UInt64(item) * 0x9E3779B97F4A7C15)
+    return seed_mix(DOMAIN_ITEM, UInt64(job), tag)
 end
 
-function reset_worker_seeds!()
+"""Plan-fixed ranks before launch (local head slots, then each host in order)."""
+function build_launch_rank_plan(
+        head_workers::Integer,
+        hosts::AbstractVector{<:Tuple{<:AbstractString, Union{Integer, Nothing}}},
+        default_workers::Integer,
+    )::Vector{Int}
+    out = Int[]
+    hw = Int(head_workers)
+    hw > 0 && append!(out, 1:hw)
+    def = Int(default_workers)
+    for (_, spec) in hosts
+        n = spec === nothing ? def : Int(spec)
+        n > 0 && append!(out, (length(out) + 1):(length(out) + n))
+    end
+    return out
+end
+
+function reset_launch_rank_plan!(ranks::AbstractVector{<:Integer})
     _JOB_SEED[] = nothing
-    _NEXT_WORKER_RANK[] = 1
+    empty!(_PLANNED_RANK_QUEUE)
+    append!(_PLANNED_RANK_QUEUE, Int.(collect(ranks)))
     empty!(_ASSIGNED_RANKS)
+    empty!(_PID_TO_RANK)
     lock(_ITEM_LOCK) do
         _NEXT_PMAP_CALL[] = 1
         empty!(_ITEM_MAP)
     end
     return nothing
+end
+
+function reset_worker_seeds!()
+    return reset_launch_rank_plan!(Int[])
+end
+
+function take_worker_rank()::Int
+    isempty(_PLANNED_RANK_QUEUE) && throw(
+        ArgumentError("launch rank plan exhausted (internal); call reset_launch_rank_plan! first"),
+    )
+    rank = popfirst!(_PLANNED_RANK_QUEUE)
+    push!(_ASSIGNED_RANKS, rank)
+    return rank
+end
+
+function register_launch_rank!(pid::Integer, rank::Integer)
+    _PID_TO_RANK[Int(pid)] = Int(rank)
+    return nothing
+end
+
+"""
+Launch plan rank for a worker `pid`, or `nothing` when unknown.
+
+Ranks are fixed before `addprocs` via the launch plan. Provenance lists each
+assigned rank under `provenance.seeds.workers`; the 0.2.0 cluster manager reads
+the same map.
+"""
+function launch_rank(pid::Integer)::Union{Nothing, Int}
+    return get(_PID_TO_RANK, Int(pid), nothing)
 end
 
 """One id per `worker_pmap` call, taken on process 1 before `pmap` starts."""
@@ -146,6 +211,58 @@ function _explicit_blas_threads()::Union{Nothing, String}
     raw = strip(get(ENV, "DISTSSH_BLAS_THREADS", ""))
     isempty(raw) && return nothing
     return raw
+end
+
+"""Positive `DISTSSH_BLAS_THREADS` when set; else `nothing`."""
+function _requested_worker_blas_count()::Union{Nothing, Int}
+    raw = _explicit_blas_threads()
+    raw === nothing && return nothing
+    n = tryparse(Int, raw)
+    (n === nothing || n < 1) &&
+        throw(ArgumentError("DISTSSH_BLAS_THREADS must be a positive integer, got $(repr(raw))"))
+    return n
+end
+
+"""`addprocs` keyword args for BLAS threading on workers."""
+function worker_addprocs_blas_kwargs()::NamedTuple
+    _requested_worker_blas_count() === nothing && return NamedTuple()
+    return (enable_threaded_blas = true,)
+end
+
+const _WORKER_PKG_UUID = Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f")
+const _WORKER_PKG_PRECOMPILE_EXPR = :(
+    let
+        pkg = Base.PkgId($(_WORKER_PKG_UUID), "Pkg")
+        mod = Base.invokelatest(Base.require, pkg)
+        Base.invokelatest(() -> mod.precompile(; io = devnull))
+        nothing
+    end
+)
+
+function _worker_blas_apply_expr(n::Int)
+    return :((using LinearAlgebra; BLAS.set_num_threads($(n)); BLAS.get_num_threads()))
+end
+
+function _apply_worker_blas_threads!(wids::AbstractVector{<:Integer})
+    want = _requested_worker_blas_count()
+    want === nothing && return nothing
+    ex_set = _worker_blas_apply_expr(want)
+    for wid in wids
+        w = Int(wid)
+        actual = remotecall_fetch(Core.eval, w, Main, ex_set)
+        actual == want && continue
+        host = remotecall_fetch(Core.eval, w, Main, :(gethostname()))
+        rank_s = remotecall_fetch(
+            Core.eval,
+            w,
+            Main,
+            :(get(ENV, "DISTSSH_WORKER_RANK", string(myid()))),
+        )
+        error(
+            "BLAS thread count on $(host) (rank $(rank_s)): requested $(want), got $(actual)",
+        )
+    end
+    return nothing
 end
 
 """Flags every worker / go slot gets (`--project=` plus pin flags)."""
@@ -280,8 +397,12 @@ function ssh_worker_exename(julia_path::AbstractString)::Cmd
     return Cmd(argv)
 end
 
+function ssh_addprocs_machine_bind(host::AbstractString, bind::AbstractString)::String
+    return string(ssh_addprocs_machine(host), " ", String(strip(bind)))
+end
+
 function ssh_addprocs_bind_localhost(host::AbstractString)::String
-    return string(ssh_addprocs_machine(host), " 127.0.0.1")
+    return ssh_addprocs_machine_bind(host, "127.0.0.1")
 end
 
 function ssh_tunnel_enabled()::Bool
@@ -358,22 +479,61 @@ function ensure_run_cluster_cookie!()::Nothing
     return nothing
 end
 
-function _precompile_worker_project!(wid::Int)
-    try
-        remotecall_wait(wid) do
-            Base.require(Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
-            mod = Base.loaded_modules[
-                Base.PkgId(
-                    Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"),
-                    "Pkg",
-                ),
-            ]
-            mod.precompile(; io = devnull)
-            return nothing
-        end
+function _worker_precompile_rank(wid::Int)::String
+    return try
+        string(
+            remotecall_fetch(
+                Core.eval,
+                wid,
+                Main,
+                :(get(ENV, "DISTSSH_WORKER_RANK", string(myid()))),
+            ),
+        )
     catch
+        string(wid)
     end
+end
+
+function _worker_precompile_host(wid::Int)::String
+    return try
+        string(remotecall_fetch(Core.eval, wid, Main, :(gethostname())))
+    catch
+        return "worker $wid"
+    end
+end
+
+function _warn_worker_project_precompile!(
+        wid::Int,
+        project::AbstractString,
+        headline::AbstractString;
+        err::Union{Nothing, Exception} = nothing,
+    )::Nothing
+    host = _worker_precompile_host(wid)
+    rank = _worker_precompile_rank(wid)
+    proj = String(project)
+    msg = "Warning: worker project precompile on $(host) (rank $(rank)), project=$(proj): $(headline)"
+    err === nothing || (msg *= "\n$(sprint(showerror, err))")
+    print_warn(msg * "\n"; io = stderr)
     return nothing
+end
+
+function _precompile_worker_project!(wid::Int, project::AbstractString)::Bool
+    p = String(project)
+    if !isdir(p) || !Base.Filesystem.iswritable(p)
+        _warn_worker_project_precompile!(
+            wid,
+            p,
+            "project directory is not writable; precompile not attempted",
+        )
+        return true
+    end
+    try
+        remotecall_wait(Core.eval, wid, Main, _WORKER_PKG_PRECOMPILE_EXPR)
+        return true
+    catch e
+        _warn_worker_project_precompile!(wid, p, "precompile failed"; err = e)
+        return false
+    end
 end
 
 function go_slot_julia_argv(
@@ -403,25 +563,39 @@ function _rmprocs_added_since(before::AbstractSet{<:Integer})
     return nothing
 end
 
-function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::AbstractString)
+function _add_local_drive_workers!(
+        n::Int,
+        project::AbstractString,
+        julia_bin::AbstractString;
+        verify_project::Bool = true,
+    )
     n < 1 && return nothing
+    isempty(_PLANNED_RANK_QUEUE) && reset_launch_rank_plan!(collect(1:n))
     flags = Cmd(worker_exeflag_strings(project; local_cpu = true, job_id = resolved_kit_job_id()))
     before = Set(workers())
     try
         for i in 1:n
-            env = worker_env_pairs(project; rank = take_worker_rank())
+            rank = take_worker_rank()
+            env = worker_env_pairs(project; ssh = false, rank = rank)
             joined = addprocs(
                 1;
                 exename = julia_bin,
                 exeflags = flags,
                 env = env,
-                topology = :master_worker,
+                topology = topology_for_launch(),
+                worker_addprocs_blas_kwargs()...,
             )
             just = Int[Int(w) for w in joined]
+            for w in just
+                register_launch_rank!(w, rank)
+            end
             _mark_workers_launched!(just, project)
+            _apply_worker_blas_threads!(just)
             i == 1 || continue
             added = sort!(just)
-            isempty(added) || _precompile_worker_project!(first(added))
+            verify_project ||
+                continue
+            isempty(added) || _precompile_worker_project!(first(added), project)
         end
     catch
         _rmprocs_added_since(before)
@@ -436,6 +610,7 @@ function _add_ssh_drive_workers!(
         julia_bin::AbstractString,
         project::AbstractString,
         sshflags::Cmd,
+        placement_ssh_endpoint::AbstractString,
     )
     n < 1 && return nothing
     flags = Cmd(worker_exeflag_strings(project; local_cpu = false, job_id = resolved_kit_job_id()))
@@ -443,7 +618,8 @@ function _add_ssh_drive_workers!(
     before = Set(workers())
     try
         for i in 1:n
-            env = worker_env_pairs(project; ssh = true, rank = take_worker_rank())
+            rank = take_worker_rank()
+            env = worker_env_pairs(project; ssh = true, rank = rank)
             joined = addprocs(
                 [(machine, 1)];
                 exename = exename,
@@ -453,14 +629,20 @@ function _add_ssh_drive_workers!(
                 cmdline_cookie = false,
                 exeflags = flags,
                 env = env,
-                topology = :master_worker,
+                topology = topology_for_launch(),
+                worker_addprocs_blas_kwargs()...,
             )
             just = Int[Int(w) for w in joined]
+            for w in just
+                register_launch_rank!(w, rank)
+            end
+            _register_worker_placement_ssh_endpoints!(just, placement_ssh_endpoint)
             _mark_workers_launched!(just, project)
+            _apply_worker_blas_threads!(just)
             i == 1 || continue
             added = sort!(just)
             isempty(added) && return nothing
-            _precompile_worker_project!(first(added))
+            _precompile_worker_project!(first(added), project)
         end
     catch
         _rmprocs_added_since(before)

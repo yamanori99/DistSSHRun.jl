@@ -6,7 +6,7 @@ using Test
             mktemp() do err_path, err_io
                 code = withenv(
                     "DISTSSH_CLI_SUBCOMMAND_DONE" => "",
-                    "DISTSSH_YES" => nothing,
+                    "DISTSSH_YES" => nothing
                 ) do
                     redirect_stdin(devnull) do
                         redirect_stdout(out_io) do
@@ -25,20 +25,23 @@ using Test
 
     @testset "go, ride, drive empty args and error paths" begin
         let (code, out, err) = _cli_capture(() -> DistSSHRun.go(String[]))
-            @test code == 0
-            @test occursin("Usage", out * err)
+            @test code == 2
+            @test isempty(out)
+            @test occursin("Usage", err)
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.run_ride(String[]))
-            @test code == 0
-            @test occursin("Usage", out * err)
+            @test code == 2
+            @test isempty(out)
+            @test occursin("Usage", err)
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.drive(String[]))
-            @test code == 0
-            @test occursin("Usage", out * err)
+            @test code == 2
+            @test isempty(out)
+            @test occursin("Usage", err)
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.run_hostinfo(["--nope", "-h"]))
             shown = out * err
-            @test code == 1
+            @test code == 2
             @test occursin("unknown hostinfo option: --nope", shown)
             @test occursin("help hostinfo", shown)
             @test !occursin("--help", shown)
@@ -46,37 +49,37 @@ using Test
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.run_pool(["-h", "--nope"]))
             shown = out * err
-            @test code == 1
+            @test code == 2
             @test occursin("unknown pool option: --nope", shown)
             @test occursin("help pool", shown)
             @test !occursin("--help", shown)
             @test !occursin("Usage", shown)
         end
         let (code, _, _) = _cli_capture(() -> DistSSHRun.run_ride(["/no/such/script.jl"]))
-            @test code == 1
+            @test code == 2
         end
         let (code, out, err) = _cli_capture(
-                () -> DistSSHRun.go(["--ship-tree", "child:h1:1", "job.jl"]),
+                () -> DistSSHRun.go(["--ship-tree", "1*h1", "job.jl"])
             )
             shown = out * err
-            @test code == 1
+            @test code == 2
             @test occursin("go: --ship-tree was removed", shown)
             @test occursin("setup ship-tree", shown)
             @test !occursin("SSH preflight", shown)
         end
         let (code, out, err) = _cli_capture(
-                () -> DistSSHRun.drive(["--ship-tree", "parent:1", "s.jl"]),
+                () -> DistSSHRun.drive(["--ship-tree", "--head-workers", "1", "s.jl"])
             )
             shown = out * err
-            @test code == 1
+            @test code == 2
             @test occursin("drive: --ship-tree was removed", shown)
             @test !occursin("SSH preflight", shown)
         end
         let (code, out, err) = _cli_capture(
-                () -> DistSSHRun.main(["go", "--ship-tree", "child:h1:1", "job.jl"]),
+                () -> DistSSHRun.main(["go", "--ship-tree", "1*h1", "job.jl"])
             )
             shown = out * err
-            @test code == 1
+            @test code == 2
             @test occursin("go: --ship-tree was removed", shown)
             @test !occursin("SSH preflight", shown)
         end
@@ -85,27 +88,32 @@ using Test
     @testset "hostinfo, pool, up, progress entrypoints" begin
         let (code, out, err) = _cli_capture(() -> DistSSHRun.run_hostinfo(String[]))
             @test code == 0
-            @test occursin("Usage", out * err)
+            @test occursin("Hostinfo:", out * err)
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.run_pool(String[]))
             @test code == 0
-            @test occursin("Usage", out * err)
+            @test occursin("Pool:", out * err)
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.up(["--version"]))
             @test code == 0
             @test occursin(string(DistSSHRun.dist_ssh_kit_version()), out * err)
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.up(["--bogus"]))
-            @test code == 1
+            @test code == 2
             @test occursin("Error:", out * err)
         end
+        let (code, out, err) = _cli_capture(() -> DistSSHRun.up(String[]))
+            @test code == 2
+            @test occursin("Usage", err)
+        end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.up(["add", "1.13", "badhost"]))
+            shown = out * err
             @test code == 1
-            @test occursin("Error:", out * err)
+            @test occursin("Error:", shown) || occursin("SSH preflight", shown)
         end
         let (code, out, err) = _cli_capture(() -> DistSSHRun.progress(["--help"]))
             @test code == 0
-            @test occursin("progress", out * err)
+            @test occursin("progress", out)
         end
         let (code, _, _) = _cli_capture(() -> DistSSHRun.progress(["/no/such/dir"]))
             @test code == 1
@@ -125,9 +133,7 @@ using Test
                 withenv("DISTRIBUTED_PROJECT_ROOT" => nothing) do
                     let (code_a, out_a, err_a) = cd(proj_a) do
                             _cli_capture(
-                                () -> DistSSHRun.run_hostinfo(
-                                    ["parent"],
-                                ),
+                                () -> DistSSHRun.run_hostinfo(String[])
                             )
                         end
                         @test code_a == 0
@@ -136,9 +142,7 @@ using Test
 
                     let (code_b, out_b, err_b) = cd(proj_b) do
                             _cli_capture(
-                                () -> DistSSHRun.run_hostinfo(
-                                    ["parent"],
-                                ),
+                                () -> DistSSHRun.run_hostinfo(String[])
                             )
                         end
                         @test code_b == 0

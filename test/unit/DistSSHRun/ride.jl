@@ -11,7 +11,7 @@ using Distributed
                 name = "RideAct"
                 uuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
                 version = "0.1.0"
-                """,
+                """
             )
             try
                 DistSSHRun._ride_activate_project!(tmp)
@@ -81,8 +81,8 @@ using Distributed
         @test occursin("work", s)
         @test !occursin("map", s)
 
-        plan = DistSSHRun._ride_resolve_plan(["child:h:2", "parent:1"])
-        @test plan.parent_workers == 1
+        plan = DistSSHRun._ride_resolve_plan(["2*h"]; head_workers = 1)
+        @test plan.head_workers == 1
         @test plan.child_workers["h"] == 2
 
         _with_tempdir() do tmp
@@ -119,7 +119,7 @@ using Distributed
             @test _scan("itmap.jl", "Iterators.map(identity, 1:2)\n").drive_line === nothing
             @test _scan(
                 "thspawn.jl",
-                "using Base.Threads: @spawn\n@spawn 1\n",
+                "using Base.Threads: @spawn\n@spawn 1\n"
             ).drive_line === nothing
             @test _scan("map2.jl", "map(f, a, b)\n").drive_line === nothing
             dist_every = _scan("devery.jl", "Distributed.@everywhere x = 1\n")
@@ -153,7 +153,7 @@ using Distributed
             write($(repr(out)), join(string.(ys), ","))
             """
         )
-        r = ride_local(map_path, "parent:1"; spi_check = true)
+        r = ride_local(map_path, String[]; head_workers = 1, spi_check = true)
         @test r.ok
         @test r.workers == 1
         @test r.spi_ok === true
@@ -198,7 +198,7 @@ using Distributed
                 write($(repr(fout)), join(string.(ys), ","))
                 """
             )
-            rf = ride_local(filt, "parent:1"; spi_check = true)
+            rf = ride_local(filt, String[]; head_workers = 1, spi_check = true)
             @test rf.ok
             @test read(fout, String) == "2,4,6"
 
@@ -213,7 +213,7 @@ using Distributed
                 write($(repr(nout)), join(string.(ys), ","))
                 """
             )
-            rn = ride_local(named, "parent:1"; spi_check = true)
+            rn = ride_local(named, String[]; head_workers = 1, spi_check = true)
             @test rn.ok
             @test read(nout, String) == "1,4,9"
 
@@ -229,7 +229,7 @@ using Distributed
                 write($(repr(lout)), join(string.(ys), ","))
                 """
             )
-            rl = ride_local(loop, "parent:1"; spi_check = true)
+            rl = ride_local(loop, String[]; head_workers = 1, spi_check = true)
             @test rl.ok
             @test rl.spi_ok !== false
             @test read(lout, String) == "1,4,9,16"
@@ -245,7 +245,7 @@ using Distributed
                 write($(repr(vout)), string(x === nothing) * ";" * join(string.(ys), ","))
                 """
             )
-            rv = ride_local(val_path, "parent:1"; spi_check = true)
+            rv = ride_local(val_path, String[]; head_workers = 1, spi_check = true)
             @test rv.ok
             @test read(vout, String) == "true;1,4,9"
 
@@ -261,7 +261,7 @@ using Distributed
                 write($(repr(stout)), join(string.(ys), ","))
                 """
             )
-            rs = ride_local(st_path, "parent:1"; spi_check = false)
+            rs = ride_local(st_path, String[]; head_workers = 1, spi_check = false)
             @test rs.ok
             @test read(stout, String) == "1,4,9,16"
 
@@ -277,7 +277,7 @@ using Distributed
                 write($(repr(aout)), join(string.(dest), ","))
                 """
             )
-            ra = ride_local(alias_path, "parent:1"; spi_check = false)
+            ra = ride_local(alias_path, String[]; head_workers = 1, spi_check = false)
             @test ra.ok
             @test read(aout, String) == "1,1,1"
 
@@ -294,7 +294,7 @@ using Distributed
                 write($(repr(oout)), join(string.(seen), ",") * ";" * join(string.(dest), ","))
                 """
             )
-            ro = ride_local(obs_path, "parent:1"; spi_check = false)
+            ro = ride_local(obs_path, String[]; head_workers = 1, spi_check = false)
             @test ro.ok
             @test read(oout, String) == "1,0,0;0,0,0"
 
@@ -319,7 +319,7 @@ using Distributed
                 write($(repr(gout)), join(string.(dest), ","))
                 """
             )
-            rg = ride_local(gen_path, "parent:1"; spi_check = false)
+            rg = ride_local(gen_path, String[]; head_workers = 1, spi_check = false)
             @test rg.ok
             @test read(gout, String) == "1,2,3"
 
@@ -345,7 +345,7 @@ using Distributed
                 write($(repr(hout)), join(string.(dest), ","))
                 """
             )
-            rh = ride_local(haslen_path, "parent:1"; spi_check = false)
+            rh = ride_local(haslen_path, String[]; head_workers = 1, spi_check = false)
             @test rh.ok
             @test read(hout, String) == "1,2,3"
 
@@ -369,7 +369,7 @@ using Distributed
                 write($(repr(pout)), join(out, ";"))
                 """
             )
-            rp = ride_local(pmapnest_path, "parent:2"; spi_check = false)
+            rp = ride_local(pmapnest_path, String[]; head_workers = 2, spi_check = false)
             @test rp.ok
             @test read(pout, String) == "1,1,1;1,1,1;1,1,1;1,1,1"
 
@@ -398,7 +398,7 @@ using Distributed
             nested_src(struct_name) = begin
                 nest_wraps = join(
                     ["w = $(struct_name)(w)" for _ in 1:(nest_n - 1)],
-                    "\n            ",
+                    "\n            "
                 )
                 nest_get = "w" * repeat(".inner", nest_n)
                 """
@@ -446,14 +446,14 @@ using Distributed
                 opath = joinpath(tmp, stem * ".jl")
                 oout = joinpath(tmp, stem * ".txt")
                 write(opath, replace(body, "ARGS[1]" => repr(oout)))
-                rr = ride_local(opath, "parent:1"; spi_check = spi)
+                rr = ride_local(opath, String[]; head_workers = 1, spi_check = spi)
                 @test rr.ok
                 @test read(oout, String) == "1,1,1"
             end
 
-            child = ride_local(map_path, "child:host1")
+            child = ride_local(map_path, "child:host1:2")
             @test !child.ok
-            @test occursin(":N", something(child.error, ""))
+            @test occursin("removed", something(child.error, ""))
 
             drive_path = joinpath(tmp, "driver.jl")
             write(drive_path, "using Distributed\npmap(x -> x, 1:2)\n")
@@ -477,7 +477,8 @@ using Distributed
                     script;
                     output_dir = dirty,
                     project = tmp,
-                    hint_surface = :cli,
+                    head_workers = 1,
+                    hint_surface = :cli
                 )
                 nothing
             catch e
@@ -503,8 +504,8 @@ using Distributed
                     "/home/distsshkit/app",
                     "/home/distsshkit/app/runs/20260101T000000Z-abcdef/src",
                     "deadbeef",
-                    ["host.test"],
-                ),
+                    ["host.test"]
+                )
             )
             return nothing
         end
@@ -528,7 +529,7 @@ using Distributed
                 seed_earlier_ship!()
                 ok = redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
-                        DistSSHRun.ride!(script; project = tmp)
+                        DistSSHRun.ride!(script; project = tmp, head_workers = 1)
                     end
                 end
                 @test ok.ok
@@ -536,7 +537,7 @@ using Distributed
                 seed_earlier_ship!()
                 failed = redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
-                        DistSSHRun.ride!(bad; project = tmp)
+                        DistSSHRun.ride!(bad; project = tmp, head_workers = 1)
                     end
                 end
                 @test !failed.ok
@@ -584,8 +585,8 @@ using Distributed
                 write(
                     joinpath(remote, "runs", snap_id, "run.toml"),
                     DistSSHRun._ship_run_leaf_complete_toml(
-                        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                    ),
+                        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    )
                 )
                 logp = joinpath(tmp, "ssh.log")
                 bindir = joinpath(tmp, "bin")
@@ -605,7 +606,7 @@ using Distributed
                       esac
                     done
                     exit 255
-                    """,
+                    """
                 )
                 chmod(ssh_bin, 0o755)
                 fake = Dict(
@@ -613,7 +614,7 @@ using Distributed
                     "DISTSSH_TEST_SSH" => double,
                     "DISTSSH_TEST_SSH_LOG" => logp,
                     "DISTSSH_TEST_POSIX_SHELL" => "1",
-                    "PATH" => bindir * ":" * get(ENV, "PATH", ""),
+                    "PATH" => bindir * ":" * get(ENV, "PATH", "")
                 )
                 host = "ridework.test"
                 want = DistSSHRun.canonical_local_path(newer)
@@ -624,7 +625,7 @@ using Distributed
                     open($(repr(parent_env)), "w") do io
                         println(io, get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
                     end
-                    """,
+                    """
                 )
 
                 withenv(fake...) do
@@ -639,11 +640,12 @@ using Distributed
                     parent = redirect_stdout(devnull) do
                         redirect_stderr(devnull) do
                             DistSSHRun.ride!(
-                                script, ["parent:0"];
+                                script, String[];
+                                head_workers = 1,
                                 project = local_proj,
                                 remote = remote,
                                 output_dir = joinpath(tmp, "parent-out"),
-                                spi_check = false,
+                                spi_check = false
                             )
                         end
                     end
@@ -658,14 +660,15 @@ using Distributed
                     child = redirect_stdout(devnull) do
                         redirect_stderr(devnull) do
                             DistSSHRun.ride!(
-                                script, ["child:$(host):1"];
+                                script, ["1*$(host)"];
+                                head_workers = 0,
                                 project = local_proj,
                                 remote = remote,
                                 run_id = snap_id,
                                 julia = "/usr/bin/julia",
                                 output_dir = joinpath(tmp, "child-out"),
                                 spi_check = false,
-                                require_all_hosts = false,
+                                best_effort = true
                             )
                         end
                     end
@@ -811,7 +814,7 @@ using Distributed
                     tmp,
                     script,
                     nothing,
-                    false,
+                    false
                 )
                 @test foreign in workers()
             finally
@@ -832,16 +835,33 @@ using Distributed
             script = joinpath(tmp, "noop.jl")
             write(script, "nothing\n")
             rid = "20260101T000000Z-aaaaaa"
-            r = redirect_stdout(devnull) do
-                redirect_stderr(devnull) do
-                    return DistSSHRun.ride!(
-                        script, ["parent:1"];
-                        project = tmp,
-                        run_id = rid,
-                    )
+            parent = DistSSHRun.run_identity(tmp)
+            digests = Any[
+                Dict{String, Any}("path" => "Project.toml", "blob" => parent["project.sha256"]),
+            ]
+            DistSSHRun._set_active_deploy_record!(
+                DistSSHRun.build_deploy_record(
+                    tmp,
+                    :ship_tree;
+                    deploy_id = rid,
+                    run_id = rid,
+                    content_file_digests = digests,
+                )
+            )
+            try
+                r = redirect_stdout(devnull) do
+                    redirect_stderr(devnull) do
+                        return DistSSHRun.ride!(
+                            script, String[]; head_workers = 1,
+                            project = tmp,
+                            run_id = rid
+                        )
+                    end
                 end
+                @test r.ok
+            finally
+                DistSSHRun._clear_active_deploy_record!()
             end
-            @test r.ok
         end
     end
 end

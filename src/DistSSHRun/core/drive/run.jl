@@ -96,13 +96,24 @@ function _isolated_project_flag()::Union{Nothing, String}
     return "--project=$(dir)"
 end
 
+"""`Int64(x)` when `x` is an integer in `Int64` range; else `nothing` (no silent wrap)."""
+function _status_int64(x)::Union{Int64, Nothing}
+    x isa Bool && return nothing
+    x isa Integer || return nothing
+    if x isa Unsigned && big(x) > typemax(Int64)
+        return nothing
+    end
+    try
+        return Int64(x)
+    catch
+        return nothing
+    end
+end
+
 """Fit `code` in `Cint`. A Windows crash code such as `0xC0000005` does not."""
 function _as_cint(code::Integer)::Cint
-    n = try
-        Int64(code)
-    catch
-        return Cint(1)
-    end
+    n = _status_int64(code)
+    n === nothing && return Cint(1)
     lo = Int64(typemin(Cint))
     hi = Int64(typemax(Cint))
     lo <= n <= hi && return Cint(n)
@@ -112,17 +123,18 @@ end
 """A signalled child is a failure. Unix can report `exitcode == 0` with a nonzero `termsignal`."""
 function _drive_child_status(exitcode, termsignal)::Cint
     if termsignal isa Integer && !(termsignal isa Bool)
-        sig = try
-            Int64(termsignal)
-        catch
-            return Cint(1)
-        end
+        sig = _status_int64(termsignal)
+        sig === nothing && return Cint(1)
         if sig > 0
+            sig > 127 && return Cint(1)
+            sig > typemax(Int64) - 128 && return Cint(1)
             # `shell_status` owns `128 + signal`. This path has no `Process`.
             return _as_cint(DistSSHBase._shell_status(zero(Int64), sig))
         elseif sig != 0
-            return _as_cint(128 + sig)
+            return Cint(1)
         end
+    elseif termsignal !== nothing && termsignal !== 0
+        return Cint(1)
     end
     if exitcode isa Integer && !(exitcode isa Bool)
         return _as_cint(exitcode)
@@ -217,8 +229,8 @@ function run_drive_parsed!(
     # `parse_drive_args` is inferred as one NamedTuple whose fields are unions.
     # CLI `drive_main` already opened the frame (`cli=true`). A direct call,
     # including `drive!`, opens it here when none is active (`cli=false`).
-    uh = get(parsed, :unsafe_heterogeneous, false)
-    return with_unsafe_heterogeneous(uh) do
+    cfg = resolve_run_job_config_from_parsed(parsed; command = :drive)
+    return with_run_unsafe_options!(cfg) do
         return _drive_frame(; cli = false) do
             return Base.invokelatest(
                 _run_drive_parsed_specialized!,
@@ -244,8 +256,7 @@ function _run_drive_parsed_specialized!(
         project_root,
     )::Cint
     if parsed.help
-        show_drive_usage()
-        return 0
+        return DistSSHRun.DistSSHBase.cli_help_stdout(show_drive_usage)
     end
 
     if parsed.show_version
@@ -253,30 +264,49 @@ function _run_drive_parsed_specialized!(
         return 0
     end
 
+    project = something(project_root, get(ENV, "DISTRIBUTED_PROJECT_ROOT", pwd()))
+    let diag = finish_run_job_diagnostics!(
+            parsed;
+            command = :drive,
+            project = project,
+            hosts = String[first(h) for h in parsed.hosts],
+            worker_tokens = host_tokens(parsed; kind = :drive),
+        )
+        diag !== nothing && return Cint(diag)
+    end
+
     if parsed.collect_root !== nothing && parsed.collect_hosts !== nothing
         apply_shared_cli_flags!(parsed.cli_session)
         root = canonical_local_path(
             something(project_root, get(ENV, "DISTRIBUTED_PROJECT_ROOT", pwd())),
         )
-        anchor = canonical_local_path(root)
+        collect_opts = collect_job_options_from_parsed(parsed)
+        session = DistSSHSession(
+            project = root,
+            workers = String[],
+            remote = collect_opts.remote_root,
+            quiet = parsed.cli_session.quiet,
+            verbosity = parsed.cli_session.verbosity,
+        )
+        session.cli_session = parsed.cli_session
+        apply_shared_cli_flags!(session.cli_session)
         return _with_kit_inproc_run!(:collect) do
-            ok = drive_collect_tree(
-                parsed.collect_root::String,
-                parsed.collect_hosts::Vector{String};
-                merge = something(parsed.collect_overwrite, false),
-                strict = parsed.require_all_hosts,
-                project_root = root,
-                path_anchor = anchor,
-                julia = parsed.julia,
-                run_id = get(parsed, :run_id, nothing),
+            result = collect!(
+                session,
+                parsed.collect_root::String;
+                merge = collect_opts.merge,
+                best_effort = collect_opts.best_effort,
+                hosts = parsed.collect_hosts::Vector{String},
+                julia = collect_opts.julia,
+                run_id = collect_opts.run_id,
+                remote_root = collect_opts.remote_root,
             )
-            return ok ? 0 : 1
+            return result.ok ? 0 : 1
         end
     end
 
     if parsed.script_path === nothing
-        show_drive_usage()
-        return 0
+        return DistSSHRun.DistSSHBase.cli_required_else_help(show_drive_usage)
     end
 
     hosts = parsed.hosts
@@ -284,7 +314,7 @@ function _run_drive_parsed_specialized!(
     remote_argv = DistSSHRun._remote_script_argv(raw_script)
     script_path = remote_argv ? raw_script : DistSSHRun.canonical_local_path(raw_script)
     script_args = parsed.script_args
-    parent_workers = parsed.parent_workers
+    head_workers = parsed.head_workers
     default_workers = parsed.default_workers
     julia_exe = parsed.julia
     skip_hash_check = parsed.skip_hash_check
@@ -292,7 +322,7 @@ function _run_drive_parsed_specialized!(
     log_dir = parsed.log_dir
     output_dir = parsed.output_dir
     explicit_package = parsed.explicit_package
-    require_all_hosts = parsed.require_all_hosts
+    best_effort = parsed.best_effort::Bool
 
     host_names = [h[1] for h in hosts]
 
@@ -300,7 +330,7 @@ function _run_drive_parsed_specialized!(
     if !isfile(script_path) && !(remote_argv && snap_for_script !== nothing)
         surface = hasproperty(parsed, :hint_surface) ? parsed.hint_surface::Symbol : :cli
         root0 = canonical_local_path(something(project_root, dirname(script_path)))
-        error(drive_script_not_found_message(script_path, root0; surface = surface))
+        throw(ArgumentError(drive_script_not_found_message(script_path, root0; surface = surface)))
     end
 
     root_hint = project_root === nothing ? nothing : canonical_local_path(project_root)
@@ -324,7 +354,7 @@ function _run_drive_parsed_specialized!(
     return try
         DistSSHRun._reset_run_provenance!(project_root_abs)
         DistSSHRun._clear_active_selection!()
-        DistSSHRun._clear_active_deploy_record!()
+        DistSSHRun._clear_active_deploy_record_unless_run_id!(snap_for_script)
         # Inside `_drive_frame`: this `finally` restores after `rmprocs`.
         return _with_drive_process!(proj_dir) do
             local release_output_dir_lock
@@ -357,9 +387,9 @@ function _run_drive_parsed_specialized!(
             try
                 code = _run_drive_parsed_locked!(
                     parsed, output_dir, script_path, script_dir, proj_dir, script_args,
-                    enable_log, log_dir, original_args, host_names, hosts, parent_workers,
+                    enable_log, log_dir, original_args, host_names, hosts, head_workers,
                     default_workers, julia_exe, skip_hash_check, explicit_package,
-                    require_all_hosts, resolved_output_dir, resolved_log_dir, hosts_acc,
+                    best_effort, resolved_output_dir, resolved_log_dir, hosts_acc,
                     project_root_abs, path_anchor,
                 )
                 return code
@@ -377,10 +407,11 @@ function _run_drive_parsed_specialized!(
                     code == 0 ? nothing : "drive",
                     Int(code),
                     hosts_acc[],
-                    DistSSHRun.resolved_placement_tokens(parent_workers, hosts, default_workers);
+                    DistSSHRun.resolved_placement_tokens(head_workers, hosts, default_workers);
                     run_dir = run_dir,
                 )
                 DistSSHRun._write_kit_result_file(result)
+                DistSSHRun.note_controller_shipped_tree_drift!(project_root_abs)
                 DistSSHRun.write_kit_run_toml!(
                     run_dir;
                     kind = :drive,
@@ -499,11 +530,12 @@ end
 
 function _run_drive_parsed_locked!(
         parsed, _output_dir, script_path, script_dir, proj_dir, script_args,
-        enable_log, log_dir, original_args, host_names, hosts, parent_workers,
+        enable_log, log_dir, original_args, host_names, hosts, head_workers,
         default_workers, julia_exe, skip_hash_check, explicit_package,
-        require_all_hosts, resolved_output_dir, resolved_log_dir, resolved_hosts,
+        best_effort, resolved_output_dir, resolved_log_dir, resolved_hosts,
         project_root, path_anchor,
     )::Cint
+    DistSSHRun.assert_loaded_verified_worker_set!()
     if enable_log
         init_log_file(resolve_drive_log_dir(log_dir, script_dir); prefix = "drive", path_anchor = path_anchor)
     end
@@ -544,7 +576,12 @@ function _run_drive_parsed_locked!(
         run_id = get(parsed, :run_id, nothing),
         remote_argv = remote_argv,
     )
-    DistSSHRun.assert_controller_environment_for_verify!(proj_dir)
+    snap_for_verify = get(parsed, :run_id, nothing)
+    if snap_for_verify isa AbstractString && !isempty(strip(snap_for_verify))
+        DistSSHRun.assert_controller_environment_for_shipped_run!(proj_dir)
+    else
+        DistSSHRun.assert_controller_environment_for_verify!(proj_dir)
+    end
     # git + cleanup + workers + wait + init + run + collect
     progress_steps = 7
     progress_ok = false
@@ -558,6 +595,26 @@ function _run_drive_parsed_locked!(
     kit_log = enable_log ? DistSSHRun.resolve_drive_log_dir(log_dir, script_dir) : nothing
     DistSSHRun._set_kit_progress_sidecar!(kit_out)
     kit_progress_begin!("drive"; steps = progress_steps, kind = :drive)
+    surface = parsed.cli_session.hint_surface
+    bind_map_ref = Ref(Dict{String, String}())
+    ssh_launch_plans_ref = Ref{Union{Nothing, Vector{HostLaunchPlan}}}(nothing)
+    planned_ssh = String[h[1] for h in hosts]
+    try
+        bind_map_ref[] = hosts_file_bind_overrides(
+            parsed.cli_session;
+            bind_overrides = get(parsed, :bind_overrides, Dict{String, String}()),
+            planned_hosts = planned_ssh,
+            command = :drive,
+        )
+        if !isempty(planned_ssh)
+            ssh_launch_plans_ref[] = validate_all_host_launch_plans!(planned_ssh, bind_map_ref[])
+        end
+    catch e
+        e isa ArgumentError || rethrow()
+        surface === :cli &&
+            throw(DistSSHBase.CliUsageError(_bind_config_cli_message(e.msg)))
+        rethrow()
+    end
     try
         if !isempty(host_names)
             # Selection uses --run-id / deploy record / git (setup deploys first).
@@ -610,14 +667,23 @@ function _run_drive_parsed_locked!(
                         println_fatal("For ship-tree remotes, omit --require-git (the default).")
                         println_fatal()
                         println_fatal("Or use git-managed remotes:")
-                        println_fatal("  julia --project=. -m DistSSHKit setup git-clone child:HOST ...")
-                        println_fatal("  julia --project=. -m DistSSHKit setup git-sync child:HOST ...")
+                        println_fatal("  julia --project=. -m DistSSHKit setup git-clone HOST ...")
+                        println_fatal("  julia --project=. -m DistSSHKit setup git-sync HOST ...")
                         println_fatal()
                     end
                     println_fatal("Or omit --require-git and run without git parity.")
                     println_fatal()
                     return 1
                 end
+            end
+        end
+
+        ssh_preflight_hosts = String[String(h) for (h, _) in hosts]
+        if !isempty(ssh_preflight_hosts)
+            if !preflight_setup_ssh(ssh_preflight_hosts) && !best_effort
+                writeln_both("")
+                print_err("SSH preflight failed. Fix connectivity, then retry.\n")
+                return 1
             end
         end
 
@@ -629,43 +695,38 @@ function _run_drive_parsed_locked!(
         # Planned SSH names land in `kit.hosts` before `add_drive_workers!`.
         # A kill during join can still find those hosts. The list is replaced
         # with hosts that joined, or removed when none did.
+        launch_report = Ref{Union{Nothing, LaunchReport}}(nothing)
         successful_hosts = try
             _drive_kit_hosts_around_join!(hosts, kit_out, kit_log) do
-                return add_drive_workers!(
-                    hosts, parent_workers, default_workers, julia_exe, proj_dir, script_path,
-                    project_root,
+                hosts_joined, report = add_drive_workers!(
+                    hosts, head_workers, default_workers, julia_exe, proj_dir, script_path,
+                    project_root;
+                    bind_overrides = bind_map_ref[],
+                    launch_plans = ssh_launch_plans_ref[],
+                    run_id = get(parsed, :run_id, nothing),
                 )
+                launch_report[] = report
+                return hosts_joined
             end
         catch
             DistSSHRun.await_declared_input_hashes!()
             rethrow()
         end
         DistSSHRun.capture_worker_provenance!()
-        # Register before the `require_all_hosts` check below: that branch can
+        # Register before the launch contract check below: that branch can
         # `return 1` with workers already joined, and `finally` must still
         # reach a non-`nothing` `drive_atexit_cleanup` to tear them down.
         drive_atexit_cleanup = register_worker_cleanup!(successful_hosts)
         DistSSHRun._write_joined_drive_host_status!(successful_hosts, kit_out, kit_log)
-        if require_all_hosts
-            missing = unique(String[h[1] for h in hosts if !(h[1] in successful_hosts)])
-            if !isempty(missing)
+        if (rep = launch_report[]) !== nothing
+            try
+                enforce_launch_contract!(rep; best_effort)
+            catch e
+                e isa LaunchIncompleteError || rethrow()
                 print_err("ERROR: "; bold = true)
-                println_fatal("required hosts did not join: $(join(missing, ", "))")
-                println_fatal("Pass --best-effort for a partial run.")
+                println_fatal(sprint(showerror, e))
                 DistSSHRun.await_declared_input_hashes!()
                 return 1
-            end
-            if parent_workers > 0
-                n = DistSSHRun._drive_parent_worker_count()
-                if n < parent_workers
-                    print_err("ERROR: "; bold = true)
-                    println_fatal(
-                        "required parent workers did not join: wanted $parent_workers, got $n",
-                    )
-                    println_fatal("Pass --best-effort for a partial run.")
-                    DistSSHRun.await_declared_input_hashes!()
-                    return 1
-                end
             end
         end
         kit_progress_step!("wait")
@@ -696,7 +757,7 @@ function _run_drive_parsed_locked!(
         _drive_cancellable() do
             run_driver_script!(enable_log)
         end
-        if require_all_hosts
+        if !best_effort
             DistSSHRun._refresh_drive_host_status_file!(kit_out, kit_log)
             left = DistSSHRun._drive_hosts_that_left()
             if !isempty(left)
@@ -716,7 +777,7 @@ function _run_drive_parsed_locked!(
             julia = julia_exe,
         )
         resolved_hosts !== nothing && (resolved_hosts[] = collect_hosts)
-        if require_all_hosts && !collect_ok
+        if !best_effort && !collect_ok
             progress_ok = false
             return 1
         end

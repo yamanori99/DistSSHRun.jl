@@ -12,4 +12,4 @@ DistSSHHeartbeat = {path = ".."}
 DistSSHBase = "=0.2.0"
 DistSSHHeartbeat = "=0.2.0"
 Distributed = "1.11"
-Test = "1"
+Test = "1.11"

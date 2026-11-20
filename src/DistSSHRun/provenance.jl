@@ -13,6 +13,7 @@ const _PROVENANCE_GIT_TOOL = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
 const _PROVENANCE_GO = Pair{String, String}[]
 const _PROVENANCE_UNSAFE = Ref{Vector{String}}(String[])
 const _PROVENANCE_ENVIRONMENT = Ref{Union{Nothing, Dict{String, Any}}}(nothing)
+const _PROVENANCE_LAUNCH = Ref{Union{Nothing, LaunchReport}}(nothing)
 
 const _GO_SLOT_PROVENANCE_NAME = "provenance-slot.toml"
 const _GO_SLOT_LOADER_NAME = "provenance-slot.jl"
@@ -199,6 +200,10 @@ function _record_environment_verified!()
     return _record_environment_verification!("verified")
 end
 
+function _record_environment_verified_against_run_id!()
+    return _record_environment_verification!("verified-against-run-id")
+end
+
 function _record_environment_unverified!(reason::AbstractString)
     return _record_environment_verification!("unverified", reason)
 end
@@ -219,7 +224,7 @@ function _reset_run_provenance!(project::AbstractString)
     _PROVENANCE_HEARTBEAT[] = nothing
     lock(_PROVENANCE_LOCK) do
         empty!(_PROVENANCE_GO)
-        if !unsafe_heterogeneous_active()
+        if !unsafe_skip_env_digests_active()
             empty!(_PROVENANCE_UNSAFE[])
         end
         _PROVENANCE_ENVIRONMENT[] = nothing
@@ -245,8 +250,36 @@ function _reset_run_provenance!(project::AbstractString)
         nothing
     end
     _PROVENANCE_AT_START[] = true
+    _PROVENANCE_LAUNCH[] = nothing
     reset_worker_seeds!()
     return nothing
+end
+
+"""Record the latest worker launch report for provenance."""
+function note_launch_provenance!(report::LaunchReport)
+    _PROVENANCE_LAUNCH[] = report
+    return nothing
+end
+
+function _launch_provenance_dict(report::LaunchReport)::Dict{String, Any}
+    failures = Dict{String, Any}[]
+    for f in report.failures
+        push!(
+            failures,
+            Dict{String, Any}(
+                "host" => f.host,
+                "requested" => f.requested,
+                "joined" => f.joined,
+                "outcome" => string(f.outcome),
+                "reason" => f.reason,
+            ),
+        )
+    end
+    return Dict{String, Any}(
+        "planned" => report.planned_workers,
+        "joined" => report.joined_workers,
+        "failures" => failures,
+    )
 end
 
 """Write the go-slot `-L` file. `nothing` when the directory cannot be written."""
@@ -483,9 +516,12 @@ end
 
 function _provenance_token(host::AbstractString)::String
     h = String(host)
-    h == PARENT_HOST_NAME && return h
-    startswith(h, "child:") && return h
-    return "child:" * h
+    for prefix in ("child:", "parent:")
+        if startswith(h, prefix)
+            return String(strip(h[(length(prefix) + 1):end]))
+        end
+    end
+    return h
 end
 
 """Read `DRIVE_HOST_WORKER_IDS` now. Later `rmprocs` does not erase this."""
@@ -500,8 +536,13 @@ function capture_worker_provenance!()
             grouped[_provenance_token(host)] = _group_snapshots(snaps)
         end
         _PROVENANCE_WORKERS[] = grouped
-    catch
-        _PROVENANCE_WORKERS[] = Dict{String, Any}()
+    catch e
+        if e isa InterruptException
+            rethrow()
+        end
+        _PROVENANCE_WORKERS[] = Dict{String, Any}(
+            "reason" => Dict{String, Any}("kind" => "capture_failed", "detail" => sprint(showerror, e)),
+        )
     end
     return nothing
 end
@@ -555,8 +596,9 @@ function _seed_provenance()::Union{Nothing, Dict{String, Any}}
     end
     _append_go_slot_items!(items)
     isempty(workers) && isempty(items) && return nothing
-    data = Dict{String, Any}()
+    data = Dict{String, Any}("scheme" => SEED_SCHEME)
     seed === nothing || (data["job"] = string(seed))
+    seed === nothing || (data["job_domain"] = string(job_domain_seed(seed)))
     isempty(workers) || (data["workers"] = workers)
     isempty(items) || (data["items"] = items)
     return data
@@ -908,9 +950,12 @@ end
 function assemble_provenance(project::AbstractString = "")::Dict{String, Any}
     return try
         _assemble_provenance(project)
-    catch
+    catch e
+        if e isa InterruptException
+            rethrow()
+        end
         Dict{String, Any}(
-            "project" => Dict{String, Any}("manifest" => "absent"),
+            "project" => Dict{String, Any}("manifest" => Dict{String, Any}("reason" => "assemble_failed")),
             "workers" => Any[],
         )
     end
@@ -925,7 +970,10 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     julia, machine = _parent_sections(parent)
     started = _PROVENANCE_AT_START[] && canonical_local_path(_PROVENANCE_PROJECT[]) == proj
     project_table = if started
-        something(_PROVENANCE_PROJECT_SNAP[], Dict{String, Any}("manifest" => "absent"))
+        something(
+            _PROVENANCE_PROJECT_SNAP[],
+            Dict{String, Any}("manifest" => Dict{String, Any}("reason" => "missing_snapshot")),
+        )
     else
         _project_provenance(proj)
     end
@@ -939,6 +987,8 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     )
     seeds = _seed_provenance()
     seeds === nothing || (data["seeds"] = seeds)
+    launch = _PROVENANCE_LAUNCH[]
+    launch !== nothing && (data["launch"] = _launch_provenance_dict(launch))
     git_tool = started ? _PROVENANCE_GIT_TOOL[] : _path_resolved_git()
     git_tool === nothing || (data["tools"] = Dict{String, Any}[git_tool])
     source = started ? _PROVENANCE_SOURCE_SNAP[] : _resolve_source(proj)
@@ -967,6 +1017,11 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
     env_tbl isa AbstractDict && !isempty(env_tbl) && (data["environment"] = copy(env_tbl))
     hb = started ? _PROVENANCE_HEARTBEAT[] : nothing
     hb !== nothing && (data["heartbeat"] = hb)
+    drift = _shipped_tree_drift_provenance()
+    drift !== nothing && (data["shipped_tree_drift"] = drift)
+    forced = _forced_ignore_ship_provenance()
+    forced isa AbstractVector && !isempty(forced) &&
+        (data["ship_forced_ignore"] = copy(forced))
     return data
 end
 

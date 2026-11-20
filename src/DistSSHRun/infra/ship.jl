@@ -733,7 +733,7 @@ function _remote_script_output(
         end
         String(take!(text))
     end
-    wait(proc)
+    DistSSHBase.ssh_wait_process!(proc)
     out = fetch(out_task)
     err = fetch(err_task)
     code = DistSSHBase.shell_status(proc)
@@ -1739,11 +1739,13 @@ function _remote_extract_tar!(
         julia_bin::AbstractString;
         allow_external_symlinks::Bool = false,
         expect_hash::AbstractString = "",
+        executable_ship_rels::Union{Nothing, AbstractVector{<:AbstractString}} = nothing,
     )
     DistSSHShip.extract_verified!(
         host, src, tar_path, julia_bin;
         allow_external_symlinks = allow_external_symlinks,
         expect_hash = expect_hash,
+        executable_ship_rels = executable_ship_rels,
     )
     sq = _remote_shell_path_word(src)
     filled, _ = _remote_shell_status(
@@ -1784,6 +1786,7 @@ function _ship_run_tree_one_host!(
             h, checked, snap.tar_path, julia_bin;
             allow_external_symlinks = allow_external_symlinks,
             expect_hash = expect_hash,
+            executable_ship_rels = snap.executable_ship_rels,
         )
     end
 
@@ -1890,6 +1893,7 @@ function ship_tree!(
         ship_max_bytes = ship_max_bytes,
         extra_files = extra_files,
     )
+    announce_forced_ignore_ship!(pack.forced_ignore_ship)
     try
         return _ship_tree_to_hosts!(
             pack, hosts, deploy_root;
@@ -2017,6 +2021,9 @@ function _ship_tree_to_hosts!(
                 ok_hosts,
             ),
         )
+        digest_rows = Any[
+            Dict{String, Any}("path" => p, "blob" => h) for (p, h) in pack.content_file_digests
+        ]
         commit_deploy_record_after_ship!(
             ok_hosts,
             String(deploy_root),
@@ -2024,6 +2031,22 @@ function _ship_tree_to_hosts!(
             rid,
             pack.content_tree_hash;
             project_rel = pack.project_rel,
+            content_file_digests = digest_rows,
+            executable_ship_rels = pack.executable_ship_rels,
+            forced_ignore_ship = pack.forced_ignore_ship,
+        )
+        _set_active_deploy_record!(
+            build_deploy_record(
+                pack.project_dir,
+                :ship_tree;
+                deploy_id = rid,
+                run_id = rid,
+                content_tree_hash = pack.content_tree_hash,
+                project_rel = pack.project_rel,
+                content_file_digests = digest_rows,
+                executable_ship_rels = pack.executable_ship_rels,
+                forced_ignore_ship = pack.forced_ignore_ship,
+            ),
         )
     end
     return ShipTreeResult(

@@ -603,6 +603,27 @@ function _report_manifest_refusal(e; io::IO = stderr)::Bool
     return true
 end
 
+"""Whether `msg` is an output-directory refusal from `_prepare_output_dir!`."""
+function _cli_output_dir_refusal_message(msg::AbstractString)::Bool
+    body = String(msg)
+    startswith(body, "refusing non-empty output directory:") && return true
+    startswith(body, "refusing output directory symlink:") && return true
+    startswith(body, "output path is not a directory:") && return true
+    return false
+end
+
+"""
+Print an output-directory refusal on stderr and return true.
+
+Other errors return false so the caller can rethrow them.
+"""
+function _report_output_dir_refusal(e; io::IO = stderr)::Bool
+    e isa ArgumentError || return false
+    _cli_output_dir_refusal_message(e.msg) || return false
+    print_cli_error(e.msg; io = io)
+    return true
+end
+
 """
 Throw when `manifest`, or a `[sources]` path, is not inside `env_dir`
 together with `project_dir`.
@@ -656,7 +677,7 @@ function _require_manifest_in_pack_paths!(project::AbstractString)
         ArgumentError(
             "Manifest $man_rel is not in the shipped tree. " *
                 "Workers would instantiate a different resolution. " *
-                "Stop ignoring it, add a negation pattern, or change the ignore rules.",
+                "The file may be missing on disk or unreadable before SSH.",
         ),
     )
 end
@@ -2290,7 +2311,7 @@ function _maybe_print_kit_progress_phases(dir::AbstractString)
     return nothing
 end
 
-function show_progress_usage(io::IO = stdout)
+function show_progress_usage(; io::IO = stdout)
     print_help_chrome(cli_heading("progress"); io = io)
     print_help_section("Usage"; io = io)
     print_help_lines(
@@ -2315,26 +2336,26 @@ end
 CLI: print [`kit_progress_phases`](@ref) for `DIR` / `kit.progress`.
 """
 function progress(args::Vector{String} = copy(ARGS))::Cint
-    if !isempty(args) && args[1] in ("-h", "--help", "help")
-        show_progress_usage()
-        return 0
+    return DistSSHBase.with_cli_exit() do
+        if !isempty(args) && args[1] in ("-h", "--help", "help")
+            return DistSSHBase.cli_help_stdout(show_progress_usage)
+        end
+        if length(args) > 1
+            throw(DistSSHBase.CliUsageError("progress: extra args $(repr(args[2:end]))"))
+        end
+        target = isempty(args) ? pwd() : String(args[1])
+        recs = _kit_progress_last_run(_kit_progress_records(target))
+        if isempty(recs)
+            print_cli_error("progress: no progress: lines in $(target)")
+            return Cint(1)
+        end
+        rows = _kit_progress_phase_rows(recs)
+        wall = _kit_progress_wall(recs)
+        text = _format_kit_progress_phases(rows; wall = wall)
+        isempty(text) && (print_cli_error("progress: no timed phases in $(target)"); return Cint(1))
+        _print_kit_progress_phases(stdout, rows; wall = wall)
+        return Cint(0)
     end
-    if length(args) > 1
-        print_cli_error("progress: extra args $(repr(args[2:end]))")
-        return 1
-    end
-    target = isempty(args) ? pwd() : String(args[1])
-    recs = _kit_progress_last_run(_kit_progress_records(target))
-    if isempty(recs)
-        print_cli_error("progress: no progress: lines in $(target)")
-        return 1
-    end
-    rows = _kit_progress_phase_rows(recs)
-    wall = _kit_progress_wall(recs)
-    text = _format_kit_progress_phases(rows; wall = wall)
-    isempty(text) && (print_cli_error("progress: no timed phases in $(target)"); return 1)
-    _print_kit_progress_phases(stdout, rows; wall = wall)
-    return 0
 end
 
 """
@@ -2529,7 +2550,8 @@ function print_kit_root_usage(io::IO = stderr)
     print_help_section("Commands"; io = io)
     print_help_lines(
         io,
-        "  setup              Clone / sync / check remotes",
+        "  setup              Clone / sync / maintain remotes",
+        "  doctor             Deploy prerequisite checks (--deploy)",
         "  up                 Align a Julia channel with juliaup",
         "  go                 Run an as-is complete job",
         "  ride               Experimental auto-split of map / filter",
@@ -2543,8 +2565,8 @@ function print_kit_root_usage(io::IO = stderr)
     print_help_section("Examples"; io = io)
     print_help_lines(
         io,
-        "  $(cli_m_project()) setup check child:host1",
-        "  $(cli_m_project()) up child:host1",
+        "  $(cli_m_project()) doctor --deploy host1",
+        "  $(cli_m_project()) up host1",
         "  $(cli_m_project()) go SCRIPT.jl",
         "  $(cli_m_project()) ride parent:2 SCRIPT.jl",
         "  $(cli_m_project()) drive parent:2 SCRIPT.jl",

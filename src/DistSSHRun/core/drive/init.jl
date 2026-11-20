@@ -292,7 +292,7 @@ function init_drive_workers!(
             _drive_invokelatest_main(w, :_drive_worker_activate!, worker_proj)
         end
 
-        pkg_name = explicit_package !== nothing ? explicit_package : project_package_name(proj_dir)
+        pkg_name = explicit_package !== nothing ? explicit_package : project_driver_package_name(proj_dir)
         if pkg_name !== nothing
             pkg_sym = Symbol(pkg_name)
             try
@@ -305,7 +305,8 @@ function init_drive_workers!(
                 end
 
                 @sync for (_, w) in host_workers
-                    @async _drive_eval_main(w, :(Pkg.precompile(; io = devnull)))
+                    worker_proj = get(RUNNER_WORKER_PROJECT_DIRS, w, proj_dir)
+                    @async DistSSHRun._precompile_worker_project!(w, worker_proj)
                 end
 
                 # Skip processes where the binding already exists (e.g. master

@@ -92,6 +92,20 @@ function _ride_reset_runtime!(; spi_check::Bool)
     _RIDE_DEPTH[] = 0
     _RIDE_SPI[] = spi_check
     _RIDE_SPI_OK[] = nothing
+    _LOADED_VERIFIED_WORKER_IDS[] = nothing
+    return nothing
+end
+
+"""Drop workers from other jobs/tests so a fresh ride launch can ping only its own."""
+function _ride_evict_foreign_workers!()
+    owned = Set(_drive_owned_worker_ids())
+    for w in Int[Int(x) for x in workers() if x != 1]
+        w ∈ owned && continue
+        try
+            w in workers() && rmprocs(w; waitfor = 2.0)
+        catch
+        end
+    end
     return nothing
 end
 
@@ -441,9 +455,17 @@ function _ride_push_prelude!(ex)
     return nothing
 end
 
-function _ride_resolve_plan(tokens::Vector{String})::WorkerPlan
-    isempty(tokens) && return WorkerPlan(1, Dict{String, Int}())
-    return worker_plan_from_tokens(tokens)
+function _ride_resolve_plan(
+        tokens::Vector{String};
+        head_workers::Union{Nothing, Integer} = nothing,
+    )::WorkerPlan
+    lw = head_workers === nothing ? nothing : Int(head_workers)
+    if isempty(tokens)
+        n = lw === nothing ? 0 : Int(lw)
+        n == 0 && throw(ArgumentError(zero_placement_usage_error(:ride; surface = :api)))
+        return WorkerPlan(n, Dict{String, Int}())
+    end
+    return worker_plan_from_tokens(tokens; head_workers = lw)
 end
 
 function _ride_activate_project!(project::AbstractString)
@@ -476,21 +498,32 @@ function _ride_add_workers!(
         project::AbstractString,
         script_path::AbstractString,
         julia,
-        require_all_hosts::Bool,
+        best_effort::Bool;
+        bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
+        launch_plans::Union{Nothing, AbstractVector{HostLaunchPlan}} = nothing,
+        run_id::Union{Nothing, AbstractString} = nothing,
     )::Tuple{Vector{Int}, Vector{String}}
     before = Set(workers())
     ssh_hosts = String[]
     try
+        _clear_drive_host_worker_ids!()
+        empty!(RUNNER_WORKER_PROJECT_DIRS)
+        empty!(RUNNER_WORKER_SCRIPT_PATHS)
         _require_drive_host_status_idle!()
         child_hosts = Tuple{String, Union{Int, Nothing}}[
             (String(h), Int(n)) for (h, n) in plan.child_workers if n > 0
         ]
         if isempty(child_hosts)
-            n = plan.parent_workers
+            n = plan.head_workers
             if n > 0
+                plan_ranks = build_launch_rank_plan(n, child_hosts, 1)
+                reset_launch_rank_plan!(plan_ranks)
                 preserve_task_local_default_rng() do
                     ensure_run_cluster_cookie!()
-                    _add_local_drive_workers!(n, project, pin_local_julia(nothing))
+                    _add_local_drive_workers!(
+                        n, project, pin_local_julia(nothing);
+                        verify_project = run_id === nothing,
+                    )
                 end
             end
         else
@@ -500,40 +533,55 @@ function _ride_add_workers!(
             else
                 String(julia)
             end
-            successful = add_drive_workers!(
+            successful, _launch_rep = add_drive_workers!(
                 child_hosts,
-                plan.parent_workers,
+                plan.head_workers,
                 1,
                 julia_exe,
                 String(project),
                 String(script_path),
-                String(project),
+                String(project);
+                bind_overrides = bind_overrides,
+                launch_plans = launch_plans,
+                run_id = run_id,
             )
             ssh_hosts = String[String(h) for h in successful]
-            if require_all_hosts
+            if !best_effort
                 wanted = String[h for (h, _) in child_hosts]
                 missing = String[h for h in wanted if !(h in successful)]
                 isempty(missing) || error(
                     "ride: required hosts did not join: $(join(missing, ", "))",
                 )
-                if plan.parent_workers > 0
+                if plan.head_workers > 0
                     got = _drive_parent_worker_count()
-                    got >= plan.parent_workers || error(
-                        "ride: required parent workers did not join: wanted $(plan.parent_workers), got $got",
+                    got >= plan.head_workers || error(
+                        "ride: required local workers did not join: wanted $(plan.head_workers), got $got",
                     )
                 end
             end
+        end
+        added = Int[w for w in workers() if w ∉ before]
+        if !isempty(added)
             wait_for_worker_connections!(; ssh = !isempty(child_hosts))
             _ride_init_drive_workers!(project)
         end
-        added = Int[w for w in workers() if w ∉ before]
+        planned_workers =
+            plan.head_workers + sum(n for (_, n) in plan.child_workers; init = 0)
+        if planned_workers > 0
+            assert_workers_joined!()
+        end
         if isempty(child_hosts) && !isempty(added)
             _mark_workers_launched!(added, project)
             _register_drive_host_worker_ids!(PARENT_HOST_NAME, added)
         end
         isempty(added) || _ride_load_self_on_workers!()
         if isempty(child_hosts) && !isempty(added)
-            verify_workers_match_job!(project)
+            if run_id === nothing
+                verify_workers_match_job!(project)
+            else
+                verify_workers_match_shipped_run!(project; run_id = run_id)
+            end
+            assert_loaded_verified_worker_set!()
         end
         capture_worker_provenance!()
         return added, ssh_hosts
@@ -561,7 +609,7 @@ end
 
 Experimental. Rewrite `map` / `filter` / simple comprehensions / independent
 indexed `for` (`dest[i] = …`) and run the script on Distributed workers
-(parent and optional SSH `child:`). Rejects Distributed vocabulary
+(parent and optional SSH ``). Rejects Distributed vocabulary
 (use [`drive!`](@ref)).
 
 Worker add for SSH children is the same `add_drive_workers!` path as drive.
@@ -571,10 +619,10 @@ the parent (no driver `include` on workers). Named functions used by `map` /
 `filter` are sent to workers as a prelude.
 
 `--spi-check` (default off) compares the distributed result to a sequential
-`map` / `filter`. Unknown syntax stays sequential. Listed `child:` hosts are
-fail-closed (`require_all_hosts=true`).
+`map` / `filter`. Unknown syntax stays sequential. Listed `` hosts are
+fail-closed by default (`best_effort=false`).
 Queue: [`execute!`](@ref) `:ride` (`detached=true` writes `kit.result` like go;
-SSH `child:` also writes `kit.hosts` for [`terminate!`](@ref)).
+SSH `` also writes `kit.hosts` for [`terminate!`](@ref)).
 """
 function ride!(
         script::AbstractString,
@@ -653,11 +701,28 @@ function ride!(
         julia::Union{Nothing, AbstractString} = nothing,
         remote::Union{Nothing, AbstractString} = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
-        require_all_hosts::Bool = true,
+        best_effort::Bool = false,
+        yes::Union{Nothing, Bool} = nothing,
+        require_all_hosts::Union{Nothing, Bool} = nothing,
+        head_workers::Union{Nothing, Integer} = nothing,
         hint_surface::Symbol = :api,
-        unsafe_heterogeneous = false,
+        unsafe_skip_env_digests = missing,
+        unsafe_expose_port = missing,
+        unsafe_all_to_all = missing,
+        hosts_file::Union{Nothing, AbstractString} = nothing,
+        bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
         allow_mismatch = nothing,
     )::RideResult
+    yes !== nothing && throw(
+        ArgumentError(
+            "ride! does not accept yes=; confirmation is CLI-only (pass -y/--yes to julia -m DistSSHKit)",
+        ),
+    )
+    require_all_hosts !== nothing && throw(
+        ArgumentError(
+            "ride! does not accept require_all_hosts=; use best_effort=true for a partial run",
+        ),
+    )
     _reject_removed_allow_mismatch!(allow_mismatch)
     path = canonical_local_path(script)
     julia_s = string(VERSION)
@@ -676,10 +741,35 @@ function ride!(
     inherited_run = old_run isa AbstractString && !isempty(strip(old_run))
     try
         _ensure_kit_run_dir!(:ride, path; project = project)
-        return with_unsafe_heterogeneous(unsafe_heterogeneous) do
+        cfg = resolve_run_job_config(;
+            command = :ride,
+            cli_unsafe_skip_env_digests = cli_optional_bool(unsafe_skip_env_digests),
+            cli_unsafe_expose_port = cli_optional_bool(unsafe_expose_port),
+            cli_unsafe_all_to_all = cli_optional_bool(unsafe_all_to_all),
+        )
+        resolved_bind = try
+            planned = String[launch_bind_host_key(t) for t in tokens]
+            resolve_launch_bind_overrides(;
+                hosts_file = hosts_file,
+                bind_overrides = bind_overrides,
+                surface = hint_surface,
+                planned_hosts = planned,
+                command = :ride,
+            )
+        catch e
+            e isa ArgumentError || rethrow()
+            if hint_surface === :cli
+                throw(DistSSHBase.CliUsageError(_bind_config_cli_message(e.msg)))
+            end
+            return RideResult(
+                false, path, 0, nothing, sprint(showerror, e), julia_s, nothing, kit_run_dir(),
+            )
+        end
+        return with_run_unsafe_options!(cfg) do
             return _ride_run!(
                 path, julia_s, tokens, args, spi_check, output_dir, project, julia,
-                remote, validated_run_id, require_all_hosts, hint_surface, inherited_run,
+                remote, validated_run_id, best_effort, head_workers, hint_surface,
+                inherited_run, resolved_bind,
             )
         end
     finally
@@ -699,24 +789,46 @@ function _ride_run!(
         julia,
         remote,
         run_id::Union{Nothing, String},
-        require_all_hosts,
+        best_effort::Bool,
+        head_workers::Union{Nothing, Integer},
         hint_surface::Symbol,
         inherited_run::Bool,
+        bind_overrides::AbstractDict{<:AbstractString, <:AbstractString},
     )
     # `ride!` restores `DISTSSH_RUN_DIR` after this returns.
     run_dir = kit_run_dir()
     project_root_abs = canonical_local_path(project)
-    assert_controller_environment_for_verify!(project_root_abs)
+    if run_id !== nothing
+        assert_controller_environment_for_shipped_run!(project_root_abs)
+    else
+        assert_controller_environment_for_verify!(project_root_abs)
+    end
     _reset_run_provenance!(project_root_abs)
-    _clear_last_ship!()
+    _clear_active_selection!()
+    _clear_active_deploy_record_unless_run_id!(run_id)
     tok = String[String(t) for t in tokens]
     wp = try
-        _ride_resolve_plan(tok)
+        _ride_resolve_plan(tok; head_workers = head_workers)
     catch e
         e isa ArgumentError && return RideResult(
             false, path, 0, nothing, sprint(showerror, e), julia_s, nothing, run_dir,
         )
         rethrow()
+    end
+    child_ssh = String[h for (h, n) in wp.child_workers if n > 0]
+    child_ssh_launch_plans = nothing
+    if !isempty(child_ssh)
+        try
+            child_ssh_launch_plans = validate_all_host_launch_plans!(child_ssh, bind_overrides)
+        catch e
+            e isa ArgumentError || rethrow()
+            if hint_surface === :cli
+                throw(DistSSHBase.CliUsageError(_bind_config_cli_message(e.msg)))
+            end
+            return RideResult(
+                false, path, 0, nothing, sprint(showerror, e), julia_s, nothing, run_dir,
+            )
+        end
     end
     src = read(path, String)
     expr = try
@@ -766,6 +878,11 @@ function _ride_run!(
                 project; cli_override = remote,
             )
             record_deploy_status_for_run!(child_hosts, deploy_root, project)
+            if !preflight_setup_ssh(child_hosts) && !best_effort
+                throw(
+                    ArgumentError("SSH preflight failed. Fix connectivity, then retry."),
+                )
+            end
         end
         empty!(ARGS)
         append!(ARGS, String[String(a) for a in args])
@@ -782,7 +899,13 @@ function _ride_run!(
         progress_started = true
         kit_progress_step!("workers")
         _ride_activate_project!(project)
-        added, ssh_hosts = _ride_add_workers!(wp, project, path, julia, require_all_hosts)
+        _ride_evict_foreign_workers!()
+        added, ssh_hosts = _ride_add_workers!(
+            wp, project, path, julia, best_effort;
+            bind_overrides = bind_overrides,
+            launch_plans = child_ssh_launch_plans,
+            run_id = run_id,
+        )
         _write_kit_hosts_file(ssh_hosts, batch_dir, nothing)
         _write_joined_drive_host_status!(
             sort!(collect(keys(DRIVE_HOST_WORKER_IDS))),

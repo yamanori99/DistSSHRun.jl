@@ -15,7 +15,7 @@ Real OpenSSH Linux workers. CI remote SSH coverage uses this stack
   `E2E weekly / macos-15-intel → ubuntu-26.04`
 - WSL2 (`windows-latest`), same image: **E2E weekly** —
   `E2E weekly / windows-latest (WSL2) → ubuntu-26.04`
-- Either kit parent, `parent:N`: mixed smoke inside the same suite
+- Either kit parent, `--local-workers N`: mixed smoke inside the same suite
 
 Suite inventory: [`test/README.md`](../../test/README.md#ssh-e2e).
 
@@ -58,7 +58,7 @@ By default, `setup check` requires matching patch and prerelease versions
 but ignores build suffixes. `go` and `drive` require matching `string(VERSION)`
 and Julia commit always; DistSSH* versions must match. Manifest and Project
 bytes must match the controller (master) byte-exactly unless
-`--unsafe-heterogeneous` is set (that flag does not waive Julia build or
+`--unsafe-skip-env-digests` is set (that flag does not waive Julia build or
 DistSSH* versions).
 Install policy:
 [Requirements](https://yamanori99.github.io/DistSSHKit.jl/stable/requirements/).

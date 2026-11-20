@@ -12,9 +12,9 @@ function _ride_parsed(;
         julia = nothing,
         run_id = nothing,
         deploy_root = nothing,
-        unsafe_heterogeneous = false,
+        run_opts::RunOptionCliState = RunOptionCliState(),
     )
-    return (
+    base = (
         help = help,
         show_version = show_version,
         cli_session = cli_session,
@@ -26,8 +26,8 @@ function _ride_parsed(;
         julia = julia,
         run_id = run_id,
         deploy_root = deploy_root,
-        unsafe_heterogeneous = unsafe_heterogeneous,
     )
+    return merge_run_option_cli!(base, run_opts)
 end
 
 function show_ride_usage(; io::IO = stdout)
@@ -44,16 +44,17 @@ function show_ride_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  $(cli_m_project()) ride SCRIPT.jl",
-        "  ride parent:2 SCRIPT.jl",
-        "  ride parent:1 child:host1:2 SCRIPT.jl",
-        "  ride --spi-check parent:2 SCRIPT.jl",
+        "  ride --head-workers 2 SCRIPT.jl",
+        "  ride --head-workers 1 2*host1 SCRIPT.jl",
+        "  ride --spi-check --head-workers 2 SCRIPT.jl",
     )
     print_help_blank(io)
     print_help_section("Options"; io = io)
     print_help_lines(
         io,
-        "  parent:N / child:NAME:N  Distributed workers (default: no tokens → parent:1)",
-        "  omit :N             error (pass parent:N / child:NAME:N)",
+        "  N*host              machine tokens (quote --hosts)",
+        "  $(KIT_HEAD_WORKERS_FLAG_HELP)",
+        "  omit host count     error (pass N*host)",
         "  --spi-check         compare to sequential map/filter (default off)",
         "  --no-spi-check      skip that compare",
         "  --output-dir PATH   DISTRIBUTED_OUTPUT_DIR for the script (must be missing or empty)",
@@ -62,7 +63,7 @@ function show_ride_usage(; io::IO = stdout)
         "                      Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
         "                      ~/Parent/RepoName layout from the local env_dir.",
         "  --run-id ID       use runs/<ID>/src under the deploy root",
-        "  --unsafe-heterogeneous  waive Manifest/Project digest checks only (unverified; Julia build and DistSSH* versions must match)",
+        generated_run_option_help(:ride)...,
         "  SSH workers: project-root cwd, bind 127.0.0.1; Julia build and DistSSH* version mismatch is always an error.",
         "  $(KIT_HOSTS_FLAG_HELP)",
         "  --hosts-file PATH   one token per line",
@@ -74,14 +75,23 @@ function show_ride_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "See also: go, drive, setup.",
-        "API: ride!(script, \"parent:2\", \"child:host:1\"; spi_check=false, run_id=\"…\").",
+        "API: ride!(script, \"1*host\"; head_workers=2, spi_check=false, run_id=\"…\").",
     )
     return nothing
 end
 
 """Parse `ride` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_ride_args(args::AbstractVector{<:AbstractString})
+    args_vec = Vector{String}(String.(args))
+    blob_path, _ = peel_job_blob_bootstrap(copy(args_vec))
+    if blob_path !== nothing
+        scrub_detached_placement_env!()
+        return ride_parsed_from_detached_job_blob(read_detached_job_blob(blob_path))
+    end
+    reject_mistaken_short_placement_flags!(args; command = :ride)
     cli_session, rest = peel_shared_cli_flags(args)
+    cli_session.head_slots !== nothing &&
+        throw(ArgumentError("ride uses --head-workers, not --head-slots"))
     hosts = String[]
     host_tokens = String[]
     script_path = nothing
@@ -90,7 +100,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
     julia_exe = nothing
     run_id = nothing
     deploy_root = nothing
-    unsafe_heterogeneous = false
+    run_opts = RunOptionCliState()
     spi_check = false
     options_done = false
     c = CliCursor(collect(String, rest))
@@ -132,8 +142,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
         elseif arg == "--"
             options_done = true
             cli_consume!(c)
-        elseif arg == "--unsafe-heterogeneous"
-            unsafe_heterogeneous = true
+        elseif try_consume_run_option!(arg, run_opts, :ride)
             cli_consume!(c)
         elseif arg == "--allow-mismatch"
             reject_removed_allow_mismatch_flag!(arg)
@@ -165,7 +174,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
                 julia = julia_exe,
                 run_id = run_id,
                 deploy_root = deploy_root,
-                unsafe_heterogeneous = unsafe_heterogeneous,
+                run_opts = run_opts,
             )
         elseif endswith(arg, ".jl")
             script_path = arg
@@ -185,7 +194,7 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
     append!(hosts, host_tokens)
     append_kit_host_sources!(hosts, cli_session; keep_counts = true)
     for h in hosts
-        parse_placement_token(h)
+        DistSSHBase.parse_machine_token(h)
     end
     if julia_exe === nothing
         env_val = get(ENV, "JULIA_DISTRIBUTED_EXE", "auto")
@@ -195,7 +204,12 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
     end
     apply_shared_cli_flags!(cli_session)
     if script_path !== nothing
-        require_counted_placement_tokens(hosts; surface = :cli)
+        require_counted_placement_tokens(
+            hosts;
+            command = :ride,
+            surface = :cli,
+            head_workers = cli_session.head_workers,
+        )
     end
     return _ride_parsed(;
         help = false,
@@ -209,6 +223,6 @@ function parse_ride_args(args::AbstractVector{<:AbstractString})
         julia = julia_exe,
         run_id = run_id,
         deploy_root = deploy_root,
-        unsafe_heterogeneous = unsafe_heterogeneous,
+        run_opts = run_opts,
     )
 end

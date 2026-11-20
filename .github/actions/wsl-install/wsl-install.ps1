@@ -10,7 +10,7 @@
 #
 # - DistSSHRun #43 and DistSSHKit #457 put timeout-minutes: 10 on the action.
 #   The intent was that a hung `wsl --install` would fail at 10 minutes instead
-#   of the 45 minute job limit. It does not. The wsl.exe from that step keeps
+#   of the 60 minute job limit. It does not. The wsl.exe from that step keeps
 #   the pipes.
 #   https://github.com/yamanori99/DistSSHRun.jl/pull/43
 #   https://github.com/yamanori99/DistSSHKit.jl/pull/457

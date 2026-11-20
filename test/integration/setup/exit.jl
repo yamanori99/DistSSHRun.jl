@@ -18,81 +18,83 @@ using Test
         (; setup_args = ["delete", "parent"]),
         (; setup_args = ["delete", "host1"]),
         (;
-            setup_args = ["delete", "--deploy-root", remote, "child:host1"],
+            setup_args = ["delete", "--deploy-root", remote, "host1"],
             extra_env = _fake_setup_remote_env(fresh_state()),
         ),
         (;
             setup_args = [
                 "delete", "--deploy-root", remote, "--confirm-path", "/not/the/path",
-                "child:host1",
+                "host1",
             ],
             extra_env = _fake_setup_remote_env(fresh_state()),
         ),
         (;
             setup_args = [
                 "delete", "--yes", "--deploy-root", remote,
-                "--confirm-path", remote, "child:host1",
+                "--confirm-path", remote, "host1",
             ],
             extra_env = merge(
                 _fake_setup_remote_env(fresh_state()),
-                Dict("DISTSSH_TEST_SSH_FAIL" => "1"),
+                Dict("DISTSSH_TEST_SSH_FAIL" => "1")
             ),
         ),
         (;
             setup_args = [
                 "delete", "--deploy-root", remote, "--confirm-path", remote,
-                "child:host1", "child:host2",
+                "host1", "host2",
             ],
             extra_env = _fake_setup_remote_env(fresh_state()),
         ),
         (;
-            setup_args = ["ship-tree", "child:host1"],
+            setup_args = ["ship-tree", "host1"],
             extra_env = merge(
                 _fake_setup_remote_env(fresh_state()),
                 Dict(
                     "DISTSSH_TEST_MKDIR_FAIL" => "1",
-                    "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia",
-                ),
+                    "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia"
+                )
             ),
         ),
         (;
-            setup_args = ["ship-tree", "child:host1", "child:host2"],
+            setup_args = ["ship-tree", "host1", "host2"],
             extra_env = merge(
                 _fake_setup_remote_env(fresh_state()),
-                Dict("DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia"),
+                Dict("DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia")
             ),
         ),
         # `--julia` skips remote detect; fake ssh still sees `Pkg.test()`.
         (;
-            setup_args = ["runtest", "--julia", "/bin/echo", "child:host1"],
+            setup_args = ["runtest", "--julia", "/bin/echo", "host1"],
             extra_env = merge(
                 _fake_setup_remote_env(fresh_state()),
-                Dict("DISTSSH_TEST_PKG_TEST_FAIL" => "1"),
+                Dict("DISTSSH_TEST_PKG_TEST_FAIL" => "1")
             ),
         ),
         (;
-            setup_args = ["runtest", "--julia", "/bin/echo", "child:host1", "child:host2"],
+            setup_args = ["runtest", "--julia", "/bin/echo", "host1", "host2"],
             extra_env = _fake_setup_remote_env(fresh_state()),
         ),
-        (; setup_args = ["--juliaup-update", "child:host1"]),
-        (; setup_args = ["--juliaup", "child:host1"]),
-        (; setup_args = ["check", "--remote-dir", "/tmp/App.jl", "child:host1"]),
+        (; setup_args = ["--juliaup-update", "host1"]),
+        (; setup_args = ["--juliaup", "host1"]),
+        (; setup_args = ["check", "host1"]),
     ]
     try
         got = _run_kit_setups(calls)
 
         @testset "host validation wiring" begin
             proc, combined = got[1]
-            @test proc.exitcode == 1
-            @test occursin("only for up", combined)
+            @test proc.exitcode == 2
+            @test occursin("only for up", combined) || occursin("was removed", combined)
             proc2, combined2 = got[2]
-            @test proc2.exitcode == 1
-            @test occursin("child:NAME", combined2) || occursin("parent[:N]", combined2)
+            @test proc2.exitcode == 2
+            @test occursin("NAME", combined2) ||
+                occursin("parent[:N]", combined2) ||
+                occursin("--confirm-path", combined2)
         end
 
         @testset "delete" begin
             proc, combined = got[3]
-            @test proc.exitcode == 1
+            @test proc.exitcode == 2
             @test occursin("do not authorize", combined)
             @test occursin("--confirm-path", combined)
             @test occursin("help setup", combined)
@@ -101,7 +103,7 @@ using Test
             @test !occursin("Would remove", combined)
 
             proc, combined = got[4]
-            @test proc.exitcode == 1
+            @test proc.exitcode == 2
             @test occursin("does not match", combined)
             @test occursin("help setup", combined)
             @test !occursin("--help", combined)
@@ -139,20 +141,20 @@ using Test
 
         @testset "removed setup flags" begin
             proc, combined = got[11]
-            @test proc.exitcode == 1
+            @test proc.exitcode == 2
             @test occursin("setup --juliaup-update was removed", combined)
             @test occursin("up update", combined)
             @test !occursin("deprecated", lowercase(combined))
 
             proc, combined = got[12]
-            @test proc.exitcode == 1
+            @test proc.exitcode == 2
             @test occursin("setup --juliaup was removed", combined)
             @test occursin("up add CHANNEL", combined)
 
             proc, combined = got[13]
-            @test proc.exitcode == 1
-            @test occursin("setup --remote-dir was removed", combined)
-            @test occursin("--deploy-root", combined)
+            @test proc.exitcode == 2
+            @test occursin("setup check was removed in 0.2.0", combined)
+            @test occursin("doctor --deploy", combined)
         end
     finally
         for d in state_dirs

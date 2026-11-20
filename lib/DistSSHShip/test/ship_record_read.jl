@@ -42,7 +42,8 @@ function _minimal_snapshot(project_rel::AbstractString)::DistSSHShip.Shipment
     end
     hash = String(DistSSHShip.Tar.tree_hash(tar_path; algorithm = "git-sha1", skip_empty = true))
     return DistSSHShip.Shipment(
-        bundle, tar_path, hash, filesize(tar_path), 2, src, src, project_rel, String[], String[],
+        bundle, tar_path, hash, filesize(tar_path), 2, src, src, project_rel,
+        String[], String[], String[], Pair{String, String}[], String[],
     )
 end
 

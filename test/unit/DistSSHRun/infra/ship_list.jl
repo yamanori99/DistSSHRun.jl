@@ -218,13 +218,18 @@ using Test
         end
     end
 
-    @testset "a gitignored selected Project.toml is refused at pack" begin
+    @testset "a gitignored selected Project.toml is forced into pack" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
             _sync_test_project_manifest!(tmp)
             write(joinpath(tmp, "a.jl"), "1\n")
             write(joinpath(tmp, ".gitignore"), "Project.toml\n")
-            @test_throws ArgumentError DistSSHRun._pack_project_tree(tmp)
+            pack = DistSSHRun._pack_project_tree(tmp)
+            try
+                @test "Project.toml" in DistSSHRun.DistSSHShip.pack_entry_paths(tmp)
+            finally
+                rm(pack.directory; force = true, recursive = true)
+            end
         end
     end
 
@@ -374,7 +379,7 @@ using Test
         end
     end
 
-    @testset "gitignored project preferences stay out" begin
+    @testset "gitignored project preferences are forced into pack" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\n")
             write(joinpath(tmp, "Project.toml"), "name = \"ShipT\"\n")
@@ -384,8 +389,9 @@ using Test
             try
                 dest = mktempdir()
                 DistSSHRun.Tar.extract(packed.tar_path, dest)
-                @test !isfile(joinpath(dest, "LocalPreferences.toml"))
+                @test isfile(joinpath(dest, "LocalPreferences.toml"))
                 @test isfile(joinpath(dest, "Project.toml"))
+                @test "LocalPreferences.toml" in packed.forced_ignore_ship
             finally
                 rm(packed.directory; force = true, recursive = true)
             end
@@ -445,7 +451,7 @@ using Test
         end
     end
 
-    @testset "gitignored preferences beside JuliaProject.toml stay out" begin
+    @testset "gitignored preferences beside JuliaProject.toml are forced into pack" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, ".gitignore"), "LocalPreferences.toml\n")
             write(joinpath(tmp, "JuliaProject.toml"), "name = \"ShipT\"\n")
@@ -455,7 +461,7 @@ using Test
             try
                 dest = mktempdir()
                 DistSSHRun.Tar.extract(packed.tar_path, dest)
-                @test !isfile(joinpath(dest, "LocalPreferences.toml"))
+                @test isfile(joinpath(dest, "LocalPreferences.toml"))
                 @test isfile(joinpath(dest, "JuliaProject.toml"))
             finally
                 rm(packed.directory; force = true, recursive = true)
@@ -552,7 +558,7 @@ end
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
             write(
                 joinpath(tmp, "Manifest.toml"),
-                "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
+                "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n"
             )
             write(joinpath(tmp, "keep.jl"), "k = 1\n")
             mkpath(joinpath(tmp, "nested", "sub"))
@@ -570,7 +576,7 @@ end
                 name = "big"
                 path = "data"
                 hash = false
-                """,
+                """
             )
             write(joinpath(tmp, ".distssh", "note.txt"), "kit\n")
             run(`mkfifo $(joinpath(tmp, "pipe"))`)
@@ -601,7 +607,7 @@ end
                 DistSSHRun.Tar.extract(packed.tar_path, dest)
                 @test _extracted_ship_rels(dest) == listed
                 snap = DistSSHRun.DistSSHShip.pack_tree(
-                    tmp; omit_project_rels = omit,
+                    tmp; omit_project_rels = omit
                 )
                 try
                     @test snap.content_tree_hash == packed.content_tree_hash
@@ -622,7 +628,7 @@ end
                 write(joinpath(repo, "Project.toml"), "name = \"App\"\n")
                 write(
                     joinpath(repo, "Manifest.toml"),
-                    "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
+                    "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n"
                 )
                 write(joinpath(repo, "tracked.jl"), "t = 1\n")
                 write(joinpath(repo, "ignored.jl"), "i = 1\n")

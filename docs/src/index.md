@@ -4,7 +4,9 @@ DistSSHRun is one run on shared machines over SSH: `setup`, `go`,
 `ride`, `drive`, `hostinfo`, `pool`, `demo`, and `progress`.
 Supported on **macOS, Linux, and WSL2 Ubuntu** (not native Windows).
 
-The command is `julia -m DistSSHRun`.
+The command is `julia -m DistSSHRun`. Exit streams and codes follow Rust
+[clap](https://docs.rs/clap) [`Command::arg_required_else_help`](https://docs.rs/clap/latest/clap/struct.Command.html#method.arg_required_else_help);
+see [CLI conventions](cli.md).
 
 `pkg> app add DistSSHRun` still installs `distsshrun`. That command is
 experimental. The binary is the Apps copy, not `--project=.`. Apps
@@ -66,7 +68,10 @@ pull-back use stdlib Tar over SSH. The remote Julia executable is `--julia`,
 or auto-detect. Original mtimes are not kept. Pull-back `touch`es extracted
 files. Ship does not `touch`; files keep the extract-time mtime. A
 non-executable file arrives as mode `0644`, and an executable file as
-`0755`. A symlink that points outside the copied tree is refused.
+`0755`. `setup ship-tree` ships regular files read-only: `0444` by
+default and `0555` when the source had execute permission; the deploy
+record’s `content_tree_hash` still detects content or mode drift. A
+symlink that points outside the copied tree is refused.
 `push_cache!` uses stdlib Tar over SSH and needs a remote Julia executable
 (`--julia`, or auto-detect) that can load stdlib `Tar` and `SHA`. Ship uses
 stdlib Tar over SSH. Git `setup git-clone`, `setup git-sync`, and
@@ -141,6 +146,12 @@ newer last-ship record. A recorded `content_tree_hash` there must match
 the selected remote stamp. A local last-ship record without a matching
 40-digit hash is not used. `setup check` still prints SSH diagnostics
 when selection cannot probe, then fails closed if the run id is invalid. `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
+`pack_ship_tree`, `pack_shipment`, and `ship_project_to_dest` send the same
+verified tar as worker ship to a caller-chosen remote directory (DistSSHQueue
+can call this for client→qhost staging). They do not create `runs/`, write Run
+`run.toml`, or instantiate. Pass an explicit `transfer_id` when the consumer
+needs a stage job id in `shipment.toml`; use `ShipmentReceipt.content_tree_hash`
+as the shipped-tree id (not lexical-latest under the stage parent).
 `ship_tree!(project, hosts, deploy_root)` packs with `DistSSHShip.pack_tree`
 (declared-input omission and warnings), ships into `runs/<run_id>/src/`, then
 deletes the temporary pack directory. `ship_tree!(pack, hosts, deploy_root)`
@@ -232,10 +243,11 @@ from this process. A build suffix alone still passes.
 runs `juliaup update` even when the channel name already matches.
 
 ```bash
-julia -m DistSSHRun setup check child:host1
+julia -m DistSSHRun setup check host1
 julia -m DistSSHRun go SCRIPT.jl
-julia -m DistSSHRun ride parent:2 SCRIPT.jl
-julia -m DistSSHRun drive parent:2 SCRIPT.jl
+julia -m DistSSHRun ride --local-workers 2 SCRIPT.jl
+julia -m DistSSHRun drive --local-workers 2 SCRIPT.jl
+julia -m DistSSHRun go --local-slots 2 SCRIPT.jl
 julia -m DistSSHRun hostinfo parent
 julia -m DistSSHRun pool
 ```

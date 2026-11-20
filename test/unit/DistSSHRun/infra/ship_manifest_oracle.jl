@@ -25,8 +25,8 @@ function _git_commit_q!(repo::AbstractString, msg::AbstractString)
         pipeline(
             `git -C $repo -c user.email=test@example.com -c user.name=Test -c commit.gpgsign=false commit -q -m $msg`;
             stdout = devnull,
-            stderr = devnull,
-        ),
+            stderr = devnull
+        )
     )
     return nothing
 end
@@ -60,7 +60,7 @@ end
                 write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
                 write(
                     joinpath(tmp, "Manifest.toml"),
-                    "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
+                    "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n"
                 )
                 run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
                 run(pipeline(`git -C $tmp add -A`; stdout = devnull, stderr = devnull))
@@ -71,13 +71,13 @@ end
         end
     end
 
-    @testset "git repository, gitignored Manifest" begin
+    @testset "git repository, gitignored Manifest is forced into pack" begin
         if Sys.which("git") !== nothing
             _with_tempdir() do tmp
                 write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
                 write(
                     joinpath(tmp, "Manifest.toml"),
-                    "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n",
+                    "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n"
                 )
                 write(joinpath(tmp, ".gitignore"), "Manifest.toml\n")
                 run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
@@ -85,28 +85,23 @@ end
                     pipeline(
                         `git -C $tmp add Project.toml .gitignore`;
                         stdout = devnull,
-                        stderr = devnull,
-                    ),
+                        stderr = devnull
+                    )
                 )
                 _git_commit_q!(tmp, "init")
-                omit = _omit_for(tmp)
-                @test_throws ArgumentError DistSSHRun.DistSSHShip.pack_entry_paths(
-                    tmp; omit_project_rels = omit,
-                )
-                @test_throws ArgumentError DistSSHRun.pack_ship_tree(tmp)
+                listed = _oracle_matches_tar!(tmp)
+                @test "Manifest.toml" in listed
             end
         end
     end
 
-    @testset "no git, gitignored Manifest" begin
+    @testset "no git, gitignored Manifest is forced into pack" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")
             _sync_test_project_manifest!(tmp)
             write(joinpath(tmp, ".gitignore"), "Manifest.toml\n")
-            omit = _omit_for(tmp)
-            @test_throws ArgumentError DistSSHRun.DistSSHShip.pack_entry_paths(
-                tmp; omit_project_rels = omit,
-            )
+            listed = _oracle_matches_tar!(tmp)
+            @test "Manifest.toml" in listed
         end
     end
 
@@ -120,7 +115,7 @@ end
         end
     end
 
-    @testset "external Manifest path gitignored is refused at pack" begin
+    @testset "external Manifest path gitignored is forced into pack" begin
         _with_tempdir() do root
             ext = joinpath(root, "extapp")
             locks = joinpath(root, "locks")
@@ -130,11 +125,11 @@ end
             write(outside_manifest, "# lock\n")
             write(
                 joinpath(ext, "Project.toml"),
-                "name = \"Ext\"\nmanifest = \"../locks/Manifest.toml\"\n",
+                "name = \"Ext\"\nmanifest = \"../locks/Manifest.toml\"\n"
             )
             write(joinpath(locks, ".gitignore"), "Manifest.toml\n")
-            @test_throws ArgumentError DistSSHRun.DistSSHShip.pack_entry_paths(ext)
-            @test_throws ArgumentError DistSSHRun.pack_ship_tree(ext)
+            listed = _oracle_matches_tar!(ext)
+            @test any(occursin("Manifest.toml", p) for p in listed)
         end
     end
 
@@ -149,7 +144,7 @@ end
                 name = "Lab"
                 [workspace]
                 projects = ["experiments/run1"]
-                """,
+                """
             )
             _sync_test_project_manifest!(lab)
             write(joinpath(member, "Project.toml"), "name = \"Run1\"\n[deps]\n")

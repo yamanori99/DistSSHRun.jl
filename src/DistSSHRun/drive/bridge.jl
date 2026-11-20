@@ -11,26 +11,31 @@ function drive_parsed_from_session(
         package::Union{Nothing, AbstractString} = nothing,
         sync::Union{Nothing, Symbol, Bool} = nothing,
         julia::Union{Nothing, AbstractString} = nothing,
-        require_all_hosts::Bool = true,
+        best_effort::Bool = false,
         worker_include::Bool = false,
         sync_script::Union{Nothing, Bool} = nothing,
-        unsafe_heterogeneous = false,
+        unsafe_skip_env_digests = false,
         allow_external_symlinks::Bool = false,
         run_id::Union{Nothing, AbstractString} = nothing,
         unsafe_master_silence_exit::Union{Nothing, Bool} = nothing,
+        unsafe_expose_port::Union{Nothing, Bool} = nothing,
+        unsafe_all_to_all::Union{Nothing, Bool} = nothing,
+        bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
     )
     _reject_removed_drive_worker_include_kw!(sync_script)
     _reject_run_transfer_kw!("drive!", sync; surface = hint_surface(session))
     allow_external_symlinks &&
         _reject_run_transfer_cli!("drive!", "--allow-external-symlinks")
-    parent_workers = 0
+    head_workers = 0
     hosts = Tuple{String, Union{Int, Nothing}}[]
     if workers !== nothing
-        parent_workers = workers.parent_workers
+        head_workers = workers.head_workers
         for (host, n) in workers.child_workers
             n > 0 && push!(hosts, (host, n))
         end
     else
+        lw = session.cli_session.head_workers
+        lw !== nothing && (head_workers = Int(lw))
         for h in session.hosts
             push!(hosts, (h, nothing))
         end
@@ -38,7 +43,7 @@ function drive_parsed_from_session(
     cli_session = CliSharedFlags(
         quiet = session.quiet,
         verbosity = session.verbosity,
-        yes = session.yes,
+        yes = session.cli_session.yes,
         show_version = false,
         hosts_file = session.cli_session.hosts_file,
         hint_surface = hint_surface(session),
@@ -51,7 +56,7 @@ function drive_parsed_from_session(
         String(julia)
     end
     return (
-        parent_workers = parent_workers,
+        head_workers = head_workers,
         default_workers = nothing,
         julia = julia_exe,
         skip_hash_check = skip_hash_check,
@@ -66,17 +71,22 @@ function drive_parsed_from_session(
         collect_hosts = nothing,
         collect_overwrite = nothing,
         worker_include = worker_include,
-        require_all_hosts = require_all_hosts,
+        best_effort = best_effort,
         help = false,
         show_version = false,
         cli_session = cli_session,
         hint_surface = hint_surface(session),
-        unsafe_heterogeneous = unsafe_heterogeneous,
+        unsafe_skip_env_digests = cli_optional_bool(unsafe_skip_env_digests),
+        unsafe_expose_port = unsafe_expose_port === nothing ? missing : cli_optional_bool(unsafe_expose_port),
+        unsafe_all_to_all = unsafe_all_to_all === nothing ? missing : cli_optional_bool(unsafe_all_to_all),
+        print_config = missing,
+        dry_run = missing,
         run_id = snap,
         deploy_root = session.remote,
         isolated = false,
         unsafe_master_silence_exit = unsafe_master_silence_exit === nothing ?
             missing :
             unsafe_master_silence_exit,
+        bind_overrides = Dict{String, String}(String(k) => String(v) for (k, v) in bind_overrides),
     )
 end

@@ -40,53 +40,55 @@ function _parse_drive_flag_count(flag::String, args::Vector, i::Int)::Int
     end
 end
 
-function _drive_set_parent_workers!(
-        parent_workers::Int,
+function _drive_set_head_workers!(
+        head_workers::Int,
         count::Int,
         source::String,
     )::Int
-    parent_workers > 0 &&
-        throw(
-        ArgumentError(
-            "duplicate parent worker spec ($source); use one of $(PARENT_HOST_NAME):N",
-        )
-    )
-    count < 1 &&
-        throw(ArgumentError("parent worker count must be >= 1, got $count"))
+    head_workers > 0 &&
+        throw(ArgumentError("duplicate local worker spec ($source); use --head-workers once"))
+    count < 0 &&
+        throw(ArgumentError("local worker count must be >= 0, got $count"))
     return count
 end
 
 function _drive_push_host_token!(
         hosts::Vector{Tuple{String, Union{Int, Nothing}}},
-        parent_workers::Int,
         token::AbstractString,
-        parent_listed::Ref{Bool},
-    )::Int
-    p = parse_placement_token(String(token))
-    p.n === nothing && throw(
-        ArgumentError(explain_bare_placement_tokens([token]; surface = :cli)),
     )
-    if p.role === :parent
-        parent_listed[] = true
-        n = p.n
-        n === 0 && return parent_workers
-        return _drive_set_parent_workers!(
-            parent_workers,
-            n,
-            String(token),
-        )
-    end
-    push!(hosts, (p.name, p.n))
-    return parent_workers
+    p = parse_placement_token(String(token))
+    n = something(p.n, 1)
+    push!(hosts, (p.name, n))
+    return nothing
+end
+
+function _throw_removed_workers_flag(flag::AbstractString)
+    throw(
+        ArgumentError(
+            "$(flag) was removed; use --head-workers and `N*host` machine tokens",
+        ),
+    )
 end
 
 """Parse `drive` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_drive_args(args::Vector{String})
+    blob_path, args = peel_job_blob_bootstrap(copy(args))
+    if blob_path !== nothing
+        scrub_detached_placement_env!()
+        blob = read_detached_job_blob(blob_path)
+        blob.kind === :drive || throw(
+            ArgumentError("job blob kind is $(blob.kind); expected drive"),
+        )
+        return drive_parsed_from_detached_job_blob(blob; hint_surface = :cli)
+    end
+    reject_mistaken_short_placement_flags!(args; command = :drive)
     cli_session, args = peel_shared_cli_flags(args)
-    parent_workers = 0
+    cli_session.head_slots !== nothing &&
+        throw(ArgumentError("drive uses --head-workers, not --head-slots"))
+    head_workers = 0
     default_workers = nothing
     julia_exe = nothing
-    unsafe_heterogeneous = false
+    run_opts = RunOptionCliState()
     skip_hash_check = true  # default: no git parity; --require-git turns checks on
     enable_log = true
     log_dir = nothing
@@ -95,15 +97,25 @@ function parse_drive_args(args::Vector{String})
     run_id = nothing
     deploy_root = nothing
     isolated = false
-    unsafe_master_silence_exit = false
-    unsafe_master_silence_exit_cli = false
     worker_include = false
     require_git = false
-    require_all_hosts = true
-    require_all_hosts_cli = false
+    best_effort = false
     best_effort_cli = false
+    if haskey(ENV, "DISTSSH_REQUIRE_ALL_HOSTS")
+        throw(
+            ArgumentError(
+                "drive: DISTSSH_REQUIRE_ALL_HOSTS was removed in 0.2.0; listed hosts must join by default, or pass --best-effort",
+            ),
+        )
+    end
+    if haskey(ENV, "DISTSSH_BEST_EFFORT")
+        throw(
+            ArgumentError(
+                "drive: DISTSSH_BEST_EFFORT was removed in 0.2.0; pass --best-effort on the CLI instead",
+            ),
+        )
+    end
     hosts = Tuple{String, Union{Int, Nothing}}[]
-    parent_listed = Ref(false)
     script_path = nothing
     script_args = String[]
 
@@ -119,16 +131,11 @@ function parse_drive_args(args::Vector{String})
             elseif startswith(arg, "-")
                 throw(
                     ArgumentError(
-                        "unknown or incomplete drive option: $arg (use parent:N / child:NAME:N, e.g. parent:2 child:host1:4)",
+                        "unknown or incomplete drive option: $arg (use --head-workers and `N*host`, e.g. 4*host1)",
                     )
                 )
             else
-                parent_workers = _drive_push_host_token!(
-                    hosts,
-                    parent_workers,
-                    arg,
-                    parent_listed,
-                )
+                _drive_push_host_token!(hosts, arg)
                 i += 1
             end
             continue
@@ -142,20 +149,14 @@ function parse_drive_args(args::Vector{String})
                     "drive: use `parent:N` (e.g. drive parent:4 script.jl), not a `--parent` flag",
                 )
             )
-        elseif arg == "--local" || arg == "-l" ||
-                startswith(arg, "--local:") || startswith(arg, "-l:")
-            throw_removed_local_flag(arg)
-        elseif arg == "--workers" || arg == "-w"
-            default_workers = _parse_drive_flag_count(arg, args, i)
-            i += 2
-        elseif startswith(arg, "--workers:") || startswith(arg, "-w:")
-            default_workers = _drive_flag_int_suffix(arg, ("--workers", "-w"))
-            i += 1
+        elseif _mistaken_short_l_flag(arg)
+            throw(ArgumentError(_mistaken_short_flag_message(arg; command = :drive, kind = :l)))
+        elseif arg == "--workers" || arg == "-w" || startswith(arg, "--workers:") || startswith(arg, "-w:")
+            _throw_removed_workers_flag(arg)
         elseif arg == "--julia" && i < length(args)
             julia_exe = args[i + 1]
             i += 2
-        elseif arg == "--unsafe-heterogeneous"
-            unsafe_heterogeneous = true
+        elseif try_consume_run_option!(arg, run_opts, :drive)
             i += 1
         elseif arg == "--allow-mismatch"
             reject_removed_allow_mismatch_flag!(arg)
@@ -199,13 +200,6 @@ function parse_drive_args(args::Vector{String})
         elseif arg == "--"
             options_done = true
             i += 1
-        elseif arg == UNSAFE_MASTER_SILENCE_EXIT_FLAG
-            unsafe_master_silence_exit_cli && throw(
-                ArgumentError("drive: $(UNSAFE_MASTER_SILENCE_EXIT_FLAG) specified more than once"),
-            )
-            unsafe_master_silence_exit = true
-            unsafe_master_silence_exit_cli = true
-            i += 1
         elseif arg == "--isolated"
             isolated && throw(ArgumentError("drive: --isolated specified more than once"))
             isolated = true
@@ -218,35 +212,29 @@ function parse_drive_args(args::Vector{String})
             skip_hash_check = false
             i += 1
         elseif arg == "--require-all-hosts"
-            require_all_hosts_cli && throw(
+            throw(
                 ArgumentError(
-                    "drive: --require-all-hosts specified more than once",
-                )
+                    "drive: --require-all-hosts was removed in 0.2.0; listed hosts must join by default, or pass --best-effort",
+                ),
             )
-            best_effort_cli && throw(
-                ArgumentError(
-                    "drive: cannot combine --require-all-hosts and --best-effort",
-                )
-            )
-            require_all_hosts_cli = true
-            require_all_hosts = true
-            i += 1
         elseif arg == "--best-effort"
             best_effort_cli && throw(
                 ArgumentError(
                     "drive: --best-effort specified more than once",
                 )
             )
-            require_all_hosts_cli && throw(
-                ArgumentError(
-                    "drive: cannot combine --require-all-hosts and --best-effort",
-                )
-            )
             best_effort_cli = true
-            require_all_hosts = false
+            best_effort = true
             i += 1
+        elseif arg == "--collect-strict"
+            throw(
+                ArgumentError(
+                    "drive: --collect-strict was removed; collect fails when any host is skipped (default). " *
+                        "Pass --best-effort only when you intentionally continue past skipped hosts.",
+                ),
+            )
         elseif arg == "--mem-headroom" || arg == "--parent-gb" || arg == "--master-gb" || startswith(arg, "--master-gb:")
-            throw(ArgumentError("drive: worker-count sizing was removed; pass explicit parent:N / child:NAME:N"))
+            throw(ArgumentError("drive: worker-count sizing was removed; pass explicit parent:N / NAME:N"))
         elseif arg == "--no-log"
             enable_log = false
             i += 1
@@ -297,60 +285,60 @@ function parse_drive_args(args::Vector{String})
             elseif julia_exe == "auto"
                 julia_exe = nothing
             end
-            return (
-                parent_workers = parent_workers,
-                default_workers = default_workers,
-                julia = julia_exe,
-                skip_hash_check = skip_hash_check,
-                enable_log = enable_log,
-                log_dir = log_dir,
-                output_dir = output_dir,
-                explicit_package = explicit_package,
-                hosts = Tuple{String, Union{Int, Nothing}}[],
-                script_path = nothing,
-                script_args = String[],
-                collect_root = tree_root,
-                collect_hosts = tree_hosts,
-                collect_overwrite = merge,
-                worker_include = worker_include,
-                require_all_hosts = require_all_hosts,
-                help = false,
-                show_version = cli_session.show_version,
-                cli_session = cli_session,
-                hint_surface = :cli,
-                unsafe_heterogeneous = unsafe_heterogeneous,
-                run_id = run_id,
-                deploy_root = deploy_root,
-                isolated = isolated,
-                unsafe_master_silence_exit = unsafe_master_silence_exit,
+            return merge_run_option_cli!(
+                (
+                    head_workers = head_workers,
+                    default_workers = default_workers,
+                    julia = julia_exe,
+                    skip_hash_check = skip_hash_check,
+                    enable_log = enable_log,
+                    log_dir = log_dir,
+                    output_dir = output_dir,
+                    explicit_package = explicit_package,
+                    hosts = Tuple{String, Union{Int, Nothing}}[],
+                    script_path = nothing,
+                    script_args = String[],
+                    collect_root = tree_root,
+                    collect_hosts = tree_hosts,
+                    collect_overwrite = merge,
+                    worker_include = worker_include,
+                    best_effort = best_effort,
+                    help = false,
+                    show_version = cli_session.show_version,
+                    cli_session = cli_session,
+                    hint_surface = :cli,
+                    run_id = run_id,
+                    deploy_root = deploy_root,
+                    isolated = isolated,
+                ), run_opts
             )
         elseif arg == "--help" || arg == "-h"
-            return (
-                parent_workers = 0,
-                default_workers = nothing,
-                julia = nothing,
-                skip_hash_check = true,
-                enable_log = true,
-                log_dir = nothing,
-                output_dir = nothing,
-                explicit_package = nothing,
-                hosts = Tuple{String, Union{Int, Nothing}}[],
-                script_path = nothing,
-                script_args = String[],
-                collect_root = nothing,
-                collect_hosts = nothing,
-                collect_overwrite = nothing,
-                worker_include = false,
-                require_all_hosts = false,
-                help = true,
-                show_version = cli_session.show_version,
-                cli_session = cli_session,
-                hint_surface = :cli,
-                unsafe_heterogeneous = unsafe_heterogeneous,
-                run_id = nothing,
-                deploy_root = nothing,
-                isolated = false,
-                unsafe_master_silence_exit = false,
+            return merge_run_option_cli!(
+                (
+                    head_workers = 0,
+                    default_workers = nothing,
+                    julia = nothing,
+                    skip_hash_check = true,
+                    enable_log = true,
+                    log_dir = nothing,
+                    output_dir = nothing,
+                    explicit_package = nothing,
+                    hosts = Tuple{String, Union{Int, Nothing}}[],
+                    script_path = nothing,
+                    script_args = String[],
+                    collect_root = nothing,
+                    collect_hosts = nothing,
+                    collect_overwrite = nothing,
+                    worker_include = false,
+                    best_effort = true,
+                    help = true,
+                    show_version = cli_session.show_version,
+                    cli_session = cli_session,
+                    hint_surface = :cli,
+                    run_id = nothing,
+                    deploy_root = nothing,
+                    isolated = false,
+                ), run_opts
             )
         elseif endswith(arg, ".jl")
             script_path = arg
@@ -359,29 +347,13 @@ function parse_drive_args(args::Vector{String})
         elseif startswith(arg, "-")
             throw(
                 ArgumentError(
-                    "unknown or incomplete drive option: $arg (use parent:N / child:NAME:N, e.g. parent:2 child:host1:4)",
+                    "unknown or incomplete drive option: $arg (use --head-workers and `N*host`, e.g. 4*host1)",
                 )
             )
         else
-            parent_workers = _drive_push_host_token!(
-                hosts,
-                parent_workers,
-                arg,
-                parent_listed,
-            )
+            _drive_push_host_token!(hosts, arg)
             i += 1
         end
-    end
-
-    if !require_all_hosts_cli && !best_effort_cli
-        want_all = _env_flag("DISTSSH_REQUIRE_ALL_HOSTS")
-        want_best = _env_flag("DISTSSH_BEST_EFFORT")
-        want_all && want_best && throw(
-            ArgumentError(
-                "drive: cannot combine DISTSSH_REQUIRE_ALL_HOSTS and DISTSSH_BEST_EFFORT",
-            )
-        )
-        want_best && (require_all_hosts = false)
     end
 
     if julia_exe === nothing
@@ -392,54 +364,62 @@ function parse_drive_args(args::Vector{String})
     end
 
     for tok in placement_source_tokens(cli_session; keep_counts = true)
-        parent_workers = _drive_push_host_token!(
-            hosts,
-            parent_workers,
-            tok,
-            parent_listed,
-        )
+        _drive_push_host_token!(hosts, tok)
     end
 
-    if !unsafe_master_silence_exit_cli &&
+    if !run_opts.unsafe_master_silence_exit &&
             _env_flag(UNSAFE_MASTER_SILENCE_EXIT_ENV)
-        unsafe_master_silence_exit = true
+        run_opts.unsafe_master_silence_exit = true
     end
 
     apply_shared_cli_flags!(cli_session)
-    if !parent_listed[] && default_workers !== nothing
-        parent_workers = _drive_set_parent_workers!(
-            parent_workers,
-            default_workers,
-            "-w",
+    if cli_session.head_workers !== nothing
+        lw = cli_session.head_workers::Int
+        head_workers = _drive_set_head_workers!(head_workers, lw, "--head-workers")
+    else
+        env_lw = tryparse(Int, strip(get(ENV, "DISTSSH_HEAD_WORKERS", "")))
+        env_lw !== nothing &&
+            (head_workers = _drive_set_head_workers!(head_workers, env_lw, "DISTSSH_HEAD_WORKERS"))
+    end
+
+    if script_path !== nothing
+        placement_tokens = String[
+            DistSSHBase.format_machine_token(Int(something(n, 1)), h) for (h, n) in hosts
+        ]
+        require_counted_placement_tokens(
+            placement_tokens;
+            command = :drive,
+            surface = :cli,
+            head_workers = head_workers,
         )
     end
 
-    return (
-        parent_workers = parent_workers,
-        default_workers = default_workers,
-        julia = julia_exe,
-        skip_hash_check = skip_hash_check,
-        enable_log = enable_log,
-        log_dir = log_dir,
-        output_dir = output_dir,
-        explicit_package = explicit_package,
-        hosts = hosts,
-        script_path = script_path,
-        script_args = script_args,
-        collect_root = nothing,
-        collect_hosts = nothing,
-        collect_overwrite = nothing,
-        worker_include = worker_include,
-        require_all_hosts = require_all_hosts,
-        help = false,
-        show_version = cli_session.show_version,
-        cli_session = cli_session,
-        hint_surface = :cli,
-        unsafe_heterogeneous = unsafe_heterogeneous,
-        run_id = run_id,
-        deploy_root = deploy_root,
-        isolated = isolated,
-        unsafe_master_silence_exit = unsafe_master_silence_exit,
+    return merge_run_option_cli!(
+        (
+            head_workers = head_workers,
+            default_workers = default_workers,
+            julia = julia_exe,
+            skip_hash_check = skip_hash_check,
+            enable_log = enable_log,
+            log_dir = log_dir,
+            output_dir = output_dir,
+            explicit_package = explicit_package,
+            hosts = hosts,
+            script_path = script_path,
+            script_args = script_args,
+            collect_root = nothing,
+            collect_hosts = nothing,
+            collect_overwrite = nothing,
+            worker_include = worker_include,
+            best_effort = best_effort,
+            help = false,
+            show_version = cli_session.show_version,
+            cli_session = cli_session,
+            hint_surface = :cli,
+            run_id = run_id,
+            deploy_root = deploy_root,
+            isolated = isolated,
+        ), run_opts
     )
 end
 
@@ -456,24 +436,25 @@ function show_drive_usage(; io::IO = stdout)
     print_help_section("Usage"; io = io)
     print_help_lines(
         io,
-        "  $(cli_m_project()) drive [workers...] DRIVER.jl",
-        "  drive parent:4 child:host1:8 jobs.jl",
+        "  $(cli_m_project()) drive [N*host...] DRIVER.jl",
+        "  drive --head-workers 4 '8*host1' jobs.jl",
         "  drive --collect-missing ROOT HOST...",
+        "  drive --best-effort --collect-missing ROOT HOST...  continue past skipped hosts",
     )
     print_help_blank(io)
     print_help_section("Workers"; io = io)
     print_help_lines(
         io,
-        "  parent:N / child:NAME:N  required :N (no tokens → parent:1)",
-        "  omit :N             error (pass parent:N / child:NAME:N)",
+        "  N*host              machine tokens (quote --hosts; bare host = 1 worker)",
+        "  $(KIT_HEAD_WORKERS_FLAG_HELP)",
         "  $(KIT_HOSTS_FLAG_HELP)",
-        "  --hosts-file PATH   one token per line",
+        "  --hosts-file PATH   TOML [[hosts]] or one token per line",
+        "  $(KIT_MACHINE_FILE_FLAG_HELP)",
     )
     print_help_blank(io)
     print_help_section("Options"; io = io)
     print_help_lines(
         io,
-        "  -w, --workers N     parent:N when no parent token is listed",
         "  --deploy-root PATH  remote deployment root (location, not snapshot id).",
         "                      Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
         "                      ~/Parent/RepoName layout from the local env_dir.",
@@ -481,13 +462,11 @@ function show_drive_usage(; io::IO = stdout)
         "                      (after setup ship-tree + setup instantiate)",
         "  --worker-include    re-include the full driver on workers (default: defs only)",
         "  --require-git       $(REQUIRE_GIT_MEANING)",
-        "  --require-all-hosts listed parent/child tokens must join, stay, and collect (default)",
-        "  --best-effort       allow a partial run (missing join is not a failure)",
+        "  --best-effort       partial worker join and/or collect past skipped hosts",
         "  --output-dir PATH   result root (default: {script}/.distssh/drive/<stem>_<UTC>/; must be missing or empty)",
         "  --isolated          run the driver in a child process (default: this process)",
-        "  $(DRIVE_UNSAFE_MASTER_SILENCE_EXIT_FLAG_HELP)",
         "  --julia PATH        remote Julia",
-        "  --unsafe-heterogeneous  waive Manifest/Project digest checks only (unverified; Julia build and DistSSH* versions must match)",
+        generated_run_option_help(:drive)...,
         "  SSH workers: project-root cwd, bind 127.0.0.1, tunnel unless DISTSSH_SSH_TUNNEL=0.",
         "  --no-log            skip drive_*.log",
         "  $(KIT_QUIET_FLAG_HELP)",
@@ -504,7 +483,7 @@ function show_drive_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  After main(): post-run-new (files newer than run start).",
-        "  Later: --collect-missing / --collect-overwrite ROOT HOST...",
+        "  Later: --collect-missing / --collect-overwrite ROOT HOST... (fails on skipped hosts unless --best-effort)",
         "  Pass --run-id ID so collect maps onto that ship, not a newer one.",
         "  With DISTSSH_RUN_DIR, omitted recovery uses that run's provenance.selection.",
         "  Pull-back uses Tar. Remote mtimes and file modes are not kept.",
@@ -521,8 +500,6 @@ function show_drive_usage(; io::IO = stdout)
         "  DISTSSH_QUIET / PROGRESS / VERBOSE / YES",
         "  $(KIT_SKIP_PKILL_ENV_HELP)",
         "  $(KIT_JOBS_ENV_HELP)",
-        "  $(KIT_REQUIRE_ALL_HOSTS_ENV_HELP)",
-        "  $(KIT_BEST_EFFORT_ENV_HELP)",
         "  $(DRIVE_UNSAFE_MASTER_SILENCE_EXIT_ENV_HELP)",
         "  $(DRIVE_HEARTBEAT_DEADLINE_ENV_HELP)",
         "  $(DRIVE_HEARTBEAT_INTERVAL_ENV_HELP)",

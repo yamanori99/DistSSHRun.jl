@@ -10,8 +10,8 @@ using Base.Threads
             "deploy_id" => "20260101T000000Z-aaaaaa",
             "mode" => "ship-tree",
             "snapshot_id" => "20260101T000000Z-aaaaaa",
-            "content_tree_hash" => "a"^40,
-        ),
+            "content_tree_hash" => "a"^40
+        )
     )
     parsed = DistSSHRun._parse_deploy_record_body(body)
     @test parsed !== nothing
@@ -24,8 +24,8 @@ using Base.Threads
             "mode" => "ship-tree",
             "run_id" => "20260102T000000Z-bbbbbb",
             "snapshot_id" => "20260101T000000Z-aaaaaa",
-            "content_tree_hash" => "b"^40,
-        ),
+            "content_tree_hash" => "b"^40
+        )
     )
     parsed2 = DistSSHRun._parse_deploy_record_body(both)
     @test parsed2 !== nothing
@@ -42,12 +42,14 @@ end
             :git_sync;
             deploy_id = "a"^40,
             commit_sha = "a"^40,
-            dirty = false,
+            dirty = false
         )
         @test rec["schema"] == 1
         @test rec["mode"] == "git-sync"
         @test rec["deploy_id"] == "a"^40
         @test haskey(rec, "manifest_hash")
+        @test haskey(rec, "project_hash")
+        @test length(rec["project_hash"]) == 64
         body = sprint(TOML.print, rec)
         parsed = DistSSHRun._parse_deploy_record_body(body)
         @test parsed !== nothing
@@ -77,7 +79,7 @@ end
         "schema" => 1,
         "mode" => "ship-tree",
         "deploy_id" => "20260101T000000Z-aaaaaa",
-        "run_id" => "20260101T000000Z-aaaaaa",
+        "run_id" => "20260101T000000Z-aaaaaa"
     )
     slice = DistSSHRun._deploy_record_for_provenance(rec)
     @test slice !== nothing
@@ -88,11 +90,12 @@ end
 @testset "deploy record scp upload argv is local then remote" begin
     local_tmp = "/tmp/deploy-record-body.toml"
     remote_abs = "/home/user/proj/.distssh/deploy.toml.tmp"
-    argv = DistSSHRun._deploy_record_scp_upload_argv("child-1", remote_abs, local_tmp)
-    @test argv[1:(end - 2)] == DistSSHRun.ssh_opts()
+    host = "user@child-1"
+    argv = DistSSHRun._deploy_record_scp_upload_argv(host, remote_abs, local_tmp)
+    @test argv[1:(end - 2)] == DistSSHRun.DistSSHBase.scp_connection_argv(host)
     @test argv[end - 1] == local_tmp
-    @test argv[end] == "child-1:$remote_abs"
-    @test length(argv) == length(DistSSHRun.ssh_opts()) + 2
+    @test argv[end] == "user@child-1:$remote_abs"
+    @test length(argv) == length(DistSSHRun.DistSSHBase.scp_connection_argv(host)) + 2
 end
 
 @testset "deploy record tmp path and atomic install script" begin
@@ -134,8 +137,8 @@ end
 
 @testset "deploy record scp host vs path validation" begin
     remote = "/home/a@-b/project/.distssh/deploy.toml.x.tmp"
-    argv = DistSSHRun._deploy_record_scp_upload_argv("child-1", remote, "/tmp/body.toml")
-    @test argv[end] == "child-1:$remote"
+    argv = DistSSHRun._deploy_record_scp_upload_argv("user@child-1", remote, "/tmp/body.toml")
+    @test argv[end] == "user@child-1:$remote"
 end
 
 @testset "deploy record staleness warns on ship-tree hash mismatch" begin
@@ -149,7 +152,7 @@ end
                 "schema" => 1,
                 "mode" => "ship-tree",
                 "deploy_id" => "rid",
-                "content_tree_hash" => "f"^40,
+                "content_tree_hash" => "f"^40
             )
             write(joinpath(proj, "extra.txt"), "change\n")
             with_kit_verbosity(:verbose) do
@@ -184,7 +187,7 @@ end
                                 pwd(),
                                 :git_sync;
                                 deploy_id = "a"^40,
-                                commit_sha = "a"^40,
+                                commit_sha = "a"^40
                             )
                         finally
                             DistSSHRun.close_log_file()
@@ -212,7 +215,7 @@ end
                 "schema" => 1,
                 "deploy_id" => "a"^40,
                 "mode" => "git-sync",
-                "commit_sha" => "a"^40,
+                "commit_sha" => "a"^40
             )
         )
         deploy_dir = joinpath(remote, ".distssh")
@@ -224,14 +227,14 @@ end
                 withenv(
                     "DISTSSH_TEST" => "1",
                     "DISTSSH_TEST_SSH" => double,
-                    "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit",
+                    "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit"
                 ) do
                     rec = DistSSHRun.read_deploy_record_on_host("child-1", remote)
                     @test rec !== nothing
                     @test rec["mode"] == "git-sync"
                     @test rec["deploy_id"] == "a"^40
                     active = DistSSHRun.record_deploy_status_for_run!(
-                        ["child-1"], remote, proj,
+                        ["child-1"], remote, proj
                     )
                     @test active !== nothing
                     if active !== nothing
@@ -267,9 +270,9 @@ end
                         "schema" => 1,
                         "deploy_id" => deploy_id,
                         "mode" => "git-sync",
-                        "commit_sha" => deploy_id,
-                    ),
-                ),
+                        "commit_sha" => deploy_id
+                    )
+                )
             )
         end
         try
@@ -278,11 +281,11 @@ end
                 "DISTSSH_TEST_SSH" => double,
                 "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit",
                 "DISTSSH_TEST_SSH_LOGICAL_ROOT" => logical,
-                "DISTSSH_TEST_SSH_HOST_ROOTS" => roots,
+                "DISTSSH_TEST_SSH_HOST_ROOTS" => roots
             ) do
                 out, (rec, warn_unknown) = _capture_stdio() do _, _
                     DistSSHRun._read_deploy_record_for_run_status(
-                        ["child-1", "child-2"], logical,
+                        ["child-1", "child-2"], logical
                     )
                 end
                 @test rec === nothing
@@ -310,9 +313,9 @@ end
                     "schema" => 1,
                     "deploy_id" => "a"^40,
                     "mode" => "git-sync",
-                    "commit_sha" => "a"^40,
-                ),
-            ),
+                    "commit_sha" => "a"^40
+                )
+            )
         )
         mkpath(joinpath(roots, "child-2"))
         try
@@ -321,11 +324,11 @@ end
                 "DISTSSH_TEST_SSH" => double,
                 "DISTSSH_TEST_REMOTE_HOME" => "/home/distsshkit",
                 "DISTSSH_TEST_SSH_LOGICAL_ROOT" => logical,
-                "DISTSSH_TEST_SSH_HOST_ROOTS" => roots,
+                "DISTSSH_TEST_SSH_HOST_ROOTS" => roots
             ) do
                 out, (rec, _) = _capture_stdio() do _, _
                     DistSSHRun._read_deploy_record_for_run_status(
-                        ["child-1", "child-2"], logical,
+                        ["child-1", "child-2"], logical
                     )
                 end
                 @test rec !== nothing
@@ -359,7 +362,7 @@ end
             "schema" => 1,
             "mode" => "ship-tree",
             "deploy_id" => "rid",
-            "manifest_hash" => "f"^length(local_mh),
+            "manifest_hash" => "f"^length(local_mh)
         )
         with_kit_verbosity(:verbose) do
             out, _ = _capture_stdio() do _, _
@@ -367,5 +370,23 @@ end
             end
             @test match(r"Local Manifest hash differs[^\n]*\n", out) !== nothing
         end
+    end
+end
+
+@testset "active deploy record preserved for explicit run_id" begin
+    rid = "20260101T000000Z-aaaaaa"
+    other = "20260102T000000Z-bbbbbb"
+    rec = Dict{String, Any}("run_id" => rid, "mode" => "ship-tree", "manifest_hash" => "a"^64)
+    try
+        DistSSHRun._set_active_deploy_record!(rec)
+        DistSSHRun._clear_active_deploy_record_unless_run_id!(rid)
+        @test DistSSHRun.active_deploy_record() !== nothing
+        DistSSHRun._clear_active_deploy_record_unless_run_id!(other)
+        @test DistSSHRun.active_deploy_record() === nothing
+        DistSSHRun._set_active_deploy_record!(rec)
+        DistSSHRun._clear_active_deploy_record_unless_run_id!(nothing)
+        @test DistSSHRun.active_deploy_record() === nothing
+    finally
+        DistSSHRun._clear_active_deploy_record!()
     end
 end

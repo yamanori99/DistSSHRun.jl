@@ -5,6 +5,9 @@ struct CliUsageError <: Exception
     msg::String
 end
 
+"""Foreground interrupt after cleanup. `with_cli_exit` returns `cli_interrupted()` (`130`)."""
+struct CliForegroundInterrupt <: Exception end
+
 function Base.showerror(io::IO, e::CliUsageError)
     print(io, "CliUsageError: ", e.msg)
     return nothing
@@ -37,6 +40,36 @@ function cli_report(msg::AbstractString)
     return nothing
 end
 
+"""Exit code when required argv is missing (clap [`Command::arg_required_else_help`](https://docs.rs/clap/latest/clap/struct.Command.html#method.arg_required_else_help))."""
+const CLI_EXIT_USAGE = Cint(2)
+
+"""
+    cli_help_stdout(help) -> Cint
+
+Explicit `--help` / `-h`: print the same body as the bare-invocation page on
+**stdout** and return `0`. Matches [clap](https://docs.rs/clap) help display.
+
+`help` is called as `help(; io = stdout)`; it must accept the `io` keyword
+(like Kit `show_*_usage` helpers).
+"""
+function cli_help_stdout(@nospecialize(help::Function))::Cint
+    help(; io = stdout)
+    return Cint(0)
+end
+
+"""
+    cli_required_else_help(help) -> Cint
+
+Required operands/flags missing (clap [`Command::arg_required_else_help`](https://docs.rs/clap/latest/clap/struct.Command.html#method.arg_required_else_help)):
+print the full help page on **stderr** and return [`CLI_EXIT_USAGE`](@ref) (`2`).
+
+`help` is called as `help(; io = stderr)`; it must accept the `io` keyword.
+"""
+function cli_required_else_help(@nospecialize(help::Function))::Cint
+    help(; io = stderr)
+    return CLI_EXIT_USAGE
+end
+
 """Ctrl-C exit code for a foreground command."""
 cli_interrupted()::Cint = Cint(130)
 
@@ -65,7 +98,7 @@ function with_cli_exit(
         if e isa CliUsageError
             without_cancel(() -> report(e.msg))
             return Cint(2)
-        elseif is_sigint(e)
+        elseif e isa CliForegroundInterrupt || is_sigint(e)
             return without_cancel(interrupted)::Cint
         elseif _is_epipe(e)
             return Cint(141)

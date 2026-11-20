@@ -113,14 +113,12 @@ end
 """
 Build execution slots from host tokens.
 
-- No tokens → one parent slot (directory label `parent`)
-- `parent:N` → N slots on this job's DistSSHRun parent
-- `parent:0` skips parent when children are listed
-- `parent` / `child:NAME` without `:N` → error (except `--repeat`: uncapped)
-- `child:NAME:N` → N SSH slots (`NAME`, or `NAME-1` … when N>1)
+- Default: no slots unless `--head-slots N` and/or `N*host` tokens
+- `--head-slots N` → N local subprocess slots (directory labels `<hostname>`, `<hostname>-2`, …)
+- `N*host` → N SSH slots per token (`NAME-1` … when N>1 on one host)
+- bare host without `N*` → error (except `--repeat`: uncapped)
 - `total=N` (`--repeat N`): N independent runs, round-robin across listed
-  hosts. No tokens → all N on parent. Omit `:N` → no cap on that host.
-  `parent:N` / `child:NAME:N` are per-host caps.
+  hosts. `--head-slots` / `N*host` set per-host caps when listed.
 """
 function _go_merge_repeat_cap(
         a::Union{Nothing, Int},
@@ -138,27 +136,97 @@ struct GoRepeatHost
     cap::Union{Nothing, Int}
 end
 
-function _go_repeat_pool(
+function _go_local_slot_count(
         host_tokens::AbstractVector{<:AbstractString},
-    )::Vector{GoRepeatHost}
-    if isempty(host_tokens)
-        return [GoRepeatHost(:parent, PARENT_HOST_NAME, nothing)]
+        head_slots::Union{Nothing, Integer},
+    )::Int
+    ls, _ = resolve_go_head_slots(host_tokens, head_slots)
+    return ls
+end
+
+"""Sanitized hostname for local go slot directory names."""
+function _go_local_slot_label_base()::String
+    return _go_sanitize_label(kit_head_host_label())
+end
+
+function _go_parent_slot_labels(parent_count::Int)::Vector{String}
+    parent_count == 0 && return String[]
+    base = _go_local_slot_label_base()
+    parent_count == 1 && return [base]
+    return ["$base-$i" for i in 1:parent_count]
+end
+
+"""Source name for a go slot label collision error."""
+function _go_slot_label_source(slot::GoSlot)::String
+    slot.kind === :parent && return "local ($(slot.label))"
+    h = slot.host
+    return h isa String ? h : slot.label
+end
+
+function _go_assert_unique_slot_labels!(slots::Vector{GoSlot})
+    by_label = Dict{String, Vector{GoSlot}}()
+    for s in slots
+        push!(get!(by_label, s.label, GoSlot[]), s)
     end
+    for (label, group) in by_label
+        length(group) <= 1 && continue
+        sources = unique(_go_slot_label_source(s) for s in group)
+        throw(
+            ArgumentError(
+                "go slot directory label $(repr(label)) collides after sanitization " *
+                    "(from $(join(sources, ", "))); rename one host token so the sanitized names differ",
+            ),
+        )
+    end
+    return nothing
+end
+
+function _go_append_child_slots!(slots::Vector{GoSlot}, remote_runs::Vector{String})
+    counts = Dict{String, Int}()
+    totals = Dict{String, Int}()
+    for h in remote_runs
+        totals[h] = get(totals, h, 0) + 1
+    end
+    for h in remote_runs
+        counts[h] = get(counts, h, 0) + 1
+        i = counts[h]
+        nlab = totals[h]
+        base = _go_sanitize_label(h)
+        label = nlab == 1 ? base : "$base-$i"
+        push!(slots, GoSlot(:child, h, label))
+    end
+    return nothing
+end
+
+function _go_repeat_pool(
+        host_tokens::AbstractVector{<:AbstractString};
+        head_slots::Union{Nothing, Integer} = nothing,
+    )::Vector{GoRepeatHost}
     order = Tuple{Symbol, String}[]
     caps = Dict{Tuple{Symbol, String}, Union{Nothing, Int}}()
+    local_name = _go_local_slot_label_base()
+    parent_key = (:parent, local_name)
+    if isempty(host_tokens)
+        cap, _ = resolve_go_head_slots(host_tokens, head_slots)
+        cap == 0 && return GoRepeatHost[]
+        return [GoRepeatHost(:parent, local_name, cap)]
+    end
+    if head_slots !== nothing
+        lw = Int(head_slots)
+        lw < 0 && throw(ArgumentError("--head-slots must be >= 0, got $lw"))
+        if lw > 0
+            caps[parent_key] = lw
+            push!(order, parent_key)
+        end
+    end
     for raw in host_tokens
         p = parse_placement_token(String(raw))
+        p.role === :parent &&
+            throw(ArgumentError("$(repr(raw)): use --head-slots for local runs, not tokens"))
         key = (p.role, p.name)
-        cap = p.n
-        if p.role === :parent
-            cap === nothing || cap >= 0 || throw(
-                ArgumentError(
-                    "parent slot count must be >= 0, got $cap in $(repr(raw))",
-                )
-            )
-        elseif something(cap, 1) < 1
+        cap = findfirst('*', String(raw)) === nothing ? nothing : p.n
+        something(cap, 1) < 1 &&
             throw(ArgumentError("slot count must be >= 1, got $(something(cap, 1)) in $(repr(raw))"))
-        end
         if !haskey(caps, key)
             push!(order, key)
             caps[key] = cap
@@ -175,115 +243,90 @@ function _go_repeat_pool(
     return pool
 end
 
-function _go_tokens_for_repeat(
-        host_tokens::AbstractVector{<:AbstractString},
-        n::Int,
-    )::Vector{String}
-    pool = _go_repeat_pool(host_tokens)
-    isempty(pool) && throw(
-        ArgumentError(
-            "no execution slots: list children after parent:0, or omit parent to run on the Kit side",
-        )
-    )
-    assigned = zeros(Int, length(pool))
-    start = 1
-    nh = length(pool)
-    for _ in 1:n
-        placed = false
-        for off in 0:(nh - 1)
-            j = mod1(start + off, nh)
-            cap = pool[j].cap
-            if cap === nothing || assigned[j] < cap
-                assigned[j] += 1
-                start = mod1(j + 1, nh)
-                placed = true
-                break
-            end
-        end
-        placed || throw(
-            ArgumentError(
-                "repeat $n exceeds per-host caps (`parent:N` / `child:NAME:N`)",
-            )
-        )
-    end
-    tokens = String[]
+function _go_slots_from_repeat(
+        pool::Vector{GoRepeatHost},
+        assigned::AbstractVector{<:Integer},
+    )::Vector{GoSlot}
+    slots = GoSlot[]
     for (h, k) in zip(pool, assigned)
         k == 0 && continue
         if h.role === :parent
-            push!(tokens, format_placement_token(:parent, PARENT_HOST_NAME, k))
+            labels = _go_parent_slot_labels(k)
+            for label in labels
+                push!(slots, GoSlot(:parent, nothing, label))
+            end
         else
-            push!(tokens, format_placement_token(:child, h.name, k))
+            remote_runs = fill(h.name, k)
+            _go_append_child_slots!(slots, remote_runs)
         end
     end
-    return tokens
+    return slots
 end
 
 function _go_plan_slots(
         host_tokens::AbstractVector{<:AbstractString};
         total::Union{Nothing, Integer} = nothing,
+        head_slots::Union{Nothing, Integer} = nothing,
     )::Vector{GoSlot}
     if total !== nothing
         n = Int(total)
         (total isa Bool || n < 1) && throw(ArgumentError("go repeat must be >= 1, got $total"))
-        return _go_plan_slots(_go_tokens_for_repeat(host_tokens, n))
+        pool = _go_repeat_pool(host_tokens; head_slots = head_slots)
+        isempty(pool) && throw(ArgumentError(zero_placement_usage_error(:go; surface = :api)))
+        assigned = zeros(Int, length(pool))
+        start = 1
+        nh = length(pool)
+        for _ in 1:n
+            placed = false
+            for off in 0:(nh - 1)
+                j = mod1(start + off, nh)
+                cap = pool[j].cap
+                if cap === nothing || assigned[j] < cap
+                    assigned[j] += 1
+                    start = mod1(j + 1, nh)
+                    placed = true
+                    break
+                end
+            end
+            placed || throw(
+                ArgumentError(
+                    "repeat $n exceeds per-host caps (`--head-slots` / `N*host`)",
+                )
+            )
+        end
+        slots = _go_slots_from_repeat(pool, assigned)
+        _go_assert_unique_slot_labels!(slots)
+        return slots
     end
-    isempty(host_tokens) && return [GoSlot(:parent, nothing, PARENT_HOST_NAME)]
-
-    parent_count = 0
-    parent_label_base = PARENT_HOST_NAME
-    remote_runs = Vector{String}() # host repeated per run
+    parent_count = _go_local_slot_count(host_tokens, head_slots)
+    parent_label_base = _go_local_slot_label_base()
+    remote_runs = Vector{String}()
     for raw in host_tokens
         p = parse_placement_token(String(raw))
         n = something(p.n, 1)
-        if p.role === :parent
-            n < 0 &&
-                throw(ArgumentError("parent slot count must be >= 0, got $n in $(repr(raw))"))
-            parent_count += n
-        elseif n < 1
+        if n < 1
             throw(ArgumentError("slot count must be >= 1, got $n in $(repr(raw))"))
-        else
-            for _ in 1:n
-                push!(remote_runs, p.name)
-            end
+        end
+        for _ in 1:n
+            push!(remote_runs, p.name)
         end
     end
-
     parent_count == 0 && isempty(remote_runs) &&
-        throw(
-        ArgumentError(
-            "no execution slots: list children after parent:0, or omit parent to run on the Kit side",
-        )
-    )
-
+        throw(ArgumentError(zero_placement_usage_error(:go; surface = :api)))
     slots = GoSlot[]
     if parent_count == 1 && isempty(remote_runs)
         push!(slots, GoSlot(:parent, nothing, parent_label_base))
     else
-        for i in 1:parent_count
-            label = parent_count == 1 ? parent_label_base : "$(parent_label_base)-$i"
+        for label in _go_parent_slot_labels(parent_count)
             push!(slots, GoSlot(:parent, nothing, label))
         end
     end
-
-    # Count runs per host for labels
-    counts = Dict{String, Int}()
-    totals = Dict{String, Int}()
-    for h in remote_runs
-        totals[h] = get(totals, h, 0) + 1
-    end
-    for h in remote_runs
-        counts[h] = get(counts, h, 0) + 1
-        i = counts[h]
-        nlab = totals[h]
-        base = _go_sanitize_label(h)
-        label = nlab == 1 ? base : "$base-$i"
-        push!(slots, GoSlot(:child, h, label))
-    end
+    _go_append_child_slots!(slots, remote_runs)
+    _go_assert_unique_slot_labels!(slots)
     return slots
 end
 
 function placement_tokens_from_go_slots(slots::Vector{GoSlot})::Vector{String}
-    parent_n = count(s -> s.kind === :parent, slots)
     order = String[]
     counts = Dict{String, Int}()
     for s in slots
@@ -297,8 +340,6 @@ function placement_tokens_from_go_slots(slots::Vector{GoSlot})::Vector{String}
         counts[h] += 1
     end
     out = String[]
-    parent_n > 0 &&
-        push!(out, format_placement_token(:parent, PARENT_HOST_NAME, parent_n))
     for h in order
         push!(out, format_placement_token(:child, h, counts[h]))
     end
@@ -389,78 +430,6 @@ function _go_batch_output_dir(
     stamp = Dates.format(now, dateformat"yyyymmddTHHMMSS") * "Z"
     dir = joinpath(_go_kit_parent(project, script), "$(stem)_$(stamp)")
     return _mkdir_unique!(dir)
-end
-
-function _go_host_ssh_hint(host::AbstractString)::String
-    h = String(strip(host))
-    if !contains(h, '@') && occursin(r"^(?:\d{1,3}\.){3}\d{1,3}$", h)
-        return "hint: use user@$h (e.g. root@$h) if SSH defaults to your local username"
-    end
-    return ""
-end
-
-function _go_assert_remote_ready!(host::AbstractString, remote_root::AbstractString)
-    rr = _remote_shell_path_word(remote_root)
-    inner = "test -d $rr && test -f $rr/Project.toml"
-    cmd = _ssh_cmd([ssh_opts()..., _ssh_host_args(String(host), inner)...])
-    out = IOBuffer()
-    err = IOBuffer()
-    proc = run(pipeline(ignorestatus(cmd), stdout = out, stderr = err), wait = true)
-    code = DistSSHBase.shell_status(proc)
-    if code != 0
-        err_text = strip(String(take!(err)))
-        ssh_hint = _go_host_ssh_hint(host)
-        auth_or_conn = code == 255 ||
-            occursin("Permission denied", err_text) ||
-            occursin("Connection refused", err_text) ||
-            occursin("Could not resolve hostname", err_text) ||
-            occursin("No route to host", err_text)
-
-        if auth_or_conn
-            msg = "cannot SSH to $host"
-            !isempty(err_text) && (msg *= ": $(first(split(err_text, '\n')))")
-            !isempty(ssh_hint) && (msg *= "\n  $ssh_hint")
-            throw(ArgumentError(DistSSHBase._append_remote_shell_hint(String(host), code, msg)))
-        end
-
-        msg = "remote project not ready on $host ($remote_root).\n" *
-            "Run setup first (pick one deploy path), then instantiate:\n" *
-            "  ship:   julia --project=. -m DistSSHKit setup ship-tree $(setup_cli_host_token(host))\n" *
-            "  git:    julia --project=. -m DistSSHKit setup git-clone $(setup_cli_host_token(host))\n" *
-            "          (later updates: setup git-sync $(setup_cli_host_token(host)))\n" *
-            "  then:   julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host))\n" *
-            "  then:   julia --project=. -m DistSSHKit go --run-id ID …\n" *
-            "Or from Julia: setup!(session, :ship_tree, :instantiate)\n" *
-            "  (or :git_clone, :instantiate; repo=\"…\" for clone; later :git_sync)\n" *
-            "Set DISTRIBUTED_REMOTE_PROJECT_ROOT if the remote path is not the default."
-        !isempty(ssh_hint) && (msg *= "\n  $ssh_hint")
-        throw(ArgumentError(DistSSHBase._append_remote_shell_hint(String(host), code, msg)))
-    end
-
-    deps_err = probe_remote_project_deps(host, remote_root)
-    if deps_err !== nothing
-        throw(
-            ArgumentError(
-                "remote project deps not ready on $host ($remote_root): $deps_err\n" *
-                    "Fix: julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host))\n" *
-                    "  (or setup!(session, :instantiate) after :ship_tree / :git_clone)",
-            )
-        )
-    end
-    return nothing
-end
-
-function _go_assert_remotes_ready!(hosts::AbstractVector{<:AbstractString}, remote_root::AbstractString)
-    errs = String[]
-    for h in hosts
-        try
-            _go_assert_remote_ready!(h, remote_root)
-        catch e
-            push!(errs, sprint(showerror, e))
-        end
-    end
-    isempty(errs) && return nothing
-    throw(ArgumentError(join(errs, "\n\n")))
 end
 
 function _go_julia_exe()::String
@@ -605,6 +574,8 @@ function _go_run_local_slot!(
     end
     loader = write_go_slot_loader(slot_dir)
     loader !== nothing && push!(extra_L, loader)
+    hs_loader = write_go_handshake_loader(slot_dir)
+    hs_loader !== nothing && push!(extra_L, hs_loader)
     argv = go_slot_julia_argv(
         julia_bin, project, script, script_args;
         local_cpu = true, extra_L = extra_L,
@@ -617,9 +588,8 @@ function _go_run_local_slot!(
     notice = launch_override_notice(PARENT_HOST_NAME, launch_override_names(ENV))
     (quiet || isempty(notice)) || writeln_both(notice)
     cmd = addenv(ignorestatus(Cmd(argv)), env_pairs...)
-    proc = open(log_path, "w") do log
-        return run(pipeline(cmd; stdout = log, stderr = log); wait = true)
-    end
+    site = "GoParent slot=$(basename(slot_dir))"
+    proc = run_go_slot_with_handshake(cmd, site, log_path)
     # Mirror script stdout in `:verbose` only (quiet/progress own the TTY).
     if !quiet && kit_output_detail() && isfile(log_path)
         lock(_GO_IO_LOCK) do
@@ -670,6 +640,7 @@ function _go_remote_slot_shell_inner(
             print(io, ' ', _remote_shell_path_word(a))
         end
     end
+    isempty(_PLANNED_RANK_QUEUE) && reset_launch_rank_plan!([1])
     rank = take_worker_rank()
     seed = job_seed()
     wseed = worker_seed(seed, rank)
@@ -693,9 +664,11 @@ function _go_remote_slot_shell_inner(
     end
     kit_q = _remote_shell_path_word(joinpath(slot_rel, DistSSHBase.LOCAL_STATE_DIR))
     loader_q = _remote_shell_path_word(joinpath(slot_rel, DistSSHBase.LOCAL_STATE_DIR, _GO_SLOT_LOADER_NAME))
+    hs_q = _remote_shell_path_word(joinpath(slot_rel, DistSSHBase.LOCAL_STATE_DIR, _GO_HANDSHAKE_LOADER_NAME))
     # Quoted heredoc: the slot has no DistSSHRun, so the snapshot source travels in the command.
     write_loader = "cat > $loader_q << 'DISTSSH_PROVENANCE_SLOT'\n$(_GO_SLOT_LOADER_SRC)\nDISTSSH_PROVENANCE_SLOT\n"
-    prov_load = " -L $loader_q"
+    write_hs = "cat > $hs_q << 'DISTSSH_GO_HS'\n$(_GO_HANDSHAKE_LOADER_SRC)\nDISTSSH_GO_HS\n"
+    prov_load = " -L $loader_q -L $hs_q"
     return string(
         "cd $rr && mkdir -p $slot_q && mkdir -p $kit_q && ",
         "export DISTRIBUTED_OUTPUT_DIR=$slot_q && ",
@@ -703,8 +676,10 @@ function _go_remote_slot_shell_inner(
         job_export,
         job_mark,
         write_loader,
-        "$jb_launch$job_load$prov_load $rel_q$args_s >$log_q 2>&1; ",
-        "ec=\$?; echo \$ec > $exit_q; cat $log_q; exit \$ec",
+        write_hs,
+        "{ $jb_launch$job_load$prov_load $rel_q$args_s 2>&1; echo \$? > $exit_q; } | tee $log_q; ",
+        "ec=\$(sed -n '1p' $exit_q 2>/dev/null); ",
+        "case \"\$ec\" in ''|*[!0-9]*) ec=127;; esac; exit \$ec",
     )
 end
 
@@ -725,11 +700,11 @@ function _go_run_remote_slot!(
     inner = _go_remote_slot_shell_inner(
         remote_root, slot_rel, rel, script_args, julia_bin,
     )
-    cmd = ignorestatus(_ssh_cmd([ssh_opts()..., _ssh_host_args(String(host), inner)...]))
-    # Capture streams ourselves: piping to the parent's stdout can drop ssh exit codes.
-    buf = IOBuffer()
-    proc = run(pipeline(cmd; stdout = buf, stderr = buf); wait = true)
-    out = String(take!(buf))
+    cmd = ignorestatus(_host_sync_remote_shell_cmd(String(host), inner; forward_stdin = true))
+    site = "GoRemoteSlot host=$(String(host)) slot=$(basename(slot_dir))"
+    log_path = joinpath(slot_dir, "julia.stdout.log")
+    proc = run_go_slot_with_handshake(cmd, site, log_path)
+    out = isfile(log_path) ? read(log_path, String) : ""
     # Collect is skipped when the slot fails, so keep the captured log locally.
     log_path = joinpath(slot_dir, "julia.stdout.log")
     if !isempty(out) && !isfile(log_path)
@@ -748,9 +723,11 @@ function _go_run_remote_slot!(
     scp_failed = false
     try
         remote_ec = string(rstrip(remote_root, '/'), "/", slot_rel, "/go.exitcode")
-        run(
+        DistSSHBase._ensure_posix_login_shell!(String(host))
+        _, remote_spec = DistSSHBase._scp_remote_file_spec(host, remote_ec)
+        run_ssh(
             pipeline(
-                _scp_cmd([ssh_opts()..., _ssh_host_args(string(host, ":", remote_ec))..., ec_path]);
+                _scp_cmd(vcat(DistSSHBase.scp_connection_argv(host), [remote_spec, ec_path]));
                 stdout = devnull,
                 stderr = devnull,
             );
@@ -813,15 +790,11 @@ function _go_fetch_slot_provenance!(
     mkpath(local_dir)
     local_snap = joinpath(local_dir, _GO_SLOT_PROVENANCE_NAME)
     try
-        run(
+        DistSSHBase._ensure_posix_login_shell!(String(host))
+        _, remote_spec = DistSSHBase._scp_remote_file_spec(host, remote_snap)
+        run_ssh(
             pipeline(
-                _scp_cmd(
-                    [
-                        ssh_opts()...,
-                        _ssh_host_args(string(host, ":", remote_snap))...,
-                        local_snap,
-                    ]
-                );
+                _scp_cmd(vcat(DistSSHBase.scp_connection_argv(host), [remote_spec, local_snap]));
                 stdout = devnull,
                 stderr = devnull,
             );
@@ -902,7 +875,8 @@ function _go_print_run_header!(
         script_args::AbstractVector{<:AbstractString},
         slots::Vector{GoSlot},
         proj::AbstractString,
-        anchor::AbstractString,
+        anchor::AbstractString;
+        implicit_no_hosts::Bool = false,
     )
     writeln_field("Subcommand args", subcommand_args_record("go", original_args))
     for (label, value) in julia_env_record()
@@ -919,7 +893,12 @@ function _go_print_run_header!(
     writeln_field("App git", app_git === nothing ? "unavailable" : app_git)
     writeln_field("Slots", string(length(slots)))
     for s in slots
-        where = s.kind === :parent ? PARENT_HOST_NAME : String(something(s.host, s.label))
+        where = if s.kind === :parent
+            implicit_no_hosts ? format_kit_go_implicit_head_slot() :
+                format_kit_head_placement(1, "slots")
+        else
+            String(something(s.host, s.label))
+        end
         writeln_both("  · $(s.label)  ($where)"; color = :light_black)
     end
     writeln_both("")
@@ -973,7 +952,7 @@ The manifest hash and the git snapshot are taken when `go!` starts.
 go!("job.jl")                          # one parent slot
 go!("job.jl"; repeat=100)              # 100 independent runs on parent
 go!("job.jl", "parent:2"; args=["8"])
-go!("job.jl", "child:user@h1:1", "child:user@h2:1"; remote="/path/to/project")
+go!("job.jl", "1*user@h1", "1*user@h2"; remote="/path/to/project")
 ```
 
 Each slot gets `DISTRIBUTED_OUTPUT_DIR` pointing at
@@ -1000,7 +979,7 @@ selected project directory. `run_id` also skips the in-tree
 `julia` sets the Julia binary for each slot (`nothing` / `"auto"` → detect;
 same as CLI `--julia`).
 
-`unsafe_heterogeneous` (CLI `--unsafe-heterogeneous`) waives only Manifest and
+`unsafe_skip_env_digests` (CLI `--unsafe-skip-env-digests`) waives only Manifest and
 Project byte digest checks across slots (recorded as unverified). Julia build
 and DistSSH* Manifest version strings must still match. Digest comparison is
 byte-exact (CRLF differences count).
@@ -1009,12 +988,12 @@ When `workers` is empty and `hosts_file` is omitted, `DISTSSH_HOSTS_FILE`
 is still read (API `go!("job.jl")`). Non-empty `workers` (CLI
 [`host_tokens`](@ref)) does not re-read that ENV.
 
-`parent:N` and `child:NAME:N` mean N independent full-job runs (not Distributed workers),
-started together. `repeat=N` (CLI `--repeat N`) is the total number of those
-runs, spread round-robin across listed hosts (no tokens → all on parent).
-`:N` on a token is a per-host cap when `repeat` is set; omit it to leave that
-host uncapped. Without `repeat`, every listed token needs `:N` (omitting it is
-not 1). Empty tokens stay one parent slot.
+`head_slots` (CLI `--head-slots N`) adds N local subprocess runs on this machine.
+`N*host` tokens add SSH full-script runs. Together they start in one batch.
+`repeat=N` (CLI `--repeat N`) is the total number of those runs, spread
+round-robin across listed hosts and local slots.
+Without `repeat`, every host token needs an explicit `N*` count and at least one
+slot must be configured (`head_slots` and/or remotes).
 `path_anchor` shortens displayed paths (CLI passes kit project root).
 """
 function go!(
@@ -1023,9 +1002,10 @@ function go!(
         project::AbstractString = pwd(),
         remote::Union{Nothing, AbstractString} = nothing,
         hosts_file::Union{Nothing, AbstractString} = nothing,
+        hosts_file_tokens_merged::Bool = false,
         quiet::Bool = false,
         verbosity::Union{Nothing, Symbol} = nothing,
-        yes::Bool = true,
+        yes::Union{Nothing, Bool} = nothing,
         output_dir::Union{Nothing, AbstractString} = nothing,
         collect_spec::Union{Bool, AbstractString, Nothing} = nothing,
         args::AbstractVector{<:AbstractString} = String[],
@@ -1034,12 +1014,20 @@ function go!(
         hint_surface::Symbol = :api,
         original_args::Vector{String} = String[],
         repeat::Union{Nothing, Integer} = nothing,
-        unsafe_heterogeneous = false,
+        unsafe_skip_env_digests = missing,
+        unsafe_expose_port = missing,
+        unsafe_all_to_all = missing,
         run_id::Union{Nothing, AbstractString} = nothing,
         sync::Union{Symbol, Bool, Nothing} = nothing,
         allow_external_symlinks::Bool = false,
         allow_mismatch = nothing,
+        head_slots::Union{Nothing, Integer} = nothing,
     )::GoResult
+    yes !== nothing && throw(
+        ArgumentError(
+            "go! does not accept yes=; confirmation is CLI-only (pass -y/--yes to julia -m DistSSHKit)",
+        ),
+    )
     _reject_removed_allow_mismatch!(allow_mismatch)
     _reject_run_transfer_kw!("go!", sync; surface = hint_surface)
     allow_external_symlinks &&
@@ -1066,19 +1054,25 @@ function go!(
     try
         _reset_run_provenance!(proj)
         _clear_active_selection!()
-        _clear_active_deploy_record!()
+        _clear_active_deploy_record_unless_run_id!(snap_arg)
         warn_project_sshflags(proj)
         _ensure_kit_run_dir!(:go, script_path; project = proj)
-        return with_unsafe_heterogeneous(unsafe_heterogeneous) do
+        cfg = resolve_run_job_config(;
+            command = :go,
+            cli_unsafe_skip_env_digests = cli_optional_bool(unsafe_skip_env_digests),
+            cli_unsafe_expose_port = cli_optional_bool(unsafe_expose_port),
+            cli_unsafe_all_to_all = cli_optional_bool(unsafe_all_to_all),
+        )
+        return with_run_unsafe_options!(cfg) do
             return _go_run!(
                 script_path,
                 proj,
                 workers,
                 remote,
                 hosts_file,
+                hosts_file_tokens_merged,
                 quiet,
                 verbosity,
-                yes,
                 output_dir,
                 collect_spec,
                 args,
@@ -1089,6 +1083,7 @@ function go!(
                 repeat,
                 inherited_run,
                 snap_arg,
+                head_slots,
             )
         end
     finally
@@ -1103,9 +1098,9 @@ function _go_run!(
         workers,
         remote,
         hosts_file,
+        hosts_file_tokens_merged::Bool,
         quiet,
         verbosity,
-        yes,
         output_dir,
         collect_spec,
         args,
@@ -1116,27 +1111,42 @@ function _go_run!(
         repeat,
         inherited_run::Bool,
         snap_arg::Union{Nothing, String} = nothing,
+        head_slots::Union{Nothing, Integer} = nothing,
     )
     anchor = something(path_anchor, proj)
 
     tokens = String[String(h) for h in workers]
-    hf = hosts_file
-    # CLI / [`host_tokens`](@ref) already merged `--hosts-file` / ENV into
-    # `workers`. Re-reading `DISTSSH_HOSTS_FILE` would duplicate slots.
-    # API `go!("job.jl")` with empty `workers` still honors the ENV file.
-    if hf === nothing && isempty(tokens)
-        env_hf = strip(get(ENV, "DISTSSH_HOSTS_FILE", ""))
-        !isempty(env_hf) && (hf = env_hf)
-    end
+    hf = merge_go_hosts_file_worker_tokens!(
+        tokens, hosts_file;
+        hosts_file_tokens_merged = hosts_file_tokens_merged,
+        surface = hint_surface,
+        honor_distssh_hosts_file_env = head_slots === nothing,
+    )
     if hf !== nothing && !isempty(strip(String(hf)))
-        for line in read_hosts_file_lines(hf; surface = hint_surface)
-            push!(tokens, line)
+        try
+            resolve_launch_bind_overrides(;
+                hosts_file = hf,
+                surface = hint_surface,
+                planned_hosts = String[split_worker_token(t)[1] for t in tokens],
+                command = :go,
+            )
+        catch e
+            e isa ArgumentError || rethrow()
+            hint_surface === :cli &&
+                throw(DistSSHBase.CliUsageError(_bind_config_cli_message(e.msg)))
+            rethrow()
         end
     end
     if repeat === nothing
-        require_counted_placement_tokens(tokens; surface = hint_surface)
+        require_counted_placement_tokens(
+            tokens;
+            command = :go,
+            surface = hint_surface,
+            head_slots = head_slots,
+        )
     end
-    slots = _go_plan_slots(tokens; total = repeat)
+    slots = _go_plan_slots(tokens; total = repeat, head_slots = head_slots)
+    reset_launch_rank_plan!(collect(1:length(slots)))
     place = placement_tokens_from_go_slots(slots)
     if output_dir !== nothing && collect_spec isa AbstractString
         throw(
@@ -1145,7 +1155,11 @@ function _go_run!(
             )
         )
     end
-    assert_controller_environment_for_verify!(proj)
+    if snap_arg !== nothing
+        assert_controller_environment_for_shipped_run!(proj)
+    else
+        assert_controller_environment_for_verify!(proj)
+    end
     batch_dir = if output_dir !== nothing
         _prepare_output_dir!(
             output_dir;
@@ -1174,7 +1188,6 @@ function _go_run!(
             remote = remote,
             quiet = quiet,
             verbosity = verbosity,
-            yes = yes,
         ),
     )
     init_log_file(batch_dir; prefix = "go", path_anchor = anchor)
@@ -1188,7 +1201,6 @@ function _go_run!(
             remote = remote,
             quiet = quiet,
             verbosity = verbosity,
-            yes = yes,
         )
         sess_rr = session_remote_root(go_session)
 
@@ -1210,7 +1222,11 @@ function _go_run!(
         first_fail_run = Ref{Union{Nothing, DriveResult}}(nothing)
         last_collect = Ref{Union{Nothing, CollectResult}}(nothing)
 
-        _go_print_run_header!(original_args, script_path, args, slots, proj, anchor)
+        _, implicit_no_hosts = resolve_go_head_slots(tokens, head_slots)
+        _go_print_run_header!(
+            original_args, script_path, args, slots, proj, anchor;
+            implicit_no_hosts = implicit_no_hosts,
+        )
 
         n_slots = length(slots)
         if n_slots > 0
@@ -1229,7 +1245,7 @@ function _go_run!(
             rr = _project_work_root(
                 child_hosts, proj; cli_override = remote, run_id = snap_arg,
             )
-            _go_assert_remotes_ready!(child_hosts, rr)
+            doctor_launch_assert_hosts!(child_hosts, rr)
             rr
         end
 

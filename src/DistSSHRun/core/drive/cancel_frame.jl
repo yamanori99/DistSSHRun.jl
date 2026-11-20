@@ -439,7 +439,7 @@ function _drive_frame(f; cli::Bool = false)
                 if is_sigint(e) || _drive_was_interrupted()
                     _drive_was_interrupted() || _accept_drive_sigint!()
                     if cli
-                        throw(_DriveProcessInterrupt())
+                        throw(DistSSHBase.CliForegroundInterrupt())
                     elseif is_sigint(e)
                         throw(_bare_sigint(e))
                     else
@@ -495,7 +495,8 @@ CLI translation of a drive interrupt. `exit`s 130 or 1, or returns so the
 caller can rethrow. No cleanup here.
 """
 function _cli_finish_interrupt(e)
-    if e isa _DriveProcessInterrupt ||
+    if e isa DistSSHBase.CliForegroundInterrupt ||
+            e isa _DriveProcessInterrupt ||
             (_drive_was_interrupted() && _is_cancellation_request(e))
         exit(130)
     end

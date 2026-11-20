@@ -7,12 +7,62 @@ host_op_result(; cancelled::Bool = false, succeeded::Int = 0, failed::Int = 0) =
 """
 Validate normalized setup hosts (SSH names after CLI placement parse).
 
-CLI entry is the same vocabulary as go / drive (`parent[:N]` /
-`child:NAME[:N]`; `:N` ignored). After parse, this checks the stripped
-names. `up` also accepts [`PARENT_HOST_NAME`](@ref) when `allow_parent=true`.
+CLI entry uses host names only (`user@host`, config aliases, or `parent`
+for juliaup). `N*host` machine counts are rejected (setup runs once per
+host). `up` also accepts [`PARENT_HOST_NAME`](@ref) when `allow_parent=true`.
 """
 function setup_mode_allows_parent(mode::Symbol)::Bool
     return mode === :juliaup || mode === :juliaup_update
+end
+
+"""True when a token uses explicit `N*host` machine placement (forbidden for setup)."""
+function setup_token_has_worker_count(spec::AbstractString)::Bool
+    return findfirst('*', String(strip(spec))) !== nothing
+end
+
+"""
+Reject `N*host` on setup (one operation per host; counts belong on drive/go/ride).
+
+Returns `nothing`; throws `ArgumentError` with a plain host hint when `N*` is present.
+"""
+function reject_setup_worker_count!(spec::AbstractString)::Nothing
+    setup_token_has_worker_count(spec) || return nothing
+    s = String(strip(spec))
+    plain = try
+        DistSSHBase.parse_machine_token(s).dest
+    catch
+        star = findfirst('*', s)
+        star === nothing ? s : strip(s[(star + 1):end])
+    end
+    throw(
+        ArgumentError(
+            join_explained_message(
+                "setup host $(repr(spec)) must not include a worker count (`N*host`)",
+                "Hint: name hosts without counts, e.g. setup ship-tree $plain …",
+            ),
+        ),
+    )
+end
+
+"""Parse one setup CLI/API host token (no `N*` prefix)."""
+function parse_setup_host_token(spec::AbstractString)::String
+    reject_setup_worker_count!(spec)
+    s = String(strip(spec))
+    is_parent_host_name(s) && throw(
+        ArgumentError(
+            "setup: $(repr(s)) is only for up (kit parent machine). " *
+                "SSH targets use a plain host name (no `N*` count).",
+        ),
+    )
+    throw_legacy_placement_token(s)
+    p = parse_placement_token(spec)
+    p.role === :parent && throw(
+        ArgumentError(
+            "setup: $(repr(spec)) is only for up (kit parent machine). " *
+                "SSH targets use a plain host name (no `N*` count).",
+        ),
+    )
+    return p.name
 end
 
 function validate_setup_hosts(
@@ -27,8 +77,7 @@ function validate_setup_hosts(
             allow_parent || throw(
                 ArgumentError(
                     "setup: $(repr(host)) is only for up (kit parent machine). " *
-                        "SSH targets use `child:NAME` " *
-                        "(or `child:NAME:N`; `:N` ignored).",
+                        "SSH targets use a plain host name (no `N*` count).",
                 )
             )
             continue
@@ -36,7 +85,7 @@ function validate_setup_hosts(
         if looks_like_path_host(host)
             throw(
                 ArgumentError(
-                    "refusing path-like host $(repr(host)); setup expects `child:NAME` " *
+                    "refusing path-like host $(repr(host)); setup expects `NAME` " *
                         "(SSH host or config alias), not a local script/path. " *
                         "Put SCRIPT.jl after hosts for drive/go, not for setup.",
                 )

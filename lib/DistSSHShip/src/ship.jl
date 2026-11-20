@@ -44,6 +44,19 @@ Extract `tar_path` into remote `dest`, then walk symlinks and check the hash.
 `dest` is not removed on failure. An escaping symlink is an error unless
 `allow_external_symlinks` is set.
 """
+function _executable_ship_rels_arg(rels::Union{Nothing, AbstractVector{<:AbstractString}})::String
+    rels isa AbstractVector || return ""
+    exec = String[]
+    for r in rels
+        r isa AbstractString || continue
+        s = strip(String(r))
+        isempty(s) && continue
+        push!(exec, s)
+    end
+    isempty(exec) && return ""
+    return join(exec, '\n')
+end
+
 function extract_verified!(
         host::AbstractString,
         dest::AbstractString,
@@ -51,13 +64,20 @@ function extract_verified!(
         julia_bin::AbstractString;
         allow_external_symlinks::Bool = false,
         expect_hash::AbstractString,
+        executable_ship_rels::Union{Nothing, AbstractVector{<:AbstractString}} = nothing,
     )
     sq = DistSSHBase._remote_shell_path_word(dest)
     allow = allow_external_symlinks ? "1" : "0"
+    exec_arg = _executable_ship_rels_arg(executable_ship_rels)
     inner = _remote_stdlib_julia(
         julia_bin,
         remote_extract_expr(),
-        String[sq, DistSSHBase.posix_quote(allow), DistSSHBase.posix_quote(String(expect_hash))],
+        String[
+            sq,
+            DistSSHBase.posix_quote(allow),
+            DistSSHBase.posix_quote(String(expect_hash)),
+            DistSSHBase.posix_quote(exec_arg),
+        ],
     )
     # ARGS are passed as shell words. posix_quote of "0"/"1" and the hash is
     # already quoted. `_remote_stdlib_julia` posix-quotes the expression and
@@ -123,6 +143,7 @@ function _ship_one_host!(
             host, checked, snapshot.tar_path, pinned;
             allow_external_symlinks = allow_external_symlinks,
             expect_hash = snapshot.content_tree_hash,
+            executable_ship_rels = snapshot.executable_ship_rels,
         )
     else
         hooks.extract_verified!(

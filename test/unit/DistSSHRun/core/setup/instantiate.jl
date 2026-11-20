@@ -4,7 +4,7 @@ using Test
     expr = DistSSHRun._instantiate_remote_e()
     @test occursin(
         "Pkg.instantiate(; manifest=true, update_registry=false, julia_version_strict=true)",
-        expr,
+        expr
     )
     @test occursin("Pkg.is_manifest_current(", expr)
     @test occursin("Pkg.Registry.reachable_registries()", expr)
@@ -30,7 +30,7 @@ using Test
                     DistSSHRun._instantiate_remote_e(),
                 ]
             ),
-            _child_env(depot),
+            _child_env(depot)
         )
         out = IOBuffer()
         err = IOBuffer()
@@ -52,7 +52,7 @@ using Test
             description = "test registry"
 
             [packages]
-            """,
+            """
         )
         compiled = joinpath(first(DEPOT_PATH), "compiled")
         if isdir(compiled)
@@ -69,7 +69,7 @@ using Test
             name = "Job"
             uuid = "c0ffee00-1111-4111-8111-111111111111"
             version = "0.1.0"
-            """,
+            """
         )
         mkpath(joinpath(project, "src"))
         write(joinpath(project, "src", "Job.jl"), "module Job\nend\n")
@@ -83,7 +83,7 @@ using Test
                     "using Pkg; Pkg.instantiate(; update_registry=false)",
                 ]
             ),
-            _child_env(depot),
+            _child_env(depot)
         )
         err = IOBuffer()
         proc = run(pipeline(ignorestatus(cmd); stdout = devnull, stderr = err); wait = true)
@@ -109,15 +109,15 @@ using Test
                 withenv(
                     merge(
                         _fake_setup_remote_env(state),
-                        Dict("DISTSSH_TEST_SSH_LOG" => logp),
-                    )...,
+                        Dict("DISTSSH_TEST_SSH_LOG" => logp)
+                    )...
                 ) do
                     inst = DistSSHRun.instantiate_remotes(
-                        ["h1"], "/bin/echo", "~/App.jl", proj,
+                        ["h1"], "/bin/echo", "~/App.jl", proj
                     )
                     @test inst.failed == 0 && inst.succeeded == 1
                     tested = DistSSHRun.runtest_remotes(
-                        ["h1"], "/bin/echo", "~/App.jl", proj,
+                        ["h1"], "/bin/echo", "~/App.jl", proj
                     )
                     @test tested.failed == 0 && tested.succeeded == 1
                 end
@@ -125,7 +125,7 @@ using Test
             script = read(logp, String)
             @test occursin(
                 "Pkg.instantiate(; manifest=true, update_registry=false, julia_version_strict=true)",
-                script,
+                script
             )
             @test occursin("help setup", script)
             @test !occursin("--help", script)

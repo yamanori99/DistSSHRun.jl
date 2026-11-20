@@ -15,13 +15,17 @@ include(joinpath(@__DIR__, "..", "..", "..", ".github", "downstream_public.jl"))
         mkpath(src)
         write(joinpath(src, "ok.jl"), "DistSSHRun.print_cli_error(\"x\")\n")
         write(
+            joinpath(src, "component_id.jl"),
+            "DistSSHRun.DistSSHBase.src_component_digest(@__DIR__, (:x.jl))\n"
+        )
+        write(
             joinpath(src, "shipread.jl"),
             """
             DistSSHRun.result_run_dir(kp)
             DistSSHRun.result_content_tree_hash(result)
             DistSSHRun.result_remote_run_id(result)
             DistSSHRun.ship_send_list(root)
-            """,
+            """
         )
         write(joinpath(src, "field.jl"), "DistSSHRun.DetachedProcess.run_dir\n")
         write(joinpath(src, "allow.jl"), "DistSSHRun.print_header(\"t\")\n")
@@ -44,12 +48,11 @@ include(joinpath(@__DIR__, "..", "..", "..", ".github", "downstream_public.jl"))
             joinpath(src, "bound.jl"),
             """
             const _QUALIFIED = (
-                :kit_confirm!,
-            )
+                :kit_confirm!)
             for _n in _QUALIFIED
                 _bind!(DistSSHRun, _n; export_name = false)
             end
-            """,
+            """
         )
         fails = downstream_public_failures(src)
         @test length(fails) == 1
@@ -68,7 +71,7 @@ include(joinpath(@__DIR__, "..", "..", "..", ".github", "downstream_public.jl"))
         mkpath(src)
         write(joinpath(src, "ok.jl"), "DistSSHRun.print_cli_error(\"x\")\n")
         allow = Dict{Tuple{Symbol, Symbol}, Int}(
-            (:DistSSHRun, :print_cli_error) => 201,
+            (:DistSSHRun, :print_cli_error) => 201
         )
         fails = downstream_public_failures(src; allow = allow)
         @test fails == ["allowlist: DistSSHRun.print_cli_error is public; remove the #201 entry"]

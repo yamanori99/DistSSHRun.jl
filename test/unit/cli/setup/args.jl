@@ -45,19 +45,19 @@ using Test
         @test !occursin("--remote-path PATH", text)
     end
 
-    let r = parse_setup_args(["check", "child:host1"])
+    let r = parse_setup_args(["check", "host1"])
         @test r.ignore_julia_version == false
     end
-    let r = parse_setup_args(["check", "--ignore-julia-version", "child:host1"])
+    let r = parse_setup_args(["check", "--ignore-julia-version", "host1"])
         @test r.ignore_julia_version == true
     end
 
-    let r = parse_setup_args(["runtest", "child:host1"])
+    let r = parse_setup_args(["runtest", "host1"])
         @test r.mode == :runtest
         @test r.hosts == ["host1"]
     end
 
-    let r = parse_setup_args(["ship-tree", "child:host1", "child:host2"])
+    let r = parse_setup_args(["ship-tree", "host1", "host2"])
         @test r.mode == :ship_tree
         @test r.hosts == ["host1", "host2"]
     end
@@ -73,7 +73,7 @@ using Test
             "remote-root" => :remote_root,
             "requirements" => :requirements,
         )
-        let r = parse_setup_args([name, "child:host1"])
+        let r = parse_setup_args([name, "host1"])
             @test r.mode == mode
             @test r.hosts == ["host1"]
         end
@@ -85,7 +85,7 @@ using Test
             "pull" => "git-pull",
         )
         let err = try
-                parse_setup_args([name, "child:host1"])
+                parse_setup_args([name, "host1"])
                 error("expected ArgumentError")
             catch e
                 e
@@ -102,7 +102,7 @@ using Test
             "--pull" => "git-pull",
         )
         let err = try
-                parse_setup_args([flag, "child:host1"])
+                parse_setup_args([flag, "host1"])
                 error("expected ArgumentError")
             catch e
                 e
@@ -114,7 +114,7 @@ using Test
     end
 
     let err = try
-            parse_setup_args(["check", "ship-tree", "--pull", "child:host1"])
+            parse_setup_args(["check", "ship-tree", "--pull", "host1"])
             error("expected ArgumentError")
         catch e
             e
@@ -125,26 +125,26 @@ using Test
         @test !occursin("--pull", err.msg)
         @test !occursin("--help", err.msg)
     end
-    @test_throws ArgumentError parse_setup_args(["check", "check", "child:host1"])
+    @test_throws ArgumentError parse_setup_args(["check", "check", "host1"])
     @test_throws ArgumentError parse_setup_args(["--help", "delete", "sync"])
-    @test_throws ArgumentError parse_setup_args(["delete", "sync", "child:host1"])
+    @test_throws ArgumentError parse_setup_args(["delete", "sync", "host1"])
     let r = parse_setup_args(["delete", "--help"])
         @test r.show_help
         @test r.mode == :delete
     end
 
-    let r = parse_setup_args(["git-clone", "--repo", "git@ex/app.git", "child:host1"])
+    let r = parse_setup_args(["git-clone", "--repo", "git@ex/app.git", "host1"])
         @test r.repo_url == "git@ex/app.git"
         @test r.mode == :git_clone
     end
-    let r = parse_setup_args(["check", "--deploy-root", "~/work/App.jl", "child:host1"])
+    let r = parse_setup_args(["check", "--deploy-root", "~/work/App.jl", "host1"])
         @test r.deploy_root == "~/work/App.jl"
     end
-    let r = parse_setup_args(["check", "--deploy-root", "/tmp/my dir", "child:host1"])
+    let r = parse_setup_args(["check", "--deploy-root", "/tmp/my dir", "host1"])
         @test r.deploy_root == "/tmp/my dir"
     end
     let err = try
-            parse_setup_args(["check", "--remote-dir", "/tmp/App.jl", "child:host1"])
+            parse_setup_args(["check", "--remote-dir", "/tmp/App.jl", "host1"])
             error("expected ArgumentError")
         catch e
             e
@@ -155,7 +155,7 @@ using Test
         @test occursin("help setup", err.msg)
     end
     let err = try
-            parse_setup_args(["check", "--remote-path", "~/work/App.jl", "child:host1"])
+            parse_setup_args(["check", "--remote-path", "~/work/App.jl", "host1"])
             error("expected ArgumentError")
         catch e
             e
@@ -166,7 +166,7 @@ using Test
         @test !occursin("deprecated", lowercase(err.msg))
     end
     let err = try
-            parse_setup_args(["check", "--remote-path=~/work/App.jl", "child:host1"])
+            parse_setup_args(["check", "--remote-path=~/work/App.jl", "host1"])
             error("expected ArgumentError")
         catch e
             e
@@ -175,26 +175,30 @@ using Test
         @test occursin("setup --remote-path was removed", err.msg)
         @test occursin("--deploy-root", err.msg)
     end
-    let r = parse_setup_args(["check", "--deploy-root", " /tmp/App.jl ", "child:host1"])
+    @testset "deploy-root shell quoting for follow-up commands" begin
+        spaced = "/tmp/distssh work"
+        @test DistSSHRun.posix_quote(spaced) == "'/tmp/distssh work'"
+    end
+    let r = parse_setup_args(["check", "--deploy-root", " /tmp/App.jl ", "host1"])
         @test r.deploy_root == "/tmp/App.jl"
     end
     @test_throws ArgumentError parse_setup_args(
-        ["remote-root", "--deploy-root", "/tmp/app\n", "child:host1"],
+        ["remote-root", "--deploy-root", "/tmp/app\n", "host1"]
     )
     @test_throws ArgumentError parse_setup_args(["check", "--deploy-root"])
-    let r = parse_setup_args(["check", "--julia", "/opt/julia/bin/julia", "child:host1"])
+    let r = parse_setup_args(["check", "--julia", "/opt/julia/bin/julia", "host1"])
         @test r.julia_path == "/opt/julia/bin/julia"
     end
-    let r = parse_setup_args(["--version", "check", "child:host1"])
+    let r = parse_setup_args(["--version", "check", "host1"])
         @test r.show_version
         @test r.mode == :check
     end
-    let r = parse_setup_args(["prune", "--older-than", "7", "--id", "pi_file", "child:host1"])
+    let r = parse_setup_args(["prune", "--older-than", "7", "--id", "pi_file", "host1"])
         @test r.mode == :prune
         @test r.older_days == 7
         @test r.prune_id == "pi_file"
     end
-    let r = parse_setup_args(["delete", "--confirm-path", "~/App", "child:host1"])
+    let r = parse_setup_args(["delete", "--confirm-path", "~/App", "host1"])
         @test r.mode == :delete
         @test r.confirm_paths == ["~/App"]
     end
@@ -202,14 +206,13 @@ using Test
     @test DistSSHRun._confirm_path_control_char("a\rb")
     @test DistSSHRun._confirm_path_control_char("a\0b")
     @test !DistSSHRun._confirm_path_control_char(" ~/App ")
-    @test_throws ArgumentError parse_setup_args(["delete", "--confirm-path", "a\nb", "child:host1"])
-    @test_throws ArgumentError parse_setup_args(["check", "--confirm-path", "~/App", "child:host1"])
-    @test_throws ArgumentError parse_setup_args(["check", "--older-than", "1", "child:host1"])
-    @test_throws ArgumentError parse_setup_args(["prune", "--older-than", "-1", "child:host1"])
+    @test_throws ArgumentError parse_setup_args(["delete", "--confirm-path", "a\nb", "host1"])
+    @test_throws ArgumentError parse_setup_args(["check", "--confirm-path", "~/App", "host1"])
+    @test_throws ArgumentError parse_setup_args(["check", "--older-than", "1", "host1"])
+    @test_throws ArgumentError parse_setup_args(["prune", "--older-than", "-1", "host1"])
     @test_throws ArgumentError parse_setup_args(["--julia"])
-    @test_throws ArgumentError parse_setup_args(["check", "host1"])
     let err = try
-            parse_setup_args(["check", "--not-a-flag", "child:host1"])
+            parse_setup_args(["check", "--not-a-flag", "host1"])
             error("expected ArgumentError")
         catch e
             e
@@ -232,7 +235,7 @@ using Test
     end
 
     let err = try
-            parse_setup_args(["--juliaup", "parent", "child:host1"])
+            parse_setup_args(["--juliaup", "parent", "host1"])
             error("expected ArgumentError")
         catch e
             e
@@ -244,7 +247,7 @@ using Test
         @test occursin("help up", err.msg)
     end
     let err = try
-            parse_setup_args(["--juliaup-update", "child:host1"])
+            parse_setup_args(["--juliaup-update", "host1"])
             error("expected ArgumentError")
         catch e
             e
@@ -257,13 +260,12 @@ using Test
     for (flag, name) in (
             "--ship-tree" => "ship-tree",
             "--instantiate" => "instantiate",
-            "--check" => "check",
             "--delete" => "delete",
             "--remote-root" => "remote-root",
             "--requirements" => "requirements",
         )
         let err = try
-                parse_setup_args([flag, "child:host1"])
+                parse_setup_args([flag, "host1"])
                 error("expected ArgumentError")
             catch e
                 e
@@ -274,38 +276,42 @@ using Test
         end
     end
 
-    let r = parse_setup_args(["check", "child:update"])
+    let r = parse_setup_args(["--check", "host1"])
+        @test r.mode == :check
+    end
+
+    let r = parse_setup_args(["check", "update"])
         @test r.mode == :check
         @test r.hosts == ["update"]
     end
-    @test_throws ArgumentError parse_setup_args(["update", "child:host1"])
+    let r = parse_setup_args(["update", "host1"])
+        @test r.mode === nothing
+        @test r.hosts == ["update", "host1"]
+    end
 
-    let r = parse_setup_args(["check", "--hosts-file", _sample_hosts_file(), "child:host-cli"])
+    let r = parse_setup_args(["check", "--hosts-file", _sample_setup_hosts_file(), "host-cli"])
         @test r.hosts == ["host-cli", "host-a", "host-b"]
     end
 
-    let r = parse_setup_args(["check", "--hosts", "child:h1:9,child:h2", "child:host-cli"])
-        @test r.hosts == ["host-cli", "h1", "h2"]
+    @test_throws ArgumentError parse_setup_args(["check", "--hosts", "9*h1,h2", "host-cli"])
+    @test_throws ArgumentError parse_setup_args(["check", "4*alice@lab-server"])
+
+    withenv("DISTSSH_HOSTS" => "3*env-h") do
+        @test_throws ArgumentError parse_setup_args(["check", "host-cli"])
     end
 
-    withenv("DISTSSH_HOSTS" => "child:env-h:3") do
-        let r = parse_setup_args(["check", "child:host-cli"])
-            @test r.hosts == ["host-cli", "env-h"]
-        end
-    end
-
-    let r = parse_setup_args(["check", "--", "child:host1"])
+    let r = parse_setup_args(["check", "--", "host1"])
         @test r.mode == :check
         @test r.hosts == ["host1"]
     end
     let r = parse_setup_args(
-            ["instantiate", "--deploy-root", "/tmp/App.jl", "--run-id", "20260101T000000Z-aaaaaa", "child:h1"],
+            ["instantiate", "--deploy-root", "/tmp/App.jl", "--run-id", "20260101T000000Z-aaaaaa", "h1"]
         )
         @test r.mode == :instantiate
         @test r.deploy_root == "/tmp/App.jl"
         @test r.run_id == "20260101T000000Z-aaaaaa"
     end
-    let r = parse_setup_args(["--deploy-root", "/tmp/App.jl", "check", "child:h1"])
+    let r = parse_setup_args(["--deploy-root", "/tmp/App.jl", "check", "h1"])
         @test r.mode == :check
         @test r.deploy_root == "/tmp/App.jl"
     end
@@ -322,7 +328,7 @@ using Test
         @test !occursin("--juliaup", txt)
         @test !occursin("--remote-dir", txt)
         @test occursin("--hosts", txt)
-        @test occursin("child:host1", txt)
+        @test occursin("host1", txt)
         @test occursin("parent", txt)
         @test occursin("progress DIR", txt)
         @test occursin("Recommended:", txt)
@@ -336,15 +342,15 @@ using Test
     end
 
     @testset "extra-file is collected and rejected by the API" begin
-        one = parse_setup_args(["ship-tree", "--extra-file", "/tmp/job.jl", "child:h1"])
+        one = parse_setup_args(["ship-tree", "--extra-file", "/tmp/job.jl", "h1"])
         @test one.extra_files == ["/tmp/job.jl"]
         two = parse_setup_args(
             [
-                "ship-tree", "--extra-file", "/tmp/a.jl", "--extra-file", "/tmp/b.jl", "child:h1",
+                "ship-tree", "--extra-file", "/tmp/a.jl", "--extra-file", "/tmp/b.jl", "h1",
             ]
         )
         @test two.extra_files == ["/tmp/a.jl", "/tmp/b.jl"]
-        other = parse_setup_args(["instantiate", "--extra-file", "/tmp/a.jl", "child:h1"])
+        other = parse_setup_args(["instantiate", "--extra-file", "/tmp/a.jl", "h1"])
         @test other.extra_files == ["/tmp/a.jl"]
         err_n = try
             DistSSHRun.check_setup_options!(:ship_tree; extra_files = two.extra_files)
@@ -358,7 +364,7 @@ using Test
         catch e
             e
         end
-        session = DistSSHRun.DistSSHSession(workers = ["child:h1"], project = pwd(), yes = true)
+        session = DistSSHRun.DistSSHSession(workers = ["h1"], project = pwd())
         err_api = try
             DistSSHRun.setup!(session, :ship_tree; extra_files = two.extra_files)
             nothing

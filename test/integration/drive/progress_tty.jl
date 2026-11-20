@@ -33,7 +33,7 @@ using Test
                     printf 'DISTSSH_PROMPT>'
                     read line
                     printf 'DISTSSH_GOT:%s\\n' "\$line"
-                    """,
+                    """
                 )
                 t0 = time()
                 pty = _tty_expect_script(
@@ -42,7 +42,7 @@ using Test
                     expect = "DISTSSH_PROMPT>",
                     reply = "pong\n",
                     reply_marker = "DISTSSH_GOT:pong",
-                    hang_s = 30.0,
+                    hang_s = 30.0
                 )
                 @info "harness expect flush wall" elapsed = (time() - t0)
                 @test occursin("DISTSSH_PROMPT>", pty)
@@ -76,7 +76,7 @@ using Test
                     echo \$! > "\$gpidf"
                     touch "\$ready"
                     while [ -f "\$alive" ]; do sleep 0.1; done
-                    """,
+                    """
                 )
                 # Unrelated process: not in the capture group; must survive cleanup.
                 unrelated = run(ignorestatus(`sleep 60`); wait = false)
@@ -89,7 +89,7 @@ using Test
                             _tty_capture_script(
                                 hang;
                                 typescript = joinpath(dir, "hang_typescript.txt"),
-                                hang_s = 8.0,
+                                hang_s = 8.0
                             )
                         catch e
                             err_box[] = e
@@ -140,12 +140,12 @@ using Test
             drive_ok = _kit_drive_cmd(;
                 script = ok_script,
                 host_root = proj,
-                parent_workers = 2,
+                head_workers = 2
             )
             drive_fail = _kit_drive_cmd(;
                 script = fail_script,
                 host_root = proj,
-                parent_workers = 2,
+                head_workers = 2
             )
             @test occursin("--no-log", join(String.(drive_ok.exec), " "))
 
@@ -175,14 +175,14 @@ using Test
                 unset DISTSSH_QUIET
                 export DISTSSH_VERBOSE=1
                 $(argv_line(drive_ok))
-                """,
+                """
             )
 
             t0 = time()
             pty = _tty_capture_script(
                 runner;
                 typescript = joinpath(dir, "drive_typescript.txt"),
-                hang_s = hang_s,
+                hang_s = hang_s
             )
             elapsed = time() - t0
             @info "drive progress_tty script child wall" elapsed
@@ -200,7 +200,7 @@ using Test
             ok_lines = _tty_lines(ok_tty)
             smoke_lines = filter(
                 l -> occursin("DISTSSH_RUNNER_SMOKE_OK", l) && !_tty_bar_line(l),
-                ok_lines,
+                ok_lines
             )
             @test !isempty(smoke_lines)
             # Live after release: smoke is not glued mid-bar. A finished bar
@@ -218,7 +218,7 @@ using Test
             fail_lines = _tty_lines(fail_tty)
             @test any(
                 l -> occursin("DISTSSH_RUNNER_BOOM", l) && !_tty_bar_line(l),
-                fail_lines,
+                fail_lines
             )
             @test !occursin("retry.___SPLIT___", pty)
             _assert_tty_progress_payload(fail_tty)
@@ -237,7 +237,7 @@ using Test
             verbose_lines = _tty_lines(verbose_tty)
             @test any(
                 l -> occursin("DISTSSH_RUNNER_SMOKE_OK", l) && !_tty_bar_line(l),
-                verbose_lines,
+                verbose_lines
             )
             # Verbose shows the running step before the smoke marker.
             run_at = findfirst("Running script", verbose_tty)
@@ -270,7 +270,7 @@ using Test
                     end
                     x
                 end
-                """,
+                """
             )
             fail_script = joinpath(proj, "fail.jl")
             write(fail_script, "map(x -> error(\"DISTSSH_RIDE_BOOM\"), 1:2)\n")
@@ -278,13 +278,13 @@ using Test
             ride_ok = _kit_cli_cmd(
                 [
                     "ride", "-y", "--no-spi-check",
-                    "--output-dir", od_ok, "parent:1", ok_script,
+                    "--output-dir", od_ok, "--head-workers", "1", ok_script,
                 ]
             )
             ride_fail = _kit_cli_cmd(
                 [
                     "ride", "-y", "--no-spi-check",
-                    "--output-dir", od_fail, "parent:1", fail_script,
+                    "--output-dir", od_fail, "--head-workers", "1", fail_script,
                 ]
             )
 
@@ -307,14 +307,14 @@ using Test
                 $(argv_line(ride_ok))
                 echo '___SPLIT___'
                 $(argv_line(ride_fail))
-                """,
+                """
             )
 
             t0 = time()
             pty = _tty_capture_script(
                 runner;
                 typescript = joinpath(dir, "ride_typescript.txt"),
-                hang_s = hang_s,
+                hang_s = hang_s
             )
             elapsed = time() - t0
             @info "ride progress_tty script child wall" elapsed
@@ -339,7 +339,7 @@ using Test
             fail_lines = _tty_lines(fail_tty)
             @test any(
                 l -> occursin("DISTSSH_RIDE_BOOM", l) && !_tty_bar_line(l),
-                fail_lines,
+                fail_lines
             )
             _assert_tty_progress_payload(fail_tty)
         end
@@ -356,14 +356,14 @@ using Test
                 """
                 println(stdout, "DISTSSH_STDOUT_MARK")
                 println(stderr, "DISTSSH_STDERR_MARK")
-                """,
+                """
             )
             out_file = joinpath(dir, "stdout.txt")
             err_file = joinpath(dir, "stderr.txt")
             drive_cmd = _kit_drive_cmd(;
                 script = script,
                 host_root = proj,
-                parent_workers = 1,
+                head_workers = 1
             )
             @test occursin("--no-log", join(String.(drive_cmd.exec), " "))
             runner = joinpath(dir, "stdio_runner.sh")
@@ -383,13 +383,13 @@ using Test
                 export DISTRIBUTED_PROJECT_ROOT=$(sh_quote(proj))
                 export DISTRIBUTED_INIT_DELAY_SEC=0
                 $(argv_line(drive_cmd)) >$(sh_quote(out_file)) 2>$(sh_quote(err_file))
-                """,
+                """
             )
             t0 = time()
             _tty_capture_script(
                 runner;
                 typescript = joinpath(dir, "stdio_typescript.txt"),
-                hang_s = hang_s,
+                hang_s = hang_s
             )
             @info "drive stdio redirect progress_tty wall" elapsed = (time() - t0)
             @test isfile(out_file) && isfile(err_file)
@@ -415,12 +415,12 @@ using Test
                     flush(stdout)
                     line = readline(stdin)
                     println("DISTSSH_GOT:", line)
-                    """,
+                    """
                 )
                 drive_cmd = _kit_drive_cmd(;
                     script = script,
                     host_root = proj,
-                    parent_workers = 1,
+                    head_workers = 1
                 )
                 runner = joinpath(dir, "prompt_runner.sh")
                 write_runner(
@@ -439,7 +439,7 @@ using Test
                     export DISTRIBUTED_PROJECT_ROOT=$(sh_quote(proj))
                     export DISTRIBUTED_INIT_DELAY_SEC=0
                     $(argv_line(drive_cmd))
-                    """,
+                    """
                 )
                 t0 = time()
                 pty = _tty_expect_script(
@@ -448,7 +448,7 @@ using Test
                     expect = "DISTSSH_PROMPT>",
                     reply = "pong\n",
                     reply_marker = "DISTSSH_GOT:pong",
-                    hang_s = hang_s,
+                    hang_s = hang_s
                 )
                 @info "drive interactive progress_tty wall" elapsed = (time() - t0)
                 plain = _tty_strip_ansi(pty)
@@ -464,7 +464,7 @@ using Test
                 # Visible model: prompt is its own payload line, not bar-glued.
                 prompt_lines = filter(
                     l -> occursin("DISTSSH_PROMPT>", l) && !_tty_bar_line(l),
-                    _tty_lines(pty),
+                    _tty_lines(pty)
                 )
                 @test !isempty(prompt_lines)
             end

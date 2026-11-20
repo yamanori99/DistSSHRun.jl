@@ -22,11 +22,22 @@ using Unicode
 
 # Public surface. Prefer `julia -m DistSSHKit …` for day-to-day CLI.
 #   user — go! / ride! / drive! / pool! / setup! / pipeline!
-#   placement — WorkerPlan from explicit parent:N / child:NAME:N
+#   placement — WorkerPlan from explicit parent:N / NAME:N
 #   queue — execute!(; detached=true), parsers, paths, help chrome
 #   argv wrappers `go` / `drive` stay unexported (`main` / tests)
 export worker_pmap
 export worker_seed
+export LaunchReport
+export WorkerLaunchOutcome
+export LaunchIncompleteError
+export launch_report_planned
+export launch_report_joined
+export launch_report_failures
+export launch_report_usable
+export launch_rank
+export SEED_SCHEME
+export seed_mix
+export job_item_seed
 export DistSSHSession
 export HostResult
 export SyncResult
@@ -63,6 +74,7 @@ export pipeline_config_from_env
 export go!
 export GoResult
 export ride!
+export LoadedCodeMismatchError
 export RideResult
 export execute!
 export allocate_output_dir
@@ -94,6 +106,7 @@ export julia_default_sysimage_path
 export julia_sysimage_is_default
 export resolve_pkg_env
 export explain_script_not_found
+public DoctorReport, doctor!, parse_doctor_args
 # Display helpers stay public and are not exported. DistSSHKit 0.11 drops them.
 public print_pool
 public print_hostinfo
@@ -127,8 +140,8 @@ end
 include(joinpath(@__DIR__, "..", "lib", "DistSSHBase", "src", "DistSSHBase.jl"))
 include("DistSSHRun/up_module.jl")
 using .DistSSHBase
-import .DistSSHBase: manifest_path
-public manifest_path
+import .DistSSHBase: join_explained_message, manifest_path
+public join_explained_message, manifest_path
 import .DistSSHBase:
     current_project_file,
     julia_default_sysimage_path,
@@ -143,7 +156,7 @@ using .DistSSHBase: CliCursor, HostFacts, HostResult, OUTPUT_WIDTH, PARENT_HOST_
     _path_is_under, _path_under_resolved, _print_colored, _remote_julia_path_sh,
     _remote_shell_path_word, _remote_shell_status, _remote_shell_status_parts,
     _rethrow_missing_host_tool, _scp_cmd, _ssh_cmd, _ssh_exe,
-    _ssh_host_args, _test_double_julia_argv, _test_doubles_on, _throw_if_nonposix_shell,
+    _ssh_host_connection_args, _test_double_julia_argv, _test_doubles_on, _throw_if_nonposix_shell,
     _truncate_ssh_message,
     cli_at_end, cli_consume!, cli_current, cli_entry, cli_heading, cli_m, cli_m_project,
     cli_match, cli_take_value!, clone_url_from_local_origin, collect_host_facts, detect_julia_path,
@@ -153,30 +166,46 @@ using .DistSSHBase: CliCursor, HostFacts, HostResult, OUTPUT_WIDTH, PARENT_HOST_
     format_placement_token, get_remote_git_hash,
     get_remote_julia_version_full,
     git_work_tree,
+    hosts_file_is_toml,
     is_sigint, join_explained_message, looks_like_path_host, normalize_git_clone_url,
-    parse_placement_token, posix_quote, project_package_name, read_hosts_file, read_hosts_file_lines,
+    parse_placement_token, posix_quote, project_driver_package_name, project_package_name,
+    read_hosts_file, read_hosts_file_lines, read_machine_file_lines,
+    read_toml_host_entries,
     remote_delete_root, remote_deploy_root, remote_env_project_root, remote_git_clone_dest,
     remote_layout_path, resolve_host_path_abs,
-    resolve_remote_julia, resolve_remote_project_root, rule_line, shield_sigint,
+    resolve_remote_julia, resolve_remote_project_root, rule_line, run_ssh, shield_sigint,
     split_hosts_csv, split_worker_token, ssh_addprocs_machine, summarize_ssh_error,
-    throw_legacy_placement_token, throw_removed_local_flag, use_colors, validate_ssh_host,
+    throw_legacy_placement_token, throw_removed_local_flag, toml_host_ssh_dest, use_colors, validate_ssh_host,
     with_cli_entry,
     without_cancel
 using .DistSSHUp: julia_version_mismatch_kind, juliaup_add_host!, juliaup_align_host!,
     juliaup_channel, juliaup_default_host!, juliaup_parent_behind_channel,
-    juliaup_status_lines, juliaup_update_host!
+    juliaup_update_host!
 
 include("DistSSHRun/messages/display.jl")
+include("DistSSHRun/messages/errors.jl")
+include("DistSSHRun/messages/placement.jl")
+include("DistSSHRun/options/table.jl")
+include("DistSSHRun/options/config.jl")
+include("DistSSHRun/options/cli_consume.jl")
+include("DistSSHRun/options/job_options.jl")
 include("DistSSHRun/argv/session.jl")
 include("DistSSHRun/infra/run_transfer_removed.jl")
 include("DistSSHRun/infra/remote.jl")
+include("DistSSHRun/infra/launch_report.jl")
 include("DistSSHRun/infra/launch.jl")
+include("DistSSHRun/infra/bind_contract.jl")
+include("DistSSHRun/infra/topology.jl")
+include("DistSSHRun/infra/component_id.jl")
 include("DistSSHRun/infra/mismatch.jl")
+include("DistSSHRun/infra/loaded_identity.jl")
+include("DistSSHRun/infra/go_handshake.jl")
 include("DistSSHRun/infra/demos.jl")
 include("DistSSHRun/infra/distributed.jl")
 include("DistSSHRun/infra/worker_plan.jl")
 include("DistSSHRun/drive/types.jl")
 include("DistSSHRun/infra/run_manifest.jl")
+include("DistSSHRun/infra/detached_job_blob.jl")
 include("DistSSHRun/setup.jl")
 include("DistSSHRun/infra/run_layout.jl")
 include("DistSSHRun/ship_module.jl")
@@ -189,6 +218,7 @@ include("DistSSHRun/infra/ship.jl")
 include("DistSSHRun/infra/ship_dest.jl")
 include("DistSSHRun/infra/source_selection.jl")
 include("DistSSHRun/infra/deploy_record.jl")
+include("DistSSHRun/infra/shipped_tree.jl")
 include("DistSSHRun/argv/drive_args.jl")
 include("DistSSHRun/argv/go_args.jl")
 include("DistSSHRun/argv/setup_args.jl")
@@ -196,7 +226,9 @@ include("DistSSHRun/argv/up_args.jl")
 include("DistSSHRun/argv/hostinfo_args.jl")
 include("DistSSHRun/argv/pool_args.jl")
 include("DistSSHRun/argv/ride_args.jl")
+include("DistSSHRun/argv/doctor_args.jl")
 include("DistSSHRun/drive.jl")
+include("DistSSHRun/core/doctor.jl")
 include("DistSSHRun/infra/namespace_sync.jl")
 include("DistSSHRun/pool.jl")
 include("DistSSHRun/hostinfo.jl")
@@ -212,8 +244,10 @@ include("DistSSHRun/core/drive/script_hint.jl")
 include("DistSSHRun/go.jl")
 include("DistSSHRun/infra/script_scan.jl")
 include("DistSSHRun/ride.jl")
+include("DistSSHRun/execute_envelope.jl")
 include("DistSSHRun/execute.jl")
 include("DistSSHRun/provenance.jl")
+include("DistSSHRun/options/unsafe_runtime.jl")
 
 const _KIT_ROOT = dirname(@__DIR__)
 
@@ -247,9 +281,10 @@ dist_ssh_kit_version()::VersionNumber = DIST_SSH_KIT_VERSION
 #   julia --project=. -m DistSSHKit drive parent:2 script.jl
 
 const _KIT_CLI_LOADED = Set{String}()
-const _KIT_CLI_SCRIPTS = ("drive.jl", "go.jl", "hostinfo.jl", "pool.jl", "ride.jl", "setup.jl", "up.jl")
+const _KIT_CLI_SCRIPTS = ("doctor.jl", "drive.jl", "go.jl", "hostinfo.jl", "pool.jl", "ride.jl", "setup.jl", "up.jl")
 
 const _KIT_CLI_MAIN = Dict(
+    "doctor.jl" => :doctor_main,
     "drive.jl" => :drive_main,
     "go.jl" => :go_main,
     "hostinfo.jl" => :hostinfo_main,
@@ -363,6 +398,13 @@ Run `setup.jl` (clone / sync / cleanup) with `args` (same as `julia -m DistSSHKi
 setup(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("setup.jl", args)
 
 """
+    run_doctor(args::Vector{String}=copy(ARGS))
+
+Run `doctor.jl` (`julia -m DistSSHKit doctor --deploy …`).
+"""
+run_doctor(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("doctor.jl", args)
+
+"""
     up(args::Vector{String}=copy(ARGS))
 
 Run `up.jl` (juliaup align / update) with `args` (same as `julia -m DistSSHKit up …`).
@@ -395,12 +437,12 @@ run_ride(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("ride.jl
 
 CLI entry. Prefer Julia 1.13+ and `julia -m DistSSHKit SUBCOMMAND …`:
 
-    julia --project=. -m DistSSHKit setup git-clone child:host1 child:host2
+    julia --project=. -m DistSSHKit setup git-clone host1 host2
     julia --project=. -m DistSSHKit go SCRIPT.jl
     julia --project=. -m DistSSHKit ride parent:2 SCRIPT.jl
     julia --project=. -m DistSSHKit drive parent:2 script.jl
-    julia --project=. -m DistSSHKit hostinfo parent child:host1
-    julia --project=. -m DistSSHKit pool parent child:host1
+    julia --project=. -m DistSSHKit hostinfo parent host1
+    julia --project=. -m DistSSHKit pool parent host1
     julia --project=. -m DistSSHKit progress DIR
 
 `main` remains for wrappers and tests; prefer `-m` day-to-day.
@@ -409,7 +451,7 @@ A `.jl` path with no command is not implicit `go`.
 function main(args::Vector{String} = copy(ARGS))::Cint
     try
         return with_cli_entry(:DistSSHRun) do
-            return _main(args)
+            return DistSSHBase.with_cli_exit(() -> _main(args))
         end
     catch e
         # After the drive frame's `finally` blocks. Translation only.
@@ -424,6 +466,7 @@ public main
 # `demo` and `progress` are ordinary functions. The script commands stop in
 # `include`, but a static call from `_main` still pulls `demo` and `progress` in.
 const _RUN_CALLS = Dict{String, Function}(
+    "doctor" => (rest -> run_doctor(rest)::Cint),
     "drive" => (rest -> drive(_merge_script_arg_prelude(rest))::Cint),
     "go" => (rest -> go(_merge_script_arg_prelude(rest))::Cint),
     "demo" => (rest -> demo(rest)::Cint),
@@ -454,7 +497,7 @@ const NO_COMMAND_HINT_LINES = (
 
 """Expected-command sentence `print_rejected_command` prints under `unknown_subcommand_message`."""
 const RUN_SUBCOMMAND_EXPECTATION =
-    "Expected: setup | up | go | ride | drive | hostinfo | pool | demo | progress"
+    "Expected: setup | doctor | up | go | ride | drive | hostinfo | pool | demo | progress"
 
 """Print the shared rejection lines. The caller prints the usage page.
 
@@ -503,12 +546,12 @@ function _main_dispatch(args::Vector{String})::Cint
     # `help`, `-h`, and `--help`, in any number and order, are the root page.
     # `help go --help` is not: `go` is a command, so the rewrite below still runs.
     if !isempty(args) && all(in(("help", "-h", "--help")), args)
-        print_kit_root_usage()
+        print_kit_root_usage(stdout)
         return 0
     end
     if isempty(args)
-        print_kit_root_usage()
-        return 1
+        print_kit_root_usage(stderr)
+        return Int(DistSSHBase.CLI_EXIT_USAGE)
     end
     # `help <verb> …` is `<verb> --help …`, once. A second word that is not a
     # command stays on the unknown-subcommand path, and that word is the name.
@@ -536,8 +579,8 @@ function _main_dispatch(args::Vector{String})::Cint
         script = any(endswith(String(a), ".jl") for a in args),
     )
     println(stderr)
-    print_kit_root_usage()
-    return 1
+    print_kit_root_usage(stderr)
+    return Int(DistSSHBase.CLI_EXIT_USAGE)
 end
 
 if ccall(:jl_generating_output, Cint, ()) == 1

@@ -8,19 +8,21 @@ mutable struct DistSSHSession
     remote::Union{Nothing, String}
     quiet::Bool
     verbosity::Symbol
-    yes::Bool
-    include_parent_for_size::Bool
+    include_head_for_size::Bool
     cli_session::CliSharedFlags
 end
 
 """
-    DistSSHSession(; project=pwd(), workers=[], remote=nothing, hosts_file=nothing,
-               quiet=false, verbosity=nothing, yes=true, include_parent_for_size=false)
+    DistSSHSession(; project=pwd(), workers=[], head_workers=nothing, remote=nothing,
+               hosts_file=nothing, quiet=false, verbosity=nothing,
+               include_head_for_size=false)
 
 Build a session for drive APIs. `workers` is a CLI-style host list.
 `setup!` / `pool!` / `sync!` / `collect!` accept a bare list
-(`child:user@host`). `go!` / `drive!` / `ride!` / `pipeline!` require `:N`
-on listed tokens (`parent:2`, `child:user@host:1`).
+(`user@host`). `go!` / `drive!` / `ride!` / `pipeline!` require `:N`
+on listed tokens (`1*user@host`). `drive` / `ride` local workers use
+`head_workers` (`--head-workers`). `go` head runs use `head_slots`
+(`--head-slots`), not placement tokens.
 
 `session.hosts` keeps remote SSH names only (for sync / collect).
 `session.tokens` keeps the original tokens (including `parent:N`).
@@ -32,18 +34,27 @@ on the kit parent).
 only when `hosts_file` is omitted **and** `workers` is empty (same as
 [`go!`](@ref)). Non-empty `workers` do not re-read that ENV.
 `verbosity` is `:verbose` | `:progress` | `:quiet` (`quiet=true` implies `:quiet`).
-API default `yes=true` skips confirm prompts.
+Confirmations are CLI-only (`-y` / `--yes`); do not pass `yes=` here.
 """
 function DistSSHSession(;
         project::AbstractString = pwd(),
         workers::AbstractVector{<:AbstractString} = String[],
+        head_workers::Union{Nothing, Integer} = nothing,
         remote::Union{Nothing, AbstractString} = nothing,
         hosts_file::Union{Nothing, AbstractString} = nothing,
         quiet::Bool = false,
         verbosity::Union{Nothing, Symbol} = nothing,
-        yes::Bool = true,
-        include_parent_for_size::Bool = false,
+        include_head_for_size::Bool = false,
+        kwargs...,
     )
+    if haskey(kwargs, :yes)
+        throw(
+            ArgumentError(
+                "DistSSHSession does not accept yes=; confirmation is CLI-only (pass -y/--yes to julia -m DistSSHKit)",
+            ),
+        )
+    end
+    isempty(kwargs) || throw(ArgumentError("DistSSHSession: unknown keyword $(first(keys(kwargs)))"))
     tokens = String[String(h) for h in workers]
     hf = if hosts_file !== nothing
         String(strip(hosts_file))
@@ -53,12 +64,14 @@ function DistSSHSession(;
         ""
     end
     hf_path = isempty(hf) ? nothing : hf
+    lw = head_workers === nothing ? nothing : Int(head_workers)
     cli = CliSharedFlags(
         quiet = quiet,
         verbosity = verbosity,
-        yes = yes,
+        yes = false,
         hosts_file = hf_path,
         hint_surface = :api,
+        head_workers = lw,
     )
     tokens = String[String(h) for h in workers]
     if hf_path !== nothing
@@ -66,8 +79,8 @@ function DistSSHSession(;
             push!(tokens, line)
         end
     end
-    parsed = parse_worker_tokens(tokens)
-    include_parent = include_parent_for_size || parsed.parent_autosize
+    parsed = parse_worker_tokens(tokens; head_workers = lw)
+    include_parent = include_head_for_size || parsed.head_workers > 0
     proj = canonical_local_path(project)
     rr = remote === nothing ? nothing : String(strip(String(remote)))
     rr !== nothing && isempty(rr) && (rr = nothing)
@@ -78,7 +91,6 @@ function DistSSHSession(;
         rr,
         cli.quiet,
         cli.verbosity,
-        yes,
         include_parent,
         cli,
     )
@@ -97,7 +109,6 @@ one owner task.
 function apply_session_env!(session::DistSSHSession)
     ENV["DISTRIBUTED_PROJECT_ROOT"] = session.project
     session.cli_session.quiet = session.quiet
-    session.cli_session.yes = session.yes
     # Non-explicit sessions auto-resolve to `:verbose` when stdout is a pipe
     # (Pkg.test). Do not wipe an ambient `:progress` / `:quiet` pin — that
     # flipped `writeln_field("Log file", …)` back on under `setup!` (#238).
@@ -143,3 +154,9 @@ end
 
 """Explain surface for this session (`:cli` or `:api`)."""
 hint_surface(session::DistSSHSession)::Symbol = session.cli_session.hint_surface
+
+"""API sessions do not prompt. CLI sessions prompt unless `--yes` / `DISTSSH_YES`."""
+function session_confirms(session::DistSSHSession)::Bool
+    hint_surface(session) === :api && return false
+    return !session.cli_session.yes
+end

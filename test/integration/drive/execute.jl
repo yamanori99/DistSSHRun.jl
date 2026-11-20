@@ -21,11 +21,9 @@ using Test
                         redirect_stderr(err_io) do
                             DistSSHRun.execute!(
                                 :drive,
-                                script,
-                                ["parent:2"];
+                                script, String[]; head_workers = 2,
                                 project = proj,
-                                verbosity = :verbose,
-                                yes = true,
+                                verbosity = :verbose
                             )
                         end
                     end
@@ -64,13 +62,12 @@ end
                 _, kp = _capture_detached_env_log() do
                     DistSSHRun.execute!(
                         :drive,
-                        script,
-                        ["parent:2"];
+                        script, String[]; head_workers = 2,
                         detached = true,
                         project = proj,
                         verbosity = :verbose,
                         stdout = out_io,
-                        stderr = err_io,
+                        stderr = err_io
                     )
                 end
                 @test kp isa DistSSHRun.DetachedProcess
@@ -109,15 +106,13 @@ end
                 _, kp = _capture_detached_env_log() do
                     DistSSHRun.execute!(
                         :drive,
-                        script,
-                        ["parent:1"];
+                        script, String[]; head_workers = 1,
                         detached = true,
                         project = proj,
                         args = ["--out", dest],
                         verbosity = :quiet,
-                        yes = true,
                         stdout = out_io,
-                        stderr = err_io,
+                        stderr = err_io
                     )
                 end
                 result = wait(kp)

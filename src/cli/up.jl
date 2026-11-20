@@ -2,9 +2,9 @@
 """
 `julia -m DistSSHKit up` — align a host's Julia channel with juliaup.
 
-  julia --project=. -m DistSSHKit up add 1.13 child:host1
+  julia --project=. -m DistSSHKit up add 1.13 host1
   julia --project=. -m DistSSHKit up default 1.13 parent
-  julia --project=. -m DistSSHKit up update child:host1
+  julia --project=. -m DistSSHKit up update host1
   julia --project=. -m DistSSHKit up status parent
 
 See `--help`.
@@ -34,52 +34,44 @@ end
 
 if !isdefined(@__MODULE__, :up_main)
     function up_main()::Cint
-        opts = try
-            parse_up_args(ARGS)
-        catch e
-            e isa ArgumentError || rethrow()
-            print_err("Error: "; bold = true)
-            println_fatal(e.msg)
-            println_fatal()
-            show_up_usage()
-            return 1
-        end
+        return DistSSHRun.DistSSHBase.with_cli_exit() do
+            opts = DistSSHRun.DistSSHBase.cli_parse(() -> parse_up_args(ARGS))
 
-        if opts.show_version
-            DistSSHRun.println_kit_version()
-            return 0
-        end
+            if opts.show_version
+                DistSSHRun.println_kit_version()
+                return Cint(0)
+            end
 
-        if opts.show_help || isempty(opts.verb) || isempty(opts.hosts)
-            show_up_usage()
-            return opts.show_help ? 0 : 1
-        end
+            if opts.show_help
+                return DistSSHRun.DistSSHBase.cli_help_stdout(show_up_usage)
+            end
 
-        try
-            validate_setup_hosts(opts.hosts; allow_parent = true)
-        catch e
-            e isa ArgumentError || rethrow()
-            print_err("Error: "; bold = true)
-            println_fatal(e.msg)
-            println_fatal()
-            show_up_usage()
-            return 1
-        end
+            if isempty(opts.verb) || isempty(opts.hosts)
+                return DistSSHRun.DistSSHBase.cli_required_else_help(show_up_usage)
+            end
 
-        ssh_hosts = setup_juliaup_ssh_hosts(opts.hosts)
-        if !isempty(ssh_hosts) && !preflight_setup_ssh(ssh_hosts)
-            print_err("SSH preflight failed. Fix connectivity, then retry.\n")
-            kit_println()
-            return Cint(1)
-        end
+            try
+                validate_setup_hosts(opts.hosts; allow_parent = true)
+            catch e
+                e isa ArgumentError || rethrow()
+                throw(DistSSHRun.DistSSHBase.CliUsageError(String(e.msg)))
+            end
 
-        result = juliaup_verb_remotes(
-            opts.hosts;
-            verb = opts.verb,
-            channel = opts.channel,
-            confirm = opts.verb == "default",
-        )
-        return Cint(finish_host_op!(opts.verb, result) ? 0 : 1)
+            ssh_hosts = setup_juliaup_ssh_hosts(opts.hosts)
+            if !isempty(ssh_hosts) && !preflight_setup_ssh(ssh_hosts)
+                print_err("SSH preflight failed. Fix connectivity, then retry.\n")
+                kit_println()
+                return Cint(1)
+            end
+
+            result = juliaup_verb_remotes(
+                opts.hosts;
+                verb = opts.verb,
+                channel = opts.channel,
+                confirm = opts.verb == "default",
+            )
+            return Cint(finish_host_op!(opts.verb, result) ? 0 : 1)
+        end
     end
 end
 

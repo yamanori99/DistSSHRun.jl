@@ -41,48 +41,50 @@ using Test
     end
 
     let (code, _, err) = _main_capture(String[])
-        @test code == 1
+        @test code == 2
         @test occursin("Usage", err)
         @test occursin("julia -m DistSSHRun <command>", err)
     end
     # Unknown first token must fail, not exit 0.
     let (code, _, err) = _main_capture(["bogus"])
-        @test code == 1
+        @test code == 2
         @test occursin("Unknown subcommand: bogus", err)
     end
     let (code, _, err) = _main_capture(["size"])
-        @test code == 1
+        @test code == 2
         @test occursin("Unknown subcommand: size", err)
         @test occursin("hostinfo", err)
         @test !occursin("Stacktrace", err)
     end
     let (code, _, err) = _main_capture(["map_echo.jl"])
-        @test code == 1
+        @test code == 2
         @test occursin("does not infer go / ride / drive", err)
         @test occursin("go SCRIPT.jl", err)
         @test !occursin("Unknown subcommand", err)
     end
-    let (code, _, err) = _main_capture(["parent:2", "job.jl"])
-        @test code == 1
+    let (code, _, err) = _main_capture(["--head-workers", "2", "job.jl"])
+        @test code == 2
         @test occursin("does not infer go / ride / drive", err)
     end
-    let (code, _, err) = _main_capture(["rysnc", "child:host1"])
-        @test code == 1
+    let (code, _, err) = _main_capture(["rysnc", "host1"])
+        @test code == 2
         @test occursin("Unknown subcommand: rysnc", err)
     end
-    let (code, _, err) = _main_capture(["--help"])
+    let (code, out, err) = _main_capture(["--help"])
         @test code == 0
-        @test occursin("Usage", err)
-        @test occursin("julia -m DistSSHRun <command>", err)
-        @test occursin("progress", err)
+        @test occursin("Usage", out)
+        @test occursin("julia -m DistSSHRun <command>", out)
+        @test occursin("progress", out)
+        @test isempty(err)
     end
     let (code, out, _) = _main_capture(["--version"])
         @test code == 0
         @test occursin("DistSSHRun $(DistSSHRun.dist_ssh_kit_version())", out)
     end
-    let (code, _, err) = _main_capture(["help"])
+    let (code, out, err) = _main_capture(["help"])
         @test code == 0
-        @test occursin("julia -m DistSSHRun <command>", err)
+        @test occursin("julia -m DistSSHRun <command>", out)
+        @test isempty(err)
     end
     let (code, out, _) = _main_capture(["-V"])
         @test code == 0
@@ -93,7 +95,7 @@ using Test
         for mode in ("ship-tree", "prune")
             let (code, out, err) = _main_capture(
                     [
-                        "setup", mode, "--deploy-root", "/", "child:host1",
+                        "setup", mode, "--deploy-root", "/", "host1",
                     ]
                 )
                 shown = out * err
@@ -144,8 +146,8 @@ using Test
             @test via[1] == 0
             @test via == direct
         end
-        let via = _main_capture(["help", "go", "--hosts", "parent:1"])
-            direct = _main_capture(["go", "--hosts", "parent:1", "--help"])
+        let via = _main_capture(["help", "go", "--head-slots", "1", "--help"])
+            direct = _main_capture(["go", "--head-slots", "1", "--help"])
             @test via[1] == 0
             @test via == direct
             @test occursin("-h, --help", via[2])
@@ -166,7 +168,7 @@ using Test
         end
         let via = _main_capture(["help", "bogus"])
             direct = _main_capture(["bogus"])
-            @test via[1] == 1
+            @test via[1] == 2
             @test via == direct
             @test occursin(DistSSHRun.unknown_subcommand_message("bogus"), via[3])
             @test via[3] == direct[3]
@@ -181,20 +183,30 @@ using Test
             @test via[3] == ""
         end
         let (code, _, err) = _main_capture(["help", "map_echo.jl"])
-            @test code == 1
+            @test code == 2
             @test occursin("got \"map_echo.jl\"", err)
             @test occursin("does not infer go / ride / drive", err)
             @test !occursin("Unknown subcommand", err)
         end
-        let (code, _, err) = _main_capture(["help", "parent:2", "job.jl"])
-            @test code == 1
-            @test occursin("got \"parent:2\"", err)
+        let (code, _, err) = _main_capture(["help", "--head-workers", "2", "job.jl"])
+            @test code == 2
+            @test occursin("head-workers", err) || occursin("local-workers", err) ||
+                occursin("unknown", lowercase(err))
         end
         for args in (String[], ["help"], ["-h"], ["--help"])
-            let (code, _, err) = _main_capture(args)
-                @test code == (isempty(args) ? 1 : 0)
-                @test occursin("Run `julia -m DistSSHRun help <command>` for flags.", err)
-                @test !occursin("<command> -h", err)
+            let (code, out, err) = _main_capture(args)
+                @test code == (isempty(args) ? 2 : 0)
+                if isempty(args)
+                    @test occursin("Usage", err)
+                    @test isempty(out)
+                else
+                    @test occursin(
+                        "Run `julia -m DistSSHRun help <command>` for flags.",
+                        out,
+                    )
+                    @test isempty(err)
+                    @test !occursin("<command> -h", out)
+                end
             end
         end
         let via = _main_capture(["help", "drive", "--help"])
@@ -209,7 +221,7 @@ using Test
         @test DistSSHRun.no_command_message("map_echo.jl") ==
             "No command (got \"map_echo.jl\"). Kit does not infer go / ride / drive."
         @test DistSSHRun.RUN_SUBCOMMAND_EXPECTATION ==
-            "Expected: setup | up | go | ride | drive | hostinfo | pool | demo | progress"
+            "Expected: setup | doctor | up | go | ride | drive | hostinfo | pool | demo | progress"
         @test DistSSHRun.NO_COMMAND_HINT_LINES == (
             "  go SCRIPT.jl      as-is complete job (timing without rewrite)",
             "  ride … SCRIPT.jl  experimental map / filter",
@@ -245,9 +257,9 @@ using Test
             )
             let (code, out, err) = _main_capture(args)
                 @test code == 0
-                @test out == ""
-                @test err == page
-                @test !occursin("Unknown subcommand", err)
+                @test err == ""
+                @test out == page
+                @test !occursin("Unknown subcommand", out)
             end
         end
     end
@@ -276,13 +288,13 @@ using Test
                 write(joinpath(proj_b, "Project.toml"), "name = \"ProjBeta\"\n")
 
                 let (code_a, out_a, err_a) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_a) do
-                        _main_capture(["hostinfo", "parent"])
+                        _main_capture(["hostinfo"])
                     end
                     @test code_a == 0
                     @test occursin("ProjAlpha", out_a * err_a)
                 end
                 let (code_b, out_b, err_b) = withenv("DISTRIBUTED_PROJECT_ROOT" => proj_b) do
-                        _main_capture(["hostinfo", "parent"])
+                        _main_capture(["hostinfo"])
                     end
                     @test code_b == 0
                     @test occursin("ProjBeta", out_b * err_b)
@@ -324,11 +336,12 @@ using Test
             end
             mktempdir() do dir
                 missing = joinpath(dir, "missing.jl")
-                @test_throws ErrorException redirect_stdout(devnull) do
+                code = redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
-                        DistSSHRun.main(["drive", missing])
+                        DistSSHRun.main(["drive", "--head-workers", "1", missing])
                     end
                 end
+                @test code != 0
                 @test !haskey(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
             end
             let (code, out, _) = _capture_main(["--version"])

@@ -5,9 +5,11 @@
 
 Sync local project to SSH hosts (call explicitly; go/drive do not call this by default).
 
-- `mode=:git_sync` — push the local branch to origin, then check out that commit on each remote as a detached HEAD (confirm unless `session.yes`). Does not run `git pull`. Requires an existing clone at `session.remote`; on a new target run `setup!(session, :git_clone; repo=...)` first. A dirty tree is refused unless `allow_dirty=true` (CLI `setup git-sync --skip-git-guard`; deploy record `dirty=true`).
+- `mode=:git_sync` — push the local branch to origin, then check out that commit on each remote as a detached HEAD. Does not run `git pull`. Requires an existing clone at `session.remote`; on a new target run `setup!(session, :git_clone; repo=...)` first. A dirty tree is refused unless `allow_dirty=true` (CLI `setup git-sync --skip-git-guard`; deploy record `dirty=true`).
 - `mode=:ship_tree` — pack the project (each directory's `.gitignore`) into a tar and extract under
-  `runs/<run_id>/src/` (confirm unless `session.yes`).
+  `runs/<run_id>/src/`.
+
+API calls do not prompt. The setup CLI prompts unless `--yes`.
 
 Also available as `setup!(session, :ship_tree)` / `setup!(session, :git_sync)`.
 
@@ -49,7 +51,7 @@ function sync!(
                 session.project,
                 session.hosts,
                 remote_path;
-                confirm = !session.yes,
+                confirm = session_confirms(session),
                 path_anchor = session.project,
                 allow_external_symlinks = allow_external_symlinks,
                 await_inputs = await_inputs,
@@ -67,7 +69,7 @@ function sync!(
                 remote_path;
                 do_push = true,
                 do_pull = true,
-                confirm = !session.yes,
+                confirm = session_confirms(session),
                 allow_dirty = allow_dirty,
             )
             if raw.cancelled

@@ -4,7 +4,7 @@
 
   julia --project=. -m DistSSHKit ride SCRIPT.jl
   julia --project=. -m DistSSHKit ride parent:2 SCRIPT.jl
-  julia --project=. -m DistSSHKit ride parent:1 child:host1:2 SCRIPT.jl
+  julia --project=. -m DistSSHKit ride parent:1 2*host1 SCRIPT.jl
 
 See `--help`.
 """
@@ -29,49 +29,65 @@ end
 include(joinpath(@__DIR__, "ride", "_using.jl"))
 
 function ride_main()::Cint
-    project_root = cli_project_root(@__DIR__)
-    parsed = parse_ride_args(ARGS)
-    if parsed.show_version
-        println_kit_version()
-        return 0
-    end
-    if parsed.help
-        show_ride_usage()
-        return 0
-    end
-    if parsed.script_path === nothing
-        show_ride_usage()
-        return 0
-    end
-    tok = parsed.hosts
-    remote_cli = get(parsed, :deploy_root, nothing)
-    remote_raw = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
-    result = try
-        ride!(
-            parsed.script_path,
-            tok;
-            args = parsed.script_args,
-            spi_check = parsed.spi_check,
-            output_dir = parsed.output_dir,
-            project = project_root,
-            julia = parsed.julia,
-            unsafe_heterogeneous = parsed.unsafe_heterogeneous,
-            remote = remote_cli isa AbstractString ? remote_cli :
-                (isempty(remote_raw) ? nothing : remote_raw),
-            run_id = parsed.run_id,
-            hint_surface = :cli,
-        )
-    catch e
-        if e isa ArgumentError
-            DistSSHRun.print_cli_error(e.msg)
-            return Cint(1)
+    return DistSSHRun.DistSSHBase.with_cli_exit() do
+        project_root = cli_project_root(@__DIR__)
+        parsed = DistSSHRun.DistSSHBase.cli_parse(() -> parse_ride_args(ARGS))
+        if parsed.show_version
+            println_kit_version()
+            return Cint(0)
         end
-        rethrow()
+        if parsed.help
+            return DistSSHRun.DistSSHBase.cli_help_stdout(show_ride_usage)
+        end
+        if parsed.script_path === nothing
+            return DistSSHRun.DistSSHBase.cli_required_else_help(show_ride_usage)
+        end
+        diag = DistSSHRun.finish_run_job_diagnostics!(
+            parsed;
+            command = :ride,
+            project = project_root,
+            hosts = parsed.hosts,
+            worker_tokens = DistSSHRun.host_tokens(parsed; kind = :ride),
+        )
+        diag !== nothing && return Cint(diag)
+        tok = parsed.hosts
+        remote_cli = get(parsed, :deploy_root, nothing)
+        remote_raw = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
+        result = try
+            ride!(
+                parsed.script_path,
+                tok;
+                args = parsed.script_args,
+                spi_check = parsed.spi_check,
+                output_dir = parsed.output_dir,
+                project = project_root,
+                julia = parsed.julia,
+                head_workers = parsed.cli_session.head_workers,
+                unsafe_skip_env_digests = parsed.unsafe_skip_env_digests,
+                unsafe_expose_port = parsed.unsafe_expose_port,
+                unsafe_all_to_all = parsed.unsafe_all_to_all,
+                remote = remote_cli isa AbstractString ? remote_cli :
+                    (isempty(remote_raw) ? nothing : remote_raw),
+                run_id = parsed.run_id,
+                hint_surface = :cli,
+                bind_overrides = DistSSHRun.hosts_file_bind_overrides(parsed.cli_session),
+            )
+        catch e
+            if e isa DistSSHRun.DistSSHBase.CliUsageError
+                rethrow()
+            elseif e isa ArgumentError
+                if DistSSHRun._report_output_dir_refusal(e)
+                    return Cint(1)
+                end
+                throw(DistSSHRun.DistSSHBase.CliUsageError(DistSSHRun._bind_config_cli_message(e.msg)))
+            end
+            rethrow()
+        end
+        if !(kit_output_progress() && result.ok)
+            print_ride(result)
+        end
+        return result.ok ? Cint(0) : Cint(1)
     end
-    if !(kit_output_progress() && result.ok)
-        print_ride(result)
-    end
-    return result.ok ? 0 : 1
 end
 
 if get(ENV, "DIST_SSH_KIT_CLI_INCLUDE", "") != "1" &&

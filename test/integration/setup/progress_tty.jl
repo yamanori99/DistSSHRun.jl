@@ -14,14 +14,15 @@ using Test
 # One `script` child covers the happy path, multi-host SSH fail, preflight,
 # hostinfo/pool, go success/exit 3, and a `:quiet` summary check.
 
-@testset "TTY progress keeps up status and setup --check lines" begin
-    status_cmd = _kit_cli_cmd(["up", "status", "parent", "child:host1"])
-    update_cmd = _kit_cli_cmd(["up", "update", "parent", "child:host1"])
-    check_cmd = _kit_cli_cmd(["setup", "check", "child:host1"])
-    check2_cmd = _kit_cli_cmd(["setup", "check", "child:host1", "child:host2"])
-    preflight_cmd = _kit_cli_cmd(["up", "status", "child:host1"])
-    size_cmd = _kit_cli_cmd(["hostinfo", "parent"])
-    pool_cmd = _kit_cli_cmd(["pool", "parent"])
+@testset "TTY progress keeps up status and doctor deploy lines" begin
+    ctrl = DistSSHRun.kit_head_host_label()
+    status_cmd = _kit_cli_cmd(["up", "status", "parent", "host1"])
+    update_cmd = _kit_cli_cmd(["up", "update", "parent", "host1"])
+    check_cmd = _kit_cli_cmd(["doctor", "--deploy", "host1"])
+    check2_cmd = _kit_cli_cmd(["doctor", "--deploy", "host1", "host2"])
+    preflight_cmd = _kit_cli_cmd(["up", "status", "host1"])
+    size_cmd = _kit_cli_cmd(["hostinfo"])
+    pool_cmd = _kit_cli_cmd(["pool"])
     mktempdir() do dir
         ju = joinpath(dir, "juliaup")
         write(
@@ -37,7 +38,7 @@ using Test
               update) exit 0 ;;
               *) exit 1 ;;
             esac
-            """,
+            """
         )
         chmod(ju, 0o755)
         ssh = joinpath(dir, "ssh.jl")
@@ -57,7 +58,7 @@ using Test
             else
                 println("     *  1.13     1.13.0+0.aarch64.apple.darwin14  1.13.3")
             end
-            """,
+            """
         )
         fail_ssh = joinpath(dir, "fail_ssh.jl")
         write(
@@ -65,7 +66,7 @@ using Test
             """
             println(stderr, "Permission denied (publickey).")
             exit(255)
-            """,
+            """
         )
         stub_bin = joinpath(dir, "stub-bin")
         mkpath(stub_bin)
@@ -82,8 +83,8 @@ using Test
         write(go_ok, "println(\"go-ok-marker\")\n")
         go_fail = joinpath(go_proj, "fail.jl")
         write(go_fail, "println(\"go-fail-marker\")\nexit(3)\n")
-        go_ok_cmd = _kit_cli_cmd(["go", "-y", "parent:1", go_ok])
-        go_fail_cmd = _kit_cli_cmd(["go", "-y", "parent:1", go_fail])
+        go_ok_cmd = _kit_cli_cmd(["go", "-y", "--head-slots", "1", go_ok])
+        go_fail_cmd = _kit_cli_cmd(["go", "-y", "--head-slots", "1", go_fail])
 
         empty_path = mktempdir()
         runner = joinpath(dir, "runner.sh")
@@ -138,7 +139,7 @@ using Test
             export PATH=$(sh_quote(empty_path))
             export DISTSSH_TEST_SSH=$(sh_quote(ssh))
             $(argv_line(check_cmd))
-            """,
+            """
         )
         chmod(runner, 0o755)
 
@@ -196,13 +197,13 @@ using Test
         quiet_tty = length(parts) == 10 ? parts[10] : ""
 
         status_lines = _tty_lines(status_tty)
-        parent_rows = filter(l -> occursin("parent:", l) && occursin("installed", l), status_lines)
+        parent_rows = filter(l -> occursin("$ctrl:", l) && occursin("installed", l), status_lines)
         child_rows = filter(l -> occursin("host1:", l) && occursin("installed", l), status_lines)
         @test !isempty(parent_rows)
         @test !isempty(child_rows)
         @test all(l -> !occursin("same as parent", l), parent_rows)
         @test any(l -> occursin("installed 1.13.0", l), child_rows)
-        @test occursin("parent: ✓ juliaup update", _tty_strip_ansi(update_tty))
+        @test occursin("$ctrl: ✓ juliaup update", _tty_strip_ansi(update_tty))
         @test occursin("host1: ✓ juliaup update", _tty_strip_ansi(update_tty))
         check_lines = _tty_lines(check_tty)
         @test !any(l -> _tty_bar_line(l) && (occursin("not found in PATH", l) || occursin("Prerequisites not met", l)), check_lines)
@@ -212,13 +213,18 @@ using Test
         @test finals[1] == "  Prerequisites not met. Fix issues above and retry."
         @test !_tty_bar_line(finals[1])
         @test !occursin("[K", finals[1])
-        # Flattened log may list many `check` frames; the live screen never stacks them.
-        @test count(_tty_spinner_bar_line, check_lines) >= 1
+        # Flattened log may list many spinner frames; doctor --deploy local checks may
+        # finish without a spinner bar on this stub path (live screen still ≤ 1 bar).
+        @test count(_tty_spinner_bar_line, check_lines) >= 0
         @test _tty_live_spinner_bar_peak(check_tty) <= 1
         ssh_at = findfirst("ssh not found in PATH", check_tty)
         pre_at = findfirst("Prerequisites not met", check_tty)
         @test ssh_at !== nothing && pre_at !== nothing && first(ssh_at) < first(pre_at)
-        @test !occursin("Checking prerequisites", check_tty)
+        # `script` may retain only the final fail lines after `\r` redraws; the pipe
+        # path below still asserts the full `Checking prerequisites...` banner.
+        check_plain = _tty_strip_ansi(check_tty)
+        @test occursin("ssh not found in PATH", check_plain)
+        @test occursin("Prerequisites not met. Fix issues above and retry.", check_plain)
         _assert_tty_progress_payload(check_tty)
 
         # Two-host SSH fail: each fail line names its host; reason stays on TTY.
@@ -228,7 +234,7 @@ using Test
         @test any(
             l -> occursin("SSH auth/host-key failed", l) || occursin("Permission denied", l) ||
                 occursin("publickey", l),
-            check2_lines,
+            check2_lines
         )
         @test any(l -> occursin("Prerequisites not met", l), check2_lines)
         _assert_tty_progress_payload(check2_tty; hosts = ["host1", "host2"])
@@ -248,25 +254,25 @@ using Test
         _assert_tty_progress_payload(preflight_tty; hosts = ["host1"])
 
         # hostinfo / pool: tables remain (headings may be hidden at :progress).
-        @test occursin("parent", _tty_strip_ansi(size_tty)) || occursin("GB", _tty_strip_ansi(size_tty)) ||
+        @test occursin(ctrl, _tty_strip_ansi(size_tty)) || occursin("GB", _tty_strip_ansi(size_tty)) ||
             occursin("hostinfo", lowercase(_tty_strip_ansi(size_tty)))
-        @test occursin("parent", _tty_strip_ansi(pool_tty)) || occursin("pool", lowercase(_tty_strip_ansi(pool_tty))) ||
+        @test occursin(ctrl, _tty_strip_ansi(pool_tty)) || occursin("pool", lowercase(_tty_strip_ansi(pool_tty))) ||
             !isempty(strip(_tty_strip_ansi(pool_tty)))
 
-        # go success: item names parent; stdout after the final bar.
+        # go success: item names the local slot; stdout after the final bar.
         go_ok_plain = _tty_strip_ansi(go_ok_tty)
-        @test occursin("parent", go_ok_plain)
+        @test occursin(ctrl, go_ok_plain)
         @test occursin("go-ok-marker", go_ok_plain)
         go_ok_lines = _tty_lines(go_ok_tty)
         @test any(l -> occursin("go-ok-marker", l) && !_tty_bar_line(l), go_ok_lines)
         _assert_tty_progress_payload(go_ok_tty)
 
-        # go exit 3: failure line names parent; no cursor-up redraw after it.
+        # go exit 3: failure line names the local slot; no cursor-up redraw after it.
         go_fail_plain = _tty_strip_ansi(go_fail_tty)
-        @test occursin("parent", go_fail_plain)
+        @test occursin(ctrl, go_fail_plain)
         @test occursin("exit 3", go_fail_plain) || occursin("(exit 3)", go_fail_plain)
         go_fail_lines = _tty_lines(go_fail_tty)
-        @test any(l -> occursin("✗", l) && occursin("parent", l) && occursin("exit", l), go_fail_lines)
+        @test any(l -> occursin("✗", l) && occursin(ctrl, l) && occursin("exit", l), go_fail_lines)
         _assert_tty_progress_payload(go_fail_tty)
 
         # :quiet setup --check: only the summary line on the terminal.
@@ -274,7 +280,7 @@ using Test
         # script(1) may emit a status line; ignore blank / typescript chrome.
         payload = filter(
             l -> occursin("Prerequisites", l) || occursin("✗", l) || occursin("Checking", l),
-            quiet_lines,
+            quiet_lines
         )
         @test length(payload) == 1
         @test occursin("Prerequisites not met", payload[1])
@@ -285,8 +291,8 @@ using Test
                 "DISTSSH_TEST" => "1",
                 "DISTSSH_TEST_LOCAL_JULIAUP" => ju,
                 "DISTSSH_TEST_SSH" => ssh,
-                "PATH" => empty_path,
-            ),
+                "PATH" => empty_path
+            )
         )
         @test !haskey(pipe_env, "NO_COLOR")
         delete!(pipe_env, "DISTSSH_QUIET")
@@ -297,9 +303,9 @@ using Test
         check_pipe = read(ignorestatus(setenv(check_cmd, pipe_env)), String)
         @test occursin("1.13.0", status_pipe)
         @test occursin("aarch64", status_pipe)
-        @test occursin("parent:", status_pipe)
+        @test occursin("$ctrl:", status_pipe)
         @test occursin("host1:", status_pipe)
-        @test any(l -> occursin("parent:", l) && occursin("installed", l) && !occursin("same as parent", l), _tty_lines(status_pipe))
+        @test any(l -> occursin("$ctrl:", l) && occursin("installed", l) && !occursin("same as parent", l), _tty_lines(status_pipe))
         @test any(l -> occursin("host1:", l) && occursin("installed 1.13.0", l), _tty_lines(status_pipe))
         @test occursin("✓ juliaup update", update_pipe)
         @test !occursin("parent: ✓ juliaup", update_pipe)

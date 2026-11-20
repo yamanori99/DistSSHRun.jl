@@ -7,9 +7,9 @@ using Test
         )
         err = try
             if api == "go!"
-                DistSSHRun.go!("job.jl", ["parent:1"]; sync = val, yes = true)
+                DistSSHRun.go!("job.jl", String[]; head_slots = 1, sync = val)
             else
-                DistSSHRun.drive!("job.jl", ["parent:1"]; sync = val, yes = true)
+                DistSSHRun.drive!("job.jl", String[]; head_workers = 1, sync = val)
             end
             error("expected ArgumentError")
         catch e
@@ -21,8 +21,8 @@ using Test
     end
     @test_throws MethodError DistSSHRun.PipelineConfig(;
         driver = "job.jl",
-        workers = ["parent:1"],
-        sync = :git_sync,
+        workers = String[], head_workers = 1,
+        sync = :git_sync
     )
     withenv("SYNC_MODE" => "git-sync", "DRIVER" => "job.jl", "DISTSSH_HOSTS" => "") do
         cfg = DistSSHRun.pipeline_config_from_env()

@@ -78,7 +78,7 @@ function _nolog_stdio_cases()
                         h isa Function || return nothing
                         return h()
                     end
-                end,
+                end
             )
         end
 
@@ -88,7 +88,7 @@ function _nolog_stdio_cases()
                     println(stdout, "DISTSSH_STDOUT_MARK")
                     println(stderr, "DISTSSH_STDERR_MARK")
                     return nothing
-                end,
+                end
             ) do
                 DistSSHRun._reset_job_stdout_capture!()
                 with_kit_verbosity(:progress) do
@@ -127,7 +127,7 @@ function _nolog_stdio_cases()
                     line = readline(stdin)
                     println(stdout, "DISTSSH_GOT:", line)
                     return nothing
-                end,
+                end
             ) do
                 DistSSHRun._reset_job_stdout_capture!()
                 with_kit_verbosity(:progress) do
@@ -181,7 +181,7 @@ function _nolog_stdio_cases()
                         println(stdout, "DISTSSH_BULK_", i, "_", "x"^64)
                     end
                     return nothing
-                end,
+                end
             ) do
                 DistSSHRun._reset_job_stdout_capture!()
                 with_kit_verbosity(:progress) do
@@ -206,7 +206,7 @@ function _nolog_stdio_cases()
                 () -> begin
                     println(stdout, "DISTSSH_BEFORE_BOOM")
                     error("DISTSSH_DRIVER_BOOM")
-                end,
+                end
             ) do
                 DistSSHRun._reset_job_stdout_capture!()
                 with_kit_verbosity(:progress) do
@@ -240,7 +240,7 @@ function _nolog_stdio_cases()
                     println(stdout, "DISTSSH_LOG_STDOUT")
                     println(stderr, "DISTSSH_LOG_STDERR")
                     return nothing
-                end,
+                end
             ) do
                 DistSSHRun._reset_job_stdout_capture!()
                 with_kit_verbosity(:progress) do
@@ -285,7 +285,7 @@ function _nolog_stdio_cases()
                         println(stdout, "DISTSSH_MODE_STDOUT")
                         println(stderr, "DISTSSH_MODE_STDERR")
                         return nothing
-                    end,
+                    end
                 ) do
                     DistSSHRun._reset_job_stdout_capture!()
                     with_kit_verbosity(v) do

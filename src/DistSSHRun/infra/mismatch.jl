@@ -1,37 +1,7 @@
-# Worker environment vs the job tree. `--unsafe-heterogeneous` waives package-environment checks only.
-
-const _UNSAFE_HETEROGENEOUS = Ref(false)
-
-"""Process-global waiver used by drive, ride, and go during worker checks."""
-function unsafe_heterogeneous_active()::Bool
-    return _UNSAFE_HETEROGENEOUS[]
-end
-
-function with_unsafe_heterogeneous(f::Function, enabled::Bool)
-    enabled || return f()
-    old = _UNSAFE_HETEROGENEOUS[]
-    _UNSAFE_HETEROGENEOUS[] = true
-    try
-        _record_unsafe_heterogeneous!()
-        _record_environment_unverified!("unsafe-heterogeneous")
-        @warn "unsafe: heterogeneous package environment (Manifest/Project byte digests may differ; Julia build and DistSSH* versions must still match)"
-        return f()
-    finally
-        _UNSAFE_HETEROGENEOUS[] = old
-    end
-end
-
-function unsafe_heterogeneous_argv(enabled::Bool)::Vector{String}
-    enabled || return String[]
-    return String["--unsafe-heterogeneous"]
-end
-
-function _record_unsafe_heterogeneous!()
-    return _note_provenance_unsafe!("heterogeneous")
-end
+# Worker environment vs the job tree. `--unsafe-skip-env-digests` waives package-environment checks only.
 
 const _ALLOW_MISMATCH_REMOVED =
-    "removed; use --unsafe-heterogeneous (Julia/DistSSH* can no longer be waived)"
+    "removed; use --unsafe-skip-env-digests (Julia/DistSSH* can no longer be waived)"
 
 function _reject_removed_allow_mismatch!(allow_mismatch)
     allow_mismatch === nothing && return nothing
@@ -40,7 +10,12 @@ end
 
 function reject_removed_allow_mismatch_flag!(arg::AbstractString)
     arg == "--allow-mismatch" || return nothing
-    throw(ArgumentError("--allow-mismatch was $(_ALLOW_MISMATCH_REMOVED)"))
+    err = removed_cli_flag_error(;
+        flag = arg,
+        replacement = "--unsafe-skip-env-digests",
+        surface = "command",
+    )
+    throw(ArgumentError(sprint(showerror, err)))
 end
 
 function _located_project_file_for_identity(project::AbstractString)::String
@@ -339,33 +314,33 @@ function _identity_env_file_mismatches(parent::AbstractDict, other::AbstractDict
 end
 
 """
-    identity_mismatches(parent, other; unsafe_heterogeneous=false) -> Vector{String}
+    identity_mismatches(parent, other; unsafe_skip_env_digests=false) -> Vector{String}
 
 Same lines as [`go!`](@ref), [`ride!`](@ref), and [`drive!`](@ref). An empty
 vector matches. This does not throw, print, or read `DISTSSH_QUIET`.
 
 Julia version and commit (Julia build), the resolved sysimage path, and
 DistSSH* `pkg.*` versions from the Manifest are always compared. An empty or
-missing commit on either side is a mismatch. When `unsafe_heterogeneous` is
+missing commit on either side is a mismatch. When `unsafe_skip_env_digests` is
 true, only **byte-exact** SHA-256
 digests of the resolved Manifest and Project files (`manifest.sha256`,
 `project.sha256`) are waived; Julia build and `pkg.*` mismatches are still
 reported. CRLF and other byte differences count for digests.
 
 When the parent has a non-empty `manifest.sha256`, the worker must supply the
-same digest or the check fails (unless `unsafe_heterogeneous`); an empty worker
+same digest or the check fails (unless `unsafe_skip_env_digests`); an empty worker
 snapshot is a mismatch. `"julia"` binary path is not compared.
 """
 function identity_mismatches(
         parent::AbstractDict,
         other::AbstractDict;
-        unsafe_heterogeneous::Bool = false,
+        unsafe_skip_env_digests::Bool = false,
     )::Vector{String}
     lines = String[]
     append!(lines, _identity_julia_build_mismatches(parent, other))
     append!(lines, _identity_sysimage_mismatches(parent, other))
     append!(lines, _identity_pkg_mismatches(parent, other))
-    unsafe_heterogeneous || append!(lines, _identity_env_file_mismatches(parent, other))
+    unsafe_skip_env_digests || append!(lines, _identity_env_file_mismatches(parent, other))
     return lines
 end
 public identity_mismatches
@@ -435,7 +410,7 @@ function _controller_missing_manifest_error(project::AbstractString)::String
             exp_line,
             "why: workers may load different package versions when the controller Manifest is absent",
             fix_line,
-            "override: pass --unsafe-heterogeneous to skip Manifest/Project digest verification (recorded as unverified; Julia build and DistSSH* versions must still match)",
+            "override: pass --unsafe-skip-env-digests to skip Manifest/Project digest verification (recorded as unverified; Julia build and DistSSH* versions must still match)",
         ],
         "\n",
     )
@@ -443,7 +418,7 @@ end
 
 """Fail before worker / remote launch when the controller has no Manifest (unless unsafe)."""
 function assert_controller_manifest_for_environment_verify!(project::AbstractString)
-    unsafe_heterogeneous_active() && return nothing
+    unsafe_skip_env_digests_active() && return nothing
     parent = run_identity(project)
     want_man = get(parent, "manifest.sha256", "")
     !isempty(want_man) && return nothing
@@ -461,7 +436,7 @@ function _controller_manifest_current_no_project_error(project::AbstractString):
             "where: controller host=$(host); project=$(proj_disp) (no Project.toml or JuliaProject.toml here)",
             "why: without a resolved project file, the controller cannot verify `Pkg.is_manifest_current`",
             "fix: run from a directory (or pass a path) that contains Project.toml or JuliaProject.toml, then `julia --project=$(q) -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'`",
-            "note: --unsafe-heterogeneous does not waive this check",
+            "note: --unsafe-skip-env-digests does not waive this check",
         ],
         "\n",
     )
@@ -483,7 +458,7 @@ function _controller_stale_manifest_error(project::AbstractString, current)::Str
             "where: controller host=$(host); project=$(proj_disp); manifest=$(man_s)",
             "why: $why_tail; workers would not load the same resolved environment",
             "fix: run `julia --project=$(q) -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'` and ship the updated Manifest to every worker",
-            "note: --unsafe-heterogeneous does not waive this check",
+            "note: --unsafe-skip-env-digests does not waive this check",
         ],
         "\n",
     )
@@ -516,7 +491,7 @@ function _controller_custom_sysimage_error()::String
             "where: controller host=$(host); sysimage=$(img); default=$(def)",
             "why: a custom sysimage can change package loading on the controller vs workers",
             "fix: run DistSSH without `--sysimage` or `JULIA_SYSIMAGE`, using the default sysimage for this Julia build",
-            "note: --unsafe-heterogeneous does not waive this check",
+            "note: --unsafe-skip-env-digests does not waive this check",
         ],
         "\n",
     )
@@ -534,9 +509,228 @@ function assert_controller_environment_for_verify!(project::AbstractString)
     assert_controller_manifest_for_environment_verify!(project)
     assert_controller_manifest_current!(project)
     assert_controller_default_sysimage!()
+    assert_controller_loaded_identity!()
+    assert_controller_shipped_tree_current!(project)
     return nothing
 end
 public assert_controller_environment_for_verify!
+
+"""Controller gates for `--run-id` runs (skip local Manifest / shipped-tree compare)."""
+function assert_controller_environment_for_shipped_run!(project::AbstractString)
+    canonical_local_path(project)
+    assert_controller_default_sysimage!()
+    assert_controller_loaded_identity!()
+    return nothing
+end
+public assert_controller_environment_for_shipped_run!
+
+function _missing_deploy_record_for_run_error(
+        run_id::AbstractString,
+        project::AbstractString = "",
+    )::String
+    rid = let s = strip(String(run_id))
+        isempty(s) ? "(unknown)" : validate_run_id(s)
+    end
+    lines = String[
+        "what: deploy record for run_id=$(rid) is not available",
+        "why: --run-id verifies worker Manifest/Project digests against the ship deploy record",
+        "fix: run setup ship-tree and instantiate on workers, then drive --run-id $(rid); remote hosts must be listed so deploy.toml is read (local last-ship.toml is not used for verification)",
+    ]
+    proj = isempty(strip(project)) ? "" : canonical_local_path(project)
+    !isempty(proj) && push!(lines, "where: controller project=$(proj)")
+    return join(lines, "\n")
+end
+
+function _missing_ship_manifest_digest_error(run_id::AbstractString)::String
+    rid = validate_run_id(run_id)
+    return join(
+        [
+            "what: deploy record for run_id=$(rid) has no manifest_hash",
+            "why: --run-id requires the Manifest SHA-256 recorded at ship time",
+            "fix: re-run setup ship-tree for this project and use the new run id",
+        ],
+        "\n",
+    )
+end
+
+function _missing_ship_project_digest_error(run_id::AbstractString)::String
+    rid = validate_run_id(run_id)
+    return join(
+        [
+            "what: deploy record for run_id=$(rid) has no project_hash",
+            "why: --run-id verifies Project.toml bytes against the ship deploy record",
+            "fix: re-run setup ship-tree for this project and use the new run id",
+        ],
+        "\n",
+    )
+end
+
+function _deploy_record_for_run_verify(
+        run_id::AbstractString,
+        project::AbstractString,
+    )::Dict{String, Any}
+    rid = validate_run_id(run_id)
+    rec = active_deploy_record()
+    if rec isa AbstractDict
+        got = get(rec, "run_id", nothing)
+        if got isa AbstractString && validate_run_id(String(got)) == rid
+            return Dict{String, Any}(rec)
+        end
+    end
+    throw(ErrorException(_missing_deploy_record_for_run_error(rid, project)))
+end
+
+function _deploy_record_env_digests(rec::AbstractDict)::Tuple{String, String}
+    mh = get(rec, "manifest_hash", nothing)
+    manifest = mh isa AbstractString ? lowercase(strip(String(mh))) : ""
+    ph = get(rec, "project_hash", nothing)
+    project = ph isa AbstractString ? lowercase(strip(String(ph))) : ""
+    return manifest, project
+end
+
+function _worker_env_digest_mismatch_lines(
+        pid::Integer,
+        snap::AbstractDict,
+        want_manifest::AbstractString,
+        want_project::AbstractString,
+    )::Vector{String}
+    lines = String[]
+    got_man = strip(get(snap, "manifest.sha256", ""))
+    got_proj = strip(get(snap, "project.sha256", ""))
+    if !isempty(want_manifest) && got_man != want_manifest
+        push!(lines, "manifest.sha256 deploy=$(want_manifest) worker=$(got_man)")
+    elseif isempty(got_man)
+        push!(lines, "manifest.sha256 missing on worker")
+    end
+    if !isempty(want_project) && got_proj != want_project
+        push!(lines, "project.sha256 deploy=$(want_project) worker=$(got_proj)")
+    elseif isempty(got_proj)
+        push!(lines, "project.sha256 missing on worker")
+    end
+    isempty(lines) && return lines
+    return [_format_worker_mismatch_line(pid, line) for line in lines]
+end
+
+function _worker_digest_heterogeneity_lines(
+        snaps::Vector{Tuple{Int, Dict{String, String}}},
+    )::Vector{String}
+    isempty(snaps) && return String[]
+    _, ref = snaps[1]
+    ref_man = strip(get(ref, "manifest.sha256", ""))
+    ref_proj = strip(get(ref, "project.sha256", ""))
+    lines = String[]
+    for (pid, snap) in snaps[2:end]
+        man = strip(get(snap, "manifest.sha256", ""))
+        proj = strip(get(snap, "project.sha256", ""))
+        if !isempty(ref_man) && man != ref_man
+            push!(
+                lines,
+                _format_worker_mismatch_line(
+                    pid,
+                    "manifest.sha256 peer=$(ref_man) worker=$(man)",
+                ),
+            )
+        end
+        if !isempty(ref_proj) && proj != ref_proj
+            push!(
+                lines,
+                _format_worker_mismatch_line(
+                    pid,
+                    "project.sha256 peer=$(ref_proj) worker=$(proj)",
+                ),
+            )
+        end
+    end
+    return lines
+end
+
+"""
+Verify worker environments for `--run-id`: homogeneous Manifest/Project digests
+and a match to the active ship deploy record (no controller Manifest compare).
+"""
+function verify_workers_match_shipped_run!(
+        project::AbstractString;
+        run_id::Union{Nothing, AbstractString} = nothing,
+    )
+    waive_env = unsafe_skip_env_digests_active()
+    proj = canonical_local_path(project)
+    rid = if run_id isa AbstractString && !isempty(strip(run_id))
+        validate_run_id(run_id)
+    else
+        sel = active_source_selection()
+        sel === nothing && throw(ErrorException(_missing_deploy_record_for_run_error("", proj)))
+        rid_sel = sel.run_id
+        rid_sel isa AbstractString ||
+            throw(ErrorException(_missing_deploy_record_for_run_error("", proj)))
+        validate_run_id(rid_sel)
+    end
+    rec = _deploy_record_for_run_verify(rid, proj)
+    want_man, want_proj = _deploy_record_env_digests(rec)
+    isempty(want_man) && throw(ErrorException(_missing_ship_manifest_digest_error(rid)))
+    isempty(want_proj) && throw(ErrorException(_missing_ship_project_digest_error(rid)))
+    worker_ids = _live_owned_worker_ids()
+    snaps = Tuple{Int, Dict{String, String}}[]
+    worker_lines = String[]
+    mismatch_lock = ReentrantLock()
+    @sync for w in worker_ids
+        @async begin
+            local lines = String[]
+            try
+                snap = _fetch_worker_environment_snapshot(w)
+                if !(snap isa AbstractDict)
+                    push!(
+                        lines,
+                        _format_worker_mismatch_line(
+                            w,
+                            "worker environment snapshot was not available",
+                        ),
+                    )
+                else
+                    worker = Dict{String, String}(String(k) => string(v) for (k, v) in snap)
+                    lock(mismatch_lock) do
+                        push!(snaps, (Int(w), worker))
+                    end
+                    if !waive_env
+                        append!(
+                            lines,
+                            _worker_env_digest_mismatch_lines(w, worker, want_man, want_proj),
+                        )
+                    end
+                end
+            catch e
+                detail = first(split(sprint(showerror, e), '\n'))
+                push!(
+                    lines,
+                    _format_worker_mismatch_line(w, "snapshot failed: $(detail)"),
+                )
+            end
+            isempty(lines) ||
+                lock(mismatch_lock) do
+                append!(worker_lines, lines)
+            end
+        end
+    end
+    sort!(snaps; by = first)
+    waive_env || append!(worker_lines, _worker_digest_heterogeneity_lines(snaps))
+    if length(snaps) >= 2
+        ref = snaps[1][2]
+        for (pid, snap) in snaps[2:end]
+            for line in identity_mismatches(ref, snap; unsafe_skip_env_digests = waive_env)
+                push!(worker_lines, _format_worker_mismatch_line(pid, line))
+            end
+        end
+    end
+    _environment_mismatch_throw(worker_lines)
+    verify_workers_shipped_trees!()
+    verify_workers_loaded_identity!()
+    if waive_env
+        _record_environment_unverified!("unsafe-skip-env-digests")
+    else
+        _record_environment_verified_against_run_id!()
+    end
+    return nothing
+end
+public verify_workers_match_shipped_run!
 
 function _environment_mismatch_throw(lines::Vector{String})
     isempty(lines) && return nothing
@@ -545,7 +739,7 @@ function _environment_mismatch_throw(lines::Vector{String})
             "environment mismatch between controller (master) and worker(s):\n  " *
                 join(lines, "\n  ") *
                 "\nwhy: every worker must match the controller (master) Julia build and DistSSH* versions; Manifest/Project byte digests must match unless you opt out.\n" *
-                "fix: align Julia and DistSSH* versions on every host, deploy matching Manifest/Project bytes with setup, or pass --unsafe-heterogeneous to waive only Manifest/Project digest checks (unverified; Julia build and DistSSH* versions must still match).",
+                "fix: align Julia and DistSSH* versions on every host, deploy matching Manifest/Project bytes with setup, or pass --unsafe-skip-env-digests to waive only Manifest/Project digest checks (unverified; Julia build and DistSSH* versions must still match).",
         ),
     )
 end
@@ -576,7 +770,7 @@ end
 
 function _record_environment_verify_outcome!(waive_env::Bool)
     if waive_env
-        _record_environment_unverified!("unsafe-heterogeneous")
+        _record_environment_unverified!("unsafe-skip-env-digests")
     else
         _record_environment_verified!()
     end
@@ -584,7 +778,7 @@ function _record_environment_verify_outcome!(waive_env::Bool)
 end
 
 function verify_workers_match_job!(project::AbstractString)
-    waive_env = unsafe_heterogeneous_active()
+    waive_env = unsafe_skip_env_digests_active()
     parent = run_identity(project)
     worker_ids = _live_owned_worker_ids()
     worker_lines = String[]
@@ -604,7 +798,7 @@ function verify_workers_match_job!(project::AbstractString)
                     )
                 else
                     worker = Dict{String, String}(String(k) => string(v) for (k, v) in snap)
-                    for line in identity_mismatches(parent, worker; unsafe_heterogeneous = waive_env)
+                    for line in identity_mismatches(parent, worker; unsafe_skip_env_digests = waive_env)
                         push!(lines, _format_worker_mismatch_line(w, line))
                     end
                 end
@@ -625,6 +819,8 @@ function verify_workers_match_job!(project::AbstractString)
         project, parent, worker_lines; waive_env_issues = waive_env,
     )
     _environment_mismatch_throw(mismatches)
+    verify_workers_shipped_trees!()
+    verify_workers_loaded_identity!()
     _record_environment_verify_outcome!(waive_env)
     return nothing
 end
@@ -732,7 +928,7 @@ function _described_identity_lines(
         parent::AbstractDict,
         other::AbstractDict,
         prefix::AbstractString;
-        unsafe_heterogeneous::Bool,
+        unsafe_skip_env_digests::Bool,
     )::Vector{String}
     probe = strip(get(other, "probe_error", ""))
     if !isempty(probe)
@@ -740,7 +936,7 @@ function _described_identity_lines(
     end
     return String[
         "$(prefix): $(line)"
-            for line in identity_mismatches(parent, other; unsafe_heterogeneous)
+            for line in identity_mismatches(parent, other; unsafe_skip_env_digests)
     ]
 end
 
@@ -882,14 +1078,17 @@ function verify_go_slots_match_job!(
         remote_root::AbstractString = "",
         julia = nothing,
     )
-    waive_env = unsafe_heterogeneous_active()
+    waive_env = unsafe_skip_env_digests_active()
     parent = run_identity(project)
     slot_lines = String[]
     if any(s -> s.kind === :parent, slots)
         local_id = _go_local_slot_identity(project, julia)
-        for line in identity_mismatches(parent, local_id; unsafe_heterogeneous = waive_env)
-            push!(slot_lines, "parent slot: $(line)")
-        end
+        append!(
+            slot_lines,
+            _described_identity_lines(
+                parent, local_id, "parent slot"; unsafe_skip_env_digests = waive_env,
+            ),
+        )
     end
     seen = Set{String}()
     for s in slots
@@ -904,7 +1103,7 @@ function verify_go_slots_match_job!(
         append!(
             slot_lines,
             _described_identity_lines(
-                parent, worker, "host $(hs)"; unsafe_heterogeneous = waive_env,
+                parent, worker, "host $(hs)"; unsafe_skip_env_digests = waive_env,
             ),
         )
     end

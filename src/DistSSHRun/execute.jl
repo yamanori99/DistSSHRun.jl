@@ -13,7 +13,7 @@ const _EXECUTE_DETACHED_KW = Set{Symbol}(
         :log_dir,
         :enable_log,
         :package,
-        :require_all_hosts,
+        :best_effort,
         :skip_hash_check,
         :workers,
         :repeat,
@@ -22,16 +22,20 @@ const _EXECUTE_DETACHED_KW = Set{Symbol}(
         :job_id,
         :worker_include,
         :spi_check,
-        :unsafe_heterogeneous,
+        :unsafe_skip_env_digests,
+        :unsafe_expose_port,
+        :unsafe_all_to_all,
         :allow_external_symlinks,
         :run_id,
+        :head_workers,
+        :head_slots,
     )
 )
 const _EXECUTE_DETACHED_DRIVE_ONLY = (
     :log_dir,
     :enable_log,
     :package,
-    :require_all_hosts,
+    :best_effort,
     :skip_hash_check,
     :workers,
     :worker_include,
@@ -177,7 +181,7 @@ function execute_detached_accepts(kw::Symbol; kind::Symbol)::Bool
     kind === :ride && return !(
         kw in (
             :repeat, :worker_include, :package, :log_dir, :enable_log, :skip_hash_check,
-            :workers, :require_all_hosts,
+            :workers,
             :allow_external_symlinks,
         )
     )
@@ -219,8 +223,21 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
         :quiet => session.quiet,
         :verbosity => session.verbosity,
     )
-    uh = get(parsed, :unsafe_heterogeneous, false)
-    uh && (kw[:unsafe_heterogeneous] = true)
+    uh = get(parsed, :unsafe_skip_env_digests, missing)
+    uh === true && (kw[:unsafe_skip_env_digests] = true)
+    ep = get(parsed, :unsafe_expose_port, missing)
+    ep === true && (kw[:unsafe_expose_port] = true)
+    ata = get(parsed, :unsafe_all_to_all, missing)
+    ata === true && (kw[:unsafe_all_to_all] = true)
+    if kind === :go
+        if hasproperty(session, :head_slots)
+            ls = session.head_slots
+            ls !== nothing && (kw[:head_slots] = ls)
+        end
+    elseif hasproperty(session, :head_workers)
+        lw = session.head_workers
+        lw !== nothing && (kw[:head_workers] = lw)
+    end
     snap0 = get(parsed, :run_id, nothing)
     snap0 === nothing || (kw[:run_id] = snap0)
     dr0 = get(parsed, :deploy_root, nothing)
@@ -231,12 +248,13 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
     end
     if kind === :ride
         kw[:spi_check] = parsed.spi_check
+        get(parsed, :best_effort, false) && (kw[:best_effort] = true)
         return _parsed_launch_kwargs!(kw, parsed)
     end
     kw[:log_dir] = parsed.log_dir
     kw[:enable_log] = parsed.enable_log
     kw[:package] = parsed.explicit_package
-    kw[:require_all_hosts] = parsed.require_all_hosts
+    kw[:best_effort] = parsed.best_effort
     kw[:skip_hash_check] = parsed.skip_hash_check
     get(parsed, :worker_include, false) && (kw[:worker_include] = true)
     dw = parsed.default_workers
@@ -422,10 +440,10 @@ that pick the kind at runtime (`kind ∈ (:go, :ride, :drive)`), returning the
 shared [`DistSSHJobResult`](@ref) instead of `GoResult` / `RideResult` / `DriveResult`.
 
 ```julia
-execute!(:go, "job.jl", ["parent:2"]; args=["8"])
-execute!(:ride, "job.jl", ["parent:2"])
-execute!(:drive, "job.jl", ["parent:2"]; args=["8"])
-wait(execute!(:go, "job.jl", ["parent:1"]; detached=true, args=["8"]))
+execute!(:go, "job.jl", ["2*host1"]; head_slots=2, args=["8"])
+execute!(:ride, "job.jl", ["2*host1"]; head_workers=2)
+execute!(:drive, "job.jl", ["2*host1"]; head_workers=2, args=["8"])
+wait(execute!(:go, "job.jl", ["1*host1"]; detached=true, head_slots=1, args=["8"]))
 ```
 
 `output_dir`, `args`, `project`, `sync`, `julia` are the keywords [`go!`](@ref)
@@ -447,8 +465,8 @@ tree has a `Project.toml`. The job must list DistSSHKit or DistSSHRun in
 `[deps]`; otherwise this throws instead of using serve's active project.
 Keywords are then an allow-list (unknown names throw):
 `output_dir`, `args`, `project`, `sync`, `julia`, `quiet`, `verbosity`, `yes`,
-`remote`, `hosts_file`, `job_id`, `source`, `unsafe_heterogeneous`, and drive-only `log_dir`,
-`enable_log`, `package`, `require_all_hosts`, `skip_hash_check`,
+`remote`, `hosts_file`, `job_id`, `source`, `unsafe_skip_env_digests`, and drive-only `log_dir`,
+`enable_log`, `package`, `best_effort`, `skip_hash_check`,
 `workers`, `worker_include`,
 `allow_external_symlinks`, `dir`, `threads`, `env_allow`, and `env`.
 `source` is a provenance
@@ -692,6 +710,11 @@ function _execute_detached!(
         )
     end
     if kind === :go
+        haskey(kwargs, :head_workers) && throw(
+            ArgumentError(
+                "execute!(:go, ...; detached=true) uses head_slots=, not head_workers=",
+            )
+        )
         for k in _EXECUTE_DETACHED_DRIVE_ONLY
             haskey(kwargs, k) && throw(
                 ArgumentError(
@@ -712,7 +735,7 @@ function _execute_detached!(
         )
         for k in (
                 :worker_include, :package, :log_dir, :enable_log, :skip_hash_check,
-                :workers, :require_all_hosts,
+                :workers,
                 :allow_external_symlinks,
             )
             haskey(kwargs, k) && throw(
@@ -741,8 +764,11 @@ function _execute_detached!(
     _reject_run_transfer_kw!("execute!", sync; surface = :api)
     get(kwargs, :allow_external_symlinks, false) === true &&
         _reject_run_transfer_cli!("execute!", "--allow-external-symlinks")
-    yes = get(kwargs, :yes, true)
-    yes === true || throw(ArgumentError("execute!(...; detached=true) requires yes=true"))
+    get(kwargs, :yes, nothing) !== nothing && throw(
+        ArgumentError(
+            "execute!(...; detached=true) does not accept yes=; the child uses CLI -y",
+        ),
+    )
     quiet = get(kwargs, :quiet, false)
     quiet isa Bool || throw(ArgumentError("quiet must be a Bool, got $(repr(quiet))"))
     verbosity = get(kwargs, :verbosity, nothing)
@@ -750,16 +776,28 @@ function _execute_detached!(
         throw(ArgumentError("verbosity must be a Symbol or nothing, got $(repr(verbosity))"))
     end
     remote = get(kwargs, :remote, nothing)
-    hosts_file = get(kwargs, :hosts_file, nothing)
+    _hosts_file = get(kwargs, :hosts_file, nothing)
+    _hosts_file !== nothing && !isempty(strip(String(_hosts_file))) &&
+        throw(
+        ArgumentError(
+            "execute!(...; detached=true) does not accept hosts_file=; " *
+                "pass host tokens in `tokens` or use --hosts via the job blob",
+        ),
+    )
     log_dir = get(kwargs, :log_dir, nothing)
     enable_log = get(kwargs, :enable_log, true)
     package = get(kwargs, :package, nothing)
-    require_all_hosts = get(kwargs, :require_all_hosts, true)
-    if kind === :drive
-        require_all_hosts isa Bool || throw(
-            ArgumentError(
-                "require_all_hosts must be a Bool, got $(repr(require_all_hosts))",
-            )
+    get(kwargs, :require_all_hosts, nothing) !== nothing && throw(
+        ArgumentError(
+            "execute!(...; detached=true) does not accept require_all_hosts=; " *
+                "use best_effort= (require_all_hosts=true → best_effort=false, " *
+                "require_all_hosts=false → best_effort=true)",
+        ),
+    )
+    best_effort = get(kwargs, :best_effort, false)
+    if kind in (:drive, :ride)
+        best_effort isa Bool || throw(
+            ArgumentError("best_effort must be a Bool, got $(repr(best_effort))"),
         )
     end
     skip_hash_check = get(kwargs, :skip_hash_check, true)
@@ -769,12 +807,41 @@ function _execute_detached!(
         _reject_removed_drive_worker_include_kw!(true)
     worker_include = get(kwargs, :worker_include, false)
     spi_check = get(kwargs, :spi_check, false)
-    unsafe_heterogeneous = get(kwargs, :unsafe_heterogeneous, false)
+    unsafe_skip_env_digests = get(kwargs, :unsafe_skip_env_digests, false)
+    allow_external_symlinks = get(kwargs, :allow_external_symlinks, false) === true
     _reject_removed_allow_mismatch!(get(kwargs, :allow_mismatch, nothing))
-    allow_external_symlinks = get(kwargs, :allow_external_symlinks, false)
     run_id = get(kwargs, :run_id, nothing)
     if run_id !== nothing
         run_id = validate_run_id(run_id)
+    end
+    head_workers = get(kwargs, :head_workers, nothing)
+    head_slots = get(kwargs, :head_slots, nothing)
+    if kind === :go
+        head_workers !== nothing && throw(
+            ArgumentError("execute!(:go, ...; detached=true) uses head_slots=, not head_workers="),
+        )
+    elseif head_slots !== nothing
+        throw(ArgumentError("execute!(:$(kind), ...; detached=true) uses head_workers=, not head_slots="))
+    end
+    if head_workers !== nothing
+        (head_workers isa Integer && !(head_workers isa Bool)) || throw(
+            ArgumentError(
+                "head_workers must be an integer, got $(repr(head_workers))",
+            )
+        )
+        lw = Int(head_workers)
+        lw < 0 && throw(ArgumentError("head_workers must be >= 0, got $lw"))
+        head_workers = lw
+    end
+    if head_slots !== nothing
+        (head_slots isa Integer && !(head_slots isa Bool)) || throw(
+            ArgumentError(
+                "head_slots must be an integer, got $(repr(head_slots))",
+            )
+        )
+        ls = Int(head_slots)
+        ls < 0 && throw(ArgumentError("head_slots must be >= 0, got $ls"))
+        head_slots = ls
     end
     worker_include isa Bool || throw(
         ArgumentError(
@@ -831,34 +898,41 @@ function _execute_detached!(
         enable_log,
         run_dir,
     )
-    argv = _execute_detached_argv(
+    verbosity_sym = verbosity isa Symbol ? verbosity :
+        verbosity === nothing ? nothing : throw(ArgumentError("verbosity must be a Symbol or nothing"))
+    job_blob_path = write_detached_job_blob!(
+        run_dir,
         kind,
         script_path,
         tokens,
-        args;
+        args,
+        proj;
+        remote = remote,
         output_dir = resolved_output,
         log_dir = resolved_log,
-        sync = sync,
         julia = julia,
+        run_id = run_id,
         quiet = quiet,
-        verbosity = verbosity,
-        hosts_file = hosts_file,
+        verbosity = verbosity_sym === nothing ? nothing : String(verbosity_sym),
+        best_effort = best_effort,
+        skip_hash_check = skip_hash_check,
         enable_log = enable_log,
         package = package,
-        require_all_hosts = require_all_hosts,
-        skip_hash_check = skip_hash_check,
         workers = workers,
         repeat = repeat,
         worker_include = worker_include,
         spi_check = spi_check,
-        unsafe_heterogeneous = unsafe_heterogeneous,
-        allow_external_symlinks = allow_external_symlinks === true,
-        run_id = run_id,
-        remote = remote,
+        unsafe_skip_env_digests = unsafe_skip_env_digests,
+        job_id = job_id_s,
+        allow_external_symlinks = allow_external_symlinks,
+        head_workers = head_workers,
+        head_slots = head_slots,
     )
+    argv = _execute_detached_bootstrap_argv(kind; job_blob = job_blob_path)
     extra = Dict{String, String}(
         "DISTRIBUTED_PROJECT_ROOT" => proj,
         DISTSSH_RUN_DIR_ENV => run_dir,
+        DETACHED_JOB_BLOB_ENV => job_blob_path,
     )
     if remote !== nothing && !isempty(strip(String(remote)))
         extra["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = remote_env_project_root(String(remote))
@@ -1102,8 +1176,33 @@ const DRIVE_HOST_WORKER_IDS = Dict{String, Vector{Int}}()
 const DRIVE_HOST_LAST_SEEN = Dict{String, Float64}()
 const DRIVE_HOST_STATUS_STOP = Ref(true)
 const DRIVE_HOST_STATUS_TASK = Ref{Union{Nothing, Task}}(nothing)
+"""Canonical placement SSH endpoint per worker pid (interrupt and leftover keys)."""
+const WORKER_PLACEMENT_SSH_ENDPOINT = Dict{Int, String}()
+
+function _register_worker_placement_ssh_endpoints!(
+        pids::AbstractVector{<:Integer},
+        endpoint::AbstractString,
+    )::Nothing
+    ep = String(endpoint)
+    for pid in pids
+        WORKER_PLACEMENT_SSH_ENDPOINT[Int(pid)] = ep
+    end
+    return nothing
+end
+
+function _forget_worker_placement_ssh_endpoints!(pids::AbstractVector{<:Integer})::Nothing
+    for pid in pids
+        delete!(WORKER_PLACEMENT_SSH_ENDPOINT, Int(pid))
+    end
+    return nothing
+end
 
 function _clear_drive_host_worker_ids!()
+    registry_pids = Int[]
+    for ids in values(DRIVE_HOST_WORKER_IDS)
+        append!(registry_pids, ids)
+    end
+    _forget_worker_placement_ssh_endpoints!(registry_pids)
     empty!(DRIVE_HOST_WORKER_IDS)
     empty!(DRIVE_HOST_LAST_SEEN)
     return nothing
@@ -1193,21 +1292,23 @@ function _rmprocs_drive_owned_workers!(; waitfor::Real)
         rmprocs(ids; waitfor = waitfor)
     catch
     end
+    _forget_worker_placement_ssh_endpoints!(ids)
     return nothing
 end
 
-"""Host name for a worker that `addprocs` created but did not register.
+"""Placement SSH endpoint for a worker that `addprocs` created but did not register.
 
-Local workers stay on the parent. An SSH worker uses the host in its
-`WorkerConfig`, without a `user@` prefix. Anything else is `unknown`, not the parent.
+Local workers stay on the parent. SSH workers use the recorded placement endpoint
+when present (`user@host` and `:port` kept), otherwise the interrupt recovery
+endpoint from `WorkerConfig`. Anything else is `unknown`, not the parent.
 """
 function _leftover_worker_host(pid::Integer)::String
+    placement = get(WORKER_PLACEMENT_SSH_ENDPOINT, Int(pid), nothing)
+    placement !== nothing && return String(placement)
     ep = _interrupt_endpoint(pid)
     ep === :local && return PARENT_HOST_NAME
     if ep isa Tuple
-        host = String(ep[1])
-        at = findlast('@', host)
-        return at === nothing ? host : String(host[nextind(host, at):end])
+        return String(ep[1])
     end
     return "unknown"
 end
@@ -1455,6 +1556,31 @@ function _read_kit_hosts(output_dir::AbstractString)::Vector{String}
     raw = _read_kit_text_file(output_dir, "kit.hosts")
     raw === nothing && return String[]
     return String[strip(line) for line in split(raw, '\n') if !isempty(strip(line))]
+end
+
+"""`kit.job` from `run_dir`, `output_dir`, or `log_dir` (detached ride/go split them)."""
+function _read_kit_job_id_for_reap(kp::DetachedProcess)::Union{Nothing, String}
+    for d in _kit_sidecar_dirs(kp.output_dir, kp.log_dir; run_dir = kp.run_dir)
+        raw = _read_kit_text_file(d, "kit.job")
+        if raw !== nothing && !isempty(strip(raw))
+            return strip(String(raw))
+        end
+    end
+    return nothing
+end
+
+"""Union of `kit.hosts` from every kit sidecar directory."""
+function _read_kit_hosts_for_reap(kp::DetachedProcess)::Vector{String}
+    seen = Set{String}()
+    out = String[]
+    for d in _kit_sidecar_dirs(kp.output_dir, kp.log_dir; run_dir = kp.run_dir)
+        for h in _read_kit_hosts(d)
+            h in seen && continue
+            push!(seen, h)
+            push!(out, h)
+        end
+    end
+    return out
 end
 
 # Wall clock for tagged `pkill` ssh. Connect timeout plus margin.
@@ -1914,6 +2040,14 @@ function _execute_detached_dirs(
     return resolved_output, resolved_log
 end
 
+function _execute_detached_bootstrap_argv(
+        kind::Symbol;
+        job_blob::AbstractString,
+    )::Vector{String}
+    argv = String[String(kind), "-y", "--job-blob", canonical_local_path(String(job_blob))]
+    return argv
+end
+
 function _execute_detached_argv(
         kind::Symbol,
         script_path::AbstractString,
@@ -1928,20 +2062,22 @@ function _execute_detached_argv(
         hosts_file,
         enable_log,
         package,
-        require_all_hosts,
+        best_effort,
         skip_hash_check,
         workers = nothing,
         repeat = nothing,
         worker_include::Bool = false,
         spi_check::Bool = false,
-        unsafe_heterogeneous::Bool = false,
+        unsafe_skip_env_digests::Bool = false,
         allow_external_symlinks::Bool = false,
         run_id::Union{Nothing, AbstractString} = nothing,
         remote::Union{Nothing, AbstractString} = nothing,
+        head_workers::Union{Nothing, Integer} = nothing,
+        head_slots::Union{Nothing, Integer} = nothing,
     )::Vector{String}
     argv = String[String(kind)]
     push!(argv, "-y")
-    append!(argv, unsafe_heterogeneous_argv(unsafe_heterogeneous))
+    append!(argv, unsafe_skip_env_digests_argv(unsafe_skip_env_digests))
     if verbosity === nothing
         quiet && push!(argv, "-q")
     elseif verbosity === :quiet
@@ -1969,6 +2105,11 @@ function _execute_detached_argv(
     if hosts_file !== nothing && !isempty(strip(String(hosts_file)))
         push!(argv, "--hosts-file", canonical_local_path(String(hosts_file)))
     end
+    if kind === :go
+        head_slots !== nothing && push!(argv, "--head-slots", string(Int(head_slots)))
+    elseif head_workers !== nothing
+        push!(argv, "--head-workers", string(Int(head_workers)))
+    end
     if kind === :drive
         enable_log === false && push!(argv, "--no-log")
         if log_dir !== nothing
@@ -1977,19 +2118,13 @@ function _execute_detached_argv(
         if package !== nothing && !isempty(strip(String(package)))
             push!(argv, "--package", String(package))
         end
-        require_all_hosts isa Bool || throw(
-            ArgumentError(
-                "require_all_hosts must be a Bool, got $(repr(require_all_hosts))",
-            )
+        best_effort isa Bool || throw(
+            ArgumentError("best_effort must be a Bool, got $(repr(best_effort))"),
         )
-        if require_all_hosts
-            push!(argv, "--require-all-hosts")
-        else
-            push!(argv, "--best-effort")
-        end
+        best_effort && push!(argv, "--best-effort")
         skip_hash_check === false && push!(argv, "--require-git")
-        if workers !== nothing
-            push!(argv, "--workers", string(Int(workers)))
+        if workers !== nothing && head_workers === nothing
+            push!(argv, "--head-workers", string(Int(workers)))
         end
         worker_include && push!(argv, "--worker-include")
     elseif kind === :ride
@@ -2411,9 +2546,8 @@ function terminate!(
     _require_nonnegative("grace", grace)
     seconds = _resolve_interrupt_grace(interrupt_grace)
     stop = _signal_ladder!(kp.process; interrupt_grace = seconds, grace = grace)
-    sidecar = something(kp.run_dir, kp.output_dir)
-    job_id = sidecar === nothing ? nothing : _read_kit_text_file(sidecar, "kit.job")
-    hosts = sidecar === nothing ? String[] : _read_kit_hosts(sidecar)
+    job_id = _read_kit_job_id_for_reap(kp)
+    hosts = _read_kit_hosts_for_reap(kp)
     _reap_tagged_workers!(job_id, hosts)
     return _persist_stop(wait(kp), stop; run_dir = kp.run_dir)
 end

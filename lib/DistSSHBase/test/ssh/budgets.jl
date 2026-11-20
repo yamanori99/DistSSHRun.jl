@@ -10,6 +10,7 @@ using Test
         "DISTSSH_WAIT_SIGINT_GRACE" => nothing,
         "DISTSSH_WAIT_E2E_STOP" => nothing,
         "DISTSSH_WAIT_SSH_CONNECT" => nothing,
+        "DISTSSH_WAIT_SSH_AUTH" => nothing,
         "DISTSSH_WAIT_PEER_SILENT" => nothing,
     ) do
         @test DistSSHBase.wait_seconds(:child_reply, 300) == 300.0
@@ -19,6 +20,7 @@ using Test
         @test DistSSHBase.wait_seconds(:sigint_grace, 20) == 20.0
         @test DistSSHBase.wait_seconds(:e2e_stop, 10) == 10.0
         @test DistSSHBase.wait_seconds(:ssh_connect, 10) == 10.0
+        @test DistSSHBase.wait_seconds(:ssh_auth, 30) == 30.0
         @test DistSSHBase.wait_seconds(:peer_silent, 600) == 600.0
         @test DistSSHBase.wait_seconds(:until_exit, 1) === Inf
         @test_throws ArgumentError DistSSHBase.wait_seconds(:not_a_wait, 1)

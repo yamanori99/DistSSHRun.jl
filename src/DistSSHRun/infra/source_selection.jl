@@ -1,7 +1,12 @@
 # Explicit source selection, local ship record, and host validation.
 # Run IDs are remote `runs/<run_id>/` leaves under the resolved deploy root.
 
-const _SHIP_RECORD_SCHEMA = 1
+const _SHIP_RECORD_SCHEMA_VERSION = 1
+const _SHIP_RECORD_SCHEMA_ERROR = """
+last-ship record is missing schema_version or uses an old format.
+Rewrite or delete the file under `.distssh/` (legacy `last-snapshot.toml` is not read).
+Ship again, or pass an explicit run id instead of the convenience record.
+"""
 const _SHIP_RECORD_NAME = "last-ship.toml"
 const _SHIP_RECORD_LOCK = ReentrantLock()
 
@@ -133,17 +138,19 @@ function _read_last_ship_record_at(path::AbstractString)::Union{Nothing, Dict{St
     raw = try
         TOML.parsefile(path)
     catch
-        return nothing
+        throw(ArgumentError("last-ship record at $(path) is not valid TOML"))
     end
-    raw isa AbstractDict || return nothing
-    schema = get(raw, "schema", nothing)
-    schema isa Integer || return nothing
-    Int(schema) == _SHIP_RECORD_SCHEMA || return nothing
+    raw isa AbstractDict || throw(ArgumentError(_SHIP_RECORD_SCHEMA_ERROR))
+    if haskey(raw, "schema") && !haskey(raw, "schema_version")
+        throw(ArgumentError(_SHIP_RECORD_SCHEMA_ERROR))
+    end
+    ver = get(raw, "schema_version", nothing)
+    ver isa Integer || throw(ArgumentError(_SHIP_RECORD_SCHEMA_ERROR))
+    Int(ver) == _SHIP_RECORD_SCHEMA_VERSION ||
+        throw(ArgumentError("last-ship record schema_version=$(ver) is not supported (expected $(_SHIP_RECORD_SCHEMA_VERSION))"))
     out = Dict{String, Any}(String(k) => v for (k, v) in raw)
-    if !haskey(out, "run_id")
-        legacy = get(out, "snapshot_id", nothing)
-        legacy isa AbstractString && (out["run_id"] = String(legacy))
-    end
+    rid = get(out, "run_id", nothing)
+    rid isa AbstractString || throw(ArgumentError("last-ship record is missing run_id"))
     return out
 end
 
@@ -155,10 +162,12 @@ function read_last_ship_record(
             DistSSHBase.local_state_write_root(env_dir),
             DistSSHBase.resolve_local_state_dir(env_dir),
         )
-        for name in (_SHIP_RECORD_NAME, _LEGACY_SHIP_RECORD_NAME)
-            rec = _read_last_ship_record_at(joinpath(base, name))
-            rec !== nothing && return rec
+        legacy = joinpath(base, _LEGACY_SHIP_RECORD_NAME)
+        if isfile(legacy)
+            throw(ArgumentError(_SHIP_RECORD_SCHEMA_ERROR))
         end
+        rec = _read_last_ship_record_at(joinpath(base, _SHIP_RECORD_NAME))
+        rec !== nothing && return rec
     end
     return nothing
 end
@@ -197,7 +206,7 @@ function write_last_ship_record!(
     aliases = _sorted_host_aliases(hosts)
     isempty(aliases) && throw(ArgumentError("last-ship record needs at least one host"))
     data = Dict{String, Any}(
-        "schema" => _SHIP_RECORD_SCHEMA,
+        "schema_version" => _SHIP_RECORD_SCHEMA_VERSION,
         "deploy_root" => _normalize_deploy_root(deploy_root),
         "hosts" => aliases,
         "run_id" => rid,
@@ -266,6 +275,24 @@ function forget_last_ship_default!(
     return nothing
 end
 public forget_last_ship_default!
+
+"""
+Forget the last-ship default after a host op that changed deploy state.
+
+Skipped when the op was cancelled or did not succeed on any host. Callers that
+report CLI exit via [`finish_host_op!`](@ref) must use this instead of gating on
+that boolean alone, because cancellation still returns `true` there.
+"""
+function forget_last_ship_after_host_op!(
+        local_project::AbstractString,
+        deploy_root::AbstractString,
+        result,
+    )::Nothing
+    result.cancelled && return nothing
+    result.succeeded == 0 && return nothing
+    forget_last_ship_default!(local_project, deploy_root)
+    return nothing
+end
 
 """POSIX `sh` body for `__DSR_SNAP_COMPLETE__` (fixtures and unit tests)."""
 function _ship_run_complete_probe_script(
@@ -657,14 +684,7 @@ function resolve_source_selection(
         end
     end
     _validate_git_on_hosts!(host_list, deploy)
-    return SourceSelection(
-        :git,
-        nothing,
-        deploy,
-        deploy,
-        nothing,
-        host_list,
-    )
+    return SourceSelection(:git, nothing, deploy, deploy, nothing, host_list)
 end
 public resolve_source_selection
 

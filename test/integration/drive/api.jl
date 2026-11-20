@@ -9,7 +9,7 @@ function _api_project_same(left, right)::Bool
     return realpath(left) == realpath(right)
 end
 
-# Oracle: `drive!(…, "parent:2")` runs the smoke driver in this process.
+# Oracle: `drive!(…; head_workers = 2)` runs the smoke driver in this process.
 # CLI child is `local.jl`. Not SSH.
 #
 # First in-process `include` of a driver into `Main`. Later files (e.g.
@@ -41,11 +41,9 @@ end
                     result = redirect_stdout(out_io) do
                         redirect_stderr(err_io) do
                             DistSSHRun.drive!(
-                                script,
-                                "parent:2";
+                                script; head_workers = 2,
                                 project = proj,
-                                verbosity = :verbose,
-                                yes = true,
+                                verbosity = :verbose
                             )
                         end
                     end
@@ -98,7 +96,7 @@ end
                 "DISTRIBUTED_PROJECT_ROOT" => "prior-root",
                 "DISTRIBUTED_REMOTE_PROJECT_ROOT" => "",
                 "DISTRIBUTED_OUTPUT_DIR" => nothing,
-                "DISTRIBUTED_RUNNER" => nothing,
+                "DISTRIBUTED_RUNNER" => nothing
             ) do
                 Base.ACTIVE_PROJECT[] = nothing
                 bad = joinpath(proj, "bad.jl")
@@ -110,8 +108,7 @@ end
                                 bad;
                                 project = proj,
                                 verbosity = :quiet,
-                                yes = true,
-                                enable_log = false,
+                                enable_log = false
                             )
                             nothing
                         catch e
@@ -132,15 +129,14 @@ end
                     project = proj,
                     workers = String[],
                     quiet = true,
-                    yes = true,
-                    verbosity = :quiet,
+                    verbosity = :quiet
                 )
                 parsed = DistSSHRun.drive_parsed_from_session(
                     session,
                     script;
                     workers = DistSSHRun.WorkerPlan(1, Dict{String, Int}()),
                     enable_log = false,
-                    skip_hash_check = true,
+                    skip_hash_check = true
                 )
                 got = redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
@@ -203,12 +199,10 @@ end
             first = redirect_stdout(devnull) do
                 redirect_stderr(devnull) do
                     DistSSHRun.drive!(
-                        with_init,
-                        "parent:1";
+                        with_init; head_workers = 1,
                         project = proj,
                         verbosity = :quiet,
-                        yes = true,
-                        enable_log = false,
+                        enable_log = false
                     )
                 end
             end
@@ -219,12 +213,10 @@ end
             second = redirect_stdout(devnull) do
                 redirect_stderr(devnull) do
                     DistSSHRun.drive!(
-                        no_init,
-                        "parent:1";
+                        no_init; head_workers = 1,
                         project = proj,
                         verbosity = :quiet,
-                        yes = true,
-                        enable_log = false,
+                        enable_log = false
                     )
                 end
             end

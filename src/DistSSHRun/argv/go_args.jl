@@ -14,20 +14,20 @@ function show_go_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  $(cli_m_project()) go [slots...] SCRIPT.jl",
-        "  go parent:2 SCRIPT.jl",
+        "  go --head-slots 2 SCRIPT.jl",
         "  go --repeat 100 SCRIPT.jl",
-        "  go --repeat 100 child:host1 child:host2 SCRIPT.jl",
-        "  go parent:1 child:host1:2 child:host2:2 SCRIPT.jl",
+        "  go --repeat 100 1*host1 2*host2 SCRIPT.jl",
+        "  go --head-slots 1 2*host1 SCRIPT.jl",
     )
     print_help_blank(io)
     print_help_section("Slots"; io = io)
     print_help_lines(
         io,
-        "  parent:N / child:NAME:N  N full-script runs (not drive workers)",
-        "  omit :N             error unless --repeat (then host is uncapped)",
-        "  parent:0                     skip parent when children are listed",
+        "  N*host              quote tokens; bare host = 1 slot (SSH)",
+        "  $(KIT_HEAD_SLOTS_FLAG_HELP)",
+        "  omit host count     error unless --repeat (then host is uncapped)",
         "  --repeat N          N independent runs; spread across listed hosts",
-        "                       (:N is a per-host cap; omit :N leaves it uncapped)",
+        "                       (`N*host` is a per-host cap; bare host is uncapped)",
         "  $(KIT_HOSTS_FLAG_HELP)",
         "  --hosts-file PATH   one token per line",
     )
@@ -41,7 +41,7 @@ function show_go_usage(; io::IO = stdout)
         "  --run-id ID       use runs/<ID>/src under the deploy root",
         "                      (after setup ship-tree + setup instantiate)",
         "  --julia PATH        remote Julia (ENV or auto)",
-        "  --unsafe-heterogeneous  waive Manifest/Project digest checks only (unverified; Julia build and DistSSH* versions must match)",
+        generated_run_option_help(:go)...,
         "  Remote slots cd to the project root and pin the real julia binary.",
         "  --output-dir PATH   batch root; slots are PATH/<slot>/",
         "  $(KIT_QUIET_FLAG_HELP)",
@@ -75,7 +75,8 @@ function show_go_usage(; io::IO = stdout)
     print_help_blank(io)
     return print_help_lines(
         io,
-        "Details: docs (manual/go). See also: setup, drive.",
+        "Details: docs (options.md, manual/go). Common errors: docs (common_errors.md).",
+        "See also: setup, drive.",
     )
 end
 
@@ -99,11 +100,11 @@ function _go_parsed(;
         output_dir,
         julia,
         repeat,
-        unsafe_heterogeneous = false,
+        run_opts::RunOptionCliState = RunOptionCliState(),
         run_id = nothing,
         deploy_root = nothing,
     )
-    return (
+    base = (
         help = help,
         show_version = show_version,
         cli_session = cli_session,
@@ -113,14 +114,22 @@ function _go_parsed(;
         output_dir = output_dir,
         julia = julia,
         repeat = repeat,
-        unsafe_heterogeneous = unsafe_heterogeneous,
         run_id = run_id,
         deploy_root = deploy_root,
     )
+    return merge_run_option_cli!(base, run_opts)
 end
 
 """Parse `go` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_go_args(args::AbstractVector{<:AbstractString})
+    args_vec = Vector{String}(String.(args))
+    blob_path, _ = peel_job_blob_bootstrap(copy(args_vec))
+    if blob_path !== nothing
+        scrub_detached_placement_env!()
+        return go_parsed_from_detached_job_blob(read_detached_job_blob(blob_path))
+    end
+    reject_mistaken_short_placement_flags!(args; command = :go)
+    assert_go_argv_no_head_workers!(args)
     cli_session, rest = peel_shared_cli_flags(args)
     hosts = String[]
     host_tokens = String[]
@@ -128,7 +137,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
     script_args = String[]
     output_dir = nothing
     julia_exe = nothing
-    unsafe_heterogeneous = false
+    run_opts = RunOptionCliState()
     run_id = nothing
     deploy_root = nothing
     repeat_n::Union{Nothing, Int} = nothing
@@ -170,8 +179,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
         elseif arg == "--"
             options_done = true
             cli_consume!(c)
-        elseif arg == "--unsafe-heterogeneous"
-            unsafe_heterogeneous = true
+        elseif try_consume_run_option!(arg, run_opts, :go)
             cli_consume!(c)
         elseif arg == "--allow-mismatch"
             reject_removed_allow_mismatch_flag!(arg)
@@ -211,7 +219,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
                 output_dir = output_dir,
                 julia = julia_exe,
                 repeat = repeat_n,
-                unsafe_heterogeneous = unsafe_heterogeneous,
+                run_opts = run_opts,
                 run_id = run_id,
                 deploy_root = deploy_root,
             )
@@ -233,7 +241,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
     append!(hosts, host_tokens)
     append_kit_host_sources!(hosts, cli_session; keep_counts = true)
     for h in hosts
-        parse_placement_token(h)
+        DistSSHBase.parse_machine_token(h)
     end
     if julia_exe === nothing
         env_val = get(ENV, "JULIA_DISTRIBUTED_EXE", "auto")
@@ -243,7 +251,12 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
     end
     apply_shared_cli_flags!(cli_session)
     if script_path !== nothing && repeat_n === nothing
-        require_counted_placement_tokens(hosts; surface = :cli)
+        require_counted_placement_tokens(
+            hosts;
+            command = :go,
+            surface = :cli,
+            head_slots = cli_session.head_slots,
+        )
     end
     return _go_parsed(;
         help = false,
@@ -255,7 +268,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
         output_dir = output_dir,
         julia = julia_exe,
         repeat = repeat_n,
-        unsafe_heterogeneous = unsafe_heterogeneous,
+        run_opts = run_opts,
         run_id = run_id,
         deploy_root = deploy_root,
     )

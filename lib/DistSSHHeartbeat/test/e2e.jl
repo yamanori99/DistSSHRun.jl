@@ -548,7 +548,12 @@ end
         @test fidx !== nothing
         @test split[fidx + 1] == abspath(spaced_cfg)
         withenv("DISTRIBUTED_SSH_OPTS" => opts) do
-            @test DistSSHBase.ssh_opts() == ["-F", abspath(spaced_cfg), "-o", "RequestTTY=no"]
+            vec = DistSSHBase.ssh_opts()
+            @test vec[1:2] == ["-F", abspath(spaced_cfg)]
+            @test count(==("RequestTTY=no"), vec) == 1
+            @test "BatchMode=yes" in vec
+            @test "ExitOnForwardFailure=yes" in vec
+            @test "ConnectTimeout=10" in vec
         end
     end
 

@@ -23,21 +23,21 @@ using Test
         @test occursin("distsshkit_demos/", DistSSHRun.explain_missing_script_hint(diag; surface = :cli))
         @test occursin(
             "DistSSHRun.install_demos(; family=",
-            DistSSHRun.explain_missing_script_hint(diag; surface = :api),
+            DistSSHRun.explain_missing_script_hint(diag; surface = :api)
         )
 
         @test occursin(
             "demo install",
-            something(DistSSHRun.missing_script_demo_hint(missing_kit, tmp; surface = :cli), ""),
+            something(DistSSHRun.missing_script_demo_hint(missing_kit, tmp; surface = :cli), "")
         )
         @test occursin(
             "./demos/ is missing",
             something(
                 DistSSHRun.missing_script_demo_hint(
                     joinpath(tmp, "demos", "with_kit", "rho_sweep.jl"),
-                    tmp,
+                    tmp
                 ), ""
-            ),
+            )
         )
         @test DistSSHRun.missing_script_demo_hint(joinpath(tmp, "jobs", "x.jl"), tmp) === nothing
     end
@@ -97,7 +97,7 @@ using Test
         catch e
             @test e isa ArgumentError
             sprint(showerror, e)
-        end,
+        end
     )
     let msg = try
             DistSSHRun.install_demos(_kit_root(); family = "with_kit", surface = :api)
@@ -126,10 +126,10 @@ using Test
         link = joinpath(tmp, "kit_root")
         symlink(realpath(kit_root), link)
         @test_throws ArgumentError DistSSHRun.install_demos(
-            kit_demos; family = "with_kit", surface = :api,
+            kit_demos; family = "with_kit", surface = :api
         )
         @test_throws ArgumentError DistSSHRun.install_demos(
-            link; family = "with_kit", surface = :api,
+            link; family = "with_kit", surface = :api
         )
     end
 
@@ -140,7 +140,7 @@ using Test
             end
         end
         flush(io)
-        @test code == 1
+        @test code == 2
         @test occursin("with_kit or without_kit or ride", read(path, String))
     end
     _with_tempdir() do tmp
@@ -166,7 +166,7 @@ using Test
         end
         flush(io)
         text = read(path, String)
-        @test code == 1
+        @test code == 2
         @test occursin("Unknown demo command: bogus", text)
         @test occursin("help demo", text)
         @test !occursin("demo --help", text)

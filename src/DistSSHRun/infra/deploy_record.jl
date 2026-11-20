@@ -12,6 +12,21 @@ function _clear_active_deploy_record!()
     return nothing
 end
 
+"""Clear in-memory deploy record unless it already matches explicit `run_id` (no last-ship lookup)."""
+function _clear_active_deploy_record_unless_run_id!(run_id::Union{Nothing, AbstractString})
+    if run_id isa AbstractString && !isempty(strip(run_id))
+        rid = validate_run_id(run_id)
+        rec = active_deploy_record()
+        if rec isa AbstractDict
+            got = get(rec, "run_id", nothing)
+            if got isa AbstractString && validate_run_id(String(got)) == rid
+                return nothing
+            end
+        end
+    end
+    return _clear_active_deploy_record!()
+end
+
 function active_deploy_record()::Union{Nothing, Dict{String, Any}}
     return _ACTIVE_DEPLOY_RECORD[]
 end
@@ -50,6 +65,15 @@ function _deploy_record_manifest_hash(project::AbstractString)::Union{Nothing, S
     return nothing
 end
 
+"""SHA-256 of resolved Project/JuliaProject bytes (same as worker `project.sha256`)."""
+function _deploy_record_project_hash(project::AbstractString)::Union{Nothing, String}
+    pf = DistSSHBase._located_project_file(project)
+    if pf isa String && isfile(pf)
+        return lowercase(file_sha256(pf))
+    end
+    return nothing
+end
+
 function _deploy_record_timestamp()::String
     return Dates.format(Dates.now(Dates.UTC), dateformat"yyyy-mm-ddTHH:MM:SS") * "Z"
 end
@@ -66,6 +90,9 @@ function build_deploy_record(
         run_id::Union{Nothing, AbstractString} = nothing,
         content_tree_hash::Union{Nothing, AbstractString} = nothing,
         project_rel::Union{Nothing, AbstractString} = nothing,
+        content_file_digests::Union{Nothing, AbstractVector} = nothing,
+        executable_ship_rels::Union{Nothing, AbstractVector} = nothing,
+        forced_ignore_ship::Union{Nothing, AbstractVector} = nothing,
     )::Dict{String, Any}
     data = Dict{String, Any}(
         "schema" => _DEPLOY_RECORD_SCHEMA,
@@ -77,6 +104,8 @@ function build_deploy_record(
     )
     mh = _deploy_record_manifest_hash(project)
     mh !== nothing && (data["manifest_hash"] = mh)
+    ph = _deploy_record_project_hash(project)
+    ph !== nothing && (data["project_hash"] = ph)
     if commit_sha isa AbstractString && !isempty(strip(String(commit_sha)))
         data["commit_sha"] = String(commit_sha)
     end
@@ -95,7 +124,37 @@ function build_deploy_record(
     rel = something(project_rel, ".")
     rel = _ship_project_rel(String(rel))
     rel == "." || (data["project_rel"] = rel)
+    if content_file_digests isa AbstractVector && !isempty(content_file_digests)
+        data["content_file_digests"] = content_file_digests
+    end
+    if executable_ship_rels isa AbstractVector && !isempty(executable_ship_rels)
+        data["executable_ship_rels"] = String[string(r) for r in executable_ship_rels]
+    end
+    if forced_ignore_ship isa AbstractVector && !isempty(forced_ignore_ship)
+        data["forced_ignore_ship"] = String[string(p) for p in forced_ignore_ship]
+    end
+    prefs = _deploy_record_preferences_hashes(project)
+    isempty(prefs) || (data["preferences"] = prefs)
     return data
+end
+
+function _deploy_record_preferences_hashes(project::AbstractString)::Vector{Dict{String, Any}}
+    pf = DistSSHBase._located_project_file(project)
+    pf isa String || return Dict{String, Any}[]
+    dir = dirname(String(pf))
+    rows = Dict{String, Any}[]
+    for name in ("LocalPreferences.toml", "JuliaLocalPreferences.toml")
+        path = joinpath(dir, name)
+        isfile(path) || continue
+        push!(
+            rows,
+            Dict{String, Any}(
+                "path" => name,
+                "sha256" => lowercase(file_sha256(path)),
+            ),
+        )
+    end
+    return rows
 end
 
 function _parse_deploy_record_body(body::AbstractString)::Union{Nothing, Dict{String, Any}}
@@ -220,13 +279,9 @@ function _deploy_record_scp_upload_argv(
         record_abs::AbstractString,
         local_path::AbstractString,
     )::Vector{String}
-    h = validate_ssh_host(String(host))
     remote = String(record_abs)
-    any(iscntrl, remote) && throw(
-        ArgumentError("deploy record remote path contains a control character"),
-    )
-    dest = string(h, ":", remote)
-    return String[ssh_opts()..., String(local_path), dest]
+    _, dest = DistSSHBase._scp_remote_file_spec(host, remote)
+    return vcat(DistSSHBase.scp_connection_argv(host), String[local_path, dest])
 end
 
 function _deploy_record_atomic_install_script(
@@ -257,7 +312,7 @@ function _write_deploy_record_via_scp!(
         i = findlast(==('/'), parent)
         i !== nothing && (parent = parent[1:prevind(parent, i)])
         pq_parent = _remote_shell_path_word(parent)
-        proc_mk = run(
+        proc_mk = run_ssh(
             pipeline(
                 ignorestatus(
                     _host_sync_remote_shell_cmd(
@@ -272,7 +327,7 @@ function _write_deploy_record_via_scp!(
         )
         DistSSHBase.shell_status(proc_mk) == 0 ||
             throw(ArgumentError("deploy record: mkdir on $(host) failed"))
-        proc_scp = run(
+        proc_scp = run_ssh(
             pipeline(
                 ignorestatus(
                     _scp_cmd(_deploy_record_scp_upload_argv(String(host), record_tmp_abs, tmp)),
@@ -285,7 +340,7 @@ function _write_deploy_record_via_scp!(
         DistSSHBase.shell_status(proc_scp) == 0 ||
             throw(ArgumentError("deploy record: scp to $(host) failed"))
         install = _deploy_record_atomic_install_script(record_abs, record_tmp_abs)
-        proc_mv = run(
+        proc_mv = run_ssh(
             pipeline(
                 ignorestatus(_host_sync_remote_shell_cmd(String(host), install));
                 stdout = devnull,
@@ -296,7 +351,7 @@ function _write_deploy_record_via_scp!(
         if DistSSHBase.shell_status(proc_mv) != 0
             tmp_q = _remote_shell_path_word(record_tmp_abs)
             try
-                run(
+                run_ssh(
                     pipeline(
                         ignorestatus(
                             _host_sync_remote_shell_cmd(String(host), "rm -f $tmp_q"),
@@ -334,6 +389,9 @@ function write_deploy_record_to_hosts!(
         run_id::Union{Nothing, AbstractString} = nothing,
         content_tree_hash::Union{Nothing, AbstractString} = nothing,
         project_rel::Union{Nothing, AbstractString} = nothing,
+        content_file_digests::Union{Nothing, AbstractVector} = nothing,
+        executable_ship_rels::Union{Nothing, AbstractVector} = nothing,
+        forced_ignore_ship::Union{Nothing, AbstractVector} = nothing,
     )
     isempty(hosts) && return nothing
     data = build_deploy_record(
@@ -345,6 +403,9 @@ function write_deploy_record_to_hosts!(
         run_id = run_id,
         content_tree_hash = content_tree_hash,
         project_rel = project_rel,
+        content_file_digests = content_file_digests,
+        executable_ship_rels = executable_ship_rels,
+        forced_ignore_ship = forced_ignore_ship,
     )
     ok_hosts = String[]
     fail_hosts = String[]
@@ -511,6 +572,14 @@ function _warn_deploy_staleness!(
                 print_warn("Local Manifest hash differs from deploy record (tree may be stale).\n")
             end
         end
+        remote_ph = get(rec, "project_hash", nothing)
+        local_pf = DistSSHBase._located_project_file(project)
+        if local_pf isa String && isfile(local_pf) && remote_ph isa AbstractString
+            local_ph = _deploy_record_project_hash(project)
+            local_ph !== nothing && local_ph != strip(String(remote_ph)) && begin
+                print_warn("Local Project hash differs from deploy record (tree may be stale).\n")
+            end
+        end
     end
     return nothing
 end
@@ -537,11 +606,15 @@ function _deploy_record_for_provenance(rec::Union{Nothing, AbstractDict})::Union
             "commit_sha",
             "dirty",
             "manifest_hash",
+            "project_hash",
             "local_path",
             "timestamp",
             "run_id",
             "content_tree_hash",
             "project_rel",
+            "content_file_digests",
+            "forced_ignore_ship",
+            "preferences",
         )
         haskey(rec, k) || continue
         out[k] = rec[k]
@@ -598,6 +671,9 @@ function commit_deploy_record_after_ship!(
         run_id::AbstractString,
         content_tree_hash::AbstractString;
         project_rel::AbstractString = ".",
+        content_file_digests::Union{Nothing, AbstractVector} = nothing,
+        executable_ship_rels::Union{Nothing, AbstractVector} = nothing,
+        forced_ignore_ship::Union{Nothing, AbstractVector} = nothing,
     )
     return write_deploy_record_to_hosts!(
         hosts,
@@ -608,6 +684,9 @@ function commit_deploy_record_after_ship!(
         run_id = run_id,
         content_tree_hash = content_tree_hash,
         project_rel = project_rel,
+        content_file_digests = content_file_digests,
+        executable_ship_rels = executable_ship_rels,
+        forced_ignore_ship = forced_ignore_ship,
     )
 end
 

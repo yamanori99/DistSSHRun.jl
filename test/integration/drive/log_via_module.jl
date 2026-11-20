@@ -17,9 +17,9 @@ using Test
         _develop_kit!(proj; julia = julia)
 
         cmd = _kit_cli_cmd(
-            ["drive", "-y", "parent:2", "--log-dir", log_dir, script];
+            ["drive", "-y", "--head-workers", "2", "--log-dir", log_dir, script];
             julia = julia,
-            project = proj,
+            project = proj
         )
         _assert_drive_log_output(;
             cmd = setenv(
@@ -27,11 +27,11 @@ using Test
                 _child_julia_env(
                     Dict(
                         "DISTRIBUTED_INIT_DELAY_SEC" => "0",
-                        "DISTRIBUTED_PROJECT_ROOT" => proj,
+                        "DISTRIBUTED_PROJECT_ROOT" => proj
                     )
-                ),
+                )
             ),
-            log_dir = log_dir,
+            log_dir = log_dir
         )
     end
 end

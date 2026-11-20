@@ -18,7 +18,7 @@ using Test
             script = script,
             host_project = proj,
             log_dir = log_dir,
-            julia = julia,
+            julia = julia
         )
         _assert_drive_log_output(; cmd = cmd, log_dir = log_dir)
     end

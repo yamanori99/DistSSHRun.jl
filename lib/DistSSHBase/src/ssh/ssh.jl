@@ -14,32 +14,87 @@ function _ssh_whole_seconds(name::Symbol, default::Int)::Int
     return max(1, round(Int, seconds))
 end
 
-"""Build SSH options. `request_tty=false` (default) adds `RequestTTY=no`."""
+const _SSH_FORBIDDEN_OPT_OVERRIDES = Dict{String, String}(
+    "batchmode" => "BatchMode=yes",
+    "requesttty" => "RequestTTY=no",
+)
+
+function _ssh_o_option_keys(argv::AbstractVector{<:AbstractString})::Set{String}
+    keys = Set{String}()
+    for i in eachindex(argv)
+        argv[i] == "-o" || continue
+        i + 1 > length(argv) && break
+        keyval = String(argv[i + 1])
+        eq = findfirst('=', keyval)
+        eq === nothing && continue
+        push!(keys, lowercase(keyval[1:(eq - 1)]))
+    end
+    return keys
+end
+
+function _validate_distributed_ssh_o!(extra::AbstractVector{String})
+    for i in 1:2:length(extra)
+        extra[i] == "-o" || continue
+        i + 1 > length(extra) && break
+        keyval = extra[i + 1]
+        eq = findfirst('=', keyval)
+        eq === nothing && continue
+        key = lowercase(keyval[1:(eq - 1)])
+        haskey(_SSH_FORBIDDEN_OPT_OVERRIDES, key) || continue
+        want = _SSH_FORBIDDEN_OPT_OVERRIDES[key]
+        keyval != want && throw(
+            ArgumentError(
+                "DISTRIBUTED_SSH_OPTS cannot override $(repr(want)); " *
+                    "DistSSH requires non-interactive SSH",
+            ),
+        )
+    end
+    return nothing
+end
+
+function _default_ssh_o_values(; request_tty::Bool)
+    connect = _ssh_whole_seconds(:ssh_connect, _SSH_CONNECT_TIMEOUT_S)
+    alive_count = 10
+    silent = _ssh_whole_seconds(:peer_silent, 600)
+    alive_interval = max(1, round(Int, silent / alive_count))
+    out = String[
+        "BatchMode=yes",
+        "ExitOnForwardFailure=yes",
+        "ConnectTimeout=$connect",
+        "StrictHostKeyChecking=accept-new",
+        "ServerAliveInterval=$alive_interval",
+        "ServerAliveCountMax=$alive_count",
+        "TCPKeepAlive=yes",
+    ]
+    request_tty || push!(out, "RequestTTY=no")
+    return out
+end
+
+"""
+Build SSH options. `DISTRIBUTED_SSH_OPTS` tokens come first; kit defaults for
+each `-o` name follow only when that name is absent (OpenSSH uses the first
+value on the command line). Forbidden overrides in ENV still throw.
+"""
 function build_ssh_opts(; request_tty::Bool = false)
     custom = strip(get(ENV, "DISTRIBUTED_SSH_OPTS", ""))
-    if isempty(custom)
-        opts = String["-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes"]
-        if !request_tty
-            push!(opts, "-o", "RequestTTY=no")
-        end
-        connect = _ssh_whole_seconds(:ssh_connect, _SSH_CONNECT_TIMEOUT_S)
-        # Ten probes. The gap is the silent budget divided across them, so the
-        # default stays Interval=60 and CountMax=10 (about 600s).
-        alive_count = 10
-        silent = _ssh_whole_seconds(:peer_silent, 600)
-        alive_interval = max(1, round(Int, silent / alive_count))
-        append!(
-            opts, (
-                "-o", "ConnectTimeout=$connect",
-                "-o", "StrictHostKeyChecking=accept-new",
-                "-o", "ServerAliveInterval=$alive_interval",
-                "-o", "ServerAliveCountMax=$alive_count",
-                "-o", "TCPKeepAlive=yes",
-            )
-        )
-        return opts
+    extra = isempty(custom) ? String[] : _split_ssh_opts(custom)
+    !isempty(extra) && _validate_distributed_ssh_o!(extra)
+    user_keys = _ssh_o_option_keys(extra)
+    defaults = String[]
+    for kv in _default_ssh_o_values(; request_tty = request_tty)
+        key = lowercase(split(kv, '=', limit = 2)[1])
+        key in user_keys && continue
+        push!(defaults, "-o", kv)
     end
-    return _split_ssh_opts(custom)
+    return vcat(extra, defaults)
+end
+
+"""Argv prefix for every `ssh` invocation (BatchMode and askpass lock)."""
+function ssh_noninteractive_env()::Dict{String, String}
+    return Dict{String, String}(
+        "SSH_ASKPASS_REQUIRE" => "never",
+        "SSH_ASKPASS" => "",
+    )
 end
 
 """Split `DISTRIBUTED_SSH_OPTS` with shell quoting. Unmatched quotes throw `ArgumentError`."""
@@ -60,13 +115,14 @@ SSH argv flags for `ssh` / `scp`.
 Reads `DISTRIBUTED_SSH_OPTS` **live** (not frozen at package precompile). Prefer
 this over a `const` so E2E / ProxyJump overrides apply in the same process.
 
-A non-empty `DISTRIBUTED_SSH_OPTS` **replaces** the default vector (it is not
-merged). It is split with `Base.shell_split`, so a quoted value that contains
-spaces stays one argument. An unmatched quote throws `ArgumentError`.
-`request_tty` only changes the default vector: `false` includes
-`-o RequestTTY=no`; `true` omits it so a caller may put `ssh -t` before or
-after these flags. The ENV replacement is unchanged (if it contains
-`RequestTTY=no`, put `-t` **after** the vector). Use `-o RequestTTY=no`,
+Non-empty `DISTRIBUTED_SSH_OPTS` is split with `Base.shell_split` and placed
+**before** kit defaults. For each `-o` option name, the first token on the
+command line wins, so ENV can override timeouts and extras like `-F`. Kit
+still fills any missing default names (`BatchMode=yes`, and so on). An
+unmatched quote throws `ArgumentError`.
+`request_tty` only changes which default names are filled: `false` includes
+`RequestTTY=no` when ENV did not set it; `true` omits that default. Use
+`-o RequestTTY=no`,
 not `ssh -T`: these flags are also passed to `scp` (`scp -T` is unrelated).
 Does not insert `-t` (that flag is `ssh`-only).
 """
@@ -94,14 +150,344 @@ function _host_tool_cmd(name::AbstractString, args::AbstractVector)::Cmd
 end
 
 _git_cmd(args::AbstractVector)::Cmd = _host_tool_cmd("git", args)
-_ssh_cmd(args::AbstractVector)::Cmd = _host_tool_cmd("ssh", args)
+function _ssh_cmd(args::AbstractVector)::Cmd
+    cmd = _host_tool_cmd("ssh", args)
+    return addenv(cmd, ssh_noninteractive_env())
+end
+
+# Seconds added on top of `ConnectTimeout` for pubkey/password auth after TCP connect.
+const _SSH_AUTH_MARGIN_S = 20
+const _SSH_PHASE_ALIVE_INTERVAL = 5
+const _SSH_PHASE_ALIVE_COUNT = 1
+
+"""
+Wall-clock limit for the **first** short POSIX probe on a host (connect plus auth).
+
+`DISTSSH_WAIT_SSH_AUTH` overrides the default (`ConnectTimeout` + margin).
+"""
+function ssh_auth_timeout_seconds()::Float64
+    connect = Float64(_ssh_whole_seconds(:ssh_connect, _SSH_CONNECT_TIMEOUT_S))
+    auth = wait_seconds(:ssh_auth, connect + _SSH_AUTH_MARGIN_S)
+    return max(auth, connect + 1.0)
+end
+
+"""OpenSSH flags for parallel short remote phases (`kill`, tagged `pkill`).
+
+Forced `-o` tokens are placed before forwarded user opts so they win over
+`DISTRIBUTED_SSH_OPTS` (OpenSSH uses the first value per option name).
+"""
+function ssh_phase_argv(;
+        request_tty::Bool = false,
+        explicit_port::Union{Nothing, Int} = nothing,
+    )::Vector{String}
+    connect = _ssh_whole_seconds(:ssh_connect, _SSH_CONNECT_TIMEOUT_S)
+    forced = String[
+        "-o", "BatchMode=yes",
+        "-o", "ConnectTimeout=$connect",
+        "-o", "ServerAliveInterval=$(_SSH_PHASE_ALIVE_INTERVAL)",
+        "-o", "ServerAliveCountMax=$(_SSH_PHASE_ALIVE_COUNT)",
+    ]
+    return vcat(
+        forced,
+        ssh_forwarded_opts(; explicit_port = explicit_port, request_tty = request_tty),
+    )
+end
+
+function _scp_cmd(args::AbstractVector)::Cmd
+    cmd = _host_tool_cmd("scp", args)
+    return addenv(cmd, ssh_noninteractive_env())
+end
+
+function _ssh_kill_local!(proc::Base.Process)
+    try
+        process_running(proc) && kill(proc, Base.SIGKILL)
+    catch
+    end
+    timedwait(() -> process_exited(proc), 2.0; pollint = 0.05)
+    process_running(proc) && try
+        kill(proc, Base.SIGKILL)
+    catch
+    end
+    return nothing
+end
+
+function _ssh_auth_timeout_error(seconds::Real)
+    return ArgumentError(
+        "SSH timed out after $(round(Float64(seconds); digits = 1))s. " *
+            "Check: ssh -o BatchMode=yes -o ConnectTimeout=5 HOST echo ok",
+    )
+end
+
+"""Wait on a kit-started `ssh` child until it exits (no Julia-side kill)."""
+function ssh_wait_process!(proc::Base.Process)::Base.Process
+    Base.wait(proc)
+    return proc
+end
+
+function _ssh_cmd_for_ignorestatus(cmd)::Cmd
+    while cmd isa Base.CmdRedirect
+        cmd = cmd.cmd
+    end
+    cmd isa Cmd || error("internal: run_ssh expects Cmd or CmdRedirect")
+    return cmd
+end
+
+function _ssh_run_throws_on_failure(cmd)::Bool
+    return !_ssh_cmd_for_ignorestatus(cmd).ignorestatus
+end
+
+"""
+Run one kit-owned `ssh` / `scp` command and wait until the child exits.
+
+Uses the same stdio and `ignorestatus` rules as `Base.run`: a non-zero exit
+throws `ProcessFailedException` unless the root `Cmd` was built with
+`ignorestatus`. The Julia-side auth budget applies only to the first short
+POSIX login-shell probe per host (cached for the process), not to every session.
+"""
+function run_ssh(cmd; wait::Bool = true)::Base.Process
+    proc = wait ? run(cmd, stdin, stdout, stderr; wait = false) : run(cmd; wait = false)
+    wait || return proc
+    Base.wait(proc)
+    if _ssh_run_throws_on_failure(cmd) && !Base.success(proc)
+        throw(Base.ProcessFailedException(Base.Process[proc]))
+    end
+    return proc
+end
+
+"""First SSH probe on a host: bounded by [`ssh_auth_timeout_seconds`](@ref)."""
+function _run_ssh_auth_bounded(cmd)::Base.Process
+    proc = run(cmd; wait = false)
+    seconds = ssh_auth_timeout_seconds()
+    if timedwait(() -> process_exited(proc), Float64(seconds); pollint = 0.05) !== :ok
+        _ssh_kill_local!(proc)
+        throw(_ssh_auth_timeout_error(seconds))
+    end
+    Base.wait(proc)
+    return proc
+end
+
+"""Run `_ssh_cmd(argv)` and return captured stdout (stderr to `devnull` by default)."""
+function _read_ssh(argv::AbstractVector)::String
+    typed = String[String(a) for a in argv]
+    return _read_ssh(typed)
+end
+
+function _read_ssh(argv::AbstractVector{<:AbstractString})::String
+    out_buf = IOBuffer()
+    run_ssh(
+        pipeline(_ssh_cmd(argv); stdout = out_buf, stderr = devnull);
+        wait = true,
+    )
+    return String(take!(out_buf))
+end
 
 """`--` then `host`, then `args`. A name that starts with `-` is rejected."""
 function _ssh_host_args(host::AbstractString, args::AbstractString...)::Vector{String}
     dest = validate_ssh_host(host)
     return String["--", dest, String.(args)...]
 end
-_scp_cmd(args::AbstractVector)::Cmd = _host_tool_cmd("scp", args)
+
+function _ssh_o_keyvalue_is_port(keyval::AbstractString)::Bool
+    eq = findfirst('=', keyval)
+    eq === nothing && return false
+    key = strip(String(keyval[1:(eq - 1)]))
+    return lowercase(key) == "port"
+end
+
+function _ssh_o_token_is_port(keyval::AbstractString)::Bool
+    _ssh_o_keyvalue_is_port(keyval) && return true
+    parts = split(String(keyval); limit = 2)
+    return length(parts) == 2 && lowercase(strip(parts[1])) == "port" && !isempty(strip(parts[2]))
+end
+
+function _ssh_argv_port_value(token::AbstractString)::Union{Nothing, Int}
+    return tryparse(Int, String(strip(token)))
+end
+
+function _attached_ssh_port_flag(flag::AbstractString)::Bool
+    return occursin(r"^-p\d+$", String(flag))
+end
+
+function _attached_scp_port_flag(flag::AbstractString)::Bool
+    return occursin(r"^-P\d+$", String(flag))
+end
+
+"""Drop ssh port spellings (`-p`, `-o Port…`) but keep ssh `-P` config tags."""
+function _ssh_ssh_argv_without_port_flags(argv::AbstractVector{<:AbstractString})::Vector{String}
+    out = String[]
+    i = 1
+    n = length(argv)
+    while i <= n
+        a = String(argv[i])
+        if a == "-p"
+            i += 2
+            continue
+        elseif _attached_ssh_port_flag(a)
+            i += 1
+            continue
+        elseif a == "-o" && i + 1 <= n
+            nxt = String(argv[i + 1])
+            if _ssh_o_token_is_port(nxt)
+                i += 2
+                continue
+            elseif lowercase(strip(nxt)) == "port" && i + 2 <= n
+                i += 3
+                continue
+            end
+        elseif startswith(a, "-o") && length(a) > 2 && _ssh_o_token_is_port(SubString(a, 3))
+            i += 1
+            continue
+        end
+        push!(out, a)
+        i += 1
+    end
+    return out
+end
+
+"""Drop scp port spellings (`-P`, `-o Port…`) but keep scp `-p` (preserve times)."""
+function _scp_argv_without_port_flags(argv::AbstractVector{<:AbstractString})::Vector{String}
+    out = String[]
+    i = 1
+    n = length(argv)
+    while i <= n
+        a = String(argv[i])
+        if a == "-P"
+            i += 2
+            continue
+        elseif a == "-p" && i + 1 <= n
+            if _ssh_argv_port_value(argv[i + 1]) !== nothing
+                i += 2
+                continue
+            end
+        elseif _attached_scp_port_flag(a)
+            i += 1
+            continue
+        elseif _attached_ssh_port_flag(a)
+            i += 1
+            continue
+        elseif a == "-o" && i + 1 <= n
+            nxt = String(argv[i + 1])
+            if _ssh_o_token_is_port(nxt)
+                i += 2
+                continue
+            elseif lowercase(strip(nxt)) == "port" && i + 2 <= n
+                i += 3
+                continue
+            end
+        elseif startswith(a, "-o") && length(a) > 2 && _ssh_o_token_is_port(SubString(a, 3))
+            i += 1
+            continue
+        end
+        push!(out, a)
+        i += 1
+    end
+    return out
+end
+
+"""OpenSSH `ssh` destination string (same as the placement host body; port is passed via `-p`)."""
+function ssh_openssh_dest(dest::AbstractString)::String
+    d = String(strip(dest))
+    validate_ssh_host(d; shown = dest)
+    return d
+end
+
+"""
+`ssh_opts()` with conflicting port flags removed when `explicit_port` is set.
+"""
+function ssh_forwarded_opts(;
+        explicit_port::Union{Nothing, Int} = nothing,
+        request_tty::Bool = false,
+    )::Vector{String}
+    base = String.(ssh_opts(; request_tty = request_tty))
+    explicit_port === nothing && return base
+    return _ssh_ssh_argv_without_port_flags(base)
+end
+
+"""
+`ssh_opts()` with scp port flags removed when `explicit_port` is set.
+"""
+function scp_forwarded_opts(;
+        explicit_port::Union{Nothing, Int} = nothing,
+        request_tty::Bool = false,
+    )::Vector{String}
+    base = String.(ssh_opts(; request_tty = request_tty))
+    explicit_port === nothing && return base
+    return _scp_argv_without_port_flags(base)
+end
+
+"""OpenSSH `-p` when the placement token carried an explicit port."""
+function _ssh_explicit_port_args(port::Union{Nothing, Int})::Vector{String}
+    port === nothing && return String[]
+    return String["-p", string(port)]
+end
+
+"""`ssh` / `Distributed.addprocs` flags: forwarded opts plus explicit `-p` when set."""
+function ssh_connection_ssh_opts(host::AbstractString)::Vector{String}
+    _, port = parse_ssh_endpoint(host)
+    return vcat(ssh_forwarded_opts(explicit_port = port), _ssh_explicit_port_args(port))
+end
+
+"""Forwarded `ssh_opts` plus `-p` and `-- dest …` for one connection."""
+function _ssh_remote_session_argv(host::AbstractString, args::AbstractString...)::Vector{String}
+    _, port = parse_ssh_endpoint(host)
+    return vcat(
+        ssh_forwarded_opts(explicit_port = port),
+        _ssh_host_connection_args(host, args...),
+    )
+end
+
+"""`--` then an already-validated OpenSSH destination."""
+function _ssh_host_openssh_args(dest::AbstractString, args::AbstractString...)::Vector{String}
+    h = String(strip(dest))
+    return String["--", h, String.(args)...]
+end
+
+"""Split a canonical SSH endpoint into OpenSSH argv tail (`-p` then `-- dest …`)."""
+function _ssh_host_connection_args(host::AbstractString, args::AbstractString...)::Vector{String}
+    dest, port = parse_ssh_endpoint(host)
+    validate_ssh_host(dest; shown = host)
+    open_dest = ssh_openssh_dest(dest)
+    return vcat(_ssh_explicit_port_args(port), _ssh_host_openssh_args(open_dest, args...))
+end
+
+"""Explicit `-p` from a worker `sshflags` `Cmd` (Distributed `addprocs`)."""
+function explicit_port_from_sshflags(flags::Cmd)::Union{Nothing, Int}
+    exec = flags.exec
+    for i in 1:(length(exec) - 1)
+        String(exec[i]) == "-p" || continue
+        parsed = tryparse(Int, String(exec[i + 1]))
+        return parsed
+    end
+    return nothing
+end
+
+"""OpenSSH `scp -P` when the placement token carried an explicit port."""
+function _scp_explicit_port_args(port::Union{Nothing, Int})::Vector{String}
+    port === nothing && return String[]
+    return String["-P", string(port)]
+end
+
+"""
+`scp` port prefix and `user@host:remote_path` spec for a canonical SSH endpoint.
+"""
+function _scp_remote_file_spec(
+        host::AbstractString,
+        remote_path::AbstractString,
+    )::Tuple{Vector{String}, String}
+    _, port = parse_ssh_endpoint(host)
+    machine = ssh_scp_machine(host)
+    remote = String(remote_path)
+    any(iscntrl, remote) &&
+        throw(ArgumentError("scp remote path contains a control character"))
+    spec = string(machine, ":", remote)
+    return (_scp_explicit_port_args(port), spec)
+end
+
+"""`scp` argv prefix: forwarded opts plus explicit `-P` when the endpoint names a port."""
+function scp_connection_argv(host::AbstractString)::Vector{String}
+    _, port = parse_ssh_endpoint(host)
+    return vcat(scp_forwarded_opts(explicit_port = port), _scp_explicit_port_args(port))
+end
 
 """
 Effective SSH `User` for `host` from `ssh -G` (config / defaults).
@@ -114,8 +500,18 @@ function ssh_config_user(host::AbstractString)::Union{Nothing, String}
     h = String(strip(host))
     isempty(h) && return nothing
     try
+        dest, port = parse_ssh_endpoint(h)
+        open_dest = ssh_openssh_dest(dest)
         # -n: no stdin; -G dumps effective config (User, HostName, …).
-        out = read(_ssh_cmd(["-n", ssh_opts()..., "-G", _ssh_host_args(h)...]), String)
+        out = _read_ssh(
+            vcat(
+                String["-n"],
+                ssh_forwarded_opts(explicit_port = port)...,
+                _ssh_explicit_port_args(port)...,
+                String["-G"],
+                _ssh_host_openssh_args(open_dest)...,
+            ),
+        )
         for line in eachsplit(out, '\n'; keepempty = false)
             if startswith(line, "user ")
                 u = strip(SubString(line, 6))
@@ -142,12 +538,24 @@ julia> DistSSHRun.ssh_addprocs_machine("dev@host1")
 "dev@host1"
 ```
 """
-function ssh_addprocs_machine(host::AbstractString)::String
-    h = String(strip(host))
-    isempty(h) && return h
-    h = validate_ssh_host(h)
+function ssh_scp_machine(host::AbstractString)::String
+    endpoint = String(strip(host))
+    isempty(endpoint) && return endpoint
+    dest, _ = parse_ssh_endpoint(endpoint)
+    h = validate_ssh_host(dest)
     occursin('@', h) && return h
-    u = ssh_config_user(h)
+    u = ssh_config_user(endpoint)
+    return u === nothing ? h : string(u, '@', h)
+end
+
+function ssh_addprocs_machine(host::AbstractString)::String
+    endpoint = String(strip(host))
+    isempty(endpoint) && return endpoint
+    dest, _ = parse_ssh_endpoint(endpoint)
+    validate_ssh_host(dest; shown = endpoint)
+    h = ssh_openssh_dest(dest)
+    occursin('@', h) && return h
+    u = ssh_config_user(endpoint)
     return u === nothing ? h : string(u, '@', h)
 end
 
@@ -189,13 +597,7 @@ end
 """Stdout of `julia_path --version` on `host`."""
 function _remote_julia_version_output(host::String, julia_path::AbstractString)::String
     remote = _remote_julia_version_remote_command(julia_path)
-    return read(
-        pipeline(
-            _ssh_cmd([ssh_opts()..., _ssh_host_args(host, remote)...]);
-            stderr = devnull,
-        ),
-        String,
-    )
+    return _read_ssh(_ssh_remote_session_argv(host, remote))
 end
 
 """Get the Julia version on a remote host by running `julia_path --version` over SSH.
@@ -452,11 +854,14 @@ function run_on_host(
     )::Base.Process
     h = String(strip(host))
     isempty(h) && throw(ArgumentError("run_on_host: host must be non-empty"))
+    _ensure_posix_login_shell!(h)
     inner = _run_on_host_remote_sh(argv; julia = julia, detect = detect)
-    args = String[ssh_opts(; request_tty = tty)...]
+    _, port = parse_ssh_endpoint(h)
+    args = ssh_forwarded_opts(explicit_port = port, request_tty = tty)
     tty && push!(args, "-t")
-    append!(args, _ssh_host_args(h, inner))
-    return run(ignorestatus(_ssh_cmd(args)); wait = wait)
+    append!(args, _ssh_host_connection_args(h, inner))
+    cmd = ignorestatus(_ssh_cmd(args))
+    return wait ? run_ssh(cmd) : run(cmd; wait = false)
 end
 
 # Process-local cache of found Julia paths only. A miss is not stored.
@@ -492,7 +897,7 @@ function _remote_shell_status_parts(
     out_buf = IOBuffer()
     cmd = _host_sync_remote_shell_cmd(host, script)
     proc = try
-        run(pipeline(ignorestatus(cmd); stdout = out_buf, stderr = err_buf); wait = true)
+        run_ssh(pipeline(ignorestatus(cmd); stdout = out_buf, stderr = err_buf); wait = true)
     catch e
         _rethrow_missing_host_tool(e)
         rethrow()
@@ -560,10 +965,13 @@ end
 function _remote_julia_reports_version(host::String, path::AbstractString)::Bool
     pq = _remote_shell_path_word(String(path))
     try
-        out = read(
-            pipeline(_host_sync_remote_shell_cmd(host, "$pq --version"); stderr = devnull),
-            String,
-        )
+        out = let buf = IOBuffer()
+            run_ssh(
+                pipeline(_host_sync_remote_shell_cmd(host, "$pq --version"); stdout = buf, stderr = devnull);
+                wait = true,
+            )
+            String(take!(buf))
+        end
         return parse_julia_version(out) !== nothing
     catch e
         _throw_if_nonposix_shell(host, e)
@@ -578,12 +986,17 @@ function _detect_julia_path_uncached(host::String)::Union{Nothing, String}
     if !isempty(uname_s)
         for path in remote_julia_candidates(uname_s)
             try
-                result = read(
-                    pipeline(
-                        _host_sync_remote_shell_cmd(host, "test -x $path && echo $path");
-                        stderr = devnull,
-                    ), String
-                )
+                result = let buf = IOBuffer()
+                    run_ssh(
+                        pipeline(
+                            _host_sync_remote_shell_cmd(host, "test -x $path && echo $path");
+                            stdout = buf,
+                            stderr = devnull,
+                        );
+                        wait = true,
+                    )
+                    String(take!(buf))
+                end
                 found = strip(result)
                 isempty(found) && continue
                 _remote_julia_reports_version(host, found) || continue
@@ -692,7 +1105,7 @@ function resolve_remote_abs_path_on_host(host::String, remote_path::AbstractStri
     startswith(path, "/") && return path
     try
         inner = _remote_abs_path_resolve_shell(path)
-        s = strip(read(pipeline(_ssh_cmd([ssh_opts()..., _ssh_host_args(host, inner)...]); stderr = devnull), String))
+        s = strip(_read_ssh(_ssh_remote_session_argv(host, inner)))
         isempty(s) && return nothing
         return String(s)
     catch e
@@ -726,7 +1139,7 @@ A non-POSIX login shell throws `ArgumentError` (see `help setup`).
 function get_remote_git_hash(host::String, remote_repo_dir::AbstractString; short::Union{Nothing, Int} = nothing)::Union{Nothing, String}
     try
         inner = _remote_git_hash_inner(remote_repo_dir; short = short)
-        s = strip(read(pipeline(_ssh_cmd([ssh_opts()..., _ssh_host_args(host, inner)...]); stderr = devnull), String))
+        s = strip(_read_ssh(_ssh_remote_session_argv(host, inner)))
         return isempty(s) ? nothing : s
     catch e
         _throw_if_nonposix_shell(host, e)
@@ -1156,7 +1569,7 @@ function _host_sync_remote_shell_cmd(
     # Default `-n`: do not forward kit stdin (juliaup/git must not wait on a TTY).
     # Tar ship needs stdin (`forward_stdin=true`).
     flags = forward_stdin ? String[] : String["-n"]
-    return _ssh_cmd([flags..., ssh_opts()..., _ssh_host_args(host, remote_script)...])
+    return _ssh_cmd(vcat(flags, _ssh_remote_session_argv(host, remote_script)))
 end
 
 # Login-shell POSIX passes. Key is host plus live `ssh_opts()` (not host alone:
@@ -1221,15 +1634,18 @@ function _remote_shell_capture(
     out_buf = IOBuffer()
     err_buf = IOBuffer()
     proc = try
-        run(
+        _run_ssh_auth_bounded(
             pipeline(
                 ignorestatus(_host_sync_remote_shell_cmd(host, script));
                 stdout = out_buf,
                 stderr = err_buf,
-            );
-            wait = true,
+            ),
         )::Base.Process
-    catch
+    catch e
+        if e isa ArgumentError
+            msg = sprint(showerror, e)
+            occursin("SSH timed out after", msg) && rethrow()
+        end
         return nothing
     end
     process_exited(proc) || return nothing

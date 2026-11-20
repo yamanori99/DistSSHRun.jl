@@ -12,7 +12,7 @@ function _env_verify_job!(proj::AbstractString)
         julia_version = "$(VERSION)"
         manifest_format = "2.0"
         project_hash = "0123456789abcdef0123456789abcdef01234567"
-        """,
+        """
     )
     return nothing
 end
@@ -22,7 +22,7 @@ function _env_verify_job_distssh_pkg!(proj::AbstractString)
     open(joinpath(proj, "Manifest.toml"), "a") do io
         println(
             io,
-            "deps = {DistSSHRun = [{uuid = \"00000000-0000-0000-0000-000000000001\", version = \"0.2.0-DEV\"}]}",
+            "deps = {DistSSHRun = [{uuid = \"00000000-0000-0000-0000-000000000001\", version = \"0.2.0-DEV\"}]}"
         )
     end
     return nothing
@@ -45,7 +45,34 @@ function _env_verify_clear_worker_test_env!(::Integer)
     return nothing
 end
 
+function _env_verify_solo_workers!()
+    leftover = setdiff(collect(workers()), [1])
+    isempty(leftover) || rmprocs(leftover; waitfor = 5.0)
+    return nothing
+end
+
+function _env_verify_add_local_workers(
+        n::Integer,
+        worker_project::Union{Nothing, AbstractString} = Base.active_project(),
+    )
+    _env_verify_solo_workers!()
+    project_flag = if worker_project === nothing
+        `--startup-file=no`
+    else
+        `--startup-file=no --project=$(String(worker_project))`
+    end
+    addprocs(n; exeflags = project_flag, topology = :master_worker)
+    ws = sort!(collect(workers()))
+    for w in ws
+        remotecall_fetch(w) do
+            return Core.eval(Main, :(using DistSSHRun))
+        end
+    end
+    return ws
+end
+
 function _with_one_local_worker(worker_project::Union{Nothing, AbstractString}, f::Function)
+    _env_verify_solo_workers!()
     @test nprocs() == 1
     project_flag = if worker_project === nothing
         `--startup-file=no`
@@ -70,11 +97,11 @@ function _go_identity_env(parent::AbstractDict; tweak::Pair{String, String})
     d = Dict(
         "DISTSSH_TEST_RUN_IDENTITY_VERSION" => get(parent, "version", string(VERSION)),
         "DISTSSH_TEST_RUN_IDENTITY_COMMIT" => get(
-            parent, "commit", string(Base.GIT_VERSION_INFO.commit),
+            parent, "commit", string(Base.GIT_VERSION_INFO.commit)
         ),
         "DISTSSH_TEST_RUN_IDENTITY_SYSIMAGE" => get(parent, "sysimage", ""),
         "DISTSSH_TEST_RUN_IDENTITY_MAN_SHA" => get(parent, "manifest.sha256", ""),
-        "DISTSSH_TEST_RUN_IDENTITY_PROJ_SHA" => get(parent, "project.sha256", ""),
+        "DISTSSH_TEST_RUN_IDENTITY_PROJ_SHA" => get(parent, "project.sha256", "")
     )
     key = tweak[1]
     if key == "version"
@@ -93,6 +120,8 @@ end
 
 function _env_verify_guards()
     @testset "environment verify guards" begin
+        _env_run_id_shipped_run_verify_tests()
+
         @testset "controller without Manifest fails closed" begin
             _with_tempdir() do proj
                 write(joinpath(proj, "Project.toml"), "name = \"NoManifestYet\"\n")
@@ -108,22 +137,22 @@ function _env_verify_guards()
                 msg = sprint(showerror, err)
                 @test occursin("what:", msg)
                 @test occursin("no Manifest", msg)
-                @test occursin("--unsafe-heterogeneous", msg)
+                @test occursin("--unsafe-skip-env-digests", msg)
                 @test occursin("Pkg.instantiate", msg)
                 @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
                 slots = DistSSHRun.GoSlot[DistSSHRun.GoSlot(:parent, nothing, "parent")]
                 @test_throws ErrorException DistSSHRun.verify_go_slots_match_job!(proj, slots)
-                DistSSHRun.with_unsafe_heterogeneous(
+                DistSSHRun.with_unsafe_skip_env_digests(
                     () -> begin
                         DistSSHRun.verify_workers_match_job!(proj)
                         DistSSHRun.verify_go_slots_match_job!(proj, slots)
-                    end, true,
+                    end, true
                 )
                 prov = DistSSHRun.assemble_provenance()
                 env = get(prov, "environment", nothing)
                 @test env isa AbstractDict
                 @test env["verification"] == "unverified"
-                @test env["reason"] == "unsafe-heterogeneous"
+                @test env["reason"] == "unsafe-skip-env-digests"
             end
         end
 
@@ -137,7 +166,7 @@ function _env_verify_guards()
                         DistSSHRun._mark_workers_launched!([w], proj)
                         parent = DistSSHRun.run_identity(proj)
                         _env_verify_worker_toml_override!(
-                            w, parent, "version" => "1.0.0",
+                            w, parent, "version" => "1.0.0"
                         )
                         err = try
                             DistSSHRun.verify_workers_match_job!(proj)
@@ -150,7 +179,7 @@ function _env_verify_guards()
                         @test occursin("no Manifest", msg)
                         @test occursin("julia version", msg)
                         return nothing
-                    end,
+                    end
                 )
             end
         end
@@ -171,7 +200,7 @@ function _env_verify_guards()
                 mkpath(ver)
                 write(joinpath(ver, "Project.toml"), "name = \"Ver\"\n")
                 vman = joinpath(
-                    ver, "Manifest-v$(VERSION.major).$(VERSION.minor).toml",
+                    ver, "Manifest-v$(VERSION.major).$(VERSION.minor).toml"
                 )
                 write(vman, "# v\n")
                 @test DistSSHRun._existing_project_manifest(ver) == vman
@@ -182,7 +211,7 @@ function _env_verify_guards()
                 mkpath(sub)
                 write(
                     joinpath(ws, "Project.toml"),
-                    "name = \"WsRoot\"\n[workspace]\nmembers = [\"sub\"]\n",
+                    "name = \"WsRoot\"\n[workspace]\nmembers = [\"sub\"]\n"
                 )
                 root_man = joinpath(ws, "Manifest.toml")
                 write(root_man, "# workspace lock\n")
@@ -206,7 +235,7 @@ function _env_verify_guards()
                     manifest_format = "2.0"
                     julia_version = "$(VERSION)"
                     project_hash = "0123456789abcdef0123456789abcdef01234567"
-                    """,
+                    """
                 )
                 @test_throws ErrorException DistSSHRun.assert_controller_manifest_current!(proj)
                 err = try
@@ -218,7 +247,7 @@ function _env_verify_guards()
                 err isa ErrorException || error("expected ErrorException")
                 msg = sprint(showerror, err)
                 @test occursin("not current", msg)
-                @test occursin("unsafe-heterogeneous does not waive", msg)
+                @test occursin("unsafe-skip-env-digests does not waive", msg)
             end
         end
 
@@ -238,8 +267,8 @@ function _env_verify_guards()
                 msg = sprint(showerror, err)
                 @test occursin("not current", msg)
                 @test occursin("no Project.toml or JuliaProject.toml", msg)
-                @test occursin("unsafe-heterogeneous does not waive", msg)
-                DistSSHRun.with_unsafe_heterogeneous(true) do
+                @test occursin("unsafe-skip-env-digests does not waive", msg)
+                DistSSHRun.with_unsafe_skip_env_digests(true) do
                     @test_throws ErrorException DistSSHRun.assert_controller_manifest_current!(bare)
                 end
             end
@@ -256,10 +285,10 @@ function _env_verify_guards()
                     manifest_format = "2.0"
                     julia_version = "$(VERSION)"
                     project_hash = "0123456789abcdef0123456789abcdef01234567"
-                    """,
+                    """
                 )
                 @test_throws ErrorException DistSSHRun.assert_controller_manifest_current!(
-                    julia_only,
+                    julia_only
                 )
             end
         end
@@ -298,22 +327,22 @@ function _env_verify_guards()
 
                             @testset "manifest.sha256" begin
                                 _env_verify_worker_toml_override!(
-                                    w, parent, "manifest.sha256" => "c"^64,
+                                    w, parent, "manifest.sha256" => "c"^64
                                 )
                                 @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
-                                DistSSHRun.with_unsafe_heterogeneous(
-                                    () -> DistSSHRun.verify_workers_match_job!(proj), true,
+                                DistSSHRun.with_unsafe_skip_env_digests(
+                                    () -> DistSSHRun.verify_workers_match_job!(proj), true
                                 )
                             end
                             _env_verify_clear_worker_test_env!(w)
 
                             @testset "project.sha256" begin
                                 _env_verify_worker_toml_override!(
-                                    w, parent, "project.sha256" => "d"^64,
+                                    w, parent, "project.sha256" => "d"^64
                                 )
                                 @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
-                                DistSSHRun.with_unsafe_heterogeneous(
-                                    () -> DistSSHRun.verify_workers_match_job!(proj), true,
+                                DistSSHRun.with_unsafe_skip_env_digests(
+                                    () -> DistSSHRun.verify_workers_match_job!(proj), true
                                 )
                             end
                             _env_verify_clear_worker_test_env!(w)
@@ -321,12 +350,12 @@ function _env_verify_guards()
                             @testset "julia version" begin
                                 parent = DistSSHRun.run_identity(proj)
                                 _env_verify_worker_toml_override!(
-                                    w, parent, "version" => "1.0.0",
+                                    w, parent, "version" => "1.0.0"
                                 )
                                 @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
                                 err = try
-                                    DistSSHRun.with_unsafe_heterogeneous(
-                                        () -> DistSSHRun.verify_workers_match_job!(proj), true,
+                                    DistSSHRun.with_unsafe_skip_env_digests(
+                                        () -> DistSSHRun.verify_workers_match_job!(proj), true
                                     )
                                     nothing
                                 catch e
@@ -342,12 +371,12 @@ function _env_verify_guards()
                                 _env_verify_worker_toml_override!(
                                     w,
                                     parent,
-                                    "commit" => "0000000000000000000000000000000000000000",
+                                    "commit" => "0000000000000000000000000000000000000000"
                                 )
                                 @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
                                 err = try
-                                    DistSSHRun.with_unsafe_heterogeneous(
-                                        () -> DistSSHRun.verify_workers_match_job!(proj), true,
+                                    DistSSHRun.with_unsafe_skip_env_digests(
+                                        () -> DistSSHRun.verify_workers_match_job!(proj), true
                                     )
                                     nothing
                                 catch e
@@ -364,8 +393,8 @@ function _env_verify_guards()
                                 _env_verify_worker_toml_override!(w, parent, "commit" => "")
                                 @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
                                 err = try
-                                    DistSSHRun.with_unsafe_heterogeneous(
-                                        () -> DistSSHRun.verify_workers_match_job!(proj), true,
+                                    DistSSHRun.with_unsafe_skip_env_digests(
+                                        () -> DistSSHRun.verify_workers_match_job!(proj), true
                                     )
                                     nothing
                                 catch e
@@ -381,12 +410,12 @@ function _env_verify_guards()
                                 parent = DistSSHRun.run_identity(proj)
                                 @test haskey(parent, "pkg.DistSSHRun")
                                 _env_verify_worker_toml_override!(
-                                    w, parent, "pkg.DistSSHRun" => "9.9.9",
+                                    w, parent, "pkg.DistSSHRun" => "9.9.9"
                                 )
                                 @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
                                 err = try
-                                    DistSSHRun.with_unsafe_heterogeneous(
-                                        () -> DistSSHRun.verify_workers_match_job!(proj), true,
+                                    DistSSHRun.with_unsafe_skip_env_digests(
+                                        () -> DistSSHRun.verify_workers_match_job!(proj), true
                                     )
                                     nothing
                                 catch e
@@ -400,19 +429,19 @@ function _env_verify_guards()
                             @testset "manifest digest waived under unsafe" begin
                                 parent = DistSSHRun.run_identity(proj)
                                 _env_verify_worker_toml_override!(
-                                    w, parent, "manifest.sha256" => "c"^64,
+                                    w, parent, "manifest.sha256" => "c"^64
                                 )
                                 @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
-                                DistSSHRun.with_unsafe_heterogeneous(
+                                DistSSHRun.with_unsafe_skip_env_digests(
                                     () -> begin
                                         DistSSHRun.verify_workers_match_job!(proj)
                                         prov = DistSSHRun.assemble_provenance()
                                         env = get(prov, "environment", nothing)
                                         @test env isa AbstractDict
                                         @test env["verification"] == "unverified"
-                                        @test env["reason"] == "unsafe-heterogeneous"
+                                        @test env["reason"] == "unsafe-skip-env-digests"
                                     end,
-                                    true,
+                                    true
                                 )
                             end
                             _env_verify_clear_worker_test_env!(w)
@@ -420,7 +449,7 @@ function _env_verify_guards()
                             @testset "non-dict worker snapshot" begin
                                 _env_verify_set_snapshot!(42)
                                 @test_throws ErrorException DistSSHRun.verify_workers_match_job!(proj)
-                                @test_throws ErrorException DistSSHRun.with_unsafe_heterogeneous(true) do
+                                @test_throws ErrorException DistSSHRun.with_unsafe_skip_env_digests(true) do
                                     DistSSHRun.verify_workers_match_job!(proj)
                                 end
                             end
@@ -451,7 +480,7 @@ function _env_verify_guards()
                 w = only(workers())
                 try
                     snap = remotecall_fetch(
-                        Core.eval, w, Main, DistSSHRun._worker_identity_expr(),
+                        Core.eval, w, Main, DistSSHRun._worker_identity_expr()
                     )
                     @test snap isa AbstractDict
                     @test haskey(snap, "pkg.DistSSHRun")
@@ -493,7 +522,7 @@ function _env_verify_guards()
                             DistSSHRun._WORKER_ENV_SNAPSHOT_OVERRIDE[] = nothing
                         end
                         return nothing
-                    end,
+                    end
                 )
             end
         end
@@ -508,7 +537,7 @@ function _env_verify_guards()
                 # `using SHA, TOML` on a job project that does not list them.
                 cmd = addenv(
                     `$bin --startup-file=no --project=$proj -e $(DistSSHRun._PROJECT_IDENTITY_EVAL)`,
-                    "JULIA_LOAD_PATH" => DistSSHRun._LAUNCH_LOAD_PATH,
+                    "JULIA_LOAD_PATH" => DistSSHRun._LAUNCH_LOAD_PATH
                 )
                 out = read(cmd, String)
                 @test occursin("pkg.DistSSHRun=0.2.0-DEV", out)
@@ -522,20 +551,46 @@ function _env_verify_guards()
                 "version" => "1.13.0",
                 "commit" => "abc",
                 "manifest.sha256" => "a"^64,
-                "project.sha256" => "b"^64,
+                "project.sha256" => "b"^64
             )
             worker = Dict(
                 "probe_error" => "identity probe failed on host h (exit 1)\nnot a julia",
                 "version" => "",
-                "commit" => "",
+                "commit" => ""
             )
             lines = DistSSHRun._described_identity_lines(
-                parent, worker, "host h"; unsafe_heterogeneous = false,
+                parent, worker, "host h"; unsafe_skip_env_digests = false
             )
             @test length(lines) == 1
             @test occursin("exit 1", only(lines))
             @test occursin("not a julia", only(lines))
             @test !occursin("cannot determine the Julia build", only(lines))
+        end
+
+        @testset "go parent slot surfaces probe_error like child slots" begin
+            parent = Dict(
+                "version" => string(VERSION),
+                "commit" => string(Base.GIT_VERSION_INFO.commit),
+                "manifest.sha256" => "a"^64,
+                "project.sha256" => "b"^64
+            )
+            local_id = Dict(
+                "probe_error" => "identity probe failed on host parent (exit 127)\nbad julia",
+                "version" => "",
+                "commit" => ""
+            )
+            direct = String[
+                "parent slot: $(line)"
+                    for line in DistSSHRun.identity_mismatches(
+                        parent, local_id; unsafe_skip_env_digests = false
+                    )
+            ]
+            described = DistSSHRun._described_identity_lines(
+                parent, local_id, "parent slot"; unsafe_skip_env_digests = false
+            )
+            @test length(described) == 1
+            @test occursin("exit 127", only(described))
+            @test any(occursin("cannot determine the Julia build", line) for line in direct)
         end
 
         @testset "_remote_project_for_go prefers remote work root" begin
@@ -553,8 +608,8 @@ function _env_verify_guards()
                     Dict(
                         "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia",
                         "DISTSSH_TEST_POSIX_SHELL" => "1",
-                        "DISTSSH_TEST_SSH_LOG" => logp,
-                    ),
+                        "DISTSSH_TEST_SSH_LOG" => logp
+                    )
                 )
                 _with_tempdir() do proj
                     _env_verify_job!(proj)
@@ -577,8 +632,8 @@ function _env_verify_guards()
                     Dict(
                         "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia",
                         "DISTSSH_TEST_POSIX_SHELL" => "1",
-                        "DISTSSH_TEST_SSH_LOG" => logp,
-                    ),
+                        "DISTSSH_TEST_SSH_LOG" => logp
+                    )
                 )
                 controller_home = "/home/controller-user"
                 withenv(merge(env, Dict("HOME" => controller_home))...) do
@@ -600,6 +655,14 @@ function _env_verify_guards()
                     @test !occursin(controller_expanded, script)
                     @test occursin("./runs", script) || occursin("./runs/src", script)
                 end
+                spaced = "~/runs/with spaces/src"
+                withenv(env...) do
+                    isfile(logp) && rm(logp)
+                    DistSSHRun._go_remote_run_identity("host1", spaced, nothing)
+                    script = isfile(logp) ? read(logp, String) : ""
+                    pr = DistSSHRun._remote_shell_path_word(spaced)
+                    @test occursin("--project=$(pr)", script)
+                end
             end
         end
 
@@ -610,8 +673,8 @@ function _env_verify_guards()
                     base,
                     Dict(
                         "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia",
-                        "DISTSSH_TEST_POSIX_SHELL" => "1",
-                    ),
+                        "DISTSSH_TEST_POSIX_SHELL" => "1"
+                    )
                 )
                 _with_tempdir() do proj
                     _env_verify_job!(proj)
@@ -628,26 +691,269 @@ function _env_verify_guards()
                         @testset "$(name)" begin
                             withenv(merge(env, _go_identity_env(parent; tweak = name => tweak_val))...) do
                                 @test_throws ErrorException DistSSHRun.verify_go_slots_match_job!(
-                                    proj, slots; remote_root = proj,
+                                    proj, slots; remote_root = proj
                                 )
                                 if unsafe_ok
-                                    DistSSHRun.with_unsafe_heterogeneous(
+                                    DistSSHRun.with_unsafe_skip_env_digests(
                                         () -> DistSSHRun.verify_go_slots_match_job!(
-                                            proj, slots; remote_root = proj,
+                                            proj, slots; remote_root = proj
                                         ),
-                                        true,
+                                        true
                                     )
                                 else
-                                    @test_throws ErrorException DistSSHRun.with_unsafe_heterogeneous(
+                                    @test_throws ErrorException DistSSHRun.with_unsafe_skip_env_digests(
                                         () -> DistSSHRun.verify_go_slots_match_job!(
-                                            proj, slots; remote_root = proj,
+                                            proj, slots; remote_root = proj
                                         ),
-                                        true,
+                                        true
                                     )
                                 end
                             end
                         end
                     end
+                end
+            end
+        end
+    end
+    return nothing
+end
+
+function _env_verify_activate_worker!(w::Integer, proj::AbstractString)
+    p = String(proj)
+    expr = :(
+        begin
+            using Pkg
+            Pkg.activate($(QuoteNode(p)); io = devnull)
+            nothing
+        end
+    )
+    remotecall_fetch(Core.eval, w, Main, expr)
+    return nothing
+end
+
+function _env_run_id_deploy_record!(proj::AbstractString, rid::AbstractString)
+    pack = DistSSHRun._pack_project_tree(proj)
+    try
+        digest_rows = Any[
+            Dict{String, Any}("path" => p, "blob" => h) for (p, h) in pack.content_file_digests
+        ]
+        rec = DistSSHRun.build_deploy_record(
+            proj,
+            :ship_tree;
+            deploy_id = rid,
+            run_id = rid,
+            content_tree_hash = pack.content_tree_hash,
+            content_file_digests = digest_rows,
+        )
+        DistSSHRun._set_active_deploy_record!(rec)
+        return DistSSHRun.run_identity(proj)
+    finally
+        rm(pack.directory; recursive = true, force = true)
+    end
+end
+
+function _env_run_id_shipped_run_verify_tests()
+    @testset "verify_workers_match_shipped_run!" begin
+        rid = "20260101T000000Z-aaaaaa"
+        @testset "matching deploy record" begin
+            _with_tempdir() do proj
+                _env_verify_job!(proj)
+                test_proj = Base.active_project()
+                try
+                    _with_one_local_worker(
+                        test_proj,
+                        function (w)
+                            _env_verify_activate_worker!(w, proj)
+                            _env_run_id_deploy_record!(proj, rid)
+                            DistSSHRun._mark_workers_launched!([w], proj)
+                            DistSSHRun.verify_workers_match_shipped_run!(proj; run_id = rid)
+                            return nothing
+                        end
+                    )
+                finally
+                    DistSSHRun._clear_active_deploy_record!()
+                end
+            end
+        end
+        @testset "worker Project.toml byte tamper" begin
+            _with_tempdir() do proj
+                _env_verify_job!(proj)
+                test_proj = Base.active_project()
+                try
+                    _with_one_local_worker(
+                        test_proj,
+                        function (w)
+                            _env_verify_activate_worker!(w, proj)
+                            _env_run_id_deploy_record!(proj, rid)
+                            DistSSHRun._mark_workers_launched!([w], proj)
+                            remotecall_fetch(w) do
+                                pf = Base.active_project()
+                                pf === nothing && error("worker has no active project")
+                                path = isfile(pf) ? String(pf) : joinpath(String(pf), "Project.toml")
+                                open(path, "r+") do io
+                                    seekend(io)
+                                    write(io, UInt8(' '))
+                                end
+                                return nothing
+                            end
+                            err = try
+                                DistSSHRun.verify_workers_match_shipped_run!(proj; run_id = rid)
+                                ""
+                            catch e
+                                sprint(showerror, e)
+                            end
+                            @test occursin("project.sha256", err)
+                            deploy = match(r"deploy=([0-9a-f]+)", err)
+                            worker = match(r"worker=([0-9a-f]+)", err)
+                            @test deploy !== nothing
+                            @test worker !== nothing
+                            @test length(deploy.captures[1]) == length(worker.captures[1])
+                            return nothing
+                        end
+                    )
+                finally
+                    DistSSHRun._clear_active_deploy_record!()
+                end
+            end
+        end
+        @testset "unsafe skip env digests" begin
+            _with_tempdir() do proj
+                _env_verify_job!(proj)
+                test_proj = Base.active_project()
+                try
+                    _with_one_local_worker(
+                        test_proj,
+                        function (w)
+                            parent = DistSSHRun.run_identity(proj)
+                            _env_run_id_deploy_record!(proj, rid)
+                            DistSSHRun._mark_workers_launched!([w], proj)
+                            other = copy(parent)
+                            other["project.sha256"] = repeat("f", 64)
+                            DistSSHRun._WORKER_ENV_SNAPSHOT_OVERRIDE[] = _ -> other
+                            try
+                                DistSSHRun.with_unsafe_skip_env_digests(
+                                    () -> DistSSHRun.verify_workers_match_shipped_run!(
+                                        proj; run_id = rid
+                                    ),
+                                    true
+                                )
+                            finally
+                                DistSSHRun._WORKER_ENV_SNAPSHOT_OVERRIDE[] = nothing
+                            end
+                            return nothing
+                        end
+                    )
+                finally
+                    DistSSHRun._clear_active_deploy_record!()
+                end
+            end
+        end
+        @testset "heterogeneous worker digests" begin
+            _with_tempdir() do proj
+                _env_verify_job!(proj)
+                test_proj = Base.active_project()
+                try
+                    ws = _env_verify_add_local_workers(2, test_proj)
+                    parent = _env_run_id_deploy_record!(proj, rid)
+                    DistSSHRun._mark_workers_launched!(ws, proj)
+                    other = copy(parent)
+                    other["manifest.sha256"] = repeat("a", 64)
+                    DistSSHRun._WORKER_ENV_SNAPSHOT_OVERRIDE[] =
+                        pid -> pid == ws[1] ? parent : other
+                    try
+                        @test_throws ErrorException DistSSHRun.verify_workers_match_shipped_run!(
+                            proj; run_id = rid
+                        )
+                    finally
+                        DistSSHRun._WORKER_ENV_SNAPSHOT_OVERRIDE[] = nothing
+                    end
+                finally
+                    _env_verify_solo_workers!()
+                    DistSSHRun._clear_active_deploy_record!()
+                end
+            end
+        end
+        @testset "digest mismatch vs deploy record" begin
+            _with_tempdir() do proj
+                _env_verify_job!(proj)
+                test_proj = Base.active_project()
+                try
+                    _with_one_local_worker(
+                        test_proj,
+                        function (w)
+                            _env_verify_activate_worker!(w, proj)
+                            pack = DistSSHRun._pack_project_tree(proj)
+                            digest_rows = try
+                                Any[
+                                    Dict{String, Any}("path" => p, "blob" => h)
+                                        for (p, h) in pack.content_file_digests
+                                ]
+                            finally
+                                rm(pack.directory; recursive = true, force = true)
+                            end
+                            rec = DistSSHRun.build_deploy_record(
+                                proj,
+                                :ship_tree;
+                                deploy_id = rid,
+                                run_id = rid,
+                                content_file_digests = digest_rows,
+                            )
+                            rec["project_hash"] = repeat("b", 64)
+                            DistSSHRun._set_active_deploy_record!(rec)
+                            DistSSHRun._mark_workers_launched!([w], proj)
+                            @test_throws ErrorException DistSSHRun.verify_workers_match_shipped_run!(
+                                proj; run_id = rid
+                            )
+                            return nothing
+                        end
+                    )
+                finally
+                    DistSSHRun._clear_active_deploy_record!()
+                end
+            end
+        end
+        @testset "last-ship.toml does not substitute deploy record" begin
+            _with_tempdir() do proj
+                _env_verify_job!(proj)
+                env = DistSSHRun.resolve_pkg_env(proj)
+                DistSSHRun.write_last_ship_record!(
+                    env.env_dir,
+                    proj,
+                    ["host1"],
+                    "20260102T000000Z-bbbbbb",
+                )
+                DistSSHRun._clear_active_deploy_record!()
+                @test_throws ErrorException DistSSHRun.verify_workers_match_shipped_run!(
+                    proj; run_id = rid
+                )
+            end
+        end
+        @testset "explicit run_id must match active deploy record run_id" begin
+            _with_tempdir() do proj
+                _env_verify_job!(proj)
+                _env_run_id_deploy_record!(proj, rid)
+                @test_throws ErrorException DistSSHRun.verify_workers_match_shipped_run!(
+                    proj; run_id = "20260102T000000Z-bbbbbb"
+                )
+                DistSSHRun._clear_active_deploy_record!()
+            end
+        end
+        @testset "missing manifest_hash on deploy record" begin
+            _with_tempdir() do proj
+                _env_verify_job!(proj)
+                rec = Dict{String, Any}(
+                    "schema" => 1,
+                    "mode" => "ship-tree",
+                    "run_id" => rid,
+                    "project_hash" => "a"^64,
+                )
+                DistSSHRun._set_active_deploy_record!(rec)
+                try
+                    @test_throws ErrorException DistSSHRun.verify_workers_match_shipped_run!(
+                        proj; run_id = rid
+                    )
+                finally
+                    DistSSHRun._clear_active_deploy_record!()
                 end
             end
         end

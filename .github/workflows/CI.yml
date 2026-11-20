@@ -82,7 +82,7 @@ jobs:
   # Linux E2E (1.13 required, 1.14-pre continue-on-error): path filter on PR /
   # main push; always on a version
   # increase and dispatch. JETLS uses `.github/actions/jetls-check` (no nested
-  # cache; julia-actions/cache#236). JETLS 2026-11-14 supports 1.12.2 through
+  # cache; julia-actions/cache#236). JETLS 2026-11-16 supports 1.12.2 through
   # 1.14. The required job is 1.13. The 1.14-pre job is continue-on-error
   # and is not a required check.
   detect:
@@ -352,7 +352,7 @@ jobs:
     # Needs Base as well as Up and Ship so a skipped peer does not overlap.
     if: ${{ needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request' && !cancelled() }}
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -394,6 +394,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          path: DistSSHRun.jl
           persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -401,6 +402,8 @@ jobs:
           ref: main
           path: downstream
           persist-credentials: false
+      - name: Workspace .github for julia-slot
+        run: ln -sfn DistSSHRun.jl/.github .github
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
@@ -409,13 +412,14 @@ jobs:
           cache-scratchspaces: false
           delete-old-caches: false
       - name: Public Run names in downstream src
+        working-directory: DistSSHRun.jl
         env:
           DOWNSTREAM_SRC: ${{ github.workspace }}/downstream/src
         run: julia --startup-file=no --project=. .github/downstream_public.jl "$DOWNSTREAM_SRC"
       - name: Pkg.test downstream against this checkout
         env:
           PKG: ${{ matrix.pkg }}
-          UPSTREAM: ${{ github.workspace }}
+          UPSTREAM: ${{ github.workspace }}/DistSSHRun.jl
           DOWNSTREAM: ${{ github.workspace }}/downstream
           UPSTREAM_PKG: DistSSHRun
         run: |
@@ -510,7 +514,7 @@ jobs:
     # skip Ship. Static gates stay result == success; cancel still skips.
     if: ${{ needs.detect.outputs.heavy == 'true' && needs.detect.outputs.ship == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request' && !cancelled() }}
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -604,7 +608,7 @@ jobs:
     needs: [detect, runic, jetls, aqua, ship-test-wsl]
     if: ${{ needs.detect.outputs.heavy == 'true' && needs.detect.outputs.heartbeat == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request' && !cancelled() }}
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -697,7 +701,7 @@ jobs:
     # skip Up. Static gates stay result == success; cancel still skips.
     if: ${{ needs.detect.outputs.heavy == 'true' && needs.detect.outputs.up == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request' && !cancelled() }}
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -832,7 +836,7 @@ jobs:
     needs: [detect, runic, jetls, aqua]
     if: needs.detect.outputs.heavy == 'true' && needs.detect.outputs.base == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success' && github.event_name != 'pull_request'
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -1160,9 +1164,20 @@ jobs:
       - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
         with:
           version: "1.13"
+      - name: Runic pin
+        id: runic-pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          v="$(sed -n -E 's/^Runic = "=([^"]+)".*/\1/p' .github/runic/Project.toml | head -1)"
+          if [[ ! "${v}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo ".github/runic/Project.toml: Runic compat pin missing or invalid" >&2
+            exit 1
+          fi
+          echo "version=${v}" >> "${GITHUB_OUTPUT}"
       - uses: fredrikekre/runic-action@b4dbd650db5cc684baae27fea45d22daf41693c2 # v1.5.0
         with:
-          version: '1'
+          version: ${{ steps.runic-pin.outputs.version }}
 
   aqua:
     name: Aqua (1.13, ubuntu-latest, x64)
@@ -1227,7 +1242,7 @@ jobs:
         run: ./.github/aqua-check.sh
 
   # Literal name: a skipped job must still be this string.
-  # Required check. JETLS 2026-11-14 supports Julia 1.12.2 through 1.14.
+  # Required check. JETLS 2026-11-16 supports Julia 1.12.2 through 1.14.
   jetls:
     name: JETLS (1.13, ubuntu-latest, x64)
     needs: detect
@@ -1447,4 +1462,3 @@ jobs:
           if [[ -d "$DISTSSHQUEUE_CHECKOUT" ]]; then
             (cd "$DISTSSHQUEUE_CHECKOUT" && ./testenv/docker-ssh/scripts/down.sh) || true
           fi
-

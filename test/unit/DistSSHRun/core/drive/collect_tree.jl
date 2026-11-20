@@ -10,13 +10,14 @@ function _collect!(
         out_dir::AbstractString,
         hosts::Vector{String};
         merge::Bool = false,
+        best_effort::Bool = false,
     )
     session = DistSSHRun.DistSSHSession(
         project = proj,
         workers = hosts,
-        remote = "/fake/remote/CollectHost",
+        remote = "/fake/remote/CollectHost"
     )
-    return DistSSHRun.collect!(session, out_dir; merge = merge)
+    return DistSSHRun.collect!(session, out_dir; merge = merge, best_effort = best_effort)
 end
 
 @testset "drive collect_tree" begin
@@ -75,13 +76,13 @@ end
                         "DISTSSH_TEST_JULIA_WHICH" => "/usr/bin/julia",
                         # Absolute fake remotes are not a real git tree; selection
                         # still requires a Project.toml probe. Force the git path.
-                        "DISTSSH_TEST_SNAP_GIT_YES" => "1",
+                        "DISTSSH_TEST_SNAP_GIT_YES" => "1"
                     ),
-                    extra_env,
+                    extra_env
                 )
                 DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!()
                 withenv(env...) do
-                    DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true, yes = true))
+                    DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true))
                     return f(state_dir, proj)
                 end
             end
@@ -94,10 +95,25 @@ end
             mkpath(out_dir)
             with_kit_verbosity(:verbose) do
                 captured, result = _capture_stdio() do _, _
-                    _collect!(proj, out_dir, ["child:host1"])
+                    _collect!(proj, out_dir, ["host1"])
                 end
-                @test result.ok
+                @test !result.ok
                 @test occursin("no directory on host", captured)
+                @test occursin("Collect skipped hosts", captured)
+                @test occursin("--best-effort", captured)
+                @test length(result.skipped) == 1
+                @test result.skipped[1].first == "host1"
+            end
+        end
+        _with_collect() do _, proj
+            out_dir = joinpath(proj, "out")
+            mkpath(out_dir)
+            with_kit_verbosity(:verbose) do
+                captured, result = _capture_stdio() do _, _
+                    _collect!(proj, out_dir, ["host1"]; best_effort = true)
+                end
+                @test !result.ok
+                @test occursin("every host was skipped", captured)
             end
         end
     end
@@ -109,10 +125,27 @@ end
             mkpath(out_dir)
             with_kit_verbosity(:verbose) do
                 captured, result = _capture_stdio() do _, _
-                    _collect!(proj, out_dir, ["child:host1"])
+                    _collect!(proj, out_dir, ["host1"])
                 end
                 @test result.ok
                 @test occursin("no files found", captured)
+            end
+        end
+    end
+
+    @testset "best-effort continues when one host collects" begin
+        _with_collect() do state_dir, proj
+            _seed_tree!(state_dir, "host2", "a.txt")
+            out_dir = joinpath(proj, "out")
+            mkpath(out_dir)
+            with_kit_verbosity(:verbose) do
+                captured, result = _capture_stdio() do _, _
+                    _collect!(proj, out_dir, ["host1", "host2"]; best_effort = true)
+                end
+                @test result.ok
+                @test occursin("Collect skipped hosts", captured)
+                @test any(p -> p.first == "host1", result.skipped)
+                @test occursin("1 file", captured)
             end
         end
     end
@@ -124,7 +157,7 @@ end
             mkpath(out_dir)
             with_kit_verbosity(:verbose) do
                 captured, result = _capture_stdio() do _, _
-                    _collect!(proj, out_dir, ["child:host1"])
+                    _collect!(proj, out_dir, ["host1"])
                 end
                 @test result.ok
                 @test occursin("1 file", captured)
@@ -142,7 +175,7 @@ end
             write(joinpath(out_dir, "a.txt"), "local\n")
             with_kit_verbosity(:verbose) do
                 captured, result = _capture_stdio() do _, _
-                    _collect!(proj, out_dir, ["child:host1"])
+                    _collect!(proj, out_dir, ["host1"])
                 end
                 @test result.ok
                 @test occursin("nothing new", captured)
@@ -158,7 +191,7 @@ end
             mkpath(out_dir)
             with_kit_verbosity(:verbose) do
                 captured, result = _capture_stdio() do _, _
-                    _collect!(proj, out_dir, ["child:host1"]; merge = true)
+                    _collect!(proj, out_dir, ["host1"]; merge = true)
                 end
                 @test result.ok
                 @test occursin("synced", captured)
@@ -174,11 +207,12 @@ end
             mkpath(out_dir)
             with_kit_verbosity(:verbose) do
                 captured, result = _capture_stdio() do _, _
-                    _collect!(proj, out_dir, ["child:host1"]; merge = true)
+                    _collect!(proj, out_dir, ["host1"]; merge = true)
                 end
                 @test !result.ok
                 @test result.exit_code == 1
-                @test occursin("some hosts failed", captured)
+                @test occursin("Collect failed", captured)
+                @test !isempty(result.skipped)
             end
         end
     end
@@ -191,11 +225,12 @@ end
             mkpath(out_dir)
             with_kit_verbosity(:verbose) do
                 captured, result = _capture_stdio() do _, _
-                    _collect!(proj, out_dir, ["child:host1"])
+                    _collect!(proj, out_dir, ["host1"])
                 end
                 @test !result.ok
                 @test !occursin("no files found", captured)
-                @test occursin("some hosts failed", captured)
+                @test occursin("Collect failed", captured)
+                @test !isempty(result.skipped)
             end
         end
     end
@@ -209,7 +244,7 @@ end
             mkpath(out)
             withenv("DISTRIBUTED_OUTPUT_DIR" => out) do
                 ok, hrs = DistSSHRun.collect_drive_results!(
-                    ["host1"], dirname(script), ".drive_sentinel_x", false, proj, proj,
+                    ["host1"], dirname(script), ".drive_sentinel_x", false, proj, proj
                 )
                 @test !ok
                 @test length(hrs) == 1
@@ -249,14 +284,14 @@ end
             mkpath(joinpath(state_dir, "shared", "tree"))
             withenv("DISTRIBUTED_OUTPUT_DIR" => out) do
                 base = DistSSHRun.place_drive_sentinels!(
-                    ["host1", "host2"], dirname(script), false, proj,
+                    ["host1", "host2"], dirname(script), false, proj
                 )
                 # After sentinels: a real `find -newer` includes this file.
                 write(joinpath(state_dir, "shared", "tree", "a.txt"), "x\n")
                 @test !isempty(base)
                 captured, (ok, hrs) = _capture_stdio() do _, _
                     DistSSHRun.collect_drive_results!(
-                        ["host1", "host2"], dirname(script), base, false, proj, proj,
+                        ["host1", "host2"], dirname(script), base, false, proj, proj
                     )
                 end
                 @test ok
@@ -264,7 +299,7 @@ end
                 @test occursin("more than one host", captured)
                 @test !any(
                     f -> startswith(f, ".drive_sentinel_"),
-                    Iterators.flatten((files for (_, _, files) in walkdir(out))),
+                    Iterators.flatten((files for (_, _, files) in walkdir(out)))
                 )
             end
         end
@@ -312,11 +347,11 @@ end
             write(script, "true\n")
             withenv(
                 "DISTSSH_TEST_SSH_LOG" => logp,
-                "DISTRIBUTED_COLLECT_DIRS" => ".",
+                "DISTRIBUTED_COLLECT_DIRS" => "."
             ) do
                 captured, name = _capture_stdio() do _, _
                     DistSSHRun.place_drive_sentinels!(
-                        ["host1"], dirname(script), false, proj,
+                        ["host1"], dirname(script), false, proj
                     )
                 end
                 @test name === nothing
@@ -328,7 +363,7 @@ end
             mkpath(joinpath(state_dir, "host1", "tree"))
             with_kit_verbosity(:verbose) do
                 captured, result = _capture_stdio() do _, _
-                    _collect!(proj, proj, ["child:host1"])
+                    _collect!(proj, proj, ["host1"])
                 end
                 @test !result.ok
                 @test result.exit_code == 1
@@ -342,7 +377,7 @@ end
 
     @testset "collect warnings are ordered and find stderr is kept" begin
         e = DistSSHRun._collect_find_failure(
-            "host1", ErrorException("fail"), "find: no such file\n",
+            "host1", ErrorException("fail"), "find: no such file\n"
         )
         @test e.msg == "collect find -newer on host1: fail: find: no such file"
         long = DistSSHRun._collect_find_failure("h", ErrorException("x"), "e"^300)
@@ -354,8 +389,8 @@ end
                     ("root", "b.txt") => ["z", "a", "a"],
                     ("root", "a.txt") => ["m", "a"],
                     ("root-b", "same.txt") => ["m", "b"],
-                    ("root-a", "same.txt") => ["z", "a"],
-                ),
+                    ("root-a", "same.txt") => ["z", "a"]
+                )
             )
         end
         @test lines == [

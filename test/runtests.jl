@@ -71,11 +71,14 @@ end
         @testset "unit" verbose = true begin
             _runtest_include("unit/DistSSHRun/messages/display.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "messages", "display.jl"))
             _runtest_include("unit/DistSSHRun/explain.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "explain.jl"))
+            _runtest_include("unit/DistSSHRun/messages/placement.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "messages", "placement.jl"))
             _runtest_include("unit/DistSSHRun/infra/remote.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "remote.jl"))
             _runtest_include("unit/DistSSHRun/infra/distributed.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "distributed.jl"))
+            _runtest_include("unit/DistSSHRun/infra/loaded_identity.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "loaded_identity.jl"))
             _runtest_include("unit/DistSSHRun/drive.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "drive.jl"))
             _runtest_include("unit/DistSSHRun/core/drive/collect_tree.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "drive", "collect_tree.jl"))
             _runtest_include("unit/DistSSHRun/core/drive/warn_newline.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "drive", "warn_newline.jl"))
+            _runtest_include("unit/DistSSHRun/core/drive/preflight_best_effort.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "drive", "preflight_best_effort.jl"))
             _runtest_include("unit/DistSSHRun/core/drive/progress_nolog_stdio.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "drive", "progress_nolog_stdio.jl"))
             _runtest_include("unit/DistSSHRun/core/drive/progress_tty_payload.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "drive", "progress_tty_payload.jl"))
             if !_distsshrun_short_skip("unit/DistSSHRun/core/drive/workers.jl")
@@ -84,6 +87,10 @@ end
                 _runtest_announce("unit/DistSSHRun/core/drive/workers.jl")
             end
             _runtest_include("unit/DistSSHRun/options/heartbeat.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "options", "heartbeat.jl"))
+            _runtest_include("unit/DistSSHRun/options/config.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "options", "config.jl"))
+            _runtest_include("unit/DistSSHRun/options/job_options.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "options", "job_options.jl"))
+            _runtest_include("unit/DistSSHRun/infra/detached_job_blob.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "detached_job_blob.jl"))
+            _runtest_include("unit/DistSSHRun/execute_envelope.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "execute_envelope.jl"))
             _runtest_include("unit/DistSSHRun/infra/worker_plan.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "worker_plan.jl"))
             _runtest_include("unit/DistSSHRun/hostinfo.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "hostinfo.jl"))
             _runtest_include("unit/DistSSHRun/go.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "go.jl"))
@@ -92,6 +99,15 @@ end
             _runtest_include("unit/DistSSHRun/pool.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "pool.jl"))
             _runtest_include("unit/DistSSHRun/module.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "module.jl"))
             _runtest_include("unit/DistSSHRun/infra/launch.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "launch.jl"))
+            _runtest_include("unit/DistSSHRun/infra/cluster_manager_api.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "cluster_manager_api.jl"))
+            _runtest_include("unit/DistSSHRun/infra/seed_golden.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "seed_golden.jl"))
+            _runtest_include("unit/DistSSHRun/infra/topology.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "topology.jl"))
+            _runtest_include("unit/DistSSHRun/infra/bind_overrides.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "bind_overrides.jl"))
+            _runtest_include("unit/DistSSHRun/infra/bind_pre_ssh.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "bind_pre_ssh.jl"))
+            _runtest_include("unit/DistSSHRun/infra/bind_contract.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "bind_contract.jl"))
+            _runtest_include("unit/DistSSHRun/infra/bind_contract_table.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "bind_contract_table.jl"))
+            _runtest_include("unit/DistSSHRun/infra/bind_gaps.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "bind_gaps.jl"))
+            _runtest_include("unit/DistSSHRun/cli_bind_entry.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "cli_bind_entry.jl"))
             if !_distsshrun_short_skip("unit/DistSSHRun/execute.jl")
                 _runtest_include("unit/DistSSHRun/execute.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "execute.jl"))
             else
@@ -117,6 +133,10 @@ end
             _runtest_include("unit/DistSSHRun/core/setup/tree_copy.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "setup", "tree_copy.jl"))
             _runtest_include("unit/DistSSHRun/infra/ship.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "ship.jl"))
             _runtest_include("unit/DistSSHRun/infra/deploy_record.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "deploy_record.jl"))
+            _runtest_include(
+                "unit/DistSSHRun/infra/placement_ssh_argv_surfaces.jl",
+                joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "placement_ssh_argv_surfaces.jl"),
+            )
             _runtest_include("unit/DistSSHRun/infra/run_transfer_removed.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "run_transfer_removed.jl"))
             _runtest_include("unit/DistSSHRun/infra/source_selection.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "source_selection.jl"))
             _runtest_include("unit/DistSSHRun/infra/ship_list.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "ship_list.jl"))
@@ -124,6 +144,7 @@ end
             _runtest_include("unit/DistSSHRun/infra/ship_fake_ssh_child_env.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "ship_fake_ssh_child_env.jl"))
             _runtest_include("unit/DistSSHRun/infra/ship_dest.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "ship_dest.jl"))
             _runtest_include("unit/DistSSHRun/infra/ship_engine_contract.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "ship_engine_contract.jl"))
+            _runtest_include("unit/DistSSHRun/ssh_e2e_ship_contract.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "ssh_e2e_ship_contract.jl"))
             if !_distsshrun_short_skip("unit/DistSSHRun/core/setup/send_list.jl")
                 _runtest_include("unit/DistSSHRun/core/setup/send_list.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "setup", "send_list.jl"))
             else
@@ -135,9 +156,12 @@ end
             _runtest_include("unit/cli/up/args.jl", joinpath(@__DIR__, "unit", "cli", "up", "args.jl"))
             _runtest_include("unit/cli/setup/using_guard.jl", joinpath(@__DIR__, "unit", "cli", "setup", "using_guard.jl"))
             _runtest_include("unit/cli/setup/main.jl", joinpath(@__DIR__, "unit", "cli", "setup", "main.jl"))
+            _runtest_include("unit/cli/setup/check_removed.jl", joinpath(@__DIR__, "unit", "cli", "setup", "check_removed.jl"))
+            _runtest_include("unit/cli/doctor/main.jl", joinpath(@__DIR__, "unit", "cli", "doctor", "main.jl"))
             _runtest_include("unit/cli/hostinfo/args.jl", joinpath(@__DIR__, "unit", "cli", "hostinfo", "args.jl"))
             _runtest_include("unit/cli/pool/args.jl", joinpath(@__DIR__, "unit", "cli", "pool", "args.jl"))
             _runtest_include("unit/cli/ride/args.jl", joinpath(@__DIR__, "unit", "cli", "ride", "args.jl"))
+            _runtest_include("unit/cli/exit_conventions.jl", joinpath(@__DIR__, "unit", "cli", "exit_conventions.jl"))
             _runtest_include("unit/cli/subcommands_main.jl", joinpath(@__DIR__, "unit", "cli", "subcommands_main.jl"))
         end
     end # unit group

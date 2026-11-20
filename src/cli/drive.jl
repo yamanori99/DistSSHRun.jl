@@ -3,7 +3,7 @@
 `julia -m DistSSHKit drive` — run a driver on local/SSH workers, then collect remote outputs.
 
   julia --project=. -m DistSSHKit drive
-  julia --project=. -m DistSSHKit drive parent:9 child:host1:10 script.jl
+  julia --project=. -m DistSSHKit drive parent:9 10*host1 script.jl
   julia --project=. -m DistSSHKit drive --collect-missing data/out host1 host2
 
 See `--help`.
@@ -34,20 +34,22 @@ function _restore_drive_args!(original_args::Vector{String})
 end
 
 function drive_main()::Cint
-    original_args = copy(ARGS)
-    try
-        # CLI: the frame throws `_DriveProcessInterrupt` after cleanup.
-        return DistSSHRun._drive_frame(; cli = true) do
-            return _drive_main_body(original_args)
+    return DistSSHRun.DistSSHBase.with_cli_exit() do
+        original_args = copy(ARGS)
+        try
+            # CLI: the frame throws `_DriveProcessInterrupt` after cleanup.
+            return DistSSHRun._drive_frame(; cli = true) do
+                return _drive_main_body(original_args)
+            end
+        finally
+            _restore_drive_args!(original_args)
         end
-    finally
-        _restore_drive_args!(original_args)
     end
 end
 
 function _drive_main_body(original_args::Vector{String})::Cint
     try
-        parsed = parse_drive_args(ARGS)
+        parsed = DistSSHRun.DistSSHBase.cli_parse(() -> parse_drive_args(ARGS))
         return run_drive_parsed!(
             parsed;
             original_args = original_args,

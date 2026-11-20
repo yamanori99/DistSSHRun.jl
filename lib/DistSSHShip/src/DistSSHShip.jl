@@ -25,6 +25,7 @@ include("project.jl")
 include("select.jl")
 include("deps.jl")
 include("contain.jl")
+include("tree_manifest.jl")
 include("pack.jl")
 include("record.jl")
 include("ship.jl")
@@ -41,6 +42,14 @@ public ShipProject
 public Shipment
 public ShipmentReceipt
 public content_tree_hash
+public content_file_digests
+public chmod_shipped_files_readonly!
+public source_had_execute_bit
+public shipped_regular_file_mode
+public apply_shipped_tree_file_modes!
+public shipped_file_digest_mismatches
+public shipped_file_mode_violations
+public shipped_tree_verify_error
 public assert_extracted_tree_contained!
 public shipment_record_logical_path
 public build_shipment_record

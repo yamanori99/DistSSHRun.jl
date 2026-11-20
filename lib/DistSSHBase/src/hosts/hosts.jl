@@ -3,13 +3,13 @@
 """Reserved token for this job's parent (not an SSH host)."""
 const PARENT_HOST_NAME = "parent"
 
-"""Prefix for an SSH child (`child:NAME` / `child:NAME:N`)."""
+"""Prefix for an SSH child (`NAME` / `NAME:N`)."""
 const CHILD_TOKEN_PREFIX = "child:"
 
 """Whether `host` denotes this job's parent in drive/go/hostinfo.
 
 Only `parent` matches. `parenthost` is rejected by `parse_placement_token`.
-A token `local` / `localhost` / `l` is an ordinary SSH child (`child:local`).
+A token `local` / `localhost` / `l` is an ordinary SSH child (`local`).
 
 # Examples
 ```jldoctest
@@ -32,12 +32,27 @@ function is_parent_host_name(host_name::AbstractString)::Bool
     return String(host_name) == PARENT_HOST_NAME
 end
 
+"""Reject the removed `parent` / `parent:N` token (head row is always implicit)."""
+function throw_removed_parent_placement_token!(context::AbstractString, raw::AbstractString)
+    s = String(strip(raw))
+    base = contains(s, ':') ? strip(split(s, ':'; limit = 2)[1]) : s
+    is_parent_host_name(base) || return nothing
+    throw(
+        ArgumentError(
+            join_explained_message(
+                "$(context): $(repr(raw)) was removed",
+                "The head machine is always listed first; name SSH hosts only.",
+            ),
+        ),
+    )
+end
+
 """`ArgumentError` for removed `--local` / `-l`."""
 function throw_removed_local_flag(arg::AbstractString)
     a = String(arg)
     throw(
         ArgumentError(
-            "$(a) was removed; use $(PARENT_HOST_NAME) / $(PARENT_HOST_NAME):N",
+            "$(a) was removed; use --head-workers N",
         )
     )
 end
@@ -56,21 +71,16 @@ function _placement_count_suffix(spec::AbstractString)::Tuple{String, Union{Noth
     return s, nothing
 end
 
-"""Format a go/drive/hostinfo token (`parent[:N]` or `child:NAME[:N]`)."""
+"""Format a machine placement token (`N*host` or bare host)."""
 function format_placement_token(
         role::Symbol,
         name::String,
         n::Union{Nothing, Integer} = nothing,
     )::String
-    nn = n === nothing ? nothing : Int(n)
-    if role === :parent
-        nn === nothing && return PARENT_HOST_NAME
-        return string(PARENT_HOST_NAME, ":", nn)
-    elseif role === :child
-        nn === nothing && return CHILD_TOKEN_PREFIX * name
-        return string(CHILD_TOKEN_PREFIX, name, ":", nn)
-    end
-    throw(ArgumentError("format_placement_token: role must be :parent or :child, got $(repr(role))"))
+    role === :parent &&
+        throw(ArgumentError("format_placement_token: head workers use --head-workers, not tokens"))
+    nn = something(n === nothing ? 1 : Int(n), 1)
+    return format_machine_token(nn, name)
 end
 
 format_placement_token(
@@ -80,16 +90,92 @@ format_placement_token(
 ) = format_placement_token(role, name isa String ? name : string(name), n)
 
 const _PLACEMENT_HINT =
-    "use `parent[:N]` or `child:NAME[:N]` (setup / hostinfo ignore `:N`)"
+    "use `N*[user@]host[:port]` (quote `--hosts` so the shell does not glob `*`); bare host = 1 worker"
 
-"""Hostname inside `user@host`, `host:path`, or `[::1]:path`."""
+const IPV6_SSH_PLACEMENT_HINT =
+    "use an SSH config Host alias instead of an IPv6 literal (in ~/.ssh/config: Host lab6, HostName ::1); then use lab6 or lab6:2222 in --hosts"
+
+"""Strip a remote path (`host:/path`) from the host side; return `host` only."""
+function _ssh_hostpart_strip_remote_path(rest::AbstractString)::String
+    r = String(rest)
+    colon = findfirst(':', r)
+    if colon !== nothing && colon < length(r) && r[colon + 1] == '/'
+        return r[1:(colon - 1)]
+    end
+    return r
+end
+
+"""
+Host side used for IPv6 rejection (`user@host`, optional `:port`, no remote path).
+
+Remote paths (`host:/tmp/x:y`) keep only the host name before `:/` so colons in
+the path are not treated as IPv6.
+"""
+function _ssh_hostpart_for_ipv6_check(dest::AbstractString)::String
+    d = String(strip(dest))
+    at = findlast('@', d)
+    rest = at === nothing ? d : d[(at + 1):end]
+    rest = _ssh_hostpart_strip_remote_path(rest)
+    startswith(rest, "[") && return rest
+    _hostpart_looks_like_ipv6_literal(rest) && return rest
+    colon = findlast(':', rest)
+    if colon !== nothing
+        port_str = rest[(colon + 1):end]
+        if tryparse(Int, port_str) !== nothing && findnext(':', rest, colon + 1) === nothing
+            return rest[1:(colon - 1)]
+        end
+    end
+    return rest
+end
+
+"""Host part of a placement endpoint (`user@host` or `host`, without `:port`)."""
+function _ssh_hostpart_for_placement(dest::AbstractString)::String
+    d = String(strip(dest))
+    at = findlast('@', d)
+    hostpart = at === nothing ? d : d[(at + 1):end]
+    hostpart = _ssh_hostpart_strip_remote_path(hostpart)
+    startswith(hostpart, "[") && return hostpart
+    _hostpart_looks_like_ipv6_literal(hostpart) && return hostpart
+    colon = findlast(':', hostpart)
+    colon === nothing && return hostpart
+    findnext(':', hostpart, colon + 1) !== nothing && return hostpart
+    port_str = hostpart[(colon + 1):end]
+    tryparse(Int, port_str) === nothing && return hostpart
+    return hostpart[1:(colon - 1)]
+end
+
+function _hostpart_looks_like_ipv6_literal(hostpart::AbstractString)::Bool
+    h = String(strip(hostpart))
+    isempty(h) && return false
+    startswith(h, "[") && return true
+    occursin('%', h) && return true
+    colon = findfirst(':', h)
+    colon === nothing && return false
+    return findnext(':', h, colon + 1) !== nothing
+end
+
+"""Reject bracketed or bare IPv6 literals in placement tokens and SSH endpoints.
+
+`shown` is the user-facing token or host string; it is quoted once in the message.
+"""
+function reject_ipv6_ssh_host!(
+        shown::AbstractString,
+        hostpart::AbstractString,
+    )::Nothing
+    _hostpart_looks_like_ipv6_literal(hostpart) || return nothing
+    throw(
+        ArgumentError(
+            join_explained_message(
+                "$(repr(String(shown))): IPv6 literals are not supported in host tokens or SSH endpoints",
+                "Hint: $IPV6_SSH_PLACEMENT_HINT",
+            ),
+        ),
+    )
+end
+
+"""Hostname inside `user@host` or `host:path`."""
 function _ssh_host_label(dest::AbstractString)::String
     d = String(dest)
-    if startswith(d, "[")
-        close = findfirst(']', d)
-        close === nothing && return d
-        return d[1:close]
-    end
     at = findlast('@', d)
     rest = at === nothing ? d : d[(at + 1):end]
     colon = findfirst(':', rest)
@@ -106,7 +192,9 @@ stripped. `parent` is not an SSH destination.
 function validate_ssh_host(host::AbstractString; shown::Union{Nothing, AbstractString} = nothing)::String
     h = String(strip(host))
     label = _ssh_host_label(h)
-    text = repr(shown === nothing ? h : String(shown))
+    shown_text = shown === nothing ? h : String(shown)
+    text = repr(shown_text)
+    reject_ipv6_ssh_host!(shown_text, _ssh_hostpart_for_ipv6_check(h))
     if isempty(h) || isempty(label)
         throw(ArgumentError("$text: empty host name. See help setup."))
     end
@@ -141,36 +229,7 @@ Returns `(role, name, n)` where `role` is `:parent` or `:child`, `name` is
 function parse_placement_token(
         spec::AbstractString,
     )::NamedTuple{(:role, :name, :n), Tuple{Symbol, String, Union{Nothing, Int}}}
-    s = strip(String(spec))
-    isempty(s) && throw(ArgumentError("empty host token"))
-    throw_legacy_placement_token(s)
-    if s == PARENT_HOST_NAME
-        return (role = :parent, name = PARENT_HOST_NAME, n = nothing)
-    end
-    if startswith(s, PARENT_HOST_NAME * ":")
-        rest = s[(lastindex(PARENT_HOST_NAME) + 2):end]
-        isempty(rest) && throw(ArgumentError("$(repr(s)): missing count after `parent:`"))
-        n = try
-            parse(Int, rest)
-        catch
-            throw(ArgumentError("$(repr(s)): parent count must be an integer"))
-        end
-        return (role = :parent, name = PARENT_HOST_NAME, n)
-    end
-    if startswith(s, CHILD_TOKEN_PREFIX)
-        rest = s[(lastindex(CHILD_TOKEN_PREFIX) + 1):end]
-        isempty(rest) && throw(ArgumentError("$(repr(s)): missing SSH name after `child:`"))
-        name, n = _placement_count_suffix(rest)
-        isempty(name) && throw(ArgumentError("$(repr(s)): missing SSH name after `child:`"))
-        validate_ssh_host(name; shown = s)
-        is_parent_host_name(name) && throw(
-            ArgumentError(
-                "$(repr(s)): Kit side is `parent`, not `child:parent`",
-            )
-        )
-        return (role = :child, name = name, n)
-    end
-    throw(ArgumentError("$(repr(s)): $_PLACEMENT_HINT"))
+    return machine_to_placement_token(spec)
 end
 
 """True when a CLI token looks like a local `.jl` script path, not an SSH host.

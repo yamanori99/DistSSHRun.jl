@@ -21,13 +21,14 @@ const _SETUP_BANG_MODES = (
 
 Reject setup options the mode does not accept. `extra_files` is only valid
 for `:ship_tree`. This version accepts one path. `run_id` is only valid
-for `:instantiate`, `:check`, and `:runtest`. The `setup` CLI collects flags
+for `:instantiate` and `:runtest`. The `setup` CLI collects flags
 and calls this; it does not apply those rules itself.
 """
 function check_setup_options!(
         mode::Symbol;
         extra_files::Vector{String} = String[],
         run_id::Union{Nothing, AbstractString} = nothing,
+        job_id::Union{Nothing, AbstractString} = nothing,
         allow_dirty::Bool = false,
     )
     allow_dirty && mode !== :git_sync && throw(
@@ -39,13 +40,16 @@ function check_setup_options!(
     length(extra_files) > 1 &&
         throw(ArgumentError("more than one extra file is not yet supported"))
     if run_id !== nothing &&
-            mode !== :instantiate && mode !== :check && mode !== :runtest
+            mode !== :instantiate && mode !== :runtest
         throw(
             ArgumentError(
-                "setup! run_id= only applies to :instantiate, :check, or :runtest",
+                "setup! run_id= only applies to :instantiate or :runtest",
             ),
         )
     end
+    job_id !== nothing && mode !== :cleanup && throw(
+        ArgumentError("setup! job_id= only applies to :cleanup"),
+    )
     return nothing
 end
 public check_setup_options!
@@ -58,21 +62,21 @@ Prepare SSH hosts — same jobs as `julia -m DistSSHKit setup …`.
 
 | `mode` | CLI | Notes |
 | --- | --- | --- |
-| `:delete` | `delete` | Destructive. Requires `confirm_path`. `session.yes` does not delete. Refuses a present unowned Ship `run.toml` |
+| `:delete` | `delete` | Destructive. Requires `confirm_path`. `session.cli_session.yes` does not delete. Refuses a present unowned Ship `run.toml` |
 | `:ship_tree` | `ship-tree` | Walk the project and each directory's `.gitignore` (case-sensitive). No git binary. Relative path dependencies outside the project ship under a common ancestor. A gitignored project or Manifest file is omitted with one warning. `!LocalPreferences.toml` ships that file. Declared inputs do not. `extra_files` is one external file at `_distsshrun_external/<basename>` (a second file errors). Creates a missing remote root when safe (`~/…` under home, or absolute with an existing parent). Tar into `runs/<run_id>/src/`, empty `out/`, DistSSHRun stamp. Does not instantiate |
 | `:git_clone` | `git-clone` | Requires `repo=`; clone runs **on the remote** |
-| `:git_sync` | `git-sync` | Requires a clone at `session.remote` (`:git_clone` first on a new target). Push the local branch to origin, then detach each remote at that commit; confirm unless `session.yes`. A dirty tree is refused unless `allow_dirty=true` (CLI `--skip-git-guard`; deploy record `dirty=true`) |
-| `:git_pull` | `git-pull` | Detach each remote at the local commit. Does not push to origin and does not run `git pull`; confirm unless `session.yes`. A dirty tree is refused |
+| `:git_sync` | `git-sync` | Requires a clone at `session.remote` (`:git_clone` first on a new target). Push the local branch to origin, then detach each remote at that commit. A dirty tree is refused unless `allow_dirty=true` (CLI `--skip-git-guard`; deploy record `dirty=true`) |
+| `:git_pull` | `git-pull` | Detach each remote at the local commit. Does not push to origin and does not run `git pull`. A dirty tree is refused |
 | `:instantiate` | `instantiate` | `julia=` (default `"auto"`) |
-| `:juliaup` | `up` | Align Julia via juliaup on `child:NAME` and/or `parent` (`\$HOME/.juliaup` or Homebrew); confirm unless `session.yes`. Tip if kit parent patch lags channel latest |
-| `:juliaup_update` | `up update` | `juliaup update` on those hosts (no `default`); confirm unless `session.yes` |
+| `:juliaup` | `up` | Align Julia via juliaup on `NAME` and/or `parent` (`\$HOME/.juliaup` or Homebrew). Tip if kit parent patch lags channel latest |
+| `:juliaup_update` | `up update` | `juliaup update` on those hosts (no `default`) |
 | `:check` | `check` | `ignore_julia_version=`, `check_code_sync=` |
 | `:runtest` | `runtest` | job `Pkg.test()` on remotes; `julia=` |
-| `:cleanup` | `cleanup` | Kill stale workers (no confirm) |
-| `:prune` | `prune` | `.distssh` (and legacy `.distsshkit`) go/drive/setup/runs leaves. Requires `confirm_path`. `session.yes` does not delete. `older_days=`, `id=` |
-| `:remote_root` | `remote-root` | `remote=` must be absolute (`--deploy-root` on the CLI). Creates that directory only when the parent exists. Confirm unless `session.yes` |
+| `:cleanup` | `cleanup` | Kill tagged workers for `job_id=` (required) |
+| `:prune` | `prune` | `.distssh` (and legacy `.distsshkit`) go/drive/setup/runs leaves. Requires `confirm_path`. `session.cli_session.yes` does not delete. `older_days=`, `id=` |
+| `:remote_root` | `remote-root` | `remote=` must be absolute (`--deploy-root` on the CLI). Creates that directory only when the parent exists |
 
-Confirmations for other modes follow `session.yes` (CLI `-y`). `:delete` and
+API calls do not prompt. The setup CLI prompts unless `--yes` / `DISTSSH_YES`. `:delete` and
 `:prune` authorize only `confirm_path`: a `String` when the session has one
 SSH host, or a `Dict` of host alias => path. A host with no key is left in
 place. An unknown key is an error. A mismatch throws
@@ -80,9 +84,9 @@ place. An unknown key is an error. A mismatch throws
 mode rejects `confirm_path`. Multiple modes run in order and stop on the first failure:
 
 ```julia
-session = DistSSHSession(workers=["child:user@h1"], remote="~/proj", yes=true)
+session = DistSSHSession(workers=["user@h1"], remote="~/proj")
 setup!(session, :ship_tree, :instantiate)
-setup!(session, :check; ignore_julia_version=true)
+doctor!(session; deploy=true, ignore_julia_version=true)
 ```
 
 [`sync!`](@ref) / [`instantiate!`](@ref) remain as thin aliases for the common
@@ -93,22 +97,31 @@ function setup!(
         mode::Symbol;
         repo::Union{Nothing, AbstractString} = nothing,
         julia::AbstractString = "auto",
-        ignore_julia_version::Bool = false,
-        check_code_sync::Bool = true,
         older_days::Union{Nothing, Integer} = nothing,
         id::Union{Nothing, AbstractString} = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
+        job_id::Union{Nothing, AbstractString} = nothing,
         confirm_path = nothing,
         allow_external_symlinks::Bool = false,
         extra_files::Vector{String} = String[],
         allow_dirty::Bool = false,
     )::SyncResult
-    check_setup_options!(mode; extra_files = extra_files, run_id = run_id, allow_dirty = allow_dirty)
+    check_setup_options!(
+        mode;
+        extra_files = extra_files,
+        run_id = run_id,
+        job_id = job_id,
+        allow_dirty = allow_dirty,
+    )
     snap = run_id === nothing ? nothing : validate_run_id(run_id)
     _setup_bang_preflight!(session, mode; repo = repo)
     hosts = _setup_bang_host_list(session)
     if isempty(hosts)
-        throw(ArgumentError(explain_no_hosts(; surface = hint_surface(session), kind = :ssh)))
+        if setup_mode_allows_parent(mode)
+            hosts = String[PARENT_HOST_NAME]
+        else
+            throw(ArgumentError(explain_no_hosts(; surface = hint_surface(session), kind = :ssh)))
+        end
     end
     validate_setup_hosts(hosts; allow_parent = setup_mode_allows_parent(mode))
     bound_plan = _setup_bind_confirm_path!(session, mode, confirm_path, hosts)
@@ -126,11 +139,10 @@ function setup!(
                 mode;
                 repo = repo,
                 julia = julia,
-                ignore_julia_version = ignore_julia_version,
-                check_code_sync = check_code_sync,
                 older_days = older_days,
                 id = id,
                 run_id = snap,
+                job_id = job_id,
                 bound_plan = bound_plan,
                 allow_external_symlinks = allow_external_symlinks,
                 extra_files = extra_files,
@@ -489,7 +501,7 @@ function _setup_bind_confirm_path!(
             ArgumentError(
                 "setup!(session, :$(mode)) requires confirm_path equal to the target $(repr(expected)). " *
                     "A String is only for one host; pass a Dict of host alias => path for more than one. " *
-                    "session.yes does not authorize this. See help setup.",
+                    "session.cli_session.yes does not authorize this. See help setup.",
             )
         )
     end
@@ -646,11 +658,10 @@ function _setup_one!(
         mode::Symbol;
         repo::Union{Nothing, AbstractString} = nothing,
         julia::AbstractString = "auto",
-        ignore_julia_version::Bool = false,
-        check_code_sync::Bool = true,
         older_days::Union{Nothing, Integer} = nothing,
         id::Union{Nothing, AbstractString} = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
+        job_id::Union{Nothing, AbstractString} = nothing,
         bound_plan::Union{Nothing, Dict{String, String}} = nothing,
         allow_external_symlinks::Bool = false,
         extra_files::Vector{String} = String[],
@@ -685,7 +696,7 @@ function _setup_one!(
         preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
         clone_dest = remote_git_clone_dest(session.project; cli_override = session.remote)
         deploy = remote_deploy_root(session.project; cli_override = session.remote)
-        raw = clone_to_remotes(hosts, clone_dest, url; confirm = !session.yes)
+        raw = clone_to_remotes(hosts, clone_dest, url; confirm = session_confirms(session))
         result = _sync_result_from_host_op(raw)
         if result.ok
             forget_last_ship_default!(session.project, deploy)
@@ -706,7 +717,7 @@ function _setup_one!(
             remote_path;
             do_push = false,
             do_pull = true,
-            confirm = !session.yes,
+            confirm = session_confirms(session),
         )
         if raw.cancelled
             return SyncResult(true, HostResult[]; ok = false)
@@ -723,13 +734,15 @@ function _setup_one!(
     elseif mode === :instantiate
         return instantiate!(session; julia = julia_path, run_id = run_id)
     elseif mode === :juliaup || mode === :juliaup_update
-        ssh_hosts = setup_juliaup_ssh_hosts(hosts)
+        targets = _setup_juliaup_targets(hosts)
+        ssh_hosts = setup_juliaup_ssh_hosts(targets)
         if !isempty(ssh_hosts)
             preflight_setup_ssh(ssh_hosts) || return SyncResult(false, HostResult[]; ok = false)
         end
+        confirm = session_confirms(session)
         raw = mode === :juliaup ?
-            juliaup_align_remotes(hosts; confirm = !session.yes) :
-            juliaup_update_remotes(hosts; confirm = !session.yes)
+            juliaup_align_remotes(targets; confirm = confirm) :
+            juliaup_update_remotes(targets; confirm = confirm)
         return _sync_result_from_host_op(raw)
     elseif mode === :runtest
         preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
@@ -743,29 +756,11 @@ function _setup_one!(
         )
         return _sync_result_from_host_op(raw)
     elseif mode === :check
-        work_path = _project_work_root(
-            hosts, session.project;
-            cli_override = session.remote, run_id = run_id,
-        )
-        result = check_prerequisites(
-            hosts,
-            julia_path,
-            work_path,
-            session.project;
-            path_anchor = session.project,
-            require_clean_git = false,
-            check_code_sync = check_code_sync,
-            ignore_julia_version = ignore_julia_version,
-        )
-        if result.ok
-            print_ok("All prerequisites met.")
-            kit_println()
-        else
-            println_err_after_progress("Prerequisites not met. Fix issues above and retry.")
-        end
-        return SyncResult(false, HostResult[]; ok = result.ok, warnings = result.warnings)
+        throw(ArgumentError(setup_check_removed_message()))
     elseif mode === :cleanup
-        raw = cleanup_remote_workers(hosts)
+        job_id === nothing &&
+            throw(ArgumentError("setup! cleanup requires job_id= (job-scoped since 0.2.0)"))
+        raw = cleanup_remote_workers(hosts, String(job_id))
         return _sync_result_from_host_op(raw)
     elseif mode === :remote_root
         remote = session.remote
@@ -774,7 +769,7 @@ function _setup_one!(
         end
         root = explicit_remote_root_path(remote)
         preflight_setup_ssh(hosts) || return SyncResult(false, HostResult[]; ok = false)
-        raw = create_remote_roots!(hosts, root; confirm = !session.yes)
+        raw = create_remote_roots!(hosts, root; confirm = session_confirms(session))
         return _sync_result_from_host_op(raw)
     elseif mode === :prune
         plan = _setup_require_plan(bound_plan)
@@ -818,33 +813,30 @@ end
 
 """SSH aliases plus `parent` when a token names the kit parent. Does not touch `ENV`."""
 function _setup_bang_host_list(session::DistSSHSession)::Vector{String}
-    hosts = copy(session.hosts)
-    # `session.hosts` is SSH children only; parent lives on `tokens`.
-    # Always surface `parent` so non-juliaup modes hit validate_setup_hosts
-    # instead of silently dropping it.
-    for t in session.tokens
-        pt = try
-            parse_placement_token(t)
-        catch
-            nothing
-        end
-        pt === nothing && continue
-        if pt.role === :parent
-            push!(hosts, PARENT_HOST_NAME)
-            break
-        end
+    for tok in session.tokens
+        reject_setup_worker_count!(tok)
     end
-    return hosts
+    return copy(session.hosts)
+end
+
+"""Juliaup targets: controller (internal) plus SSH hosts from the session."""
+function _setup_juliaup_targets(hosts::AbstractVector{<:AbstractString})::Vector{String}
+    out = String[String(h) for h in hosts if !is_parent_host_name(h)]
+    push!(out, PARENT_HOST_NAME)
+    return out
 end
 
 function _setup_bang_hosts!(session::DistSSHSession; allow_parent::Bool = false)
     apply_session_env!(session)
     hosts = _setup_bang_host_list(session)
-    isempty(hosts) && throw(
-        ArgumentError(
-            explain_no_hosts(; surface = hint_surface(session), kind = :ssh),
+    if isempty(hosts)
+        allow_parent || throw(
+            ArgumentError(
+                explain_no_hosts(; surface = hint_surface(session), kind = :ssh),
+            ),
         )
-    )
+        hosts = String[PARENT_HOST_NAME]
+    end
     validate_setup_hosts(hosts; allow_parent = allow_parent)
     return hosts
 end
