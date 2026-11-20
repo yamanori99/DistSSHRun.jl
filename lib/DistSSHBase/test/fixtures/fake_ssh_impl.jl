@@ -37,7 +37,7 @@ end
 function _fake_ship_expect_hash_from_script(script::AbstractString)
     idx = findfirst("--", script)
     idx === nothing && return nothing
-    rest = script[idx.stop + 1:end]
+    rest = script[(idx.stop + 1):end]
     m = match(r"'[01]'\s+'([0-9a-fA-F]{40})'", rest)
     m === nothing && return nothing
     return lowercase(String(m.captures[1]))
