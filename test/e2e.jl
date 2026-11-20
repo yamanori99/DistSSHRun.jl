@@ -1046,7 +1046,11 @@ end
                     bind_script,
                     """
                     using Distributed
-                    pmap(_ -> touch(joinpath(ENV["DISTRIBUTED_OUTPUT_DIR"], "bind_ok.txt")), workers())
+                    function main()
+                        all(!=(1), pmap(_ -> myid(), workers())) || error("expected SSH workers")
+                        touch(joinpath(ENV["DISTRIBUTED_OUTPUT_DIR"], "bind_ok.txt"))
+                        return nothing
+                    end
                     """,
                 )
                 bind_out = joinpath(bind_dir, "e2e-bind-drive-out")

@@ -1,3 +1,7 @@
-# Sleep on workers so E2E can terminate! a detached SSH drive.
+# Long enough for E2E to kill or terminate! a detached SSH drive.
 using Distributed
-pmap(x -> (sleep(30); x), 1:4)
+
+function main()
+    pmap(_ -> (sleep(30); 1), 1:nworkers())
+    return nothing
+end
