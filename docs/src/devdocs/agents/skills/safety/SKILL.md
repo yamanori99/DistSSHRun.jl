@@ -26,3 +26,4 @@ When a rule becomes a lint or a test, delete that line here.
 - Each feature has one implementation. A second entry reaches that implementation, and a parity test covers the entries. Keep that test out of PkgEval.
 - User-facing errors, hints, and help belong in the messages layer.
 - If the cause is Julia or a dependency, report the commit or version. Do not copy an upstream function into this package to avoid it. Do not open an issue or a pull request on another repository.
+- Do not pass a review fix by searching source for the condition you added. Run one call that failed before the fix.

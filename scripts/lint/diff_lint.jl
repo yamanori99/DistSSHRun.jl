@@ -527,15 +527,27 @@ function lint_skips(root, files, src_for_path)
     return n
 end
 
+function _comment_tokens_or_empty(src::AbstractString)
+    try
+        return comment_tokens(src)
+    catch e
+        e isa JuliaSyntax.ParseError || rethrow()
+        return Tuple{Int, Int, String}[]
+    end
+end
+
 function deleted_bodies(h::Hunk)
     bodies = Set{String}()
-    for line in h.deleted
-        try
-            for (_, _, text) in comment_tokens(line * "\n")
-                push!(bodies, comment_body(text))
-            end
-        catch
+    isempty(h.deleted) && return bodies
+    src = join(h.deleted, '\n') * '\n'
+    tokens = _comment_tokens_or_empty(src)
+    if isempty(tokens)
+        for line in h.deleted
+            append!(tokens, _comment_tokens_or_empty(line * '\n'))
         end
+    end
+    for (_, _, text) in tokens
+        push!(bodies, comment_body(text))
     end
     return bodies
 end
@@ -699,6 +711,10 @@ function self_test()
         nothing || die("self-test: aqua-check allowed")
     aqua_run_hit("Aqua (1.13, ubuntu-latest, x64)", "        run: julia extra.jl") ==
         "Aqua job run is not aqua-check.sh" || die("self-test: aqua extra run")
+    split_for = Hunk(1, 2, 1, 1, String["for (k, v) in xs()", "    y = v"])
+    deleted_bodies(split_for) == Set{String}() || die("self-test: split for")
+    moved = Hunk(1, 2, 1, 1, String["for (k, v) in xs()", "# moved note"])
+    "moved note" in deleted_bodies(moved) || die("self-test: deleted comment")
     println("self-test: passed")
     return 0
 end

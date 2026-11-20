@@ -55,14 +55,13 @@ end
 
 function _cmd_env_lookup(cmd::Cmd, key::AbstractString)
     env = cmd.env
-    if env !== nothing
-        prefix = string(key, "=")
-        for entry in env
-            startswith(entry, prefix) || continue
-            return split(entry, '=', limit = 2)[2]
-        end
+    env === nothing && return get(ENV, key, nothing)
+    prefix = string(key, "=")
+    for entry in env
+        startswith(entry, prefix) || continue
+        return split(entry, '=', limit = 2)[2]
     end
-    return get(ENV, key, nothing)
+    return nothing
 end
 
 @testset "ssh and scp noninteractive env" begin
