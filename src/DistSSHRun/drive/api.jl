@@ -7,7 +7,7 @@
 
 Run a driver script on workers. Tokens match the CLI (`parent:2`, `1*user@host`).
 Load is the master `include`. Publish sends definitions to workers (not top-level
-work). Run is `main()` when defined. Use [`go!`](@ref) when that matches the
+work). Run is `main()` when the script defines it. Use [`go!`](@ref) when that matches the
 script.
 
 ```julia

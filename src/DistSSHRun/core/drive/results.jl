@@ -99,17 +99,14 @@ function _with_driver_sigint_exceptions(f)
     end
 end
 
-function run_driver_script!(enable_log::Bool)
+function run_driver_script!(enable_log::Bool; script_main::Union{Nothing, Method})
     writeln_both("Running script..."; color = :light_black)
     writeln_both("")
     call_main = () -> begin
+        script_main === nothing && return nothing
         Base.invokelatest() do
-            if isdefined(Main, :main)
-                main_fn = getfield(Main, :main)
-                if main_fn isa Function
-                    Base.invokelatest(Base.inferencebarrier(main_fn))
-                end
-            end
+            main_fn = getfield(Main, :main)
+            Base.invokelatest(Base.inferencebarrier(main_fn))
         end
     end
     return _with_driver_sigint_exceptions() do

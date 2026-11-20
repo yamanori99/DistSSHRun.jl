@@ -16,6 +16,18 @@ function _drive_script_init_output_dir_method(script_args)::Union{Nothing, Metho
     end
 end
 
+# Same rule for `Main.main()`: a script without `main` must not run the
+# previous in-process driver's `main`.
+function _drive_script_main_method()::Union{Nothing, Method}
+    return Base.invokelatest() do
+        isdefined(Main, :main) || return nothing
+        main_fn = getfield(Main, :main)
+        main_fn isa Function || return nothing
+        applicable = methods(main_fn, ())
+        return isempty(applicable) ? nothing : first(applicable)::Method
+    end
+end
+
 # Options that take the next argv word. A word equal to `--isolated` there is a value.
 const _DRIVE_VALUE_FLAGS = (
     "--workers", "-w", "--julia",
@@ -370,8 +382,11 @@ function _run_drive_parsed_specialized!(
             # Lock after that so `.kit.lock` is not the kind root when the driver
             # chose `output/` (or `--output-dir` / a unique batch dir).
             init_before = _drive_script_init_output_dir_method(script_args)
+            main_before = _drive_script_main_method()
             Base.include(Main, script_path)
             init_after = _drive_script_init_output_dir_method(script_args)
+            main_after = _drive_script_main_method()
+            script_main = main_after !== main_before ? main_after : nothing
             if init_after !== nothing && init_after !== init_before
                 @invokelatest Main.init_output_dir!(script_args)
             end
@@ -390,7 +405,7 @@ function _run_drive_parsed_specialized!(
                     enable_log, log_dir, original_args, host_names, hosts, head_workers,
                     default_workers, julia_exe, skip_hash_check, explicit_package,
                     best_effort, resolved_output_dir, resolved_log_dir, hosts_acc,
-                    project_root_abs, path_anchor,
+                    project_root_abs, path_anchor; script_main,
                 )
                 return code
             finally
@@ -533,7 +548,8 @@ function _run_drive_parsed_locked!(
         enable_log, log_dir, original_args, host_names, hosts, head_workers,
         default_workers, julia_exe, skip_hash_check, explicit_package,
         best_effort, resolved_output_dir, resolved_log_dir, resolved_hosts,
-        project_root, path_anchor,
+        project_root, path_anchor;
+        script_main::Union{Nothing, Method},
     )::Cint
     DistSSHRun.assert_loaded_verified_worker_set!()
     if enable_log
@@ -755,7 +771,7 @@ function _run_drive_parsed_locked!(
 
         kit_progress_step!("run")
         _drive_cancellable() do
-            run_driver_script!(enable_log)
+            run_driver_script!(enable_log; script_main)
         end
         if !best_effort
             DistSSHRun._refresh_drive_host_status_file!(kit_out, kit_log)

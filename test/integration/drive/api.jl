@@ -231,6 +231,47 @@ end
     end
 end
 
+# A script that defines `main` leaves it in `Main`. The next in-process
+# `drive!` of a script without `main` must not run the previous one.
+@testset "drive! ignores a leftover main" begin
+    _mktemp_host() do proj
+        _write_host_project!(proj, "DriveLeftoverMain")
+        marker = joinpath(proj, "LEFTOVER_MAIN_RAN")
+        with_main = joinpath(proj, "with_main.jl")
+        write(
+            with_main, """
+            function main()
+                touch($(repr(marker)))
+                return nothing
+            end
+            """
+        )
+        no_main = joinpath(proj, "no_main.jl")
+        write(no_main, "no_main_loaded = true\n")
+        prev_v = DistSSHRun.kit_verbosity()
+        try
+            for (script, ran) in ((with_main, true), (no_main, false))
+                rm(marker; force = true)
+                res = redirect_stdout(devnull) do
+                    redirect_stderr(devnull) do
+                        DistSSHRun.drive!(
+                            script; head_workers = 1,
+                            project = proj,
+                            verbosity = :quiet,
+                            enable_log = false
+                        )
+                    end
+                end
+                @test res.ok
+                @test isfile(marker) == ran
+            end
+        finally
+            DistSSHRun.set_kit_verbosity!(prev_v)
+            delete!(ENV, "DISTRIBUTED_OUTPUT_DIR")
+        end
+    end
+end
+
 @testset "init_output_dir! lookup uses the definition world" begin
     # Tracked fixture: JETLS executes this `@testset` as top-level and cannot
     # `include` a path that only exists after `mktempdir` + `write`.
