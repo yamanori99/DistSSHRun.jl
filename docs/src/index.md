@@ -1,7 +1,7 @@
 # DistSSHRun
 
 DistSSHRun is one run on shared machines over SSH: `setup`, `go`,
-`ride`, `drive`, `hostinfo`, `pool`, `demo`, and `progress`.
+`drive`, `hostinfo`, `pool`, `demo`, and `progress`.
 Supported on **macOS, Linux, and WSL2 Ubuntu** (not native Windows).
 
 The command is `julia -m DistSSHRun`. Exit streams and codes follow Rust
@@ -14,10 +14,10 @@ fixes `JULIA_LOAD_PATH`, so `drive`, `hostinfo`, and `pool` still need
 `julia -m DistSSHRun`. Worker processes (local and SSH) set
 `JULIA_LOAD_PATH=@:@stdlib` and `--project=` of the job tree; they do not
 see `@v#.#`. Local workers also put the parent project, then DistSSHRun's
-package directory, on that path so `ride` can load DistSSHRun when the job
+package directory, on that path so` `drive` can load DistSSHRun when the job
 tree does not. Parent `LOAD_PATH` mutations do not otherwise affect workers.
 
-`drive` and `ride` set the Distributed cluster cookie from
+`drive` and` `drive` set the Distributed cluster cookie from
 `RandomDevice` before the first worker starts when you have not already
 initialized Distributed (for example with `Distributed.cluster_cookie` or
 `addprocs`). An existing cookie is kept. Launch runs inside a controller-task
@@ -125,9 +125,9 @@ with that same local script. The remote command is
 selected project). The `go` / `drive` CLI does not take `--ship-tree`: run
 `setup ship-tree`, then `setup instantiate`, then `go` / `drive` with
 `--run-id ID`.
-Later `setup instantiate` / `setup check` / `go` / `drive` / `ride` select a
-a shipped run with `--run-id ID` (or `run_id=` on `setup!` / `go!` / `drive!` /
-`ride!`), else the local `.distssh/last-ship.toml` written after a
+Later `setup instantiate` / `setup check` / `go` / `drive` select a
+shipped run with `--run-id ID` (or `run_id=` on `setup!` / `go!` / `drive!`),
+else the local `.distssh/last-ship.toml` written after a
 successful ship, else a git checkout that has `Project.toml` at the deploy
 root on every host. A successful delete / git-clone / git-sync / git-pull
 clears that local record for the matching deploy root. `go` / `drive` do not
@@ -207,7 +207,7 @@ opens paths literally, so use `check_input_manifest` for those trees.
 `hash = false` records only stat fields in `run.toml` and does not write
 a manifest. A later ship into the same run directory replaces the row
 for the same input name and host. Standalone `setup ship-tree` waits
-for hashing before it returns. `go` / `drive` / `ride` do not copy on run;
+for hashing before it returns. `go` / `drive` / `drive` do not copy on run;
 hashing for a ship finishes under `setup ship-tree` before selection.
 `outputs` is reserved and not written. There is no
 `run.private.toml`; public records keep relative paths and aliases only.
@@ -245,9 +245,9 @@ runs `juliaup update` even when the channel name already matches.
 ```bash
 julia -m DistSSHRun setup check host1
 julia -m DistSSHRun go SCRIPT.jl
-julia -m DistSSHRun ride --local-workers 2 SCRIPT.jl
-julia -m DistSSHRun drive --local-workers 2 SCRIPT.jl
-julia -m DistSSHRun go --local-slots 2 SCRIPT.jl
+julia -m DistSSHRun drive --head-workers 2 parent:2 SCRIPT.jl
+julia -m DistSSHRun drive --head-workers 2 SCRIPT.jl
+julia -m DistSSHRun go --head-slots 2 SCRIPT.jl
 julia -m DistSSHRun hostinfo parent
 julia -m DistSSHRun pool
 ```

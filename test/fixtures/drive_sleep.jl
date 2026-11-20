@@ -1,4 +1,4 @@
-# Long enough for E2E to kill the master and watch heartbeat reap workers.
+# Long enough for E2E to kill or terminate! a detached SSH drive.
 using Distributed
 
 function main()

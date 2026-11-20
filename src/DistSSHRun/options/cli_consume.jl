@@ -1,4 +1,4 @@
-# Table-driven CLI flag consumption for go / drive / ride.
+# Table-driven CLI flag consumption for go / drive.
 
 mutable struct RunOptionCliState
     unsafe_skip_env_digests::Bool

@@ -22,7 +22,7 @@ julia -m DistSSHKit drive --local-workers 2 --hosts '4*user@lab:2222,2*lab-b' sc
 - The same port is part of the host key for duplicates, `bind_overrides=`, and dry-run lines (`alice@lab:2222` is distinct from `alice@lab`).
 - IPv6 literals (`::1`, `[::1]`, `user@[::1]:2222`, and similar) are not accepted in host tokens or SSH endpoints. Use an SSH config `Host` alias instead (for example `Host lab6` with `HostName ::1` in `~/.ssh/config`), then pass `lab6` or `lab6:2222` in `--hosts`.
 
-Local capacity is **not** a placement token. `drive` / `ride`: `--local-workers N`
+Local capacity is **not** a placement token. `drive` / `drive`: `--local-workers N`
 (`DISTSSH_LOCAL_WORKERS` only). `go`: `--local-slots N`. With no hosts and no
 `--local-slots`, `go` still runs **one** local slot and prints
 `local: <hostname>, 1 slot (no hosts given)`; `--local-slots 0` with no hosts

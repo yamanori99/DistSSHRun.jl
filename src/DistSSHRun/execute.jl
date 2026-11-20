@@ -1,7 +1,7 @@
-# execute! — one seam over `go!` / `ride!` / `drive!` for callers that pick the kind at runtime
+# execute! — one seam over `go!` / `drive!` for callers that pick the kind at runtime
 # (see https://github.com/yamanori99/DistSSHKit.jl/issues/129).
-# Thin wrapper only: `go!` / `ride!` / `drive!` / `src/cli/*` are untouched.
-# `detached=true` spawns `julia -m DistSSHKit go|ride|drive` and returns [`DetachedProcess`](@ref).
+# Thin wrapper only: `go!` / `drive!` / `src/cli/*` are untouched.
+# `detached=true` spawns `julia -m DistSSHKit go|drive` and returns [`DetachedProcess`](@ref).
 
 const _EXECUTE_DETACHED_KW = Set{Symbol}(
     (
@@ -21,7 +21,6 @@ const _EXECUTE_DETACHED_KW = Set{Symbol}(
         :stderr,
         :job_id,
         :worker_include,
-        :spi_check,
         :unsafe_skip_env_digests,
         :unsafe_expose_port,
         :unsafe_all_to_all,
@@ -168,24 +167,16 @@ Uses the same tables as the detached throw path, plus the named parameters
 (`output_dir`, `args`, `project`, `sync`, `julia`, `detached`, `source`,
 `dir`, `threads`, `env_allow`, `env`).
 `source` is a provenance dict. Detached passes it to the child as
-`DISTSSH_SOURCE_*`. It is not a `go!` / `ride!` / `drive!` keyword.
+`DISTSSH_SOURCE_*`. It is not a `go!` / `drive!` keyword.
 `dir`, `threads`, `env_allow`, and `env` are detached launch policy, not
-`go!` / `ride!` / `drive!` keywords.
+`go!` / `drive!` keywords.
 """
 function execute_detached_accepts(kw::Symbol; kind::Symbol)::Bool
     _require_execute_kind!(kind)
     kw in _EXECUTE_DETACHED_NAMED && return true
     kw in _EXECUTE_DETACHED_KW || return false
-    kind === :go && return !(kw in _EXECUTE_DETACHED_DRIVE_ONLY) &&
-        !(kw in (:spi_check,))
-    kind === :ride && return !(
-        kw in (
-            :repeat, :worker_include, :package, :log_dir, :enable_log, :skip_hash_check,
-            :workers,
-            :allow_external_symlinks,
-        )
-    )
-    return !(kw in (:repeat, :spi_check))
+    kind === :go && return !(kw in _EXECUTE_DETACHED_DRIVE_ONLY)
+    return kw !== :repeat
 end
 
 # Copy `dir`, `threads`, `env_allow`, and `env` when `parsed` has a non-`nothing` value.
@@ -203,14 +194,14 @@ end
     execute_kwargs_from_parsed(parsed; kind) -> Dict{Symbol,Any}
 
 Keywords for [`execute!`](@ref) (`detached=true`) from `parse_go_args` /
-`parse_drive_args` / `DistSSHRun.parse_ride_args`. Keys are a subset of [`execute_detached_accepts`](@ref).
+`parse_drive_args`. Keys are a subset of [`execute_detached_accepts`](@ref).
 
 Does not include `hosts_file` / `--hosts`: those tokens belong in
 [`host_tokens`](@ref) (`kind` required). Does not set `project`, `detached`,
 `yes`, `job_id`, `remote`, or stdio. Drive `--workers` is `:workers` only
 when the parser set `default_workers`. `dir`, `threads`, `env_allow`, and
 `env` are copied only when `parsed` has that property and the value is
-not `nothing`. The go / drive / ride parsers do not grow those fields.
+not `nothing`. The go / drive parsers do not grow those fields.
 """
 function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
     _require_execute_kind!(kind)
@@ -246,11 +237,6 @@ function execute_kwargs_from_parsed(parsed; kind::Symbol)::Dict{Symbol, Any}
         parsed.repeat === nothing || (kw[:repeat] = parsed.repeat)
         return _parsed_launch_kwargs!(kw, parsed)
     end
-    if kind === :ride
-        kw[:spi_check] = parsed.spi_check
-        get(parsed, :best_effort, false) && (kw[:best_effort] = true)
-        return _parsed_launch_kwargs!(kw, parsed)
-    end
     kw[:log_dir] = parsed.log_dir
     kw[:enable_log] = parsed.enable_log
     kw[:package] = parsed.explicit_package
@@ -265,13 +251,13 @@ end
 """
 Handle to a detached [`execute!`](@ref) child (`detached=true`).
 
-`process` is the `julia -m DistSSHKit go|drive|ride` subprocess.
+`process` is the `julia -m DistSSHKit go|drive` subprocess.
 `run_dir` is always allocated in the parent before spawn (pid / `kit.out` /
 `run.toml`). Read it with [`result_run_dir`](@ref). The field is not API.
 `output_dir` is the artifact root when known at spawn (`go` /
-`ride`, explicit `output_dir=`, or inherited `DISTRIBUTED_OUTPUT_DIR`).
+explicit `output_dir=`, or inherited `DISTRIBUTED_OUTPUT_DIR`).
 Detached `:drive` without those leaves `output_dir` as `nothing` so the child
-can honor `init_output_dir!`. `log_dir` is `nothing` for `:go` / `:ride`.
+can honor `init_output_dir!`. `log_dir` is `nothing` for `:go`.
 [`wait`](@ref) returns a [`DistSSHJobResult`](@ref); it does not fill
 `output_dir` on this handle.
 """
@@ -375,8 +361,8 @@ left running: `failed_step` is `"hung"`, `exit_code` is `124`, and owned
 stdio stays open. Call [`terminate!`](@ref) if the hang is fatal.
 
 If the child wrote `kit.result` under `run_dir` or `output_dir`, that file is
-the source of truth (including `failed_step` from `go!` / `ride!`). Otherwise
-`failed_step` is `"go"` / `"ride"` / `"drive"` on a non-zero exit — the parent
+the source of truth (including `failed_step` from `go!` / . Otherwise
+`failed_step` is `"go"` or `"drive"` on a non-zero exit — the parent
 cannot recover a more specific in-process step name.
 
 Best-effort: remove `kit.pid` if it still names this child (pid captured
@@ -435,22 +421,21 @@ end
 """
     execute!(kind, script, tokens=String[]; output_dir=nothing, args=String[], project=pwd(), sync=nothing, julia=nothing, detached=false, source=nothing, kwargs...) -> DistSSHJobResult or DetachedProcess
 
-One seam over [`go!`](@ref) / [`ride!`](@ref) / [`drive!`](@ref) for callers
-that pick the kind at runtime (`kind ∈ (:go, :ride, :drive)`), returning the
-shared [`DistSSHJobResult`](@ref) instead of `GoResult` / `RideResult` / `DriveResult`.
+One seam over [`go!`](@ref) and [`drive!`](@ref) for callers
+that pick the kind at runtime (`kind ∈ (:go, :drive)`), returning the
+shared [`DistSSHJobResult`](@ref) instead of `GoResult` / `DriveResult`.
 
 ```julia
 execute!(:go, "job.jl", ["2*host1"]; head_slots=2, args=["8"])
-execute!(:ride, "job.jl", ["2*host1"]; head_workers=2)
 execute!(:drive, "job.jl", ["2*host1"]; head_workers=2, args=["8"])
 wait(execute!(:go, "job.jl", ["1*host1"]; detached=true, head_slots=1, args=["8"]))
 ```
 
 `output_dir`, `args`, `project`, `sync`, `julia` are the keywords [`go!`](@ref)
-and [`drive!`](@ref) already share (`ride!` ignores `sync`). With `detached=false`
+and [`drive!`](@ref) already share. With `detached=false`
 (default), any other keyword is forwarded to the chosen function.
 
-`detached=true` spawns `julia -m DistSSHKit go|ride|drive` and returns a
+`detached=true` spawns `julia -m DistSSHKit go|drive` and returns a
 [`DetachedProcess`](@ref). `sync=:ship_tree` or `sync=:git_sync` is an error before
 spawn (run no longer transfers). Ship or git-sync first with [`setup!`](@ref)
 `:ship_tree` / `:git_sync`, or CLI `setup ship-tree` / `setup git-sync`.
@@ -471,11 +456,7 @@ Keywords are then an allow-list (unknown names throw):
 `allow_external_symlinks`, `dir`, `threads`, `env_allow`, and `env`.
 `source` is a provenance
 dict for every kind. Detached passes it as `DISTSSH_SOURCE_*`. Go-only
-`repeat`. Ride: `spi_check` (default
-`false`). Detached argv passes `--spi-check` when true and `--no-spi-check`
-when false, so an older child whose default is on still skips the compare.
-Neither go nor
-ride takes sizing flags. `yes` must be `true` (the
+`repeat`. Neither go nor drive takes sizing flags. `yes` must be `true` (the
 default): an unattended child cannot answer a prompt. `remote` that starts
 with `~` is stored in `DISTRIBUTED_REMOTE_PROJECT_ROOT` as a layout path
 (not `expanduser` on the kit parent). Child stdio defaults to
@@ -574,21 +555,6 @@ function execute!(
     result = try
         if kind === :go
             go!(
-                script,
-                tokens;
-                output_dir = output_dir,
-                args = args,
-                project = project,
-                julia = julia,
-                kwargs...,
-            )
-        elseif kind === :ride
-            (sync === nothing || sync === false) || throw(
-                ArgumentError(
-                    "execute!(:ride, ...) does not accept sync=$(repr(sync))",
-                )
-            )
-            ride!(
                 script,
                 tokens;
                 output_dir = output_dir,
@@ -722,42 +688,10 @@ function _execute_detached!(
                 )
             )
         end
-        haskey(kwargs, :spi_check) && throw(
-            ArgumentError(
-                "execute!(:go, ...; detached=true) does not accept keyword :spi_check",
-            )
-        )
-    elseif kind === :ride
-        haskey(kwargs, :repeat) && throw(
-            ArgumentError(
-                "execute!(:ride, ...; detached=true) does not accept keyword :repeat",
-            )
-        )
-        for k in (
-                :worker_include, :package, :log_dir, :enable_log, :skip_hash_check,
-                :workers,
-                :allow_external_symlinks,
-            )
-            haskey(kwargs, k) && throw(
-                ArgumentError(
-                    "execute!(:ride, ...; detached=true) does not accept keyword $(repr(k))",
-                )
-            )
-        end
-        (sync === nothing || sync === false) || throw(
-            ArgumentError(
-                "execute!(:ride, ...; detached=true) does not accept sync=$(repr(sync))",
-            )
-        )
     elseif kind === :drive
         haskey(kwargs, :repeat) && throw(
             ArgumentError(
                 "execute!(:drive, ...; detached=true) does not accept keyword :repeat",
-            )
-        )
-        haskey(kwargs, :spi_check) && throw(
-            ArgumentError(
-                "execute!(:drive, ...; detached=true) does not accept keyword :spi_check",
             )
         )
     end
@@ -795,7 +729,7 @@ function _execute_detached!(
         ),
     )
     best_effort = get(kwargs, :best_effort, false)
-    if kind in (:drive, :ride)
+    if kind === :drive
         best_effort isa Bool || throw(
             ArgumentError("best_effort must be a Bool, got $(repr(best_effort))"),
         )
@@ -806,7 +740,6 @@ function _execute_detached!(
     get(kwargs, :sync_script, nothing) !== nothing &&
         _reject_removed_drive_worker_include_kw!(true)
     worker_include = get(kwargs, :worker_include, false)
-    spi_check = get(kwargs, :spi_check, false)
     unsafe_skip_env_digests = get(kwargs, :unsafe_skip_env_digests, false)
     allow_external_symlinks = get(kwargs, :allow_external_symlinks, false) === true
     _reject_removed_allow_mismatch!(get(kwargs, :allow_mismatch, nothing))
@@ -846,11 +779,6 @@ function _execute_detached!(
     worker_include isa Bool || throw(
         ArgumentError(
             "worker_include must be a Bool, got $(repr(worker_include))",
-        )
-    )
-    spi_check isa Bool || throw(
-        ArgumentError(
-            "spi_check must be a Bool, got $(repr(spi_check))",
         )
     )
     if workers !== nothing
@@ -921,7 +849,6 @@ function _execute_detached!(
         workers = workers,
         repeat = repeat,
         worker_include = worker_include,
-        spi_check = spi_check,
         unsafe_skip_env_digests = unsafe_skip_env_digests,
         job_id = job_id_s,
         allow_external_symlinks = allow_external_symlinks,
@@ -1217,7 +1144,7 @@ function _require_drive_host_status_idle!()
     if _drive_host_status_monitor_active()
         throw(
             ArgumentError(
-                "overlapping in-process drive!/ride! is not supported (host-status monitor already running)",
+                "overlapping in-process drive! is not supported (host-status monitor already running)",
             )
         )
     end
@@ -1229,7 +1156,7 @@ function _register_drive_host_worker_ids!(host::AbstractString, ids::AbstractVec
     return nothing
 end
 
-"""Worker ids recorded for this drive or ride run (`DRIVE_HOST_WORKER_IDS`)."""
+"""Worker ids recorded for this drive run (`DRIVE_HOST_WORKER_IDS`)."""
 function _registered_drive_worker_ids()::Vector{Int}
     out = Int[]
     for ids in values(DRIVE_HOST_WORKER_IDS)
@@ -1311,26 +1238,6 @@ function _leftover_worker_host(pid::Integer)::String
         return String(ep[1])
     end
     return "unknown"
-end
-
-"""Append unregistered workers to the host they belong to. Does not replace a host list."""
-function _register_leftover_workers!(pids::AbstractVector{<:Integer})
-    isempty(pids) && return nothing
-    by_host = Dict{String, Vector{Int}}()
-    for pid in pids
-        host = _leftover_worker_host(pid)
-        push!(get!(by_host, host, Int[]), Int(pid))
-    end
-    for (host, ids) in by_host
-        existing = Int[Int(i) for i in get(DRIVE_HOST_WORKER_IDS, String(host), Int[])]
-        _register_drive_host_worker_ids!(host, vcat(existing, ids))
-    end
-    return nothing
-end
-
-function _drive_parent_worker_count()::Int
-    ids = get(DRIVE_HOST_WORKER_IDS, PARENT_HOST_NAME, Int[])
-    return length(ids)
 end
 
 """SSH workers sleep `DISTRIBUTED_INIT_DELAY_SEC` (default 5). Local-only is 0."""
@@ -1558,7 +1465,7 @@ function _read_kit_hosts(output_dir::AbstractString)::Vector{String}
     return String[strip(line) for line in split(raw, '\n') if !isempty(strip(line))]
 end
 
-"""`kit.job` from `run_dir`, `output_dir`, or `log_dir` (detached ride/go split them)."""
+"""`kit.job` from `run_dir`, `output_dir`, or `log_dir` (detached go may split them)."""
 function _read_kit_job_id_for_reap(kp::DetachedProcess)::Union{Nothing, String}
     for d in _kit_sidecar_dirs(kp.output_dir, kp.log_dir; run_dir = kp.run_dir)
         raw = _read_kit_text_file(d, "kit.job")
@@ -1823,7 +1730,7 @@ end
 """
     kit_result_from_dir(output_dir) -> Union{Nothing,DistSSHJobResult}
 
-Read `output_dir/kit.result` written by a finished `go` / `ride` / `drive` child.
+Read `output_dir/kit.result` written by a finished `go` or `drive` child (legacy `ride` included).
 `nothing` when the file is missing or unreadable (still running, or a hard death).
 """
 function kit_result_from_dir(output_dir::AbstractString)::Union{Nothing, DistSSHJobResult}
@@ -1836,6 +1743,7 @@ function kit_result_from_dir(output_dir::AbstractString)::Union{Nothing, DistSSH
         kind_s = raw["kind"]
         kind_s isa AbstractString || return nothing
         ks = String(kind_s)
+        # Keep "ride" for kit.result written by 0.1.x ride runs.
         (ks == "go" || ks == "ride" || ks == "drive" || ks == "pipeline") || return nothing
         kind = Symbol(ks)
         code = raw["exit_code"]
@@ -1896,7 +1804,7 @@ end
     drive_host_status(kp::DetachedProcess) -> Vector{DriveHostStatus}
 
 Live per-host membership for a running (or recently collecting) `drive`
-or `ride`. Reads `kit.hosts.status`. Empty when the file is missing (too
+Reads `kit.hosts.status`. Empty when the file is missing (too
 early, a `go` run, or a hard death before join). This is not
 [`DriveResult`](@ref) `hosts` (post-run collect); that vector is stored in
 `kit.result` as `hosts`.
@@ -1943,7 +1851,7 @@ end
     allocate_output_dir(kind, script; project=pwd(), job_id=nothing) -> String
 
 Create a unique output directory for a later detached [`execute!`](@ref)
-and return its path. `kind` is `:go`, `:drive`, or `:ride` (the same values as
+and return its path. `kind` is `:go` or `:drive` (the same values as
 `execute!`). The directory is created; pass it as `output_dir=`.
 
 Layout is `{script dir}/.distssh/<kind>/<script-stem>_<UTC-stamp>/` (legacy
@@ -1953,7 +1861,7 @@ Layout is `{script dir}/.distssh/<kind>/<script-stem>_<UTC-stamp>/` (legacy
 if it already exists (same-second collision), a nanosecond suffix is
 retried so two allocations do not share a directory.
 
-This matches omitted in-process defaults for go, ride, and drive:
+This matches omitted in-process defaults for go and drive:
 `{script}/.distssh/<kind>/<stem>_<UTC>/`. Drive still honors
 `output_dir` / `--output-dir` and a driver's `init_output_dir!`
 (`DISTRIBUTED_OUTPUT_DIR`) when those are set. Detached `execute!(:drive)`
@@ -2018,8 +1926,6 @@ function _execute_detached_dirs(
         canonical_local_path(output_dir)
     elseif kind === :go
         _go_batch_output_dir(project, script_path)
-    elseif kind === :ride
-        _ride_batch_dir(script_path, nothing; project = project)
     else
         inherited = strip(get(ENV, "DISTRIBUTED_OUTPUT_DIR", ""))
         if !isempty(inherited)
@@ -2030,7 +1936,7 @@ function _execute_detached_dirs(
             nothing
         end
     end
-    resolved_log = if kind === :go || kind === :ride || enable_log === false
+    resolved_log = if kind === :go || enable_log === false
         nothing
     elseif log_dir !== nothing
         canonical_local_path(String(log_dir))
@@ -2067,7 +1973,6 @@ function _execute_detached_argv(
         workers = nothing,
         repeat = nothing,
         worker_include::Bool = false,
-        spi_check::Bool = false,
         unsafe_skip_env_digests::Bool = false,
         allow_external_symlinks::Bool = false,
         run_id::Union{Nothing, AbstractString} = nothing,
@@ -2127,12 +2032,6 @@ function _execute_detached_argv(
             push!(argv, "--head-workers", string(Int(workers)))
         end
         worker_include && push!(argv, "--worker-include")
-    elseif kind === :ride
-        if spi_check
-            push!(argv, "--spi-check")
-        else
-            push!(argv, "--no-spi-check")
-        end
     else
         if repeat !== nothing
             push!(argv, "--repeat", string(Int(repeat)))
@@ -2519,7 +2418,7 @@ Julia 1.13: the driver exits 1 and does not send `kill -INT`. Measured on
 macOS. On builds without `Base.CANCEL_TOKEN` (e.g. 1.13 and 1.14.0-beta1 through
 1.14.x) the
 driver exits 130, but a worker can be removed before it sees the interrupt.
-A `go` or `ride` child is `julia -m` with
+A `go` child is `julia -m` with
 exit-on-sigint, so SIGINT runs `atexit` and does not enter `catch` or
 `finally`. Then SIGTERM, wait up to `grace` seconds (`0` sends SIGTERM
 and does not wait), then SIGKILL if the process is still alive. Then

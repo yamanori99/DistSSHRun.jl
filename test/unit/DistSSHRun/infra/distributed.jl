@@ -108,8 +108,7 @@ using Test
             @test isempty(readdir(made))
             empty_dir = joinpath(tmp, "empty")
             mkdir(empty_dir)
-            @test DistSSHRun._prepare_output_dir!(empty_dir; command = :ride) ==
-                DistSSHRun.canonical_local_path(empty_dir)
+            @test_throws ArgumentError DistSSHRun._prepare_output_dir!(empty_dir; command = :ride)
             file = joinpath(tmp, "a-file")
             write(file, "x\n")
             file_err = try

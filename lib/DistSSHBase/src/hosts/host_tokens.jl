@@ -28,9 +28,9 @@ end
 
 Rebuild CLI host tokens for `execute!`.
 
-Go tokens are the parser strings. Ride uses the same shape. Drive uses remote
-tuple specs only (head workers use `--head-workers`, not tokens). `kind` must be `:go`,
-`:drive`, or `:ride`.
+Go tokens are the parser strings. Drive uses remote
+tuple specs only (head workers use `--head-workers`, not tokens). `kind` must be `:go`
+or `:drive`.
 """
 function host_tokens(hosts::AbstractVector{<:AbstractString})::Vector{String}
     return String[String(h) for h in hosts]
@@ -50,12 +50,12 @@ function host_tokens(
 end
 
 function host_tokens(parsed; kind::Symbol)::Vector{String}
-    if kind === :go || kind === :ride
+    if kind === :go
         return host_tokens(parsed.hosts::AbstractVector{<:AbstractString})
     elseif kind === :drive
         return host_tokens(parsed.hosts::AbstractVector{Tuple{String, Union{Int, Nothing}}})
     end
-    throw(ArgumentError("host_tokens: kind must be :go, :drive, or :ride, got $(repr(kind))"))
+    throw(ArgumentError("host_tokens: kind must be :go or :drive, got $(repr(kind))"))
 end
 
 """SSH host names from a hosts file (for setup / DistSSHSession)."""

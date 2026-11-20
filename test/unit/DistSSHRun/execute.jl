@@ -330,7 +330,6 @@ end
             @test by2["h1"].state === :collect_pending
             @test by2["h2"].state === :left
             @test DistSSHRun._drive_hosts_that_left() == ["h2"]
-            @test DistSSHRun._drive_parent_worker_count() == 0
         end
         DistSSHRun._clear_drive_host_worker_ids!()
         DistSSHRun._register_drive_host_worker_ids!("h1", [1])
@@ -383,9 +382,7 @@ end
             d3 = DistSSHRun.allocate_output_dir(:go, "batch.jl"; project)
             @test isdir(d3)
             @test d1 != d3
-            d_ride = DistSSHRun.allocate_output_dir(:ride, "map.jl"; project)
-            @test isdir(d_ride)
-            @test occursin(joinpath(".distssh", "ride"), d_ride)
+            @test_throws ArgumentError DistSSHRun.allocate_output_dir(:ride, "map.jl"; project)
             err_kind = try
                 DistSSHRun.allocate_output_dir(:pipeline, "x.jl"; project)
                 nothing
@@ -551,23 +548,12 @@ end
         @test !DistSSHRun.execute_detached_accepts(:plan; kind = :drive)
         @test DistSSHRun.execute_detached_accepts(:allow_external_symlinks; kind = :go)
         @test DistSSHRun.execute_detached_accepts(:allow_external_symlinks; kind = :drive)
-        @test !DistSSHRun.execute_detached_accepts(:allow_external_symlinks; kind = :ride)
         @test DistSSHRun.execute_detached_accepts(:unsafe_skip_env_digests; kind = :go)
         @test DistSSHRun.execute_detached_accepts(:unsafe_skip_env_digests; kind = :drive)
-        @test DistSSHRun.execute_detached_accepts(:unsafe_skip_env_digests; kind = :ride)
         @test DistSSHRun.execute_detached_accepts(:run_id; kind = :go)
         @test DistSSHRun.execute_detached_accepts(:run_id; kind = :drive)
-        @test DistSSHRun.execute_detached_accepts(:run_id; kind = :ride)
-        @test DistSSHRun.execute_detached_accepts(:spi_check; kind = :ride)
-        @test !DistSSHRun.execute_detached_accepts(:gb_per_worker; kind = :ride)
-        @test !DistSSHRun.execute_detached_accepts(:mem_headroom; kind = :ride)
-        @test DistSSHRun.execute_detached_accepts(:output_dir; kind = :ride)
-        @test !DistSSHRun.execute_detached_accepts(:repeat; kind = :ride)
-        @test !DistSSHRun.execute_detached_accepts(:sync_script; kind = :ride)
         @test DistSSHRun.execute_detached_accepts(:worker_include; kind = :drive)
         @test !DistSSHRun.execute_detached_accepts(:worker_include; kind = :go)
-        @test !DistSSHRun.execute_detached_accepts(:log_dir; kind = :ride)
-        @test DistSSHRun.execute_detached_accepts(:best_effort; kind = :ride)
         @test !DistSSHRun.execute_detached_accepts(:spi_check; kind = :go)
         @test !DistSSHRun.execute_detached_accepts(:spi_check; kind = :drive)
         err = try
@@ -577,7 +563,7 @@ end
             e
         end
         @test err isa ArgumentError
-        @test occursin(":go, :drive, or :ride", sprint(showerror, err))
+        @test occursin(":go or :drive", sprint(showerror, err))
     end
 
     @testset "detached bootstrap argv" begin
@@ -748,44 +734,6 @@ end
             best_effort = nothing,
             skip_hash_check = true
         )
-        argv_ride = DistSSHRun._execute_detached_argv(
-            :ride, "job.jl", String[], String[]; head_workers = 2,
-            output_dir = "/tmp/out",
-            log_dir = nothing,
-            sync = nothing,
-            julia = nothing,
-            quiet = true,
-            verbosity = nothing,
-            hosts_file = nothing,
-            enable_log = true,
-            package = nothing,
-            best_effort = false,
-            skip_hash_check = true,
-            spi_check = false
-        )
-        @test argv_ride[1] == "ride"
-        @test !("--spi-check" in argv_ride)
-        @test "--no-spi-check" in argv_ride
-        @test !("--gb-per-worker" in argv_ride)
-        @test "--output-dir" in argv_ride
-        @test !("--allow-external-symlinks" in argv_ride)
-        argv_ride_spi = DistSSHRun._execute_detached_argv(
-            :ride, "job.jl", String[], String[]; head_workers = 2,
-            output_dir = "/tmp/out",
-            log_dir = nothing,
-            sync = nothing,
-            julia = nothing,
-            quiet = true,
-            verbosity = nothing,
-            hosts_file = nothing,
-            enable_log = true,
-            package = nothing,
-            best_effort = false,
-            skip_hash_check = true,
-            spi_check = true
-        )
-        @test "--spi-check" in argv_ride_spi
-        @test !("--no-spi-check" in argv_ride_spi)
         argv_snap = DistSSHRun._execute_detached_argv(
             :go, "job.jl", String[], String[]; head_slots = 1,
             output_dir = "/tmp/out",
@@ -877,18 +825,6 @@ end
         go_r = DistSSHRun.parse_go_args(["--repeat", "8", "job.jl"])
         @test DistSSHRun.execute_kwargs_from_parsed(go_r; kind = :go)[:repeat] == 8
 
-        ride = DistSSHRun.parse_ride_args(
-            [
-                "--no-spi-check", "--head-workers", "2", "job.jl",
-            ]
-        )
-        rkw = DistSSHRun.execute_kwargs_from_parsed(ride; kind = :ride)
-        @test rkw[:spi_check] === false
-        @test !haskey(rkw, :gb_per_worker)
-        @test ride.cli_session.head_workers == 2
-        @test DistSSHRun.host_tokens(ride; kind = :ride) == String[]
-        @test !haskey(rkw, :sync)
-
         hosts_file = _sample_hosts_file()
         drive = DistSSHRun.parse_drive_args(
             [
@@ -913,7 +849,7 @@ end
             e
         end
         @test errk isa ArgumentError
-        @test occursin(":go, :drive, or :ride", sprint(showerror, errk))
+        @test occursin(":go or :drive", sprint(showerror, errk))
     end
 
     @testset "Queue submit parse boundary (DistSSHQueue 461e85b9)" begin
@@ -968,15 +904,18 @@ end
         @test occursin("go: --git-sync was removed", err_go_git.msg)
     end
 
-    @testset "kind not :go / :drive / :ride" begin
-        err = try
-            DistSSHRun.execute!(:pipeline, "job.jl", String[])
-            nothing
-        catch e
-            e
+    @testset "kind not :go or :drive" begin
+        for bad in (:pipeline, :ride)
+            err = try
+                DistSSHRun.execute!(bad, "job.jl", String[])
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin(":go or :drive", sprint(showerror, err))
         end
-        @test err isa ArgumentError
-        @test occursin(":go, :drive, or :ride", sprint(showerror, err))
+        @test_throws UndefVarError DistSSHRun.ride!("job.jl")
     end
 
     @testset "detached rejects unknown / yes kwarg" begin
@@ -1447,7 +1386,7 @@ end
                 try
                     kp = DistSSHRun.DetachedProcess(
                         proc;
-                        kind = :ride,
+                        kind = :drive,
                         output_dir = out_d,
                         run_dir = run_d,
                     )
@@ -1468,38 +1407,6 @@ end
             finally
                 process_running(proc) && kill(proc)
                 wait(proc)
-            end
-        end
-    end
-
-    @testset "terminate! detached ride" begin
-        _with_tempdir() do proj
-            _write_job_with_distsshrun!(proj)
-            script = joinpath(proj, "job.jl")
-            write(
-                script, """
-                sleep(60)
-                """
-            )
-            mktemp() do _, out_io
-                mktemp() do _, err_io
-                    _, kp = _capture_detached_env_log() do
-                        DistSSHRun.execute!(
-                            :ride,
-                            script, String[]; head_workers = 1,
-                            detached = true,
-                            project = proj,
-                            verbosity = :progress,
-                            job_id = "t-ride",
-                            stdout = out_io,
-                            stderr = err_io
-                        )
-                    end
-                    result = DistSSHRun.terminate!(kp; grace = 2)
-                    @test result isa DistSSHRun.DistSSHJobResult
-                    @test !process_running(kp.process)
-                    @test result.kind === :ride
-                end
             end
         end
     end
@@ -1959,10 +1866,9 @@ end
         @test DistSSHRun._detached_threads_from_counts(4, 1) == "4,1"
         @test DistSSHRun._detached_thread_flag(:inherit) == DistSSHRun._launch_thread_spec()
         @test DistSSHRun.execute_detached_accepts(:threads; kind = :go)
-        @test DistSSHRun.execute_detached_accepts(:threads; kind = :ride)
         @test DistSSHRun.execute_detached_accepts(:threads; kind = :drive)
         @test DistSSHRun.execute_detached_accepts(:dir; kind = :go)
-        @test DistSSHRun.execute_detached_accepts(:env_allow; kind = :ride)
+        @test DistSSHRun.execute_detached_accepts(:env_allow; kind = :drive)
         @test DistSSHRun.execute_detached_accepts(:env; kind = :drive)
 
         session = (quiet = false, verbosity = nothing, head_workers = nothing)
@@ -2198,6 +2104,15 @@ end
             @test result_snap.ok
             @test isfile(marker_snap)
         end
+    end
+
+    @testset "legacy ride on-disk records" begin
+        raw = Dict{String, Any}(
+            "schema" => 1,
+            "writer" => "DistSSHRun 0.1.0",
+            "kind" => "ride",
+        )
+        @test DistSSHRun._kit_run_toml_owned(raw)
     end
 
 end

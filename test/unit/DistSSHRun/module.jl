@@ -24,9 +24,8 @@ using Test
     @test :pool! in ns && :ResourcePool in ns && :HostInventory in ns
     @test not_exported(:print_pool)
     @test :worker_plan_from_pool ∉ ns
-    @test :ride! in ns && :RideResult in ns
-    @test not_exported(:print_ride)
-    @test Base.isexported(DistSSHRun, :parse_ride_args) && :show_ride_usage ∉ ns
+    @test :ride! ∉ ns && :RideResult ∉ ns && :parse_ride_args ∉ ns
+    @test :print_ride ∉ ns && :show_ride_usage ∉ ns
     @test :plan! ∉ ns && :KitPlan ∉ ns && :PlanFinding ∉ ns
     @test :print_plan ∉ ns
     @test :parse_plan_args ∉ ns && :show_plan_usage ∉ ns
@@ -106,7 +105,7 @@ using Test
     @test :DistSSHBase ∉ ns && :DistSSHUp ∉ ns
     @test !isdefined(DistSSHRun, :DistSSHSize)
     @test :parse_worker_tokens ∉ ns && :ParsedWorkerTokens ∉ ns
-    @test :worker_tokens_fully_specified ∉ ns && :child_hosts_from_tokens ∉ ns
+    @test :worker_tokens_fully_specified ∉ ns
     @test :worker_plan_from_tokens ∉ ns
     @test :split_worker_token ∉ ns && :is_parent_host_name in ns && :host_tokens in ns
     @test :size_plan ∉ ns && :go ∉ ns && :drive ∉ ns

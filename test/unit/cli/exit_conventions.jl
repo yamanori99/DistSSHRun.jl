@@ -28,7 +28,6 @@ using Test
 
     for (cmd, bare, help_argv, help_needle) in (
             (:go, () -> DistSSHRun.go(String[]), ["--help"], "SCRIPT.jl"),
-            (:ride, () -> DistSSHRun.run_ride(String[]), ["--help"], "SCRIPT.jl"),
             (:drive, () -> DistSSHRun.drive(String[]), ["--help"], "drive"),
             (:up, () -> DistSSHRun.up(String[]), ["--help"], "up"),
             (:setup, () -> DistSSHRun.setup(String[]), ["--help"], "ship-tree"),
@@ -43,7 +42,6 @@ using Test
         @testset "$cmd --help" begin
             let (code, out, err) = _capture(
                     () -> cmd == :go ? DistSSHRun.go(help_argv) :
-                        cmd == :ride ? DistSSHRun.run_ride(help_argv) :
                         cmd == :drive ? DistSSHRun.drive(help_argv) :
                         cmd == :up ? DistSSHRun.up(help_argv) :
                         DistSSHRun.setup(help_argv)
@@ -91,6 +89,13 @@ using Test
             )
             @test code == USAGE_EXIT
             @test occursin("ship-tree was removed", err)
+        end
+    end
+
+    @testset "removed ride subcommand" begin
+        let (code, _, err) = _capture(() -> DistSSHRun.main(["ride", "job.jl"]))
+            @test code == USAGE_EXIT
+            @test occursin(DistSSHRun.REMOVED_RIDE_SUBCOMMAND_HINT, err)
         end
     end
 

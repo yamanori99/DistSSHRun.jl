@@ -1,7 +1,7 @@
 """
 DistSSHRun — the DistSSHKit execution layer moved into this package.
 
-One SSH run (`setup`, `go`, `ride`, `drive`, `hostinfo`, `pool`, `demo`, `progress`) and the bang API (`go!`, `ride!`, `pool!`, `drive!`, `pipeline!`).
+One SSH run (`setup`, `go`, `drive`, `hostinfo`, `pool`, `demo`, `progress`) and the bang API (`go!`, `pool!`, `drive!`, `pipeline!`).
 
 DistSSHKit depends on DistSSHRun and DistSSHQueue and reexports their public names. Users add DistSSHKit and run `julia -m DistSSHKit`. This package can still be added on its own. The command is then `julia -m DistSSHRun`.
 
@@ -21,7 +21,7 @@ using TOML
 using Unicode
 
 # Public surface. Prefer `julia -m DistSSHKit …` for day-to-day CLI.
-#   user — go! / ride! / drive! / pool! / setup! / pipeline!
+#   user — go! / drive! / pool! / setup! / pipeline!
 #   placement — WorkerPlan from explicit parent:N / NAME:N
 #   queue — execute!(; detached=true), parsers, paths, help chrome
 #   argv wrappers `go` / `drive` stay unexported (`main` / tests)
@@ -73,9 +73,7 @@ export pipeline!
 export pipeline_config_from_env
 export go!
 export GoResult
-export ride!
 export LoadedCodeMismatchError
-export RideResult
 export execute!
 export allocate_output_dir
 export allocate_run_dir
@@ -92,7 +90,6 @@ export kit_result_from_dir
 export drive_host_status
 export parse_go_args
 export parse_drive_args
-export parse_ride_args
 export ssh_opts
 export run_on_host
 export resolve_controller_julia
@@ -113,7 +110,6 @@ public print_hostinfo
 public report_pipeline_errors
 public report_run_errors
 public report_go_errors
-public print_ride
 public show_go_usage
 public show_drive_usage
 public println_kit_version
@@ -225,7 +221,6 @@ include("DistSSHRun/argv/setup_args.jl")
 include("DistSSHRun/argv/up_args.jl")
 include("DistSSHRun/argv/hostinfo_args.jl")
 include("DistSSHRun/argv/pool_args.jl")
-include("DistSSHRun/argv/ride_args.jl")
 include("DistSSHRun/argv/doctor_args.jl")
 include("DistSSHRun/drive.jl")
 include("DistSSHRun/core/doctor.jl")
@@ -242,8 +237,6 @@ include("DistSSHRun/core/drive/results.jl")
 include("DistSSHRun/core/drive/run.jl")
 include("DistSSHRun/core/drive/script_hint.jl")
 include("DistSSHRun/go.jl")
-include("DistSSHRun/infra/script_scan.jl")
-include("DistSSHRun/ride.jl")
 include("DistSSHRun/execute_envelope.jl")
 include("DistSSHRun/execute.jl")
 include("DistSSHRun/provenance.jl")
@@ -281,7 +274,7 @@ dist_ssh_kit_version()::VersionNumber = DIST_SSH_KIT_VERSION
 #   julia --project=. -m DistSSHKit drive parent:2 script.jl
 
 const _KIT_CLI_LOADED = Set{String}()
-const _KIT_CLI_SCRIPTS = ("doctor.jl", "drive.jl", "go.jl", "hostinfo.jl", "pool.jl", "ride.jl", "setup.jl", "up.jl")
+const _KIT_CLI_SCRIPTS = ("doctor.jl", "drive.jl", "go.jl", "hostinfo.jl", "pool.jl", "setup.jl", "up.jl")
 
 const _KIT_CLI_MAIN = Dict(
     "doctor.jl" => :doctor_main,
@@ -289,7 +282,6 @@ const _KIT_CLI_MAIN = Dict(
     "go.jl" => :go_main,
     "hostinfo.jl" => :hostinfo_main,
     "pool.jl" => :pool_main,
-    "ride.jl" => :ride_main,
     "setup.jl" => :setup_main,
     "up.jl" => :up_main,
 )
@@ -426,20 +418,12 @@ Run the `pool` CLI (`pool.jl`) with `args`. Prefer `julia -m DistSSHKit pool …
 run_pool(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("pool.jl", args)
 
 """
-    run_ride(args::Vector{String}=copy(ARGS))
-
-Run the `ride` CLI (`ride.jl`) with `args`. Prefer `julia -m DistSSHKit ride …`.
-"""
-run_ride(args::Vector{String} = copy(ARGS))::Cint = _run_kit_cli_script("ride.jl", args)
-
-"""
     main(args::Vector{String}=copy(ARGS))
 
 CLI entry. Prefer Julia 1.13+ and `julia -m DistSSHKit SUBCOMMAND …`:
 
     julia --project=. -m DistSSHKit setup git-clone host1 host2
     julia --project=. -m DistSSHKit go SCRIPT.jl
-    julia --project=. -m DistSSHKit ride parent:2 SCRIPT.jl
     julia --project=. -m DistSSHKit drive parent:2 script.jl
     julia --project=. -m DistSSHKit hostinfo parent host1
     julia --project=. -m DistSSHKit pool parent host1
@@ -472,7 +456,6 @@ const _RUN_CALLS = Dict{String, Function}(
     "demo" => (rest -> demo(rest)::Cint),
     "setup" => (rest -> setup(rest)::Cint),
     "up" => (rest -> up(rest)::Cint),
-    "ride" => (rest -> run_ride(rest)::Cint),
     "hostinfo" => (rest -> run_hostinfo(rest)::Cint),
     "pool" => (rest -> run_pool(rest)::Cint),
     "progress" => (rest -> progress(rest)::Cint),
@@ -485,19 +468,21 @@ end
 
 """The `.jl` rejection sentence. `name` is the word the caller reports."""
 function no_command_message(name::AbstractString)::String
-    return "No command (got $(repr(String(name)))). Kit does not infer go / ride / drive."
+    return "No command (got $(repr(String(name)))). Kit does not infer go or drive."
 end
 
 """Three hint lines `print_rejected_command` prints under `no_command_message`."""
 const NO_COMMAND_HINT_LINES = (
     "  go SCRIPT.jl      as-is complete job (timing without rewrite)",
-    "  ride … SCRIPT.jl  experimental map / filter",
     "  drive … SCRIPT.jl Distributed",
 )
 
+"""One line after `unknown_subcommand_message` when `name` is `ride`. DistSSHKit prints this too."""
+const REMOVED_RIDE_SUBCOMMAND_HINT = "ride was removed; use drive with pmap"
+
 """Expected-command sentence `print_rejected_command` prints under `unknown_subcommand_message`."""
 const RUN_SUBCOMMAND_EXPECTATION =
-    "Expected: setup | doctor | up | go | ride | drive | hostinfo | pool | demo | progress"
+    "Expected: setup | doctor | up | go | drive | hostinfo | pool | demo | progress"
 
 """Print the shared rejection lines. The caller prints the usage page.
 
@@ -513,6 +498,7 @@ function print_rejected_command(name::AbstractString; script::Bool, io::IO = std
         end
     else
         print_cli_error(unknown_subcommand_message(name); io = io)
+        String(name) == "ride" && println(io, REMOVED_RIDE_SUBCOMMAND_HINT)
         println(io, RUN_SUBCOMMAND_EXPECTATION)
     end
     return nothing
@@ -521,6 +507,7 @@ end
 public unknown_subcommand_message
 public no_command_message
 public NO_COMMAND_HINT_LINES
+public REMOVED_RIDE_SUBCOMMAND_HINT
 public RUN_SUBCOMMAND_EXPECTATION
 public print_rejected_command
 
@@ -576,7 +563,7 @@ function _main_dispatch(args::Vector{String})::Cint
     end
     print_rejected_command(
         subcommand;
-        script = any(endswith(String(a), ".jl") for a in args),
+        script = endswith(String(subcommand), ".jl"),
     )
     println(stderr)
     print_kit_root_usage(stderr)

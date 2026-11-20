@@ -6,7 +6,7 @@ DistSSHRun and `julia -m DistSSHKit` follow the same exit conventions as Rust
 
 | Situation | Output stream | Exit code |
 | --- | --- | --- |
-| No arguments on a command that needs operands or flags (`go`, `ride`, `drive`, `up`, `setup`, or the top-level driver with no subcommand) | Full `--help` text on **stderr** | **2** |
+| No arguments on a command that needs operands or flags (`go`, `drive`, `up`, `setup`, or the top-level driver with no subcommand) | Full `--help` text on **stderr** | **2** |
 | Explicit `--help` / `-h` | Same help text on **stdout** | **0** |
 | Usage error (unknown flag, missing operand, bad combination) | Error and a short hint on **stderr** | **2** |
 | Runtime failure (SSH error, job failure, missing file, …) | Diagnostics on **stderr** (command-specific) | **1** (unless documented below) |

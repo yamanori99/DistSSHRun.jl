@@ -1,6 +1,6 @@
 #!/usr/bin/env julia
 # Real-SSH E2E against testenv/docker-ssh workers. Not part of Pkg.test().
-# Oracle: OpenSSH + remote Julia (setup / drive / go / ride / git). Assert
+# Oracle: OpenSSH + remote Julia (setup / drive / go / git). Assert
 # files workers write (`run_on_host` / collect). Kit-parent-side demo CSV is not
 # a remote collect. Inventory: test/README.md § SSH E2E.
 # Local with_kit recipes are test/integration/demos/.
@@ -402,8 +402,8 @@ end
             _assert_ssh_e2e_ok(suite, "setup_instantiate", proc, out; project = proj, kit = :setup)
         end
 
-        @testset "drive and ride --run-id env digests" begin
-            _e2e_announce("drive and ride --run-id env digests")
+        @testset "drive --run-id env digests" begin
+            _e2e_announce("drive --run-id env digests")
             run_id_root = "/home/dev/distsshkit-e2e-run-id-verify"
             run_env = _ssh_e2e_env(; remote_project = run_id_root)
             quiet = merge(run_env, Dict("DISTSSH_QUIET" => "0"))
@@ -454,14 +454,6 @@ end
                     extra_env = quiet
                 )
                 _assert_ssh_e2e_ok(suite, "run_id_env_drive", proc, out)
-                ride_script = _fixture("ride_remote_ok.jl")
-                ride_cmd = _kit_cli_cmd(
-                    vcat(["ride", "--no-spi-check"], runid_flags, remote_tokens, [ride_script])
-                )
-                proc, out = _run_subprocess(
-                    setenv(ride_cmd, _drive_host_env(proj; extra_env = quiet))
-                )
-                _assert_ssh_e2e_ok(suite, "run_id_env_ride", proc, out)
 
                 proc_skip, out_skip = _run_kit_drive(;
                     script = smoke,
@@ -935,8 +927,7 @@ end
             @test occursin("DISTSSH_RUNNER_SMOKE_OK nw=3", out)
         end
 
-        # Focused pseudo-TTY (`script`) coverage for remote drive. Remote
-        # ride under a PTY is the next inner testset (parent-side marker).
+        # Focused pseudo-TTY (`script`) coverage for remote drive.
         @testset "drive remote pseudo-TTY success and failure" begin
             _e2e_announce("drive remote pseudo-TTY success and failure")
             function sh_quote(s::AbstractString)
@@ -1029,160 +1020,21 @@ end
 
         _ssh_e2e_ship_tree_after_local_change!(
             suite,
-            "setup_ship_tree_before_ride",
+            "setup_ship_tree_before_drive_pty",
             proj,
             remote_root,
             setup_hosts;
             extra_env = _e2e_base_env(),
         )
 
-        # Ride progress stdout is buffered then replayed after
-        # `kit_progress_done!` (unlike drive `--no-log` live). Success must
-        # not print `Script:`; controller `run.toml` has no `log_dir`.
-        @testset "ride remote pseudo-TTY success and failure" begin
-            _e2e_announce("ride remote pseudo-TTY success and failure")
-            function sh_quote(s::AbstractString)
-                return "'" * replace(String(s), "'" => "'\\''") * "'"
-            end
-            function argv_line(cmd::Cmd)
-                return join(sh_quote.(String.(cmd.exec)), " ")
-            end
-            tty_extra = merge(
-                _e2e_base_env(),
-                Dict(
-                    "DISTSSH_QUIET" => "0",
-                    "DISTSSH_YES" => "1",
-                    "DISTRIBUTED_INIT_DELAY_SEC" => "0"
-                )
-            )
-            delete!(tty_extra, "DISTSSH_PROGRESS")
-            delete!(tty_extra, "DISTSSH_VERBOSE")
-            tty_env = _drive_host_env(proj; extra_env = tty_extra)
-            mktempdir() do dir
-                ok_script = joinpath(dir, "ride_remote_ok.jl")
-                fail_script = joinpath(dir, "ride_remote_fail.jl")
-                cp(_fixture("ride_remote_ok.jl"), ok_script; force = true)
-                cp(_fixture("ride_remote_fail.jl"), fail_script; force = true)
-                od_ok = joinpath(dir, "ride-out-ok")
-                od_fail = joinpath(dir, "ride-out-fail")
-                mkpath(od_ok)
-                mkpath(od_fail)
-                ride_ok = _kit_cli_cmd(
-                    [
-                        "ride", "-y", "--no-spi-check",
-                        "--output-dir", od_ok, remote_tokens..., ok_script,
-                    ]
-                )
-                ride_fail = _kit_cli_cmd(
-                    [
-                        "ride", "-y", "--no-spi-check",
-                        "--output-dir", od_fail, remote_tokens..., fail_script,
-                    ]
-                )
-                runner = joinpath(dir, "ride_remote_tty.sh")
-                exports = join(
-                    ["export $(sh_quote(k))=$(sh_quote(v))" for (k, v) in sort!(collect(pairs(tty_env)))],
-                    "\n"
-                )
-                write(
-                    runner,
-                    """
-                    #!/bin/sh
-                    unset DISTSSH_QUIET
-                    unset DISTSSH_PROGRESS
-                    unset DISTSSH_VERBOSE
-                    unset DISTSSH_CLI_SUBCOMMAND_DONE
-                    unset DIST_SSH_KIT_CLI_INCLUDE
-                    export JULIA_LOAD_PATH=$(sh_quote(_child_load_path()))
-                    unset JULIA_PROJECT
-                    $exports
-                    unset NO_COLOR
-                    $(argv_line(ride_ok))
-                    echo "___OK_EXIT_\$?___"
-                    echo '___SPLIT___'
-                    $(argv_line(ride_fail))
-                    echo "___FAIL_EXIT_\$?___"
-                    """
-                )
-                chmod(runner, 0o755)
-                t0 = time()
-                pty = _tty_capture_script(
-                    runner;
-                    typescript = joinpath(dir, "ride_remote_typescript.txt"),
-                    hang_s = 600.0
-                )
-                elapsed = time() - t0
-                @info "e2e ride remote progress_tty script child wall" elapsed
-                parts = split(pty, "___SPLIT___")
-                @test length(parts) == 2
-                ok_tty = length(parts) == 2 ? parts[1] : ""
-                fail_tty = length(parts) == 2 ? parts[2] : ""
-                ok_plain = _tty_strip_ansi(ok_tty)
-                fail_plain = _tty_strip_ansi(fail_tty)
-                ok_m = match(r"___OK_EXIT_(\d+)___", ok_plain)
-                fail_m = match(r"___FAIL_EXIT_(\d+)___", fail_plain)
-                @test ok_m !== nothing && ok_m.captures[1] == "0"
-                @test fail_m !== nothing && fail_m.captures[1] != "0"
-                @test occursin("DISTSSH_RIDE_REMOTE_OK", ok_plain)
-                @test !occursin("Script: ", ok_plain)
-                @test any(
-                    l -> occursin("DISTSSH_RIDE_REMOTE_OK", l) && !_tty_bar_line(l),
-                    _tty_lines(ok_tty)
-                )
-                @test !occursin(
-                    r"[━╺⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*DISTSSH_RIDE_REMOTE_OK",
-                    ok_tty
-                )
-                _assert_tty_progress_payload(ok_tty)
-                rec = _assert_kit_progress_done(od_ok; kind = :ride)
-                @test rec.kind === :ride && rec.ok === true
-                kr_ok = DistSSHRun.kit_result_from_dir(od_ok)
-                @test kr_ok !== nothing
-                kr_ok === nothing && error("expected kit.result for remote ride success")
-                @test kr_ok.kind === :ride
-                @test kr_ok.ok === true
-                @test kr_ok.exit_code == 0
-                @test kr_ok.log_dir === nothing
-                rd_ok = kr_ok.run_dir
-                if rd_ok === nothing
-                    side = joinpath(od_ok, "kit.run_dir")
-                    @test isfile(side)
-                    rd_ok = isfile(side) ? strip(read(side, String)) : ""
-                end
-                @test !isempty(rd_ok)
-                raw_ok = DistSSHRun.read_kit_run_toml(rd_ok)
-                @test raw_ok isa AbstractDict
-                raw_ok isa AbstractDict && begin
-                    @test get(raw_ok, "kind", nothing) == "ride"
-                    @test !haskey(raw_ok, "log_dir")
-                end
-                @test occursin("DISTSSH_RIDE_REMOTE_BOOM", fail_plain)
-                @test any(
-                    l -> occursin("DISTSSH_RIDE_REMOTE_BOOM", l) && !_tty_bar_line(l),
-                    _tty_lines(fail_tty)
-                )
-                @test !occursin(
-                    r"[━╺⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*DISTSSH_RIDE_REMOTE_BOOM",
-                    fail_tty
-                )
-                _assert_tty_progress_payload(fail_tty)
-                kr_fail = DistSSHRun.kit_result_from_dir(od_fail)
-                @test kr_fail !== nothing
-                kr_fail === nothing && error("expected kit.result for remote ride failure")
-                @test kr_fail.kind === :ride
-                @test kr_fail.ok === false
-                @test kr_fail.exit_code != 0
-                _assert_ssh_e2e_api_ok(
-                    suite, "ride_remote_tty", true, "pty ok/fail captured"
-                )
-            end
-        end
-
         @testset "strict bind contract on ssh workers" begin
             _e2e_announce("strict bind contract on ssh workers")
-            # Keep hosts files and ride script off `proj` so ship-tree hash and git stay aligned.
+            # Hosts and output stay off `proj` so ship-tree / git stay aligned.
+            # The script is staged into `proj` before the ship: drive takes the
+            # job project from the script directory.
             mktempdir() do bind_dir
-                hosts_toml = joinpath(bind_dir, "e2e_bind_ride_hosts.toml")
+                bind_script = joinpath(proj, "drive_bind_workers.jl")
+                hosts_toml = joinpath(bind_dir, "e2e_bind_drive_hosts.toml")
                 write(
                     hosts_toml,
                     """
@@ -1192,27 +1044,19 @@ end
                     bind = "127.0.0.1"
                     """,
                 )
-                bind_script = joinpath(bind_dir, "ride_bind_workers.jl")
-                write(
-                    bind_script,
-                    """
-                    touch(joinpath(ENV["DISTRIBUTED_OUTPUT_DIR"], "bind_ok.txt"))
-                    """,
-                )
-                bind_out = joinpath(bind_dir, "e2e-bind-ride-out")
-                mkpath(bind_out)
+                bind_out = joinpath(bind_dir, "e2e-bind-drive-out")
                 bind_env = _drive_host_env(
                     proj;
                     extra_env = merge(_e2e_base_env(), Dict("DISTSSH_QUIET" => "0")),
                 )
                 bind_cmd = _kit_cli_cmd(
                     [
-                        "ride", "-y", "--no-spi-check", "--unsafe-expose-port",
+                        "drive", "-y", "--unsafe-expose-port",
                         "--hosts-file", hosts_toml, "--output-dir", bind_out, bind_script,
                     ],
                 )
                 proc_ok, out_ok = _run_subprocess(setenv(bind_cmd, bind_env))
-                _assert_ssh_e2e_ok(suite, "ride_bind_unsafe_expose", proc_ok, out_ok; project = proj)
+                _assert_ssh_e2e_ok(suite, "drive_bind_unsafe_expose", proc_ok, out_ok; project = proj)
                 @test isfile(joinpath(bind_out, "bind_ok.txt"))
 
                 bind_reject_toml = joinpath(bind_dir, "e2e_bind_reject_hosts.toml")
@@ -1227,7 +1071,7 @@ end
                 before_pids = _e2e_hb_worker_pids(hosts[1])
                 reject_cmd = _kit_cli_cmd(
                     [
-                        "ride", "-y", "--no-spi-check", "--unsafe-expose-port",
+                        "drive", "-y", "--unsafe-expose-port",
                         "--hosts-file", bind_reject_toml, bind_script,
                     ],
                 )
@@ -1242,12 +1086,12 @@ end
                 @test length(setdiff(after_pids, before_pids)) == 0
                 _ssh_e2e_record!(
                     suite,
-                    "ride_bind_all_interfaces_tunnel_off",
+                    "drive_bind_all_interfaces_tunnel_off",
                     proc_bad,
                     out_bad;
                     expect_ok = false,
                     project = proj,
-                    kit = :ride,
+                    kit = :drive,
                 )
             end
         end
@@ -1682,30 +1526,32 @@ end
             @test dist_exit
         end
 
-        # Detached SSH ride writes `kit.hosts`; `terminate!` SIGTERMs then
-        # tagged `pkill` (never `julia.*--worker`). Parent-only ride is unit.
-        @testset "detached ride terminate! reaps remote workers" begin
-            _e2e_announce("detached ride terminate! reaps remote workers")
-            ride_script = joinpath(proj, "ride_sleep.jl")
+        # Detached SSH drive writes `kit.hosts`; `terminate!` SIGTERMs then
+        # tagged `pkill` (never `julia.*--worker`).
+        @testset "detached drive terminate! reaps remote workers" begin
+            _e2e_announce("detached drive terminate! reaps remote workers")
+            drive_script = joinpath(proj, "drive_sleep.jl")
             host = hosts[1]
             pat_q = DistSSHRun.DistSSHBase._remote_sh_quote(_E2E_JULIA_WORKER_PGREP_PATTERN)
             _ssh_e2e_ssh(host, "pkill -f $pat_q || true")
+            term_out = mktempdir()
             kp = withenv(_e2e_base_env()...) do
                 DistSSHRun.execute!(
-                    :ride,
-                    ride_script,
+                    :drive,
+                    drive_script,
                     ["1*$(host)"];
                     project = proj,
                     remote = remote_root,
+                    output_dir = term_out,
                     detached = true,
                     quiet = true,
-                    spi_check = false,
-                    job_id = "e2e-ride-term"
+                    job_id = "e2e-drive-term"
                 )
             end
-            out = kp.output_dir
-            @test out isa AbstractString
-            hosts_path = joinpath(String(out), "kit.hosts")
+            out_dir = kp.output_dir
+            @test out_dir !== nothing
+            out = String(out_dir)
+            hosts_path = joinpath(out, "kit.hosts")
             hosts_ready = false
             t0h = time()
             while (time() - t0h) < 90
@@ -1716,9 +1562,9 @@ end
                 process_running(kp.process) || break
                 sleep(0.5)
             end
-            listed = hosts_ready ? DistSSHRun._read_kit_hosts(String(out)) : String[]
+            listed = hosts_ready ? DistSSHRun._read_kit_hosts(out) : String[]
             function _kit_snip(name)
-                p = joinpath(String(out), name)
+                p = joinpath(out, name)
                 isfile(p) || return ""
                 text = strip(read(p, String))
                 return last(text, min(length(text), 800))
@@ -1727,30 +1573,30 @@ end
             err_err = _kit_snip("kit.err")
             _assert_ssh_e2e_api_ok(
                 suite,
-                "ride_kit_hosts",
+                "drive_kit_hosts",
                 hosts_ready && host in listed,
                 "ready=$(hosts_ready) listed=$(listed) path=$(hosts_path) out=$(repr(err_snip)) err=$(repr(err_err))"
             )
             @test hosts_ready
             @test host in listed
 
-            function _ride_worker_pids()
+            function _drive_worker_pids()
                 return _e2e_hb_worker_pids(host)
             end
             workers_ready = false
             t0w = time()
             while (time() - t0w) < 60
-                if !isempty(_ride_worker_pids())
+                if !isempty(_drive_worker_pids())
                     workers_ready = true
                     break
                 end
                 process_running(kp.process) || break
                 sleep(0.5)
             end
-            pids = _ride_worker_pids()
+            pids = _drive_worker_pids()
             _assert_ssh_e2e_api_ok(
                 suite,
-                "ride_workers_up",
+                "drive_workers_up",
                 workers_ready && !isempty(pids),
                 "pids=$(pids)"
             )
@@ -1765,14 +1611,14 @@ end
             end
             @test !any(r -> occursin("did not reach", string(r.message)), logger.logs)
             @test result isa DistSSHRun.DistSSHJobResult
-            @test result.kind === :ride
+            @test result.kind === :drive
             @test !process_running(kp.process)
 
             gone = false
             leftover = pids
             t1 = time()
             while (time() - t1) < 30
-                live = Set(_ride_worker_pids())
+                live = Set(_drive_worker_pids())
                 leftover = Int[p for p in pids if p in live]
                 if isempty(leftover)
                     gone = true
@@ -1780,7 +1626,7 @@ end
                 end
                 sleep(0.5)
             end
-            _assert_ssh_e2e_api_ok(suite, "ride_terminate_reap", gone, "leftover=$(leftover)")
+            _assert_ssh_e2e_api_ok(suite, "drive_terminate_reap", gone, "leftover=$(leftover)")
             @test gone
         end
 

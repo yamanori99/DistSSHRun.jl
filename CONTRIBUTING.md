@@ -5,7 +5,7 @@ Internals of this repo.
 - Users: [DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/stable/), [README.md](README.md), [README.ja.md](README.ja.md), [NEWS.md](NEWS.md)
 - API docs: [dev](https://yamanori99.github.io/DistSSHRun.jl/dev/) ([docs/README.md](docs/README.md))
 
-This is a **separate** package from DistSSHKit: FIFO `serve` in front of one Kit `go` / `ride` / `drive`, not a bigger Kit. Placement tokens, `execute!`, `kit.pid` / `kit.result`, `terminate_run!`, demo argv, and rsync/collect are Kit's. Queue records table state and the path Kit already wrote.
+This is a **separate** package from DistSSHKit: FIFO `serve` in front of one Kit `go` / `drive`, not a bigger Kit. Placement tokens, `execute!`, `kit.pid` / `kit.result`, `terminate_run!`, demo argv, and rsync/collect are Kit's. Queue records table state and the path Kit already wrote.
 
 ## Requirements
 

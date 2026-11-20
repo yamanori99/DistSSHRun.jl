@@ -57,7 +57,7 @@ end
 
 Single resolution for drive heartbeat self-exit. Pass `self_exit=true/false` when
 the caller already merged CLI and env (drive argv). Omit it (`nothing`) to read
-`DISTSSH_UNSAFE_MASTER_SILENCE_EXIT` from `env` (API / ride).
+`DISTSSH_UNSAFE_MASTER_SILENCE_EXIT` from `env` (API).
 """
 function resolve_drive_heartbeat_policy(;
         env::AbstractDict{<:Any, <:Any} = ENV,

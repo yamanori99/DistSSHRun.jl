@@ -34,7 +34,7 @@ function _toml_bind_map_from_hosts_file(
         if reject_bind_for_command === :go
             throw(
                 ArgumentError(
-                    "$ctx: bind is not supported for go; checked: go launch contract; fix: remove bind or use drive/ride",
+                    "$ctx: bind is not supported for go; checked: go launch contract; fix: remove bind or use drive",
                 ),
             )
         end

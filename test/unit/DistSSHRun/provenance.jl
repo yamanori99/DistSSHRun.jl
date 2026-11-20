@@ -503,7 +503,7 @@ end
         DistSSHRun._drop_unspecified_source_env!(kept, nothing, Dict{String, String}())
         @test kept["DISTSSH_SOURCE_DIRTY"] == "true"
         @test isempty(DistSSHRun._provenance_source_env(nothing))
-        for kind in (:go, :ride, :drive)
+        for kind in (:go, :drive)
             @test DistSSHRun.execute_detached_accepts(:source; kind = kind)
         end
         withenv(
@@ -531,22 +531,6 @@ end
         @test DistSSHRun._git_status_is_kit(".distsshqueue/tickets/a")
         @test DistSSHRun._git_status_is_kit("out/.distsshkit/provenance.toml")
         @test !DistSSHRun._git_status_is_kit("src/job.jl")
-    end
-
-    @testset "leftover workers keep their host" begin
-        saved = copy(DistSSHRun.DRIVE_HOST_WORKER_IDS)
-        try
-            empty!(DistSSHRun.DRIVE_HOST_WORKER_IDS)
-            DistSSHRun._register_drive_host_worker_ids!(DistSSHRun.PARENT_HOST_NAME, [2, 3])
-            DistSSHRun._register_leftover_workers!([99])
-            @test DistSSHRun.DRIVE_HOST_WORKER_IDS[DistSSHRun.PARENT_HOST_NAME] == [2, 3]
-            @test DistSSHRun.DRIVE_HOST_WORKER_IDS["unknown"] == [99]
-        finally
-            empty!(DistSSHRun.DRIVE_HOST_WORKER_IDS)
-            for (k, v) in saved
-                DistSSHRun.DRIVE_HOST_WORKER_IDS[k] = v
-            end
-        end
     end
 
     @testset "failed script still records provenance" begin
@@ -741,7 +725,7 @@ end
         end
     end
 
-    @testset "drive! and ride! record unverified after unsafe heterogeneous" begin
+    @testset "drive! records unverified after unsafe heterogeneous" begin
         _with_tempdir() do proj
             _write_host_project!(proj, "ProvUnsafeDrive")
             script = joinpath(proj, "job.jl")
@@ -753,28 +737,6 @@ end
                     script, String[]; head_workers = 1,
                     project = proj,
                     enable_log = false,
-                    unsafe_skip_env_digests = true
-                )
-                @test result.ok
-                prov = DistSSHRun.assemble_provenance(proj)
-                env = get(prov, "environment", nothing)
-                @test env isa AbstractDict
-                @test env["verification"] == "unverified"
-                @test env["reason"] == "unsafe-skip-env-digests"
-            finally
-                DistSSHRun.set_kit_verbosity!(prev)
-            end
-        end
-        _with_tempdir() do proj
-            _write_host_project!(proj, "ProvUnsafeRide")
-            script = joinpath(proj, "job.jl")
-            write(script, "println(\"hi\")\n")
-            prev = DistSSHRun.kit_verbosity()
-            try
-                DistSSHRun.set_kit_verbosity!(:quiet)
-                result = DistSSHRun.ride!(
-                    script, String[]; head_workers = 1,
-                    project = proj,
                     unsafe_skip_env_digests = true
                 )
                 @test result.ok
@@ -801,14 +763,7 @@ end
             "removed; use --unsafe-skip-env-digests (Julia/DistSSH* can no longer be waived)",
             err.msg
         )
-        err = try
-            DistSSHRun.ride!("missing.jl"; allow_mismatch = true)
-            nothing
-        catch e
-            e
-        end
-        err isa ArgumentError || error("expected ArgumentError")
-        @test occursin("allow_mismatch= was removed", err.msg)
+        @test_throws UndefVarError DistSSHRun.ride!("missing.jl"; allow_mismatch = true)
         err = try
             DistSSHRun.go!("missing.jl"; allow_mismatch = true)
             nothing

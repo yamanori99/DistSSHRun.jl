@@ -3,7 +3,7 @@ function show_up_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "juliaup verbs: add, default, update, status.",
-        "Hosts: plain SSH names (optional :N suffix is stripped; counts belong on drive/go/ride).",
+        "Hosts: plain SSH names (optional :N suffix is stripped; counts belong on drive/go).",
         "Omit hosts to touch only this machine (kit parent / local juliaup).",
         "add installs a channel. default switches to it.",
         "update with no channel updates every installed channel.",

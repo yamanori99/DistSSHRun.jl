@@ -64,8 +64,8 @@ function _validate_detached_job_blob_dict(raw::AbstractDict)
     kind = get(raw, "kind", nothing)
     kind isa AbstractString || throw(ArgumentError("job blob: missing kind"))
     sym = Symbol(String(kind))
-    sym in (:go, :drive, :ride) || throw(
-        ArgumentError("job blob: kind must be go, drive, or ride, got $(repr(kind))"),
+    sym in (:go, :drive) || throw(
+        ArgumentError("job blob: kind must be go or drive, got $(repr(kind))"),
     )
     script = get(raw, "script", nothing)
     script isa AbstractString || throw(ArgumentError("job blob: missing script"))
@@ -201,7 +201,6 @@ function write_detached_job_blob!(
         workers = nothing,
         repeat = nothing,
         worker_include::Bool = false,
-        spi_check::Bool = false,
         unsafe_skip_env_digests::Bool = false,
         job_id = nothing,
         allow_external_symlinks::Bool = false,
@@ -242,7 +241,6 @@ function write_detached_job_blob!(
             (:skip_hash_check, skip_hash_check),
             (:enable_log, enable_log),
             (:worker_include, worker_include),
-            (:spi_check, spi_check),
             (:unsafe_skip_env_digests, unsafe_skip_env_digests),
             (:allow_external_symlinks, allow_external_symlinks),
         )
@@ -275,7 +273,6 @@ function execute_kwargs_from_job_blob(blob)
     blob.workers !== nothing && (kw[:workers] = blob.workers)
     blob.repeat !== nothing && (kw[:repeat] = blob.repeat)
     blob.worker_include && (kw[:worker_include] = true)
-    blob.spi_check && (kw[:spi_check] = true)
     blob.job_id !== nothing && (kw[:job_id] = blob.job_id)
     blob.head_workers !== nothing && (kw[:head_workers] = blob.head_workers)
     blob.head_slots !== nothing && (kw[:head_slots] = blob.head_slots)
@@ -395,37 +392,7 @@ function go_parsed_from_detached_job_blob(blob)
     )
 end
 
-"""`parse_ride_args`-shaped NamedTuple from a detached job blob."""
-function ride_parsed_from_detached_job_blob(blob)
-    blob.kind === :ride || throw(ArgumentError("job blob kind is $(blob.kind); expected ride"))
-    cli_session = CliSharedFlags(
-        quiet = blob.quiet,
-        verbosity = blob.verbosity === nothing ? nothing : Symbol(blob.verbosity),
-        yes = true,
-        show_version = false,
-        hosts_file = nothing,
-        hint_surface = :cli,
-        head_workers = blob.head_workers,
-    )
-    run_opts = RunOptionCliState()
-    run_opts.unsafe_skip_env_digests = blob.unsafe_skip_env_digests
-    return _ride_parsed(
-        help = false,
-        show_version = false,
-        cli_session = cli_session,
-        script_path = blob.script,
-        script_args = blob.script_args,
-        hosts = String[String(t) for t in blob.tokens],
-        spi_check = blob.spi_check,
-        output_dir = blob.output_dir,
-        julia = blob.julia,
-        run_id = blob.run_id,
-        deploy_root = blob.remote,
-        run_opts = run_opts,
-    )
-end
-
 public DETACHED_JOB_BLOB_ENV, DETACHED_JOB_BLOB_FILENAME, DETACHED_JOB_BLOB_SCHEMA
 public detached_job_blob_path, drive_parsed_from_detached_job_blob, execute_kwargs_from_job_blob
 public go_parsed_from_detached_job_blob, peel_job_blob_bootstrap, read_detached_job_blob
-public ride_parsed_from_detached_job_blob, scrub_detached_placement_env!, write_detached_job_blob!
+public scrub_detached_placement_env!, write_detached_job_blob!

@@ -94,7 +94,6 @@ end
             _runtest_include("unit/DistSSHRun/infra/worker_plan.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "worker_plan.jl"))
             _runtest_include("unit/DistSSHRun/hostinfo.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "hostinfo.jl"))
             _runtest_include("unit/DistSSHRun/go.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "go.jl"))
-            _runtest_include("unit/DistSSHRun/ride.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "ride.jl"))
             _runtest_include("unit/DistSSHRun/namespace.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "namespace.jl"))
             _runtest_include("unit/DistSSHRun/pool.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "pool.jl"))
             _runtest_include("unit/DistSSHRun/module.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "module.jl"))
@@ -160,7 +159,6 @@ end
             _runtest_include("unit/cli/doctor/main.jl", joinpath(@__DIR__, "unit", "cli", "doctor", "main.jl"))
             _runtest_include("unit/cli/hostinfo/args.jl", joinpath(@__DIR__, "unit", "cli", "hostinfo", "args.jl"))
             _runtest_include("unit/cli/pool/args.jl", joinpath(@__DIR__, "unit", "cli", "pool", "args.jl"))
-            _runtest_include("unit/cli/ride/args.jl", joinpath(@__DIR__, "unit", "cli", "ride", "args.jl"))
             _runtest_include("unit/cli/exit_conventions.jl", joinpath(@__DIR__, "unit", "cli", "exit_conventions.jl"))
             _runtest_include("unit/cli/subcommands_main.jl", joinpath(@__DIR__, "unit", "cli", "subcommands_main.jl"))
         end

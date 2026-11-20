@@ -7,8 +7,8 @@
 
 Run a driver script on workers. Tokens match the CLI (`parent:2`, `1*user@host`).
 Load is the master `include`. Publish sends definitions to workers (not top-level
-work). Run is `main()` when defined. Use [`go!`](@ref) / [`ride!`](@ref)
-when that matches the script.
+work). Run is `main()` when defined. Use [`go!`](@ref) when that matches the
+script.
 
 ```julia
 drive!("job.jl", "parent:2"; args=["8"])

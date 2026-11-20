@@ -189,38 +189,6 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             end
         end
 
-        @testset "ride registers local workers before package load boundary" begin
-            for w in setdiff(workers(), [1])
-                rmprocs(w; waitfor = 2.0)
-            end
-            DistSSHRun._clear_drive_host_worker_ids!()
-            empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
-            addprocs(1; topology = :master_worker)
-            foreign = workers()[end]
-            before = Set(workers())
-            addprocs(1; topology = :master_worker)
-            owned = Int[w for w in workers() if w ∉ before]
-            DistSSHRun._mark_workers_launched!(owned, tmp)
-            DistSSHRun._register_drive_host_worker_ids!(DistSSHRun.PARENT_HOST_NAME, owned)
-            try
-                @test foreign ∉ DistSSHRun._live_owned_worker_ids()
-                @test owned[1] in DistSSHRun._live_owned_worker_ids()
-                touch = Dict{Int, Bool}()
-                for w in DistSSHRun._live_owned_worker_ids()
-                    touch[w] = true
-                end
-                DistSSHRun._ride_load_self_on_workers!()
-                @test !get(touch, foreign, false)
-                @test touch[owned[1]]
-            finally
-                DistSSHRun._clear_drive_host_worker_ids!()
-                empty!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS)
-                for w in setdiff(workers(), [1])
-                    w in workers() && rmprocs(w; waitfor = 2.0)
-                end
-            end
-        end
-
         @testset "foreign worker survives drive interrupt hook" begin
             for w in setdiff(workers(), [1])
                 rmprocs(w; waitfor = 2.0)

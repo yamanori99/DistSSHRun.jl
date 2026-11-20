@@ -1193,7 +1193,7 @@ end
 
 No hosts leaves the env alone. `cli_override=nothing` reads the current env.
 A control character in that override or in the resolved root leaves the env alone.
-Shared by `drive` (no pre-run sync) and `ride` (SSH children).
+Shared by `drive` (no pre-run sync).
 """
 function _assign_remote_work_root_env!(
         hosts::AbstractVector{<:AbstractString},

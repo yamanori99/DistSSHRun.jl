@@ -1,6 +1,6 @@
-# Bundled demos under `demos/with_kit/`, `demos/without_kit/`, and `demos/ride/`.
+# Bundled demos under `demos/with_kit/` and `demos/without_kit/`.
 
-const _DEMO_GROUPS = ("with_kit", "without_kit", "ride")
+const _DEMO_GROUPS = ("with_kit", "without_kit")
 
 # Job-project install dir. Package sources stay `demos/with_kit/` etc.
 const DEMO_INSTALL_DIR = "distsshkit_demos"
@@ -195,7 +195,7 @@ end
 """
     install_demos(dest=pwd(); family, force=false) -> (installed=Vector{String}, skipped=Vector{String})
 
-Copy one bundled family (`with_kit`, `without_kit`, or `ride`) into
+Copy one bundled family (`with_kit` or `without_kit`) into
 `joinpath(dest, DistSSHRun.DEMO_INSTALL_DIR)`. Also copies `demos/.gitignore`
 when present.
 
@@ -289,7 +289,7 @@ function _demo_install_args(
     end
     length(families) > 1 && throw(
         DistSSHBase.CliUsageError(
-            "demo install takes one family (with_kit, without_kit, or ride); got extra $(repr(families[2]))",
+            "demo install takes one family (with_kit or without_kit); got extra $(repr(families[2]))",
         )
     )
     fam = _require_demo_family(isempty(families) ? nothing : families[1]; surface = :cli)
@@ -303,7 +303,6 @@ function show_demo_usage(; io::IO = stdout)
         io,
         "  $(cli_m_project()) demo install with_kit [--dest DIR] [--force]",
         "  $(cli_m_project()) demo install without_kit [--dest DIR] [--force]",
-        "  $(cli_m_project()) demo install ride [--dest DIR] [--force]",
         "  $(cli_m_project()) demo list",
     )
     print_help_blank(io)
@@ -320,7 +319,6 @@ function show_demo_usage(; io::IO = stdout)
         io,
         "  with_kit/     Drivers for drive / pipeline!",
         "  without_kit/  Kit-independent scripts (julia / go / go!)",
-        "  ride/         Plain scripts for go / ride (map, filter, for)",
     )
     print_help_blank(io)
     print_help_section("Demos (demo install)"; io = io)
@@ -391,8 +389,6 @@ function demo(args::Vector{String} = copy(ARGS))::Cint
                 if family == "with_kit"
                     println("  $(cli_m_project()) drive parent:2 $rel_demos/with_kit/square_file.jl")
                     println("  julia --project=. $rel_demos/with_kit/pipeline_square.jl")
-                elseif family == "ride"
-                    println("  $(cli_m_project()) ride parent:2 $rel_demos/ride/map_echo.jl")
                 else
                     println("  julia --project=. $rel_demos/without_kit/pipeline_pi.jl")
                     println("  $(cli_m_project()) go $rel_demos/without_kit/pi_file.jl")

@@ -1,6 +1,6 @@
 if !isdefined(Main, :_write_host_project!)
 
-    # `Pkg.is_manifest_current` must be `true` before drive/ride/go verification.
+    # `Pkg.is_manifest_current` must be `true` before drive/go verification.
     function _sync_test_project_manifest!(proj::AbstractString)
         proj = abspath(string(proj))
         isfile(joinpath(proj, "Project.toml")) ||

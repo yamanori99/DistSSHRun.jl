@@ -13,7 +13,7 @@
 <!-- markdownlint-enable MD013 -->
 
 DistSSHRun は、SSH で共有マシンに載せる一回の実行である。`setup`、`up`、
-`go`、`ride`、`drive`、`hostinfo`、`pool`、`demo`、`progress` を持つ。
+`go`、`drive`、`hostinfo`、`pool`、`demo`、`progress` を持つ。
 対応は **macOS、Linux、WSL2 Ubuntu** (ネイティブ Windows は対象外)。
 
 手順の詳細は
@@ -93,7 +93,7 @@ Julia **1.13+**。
 ```bash
 julia -m DistSSHRun setup check child:host1
 julia -m DistSSHRun go SCRIPT.jl
-julia -m DistSSHRun ride --local-workers 2 SCRIPT.jl
+julia -m DistSSHRun drive parent:2 SCRIPT.jl
 julia -m DistSSHRun drive --local-workers 2 SCRIPT.jl
 julia -m DistSSHRun hostinfo
 julia -m DistSSHRun pool

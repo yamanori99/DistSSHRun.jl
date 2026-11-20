@@ -3,7 +3,7 @@ using DistSSHRun
 using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
 
 @testset "bind contract regressions (#503 gaps)" begin
-    @testset "gap 1 ride dry-run uses ssh dest for bind lookup" begin
+    @testset "gap 1 drive dry-run uses ssh dest for bind lookup" begin
         _with_tempdir() do tmp
             path = joinpath(tmp, "hosts.toml")
             write(
@@ -18,7 +18,7 @@ using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
             )
             cli = DistSSHRun.CliSharedFlags(hosts_file = path, hint_surface = :cli)
             cfg = DistSSHRun.resolve_run_job_config(;
-                command = :ride,
+                command = :drive,
                 cli_dry_run = true,
                 cli_unsafe_expose_port = true,
             )
@@ -33,7 +33,7 @@ using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
                 bind_overrides = DistSSHRun.hosts_file_bind_overrides(
                     cli;
                     planned_hosts = ["alice@mac-b"],
-                    command = :ride,
+                    command = :drive,
                 ),
             )
             txt = String(take!(buf))
@@ -42,14 +42,20 @@ using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
         end
     end
 
-    @testset "gap 1b ride dry-run non-loopback bind exits usage" begin
+    @testset "gap 1b drive dry-run non-loopback bind exits usage" begin
         _with_tempdir() do tmp
             proj = joinpath(tmp, "proj")
             mkpath(proj)
             write(joinpath(proj, "Project.toml"), "name = \"DryBind\"\n")
             _sync_test_project_manifest!(proj)
             script = joinpath(proj, "job.jl")
-            write(script, "1\n")
+            write(
+                script,
+                """
+                using Distributed
+                pmap(identity, 1:2)
+                """,
+            )
             hf = joinpath(tmp, "hosts.toml")
             write(
                 hf,
@@ -60,16 +66,16 @@ using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
                 bind = "10.0.0.5"
                 """,
             )
-            parsed = DistSSHRun.parse_ride_args(
+            parsed = DistSSHRun.parse_drive_args(
                 String["--dry-run", "--hosts-file", hf, basename(script)],
             )
             err = try
                 DistSSHRun.finish_run_job_diagnostics!(
                     parsed;
-                    command = :ride,
+                    command = :drive,
                     project = proj,
-                    hosts = parsed.hosts,
-                    worker_tokens = parsed.hosts,
+                    hosts = String[first(h) for h in parsed.hosts],
+                    worker_tokens = DistSSHRun.host_tokens(parsed; kind = :drive),
                 )
             catch e
                 e
@@ -99,12 +105,12 @@ using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
         @test occursin("non-loopback bind", msg)
     end
 
-    @testset "gap 2 ride unsafe_expose_port env when CLI omits flag" begin
+    @testset "gap 2 drive unsafe_expose_port env when CLI omits flag" begin
         let old = get(ENV, "DISTSSH_UNSAFE_EXPOSE_PORT", nothing)
             try
                 ENV["DISTSSH_UNSAFE_EXPOSE_PORT"] = "1"
-                parsed = DistSSHRun.parse_ride_args(String["1*host", "script.jl"])
-                cfg = DistSSHRun.resolve_run_job_config_from_parsed(parsed; command = :ride)
+                parsed = DistSSHRun.parse_drive_args(String["1*host", "script.jl"])
+                cfg = DistSSHRun.resolve_run_job_config_from_parsed(parsed; command = :drive)
                 @test cfg.unsafe_expose_port.value
                 @test cfg.unsafe_expose_port.source == DistSSHRun.FromEnv
             finally
@@ -233,14 +239,14 @@ using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
         let old = get(ENV, "DISTSSH_UNSAFE_EXPOSE_PORT", nothing)
             try
                 ENV["DISTSSH_UNSAFE_EXPOSE_PORT"] = "1"
-                parsed_cli = DistSSHRun.parse_ride_args(
+                parsed_cli = DistSSHRun.parse_drive_args(
                     String["--unsafe-expose-port", "1*host", "script.jl"],
                 )
-                cfg_cli = DistSSHRun.resolve_run_job_config_from_parsed(parsed_cli; command = :ride)
+                cfg_cli = DistSSHRun.resolve_run_job_config_from_parsed(parsed_cli; command = :drive)
                 @test cfg_cli.unsafe_expose_port.value
                 @test cfg_cli.unsafe_expose_port.source == DistSSHRun.FromCLI
-                parsed = DistSSHRun.parse_ride_args(String["1*host", "script.jl"])
-                cfg = DistSSHRun.resolve_run_job_config_from_parsed(parsed; command = :ride)
+                parsed = DistSSHRun.parse_drive_args(String["1*host", "script.jl"])
+                cfg = DistSSHRun.resolve_run_job_config_from_parsed(parsed; command = :drive)
                 @test cfg.unsafe_expose_port.value
                 @test cfg.unsafe_expose_port.source == DistSSHRun.FromEnv
                 _with_tempdir() do tmp
@@ -262,7 +268,7 @@ using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
         end
     end
 
-    @testset "drive! and ride! unsafe_expose_port non-loopback gate" begin
+    @testset "drive! unsafe_expose_port non-loopback gate" begin
         non_loopback_reject = join(
             [
                 "\"lab\": non-loopback bind \"10.0.0.5\"",
@@ -318,23 +324,6 @@ using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
                     @test err isa CliUsageError
                     @test err.msg == non_loopback_reject
                 end
-                let err = try
-                        DistSSHRun.ride!(
-                            script,
-                            ["1*lab"];
-                            project = proj,
-                            bind_overrides = bind,
-                            unsafe_expose_port = missing,
-                            hint_surface = :cli,
-                            spi_check = false,
-                            output_dir = joinpath(tmp, "ride-out"),
-                        )
-                    catch e
-                        e isa CliUsageError ? e : rethrow()
-                    end
-                    @test err isa CliUsageError
-                    @test err.msg == non_loopback_reject
-                end
                 @test !isfile(logp) || read(logp, String) == ""
                 past_gate(f) = try
                     f()
@@ -355,20 +344,6 @@ using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
                             skip_hash_check = true,
                             enable_log = false,
                             julia = julia_exe,
-                        )
-                    end
-                end
-                @test past_gate() do
-                    redirect_stderr(devnull) do
-                        DistSSHRun.ride!(
-                            script,
-                            ["1*lab"];
-                            project = proj,
-                            bind_overrides = bind,
-                            unsafe_expose_port = true,
-                            hint_surface = :cli,
-                            spi_check = false,
-                            output_dir = joinpath(tmp, "ride-out2"),
                         )
                     end
                 end

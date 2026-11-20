@@ -492,7 +492,8 @@ if !isdefined(Main, :_ssh_e2e_enabled)
         cp(_fixture("drive_remote_error.jl"), joinpath(proj, "fail.jl"); force = true)
         cp(_fixture("drive_worker_file.jl"), joinpath(proj, "worker_file.jl"); force = true)
         cp(_fixture("drive_sleep.jl"), joinpath(proj, "sleep.jl"); force = true)
-        cp(_fixture("ride_sleep.jl"), joinpath(proj, "ride_sleep.jl"); force = true)
+        cp(_fixture("drive_sleep.jl"), joinpath(proj, "drive_sleep.jl"); force = true)
+        cp(_fixture("drive_bind_workers.jl"), joinpath(proj, "drive_bind_workers.jl"); force = true)
 
         # Kit logs / demo outputs must not dirty the tree: setup git-sync requires clean git.
         write(

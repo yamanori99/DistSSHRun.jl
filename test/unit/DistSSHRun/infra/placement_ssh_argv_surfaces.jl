@@ -29,7 +29,7 @@ withenv(
             end
         end
 
-        @testset "drive and ride worker sshflags share ssh_connection_ssh_opts" begin
+        @testset "drive worker sshflags share ssh_connection_ssh_opts" begin
             host = "alice@lab:2222"
             exec = Cmd(_B.ssh_connection_ssh_opts(host)).exec
             @test "-p" in exec

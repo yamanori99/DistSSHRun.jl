@@ -32,7 +32,6 @@ struct ExecuteEnvelope
     stderr::Union{Nothing, IO}
     job_id::Union{Nothing, String}
     worker_include::Bool
-    spi_check::Bool
     unsafe_skip_env_digests::Bool
     unsafe_expose_port::Bool
     unsafe_all_to_all::Bool
@@ -80,7 +79,6 @@ function _execute_envelope_from_kwargs(
         stderr = nothing,
         job_id = nothing,
         worker_include::Bool = false,
-        spi_check::Bool = false,
         unsafe_skip_env_digests::Bool = false,
         unsafe_expose_port::Bool = false,
         unsafe_all_to_all::Bool = false,
@@ -133,7 +131,6 @@ function _execute_envelope_from_kwargs(
         stderr,
         job_id === nothing ? nothing : String(job_id),
         worker_include,
-        spi_check,
         unsafe_skip_env_digests,
         unsafe_expose_port,
         unsafe_all_to_all,
@@ -165,10 +162,6 @@ function execute_kwargs_from_envelope(env::ExecuteEnvelope)::Dict{Symbol, Any}
     env.remote !== nothing && (kw[:remote] = env.remote)
     if env.kind === :go
         env.repeat !== nothing && (kw[:repeat] = env.repeat)
-        return kw
-    end
-    if env.kind === :ride
-        env.spi_check && (kw[:spi_check] = true)
         return kw
     end
     kw[:log_dir] = env.log_dir

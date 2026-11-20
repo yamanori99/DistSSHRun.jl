@@ -38,7 +38,7 @@ using DistSSHRun
             @test top == plan.topology == :master_worker
         end
         let cfg = DistSSHRun.resolve_run_job_config(;
-                command = :ride,
+                command = :drive,
                 cli_dry_run = true,
                 cli_unsafe_all_to_all = true,
             ),

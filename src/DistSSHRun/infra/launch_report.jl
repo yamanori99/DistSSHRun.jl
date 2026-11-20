@@ -60,7 +60,7 @@ end
 """
 `true` when every planned worker joined and no host failure rows were recorded.
 
-Strict drive/ride treat a false result as [`LaunchIncompleteError`](@ref) when
+Strict drive treat a false result as [`LaunchIncompleteError`](@ref) when
 `best_effort` is false.
 """
 function launch_report_usable(r::LaunchReport)::Bool

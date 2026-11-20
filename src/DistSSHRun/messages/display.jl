@@ -71,7 +71,7 @@ corrupted output.
 Writes `output_dir/.kit.lock` (this process's pid, plain text). An existing
 lock naming a still-alive **other** pid throws `ArgumentError` immediately. A lock
 naming a dead pid is stale and gets overwritten. Same-pid re-lock does not throw;
-overlapping in-process `go!` / `drive!` / `ride!` (and hostinfo / pool / setup /
+overlapping in-process `go!` / `drive!` (and hostinfo / pool / setup /
 sync / collect / pipeline) throw.
 
 Returns a zero-arg closure that releases the lock; call it in a `finally`.
@@ -110,7 +110,7 @@ function kit_output_dir_lock!(output_dir::AbstractString)
     end
 end
 
-# One in-process Kit job at a time (`go!` / `drive!` / `ride!` / `pool!` / …).
+# One in-process Kit job at a time (`go!` / `drive!` / `pool!` / …).
 # `.kit.lock` is per `output_dir` and pid; it does not serialize two runs in
 # this process. Nested calls on the same task (`pipeline!` → `drive!`) are ok.
 const _KIT_INPROC_GATE = ReentrantLock()
@@ -2554,7 +2554,6 @@ function print_kit_root_usage(io::IO = stderr)
         "  doctor             Deploy prerequisite checks (--deploy)",
         "  up                 Align a Julia channel with juliaup",
         "  go                 Run an as-is complete job",
-        "  ride               Experimental auto-split of map / filter",
         "  drive              Distributed workers + collect",
         "  hostinfo           Host identity, Julia, OS, CPU, RAM",
         "  pool               Cluster cores / health (no job)",
@@ -2568,7 +2567,6 @@ function print_kit_root_usage(io::IO = stderr)
         "  $(cli_m_project()) doctor --deploy host1",
         "  $(cli_m_project()) up host1",
         "  $(cli_m_project()) go SCRIPT.jl",
-        "  $(cli_m_project()) ride parent:2 SCRIPT.jl",
         "  $(cli_m_project()) drive parent:2 SCRIPT.jl",
         "  $(cli_m_project()) hostinfo parent",
     )

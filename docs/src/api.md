@@ -9,9 +9,8 @@ is the [DistSSHKit manual](https://yamanori99.github.io/DistSSHKit.jl/stable/).
 
 ## Run
 
-`go!` runs a script as-is on one or more slots. `drive!` runs a driver
-script on workers. `ride!` is experimental: it rewrites `map` and `filter`
-in a script onto workers.
+`go!` runs a script as-is on one or more slots. `drive!` loads a driver
+script on the controller and runs it across workers.
 
 ```@autodocs
 Modules = [DistSSHRun]
@@ -24,7 +23,6 @@ Filter = function (x)
         :DistSSHJobResult, :DetachedProcess, :kit_run_result, :report_run_errors,
         :terminate!, :terminate_run!, :kit_result_from_dir, :result_run_dir, :result_provenance,
         :result_content_tree_hash, :result_remote_run_id,
-        :ride!, :RideResult, :print_ride,
     )
     n = try
         nameof(x)
@@ -69,7 +67,7 @@ end
 
 0.2.0 freezes the user-visible API the own OpenSSH cluster manager will build on
 in 0.2.x (ControlMaster wiring and sidecar land behind the same names). Today
-[`drive!`](@ref) and [`ride!`](@ref) implement launch over the stock launcher;
+[`drive!`](@ref) implements launch over the stock launcher;
 [`LaunchReport`](@ref), ranks, seeds, and config below are the contract.
 
 Partial worker launch is fail-closed unless you pass `best_effort=true` or CLI
@@ -262,8 +260,7 @@ Filter = function (x)
         :drive!, :DriveResult, :HostRunResult, :DriveHostStatus, :drive_host_status,
         :DistSSHJobResult, :DetachedProcess, :kit_run_result, :report_run_errors,
         :terminate!, :terminate_run!, :kit_result_from_dir, :result_run_dir, :result_provenance,
-        :result_content_tree_hash, :result_remote_run_id,
-        :ride!, :RideResult, :print_ride,
+        :result_content_tree_hash,         :result_remote_run_id,
         :WorkerPlan, :pool!, :ResourcePool, :HostInventory, :print_pool, :print_hostinfo,
         :LaunchReport, :launch_report_planned, :launch_report_joined, :launch_report_failures,
         :launch_report_usable, :LaunchIncompleteError, :WorkerLaunchOutcome, :HostLaunchFailure,
@@ -322,7 +319,7 @@ DistSSHBase.shell_status
 ## Identity
 
 [`run_identity`](@ref) and [`identity_mismatches`](@ref) are public and are
-not exported. [`go!`](@ref), [`ride!`](@ref), and [`drive!`](@ref) require the same Julia
+not exported. [`go!`](@ref) and [`drive!`](@ref) require the same Julia
 build (version and commit) and DistSSH* `pkg.*` versions on every worker or go
 slot. They also compare resolved Manifest and Project file SHA-256 digests
 (byte-exact; CRLF differences count) when the controller has an active
@@ -341,7 +338,7 @@ run_identity
 identity_mismatches
 ```
 
-Drive and ride also compare each worker's loaded DistSSH component ids (from
+Drive also compare each worker's loaded DistSSH component ids (from
 precompile-time `COMPONENT_ID` constants, not Manifest digests). This check is
 independent of `--unsafe-heterogeneous`, which still waives only Manifest/Project
 digest lines from [`identity_mismatches`](@ref).

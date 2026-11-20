@@ -40,7 +40,6 @@ end
         auto = DistSSHRun.parse_worker_tokens(["3*h1"])
         @test auto.head_workers == 0
         @test auto.child_workers == Dict("h1" => 3)
-        @test DistSSHRun.child_hosts_from_tokens(["h1", "4*h2"]) == ["h1", "h2"]
         @test DistSSHRun.require_counted_placement_tokens(
             ["host"]; command = :drive, head_workers = 0
         ) === nothing
