@@ -64,6 +64,7 @@ function add_drive_workers!(
         script_path::String,
         project_root::String;
         bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
+        launch_plans::Union{Nothing, AbstractVector{HostLaunchPlan}} = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
     )::Tuple{Vector{String}, LaunchReport}
     empty!(RUNNER_WORKER_PROJECT_DIRS)
@@ -79,6 +80,13 @@ function add_drive_workers!(
     DistSSHRun._clear_drive_host_worker_ids!()
     script_path = abspath(String(script_path))
     writeln_both("Adding workers..."; color = :light_black)
+
+    remote_ssh = String[h for (h, _) in hosts]
+    if launch_plans === nothing
+        validate_all_host_launch_plans!(remote_ssh, bind_overrides)
+    elseif length(launch_plans) != length(remote_ssh)
+        throw(ArgumentError("launch_plans length ($(length(launch_plans))) != SSH hosts ($(length(remote_ssh)))"))
+    end
 
     successful_hosts = String[]
     default_n = something(default_workers, 1)
@@ -163,8 +171,6 @@ function add_drive_workers!(
         else
             writeln_both("  $(DistSSHRun.format_kit_head_placement(0, "workers")) (use --head-workers N)")
         end
-
-        sshflags_cmd = Cmd(ssh_opts())
 
         for (host_name, host_workers_spec) in hosts
             DistSSHRun._drive_host_span!(host_name, "workers", :running)
@@ -273,15 +279,24 @@ function add_drive_workers!(
                     # Machine must be user@host: Distributed prefixes \$USER otherwise and
                     # overrides SSH config User (Host aliases then look like "No free port?").
                     # Bind 127.0.0.1 so the cluster cookie is not reachable on other interfaces.
-                    bind = DistSSHRun.resolved_bind_address(host_name, bind_overrides)
-                    DistSSHRun.validate_host_launch_plan(host_name, bind)
+                    bind = if launch_plans === nothing
+                        DistSSHRun.resolved_bind_address(host_name, bind_overrides)
+                    else
+                        key = DistSSHRun.launch_bind_host_key(host_name)
+                        plan = findfirst(p -> p.host == key, launch_plans)
+                        plan === nothing &&
+                            throw(ArgumentError("no launch plan for host $(repr(host_name))"))
+                        launch_plans[plan].bind
+                    end
                     machine = DistSSHRun.ssh_addprocs_machine_bind(host_name, bind)
+                    sshflags_cmd = Cmd(DistSSHBase.ssh_connection_ssh_opts(host_name))
                     DistSSHRun._add_ssh_drive_workers!(
                         machine,
                         host_workers,
                         host_julia,
                         remote_proj,
                         sshflags_cmd,
+                        host_name,
                     )
                     added = sort!(Int[w for w in workers() if w ∉ before])
                     # `SSHManager.launch` can swallow a failed machine; `addprocs` then
@@ -420,8 +435,8 @@ const _INTERRUPT_SSH_PHASE_S = Float64(DistSSHBase._SSH_CONNECT_TIMEOUT_S)
     _group_interrupt_targets(rows) -> (local_pids, ssh, fallback)
 
 `rows` is `(pid, endpoint)`. `endpoint` is `:local`, `nothing` (use
-`Distributed.interrupt` for that pid), or `(host, ospid)` for one SSH worker.
-SSH workers on the same host share one OS signal.
+`Distributed.interrupt` for that pid), or `(placement_ssh_endpoint, ospid)` for one SSH worker.
+SSH workers on the same placement endpoint share one OS signal.
 """
 function _group_interrupt_targets(rows)
     local_pids = Int[]
@@ -433,8 +448,9 @@ function _group_interrupt_targets(rows)
         elseif endpoint === nothing
             push!(fallback, Int(pid))
         else
-            host, ospid = endpoint
-            push!(get!(ssh, String(host), Int[]), Int(ospid))
+            ssh_endpoint, ospid = endpoint
+            key = String(ssh_endpoint)
+            push!(get!(ssh, key, Int[]), Int(ospid))
         end
     end
     return (local_pids = local_pids, ssh = ssh, fallback = fallback)
@@ -457,7 +473,16 @@ function _interrupt_endpoint(pid::Integer)
             host = w.config.host
             ospid = w.config.ospid
             if host isa AbstractString && !isempty(host) && ospid isa Integer && ospid > 0
-                return (String(host), Int(ospid))
+                placement = get(DistSSHRun.WORKER_PLACEMENT_SSH_ENDPOINT, Int(pid), nothing)
+                if placement !== nothing
+                    return (String(placement), Int(ospid))
+                end
+                endpoint = DistSSHBase.placement_ssh_endpoint_from_worker_host(
+                    host,
+                    w.config.sshflags,
+                )
+                endpoint === nothing && return nothing
+                return (endpoint, Int(ospid))
             end
         end
     catch
@@ -476,11 +501,13 @@ function _interrupt_kill_shell(ospids::Vector{Int})::String
 end
 
 """One bounded `kill -INT` ssh per host. A failure is logged, not thrown."""
-function _interrupt_ssh_phase!(ssh::AbstractDict{<:AbstractString, <:AbstractVector{Int}})
+function _interrupt_ssh_phase!(
+        ssh::AbstractDict{<:AbstractString, <:AbstractVector{Int}},
+    )
     pairs = Pair{String, String}[]
-    for (host, ospids) in ssh
+    for (ssh_endpoint, ospids) in ssh
         isempty(ospids) && continue
-        push!(pairs, String(host) => _interrupt_kill_shell(Int[Int(pid) for pid in ospids]))
+        push!(pairs, String(ssh_endpoint) => _interrupt_kill_shell(Int[Int(pid) for pid in ospids]))
     end
     isempty(pairs) && return nothing
     results = _run_ssh_hosts!(pairs, _INTERRUPT_SSH_PHASE_S)

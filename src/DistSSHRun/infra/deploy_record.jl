@@ -65,6 +65,15 @@ function _deploy_record_manifest_hash(project::AbstractString)::Union{Nothing, S
     return nothing
 end
 
+"""SHA-256 of resolved Project/JuliaProject bytes (same as worker `project.sha256`)."""
+function _deploy_record_project_hash(project::AbstractString)::Union{Nothing, String}
+    pf = DistSSHBase._located_project_file(project)
+    if pf isa String && isfile(pf)
+        return lowercase(file_sha256(pf))
+    end
+    return nothing
+end
+
 function _deploy_record_timestamp()::String
     return Dates.format(Dates.now(Dates.UTC), dateformat"yyyy-mm-ddTHH:MM:SS") * "Z"
 end
@@ -95,6 +104,8 @@ function build_deploy_record(
     )
     mh = _deploy_record_manifest_hash(project)
     mh !== nothing && (data["manifest_hash"] = mh)
+    ph = _deploy_record_project_hash(project)
+    ph !== nothing && (data["project_hash"] = ph)
     if commit_sha isa AbstractString && !isempty(strip(String(commit_sha)))
         data["commit_sha"] = String(commit_sha)
     end
@@ -268,13 +279,9 @@ function _deploy_record_scp_upload_argv(
         record_abs::AbstractString,
         local_path::AbstractString,
     )::Vector{String}
-    h = validate_ssh_host(String(host))
     remote = String(record_abs)
-    any(iscntrl, remote) && throw(
-        ArgumentError("deploy record remote path contains a control character"),
-    )
-    dest = string(h, ":", remote)
-    return String[ssh_opts()..., String(local_path), dest]
+    _, dest = DistSSHBase._scp_remote_file_spec(host, remote)
+    return vcat(DistSSHBase.scp_connection_argv(host), String[local_path, dest])
 end
 
 function _deploy_record_atomic_install_script(
@@ -565,6 +572,14 @@ function _warn_deploy_staleness!(
                 print_warn("Local Manifest hash differs from deploy record (tree may be stale).\n")
             end
         end
+        remote_ph = get(rec, "project_hash", nothing)
+        local_pf = DistSSHBase._located_project_file(project)
+        if local_pf isa String && isfile(local_pf) && remote_ph isa AbstractString
+            local_ph = _deploy_record_project_hash(project)
+            local_ph !== nothing && local_ph != strip(String(remote_ph)) && begin
+                print_warn("Local Project hash differs from deploy record (tree may be stale).\n")
+            end
+        end
     end
     return nothing
 end
@@ -591,6 +606,7 @@ function _deploy_record_for_provenance(rec::Union{Nothing, AbstractDict})::Union
             "commit_sha",
             "dirty",
             "manifest_hash",
+            "project_hash",
             "local_path",
             "timestamp",
             "run_id",

@@ -45,6 +45,30 @@ using DistSSHRun
         end
     end
 
+    @testset "TOML port in bind key" begin
+        _with_tempdir() do tmp
+            path = joinpath(tmp, "hosts.toml")
+            write(
+                path,
+                """
+                [[hosts]]
+                name = "lab"
+                port = 2222
+                bind = "10.0.0.3"
+                user = "alice"
+                """,
+            )
+            merged = DistSSHRun.resolve_launch_bind_overrides(; hosts_file = path)
+            @test merged == Dict("alice@lab:2222" => "10.0.0.3")
+            @test DistSSHRun.resolved_bind_address(
+                "alice@lab:2222",
+                DistSSHRun.resolve_launch_bind_overrides(;
+                    bind_overrides = Dict("alice@lab:2222" => "10.0.0.9"),
+                ),
+            ) == "10.0.0.9"
+        end
+    end
+
     @testset "bind_overrides= conflicts with hosts file" begin
         _with_tempdir() do tmp
             path = joinpath(tmp, "hosts.toml")
@@ -91,6 +115,64 @@ using DistSSHRun
                 msg = sprint(showerror, err)
                 @test occursin("TOML hosts file", msg)
             end
+        end
+    end
+
+    @testset "bind whitespace not stripped before validation" begin
+        _with_tempdir() do tmp
+            path = joinpath(tmp, "hosts.toml")
+            write(
+                path,
+                """
+                [[hosts]]
+                name = "h1"
+                bind = " 127.0.0.1"
+                """,
+            )
+            let msg = try
+                    DistSSHRun.resolve_launch_bind_overrides(;
+                        hosts_file = path,
+                        planned_hosts = ["h1"],
+                    )
+                catch e
+                    e isa ArgumentError ? e.msg : rethrow()
+                end
+                @test occursin("whitespace", msg)
+            end
+            @test_throws ArgumentError DistSSHRun.resolve_launch_bind_overrides(;
+                bind_overrides = Dict("h1" => " 10.0.0.1"),
+                planned_hosts = ["h1"],
+            )
+        end
+    end
+
+    @testset "go API workers plus hosts_file slots" begin
+        _with_tempdir() do tmp
+            hf = joinpath(tmp, "hosts.toml")
+            write(
+                hf,
+                """
+                [[hosts]]
+                name = "lab-b"
+                """,
+            )
+            tokens = String["1*lab-a"]
+            resolved = DistSSHRun.merge_go_hosts_file_worker_tokens!(
+                tokens, hf;
+                hosts_file_tokens_merged = false,
+                surface = :api,
+            )
+            @test resolved == hf
+            @test tokens == String["1*lab-a", "lab-b"]
+            cli_tokens = String["1*lab-a"]
+            DistSSHRun.merge_go_hosts_file_worker_tokens!(
+                cli_tokens, hf;
+                hosts_file_tokens_merged = true,
+                surface = :cli,
+            )
+            @test cli_tokens == String["1*lab-a"]
+            slots = DistSSHRun._go_plan_slots(tokens)
+            @test length(slots) == 2
         end
     end
 

@@ -49,7 +49,7 @@ end
 const hosts = collect(String, _ssh_e2e_hosts())
 const setup_hosts = String["$h" for h in hosts]
 const remote_root = _ssh_e2e_remote_root()
-const remote_tokens = String["$(hosts[1]):1", "$(hosts[2]):1"]
+const remote_tokens = String["1*$(hosts[1])", "1*$(hosts[2])"]
 # ENV overlay for the suite (`-F` ssh config and the remote project path).
 _e2e_base_env() = _ssh_e2e_env(; remote_project = remote_root)
 
@@ -336,6 +336,121 @@ end
                 extra_env = _e2e_base_env()
             )
             _assert_ssh_e2e_ok(suite, "setup_instantiate", proc, out; project = proj, kit = :setup)
+        end
+
+        @testset "drive and ride --run-id env digests" begin
+            _e2e_announce("drive and ride --run-id env digests")
+            run_id_root = "/home/dev/distsshkit-e2e-run-id-verify"
+            run_env = _ssh_e2e_env(; remote_project = run_id_root)
+            quiet = merge(run_env, Dict("DISTSSH_QUIET" => "0"))
+            try
+                proc, out = _run_kit_setup(;
+                    setup_args = [
+                        "delete", "--deploy-root", run_id_root,
+                        "--confirm-path", run_id_root, setup_hosts...,
+                    ],
+                    project_root = proj,
+                    extra_env = run_env
+                )
+                _assert_ssh_e2e_ok(suite, "run_id_env_delete", proc, out; project = proj, kit = :setup)
+                _ssh_e2e_ensure_remote_root!(hosts, run_id_root)
+
+                proc, out = _run_kit_setup(;
+                    setup_args = ["ship-tree", "--deploy-root", run_id_root, setup_hosts...],
+                    project_root = proj,
+                    extra_env = run_env
+                )
+                _assert_ssh_e2e_ok(suite, "run_id_env_ship", proc, out; project = proj, kit = :setup)
+                rootq = DistSSHRun._remote_shell_path_word(run_id_root)
+                p_src, src_out = _ssh_e2e_ssh(
+                    hosts[1],
+                    "ls -1d $(rootq)/runs/*/src 2>/dev/null | tail -n 1",
+                )
+                _assert_proc_ok(p_src, src_out; label = "run-id env ship src")
+                snap_id = basename(dirname(strip(src_out)))
+                @test !isempty(snap_id)
+                proc, out = _run_kit_setup(;
+                    setup_args = [
+                        "instantiate", "--deploy-root", run_id_root, "--run-id", snap_id,
+                        setup_hosts...,
+                    ],
+                    project_root = proj,
+                    extra_env = run_env
+                )
+                _assert_ssh_e2e_ok(
+                    suite, "run_id_env_instantiate", proc, out; project = proj, kit = :setup
+                )
+                runid_flags = ["-y", "-q", "--deploy-root", run_id_root, "--run-id", snap_id]
+                proc, out = _run_kit_drive(;
+                    script = smoke,
+                    host_root = proj,
+                    head_workers = 0,
+                    child_hosts = remote_tokens,
+                    drive_flags = runid_flags,
+                    extra_env = quiet
+                )
+                _assert_ssh_e2e_ok(suite, "run_id_env_drive", proc, out)
+                ride_script = _fixture("ride_remote_ok.jl")
+                ride_cmd = _kit_cli_cmd(
+                    vcat(["ride", "--no-spi-check"], runid_flags, remote_tokens, [ride_script])
+                )
+                proc, out = _run_subprocess(
+                    setenv(ride_cmd, _drive_host_env(proj; extra_env = quiet))
+                )
+                _assert_ssh_e2e_ok(suite, "run_id_env_ride", proc, out)
+
+                proc_skip, out_skip = _run_kit_drive(;
+                    script = smoke,
+                    host_root = proj,
+                    head_workers = 0,
+                    child_hosts = remote_tokens,
+                    drive_flags = vcat(runid_flags, "--unsafe-skip-env-digests"),
+                    extra_env = quiet
+                )
+                _assert_ssh_e2e_ok(suite, "run_id_env_drive_unsafe_skip", proc_skip, out_skip)
+
+                proj_remote = "$(run_id_root)/runs/$(snap_id)/src/Project.toml"
+                tamper_jl = """
+                p = $(repr(proj_remote))
+                chmod(p, 0o644)
+                open(p, "a") do io
+                    write(io, 0x20)
+                end
+                """
+                for tamper_host in hosts
+                    p_tamper, tamper_out = withenv(run_env...) do
+                        _e2e_run_on_host(tamper_host, ["-e", tamper_jl])
+                    end
+                    _assert_proc_ok(
+                        p_tamper, tamper_out; label = "tamper remote Project.toml $(tamper_host)"
+                    )
+                end
+                proc_bad, out_bad = _run_kit_drive(;
+                    script = smoke,
+                    host_root = proj,
+                    head_workers = 0,
+                    child_hosts = remote_tokens,
+                    drive_flags = runid_flags,
+                    extra_env = quiet
+                )
+                @test proc_bad.exitcode != 0
+                @test occursin("project.sha256", out_bad)
+                deploy = match(r"deploy=([0-9a-f]+)", out_bad)
+                worker = match(r"worker=([0-9a-f]+)", out_bad)
+                @test deploy !== nothing
+                @test worker !== nothing
+                @test length(deploy.captures[1]) == length(worker.captures[1])
+            finally
+                proc, out = _run_kit_setup(;
+                    setup_args = [
+                        "delete", "--deploy-root", run_id_root,
+                        "--confirm-path", run_id_root, setup_hosts...,
+                    ],
+                    project_root = proj,
+                    extra_env = run_env
+                )
+                _assert_ssh_e2e_ok(suite, "run_id_env_cleanup", proc, out; project = proj, kit = :setup)
+            end
         end
 
         @testset "doctor --deploy (major.minor; no --ignore-julia-version)" begin
@@ -999,6 +1114,80 @@ end
             end
         end
 
+        @testset "strict bind contract on ssh workers" begin
+            _e2e_announce("strict bind contract on ssh workers")
+            # Keep hosts files and ride script off `proj` so ship-tree hash and git stay aligned.
+            mktempdir() do bind_dir
+                hosts_toml = joinpath(bind_dir, "e2e_bind_ride_hosts.toml")
+                write(
+                    hosts_toml,
+                    """
+                    [[hosts]]
+                    name = "$(hosts[1])"
+                    workers = 2
+                    bind = "127.0.0.1"
+                    """,
+                )
+                bind_script = joinpath(bind_dir, "ride_bind_workers.jl")
+                write(
+                    bind_script,
+                    """
+                    touch(joinpath(ENV["DISTRIBUTED_OUTPUT_DIR"], "bind_ok.txt"))
+                    """,
+                )
+                bind_out = joinpath(bind_dir, "e2e-bind-ride-out")
+                mkpath(bind_out)
+                bind_env = _drive_host_env(
+                    proj;
+                    extra_env = merge(_e2e_base_env(), Dict("DISTSSH_QUIET" => "0")),
+                )
+                bind_cmd = _kit_cli_cmd(
+                    [
+                        "ride", "-y", "--no-spi-check", "--unsafe-expose-port",
+                        "--hosts-file", hosts_toml, "--output-dir", bind_out, bind_script,
+                    ],
+                )
+                proc_ok, out_ok = _run_subprocess(setenv(bind_cmd, bind_env))
+                _assert_ssh_e2e_ok(suite, "ride_bind_unsafe_expose", proc_ok, out_ok; project = proj)
+                @test isfile(joinpath(bind_out, "bind_ok.txt"))
+
+                bind_reject_toml = joinpath(bind_dir, "e2e_bind_reject_hosts.toml")
+                write(
+                    bind_reject_toml,
+                    """
+                    [[hosts]]
+                    name = "$(hosts[1])"
+                    bind = "0.0.0.0"
+                    """,
+                )
+                before_pids = _e2e_hb_worker_pids(hosts[1])
+                reject_cmd = _kit_cli_cmd(
+                    [
+                        "ride", "-y", "--no-spi-check", "--unsafe-expose-port",
+                        "--hosts-file", bind_reject_toml, bind_script,
+                    ],
+                )
+                reject_env = merge(
+                    bind_env,
+                    Dict("DISTSSH_SSH_TUNNEL" => "0"),
+                )
+                proc_bad, out_bad = _run_subprocess(setenv(reject_cmd, reject_env))
+                @test proc_bad.exitcode == 2
+                @test occursin("bind 0.0.0.0 requires --unsafe-expose-port and SSH tunnel enabled", out_bad)
+                after_pids = _e2e_hb_worker_pids(hosts[1])
+                @test length(setdiff(after_pids, before_pids)) == 0
+                _ssh_e2e_record!(
+                    suite,
+                    "ride_bind_all_interfaces_tunnel_off",
+                    proc_bad,
+                    out_bad;
+                    expect_ok = false,
+                    project = proj,
+                    kit = :ride,
+                )
+            end
+        end
+
         @testset "go pi_echo both remotes" begin
             _e2e_announce("go pi_echo both remotes")
             proc, out = _run_kit_go(;
@@ -1202,7 +1391,7 @@ end
             withenv(_e2e_base_env()...) do
                 session = DistSSHSession(
                     project = proj,
-                    workers = remote_tokens,
+                    workers = setup_hosts,
                     remote = remote_root,
                     quiet = true
                 )
@@ -1927,7 +2116,7 @@ end
                 DistSSHRun.execute!(
                     :go,
                     outside,
-                    ["$(hosts[1]):1"];
+                    ["1*$(hosts[1])"];
                     project = proj,
                     remote = outside_root,
                     detached = true,

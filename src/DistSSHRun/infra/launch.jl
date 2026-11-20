@@ -582,7 +582,7 @@ function _add_local_drive_workers!(
                 exename = julia_bin,
                 exeflags = flags,
                 env = env,
-                topology = :master_worker,
+                topology = topology_for_launch(),
                 worker_addprocs_blas_kwargs()...,
             )
             just = Int[Int(w) for w in joined]
@@ -610,6 +610,7 @@ function _add_ssh_drive_workers!(
         julia_bin::AbstractString,
         project::AbstractString,
         sshflags::Cmd,
+        placement_ssh_endpoint::AbstractString,
     )
     n < 1 && return nothing
     flags = Cmd(worker_exeflag_strings(project; local_cpu = false, job_id = resolved_kit_job_id()))
@@ -628,13 +629,14 @@ function _add_ssh_drive_workers!(
                 cmdline_cookie = false,
                 exeflags = flags,
                 env = env,
-                topology = :master_worker,
+                topology = topology_for_launch(),
                 worker_addprocs_blas_kwargs()...,
             )
             just = Int[Int(w) for w in joined]
             for w in just
                 register_launch_rank!(w, rank)
             end
+            _register_worker_placement_ssh_endpoints!(just, placement_ssh_endpoint)
             _mark_workers_launched!(just, project)
             _apply_worker_blas_threads!(just)
             i == 1 || continue

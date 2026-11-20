@@ -92,6 +92,25 @@ using Test, DistSSHRun
             @test !occursin("phase 4", txt)
         end
         let cfg = DistSSHRun.resolve_run_job_config(;
+                command = :ride,
+                cli_dry_run = true,
+                cli_unsafe_expose_port = true,
+            ),
+                buf = IOBuffer()
+            DistSSHRun.print_run_job_dry_plan!(
+                buf,
+                cfg;
+                hosts = ["alice@lab:2222"],
+                worker_tokens = ["2*alice@lab:2222"],
+                project = pwd(),
+                head_workers = 0,
+                bind_overrides = Dict{String, String}(),
+            )
+            txt = String(take!(buf))
+            @test occursin("placement = [\"2*alice@lab:2222\"]", txt)
+            @test occursin("alice@lab:2222:", txt)
+        end
+        let cfg = DistSSHRun.resolve_run_job_config(;
                 command = :go,
                 cli_dry_run = true,
             )

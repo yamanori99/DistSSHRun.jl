@@ -55,6 +55,10 @@ using Dates
         end
         @test DistSSHRun._go_sanitize_label("a/b c") == "a_b_c"
         @test DistSSHRun._go_sanitize_label("***") == "_"
+        @test_throws ArgumentError DistSSHRun._go_plan_slots(
+            ["lab:2222", "lab_2222"];
+            head_slots = 0,
+        )
         @test_throws ArgumentError DistSSHRun.parse_go_args(["parent:1", "job.jl"])
         let s = DistSSHRun._go_plan_slots(String[]; head_slots = 2)
             @test length(s) == 2

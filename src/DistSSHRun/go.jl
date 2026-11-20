@@ -156,6 +156,31 @@ function _go_parent_slot_labels(parent_count::Int)::Vector{String}
     return ["$base-$i" for i in 1:parent_count]
 end
 
+"""Source name for a go slot label collision error."""
+function _go_slot_label_source(slot::GoSlot)::String
+    slot.kind === :parent && return "local ($(slot.label))"
+    h = slot.host
+    return h isa String ? h : slot.label
+end
+
+function _go_assert_unique_slot_labels!(slots::Vector{GoSlot})
+    by_label = Dict{String, Vector{GoSlot}}()
+    for s in slots
+        push!(get!(by_label, s.label, GoSlot[]), s)
+    end
+    for (label, group) in by_label
+        length(group) <= 1 && continue
+        sources = unique(_go_slot_label_source(s) for s in group)
+        throw(
+            ArgumentError(
+                "go slot directory label $(repr(label)) collides after sanitization " *
+                    "(from $(join(sources, ", "))); rename one host token so the sanitized names differ",
+            ),
+        )
+    end
+    return nothing
+end
+
 function _go_append_child_slots!(slots::Vector{GoSlot}, remote_runs::Vector{String})
     counts = Dict{String, Int}()
     totals = Dict{String, Int}()
@@ -269,7 +294,9 @@ function _go_plan_slots(
                 )
             )
         end
-        return _go_slots_from_repeat(pool, assigned)
+        slots = _go_slots_from_repeat(pool, assigned)
+        _go_assert_unique_slot_labels!(slots)
+        return slots
     end
     parent_count = _go_local_slot_count(host_tokens, head_slots)
     parent_label_base = _go_local_slot_label_base()
@@ -295,6 +322,7 @@ function _go_plan_slots(
         end
     end
     _go_append_child_slots!(slots, remote_runs)
+    _go_assert_unique_slot_labels!(slots)
     return slots
 end
 
@@ -695,9 +723,10 @@ function _go_run_remote_slot!(
     scp_failed = false
     try
         remote_ec = string(rstrip(remote_root, '/'), "/", slot_rel, "/go.exitcode")
+        _, remote_spec = DistSSHBase._scp_remote_file_spec(host, remote_ec)
         run(
             pipeline(
-                _scp_cmd([ssh_opts()..., _ssh_host_args(string(host, ":", remote_ec))..., ec_path]);
+                _scp_cmd(vcat(DistSSHBase.scp_connection_argv(host), [remote_spec, ec_path]));
                 stdout = devnull,
                 stderr = devnull,
             );
@@ -760,15 +789,10 @@ function _go_fetch_slot_provenance!(
     mkpath(local_dir)
     local_snap = joinpath(local_dir, _GO_SLOT_PROVENANCE_NAME)
     try
+        _, remote_spec = DistSSHBase._scp_remote_file_spec(host, remote_snap)
         run(
             pipeline(
-                _scp_cmd(
-                    [
-                        ssh_opts()...,
-                        _ssh_host_args(string(host, ":", remote_snap))...,
-                        local_snap,
-                    ]
-                );
+                _scp_cmd(vcat(DistSSHBase.scp_connection_argv(host), [remote_spec, local_snap]));
                 stdout = devnull,
                 stderr = devnull,
             );
@@ -976,6 +1000,7 @@ function go!(
         project::AbstractString = pwd(),
         remote::Union{Nothing, AbstractString} = nothing,
         hosts_file::Union{Nothing, AbstractString} = nothing,
+        hosts_file_tokens_merged::Bool = false,
         quiet::Bool = false,
         verbosity::Union{Nothing, Symbol} = nothing,
         yes::Union{Nothing, Bool} = nothing,
@@ -987,9 +1012,9 @@ function go!(
         hint_surface::Symbol = :api,
         original_args::Vector{String} = String[],
         repeat::Union{Nothing, Integer} = nothing,
-        unsafe_skip_env_digests = false,
-        unsafe_expose_port::Bool = false,
-        unsafe_all_to_all::Bool = false,
+        unsafe_skip_env_digests = missing,
+        unsafe_expose_port = missing,
+        unsafe_all_to_all = missing,
         run_id::Union{Nothing, AbstractString} = nothing,
         sync::Union{Symbol, Bool, Nothing} = nothing,
         allow_external_symlinks::Bool = false,
@@ -1032,9 +1057,9 @@ function go!(
         _ensure_kit_run_dir!(:go, script_path; project = proj)
         cfg = resolve_run_job_config(;
             command = :go,
-            cli_unsafe_skip_env_digests = unsafe_skip_env_digests ? true : nothing,
-            cli_unsafe_expose_port = unsafe_expose_port ? true : nothing,
-            cli_unsafe_all_to_all = unsafe_all_to_all ? true : nothing,
+            cli_unsafe_skip_env_digests = cli_optional_bool(unsafe_skip_env_digests),
+            cli_unsafe_expose_port = cli_optional_bool(unsafe_expose_port),
+            cli_unsafe_all_to_all = cli_optional_bool(unsafe_all_to_all),
         )
         return with_run_unsafe_options!(cfg) do
             return _go_run!(
@@ -1043,6 +1068,7 @@ function go!(
                 workers,
                 remote,
                 hosts_file,
+                hosts_file_tokens_merged,
                 quiet,
                 verbosity,
                 output_dir,
@@ -1070,6 +1096,7 @@ function _go_run!(
         workers,
         remote,
         hosts_file,
+        hosts_file_tokens_merged::Bool,
         quiet,
         verbosity,
         output_dir,
@@ -1087,17 +1114,25 @@ function _go_run!(
     anchor = something(path_anchor, proj)
 
     tokens = String[String(h) for h in workers]
-    hf = hosts_file
-    # CLI / [`host_tokens`](@ref) already merged `--hosts-file` / ENV into
-    # `workers`. Re-reading `DISTSSH_HOSTS_FILE` would duplicate slots.
-    # API `go!("job.jl")` with empty `workers` still honors the ENV file.
-    if hf === nothing && isempty(tokens) && head_slots === nothing
-        env_hf = strip(get(ENV, "DISTSSH_HOSTS_FILE", ""))
-        !isempty(env_hf) && (hf = env_hf)
-    end
+    hf = merge_go_hosts_file_worker_tokens!(
+        tokens, hosts_file;
+        hosts_file_tokens_merged = hosts_file_tokens_merged,
+        surface = hint_surface,
+        honor_distssh_hosts_file_env = head_slots === nothing,
+    )
     if hf !== nothing && !isempty(strip(String(hf)))
-        for line in read_hosts_file_lines(hf; surface = hint_surface)
-            push!(tokens, line)
+        try
+            resolve_launch_bind_overrides(;
+                hosts_file = hf,
+                surface = hint_surface,
+                planned_hosts = String[split_worker_token(t)[1] for t in tokens],
+                command = :go,
+            )
+        catch e
+            e isa ArgumentError || rethrow()
+            hint_surface === :cli &&
+                throw(DistSSHBase.CliUsageError(_bind_config_cli_message(e.msg)))
+            rethrow()
         end
     end
     if repeat === nothing

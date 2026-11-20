@@ -127,10 +127,8 @@ ecosystem daily uses. The sandbox is Debian bookworm without `tzdata`, with
 `LANG=C.UTF-8`, a pipe for stdout, and a 45 minute test limit. Daily uses
 the General tarball. This recipe mounts this checkout read-only, and
 dependencies resolve from General, so an unreleased DistSSHQueue change is
-not in the sandbox. This package:
-<https://juliaci.github.io/NanosoldierReports/pkgeval_badges/D/DistSSHRun.html>
-Latest ecosystem report:
-<https://juliaci.github.io/NanosoldierReports/pkgeval_badges/report.html>
+not in the sandbox. This package's public daily is <https://pkgeval-reports.julialang.org/>.
+That daily tests the registered release on Julia master, not this repository's main.
 Run it on Linux with cgroup v2 and unprivileged user namespaces, before a
 General cut. The host Julia is 1.13 or newer. PkgEval is not in General,
 so this adds it from its repository. The tested Julia is the published

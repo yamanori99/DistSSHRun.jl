@@ -65,7 +65,7 @@ using Test
     @testset "parse hosts and flags" begin
         @test DistSSHRun.split_worker_token("host-a") == ("host-a", nothing)
         @test DistSSHRun.split_worker_token("10*host-a") == ("host-a", 10)
-        @test DistSSHRun.split_worker_token("host-a:22") == ("host-a", nothing)
+        @test DistSSHRun.split_worker_token("host-a:22") == ("host-a:22", nothing)
 
         withenv("JULIA_DISTRIBUTED_EXE" => nothing) do
             let r = parse_drive_args(["--help"])

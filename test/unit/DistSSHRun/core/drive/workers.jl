@@ -242,14 +242,14 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
                 (2, :local),
                 (3, ("dev@child-1", 40)),
                 (4, ("dev@child-1", 41)),
-                (5, ("child-2", 7)),
+                (5, ("child-2:2222", 7)),
                 (6, nothing),
             ]
             g = DistSSHRun._group_interrupt_targets(rows)
             @test g.local_pids == [1, 2]
             @test g.fallback == [6]
             @test g.ssh["dev@child-1"] == [40, 41]
-            @test g.ssh["child-2"] == [7]
+            @test g.ssh["child-2:2222"] == [7]
             @test DistSSHRun._group_interrupt_targets(Tuple{Int, Any}[]).local_pids == Int[]
         end
 
@@ -332,6 +332,34 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
                         kill(proc, Base.SIGKILL)
                     end
                 end
+            end
+        end
+
+        @testset "interrupt SSH phase batch and worker endpoint fallback" begin
+            @test DistSSHRun.DistSSHBase.placement_ssh_endpoint_from_worker_host("::1") === nothing
+            @test DistSSHRun.DistSSHBase.placement_ssh_endpoint_from_worker_host(
+                "user@::1",
+            ) === nothing
+            withenv("DISTRIBUTED_SSH_OPTS" => nothing) do
+                cmd = DistSSHRun._ssh_phase_cmd("alice@lab:2222", "kill -INT 1 || true")
+                @test "-p" in cmd.exec
+                @test "2222" in cmd.exec
+            end
+            withenv(
+                "DISTSSH_TEST" => nothing,
+                "DISTSSH_TEST_SSH" => nothing,
+            ) do
+                results = DistSSHRun._run_ssh_hosts!(
+                    Pair{String, String}[
+                        "::1" => "true",
+                        "alice@lab" => "true",
+                    ],
+                    0.1,
+                )
+                @test length(results) == 2
+                @test results[1].errkind == :tool
+                @test results[1].proc === nothing
+                @test results[2].proc !== nothing
             end
         end
 
@@ -634,6 +662,14 @@ end
         return flag[]
     end
 
+    function _wait_ref_gt(ref::Ref{Int}, threshold::Int; timeout::Float64 = 5.0)
+        t0 = time()
+        while ref[] <= threshold && (time() - t0) < timeout
+            sleep(0.02)
+        end
+        return ref[] > threshold
+    end
+
     @testset "_run_heartbeat! silent stall trips on_dead" begin
         stop = Ref(false)
         dead = Ref(false)
@@ -679,9 +715,8 @@ end
             on_dead = () -> (dead[] = true)
         )
         try
-            sleep(0.45)
+            @test _wait_ref_gt(n, 2)
             @test !dead[]
-            @test n[] > 2
         finally
             stop[] = true
         end

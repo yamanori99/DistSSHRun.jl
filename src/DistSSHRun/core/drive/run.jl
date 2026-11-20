@@ -595,6 +595,26 @@ function _run_drive_parsed_locked!(
     kit_log = enable_log ? DistSSHRun.resolve_drive_log_dir(log_dir, script_dir) : nothing
     DistSSHRun._set_kit_progress_sidecar!(kit_out)
     kit_progress_begin!("drive"; steps = progress_steps, kind = :drive)
+    surface = parsed.cli_session.hint_surface
+    bind_map_ref = Ref(Dict{String, String}())
+    ssh_launch_plans_ref = Ref{Union{Nothing, Vector{HostLaunchPlan}}}(nothing)
+    planned_ssh = String[h[1] for h in hosts]
+    try
+        bind_map_ref[] = hosts_file_bind_overrides(
+            parsed.cli_session;
+            bind_overrides = get(parsed, :bind_overrides, Dict{String, String}()),
+            planned_hosts = planned_ssh,
+            command = :drive,
+        )
+        if !isempty(planned_ssh)
+            ssh_launch_plans_ref[] = validate_all_host_launch_plans!(planned_ssh, bind_map_ref[])
+        end
+    catch e
+        e isa ArgumentError || rethrow()
+        surface === :cli &&
+            throw(DistSSHBase.CliUsageError(_bind_config_cli_message(e.msg)))
+        rethrow()
+    end
     try
         if !isempty(host_names)
             # Selection uses --run-id / deploy record / git (setup deploys first).
@@ -669,14 +689,11 @@ function _run_drive_parsed_locked!(
         launch_report = Ref{Union{Nothing, LaunchReport}}(nothing)
         successful_hosts = try
             _drive_kit_hosts_around_join!(hosts, kit_out, kit_log) do
-                bind_map = hosts_file_bind_overrides(
-                    parsed.cli_session;
-                    bind_overrides = get(parsed, :bind_overrides, Dict{String, String}()),
-                )
                 hosts_joined, report = add_drive_workers!(
                     hosts, head_workers, default_workers, julia_exe, proj_dir, script_path,
                     project_root;
-                    bind_overrides = bind_map,
+                    bind_overrides = bind_map_ref[],
+                    launch_plans = ssh_launch_plans_ref[],
                     run_id = get(parsed, :run_id, nothing),
                 )
                 launch_report[] = report

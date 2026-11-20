@@ -603,6 +603,27 @@ function _report_manifest_refusal(e; io::IO = stderr)::Bool
     return true
 end
 
+"""Whether `msg` is an output-directory refusal from `_prepare_output_dir!`."""
+function _cli_output_dir_refusal_message(msg::AbstractString)::Bool
+    body = String(msg)
+    startswith(body, "refusing non-empty output directory:") && return true
+    startswith(body, "refusing output directory symlink:") && return true
+    startswith(body, "output path is not a directory:") && return true
+    return false
+end
+
+"""
+Print an output-directory refusal on stderr and return true.
+
+Other errors return false so the caller can rethrow them.
+"""
+function _report_output_dir_refusal(e; io::IO = stderr)::Bool
+    e isa ArgumentError || return false
+    _cli_output_dir_refusal_message(e.msg) || return false
+    print_cli_error(e.msg; io = io)
+    return true
+end
+
 """
 Throw when `manifest`, or a `[sources]` path, is not inside `env_dir`
 together with `project_dir`.

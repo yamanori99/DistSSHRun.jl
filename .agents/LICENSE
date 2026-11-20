@@ -1,0 +1,57 @@
+Adapted skills under `docs/src/devdocs/agents/skills/` keep this notice
+here so a skill body does not repeat it. `.agents/skills` is a symlink
+to that directory.
+
+Sources, cursor/plugins e58dd043600587dbaf58ba315e7f2b38373eeb43:
+
+- no-comments, correct, benchmark-checklist, tdd: `pstack/skills/<name>/SKILL.md`. Copyright (c) 2026 Lauren Tan. The harness copy of no-comments was not mixed in.
+- deslop, verify-this: `cursor-team-kit/skills/<name>/SKILL.md`. Copyright (c) 2026 Cursor.
+- advisor: `advisor/skills/advisor/SKILL.md`. Copyright (c) 2026 Cursor.
+- docs-reliability: `agent-compatibility/agents/docs-reliability-review.md`. Copyright (c) 2026 Cursor. The score and the fan-out were not copied.
+- continual-learning: `continual-learning/skills/continual-learning/SKILL.md`, also poteto/plugins 74dd2291e8e37b12fd6dc49b2acbd655c6bdaf12. Copyright (c) 2026 Cursor. The hook and the AGENTS.md update were not copied.
+
+fix-gate and safety are original to this repository.
+
+MIT License
+
+Copyright (c) 2026 Lauren Tan
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+MIT License
+
+Copyright (c) 2026 Cursor
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

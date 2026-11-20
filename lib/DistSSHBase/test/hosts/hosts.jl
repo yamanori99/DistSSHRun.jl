@@ -16,11 +16,42 @@ using Test
         @test_throws ArgumentError DistSSHBase.parse_placement_token("parent:2")
         @test_throws ArgumentError DistSSHBase.parse_placement_token("parenthost:2")
         @test_throws ArgumentError DistSSHBase.parse_placement_token("4*parent")
+        @test_throws ArgumentError DistSSHBase.parse_placement_token("4*parent:22")
         @test_throws ArgumentError DistSSHBase.parse_placement_token("-oBatchMode=yes")
         @test_throws ArgumentError DistSSHBase.parse_placement_token("user@-h")
         @test_throws ArgumentError DistSSHBase.parse_placement_token("h\nname")
         @test DistSSHBase.validate_ssh_host("user@host:/tmp/a b") == "user@host:/tmp/a b"
         @test DistSSHBase.validate_ssh_host("alice@h") == "alice@h"
+    end
+
+    @testset "IPv6 message quoting and host:path" begin
+        function _catch_ipv6(f)
+            try
+                f()
+                return nothing
+            catch e
+                e
+            end
+        end
+        v_err = _catch_ipv6(() -> DistSSHBase.validate_ssh_host("::1"))
+        e_err = _catch_ipv6(() -> DistSSHBase.parse_ssh_endpoint("::1"))
+        @test v_err isa ArgumentError && e_err isa ArgumentError
+        v_msg = sprint(showerror, v_err)
+        e_msg = sprint(showerror, e_err)
+        @test v_msg == e_msg
+        @test startswith(v_msg, "ArgumentError: \"::1\": IPv6 literals are not supported")
+        @test !occursin("\"\\\"::1\\\"\"", v_msg)
+
+        @test DistSSHBase.validate_ssh_host("host:/a:b") == "host:/a:b"
+        @test DistSSHBase.validate_ssh_host("user@host:/tmp/x:y") == "user@host:/tmp/x:y"
+
+        for bad in ("::1", "[::1]", "user@[::1]:22", "fe80::1%eth0")
+            @test _catch_ipv6(() -> DistSSHBase.validate_ssh_host(bad)) isa ArgumentError
+            @test occursin(
+                "IPv6 literals are not supported",
+                sprint(showerror, _catch_ipv6(() -> DistSSHBase.validate_ssh_host(bad))),
+            )
+        end
     end
 
     @testset "looks_like_path_host / script" begin
@@ -65,6 +96,52 @@ using Test
             stderr = "only stderr line",
         )
         @test short == "only stderr line"
+    end
+
+    @testset "machine SSH port" begin
+        ep = DistSSHBase.parse_machine_token("2*alice@lab:2222")
+        @test DistSSHBase.machine_ssh_endpoint(ep) == "alice@lab:2222"
+        @test DistSSHBase.split_worker_token("alice@lab:2222") == ("alice@lab:2222", nothing)
+        @test DistSSHBase.parse_placement_token("alice@lab:2222").name == "alice@lab:2222"
+        @test DistSSHBase.parse_ssh_endpoint("alice@lab:2222") == ("alice@lab", 2222)
+        @test DistSSHBase.parse_ssh_endpoint("lab") == ("lab", nothing)
+        a = DistSSHBase.parse_machine_token("host-a:22")
+        b = DistSSHBase.parse_machine_token("host-a:2222")
+        @test DistSSHBase.machine_ssh_label(a) != DistSSHBase.machine_ssh_label(b)
+        @test DistSSHBase.machine_ssh_label(a) == DistSSHBase.machine_ssh_endpoint(a)
+        alice = DistSSHBase.parse_machine_token("alice@lab:2222")
+        bob = DistSSHBase.parse_machine_token("bob@lab:2222")
+        @test DistSSHBase.machine_ssh_label(alice) != DistSSHBase.machine_ssh_label(bob)
+        @test DistSSHBase.parse_placement_token("host-a:22").name == "host-a:22"
+        josé_ep = "josé@lab:2222"
+        @test DistSSHBase.parse_ssh_endpoint(josé_ep) == ("josé@lab", 2222)
+        @test DistSSHBase.parse_machine_token(josé_ep).dest == "josé@lab"
+    end
+
+    @testset "toml distinct users same host port" begin
+        _with_tempdir() do tmp
+            path = joinpath(tmp, "hosts.toml")
+            write(
+                path,
+                """
+                [[hosts]]
+                name = "lab"
+                user = "alice"
+                port = 2222
+                workers = 1
+
+                [[hosts]]
+                name = "lab"
+                user = "bob"
+                port = 2222
+                workers = 1
+                """,
+            )
+            entries = DistSSHBase.read_toml_host_entries(path)
+            @test length(entries) == 2
+            @test DistSSHBase.toml_host_ssh_dest(entries[1]) == "alice@lab:2222"
+            @test DistSSHBase.toml_host_ssh_dest(entries[2]) == "bob@lab:2222"
+        end
     end
 
     @testset "host_tokens" begin

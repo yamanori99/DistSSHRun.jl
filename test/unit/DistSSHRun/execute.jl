@@ -353,6 +353,23 @@ end
         DistSSHRun._clear_drive_host_worker_ids!()
     end
 
+    @testset "worker placement ssh endpoint registry" begin
+        try
+            DistSSHRun._register_worker_placement_ssh_endpoints!([100], "alice@h:2222")
+            DistSSHRun._register_worker_placement_ssh_endpoints!([200], "bob@h:2222")
+            DistSSHRun._register_drive_host_worker_ids!("alice@h:2222", [100])
+            @test DistSSHRun._leftover_worker_host(100) == "alice@h:2222"
+            DistSSHRun._clear_drive_host_worker_ids!()
+            @test !haskey(DistSSHRun.WORKER_PLACEMENT_SSH_ENDPOINT, 100)
+            @test get(DistSSHRun.WORKER_PLACEMENT_SSH_ENDPOINT, 200, nothing) == "bob@h:2222"
+            DistSSHRun._forget_worker_placement_ssh_endpoints!([200])
+            @test isempty(DistSSHRun.WORKER_PLACEMENT_SSH_ENDPOINT)
+        finally
+            DistSSHRun._clear_drive_host_worker_ids!()
+            empty!(DistSSHRun.WORKER_PLACEMENT_SSH_ENDPOINT)
+        end
+    end
+
     @testset "allocate_output_dir" begin
         _with_tempdir() do project
             d1 = DistSSHRun.allocate_output_dir(:go, "batch.jl"; project)
