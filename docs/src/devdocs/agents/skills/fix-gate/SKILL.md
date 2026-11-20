@@ -11,7 +11,7 @@ When a check fails:
 
 1. Fix the failure.
 2. Commit the fix.
-3. Run `./scripts/check.sh` on that commit.
+3. Run `./scripts/check.sh` on that commit. Success ends with `HEAD <sha>: passed`. A line `FAIL  <step>` names the failing step; read the dump below it.
 4. Repeat until one clean pass with no edits between the commit and the run.
 
 Do not amend the failing commit. A docstring `@ref` may name only a binding Documenter resolves on the public pages.

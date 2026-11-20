@@ -170,7 +170,13 @@ set +e
 "${_path_jetls}" check --root=. --exit-severity=hint --show-severity=hint "${jetls_args[@]}" "${files[@]}" >"${_log}" 2>&1
 _status=$?
 set -e
-cat "${_log}"
+if [[ "${CHECK_GATE_QUIET:-0}" == 1 ]]; then
+  if (( _status != 0 )); then
+    cat "${_log}"
+  fi
+else
+  cat "${_log}"
+fi
 if grep -q 'Failed to instantiate package environment' "${_log}"; then
     _manifest_julia=""
     if [[ -f Manifest.toml ]]; then

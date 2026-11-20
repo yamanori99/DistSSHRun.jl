@@ -5,8 +5,6 @@ set -euo pipefail
 
 root="$(git rev-parse --show-toplevel)"
 cd "${root}"
-# shellcheck source=section.sh
-source "${root}/scripts/section.sh"
 sha="$(git rev-parse HEAD)"
 while read -r _local_ref local_sha _remote_ref _remote_sha; do
   [[ -n "${local_sha}" ]] || continue
@@ -21,7 +19,7 @@ if [[ "${stamp}" != /* ]]; then
   stamp="${root}/${stamp}"
 fi
 if [[ -f "${stamp}" ]] && [[ "$(cat "${stamp}")" == "${sha}" ]]; then
-  section "check: already passed ${sha}"
+  echo "ok    check (already passed ${sha})"
   exit 0
 fi
 exec ./scripts/check.sh

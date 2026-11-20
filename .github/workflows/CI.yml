@@ -94,6 +94,7 @@ jobs:
       pull-requests: read
     outputs:
       heavy: ${{ steps.heavy.outputs.heavy }}
+      scripts: ${{ steps.heavy.outputs.scripts }}
       version_cut: ${{ steps.heavy.outputs.version_cut }}
       e2e: ${{ steps.gate.outputs.e2e }}
       coverage: ${{ steps.gate.outputs.coverage }}
@@ -1154,7 +1155,7 @@ jobs:
   runic:
     name: Runic
     needs: detect
-    if: needs.detect.outputs.heavy == 'true'
+    if: needs.detect.outputs.heavy == 'true' || needs.detect.outputs.scripts == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -1178,6 +1179,29 @@ jobs:
       - uses: fredrikekre/runic-action@b4dbd650db5cc684baae27fea45d22daf41693c2 # v1.5.0
         with:
           version: ${{ steps.runic-pin.outputs.version }}
+
+  diff-lint-self-test:
+    name: diff-lint self-test
+    needs: detect
+    if: needs.detect.outputs.scripts == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - name: diff_lint.jl self-test
+        run: |
+          set -euo pipefail
+          julia --project=.github/runic --startup-file=no -e 'using Pkg; Pkg.instantiate()'
+          julia --project=.github/runic --startup-file=no scripts/lint/diff_lint.jl self-test
 
   aqua:
     name: Aqua (1.13, ubuntu-latest, x64)
