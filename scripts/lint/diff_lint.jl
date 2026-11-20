@@ -632,16 +632,15 @@ function self_test()
     for (_, _, text) in comment_tokens("# Use café\n")
     end
     link_target("guide.md \"Read the guide\"") == "guide.md" || die("self-test: link title")
-    aqua_yml = """
-  aqua:
-    name: Aqua (1.13, ubuntu-latest, x64)
-    steps:
-      - name: Aqua.test_all (latest Aqua)
-        run: ./.github/aqua-check.sh
-      - name: extra
-        run: julia extra.jl
-"""
-    aqua_lines = split(aqua_yml, '\n'; keepempty = true)
+    aqua_lines = [
+        "  aqua:",
+        "    name: Aqua (1.13, ubuntu-latest, x64)",
+        "    steps:",
+        "      - name: Aqua.test_all (latest Aqua)",
+        "        run: ./.github/aqua-check.sh",
+        "      - name: extra",
+        "        run: julia extra.jl",
+    ]
     workflow_job_title(aqua_lines, 7) == "Aqua (1.13, ubuntu-latest, x64)" ||
         die("self-test: aqua job title")
     aqua_run_hit("Aqua (1.13, ubuntu-latest, x64)", "        run: ./.github/aqua-check.sh") ===
