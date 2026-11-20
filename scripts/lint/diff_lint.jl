@@ -821,14 +821,19 @@ function self_test()
     star = "## Summary\n\n## Testing\n\n## Risk\n\n## Revert\n\n* `scripts/check.sh`\n* `CONTRIBUTING.md`\n"
     any(==("file list"), pr_body_errors(star, listed)) || die("self-test: pr body star list")
     dup_ai = "## Summary\n\n## Testing\n\nRan it.\n\nGenerative tool: Cursor Agent.\n\nMade with [Cursor](https://cursor.com)\n"
-    any(==("duplicate AI attribution (Generative tool + Made with Cursor)"), pr_body_hints(dup_ai, "")) ||
+    any(==("duplicate AI attribution (Generative tool and a Made with footer)"), pr_body_hints(dup_ai, "")) ||
         die("self-test: pr body duplicate AI hint")
+    dup_other = "## Summary\n\ngenerative tool: SomeTool\n\nmade with SomeTool\n"
+    any(x -> startswith(x, "duplicate AI attribution"), pr_body_hints(dup_other, "")) ||
+        die("self-test: pr body duplicate AI hint case")
     isempty(pr_body_hints("Generative tool: Cursor Agent.\n", "")) || die("self-test: pr body single AI hint")
     noenv = "## Summary\n\n## Testing\n\n`./scripts/check.sh` passed.\n"
-    env_hints = pr_body_hints(noenv, "macOS 27.2 arm64, Julia 1.13.4")
-    any(x -> startswith(x, "add env to ## Testing"), env_hints) ||
+    env_hints = pr_body_hints(noenv, "Linux x86_64, Julia 1.13.4")
+    any(x -> x == "add env to ## Testing (Linux x86_64, Julia 1.13.4)", env_hints) ||
         die("self-test: pr body testing env hint $(env_hints)")
-    with_env = "## Summary\n\n## Testing\n\nEnvironment: macOS 27.2 arm64, Julia 1.13.4.\n\nRan check.\n"
+    any(x -> startswith(x, "add the OS and Julia version"), pr_body_hints(noenv, "")) ||
+        die("self-test: pr body testing env hint no example")
+    with_env = "## Summary\n\n## Testing\n\nEnvironment: Darwin arm64, Julia 1.13.4.\n\nRan check.\n"
     isempty(pr_body_hints(with_env, "")) || die("self-test: pr body testing env ok")
     isempty(pr_body_hints("## Summary\n\nNo testing section.\n", "")) || die("self-test: pr body no testing section")
     fence_ok = "## Summary\n\n## Testing\n\n```sh\n# Confirmed locally\n```\n\n## Risk\n\n## Revert\n"
@@ -1245,32 +1250,34 @@ function testing_section_text(body::AbstractString)
 end
 
 function testing_has_env_markers(text::AbstractString)
-    for marker in ("macOS", "Linux", "Ubuntu", "WSL", "Julia", "Darwin", "Windows")
+    for marker in ("macOS", "Darwin", "Linux", "Ubuntu", "WSL", "Julia", "Windows", "freebsd", "openbsd")
         occursin(marker, text) && return true
     end
     return false
 end
 
 function has_generative_tool_line(body::AbstractString)
-    return occursin(r"(?m)^Generative tool:", body)
+    return occursin(r"(?im)^generative tool:", body)
 end
 
-function has_made_with_cursor(body::AbstractString)
-    return occursin("Made with [Cursor]", body) ||
-        occursin(r"(?m)^Made with Cursor\s*$", body)
+function has_made_with_footer(body::AbstractString)
+    return occursin(r"(?i)made with ", body)
 end
 
 function pr_body_hints(body::AbstractString, env_example::AbstractString)
     hints = String[]
-    if has_generative_tool_line(body) && has_made_with_cursor(body)
-        push!(hints, "duplicate AI attribution (Generative tool + Made with Cursor)")
+    if has_generative_tool_line(body) && has_made_with_footer(body)
+        push!(hints, "duplicate AI attribution (Generative tool and a Made with footer)")
     end
     if testing_section_present(body)
         txt = testing_section_text(body)
         if !testing_has_env_markers(txt)
             ex = strip(env_example)
-            isempty(ex) && (ex = "macOS 27.2 arm64, Julia 1.13.4")
-            push!(hints, "add env to ## Testing ($ex)")
+            if isempty(ex)
+                push!(hints, "add the OS and Julia version to ## Testing")
+            else
+                push!(hints, "add env to ## Testing ($ex)")
+            end
         end
     end
     return hints

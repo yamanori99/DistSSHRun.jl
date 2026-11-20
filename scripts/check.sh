@@ -173,7 +173,13 @@ gate_env_example() {
   local os_name arch jver
   case "$(uname -s)" in
     Darwin) os_name="macOS $(sw_vers -productVersion 2>/dev/null || echo unknown)" ;;
-    Linux) os_name="Linux" ;;
+    Linux)
+      if grep -qi microsoft /proc/version 2>/dev/null; then
+        os_name="WSL2 Linux"
+      else
+        os_name="Linux"
+      fi
+      ;;
     *) os_name="$(uname -s)" ;;
   esac
   arch="$(uname -m)"
