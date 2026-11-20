@@ -82,7 +82,7 @@ jobs:
   # Linux E2E (1.13 required, 1.14-pre continue-on-error): path filter on PR /
   # main push; always on a version
   # increase and dispatch. JETLS uses `.github/actions/jetls-check` (no nested
-  # cache; julia-actions/cache#236). JETLS 2026-11-14 supports 1.12.2 through
+  # cache; julia-actions/cache#236). JETLS 2026-11-16 supports 1.12.2 through
   # 1.14. The required job is 1.13. The 1.14-pre job is continue-on-error
   # and is not a required check.
   detect:
@@ -1164,9 +1164,20 @@ jobs:
       - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
         with:
           version: "1.13"
+      - name: Runic pin
+        id: runic-pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          v="$(sed -n -E 's/^Runic = "=([^"]+)".*/\1/p' .github/runic/Project.toml | head -1)"
+          if [[ ! "${v}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo ".github/runic/Project.toml: Runic compat pin missing or invalid" >&2
+            exit 1
+          fi
+          echo "version=${v}" >> "${GITHUB_OUTPUT}"
       - uses: fredrikekre/runic-action@b4dbd650db5cc684baae27fea45d22daf41693c2 # v1.5.0
         with:
-          version: '1'
+          version: ${{ steps.runic-pin.outputs.version }}
 
   aqua:
     name: Aqua (1.13, ubuntu-latest, x64)
@@ -1233,7 +1244,7 @@ jobs:
         run: ./.github/aqua-check.sh
 
   # Literal name: a skipped job must still be this string.
-  # Required check. JETLS 2026-11-14 supports Julia 1.12.2 through 1.14.
+  # Required check. JETLS 2026-11-16 supports Julia 1.12.2 through 1.14.
   jetls:
     name: JETLS (1.13, ubuntu-latest, x64)
     needs: detect
@@ -1453,4 +1464,3 @@ jobs:
           if [[ -d "$DISTSSHQUEUE_CHECKOUT" ]]; then
             (cd "$DISTSSHQUEUE_CHECKOUT" && ./testenv/docker-ssh/scripts/down.sh) || true
           fi
-

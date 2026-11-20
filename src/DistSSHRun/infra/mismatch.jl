@@ -515,6 +515,223 @@ function assert_controller_environment_for_verify!(project::AbstractString)
 end
 public assert_controller_environment_for_verify!
 
+"""Controller gates for `--run-id` runs (skip local Manifest / shipped-tree compare)."""
+function assert_controller_environment_for_shipped_run!(project::AbstractString)
+    canonical_local_path(project)
+    assert_controller_default_sysimage!()
+    assert_controller_loaded_identity!()
+    return nothing
+end
+public assert_controller_environment_for_shipped_run!
+
+function _missing_deploy_record_for_run_error(
+        run_id::AbstractString,
+        project::AbstractString = "",
+    )::String
+    rid = let s = strip(String(run_id))
+        isempty(s) ? "(unknown)" : validate_run_id(s)
+    end
+    lines = String[
+        "what: deploy record for run_id=$(rid) is not available",
+        "why: --run-id verifies worker Manifest/Project digests against the ship deploy record",
+        "fix: run setup ship-tree and instantiate on workers, then drive --run-id $(rid); remote hosts must be listed so deploy.toml is read (local last-ship.toml is not used for verification)",
+    ]
+    proj = isempty(strip(project)) ? "" : canonical_local_path(project)
+    !isempty(proj) && push!(lines, "where: controller project=$(proj)")
+    return join(lines, "\n")
+end
+
+function _missing_ship_manifest_digest_error(run_id::AbstractString)::String
+    rid = validate_run_id(run_id)
+    return join(
+        [
+            "what: deploy record for run_id=$(rid) has no manifest_hash",
+            "why: --run-id requires the Manifest SHA-256 recorded at ship time",
+            "fix: re-run setup ship-tree for this project and use the new run id",
+        ],
+        "\n",
+    )
+end
+
+function _missing_ship_project_digest_error(run_id::AbstractString)::String
+    rid = validate_run_id(run_id)
+    return join(
+        [
+            "what: deploy record for run_id=$(rid) has no project_hash",
+            "why: --run-id verifies Project.toml bytes against the ship deploy record",
+            "fix: re-run setup ship-tree for this project and use the new run id",
+        ],
+        "\n",
+    )
+end
+
+function _deploy_record_for_run_verify(
+        run_id::AbstractString,
+        project::AbstractString,
+    )::Dict{String, Any}
+    rid = validate_run_id(run_id)
+    rec = active_deploy_record()
+    if rec isa AbstractDict
+        got = get(rec, "run_id", nothing)
+        if got isa AbstractString && validate_run_id(String(got)) == rid
+            return Dict{String, Any}(rec)
+        end
+    end
+    throw(ErrorException(_missing_deploy_record_for_run_error(rid, project)))
+end
+
+function _deploy_record_env_digests(rec::AbstractDict)::Tuple{String, String}
+    mh = get(rec, "manifest_hash", nothing)
+    manifest = mh isa AbstractString ? lowercase(strip(String(mh))) : ""
+    ph = get(rec, "project_hash", nothing)
+    project = ph isa AbstractString ? lowercase(strip(String(ph))) : ""
+    return manifest, project
+end
+
+function _worker_env_digest_mismatch_lines(
+        pid::Integer,
+        snap::AbstractDict,
+        want_manifest::AbstractString,
+        want_project::AbstractString,
+    )::Vector{String}
+    lines = String[]
+    got_man = strip(get(snap, "manifest.sha256", ""))
+    got_proj = strip(get(snap, "project.sha256", ""))
+    if !isempty(want_manifest) && got_man != want_manifest
+        push!(lines, "manifest.sha256 deploy=$(want_manifest) worker=$(got_man)")
+    elseif isempty(got_man)
+        push!(lines, "manifest.sha256 missing on worker")
+    end
+    if !isempty(want_project) && got_proj != want_project
+        push!(lines, "project.sha256 deploy=$(want_project) worker=$(got_proj)")
+    elseif isempty(got_proj)
+        push!(lines, "project.sha256 missing on worker")
+    end
+    isempty(lines) && return lines
+    return [_format_worker_mismatch_line(pid, line) for line in lines]
+end
+
+function _worker_digest_heterogeneity_lines(
+        snaps::Vector{Tuple{Int, Dict{String, String}}},
+    )::Vector{String}
+    isempty(snaps) && return String[]
+    _, ref = snaps[1]
+    ref_man = strip(get(ref, "manifest.sha256", ""))
+    ref_proj = strip(get(ref, "project.sha256", ""))
+    lines = String[]
+    for (pid, snap) in snaps[2:end]
+        man = strip(get(snap, "manifest.sha256", ""))
+        proj = strip(get(snap, "project.sha256", ""))
+        if !isempty(ref_man) && man != ref_man
+            push!(
+                lines,
+                _format_worker_mismatch_line(
+                    pid,
+                    "manifest.sha256 peer=$(ref_man) worker=$(man)",
+                ),
+            )
+        end
+        if !isempty(ref_proj) && proj != ref_proj
+            push!(
+                lines,
+                _format_worker_mismatch_line(
+                    pid,
+                    "project.sha256 peer=$(ref_proj) worker=$(proj)",
+                ),
+            )
+        end
+    end
+    return lines
+end
+
+"""
+Verify worker environments for `--run-id`: homogeneous Manifest/Project digests
+and a match to the active ship deploy record (no controller Manifest compare).
+"""
+function verify_workers_match_shipped_run!(
+        project::AbstractString;
+        run_id::Union{Nothing, AbstractString} = nothing,
+    )
+    waive_env = unsafe_skip_env_digests_active()
+    proj = canonical_local_path(project)
+    rid = if run_id isa AbstractString && !isempty(strip(run_id))
+        validate_run_id(run_id)
+    else
+        sel = active_source_selection()
+        sel === nothing && throw(ErrorException(_missing_deploy_record_for_run_error("", proj)))
+        rid_sel = sel.run_id
+        rid_sel isa AbstractString ||
+            throw(ErrorException(_missing_deploy_record_for_run_error("", proj)))
+        validate_run_id(rid_sel)
+    end
+    rec = _deploy_record_for_run_verify(rid, proj)
+    want_man, want_proj = _deploy_record_env_digests(rec)
+    isempty(want_man) && throw(ErrorException(_missing_ship_manifest_digest_error(rid)))
+    isempty(want_proj) && throw(ErrorException(_missing_ship_project_digest_error(rid)))
+    worker_ids = _live_owned_worker_ids()
+    snaps = Tuple{Int, Dict{String, String}}[]
+    worker_lines = String[]
+    mismatch_lock = ReentrantLock()
+    @sync for w in worker_ids
+        @async begin
+            local lines = String[]
+            try
+                snap = _fetch_worker_environment_snapshot(w)
+                if !(snap isa AbstractDict)
+                    push!(
+                        lines,
+                        _format_worker_mismatch_line(
+                            w,
+                            "worker environment snapshot was not available",
+                        ),
+                    )
+                else
+                    worker = Dict{String, String}(String(k) => string(v) for (k, v) in snap)
+                    lock(mismatch_lock) do
+                        push!(snaps, (Int(w), worker))
+                    end
+                    if !waive_env
+                        append!(
+                            lines,
+                            _worker_env_digest_mismatch_lines(w, worker, want_man, want_proj),
+                        )
+                    end
+                end
+            catch e
+                detail = first(split(sprint(showerror, e), '\n'))
+                push!(
+                    lines,
+                    _format_worker_mismatch_line(w, "snapshot failed: $(detail)"),
+                )
+            end
+            isempty(lines) ||
+                lock(mismatch_lock) do
+                append!(worker_lines, lines)
+            end
+        end
+    end
+    sort!(snaps; by = first)
+    waive_env || append!(worker_lines, _worker_digest_heterogeneity_lines(snaps))
+    if length(snaps) >= 2
+        ref = snaps[1][2]
+        for (pid, snap) in snaps[2:end]
+            for line in identity_mismatches(ref, snap; unsafe_skip_env_digests = waive_env)
+                push!(worker_lines, _format_worker_mismatch_line(pid, line))
+            end
+        end
+    end
+    _environment_mismatch_throw(worker_lines)
+    verify_workers_shipped_trees!()
+    verify_workers_loaded_identity!()
+    if waive_env
+        _record_environment_unverified!("unsafe-skip-env-digests")
+    else
+        _record_environment_verified_against_run_id!()
+    end
+    return nothing
+end
+public verify_workers_match_shipped_run!
+
 function _environment_mismatch_throw(lines::Vector{String})
     isempty(lines) && return nothing
     throw(

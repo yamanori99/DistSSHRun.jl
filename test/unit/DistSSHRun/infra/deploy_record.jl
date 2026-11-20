@@ -6,7 +6,7 @@ using Base.Threads
     body = sprint(
         TOML.print,
         Dict(
-            "schema_version" => 1,
+            "schema" => 1,
             "deploy_id" => "20260101T000000Z-aaaaaa",
             "mode" => "ship-tree",
             "snapshot_id" => "20260101T000000Z-aaaaaa",
@@ -19,7 +19,7 @@ using Base.Threads
     both = sprint(
         TOML.print,
         Dict(
-            "schema_version" => 1,
+            "schema" => 1,
             "deploy_id" => "20260102T000000Z-bbbbbb",
             "mode" => "ship-tree",
             "run_id" => "20260102T000000Z-bbbbbb",
@@ -48,6 +48,8 @@ end
         @test rec["mode"] == "git-sync"
         @test rec["deploy_id"] == "a"^40
         @test haskey(rec, "manifest_hash")
+        @test haskey(rec, "project_hash")
+        @test length(rec["project_hash"]) == 64
         body = sprint(TOML.print, rec)
         parsed = DistSSHRun._parse_deploy_record_body(body)
         @test parsed !== nothing
@@ -58,9 +60,9 @@ end
 end
 
 @testset "deploy record equivalence" begin
-    a = Dict("schema_version" => 1, "deploy_id" => "x", "mode" => "git-sync")
-    b = Dict("schema_version" => 1, "deploy_id" => "x", "mode" => "git-sync")
-    c = Dict("schema_version" => 1, "deploy_id" => "y", "mode" => "git-sync")
+    a = Dict("schema" => 1, "deploy_id" => "x", "mode" => "git-sync")
+    b = Dict("schema" => 1, "deploy_id" => "x", "mode" => "git-sync")
+    c = Dict("schema" => 1, "deploy_id" => "y", "mode" => "git-sync")
     @test DistSSHRun._deploy_records_equivalent(a, b)
     @test !DistSSHRun._deploy_records_equivalent(a, c)
 end
@@ -74,7 +76,7 @@ end
 
 @testset "provenance deploy slice" begin
     rec = Dict(
-        "schema_version" => 1,
+        "schema" => 1,
         "mode" => "ship-tree",
         "deploy_id" => "20260101T000000Z-aaaaaa",
         "run_id" => "20260101T000000Z-aaaaaa"
@@ -88,11 +90,12 @@ end
 @testset "deploy record scp upload argv is local then remote" begin
     local_tmp = "/tmp/deploy-record-body.toml"
     remote_abs = "/home/user/proj/.distssh/deploy.toml.tmp"
-    argv = DistSSHRun._deploy_record_scp_upload_argv("child-1", remote_abs, local_tmp)
-    @test argv[1:(end - 2)] == DistSSHRun.ssh_opts()
+    host = "user@child-1"
+    argv = DistSSHRun._deploy_record_scp_upload_argv(host, remote_abs, local_tmp)
+    @test argv[1:(end - 2)] == DistSSHRun.DistSSHBase.scp_connection_argv(host)
     @test argv[end - 1] == local_tmp
-    @test argv[end] == "child-1:$remote_abs"
-    @test length(argv) == length(DistSSHRun.ssh_opts()) + 2
+    @test argv[end] == "user@child-1:$remote_abs"
+    @test length(argv) == length(DistSSHRun.DistSSHBase.scp_connection_argv(host)) + 2
 end
 
 @testset "deploy record tmp path and atomic install script" begin
@@ -134,8 +137,8 @@ end
 
 @testset "deploy record scp host vs path validation" begin
     remote = "/home/a@-b/project/.distssh/deploy.toml.x.tmp"
-    argv = DistSSHRun._deploy_record_scp_upload_argv("child-1", remote, "/tmp/body.toml")
-    @test argv[end] == "child-1:$remote"
+    argv = DistSSHRun._deploy_record_scp_upload_argv("user@child-1", remote, "/tmp/body.toml")
+    @test argv[end] == "user@child-1:$remote"
 end
 
 @testset "deploy record staleness warns on ship-tree hash mismatch" begin
@@ -146,7 +149,7 @@ end
             pack = DistSSHRun._pack_project_tree(proj)
             rm(pack.directory; recursive = true, force = true)
             rec = Dict(
-                "schema_version" => 1,
+                "schema" => 1,
                 "mode" => "ship-tree",
                 "deploy_id" => "rid",
                 "content_tree_hash" => "f"^40
@@ -209,7 +212,7 @@ end
         remote = joinpath(state, "remote")
         body = sprint(
             TOML.print, Dict(
-                "schema_version" => 1,
+                "schema" => 1,
                 "deploy_id" => "a"^40,
                 "mode" => "git-sync",
                 "commit_sha" => "a"^40
@@ -264,7 +267,7 @@ end
                 sprint(
                     TOML.print,
                     Dict(
-                        "schema_version" => 1,
+                        "schema" => 1,
                         "deploy_id" => deploy_id,
                         "mode" => "git-sync",
                         "commit_sha" => deploy_id
@@ -307,7 +310,7 @@ end
             sprint(
                 TOML.print,
                 Dict(
-                    "schema_version" => 1,
+                    "schema" => 1,
                     "deploy_id" => "a"^40,
                     "mode" => "git-sync",
                     "commit_sha" => "a"^40
@@ -356,7 +359,7 @@ end
         local_mh = DistSSHRun._deploy_record_manifest_hash(proj)
         local_mh === nothing && error("expected manifest hash")
         rec = Dict(
-            "schema_version" => 1,
+            "schema" => 1,
             "mode" => "ship-tree",
             "deploy_id" => "rid",
             "manifest_hash" => "f"^length(local_mh)
@@ -367,5 +370,23 @@ end
             end
             @test match(r"Local Manifest hash differs[^\n]*\n", out) !== nothing
         end
+    end
+end
+
+@testset "active deploy record preserved for explicit run_id" begin
+    rid = "20260101T000000Z-aaaaaa"
+    other = "20260102T000000Z-bbbbbb"
+    rec = Dict{String, Any}("run_id" => rid, "mode" => "ship-tree", "manifest_hash" => "a"^64)
+    try
+        DistSSHRun._set_active_deploy_record!(rec)
+        DistSSHRun._clear_active_deploy_record_unless_run_id!(rid)
+        @test DistSSHRun.active_deploy_record() !== nothing
+        DistSSHRun._clear_active_deploy_record_unless_run_id!(other)
+        @test DistSSHRun.active_deploy_record() === nothing
+        DistSSHRun._set_active_deploy_record!(rec)
+        DistSSHRun._clear_active_deploy_record_unless_run_id!(nothing)
+        @test DistSSHRun.active_deploy_record() === nothing
+    finally
+        DistSSHRun._clear_active_deploy_record!()
     end
 end

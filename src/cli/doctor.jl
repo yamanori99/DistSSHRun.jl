@@ -58,8 +58,10 @@ if !isdefined(@__MODULE__, :doctor_main)
             return Cint(2)
         end
 
-        project = pwd()
-        path_anchor = project
+        # Same root as setup / drive. `pwd()` ignored DISTRIBUTED_PROJECT_ROOT,
+        # so doctor checked the kit checkout while git-sync checked the app.
+        project = String(DistSSHRun.cli_project_root(@__DIR__))
+        path_anchor = DistSSHRun.canonical_local_path(project)
         remote_path = DistSSHRun.resolve_remote_project_root(
             project;
             cli_override = opts.deploy_root,
@@ -93,14 +95,14 @@ if !isdefined(@__MODULE__, :doctor_main)
             workers = opts.hosts,
             remote = opts.deploy_root,
             quiet = opts.cli_session.quiet,
-            verbose = opts.cli_session.verbose,
-            progress = opts.cli_session.progress,
+            verbosity = opts.cli_session.verbosity,
         )
+        session.cli_session.yes = opts.cli_session.yes
 
         log_dir = DistSSHRun.setup_log_dir(project)
         init_log_file(log_dir; prefix = "doctor", path_anchor = path_anchor)
         try
-            report = DistSSHRun.with_kit_inproc_run!(:doctor) do
+            report = DistSSHRun._with_kit_inproc_run!(:doctor) do
                 DistSSHRun.apply_session_env!(session)
                 return DistSSHRun.doctor_deploy_check(
                     opts.hosts,

@@ -50,15 +50,19 @@ KIT_ROOT="$(cd "${APPLE_ROOT}/../.." && pwd)"
 LOCAL_IMAGE="local/linux-ssh-worker:latest"
 NAMES=(child-1 child-2)
 RUN_E2E=0
+USE_SYSTEM_SSH=0
 
 for arg in "$@"; do
   case "$arg" in
     --e2e) RUN_E2E=1 ;;
+    --system-ssh) USE_SYSTEM_SSH=1 ;;
     -h|--help)
-      echo "usage: $0 [--e2e]"
+      echo "usage: $0 [--e2e] [--system-ssh]"
       echo "  Manual DistSSHRun: source $0   (activates .generated/env.sh in this shell)"
       echo "  Same E2E as docker-ssh (child-1 / child-2)."
       echo "  Needs macOS 26+ Apple silicon and the container CLI."
+      echo "  --system-ssh  (macOS only) prepend a temp dir with symlinks to /usr/bin/ssh"
+      echo "                and /usr/bin/scp on PATH for this script and --e2e Julia."
       echo "  DISTSSH_CODE_COVERAGE=1  e2e with --code-coverage=user"
       exit 0
       ;;
@@ -68,6 +72,31 @@ for arg in "$@"; do
       ;;
   esac
 done
+
+if [[ "${USE_SYSTEM_SSH}" -eq 1 ]] && [[ "$(uname -s)" != "Darwin" ]]; then
+  echo "error: --system-ssh is supported on macOS (Darwin) only" >&2
+  exit 1
+fi
+
+_KIT_SYSTEM_SSH_DIR=""
+_kit_cleanup_system_ssh() {
+  if [[ -n "${_KIT_SYSTEM_SSH_DIR}" ]]; then
+    rm -rf "${_KIT_SYSTEM_SSH_DIR}"
+    _KIT_SYSTEM_SSH_DIR=""
+  fi
+}
+
+if [[ "${USE_SYSTEM_SSH}" -eq 1 ]]; then
+  if [[ ! -x /usr/bin/ssh ]] || [[ ! -x /usr/bin/scp ]]; then
+    echo "error: --system-ssh needs /usr/bin/ssh and /usr/bin/scp" >&2
+    exit 1
+  fi
+  _KIT_SYSTEM_SSH_DIR="$(mktemp -d)"
+  trap _kit_cleanup_system_ssh EXIT
+  ln -s /usr/bin/ssh "${_KIT_SYSTEM_SSH_DIR}/ssh"
+  ln -s /usr/bin/scp "${_KIT_SYSTEM_SSH_DIR}/scp"
+  export PATH="${_KIT_SYSTEM_SSH_DIR}:${PATH}"
+fi
 
 if ! command -v container >/dev/null 2>&1; then
   echo "container CLI not found. Install https://github.com/apple/container" >&2
@@ -133,6 +162,32 @@ Host child-2
 EOF
 }
 
+# Fail fast when this process's ssh cannot route to Apple container bridge IPs
+# (macOS local network permission). sshd-not-ready errors are left to wait-ready.
+preflight_ssh_local_network() {
+  local cfg="$1"
+  local container_ip="$2"
+  local ssh_bin err rc
+  ssh_bin="$(command -v ssh)"
+  if [[ -z "${ssh_bin}" ]]; then
+    echo "ssh not found on PATH" >&2
+    exit 1
+  fi
+  err="$(mktemp)"
+  rc=0
+  ssh -F "${cfg}" -o BatchMode=yes -o ConnectTimeout=5 child-1 true 2>"${err}" || rc=$?
+  if [[ "${rc}" -ne 0 ]] && grep -qiE 'no route to host|network is unreachable' "${err}"; then
+    {
+      echo "error: ${ssh_bin} cannot reach container ip ${container_ip} (no route to host);" >&2
+      echo "this process likely lacks macOS local network permission for ssh." >&2
+      echo "remedies: run from a terminal that has local network permission, or rerun with --system-ssh." >&2
+    }
+    rm -f "${err}"
+    exit 1
+  fi
+  rm -f "${err}"
+}
+
 inject_child_hosts() {
   local ip1="$1" ip2="$2"
   local cfg="${DOCKER_ROOT}/.generated/ssh_config"
@@ -175,8 +230,11 @@ MOUNT="type=bind,source=${DOCKER_ROOT}/mounted-keys,target=/mounted-keys,readonl
 WORKER_CPUS="${DISTSSH_APPLE_WORKER_CPUS:-1}"
 WORKER_MEMORY="${DISTSSH_APPLE_WORKER_MEMORY:-3584M}"
 for name in "${NAMES[@]}"; do
+  # Match docker-ssh compose cap_add: SYS_PTRACE so e2e strace can attach to
+  # remote --worker PIDs (detached drive kill reaps remote workers).
   container create -d --name "${name}" --network default \
     -c "${WORKER_CPUS}" -m "${WORKER_MEMORY}" \
+    --cap-add CAP_SYS_PTRACE \
     -e "DISTSSH_HOSTNAME=${name}" \
     -u root --mount "${MOUNT}" "${LOCAL_IMAGE}"
   container start "${name}"
@@ -201,6 +259,8 @@ fi
 write_ssh_config "${IP1}" "${IP2}"
 echo "Workers: child-1 -> ${IP1}:22  child-2 -> ${IP2}:22"
 echo "SSH config: ${DOCKER_ROOT}/.generated/ssh_config"
+
+preflight_ssh_local_network "${DOCKER_ROOT}/.generated/ssh_config" "${IP1}"
 
 "${DOCKER_ROOT}/scripts/wait-ready.sh"
 inject_child_hosts "${IP1}" "${IP2}"

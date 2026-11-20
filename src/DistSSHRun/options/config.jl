@@ -3,17 +3,31 @@
 """Where one field value came from (avoid naming enum members `Env` / `CLI`)."""
 @enum ConfigSource FromCLI FromEnv FromDefault
 
+"""Resolved boolean option value and whether it came from argv, env, or default."""
 struct BoolConfigField
     value::Bool
     source::ConfigSource
 end
 
+"""Resolved string option value and whether it came from argv, env, or default."""
 struct StringConfigField
     value::String
     source::ConfigSource
 end
 
-"""Immutable resolved configuration for go / drive / ride."""
+"""
+Immutable resolved configuration for go / drive / ride.
+
+The 0.2.0 cluster manager reads the `unsafe_*` fields (and their CLI / env
+names from [`run_option_table`](@ref)) plus `topology`. Use
+[`resolve_run_job_config`](@ref) or [`resolve_run_job_config_from_parsed`](@ref)
+to build it; [`print_run_job_config!`](@ref) prints sources.
+
+Field names are API: `unsafe_skip_env_digests`, `unsafe_expose_port`,
+`unsafe_all_to_all`, `unsafe_master_silence_exit`, `print_config`, `dry_run`,
+`topology`, `command`. Each boolean option is a [`BoolConfigField`](@ref)
+(`value` + `source`).
+"""
 struct RunJobConfig
     unsafe_skip_env_digests::BoolConfigField
     unsafe_expose_port::BoolConfigField
@@ -71,8 +85,9 @@ end
         env = ENV,
     ) -> RunJobConfig
 
-Precedence: CLI, then environment, then default. Per-host scope is reserved
-for placement file / machine-file ingest (phase 4).
+Precedence: CLI, then environment, then default. Per-host `bind` comes from
+TOML `[[hosts]]` rows when the host list uses `--hosts-file` or
+`DISTSSH_HOSTS_FILE`.
 """
 function resolve_run_job_config(;
         command::Symbol,
@@ -200,6 +215,7 @@ function print_run_job_dry_plan!(
         head_slots::Union{Nothing, Integer} = nothing,
         hosts_source::Union{Nothing, Symbol} = nothing,
         go_implicit_no_hosts::Bool = false,
+        bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
     )
     println(io, "# dry-run plan ($(cfg.command))")
     println(io, "project = ", repr(canonical_local_path(project)))
@@ -234,13 +250,33 @@ function print_run_job_dry_plan!(
         startswith(sk, "DIST") || startswith(sk, "JULIA") || continue
         println(io, "  ", _redact_env_key(sk))
     end
-    println(io, "# bind / per-host overrides: (machine file hook — phase 4)")
+    tunnel = ssh_tunnel_enabled()
+    ssh_hosts = String[launch_bind_host_key(h) for h in hosts]
+    plans = validate_all_host_launch_plans!(
+        ssh_hosts,
+        bind_overrides;
+        tunnel = tunnel,
+        unsafe_expose_port = cfg.unsafe_expose_port.value,
+        unsafe_all_to_all = cfg.unsafe_all_to_all.value,
+        topology_setting = cfg.topology.value,
+    )
+    println(io, "launch (per host):")
+    for plan in plans
+        println(io, "  ", format_host_launch_plan_line(plan))
+    end
     return nothing
 end
 
 """Return true when the caller should exit 0 after printing diagnostics."""
 function run_job_config_diagnostic_exit(cfg::RunJobConfig)::Bool
     return cfg.print_config.value || cfg.dry_run.value
+end
+
+"""Map a parsed CLI/API keyword (`missing` = omit) into `resolve_run_job_config` CLI input."""
+function cli_optional_bool(v)::Union{Nothing, Bool}
+    v === missing && return nothing
+    v isa Bool || throw(ArgumentError("cli_optional_bool: expected Bool or missing, got $(typeof(v))"))
+    return v
 end
 
 function _cli_bool(parsed, key::Symbol)::Union{Nothing, Bool}
@@ -296,6 +332,20 @@ function finish_run_job_diagnostics!(
     else
         (0, false)
     end
+    planned_ssh = String[launch_bind_host_key(h) for h in hosts]
+    bind_overrides = try
+        hosts_file_bind_overrides(
+            cli;
+            bind_overrides = get(parsed, :bind_overrides, Dict{String, String}()),
+            planned_hosts = planned_ssh,
+            command = command,
+        )
+    catch e
+        e isa ArgumentError || rethrow()
+        cli.hint_surface === :cli &&
+            throw(DistSSHBase.CliUsageError(_bind_config_cli_message(e.msg)))
+        rethrow()
+    end
     if cfg.dry_run.value
         resolved_workers = if command === :drive && hasproperty(parsed, :head_workers)
             Int(getproperty(parsed, :head_workers))
@@ -304,22 +354,30 @@ function finish_run_job_diagnostics!(
         else
             nothing
         end
-        print_run_job_dry_plan!(
-            stdout,
-            cfg;
-            hosts = hosts,
-            worker_tokens = worker_tokens,
-            project = project,
-            head_workers = command === :go ? nothing : resolved_workers,
-            head_slots = command === :go ? go_ls : nothing,
-            hosts_source = hosts_source,
-            go_implicit_no_hosts = go_implicit,
-        )
+        try
+            print_run_job_dry_plan!(
+                stdout,
+                cfg;
+                hosts = hosts,
+                worker_tokens = worker_tokens,
+                project = project,
+                head_workers = command === :go ? nothing : resolved_workers,
+                head_slots = command === :go ? go_ls : nothing,
+                hosts_source = hosts_source,
+                go_implicit_no_hosts = go_implicit,
+                bind_overrides = bind_overrides,
+            )
+        catch e
+            e isa ArgumentError || rethrow()
+            cli.hint_surface === :cli &&
+                throw(DistSSHBase.CliUsageError(_bind_config_cli_message(e.msg)))
+            rethrow()
+        end
     end
     return 0
 end
 
 public BoolConfigField, ConfigSource, RunJobConfig, StringConfigField
 public finish_run_job_diagnostics!, print_run_job_config!, print_run_job_dry_plan!
-public resolve_run_job_config, resolve_run_job_config_from_parsed
+public cli_optional_bool, resolve_run_job_config, resolve_run_job_config_from_parsed
 public run_job_config_diagnostic_exit

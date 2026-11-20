@@ -18,7 +18,7 @@ Parse a machine token into `(ssh_dest, workers_or_nothing)`.
 function split_worker_token(spec::AbstractString)::Tuple{String, Union{Nothing, Int}}
     p = parse_machine_token(spec)
     n = p.workers == 1 ? nothing : p.workers
-    return p.dest, n
+    return machine_ssh_endpoint(p), n
 end
 
 """

@@ -46,6 +46,13 @@ using Test
     @test :allocate_output_dir in ns
     @test :allocate_run_dir in ns && :kit_run_dir in ns && :read_kit_run_toml in ns
     @test :worker_seed in ns
+    @test :LaunchReport in ns && :launch_rank in ns && :SEED_SCHEME in ns
+    @test Base.isexported(DistSSHRun, :LaunchReport) && Base.isexported(DistSSHRun, :launch_rank)
+    @test :launch_report_planned in ns && :WorkerLaunchOutcome in ns
+    @test Base.isexported(DistSSHRun, :launch_report_planned)
+    @test Base.isexported(DistSSHRun, :job_item_seed)
+    @test not_exported(:HostLaunchFailure)
+    @test not_exported(:RunJobConfig)
     @test :result_provenance in ns
     @test :result_run_dir in ns && Base.ispublic(DistSSHRun, :result_run_dir)
     @test !Base.isexported(DistSSHRun, :result_run_dir)

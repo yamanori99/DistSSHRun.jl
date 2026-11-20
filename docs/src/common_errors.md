@@ -32,7 +32,9 @@ unique anchor (for example `removed-cli-flag` for `DSSH-E001`). Typed errors pri
 
 ## DSSH-E030 — Topology or bind rejected
 
-**When:** Resolved topology, tunnel, or bind settings are incompatible (see upcoming topology rules).
+**When:** Resolved topology, tunnel, or bind settings are incompatible before SSH worker launch (for example `DISTSSH_SSH_TUNNEL=0` with loopback or `0.0.0.0` on a remote host, a non-loopback bind without `--unsafe-expose-port`, or a hosts-file `bind` that is not a canonical IPv4 literal).
+
+**Example:** `hosts.toml: hosts[2] (alice@mac-b): bind "localhost" is not an IPv4 address; checked: dotted-quad IPv4 literal (names are not resolved); fix: bind = "127.0.0.1"`.
 
 ## DSSH-E040 — Worker environment mismatch
 

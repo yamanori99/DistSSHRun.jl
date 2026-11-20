@@ -1,34 +1,15 @@
-# Pull request
-
 ## Summary
 
-<!-- What / why -->
+<!-- What / why. The GitHub title is the title. Do not add a heading above this section. Do not list every changed path. When a bullet is used, state the previous result and the result after this change in that bullet. -->
 
 ## Testing
 
-<!-- The command that ran, and what it returned. If nothing ran, say why. -->
+<!-- The command that ran, and the line it printed. Do not list the checks inside the command. Delete this section if nothing ran. -->
 
 ## Risk
 
-<!-- Name what this can break. Do not grade it. -->
+<!-- Name what this can break. Do not grade it. Delete this section if nothing can break. -->
 
 ## Revert
 
-<!-- How to undo this after it merges. -->
-
-## Checklist
-
-- [ ] Breaking status is correct — a change PR has the `breaking` label
-      when needed, and a `changelog.d/` fragment with `category: breaking`.
-      A cut PR runs `./.github/news-collect.sh` and keeps the NEWS section
-      required by its version bump. Breaking includes CLI behavior: flags,
-      confirmation, exit codes, what is deleted. See
-      [DistSSHKit releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md).
-- [ ] News fragment — this PR adds one `changelog.d/*.md` file when it
-      changes `src/`, `lib/**/src/`, or `ext/`. Docs, tests, and CI do not
-      need one. A cut PR assembles fragments and does not add a new one.
-- [ ] Version is correct — `Project.toml` `version` went up when this
-      should ship, and stayed when it should not (CI reads the diff;
-      register when the required checks are green; E2E weekly Intel / WSL
-      watch; `cut-hold` if scheduled Linux is red)
-- [ ] Remote / smoke is done, or this change does not need it
+<!-- How to undo this after it merges. Delete this section if undo is the squash merge of this branch. If a generative tool wrote a substantive part, add one line after the last section naming the tool. -->

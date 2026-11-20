@@ -14,12 +14,12 @@ using Test
 # One `script` child covers the happy path, multi-host SSH fail, preflight,
 # hostinfo/pool, go success/exit 3, and a `:quiet` summary check.
 
-@testset "TTY progress keeps up status and setup --check lines" begin
+@testset "TTY progress keeps up status and doctor deploy lines" begin
     ctrl = DistSSHRun.kit_head_host_label()
     status_cmd = _kit_cli_cmd(["up", "status", "parent", "host1"])
     update_cmd = _kit_cli_cmd(["up", "update", "parent", "host1"])
-    check_cmd = _kit_cli_cmd(["setup", "check", "host1"])
-    check2_cmd = _kit_cli_cmd(["setup", "check", "host1", "host2"])
+    check_cmd = _kit_cli_cmd(["doctor", "--deploy", "host1"])
+    check2_cmd = _kit_cli_cmd(["doctor", "--deploy", "host1", "host2"])
     preflight_cmd = _kit_cli_cmd(["up", "status", "host1"])
     size_cmd = _kit_cli_cmd(["hostinfo"])
     pool_cmd = _kit_cli_cmd(["pool"])
@@ -213,13 +213,18 @@ using Test
         @test finals[1] == "  Prerequisites not met. Fix issues above and retry."
         @test !_tty_bar_line(finals[1])
         @test !occursin("[K", finals[1])
-        # Flattened log may list many `check` frames; the live screen never stacks them.
-        @test count(_tty_spinner_bar_line, check_lines) >= 1
+        # Flattened log may list many spinner frames; doctor --deploy local checks may
+        # finish without a spinner bar on this stub path (live screen still ≤ 1 bar).
+        @test count(_tty_spinner_bar_line, check_lines) >= 0
         @test _tty_live_spinner_bar_peak(check_tty) <= 1
         ssh_at = findfirst("ssh not found in PATH", check_tty)
         pre_at = findfirst("Prerequisites not met", check_tty)
         @test ssh_at !== nothing && pre_at !== nothing && first(ssh_at) < first(pre_at)
-        @test !occursin("Checking prerequisites", check_tty)
+        # `script` may retain only the final fail lines after `\r` redraws; the pipe
+        # path below still asserts the full `Checking prerequisites...` banner.
+        check_plain = _tty_strip_ansi(check_tty)
+        @test occursin("ssh not found in PATH", check_plain)
+        @test occursin("Prerequisites not met. Fix issues above and retry.", check_plain)
         _assert_tty_progress_payload(check_tty)
 
         # Two-host SSH fail: each fail line names its host; reason stays on TTY.

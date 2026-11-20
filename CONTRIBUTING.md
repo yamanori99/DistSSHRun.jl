@@ -7,11 +7,9 @@ Internals of this repo.
 
 This is a **separate** package from DistSSHKit: FIFO `serve` in front of one Kit `go` / `ride` / `drive`, not a bigger Kit. Placement tokens, `execute!`, `kit.pid` / `kit.result`, `terminate_run!`, demo argv, and rsync/collect are Kit's. Queue records table state and the path Kit already wrote.
 
-CI names Julia versions in the job (`1.13`, `1.14-pre`, `nightly`). `1.14-pre` is setup-julia `~1.14.0-0`. The names match DistSSHQueue and DistSSHKit. SSH E2E is this repo's `testenv/docker-ssh`. CI is `Pkg.test` (unit + integration), `Registry install (1.13, ubuntu-latest, x64)`, JETLS, Aqua, Linux SSH E2E (`test/e2e.jl`: `setup` / `go` / `ride` / `drive`) on path-filtered PRs / **main** / a `Project.toml` version increase / weekly / dispatch: required **1.13** (`DistSSHRun (1.13, ubuntu-latest → ubuntu-26.04)`), plus continue-on-error **1.14-pre** (`DistSSHRun (1.14-pre, ubuntu-latest → ubuntu-26.04)`; parent and workers start on 1.14, alt channel 1.12). Gitleaks, light **Runic** `--check` (soft on PRs; monthly on `main`), schedule-only **E2E weekly** (Linux / macOS Intel / WSL, 1.13), and schedule-only **CI weekly**.
-
 ## Requirements
 
-macOS, Linux, or WSL2 Ubuntu. Not native Windows (the kit shells out to `ssh`). Git clone, sync, and pull also need `git`.
+macOS, Linux, or WSL2 Ubuntu. Not native Windows (the kit shells out to `ssh`). Git clone, sync, and pull also need `git`. Before pushing, run `scripts/check.sh` on that commit. That gate is the same on macOS and Linux. WSL2 Ubuntu uses the Linux conditions.
 
 | What | Need |
 | --- | --- |
@@ -50,24 +48,16 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 
 Run this on Julia **1.13** (and a **1.14** prerelease or **nightly** if you have them). Layout: [test/README.md](test/README.md). `test/runtests.jl` counts its `_runtest_announce` calls for `[i/N]`. `test/e2e.jl` counts its `_e2e_announce` calls the same way. Unset, that run includes every announced file. `DISTSSHRUN_TEST_SHORT=1` skips the heavy ones, and `JULIA_PKGEVAL=true` turns that skip on by itself.
 
-Checkout `Pkg.test()` is not a registry install. General puts the committed tree in `~/.julia/packages/DistSSHRun/<slug>` with read-only files and no gitignored `Manifest.toml`. `lib/` is part of that tree. CI runs that install on the heavy gate (`Registry install (1.13, ubuntu-latest, x64)`), including ordinary pull requests and **main**. A pull request installs its head commit, not the merge commit. Dependencies come from General. The job sets `JULIA_PKGEVAL=true`, which selects the short file list. `PkgEval (nightly, ubuntu-latest, x64)` is the sandbox in [test/README.md](test/README.md#pkgeval). CI runs that job on **main** push and `workflow_dispatch` (heavy gate), not ordinary pull requests (host Julia 1.13; test Julia is the julia-latest tarball; `continue-on-error`; not a required check). Run that recipe before a General cut.
-
 ```bash
-julia -e 'using Pkg; Pkg.Apps.add("Runic")'   # once
-runic --inplace src lib test docs testenv   # before push; not `.` (markdown out of scope)
-./.github/jetls-check.sh    # hint+; same files as CI
+./scripts/check.sh
 ./.github/aqua-check.sh     # latest registry Aqua; not part of Pkg.test()
 ./testenv/docker-ssh/scripts/up.sh --e2e
-julia --project=docs -e 'using Pkg; Pkg.instantiate()'
-julia --project=docs --color=yes docs/make.jl
 gitleaks detect --source .
 ```
 
-[Runic](https://github.com/fredrikekre/Runic.jl) CI
-(`fredrikekre/runic-action@v1`, `version: '1'`) runs `--check` on every
-tracked `.jl`. Format `docs/*.jl` and `testenv/**/*.jl` too if you change
-them. A Runic minor may make `--check` red: re-run
-`runic --inplace src lib test docs testenv` and push.
+`scripts/check.sh` is the push gate. It runs the pinned Runic `--check` and the pinned JETLS. It instantiates `.github/runic` so the diff lints can load JuliaSyntax. When a pull request is open, that gate reads the body with `gh`. Run `.github/install-agent-tools.sh` when you want those pins (`julia +1.13` on PATH). The gate installs `.git/hooks/pre-push`, and that hook runs `./scripts/check.sh` unless this commit already passed. Do not pass `--no-verify`. Formatting, when a file needs it, is `runic --inplace src lib test docs testenv scripts` with that pin. Do not `Pkg.Apps.add("Runic")` at a floating version. `docs/make.jl` runs from the gate only when `docs/` or a docstring line changed.
+
+[Runic](https://github.com/fredrikekre/Runic.jl) on a pull request reads the pin in `.github/runic/Project.toml` and passes that version to `fredrikekre/runic-action`. It runs `--check` on every tracked `.jl`. The monthly workflow `.github/workflows/runic.yml` is the one that uses floating `version: '1'`. Format `docs/*.jl` and `testenv/**/*.jl` too if you change them. A Runic minor may make `--check` red: re-run `runic --inplace src lib test docs testenv scripts` with the pinned app and push.
 Optional: after a bulk format squash, add the landed SHA to
 [`.git-blame-ignore-revs`](.git-blame-ignore-revs) if blame is noisy.
 Local blame:
@@ -95,13 +85,179 @@ JETLS is the type gate. Do not commit `.vscode/settings.json` to silence the Lan
 
 [Fatou](https://fatou.dev) is local only. Do not add `fatou.toml` or Fatou to `.vscode/extensions.json`. After a Fatou bump, check it did not rewrite files you did not mean to touch.
 
+## Pull requests
+
+- Branch from `main`. Squash-merge only. Merged heads are deleted.
+- One reviewable change per PR. Split unless `main` would be broken in between.
+- Large plans: discuss in an issue first, then small PRs.
+- The body is
+  [`.github/pull_request_template.md`](.github/pull_request_template.md).
+  Summary is required. Testing, Risk, and Revert may be omitted.
+  When Testing is present, it is the command and the line it printed.
+  The GitHub title is the title. The body has no title heading and no checklist.
+  It does not list every changed path. `./scripts/check.sh` reads the open
+  pull request and fails when a bullet list or a fenced block repeats
+  `git diff --name-only origin/main...HEAD`.
+  [REVIEW.md](REVIEW.md) tells a reviewer what failure looks like here.
+  The type label stays out of the body. CI applies it.
+- Every pull request needs one type label (`bug` / `enhancement` / `breaking` / `chore`) when labels exist.
+- When this pull request finishes the remaining work of an issue, write `Closes #N`. When work remains, write `Part of #N` and name the leftover as another `#M`. Do not write `Part of` alone.
+- When a generative tool wrote a substantive part of a pull request or an issue, add one line after the body naming the tool. Review the change before opening. Do not put that line in Summary, Testing, or Risk.
+
+### CodeRabbit (experimental)
+
+[CodeRabbit](https://docs.coderabbit.ai) does not review a pull request
+until someone comments `@coderabbitai review` (changes since the last
+review) or `@coderabbitai full review` (the whole pull request). It does
+not reply in a thread until it is mentioned, and a later push does not
+start another review. Config is [`.coderabbit.yaml`](.coderabbit.yaml)
+on the **PR head** (not a merge gate). `scripts/check.sh` is the push gate.
+It comments on a bug this diff introduced that `REVIEW.md` does not already
+name. Treat inline comments as hints; do not apply Autofix or generated
+tests unless you want that change.
+
+## Issues
+
+Search existing issues first. A useful report is the wrong result in one
+sentence, then the command that ran, the output it printed, and
+`versioninfo()`.
+
+A failure of one run is a DistSSHRun bug. Open it here. DistSSHKit reexports this package; do not file the same defect on Kit unless the meta-package wiring is what broke. See [DistSSHKit](#distsshkit).
+
+This repo has no Discussions; usage questions that are not a bug or a committed feature can wait or be an Issue. Security: [SECURITY.md](SECURITY.md).
+
+**Issues** (Bug / Enhancement forms only): `bug` or `enhancement`. The area dropdown is triage; add `area:*` if useful. Horizon (`when:*`) is **when**, not type or path: every open Issue gets exactly one of `when:current` / `when:next` / `when:later`. `julia-next` is optional and orthogonal: Julia tip / next stable Base or stdlib drift (keep `when:later` until that Julia is the package contract).
+
+## Release
+
+When to cut, the dependency floor, and how Kit versions move are in
+the DistSSHKit manual:
+[Releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md)
+and
+[Packages](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/packages.md).
+
+A new DistSSHRun version in General needs:
+
+- `version` only goes up. A breaking change raises `x` in `0.x.y`. Anything else raises `y`. Label a breaking pull request `breaking`.
+- Every root `[deps]` entry has a `[compat]` with an upper bound. Do not use `0` or `>=` alone. `< 0.0.1` is rejected by [`.github/pkg-compat-check.sh`](.github/pkg-compat-check.sh). `test/` and `docs/` `Project.toml` files are not registered. Stdlib lower bounds stay on the Julia stdlib numbers. A stdlib JLL `[compat]` that starts at a patch, while `julia` starts at `x.y.0`, is rejected by `scripts/lint/stdlib-compat.sh`.
+- `DistSSHBase`, `DistSSHUp`, `DistSSHShip`, and `DistSSHHeartbeat` are not registered in General. Their versions stay lockstep with Run.
+- User-visible behavior: one fragment in `changelog.d/`. The version-cut pull request copies fragments into `NEWS.md`.
+- Breaking registration notes include the word `breaking` or `changelog`, and point at `NEWS.md`.
+- The Registrator command is a comment on the merge commit, and only when you asked to register. Do not write it in an issue or a pull request body.
+
+Release notes are often shorter than the NEWS section. A version held by `cut-hold` is registered after the hold lifts. Do not publish a later number in its place. If `Downstream SSH E2E (DistSSHQueue, 1.13)` is red on a version-cut pull request, do not register until the cause is known, and open a DistSSHQueue issue when the cause is DistSSHQueue.
+
+### In-repo lib packages (lockstep)
+
+`DistSSHBase`, `DistSSHUp`, `DistSSHShip`, and `DistSSHHeartbeat` ship with DistSSHRun as nested modules and workspace members. Each lib's `Project.toml` `version` must equal Run's `version` (including `-DEV`). Do not bump a lib alone in an ordinary pull request. Sibling `[compat]` entries use an exact pin on the numeric triple, for example `DistSSHBase = "=0.2.0"` while Run is `0.2.0-DEV` (Julia Pkg rejects prereleases in `=` specifiers). The pin stays `=0.2.0` when Run cuts to `0.2.0`.
+
+On a release cut, after you set the new Run `version`, run
+`./.github/version-cut.sh --lockstep-write NEW_VER` so all lib `version`
+fields and in-repo `=` compat lines move together. The `Gitleaks` workflow runs
+[`.github/lib-lockstep-check.sh`](.github/lib-lockstep-check.sh) on every pull
+request.
+
+### When to cut
+
+[Releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md#when-to-cut).
+
+### DistSSHKit
+
+Day-to-day users add DistSSHKit. This repository is the run. A behavior
+change that Kit reexports lands here first. Kit freeze and cut rules:
+[Releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md#when-to-cut).
+
+## Language
+
+`.jl` comments, docstrings, and errors: English. Install or Docs links: `docs/src`, [README.md](README.md), and [README.ja.md](README.ja.md). User-visible behavior: one fragment in `changelog.d/`. The version-cut PR copies fragments into `NEWS.md`. Generative AI is allowed; you own the diff. Keep docs plain.
+
+## Labels
+
+```bash
+./.github/gen-labeler.sh          # rewrite
+./.github/gen-labeler.sh --check  # CI drift
+```
+
+Every tracked path must match some `area:*` glob (`gen-labeler.sh --check`). Globs are positive paths; do not add `!` excludes (labeler ORs them as "not this path" and tags unrelated files). Path labeler syncs only `area:*`. After `setLabels` it restores type / other non-area labels so a concurrent Type job is not wiped.
+
+| Paths | Label |
+| --- | --- |
+| `src/**`, `demos/**`, `test/unit/**`, `test/integration/**`, package meta | `area:run` |
+| Harness under `test/` (not `unit/` / `integration/`) and `testenv/**` | `area:test` |
+| `docs/**` | `area:docs` |
+| `README.md`, `README.ja.md`, `NEWS.md`, `CONTRIBUTING.md`, `SECURITY.md` | `area:project-docs` |
+| `.github/**`, `codecov.yml`, `.coderabbit.yaml` | `area:ci` |
+
+New product path: edit the script, regenerate, create the GitHub label.
+
+Backfill every PR after a vocabulary change:
+
+```bash
+./.github/retag-pr-areas.sh           # dry-run
+./.github/retag-pr-areas.sh --apply
+```
+
+### Type labels
+
+Every PR needs one of `bug` / `enhancement` / `breaking` / `chore`. Dependabot skips the type check (`dependencies` only). Override with `gh pr edit N --add-label …`.
+
+Weekly Dependabot covers `github-actions` and Julia registry deps.
+Stdlib names are `ignore` in [`.github/dependabot.yml`](.github/dependabot.yml)
+(`Dates`, `Pkg`, `TOML`, `Test`). In-repo
+`DistSSHBase` / `DistSSHUp` / `DistSSHShip` / `DistSSHHeartbeat` path deps are
+ignored too; sibling compat moves only with
+`./.github/version-cut.sh --lockstep-write`. A new
+third-party `[deps]` entry is picked up with no YAML change; a new
+stdlib must be added to that ignore list. Stdlib `[compat]` stays with
+the Julia floor. The Julia updater otherwise appends `< 0.0.1` for the
+pre-1.10 Pkg.test 0.0.0 sandbox; this package is 1.13 and does not need
+that union (comma is or, not and). Scan /
+`./.github/pkg-compat-check.sh` rejects that token.
+
+CI infers, in order:
+
+1. A unique type on a closing issue (`Fixes #N`)
+2. Else the branch prefix: `feat/` → enhancement, `fix/` → bug, `breaking/` → breaking, `chore/` / `docs/` / `ci/` / `test/` → chore.
+3. Else a Conventional Commit title: `fix:` → bug, `feat:` → enhancement, `!` before the colon → breaking, and `docs:` / `test:` / `ci:` / `chore:` → chore. `type(scope):` is accepted.
+4. Else `chore` when the diff has no `src/`, `ext/`, or root `Project.toml`. Anything else fails until someone adds one of the four labels.
+
+`fix/` plus `Fixes` an enhancement issue gets `enhancement`. `breaking` may sit next to the type label. After a cut, a human registers when the required checks are green (or holds with `cut-hold` if scheduled Linux is red); TagBot tags.
+
+Ruleset `main` requires check `PR label` (workflow `Type`). Type labels (`bug` / `enhancement` / `breaking` / `chore`) and each `area:*` must exist (`gh label create` if missing). `when:*` and `julia-next` are Issues only (not a PR type). Labels adds `cut` when the version rises above the base. Removing it sticks until the next rise. CI still reads Project.toml, not the label.
+
+Colors match DistSSHKit: type is "what", area is "where". Do not give each `area:*` its own hue.
+
+| Kind | Color | Labels |
+| --- | --- | --- |
+| Type | red / green / yellow / dark red / purple / mint | `bug` `enhancement` `chore` `breaking` `dependencies` |
+| Path area | teal `#bfdadc` | `area:run` `area:project-docs` `area:agents` |
+| Documenter | blue `#0075ca` | `area:docs` (and leftover `docs`) |
+| CI | black `#000000` | `area:ci` |
+| Scheduled failure | orange `#ff4d00` | `alert` on bot Issues (`E2E weekly failed`, `CI weekly failed`, `Runic monthly failed`) |
+| Hold | pale blue `#BFD4F2` | `cut-hold` on Issue `E2E weekly failed` after a red scheduled Linux job |
+| Test harness | pale blue `#c5def5` | `area:test` |
+| Horizon | orange `#fdba74` / violet `#c4b5fd` / slate `#94a3b8` | `when:current` `when:next` `when:later` |
+| Julia next | Julia purple `#9558b2` | `julia-next` (Issues: tip / next-stable API; not a PR type) |
+
+| `when:*` | Use |
+| --- | --- |
+| `when:current` | Bug on the ordinary path or lying CLI; patch promptly |
+| `when:next` | Non-breaking (opt-in, docs, CI); ships when needed or after 2 weeks |
+| `when:later` | Breaking milestone batch, or waits on upstream (e.g. julia-next) |
+
+An issue on the open breaking milestone (`X.Y.0`, no due date) gets `when:later`. That milestone is the batch in [When to cut](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md#when-to-cut).
+
+## CI
+
+CI names Julia versions in the job (`1.13`, `1.14-pre`, `nightly`). `1.14-pre` is setup-julia `~1.14.0-0`. The names match DistSSHQueue and DistSSHKit. SSH E2E is this repo's `testenv/docker-ssh`.
+
 ### Julia versions
 
 Workflows pass the version to `julia-actions/setup-julia`. The stable line and `nightly` use that string as the job title. The 1.14 prerelease line passes `~1.14.0-0` and titles the job `1.14-pre`.
 
 | Version | Role | Required |
 | --- | --- | --- |
-| **1.13** | `Project.toml` julia floor. Pkg.test, Aqua, JETLS, Documenter, draw, E2E, Runic. Codecov `pkgtest` on **main push** only | yes |
+| **1.13** | `Project.toml` julia floor. Pkg.test, Aqua, JETLS, Documenter, E2E, Runic. Codecov `pkgtest` on **main push** only | yes |
 | **1.14-pre** | setup-julia `~1.14.0-0` (1.14.0 alpha, then beta, then rc, then 1.14.0; not 1.15). Ubuntu and macOS `Pkg.test` are required. Aqua, JETLS, and Linux SSH E2E stay `continue-on-error` | Ubuntu and macOS `Pkg.test` |
 | **nightly** | Published `julia-latest` tarball. It follows master and can lag a `VERSION` bump. Pkg.test and Aqua. No JETLS. `continue-on-error` | no |
 
@@ -118,6 +274,8 @@ Ubuntu **nightly** `Pkg.test` and Aqua run on **main**, **CI weekly**, and
 `workflow_dispatch`, not on pull requests (including version-cut PRs). There
 is no JETLS on nightly.
 macOS **nightly**, and WSL2 **1.14-pre** and nightly `Pkg.test` and Aqua, run on **CI weekly** only. macOS **1.14-pre** Aqua stays there too. macOS **1.14-pre** `Pkg.test` uses the heavy gate. `Registry install (1.13, ubuntu-latest, x64)` uses the same heavy gate as Ubuntu `Pkg.test` 1.13, including ordinary pull requests and **main**. It is not `continue-on-error`. PkgEval uses the heavy gate on push and dispatch only, not ordinary pull requests. It stays `continue-on-error` and is not a required check.
+
+Checkout `Pkg.test()` is not a registry install. General puts the committed tree in `~/.julia/packages/DistSSHRun/<slug>` with read-only files and no gitignored `Manifest.toml`. `lib/` is part of that tree. CI runs that install on the heavy gate (`Registry install (1.13, ubuntu-latest, x64)`), including ordinary pull requests and **main**. A pull request installs its head commit, not the merge commit. Dependencies come from General. The job sets `JULIA_PKGEVAL=true`, which selects the short file list. `PkgEval (nightly, ubuntu-latest, x64)` is the sandbox in [test/README.md](test/README.md#pkgeval). CI runs that job on **main** push and `workflow_dispatch` (heavy gate), not ordinary pull requests (host Julia 1.13; test Julia is the julia-latest tarball; `continue-on-error`; not a required check). Run that recipe before a General cut.
 
 This package feels SSH hosts, Pkg, and lockfiles more than a compute-model
 library does. When Julia announces that it has stopped maintaining the
@@ -148,8 +306,7 @@ A pull request that runs it also pushes a preview to `gh-pages` at
 `previews/PR<n>`. The commit status `documenter/deploy` links to
 `https://yamanori99.github.io/DistSSHRun.jl/previews/PR<n>/`.
 That directory stays after the pull request closes.
-`Assets` (`draw SVG`) runs if `docs/src/assets/` or that workflow
-changed. Linux E2E (1.13 required, 1.14-pre continue-on-error) uses the same **path filter** as **main** push
+Linux E2E (1.13 required, 1.14-pre continue-on-error) uses the same **path filter** as **main** push
 (`src/**`, `lib/**`, `test/**`, `testenv/**` minus markdown under those trees,
 `Project.toml`, `test/Project.toml`, `.github/workflows/CI.yml`). It also
 runs on a **version increase**, **E2E weekly** (`ssh-e2e-weekly.yml`; `CI.yml` has no
@@ -235,161 +392,3 @@ Required to merge (ruleset `main` uses these names). **nightly** jobs, and **1.1
 | Daily 04:00 JST, or Run workflow | `E2E weekly` | `ubuntu-latest`, `macos-15-intel`, WSL2 → `ubuntu-26.04`, plus the same three hosts for DistSSHBase and DistSSHUp. Linux job uploads E2E Codecov. Not a PR check. Failure opens (or comments on) Issue `E2E weekly failed`; a later all-green run closes it. A red **Linux** job on a scheduled run adds `cut-hold`, and a later green scheduled Linux removes it. Intel / WSL red does not. |
 | Daily 06:00 JST, or Run workflow | `CI weekly` | Same 1.13 jobs as a main push of Test (Run, DistSSHBase, DistSSHUp, DistSSHShip, and DistSSHHeartbeat on Ubuntu, macOS, and WSL2, plus downstream DistSSHQueue and DistSSHKit; no coverage). A pull request does not run the WSL2 rows, plus JETLS and Aqua. 1.14-pre and nightly `Pkg.test` run on Ubuntu, macOS, and WSL2. macOS 1.14-pre `Pkg.test` is also a required job in Test. Aqua on macOS and WSL2 runs here only. `Compile bench` measures precompile, load, CLI wall time, `src/**/*.jl` size, and the host OS, arch, and CPU on 1.13, 1.14-pre, and nightly. The page opens on 1.13. A solid line marks a `Project.toml` version change. On the 1.13 slot, a dash-dot line marks a Julia patch change. CI weekly runs it, and a **main** push that changes the measured tree runs it too (`src/`, `lib/`, the bench measure inputs, `Project.toml`, and the compile-bench action and workflow). A docs-only push does not. A second run of the same commit on the same UTC day keeps the first sample. A **main** run appends that sample to the `bench-data` branch. A render job then rebuilds the README and `bench.html`, and a main run publishes that page on GitHub Pages. A **main** push of `bench/compile/report.jl` or `bench/compile/charts.jl` rebuilds them and does not measure. A pull request that changes the file renders the history into the job summary and does not push. A command that exits nonzero is not recorded. It flags a host change, a 1.5x jump (and a 200 ms method that is new or doubled) but does not fail the run. Not a PR check. Catches 1.13 / Aqua / JETLS `@release` drift when nothing merged that day. Failure of the 1.13 jobs opens Issue `CI weekly failed` (`alert`); 1.14-pre, nightly, and compile bench are omitted from that notify. `cache-gc` keeps one Actions cache per restore-key prefix. |
 | 1st 10:00 JST, or Run workflow | `Runic` | `runic --check` on tracked `.jl` (`version: '1'`). The same check on a pull request is the `Runic` job in `Test`, and heavy jobs wait for it. This schedule is not a required PR check. Catches Runic minor drift when nothing formatted that month. Failure opens Issue `Runic monthly failed` (`alert`). |
-
-## Pull requests
-
-- Branch from `main`. Squash-merge only. Merged heads are deleted.
-- One reviewable change per PR. Split unless `main` would be broken in between.
-- Large plans: discuss in an issue first, then small PRs.
-- The body is
-  [`.github/pull_request_template.md`](.github/pull_request_template.md):
-  what changed, what ran, what it can break, and how to undo it.
-  [AGENTS.md](AGENTS.md) tells an agent how to fill that.
-  [REVIEW.md](REVIEW.md) tells a reviewer what failure looks like here.
-  The type label stays out of the body. CI applies it. See
-  [DistSSHKit releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md).
-- That split follows
-  [How the Claude Code team does code review](https://claude.dev/blog/solving-code-review-at-anthropic/).
-
-### CodeRabbit (experimental)
-
-[CodeRabbit](https://docs.coderabbit.ai) does not review a pull request
-until someone comments `@coderabbitai review` (changes since the last
-review) or `@coderabbitai full review` (the whole pull request). It does
-not reply in a thread until it is mentioned, and a later push does not
-start another review. Config is [`.coderabbit.yaml`](.coderabbit.yaml)
-on the **PR head** (not a merge gate). JETLS / tests / e2e stay the gate.
-Treat inline comments as hints; do not apply Autofix or generated tests
-unless you want that change.
-
-## Release
-
-Versioning, when to cut, the dependency floor, and how to register are in
-the DistSSHKit manual:
-[Releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md)
-and
-[Packages](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/packages.md).
-
-In short: a breaking change raises `x` in `0.x.y`, anything else raises
-`y`. Label a breaking pull request `breaking`. Register on the merge
-commit. Release notes are often shorter than the NEWS section. Do not lower
-`version`. A version held by `cut-hold` is registered after the hold
-lifts. Do not publish a later number in its place. If `Downstream SSH E2E
-(DistSSHQueue, 1.13)` is red on a version-cut pull request, do not register
-until the cause is known, and open a DistSSHQueue issue when the cause is
-DistSSHQueue.
-
-### In-repo lib packages (lockstep)
-
-`DistSSHBase`, `DistSSHUp`, `DistSSHShip`, and `DistSSHHeartbeat` are not
-registered in General. They ship with DistSSHRun as nested modules and
-workspace members. Each lib's `Project.toml` `version` must equal Run's
-`version` (including `-DEV`). Do not bump a lib alone in an ordinary pull
-request. Sibling `[compat]` entries use an exact pin on the numeric
-triple, for example `DistSSHBase = "=0.2.0"` while Run is `0.2.0-DEV`
-(Julia Pkg rejects prereleases in `=` specifiers). The pin stays
-`=0.2.0` when Run cuts to `0.2.0`.
-
-On a release cut, after you set the new Run `version`, run
-`./.github/version-cut.sh --lockstep-write NEW_VER` so all lib `version`
-fields and in-repo `=` compat lines move together. The `Gitleaks` workflow runs
-[`.github/lib-lockstep-check.sh`](.github/lib-lockstep-check.sh) on every pull
-request.
-
-### When to cut
-
-[Releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md#when-to-cut).
-
-### DistSSHKit
-
-Day-to-day users add DistSSHKit. This repository is the run. A behavior
-change that Kit reexports lands here first. Kit freeze and cut rules:
-[Releasing](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md#when-to-cut).
-
-## Issues
-
-**Issues** (Bug / Enhancement forms only): `bug` or `enhancement`. The area dropdown is triage; add `area:*` if useful. Horizon (`when:*`) is **when**, not type or path: every open Issue gets exactly one of `when:current` / `when:next` / `when:later`. `julia-next` is optional and orthogonal: Julia tip / next stable Base or stdlib drift (keep `when:later` until that Julia is the package contract). This repo has no Discussions; usage questions that are not a bug or a committed feature can wait or be an Issue. Security: [SECURITY.md](SECURITY.md).
-
-A failure of one run is a DistSSHRun bug. Open it here. DistSSHKit reexports this package; do not file the same defect on Kit unless the meta-package wiring is what broke. See [DistSSHKit](#distsshkit).
-
-Every PR needs one type label (`bug` / `enhancement` / `breaking` / `chore`) when labels exist.
-
-## Labels
-
-```bash
-./.github/gen-labeler.sh          # rewrite
-./.github/gen-labeler.sh --check  # CI drift
-```
-
-Every tracked path must match some `area:*` glob (`gen-labeler.sh --check`). Globs are positive paths; do not add `!` excludes (labeler ORs them as "not this path" and tags unrelated files). Path labeler syncs only `area:*`. After `setLabels` it restores type / other non-area labels so a concurrent Type job is not wiped.
-
-| Paths | Label |
-| --- | --- |
-| `src/**`, `demos/**`, `test/unit/**`, `test/integration/**`, package meta | `area:run` |
-| Harness under `test/` (not `unit/` / `integration/`) and `testenv/**` | `area:test` |
-| `docs/**` | `area:docs` |
-| `README.md`, `README.ja.md`, `NEWS.md`, `CONTRIBUTING.md`, `SECURITY.md` | `area:project-docs` |
-| `.github/**`, `codecov.yml`, `.coderabbit.yaml` | `area:ci` |
-
-New product path: edit the script, regenerate, create the GitHub label.
-
-Backfill every PR after a vocabulary change:
-
-```bash
-./.github/retag-pr-areas.sh           # dry-run
-./.github/retag-pr-areas.sh --apply
-```
-
-### Type labels
-
-Every PR needs one of `bug` / `enhancement` / `breaking` / `chore`. Dependabot skips the type check (`dependencies` only). Override with `gh pr edit N --add-label …`.
-
-Weekly Dependabot covers `github-actions` and Julia registry deps.
-Stdlib names are `ignore` in [`.github/dependabot.yml`](.github/dependabot.yml)
-(`Dates`, `Pkg`, `TOML`, `Test`). In-repo
-`DistSSHBase` / `DistSSHUp` / `DistSSHShip` / `DistSSHHeartbeat` path deps are
-ignored too; sibling compat moves only with
-`./.github/version-cut.sh --lockstep-write`. A new
-third-party `[deps]` entry is picked up with no YAML change; a new
-stdlib must be added to that ignore list. Stdlib `[compat]` stays with
-the Julia floor. The Julia updater otherwise appends `< 0.0.1` for the
-pre-1.10 Pkg.test 0.0.0 sandbox; this package is 1.13 and does not need
-that union (comma is or, not and). Scan /
-`./.github/pkg-compat-check.sh` rejects that token.
-
-CI infers, in order:
-
-1. A unique type on a closing issue (`Fixes #N`)
-2. Else the branch prefix: `feat/` → enhancement, `fix/` → bug, `breaking/` → breaking, `chore/` / `docs/` / `ci/` / `test/` → chore.
-3. Else a Conventional Commit title: `fix:` → bug, `feat:` → enhancement, `!` before the colon → breaking, and `docs:` / `test:` / `ci:` / `chore:` → chore. `type(scope):` is accepted.
-4. Else `chore` when the diff has no `src/`, `ext/`, or root `Project.toml`. Anything else fails until someone adds one of the four labels.
-
-`fix/` plus `Fixes` an enhancement issue gets `enhancement`. `breaking` may sit next to the type label. After a cut, a human registers when the required checks are green (or holds with `cut-hold` if scheduled Linux is red); TagBot tags.
-
-Ruleset `main` requires check `PR label` (workflow `Type`). Type labels (`bug` / `enhancement` / `breaking` / `chore`) and each `area:*` must exist (`gh label create` if missing). `when:*` and `julia-next` are Issues only (not a PR type). Labels adds `cut` when the version rises above the base. Removing it sticks until the next rise. CI still reads Project.toml, not the label.
-
-Colors match DistSSHKit: type is "what", area is "where". Do not give each `area:*` its own hue.
-
-| Kind | Color | Labels |
-| --- | --- | --- |
-| Type | red / green / yellow / dark red / purple / mint | `bug` `enhancement` `chore` `breaking` `dependencies` |
-| Path area | teal `#bfdadc` | `area:run` `area:project-docs` |
-| Documenter | blue `#0075ca` | `area:docs` (and leftover `docs`) |
-| CI | black `#000000` | `area:ci` |
-| Scheduled failure | orange `#ff4d00` | `alert` on bot Issues (`E2E weekly failed`, `CI weekly failed`, `Runic monthly failed`) |
-| Hold | pale blue `#BFD4F2` | `cut-hold` on Issue `E2E weekly failed` after a red scheduled Linux job |
-| Test harness | pale blue `#c5def5` | `area:test` |
-| Horizon | orange `#fdba74` / violet `#c4b5fd` / slate `#94a3b8` | `when:current` `when:next` `when:later` |
-| Julia next | Julia purple `#9558b2` | `julia-next` (Issues: tip / next-stable API; not a PR type) |
-
-| `when:*` | Use |
-| --- | --- |
-| `when:current` | Bug on the ordinary path or lying CLI; patch promptly |
-| `when:next` | Non-breaking (opt-in, docs, CI); ships when needed or after 2 weeks |
-| `when:later` | Breaking milestone batch, or waits on upstream (e.g. julia-next) |
-
-An issue on the open breaking milestone (`X.Y.0`, no due date) gets `when:later`. That milestone is the batch in [When to cut](https://github.com/yamanori99/DistSSHKit.jl/blob/main/docs/src/developers/releasing.md#when-to-cut).
-
-## Language
-
-`.jl` comments, docstrings, and errors: English. Install or Docs links: `docs/src`, [README.md](README.md), and [README.ja.md](README.ja.md). User-visible behavior: one fragment in `changelog.d/`. The version-cut PR copies fragments into `NEWS.md`. Generative AI is allowed; you own the diff. Keep docs plain.

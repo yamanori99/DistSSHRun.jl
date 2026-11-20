@@ -192,13 +192,32 @@ struct _SSHHostResult
     errkind::Symbol
 end
 
+function _ssh_phase_opts(host::AbstractString)::Vector{String}
+    connect = DistSSHBase._ssh_whole_seconds(:ssh_connect, DistSSHBase._SSH_CONNECT_TIMEOUT_S)
+    forced = String[
+        "-o", "BatchMode=yes",
+        "-o", "ConnectTimeout=$connect",
+        "-o", "ServerAliveInterval=$(_SSH_PHASE_ALIVE_INTERVAL)",
+        "-o", "ServerAliveCountMax=$(_SSH_PHASE_ALIVE_COUNT)",
+    ]
+    _, port = DistSSHBase.parse_ssh_endpoint(host)
+    return append!(forced, DistSSHBase.ssh_forwarded_opts(explicit_port = port))
+end
+
 """`ssh` argv for one short remote command, or the `DISTSSH_TEST_SSH` double."""
 function _ssh_phase_cmd(host::AbstractString, remote::AbstractString)::Cmd
     custom = _test_doubles_on() ? strip(get(ENV, "DISTSSH_TEST_SSH", "")) : ""
     if !isempty(custom)
         return Cmd(vcat(_test_double_julia_argv(custom), [String(host), String(remote)]))
     end
-    return _ssh_cmd(String["-n"; DistSSHBase.ssh_phase_argv(); _ssh_host_args(String(host), String(remote))])
+    h = String(host)
+    return _ssh_cmd(
+        vcat(
+            String["-n"],
+            _ssh_phase_opts(h),
+            _ssh_host_connection_args(h, String(remote)),
+        ),
+    )
 end
 
 function _kill_cmd_runs!(runs::AbstractVector{_CmdRun})
@@ -284,13 +303,36 @@ function _run_ssh_hosts!(
         ntasks::Integer = _SSH_PHASE_CONCURRENCY,
     )::Vector{_SSHHostResult}
     n = length(host_cmds)
-    cmds = Vector{Cmd}(undef, n)
     hosts = Vector{String}(undef, n)
+    runs = [_CmdRun() for _ in 1:n]
+    pending_cmds = Cmd[]
+    pending_idx = Int[]
     for i in eachindex(host_cmds)
         hosts[i] = String(first(host_cmds[i]))
-        cmds[i] = _ssh_phase_cmd(hosts[i], last(host_cmds[i]))
+        remote = String(last(host_cmds[i]))
+        try
+            cmd = _ssh_phase_cmd(hosts[i], remote)
+            push!(pending_cmds, cmd)
+            push!(pending_idx, i)
+        catch e
+            if e isa ArgumentError
+                runs[i].errkind = :tool
+                @warn "SSH phase skipped for $(repr(hosts[i]))" error = e.msg
+            else
+                runs[i].errkind = :other
+                @warn "SSH phase skipped for $(repr(hosts[i]))" exception = (
+                    e,
+                    catch_backtrace(),
+                )
+            end
+        end
     end
-    runs = _run_cmds_bounded!(cmds, seconds; ntasks = ntasks)
+    if !isempty(pending_cmds)
+        batch_runs = _run_cmds_bounded!(pending_cmds, seconds; ntasks = ntasks)
+        for (j, i) in enumerate(pending_idx)
+            runs[i] = batch_runs[j]
+        end
+    end
     return [_SSHHostResult(hosts[i], runs[i].proc, runs[i].errkind) for i in eachindex(hosts)]
 end
 

@@ -82,6 +82,7 @@ function _launch_cpu_target()::Union{Nothing, String}
     return s
 end
 
+"""Provenance and mixer schema id for launch ranks and worker streams (frozen at `1` for 0.2.0)."""
 const SEED_SCHEME = 1
 const DOMAIN_JOB = 0x44535348_4a4f4201
 const DOMAIN_WORKER = 0x44535348_574f524b
@@ -178,7 +179,13 @@ function register_launch_rank!(pid::Integer, rank::Integer)
     return nothing
 end
 
-"""Launch plan rank for a worker pid, or `nothing` when unknown."""
+"""
+Launch plan rank for a worker `pid`, or `nothing` when unknown.
+
+Ranks are fixed before `addprocs` via the launch plan. Provenance lists each
+assigned rank under `provenance.seeds.workers`; the 0.2.0 cluster manager reads
+the same map.
+"""
 function launch_rank(pid::Integer)::Union{Nothing, Int}
     return get(_PID_TO_RANK, Int(pid), nothing)
 end
@@ -390,8 +397,12 @@ function ssh_worker_exename(julia_path::AbstractString)::Cmd
     return Cmd(argv)
 end
 
+function ssh_addprocs_machine_bind(host::AbstractString, bind::AbstractString)::String
+    return string(ssh_addprocs_machine(host), " ", String(strip(bind)))
+end
+
 function ssh_addprocs_bind_localhost(host::AbstractString)::String
-    return string(ssh_addprocs_machine(host), " 127.0.0.1")
+    return ssh_addprocs_machine_bind(host, "127.0.0.1")
 end
 
 function ssh_tunnel_enabled()::Bool
@@ -514,7 +525,7 @@ function _precompile_worker_project!(wid::Int, project::AbstractString)::Bool
             p,
             "project directory is not writable; precompile not attempted",
         )
-        return false
+        return true
     end
     try
         remotecall_wait(Core.eval, wid, Main, _WORKER_PKG_PRECOMPILE_EXPR)
@@ -552,8 +563,14 @@ function _rmprocs_added_since(before::AbstractSet{<:Integer})
     return nothing
 end
 
-function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::AbstractString)
+function _add_local_drive_workers!(
+        n::Int,
+        project::AbstractString,
+        julia_bin::AbstractString;
+        verify_project::Bool = true,
+    )
     n < 1 && return nothing
+    isempty(_PLANNED_RANK_QUEUE) && reset_launch_rank_plan!(collect(1:n))
     flags = Cmd(worker_exeflag_strings(project; local_cpu = true, job_id = resolved_kit_job_id()))
     before = Set(workers())
     try
@@ -565,7 +582,7 @@ function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::A
                 exename = julia_bin,
                 exeflags = flags,
                 env = env,
-                topology = :master_worker,
+                topology = topology_for_launch(),
                 worker_addprocs_blas_kwargs()...,
             )
             just = Int[Int(w) for w in joined]
@@ -576,6 +593,8 @@ function _add_local_drive_workers!(n::Int, project::AbstractString, julia_bin::A
             _apply_worker_blas_threads!(just)
             i == 1 || continue
             added = sort!(just)
+            verify_project ||
+                continue
             isempty(added) || _precompile_worker_project!(first(added), project)
         end
     catch
@@ -591,6 +610,7 @@ function _add_ssh_drive_workers!(
         julia_bin::AbstractString,
         project::AbstractString,
         sshflags::Cmd,
+        placement_ssh_endpoint::AbstractString,
     )
     n < 1 && return nothing
     flags = Cmd(worker_exeflag_strings(project; local_cpu = false, job_id = resolved_kit_job_id()))
@@ -609,13 +629,14 @@ function _add_ssh_drive_workers!(
                 cmdline_cookie = false,
                 exeflags = flags,
                 env = env,
-                topology = :master_worker,
+                topology = topology_for_launch(),
                 worker_addprocs_blas_kwargs()...,
             )
             just = Int[Int(w) for w in joined]
             for w in just
                 register_launch_rank!(w, rank)
             end
+            _register_worker_placement_ssh_endpoints!(just, placement_ssh_endpoint)
             _mark_workers_launched!(just, project)
             _apply_worker_blas_threads!(just)
             i == 1 || continue
