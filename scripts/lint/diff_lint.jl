@@ -828,6 +828,10 @@ function self_test()
     any(x -> startswith(x, "duplicate AI attribution"), pr_body_hints(dup_other, "")) ||
         die("self-test: pr body duplicate AI hint case")
     isempty(pr_body_hints("Generative tool: Cursor Agent.\n", "")) || die("self-test: pr body single AI hint")
+    prose = "## Summary\n\nThe fix was made with care.\n\nGenerative tool: SomeTool\n"
+    isempty(pr_body_hints(prose, "")) || die("self-test: pr body made with prose")
+    lower_env = "## Summary\n\n## Testing\n\nRan on ubuntu 24.04 with julia 1.13.\n"
+    isempty(pr_body_hints(lower_env, "")) || die("self-test: pr body lowercase env")
     noenv = "## Summary\n\n## Testing\n\n`./scripts/check.sh` passed.\n"
     env_hints = pr_body_hints(noenv, "Linux x86_64, Julia 1.13.4")
     any(x -> x == "add env to ## Testing (Linux x86_64, Julia 1.13.4)", env_hints) ||
@@ -1258,10 +1262,7 @@ function testing_section_text(body::AbstractString)
 end
 
 function testing_has_env_markers(text::AbstractString)
-    for marker in ("macOS", "Darwin", "Linux", "Ubuntu", "WSL", "Julia", "Windows", "freebsd", "openbsd")
-        occursin(marker, text) && return true
-    end
-    return false
+    return occursin(r"(?i)macos|darwin|linux|ubuntu|wsl|julia|windows|freebsd|openbsd", text)
 end
 
 function has_generative_tool_line(body::AbstractString)
@@ -1269,7 +1270,7 @@ function has_generative_tool_line(body::AbstractString)
 end
 
 function has_made_with_footer(body::AbstractString)
-    return occursin(r"(?i)made with ", body)
+    return occursin(r"(?im)^made with \[?[^\]\n]+\]?(\([^)\n]*\))?\s*$", body)
 end
 
 function utc_datetime(s::AbstractString)

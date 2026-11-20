@@ -198,10 +198,12 @@ gate_env_example() {
 }
 
 pr_description_time() {
-  local num owner name when
-  num="$(gh pr view --json number --jq .number 2>/dev/null)" || return 0
-  owner="$(gh repo view --json owner --jq .owner.login 2>/dev/null)" || return 0
-  name="$(gh repo view --json name --jq .name 2>/dev/null)" || return 0
+  local url owner name num when
+  url="$(gh pr view --json url --jq .url 2>/dev/null)" || return 0
+  [[ "${url}" =~ ^https://[^/]+/([^/]+)/([^/]+)/pull/([0-9]+)$ ]] || return 0
+  owner="${BASH_REMATCH[1]}"
+  name="${BASH_REMATCH[2]}"
+  num="${BASH_REMATCH[3]}"
   when="$(
     gh api graphql \
       -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){lastEditedAt createdAt}}}' \
