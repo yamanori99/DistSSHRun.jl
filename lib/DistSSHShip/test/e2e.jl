@@ -150,7 +150,12 @@ end
                 dest = _reserve_e2e_dest!(_host)
                 owned = true
                 snap = DistSSHShip.pack_tree(project_dir)
-                receipt = DistSSHShip.ship(snap, [_host], dest; write_record = true)
+                transfer_id = "ship-e2e-$(bytes2hex(rand(UInt8, 8)))"
+                receipt = DistSSHShip.ship(
+                    snap, [_host], dest;
+                    write_record = true,
+                    transfer_id = transfer_id,
+                )
                 @test receipt.ok
                 @test receipt.content_tree_hash == snap.content_tree_hash
                 @test _remote_file_exists(_host, _shipped_project_file(receipt))
@@ -177,6 +182,7 @@ end
                 @test status == :complete
                 @test rec["complete"] === true
                 @test rec["content_tree_hash"] == snap.content_tree_hash
+                @test rec["transfer_id"] == transfer_id
 
                 @testset "remote tamper rejects expect_hash" begin
                     tamper = DistSSHBase._remote_shell_path_word(

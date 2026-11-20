@@ -33,6 +33,16 @@ function _fake_ship_record_local_file(tree::AbstractString, remote_path::Abstrac
     return joinpath(tree, ".distssh", name)
 end
 
+"""Expected `ARGS[3]` from a DistSSHShip `remote_extract_expr` remote command."""
+function _fake_ship_expect_hash_from_script(script::AbstractString)
+    idx = findfirst("--", script)
+    idx === nothing && return nothing
+    rest = script[(idx.stop + 1):end]
+    m = match(r"'[01]'\s+'([0-9a-fA-F]{40})'", rest)
+    m === nothing && return nothing
+    return lowercase(String(m.captures[1]))
+end
+
 function main()
     host = length(ARGS) >= 1 ? ARGS[1] : ""
     script = length(ARGS) >= 2 ? ARGS[2] : ""
@@ -565,27 +575,36 @@ function main()
 
     if _FAKE_SSH_ARBITRARY_DEST &&
             occursin("Tar.extract(stdin", script) && occursin("content_tree_hash mismatch", script)
-        expect = strip(get(ENV, "DISTSSH_TEST_EXPECT_TREE_HASH", ""))
-        if !isempty(expect)
-            if get(ENV, "DISTSSH_TEST_TAR_EXTRACT_FAIL", "") == "1"
-                println(stderr, "tar extract failed")
-                exit(1)
-            end
-            mkpath(tree)
-            data = read(stdin)
-            buf = IOBuffer(data)
-            seekstart(buf)
-            Tar.extract(buf, tree)
-            buf = IOBuffer()
-            Tar.create(tree, buf)
-            seekstart(buf)
-            got = string(Tar.tree_hash(buf; algorithm = "git-sha1", skip_empty = true))
-            got == expect || begin
-                println(stderr, "content_tree_hash mismatch: ", got, " != ", expect)
-                exit(1)
-            end
-            exit(0)
+        embedded = _fake_ship_expect_hash_from_script(script)
+        if embedded === nothing
+            println(stderr, "could not parse expected content_tree_hash from remote script")
+            exit(1)
         end
+        test_want = strip(get(ENV, "DISTSSH_TEST_EXPECT_TREE_HASH", ""))
+        if !isempty(test_want)
+            lowercase(test_want) == embedded || begin
+                println(stderr, "content_tree_hash mismatch: ", embedded, " != ", test_want)
+                exit(1)
+            end
+        end
+        if get(ENV, "DISTSSH_TEST_TAR_EXTRACT_FAIL", "") == "1"
+            println(stderr, "tar extract failed")
+            exit(1)
+        end
+        mkpath(tree)
+        data = read(stdin)
+        buf = IOBuffer(data)
+        seekstart(buf)
+        Tar.extract(buf, tree)
+        buf = IOBuffer()
+        Tar.create(tree, buf)
+        seekstart(buf)
+        got = string(Tar.tree_hash(buf; algorithm = "git-sha1", skip_empty = true))
+        got == embedded || begin
+            println(stderr, "content_tree_hash mismatch: ", got, " != ", embedded)
+            exit(1)
+        end
+        exit(0)
     end
 
     if _FAKE_SSH_ARBITRARY_DEST &&

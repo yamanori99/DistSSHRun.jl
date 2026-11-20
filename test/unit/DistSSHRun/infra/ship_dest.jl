@@ -133,6 +133,54 @@ end
         end
     end
 
+    @testset "pack_ship_tree uses versioned Manifest via manifest_path" begin
+        _with_tempdir() do tmp
+            write(joinpath(tmp, "Project.toml"), "name = \"VerMan\"\n")
+            ver = "Manifest-v$(VERSION.major).$(VERSION.minor).toml"
+            write(joinpath(tmp, ver), "julia_version = \"1.13.0\"\nmanifest_format = \"2.0\"\n")
+            pack = DistSSHRun.pack_ship_tree(tmp)
+            try
+                mp = DistSSHRun.manifest_path(tmp)
+                @test basename(mp) == ver
+                rel = replace(relpath(mp, tmp), '\\' => '/')
+                @test rel in DistSSHRun.DistSSHShip.pack_entry_paths(tmp)
+                @test rel in DistSSHRun.ship_send_list(tmp)
+            finally
+                rm(pack.directory; force = true, recursive = true)
+            end
+        end
+    end
+
+    @testset "pack_shipment fails closed when remote hash mismatches" begin
+        _with_tempdir() do state
+            mktempdir() do proj
+                _minimal_project!(proj)
+                host = "host1"
+                pack = DistSSHRun.pack_ship_tree(proj)
+                try
+                    dest = "/home/distsshkit/.distsshqueue/stage/hash-mismatch"
+                    DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!(host)
+                    withenv(
+                        merge(
+                            _fake_arbitrary_dest_ship_env(state),
+                            Dict("DISTSSH_TEST_EXPECT_TREE_HASH" => "0"^40),
+                        )...
+                    ) do
+                        result = DistSSHRun.pack_shipment(
+                            pack, [host], dest; write_record = false
+                        )
+                        @test !result.ok
+                        @test occursin("content_tree_hash", result.hosts[1].message)
+                    end
+                finally
+                    rm(pack.directory; force = true, recursive = true)
+                    DistSSHRun.DistSSHBase._clear_remote_posix_shell_cache!()
+                    DistSSHRun.DistSSHBase.clear_detect_julia_path_cache!(host)
+                end
+            end
+        end
+    end
+
     @testset "fake ssh pack_shipment extracts and verifies" begin
         _with_tempdir() do state
             mktempdir() do proj

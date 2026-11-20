@@ -146,6 +146,12 @@ newer last-ship record. A recorded `content_tree_hash` there must match
 the selected remote stamp. A local last-ship record without a matching
 40-digit hash is not used. `setup check` still prints SSH diagnostics
 when selection cannot probe, then fails closed if the run id is invalid. `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
+`pack_ship_tree`, `pack_shipment`, and `ship_project_to_dest` send the same
+verified tar as worker ship to a caller-chosen remote directory (DistSSHQueue
+can call this for client→qhost staging). They do not create `runs/`, write Run
+`run.toml`, or instantiate. Pass an explicit `transfer_id` when the consumer
+needs a stage job id in `shipment.toml`; use `ShipmentReceipt.content_tree_hash`
+as the shipped-tree id (not lexical-latest under the stage parent).
 `ship_tree!(project, hosts, deploy_root)` packs with `DistSSHShip.pack_tree`
 (declared-input omission and warnings), ships into `runs/<run_id>/src/`, then
 deletes the temporary pack directory. `ship_tree!(pack, hosts, deploy_root)`
