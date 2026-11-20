@@ -191,6 +191,50 @@ function lint_banned(root, files)
     return n
 end
 
+function ssh_builder_path(path::AbstractString)::Bool
+    return replace(String(path), '\\' => '/') == "lib/DistSSHBase/src/ssh/ssh.jl"
+end
+
+function ssh_scan_path(path::AbstractString)::Bool
+    p = replace(String(path), '\\' => '/')
+    endswith(p, ".jl") || return false
+    ssh_builder_path(p) && return false
+    occursin("/messages/", p) && return false
+    occursin("/DistSSHBase/src/hosts/hosts.jl", p) && return false
+    occursin("/core/setup/hosts.jl", p) && return false
+    startswith(p, "src/") && return true
+    return occursin(r"^lib/[^/]+/src/", p)
+end
+
+function ssh_argv_hit(line::AbstractString)
+    occursin(r"(?i)batchmode", line) && return "BatchMode"
+    occursin(r"\[\s*\"ssh\"", line) || return nothing
+    occursin("_ssh_cmd", line) && return nothing
+    occursin("_host_tool_cmd", line) && return nothing
+    occursin("_host_tool_exe", line) && return nothing
+    return "raw ssh argv"
+end
+
+function lint_ssh_argv(root, files)
+    n = 0
+    for (path, hunks) in files
+        ssh_scan_path(path) || continue
+        added = union((added_lines(h) for h in hunks)...)
+        isempty(added) && continue
+        full = joinpath(root, path)
+        isfile(full) || continue
+        lines = split(read(full, String), '\n'; keepempty = true)
+        for i in sort!(collect(added))
+            1 <= i <= length(lines) || continue
+            hit = ssh_argv_hit(lines[i])
+            hit === nothing && continue
+            println(stderr, "lint: $(path):$(i): $(hit)")
+            n += 1
+        end
+    end
+    return n
+end
+
 function workflow_job_title(lines, i::Int)
     j = i
     while j >= 1
@@ -647,6 +691,11 @@ function self_test()
     for (_, _, text) in comment_tokens("# Use café\n")
     end
     link_target("guide.md \"Read the guide\"") == "guide.md" || die("self-test: link title")
+    ssh_argv_hit("-o BatchMode=yes") == "BatchMode" || die("self-test: ssh BatchMode")
+    ssh_argv_hit("Cmd([\"ssh\", host])") == "raw ssh argv" || die("self-test: ssh raw argv")
+    ssh_argv_hit("_ssh_cmd([\"ssh\", dest])") === nothing || die("self-test: ssh builder argv")
+    ssh_scan_path("lib/DistSSHBase/src/ssh/ssh.jl") && die("self-test: ssh builder scanned")
+    ssh_scan_path("src/DistSSHRun/infra/remote.jl") || die("self-test: ssh product scanned")
     aqua_lines = [
         "  aqua:",
         "    name: Aqua (1.13, ubuntu-latest, x64)",
@@ -1017,7 +1066,7 @@ function main(args)
         return pr_body_main(args[2], args[3])
     end
     if length(args) != 1
-        die("usage: diff_lint.jl <banned-words|agents-md|skip-reasons|new-comments|stdlib-compat|aqua-run|doc-touch|docs-static|self-test|pr-body>")
+        die("usage: diff_lint.jl <banned-words|agents-md|skip-reasons|new-comments|stdlib-compat|ssh-argv|aqua-run|doc-touch|docs-static|self-test|pr-body>")
     end
     mode = args[1]
     mode == "self-test" && return self_test()
@@ -1041,6 +1090,8 @@ function main(args)
         lint_skips(root, files, path -> read(joinpath(root, path), String))
     elseif mode == "new-comments"
         lint_new_comments(root, files)
+    elseif mode == "ssh-argv"
+        lint_ssh_argv(root, files)
     elseif mode == "aqua-run"
         lint_aqua_run(root, files)
     else

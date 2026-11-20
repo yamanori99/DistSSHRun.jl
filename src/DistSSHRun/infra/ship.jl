@@ -733,7 +733,7 @@ function _remote_script_output(
         end
         String(take!(text))
     end
-    wait(proc)
+    DistSSHBase.ssh_wait_process!(proc)
     out = fetch(out_task)
     err = fetch(err_task)
     code = DistSSHBase.shell_status(proc)

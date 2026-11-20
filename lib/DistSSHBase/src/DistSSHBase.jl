@@ -10,7 +10,8 @@ module DistSSHBase
 import SHA
 import TOML
 
-export canonical_local_path, resolve_pkg_env, resolve_pkg_project_dir, short_path
+export build_ssh_opts, canonical_local_path, resolve_pkg_env, resolve_pkg_project_dir, short_path
+export run_ssh, ssh_auth_timeout_seconds, ssh_phase_argv, ssh_wait_process!
 export host_tokens, is_parent_host_name, throw_removed_parent_placement_token!
 export print_colored, print_help_blank, print_help_chrome, print_help_lines, print_help_section
 export cache_file, cache_path, cache_relpath, file_sha256, stored_path

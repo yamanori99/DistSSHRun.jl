@@ -264,12 +264,13 @@ function _remote_git_run(
     out_buf = IOBuffer()
     err_buf = IOBuffer()
     try
-        run(
+        run_ssh(
             pipeline(
                 _host_sync_remote_shell_cmd(String(host), _remote_git_shell(remote_path, args));
                 stdout = out_buf,
                 stderr = err_buf,
-            ),
+            );
+            wait = true,
         )
         return (; ok = true, code = 0, out = String(take!(out_buf)), err = String(take!(err_buf)), detail = "")
     catch e

@@ -1730,6 +1730,38 @@ end
             _assert_ssh_e2e_ok(suite, "setup_ship_tree_again", proc, out; project = proj, kit = :setup)
         end
 
+        @testset "password-only sshd fails fast (BatchMode)" begin
+            _e2e_announce("password-only sshd")
+            pw = "child-pw"
+            budget = DistSSHRun.DistSSHBase.ssh_auth_timeout_seconds() + 5.0
+            env = _ssh_e2e_env(; remote_project = remote_root)
+            t0 = time()
+            ok = withenv(env...) do
+                redirect_stdout(devnull) do
+                    redirect_stderr(devnull) do
+                        DistSSHRun.preflight_setup_ssh([pw])
+                    end
+                end
+            end
+            elapsed = time() - t0
+            @test !ok
+            @test elapsed < budget
+
+            t1 = time()
+            proc, out = _run_kit_setup(;
+                command = "up",
+                setup_args = ["status", pw],
+                project_root = proj,
+                extra_env = env,
+            )
+            @test proc.exitcode != 0
+            @test time() - t1 < budget
+            combined = out
+            @test occursin("SSH auth", combined) ||
+                occursin("Permission denied", combined) ||
+                occursin("preflight", lowercase(combined))
+        end
+
         @testset "inter-child SSH (child-1 → child-2)" begin
             _e2e_announce("inter-child SSH (child-1 → child-2)")
             cmd = Cmd(

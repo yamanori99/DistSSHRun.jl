@@ -173,7 +173,7 @@ using .DistSSHBase: CliCursor, HostFacts, HostResult, OUTPUT_WIDTH, PARENT_HOST_
     read_toml_host_entries,
     remote_delete_root, remote_deploy_root, remote_env_project_root, remote_git_clone_dest,
     remote_layout_path, resolve_host_path_abs,
-    resolve_remote_julia, resolve_remote_project_root, rule_line, shield_sigint,
+    resolve_remote_julia, resolve_remote_project_root, rule_line, run_ssh, shield_sigint,
     split_hosts_csv, split_worker_token, ssh_addprocs_machine, summarize_ssh_error,
     throw_legacy_placement_token, throw_removed_local_flag, toml_host_ssh_dest, use_colors, validate_ssh_host,
     with_cli_entry,

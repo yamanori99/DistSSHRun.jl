@@ -678,6 +678,15 @@ function _run_drive_parsed_locked!(
             end
         end
 
+        ssh_preflight_hosts = String[String(h) for (h, _) in hosts]
+        if !isempty(ssh_preflight_hosts)
+            if !preflight_setup_ssh(ssh_preflight_hosts) && !best_effort
+                writeln_both("")
+                print_err("SSH preflight failed. Fix connectivity, then retry.\n")
+                return 1
+            end
+        end
+
         kit_progress_step!("cleanup")
         cleanup_stale_workers!(hosts)
 

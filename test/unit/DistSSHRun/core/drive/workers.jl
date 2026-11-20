@@ -18,6 +18,18 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             @test occursin("worker-host", hint)
         end
 
+        @testset "assert_workers_joined! fails on lone master" begin
+            @test nprocs() == 1
+            err = try
+                DistSSHRun.assert_workers_joined!()
+                nothing
+            catch e
+                e
+            end
+            @test err isa ErrorException
+            @test err.msg == DistSSHRun._NO_WORKERS_JOINED
+        end
+
         @testset "register_worker_cleanup! lone master is a no-op" begin
             @test nprocs() == 1
             @test workers() == [1]

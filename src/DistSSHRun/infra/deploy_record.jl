@@ -312,7 +312,7 @@ function _write_deploy_record_via_scp!(
         i = findlast(==('/'), parent)
         i !== nothing && (parent = parent[1:prevind(parent, i)])
         pq_parent = _remote_shell_path_word(parent)
-        proc_mk = run(
+        proc_mk = run_ssh(
             pipeline(
                 ignorestatus(
                     _host_sync_remote_shell_cmd(
@@ -327,7 +327,7 @@ function _write_deploy_record_via_scp!(
         )
         DistSSHBase.shell_status(proc_mk) == 0 ||
             throw(ArgumentError("deploy record: mkdir on $(host) failed"))
-        proc_scp = run(
+        proc_scp = run_ssh(
             pipeline(
                 ignorestatus(
                     _scp_cmd(_deploy_record_scp_upload_argv(String(host), record_tmp_abs, tmp)),
@@ -340,7 +340,7 @@ function _write_deploy_record_via_scp!(
         DistSSHBase.shell_status(proc_scp) == 0 ||
             throw(ArgumentError("deploy record: scp to $(host) failed"))
         install = _deploy_record_atomic_install_script(record_abs, record_tmp_abs)
-        proc_mv = run(
+        proc_mv = run_ssh(
             pipeline(
                 ignorestatus(_host_sync_remote_shell_cmd(String(host), install));
                 stdout = devnull,
@@ -351,7 +351,7 @@ function _write_deploy_record_via_scp!(
         if DistSSHBase.shell_status(proc_mv) != 0
             tmp_q = _remote_shell_path_word(record_tmp_abs)
             try
-                run(
+                run_ssh(
                     pipeline(
                         ignorestatus(
                             _host_sync_remote_shell_cmd(String(host), "rm -f $tmp_q"),

@@ -565,6 +565,11 @@ function _ride_add_workers!(
             wait_for_worker_connections!(; ssh = !isempty(child_hosts))
             _ride_init_drive_workers!(project)
         end
+        planned_workers =
+            plan.head_workers + sum(n for (_, n) in plan.child_workers; init = 0)
+        if planned_workers > 0
+            assert_workers_joined!()
+        end
         if isempty(child_hosts) && !isempty(added)
             _mark_workers_launched!(added, project)
             _register_drive_host_worker_ids!(PARENT_HOST_NAME, added)
@@ -873,6 +878,11 @@ function _ride_run!(
                 project; cli_override = remote,
             )
             record_deploy_status_for_run!(child_hosts, deploy_root, project)
+            if !preflight_setup_ssh(child_hosts) && !best_effort
+                throw(
+                    ArgumentError("SSH preflight failed. Fix connectivity, then retry."),
+                )
+            end
         end
         empty!(ARGS)
         append!(ARGS, String[String(a) for a in args])
