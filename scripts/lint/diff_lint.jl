@@ -100,6 +100,11 @@ function parse_diff(diff::AbstractString)
     for line in eachsplit(diff, '\n')
         if startswith(line, "diff --git ")
             cur = nothing
+            m = match(r"^diff --git a/.+ b/(.+)$", line)
+            if m !== nothing
+                path = m.captures[1]
+                get!(files, path, Hunk[])
+            end
             continue
         elseif startswith(line, "--- a/")
             path = line[7:end]
@@ -450,9 +455,31 @@ function require_open_issues(src, a, b, path)
     return nerr
 end
 
+function test_macro_name(node)
+    numchildren(node) < 1 && return nothing
+    head = node[1]
+    if kind(head) == K"."
+        numchildren(head) >= 2 || return nothing
+        return sourcetext(head[2])
+    end
+    return sourcetext(head)
+end
+
+function macro_touches_added(src, node, added)
+    isempty(added) && return false
+    r = byte_range(node)
+    a = line_of(src, Int(first(r)))
+    b = line_of(src, Int(last(r)))
+    for line in a:b
+        line in added && return true
+    end
+    return false
+end
+
 function check_skip_macro(node, src, path)
     numchildren(node) < 1 && return 0
-    name = sourcetext(node[1])
+    name = test_macro_name(node)
+    name === nothing && return 0
     name in ("test", "test_skip", "test_broken") || return 0
     r = byte_range(node)
     a = line_of(src, Int(first(r)))
@@ -509,12 +536,8 @@ function lint_skips(root, files, src_for_path)
         tree = parse_tree(src)
         function walk(node, inside_fn)
             k = kind(node)
-            if k == K"macrocall" && !inside_fn
-                r = byte_range(node)
-                line = line_of(src, Int(first(r)))
-                if line in added
-                    n += check_skip_macro(node, src, path)
-                end
+            if k == K"macrocall" && !inside_fn && macro_touches_added(src, node, added)
+                n += check_skip_macro(node, src, path)
             end
             next = inside_fn || k == K"function" || k == K"->"
             for i in 1:numchildren(node)
@@ -536,18 +559,25 @@ function _comment_tokens_or_empty(src::AbstractString)
     end
 end
 
+function line_comment_bodies(line::AbstractString)
+    out = Set{String}()
+    line_src = line * '\n'
+    for tok in tokenize(line_src)
+        kind(tok) == K"Comment" || continue
+        push!(out, comment_body(untokenize(tok, line_src)))
+    end
+    return out
+end
+
 function deleted_bodies(h::Hunk)
     bodies = Set{String}()
     isempty(h.deleted) && return bodies
     src = join(h.deleted, '\n') * '\n'
-    tokens = _comment_tokens_or_empty(src)
-    if isempty(tokens)
-        for line in h.deleted
-            append!(tokens, _comment_tokens_or_empty(line * '\n'))
-        end
-    end
-    for (_, _, text) in tokens
+    for (_, _, text) in _comment_tokens_or_empty(src)
         push!(bodies, comment_body(text))
+    end
+    for line in h.deleted
+        union!(bodies, line_comment_bodies(line))
     end
     return bodies
 end
@@ -630,11 +660,14 @@ function self_test()
     @test_broken \"needs a number\"
     @test g() skip=(VERSION < v\"1.14\")
     @test h() skip=true
+    Test.@test j() skip=true
     @test i() broken=true #1
     function helper()
         @test_broken \"inside helper\"
     end
     """
+    tree_q = parse_tree("Test.@test_skip \"git not in PATH\"\n")
+    test_macro_name(tree_q[1]) == "test_skip" || die("self-test: qualified macro name")
     tree2 = parse_tree(skip_src)
     errs = Ref(0)
     function walk2(node, inside)
@@ -648,7 +681,15 @@ function self_test()
         return
     end
     walk2(tree2, false)
-    errs[] == 3 || die("self-test: skip errors $(errs[])")
+    errs[] == 4 || die("self-test: skip errors $(errs[])")
+    ml = """
+    @test long() begin
+        1
+    end skip=true
+    """
+    h = Hunk(1, 2, 3, 1, String[])
+    lint_skips("", Dict("t.jl" => [h]), path -> path == "t.jl" ? ml : "") == 1 ||
+        die("self-test: multiline skip on added tail line")
     docsrc = "\"\"\"\ndoc\n\"\"\"\nf() = 1\n"
     ranges = doc_line_ranges(docsrc)
     length(ranges) == 1 && 1 in ranges[1] && 3 in ranges[1] && !(4 in ranges[1]) || die("self-test: doc lines $(ranges)")
@@ -715,6 +756,13 @@ function self_test()
     deleted_bodies(split_for) == Set{String}() || die("self-test: split for")
     moved = Hunk(1, 2, 1, 1, String["for (k, v) in xs()", "# moved note"])
     "moved note" in deleted_bodies(moved) || die("self-test: deleted comment")
+    partial = Hunk(1, 1, 1, 1, String["for (k, v) in xs()  # partial inline"])
+    "partial inline" in deleted_bodies(partial) || die("self-test: partial deleted comment")
+    bin = """
+    diff --git a/docs/preview.png b/docs/preview.png
+    Binary files a/docs/preview.png and b/docs/preview.png differ
+    """
+    haskey(parse_diff(bin), "docs/preview.png") || die("self-test: binary docs path")
     println("self-test: passed")
     return 0
 end
@@ -751,9 +799,18 @@ function lines_hit_doc(src::AbstractString, lines)
     return any(line -> any(r -> line in r, ranges), lines)
 end
 
-function show_file(root::AbstractString, path::AbstractString)
+function merge_base_ref(root::AbstractString)
     try
-        return read(`git -C $root show origin/main:$path`, String)
+        return strip(read(`git -C $root merge-base origin/main HEAD`, String))
+    catch
+        return "origin/main"
+    end
+end
+
+function show_file(root::AbstractString, path::AbstractString; ref::Union{Nothing, AbstractString} = nothing)
+    ref = ref === nothing ? merge_base_ref(root) : String(ref)
+    try
+        return read(`git -C $root show $(ref):$path`, String)
     catch
         return ""
     end
