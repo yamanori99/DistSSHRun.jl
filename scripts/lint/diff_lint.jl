@@ -191,6 +191,45 @@ function lint_banned(root, files)
     return n
 end
 
+function workflow_job_title(lines, i::Int)
+    j = i
+    while j >= 1
+        m = match(r"^    name:\s*(.+)\s*$", lines[j])
+        m === nothing && (j -= 1; continue)
+        return strip(m.captures[1], ['"', '\''])
+    end
+    return nothing
+end
+
+function aqua_run_hit(title, line::AbstractString)
+    startswith(String(title), "Aqua (") || return nothing
+    occursin(r"^\s+run:", line) || return nothing
+    occursin("aqua-check.sh", line) && return nothing
+    return "Aqua job run is not aqua-check.sh"
+end
+
+function lint_aqua_run(root, files)
+    n = 0
+    for (path, hunks) in files
+        startswith(path, ".github/workflows/") && endswith(path, ".yml") || continue
+        added = union((added_lines(h) for h in hunks)...)
+        isempty(added) && continue
+        full = joinpath(root, path)
+        isfile(full) || continue
+        lines = split(read(full, String), '\n'; keepempty = true)
+        for i in sort!(collect(added))
+            1 <= i <= length(lines) || continue
+            title = workflow_job_title(lines, i)
+            title === nothing && continue
+            hit = aqua_run_hit(title, lines[i])
+            hit === nothing && continue
+            println(stderr, "lint: $(path):$(i): $(hit)")
+            n += 1
+        end
+    end
+    return n
+end
+
 function public_names_in(src::AbstractString)
     names = Set{String}()
     toks = tokenize(src)
@@ -593,6 +632,22 @@ function self_test()
     for (_, _, text) in comment_tokens("# Use café\n")
     end
     link_target("guide.md \"Read the guide\"") == "guide.md" || die("self-test: link title")
+    aqua_yml = """
+  aqua:
+    name: Aqua (1.13, ubuntu-latest, x64)
+    steps:
+      - name: Aqua.test_all (latest Aqua)
+        run: ./.github/aqua-check.sh
+      - name: extra
+        run: julia extra.jl
+"""
+    aqua_lines = split(aqua_yml, '\n'; keepempty = true)
+    workflow_job_title(aqua_lines, 7) == "Aqua (1.13, ubuntu-latest, x64)" ||
+        die("self-test: aqua job title")
+    aqua_run_hit("Aqua (1.13, ubuntu-latest, x64)", "        run: ./.github/aqua-check.sh") ===
+    nothing || die("self-test: aqua-check allowed")
+    aqua_run_hit("Aqua (1.13, ubuntu-latest, x64)", "        run: julia extra.jl") ==
+    "Aqua job run is not aqua-check.sh" || die("self-test: aqua extra run")
     println("self-test: passed")
     return 0
 end
@@ -944,7 +999,7 @@ function main(args)
         return pr_body_main(args[2], args[3])
     end
     if length(args) != 1
-        die("usage: diff_lint.jl <banned-words|agents-md|skip-reasons|new-comments|stdlib-compat|doc-touch|docs-static|self-test|pr-body>")
+        die("usage: diff_lint.jl <banned-words|agents-md|skip-reasons|new-comments|stdlib-compat|aqua-run|doc-touch|docs-static|self-test|pr-body>")
     end
     mode = args[1]
     mode == "self-test" && return self_test()
@@ -968,6 +1023,8 @@ function main(args)
         lint_skips(root, files, path -> read(joinpath(root, path), String))
     elseif mode == "new-comments"
         lint_new_comments(root, files)
+    elseif mode == "aqua-run"
+        lint_aqua_run(root, files)
     else
         die("unknown mode $(mode)")
     end
