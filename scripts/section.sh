@@ -45,7 +45,7 @@ gate_fail_show() {
   local log="$2"
   local rc="${3:-1}"
   printf 'FAIL  %s\n' "${label}" >&2
-  printf '----- %s output -----\n' "${label}" >&2
+  printf '%s\n' "----- ${label} output -----" >&2
   cat "${log}" >&2
   printf '-----\n' >&2
   local sha

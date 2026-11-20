@@ -1299,11 +1299,11 @@ function commit_newer_than_edit(committed::AbstractString, edited::AbstractStrin
 end
 
 function pr_body_hints(
-    body::AbstractString,
-    env_example::AbstractString,
-    committed_at::AbstractString = "",
-    edited_at::AbstractString = "",
-)
+        body::AbstractString,
+        env_example::AbstractString,
+        committed_at::AbstractString = "",
+        edited_at::AbstractString = "",
+    )
     hints = String[]
     if commit_newer_than_edit(committed_at, edited_at)
         push!(hints, "update the PR body (a commit is newer than the last edit)")
@@ -1326,11 +1326,11 @@ function pr_body_hints(
 end
 
 function pr_body_hints_main(
-    body_file::AbstractString,
-    env_example::AbstractString,
-    committed_at::AbstractString = "",
-    edited_at::AbstractString = "",
-)
+        body_file::AbstractString,
+        env_example::AbstractString,
+        committed_at::AbstractString = "",
+        edited_at::AbstractString = "",
+    )
     for hint in pr_body_hints(read(body_file, String), env_example, committed_at, edited_at)
         println(hint)
     end
