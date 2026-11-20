@@ -19,8 +19,8 @@ end
 
 Build a session for drive APIs. `workers` is a CLI-style host list.
 `setup!` / `pool!` / `sync!` / `collect!` accept a bare list
-(`user@host`). `go!` / `drive!` / `ride!` / `pipeline!` require `:N`
-on listed tokens (`1*user@host`). `drive` / `ride` local workers use
+(`user@host`). `go!` / `drive!` / `pipeline!` require `:N`
+on listed tokens (`1*user@host`). `drive` local workers use
 `head_workers` (`--head-workers`). `go` head runs use `head_slots`
 (`--head-slots`), not placement tokens.
 
@@ -101,7 +101,7 @@ end
 Sets `DISTRIBUTED_PROJECT_ROOT` from `session.project`. Does **not** write
 `DISTRIBUTED_REMOTE_PROJECT_ROOT`: `session.remote` is passed as
 `cli_override` into location helpers. Callers that must expose a remote
-layout to `remote_layout_path` / workers (drive / ride) set that ENV only
+layout to `remote_layout_path` / workers (drive) set that ENV only
 inside a frame that restores the caller's value. Overlapping in-process kit
 runs are refused (`_acquire_kit_inproc_run!`); nested same-task runs share
 one owner task.

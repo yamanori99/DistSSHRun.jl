@@ -21,7 +21,7 @@ function setup_token_has_worker_count(spec::AbstractString)::Bool
 end
 
 """
-Reject `N*host` on setup (one operation per host; counts belong on drive/go/ride).
+Reject `N*host` on setup (one operation per host; counts belong on drive/go).
 
 Returns `nothing`; throws `ArgumentError` with a plain host hint when `N*` is present.
 """

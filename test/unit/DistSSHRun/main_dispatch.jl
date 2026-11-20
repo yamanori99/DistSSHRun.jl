@@ -58,13 +58,13 @@ using Test
     end
     let (code, _, err) = _main_capture(["map_echo.jl"])
         @test code == 2
-        @test occursin("does not infer go / ride / drive", err)
+        @test occursin("does not infer go or drive", err)
         @test occursin("go SCRIPT.jl", err)
         @test !occursin("Unknown subcommand", err)
     end
     let (code, _, err) = _main_capture(["--head-workers", "2", "job.jl"])
         @test code == 2
-        @test occursin("does not infer go / ride / drive", err)
+        @test occursin("does not infer go or drive", err)
     end
     let (code, _, err) = _main_capture(["rysnc", "host1"])
         @test code == 2
@@ -109,7 +109,7 @@ using Test
 
     # Subcommand --help / --version load `src/cli/*.jl` in-process (no SSH / addprocs).
     @testset "subcommand help and version" begin
-        for cmd in ("drive", "go", "ride", "setup", "hostinfo", "pool")
+        for cmd in ("drive", "go", "setup", "hostinfo", "pool")
             let (code, out, err) = _main_capture([cmd, "--help"])
                 combined = out * err
                 @test code == 0
@@ -139,7 +139,7 @@ using Test
 
     @testset "help <command> is <command> --help" begin
         for cmd in (
-                "drive", "go", "ride", "setup", "hostinfo", "pool", "up", "demo", "progress",
+                "drive", "go", "setup", "hostinfo", "pool", "up", "demo", "progress",
             )
             direct = _main_capture([cmd, "--help"])
             via = _main_capture(["help", cmd])
@@ -185,7 +185,7 @@ using Test
         let (code, _, err) = _main_capture(["help", "map_echo.jl"])
             @test code == 2
             @test occursin("got \"map_echo.jl\"", err)
-            @test occursin("does not infer go / ride / drive", err)
+            @test occursin("does not infer go or drive", err)
             @test !occursin("Unknown subcommand", err)
         end
         let (code, _, err) = _main_capture(["help", "--head-workers", "2", "job.jl"])
@@ -219,14 +219,15 @@ using Test
         @test DistSSHRun.unknown_subcommand_message("bogus") ==
             "Unknown subcommand: bogus"
         @test DistSSHRun.no_command_message("map_echo.jl") ==
-            "No command (got \"map_echo.jl\"). Kit does not infer go / ride / drive."
+            "No command (got \"map_echo.jl\"). Kit does not infer go or drive."
         @test DistSSHRun.RUN_SUBCOMMAND_EXPECTATION ==
-            "Expected: setup | doctor | up | go | ride | drive | hostinfo | pool | demo | progress"
+            "Expected: setup | doctor | up | go | drive | hostinfo | pool | demo | progress"
         @test DistSSHRun.NO_COMMAND_HINT_LINES == (
             "  go SCRIPT.jl      as-is complete job (timing without rewrite)",
-            "  ride … SCRIPT.jl  experimental map / filter",
             "  drive … SCRIPT.jl Distributed",
         )
+        @test DistSSHRun.REMOVED_RIDE_SUBCOMMAND_HINT ==
+            "ride was removed; use drive with pmap"
         for name in (
                 :unknown_subcommand_message,
                 :no_command_message,
@@ -243,6 +244,10 @@ using Test
         @test occursin("Unknown subcommand: bogus\n", text)
         @test occursin(DistSSHRun.RUN_SUBCOMMAND_EXPECTATION * "\n", text)
         @test !occursin("Usage", text)
+        buf_ride = IOBuffer()
+        DistSSHRun.print_rejected_command("ride"; script = false, io = buf_ride)
+        ride_text = String(take!(buf_ride))
+        @test occursin(DistSSHRun.REMOVED_RIDE_SUBCOMMAND_HINT, ride_text)
     end
 
     @testset "help-only argv is the root page" begin

@@ -106,7 +106,7 @@ function explain_no_hosts(;
     return join_explained_message(head, hint)
 end
 
-"""go / drive / ride listed a host without `:N`."""
+"""go / drive listed a host without `:N`."""
 function explain_bare_placement_tokens(
         tokens::AbstractVector{<:AbstractString};
         surface::Symbol = :cli,
@@ -125,11 +125,11 @@ function explain_bare_placement_tokens(
     end
     isempty(bare) && return ""
     listed = join(bare, ' ')
-    head = "each go / drive / ride token needs an explicit worker count; bare $(listed) is not allowed"
+    head = "each go / drive token needs an explicit worker count; bare $(listed) is not allowed"
     hint = if surface === :api
-        "Hint: write `N*host`, or `head_workers=` / `head_slots=` on drive, ride, or go respectively."
+        "Hint: write `N*host`, or `head_workers=` / `head_slots=` on drive, or go respectively."
     else
-        "Hint: write `2*host` (quote `--hosts`). drive/ride: --head-workers. go: --head-slots."
+        "Hint: write `2*host` (quote `--hosts`). drive: --head-workers. go: --head-slots."
     end
     return join_explained_message(head, hint)
 end

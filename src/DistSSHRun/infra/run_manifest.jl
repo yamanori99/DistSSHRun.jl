@@ -1,12 +1,12 @@
 # Per-run bundle (pid, logs, `run.toml`) separate from user artifact output.
 
 const DISTSSH_RUN_DIR_ENV::String = "DISTSSH_RUN_DIR"
-const _KIT_EXECUTE_KINDS = (:go, :drive, :ride)
+const _KIT_EXECUTE_KINDS = (:go, :drive)
 
 function _require_execute_kind!(kind::Symbol)
     kind in _KIT_EXECUTE_KINDS || throw(
         ArgumentError(
-            "execute! kind must be :go, :drive, or :ride, got $(repr(kind))",
+            "execute! kind must be :go or :drive, got $(repr(kind))",
         )
     )
     return nothing
@@ -302,6 +302,7 @@ function _kit_run_toml_owned(raw::AbstractDict)::Bool
     kind = get(raw, "kind", nothing)
     kind isa AbstractString || return false
     ks = String(kind)
+    # Keep "ride" so 0.1.x run trees remain owned (prune, provenance).
     return ks == "go" || ks == "drive" || ks == "ride" || ks == "pipeline" ||
         ks == "ship"
 end

@@ -8,6 +8,6 @@ using Test
     env = _child_julia_env(Dict("DISTSSH_YES" => "1"))
     proc, out = _run_subprocess(setenv(cmd, env))
     @test proc.exitcode != 0
-    @test occursin("does not infer go / ride / drive", out)
+    @test occursin("does not infer go or drive", out)
     @test !occursin("script not found", out)
 end

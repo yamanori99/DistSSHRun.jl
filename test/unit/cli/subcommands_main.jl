@@ -23,13 +23,8 @@ using Test
         end
     end
 
-    @testset "go, ride, drive empty args and error paths" begin
+    @testset "go, drive empty args and error paths" begin
         let (code, out, err) = _cli_capture(() -> DistSSHRun.go(String[]))
-            @test code == 2
-            @test isempty(out)
-            @test occursin("Usage", err)
-        end
-        let (code, out, err) = _cli_capture(() -> DistSSHRun.run_ride(String[]))
             @test code == 2
             @test isempty(out)
             @test occursin("Usage", err)
@@ -55,8 +50,9 @@ using Test
             @test !occursin("--help", shown)
             @test !occursin("Usage", shown)
         end
-        let (code, _, _) = _cli_capture(() -> DistSSHRun.run_ride(["/no/such/script.jl"]))
+        let (code, _, err) = _cli_capture(() -> DistSSHRun.main(["ride", "parent:1", "job.jl"]))
             @test code == 2
+            @test occursin(DistSSHRun.REMOVED_RIDE_SUBCOMMAND_HINT, err)
         end
         let (code, out, err) = _cli_capture(
                 () -> DistSSHRun.go(["--ship-tree", "1*h1", "job.jl"])

@@ -78,7 +78,7 @@ end
     parse_worker_tokens(tokens) -> ParsedWorkerTokens
 
 Classify CLI-style tokens. `hostinfo` / `pool` / `setup` may omit `:N` (host list).
-go / drive / ride placement requires `:N` except `go --repeat` (omit = uncapped).
+go / drive placement requires `:N` except `go --repeat` (omit = uncapped).
 """
 function parse_worker_tokens(
         tokens::AbstractVector{<:AbstractString};
@@ -128,7 +128,7 @@ function total_worker_placement(parsed::ParsedWorkerTokens)::Int
     return parsed.head_workers + rem
 end
 
-"""Throw unless every token has `:N` (go / drive / ride placement)."""
+"""Throw unless every token has `:N` (go / drive placement)."""
 function require_counted_placement_tokens(
         tokens::AbstractVector{<:AbstractString};
         command::Symbol,
@@ -136,7 +136,7 @@ function require_counted_placement_tokens(
         head_workers::Union{Nothing, Integer} = nothing,
         head_slots::Union{Nothing, Integer} = nothing,
     )::Nothing
-    command in (:go, :drive, :ride) ||
+    command in (:go, :drive) ||
         throw(ArgumentError("require_counted_placement_tokens: unsupported command $(repr(command))"))
     if command === :go
         parsed = parse_worker_tokens(tokens; head_workers = 0)
@@ -155,11 +155,6 @@ function require_counted_placement_tokens(
     total_worker_placement(parsed) == 0 &&
         throw(ArgumentError(zero_placement_usage_error(command; surface = surface)))
     return nothing
-end
-
-"""SSH host names from tokens (parent tokens omitted)."""
-function child_hosts_from_tokens(tokens::AbstractVector{<:AbstractString})::Vector{String}
-    return parse_worker_tokens(tokens).child_hosts
 end
 
 """Optional path string (`nothing` when unset or empty)."""
@@ -204,7 +199,8 @@ end
 """
 Shared run outcome (`ok`, `kind`, dirs, `failed_step`, `exit_code`, `hosts`, `stop`).
 
-`kind` is `:go`, `:drive`, `:ride`, or `:pipeline`. Convert with [`kit_run_result`](@ref).
+`kind` is `:go`, `:drive`, or `:pipeline`. Legacy `kit.result` may still record `"ride"`.
+Convert with [`kit_run_result`](@ref).
 `hosts` is post-run collect ([`HostRunResult`](@ref)); empty for `go`, hung
 `wait`, or a `drive` that never collected.
 
@@ -222,9 +218,6 @@ there too. `schema` stays 1. An unknown `stop` string is ignored.
 with [`result_run_dir`](@ref). [`result_provenance`](@ref) reads
 `run.toml` from it. [`result_content_tree_hash`](@ref) and
 [`result_remote_run_id`](@ref) read `provenance.selection` in that file.
-A [`RideResult`](@ref) is not accepted there; convert
-it with [`kit_run_result`](@ref) first.
-
 Result fields and positional constructors are not API. Result structs are
 not a stable serialization format. `serialize` and JLD2 of a result are
 unsupported. The supported record is `kit.result`.
@@ -526,7 +519,7 @@ function PipelineResult(
     return PipelineResult(ok, sync, plan, drive, collect, driver, failed_step, od, ld, code)
 end
 
-"""Build [`DistSSHJobResult`](@ref) from a kit outcome (`:go` / `:ride` / `:drive` / `:pipeline`)."""
+"""Build [`DistSSHJobResult`](@ref) from a kit outcome (`:go` / `:drive` / `:pipeline`)."""
 function kit_run_result(result::DriveResult)::DistSSHJobResult
     return DistSSHJobResult(
         result.ok,
@@ -580,7 +573,7 @@ end
     report_run_errors(result; io=stderr)
 
 Print a short summary when a kit run failed. Accepts [`DistSSHJobResult`](@ref)
-or a typed outcome (`GoResult` / `RideResult` / `DriveResult` / `PipelineResult`).
+or a typed outcome (`GoResult` / `DriveResult` / `PipelineResult`).
 Returns `result.ok`.
 """
 function report_run_errors(result::DistSSHJobResult; io::IO = stderr)::Bool

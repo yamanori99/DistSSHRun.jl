@@ -7,7 +7,7 @@ using DistSSHRun.DistSSHBase: CliUsageError, CLI_EXIT_USAGE, with_cli_exit
 const _CLI_BIND_FAKE_SSH =
     abspath(joinpath(@__DIR__, "..", "..", "..", "test", "fixtures", "fake_snapshot_ssh.jl"))
 
-@testset "ride and go CLI bind paths" begin
+@testset "drive and go CLI bind paths" begin
 
     function _recording_ssh_bin(tmp::AbstractString)
         bindir = joinpath(tmp, "bin")
@@ -33,7 +33,13 @@ const _CLI_BIND_FAKE_SSH =
         write(joinpath(proj, "Project.toml"), "name = \"CliBindEntry\"\n")
         _sync_test_project_manifest!(proj)
         script = joinpath(proj, "job.jl")
-        write(script, "map(identity, 1:2)\n")
+        write(
+            script,
+            """
+            using Distributed
+            pmap(identity, 1:2)
+            """,
+        )
         hosts_path = joinpath(tmp, "hosts.toml")
         write(
             hosts_path,
@@ -73,12 +79,12 @@ const _CLI_BIND_FAKE_SSH =
         end
     end
 
-    @testset "ride_main default launch reaches ssh" begin
+    @testset "drive_main default launch reaches ssh" begin
         _with_tempdir() do tmp
             proj, script, hosts_path = _minimal_proj(tmp)
             bindir, logp = _recording_ssh_bin(tmp)
             path = bindir * ":" * get(ENV, "PATH", "")
-            include(joinpath(@__DIR__, "..", "..", "..", "src", "cli", "ride.jl"))
+            include(joinpath(@__DIR__, "..", "..", "..", "src", "cli", "drive.jl"))
             env = _cli_bind_test_env(path, logp, proj)
             code = _with_cli_bind_env(
                 env, () ->
@@ -86,12 +92,15 @@ const _CLI_BIND_FAKE_SSH =
                     empty!(ARGS)
                     append!(
                         ARGS,
-                        String["-y", "--no-spi-check", "--hosts-file", hosts_path, basename(script)],
+                        String[
+                            "-y", "--hosts-file", hosts_path, "--head-workers", "0",
+                            "1*alice@mac-b", basename(script),
+                        ],
                     )
                     return redirect_stdout(devnull) do
                         redirect_stderr(devnull) do
                             with_cli_exit() do
-                                return Base.invokelatest(ride_main)
+                                return Base.invokelatest(drive_main)
                             end
                         end
                     end
@@ -133,7 +142,7 @@ const _CLI_BIND_FAKE_SSH =
         end
     end
 
-    @testset "ride --unsafe-expose-port respects launch plan" begin
+    @testset "drive --unsafe-expose-port respects launch plan" begin
         _with_tempdir() do tmp
             _, _, hosts_path = _minimal_proj(tmp)
             write(
@@ -144,7 +153,7 @@ const _CLI_BIND_FAKE_SSH =
                 bind = "10.0.0.2"
                 """,
             )
-            parsed = DistSSHRun.parse_ride_args(
+            parsed = DistSSHRun.parse_drive_args(
                 String[
                     "--unsafe-expose-port",
                     "--hosts-file",
@@ -152,12 +161,12 @@ const _CLI_BIND_FAKE_SSH =
                     joinpath(tmp, "proj", "job.jl"),
                 ],
             )
-            cfg = DistSSHRun.resolve_run_job_config_from_parsed(parsed; command = :ride)
+            cfg = DistSSHRun.resolve_run_job_config_from_parsed(parsed; command = :drive)
             @test cfg.unsafe_expose_port.value
             overrides = DistSSHRun.hosts_file_bind_overrides(
                 parsed.cli_session;
                 planned_hosts = ["alice@mac-b"],
-                command = :ride,
+                command = :drive,
             )
             plan = DistSSHRun.validate_host_launch_plan(
                 "1*alice@mac-b",

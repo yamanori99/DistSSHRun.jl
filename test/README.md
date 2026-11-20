@@ -17,7 +17,7 @@ Unset `DISTSSH_TEST_GROUP` runs both groups (default for `Pkg.test()` and
 PkgEval). `DISTSSH_TEST_GROUP=unit` or `integration` runs one group only
 (Ubuntu 1.13 CI merge gate).
 Unset, all 58 files run. `DISTSSHRUN_TEST_SHORT=1` (`true`, `yes`, and `on`
-too) skips the heavy files and the extra `ride!` cases. `JULIA_PKGEVAL=true`
+too) skips the heavy files. `JULIA_PKGEVAL=true`
 does the same so a PkgEval run stays inside the 45 minute limit. That short
 list includes `integration/setup/progress_tty.jl` and
 `integration/drive/progress_tty.jl` (pseudo-TTY via `script`) so Registry
@@ -246,10 +246,7 @@ only return numbers. Collect tests use files workers write.
   leak (#144)
 - detached drive SIGKILL: wait until heartbeat monitors start, then
   remote `--worker` gone (#148)
-- detached SSH ride `terminate!`: `kit.hosts` then remote `--worker` gone
-- remote ride pseudo-TTY: success parent-side marker after the finished
-  bar (`log_dir` absent in controller `run.toml`); failure boom is a
-  plain line (not drive host-label contract)
+- detached SSH drive `terminate!`: `kit.hosts` then remote `--worker` gone
 - `go pi_echo`: π on both hosts
 - empty dedicated root: `setup ship-tree` then `setup instantiate --run-id`
   then `go --run-id`; π on both; remote `runs/<run_id>/src/Project.toml`
@@ -324,8 +321,8 @@ Do not search-replace a host name into a token (that produced
    `integration/drive/progress_tty.jl`: `script` typescripts stack each
    `\r` spinner redraw when `\r` is turned into `\n` (CI log look). That
    is not the live TTY. The files document it and check a `\r` / CSI-K
-   screen peak of at most one spinner bar. Drive/ride TTY coverage lives
-   in the latter; remote TTY cases stay in `e2e.jl`.
+   screen peak of at most one spinner bar. Drive TTY coverage lives in the
+   latter; remote TTY cases stay in `e2e.jl`.
 
 Helpers (via `support.jl`): `_child_julia_env`, `_run_kit_drive` /
 `_run_kit_setup` / `_run_kit_go` / `_run_kit_hostinfo`, `_mktemp_host` /

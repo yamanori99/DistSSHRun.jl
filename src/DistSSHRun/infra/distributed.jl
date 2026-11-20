@@ -38,12 +38,12 @@ function resolve_distributed_output_dir!(
     return dir
 end
 
-const _OUTPUT_DIR_COMMANDS = (:go, :ride, :drive)
+const _OUTPUT_DIR_COMMANDS = (:go, :drive)
 
 function _output_dir_command!(command::Symbol)::Symbol
     command in _OUTPUT_DIR_COMMANDS || throw(
         ArgumentError(
-            "output directory command must be :go, :ride, or :drive, got $(repr(command))",
+            "output directory command must be :go or :drive, got $(repr(command))",
         ),
     )
     return command
@@ -128,7 +128,7 @@ function _prepare_output_dir!(
     return canonical_local_path(path)
 end
 
-"""`{script_dir}/.distssh/{kind}` (parent of go / ride / drive batch dirs; write target)."""
+"""`{script_dir}/.distssh/{kind}` (parent of go / drive batch dirs; write target)."""
 function kit_dir_beside_script(script_dir::AbstractString, kind::Symbol)::String
     return joinpath(
         DistSSHBase.canonical_local_path(String(script_dir)),

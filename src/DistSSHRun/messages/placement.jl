@@ -1,4 +1,4 @@
-# Head-machine placement labels (drive / ride workers, go head slots).
+# Head-machine placement labels (drive workers, go head slots).
 
 """Hostname of the machine running this DistSSHRun process (process 1)."""
 function kit_head_host_label()::String
@@ -52,7 +52,7 @@ function resolve_go_head_slots(
     return 1, true
 end
 
-"""Usage error when a job has no workers (drive / ride) or slots (go)."""
+"""Usage error when a job has no workers (drive) or slots (go)."""
 function zero_placement_usage_error(command::Symbol; surface::Symbol = :cli)::String
     surface = _normalize_hint_surface(surface)
     cmd = String(command)
@@ -82,7 +82,7 @@ function reject_legacy_local_placement_flag!(arg::AbstractString)
             ArgumentError(
                 join_explained_message(
                     "$(a) was removed",
-                    "use --head-workers N on drive and ride.",
+                    "use --head-workers N on drive.",
                 ),
             ),
         )
@@ -129,7 +129,7 @@ function assert_go_argv_no_head_workers!(args::AbstractVector{<:AbstractString})
     return nothing
 end
 
-"""Reject `--head-slots` on drive / ride."""
+"""Reject `--head-slots` on drive."""
 function reject_drive_ride_head_slots_flag!()
     throw(
         ArgumentError(
@@ -202,7 +202,7 @@ function reject_mistaken_short_placement_flags!(
         args::AbstractVector{<:AbstractString};
         command::Symbol,
     )::Nothing
-    command in (:go, :drive, :ride) ||
+    command in (:go, :drive) ||
         throw(ArgumentError("reject_mistaken_short_placement_flags!: unsupported command $(repr(command))"))
     for arg in args
         a = String(arg)

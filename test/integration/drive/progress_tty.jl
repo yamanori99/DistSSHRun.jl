@@ -1,10 +1,10 @@
 using Test
 
-# Pseudo-TTY (`script`) coverage for `drive` and `ride` at the TTY default
+# Pseudo-TTY (`script`) coverage for `drive` at the TTY default
 # (`:progress`). Reuses `test/support/progress_tty.jl`. Setup/up/go TTY cases
 # stay in `integration/setup/progress_tty.jl`.
 
-@testset "TTY progress keeps drive and ride lines" begin
+@testset "TTY progress keeps drive lines" begin
     function sh_quote(s::AbstractString)
         return "'" * replace(String(s), "'" => "'\\''") * "'"
     end
@@ -244,104 +244,6 @@ using Test
             vsmoke_at = findfirst("DISTSSH_RUNNER_SMOKE_OK", verbose_tty)
             @test run_at !== nothing && vsmoke_at !== nothing
             @test first(run_at) < first(vsmoke_at)
-        end
-    end
-
-    @testset "ride success and failure" begin
-        mktempdir() do dir
-            proj = joinpath(dir, "ride-proj")
-            mkpath(proj)
-            _write_host_project!(proj, "TtyRide")
-            od_ok = joinpath(dir, "ride-out-ok")
-            od_fail = joinpath(dir, "ride-out-fail")
-            mkpath(od_ok)
-            mkpath(od_fail)
-            marker = joinpath(od_ok, "ride_ok_marker.txt")
-            ok_script = joinpath(proj, "ok.jl")
-            # Ride rewrites `map`; write a unique success marker from the body.
-            write(
-                ok_script,
-                """
-                map(1:2) do x
-                    if x == 1
-                        open($(repr(marker)), "w") do io
-                            println(io, "DISTSSH_RIDE_OK_MARKER")
-                        end
-                    end
-                    x
-                end
-                """
-            )
-            fail_script = joinpath(proj, "fail.jl")
-            write(fail_script, "map(x -> error(\"DISTSSH_RIDE_BOOM\"), 1:2)\n")
-
-            ride_ok = _kit_cli_cmd(
-                [
-                    "ride", "-y", "--no-spi-check",
-                    "--output-dir", od_ok, "--head-workers", "1", ok_script,
-                ]
-            )
-            ride_fail = _kit_cli_cmd(
-                [
-                    "ride", "-y", "--no-spi-check",
-                    "--output-dir", od_fail, "--head-workers", "1", fail_script,
-                ]
-            )
-
-            runner = joinpath(dir, "ride_runner.sh")
-            write_runner(
-                runner,
-                """
-                unset NO_COLOR
-                unset DISTSSH_QUIET
-                unset DISTSSH_PROGRESS
-                unset DISTSSH_VERBOSE
-                unset DISTSSH_CLI_SUBCOMMAND_DONE
-                unset DIST_SSH_KIT_CLI_INCLUDE
-                export DISTSSH_TEST=1
-                export DISTSSH_YES=1
-                export JULIA_LOAD_PATH=$(sh_quote(_child_load_path()))
-                unset JULIA_PROJECT
-                export DISTRIBUTED_PROJECT_ROOT=$(sh_quote(proj))
-                export DISTRIBUTED_INIT_DELAY_SEC=0
-                $(argv_line(ride_ok))
-                echo '___SPLIT___'
-                $(argv_line(ride_fail))
-                """
-            )
-
-            t0 = time()
-            pty = _tty_capture_script(
-                runner;
-                typescript = joinpath(dir, "ride_typescript.txt"),
-                hang_s = hang_s
-            )
-            elapsed = time() - t0
-            @info "ride progress_tty script child wall" elapsed
-
-            parts = split(pty, "___SPLIT___")
-            @test length(parts) == 2
-            ok_tty = length(parts) == 2 ? parts[1] : ""
-            fail_tty = length(parts) == 2 ? parts[2] : ""
-
-            # Success is observed via the rewritten map side effect + progress done.
-            @test isfile(marker)
-            @test occursin("DISTSSH_RIDE_OK_MARKER", read(marker, String))
-            _assert_kit_progress_done(od_ok; kind = :ride)
-            ok_plain = _tty_strip_ansi(ok_tty)
-            @test !isempty(strip(ok_plain))
-            # `:progress` success hides `print_ride`; the finished bar must not
-            # cursor-up over earlier payload.
-            _assert_tty_progress_payload(ok_tty)
-
-            fail_plain = _tty_strip_ansi(fail_tty)
-            @test occursin("DISTSSH_RIDE_BOOM", fail_plain)
-            fail_lines = _tty_lines(fail_tty)
-            @test any(
-                l -> occursin("DISTSSH_RIDE_BOOM", l) && !_tty_bar_line(l),
-                fail_lines
-            )
-            _assert_tty_progress_payload(fail_tty)
         end
     end
 

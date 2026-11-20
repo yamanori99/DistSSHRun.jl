@@ -126,7 +126,7 @@ end
         end
     end
 
-    @testset "ride and go kit CLI exit 2 on bad bind" begin
+    @testset "drive and go kit CLI exit 2 on bad bind" begin
         _with_tempdir() do tmp
             hosts_path = joinpath(tmp, "hosts.toml")
             write(
@@ -143,7 +143,13 @@ end
             write(joinpath(proj, "Project.toml"), "name = \"BindCli\"\n")
             _sync_test_project_manifest!(proj)
             script = joinpath(proj, "job.jl")
-            write(script, "map(identity, 1:2)\n")
+            write(
+                script,
+                """
+                using Distributed
+                pmap(identity, 1:2)
+                """,
+            )
             bindir, logp = _recording_ssh_bin(tmp)
             path = bindir * ":" * get(ENV, "PATH", "")
             env = Dict(
@@ -153,7 +159,8 @@ end
             )
             for cmd_args in (
                     String[
-                        "ride", "-y", "--no-spi-check", "--hosts-file", hosts_path, script,
+                        "drive", "-y", "--hosts-file", hosts_path, "--head-workers", "0",
+                        "1*reject-ssh.test", script,
                     ],
                     String["go", "-y", "--hosts-file", hosts_path, script],
                 )

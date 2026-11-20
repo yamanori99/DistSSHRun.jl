@@ -34,7 +34,7 @@ function throw_legacy_machine_token(raw::AbstractString)
         if startswith(s, CHILD_TOKEN_PREFIX) || s == PARENT_HOST_NAME || startswith(s, PARENT_HOST_NAME * ":")
             throw(
                 ArgumentError(
-                    "$(repr(s)) was removed; use --head-workers on drive/ride, --head-slots on go; "
+                    "$(repr(s)) was removed; use --head-workers on drive, --head-slots on go; "
                         * _MACHINE_TOKEN_HINT,
                 ),
             )

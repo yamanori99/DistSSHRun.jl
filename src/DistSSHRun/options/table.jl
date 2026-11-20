@@ -1,4 +1,4 @@
-# Single option table for go / drive / ride (extended in later phases).
+# Single option table for go / drive (extended in later phases).
 
 """One row of the run-job option table."""
 struct OptionRow
@@ -25,7 +25,7 @@ OptionRow(;
     valued = false,
 ) = OptionRow(key, cli, env, kwarg, default, commands, help, unsafe, valued)
 
-const RUN_JOB_COMMANDS = (:go, :drive, :ride)
+const RUN_JOB_COMMANDS = (:go, :drive)
 
 """Legacy CLI spellings → current flag (no aliases at runtime)."""
 const LEGACY_CLI_FLAGS = Dict{String, String}(
@@ -39,7 +39,7 @@ function _bool_env(name::AbstractString; env::AbstractDict = ENV)::Union{Nothing
 end
 
 """
-Canonical go / drive / ride option rows (CLI, env, kwarg, defaults).
+Canonical go / drive option rows (CLI, env, kwarg, defaults).
 
 The 0.2.0 cluster manager reads the same `unsafe_*` keys and env names defined
 here. Use [`options_for_command`](@ref) to restrict rows per command.
@@ -119,7 +119,7 @@ function run_option_table()::Vector{OptionRow}
 end
 
 """
-Rows applicable to `command` (`:go`, `:drive`, or `:ride`).
+Rows applicable to `command` (`:go` or `:drive`).
 
 Filter [`run_option_table`](@ref) for launch and cluster-manager config.
 """

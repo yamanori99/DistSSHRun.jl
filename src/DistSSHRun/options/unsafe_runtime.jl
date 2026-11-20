@@ -81,7 +81,7 @@ end
 """
 Run `f` with resolved [`RunJobConfig`](@ref) unsafe flags applied for this process.
 
-Drive, ride, and go call this around worker launch.
+Drive and go call this around worker launch.
 """
 function with_run_unsafe_options!(f::Function, cfg::RunJobConfig)
     return with_unsafe_skip_env_digests(cfg.unsafe_skip_env_digests.value) do

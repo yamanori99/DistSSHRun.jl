@@ -16,7 +16,7 @@ struct StringConfigField
 end
 
 """
-Immutable resolved configuration for go / drive / ride.
+Immutable resolved configuration for go / drive.
 
 The 0.2.0 cluster manager reads the `unsafe_*` fields (and their CLI / env
 names from [`run_option_table`](@ref)) plus `topology`. Use
@@ -288,7 +288,7 @@ function _cli_bool(parsed, key::Symbol)::Union{Nothing, Bool}
     return v
 end
 
-"""Build [`RunJobConfig`](@ref) from a go / drive / ride parse result."""
+"""Build [`RunJobConfig`](@ref) from a go / drive parse result."""
 function resolve_run_job_config_from_parsed(parsed; command::Symbol)::RunJobConfig
     return resolve_run_job_config(;
         command,
@@ -349,7 +349,7 @@ function finish_run_job_diagnostics!(
     if cfg.dry_run.value
         resolved_workers = if command === :drive && hasproperty(parsed, :head_workers)
             Int(getproperty(parsed, :head_workers))
-        elseif command === :ride || command === :drive
+        elseif command === :drive
             something(cli.head_workers, 0)
         else
             nothing

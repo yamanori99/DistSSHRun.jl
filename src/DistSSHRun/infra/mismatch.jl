@@ -316,7 +316,7 @@ end
 """
     identity_mismatches(parent, other; unsafe_skip_env_digests=false) -> Vector{String}
 
-Same lines as [`go!`](@ref), [`ride!`](@ref), and [`drive!`](@ref). An empty
+Same lines as [`go!`](@ref), [(@ref), and [`drive!`](@ref). An empty
 vector matches. This does not throw, print, or read `DISTSSH_QUIET`.
 
 Julia version and commit (Julia build), the resolved sysimage path, and
@@ -504,7 +504,7 @@ function assert_controller_default_sysimage!()
 end
 public assert_controller_default_sysimage!
 
-"""Controller gates for drive, ride, and go before worker environment verification."""
+"""Controller gates for drive, and go before worker environment verification."""
 function assert_controller_environment_for_verify!(project::AbstractString)
     assert_controller_manifest_for_environment_verify!(project)
     assert_controller_manifest_current!(project)

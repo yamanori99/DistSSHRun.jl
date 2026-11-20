@@ -1,7 +1,7 @@
 # [Run options (generated from the option table)](@id Options)
 
 The authoritative definitions live in `src/DistSSHRun/options/table.jl`.
-Help text for `go`, `drive`, and `ride` is generated from the same rows.
+Help text for `go` and `drive` is generated from the same rows.
 CI fails when `--help` and this page drift from that table.
 
 ## Shared run-job flags
@@ -26,7 +26,7 @@ CI fails when `--help` and this page drift from that table.
 Within one scope: **CLI → environment → default**. Per-host Distributed
 `bind` overrides come from optional `bind` on each `[[hosts]]` row in a TOML
 hosts file (IPv4 literal only; see [Placement](@ref Placement)). `drive`,
-`ride`, and `--dry-run` validate every listed host before SSH; invalid `bind`
+`drive`, and `--dry-run` validate every listed host before SSH; invalid `bind`
 values fail closed (exit 2 on the CLI, not softened by `--best-effort`).
 
 ## Diagnostics
@@ -40,6 +40,6 @@ values fail closed (exit 2 on the CLI, not softened by `--best-effort`).
 |----------|-------------|
 | `--unsafe-heterogeneous` | `--unsafe-skip-env-digests` |
 | `--allow-mismatch` | `--unsafe-skip-env-digests` (digests only) |
-| `-p` / `-pN` (drive, ride, go) | No short alias: `--local-workers N` (drive, ride) or `--local-slots N` (go) |
+| `-p` / `-pN` (drive, go) | No short alias: `--local-workers N` (drive) or `--local-slots N` (go) |
 | `-l`, `--local` | SSH user as `user@host` in a hosts file |
 | `-L` | `host:port` in a hosts file or SSH config (no `-L` forwarding flag) |

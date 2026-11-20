@@ -92,7 +92,7 @@ using Test, DistSSHRun
             @test !occursin("phase 4", txt)
         end
         let cfg = DistSSHRun.resolve_run_job_config(;
-                command = :ride,
+                command = :drive,
                 cli_dry_run = true,
                 cli_unsafe_expose_port = true,
             ),

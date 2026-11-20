@@ -1,7 +1,3 @@
-# Long enough for E2E to kill the master and watch heartbeat reap workers.
+# Sleep on workers so E2E can terminate! a detached SSH drive.
 using Distributed
-
-function main()
-    pmap(_ -> (sleep(30); 1), 1:nworkers())
-    return nothing
-end
+pmap(x -> (sleep(30); x), 1:4)

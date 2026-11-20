@@ -1054,11 +1054,11 @@ end
 This run's `DISTSSH_RUN_DIR`, or `nothing` when the result has none.
 
 `result` is a [`DriveResult`](@ref), [`GoResult`](@ref),
-[`DistSSHJobResult`](@ref), [`RideResult`](@ref), or [`DetachedProcess`](@ref).
+[`DistSSHJobResult`](@ref), or [`DetachedProcess`](@ref).
 Result fields and positional constructors are not API.
 """
 function result_run_dir(
-        result::Union{DriveResult, GoResult, DistSSHJobResult, RideResult, DetachedProcess},
+        result::Union{DriveResult, GoResult, DistSSHJobResult, DetachedProcess},
     )::Union{Nothing, String}
     return result.run_dir
 end
@@ -1071,8 +1071,7 @@ Read `run.toml` from [`result_run_dir`](@ref). `nothing` when that
 directory is unset or the file is missing.
 
 `result` is a [`DriveResult`](@ref), [`GoResult`](@ref), or
-[`DistSSHJobResult`](@ref). A [`RideResult`](@ref) is not accepted; convert
-it with [`kit_run_result`](@ref) first. A [`DetachedProcess`](@ref) is not
+[`DistSSHJobResult`](@ref). A [`DetachedProcess`](@ref) is not
 accepted; [`wait`](@ref) it first.
 """
 function result_provenance(result::Union{DriveResult, GoResult, DistSSHJobResult})
@@ -1110,8 +1109,7 @@ snapshot selection recorded one.
 
 Schema stays 1. An absent or empty key means not recorded.
 `result` is a [`DriveResult`](@ref), [`GoResult`](@ref), or
-[`DistSSHJobResult`](@ref). A [`RideResult`](@ref) goes through
-[`kit_run_result`](@ref) first. A run that selected an existing completed
+[`DistSSHJobResult`](@ref). A run that selected an existing completed
 snapshot (without shipping in-process) may still record the hash from that
 selection.
 
@@ -1150,8 +1148,7 @@ snapshot selection recorded one.
 
 Schema stays 1. An absent or empty key means not recorded. This is not
 `DISTSSH_RUN_DIR`. `result` is a [`DriveResult`](@ref), [`GoResult`](@ref),
-or [`DistSSHJobResult`](@ref). A [`RideResult`](@ref) goes through
-[`kit_run_result`](@ref) first. A run that selected an existing completed
+or [`DistSSHJobResult`](@ref). A run that selected an existing completed
 snapshot (without shipping in-process) may still record that snapshot's
 `run_id`.
 

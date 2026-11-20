@@ -30,7 +30,7 @@ const KIT_TIME_HELP =
 const KIT_HOSTS_FLAG_HELP =
     "--hosts CSV         quote `N*host` machine tokens (bare host = 1 worker)"
 const KIT_HEAD_WORKERS_FLAG_HELP =
-    "--head-workers N    LocalManager workers on this machine (drive, ride; ENV DISTSSH_HEAD_WORKERS)"
+    "--head-workers N    LocalManager workers on this machine (drive; ENV DISTSSH_HEAD_WORKERS)"
 const KIT_HEAD_SLOTS_FLAG_HELP =
     "--head-slots N      head subprocess slots on this machine (go only)"
 const KIT_MACHINE_FILE_FLAG_HELP =
