@@ -2,9 +2,11 @@
 # Local push gate. Same pins as CI. Does not install tools.
 #
 #   ./scripts/check.sh
+#   ./scripts/check.sh --verbose
 #
-# On success prints `HEAD <sha>: passed`.
-# Each step is wrapped in `---- check: <step> ----` lines.
+# Default: one ok/FAIL line per step; subprocess output only on failure.
+# --verbose: legacy ---- check: ... ---- banners and streamed output.
+# On success prints `HEAD <sha>: passed` (optional total seconds).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -13,6 +15,27 @@ cd "${ROOT}"
 source "${ROOT}/scripts/section.sh"
 # shellcheck source=julia.sh
 source "${ROOT}/scripts/julia.sh"
+
+die() {
+  echo "check: $*" >&2
+  exit 1
+}
+
+CHECK_VERBOSE=0
+for arg in "$@"; do
+  case "${arg}" in
+    --verbose) CHECK_VERBOSE=1 ;;
+    -h | --help)
+      echo "usage: ./scripts/check.sh [--verbose]" >&2
+      exit 0
+      ;;
+    *)
+      die "unknown argument: ${arg}"
+      ;;
+  esac
+done
+export CHECK_VERBOSE
+export CHECK_GATE_QUIET=$((CHECK_VERBOSE ? 0 : 1))
 
 # A linked worktree's .git is a file. hooksPath may point outside the repo.
 git_path() {
@@ -47,11 +70,6 @@ install_pre_push
 RUNIC_COMPAT="${ROOT}/.github/runic/Project.toml"
 JETLS_ACTION="${ROOT}/.github/actions/jetls-check/action.yml"
 
-die() {
-  echo "check: $*" >&2
-  exit 1
-}
-
 pin_help() {
   echo "check: pin: $1" >&2
   echo "check: do not install unless the person asked" >&2
@@ -65,12 +83,13 @@ fi
 gate_sha="$(git rev-parse HEAD)"
 stamp_path="$(git_path check-gate-ok)"
 rm -f "${stamp_path}"
+GATE_T0=$SECONDS
 
 # macOS and Linux, including WSL2, use this same gate.
 # Native Windows is not a supported environment.
 case "$(uname -s)" in
-  Darwin|Linux) ;;
-  MINGW*|MSYS*|CYGWIN*)
+  Darwin | Linux) ;;
+  MINGW* | MSYS* | CYGWIN*)
     die "native Windows is not supported. Use WSL2 Ubuntu. This gate then uses the Linux conditions."
     ;;
   *)
@@ -78,8 +97,10 @@ case "$(uname -s)" in
     ;;
 esac
 
-section "check: pins"
-
+if [[ "${CHECK_VERBOSE}" == 1 ]]; then
+  section "check: pins"
+fi
+_pins_start=$SECONDS
 use_julia_1_13 || pin_help "Julia 1.13 is not on PATH"
 depot="$("${JULIA[@]}" --startup-file=no -e 'print(DEPOT_PATH[1])')"
 
@@ -146,32 +167,51 @@ if command -v jetls >/dev/null 2>&1; then
     pin_help "PATH jetls is ${path_jetls}, not the pin ${jetls_pin}"
   fi
 fi
-section "check: pins ok (Runic ${runic_pin}, JETLS ${jetls_pin})"
+gate_ok "pins" "(Runic ${runic_pin}, JETLS ${jetls_pin})" "$((SECONDS - _pins_start))"
 
-section "check: pr body"
+_pr_start=$SECONDS
 pr_paths="$(mktemp)"
 pr_body="$(mktemp)"
 pr_err="$(mktemp)"
+pr_log="$(mktemp)"
 cleanup_pr() {
-  rm -f "${pr_paths}" "${pr_body}" "${pr_err}"
+  rm -f "${pr_paths}" "${pr_body}" "${pr_err}" "${pr_log}"
 }
 trap cleanup_pr EXIT
-git diff --name-only origin/main...HEAD > "${pr_paths}"
-if gh pr view --json body --jq .body > "${pr_body}" 2>"${pr_err}"; then
-  "${ROOT}/scripts/lint/run.sh" pr-body "${pr_paths}" "${pr_body}"
+git diff --name-only origin/main...HEAD >"${pr_paths}"
+if gh pr view --json body --jq .body >"${pr_body}" 2>"${pr_err}"; then
+  if [[ "${CHECK_VERBOSE}" == 1 ]]; then
+    section "check: pr body"
+    "${ROOT}/scripts/lint/run.sh" pr-body "${pr_paths}" "${pr_body}"
+    section "check: pr body ok"
+  else
+    set +e
+    "${ROOT}/scripts/lint/run.sh" pr-body "${pr_paths}" "${pr_body}" >"${pr_log}" 2>&1
+    pr_rc=$?
+    set -e
+    if ((pr_rc != 0)); then
+      gate_fail_show "pr body" "${pr_log}" "${pr_rc}"
+    fi
+    gate_ok "pr body" "" "$((SECONDS - _pr_start))"
+  fi
 elif grep -q 'no pull requests found' "${pr_err}"; then
-  echo "check: pr body: no pull request"
+  if [[ "${CHECK_VERBOSE}" == 1 ]]; then
+    echo "check: pr body: no pull request"
+    section "check: pr body ok"
+  else
+    gate_ok "pr body" "(no pull request)" "$((SECONDS - _pr_start))"
+  fi
 else
   cat "${pr_err}" >&2
   die "pr body: could not read the pull request"
 fi
-section "check: pr body ok"
 
-section "check: runic ${runic_pin}"
-JULIA_APPS_JULIA_CMD="${JULIA_BIN}" "${runic_bin}" --check --diff .
-section "check: runic ok"
+gate_capture "runic ${runic_pin}" env JULIA_APPS_JULIA_CMD="${JULIA_BIN}" "${runic_bin}" --check --diff .
 
-section "check: whitespace"
+_ws_start=$SECONDS
+if [[ "${CHECK_VERBOSE}" == 1 ]]; then
+  section "check: whitespace"
+fi
 while IFS= read -r -d '' f; do
   [[ -f "${f}" ]] || continue
   numstat="$(git diff --numstat origin/main...HEAD -- "${f}")"
@@ -181,7 +221,6 @@ while IFS= read -r -d '' f; do
   if [[ ! -s "${f}" ]]; then
     continue
   fi
-  # Command substitution drops a trailing newline, so compare the byte.
   last="$(tail -c 1 "${f}" | od -An -tu1 | tr -d '[:space:]')"
   if [[ "${last}" != "10" ]]; then
     die "${f} does not end with exactly one newline"
@@ -195,29 +234,44 @@ while IFS= read -r -d '' f; do
 done < <(git diff --name-only -z origin/main...HEAD)
 
 git diff --check origin/main...HEAD
-section "check: whitespace ok"
+if [[ "${CHECK_VERBOSE}" == 1 ]]; then
+  section "check: whitespace ok"
+else
+  gate_ok "whitespace" "" "$((SECONDS - _ws_start))"
+fi
 
-section "check: jetls ${jetls_pin}"
-JULIA_APPS_JULIA_CMD="${JULIA_BIN}" "${ROOT}/.github/jetls-check.sh" --progress=none
-section "check: jetls ok"
+gate_capture "jetls ${jetls_pin}" env JULIA_APPS_JULIA_CMD="${JULIA_BIN}" "${ROOT}/.github/jetls-check.sh" --progress=none
 
-for lint in banned-words agents-md skip-reasons new-comments stdlib-compat ssh-argv aqua-run; do
+lint_names=(banned-words agents-md skip-reasons new-comments stdlib-compat ssh-argv aqua-run)
+_lint_start=$SECONDS
+_lint_log="$(mktemp)"
+_lint_fail=""
+for lint in "${lint_names[@]}"; do
   script="${ROOT}/scripts/lint/${lint}.sh"
   if [[ ! -x "${script}" ]]; then
     die "missing ${script#"${ROOT}/"}"
   fi
-  section "check: lint ${lint}"
-  "${script}"
-  section "check: lint ${lint} ok"
+  if [[ "${CHECK_VERBOSE}" == 1 ]]; then
+    section "check: lint ${lint}"
+    "${script}"
+    section "check: lint ${lint} ok"
+  else
+    if ! "${script}" >>"${_lint_log}" 2>&1; then
+      _lint_fail="${lint}"
+      break
+    fi
+  fi
 done
+if [[ "${CHECK_VERBOSE}" != 1 ]]; then
+  if [[ -n "${_lint_fail}" ]]; then
+    gate_fail_show "lint ${_lint_fail}" "${_lint_log}" 1
+  fi
+  rm -f "${_lint_log}"
+  gate_ok "lint" "($(IFS=', '; echo "${lint_names[*]}"))" "$((SECONDS - _lint_start))"
+fi
 
-section "check: docs static"
-"${ROOT}/scripts/docs.sh" static
-section "check: docs static ok"
-
-section "check: docs maybe"
-"${ROOT}/scripts/docs.sh" maybe
-section "check: docs maybe ok"
+gate_capture "docs static" "${ROOT}/scripts/docs.sh" static
+gate_capture "docs maybe" "${ROOT}/scripts/docs.sh" maybe
 
 if [[ -n "$(git status --porcelain)" ]]; then
   die "git status is not empty. Commit first, then rerun ./scripts/check.sh on that commit."
@@ -226,5 +280,10 @@ head_now="$(git rev-parse HEAD)"
 if [[ "${head_now}" != "${gate_sha}" ]]; then
   die "HEAD moved during the gate (${gate_sha} -> ${head_now}). Rerun ./scripts/check.sh on ${head_now}."
 fi
-printf '%s\n' "${gate_sha}" > "${stamp_path}"
-echo "HEAD ${gate_sha}: passed"
+printf '%s\n' "${gate_sha}" >"${stamp_path}"
+_total=$((SECONDS - GATE_T0))
+if (( _total >= 3 )); then
+  echo "HEAD ${gate_sha}: passed (${_total}s)"
+else
+  echo "HEAD ${gate_sha}: passed"
+fi
