@@ -4,6 +4,7 @@
 #   julia --project=.github/runic --startup-file=no scripts/lint/diff_lint.jl <mode>
 #   modes: banned-words, agents-md, skip-reasons, new-comments, stdlib-compat, self-test, pr-body
 
+using Dates
 using JuliaSyntax
 using TOML
 import Pkg
@@ -836,6 +837,13 @@ function self_test()
     with_env = "## Summary\n\n## Testing\n\nEnvironment: Darwin arm64, Julia 1.13.4.\n\nRan check.\n"
     isempty(pr_body_hints(with_env, "")) || die("self-test: pr body testing env ok")
     isempty(pr_body_hints("## Summary\n\nNo testing section.\n", "")) || die("self-test: pr body no testing section")
+    stale = pr_body_hints("Any wording is fine.\n", "", "2026-11-20T21:00:00+09:00", "2026-11-20T11:00:00Z")
+    any(==("update the PR body (a commit is newer than the last edit)"), stale) ||
+        die("self-test: pr body stale edit $(stale)")
+    fresh = pr_body_hints("Any wording is fine.\n", "", "2026-11-20T11:00:00Z", "2026-11-20T12:00:00Z")
+    any(x -> startswith(x, "update the PR body"), fresh) && die("self-test: pr body fresh edit")
+    any(x -> startswith(x, "update the PR body"), pr_body_hints("Any wording is fine.\n", "", "", "")) &&
+        die("self-test: pr body missing edit time")
     fence_ok = "## Summary\n\n## Testing\n\n```sh\n# Confirmed locally\n```\n\n## Risk\n\n## Revert\n"
     isempty(pr_template_errors(fence_ok)) || die("self-test: pr fence heading $(pr_template_errors(fence_ok))")
     patch_pin = stdlib_compat_errors(
@@ -1264,8 +1272,42 @@ function has_made_with_footer(body::AbstractString)
     return occursin(r"(?i)made with ", body)
 end
 
-function pr_body_hints(body::AbstractString, env_example::AbstractString)
+function utc_datetime(s::AbstractString)
+    m = match(r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})?", strip(s))
+    m === nothing && return nothing
+    t = DateTime(
+        Base.parse(Int, m.captures[1]),
+        Base.parse(Int, m.captures[2]),
+        Base.parse(Int, m.captures[3]),
+        Base.parse(Int, m.captures[4]),
+        Base.parse(Int, m.captures[5]),
+        Base.parse(Int, m.captures[6]),
+    )
+    zone = m.captures[7]
+    if zone !== nothing && zone != "Z"
+        sign = zone[1] == '-' ? -1 : 1
+        t -= Minute(sign * (Base.parse(Int, zone[2:3]) * 60 + Base.parse(Int, zone[5:6])))
+    end
+    return t
+end
+
+function commit_newer_than_edit(committed::AbstractString, edited::AbstractString)
+    c = utc_datetime(committed)
+    e = utc_datetime(edited)
+    (c === nothing || e === nothing) && return false
+    return c > e
+end
+
+function pr_body_hints(
+    body::AbstractString,
+    env_example::AbstractString,
+    committed_at::AbstractString = "",
+    edited_at::AbstractString = "",
+)
     hints = String[]
+    if commit_newer_than_edit(committed_at, edited_at)
+        push!(hints, "update the PR body (a commit is newer than the last edit)")
+    end
     if has_generative_tool_line(body) && has_made_with_footer(body)
         push!(hints, "duplicate AI attribution (Generative tool and a Made with footer)")
     end
@@ -1283,8 +1325,13 @@ function pr_body_hints(body::AbstractString, env_example::AbstractString)
     return hints
 end
 
-function pr_body_hints_main(body_file::AbstractString, env_example::AbstractString)
-    for hint in pr_body_hints(read(body_file, String), env_example)
+function pr_body_hints_main(
+    body_file::AbstractString,
+    env_example::AbstractString,
+    committed_at::AbstractString = "",
+    edited_at::AbstractString = "",
+)
+    for hint in pr_body_hints(read(body_file, String), env_example, committed_at, edited_at)
         println(hint)
     end
     return 0
@@ -1383,8 +1430,10 @@ function main(args)
     if length(args) == 3 && args[1] == "pr-body"
         return pr_body_main(args[2], args[3])
     end
-    if length(args) == 3 && args[1] == "pr-body-hints"
-        return pr_body_hints_main(args[2], args[3])
+    if length(args) in 3:5 && args[1] == "pr-body-hints"
+        committed = length(args) >= 4 ? args[4] : ""
+        edited = length(args) >= 5 ? args[5] : ""
+        return pr_body_hints_main(args[2], args[3], committed, edited)
     end
     if length(args) != 1
         die("usage: diff_lint.jl <banned-words|agents-md|skip-reasons|new-comments|stdlib-compat|ssh-argv|aqua-run|doc-touch|docs-static|self-test|pr-body|pr-body-hints>")

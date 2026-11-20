@@ -197,14 +197,30 @@ gate_env_example() {
   fi
 }
 
+pr_description_time() {
+  local num owner name when
+  num="$(gh pr view --json number --jq .number 2>/dev/null)" || return 0
+  owner="$(gh repo view --json owner --jq .owner.login 2>/dev/null)" || return 0
+  name="$(gh repo view --json name --jq .name 2>/dev/null)" || return 0
+  when="$(
+    gh api graphql \
+      -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){lastEditedAt createdAt}}}' \
+      -f o="${owner}" -f r="${name}" -F n="${num}" \
+      --jq '.data.repository.pullRequest | .lastEditedAt // .createdAt' 2>/dev/null || true
+  )"
+  printf '%s' "${when}"
+}
+
 pr_body_print_hints() {
   local body_file="$1"
-  local env_ex
+  local env_ex committed edited
   env_ex="$(gate_env_example)"
+  committed="$(git log -1 --format=%cI)"
+  edited="$(pr_description_time)"
   while IFS= read -r hint; do
     [[ -z "${hint}" ]] && continue
     gate_note "pr body: ${hint}"
-  done < <("${ROOT}/scripts/lint/run.sh" pr-body-hints "${body_file}" "${env_ex}")
+  done < <("${ROOT}/scripts/lint/run.sh" pr-body-hints "${body_file}" "${env_ex}" "${committed}" "${edited}")
 }
 
 _pr_start=$SECONDS
