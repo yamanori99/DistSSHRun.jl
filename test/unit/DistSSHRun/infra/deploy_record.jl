@@ -48,6 +48,8 @@ end
         @test rec["mode"] == "git-sync"
         @test rec["deploy_id"] == "a"^40
         @test haskey(rec, "manifest_hash")
+        @test haskey(rec, "project_hash")
+        @test length(rec["project_hash"]) == 64
         body = sprint(TOML.print, rec)
         parsed = DistSSHRun._parse_deploy_record_body(body)
         @test parsed !== nothing

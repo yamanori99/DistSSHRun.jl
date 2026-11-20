@@ -718,23 +718,38 @@ function _env_verify_guards()
     return nothing
 end
 
-function _env_run_id_deploy_record!(proj::AbstractString, rid::AbstractString)
-    parent = DistSSHRun.run_identity(proj)
-    digests = Any[
-        Dict{String, Any}(
-            "path" => "Project.toml",
-            "blob" => parent["project.sha256"],
-        ),
-    ]
-    rec = DistSSHRun.build_deploy_record(
-        proj,
-        :ship_tree;
-        deploy_id = rid,
-        run_id = rid,
-        content_file_digests = digests,
+function _env_verify_activate_worker!(w::Integer, proj::AbstractString)
+    p = String(proj)
+    expr = :(
+        begin
+            using Pkg
+            Pkg.activate($(QuoteNode(p)); io = devnull)
+            nothing
+        end
     )
-    DistSSHRun._set_active_deploy_record!(rec)
-    return parent
+    remotecall_fetch(Core.eval, w, Main, expr)
+    return nothing
+end
+
+function _env_run_id_deploy_record!(proj::AbstractString, rid::AbstractString)
+    pack = DistSSHRun._pack_project_tree(proj)
+    try
+        digest_rows = Any[
+            Dict{String, Any}("path" => p, "blob" => h) for (p, h) in pack.content_file_digests
+        ]
+        rec = DistSSHRun.build_deploy_record(
+            proj,
+            :ship_tree;
+            deploy_id = rid,
+            run_id = rid,
+            content_tree_hash = pack.content_tree_hash,
+            content_file_digests = digest_rows,
+        )
+        DistSSHRun._set_active_deploy_record!(rec)
+        return DistSSHRun.run_identity(proj)
+    finally
+        rm(pack.directory; recursive = true, force = true)
+    end
 end
 
 function _env_run_id_shipped_run_verify_tests()
@@ -744,17 +759,84 @@ function _env_run_id_shipped_run_verify_tests()
             _with_tempdir() do proj
                 _env_verify_job!(proj)
                 test_proj = Base.active_project()
-                old = test_proj
-                Pkg.activate(proj; io = devnull)
                 try
                     _with_one_local_worker(
                         test_proj,
                         function (w)
-                            parent = _env_run_id_deploy_record!(proj, rid)
+                            _env_verify_activate_worker!(w, proj)
+                            _env_run_id_deploy_record!(proj, rid)
                             DistSSHRun._mark_workers_launched!([w], proj)
-                            DistSSHRun._WORKER_ENV_SNAPSHOT_OVERRIDE[] = _ -> parent
-                            try
+                            DistSSHRun.verify_workers_match_shipped_run!(proj; run_id = rid)
+                            return nothing
+                        end
+                    )
+                finally
+                    DistSSHRun._clear_active_deploy_record!()
+                end
+            end
+        end
+        @testset "worker Project.toml byte tamper" begin
+            _with_tempdir() do proj
+                _env_verify_job!(proj)
+                test_proj = Base.active_project()
+                try
+                    _with_one_local_worker(
+                        test_proj,
+                        function (w)
+                            _env_verify_activate_worker!(w, proj)
+                            _env_run_id_deploy_record!(proj, rid)
+                            DistSSHRun._mark_workers_launched!([w], proj)
+                            remotecall_fetch(w) do
+                                pf = Base.active_project()
+                                pf === nothing && error("worker has no active project")
+                                path = isfile(pf) ? String(pf) : joinpath(String(pf), "Project.toml")
+                                open(path, "r+") do io
+                                    seekend(io)
+                                    write(io, UInt8(' '))
+                                end
+                                return nothing
+                            end
+                            err = try
                                 DistSSHRun.verify_workers_match_shipped_run!(proj; run_id = rid)
+                                ""
+                            catch e
+                                sprint(showerror, e)
+                            end
+                            @test occursin("project.sha256", err)
+                            deploy = match(r"deploy=([0-9a-f]+)", err)
+                            worker = match(r"worker=([0-9a-f]+)", err)
+                            @test deploy !== nothing
+                            @test worker !== nothing
+                            @test length(deploy.captures[1]) == length(worker.captures[1])
+                            return nothing
+                        end
+                    )
+                finally
+                    DistSSHRun._clear_active_deploy_record!()
+                end
+            end
+        end
+        @testset "unsafe skip env digests" begin
+            _with_tempdir() do proj
+                _env_verify_job!(proj)
+                test_proj = Base.active_project()
+                try
+                    _with_one_local_worker(
+                        test_proj,
+                        function (w)
+                            parent = DistSSHRun.run_identity(proj)
+                            _env_run_id_deploy_record!(proj, rid)
+                            DistSSHRun._mark_workers_launched!([w], proj)
+                            other = copy(parent)
+                            other["project.sha256"] = repeat("f", 64)
+                            DistSSHRun._WORKER_ENV_SNAPSHOT_OVERRIDE[] = _ -> other
+                            try
+                                DistSSHRun.with_unsafe_skip_env_digests(
+                                    () -> DistSSHRun.verify_workers_match_shipped_run!(
+                                        proj; run_id = rid
+                                    ),
+                                    true
+                                )
                             finally
                                 DistSSHRun._WORKER_ENV_SNAPSHOT_OVERRIDE[] = nothing
                             end
@@ -762,7 +844,6 @@ function _env_run_id_shipped_run_verify_tests()
                         end
                     )
                 finally
-                    old === nothing || Pkg.activate(old; io = devnull)
                     DistSSHRun._clear_active_deploy_record!()
                 end
             end
@@ -771,8 +852,6 @@ function _env_run_id_shipped_run_verify_tests()
             _with_tempdir() do proj
                 _env_verify_job!(proj)
                 test_proj = Base.active_project()
-                old = test_proj
-                Pkg.activate(proj; io = devnull)
                 try
                     ws = _env_verify_add_local_workers(2, test_proj)
                     parent = _env_run_id_deploy_record!(proj, rid)
@@ -790,7 +869,6 @@ function _env_run_id_shipped_run_verify_tests()
                     end
                 finally
                     _env_verify_solo_workers!()
-                    old === nothing || Pkg.activate(old; io = devnull)
                     DistSSHRun._clear_active_deploy_record!()
                 end
             end
@@ -799,41 +877,37 @@ function _env_run_id_shipped_run_verify_tests()
             _with_tempdir() do proj
                 _env_verify_job!(proj)
                 test_proj = Base.active_project()
-                old = test_proj
-                Pkg.activate(proj; io = devnull)
                 try
                     _with_one_local_worker(
                         test_proj,
                         function (w)
-                            parent = DistSSHRun.run_identity(proj)
-                            digests = Any[
-                                Dict{String, Any}(
-                                    "path" => "Project.toml",
-                                    "blob" => repeat("b", 64),
-                                ),
-                            ]
+                            _env_verify_activate_worker!(w, proj)
+                            pack = DistSSHRun._pack_project_tree(proj)
+                            digest_rows = try
+                                Any[
+                                    Dict{String, Any}("path" => p, "blob" => h)
+                                        for (p, h) in pack.content_file_digests
+                                ]
+                            finally
+                                rm(pack.directory; recursive = true, force = true)
+                            end
                             rec = DistSSHRun.build_deploy_record(
                                 proj,
                                 :ship_tree;
                                 deploy_id = rid,
                                 run_id = rid,
-                                content_file_digests = digests,
+                                content_file_digests = digest_rows,
                             )
+                            rec["project_hash"] = repeat("b", 64)
                             DistSSHRun._set_active_deploy_record!(rec)
                             DistSSHRun._mark_workers_launched!([w], proj)
-                            DistSSHRun._WORKER_ENV_SNAPSHOT_OVERRIDE[] = _ -> parent
-                            try
-                                @test_throws ErrorException DistSSHRun.verify_workers_match_shipped_run!(
-                                    proj; run_id = rid
-                                )
-                            finally
-                                DistSSHRun._WORKER_ENV_SNAPSHOT_OVERRIDE[] = nothing
-                            end
+                            @test_throws ErrorException DistSSHRun.verify_workers_match_shipped_run!(
+                                proj; run_id = rid
+                            )
                             return nothing
                         end
                     )
                 finally
-                    old === nothing || Pkg.activate(old; io = devnull)
                     DistSSHRun._clear_active_deploy_record!()
                 end
             end
@@ -871,9 +945,7 @@ function _env_run_id_shipped_run_verify_tests()
                     "schema" => 1,
                     "mode" => "ship-tree",
                     "run_id" => rid,
-                    "content_file_digests" => Any[
-                        Dict{String, Any}("path" => "Project.toml", "blob" => "a"^64),
-                    ],
+                    "project_hash" => "a"^64,
                 )
                 DistSSHRun._set_active_deploy_record!(rec)
                 try
