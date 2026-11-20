@@ -1029,19 +1029,12 @@ end
 
         @testset "strict bind contract on ssh workers" begin
             _e2e_announce("strict bind contract on ssh workers")
-            # Keep hosts files and drive script off `proj` so ship-tree hash and git stay aligned.
+            # Hosts and output stay off `proj` so ship-tree / git stay aligned.
+            # The script must live under `proj`: drive resolves the job project
+            # from the script directory, and --unsafe-skip-env-digests does not
+            # waive `Pkg.is_manifest_current`.
             mktempdir() do bind_dir
-                hosts_toml = joinpath(bind_dir, "e2e_bind_drive_hosts.toml")
-                write(
-                    hosts_toml,
-                    """
-                    [[hosts]]
-                    name = "$(hosts[1])"
-                    workers = 2
-                    bind = "127.0.0.1"
-                    """,
-                )
-                bind_script = joinpath(bind_dir, "drive_bind_workers.jl")
+                bind_script = joinpath(proj, "drive_bind_workers.jl")
                 write(
                     bind_script,
                     """
@@ -1053,55 +1046,69 @@ end
                     end
                     """,
                 )
-                bind_out = joinpath(bind_dir, "e2e-bind-drive-out")
-                bind_env = _drive_host_env(
-                    proj;
-                    extra_env = merge(_e2e_base_env(), Dict("DISTSSH_QUIET" => "0")),
-                )
-                bind_cmd = _kit_cli_cmd(
-                    [
-                        "drive", "-y", "--unsafe-skip-env-digests", "--unsafe-expose-port",
-                        "--hosts-file", hosts_toml, "--output-dir", bind_out, bind_script,
-                    ],
-                )
-                proc_ok, out_ok = _run_subprocess(setenv(bind_cmd, bind_env))
-                _assert_ssh_e2e_ok(suite, "drive_bind_unsafe_expose", proc_ok, out_ok; project = proj)
-                @test isfile(joinpath(bind_out, "bind_ok.txt"))
+                try
+                    hosts_toml = joinpath(bind_dir, "e2e_bind_drive_hosts.toml")
+                    write(
+                        hosts_toml,
+                        """
+                        [[hosts]]
+                        name = "$(hosts[1])"
+                        workers = 2
+                        bind = "127.0.0.1"
+                        """,
+                    )
+                    bind_out = joinpath(bind_dir, "e2e-bind-drive-out")
+                    bind_env = _drive_host_env(
+                        proj;
+                        extra_env = merge(_e2e_base_env(), Dict("DISTSSH_QUIET" => "0")),
+                    )
+                    bind_cmd = _kit_cli_cmd(
+                        [
+                            "drive", "-y", "--unsafe-expose-port",
+                            "--hosts-file", hosts_toml, "--output-dir", bind_out, bind_script,
+                        ],
+                    )
+                    proc_ok, out_ok = _run_subprocess(setenv(bind_cmd, bind_env))
+                    _assert_ssh_e2e_ok(suite, "drive_bind_unsafe_expose", proc_ok, out_ok; project = proj)
+                    @test isfile(joinpath(bind_out, "bind_ok.txt"))
 
-                bind_reject_toml = joinpath(bind_dir, "e2e_bind_reject_hosts.toml")
-                write(
-                    bind_reject_toml,
-                    """
-                    [[hosts]]
-                    name = "$(hosts[1])"
-                    bind = "0.0.0.0"
-                    """,
-                )
-                before_pids = _e2e_hb_worker_pids(hosts[1])
-                reject_cmd = _kit_cli_cmd(
-                    [
-                        "drive", "-y", "--unsafe-skip-env-digests", "--unsafe-expose-port",
-                        "--hosts-file", bind_reject_toml, bind_script,
-                    ],
-                )
-                reject_env = merge(
-                    bind_env,
-                    Dict("DISTSSH_SSH_TUNNEL" => "0"),
-                )
-                proc_bad, out_bad = _run_subprocess(setenv(reject_cmd, reject_env))
-                @test proc_bad.exitcode == 2
-                @test occursin("bind 0.0.0.0 requires --unsafe-expose-port and SSH tunnel enabled", out_bad)
-                after_pids = _e2e_hb_worker_pids(hosts[1])
-                @test length(setdiff(after_pids, before_pids)) == 0
-                _ssh_e2e_record!(
-                    suite,
-                    "drive_bind_all_interfaces_tunnel_off",
-                    proc_bad,
-                    out_bad;
-                    expect_ok = false,
-                    project = proj,
-                    kit = :drive,
-                )
+                    bind_reject_toml = joinpath(bind_dir, "e2e_bind_reject_hosts.toml")
+                    write(
+                        bind_reject_toml,
+                        """
+                        [[hosts]]
+                        name = "$(hosts[1])"
+                        bind = "0.0.0.0"
+                        """,
+                    )
+                    before_pids = _e2e_hb_worker_pids(hosts[1])
+                    reject_cmd = _kit_cli_cmd(
+                        [
+                            "drive", "-y", "--unsafe-expose-port",
+                            "--hosts-file", bind_reject_toml, bind_script,
+                        ],
+                    )
+                    reject_env = merge(
+                        bind_env,
+                        Dict("DISTSSH_SSH_TUNNEL" => "0"),
+                    )
+                    proc_bad, out_bad = _run_subprocess(setenv(reject_cmd, reject_env))
+                    @test proc_bad.exitcode == 2
+                    @test occursin("bind 0.0.0.0 requires --unsafe-expose-port and SSH tunnel enabled", out_bad)
+                    after_pids = _e2e_hb_worker_pids(hosts[1])
+                    @test length(setdiff(after_pids, before_pids)) == 0
+                    _ssh_e2e_record!(
+                        suite,
+                        "drive_bind_all_interfaces_tunnel_off",
+                        proc_bad,
+                        out_bad;
+                        expect_ok = false,
+                        project = proj,
+                        kit = :drive,
+                    )
+                finally
+                    rm(bind_script; force = true)
+                end
             end
         end
 
