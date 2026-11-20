@@ -21,7 +21,8 @@ say there is nothing to fix.
   mixes controller `DISTSSH_RUN_DIR/run.toml` with the remote Ship
   stamp, or treats `teardown` as this package.
 - **Config misroutes.** A required check name, the heavy-job allowlist,
-  or a label rule sends a change to the wrong gate.
+  or a label rule sends a change to the wrong gate. An Aqua job gains a
+  `run:` that is not `aqua-check.sh`.
 - **Remote shell.** A remote command interpolates a value without
   `posix_quote` or `_remote_shell_path_word`. `~` expansion belongs
   to `_remote_shell_path_word`. A host that starts with `-`, including
