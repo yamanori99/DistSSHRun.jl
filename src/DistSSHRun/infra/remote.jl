@@ -178,8 +178,6 @@ end
 # OpenSSH keeps the first value of each option, so these budgets win over
 # `ssh_opts`, including a replacement `DISTRIBUTED_SSH_OPTS`.
 const _SSH_PHASE_CONCURRENCY = 8
-const _SSH_PHASE_ALIVE_INTERVAL = 5
-const _SSH_PHASE_ALIVE_COUNT = 1
 
 mutable struct _CmdRun
     proc::Union{Nothing, Base.Process}
@@ -194,18 +192,6 @@ struct _SSHHostResult
     errkind::Symbol
 end
 
-function _ssh_phase_opts(host::AbstractString)::Vector{String}
-    connect = DistSSHBase._ssh_whole_seconds(:ssh_connect, DistSSHBase._SSH_CONNECT_TIMEOUT_S)
-    forced = String[
-        "-o", "BatchMode=yes",
-        "-o", "ConnectTimeout=$connect",
-        "-o", "ServerAliveInterval=$(_SSH_PHASE_ALIVE_INTERVAL)",
-        "-o", "ServerAliveCountMax=$(_SSH_PHASE_ALIVE_COUNT)",
-    ]
-    _, port = DistSSHBase.parse_ssh_endpoint(host)
-    return append!(forced, DistSSHBase.ssh_forwarded_opts(explicit_port = port))
-end
-
 """`ssh` argv for one short remote command, or the `DISTSSH_TEST_SSH` double."""
 function _ssh_phase_cmd(host::AbstractString, remote::AbstractString)::Cmd
     custom = _test_doubles_on() ? strip(get(ENV, "DISTSSH_TEST_SSH", "")) : ""
@@ -213,10 +199,12 @@ function _ssh_phase_cmd(host::AbstractString, remote::AbstractString)::Cmd
         return Cmd(vcat(_test_double_julia_argv(custom), [String(host), String(remote)]))
     end
     h = String(host)
+    _, port = DistSSHBase.parse_ssh_endpoint(h)
     return _ssh_cmd(
         vcat(
             String["-n"],
-            _ssh_phase_opts(h),
+            DistSSHBase.ssh_phase_argv(),
+            DistSSHBase.ssh_forwarded_opts(explicit_port = port),
             _ssh_host_connection_args(h, String(remote)),
         ),
     )
