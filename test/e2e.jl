@@ -1060,7 +1060,7 @@ end
                 )
                 bind_cmd = _kit_cli_cmd(
                     [
-                        "drive", "-y", "--unsafe-expose-port",
+                        "drive", "-y", "--unsafe-skip-env-digests", "--unsafe-expose-port",
                         "--hosts-file", hosts_toml, "--output-dir", bind_out, bind_script,
                     ],
                 )
@@ -1080,7 +1080,7 @@ end
                 before_pids = _e2e_hb_worker_pids(hosts[1])
                 reject_cmd = _kit_cli_cmd(
                     [
-                        "drive", "-y", "--unsafe-expose-port",
+                        "drive", "-y", "--unsafe-skip-env-digests", "--unsafe-expose-port",
                         "--hosts-file", bind_reject_toml, bind_script,
                     ],
                 )
