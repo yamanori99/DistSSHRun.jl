@@ -69,10 +69,11 @@ function _remote_file_exists(host::AbstractString, path::AbstractString)::Bool
     return code == 0
 end
 
-function _remote_is_executable(host::AbstractString, path::AbstractString)::Bool
+function _remote_regular_file_mode(host::AbstractString, path::AbstractString)::Int
     pq = DistSSHBase._remote_shell_path_word(path)
-    code, _ = DistSSHBase._remote_shell_status(String(host), "test -x $pq")
-    return code == 0
+    code, out = DistSSHBase._remote_shell_status(String(host), "stat -c %a $pq")
+    code == 0 || error("stat failed for $path on $host")
+    return parse(Int, strip(out); base = 8)
 end
 
 function _remote_rm_rf(host::AbstractString, path::AbstractString)
@@ -162,7 +163,13 @@ end
                 @test _remote_file_exists(_host, joinpath(receipt.dest, "my file.jl"))
                 @test _remote_file_exists(_host, joinpath(receipt.dest, "日本語.txt"))
                 @test _remote_file_exists(_host, joinpath(receipt.dest, "bulk.bin"))
-                @test _remote_is_executable(_host, joinpath(receipt.dest, "run.sh"))
+                run_sh = joinpath(receipt.dest, "run.sh")
+                marker = joinpath(receipt.dest, "marker.jl")
+                @test _remote_regular_file_mode(_host, run_sh) == 0o555
+                pq_x = DistSSHBase._remote_shell_path_word(run_sh)
+                code_x, _ = DistSSHBase._remote_shell_status(_host, "test -x $pq_x")
+                @test code_x == 0
+                @test _remote_regular_file_mode(_host, marker) == 0o444
                 @test _remote_file_exists(_host, joinpath(receipt.dest, "alias.jl"))
                 pq = DistSSHBase._remote_shell_path_word(joinpath(receipt.dest, "tree_parent"))
                 code_dir, _ = DistSSHBase._remote_shell_status(_host, "test -d $pq")
@@ -181,6 +188,10 @@ end
                     tamper = DistSSHBase._remote_shell_path_word(
                         joinpath(receipt.dest, "marker.jl"),
                     )
+                    code_w, _ = DistSSHBase._remote_shell_status(
+                        _host, "chmod u+w $tamper",
+                    )
+                    @test code_w == 0
                     code_t, _ = DistSSHBase._remote_shell_status(
                         _host, "printf '\\n#' >> $tamper",
                     )

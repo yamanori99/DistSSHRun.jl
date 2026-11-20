@@ -37,6 +37,7 @@ include("ssh/shell_status.jl")
 include("ssh/budgets.jl")
 include("messages/help.jl")
 include("ssh/ssh.jl")
+include("ssh/worker_endpoint.jl")
 include("hosts/hostinfo.jl")
 include("hosts/host_result.jl")
 include("ssh/julia_where.jl")
@@ -62,10 +63,12 @@ public current_project_file,
     local_preferences_path,
     manifest_path,
     parse_julia_version_full
-public MachinePlacement, parse_machine_token
+public MachinePlacement, machine_ssh_endpoint, parse_machine_token, parse_ssh_endpoint
+public ssh_connection_ssh_opts
+public join_explained_message, machine_ssh_label, throw_legacy_machine_token
 public parse_placement_token, posix_quote, remote_env_project_root, resolve_remote_julia
 public resolve_remote_project_root, shell_status, shield_sigint, with_cli_entry, without_cancel
-public CLI_EXIT_USAGE, CliUsageError, cli_help_stdout, cli_parse, cli_required_else_help, with_cli_exit
+public CLI_EXIT_USAGE, CliForegroundInterrupt, CliUsageError, cli_help_stdout, cli_parse, cli_required_else_help, with_cli_exit
 public wait_seconds
 public tool_require
 public src_component_digest

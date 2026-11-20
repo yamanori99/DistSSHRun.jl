@@ -684,14 +684,7 @@ function resolve_source_selection(
         end
     end
     _validate_git_on_hosts!(host_list, deploy)
-    return SourceSelection(
-        :git,
-        nothing,
-        deploy,
-        deploy,
-        nothing,
-        host_list,
-    )
+    return SourceSelection(:git, nothing, deploy, deploy, nothing, host_list)
 end
 public resolve_source_selection
 

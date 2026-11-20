@@ -648,11 +648,87 @@ function append_kit_host_sources!(
     return hosts
 end
 
+"""Path to the hosts file used for TOML `bind` on this session (`nothing` when not applicable)."""
+function hosts_file_path_for_bind(session::CliSharedFlags)::Union{Nothing, String}
+    source = placement_host_source(session)
+    path = if source === :hosts_file
+        session.hosts_file
+    elseif source === :env_file
+        String(strip(get(ENV, "DISTSSH_HOSTS_FILE", "")))
+    elseif session.hosts_file !== nothing
+        session.hosts_file
+    else
+        nothing
+    end
+    path === nothing && return nothing
+    path = String(strip(path))
+    isempty(path) && return nothing
+    return path
+end
+
+"""Per-host bind overrides from TOML on the active hosts file (`bind_overrides=` must not conflict)."""
+function hosts_file_bind_overrides(
+        session::CliSharedFlags;
+        bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
+        planned_hosts::Union{Nothing, AbstractVector{<:AbstractString}} = nothing,
+        command::Union{Nothing, Symbol} = nothing,
+    )::Dict{String, String}
+    path = hosts_file_path_for_bind(session)
+    path === nothing && return resolve_launch_bind_overrides(;
+        bind_overrides = bind_overrides,
+        surface = session.hint_surface,
+        planned_hosts = planned_hosts,
+        command = command,
+    )
+    return resolve_launch_bind_overrides(;
+        hosts_file = path,
+        bind_overrides = bind_overrides,
+        surface = session.hint_surface,
+        planned_hosts = planned_hosts,
+        command = command,
+    )
+end
+
 function append_hosts_file!(hosts::Vector{String}, session::CliSharedFlags)
     hosts_file = session.hosts_file
     hosts_file === nothing && return hosts
     append!(hosts, read_hosts_file(hosts_file; surface = session.hint_surface))
     return hosts
+end
+
+"""True when CLI host token collection already includes the active hosts file."""
+function hosts_file_worker_tokens_merged(source::Union{Nothing, Symbol})::Bool
+    return source === :hosts_file || source === :env_file
+end
+
+"""
+Append hosts-file machine tokens into `tokens` when they are not already merged.
+
+Returns the resolved hosts-file path for bind validation (`nothing` when absent).
+"""
+function merge_go_hosts_file_worker_tokens!(
+        tokens::Vector{String},
+        hosts_file::Union{Nothing, AbstractString};
+        hosts_file_tokens_merged::Bool,
+        surface::Symbol,
+        honor_distssh_hosts_file_env::Bool = true,
+    )::Union{Nothing, String}
+    hf = hosts_file === nothing ? nothing : String(strip(hosts_file))
+    if hf === nothing || isempty(hf)
+        if isempty(tokens) && honor_distssh_hosts_file_env
+            env_hf = strip(get(ENV, "DISTSSH_HOSTS_FILE", ""))
+            !isempty(env_hf) && (hf = env_hf)
+        else
+            return nothing
+        end
+    end
+    hf === nothing && return nothing
+    if !hosts_file_tokens_merged
+        for line in read_hosts_file_lines(hf; surface = surface)
+            push!(tokens, line)
+        end
+    end
+    return hf
 end
 
 """`println` with the same terminal gate as `writeln_both` (setup / size)."""

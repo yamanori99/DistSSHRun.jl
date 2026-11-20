@@ -29,6 +29,7 @@ updates:
       - "/lib/DistSSHUp"
       - "/lib/DistSSHShip"
       - "/lib/DistSSHHeartbeat"
+      - "/.github/runic"
     schedule:
       interval: weekly
     open-pull-requests-limit: 5

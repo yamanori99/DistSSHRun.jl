@@ -98,9 +98,10 @@ if !isdefined(Main, :_run_kit_setup)
         return proc_def, out_add * out_def
     end
 
-    # Apply a quiet+yes kit CLI session.
+    # Apply a quiet+yes kit CLI session for bang-API setup tests (flags only;
+    # callers that need auto-confirm must also set `session.cli_session.yes`).
     function _apply_quiet_setup_session!()
-        DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true))
+        DistSSHRun.apply_shared_cli_flags!(DistSSHRun.CliSharedFlags(quiet = true, yes = true))
         return nothing
     end
 
@@ -152,6 +153,16 @@ if !isdefined(Main, :_run_kit_setup)
                 probe_suspend || return out, value
                 return out, value, seen[]
             end
+        end
+    end
+
+    function with_kit_noninteractive(f::Function, flag::Bool)
+        prev = DistSSHRun.kit_noninteractive()
+        DistSSHRun.set_kit_noninteractive!(flag)
+        try
+            return f()
+        finally
+            DistSSHRun.set_kit_noninteractive!(prev)
         end
     end
 

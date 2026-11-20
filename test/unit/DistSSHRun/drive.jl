@@ -18,6 +18,10 @@ end
         @test p.child_hosts == ["host-a", "host-b"]
         @test DistSSHRun.worker_tokens_fully_specified(p)
 
+        ports = DistSSHRun.parse_worker_tokens(["host-a:22", "host-a:2222"])
+        @test ports.child_hosts == ["host-a:22", "host-a:2222"]
+        @test_throws ArgumentError DistSSHRun.parse_worker_tokens(["host-a:22", "host-a:22"])
+
         fixed = DistSSHRun.parse_worker_tokens(["1*h1"]; head_workers = 2)
         @test DistSSHRun.worker_tokens_fully_specified(fixed)
         let plan = DistSSHRun.worker_plan_from_tokens(["1*h1"]; head_workers = 2)
@@ -92,7 +96,7 @@ end
             @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
             @test DistSSHRun.session_remote_root(session) == "/remote/App.jl"
             @test DistSSHRun.kit_output_quiet()
-            @test DistSSHRun.kit_noninteractive()
+            @test !DistSSHRun.kit_noninteractive()
         end
         _with_tempdir() do tmp
             delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
@@ -221,6 +225,12 @@ end
         @test DistSSHRun.resolve_pipeline_collect(default_cfg, default_session)
         @test DistSSHRun.pipeline_skip_hash_check(default_cfg)
         @test !default_session.cli_session.yes || get(ENV, "DISTSSH_YES", "") == "1"
+        @test !DistSSHRun.session_confirms(default_session)
+        cli_confirm = DistSSHRun.DistSSHSession(workers = ["host-a"])
+        cli_confirm.cli_session.hint_surface = :cli
+        @test DistSSHRun.session_confirms(cli_confirm)
+        cli_confirm.cli_session.yes = true
+        @test !DistSSHRun.session_confirms(cli_confirm)
         @test !DistSSHRun.pipeline_skip_hash_check(
             DistSSHRun.PipelineConfig(
                 driver = "job.jl",
@@ -235,6 +245,7 @@ end
             collect = false
         )
         local_session = DistSSHRun.kit_session_from_config(local_cfg)
+        @test local_session.cli_session.head_workers == 2
         @test !DistSSHRun.resolve_pipeline_collect(local_cfg, local_session)
 
         _with_tempdir() do tmp
@@ -570,7 +581,7 @@ end
             end
             @test err isa ArgumentError
             @test occursin("driver not found", sprint(showerror, err))
-            @test occursin("DistSSHRun.install_demos(; family=", sprint(showerror, err))
+            @test occursin("install_demos", sprint(showerror, err))
         end
     end
 
@@ -786,7 +797,7 @@ end
             catch e
                 e
             end
-            @test left isa DistSSHRun._DriveProcessInterrupt
+            @test left isa DistSSHRun.DistSSHBase.CliForegroundInterrupt
             @test DistSSHRun._drive_was_interrupted()
             seen = Ref(true)
             ordinary = try
@@ -996,7 +1007,7 @@ end
             parsed = DistSSHRun.drive_parsed_from_session(
                 session,
                 script;
-                workers = DistSSHRun.WorkerPlan(0, Dict("-orphan" => 1)),
+                workers = DistSSHRun.WorkerPlan(0, Dict("orphan" => 1)),
                 enable_log = false,
                 skip_hash_check = true,
                 output_dir = out,
@@ -1092,6 +1103,20 @@ end
             end
             _sync_test_project_manifest!(app)
             @test occursin("path = \"../Bar\"", read(joinpath(app, "Project.toml"), String))
+            snap_id = "20260101T000000Z-aaaaaa"
+            parent = DistSSHRun.run_identity(app)
+            digests = Any[
+                Dict{String, Any}("path" => "Project.toml", "blob" => parent["project.sha256"]),
+            ]
+            DistSSHRun._set_active_deploy_record!(
+                DistSSHRun.build_deploy_record(
+                    app,
+                    :ship_tree;
+                    deploy_id = snap_id,
+                    run_id = snap_id,
+                    content_file_digests = digests,
+                )
+            )
             script = joinpath(app, "job.jl")
             marker = joinpath(root, "RAN")
             write(script, "write($(repr(marker)), \"yes\")\n")
@@ -1101,7 +1126,7 @@ end
                         DistSSHRun.drive!(
                             script, String[]; head_workers = 1,
                             project = app,
-                            run_id = "20260101T000000Z-aaaaaa",
+                            run_id = snap_id,
                             quiet = true,
                             enable_log = false
                         )
@@ -1117,6 +1142,43 @@ end
             @test result.ok
             @test result.exit_code == 0
             @test isfile(marker)
+        end
+    end
+
+    @testset "run_id records verified-against-run-id when deploy record matches" begin
+        _with_tempdir() do proj
+            _write_host_project!(proj, "RunIdProv")
+            script = joinpath(proj, "job.jl")
+            write(script, "1\n")
+            rid = "20260101T000000Z-aaaaaa"
+            parent = DistSSHRun.run_identity(proj)
+            digests = Any[
+                Dict{String, Any}("path" => "Project.toml", "blob" => parent["project.sha256"]),
+            ]
+            DistSSHRun._set_active_deploy_record!(
+                DistSSHRun.build_deploy_record(
+                    proj,
+                    :ship_tree;
+                    deploy_id = rid,
+                    run_id = rid,
+                    content_file_digests = digests,
+                )
+            )
+            DistSSHRun.set_kit_verbosity!(:quiet)
+            try
+                result = DistSSHRun.drive!(
+                    script, String[]; head_workers = 1,
+                    project = proj,
+                    enable_log = false,
+                    run_id = rid,
+                )
+                @test result.ok
+                prov = DistSSHRun.assemble_provenance(proj)
+                env = get(prov, "environment", nothing)
+                @test env["verification"] == "verified-against-run-id"
+            finally
+                DistSSHRun.set_kit_verbosity!(:progress)
+            end
         end
     end
 

@@ -140,7 +140,7 @@ using Test
             end
         end
         flush(io)
-        @test code == 1
+        @test code == 2
         @test occursin("with_kit or without_kit or ride", read(path, String))
     end
     _with_tempdir() do tmp
@@ -166,7 +166,7 @@ using Test
         end
         flush(io)
         text = read(path, String)
-        @test code == 1
+        @test code == 2
         @test occursin("Unknown demo command: bogus", text)
         @test occursin("help demo", text)
         @test !occursin("demo --help", text)

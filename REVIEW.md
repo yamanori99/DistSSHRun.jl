@@ -21,7 +21,8 @@ say there is nothing to fix.
   mixes controller `DISTSSH_RUN_DIR/run.toml` with the remote Ship
   stamp, or treats `teardown` as this package.
 - **Config misroutes.** A required check name, the heavy-job allowlist,
-  or a label rule sends a change to the wrong gate.
+  or a label rule sends a change to the wrong gate. An Aqua job gains a
+  `run:` that is not `aqua-check.sh`.
 - **Remote shell.** A remote command interpolates a value without
   `posix_quote` or `_remote_shell_path_word`. `~` expansion belongs
   to `_remote_shell_path_word`. A host that starts with `-`, including
@@ -34,9 +35,6 @@ say there is nothing to fix.
   authorize `setup --delete` or `setup --prune` without `--confirm-path`.
   Delete scans `<target>/runs` when stamps live under a nested deploy
   root. This diff writes a `.distssh-run` / `.distsshrun` marker.
-- **Public behavior.** Flags, confirmation, exit codes, or what is deleted
-  changed, and the pull request is not labeled `breaking`, or that
-  breaking change is mixed with another change.
-  Edits to existing breaking fragments are for factual corrections only.
+- **Public behavior.** A public name removed in this diff must appear as an identifier in a changelog fragment bullet in the same pull request. Do not request a `breaking` label. A same-name behavior change, and a break that is only in the CLI, are not a label.
 - **Registrator.** The register command appears in an issue, a pull
   request body, or a pull request comment.

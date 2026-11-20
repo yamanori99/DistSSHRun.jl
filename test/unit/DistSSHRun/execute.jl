@@ -353,6 +353,23 @@ end
         DistSSHRun._clear_drive_host_worker_ids!()
     end
 
+    @testset "worker placement ssh endpoint registry" begin
+        try
+            DistSSHRun._register_worker_placement_ssh_endpoints!([100], "alice@h:2222")
+            DistSSHRun._register_worker_placement_ssh_endpoints!([200], "bob@h:2222")
+            DistSSHRun._register_drive_host_worker_ids!("alice@h:2222", [100])
+            @test DistSSHRun._leftover_worker_host(100) == "alice@h:2222"
+            DistSSHRun._clear_drive_host_worker_ids!()
+            @test !haskey(DistSSHRun.WORKER_PLACEMENT_SSH_ENDPOINT, 100)
+            @test get(DistSSHRun.WORKER_PLACEMENT_SSH_ENDPOINT, 200, nothing) == "bob@h:2222"
+            DistSSHRun._forget_worker_placement_ssh_endpoints!([200])
+            @test isempty(DistSSHRun.WORKER_PLACEMENT_SSH_ENDPOINT)
+        finally
+            DistSSHRun._clear_drive_host_worker_ids!()
+            empty!(DistSSHRun.WORKER_PLACEMENT_SSH_ENDPOINT)
+        end
+    end
+
     @testset "allocate_output_dir" begin
         _with_tempdir() do project
             d1 = DistSSHRun.allocate_output_dir(:go, "batch.jl"; project)
@@ -1417,6 +1434,40 @@ end
                     @test !process_running(kp.process)
                     @test result.kind === :go
                 end
+            end
+        end
+    end
+
+    @testset "terminate! kit sidecars split across run_dir and output_dir" begin
+        mktempdir() do run_d
+            mktempdir() do out_d
+                write(joinpath(run_d, "kit.job"), "j-sidecar\n")
+                DistSSHRun._write_kit_hosts_file(["worker-1"], out_d, nothing)
+                proc = run(ignorestatus(`sleep 30`); wait = false)
+                try
+                    kp = DistSSHRun.DetachedProcess(
+                        proc;
+                        kind = :ride,
+                        output_dir = out_d,
+                        run_dir = run_d,
+                    )
+                    @test DistSSHRun._read_kit_job_id_for_reap(kp) == "j-sidecar"
+                    @test DistSSHRun._read_kit_hosts_for_reap(kp) == ["worker-1"]
+                finally
+                    process_running(proc) && kill(proc)
+                    wait(proc)
+                end
+            end
+        end
+        mktempdir() do log_d
+            write(joinpath(log_d, "kit.job"), "j-log\n")
+            proc = run(ignorestatus(`sleep 30`); wait = false)
+            try
+                kp = DistSSHRun.DetachedProcess(proc; kind = :drive, log_dir = log_d)
+                @test DistSSHRun._read_kit_job_id_for_reap(kp) == "j-log"
+            finally
+                process_running(proc) && kill(proc)
+                wait(proc)
             end
         end
     end

@@ -38,6 +38,12 @@ function _bool_env(name::AbstractString; env::AbstractDict = ENV)::Union{Nothing
     return raw in ("1", "true", "yes", "on")
 end
 
+"""
+Canonical go / drive / ride option rows (CLI, env, kwarg, defaults).
+
+The 0.2.0 cluster manager reads the same `unsafe_*` keys and env names defined
+here. Use [`options_for_command`](@ref) to restrict rows per command.
+"""
 function run_option_table()::Vector{OptionRow}
     shared = RUN_JOB_COMMANDS
     return OptionRow[
@@ -112,7 +118,11 @@ function run_option_table()::Vector{OptionRow}
     ]
 end
 
-"""Rows applicable to `command` (`:go`, `:drive`, or `:ride`)."""
+"""
+Rows applicable to `command` (`:go`, `:drive`, or `:ride`).
+
+Filter [`run_option_table`](@ref) for launch and cluster-manager config.
+"""
 function options_for_command(command::Symbol)::Vector{OptionRow}
     command in RUN_JOB_COMMANDS ||
         throw(ArgumentError("options_for_command: unsupported command $(repr(command))"))

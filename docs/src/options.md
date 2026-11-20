@@ -23,13 +23,16 @@ CI fails when `--help` and this page drift from that table.
 
 ## Precedence
 
-Within one scope: **CLI → environment → default**. Per-host overrides from a
-machine file or hosts file land in phase 4; the resolver keeps a hook for them.
+Within one scope: **CLI → environment → default**. Per-host Distributed
+`bind` overrides come from optional `bind` on each `[[hosts]]` row in a TOML
+hosts file (IPv4 literal only; see [Placement](@ref Placement)). `drive`,
+`ride`, and `--dry-run` validate every listed host before SSH; invalid `bind`
+values fail closed (exit 2 on the CLI, not softened by `--best-effort`).
 
 ## Diagnostics
 
 - `--print-config` resolves settings and prints each value with its source, then exits 0 without SSH.
-- `--dry-run` prints placement, topology, and redacted worker env keys, then exits 0 without SSH.
+- `--dry-run` prints placement, resolved topology and bind per host (with tunnel), and redacted worker env keys, then exits 0 without SSH.
 
 ## Removed CLI names (0.2.0)
 

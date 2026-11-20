@@ -603,6 +603,27 @@ function _report_manifest_refusal(e; io::IO = stderr)::Bool
     return true
 end
 
+"""Whether `msg` is an output-directory refusal from `_prepare_output_dir!`."""
+function _cli_output_dir_refusal_message(msg::AbstractString)::Bool
+    body = String(msg)
+    startswith(body, "refusing non-empty output directory:") && return true
+    startswith(body, "refusing output directory symlink:") && return true
+    startswith(body, "output path is not a directory:") && return true
+    return false
+end
+
+"""
+Print an output-directory refusal on stderr and return true.
+
+Other errors return false so the caller can rethrow them.
+"""
+function _report_output_dir_refusal(e; io::IO = stderr)::Bool
+    e isa ArgumentError || return false
+    _cli_output_dir_refusal_message(e.msg) || return false
+    print_cli_error(e.msg; io = io)
+    return true
+end
+
 """
 Throw when `manifest`, or a `[sources]` path, is not inside `env_dir`
 together with `project_dir`.
@@ -2326,12 +2347,12 @@ function progress(args::Vector{String} = copy(ARGS))::Cint
         recs = _kit_progress_last_run(_kit_progress_records(target))
         if isempty(recs)
             print_cli_error("progress: no progress: lines in $(target)")
-            return 1
+            return Cint(1)
         end
         rows = _kit_progress_phase_rows(recs)
         wall = _kit_progress_wall(recs)
         text = _format_kit_progress_phases(rows; wall = wall)
-        isempty(text) && (print_cli_error("progress: no timed phases in $(target)"); return 1)
+        isempty(text) && (print_cli_error("progress: no timed phases in $(target)"); return Cint(1))
         _print_kit_progress_phases(stdout, rows; wall = wall)
         return Cint(0)
     end

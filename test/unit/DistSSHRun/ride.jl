@@ -835,16 +835,33 @@ using Distributed
             script = joinpath(tmp, "noop.jl")
             write(script, "nothing\n")
             rid = "20260101T000000Z-aaaaaa"
-            r = redirect_stdout(devnull) do
-                redirect_stderr(devnull) do
-                    return DistSSHRun.ride!(
-                        script, String[]; head_workers = 1,
-                        project = tmp,
-                        run_id = rid
-                    )
+            parent = DistSSHRun.run_identity(tmp)
+            digests = Any[
+                Dict{String, Any}("path" => "Project.toml", "blob" => parent["project.sha256"]),
+            ]
+            DistSSHRun._set_active_deploy_record!(
+                DistSSHRun.build_deploy_record(
+                    tmp,
+                    :ship_tree;
+                    deploy_id = rid,
+                    run_id = rid,
+                    content_file_digests = digests,
+                )
+            )
+            try
+                r = redirect_stdout(devnull) do
+                    redirect_stderr(devnull) do
+                        return DistSSHRun.ride!(
+                            script, String[]; head_workers = 1,
+                            project = tmp,
+                            run_id = rid
+                        )
+                    end
                 end
+                @test r.ok
+            finally
+                DistSSHRun._clear_active_deploy_record!()
             end
-            @test r.ok
         end
     end
 end

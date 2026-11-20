@@ -13,5 +13,5 @@ using .DistSSHRun:
     println_fatal,
     resolve_remote_project_root,
     show_doctor_usage,
-    with_kit_inproc_run!,
+    _with_kit_inproc_run!,
     writeln_field

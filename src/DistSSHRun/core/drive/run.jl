@@ -354,7 +354,7 @@ function _run_drive_parsed_specialized!(
     return try
         DistSSHRun._reset_run_provenance!(project_root_abs)
         DistSSHRun._clear_active_selection!()
-        DistSSHRun._clear_active_deploy_record!()
+        DistSSHRun._clear_active_deploy_record_unless_run_id!(snap_for_script)
         # Inside `_drive_frame`: this `finally` restores after `rmprocs`.
         return _with_drive_process!(proj_dir) do
             local release_output_dir_lock
@@ -576,7 +576,12 @@ function _run_drive_parsed_locked!(
         run_id = get(parsed, :run_id, nothing),
         remote_argv = remote_argv,
     )
-    DistSSHRun.assert_controller_environment_for_verify!(proj_dir)
+    snap_for_verify = get(parsed, :run_id, nothing)
+    if snap_for_verify isa AbstractString && !isempty(strip(snap_for_verify))
+        DistSSHRun.assert_controller_environment_for_shipped_run!(proj_dir)
+    else
+        DistSSHRun.assert_controller_environment_for_verify!(proj_dir)
+    end
     # git + cleanup + workers + wait + init + run + collect
     progress_steps = 7
     progress_ok = false
@@ -590,6 +595,26 @@ function _run_drive_parsed_locked!(
     kit_log = enable_log ? DistSSHRun.resolve_drive_log_dir(log_dir, script_dir) : nothing
     DistSSHRun._set_kit_progress_sidecar!(kit_out)
     kit_progress_begin!("drive"; steps = progress_steps, kind = :drive)
+    surface = parsed.cli_session.hint_surface
+    bind_map_ref = Ref(Dict{String, String}())
+    ssh_launch_plans_ref = Ref{Union{Nothing, Vector{HostLaunchPlan}}}(nothing)
+    planned_ssh = String[h[1] for h in hosts]
+    try
+        bind_map_ref[] = hosts_file_bind_overrides(
+            parsed.cli_session;
+            bind_overrides = get(parsed, :bind_overrides, Dict{String, String}()),
+            planned_hosts = planned_ssh,
+            command = :drive,
+        )
+        if !isempty(planned_ssh)
+            ssh_launch_plans_ref[] = validate_all_host_launch_plans!(planned_ssh, bind_map_ref[])
+        end
+    catch e
+        e isa ArgumentError || rethrow()
+        surface === :cli &&
+            throw(DistSSHBase.CliUsageError(_bind_config_cli_message(e.msg)))
+        rethrow()
+    end
     try
         if !isempty(host_names)
             # Selection uses --run-id / deploy record / git (setup deploys first).
@@ -666,7 +691,10 @@ function _run_drive_parsed_locked!(
             _drive_kit_hosts_around_join!(hosts, kit_out, kit_log) do
                 hosts_joined, report = add_drive_workers!(
                     hosts, head_workers, default_workers, julia_exe, proj_dir, script_path,
-                    project_root,
+                    project_root;
+                    bind_overrides = bind_map_ref[],
+                    launch_plans = ssh_launch_plans_ref[],
+                    run_id = get(parsed, :run_id, nothing),
                 )
                 launch_report[] = report
                 return hosts_joined

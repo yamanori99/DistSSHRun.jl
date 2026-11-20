@@ -27,8 +27,6 @@ using Unicode
 #   argv wrappers `go` / `drive` stay unexported (`main` / tests)
 export worker_pmap
 export worker_seed
-export job_item_seed
-export seed_mix
 export LaunchReport
 export WorkerLaunchOutcome
 export LaunchIncompleteError
@@ -38,6 +36,8 @@ export launch_report_failures
 export launch_report_usable
 export launch_rank
 export SEED_SCHEME
+export seed_mix
+export job_item_seed
 export DistSSHSession
 export HostResult
 export SyncResult
@@ -56,8 +56,6 @@ export PipelineResult
 export sync!
 export instantiate!
 export setup!
-export doctor!
-export DoctorReport
 export pool!
 export ResourcePool
 export HostInventory
@@ -95,7 +93,6 @@ export drive_host_status
 export parse_go_args
 export parse_drive_args
 export parse_ride_args
-export parse_doctor_args
 export ssh_opts
 export run_on_host
 export resolve_controller_julia
@@ -109,6 +106,7 @@ export julia_default_sysimage_path
 export julia_sysimage_is_default
 export resolve_pkg_env
 export explain_script_not_found
+public DoctorReport, doctor!, parse_doctor_args
 # Display helpers stay public and are not exported. DistSSHKit 0.11 drops them.
 public print_pool
 public print_hostinfo
@@ -142,8 +140,8 @@ end
 include(joinpath(@__DIR__, "..", "lib", "DistSSHBase", "src", "DistSSHBase.jl"))
 include("DistSSHRun/up_module.jl")
 using .DistSSHBase
-import .DistSSHBase: manifest_path
-public manifest_path
+import .DistSSHBase: join_explained_message, manifest_path
+public join_explained_message, manifest_path
 import .DistSSHBase:
     current_project_file,
     julia_default_sysimage_path,
@@ -158,7 +156,7 @@ using .DistSSHBase: CliCursor, HostFacts, HostResult, OUTPUT_WIDTH, PARENT_HOST_
     _path_is_under, _path_under_resolved, _print_colored, _remote_julia_path_sh,
     _remote_shell_path_word, _remote_shell_status, _remote_shell_status_parts,
     _rethrow_missing_host_tool, _scp_cmd, _ssh_cmd, _ssh_exe,
-    _ssh_host_args, _test_double_julia_argv, _test_doubles_on, _throw_if_nonposix_shell,
+    _ssh_host_connection_args, _test_double_julia_argv, _test_doubles_on, _throw_if_nonposix_shell,
     _truncate_ssh_message,
     cli_at_end, cli_consume!, cli_current, cli_entry, cli_heading, cli_m, cli_m_project,
     cli_match, cli_take_value!, clone_url_from_local_origin, collect_host_facts, detect_julia_path,
@@ -168,14 +166,16 @@ using .DistSSHBase: CliCursor, HostFacts, HostResult, OUTPUT_WIDTH, PARENT_HOST_
     format_placement_token, get_remote_git_hash,
     get_remote_julia_version_full,
     git_work_tree,
+    hosts_file_is_toml,
     is_sigint, join_explained_message, looks_like_path_host, normalize_git_clone_url,
-    parse_placement_token, posix_quote, project_package_name,
+    parse_placement_token, posix_quote, project_driver_package_name, project_package_name,
     read_hosts_file, read_hosts_file_lines, read_machine_file_lines,
+    read_toml_host_entries,
     remote_delete_root, remote_deploy_root, remote_env_project_root, remote_git_clone_dest,
     remote_layout_path, resolve_host_path_abs,
     resolve_remote_julia, resolve_remote_project_root, rule_line, shield_sigint,
     split_hosts_csv, split_worker_token, ssh_addprocs_machine, summarize_ssh_error,
-    throw_legacy_placement_token, throw_removed_local_flag, use_colors, validate_ssh_host,
+    throw_legacy_placement_token, throw_removed_local_flag, toml_host_ssh_dest, use_colors, validate_ssh_host,
     with_cli_entry,
     without_cancel
 using .DistSSHUp: julia_version_mismatch_kind, juliaup_add_host!, juliaup_align_host!,
@@ -194,6 +194,7 @@ include("DistSSHRun/infra/run_transfer_removed.jl")
 include("DistSSHRun/infra/remote.jl")
 include("DistSSHRun/infra/launch_report.jl")
 include("DistSSHRun/infra/launch.jl")
+include("DistSSHRun/infra/bind_contract.jl")
 include("DistSSHRun/infra/topology.jl")
 include("DistSSHRun/infra/component_id.jl")
 include("DistSSHRun/infra/mismatch.jl")
