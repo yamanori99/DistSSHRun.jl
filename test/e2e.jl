@@ -1050,7 +1050,6 @@ end
                     """,
                 )
                 bind_out = joinpath(bind_dir, "e2e-bind-drive-out")
-                mkpath(bind_out)
                 bind_env = _drive_host_env(
                     proj;
                     extra_env = merge(_e2e_base_env(), Dict("DISTSSH_QUIET" => "0")),
@@ -1540,6 +1539,7 @@ end
             host = hosts[1]
             pat_q = DistSSHRun.DistSSHBase._remote_sh_quote(_E2E_JULIA_WORKER_PGREP_PATTERN)
             _ssh_e2e_ssh(host, "pkill -f $pat_q || true")
+            term_out = mktempdir()
             kp = withenv(_e2e_base_env()...) do
                 DistSSHRun.execute!(
                     :drive,
@@ -1547,14 +1547,16 @@ end
                     ["1*$(host)"];
                     project = proj,
                     remote = remote_root,
+                    output_dir = term_out,
                     detached = true,
                     quiet = true,
                     job_id = "e2e-drive-term"
                 )
             end
-            out = kp.output_dir
-            @test out isa AbstractString
-            hosts_path = joinpath(String(out), "kit.hosts")
+            out_dir = kp.output_dir
+            @test out_dir !== nothing
+            out = String(out_dir)
+            hosts_path = joinpath(out, "kit.hosts")
             hosts_ready = false
             t0h = time()
             while (time() - t0h) < 90
@@ -1565,9 +1567,9 @@ end
                 process_running(kp.process) || break
                 sleep(0.5)
             end
-            listed = hosts_ready ? DistSSHRun._read_kit_hosts(String(out)) : String[]
+            listed = hosts_ready ? DistSSHRun._read_kit_hosts(out) : String[]
             function _kit_snip(name)
-                p = joinpath(String(out), name)
+                p = joinpath(out, name)
                 isfile(p) || return ""
                 text = strip(read(p, String))
                 return last(text, min(length(text), 800))
