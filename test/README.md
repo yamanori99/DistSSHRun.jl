@@ -162,6 +162,14 @@ julia -e '
 '
 ```
 
+## Real host
+
+Manual developer smoke on **your** SSH machines (lab Mac minis, or the
+docker-ssh / apple-container workers as a dry run). Not CI and not
+`test/e2e.jl`.
+
+[`testenv/real-host/README.md`](../testenv/real-host/README.md)
+
 ## SSH E2E
 
 Two Linux workers. `DISTSSH_SSH_E2E=1`.
