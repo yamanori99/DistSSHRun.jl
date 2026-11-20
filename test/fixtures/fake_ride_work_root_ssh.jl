@@ -21,6 +21,10 @@ if strip(script) == "echo \$SHELL"
     println("/bin/sh")
     exit(0)
 end
+if strip(script) == "echo ok" || strip(script) == "true"
+    println("ok")
+    exit(0)
+end
 if script == "cd -P ~ && pwd -P"
     println("/home/dev")
     exit(0)

@@ -723,6 +723,7 @@ function _go_run_remote_slot!(
     scp_failed = false
     try
         remote_ec = string(rstrip(remote_root, '/'), "/", slot_rel, "/go.exitcode")
+        DistSSHBase._ensure_posix_login_shell!(String(host))
         _, remote_spec = DistSSHBase._scp_remote_file_spec(host, remote_ec)
         run_ssh(
             pipeline(
@@ -789,6 +790,7 @@ function _go_fetch_slot_provenance!(
     mkpath(local_dir)
     local_snap = joinpath(local_dir, _GO_SLOT_PROVENANCE_NAME)
     try
+        DistSSHBase._ensure_posix_login_shell!(String(host))
         _, remote_spec = DistSSHBase._scp_remote_file_spec(host, remote_snap)
         run_ssh(
             pipeline(

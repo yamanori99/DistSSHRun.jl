@@ -164,7 +164,7 @@ const _SSH_PHASE_ALIVE_INTERVAL = 5
 const _SSH_PHASE_ALIVE_COUNT = 1
 
 """
-Wall-clock limit for one kit-owned `ssh` / `scp` session (connect plus auth).
+Wall-clock limit for the **first** short POSIX probe on a host (connect plus auth).
 
 `DISTSSH_WAIT_SSH_AUTH` overrides the default (`ConnectTimeout` + margin).
 """
@@ -218,26 +218,52 @@ function _ssh_auth_timeout_error(seconds::Real)
     )
 end
 
-"""Wait on a kit-started `ssh` child, or kill it when auth exceeds the budget."""
+"""Wait on a kit-started `ssh` child until it exits (no Julia-side kill)."""
 function ssh_wait_process!(proc::Base.Process)::Base.Process
+    Base.wait(proc)
+    return proc
+end
+
+function _ssh_cmd_for_ignorestatus(cmd)::Cmd
+    while cmd isa Base.CmdRedirect
+        cmd = cmd.cmd
+    end
+    cmd isa Cmd || error("internal: run_ssh expects Cmd or CmdRedirect")
+    return cmd
+end
+
+function _ssh_run_throws_on_failure(cmd)::Bool
+    return !_ssh_cmd_for_ignorestatus(cmd).ignorestatus
+end
+
+"""
+Run one kit-owned `ssh` / `scp` command and wait until the child exits.
+
+Uses the same stdio and `ignorestatus` rules as `Base.run`: a non-zero exit
+throws `ProcessFailedException` unless the root `Cmd` was built with
+`ignorestatus`. The Julia-side auth budget applies only to the first short
+POSIX login-shell probe per host (cached for the process), not to every session.
+"""
+function run_ssh(cmd; wait::Bool = true)::Base.Process
+    proc = run(cmd; wait = false)
+    wait || return proc
+    Base.wait(proc)
+    if _ssh_run_throws_on_failure(cmd) && !Base.success(proc)
+        throw(Base.ProcessFailedException(Base.Process[proc]))
+    end
+    return proc
+end
+
+"""First SSH probe on a host: bounded by [`ssh_auth_timeout_seconds`](@ref)."""
+function _run_ssh_auth_bounded(cmd)::Base.Process
+    proc = run(cmd; wait = false)
     seconds = ssh_auth_timeout_seconds()
     if timedwait(() -> process_exited(proc), Float64(seconds); pollint = 0.05) !== :ok
         _ssh_kill_local!(proc)
         throw(_ssh_auth_timeout_error(seconds))
     end
+    Base.wait(proc)
     return proc
-end
-
-"""
-Run one kit-owned `ssh` or `scp` pipeline with a Julia-side auth-phase timeout.
-
-When `wait` is true and the child does not exit before [`ssh_auth_timeout_seconds`](@ref),
-the local process is killed and an `ArgumentError` names the budget.
-"""
-function run_ssh(cmd; wait::Bool = true)::Base.Process
-    proc = run(pipeline(cmd); wait = false)
-    wait || return proc
-    return ssh_wait_process!(proc)
 end
 
 """Run `_ssh_cmd(argv)` and return captured stdout (stderr to `devnull` by default)."""
@@ -828,6 +854,7 @@ function run_on_host(
     )::Base.Process
     h = String(strip(host))
     isempty(h) && throw(ArgumentError("run_on_host: host must be non-empty"))
+    _ensure_posix_login_shell!(h)
     inner = _run_on_host_remote_sh(argv; julia = julia, detect = detect)
     _, port = parse_ssh_endpoint(h)
     args = ssh_forwarded_opts(explicit_port = port, request_tty = tty)
@@ -1607,15 +1634,18 @@ function _remote_shell_capture(
     out_buf = IOBuffer()
     err_buf = IOBuffer()
     proc = try
-        run_ssh(
+        _run_ssh_auth_bounded(
             pipeline(
                 ignorestatus(_host_sync_remote_shell_cmd(host, script));
                 stdout = out_buf,
                 stderr = err_buf,
-            );
-            wait = true,
+            ),
         )::Base.Process
-    catch
+    catch e
+        if e isa ArgumentError
+            msg = sprint(showerror, e)
+            occursin("SSH timed out after", msg) && rethrow()
+        end
         return nothing
     end
     process_exited(proc) || return nothing
