@@ -148,7 +148,7 @@ the selected remote stamp. A local last-ship record without a matching
 when selection cannot probe, then fails closed if the run id is invalid. `--rsync` was removed in 0.2.0. Workers `--project=` that tree.
 `pack_ship_tree`, `pack_shipment`, and `ship_project_to_dest` send the same
 verified tar as worker ship to a caller-chosen remote directory (DistSSHQueue
-uses this for client→qhost staging). They do not create `runs/`, write Run
+can call this for client→qhost staging). They do not create `runs/`, write Run
 `run.toml`, or instantiate. Pass an explicit `transfer_id` when the consumer
 needs a stage job id in `shipment.toml`; use `ShipmentReceipt.content_tree_hash`
 as the shipped-tree id (not lexical-latest under the stage parent).

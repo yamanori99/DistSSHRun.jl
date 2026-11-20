@@ -26,7 +26,6 @@ if !isdefined(Main, :TEST_PROJECT)
     end
 end
 
-using Random
 using Test
 using Distributed
 using Logging
@@ -264,13 +263,13 @@ const _E2E_QUEUE_STAGE_PARENT = "~/.distsshqueue/stage"
 function _e2e_reserve_queue_stage_dest!(host::AbstractString)::String
     h = String(host)
     pq = DistSSHRun.DistSSHBase._remote_shell_path_word(_E2E_QUEUE_STAGE_PARENT)
-    code, _ = _ssh_e2e_ssh(h, "mkdir -p $pq")
-    code == 0 || error("could not create Queue stage parent on $h")
+    proc, _ = _ssh_e2e_ssh(h, "mkdir -p $pq")
+    proc.exitcode == 0 || error("could not create Queue stage parent on $h")
     for _ in 1:8
         dest = string(_E2E_QUEUE_STAGE_PARENT, "/e2e-", bytes2hex(rand(UInt8, 8)))
         dq = DistSSHRun.DistSSHBase._remote_shell_path_word(dest)
-        code, _ = _ssh_e2e_ssh(h, "mkdir $dq")
-        code == 0 && return dest
+        proc, _ = _ssh_e2e_ssh(h, "mkdir $dq")
+        proc.exitcode == 0 && return dest
     end
     error("could not reserve unique Queue stage dest on $h")
 end

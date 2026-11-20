@@ -144,7 +144,7 @@ end
                 @test basename(mp) == ver
                 rel = replace(relpath(mp, tmp), '\\' => '/')
                 @test rel in DistSSHRun.DistSSHShip.pack_entry_paths(tmp)
-                @test rel in pack.forced_ignore_ship || rel in DistSSHRun.ship_send_list(tmp)
+                @test rel in DistSSHRun.ship_send_list(tmp)
             finally
                 rm(pack.directory; force = true, recursive = true)
             end
@@ -163,9 +163,7 @@ end
                     withenv(
                         merge(
                             _fake_arbitrary_dest_ship_env(state),
-                            Dict(
-                                "DISTSSH_TEST_EXPECT_TREE_HASH" => "0"^40,
-                            )
+                            Dict("DISTSSH_TEST_EXPECT_TREE_HASH" => "0"^40),
                         )...
                     ) do
                         result = DistSSHRun.pack_shipment(
