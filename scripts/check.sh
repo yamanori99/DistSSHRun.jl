@@ -267,7 +267,10 @@ if [[ "${CHECK_VERBOSE}" != 1 ]]; then
     gate_fail_show "lint ${_lint_fail}" "${_lint_log}" 1
   fi
   rm -f "${_lint_log}"
-  gate_ok "lint" "($(IFS=', '; echo "${lint_names[*]}"))" "$((SECONDS - _lint_start))"
+  local lint_label
+  lint_label="$(printf '%s, ' "${lint_names[@]}")"
+  lint_label="${lint_label%, }"
+  gate_ok "lint" "(${lint_label})" "$((SECONDS - _lint_start))"
 fi
 
 gate_capture "docs static" "${ROOT}/scripts/docs.sh" static
