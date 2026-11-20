@@ -87,7 +87,8 @@ julia --project=. --startup-file=no -e 'using InteractiveUtils; versioninfo()'
 julia --project=. --startup-file=no -m DistSSHRun hostinfo --verbose --hosts "$HOSTS"
 ```
 
-**Success:** exit 0; one block per host (Julia path, OS, CPU, RAM).  
+**Success:** exit 0; one block per host (Julia path, OS, CPU, RAM).
+
 **If it fails:** fix SSH config, keys, or Julia on the worker before shipping.
 
 ## 3. `setup ship-tree`
