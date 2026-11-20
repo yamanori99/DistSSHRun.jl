@@ -528,11 +528,18 @@ function comments_on(src, a, b)
     return [text for (la, lb, text) in comment_tokens(src) if !(lb < a || la > b)]
 end
 
+const issue_lookup = Ref(true)
+
 function issue_is_open(n::Int)
+    issue_lookup[] || return true
     get(ENV, "GITHUB_ACTIONS", "") == "true" || return true
     repo = get(ENV, "GITHUB_REPOSITORY", "")
     isempty(repo) && die("GITHUB_REPOSITORY is unset")
-    out = read(`gh api repos/$(repo)/issues/$(n) --jq .state`, String)
+    out = try
+        read(`gh api repos/$(repo)/issues/$(n) --jq .state`, String)
+    catch
+        die("could not read issue #$(n) state")
+    end
     return strip(out) == "open"
 end
 
@@ -708,6 +715,23 @@ function lint_new_comments(root, files)
 end
 
 function self_test()
+    issue_lookup[] = false
+    try
+        return self_test_body()
+    finally
+        issue_lookup[] = true
+    end
+end
+
+function self_test_body()
+    withenv(
+        "GITHUB_ACTIONS" => "true",
+        "GITHUB_REPOSITORY" => "nobody/no-such-distssh-repo",
+        "GH_TOKEN" => "invalid",
+        "GITHUB_TOKEN" => "invalid",
+    ) do
+        issue_is_open(1) || die("self-test: issue lookup ran")
+    end
     src = """
     # fine for now
     s = \"# fine for now\"
