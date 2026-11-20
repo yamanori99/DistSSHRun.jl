@@ -93,6 +93,33 @@ end
 
 added_lines(h::Hunk) = h.newlen == 0 ? Set{Int}() : Set(h.newstart:(h.newstart + h.newlen - 1))
 
+function added_lines(hunks::Vector{Hunk})
+    out = Set{Int}()
+    for h in hunks
+        union!(out, added_lines(h))
+    end
+    return out
+end
+
+function register_diff_header!(files::Dict{String, Vector{Hunk}}, line::AbstractString, path::String)
+    m = match(r"^diff --git a/(.+) b/\1$", line)
+    if m !== nothing
+        c1 = m.captures[1]
+        c1 === nothing && return path
+        p = String(c1)
+        get!(files, p, Hunk[])
+        return p
+    end
+    m2 = match(r"^diff --git a/(\S+) b/(\S+)$", line)
+    m2 === nothing && return path
+    c1, c2 = m2.captures[1], m2.captures[2]
+    (c1 === nothing || c2 === nothing) && return path
+    get!(files, String(c1), Hunk[])
+    p = String(c2)
+    get!(files, p, Hunk[])
+    return p
+end
+
 function parse_diff(diff::AbstractString)
     files = Dict{String, Vector{Hunk}}()
     path = ""
@@ -100,7 +127,13 @@ function parse_diff(diff::AbstractString)
     for line in eachsplit(diff, '\n')
         if startswith(line, "diff --git ")
             cur = nothing
+            path = register_diff_header!(files, line, path)
             continue
+        elseif startswith(line, "rename from ")
+            get!(files, String(line[13:end]), Hunk[])
+        elseif startswith(line, "rename to ")
+            path = String(line[11:end])
+            get!(files, path, Hunk[])
         elseif startswith(line, "--- a/")
             path = line[7:end]
         elseif startswith(line, "+++ b/")
@@ -164,7 +197,7 @@ function lint_banned(root, files)
     n = 0
     for (path, hunks) in files
         skipped_path(path) && continue
-        added = union((added_lines(h) for h in hunks)...)
+        added = added_lines(hunks)
         isempty(added) && continue
         full = joinpath(root, path)
         isfile(full) || continue
@@ -219,7 +252,7 @@ function lint_ssh_argv(root, files)
     n = 0
     for (path, hunks) in files
         ssh_scan_path(path) || continue
-        added = union((added_lines(h) for h in hunks)...)
+        added = added_lines(hunks)
         isempty(added) && continue
         full = joinpath(root, path)
         isfile(full) || continue
@@ -256,7 +289,7 @@ function lint_aqua_run(root, files)
     n = 0
     for (path, hunks) in files
         startswith(path, ".github/workflows/") && endswith(path, ".yml") || continue
-        added = union((added_lines(h) for h in hunks)...)
+        added = added_lines(hunks)
         isempty(added) && continue
         full = joinpath(root, path)
         isfile(full) || continue
@@ -358,7 +391,7 @@ end
 function lint_agents(root, files)
     hunks = get(files, "AGENTS.md", Hunk[])
     isempty(hunks) && return 0
-    added = union((added_lines(h) for h in hunks)...)
+    added = added_lines(hunks)
     isempty(added) && return 0
     src = read(joinpath(root, "AGENTS.md"), String)
     lines = split(src, '\n'; keepempty = true)
@@ -450,9 +483,31 @@ function require_open_issues(src, a, b, path)
     return nerr
 end
 
+function test_macro_name(node)
+    numchildren(node) < 1 && return nothing
+    head = node[1]
+    if kind(head) == K"."
+        numchildren(head) >= 2 || return nothing
+        return sourcetext(head[2])
+    end
+    return sourcetext(head)
+end
+
+function macro_touches_added(src, node, added)
+    isempty(added) && return false
+    r = byte_range(node)
+    a = line_of(src, Int(first(r)))
+    b = line_of(src, Int(last(r)))
+    for line in a:b
+        line in added && return true
+    end
+    return false
+end
+
 function check_skip_macro(node, src, path)
     numchildren(node) < 1 && return 0
-    name = sourcetext(node[1])
+    name = test_macro_name(node)
+    name === nothing && return 0
     name in ("test", "test_skip", "test_broken") || return 0
     r = byte_range(node)
     a = line_of(src, Int(first(r)))
@@ -503,18 +558,14 @@ function lint_skips(root, files, src_for_path)
     for (path, hunks) in files
         endswith(path, ".jl") || continue
         skipped_path(path) && continue
-        added = union((added_lines(h) for h in hunks)...)
+        added = added_lines(hunks)
         isempty(added) && continue
         src = src_for_path(path)
         tree = parse_tree(src)
         function walk(node, inside_fn)
             k = kind(node)
-            if k == K"macrocall" && !inside_fn
-                r = byte_range(node)
-                line = line_of(src, Int(first(r)))
-                if line in added
-                    n += check_skip_macro(node, src, path)
-                end
+            if k == K"macrocall" && !inside_fn && macro_touches_added(src, node, added)
+                n += check_skip_macro(node, src, path)
             end
             next = inside_fn || k == K"function" || k == K"->"
             for i in 1:numchildren(node)
@@ -527,12 +578,12 @@ function lint_skips(root, files, src_for_path)
     return n
 end
 
-function _comment_tokens_or_empty(src::AbstractString)
+function deleted_doc_covers(src::AbstractString)
     try
-        return comment_tokens(src)
+        return doc_covers(src)
     catch e
         e isa JuliaSyntax.ParseError || rethrow()
-        return Tuple{Int, Int, String}[]
+        return UnitRange{Int}[]
     end
 end
 
@@ -540,14 +591,23 @@ function deleted_bodies(h::Hunk)
     bodies = Set{String}()
     isempty(h.deleted) && return bodies
     src = join(h.deleted, '\n') * '\n'
-    tokens = _comment_tokens_or_empty(src)
-    if isempty(tokens)
-        for line in h.deleted
-            append!(tokens, _comment_tokens_or_empty(line * '\n'))
-        end
+    docs = deleted_doc_covers(src)
+    toks = collect(tokenize(src))
+    for tok in toks
+        kind(tok) == K"Comment" || continue
+        r = Int(first(tok.range)):Int(last(tok.range))
+        isempty(r) && continue
+        in_doc(docs, first(r)) && continue
+        push!(bodies, comment_body(untokenize(tok, src)))
     end
-    for (_, _, text) in tokens
-        push!(bodies, comment_body(text))
+    if any(tok -> JuliaSyntax.is_error(kind(tok)), toks)
+        for line in h.deleted
+            line_src = line * '\n'
+            for tok in tokenize(line_src)
+                kind(tok) == K"Comment" || continue
+                push!(bodies, comment_body(untokenize(tok, line_src)))
+            end
+        end
     end
     return bodies
 end
@@ -630,11 +690,20 @@ function self_test()
     @test_broken \"needs a number\"
     @test g() skip=(VERSION < v\"1.14\")
     @test h() skip=true
+    Test.@test j() skip=true
     @test i() broken=true #1
     function helper()
         @test_broken \"inside helper\"
     end
     """
+    for qsrc in (
+            "Test.@test_skip \"git not in PATH\"\n",
+            "Main.Test.@test_skip \"git not in PATH\"\n",
+            "@Test.test_skip \"git not in PATH\"\n",
+        )
+        test_macro_name(parse_tree(qsrc)[1]) == "test_skip" ||
+            die("self-test: qualified macro name $(qsrc)")
+    end
     tree2 = parse_tree(skip_src)
     errs = Ref(0)
     function walk2(node, inside)
@@ -648,7 +717,19 @@ function self_test()
         return
     end
     walk2(tree2, false)
-    errs[] == 3 || die("self-test: skip errors $(errs[])")
+    errs[] == 4 || die("self-test: skip errors $(errs[])")
+    ml = """
+    @test long() begin
+        1
+    end skip=true
+    """
+    h = Hunk(1, 2, 3, 1, String[])
+    lint_skips("", Dict("t.jl" => [h]), path -> path == "t.jl" ? ml : "") == 1 ||
+        die("self-test: multiline skip on added tail line")
+    ml_untouched = ml * "x = 1\n"
+    h_after = Hunk(4, 0, 4, 1, String[])
+    lint_skips("", Dict("t.jl" => [h_after]), path -> path == "t.jl" ? ml_untouched : "") == 0 ||
+        die("self-test: untouched multiline skip flagged")
     docsrc = "\"\"\"\ndoc\n\"\"\"\nf() = 1\n"
     ranges = doc_line_ranges(docsrc)
     length(ranges) == 1 && 1 in ranges[1] && 3 in ranges[1] && !(4 in ranges[1]) || die("self-test: doc lines $(ranges)")
@@ -715,6 +796,54 @@ function self_test()
     deleted_bodies(split_for) == Set{String}() || die("self-test: split for")
     moved = Hunk(1, 2, 1, 1, String["for (k, v) in xs()", "# moved note"])
     "moved note" in deleted_bodies(moved) || die("self-test: deleted comment")
+    partial = Hunk(1, 1, 1, 1, String["for (k, v) in xs()  # partial inline"])
+    "partial inline" in deleted_bodies(partial) || die("self-test: partial deleted comment")
+    del_doc = Hunk(1, 5, 1, 1, String["\"\"\"", "doc", "# inside doc \$(1 # doc interp\n)", "\"\"\"", "f() = 1"])
+    isempty(deleted_bodies(del_doc)) || die("self-test: docstring treated as deleted comment")
+    del_mstr = Hunk(1, 3, 1, 1, String["s = \"\"\"", "# inside string", "\"\"\""])
+    isempty(deleted_bodies(del_mstr)) || die("self-test: multiline string treated as deleted comment")
+    del_mid_str = Hunk(1, 2, 1, 1, String["end\"\"\"", "x = 1 # after split string"])
+    "after split string" in deleted_bodies(del_mid_str) || die("self-test: comment after split string")
+    bin = """
+    diff --git a/docs/preview.png b/docs/preview.png
+    Binary files a/docs/preview.png and b/docs/preview.png differ
+    """
+    bin_files = parse_diff(bin)
+    doc_touch_files(bin_files, _ -> "", _ -> "") || die("self-test: binary docs path")
+    lint_banned("", bin_files) == 0 || die("self-test: binary lint_banned")
+    lint_skips("", bin_files, _ -> "") == 0 || die("self-test: binary lint_skips")
+    bin_rename = """
+    diff --git a/docs/old.png b/other/old.png
+    similarity index 100%
+    rename from docs/old.png
+    rename to other/old.png
+    """
+    doc_touch_files(parse_diff(bin_rename), _ -> "", _ -> "") || die("self-test: binary docs rename")
+    mktempdir() do tmp
+        git(args...) = run(
+            pipeline(
+                `git -C $tmp -c user.name=t -c user.email=t@e -c commit.gpgsign=false $args`;
+                stdout = devnull,
+                stderr = devnull,
+            ),
+        )
+        git("init", "-b", "main")
+        write(joinpath(tmp, "f.jl"), "x = 1\n\"\"\"\ndoc\n\"\"\"\nf() = 2\n")
+        git("add", "f.jl")
+        git("commit", "-m", "base")
+        git("checkout", "-b", "feat")
+        write(joinpath(tmp, "f.jl"), "x = 1\nf() = 2\n")
+        git("commit", "-am", "drop doc")
+        git("checkout", "main")
+        write(joinpath(tmp, "f.jl"), "a = 1\nb = 2\nc = 3\nd = 4\nx = 1\n\"\"\"\ndoc\n\"\"\"\nf() = 2\n")
+        git("commit", "-am", "advance main")
+        main_sha = strip(read(`git -C $tmp rev-parse main`, String))
+        git("update-ref", "refs/remotes/origin/main", main_sha)
+        git("checkout", "feat")
+        lines_hit_doc(show_file(tmp, "f.jl"; ref = "origin/main"), Set(2:4)) &&
+            die("self-test: origin/main tip unexpectedly hit doc")
+        doc_touch(tmp) || die("self-test: doc_touch merge-base")
+    end
     println("self-test: passed")
     return 0
 end
@@ -751,16 +880,24 @@ function lines_hit_doc(src::AbstractString, lines)
     return any(line -> any(r -> line in r, ranges), lines)
 end
 
-function show_file(root::AbstractString, path::AbstractString)
+function merge_base_ref(root::AbstractString)
     try
-        return read(`git -C $root show origin/main:$path`, String)
+        return strip(read(`git -C $root merge-base origin/main HEAD`, String))
+    catch
+        return "origin/main"
+    end
+end
+
+function show_file(root::AbstractString, path::AbstractString; ref::Union{Nothing, AbstractString} = nothing)
+    ref = ref === nothing ? merge_base_ref(root) : String(ref)
+    try
+        return read(`git -C $root show $(ref):$path`, String)
     catch
         return ""
     end
 end
 
-function doc_touch(root::AbstractString)
-    files = parse_diff(git_diff(root))
+function doc_touch_files(files::Dict{String, Vector{Hunk}}, read_new, read_old)
     for path in keys(files)
         startswith(path, "docs/") && return true
     end
@@ -772,12 +909,20 @@ function doc_touch(root::AbstractString)
             union!(new_lines, line_span(h.newstart, h.newlen))
             union!(old_lines, line_span(h.oldstart, h.oldlen))
         end
-        new_src = isfile(joinpath(root, path)) ? read(joinpath(root, path), String) : ""
-        if lines_hit_doc(new_src, new_lines) || lines_hit_doc(show_file(root, path), old_lines)
+        if lines_hit_doc(read_new(path), new_lines) || lines_hit_doc(read_old(path), old_lines)
             return true
         end
     end
     return false
+end
+
+function doc_touch(root::AbstractString)
+    base = merge_base_ref(root)
+    return doc_touch_files(
+        parse_diff(git_diff(root)),
+        path -> isfile(joinpath(root, path)) ? read(joinpath(root, path), String) : "",
+        path -> show_file(root, path; ref = base),
+    )
 end
 
 function percent_decode(s::AbstractString)
