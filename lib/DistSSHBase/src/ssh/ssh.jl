@@ -173,7 +173,7 @@ end
 
 """OpenSSH flags for parallel short remote phases (`kill`, tagged `pkill`).
 
-Forced `-o` tokens are placed before [`ssh_forwarded_opts`](@ref) so they win over
+Forced `-o` tokens are placed before forwarded user opts so they win over
 `DISTRIBUTED_SSH_OPTS` (OpenSSH uses the first value per option name).
 """
 function ssh_phase_argv(;
