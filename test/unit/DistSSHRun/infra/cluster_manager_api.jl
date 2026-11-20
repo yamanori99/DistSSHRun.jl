@@ -41,6 +41,8 @@ const _CLUSTER_MANAGER_PUBLIC_UNEXPORTED = (
     :DriveJobOptions,
     :resolved_placement_tokens,
     :HostLaunchPlan,
+    :launch_bind_host_key,
+    :validate_all_host_launch_plans!,
 )
 
 const _TOPOLOGY_BIND_INTERNAL = (

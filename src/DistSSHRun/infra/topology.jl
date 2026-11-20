@@ -115,8 +115,8 @@ end
 """
 Per-host SSH launch view (bind address, tunnel flag, resolved topology).
 
-Field names are API for 0.2.0: `host`, `bind`, `tunnel`, `topology`
-(`:master_worker` or `:all_to_all`; the symbol passed to `Distributed.addprocs`).
+Field names are API for 0.2.0: `host`, `bind`, `tunnel`, `topology`.
+`topology` is always `:master_worker` from [`topology_for_launch`](@ref) today.
 `bind` is the canonical IPv4 literal passed to Distributed; dry-run decorates
 `0.0.0.0` via `bind_dry_run_display`.
 """

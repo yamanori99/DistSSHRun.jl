@@ -113,10 +113,14 @@ with_unsafe_expose_port
 with_unsafe_all_to_all
 DriveJobOptions
 HostLaunchPlan
+launch_bind_host_key
+validate_all_host_launch_plans!
 ```
 
 [`HostLaunchPlan`](@ref) records per-host `host`, `bind`, `tunnel`, and `topology`
-for dry-run and launch; bind resolution helpers are internal.
+for dry-run and launch. [`launch_bind_host_key`](@ref) and
+[`validate_all_host_launch_plans!`](@ref) are public (not exported) entry points
+for the same contract; other bind merge and override helpers stay internal.
 
 Controller [`result_provenance`](@ref) / `run.toml` records launch under
 `provenance.launch` (`planned`, `joined`, `failures` with the same keys as
@@ -259,7 +263,7 @@ Filter = function (x)
         :unsafe_skip_env_digests_active, :unsafe_expose_port_active, :unsafe_all_to_all_active,
         :unsafe_skip_env_digests_argv, :with_run_unsafe_options!, :with_unsafe_skip_env_digests,
         :with_unsafe_expose_port, :with_unsafe_all_to_all, :DriveJobOptions,
-        :HostLaunchPlan,
+        :HostLaunchPlan, :launch_bind_host_key, :validate_all_host_launch_plans!,
         :pipeline!, :PipelineConfig, :PipelineResult, :pipeline_config_from_env,
         :report_pipeline_errors,
         :collect!, :CollectResult,
