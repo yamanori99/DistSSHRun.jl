@@ -201,7 +201,7 @@ section "check: jetls ${jetls_pin}"
 JULIA_APPS_JULIA_CMD="${JULIA_BIN}" "${ROOT}/.github/jetls-check.sh" --progress=none
 section "check: jetls ok"
 
-for lint in banned-words agents-md skip-reasons new-comments stdlib-compat; do
+for lint in banned-words agents-md skip-reasons new-comments stdlib-compat ssh-argv; do
   script="${ROOT}/scripts/lint/${lint}.sh"
   if [[ ! -x "${script}" ]]; then
     die "missing ${script#"${ROOT}/"}"
