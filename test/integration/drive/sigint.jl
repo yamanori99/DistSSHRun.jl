@@ -110,6 +110,7 @@ end
             _leak_guard_tag("integration/drive/sigint.jl");
             label = "drive second SIGINT",
             broken = true,
+            broken_rows = _leak_guard_known_worker_orphan,
         )
     end
 end
