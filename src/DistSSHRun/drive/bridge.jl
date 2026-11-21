@@ -1,3 +1,74 @@
+function _reject_drive_isolated_api!(
+        isolated::Bool,
+        session::DistSSHSession,
+        bind_overrides::AbstractDict{<:AbstractString, <:AbstractString},
+    )
+    isolated || return nothing
+    session.cli_session.hosts_file !== nothing &&
+        throw(ArgumentError(drive_isolated_hosts_file_message()))
+    !isempty(bind_overrides) &&
+        throw(ArgumentError(drive_isolated_bind_overrides_message()))
+    return nothing
+end
+
+function _append_drive_shared_verbosity_argv!(out::Vector{String}, cli_session::CliSharedFlags)
+    cli_session.verbosity_explicit || return nothing
+    cli_session.quiet && push!(out, "--quiet")
+    cli_session.verbosity === :verbose && !cli_session.quiet && push!(out, "--verbose")
+    cli_session.verbosity === :progress && !cli_session.quiet && push!(out, "--progress")
+    return nothing
+end
+
+"""CLI argv for a child `julia -m DistSSHKit drive` from API `drive_parsed_from_session` output."""
+function drive_api_isolated_argv(parsed)::Vector{String}
+    out = String[]
+    push!(out, "--head-workers", string(Int(parsed.head_workers)))
+    for (h, n) in parsed.hosts
+        push!(out, "--hosts", DistSSHBase.format_machine_token(Int(something(n, 1)), h))
+    end
+    get(parsed, :skip_hash_check, true) == false && push!(out, "--require-git")
+    get(parsed, :enable_log, true) == false && push!(out, "--no-log")
+    let v = get(parsed, :log_dir, nothing)
+        v !== nothing && push!(out, "--log-dir", String(v))
+    end
+    let v = get(parsed, :output_dir, nothing)
+        v !== nothing && push!(out, "--output-dir", String(v))
+    end
+    let v = get(parsed, :explicit_package, nothing)
+        v !== nothing && push!(out, "--package", String(v))
+    end
+    let v = get(parsed, :julia, nothing)
+        v !== nothing && push!(out, "--julia", String(v))
+    end
+    let v = get(parsed, :run_id, nothing)
+        v !== nothing && push!(out, "--run-id", String(v))
+    end
+    let v = get(parsed, :deploy_root, nothing)
+        v !== nothing && push!(out, DEPLOY_ROOT_FLAG, String(v))
+    end
+    get(parsed, :best_effort, false) === true && push!(out, "--best-effort")
+    get(parsed, :worker_include, false) === true && push!(out, "--worker-include")
+    for row in options_for_command(:drive)
+        row.cli === nothing && continue
+        get(parsed, row.key, missing) === true && push!(out, row.cli)
+    end
+    _append_drive_shared_verbosity_argv!(out, parsed.cli_session)
+    push!(out, String(parsed.script_path))
+    _append_drive_api_script_args!(out, parsed.script_args)
+    return out
+end
+
+"""Env keys the API isolated child must not read. CLI `--isolated` drops nothing."""
+function _isolated_api_env_drops(parsed)::Vector{String}
+    hasproperty(parsed, :reuse_main) || return String[]
+    drops = String["DISTSSH_HOSTS", "DISTSSH_HOSTS_FILE"]
+    for row in options_for_command(:drive)
+        row.env === nothing && continue
+        get(parsed, row.key, missing) === false && push!(drops, String(row.env))
+    end
+    return drops
+end
+
 """Build a `parse_drive_args`-shaped NamedTuple from a session + options."""
 function drive_parsed_from_session(
         session::DistSSHSession,
@@ -20,8 +91,12 @@ function drive_parsed_from_session(
         unsafe_master_silence_exit::Union{Nothing, Bool} = nothing,
         unsafe_expose_port::Union{Nothing, Bool} = nothing,
         unsafe_all_to_all::Union{Nothing, Bool} = nothing,
+        isolated::Bool = false,
+        reuse_main::Bool = false,
         bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
     )
+    isolated && reuse_main && throw(ArgumentError(drive_isolated_reuse_main_conflict_message()))
+    _reject_drive_isolated_api!(isolated, session, bind_overrides)
     _reject_removed_drive_worker_include_kw!(sync_script)
     _reject_run_transfer_kw!("drive!", sync; surface = hint_surface(session))
     allow_external_symlinks &&
@@ -83,7 +158,8 @@ function drive_parsed_from_session(
         dry_run = missing,
         run_id = snap,
         deploy_root = session.remote,
-        isolated = false,
+        isolated = isolated,
+        reuse_main = reuse_main,
         unsafe_master_silence_exit = unsafe_master_silence_exit === nothing ?
             missing :
             unsafe_master_silence_exit,

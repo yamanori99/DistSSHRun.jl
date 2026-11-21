@@ -45,7 +45,8 @@ end
             skip_hash_check = false,
             output_dir = out_dir,
             julia = joinpath(Sys.BINDIR, Base.julia_exename()),
-            best_effort = true
+            best_effort = true,
+            reuse_main = true
         )
         _with_tempdir() do log_root
             log_path = DistSSHRun.init_log_file(log_root; prefix = "drive_dirty")

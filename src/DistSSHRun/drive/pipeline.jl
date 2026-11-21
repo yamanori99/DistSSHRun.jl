@@ -59,6 +59,8 @@ function pipeline_config_from_env(;
         julia = let j = strip(get(ENV, "JULIA_DISTRIBUTED_EXE", ""))
             isempty(j) || lowercase(j) == "auto" ? nothing : String(j)
         end,
+        isolated = false,
+        reuse_main = false,
     )
 end
 
@@ -216,6 +218,8 @@ function _pipeline_run!(config::PipelineConfig, session::DistSSHSession, driver:
             package = config.package,
             julia = config.julia,
             run_id = config.run_id,
+            isolated = config.isolated,
+            reuse_main = config.reuse_main,
         )
     finally
         if do_collect

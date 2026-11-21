@@ -1011,7 +1011,8 @@ end
                 skip_hash_check = true,
                 output_dir = out,
                 julia = joinpath(Sys.BINDIR, Base.julia_exename()),
-                best_effort = true
+                best_effort = true,
+                reuse_main = true
             )
             err = redirect_stdout(devnull) do
                 redirect_stderr(devnull) do
@@ -1127,7 +1128,8 @@ end
                             project = app,
                             run_id = snap_id,
                             quiet = true,
-                            enable_log = false
+                            enable_log = false,
+                            reuse_main = true
                         )
                     end
                     flush(err_io)
@@ -1170,6 +1172,7 @@ end
                     project = proj,
                     enable_log = false,
                     run_id = rid,
+                    reuse_main = true,
                 )
                 @test result.ok
                 prov = DistSSHRun.assemble_provenance(proj)
@@ -1205,5 +1208,112 @@ end
         rej_kws = Base.kwarg_decl(rej_m)
         @test :run_id in rej_kws
         @test :snapshot ∉ rej_kws
+    end
+
+    @testset "drive! isolated and reuse_main API" begin
+        _with_tempdir() do proj
+            _write_host_project!(proj, "DrvIsoApi")
+            session = DistSSHRun.DistSSHSession(
+                project = proj,
+                workers = String["1*host1"],
+            )
+            script = joinpath(proj, "job.jl")
+            write(script, "1\n")
+            err_both = try
+                DistSSHRun.drive_parsed_from_session(
+                    session,
+                    script;
+                    isolated = true,
+                    reuse_main = true,
+                )
+                nothing
+            catch e
+                e
+            end
+            @test err_both isa ArgumentError
+            @test occursin("reuse_main", err_both.msg)
+            parsed = DistSSHRun.drive_parsed_from_session(
+                session,
+                script;
+                workers = DistSSHRun.WorkerPlan(2, Dict("host1" => 1)),
+                output_dir = joinpath(proj, "out"),
+                skip_hash_check = false,
+                isolated = true,
+            )
+            argv = DistSSHRun.drive_api_isolated_argv(parsed)
+            cli = DistSSHRun.parse_drive_args(argv)
+            @test cli.script_path == script
+            @test cli.head_workers == 2
+            @test cli.output_dir == joinpath(proj, "out")
+            @test cli.skip_hash_check == false
+            @test !cli.isolated
+            @test length(cli.hosts) == 1
+            @test first(cli.hosts)[1] == "host1"
+            withenv("DISTSSH_HOSTS" => "1*host-b") do
+                hosted = DistSSHRun.parse_drive_args(argv)
+                @test length(hosted.hosts) == 1
+                @test first(hosted.hosts)[1] == "host1"
+            end
+            arg_parsed = DistSSHRun.drive_parsed_from_session(
+                session,
+                script;
+                workers = DistSSHRun.WorkerPlan(2, Dict("host1" => 1)),
+                isolated = true,
+                script_args = String["--head-workers", "9", "-q"],
+            )
+            arg_cli = DistSSHRun.parse_drive_args(DistSSHRun.drive_api_isolated_argv(arg_parsed))
+            @test arg_cli.script_args == ["--head-workers", "9", "-q"]
+            @test arg_cli.head_workers == 2
+            @test !arg_cli.cli_session.quiet
+            empty_parsed = DistSSHRun.drive_parsed_from_session(
+                session,
+                script;
+                workers = DistSSHRun.WorkerPlan(1, Dict{String, Int}()),
+                isolated = true,
+            )
+            drops = DistSSHRun._isolated_api_env_drops(empty_parsed)
+            @test "DISTSSH_HOSTS" in drops
+            @test "DISTSSH_HOSTS_FILE" in drops
+            @test "DISTSSH_UNSAFE_SKIP_ENV_DIGESTS" in drops
+            @test "DISTSSH_UNSAFE_EXPOSE_PORT" ∉ drops
+            cli_only = DistSSHRun.parse_drive_args(String["--head-workers", "1", script])
+            @test isempty(DistSSHRun._isolated_api_env_drops(cli_only))
+            withenv(
+                "DISTSSH_HOSTS" => "1*host-b",
+                "DISTSSH_HOSTS_FILE" => joinpath(proj, "hosts.toml"),
+                "DISTSSH_UNSAFE_SKIP_ENV_DIGESTS" => "1",
+            ) do
+                child = DistSSHRun._drive_isolated_cmd(
+                    DistSSHRun.drive_api_isolated_argv(empty_parsed);
+                    drop_env = drops,
+                )
+                env = something(child.env, String[])
+                @test !any(e -> startswith(e, "DISTSSH_HOSTS="), env)
+                @test !any(e -> startswith(e, "DISTSSH_HOSTS_FILE="), env)
+                @test !any(e -> startswith(e, "DISTSSH_UNSAFE_SKIP_ENV_DIGESTS="), env)
+            end
+            hf_session = DistSSHRun.DistSSHSession(project = proj, workers = String[])
+            hf_session.cli_session.hosts_file = joinpath(proj, "hosts.toml")
+            err_hf = try
+                DistSSHRun.drive_parsed_from_session(hf_session, script; isolated = true)
+                nothing
+            catch e
+                e
+            end
+            @test err_hf isa ArgumentError
+            bind_session = DistSSHRun.DistSSHSession(project = proj, workers = String[])
+            err_bind = try
+                DistSSHRun.drive!(
+                    bind_session,
+                    script;
+                    isolated = true,
+                    bind_overrides = Dict("host1" => "127.0.0.1"),
+                )
+                nothing
+            catch e
+                e
+            end
+            @test err_bind isa ArgumentError
+        end
     end
 end
