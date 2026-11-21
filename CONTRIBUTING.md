@@ -46,7 +46,7 @@ workers do not have. Keep a separate environment for package work.
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
-Run this on Julia **1.13** (and a **1.14** prerelease or **nightly** if you have them). Layout: [test/README.md](test/README.md). `test/runtests.jl` counts its `_runtest_announce` calls for `[i/N]`. `test/e2e.jl` counts its `_e2e_announce` calls the same way. Unset, that run includes every announced file. `DISTSSHRUN_TEST_SHORT=1` skips the heavy ones, and `JULIA_PKGEVAL=true` turns that skip on by itself.
+Run this on Julia **1.13** (and a **1.14** prerelease or **nightly** if you have them). Layout: [test/README.md](test/README.md). `test/runtests.jl` prints `[i/N]` where `N` is the number of files `DISTSSH_TEST_GROUP` and `DISTSSHRUN_TEST_SHORT` actually include (`_runtest_selected_files` in `test/support/_common.jl`). `test/e2e.jl` still counts its `_e2e_announce` calls for `[i/N]`. Unset group runs every `_runtest_include` path. `DISTSSHRUN_TEST_SHORT=1` skips the heavy ones, and `JULIA_PKGEVAL=true` turns that skip on by itself.
 
 ```bash
 ./scripts/check.sh

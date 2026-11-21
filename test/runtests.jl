@@ -28,13 +28,9 @@ include(joinpath(@__DIR__, "support.jl"))
 DistSSHRun.set_kit_verbosity!(:progress)
 
 # Keep `include(joinpath(@__DIR__, …))` at this top level (JETLS). The banner
-# counts `_runtest_announce` calls in this file, so adding one updates `[i/N]`.
-const _RUNTEST_N = let n = count(eachline(@__FILE__)) do line
-        return occursin(r"^\s*_runtest_include\(", line)
-    end
-    n > 0 || error("test/runtests.jl: no _runtest_include calls")
-    n
-end
+# `[i/N]` uses `_runtest_selected_files` (group + short-skip), not every
+# `_runtest_include(` line in this file.
+const _RUNTEST_N = length(_runtest_selected_files(read(@__FILE__, String)))
 const _RUNTEST_I = Ref(0)
 function _runtest_announce(rel::AbstractString)
     _RUNTEST_I[] += 1
@@ -74,8 +70,6 @@ end
             _runtest_include("unit/DistSSHRun/core/drive/progress_tty_payload.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "drive", "progress_tty_payload.jl"))
             if !_distsshrun_short_skip("unit/DistSSHRun/core/drive/workers.jl")
                 _runtest_include("unit/DistSSHRun/core/drive/workers.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "drive", "workers.jl"))
-            else
-                _runtest_announce("unit/DistSSHRun/core/drive/workers.jl")
             end
             _runtest_include("unit/DistSSHRun/options/heartbeat.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "options", "heartbeat.jl"))
             _runtest_include("unit/DistSSHRun/options/config.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "options", "config.jl"))
@@ -88,6 +82,7 @@ end
             _runtest_include("unit/DistSSHRun/namespace.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "namespace.jl"))
             _runtest_include("unit/DistSSHRun/pool.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "pool.jl"))
             _runtest_include("unit/DistSSHRun/module.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "module.jl"))
+            _runtest_include("unit/DistSSHRun/runtests_banner.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "runtests_banner.jl"))
             _runtest_include("unit/DistSSHRun/infra/launch.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "launch.jl"))
             _runtest_include("unit/DistSSHRun/infra/cluster_manager_api.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "cluster_manager_api.jl"))
             _runtest_include("unit/DistSSHRun/infra/seed_golden.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "seed_golden.jl"))
@@ -100,8 +95,6 @@ end
             _runtest_include("unit/DistSSHRun/cli_bind_entry.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "cli_bind_entry.jl"))
             if !_distsshrun_short_skip("unit/DistSSHRun/execute.jl")
                 _runtest_include("unit/DistSSHRun/execute.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "execute.jl"))
-            else
-                _runtest_announce("unit/DistSSHRun/execute.jl")
             end
             _runtest_include("unit/DistSSHRun/provenance.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "provenance.jl"))
             _runtest_include("unit/DistSSHRun/argv/session.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "argv", "session.jl"))
@@ -114,8 +107,6 @@ end
             _runtest_include("unit/DistSSHRun/core/setup/status_summary.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "setup", "status_summary.jl"))
             if !_distsshrun_short_skip("unit/DistSSHRun/core/setup/checks.jl")
                 _runtest_include("unit/DistSSHRun/core/setup/checks.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "setup", "checks.jl"))
-            else
-                _runtest_announce("unit/DistSSHRun/core/setup/checks.jl")
             end
             _runtest_include("unit/DistSSHRun/core/setup/instantiate.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "setup", "instantiate.jl"))
             _runtest_include("unit/DistSSHRun/core/setup/hosts.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "setup", "hosts.jl"))
@@ -137,8 +128,6 @@ end
             _runtest_include("unit/DistSSHRun/ssh_e2e_ship_contract.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "ssh_e2e_ship_contract.jl"))
             if !_distsshrun_short_skip("unit/DistSSHRun/core/setup/send_list.jl")
                 _runtest_include("unit/DistSSHRun/core/setup/send_list.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "core", "setup", "send_list.jl"))
-            else
-                _runtest_announce("unit/DistSSHRun/core/setup/send_list.jl")
             end
             _runtest_include("unit/cli/drive/args.jl", joinpath(@__DIR__, "unit", "cli", "drive", "args.jl"))
             _runtest_include("unit/cli/go/args.jl", joinpath(@__DIR__, "unit", "cli", "go", "args.jl"))
@@ -162,18 +151,12 @@ end
             _runtest_include("integration/DistSSHRun/env_verify.jl", joinpath(@__DIR__, "integration", "DistSSHRun", "env_verify.jl"))
             if !_distsshrun_short_skip("integration/cli/help.jl")
                 _runtest_include("integration/cli/help.jl", joinpath(@__DIR__, "integration", "cli", "help.jl"))
-            else
-                _runtest_announce("integration/cli/help.jl")
             end
             if !_distsshrun_short_skip("integration/setup/exit.jl")
                 _runtest_include("integration/setup/exit.jl", joinpath(@__DIR__, "integration", "setup", "exit.jl"))
-            else
-                _runtest_announce("integration/setup/exit.jl")
             end
             if !_distsshrun_short_skip("integration/setup/progress_tty.jl")
                 _runtest_include("integration/setup/progress_tty.jl", joinpath(@__DIR__, "integration", "setup", "progress_tty.jl"))
-            else
-                _runtest_announce("integration/setup/progress_tty.jl")
             end
             _runtest_include("integration/go/cli.jl", joinpath(@__DIR__, "integration", "go", "cli.jl"))
             _runtest_include("integration/go/overlap.jl", joinpath(@__DIR__, "integration", "go", "overlap.jl"))
@@ -182,50 +165,32 @@ end
             _runtest_include("integration/cli/project.jl", joinpath(@__DIR__, "integration", "cli", "project.jl"))
             if !_distsshrun_short_skip("integration/drive/progress_tty.jl")
                 _runtest_include("integration/drive/progress_tty.jl", joinpath(@__DIR__, "integration", "drive", "progress_tty.jl"))
-            else
-                _runtest_announce("integration/drive/progress_tty.jl")
             end
             if !_distsshrun_short_skip("integration/drive/execute.jl")
                 _runtest_include("integration/drive/execute.jl", joinpath(@__DIR__, "integration", "drive", "execute.jl"))
-            else
-                _runtest_announce("integration/drive/execute.jl")
             end
             _runtest_include("integration/drive/fail.jl", joinpath(@__DIR__, "integration", "drive", "fail.jl"))
             _runtest_include("integration/drive/sigint.jl", joinpath(@__DIR__, "integration", "drive", "sigint.jl"))
             if !_distsshrun_short_skip("integration/drive/interrupt_grace.jl")
                 _runtest_include("integration/drive/interrupt_grace.jl", joinpath(@__DIR__, "integration", "drive", "interrupt_grace.jl"))
-            else
-                _runtest_announce("integration/drive/interrupt_grace.jl")
             end
             if !_distsshrun_short_skip("integration/drive/pkg.jl")
                 _runtest_include("integration/drive/pkg.jl", joinpath(@__DIR__, "integration", "drive", "pkg.jl"))
-            else
-                _runtest_announce("integration/drive/pkg.jl")
             end
             if !_distsshrun_short_skip("integration/drive/log_via_script.jl")
                 _runtest_include("integration/drive/log_via_script.jl", joinpath(@__DIR__, "integration", "drive", "log_via_script.jl"))
-            else
-                _runtest_announce("integration/drive/log_via_script.jl")
             end
             if !_distsshrun_short_skip("integration/drive/log_via_module.jl")
                 _runtest_include("integration/drive/log_via_module.jl", joinpath(@__DIR__, "integration", "drive", "log_via_module.jl"))
-            else
-                _runtest_announce("integration/drive/log_via_module.jl")
             end
             if !_distsshrun_short_skip("integration/drive/pkg_develop.jl")
                 _runtest_include("integration/drive/pkg_develop.jl", joinpath(@__DIR__, "integration", "drive", "pkg_develop.jl"))
-            else
-                _runtest_announce("integration/drive/pkg_develop.jl")
             end
             if !_distsshrun_short_skip("integration/demos/with_kit.jl")
                 _runtest_include("integration/demos/with_kit.jl", joinpath(@__DIR__, "integration", "demos", "with_kit.jl"))
-            else
-                _runtest_announce("integration/demos/with_kit.jl")
             end
             if !_distsshrun_short_skip("integration/demos/without_kit.jl")
                 _runtest_include("integration/demos/without_kit.jl", joinpath(@__DIR__, "integration", "demos", "without_kit.jl"))
-            else
-                _runtest_announce("integration/demos/without_kit.jl")
             end
         end
     end # integration group
