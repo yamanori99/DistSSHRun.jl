@@ -33,7 +33,7 @@ function _drive_script_hooks(before::NamedTuple, after::NamedTuple)::NamedTuple
     return map((b, a) -> a === b ? nothing : a, before, after)
 end
 
-function _call_drive_script_hook(name::Symbol, args...)
+Base.@constprop :none function _call_drive_script_hook(name::Symbol, args...)
     return Base.invokelatest() do
         hook = getfield(Main, name)
         return Base.invokelatest(Base.inferencebarrier(hook), args...)
