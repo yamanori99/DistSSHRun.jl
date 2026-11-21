@@ -144,6 +144,43 @@ using Test
         end
     end
 
+    @testset "backslash and unreadable gitignore refuse ship_send_list" begin
+        Sys.which("git") === nothing && @test_skip "git not in PATH"
+        _with_tempdir() do tmp
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            write(joinpath(tmp, raw"a\b.txt"), "1")
+            write(joinpath(tmp, "ok.txt"), "1")
+            @test try
+                DistSSHRun.ship_send_list(tmp)
+                false
+            catch e
+                e isa ArgumentError && occursin("backslash", sprint(showerror, e))
+            end
+        end
+        _with_tempdir() do tmp
+            run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+            write(joinpath(tmp, ".gitignore"), "secret.env\n")
+            write(joinpath(tmp, "secret.env"), "s")
+            gi = joinpath(tmp, ".gitignore")
+            if Sys.isunix() && ccall(:geteuid, Cuint, ()) == 0
+                @test_skip "unreadable .gitignore (running as root)"
+            else
+                mode = filemode(gi)
+                chmod(gi, 0o000)
+                try
+                    @test try
+                        DistSSHRun.ship_send_list(tmp)
+                        false
+                    catch e
+                        e isa ArgumentError && occursin(gi, sprint(showerror, e))
+                    end
+                finally
+                    chmod(gi, mode)
+                end
+            end
+        end
+    end
+
     @testset "an ignored newline path is skipped" begin
         _with_tempdir() do tmp
             write(joinpath(tmp, "Project.toml"), "name = \"App\"\n")

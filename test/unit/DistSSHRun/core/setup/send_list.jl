@@ -616,5 +616,84 @@ using Test
             end
         end
 
+        @testset "broken submodule refuses ignored secrets in the send list" begin
+            _with_tempdir() do r
+                write(joinpath(r, "Project.toml"), "name = \"X\"\nuuid = \"11111111-1111-1111-1111-111111111111\"\n")
+                write(joinpath(r, "Manifest.toml"), "manifest_format = \"2.0\"\n")
+                run(pipeline(`git -C $r init -q`; stdout = devnull, stderr = devnull))
+                _ident!(r)
+                sub = joinpath(r, "sub")
+                mkpath(sub)
+                write(joinpath(sub, "code.jl"), "1")
+                write(joinpath(sub, ".git"), "gitdir: /nonexistent/modules/sub\n")
+                write(joinpath(sub, ".gitignore"), "*.log\nsecret.env\n")
+                write(joinpath(sub, "debug.log"), "1")
+                write(joinpath(sub, "secret.env"), "s")
+                run(
+                    pipeline(
+                        `git -C $r update-index --add --cacheinfo 160000,0000000000000000000000000000000000000001,sub`;
+                        stdout = devnull,
+                        stderr = devnull,
+                    ),
+                )
+                env = DistSSHRun.resolve_pkg_env(r)
+                err = ""
+                @test try
+                    DistSSHRun._git_send_list(r, env)
+                    false
+                catch e
+                    err = sprint(showerror, e)
+                    e isa ArgumentError &&
+                        occursin("submodule 'sub'", err) &&
+                        occursin("submodule update --init sub", err) &&
+                        !occursin("sub/debug.log", err) &&
+                        !occursin("sub/secret.env", err)
+                end
+                @test occursin(r, err)
+            end
+        end
+
+        @testset "git_work_tree refuses dubious ownership with git stderr" begin
+            _with_tempdir() do tmp
+                stub_bin = joinpath(tmp, "bin")
+                mkpath(stub_bin)
+                tree = joinpath(tmp, "repo")
+                mkpath(joinpath(tree, ".git"))
+                write(
+                    joinpath(stub_bin, "git"),
+                    "#!/bin/sh\n" *
+                        "echo fatal: detected dubious ownership in repository 1>&2\n" *
+                        "exit 128\n",
+                )
+                chmod(joinpath(stub_bin, "git"), 0o755)
+                withenv("PATH" => stub_bin * ":" * get(ENV, "PATH", "")) do
+                    err = ""
+                    @test try
+                        DistSSHRun.git_work_tree(tree)
+                        false
+                    catch e
+                        err = sprint(showerror, e)
+                        e isa ArgumentError &&
+                            occursin("dubious ownership", err) &&
+                            occursin("safe.directory", err) &&
+                            occursin(tree, err)
+                    end
+                end
+            end
+        end
+
+        @testset "corrupt HEAD makes git_work_tree throw" begin
+            _with_tempdir() do tmp
+                run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
+                write(joinpath(tmp, ".git", "HEAD"), "not a ref\n")
+                @test try
+                    DistSSHRun.git_work_tree(tmp)
+                    false
+                catch e
+                    e isa ArgumentError && occursin("git failed in", sprint(showerror, e))
+                end
+            end
+        end
+
     end # _test_skip_unless_git()
 end
