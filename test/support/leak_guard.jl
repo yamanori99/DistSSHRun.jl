@@ -7,6 +7,18 @@ if !isdefined(@__MODULE__, :_DISTSSH_TEST_LEAK_TAG)
     const _LEAK_GUARD_RUN_ID = Ref{String}(
         string("test-", getpid(), "-", rand(UInt32)),
     )
+    const _TEST_HARNESS_ENV = Ref{Any}(nothing)
+
+    function _capture_test_harness_env!()
+        if _TEST_HARNESS_ENV[] === nothing
+            _TEST_HARNESS_ENV[] = (
+                load_path = copy(LOAD_PATH),
+                julia_lp = get(ENV, "JULIA_LOAD_PATH", nothing),
+                active = Base.ACTIVE_PROJECT[],
+            )
+        end
+        return nothing
+    end
 
     function _leak_guard_tag(rel::AbstractString)::String
         rel = replace(String(rel), '\\' => '/')
@@ -72,39 +84,35 @@ if !isdefined(@__MODULE__, :_DISTSSH_TEST_LEAK_TAG)
         return nothing
     end
 
-    function _restore_test_process_env!(
-            prev_lp::Vector{String},
-            prev_julia_lp::Union{Nothing, String},
-            prev_active,
-        )
+    function _restore_test_harness_env!()
+        snap = _TEST_HARNESS_ENV[]
+        snap === nothing && return nothing
         try
             empty!(LOAD_PATH)
-            append!(LOAD_PATH, prev_lp)
+            append!(LOAD_PATH, snap.load_path)
         catch
         end
         try
-            if prev_julia_lp === nothing
+            if snap.julia_lp === nothing
                 delete!(ENV, "JULIA_LOAD_PATH")
             else
-                ENV["JULIA_LOAD_PATH"] = prev_julia_lp
+                ENV["JULIA_LOAD_PATH"] = snap.julia_lp
             end
         catch
         end
         try
-            Base.ACTIVE_PROJECT[] = prev_active
+            Base.ACTIVE_PROJECT[] = snap.active
         catch
         end
         return nothing
     end
 
     function _with_test_load_path_guard(f::Function)
-        prev_lp = copy(LOAD_PATH)
-        prev_julia_lp = get(ENV, "JULIA_LOAD_PATH", nothing)
-        prev_active = Base.ACTIVE_PROJECT[]
+        _capture_test_harness_env!()
         try
             return f()
         finally
-            _restore_test_process_env!(prev_lp, prev_julia_lp, prev_active)
+            _restore_test_harness_env!()
         end
     end
 

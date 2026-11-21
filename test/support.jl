@@ -14,4 +14,7 @@ if !isdefined(@__MODULE__, :_child_julia_env)
     include(joinpath(@__DIR__, "support", "setup.jl"))
     include(joinpath(@__DIR__, "support", "staging.jl"))
     include(joinpath(@__DIR__, "support", "ssh_e2e.jl"))
+    if isdefined(Main, :_capture_test_harness_env!)
+        _capture_test_harness_env!()
+    end
 end
