@@ -16,7 +16,9 @@ That is `test/runtests.jl` (unit + integration), sequential `@testset`s,
 Unset `DISTSSH_TEST_GROUP` runs both groups (default for `Pkg.test()` and
 PkgEval). `DISTSSH_TEST_GROUP=unit` or `integration` runs one group only
 (Ubuntu 1.13 CI merge gate).
-Unset, all 58 files run. `DISTSSHRUN_TEST_SHORT=1` (`true`, `yes`, and `on`
+Unset group, every `_runtest_include` path in `runtests.jl` runs; `[i/N]` uses
+that selection count (`N` shrinks with `DISTSSH_TEST_GROUP` or short-skip).
+`DISTSSHRUN_TEST_SHORT=1` (`true`, `yes`, and `on`
 too) skips the heavy files. `JULIA_PKGEVAL=true`
 does the same so a PkgEval run stays inside the 45 minute limit. That short
 list includes `integration/setup/progress_tty.jl` and

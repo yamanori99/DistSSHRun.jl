@@ -18,15 +18,7 @@ const TEST_PROJECT = let active = Base.active_project()
 end
 include(joinpath(ROOT, "support.jl"))
 
-const FILES = let src = read(joinpath(ROOT, "runtests.jl"), String)
-    files = String[m.captures[1] for m in eachmatch(r"_runtest_include\(\s*\"([^\"]+)\"", src)]
-    isempty(files) && error("test/parallel.jl: no _runtest_include calls in runtests.jl")
-    selected = filter(files) do rel
-        _distssh_test_group_enabled(Symbol(first(splitpath(rel)))) && !_distsshrun_short_skip(rel)
-    end
-    isempty(selected) && error("test/parallel.jl: DISTSSH_TEST_GROUP and DISTSSHRUN_TEST_SHORT select no file")
-    selected
-end
+const FILES = _runtest_selected_files(read(joinpath(ROOT, "runtests.jl"), String))
 
 const TESTSUITE = Dict{String, Expr}(
     replace(rel, r"\.jl$" => "") => :(Base.invokelatest(Main._ptr_include, $rel, $(joinpath(ROOT, rel))))

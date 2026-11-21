@@ -141,32 +141,51 @@ if !isdefined(Main, :_test_root)
         return false
     end
 
-    function _distsshrun_short_skip(rel::AbstractString)::Bool
+    const _DISTSSHRUN_SHORT_SKIP_PATHS = (
+        "unit/DistSSHRun/core/drive/workers.jl",
+        "unit/DistSSHRun/execute.jl",
+        "unit/DistSSHRun/core/setup/checks.jl",
+        "unit/DistSSHRun/core/setup/send_list.jl",
+        "integration/cli/help.jl",
+        "integration/setup/exit.jl",
+        # Pseudo-TTY (`script`) suites: ordinary checkout CI keeps them.
+        # PkgEval and Registry install set JULIA_PKGEVAL=true and skip them.
+        "integration/setup/progress_tty.jl",
+        "integration/drive/progress_tty.jl",
+        "integration/drive/execute.jl",
+        "integration/drive/interrupt_grace.jl",
+        "integration/drive/pkg.jl",
+        "integration/drive/log_via_script.jl",
+        "integration/drive/log_via_module.jl",
+        "integration/drive/pkg_develop.jl",
+        "integration/demos/with_kit.jl",
+        "integration/demos/without_kit.jl",
+    )
+
+    function _distsshrun_short_skipped(rel::AbstractString)::Bool
         _distsshrun_test_short() || return false
-        skipped = (
-            "unit/DistSSHRun/core/drive/workers.jl",
-            "unit/DistSSHRun/execute.jl",
-            "unit/DistSSHRun/core/setup/checks.jl",
-            "unit/DistSSHRun/core/setup/send_list.jl",
-            "integration/cli/help.jl",
-            "integration/setup/exit.jl",
-            # Pseudo-TTY (`script`) suites: ordinary checkout CI keeps them.
-            # PkgEval and Registry install set JULIA_PKGEVAL=true and skip them.
-            "integration/setup/progress_tty.jl",
-            "integration/drive/progress_tty.jl",
-            "integration/drive/execute.jl",
-            "integration/drive/interrupt_grace.jl",
-            "integration/drive/pkg.jl",
-            "integration/drive/log_via_script.jl",
-            "integration/drive/log_via_module.jl",
-            "integration/drive/pkg_develop.jl",
-            "integration/demos/with_kit.jl",
-            "integration/demos/without_kit.jl",
-        )
-        String(rel) in skipped || return false
+        return String(rel) in _DISTSSHRUN_SHORT_SKIP_PATHS
+    end
+
+    function _distsshrun_short_skip(rel::AbstractString)::Bool
+        _distsshrun_short_skipped(rel) || return false
         println("  short: skip $rel")
         flush(stdout)
         return true
+    end
+
+    function _runtest_include_paths(runtests_src::AbstractString)::Vector{String}
+        paths = String[m.captures[1] for m in eachmatch(r"_runtest_include\(\s*\"([^\"]+)\"", runtests_src)]
+        isempty(paths) && error("test: no _runtest_include calls in runtests.jl source")
+        return paths
+    end
+
+    function _runtest_selected_files(runtests_src::AbstractString)::Vector{String}
+        selected = filter(_runtest_include_paths(runtests_src)) do rel
+            _distssh_test_group_enabled(Symbol(first(splitpath(rel)))) && !_distsshrun_short_skipped(rel)
+        end
+        isempty(selected) && error("test: DISTSSH_TEST_GROUP and DISTSSHRUN_TEST_SHORT select no file")
+        return selected
     end
 
     # Keep the detached-env count off the test console. `min_level=Debug`
