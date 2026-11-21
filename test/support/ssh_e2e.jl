@@ -1,6 +1,6 @@
 # Shared helpers for real-SSH E2E (docker-ssh workers).
 
-if !isdefined(Main, :_ssh_e2e_enabled)
+if !isdefined(@__MODULE__, :_ssh_e2e_enabled)
 
     using Dates
 

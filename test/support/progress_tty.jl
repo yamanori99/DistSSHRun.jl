@@ -1,7 +1,7 @@
 # Shared TTY (`script`) capture helpers for `:progress` assertions.
 # Guard: JETLS may analyze this file both via support.jl and as an include leaf.
 
-if !isdefined(Main, :_tty_strip_ansi)
+if !isdefined(@__MODULE__, :_tty_strip_ansi)
     function _tty_strip_ansi(s::AbstractString)
         return replace(String(s), r"\e\[[0-9;?]*[A-Za-z]" => "")
     end

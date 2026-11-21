@@ -64,9 +64,7 @@ function _env_verify_add_local_workers(
     addprocs(n; exeflags = project_flag, topology = :master_worker)
     ws = sort!(collect(workers()))
     for w in ws
-        remotecall_fetch(w) do
-            return Core.eval(Main, :(using DistSSHRun))
-        end
+        remotecall_fetch(Core.eval, w, Main, :(using DistSSHRun))
     end
     return ws
 end
@@ -81,9 +79,7 @@ function _with_one_local_worker(worker_project::Union{Nothing, AbstractString}, 
     end
     addprocs(1; exeflags = project_flag, topology = :master_worker)
     w = only(workers())
-    remotecall_fetch(w) do
-        return Core.eval(Main, :(using DistSSHRun))
-    end
+    remotecall_fetch(Core.eval, w, Main, :(using DistSSHRun))
     try
         f(w)
     finally
@@ -319,10 +315,12 @@ function _env_verify_guards()
                     _with_one_local_worker(
                         test_proj, function (w)
                             DistSSHRun._mark_workers_launched!([w], proj)
-                            remotecall_fetch(w, proj) do p
-                                ENV["JULIA_PROJECT"] = String(p)
-                                return nothing
-                            end
+                            remotecall_fetch(
+                                Core.eval,
+                                w,
+                                Main,
+                                :(ENV["JULIA_PROJECT"] = $(QuoteNode(String(proj)))),
+                            )
                             local parent = DistSSHRun.run_identity(proj)
 
                             @testset "manifest.sha256" begin
@@ -786,16 +784,21 @@ function _env_run_id_shipped_run_verify_tests()
                             _env_verify_activate_worker!(w, proj)
                             _env_run_id_deploy_record!(proj, rid)
                             DistSSHRun._mark_workers_launched!([w], proj)
-                            remotecall_fetch(w) do
-                                pf = Base.active_project()
-                                pf === nothing && error("worker has no active project")
-                                path = isfile(pf) ? String(pf) : joinpath(String(pf), "Project.toml")
-                                open(path, "r+") do io
-                                    seekend(io)
-                                    write(io, UInt8(' '))
-                                end
-                                return nothing
-                            end
+                            remotecall_fetch(
+                                Core.eval,
+                                w,
+                                Main,
+                                quote
+                                    pf = Base.active_project()
+                                    pf === nothing && error("worker has no active project")
+                                    path = isfile(pf) ? String(pf) : joinpath(String(pf), "Project.toml")
+                                    open(path, "r+") do io
+                                        seekend(io)
+                                        write(io, UInt8(' '))
+                                    end
+                                    nothing
+                                end,
+                            )
                             err = try
                                 DistSSHRun.verify_workers_match_shipped_run!(proj; run_id = rid)
                                 ""

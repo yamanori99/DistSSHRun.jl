@@ -137,10 +137,14 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
                     DistSSHRun.init_drive_workers!(tmp, nothing, tmp)
                     DistSSHRun.sync_driver_to_workers!(script; worker_include = true)
                 end
-                @test !remotecall_fetch(() -> isdefined(Main, :_distssh_sync_hit), foreign)
+                @test !remotecall_fetch(
+                    Core.eval, foreign, Main, :(isdefined(Main, :_distssh_sync_hit))
+                )
                 @test remotecall_fetch(
-                    () -> isdefined(Main, :_distssh_sync_hit) && Main._distssh_sync_hit,
-                    owned[1]
+                    Core.eval,
+                    owned[1],
+                    Main,
+                    :(isdefined(Main, :_distssh_sync_hit) && Main._distssh_sync_hit),
                 )
             finally
                 DistSSHRun._clear_drive_host_worker_ids!()
@@ -172,12 +176,10 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
                     deadline = 120.0
                 )
                 @test remotecall_fetch(
-                    () -> isdefined(Main, :DistSSHHeartbeat),
-                    foreign
+                    Core.eval, foreign, Main, :(isdefined(Main, :DistSSHHeartbeat))
                 ) == false
                 @test remotecall_fetch(
-                    () -> isdefined(Main, :DistSSHHeartbeat),
-                    owned[1]
+                    Core.eval, owned[1], Main, :(isdefined(Main, :DistSSHHeartbeat))
                 ) == true
             finally
                 DistSSHRun.stop_heartbeat_on_workers!(DistSSHRun._live_owned_worker_ids())
@@ -789,13 +791,18 @@ end
             addprocs(1; topology = :master_worker)
             w = workers()[end]
             try
-                remotecall_fetch(w, src) do code
-                    include_string(Main, code)
-                    return nothing
-                end
-                @test remotecall_fetch(w) do
-                    isdefined(Main, :work) && Base.invokelatest(getfield(Main, :work), 3) == 9
-                end
+                remotecall_fetch(
+                    Core.eval,
+                    w,
+                    Main,
+                    :(include_string(Main, $(QuoteNode(src))); nothing),
+                )
+                @test remotecall_fetch(
+                    Core.eval,
+                    w,
+                    Main,
+                    :(isdefined(Main, :work) && Base.invokelatest(getfield(Main, :work), 3) == 9),
+                )
             finally
                 w in workers() && rmprocs(w; waitfor = 2.0)
             end
@@ -828,13 +835,16 @@ end
                 end
                 @test occursin("is not published", out)
                 @test occursin("--worker-include", out)
-                @test remotecall_fetch(w) do
-                    isdefined(Main, :work) && Base.invokelatest(getfield(Main, :work), 3) == 9
-                end
+                @test remotecall_fetch(
+                    Core.eval,
+                    w,
+                    Main,
+                    :(isdefined(Main, :work) && Base.invokelatest(getfield(Main, :work), 3) == 9),
+                )
                 # The guarded include never reached the worker.
-                @test !remotecall_fetch(w) do
-                    isdefined(Main, :other_loaded)
-                end
+                @test !remotecall_fetch(
+                    Core.eval, w, Main, :(isdefined(Main, :other_loaded))
+                )
             finally
                 w in workers() && rmprocs(w; waitfor = 2.0)
             end

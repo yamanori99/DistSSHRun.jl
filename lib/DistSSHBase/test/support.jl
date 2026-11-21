@@ -1,7 +1,7 @@
 # Shared by DistSSHBase's own tests.
 include(joinpath(@__DIR__, "shared_tempdir.jl"))
 
-if !isdefined(Main, :_run_subprocess)
+if !isdefined(@__MODULE__, :_run_subprocess)
     function _run_subprocess(cmd::Cmd)
         out = IOBuffer()
         proc = run(pipeline(ignorestatus(cmd), stdout = out, stderr = out), wait = true)

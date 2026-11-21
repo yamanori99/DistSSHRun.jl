@@ -1,4 +1,4 @@
-if !isdefined(Main, :_run_kit_setup)
+if !isdefined(@__MODULE__, :_run_kit_setup)
 
     # Run the kit `setup` CLI as a subprocess (for CLI exit-code tests).
     #

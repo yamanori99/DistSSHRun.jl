@@ -67,14 +67,14 @@ jobs:
   # put those titles in one matrix: a job-level if runs before the matrix
   # expands, and the required names never report.
   # Coverage uploads from the Ubuntu Run coverage job and the Ubuntu DistSSHBase,
-  # DistSSHUp, DistSSHShip, and DistSSHHeartbeat jobs (flag pkgtest, main push).
+  # DistSSHUp, DistSSHShip, and DistSSHHeartbeat jobs (per-package flags, main push).
   # Slow SSH E2E kit parents are `E2E weekly`
   # (macos-15-intel Colima, not this job).
   # PRs run `DistSSHRun (1.13, ubuntu-latest → ubuntu-26.04)` in this workflow.
   # `DistSSHRun (1.14-pre, ubuntu-latest → ubuntu-26.04)` is continue-on-error.
   # One detect job; markdown-only / allowlisted PRs skip heavy jobs (UI: skipping).
   # Required check names include the Julia version and the architecture.
-  # Codecov (flag pkgtest): main push only — not on pull_request.
+  # Codecov (flags run/base/up/ship/heartbeat/e2e): main push Pkg.test; E2E on main + weekly + version-cut.
   # cache-scratchspaces: false — registry_updates.toml in scratchspaces can
   # poison Pkg.Registry.update on 1.13 if restored corrupt.
   # Aqua / JETLS / Runic share this workflow so the Test badge is the PR gate.
@@ -175,6 +175,8 @@ jobs:
             echo "e2e=false" >> "$GITHUB_OUTPUT"
           fi
           if [ "$CUT" = "true" ]; then
+            echo "coverage=true" >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ] && [ "$HEAVY" != "false" ]; then
             echo "coverage=true" >> "$GITHUB_OUTPUT"
           else
             echo "coverage=false" >> "$GITHUB_OUTPUT"
@@ -482,7 +484,7 @@ jobs:
           files: lcov.info
           slug: ${{ github.repository }}
           use_oidc: true
-          flags: pkgtest
+          flags: ship
           fail_ci_if_error: true
 
   ship-test-macos:
@@ -579,7 +581,7 @@ jobs:
           files: lcov.info
           slug: ${{ github.repository }}
           use_oidc: true
-          flags: pkgtest
+          flags: heartbeat
           fail_ci_if_error: true
 
   heartbeat-test-macos:
@@ -669,7 +671,7 @@ jobs:
           files: lcov.info
           slug: ${{ github.repository }}
           use_oidc: true
-          flags: pkgtest
+          flags: up
           fail_ci_if_error: true
 
   up-test-macos:
@@ -807,7 +809,7 @@ jobs:
           files: lcov.info
           slug: ${{ github.repository }}
           use_oidc: true
-          flags: pkgtest
+          flags: base
           fail_ci_if_error: true
 
   base-test-macos:
@@ -1364,7 +1366,7 @@ jobs:
     permissions:
       contents: read
       actions: write # buildx type=gha cache for the worker image
-      id-token: write # Codecov OIDC when a version-cut PR runs E2E coverage
+      id-token: write # Codecov OIDC on main push, version-cut PR, and weekly E2E coverage
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

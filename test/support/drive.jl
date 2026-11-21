@@ -1,4 +1,4 @@
-if !isdefined(Main, :_run_kit_drive)
+if !isdefined(@__MODULE__, :_run_kit_drive)
 
     # Normalize a host project path for drive subprocesses.
     function _drive_host_root(path)::String

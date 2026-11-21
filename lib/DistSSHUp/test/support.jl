@@ -1,7 +1,7 @@
 # Shared by DistSSHUp's own tests.
 include(joinpath(@__DIR__, "..", "..", "DistSSHBase", "test", "shared_tempdir.jl"))
 
-if !isdefined(Main, :_write_aligned_fake_juliaup)
+if !isdefined(@__MODULE__, :_write_aligned_fake_juliaup)
     function _write_aligned_fake_juliaup(dir::AbstractString)
         ju = joinpath(dir, "juliaup")
         jl = joinpath(dir, "julia")
