@@ -77,13 +77,13 @@ public CLI_EXIT_USAGE, CliForegroundInterrupt, CliUsageError, cli_help_stdout, c
 public wait_seconds
 public tool_require
 public src_component_digest
-public record_writer_string,
+public RecordWriterMismatchKind,
     parse_record_writer,
     record_writer_minor_match,
     record_writer_minor_parts,
-    record_writer_toml_line_ere,
-    record_writer_shell_minor_words,
     record_writer_mismatch_message,
-    RecordWriterMismatchKind
+    record_writer_shell_minor_words,
+    record_writer_string,
+    record_writer_toml_line_ere
 
 end # module DistSSHBase

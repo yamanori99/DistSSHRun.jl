@@ -115,11 +115,11 @@ function record_writer_mismatch_message(
     end
 end
 
-public record_writer_string,
+public RecordWriterMismatchKind,
     parse_record_writer,
     record_writer_minor_match,
     record_writer_minor_parts,
-    record_writer_toml_line_ere,
-    record_writer_shell_minor_words,
     record_writer_mismatch_message,
-    RecordWriterMismatchKind
+    record_writer_shell_minor_words,
+    record_writer_string,
+    record_writer_toml_line_ere
