@@ -692,73 +692,44 @@ or when Manifest `julia_version` is missing or its minor differs from that
 Julia. Otherwise it instantiates the Manifest and does not update registries.
 """
 function _instantiate_remote_e()::String
-    return join(
-        (
-            "using Pkg",
-            "using TOML",
-            "regs = Pkg.Registry.reachable_registries()",
-            "if isempty(regs)",
-            "    error(\"no reachable package registries. See help setup.\")",
-            "end",
-            "project = Base.active_project()",
-            "if project === nothing",
-            "    error(\"no active project. See help setup.\")",
-            "end",
-            "project_dir = isfile(project) ? dirname(project) : project",
-            "if Pkg.is_manifest_current(project_dir) !== true",
-            "    error(\"Manifest is not current with the project. See help setup.\")",
-            "end",
-            "manifest = Base.active_manifest()",
-            "parsed = manifest isa AbstractString ? TOML.parsefile(manifest) : Dict{String, Any}()",
-            "julia_version = get(parsed, \"julia_version\", nothing)",
-            "if !(julia_version isa String)",
-            "    error(\"Manifest julia_version is missing. See help setup.\")",
-            "end",
-            "parsed_version = try",
-            "    VersionNumber(julia_version)",
-            "catch",
-            "    nothing",
-            "end",
-            "if !(parsed_version isa VersionNumber)",
-            "    error(\"Manifest julia_version is not a Julia version. See help setup.\")",
-            "end",
-            "if Base.thisminor(parsed_version) != Base.thisminor(VERSION)",
-            "    error(",
-            "        \"Manifest julia_version \" * julia_version *",
-            "        \" does not match this Julia \" * string(VERSION) *",
-            "        \". See help setup.\",",
-            "    )",
-            "end",
-            "begin",
-            "    local deploy_path = \"\"",
-            "    local walk = project_dir",
-            "    while !isempty(walk)",
-            "        cand = joinpath(walk, \".distssh\", \"deploy.toml\")",
-            "        if isfile(cand)",
-            "            deploy_path = cand",
-            "            break",
-            "        end",
-            "        parent = dirname(walk)",
-            "        parent == walk && break",
-            "        walk = parent",
-            "    end",
-            "    if !isempty(deploy_path)",
-            "        rec = TOML.parsefile(deploy_path)",
-            "        want = get(rec, \"manifest_hash\", nothing)",
-            "        if want isa String && !isempty(want) && manifest isa String && isfile(manifest)",
-            "            using SHA",
-            "            got = lowercase(bytes2hex(sha256(read(manifest))))",
-            "            got == want || error(",
-            "                \"Manifest bytes do not match deploy record before instantiate (got \" *",
-            "                got[1:min(end, 12)] * \"… != \" * want[1:min(end, 12)] * \"…). See help setup.\",",
-            "            )",
-            "        end",
-            "    end",
-            "end",
-            "Pkg.instantiate(; manifest=true, update_registry=false, julia_version_strict=true)",
-        ),
-        "\n",
-    )
+    head = String[
+        "using Pkg",
+        "using TOML",
+        "regs = Pkg.Registry.reachable_registries()",
+        "if isempty(regs)",
+        "    error(\"no reachable package registries. See help setup.\")",
+        "end",
+        "project = Base.active_project()",
+        "if project === nothing",
+        "    error(\"no active project. See help setup.\")",
+        "end",
+        "project_dir = isfile(project) ? dirname(project) : project",
+        "if Pkg.is_manifest_current(project_dir) !== true",
+        "    error(\"Manifest is not current with the project. See help setup.\")",
+        "end",
+        "manifest = Base.active_manifest()",
+        "parsed = manifest isa AbstractString ? TOML.parsefile(manifest) : Dict{String, Any}()",
+        "julia_version = get(parsed, \"julia_version\", nothing)",
+        "if !(julia_version isa String)",
+        "    error(\"Manifest julia_version is missing. See help setup.\")",
+        "end",
+        "parsed_version = try",
+        "    VersionNumber(julia_version)",
+        "catch",
+        "    nothing",
+        "end",
+        "if !(parsed_version isa VersionNumber)",
+        "    error(\"Manifest julia_version is not a Julia version. See help setup.\")",
+        "end",
+        "if Base.thisminor(parsed_version) != Base.thisminor(VERSION)",
+        "    error(",
+        "        \"Manifest julia_version \" * julia_version *",
+        "        \" does not match this Julia \" * string(VERSION) *",
+        "        \". See help setup.\",",
+        "    )",
+        "end",
+    ]
+    return join(vcat(head, instantiate_remote_digest_gate_lines()), "\n")
 end
 
 """Manifest must exist. A selected ship already carried path dependencies."""
@@ -786,12 +757,16 @@ function instantiate_remotes(
         path_anchor::AbstractString = project,
     )::NamedTuple
     _require_manifest_for_instantiate!(project)
-    return _pkg_e_on_remotes(
+    raw = _pkg_e_on_remotes(
         hosts, julia_path, remote_path, project;
         path_anchor = path_anchor,
         pkg_e = _instantiate_remote_e(),
         spin_label = "Instantiating",
     )
+    if raw.failed == 0 && !raw.cancelled
+        update_deploy_record_instantiated!(hosts, remote_path, project)
+    end
+    return raw
 end
 
 """Run `Pkg.test()` of the **job** project on remote hosts (not DistSSHRun's tests)."""

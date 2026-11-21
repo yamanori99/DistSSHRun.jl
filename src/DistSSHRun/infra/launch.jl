@@ -14,20 +14,9 @@ const _LAUNCH_UNSET_ENV = (
 const _LAUNCH_LOAD_PATH = "@:@stdlib"
 
 function worker_load_path(; ssh::Bool = false)::String
-    # Remote workers: job packages load via `--project=` only.
-    ssh && return _LAUNCH_LOAD_PATH
-    extras = String[]
-    ap = Base.active_project()
-    if ap !== nothing
-        pd = dirname(String(ap))
-        isempty(pd) || push!(extras, pd)
-    end
-    d = pkgdir(@__MODULE__)
-    if d !== nothing && !isempty(d) && !(d in extras)
-        push!(extras, d)
-    end
-    isempty(extras) && return _LAUNCH_LOAD_PATH
-    return string(_LAUNCH_LOAD_PATH, ":", join(extras, ":"))
+    # Local and remote workers: job packages load via `--project=` only.
+    ssh # keyword kept for call-site documentation
+    return _LAUNCH_LOAD_PATH
 end
 
 function _env_unset_prefix()::String

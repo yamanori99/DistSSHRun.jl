@@ -1,4 +1,6 @@
 using Test
+using SHA
+using TOML
 
 @testset "remote instantiate" begin
     expr = DistSSHRun._instantiate_remote_e()
@@ -215,6 +217,24 @@ using Test
                 @test occursin("Manifest julia_version is missing. See help setup.", err)
                 @test !occursin("--help", err)
                 @test !occursin(r"^julia_version ="m, read(path, String))
+            end
+
+            @testset "deploy manifest_hash mismatch" begin
+                proj = joinpath(root, "digest")
+                cp(base, proj)
+                good = read(joinpath(proj, "Manifest.toml"))
+                mkpath(joinpath(proj, ".distssh"))
+                want = lowercase(bytes2hex(sha256(good)))
+                write(
+                    joinpath(proj, ".distssh", "deploy.toml"),
+                    sprint(TOML.print, Dict("manifest_hash" => ("f"^length(want)))),
+                )
+                before = read(joinpath(proj, "Manifest.toml"))
+                called = Ref(false)
+                code, _, err = _run_instantiate_e(proj, depot)
+                @test code != 0
+                @test occursin("Manifest bytes do not match deploy record", err)
+                @test read(joinpath(proj, "Manifest.toml")) == before
             end
 
             @testset "julia minor mismatch" begin

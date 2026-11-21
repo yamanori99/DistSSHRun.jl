@@ -533,6 +533,7 @@ Each slot is its own `try`, so one failure does not skip the rest.
 """
 function _with_drive_process!(f, proj_dir::AbstractString)
     prev_active = Base.ACTIVE_PROJECT[]
+    prev_load_path = copy(LOAD_PATH)
     prev_env = Vector{Union{Nothing, String}}(undef, length(_DRIVE_PROCESS_ENV))
     for (i, key) in enumerate(_DRIVE_PROCESS_ENV)
         prev_env[i] = get(ENV, key, nothing)
@@ -541,6 +542,11 @@ function _with_drive_process!(f, proj_dir::AbstractString)
     function restore_drive_process!()
         restored[] && return nothing
         restored[] = true
+        try
+            empty!(LOAD_PATH)
+            append!(LOAD_PATH, prev_load_path)
+        catch
+        end
         try
             Base.ACTIVE_PROJECT[] = prev_active
         catch
@@ -559,6 +565,7 @@ function _with_drive_process!(f, proj_dir::AbstractString)
         return nothing
     end
     activate_drive_project!(String(proj_dir))
+    restrict_job_load_path!()
     try
         return f()
     finally

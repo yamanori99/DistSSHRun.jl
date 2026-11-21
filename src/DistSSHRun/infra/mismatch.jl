@@ -511,6 +511,7 @@ function assert_controller_environment_for_verify!(project::AbstractString)
     assert_controller_default_sysimage!()
     assert_controller_loaded_identity!()
     assert_controller_shipped_tree_current!(project)
+    assert_controller_job_package_collisions!(project)
     return nothing
 end
 public assert_controller_environment_for_verify!
@@ -813,6 +814,14 @@ function verify_workers_match_job!(project::AbstractString)
                 lock(mismatch_lock) do
                 append!(worker_lines, lines)
             end
+        end
+    end
+    for w in worker_ids
+        try
+            assert_worker_job_package_collisions!(w)
+        catch e
+            detail = first(split(sprint(showerror, e), '\n'))
+            push!(worker_lines, _format_worker_mismatch_line(w, detail))
         end
     end
     mismatches = _collect_environment_mismatches(

@@ -33,11 +33,17 @@ end
 
 # Source text (not a DistSSHRun-quoted `function` Expr) so workers define
 # these names in Main without serializing kit gensyms.
-const _DRIVE_WORKER_BOOTSTRAP = """
+const _DRIVE_WORKER_BOOTSTRAP = let collision = worker_package_collision_check_source()
+    """
 ENV["JULIA_PKG_PRECOMPILE_AUTO"] = "0"
 using Pkg
+$collision
 function _drive_worker_activate!(path::String)
     Pkg.activate(path; io = devnull)
+    empty!(LOAD_PATH)
+    push!(LOAD_PATH, "@")
+    push!(LOAD_PATH, "@stdlib")
+    _drive_worker_assert_no_package_collisions!()
     return nothing
 end
 function _drive_worker_include!(path::String)
@@ -62,6 +68,7 @@ function _drive_worker_publish!(src::String, path::String)
 end
 nothing
 """
+end
 
 """
     activate_drive_project!(proj_dir)

@@ -100,6 +100,7 @@ function build_deploy_record(
         "dirty" => dirty,
         "local_path" => canonical_local_path(project),
         "timestamp" => _deploy_record_timestamp(),
+        "instantiated" => false,
     )
     mh = _deploy_record_manifest_hash(project)
     mh !== nothing && (data["manifest_hash"] = mh)
@@ -224,6 +225,7 @@ function _deploy_records_equivalent(a::AbstractDict, b::AbstractDict)::Bool
         "run_id",
         "content_tree_hash",
         "project_rel",
+        "instantiated",
     )
     for k in keys
         va = get(a, k, nothing)
@@ -618,6 +620,7 @@ function _deploy_record_for_provenance(rec::Union{Nothing, AbstractDict})::Union
             "content_file_digests",
             "forced_ignore_ship",
             "preferences",
+            "instantiated",
         )
         haskey(rec, k) || continue
         out[k] = rec[k]

@@ -738,7 +738,6 @@ end
         addprocs(1; exeflags = Cmd(flags), env = env)
         w = only(Distributed.workers())
         try
-            remotecall_fetch(Core.eval, w, Main, :(using DistSSHRun))
             snap_raw = remotecall_fetch(Core.eval, w, Main, DistSSHRun._worker_identity_expr())
             snap = Dict{String, String}(String(k) => String(v) for (k, v) in pairs(snap_raw))
             parent_id = DistSSHRun.run_identity(proj)
