@@ -13,10 +13,22 @@ const _LAUNCH_UNSET_ENV = (
 )
 const _LAUNCH_LOAD_PATH = "@:@stdlib"
 
+function _worker_load_path_entries()::Vector{String}
+    parts = String["@", "@stdlib"]
+    d = pkgdir(@__MODULE__)
+    if d !== nothing
+        ds = String(d)
+        !isempty(ds) && !(ds in parts) && push!(parts, ds)
+    end
+    return parts
+end
+
 function worker_load_path(; ssh::Bool = false)::String
-    # Local and remote workers: job packages load via `--project=` only.
+    # Job packages load via `--project=` only; kit source is pinned explicitly,
+    # not inherited from the parent's active project or sandbox LOAD_PATH.
     ssh # keyword kept for call-site documentation
-    return _LAUNCH_LOAD_PATH
+    sep = Sys.iswindows() ? ";" : ":"
+    return join(_worker_load_path_entries(), sep)
 end
 
 function _env_unset_prefix()::String
@@ -328,7 +340,8 @@ function launch_override_names(ambient)::Vector{String}
         (v isa AbstractString && !isempty(strip(v))) && push!(names, k)
     end
     lp = get(ambient, "JULIA_LOAD_PATH", nothing)
-    if lp isa AbstractString && !isempty(strip(lp)) && strip(lp) != _LAUNCH_LOAD_PATH
+    want = worker_load_path()
+    if lp isa AbstractString && !isempty(strip(lp)) && strip(lp) != want
         push!(names, "JULIA_LOAD_PATH")
     end
     return unique!(names)
@@ -381,7 +394,7 @@ function ssh_worker_exename(julia_path::AbstractString)::Cmd
     end
     # Set LOAD_PATH here. `env -u JULIA_LOAD_PATH` would drop the value
     # Distributed exported on the SSH command line.
-    push!(argv, "JULIA_LOAD_PATH=$(_LAUNCH_LOAD_PATH)")
+    push!(argv, "JULIA_LOAD_PATH=$(worker_load_path(; ssh = true))")
     push!(argv, String(julia_path))
     return Cmd(argv)
 end
@@ -653,5 +666,5 @@ function go_remote_julia_prefix(
     end
     blas_s = blas === nothing ? "" :
         " OPENBLAS_NUM_THREADS=$(posix_quote(String(blas))) OMP_NUM_THREADS=$(posix_quote(String(blas)))"
-    return "$(_env_unset_prefix())$blas_s JULIA_LOAD_PATH=$(posix_quote(_LAUNCH_LOAD_PATH)) $(jb)$(flag_s)"
+    return "$(_env_unset_prefix())$blas_s JULIA_LOAD_PATH=$(posix_quote(worker_load_path(; ssh = true))) $(jb)$(flag_s)"
 end

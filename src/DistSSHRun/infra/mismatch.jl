@@ -1040,7 +1040,7 @@ function _go_remote_run_identity(
     pr = _remote_shell_path_word(rp)
     inner = string(
         "JULIA_LOAD_PATH=",
-        posix_quote(_LAUNCH_LOAD_PATH),
+        posix_quote(worker_load_path(; ssh = true)),
         " ",
         pq,
         " --startup-file=no --project=",

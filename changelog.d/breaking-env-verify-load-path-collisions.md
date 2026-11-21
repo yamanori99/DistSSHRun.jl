@@ -2,8 +2,9 @@ category: breaking
 
 Closes #468
 
-- Local workers use `JULIA_LOAD_PATH=@:@stdlib` only (no script directory or
-  active-project load-path extras). Drive restricts controller `LOAD_PATH` to
+- Workers use `JULIA_LOAD_PATH=@:@stdlib` plus the pinned DistSSHRun source path
+  only (no script directory or active-project load-path extras). Drive restricts
+  controller `LOAD_PATH` to
   `@` and `@stdlib` while the job project is active.
 - `drive` / `go` verify package identity collisions between already-loaded
   packages and the job Manifest (UUID and version) with what/where/why/fix

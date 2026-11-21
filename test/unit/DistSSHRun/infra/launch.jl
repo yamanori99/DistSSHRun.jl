@@ -13,7 +13,7 @@ using TOML
 
     env = Dict(DistSSHRun.worker_env_pairs("/tmp/job"))
     @test env["JULIA_LOAD_PATH"] == DistSSHRun.worker_load_path()
-    @test DistSSHRun.worker_load_path(; ssh = true) == "@:@stdlib"
+    @test DistSSHRun.worker_load_path() == DistSSHRun.worker_load_path(; ssh = true)
     @test !occursin("@v#.#", DistSSHRun.worker_load_path())
     @test env["JULIA_PROJECT"] == "/tmp/job"
     @test haskey(env, "JULIA_NUM_THREADS")
@@ -191,9 +191,11 @@ using TOML
     @test "/opt/julia" in ssh_exe.exec
     @test "-u" in ssh_exe.exec
     @test "JULIA_PROJECT" in ssh_exe.exec
-    @test "JULIA_LOAD_PATH=@:@stdlib" in ssh_exe.exec
+    want_lp = DistSSHRun.worker_load_path(; ssh = true)
+    @test occursin("JULIA_LOAD_PATH=", ssh_cmd)
+    @test any(s -> s == "JULIA_LOAD_PATH=$(want_lp)", ssh_exe.exec)
     @test occursin("-u JULIA_PROJECT", ssh_cmd)
-    @test occursin("JULIA_LOAD_PATH=@:@stdlib /opt/julia", ssh_cmd)
+    @test occursin("JULIA_LOAD_PATH=$(want_lp) /opt/julia", ssh_cmd)
     @test !occursin("-u JULIA_LOAD_PATH", ssh_cmd)
     @test DistSSHRun.ssh_addprocs_bind_localhost("user@lab") == "user@lab 127.0.0.1"
 

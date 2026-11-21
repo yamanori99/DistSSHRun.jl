@@ -5,15 +5,22 @@ using Pkg
 using Dates
 
 @testset "job environment" begin
-    @testset "worker_load_path is @:@stdlib for local and ssh" begin
-        @test DistSSHRun.worker_load_path() == DistSSHRun._LAUNCH_LOAD_PATH
-        @test DistSSHRun.worker_load_path(; ssh = true) == "@:@stdlib"
+    @testset "worker_load_path pins @ @stdlib and kit, not parent extras" begin
+        lp = DistSSHRun.worker_load_path()
+        lp_ssh = DistSSHRun.worker_load_path(; ssh = true)
+        @test lp == lp_ssh
+        @test occursin("@", lp)
+        @test occursin("@stdlib", lp)
+        kit = pkgdir(DistSSHRun)
+        if kit !== nothing
+            @test occursin(String(kit), lp)
+        end
         env = Dict(DistSSHRun.worker_env_pairs("/tmp/job"))
-        @test env["JULIA_LOAD_PATH"] == "@:@stdlib"
+        @test env["JULIA_LOAD_PATH"] == lp
         ap = mktempdir()
         try
             write(joinpath(ap, "Project.toml"), "name = \"LpJob\"\n")
-            @test !occursin(ap, DistSSHRun.worker_load_path())
+            @test !occursin(ap, lp)
         finally
             rm(ap; force = true, recursive = true)
         end

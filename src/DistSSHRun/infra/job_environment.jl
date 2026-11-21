@@ -2,6 +2,11 @@
 
 const _JOB_LOAD_PATH = ("@", "@stdlib")
 
+function _job_controller_julia_load_path()::String
+    sep = Sys.iswindows() ? ";" : ":"
+    return join(String.(collect(_JOB_LOAD_PATH)), sep)
+end
+
 function restrict_job_load_path!()
     empty!(LOAD_PATH)
     for entry in _JOB_LOAD_PATH
@@ -183,8 +188,8 @@ Julia source spliced into worker Main (no DistSSHRun bindings).
 """
 function worker_package_collision_check_source()::String
     return """
+    using TOML
     function _drive_worker_assert_no_package_collisions!()
-        using TOML
         proj = Base.active_project()
         proj === nothing && return nothing
         man = try
@@ -266,7 +271,10 @@ function worker_package_collision_check_source()::String
 end
 
 function _worker_assert_job_package_collisions_expr()
-    return Meta.parse("(using TOML; include_string(Main, $(repr(worker_package_collision_check_source()))); _drive_worker_assert_no_package_collisions!())")
+    return Meta.parse(
+        "(include_string(Main, $(repr(worker_package_collision_check_source()))); " *
+            "Base.invokelatest(Main._drive_worker_assert_no_package_collisions!))",
+    )
 end
 
 """Run collision check on a worker via `Core.eval` (no DistSSHRun on the worker)."""
@@ -278,17 +286,24 @@ end
 function _with_controller_job_verify!(project::AbstractString, f::Function)
     prev_active = Base.ACTIVE_PROJECT[]
     prev_lp = copy(LOAD_PATH)
+    prev_julia_lp = get(ENV, "JULIA_LOAD_PATH", nothing)
     try
         pf = DistSSHBase._located_project_file(project)
         if pf isa String && !isempty(pf)
             Base.set_active_project(String(pf))
         end
         restrict_job_load_path!()
+        ENV["JULIA_LOAD_PATH"] = _job_controller_julia_load_path()
         return f()
     finally
         empty!(LOAD_PATH)
         append!(LOAD_PATH, prev_lp)
         Base.ACTIVE_PROJECT[] = prev_active
+        if prev_julia_lp === nothing
+            delete!(ENV, "JULIA_LOAD_PATH")
+        else
+            ENV["JULIA_LOAD_PATH"] = prev_julia_lp
+        end
     end
 end
 
