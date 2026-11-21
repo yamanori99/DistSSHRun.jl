@@ -30,8 +30,10 @@ DistSSHRun.set_kit_verbosity!(:progress)
 # Keep `include(joinpath(@__DIR__, …))` at this top level (JETLS). The banner
 # `[i/N]` uses `_runtest_selected_files` (group + short-skip), not every
 # `_runtest_include(` line in this file.
-const _RUNTEST_N = length(_runtest_selected_files(read(@__FILE__, String)))
+const _RUNTEST_PLANNED = _runtest_selected_files(read(@__FILE__, String))
+const _RUNTEST_N = length(_RUNTEST_PLANNED)
 const _RUNTEST_I = Ref(0)
+const _RUNTEST_EXECUTED = String[]
 function _runtest_announce(rel::AbstractString)
     _RUNTEST_I[] += 1
     println("[$(_RUNTEST_I[])/$_RUNTEST_N]  $rel")
@@ -41,6 +43,7 @@ end
 
 function _runtest_include(rel::AbstractString, path::AbstractString)
     _runtest_announce(rel)
+    push!(_RUNTEST_EXECUTED, String(rel))
     mktemp() do err_path, err_io
         redirect_stderr(err_io) do
             _with_leak_guard(() -> include(path), rel)
@@ -74,7 +77,9 @@ end
             _runtest_include("unit/DistSSHRun/options/heartbeat.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "options", "heartbeat.jl"))
             _runtest_include("unit/DistSSHRun/options/config.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "options", "config.jl"))
             _runtest_include("unit/DistSSHRun/options/job_options.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "options", "job_options.jl"))
-            _runtest_include("unit/DistSSHRun/options/process_env.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "options", "process_env.jl"))
+            if !_distsshrun_short_skip("unit/DistSSHRun/options/process_env.jl")
+                _runtest_include("unit/DistSSHRun/options/process_env.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "options", "process_env.jl"))
+            end
             _runtest_include("unit/DistSSHRun/infra/detached_job_blob.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "detached_job_blob.jl"))
             _runtest_include("unit/DistSSHRun/execute_envelope.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "execute_envelope.jl"))
             _runtest_include("unit/DistSSHRun/infra/worker_plan.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "worker_plan.jl"))
@@ -202,4 +207,5 @@ end
             end
         end
     end # integration group
+    _runtest_assert_planned_executed!(_RUNTEST_PLANNED, _RUNTEST_EXECUTED)
 end
