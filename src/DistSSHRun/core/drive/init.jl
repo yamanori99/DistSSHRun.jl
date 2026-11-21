@@ -34,40 +34,45 @@ end
 # Source text (not a DistSSHRun-quoted `function` Expr) so workers define
 # these names in Main without serializing kit gensyms.
 const _DRIVE_WORKER_BOOTSTRAP = let collision = worker_package_collision_check_source()
-    """
-ENV["JULIA_PKG_PRECOMPILE_AUTO"] = "0"
-using Pkg
-$collision
-function _drive_worker_activate!(path::String)
-    Pkg.activate(path; io = devnull)
-    empty!(LOAD_PATH)
-    push!(LOAD_PATH, "@")
-    push!(LOAD_PATH, "@stdlib")
-    _drive_worker_assert_no_package_collisions!()
-    return nothing
-end
-function _drive_worker_include!(path::String)
-    Base.include(Main, path)
-    return nothing
-end
-function _drive_worker_publish!(src::String, path::String)
-    isempty(src) && return nothing
-    tls = task_local_storage()
-    prev = get(tls, :SOURCE_PATH, nothing)
-    tls[:SOURCE_PATH] = path
-    try
-        include_string(Main, src, path)
-    finally
-        if prev === nothing
-            delete!(tls, :SOURCE_PATH)
-        else
-            tls[:SOURCE_PATH] = prev
-        end
-    end
-    return nothing
-end
-nothing
-"""
+    join(
+        vcat(
+            String[
+                "ENV[\"JULIA_PKG_PRECOMPILE_AUTO\"] = \"0\"",
+                "using Pkg",
+                collision,
+                "function _drive_worker_activate!(path::String)",
+                "    Pkg.activate(path; io = devnull)",
+                "    empty!(LOAD_PATH)",
+                "    push!(LOAD_PATH, \"@\")",
+                "    push!(LOAD_PATH, \"@stdlib\")",
+                "    _drive_worker_assert_no_package_collisions!()",
+                "    return nothing",
+                "end",
+                "function _drive_worker_include!(path::String)",
+                "    Base.include(Main, path)",
+                "    return nothing",
+                "end",
+                "function _drive_worker_publish!(src::String, path::String)",
+                "    isempty(src) && return nothing",
+                "    tls = task_local_storage()",
+                "    prev = get(tls, :SOURCE_PATH, nothing)",
+                "    tls[:SOURCE_PATH] = path",
+                "    try",
+                "        include_string(Main, src, path)",
+                "    finally",
+                "        if prev === nothing",
+                "            delete!(tls, :SOURCE_PATH)",
+                "        else",
+                "            tls[:SOURCE_PATH] = prev",
+                "        end",
+                "    end",
+                "    return nothing",
+                "end",
+                "nothing",
+            ],
+        ),
+        "\n",
+    )
 end
 
 """
