@@ -20,9 +20,11 @@ const _EMPTY_HEARTBEAT_ENV = DistSSHRun.ProcessEnv(Dict{String, String}())
     @testset "provenance heartbeat table" begin
         DistSSHRun._reset_run_provenance!(pwd())
         pol = DistSSHRun.resolve_drive_heartbeat_policy(
-            env = DistSSHRun.ProcessEnv(Dict(
-                "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "11"
-            )),
+            env = DistSSHRun.ProcessEnv(
+                Dict(
+                    "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "11"
+                )
+            ),
             self_exit = true
         )
         DistSSHRun.record_heartbeat_provenance!(pol)

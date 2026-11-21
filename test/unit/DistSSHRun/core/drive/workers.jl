@@ -602,10 +602,12 @@ end
         @test cfg.interval == 30.0
         @test cfg.deadline === nothing
         cfg = DistSSHRun.resolve_drive_heartbeat_policy(
-            env = DistSSHRun.ProcessEnv(Dict(
-                "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "2",
-                "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "9"
-            )),
+            env = DistSSHRun.ProcessEnv(
+                Dict(
+                    "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "2",
+                    "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "9"
+                )
+            ),
             self_exit = true
         )
         @test cfg.self_exit
@@ -619,10 +621,12 @@ end
             env = DistSSHRun.ProcessEnv(Dict("DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1"))
         )
         pol = DistSSHRun.resolve_drive_heartbeat_policy(
-            env = DistSSHRun.ProcessEnv(Dict(
-                "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1",
-                "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "7"
-            ))
+            env = DistSSHRun.ProcessEnv(
+                Dict(
+                    "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1",
+                    "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "7"
+                )
+            )
         )
         @test pol.self_exit
         @test pol.deadline == 7.0

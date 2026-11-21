@@ -72,7 +72,7 @@ using Test, DistSSHRun
 
     @testset "dry-run per-host launch" begin
         let pe = DistSSHRun.snapshot_process_env(),
-            cfg = DistSSHRun.resolve_run_job_config(;
+                cfg = DistSSHRun.resolve_run_job_config(;
                 command = :go,
                 cli_dry_run = true,
                 cli_unsafe_expose_port = true,
@@ -97,7 +97,7 @@ using Test, DistSSHRun
             @test !occursin("phase 4", txt)
         end
         let pe = DistSSHRun.snapshot_process_env(),
-            cfg = DistSSHRun.resolve_run_job_config(;
+                cfg = DistSSHRun.resolve_run_job_config(;
                 command = :drive,
                 cli_dry_run = true,
                 cli_unsafe_expose_port = true,
@@ -118,7 +118,7 @@ using Test, DistSSHRun
             @test occursin("alice@lab:2222:", txt)
         end
         let pe = DistSSHRun.snapshot_process_env(),
-            cfg = DistSSHRun.resolve_run_job_config(;
+                cfg = DistSSHRun.resolve_run_job_config(;
                 command = :go,
                 cli_dry_run = true,
                 env = pe,
@@ -137,7 +137,7 @@ using Test, DistSSHRun
 
     @testset "dry-run hosts_source" begin
         let pe = DistSSHRun.snapshot_process_env(),
-            cfg = DistSSHRun.resolve_run_job_config(;
+                cfg = DistSSHRun.resolve_run_job_config(;
                 command = :go,
                 cli_dry_run = true,
                 env = pe,
@@ -156,7 +156,7 @@ using Test, DistSSHRun
             @test occursin("hosts_source = \"--hosts\"", txt)
         end
         let pe = DistSSHRun.snapshot_process_env(),
-            cfg = DistSSHRun.resolve_run_job_config(;
+                cfg = DistSSHRun.resolve_run_job_config(;
                 command = :go,
                 cli_dry_run = true,
                 env = pe,

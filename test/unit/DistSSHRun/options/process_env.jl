@@ -8,10 +8,12 @@ using DistSSHRun
             "DISTSSH_HOSTS" => "ignored",
             "JULIA_DISTRIBUTED_EXE" => "/live/julia",
         ) do
-            pe = DistSSHRun.ProcessEnv(Dict(
-                "DISTSSH_YES" => "1",
-                "JULIA_DISTRIBUTED_EXE" => "/frozen/julia",
-            ))
+            pe = DistSSHRun.ProcessEnv(
+                Dict(
+                    "DISTSSH_YES" => "1",
+                    "JULIA_DISTRIBUTED_EXE" => "/frozen/julia",
+                )
+            )
             parsed = DistSSHRun.parse_setup_args(String["check", "host1"]; env = pe)
             @test parsed.cli_session.yes
             @test parsed.julia_path == "/frozen/julia"
