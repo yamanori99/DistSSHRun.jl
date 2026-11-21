@@ -8,6 +8,7 @@
 # A name that matches no file is an error; ParallelTestRunner itself would pass with zero tests.
 
 using ParallelTestRunner
+using Test
 using DistSSHRun
 
 const ROOT = @__DIR__
@@ -15,12 +16,16 @@ const TEST_PROJECT = let active = Base.active_project()
     active === nothing && error("test/parallel.jl: Base.active_project() is nothing")
     String(active)
 end
+include(joinpath(ROOT, "support.jl"))
 
 const FILES = let src = read(joinpath(ROOT, "runtests.jl"), String)
     files = String[m.captures[1] for m in eachmatch(r"_runtest_include\(\s*\"([^\"]+)\"", src)]
     isempty(files) && error("test/parallel.jl: no _runtest_include calls in runtests.jl")
-    group = strip(get(ENV, "DISTSSH_TEST_GROUP", ""))
-    isempty(group) ? files : filter(startswith(group * "/"), files)
+    selected = filter(files) do rel
+        _distssh_test_group_enabled(Symbol(first(splitpath(rel)))) && !_distsshrun_short_skip(rel)
+    end
+    isempty(selected) && error("test/parallel.jl: DISTSSH_TEST_GROUP and DISTSSHRUN_TEST_SHORT select no file")
+    selected
 end
 
 const TESTSUITE = Dict{String, Expr}(

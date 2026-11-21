@@ -57,15 +57,6 @@ function _runtest_include(rel::AbstractString, path::AbstractString)
     return nothing
 end
 
-function _distssh_test_group_enabled(sym::Symbol)::Bool
-    raw = strip(get(ENV, "DISTSSH_TEST_GROUP", ""))
-    isempty(raw) && return true
-    g = lowercase(raw)
-    g == "unit" && return sym === :unit
-    g == "integration" && return sym === :integration
-    error("test/runtests.jl: invalid DISTSSH_TEST_GROUP=$(repr(raw)); want unit, integration, or unset")
-end
-
 @testset "DistSSHRun" verbose = true begin
     if _distssh_test_group_enabled(:unit)
         @testset "unit" verbose = true begin

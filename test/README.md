@@ -38,9 +38,12 @@ julia --project=test test/parallel.jl unit/DistSSHRun/drive  # names starting wi
 julia --project=test test/parallel.jl --list
 ```
 
-Each file runs in its own module on a reused worker, so a file must load what
-it uses (`using Distributed`) rather than rely on an earlier file. A name that
-matches no file is an error.
+`DISTSSH_TEST_GROUP` and `DISTSSHRUN_TEST_SHORT` select files as in
+`runtests.jl`. A reused worker includes each file into its `Main`, in an order
+that differs from `runtests.jl`. A file must load what it uses
+(`using Distributed`) rather than rely on an earlier file, and a binding one
+file leaves can still reach the next. A name or an environment that matches no
+file is an error.
 
 Real SSH:
 
