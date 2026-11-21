@@ -98,36 +98,36 @@ function drive!(
     allow_external_symlinks &&
         _reject_run_transfer_cli!("drive!", "--allow-external-symlinks")
     return _drive_frame(; cli = false) do
-        if isolated
-            resolved = plan
-            if resolved === nothing && !isempty(session.tokens)
-                resolved = worker_plan_from_tokens(
-                    session.tokens;
-                    head_workers = session.cli_session.head_workers,
-                )
-            end
-            parsed = drive_parsed_from_session(
-                session,
-                script;
-                workers = resolved,
-                script_args = args,
-                skip_hash_check = skip_hash_check,
-                output_dir = output_dir,
-                enable_log = enable_log,
-                log_dir = log_dir,
-                package = package,
-                julia = julia,
-                best_effort = best_effort,
-                worker_include = worker_include,
-                unsafe_skip_env_digests = unsafe_skip_env_digests,
-                unsafe_expose_port = unsafe_expose_port,
-                unsafe_all_to_all = unsafe_all_to_all,
-                run_id = run_id,
-                unsafe_master_silence_exit = unsafe_master_silence_exit,
-                isolated = isolated,
-                reuse_main = reuse_main,
-                bind_overrides = bind_overrides,
+        resolved = plan
+        if resolved === nothing && !isempty(session.tokens)
+            resolved = worker_plan_from_tokens(
+                session.tokens;
+                head_workers = session.cli_session.head_workers,
             )
+        end
+        parsed = drive_parsed_from_session(
+            session,
+            script;
+            workers = resolved,
+            script_args = args,
+            skip_hash_check = skip_hash_check,
+            output_dir = output_dir,
+            enable_log = enable_log,
+            log_dir = log_dir,
+            package = package,
+            julia = julia,
+            best_effort = best_effort,
+            worker_include = worker_include,
+            unsafe_skip_env_digests = unsafe_skip_env_digests,
+            unsafe_expose_port = unsafe_expose_port,
+            unsafe_all_to_all = unsafe_all_to_all,
+            run_id = run_id,
+            unsafe_master_silence_exit = unsafe_master_silence_exit,
+            isolated = isolated,
+            reuse_main = reuse_main,
+            bind_overrides = bind_overrides,
+        )
+        if isolated
             return _with_drive_process!(session.project) do
                 argv = drive_api_isolated_argv(parsed)
                 code = run_drive_parsed!(
@@ -150,35 +150,6 @@ function drive!(
                     # Scoped for `remote_layout_path` / worker path mapping only.
                     # Restored here and again by `_with_drive_process!`.
                     return _with_session_remote_env!(session) do
-                        resolved = plan
-                        if resolved === nothing && !isempty(session.tokens)
-                            resolved = worker_plan_from_tokens(
-                                session.tokens;
-                                head_workers = session.cli_session.head_workers,
-                            )
-                        end
-                        parsed = drive_parsed_from_session(
-                            session,
-                            script;
-                            workers = resolved,
-                            script_args = args,
-                            skip_hash_check = skip_hash_check,
-                            output_dir = output_dir,
-                            enable_log = enable_log,
-                            log_dir = log_dir,
-                            package = package,
-                            julia = julia,
-                            best_effort = best_effort,
-                            worker_include = worker_include,
-                            unsafe_skip_env_digests = unsafe_skip_env_digests,
-                            unsafe_expose_port = unsafe_expose_port,
-                            unsafe_all_to_all = unsafe_all_to_all,
-                            run_id = run_id,
-                            unsafe_master_silence_exit = unsafe_master_silence_exit,
-                            isolated = isolated,
-                            reuse_main = reuse_main,
-                            bind_overrides = bind_overrides,
-                        )
                         apply_shared_cli_flags!(parsed.cli_session)
                         original_args = copy(ARGS)
                         resolved_output_dir = Ref{Union{Nothing, String}}(nothing)
