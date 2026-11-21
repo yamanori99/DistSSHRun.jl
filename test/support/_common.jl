@@ -153,6 +153,7 @@ if !isdefined(Main, :_test_root)
         # PkgEval and Registry install set JULIA_PKGEVAL=true and skip them.
         "integration/setup/progress_tty.jl",
         "integration/drive/progress_tty.jl",
+        "integration/drive/reuse_main_isolated.jl",
         "integration/drive/execute.jl",
         "integration/drive/interrupt_grace.jl",
         "integration/drive/pkg.jl",

@@ -70,9 +70,31 @@ function _throw_removed_workers_flag(flag::AbstractString)
     )
 end
 
+# Separates API isolated script args from shared-flag peeling. Not a CLI flag.
+const _DRIVE_API_SCRIPT_ARGS_MARK = "\u001e"
+
+"""Drop the API script-arg mark and return those args. `nothing` when the mark is absent."""
+function _take_drive_api_script_args!(args::Vector{String})::Union{Nothing, Vector{String}}
+    i = findfirst(==(_DRIVE_API_SCRIPT_ARGS_MARK), args)
+    i === nothing && return nothing
+    tail = args[(i + 1):end]
+    deleteat!(args, i:length(args))
+    return tail
+end
+
+"""Append script args so `parse_drive_args` does not treat them as shared flags."""
+function _append_drive_api_script_args!(out::Vector{String}, script_args)
+    isempty(script_args) && return out
+    push!(out, _DRIVE_API_SCRIPT_ARGS_MARK)
+    append!(out, String.(script_args))
+    return out
+end
+
 """Parse `drive` CLI arguments (same shape as other kit CLI parsers)."""
 function parse_drive_args(args::Vector{String}; env::ProcessEnv = snapshot_process_env())
-    blob_path, args = peel_job_blob_bootstrap(copy(args))
+    args = copy(args)
+    forced_script_args = _take_drive_api_script_args!(args)
+    blob_path, args = peel_job_blob_bootstrap(args)
     if blob_path !== nothing
         scrub_detached_placement_env!()
         env = snapshot_process_env()
@@ -393,6 +415,10 @@ function parse_drive_args(args::Vector{String}; env::ProcessEnv = snapshot_proce
             surface = :cli,
             head_workers = head_workers,
         )
+    end
+
+    if forced_script_args !== nothing
+        script_args = forced_script_args
     end
 
     return merge_run_option_cli!(

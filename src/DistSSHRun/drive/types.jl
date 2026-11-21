@@ -399,6 +399,8 @@ mutable struct PipelineConfig
     run_id::Union{Nothing, String}
     best_effort::Bool
     process_env::ProcessEnv
+    isolated::Bool
+    reuse_main::Bool
 end
 
 function PipelineConfig(;
@@ -423,12 +425,15 @@ function PipelineConfig(;
         run_id::Union{Nothing, AbstractString} = nothing,
         best_effort::Bool = false,
         process_env::ProcessEnv = snapshot_process_env(),
+        isolated::Bool = false,
+        reuse_main::Bool = false,
     )
     yes !== nothing && throw(
         ArgumentError(
             "PipelineConfig does not accept yes=; confirmation is CLI-only (DISTSSH_YES / -y)",
         ),
     )
+    isolated && reuse_main && throw(ArgumentError(drive_isolated_reuse_main_conflict_message()))
     rr = remote === nothing ? nothing : String(strip(String(remote)))
     rr !== nothing && isempty(rr) && (rr = nothing)
     hf = hosts_file === nothing ? nothing : String(strip(String(hosts_file)))
@@ -464,6 +469,8 @@ function PipelineConfig(;
         snap,
         best_effort,
         process_env,
+        isolated,
+        reuse_main,
     )
 end
 

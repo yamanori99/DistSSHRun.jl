@@ -318,6 +318,7 @@ using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
                             unsafe_expose_port = nothing,
                             skip_hash_check = true,
                             enable_log = false,
+                            reuse_main = true,
                         )
                     catch e
                         e isa CliUsageError ? e : rethrow()
@@ -345,6 +346,7 @@ using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
                             skip_hash_check = true,
                             enable_log = false,
                             julia = julia_exe,
+                            reuse_main = true,
                         )
                     end
                 end

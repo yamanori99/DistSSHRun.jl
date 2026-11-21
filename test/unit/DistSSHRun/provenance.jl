@@ -777,7 +777,8 @@ end
                     script, String[]; head_workers = 1,
                     project = proj,
                     enable_log = false,
-                    unsafe_skip_env_digests = true
+                    unsafe_skip_env_digests = true,
+                    reuse_main = true
                 )
                 @test result.ok
                 prov = DistSSHRun.assemble_provenance(proj)

@@ -163,6 +163,12 @@ end
             _runtest_include("integration/go/overlap.jl", joinpath(@__DIR__, "integration", "go", "overlap.jl"))
             _runtest_include("integration/drive/local.jl", joinpath(@__DIR__, "integration", "drive", "local.jl"))
             _runtest_include("integration/drive/api.jl", joinpath(@__DIR__, "integration", "drive", "api.jl"))
+            if !_distsshrun_short_skip("integration/drive/reuse_main_isolated.jl")
+                _runtest_include(
+                    "integration/drive/reuse_main_isolated.jl",
+                    joinpath(@__DIR__, "integration", "drive", "reuse_main_isolated.jl"),
+                )
+            end
             _runtest_include("integration/cli/project.jl", joinpath(@__DIR__, "integration", "cli", "project.jl"))
             if !_distsshrun_short_skip("integration/drive/progress_tty.jl")
                 _runtest_include("integration/drive/progress_tty.jl", joinpath(@__DIR__, "integration", "drive", "progress_tty.jl"))
