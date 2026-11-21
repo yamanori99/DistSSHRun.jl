@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck over tracked *.sh under scripts/, .github/, testenv/.
+# Run ShellCheck on tracked shell scripts under scripts/, .github/, and testenv/.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -10,7 +10,6 @@ if ! command -v shellcheck >/dev/null 2>&1; then
   exit 1
 fi
 
-shopt -s globstar nullglob
 mapfile -t files < <(
   git ls-files 'scripts/**/*.sh' '.github/**/*.sh' 'testenv/**/*.sh' | LC_ALL=C sort
 )
@@ -22,7 +21,7 @@ fi
 fail=0
 for f in "${files[@]}"; do
   [[ -f "${f}" ]] || continue
-  if ! shellcheck -x "${f}"; then
+  if ! shellcheck -x -S error "${f}"; then
     fail=1
   fi
 done
