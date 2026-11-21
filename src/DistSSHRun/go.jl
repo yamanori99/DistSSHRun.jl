@@ -910,6 +910,7 @@ function _go_complete!(
         batch_dir::AbstractString,
         release_lock,
         progress_ok::Bool,
+        proj::AbstractString,
         anchor,
         tokens::Vector{String},
     )::GoResult
@@ -922,20 +923,29 @@ function _go_complete!(
     kr = kit_run_result(result, tokens)
     _write_kit_result_file(kr)
     rd = kit_run_dir()
-    if rd !== nothing
-        note_controller_shipped_tree_drift!(anchor)
-        write_kit_run_toml!(
-            rd;
-            kind = :go,
-            output_dir = batch_dir,
-            log_dir = batch_dir,
-            result = kr,
-            project_root = String(anchor),
-            provenance = assemble_provenance(),
-        )
+    try
+        if rd !== nothing
+            try
+                note_controller_shipped_tree_drift!(proj)
+            catch err
+                kit_println(
+                    "shipped-tree drift check skipped: $(sprint(showerror, err; context = 0))",
+                )
+            end
+            write_kit_run_toml!(
+                rd;
+                kind = :go,
+                output_dir = batch_dir,
+                log_dir = batch_dir,
+                result = kr,
+                project_root = String(anchor),
+                provenance = assemble_provenance(),
+            )
+        end
+    finally
+        release_lock()
+        _remove_kit_pid_file(getpid(), batch_dir, nothing)
     end
-    release_lock()
-    _remove_kit_pid_file(getpid(), batch_dir, nothing)
     return result
 end
 
@@ -1388,6 +1398,7 @@ function _go_run!(
                 batch_dir,
                 release_lock,
                 false,
+                proj,
                 anchor,
                 place,
             )
@@ -1407,6 +1418,7 @@ function _go_run!(
                 batch_dir,
                 release_lock,
                 false,
+                proj,
                 anchor,
                 place,
             )
@@ -1421,6 +1433,7 @@ function _go_run!(
             batch_dir,
             release_lock,
             true,
+            proj,
             anchor,
             place,
         )

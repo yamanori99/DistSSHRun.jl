@@ -946,4 +946,56 @@ using Dates
             )
         end
     end
+
+    @testset "_go_complete! releases output lock when drift check fails" begin
+        batch = mktempdir()
+        proj = mktempdir()
+        released = Ref(false)
+        try
+            write(joinpath(proj, "Project.toml"), "name = \"GoDrift\"\n")
+            _sync_test_project_manifest!(proj)
+            write(joinpath(proj, "job.jl"), "1\n")
+            pack = DistSSHRun._pack_project_tree(proj)
+            rows = Any[
+                Dict{String, Any}("path" => p, "blob" => h) for (p, h) in pack.content_file_digests
+            ]
+            DistSSHRun._set_active_deploy_record!(
+                Dict{String, Any}(
+                    "mode" => "ship-tree",
+                    "content_tree_hash" => pack.content_tree_hash,
+                    "content_file_digests" => rows,
+                )
+            )
+            rm(proj; recursive = true, force = true)
+            function release()
+                released[] = true
+                lock_path = joinpath(batch, ".kit.lock")
+                isfile(lock_path) && rm(lock_path; force = true)
+            end
+            DistSSHRun.kit_output_dir_lock!(batch)
+            result = DistSSHRun.GoResult(
+                true,
+                nothing,
+                DistSSHRun.DriveResult(true, 0),
+                nothing,
+                joinpath(dirname(proj), "job.jl"),
+                batch,
+            )
+            DistSSHRun._go_complete!(
+                result,
+                batch,
+                release,
+                false,
+                proj,
+                proj,
+                String[],
+            )
+            @test released[]
+            @test DistSSHRun.kit_output_dir_lock!(batch) isa Function
+            rm(pack.directory; recursive = true, force = true)
+        finally
+            DistSSHRun._clear_active_deploy_record!()
+            rm(batch; recursive = true, force = true)
+        end
+    end
 end

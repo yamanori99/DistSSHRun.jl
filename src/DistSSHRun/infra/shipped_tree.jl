@@ -2,6 +2,9 @@
 
 using Tar
 
+const _WORKER_SHIP_SHA_UUID = Base.UUID("ea8e919c-243c-51af-8825-aaa63cd721ce")
+const _WORKER_SHIP_TAR_UUID = Base.UUID("a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e")
+
 function _deploy_executable_ship_rels(rec::Union{Nothing, AbstractDict})::Union{Nothing, Vector{String}}
     rec === nothing && return nothing
     raw = get(rec, "executable_ship_rels", nothing)
@@ -156,8 +159,9 @@ function _worker_shipped_tree_verify_expr(rec::AbstractDict)
     exec = _deploy_executable_ship_rels(rec)
     exec_payload = exec === nothing ? nothing : String[string(r) for r in exec]
     return quote
-        using SHA, Tar
         let want = $(want), rows = $(rows), exec_rels = $(exec_payload)
+            SHA = Base.require(Base.PkgId($(_WORKER_SHIP_SHA_UUID), "SHA"))
+            Tar = Base.require(Base.PkgId($(_WORKER_SHIP_TAR_UUID), "Tar"))
             function blob_hex(data::AbstractVector{UInt8})
                 ctx = SHA.SHA1_CTX()
                 SHA.update!(ctx, codeunits(string("blob ", length(data), "\0")))
