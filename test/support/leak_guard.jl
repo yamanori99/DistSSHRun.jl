@@ -72,13 +72,45 @@ if !isdefined(@__MODULE__, :_DISTSSH_TEST_LEAK_TAG)
         return nothing
     end
 
+    function _restore_test_load_path!(
+            prev_lp::Vector{String},
+            prev_julia_lp::Union{Nothing, String},
+        )
+        try
+            empty!(LOAD_PATH)
+            append!(LOAD_PATH, prev_lp)
+        catch
+        end
+        try
+            if prev_julia_lp === nothing
+                delete!(ENV, "JULIA_LOAD_PATH")
+            else
+                ENV["JULIA_LOAD_PATH"] = prev_julia_lp
+            end
+        catch
+        end
+        return nothing
+    end
+
+    function _with_test_load_path_guard(f::Function)
+        prev_lp = copy(LOAD_PATH)
+        prev_julia_lp = get(ENV, "JULIA_LOAD_PATH", nothing)
+        try
+            return f()
+        finally
+            _restore_test_load_path!(prev_lp, prev_julia_lp)
+        end
+    end
+
     function _with_leak_guard(f::Function, rel::AbstractString)
         tag = _leak_guard_tag(rel)
-        return withenv(_DISTSSH_TEST_LEAK_TAG => tag) do
-            try
-                return f()
-            finally
-                _assert_no_leaked_processes(tag; label = rel)
+        return _with_test_load_path_guard() do
+            return withenv(_DISTSSH_TEST_LEAK_TAG => tag) do
+                try
+                    return f()
+                finally
+                    _assert_no_leaked_processes(tag; label = rel)
+                end
             end
         end
     end
