@@ -20,7 +20,7 @@ When a rule becomes a lint or a test, delete that line here.
 - Fail closed. Loosen only with an explicit flag or keyword, not with an environment variable.
 - Do not silently remap an old key or flag. Error with the corrected form.
 - One concept has one name. Do not add an alias. A public rename ships without a compatibility alias.
-- A missing value is a typed reason. A versioned format requires `schema_version`.
+- A missing value is a typed reason. Versioned formats record the writer package and version; readers reject a different major.minor.
 - CLI: missing operands print help on stderr and exit 2. Explicit help prints on stdout and exits 0. Other usage errors exit 2.
 - Read process environment for job defaults in exactly one place per invocation. Job execution must not read `ENV` for those defaults.
 - Each feature has one implementation. A second entry reaches that implementation, and a parity test covers the entries. Keep that test out of PkgEval.

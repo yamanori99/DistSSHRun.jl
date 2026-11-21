@@ -1,6 +1,16 @@
 # Loaded DistSSH component verification (separate from `run_identity` / env digests).
 
-const LOADED_IDENTITY_SCHEMA = 1
+const _LOADED_IDENTITY_KIT_VERSION = begin
+    path = joinpath(@__DIR__, "..", "..", "..", "Project.toml")
+    if isfile(path)
+        VersionNumber(String(get(TOML.parsefile(path), "version", "0.0.0")))
+    else
+        v"0.0.0"
+    end
+end
+
+const _LOADED_WIRE_WRITER =
+    DistSSHBase.record_writer_string("DistSSHRun", _LOADED_IDENTITY_KIT_VERSION)
 
 const _RUN_PKG_UUID = Base.UUID("b568025c-2759-4ef1-8b14-17d00e2cd000")
 const _BASE_PKG_UUID = Base.UUID("f0a69307-14e5-4272-8c28-20680d05bac8")
@@ -11,7 +21,6 @@ const _WORKER_QUEUE_UUID_STR = string(_QUEUE_PKG_UUID)
 const _KIT_PKG_NAME = "DistSSHKit"
 
 struct LoadedComponentId
-    schema::Int
     name::String
     uuid::Base.UUID
     version::String
@@ -29,7 +38,7 @@ struct LoadedSlotReport
 end
 
 module LoadedMismatchKind
-    const schema_skew = :schema_skew
+    const writer_skew = :writer_skew
     const component_id = :component_id
     const dual_layout = :dual_layout
     const probe_failed = :probe_failed
@@ -79,12 +88,11 @@ end
 
 function _component_id_from_module(mod::Module)::LoadedComponentId
     id = getfield(mod, :COMPONENT_ID)
-    schema = Int(getproperty(id, :schema))
     name = String(getproperty(id, :name))
     uuid = getproperty(id, :uuid)::Base.UUID
     version = String(getproperty(id, :version))
     digest = String(getproperty(id, :digest))
-    return LoadedComponentId(schema, name, uuid, version, digest)
+    return LoadedComponentId(name, uuid, version, digest)
 end
 
 function _read_top_level_base_id()::Union{Nothing, LoadedComponentId}
@@ -206,7 +214,7 @@ function _slot_wire_lines(s::LoadedSlotReport)::Vector{String}
 end
 
 function encode_loaded_wire_report(slots::AbstractVector{LoadedSlotReport})::String
-    lines = String["schema=$(LOADED_IDENTITY_SCHEMA)"]
+    lines = String["writer=$(_LOADED_WIRE_WRITER)"]
     for s in slots
         append!(lines, _slot_wire_lines(s))
         push!(lines, "---")
@@ -239,8 +247,8 @@ function _parse_slot_block(lines::AbstractVector{String})::LoadedSlotReport
     return LoadedSlotReport(Symbol(comp), state, ver, uuid, digest, layout, probe)
 end
 
-function decode_loaded_wire_report(text::AbstractString)::Tuple{Int, Vector{LoadedSlotReport}}
-    schema = LOADED_IDENTITY_SCHEMA
+function decode_loaded_wire_report(text::AbstractString)::Tuple{Union{Nothing, String}, Vector{LoadedSlotReport}}
+    writer = nothing
     slots = LoadedSlotReport[]
     block = String[]
     for line in split(String(text), '\n'; keepempty = false)
@@ -251,18 +259,39 @@ function decode_loaded_wire_report(text::AbstractString)::Tuple{Int, Vector{Load
             empty!(block)
             continue
         end
+        if startswith(s, "writer=")
+            writer = strip(s[8:end])
+            continue
+        end
         if startswith(s, "schema=")
-            schema = try
-                parse(Int, strip(s[8:end]))
-            catch
-                -1
-            end
             continue
         end
         push!(block, s)
     end
     isempty(block) || push!(slots, _parse_slot_block(block))
-    return schema, slots
+    return writer, slots
+end
+
+function _verify_loaded_wire_writer!(writer, site::AbstractString)
+    kind = DistSSHBase.record_writer_minor_match(
+        writer,
+        "DistSSHRun",
+        _LOADED_IDENTITY_KIT_VERSION,
+    )
+    kind == :ok && return nothing
+    throw(
+        LoadedCodeMismatchError(
+            LoadedMismatchKind.writer_skew,
+            String(site),
+            DistSSHBase.record_writer_mismatch_message(
+                kind,
+                writer,
+                "DistSSHRun",
+                _LOADED_IDENTITY_KIT_VERSION,
+                fix = "Match the controller package version, then rerun.",
+            ),
+        ),
+    )
 end
 
 function _compare_slot(expected::LoadedSlotReport, observed::LoadedSlotReport, site::String)
@@ -332,9 +361,10 @@ function verify_loaded_slots_match!(
 end
 
 function _worker_loaded_identity_expr()
+    wire_writer = _LOADED_WIRE_WRITER
     return quote
         let
-            lines = String[string("schema=", $(LOADED_IDENTITY_SCHEMA))]
+            lines = String[string("writer=", $(QuoteNode(wire_writer)))]
             run_uuid = $(_WORKER_RUN_UUID_STR)
             queue_uuid = $(_WORKER_QUEUE_UUID_STR)
             function __push_slot!(component, state, version, uuid, digest, layout, probe)
@@ -498,14 +528,8 @@ function verify_workers_loaded_identity!()
             site = "DistributedWorker rank=$(rank_s) pid=$(w) host=$(host)"
             try
                 wire = _fetch_worker_loaded_wire(w)
-                schema, observed = decode_loaded_wire_report(wire)
-                schema == LOADED_IDENTITY_SCHEMA || throw(
-                    LoadedCodeMismatchError(
-                        LoadedMismatchKind.schema_skew,
-                        site,
-                        "loaded identity schema=$(schema); expected $(LOADED_IDENTITY_SCHEMA)",
-                    ),
-                )
+                writer, observed = decode_loaded_wire_report(wire)
+                _verify_loaded_wire_writer!(writer, site)
                 verify_loaded_slots_match!(expected, observed, site)
             catch e
                 e isa LoadedCodeMismatchError || rethrow()

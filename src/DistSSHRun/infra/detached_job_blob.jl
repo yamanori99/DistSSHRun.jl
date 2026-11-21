@@ -1,6 +1,5 @@
 # Versioned detached/Queue job settings (`job.toml`); argv is bootstrap only.
 
-const DETACHED_JOB_BLOB_SCHEMA::Int = 1
 const DETACHED_JOB_BLOB_FILENAME::String = "job.toml"
 const DETACHED_JOB_BLOB_ENV::String = "DISTSSH_JOB_BLOB"
 
@@ -57,10 +56,23 @@ function _blob_optional_string(raw)::Union{Nothing, String}
 end
 
 function _validate_detached_job_blob_dict(raw::AbstractDict)
-    schema = get(raw, "schema", nothing)
-    schema === nothing && throw(ArgumentError("job blob: missing schema"))
-    Int(schema) != DETACHED_JOB_BLOB_SCHEMA &&
-        throw(ArgumentError("job blob: unsupported schema $(repr(schema))"))
+    writer = get(raw, "writer", nothing)
+    kind = DistSSHBase.record_writer_minor_match(
+        writer,
+        _RUN_RECORD_PACKAGE,
+        dist_ssh_kit_version(),
+    )
+    kind == :ok || throw(
+        ArgumentError(
+            DistSSHBase.record_writer_mismatch_message(
+                kind,
+                writer,
+                _RUN_RECORD_PACKAGE,
+                dist_ssh_kit_version();
+                fix = "Rewrite job.toml or rerun the command that wrote it.",
+            ),
+        ),
+    )
     kind = get(raw, "kind", nothing)
     kind isa AbstractString || throw(ArgumentError("job blob: missing kind"))
     sym = Symbol(String(kind))
@@ -82,7 +94,7 @@ end
 """
     read_detached_job_blob(path) -> NamedTuple
 
-Load and validate a detached job blob. Unknown schema fails closed.
+Load and validate a detached job blob. Writer `major.minor` must match this package.
 """
 function read_detached_job_blob(path::AbstractString)
     p = canonical_local_path(String(path))
@@ -94,7 +106,7 @@ function read_detached_job_blob(path::AbstractString)
     script = get(raw, "script", nothing)
     project = get(raw, "project", nothing)
     return (
-        schema = DETACHED_JOB_BLOB_SCHEMA,
+        writer = String(get(raw, "writer", "")),
         kind = kind,
         script = String(script),
         tokens = _blob_string_vec(get(raw, "tokens", String[])),
@@ -211,7 +223,7 @@ function write_detached_job_blob!(
     path = detached_job_blob_path(run_dir)
     mkpath(dirname(path))
     pairs = Pair{String, Any}[
-        "schema" => DETACHED_JOB_BLOB_SCHEMA,
+        "writer" => run_record_writer(),
         "kind" => String(kind),
         "script" => String(script),
         "tokens" => collect(String, tokens),
@@ -392,7 +404,7 @@ function go_parsed_from_detached_job_blob(blob)
     )
 end
 
-public DETACHED_JOB_BLOB_ENV, DETACHED_JOB_BLOB_FILENAME, DETACHED_JOB_BLOB_SCHEMA
+public DETACHED_JOB_BLOB_ENV, DETACHED_JOB_BLOB_FILENAME
 public detached_job_blob_path, drive_parsed_from_detached_job_blob, execute_kwargs_from_job_blob
 public go_parsed_from_detached_job_blob, peel_job_blob_bootstrap, read_detached_job_blob
 public scrub_detached_placement_env!, write_detached_job_blob!

@@ -27,4 +27,5 @@ include(joinpath(@__DIR__, "support.jl"))
     include(joinpath(@__DIR__, "shell_quote.jl"))
     include(joinpath(@__DIR__, "detect_julia.jl"))
     include(joinpath(@__DIR__, "tool_require.jl"))
+    include(joinpath(@__DIR__, "record_writer.jl"))
 end

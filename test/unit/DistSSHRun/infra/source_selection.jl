@@ -98,7 +98,7 @@ end
             sprint(
                 TOML.print,
                 Dict(
-                    "schema" => 1,
+                    "writer" => DistSSHRun.run_record_writer(),
                     "deploy_id" => _SNAP_HASH_OLD,
                     "mode" => "ship-tree",
                     "snapshot_id" => _SNAP_ID_OLD,
@@ -360,7 +360,7 @@ end
             sprint(
                 TOML.print,
                 Dict(
-                    "schema_version" => 1,
+                    "writer" => DistSSHRun.run_record_writer(),
                     "deploy_root" => "/deploy/a",
                     "hosts" => ["h1"],
                     "snapshot_id" => _SNAP_ID_OLD
@@ -830,7 +830,7 @@ end
                 kind = :drive,
                 project_root = proj,
                 provenance = Dict{String, Any}(
-                    "schema_version" => 1,
+                    "writer" => DistSSHRun.run_record_writer(),
                     "writer" => "DistSSHRun test",
                     "shipped" => Dict{String, Any}(
                         "source_kind" => "ship",
@@ -878,7 +878,7 @@ end
                     kind = :drive,
                     project_root = proj,
                     provenance = Dict{String, Any}(
-                        "schema_version" => 1,
+                        "writer" => DistSSHRun.run_record_writer(),
                         "writer" => "DistSSHRun test",
                         "shipped" => Dict{String, Any}(
                             "source_kind" => "ship",

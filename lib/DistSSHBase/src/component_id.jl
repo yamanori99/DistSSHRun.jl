@@ -1,4 +1,4 @@
-# Precompile-time component fingerprint (schema 1).
+# Precompile-time component fingerprint.
 
 const _SRC_FILES = (
     "DistSSHBase.jl",
@@ -27,10 +27,18 @@ const _SRC_FILES = (
 
 const _COMPONENT_SRC_DIGEST = src_component_digest(@__DIR__, _SRC_FILES)
 
+const _COMPONENT_PKG_VERSION = begin
+    path = joinpath(@__DIR__, "..", "Project.toml")
+    if isfile(path)
+        string(get(TOML.parsefile(path), "version", "0.0.0"))
+    else
+        "0.0.0"
+    end
+end
+
 const COMPONENT_ID = (
-    schema = 1,
     name = "DistSSHBase",
     uuid = Base.UUID("f0a69307-14e5-4272-8c28-20680d05bac8"),
-    version = "0.2.0-DEV",
+    version = _COMPONENT_PKG_VERSION,
     digest = _COMPONENT_SRC_DIGEST,
 )

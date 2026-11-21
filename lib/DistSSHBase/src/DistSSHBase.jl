@@ -48,6 +48,7 @@ include("procs/reap.jl")
 include("namespace.jl")
 include("component_src.jl")
 include("component_id.jl")
+include("record_writer.jl")
 include("tool_require.jl")
 
 # Queue and Kit import these. Underscore names stay private.
@@ -76,5 +77,13 @@ public CLI_EXIT_USAGE, CliForegroundInterrupt, CliUsageError, cli_help_stdout, c
 public wait_seconds
 public tool_require
 public src_component_digest
+public RecordWriterMismatchKind,
+    parse_record_writer,
+    record_writer_minor_match,
+    record_writer_minor_parts,
+    record_writer_mismatch_message,
+    record_writer_shell_minor_words,
+    record_writer_string,
+    record_writer_toml_line_ere
 
 end # module DistSSHBase
