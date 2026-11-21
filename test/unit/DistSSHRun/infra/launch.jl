@@ -552,7 +552,7 @@ using TOML
         DistSSHRun.verify_distributed_init_probe!()
 
         julia = joinpath(Sys.BINDIR, Base.julia_exename())
-        proj = if isdefined(Main, :TEST_PROJECT)
+        proj = if isdefined(@__MODULE__, :TEST_PROJECT)
             String(TEST_PROJECT)
         else
             String(something(Base.active_project(), pkgdir(DistSSHRun)))
@@ -697,7 +697,7 @@ end
 
 @testset "worker BLAS threads via addprocs (subprocess)" begin
     julia = joinpath(Sys.BINDIR, Base.julia_exename())
-    runproj = if isdefined(Main, :TEST_PROJECT)
+    runproj = if isdefined(@__MODULE__, :TEST_PROJECT)
         dirname(String(TEST_PROJECT))
     else
         String(something(Base.active_project(), pkgdir(DistSSHRun)) |> dirname)
@@ -738,7 +738,7 @@ end
         addprocs(1; exeflags = Cmd(flags), env = env)
         w = only(Distributed.workers())
         try
-            remotecall_fetch(() -> Core.eval(Main, :(using DistSSHRun)), w)
+            remotecall_fetch(Core.eval, w, Main, :(using DistSSHRun))
             snap_raw = remotecall_fetch(Core.eval, w, Main, DistSSHRun._worker_identity_expr())
             snap = Dict{String, String}(String(k) => String(v) for (k, v) in pairs(snap_raw))
             parent_id = DistSSHRun.run_identity(proj)

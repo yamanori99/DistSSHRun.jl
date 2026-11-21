@@ -1,7 +1,7 @@
 # Loaded first from support.jl (same role as DistSSHRun/core/drive/_common.jl).
 # Guard: JETLS may analyze this file both via support.jl and as an include leaf.
 
-if !isdefined(Main, :_test_root)
+if !isdefined(@__MODULE__, :_test_root)
     include(joinpath(@__DIR__, "..", "..", "src", "cli", "_checkout.jl"))
 
     function _test_root()::String
@@ -29,7 +29,7 @@ if !isdefined(Main, :_test_root)
     # startup project (`test/runtests.jl`, before any include). Do not read
     # `Base.active_project()` here: `drive!` activates the host and leaves it.
     function _cli_m_project(project::AbstractString)::String
-        isdefined(Main, :TEST_PROJECT) ||
+        isdefined(@__MODULE__, :TEST_PROJECT) ||
             error("_cli_m_project($(project)): TEST_PROJECT is not set")
         return String(TEST_PROJECT::AbstractString)
     end

@@ -1,7 +1,7 @@
 # Shared test infrastructure (barrel; mirrors cli/drive.jl + DistSSHRun/core/drive/).
 # Guard: runtests and some unit files may both `include` this path; JETLS should not reload fragments.
 
-if !isdefined(Main, :_child_julia_env)
+if !isdefined(@__MODULE__, :_child_julia_env)
     include(joinpath(@__DIR__, "..", "lib", "DistSSHBase", "test", "support.jl"))
     include(joinpath(@__DIR__, "..", "lib", "DistSSHUp", "test", "support.jl"))
     include(joinpath(@__DIR__, "support", "binding_world_stderr.jl"))

@@ -41,11 +41,11 @@ julia --project=test test/parallel.jl --list
 ```
 
 `DISTSSH_TEST_GROUP` and `DISTSSHRUN_TEST_SHORT` select files as in
-`runtests.jl`. A reused worker includes each file into its `Main`, in an order
-that differs from `runtests.jl`. A file must load what it uses
-(`using Distributed`) rather than rely on an earlier file, and a binding one
-file leaves can still reach the next. A name or an environment that matches no
-file is an error.
+`runtests.jl`. Each file runs in its own worker sandbox module (not worker
+`Main`), in an order that differs from `runtests.jl`. A file must load what it
+uses (`using Distributed`) rather than rely on an earlier file. In-process
+`drive!` still includes the driver script into process `Main`. A name or an
+environment that matches no file is an error.
 
 Real SSH:
 
