@@ -109,6 +109,8 @@ end
         _assert_no_leaked_processes(
             _leak_guard_tag("integration/drive/sigint.jl");
             label = "drive second SIGINT",
+            broken = VERSION < v"1.14.0-", #540
+            broken_rows = _leak_guard_known_worker_orphan,
         )
     end
 end
