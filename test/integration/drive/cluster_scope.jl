@@ -1,6 +1,5 @@
 using Test
 using Distributed
-using Logging
 using DistSSHRun
 
 function _cluster_session(proj::AbstractString; head::Int = 2)
@@ -14,6 +13,38 @@ function _cluster_host!(proj::AbstractString)
 end
 
 @testset "cluster scope" begin
+    @testset "session.remote scopes launch" begin
+        _mktemp_host() do proj
+            _cluster_host!(proj)
+            remote = "/session/CustomDeploy"
+            keep = "/caller/KeepRemote"
+            session = DistSSHSession(;
+                project = proj, head_workers = 1, remote = remote,
+            )
+            prev = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
+            try
+                ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = keep
+                redirect_stdout(devnull) do
+                    cluster(session) do c
+                        @test length(c.workers) == 1
+                        seen = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", "")
+                        @test seen == DistSSHRun.remote_env_project_root(remote)
+                        @test DistSSHRun.remote_deploy_root(proj) == remote
+                        return :scoped
+                    end
+                end
+            finally
+                if prev === nothing
+                    delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+                else
+                    ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = prev
+                end
+            end
+            after = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
+            @test after == keep
+        end
+    end
+
     @testset "normal return removes launched workers" begin
         _mktemp_host() do proj
             _cluster_host!(proj)
@@ -172,18 +203,24 @@ end
             @test proc.exitcode == 130
             @test !occursin("TaskFailedException", combined)
             lines = readlines(state)
-            owned_ok = true
+            owned_ids = Int[]
             user_ok = false
             foreign_ok = false
             for line in lines
                 parts = split(line, '\t')
                 length(parts) == 3 || continue
                 kind, wid, present = parts[1], parse(Int, parts[2]), parts[3] == "true"
-                kind == "owned" && (owned_ok &= !present)
-                kind == "user" && (user_ok = present)
-                kind == "foreign" && (foreign_ok = present)
+                if kind == "owned"
+                    push!(owned_ids, wid)
+                    @test !present
+                elseif kind == "user"
+                    user_ok = present
+                elseif kind == "foreign"
+                    foreign_ok = present
+                end
             end
-            @test owned_ok
+            @test length(owned_ids) == 2
+            @test length(unique(owned_ids)) == 2
             @test user_ok
             @test foreign_ok
         end
