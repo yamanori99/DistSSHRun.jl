@@ -1536,13 +1536,18 @@ end
                                 DistSSHRun.result_remote_run_id(recorded)
                             @test isfile(pack.tar_path)
 
-                            before = Set(readdir(tempdir()))
-                            wrapped = DistSSHRun.ship_tree!(
-                                proj, ["host1"], "/home/distsshkit/app"; confirm = false
-                            )
-                            @test all(hr -> hr.ok, wrapped.host_results)
-                            for name in setdiff(Set(readdir(tempdir())), before)
-                                @test !isfile(joinpath(tempdir(), name, "ship.tar"))
+                            private_tmp = mktempdir()
+                            try
+                                withenv("TMPDIR" => private_tmp) do
+                                    wrapped = DistSSHRun.ship_tree!(
+                                        proj, ["host1"], "/home/distsshkit/app";
+                                        confirm = false
+                                    )
+                                    @test all(hr -> hr.ok, wrapped.host_results)
+                                    @test isempty(readdir(private_tmp))
+                                end
+                            finally
+                                rm(private_tmp; force = true, recursive = true)
                             end
                             session = DistSSHRun.DistSSHSession(
                                 project = proj,
