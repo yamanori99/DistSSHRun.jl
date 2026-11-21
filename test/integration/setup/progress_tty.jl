@@ -71,7 +71,15 @@ using Test
         stub_bin = joinpath(dir, "stub-bin")
         mkpath(stub_bin)
         write(joinpath(stub_bin, "ssh"), "#!/bin/sh\nexit 1\n")
-        write(joinpath(stub_bin, "git"), "#!/bin/sh\nexit 1\n")
+        write(
+            joinpath(stub_bin, "git"),
+            "#!/bin/sh\n" *
+                "if [ \"\$1\" = \"-C\" ] && [ \"\$4\" = \"rev-parse\" ]; then\n" *
+                "  echo fatal: not a git repository 1>&2\n" *
+                "  exit 128\n" *
+                "fi\n" *
+                "exit 1\n",
+        )
         chmod(joinpath(stub_bin, "ssh"), 0o755)
         chmod(joinpath(stub_bin, "git"), 0o755)
 

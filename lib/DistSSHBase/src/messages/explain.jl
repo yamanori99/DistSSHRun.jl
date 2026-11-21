@@ -161,6 +161,32 @@ function explain_host_tool_missing(tool::AbstractString; surface::Symbol = :api)
     return join_explained_message("$t not found in PATH", explain_host_tool_hint(t; surface = surface))
 end
 
+"""When `git rev-parse --show-toplevel` fails for a path that looks like a repository."""
+function explain_git_work_tree_failed(
+        repo::AbstractString,
+        exit_code::Integer,
+        stderr::AbstractString,
+    )::String
+    resolved = strip(String(repo))
+    qdir = posix_quote(resolved)
+    detail = strip(String(stderr))
+    head = "git failed in $resolved (exit $exit_code)"
+    !isempty(detail) && (head = head * ": $detail")
+    fix = if occursin("detected dubious ownership", detail)
+        "Fix: git config --global --add safe.directory $qdir"
+    elseif occursin("bad object", detail) ||
+           occursin("unknown revision", detail) ||
+           occursin("not a valid object", detail) ||
+           occursin("malformed", detail)
+        "Fix: git -C $qdir fsck"
+    elseif isempty(detail)
+        "git printed no diagnostics. The repository may be corrupt or git failed to run."
+    else
+        "Fix the git error above and retry."
+    end
+    return join_explained_message(head, fix)
+end
+
 # --- setup / clone -----------------------------------------------------------
 
 function explain_clone_repo_required(; surface::Symbol = :api)::String

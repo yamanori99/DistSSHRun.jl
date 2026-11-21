@@ -34,6 +34,97 @@ function _reject_newline(rel::AbstractString)
     )
 end
 
+function _reject_backslash(rel::AbstractString, root_c::AbstractString)
+    occursin('\\', rel) || return nothing
+    under = canonical_local_path(root_c)
+    throw(
+        ArgumentError(
+            "cannot ship a path that contains a backslash ($(repr(rel)) under $under). " *
+                "GitIgnore.jl treats '\\' as a separator, so the file would be dropped or mis-ignored. " *
+                "Rename it (for example mv $(repr(rel)) $(repr(replace(rel, '\\' => '_')))) and retry.",
+        ),
+    )
+end
+
+function _throw_unreadable_gitignore(path::AbstractString, err::Exception)
+    p = canonical_local_path(path)
+    detail = sprint(showerror, err)
+    fix = if occursin("permission denied", lowercase(detail))
+        "Fix the permissions (chmod u+r $(repr(p))) or remove the file, then retry."
+    else
+        "Replace $(repr(p)) with a regular file containing the rules, then retry."
+    end
+    throw(
+        ArgumentError(
+            "cannot read $(repr(p)): $detail. " *
+                "A rule file that cannot be read would ship every file it lists. $fix",
+        ),
+    )
+end
+
+function _throw_symlinked_gitignore(path::AbstractString, target::AbstractString)
+    p = canonical_local_path(path)
+    t = String(target)
+    throw(
+        ArgumentError(
+            "$(repr(p)) is a symlink to $t. git does not apply a symlinked .gitignore, " *
+                "so ship-tree and git would send different files. " *
+                "Replace it with a regular file (rm $(repr(p)); cp $(repr(joinpath(dirname(p), t))) $(repr(p))).",
+        ),
+    )
+end
+
+"""Refuse a `.gitignore` DistSSH cannot apply the same way git would."""
+function _assert_ship_gitignore_rule_file!(path::AbstractString)
+    islink(path) && _throw_symlinked_gitignore(path, readlink(path))
+    isfile(path) || return nothing
+    try
+        read(path)
+    catch e
+        _throw_unreadable_gitignore(path, e)
+    end
+    return nothing
+end
+
+function _assert_gitignore_rules_for_dir!(dir::AbstractString)
+    gi = joinpath(dir, ".gitignore")
+    (islink(gi) || isfile(gi)) || return nothing
+    _assert_ship_gitignore_rule_file!(gi)
+    return nothing
+end
+
+function _assert_gitignore_rules_for_rel!(root_c::AbstractString, rel::AbstractString)
+    _assert_gitignore_rules_for_dir!(root_c)
+    d = dirname(rel)
+    while !isempty(d) && d != "." && d != "/"
+        _assert_gitignore_rules_for_dir!(joinpath(root_c, d))
+        d = dirname(d)
+    end
+    return nothing
+end
+
+"""Walk `root` and refuse `.gitignore` rule files git would not apply the same way ship does."""
+function assert_ship_gitignore_rules!(root::AbstractString)
+    root_c = canonical_local_path(root)
+    stack = String[root_c]
+    while !isempty(stack)
+        cur = pop!(stack)
+        _assert_gitignore_rules_for_dir!(cur)
+        names = try
+            readdir(cur; join = false, sort = false)
+        catch
+            throw(ArgumentError("ship-tree: cannot read directory $cur"))
+        end
+        for name in names
+            name == ".git" && continue
+            DistSSHBase.is_local_state_dir_name(name) && continue
+            child = joinpath(cur, name)
+            isdir(child) && !islink(child) && push!(stack, child)
+        end
+    end
+    return nothing
+end
+
 function _unshippable(path::AbstractString)::Bool
     islink(path) && return false
     isdir(path) && return false
@@ -53,6 +144,7 @@ end
 """Relative paths under `root` that `.gitignore` keeps, not yet sorted."""
 function gitignore_paths(root::AbstractString)::Vector{String}
     root_c = canonical_local_path(root)
+    _assert_gitignore_rules_for_dir!(root_c)
     GitIgnore = _gitignore_mod()
     # When `.shipignore` exists, it will fully replace `.gitignore` for ship here (same syntax).
     matcher = Base.invokelatest(GitIgnore.IgnoreMatcher, root_c; excludes = false)
@@ -60,6 +152,7 @@ function gitignore_paths(root::AbstractString)::Vector{String}
     stack = String[root_c]
     while !isempty(stack)
         cur = pop!(stack)
+        _assert_gitignore_rules_for_dir!(cur)
         names = try
             readdir(cur; join = false, sort = false)
         catch
@@ -68,8 +161,10 @@ function gitignore_paths(root::AbstractString)::Vector{String}
         for name in names
             name == ".git" && continue
             DistSSHBase.is_local_state_dir_name(name) && continue
+            occursin('\\', name) && _reject_backslash(name, root_c)
             child = joinpath(cur, name)
-            rel = replace(relpath(child, root_c), '\\' => '/')
+            rel = relpath(child, root_c)
+            _reject_backslash(rel, root_c)
             is_dir = isdir(child) && !islink(child)
             Base.invokelatest(GitIgnore.isignored, matcher, rel, is_dir) && continue
             _reject_newline(rel)
@@ -83,10 +178,13 @@ end
 
 """True when `rel` (relative to `root`) is ignored. A missing matcher ignores nothing."""
 function path_ignored(root::AbstractString, rel::AbstractString, is_dir::Bool)::Bool
+    root_c = canonical_local_path(root)
+    shown = String(rel)
+    _reject_backslash(shown, root_c)
+    _assert_gitignore_rules_for_rel!(root_c, shown)
     GitIgnore = _gitignore_mod()
     # When `.shipignore` exists, it will fully replace `.gitignore` for ship here (same syntax).
-    matcher = Base.invokelatest(GitIgnore.IgnoreMatcher, canonical_local_path(root); excludes = false)
-    shown = replace(String(rel), '\\' => '/')
+    matcher = Base.invokelatest(GitIgnore.IgnoreMatcher, root_c; excludes = false)
     return Base.invokelatest(GitIgnore.isignored, matcher, shown, is_dir)
 end
 

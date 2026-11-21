@@ -14,6 +14,10 @@ The version-cut PR copies them into this file.
 - Drive worker heartbeat moves to `lib/DistSSHHeartbeat` (always shipped
   by Run). Self-exit when the controller (master) is silent is opt-in; see
   `changelog.d/heartbeat-self-exit-opt-in.md` and `changelog.d/heartbeat-lib.md`.
+- `setup ship-tree`, `ship_send_list`, and `git_send_list` stop (with a fix
+  message) on backslash path names, unreadable or symlinked `.gitignore`, git
+  failures, and broken submodules instead of silently changing the file set.
+  See `changelog.d/breaking-ship-gitignore-fail-closed.md`.
 
 ## 0.1.16
 

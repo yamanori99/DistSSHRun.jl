@@ -33,6 +33,7 @@ include("ship.jl")
 public EXTERNAL_DIR_NAME
 public resolve_ship_project
 public gitignore_paths
+public assert_ship_gitignore_rules!
 public selected_paths
 public pack_paths
 public pack_entry_paths

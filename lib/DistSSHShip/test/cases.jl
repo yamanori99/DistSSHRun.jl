@@ -54,6 +54,95 @@
         end
     end
 
+    @testset "ship-tree refuses gitignore inputs git cannot match" begin
+        Sys.which("git") === nothing && @test_skip "git not in PATH"
+        _tmp() do dir
+            run(`git -C $dir init -q`)
+            write(joinpath(dir, raw"a\b.txt"), "1")
+            write(joinpath(dir, "ok.txt"), "1")
+            @test try
+                DistSSHShip.pack_paths(dir)
+                false
+            catch e
+                e isa ArgumentError && occursin("backslash", sprint(showerror, e))
+            end
+            @test try
+                DistSSHShip.selected_paths(dir)
+                false
+            catch e
+                e isa ArgumentError && occursin("backslash", sprint(showerror, e))
+            end
+        end
+        _tmp() do dir
+            run(`git -C $dir init -q`)
+            write(joinpath(dir, ".gitignore"), "secret.env\n")
+            write(joinpath(dir, "secret.env"), "s")
+            write(joinpath(dir, "ok.txt"), "o")
+            gi = joinpath(dir, ".gitignore")
+            if Sys.isunix() && ccall(:geteuid, Cuint, ()) == 0
+                @test_skip "unreadable .gitignore (running as root)"
+            else
+                mode = filemode(gi)
+                chmod(gi, 0o000)
+                try
+                    @test try
+                        DistSSHShip.pack_paths(dir)
+                        false
+                    catch e
+                        e isa ArgumentError &&
+                            occursin(".gitignore", sprint(showerror, e)) &&
+                            (occursin(gi, sprint(showerror, e)) || occursin(basename(gi), sprint(showerror, e)))
+                    end
+                finally
+                    chmod(gi, mode)
+                end
+                sub = joinpath(dir, "sub")
+                mkpath(sub)
+                write(joinpath(sub, "keep.txt"), "1\n")
+                sub_gi = joinpath(sub, ".gitignore")
+                write(sub_gi, "drop.txt\n")
+                write(joinpath(sub, "drop.txt"), "x\n")
+                chmod(sub_gi, 0o000)
+                try
+                    @test try
+                        DistSSHShip.pack_paths(dir)
+                        false
+                    catch e
+                        e isa ArgumentError &&
+                            (occursin(sub_gi, sprint(showerror, e)) ||
+                                occursin(basename(dirname(sub_gi)) * "/.gitignore", sprint(showerror, e)))
+                    end
+                finally
+                    chmod(sub_gi, 0o644)
+                end
+            end
+        end
+        _tmp() do dir
+            run(`git -C $dir init -q`)
+            write(joinpath(dir, "real_ignore"), "*.log\n")
+            symlink("real_ignore", joinpath(dir, ".gitignore"))
+            write(joinpath(dir, "a.log"), "1")
+            write(joinpath(dir, "b.txt"), "1")
+            gi = joinpath(dir, ".gitignore")
+            @test try
+                DistSSHShip.pack_paths(dir)
+                false
+            catch e
+                e isa ArgumentError &&
+                    occursin("symlink", sprint(showerror, e)) &&
+                    occursin(gi, sprint(showerror, e))
+            end
+        end
+        _tmp() do dir
+            _project!(dir)
+            write(joinpath(dir, ".gitignore"), "*.log\n")
+            write(joinpath(dir, "keep.jl"), "1\n")
+            write(joinpath(dir, "skip.log"), "no\n")
+            @test "keep.jl" in DistSSHShip.pack_paths(dir)
+            @test !("skip.log" in DistSSHShip.pack_paths(dir))
+        end
+    end
+
     @testset "pack_paths matches a flat snapshot tar" begin
         _tmp() do dir
             _project!(dir)
