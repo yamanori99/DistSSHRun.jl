@@ -44,7 +44,7 @@ tear down every worker DistSSH started on every exit path (normal return, error,
 
 User-added workers (for example `addprocs` inside `f`) stay connected; DistSSH logs a
 one-line `@warn` when teardown skips them. The launch [`LaunchReport`](@ref) is recorded
-under provenance `launch` via [`note_launch_provenance!`](@ref).
+under provenance `launch`.
 
 Does not run a driver script, collect, heartbeat, or host-status monitoring.
 Cannot nest inside an active [`drive!`](@ref) frame.

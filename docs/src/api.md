@@ -267,6 +267,7 @@ Filter = function (x)
         :result_content_tree_hash,         :result_remote_run_id,
         :WorkerPlan, :pool!, :ResourcePool, :HostInventory, :print_pool, :print_hostinfo,
         :LaunchReport, :launch_report_planned, :launch_report_joined, :launch_report_failures,
+        :Cluster, :cluster,
         :launch_report_usable, :LaunchIncompleteError, :WorkerLaunchOutcome, :HostLaunchFailure,
         :launch_rank, :SEED_SCHEME, :seed_mix, :job_item_seed,
         :RunJobConfig, :BoolConfigField, :StringConfigField, :ConfigSource,
