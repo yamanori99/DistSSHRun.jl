@@ -721,6 +721,18 @@ end
             end
             @test occursin("is not published", gout)
             @test occursin("--worker-include", gout)
+
+            ev = joinpath(tmp, "everywhere.jl")
+            write(
+                ev, """
+                using Distributed
+                @everywhere include("model.jl")
+                function main()
+                end
+                """
+            )
+            _, ewarns = DistSSHRun._drive_publish_extract(ev)
+            @test isempty(ewarns)
         end
     end
 

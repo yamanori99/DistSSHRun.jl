@@ -282,6 +282,7 @@ using Test
         @test !occursin("parent:N", txt)
         @test occursin("progress DIR", txt)
         @test occursin("slot pull-back uses Tar", txt)
+        @test occursin("only tree go pulls back", txt)
         @test occursin("--deploy-root", txt)
         @test occursin("Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT", txt)
         @test !occursin("--remote-path PATH", txt)

@@ -2,7 +2,16 @@
 
 function _drive_call_name(f)::Union{Nothing, Symbol}
     f isa Symbol && return f
+    f isa QuoteNode && f.value isa Symbol && return f.value
+    f isa GlobalRef && return f.name
     return nothing
+end
+
+function _drive_is_everywhere_macro(ex::Expr)::Bool
+    ex.head === :macrocall || return false
+    isempty(ex.args) && return false
+    n = _drive_call_name(ex.args[1])
+    return n === :everywhere || n === Symbol("@everywhere")
 end
 
 function _drive_is_short_method(ex::Expr)::Bool
@@ -94,6 +103,7 @@ function _drive_collect_publish!(
         push!(pieces, ex)
         return
     end
+    _drive_is_everywhere_macro(ex) && return
     loc = _drive_nested_include_line(ex, line)
     loc !== nothing && push!(warns, _drive_skipped_include_warn(loc))
     return
