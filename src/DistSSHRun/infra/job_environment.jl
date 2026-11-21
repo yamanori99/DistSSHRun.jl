@@ -108,7 +108,7 @@ function assert_job_package_collisions!(
         project::AbstractString;
         site::AbstractString = "controller",
     )
-    for (name, lu, lv, mu, mv) in job_package_collision_details(project; site = site)
+    for (name, lu, lv, mu, mv) in job_package_collision_details(project)
         throw(
             ErrorException(
                 job_package_collision_error(name, lu, lv, mu, mv, site),
