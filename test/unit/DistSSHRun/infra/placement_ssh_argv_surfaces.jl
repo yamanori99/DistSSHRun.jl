@@ -51,13 +51,15 @@ withenv(
             session = _B._ssh_remote_session_argv(host, "true")
             @test findfirst(==("-p"), session) !== nothing
             @test !("-p" in _B._ssh_remote_session_argv("alice@lab", "true"))
-            phase = DistSSHRun._ssh_phase_cmd(host, "true")
-            @test "-p" in phase.exec
-            @test !("-p" in DistSSHRun._ssh_phase_cmd("alice@lab", "true").exec)
-            withenv("DISTRIBUTED_SSH_OPTS" => "-p 2200") do
-                dup = DistSSHRun._ssh_phase_cmd(host, "true")
-                @test count(==("-p"), dup.exec) == 1
-                @test "2222" in dup.exec
+            _with_ssh_stub_in_path() do
+                phase = DistSSHRun._ssh_phase_cmd(host, "true")
+                @test "-p" in phase.exec
+                @test !("-p" in DistSSHRun._ssh_phase_cmd("alice@lab", "true").exec)
+                withenv("DISTRIBUTED_SSH_OPTS" => "-p 2200") do
+                    dup = DistSSHRun._ssh_phase_cmd(host, "true")
+                    @test count(==("-p"), dup.exec) == 1
+                    @test "2222" in dup.exec
+                end
             end
         end
 
