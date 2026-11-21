@@ -86,9 +86,7 @@ function add_drive_workers!(
     end
     DistSSHRun._require_drive_host_status_idle!()
     DistSSHRun._clear_drive_host_worker_ids!()
-    if script_path !== nothing
-        script_path = abspath(String(script_path))
-    end
+    script_abs = script_path === nothing ? nothing : abspath(String(script_path))
     writeln_both("Adding workers..."; color = :light_black)
 
     remote_ssh = String[h for (h, _) in hosts]
@@ -122,7 +120,7 @@ function add_drive_workers!(
                     head_workers, proj_dir, local_julia;
                     verify_project = !snapshot_run,
                 )
-                _register_drive_workers!(before, proj_dir, script_path)
+                _register_drive_workers!(before, proj_dir, script_abs)
                 added = sort!(Int[w for w in workers() if w ∉ before])
                 DistSSHRun._register_drive_host_worker_ids!(
                     DistSSHRun.PARENT_HOST_NAME,
@@ -190,21 +188,21 @@ function add_drive_workers!(
 
                 repo_ra = canonical_local_path(project_root)
                 remote_proj = resolve_host_path_abs(host_name, proj_dir, repo_ra)
-                remote_script = if script_path === nothing
+                remote_script = if script_abs === nothing
                     nothing
-                elseif DistSSHRun._script_inside_project(proj_dir, script_path)
-                    resolve_host_path_abs(host_name, script_path, repo_ra)
+                elseif DistSSHRun._script_inside_project(proj_dir, script_abs)
+                    resolve_host_path_abs(host_name, script_abs, repo_ra)
                 elseif remote_proj === nothing
                     nothing
                 else
-                    joinpath(remote_proj, DistSSHRun._go_script_relpath(proj_dir, script_path))
+                    joinpath(remote_proj, DistSSHRun._go_script_relpath(proj_dir, script_abs))
                 end
-                if remote_proj === nothing || (script_path !== nothing && remote_script === nothing)
+                if remote_proj === nothing || (script_abs !== nothing && remote_script === nothing)
                     write_both("$host_name ($host_workers workers): ")
                     missing = if remote_proj === nothing
                         remote_layout_path(proj_dir, repo_ra)
                     else
-                        remote_layout_path(script_path, repo_ra)
+                        remote_layout_path(script_abs, repo_ra)
                     end
                     print_progress_err("✗ (remote path not found: $missing)")
                     writeln_both("")

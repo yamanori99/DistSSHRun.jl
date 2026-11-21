@@ -22,8 +22,8 @@ function _cluster_placement(
                 session.tokens;
                 head_workers = session.cli_session.head_workers,
             )
-        elseif session.cli_session.head_workers !== nothing
-            resolved = WorkerPlan(Int(session.cli_session.head_workers), Dict{String, Int}())
+        elseif (head = session.cli_session.head_workers) isa Int
+            resolved = WorkerPlan(head, Dict{String, Int}())
         else
             throw(ArgumentError("cluster requires plan=, session.tokens, or head_workers on the session"))
         end
