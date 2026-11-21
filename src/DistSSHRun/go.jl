@@ -923,6 +923,7 @@ function _go_complete!(
     _write_kit_result_file(kr)
     rd = kit_run_dir()
     if rd !== nothing
+        note_controller_shipped_tree_drift!(anchor)
         write_kit_run_toml!(
             rd;
             kind = :go,

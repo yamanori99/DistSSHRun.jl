@@ -215,8 +215,11 @@ function _worker_shipped_tree_verify_expr(rec::AbstractDict)
                         target = rel in exec_set ? 0o555 : 0o444
                         mode == target || push!(mode_hits, rel)
                     else
-                        (mode & 0o222) != 0 && push!(mode_hits, rel)
-                        mode != 0o444 && mode != 0o555 && push!(mode_hits, rel)
+                        if (mode & 0o222) != 0
+                            push!(mode_hits, rel)
+                        elseif mode != 0o444 && mode != 0o555
+                            push!(mode_hits, rel)
+                        end
                     end
                 end
                 isempty(mode_hits) || error(
@@ -282,7 +285,6 @@ function note_controller_shipped_tree_drift!(project::AbstractString)
     want = strip(String(expect_hash))
     got == want && return nothing
     msg = "controller source tree changed after ship (content_tree_hash $(got) != deployed $(want))"
-    @warn msg
     _note_provenance_shipped_tree_drift!(got, want)
     kit_println(msg)
     return nothing

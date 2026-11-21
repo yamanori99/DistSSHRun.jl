@@ -251,6 +251,7 @@ function _reset_run_provenance!(project::AbstractString)
     end
     _PROVENANCE_AT_START[] = true
     _PROVENANCE_LAUNCH[] = nothing
+    _PROVENANCE_SHIPPED_TREE_DRIFT[] = nothing
     reset_worker_seeds!()
     return nothing
 end

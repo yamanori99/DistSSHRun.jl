@@ -1741,3 +1741,111 @@ end
         rm(proj; recursive = true, force = true)
     end
 end
+
+@testset "worker shipped-tree mode tamper names path" begin
+    proj = mktempdir()
+    pack = nothing
+    wids = Int[]
+    try
+        write(joinpath(proj, "Project.toml"), "name = \"ModeTamper\"\n")
+        _sync_test_project_manifest!(proj)
+        write(joinpath(proj, "a.jl"), "1\n")
+        pack = DistSSHRun._pack_project_tree(proj)
+        stage = joinpath(pack.directory, "stage")
+        rel = "a.jl"
+        chmod(joinpath(stage, rel), 0o644)
+        rows = Any[
+            Dict{String, Any}("path" => p, "blob" => h) for (p, h) in pack.content_file_digests
+        ]
+        rec = Dict{String, Any}(
+            "mode" => "ship-tree",
+            "content_tree_hash" => pack.content_tree_hash,
+            "content_file_digests" => rows,
+            "executable_ship_rels" => pack.executable_ship_rels,
+        )
+        expr = DistSSHRun._worker_shipped_tree_verify_expr(rec)
+        wids = Distributed.addprocs(1; exeflags = `--project=$stage --startup-file=no`)
+        err = try
+            Distributed.remotecall_fetch(Core.eval, wids[1], Main, expr)
+            ""
+        catch e
+            sprint(showerror, e)
+        end
+        @test occursin("read-only violation", err)
+        @test occursin(rel, err)
+        @test count(rel, err) == 1
+        hits = DistSSHRun.DistSSHShip.shipped_file_mode_violations(stage, [rel])
+        @test hits == [rel]
+        chmod(joinpath(stage, rel), 0o444)
+        @test Distributed.remotecall_fetch(Core.eval, wids[1], Main, expr) === nothing
+    finally
+        isempty(wids) || Distributed.rmprocs(wids)
+        pack === nothing || rm(pack.directory; recursive = true, force = true)
+        rm(proj; recursive = true, force = true)
+    end
+end
+
+@testset "controller shipped-tree drift provenance and message" begin
+    proj = mktempdir()
+    try
+        write(joinpath(proj, "Project.toml"), "name = \"Drift\"\n")
+        _sync_test_project_manifest!(proj)
+        write(joinpath(proj, "a.jl"), "1\n")
+        pack = DistSSHRun._pack_project_tree(proj)
+        want = pack.content_tree_hash
+        rows = Any[
+            Dict{String, Any}("path" => p, "blob" => h) for (p, h) in pack.content_file_digests
+        ]
+        rec = Dict{String, Any}(
+            "mode" => "ship-tree",
+            "content_tree_hash" => want,
+            "content_file_digests" => rows,
+        )
+        DistSSHRun._set_active_deploy_record!(rec)
+        DistSSHRun._reset_run_provenance!(proj)
+        write(joinpath(proj, "a.jl"), "2\n")
+        verb = DistSSHRun.KIT_VERBOSITY[]
+        out = try
+            DistSSHRun.set_kit_verbosity!(:verbose)
+            mktemp() do _, io
+                redirect_stdout(io) do
+                    DistSSHRun.note_controller_shipped_tree_drift!(proj)
+                end
+                flush(io)
+                seekstart(io)
+                read(io, String)
+            end
+        finally
+            DistSSHRun.set_kit_verbosity!(verb)
+        end
+        @test count("controller source tree changed after ship", out) == 1
+        prov = DistSSHRun.assemble_provenance(proj)
+        drift = prov["shipped_tree_drift"]
+        @test drift["deployed"] == want
+        @test drift["observed"] != want
+        DistSSHRun._PROVENANCE_SHIPPED_TREE_DRIFT[] = nothing
+        write(joinpath(proj, "a.jl"), "1\n")
+        DistSSHRun.set_kit_verbosity!(:verbose)
+        quiet = mktemp() do _, io
+            redirect_stdout(io) do
+                DistSSHRun.note_controller_shipped_tree_drift!(proj)
+            end
+            flush(io)
+            seekstart(io)
+            read(io, String)
+        end
+        @test isempty(quiet)
+        DistSSHRun.set_kit_verbosity!(verb)
+        prov2 = DistSSHRun.assemble_provenance(proj)
+        @test !haskey(prov2, "shipped_tree_drift")
+        DistSSHRun._note_provenance_shipped_tree_drift!("aaaa", "bbbb")
+        DistSSHRun._reset_run_provenance!(proj)
+        prov3 = DistSSHRun.assemble_provenance(proj)
+        @test !haskey(prov3, "shipped_tree_drift")
+        rm(pack.directory; recursive = true, force = true)
+    finally
+        DistSSHRun._clear_active_deploy_record!()
+        DistSSHRun._PROVENANCE_SHIPPED_TREE_DRIFT[] = nothing
+        rm(proj; recursive = true, force = true)
+    end
+end
