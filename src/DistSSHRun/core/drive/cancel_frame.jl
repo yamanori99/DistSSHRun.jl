@@ -37,6 +37,86 @@ const _POOL_SIGINT_BLOCKED = Ref(false)
 const _SECOND_WATCH_STARTED = Ref(false)
 const _SAVED_SIGINT_EPISODE = Ref{Any}(nothing)
 
+# Filled when the second-SIGINT handler is armed. The handler only reads these
+# and calls `kill` (async-signal-safe).
+const _SECOND_SIGINT_KILL_CAP = 256
+const _SECOND_SIGINT_KILL_PIDS = Vector{Cint}(undef, _SECOND_SIGINT_KILL_CAP)
+const _SECOND_SIGINT_KILL_GROUP = Vector{UInt8}(undef, _SECOND_SIGINT_KILL_CAP)
+const _SECOND_SIGINT_KILL_COUNT = Ref(0)
+const _SIGKILL = Cint(9)
+
+function _clear_second_sigint_kill_list!()
+    _SECOND_SIGINT_KILL_COUNT[] = 0
+    return nothing
+end
+
+function _local_drive_worker_ospid(wid::Integer)::Union{Nothing, Cint}
+    try
+        w = Distributed.map_pid_wrkr[Int(wid)]
+        w isa Distributed.Worker || return nothing
+        w.manager isa Distributed.LocalManager || return nothing
+        ospid = w.config.ospid
+        if ospid isa Integer
+            ospid_int = Int(ospid)
+            ospid_int > 0 && return Cint(ospid_int)
+        end
+        return nothing
+    catch
+        return nothing
+    end
+end
+
+"""Record owned local worker OS pids for a hard exit that skips `rmprocs`."""
+function _fill_second_sigint_local_kill_list!()
+    _clear_second_sigint_kill_list!()
+    n = 0
+    for wid in _drive_owned_worker_ids()
+        ospid = _local_drive_worker_ospid(wid)
+        ospid === nothing && continue
+        n >= _SECOND_SIGINT_KILL_CAP && break
+        group = UInt8(0)
+        if Sys.isunix()
+            if ccall(:setpgid, Cint, (Cint, Cint), ospid, ospid) == 0
+                group = UInt8(1)
+            end
+        end
+        n += 1
+        _SECOND_SIGINT_KILL_PIDS[n] = ospid
+        _SECOND_SIGINT_KILL_GROUP[n] = group
+    end
+    _SECOND_SIGINT_KILL_COUNT[] = n
+    return nothing
+end
+
+function _kill_second_sigint_local_workers!()
+    n = _SECOND_SIGINT_KILL_COUNT[]
+    n == 0 && return nothing
+    GC.@preserve _SECOND_SIGINT_KILL_PIDS _SECOND_SIGINT_KILL_GROUP begin
+        for i in 1:n
+            pid = _SECOND_SIGINT_KILL_PIDS[i]
+            target = _SECOND_SIGINT_KILL_GROUP[i] != 0 ? -pid : pid
+            ccall(:kill, Cint, (Cint, Cint), target, _SIGKILL)
+        end
+    end
+    return nothing
+end
+
+# Async-signal-safe twin of [`_kill_second_sigint_local_workers!`](@ref).
+function _kill_second_sigint_local_workers_signal_safe!()
+    n = _SECOND_SIGINT_KILL_COUNT[]
+    i = 1
+    while i <= n
+        pid = _SECOND_SIGINT_KILL_PIDS[i]
+        if _SECOND_SIGINT_KILL_GROUP[i] != 0
+            ccall(:kill, Cint, (Cint, Cint), -pid, _SIGKILL)
+        else
+            ccall(:kill, Cint, (Cint, Cint), pid, _SIGKILL)
+        end
+        i += 1
+    end
+    return nothing
+end
+
 """Process-wide: a drive Ctrl-C has been accepted. `main` reads this."""
 function _mark_interrupted!()
     _DRIVE_INTERRUPTED[] = true
@@ -122,8 +202,9 @@ function _second_sigint_message()::String
     return "Cleanup skipped after a second interrupt. Run `$(cli_m()) help drive` for flags."
 end
 
-# Installed only after the first interrupt. `write` + `_exit` (no alloc).
+# Installed only after the first interrupt. `kill` + `write` + `_exit` (no alloc).
 function _second_sigint_handler(_signum::Cint)::Cvoid
+    _kill_second_sigint_local_workers_signal_safe!()
     bytes = _SECOND_SIGINT_BYTES
     if !isempty(bytes)
         ccall(:write, Cssize_t, (Cint, Ptr{UInt8}, Csize_t), 2, pointer(bytes), sizeof(bytes))
@@ -171,6 +252,7 @@ function _second_sigint_watch()
         is_sigint(e) || rethrow()
         # The episode token is still cancelled. Leave it before `jl_exit`.
         _noncancellable() do
+            _kill_second_sigint_local_workers!()
             _write_second_sigint_line()
             ccall(:jl_exit, Union{}, (Int32,), Int32(130))
         end
@@ -220,6 +302,7 @@ end
 
 function _arm_second_sigint!()
     _SECOND_SIGINT_ARMED[] && return nothing
+    _fill_second_sigint_local_kill_list!()
     empty!(_SECOND_SIGINT_BYTES)
     append!(_SECOND_SIGINT_BYTES, codeunits(_second_sigint_message()))
     push!(_SECOND_SIGINT_BYTES, UInt8('\n'))
@@ -239,6 +322,7 @@ function _arm_second_sigint!()
         )
         if old == _SIG_ERR
             _SECOND_SIGINT_ARMED[] = false
+            _clear_second_sigint_kill_list!()
             return nothing
         end
         _OLD_SIGINT_HANDLER[] = old
@@ -248,6 +332,7 @@ end
 
 function _disarm_second_sigint!()
     _SECOND_SIGINT_ARMED[] || return nothing
+    _clear_second_sigint_kill_list!()
     _SECOND_SIGINT_ARMED[] = false
     if isdefined(Base, :CANCEL_TOKEN)
         _SECOND_WATCH_STARTED[] = false
