@@ -1,0 +1,1 @@
+`terminate!` and `terminate_run!` now `pkill` local go head slots that outlive the detached kit child (Julia 1.14), scoped to this run's `go-handshake.jl` paths under kit directories.

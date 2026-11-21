@@ -242,6 +242,65 @@ function _go_handshake_await_drain!(drain_task::Task)
     return nothing
 end
 
+function _collect_go_handshake_loader_paths(roots::AbstractVector{<:AbstractString})::Vector{String}
+    seen = Set{String}()
+    out = String[]
+    for root in roots
+        r = canonical_local_path(String(root))
+        isdir(r) || continue
+        for (dir, _, files) in walkdir(r)
+            _GO_HANDSHAKE_LOADER_NAME in files || continue
+            path = joinpath(dir, _GO_HANDSHAKE_LOADER_NAME)
+            path in seen && continue
+            push!(seen, path)
+            push!(out, path)
+        end
+    end
+    return out
+end
+
+function _go_slot_pkill_patterns(roots::AbstractVector{<:AbstractString})::Vector{String}
+    seen = Set{String}()
+    out = String[]
+    for root in roots
+        r = canonical_local_path(String(root))
+        isempty(r) && continue
+        pat = string(r, ".*", _GO_HANDSHAKE_LOADER_NAME)
+        pat in seen && continue
+        push!(seen, pat)
+        push!(out, pat)
+    end
+    for path in _collect_go_handshake_loader_paths(roots)
+        path in seen && continue
+        push!(seen, path)
+        push!(out, path)
+    end
+    return out
+end
+
+function _reap_local_go_slots_for_roots!(roots::AbstractVector{<:AbstractString})
+    Sys.isunix() || return nothing
+    for pat in _go_slot_pkill_patterns(roots)
+        _pkill_pattern!(pat)
+    end
+    return nothing
+end
+
+function _process_cmdline_contains(needle::AbstractString)::Bool
+    Sys.isunix() || return false
+    s = String(needle)
+    isempty(s) && return false
+    try
+        proc = run(
+            pipeline(Cmd(["pgrep", "-f", s]); stdout = devnull, stderr = devnull);
+            wait = true,
+        )
+        return proc.exitcode == 0
+    catch
+        return false
+    end
+end
+
 function run_go_slot_with_handshake(cmd::Cmd, site::AbstractString, log_path::AbstractString)
     log_io = open(String(log_path), "w")
     return try
