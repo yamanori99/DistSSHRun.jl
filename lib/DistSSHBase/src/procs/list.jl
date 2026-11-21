@@ -135,6 +135,7 @@ function _ps_line_has_mark(
         before_ok && after_ok && return true
         searchfrom = nextind(line, at)
     end
+    return
 end
 
 function _processes_with_env_ps(
@@ -198,4 +199,3 @@ function processes_with_env(
         return ProcessRow[]
     end
 end
-
