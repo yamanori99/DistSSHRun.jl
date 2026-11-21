@@ -1860,19 +1860,58 @@ function _append_remote_shell_hint_from_error(err, text::AbstractString)::String
 end
 
 
-"""`git rev-parse --show-toplevel` for `proj_dir`, or `nothing` when it is not a work tree."""
+"""True when `dir` or an ancestor has a `.git` file, directory, or symlink."""
+function _ancestor_dot_git_entry(dir::AbstractString)::Bool
+    cur = canonical_local_path(dir)
+    prev = ""
+    while cur != prev
+        meta = joinpath(cur, ".git")
+        (isfile(meta) || isdir(meta) || islink(meta)) && return true
+        prev = cur
+        cur = dirname(cur)
+    end
+    return false
+end
+
+function _git_work_tree_exit_code(e)::Int
+    e isa ProcessFailedException || return 1
+    for proc in Iterators.reverse(e.procs)
+        process_exited(proc) || continue
+        return shell_status(proc)
+    end
+    return 1
+end
+
+"""
+`git rev-parse --show-toplevel` for `proj_dir`, or `nothing` when it is not a work tree.
+
+Throws when git fails on a tree that has `.git` metadata (or when git prints a real error).
+"""
 function git_work_tree(proj_dir::AbstractString)::Union{Nothing, String}
-    _host_tool_present("git") || return nothing
     resolved = canonical_local_path(proj_dir)
-    try
-        s = strip(
-            read(
-                pipeline(_git_cmd(["-C", resolved, "rev-parse", "--show-toplevel"]); stderr = devnull),
-                String,
-            )
-        )
-        return isempty(s) ? nothing : canonical_local_path(s)
-    catch
+    if !_host_tool_present("git")
+        _ancestor_dot_git_entry(resolved) &&
+            throw(ArgumentError(explain_host_tool_missing("git")))
         return nothing
+    end
+    err_buf = IOBuffer()
+    cmd = addenv(_git_cmd(["-C", resolved, "rev-parse", "--show-toplevel"]), "LC_ALL" => "C")
+    return try
+        s = strip(read(pipeline(cmd; stderr = err_buf), String))
+        if !isempty(s)
+            return canonical_local_path(s)
+        end
+        detail = strip(String(take!(err_buf)))
+        throw(ArgumentError(explain_git_work_tree_failed(resolved, 0, detail)))
+    catch e
+        _rethrow_missing_host_tool(e)
+        detail = strip(String(take!(err_buf)))
+        code = _git_work_tree_exit_code(e)
+        if code == 128 &&
+                occursin("not a git repository", lowercase(detail)) &&
+                !_ancestor_dot_git_entry(resolved)
+            return nothing
+        end
+        throw(ArgumentError(explain_git_work_tree_failed(resolved, code, detail)))
     end
 end

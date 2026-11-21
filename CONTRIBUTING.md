@@ -260,7 +260,7 @@ Workflows pass the version to `julia-actions/setup-julia`. The stable line and `
 
 | Version | Role | Required |
 | --- | --- | --- |
-| **1.13** | `Project.toml` julia floor. Pkg.test, Aqua, JETLS, Documenter, E2E, Runic. Codecov `pkgtest` on **main push** only | yes |
+| **1.13** | `Project.toml` julia floor. Pkg.test, Aqua, JETLS, Documenter, E2E, Runic. Codecov per-package flags on **main push** only | yes |
 | **1.14-pre** | setup-julia `~1.14.0-0` (1.14.0 alpha, then beta, then rc, then 1.14.0; not 1.15). Ubuntu and macOS `Pkg.test` are required. Aqua, JETLS, and Linux SSH E2E stay `continue-on-error` | Ubuntu and macOS `Pkg.test` |
 | **nightly** | Published `julia-latest` tarball. It follows master and can lag a `VERSION` bump. Pkg.test and Aqua. No JETLS. `continue-on-error` | no |
 
@@ -353,7 +353,7 @@ Codecov too). macOS and WSL SSH E2E stay on `E2E weekly`, not the PR.
 Register when the required checks below are green. Intel / WSL weekly are
 watchers, not the register gate.
 
-CI uploads Codecov on **main push** only (Run `Pkg.test` on 1.13, plus Ubuntu `Pkg.test` of DistSSHBase, DistSSHUp, DistSSHShip, and DistSSHHeartbeat, flag `pkgtest`). PR E2E does not upload; a version-increase PR and **E2E weekly** Linux upload flag `e2e`. Public repo + Codecov OIDC (`id-token: write`). Status checks are informational (`codecov.yml`). Local coverage:
+CI uploads Codecov on **main push** only (Run `Pkg.test` on 1.13, plus Ubuntu `Pkg.test` of DistSSHBase, DistSSHUp, DistSSHShip, and DistSSHHeartbeat — flags `run`, `base`, `up`, `ship`, `heartbeat`). Successful **main push** Linux SSH E2E, version-increase PR E2E, and **E2E weekly** upload flag `e2e`. Ordinary PR E2E does not upload. Public repo + Codecov OIDC (`id-token: write`). Status checks are informational (`codecov.yml`). Local coverage:
 
 ```bash
 julia --project=. -e 'using Pkg; Pkg.test(; coverage=true)'

@@ -171,6 +171,45 @@ using Test
         @test_throws ArgumentError DistSSHBase.build_ssh_opts()
     end
 
+    @testset "git_work_tree" begin
+        _with_tempdir() do tmp
+            @test DistSSHBase.git_work_tree(tmp) === nothing
+        end
+        _with_tempdir() do tmp
+            stub_bin = joinpath(tmp, "bin")
+            mkpath(stub_bin)
+            write(joinpath(stub_bin, "git"), "#!/bin/sh\nexit 1\n")
+            chmod(joinpath(stub_bin, "git"), 0o755)
+            tree = joinpath(tmp, "plain")
+            mkpath(tree)
+            withenv("PATH" => stub_bin * ":" * get(ENV, "PATH", "")) do
+                @test_throws ArgumentError DistSSHBase.git_work_tree(tree)
+            end
+        end
+        _with_tempdir() do tmp
+            stub_bin = joinpath(tmp, "bin")
+            mkpath(stub_bin)
+            write(
+                joinpath(stub_bin, "git"),
+                "#!/bin/sh\n" *
+                    "echo fatal: not a git repository 1>&2\n" *
+                    "exit 128\n",
+            )
+            chmod(joinpath(stub_bin, "git"), 0o755)
+            tree = joinpath(tmp, "plain")
+            mkpath(tree)
+            withenv("PATH" => stub_bin * ":" * get(ENV, "PATH", "")) do
+                @test DistSSHBase.git_work_tree(tree) === nothing
+            end
+        end
+        if Sys.which("git") !== nothing
+            _with_tempdir() do tmp
+                run(Cmd(["git", "-C", tmp, "init", "-q"]))
+                @test DistSSHBase.git_work_tree(tmp) isa String
+            end
+        end
+    end
+
     _with_tempdir() do tmp
         @test DistSSHBase.clone_url_from_local_origin(tmp) === nothing
         if Sys.which("git") === nothing
