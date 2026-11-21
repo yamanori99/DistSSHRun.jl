@@ -13,6 +13,24 @@ function _log_kw(record, key)
     return nothing
 end
 
+function _tagged_go_handshake_rows()
+    tag = get(ENV, "DISTSSH_TEST_LEAK_TAG", "")
+    isempty(tag) && return DistSSHRun.DistSSHBase.ProcessRow[]
+    rows = DistSSHRun.DistSSHBase.processes_with_env("DISTSSH_TEST_LEAK_TAG", tag)
+    return filter(row -> occursin("go-handshake.jl", row.command), rows)
+end
+
+function _wait_tagged_go_handshake_rows(; timeout::Real = 60.0)
+    t0 = time()
+    rows = DistSSHRun.DistSSHBase.ProcessRow[]
+    while (time() - t0) < timeout
+        rows = _tagged_go_handshake_rows()
+        isempty(rows) || return rows
+        sleep(0.1)
+    end
+    return rows
+end
+
 # Oracle: dispatcher only (plus detached `:go`, which is out-of-process).
 # `execute!(:drive, …)` includes a driver into `Main` and lives in
 # `integration/drive/execute.jl` (after `api.jl`, which is the first
@@ -1337,23 +1355,15 @@ end
             @test hung.failed_step == "hung"
             @test hung.exit_code == 124
             @test process_running(kp.process)
-            @test kp.output_dir !== nothing
-            reap_roots = DistSSHRun._kit_sidecar_dirs(
-                kp.output_dir, kp.log_dir; run_dir = kp.run_dir,
-            )
-            slot_pats = DistSSHRun._go_slot_pkill_patterns(reap_roots)
-            t0 = time()
-            while (time() - t0) < 15
-                any(DistSSHRun._process_cmdline_contains, slot_pats) && break
-                sleep(0.05)
-            end
-            @test any(DistSSHRun._process_cmdline_contains, slot_pats)
+            slots = _wait_tagged_go_handshake_rows()
+            @test !isempty(slots)
+            pids = Set(row.pid for row in slots)
             killed = DistSSHRun.terminate!(kp; grace = 2)
             @test !process_running(kp.process)
             @test killed isa DistSSHRun.DistSSHJobResult
-            for pat in slot_pats
-                @test !DistSSHRun._process_cmdline_contains(pat)
-            end
+            gone = DistSSHRun.DistSSHBase.wait_gone(_tagged_go_handshake_rows; timeout = 5.0)
+            @test isempty(gone)
+            @test all(!DistSSHRun.kit_pid_alive, pids)
         end
     end
 
@@ -1382,24 +1392,18 @@ end
                             stderr = err_io
                         )
                     end
-                    @test kp.output_dir !== nothing
-                    reap_roots = DistSSHRun._kit_sidecar_dirs(
-                        kp.output_dir, kp.log_dir; run_dir = kp.run_dir,
-                    )
-                    slot_pats = DistSSHRun._go_slot_pkill_patterns(reap_roots)
-                    t0 = time()
-                    while (time() - t0) < 15
-                        any(DistSSHRun._process_cmdline_contains, slot_pats) && break
-                        sleep(0.05)
-                    end
-                    @test any(DistSSHRun._process_cmdline_contains, slot_pats)
+                    slots = _wait_tagged_go_handshake_rows()
+                    @test !isempty(slots)
+                    pids = Set(row.pid for row in slots)
                     result = DistSSHRun.terminate!(kp; grace = 2)
                     @test result isa DistSSHRun.DistSSHJobResult
                     @test !process_running(kp.process)
                     @test result.kind === :go
-                    for pat in slot_pats
-                        @test !DistSSHRun._process_cmdline_contains(pat)
-                    end
+                    gone = DistSSHRun.DistSSHBase.wait_gone(
+                        _tagged_go_handshake_rows; timeout = 5.0,
+                    )
+                    @test isempty(gone)
+                    @test all(!DistSSHRun.kit_pid_alive, pids)
                 end
             end
         end
