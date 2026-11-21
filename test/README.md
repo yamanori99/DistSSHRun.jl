@@ -361,10 +361,10 @@ Helpers (via `support.jl`): `_child_julia_env`, `_run_kit_drive` /
   process and inherited by child `julia` / local workers. After the file
   finishes, `DistSSHBase.processes_with_env` must find no matching process;
   leftovers are printed and `reap!`ed. Record a known leak with
-  `@test_broken` on `_assert_no_leaked_processes` inside the test (see
-  `integration/drive/sigint.jl`, #540). On Julia 1.14 that check is a
-  passing `@test`: Distributed.jl#198 exits the workers after the
-  driver `_exit`s.
+  `@test_broken` on `_assert_no_leaked_processes` inside the test.
+  A second Ctrl-C during `drive` cleanup SIGKILLs this run's local
+  workers before `_exit` 130, so `integration/drive/sigint.jl` expects
+  no tagged survivors on Julia 1.13 as well.
 - `DISTSSH_SSH_E2E` (unset): `1` runs `test/e2e.jl` (needs docker-ssh
   workers)
 - `DISTSSH_CODE_COVERAGE` (unset): `1` with `up.sh --e2e` →
