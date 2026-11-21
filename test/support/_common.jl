@@ -118,6 +118,23 @@ if !isdefined(Main, :_test_root)
         return false
     end
 
+    """Temp dir with a stub `ssh` on PATH (exits 1). For tests that need `Sys.which("ssh")` without OpenSSH."""
+    function _with_ssh_stub_in_path(f::Function)
+        stub_dir = mktempdir()
+        return try
+            stub = joinpath(stub_dir, "ssh")
+            write(stub, "#!/bin/sh\nexit 1\n")
+            chmod(stub, 0o755)
+            sep = Sys.iswindows() ? ';' : ':'
+            prev = get(ENV, "PATH", "")
+            withenv("PATH" => stub_dir * sep * prev) do
+                return f()
+            end
+        finally
+            _rm_tempdir!(stub_dir)
+        end
+    end
+
     function _test_skip_unless_unix()::Bool
         Sys.isunix() && return true
         @test_skip "requires Unix (script/kill)"
