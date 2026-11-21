@@ -106,6 +106,11 @@ end
         @test occursin("Cleanup skipped after a second interrupt.", combined)
         @test occursin("help drive", combined)
         @test !occursin("--help", combined)
+        _assert_no_leaked_processes(
+            _leak_guard_tag("integration/drive/sigint.jl");
+            label = "drive second SIGINT",
+            broken = true,
+        )
     end
 end
 

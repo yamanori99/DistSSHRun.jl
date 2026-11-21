@@ -354,6 +354,13 @@ Helpers (via `support.jl`): `_child_julia_env`, `_run_kit_drive` /
 - `DISTSSH_SKIP_GLOBAL_WORKER_PKILL` (default `1` in test children):
   skip drive leftover tagged remote `pkill`; each child `rmprocs`es its own
   local workers. Untagged sweep is `setup cleanup` only.
+- Each `runtests.jl` / `parallel.jl` file runs under `_with_leak_guard`: while
+  the file loads, `DISTSSH_TEST_LEAK_TAG=<run-id>:<path>` is set on the test
+  process and inherited by child `julia` / local workers. After the file
+  finishes, `DistSSHBase.processes_with_env` must find no matching process;
+  leftovers are printed and `reap!`ed. Record a known leak with
+  `@test_broken` on `_assert_no_leaked_processes` inside the test (see
+  `integration/drive/sigint.jl`, #540).
 - `DISTSSH_SSH_E2E` (unset): `1` runs `test/e2e.jl` (needs docker-ssh
   workers)
 - `DISTSSH_CODE_COVERAGE` (unset): `1` with `up.sh --e2e` →

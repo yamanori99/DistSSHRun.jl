@@ -21,6 +21,7 @@ export local_state_write_root, resolve_local_state_dir, resolve_local_state_dir_
 export resolve_local_state_item, resolve_remote_state_item
 export remote_cache_dir, resolve_remote_cache_dir
 export resolve_controller_julia, run_on_host, ssh_opts
+export ProcessRow, processes_with_env, reap!, wait_gone
 
 # Include order matches pre-layout dependency order (paths before cores that use them).
 include("ssh/paths.jl")
@@ -42,6 +43,8 @@ include("ssh/worker_endpoint.jl")
 include("hosts/hostinfo.jl")
 include("hosts/host_result.jl")
 include("ssh/julia_where.jl")
+include("procs/list.jl")
+include("procs/reap.jl")
 include("namespace.jl")
 include("component_src.jl")
 include("component_id.jl")

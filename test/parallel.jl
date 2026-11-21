@@ -44,7 +44,7 @@ const INIT_WORKER = Expr(
         function _ptr_include(rel::AbstractString, path::AbstractString)
             mktemp() do err_path, err_io
                 redirect_stderr(err_io) do
-                    Base.include(Main, path)
+                    _with_leak_guard(() -> Base.include(Main, path), rel)
                 end
                 flush(err_io)
                 text = read(err_path, String)

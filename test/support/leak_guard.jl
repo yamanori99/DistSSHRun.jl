@@ -1,0 +1,66 @@
+if !isdefined(Main, :_DISTSSH_TEST_LEAK_TAG)
+
+    using DistSSHRun.DistSSHBase: ProcessRow, processes_with_env, reap!, wait_gone
+
+    const _DISTSSH_TEST_LEAK_TAG = "DISTSSH_TEST_LEAK_TAG"
+    const _LEAK_GUARD_GRACE_S = 15.0
+    const _LEAK_GUARD_RUN_ID = Ref{String}(
+        string("test-", getpid(), "-", rand(UInt32)),
+    )
+
+    function _leak_guard_tag(rel::AbstractString)::String
+        rel = replace(String(rel), '\\' => '/')
+        return string(_LEAK_GUARD_RUN_ID[], ":", rel)
+    end
+
+    function _format_leak_rows(rows::AbstractVector{ProcessRow})::String
+        io = IOBuffer()
+        for row in rows
+            println(
+                io,
+                "  pid=$(row.pid) ppid=$(row.ppid) etime=$(row.etime) $(row.command)",
+            )
+        end
+        return String(take!(io))
+    end
+
+    function _assert_no_leaked_processes(
+            tag::AbstractString;
+            grace::Real = _LEAK_GUARD_GRACE_S,
+            label::AbstractString = "",
+            broken::Bool = false,
+        )
+        key = _DISTSSH_TEST_LEAK_TAG
+        list = () -> processes_with_env(key, String(tag))
+        rows = wait_gone(list; timeout = grace)
+        if !isempty(rows)
+            head = isempty(label) ? "leaked processes" : "leaked processes ($label)"
+            println(stderr, "──── $head (tag=$(repr(tag))) ────")
+            print(stderr, _format_leak_rows(rows))
+            println(stderr, "──── end leaked processes ────")
+        end
+        try
+            if broken
+                @test_broken isempty(rows)
+            else
+                @test isempty(rows)
+            end
+        finally
+            reap!(rows)
+            wait_gone(list; timeout = 3.0)
+        end
+        return nothing
+    end
+
+    function _with_leak_guard(f::Function, rel::AbstractString)
+        tag = _leak_guard_tag(rel)
+        return withenv(_DISTSSH_TEST_LEAK_TAG => tag) do
+            try
+                return f()
+            finally
+                _assert_no_leaked_processes(tag; label = rel)
+            end
+        end
+    end
+
+end

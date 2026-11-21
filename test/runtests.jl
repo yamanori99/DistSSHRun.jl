@@ -47,7 +47,7 @@ function _runtest_include(rel::AbstractString, path::AbstractString)
     _runtest_announce(rel)
     mktemp() do err_path, err_io
         redirect_stderr(err_io) do
-            include(path)
+            _with_leak_guard(() -> include(path), rel)
         end
         flush(err_io)
         text = read(err_path, String)
