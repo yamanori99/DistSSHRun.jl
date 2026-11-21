@@ -183,9 +183,11 @@ end
         end
         mktemp() do out_path, out_io
             head = DistSSHRun.kit_head_host_label()
-            code = redirect_stdout(out_io) do
-                redirect_stderr(devnull) do
-                    DistSSHRun.run_hostinfo(["--quiet", "host1"])
+            code = _with_ssh_stub_in_path() do
+                redirect_stdout(out_io) do
+                    redirect_stderr(devnull) do
+                        DistSSHRun.run_hostinfo(["--quiet", "host1"])
+                    end
                 end
             end
             flush(out_io)
