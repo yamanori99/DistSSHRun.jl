@@ -1,6 +1,6 @@
 # CLI conventions
 
-DistSSHRun and `julia -m DistSSHKit` follow the same exit conventions as Rust
+DistSSHRun and `julia -m DistSSHKit` follow the same exit conventions as
 [clap](https://docs.rs/clap), especially
 [`Command::arg_required_else_help`](https://docs.rs/clap/latest/clap/struct.Command.html#method.arg_required_else_help):
 

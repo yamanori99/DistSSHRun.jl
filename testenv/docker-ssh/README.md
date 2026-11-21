@@ -15,7 +15,7 @@ Real OpenSSH Linux workers. CI remote SSH coverage uses this stack
   `E2E weekly / macos-15-intel → ubuntu-26.04`
 - WSL2 (`windows-latest`), same image: **E2E weekly** —
   `E2E weekly / windows-latest (WSL2) → ubuntu-26.04`
-- Either kit parent, `--local-workers N`: mixed smoke inside the same suite
+- Kit parent with `drive --head-workers N` or `go --head-slots N`: mixed smoke inside the same suite
 
 Suite inventory: [`test/README.md`](../../test/README.md#ssh-e2e).
 
@@ -54,7 +54,7 @@ path it also resolves each channel's current release from `versions.json`
 (`JULIA_DEFAULT_RELEASE` / `JULIA_ALT_RELEASE`). That string is the image
 cache key, so a new patch, or a prerelease becoming stable, rebuilds the
 juliaup layer. The image build checks `julia --version` against it.
-By default, `setup check` requires matching patch and prerelease versions
+By default, `doctor --deploy` requires matching patch and prerelease versions
 but ignores build suffixes. `go` and `drive` require matching `string(VERSION)`
 and Julia commit always; DistSSH* versions must match. Manifest and Project
 bytes must match the controller (master) byte-exactly unless
@@ -146,7 +146,7 @@ before E2E starts.
 # source (not ./) so DistSSHRun SSH env is loaded into this shell:
 source ./scripts/up.sh
 julia --project=../.. -m DistSSHRun \
-  up status parent child:child-1 child:child-2 --verbose
+  up status child-1 child-2 --verbose
 # One-shot without sourcing the shell:
 # ./scripts/with-env.sh julia --project=../.. -m DistSSHRun …
 # Or plain ssh:
