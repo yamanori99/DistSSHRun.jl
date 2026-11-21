@@ -74,9 +74,11 @@ Partial worker launch is fail-closed unless you pass `best_effort=true` or CLI
 `--best-effort` ([`DriveJobOptions`](@ref) `best_effort`). That replaces legacy
 `--require-all-hosts` spellings.
 
-Scoped `cluster(cfg) do … end` (deterministic worker cleanup on every exit path)
-is tracked for 0.2.x ([#464](https://github.com/yamanori99/DistSSHRun.jl/issues/464)).
-It is not exported in 0.2.0; adding it later is non-breaking.
+[`cluster`](@ref) runs `cluster(session) do c … end`: it launches workers from a
+[`DistSSHSession`](@ref) (or `plan=`), runs the block, then removes DistSSH-started
+workers on every exit path (normal return, error, Ctrl-C). User `addprocs` workers
+stay up; DistSSH logs when teardown skips them. The block's [`LaunchReport`](@ref)
+is stored under provenance `launch` ([#464](https://github.com/yamanori99/DistSSHRun.jl/issues/464)).
 
 ```@docs
 LaunchReport
@@ -93,6 +95,8 @@ seed_mix
 worker_seed
 job_item_seed
 worker_pmap
+Cluster
+cluster
 RunJobConfig
 BoolConfigField
 StringConfigField

@@ -178,6 +178,7 @@ end
             end
             _runtest_include("integration/drive/fail.jl", joinpath(@__DIR__, "integration", "drive", "fail.jl"))
             _runtest_include("integration/drive/sigint.jl", joinpath(@__DIR__, "integration", "drive", "sigint.jl"))
+            _runtest_include("integration/drive/cluster_scope.jl", joinpath(@__DIR__, "integration", "drive", "cluster_scope.jl"))
             if !_distsshrun_short_skip("integration/drive/interrupt_grace.jl")
                 _runtest_include("integration/drive/interrupt_grace.jl", joinpath(@__DIR__, "integration", "drive", "interrupt_grace.jl"))
             end

@@ -862,18 +862,11 @@ function _run_drive_parsed_locked!(
         progress_ok = true
         return 0
     finally
-        # Before worker teardown, so a second Ctrl-C can `jl_exit` on 1.14.
-        _ensure_second_sigint_watch!()
         if resolved_output_dir !== nothing
             resolved_output_dir[] = DistSSHRun.resolve_drive_output_dir(script_dir)
         end
         if resolved_log_dir !== nothing
             resolved_log_dir[] = enable_log ? DistSSHRun.resolve_drive_log_dir(log_dir, script_dir) : nothing
-        end
-        if _drive_was_interrupted()
-            writeln_both("\nInterrupted. Cleaning up workers...")
-            flush(stdout)
-            _interrupt_drive_workers!()
         end
         kit_progress_done!(; ok = progress_ok)
         # Replay any job-stdout capture (log-enabled `:progress`, worker sync).
@@ -886,8 +879,7 @@ function _run_drive_parsed_locked!(
         # `add_drive_workers!`). Otherwise idempotent (guarded by a `Ref`
         # inside) — a harmless no-op if `atexit` already ran it.
         # Runs in the frame's non-cancellable scope, before Distributed `atexit`.
-        drive_atexit_cleanup !== nothing && drive_atexit_cleanup()
-        _drive_was_interrupted() && _retire_distributed_gc_task!()
+        _teardown_drive_workers_after_run!(drive_atexit_cleanup)
         try
             DistSSHRun.await_declared_input_hashes!()
         finally
