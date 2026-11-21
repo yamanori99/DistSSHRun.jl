@@ -50,6 +50,7 @@ end
             skip_hash_check = true,
             best_effort = best_effort,
             julia = joinpath(Sys.BINDIR, Base.julia_exename()),
+            reuse_main = true,
         )
         return parsed, proj
     end

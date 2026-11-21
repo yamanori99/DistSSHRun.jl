@@ -148,8 +148,9 @@ if !isdefined(Main, :_test_root)
         "unit/DistSSHRun/core/setup/send_list.jl", # large send-list oracle
         "integration/cli/help.jl", # CLI help golden output
         "integration/setup/exit.jl", # setup exit-code matrix
-        "integration/setup/progress_tty.jl", # pseudo-TTY script suite
+        "integration/setup/progress_tty.jl", # pseudo-TTY script suite (short CI)
         "integration/drive/progress_tty.jl", # pseudo-TTY drive progress
+        "integration/drive/reuse_main_isolated.jl", # isolated Main reuse drive path
         "integration/drive/execute.jl", # long-running execute integration
         "integration/drive/interrupt_grace.jl", # interrupt grace timing
         "integration/drive/pkg.jl", # Pkg-heavy drive path

@@ -23,7 +23,8 @@ using Test
                                 :drive,
                                 script, String[]; head_workers = 2,
                                 project = proj,
-                                verbosity = :verbose
+                                verbosity = :verbose,
+                                reuse_main = true
                             )
                         end
                     end

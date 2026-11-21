@@ -80,6 +80,8 @@ const _CLI_BIND_FAKE_SSH =
     end
 
     @testset "drive_main default launch reaches ssh" begin
+        # An earlier in-process drive! in this process must not block CLI drive.
+        DistSSHRun._set_drive_main_driver_included!()
         _with_tempdir() do tmp
             proj, script, hosts_path = _minimal_proj(tmp)
             bindir, logp = _recording_ssh_bin(tmp)
