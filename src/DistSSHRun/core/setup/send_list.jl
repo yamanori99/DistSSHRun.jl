@@ -337,6 +337,54 @@ function _reject_newline_send_path(rel::AbstractString)
     )
 end
 
+function _reject_backslash_send_path(rel::AbstractString)
+    occursin('\\', rel) || return nothing
+    throw(
+        ArgumentError(
+            "cannot ship a path that contains a backslash ($(repr(rel))). " *
+                "GitIgnore.jl treats '\\' as a separator, so the file would be dropped or mis-ignored. " *
+                "Rename it (for example mv $(repr(rel)) $(repr(replace(rel, '\\' => '_')))) and retry.",
+        ),
+    )
+end
+
+function _throw_broken_gitlink!(
+        parent::AbstractString,
+        rel::AbstractString,
+        sub_dir::AbstractString,
+    )
+    parent_c = canonical_local_path(parent)
+    git_meta = joinpath(sub_dir, ".git")
+    meta_line = isfile(git_meta) ? strip(read(git_meta, String)) : ""
+    qparent = posix_quote(parent_c)
+    throw(
+        ArgumentError(
+            "submodule '$(rel)' in $parent_c is not initialized or its .git is broken ($meta_line). " *
+                "Run: git -C $qparent submodule update --init $(rel)",
+        ),
+    )
+end
+
+function _ensure_gitlink_resolved!(parent::AbstractString, rel::AbstractString)
+    sub_dir = joinpath(parent, rel)
+    try
+        git_work_tree(sub_dir) isa String && return nothing
+    catch e
+        e isa ArgumentError || rethrow()
+        msg = sprint(showerror, e)
+        occursin("submodule '", msg) && rethrow()
+        occursin("dubious ownership", msg) && rethrow()
+        isfile(joinpath(sub_dir, ".git")) || rethrow()
+        _throw_broken_gitlink!(parent, rel, sub_dir)
+    end
+    isfile(joinpath(sub_dir, ".git")) && _throw_broken_gitlink!(parent, rel, sub_dir)
+    throw(
+        ArgumentError(
+            "git work tree for $(repr(rel)) under $(canonical_local_path(parent)) could not be resolved",
+        ),
+    )
+end
+
 """`git check-ignore -v -z` records: source, line, pattern, pathname."""
 function _parse_check_ignore_verbose(
         raw::AbstractString,
@@ -566,6 +614,7 @@ end
 function _push_send_rel!(out::Vector{String}, prefix::AbstractString, rel::AbstractString)
     listed = _join_send_rel(prefix, rel)
     _send_rel_excluded(listed) && return nothing
+    _reject_backslash_send_path(listed)
     _reject_newline_send_path(listed)
     push!(out, listed)
     return nothing
@@ -678,6 +727,7 @@ function _git_worktree_file_list!(
         )
         bare = endswith(rel, "/") ? rel[1:(end - 1)] : rel
         if endswith(rel, "/") || bare in subs
+            bare in subs && _ensure_gitlink_resolved!(dir, bare)
             _git_worktree_file_list!(out, joinpath(dir, bare), _join_send_rel(prefix, bare), seen)
             continue
         end
@@ -727,7 +777,9 @@ function _git_send_list(
         warn::Bool = false,
     )::Union{Nothing, Vector{String}}
     root = canonical_local_path(local_root)
-    git_work_tree(root) === nothing && return nothing
+    top = git_work_tree(root)
+    top === nothing && return nothing
+    DistSSHShip.assert_ship_gitignore_rules!(root)
     sources = _rsync_path_source_dirs(env, root)
     source_rels = String[relpath(s, root) for s in sources]
     out = String[]

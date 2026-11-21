@@ -252,6 +252,37 @@ const _EMPTY_DRIVE_HOSTS = Tuple{String, Union{Int, Nothing}}[]
             end
         end
 
+        @testset "second SIGINT kill list is pid-scoped" begin
+            Sys.isunix() || begin
+                @test_skip "local worker SIGKILL list needs Unix"
+            end
+            before = Set(workers())
+            addprocs(1; topology = :master_worker)
+            owned = Int[w for w in workers() if w ∉ before]
+            DistSSHRun._register_drive_host_worker_ids!(DistSSHRun.PARENT_HOST_NAME, owned)
+            DistSSHRun.RUNNER_WORKER_PROJECT_DIRS[owned[1]] = tmp
+            other = run(Cmd(`sleep 300`), wait = false)
+            try
+                DistSSHRun._arm_second_sigint!()
+                try
+                    DistSSHRun._kill_second_sigint_local_workers!()
+                    stopped = timedwait(() -> !(owned[1] in workers()), 5.0; pollint = 0.05)
+                    @test stopped === :ok
+                    @test process_running(other)
+                finally
+                    DistSSHRun._disarm_second_sigint!()
+                end
+            finally
+                DistSSHRun._clear_drive_host_worker_ids!()
+                delete!(DistSSHRun.RUNNER_WORKER_PROJECT_DIRS, owned[1])
+                process_running(other) && kill(other, Base.SIGKILL)
+                wait(other)
+                for w in setdiff(workers(), [1])
+                    w in workers() && rmprocs(w; waitfor = 2.0)
+                end
+            end
+        end
+
         @testset "_interrupt_kill_shell names those pids" begin
             @test DistSSHRun._interrupt_kill_shell([4242, 4243]) == "kill -INT 4242 4243 || true"
             @test !occursin("pkill", DistSSHRun._interrupt_kill_shell([7]))
