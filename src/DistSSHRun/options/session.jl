@@ -45,6 +45,7 @@ function DistSSHSession(;
         quiet::Bool = false,
         verbosity::Union{Nothing, Symbol} = nothing,
         include_head_for_size::Bool = false,
+        env::Union{Nothing, ProcessEnv} = nothing,
         kwargs...,
     )
     if haskey(kwargs, :yes)
@@ -55,11 +56,12 @@ function DistSSHSession(;
         )
     end
     isempty(kwargs) || throw(ArgumentError("DistSSHSession: unknown keyword $(first(keys(kwargs)))"))
+    pe = env === nothing ? snapshot_process_env() : env
     tokens = String[String(h) for h in workers]
     hf = if hosts_file !== nothing
         String(strip(hosts_file))
     elseif isempty(tokens)
-        strip(get(ENV, "DISTSSH_HOSTS_FILE", ""))
+        strip(get(pe, "DISTSSH_HOSTS_FILE", ""))
     else
         ""
     end
@@ -72,6 +74,7 @@ function DistSSHSession(;
         hosts_file = hf_path,
         hint_surface = :api,
         head_workers = lw,
+        process_env = pe,
     )
     tokens = String[String(h) for h in workers]
     if hf_path !== nothing

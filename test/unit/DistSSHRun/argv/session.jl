@@ -55,28 +55,32 @@ end
             @test_throws ArgumentError DistSSHRun.CliSharedFlags(quiet = true, verbosity = :progress)
         end
         withenv("DISTSSH_QUIET" => "1", "DISTSSH_PROGRESS" => "1") do
-            @test_throws ArgumentError DistSSHRun.default_kit_cli_session()
+            @test_throws ArgumentError DistSSHRun.default_kit_cli_session(
+                DistSSHRun.snapshot_process_env(),
+            )
         end
         withenv("DISTSSH_VERBOSE" => "1", "DISTSSH_PROGRESS" => "1", "DISTSSH_QUIET" => nothing) do
-            @test_throws ArgumentError DistSSHRun.default_kit_cli_session()
+            @test_throws ArgumentError DistSSHRun.default_kit_cli_session(
+                DistSSHRun.snapshot_process_env(),
+            )
         end
     end
 
     @testset "ENV defaults" begin
         withenv("DISTSSH_QUIET" => "1", "DISTSSH_YES" => "true", "DISTSSH_PROGRESS" => nothing, "DISTSSH_VERBOSE" => nothing) do
-            session = DistSSHRun.default_kit_cli_session()
+            session = DistSSHRun.default_kit_cli_session(DistSSHRun.snapshot_process_env())
             @test session.quiet
             @test session.verbosity === :quiet
             @test session.yes
         end
         withenv("DISTSSH_QUIET" => nothing, "DISTSSH_PROGRESS" => "1", "DISTSSH_VERBOSE" => nothing, "DISTSSH_YES" => nothing) do
-            session = DistSSHRun.default_kit_cli_session()
+            session = DistSSHRun.default_kit_cli_session(DistSSHRun.snapshot_process_env())
             @test session.verbosity === :progress
             @test !session.quiet
             @test !session.yes
         end
         withenv("DISTSSH_QUIET" => nothing, "DISTSSH_PROGRESS" => nothing, "DISTSSH_VERBOSE" => "1", "DISTSSH_YES" => nothing) do
-            session = DistSSHRun.default_kit_cli_session()
+            session = DistSSHRun.default_kit_cli_session(DistSSHRun.snapshot_process_env())
             @test session.verbosity === :verbose
             @test !session.quiet
         end
@@ -169,16 +173,16 @@ end
 
     @testset "kit_host_jobs" begin
         withenv("DISTSSH_JOBS" => nothing) do
-            @test DistSSHRun.kit_host_jobs() == 1
+            @test DistSSHRun.kit_host_jobs(DistSSHRun.snapshot_process_env()) == 1
         end
         withenv("DISTSSH_JOBS" => "4") do
-            @test DistSSHRun.kit_host_jobs() == 4
+            @test DistSSHRun.kit_host_jobs(DistSSHRun.snapshot_process_env()) == 4
         end
         withenv("DISTSSH_JOBS" => "0") do
-            @test DistSSHRun.kit_host_jobs() == 1
+            @test DistSSHRun.kit_host_jobs(DistSSHRun.snapshot_process_env()) == 1
         end
         withenv("DISTSSH_JOBS" => "nope") do
-            @test DistSSHRun.kit_host_jobs() == 1
+            @test DistSSHRun.kit_host_jobs(DistSSHRun.snapshot_process_env()) == 1
         end
         seen = Int[]
         DistSSHRun.map_host_jobs(["a", "b"]) do i, host

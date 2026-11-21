@@ -21,6 +21,7 @@ using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
                 command = :drive,
                 cli_dry_run = true,
                 cli_unsafe_expose_port = true,
+                env = cli.process_env,
             )
             buf = IOBuffer()
             DistSSHRun.print_run_job_dry_plan!(

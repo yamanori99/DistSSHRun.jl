@@ -32,7 +32,7 @@ const LEGACY_CLI_FLAGS = Dict{String, String}(
     "--unsafe-heterogeneous" => "--unsafe-skip-env-digests",
 )
 
-function _bool_env(name::AbstractString; env::AbstractDict = ENV)::Union{Nothing, Bool}
+function _bool_env(name::AbstractString; env::ProcessEnv)::Union{Nothing, Bool}
     haskey(env, String(name)) || return nothing
     raw = strip(get(env, String(name), ""))
     return raw in ("1", "true", "yes", "on")

@@ -1,7 +1,7 @@
 using Test
 using DistSSHRun
 
-const _EMPTY_HEARTBEAT_ENV = Dict{String, String}()
+const _EMPTY_HEARTBEAT_ENV = DistSSHRun.ProcessEnv(Dict{String, String}())
 
 @testset "drive heartbeat policy" begin
     @testset "parse_drive_args env opt-in requires deadline at runtime" begin
@@ -20,9 +20,9 @@ const _EMPTY_HEARTBEAT_ENV = Dict{String, String}()
     @testset "provenance heartbeat table" begin
         DistSSHRun._reset_run_provenance!(pwd())
         pol = DistSSHRun.resolve_drive_heartbeat_policy(
-            env = Dict(
+            env = DistSSHRun.ProcessEnv(Dict(
                 "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "11"
-            ),
+            )),
             self_exit = true
         )
         DistSSHRun.record_heartbeat_provenance!(pol)

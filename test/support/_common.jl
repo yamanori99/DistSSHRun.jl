@@ -142,6 +142,7 @@ if !isdefined(Main, :_test_root)
     end
 
     const _DISTSSHRUN_SHORT_SKIP_PATHS = (
+        "unit/DistSSHRun/options/process_env.jl",
         "unit/DistSSHRun/core/drive/workers.jl",
         "unit/DistSSHRun/execute.jl",
         "unit/DistSSHRun/core/setup/checks.jl",

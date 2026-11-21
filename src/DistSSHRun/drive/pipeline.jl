@@ -1,8 +1,8 @@
 # pipeline! — sync → drive → collect.
 
-function _reject_obsolete_pipeline_size_env()
+function _reject_obsolete_pipeline_size_env(env::ProcessEnv)
     for name in ("GB_PER_WORKER", "DISTSSH_SIZE_PROBE")
-        raw = strip(get(ENV, name, ""))
+        raw = strip(get(env, name, ""))
         isempty(raw) && continue
         throw(
             ArgumentError(
@@ -13,12 +13,15 @@ function _reject_obsolete_pipeline_size_env()
     return nothing
 end
 
-function _pipeline_config_driver_path(driver::Union{Nothing, AbstractString})::String
+function _pipeline_config_driver_path(
+        driver::Union{Nothing, AbstractString},
+        env::ProcessEnv,
+    )::String
     if driver !== nothing
         d = String(strip(driver::AbstractString))
         !isempty(d) && return d
     end
-    env_driver = String(strip(get(ENV, "DRIVER", "")))
+    env_driver = String(strip(get(env, "DRIVER", "")))
     !isempty(env_driver) && return env_driver
     throw(ArgumentError(explain_pipeline_driver_missing(; surface = :api)))
 end
@@ -40,14 +43,15 @@ Build [`PipelineConfig`](@ref) from environment variables.
 """
 function pipeline_config_from_env(;
         driver::Union{Nothing, AbstractString} = nothing,
+        env::ProcessEnv = snapshot_process_env(),
     )::PipelineConfig
-    _reject_obsolete_pipeline_size_env()
-    driver_path = _pipeline_config_driver_path(driver)
-    remote_raw = strip(get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
-    project_root = strip(get(ENV, "DISTRIBUTED_PROJECT_ROOT", ""))
-    cli = default_kit_cli_session()
+    _reject_obsolete_pipeline_size_env(env)
+    driver_path = _pipeline_config_driver_path(driver, env)
+    remote_raw = strip(get(env, "DISTRIBUTED_REMOTE_PROJECT_ROOT", ""))
+    project_root = strip(get(env, "DISTRIBUTED_PROJECT_ROOT", ""))
+    cli = default_kit_cli_session(env)
     cli.hint_surface = :api
-    env_v = _env_verbosity()
+    env_v = _env_verbosity(env)
     return PipelineConfig(
         project = isempty(project_root) ? pwd() : String(project_root),
         workers = placement_source_tokens(cli; keep_counts = true),
@@ -56,9 +60,10 @@ function pipeline_config_from_env(;
         quiet = env_v === :quiet,
         verbosity = env_v,
         driver = String(driver_path),
-        julia = let j = strip(get(ENV, "JULIA_DISTRIBUTED_EXE", ""))
+        julia = let j = strip(get(env, "JULIA_DISTRIBUTED_EXE", ""))
             isempty(j) || lowercase(j) == "auto" ? nothing : String(j)
         end,
+        process_env = env,
     )
 end
 
@@ -72,6 +77,7 @@ function kit_session_from_config(config::PipelineConfig)::DistSSHSession
         hosts_file = config.hosts_file,
         quiet = config.quiet,
         verbosity = config.verbosity,
+        env = config.process_env,
     )
     cli = session.cli_session
     config.verbosity !== nothing && (cli.verbosity = config.verbosity)
@@ -164,23 +170,25 @@ Collect defaults on when remotes are present (`collect=false` to skip).
 Returns [`PipelineResult`](@ref); check `result.ok` or use [`report_pipeline_errors`](@ref).
 """
 function pipeline!(config::PipelineConfig)::PipelineResult
-    session = kit_session_from_config(config)
-    driver = abspath(config.driver)
-    if !isfile(driver)
-        throw(
-            ArgumentError(
-                explain_script_not_found(
-                    driver,
-                    session.project;
-                    surface = hint_surface(session),
-                    headline = "driver not found: $driver",
+    return with_kit_invocation_env!(config.process_env) do
+        session = kit_session_from_config(config)
+        driver = abspath(config.driver)
+        if !isfile(driver)
+            throw(
+                ArgumentError(
+                    explain_script_not_found(
+                        driver,
+                        session.project;
+                        surface = hint_surface(session),
+                        headline = "driver not found: $driver",
+                    ),
                 )
             )
-        )
-    end
+        end
 
-    return _with_kit_inproc_run!(:pipeline) do
-        _pipeline_run!(config, session, driver)
+        return _with_kit_inproc_run!(:pipeline) do
+            _pipeline_run!(config, session, driver)
+        end
     end
 end
 

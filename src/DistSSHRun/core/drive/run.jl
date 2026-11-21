@@ -262,19 +262,22 @@ function run_drive_parsed!(
     # `parse_drive_args` is inferred as one NamedTuple whose fields are unions.
     # CLI `drive_main` already opened the frame (`cli=true`). A direct call,
     # including `drive!`, opens it here when none is active (`cli=false`).
-    cfg = resolve_run_job_config_from_parsed(parsed; command = :drive)
-    return with_run_unsafe_options!(cfg) do
-        return _drive_frame(; cli = false) do
-            return Base.invokelatest(
-                _run_drive_parsed_specialized!,
-                parsed,
-                original_args,
-                resolved_output_dir,
-                resolved_log_dir,
-                resolved_hosts,
-                resolved_run_dir,
-                project_root,
-            )
+    pe = parsed.cli_session.process_env
+    return with_kit_invocation_env!(pe) do
+        cfg = resolve_run_job_config_from_parsed(parsed; command = :drive)
+        return with_run_unsafe_options!(cfg) do
+            return _drive_frame(; cli = false) do
+                return Base.invokelatest(
+                    _run_drive_parsed_specialized!,
+                    parsed,
+                    original_args,
+                    resolved_output_dir,
+                    resolved_log_dir,
+                    resolved_hosts,
+                    resolved_run_dir,
+                    project_root,
+                )
+            end
         end
     end
 end
@@ -593,10 +596,11 @@ function _run_drive_parsed_locked!(
     else
         missing
     end
+    pe = parsed.cli_session.process_env
     heartbeat_policy = if hb_self_exit === missing
-        resolve_drive_heartbeat_policy()
+        resolve_drive_heartbeat_policy(env = pe)
     else
-        resolve_drive_heartbeat_policy(self_exit = hb_self_exit)
+        resolve_drive_heartbeat_policy(env = pe, self_exit = hb_self_exit)
     end
     record_heartbeat_provenance!(heartbeat_policy)
     write_heartbeat_startup_summary!(heartbeat_policy)
@@ -722,7 +726,7 @@ function _run_drive_parsed_locked!(
         end
 
         kit_progress_step!("cleanup")
-        cleanup_stale_workers!(hosts)
+        cleanup_stale_workers!(hosts; env = pe)
 
         kit_progress_step!("workers")
 

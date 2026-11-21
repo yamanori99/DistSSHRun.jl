@@ -398,6 +398,7 @@ mutable struct PipelineConfig
     head_workers::Union{Nothing, Int}
     run_id::Union{Nothing, String}
     best_effort::Bool
+    process_env::ProcessEnv
 end
 
 function PipelineConfig(;
@@ -421,6 +422,7 @@ function PipelineConfig(;
         julia::Union{Nothing, AbstractString} = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
         best_effort::Bool = false,
+        process_env::ProcessEnv = snapshot_process_env(),
     )
     yes !== nothing && throw(
         ArgumentError(
@@ -461,6 +463,7 @@ function PipelineConfig(;
         head_workers === nothing ? nothing : Int(head_workers),
         snap,
         best_effort,
+        process_env,
     )
 end
 

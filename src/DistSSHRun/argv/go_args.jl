@@ -121,16 +121,23 @@ function _go_parsed(;
 end
 
 """Parse `go` CLI arguments (same shape as other kit CLI parsers)."""
-function parse_go_args(args::AbstractVector{<:AbstractString})
+function parse_go_args(
+        args::AbstractVector{<:AbstractString};
+        env::ProcessEnv = snapshot_process_env(),
+    )
     args_vec = Vector{String}(String.(args))
     blob_path, _ = peel_job_blob_bootstrap(copy(args_vec))
     if blob_path !== nothing
         scrub_detached_placement_env!()
-        return go_parsed_from_detached_job_blob(read_detached_job_blob(blob_path))
+        env = snapshot_process_env()
+        return go_parsed_from_detached_job_blob(
+            read_detached_job_blob(blob_path);
+            process_env = env,
+        )
     end
     reject_mistaken_short_placement_flags!(args; command = :go)
     assert_go_argv_no_head_workers!(args)
-    cli_session, rest = peel_shared_cli_flags(args)
+    cli_session, rest = peel_shared_cli_flags(args; env = env)
     hosts = String[]
     host_tokens = String[]
     script_path = nothing
@@ -204,7 +211,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
             append!(hosts, host_tokens)
             append_kit_host_sources!(hosts, cli_session; keep_counts = true)
             if julia_exe === nothing
-                env_val = get(ENV, "JULIA_DISTRIBUTED_EXE", "auto")
+                env_val = get(env, "JULIA_DISTRIBUTED_EXE", "auto")
                 julia_exe = env_val == "auto" ? nothing : env_val
             elseif julia_exe == "auto"
                 julia_exe = nothing
@@ -244,7 +251,7 @@ function parse_go_args(args::AbstractVector{<:AbstractString})
         DistSSHBase.parse_machine_token(h)
     end
     if julia_exe === nothing
-        env_val = get(ENV, "JULIA_DISTRIBUTED_EXE", "auto")
+        env_val = get(env, "JULIA_DISTRIBUTED_EXE", "auto")
         julia_exe = env_val == "auto" ? nothing : env_val
     elseif julia_exe == "auto"
         julia_exe = nothing
