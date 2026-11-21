@@ -491,7 +491,7 @@ drops baseline, prefix, and `:all` copies. An explicit `env_allow` or
 `env` name wins and is recorded as sensitive. A count of dropped names
 is logged. The names, not the values, are in [`detached_launch`](@ref),
 `run.toml` `[launch]`, and the debug log (`JULIA_DEBUG=DistSSHRun`).
-`schema` stays 1.
+Writer `major.minor` matches this package.
 
 Local go slots and local drive workers inherit that environment, including
 `SSH_AUTH_SOCK` when it was kept. SSH workers do not receive this
@@ -2438,7 +2438,7 @@ run's kit directories (`run_dir`, `output_dir`, `log_dir`).
 
 The returned [`DistSSHJobResult`](@ref) `stop` is that ladder outcome. The same
 string is written to `kit.result`. When `run_dir` holds this package's
-`run.toml` (`schema = 1`, `writer` starting with `DistSSHRun `), `stop` is
+`run.toml` (`writer` with this package's `major.minor`), `stop` is
 set there too. Artifact `output_dir` / `log_dir` are not rewritten.
 """
 function terminate!(

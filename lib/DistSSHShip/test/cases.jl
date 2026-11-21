@@ -447,10 +447,17 @@
             snap = DistSSHShip.pack_tree(dir)
             try
                 prog = DistSSHShip.build_shipment_record(snap; complete = false)
-                @test prog["schema"] == 1
+                @test !haskey(prog, "schema")
                 @test prog["complete"] === false
                 @test prog["content_tree_hash"] == snap.content_tree_hash
-                @test startswith(String(prog["writer"]), "DistSSHShip")
+                ship_ver = VersionNumber(
+                    String(get(TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml")), "version", "0.0.0")),
+                )
+                @test DistSSHBase.record_writer_minor_match(
+                    prog["writer"],
+                    "DistSSHShip",
+                    ship_ver,
+                ) == :ok
                 done = DistSSHShip.build_shipment_record(snap; complete = true)
                 @test done["complete"] === true
                 @test DistSSHShip.shipment_record_status(done) == :complete
@@ -464,8 +471,7 @@
             end
         end
         bad = Dict(
-            "schema_version" => 1,
-            "writer" => "Other",
+            "writer" => "Other 0.9.0",
             "complete" => true,
             "algorithm" => "git-sha1",
             "content_tree_hash" => "a"^40,

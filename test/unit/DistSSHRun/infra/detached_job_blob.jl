@@ -1,14 +1,16 @@
 using DistSSHRun
 using Test
 
-const _JOB_BLOB_MINIMAL = """
-schema = 1
-kind = "drive"
-script = "a.jl"
-tokens = []
-script_args = []
-project = "/tmp/p"
-"""
+function _job_blob_minimal_toml()::String
+    return """
+    writer = \"$(DistSSHRun.run_record_writer())\"
+    kind = "drive"
+    script = "a.jl"
+    tokens = []
+    script_args = []
+    project = "/tmp/p"
+    """
+end
 
 @testset "detached job blob round trip" begin
     mktempdir() do d
@@ -35,10 +37,13 @@ project = "/tmp/p"
     end
 end
 
-@testset "detached job blob unknown schema" begin
+@testset "detached job blob writer mismatch" begin
     mktempdir() do d
         p = joinpath(d, "job.toml")
-        write(p, "schema = 99\nkind = \"drive\"\nscript = \"a.jl\"\ntokens = []\nscript_args = []\nproject = \"/tmp\"\n")
+        write(
+            p,
+            "writer = \"DistSSHRun 0.1.0\"\nkind = \"drive\"\nscript = \"a.jl\"\ntokens = []\nscript_args = []\nproject = \"/tmp\"\n",
+        )
         @test_throws ArgumentError DistSSHRun.read_detached_job_blob(p)
     end
 end
@@ -51,7 +56,7 @@ end
                 ("require_all_hosts = false\n", "best_effort = true"),
                 ("collect_best_effort = true\n", "collect_best_effort"),
             )
-            write(p, _JOB_BLOB_MINIMAL * extra)
+            write(p, _job_blob_minimal_toml() * extra)
             err = try
                 DistSSHRun.read_detached_job_blob(p)
                 nothing

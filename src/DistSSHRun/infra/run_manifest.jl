@@ -246,8 +246,7 @@ function write_kit_run_toml!(
     )
     d = canonical_local_path(run_dir)
     data = Dict{String, Any}(
-        "schema" => 1,
-        "writer" => "DistSSHRun $(dist_ssh_kit_version())",
+        "writer" => run_record_writer(),
         "kind" => String(kind),
         "run_dir" => _record_path(d, project_root),
     )
@@ -291,14 +290,38 @@ function write_kit_run_toml!(
     return nothing
 end
 
-"""True when `run.toml` is this package's schema 1 manifest, not an arbitrary TOML file."""
+const _RUN_RECORD_PACKAGE = "DistSSHRun"
+
+"""`writer` string for on-disk Run records."""
+function run_record_writer()::String
+    return DistSSHBase.record_writer_string(_RUN_RECORD_PACKAGE, dist_ssh_kit_version())
+end
+
+function _kit_run_writer_minor_ok(writer)::Bool
+    return DistSSHBase.record_writer_minor_match(
+        writer,
+        _RUN_RECORD_PACKAGE,
+        dist_ssh_kit_version(),
+    ) == :ok
+end
+
+"""ERE for a single-line TOML `writer = "…"` stamp (remote `grep` / probe scripts)."""
+function _run_toml_writer_line_ere()::String
+    return DistSSHBase.record_writer_toml_line_ere(_RUN_RECORD_PACKAGE, dist_ssh_kit_version())
+end
+
+"""Awk ERE body (no delimiters) for the same stamp line as [`_run_toml_writer_line_ere`](@ref)."""
+function _run_toml_writer_awk_ere()::String
+    ere = _run_toml_writer_line_ere()
+    startswith(ere, "^") || return ere
+    endswith(ere, "\$") || return ere
+    return ere[2:(end - 1)]
+end
+
+"""True when `run.toml` is this package's manifest (same writer `major.minor`), not arbitrary TOML."""
 function _kit_run_toml_owned(raw::AbstractDict)::Bool
-    schema = get(raw, "schema", nothing)
-    schema isa Integer || return false
-    schema == 1 || return false
     writer = get(raw, "writer", nothing)
-    writer isa AbstractString || return false
-    startswith(String(writer), "DistSSHRun ") || return false
+    _kit_run_writer_minor_ok(writer) || return false
     kind = get(raw, "kind", nothing)
     kind isa AbstractString || return false
     ks = String(kind)

@@ -1,8 +1,8 @@
-# Ship record at `<extract_dest>/.distssh/shipment.toml` (schema 1).
+# Ship record at `<extract_dest>/.distssh/shipment.toml`.
 # `ship` writes `complete = true` only after verified extract.
 # Readers treat a missing record or `complete = false` as not usable.
 
-const SHIP_RECORD_SCHEMA = 1
+const _SHIP_PKG_NAME = "DistSSHShip"
 const SHIP_RECORD_DIR = ".distssh"
 const SHIP_RECORD_NAME = "shipment.toml"
 const LEGACY_SHIP_RECORD_NAME = "ship.toml"
@@ -11,9 +11,9 @@ const _SHIP_RECORD_TMP_TAIL = ".tmp"
 const _SHIP_PKG_VERSION = begin
     path = joinpath(@__DIR__, "..", "Project.toml")
     if isfile(path)
-        string(get(TOML.parsefile(path), "version", "0.0.0"))
+        VersionNumber(String(get(TOML.parsefile(path), "version", "0.0.0")))
     else
-        "0.0.0"
+        v"0.0.0"
     end
 end
 
@@ -44,7 +44,7 @@ function _shipment_record_read_paths(extract_dest::AbstractString)::Vector{Strin
 end
 
 function _shipment_record_writer()::String
-    return "DistSSHShip $_SHIP_PKG_VERSION"
+    return DistSSHBase.record_writer_string(_SHIP_PKG_NAME, _SHIP_PKG_VERSION)
 end
 
 function _shipment_record_timestamp()::String
@@ -78,7 +78,7 @@ function _normalize_project_rel(project_rel::AbstractString)::String
 end
 
 """
-Build a schema-1 ship record table (not yet written).
+Build a ship record table (not yet written).
 
 `project_rel` is stored in TOML only; remote shell paths for the record use
 `DistSSHBase._remote_shell_path_word` (POSIX-quoted).
@@ -96,7 +96,6 @@ function build_shipment_record(
     )
     rel = _normalize_project_rel(snapshot.project_rel)
     data = Dict{String, Any}(
-        "schema" => SHIP_RECORD_SCHEMA,
         "writer" => _shipment_record_writer(),
         "complete" => complete,
         "algorithm" => TREE_HASH_ALGORITHM,
@@ -121,10 +120,12 @@ function _parse_shipment_record_body(body::AbstractString)::Union{Nothing, Dict{
     try
         raw = TOML.parse(s)
         raw isa AbstractDict || return nothing
-        schema = get(raw, "schema", nothing)
-        schema isa Integer && schema == SHIP_RECORD_SCHEMA || return nothing
         writer = get(raw, "writer", nothing)
-        writer isa AbstractString && startswith(strip(String(writer)), "DistSSHShip") || return nothing
+        DistSSHBase.record_writer_minor_match(
+            writer,
+            _SHIP_PKG_NAME,
+            _SHIP_PKG_VERSION,
+        ) == :ok || return nothing
         complete = get(raw, "complete", nothing)
         complete isa Bool || return nothing
         algo = get(raw, "algorithm", nothing)

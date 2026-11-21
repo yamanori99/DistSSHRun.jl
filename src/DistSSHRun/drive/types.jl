@@ -212,7 +212,7 @@ and the ladder escalated. `:no_sigint` means `interrupt_grace` was 0, so
 SIGINT was not sent and the ladder went to SIGTERM (then SIGKILL if the
 process was still alive). The same string is `stop` in `kit.result`. When
 the kit run directory already has this package's `run.toml`, `stop` is set
-there too. `schema` stays 1. An unknown `stop` string is ignored.
+there too. Writer `major.minor` must match this package. An unknown `stop` string is ignored.
 
 `run_dir` is this run's `DISTSSH_RUN_DIR` when one is known. Read it
 with [`result_run_dir`](@ref). [`result_provenance`](@ref) reads

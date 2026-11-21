@@ -336,7 +336,11 @@ end
                 provenance = prov
             )
             raw = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
-            @test raw["schema"] == 1
+            @test DistSSHRun.DistSSHBase.record_writer_minor_match(
+                raw["writer"],
+                "DistSSHRun",
+                DistSSHRun.dist_ssh_kit_version(),
+            ) == :ok
             @test startswith(String(raw["writer"]), "DistSSHRun ")
             @test raw["kind"] == "go"
             @test haskey(raw, "run_dir")
@@ -363,13 +367,21 @@ end
                 provenance = prov
             )
             grouped_raw = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
-            @test grouped_raw["schema"] == 1
+            @test DistSSHRun.DistSSHBase.record_writer_minor_match(
+                grouped_raw["writer"],
+                "DistSSHRun",
+                DistSSHRun.dist_ssh_kit_version(),
+            ) == :ok
             @test grouped_raw["provenance"]["workers"]["box"][1]["n"] == 2
             grouped_side = DistSSHRun.TOML.parsefile(joinpath(out, ".distssh", "provenance.toml"))
             @test grouped_side == grouped_raw["provenance"]
             DistSSHRun.write_kit_run_toml!(tmp; kind = :go, output_dir = out)
             again = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
-            @test again["schema"] == 1
+            @test DistSSHRun.DistSSHBase.record_writer_minor_match(
+                again["writer"],
+                "DistSSHRun",
+                DistSSHRun.dist_ssh_kit_version(),
+            ) == :ok
             @test !haskey(again, "provenance")
         end
     end
@@ -412,7 +424,11 @@ end
                     @test !haskey(clean["source"], "diff_sha256")
                     @test haskey(clean, "writer")
                     @test startswith(clean["writer"], "DistSSHRun ")
-                    @test clean["schema"] == 1
+                    @test DistSSHRun.DistSSHBase.record_writer_minor_match(
+                        clean["writer"],
+                        "DistSSHRun",
+                        DistSSHRun.dist_ssh_kit_version(),
+                    ) == :ok
                     head = readchomp(`git -C $repo rev-parse HEAD`)
                     @test clean["source"]["commit"] == head
                     snap = DistSSHRun.git_source_snapshot(repo)
@@ -551,7 +567,11 @@ end
                 end
                 @test !result.ok
                 raw = _prov_require(DistSSHRun.read_kit_run_toml(_prov_run_toml(proj)))
-                @test raw["schema"] == 1
+                @test DistSSHRun.DistSSHBase.record_writer_minor_match(
+                raw["writer"],
+                "DistSSHRun",
+                DistSSHRun.dist_ssh_kit_version(),
+            ) == :ok
                 @test raw["kind"] == "go"
                 @test haskey(raw, "output_dir")
                 @test raw["provenance"]["project"]["manifest"] isa String
@@ -596,11 +616,19 @@ end
             DistSSHRun._clear_last_ship!()
             _with_tempdir() do tmp
                 prov = DistSSHRun.assemble_provenance(tmp)
-                @test prov["schema"] == 1
+                @test DistSSHRun.DistSSHBase.record_writer_minor_match(
+                    prov["writer"],
+                    "DistSSHRun",
+                    DistSSHRun.dist_ssh_kit_version(),
+                ) == :ok
                 @test !haskey(prov, "selection")
                 DistSSHRun.write_kit_run_toml!(tmp; kind = :go, provenance = prov)
                 raw = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
-                @test raw["schema"] == 1
+                @test DistSSHRun.DistSSHBase.record_writer_minor_match(
+                raw["writer"],
+                "DistSSHRun",
+                DistSSHRun.dist_ssh_kit_version(),
+            ) == :ok
                 @test !haskey(raw["provenance"], "selection")
                 held = DistSSHRun.DriveResult(true, 0; run_dir = tmp)
                 @test DistSSHRun.result_content_tree_hash(held) === nothing
@@ -623,13 +651,25 @@ end
             )
             _with_tempdir() do tmp
                 prov = DistSSHRun.assemble_provenance(tmp)
-                @test prov["schema"] == 1
+                @test DistSSHRun.DistSSHBase.record_writer_minor_match(
+                    prov["writer"],
+                    "DistSSHRun",
+                    DistSSHRun.dist_ssh_kit_version(),
+                ) == :ok
                 @test prov["selection"]["content_tree_hash"] == "abc123"
                 @test prov["selection"]["run_id"] == "20260101T000000Z-abcdef"
                 DistSSHRun.write_kit_run_toml!(tmp; kind = :drive, provenance = prov)
                 raw = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
-                @test raw["schema"] == 1
-                @test raw["provenance"]["schema"] == 1
+                @test DistSSHRun.DistSSHBase.record_writer_minor_match(
+                raw["writer"],
+                "DistSSHRun",
+                DistSSHRun.dist_ssh_kit_version(),
+            ) == :ok
+                @test DistSSHRun.DistSSHBase.record_writer_minor_match(
+                    raw["provenance"]["writer"],
+                    "DistSSHRun",
+                    DistSSHRun.dist_ssh_kit_version(),
+                ) == :ok
                 @test raw["provenance"]["selection"]["content_tree_hash"] == "abc123"
                 @test raw["provenance"]["selection"]["run_id"] == "20260101T000000Z-abcdef"
                 held = DistSSHRun.DistSSHJobResult(

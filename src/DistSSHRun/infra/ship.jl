@@ -470,7 +470,10 @@ function _store_input_rows!(run_dir::AbstractString, rows::AbstractVector{<:Abst
             )
             push!(existing, stored)
         end
-        data = Dict{String, Any}("schema" => 1, "inputs" => existing)
+        data = Dict{String, Any}(
+            "writer" => run_record_writer(),
+            "inputs" => existing,
+        )
         tmp = dest * ".tmp"
         open(tmp, "w") do io
             TOML.print(io, data)
@@ -1676,8 +1679,7 @@ end
 """Minimal remote-leaf `run.toml` for ownership proof (no paths or secrets)."""
 function _ship_run_leaf_stamp_toml()::String
     return string(
-        "schema = 1\n",
-        "writer = \"DistSSHRun $(dist_ssh_kit_version())\"\n",
+        "writer = \"", run_record_writer(), "\"\n",
         "kind = \"ship\"\n",
     )
 end

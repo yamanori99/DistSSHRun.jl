@@ -50,16 +50,18 @@ end
 # or a symlink directly under
 # `runs/` is unowned (find would not inspect the target). Prune omits that
 # mode and walks its
-# candidate recursively, including nested stamps. Top-level `schema` /
-# `writer` / `kind` must match `_kit_run_toml_owned`. After the first table
+# candidate recursively, including nested stamps. Top-level `writer` /
+# `kind` must match `_kit_run_toml_owned` (legacy `schema` lines are skipped).
+# After the first table
 # header (`[`, `[[`, optional leading space), only unclosed quotes or
 # brackets are refused, so a `TOML.print` tree is owned. Duplicate
-# `schema` / `writer` / `kind` lines are unowned. It is not a TOML parser.
+# `writer` / `kind` lines are unowned. It is not a TOML parser.
 # A newline in a stamp path, a symlink or other
 # non-regular `run.toml`, a failed checker write, and a scan error are unowned
 # (fail closed), never a
 # missing stamp and never ownership proof.
 function _remote_run_toml_owned_check_sh()::String
+    w_ere = _run_toml_writer_awk_ere()
     return """
             _dsk_find_stamps() {
               _dsk_find_root=\$1
@@ -153,7 +155,7 @@ function _remote_run_toml_owned_check_sh()::String
       if (dq || sq || br || cu || esc) return 1
       return 0
     }
-    BEGIN { s = 0; w = 0; k = 0; top = 1; bad = 0 }
+    BEGIN { w = 0; k = 0; top = 1; bad = 0 }
     /^[ \\t]*#/ { next }
     /^[ \\t]*\$/ { next }
     { if (unbalanced(\$0)) { bad = 1; exit } }
@@ -162,13 +164,9 @@ function _remote_run_toml_owned_check_sh()::String
       next
     }
     top == 1 {
-      if (\$0 ~ /^schema = /) {
-        if (s || \$0 !~ /^schema = 1\$/) { bad = 1; exit }
-        s = 1
-        next
-      }
+      if (\$0 ~ /^schema = /) { next }
       if (\$0 ~ /^writer = /) {
-        if (w || \$0 !~ /^writer = "DistSSHRun [^"]*"\$/) { bad = 1; exit }
+        if (w || \$0 !~ /$w_ere/) { bad = 1; exit }
         w = 1
         next
       }
@@ -183,7 +181,7 @@ function _remote_run_toml_owned_check_sh()::String
       bad = 1
       exit
     }
-    END { if (bad) exit 1; exit (s && w && k) ? 0 : 1 }
+    END { if (bad) exit 1; exit (w && k) ? 0 : 1 }
     DSK_AWK
               then
                 rm -f "\$_mark" "\$_awkf" "\$_chk"

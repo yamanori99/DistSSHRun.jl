@@ -241,14 +241,19 @@ end
             before = DistSSHRun.read_kit_run_toml(d)
             @test before isa AbstractDict
             if before isa AbstractDict
-                @test before["schema"] == 1
+                @test !haskey(before, "schema")
+                @test DistSSHRun.DistSSHBase.record_writer_minor_match(
+                    before["writer"],
+                    "DistSSHRun",
+                    DistSSHRun.dist_ssh_kit_version(),
+                ) == :ok
                 @test !haskey(before, "stop")
             end
             DistSSHRun._stamp_run_toml_stop!(d, :sigkill)
             after = DistSSHRun.read_kit_run_toml(d)
             @test after isa AbstractDict
             if after isa AbstractDict
-                @test after["schema"] == 1
+                @test !haskey(after, "schema")
                 @test after["kind"] == "go"
                 @test after["ok"] === true
                 @test after["stop"] == "sigkill"
@@ -465,7 +470,11 @@ end
             @test raw isa AbstractDict
             @test raw["kind"] == "drive"
             @test raw["ok"] === true
-            @test raw["schema"] == 1
+            @test DistSSHRun.DistSSHBase.record_writer_minor_match(
+                raw["writer"],
+                "DistSSHRun",
+                DistSSHRun.dist_ssh_kit_version(),
+            ) == :ok
             @test occursin("out", String(raw["output_dir"]))
             other = mktempdir()
             try
@@ -1962,7 +1971,11 @@ end
             @test pwd() == here
             DistSSHRun.write_kit_run_toml!(proj; kind = :go, project_root = proj)
             plain = _must_run_toml(proj)
-            @test plain["schema"] == 1
+            @test DistSSHRun.DistSSHBase.record_writer_minor_match(
+                plain["writer"],
+                "DistSSHRun",
+                DistSSHRun.dist_ssh_kit_version(),
+            ) == :ok
             @test !haskey(plain, "launch")
             withenv(
                 "DISTSSH_LAUNCH_THREADS" => "1",
@@ -1972,7 +1985,11 @@ end
                 DistSSHRun.write_kit_run_toml!(proj; kind = :go, project_root = proj)
             end
             stamped = _must_run_toml(proj)
-            @test stamped["schema"] == 1
+            @test DistSSHRun.DistSSHBase.record_writer_minor_match(
+                stamped["writer"],
+                "DistSSHRun",
+                DistSSHRun.dist_ssh_kit_version(),
+            ) == :ok
             launch = stamped["launch"]::AbstractDict
             @test launch["threads"] == "1"
             @test launch["dir"] == "."
@@ -2044,7 +2061,11 @@ end
                 @test "CUSTOM_JOB_PATH" in report.dropped
                 @test "HOME" ∉ report.dropped
                 raw = _must_run_toml(kp.run_dir::AbstractString)
-                @test raw["schema"] == 1
+                @test DistSSHRun.DistSSHBase.record_writer_minor_match(
+                raw["writer"],
+                "DistSSHRun",
+                DistSSHRun.dist_ssh_kit_version(),
+            ) == :ok
                 launch = raw["launch"]::AbstractDict
                 @test launch["threads"] == "1"
                 @test "SECRET_TOKEN" in String.(launch["dropped"])
@@ -2138,13 +2159,18 @@ end
         end
     end
 
-    @testset "legacy ride on-disk records" begin
+    @testset "writer major.minor owns run.toml (not schema)" begin
         raw = Dict{String, Any}(
             "schema" => 1,
             "writer" => "DistSSHRun 0.1.0",
             "kind" => "ride",
         )
-        @test DistSSHRun._kit_run_toml_owned(raw)
+        @test !DistSSHRun._kit_run_toml_owned(raw)
+        ok = Dict{String, Any}(
+            "writer" => DistSSHRun.run_record_writer(),
+            "kind" => "go",
+        )
+        @test DistSSHRun._kit_run_toml_owned(ok)
     end
 
 end

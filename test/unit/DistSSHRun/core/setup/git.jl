@@ -1,4 +1,5 @@
 using Test
+using TOML
 
 function _git_sync_via_ssh_shim!(bindir, work, remote; hosts = ["dest"])
     path0 = get(ENV, "PATH", "")
@@ -462,7 +463,17 @@ end
                 @test raw0.ok
 
                 mkpath(joinpath(remote, ".distssh"))
-                write(joinpath(remote, ".distssh", "deploy.toml"), "schema = 1\n")
+                write(
+                    joinpath(remote, ".distssh", "deploy.toml"),
+                    sprint(
+                        TOML.print,
+                        Dict(
+                            "writer" => DistSSHRun.run_record_writer(),
+                            "deploy_id" => "stub",
+                            "mode" => "git-sync",
+                        ),
+                    ),
+                )
                 write(joinpath(work, "f.txt"), "after-deploy-record\n")
                 run(pipeline(`git -C $work add f.txt`; stdout = devnull, stderr = devnull))
                 run(
@@ -478,7 +489,17 @@ end
 
                 head_before_block = strip(read(`git -C $remote rev-parse HEAD`, String))
                 mkpath(joinpath(remote, ".distssh"))
-                write(joinpath(remote, ".distssh", "deploy.toml"), "schema = 1\n")
+                write(
+                    joinpath(remote, ".distssh", "deploy.toml"),
+                    sprint(
+                        TOML.print,
+                        Dict(
+                            "writer" => DistSSHRun.run_record_writer(),
+                            "deploy_id" => "stub",
+                            "mode" => "git-sync",
+                        ),
+                    ),
+                )
                 write(joinpath(remote, "shadow.txt"), "untracked\n")
                 write(joinpath(work, "f.txt"), "blocked\n")
                 run(pipeline(`git -C $work add f.txt`; stdout = devnull, stderr = devnull))
@@ -507,7 +528,17 @@ end
                 _, raw3a = _git_sync_via_ssh_shim!(bindir, work, remote)
                 @test raw3a.ok
                 mkpath(joinpath(remote, ".distssh"))
-                write(joinpath(remote, ".distssh", "deploy.toml"), "schema = 1\n")
+                write(
+                    joinpath(remote, ".distssh", "deploy.toml"),
+                    sprint(
+                        TOML.print,
+                        Dict(
+                            "writer" => DistSSHRun.run_record_writer(),
+                            "deploy_id" => "stub",
+                            "mode" => "git-sync",
+                        ),
+                    ),
+                )
                 write(joinpath(remote, ".distssh", "tracked.toml"), "dirty\n")
                 head_before_mod = strip(read(`git -C $remote rev-parse HEAD`, String))
                 write(joinpath(work, "f.txt"), "tracked-mod-blocked\n")
@@ -545,7 +576,17 @@ end
                     @test raw_base.ok
                     head0 = strip(read(`git -C $remote2 rev-parse HEAD`, String))
                     mkpath(joinpath(remote2, ".distssh"))
-                    write(joinpath(remote2, ".distssh", "deploy.toml"), "schema = 1\n")
+                    write(
+                        joinpath(remote2, ".distssh", "deploy.toml"),
+                        sprint(
+                            TOML.print,
+                            Dict(
+                                "writer" => DistSSHRun.run_record_writer(),
+                                "deploy_id" => "stub",
+                                "mode" => "git-sync",
+                            ),
+                        ),
+                    )
                     write(joinpath(work2, "f.txt"), "collide\n")
                     run(pipeline(`git -C $work2 add f.txt`; stdout = devnull, stderr = devnull))
                     run(
