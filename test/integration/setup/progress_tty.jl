@@ -73,12 +73,24 @@ using Test
         write(joinpath(stub_bin, "ssh"), "#!/bin/sh\nexit 1\n")
         write(
             joinpath(stub_bin, "git"),
-            "#!/bin/sh\n" *
-                "if [ \"\$1\" = \"-C\" ] && [ \"\$4\" = \"rev-parse\" ]; then\n" *
-                "  echo fatal: not a git repository 1>&2\n" *
-                "  exit 128\n" *
-                "fi\n" *
-                "exit 1\n",
+            raw"""
+            #!/bin/sh
+            # Fail-closed helpers invoke rev-parse, status, and remote; exit 1 looked
+            # like repository corruption when .git metadata exists on the checkout path.
+            for g in /usr/bin/git /usr/local/bin/git /bin/git; do
+              [ -x "$g" ] && exec "$g" "$@"
+            done
+            if [ "$1" = "-C" ]; then
+              shift 2
+              case "$1" in
+                rev-parse|remote|status)
+                  echo 'fatal: not a git repository (or any of the parent directories): .git' 1>&2
+                  exit 128
+                  ;;
+              esac
+            fi
+            exit 1
+            """,
         )
         chmod(joinpath(stub_bin, "ssh"), 0o755)
         chmod(joinpath(stub_bin, "git"), 0o755)
