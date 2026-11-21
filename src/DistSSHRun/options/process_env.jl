@@ -16,7 +16,6 @@ end
 
 Base.get(pe::ProcessEnv, key::Union{AbstractString, Symbol}, default) =
     get(pe.data, String(key), default)
-Base.get(pe::ProcessEnv, key::Union{AbstractString, Symbol}) = get(pe.data, String(key))
 Base.haskey(pe::ProcessEnv, key) = haskey(pe.data, String(key))
 
 const _INVOCATION_PROCESS_ENV = Ref{Union{Nothing, ProcessEnv}}(nothing)
@@ -29,7 +28,7 @@ function invocation_process_env()::ProcessEnv
 end
 
 """Run `f` with `env` as the active invocation snapshot (nested calls restore the outer snapshot)."""
-function with_kit_invocation_env!(env::ProcessEnv, f)
+function with_kit_invocation_env!(f, env::ProcessEnv)
     prev = _INVOCATION_PROCESS_ENV[]
     _INVOCATION_PROCESS_ENV[] = env
     try
