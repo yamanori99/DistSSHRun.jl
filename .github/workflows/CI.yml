@@ -1555,17 +1555,23 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
       - name: Diff base for PR
         id: diff
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          SHA: ${{ github.sha }}
+          BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
-            base="${{ github.event.pull_request.base.sha }}"
-            head="${{ github.sha }}"
-          elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "$(printf '0%.0s' {1..40})" ]; then
-            base="${{ github.event.before }}"
-            head="${{ github.sha }}"
+          zeros="$(printf '0%.0s' {1..40})"
+          if [ "${EVENT_NAME}" = "pull_request" ]; then
+            base="${PR_BASE}"
+            head="${SHA}"
+          elif [ -n "${BEFORE}" ] && [ "${BEFORE}" != "${zeros}" ]; then
+            base="${BEFORE}"
+            head="${SHA}"
           else
             base="$(git rev-parse origin/main)"
-            head="${{ github.sha }}"
+            head="${SHA}"
           fi
           echo "base=${base}" >> "$GITHUB_OUTPUT"
           echo "head=${head}" >> "$GITHUB_OUTPUT"
@@ -1573,10 +1579,13 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GATE_DIFF_BASE: ${{ steps.diff.outputs.base }}
+          GATE_DIFF_HEAD: ${{ steps.diff.outputs.head }}
         run: |
           set -euo pipefail
-          gh pr view "${{ github.event.pull_request.number }}" --json body --jq .body > "${RUNNER_TEMP}/gate-pr-body.txt"
-          git diff --name-only "${{ steps.diff.outputs.base }}...${{ steps.diff.outputs.head }}" > "${RUNNER_TEMP}/gate-pr-paths.txt"
+          gh pr view "${PR_NUMBER}" --json body --jq .body > "${RUNNER_TEMP}/gate-pr-body.txt"
+          git diff --name-only "${GATE_DIFF_BASE}...${GATE_DIFF_HEAD}" > "${RUNNER_TEMP}/gate-pr-paths.txt"
       - name: Cheap mechanical guards
         env:
           GATE_DIFF_BASE: ${{ steps.diff.outputs.base }}
