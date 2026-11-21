@@ -1863,16 +1863,14 @@ end
 """True when `dir` or an ancestor has a `.git` file, directory, or symlink."""
 function _ancestor_dot_git_entry(dir::AbstractString)::Bool
     cur = canonical_local_path(dir)
-    while true
+    prev = ""
+    while cur != prev
         meta = joinpath(cur, ".git")
-        if isfile(meta) || isdir(meta) || islink(meta)
-            return true
-        end
-        parent = dirname(cur)
-        parent == cur && return false
-        cur = parent
+        (isfile(meta) || isdir(meta) || islink(meta)) && return true
+        prev = cur
+        cur = dirname(cur)
     end
-    return
+    return false
 end
 
 function _git_work_tree_exit_code(e)::Int
