@@ -92,6 +92,7 @@ end
             _runtest_include("unit/DistSSHRun/infra/launch.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "launch.jl"))
             _runtest_include("unit/DistSSHRun/infra/cluster_manager_api.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "cluster_manager_api.jl"))
             _runtest_include("unit/DistSSHRun/infra/seed_golden.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "seed_golden.jl"))
+            _runtest_include("unit/DistSSHRun/infra/plan_ranks_item_seeds.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "plan_ranks_item_seeds.jl"))
             _runtest_include("unit/DistSSHRun/infra/topology.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "topology.jl"))
             _runtest_include("unit/DistSSHRun/infra/bind_overrides.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "bind_overrides.jl"))
             _runtest_include("unit/DistSSHRun/infra/bind_pre_ssh.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "infra", "bind_pre_ssh.jl"))

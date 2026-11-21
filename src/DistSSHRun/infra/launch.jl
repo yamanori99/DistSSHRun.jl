@@ -174,8 +174,28 @@ function take_worker_rank()::Int
     return rank
 end
 
+function reserve_worker_ranks!(n::Integer)::Vector{Int}
+    n = Int(n)
+    n < 1 && return Int[]
+    length(_PLANNED_RANK_QUEUE) >= n ||
+        throw(ArgumentError("launch rank plan exhausted (need $n ranks, $(length(_PLANNED_RANK_QUEUE)) left)"))
+    return [popfirst!(_PLANNED_RANK_QUEUE) for _ in 1:n]
+end
+
 function register_launch_rank!(pid::Integer, rank::Integer)
-    _PID_TO_RANK[Int(pid)] = Int(rank)
+    pid = Int(pid)
+    rank = Int(rank)
+    _PID_TO_RANK[pid] = rank
+    rank in _ASSIGNED_RANKS || push!(_ASSIGNED_RANKS, rank)
+    return nothing
+end
+
+function unregister_launch_rank!(pid::Integer)
+    pid = Int(pid)
+    rank = pop!(_PID_TO_RANK, pid, nothing)
+    rank === nothing && return nothing
+    any(v -> v == rank, values(_PID_TO_RANK)) && return nothing
+    filter!(r -> r != rank, _ASSIGNED_RANKS)
     return nothing
 end
 
@@ -556,6 +576,9 @@ end
 
 function _rmprocs_added_since(before::AbstractSet{<:Integer})
     leftover = Int[w for w in workers() if w ∉ before]
+    for w in leftover
+        unregister_launch_rank!(w)
+    end
     try
         isempty(leftover) || rmprocs(leftover; waitfor = 30)
     catch
@@ -567,15 +590,22 @@ function _add_local_drive_workers!(
         n::Int,
         project::AbstractString,
         julia_bin::AbstractString;
+        ranks::Union{Nothing, AbstractVector{<:Integer}} = nothing,
         verify_project::Bool = true,
     )
     n < 1 && return nothing
-    isempty(_PLANNED_RANK_QUEUE) && reset_launch_rank_plan!(collect(1:n))
+    rank_list = if ranks !== nothing
+        length(ranks) == n ||
+            throw(ArgumentError("ranks length ($(length(ranks))) != worker count ($n)"))
+        Int.(collect(ranks))
+    else
+        isempty(_PLANNED_RANK_QUEUE) && reset_launch_rank_plan!(collect(1:n))
+        [take_worker_rank() for _ in 1:n]
+    end
     flags = Cmd(worker_exeflag_strings(project; local_cpu = true, job_id = resolved_kit_job_id()))
     before = Set(workers())
     try
-        for i in 1:n
-            rank = take_worker_rank()
+        for (i, rank) in enumerate(rank_list)
             env = worker_env_pairs(project; ssh = false, rank = rank)
             joined = addprocs(
                 1;
@@ -610,15 +640,23 @@ function _add_ssh_drive_workers!(
         julia_bin::AbstractString,
         project::AbstractString,
         sshflags::Cmd,
-        placement_ssh_endpoint::AbstractString,
+        placement_ssh_endpoint::AbstractString;
+        ranks::Union{Nothing, AbstractVector{<:Integer}} = nothing,
     )
     n < 1 && return nothing
+    rank_list = if ranks !== nothing
+        length(ranks) == n ||
+            throw(ArgumentError("ranks length ($(length(ranks))) != worker count ($n)"))
+        Int.(collect(ranks))
+    else
+        isempty(_PLANNED_RANK_QUEUE) && reset_launch_rank_plan!(collect(1:n))
+        [take_worker_rank() for _ in 1:n]
+    end
     flags = Cmd(worker_exeflag_strings(project; local_cpu = false, job_id = resolved_kit_job_id()))
     exename = ssh_worker_exename(julia_bin)
     before = Set(workers())
     try
-        for i in 1:n
-            rank = take_worker_rank()
+        for (i, rank) in enumerate(rank_list)
             env = worker_env_pairs(project; ssh = true, rank = rank)
             joined = addprocs(
                 [(machine, 1)];
