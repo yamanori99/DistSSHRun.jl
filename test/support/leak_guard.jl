@@ -60,7 +60,7 @@ if !isdefined(Main, :_DISTSSH_TEST_LEAK_TAG)
             reap!(to_reap)
             survivors = wait_gone(list; timeout = 3.0)
             if !isempty(survivors)
-                reap!(survivors)
+                reap!(broken_rows === nothing ? survivors : filter(broken_rows, survivors))
                 survivors = wait_gone(list; timeout = 0.5)
             end
             if !isempty(survivors)
