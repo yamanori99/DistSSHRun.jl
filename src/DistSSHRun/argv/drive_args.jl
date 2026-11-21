@@ -99,11 +99,11 @@ function parse_drive_args(args::Vector{String}; env::ProcessEnv = snapshot_proce
     if blob_path !== nothing
         assert_detached_job_blob_bootstrap_argv!(bootstrap_argv)
         scrub_detached_placement_env!()
-        env = snapshot_process_env()
         blob = read_detached_job_blob(blob_path)
         blob.kind === :drive || throw(
             ArgumentError("job blob kind is $(blob.kind); expected drive"),
         )
+        env = detached_job_blob_child_process_env(snapshot_process_env(), blob)
         return drive_parsed_from_detached_job_blob(blob; hint_surface = :cli, process_env = env)
     end
     reject_mistaken_short_placement_flags!(args; command = :drive)

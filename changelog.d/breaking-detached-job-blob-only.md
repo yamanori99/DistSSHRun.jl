@@ -1,3 +1,3 @@
 category: breaking
 
-- Detached `go` / `drive` children with `--job-blob` reject any argv beyond bootstrap `-y` / `--yes` and `--job-blob PATH` (including tokens after `PATH`). Job settings come only from `job.toml`; job-default `DISTSSH_*` and `JULIA_DISTRIBUTED_EXE` are scrubbed from the child environment after the blob loads. `DISTSSH_JOB_BLOB` is no longer set on detached children (use `--job-blob` argv only).
+- Detached `go` / `drive` children with `--job-blob` reject any argv beyond bootstrap `-y` / `--yes` and `--job-blob PATH` (including tokens after `PATH`). Job settings come only from `job.toml`; job-default `DISTSSH_*` and `JULIA_DISTRIBUTED_EXE` are scrubbed from the child environment after the blob loads. `DISTSSH_JOB_BLOB` is no longer set on detached children (use `--job-blob` argv only). Parents writing a blob persist run options (including `unsafe_master_silence_exit`, topology, and explicit heartbeat timing) from their environment into `job.toml`.

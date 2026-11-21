@@ -130,11 +130,9 @@ function parse_go_args(
     if blob_path !== nothing
         assert_detached_job_blob_bootstrap_argv!(args_vec)
         scrub_detached_placement_env!()
-        env = snapshot_process_env()
-        return go_parsed_from_detached_job_blob(
-            read_detached_job_blob(blob_path);
-            process_env = env,
-        )
+        blob = read_detached_job_blob(blob_path)
+        env = detached_job_blob_child_process_env(snapshot_process_env(), blob)
+        return go_parsed_from_detached_job_blob(blob; process_env = env)
     end
     reject_mistaken_short_placement_flags!(args; command = :go)
     assert_go_argv_no_head_workers!(args)
