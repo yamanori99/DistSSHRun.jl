@@ -159,37 +159,41 @@ function parse_diff(diff::AbstractString)
 end
 
 function git_diff(root::AbstractString)
-    cmd = `git -C $root diff -U0 --no-color origin/main...HEAD`
+    range = strip(get(ENV, "GATE_DIFF_RANGE", ""))
+    if isempty(range)
+        range = "origin/main...HEAD"
+    end
+    cmd = `git -C $root diff -U0 --no-color $range`
     return read(cmd, String)
 end
 
 function skipped_path(path::AbstractString)
-    return startswith(path, "scripts/lint/") ||
-        startswith(path, ".agents/skills/") ||
-        startswith(path, "docs/src/devdocs/agents/skills/")
+    return startswith(path, "scripts/lint/")
 end
 
-const BANNED = (
-    "fine for now",
-    "workaround",
-    "IMPORTANT",
-    "for now",
-    "XXX",
-    "HACK",
-    "delve",
-    "crucial",
-    "additionally",
-)
+const EXCUSE_PHRASES = let
+    path = joinpath(@__DIR__, "excuse-phrases.toml")
+    data = TOML.parsefile(path)
+    (
+        phrases = get(data, "phrases", String[]),
+        word_boundary = Set(String.(get(data, "word_boundary", String[]))),
+        prefix_sensitive = Set(String.(get(data, "prefix_sensitive", String[]))),
+    )
+end
 
 function banned_hit(text::AbstractString)
-    for word in ("fine for now", "workaround", "IMPORTANT")
-        occursin(word, text) && return word
+    for word in EXCUSE_PHRASES.phrases
+        word == "for now" && continue
+        if word in EXCUSE_PHRASES.prefix_sensitive
+            occursin(word, text) && return word
+        elseif word in EXCUSE_PHRASES.word_boundary
+            occursin(Regex("(?<![A-Za-z0-9_])" * word * "(?![A-Za-z0-9_])"), text) && return word
+        else
+            occursin(word, text) && return word
+        end
     end
     if !occursin("fine for now", text) && occursin("for now", text)
         return "for now"
-    end
-    for word in ("XXX", "HACK", "delve", "crucial", "additionally")
-        occursin(Regex("(?<![A-Za-z0-9_])" * word * "(?![A-Za-z0-9_])"), text) && return word
     end
     return nothing
 end
@@ -463,6 +467,49 @@ function public_names_in(src::AbstractString)
     return names
 end
 
+function export_names_in(src::AbstractString)
+    names = Set{String}()
+    toks = tokenize(src)
+    i = 1
+    while i <= length(toks)
+        if kind(toks[i]) == K"export"
+            i += 1
+            after_comma = false
+            while i <= length(toks)
+                k = kind(toks[i])
+                if k == K"Identifier"
+                    push!(names, untokenize(toks[i], src))
+                    after_comma = false
+                elseif k == K":"
+                    after_comma = false
+                elseif k == K","
+                    after_comma = true
+                elseif k == K"NewlineWs"
+                    after_comma || break
+                elseif k in (K"Whitespace", K"Comment")
+                else
+                    break
+                end
+                i += 1
+            end
+        else
+            i += 1
+        end
+    end
+    return names
+end
+
+function module_private_names_in(src::AbstractString)
+    names = Set{String}()
+    for m in eachmatch(r"(?:^|\n)\s*(?:function|const|macro)\s+(_[A-Za-z0-9_]+)", src)
+        push!(names, String(m.captures[1]))
+    end
+    for m in eachmatch(r"(?:^|\n)\s*mutable\s+struct\s+(_[A-Za-z0-9_]+)", src)
+        push!(names, String(m.captures[1]))
+    end
+    return names
+end
+
 function public_names(root::AbstractString)
     names = Set{String}()
     for rel in ("src", "ext", "lib")
@@ -474,7 +521,10 @@ function public_names(root::AbstractString)
             end
             for file in files
                 endswith(file, ".jl") || continue
-                union!(names, public_names_in(read(joinpath(dir, file), String)))
+                body = read(joinpath(dir, file), String)
+                union!(names, public_names_in(body))
+                union!(names, export_names_in(body))
+                union!(names, module_private_names_in(body))
             end
         end
     end
@@ -552,17 +602,27 @@ function has_version(node)
     return false
 end
 
-function has_string(node)
-    stack = [node]
-    while !isempty(stack)
-        n = pop!(stack)
-        if kind(n) in (K"string", K"String")
-            return true
-        end
-        for i in 1:numchildren(n)
-            push!(stack, n[i])
-        end
+function macro_reason_string(node)
+    numchildren(node) < 2 && return false
+    arg = node[2]
+    return kind(arg) in (K"string", K"String")
+end
+
+function node_touches_added(src, node, added)
+    isempty(added) && return false
+    r = byte_range(node)
+    a = line_of(src, Int(first(r)))
+    b = line_of(src, Int(last(r)))
+    for line in a:b
+        line in added && return true
     end
+    return false
+end
+
+function truthy_skip_kw(val)
+    val === nothing && return false
+    kind(val) == K"Bool" && sourcetext(val) == "true" && return true
+    has_version(val) && return true
     return false
 end
 
@@ -590,13 +650,25 @@ end
 
 const issue_lookup = Ref(true)
 
+function issue_check_active()
+    issue_lookup[] || return false
+    return get(ENV, "GITHUB_ACTIONS", "") == "true" ||
+        get(ENV, "GATE_ISSUE_CHECK", "") == "1"
+end
+
 function issue_is_open(n::Int)
-    issue_lookup[] || return true
-    get(ENV, "GITHUB_ACTIONS", "") == "true" || return true
+    issue_check_active() || return true
     repo = get(ENV, "GITHUB_REPOSITORY", "")
     isempty(repo) && die("GITHUB_REPOSITORY is unset")
+    token = get(ENV, "GH_TOKEN", get(ENV, "GITHUB_TOKEN", ""))
     out = try
-        read(`gh api repos/$(repo)/issues/$(n) --jq .state`, String)
+        if isempty(token)
+            read(`gh api repos/$(repo)/issues/$(n) --jq .state`, String)
+        else
+            withenv("GH_TOKEN" => token, "GITHUB_TOKEN" => token) do
+                read(`gh api repos/$(repo)/issues/$(n) --jq .state`, String)
+            end
+        end
     catch
         die("could not read issue #$(n) state")
     end
@@ -676,12 +748,45 @@ function check_skip_macro(node, src, path)
             nerr += 1
         end
     elseif skip
-        if !has_string(node)
-            println(stderr, "lint: $(path):$(a): environment-guard skip needs a reason string")
+        if !macro_reason_string(node)
+            println(stderr, "lint: $(path):$(a): @test_skip needs a literal reason string in the first argument")
             nerr += 1
         end
     else
         return nerr
+    end
+    return nerr + require_open_issues(src, a, b, path)
+end
+
+function check_call_test_guard(node, src, path, added)
+    node_touches_added(src, node, added) || return 0
+    nerr = 0
+    broken = false
+    skip = false
+    versioned = false
+    for i in 2:numchildren(node)
+        kw = keyword_name(node[i])
+        kw === nothing && continue
+        val = keyword_value(node[i])
+        if kw == "broken" && val !== nothing && (kind(val) == K"Bool" && sourcetext(val) == "true" || has_version(val))
+            broken = true
+            versioned = versioned || has_version(val)
+        elseif kw == "skip" && truthy_skip_kw(val)
+            skip = true
+            versioned = versioned || (val !== nothing && has_version(val))
+        end
+    end
+    broken || skip || versioned || return 0
+    r = byte_range(node)
+    a = line_of(src, Int(first(r)))
+    b = line_of(src, Int(last(r)))
+    notes = join(comments_on(src, a, b), "\n")
+    nums = issue_numbers(notes)
+    if broken || versioned
+        if isempty(nums)
+            println(stderr, "lint: $(path):$(a): broken/skip kwarg guard needs #N")
+            nerr += 1
+        end
     end
     return nerr + require_open_issues(src, a, b, path)
 end
@@ -695,18 +800,19 @@ function lint_skips(root, files, src_for_path)
         isempty(added) && continue
         src = src_for_path(path)
         tree = parse_tree(src)
-        function walk(node, inside_fn)
+        function walk(node)
             k = kind(node)
-            if k == K"macrocall" && !inside_fn && macro_touches_added(src, node, added)
+            if k == K"macrocall" && macro_touches_added(src, node, added)
                 n += check_skip_macro(node, src, path)
+            elseif k == K"call" && node_touches_added(src, node, added)
+                n += check_call_test_guard(node, src, path, added)
             end
-            next = inside_fn || k == K"function" || k == K"->"
             for i in 1:numchildren(node)
-                walk(node[i], next)
+                walk(node[i])
             end
             return
         end
-        walk(tree, false)
+        walk(tree)
     end
     return n
 end
@@ -837,6 +943,7 @@ function self_test_body()
         die("self-test: public statement boundary")
     skip_src = """
     @test_skip \"git not in PATH\"
+    @test_skip f(\"x\")
     @test_broken \"needs a number\"
     @test g() skip=(VERSION < v\"1.14\")
     @test h() skip=true
@@ -856,18 +963,26 @@ function self_test_body()
     end
     tree2 = parse_tree(skip_src)
     errs = Ref(0)
-    function walk2(node, inside)
-        if kind(node) == K"macrocall" && !inside
+    function walk2(node)
+        if kind(node) == K"macrocall"
             errs[] += check_skip_macro(node, skip_src, "t.jl")
+        elseif kind(node) == K"call"
+            errs[] += check_call_test_guard(node, skip_src, "t.jl", Set(1:200))
         end
-        next = inside || kind(node) == K"function"
         for i in 1:numchildren(node)
-            walk2(node[i], next)
+            walk2(node[i])
         end
         return
     end
-    walk2(tree2, false)
-    errs[] == 4 || die("self-test: skip errors $(errs[])")
+    walk2(tree2)
+    errs[] == 6 || die("self-test: skip errors $(errs[])")
+    mktempdir() do root
+        mkpath(joinpath(root, "src"))
+        write(joinpath(root, "src", "DistSSHRun.jl"), "module DistSSHRun\nexport worker_pmap\nend\n")
+        write(joinpath(root, "AGENTS.md"), "Use worker_pmap in docs.\n")
+        files = Dict("AGENTS.md" => [Hunk(1, 0, 1, 1, String[])])
+        lint_agents(root, files) == 1 || die("self-test: agents-md must fail on export name")
+    end
     ml = """
     @test long() begin
         1
@@ -1527,6 +1642,115 @@ function docs_static(root::AbstractString)
     return n
 end
 
+const RUNTESTS_ALLOW = Set(
+    [
+        "integration/cli/project_child.jl",
+        "support.jl",
+        "support/leak_guard.jl",
+        "support/_common.jl",
+        "support/parallel_common.jl",
+    ]
+)
+
+function runtests_allowlisted(rel::AbstractString, prefix::AbstractString)
+    rel in RUNTESTS_ALLOW && return true
+    startswith(rel, prefix * "support/") && return true
+    return occursin("/fixtures/", "/" * rel)
+end
+
+function runtests_includes(src::AbstractString, prefix::AbstractString)
+    out = Set{String}()
+    for m in eachmatch(r"_runtest_include\(\s*\"([^\"]+)\"", src)
+        push!(out, String(m.captures[1]))
+    end
+    for m in eachmatch(r"include\(joinpath\(@__DIR__,\s*((?:\"[^\"]+\",\s*)*\"[^\"]+\")\s*\)", src)
+        parts = String[c.captures[1] for c in eachmatch(r"\"([^\"]+)\"", m.captures[1])]
+        isempty(parts) && continue
+        rel = join(parts, '/')
+        if !isempty(prefix)
+            push!(out, prefix * rel)
+        elseif startswith(rel, "unit/") || startswith(rel, "integration/")
+            push!(out, rel)
+        end
+    end
+    for m in eachmatch(r"include\(\"([^\"]+\.jl)\"\)", src)
+        rel = String(m.captures[1])
+        !isempty(prefix) && push!(out, prefix * rel)
+    end
+    return out
+end
+
+function lint_runtests(root::AbstractString)
+    n = 0
+    main = read(joinpath(root, "test", "runtests.jl"), String)
+    included = runtests_includes(main, "")
+    test_root = joinpath(root, "test")
+    for (dir, _, files) in walkdir(test_root)
+        for file in files
+            endswith(file, ".jl") || continue
+            rel = replace(relpath(joinpath(dir, file), test_root), '\\' => '/')
+            (startswith(rel, "unit/") || startswith(rel, "integration/")) || continue
+            runtests_allowlisted(rel, "") && continue
+            rel in included && continue
+            println(stderr, "lint: test/$(rel) is not listed in test/runtests.jl")
+            n += 1
+        end
+    end
+    for pkg in ("DistSSHBase", "DistSSHUp", "DistSSHShip", "DistSSHHeartbeat")
+        rt = joinpath(root, "lib", pkg, "test", "runtests.jl")
+        isfile(rt) || continue
+        src = read(rt, String)
+        prefix = "lib/" * pkg * "/test/"
+        incl = runtests_includes(src, prefix)
+        tdir = joinpath(root, "lib", pkg, "test")
+        for (dir, _, files) in walkdir(tdir)
+            for file in files
+                endswith(file, ".jl") || continue
+                body = read(joinpath(dir, file), String)
+                relbase = relpath(dir, tdir)
+                base = isempty(relbase) || relbase == "." ? "" : replace(relbase, '\\' => '/') * "/"
+                for m in eachmatch(r"include\(\"([^\"]+\.jl)\"\)", body)
+                    inc = String(m.captures[1])
+                    push!(incl, prefix * base * inc)
+                end
+            end
+        end
+        for (dir, _, files) in walkdir(tdir)
+            for file in files
+                endswith(file, ".jl") || continue
+                rel = replace(relpath(joinpath(dir, file), tdir), '\\' => '/')
+                rel == "runtests.jl" && continue
+                full = prefix * rel
+                runtests_allowlisted(full, prefix) && continue
+                full in incl && continue
+                occursin("/fixtures/", full) && continue
+                endswith(rel, "support.jl") && continue
+                endswith(rel, "helpers.jl") && continue
+                rel == "e2e.jl" && continue
+                rel == "shared_tempdir.jl" && continue
+                println(stderr, "lint: $(full) is not included from lib/$(pkg)/test/runtests.jl")
+                n += 1
+            end
+        end
+    end
+    short_src = read(joinpath(root, "test", "support", "_common.jl"), String)
+    start = findfirst("_DISTSSHRUN_SHORT_SKIP_PATHS", short_src)
+    if start !== nothing
+        block = short_src[start[1]:min(end, start[1] + 2000)]
+        for m in eachmatch(r"\"((?:unit|integration)/[^\"]+)\"", block)
+            path = String(m.captures[1])
+            line = findfirst(path, block)
+            line === nothing && continue
+            tail = block[min(last(line) + 1, end):min(end, last(line) + 160)]
+            if !occursin("#", tail)
+                println(stderr, "lint: short-skip entry $(path) needs an end-of-line reason comment")
+                n += 1
+            end
+        end
+    end
+    return n
+end
+
 function main(args)
     if length(args) == 3 && args[1] == "pr-body"
         return pr_body_main(args[2], args[3])
@@ -1537,12 +1761,15 @@ function main(args)
         return pr_body_hints_main(args[2], args[3], committed, edited)
     end
     if length(args) != 1
-        die("usage: diff_lint.jl <banned-words|agents-md|skip-reasons|new-comments|stdlib-compat|ssh-argv|drive-hooks|aqua-run|doc-touch|docs-static|self-test|pr-body|pr-body-hints>")
+        die("usage: diff_lint.jl <banned-words|agents-md|skip-reasons|new-comments|stdlib-compat|ssh-argv|drive-hooks|aqua-run|runtests|doc-touch|docs-static|self-test|pr-body|pr-body-hints>")
     end
     mode = args[1]
     mode == "self-test" && return self_test()
     root = repo_root()
-    if mode == "doc-touch"
+    if mode == "runtests"
+        lint_runtests(root) == 0 || exit(1)
+        return 0
+    elseif mode == "doc-touch"
         println(doc_touch(root) ? "yes" : "no")
         return 0
     elseif mode == "docs-static"

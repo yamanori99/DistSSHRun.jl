@@ -1,0 +1,33 @@
+# Substrings that must not appear in newly added non-doc comments (any language).
+# Word-boundary rules for short tokens are applied in diff_lint.jl.
+
+phrases = [
+    "fine for now",
+    "workaround",
+    "IMPORTANT",
+    "XXX",
+    "HACK",
+    "delve",
+    "crucial",
+    "additionally",
+    "とりあえず",
+    "暫定対応",
+    "暫定",
+    "一時凌ぎ",
+    "妥協",
+]
+
+word_boundary = [
+    "XXX",
+    "HACK",
+    "delve",
+    "crucial",
+    "additionally",
+]
+
+prefix_sensitive = [
+    "fine for now",
+    "workaround",
+    "IMPORTANT",
+    "for now",
+]

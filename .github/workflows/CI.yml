@@ -1486,3 +1486,160 @@ jobs:
           if [[ -d "$DISTSSHQUEUE_CHECKOUT" ]]; then
             (cd "$DISTSSHQUEUE_CHECKOUT" && ./testenv/docker-ssh/scripts/down.sh) || true
           fi
+
+  # Always runs. Later: sole ruleset required check (replaces per-job edits).
+  gate:
+    name: gate
+    needs:
+      - detect
+      - runic
+      - diff-lint-self-test
+      - jetls
+      - aqua
+      - aqua-1-14-pre
+      - aqua-nightly
+      - jetls-1-14-pre
+      - test-unit
+      - test-integration
+      - test-coverage
+      - test-macos-unit
+      - test-macos-integration
+      - test-wsl
+      - test-1-14-pre-unit
+      - test-1-14-pre-integration
+      - test-1-14-pre-macos-unit
+      - test-1-14-pre-macos-integration
+      - test-nightly
+      - registry-install
+      - pkgeval
+      - downstream
+      - base-test-ubuntu
+      - base-test-macos
+      - base-test-wsl
+      - up-test-ubuntu
+      - up-test-macos
+      - up-test-wsl
+      - ship-test-ubuntu
+      - ship-test-macos
+      - ship-test-wsl
+      - heartbeat-test-ubuntu
+      - heartbeat-test-macos
+      - heartbeat-test-wsl
+      - up-ssh-e2e
+      - base-ssh-e2e
+      - ship-ssh-e2e
+      - heartbeat-ssh-e2e
+      - ssh-e2e
+      - ssh-e2e-1-14-pre
+      - queue-ssh-e2e
+    if: ${{ !cancelled() && always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - name: Install shellcheck
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+      - name: Diff base for PR
+        id: diff
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.sha }}"
+          elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "$(printf '0%.0s' {1..40})" ]; then
+            base="${{ github.event.before }}"
+            head="${{ github.sha }}"
+          else
+            base="$(git rev-parse origin/main)"
+            head="${{ github.sha }}"
+          fi
+          echo "base=${base}" >> "$GITHUB_OUTPUT"
+          echo "head=${head}" >> "$GITHUB_OUTPUT"
+      - name: PR body for lint
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh pr view "${{ github.event.pull_request.number }}" --json body --jq .body > "${RUNNER_TEMP}/gate-pr-body.txt"
+          git diff --name-only "${{ steps.diff.outputs.base }}...${{ steps.diff.outputs.head }}" > "${RUNNER_TEMP}/gate-pr-paths.txt"
+      - name: Cheap mechanical guards
+        env:
+          GATE_DIFF_BASE: ${{ steps.diff.outputs.base }}
+          GATE_DIFF_HEAD: ${{ steps.diff.outputs.head }}
+          GATE_NEWLINE_ALL: "1"
+          GATE_ISSUE_CHECK: "1"
+          GITHUB_ACTIONS: "true"
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          GATE_PR_BODY_FILE: ${{ runner.temp }}/gate-pr-body.txt
+          GATE_PR_PATHS_FILE: ${{ runner.temp }}/gate-pr-paths.txt
+        run: ./scripts/gate/cheap.sh
+      - name: Judge required jobs
+        env:
+          DETECT_HEAVY: ${{ needs.detect.outputs.heavy }}
+          DETECT_SCRIPTS: ${{ needs.detect.outputs.scripts }}
+          DETECT_E2E: ${{ needs.detect.outputs.e2e }}
+          DETECT_BASE: ${{ needs.detect.outputs.base }}
+          DETECT_UP: ${{ needs.detect.outputs.up }}
+          DETECT_SHIP: ${{ needs.detect.outputs.ship }}
+          DETECT_HEARTBEAT: ${{ needs.detect.outputs.heartbeat }}
+          DETECT_QUEUE_E2E: ${{ needs.detect.outputs.queue_e2e }}
+          DETECT_COVERAGE: ${{ needs.detect.outputs.coverage }}
+          DETECT_EVENT: ${{ github.event_name }}
+          RESULT_detect: ${{ needs.detect.result }}
+          RESULT_runic: ${{ needs.runic.result }}
+          RESULT_diff_lint_self_test: ${{ needs.diff-lint-self-test.result }}
+          RESULT_jetls: ${{ needs.jetls.result }}
+          RESULT_aqua: ${{ needs.aqua.result }}
+          RESULT_aqua-1-14-pre: ${{ needs.aqua-1-14-pre.result }}
+          RESULT_aqua-nightly: ${{ needs.aqua-nightly.result }}
+          RESULT_jetls-1-14-pre: ${{ needs.jetls-1-14-pre.result }}
+          RESULT_test-unit: ${{ needs.test-unit.result }}
+          RESULT_test-integration: ${{ needs.test-integration.result }}
+          RESULT_test-coverage: ${{ needs.test-coverage.result }}
+          RESULT_test-macos-unit: ${{ needs.test-macos-unit.result }}
+          RESULT_test-macos-integration: ${{ needs.test-macos-integration.result }}
+          RESULT_test-wsl: ${{ needs.test-wsl.result }}
+          RESULT_test-1-14-pre-unit: ${{ needs.test-1-14-pre-unit.result }}
+          RESULT_test-1-14-pre-integration: ${{ needs.test-1-14-pre-integration.result }}
+          RESULT_test-1-14-pre-macos-unit: ${{ needs.test-1-14-pre-macos-unit.result }}
+          RESULT_test-1-14-pre-macos-integration: ${{ needs.test-1-14-pre-macos-integration.result }}
+          RESULT_test-nightly: ${{ needs.test-nightly.result }}
+          RESULT_registry-install: ${{ needs.registry-install.result }}
+          RESULT_pkgeval: ${{ needs.pkgeval.result }}
+          RESULT_downstream: ${{ needs.downstream.result }}
+          RESULT_base-test-ubuntu: ${{ needs.base-test-ubuntu.result }}
+          RESULT_base-test-macos: ${{ needs.base-test-macos.result }}
+          RESULT_base-test-wsl: ${{ needs.base-test-wsl.result }}
+          RESULT_up-test-ubuntu: ${{ needs.up-test-ubuntu.result }}
+          RESULT_up-test-macos: ${{ needs.up-test-macos.result }}
+          RESULT_up-test-wsl: ${{ needs.up-test-wsl.result }}
+          RESULT_ship-test-ubuntu: ${{ needs.ship-test-ubuntu.result }}
+          RESULT_ship-test-macos: ${{ needs.ship-test-macos.result }}
+          RESULT_ship-test-wsl: ${{ needs.ship-test-wsl.result }}
+          RESULT_heartbeat-test-ubuntu: ${{ needs.heartbeat-test-ubuntu.result }}
+          RESULT_heartbeat-test-macos: ${{ needs.heartbeat-test-macos.result }}
+          RESULT_heartbeat-test-wsl: ${{ needs.heartbeat-test-wsl.result }}
+          RESULT_up-ssh-e2e: ${{ needs.up-ssh-e2e.result }}
+          RESULT_base-ssh-e2e: ${{ needs.base-ssh-e2e.result }}
+          RESULT_ship-ssh-e2e: ${{ needs.ship-ssh-e2e.result }}
+          RESULT_heartbeat-ssh-e2e: ${{ needs.heartbeat-ssh-e2e.result }}
+          RESULT_ssh-e2e: ${{ needs.ssh-e2e.result }}
+          RESULT_ssh-e2e-1-14-pre: ${{ needs.ssh-e2e-1-14-pre.result }}
+          RESULT_queue-ssh-e2e: ${{ needs.queue-ssh-e2e.result }}
+        run: ./scripts/gate/judge.sh

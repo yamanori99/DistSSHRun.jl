@@ -15,6 +15,7 @@ source "${root}/scripts/section.sh"
 shopt -s nullglob
 
 files=(
+    scripts/lint/diff_lint.jl
     src/DistSSHRun.jl
     test/runtests.jl
     test/e2e.jl

@@ -142,24 +142,22 @@ if !isdefined(Main, :_test_root)
     end
 
     const _DISTSSHRUN_SHORT_SKIP_PATHS = (
-        "unit/DistSSHRun/core/drive/workers.jl",
-        "unit/DistSSHRun/execute.jl",
-        "unit/DistSSHRun/core/setup/checks.jl",
-        "unit/DistSSHRun/core/setup/send_list.jl",
-        "integration/cli/help.jl",
-        "integration/setup/exit.jl",
-        # Pseudo-TTY (`script`) suites: ordinary checkout CI keeps them.
-        # PkgEval and Registry install set JULIA_PKGEVAL=true and skip them.
-        "integration/setup/progress_tty.jl",
-        "integration/drive/progress_tty.jl",
-        "integration/drive/execute.jl",
-        "integration/drive/interrupt_grace.jl",
-        "integration/drive/pkg.jl",
-        "integration/drive/log_via_script.jl",
-        "integration/drive/log_via_module.jl",
-        "integration/drive/pkg_develop.jl",
-        "integration/demos/with_kit.jl",
-        "integration/demos/without_kit.jl",
+        "unit/DistSSHRun/core/drive/workers.jl", # long local worker spawn
+        "unit/DistSSHRun/execute.jl", # long detach and polling paths
+        "unit/DistSSHRun/core/setup/checks.jl", # juliaup channel fixtures
+        "unit/DistSSHRun/core/setup/send_list.jl", # large send-list oracle
+        "integration/cli/help.jl", # CLI help golden output
+        "integration/setup/exit.jl", # setup exit-code matrix
+        "integration/setup/progress_tty.jl", # pseudo-TTY script suite
+        "integration/drive/progress_tty.jl", # pseudo-TTY drive progress
+        "integration/drive/execute.jl", # long-running execute integration
+        "integration/drive/interrupt_grace.jl", # interrupt grace timing
+        "integration/drive/pkg.jl", # Pkg-heavy drive path
+        "integration/drive/log_via_script.jl", # script-driven log capture
+        "integration/drive/log_via_module.jl", # module-driven log capture
+        "integration/drive/pkg_develop.jl", # Pkg.develop integration
+        "integration/demos/with_kit.jl", # DistSSHKit demo subprocess
+        "integration/demos/without_kit.jl", # kit-less demo subprocess
     )
 
     function _distsshrun_short_skipped(rel::AbstractString)::Bool

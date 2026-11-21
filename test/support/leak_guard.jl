@@ -51,7 +51,7 @@ if !isdefined(Main, :_DISTSSH_TEST_LEAK_TAG)
         end
         try
             if broken
-                @test_broken isempty(assert_rows)
+                @test_broken isempty(assert_rows) #540
             else
                 @test isempty(rows)
             end
