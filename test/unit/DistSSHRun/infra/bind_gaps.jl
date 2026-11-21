@@ -165,10 +165,10 @@ using DistSSHRun.DistSSHBase: CliUsageError, read_toml_host_entries
             @test occursin("alice@lab", msg)
         end
         _with_tempdir() do tmp
-            session = DistSSHRun.DistSSHSession(project = tmp, workers = String[])
             let old = get(ENV, "DISTSSH_UNSAFE_EXPOSE_PORT", nothing)
                 try
                     ENV["DISTSSH_UNSAFE_EXPOSE_PORT"] = "1"
+                    session = DistSSHRun.DistSSHSession(project = tmp, workers = String[])
                     parsed = DistSSHRun.drive_parsed_from_session(session, joinpath(tmp, "j.jl"))
                     cfg = DistSSHRun.resolve_run_job_config_from_parsed(parsed; command = :drive)
                     @test cfg.unsafe_expose_port.value
