@@ -21,6 +21,32 @@ using Random
         end
     end
 
+    @testset "fallback local launch keeps failed addprocs ranks out of provenance" begin
+        proj = mktempdir()
+        write(joinpath(proj, "Project.toml"), "name = \"Tmp\"\n")
+        julia = joinpath(Sys.BINDIR, Base.julia_exename())
+        bad = joinpath(proj, "not-a-julia-binary")
+        DistSSHRun.reset_worker_seeds!()
+        DistSSHRun.reset_launch_rank_plan!(1:2)
+        withenv("DISTSSH_JOB_SEED" => "42") do
+            DistSSHRun.job_seed()
+            before = Set(workers())
+            @test_throws Exception DistSSHRun.preserve_task_local_default_rng() do
+                DistSSHRun.ensure_run_cluster_cookie!()
+                DistSSHRun._add_local_drive_workers!(2, proj, bad)
+            end
+            added = Int[w for w in workers() if w ∉ before]
+            try
+                isempty(added) || rmprocs(added; waitfor = 30)
+            catch
+            end
+            seeds = DistSSHRun._seed_provenance()
+            @test isempty(DistSSHRun._ASSIGNED_RANKS)
+            @test seeds === nothing || !haskey(seeds, "workers") || isempty(seeds["workers"])
+        end
+        rm(proj; recursive = true, force = true)
+    end
+
     @testset "worker_pmap item RNG is independent of workers and batch_size" begin
         job_val = UInt64(100)
         call = 1

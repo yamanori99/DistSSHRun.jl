@@ -600,7 +600,7 @@ function _add_local_drive_workers!(
         Int.(collect(ranks))
     else
         isempty(_PLANNED_RANK_QUEUE) && reset_launch_rank_plan!(collect(1:n))
-        [take_worker_rank() for _ in 1:n]
+        reserve_worker_ranks!(n)
     end
     flags = Cmd(worker_exeflag_strings(project; local_cpu = true, job_id = resolved_kit_job_id()))
     before = Set(workers())
@@ -650,7 +650,7 @@ function _add_ssh_drive_workers!(
         Int.(collect(ranks))
     else
         isempty(_PLANNED_RANK_QUEUE) && reset_launch_rank_plan!(collect(1:n))
-        [take_worker_rank() for _ in 1:n]
+        reserve_worker_ranks!(n)
     end
     flags = Cmd(worker_exeflag_strings(project; local_cpu = false, job_id = resolved_kit_job_id()))
     exename = ssh_worker_exename(julia_bin)
