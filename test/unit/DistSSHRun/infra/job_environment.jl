@@ -84,6 +84,7 @@ using Dates
 
     @testset "instantiate digest gate" begin
         job = mktempdir()
+        prev_active = Base.ACTIVE_PROJECT[]
         try
             write(joinpath(job, "Project.toml"), "name = \"InstGate\"\n")
             _sync_test_project_manifest!(job)
@@ -114,6 +115,7 @@ using Dates
             )
             @test !called[]
         finally
+            Base.ACTIVE_PROJECT[] = prev_active
             rm(job; force = true, recursive = true)
         end
     end

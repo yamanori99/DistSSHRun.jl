@@ -72,9 +72,10 @@ if !isdefined(@__MODULE__, :_DISTSSH_TEST_LEAK_TAG)
         return nothing
     end
 
-    function _restore_test_load_path!(
+    function _restore_test_process_env!(
             prev_lp::Vector{String},
             prev_julia_lp::Union{Nothing, String},
+            prev_active,
         )
         try
             empty!(LOAD_PATH)
@@ -89,16 +90,21 @@ if !isdefined(@__MODULE__, :_DISTSSH_TEST_LEAK_TAG)
             end
         catch
         end
+        try
+            Base.ACTIVE_PROJECT[] = prev_active
+        catch
+        end
         return nothing
     end
 
     function _with_test_load_path_guard(f::Function)
         prev_lp = copy(LOAD_PATH)
         prev_julia_lp = get(ENV, "JULIA_LOAD_PATH", nothing)
+        prev_active = Base.ACTIVE_PROJECT[]
         try
             return f()
         finally
-            _restore_test_load_path!(prev_lp, prev_julia_lp)
+            _restore_test_process_env!(prev_lp, prev_julia_lp, prev_active)
         end
     end
 
