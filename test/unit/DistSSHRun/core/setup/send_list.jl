@@ -655,21 +655,28 @@ using Test
 
         @testset "git_work_tree refuses dubious ownership with git stderr" begin
             _with_tempdir() do tmp
-                run(pipeline(`git -C $tmp init -q`; stdout = devnull, stderr = devnull))
-                _ident!(tmp)
-                write(joinpath(tmp, "keeper.txt"), "1\n")
-                _commit!(tmp, "init")
-                withenv("GIT_TEST_ASSUME_DIFFERENT_OWNER" => "1") do
+                stub_bin = joinpath(tmp, "bin")
+                mkpath(stub_bin)
+                tree = joinpath(tmp, "repo")
+                mkpath(joinpath(tree, ".git"))
+                write(
+                    joinpath(stub_bin, "git"),
+                    "#!/bin/sh\n" *
+                        "echo fatal: detected dubious ownership in repository 1>&2\n" *
+                        "exit 128\n",
+                )
+                chmod(joinpath(stub_bin, "git"), 0o755)
+                withenv("PATH" => stub_bin * ":" * get(ENV, "PATH", "")) do
                     err = ""
                     @test try
-                        DistSSHRun.git_work_tree(tmp)
+                        DistSSHRun.git_work_tree(tree)
                         false
                     catch e
                         err = sprint(showerror, e)
                         e isa ArgumentError &&
                             occursin("dubious ownership", err) &&
                             occursin("safe.directory", err) &&
-                            occursin(tmp, err)
+                            occursin(tree, err)
                     end
                 end
             end
