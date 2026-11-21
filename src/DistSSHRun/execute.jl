@@ -862,7 +862,6 @@ function _execute_detached!(
     extra = Dict{String, String}(
         "DISTRIBUTED_PROJECT_ROOT" => proj,
         DISTSSH_RUN_DIR_ENV => run_dir,
-        DETACHED_JOB_BLOB_ENV => job_blob_path,
     )
     if remote !== nothing && !isempty(strip(String(remote)))
         extra["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = remote_env_project_root(String(remote))

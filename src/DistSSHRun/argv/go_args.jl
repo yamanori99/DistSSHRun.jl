@@ -128,6 +128,7 @@ function parse_go_args(
     args_vec = Vector{String}(String.(args))
     blob_path, _ = peel_job_blob_bootstrap(copy(args_vec))
     if blob_path !== nothing
+        assert_detached_job_blob_bootstrap_argv!(args_vec)
         scrub_detached_placement_env!()
         env = snapshot_process_env()
         return go_parsed_from_detached_job_blob(

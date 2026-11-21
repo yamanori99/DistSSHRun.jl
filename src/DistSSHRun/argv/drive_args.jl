@@ -94,8 +94,10 @@ end
 function parse_drive_args(args::Vector{String}; env::ProcessEnv = snapshot_process_env())
     args = copy(args)
     forced_script_args = _take_drive_api_script_args!(args)
+    bootstrap_argv = copy(args)
     blob_path, args = peel_job_blob_bootstrap(args)
     if blob_path !== nothing
+        assert_detached_job_blob_bootstrap_argv!(bootstrap_argv)
         scrub_detached_placement_env!()
         env = snapshot_process_env()
         blob = read_detached_job_blob(blob_path)

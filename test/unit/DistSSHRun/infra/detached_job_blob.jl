@@ -92,3 +92,61 @@ end
         @test !parsed.best_effort
     end
 end
+
+function _detached_blob_path(d::AbstractString, kind::Symbol)::String
+    run_dir = joinpath(d, "run")
+    mkpath(run_dir)
+    return DistSSHRun.write_detached_job_blob!(
+        run_dir,
+        kind,
+        "job.jl",
+        kind === :drive ? ["1*h1"] : ["1*h1"],
+        String[],
+        d;
+        head_workers = kind === :drive ? 1 : nothing,
+        head_slots = kind === :go ? 1 : nothing,
+    )
+end
+
+@testset "detached job blob bootstrap argv" begin
+    mktempdir() do d
+        path = _detached_blob_path(d, :drive)
+        bootstrap = String["-y", "--job-blob", path]
+        @test isfile(path)
+        @test DistSSHRun.parse_drive_args(bootstrap).script_path == "job.jl"
+        @test_throws ArgumentError DistSSHRun.parse_drive_args(
+            [bootstrap..., "--best-effort"],
+        )
+        @test_throws ArgumentError DistSSHRun.parse_drive_args(
+            String["--job-blob", path, "--quiet"],
+        )
+        go_path = _detached_blob_path(d, :go)
+        go_bootstrap = String["-y", "--job-blob", go_path]
+        @test_throws ArgumentError DistSSHRun.parse_go_args([go_bootstrap..., "1*h1"])
+        @test DistSSHRun.parse_go_args(go_bootstrap).script_path == "job.jl"
+    end
+end
+
+@testset "detached job blob ignores job-default env" begin
+    mktempdir() do d
+        path = _detached_blob_path(d, :drive)
+        withenv("DISTSSH_TOPOLOGY" => "master_worker") do
+            parsed = DistSSHRun.parse_drive_args(String["-y", "--job-blob", path])
+            cfg = DistSSHRun.resolve_run_job_config_from_parsed(parsed; command = :drive)
+            @test cfg.topology.value == "auto"
+            @test cfg.topology.source == DistSSHRun.FromDefault
+        end
+    end
+    mktempdir() do d
+        path = _detached_blob_path(d, :go)
+        withenv(
+            "DISTSSH_TOPOLOGY" => "master_worker",
+            "DISTSSH_UNSAFE_EXPOSE_PORT" => "1",
+        ) do
+            parsed = DistSSHRun.parse_go_args(String["-y", "--job-blob", path])
+            cfg = DistSSHRun.resolve_run_job_config_from_parsed(parsed; command = :go)
+            @test cfg.topology.value == "auto"
+            @test !cfg.unsafe_expose_port.value
+        end
+    end
+end

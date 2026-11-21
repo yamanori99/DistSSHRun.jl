@@ -8,6 +8,67 @@ const _DETACHED_PLACEMENT_ENV_KEYS = (
     "DISTSSH_HOSTS_FILE",
 )
 
+const _DETACHED_JOB_SHARED_ENV_KEYS = (
+    "DISTSSH_QUIET",
+    "DISTSSH_PROGRESS",
+    "DISTSSH_VERBOSE",
+    "DISTSSH_YES",
+    "DISTSSH_JOBS",
+    "DISTSSH_HEAD_WORKERS",
+    "DISTSSH_SKIP_GLOBAL_WORKER_PKILL",
+    "JULIA_DISTRIBUTED_EXE",
+    "DISTSSH_REQUIRE_ALL_HOSTS",
+    "DISTSSH_BEST_EFFORT",
+    "DISTSSH_JOB_BLOB",
+)
+
+const _JOB_BLOB_BOOTSTRAP_YES = ("-y", "--yes")
+
+function _detached_job_default_env_keys()::Vector{String}
+    keys = Set{String}()
+    for k in _DETACHED_PLACEMENT_ENV_KEYS
+        push!(keys, k)
+    end
+    for k in _DETACHED_JOB_SHARED_ENV_KEYS
+        push!(keys, k)
+    end
+    for row in run_option_table()
+        row.env === nothing && continue
+        push!(keys, String(row.env))
+    end
+    return sort!(collect(keys))
+end
+
+"""Usage error when bootstrap argv is not only `-y` / `--yes` plus `--job-blob PATH`."""
+function assert_detached_job_blob_bootstrap_argv!(args::AbstractVector{<:AbstractString})
+    args_vec = String[String(x) for x in args]
+    for i in eachindex(args_vec)
+        args_vec[i] == "--job-blob" || continue
+        i >= length(args_vec) &&
+            throw(ArgumentError("--job-blob requires a path"))
+        trailing = args_vec[(i + 2):end]
+        isempty(trailing) && break
+        extra = join(trailing, " ")
+        throw(
+            ArgumentError(
+                "unexpected argv after --job-blob PATH: $(extra); "
+                    * "detached bootstrap is -y/--yes and --job-blob PATH only",
+            ),
+        )
+    end
+    _, rest = peel_job_blob_bootstrap(copy(args_vec))
+    for arg in rest
+        arg in _JOB_BLOB_BOOTSTRAP_YES && continue
+        throw(
+            ArgumentError(
+                "unexpected argv with --job-blob: $(arg); "
+                    * "detached bootstrap is -y/--yes and --job-blob PATH only",
+            ),
+        )
+    end
+    return nothing
+end
+
 """Absolute path to the job blob under `run_dir`."""
 function detached_job_blob_path(run_dir::AbstractString)::String
     return joinpath(canonical_local_path(String(run_dir)), DETACHED_JOB_BLOB_FILENAME)
@@ -151,9 +212,9 @@ function read_detached_job_blob(path::AbstractString)
     )
 end
 
-"""Remove placement tokens from `ENV` after the blob is loaded."""
+"""Remove job-default keys from `ENV` after the blob is loaded (placement and option env)."""
 function scrub_detached_placement_env!()
-    for k in _DETACHED_PLACEMENT_ENV_KEYS
+    for k in _detached_job_default_env_keys()
         delete!(ENV, k)
     end
     return nothing
@@ -412,5 +473,6 @@ end
 
 public DETACHED_JOB_BLOB_ENV, DETACHED_JOB_BLOB_FILENAME
 public detached_job_blob_path, drive_parsed_from_detached_job_blob, execute_kwargs_from_job_blob
-public go_parsed_from_detached_job_blob, peel_job_blob_bootstrap, read_detached_job_blob
-public scrub_detached_placement_env!, write_detached_job_blob!
+public assert_detached_job_blob_bootstrap_argv!, go_parsed_from_detached_job_blob
+public peel_job_blob_bootstrap, read_detached_job_blob, scrub_detached_placement_env!
+public write_detached_job_blob!
