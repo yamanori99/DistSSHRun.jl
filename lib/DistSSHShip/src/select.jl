@@ -103,7 +103,6 @@ function _assert_gitignore_rules_for_rel!(root_c::AbstractString, rel::AbstractS
     return nothing
 end
 
-"""Walk `root` and refuse `.gitignore` rule files git would not apply the same way ship does."""
 function assert_ship_gitignore_rules!(root::AbstractString)
     root_c = canonical_local_path(root)
     stack = String[root_c]
