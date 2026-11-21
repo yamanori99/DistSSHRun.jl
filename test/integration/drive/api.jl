@@ -231,12 +231,74 @@ end
     end
 end
 
+# Each driver hook stays in `Main` after its script. A later in-process `drive!`
+# runs only the hooks its own script defines. A hook added to
+# `_drive_script_hook_signatures` needs a definition here.
+@testset "drive! runs only this script's hooks" begin
+    _mktemp_host() do proj
+        _write_host_project!(proj, "DriveLeftoverHooks")
+        hooks = keys(DistSSHRun._drive_script_hook_signatures(String[]))
+        marker(hook) = joinpath(proj, "RAN_$(hook)")
+        args = Dict(:init_output_dir! => "_")
+        scripts = Pair{String, Vector{Symbol}}[]
+        for hook in hooks
+            path = joinpath(proj, "with_$(hook).jl")
+            write(
+                path, """
+                function $(hook)($(get(args, hook, "")))
+                    touch($(repr(marker(hook))))
+                    return nothing
+                end
+                """
+            )
+            push!(scripts, path => [hook])
+        end
+        bare = joinpath(proj, "bare.jl")
+        write(bare, "bare_loaded = true\n")
+        push!(scripts, bare => Symbol[])
+        prev_v = DistSSHRun.kit_verbosity()
+        try
+            for (script, defined) in scripts
+                foreach(h -> rm(marker(h); force = true), hooks)
+                res = redirect_stdout(devnull) do
+                    redirect_stderr(devnull) do
+                        DistSSHRun.drive!(
+                            script; head_workers = 1,
+                            project = proj,
+                            verbosity = :quiet,
+                            enable_log = false
+                        )
+                    end
+                end
+                delete!(ENV, "DISTRIBUTED_OUTPUT_DIR")
+                @test res.ok
+                @test [h for h in hooks if isfile(marker(h))] == defined
+            end
+        finally
+            DistSSHRun.set_kit_verbosity!(prev_v)
+            delete!(ENV, "DISTRIBUTED_OUTPUT_DIR")
+        end
+    end
+end
+
+# `main = make_main(path)` rebinds a closure whose type, and so `Method`, is unchanged.
+@testset "drive hook selection sees a rebound closure" begin
+    make_main(path) = () -> path
+    a, b = make_main("a"), make_main("b")
+    m = first(methods(a, Tuple{}))
+    @test first(methods(b, Tuple{})) === m
+    before = (main = (a, m),)
+    @test DistSSHRun._drive_script_hooks(before, (main = (b, m),)).main === m
+    @test DistSSHRun._drive_script_hooks(before, before).main === nothing
+    @test DistSSHRun._drive_script_hooks((main = nothing,), (main = nothing,)).main === nothing
+end
+
 @testset "init_output_dir! lookup uses the definition world" begin
     # Tracked fixture: JETLS executes this `@testset` as top-level and cannot
     # `include` a path that only exists after `mktempdir` + `write`.
     path = _fixture("drive_init_output.jl")
     args = String[]
-    lookup() = DistSSHRun._drive_script_init_output_dir_method(args)
+    lookup() = DistSSHRun._drive_script_hook_bindings(args).init_output_dir!
     before = lookup()
     redirect_stderr(devnull) do
         Base.include(Main, path)
@@ -246,7 +308,7 @@ end
             lookup()
         end
         flush(err_io)
-        @test after isa Method
+        @test after isa Tuple{Function, Method}
         @test after !== before
         @test !occursin("prior to its definition", read(err_path, String))
     end

@@ -300,7 +300,7 @@ fi
 
 gate_capture "jetls ${jetls_pin}" env JULIA_APPS_JULIA_CMD="${JULIA_BIN}" "${ROOT}/.github/jetls-check.sh" --progress=none
 
-lint_names=(banned-words agents-md skip-reasons new-comments stdlib-compat ssh-argv aqua-run)
+lint_names=(banned-words agents-md skip-reasons new-comments stdlib-compat ssh-argv drive-hooks aqua-run)
 _lint_start=$SECONDS
 _lint_log="$(mktemp)"
 _lint_fail=""

@@ -334,6 +334,66 @@ function lint_ssh_argv(root, files, src_for_path)
     return n
 end
 
+const DRIVE_HOOK_ACCESSORS = (
+    "_drive_hook_binding", "_call_drive_script_hook", "_call_drive_script_hook_on_workers",
+)
+
+function drive_hooks_scan_path(path::AbstractString)::Bool
+    p = replace(String(path), '\\' => '/')
+    endswith(p, ".jl") || return false
+    return startswith(p, "src/DistSSHRun/core/drive/") || startswith(p, "src/DistSSHRun/drive/")
+end
+
+function defined_function_name(node)
+    k = kind(node)
+    (k == K"function" || k == K"=") || return nothing
+    numchildren(node) >= 1 || return nothing
+    sig = node[1]
+    while (kind(sig) == K"where" || kind(sig) == K"::") && numchildren(sig) >= 1
+        sig = sig[1]
+    end
+    kind(sig) == K"call" || return nothing
+    return callee_leaf_name(sig[1])
+end
+
+function main_access_node(node)
+    k = kind(node)
+    if k == K"."
+        numchildren(node) >= 2 || return false
+        return sourcetext(node[1]) == "Main"
+    elseif k == K"call"
+        numchildren(node) >= 3 || return false
+        callee_leaf_name(node[1]) in ("isdefined", "getfield") || return false
+        return sourcetext(node[2]) == "Main"
+    end
+    return false
+end
+
+function lint_drive_hooks(root, files, src_for_path)
+    n = 0
+    for (path, hunks) in files
+        drive_hooks_scan_path(path) || continue
+        added = added_lines(hunks)
+        isempty(added) && continue
+        src = src_for_path(path)
+        function walk(node)
+            defined_function_name(node) in DRIVE_HOOK_ACCESSORS && return
+            if main_access_node(node) && node_touches_added(src, node, added)
+                a = line_of(src, Int(first(byte_range(node))))
+                println(stderr, "lint: $(path):$(a): driver hook read from Main; use _drive_script_hooks")
+                n += 1
+                return
+            end
+            for i in 1:numchildren(node)
+                walk(node[i])
+            end
+            return
+        end
+        walk(parse_tree(src))
+    end
+    return n
+end
+
 function workflow_job_title(lines, i::Int)
     j = i
     while j >= 1
@@ -922,6 +982,22 @@ function self_test_body()
     untouched = "x = 1\nCmd([\"ssh\", host])\n"
     lint_ssh_argv("", Dict(scan => [Hunk(1, 0, 1, 1, String[])]), _ -> untouched) == 0 ||
         die("self-test: ssh argv outside added lines")
+    drive_src = "src/DistSSHRun/core/drive/run.jl"
+    for (code, want, msg) in (
+            ("isdefined(Main, :main) || return\n", 1, "isdefined"),
+            ("f = getfield(Main, :prepare_workers!)\n", 1, "getfield"),
+            ("Main.init_output_dir!(args)\n", 1, "dotted call"),
+            ("function _drive_hook_binding(name)\n    isdefined(Main, name)\nend\n", 0, "accessor"),
+            ("_call_drive_script_hook(name) = getfield(Main, name)\n", 0, "short accessor"),
+            ("Base.include(Main, path)\n", 0, "include into Main"),
+        )
+        lint_drive_hooks("", Dict(drive_src => [Hunk(1, 0, 1, 1, String[])]), _ -> code) == want ||
+            die("self-test: drive hooks $(msg)")
+    end
+    lint_drive_hooks("", Dict(drive_src => [Hunk(1, 0, 1, 1, String[])]), _ -> "x = 1\nMain.main()\n") == 0 ||
+        die("self-test: drive hooks outside added lines")
+    lint_drive_hooks("", Dict("src/DistSSHRun.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> "getfield(Main, sym)()\n") == 0 ||
+        die("self-test: drive hooks outside drive sources")
     ssh_scan_path("lib/DistSSHBase/src/ssh/ssh.jl") && die("self-test: ssh builder scanned")
     ssh_scan_path("src/DistSSHRun/infra/remote.jl") || die("self-test: ssh product scanned")
     aqua_lines = [
@@ -1461,7 +1537,7 @@ function main(args)
         return pr_body_hints_main(args[2], args[3], committed, edited)
     end
     if length(args) != 1
-        die("usage: diff_lint.jl <banned-words|agents-md|skip-reasons|new-comments|stdlib-compat|ssh-argv|aqua-run|doc-touch|docs-static|self-test|pr-body|pr-body-hints>")
+        die("usage: diff_lint.jl <banned-words|agents-md|skip-reasons|new-comments|stdlib-compat|ssh-argv|drive-hooks|aqua-run|doc-touch|docs-static|self-test|pr-body|pr-body-hints>")
     end
     mode = args[1]
     mode == "self-test" && return self_test()
@@ -1487,6 +1563,8 @@ function main(args)
         lint_new_comments(root, files)
     elseif mode == "ssh-argv"
         lint_ssh_argv(root, files, path -> read(joinpath(root, path), String))
+    elseif mode == "drive-hooks"
+        lint_drive_hooks(root, files, path -> read(joinpath(root, path), String))
     elseif mode == "aqua-run"
         lint_aqua_run(root, files)
     else

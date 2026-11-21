@@ -1,19 +1,52 @@
 # Core drive execution after argv parse (shared by CLI `drive_main` and API `drive!`).
 
-# `include` leaves `Main.init_output_dir!` defined. A later in-process `drive!`
-# whose script does not define that hook must not run the previous driver's
-# method: it would reuse that driver's output directory. Compare the method
-# that would accept this script's argument vector, and call it only when this
-# `include` added or replaced that method.
+# Driver hooks and the argument types the kit calls them with.
+# `include` leaves each hook defined in `Main`. A later in-process `drive!` whose
+# script does not define a hook must not run the previous driver's method.
+# Every hook is looked up and called only through the functions below; the
+# `drive-hooks` lint rejects other `Main` access under the drive sources.
+_drive_script_hook_signatures(script_args) = (
+    init_output_dir! = Tuple{typeof(script_args)},
+    prepare_workers! = Tuple{},
+    main = Tuple{},
+)
+
+# The bound value and the method it would call. Closure instances of one type
+# share a `Method`, so `main = make_main(path)` is a change only in the value.
 # Lookup is `invokelatest`: after `include` the binding's world is newer than
 # this method, and Julia 1.12+ warns (later errors) on a stale read.
-function _drive_script_init_output_dir_method(script_args)::Union{Nothing, Method}
+function _drive_hook_binding(name::Symbol, argtypes::Type{<:Tuple})::Union{Nothing, Tuple{Function, Method}}
     return Base.invokelatest() do
-        isdefined(Main, :init_output_dir!) || return nothing
-        hook = getfield(Main, :init_output_dir!)
-        applicable = methods(hook, (typeof(script_args),))
-        return isempty(applicable) ? nothing : first(applicable)::Method
+        isdefined(Main, name) || return nothing
+        hook = getfield(Main, name)
+        hook isa Function || return nothing
+        applicable = methods(hook, argtypes)
+        return isempty(applicable) ? nothing : (hook, first(applicable)::Method)
     end
+end
+
+function _drive_script_hook_bindings(script_args)
+    sigs = _drive_script_hook_signatures(script_args)
+    return NamedTuple{keys(sigs)}(map(_drive_hook_binding, keys(sigs), values(sigs)))
+end
+
+"""
+Methods of the hooks this script's `include` added or replaced. Each other hook is `nothing`.
+Assigning a value `===` to the one already bound is not a change.
+"""
+function _drive_script_hooks(before::NamedTuple, after::NamedTuple)::NamedTuple
+    return map((b, a) -> a === nothing || a === b ? nothing : last(a), before, after)
+end
+
+Base.@constprop :none function _call_drive_script_hook(name::Symbol, args...)
+    return Base.invokelatest() do
+        hook = getfield(Main, name)
+        return Base.invokelatest(Base.inferencebarrier(hook), args...)
+    end
+end
+
+function _call_drive_script_hook_on_workers(name::Symbol)
+    return _drive_eval_workers(:(Base.invokelatest(getfield(Main, $(QuoteNode(name))))))
 end
 
 # Options that take the next argv word. A word equal to `--isolated` there is a value.
@@ -369,11 +402,11 @@ function _run_drive_parsed_specialized!(
             # If still unset, kit allocates `{script}/.distssh/drive/<stem>_<UTC>/`.
             # Lock after that so `.kit.lock` is not the kind root when the driver
             # chose `output/` (or `--output-dir` / a unique batch dir).
-            init_before = _drive_script_init_output_dir_method(script_args)
+            hooks_before = _drive_script_hook_bindings(script_args)
             Base.include(Main, script_path)
-            init_after = _drive_script_init_output_dir_method(script_args)
-            if init_after !== nothing && init_after !== init_before
-                @invokelatest Main.init_output_dir!(script_args)
+            script_hooks = _drive_script_hooks(hooks_before, _drive_script_hook_bindings(script_args))
+            if script_hooks.init_output_dir! !== nothing
+                _call_drive_script_hook(:init_output_dir!, script_args)
             end
             DistSSHRun._ensure_drive_output_env!(script_path; project = proj_dir)
             out_ready = DistSSHRun._prepare_output_dir!(
@@ -390,7 +423,7 @@ function _run_drive_parsed_specialized!(
                     enable_log, log_dir, original_args, host_names, hosts, head_workers,
                     default_workers, julia_exe, skip_hash_check, explicit_package,
                     best_effort, resolved_output_dir, resolved_log_dir, hosts_acc,
-                    project_root_abs, path_anchor,
+                    project_root_abs, path_anchor; script_hooks,
                 )
                 return code
             finally
@@ -533,7 +566,8 @@ function _run_drive_parsed_locked!(
         enable_log, log_dir, original_args, host_names, hosts, head_workers,
         default_workers, julia_exe, skip_hash_check, explicit_package,
         best_effort, resolved_output_dir, resolved_log_dir, resolved_hosts,
-        project_root, path_anchor,
+        project_root, path_anchor;
+        script_hooks::NamedTuple,
     )::Cint
     DistSSHRun.assert_loaded_verified_worker_set!()
     if enable_log
@@ -737,7 +771,7 @@ function _run_drive_parsed_locked!(
         DistSSHRun._start_drive_host_status_monitor!(kit_out, kit_log)
         worker_include = get(parsed, :worker_include, false)
         sync_driver_to_workers!(script_path; worker_include = worker_include)
-        run_prepare_workers!()
+        script_hooks.prepare_workers! === nothing || run_prepare_workers!()
 
         empty!(ARGS)
         append!(ARGS, script_args)
@@ -755,7 +789,7 @@ function _run_drive_parsed_locked!(
 
         kit_progress_step!("run")
         _drive_cancellable() do
-            run_driver_script!(enable_log)
+            run_driver_script!(enable_log; script_main = script_hooks.main)
         end
         if !best_effort
             DistSSHRun._refresh_drive_host_status_file!(kit_out, kit_log)

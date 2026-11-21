@@ -141,18 +141,17 @@ end
 """
     run_prepare_workers!()
 
-Optional hook: if the driver defines `prepare_workers!()`, call it on every
-process after [`sync_driver_to_workers!`](@ref). Use this for worker-local setup
+Optional hook: when the driver script defines `prepare_workers!()`, call it on
+every process after [`sync_driver_to_workers!`](@ref). Use this for worker-local setup
 that cannot be expressed as `@everywhere` inside `main()` (e.g. extra `using` of
 packages that are not the host application's main module).
 """
 function run_prepare_workers!()
-    isdefined(Main, :prepare_workers!) || return
     write_both("  Running prepare_workers!... ")
     flush(stdout)
     return try
-        Base.invokelatest(Main.prepare_workers!)
-        _drive_eval_workers(:(Base.invokelatest(Main.prepare_workers!)))
+        _call_drive_script_hook(:prepare_workers!)
+        _call_drive_script_hook_on_workers(:prepare_workers!)
         print_ok("✓")
         writeln_both("")
     catch e
