@@ -1,4 +1,4 @@
-if !isdefined(Main, :_DISTSSH_TEST_LEAK_TAG)
+if !isdefined(@__MODULE__, :_DISTSSH_TEST_LEAK_TAG)
 
     using DistSSHRun.DistSSHBase: ProcessRow, processes_with_env, reap!, wait_gone
 

@@ -1,4 +1,4 @@
-if !isdefined(Main, :_child_julia_env)
+if !isdefined(@__MODULE__, :_child_julia_env)
 
     # `@` and `@stdlib`, joined by the platform depot separator (`;` on Windows).
     function _child_load_path()::String
