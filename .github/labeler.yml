@@ -47,6 +47,7 @@
           - "test/artifacts/**"
           - "test/e2e.jl"
           - "test/fixtures/**"
+          - "test/parallel.jl"
           - "test/runtests.jl"
           - "test/support/**"
           - "test/support.jl"

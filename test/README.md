@@ -28,6 +28,23 @@ runs them.
 real SSH clusters stay in `e2e.jl`. Reproduce that sandbox:
 [PkgEval](#pkgeval).
 
+The same file list runs in worker processes with ParallelTestRunner.jl. It is
+opt-in; `Pkg.test()` and CI still run `runtests.jl`:
+
+```bash
+julia --project=test test/parallel.jl                       # all files
+julia --project=test test/parallel.jl --jobs=1
+julia --project=test test/parallel.jl unit/DistSSHRun/drive  # names starting with this
+julia --project=test test/parallel.jl --list
+```
+
+`DISTSSH_TEST_GROUP` and `DISTSSHRUN_TEST_SHORT` select files as in
+`runtests.jl`. A reused worker includes each file into its `Main`, in an order
+that differs from `runtests.jl`. A file must load what it uses
+(`using Distributed`) rather than rely on an earlier file, and a binding one
+file leaves can still reach the next. A name or an environment that matches no
+file is an error.
+
 Real SSH:
 
 ```bash

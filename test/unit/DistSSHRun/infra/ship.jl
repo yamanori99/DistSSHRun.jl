@@ -1,4 +1,5 @@
 using Test
+using Distributed
 using TOML
 
 @testset "run layout" begin

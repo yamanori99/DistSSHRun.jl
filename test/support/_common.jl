@@ -83,6 +83,17 @@ if !isdefined(Main, :_test_root)
         return rec
     end
 
+    # `test/runtests.jl` and `test/parallel.jl` select files with this and
+    # `_distsshrun_short_skip`.
+    function _distssh_test_group_enabled(sym::Symbol)::Bool
+        raw = strip(get(ENV, "DISTSSH_TEST_GROUP", ""))
+        isempty(raw) && return true
+        g = lowercase(raw)
+        g == "unit" && return sym === :unit
+        g == "integration" && return sym === :integration
+        error("test: invalid DISTSSH_TEST_GROUP=$(repr(raw)); want unit, integration, or unset")
+    end
+
     # PkgEval's assertion build kills this suite around 45 minutes.
     # `DISTSSHRUN_TEST_SHORT=1` (or `JULIA_PKGEVAL=true`) drops the heavy
     # files listed here. Unset keeps every file.

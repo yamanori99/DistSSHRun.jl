@@ -315,11 +315,14 @@ end
 
 if get(ENV, "DISTSSH_NOLOG_STDIO_CHILD", "") != "1"
     @testset "drive --no-log progress stdio" begin
+        # A runner may already bind `Main.main` (a ParallelTestRunner worker does).
+        parent_main() = isdefined(Main, :main) ? getfield(Main, :main) : nothing
+        main_before = parent_main()
         proc, combined = _nolog_stdio_spawn_child()
         print(combined)
         @test success(proc)
         @test occursin("drive --no-log progress stdio", combined)
-        @test !isdefined(Main, :main)
+        @test parent_main() === main_before
     end
 else
     _nolog_stdio_cases()
