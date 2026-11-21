@@ -1462,24 +1462,27 @@ function normalize_git_clone_url(url::AbstractString)::String
     return origin_url
 end
 
-"""Read `origin` from `proj_dir` and return a clone URL (HTTPS GitHub → SSH). `nothing` on failure."""
+"""
+Read `origin` from `proj_dir` and return a clone URL (HTTPS GitHub → SSH).
+
+`nothing` when the path is not a git work tree or `origin` is absent.
+Throws when git fails on a tree that has `.git` metadata.
+"""
 function clone_url_from_local_origin(proj_dir::AbstractString)::Union{Nothing, String}
-    _host_tool_present("git") || return nothing
     resolved = canonical_local_path(proj_dir)
-    try
-        origin_url = strip(
-            read(
-                pipeline(
-                    _git_cmd(["-C", resolved, "remote", "get-url", "origin"]);
-                    stderr = devnull
-                ), String
-            )
-        )
-        isempty(origin_url) && return nothing
-        return normalize_git_clone_url(origin_url)
-    catch
+    if !_host_tool_present("git")
+        _ancestor_dot_git_entry(resolved) &&
+            throw(ArgumentError(explain_host_tool_missing("git")))
         return nothing
     end
+    origin_url, code, detail = _git_read_local(resolved, ["remote", "get-url", "origin"])
+    if code == 0
+        isempty(origin_url) && return nothing
+        return normalize_git_clone_url(origin_url)
+    end
+    _git_absent_plain_directory(code, detail, resolved) && return nothing
+    code == 2 && occursin("no such remote", lowercase(detail)) && return nothing
+    throw(ArgumentError(explain_git_work_tree_failed(resolved, code, detail)))
 end
 
 """Join `rel` under remote repo root without expanding `~` on the local machine."""
@@ -1882,6 +1885,35 @@ function _git_work_tree_exit_code(e)::Int
     return 1
 end
 
+function _git_absent_plain_directory(code::Integer, detail::AbstractString, resolved::AbstractString)::Bool
+    return code == 128 &&
+        occursin("not a git repository", lowercase(String(detail))) &&
+        !_ancestor_dot_git_entry(resolved)
+end
+
+function _git_missing_head(detail::AbstractString)::Bool
+    ld = lowercase(String(detail))
+    return occursin("unknown revision", ld) || occursin("ambiguous argument 'head'", ld)
+end
+
+"""Run `git -C resolved` with `args`. On success returns `(stdout, 0, stderr)`. On failure `(nothing, code, stderr)`."""
+function _git_read_local(
+        resolved::AbstractString,
+        args::AbstractVector{<:AbstractString},
+    )::Tuple{Union{Nothing, String}, Int, String}
+    err_buf = IOBuffer()
+    git_argv = vcat(["-C", String(resolved)], String[String(a) for a in args])
+    cmd = addenv(_git_cmd(git_argv), "LC_ALL" => "C")
+    try
+        out = strip(read(pipeline(cmd; stderr = err_buf), String))
+        return out, 0, strip(String(take!(err_buf)))
+    catch e
+        _rethrow_missing_host_tool(e)
+        detail = strip(String(take!(err_buf)))
+        return nothing, _git_work_tree_exit_code(e), detail
+    end
+end
+
 """
 `git rev-parse --show-toplevel` for `proj_dir`, or `nothing` when it is not a work tree.
 
@@ -1894,24 +1926,11 @@ function git_work_tree(proj_dir::AbstractString)::Union{Nothing, String}
             throw(ArgumentError(explain_host_tool_missing("git")))
         return nothing
     end
-    err_buf = IOBuffer()
-    cmd = addenv(_git_cmd(["-C", resolved, "rev-parse", "--show-toplevel"]), "LC_ALL" => "C")
-    return try
-        s = strip(read(pipeline(cmd; stderr = err_buf), String))
-        if !isempty(s)
-            return canonical_local_path(s)
-        end
-        detail = strip(String(take!(err_buf)))
-        throw(ArgumentError(explain_git_work_tree_failed(resolved, 0, detail)))
-    catch e
-        _rethrow_missing_host_tool(e)
-        detail = strip(String(take!(err_buf)))
-        code = _git_work_tree_exit_code(e)
-        if code == 128 &&
-                occursin("not a git repository", lowercase(detail)) &&
-                !_ancestor_dot_git_entry(resolved)
-            return nothing
-        end
-        throw(ArgumentError(explain_git_work_tree_failed(resolved, code, detail)))
+    out, code, detail = _git_read_local(resolved, ["rev-parse", "--show-toplevel"])
+    if code == 0
+        isempty(out) && throw(ArgumentError(explain_git_work_tree_failed(resolved, 0, detail)))
+        return canonical_local_path(out)
     end
+    _git_absent_plain_directory(code, detail, resolved) && return nothing
+    throw(ArgumentError(explain_git_work_tree_failed(resolved, code, detail)))
 end
