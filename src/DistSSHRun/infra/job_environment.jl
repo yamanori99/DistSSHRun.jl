@@ -293,10 +293,13 @@ function _with_controller_job_verify!(project::AbstractString, f::Function)
 end
 
 function assert_controller_job_package_collisions!(project::AbstractString)
-    return _with_controller_job_verify!(project, () -> begin
-        assert_job_package_collisions!(project; site = "controller")
-        return nothing
-    end)
+    return _with_controller_job_verify!(
+        project,
+        () -> begin
+            assert_job_package_collisions!(project; site = "controller")
+            return nothing
+        end,
+    )
 end
 public assert_controller_job_package_collisions!
 
