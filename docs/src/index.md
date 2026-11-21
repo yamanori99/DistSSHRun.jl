@@ -102,7 +102,12 @@ add `!LocalPreferences.toml` to ship it. A file over 50 MiB, or a send list over
 100 MiB, prints a warning (`DISTSSH_SHIP_WARN_FILE_BYTES`,
 `DISTSSH_SHIP_WARN_TOTAL_BYTES`; an invalid value is an error). The 256 MiB
 cap still stops the ship. Declared inputs are
-left out. `ship_send_list(root)` is that path list for the directory it is
+left out of the tar and recorded in `run.toml`; they are not a way to send
+gitignored trees such as `data/`. `--extra-file` is one extra file, not a
+directory. Controller-local result copies are not visible to remote scripts.
+Put `.distssh/` in the project `.gitignore` (this repository already does).
+Ship skips that directory by name; git still tracks it if you add it.
+`ship_send_list(root)` is that path list for the directory it is
 given. It is public and is not exported. `git_send_list` remains the git
 list for git-clone, git-sync, and git-pull. Extract is into
 `<remote_root>/runs/<run_id>/src/` (`run_id` is UTC plus 6 hex). The same leaf also gets an empty
@@ -256,6 +261,38 @@ julia -m DistSSHRun pool
 using DistSSHRun
 go!("job.jl")
 ```
+
+## Collect, worker env, and provenance
+
+`drive` collect after `main()` takes files newer than this run's sentinel.
+The default root is `--output-dir`, else
+`{script}/.distssh/drive/<stem>_<UTC>/`. Files written under the project
+(for example `data/sims`) are not collected unless
+`DISTRIBUTED_COLLECT_DIRS` lists those directories (colon-separated,
+relative to the project root or absolute). Example in the driver:
+`ENV["DISTRIBUTED_COLLECT_DIRS"] = "data/sims"`. A second `drive --run-id`
+that does not rewrite those files prints `(nothing to collect)`. Use
+`drive --collect-missing ROOT HOST...` with `--run-id` to pull files that
+already exist. A new `setup ship-tree` starts an empty tree; files left
+from an earlier ship do not carry over.
+
+`go` pull-back is the slot output directory only
+(`DISTRIBUTED_OUTPUT_DIR`). Project-relative files outside that slot stay
+on the remote.
+
+SSH workers and `go` slots receive `JULIA_PROJECT`, `JULIA_LOAD_PATH`,
+`JULIA_NUM_THREADS`, optional BLAS/OMP thread variables, and when a rank
+or job id is set `DISTSSH_JOB_SEED`, `DISTSSH_WORKER_RANK`,
+`DISTSSH_WORKER_SEED`, and `DISTSSH_JOB_ID`. `go` also sets
+`DISTRIBUTED_OUTPUT_DIR` to the slot directory. Other controller
+environment variables are not forwarded. Local `drive` workers may still
+see the controller process environment; do not rely on that.
+
+`.git` is not shipped. After `setup ship-tree`, the remote
+`runs/<run_id>/run.toml` (one directory above `src/`) records `run_id` and
+`content_tree_hash`. That file is the supported place for a worker-side
+script to read those values. A git walk from the deploy path can report
+some other repository.
 
 ## Delete and prune
 

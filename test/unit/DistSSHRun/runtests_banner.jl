@@ -40,6 +40,15 @@ const _RUNTESTS_SRC = read(joinpath(_test_root(), "runtests.jl"), String)
         end
     end
 
+    @testset "short-skip guards in runtests.jl" begin
+        @test _runtest_short_skip_unguarded(_RUNTESTS_SRC) == String[]
+    end
+
+    @testset "_runtest_assert_planned_executed!" begin
+        @test _runtest_assert_planned_executed!(String["a.jl"], String["a.jl"]) === nothing
+        @test_throws ErrorException _runtest_assert_planned_executed!(String["a.jl"], String["b.jl"])
+    end
+
     @testset "empty selection errors" begin
         src = raw"""_runtest_include("integration/demos/without_kit.jl", "path.jl")\n"""
         withenv(merge(clear, Dict("DISTSSH_TEST_GROUP" => "unit"))...) do
