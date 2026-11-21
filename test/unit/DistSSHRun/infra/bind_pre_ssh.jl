@@ -2,8 +2,8 @@ using Test
 using DistSSHRun
 using DistSSHRun.DistSSHBase: CliUsageError, CLI_EXIT_USAGE, with_cli_exit
 
-if !isdefined(Main, :TEST_PROJECT)
-    Core.eval(Main, :(const TEST_PROJECT = $(abspath(joinpath(@__DIR__, "..", "..", "..")))))
+if !isdefined(@__MODULE__, :TEST_PROJECT)
+    Core.eval(@__MODULE__, :(const TEST_PROJECT = $(abspath(joinpath(@__DIR__, "..", "..", "..")))))
 end
 
 @testset "bind config is enforced before PATH ssh" begin

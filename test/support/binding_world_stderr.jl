@@ -1,7 +1,7 @@
 # Julia 1.12+ binding world-age warnings on stderr. Included from support.jl
 # (runtests.jl, e2e.jl, unit tests) and analyzed as its own file by JETLS.
 
-if !isdefined(Main, :_assert_no_binding_world_stderr!)
+if !isdefined(@__MODULE__, :_assert_no_binding_world_stderr!)
     function _binding_world_age_warning_text(text::AbstractString)::Union{Nothing, String}
         for pat in (
                 "Detected access to binding",

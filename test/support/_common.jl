@@ -1,7 +1,7 @@
 # Loaded first from support.jl (same role as DistSSHRun/core/drive/_common.jl).
 # Guard: JETLS may analyze this file both via support.jl and as an include leaf.
 
-if !isdefined(Main, :_test_root)
+if !isdefined(@__MODULE__, :_test_root)
     include(joinpath(@__DIR__, "..", "..", "src", "cli", "_checkout.jl"))
 
     function _test_root()::String
@@ -29,7 +29,7 @@ if !isdefined(Main, :_test_root)
     # startup project (`test/runtests.jl`, before any include). Do not read
     # `Base.active_project()` here: `drive!` activates the host and leaves it.
     function _cli_m_project(project::AbstractString)::String
-        isdefined(Main, :TEST_PROJECT) ||
+        isdefined(@__MODULE__, :TEST_PROJECT) ||
             error("_cli_m_project($(project)): TEST_PROJECT is not set")
         return String(TEST_PROJECT::AbstractString)
     end
@@ -141,31 +141,34 @@ if !isdefined(Main, :_test_root)
         return false
     end
 
-    const _DISTSSHRUN_SHORT_SKIP_PATHS = (
-        "unit/DistSSHRun/core/drive/workers.jl",
-        "unit/DistSSHRun/execute.jl",
-        "unit/DistSSHRun/core/setup/checks.jl",
-        "unit/DistSSHRun/core/setup/send_list.jl",
-        "integration/cli/help.jl",
-        "integration/setup/exit.jl",
-        # Pseudo-TTY (`script`) suites: ordinary checkout CI keeps them.
-        # PkgEval and Registry install set JULIA_PKGEVAL=true and skip them.
-        "integration/setup/progress_tty.jl",
-        "integration/drive/progress_tty.jl",
-        "integration/drive/reuse_main_isolated.jl",
-        "integration/drive/execute.jl",
-        "integration/drive/interrupt_grace.jl",
-        "integration/drive/pkg.jl",
-        "integration/drive/log_via_script.jl",
-        "integration/drive/log_via_module.jl",
-        "integration/drive/pkg_develop.jl",
-        "integration/demos/with_kit.jl",
-        "integration/demos/without_kit.jl",
-    )
+    # A function, not a `const` inside this `if`: JETLS reports that `const` as an undefined global.
+    function _distsshrun_short_skip_paths()
+        return (
+            "unit/DistSSHRun/core/drive/workers.jl",
+            "unit/DistSSHRun/execute.jl",
+            "unit/DistSSHRun/core/setup/checks.jl",
+            "unit/DistSSHRun/core/setup/send_list.jl",
+            "integration/cli/help.jl",
+            "integration/setup/exit.jl",
+            # Pseudo-TTY (`script`) suites: ordinary checkout CI keeps them.
+            # PkgEval and Registry install set JULIA_PKGEVAL=true and skip them.
+            "integration/setup/progress_tty.jl",
+            "integration/drive/progress_tty.jl",
+            "integration/drive/reuse_main_isolated.jl",
+            "integration/drive/execute.jl",
+            "integration/drive/interrupt_grace.jl",
+            "integration/drive/pkg.jl",
+            "integration/drive/log_via_script.jl",
+            "integration/drive/log_via_module.jl",
+            "integration/drive/pkg_develop.jl",
+            "integration/demos/with_kit.jl",
+            "integration/demos/without_kit.jl",
+        )
+    end
 
     function _distsshrun_short_skipped(rel::AbstractString)::Bool
         _distsshrun_test_short() || return false
-        return String(rel) in _DISTSSHRUN_SHORT_SKIP_PATHS
+        return String(rel) in _distsshrun_short_skip_paths()
     end
 
     function _distsshrun_short_skip(rel::AbstractString)::Bool

@@ -116,9 +116,9 @@ end
 
     @testset "worker reporter" begin
         _with_one_loaded_worker() do w
-            names_before = remotecall_fetch(() -> String.(names(Main)), w)
+            names_before = remotecall_fetch(Core.eval, w, Main, :(String.(names(Main))))
             wire = DistSSHRun._fetch_worker_loaded_wire(w)
-            names_after = remotecall_fetch(() -> String.(names(Main)), w)
+            names_after = remotecall_fetch(Core.eval, w, Main, :(String.(names(Main))))
             @test names_before == names_after
             @test !("DistSSHRun" in names_after)
             writer, slots = DistSSHRun.decode_loaded_wire_report(wire)

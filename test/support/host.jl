@@ -1,4 +1,4 @@
-if !isdefined(Main, :_write_host_project!)
+if !isdefined(@__MODULE__, :_write_host_project!)
 
     # `Pkg.is_manifest_current` must be `true` before drive/go verification.
     function _sync_test_project_manifest!(proj::AbstractString)
