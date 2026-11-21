@@ -281,12 +281,24 @@ end
     end
 end
 
+# `main = make_main(path)` rebinds a closure whose type, and so `Method`, is unchanged.
+@testset "drive hook selection sees a rebound closure" begin
+    make_main(path) = () -> path
+    a, b = make_main("a"), make_main("b")
+    m = first(methods(a, Tuple{}))
+    @test first(methods(b, Tuple{})) === m
+    before = (main = (a, m),)
+    @test DistSSHRun._drive_script_hooks(before, (main = (b, m),)).main === m
+    @test DistSSHRun._drive_script_hooks(before, before).main === nothing
+    @test DistSSHRun._drive_script_hooks((main = nothing,), (main = nothing,)).main === nothing
+end
+
 @testset "init_output_dir! lookup uses the definition world" begin
     # Tracked fixture: JETLS executes this `@testset` as top-level and cannot
     # `include` a path that only exists after `mktempdir` + `write`.
     path = _fixture("drive_init_output.jl")
     args = String[]
-    lookup() = DistSSHRun._drive_script_hook_methods(args).init_output_dir!
+    lookup() = DistSSHRun._drive_script_hook_bindings(args).init_output_dir!
     before = lookup()
     redirect_stderr(devnull) do
         Base.include(Main, path)
@@ -296,7 +308,7 @@ end
             lookup()
         end
         flush(err_io)
-        @test after isa Method
+        @test after isa Tuple{Function, Method}
         @test after !== before
         @test !occursin("prior to its definition", read(err_path, String))
     end

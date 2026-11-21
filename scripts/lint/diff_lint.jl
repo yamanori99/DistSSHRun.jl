@@ -335,7 +335,7 @@ function lint_ssh_argv(root, files, src_for_path)
 end
 
 const DRIVE_HOOK_ACCESSORS = (
-    "_drive_hook_method", "_call_drive_script_hook", "_call_drive_script_hook_on_workers",
+    "_drive_hook_binding", "_call_drive_script_hook", "_call_drive_script_hook_on_workers",
 )
 
 function drive_hooks_scan_path(path::AbstractString)::Bool
@@ -987,7 +987,7 @@ function self_test_body()
             ("isdefined(Main, :main) || return\n", 1, "isdefined"),
             ("f = getfield(Main, :prepare_workers!)\n", 1, "getfield"),
             ("Main.init_output_dir!(args)\n", 1, "dotted call"),
-            ("function _drive_hook_method(name)\n    isdefined(Main, name)\nend\n", 0, "accessor"),
+            ("function _drive_hook_binding(name)\n    isdefined(Main, name)\nend\n", 0, "accessor"),
             ("_call_drive_script_hook(name) = getfield(Main, name)\n", 0, "short accessor"),
             ("Base.include(Main, path)\n", 0, "include into Main"),
         )

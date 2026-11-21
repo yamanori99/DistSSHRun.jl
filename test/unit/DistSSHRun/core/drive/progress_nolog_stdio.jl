@@ -97,7 +97,7 @@ function _nolog_stdio_cases()
                         mktemp() do err_path, err_io
                             redirect_stdout(out_io) do
                                 redirect_stderr(err_io) do
-                                    DistSSHRun.run_driver_script!(false; script_main = DistSSHRun._drive_hook_method(:main, Tuple{}))
+                                    DistSSHRun.run_driver_script!(false; script_main = last(DistSSHRun._drive_hook_binding(:main, Tuple{})))
                                 end
                             end
                             flush(out_io)
@@ -155,7 +155,7 @@ function _nolog_stdio_cases()
                                         close(pin.in)
                                     end
                                 end
-                                DistSSHRun.run_driver_script!(false; script_main = DistSSHRun._drive_hook_method(:main, Tuple{}))
+                                DistSSHRun.run_driver_script!(false; script_main = last(DistSSHRun._drive_hook_binding(:main, Tuple{})))
                                 wait(feeder)
                             end
                         end
@@ -188,7 +188,7 @@ function _nolog_stdio_cases()
                     DistSSHRun.kit_progress_begin!("drive"; steps = 2, kind = :drive)
                     mktemp() do out_path, out_io
                         redirect_stdout(out_io) do
-                            DistSSHRun.run_driver_script!(false; script_main = DistSSHRun._drive_hook_method(:main, Tuple{}))
+                            DistSSHRun.run_driver_script!(false; script_main = last(DistSSHRun._drive_hook_binding(:main, Tuple{})))
                         end
                         flush(out_io)
                         out = read(out_path, String)
@@ -216,7 +216,7 @@ function _nolog_stdio_cases()
                     mktemp() do out_path, out_io
                         err = try
                             redirect_stdout(out_io) do
-                                DistSSHRun.run_driver_script!(false; script_main = DistSSHRun._drive_hook_method(:main, Tuple{}))
+                                DistSSHRun.run_driver_script!(false; script_main = last(DistSSHRun._drive_hook_binding(:main, Tuple{})))
                             end
                             nothing
                         catch e
@@ -253,7 +253,7 @@ function _nolog_stdio_cases()
                                 mktemp() do err_path, err_io
                                     redirect_stdout(out_io) do
                                         redirect_stderr(err_io) do
-                                            DistSSHRun.run_driver_script!(true; script_main = DistSSHRun._drive_hook_method(:main, Tuple{}))
+                                            DistSSHRun.run_driver_script!(true; script_main = last(DistSSHRun._drive_hook_binding(:main, Tuple{})))
                                         end
                                     end
                                     flush(out_io)
@@ -293,7 +293,7 @@ function _nolog_stdio_cases()
                             mktemp() do err_path, err_io
                                 redirect_stdout(out_io) do
                                     redirect_stderr(err_io) do
-                                        DistSSHRun.run_driver_script!(false; script_main = DistSSHRun._drive_hook_method(:main, Tuple{}))
+                                        DistSSHRun.run_driver_script!(false; script_main = last(DistSSHRun._drive_hook_binding(:main, Tuple{})))
                                     end
                                 end
                                 flush(out_io)

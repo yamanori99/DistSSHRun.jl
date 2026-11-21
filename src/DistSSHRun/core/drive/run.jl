@@ -11,26 +11,31 @@ _drive_script_hook_signatures(script_args) = (
     main = Tuple{},
 )
 
+# The bound value and the method it would call. Closure instances of one type
+# share a `Method`, so `main = make_main(path)` is a change only in the value.
 # Lookup is `invokelatest`: after `include` the binding's world is newer than
 # this method, and Julia 1.12+ warns (later errors) on a stale read.
-function _drive_hook_method(name::Symbol, argtypes::Type{<:Tuple})::Union{Nothing, Method}
+function _drive_hook_binding(name::Symbol, argtypes::Type{<:Tuple})::Union{Nothing, Tuple{Function, Method}}
     return Base.invokelatest() do
         isdefined(Main, name) || return nothing
         hook = getfield(Main, name)
         hook isa Function || return nothing
         applicable = methods(hook, argtypes)
-        return isempty(applicable) ? nothing : first(applicable)::Method
+        return isempty(applicable) ? nothing : (hook, first(applicable)::Method)
     end
 end
 
-function _drive_script_hook_methods(script_args)
+function _drive_script_hook_bindings(script_args)
     sigs = _drive_script_hook_signatures(script_args)
-    return NamedTuple{keys(sigs)}(map(_drive_hook_method, keys(sigs), values(sigs)))
+    return NamedTuple{keys(sigs)}(map(_drive_hook_binding, keys(sigs), values(sigs)))
 end
 
-"""Hooks this script's `include` added or replaced. Each other hook is `nothing`."""
+"""
+Methods of the hooks this script's `include` added or replaced. Each other hook is `nothing`.
+Assigning a value `===` to the one already bound is not a change.
+"""
 function _drive_script_hooks(before::NamedTuple, after::NamedTuple)::NamedTuple
-    return map((b, a) -> a === b ? nothing : a, before, after)
+    return map((b, a) -> a === nothing || a === b ? nothing : last(a), before, after)
 end
 
 Base.@constprop :none function _call_drive_script_hook(name::Symbol, args...)
@@ -397,9 +402,9 @@ function _run_drive_parsed_specialized!(
             # If still unset, kit allocates `{script}/.distssh/drive/<stem>_<UTC>/`.
             # Lock after that so `.kit.lock` is not the kind root when the driver
             # chose `output/` (or `--output-dir` / a unique batch dir).
-            hooks_before = _drive_script_hook_methods(script_args)
+            hooks_before = _drive_script_hook_bindings(script_args)
             Base.include(Main, script_path)
-            script_hooks = _drive_script_hooks(hooks_before, _drive_script_hook_methods(script_args))
+            script_hooks = _drive_script_hooks(hooks_before, _drive_script_hook_bindings(script_args))
             if script_hooks.init_output_dir! !== nothing
                 _call_drive_script_hook(:init_output_dir!, script_args)
             end
