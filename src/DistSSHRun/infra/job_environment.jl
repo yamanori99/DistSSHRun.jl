@@ -67,10 +67,7 @@ function _version_string_from_manifest(tab::AbstractDict)::String
     return ""
 end
 
-function job_package_collision_details(
-        project::AbstractString;
-        site::AbstractString = "controller",
-    )::Vector{NTuple{5, String}}
+function job_package_collision_details(project::AbstractString)::Vector{NTuple{5, String}}
     deps = _parsed_manifest_deps(project)
     isempty(deps) && return NTuple{5, String}[]
     out = NTuple{5, String}[]
@@ -146,12 +143,14 @@ function assert_manifest_digest_matches_deploy_record!(project_dir::AbstractStri
     !(want isa AbstractString) || isempty(strip(want)) && return nothing
     want = lowercase(strip(String(want)))
     manifest = Base.active_manifest()
-    manifest isa AbstractString && isfile(manifest) || throw(
-        ErrorException(
-            deploy_manifest_digest_mismatch_error("", want, deploy_path),
-        ),
-    )
-    got = lowercase(file_sha256(manifest))
+    if !(manifest isa AbstractString) || !isfile(manifest)
+        throw(
+            ErrorException(
+                deploy_manifest_digest_mismatch_error("", want, deploy_path),
+            ),
+        )
+    end
+    got = lowercase(file_sha256(String(manifest)))
     got == want && return nothing
     throw(ErrorException(deploy_manifest_digest_mismatch_error(got, want, deploy_path)))
 end
@@ -163,12 +162,14 @@ function instantiate_job_manifest!(
             pf = DistSSHBase._located_project_file(project_dir)
             pf isa String || throw(ArgumentError("no project file under $(project_dir)"))
             ctx = canonical_local_path(dirname(String(pf)))
-            Pkg.instantiate(
-                ctx;
-                manifest = true,
-                update_registry = false,
-                julia_version_strict = true,
-            )
+            withenv() do
+                Pkg.activate(ctx; io = devnull)
+                Pkg.instantiate(;
+                    manifest = true,
+                    update_registry = false,
+                    julia_version_strict = true,
+                )
+            end
             return nothing
         end,
     )
@@ -285,15 +286,17 @@ function _with_controller_job_verify!(project::AbstractString, f::Function)
         restrict_job_load_path!()
         return f()
     finally
-        LOAD_PATH .= prev_lp
+        empty!(LOAD_PATH)
+        append!(LOAD_PATH, prev_lp)
         Base.ACTIVE_PROJECT[] = prev_active
     end
 end
 
 function assert_controller_job_package_collisions!(project::AbstractString)
-    return _with_controller_job_verify!(project) do
+    return _with_controller_job_verify!(project, () -> begin
         assert_job_package_collisions!(project; site = "controller")
-    end
+        return nothing
+    end)
 end
 public assert_controller_job_package_collisions!
 
