@@ -118,7 +118,7 @@ if !isdefined(Main, :_test_root)
         return false
     end
 
-    """Temp dir with a stub `ssh` on PATH (exits 1). For tests that need `Sys.which("ssh")` without OpenSSH."""
+    # Stub `ssh` on PATH (exits 1) when OpenSSH is absent (PkgEval sandbox).
     function _with_ssh_stub_in_path(f::Function)
         stub_dir = mktempdir()
         return try
