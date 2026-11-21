@@ -20,6 +20,14 @@ cleanup() {
 trap cleanup EXIT
 
 if [[ -n "${GATE_PR_PATHS_FILE:-}" && -n "${GATE_PR_BODY_FILE:-}" ]]; then
+  if [[ ! -f "${GATE_PR_BODY_FILE}" || ! -f "${GATE_PR_PATHS_FILE}" ]]; then
+    if [[ "${GITHUB_ACTIONS:-}" == "true" && "${GITHUB_EVENT_NAME:-}" != "pull_request" ]]; then
+      echo "pr body: skip (not pull_request)"
+      exit 0
+    fi
+    echo "pr body: missing ${GATE_PR_BODY_FILE} or ${GATE_PR_PATHS_FILE}" >&2
+    exit 1
+  fi
   cp "${GATE_PR_PATHS_FILE}" "${pr_paths}"
   cp "${GATE_PR_BODY_FILE}" "${pr_body}"
 elif gh pr view --json body --jq .body >"${pr_body}" 2>"${pr_err}"; then

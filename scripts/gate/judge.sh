@@ -9,7 +9,8 @@ fail() {
 
 result_of() {
   local id="$1"
-  local var="RESULT_${id}"
+  local norm="${id//-/_}"
+  local var="RESULT_${norm}"
   echo "${!var:-missing}"
 }
 

@@ -51,6 +51,14 @@ run_step "lint" env GATE_DIFF_BASE="${GATE_DIFF_BASE}" GATE_DIFF_HEAD="${GATE_DI
 
 run_step "shellcheck" "${ROOT}/scripts/gate/shellcheck.sh"
 
-run_step "pr body" env GATE_DIFF_BASE="${GATE_DIFF_BASE}" GATE_DIFF_HEAD="${GATE_DIFF_HEAD}" \
-  GATE_PR_BODY_FILE="${GATE_PR_BODY_FILE:-}" GATE_PR_PATHS_FILE="${GATE_PR_PATHS_FILE:-}" \
-  "${ROOT}/scripts/gate/pr-body.sh"
+if [[ -z "${GITHUB_ACTIONS:-}" ]] || [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]]; then
+  run_step "pr body" env GATE_DIFF_BASE="${GATE_DIFF_BASE}" GATE_DIFF_HEAD="${GATE_DIFF_HEAD}" \
+    GATE_PR_BODY_FILE="${GATE_PR_BODY_FILE:-}" GATE_PR_PATHS_FILE="${GATE_PR_PATHS_FILE:-}" \
+    "${ROOT}/scripts/gate/pr-body.sh"
+elif [[ "${CHECK_GATE_QUIET:-0}" == 1 ]]; then
+  gate_ok "pr body" "(skipped non-pull_request CI)"
+else
+  section "check: pr body"
+  echo "pr body: skip (not pull_request)"
+  section "check: pr body ok"
+fi

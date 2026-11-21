@@ -174,9 +174,8 @@ jobs:
           else
             echo "e2e=false" >> "$GITHUB_OUTPUT"
           fi
-          if [ "$CUT" = "true" ]; then
-            echo "coverage=true" >> "$GITHUB_OUTPUT"
-          elif [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ] && [ "$HEAVY" != "false" ]; then
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ] && \
+            { [ "$CUT" = "true" ] || [ "$HEAVY" != "false" ]; }; then
             echo "coverage=true" >> "$GITHUB_OUTPUT"
           else
             echo "coverage=false" >> "$GITHUB_OUTPUT"
@@ -1611,9 +1610,10 @@ jobs:
           GITHUB_ACTIONS: "true"
           GITHUB_REPOSITORY: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
-          GATE_PR_BODY_FILE: ${{ runner.temp }}/gate-pr-body.txt
-          GATE_PR_PATHS_FILE: ${{ runner.temp }}/gate-pr-paths.txt
+          GATE_PR_BODY_FILE: ${{ github.event_name == 'pull_request' && format('{0}/gate-pr-body.txt', runner.temp) || '' }}
+          GATE_PR_PATHS_FILE: ${{ github.event_name == 'pull_request' && format('{0}/gate-pr-paths.txt', runner.temp) || '' }}
           GATE_RUNIC_FROM_PATH: "1"
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: ./scripts/gate/cheap.sh
       - name: Judge required jobs
         env:
@@ -1632,40 +1632,40 @@ jobs:
           RESULT_diff_lint_self_test: ${{ needs.diff-lint-self-test.result }}
           RESULT_jetls: ${{ needs.jetls.result }}
           RESULT_aqua: ${{ needs.aqua.result }}
-          RESULT_aqua-1-14-pre: ${{ needs.aqua-1-14-pre.result }}
-          RESULT_aqua-nightly: ${{ needs.aqua-nightly.result }}
-          RESULT_jetls-1-14-pre: ${{ needs.jetls-1-14-pre.result }}
-          RESULT_test-unit: ${{ needs.test-unit.result }}
-          RESULT_test-integration: ${{ needs.test-integration.result }}
-          RESULT_test-coverage: ${{ needs.test-coverage.result }}
-          RESULT_test-macos-unit: ${{ needs.test-macos-unit.result }}
-          RESULT_test-macos-integration: ${{ needs.test-macos-integration.result }}
-          RESULT_test-wsl: ${{ needs.test-wsl.result }}
-          RESULT_test-1-14-pre-unit: ${{ needs.test-1-14-pre-unit.result }}
-          RESULT_test-1-14-pre-integration: ${{ needs.test-1-14-pre-integration.result }}
-          RESULT_test-1-14-pre-macos-unit: ${{ needs.test-1-14-pre-macos-unit.result }}
-          RESULT_test-1-14-pre-macos-integration: ${{ needs.test-1-14-pre-macos-integration.result }}
-          RESULT_test-nightly: ${{ needs.test-nightly.result }}
-          RESULT_registry-install: ${{ needs.registry-install.result }}
+          RESULT_aqua_1_14_pre: ${{ needs.aqua-1-14-pre.result }}
+          RESULT_aqua_nightly: ${{ needs.aqua-nightly.result }}
+          RESULT_jetls_1_14_pre: ${{ needs.jetls-1-14-pre.result }}
+          RESULT_test_unit: ${{ needs.test-unit.result }}
+          RESULT_test_integration: ${{ needs.test-integration.result }}
+          RESULT_test_coverage: ${{ needs.test-coverage.result }}
+          RESULT_test_macos_unit: ${{ needs.test-macos-unit.result }}
+          RESULT_test_macos_integration: ${{ needs.test-macos-integration.result }}
+          RESULT_test_wsl: ${{ needs.test-wsl.result }}
+          RESULT_test_1_14_pre_unit: ${{ needs.test-1-14-pre-unit.result }}
+          RESULT_test_1_14_pre_integration: ${{ needs.test-1-14-pre-integration.result }}
+          RESULT_test_1_14_pre_macos_unit: ${{ needs.test-1-14-pre-macos-unit.result }}
+          RESULT_test_1_14_pre_macos_integration: ${{ needs.test-1-14-pre-macos-integration.result }}
+          RESULT_test_nightly: ${{ needs.test-nightly.result }}
+          RESULT_registry_install: ${{ needs.registry-install.result }}
           RESULT_pkgeval: ${{ needs.pkgeval.result }}
           RESULT_downstream: ${{ needs.downstream.result }}
-          RESULT_base-test-ubuntu: ${{ needs.base-test-ubuntu.result }}
-          RESULT_base-test-macos: ${{ needs.base-test-macos.result }}
-          RESULT_base-test-wsl: ${{ needs.base-test-wsl.result }}
-          RESULT_up-test-ubuntu: ${{ needs.up-test-ubuntu.result }}
-          RESULT_up-test-macos: ${{ needs.up-test-macos.result }}
-          RESULT_up-test-wsl: ${{ needs.up-test-wsl.result }}
-          RESULT_ship-test-ubuntu: ${{ needs.ship-test-ubuntu.result }}
-          RESULT_ship-test-macos: ${{ needs.ship-test-macos.result }}
-          RESULT_ship-test-wsl: ${{ needs.ship-test-wsl.result }}
-          RESULT_heartbeat-test-ubuntu: ${{ needs.heartbeat-test-ubuntu.result }}
-          RESULT_heartbeat-test-macos: ${{ needs.heartbeat-test-macos.result }}
-          RESULT_heartbeat-test-wsl: ${{ needs.heartbeat-test-wsl.result }}
-          RESULT_up-ssh-e2e: ${{ needs.up-ssh-e2e.result }}
-          RESULT_base-ssh-e2e: ${{ needs.base-ssh-e2e.result }}
-          RESULT_ship-ssh-e2e: ${{ needs.ship-ssh-e2e.result }}
-          RESULT_heartbeat-ssh-e2e: ${{ needs.heartbeat-ssh-e2e.result }}
-          RESULT_ssh-e2e: ${{ needs.ssh-e2e.result }}
-          RESULT_ssh-e2e-1-14-pre: ${{ needs.ssh-e2e-1-14-pre.result }}
-          RESULT_queue-ssh-e2e: ${{ needs.queue-ssh-e2e.result }}
+          RESULT_base_test_ubuntu: ${{ needs.base-test-ubuntu.result }}
+          RESULT_base_test_macos: ${{ needs.base-test-macos.result }}
+          RESULT_base_test_wsl: ${{ needs.base-test-wsl.result }}
+          RESULT_up_test_ubuntu: ${{ needs.up-test-ubuntu.result }}
+          RESULT_up_test_macos: ${{ needs.up-test-macos.result }}
+          RESULT_up_test_wsl: ${{ needs.up-test-wsl.result }}
+          RESULT_ship_test_ubuntu: ${{ needs.ship-test-ubuntu.result }}
+          RESULT_ship_test_macos: ${{ needs.ship-test-macos.result }}
+          RESULT_ship_test_wsl: ${{ needs.ship-test-wsl.result }}
+          RESULT_heartbeat_test_ubuntu: ${{ needs.heartbeat-test-ubuntu.result }}
+          RESULT_heartbeat_test_macos: ${{ needs.heartbeat-test-macos.result }}
+          RESULT_heartbeat_test_wsl: ${{ needs.heartbeat-test-wsl.result }}
+          RESULT_up_ssh_e2e: ${{ needs.up-ssh-e2e.result }}
+          RESULT_base_ssh_e2e: ${{ needs.base-ssh-e2e.result }}
+          RESULT_ship_ssh_e2e: ${{ needs.ship-ssh-e2e.result }}
+          RESULT_heartbeat_ssh_e2e: ${{ needs.heartbeat-ssh-e2e.result }}
+          RESULT_ssh_e2e: ${{ needs.ssh-e2e.result }}
+          RESULT_ssh_e2e_1_14_pre: ${{ needs.ssh-e2e-1-14-pre.result }}
+          RESULT_queue_ssh_e2e: ${{ needs.queue-ssh-e2e.result }}
         run: ./scripts/gate/judge.sh

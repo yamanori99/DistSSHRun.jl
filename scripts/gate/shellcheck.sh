@@ -10,8 +10,14 @@ if ! command -v shellcheck >/dev/null 2>&1; then
   exit 1
 fi
 
-mapfile -t files < <(
-  git ls-files 'scripts/**/*.sh' '.github/**/*.sh' 'testenv/**/*.sh' | LC_ALL=C sort
+files=()
+while IFS= read -r f; do
+  [[ -n "${f}" ]] || continue
+  files+=("${f}")
+done < <(
+  {
+    git ls-files 'scripts/*.sh' 'scripts/**/*.sh' '.github/*.sh' '.github/**/*.sh' 'testenv/**/*.sh'
+  } | LC_ALL=C sort -u
 )
 if ((${#files[@]} == 0)); then
   echo "shellcheck: no tracked shell scripts" >&2
