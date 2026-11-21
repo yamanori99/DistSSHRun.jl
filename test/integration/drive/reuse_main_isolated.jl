@@ -58,6 +58,58 @@ using Test
         end
     end
 
+    @testset "nested drive! during include fails closed" begin
+        _mktemp_host() do proj
+            _write_host_project!(proj, "DrvReuseNested")
+            inner = joinpath(proj, "inner.jl")
+            outer = joinpath(proj, "outer.jl")
+            touched = joinpath(proj, "inner.ran")
+            write(
+                inner,
+                """
+                write($(repr(touched)), "ran")
+                function main()
+                    return nothing
+                end
+                """,
+            )
+            write(
+                outer,
+                """
+                try
+                    DistSSHRun.drive!(
+                        $(repr(inner));
+                        head_workers = 1,
+                        project = $(repr(proj)),
+                        enable_log = false,
+                    )
+                    write($(repr(touched)), "allowed")
+                catch err
+                    err isa ArgumentError || rethrow()
+                    occursin("reuse_main=true", err.msg) || rethrow()
+                end
+                function main()
+                    return nothing
+                end
+                """,
+            )
+            prev = DistSSHRun.kit_verbosity()
+            try
+                DistSSHRun.set_kit_verbosity!(:quiet)
+                res = DistSSHRun.drive!(
+                    outer; head_workers = 1,
+                    project = proj,
+                    enable_log = false,
+                    reuse_main = true,
+                )
+                @test res.ok
+                @test !isfile(touched)
+            finally
+                DistSSHRun.set_kit_verbosity!(prev)
+            end
+        end
+    end
+
     @testset "reuse_main allows another in-process include" begin
         _mktemp_host() do proj
             _write_host_project!(proj, "DrvReuseOk")

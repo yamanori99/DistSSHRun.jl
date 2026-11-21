@@ -49,7 +49,7 @@ function _call_drive_script_hook_on_workers(name::Symbol)
     return _drive_eval_workers(:(Base.invokelatest(getfield(Main, $(QuoteNode(name))))))
 end
 
-# Set after any in-process drive `Base.include(Main, script)` (success or throw).
+# Set before any in-process drive `Base.include(Main, script)`. It stays set on success or throw.
 const _DRIVE_MAIN_DRIVER_INCLUDED = Ref(false)
 
 function _drive_main_driver_included()::Bool
@@ -65,6 +65,12 @@ function _reject_second_drive_main_include!(reuse_main::Bool)
     _drive_main_driver_included() || return nothing
     reuse_main && return nothing
     throw(ArgumentError(drive_reuse_main_required_message()))
+end
+
+"""CLI parses omit `:reuse_main` and keep including. The API field `false` does not."""
+function _drive_reuse_main_opt_in(parsed)::Bool
+    hasproperty(parsed, :reuse_main) || return true
+    return getproperty(parsed, :reuse_main) === true
 end
 
 # Options that take the next argv word. A word equal to `--isolated` there is a value.
@@ -197,6 +203,7 @@ end
 function _drive_isolated_cmd(
         original_args::AbstractVector{<:AbstractString};
         project_root::Union{Nothing, AbstractString} = nothing,
+        drop_env::Vector{String} = String[],
     )::Cmd
     child = _drive_isolated_child_args(original_args)
     script = "using DistSSHRun; exit(Int(DistSSHRun.run_drive_parsed!(DistSSHRun.parse_drive_args(String[ARGS...]); original_args=String[ARGS...])))"
@@ -212,7 +219,9 @@ function _drive_isolated_cmd(
         root = strip(String(project_root))
         isempty(root) || push!(pairs, "DISTRIBUTED_PROJECT_ROOT" => root)
     end
-    return addenv(Cmd(argv), pairs...)
+    cmd = addenv(Cmd(argv), pairs...)
+    isempty(drop_env) && return cmd
+    return addenv(cmd, (String(key) => nothing for key in drop_env)...)
 end
 
 """SIGINT the child, then wait until it exits. A second interrupt still uses the drive handler."""
@@ -232,10 +241,17 @@ end
 
 function _drive_isolated_process(
         original_args::AbstractVector{<:AbstractString},
-        project_root::Union{Nothing, AbstractString} = nothing,
+        project_root::Union{Nothing, AbstractString} = nothing;
+        drop_env::Vector{String} = String[],
     )::Cint
     proc = run(
-        ignorestatus(_drive_isolated_cmd(original_args; project_root = project_root));
+        ignorestatus(
+            _drive_isolated_cmd(
+                original_args;
+                project_root = project_root,
+                drop_env = drop_env,
+            )
+        );
         wait = false,
     )
     try
@@ -275,7 +291,11 @@ function run_drive_parsed!(
     # `drive!` builds the same field as `parse_drive_args` (`false`). A missing
     # key stays in this process. `get` does not read a field the tuple lacks.
     if get(parsed, :isolated, false) === true
-        return _drive_isolated_process(original_args, project_root)
+        return _drive_isolated_process(
+            original_args,
+            project_root;
+            drop_env = _isolated_api_env_drops(parsed),
+        )
     end
     # `parse_drive_args` is inferred as one NamedTuple whose fields are unions.
     # CLI `drive_main` already opened the frame (`cli=true`). A direct call,
@@ -421,12 +441,9 @@ function _run_drive_parsed_specialized!(
             # Lock after that so `.kit.lock` is not the kind root when the driver
             # chose `output/` (or `--output-dir` / a unique batch dir).
             hooks_before = _drive_script_hook_bindings(script_args)
-            _reject_second_drive_main_include!(get(parsed, :reuse_main, false) === true)
-            try
-                Base.include(Main, script_path)
-            finally
-                _set_drive_main_driver_included!()
-            end
+            _reject_second_drive_main_include!(_drive_reuse_main_opt_in(parsed))
+            _set_drive_main_driver_included!()
+            Base.include(Main, script_path)
             script_hooks = _drive_script_hooks(hooks_before, _drive_script_hook_bindings(script_args))
             if script_hooks.init_output_dir! !== nothing
                 _call_drive_script_hook(:init_output_dir!, script_args)

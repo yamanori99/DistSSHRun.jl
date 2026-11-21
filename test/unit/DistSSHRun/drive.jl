@@ -1249,6 +1249,49 @@ end
             @test !cli.isolated
             @test length(cli.hosts) == 1
             @test first(cli.hosts)[1] == "host1"
+            withenv("DISTSSH_HOSTS" => "1*host-b") do
+                hosted = DistSSHRun.parse_drive_args(argv)
+                @test length(hosted.hosts) == 1
+                @test first(hosted.hosts)[1] == "host1"
+            end
+            arg_parsed = DistSSHRun.drive_parsed_from_session(
+                session,
+                script;
+                workers = DistSSHRun.WorkerPlan(2, Dict("host1" => 1)),
+                isolated = true,
+                script_args = String["--head-workers", "9", "-q"],
+            )
+            arg_cli = DistSSHRun.parse_drive_args(DistSSHRun.drive_api_isolated_argv(arg_parsed))
+            @test arg_cli.script_args == ["--head-workers", "9", "-q"]
+            @test arg_cli.head_workers == 2
+            @test !arg_cli.cli_session.quiet
+            empty_parsed = DistSSHRun.drive_parsed_from_session(
+                session,
+                script;
+                workers = DistSSHRun.WorkerPlan(1, Dict{String, Int}()),
+                isolated = true,
+            )
+            drops = DistSSHRun._isolated_api_env_drops(empty_parsed)
+            @test "DISTSSH_HOSTS" in drops
+            @test "DISTSSH_HOSTS_FILE" in drops
+            @test "DISTSSH_UNSAFE_SKIP_ENV_DIGESTS" in drops
+            @test "DISTSSH_UNSAFE_EXPOSE_PORT" ∉ drops
+            cli_only = DistSSHRun.parse_drive_args(String["--head-workers", "1", script])
+            @test isempty(DistSSHRun._isolated_api_env_drops(cli_only))
+            withenv(
+                "DISTSSH_HOSTS" => "1*host-b",
+                "DISTSSH_HOSTS_FILE" => joinpath(proj, "hosts.toml"),
+                "DISTSSH_UNSAFE_SKIP_ENV_DIGESTS" => "1",
+            ) do
+                child = DistSSHRun._drive_isolated_cmd(
+                    DistSSHRun.drive_api_isolated_argv(empty_parsed);
+                    drop_env = drops,
+                )
+                env = something(child.env, String[])
+                @test !any(e -> startswith(e, "DISTSSH_HOSTS="), env)
+                @test !any(e -> startswith(e, "DISTSSH_HOSTS_FILE="), env)
+                @test !any(e -> startswith(e, "DISTSSH_UNSAFE_SKIP_ENV_DIGESTS="), env)
+            end
             hf_session = DistSSHRun.DistSSHSession(project = proj, workers = String[])
             hf_session.cli_session.hosts_file = joinpath(proj, "hosts.toml")
             err_hf = try

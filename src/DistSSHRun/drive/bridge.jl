@@ -24,7 +24,7 @@ function drive_api_isolated_argv(parsed)::Vector{String}
     out = String[]
     push!(out, "--head-workers", string(Int(parsed.head_workers)))
     for (h, n) in parsed.hosts
-        push!(out, DistSSHBase.format_machine_token(Int(something(n, 1)), h))
+        push!(out, "--hosts", DistSSHBase.format_machine_token(Int(something(n, 1)), h))
     end
     get(parsed, :skip_hash_check, true) == false && push!(out, "--require-git")
     get(parsed, :enable_log, true) == false && push!(out, "--no-log")
@@ -54,8 +54,19 @@ function drive_api_isolated_argv(parsed)::Vector{String}
     end
     _append_drive_shared_verbosity_argv!(out, parsed.cli_session)
     push!(out, String(parsed.script_path))
-    append!(out, parsed.script_args)
+    _append_drive_api_script_args!(out, parsed.script_args)
     return out
+end
+
+"""Env keys the API isolated child must not read. CLI `--isolated` drops nothing."""
+function _isolated_api_env_drops(parsed)::Vector{String}
+    hasproperty(parsed, :reuse_main) || return String[]
+    drops = String["DISTSSH_HOSTS", "DISTSSH_HOSTS_FILE"]
+    for row in options_for_command(:drive)
+        row.env === nothing && continue
+        get(parsed, row.key, missing) === false && push!(drops, String(row.env))
+    end
+    return drops
 end
 
 """Build a `parse_drive_args`-shaped NamedTuple from a session + options."""
