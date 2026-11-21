@@ -178,11 +178,12 @@ function _workspace_member_project_files(env_dir::AbstractString)::Vector{String
 end
 
 """
-`(name, raw, probe_path)` for every Manifest `path` and Project `[sources]` path.
+`(name, raw, probe_path)` for every path in the active environment Manifest and Project `[sources]` path.
 
-Resolved on the controller only from TOML. `probe_path` is relative to the
-active `--project` directory unless the declared path is absolute or starts
-with `~` (not expanded here).
+Does not walk path-dependency Manifest files: Pkg resolves only the active
+Manifest. Resolved on the controller only from TOML. `probe_path` is relative
+to the active `--project` directory unless the declared path is absolute or
+starts with `~` (not expanded here).
 """
 function _manifest_path_probe_specs(project::AbstractString)::Vector{_PathProbeSpec}
     env = resolve_pkg_env(project)
@@ -210,27 +211,9 @@ function _manifest_path_probe_specs(project::AbstractString)::Vector{_PathProbeS
         end
     end
     man = env.manifest
-    man isa String && isfile(man) || return specs
-    queue = String[man]
-    done = Set{String}()
-    while !isempty(queue)
-        m = popfirst!(queue)
-        m in done && continue
-        push!(done, m)
-        for (name, raw) in DistSSHShip._manifest_path_pairs(m)
-            add!(name, raw, m)
-            r = strip(String(raw))
-            if isabspath(r) || (!isempty(r) && first(r) == '~')
-                continue
-            end
-            loc = joinpath(dirname(m), r)
-            ispath(loc) || continue
-            cpf = _located_project_file(loc)
-            cpf isa String || continue
-            cm = manifest_path(dirname(cpf))
-            if cm isa String && cm ∉ done
-                push!(queue, cm)
-            end
+    if man isa String && isfile(man)
+        for (name, raw) in DistSSHShip._manifest_path_pairs(man)
+            add!(name, raw, man)
         end
     end
     return specs

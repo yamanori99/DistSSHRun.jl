@@ -239,6 +239,44 @@ using Pkg
             after = DistSSHRun.probe_project_deps(root)
             @test after === nothing || !occursin("missing ../Bar", String(after))
         end
+        _with_tempdir() do parent
+            root = joinpath(parent, "App")
+            mkpath(root)
+            foo = joinpath(parent, "vendor", "Foo")
+            bench = joinpath(parent, "vendor", "BenchOnly")
+            mkpath(foo)
+            mkpath(bench)
+            write(joinpath(foo, "Project.toml"), "name = \"Foo\"\nuuid = \"55555555-5555-5555-5555-555555555555\"\n")
+            write(joinpath(bench, "Project.toml"), "name = \"BenchOnly\"\nuuid = \"66666666-6666-6666-6666-666666666666\"\n")
+            write(
+                joinpath(root, "Project.toml"),
+                "[deps]\nFoo = \"55555555-5555-5555-5555-555555555555\"\n",
+            )
+            write(
+                joinpath(root, "Manifest.toml"),
+                """
+                manifest_format = "2.0"
+
+                [deps.Foo]
+                uuid = "55555555-5555-5555-5555-555555555555"
+                path = "vendor/Foo"
+                """,
+            )
+            write(
+                joinpath(foo, "Manifest.toml"),
+                """
+                manifest_format = "2.0"
+
+                [deps.BenchOnly]
+                uuid = "66666666-6666-6666-6666-666666666666"
+                path = "../BenchOnly"
+                """,
+            )
+            specs = DistSSHRun._manifest_path_probe_specs(root)
+            @test any(s -> s[1] == "Foo" && s[2] == "vendor/Foo", specs)
+            @test !any(s -> s[1] == "BenchOnly", specs)
+            @test !any(s -> s[2] == "../BenchOnly", specs)
+        end
         _with_tempdir() do root
             mkpath(joinpath(root, "pkg"))
             write(
