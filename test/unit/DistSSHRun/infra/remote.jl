@@ -16,6 +16,54 @@ end
         @test r.ncpu !== nothing && r.ncpu >= 1
     end
 
+    @testset "local git helpers fail closed" begin
+        if Sys.which("git") === nothing
+            @test_skip "git not in PATH"
+        else
+            _with_tempdir() do tmp
+                @test DistSSHRun.get_local_git_hash(tmp) === nothing
+                @test DistSSHRun.local_git_clean(tmp)
+                @test DistSSHRun.DistSSHBase.clone_url_from_local_origin(tmp) === nothing
+            end
+            _with_tempdir() do tmp
+                run(Cmd(["git", "-C", tmp, "init", "-q"]))
+                run(Cmd(["git", "-C", tmp, "config", "user.email", "test@example.com"]))
+                run(Cmd(["git", "-C", tmp, "config", "user.name", "Test"]))
+                @test DistSSHRun.get_local_git_hash(tmp) === nothing
+                @test DistSSHRun.DistSSHBase.clone_url_from_local_origin(tmp) === nothing
+                @test DistSSHRun.local_git_clean(tmp)
+            end
+            _with_tempdir() do tmp
+                run(Cmd(["git", "-C", tmp, "init", "-q"]))
+                run(Cmd(["git", "-C", tmp, "config", "user.email", "test@example.com"]))
+                run(Cmd(["git", "-C", tmp, "config", "user.name", "Test"]))
+                write(joinpath(tmp, "f.txt"), "x")
+                run(Cmd(["git", "-C", tmp, "add", "f.txt"]))
+                run(Cmd(["git", "-C", tmp, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "init"]))
+                objects = joinpath(tmp, ".git", "objects")
+                chmod(objects, 0o000)
+                try
+                    for f in (
+                            () -> DistSSHRun.get_local_git_hash(tmp),
+                            () -> DistSSHRun.local_git_clean(tmp),
+                            () -> DistSSHRun.DistSSHBase.clone_url_from_local_origin(tmp),
+                        )
+                        err = try
+                            f()
+                            ""
+                        catch e
+                            e isa ArgumentError ? e.msg : sprint(showerror, e)
+                        end
+                        @test occursin("git failed in", err)
+                        @test !isempty(err)
+                    end
+                finally
+                    chmod(objects, 0o755)
+                end
+            end
+        end
+    end
+
     _with_tempdir() do tmp
         d = tmp
         @test DistSSHRun.get_local_git_hash(d) === nothing
@@ -56,7 +104,13 @@ end
                 write(idx, "not-a-git-index")
                 try
                     @test DistSSHRun.get_local_git_hash(d) isa String
-                    @test !DistSSHRun.local_git_clean(d)
+                    err = try
+                        DistSSHRun.local_git_clean(d)
+                        ""
+                    catch e
+                        e isa ArgumentError ? e.msg : sprint(showerror, e)
+                    end
+                    @test occursin("index file smaller than expected", err)
                 finally
                     write(idx, backup)
                 end
