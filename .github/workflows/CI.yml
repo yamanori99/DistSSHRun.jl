@@ -1569,7 +1569,6 @@ jobs:
         id: runic-app
         run: |
           set -euo pipefail
-          v="${{ steps.runic-pin.outputs.version }}"
           julia --startup-file=no -e '
             using Pkg
             v = ENV["RUNIC_PIN"]
