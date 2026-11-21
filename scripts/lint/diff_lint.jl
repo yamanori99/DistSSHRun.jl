@@ -1247,6 +1247,24 @@ function self_test_body()
     rt_src = "# _runtest_include(\"ghost.jl\")\n_runtest_include(\"real.jl\")\n"
     rt_inc = runtests_includes(rt_src, "")
     rt_inc == Set(["real.jl"]) || die("self-test: commented runtest include $rt_inc")
+    join_src = "include(joinpath(@__DIR__, \"unit\", \"nested.jl\"))\n"
+    join_inc = runtests_includes(join_src, "lib/Fake/test/")
+    join_inc == Set(["lib/Fake/test/unit/nested.jl"]) ||
+        die("self-test: joinpath include $join_inc")
+    mktempdir() do tmp
+        pkg_t = joinpath(tmp, "lib", "Pkg", "test")
+        mkpath(joinpath(pkg_t, "suites"))
+        write(joinpath(pkg_t, "runtests.jl"), "include(\"suites/a.jl\")\n")
+        write(
+            joinpath(pkg_t, "suites", "a.jl"),
+            "include(joinpath(@__DIR__, \"cases\", \"b.jl\"))\n",
+        )
+        mkpath(joinpath(pkg_t, "suites", "cases"))
+        write(joinpath(pkg_t, "suites", "cases", "b.jl"), "using Test\n@test 1 == 1\n")
+        reach = runtests_reachable("lib/Pkg/test/", joinpath(pkg_t, "runtests.jl"), pkg_t)
+        "lib/Pkg/test/suites/cases/b.jl" in reach ||
+            die("self-test: transitive joinpath include $reach")
+    end
     common_src = "function _distsshrun_short_skip_paths()\n    return (\"integration/a.jl\",)\nend\n"
     paths, ok = short_skip_paths_from_common(common_src)
     (ok && paths == ["integration/a.jl"]) || die("self-test: short skip paths $(paths) $(ok)")
@@ -1255,6 +1273,8 @@ function self_test_body()
     ok2 && die("self-test: short skip must fail closed")
     judge_norm = strip(read(`bash -c 'id=test-unit; norm=${id//-/_}; var=RESULT_${norm}; export RESULT_test_unit=success; echo ${!var:-missing}'`, String))
     judge_norm == "success" || die("self-test: judge result normalization $(judge_norm)")
+    judge_self = strip(read(`$(joinpath(@__DIR__, "..", "gate", "judge_self_test.sh"))`, String))
+    judge_self == "ok" || die("self-test: judge_self_test $(judge_self)")
     shell_list = strip(read(`bash -c 'git ls-files scripts/*.sh .github/*.sh | LC_ALL=C sort -u'`, String))
     occursin("scripts/check.sh", shell_list) || die("self-test: shellcheck pathspec missing check.sh")
     occursin(".github/jetls-check.sh", strip(read(`bash -c 'git ls-files .github/*.sh'`, String))) ||
@@ -1749,9 +1769,10 @@ function runtest_rel_from_joinpath(node, prefix::AbstractString)
     parts = String[]
     for i in 2:numchildren(node)
         v = string_literal_value(node[i])
-        v === nothing && return nothing
+        v === nothing && continue
         push!(parts, v)
     end
+    isempty(parts) && return nothing
     rel = join(parts, '/')
     if !isempty(prefix)
         return prefix * rel
@@ -1759,6 +1780,26 @@ function runtest_rel_from_joinpath(node, prefix::AbstractString)
         return rel
     end
     return nothing
+end
+
+function runtests_reachable(prefix::AbstractString, rt::AbstractString, tdir::AbstractString)
+    incl = Set(runtests_includes(read(rt, String), prefix))
+    queue = collect(incl)
+    while !isempty(queue)
+        rel = popfirst!(queue)
+        startswith(rel, prefix) || continue
+        suffix = rel[(length(prefix) + 1):end]
+        path = joinpath(tdir, suffix)
+        isfile(path) || continue
+        relbase = dirname(suffix)
+        sub_prefix = prefix * (isempty(relbase) || relbase == "." ? "" : replace(relbase, '\\' => '/') * "/")
+        for child in runtests_includes(read(path, String), sub_prefix)
+            child in incl && continue
+            push!(incl, child)
+            push!(queue, child)
+        end
+    end
+    return incl
 end
 
 function runtests_includes(src::AbstractString, prefix::AbstractString)
@@ -1825,22 +1866,9 @@ function lint_runtests(root::AbstractString)
     for pkg in ("DistSSHBase", "DistSSHUp", "DistSSHShip", "DistSSHHeartbeat")
         rt = joinpath(root, "lib", pkg, "test", "runtests.jl")
         isfile(rt) || continue
-        src = read(rt, String)
         prefix = "lib/" * pkg * "/test/"
-        incl = runtests_includes(src, prefix)
         tdir = joinpath(root, "lib", pkg, "test")
-        for (dir, _, files) in walkdir(tdir)
-            for file in files
-                endswith(file, ".jl") || continue
-                body = read(joinpath(dir, file), String)
-                relbase = relpath(dir, tdir)
-                base = isempty(relbase) || relbase == "." ? "" : replace(relbase, '\\' => '/') * "/"
-                for m in eachmatch(r"include\(\"([^\"]+\.jl)\"\)", body)
-                    inc = String(m.captures[1])
-                    push!(incl, prefix * base * inc)
-                end
-            end
-        end
+        incl = runtests_reachable(prefix, rt, tdir)
         for (dir, _, files) in walkdir(tdir)
             for file in files
                 endswith(file, ".jl") || continue

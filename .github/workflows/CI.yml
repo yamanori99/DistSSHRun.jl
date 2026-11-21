@@ -1565,9 +1565,25 @@ jobs:
             exit 1
           fi
           echo "version=${v}" >> "${GITHUB_OUTPUT}"
-      - uses: fredrikekre/runic-action@b4dbd650db5cc684baae27fea45d22daf41693c2 # v1.5.0
-        with:
-          version: ${{ steps.runic-pin.outputs.version }}
+      - name: Install pinned Runic app
+        id: runic-app
+        run: |
+          set -euo pipefail
+          v="${{ steps.runic-pin.outputs.version }}"
+          julia --startup-file=no -e '
+            using Pkg
+            v = ENV["RUNIC_PIN"]
+            Pkg.Apps.add(PackageSpec(
+              name = "Runic",
+              uuid = Base.UUID("62bfec6d-59d7-401d-8490-b29ee721c001"),
+              version = VersionNumber(v),
+            ))
+          '
+          bin="$(julia --startup-file=no -e 'print(joinpath(DEPOT_PATH[1], "bin", "runic"))')"
+          [[ -x "${bin}" ]] || { echo "gate: Runic app missing (${bin})" >&2; exit 1; }
+          echo "bin=${bin}" >> "${GITHUB_OUTPUT}"
+        env:
+          RUNIC_PIN: ${{ steps.runic-pin.outputs.version }}
       - name: Diff base for PR
         id: diff
         env:
@@ -1612,7 +1628,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GATE_PR_BODY_FILE: ${{ github.event_name == 'pull_request' && format('{0}/gate-pr-body.txt', runner.temp) || '' }}
           GATE_PR_PATHS_FILE: ${{ github.event_name == 'pull_request' && format('{0}/gate-pr-paths.txt', runner.temp) || '' }}
-          GATE_RUNIC_FROM_PATH: "1"
+          GATE_RUNIC_BIN: ${{ steps.runic-app.outputs.bin }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: ./scripts/gate/cheap.sh
       - name: Judge required jobs

@@ -14,6 +14,13 @@ result_of() {
   echo "${!var:-missing}"
 }
 
+# Nonempty allow_skip_reason permits a skipped job. Pass "" when the job must run.
+skip_unless() {
+  local flag="$1"
+  local reason="$2"
+  [[ "${flag}" == true ]] && echo "" || echo "${reason}"
+}
+
 judge() {
   local id="$1"
   local allow_skip_reason="${2:-}"
@@ -59,8 +66,16 @@ coverage_off="detect coverage=false"
 
 judge detect ""
 
-judge runic "${docs_scripts_off}"
-judge diff_lint_self_test "${docs_scripts_off}"
+if [[ "${heavy}" == true || "${scripts}" == true ]]; then
+  judge runic ""
+else
+  judge runic "${docs_scripts_off}"
+fi
+if [[ "${scripts}" == true ]]; then
+  judge diff_lint_self_test ""
+else
+  judge diff_lint_self_test "${docs_scripts_off}"
+fi
 
 if [[ "${heavy}" == true ]]; then
   judge jetls ""
@@ -102,44 +117,44 @@ else
   judge test-nightly "${heavy_off}"
 fi
 
-judge base-test-ubuntu "${base_off}"
-judge base-test-macos "${base_off}"
+judge base-test-ubuntu "$(skip_unless "${base}" "${base_off}")"
+judge base-test-macos "$(skip_unless "${base}" "${base_off}")"
 if [[ "${event}" == pull_request ]]; then
   judge base-test-wsl "${wsl_off}"
 else
-  judge base-test-wsl "${base_off}"
+  judge base-test-wsl "$(skip_unless "${base}" "${base_off}")"
 fi
 
-judge up-test-ubuntu "${up_off}"
-judge up-test-macos "${up_off}"
+judge up-test-ubuntu "$(skip_unless "${up}" "${up_off}")"
+judge up-test-macos "$(skip_unless "${up}" "${up_off}")"
 if [[ "${event}" == pull_request ]]; then
   judge up-test-wsl "${wsl_off}"
 else
-  judge up-test-wsl "${up_off}"
+  judge up-test-wsl "$(skip_unless "${up}" "${up_off}")"
 fi
 
-judge ship-test-ubuntu "${ship_off}"
-judge ship-test-macos "${ship_off}"
+judge ship-test-ubuntu "$(skip_unless "${ship}" "${ship_off}")"
+judge ship-test-macos "$(skip_unless "${ship}" "${ship_off}")"
 if [[ "${event}" == pull_request ]]; then
   judge ship-test-wsl "${wsl_off}"
 else
-  judge ship-test-wsl "${ship_off}"
+  judge ship-test-wsl "$(skip_unless "${ship}" "${ship_off}")"
 fi
 
-judge heartbeat-test-ubuntu "${heartbeat_off}"
-judge heartbeat-test-macos "${heartbeat_off}"
+judge heartbeat-test-ubuntu "$(skip_unless "${heartbeat}" "${heartbeat_off}")"
+judge heartbeat-test-macos "$(skip_unless "${heartbeat}" "${heartbeat_off}")"
 if [[ "${event}" == pull_request ]]; then
   judge heartbeat-test-wsl "${wsl_off}"
 else
-  judge heartbeat-test-wsl "${heartbeat_off}"
+  judge heartbeat-test-wsl "$(skip_unless "${heartbeat}" "${heartbeat_off}")"
 fi
 
-judge up-ssh-e2e "${e2e_off}"
-judge base-ssh-e2e "${e2e_off}"
-judge ship-ssh-e2e "${e2e_off}"
-judge heartbeat-ssh-e2e "${e2e_off}"
-judge ssh-e2e "${e2e_off}"
-judge queue-ssh-e2e "${queue_off}"
+judge up-ssh-e2e "$(skip_unless "${e2e}" "${e2e_off}")"
+judge base-ssh-e2e "$(skip_unless "${e2e}" "${e2e_off}")"
+judge ship-ssh-e2e "$(skip_unless "${e2e}" "${e2e_off}")"
+judge heartbeat-ssh-e2e "$(skip_unless "${e2e}" "${e2e_off}")"
+judge ssh-e2e "$(skip_unless "${e2e}" "${e2e_off}")"
+judge queue-ssh-e2e "$(skip_unless "${queue_e2e}" "${queue_off}")"
 
 # continue-on-error: failure does not fail gate when the job ran
 for id in aqua-1-14-pre aqua-nightly jetls-1-14-pre ssh-e2e-1-14-pre; do
