@@ -34,7 +34,7 @@ const TESTSUITE = Dict{String, Expr}(
             end
         end
     end
-    for rel in FILES
+        for rel in FILES
 )
 
 const INIT_WORKER = Expr(
