@@ -210,8 +210,42 @@ using Test
         end
     end
 
+    @testset "clone_url_from_local_origin" begin
+        _with_tempdir() do tmp
+            @test DistSSHBase.clone_url_from_local_origin(tmp) === nothing
+        end
+        if Sys.which("git") === nothing
+            @test_skip "git not in PATH"
+        else
+            _with_tempdir() do tmp
+                run(Cmd(["git", "-C", tmp, "init", "-q"]))
+                @test DistSSHBase.clone_url_from_local_origin(tmp) === nothing
+            end
+            _with_tempdir() do tmp
+                run(Cmd(["git", "-C", tmp, "init", "-q"]))
+                run(Cmd(["git", "-C", tmp, "config", "user.email", "test@example.com"]))
+                run(Cmd(["git", "-C", tmp, "config", "user.name", "Test"]))
+                write(joinpath(tmp, "f.txt"), "x")
+                run(Cmd(["git", "-C", tmp, "add", "f.txt"]))
+                run(Cmd(["git", "-C", tmp, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "init"]))
+                objects = joinpath(tmp, ".git", "objects")
+                chmod(objects, 0o000)
+                try
+                    err = try
+                        DistSSHBase.clone_url_from_local_origin(tmp)
+                        ""
+                    catch e
+                        e isa ArgumentError ? e.msg : sprint(showerror, e)
+                    end
+                    @test occursin("git failed in", err)
+                finally
+                    chmod(objects, 0o755)
+                end
+            end
+        end
+    end
+
     _with_tempdir() do tmp
-        @test DistSSHBase.clone_url_from_local_origin(tmp) === nothing
         if Sys.which("git") === nothing
             @test_skip "git not in PATH"
         else

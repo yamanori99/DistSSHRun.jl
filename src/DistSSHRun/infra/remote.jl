@@ -529,21 +529,36 @@ function _warn_git_worktree_ship!(project::AbstractString)
     return nothing
 end
 
-"""Get local git commit hash (`short=nothing` → full hash, else `git rev-parse --short`)."""
+"""
+Local git commit hash (`short=nothing` → full hash, else `git rev-parse --short`).
+
+`nothing` when `proj_dir` is not a work tree or has no commit yet.
+Throws when git fails on a tree that has `.git` metadata.
+"""
 function get_local_git_hash(proj_dir::AbstractString; short::Union{Nothing, Int} = nothing)::Union{Nothing, String}
-    _host_tool_present("git") || return nothing
     resolved = canonical_local_path(proj_dir)
-    try
-        cmd = if short === nothing
-            _git_cmd(["-C", resolved, "rev-parse", "HEAD"])
-        else
-            _git_cmd(["-C", resolved, "rev-parse", "--short=$(short)", "HEAD"])
-        end
-        s = strip(read(pipeline(cmd; stderr = devnull), String))
-        return isempty(s) ? nothing : s
-    catch
+    if !_host_tool_present("git")
+        _ancestor_dot_git_entry(resolved) &&
+            throw(ArgumentError(explain_host_tool_missing("git")))
         return nothing
     end
+    inside, icode, idetail = _git_read_local(resolved, ["rev-parse", "--is-inside-work-tree"])
+    if icode != 0
+        _git_absent_plain_directory(icode, idetail, resolved) && return nothing
+        throw(ArgumentError(explain_git_work_tree_failed(resolved, icode, idetail)))
+    end
+    inside == "true" || return nothing
+    args = if short === nothing
+        ["rev-parse", "HEAD"]
+    else
+        ["rev-parse", "--short=$(short)", "HEAD"]
+    end
+    out, code, detail = _git_read_local(resolved, args)
+    if code == 0
+        return isempty(out) ? nothing : out
+    end
+    code == 128 && _git_missing_head(detail) && return nothing
+    throw(ArgumentError(explain_git_work_tree_failed(resolved, code, detail)))
 end
 
 """True when `path` names only DistSSHRun / Queue state under the project tree."""
@@ -565,42 +580,30 @@ end
 Untracked or modified paths under `.distssh/`, legacy `.distsshkit/`, and
 `.distsshqueue/` are ignored (same rule as [`git_source_snapshot`](@ref)).
 
-Returns `true` if clean, if `git` is missing, or if `proj_dir` is not a git work tree.
-If this is a work tree but `git status` fails, returns `false` so `--require-git` /
-`setup check` still warn. This check does not block a run."""
+Returns `true` when `proj_dir` is not a git work tree (or git is absent and no `.git` metadata).
+Throws when git fails on a tree that has `.git` metadata."""
 function local_git_clean(proj_dir::AbstractString)::Bool
-    _host_tool_present("git") || return true
     resolved = canonical_local_path(proj_dir)
-    inside = try
-        strip(
-            read(
-                pipeline(
-                    _git_cmd(["-C", resolved, "rev-parse", "--is-inside-work-tree"]);
-                    stderr = devnull,
-                ), String
-            )
-        )
-    catch
+    if !_host_tool_present("git")
+        _ancestor_dot_git_entry(resolved) &&
+            throw(ArgumentError(explain_host_tool_missing("git")))
         return true
+    end
+    inside, icode, idetail = _git_read_local(resolved, ["rev-parse", "--is-inside-work-tree"])
+    if icode != 0
+        _git_absent_plain_directory(icode, idetail, resolved) && return true
+        throw(ArgumentError(explain_git_work_tree_failed(resolved, icode, idetail)))
     end
     inside == "true" || return true
-    try
-        result = strip(
-            read(
-                pipeline(_git_cmd(["-C", resolved, "status", "--porcelain"]); stderr = devnull),
-                String,
-            ),
-        )
-        isempty(result) && return true
-        for line in split(result, '\n'; keepempty = false)
-            ncodeunits(line) < 4 && return false
-            path = line[4:end]
-            _git_worktree_kit_path(path) || return false
-        end
-        return true
-    catch
-        return false
+    result, code, detail = _git_read_local(resolved, ["status", "--porcelain"])
+    code != 0 && throw(ArgumentError(explain_git_work_tree_failed(resolved, code, detail)))
+    isempty(result) && return true
+    for line in split(result, '\n'; keepempty = false)
+        ncodeunits(line) < 4 && return false
+        path = line[4:end]
+        _git_worktree_kit_path(path) || return false
     end
+    return true
 end
 
 
