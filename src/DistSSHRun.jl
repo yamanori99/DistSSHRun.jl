@@ -90,6 +90,7 @@ export kit_result_from_dir
 export drive_host_status
 export parse_go_args
 export parse_drive_args
+export ProcessEnv, snapshot_process_env
 export ssh_opts
 export run_on_host
 export resolve_controller_julia
@@ -104,6 +105,7 @@ export julia_sysimage_is_default
 export resolve_pkg_env
 export explain_script_not_found
 public DoctorReport, doctor!, parse_doctor_args
+public with_kit_invocation_env!
 # Display helpers stay public and are not exported. DistSSHKit 0.11 drops them.
 public print_pool
 public print_hostinfo
@@ -181,6 +183,7 @@ using .DistSSHUp: julia_version_mismatch_kind, juliaup_add_host!, juliaup_align_
 include("DistSSHRun/messages/display.jl")
 include("DistSSHRun/messages/errors.jl")
 include("DistSSHRun/messages/placement.jl")
+include("DistSSHRun/options/process_env.jl")
 include("DistSSHRun/options/table.jl")
 include("DistSSHRun/options/config.jl")
 include("DistSSHRun/options/cli_consume.jl")

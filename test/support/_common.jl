@@ -144,6 +144,7 @@ if !isdefined(@__MODULE__, :_test_root)
     # A function, not a `const` inside this `if`: JETLS reports that `const` as an undefined global.
     function _distsshrun_short_skip_paths()
         return (
+            "unit/DistSSHRun/options/process_env.jl",
             "unit/DistSSHRun/core/drive/workers.jl",
             "unit/DistSSHRun/execute.jl",
             "unit/DistSSHRun/core/setup/checks.jl",

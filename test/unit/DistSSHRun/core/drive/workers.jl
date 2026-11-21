@@ -626,7 +626,7 @@ end
 
 @testset "drive heartbeat" begin
     @testset "resolve_drive_heartbeat_policy" begin
-        empty_env = Dict{String, String}()
+        empty_env = DistSSHRun.ProcessEnv(Dict{String, String}())
         cfg = DistSSHRun.resolve_drive_heartbeat_policy(
             env = empty_env,
             self_exit = false
@@ -635,9 +635,11 @@ end
         @test cfg.interval == 30.0
         @test cfg.deadline === nothing
         cfg = DistSSHRun.resolve_drive_heartbeat_policy(
-            env = Dict(
-                "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "2",
-                "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "9"
+            env = DistSSHRun.ProcessEnv(
+                Dict(
+                    "DISTRIBUTED_HEARTBEAT_INTERVAL_SEC" => "2",
+                    "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "9"
+                )
             ),
             self_exit = true
         )
@@ -649,12 +651,14 @@ end
             self_exit = true
         )
         @test_throws ArgumentError DistSSHRun.resolve_drive_heartbeat_policy(
-            env = Dict("DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1")
+            env = DistSSHRun.ProcessEnv(Dict("DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1"))
         )
         pol = DistSSHRun.resolve_drive_heartbeat_policy(
-            env = Dict(
-                "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1",
-                "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "7"
+            env = DistSSHRun.ProcessEnv(
+                Dict(
+                    "DISTSSH_UNSAFE_MASTER_SILENCE_EXIT" => "1",
+                    "DISTRIBUTED_HEARTBEAT_DEADLINE_SEC" => "7"
+                )
             )
         )
         @test pol.self_exit

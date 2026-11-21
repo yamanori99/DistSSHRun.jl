@@ -43,7 +43,7 @@ function _resolve_bool_field(;
         cli::Union{Nothing, Bool},
         env::Union{Nothing, String},
         default::Bool,
-        env_dict::AbstractDict = ENV,
+        env_dict::ProcessEnv,
     )::BoolConfigField
     if cli !== nothing
         return BoolConfigField(cli, FromCLI)
@@ -59,7 +59,7 @@ function _resolve_string_field(
         cli::Union{Nothing, AbstractString},
         env::Union{Nothing, String},
         default::AbstractString;
-        env_dict::AbstractDict = ENV,
+        env_dict::ProcessEnv,
     )::StringConfigField
     if cli !== nothing
         s = strip(String(cli))
@@ -82,7 +82,7 @@ end
         cli_print_config = nothing,
         cli_dry_run = nothing,
         cli_topology = nothing,
-        env = ENV,
+        env::ProcessEnv,
     ) -> RunJobConfig
 
 Precedence: CLI, then environment, then default. Per-host `bind` comes from
@@ -98,7 +98,7 @@ function resolve_run_job_config(;
         cli_print_config::Union{Nothing, Bool} = nothing,
         cli_dry_run::Union{Nothing, Bool} = nothing,
         cli_topology::Union{Nothing, AbstractString} = nothing,
-        env::AbstractDict{<:Any, <:Any} = ENV,
+        env::ProcessEnv,
     )::RunJobConfig
     command in RUN_JOB_COMMANDS ||
         throw(ArgumentError("resolve_run_job_config: unsupported command $(repr(command))"))
@@ -290,6 +290,7 @@ end
 
 """Build [`RunJobConfig`](@ref) from a go / drive parse result."""
 function resolve_run_job_config_from_parsed(parsed; command::Symbol)::RunJobConfig
+    env = parsed.cli_session.process_env
     return resolve_run_job_config(;
         command,
         cli_unsafe_skip_env_digests = _cli_bool(parsed, :unsafe_skip_env_digests),
@@ -298,6 +299,7 @@ function resolve_run_job_config_from_parsed(parsed; command::Symbol)::RunJobConf
         cli_unsafe_master_silence_exit = _cli_bool(parsed, :unsafe_master_silence_exit),
         cli_print_config = _cli_bool(parsed, :print_config),
         cli_dry_run = _cli_bool(parsed, :dry_run),
+        env,
     )
 end
 

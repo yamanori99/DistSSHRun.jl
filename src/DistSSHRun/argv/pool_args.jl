@@ -52,7 +52,7 @@ function show_pool_usage(; io::IO = stdout)
     return nothing
 end
 
-function parse_pool_args(args::Vector{String})
+function parse_pool_args(args::Vector{String}; env::ProcessEnv = snapshot_process_env())
     _reject_unknown_cli_options(
         args,
         "pool";
@@ -69,7 +69,7 @@ function parse_pool_args(args::Vector{String})
         ),
         prefixes = ("--local:", "-l:"),
     )
-    cli_session, args = peel_shared_cli_flags(args)
+    cli_session, args = peel_shared_cli_flags(args; env = env)
     include_parent = false
     hosts = String[]
 

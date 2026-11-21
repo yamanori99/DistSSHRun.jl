@@ -27,7 +27,8 @@ using Test, DistSSHRun
         let old = get(ENV, "DISTSSH_UNSAFE_SKIP_ENV_DIGESTS", nothing)
             try
                 ENV["DISTSSH_UNSAFE_SKIP_ENV_DIGESTS"] = "1"
-                cfg = DistSSHRun.resolve_run_job_config(; command = :go)
+                pe = DistSSHRun.snapshot_process_env()
+                cfg = DistSSHRun.resolve_run_job_config(; command = :go, env = pe)
                 @test cfg.unsafe_skip_env_digests.value == true
                 @test cfg.unsafe_skip_env_digests.source == DistSSHRun.FromEnv
             finally
@@ -41,9 +42,11 @@ using Test, DistSSHRun
         let old = get(ENV, "DISTSSH_UNSAFE_SKIP_ENV_DIGESTS", nothing)
             try
                 ENV["DISTSSH_UNSAFE_SKIP_ENV_DIGESTS"] = "1"
+                pe = DistSSHRun.snapshot_process_env()
                 cfg = DistSSHRun.resolve_run_job_config(;
                     command = :go,
-                    cli_unsafe_skip_env_digests = false
+                    cli_unsafe_skip_env_digests = false,
+                    env = pe,
                 )
                 @test cfg.unsafe_skip_env_digests.value == false
                 @test cfg.unsafe_skip_env_digests.source == DistSSHRun.FromCLI
@@ -68,10 +71,12 @@ using Test, DistSSHRun
     end
 
     @testset "dry-run per-host launch" begin
-        let cfg = DistSSHRun.resolve_run_job_config(;
+        let pe = DistSSHRun.snapshot_process_env(),
+                cfg = DistSSHRun.resolve_run_job_config(;
                 command = :go,
                 cli_dry_run = true,
                 cli_unsafe_expose_port = true,
+                env = pe,
             ),
                 buf = IOBuffer()
             DistSSHRun.print_run_job_dry_plan!(
@@ -91,10 +96,12 @@ using Test, DistSSHRun
             @test occursin("bind=10.0.0.2", txt)
             @test !occursin("phase 4", txt)
         end
-        let cfg = DistSSHRun.resolve_run_job_config(;
+        let pe = DistSSHRun.snapshot_process_env(),
+                cfg = DistSSHRun.resolve_run_job_config(;
                 command = :drive,
                 cli_dry_run = true,
                 cli_unsafe_expose_port = true,
+                env = pe,
             ),
                 buf = IOBuffer()
             DistSSHRun.print_run_job_dry_plan!(
@@ -110,9 +117,11 @@ using Test, DistSSHRun
             @test occursin("placement = [\"2*alice@lab:2222\"]", txt)
             @test occursin("alice@lab:2222:", txt)
         end
-        let cfg = DistSSHRun.resolve_run_job_config(;
+        let pe = DistSSHRun.snapshot_process_env(),
+                cfg = DistSSHRun.resolve_run_job_config(;
                 command = :go,
                 cli_dry_run = true,
+                env = pe,
             )
             @test_throws ArgumentError DistSSHRun.print_run_job_dry_plan!(
                 IOBuffer(),
@@ -127,9 +136,11 @@ using Test, DistSSHRun
     end
 
     @testset "dry-run hosts_source" begin
-        let cfg = DistSSHRun.resolve_run_job_config(;
+        let pe = DistSSHRun.snapshot_process_env(),
+                cfg = DistSSHRun.resolve_run_job_config(;
                 command = :go,
-                cli_dry_run = true
+                cli_dry_run = true,
+                env = pe,
             ),
                 buf = IOBuffer()
             DistSSHRun.print_run_job_dry_plan!(
@@ -144,9 +155,11 @@ using Test, DistSSHRun
             txt = String(take!(buf))
             @test occursin("hosts_source = \"--hosts\"", txt)
         end
-        let cfg = DistSSHRun.resolve_run_job_config(;
+        let pe = DistSSHRun.snapshot_process_env(),
+                cfg = DistSSHRun.resolve_run_job_config(;
                 command = :go,
-                cli_dry_run = true
+                cli_dry_run = true,
+                env = pe,
             ),
                 buf = IOBuffer()
             DistSSHRun.print_run_job_dry_plan!(

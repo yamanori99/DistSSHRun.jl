@@ -347,7 +347,7 @@ function init_drive_workers!(
         writeln_both("")
 
         policy = heartbeat === nothing ?
-            resolve_drive_heartbeat_policy() :
+            resolve_drive_heartbeat_policy(env = invocation_process_env()) :
             heartbeat
         owned_live = DistSSHRun._live_owned_worker_ids()
         if policy.self_exit && !isempty(owned_live)

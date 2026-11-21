@@ -91,20 +91,21 @@ function _append_drive_api_script_args!(out::Vector{String}, script_args)
 end
 
 """Parse `drive` CLI arguments (same shape as other kit CLI parsers)."""
-function parse_drive_args(args::Vector{String})
+function parse_drive_args(args::Vector{String}; env::ProcessEnv = snapshot_process_env())
     args = copy(args)
     forced_script_args = _take_drive_api_script_args!(args)
     blob_path, args = peel_job_blob_bootstrap(args)
     if blob_path !== nothing
         scrub_detached_placement_env!()
+        env = snapshot_process_env()
         blob = read_detached_job_blob(blob_path)
         blob.kind === :drive || throw(
             ArgumentError("job blob kind is $(blob.kind); expected drive"),
         )
-        return drive_parsed_from_detached_job_blob(blob; hint_surface = :cli)
+        return drive_parsed_from_detached_job_blob(blob; hint_surface = :cli, process_env = env)
     end
     reject_mistaken_short_placement_flags!(args; command = :drive)
-    cli_session, args = peel_shared_cli_flags(args)
+    cli_session, args = peel_shared_cli_flags(args; env = env)
     cli_session.head_slots !== nothing &&
         throw(ArgumentError("drive uses --head-workers, not --head-slots"))
     head_workers = 0
@@ -123,14 +124,14 @@ function parse_drive_args(args::Vector{String})
     require_git = false
     best_effort = false
     best_effort_cli = false
-    if haskey(ENV, "DISTSSH_REQUIRE_ALL_HOSTS")
+    if haskey(env, "DISTSSH_REQUIRE_ALL_HOSTS")
         throw(
             ArgumentError(
                 "drive: DISTSSH_REQUIRE_ALL_HOSTS was removed in 0.2.0; listed hosts must join by default, or pass --best-effort",
             ),
         )
     end
-    if haskey(ENV, "DISTSSH_BEST_EFFORT")
+    if haskey(env, "DISTSSH_BEST_EFFORT")
         throw(
             ArgumentError(
                 "drive: DISTSSH_BEST_EFFORT was removed in 0.2.0; pass --best-effort on the CLI instead",
@@ -302,7 +303,7 @@ function parse_drive_args(args::Vector{String})
             isempty(tree_hosts) && throw(ArgumentError("`$(flag)` requires at least one HOST after ROOT"))
             apply_shared_cli_flags!(cli_session)
             if julia_exe === nothing
-                env_val = get(ENV, "JULIA_DISTRIBUTED_EXE", "auto")
+                env_val = get(env, "JULIA_DISTRIBUTED_EXE", "auto")
                 julia_exe = env_val == "auto" ? nothing : env_val
             elseif julia_exe == "auto"
                 julia_exe = nothing
@@ -379,7 +380,7 @@ function parse_drive_args(args::Vector{String})
     end
 
     if julia_exe === nothing
-        env_val = get(ENV, "JULIA_DISTRIBUTED_EXE", "auto")
+        env_val = get(env, "JULIA_DISTRIBUTED_EXE", "auto")
         julia_exe = env_val == "auto" ? nothing : env_val
     elseif julia_exe == "auto"
         julia_exe = nothing
@@ -390,7 +391,7 @@ function parse_drive_args(args::Vector{String})
     end
 
     if !run_opts.unsafe_master_silence_exit &&
-            _env_flag(UNSAFE_MASTER_SILENCE_EXIT_ENV)
+            _env_flag(UNSAFE_MASTER_SILENCE_EXIT_ENV, env)
         run_opts.unsafe_master_silence_exit = true
     end
 
@@ -399,7 +400,7 @@ function parse_drive_args(args::Vector{String})
         lw = cli_session.head_workers::Int
         head_workers = _drive_set_head_workers!(head_workers, lw, "--head-workers")
     else
-        env_lw = tryparse(Int, strip(get(ENV, "DISTSSH_HEAD_WORKERS", "")))
+        env_lw = tryparse(Int, strip(get(env, "DISTSSH_HEAD_WORKERS", "")))
         env_lw !== nothing &&
             (head_workers = _drive_set_head_workers!(head_workers, env_lw, "DISTSSH_HEAD_WORKERS"))
     end
