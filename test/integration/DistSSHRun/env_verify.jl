@@ -942,7 +942,7 @@ function _env_run_id_shipped_run_verify_tests()
             _with_tempdir() do proj
                 _env_verify_job!(proj)
                 rec = Dict{String, Any}(
-                    "schema" => 1,
+                    "writer" => DistSSHRun.run_record_writer(),
                     "mode" => "ship-tree",
                     "run_id" => rid,
                     "project_hash" => "a"^64,

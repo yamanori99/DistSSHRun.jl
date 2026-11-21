@@ -978,8 +978,7 @@ function _assemble_provenance(project::AbstractString)::Dict{String, Any}
         _project_provenance(proj)
     end
     data = Dict{String, Any}(
-        "schema" => 1,
-        "writer" => "DistSSHRun $(dist_ssh_kit_version())",
+        "writer" => run_record_writer(),
         "julia" => Dict{String, Any}("parent" => julia),
         "machine" => Dict{String, Any}("parent" => machine),
         "workers" => started ? _worker_section() : Any[],

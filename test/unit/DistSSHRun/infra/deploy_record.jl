@@ -6,7 +6,7 @@ using Base.Threads
     body = sprint(
         TOML.print,
         Dict(
-            "schema" => 1,
+            "writer" => DistSSHRun.run_record_writer(),
             "deploy_id" => "20260101T000000Z-aaaaaa",
             "mode" => "ship-tree",
             "snapshot_id" => "20260101T000000Z-aaaaaa",
@@ -19,7 +19,7 @@ using Base.Threads
     both = sprint(
         TOML.print,
         Dict(
-            "schema" => 1,
+            "writer" => DistSSHRun.run_record_writer(),
             "deploy_id" => "20260102T000000Z-bbbbbb",
             "mode" => "ship-tree",
             "run_id" => "20260102T000000Z-bbbbbb",
@@ -44,7 +44,7 @@ end
             commit_sha = "a"^40,
             dirty = false
         )
-        @test rec["schema"] == 1
+        @test rec["writer"] == DistSSHRun.run_record_writer()
         @test rec["mode"] == "git-sync"
         @test rec["deploy_id"] == "a"^40
         @test haskey(rec, "manifest_hash")
@@ -60,9 +60,9 @@ end
 end
 
 @testset "deploy record equivalence" begin
-    a = Dict("schema" => 1, "deploy_id" => "x", "mode" => "git-sync")
-    b = Dict("schema" => 1, "deploy_id" => "x", "mode" => "git-sync")
-    c = Dict("schema" => 1, "deploy_id" => "y", "mode" => "git-sync")
+    a = Dict("writer" => DistSSHRun.run_record_writer(), "deploy_id" => "x", "mode" => "git-sync")
+    b = Dict("writer" => DistSSHRun.run_record_writer(), "deploy_id" => "x", "mode" => "git-sync")
+    c = Dict("writer" => DistSSHRun.run_record_writer(), "deploy_id" => "y", "mode" => "git-sync")
     @test DistSSHRun._deploy_records_equivalent(a, b)
     @test !DistSSHRun._deploy_records_equivalent(a, c)
 end
@@ -76,7 +76,7 @@ end
 
 @testset "provenance deploy slice" begin
     rec = Dict(
-        "schema" => 1,
+        "writer" => DistSSHRun.run_record_writer(),
         "mode" => "ship-tree",
         "deploy_id" => "20260101T000000Z-aaaaaa",
         "run_id" => "20260101T000000Z-aaaaaa"
@@ -149,7 +149,7 @@ end
             pack = DistSSHRun._pack_project_tree(proj)
             rm(pack.directory; recursive = true, force = true)
             rec = Dict(
-                "schema" => 1,
+                "writer" => DistSSHRun.run_record_writer(),
                 "mode" => "ship-tree",
                 "deploy_id" => "rid",
                 "content_tree_hash" => "f"^40
@@ -212,7 +212,7 @@ end
         remote = joinpath(state, "remote")
         body = sprint(
             TOML.print, Dict(
-                "schema" => 1,
+                "writer" => DistSSHRun.run_record_writer(),
                 "deploy_id" => "a"^40,
                 "mode" => "git-sync",
                 "commit_sha" => "a"^40
@@ -267,7 +267,7 @@ end
                 sprint(
                     TOML.print,
                     Dict(
-                        "schema" => 1,
+                        "writer" => DistSSHRun.run_record_writer(),
                         "deploy_id" => deploy_id,
                         "mode" => "git-sync",
                         "commit_sha" => deploy_id
@@ -310,7 +310,7 @@ end
             sprint(
                 TOML.print,
                 Dict(
-                    "schema" => 1,
+                    "writer" => DistSSHRun.run_record_writer(),
                     "deploy_id" => "a"^40,
                     "mode" => "git-sync",
                     "commit_sha" => "a"^40
@@ -359,7 +359,7 @@ end
         local_mh = DistSSHRun._deploy_record_manifest_hash(proj)
         local_mh === nothing && error("expected manifest hash")
         rec = Dict(
-            "schema" => 1,
+            "writer" => DistSSHRun.run_record_writer(),
             "mode" => "ship-tree",
             "deploy_id" => "rid",
             "manifest_hash" => "f"^length(local_mh)

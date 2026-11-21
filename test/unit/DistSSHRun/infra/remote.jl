@@ -313,6 +313,7 @@ end
         @test occursin("_dsk_first_unowned_stamp", script)
         @test occursin("DistSSHRun ", script)
         owned_sh = DistSSHRun._remote_run_toml_owned_check_sh()
+        @test occursin(DistSSHRun._run_toml_writer_awk_ere(), owned_sh)
         @test occursin("/^[ \\t]*\\[/", owned_sh)
         @test occursin("mktemp", owned_sh)
         @test occursin("NR>1", owned_sh)
@@ -615,7 +616,7 @@ end
             root = joinpath(d, "app")
             leaf = joinpath(root, "runs", "20260101T000000Z-abcd")
             mkpath(leaf)
-            owned = "schema = 1\nwriter = \"DistSSHRun 1.0\"\nkind = \"ship\"\n"
+            owned = DistSSHRun._ship_run_leaf_stamp_toml()
             for extra in (
                     "note = \"unterminated\n",
                     "nums = [1, 2\n",

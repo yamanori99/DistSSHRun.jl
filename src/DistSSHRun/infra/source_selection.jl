@@ -1,12 +1,9 @@
 # Explicit source selection, local ship record, and host validation.
 # Run IDs are remote `runs/<run_id>/` leaves under the resolved deploy root.
 
-const _SHIP_RECORD_SCHEMA_VERSION = 1
-const _SHIP_RECORD_SCHEMA_ERROR = """
-last-ship record is missing schema_version or uses an old format.
+const _LAST_SHIP_WRITER_FIX = """
 Rewrite or delete the file under `.distssh/` (legacy `last-snapshot.toml` is not read).
-Ship again, or pass an explicit run id instead of the convenience record.
-"""
+Ship again, or pass an explicit run id instead of the convenience record."""
 const _SHIP_RECORD_NAME = "last-ship.toml"
 const _SHIP_RECORD_LOCK = ReentrantLock()
 
@@ -140,14 +137,24 @@ function _read_last_ship_record_at(path::AbstractString)::Union{Nothing, Dict{St
     catch
         throw(ArgumentError("last-ship record at $(path) is not valid TOML"))
     end
-    raw isa AbstractDict || throw(ArgumentError(_SHIP_RECORD_SCHEMA_ERROR))
-    if haskey(raw, "schema") && !haskey(raw, "schema_version")
-        throw(ArgumentError(_SHIP_RECORD_SCHEMA_ERROR))
-    end
-    ver = get(raw, "schema_version", nothing)
-    ver isa Integer || throw(ArgumentError(_SHIP_RECORD_SCHEMA_ERROR))
-    Int(ver) == _SHIP_RECORD_SCHEMA_VERSION ||
-        throw(ArgumentError("last-ship record schema_version=$(ver) is not supported (expected $(_SHIP_RECORD_SCHEMA_VERSION))"))
+    raw isa AbstractDict || throw(ArgumentError("last-ship record is not a table"))
+    writer = get(raw, "writer", nothing)
+    kind = DistSSHBase.record_writer_minor_match(
+        writer,
+        _RUN_RECORD_PACKAGE,
+        dist_ssh_kit_version(),
+    )
+    kind == :ok || throw(
+        ArgumentError(
+            DistSSHBase.record_writer_mismatch_message(
+                kind,
+                writer,
+                _RUN_RECORD_PACKAGE,
+                dist_ssh_kit_version();
+                fix = _LAST_SHIP_WRITER_FIX,
+            ),
+        ),
+    )
     out = Dict{String, Any}(String(k) => v for (k, v) in raw)
     rid = get(out, "run_id", nothing)
     rid isa AbstractString || throw(ArgumentError("last-ship record is missing run_id"))
@@ -164,7 +171,11 @@ function read_last_ship_record(
         )
         legacy = joinpath(base, _LEGACY_SHIP_RECORD_NAME)
         if isfile(legacy)
-            throw(ArgumentError(_SHIP_RECORD_SCHEMA_ERROR))
+            throw(
+                ArgumentError(
+                    "last-ship record uses legacy name last-snapshot.toml. $_LAST_SHIP_WRITER_FIX",
+                ),
+            )
         end
         rec = _read_last_ship_record_at(joinpath(base, _SHIP_RECORD_NAME))
         rec !== nothing && return rec
@@ -206,7 +217,7 @@ function write_last_ship_record!(
     aliases = _sorted_host_aliases(hosts)
     isempty(aliases) && throw(ArgumentError("last-ship record needs at least one host"))
     data = Dict{String, Any}(
-        "schema_version" => _SHIP_RECORD_SCHEMA_VERSION,
+        "writer" => run_record_writer(),
         "deploy_root" => _normalize_deploy_root(deploy_root),
         "hosts" => aliases,
         "run_id" => rid,
@@ -303,6 +314,7 @@ function _ship_run_complete_probe_script(
     lq = _remote_shell_path_word(leaf)
     sq = _remote_shell_path_word(src)
     tq = _remote_shell_path_word(stamp)
+    w_ere = _run_toml_writer_line_ere()
     return """
     # __DSR_SNAP_COMPLETE__
     if test ! -d $lq; then
@@ -313,22 +325,17 @@ function _ship_run_complete_probe_script(
       printf 'legacy\\n'
       exit 0
     fi
-    n_schema=\$(grep -c '^schema = ' $tq || true)
     n_writer=\$(grep -c '^writer = ' $tq || true)
     n_kind=\$(grep -c '^kind = ' $tq || true)
     n_complete=\$(grep -c '^complete = ' $tq || true)
     n_algo=\$(grep -c '^algorithm = ' $tq || true)
     n_hash=\$(grep -c '^content_tree_hash = ' $tq || true)
-    if [ "\$n_schema" != 1 ] || [ "\$n_writer" != 1 ] || [ "\$n_kind" != 1 ] ||
+    if [ "\$n_writer" != 1 ] || [ "\$n_kind" != 1 ] ||
        [ "\$n_complete" != 1 ] || [ "\$n_algo" != 1 ] || [ "\$n_hash" != 1 ]; then
       printf 'stamp\\n'
       exit 0
     fi
-    if ! grep -Eq '^schema = 1\$' $tq; then
-      printf 'stamp\\n'
-      exit 0
-    fi
-    if ! grep -Eq '^writer = "DistSSHRun [^"]*"\$' $tq; then
+    if ! grep -Eq '$w_ere' $tq; then
       printf 'stamp\\n'
       exit 0
     fi
@@ -707,7 +714,7 @@ function _controller_collect_source()
     )
     _kit_run_toml_owned(raw) || throw(
         _selection_error(
-            "controller run.toml is not a DistSSHRun schema 1 stamp; refusing collect recovery",
+            "controller run.toml is not a DistSSHRun-owned stamp (writer major.minor); refusing collect recovery",
         ),
     )
     prov = get(raw, "provenance", nothing)

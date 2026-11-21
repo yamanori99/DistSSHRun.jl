@@ -1,6 +1,5 @@
 # Remote deploy record (`.distssh/deploy.toml`) written by setup, read by run.
 
-const _DEPLOY_RECORD_SCHEMA = 1
 const _DEPLOY_RECORD_DIR = ".distssh"
 const _DEPLOY_RECORD_NAME = "deploy.toml"
 const _DEPLOY_RECORD_TMP_TAIL = ".tmp"
@@ -79,7 +78,7 @@ function _deploy_record_timestamp()::String
 end
 
 """
-Build a schema-1 deploy record table (not yet written).
+Build a deploy record table (not yet written).
 """
 function build_deploy_record(
         project::AbstractString,
@@ -95,7 +94,7 @@ function build_deploy_record(
         forced_ignore_ship::Union{Nothing, AbstractVector} = nothing,
     )::Dict{String, Any}
     data = Dict{String, Any}(
-        "schema" => _DEPLOY_RECORD_SCHEMA,
+        "writer" => run_record_writer(),
         "deploy_id" => String(deploy_id),
         "mode" => _deploy_mode_string(mode),
         "dirty" => dirty,
@@ -163,8 +162,12 @@ function _parse_deploy_record_body(body::AbstractString)::Union{Nothing, Dict{St
     try
         raw = TOML.parse(s)
         raw isa AbstractDict || return nothing
-        schema = get(raw, "schema", nothing)
-        schema isa Integer && schema == _DEPLOY_RECORD_SCHEMA || return nothing
+        writer = get(raw, "writer", nothing)
+        DistSSHBase.record_writer_minor_match(
+            writer,
+            _RUN_RECORD_PACKAGE,
+            dist_ssh_kit_version(),
+        ) == :ok || return nothing
         mode = get(raw, "mode", nothing)
         mode isa AbstractString && !isempty(strip(String(mode))) || return nothing
         deploy_id = get(raw, "deploy_id", nothing)
@@ -211,7 +214,7 @@ end
 
 function _deploy_records_equivalent(a::AbstractDict, b::AbstractDict)::Bool
     keys = (
-        "schema",
+        "writer",
         "deploy_id",
         "mode",
         "commit_sha",
@@ -600,7 +603,7 @@ function _deploy_record_for_provenance(rec::Union{Nothing, AbstractDict})::Union
     rec === nothing && return nothing
     out = Dict{String, Any}()
     for k in (
-            "schema",
+            "writer",
             "deploy_id",
             "mode",
             "commit_sha",

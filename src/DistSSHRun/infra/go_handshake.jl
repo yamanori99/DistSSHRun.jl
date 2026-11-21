@@ -4,11 +4,16 @@ using Random: RandomDevice, randstring
 import SHA
 
 const _GO_HANDSHAKE_LOADER_NAME = "go-handshake.jl"
-const _GO_HANDSHAKE_FRAME_PREFIX = "DISTSSH-REPORT/1"
 const _GO_HANDSHAKE_ABORT_EXIT = 2
+const _GO_HANDSHAKE_FRAME_PREFIX = string(
+    "DISTSSH-REPORT/",
+    _LOADED_IDENTITY_KIT_VERSION.major,
+    ".",
+    _LOADED_IDENTITY_KIT_VERSION.minor,
+)
 const _GO_HANDSHAKE_FRAME_PREFIX_S = string(_GO_HANDSHAKE_FRAME_PREFIX)
 
-const _GO_HANDSHAKE_LOADER_SRC = let schema = 1,
+const _GO_HANDSHAKE_LOADER_SRC = let writer = _LOADED_WIRE_WRITER,
         run_uuid = "b568025c-2759-4ef1-8b14-17d00e2cd000",
         base_uuid = "f0a69307-14e5-4272-8c28-20680d05bac8",
         queue_uuid = "24254401-70d8-4a51-8ea4-cfab19f5bc73"
@@ -25,7 +30,7 @@ const _GO_HANDSHAKE_LOADER_SRC = let schema = 1,
         hello === nothing && exit($(_GO_HANDSHAKE_ABORT_EXIT))
         startswith(hello, "HELLO ") || error("go handshake: expected HELLO on stdin")
         nonce = strip(hello[7:end])
-        lines = String["schema=$schema"]
+        lines = String["writer=$writer"]
         function __push_slot!(component, state, version, uuid, digest, layout, probe)
             push!(lines, "component=\$(component)")
             push!(lines, "state=\$(state)")
@@ -159,7 +164,7 @@ function _go_handshake_frame_line(payload::AbstractString, nonce::AbstractString
     return string(_GO_HANDSHAKE_FRAME_PREFIX, ' ', nonce, ' ', plen, ' ', digest, ' ', hexpay)
 end
 
-"""Controller-expected DISTSSH-REPORT/1 line (test doubles and remote sh helpers)."""
+"""Controller-expected `DISTSSH-REPORT/major.minor` line (test doubles and remote sh helpers)."""
 function go_handshake_report_frame(nonce::AbstractString)::String
     slots = _controller_loaded_slots(loaded_launch_mode())
     return _go_handshake_frame_line(encode_loaded_wire_report(slots), nonce)
@@ -205,14 +210,8 @@ function _go_drain_slot_stdout!(io::IO, log_io::IO)
 end
 
 function verify_go_handshake_wire!(wire::AbstractString, site::AbstractString)
-    schema, observed = decode_loaded_wire_report(wire)
-    schema == LOADED_IDENTITY_SCHEMA || throw(
-        LoadedCodeMismatchError(
-            LoadedMismatchKind.schema_skew,
-            site,
-            "loaded identity schema=$(schema); expected $(LOADED_IDENTITY_SCHEMA)",
-        ),
-    )
+    writer, observed = decode_loaded_wire_report(wire)
+    _verify_loaded_wire_writer!(writer, site)
     mode = loaded_launch_mode()
     expected = _controller_loaded_slots(mode)
     verify_loaded_slots_match!(expected, observed, site)

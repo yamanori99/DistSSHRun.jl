@@ -13,7 +13,6 @@ function _component_id_matches_project!(mod::Module, project_file::AbstractStrin
     @test String(getproperty(id, :name)) == string(proj["name"])
     @test getproperty(id, :uuid) == Base.UUID(string(proj["uuid"]))
     @test String(getproperty(id, :version)) == string(proj["version"])
-    @test Int(getproperty(id, :schema)) == 1
     dig = String(getproperty(id, :digest))
     @test !isempty(dig)
     @test length(dig) == 64
@@ -72,8 +71,8 @@ end
             ),
         ]
         wire = DistSSHRun.encode_loaded_wire_report(slots)
-        schema, back = DistSSHRun.decode_loaded_wire_report(wire)
-        @test schema == 1
+        writer, back = DistSSHRun.decode_loaded_wire_report(wire)
+        @test writer == DistSSHRun.DistSSHBase.record_writer_string("DistSSHRun", DistSSHRun.dist_ssh_kit_version())
         @test length(back) == 2
         DistSSHRun.verify_loaded_slots_match!(slots, back, "test")
     end
@@ -104,10 +103,9 @@ end
         )
     end
 
-    @testset "schema skew" begin
-        wire = "schema=99\ncomponent=DistSSHRun\nstate=Loaded\nversion=\nuuid=b568025c-2759-4ef1-8b14-17d00e2cd000\ndigest=\nlayout=top_level\nprobe_error=\n---\n"
-        schema, _ = DistSSHRun.decode_loaded_wire_report(wire)
-        @test schema == 99
+    @testset "writer skew" begin
+        wire = "writer=DistSSHRun 0.1.0\ncomponent=DistSSHRun\nstate=Loaded\nversion=\nuuid=b568025c-2759-4ef1-8b14-17d00e2cd000\ndigest=\nlayout=top_level\nprobe_error=\n---\n"
+        @test_throws DistSSHRun.LoadedCodeMismatchError DistSSHRun.verify_go_handshake_wire!(wire, "test")
     end
 
     @testset "controller assert" begin
@@ -123,8 +121,12 @@ end
             names_after = remotecall_fetch(() -> String.(names(Main)), w)
             @test names_before == names_after
             @test !("DistSSHRun" in names_after)
-            schema, slots = DistSSHRun.decode_loaded_wire_report(wire)
-            @test schema == 1
+            writer, slots = DistSSHRun.decode_loaded_wire_report(wire)
+            @test DistSSHRun.DistSSHBase.record_writer_minor_match(
+                writer,
+                "DistSSHRun",
+                DistSSHRun.dist_ssh_kit_version(),
+            ) == :ok
             @test any(s -> s.component == :DistSSHRun && s.state == :Loaded, slots)
             @test any(s -> s.component == :DistSSHBase && s.state == :Loaded && s.layout == :bundled, slots)
         end
