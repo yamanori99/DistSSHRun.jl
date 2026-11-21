@@ -94,8 +94,8 @@ function _up_absorb_host!(hosts::Vector{String}, arg::AbstractString)
     return nothing
 end
 
-function parse_up_args(args::Vector{String})
-    cli_session, args = peel_shared_cli_flags(args)
+function parse_up_args(args::Vector{String}; env::ProcessEnv = snapshot_process_env())
+    cli_session, args = peel_shared_cli_flags(args; env = env)
     verb = ""
     channel = nothing
     hosts = String[]

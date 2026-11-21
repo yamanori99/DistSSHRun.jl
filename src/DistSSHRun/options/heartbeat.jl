@@ -53,14 +53,14 @@ function explain_heartbeat_missing_deadline(; surface::Symbol = :cli)::String
 end
 
 """
-    resolve_drive_heartbeat_policy(; env=ENV, self_exit=nothing)
+    resolve_drive_heartbeat_policy(; env, self_exit=nothing)
 
 Single resolution for drive heartbeat self-exit. Pass `self_exit=true/false` when
 the caller already merged CLI and env (drive argv). Omit it (`nothing`) to read
 `DISTSSH_UNSAFE_MASTER_SILENCE_EXIT` from `env` (API).
 """
 function resolve_drive_heartbeat_policy(;
-        env::AbstractDict{<:Any, <:Any} = ENV,
+        env::ProcessEnv,
         self_exit::Union{Nothing, Bool} = nothing,
     )
     enabled = if self_exit !== nothing
@@ -107,7 +107,7 @@ function write_heartbeat_startup_summary!(policy)
     return nothing
 end
 
-function _heartbeat_env_flag(name::AbstractString, env::AbstractDict{<:Any, <:Any})::Bool
+function _heartbeat_env_flag(name::AbstractString, env::ProcessEnv)::Bool
     raw = strip(get(env, String(name), ""))
     return raw in ("1", "true", "yes", "on")
 end

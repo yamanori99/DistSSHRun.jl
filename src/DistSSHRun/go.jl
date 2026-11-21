@@ -1022,6 +1022,7 @@ function go!(
         allow_external_symlinks::Bool = false,
         allow_mismatch = nothing,
         head_slots::Union{Nothing, Integer} = nothing,
+        env::Union{Nothing, ProcessEnv} = nothing,
     )::GoResult
     yes !== nothing && throw(
         ArgumentError(
@@ -1049,46 +1050,50 @@ function go!(
         )
     end
     _acquire_kit_inproc_run!(:go)
+    pe = env === nothing ? snapshot_process_env() : env
     old_run = get(ENV, DISTSSH_RUN_DIR_ENV, nothing)
     inherited_run = old_run isa AbstractString && !isempty(strip(old_run))
-    try
-        _reset_run_provenance!(proj)
-        _clear_active_selection!()
-        _clear_active_deploy_record_unless_run_id!(snap_arg)
-        warn_project_sshflags(proj)
-        _ensure_kit_run_dir!(:go, script_path; project = proj)
-        cfg = resolve_run_job_config(;
-            command = :go,
-            cli_unsafe_skip_env_digests = cli_optional_bool(unsafe_skip_env_digests),
-            cli_unsafe_expose_port = cli_optional_bool(unsafe_expose_port),
-            cli_unsafe_all_to_all = cli_optional_bool(unsafe_all_to_all),
-        )
-        return with_run_unsafe_options!(cfg) do
-            return _go_run!(
-                script_path,
-                proj,
-                workers,
-                remote,
-                hosts_file,
-                hosts_file_tokens_merged,
-                quiet,
-                verbosity,
-                output_dir,
-                collect_spec,
-                args,
-                path_anchor,
-                julia,
-                hint_surface,
-                original_args,
-                repeat,
-                inherited_run,
-                snap_arg,
-                head_slots,
+    return with_kit_invocation_env!(pe) do
+        try
+            _reset_run_provenance!(proj)
+            _clear_active_selection!()
+            _clear_active_deploy_record_unless_run_id!(snap_arg)
+            warn_project_sshflags(proj)
+            _ensure_kit_run_dir!(:go, script_path; project = proj)
+            cfg = resolve_run_job_config(;
+                command = :go,
+                cli_unsafe_skip_env_digests = cli_optional_bool(unsafe_skip_env_digests),
+                cli_unsafe_expose_port = cli_optional_bool(unsafe_expose_port),
+                cli_unsafe_all_to_all = cli_optional_bool(unsafe_all_to_all),
+                env = pe,
             )
+            return with_run_unsafe_options!(cfg) do
+                return _go_run!(
+                    script_path,
+                    proj,
+                    workers,
+                    remote,
+                    hosts_file,
+                    hosts_file_tokens_merged,
+                    quiet,
+                    verbosity,
+                    output_dir,
+                    collect_spec,
+                    args,
+                    path_anchor,
+                    julia,
+                    hint_surface,
+                    original_args,
+                    repeat,
+                    inherited_run,
+                    snap_arg,
+                    head_slots,
+                )
+            end
+        finally
+            _restore_kit_run_dir_env!(old_run)
+            _release_kit_inproc_run!()
         end
-    finally
-        _restore_kit_run_dir_env!(old_run)
-        _release_kit_inproc_run!()
     end
 end
 

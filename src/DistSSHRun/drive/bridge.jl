@@ -122,6 +122,7 @@ function drive_parsed_from_session(
         show_version = false,
         hosts_file = session.cli_session.hosts_file,
         hint_surface = hint_surface(session),
+        process_env = session.cli_session.process_env,
     )
     snap = run_id === nothing ? nothing : validate_run_id(run_id)
     julia_exe = if julia === nothing || strip(String(julia)) == "" ||

@@ -40,7 +40,7 @@ function show_doctor_requirements(; io::IO = stdout)
     )
 end
 
-function parse_doctor_args(args::Vector{String})
+function parse_doctor_args(args::Vector{String}; env::ProcessEnv = snapshot_process_env())
     _reject_unknown_cli_options(
         args,
         "doctor";
@@ -51,9 +51,9 @@ function parse_doctor_args(args::Vector{String})
         ),
         bare_dash = true,
     )
-    cli_session, args = peel_shared_cli_flags(args)
+    cli_session, args = peel_shared_cli_flags(args; env = env)
     deploy = false
-    julia_path = get(ENV, "JULIA_DISTRIBUTED_EXE", "auto")
+    julia_path = get(env, "JULIA_DISTRIBUTED_EXE", "auto")
     deploy_root = nothing
     run_id = nothing
     hosts = String[]

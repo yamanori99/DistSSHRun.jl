@@ -127,27 +127,29 @@ function setup!(
     bound_plan = _setup_bind_confirm_path!(session, mode, confirm_path, hosts)
     log_dir = setup_log_dir(session.project)
     step = setup_progress_step_name(mode)
-    return _with_kit_inproc_run!(:setup) do
-        apply_session_env!(session)
-        with_kit_setup_progress(
-            log_dir,
-            step;
-            path_anchor = session.project,
-        ) do
-            _setup_one!(
-                session,
-                mode;
-                repo = repo,
-                julia = julia,
-                older_days = older_days,
-                id = id,
-                run_id = snap,
-                job_id = job_id,
-                bound_plan = bound_plan,
-                allow_external_symlinks = allow_external_symlinks,
-                extra_files = extra_files,
-                allow_dirty = allow_dirty,
-            )
+    return with_kit_invocation_env!(session.cli_session.process_env) do
+        _with_kit_inproc_run!(:setup) do
+            apply_session_env!(session)
+            with_kit_setup_progress(
+                log_dir,
+                step;
+                path_anchor = session.project,
+            ) do
+                _setup_one!(
+                    session,
+                    mode;
+                    repo = repo,
+                    julia = julia,
+                    older_days = older_days,
+                    id = id,
+                    run_id = snap,
+                    job_id = job_id,
+                    bound_plan = bound_plan,
+                    allow_external_symlinks = allow_external_symlinks,
+                    extra_files = extra_files,
+                    allow_dirty = allow_dirty,
+                )
+            end
         end
     end
 end
@@ -163,8 +165,10 @@ function setup!(session::DistSSHSession, mode::Symbol, more::Symbol...; kwargs..
             )
         )
     end
-    return _with_kit_inproc_run!(:setup) do
-        _setup_bang_run_modes!(session, modes; kwargs...)
+    return with_kit_invocation_env!(session.cli_session.process_env) do
+        _with_kit_inproc_run!(:setup) do
+            _setup_bang_run_modes!(session, modes; kwargs...)
+        end
     end
 end
 

@@ -78,6 +78,7 @@ function go_main()::Cint
                 remote = get(parsed, :deploy_root, nothing),
                 hint_surface = :cli,
                 original_args = original_args,
+                env = parsed.cli_session.process_env,
             )
         catch e
             if e isa DistSSHRun.DistSSHBase.CliUsageError
