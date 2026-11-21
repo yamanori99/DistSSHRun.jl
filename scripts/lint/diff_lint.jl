@@ -1568,8 +1568,7 @@ function coderabbit_tone_errors(src::AbstractString)
     idx = findfirst(line -> startswith(line, "tone_instructions:"), lines)
     idx === nothing && return ["tone_instructions missing"]
     line = lines[idx]
-    text = ""
-    if occursin(r":\s*[>|]\s*$", line)
+    text = if occursin(r":\s*[>|]\s*$", line)
         parts = String[]
         i = idx + 1
         while i <= length(lines)
@@ -1578,11 +1577,11 @@ function coderabbit_tone_errors(src::AbstractString)
             push!(parts, strip(nxt))
             i += 1
         end
-        text = join(filter(!isempty, parts), " ")
+        join(filter(!isempty, parts), " ")
     else
         m = match(r"^tone_instructions:\s*(?:\"(.*)\"|'(.*)'|(\S.*?))\s*$", line)
         m === nothing && return ["tone_instructions is not a string"]
-        text = something(m.captures[1], m.captures[2], m.captures[3], "")
+        something(m.captures[1], m.captures[2], m.captures[3], "")
     end
     length(text) <= 250 && return String[]
     return ["tone_instructions is $(length(text)) characters. The limit is 250"]
