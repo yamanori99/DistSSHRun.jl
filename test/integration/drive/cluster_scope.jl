@@ -22,6 +22,7 @@ end
                 project = proj, head_workers = 1, remote = remote,
             )
             prev = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
+            after = nothing
             try
                 ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = keep
                 redirect_stdout(devnull) do
@@ -33,6 +34,8 @@ end
                         return :scoped
                     end
                 end
+                after = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
+                @test after == keep
             finally
                 if prev === nothing
                     delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
@@ -40,8 +43,6 @@ end
                     ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = prev
                 end
             end
-            after = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
-            @test after == keep
         end
     end
 
