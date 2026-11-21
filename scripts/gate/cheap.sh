@@ -26,14 +26,20 @@ run_step() {
 }
 
 use_julia_1_13 || exit 1
-depot="$("${JULIA[@]}" --startup-file=no -e 'print(DEPOT_PATH[1])')"
 RUNIC_COMPAT="${ROOT}/.github/runic/Project.toml"
 runic_pin="$(sed -n -E 's/^Runic = "=([^"]+)".*/\1/p' "${RUNIC_COMPAT}" | head -1)"
-runic_bin="${depot}/bin/runic"
-[[ -x "${runic_bin}" ]] || {
-  echo "cheap: Runic app missing (${runic_bin})" >&2
-  exit 1
-}
+if [[ -n "${GATE_RUNIC_FROM_PATH:-}" ]] && command -v runic >/dev/null 2>&1; then
+  runic_bin="$(command -v runic)"
+elif [[ -n "${GATE_RUNIC_BIN:-}" && -x "${GATE_RUNIC_BIN}" ]]; then
+  runic_bin="${GATE_RUNIC_BIN}"
+else
+  depot="$("${JULIA[@]}" --startup-file=no -e 'print(DEPOT_PATH[1])')"
+  runic_bin="${depot}/bin/runic"
+  [[ -x "${runic_bin}" ]] || {
+    echo "cheap: Runic app missing (${runic_bin})" >&2
+    exit 1
+  }
+fi
 
 run_step "runic ${runic_pin}" env JULIA_APPS_JULIA_CMD="${JULIA_BIN}" "${runic_bin}" --check --diff .
 
