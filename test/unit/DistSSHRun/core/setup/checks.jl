@@ -184,9 +184,11 @@ using Pkg
         !t.ssh && !t.git
     end
 
-    expr = DistSSHRun._project_deps_probe_expr()
+    expr = DistSSHRun._project_deps_probe_expr(Tuple{String, String, String}[])
     @test occursin("locate_package", expr)
     @test occursin("not instantiated", expr)
+    @test occursin("missing path", expr)
+    @test occursin("JuliaProject.toml", expr)
 
     _with_tempdir() do dir
         @test DistSSHRun.probe_project_deps(dir) == "Project.toml not found"
@@ -204,6 +206,125 @@ using Pkg
             Pkg.instantiate(; io = devnull)
         end
         @test DistSSHRun.probe_project_deps(dir) === nothing
+    end
+
+    @testset "path dependency probe" begin
+        _with_tempdir() do parent
+            root = joinpath(parent, "App")
+            mkpath(root)
+            bar = joinpath(parent, "Bar")
+            write(
+                joinpath(root, "Project.toml"),
+                "[deps]\nBar = \"11111111-1111-1111-1111-111111111111\"\n",
+            )
+            write(
+                joinpath(root, "Manifest.toml"),
+                """
+                manifest_format = "2.0"
+
+                [deps.Bar]
+                uuid = "11111111-1111-1111-1111-111111111111"
+                path = "../Bar"
+                """,
+            )
+            probed = DistSSHRun.probe_project_deps(root)
+            @test probed !== nothing
+            @test occursin("missing ../Bar", probed)
+            @test occursin("expected at", probed)
+            @test !occursin("setup instantiate", probed)
+            specs = DistSSHRun._manifest_path_probe_specs(root)
+            @test any(s -> s[2] == "../Bar", specs)
+            mkpath(bar)
+            write(joinpath(bar, "Project.toml"), "name = \"Bar\"\nuuid = \"11111111-1111-1111-1111-111111111111\"\n")
+            after = DistSSHRun.probe_project_deps(root)
+            @test after === nothing || !occursin("missing ../Bar", String(after))
+        end
+        _with_tempdir() do root
+            mkpath(joinpath(root, "pkg"))
+            write(
+                joinpath(root, "Project.toml"),
+                """
+                [workspace]
+                projects = ["pkg"]
+
+                [deps]
+                """,
+            )
+            write(
+                joinpath(root, "pkg", "Project.toml"),
+                """
+                [deps]
+                Local = "22222222-2222-2222-2222-222222222222"
+
+                [sources.Local]
+                path = "../vendor/Local"
+                """,
+            )
+            write(
+                joinpath(root, "Manifest.toml"),
+                """
+                manifest_format = "2.0"
+
+                [deps.Local]
+                uuid = "22222222-2222-2222-2222-222222222222"
+                path = "vendor/Local"
+                """,
+            )
+            specs = DistSSHRun._manifest_path_probe_specs(joinpath(root, "pkg"))
+            @test any(s -> s[2] == "../vendor/Local", specs)
+            @test any(s -> s[2] == "vendor/Local", specs)
+        end
+        _with_tempdir() do dir
+            write(
+                joinpath(dir, "Project.toml"),
+                """
+                [deps]
+                Abs = "33333333-3333-3333-3333-333333333333"
+
+                [sources.Abs]
+                path = "/opt/AbsDep"
+                """,
+            )
+            write(
+                joinpath(dir, "Manifest.toml"),
+                """
+                manifest_format = "2.0"
+
+                [deps.Abs]
+                uuid = "33333333-3333-3333-3333-333333333333"
+                path = "/opt/AbsDep"
+                """,
+            )
+            specs = DistSSHRun._manifest_path_probe_specs(dir)
+            abs_spec = only(s for s in specs if s[1] == "Abs")
+            @test abs_spec[3] == "/opt/AbsDep"
+            home_probe = joinpath(dir, "tilde")
+            mkpath(home_probe)
+            write(
+                joinpath(home_probe, "Project.toml"),
+                """
+                [deps]
+                Home = "44444444-4444-4444-4444-444444444444"
+
+                [sources.Home]
+                path = "~/MissingDep"
+                """,
+            )
+            write(
+                joinpath(home_probe, "Manifest.toml"),
+                """
+                manifest_format = "2.0"
+
+                [deps.Home]
+                uuid = "44444444-4444-4444-4444-444444444444"
+                path = "~/MissingDep"
+                """,
+            )
+            home_specs = DistSSHRun._manifest_path_probe_specs(home_probe)
+            home_spec = only(s for s in home_specs if s[1] == "Home")
+            @test home_spec[3] == "~/MissingDep"
+            @test home_spec[3] != expanduser("~/MissingDep")
+        end
     end
 
     @testset "check_prerequisites git commit missing is a warning" begin

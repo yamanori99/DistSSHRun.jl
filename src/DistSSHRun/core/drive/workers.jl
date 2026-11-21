@@ -261,13 +261,20 @@ function add_drive_workers!(
                 write_both("  ")
 
                 deps_err = DistSSHRun.probe_remote_project_deps(
-                    host_name, remote_proj; julia_path = String(host_julia),
+                    host_name,
+                    remote_proj;
+                    julia_path = String(host_julia),
+                    local_project = proj_dir,
                 )
                 if deps_err !== nothing
                     write_both("$host_name ($host_workers workers): ")
                     print_progress_err("✗ ($deps_err)")
                     writeln_both("")
-                    writeln_both("    hint: julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host_name))")
+                    if !DistSSHRun.probe_deps_is_missing_path_message(deps_err)
+                        writeln_both(
+                            "    hint: julia --project=. -m DistSSHKit setup instantiate $(setup_cli_host_token(host_name))",
+                        )
+                    end
                     push!(
                         launch_failures,
                         HostLaunchFailure(
