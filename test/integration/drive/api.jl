@@ -231,27 +231,35 @@ end
     end
 end
 
-# A script that defines `main` leaves it in `Main`. The next in-process
-# `drive!` of a script without `main` must not run the previous one.
-@testset "drive! ignores a leftover main" begin
+# Each driver hook stays in `Main` after its script. A later in-process `drive!`
+# runs only the hooks its own script defines. A hook added to
+# `_drive_script_hook_signatures` needs a definition here.
+@testset "drive! runs only this script's hooks" begin
     _mktemp_host() do proj
-        _write_host_project!(proj, "DriveLeftoverMain")
-        marker = joinpath(proj, "LEFTOVER_MAIN_RAN")
-        with_main = joinpath(proj, "with_main.jl")
-        write(
-            with_main, """
-            function main()
-                touch($(repr(marker)))
-                return nothing
-            end
-            """
-        )
-        no_main = joinpath(proj, "no_main.jl")
-        write(no_main, "no_main_loaded = true\n")
+        _write_host_project!(proj, "DriveLeftoverHooks")
+        hooks = keys(DistSSHRun._drive_script_hook_signatures(String[]))
+        marker(hook) = joinpath(proj, "RAN_$(hook)")
+        args = Dict(:init_output_dir! => "_")
+        scripts = Pair{String, Vector{Symbol}}[]
+        for hook in hooks
+            path = joinpath(proj, "with_$(hook).jl")
+            write(
+                path, """
+                function $(hook)($(get(args, hook, "")))
+                    touch($(repr(marker(hook))))
+                    return nothing
+                end
+                """
+            )
+            push!(scripts, path => [hook])
+        end
+        bare = joinpath(proj, "bare.jl")
+        write(bare, "bare_loaded = true\n")
+        push!(scripts, bare => Symbol[])
         prev_v = DistSSHRun.kit_verbosity()
         try
-            for (script, ran) in ((with_main, true), (no_main, false))
-                rm(marker; force = true)
+            for (script, defined) in scripts
+                foreach(h -> rm(marker(h); force = true), hooks)
                 res = redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
                         DistSSHRun.drive!(
@@ -262,8 +270,9 @@ end
                         )
                     end
                 end
+                delete!(ENV, "DISTRIBUTED_OUTPUT_DIR")
                 @test res.ok
-                @test isfile(marker) == ran
+                @test [h for h in hooks if isfile(marker(h))] == defined
             end
         finally
             DistSSHRun.set_kit_verbosity!(prev_v)
@@ -277,7 +286,7 @@ end
     # `include` a path that only exists after `mktempdir` + `write`.
     path = _fixture("drive_init_output.jl")
     args = String[]
-    lookup() = DistSSHRun._drive_script_init_output_dir_method(args)
+    lookup() = DistSSHRun._drive_script_hook_methods(args).init_output_dir!
     before = lookup()
     redirect_stderr(devnull) do
         Base.include(Main, path)
