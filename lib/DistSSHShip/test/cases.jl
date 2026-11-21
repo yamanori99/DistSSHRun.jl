@@ -109,8 +109,10 @@
                         false
                     catch e
                         e isa ArgumentError &&
-                            (occursin(sub_gi, sprint(showerror, e)) ||
-                                occursin(basename(dirname(sub_gi)) * "/.gitignore", sprint(showerror, e)))
+                            (
+                            occursin(sub_gi, sprint(showerror, e)) ||
+                                occursin(basename(dirname(sub_gi)) * "/.gitignore", sprint(showerror, e))
+                        )
                     end
                 finally
                     chmod(sub_gi, 0o644)

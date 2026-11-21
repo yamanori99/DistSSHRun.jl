@@ -1872,6 +1872,7 @@ function _ancestor_dot_git_entry(dir::AbstractString)::Bool
         parent == cur && return false
         cur = parent
     end
+    return
 end
 
 function _git_work_tree_exit_code(e)::Int
@@ -1897,7 +1898,7 @@ function git_work_tree(proj_dir::AbstractString)::Union{Nothing, String}
     end
     err_buf = IOBuffer()
     cmd = addenv(_git_cmd(["-C", resolved, "rev-parse", "--show-toplevel"]), "LC_ALL" => "C")
-    try
+    return try
         s = strip(read(pipeline(cmd; stderr = err_buf), String))
         if !isempty(s)
             return canonical_local_path(s)

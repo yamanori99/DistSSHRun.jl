@@ -175,9 +175,9 @@ function explain_git_work_tree_failed(
     fix = if occursin("detected dubious ownership", detail)
         "Fix: git config --global --add safe.directory $qdir"
     elseif occursin("bad object", detail) ||
-           occursin("unknown revision", detail) ||
-           occursin("not a valid object", detail) ||
-           occursin("malformed", detail)
+            occursin("unknown revision", detail) ||
+            occursin("not a valid object", detail) ||
+            occursin("malformed", detail)
         "Fix: git -C $qdir fsck"
     elseif isempty(detail)
         "git printed no diagnostics. The repository may be corrupt or git failed to run."
