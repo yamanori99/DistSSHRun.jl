@@ -125,17 +125,18 @@ function _ps_line_has_mark(
     )::Bool
     needle = string(key, "=", value)
     searchfrom = 1
-    while true
+    n = ncodeunits(line)
+    while searchfrom <= n
         idx = findnext(needle, line, searchfrom)
         idx === nothing && return false
         at = first(idx)
         before_ok = at == 1 || isspace(line[prevind(line, at)])
         after = nextind(line, last(idx))
-        after_ok = prefix || after > ncodeunits(line) || isspace(line[after])
+        after_ok = prefix || after > n || isspace(line[after])
         before_ok && after_ok && return true
         searchfrom = nextind(line, at)
     end
-    return
+    return false
 end
 
 function _processes_with_env_ps(
@@ -154,20 +155,20 @@ function _processes_with_env_ps(
         isempty(strip(line)) && continue
         m = match(r"^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.*)$", line)
         m === nothing && continue
-        pid = parse(Int, m.captures[1])
+        pid_s, ppid_s, etime_s, cmd_s = m.captures
+        pid_s isa AbstractString || continue
+        ppid_s isa AbstractString || continue
+        etime_s isa AbstractString || continue
+        cmd_s isa AbstractString || continue
+        pid = parse(Int, pid_s)
         pid in exclude && continue
         _ps_line_has_mark(line, key, value; prefix) || continue
-        cmd = _argv_before_env(String(m.captures[4]))
+        cmd = _argv_before_env(String(cmd_s))
         # `ps -E` inherits the caller's environment and would match itself.
         startswith(lstrip(cmd), "ps ") && continue
         push!(
             rows,
-            ProcessRow(
-                pid,
-                parse(Int, m.captures[2]),
-                String(m.captures[3]),
-                cmd,
-            ),
+            ProcessRow(pid, parse(Int, ppid_s), String(etime_s), cmd),
         )
     end
     return rows
