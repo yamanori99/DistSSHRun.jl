@@ -2062,10 +2062,10 @@ end
                 @test "HOME" ∉ report.dropped
                 raw = _must_run_toml(kp.run_dir::AbstractString)
                 @test DistSSHRun.DistSSHBase.record_writer_minor_match(
-                raw["writer"],
-                "DistSSHRun",
-                DistSSHRun.dist_ssh_kit_version(),
-            ) == :ok
+                    raw["writer"],
+                    "DistSSHRun",
+                    DistSSHRun.dist_ssh_kit_version(),
+                ) == :ok
                 launch = raw["launch"]::AbstractDict
                 @test launch["threads"] == "1"
                 @test "SECRET_TOKEN" in String.(launch["dropped"])

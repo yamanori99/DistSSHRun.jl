@@ -568,10 +568,10 @@ end
                 @test !result.ok
                 raw = _prov_require(DistSSHRun.read_kit_run_toml(_prov_run_toml(proj)))
                 @test DistSSHRun.DistSSHBase.record_writer_minor_match(
-                raw["writer"],
-                "DistSSHRun",
-                DistSSHRun.dist_ssh_kit_version(),
-            ) == :ok
+                    raw["writer"],
+                    "DistSSHRun",
+                    DistSSHRun.dist_ssh_kit_version(),
+                ) == :ok
                 @test raw["kind"] == "go"
                 @test haskey(raw, "output_dir")
                 @test raw["provenance"]["project"]["manifest"] isa String
@@ -625,10 +625,10 @@ end
                 DistSSHRun.write_kit_run_toml!(tmp; kind = :go, provenance = prov)
                 raw = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
                 @test DistSSHRun.DistSSHBase.record_writer_minor_match(
-                raw["writer"],
-                "DistSSHRun",
-                DistSSHRun.dist_ssh_kit_version(),
-            ) == :ok
+                    raw["writer"],
+                    "DistSSHRun",
+                    DistSSHRun.dist_ssh_kit_version(),
+                ) == :ok
                 @test !haskey(raw["provenance"], "selection")
                 held = DistSSHRun.DriveResult(true, 0; run_dir = tmp)
                 @test DistSSHRun.result_content_tree_hash(held) === nothing
@@ -661,10 +661,10 @@ end
                 DistSSHRun.write_kit_run_toml!(tmp; kind = :drive, provenance = prov)
                 raw = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
                 @test DistSSHRun.DistSSHBase.record_writer_minor_match(
-                raw["writer"],
-                "DistSSHRun",
-                DistSSHRun.dist_ssh_kit_version(),
-            ) == :ok
+                    raw["writer"],
+                    "DistSSHRun",
+                    DistSSHRun.dist_ssh_kit_version(),
+                ) == :ok
                 @test DistSSHRun.DistSSHBase.record_writer_minor_match(
                     raw["provenance"]["writer"],
                     "DistSSHRun",
