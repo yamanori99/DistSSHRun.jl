@@ -225,6 +225,33 @@ end
         end
     end
 
+    @testset "go slot pkill pattern is rooted and escaped" begin
+        _with_tempdir() do parent
+            root = joinpath(parent, "out")
+            mkpath(root)
+            want = string(
+                DistSSHRun._pkill_ere_literal(root),
+                "/.*",
+                DistSSHRun._pkill_ere_literal("go-handshake.jl"),
+            )
+            @test DistSSHRun._go_slot_pkill_patterns([root]) == [want]
+            sibling = joinpath(parent, "out-2")
+            mkpath(sibling)
+            @test !occursin(DistSSHRun._pkill_ere_literal(sibling), want)
+            bracket = joinpath(parent, "run[1]")
+            mkpath(bracket)
+            br = DistSSHRun._go_slot_pkill_patterns([bracket])[1]
+            @test startswith(br, DistSSHRun._pkill_ere_literal(bracket) * "/")
+            @test occursin("\\[", br)
+            loader = joinpath(root, "slot", DistSSHRun.DistSSHBase.LOCAL_STATE_DIR)
+            mkpath(loader)
+            exact = joinpath(loader, "go-handshake.jl")
+            write(exact, "")
+            exact_pat = DistSSHRun._pkill_ere_literal(exact)
+            @test DistSSHRun._go_slot_pkill_patterns([root]) == [want, exact_pat]
+        end
+    end
+
     @testset "reap pkill is parallel, deduped, and bounded" begin
         _with_tempdir() do dir
             script = joinpath(dir, "reap_ssh.jl")

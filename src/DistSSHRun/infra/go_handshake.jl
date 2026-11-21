@@ -242,6 +242,52 @@ function _go_handshake_await_drain!(drain_task::Task)
     return nothing
 end
 
+function _collect_go_handshake_loader_paths(roots::AbstractVector{<:AbstractString})::Vector{String}
+    seen = Set{String}()
+    out = String[]
+    for root in roots
+        r = canonical_local_path(String(root))
+        isdir(r) || continue
+        for (dir, _, files) in walkdir(r; onerror = Returns(nothing))
+            _GO_HANDSHAKE_LOADER_NAME in files || continue
+            path = joinpath(dir, _GO_HANDSHAKE_LOADER_NAME)
+            path in seen && continue
+            push!(seen, path)
+            push!(out, path)
+        end
+    end
+    return out
+end
+
+function _go_slot_pkill_patterns(roots::AbstractVector{<:AbstractString})::Vector{String}
+    seen = Set{String}()
+    out = String[]
+    name = _pkill_ere_literal(_GO_HANDSHAKE_LOADER_NAME)
+    for root in roots
+        r = canonical_local_path(String(root))
+        isempty(r) && continue
+        pat = string(_pkill_ere_literal(r), '/', ".*", name)
+        pat in seen && continue
+        push!(seen, pat)
+        push!(out, pat)
+    end
+    for path in _collect_go_handshake_loader_paths(roots)
+        lit = _pkill_ere_literal(path)
+        lit in seen && continue
+        push!(seen, lit)
+        push!(out, lit)
+    end
+    return out
+end
+
+function _reap_local_go_slots_for_roots!(roots::AbstractVector{<:AbstractString})
+    Sys.isunix() || return nothing
+    for pat in _go_slot_pkill_patterns(roots)
+        _pkill_pattern!(pat)
+    end
+    return nothing
+end
+
 function run_go_slot_with_handshake(cmd::Cmd, site::AbstractString, log_path::AbstractString)
     log_io = open(String(log_path), "w")
     return try

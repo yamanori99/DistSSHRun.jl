@@ -18,6 +18,8 @@ const _SRC_FILES = (
     "hosts/hostinfo.jl",
     "hosts/host_result.jl",
     "ssh/julia_where.jl",
+    "procs/list.jl",
+    "procs/reap.jl",
     "namespace.jl",
     "component_src.jl",
     "tool_require.jl",

@@ -130,6 +130,18 @@ function _pkill_pattern!(pattern::AbstractString)
     return nothing
 end
 
+"""POSIX ERE literal for `pkill -f` / `pgrep -f` (not a glob, not PCRE)."""
+function _pkill_ere_literal(s::AbstractString)::String
+    io = IOBuffer()
+    for c in String(s)
+        if c in ('.', '\\', '[', ']', '^', '$', '|', '?', '*', '+', '(', ')', '{')
+            print(io, '\\')
+        end
+        print(io, c)
+    end
+    return String(take!(io))
+end
+
 """Kill local processes whose argv contains this run's job mark. No-op if `job_id` is unset."""
 function _pkill_local_tagged_workers!(job_id::AbstractString)
     _pkill_pattern!(kit_job_pkill_pattern(job_id))

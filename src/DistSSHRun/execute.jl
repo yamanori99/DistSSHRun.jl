@@ -2432,6 +2432,10 @@ Hosts that cannot be reached are named in one warning, and this still
 returns. The remote pattern is `[d]istsshkit-job:…`, so `pkill -f` does
 not match the `sh -c` line that contains the command.
 
+For `:go`, local head slots that outlive the detached child (Julia 1.14) are
+signaled with `pkill -f` on each slot's `go-handshake.jl` path under this
+run's kit directories (`run_dir`, `output_dir`, `log_dir`).
+
 The returned [`DistSSHJobResult`](@ref) `stop` is that ladder outcome. The same
 string is written to `kit.result`. When `run_dir` holds this package's
 `run.toml` (`schema = 1`, `writer` starting with `DistSSHRun `), `stop` is
@@ -2448,6 +2452,9 @@ function terminate!(
     job_id = _read_kit_job_id_for_reap(kp)
     hosts = _read_kit_hosts_for_reap(kp)
     _reap_tagged_workers!(job_id, hosts)
+    kp.kind === :go && _reap_local_go_slots_for_roots!(
+        _kit_sidecar_dirs(kp.output_dir, kp.log_dir; run_dir = kp.run_dir),
+    )
     return _persist_stop(wait(kp), stop; run_dir = kp.run_dir)
 end
 
@@ -2482,6 +2489,9 @@ function terminate_run!(
     job_id = _read_kit_text_file(d, "kit.job")
     _reap_tagged_workers!(job_id, _read_kit_hosts(d))
     run_d = _run_dir_for_stop(d)
+    kind === :go && _reap_local_go_slots_for_roots!(
+        _kit_sidecar_dirs(d, nothing; run_dir = run_d),
+    )
     recovered = kit_result_from_dir(d)
     if recovered === nothing && run_d !== nothing
         recovered = kit_result_from_dir(run_d)
