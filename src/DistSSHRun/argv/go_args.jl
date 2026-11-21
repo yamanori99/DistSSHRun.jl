@@ -58,7 +58,8 @@ function show_go_usage(; io::IO = stdout)
     print_help_lines(
         io,
         "  {script}/.distssh/go/<stem>_<UTC>/<slot>/",
-        "  DISTRIBUTED_OUTPUT_DIR → that slot dir",
+        "  DISTRIBUTED_OUTPUT_DIR → that slot dir (the only tree go pulls back)",
+        "  Project-relative files outside the slot stay on the remote.",
         "  --output-dir is the batch root (not drive's result root)",
         "  a non-empty --output-dir is an error",
         "  slot pull-back uses Tar (remote mtimes and file modes are not kept)",
@@ -71,6 +72,9 @@ function show_go_usage(; io::IO = stdout)
         "  $(KIT_HOSTS_ENV_HELP)",
         "  JULIA_DISTRIBUTED_EXE        default remote Julia",
         "  DISTSSH_QUIET / PROGRESS / VERBOSE / YES",
+        "  Slot ENV: JULIA_PROJECT / JULIA_LOAD_PATH / JULIA_NUM_THREADS,",
+        "  optional BLAS/OMP, DISTSSH_* seed/rank/job, DISTRIBUTED_OUTPUT_DIR.",
+        "  Other controller ENV is not forwarded.",
     )
     print_help_blank(io)
     return print_help_lines(

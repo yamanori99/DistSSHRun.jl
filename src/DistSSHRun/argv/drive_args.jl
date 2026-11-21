@@ -509,7 +509,11 @@ function show_drive_usage(; io::IO = stdout)
     print_help_section("Collect"; io = io)
     print_help_lines(
         io,
-        "  After main(): post-run-new (files newer than run start).",
+        "  After main(): files newer than this run's sentinel.",
+        "  Default root: --output-dir, else {script}/.distssh/drive/<stem>_<UTC>/.",
+        "  Extra trees: DISTRIBUTED_COLLECT_DIRS=dir[:dir...] (relative to the project, or absolute).",
+        "  Example: ENV[\"DISTRIBUTED_COLLECT_DIRS\"] = \"data/sims\" in the driver.",
+        "  A second drive --run-id that does not rewrite files: (nothing to collect).",
         "  Later: --collect-missing / --collect-overwrite ROOT HOST... (fails on skipped hosts unless --best-effort)",
         "  Pass --run-id ID so collect maps onto that ship, not a newer one.",
         "  With DISTSSH_RUN_DIR, omitted recovery uses that run's provenance.selection.",
@@ -531,6 +535,10 @@ function show_drive_usage(; io::IO = stdout)
         "  $(DRIVE_HEARTBEAT_DEADLINE_ENV_HELP)",
         "  $(DRIVE_HEARTBEAT_INTERVAL_ENV_HELP)",
         "  DISTRIBUTED_SKIP_COLLECT=1 skip post-run collect",
+        "  DISTRIBUTED_COLLECT_DIRS extra collect trees (colon-separated)",
+        "  SSH workers get JULIA_PROJECT / JULIA_LOAD_PATH / JULIA_NUM_THREADS,",
+        "  optional BLAS/OMP thread vars, and DISTSSH_JOB_SEED / WORKER_RANK /",
+        "  WORKER_SEED / JOB_ID when set. Other controller ENV is not forwarded.",
     )
     print_help_blank(io)
     return print_help_lines(

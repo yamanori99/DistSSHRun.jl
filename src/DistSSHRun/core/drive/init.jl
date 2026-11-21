@@ -90,7 +90,8 @@ process). Definitions on the master are compiled in the post-package-load
 world (Julia 1.12+ world age).
 
 Bare top-level `include(...)` is published; wrapping it in `if` / `||` /
-`&&` is dropped with a warning. Prefer `@__DIR__` for per-worker sibling
+`&&` is dropped with a warning. `@everywhere include(...)` is already
+evaluated on workers and is not warned. Prefer `@__DIR__` for per-worker sibling
 paths. See [Publishing to workers](@ref Manual-drive-publish).
 
 `init_output_dir!` is invoked separately on the master before workers start.
@@ -332,7 +333,14 @@ function init_drive_workers!(
         elseif !isfile(joinpath(proj_dir, "Project.toml"))
             writeln_both("(no Project.toml in $(display_path(proj_dir, path_anchor)))")
         else
-            writeln_both("(no package name in Project.toml; use --package NAME)")
+            listed = project_package_name(proj_dir)
+            if listed !== nothing
+                writeln_both(
+                    "(no src/$(listed).jl for name = $(repr(listed)); omit --package when the script does not load a project module)",
+                )
+            else
+                writeln_both("(no package name in Project.toml; use --package NAME)")
+            end
         end
 
         write_both("  Verifying workers... ")

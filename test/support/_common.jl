@@ -193,6 +193,40 @@ if !isdefined(@__MODULE__, :_test_root)
         return selected
     end
 
+    function _runtest_short_skip_unguarded(runtests_src::AbstractString)::Vector{String}
+        unguarded = String[]
+        for rel in _distsshrun_short_skip_paths()
+            occursin("_runtest_include(\"$rel\"", runtests_src) || continue
+            occursin("_distsshrun_short_skip(\"$rel\")", runtests_src) || push!(unguarded, rel)
+        end
+        return unguarded
+    end
+
+    function _runtest_assert_planned_executed!(
+            planned::AbstractVector{<:AbstractString},
+            executed::AbstractVector{<:AbstractString},
+        )
+        planned == executed && return nothing
+        only_planned = setdiff(planned, executed)
+        only_executed = setdiff(executed, planned)
+        io = IOBuffer()
+        print(io, "test runtests.jl: planned file list does not match executed")
+        print(io, " (planned=", length(planned), ", executed=", length(executed), ")")
+        if !isempty(only_planned)
+            print(io, "\n  planned only:")
+            for rel in only_planned
+                print(io, "\n    ", rel)
+            end
+        end
+        if !isempty(only_executed)
+            print(io, "\n  executed only:")
+            for rel in only_executed
+                print(io, "\n    ", rel)
+            end
+        end
+        error(String(take!(io)))
+    end
+
     # Keep the detached-env count off the test console. `min_level=Debug`
     # also keeps the name list, which is not written at Info.
     function _capture_detached_env_log(f; min_level = Test.Logging.Info)
