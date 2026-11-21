@@ -1385,7 +1385,8 @@ end
                                 project = proj,
                                 remote = remote_root,
                                 julia = "auto",
-                                verbosity = :verbose
+                                verbosity = :verbose,
+                                reuse_main = true
                             )
                         end
                         flush(out_io)

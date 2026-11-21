@@ -41,6 +41,13 @@ deploy root when `sync` is omitted or `false`. `plan` is an optional explicit
 workers. The default publishes definitions / `using` / `import` / `include`
 only, so top-level work on Load is not repeated on workers.
 
+The first in-process `drive!` in a Julia process loads the driver into `Main`.
+A second in-process run in the same process fails unless `reuse_main=true` or
+`isolated=true`. `isolated=true` runs the same core as CLI `drive --isolated`
+(a child Julia process) and does not leave driver definitions in this
+process's `Main`; `output_dir`, `log_dir`, `hosts`, and `run_dir` on
+[`DriveResult`](@ref) stay empty.
+
 Ctrl-C restores the active project and the `DISTRIBUTED_*` entries this call
 changed, then rethrows `InterruptException` or, when Julia has it,
 `Base.CancellationRequest`. `drive!` does not `exit` and does not throw the
@@ -71,6 +78,8 @@ function drive!(
         unsafe_master_silence_exit::Union{Nothing, Bool} = nothing,
         yes::Union{Nothing, Bool} = nothing,
         require_all_hosts::Union{Nothing, Bool} = nothing,
+        isolated::Bool = false,
+        reuse_main::Bool = false,
         bind_overrides::AbstractDict{<:AbstractString, <:AbstractString} = Dict{String, String}(),
     )::DriveResult
     yes !== nothing && throw(
@@ -89,6 +98,49 @@ function drive!(
     allow_external_symlinks &&
         _reject_run_transfer_cli!("drive!", "--allow-external-symlinks")
     return _drive_frame(; cli = false) do
+        resolved = plan
+        if resolved === nothing && !isempty(session.tokens)
+            resolved = worker_plan_from_tokens(
+                session.tokens;
+                head_workers = session.cli_session.head_workers,
+            )
+        end
+        parsed = drive_parsed_from_session(
+            session,
+            script;
+            workers = resolved,
+            script_args = args,
+            skip_hash_check = skip_hash_check,
+            output_dir = output_dir,
+            enable_log = enable_log,
+            log_dir = log_dir,
+            package = package,
+            julia = julia,
+            best_effort = best_effort,
+            worker_include = worker_include,
+            unsafe_skip_env_digests = unsafe_skip_env_digests,
+            unsafe_expose_port = unsafe_expose_port,
+            unsafe_all_to_all = unsafe_all_to_all,
+            run_id = run_id,
+            unsafe_master_silence_exit = unsafe_master_silence_exit,
+            isolated = isolated,
+            reuse_main = reuse_main,
+            bind_overrides = bind_overrides,
+        )
+        if isolated
+            return _with_drive_process!(session.project) do
+                argv = drive_api_isolated_argv(parsed)
+                code = run_drive_parsed!(
+                    parsed;
+                    original_args = argv,
+                    project_root = session.project,
+                )
+                return DriveResult(
+                    code == 0, Int(code);
+                    failed_step = code == 0 ? nothing : "drive",
+                )
+            end
+        end
         return _with_kit_inproc_run!(:drive) do
             # Outside `run_drive_parsed!`: `apply_session_env!` runs first, and
             # this frame restores DISTRIBUTED_* after the inner drive returns.
@@ -97,33 +149,6 @@ function drive!(
                 # Scoped for `remote_layout_path` / worker path mapping only.
                 # Restored here and again by `_with_drive_process!`.
                 return _with_session_remote_env!(session) do
-                    resolved = plan
-                    if resolved === nothing && !isempty(session.tokens)
-                        resolved = worker_plan_from_tokens(
-                            session.tokens;
-                            head_workers = session.cli_session.head_workers,
-                        )
-                    end
-                    parsed = drive_parsed_from_session(
-                        session,
-                        script;
-                        workers = resolved,
-                        script_args = args,
-                        skip_hash_check = skip_hash_check,
-                        output_dir = output_dir,
-                        enable_log = enable_log,
-                        log_dir = log_dir,
-                        package = package,
-                        julia = julia,
-                        best_effort = best_effort,
-                        worker_include = worker_include,
-                        unsafe_skip_env_digests = unsafe_skip_env_digests,
-                        unsafe_expose_port = unsafe_expose_port,
-                        unsafe_all_to_all = unsafe_all_to_all,
-                        run_id = run_id,
-                        unsafe_master_silence_exit = unsafe_master_silence_exit,
-                        bind_overrides = bind_overrides,
-                    )
                     apply_shared_cli_flags!(parsed.cli_session)
                     original_args = copy(ARGS)
                     resolved_output_dir = Ref{Union{Nothing, String}}(nothing)

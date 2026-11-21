@@ -1,0 +1,3 @@
+category: breaking
+
+- `drive!` accepts `isolated=true` (same core as CLI `drive --isolated`, child Julia process) and `reuse_main=true` (allow another in-process run after a driver was included into `Main`). The default still allows one in-process run per process; a second in-process run without `reuse_main=true` or `isolated=true` errors before loading the driver. `pipeline!` and in-process `execute!(:drive, …)` pass both keywords. `isolated=true` with `hosts_file` or `bind_overrides=` is rejected; isolated `DriveResult` fields besides exit success stay empty.

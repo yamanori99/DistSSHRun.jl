@@ -530,6 +530,9 @@ function execute!(
     )
     _require_execute_kind!(kind)
     if detached
+        if get(kwargs, :isolated, false) === true || get(kwargs, :reuse_main, false) === true
+            throw(ArgumentError(execute_detached_isolated_reuse_main_message()))
+        end
         return _execute_detached!(
             kind,
             script,

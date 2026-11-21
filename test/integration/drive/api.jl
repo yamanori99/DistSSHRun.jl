@@ -12,9 +12,9 @@ end
 # Oracle: `drive!(…; head_workers = 2)` runs the smoke driver in this process.
 # CLI child is `local.jl`. Not SSH.
 #
-# First in-process `include` of a driver into `Main`. Later files (e.g.
-# `integration/drive/execute.jl`) share that `Main` and will warn-overwrite
-# `main()`. Keep this file before those includes in `runtests.jl`.
+# `unit/DistSSHRun/drive.jl` may already have included a driver into `Main`.
+# Every in-process `drive!` / `run_drive_parsed!` here uses `reuse_main=true`.
+# Later files (e.g. `integration/drive/execute.jl`) share that `Main`.
 
 @testset "drive! l:N" begin
     fixture = _fixture("drive_local_smoke.jl")
@@ -43,7 +43,8 @@ end
                             DistSSHRun.drive!(
                                 script; head_workers = 2,
                                 project = proj,
-                                verbosity = :verbose
+                                verbosity = :verbose,
+                                reuse_main = true
                             )
                         end
                     end
@@ -108,7 +109,8 @@ end
                                 bad;
                                 project = proj,
                                 verbosity = :quiet,
-                                enable_log = false
+                                enable_log = false,
+                                reuse_main = true
                             )
                             nothing
                         catch e
@@ -136,7 +138,8 @@ end
                     script;
                     workers = DistSSHRun.WorkerPlan(1, Dict{String, Int}()),
                     enable_log = false,
-                    skip_hash_check = true
+                    skip_hash_check = true,
+                    reuse_main = true
                 )
                 got = redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
@@ -202,7 +205,8 @@ end
                         with_init; head_workers = 1,
                         project = proj,
                         verbosity = :quiet,
-                        enable_log = false
+                        enable_log = false,
+                        reuse_main = true
                     )
                 end
             end
@@ -216,7 +220,8 @@ end
                         no_init; head_workers = 1,
                         project = proj,
                         verbosity = :quiet,
-                        enable_log = false
+                        enable_log = false,
+                        reuse_main = true
                     )
                 end
             end
@@ -266,7 +271,8 @@ end
                             script; head_workers = 1,
                             project = proj,
                             verbosity = :quiet,
-                            enable_log = false
+                            enable_log = false,
+                            reuse_main = true
                         )
                     end
                 end

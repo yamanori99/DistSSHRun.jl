@@ -49,6 +49,24 @@ function _call_drive_script_hook_on_workers(name::Symbol)
     return _drive_eval_workers(:(Base.invokelatest(getfield(Main, $(QuoteNode(name))))))
 end
 
+# Set after any in-process drive `Base.include(Main, script)` (success or throw).
+const _DRIVE_MAIN_DRIVER_INCLUDED = Ref(false)
+
+function _drive_main_driver_included()::Bool
+    return _DRIVE_MAIN_DRIVER_INCLUDED[]
+end
+
+function _set_drive_main_driver_included!()
+    _DRIVE_MAIN_DRIVER_INCLUDED[] = true
+    return nothing
+end
+
+function _reject_second_drive_main_include!(reuse_main::Bool)
+    _drive_main_driver_included() || return nothing
+    reuse_main && return nothing
+    throw(ArgumentError(drive_reuse_main_required_message()))
+end
+
 # Options that take the next argv word. A word equal to `--isolated` there is a value.
 const _DRIVE_VALUE_FLAGS = (
     "--workers", "-w", "--julia",
@@ -403,7 +421,12 @@ function _run_drive_parsed_specialized!(
             # Lock after that so `.kit.lock` is not the kind root when the driver
             # chose `output/` (or `--output-dir` / a unique batch dir).
             hooks_before = _drive_script_hook_bindings(script_args)
-            Base.include(Main, script_path)
+            _reject_second_drive_main_include!(get(parsed, :reuse_main, false) === true)
+            try
+                Base.include(Main, script_path)
+            finally
+                _set_drive_main_driver_included!()
+            end
             script_hooks = _drive_script_hooks(hooks_before, _drive_script_hook_bindings(script_args))
             if script_hooks.init_output_dir! !== nothing
                 _call_drive_script_hook(:init_output_dir!, script_args)
