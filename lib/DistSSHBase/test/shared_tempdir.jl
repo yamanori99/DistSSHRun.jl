@@ -1,6 +1,6 @@
 # Shared test helpers for DistSSHBase and DistSSHUp (single Main definitions for JETLS).
 
-if !isdefined(Main, :_with_tempdir)
+if !isdefined(@__MODULE__, :_with_tempdir)
     function _rm_tempdir!(path::AbstractString)
         pauses = (0.05, 0.2, 0.5)
         for pause in pauses

@@ -17,8 +17,8 @@ function _register_drive_workers!(
     return nothing
 end
 
-function _skip_global_worker_pkill()::Bool
-    return get(ENV, "DISTSSH_SKIP_GLOBAL_WORKER_PKILL", "") == "1"
+function _skip_global_worker_pkill(env::ProcessEnv = invocation_process_env())::Bool
+    return get(env, "DISTSSH_SKIP_GLOBAL_WORKER_PKILL", "") == "1"
 end
 
 # Pre-run local `pkill -f julia.*--worker` is gone: it is not pid-scoped and
@@ -28,8 +28,11 @@ end
 # `pkill`s argv containing `distsshkit-job:<id>` when `DISTSSH_JOB_ID` is set.
 # Machine-wide sweep remains `setup cleanup`. Skip leftover tagged pkill with
 # DISTSSH_SKIP_GLOBAL_WORKER_PKILL=1.
-function cleanup_stale_workers!(hosts::Vector{Tuple{String, Union{Int, Nothing}}})
-    if _skip_global_worker_pkill() || isempty(hosts)
+function cleanup_stale_workers!(
+        hosts::Vector{Tuple{String, Union{Int, Nothing}}};
+        env::ProcessEnv = invocation_process_env(),
+    )
+    if _skip_global_worker_pkill(env) || isempty(hosts)
         return
     end
     job_id = DistSSHRun.resolved_kit_job_id()

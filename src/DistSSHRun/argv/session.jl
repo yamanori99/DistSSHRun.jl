@@ -62,10 +62,10 @@ kit_cli_auto_verbosity(; live::Union{Nothing, Bool} = nothing)::Symbol =
     something(live, kit_stdout_is_live()) ? :progress : :verbose
 
 """Read exclusive verbosity from env (`DISTSSH_QUIET` / `_PROGRESS` / `_VERBOSE`)."""
-function _env_verbosity()::Union{Nothing, Symbol}
-    want_quiet = _env_flag("DISTSSH_QUIET")
-    want_progress = _env_flag("DISTSSH_PROGRESS")
-    want_verbose = _env_flag("DISTSSH_VERBOSE")
+function _env_verbosity(env::ProcessEnv)::Union{Nothing, Symbol}
+    want_quiet = _env_flag("DISTSSH_QUIET", env)
+    want_progress = _env_flag("DISTSSH_PROGRESS", env)
+    want_verbose = _env_flag("DISTSSH_VERBOSE", env)
     n = count(identity, (want_quiet, want_progress, want_verbose))
     n > 1 && throw(
         ArgumentError(
@@ -127,6 +127,7 @@ mutable struct CliSharedFlags
     verbosity_explicit::Bool
     hosts_flag::Vector{String}
     hosts_source::Union{Nothing, Symbol}
+    process_env::ProcessEnv
 end
 
 function CliSharedFlags(;
@@ -142,6 +143,7 @@ function CliSharedFlags(;
         verbosity_explicit::Bool = false,
         hosts_flag::AbstractVector{<:AbstractString} = String[],
         hosts_source::Union{Nothing, Symbol} = nothing,
+        process_env::ProcessEnv = snapshot_process_env(),
     )
     v = _resolve_kit_verbosity(; quiet = quiet, verbosity = verbosity)
     hf = hosts_file === nothing ? nothing : String(hosts_file)
@@ -167,27 +169,28 @@ function CliSharedFlags(;
         explicit,
         String[String(h) for h in hosts_flag],
         hosts_source,
+        process_env,
     )
 end
 
-function _env_flag(name::AbstractString)::Bool
-    v = strip(get(ENV, String(name), ""))
+function _env_flag(name::AbstractString, env::ProcessEnv)::Bool
+    v = strip(get(env, String(name), ""))
     return v in ("1", "true", "yes", "on")
 end
 
-"""Max concurrent SSH host jobs (`DISTSSH_JOBS`, default 1)."""
-function kit_host_jobs()::Int
-    raw = strip(get(ENV, "DISTSSH_JOBS", "1"))
+"""Max concurrent SSH host jobs (`DISTSSH_JOBS`, default 1) from `env`."""
+function kit_host_jobs(env::ProcessEnv = invocation_process_env())::Int
+    raw = strip(get(env, "DISTSSH_JOBS", "1"))
     n = tryparse(Int, raw)
     (n === nothing || n < 1) && return 1
     return n
 end
 
-"""Call `f(i, host)` for each host, at most `kit_host_jobs()` at once (1 → sequential)."""
-function map_host_jobs(f, hosts::Vector{String})
+"""Call `f(i, host)` for each host, at most `kit_host_jobs(env)` at once (1 → sequential)."""
+function map_host_jobs(f, hosts::Vector{String}; env::ProcessEnv = invocation_process_env())
     n = length(hosts)
     n == 0 && return nothing
-    jobs = min(kit_host_jobs(), n)
+    jobs = min(kit_host_jobs(env), n)
     if jobs == 1
         for i in 1:n
             f(i, hosts[i])
@@ -209,11 +212,12 @@ function map_host_jobs(f, hosts::Vector{String})
 end
 
 """Default session; honors `DISTSSH_QUIET`, `DISTSSH_PROGRESS`, `DISTSSH_VERBOSE`, `DISTSSH_YES`."""
-function default_kit_cli_session()::CliSharedFlags
-    env_v = _env_verbosity()
+function default_kit_cli_session(env::ProcessEnv = snapshot_process_env())::CliSharedFlags
+    env_v = _env_verbosity(env)
     hosts_kw = (;
-        yes = _env_flag("DISTSSH_YES"),
+        yes = _env_flag("DISTSSH_YES", env),
         show_version = false,
+        process_env = env,
     )
     env_v === nothing && return CliSharedFlags(; hosts_kw...)
     return CliSharedFlags(;
@@ -465,8 +469,11 @@ Split leading shared flags from `args`.
 Returns `(session, rest)` where `rest` is every non-flag token (and tokens
 following flags that take values other than `--hosts-file` / `--hosts`).
 """
-function peel_shared_cli_flags(args::AbstractVector{<:AbstractString})::Tuple{CliSharedFlags, Vector{String}}
-    session = default_kit_cli_session()
+function peel_shared_cli_flags(
+        args::AbstractVector{<:AbstractString};
+        env::ProcessEnv = snapshot_process_env(),
+    )::Tuple{CliSharedFlags, Vector{String}}
+    session = default_kit_cli_session(env)
     rest = String[]
     c = CliCursor(collect(String, args))
     while !cli_at_end(c)
@@ -511,8 +518,9 @@ function _host_input_coalesce_sources!(session::CliSharedFlags)::Symbol
     if !isempty(explicit)
         return first(explicit)
     end
-    env_hosts = split_hosts_csv(get(ENV, "DISTSSH_HOSTS", ""))
-    env_file = let raw = strip(get(ENV, "DISTSSH_HOSTS_FILE", ""))
+    pe = session.process_env
+    env_hosts = split_hosts_csv(get(pe, "DISTSSH_HOSTS", ""))
+    env_file = let raw = strip(get(pe, "DISTSSH_HOSTS_FILE", ""))
         isempty(raw) ? nothing : String(raw)
     end
     !isempty(env_hosts) && return :env_hosts
@@ -559,13 +567,13 @@ function placement_source_tokens(
             return String[split_worker_token(line)[1] for line in lines]
         end
     elseif source === :env_hosts
-        raw = split_hosts_csv(get(ENV, "DISTSSH_HOSTS", ""))
+        raw = split_hosts_csv(get(session.process_env, "DISTSSH_HOSTS", ""))
         for t in raw
             _setup_reject_counts!(t)
         end
         return String[_kit_host_token(t, keep_counts; roles = roles) for t in raw]
     elseif source === :env_file
-        hf = String(strip(get(ENV, "DISTSSH_HOSTS_FILE", "")))
+        hf = String(strip(get(session.process_env, "DISTSSH_HOSTS_FILE", "")))
         lines = read_hosts_file_lines(hf; surface = session.hint_surface)
         for line in lines
             _setup_reject_counts!(line)
@@ -585,8 +593,8 @@ end
 """Resolved host-list source for `session` (CLI wins over env; never merges `--hosts` with `DISTSSH_HOSTS`)."""
 placement_host_source(session::CliSharedFlags)::Symbol = _host_input_coalesce_sources!(session)
 
-function _distssh_hosts_env_tokens()::Vector{String}
-    return split_hosts_csv(get(ENV, "DISTSSH_HOSTS", ""))
+function _distssh_hosts_env_tokens(env::ProcessEnv)::Vector{String}
+    return split_hosts_csv(get(env, "DISTSSH_HOSTS", ""))
 end
 
 function placement_host_source_label(source::Symbol)::String
@@ -603,7 +611,7 @@ end
 function kit_distssh_hosts_override_notice(session::CliSharedFlags)::Union{Nothing, String}
     explicit = _host_input_explicit_sources(session)
     isempty(explicit) && return nothing
-    isempty(_distssh_hosts_env_tokens()) && return nothing
+    isempty(_distssh_hosts_env_tokens(session.process_env)) && return nothing
     cli = first(explicit)
     cli === :env_hosts && return nothing
     cli === :env_file && return nothing
@@ -654,7 +662,7 @@ function hosts_file_path_for_bind(session::CliSharedFlags)::Union{Nothing, Strin
     path = if source === :hosts_file
         session.hosts_file
     elseif source === :env_file
-        String(strip(get(ENV, "DISTSSH_HOSTS_FILE", "")))
+        String(strip(get(session.process_env, "DISTSSH_HOSTS_FILE", "")))
     elseif session.hosts_file !== nothing
         session.hosts_file
     else
@@ -716,7 +724,7 @@ function merge_go_hosts_file_worker_tokens!(
     hf = hosts_file === nothing ? nothing : String(strip(hosts_file))
     if hf === nothing || isempty(hf)
         if isempty(tokens) && honor_distssh_hosts_file_env
-            env_hf = strip(get(ENV, "DISTSSH_HOSTS_FILE", ""))
+            env_hf = strip(get(invocation_process_env(), "DISTSSH_HOSTS_FILE", ""))
             !isempty(env_hf) && (hf = env_hf)
         else
             return nothing

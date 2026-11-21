@@ -327,7 +327,11 @@ function _blob_machine_hosts(tokens::AbstractVector{<:AbstractString})
 end
 
 """`parse_drive_args`-shaped NamedTuple from a detached job blob."""
-function drive_parsed_from_detached_job_blob(blob; hint_surface::Symbol = :cli)
+function drive_parsed_from_detached_job_blob(
+        blob;
+        hint_surface::Symbol = :cli,
+        process_env::ProcessEnv = snapshot_process_env(),
+    )
     head_workers = something(blob.head_workers, 0)
     hosts = _blob_machine_hosts(blob.tokens)
     cfg_quiet = blob.quiet
@@ -339,6 +343,7 @@ function drive_parsed_from_detached_job_blob(blob; hint_surface::Symbol = :cli)
         show_version = false,
         hosts_file = nothing,
         hint_surface = hint_surface,
+        process_env = process_env,
     )
     return (
         head_workers = head_workers,
@@ -375,7 +380,7 @@ function drive_parsed_from_detached_job_blob(blob; hint_surface::Symbol = :cli)
 end
 
 """`parse_go_args`-shaped NamedTuple from a detached job blob."""
-function go_parsed_from_detached_job_blob(blob)
+function go_parsed_from_detached_job_blob(blob; process_env::ProcessEnv = snapshot_process_env())
     blob.kind === :go || throw(ArgumentError("job blob kind is $(blob.kind); expected go"))
     cli_session = CliSharedFlags(
         quiet = blob.quiet,
@@ -385,6 +390,7 @@ function go_parsed_from_detached_job_blob(blob)
         hosts_file = nothing,
         hint_surface = :cli,
         head_slots = blob.head_slots,
+        process_env = process_env,
     )
     run_opts = RunOptionCliState()
     run_opts.unsafe_skip_env_digests = blob.unsafe_skip_env_digests

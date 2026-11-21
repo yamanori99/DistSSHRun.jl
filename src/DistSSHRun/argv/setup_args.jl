@@ -271,7 +271,7 @@ function _setup_set_mode!(
     return next, String(shown)
 end
 
-function parse_setup_args(args::Vector{String})
+function parse_setup_args(args::Vector{String}; env::ProcessEnv = snapshot_process_env())
     # Unknown options fail before `--help` and before any other flag is applied.
     _reject_unknown_cli_options(
         args,
@@ -292,10 +292,10 @@ function parse_setup_args(args::Vector{String})
         ),
         bare_dash = true,
     )
-    cli_session, args = peel_shared_cli_flags(args)
+    cli_session, args = peel_shared_cli_flags(args; env = env)
     mode = nothing
     mode_flag::Union{Nothing, String} = nothing
-    julia_path = get(ENV, "JULIA_DISTRIBUTED_EXE", "auto")  # default to env or auto-detect
+    julia_path = get(env, "JULIA_DISTRIBUTED_EXE", "auto")  # default to env or auto-detect
     repo_url = nothing
     deploy_root = nothing
     run_id = nothing

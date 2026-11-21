@@ -1,4 +1,4 @@
-if !isdefined(Main, :_stage_with_kit_demos)
+if !isdefined(@__MODULE__, :_stage_with_kit_demos)
 
     # Copy bundled `demos/with_kit/*.jl` into a temp host project for drive tests.
     function _stage_with_kit_demos!(demos_dir::String, kit_root::String)

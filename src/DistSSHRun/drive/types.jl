@@ -398,6 +398,7 @@ mutable struct PipelineConfig
     head_workers::Union{Nothing, Int}
     run_id::Union{Nothing, String}
     best_effort::Bool
+    process_env::ProcessEnv
     isolated::Bool
     reuse_main::Bool
 end
@@ -423,6 +424,7 @@ function PipelineConfig(;
         julia::Union{Nothing, AbstractString} = nothing,
         run_id::Union{Nothing, AbstractString} = nothing,
         best_effort::Bool = false,
+        process_env::ProcessEnv = snapshot_process_env(),
         isolated::Bool = false,
         reuse_main::Bool = false,
     )
@@ -466,6 +468,7 @@ function PipelineConfig(;
         head_workers === nothing ? nothing : Int(head_workers),
         snap,
         best_effort,
+        process_env,
         isolated,
         reuse_main,
     )
