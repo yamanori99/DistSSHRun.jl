@@ -1,5 +1,5 @@
 using Distributed
-using Random: copy!, copy, default_rng, seed!
+using Random: copy, copy!, default_rng, seed!
 
 """
     resolve_distributed_output_dir!(script_args, default_dir)
