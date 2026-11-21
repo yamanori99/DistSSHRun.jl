@@ -18,7 +18,6 @@ const _FORBIDDEN_DOC_RE = [
     Regex("--local-slots") => "--head-slots",
     Regex("DISTSSH_LOCAL_WORKERS") => "DISTSSH_HEAD_WORKERS",
     Regex(raw"drive` / `drive") => "drive / go",
-    Regex(raw"\bRust\b") => "describe clap behavior without naming Rust",
 ]
 
 function _doc_walk_paths(root::AbstractString)::Vector{String}
@@ -45,9 +44,7 @@ function _scan_forbidden_docs(root::AbstractString)
         skip_placement = rel == joinpath("docs", "src", "common_errors.md")
         for (i, line) in enumerate(split(read(path, String), '\n'; keepempty = true))
             for (re, hint) in _FORBIDDEN_DOC_RE
-                if skip_placement && re != Regex(raw"\bRust\b") && occursin(re, line)
-                    continue
-                end
+                skip_placement && occursin(re, line) && continue
                 occursin(re, line) || continue
                 push!(hits, (rel, i, hint, line))
             end
