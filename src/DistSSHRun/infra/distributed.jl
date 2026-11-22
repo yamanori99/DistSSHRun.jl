@@ -206,8 +206,13 @@ function worker_pmap(f, collection; batch_size = nothing)
     end
     pmap_kwargs = batch_size === nothing ? () : (; batch_size = batch_size)
     return pmap(work; pmap_kwargs...) do (item, x, item_seed)
-        raw = get(ENV, "DISTSSH_WORKER_RANK", "")
-        rank = something(tryparse(Int, raw), 0)
+        raw = strip(get(ENV, "DISTSSH_WORKER_RANK", ""))
+        rank = DistSSHBase.parse_env_int(
+            "DISTSSH_WORKER_RANK",
+            raw;
+            default = 0,
+            minimum = 0,
+        )
         if myid() == 1
             _note_item!(call, item, rank)
         else

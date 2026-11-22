@@ -68,6 +68,56 @@ using DistSSHRun
         end
     end
 
+    @testset "unparsable table numerics and bools throw" begin
+        DistSSHRun.reset_worker_seeds!()
+        withenv("DISTSSH_JOB_SEED" => "nope") do
+            err = try
+                DistSSHRun.job_seed()
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("DISTSSH_JOB_SEED", err.msg)
+            @test DistSSHRun._JOB_SEED[] === nothing
+        end
+        withenv("DISTSSH_SSH_TUNNEL" => "maybe") do
+            @test_throws ArgumentError DistSSHRun.ssh_tunnel_enabled()
+        end
+        withenv("DISTSSH_SSH_TUNNEL" => "false") do
+            @test DistSSHRun.ssh_tunnel_enabled() == false
+        end
+        withenv("DISTSSH_SKIP_COLLECT" => "true") do
+            @test DistSSHRun.DistSSHBase.env_flag(
+                "DISTSSH_SKIP_COLLECT", ENV; default = false,
+            )
+        end
+        withenv("DISTSSH_SKIP_COLLECT" => "maybe") do
+            @test_throws ArgumentError DistSSHRun.DistSSHBase.env_flag(
+                "DISTSSH_SKIP_COLLECT", ENV; default = false,
+            )
+        end
+        withenv("DISTSSH_PROGRESS_BG" => "foo") do
+            @test_throws ArgumentError DistSSHRun._term_light_background()
+        end
+        withenv("DISTSSH_WORKER_RANK" => "nope") do
+            err = try
+                DistSSHRun.worker_pmap(identity, [1])
+                nothing
+            catch e
+                e
+            end
+            @test err !== nothing
+            @test occursin("DISTSSH_WORKER_RANK", sprint(showerror, err))
+        end
+        @test DistSSHRun._skip_global_worker_pkill(
+            DistSSHRun.ProcessEnv(Dict("DISTSSH_SKIP_GLOBAL_WORKER_PKILL" => "true")),
+        )
+        @test_throws ArgumentError DistSSHRun._skip_global_worker_pkill(
+            DistSSHRun.ProcessEnv(Dict("DISTSSH_SKIP_GLOBAL_WORKER_PKILL" => "maybe")),
+        )
+    end
+
     @testset "go slot permit helper bounds concurrency" begin
         inflight = Threads.Atomic{Int}(0)
         peak = Ref(0)

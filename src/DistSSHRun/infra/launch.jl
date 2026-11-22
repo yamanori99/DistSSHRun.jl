@@ -104,12 +104,16 @@ function seed_mix(domain::UInt64, a::UInt64, b::UInt64)::UInt64
     return xor(x, x >> 31)
 end
 
-"""One seed for this run. `DISTSSH_JOB_SEED` wins when it is a `UInt64`."""
+"""One seed for this run. A non-empty `DISTSSH_JOB_SEED` must parse as `UInt64`."""
 function job_seed()::UInt64
     existing = _JOB_SEED[]
     existing !== nothing && return existing
-    parsed = tryparse(UInt64, strip(get(ENV, "DISTSSH_JOB_SEED", "")))
-    seed = parsed === nothing ? rand(UInt64) : parsed
+    raw = strip(get(ENV, "DISTSSH_JOB_SEED", ""))
+    seed = if isempty(raw)
+        rand(UInt64)
+    else
+        DistSSHBase.parse_env_uint64("DISTSSH_JOB_SEED", raw)
+    end
     _JOB_SEED[] = seed
     return seed
 end
@@ -426,7 +430,7 @@ function ssh_addprocs_bind_localhost(host::AbstractString)::String
 end
 
 function ssh_tunnel_enabled()::Bool
-    return get(ENV, "DISTSSH_SSH_TUNNEL", "1") != "0"
+    return DistSSHBase.env_flag("DISTSSH_SSH_TUNNEL", ENV; default = true)
 end
 
 """

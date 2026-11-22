@@ -59,9 +59,9 @@ A numeric or boolean value that does not parse is an error that names the variab
 | `DISTSSH_INIT_DELAY_SEC` | float > 0 | `5` | — | SSH worker init delay; local-only is 0 |
 | `DISTSSH_PING_RETRIES` | int >= 1 | `6` | — | worker ping attempts during drive init |
 | `DISTSSH_JOB_ID` | string | `unset` | — | job id for tagged remote processes |
-| `DISTSSH_JOB_SEED` | uint64 hex | `unset` | — | controller job seed |
+| `DISTSSH_JOB_SEED` | uint64 | `unset` | — | controller job seed |
 | `DISTSSH_WORKER_RANK` | int | `unset` | — | worker rank (set on the slot) |
-| `DISTSSH_WORKER_SEED` | uint64 hex | `unset` | — | per-worker seed (set on the slot) |
+| `DISTSSH_WORKER_SEED` | uint64 | `unset` | — | per-worker seed (set on the slot) |
 | `DISTSSH_SHIP_WARN_FILE_BYTES` | int | `104857600` | — | warn when one shipped file exceeds this |
 | `DISTSSH_SHIP_WARN_TOTAL_BYTES` | int | `unset` | — | warn when the shipped total exceeds this |
 | `DISTSSH_PROGRESS_BG` | string | `unset` | — | progress accent: light or dark |

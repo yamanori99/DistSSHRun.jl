@@ -821,7 +821,7 @@ function _run_drive_parsed_locked!(
         append!(ARGS, script_args)
 
         ENV["DISTSSH_INTERNAL_RUNNER"] = "1"
-        skip_collect = get(ENV, "DISTSSH_SKIP_COLLECT", "") == "1"
+        skip_collect = DistSSHBase.env_flag("DISTSSH_SKIP_COLLECT", ENV; default = false)
         sentinel_placed = place_drive_sentinels!(
             successful_hosts, script_dir, skip_collect, project_root,
         )

@@ -37,6 +37,23 @@ function parse_env_bool(name::AbstractString, raw::AbstractString)::Bool
     )
 end
 
+"""Parse `name` from `env` as a bool. Missing or empty uses `default`."""
+function env_flag(name::AbstractString, env; default::Bool)::Bool
+    haskey(env, String(name)) || return default
+    raw = strip(String(get(env, String(name), "")))
+    isempty(raw) && return default
+    return parse_env_bool(name, raw)
+end
+
+function parse_env_uint64(name::AbstractString, raw::AbstractString)::UInt64
+    s = strip(String(raw))
+    n = tryparse(UInt64, s)
+    n === nothing && throw(
+        ArgumentError("$(name) must be a UInt64, got $(repr(String(raw)))"),
+    )
+    return n
+end
+
 function parse_env_int(
         name::AbstractString,
         raw::AbstractString;

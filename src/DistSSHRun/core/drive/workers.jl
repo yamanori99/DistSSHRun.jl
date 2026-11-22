@@ -17,7 +17,11 @@ function _register_drive_workers!(
 end
 
 function _skip_global_worker_pkill(env::ProcessEnv = invocation_process_env())::Bool
-    return get(env, "DISTSSH_SKIP_GLOBAL_WORKER_PKILL", "") == "1"
+    return DistSSHBase.env_flag(
+        "DISTSSH_SKIP_GLOBAL_WORKER_PKILL",
+        env;
+        default = false,
+    )
 end
 
 # Pre-run local `pkill -f julia.*--worker` is gone: it is not pid-scoped and

@@ -1341,8 +1341,11 @@ const PROGRESS_EMPTY_CHAR = '━'
 # `DISTSSH_PROGRESS_BG=dark|light` overrides `COLORFGBG`.
 function _term_light_background()::Bool
     v = lowercase(strip(get(ENV, "DISTSSH_PROGRESS_BG", "")))
-    v == "light" && return true
-    v == "dark" && return false
+    if !isempty(v)
+        v == "light" && return true
+        v == "dark" && return false
+        throw(ArgumentError("DISTSSH_PROGRESS_BG must be light or dark, got $(repr(v))"))
+    end
     fgbg = get(ENV, "COLORFGBG", "")
     m = match(r";(\d+)\s*$", fgbg)
     m === nothing && return false
