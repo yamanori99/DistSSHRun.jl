@@ -47,7 +47,7 @@ gate_fail_show() {
   printf 'FAIL  %s\n' "${label}" >&2
   printf '%s\n' "----- ${label} output -----" >&2
   cat "${log}" >&2
-  printf '-----\n' >&2
+  printf '%s\n' '-----' >&2
   local sha
   sha="$(git rev-parse HEAD 2>/dev/null || true)"
   if [[ -n "${sha}" ]]; then

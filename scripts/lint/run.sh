@@ -12,6 +12,9 @@ if [[ $# -lt 1 ]]; then
 fi
 mode="${1}"
 shift
+if [[ "${mode}" == self-test ]]; then
+  unset GATE_DIFF_RANGE GATE_DIFF_BASE GATE_DIFF_HEAD
+fi
 use_julia_1_13 || exit 1
 "${JULIA[@]}" --project="${ROOT}/.github/runic" --startup-file=no -e 'using Pkg; Pkg.instantiate()'
 exec "${JULIA[@]}" --project="${ROOT}/.github/runic" --startup-file=no "${ROOT}/scripts/lint/diff_lint.jl" "${mode}" "$@"

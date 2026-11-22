@@ -84,6 +84,8 @@ gate_sha="$(git rev-parse HEAD)"
 stamp_path="$(git_path check-gate-ok)"
 rm -f "${stamp_path}"
 GATE_T0=$SECONDS
+export GATE_DIFF_BASE="${GATE_DIFF_BASE:-origin/main}"
+export GATE_DIFF_HEAD="${GATE_DIFF_HEAD:-HEAD}"
 
 # macOS and Linux, including WSL2, use this same gate.
 # Native Windows is not a supported environment.
@@ -267,70 +269,36 @@ fi
 gate_capture "runic ${runic_pin}" env JULIA_APPS_JULIA_CMD="${JULIA_BIN}" "${runic_bin}" --check --diff .
 
 _ws_start=$SECONDS
+export GATE_DIFF_BASE="origin/main"
+export GATE_DIFF_HEAD="HEAD"
+export GATE_NEWLINE_ALL="${GATE_NEWLINE_ALL:-0}"
 if [[ "${CHECK_VERBOSE}" == 1 ]]; then
-  section "check: whitespace"
-fi
-while IFS= read -r -d '' f; do
-  [[ -f "${f}" ]] || continue
-  numstat="$(git diff --numstat origin/main...HEAD -- "${f}")"
-  if [[ "${numstat}" == -* ]]; then
-    continue
-  fi
-  if [[ ! -s "${f}" ]]; then
-    continue
-  fi
-  last="$(tail -c 1 "${f}" | od -An -tu1 | tr -d '[:space:]')"
-  if [[ "${last}" != "10" ]]; then
-    die "${f} does not end with exactly one newline"
-  fi
-  if [[ "$(tail -c 2 "${f}" | wc -c | tr -d '[:space:]')" -eq 2 ]]; then
-    prev="$(tail -c 2 "${f}" | od -An -tu1 | tr -d '[:space:]')"
-    if [[ "${prev}" == "1010" ]]; then
-      die "${f} ends with more than one newline"
-    fi
-  fi
-done < <(git diff --name-only -z origin/main...HEAD)
-
-git diff --check origin/main...HEAD
-if [[ "${CHECK_VERBOSE}" == 1 ]]; then
+  env GATE_DIFF_BASE="${GATE_DIFF_BASE}" GATE_DIFF_HEAD="${GATE_DIFF_HEAD}" \
+    GATE_NEWLINE_ALL="${GATE_NEWLINE_ALL}" "${ROOT}/scripts/gate/whitespace.sh"
   section "check: whitespace ok"
 else
+  if ! env GATE_DIFF_BASE="${GATE_DIFF_BASE}" GATE_DIFF_HEAD="${GATE_DIFF_HEAD}" \
+    GATE_NEWLINE_ALL="${GATE_NEWLINE_ALL}" "${ROOT}/scripts/gate/whitespace.sh" >/dev/null 2>&1; then
+    _ws_log="$(mktemp)"
+    env GATE_DIFF_BASE="${GATE_DIFF_BASE}" GATE_DIFF_HEAD="${GATE_DIFF_HEAD}" \
+      GATE_NEWLINE_ALL="${GATE_NEWLINE_ALL}" "${ROOT}/scripts/gate/whitespace.sh" >"${_ws_log}" 2>&1 || true
+    gate_fail_show "whitespace" "${_ws_log}" 1
+  fi
   gate_ok "whitespace" "" "$((SECONDS - _ws_start))"
 fi
 
 gate_capture "jetls ${jetls_pin}" env JULIA_APPS_JULIA_CMD="${JULIA_BIN}" "${ROOT}/.github/jetls-check.sh" --progress=none
 
-lint_names=(banned-words agents-md skip-reasons new-comments stdlib-compat ssh-argv drive-hooks aqua-run)
 _lint_start=$SECONDS
-_lint_log="$(mktemp)"
-_lint_fail=""
-for lint in "${lint_names[@]}"; do
-  script="${ROOT}/scripts/lint/${lint}.sh"
-  if [[ ! -x "${script}" ]]; then
-    die "missing ${script#"${ROOT}/"}"
-  fi
-  if [[ "${CHECK_VERBOSE}" == 1 ]]; then
-    section "check: lint ${lint}"
-    "${script}"
-    section "check: lint ${lint} ok"
-  else
-    if ! "${script}" >>"${_lint_log}" 2>&1; then
-      _lint_fail="${lint}"
-      break
-    fi
-  fi
-done
-if [[ "${CHECK_VERBOSE}" != 1 ]]; then
-  if [[ -n "${_lint_fail}" ]]; then
-    gate_fail_show "lint ${_lint_fail}" "${_lint_log}" 1
-  fi
-  rm -f "${_lint_log}"
-  gate_ok "lint" "(${#lint_names[@]} modes)" "$((SECONDS - _lint_start))"
+if [[ "${CHECK_VERBOSE}" == 1 ]]; then
+  env GATE_DIFF_BASE="${GATE_DIFF_BASE}" GATE_DIFF_HEAD="${GATE_DIFF_HEAD}" "${ROOT}/scripts/gate/lint.sh"
+  section "check: lint ok"
+else
+  gate_capture "lint" env GATE_DIFF_BASE="${GATE_DIFF_BASE}" GATE_DIFF_HEAD="${GATE_DIFF_HEAD}" \
+    "${ROOT}/scripts/gate/lint.sh"
 fi
 
-if git diff --name-only origin/main...HEAD | grep -q '^scripts/lint/'; then
-  gate_capture "lint self-test" "${ROOT}/scripts/lint/run.sh" self-test
-fi
+gate_capture "shellcheck" "${ROOT}/scripts/gate/shellcheck.sh"
 
 gate_capture "docs static" "${ROOT}/scripts/docs.sh" static
 gate_capture "docs maybe" "${ROOT}/scripts/docs.sh" maybe
