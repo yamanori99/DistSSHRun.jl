@@ -1,106 +1,25 @@
 # Source churn
 
-Developer view of line churn in package source trees (`src/` and `lib/*/src/`).
-The numbers come from git history on `main` and refresh on the compile-bench
-schedule.
+Developer view of line churn in non-blank `*.jl` files under package `src/`
+trees (`src/` and `lib/*/src/`). Metrics use git history on `main` (rename-aware,
+JST 7d/30d windows) and refresh on the compile-bench schedule.
 
-Published artifacts live on the
-[`bench-data` branch under `churn/`](https://github.com/yamanori99/DistSSHRun.jl/tree/bench-data/churn)
-(`summary.csv`, `report.md`, and `charts/` with PNG and interactive HTML).
+## Where to read the latest report
 
-<!-- CHURN_GENERATED_BEGIN -->
+The live tables and charts are published on the
+[`bench-data`](https://github.com/yamanori99/DistSSHRun.jl/tree/bench-data/churn)
+branch only (not in the repository README):
 
-Lines are non-blank `*.jl` under `src/` and `lib/*/src/`, grouped by package and area.
-Columns use git history through `cc10be9` as of 2026-11-23 (JST).
-Areas list only directories that hold at least one `*.jl` directly and show any 7d or 30d added/deleted lines.
+- [Churn report (`report.md`)](https://github.com/yamanori99/DistSSHRun.jl/blob/bench-data/churn/report.md)
+- [Summary CSV](https://github.com/yamanori99/DistSSHRun.jl/blob/bench-data/churn/summary.csv)
+- PNG previews and interactive HTML under `churn/charts/` (linked from `report.md`)
 
-**(root files)** lists `.jl` files sitting directly in a package `src/` directory, not in a subfolder.
+## Regenerating locally
 
-![30-day churn summary](https://raw.githubusercontent.com/yamanori99/DistSSHRun.jl/bench-data/churn/charts/churn-summary.png)
+```bash
+julia --startup-file=no --project=bench/compile bench/compile/churn_render.jl \
+    --out-dir /tmp/churn-out
+```
 
-![Weekly churn](https://raw.githubusercontent.com/yamanori99/DistSSHRun.jl/bench-data/churn/charts/churn-weekly.png)
-
-![Net churn heatmap](https://raw.githubusercontent.com/yamanori99/DistSSHRun.jl/bench-data/churn/charts/churn-heatmap.png)
-
-Interactive charts (hover for values): [summary](https://raw.githubusercontent.com/yamanori99/DistSSHRun.jl/bench-data/churn/charts/churn-summary.html) · [weekly](https://raw.githubusercontent.com/yamanori99/DistSSHRun.jl/bench-data/churn/charts/churn-weekly.html) · [heatmap](https://raw.githubusercontent.com/yamanori99/DistSSHRun.jl/bench-data/churn/charts/churn-heatmap.html).
-
-### DistSSHBase
-| area | files | LOC | +7d | −7d | net7 | +30d | −30d | net30 | %≥30d old | last touch |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| ssh/ | 9 | 2259 | 649 | 141 | 508 | 1518 | 343 | 1175 | 44.4 | 2026-11-22 |
-| hosts/ | 6 | 1091 | 559 | 147 | 412 | 1093 | 216 | 877 | 18.9 | 2026-11-21 |
-| messages/ | 4 | 403 | 80 | 15 | 65 | 193 | 67 | 126 | 61.7 | 2026-11-22 |
-| (root files) | 5 | 288 | 227 | 3 | 224 | 240 | 11 | 229 | 25.5 | 2026-11-21 |
-| procs/ | 2 | 233 | 250 | 0 | 250 | 250 | 0 | 250 | 0.0 | 2026-11-21 |
-| DistSSHBase.jl | 1 | 83 | 35 | 6 | 29 | 83 | 34 | 49 | 25.8 | 2026-11-21 |
-| argv/ | 1 | 31 | 0 | 0 | 0 | 1 | 1 | 0 | 97.4 | 2026-11-08 |
-
-*(root files)*: component_id.jl, component_src.jl, namespace.jl, record_writer.jl, tool_require.jl.
-
-### DistSSHHeartbeat
-| area | files | LOC | +7d | −7d | net7 | +30d | −30d | net30 | %≥30d old | last touch |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| (root files) | 5 | 198 | 0 | 0 | 0 | 232 | 15 | 217 | 0.0 | 2026-11-13 |
-| DistSSHHeartbeat.jl | 1 | 22 | 0 | 0 | 0 | 30 | 2 | 28 | 0.0 | 2026-11-13 |
-
-*(root files)*: config.jl, deliver.jl, monitor.jl, worker.jl, worker_source.jl.
-
-### DistSSHRun
-| area | files | LOC | +7d | −7d | net7 | +30d | −30d | net30 | %≥30d old | last touch |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| infra/ | 25 | 9940 | 3779 | 577 | 3202 | 11463 | 2264 | 9199 | 11.7 | 2026-11-22 |
-| (root files) | 11 | 5501 | 904 | 536 | 368 | 3518 | 1530 | 1988 | 50.7 | 2026-11-22 |
-| core/drive/ | 12 | 3441 | 818 | 268 | 550 | 2823 | 1176 | 1647 | 40.5 | 2026-11-22 |
-| core/setup/ | 10 | 4168 | 626 | 98 | 528 | 2575 | 507 | 2068 | 46.2 | 2026-11-22 |
-| argv/ | 8 | 2507 | 871 | 387 | 484 | 2047 | 934 | 1113 | 40.7 | 2026-11-22 |
-| drive/ | 7 | 2152 | 637 | 341 | 296 | 1693 | 905 | 788 | 44.9 | 2026-11-22 |
-| cli/ | 15 | 1157 | 426 | 287 | 139 | 1106 | 687 | 419 | 43.1 | 2026-11-22 |
-| options/ | 8 | 1031 | 946 | 77 | 869 | 1107 | 107 | 1000 | 7.5 | 2026-11-22 |
-| messages/ | 3 | 2763 | 457 | 36 | 421 | 767 | 151 | 616 | 77.5 | 2026-11-22 |
-| DistSSHRun.jl | 1 | 533 | 102 | 66 | 36 | 356 | 213 | 143 | 55.6 | 2026-11-22 |
-| core/ | 1 | 171 | 192 | 7 | 185 | 192 | 7 | 185 | 0.0 | 2026-11-22 |
-
-*(root files)*: DistSSHRun/drive.jl, DistSSHRun/execute.jl, DistSSHRun/execute_envelope.jl, DistSSHRun/go.jl, DistSSHRun/heartbeat_module.jl, DistSSHRun/hostinfo.jl, DistSSHRun/pool.jl, DistSSHRun/provenance.jl, DistSSHRun/setup.jl, DistSSHRun/ship_module.jl, DistSSHRun/up_module.jl.
-
-### DistSSHShip
-| area | files | LOC | +7d | −7d | net7 | +30d | −30d | net30 | %≥30d old | last touch |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| (root files) | 8 | 2085 | 430 | 64 | 366 | 2568 | 340 | 2228 | 0.0 | 2026-11-22 |
-| DistSSHShip.jl | 1 | 55 | 9 | 0 | 9 | 88 | 26 | 62 | 0.0 | 2026-11-18 |
-
-*(root files)*: contain.jl, deps.jl, pack.jl, project.jl, record.jl, select.jl, ship.jl, tree_manifest.jl.
-
-### DistSSHUp
-| area | files | LOC | +7d | −7d | net7 | +30d | −30d | net30 | %≥30d old | last touch |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| (root files) | 6 | 602 | 0 | 0 | 0 | 59 | 61 | -2 | 91.3 | 2026-11-07 |
-
-*(root files)*: body.jl, hosts.jl, local.jl, remote.jl, status.jl, version.jl.
-
-
-### Removed paths
-Paths with churn in the window but no file at HEAD.
-| package | path | +30d | −30d | last touch |
-| --- | --- | ---: | ---: | --- |
-| DistSSHSize | `lib/DistSSHSize/src/DistSSHSize.jl` | 14 | 14 | 2026-11-08 |
-| DistSSHSize | `lib/DistSSHSize/src/body.jl` | 12 | 12 | 2026-11-08 |
-| DistSSHSize | `lib/DistSSHSize/src/compute_worker_plan.jl` | 45 | 45 | 2026-11-08 |
-| DistSSHSize | `lib/DistSSHSize/src/worker_plan.jl` | 114 | 114 | 2026-11-08 |
-| DistSSHRun | `src/DistSSHRun/argv/plan_args.jl` | 9 | 138 | 2026-11-06 |
-| DistSSHRun | `src/DistSSHRun/argv/ride_args.jl` | 117 | 273 | 2026-11-21 |
-| DistSSHRun | `src/DistSSHRun/argv/size_args.jl` | 14 | 150 | 2026-11-08 |
-| DistSSHRun | `src/DistSSHRun/argv/size_report.jl` | 0 | 134 | 2026-11-08 |
-| DistSSHRun | `src/DistSSHRun/drive/runtime/heartbeat.jl` | 0 | 49 | 2026-11-09 |
-| DistSSHRun | `src/DistSSHRun/drive/size.jl` | 1 | 113 | 2026-11-08 |
-| DistSSHRun | `src/DistSSHRun/infra/script_scan.jl` | 315 | 315 | 2026-11-21 |
-| DistSSHRun | `src/DistSSHRun/plan.jl` | 220 | 684 | 2026-11-06 |
-| DistSSHRun | `src/DistSSHRun/ride.jl` | 384 | 1147 | 2026-11-21 |
-| DistSSHRun | `src/DistSSHRun/size/measure.jl` | 15 | 253 | 2026-11-08 |
-| DistSSHRun | `src/DistSSHRun/size_module.jl` | 18 | 18 | 2026-11-08 |
-| DistSSHRun | `src/cli/plan.jl` | 17 | 73 | 2026-11-06 |
-| DistSSHRun | `src/cli/plan/_using.jl` | 0 | 6 | 2026-11-06 |
-| DistSSHRun | `src/cli/ride.jl` | 113 | 176 | 2026-11-21 |
-| DistSSHRun | `src/cli/ride/_using.jl` | 0 | 9 | 2026-11-21 |
-| DistSSHRun | `src/cli/size/_using.jl` | 0 | 9 | 2026-11-08 |
-
-<!-- CHURN_GENERATED_END -->
+Optional: `--append-docs PATH --docs-chart-base URL` splices generated tables into a
+markdown file (for ad-hoc previews only; CI does not commit docs sources).
