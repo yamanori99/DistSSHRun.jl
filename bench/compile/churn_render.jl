@@ -36,14 +36,15 @@ function splice_churn_section(readme_path::AbstractString, section::AbstractStri
         end
         return nothing
     end
-    rest = text[(start_m.offset + length(start_m.match)):end]
+    start_i = last(start_m.offset)
+    rest = text[(start_i + length(start_m.match)):end]
     stop = findfirst("\n## ", rest[2:end])
     tail = if stop === nothing
         ""
     else
         rest[(stop + 1):end]
     end
-    head = text[1:(start_m.offset)]
+    head = text[1:(start_i - 1)]
     open(readme_path, "w") do io
         write(io, head)
         write(io, section)
