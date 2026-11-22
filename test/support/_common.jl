@@ -169,26 +169,26 @@ if !isdefined(@__MODULE__, :_test_root)
     # A function, not a `const` inside this `if`: JETLS reports that `const` as an undefined global.
     function _distsshrun_short_skip_paths()
         return (
-            "unit/DistSSHRun/options/process_env.jl",
-            "unit/DistSSHRun/core/drive/workers.jl",
-            "unit/DistSSHRun/execute.jl",
-            "unit/DistSSHRun/core/setup/checks.jl",
-            "unit/DistSSHRun/core/setup/send_list.jl",
-            "integration/cli/help.jl",
-            "integration/setup/exit.jl",
+            "unit/DistSSHRun/options/process_env.jl", # process env snapshot tests
+            "unit/DistSSHRun/core/drive/workers.jl", # long local worker spawn
+            "unit/DistSSHRun/execute.jl", # long detach and polling paths
+            "unit/DistSSHRun/core/setup/checks.jl", # juliaup channel fixtures
+            "unit/DistSSHRun/core/setup/send_list.jl", # large send-list oracle
+            "integration/cli/help.jl", # CLI help golden output
+            "integration/setup/exit.jl", # setup exit-code matrix
             # Pseudo-TTY (`script`) suites: ordinary checkout CI keeps them.
             # PkgEval and Registry install set JULIA_PKGEVAL=true and skip them.
-            "integration/setup/progress_tty.jl",
-            "integration/drive/progress_tty.jl",
-            "integration/drive/reuse_main_isolated.jl",
-            "integration/drive/execute.jl",
-            "integration/drive/interrupt_grace.jl",
-            "integration/drive/pkg.jl",
-            "integration/drive/log_via_script.jl",
-            "integration/drive/log_via_module.jl",
-            "integration/drive/pkg_develop.jl",
-            "integration/demos/with_kit.jl",
-            "integration/demos/without_kit.jl",
+            "integration/setup/progress_tty.jl", # pseudo-TTY script suite (short CI)
+            "integration/drive/progress_tty.jl", # pseudo-TTY drive progress
+            "integration/drive/reuse_main_isolated.jl", # isolated Main reuse drive path
+            "integration/drive/execute.jl", # long-running execute integration
+            "integration/drive/interrupt_grace.jl", # interrupt grace timing
+            "integration/drive/pkg.jl", # Pkg-heavy drive path
+            "integration/drive/log_via_script.jl", # script-driven log capture
+            "integration/drive/log_via_module.jl", # module-driven log capture
+            "integration/drive/pkg_develop.jl", # Pkg.develop integration
+            "integration/demos/with_kit.jl", # DistSSHKit demo subprocess
+            "integration/demos/without_kit.jl", # kit-less demo subprocess
         )
     end
 
