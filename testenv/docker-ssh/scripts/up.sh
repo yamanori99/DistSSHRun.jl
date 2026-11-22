@@ -59,7 +59,7 @@ for arg in "$@"; do
       echo "  DISTSSH_WORKER_IMAGE  pull this tag (skip compose build)"
       echo "  DISTSSH_PUSH_IMAGE    after build, tag and push (retried)"
       echo "  DISTSSH_SKIP_UP=1     skip compose up (push-only)"
-      echo "  DISTSSH_CODE_COVERAGE=1  e2e with --code-coverage=user (child CLI too)"
+      echo "  DISTSSH_CODE_COVERAGE=1  e2e with scoped --code-coverage=@src (kit trees)"
       echo "  DISTSSH_BUILD_RETRIES=N  image build attempts (default 3)"
       echo "  DISTSSH_BUILD_CACHE=gha  CI only: buildx with the GitHub Actions layer cache"
       exit 0
@@ -169,7 +169,8 @@ if [[ "$RUN_E2E" -eq 1 ]]; then
   '
   julia_e2e=(julia --project=. --color=yes)
   if [[ "${DISTSSH_CODE_COVERAGE:-}" == "1" ]]; then
-    julia_e2e+=(--code-coverage=user)
+    mapfile -d '' _cov_flags < <("${ROOT}/../scripts/e2e-coverage-flags.sh" "${KIT_ROOT}")
+    julia_e2e+=("${_cov_flags[@]}")
   fi
   e2e_status=0
   "${julia_e2e[@]}" test/e2e.jl || e2e_status=$?

@@ -702,7 +702,6 @@ jobs:
       - test
       - test-macos
       - test-wsl
-      - downstream
       - up-test
       - ship-test
       - heartbeat-test
@@ -710,7 +709,7 @@ jobs:
       - jetls
       - aqua
       - cache-gc
-    if: always()
+    if: always() && !cancelled()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     name: notify
@@ -720,20 +719,20 @@ jobs:
       - name: Open or close tracking issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          FAILED: ${{ contains(join(needs.*.result, ','), 'failure') }}
+          TITLE: CI weekly failed
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          title='CI weekly failed'
-          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label alert --search "in:title $title" --json number --jq '.[0].number // empty')"
-          if [ "$FAILED" = "true" ]; then
-            body="Latest run: $RUN_URL
+          BODY_PREFIX: |+
+            Not a PR check. Re-run **CI weekly** after a fix. Downstream is not monitored.
 
-          Not a PR check. Re-run **CI weekly** after a fix."
-            if [ -n "$existing" ]; then
-              gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
-            else
-              gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label alert --body "$body"
-            fi
-          elif [ -n "$existing" ]; then
-            gh issue close "$existing" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Latest run succeeded: $RUN_URL"
-          fi
+          MONITOR_RESULTS: |
+            test:${{ needs.test.result }}
+            test-macos:${{ needs.test-macos.result }}
+            test-wsl:${{ needs.test-wsl.result }}
+            up-test:${{ needs.up-test.result }}
+            ship-test:${{ needs.ship-test.result }}
+            heartbeat-test:${{ needs.heartbeat-test.result }}
+            base-test:${{ needs.base-test.result }}
+            jetls:${{ needs.jetls.result }}
+            aqua:${{ needs.aqua.result }}
+            cache-gc:${{ needs.cache-gc.result }}
+        run: bash .github/ci-alert-notify.sh
