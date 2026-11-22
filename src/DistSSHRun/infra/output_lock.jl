@@ -162,7 +162,7 @@ end
 function _leaf_job_id(name::AbstractString)::Union{Nothing, String}
     m = match(r"^.*_[0-9]{8}T[0-9]{6}Z_(.+)$", String(name))
     m === nothing && return nothing
-    job = String(m.captures[1])
+    job = String(something(m.captures[1], ""))
     try
         return _parse_kit_job_id(job)
     catch
@@ -197,7 +197,6 @@ end
 
 """Shell helpers for `.distssh.lock` liveness. Values are embedded here."""
 function _output_lock_shell_helpers()::String
-    writer_q = posix_quote(_output_lock_writer())
     maj, minr = DistSSHBase.record_writer_minor_parts(dist_ssh_kit_version())
     awk = raw"""
               {
