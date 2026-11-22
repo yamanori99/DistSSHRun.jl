@@ -35,7 +35,7 @@ makedocs(;
     checkdocs = :public,
     linkcheck = get(ENV, "DOCUMENTER_LINKCHECK", "") == "1",
     linkcheck_ignore = [
-        r"https?://github\.com/yamanori99/DistSSHRun\.jl/(?:blob|tree)/main/",
+        r"https?://github\.com/yamanori99/DistSSHRun\.jl/(?:blob|tree)/(?:main|bench-data)/",
     ],
 )
 

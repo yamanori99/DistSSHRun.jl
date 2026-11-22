@@ -1,5 +1,7 @@
 # Interactive churn charts (stdlib only; Plotly.js from CDN).
 
+using Dates
+
 const CHURN_PLOTLY_CDN = "https://cdn.plot.ly/plotly-2.35.2.min.js"
 const CHURN_HTML_MAX_BYTES = 200_000
 
