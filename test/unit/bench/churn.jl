@@ -3,6 +3,7 @@ using Dates
 
 include(joinpath(@__DIR__, "..", "..", "..", "bench", "compile", "churn_compute.jl"))
 using .ChurnCompute
+include(joinpath(@__DIR__, "..", "..", "..", "bench", "compile", "churn_report.jl"))
 
 function with_churn_repo(f)
     dir = mktempdir()
@@ -27,6 +28,13 @@ end
 function git_commit(dir, msg)
     run(`git -C $dir add -A`)
     run(`git -C $dir commit -q -m $msg`)
+    return nothing
+end
+
+function git_commit_at(dir, msg, when::AbstractString)
+    withenv("GIT_AUTHOR_DATE" => when, "GIT_COMMITTER_DATE" => when) do
+        git_commit(dir, msg)
+    end
     return nothing
 end
 
@@ -63,28 +71,61 @@ end
         end
     end
 
+    @testset "rename and edit in one commit" begin
+        with_churn_repo() do dir
+            fixed = DateTime(2026, 6, 15, 12)
+            write_jl(dir, "src/Alpha.jl", "module Alpha\none\nend\n")
+            git_commit_at(dir, "add", "2026-06-01T12:00:00")
+            mv(joinpath(dir, "src", "Alpha.jl"), joinpath(dir, "src", "Beta.jl"))
+            write(joinpath(dir, "src", "Beta.jl"), "module Beta\none\ntwo\nthree\nend\n")
+            git_commit_at(dir, "rename edit", "2026-06-14T12:00:00")
+            report = ChurnCompute.compute_churn(dir; now = fixed)
+            row = only(report.areas)
+            @test row.added_30 >= 2
+        end
+    end
+
     @testset "7d and 30d windows and removed paths" begin
         with_churn_repo() do dir
             fixed = DateTime(2026, 6, 15, 12)
             write_jl(dir, "src/Old.jl", "x = 1\n")
-            ENV["GIT_AUTHOR_DATE"] = "2026-05-01T12:00:00"
-            ENV["GIT_COMMITTER_DATE"] = "2026-05-01T12:00:00"
-            git_commit(dir, "old file")
-            delete!(ENV, "GIT_AUTHOR_DATE")
-            delete!(ENV, "GIT_COMMITTER_DATE")
+            git_commit_at(dir, "old file", "2026-05-01T12:00:00")
             write_jl(dir, "src/Keep.jl", "y = 1\n")
-            ENV["GIT_AUTHOR_DATE"] = "2026-06-10T12:00:00"
-            ENV["GIT_COMMITTER_DATE"] = "2026-06-10T12:00:00"
-            git_commit(dir, "keep")
+            git_commit_at(dir, "keep", "2026-06-10T12:00:00")
             rm(joinpath(dir, "src", "Old.jl"))
-            ENV["GIT_AUTHOR_DATE"] = "2026-06-12T12:00:00"
-            ENV["GIT_COMMITTER_DATE"] = "2026-06-12T12:00:00"
-            git_commit(dir, "remove old")
+            git_commit_at(dir, "remove old", "2026-06-12T12:00:00")
             report = ChurnCompute.compute_churn(dir; now = fixed)
             @test any(r.path == "src/Old.jl" for r in report.removed)
             keep = only(filter(r -> occursin("Keep", r.area) || r.files == 1, report.areas))
             @test keep.added_7 >= 1
         end
+    end
+
+    @testset "30d window excludes older churn" begin
+        with_churn_repo() do dir
+            fixed = DateTime(2026, 6, 15, 12)
+            path = write_jl(dir, "src/Stale.jl", "a = 1\n")
+            git_commit_at(dir, "stale", "2026-04-01T12:00:00")
+            write(path, "a = 1\nb = 2\n")
+            git_commit_at(dir, "recent", "2026-06-10T12:00:00")
+            report = ChurnCompute.compute_churn(dir; now = fixed)
+            row = only(report.areas)
+            @test row.added_30 == 1
+        end
+    end
+
+    @testset "map_to_head chains renames within a commit" begin
+        commits = ["c1", "c2"]
+        per = [
+            Dict{String, String}(),
+            Dict("src/A.jl" => "src/B.jl", "src/B.jl" => "src/C.jl"),
+        ]
+        @test ChurnCompute.map_to_head("src/A.jl", 1, commits, per) == "src/C.jl"
+    end
+
+    @testset "normalize_numstat_path" begin
+        @test ChurnCompute.normalize_numstat_path("src/A.jl => src/B.jl") == "src/B.jl"
+        @test ChurnCompute.normalize_numstat_path("src/X.jl") == "src/X.jl"
     end
 
     @testset "area labels" begin
@@ -114,25 +155,32 @@ end
             fixed = DateTime(2026, 6, 15, 12)
             write_jl(dir, "src/DistSSHRun.jl", "module DistSSHRun\nend\n")
             write_jl(dir, "src/DistSSHRun/core/drive/run.jl", "x = 1\n")
-            ENV["GIT_AUTHOR_DATE"] = "2026-01-01T12:00:00"
-            ENV["GIT_COMMITTER_DATE"] = "2026-01-01T12:00:00"
-            git_commit(dir, "init nested")
-            delete!(ENV, "GIT_AUTHOR_DATE")
-            delete!(ENV, "GIT_COMMITTER_DATE")
-            ENV["GIT_AUTHOR_DATE"] = "2026-06-10T12:00:00"
-            ENV["GIT_COMMITTER_DATE"] = "2026-06-10T12:00:00"
+            git_commit_at(dir, "init nested", "2026-01-01T12:00:00")
             write(
                 joinpath(dir, "src", "DistSSHRun", "core", "drive", "run.jl"),
                 "x = 1\ny = 2\n",
             )
-            git_commit(dir, "edit drive")
-            delete!(ENV, "GIT_AUTHOR_DATE")
-            delete!(ENV, "GIT_COMMITTER_DATE")
+            git_commit_at(dir, "edit drive", "2026-06-10T12:00:00")
             report = ChurnCompute.compute_churn(dir; now = fixed)
             areas = [r.area for r in report.areas if r.package == "DistSSHRun"]
             @test "core/drive/" in areas
             @test !("core/" in areas)
             @test !any(r -> r.area == "DistSSHRun.jl", report.areas)
+        end
+    end
+
+    @testset "splice churn section at readme start" begin
+        dir = mktempdir()
+        try
+            readme = joinpath(dir, "README.md")
+            write(readme, "## Source churn\n\nold table\n\n## Compile bench\n\ntail\n")
+            splice_churn_section(readme, "## Source churn\n\nnew table\n\n")
+            text = read(readme, String)
+            @test occursin("new table", text)
+            @test !occursin("old table", text)
+            @test occursin("## Compile bench", text)
+        finally
+            rm(dir; force = true, recursive = true)
         end
     end
 end

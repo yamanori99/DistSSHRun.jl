@@ -3,7 +3,15 @@ module ChurnCompute
 
 using Dates
 
-export AreaRow, ChurnReport, RemovedPathRow, area_label, area_row_included, compute_churn, jst_today
+export AreaRow,
+    ChurnReport,
+    RemovedPathRow,
+    area_label,
+    area_row_included,
+    compute_churn,
+    jst_today,
+    map_to_head,
+    normalize_numstat_path
 
 const JST_OFFSET = Hour(9)
 const REPO_ROOT = normpath(joinpath(@__DIR__, "..", ".."))
@@ -141,6 +149,17 @@ function count_code_lines(path::AbstractString)::Int
     return n
 end
 
+function normalize_numstat_path(path::AbstractString)::String
+    occursin(" => ", path) || return String(path)
+    parts = split(path, " => ")
+    return strip(parts[end])
+end
+
+function commits_since_chrono(repo::AbstractString, since::AbstractString)::Vector{String}
+    text = read(`git -C $repo log --since=$since --reverse --pretty=format:%H`, String)
+    return collect(eachsplit(strip(text), '\n'; keepempty = false))
+end
+
 function parse_commit_times(repo::AbstractString, since::AbstractString)::Dict{String, DateTime}
     text = read(`git -C $repo log --since=$since --pretty=format:%H%x09%at`, String)
     out = Dict{String, DateTime}()
@@ -221,9 +240,9 @@ function parse_numstat_log(repo::AbstractString, since::AbstractString)::Vector{
         isempty(commit) && continue
         m = match(r"^(\d+|-)\t(\d+|-)\t(.+)$", line)
         m === nothing && continue
-        path = m.captures[3]
-        path === nothing && continue
-        occursin(r" => ", path) && continue
+        raw_path = m.captures[3]
+        raw_path === nothing && continue
+        path = normalize_numstat_path(raw_path)
         a_raw, d_raw = m.captures[1], m.captures[2]
         a = a_raw === nothing || a_raw == "-" ? 0 : parse(Int, a_raw)
         d = d_raw === nothing || d_raw == "-" ? 0 : parse(Int, d_raw)
@@ -249,11 +268,9 @@ function build_forward_renames(repo::AbstractString, commits_chrono::Vector{Stri
 end
 
 function map_to_head(path::AbstractString, commit_idx::Int, commits::Vector{String}, per_commit::Vector{Dict{String, String}})::String
-    p = path
+    p = String(path)
     for i in (commit_idx + 1):length(commits)
-        for (old, new) in per_commit[i]
-            p == old && (p = new)
-        end
+        p = path_at_head(per_commit[i], p)
     end
     return p
 end
@@ -296,7 +313,7 @@ function compute_churn(repo::AbstractString = REPO_ROOT; now::DateTime = Dates.n
     since7 = head_date - Day(7)
     since_git = string(since30 - Day(1))
     commit_times = parse_commit_times(repo, since_git)
-    commits = sort(collect(keys(commit_times)); by = c -> commit_times[c])
+    commits = commits_since_chrono(repo, since_git)
     per_commit = build_forward_renames(repo, commits)
     commit_index = Dict(c => i for (i, c) in enumerate(commits))
     files = collect_source_files(repo)
@@ -317,12 +334,16 @@ function compute_churn(repo::AbstractString = REPO_ROOT; now::DateTime = Dates.n
     weekly_added = Dict{Date, Int}()
     weekly_deleted = Dict{Date, Int}()
     numstat = parse_numstat_log(repo, since_git)
+    move_only_cache = Dict{String, Set{String}}()
     for row in numstat
         scoped_path(row.path) || continue
         idx = get(commit_index, row.commit, nothing)
         idx === nothing && continue
         commit_day = jst_today(commit_times[row.commit])
-        move_only = move_only_paths(repo, row.commit)
+        commit_day < since30 && continue
+        move_only = get!(move_only_cache, row.commit) do
+            move_only_paths(repo, row.commit)
+        end
         row.path in move_only && continue
         head_path = map_to_head(row.path, idx, commits, per_commit)
         touch = get(path_last_touch, head_path, nothing)

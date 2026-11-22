@@ -1,5 +1,8 @@
 # PNG charts for source churn (PlotlyJS + Kaleido).
 
+import Pkg
+Pkg.activate(@__DIR__)
+Pkg.instantiate()
 using Dates
 using PlotlyJS
 

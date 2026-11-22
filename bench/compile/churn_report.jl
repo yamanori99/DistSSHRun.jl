@@ -69,6 +69,35 @@ function render_churn_markdown(report, chart_prefix::AbstractString)::String
     return join(lines, "\n")
 end
 
+function splice_churn_section(readme_path::AbstractString, section::AbstractString)
+    heading = "## Source churn"
+    isfile(readme_path) || return write(readme_path, section)
+    text = read(readme_path, String)
+    if startswith(text, heading)
+        body_start = findfirst('\n', text)
+        body_start === nothing && return write(readme_path, section)
+        body = text[(body_start + 1):end]
+        stop = findfirst("\n## ", body)
+        tail = stop === nothing ? "" : body[first(stop):end]
+        write(readme_path, section * tail)
+        return nothing
+    end
+    marker = "\n" * heading * "\n"
+    idx = findfirst(marker, text)
+    if idx === nothing
+        sep = endswith(text, "\n") ? "\n" : "\n\n"
+        write(readme_path, text * sep * section)
+        return nothing
+    end
+    start_pos = first(idx)
+    head = text[begin:start_pos]
+    rest = text[(start_pos + length(marker)):end]
+    stop = findfirst("\n## ", rest)
+    tail = stop === nothing ? "" : rest[first(stop):end]
+    write(readme_path, head * section * tail)
+    return nothing
+end
+
 function write_churn_csv(report, path::AbstractString)
     open(path, "w") do io
         println(io, "package,area,files,loc,added_7,deleted_7,net_7,added_30,deleted_30,net_30,stale_pct,last_touch_jst")

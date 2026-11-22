@@ -110,6 +110,8 @@ jobs:
 
   source-churn-render:
     name: Source churn render
+    needs:
+      - render
     if: always() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
