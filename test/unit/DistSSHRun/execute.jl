@@ -599,8 +599,8 @@ end
         @test DistSSHRun.execute_detached_accepts(:allow_external_symlinks; kind = :drive)
         @test DistSSHRun.execute_detached_accepts(:unsafe_skip_env_digests; kind = :go)
         @test DistSSHRun.execute_detached_accepts(:unsafe_skip_env_digests; kind = :drive)
-        @test DistSSHRun.execute_detached_accepts(:run_id; kind = :go)
-        @test DistSSHRun.execute_detached_accepts(:run_id; kind = :drive)
+        @test DistSSHRun.execute_detached_accepts(:ship_id; kind = :go)
+        @test DistSSHRun.execute_detached_accepts(:ship_id; kind = :drive)
         @test DistSSHRun.execute_detached_accepts(:worker_include; kind = :drive)
         @test !DistSSHRun.execute_detached_accepts(:worker_include; kind = :go)
         @test !DistSSHRun.execute_detached_accepts(:spi_check; kind = :go)
@@ -796,9 +796,9 @@ end
             package = nothing,
             best_effort = false,
             skip_hash_check = true,
-            run_id = "20260101T000000Z-aaaaaa"
+            ship_id = "20260101T000000Z-aaaaaa"
         )
-        @test "--run-id" in argv_snap
+        @test "--ship-id" in argv_snap
         @test "20260101T000000Z-aaaaaa" in argv_snap
         argv_root = DistSSHRun._execute_detached_argv(
             :go, "job.jl", String[], String[]; head_slots = 1,
@@ -828,17 +828,17 @@ end
             ]
         )
         gkw = DistSSHRun.execute_kwargs_from_parsed(go; kind = :go)
-        @test !haskey(gkw, :run_id)
+        @test !haskey(gkw, :ship_id)
         go_snap = DistSSHRun.parse_go_args(
-            ["--run-id", "20260101T000000Z-aaaaaa", "--head-slots", "1", "job.jl"]
+            ["--ship-id", "20260101T000000Z-aaaaaa", "--head-slots", "1", "job.jl"]
         )
         gsnap = DistSSHRun.execute_kwargs_from_parsed(go_snap; kind = :go)
-        @test gsnap[:run_id] == "20260101T000000Z-aaaaaa"
+        @test gsnap[:ship_id] == "20260101T000000Z-aaaaaa"
         drive_snap = DistSSHRun.parse_drive_args(
-            ["--run-id", "20260101T000000Z-aaaaaa", "--head-workers", "1", "s.jl"]
+            ["--ship-id", "20260101T000000Z-aaaaaa", "--head-workers", "1", "s.jl"]
         )
         dsnap = DistSSHRun.execute_kwargs_from_parsed(drive_snap; kind = :drive)
-        @test dsnap[:run_id] == "20260101T000000Z-aaaaaa"
+        @test dsnap[:ship_id] == "20260101T000000Z-aaaaaa"
         @test !haskey(dsnap, :sync)
         go_root = DistSSHRun.parse_go_args(
             ["--deploy-root", "/tmp/App", "--head-slots", "1", "job.jl"]
@@ -920,7 +920,7 @@ end
         @test occursin("Error:", shown)
         @test occursin("go: --ship-tree was removed", shown)
         @test occursin("setup ship-tree", shown)
-        @test occursin("--run-id", shown)
+        @test occursin("--ship-id", shown)
         errd = try
             kit_parse_args(:drive, String["--ship-tree", "--head-workers", "1", "s.jl"])
             nothing
@@ -930,10 +930,10 @@ end
         @test errd isa ArgumentError
         @test occursin("drive: --ship-tree was removed", errd.msg)
         parsed = kit_parse_args(
-            :go, String["--run-id", "20260101T000000Z-aaaaaa", "--head-slots", "1", "job.jl"]
+            :go, String["--ship-id", "20260101T000000Z-aaaaaa", "--head-slots", "1", "job.jl"]
         )
         bag = DistSSHRun.execute_kwargs_from_parsed(parsed; kind = :go)
-        @test bag[:run_id] == "20260101T000000Z-aaaaaa"
+        @test bag[:ship_id] == "20260101T000000Z-aaaaaa"
         @test !haskey(bag, :sync)
         err_go_sync = try
             kit_parse_args(:go, String["--sync", "--head-slots", "1", "job.jl"])
@@ -1057,11 +1057,11 @@ end
             package = nothing,
             best_effort = false,
             skip_hash_check = true,
-            run_id = "20260101T000000Z-aaaaaa",
+            ship_id = "20260101T000000Z-aaaaaa",
             remote = "/remote"
         )
         @test !any(==("--ship-tree"), argv)
-        @test "--run-id" in argv
+        @test "--ship-id" in argv
         @test argv[end] == "/remote/src/app/_distsshrun_external/job.jl"
         err_ext = try
             DistSSHRun.execute!(
@@ -1099,7 +1099,7 @@ end
                         script, ["1*h"];
                         project = proj,
                         remote = "/home/dev/app",
-                        run_id = "20260101T000000Z-aaaaaa",
+                        ship_id = "20260101T000000Z-aaaaaa",
                         quiet = true
                     )
                 end
@@ -1149,19 +1149,19 @@ end
             write(script, "write($(repr(marker)), \"yes\")\n")
             mktemp() do _, out_io
                 mktemp() do _, err_io
-                    _, kp = _capture_detached_env_log() do
+                    _, detached = _capture_detached_env_log() do
                         DistSSHRun.execute!(
                             :go,
                             script, String[]; head_slots = 1,
                             detached = true,
                             project = app,
-                            run_id = "20260101T000000Z-aaaaaa",
+                            ship_id = "20260101T000000Z-aaaaaa",
                             quiet = true,
                             stdout = out_io,
                             stderr = err_io
                         )
                     end
-                    result = wait(kp)
+                    result = wait(detached)
                     @test result isa DistSSHRun.DistSSHJobResult
                     @test result.ok
                     @test result.exit_code == 0
@@ -1212,7 +1212,7 @@ end
             )
             mktemp() do _, out_io
                 mktemp() do _, err_io
-                    _, kp = _capture_detached_env_log() do
+                    _, detached = _capture_detached_env_log() do
                         DistSSHRun.execute!(
                             :go,
                             script, String[]; head_slots = 1,
@@ -1224,32 +1224,32 @@ end
                             stderr = err_io
                         )
                     end
-                    out_dir = kp.output_dir
+                    out_dir = detached.output_dir
                     @test out_dir !== nothing
                     pid_path = joinpath(out_dir, "kit.pid")
-                    if process_running(kp.process)
+                    if process_running(detached.process)
                         t0 = time()
-                        while !isfile(pid_path) && process_running(kp.process) && (time() - t0) < 5
+                        while !isfile(pid_path) && process_running(detached.process) && (time() - t0) < 5
                             sleep(0.05)
                         end
                         if isfile(pid_path)
                             rec = DistSSHRun._read_kit_pid_record(out_dir)
                             @test rec !== nothing
-                            @test rec.pid == getpid(kp.process)
+                            @test rec.pid == getpid(detached.process)
                         end
                     end
-                    result = wait(kp)
+                    result = wait(detached)
                     flush(out_io)
                     flush(err_io)
-                    @test kp isa DistSSHRun.DetachedProcess
-                    @test kp.kind === :go
-                    @test kp.log_dir === nothing
-                    @test kp.output_dir !== nothing
+                    @test detached isa DistSSHRun.DetachedProcess
+                    @test detached.kind === :go
+                    @test detached.log_dir === nothing
+                    @test detached.output_dir !== nothing
                     @test result isa DistSSHRun.DistSSHJobResult
                     @test result.kind === :go
                     @test result.ok
                     @test result.exit_code == 0
-                    @test result.output_dir == kp.output_dir
+                    @test result.output_dir == detached.output_dir
                     @test result.log_dir === nothing
                     @test read(joinpath(result.output_dir, _go_local_slot_label(), "args.txt"), String) == "8"
                     @test !isfile(pid_path)
@@ -1282,7 +1282,7 @@ end
             )
             mktemp() do _, out_io
                 mktemp() do _, err_io
-                    _, kp = _capture_detached_env_log() do
+                    _, detached = _capture_detached_env_log() do
                         DistSSHRun.execute!(
                             :go,
                             script, String[]; head_slots = 1,
@@ -1294,7 +1294,7 @@ end
                             stderr = err_io
                         )
                     end
-                    result = wait(kp)
+                    result = wait(detached)
                     @test result.ok
                     out_dir = result.output_dir
                     @test out_dir !== nothing
@@ -1322,7 +1322,7 @@ end
                 mkpath(out)
                 """
             )
-            _, kp = _capture_detached_env_log() do
+            _, detached = _capture_detached_env_log() do
                 DistSSHRun.execute!(
                     :go,
                     script, String[]; head_slots = 1,
@@ -1331,11 +1331,11 @@ end
                     quiet = true
                 )
             end
-            result = wait(kp)
+            result = wait(detached)
             @test result.ok
-            @test kp.run_dir !== nothing
-            @test isfile(joinpath(kp.run_dir, "kit.out"))
-            @test isfile(joinpath(kp.run_dir, "kit.err"))
+            @test detached.run_dir !== nothing
+            @test isfile(joinpath(detached.run_dir, "kit.out"))
+            @test isfile(joinpath(detached.run_dir, "kit.err"))
         end
     end
 
@@ -1372,7 +1372,7 @@ end
                 sleep(60)
                 """
             )
-            _, kp = _capture_detached_env_log() do
+            _, detached = _capture_detached_env_log() do
                 DistSSHRun.execute!(
                     :go,
                     script, String[]; head_slots = 1,
@@ -1381,16 +1381,16 @@ end
                     quiet = true
                 )
             end
-            hung = wait(kp; timeout = 0.4)
+            hung = wait(detached; timeout = 0.4)
             @test hung.ok === false
             @test hung.failed_step == "hung"
             @test hung.exit_code == 124
-            @test process_running(kp.process)
+            @test process_running(detached.process)
             slots = _wait_tagged_go_handshake_rows()
             @test !isempty(slots)
             pids = Set(row.pid for row in slots)
-            killed = DistSSHRun.terminate!(kp; grace = 2)
-            @test !process_running(kp.process)
+            killed = DistSSHRun.cancel!(detached; grace = 2)
+            @test !process_running(detached.process)
             @test killed isa DistSSHRun.DistSSHJobResult
             gone = DistSSHRun.DistSSHBase.wait_gone(_tagged_go_handshake_rows; timeout = 5.0)
             @test isempty(gone)
@@ -1398,7 +1398,7 @@ end
         end
     end
 
-    @testset "terminate! detached go" begin
+    @testset "cancel! detached go" begin
         _with_tempdir() do proj
             _write_job_with_distsshrun!(proj)
             script = joinpath(proj, "job.jl")
@@ -1411,7 +1411,7 @@ end
             )
             mktemp() do _, out_io
                 mktemp() do _, err_io
-                    _, kp = _capture_detached_env_log() do
+                    _, detached = _capture_detached_env_log() do
                         DistSSHRun.execute!(
                             :go,
                             script, String[]; head_slots = 1,
@@ -1426,9 +1426,9 @@ end
                     slots = _wait_tagged_go_handshake_rows()
                     @test !isempty(slots)
                     pids = Set(row.pid for row in slots)
-                    result = DistSSHRun.terminate!(kp; grace = 2)
+                    result = DistSSHRun.cancel!(detached; grace = 2)
                     @test result isa DistSSHRun.DistSSHJobResult
-                    @test !process_running(kp.process)
+                    @test !process_running(detached.process)
                     @test result.kind === :go
                     gone = DistSSHRun.DistSSHBase.wait_gone(
                         _tagged_go_handshake_rows; timeout = 5.0,
@@ -1440,21 +1440,21 @@ end
         end
     end
 
-    @testset "terminate! kit sidecars split across run_dir and output_dir" begin
+    @testset "cancel! kit sidecars split across run_dir and output_dir" begin
         mktempdir() do run_d
             mktempdir() do out_d
                 write(joinpath(run_d, "kit.job"), "j-sidecar\n")
                 DistSSHRun._write_kit_hosts_file(["worker-1"], out_d, nothing)
                 proc = run(ignorestatus(`sleep 30`); wait = false)
                 try
-                    kp = DistSSHRun.DetachedProcess(
+                    detached = DistSSHRun.DetachedProcess(
                         proc;
                         kind = :drive,
                         output_dir = out_d,
                         run_dir = run_d,
                     )
-                    @test DistSSHRun._read_kit_job_id_for_reap(kp) == "j-sidecar"
-                    @test DistSSHRun._read_kit_hosts_for_reap(kp) == ["worker-1"]
+                    @test DistSSHRun._read_kit_job_id_for_reap(detached) == "j-sidecar"
+                    @test DistSSHRun._read_kit_hosts_for_reap(detached) == ["worker-1"]
                 finally
                     process_running(proc) && kill(proc)
                     wait(proc)
@@ -1465,8 +1465,8 @@ end
             write(joinpath(log_d, "kit.job"), "j-log\n")
             proc = run(ignorestatus(`sleep 30`); wait = false)
             try
-                kp = DistSSHRun.DetachedProcess(proc; kind = :drive, log_dir = log_d)
-                @test DistSSHRun._read_kit_job_id_for_reap(kp) == "j-log"
+                detached = DistSSHRun.DetachedProcess(proc; kind = :drive, log_dir = log_d)
+                @test DistSSHRun._read_kit_job_id_for_reap(detached) == "j-log"
             finally
                 process_running(proc) && kill(proc)
                 wait(proc)
@@ -1474,23 +1474,23 @@ end
         end
     end
 
-    @testset "terminate_run! missing pid" begin
+    @testset "cancel! missing pid" begin
         _with_tempdir() do d
-            r = DistSSHRun.terminate_run!(d; grace = 0)
+            r = DistSSHRun.cancel!(d; grace = 0)
             @test r isa DistSSHRun.DistSSHJobResult
             @test r.ok === false
             @test r.failed_step == "terminated"
             @test r.kind === :go
             @test r.stop === nothing
             err = try
-                DistSSHRun.terminate_run!(d; interrupt_grace = -1)
+                DistSSHRun.cancel!(d; interrupt_grace = -1)
                 nothing
             catch e
                 e
             end
             @test err isa ArgumentError
             err_nan = try
-                DistSSHRun.terminate_run!(d; interrupt_grace = NaN)
+                DistSSHRun.cancel!(d; interrupt_grace = NaN)
                 nothing
             catch e
                 e
@@ -1510,7 +1510,7 @@ end
                 DistSSHRun.DistSSHJobResult(false, :go, run_d, nothing, "collect", 7);
                 run_dir = run_d
             )
-            r = DistSSHRun.terminate_run!(out; grace = 0)
+            r = DistSSHRun.cancel!(out; grace = 0)
             @test r.failed_step == "collect"
             @test r.exit_code == 7
             @test r.kind === :go
@@ -1599,7 +1599,7 @@ end
         @test ladder("true"; interrupt_grace = 0, grace = 1) === :no_sigint
     end
 
-    @testset "terminate! sends one SIGINT" begin
+    @testset "cancel! sends one SIGINT" begin
         _with_tempdir() do dir
             ready = joinpath(dir, "ready")
             countp = joinpath(dir, "count")
@@ -1681,7 +1681,7 @@ end
                 );
                 wait = false
             )
-            kp = DistSSHRun.DetachedProcess(proc; kind = :go, output_dir = dir)
+            detached = DistSSHRun.DetachedProcess(proc; kind = :go, output_dir = dir)
             try
                 t0 = time()
                 while !isfile(ready) && (time() - t0) < 60
@@ -1689,7 +1689,7 @@ end
                     sleep(0.05)
                 end
                 @test isfile(ready)
-                stopped = DistSSHRun.terminate!(kp; interrupt_grace = 0.4, grace = 2)
+                stopped = DistSSHRun.cancel!(detached; interrupt_grace = 0.4, grace = 2)
                 @test isfile(countp)
                 @test read(countp, String) == "1"
                 @test stopped.stop === :sigterm
@@ -1738,7 +1738,7 @@ end
         bare = DistSSHRun.DetachedProcess(proc; kind = :go)
         @test DistSSHRun.result_run_dir(bare) === nothing
         @test_throws MethodError DistSSHRun.result_content_tree_hash(bare)
-        @test_throws MethodError DistSSHRun.result_remote_run_id(bare)
+        @test_throws MethodError DistSSHRun.result_ship_id(bare)
         _with_tempdir() do run_dir
             held = DistSSHRun.DetachedProcess(proc; kind = :drive, run_dir = run_dir)
             @test DistSSHRun.result_run_dir(held) == run_dir
@@ -1748,8 +1748,8 @@ end
     @testset "wait(::DetachedProcess) uses shell_status" begin
         function _wait_code(proc)
             return _with_tempdir() do dir
-                kp = DistSSHRun.DetachedProcess(proc; kind = :go, output_dir = dir)
-                result = wait(kp)
+                detached = DistSSHRun.DetachedProcess(proc; kind = :go, output_dir = dir)
+                result = wait(detached)
                 return result
             end
         end
@@ -2063,7 +2063,7 @@ end
                 "SECRET_TOKEN" => "nope",
                 "CUSTOM_JOB_PATH" => "kept"
             ) do
-                logs, kp = _capture_detached_env_log(; min_level = Test.Logging.Debug) do
+                logs, detached = _capture_detached_env_log(; min_level = Test.Logging.Debug) do
                     DistSSHRun.execute!(
                         :go,
                         script, String[]; head_slots = 1,
@@ -2074,15 +2074,15 @@ end
                         stderr = devnull
                     )
                 end
-                result = wait(kp)
+                result = wait(detached)
                 @test result.ok
-                report = DistSSHRun.detached_launch(kp)
+                report = DistSSHRun.detached_launch(detached)
                 @test report.threads == "1"
                 @test report.dir == DistSSHRun._detached_launch_dir(nothing, proj)
                 @test "SECRET_TOKEN" in report.dropped
                 @test "CUSTOM_JOB_PATH" in report.dropped
                 @test "HOME" ∉ report.dropped
-                raw = _must_run_toml(kp.run_dir::AbstractString)
+                raw = _must_run_toml(detached.run_dir::AbstractString)
                 @test DistSSHRun.DistSSHBase.record_writer_minor_match(
                     raw["writer"],
                     "DistSSHRun",
@@ -2122,7 +2122,7 @@ end
                 "SECRET_TOKEN" => "nope",
                 "CUSTOM_JOB_PATH" => "kept"
             ) do
-                _, kp = _capture_detached_env_log() do
+                _, detached = _capture_detached_env_log() do
                     DistSSHRun.execute!(
                         :go,
                         script, String[]; head_slots = 1,
@@ -2136,9 +2136,9 @@ end
                         env_allow = :all
                     )
                 end
-                result = wait(kp)
+                result = wait(detached)
                 @test result.ok
-                report = DistSSHRun.detached_launch(kp)
+                report = DistSSHRun.detached_launch(detached)
                 @test report.threads == "unset"
                 @test report.dir == DistSSHRun._detached_launch_dir(parent_pwd, proj)
                 @test "CUSTOM_JOB_PATH" ∉ report.dropped
@@ -2170,7 +2170,7 @@ end
                     detached = true,
                     project = proj,
                     quiet = true,
-                    run_id = "20260101T000000Z-aaaaaa",
+                    ship_id = "20260101T000000Z-aaaaaa",
                     stdout = devnull,
                     stderr = devnull
                 )

@@ -1216,7 +1216,7 @@ function local_dir_from_remote_mirror(
 end
 
 # Remote location roles (do not collapse these into one path):
-# - deployment/container root: [`remote_deploy_root`](@ref) — receives ship `runs/`
+# - deployment/container root: [`remote_deploy_root`](@ref) — receives ship `ships/`
 # - git clone destination: [`remote_git_clone_dest`](@ref)
 # - worker `--project`: [`resolve_remote_project_root`](@ref) (deploy + member rel)
 # - snapshot source: local pack root (unchanged by these helpers)

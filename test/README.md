@@ -115,7 +115,7 @@ Green on one layer does not imply the others. `Pkg.test()` does not run
 - **integration** (~12 min VM, fresh depot): child CLI and/or **local**
   `addprocs`. Not
   real SSH. `integration/drive/interrupt_grace.jl` is a detached
-  `drive` plus `terminate!`.
+  `drive` plus `cancel!`.
 - **e2e** (~15–25 min): real SSH, two Linux workers; **PR** /
   **main** (path filter), a `Project.toml` version increase, weekly, or
   dispatch (Compose). Not markdown-only allowlisted PRs. Not local-only
@@ -236,7 +236,7 @@ DISTSSH_CODE_COVERAGE=1 \
 - `run_on_host`: `--version` exit 0; `-e exit(3)` is `.exitcode == 3`
   (no throw)
 - `--delete`: remote `Project.toml` is gone
-- `--ship-tree`: remote `runs/<run_id>/src/Project.toml` exists
+- `--ship-tree`: remote `ships/<ship_id>/src/Project.toml` exists
 - `--instantiate` / `--check`: job deps; Julia version (no
   `--ignore-julia-version`)
 - `up`: remotes (mismatch → align); `parent` + one remote
@@ -244,7 +244,7 @@ DISTSSH_CODE_COVERAGE=1 \
   kit-parent juliaup + both channels via
   `ensure-kit-parent-juliaup.sh` (needed on CI `setup-julia`)
 - `--runtest`: job `Pkg.test` pass; a planted failure is non-zero
-- `--ship-tree` onto an existing root: a new `run_id` leaf
+- `--ship-tree` onto an existing root: a new `ship_id` leaf
 - `~/…` remote path: delete → ship-tree → instantiate → drive still run
 
 ### Drive / go / hostinfo
@@ -267,10 +267,10 @@ only return numbers. Collect tests use files workers write.
   leak (#144)
 - detached drive SIGKILL: wait until heartbeat monitors start, then
   remote `--worker` gone (#148)
-- detached SSH drive `terminate!`: `kit.hosts` then remote `--worker` gone
+- detached SSH drive `cancel!`: `kit.hosts` then remote `--worker` gone
 - `go pi_echo`: π on both hosts
-- empty dedicated root: `setup ship-tree` then `setup instantiate --run-id`
-  then `go --run-id`; π on both; remote `runs/<run_id>/src/Project.toml`
+- empty dedicated root: `setup ship-tree` then `setup instantiate --ship-id`
+  then `go --ship-id`; π on both; remote `ships/<ship_id>/src/Project.toml`
   appears (`go --ship-tree` is an error before SSH)
 - `go pi_file`: slot `pi_results.txt` after go collect;
   `DISTSSH_JOB_ID` set so remote `-L` mark is collected

@@ -1,4 +1,4 @@
-# Tar ship of a project tree into `<remote_root>/runs/<run_id>/src/`.
+# Tar ship of a project tree into `<remote_root>/ships/<ship_id>/src/`.
 
 const SHIP_MAX_BYTES_DEFAULT = 256 * 1024 * 1024
 const SHIP_FILE_WARN_BYTES = 50 * 1024 * 1024
@@ -11,11 +11,11 @@ const _SSHFLAGS_WARNED = Ref(false)
 """
 Result of [`ship_tree!`](@ref).
 
-[`result_content_tree_hash`](@ref) and [`result_remote_run_id`](@ref) read
-the ship hash and the remote `runs/<run_id>/` id. Fields are not API.
+[`result_content_tree_hash`](@ref) and [`result_ship_id`](@ref) read
+the ship hash and the remote `ships/<ship_id>/` id. Fields are not API.
 """
 struct ShipTreeResult
-    run_id::String
+    ship_id::String
     deploy_root::String
     src::String
     content_tree_hash::String
@@ -1141,19 +1141,19 @@ function _remote_project_work_root(host::AbstractString, remote_root::AbstractSt
     return isempty(s) ? given : s
 end
 
-"""Resolve the remote work root via explicit run id, local last-ship record, or git."""
+"""Resolve the remote work root via explicit ship id, local last-ship record, or git."""
 function _work_root_for_hosts(
         hosts::AbstractVector{<:AbstractString},
         remote_root::AbstractString;
         local_project::Union{Nothing, AbstractString} = nothing,
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
         skip_local_record::Bool = false,
     )::String
     isempty(hosts) && return String(remote_root)
     proj = local_project === nothing ? pwd() : String(local_project)
     sel = resolve_source_selection(
         hosts, remote_root, proj;
-        run_id = run_id, skip_local_record = skip_local_record,
+        ship_id = ship_id, skip_local_record = skip_local_record,
     )
     _set_active_selection!(sel)
     return sel.work_root
@@ -1162,7 +1162,7 @@ end
 """Worker `--project` after selection: ship-tree `src` or git deploy root, plus member rel.
 
 Matches `remote_deploy_root`, not `session_remote_root`. A workspace member is
-then joined onto that work root. Pass `run_id=` for an explicit ID.
+then joined onto that work root. Pass `ship_id=` for an explicit ID.
 """
 function _resolved_deploy_root_for_work(
         local_project::AbstractString;
@@ -1179,7 +1179,7 @@ function _project_work_root(
         hosts::AbstractVector{<:AbstractString},
         local_project::AbstractString;
         cli_override::Union{Nothing, AbstractString} = nothing,
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
     )::String
     deploy = _resolved_deploy_root_for_work(
         local_project; cli_override = cli_override,
@@ -1187,7 +1187,7 @@ function _project_work_root(
     mapped = resolve_remote_project_root(local_project; cli_override = deploy)
     wr = _work_root_for_hosts(
         hosts, deploy;
-        local_project = local_project, run_id = run_id,
+        local_project = local_project, ship_id = ship_id,
     )
     return _rehome_under_work_root(mapped, deploy, wr)
 end
@@ -1202,7 +1202,7 @@ function _assign_remote_work_root_env!(
         hosts::AbstractVector{<:AbstractString},
         local_project::AbstractString;
         cli_override::Union{Nothing, AbstractString} = nothing,
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
     )::Nothing
     isempty(hosts) && return nothing
     cli = if cli_override === nothing
@@ -1214,7 +1214,7 @@ function _assign_remote_work_root_env!(
     end
     if cli === nothing || !any(iscntrl, String(cli))
         wr = _project_work_root(
-            hosts, local_project; cli_override = cli, run_id = run_id,
+            hosts, local_project; cli_override = cli, ship_id = ship_id,
         )
         if !any(iscntrl, String(wr))
             ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = remote_env_project_root(wr)
@@ -1223,7 +1223,7 @@ function _assign_remote_work_root_env!(
     return nothing
 end
 
-"""Rewrite `mapped` from under `deploy` onto `work` (`runs/<id>/src` when that is the project)."""
+"""Rewrite `mapped` from under `deploy` onto `work` (`ships/<id>/src` when that is the project)."""
 function _rehome_under_work_root(
         mapped::AbstractString,
         deploy::AbstractString,
@@ -1241,10 +1241,10 @@ end
 """`remote_layout_path` re-homed onto the remote work root for `hosts`.
 
 After [`_assign_remote_work_root_env!`](@ref), `DISTRIBUTED_REMOTE_PROJECT_ROOT`
-holds the work root (`runs/<id>/src`), not the deploy root. Mapping must use
+holds the work root (`ships/<id>/src`), not the deploy root. Mapping must use
 the deploy root (via [`active_source_selection`](@ref) or a temporary ENV),
 then rehome onto the work root — otherwise `remote_layout_path` already returns
-a work-root path and rehome nests `runs/<id>/src/runs/<id>`.
+a work-root path and rehome nests `ships/<id>/src/ships/<id>`.
 
 Reuse the active selection only when its deploy root and hosts cover this call
 (so a later standalone `collect!` after a ship to another root/host set
@@ -1254,12 +1254,12 @@ function _remote_work_layout_path(
         local_abs::AbstractString,
         local_repo::AbstractString,
         hosts::AbstractVector{<:AbstractString};
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
         skip_local_record::Bool = false,
         deploy_root::Union{Nothing, AbstractString} = nothing,
     )::String
-    plan = _collect_source_plan(run_id)
-    snap = plan.run_id
+    plan = _collect_source_plan(ship_id)
+    snap = plan.ship_id
     skip_rec = skip_local_record || plan.skip_local_record
     sel = active_source_selection()
     deploy = if deploy_root !== nothing
@@ -1276,14 +1276,14 @@ function _remote_work_layout_path(
         (
         snap === nothing ||
             (
-            sel.run_id !== nothing &&
-                String(sel.run_id) == String(snap)
+            sel.ship_id !== nothing &&
+                String(sel.ship_id) == String(snap)
         )
     )
     if !reuse
         _work_root_for_hosts(
             hosts, deploy;
-            local_project = local_repo, run_id = snap,
+            local_project = local_repo, ship_id = snap,
             skip_local_record = skip_rec,
         )
         sel = active_source_selection()
@@ -1620,9 +1620,9 @@ function create_remote_roots!(
     )
 end
 
-function _remote_run_leaf_script(abs_root::AbstractString, run_id::AbstractString)::String
-    runs = _posix_join(abs_root, "runs")
-    leaf = _posix_join(runs, run_id)
+function _remote_ship_leaf_script(abs_root::AbstractString, ship_id::AbstractString)::String
+    runs = _posix_join(abs_root, "ships")
+    leaf = _posix_join(runs, ship_id)
     src = _posix_join(leaf, "src")
     out = _posix_join(leaf, "out")
     rq = _remote_shell_path_word(runs)
@@ -1635,7 +1635,7 @@ function _remote_run_leaf_script(abs_root::AbstractString, run_id::AbstractStrin
     if [ ! -d $rq ]; then
       mkdir $rq || [ -d $rq ] || exit 1
     fi
-    mkdir $lq || { printf 'run_id already exists: %s\\n' $lq >&2; exit 2; }
+    mkdir $lq || { printf 'ship_id already exists: %s\\n' $lq >&2; exit 2; }
     if test -L $sq; then
       printf 'refusing symlinked extract dest %s\\n' $sq >&2
       exit 3
@@ -1706,7 +1706,7 @@ function _ship_run_leaf_complete_toml(
     )
 end
 
-function _remote_run_leaf_stamp_sh(leaf::AbstractString)::String
+function _remote_ship_leaf_stamp_sh(leaf::AbstractString)::String
     dest = _remote_shell_path_word(_posix_join(leaf, "run.toml"))
     cq = posix_quote(_ship_run_leaf_stamp_toml())
     return """
@@ -1714,7 +1714,7 @@ function _remote_run_leaf_stamp_sh(leaf::AbstractString)::String
     """
 end
 
-function _remote_run_leaf_complete_sh(
+function _remote_ship_leaf_complete_sh(
         leaf::AbstractString,
         content_tree_hash::AbstractString;
         project_rel::AbstractString = ".",
@@ -1726,9 +1726,9 @@ function _remote_run_leaf_complete_sh(
     """
 end
 
-function _remote_prepare_run_leaf!(host::AbstractString, abs_root::AbstractString, run_id::AbstractString)
-    leaf = _posix_join(_posix_join(abs_root, "runs"), run_id)
-    script = _remote_run_leaf_script(abs_root, run_id) * _remote_run_leaf_stamp_sh(leaf)
+function _remote_prepare_run_leaf!(host::AbstractString, abs_root::AbstractString, ship_id::AbstractString)
+    leaf = _posix_join(_posix_join(abs_root, "ships"), ship_id)
+    script = _remote_ship_leaf_script(abs_root, ship_id) * _remote_ship_leaf_stamp_sh(leaf)
     code, out = _remote_shell_status(String(host), script)
     code == 0 || throw(ArgumentError("could not create run dir on $(host): $(strip(out))"))
     return _posix_join(leaf, "src")
@@ -1761,7 +1761,7 @@ end
 function _ship_run_tree_one_host!(
         host::AbstractString,
         deploy_root::AbstractString,
-        run_id::AbstractString,
+        ship_id::AbstractString,
         pack::DistSSHShip.Shipment;
         allow_external_symlinks::Bool,
         julia,
@@ -1769,10 +1769,10 @@ function _ship_run_tree_one_host!(
     )::Tuple{Bool, String}
     ensured = _ensure_ship_remote_root!(host, deploy_root)
     abs_root = ensured.abs_root
-    src = _remote_prepare_run_leaf!(host, abs_root, run_id)
+    src = _remote_prepare_run_leaf!(host, abs_root, ship_id)
     pinned = something(pin_remote_julia(host, julia), resolve_remote_julia(host, julia))
     pinned === nothing && throw(ArgumentError("Julia not found on $host"))
-    leaf = _posix_join(abs_root, "runs", run_id)
+    leaf = _posix_join(abs_root, "ships", ship_id)
     project_rel = pack.project_rel
     content_hash = pack.content_tree_hash
 
@@ -1795,7 +1795,7 @@ function _ship_run_tree_one_host!(
     function _ship_run_complete_hook(h, ::AbstractString, ::DistSSHShip.Shipment)
         code_c, out_c = _remote_shell_status(
             String(h),
-            _remote_run_leaf_complete_sh(leaf, content_hash; project_rel = project_rel),
+            _remote_ship_leaf_complete_sh(leaf, content_hash; project_rel = project_rel),
         )
         code_c == 0 || throw(
             ArgumentError("could not mark ship-tree leaf complete on $(h): $(strip(out_c))"),
@@ -1823,7 +1823,7 @@ end
 """
     ship_tree!(pack, hosts, deploy_root; confirm=false, provenance=true) -> ShipTreeResult
 
-Send an existing [`Shipment`](@ref DistSSHRun.DistSSHShip.Shipment) to `runs/<run_id>/src/` on
+Send an existing [`Shipment`](@ref DistSSHRun.DistSSHShip.Shipment) to `ships/<ship_id>/src/` on
 each host. Does not pack again and does not delete the pack directory.
 
 The tar is hashed again immediately before sending. A different `git-sha1`
@@ -1842,7 +1842,7 @@ function ship_tree!(
         report::Bool = false,
         path_anchor::AbstractString = pack.project_dir,
         allow_external_symlinks::Bool = false,
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
         julia = nothing,
         await_inputs::Bool = true,
     )::ShipTreeResult
@@ -1854,7 +1854,7 @@ function ship_tree!(
         report = report,
         path_anchor = path_anchor,
         allow_external_symlinks = allow_external_symlinks,
-        run_id = run_id,
+        ship_id = ship_id,
         julia = julia,
         await_inputs = await_inputs,
     )
@@ -1865,7 +1865,7 @@ public ship_tree!
     ship_tree!(project, hosts, deploy_root; confirm=true, provenance=true) -> ShipTreeResult
 
 Pack `project` (with declared-input omission and `warn = print_warn`), ship
-to `runs/<run_id>/src/` on each host, then delete the temporary pack directory.
+to `ships/<ship_id>/src/` on each host, then delete the temporary pack directory.
 
 See the [`Shipment`](@ref DistSSHRun.DistSSHShip.Shipment) method for send-only behavior
 and keyword semantics.
@@ -1881,7 +1881,7 @@ function ship_tree!(
         allow_external_symlinks::Bool = false,
         ship_max_bytes::Integer = SHIP_MAX_BYTES_DEFAULT,
         extra_files::Vector{String} = String[],
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
         julia = nothing,
         await_inputs::Bool = true,
     )::ShipTreeResult
@@ -1904,7 +1904,7 @@ function ship_tree!(
             report = report,
             path_anchor = path_anchor,
             allow_external_symlinks = allow_external_symlinks,
-            run_id = run_id,
+            ship_id = ship_id,
             julia = julia,
             await_inputs = await_inputs,
         )
@@ -1922,15 +1922,15 @@ function _ship_tree_to_hosts!(
         report::Bool,
         path_anchor::AbstractString,
         allow_external_symlinks::Bool,
-        run_id::Union{Nothing, AbstractString},
+        ship_id::Union{Nothing, AbstractString},
         julia,
         await_inputs::Bool,
     )::ShipTreeResult
     isempty(hosts) && throw(ArgumentError("ship-tree: no hosts"))
     length(unique(hosts)) == length(hosts) ||
         throw(ArgumentError("ship-tree: hosts must be unique"))
-    rid = run_id === nothing ? allocate_remote_run_id() : validate_run_id(run_id)
-    extract_logical = _posix_join(String(deploy_root), "runs", rid, "src")
+    rid = ship_id === nothing ? allocate_remote_ship_id() : validate_ship_id(ship_id)
+    extract_logical = _posix_join(String(deploy_root), "ships", rid, "src")
     src_logical = pack.project_rel == "." ? extract_logical :
         _posix_join(extract_logical, pack.project_rel)
     _refuse_unshipped_depot_prefs!()
@@ -1944,7 +1944,7 @@ function _ship_tree_to_hosts!(
     if confirm && !kit_noninteractive()
         cancelled = with_kit_progress_suspended() do
             writeln_both(
-                "ship-tree $(display_path(path_anchor, pack.project_dir)) to $(length(hosts)) host(s) into runs/$rid/src/",
+                "ship-tree $(display_path(path_anchor, pack.project_dir)) to $(length(hosts)) host(s) into ships/$rid/src/",
             )
             writeln_both(
                 "  files=$(pack.files) bytes=$(pack.bytes) hash=$(pack.content_tree_hash)",
@@ -2042,7 +2042,7 @@ function _ship_tree_to_hosts!(
                 pack.project_dir,
                 :ship_tree;
                 deploy_id = rid,
-                run_id = rid,
+                ship_id = rid,
                 content_tree_hash = pack.content_tree_hash,
                 project_rel = pack.project_rel,
                 content_file_digests = digest_rows,

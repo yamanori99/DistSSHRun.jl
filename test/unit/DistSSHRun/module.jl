@@ -58,9 +58,9 @@ using Test
     @test :result_content_tree_hash in ns &&
         Base.ispublic(DistSSHRun, :result_content_tree_hash)
     @test !Base.isexported(DistSSHRun, :result_content_tree_hash)
-    @test :result_remote_run_id in ns &&
-        Base.ispublic(DistSSHRun, :result_remote_run_id)
-    @test !Base.isexported(DistSSHRun, :result_remote_run_id)
+    @test :result_ship_id in ns &&
+        Base.ispublic(DistSSHRun, :result_ship_id)
+    @test !Base.isexported(DistSSHRun, :result_ship_id)
     for name in (:ship_tree!, :ShipTreeResult)
         @test name in ns && Base.ispublic(DistSSHRun, name)
         @test !Base.isexported(DistSSHRun, name)
@@ -77,7 +77,9 @@ using Test
     @test :kit_progress_phases ∉ ns
     @test :execute_detached_accepts in ns && :kit_pid_alive ∉ ns
     @test :kit_pid_file_running in ns
-    @test :terminate! in ns && :terminate_run! in ns
+    @test :cancel! in ns
+    @test :terminate! ∉ ns && :terminate_run! ∉ ns
+    @test DistSSHRun.cancel! === DistSSHRun.DistSSHBase.cancel!
     @test Base.isexported(DistSSHRun, :parse_go_args) &&
         Base.isexported(DistSSHRun, :parse_drive_args)
     @test :execute_kwargs_from_parsed in ns

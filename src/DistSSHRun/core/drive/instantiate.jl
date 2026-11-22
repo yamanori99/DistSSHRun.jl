@@ -26,7 +26,7 @@ Also available as [`setup!`](@ref)`(session, :instantiate; julia=…)`.
 function instantiate!(
         session::DistSSHSession;
         julia::AbstractString = "auto",
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
     )::SyncResult
     isempty(session.hosts) && throw(
         ArgumentError(
@@ -34,7 +34,7 @@ function instantiate!(
         )
     )
     validate_setup_hosts(session.hosts)
-    snap = run_id === nothing ? nothing : validate_run_id(run_id)
+    snap = ship_id === nothing ? nothing : validate_ship_id(ship_id)
     return _with_kit_inproc_run!(:instantiate) do
         return _with_session_env!(session) do
             return _with_session_remote_env!(session) do
@@ -45,7 +45,7 @@ function instantiate!(
                 )
                 remote_path = _project_work_root(
                     session.hosts, session.project;
-                    cli_override = session.remote, run_id = snap,
+                    cli_override = session.remote, ship_id = snap,
                 )
                 julia_path = isempty(strip(String(julia))) ? "auto" : String(julia)
                 raw = instantiate_remotes(
@@ -69,20 +69,20 @@ end
 """After `sync!(; mode=:ship_tree)`, instantiate on hosts that still lack deps.
 
 Returns `nothing` when every host already resolves, else [`instantiate!`](@ref).
-Pass `run_id=` to force the ID from that ship when the local record is not enough.
+Pass `ship_id=` to force the ID from that ship when the local record is not enough.
 """
 function instantiate_after_ship!(
         session::DistSSHSession;
         julia::AbstractString = "auto",
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
     )::Union{Nothing, SyncResult}
     isempty(session.hosts) && return nothing
-    snap = run_id === nothing ? nothing : validate_run_id(run_id)
+    snap = ship_id === nothing ? nothing : validate_ship_id(ship_id)
     return _with_kit_inproc_run!(:instantiate) do
         return _with_session_env!(session) do
             rr = _project_work_root(
                 session.hosts, session.project;
-                cli_override = session.remote, run_id = snap,
+                cli_override = session.remote, ship_id = snap,
             )
             any(
                 h -> probe_remote_project_deps(
@@ -92,7 +92,7 @@ function instantiate_after_ship!(
                 ) !== nothing,
                 session.hosts,
             ) || return nothing
-            return instantiate!(session; julia = julia, run_id = snap)
+            return instantiate!(session; julia = julia, ship_id = snap)
         end
     end
 end

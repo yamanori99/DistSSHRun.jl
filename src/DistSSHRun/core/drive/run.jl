@@ -77,7 +77,7 @@ end
 const _DRIVE_VALUE_FLAGS = (
     "--workers", "-w", "--julia",
     "--log-dir", "--output-dir", "--package", "--hosts", "--hosts-file",
-    "--run-id", "--deploy-root",
+    "--ship-id", "--deploy-root",
 )
 
 """Index of the drive `--isolated` option in already-peeled argv, or `nothing`."""
@@ -372,7 +372,7 @@ function _run_drive_parsed_specialized!(
                 best_effort = collect_opts.best_effort,
                 hosts = parsed.collect_hosts::Vector{String},
                 julia = collect_opts.julia,
-                run_id = collect_opts.run_id,
+                ship_id = collect_opts.ship_id,
                 remote_root = collect_opts.remote_root,
             )
             return result.ok ? 0 : 1
@@ -400,7 +400,7 @@ function _run_drive_parsed_specialized!(
 
     host_names = [h[1] for h in hosts]
 
-    snap_for_script = get(parsed, :run_id, nothing)
+    snap_for_script = get(parsed, :ship_id, nothing)
     if !isfile(script_path) && !(remote_argv && snap_for_script !== nothing)
         surface = hasproperty(parsed, :hint_surface) ? parsed.hint_surface::Symbol : :cli
         root0 = canonical_local_path(something(project_root, dirname(script_path)))
@@ -428,7 +428,7 @@ function _run_drive_parsed_specialized!(
     return try
         DistSSHRun._reset_run_provenance!(project_root_abs)
         DistSSHRun._clear_active_selection!()
-        DistSSHRun._clear_active_deploy_record_unless_run_id!(snap_for_script)
+        DistSSHRun._clear_active_deploy_record_unless_ship_id!(snap_for_script)
         # Inside `_drive_frame`: this `finally` restores after `rmprocs`.
         return _with_drive_process!(proj_dir) do
             local release_output_dir_lock
@@ -471,7 +471,7 @@ function _run_drive_parsed_specialized!(
                 return code
             finally
                 # The locked body throws before it can return 130. The result
-                # file is what `terminate!` reads.
+                # file is what `cancel!` reads.
                 _drive_was_interrupted() && (code = Cint(130))
                 out = DistSSHRun.resolve_drive_output_dir(script_dir)
                 log = enable_log ? DistSSHRun.resolve_drive_log_dir(log_dir, script_dir) : nothing
@@ -577,7 +577,7 @@ Write the planned SSH hosts, run `join`, then keep only hosts that joined.
 `join` is `add_drive_workers!` and returns the SSH names that joined.
 An empty list removes `kit.hosts`. The same removal runs when `join` throws
 the no-worker error after that loop. An interrupt, or any other error,
-leaves the planned list so `terminate!` can reap workers that may already
+leaves the planned list so `cancel!` can reap workers that may already
 be running.
 """
 function _drive_kit_hosts_around_join!(
@@ -651,10 +651,10 @@ function _run_drive_parsed_locked!(
         "drive",
         proj_dir,
         script_path;
-        run_id = get(parsed, :run_id, nothing),
+        ship_id = get(parsed, :ship_id, nothing),
         remote_argv = remote_argv,
     )
-    snap_for_verify = get(parsed, :run_id, nothing)
+    snap_for_verify = get(parsed, :ship_id, nothing)
     if snap_for_verify isa AbstractString && !isempty(strip(snap_for_verify))
         DistSSHRun.assert_controller_environment_for_shipped_run!(proj_dir)
     else
@@ -695,11 +695,11 @@ function _run_drive_parsed_locked!(
     end
     try
         if !isempty(host_names)
-            # Selection uses --run-id / deploy record / git (setup deploys first).
+            # Selection uses --ship-id / deploy record / git (setup deploys first).
             DistSSHRun._assign_remote_work_root_env!(
                 host_names, project_root;
                 cli_override = get(parsed, :deploy_root, nothing),
-                run_id = get(parsed, :run_id, nothing),
+                ship_id = get(parsed, :ship_id, nothing),
             )
             deploy_root = DistSSHRun._resolved_deploy_root_for_work(
                 proj_dir; cli_override = get(parsed, :deploy_root, nothing),
@@ -781,7 +781,7 @@ function _run_drive_parsed_locked!(
                     project_root;
                     bind_overrides = bind_map_ref[],
                     launch_plans = ssh_launch_plans_ref[],
-                    run_id = get(parsed, :run_id, nothing),
+                    ship_id = get(parsed, :ship_id, nothing),
                 )
                 launch_report[] = report
                 return hosts_joined

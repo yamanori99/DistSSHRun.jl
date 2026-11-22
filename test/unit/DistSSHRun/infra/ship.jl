@@ -3,12 +3,12 @@ using Distributed
 using TOML
 
 @testset "run layout" begin
-    id = DistSSHRun.allocate_remote_run_id()
-    @test occursin(DistSSHRun._RUN_ID_PATTERN, id)
-    @test DistSSHRun.validate_run_id(id) == id
-    @test_throws ArgumentError DistSSHRun.validate_run_id("not-a-run-id")
-    @test DistSSHRun.remote_run_src("~/jobs/app", id) ==
-        joinpath("~/jobs/app", "runs", id, "src")
+    id = DistSSHRun.allocate_remote_ship_id()
+    @test occursin(DistSSHRun._SHIP_ID_PATTERN, id)
+    @test DistSSHRun.validate_ship_id(id) == id
+    @test_throws ArgumentError DistSSHRun.validate_ship_id("not-a-run-id")
+    @test DistSSHRun.remote_ship_src("~/jobs/app", id) ==
+        joinpath("~/jobs/app", "ships", id, "src")
     @test DistSSHRun.validate_expanded_remote_root("/tmp/jobs", "/home/u") == "/tmp/jobs"
     @test_throws ArgumentError DistSSHRun.validate_expanded_remote_root("/", "/home/u")
     @test_throws ArgumentError DistSSHRun.validate_expanded_remote_root("/home/u", "/home/u")
@@ -45,7 +45,7 @@ end
     @test occursin("project_rel = \"app\"", nested)
     @test DistSSHRun._ship_run_project_logical(
         "/srv/app", "20260101T000000Z-abcdef", "app"
-    ) == "/srv/app/runs/20260101T000000Z-abcdef/src/app"
+    ) == "/srv/app/ships/20260101T000000Z-abcdef/src/app"
     @test_throws ArgumentError DistSSHRun._ship_run_leaf_complete_toml(
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         project_rel = "/app"
@@ -57,40 +57,40 @@ end
     @test !DistSSHRun._kit_run_toml_owned(
         Dict("writer" => "DistSSHRun 1.0", "kind" => "other")
     )
-    sh = DistSSHRun._remote_run_leaf_stamp_sh("/work/app/runs/20260101T000000Z-abcd")
-    @test occursin("/work/app/runs/20260101T000000Z-abcd/run.toml", sh)
+    sh = DistSSHRun._remote_ship_leaf_stamp_sh("/work/app/ships/20260101T000000Z-abcd")
+    @test occursin("/work/app/ships/20260101T000000Z-abcd/run.toml", sh)
     @test occursin("kind = \"ship\"", sh)
-    csh = DistSSHRun._remote_run_leaf_complete_sh(
-        "/work/app/runs/20260101T000000Z-abcd",
+    csh = DistSSHRun._remote_ship_leaf_complete_sh(
+        "/work/app/ships/20260101T000000Z-abcd",
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     )
     @test occursin("complete = true", csh)
 end
 
 @testset "remote run leaf still validates an existing root" begin
-    sh = DistSSHRun._remote_run_leaf_script("/work/app", "20260101T000000Z-abcd")
+    sh = DistSSHRun._remote_ship_leaf_script("/work/app", "20260101T000000Z-abcd")
     @test occursin("remote_root does not exist", sh)
     @test occursin("ls -ldL", sh)
     @test occursin("could not read remote_root mode", sh)
     @test occursin("stat -L -c", sh)
     @test occursin("group or world writable", sh)
     @test occursin("owner", sh)
-    @test occursin("mkdir '/work/app/runs' || [ -d '/work/app/runs' ]", sh)
+    @test occursin("mkdir '/work/app/ships' || [ -d '/work/app/ships' ]", sh)
     @test !occursin("mkdir -p", sh)
-    @test occursin("/work/app/runs/20260101T000000Z-abcd/src", sh)
-    @test occursin("/work/app/runs/20260101T000000Z-abcd/out", sh)
+    @test occursin("/work/app/ships/20260101T000000Z-abcd/src", sh)
+    @test occursin("/work/app/ships/20260101T000000Z-abcd/out", sh)
     @test occursin("refusing symlinked out dir", sh)
     @test occursin("could not inspect out dir", sh)
     @test occursin("out dir is not empty", sh)
-    @test occursin("mkdir '/work/app/runs/20260101T000000Z-abcd/out'", sh)
+    @test occursin("mkdir '/work/app/ships/20260101T000000Z-abcd/out'", sh)
     parent = mktempdir()
     try
         root = joinpath(parent, "app")
         mkpath(root)
         chmod(root, 0o755)
-        script = DistSSHRun._remote_run_leaf_script(root, "20260101T000000Z-abcd")
+        script = DistSSHRun._remote_ship_leaf_script(root, "20260101T000000Z-abcd")
         run(`sh -c $script`)
-        out = joinpath(root, "runs", "20260101T000000Z-abcd", "out")
+        out = joinpath(root, "ships", "20260101T000000Z-abcd", "out")
         @test isdir(out)
         @test isempty(readdir(out))
     finally
@@ -1129,7 +1129,7 @@ end
         :ship,
         "20260101T000000Z-abcdef",
         "/home/dev/app",
-        "/home/dev/app/runs/20260101T000000Z-abcdef/src",
+        "/home/dev/app/ships/20260101T000000Z-abcdef/src",
         "deadbeef",
         ["child-1"]
     )
@@ -1137,10 +1137,10 @@ end
     DistSSHRun._set_active_selection!(sel)
     try
         got = something(DistSSHRun.active_source_selection())
-        @test got.work_root == "/home/dev/app/runs/20260101T000000Z-abcdef/src"
+        @test got.work_root == "/home/dev/app/ships/20260101T000000Z-abcdef/src"
         @test DistSSHRun._rehome_under_work_root(
             "/home/dev/app/pkg", "/home/dev/app", got.work_root
-        ) == "/home/dev/app/runs/20260101T000000Z-abcdef/src/pkg"
+        ) == "/home/dev/app/ships/20260101T000000Z-abcdef/src/pkg"
         @test got.hosts == ["child-1"]
         @test got.deploy_root == "/home/dev/app"
     finally
@@ -1150,33 +1150,33 @@ end
 
 @testset "project work root rehomes workspace member onto selected src" begin
     # Pure rehome mapping (selection itself is covered in source_selection.jl).
-    wr = "/home/dev/app/runs/20260101T000000Z-abcdef/src"
+    wr = "/home/dev/app/ships/20260101T000000Z-abcdef/src"
     @test DistSSHRun._rehome_under_work_root(
         "/home/dev/app/pkg", "/home/dev/app", wr
-    ) == "/home/dev/app/runs/20260101T000000Z-abcdef/src/pkg"
+    ) == "/home/dev/app/ships/20260101T000000Z-abcdef/src/pkg"
 end
 
 @testset "rehome collect path onto work root" begin
     @test DistSSHRun._rehome_under_work_root(
         "/home/dev/app/output",
         "/home/dev/app",
-        "/home/dev/app/runs/x/src"
-    ) == "/home/dev/app/runs/x/src/output"
+        "/home/dev/app/ships/x/src"
+    ) == "/home/dev/app/ships/x/src/output"
     @test DistSSHRun._rehome_under_work_root(
         "/home/dev/app",
         "/home/dev/app",
-        "/home/dev/app/runs/x/src"
-    ) == "/home/dev/app/runs/x/src"
+        "/home/dev/app/ships/x/src"
+    ) == "/home/dev/app/ships/x/src"
     @test DistSSHRun._rehome_under_work_root(
         "/tmp/other",
         "/home/dev/app",
-        "/home/dev/app/runs/x/src"
+        "/home/dev/app/ships/x/src"
     ) == "/tmp/other"
     @test DistSSHRun._rehome_under_work_root(
         "~/app/output",
         "~/app",
-        "~/app/runs/x/src"
-    ) == "~/app/runs/x/src/output"
+        "~/app/ships/x/src"
+    ) == "~/app/ships/x/src/output"
     @test DistSSHRun._rehome_under_work_root(
         "/home/dev/app/output",
         "/home/dev/app",
@@ -1193,7 +1193,7 @@ end
         )
         mkpath(joinpath(proj, "output"))
         deploy = "/home/dev/app"
-        work = "/home/dev/app/runs/20260101T000000Z-abcdef/src"
+        work = "/home/dev/app/ships/20260101T000000Z-abcdef/src"
         DistSSHRun._set_active_selection!(
             DistSSHRun.SourceSelection(
                 :ship,
@@ -1210,7 +1210,7 @@ end
                     joinpath(proj, "output"), proj, ["child-1"]
                 )
                 @test got == "$work/output"
-                @test !occursin("/runs/20260101T000000Z-abcdef/src/runs/", got)
+                @test !occursin("/ships/20260101T000000Z-abcdef/src/ships/", got)
             end
         finally
             DistSSHRun._clear_last_ship!()
@@ -1227,7 +1227,7 @@ end
         )
         mkpath(joinpath(proj, "output"))
         other = "/home/dev/other"
-        other_work = "/home/dev/other/runs/20260101T000000Z-abcdef/src"
+        other_work = "/home/dev/other/ships/20260101T000000Z-abcdef/src"
         DistSSHRun._set_active_selection!(
             DistSSHRun.SourceSelection(
                 :ship,
@@ -1478,7 +1478,7 @@ end
                 @test !res.ok
                 @test occursin("Cancelled.", out)
                 @test DistSSHRun.result_content_tree_hash(res) !== nothing
-                @test occursin(DistSSHRun._RUN_ID_PATTERN, something(DistSSHRun.result_remote_run_id(res)))
+                @test occursin(DistSSHRun._SHIP_ID_PATTERN, something(DistSSHRun.result_ship_id(res)))
             end
         finally
             DistSSHRun.set_kit_noninteractive!(prev_ni)
@@ -1507,7 +1507,7 @@ end
                                 :ship,
                                 "sentinel-run",
                                 "/other",
-                                "/other/runs/sentinel-run/src",
+                                "/other/ships/sentinel-run/src",
                                 "sentinel-hash",
                                 ["host9"]
                             )
@@ -1523,8 +1523,8 @@ end
                             @test isfile(pack.tar_path)
                             @test DistSSHRun.result_content_tree_hash(quiet) == pack.content_tree_hash
                             @test occursin(
-                                DistSSHRun._RUN_ID_PATTERN,
-                                something(DistSSHRun.result_remote_run_id(quiet))
+                                DistSSHRun._SHIP_ID_PATTERN,
+                                something(DistSSHRun.result_ship_id(quiet))
                             )
                             recorded = DistSSHRun.ship_tree!(
                                 pack, ["host1"], "/home/distsshkit/app";
@@ -1532,8 +1532,8 @@ end
                             )
                             kept = something(DistSSHRun.active_source_selection())
                             @test kept.content_tree_hash == pack.content_tree_hash
-                            @test kept.run_id ==
-                                DistSSHRun.result_remote_run_id(recorded)
+                            @test kept.ship_id ==
+                                DistSSHRun.result_ship_id(recorded)
                             @test isfile(pack.tar_path)
 
                             private_tmp = mktempdir()
@@ -1561,11 +1561,11 @@ end
                             @test synced.ok && !synced.cancelled
                             @test DistSSHRun.result_content_tree_hash(synced) ==
                                 pack.content_tree_hash
-                            @test DistSSHRun.result_remote_run_id(synced) !== nothing
+                            @test DistSSHRun.result_ship_id(synced) !== nothing
                             @test any(hr -> occursin("ship-tree ok", hr.message), synced.hosts)
                             other = DistSSHRun.SyncResult(false, DistSSHRun.HostResult[]; ok = true)
                             @test DistSSHRun.result_content_tree_hash(other) === nothing
-                            @test DistSSHRun.result_remote_run_id(other) === nothing
+                            @test DistSSHRun.result_ship_id(other) === nothing
                         finally
                             rm(pack.directory; force = true, recursive = true)
                             _restore_selection!(previous)
@@ -1848,7 +1848,7 @@ end
 
 @testset "controller drift compares project root not path anchor" begin
     parent = mktempdir()
-    proj = joinpath(parent, "runs", "rid", "src")
+    proj = joinpath(parent, "ships", "rid", "src")
     try
         mkpath(proj)
         write(joinpath(parent, "Project.toml"), "name = \"AnchorKit\"\n")

@@ -27,7 +27,7 @@ collected). By default any skipped host fails the run; pass `best_effort=true` o
 
 A root that is the session project or a parent of it is refused (`ok=false`,
 exit code 1). Point it at a result directory inside the project.
-`run_id=` selects `runs/<ID>/src`. When omitted, a present controller
+`ship_id=` selects `ships/<ID>/src`. When omitted, a present controller
 `DISTSSH_RUN_DIR/run.toml` with `provenance.selection` recovers that
 execution's source instead of a later last-snapshot record.
 """
@@ -38,7 +38,7 @@ function collect!(
         best_effort::Bool = false,
         hosts::Union{Nothing, AbstractVector{<:AbstractString}} = nothing,
         julia::Union{Nothing, AbstractString} = nothing,
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
         remote_root::Union{Nothing, AbstractString} = nothing,
     )::CollectResult
     host_list = hosts === nothing ? session.hosts : collect(String, hosts)
@@ -51,10 +51,10 @@ function collect!(
         merge = merge,
         best_effort = best_effort,
         remote_root = remote_root !== nothing ? remote_root : session.remote,
-        run_id = run_id,
+        ship_id = ship_id,
         julia = julia,
     )
-    snap = opts.run_id
+    snap = opts.ship_id
     session = if opts.remote_root !== session.remote
         let s = DistSSHSession(
                 project = session.project,
@@ -80,7 +80,7 @@ function collect!(
                     project_root = session.project,
                     path_anchor = canonical_local_path(session.project),
                     julia = opts.julia,
-                    run_id = snap,
+                    ship_id = snap,
                 )
                 return CollectResult(ok, ok ? 0 : 1, skipped)
             end

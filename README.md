@@ -46,7 +46,7 @@ Julia **1.13+**.
 
 ### Ship
 
-`setup ship-tree` (then `setup instantiate`, then `go` / `drive --run-id ID`):
+`setup ship-tree` (then `setup instantiate`, then `go` / `drive --ship-id ID`):
 
 - Walk the ship root and apply each directory's `.gitignore`
   (case-sensitive). `.git/info/exclude`, `core.excludesFile`, and a
@@ -65,7 +65,7 @@ Julia **1.13+**.
   (`DISTSSH_SHIP_WARN_FILE_BYTES`,
   `DISTSSH_SHIP_WARN_TOTAL_BYTES`; an invalid value is an error).
   The 256 MiB cap still stops the ship. Declared inputs are left out.
-- Extract is into `<remote_root>/runs/<run_id>/src/`, with empty
+- Extract is into `<remote_root>/ships/<ship_id>/src/`, with empty
   `out/` beside it and a minimal DistSSHRun `run.toml` stamp. The
   missing remote root is created when safe (`~/…` under home, or absolute
   with an existing parent; see `help setup`). Absolute roots also refuse

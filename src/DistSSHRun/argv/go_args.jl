@@ -7,7 +7,7 @@ function show_go_usage(; io::IO = stdout)
         io,
         "Standalone script. One full run per slot; slots start together.",
         "Remotes: setup ship-tree or setup git-clone, then setup instantiate.",
-        "Then go --run-id ID (or last-ship.toml / git checkout).",
+        "Then go --ship-id ID (or last-ship.toml / git checkout).",
     )
     print_help_blank(io)
     print_help_section("Usage"; io = io)
@@ -38,7 +38,7 @@ function show_go_usage(; io::IO = stdout)
         "  --deploy-root PATH  remote deployment root (location, not snapshot id).",
         "                      Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
         "                      ~/Parent/RepoName layout from the local env_dir.",
-        "  --run-id ID       use runs/<ID>/src under the deploy root",
+        "  --ship-id ID       use ships/<ID>/src under the deploy root",
         "                      (after setup ship-tree + setup instantiate)",
         "  --julia PATH        remote Julia (ENV or auto)",
         generated_run_option_help(:go)...,
@@ -105,7 +105,7 @@ function _go_parsed(;
         julia,
         repeat,
         run_opts::RunOptionCliState = RunOptionCliState(),
-        run_id = nothing,
+        ship_id = nothing,
         deploy_root = nothing,
     )
     base = (
@@ -118,7 +118,7 @@ function _go_parsed(;
         output_dir = output_dir,
         julia = julia,
         repeat = repeat,
-        run_id = run_id,
+        ship_id = ship_id,
         deploy_root = deploy_root,
     )
     return merge_run_option_cli!(base, run_opts)
@@ -148,7 +148,7 @@ function parse_go_args(
     output_dir = nothing
     julia_exe = nothing
     run_opts = RunOptionCliState()
-    run_id = nothing
+    ship_id = nothing
     deploy_root = nothing
     repeat_n::Union{Nothing, Int} = nothing
     options_done = false
@@ -177,9 +177,11 @@ function parse_go_args(
         elseif arg == "--julia"
             julia_exe = cli_take_value!(c, arg)
         elseif arg == "--run-id"
+            reject_legacy_run_cli_flag!(arg, "go")
+        elseif arg == "--ship-id"
             raw = String(strip(cli_take_value!(c, arg)))
-            isempty(raw) && throw(ArgumentError("go: --run-id needs a non-empty id"))
-            run_id = raw
+            isempty(raw) && throw(ArgumentError("go: --ship-id needs a non-empty id"))
+            ship_id = raw
         elseif _legacy_remote_path_arg(arg)
             _throw_legacy_remote_path("go")
         elseif arg == DEPLOY_ROOT_FLAG
@@ -230,7 +232,7 @@ function parse_go_args(
                 julia = julia_exe,
                 repeat = repeat_n,
                 run_opts = run_opts,
-                run_id = run_id,
+                ship_id = ship_id,
                 deploy_root = deploy_root,
             )
         elseif endswith(arg, ".jl")
@@ -279,7 +281,7 @@ function parse_go_args(
         julia = julia_exe,
         repeat = repeat_n,
         run_opts = run_opts,
-        run_id = run_id,
+        ship_id = ship_id,
         deploy_root = deploy_root,
     )
 end

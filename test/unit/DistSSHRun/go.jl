@@ -920,7 +920,7 @@ using Dates
                     app,
                     :ship_tree;
                     deploy_id = snap_id,
-                    run_id = snap_id,
+                    ship_id = snap_id,
                     content_file_digests = digests,
                 )
             )
@@ -937,7 +937,7 @@ using Dates
                 DistSSHRun.go!(
                     script, String[]; head_slots = 1,
                     project = app,
-                    run_id = snap_id,
+                    ship_id = snap_id,
                     quiet = true
                 )
             end

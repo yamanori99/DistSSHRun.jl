@@ -610,7 +610,7 @@ end
         end
     end
 
-    @testset "shipped hash and run_id" begin
+    @testset "shipped hash and ship_id" begin
         previous = DistSSHRun.active_source_selection()
         try
             DistSSHRun._clear_last_ship!()
@@ -632,12 +632,12 @@ end
                 @test !haskey(raw["provenance"], "selection")
                 held = DistSSHRun.DriveResult(true, 0; run_dir = tmp)
                 @test DistSSHRun.result_content_tree_hash(held) === nothing
-                @test DistSSHRun.result_remote_run_id(held) === nothing
+                @test DistSSHRun.result_ship_id(held) === nothing
                 go = DistSSHRun.GoResult(
                     true, nothing, held, nothing, "job.jl", tmp; run_dir = tmp
                 )
                 @test DistSSHRun.result_content_tree_hash(go) === nothing
-                @test DistSSHRun.result_remote_run_id(go) === nothing
+                @test DistSSHRun.result_ship_id(go) === nothing
             end
             DistSSHRun._set_active_selection!(
                 DistSSHRun.SourceSelection(
@@ -657,7 +657,7 @@ end
                     DistSSHRun.dist_ssh_kit_version(),
                 ) == :ok
                 @test prov["selection"]["content_tree_hash"] == "abc123"
-                @test prov["selection"]["run_id"] == "20260101T000000Z-abcdef"
+                @test prov["selection"]["ship_id"] == "20260101T000000Z-abcdef"
                 DistSSHRun.write_kit_run_toml!(tmp; kind = :drive, provenance = prov)
                 raw = _prov_require(DistSSHRun.read_kit_run_toml(tmp))
                 @test DistSSHRun.DistSSHBase.record_writer_minor_match(
@@ -671,14 +671,14 @@ end
                     DistSSHRun.dist_ssh_kit_version(),
                 ) == :ok
                 @test raw["provenance"]["selection"]["content_tree_hash"] == "abc123"
-                @test raw["provenance"]["selection"]["run_id"] == "20260101T000000Z-abcdef"
+                @test raw["provenance"]["selection"]["ship_id"] == "20260101T000000Z-abcdef"
                 held = DistSSHRun.DistSSHJobResult(
                     true, :drive, nothing, nothing, nothing, 0; run_dir = tmp
                 )
                 @test DistSSHRun.result_content_tree_hash(held) == "abc123"
-                @test DistSSHRun.result_remote_run_id(held) == "20260101T000000Z-abcdef"
+                @test DistSSHRun.result_ship_id(held) == "20260101T000000Z-abcdef"
                 drive = DistSSHRun.DriveResult(true, 0; run_dir = tmp)
-                @test DistSSHRun.result_remote_run_id(DistSSHRun.kit_run_result(drive)) ==
+                @test DistSSHRun.result_ship_id(DistSSHRun.kit_run_result(drive)) ==
                     "20260101T000000Z-abcdef"
             end
             DistSSHRun._set_active_selection!(
@@ -694,11 +694,11 @@ end
             _with_tempdir() do tmp
                 prov = DistSSHRun.assemble_provenance(tmp)
                 @test prov["selection"]["content_tree_hash"] == "abc123"
-                @test !haskey(prov["selection"], "run_id")
+                @test !haskey(prov["selection"], "ship_id")
                 DistSSHRun.write_kit_run_toml!(tmp; kind = :go, provenance = prov)
                 held = DistSSHRun.DriveResult(true, 0; run_dir = tmp)
                 @test DistSSHRun.result_content_tree_hash(held) == "abc123"
-                @test DistSSHRun.result_remote_run_id(held) === nothing
+                @test DistSSHRun.result_ship_id(held) === nothing
             end
             _with_tempdir() do tmp
                 DistSSHRun.write_kit_run_toml!(
@@ -708,13 +708,13 @@ end
                         "schema_version" => 1,
                         "shipped" => Dict{String, Any}(
                             "content_tree_hash" => "",
-                            "run_id" => ""
+                            "ship_id" => ""
                         )
                     )
                 )
                 held = DistSSHRun.DriveResult(true, 0; run_dir = tmp)
                 @test DistSSHRun.result_content_tree_hash(held) === nothing
-                @test DistSSHRun.result_remote_run_id(held) === nothing
+                @test DistSSHRun.result_ship_id(held) === nothing
             end
         finally
             if previous === nothing

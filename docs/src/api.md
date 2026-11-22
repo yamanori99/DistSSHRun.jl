@@ -21,8 +21,8 @@ Filter = function (x)
         :worker_pmap, :worker_seed, :go!, :GoResult, :report_go_errors,
         :drive!, :DriveResult, :HostRunResult, :DriveHostStatus, :drive_host_status,
         :DistSSHJobResult, :DetachedProcess, :kit_run_result, :report_run_errors,
-        :terminate!, :terminate_run!, :kit_result_from_dir, :result_run_dir, :result_provenance,
-        :result_content_tree_hash, :result_remote_run_id,
+        :cancel!, :kit_result_from_dir, :result_run_dir, :result_provenance,
+        :result_content_tree_hash, :result_ship_id,
     )
     n = try
         nameof(x)
@@ -178,13 +178,13 @@ end
 
 `pack_ship_tree`, `pack_shipment`, and `ship_project_to_dest` ship a project
 to a caller-chosen remote directory (for example a Queue qhost stage root)
-without allocating `runs/<id>/` or writing Run leaf provenance. They use the
+without allocating `ships/<id>/` or writing Run leaf provenance. They use the
 same pack rules as `ship_tree!`. Optional `transfer_id` is stored in
 `<dest>/.distssh/shipment.toml` when `write_record=true` (default). The
 returned `ShipmentReceipt.content_tree_hash` is the snapshot identity; callers
 must not infer the latest stage from lexical paths.
 
-`ship_tree!`, `ship_send_list`, `validate_run_id`,
+`ship_tree!`, `ship_send_list`, `validate_ship_id`,
 `resolve_source_selection`, `read_last_ship_record`,
 `write_last_ship_record!`, `forget_last_ship_default!`, and
 `active_source_selection` are public and are not exported.
@@ -197,7 +197,7 @@ ship_send_list
 ship_tree!
 ShipTreeResult
 SourceSelection
-validate_run_id
+validate_ship_id
 resolve_source_selection
 read_last_ship_record
 write_last_ship_record!
@@ -263,8 +263,8 @@ Filter = function (x)
         :worker_pmap, :worker_seed, :go!, :GoResult, :report_go_errors,
         :drive!, :DriveResult, :HostRunResult, :DriveHostStatus, :drive_host_status,
         :DistSSHJobResult, :DetachedProcess, :kit_run_result, :report_run_errors,
-        :terminate!, :terminate_run!, :kit_result_from_dir, :result_run_dir, :result_provenance,
-        :result_content_tree_hash,         :result_remote_run_id,
+        :cancel!, :kit_result_from_dir, :result_run_dir, :result_provenance,
+        :result_content_tree_hash,         :result_ship_id,
         :WorkerPlan, :pool!, :ResourcePool, :HostInventory, :print_pool, :print_hostinfo,
         :LaunchReport, :launch_report_planned, :launch_report_joined, :launch_report_failures,
         :Cluster, :cluster,
@@ -283,7 +283,7 @@ Filter = function (x)
         :setup!, :sync!, :instantiate!, :ship_send_list,
         :DistSSHSession, :HostResult, :SyncResult,
         :ship_tree!, :ShipTreeResult, :SourceSelection,
-        :validate_run_id, :resolve_source_selection,
+        :validate_ship_id, :resolve_source_selection,
         :read_last_ship_record, :write_last_ship_record!,
         :forget_last_ship_default!,
         :active_source_selection,

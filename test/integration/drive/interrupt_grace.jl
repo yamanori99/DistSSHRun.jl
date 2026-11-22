@@ -1,8 +1,8 @@
 using Test
 
-# Detached `drive` plus `terminate!`. Child Julia, so this is integration.
+# Detached `drive` plus `cancel!`. Child Julia, so this is integration.
 
-@testset "terminate! interrupt_grace" begin
+@testset "cancel! interrupt_grace" begin
     function wait_file(path, seconds)
         t0 = time()
         while !isfile(path) && (time() - t0) < seconds
@@ -26,7 +26,7 @@ using Test
         function main()
             # Write `ready` inside the `try`. Julia 1.13 delivers SIGINT at
             # the next safepoint, so a file written before `try` lets
-            # `terminate!` land in that gap and this `catch` never runs.
+            # `cancel!` land in that gap and this `catch` never runs.
             # DistSSHRun's 1.13 handler wakes through libuv, so the wait
             # must `sleep` (same as the worker test). `GC.safepoint` alone
             # does not observe that wake on macOS.
@@ -54,7 +54,7 @@ using Test
         ready = joinpath(proj, "ready")
         mark = joinpath(proj, "caught")
         write(script, catch_script(ready, mark))
-        _, kp = _capture_detached_env_log() do
+        _, detached = _capture_detached_env_log() do
             DistSSHRun.execute!(
                 :drive,
                 script, String[]; head_workers = 1,
@@ -65,15 +65,15 @@ using Test
         end
         try
             @test wait_file(ready, 90)
-            stopped = DistSSHRun.terminate!(kp; interrupt_grace = 5, grace = 2)
+            stopped = DistSSHRun.cancel!(detached; interrupt_grace = 5, grace = 2)
             @test isfile(mark)
             @test stopped.stop === :within_grace
         finally
-            process_running(kp.process) && DistSSHRun.terminate!(kp; grace = 1)
+            process_running(detached.process) && DistSSHRun.cancel!(detached; grace = 1)
         end
         rm(ready; force = true)
         rm(mark; force = true)
-        _, kp0 = _capture_detached_env_log() do
+        _, detached0 = _capture_detached_env_log() do
             DistSSHRun.execute!(
                 :drive,
                 script, String[]; head_workers = 1,
@@ -84,16 +84,16 @@ using Test
         end
         try
             @test wait_file(ready, 90)
-            skipped = DistSSHRun.terminate!(kp0; interrupt_grace = 0, grace = 2)
+            skipped = DistSSHRun.cancel!(detached0; interrupt_grace = 0, grace = 2)
             @test !isfile(mark)
             @test skipped.stop === :no_sigint
         finally
-            process_running(kp0.process) && DistSSHRun.terminate!(kp0; grace = 1)
+            process_running(detached0.process) && DistSSHRun.cancel!(detached0; grace = 1)
         end
     end
 end
 
-@testset "terminate! interrupt_grace reaches a drive worker" begin
+@testset "cancel! interrupt_grace reaches a drive worker" begin
     # SIGINT reaches the worker `sleep`, so the `catch` runs, and the
     # driver's recorded exit code is 130.
     _with_tempdir() do proj
@@ -124,7 +124,7 @@ end
             end
             """
         )
-        _, kp = _capture_detached_env_log() do
+        _, detached = _capture_detached_env_log() do
             DistSSHRun.execute!(
                 :drive,
                 script, String[]; head_workers = 1,
@@ -139,12 +139,12 @@ end
                 sleep(0.05)
             end
             @test isfile(ready)
-            r = DistSSHRun.terminate!(kp; interrupt_grace = 15, grace = 2)
+            r = DistSSHRun.cancel!(detached; interrupt_grace = 15, grace = 2)
             @test isfile(caught)
             @test r.exit_code == 130
             @test r.stop === :within_grace
         finally
-            process_running(kp.process) && DistSSHRun.terminate!(kp; grace = 1)
+            process_running(detached.process) && DistSSHRun.cancel!(detached; grace = 1)
         end
     end
 end

@@ -60,6 +60,20 @@ using Test
             @test err isa ArgumentError
             @test occursin("Port forwarding", err.msg)
         end
+        let r = parse_drive_args(["--ship-id", "20260101T000000Z-aaaaaa", "--head-workers", "1", "s.jl"])
+            @test r.ship_id == "20260101T000000Z-aaaaaa"
+        end
+        let err_old = try
+                parse_drive_args(["--run-id", "20260101T000000Z-aaaaaa", "--head-workers", "1", "s.jl"])
+                error("expected ArgumentError")
+            catch e
+                e
+            end
+            @test err_old isa ArgumentError
+            @test occursin("DSSH-E001", err_old.msg)
+            @test occursin("--ship-id", err_old.msg)
+            @test !occursin("unknown option", err_old.msg)
+        end
     end
 
     @testset "parse hosts and flags" begin
@@ -351,8 +365,8 @@ using Test
         @test !occursin("--sync-script", txt)
         @test !occursin("--ship-tree", txt)
         @test occursin("setup ship-tree", txt)
-        @test occursin("--run-id", txt)
-        @test occursin("runs/<ID>/src", txt)
+        @test occursin("--ship-id", txt)
+        @test occursin("ships/<ID>/src", txt)
         @test occursin("post-run-new", txt) || occursin("sentinel", txt)
         @test occursin("DISTRIBUTED_COLLECT_DIRS", txt)
         @test occursin("Pull-back uses Tar", txt)

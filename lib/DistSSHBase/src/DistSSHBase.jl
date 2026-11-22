@@ -22,6 +22,10 @@ export resolve_local_state_item, resolve_remote_state_item
 export remote_cache_dir, resolve_remote_cache_dir
 export resolve_controller_julia, run_on_host, ssh_opts
 export ProcessRow, processes_with_env, reap!, wait_gone
+export cancel!
+
+"""Generic cancel. DistSSHRun and DistSSHQueue add methods."""
+function cancel! end
 
 # Include order matches pre-layout dependency order (paths before cores that use them).
 include("ssh/paths.jl")

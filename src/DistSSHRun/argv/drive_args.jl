@@ -119,7 +119,7 @@ function parse_drive_args(args::Vector{String}; env::ProcessEnv = snapshot_proce
     log_dir = nothing
     output_dir = nothing
     explicit_package = nothing
-    run_id = nothing
+    ship_id = nothing
     deploy_root = nothing
     isolated = false
     worker_include = false
@@ -207,10 +207,12 @@ function parse_drive_args(args::Vector{String}; env::ProcessEnv = snapshot_proce
             worker_include = true
             i += 1
         elseif arg == "--run-id"
-            i >= length(args) && throw(ArgumentError("drive: --run-id needs a non-empty id"))
+            reject_legacy_run_cli_flag!(arg, "drive")
+        elseif arg == "--ship-id"
+            i >= length(args) && throw(ArgumentError("drive: --ship-id needs a non-empty id"))
             raw = String(strip(args[i + 1]))
-            isempty(raw) && throw(ArgumentError("drive: --run-id needs a non-empty id"))
-            run_id = raw
+            isempty(raw) && throw(ArgumentError("drive: --ship-id needs a non-empty id"))
+            ship_id = raw
             i += 2
         elseif _legacy_remote_path_arg(arg)
             _throw_legacy_remote_path("drive")
@@ -332,7 +334,7 @@ function parse_drive_args(args::Vector{String}; env::ProcessEnv = snapshot_proce
                     show_version = cli_session.show_version,
                     cli_session = cli_session,
                     hint_surface = :cli,
-                    run_id = run_id,
+                    ship_id = ship_id,
                     deploy_root = deploy_root,
                     isolated = isolated,
                 ), run_opts
@@ -360,7 +362,7 @@ function parse_drive_args(args::Vector{String}; env::ProcessEnv = snapshot_proce
                     show_version = cli_session.show_version,
                     cli_session = cli_session,
                     hint_surface = :cli,
-                    run_id = nothing,
+                    ship_id = nothing,
                     deploy_root = nothing,
                     isolated = false,
                 ), run_opts
@@ -445,7 +447,7 @@ function parse_drive_args(args::Vector{String}; env::ProcessEnv = snapshot_proce
             show_version = cli_session.show_version,
             cli_session = cli_session,
             hint_surface = :cli,
-            run_id = run_id,
+            ship_id = ship_id,
             deploy_root = deploy_root,
             isolated = isolated,
         ), run_opts
@@ -459,7 +461,7 @@ function show_drive_usage(; io::IO = stdout)
         io,
         "Driver + Distributed workers (pmap), then collect new files.",
         "Remotes: setup ship-tree or setup git-clone, then setup instantiate.",
-        "Then drive --run-id ID (or last-ship.toml / git checkout).",
+        "Then drive --ship-id ID (or last-ship.toml / git checkout).",
     )
     print_help_blank(io)
     print_help_section("Usage"; io = io)
@@ -487,7 +489,7 @@ function show_drive_usage(; io::IO = stdout)
         "  --deploy-root PATH  remote deployment root (location, not snapshot id).",
         "                      Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
         "                      ~/Parent/RepoName layout from the local env_dir.",
-        "  --run-id ID       use runs/<ID>/src under the deploy root",
+        "  --ship-id ID       use ships/<ID>/src under the deploy root",
         "                      (after setup ship-tree + setup instantiate)",
         "  --worker-include    re-include the full driver on workers (default: defs only)",
         "  --require-git       $(REQUIRE_GIT_MEANING)",
@@ -515,9 +517,9 @@ function show_drive_usage(; io::IO = stdout)
         "  Default root: --output-dir, else {script}/.distssh/drive/<stem>_<UTC>/.",
         "  Extra trees: DISTRIBUTED_COLLECT_DIRS=dir[:dir...] (relative to the project, or absolute).",
         "  Example: ENV[\"DISTRIBUTED_COLLECT_DIRS\"] = \"data/sims\" in the driver.",
-        "  A second drive --run-id that does not rewrite files: (nothing to collect).",
+        "  A second drive --ship-id that does not rewrite files: (nothing to collect).",
         "  Later: --collect-missing / --collect-overwrite ROOT HOST... (fails on skipped hosts unless --best-effort)",
-        "  Pass --run-id ID so collect maps onto that ship, not a newer one.",
+        "  Pass --ship-id ID so collect maps onto that ship, not a newer one.",
         "  With DISTSSH_RUN_DIR, omitted recovery uses that run's provenance.selection.",
         "  Pull-back uses Tar. Remote mtimes and file modes are not kept.",
         "  Modes are 0644, or 0755 if executable. Remote Julia is --julia or auto-detect.",

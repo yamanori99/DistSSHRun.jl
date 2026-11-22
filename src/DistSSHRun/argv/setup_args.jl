@@ -27,14 +27,14 @@
 #                        use DISTRIBUTED_REMOTE_PROJECT_ROOT, else ~/Parent/Repo
 #                        from the local package env_dir (workspace Manifest
 #                        member maps under that root). Does not rename ENV.
-#   --run-id ID        instantiate / check / runtest only
+#   --ship-id ID        instantiate / check / runtest only
 #
 # Legacy (error, not aliases):
 #   setup --ship-tree / --instantiate / --check / … → setup <subcommand>
 #   --remote-path PATH → --deploy-root PATH
 #   --remote-dir → --deploy-root
 #   --juliaup / --juliaup-update / --rsync remain removed
-#   go / drive --ship-tree error (use this namespace, then go/drive --run-id)
+#   go / drive --ship-tree error (use this namespace, then go/drive --ship-id)
 #
 # Ambiguous combinations fail before remote side effects.
 
@@ -44,9 +44,9 @@ function show_requirements(; io::IO = stdout)
         io,
         "Deploy and check the project on SSH hosts before go / drive.",
         "Recommended: ship-tree, instantiate, doctor --deploy, then optional runtest.",
-        "  After ship-tree, instantiate/doctor/go use that run id (local",
-        "  last-ship.toml, or pass --run-id ID). Lexical latest is not used.",
-        "  A git checkout at the deploy root remains usable without --run-id;",
+        "  After ship-tree, instantiate/doctor/go use that ship id (local",
+        "  last-ship.toml, or pass --ship-id ID). Lexical latest is not used.",
+        "  A git checkout at the deploy root remains usable without --ship-id;",
         "  delete/git-clone/git-sync/git-pull clear the matching local last-ship record.",
         "Hosts: NAME[:N] (same as go / drive; :N ignored).",
         "       parent is up, not setup.",
@@ -112,7 +112,7 @@ function show_requirements(; io::IO = stdout)
     print_help_lines(
         io,
         "  remote-root        create that absolute --deploy-root PATH only",
-        "  ship-tree / git-clone  ship-tree writes runs/<run_id>/src/, out/,",
+        "  ship-tree / git-clone  ship-tree writes ships/<ship_id>/src/, out/,",
         "                         and a DistSSHRun run.toml stamp; does not instantiate",
         "                         git-clone needs an empty remote path",
         "                         delete first to replace a clone dest",
@@ -134,7 +134,7 @@ function show_requirements(; io::IO = stdout)
         "  --deploy-root PATH   remote deployment root (location, not snapshot id).",
         "                       Omit for DISTRIBUTED_REMOTE_PROJECT_ROOT, else the",
         "                       ~/Parent/RepoName layout from the local env_dir.",
-        "  --run-id ID        runs/<ID>/ under that root (instantiate/runtest)",
+        "  --ship-id ID        ships/<ID>/ under that root (instantiate/runtest)",
         "  --job-id ID        with cleanup: kill only workers for this job",
         "  --job-id ID        with cleanup: kill only workers for this job",
         "  --allow-external-symlinks  with ship-tree: keep escaping symlinks",
@@ -278,7 +278,7 @@ function parse_setup_args(args::Vector{String}; env::ProcessEnv = snapshot_proce
         "setup";
         valued = (
             "--confirm-path", "--older-than", "--id", "--julia", "--repo",
-            "--remote-path", DEPLOY_ROOT_FLAG, "--run-id", "--job-id", "--extra-file",
+            "--remote-path", DEPLOY_ROOT_FLAG, "--ship-id", "--job-id", "--extra-file",
         ),
         prefixes = ("--remote-path=",),
         known = (
@@ -286,7 +286,7 @@ function parse_setup_args(args::Vector{String}; env::ProcessEnv = snapshot_proce
             "--juliaup-update", "--runtest", "--cleanup", "--clone",
             "--delete", "--prune", "--rsync", "--ship-tree", "--remote-root",
             "--remote-dir",
-            "--allow-external-symlinks", "--requirements",
+            "--allow-external-symlinks", "--requirements", "--run-id",
             "--ignore-julia-version", "--skip-git-guard",
             "-h", "--help", "--",
         ),
@@ -298,7 +298,7 @@ function parse_setup_args(args::Vector{String}; env::ProcessEnv = snapshot_proce
     julia_path = get(env, "JULIA_DISTRIBUTED_EXE", "auto")  # default to env or auto-detect
     repo_url = nothing
     deploy_root = nothing
-    run_id = nothing
+    ship_id = nothing
     job_id = nothing
     hosts = String[]
     show_help = false
@@ -374,9 +374,11 @@ function parse_setup_args(args::Vector{String}; env::ProcessEnv = snapshot_proce
                 deploy_root, _take_deploy_root!(c), "setup",
             )
         elseif arg == "--run-id"
+            reject_legacy_run_cli_flag!(arg, "setup")
+        elseif arg == "--ship-id"
             raw = String(strip(cli_take_value!(c, arg)))
-            isempty(raw) && throw(ArgumentError("--run-id needs a non-empty id"))
-            run_id = raw
+            isempty(raw) && throw(ArgumentError("--ship-id needs a non-empty id"))
+            ship_id = raw
         elseif arg == "--job-id"
             raw = String(strip(cli_take_value!(c, arg)))
             isempty(raw) && throw(ArgumentError("--job-id needs a non-empty id"))
@@ -425,7 +427,7 @@ function parse_setup_args(args::Vector{String}; env::ProcessEnv = snapshot_proce
         julia_path = julia_path,
         repo_url = repo_url,
         deploy_root = deploy_root,
-        run_id = run_id,
+        ship_id = ship_id,
         job_id = job_id,
         hosts = hosts,
         show_help = show_help,

@@ -19,7 +19,7 @@ With `sync` omitted or `false` (the default), prepare remotes with
 [`setup!`](@ref) or CLI `setup` first; remotes are checked before execution.
 The `drive` CLI does not take `--ship-tree` or `--git-sync`; prepare with
 `setup ship-tree` or `setup git-sync`, then `setup instantiate` when needed,
-then `drive --run-id ID`. Passing `sync=:git_sync` or `sync=:ship_tree` on
+then `drive --ship-id ID`. Passing `sync=:git_sync` or `sync=:ship_tree` on
 [`drive!`](@ref) is an `ArgumentError` (transfer on run was removed).
 Git parity is off by default (`skip_hash_check=true`).
 By default (`best_effort=false`) every listed host must join and load workers,
@@ -32,7 +32,7 @@ A collect root that is the project or a parent of it stops the run before
 `DISTRIBUTED_COLLECT_DIRS` and a default root from `DISTRIBUTED_OUTPUT_DIR`.
 
 `julia` sets the remote Julia binary (`nothing` / `"auto"` → detect; same as
-CLI `--julia`). `run_id` (CLI `--run-id`) selects `runs/<ID>/src` under the
+CLI `--julia`). `ship_id` (CLI `--ship-id`) selects `ships/<ID>/src` under the
 deploy root when `sync` is omitted or `false`. `plan` is an optional explicit
 [`WorkerPlan`](@ref). [`pipeline!`](@ref) runs [`drive!`](@ref) and optional collect only; call
 [`setup!`](@ref) first. It does not pass run-time `sync=` into `drive!`.
@@ -74,7 +74,7 @@ function drive!(
         unsafe_all_to_all::Union{Nothing, Bool} = nothing,
         allow_external_symlinks::Bool = false,
         allow_mismatch = nothing,
-        run_id::Union{Nothing, AbstractString} = nothing,
+        ship_id::Union{Nothing, AbstractString} = nothing,
         unsafe_master_silence_exit::Union{Nothing, Bool} = nothing,
         yes::Union{Nothing, Bool} = nothing,
         require_all_hosts::Union{Nothing, Bool} = nothing,
@@ -121,7 +121,7 @@ function drive!(
             unsafe_skip_env_digests = unsafe_skip_env_digests,
             unsafe_expose_port = unsafe_expose_port,
             unsafe_all_to_all = unsafe_all_to_all,
-            run_id = run_id,
+            ship_id = ship_id,
             unsafe_master_silence_exit = unsafe_master_silence_exit,
             isolated = isolated,
             reuse_main = reuse_main,

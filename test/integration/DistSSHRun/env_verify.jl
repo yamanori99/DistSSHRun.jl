@@ -739,7 +739,7 @@ function _env_run_id_deploy_record!(proj::AbstractString, rid::AbstractString)
             proj,
             :ship_tree;
             deploy_id = rid,
-            run_id = rid,
+            ship_id = rid,
             content_tree_hash = pack.content_tree_hash,
             content_file_digests = digest_rows,
         )
@@ -764,7 +764,7 @@ function _env_run_id_shipped_run_verify_tests()
                             _env_verify_activate_worker!(w, proj)
                             _env_run_id_deploy_record!(proj, rid)
                             DistSSHRun._mark_workers_launched!([w], proj)
-                            DistSSHRun.verify_workers_match_shipped_run!(proj; run_id = rid)
+                            DistSSHRun.verify_workers_match_shipped_run!(proj; ship_id = rid)
                             return nothing
                         end
                     )
@@ -800,7 +800,7 @@ function _env_run_id_shipped_run_verify_tests()
                                 end,
                             )
                             err = try
-                                DistSSHRun.verify_workers_match_shipped_run!(proj; run_id = rid)
+                                DistSSHRun.verify_workers_match_shipped_run!(proj; ship_id = rid)
                                 ""
                             catch e
                                 sprint(showerror, e)
@@ -836,7 +836,7 @@ function _env_run_id_shipped_run_verify_tests()
                             try
                                 DistSSHRun.with_unsafe_skip_env_digests(
                                     () -> DistSSHRun.verify_workers_match_shipped_run!(
-                                        proj; run_id = rid
+                                        proj; ship_id = rid
                                     ),
                                     true
                                 )
@@ -865,7 +865,7 @@ function _env_run_id_shipped_run_verify_tests()
                         pid -> pid == ws[1] ? parent : other
                     try
                         @test_throws ErrorException DistSSHRun.verify_workers_match_shipped_run!(
-                            proj; run_id = rid
+                            proj; ship_id = rid
                         )
                     finally
                         DistSSHRun._WORKER_ENV_SNAPSHOT_OVERRIDE[] = nothing
@@ -898,14 +898,14 @@ function _env_run_id_shipped_run_verify_tests()
                                 proj,
                                 :ship_tree;
                                 deploy_id = rid,
-                                run_id = rid,
+                                ship_id = rid,
                                 content_file_digests = digest_rows,
                             )
                             rec["project_hash"] = repeat("b", 64)
                             DistSSHRun._set_active_deploy_record!(rec)
                             DistSSHRun._mark_workers_launched!([w], proj)
                             @test_throws ErrorException DistSSHRun.verify_workers_match_shipped_run!(
-                                proj; run_id = rid
+                                proj; ship_id = rid
                             )
                             return nothing
                         end
@@ -927,16 +927,16 @@ function _env_run_id_shipped_run_verify_tests()
                 )
                 DistSSHRun._clear_active_deploy_record!()
                 @test_throws ErrorException DistSSHRun.verify_workers_match_shipped_run!(
-                    proj; run_id = rid
+                    proj; ship_id = rid
                 )
             end
         end
-        @testset "explicit run_id must match active deploy record run_id" begin
+        @testset "explicit ship_id must match active deploy record ship_id" begin
             _with_tempdir() do proj
                 _env_verify_job!(proj)
                 _env_run_id_deploy_record!(proj, rid)
                 @test_throws ErrorException DistSSHRun.verify_workers_match_shipped_run!(
-                    proj; run_id = "20260102T000000Z-bbbbbb"
+                    proj; ship_id = "20260102T000000Z-bbbbbb"
                 )
                 DistSSHRun._clear_active_deploy_record!()
             end
@@ -947,13 +947,13 @@ function _env_run_id_shipped_run_verify_tests()
                 rec = Dict{String, Any}(
                     "writer" => DistSSHRun.run_record_writer(),
                     "mode" => "ship-tree",
-                    "run_id" => rid,
+                    "ship_id" => rid,
                     "project_hash" => "a"^64,
                 )
                 DistSSHRun._set_active_deploy_record!(rec)
                 try
                     @test_throws ErrorException DistSSHRun.verify_workers_match_shipped_run!(
-                        proj; run_id = rid
+                        proj; ship_id = rid
                     )
                 finally
                     DistSSHRun._clear_active_deploy_record!()

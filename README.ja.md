@@ -48,7 +48,7 @@ Julia **1.13+**。
 
 ### Ship
 
-`setup ship-tree`（その後 `setup instantiate`、それから `go` / `drive --run-id ID`）:
+`setup ship-tree`（その後 `setup instantiate`、それから `go` / `drive --ship-id ID`）:
 
 - ship の根を歩き、各ディレクトリの `.gitignore` を適用する
   （大文字小文字を区別する）。`.git/info/exclude`、
@@ -65,7 +65,7 @@ Julia **1.13+**。
   警告する（`DISTSSH_SHIP_WARN_FILE_BYTES`、
   `DISTSSH_SHIP_WARN_TOTAL_BYTES`。不正な値はエラー）。
   256 MiB の上限は従来どおり失敗する。宣言した入力は載らない。
-- 展開先は `<remote_root>/runs/<run_id>/src/` で、横に空の `out/`
+- 展開先は `<remote_root>/ships/<ship_id>/src/` で、横に空の `out/`
   と DistSSHRun の短い `run.toml` stamp を置く。リモート根は先に
   存在しなければならない（`setup remote-root`）。
 - `--rsync` は 0.2.0 で削除した。`setup delete` と `setup prune` は

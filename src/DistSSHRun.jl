@@ -86,8 +86,7 @@ export execute_detached_accepts
 export execute_kwargs_from_parsed
 export detached_launch
 export kit_pid_file_running
-export terminate!
-export terminate_run!
+export cancel!
 export kit_result_from_dir
 export drive_host_status
 export parse_go_args
@@ -140,7 +139,7 @@ end
 include(joinpath(@__DIR__, "..", "lib", "DistSSHBase", "src", "DistSSHBase.jl"))
 include("DistSSHRun/up_module.jl")
 using .DistSSHBase
-import .DistSSHBase: join_explained_message, manifest_path
+import .DistSSHBase: cancel!, join_explained_message, manifest_path
 public join_explained_message, manifest_path
 import .DistSSHBase:
     current_project_file,
@@ -510,6 +509,7 @@ function print_rejected_command(name::AbstractString; script::Bool, io::IO = std
         for line in NO_COMMAND_HINT_LINES
             println(io, line)
         end
+        String(name) == "ride" && println(io, REMOVED_RIDE_SUBCOMMAND_HINT)
     else
         print_cli_error(unknown_subcommand_message(name); io = io)
         String(name) == "ride" && println(io, REMOVED_RIDE_SUBCOMMAND_HINT)

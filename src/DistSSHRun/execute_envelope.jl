@@ -36,7 +36,7 @@ struct ExecuteEnvelope
     unsafe_expose_port::Bool
     unsafe_all_to_all::Bool
     allow_external_symlinks::Bool
-    run_id::Union{Nothing, String}
+    ship_id::Union{Nothing, String}
     dir::Union{Nothing, String}
     threads::Union{Integer, AbstractString, Symbol}
     env_allow::Union{Nothing, Symbol, AbstractVector{Symbol}}
@@ -83,7 +83,7 @@ function _execute_envelope_from_kwargs(
         unsafe_expose_port::Bool = false,
         unsafe_all_to_all::Bool = false,
         allow_external_symlinks::Bool = false,
-        run_id = nothing,
+        ship_id = nothing,
         dir = nothing,
         threads::Union{Integer, AbstractString, Symbol} = 1,
         env_allow = nothing,
@@ -104,7 +104,7 @@ function _execute_envelope_from_kwargs(
             throw(ArgumentError("execute envelope: unknown keyword $(repr(k))"))
     end
     detached && throw(ArgumentError("execute envelope is for detached=false only"))
-    snap = run_id === nothing ? nothing : validate_run_id(run_id)
+    snap = ship_id === nothing ? nothing : validate_ship_id(ship_id)
     return ExecuteEnvelope(
         kind,
         String(script),
@@ -158,7 +158,7 @@ function execute_kwargs_from_envelope(env::ExecuteEnvelope)::Dict{Symbol, Any}
     env.unsafe_skip_env_digests && (kw[:unsafe_skip_env_digests] = true)
     env.unsafe_expose_port && (kw[:unsafe_expose_port] = true)
     env.unsafe_all_to_all && (kw[:unsafe_all_to_all] = true)
-    env.run_id !== nothing && (kw[:run_id] = env.run_id)
+    env.ship_id !== nothing && (kw[:ship_id] = env.ship_id)
     env.remote !== nothing && (kw[:remote] = env.remote)
     if env.kind === :go
         env.repeat !== nothing && (kw[:repeat] = env.repeat)
