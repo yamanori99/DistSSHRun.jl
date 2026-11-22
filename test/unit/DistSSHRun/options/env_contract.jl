@@ -77,7 +77,9 @@ using DistSSHRun
         withenv("DISTSSH_SSH_TUNNEL" => "maybe") do
             @test_throws ArgumentError DistSSHRun.ssh_tunnel_enabled()
         end
-        withenv("DISTSSH_SSH_TUNNEL" => "false") do
+        withenv(
+            "DISTSSH_SSH_TUNNEL" => "false",
+        ) do
             @test DistSSHRun.ssh_tunnel_enabled() == false
         end
         withenv("DISTSSH_SKIP_COLLECT" => "true") do
