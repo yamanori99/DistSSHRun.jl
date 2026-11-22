@@ -159,47 +159,69 @@ function parse_diff(diff::AbstractString)
 end
 
 function git_rev_parse(root::AbstractString, ref::AbstractString)
-    try
-        read(`git -C $root rev-parse --verify -q $ref`, String)
-        return true
-    catch
-        return false
+    obj = string(strip(ref), "^{commit}")
+    return success(
+        pipeline(
+            `git -C $root rev-parse --verify -q $obj`;
+            stdout = devnull,
+            stderr = devnull,
+        ),
+    )
+end
+
+function resolve_git_diff_range!(root::AbstractString, range::AbstractString)
+    range = strip(range)
+    if isempty(range)
+        return "origin/main...HEAD"
     end
+    if occursin("...", range)
+        parts = split(range, "...", limit = 2)
+        length(parts) == 2 || throw(
+            ErrorException(
+                "GATE_DIFF_RANGE=$(repr(range)): expected exactly one \"...\" between base and head; " *
+                "unset GATE_DIFF_RANGE for default origin/main...HEAD, or fix the range",
+            ),
+        )
+        base = strip(parts[1])
+        head = strip(parts[2])
+        !git_rev_parse(root, base) && throw(
+            ErrorException(
+                "GATE_DIFF_RANGE=$(repr(range)): base ref $(repr(base)) does not resolve under $(root); " *
+                "unset GATE_DIFF_RANGE for default origin/main...HEAD, or fix the base ref",
+            ),
+        )
+        !git_rev_parse(root, head) && throw(
+            ErrorException(
+                "GATE_DIFF_RANGE=$(repr(range)): head ref $(repr(head)) does not resolve under $(root); " *
+                "unset GATE_DIFF_RANGE for default origin/main...HEAD, or fix the head ref",
+            ),
+        )
+        return range
+    end
+    git_rev_parse(root, range) || throw(
+        ErrorException(
+            "GATE_DIFF_RANGE=$(repr(range)): ref does not resolve under $(root); " *
+            "unset GATE_DIFF_RANGE for default origin/main...HEAD, or fix the ref",
+        ),
+    )
+    return range
 end
 
 function resolve_git_diff_range(root::AbstractString, range::AbstractString)
-    range = strip(range)
-    if isempty(range)
-        range = "origin/main...HEAD"
-    end
-    if occursin("...", range)
-        base, head = split(range, "...")
-        if git_rev_parse(root, base) && git_rev_parse(root, head)
-            return range
+    try
+        return resolve_git_diff_range!(root, range)
+    catch e
+        if e isa ErrorException
+            die(e.msg)
         end
-        if git_rev_parse(root, "origin/main") && git_rev_parse(root, "HEAD")
-            return "origin/main...HEAD"
-        end
-        return "HEAD"
+        rethrow()
     end
-    git_rev_parse(root, range) || return "HEAD"
-    return range
 end
 
 function git_diff(root::AbstractString)
     raw = strip(get(ENV, "GATE_DIFF_RANGE", ""))
     range = resolve_git_diff_range(root, raw)
-    try
-        return read(`git -C $root diff -U0 --no-color $range`, String)
-    catch
-        fallback = if git_rev_parse(root, "origin/main") && git_rev_parse(root, "HEAD")
-            "origin/main...HEAD"
-        else
-            "HEAD"
-        end
-        range == fallback && rethrow()
-        return read(`git -C $root diff -U0 --no-color $fallback`, String)
-    end
+    return read(`git -C $root diff -U0 --no-color $range`, String)
 end
 
 function skipped_path(path::AbstractString)
@@ -1295,9 +1317,11 @@ function self_test_body_main()
             git("add", "f.jl")
             git("commit", "-m", "one")
             try
-                git_diff(tmp)
+                resolve_git_diff_range!(tmp, bogus_range)
+                die("self-test: bogus GATE_DIFF_RANGE must fail closed")
             catch e
-                die("self-test: git_diff bogus GATE_DIFF_RANGE $e")
+                e isa ErrorException || rethrow(e)
+                occursin("GATE_DIFF_RANGE", e.msg) || die("self-test: bogus GATE_DIFF_RANGE message $(e.msg)")
             end
         end
     end
