@@ -14,3 +14,23 @@ args = ["go", "bench/compile/fixtures/pi_echo.jl"]
 [[command]]
 name = "drive"
 args = ["drive", "--head-workers", "2", "bench/compile/fixtures/drive_square.jl"]
+
+[[command]]
+name = "hostinfo"
+args = ["hostinfo"]
+
+[[command]]
+name = "pool"
+args = ["pool"]
+
+[[command]]
+name = "demo-list"
+args = ["demo", "list"]
+
+[[command]]
+name = "progress"
+args = ["progress", "{work}"]
+
+[[command]]
+name = "setup-req"
+args = ["setup", "requirements"]
