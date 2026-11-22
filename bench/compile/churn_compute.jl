@@ -49,7 +49,7 @@ function jst_today(t::DateTime = Dates.now(UTC))::Date
     return Date(jst_from_utc(t))
 end
 
-function git_read(repo::AbstractString, cmd::Cmd)::String
+function git_read(cmd::Cmd)::String
     try
         return chomp(read(cmd, String))
     catch err
@@ -59,7 +59,7 @@ function git_read(repo::AbstractString, cmd::Cmd)::String
 end
 
 function ensure_full_history(repo::AbstractString)
-    shallow = git_read(repo, `git -C $repo rev-parse --is-shallow-repository`)
+    shallow = git_read(`git -C $repo rev-parse --is-shallow-repository`)
     shallow == "true" && error("shallow git history: checkout needs fetch-depth 0")
     return nothing
 end
