@@ -119,8 +119,6 @@ runs:
         # Project.toml version went up. Path skips do not apply.
         CUT: ${{ steps.version.outputs.cut }}
         RELEASE_ONLY: ${{ steps.release.outputs.only }}
-        EVENT_ACTION: ${{ github.event.action }}
-        TITLE_EDITED: ${{ github.event.changes.title != null }}
       run: |
         if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
           echo "heavy=false" >> "$GITHUB_OUTPUT"
@@ -146,11 +144,6 @@ runs:
           echo "docs=true" >> "$GITHUB_OUTPUT"
           echo "scripts=false" >> "$GITHUB_OUTPUT"
           echo "PR version cut: heavy=true docs=true"
-        elif [ "${EVENT_ACTION}" = "edited" ] && [ "${TITLE_EDITED}" != "true" ]; then
-          echo "heavy=false" >> "$GITHUB_OUTPUT"
-          echo "docs=false" >> "$GITHUB_OUTPUT"
-          echo "scripts=false" >> "$GITHUB_OUTPUT"
-          echo "PR body-only edit: heavy=false"
         else
           echo "heavy=${HEAVY}" >> "$GITHUB_OUTPUT"
           echo "docs=${DOCS}" >> "$GITHUB_OUTPUT"

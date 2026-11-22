@@ -11,7 +11,6 @@ on:
       - reopened
       - ready_for_review
       - labeled
-      - edited
   workflow_dispatch:
   # Daily 06:00 JST (21:00 UTC). Downstream-only report; detect sets heavy=false.
   schedule:
@@ -1334,38 +1333,7 @@ jobs:
       - name: Run added tests on HEAD src then merge-base src
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          git fetch --no-tags origin "$BASE"
-          mapfile -t files < <(git diff --name-only "$BASE"...HEAD -- 'test/**/*.jl' 'lib/*/test/**/*.jl' | grep -v '/e2e.jl$' || true)
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "no added or changed test files (e2e.jl is not run here)" >&2
-            exit 1
-          fi
-          julia --project=. --startup-file=no -e 'using Pkg; Pkg.instantiate()'
-          failed=0
-          for f in "${files[@]}"; do
-            [ -f "$f" ] || continue
-            if ! julia --project=. --startup-file=no "$f"; then
-              failed=1
-            fi
-          done
-          if [ "$failed" -ne 0 ]; then
-            echo "selected tests failed on pull request source" >&2
-            exit 1
-          fi
-          git checkout "$BASE" -- src lib/DistSSHBase/src lib/DistSSHUp/src lib/DistSSHShip/src lib/DistSSHHeartbeat/src
-          failed=0
-          for f in "${files[@]}"; do
-            [ -f "$f" ] || continue
-            if ! julia --project=. --startup-file=no "$f"; then
-              failed=1
-            fi
-          done
-          if [ "$failed" -eq 0 ]; then
-            echo "new tests also passed on merge-base src" >&2
-            exit 1
-          fi
+        run: ./scripts/gate/fix-tests-on-base.sh
 
   aqua:
     name: Aqua (1.13, ubuntu-latest, x64)

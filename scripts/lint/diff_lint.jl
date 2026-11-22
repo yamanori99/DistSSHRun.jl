@@ -1391,9 +1391,12 @@ function self_test_body_main()
     judge_norm == "success" || die("self-test: judge result normalization $(judge_norm)")
     judge_script = joinpath(@__DIR__, "..", "gate", "judge_self_test.sh")
     judge_buf = IOBuffer()
-    judge_proc = run(pipeline(`$judge_script`, stdout = judge_buf, stderr = judge_buf), wait = true)
+    judge_proc = run(pipeline(`$judge_script`, stdout = judge_buf, stderr = judge_buf))
     judge_self = String(take!(judge_buf))
     if !success(judge_proc)
+        for line in split(strip(judge_self), '\n'; keepempty = false)
+            println(stderr, line)
+        end
         for line in split(strip(judge_self), '\n'; keepempty = false)
             startswith(line, "FAIL  ") && die("self-test: judge_self_test $(line)")
         end
@@ -1502,6 +1505,18 @@ function self_test_body_main()
     pending_fail = "## Risk\n\nStill pending on main.\n"
     any(endswith(e, "pending") for e in excuse_word_errors(section_named_text(pending_fail, "Risk"))) ||
         die("self-test: pending evidence")
+    table_in_fence = "## Testing\n\nLinux x86_64, Julia 1.13.4.\n\n`true`\n\n```text\n| a | b |\n|---|---|\n```\n"
+    isempty(testing_format_errors(section_named_text(table_in_fence, "Testing"))) ||
+        die("self-test: table in text fence $(testing_format_errors(section_named_text(table_in_fence, "Testing")))")
+    testing_has_env_line("Linux x86_64, Julia 1.13.4") &&
+        die("self-test: version dot must not satisfy env line")
+    testing_has_env_line("Linux x86_64, Julia 1.13.4.") ||
+        die("self-test: sentence period env line")
+    cmd_fence_only = "## Testing\n\nLinux x86_64, Julia 1.13.4.\n\n```text\n`only in fence`\n```\n"
+    any(x -> occursin("command", x), testing_format_errors(section_named_text(cmd_fence_only, "Testing"))) ||
+        die("self-test: cmd in fence only")
+    hdr_in_fence = "## Summary\n\n```markdown\n## Testing\n```\n\n## Risk\n"
+    testing_section_present(hdr_in_fence) && die("self-test: testing heading in fence")
     banned_hit("# until later") == "until" || die("self-test: until phrase $(repr(banned_hit("# until later")))")
     println("self-test: passed")
     return 0
@@ -1770,39 +1785,75 @@ function file_list_errors(body::AbstractString, paths)
     return unique(errs)
 end
 
+function unfenced_lines(text::AbstractString)
+    lines = collect(eachsplit(text, '\n'; keepempty = true))
+    out = Tuple{Int, String}[]
+    in_fence = false
+    for (i, line) in enumerate(lines)
+        if startswith(strip(line), "```")
+            in_fence = !in_fence
+            continue
+        end
+        in_fence || push!(out, (i, line))
+    end
+    return out
+end
+
+function has_markdown_table_outside_fences(text::AbstractString)
+    for (_, line) in unfenced_lines(text)
+        startswith(strip(line), "|") && return true
+    end
+    return false
+end
+
+function has_inline_command_outside_fences(text::AbstractString)
+    for (_, line) in unfenced_lines(text)
+        occursin(r"`[^`\n]+`", line) && return true
+    end
+    return false
+end
+
+function section_heading_outside_fences(body::AbstractString, hdr::AbstractString)
+    h = strip(hdr)
+    for (_, line) in unfenced_lines(body)
+        s = strip(line)
+        (s == h || (startswith(line, h) && length(s) <= length(h) + 2)) && return true
+    end
+    return false
+end
+
 function testing_format_errors(text::AbstractString)
     errs = String[]
     if isempty(strip(text))
         push!(errs, "Testing section empty")
         return errs
     end
-    if occursin(r"(?m)^\|", text)
+    if has_markdown_table_outside_fences(text)
         push!(errs, "Testing uses a markdown table")
         return errs
     end
     lines = collect(eachsplit(text, '\n'; keepempty = true))
-    in_fence = false
     env_lines = Int[]
-    for (i, line) in enumerate(lines)
-        s = strip(line)
-        if startswith(s, "```")
-            in_fence = !in_fence
-            continue
-        end
-        in_fence && continue
+    for (i, line) in unfenced_lines(text)
         if testing_has_env_line(line) && !isempty(strip(line))
             push!(env_lines, i)
         end
     end
     if isempty(env_lines)
-        line = something(findfirst(l -> !isempty(strip(l)), lines), 1)
+        line = 1
+        for (i, ln) in unfenced_lines(text)
+            if !isempty(strip(ln))
+                line = i
+                break
+            end
+        end
         push!(errs, "$line: Testing environment line (OS/arch, Julia, trailing period)")
         return errs
     end
     for (idx, env_i) in enumerate(env_lines)
         stop = idx < length(env_lines) ? env_lines[idx + 1] - 1 : length(lines)
         segment = join(lines[env_i:stop], '\n')
-        if !occursin(r"`[^`\n]+`", segment)
+        if !has_inline_command_outside_fences(segment)
             push!(errs, "$env_i: Testing command in a code span")
         elseif !occursin(r"(?m)^```text\s*$", segment)
             push!(errs, "$env_i: Testing ```text output fence")
@@ -1823,7 +1874,7 @@ function pr_body_errors(body::AbstractString, paths)
 end
 
 function testing_section_present(body::AbstractString)
-    return occursin(r"(?m)^## Testing\s*$", body)
+    return section_heading_outside_fences(body, "## Testing")
 end
 
 function markdown_section_text(body::AbstractString, hdr::AbstractString)
@@ -1863,7 +1914,7 @@ end
 
 function testing_has_env_line(text::AbstractString)
     return occursin(
-        r"(?im)^[^\n]*\b(arm64|aarch64|x86_64|x64|amd64|i686|riscv64)\b[^\n]*\bjulia\b[^\n]*\.",
+        r"(?im)^[^\n]*\b(arm64|aarch64|x86_64|x64|amd64|i686|riscv64)\b[^\n]*\bjulia\b[^\n]*\.\s*$",
         text,
     )
 end

@@ -9,8 +9,10 @@ fail() {
 
 fix_title_triggers() {
   local title="$1"
-  local lower="${title,,}"
-  [[ "${lower}" == fix:* || "${lower}" == fix\(* ]]
+  case "$title" in
+    [fF][iI][xX]:* | [fF][iI][xX]\(* ) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 for t in "Fix typo" "fixture cleanup" "Fixing typo"; do

@@ -11,7 +11,7 @@ gh_pr_note_or_continue() {
     gh_pr_note_reason=""
     return 2
   fi
-  if grep -qiE '(not logged into|not authenticated|authentication failed|HTTP 401|HTTP 403|gh auth login|failed to run git)' "${err_file}"; then
+  if grep -qiE '(not logged into|not authenticated|authentication failed|HTTP 401|gh auth login)' "${err_file}"; then
     gh_pr_note_reason="gh not authenticated"
     return 0
   fi
