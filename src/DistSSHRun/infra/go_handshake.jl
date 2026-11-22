@@ -377,10 +377,10 @@ function _wait_go_slot_pid_gone!(pid::Integer)
     throw(
         ErrorException(
             "what: local go head slot pid $pid is still alive after terminate! reap\n" *
-            "where: _reap_local_go_slots_for_roots!\n" *
-            "why: pkill and SIGKILL did not remove the slot from the process table\n" *
-            "fix: inspect the slot process and its parent; file an issue if this persists" *
-            extra,
+                "where: _reap_local_go_slots_for_roots!\n" *
+                "why: pkill and SIGKILL did not remove the slot from the process table\n" *
+                "fix: inspect the slot process and its parent; file an issue if this persists" *
+                extra,
         ),
     )
 end

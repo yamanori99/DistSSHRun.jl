@@ -50,7 +50,7 @@ function _wait_kit_pids_gone!(pids; timeout::Real = 5.0)
     for p in alive
         println(stderr, "/proc/$p/stat: ", _proc_stat_diag(p))
     end
-    @test isempty(alive)
+    return @test isempty(alive)
 end
 
 # Oracle: dispatcher only (plus detached `:go`, which is out-of-process).
