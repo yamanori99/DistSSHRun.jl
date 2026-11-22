@@ -360,9 +360,12 @@ Helpers (via `support.jl`): `_child_julia_env`, `_run_kit_drive` /
 - Each `runtests.jl` / `parallel.jl` file runs under `_with_leak_guard`: while
   the file loads, `DISTSSH_TEST_LEAK_TAG=<run-id>:<path>` is set on the test
   process and inherited by child `julia` / local workers. After the file
-  finishes, `DistSSHBase.processes_with_env` must find no matching process;
-  leftovers are printed and `reap!`ed. Record a known leak with
-  `@test_broken` on `_assert_no_leaked_processes` inside the test.
+  finishes, a changed `ENV` entry, `LOAD_PATH`, `JULIA_LOAD_PATH`, or active
+  project fails that file with the name and the before and after values.
+  `DistSSHBase.processes_with_env` must find no matching process. Leftovers
+  are printed; the harness does not restore or reap.
+- Invariant testsets are named `@testset "invariant: <name>"`. Names live in
+  `scripts/check.sh` (`INVARIANT_NAMES`). Add a name there when the tests exist.
   A second Ctrl-C during `drive` cleanup SIGKILLs this run's local
   workers before `_exit` 130, so `integration/drive/sigint.jl` expects
   no tagged survivors on Julia 1.13 as well.

@@ -111,6 +111,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: ./.github/actions/ci-heavy
         id: heavy
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -219,6 +220,33 @@ jobs:
             fi
             testenv_paths="${FILTER_TESTENV:-false}"
             echo "testenv=${testenv_paths}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Conflict and staleness
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          sha="${HEAD_SHA}"
+          if [ -n "${PR:-}" ]; then
+            git fetch --no-tags origin "pull/${PR}/head"
+            sha="$(git rev-parse FETCH_HEAD)"
+          fi
+          if ! git merge-tree --write-tree origin/main "$sha" >/dev/null; then
+            echo "conflicts with origin/main" >&2
+            exit 1
+          fi
+          behind="$(git rev-list --count "${sha}..origin/main")"
+          mb="$(git merge-base "$sha" origin/main)"
+          age="$(($(git log -1 --format=%ct origin/main) - $(git log -1 --format=%ct "$mb")))"
+          if [ "$behind" -gt 40 ] || [ "$age" -gt $((48 * 3600)) ]; then
+            echo "::warning::stale versus origin/main (${behind} commits, ${age}s)"
+            if [[ ",${PR_LABELS}," == *",cut,"* ]]; then
+              echo "stale branch with cut label" >&2
+              exit 1
+            fi
           fi
   test-unit:
     name: DistSSHRun (1.13, ubuntu-latest, x64, unit)
@@ -398,10 +426,30 @@ jobs:
         with:
           path: DistSSHRun.jl
           persist-credentials: false
+          fetch-depth: 0
+      - name: Downstream ref
+        id: dref
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+          PKG: ${{ matrix.pkg }}
+        run: |
+          set -euo pipefail
+          ref=main
+          if [ -n "${BODY:-}" ]; then
+            line="$(printf '%s\n' "$BODY" | grep -E "^Downstream-Ref: ${PKG}=" | head -1 || true)"
+            if [ -n "$line" ]; then
+              ref="${line#*=}"
+              if ! [[ "$ref" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+                echo "invalid Downstream-Ref: ${ref}" >&2
+                exit 1
+              fi
+            fi
+          fi
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yamanori99/${{ matrix.pkg }}.jl
-          ref: main
+          ref: ${{ steps.dref.outputs.ref }}
           path: downstream
           persist-credentials: false
       - name: Workspace .github for julia-slot
@@ -417,7 +465,14 @@ jobs:
         working-directory: DistSSHRun.jl
         env:
           DOWNSTREAM_SRC: ${{ github.workspace }}/downstream/src
-        run: julia --startup-file=no --project=. .github/downstream_public.jl "$DOWNSTREAM_SRC"
+        run: |
+          git fetch --no-tags origin main || true
+          julia --startup-file=no --project=. .github/downstream_public.jl "$DOWNSTREAM_SRC"
+      - name: Removed names in downstream tree
+        working-directory: DistSSHRun.jl
+        env:
+          DOWNSTREAM: ${{ github.workspace }}/downstream
+        run: julia --project=.github/runic --startup-file=no scripts/lint/diff_lint.jl removed-names "$DOWNSTREAM"
       - name: Pkg.test downstream against this checkout
         env:
           PKG: ${{ matrix.pkg }}
@@ -1184,13 +1239,14 @@ jobs:
   diff-lint-self-test:
     name: diff-lint self-test
     needs: detect
-    if: needs.detect.outputs.scripts == 'true'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: ./.github/actions/julia-slot
         with:
           version: "1.13"
@@ -1201,8 +1257,55 @@ jobs:
       - name: diff_lint.jl self-test
         run: |
           set -euo pipefail
+          git fetch --no-tags origin main
           julia --project=.github/runic --startup-file=no -e 'using Pkg; Pkg.instantiate()'
           julia --project=.github/runic --startup-file=no scripts/lint/diff_lint.jl self-test
+          for mode in banned-words skip-reasons id-match process-pattern lock-create env-default swallowed-catch pr-refs; do
+            julia --project=.github/runic --startup-file=no scripts/lint/diff_lint.jl "$mode"
+          done
+
+  fix-tests-on-base:
+    name: fix tests fail on merge-base src
+    needs: detect
+    if: github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'fix')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/julia-slot
+        with:
+          version: "1.13"
+      - uses: julia-actions/cache@9353db09a0f2bbbdec6f41791918c75d37391b36 # v3.5.0
+        with:
+          cache-scratchspaces: false
+          delete-old-caches: false
+      - name: Run added tests against merge-base src
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$BASE"
+          mapfile -t files < <(git diff --name-only "$BASE"...HEAD -- 'test/**/*.jl' 'lib/*/test/**/*.jl' | grep -v '/e2e.jl$' || true)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "no added or changed test files (e2e.jl is not run here)" >&2
+            exit 1
+          fi
+          git checkout "$BASE" -- src lib/DistSSHBase/src lib/DistSSHUp/src lib/DistSSHShip/src lib/DistSSHHeartbeat/src
+          julia --project=. --startup-file=no -e 'using Pkg; Pkg.instantiate()'
+          failed=0
+          for f in "${files[@]}"; do
+            [ -f "$f" ] || continue
+            if ! julia --project=. --startup-file=no "$f"; then
+              failed=1
+            fi
+          done
+          if [ "$failed" -eq 0 ]; then
+            echo "new tests also passed on merge-base src" >&2
+            exit 1
+          fi
 
   aqua:
     name: Aqua (1.13, ubuntu-latest, x64)

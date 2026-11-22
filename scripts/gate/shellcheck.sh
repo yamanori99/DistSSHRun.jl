@@ -6,8 +6,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT}"
 
 if ! command -v shellcheck >/dev/null 2>&1; then
-  echo "shellcheck: not on PATH" >&2
-  exit 1
+  echo "note: shellcheck not found; shell scripts unchecked locally, CI will check"
+  exit 0
 fi
 
 files=()

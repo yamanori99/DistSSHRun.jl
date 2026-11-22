@@ -8,7 +8,7 @@
 # + Issues write). Add Workflows write only if the tagged SHA changes
 # `.github/workflows`. Empty secret falls back to `GITHUB_TOKEN`.
 name: TagBot
-on:
+on: # zizmor: ignore[dangerous-triggers] JuliaTagBot comments; job gated on actor
   issue_comment:
     types:
       - created

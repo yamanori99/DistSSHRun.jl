@@ -13,6 +13,18 @@ here.
 Start the summary with the count of findings. When the count is zero,
 say there is nothing to fix.
 
+## Invariants
+
+- Ids are compared exactly.
+- Run state has an owner.
+- Invalid input errors.
+- A change adds no fallback, skip, allowlist entry, or non-blocking job.
+
+## Pre-existing
+
+A finding outside this diff stays out of the pull request. List it under
+this heading, one line each, with file:line.
+
 ## Failures
 
 - **Docs lie.** A manual, README, or NEWS states a flag, confirmation,

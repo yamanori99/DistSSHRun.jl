@@ -59,6 +59,7 @@ end
 @testset "DistSSHRun" verbose = true begin
     if _distssh_test_group_enabled(:unit)
         @testset "unit" verbose = true begin
+            _runtest_include("unit/DistSSHRun/support_leak_guard.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "support_leak_guard.jl"))
             _runtest_include("unit/DistSSHRun/messages/display.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "messages", "display.jl"))
             _runtest_include("unit/DistSSHRun/explain.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "explain.jl"))
             _runtest_include("unit/DistSSHRun/messages/placement.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "messages", "placement.jl"))
