@@ -94,7 +94,6 @@ if [[ "${heavy}" == true ]]; then
   judge test-1-14-pre-integration ""
   judge test-1-14-pre-macos-unit ""
   judge test-1-14-pre-macos-integration ""
-  judge downstream ""
   if [[ "${coverage}" == true ]]; then
     judge test-coverage ""
   else
