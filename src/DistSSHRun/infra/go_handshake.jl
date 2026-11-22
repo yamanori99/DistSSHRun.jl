@@ -44,7 +44,7 @@ const _GO_HANDSHAKE_LOADER_SRC = let writer = _LOADED_WIRE_WRITER,
         end
         function __read_id(mod)
             id = getfield(mod, :COMPONENT_ID)
-            (
+            return (
                 version = string(getproperty(id, :version)),
                 uuid = string(getproperty(id, :uuid)),
                 digest = string(getproperty(id, :digest)),
