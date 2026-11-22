@@ -128,6 +128,25 @@ function apply_session_env!(session::DistSSHSession)
     return session
 end
 
+"""Run `f` after [`apply_session_env!`](@ref), then restore `DISTRIBUTED_PROJECT_ROOT`.
+
+Deletes the key when it was absent before the call. Runs the restore from
+`finally`, including when `f` throws.
+"""
+function _with_session_env!(f, session::DistSSHSession)
+    prev_root = get(ENV, "DISTRIBUTED_PROJECT_ROOT", nothing)
+    try
+        apply_session_env!(session)
+        return f()
+    finally
+        if prev_root === nothing
+            delete!(ENV, "DISTRIBUTED_PROJECT_ROOT")
+        else
+            ENV["DISTRIBUTED_PROJECT_ROOT"] = prev_root
+        end
+    end
+end
+
 """Run `f` with `session.remote` in `DISTRIBUTED_REMOTE_PROJECT_ROOT`, then restore.
 
 Needed for `remote_layout_path` / collect mapping when `apply_session_env!`

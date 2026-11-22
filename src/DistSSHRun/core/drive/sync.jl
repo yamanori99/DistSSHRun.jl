@@ -41,7 +41,7 @@ function sync!(
         )
     )
     return _with_kit_inproc_run!(:sync) do
-        apply_session_env!(session)
+        return _with_session_env!(session) do
         warn_project_sshflags(session.project)
         if kind === :ship_tree
             remote_path = remote_deploy_root(
@@ -85,6 +85,7 @@ function sync!(
                 )
             end
             return result
+        end
         end
     end
 end

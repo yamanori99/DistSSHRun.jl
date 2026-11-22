@@ -146,7 +146,7 @@ function drive!(
                 # Outside `run_drive_parsed!`: `apply_session_env!` runs first, and
                 # this frame restores DISTRIBUTED_* after the inner drive returns.
                 return _with_drive_process!(session.project) do
-                    apply_session_env!(session)
+                    return _with_session_env!(session) do
                     # Scoped for `remote_layout_path` / worker path mapping only.
                     # Restored here and again by `_with_drive_process!`.
                     return _with_session_remote_env!(session) do
@@ -178,6 +178,7 @@ function drive!(
                             empty!(ARGS)
                             append!(ARGS, original_args)
                         end
+                    end
                     end
                 end
             end

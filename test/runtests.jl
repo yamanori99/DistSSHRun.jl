@@ -106,6 +106,7 @@ end
             end
             _runtest_include("unit/DistSSHRun/provenance.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "provenance.jl"))
             _runtest_include("unit/DistSSHRun/argv/session.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "argv", "session.jl"))
+            _runtest_include("unit/DistSSHRun/options/session_env_restore.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "options", "session_env_restore.jl"))
             _runtest_include("unit/DistSSHRun/hosts.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "hosts.jl"))
             _runtest_include("unit/DistSSHRun/main_dispatch.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "main_dispatch.jl"))
             _runtest_include("unit/DistSSHRun/downstream_public.jl", joinpath(@__DIR__, "unit", "DistSSHRun", "downstream_public.jl"))

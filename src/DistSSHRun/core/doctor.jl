@@ -162,7 +162,7 @@ function doctor!(
     validate_setup_hosts(session.hosts)
     snap = run_id === nothing ? nothing : validate_run_id(run_id)
     return _with_kit_inproc_run!(:doctor) do
-        apply_session_env!(session)
+        return _with_session_env!(session) do
         work_path = _project_work_root(
             session.hosts, session.project;
             cli_override = session.remote, run_id = snap,
@@ -176,6 +176,7 @@ function doctor!(
             path_anchor = session.project,
             ignore_julia_version = ignore_julia_version,
         )
+        end
     end
 end
 

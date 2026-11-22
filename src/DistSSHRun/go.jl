@@ -1197,15 +1197,14 @@ function _go_run!(
     release_lock = kit_output_dir_lock!(batch_dir)
     _go_write_batch_manifest!(batch_dir, script_path, slots)
     _set_kit_progress_sidecar!(batch_dir)
-    apply_session_env!(
-        DistSSHSession(
-            project = proj,
-            workers = String[],
-            remote = remote,
-            quiet = quiet,
-            verbosity = verbosity,
-        ),
+    go_env_session = DistSSHSession(
+        project = proj,
+        workers = String[],
+        remote = remote,
+        quiet = quiet,
+        verbosity = verbosity,
     )
+    return _with_session_env!(go_env_session) do
     init_log_file(batch_dir; prefix = "go", path_anchor = anchor)
 
     progress_ok = false
@@ -1454,6 +1453,7 @@ function _go_run!(
                 _remove_kit_pid_file(getpid(), batch_dir, nothing)
             end
         end
+    end
     end
 end
 

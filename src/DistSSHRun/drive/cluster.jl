@@ -64,7 +64,7 @@ function cluster(
             return _drive_frame(; cli = false) do
                 return _with_kit_inproc_run!(:drive) do
                     return _with_drive_process!(session.project) do
-                        apply_session_env!(session)
+                        return _with_session_env!(session) do
                         return _with_session_remote_env!(session) do
                             apply_shared_cli_flags!(session.cli_session)
                             head_workers, hosts = _cluster_placement(session, plan)
@@ -101,6 +101,7 @@ function cluster(
                             finally
                                 _teardown_drive_workers_after_run!(drive_atexit_cleanup)
                             end
+                        end
                         end
                     end
                 end

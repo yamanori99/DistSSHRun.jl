@@ -36,7 +36,7 @@ function instantiate!(
     validate_setup_hosts(session.hosts)
     snap = run_id === nothing ? nothing : validate_run_id(run_id)
     return _with_kit_inproc_run!(:instantiate) do
-        apply_session_env!(session)
+        return _with_session_env!(session) do
         return _with_session_remote_env!(session) do
             preflight_setup_ssh(session.hosts) || return SyncResult(
                 false,
@@ -62,6 +62,7 @@ function instantiate!(
                 ok = !raw.cancelled && raw.failed == 0,
             )
         end
+        end
     end
 end
 
@@ -78,7 +79,7 @@ function instantiate_after_ship!(
     isempty(session.hosts) && return nothing
     snap = run_id === nothing ? nothing : validate_run_id(run_id)
     return _with_kit_inproc_run!(:instantiate) do
-        apply_session_env!(session)
+        return _with_session_env!(session) do
         rr = _project_work_root(
             session.hosts, session.project;
             cli_override = session.remote, run_id = snap,
@@ -92,5 +93,6 @@ function instantiate_after_ship!(
             session.hosts,
         ) || return nothing
         return instantiate!(session; julia = julia, run_id = snap)
+        end
     end
 end
