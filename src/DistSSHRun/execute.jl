@@ -2464,7 +2464,10 @@ not match the `sh -c` line that contains the command.
 
 For `:go`, local head slots that outlive the detached child (Julia 1.14) are
 signaled with `pkill -f` on each slot's `go-handshake.jl` path under this
-run's kit directories (`run_dir`, `output_dir`, `log_dir`).
+run's kit directories (`run_dir`, `output_dir`, `log_dir`). This reaper waits
+until each targeted slot pid is gone from the process table (reaping a zombie
+when this process is its parent, then SIGKILL by exact pid). A survivor
+errors instead of returning success.
 
 The returned [`DistSSHJobResult`](@ref) `stop` is that ladder outcome. The same
 string is written to `kit.result`. When `run_dir` holds this package's

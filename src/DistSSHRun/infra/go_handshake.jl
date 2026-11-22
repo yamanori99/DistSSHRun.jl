@@ -279,10 +279,132 @@ function _go_slot_pkill_patterns(roots::AbstractVector{<:AbstractString})::Vecto
     return out
 end
 
+const _GO_SLOT_REAP_WAIT_S = 5.0
+const _GO_SLOT_REAP_POLL_S = 0.05
+const _GO_SLOT_REAP_KILL_WAIT_S = 1.0
+const _WNOHANG = 1
+
+function _pgrep_pattern_pids(pattern::AbstractString)::Vector{Int}
+    Sys.isunix() || return Int[]
+    pgrep = Sys.which("pgrep")
+    pgrep === nothing && return Int[]
+    out = try
+        read(Cmd([pgrep, "-f", String(pattern)]), String)
+    catch
+        return Int[]
+    end
+    pids = Int[]
+    for line in split(strip(out), '\n'; keepempty = false)
+        parsed = tryparse(Int, strip(line))
+        parsed === nothing && continue
+        push!(pids, parsed)
+    end
+    return pids
+end
+
+"""`/proc/<pid>/stat` snapshot for diagnostics (`state`, `ppid`, `comm`)."""
+function _linux_proc_stat_diag(pid::Integer)::Union{Nothing, String}
+    Sys.islinux() || return nothing
+    path = string("/proc/", Int(pid), "/stat")
+    isfile(path) || return nothing
+    line = try
+        read(path, String)
+    catch
+        return nothing
+    end
+    j = findfirst(')', line)
+    j === nothing && return nothing
+    comm = strip(line[2:(j - 1)])
+    rest = split(strip(line[(j + 1):end]))
+    length(rest) < 2 && return nothing
+    return string("state=", rest[1], " ppid=", rest[2], " comm=", comm)
+end
+
+function _go_slot_proc_state(pid::Integer)::Union{Nothing, NamedTuple{(:state, :ppid), Tuple{String, Int}}}
+    Sys.islinux() || return nothing
+    path = string("/proc/", Int(pid), "/stat")
+    isfile(path) || return nothing
+    line = try
+        read(path, String)
+    catch
+        return nothing
+    end
+    j = findfirst(')', line)
+    j === nothing && return nothing
+    rest = split(strip(line[(j + 1):end]))
+    length(rest) < 2 && return nothing
+    ppid = tryparse(Int, rest[2])
+    ppid === nothing && return nothing
+    return (state = String(rest[1]), ppid = ppid)
+end
+
+function _try_reap_go_slot_zombie!(pid::Integer)
+    info = _go_slot_proc_state(pid)
+    info === nothing && return nothing
+    info.state != "Z" && return nothing
+    info.ppid == getpid() || return nothing
+    status = Ref{Cint}(0)
+    ccall(:waitpid, Cint, (Cint, Ptr{Cint}), Cint(pid), Base.unsafe_convert(Ptr{Cint}, status))
+    return nothing
+end
+
+function _kill_pid_and_wait!(pid::Integer, signum::Integer, wait_s::Real)
+    pid = Int(pid)
+    pid < 1 && return nothing
+    rc = ccall(:kill, Cint, (Cint, Cint), Cint(pid), Cint(signum))
+    rc == 0 || return nothing
+    deadline = time() + Float64(wait_s)
+    while kit_pid_alive(pid) && time() < deadline
+        _try_reap_go_slot_zombie!(pid)
+        sleep(_GO_SLOT_REAP_POLL_S)
+    end
+    return nothing
+end
+
+function _wait_go_slot_pid_gone!(pid::Integer)
+    pid = Int(pid)
+    pid < 1 && return nothing
+    deadline = time() + _GO_SLOT_REAP_WAIT_S
+    while kit_pid_alive(pid) && time() < deadline
+        _try_reap_go_slot_zombie!(pid)
+        sleep(_GO_SLOT_REAP_POLL_S)
+    end
+    kit_pid_alive(pid) || return nothing
+    _kill_pid_and_wait!(pid, Base.SIGKILL, _GO_SLOT_REAP_KILL_WAIT_S)
+    kit_pid_alive(pid) || return nothing
+    diag = _linux_proc_stat_diag(pid)
+    extra = diag === nothing ? "" : "\nstat: $diag"
+    throw(
+        ErrorException(
+            "what: local go head slot pid $pid is still alive after terminate! reap\n" *
+                "where: _reap_local_go_slots_for_roots!\n" *
+                "why: pkill and SIGKILL did not remove the slot from the process table\n" *
+                "fix: inspect the slot process and its parent; file an issue if this persists" *
+                extra,
+        ),
+    )
+end
+
+function _collect_go_slot_pids_for_patterns(patterns::AbstractVector{String})::Set{Int}
+    targets = Set{Int}()
+    for pat in patterns
+        for pid in _pgrep_pattern_pids(pat)
+            push!(targets, pid)
+        end
+    end
+    return targets
+end
+
 function _reap_local_go_slots_for_roots!(roots::AbstractVector{<:AbstractString})
     Sys.isunix() || return nothing
-    for pat in _go_slot_pkill_patterns(roots)
+    patterns = _go_slot_pkill_patterns(roots)
+    targets = _collect_go_slot_pids_for_patterns(patterns)
+    for pat in patterns
         _pkill_pattern!(pat)
+    end
+    union!(targets, _collect_go_slot_pids_for_patterns(patterns))
+    for pid in targets
+        _wait_go_slot_pid_gone!(pid)
     end
     return nothing
 end
