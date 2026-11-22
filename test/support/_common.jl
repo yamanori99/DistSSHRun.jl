@@ -242,6 +242,8 @@ if !isdefined(@__MODULE__, :_test_root)
             "unit/DistSSHRun/execute.jl",
             # SIGINT/grace timing and ready files under parallel host load.
             "integration/drive/interrupt_grace.jl",
+            # Local head_slots overlap wall-clock oracle (integration/go/overlap.jl).
+            "integration/go/overlap.jl",
         )
     end
 
