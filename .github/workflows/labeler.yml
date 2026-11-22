@@ -46,6 +46,9 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          if ! gh label list --json name --jq '.[].name' | grep -Fxq conflict; then
+            gh label create conflict --description "Conflicts with the base branch" --color D93F0B
+          fi
           json=""
           tries=0
           while :; do
