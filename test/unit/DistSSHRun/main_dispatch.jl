@@ -1,6 +1,8 @@
 using Test
 
 @testset "(@main) dispatch" begin
+    saved_done = get(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE", nothing)
+    try
     # `julia -m DistSSHRun` invokes this module's `main`.
     function _main_capture(args)
         mktemp() do out_path, out_io
@@ -359,6 +361,13 @@ using Test
             else
                 ENV["DISTSSH_CLI_SUBCOMMAND_DONE"] = had
             end
+        end
+    end
+    finally
+        if saved_done === nothing
+            delete!(ENV, "DISTSSH_CLI_SUBCOMMAND_DONE")
+        else
+            ENV["DISTSSH_CLI_SUBCOMMAND_DONE"] = saved_done
         end
     end
 end

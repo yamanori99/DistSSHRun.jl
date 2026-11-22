@@ -9,7 +9,32 @@ function _sigint_sa_handler()::Ptr{Cvoid}
     return GC.@preserve buf unsafe_load(Ptr{Ptr{Cvoid}}(pointer(buf)))
 end
 
+const _DRIVE_LEAK_ENV_KEYS = (
+    "DISTRIBUTED_PROJECT_ROOT",
+    "DISTRIBUTED_REMOTE_PROJECT_ROOT",
+    "DISTSSH_CLI_SUBCOMMAND_DONE",
+    "DISTSSH_TEST",
+    "DISTSSH_TEST_SSH",
+    "DISTSSH_TEST_STATE_ROOT",
+    "DISTSSH_YES",
+    "DISTSSH_TEST_SNAP_GIT_YES",
+)
+
+function _restore_env_keys!(saved::Dict{String, Union{Nothing, String}})
+    for (k, v) in saved
+        if v === nothing
+            delete!(ENV, k)
+        else
+            ENV[k] = v
+        end
+    end
+    return nothing
+end
+
 @testset "drive API" begin
+    saved_env = Dict{String, Union{Nothing, String}}(
+        k => get(ENV, k, nothing) for k in _DRIVE_LEAK_ENV_KEYS
+    )
     @testset "parse_worker_tokens" begin
         p = DistSSHRun.parse_worker_tokens(["4*host-a", "host-b"]; head_workers = 2)
         @test p.head_workers == 2
@@ -82,8 +107,16 @@ end
     end
 
     @testset "apply_session_env!" begin
+        saved_proj = get(ENV, "DISTRIBUTED_PROJECT_ROOT", nothing)
+        saved_remote = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
+        saved_quiet = DistSSHRun.kit_output_quiet()
+        saved_ni = DistSSHRun.kit_noninteractive()
+        try
         _with_tempdir() do tmp
-            delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+            withenv(
+                "DISTRIBUTED_PROJECT_ROOT" => nothing,
+                "DISTRIBUTED_REMOTE_PROJECT_ROOT" => nothing,
+            ) do
             session = DistSSHRun.DistSSHSession(
                 project = tmp,
                 workers = ["host-a"],
@@ -96,9 +129,13 @@ end
             @test DistSSHRun.session_remote_root(session) == "/remote/App.jl"
             @test DistSSHRun.kit_output_quiet()
             @test !DistSSHRun.kit_noninteractive()
+            end
         end
         _with_tempdir() do tmp
-            delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+            withenv(
+                "DISTRIBUTED_PROJECT_ROOT" => nothing,
+                "DISTRIBUTED_REMOTE_PROJECT_ROOT" => nothing,
+            ) do
             tilde = DistSSHRun.DistSSHSession(
                 project = tmp,
                 workers = ["host-a"],
@@ -108,8 +145,10 @@ end
             DistSSHRun.apply_session_env!(tilde)
             @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
             @test DistSSHRun.session_remote_root(tilde) == "~/jobs/abc"
+            end
         end
         _with_tempdir() do tmp
+            withenv("DISTRIBUTED_PROJECT_ROOT" => nothing) do
             ambient = DistSSHRun.DistSSHSession(
                 project = tmp,
                 workers = ["host-a"]
@@ -119,9 +158,13 @@ end
                 @test DistSSHRun.kit_verbosity() === :progress
                 @test ambient.verbosity === :progress
             end
+            end
         end
         _with_tempdir() do tmp
-            delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+            withenv(
+                "DISTRIBUTED_PROJECT_ROOT" => nothing,
+                "DISTRIBUTED_REMOTE_PROJECT_ROOT" => nothing,
+            ) do
             a = DistSSHRun.DistSSHSession(
                 project = tmp, workers = ["host-a"],
                 remote = "/remote/A", quiet = true
@@ -162,11 +205,22 @@ end
                 )
             )
             @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+            end
         end
-        delete!(ENV, "DISTRIBUTED_PROJECT_ROOT")
-        delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
-        DistSSHRun.set_kit_output_quiet!(false)
-        DistSSHRun.set_kit_noninteractive!(false)
+        finally
+            if saved_proj === nothing
+                delete!(ENV, "DISTRIBUTED_PROJECT_ROOT")
+            else
+                ENV["DISTRIBUTED_PROJECT_ROOT"] = saved_proj
+            end
+            if saved_remote === nothing
+                delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+            else
+                ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = saved_remote
+            end
+            DistSSHRun.set_kit_output_quiet!(saved_quiet)
+            DistSSHRun.set_kit_noninteractive!(saved_ni)
+        end
     end
 
     @testset "overlapping in-process kit runs are refused" begin
@@ -451,6 +505,8 @@ end
     end
 
     @testset "collect! scopes session.remote into ENV" begin
+        saved_remote = get(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT", nothing)
+        try
         _with_tempdir() do state_dir
             _with_tempdir() do tmp
                 write(joinpath(tmp, "Project.toml"), "name = \"DriveRemoteEnv\"\n")
@@ -489,6 +545,13 @@ end
                 end
                 @test err isa ErrorException
                 @test !haskey(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+            end
+        end
+        finally
+            if saved_remote === nothing
+                delete!(ENV, "DISTRIBUTED_REMOTE_PROJECT_ROOT")
+            else
+                ENV["DISTRIBUTED_REMOTE_PROJECT_ROOT"] = saved_remote
             end
         end
     end
@@ -1328,4 +1391,5 @@ end
             @test err_bind isa ArgumentError
         end
     end
+    _restore_env_keys!(saved_env)
 end
