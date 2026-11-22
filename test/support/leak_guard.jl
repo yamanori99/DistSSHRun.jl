@@ -63,28 +63,17 @@ if !isdefined(@__MODULE__, :_DISTSSH_TEST_LEAK_TAG)
             tag::AbstractString;
             grace::Real = _LEAK_GUARD_GRACE_S,
             label::AbstractString = "",
-            broken::Bool = false,
-            broken_rows::Union{Nothing, Function} = nothing,
         )
         key = _DISTSSH_TEST_LEAK_TAG
         list = () -> processes_with_env(key, String(tag))
         rows = wait_gone(list; timeout = grace)
-        assert_rows = if broken_rows === nothing
-            rows
-        else
-            filter(broken_rows, rows)
-        end
-        if !isempty(assert_rows)
+        if !isempty(rows)
             head = isempty(label) ? "leaked processes" : "leaked processes ($label)"
             println(stderr, "──── $head (tag=$(repr(tag))) ────")
-            print(stderr, _format_leak_rows(assert_rows))
+            print(stderr, _format_leak_rows(rows))
             println(stderr, "──── end leaked processes ────")
         end
-        if broken
-            @test_broken isempty(assert_rows)
-        else
-            @test isempty(rows)
-        end
+        @test isempty(rows)
         return nothing
     end
 
