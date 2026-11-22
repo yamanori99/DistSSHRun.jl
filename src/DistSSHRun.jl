@@ -139,7 +139,7 @@ end
 include(joinpath(@__DIR__, "..", "lib", "DistSSHBase", "src", "DistSSHBase.jl"))
 include("DistSSHRun/up_module.jl")
 using .DistSSHBase
-import .DistSSHBase: join_explained_message, manifest_path, cancel!
+import .DistSSHBase: cancel!, join_explained_message, manifest_path
 public join_explained_message, manifest_path
 import .DistSSHBase:
     current_project_file,
