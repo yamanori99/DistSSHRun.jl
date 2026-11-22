@@ -24,6 +24,7 @@ files=(
     lib/DistSSHHeartbeat/test/runtests.jl
     bench/compile/report.jl
     bench/compile/measure.jl
+    bench/compile/churn_render.jl
 )
 
 if ((${#files[@]} == 0)); then

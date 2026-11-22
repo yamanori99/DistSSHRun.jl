@@ -28,11 +28,14 @@ makedocs(;
         "Placement" => "placement.md",
         "Common errors" => "common_errors.md",
         "API" => "api.md",
+        "Developer" => [
+            "Source churn" => "source_churn.md",
+        ],
     ],
     checkdocs = :public,
     linkcheck = get(ENV, "DOCUMENTER_LINKCHECK", "") == "1",
     linkcheck_ignore = [
-        r"https?://github\.com/yamanori99/DistSSHRun\.jl/(?:blob|tree)/main/",
+        r"https?://github\.com/yamanori99/DistSSHRun\.jl/(?:blob|tree)/(?:main|bench-data)/",
     ],
 )
 
