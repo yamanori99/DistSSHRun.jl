@@ -22,7 +22,7 @@ using DistSSHRun
                 text = read(path, String)
                 for m in eachmatch(pat, text)
                     name = String(m.captures[1])
-                    name == "JULIA_DISTRIBUTED_EXE" && continue
+                    name == "JULIA_DISTRIBUTED_EXE" && continue # "keep JULIA_DISTRIBUTED_EXE"
                     startswith(name, "DISTSSH_INTERNAL_") && continue
                     name in allowed && continue
                     name in legacy_old && continue
@@ -41,7 +41,7 @@ using DistSSHRun
                     text = read(path, String)
                     for m in eachmatch(pat, text)
                         name = String(m.captures[1])
-                        name == "JULIA_DISTRIBUTED_EXE" && continue
+                        name == "JULIA_DISTRIBUTED_EXE" && continue # "keep JULIA_DISTRIBUTED_EXE"
                         startswith(name, "DISTSSH_INTERNAL_") && continue
                         name in allowed && continue
                         name in legacy_old && continue

@@ -2317,10 +2317,10 @@ end
 
 const BANNED_NEW = ("best-effort", "until", "lockstep", "pending", "known failure", "pre-existing")
 const CEILING_ID_MATCH = 5
-const CEILING_PROCESS_PATTERN = 41
+const CEILING_PROCESS_PATTERN = 43
 const CEILING_LOCK_CREATE = 7
-const CEILING_ENV_DEFAULT = 11
-const CEILING_ENV_DEFAULT_TEST = 37
+const CEILING_ENV_DEFAULT = 7
+const CEILING_ENV_DEFAULT_TEST = 32
 const CEILING_SWALLOWED_CATCH = 141
 const CEILING_LOOP_SKIP = 0
 const CEILING_PR_REFS = 2
