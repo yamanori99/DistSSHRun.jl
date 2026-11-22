@@ -3,7 +3,7 @@ module ChurnCompute
 
 using Dates
 
-export AreaRow, RemovedPathRow, ChurnReport, compute_churn, jst_today, area_label
+export AreaRow, ChurnReport, RemovedPathRow, area_label, compute_churn, jst_today
 
 const JST_OFFSET = Hour(9)
 const REPO_ROOT = normpath(joinpath(@__DIR__, "..", ".."))
@@ -91,7 +91,6 @@ end
 function collect_source_files(repo::AbstractString)::Vector{Tuple{String, String, String}}
     rows = Tuple{String, String, String}[]
     for (package, src_root) in package_src_roots(repo)
-        prefix = relpath(src_root, repo)
         for (root, _, names) in walkdir(src_root)
             for name in names
                 endswith(name, ".jl") || continue
@@ -191,6 +190,7 @@ function move_only_paths(repo::AbstractString, commit::AbstractString)::Set{Stri
         m = match(r"^(\d+|-)\t(\d+|-)\t(.+)$", line)
         m === nothing && continue
         path = m.captures[3]
+        path === nothing && continue
         occursin(r" => ", path) && continue
         a, d = m.captures[1], m.captures[2]
         (a == "-" || d == "-") && (path in rename_old) && push!(numstat_rename, path)
@@ -218,10 +218,12 @@ function parse_numstat_log(repo::AbstractString, since::AbstractString)::Vector{
         isempty(commit) && continue
         m = match(r"^(\d+|-)\t(\d+|-)\t(.+)$", line)
         m === nothing && continue
-        a = m.captures[1] == "-" ? 0 : parse(Int, m.captures[1])
-        d = m.captures[2] == "-" ? 0 : parse(Int, m.captures[2])
         path = m.captures[3]
+        path === nothing && continue
         occursin(r" => ", path) && continue
+        a_raw, d_raw = m.captures[1], m.captures[2]
+        a = a_raw === nothing || a_raw == "-" ? 0 : parse(Int, a_raw)
+        d = d_raw === nothing || d_raw == "-" ? 0 : parse(Int, d_raw)
         push!(lines, NumstatLine(commit, a, d, path))
     end
     return lines
@@ -269,8 +271,10 @@ function blame_staleness(repo::AbstractString, path::AbstractString, cutoff::Dat
     for line in eachsplit(text, '\n'; keepempty = false)
         m = match(r"^author-time (\d+)$", line)
         m === nothing && continue
+        stamp = m.captures[1]
+        stamp === nothing && continue
         total += 1
-        dt = Date(jst_from_utc(Dates.unix2datetime(parse(Int, m.captures[1]))))
+        dt = Date(jst_from_utc(Dates.unix2datetime(parse(Int, stamp))))
         dt <= cutoff && (stale += 1)
         last_touch = if last_touch === nothing
             dt
