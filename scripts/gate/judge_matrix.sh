@@ -32,6 +32,10 @@ queue_e2e_should_run() {
   [[ "${queue_e2e:-false}" == true ]]
 }
 
+downstream_should_run() {
+  [[ "${downstream:-false}" == true ]]
+}
+
 prereq_gate_jobs_ok() {
   [[ "$(result_of runic)" == success && "$(result_of jetls)" == success && "$(result_of aqua)" == success ]]
 }

@@ -19,5 +19,6 @@ skip_unless() {
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 "${ROOT}/scripts/gate/judge_matrix_verify.sh" >/dev/null
+"${ROOT}/scripts/gate/judge_downstream_self_test.sh" >/dev/null
 
 echo "ok"

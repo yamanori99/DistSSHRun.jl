@@ -5,7 +5,16 @@ on:
     branches:
       - main
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+      - labeled
   workflow_dispatch:
+  # Daily 06:00 JST (21:00 UTC). Downstream-only report; detect sets heavy=false.
+  schedule:
+    - cron: "0 21 * * *"
 
 # Cancel redundant runs on the same branch/PR.
 # Ubuntu 1.14-pre (setup-julia ~1.14.0-0) Pkg.test, Aqua, and JETLS follow
@@ -23,6 +32,8 @@ on:
 # version-cut PR, and workflow_dispatch still run Base, Up, Ship, and Heartbeat in this
 # workflow. Codecov stays a main push.
 # Registry install follows the heavy gate, including ordinary pull requests.
+# Downstream runs on a pull request with the `downstream` or `cut` label, on the
+# daily schedule, and on workflow_dispatch. A main push skips it.
 # PkgEval follows the heavy gate on push, workflow_dispatch, and version cuts;
 # ordinary pull_request skips it. continue-on-error. No label is involved.
 # A main push that changes only Project.toml and NEWS.md, and raises
@@ -107,6 +118,8 @@ jobs:
       testenv: ${{ steps.gate.outputs.testenv }}
       # Queue's Linux SSH E2E against this checkout. Not the path-filtered `e2e` gate.
       queue_e2e: ${{ steps.gate.outputs.queue_e2e }}
+      downstream: ${{ steps.gate.outputs.downstream }}
+      precheck: ${{ steps.gate.outputs.precheck }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -153,6 +166,15 @@ jobs:
             testenv:
               - "testenv/**"
               - "!testenv/**/*.md"
+      - id: pr-labels
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" \
+            --jq '.[].name' > "${RUNNER_TEMP}/pr-labels.txt"
       - id: gate
         env:
           FILTER_E2E: ${{ steps.filter.outputs.e2e }}
@@ -163,6 +185,8 @@ jobs:
           FILTER_TESTENV: ${{ steps.filter.outputs.testenv }}
           CUT: ${{ steps.heavy.outputs.version_cut }}
           HEAVY: ${{ steps.heavy.outputs.heavy }}
+          SCRIPTS: ${{ steps.heavy.outputs.scripts }}
+          PR_LABELS_FILE: ${{ github.event_name == 'pull_request' && format('{0}/pr-labels.txt', runner.temp) || '' }}
         run: |
           if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$HEAVY" = "false" ]; then
             echo "e2e=false" >> "$GITHUB_OUTPUT"
@@ -220,6 +244,30 @@ jobs:
             testenv_paths="${FILTER_TESTENV:-false}"
             echo "testenv=${testenv_paths}" >> "$GITHUB_OUTPUT"
           fi
+          has_pr_label() {
+            local want="$1"
+            [ -n "${PR_LABELS_FILE:-}" ] && [ -f "${PR_LABELS_FILE}" ] || return 1
+            grep -Fxq "${want}" "${PR_LABELS_FILE}"
+          }
+          downstream=false
+          case "${GITHUB_EVENT_NAME}" in
+            workflow_dispatch|schedule)
+              downstream=true ;;
+            pull_request)
+              if has_pr_label downstream || has_pr_label cut || [ "${CUT}" = "true" ]; then
+                downstream=true
+              fi ;;
+            push)
+              downstream=false ;;
+            *)
+              downstream=true ;;
+          esac
+          echo "downstream=${downstream}" >> "$GITHUB_OUTPUT"
+          precheck=false
+          if [ "${HEAVY}" = "true" ] || [ "${SCRIPTS:-false}" = "true" ] || [ "${downstream}" = "true" ]; then
+            precheck=true
+          fi
+          echo "precheck=${precheck}" >> "$GITHUB_OUTPUT"
   test-unit:
     name: DistSSHRun (1.13, ubuntu-latest, x64, unit)
     needs: [detect, runic, jetls, aqua]
@@ -384,7 +432,7 @@ jobs:
   downstream:
     name: Downstream (${{ matrix.pkg }}@main, 1.13)
     needs: [detect, runic, jetls, aqua]
-    if: needs.detect.outputs.heavy == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
+    if: needs.detect.outputs.downstream == 'true' && needs.runic.result == 'success' && needs.jetls.result == 'success' && needs.aqua.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -1156,7 +1204,7 @@ jobs:
   runic:
     name: Runic
     needs: detect
-    if: needs.detect.outputs.heavy == 'true' || needs.detect.outputs.scripts == 'true'
+    if: needs.detect.outputs.precheck == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -1207,7 +1255,7 @@ jobs:
   aqua:
     name: Aqua (1.13, ubuntu-latest, x64)
     needs: detect
-    if: needs.detect.outputs.heavy == 'true'
+    if: needs.detect.outputs.precheck == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -1271,7 +1319,7 @@ jobs:
   jetls:
     name: JETLS (1.13, ubuntu-latest, x64)
     needs: detect
-    if: needs.detect.outputs.heavy == 'true'
+    if: needs.detect.outputs.precheck == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # Official x86_64 release target from JuliaCI/julia-buildkite
@@ -1642,6 +1690,8 @@ jobs:
           DETECT_QUEUE_E2E: ${{ needs.detect.outputs.queue_e2e }}
           DETECT_TESTENV: ${{ needs.detect.outputs.testenv }}
           DETECT_COVERAGE: ${{ needs.detect.outputs.coverage }}
+          DETECT_DOWNSTREAM: ${{ needs.detect.outputs.downstream }}
+          DETECT_PRECHECK: ${{ needs.detect.outputs.precheck }}
           DETECT_EVENT: ${{ github.event_name }}
           RESULT_detect: ${{ needs.detect.result }}
           RESULT_runic: ${{ needs.runic.result }}
