@@ -95,4 +95,44 @@ end
         @test ChurnCompute.area_label("DistSSHBase", "ssh/foo.jl") == "ssh/"
         @test ChurnCompute.area_label("DistSSHBase", "tool.jl") == "(root files)"
     end
+
+    @testset "area row inclusion" begin
+        @test !ChurnCompute.area_row_included(
+            ChurnCompute.AreaRow(
+                "DistSSHRun", "core/", 0, 0, 0, 0, 0, 0, 100.0, nothing, String[],
+            )
+        )
+        @test ChurnCompute.area_row_included(
+            ChurnCompute.AreaRow(
+                "DistSSHRun", "core/", 1, 10, 0, 0, 5, 0, 100.0, nothing, String[],
+            )
+        )
+    end
+
+    @testset "nested dirs and zero churn rows" begin
+        with_churn_repo() do dir
+            fixed = DateTime(2026, 6, 15, 12)
+            write_jl(dir, "src/DistSSHRun.jl", "module DistSSHRun\nend\n")
+            write_jl(dir, "src/DistSSHRun/core/drive/run.jl", "x = 1\n")
+            ENV["GIT_AUTHOR_DATE"] = "2026-01-01T12:00:00"
+            ENV["GIT_COMMITTER_DATE"] = "2026-01-01T12:00:00"
+            git_commit(dir, "init nested")
+            delete!(ENV, "GIT_AUTHOR_DATE")
+            delete!(ENV, "GIT_COMMITTER_DATE")
+            ENV["GIT_AUTHOR_DATE"] = "2026-06-10T12:00:00"
+            ENV["GIT_COMMITTER_DATE"] = "2026-06-10T12:00:00"
+            write(
+                joinpath(dir, "src", "DistSSHRun", "core", "drive", "run.jl"),
+                "x = 1\ny = 2\n",
+            )
+            git_commit(dir, "edit drive")
+            delete!(ENV, "GIT_AUTHOR_DATE")
+            delete!(ENV, "GIT_COMMITTER_DATE")
+            report = ChurnCompute.compute_churn(dir; now = fixed)
+            areas = [r.area for r in report.areas if r.package == "DistSSHRun"]
+            @test "core/drive/" in areas
+            @test !("core/" in areas)
+            @test !any(r -> r.area == "DistSSHRun.jl", report.areas)
+        end
+    end
 end
