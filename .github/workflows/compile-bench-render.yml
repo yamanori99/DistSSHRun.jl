@@ -9,13 +9,21 @@ on:
     paths:
       - bench/compile/report.jl
       - bench/compile/charts.jl
+      - bench/compile/churn_*.jl
+      - bench/compile/churn_render.sh
+      - bench/compile/Project.toml
       - .github/compile-bench-render.sh
+      - .github/source-churn-bench.sh
       - .github/workflows/compile-bench-render.yml
   pull_request:
     paths:
       - bench/compile/report.jl
       - bench/compile/charts.jl
+      - bench/compile/churn_*.jl
+      - bench/compile/churn_render.sh
+      - bench/compile/Project.toml
       - .github/compile-bench-render.sh
+      - .github/source-churn-bench.sh
       - .github/workflows/compile-bench-render.yml
   workflow_dispatch:
 
@@ -35,6 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
         with:
@@ -44,6 +53,11 @@ jobs:
           BENCH_TOKEN: ${{ github.token }}
           BENCH_PUSH: "0"
         run: bash .github/compile-bench-render.sh
+      - name: Render source churn
+        env:
+          BENCH_TOKEN: ${{ github.token }}
+          BENCH_PUSH: "0"
+        run: bash .github/source-churn-bench.sh
 
   publish:
     name: Render bench-data
@@ -55,12 +69,13 @@ jobs:
       # actionlint 1.7.12 does not know concurrency.queue yet. GitHub does.
       queue: max
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
         with:
@@ -70,3 +85,8 @@ jobs:
           BENCH_TOKEN: ${{ github.token }}
           BENCH_PUSH: "1"
         run: bash .github/compile-bench-render.sh
+      - name: Render source churn
+        env:
+          BENCH_TOKEN: ${{ github.token }}
+          BENCH_PUSH: "1"
+        run: bash .github/source-churn-bench.sh
