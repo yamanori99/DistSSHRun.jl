@@ -1,0 +1,3 @@
+progress: begin kind=drive label=drive total=2 t=1.0
+progress: step kind=drive label=workers done=0 total=2 cur=1 t=2.5
+progress: done kind=drive ok=true done=2 total=2 t=3.0
