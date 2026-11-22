@@ -1534,7 +1534,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TITLE: Test main failed
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          BODY_PREFIX: 'Not a PR check. Downstream Kit/Queue failures are tracked separately.'
+          BODY_PREFIX: |+
+            Not a PR check. Downstream Kit/Queue failures are tracked separately.
+
           MONITOR_RESULTS: |
             detect:${{ needs.detect.result }}
             runic:${{ needs.runic.result }}
