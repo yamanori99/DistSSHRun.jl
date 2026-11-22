@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-action.json
+name: pkg-parallel-test
+description: test/parallel.jl after the caller has run setup-julia and julia-actions/cache
+
+inputs:
+  jobs:
+    description: "Worker count; default is the runner CPU thread count"
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    # Do not nest julia-actions/cache here (julia-actions/cache#236).
+    - uses: julia-actions/julia-buildpkg@e3eb439fad4f9aba7da2667e7510e4a46ebc46e1 # v1.7.0
+    - name: Instantiate test project
+      shell: bash
+      run: julia --project=test -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+    - name: Parallel versus runtests parity
+      shell: bash
+      run: julia --project=test scripts/gate/parallel_runtests_parity.jl
+    - name: Run parallel tests
+      shell: bash
+      env:
+        INPUT_JOBS: ${{ inputs.jobs }}
+      run: |
+        set -euo pipefail
+        if [[ -n "${INPUT_JOBS}" ]]; then
+          jobs="${INPUT_JOBS}"
+        else
+          jobs="$(julia -e 'print(Sys.CPU_THREADS)')"
+        fi
+        echo "parallel jobs=${jobs}"
+        julia --project=test test/parallel.jl --jobs="${jobs}"

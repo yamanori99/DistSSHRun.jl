@@ -317,10 +317,7 @@ jobs:
         with:
           cache-scratchspaces: false
           delete-old-caches: false
-      - uses: ./.github/actions/pkg-test
-        with:
-          coverage: false
-          upload: false
+      - uses: ./.github/actions/pkg-parallel-test
 
   test-integration:
     name: DistSSHRun (1.13, ubuntu-latest, x64, integration)
@@ -343,10 +340,7 @@ jobs:
         with:
           cache-scratchspaces: false
           delete-old-caches: false
-      - uses: ./.github/actions/pkg-test
-        with:
-          coverage: false
-          upload: false
+      - uses: ./.github/actions/pkg-parallel-test
 
   test-coverage:
     name: DistSSHRun (1.13, ubuntu-latest, x64, coverage)
@@ -397,7 +391,7 @@ jobs:
         with:
           cache-scratchspaces: false
           delete-old-caches: false
-      - uses: ./.github/actions/pkg-test
+      - uses: ./.github/actions/pkg-parallel-test
 
   test-macos-integration:
     name: DistSSHRun (1.13, xcode-27, aarch64, integration)
@@ -420,7 +414,7 @@ jobs:
         with:
           cache-scratchspaces: false
           delete-old-caches: false
-      - uses: ./.github/actions/pkg-test
+      - uses: ./.github/actions/pkg-parallel-test
 
   test-wsl:
     name: DistSSHRun (1.13, WSL2 ubuntu-24.04, x64)
@@ -1116,7 +1110,7 @@ jobs:
         with:
           cache-scratchspaces: false
           delete-old-caches: false
-      - uses: ./.github/actions/pkg-test
+      - uses: ./.github/actions/pkg-parallel-test
 
   test-1-14-pre-integration:
     name: DistSSHRun (1.14-pre, ubuntu-latest, x64, integration)
@@ -1137,7 +1131,7 @@ jobs:
         with:
           cache-scratchspaces: false
           delete-old-caches: false
-      - uses: ./.github/actions/pkg-test
+      - uses: ./.github/actions/pkg-parallel-test
 
   test-1-14-pre-macos-unit:
     name: DistSSHRun (1.14-pre, xcode-27, aarch64, unit)
@@ -1158,7 +1152,7 @@ jobs:
         with:
           cache-scratchspaces: false
           delete-old-caches: false
-      - uses: ./.github/actions/pkg-test
+      - uses: ./.github/actions/pkg-parallel-test
 
   test-1-14-pre-macos-integration:
     name: DistSSHRun (1.14-pre, xcode-27, aarch64, integration)
@@ -1179,7 +1173,7 @@ jobs:
         with:
           cache-scratchspaces: false
           delete-old-caches: false
-      - uses: ./.github/actions/pkg-test
+      - uses: ./.github/actions/pkg-parallel-test
 
   test-nightly:
     name: DistSSHRun (nightly, ubuntu-latest, x64)
