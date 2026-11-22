@@ -68,6 +68,8 @@ export cache_relpath
 export push_cache!
 export cache_remote_dir
 export drive!
+export cluster
+export Cluster
 export collect!
 export pipeline!
 export pipeline_config_from_env
