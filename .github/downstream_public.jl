@@ -314,9 +314,9 @@ function _allow_snapshot_from_text(text::AbstractString)
     prev_max = m === nothing ? nothing : Base.parse(Int, m.captures[1])
     prev_keys = Set{Tuple{Symbol, Symbol}}(
         (Symbol(m.captures[1]), Symbol(m.captures[2])) for m in eachmatch(
-            r"\(:([A-Za-z0-9_]+), :([A-Za-z0-9_]+)\)",
-            text,
-        )
+                r"\(:([A-Za-z0-9_]+), :([A-Za-z0-9_]+)\)",
+                text,
+            )
     )
     return prev_max, prev_keys
 end
