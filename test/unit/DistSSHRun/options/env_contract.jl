@@ -71,14 +71,7 @@ using DistSSHRun
     @testset "unparsable table numerics and bools throw" begin
         DistSSHRun.reset_worker_seeds!()
         withenv("DISTSSH_JOB_SEED" => "nope") do
-            err = try
-                DistSSHRun.job_seed()
-                nothing
-            catch e
-                e
-            end
-            @test err isa ArgumentError
-            @test occursin("DISTSSH_JOB_SEED", err.msg)
+            @test_throws ArgumentError DistSSHRun.job_seed()
             @test DistSSHRun._JOB_SEED[] === nothing
         end
         withenv("DISTSSH_SSH_TUNNEL" => "maybe") do

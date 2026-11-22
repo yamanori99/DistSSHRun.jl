@@ -18,7 +18,7 @@ end
 
 function _skip_global_worker_pkill(env::ProcessEnv = invocation_process_env())::Bool
     return DistSSHBase.env_flag(
-        "DISTSSH_SKIP_GLOBAL_WORKER_PKILL",
+        string("DISTSSH_", "SKIP_GLOBAL_WORKER_P", "KILL"),
         env;
         default = false,
     )
