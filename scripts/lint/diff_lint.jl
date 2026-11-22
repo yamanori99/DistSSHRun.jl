@@ -2,7 +2,7 @@
 # Do not Pkg.add, and do not load a copy from the running process.
 #
 #   julia --project=.github/runic --startup-file=no scripts/lint/diff_lint.jl <mode>
-#   modes: banned-words, agents-md, skip-reasons, new-comments, stdlib-compat, self-test, pr-body
+#   modes: all, banned-words, agents-md, skip-reasons, new-comments, stdlib-compat, self-test, pr-body
 
 using Dates
 using JuliaSyntax
@@ -1387,6 +1387,11 @@ function self_test_body_main()
     judge_norm == "success" || die("self-test: judge result normalization $(judge_norm)")
     judge_self = strip(read(`$(joinpath(@__DIR__, "..", "gate", "judge_self_test.sh"))`, String))
     judge_self == "ok" || die("self-test: judge_self_test $(judge_self)")
+    length(GATE_LINT_NAMES) == 15 || die("self-test: GATE_LINT_NAMES $(length(GATE_LINT_NAMES))")
+    "all" in GATE_LINT_NAMES && die("self-test: all is not a per-mode name")
+    lint_sh = read(joinpath(@__DIR__, "..", "gate", "lint.sh"), String)
+    occursin("run.sh\" all", lint_sh) || die("self-test: lint.sh must run all in one process")
+    occursin("lint_names=", lint_sh) && die("self-test: lint.sh still loops modes")
     shell_list = strip(read(`bash -c 'git ls-files scripts/*.sh .github/*.sh | LC_ALL=C sort -u'`, String))
     occursin("scripts/check.sh", shell_list) || die("self-test: shellcheck pathspec missing check.sh")
     occursin(".github/jetls-check.sh", strip(read(`bash -c 'git ls-files .github/*.sh'`, String))) ||
@@ -2748,6 +2753,57 @@ function lint_excuse_ceiling(root)
     return check_ceiling("CEILING_EXCUSE_PHRASES", collect_excuse_phrases(root), CEILING_EXCUSE_PHRASES)
 end
 
+const GATE_LINT_NAMES = (
+    "banned-words",
+    "agents-md",
+    "skip-reasons",
+    "new-comments",
+    "stdlib-compat",
+    "ssh-argv",
+    "drive-hooks",
+    "aqua-run",
+    "runtests",
+    "id-match",
+    "process-pattern",
+    "lock-create",
+    "env-default",
+    "swallowed-catch",
+    "pr-refs",
+)
+
+function lint_diff_mode(mode, root, files, src_for)
+    mode == "banned-words" && return lint_banned(root, files) + lint_excuse_ceiling(root)
+    mode == "agents-md" && return lint_agents(root, files)
+    mode == "skip-reasons" && return lint_skips(root, files, src_for)
+    mode == "new-comments" && return lint_new_comments(root, files)
+    mode == "ssh-argv" && return lint_ssh_argv(root, files, src_for)
+    mode == "drive-hooks" && return lint_drive_hooks(root, files, src_for)
+    mode == "aqua-run" && return lint_aqua_run(root, files)
+    mode == "id-match" && return lint_id_match(root, files, src_for)
+    mode == "process-pattern" && return lint_process_pattern(root, files, src_for)
+    mode == "lock-create" && return lint_lock_create(root, files, src_for)
+    mode == "env-default" && return lint_env_default(root, files, src_for)
+    mode == "swallowed-catch" && return lint_swallowed_catch(root, files, src_for)
+    mode == "pr-refs" && return lint_pr_refs(root, files, src_for)
+    return die("unknown mode $(mode)")
+end
+
+function lint_all(root)
+    files = parse_diff(git_diff(root))
+    src_for = path -> read(joinpath(root, path), String)
+    n = 0
+    for mode in GATE_LINT_NAMES
+        n += if mode == "stdlib-compat"
+            lint_stdlib_compat(root)
+        elseif mode == "runtests"
+            lint_runtests(root)
+        else
+            lint_diff_mode(mode, root, files, src_for)
+        end
+    end
+    n == 0 || exit(1)
+    return 0
+end
 
 function main(args)
     if length(args) == 3 && args[1] == "pr-body"
@@ -2764,11 +2820,12 @@ function main(args)
         return pr_body_hints_main(args[2], args[3], committed, edited)
     end
     if length(args) != 1
-        die("usage: diff_lint.jl <banned-words|agents-md|skip-reasons|new-comments|stdlib-compat|ssh-argv|drive-hooks|aqua-run|runtests|doc-touch|docs-static|self-test|pr-body|pr-body-hints>")
+        die("usage: diff_lint.jl <all|banned-words|agents-md|skip-reasons|new-comments|stdlib-compat|ssh-argv|drive-hooks|aqua-run|runtests|doc-touch|docs-static|self-test|pr-body|pr-body-hints>")
     end
     mode = args[1]
     mode == "self-test" && return self_test()
     root = repo_root()
+    mode == "all" && return lint_all(root)
     if mode == "runtests"
         lint_runtests(root) == 0 || exit(1)
         return 0
@@ -2784,35 +2841,7 @@ function main(args)
     end
     files = parse_diff(git_diff(root))
     src_for = path -> read(joinpath(root, path), String)
-    n = if mode == "banned-words"
-        lint_banned(root, files) + lint_excuse_ceiling(root)
-    elseif mode == "agents-md"
-        lint_agents(root, files)
-    elseif mode == "skip-reasons"
-        lint_skips(root, files, src_for)
-    elseif mode == "new-comments"
-        lint_new_comments(root, files)
-    elseif mode == "ssh-argv"
-        lint_ssh_argv(root, files, src_for)
-    elseif mode == "drive-hooks"
-        lint_drive_hooks(root, files, src_for)
-    elseif mode == "aqua-run"
-        lint_aqua_run(root, files)
-    elseif mode == "id-match"
-        lint_id_match(root, files, src_for)
-    elseif mode == "process-pattern"
-        lint_process_pattern(root, files, src_for)
-    elseif mode == "lock-create"
-        lint_lock_create(root, files, src_for)
-    elseif mode == "env-default"
-        lint_env_default(root, files, src_for)
-    elseif mode == "swallowed-catch"
-        lint_swallowed_catch(root, files, src_for)
-    elseif mode == "pr-refs"
-        lint_pr_refs(root, files, src_for)
-    else
-        die("unknown mode $(mode)")
-    end
+    n = lint_diff_mode(mode, root, files, src_for)
     n == 0 || exit(1)
     return 0
 end
