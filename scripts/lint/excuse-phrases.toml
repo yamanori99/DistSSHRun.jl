@@ -15,6 +15,12 @@ phrases = [
     "暫定",
     "一時凌ぎ",
     "妥協",
+    "best-effort",
+    "until",
+    "lockstep",
+    "pending",
+    "known failure",
+    "pre-existing",
 ]
 
 word_boundary = [
@@ -23,6 +29,9 @@ word_boundary = [
     "delve",
     "crucial",
     "additionally",
+    "until",
+    "lockstep",
+    "pending",
 ]
 
 prefix_sensitive = [

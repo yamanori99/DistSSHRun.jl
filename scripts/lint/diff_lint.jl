@@ -923,6 +923,14 @@ function lint_skips(root, files, src_for_path)
         end
         walk(tree)
     end
+    if !isempty(root)
+        n += report_hits(collect_loop_skip(root, files, src_for_path; whole = false))
+        n += check_ceiling(
+            "CEILING_LOOP_SKIP",
+            length(collect_loop_skip(root, files, src_for_path; whole = true)),
+            CEILING_LOOP_SKIP,
+        )
+    end
     return n
 end
 
@@ -1383,6 +1391,54 @@ function self_test_body_main()
     occursin("scripts/check.sh", shell_list) || die("self-test: shellcheck pathspec missing check.sh")
     occursin(".github/jetls-check.sh", strip(read(`bash -c 'git ls-files .github/*.sh'`, String))) ||
         die("self-test: shellcheck pathspec missing jetls-check.sh")
+    id_src = "occursin(job_id, name)\nid == token\n"
+    id_h = Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])])
+    length(collect_id_match("", id_h, _ -> id_src; whole = false)) >= 1 || die("self-test: id-match hit")
+    id_ok = "id == job_id\n"
+    isempty(collect_id_match("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> id_ok; whole = false)) ||
+        die("self-test: id-match exact ==")
+    proc_src = "Cmd([\"pkill\", \"-9\", \"-f\", p])\n"
+    length(collect_process_pattern("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> proc_src; whole = false)) >= 1 ||
+        die("self-test: process-pattern hit")
+    lock_src = "if isfile(lock_path)\n    write(lock_path, pid)\nend\n"
+    length(collect_lock_create("", Dict("src/x.jl" => [Hunk(1, 0, 1, 2, String[])]), _ -> lock_src; whole = false)) >= 1 ||
+        die("self-test: lock-create hit")
+    mkdir_src = "mkdir(lock_path)\n"
+    isempty(collect_lock_create("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> mkdir_src; whole = false)) ||
+        die("self-test: lock-create mkdir")
+    env_src = "get(ENV, \"X\", \"1\")\nget(ENV, \"X\", \"\")\n"
+    env_h = Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])])
+    length(collect_env_default("", env_h, _ -> env_src; whole = false)) == 1 || die("self-test: env-default hit")
+    test_src = "withenv(\"DISTSSH_JOBS\" => \"nope\") do\n    @test kit_host_jobs() == 1\nend\n"
+    length(collect_env_default_test("", Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> test_src; whole = false)) >= 1 ||
+        die("self-test: env-default test hit")
+    throw_src = "withenv(\"DISTSSH_JOBS\" => \"nope\") do\n    @test_throws ArgumentError kit_host_jobs()\nend\n"
+    isempty(collect_env_default_test("", Dict("test/t.jl" => [Hunk(1, 0, 1, 3, String[])]), _ -> throw_src; whole = false)) ||
+        die("self-test: env-default test throws")
+    catch_src = "try\n    f()\ncatch\nend\n"
+    length(collect_swallowed_catch("", Dict("src/x.jl" => [Hunk(3, 0, 3, 2, String[])]), _ -> catch_src; whole = false)) >= 1 ||
+        die("self-test: swallowed-catch hit")
+    rethrow_src = "try\n    f()\ncatch e\n    e isa InterruptException && rethrow()\n    error(e)\nend\n"
+    isempty(collect_swallowed_catch("", Dict("src/x.jl" => [Hunk(3, 0, 3, 4, String[])]), _ -> rethrow_src; whole = false)) ||
+        die("self-test: swallowed-catch rethrow")
+    skip_src2 = "for kind in ks\n    kind == \"x\" && continue\nend\n"
+    length(collect_loop_skip("", Dict("test/t.jl" => [Hunk(2, 0, 2, 1, String[])]), _ -> skip_src2; whole = false)) >= 1 ||
+        die("self-test: loop skip hit")
+    skip_ok = "for kind in ks\n    kind == \"x\" && continue #1\nend\n"
+    isempty(collect_loop_skip("", Dict("test/t.jl" => [Hunk(2, 0, 2, 1, String[])]), _ -> skip_ok; whole = false)) ||
+        die("self-test: loop skip reason")
+    pref = "const S = \"see DistSSHQueue #12\"\n"
+    length(collect_pr_refs("", Dict("src/x.jl" => [Hunk(1, 0, 1, 1, String[])]), _ -> pref; whole = false)) >= 1 ||
+        die("self-test: pr-refs hit")
+    ev_fail = excuse_word_errors("This is known on CI.\n")
+    any(endswith(e, "known") for e in ev_fail) || die("self-test: evidence fail $(ev_fail)")
+    ev_ok = excuse_word_errors("This is known on main https://github.com/yamanori99/DistSSHRun.jl/actions/runs/1\n")
+    isempty(ev_ok) || die("self-test: evidence pass $(ev_ok)")
+    check_ceiling("CEILING_ID_MATCH", 1, 0) == 1 || die("self-test: ceiling mismatch")
+    notes = testing_shape_notes("## Testing\n\nran it\n", "abc")
+    any(startswith(n, "note: Testing has no environment") for n in notes) || die("self-test: testing shape")
+    any(occursin("HEAD abc: passed", n) for n in notes) || die("self-test: testing head")
+    banned_hit("# until later") == "until" || die("self-test: until phrase $(repr(banned_hit("# until later")))")
     println("self-test: passed")
     return 0
 end
@@ -1653,6 +1709,8 @@ end
 function pr_body_errors(body::AbstractString, paths)
     errs = pr_template_errors(body)
     append!(errs, file_list_errors(body, paths))
+    append!(errs, excuse_word_errors(section_named_text(body, "Testing")))
+    append!(errs, excuse_word_errors(section_named_text(body, "Risk")))
     return errs
 end
 
@@ -1737,6 +1795,10 @@ function pr_body_hints(
             else
                 push!(hints, "add env to ## Testing ($ex)")
             end
+        end
+        head = get(ENV, "CHECK_HEAD", "")
+        if !isempty(head)
+            append!(hints, testing_shape_notes(body, head))
         end
     end
     return hints
@@ -2076,9 +2138,623 @@ function short_skip_paths_from_common(src::AbstractString)
     return paths, found[]
 end
 
+
+const BANNED_NEW = ("best-effort", "until", "lockstep", "pending", "known failure", "pre-existing")
+const CEILING_ID_MATCH = 6
+const CEILING_PROCESS_PATTERN = 55
+const CEILING_LOCK_CREATE = 8
+const CEILING_ENV_DEFAULT = 11
+const CEILING_ENV_DEFAULT_TEST = 37
+const CEILING_SWALLOWED_CATCH = 137
+const CEILING_LOOP_SKIP = 0
+const CEILING_PR_REFS = 2
+const CEILING_EXCUSE_PHRASES = 25
+
+function tracked_jl(root::AbstractString)
+    return filter(p -> endswith(p, ".jl") && !skipped_path(p), readlines(`git -C $root ls-files '*.jl'`))
+end
+
+function id_match_path(path::AbstractString)::Bool
+    p = replace(String(path), '\\' => '/')
+    startswith(p, "src/") && return true
+    occursin(r"^lib/[^/]+/src/", p) && return true
+    return occursin("/fixtures/", p)
+end
+
+function ident_leaf(node)
+    k = kind(node)
+    k == K"Identifier" && return sourcetext(node)
+    if k == K"." && numchildren(node) >= 2
+        return ident_leaf(node[numchildren(node)])
+    end
+    return nothing
+end
+
+function name_is_idish(s::AbstractString)::Bool
+    return occursin(r"(?i)id|token|job|run|leaf|stamp|mark", s)
+end
+
+function id_match_call(node, src, path, added, hits)
+    kind(node) == K"call" || return
+    numchildren(node) >= 2 || return
+    fname = ident_leaf(node[1])
+    fname === nothing && return
+    if fname in ("occursin", "startswith", "endswith", "first")
+        for i in 2:numchildren(node)
+            id = ident_leaf(node[i])
+            id === nothing && continue
+            name_is_idish(id) || continue
+            node_touches_added(src, node, added) || continue
+            a = line_of(src, Int(first(byte_range(node))))
+            push!(hits, (path, a, "id-match"))
+            return
+        end
+    end
+    return
+end
+
+function id_match_ref(node, src, path, added, hits)
+    kind(node) == K"ref" || return
+    numchildren(node) >= 2 || return
+    id = ident_leaf(node[1])
+    id === nothing && return
+    name_is_idish(id) || return
+    idx = node[2]
+    kind(idx) == K":" || return
+    node_touches_added(src, node, added) || return
+    a = line_of(src, Int(first(byte_range(node))))
+    push!(hits, (path, a, "id-match"))
+    return
+end
+
+function id_match_shell_line(line::AbstractString)::Bool
+    return occursin(r"case[[:space:]].*\*\"\$[A-Za-z_][A-Za-z0-9_]*\"\*", line)
+end
+
+function walk_id_match!(node, src, path, added, hits)
+    id_match_call(node, src, path, added, hits)
+    id_match_ref(node, src, path, added, hits)
+    for i in 1:numchildren(node)
+        walk_id_match!(node[i], src, path, added, hits)
+    end
+    return
+end
+
+function collect_id_match(root, files, src_for_path; whole::Bool)
+    hits = Tuple{String, Int, String}[]
+    paths = whole ? filter(id_match_path, tracked_jl(root)) : collect(keys(files))
+    for path in paths
+        id_match_path(path) || continue
+        src = src_for_path(path)
+        added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
+        whole || (isempty(added) && continue)
+        if whole
+            for (i, line) in enumerate(split(src, '\n'; keepempty = true))
+                id_match_shell_line(line) && push!(hits, (path, i, "id-match"))
+            end
+        else
+            lines = split(src, '\n'; keepempty = true)
+            for i in sort!(collect(added))
+                1 <= i <= length(lines) || continue
+                id_match_shell_line(lines[i]) || continue
+                push!(hits, (path, i, "id-match"))
+            end
+        end
+        endswith(path, ".jl") || continue
+        walk_id_match!(parse_tree(src), src, path, added, hits)
+    end
+    return unique(hits)
+end
+
+function process_builder_name(node)
+    n = defined_function_name(node)
+    n === nothing && return false
+    return n == "_pkill_pattern!"
+end
+
+function walk_process!(node, src, path, added, in_builder, hits)
+    if process_builder_name(node)
+        for i in 1:numchildren(node)
+            walk_process!(node[i], src, path, added, true, hits)
+        end
+        return
+    end
+    st = sourcetext(node)
+    if !in_builder && kind(node) in (K"vect", K"ref", K"string", K"String")
+        if occursin(r"(?i)(?<![A-Za-z])(pkill|pgrep)(?![A-Za-z])", st) && node_touches_added(src, node, added)
+            a = line_of(src, Int(first(byte_range(node))))
+            push!(hits, (path, a, "process-pattern"))
+        end
+    end
+    if occursin(r"\[[a-zA-Z]\]", st) && occursin(r"(?i)pkill|pgrep", st) && node_touches_added(src, node, added)
+        a = line_of(src, Int(first(byte_range(node))))
+        push!(hits, (path, a, "process-pattern"))
+    end
+    for i in 1:numchildren(node)
+        walk_process!(node[i], src, path, added, in_builder, hits)
+    end
+    return
+end
+
+function collect_process_pattern(root, files, src_for_path; whole::Bool)
+    hits = Tuple{String, Int, String}[]
+    paths = whole ? tracked_jl(root) : collect(keys(files))
+    for path in paths
+        skipped_path(path) && continue
+        endswith(path, ".jl") || continue
+        p = replace(path, '\\' => '/')
+        startswith(p, "src/") || occursin(r"^lib/[^/]+/src/", p) || continue
+        src = src_for_path(path)
+        added_set = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
+        whole || (isempty(added_set) && continue)
+        walk_process!(parse_tree(src), src, path, added_set, false, hits)
+    end
+    return unique(hits)
+end
+
+function lock_create_hits(src::AbstractString, path::AbstractString, added)
+    hits = Tuple{String, Int, String}[]
+    lines = split(src, '\n'; keepempty = true)
+    for (i, line) in enumerate(lines)
+        i in added || continue
+        m = match(r"isfile\(([^)]+)\)", line)
+        m === nothing && continue
+        v = strip(m.captures[1])
+        occursin(r"(?i)lock|pid", v) || continue
+        last = min(i + 40, length(lines))
+        for j in (i + 1):last
+            occursin("write(" * v, lines[j]) || continue
+            push!(hits, (path, i, "lock-create"))
+            break
+        end
+    end
+    return hits
+end
+
+function collect_lock_create(root, files, src_for_path; whole::Bool)
+    hits = Tuple{String, Int, String}[]
+    paths = whole ? tracked_jl(root) : collect(keys(files))
+    for path in paths
+        skipped_path(path) && continue
+        endswith(path, ".jl") || continue
+        src = src_for_path(path)
+        added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
+        whole || (isempty(added) && continue)
+        append!(hits, lock_create_hits(src, path, added))
+    end
+    return unique(hits)
+end
+
+function env_default_src_path(path::AbstractString)::Bool
+    p = replace(String(path), '\\' => '/')
+    startswith(p, "src/") && return true
+    return occursin(r"^lib/[^/]+/src/", p)
+end
+
+function env_default_line_hit(line::AbstractString)::Bool
+    occursin(r"something\(\s*tryparse\s*\(", line) && return true
+    occursin(r"tryparse\s*\([^\n]*\)\s*===\s*nothing\s*&&\s*return\s+\S", line) && return true
+    occursin(r"tryparse\s*\([^\n]*\)\s*===\s*nothing\s*\?\s*\S", line) && return true
+    occursin(r"get\(\s*ENV\s*,\s*\"[^\"]+\"\s*,\s*\"[^\"]+\"\s*\)", line) && return true
+    return false
+end
+
+function collect_env_default(root, files, src_for_path; whole::Bool)
+    hits = Tuple{String, Int, String}[]
+    paths = whole ? filter(env_default_src_path, tracked_jl(root)) : collect(keys(files))
+    for path in paths
+        env_default_src_path(path) || continue
+        src = src_for_path(path)
+        added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
+        whole || (isempty(added) && continue)
+        lines = split(src, '\n'; keepempty = true)
+        for i in sort!(collect(added))
+            1 <= i <= length(lines) || continue
+            env_default_line_hit(lines[i]) || continue
+            push!(hits, (path, i, "env-default"))
+        end
+    end
+    return unique(hits)
+end
+
+function invalid_env_literal(s::AbstractString)::Bool
+    s == "0" && return true
+    s == "-1" && return true
+    isempty(s) && return false
+    return tryparse(Float64, s) === nothing
+end
+
+function test_path(path::AbstractString)::Bool
+    p = replace(String(path), '\\' => '/')
+    startswith(p, "test/") && return true
+    return occursin(r"^lib/[^/]+/test/", p)
+end
+
+function collect_env_default_test(root, files, src_for_path; whole::Bool)
+    hits = Tuple{String, Int, String}[]
+    paths = whole ? filter(test_path, tracked_jl(root)) : collect(keys(files))
+    for path in paths
+        test_path(path) || continue
+        endswith(path, ".jl") || continue
+        src = src_for_path(path)
+        added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
+        whole || (isempty(added) && continue)
+        lines = split(src, '\n'; keepempty = true)
+        i = 1
+        while i <= length(lines)
+            line = lines[i]
+            m = match(r"withenv\([^)]*\"([^\"]+)\"\s*=>\s*\"([^\"]*)\"", line)
+            if m !== nothing && invalid_env_literal(m.captures[2]) && i in added
+                has_throws = false
+                has_eq = false
+                j = i
+                while j <= length(lines)
+                    occursin("@test_throws", lines[j]) && (has_throws = true)
+                    occursin(r"@test\b[^=]*==", lines[j]) && (has_eq = true)
+                    occursin(r"\bend\b", lines[j]) && j > i && break
+                    j += 1
+                    j - i > 40 && break
+                end
+                if has_eq && !has_throws
+                    push!(hits, (path, i, "env-default"))
+                end
+            end
+            i += 1
+        end
+    end
+    return unique(hits)
+end
+
+function swallowed_catch_hit(src::AbstractString, node)::Bool
+    kind(node) == K"catch" || return false
+    st = strip(sourcetext(node))
+    occursin("InterruptException", st) && occursin("rethrow", st) && return false
+    body = replace(st, r"^catch(?:\s+\w+)?" => "")
+    body = strip(body)
+    isempty(body) && return true
+    body == "nothing" && return true
+    occursin(r"^return\s+\S+$", body) && return true
+    lines = [strip(l) for l in eachsplit(body, '\n'; keepempty = false)]
+    !isempty(lines) && all(l -> isempty(l) || startswith(l, "#"), lines) && return true
+    return false
+end
+
+function walk_catch!(node, src, path, added, hits)
+    if kind(node) == K"catch" && node_touches_added(src, node, added) && swallowed_catch_hit(src, node)
+        a = line_of(src, Int(first(byte_range(node))))
+        push!(hits, (path, a, "swallowed-catch"))
+    end
+    for i in 1:numchildren(node)
+        walk_catch!(node[i], src, path, added, hits)
+    end
+    return
+end
+
+function collect_swallowed_catch(root, files, src_for_path; whole::Bool)
+    hits = Tuple{String, Int, String}[]
+    paths = whole ? tracked_jl(root) : collect(keys(files))
+    for path in paths
+        skipped_path(path) && continue
+        endswith(path, ".jl") || continue
+        src = src_for_path(path)
+        added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
+        whole || (isempty(added) && continue)
+        walk_catch!(parse_tree(src), src, path, added, hits)
+    end
+    return unique(hits)
+end
+
+function loop_skip_line(line::AbstractString)::Bool
+    return occursin(r"==\s*\"[^\"]+\"\s*&&\s*continue", line)
+end
+
+function loop_skip_reason(src, line::Int)::Bool
+    notes = join(comments_on(src, line, line), "\n")
+    isempty(issue_numbers(notes)) || return true
+    return occursin(r"\"[^\"]+\"", notes)
+end
+
+function collect_loop_skip(root, files, src_for_path; whole::Bool)
+    hits = Tuple{String, Int, String}[]
+    paths = whole ? filter(test_path, tracked_jl(root)) : collect(keys(files))
+    for path in paths
+        test_path(path) || continue
+        src = src_for_path(path)
+        added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
+        whole || (isempty(added) && continue)
+        lines = split(src, '\n'; keepempty = true)
+        for i in sort!(collect(added))
+            1 <= i <= length(lines) || continue
+            loop_skip_line(lines[i]) || continue
+            loop_skip_reason(src, i) && continue
+            push!(hits, (path, i, "skip-reasons"))
+        end
+    end
+    return unique(hits)
+end
+
+function pr_ref_hit(text::AbstractString)::Bool
+    occursin(r"\blockstep\b", text) && return true
+    occursin(r"\bPR\s+[0-9]+", text) && return true
+    occursin(r"[A-Za-z][A-Za-z0-9_.-]*\s+#\s*[0-9]+", text) && return true
+    return false
+end
+
+function collect_pr_refs(root, files, src_for_path; whole::Bool)
+    hits = Tuple{String, Int, String}[]
+    paths = whole ? tracked_jl(root) : collect(keys(files))
+    for path in paths
+        skipped_path(path) && continue
+        p = replace(path, '\\' => '/')
+        in_src = startswith(p, "src/") || occursin(r"^lib/[^/]+/src/", p)
+        in_test = test_path(p)
+        (in_src || in_test) || continue
+        src = src_for_path(path)
+        added = whole ? Set(1:(count(==('\n'), src) + 1)) : added_lines(get(files, path, Hunk[]))
+        whole || (isempty(added) && continue)
+        if in_src
+            tree = parse_tree(src)
+            function walk_str(node)
+                if kind(node) in (K"string", K"String") && node_touches_added(src, node, added)
+                    pr_ref_hit(sourcetext(node)) && push!(hits, (path, line_of(src, Int(first(byte_range(node)))), "pr-refs"))
+                end
+                for i in 1:numchildren(node)
+                    walk_str(node[i])
+                end
+                return
+            end
+            walk_str(tree)
+        end
+        if in_test
+            for (a, _, text) in comment_tokens(src)
+                a in added || continue
+                pr_ref_hit(text) || continue
+                push!(hits, (path, a, "pr-refs"))
+            end
+        end
+    end
+    return unique(hits)
+end
+
+function collect_excuse_phrases(root)
+    n = 0
+    for path in tracked_jl(root)
+        skipped_path(path) && continue
+        src = read(joinpath(root, path), String)
+        endswith(path, ".jl") || continue
+        for (_, _, text) in comment_tokens(src)
+            hit = banned_hit(text)
+            hit === nothing && continue
+            hit in BANNED_NEW || continue
+            n += 1
+        end
+    end
+    return n
+end
+
+function main_ceiling(name::AbstractString)::Union{Nothing, Int}
+    text = try
+        read(`git show origin/main:scripts/lint/diff_lint.jl`, String)
+    catch
+        return nothing
+    end
+    m = match(Regex("const " * name * " = ([0-9]+)"), text)
+    m === nothing && return nothing
+    return Base.parse(Int, m.captures[1])
+end
+
+function check_ceiling(name::AbstractString, measured::Int, constant::Int)
+    n = 0
+    if measured != constant
+        println(stderr, "lint: $(name) count $(measured) != ceiling $(constant)")
+        n += 1
+    end
+    prev = main_ceiling(name)
+    if prev !== nothing && constant > prev
+        println(stderr, "lint: $(name) ceiling $(constant) > origin/main $(prev)")
+        n += 1
+    end
+    return n
+end
+
+function report_hits(hits)
+    n = 0
+    for (path, line, rule) in hits
+        println(stderr, "lint: $(path):$(line): $(rule)")
+        n += 1
+    end
+    return n
+end
+
+function lint_mode_dual(root, files, src_for_path, collect_fn, ceiling_name, ceiling)
+    added = collect_fn(root, files, src_for_path; whole = false)
+    n = report_hits(added)
+    whole = collect_fn(root, files, src_for_path; whole = true)
+    n += check_ceiling(ceiling_name, length(whole), ceiling)
+    return n
+end
+
+function markdown_removed_names(src::AbstractString)
+    names = String[]
+    for line in eachsplit(src, '\n'; keepempty = false)
+        occursin(r"removed|no longer", line) || continue
+        for m in eachmatch(r"`([^`]+)`", line)
+            tok = m.captures[1]
+            occursin(r"^[A-Za-z_][A-Za-z0-9_!]*$", tok) || continue
+            push!(names, tok)
+        end
+    end
+    return unique(names)
+end
+
+function grep_token(root, tok, dirs)
+    hits = String[]
+    for dir in dirs
+        cmd = `git -C $root grep -n -F -- $tok -- $dir`
+        out = try
+            read(cmd, String)
+        catch
+            ""
+        end
+        for line in eachsplit(out, '\n'; keepempty = false)
+            push!(hits, line)
+        end
+    end
+    return hits
+end
+
+function lint_removed_names(root::AbstractString, extra_root::AbstractString = "")
+    n = 0
+    diff = read(`git -C $root diff -U0 --no-color origin/main...HEAD -- changelog.d`, String)
+    files = parse_diff(diff)
+    names = String[]
+    for (path, hunks) in files
+        full = joinpath(root, path)
+        isfile(full) || continue
+        src = read(full, String)
+        added = added_lines(hunks)
+        lines = split(src, '\n'; keepempty = true)
+        buf = IOBuffer()
+        for i in sort!(collect(added))
+            1 <= i <= length(lines) && println(buf, lines[i])
+        end
+        append!(names, markdown_removed_names(String(take!(buf))))
+    end
+    names = unique(names)
+    for tok in names
+        for hit in grep_token(root, tok, ("README.md", "README.ja.md", "docs", "src"))
+            println(stderr, "lint: removed name $(tok) still in $(hit)")
+            n += 1
+        end
+        if !isempty(extra_root)
+            for hit in grep_token(extra_root, tok, ("src", "test", "README.md", "README.ja.md", "docs"))
+                println(stderr, "lint: removed name $(tok) still in downstream $(hit)")
+                n += 1
+            end
+        end
+    end
+    return n
+end
+
+function section_named_text(body::AbstractString, name::AbstractString)
+    lines = collect(eachsplit(body, '\n'; keepempty = true))
+    in_section = false
+    parts = String[]
+    hdr = "## " * name
+    for line in lines
+        if startswith(line, "## ")
+            if in_section
+                break
+            end
+            in_section = startswith(line, hdr) && length(line) <= length(hdr) + 2
+            continue
+        end
+        in_section && push!(parts, line)
+    end
+    return join(parts, '\n')
+end
+
+function has_main_run_url(text::AbstractString)::Bool
+    occursin(r"https://github.com/[^/]+/[^/]+/actions/runs/[0-9]+", text) || return false
+    return occursin(r"\bmain\b", text)
+end
+
+function excuse_word_errors(section::AbstractString)
+    errs = String[]
+    lines = collect(eachsplit(section, '\n'; keepempty = true))
+    paras = Tuple{Int, String}[]
+    buf = String[]
+    start = 1
+    function flush!(s, b)
+        isempty(b) && return
+        push!(paras, (s, join(b, '\n')))
+        empty!(b)
+        return
+    end
+    for (i, line) in enumerate(lines)
+        if isempty(strip(line))
+            flush!(start, buf)
+            start = i + 1
+        else
+            isempty(buf) && (start = i)
+            push!(buf, line)
+        end
+    end
+    flush!(start, buf)
+    patterns = (
+        (r"(?<![A-Za-z])known(?![A-Za-z])"i, "known"),
+        (r"pre-existing"i, "pre-existing"),
+        (r"(?<![A-Za-z])unrelated(?![A-Za-z])"i, "unrelated"),
+        (r"(?<![A-Za-z])flaky(?![A-Za-z])"i, "flaky"),
+        (r"left to CI"i, "left to CI"),
+    )
+    for (s, text) in paras
+        has_main_run_url(text) && continue
+        for (re, word) in patterns
+            m = match(re, text)
+            m === nothing && continue
+            rel = count(==('\n'), text[1:max(1, m.offset)])
+            push!(errs, "$(s + rel): $(word)")
+        end
+    end
+    return errs
+end
+
+function testing_shape_notes(body::AbstractString, head::AbstractString)
+    notes = String[]
+    testing_section_present(body) || return notes
+    txt = testing_section_text(body)
+    env = occursin(r"(?im)(macos|darwin|linux|ubuntu|wsl).*(arm64|aarch64|x86_64|x64|amd64).*(julia).*(git).*\.", txt)
+    cmd = occursin(r"`[^`]+`", txt)
+    fence = occursin(r"(?m)^```text\s*$", txt)
+    if !(env && cmd && fence)
+        push!(notes, "note: Testing has no environment line / command / text-fenced output; see CONTRIBUTING.md")
+    end
+    if !isempty(head) && !occursin("HEAD $(head): passed", txt)
+        push!(notes, "note: Testing has no 'HEAD $(head): passed' line for HEAD $(head)")
+    end
+    return notes
+end
+
+function lint_id_match(root, files, src_for_path)
+    return lint_mode_dual(root, files, src_for_path, collect_id_match, "CEILING_ID_MATCH", CEILING_ID_MATCH)
+end
+
+function lint_process_pattern(root, files, src_for_path)
+    return lint_mode_dual(root, files, src_for_path, collect_process_pattern, "CEILING_PROCESS_PATTERN", CEILING_PROCESS_PATTERN)
+end
+
+function lint_lock_create(root, files, src_for_path)
+    return lint_mode_dual(root, files, src_for_path, collect_lock_create, "CEILING_LOCK_CREATE", CEILING_LOCK_CREATE)
+end
+
+function lint_env_default(root, files, src_for_path)
+    n = lint_mode_dual(root, files, src_for_path, collect_env_default, "CEILING_ENV_DEFAULT", CEILING_ENV_DEFAULT)
+    n += lint_mode_dual(root, files, src_for_path, collect_env_default_test, "CEILING_ENV_DEFAULT_TEST", CEILING_ENV_DEFAULT_TEST)
+    return n
+end
+
+function lint_swallowed_catch(root, files, src_for_path)
+    return lint_mode_dual(root, files, src_for_path, collect_swallowed_catch, "CEILING_SWALLOWED_CATCH", CEILING_SWALLOWED_CATCH)
+end
+
+function lint_pr_refs(root, files, src_for_path)
+    return lint_mode_dual(root, files, src_for_path, collect_pr_refs, "CEILING_PR_REFS", CEILING_PR_REFS)
+end
+
+function lint_excuse_ceiling(root)
+    return check_ceiling("CEILING_EXCUSE_PHRASES", collect_excuse_phrases(root), CEILING_EXCUSE_PHRASES)
+end
+
+
 function main(args)
     if length(args) == 3 && args[1] == "pr-body"
         return pr_body_main(args[2], args[3])
+    end
+    if length(args) >= 1 && args[1] == "removed-names"
+        extra = length(args) >= 2 ? args[2] : ""
+        lint_removed_names(repo_root(), extra) == 0 || exit(1)
+        return 0
     end
     if length(args) in 3:5 && args[1] == "pr-body-hints"
         committed = length(args) >= 4 ? args[4] : ""
@@ -2105,20 +2781,33 @@ function main(args)
         return 0
     end
     files = parse_diff(git_diff(root))
+    src_for = path -> read(joinpath(root, path), String)
     n = if mode == "banned-words"
-        lint_banned(root, files)
+        lint_banned(root, files) + lint_excuse_ceiling(root)
     elseif mode == "agents-md"
         lint_agents(root, files)
     elseif mode == "skip-reasons"
-        lint_skips(root, files, path -> read(joinpath(root, path), String))
+        lint_skips(root, files, src_for)
     elseif mode == "new-comments"
         lint_new_comments(root, files)
     elseif mode == "ssh-argv"
-        lint_ssh_argv(root, files, path -> read(joinpath(root, path), String))
+        lint_ssh_argv(root, files, src_for)
     elseif mode == "drive-hooks"
-        lint_drive_hooks(root, files, path -> read(joinpath(root, path), String))
+        lint_drive_hooks(root, files, src_for)
     elseif mode == "aqua-run"
         lint_aqua_run(root, files)
+    elseif mode == "id-match"
+        lint_id_match(root, files, src_for)
+    elseif mode == "process-pattern"
+        lint_process_pattern(root, files, src_for)
+    elseif mode == "lock-create"
+        lint_lock_create(root, files, src_for)
+    elseif mode == "env-default"
+        lint_env_default(root, files, src_for)
+    elseif mode == "swallowed-catch"
+        lint_swallowed_catch(root, files, src_for)
+    elseif mode == "pr-refs"
+        lint_pr_refs(root, files, src_for)
     else
         die("unknown mode $(mode)")
     end

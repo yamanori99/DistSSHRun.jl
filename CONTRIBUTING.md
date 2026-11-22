@@ -96,7 +96,18 @@ JETLS is the type gate. Do not commit `.vscode/settings.json` to silence the Lan
 - The body is
   [`.github/pull_request_template.md`](.github/pull_request_template.md).
   Summary is required. Testing, Risk, and Revert may be omitted.
-  When Testing is present, it is the command and the line it printed.
+  When Testing is present, it is one block per environment: a line with OS
+  and arch, Julia version and git version, ending with a period; the exact
+  command in a code span; the verbatim tail in a `text` fence. Example:
+
+  macOS arm64, Julia 1.13.4, git 2.56.0.
+
+  `./scripts/check.sh`
+
+  ```text
+  HEAD abcdef: passed
+  ```
+
   The GitHub title is the title. The body has no title heading and no checklist.
   It does not list every changed path. `./scripts/check.sh` reads the open
   pull request and fails when a bullet list or a fenced block repeats
@@ -388,6 +399,8 @@ Required to merge (ruleset `main` uses these names). **nightly** jobs, and **1.1
 - `DistSSHUp (ubuntu-latest → ubuntu-26.04)`
 - `DistSSHShip (ubuntu-latest → ubuntu-26.04)`
 - `Downstream SSH E2E (DistSSHQueue, 1.13)`
+- `Downstream (DistSSHQueue@main, 1.13)`
+- `Downstream (DistSSHKit@main, 1.13)`
 - `PR label`
 
 | When | Workflow | What |

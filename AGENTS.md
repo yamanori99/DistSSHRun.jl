@@ -11,6 +11,9 @@ Targeted tests are the heading for that area in `CONTRIBUTING.md` or `test/READM
 The gate is the same on macOS and Linux. WSL2 Ubuntu uses the Linux conditions. Native Windows is not a supported environment.
 `./scripts/check.sh` installs `.git/hooks/pre-push`. A push runs that gate. Do not pass `--no-verify`.
 A pull request title names the change. The body has Summary. Testing, Risk, and Revert follow [CONTRIBUTING.md](CONTRIBUTING.md). Do not add a title heading, a checklist, or a list of every changed path. Follow Pull requests and Issues there.
+Search for the same pattern elsewhere and report it.
+Stop before adding a fallback, skip, or exception.
+A failure called known or flaky needs a default-branch Actions run that shows it.
 
 ## Skills
 
